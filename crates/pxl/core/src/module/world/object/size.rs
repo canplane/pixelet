@@ -15,8 +15,8 @@ use pxl_shared::bake::constant::U_PER_CELL;
 /// bake/constant.rs's OBJECT_LAYOUT, whose `max: CELL_SHAMT` is the other
 /// half of that reasoning: object/store.rs's sparse tree never spans more
 /// than one cell) — the other three (finer) tiers are what the object paint
-/// (crates/pxl/core/src/world/object.rs) writes as sub-cell voxels instead of
-/// a full-cell voxel. Deliberately 4 tiers deep, not 3 — when CELL_SHAMT
+/// (crates/pxl/core/src/render/layer/object/adapter.rs) writes as sub-cell
+/// voxels instead of a full-cell voxel. Deliberately 4 tiers deep, not 3 — when CELL_SHAMT
 /// changed U_PER_CELL 0.5u -> 1u, sliding a fixed *count* of tiers down from
 /// it would have silently dropped the finest one (0.125u) that building at
 /// sub-block detail already depended on, instead of just gaining a coarser

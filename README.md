@@ -87,7 +87,7 @@ The web app uses Vite as its bundling/build entry; the api runs directly under D
 | Database            | PostgreSQL (main + geographic/PostGIS) |
 | Geodata             | Overture Maps + GEDTM30 (elevation)    |
 
-Three more pieces of the stack are built for this project rather than adopted: a packed fixed-point coordinate format (PVF3), a typed-array wire protocol (XTP) for every page and record the client reads, and a record layer on it — one `Placement` row for every placed thing and one global `Palette` naming what it is. See [Repository Structure](#repository-structure) and [World and Rendering Model](#world-and-rendering-model) below, or [ARCHITECTURE.md](./ARCHITECTURE.md) for the full design.
+Two more pieces of the stack are built for this project rather than adopted: a packed fixed-point coordinate format (PVF3) and a typed-array wire protocol (XTP) for every page the client reads. See [Repository Structure](#repository-structure) and [World and Rendering Model](#world-and-rendering-model) below, or [ARCHITECTURE.md](./ARCHITECTURE.md) for the full design.
 
 **Naming:** Most identifiers here — files, functions, locals — use `snake_case` rather than TypeScript's usual `camelCase` (React hooks, stores, and components keep the ecosystem's own convention, since fighting that adds no value). The engine side of pixelet leans toward data-oriented design, closer to systems programming than typical frontend code, and a WebGPU/WASM path — including a partial Rust port — has been on the table from early on. C/C++/Rust-style abbreviations show up throughout (`len`, `u32`, `new_len` in `@xpute/core/ds`, for instance), and those read oddly bolted onto camelCase (`newLen` next to `len`); `snake_case` sits naturally with them instead. Unifying most of the TypeScript around it also keeps the two languages visually consistent at the boundary.
 
@@ -121,7 +121,7 @@ Three more pieces of the stack are built for this project rather than adopted: a
     │
     └── pxl/
         └── shared/                 # PVF3 coordinate system, cell/terrain model, bake wire format,
-                                     # the record layer (Placement, Palette)
+                                     # the shipped asset and texture tables
                                      # (pixelet-specific — must stay identical between web and api)
 ```
 

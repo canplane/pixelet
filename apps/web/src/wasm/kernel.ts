@@ -615,13 +615,13 @@ function gpu_boot(): void {
     request_frame();
   };
   void acquire_device(lost).then((info) => {
-    if (info === null) {
-      console.error("[gpu] no WebGPU on this device; nothing can be drawn");
+    if ("reason" in info) {
+      console.error(`[gpu] ${info.reason}; nothing can be drawn`);
       return;
     }
     CORE_BUILD.send(0, Cmd.GPU_CREATE, packet((b) => b.u32(info.align).bool(info.timestamps)));
     request_frame();
-  });
+  }, (err) => console.error("[gpu] the device request failed; nothing can be drawn:", err));
 }
 
 gpu_boot();

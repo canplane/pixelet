@@ -30,11 +30,7 @@ pub mod cube_types {
         /// missing / invalid / unresolved data
         pub const unknown: u8 = 0xff;
 
-        pub const ENTRIES: &[(&str, u8)] = &[
-            ("void", void),
-            ("air", air),
-            ("unknown", unknown),
-        ];
+        pub const ENTRIES: &[(&str, u8)] = &[("void", void), ("air", air), ("unknown", unknown)];
     }
 
     pub mod land {
@@ -102,11 +98,7 @@ pub mod cube_types {
         /// wetland
         pub const wetland: u8 = 3;
 
-        pub const ENTRIES: &[(&str, u8)] = &[
-            ("river", river),
-            ("lake", lake),
-            ("wetland", wetland),
-        ];
+        pub const ENTRIES: &[(&str, u8)] = &[("river", river), ("lake", lake), ("wetland", wetland)];
     }
 
     pub mod structure {
@@ -176,7 +168,7 @@ pub mod cube_types {
         ];
     }
 
-    // Flat user-painted colors only — no sentinels of its own anymore.
+    // Flat user-painted colors only — no sentinels of its own.
     // cube_types.common.void (sparse-tree absence) and .air (explicit erase)
     // already cover every non-color case a placed cube's own byte can mean;
     // every real key here is a real, pickable color.
@@ -246,11 +238,7 @@ pub mod cube_types {
 
     impl Common {
         /// Every type the channel gives out, in the JSON's own order.
-        pub const ALL: [Common; 3] = [
-            Common::void,
-            Common::air,
-            Common::unknown,
-        ];
+        pub const ALL: [Common; 3] = [Common::void, Common::air, Common::unknown];
 
         /// The type a number names, or none for a number the channel
         /// does not give out.
@@ -331,11 +319,7 @@ pub mod cube_types {
 
     impl Water {
         /// Every type the channel gives out, in the JSON's own order.
-        pub const ALL: [Water; 3] = [
-            Water::river,
-            Water::lake,
-            Water::wetland,
-        ];
+        pub const ALL: [Water; 3] = [Water::river, Water::lake, Water::wetland];
 
         /// The type a number names, or none for a number the channel
         /// does not give out.
@@ -423,7 +407,7 @@ pub mod cube_types {
         }
     }
 
-    // Flat user-painted colors only — no sentinels of its own anymore.
+    // Flat user-painted colors only — no sentinels of its own.
     // cube_types.common.void (sparse-tree absence) and .air (explicit erase)
     // already cover every non-color case a placed cube's own byte can mean;
     // every real key here is a real, pickable color.

@@ -1,11 +1,12 @@
 // pxl_shared/bake/format.test.rs
 // (no pair: format.ts's tests are poi_page.test.ts, mirrored beside this)
 
-use super::*;
 use xpute_core::kit::array::TypedArray;
 use xpute_core::kit::encoding::{bytes_to_hex, hex_to_bytes, td};
 use xpute_core::kit::json::stringify_str_map;
-use xpute_core::vector::Vector;
+use xpute_core::sys::vector::Vector;
+
+use super::*;
 
 const VECTOR: &str = include_str!("../../vector/bake/format.tsv");
 

@@ -11,10 +11,11 @@
 //! configured, the live API otherwise; a 404 from the static set resolves to
 //! the empty page with no extra round trip.
 
-use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::bake::format::{encode_empty_poi_page, PoiPage};
+use pxl_shared::spec::space::pvf3::ivec::IVec;
 use xpute_core::kit::array::{ArrayBuffer, U8Array};
 use xpute_core::sys::error::MarshalError;
+use xpute_core::sys::mem::Block;
 
 use crate::lib::env::config::POI_TILE_BASE_URL;
 use crate::lib::env::route::{Joined, TileBase};
@@ -22,9 +23,6 @@ use crate::lib::env::route::{Joined, TileBase};
 pub fn poi_url(page_idx: IVec) -> Joined<TileBase, IVec> {
     Joined(POI_TILE_BASE_URL(), page_idx)
 }
-
-/// A block of the page section: its address and size.
-pub type Block = (usize, u32);
 
 pub struct ResidentPoiPage {
     pub page: PoiPage,

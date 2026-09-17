@@ -3,7 +3,7 @@
 // them to the TypeScript over signed addresses)
 
 use super::*;
-use crate::vector::Vector;
+use crate::sys::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/ds/lattice_hash.tsv");
 

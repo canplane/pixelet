@@ -9,8 +9,8 @@
 //! A response is read into a table — parts and their names — cleared before
 //! the next.
 
-use pxl_shared::spec::space::pvf3::ivec::IVec;
 use core::ops::Range;
+use pxl_shared::spec::space::pvf3::ivec::IVec;
 
 use xpute_core::kit::json::{read_json, JsonKind, JsonValue};
 
@@ -88,10 +88,16 @@ impl PartTable {
         if let Some(object) = value.filter(|v| v.kind() == JsonKind::Object) {
             for (key, v) in object.fields() {
                 let Some(s) = v.as_str() else { continue };
-                self.names.push(CommonName { lang: key.to_string(), name: s.to_string() });
+                self.names.push(CommonName {
+                    lang: key.to_string(),
+                    name: s.to_string(),
+                });
             }
         }
-        Rows { first, count: self.names.len() as u32 - first }
+        Rows {
+            first,
+            count: self.names.len() as u32 - first,
+        }
     }
 
     /// A part as the JSON carries it; none where it does not read.
@@ -109,7 +115,10 @@ impl PartTable {
         for p in value.map(|v| v.items()).into_iter().flatten() {
             self.read_part(p);
         }
-        Rows { first, count: self.parts.len() as u32 - first }
+        Rows {
+            first,
+            count: self.parts.len() as u32 - first,
+        }
     }
 }
 

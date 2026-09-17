@@ -75,7 +75,7 @@ const PREFIX = "/api/tiles/";
  *   geocode/repository.ts resolves that to `null` directly).
  * - `asset/<sha256>` — a model or an image, named by its content;
  *   apps/api/src/bake/asset/tool/ingest_asset.ts writes them and the
- *   shipped palette names them. No version segment: a changed file is a
+ *   catalogs name them by path. No version segment: a changed file is a
  *   new key, which is what makes `immutable` true of it.
  *
  * page_idx is an L3 index printed as a decimal BigInt (see tile_repository.ts/

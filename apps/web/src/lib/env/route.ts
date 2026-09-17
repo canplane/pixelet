@@ -24,7 +24,7 @@ export function tile_base(kind: TileKind, published: boolean): string {
 }
 
 /** A content-addressed asset — a model, a texture — by its bucket key
- * (`asset/<sha256>`, the shipped palette's `model_key`/`skin_key`). No
+ * (`asset/<sha256>`, the key the asset ingest gave its bytes). No
  * version: the key is the content. Same path published or not, since the
  * dev API serves the ingest's output under it. */
 export function asset_url(key: string): string {

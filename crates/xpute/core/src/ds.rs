@@ -12,4 +12,3 @@ pub mod map;
 pub mod slab;
 pub mod spatial_hash;
 pub mod treap_set;
-pub mod typed_alloc;

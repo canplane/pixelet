@@ -2,7 +2,7 @@
 
 //! The texture pack as two 2D array textures on the device — a top and a side
 //! face per layer, one layer per ground type and cube colour, indexed by the
-//! layer indices the mesher bakes into a vertex's taps (layer_table.rs). Every
+//! layer indices the mesher bakes into a vertex's taps (render/layer/terrain/shader_meta.rs). Every
 //! layer starts as its flat colour, and the pack's sheet replaces them tile by
 //! tile once it arrives; a side with no tile of its own wears the top's, the
 //! rule the shader assumes.
@@ -12,17 +12,18 @@
 //! different texel and the ground crawls. WebGPU has no generateMipmap, so the
 //! chain is drawn on the device, a level from the one above (Mips).
 
-use pxl_shared::record::texture::{shipped_texture_tile, CubeFace, SHIPPED_SHEET};
-use pxl_shared::spec::cell::{cube_rgb, cube_ids};
+use pxl_shared::asset::texture::{shipped_texture_tile, CubeFace, SHIPPED_SHEET};
+use pxl_shared::spec::cell::{cube_ids, cube_rgb};
 
 use super::api::{object, texture_usage, GpuApi};
 use super::api_spec::{address, compare, dimension, filter, format, load, resource};
-use super::layer_table::{rgb255, GROUND_LAYER_META, OBJECT_LAYER_IDX};
 use super::paint::Paint;
 use super::pipeline::Pipelines;
 use crate::lib::env::route::asset_url;
-use crate::render::gltf::load::load_image;
+use crate::module::world::gltf_cache::load_image;
+use crate::render::layer::terrain::shader_meta::{rgb255, GROUND_LAYER_META};
 use crate::render::shader::PIPELINE_MIPS;
+use crate::render::tex_array::OBJECT_LAYER_IDX;
 
 /// The tile edge in texels (apps/api's download_texture_pack.ts's TILE_SIZE).
 pub const LAYER_TEX_SZ: u32 = 256;
@@ -64,7 +65,11 @@ impl Mips {
                 let group = object();
                 (g.bind_group)(group, self.layout, &[0, resource::VIEW, above, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
                 let pass = object();
-                (g.pass)(pass, encoder, &super::api::pass_desc(target, 0, load::CLEAR, 0, load::CLEAR, 0.0, 0, super::api::NONE, super::api::NONE));
+                (g.pass)(
+                    pass,
+                    encoder,
+                    &super::api::pass_desc(target, 0, load::CLEAR, 0, load::CLEAR, 0.0, 0, super::api::NONE, super::api::NONE),
+                );
                 (g.set_pipeline)(pass, self.pipeline);
                 (g.set_bind_group)(pass, 0, group, &[]);
                 (g.draw)(pass, 3, 1, 0, 0);
@@ -161,7 +166,9 @@ impl Layers {
         let (cell, size) = (SHIPPED_SHEET.cell as f32, LAYER_TEX_SZ as f32);
         for (tex, face) in [(self.top, CubeFace::Top), (self.side, CubeFace::Side)] {
             each_layer(|channel, type_key, layer, _| {
-                let Some(tile) = shipped_texture_tile(channel, type_key, face).or_else(|| shipped_texture_tile(channel, type_key, CubeFace::Top)) else { return };
+                let Some(tile) = shipped_texture_tile(channel, type_key, face).or_else(|| shipped_texture_tile(channel, type_key, CubeFace::Top)) else {
+                    return;
+                };
                 let mut p = Paint::new();
                 p.size(LAYER_TEX_SZ, LAYER_TEX_SZ);
                 p.image(image, tile.x as f32, tile.y as f32, cell, cell, 0.0, 0.0, size, size);

@@ -13,11 +13,11 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 use xpute_core::kit::math::clamp;
 
-use crate::global::Global;
 use crate::module::camera::config::camera_cfg::view::DEFAULT_DIST;
-use crate::module::map::store::use_map_store;
+use crate::module::map::store::map_store;
 use crate::module::world::terrain::store::tile_pages;
-use crate::render::gpu::layer_table::rgb255;
+use crate::render::layer::terrain::shader_meta::rgb255;
+use crate::sys::global::Global;
 
 const ATLAS_PAGE_PX: u32 = 64;
 const SAMPLE_STRIDE: u32 = PAGE_CELL_SPAN / ATLAS_PAGE_PX;
@@ -38,7 +38,7 @@ type Rgb = [u8; 3];
 
 /// Ground channel bytes are type IDs, not weights, so this must reuse the same
 /// per-channel override order the terrain paint resolves a cell by
-/// (crates/pxl/core/src/bake/terrain.rs) — reordering GROUND_CH_KEYS here would
+/// (crates/pxl/core/src/render/layer/terrain/adapter.rs) — reordering GROUND_CH_KEYS here would
 /// silently mismatch the 3D terrain's colors.
 struct Colors {
     base: Rgb,
@@ -46,7 +46,10 @@ struct Colors {
 }
 
 fn colors() -> Colors {
-    let base = cube_colors.get("land").and_then(|c| c.get(&(cube_types::land::bare as u32)).copied().flatten()).map_or([0; 3], |s| rgb255(s.rgb));
+    let base = cube_colors
+        .get("land")
+        .and_then(|c| c.get(&(cube_types::land::bare as u32)).copied().flatten())
+        .map_or([0; 3], |s| rgb255(s.rgb));
     let mut by_channel = [[None; 256]; 4];
     for (slot, ch) in GROUND_CH_KEYS.iter().enumerate() {
         if let Some(table) = cube_colors.get(ch.as_str()) {
@@ -83,13 +86,13 @@ struct Atlas {
 static ATLAS: Global<Atlas> = Global::new();
 
 /// The minimap's image as it stands, rebaked when its inputs moved.
-pub fn use_minimap_atlas() -> Option<&'static MinimapAtlas> {
+pub fn minimap_atlas() -> Option<&'static MinimapAtlas> {
     let a = ATLAS.get(|| Atlas {
         colors: colors(),
         image: None,
         baked_for: None,
     });
-    let map_center = use_map_store().map_center?;
+    let map_center = map_store().map_center?;
     let key = (tile_pages().revision(), L3_IDX(map_center.i));
     if a.baked_for != Some(key) {
         a.baked_for = Some(key);

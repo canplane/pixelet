@@ -8,10 +8,10 @@
 // Two outputs. ./out/asset/{glb,png,webp}/<sha256> is a copy of every file
 // under its key, split by type so `aws s3 sync` can set one content-type per
 // directory (the object name carries no extension, so the type has to be
-// stored with it). And packages/pxl/shared/src/record/ingested.ts is the
-// table the shipped palette reads — asset path to key, size and extent —
+// stored with it). And packages/pxl/shared/src/asset/ingested.ts is the
+// table the catalogs read — asset path to key, size and extent —
 // generated in sorted order so a re-run with no changes writes no diff,
-// and crates/pxl/shared/src/record/ingested.rs is the same table for the
+// and crates/pxl/shared/src/asset/ingested.rs is the same table for the
 // Rust pair, from the same rows.
 //
 // The texture pack is also ingested as one object: every image under
@@ -39,8 +39,8 @@ import { render_rust_table, render_table, type Sheet } from "../table.ts";
 const ROOT = fileURLToPath(new URL("../../../../../../", import.meta.url));
 const ASSET_DIR = resolve(ROOT, "asset");
 const OUT_DIR = resolve(ROOT, "out/asset");
-const TABLE_PATH = resolve(ROOT, "packages/pxl/shared/src/record/ingested.ts");
-const RUST_TABLE_PATH = resolve(ROOT, "crates/pxl/shared/src/record/ingested.rs");
+const TABLE_PATH = resolve(ROOT, "packages/pxl/shared/src/asset/ingested.ts");
+const RUST_TABLE_PATH = resolve(ROOT, "crates/pxl/shared/src/asset/ingested.rs");
 
 async function* walk_files(dir: string): AsyncGenerator<string> {
   for await (const entry of Deno.readDir(dir)) {

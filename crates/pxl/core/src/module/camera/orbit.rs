@@ -1,15 +1,15 @@
 // pxl_core/module/camera/orbit.rs
 
-//! Pure math for this app's orbit camera model, pulled out of use_camera.rs /
-//! use_view_frame.rs so it can be unit tested on its own. Doc'd once here
+//! Pure math for this app's orbit camera model, pulled out of damping.rs /
+//! view_frame.rs so it can be unit tested on its own. Doc'd once here
 //! because the model is easy to get backwards:
 //!
 //! **Azimuth never rotates the camera.** Only `dist` and `polar` determine
 //! camera.position (orbit_local_offset below), and the camera always looks
 //! straight at its target. World content rotates by azimuth under this fixed
-//! camera instead (module/world/frame/view.rs, stepped by use_view_frame.rs) — the
+//! camera instead (module/world/frame/view.rs, stepped by view_frame.rs) — the
 //! ground spins, not the eye. Anything needing "which way is the camera
-//! effectively facing" (the sky dome's sun/moon sweep in environment.tsx) has
+//! effectively facing" — the sky dome's sun and moon sweep — has
 //! no single camera transform to read that off of — only this rotate2
 //! primitive, signed for the conversion direction: world_frame_ref's own
 //! rotation.z is always exactly +azimuth, so matching the ground's own
@@ -57,7 +57,7 @@ pub fn rotate2(x: f64, y: f64, angle: f64) -> Rotated {
 /// Exponential-decay ease-toward-target factor for one frame of `delta`
 /// seconds at rate `k` (bigger k = snappier convergence). Shared by every
 /// damped camera/frame value in this module tree (dist/polar in
-/// use_camera.rs, azimuth in use_view_frame.rs) so they all converge with
+/// damping.rs, azimuth in view_frame.rs) so they all converge with
 /// the same characteristic curve — apply as
 /// `current += (target - current) * damp_alpha(k, delta)`.
 pub fn damp_alpha(k: f64, delta: f64) -> f64 {

@@ -1,6 +1,6 @@
 // pxl_core/module/world/character/store.rs
 
-use crate::global::Global;
+use crate::sys::global::Global;
 
 /// Whether the in-world companion's person/pet models have finished loading
 /// (the companion registers them with the kernel once parsed) — not persisted,
@@ -16,28 +16,12 @@ use crate::global::Global;
 pub struct CompanionLoadStore {
     pub person_ready: bool,
     pub pet_ready: bool,
-    pub revision: u32,
 }
 
-impl CompanionLoadStore {
-    pub fn set_person_ready(&mut self, ready: bool) {
-        if self.person_ready != ready {
-            self.person_ready = ready;
-            self.revision += 1;
-        }
-    }
-
-    pub fn set_pet_ready(&mut self, ready: bool) {
-        if self.pet_ready != ready {
-            self.pet_ready = ready;
-            self.revision += 1;
-        }
-    }
-}
+impl CompanionLoadStore {}
 
 static STORE: Global<CompanionLoadStore> = Global::new();
 
-/// `useCompanionLoadStore.getState()`.
-pub fn use_companion_load_store() -> &'static mut CompanionLoadStore {
+pub fn companion_load_store() -> &'static mut CompanionLoadStore {
     STORE.get(CompanionLoadStore::default)
 }

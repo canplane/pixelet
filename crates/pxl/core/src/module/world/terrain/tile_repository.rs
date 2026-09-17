@@ -14,23 +14,23 @@
 //!
 //! The shared tile is fetched under its own category, so the pages waiting on
 //! it settle at once and its one fetch is not tied to any of them. A failure
-//! is not kept: while pages wait, it is asked for again (use_tile_fetcher.rs).
+//! is not kept: while pages wait, it is asked for again (tile_fetcher.rs).
 
 use pxl_shared::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_shared::bake::format::{decode_terrain, Ground, Terrain, Tile};
 use pxl_shared::spec::fetch::FetchFail;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use xpute_core::kit::array::{ArrayBuffer, I16Array, U8Array};
+use xpute_core::sys::mem::alloc;
 
-use super::resident::take_slot;
 use super::fixed::{ele_at, ground_at, record_ele_at, record_ground_at, RECORD_BYTES};
-use super::store::use_tile_store;
-use crate::module::world::sched::demand::Category;
-use crate::global::{now, Global};
+use super::resident::take_slot;
+use super::store::tile_store;
 use crate::lib::env::config::TILE_BASE_URL;
 use crate::lib::env::route::{Joined, TileBase};
 use crate::mem;
-use crate::module::world::sched::demand::Phases;
+use crate::module::world::sched::demand::{Category, Phases};
+use crate::sys::global::{now, Global};
 
 /// Object key of the single shared open-ocean tile in the static bucket.
 pub const OCEAN_KEY: &str = "_ocean";
@@ -143,12 +143,12 @@ pub fn adopt_terrain(page_idx: IVec, pkt: U8Array, phases: &mut Phases) -> Resul
     // Only a jump reaches this: inside the load radius no two pages share a
     // record.
     if let Some(gone) = take_slot(page_idx) {
-        use_tile_store().clear_tile(gone);
+        tile_store().clear_tile(gone);
     }
     // SAFETY: the lanes are this page's record in the range, at the page's lane
     // sizes, until another page's coordinate names the same record.
     let terrain = unsafe { open_terrain(lanes) };
-    use_tile_store().set_tile(page_idx, Tile { terrain });
+    tile_store().set_tile(page_idx, Tile { terrain });
     Ok(())
 }
 
@@ -169,7 +169,7 @@ fn ocean() -> &'static mut Ocean {
 pub fn ocean_page(page_idx: IVec) {
     let o = ocean();
     match &o.terrain {
-        Some(t) => use_tile_store().set_tile(page_idx, Tile { terrain: t.clone() }),
+        Some(t) => tile_store().set_tile(page_idx, Tile { terrain: t.clone() }),
         None if !o.waiting.contains(&page_idx) => o.waiting.push(page_idx),
         None => {}
     }
@@ -186,7 +186,7 @@ pub fn adopt_ocean(pkt: U8Array) -> Result<(), FetchFail> {
         return Ok(());
     }
     let decoded = decode(pkt)?;
-    let at = crate::bake::volume::take_bytes(RECORD_BYTES as usize).ok_or(FetchFail::NoRoom)?;
+    let (at, _) = alloc(RECORD_BYTES).ok_or(FetchFail::NoRoom)?;
     let lanes = TerrainLanes {
         ground: [record_ground_at(at, 0), record_ground_at(at, 1), record_ground_at(at, 2), record_ground_at(at, 3)],
         ele: record_ele_at(at),
@@ -196,7 +196,7 @@ pub fn adopt_ocean(pkt: U8Array) -> Result<(), FetchFail> {
     let terrain = unsafe { open_terrain(lanes) };
     let o = ocean();
     for page_idx in o.waiting.drain(..) {
-        use_tile_store().set_tile(page_idx, Tile { terrain: terrain.clone() });
+        tile_store().set_tile(page_idx, Tile { terrain: terrain.clone() });
     }
     o.terrain = Some(terrain);
     Ok(())

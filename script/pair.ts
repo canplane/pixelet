@@ -226,7 +226,7 @@ async function check_tree(tree: Tree): Promise<void> {
   for (const t of ts_test) {
     const src = t.replace(/\.test\.ts$/, ".ts");
     if (ts_src.includes(src) || !required(src)) continue;
-    // A test named for no module (record.test.ts beside record/'s files) is
+    // A test named for no module (asset.test.ts beside asset/'s files) is
     // paired all the same: its tests in the `.test.rs` at its path, which a
     // module in the directory takes in by `#[path]`.
     const rs_test = t.replace(/\.test\.ts$/, ".test.rs");

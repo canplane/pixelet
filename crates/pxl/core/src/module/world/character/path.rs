@@ -3,7 +3,7 @@
 //! Pure companion-movement math — no renderer of any kind. Positioning/timing
 //! logic is kept independent of the renderer on purpose, which is how it
 //! survived the move from three to the kernel's actors
-//! (crates/pxl/core/src/world/model.rs) unchanged.
+//! (crates/pxl/core/src/module/world/gltf_cache.rs) unchanged.
 
 use xpute_core::kit::fdlibm;
 

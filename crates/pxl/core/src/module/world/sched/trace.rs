@@ -45,7 +45,6 @@ fn json_number(n: f64) -> String {
     }
 }
 
-
 fn object(fields: &[(String, String)]) -> String {
     let body: Vec<String> = fields.iter().map(|(k, v)| format!("{}:{}", Quoted(k), v)).collect();
     format!("{{{}}}", body.join(","))
@@ -57,7 +56,12 @@ fn field(k: &str, v: String) -> (String, String) {
 
 #[allow(clippy::too_many_arguments)]
 fn event(name: &str, cat: &str, ph: &str, ts: f64, dur: Option<f64>, tid: u32, args: Option<String>) -> String {
-    let mut fields = vec![field("name", Quoted(name).to_string()), field("cat", Quoted(cat).to_string()), field("ph", Quoted(ph).to_string()), field("ts", json_number(ts))];
+    let mut fields = vec![
+        field("name", Quoted(name).to_string()),
+        field("cat", Quoted(cat).to_string()),
+        field("ph", Quoted(ph).to_string()),
+        field("ts", json_number(ts)),
+    ];
     if let Some(dur) = dur {
         fields.push(field("dur", json_number(dur)));
     }
@@ -195,7 +199,15 @@ pub fn ledger_trace_json() -> String {
             let mut args = frame_args(f);
             args.push(field("d_buffers", w.prev.as_ref().map_or("null".to_string(), |p| json_number(f.buffers - p.buffers))));
             args.push(field("d_heap_mb", w.prev.as_ref().map_or("null".to_string(), |p| json_number(f.heap_mb - p.heap_mb))));
-            events.push(event(&format!("stall {:.0}ms", f.dt_ms), "worst", "X", ms_to_us(f.t - f.dt_ms), Some(ms_to_us(f.dt_ms)), TID_WORST, Some(object(&args))));
+            events.push(event(
+                &format!("stall {:.0}ms", f.dt_ms),
+                "worst",
+                "X",
+                ms_to_us(f.t - f.dt_ms),
+                Some(ms_to_us(f.dt_ms)),
+                TID_WORST,
+                Some(object(&args)),
+            ));
         }
     }
 
@@ -203,13 +215,29 @@ pub fn ledger_trace_json() -> String {
     if !longs.is_empty() {
         events.push(thread_name(TID_LONG, "LoAF"));
         for l in longs {
-            let args = object(&[field("blocking_ms", fixed(l.blocking_ms, 1)), field("script_ms", fixed(l.script_ms, 1)), field("render_ms", fixed(l.render_ms, 1))]);
-            events.push(event(&format!("long frame {:.0}ms", l.duration_ms), "loaf", "X", ms_to_us(l.t), Some(ms_to_us(l.duration_ms)), TID_LONG, Some(args)));
+            let args = object(&[
+                field("blocking_ms", fixed(l.blocking_ms, 1)),
+                field("script_ms", fixed(l.script_ms, 1)),
+                field("render_ms", fixed(l.render_ms, 1)),
+            ]);
+            events.push(event(
+                &format!("long frame {:.0}ms", l.duration_ms),
+                "loaf",
+                "X",
+                ms_to_us(l.t),
+                Some(ms_to_us(l.duration_ms)),
+                TID_LONG,
+                Some(args),
+            ));
         }
     }
 
     // Chrome's trace format keeps a top-level `metadata` object; a trace read
     // back later names the build it came from.
-    let metadata = object(&[field("build_number", Quoted(BUILD_NUMBER()).to_string()), field("build_id", Quoted(BUILD_ID()).to_string()), field("build_time", Quoted(BUILD_TIME()).to_string())]);
+    let metadata = object(&[
+        field("build_number", Quoted(BUILD_NUMBER()).to_string()),
+        field("build_id", Quoted(BUILD_ID()).to_string()),
+        field("build_time", Quoted(BUILD_TIME()).to_string()),
+    ]);
     format!("{{\"traceEvents\":[{}],\"displayTimeUnit\":\"ms\",\"metadata\":{}}}", events.join(","), metadata)
 }

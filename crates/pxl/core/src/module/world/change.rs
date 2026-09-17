@@ -13,8 +13,8 @@
 
 use xpute_core::ipc::change::{ChangeLog, Revision, Topic};
 
-use crate::global::Global;
-use crate::kernel::kernel;
+use crate::sys::global::Global;
+use crate::sys::kernel::kernel;
 
 /// A column's cube content (object/store.rs), keyed by column base.
 pub const OBJECT_COLUMN: Topic = 0;

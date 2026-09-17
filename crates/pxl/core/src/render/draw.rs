@@ -1,17 +1,19 @@
-//! What the renderer draws, as lists the glue executes against WebGPU: the
+//! What the renderer draws, as lists the shell executes against WebGPU: the
 //! blocks to put on the GPU and the ones to let go, and each frame the
-//! draws, with what each needs beyond its geometry. The glue holds no
+//! draws, with what each needs beyond its geometry. The shell holds no
 //! decision — which mesh, at what weight, where — only the API calls; a
 //! native shell executes the same lists against wgpu.
 //!
 //! A block is named by a handle the core hands out when a tier lands; the
 //! upload says where the block lies in the memory and how long it is, and
-//! the glue reads the lanes by the mesher's layout from the vertex count.
-//! Uploads and frees accumulate until the glue takes them, whatever calls
+//! the shell reads the lanes by the mesher's layout from the vertex count.
+//! Uploads and frees accumulate until the shell takes them, whatever calls
 //! made them (a tick, a build now); the draws are the last tick's. A free
-//! cancels an upload not yet taken: the block is the glue's to release the
+//! cancels an upload not yet taken: the block is the shell's to release the
 //! moment it is told, and may be someone else's by the time the list runs.
 
+use pxl_shared::spec::space::v3::V3;
+use xpute_core::sys::mem::{alloc, free};
 
 /// Words an upload record holds: the handle, the block's address and its
 /// length in bytes, and the vertex and index counts, which name the lanes.
@@ -38,17 +40,17 @@ pub const PIPELINE_DECOR: u32 = 1;
 pub const PIPELINE_GHOST_BOX: u32 = 2;
 pub const PIPELINE_GHOST_BOX_COPLANAR: u32 = 3;
 pub const PIPELINE_GHOST_DECOR: u32 = 4;
-/// An actor (model.rs): words (the model's handle, the joint palette's
+/// An actor (gltf_cache.rs): words (the model's handle, the joint palette's
 /// handle, the model id, uniform, pipeline), its uniform's fourth float the
 /// turn about Z.
 pub const PIPELINE_SKINNED: u32 = 5;
-/// The location puck (marker.rs): the zone's instances as (the zone block's
+/// The location puck (marker/location_puck.rs): the zone's instances as (the zone block's
 /// handle, the instance count, 0, uniform, pipeline), translated to the
 /// zone's centre; the beacon as (0, night, 0, uniform, pipeline), its
 /// uniform's fourth float its spin.
 pub const PIPELINE_PUCK_ZONE: u32 = 6;
 pub const PIPELINE_PUCK_BEACON: u32 = 7;
-/// The badges (billboard.rs): (the block's handle, the count, 0, uniform,
+/// The badges (billboard/field.rs): (the block's handle, the count, 0, uniform,
 /// pipeline), translated to the placement's origin.
 pub const PIPELINE_BADGE: u32 = 8;
 /// Line segments over everything: handle, vertex count.
@@ -65,7 +67,7 @@ pub struct DrawList {
     draws: Vec<u32>,
     uniforms: Vec<f32>,
     next_handle: u32,
-    /// The lanes the glue last took, kept until it takes again.
+    /// The lanes the shell last took, kept until it takes again.
     taken: Taken,
 }
 
@@ -79,7 +81,7 @@ struct Taken {
 }
 
 impl DrawList {
-    /// A handle for a block the glue is to upload.
+    /// A handle for a block the shell is to upload.
     pub fn upload(&mut self, at: u32, bytes: u32, vertex_cnt: u32, index_cnt: u32) -> u32 {
         self.next_handle = self.next_handle.wrapping_add(1).max(1);
         let handle = self.next_handle;
@@ -87,7 +89,7 @@ impl DrawList {
         handle
     }
 
-    /// The block behind `handle` is gone from the glue's memory, or about to
+    /// The block behind `handle` is gone from the shell's memory, or about to
     /// be; 0 names no block.
     pub fn free(&mut self, handle: u32) {
         if handle == 0 {
@@ -130,7 +132,7 @@ impl DrawList {
 
     /// A draw's translation: where `at` is against the frame's `origin`,
     /// narrowed once the difference is small.
-    pub fn translation(at: [f64; 3], origin: [f64; 3]) -> [f32; 3] {
+    pub fn translation(at: V3, origin: V3) -> [f32; 3] {
         [(at[0] - origin[0]) as f32, (at[1] - origin[1]) as f32, (at[2] - origin[2]) as f32]
     }
 
@@ -158,7 +160,7 @@ impl DrawList {
     }
 
     /// A decor group's instances: `offset` is the group's first lane word in
-    /// the block (decor.rs's layout), exact in a float to 2^24 words.
+    /// the block (decor_layer.rs's layout), exact in a float to 2^24 words.
     pub fn draw_decor(&mut self, handle: u32, group: u32, count: u32, offset: u32, translation: [f32; 3]) {
         let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, 1.0, 0.0, 0.0, 0.0]);
@@ -170,7 +172,7 @@ impl DrawList {
         (self.draws.len() / DRAW_WORDS) as u32
     }
 
-    /// Hands the lists to the glue: the lanes' addresses and counts, valid
+    /// Hands the lists to the shell: the lanes' addresses and counts, valid
     /// until the next take. Uploads and frees start fresh; the draws stay
     /// until the next frame writes them.
     pub fn take(&mut self) -> [usize; 10] {
@@ -200,7 +202,6 @@ impl DrawList {
     }
 }
 
-
 /// A block of the mesh section the renderer holds a copy of, written whole
 /// each time by whoever owns it — the badges, the gizmos: grown to the
 /// next power of two when the write outgrows it, since a placement's count
@@ -224,7 +225,7 @@ impl Held {
         if need > self.bytes {
             self.free(draw);
             let bytes = need.next_power_of_two();
-            let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else { return false };
+            let Some((at, bytes)) = alloc(bytes) else { return false };
             self.at = at;
             self.bytes = bytes;
         }
@@ -242,7 +243,7 @@ impl Held {
         if self.bytes > 0 {
             draw.free(self.handle);
             // SAFETY: the block this lane took and has not given back.
-            unsafe { crate::bake::volume::give_bytes(self.at, self.bytes as usize) };
+            unsafe { free((self.at, self.bytes)) };
             self.bytes = 0;
             self.handle = 0;
         }

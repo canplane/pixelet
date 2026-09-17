@@ -1,18 +1,20 @@
 // pxl_core/module/world/decor/scatter.rs
 
-//! Deterministic decoration placement — the general half of the "scatter some
-//! prop across eligible terrain cells" pipeline this module family exists to
-//! establish (trees, boats, cars, and trains today; more kinds later reuse
-//! this same function with their own DecorKindSeed + eligibility rules, never
-//! their own bespoke RNG). Rendering, terrain access, and the "is a user object
-//! already standing here" check are all decor_kinds.rs's concern instead —
-//! this file only ever sees plain ground-channel arrays and a seed, so it can
-//! be tested head-on with synthetic ground data, no tile store involved.
+//! What a decoration kind is allowed to stand on, and how a placed one picks
+//! its size and heading — the general half of the "scatter some prop across
+//! eligible terrain cells" pipeline this module family exists to establish
+//! (trees, boats, cars, and trains today; more kinds later declare their own
+//! DecorKindSeed + eligibility rules, never their own bespoke RNG).
+//!
+//! The scatter itself is the kernel's (crates/pxl/core/src/module/world/decor/decor_layer.rs):
+//! it walks a chunk's cells into the decor block's lanes, drawing from a
+//! stream seeded by the page, the kind and the cell. Which cells it may use
+//! and what it does with the draws is declared here, so a kind is one
+//! description rather than two rules kept in step. Nothing here reaches for a tile store — plain ground-channel
+//! arrays and numbers, so it can be read head-on.
 
 use pxl_shared::bake::constant::PAGE_CELL_SPAN;
-use pxl_shared::bake::format::Ground;
 use pxl_shared::spec::cell::cube_types;
-use xpute_core::kit::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 /// What a channel's type must be for a kind to stand on the cell: anything,
 /// nothing painted, or one of a list of types.
@@ -24,7 +26,7 @@ pub enum DecorChannelRule {
 }
 
 /// A kind's rule per ground channel, declared so the scheduler can be taught
-/// the same rule (crates/pxl/core/src/world/decor.rs) and `eligibility_of`
+/// the same rule (crates/pxl/core/src/module/world/decor/decor_layer.rs) and `eligibility_of`
 /// derives the predicate from it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DecorRules {
@@ -123,24 +125,12 @@ pub struct DecorKindSeed {
     pub orientation: DecorOrientationMode,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct DecorCandidate {
-    /// Page-local cell coordinates (cell_y * PAGE_CELL_SPAN + cell_x).
-    pub cell_x: u32,
-    pub cell_y: u32,
-    pub variant: u32,
-    /// Radians, about the decoration's own vertical axis.
-    pub rotation: f64,
-    /// Uniform scale multiplier, jittered around 1 for organic variety.
-    pub scale: f64,
-}
-
 // +/- this fraction around 1.0 — visible variety between instances of the
 // same variant without any one of them reading as a visibly wrong size.
-const SCALE_JITTER: f64 = 0.18;
+pub const SCALE_JITTER: f64 = 0.18;
 
 // How far transport_aligned_rotation looks past the immediate neighbor on each
-// side — a fixed, small radius (never a flood-fill: O(1) reads per candidate,
+// side — a fixed, small radius (never a flood-fill: O(1) reads per cell,
 // independent of how long the actual road/rail run is), just enough to outvote
 // a single-cell diagonal "stairstep" jog in an otherwise straight run. A true
 // curve still won't resolve to the right heading at any radius — this only
@@ -158,7 +148,7 @@ const ALIGN_NEIGHBOR_RADIUS: i64 = 3;
 /// `flip` adds a random +PI on top of that axis — still lined up with the
 /// road/rail either way, but facing one direction or the opposite one, same as
 /// real two-way traffic never all pointing the same way.
-fn transport_aligned_rotation(transport: &[u8], cell_x: u32, cell_y: u32, flip: bool) -> f64 {
+pub fn transport_aligned_rotation(transport: &[u8], cell_x: u32, cell_y: u32, flip: bool) -> f64 {
     let span = PAGE_CELL_SPAN as i64;
     let (x, y) = (cell_x as i64, cell_y as i64);
     let idx = y * span + x;
@@ -185,62 +175,6 @@ fn transport_aligned_rotation(transport: &[u8], cell_x: u32, cell_y: u32, flip: 
     } else {
         axis_rotation
     }
-}
-
-/// Scans page-local cells [tx0, tx0+span) x [ty0, ty0+span) — a chunk's own
-/// footprint within a page's full-resolution ground arrays — and returns every
-/// eligible cell's placement, keyed off a seed derived from (page_seed,
-/// kind.tag, cell_x, cell_y) alone. Pure and fully deterministic: the same
-/// inputs always produce the same candidates, regardless of when, how often,
-/// or in what order this runs — which lets a placed user object's cell "win"
-/// over a scattered decoration by simply filtering candidates afterward,
-/// rather than persisting which cells got suppressed.
-///
-/// `density_scale` multiplies kind.density before the per-cell roll — the
-/// caller's own distance-based falloff, kept as a plain scalar here so this
-/// function stays free of any renderer/LOD concept of its own.
-#[allow(clippy::too_many_arguments)]
-pub fn scatter_decor_candidates(ground: &Ground, tx0: u32, ty0: u32, span: u32, page_seed: u64, kind: &DecorKindSeed, rules: &DecorRules, density_scale: f64) -> Vec<DecorCandidate> {
-    let mut out = Vec::new();
-    let (land, water, structure, transport) = (ground.land.as_slice(), ground.water.as_slice(), ground.structure.as_slice(), ground.transport.as_slice());
-    let kind_seed = derive_seed_u64(page_seed, kind.tag);
-
-    for dy in 0..span {
-        let cell_y = ty0 + dy;
-        let row = cell_y * PAGE_CELL_SPAN;
-        for dx in 0..span {
-            let cell_x = tx0 + dx;
-            let idx = (row + cell_x) as usize;
-            if !eligibility_of(rules, land[idx] as u32, water[idx] as u32, structure[idx] as u32, transport[idx] as u32) {
-                continue;
-            }
-
-            // 16 bits per axis comfortably covers PAGE_CELL_SPAN (1024, 10 bits).
-            let cell_tag = ((cell_x as u64) << 16) | cell_y as u64;
-            let mut stream = SplitMix64::new(derive_seed_u64(kind_seed, cell_tag));
-            let mut rng = || stream.next_u32();
-
-            if u32_to_unit(rng()) >= kind.density * density_scale {
-                continue;
-            }
-            let variant = ((u32_to_unit(rng()) * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
-            let rotation = if kind.orientation == DecorOrientationMode::AlignTransport {
-                transport_aligned_rotation(transport, cell_x, cell_y, u32_to_unit(rng()) < 0.5)
-            } else {
-                u32_to_unit(rng()) * core::f64::consts::PI * 2.0
-            };
-            let scale = 1.0 + (u32_to_unit(rng()) * 2.0 - 1.0) * SCALE_JITTER;
-            out.push(DecorCandidate {
-                cell_x,
-                cell_y,
-                variant,
-                rotation,
-                scale,
-            });
-        }
-    }
-
-    out
 }
 
 #[cfg(test)]

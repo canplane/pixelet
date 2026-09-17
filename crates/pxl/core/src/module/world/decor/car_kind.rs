@@ -11,7 +11,7 @@ pub fn CAR_KIND() -> DecorKindSeed {
     DecorKindSeed {
         tag: S::tag,
         density: S::density,
-        variant_count: S::variant_count,
+        variant_count: S::models.len() as u32,
         orientation: DecorOrientationMode::of(S::orientation),
     }
 }

@@ -100,10 +100,6 @@
           "value": 19
         },
         {
-          "name": "FRAME",
-          "value": 20
-        },
-        {
           "name": "DRAW",
           "value": 21
         },
@@ -605,8 +601,9 @@
           "name": "CHUNK_CREATE",
           "value": 257,
           "doc": [
-            "tag chunk · [base u64, tx0 u32, ty0 u32, base_x i32, base_y i32,",
-            "stable_hash u32]"
+            "tag chunk · [page_idx u64, base_x u32, base_y u32] — a chunk the",
+            "kernel mounted. Raised, never submitted: the scheduler decides what is",
+            "resident and where it sits"
           ]
         },
         {
@@ -717,7 +714,7 @@
         {
           "section": "the scene: what is drawn beside the chunks",
           "doc": [
-            "A lane of floats crosses in the packet, not by address: the glue's",
+            "A lane of floats crosses in the packet, not by address: the shell's",
             "scratch is given back as soon as the command is sent, and the command",
             "is applied later."
           ]
@@ -853,7 +850,7 @@
           ]
         },
         {
-          "section": "models: a mesh block the glue writes, and its skeleton and clips"
+          "section": "models: a mesh block the shell writes, and its skeleton and clips"
         },
         {
           "name": "MODEL_CREATE",
@@ -861,7 +858,7 @@
           "doc": [
             "tag call · [vertex_cnt u32, index_cnt u32, joint_cnt u32] → result: the",
             "model's id, or -1 when the mesh pool refused; with an id, [block_at u32]",
-            "— where the glue writes the vertices and indices, in the module's",
+            "— where the shell writes the vertices and indices, in the module's",
             "memory"
           ]
         },
@@ -957,15 +954,6 @@
           "doc": [
             "Asked once, or once a frame for the draw lists: the answer is addresses",
             "in the module's memory, which never grows."
-          ]
-        },
-        {
-          "name": "FRAME_READ",
-          "value": 5122,
-          "doc": [
-            "tag call · no packet → [frame_at u32 (FRAME_WORDS doubles the glue",
-            "writes before a tick), uniform u32[14]: the frame uniform's floats,",
-            "then where each field starts]"
           ]
         },
         {
@@ -1106,7 +1094,7 @@
           "value": 6401,
           "doc": [
             "tag call · [at u32, count u32, span u32, lod_step u32] → result: 1, or 0",
-            "while a bake is open — of the run set at `at`, in column_run.ts's layout,",
+            "while a bake is open — of the run set at `at`, in the run set's own layout,",
             "which the shell keeps until the bake closes"
           ]
         },
@@ -1220,7 +1208,7 @@
         {
           "section": "kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too)",
           "doc": [
-            "CHUNK_CREATE: tag chunk · [page u64, base_x i32, base_y i32] — mounted",
+            "CHUNK_CREATE: tag chunk · [page_idx u64, base_x u32, base_y u32] — mounted",
             "CHUNK_DELETE: tag chunk · no packet — unmounted"
           ]
         },

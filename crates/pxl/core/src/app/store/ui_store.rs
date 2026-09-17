@@ -1,11 +1,11 @@
 // pxl_core/app/store/ui_store.rs
 
 use pxl_shared::spec::cell::{cube_types, decor_ids, placeable_cube_id, placeable_cubes, DecorId, PlaceableCube};
-
-use crate::global::Global;
-use crate::host::{storage_get, storage_set, wall_now};
 use xpute_core::kit::json::{read_json, JsonStr, Quoted};
+
 use crate::module::world::object::size::DEFAULT_OBJECT_SIZE;
+use crate::sys::global::Global;
+use crate::sys::host::{storage_get, storage_set, wall_now};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ActiveTool {
@@ -79,7 +79,6 @@ pub struct UiStore {
     pub recent_picks: Vec<RecentPick>,
     pub chat_lines: Vec<ChatLine>,
     next_chat_line_id: u32,
-    pub revision: u32,
 }
 
 const STORAGE_KEY: &str = "pxl:ui_hotbar";
@@ -111,26 +110,6 @@ impl UiStore {
             recent_picks: seed_picks(),
             chat_lines: Vec::new(),
             next_chat_line_id: 0,
-            revision: 0,
-        }
-    }
-
-    fn changed(&mut self) {
-        self.revision += 1;
-        save(self);
-    }
-
-    pub fn set_active_tool(&mut self, tool: ActiveTool) {
-        if self.active_tool != tool {
-            self.active_tool = tool;
-            self.revision += 1;
-        }
-    }
-
-    pub fn set_object_size(&mut self, size: f64) {
-        if self.object_size != size {
-            self.object_size = size;
-            self.revision += 1;
         }
     }
 
@@ -138,14 +117,14 @@ impl UiStore {
         self.object_cube = cube;
         self.active_tool = ActiveTool::Object;
         touch_recent(&mut self.recent_picks, RecentPick::Object(cube));
-        self.changed();
+        save(self);
     }
 
     pub fn select_decor(&mut self, id: DecorId) {
         self.decor_id = id;
         self.active_tool = ActiveTool::Decor;
         touch_recent(&mut self.recent_picks, RecentPick::Decor(id));
-        self.changed();
+        save(self);
     }
 
     pub fn append_chat_line(&mut self, text: &str) {
@@ -158,10 +137,8 @@ impl UiStore {
         });
         let excess = self.chat_lines.len().saturating_sub(MAX_CHAT_LINES);
         self.chat_lines.drain(..excess);
-        self.revision += 1;
     }
 }
-
 
 // Persisted: object_cube_id/decor_id/recent_picks — real picks worth
 // remembering across a reload. active_tool and chat_lines are deliberately left
@@ -249,7 +226,6 @@ fn load() -> UiStore {
 
 static UI_STORE: Global<UiStore> = Global::new();
 
-/// `useUiStore.getState()`.
-pub fn use_ui_store() -> &'static mut UiStore {
+pub fn ui_store() -> &'static mut UiStore {
     UI_STORE.get(load)
 }

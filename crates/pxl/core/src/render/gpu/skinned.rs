@@ -1,6 +1,6 @@
 // pxl_core/render/gpu/skinned.rs
 
-//! Actors on the device: the scheduler's skinned draws (world/model.rs)
+//! Actors on the device: the scheduler's skinned draws (module/world/gltf_cache.rs)
 //! executed against each model's mesh block and each actor's joint palette,
 //! both as the scheduler wrote them, under shader/skinned.wgsl. A model's skin
 //! is the image its asset loaded, by model id.
@@ -13,9 +13,9 @@ use super::api::{buffer_usage, object, release, GpuApi};
 use super::api_spec::{address, compare, filter, format, resource};
 use super::pipeline::{Built, Pipelines};
 use super::renderer::{frame_group, put_f32, skin_group, Blocks, Scratch};
+use crate::module::world::gltf_cache::MODEL_VERTEX_WORDS;
 use crate::render::draw::{DRAW_WORDS, PIPELINE_SKINNED, UNIFORM_FLOATS};
 use crate::render::shader::PIPELINE_SKINNED_DEPTH;
-use crate::world::model::MODEL_VERTEX_WORDS;
 
 /// shader/skinned.wgsl's Draw: translation, the turn about Z, the opacity, the
 /// scale, padding.
@@ -159,7 +159,9 @@ impl SkinnedPass {
             }
             let offset = slot * self.stride;
             slot += 1;
-            let (Some((mesh, vertex_cnt, index_cnt)), Some(skin)) = (blocks.get(d[0]), self.skin_of(d[2])) else { continue };
+            let (Some((mesh, vertex_cnt, index_cnt)), Some(skin)) = (blocks.get(d[0]), self.skin_of(d[2])) else {
+                continue;
+            };
             let Some(palette) = blocks.group(g, d[1], self.lit.layouts[3]) else { continue };
             if self.draw_group == 0 {
                 continue;

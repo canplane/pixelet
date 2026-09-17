@@ -50,7 +50,7 @@
 //! the whole canvas back into a pixel buffer — 64 MB of ArrayBuffer at 4096 px,
 //! once per flush.
 
-use crate::host::handheld;
+use crate::sys::host::handheld;
 
 /// An entry is a slot, named by its index, and a consumer keeps that index for
 /// as long as the badge is cached. Its rectangle is read through the `u0`..`v1`

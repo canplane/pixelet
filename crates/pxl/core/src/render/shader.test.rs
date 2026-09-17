@@ -1,9 +1,11 @@
 // pxl_core/render/shader.test.rs
 
-use super::*;
+use std::collections::BTreeMap;
+
 use naga::valid::{Capabilities, ValidationFlags, Validator};
 use naga::{AddressSpace, Binding, ImageClass, Module, ScalarKind, ShaderStage, TypeInner, VectorSize};
-use std::collections::BTreeMap;
+
+use super::*;
 
 fn compile(kind: u32) -> (Module, naga::valid::ModuleInfo) {
     let src = source(kind);
@@ -31,7 +33,7 @@ fn every_shader_compiles() {
 /// by.
 #[test]
 fn the_face_bits_are_the_meshers() {
-    use crate::bake::mesher as m;
+    use crate::render::layer::pipeline::chunk_mesher as m;
     let (module, _) = compile(SHADER_CHUNK);
     let value = |name: &str| -> u32 {
         let (_, c) = module

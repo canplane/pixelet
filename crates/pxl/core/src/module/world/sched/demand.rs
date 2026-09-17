@@ -13,8 +13,6 @@
 
 use core::fmt;
 
-
-
 /// The most sub-timings one run reports.
 pub const PHASES_MAX: usize = 6;
 
@@ -76,9 +74,7 @@ impl Category {
 ///
 /// The subject is a page's own coordinate where the stream is pages, the
 /// query's hash where it is a search, and nothing where the stream has one
-/// member. It used to be `"<category>:<subject>"` spelled out, which the
-/// arrival then split back apart and parsed — two numbers folded into text so
-/// that the text could be unfolded into two numbers.
+/// member.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct DemandKey {
     pub category: Category,
@@ -105,7 +101,7 @@ pub struct Demand {
     /// priority, one already in flight is left alone.
     pub key: DemandKey,
     /// Lower runs sooner. Convention: the page's Euclidean distance from the
-    /// view anchor in whole pages (range.rs's page_priority), so the nearest
+    /// view anchor in whole pages (render/chunk_range.rs's page_priority), so the nearest
     /// page loads first.
     pub priority: f64,
 }

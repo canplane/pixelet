@@ -18,11 +18,9 @@
 //! names and their element kinds in order, `mem` the views in that order,
 //! and `lane::<T>(name)` the typed view of one.
 
-use crate::kit::array::{AnyElement, ArrayBufferView, Kind, TypedArray};
+use crate::kit::array::{AnyElement, ArrayBuffer, ArrayBufferView, Kind, TypedArray};
 use crate::sys::errno::Errno;
 use crate::sys::error::MarshalError;
-
-use super::typed_alloc::{TypedAlloc, HEAP_ALLOC};
 
 pub type LaneSpec = Vec<(&'static str, Kind)>;
 pub type LaneViews = Vec<ArrayBufferView>;
@@ -31,14 +29,12 @@ pub type LaneViews = Vec<ArrayBufferView>;
 pub struct LanesOptions {
     pub init_cap: Option<u32>,
     pub max_cap: Option<u32>,
-    pub alloc: Option<Box<dyn TypedAlloc>>,
 }
 
 pub struct Lanes {
     pub mem: LaneViews,
     pub max_cap: u32,
     pub spec: LaneSpec,
-    alloc: Box<dyn TypedAlloc>,
     _cap: u32,
     _len: u32,
 }
@@ -47,17 +43,9 @@ impl Lanes {
     pub fn new(spec: LaneSpec, opts: LanesOptions) -> Lanes {
         let init_cap = opts.init_cap.unwrap_or(1 << 10);
         let max_cap = opts.max_cap.unwrap_or(1 << 24);
-        let mut alloc = opts.alloc.unwrap_or_else(|| Box::new(HEAP_ALLOC));
         let _cap = init_cap.min(max_cap);
-        let mem = Self::take_of(&spec, alloc.as_mut(), _cap);
-        Lanes {
-            mem,
-            max_cap,
-            spec,
-            alloc,
-            _cap,
-            _len: 0,
-        }
+        let mem = Self::take(&spec, _cap);
+        Lanes { mem, max_cap, spec, _cap, _len: 0 }
     }
 
     pub fn len(&self) -> u32 {
@@ -113,12 +101,19 @@ impl Lanes {
         last
     }
 
-    fn take_of(spec: &LaneSpec, alloc: &mut dyn TypedAlloc, cap: u32) -> LaneViews {
-        spec.iter().map(|&(_, kind)| alloc.take_view(kind, cap)).collect()
-    }
-
-    fn take(&mut self, cap: u32) -> LaneViews {
-        Self::take_of(&self.spec, self.alloc.as_mut(), cap)
+    /// Every lane of `spec` at `cap` rows, zeroed: `new Ctor(cap)` per lane.
+    fn take(spec: &LaneSpec, cap: u32) -> LaneViews {
+        spec.iter()
+            .map(|&(_, kind)| {
+                let byte_length = cap as usize * kind.bytes_per_element();
+                ArrayBufferView {
+                    buffer: ArrayBuffer::new(byte_length),
+                    byte_offset: 0,
+                    byte_length,
+                    kind,
+                }
+            })
+            .collect()
     }
 
     fn grow(&mut self, new_cap: u32) -> Result<(), MarshalError> {
@@ -128,7 +123,7 @@ impl Lanes {
         if new_cap > self.max_cap {
             return Err(MarshalError::new(Errno::EOVERFLOW, Some(&format!("lanes: required size exceeds max_cap={}", self.max_cap)), None));
         }
-        let next = self.take(new_cap);
+        let next = Self::take(&self.spec, new_cap);
         for (k, lane) in self.mem.iter().enumerate() {
             // The two views are always the same element: copied as bytes.
             let size = lane.kind.bytes_per_element();
@@ -136,7 +131,6 @@ impl Lanes {
             let from = TypedArray::<u8>::over(lane.buffer.clone(), lane.byte_offset, n);
             let to = TypedArray::<u8>::over(next[k].buffer.clone(), next[k].byte_offset, n);
             to.set(&from);
-            self.alloc.give(lane);
         }
         self.mem = next;
         self._cap = new_cap;

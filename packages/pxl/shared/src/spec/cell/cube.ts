@@ -3,31 +3,23 @@
 // type — both the baked 2.5D terrain raster's own four channels
 // (land/water/structure/transport, filled by the bake pipeline, one
 // independent value per channel per cell) and the flat "block" colors a
-// user paints directly. These used to live in two near-identical files
-// (terrain.ts + objects.ts); there's no real reason for that (2026-09-06) —
-// every channel below is just a Record<name, number>, same shape, whether
-// the bake pipeline treats it as real map data or a user-placed palette.
-// mod.ts is the one place a placed cube's own single sparse-tree byte gets
-// derived FROM these channels (banding land/water/structure/transport into
-// disjoint ranges, since a real terrain cell can hold a value from every
-// channel at once but a placed cube is exactly one of them) — nothing here
-// needs to know about that; this file stays pure cell-definition data.
+// user paints directly. Every channel is a name-to-number table of the same
+// shape, whether the bake pipeline treats it as real map data or a user's
+// palette.
 //
-// common.ts used to hold VOID/UNKNOWN as their own separate file/export —
-// folded in here as cube_types.common (2026-09-06). Unlike an earlier pass
-// at this same merge, land/water/structure/transport/block do NOT spread
-// common's keys into their own — common is a shared *registry* of sentinel
-// values (VOID: nothing painted; AIR: explicit object-layer erase; UNKNOWN:
-// missing/invalid data), not something every channel actually needs. Only
-// land/water/structure/transport ever really see VOID/UNKNOWN (real raw
-// bytes a baked raster can legitimately hold); AIR only ever means anything
-// within the object-placement encoding (mod.ts), never as a raw terrain
-// value — spreading it into land/water/etc anyway would've been a sentinel
-// that channel can never actually produce, present only for symmetry.
-// shader_meta.ts's get_color_meta is the one place that still needs to
-// treat a channel's real keys and common's shared ones as one set (for
-// VOID/UNKNOWN specifically) — it merges the two explicitly there instead
-// of relying on the data itself already being merged.
+// `common` is a shared registry of sentinel values — VOID (nothing painted),
+// AIR (an explicit object-layer erase) and UNKNOWN (missing or invalid data)
+// — and the other channels do not spread its keys into their own. Only
+// land/water/structure/transport can hold VOID or UNKNOWN, those being raw
+// bytes a baked raster legitimately produces; AIR means something only
+// within the object-placement encoding (mod.ts), never as a terrain value,
+// so a channel that can never produce it does not list it.
+//
+// mod.ts is where a placed cube's own value is derived from these channels,
+// banding the terrain channels into disjoint ranges — a real terrain cell
+// can hold one value from every channel at once, where a placed cube is
+// exactly one of them. Nothing here needs to know that; this file is cell
+// definitions and nothing else.
 
 import { build_colors_from_json, type Swatch } from "./type.ts";
 

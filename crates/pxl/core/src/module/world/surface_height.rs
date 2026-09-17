@@ -20,10 +20,9 @@ const SAME_SURFACE_EPS: f64 = 1e-6;
 /// The z extents of every placed object whose footprint covers a local XY,
 /// gathered in one pass over the chunk columns that could hold one.
 ///
-/// This replaces probing upward a cell at a time with a 27-cell neighbourhood
-/// query at each step: with nothing placed at the XY the probe loop ran to its
-/// 64-cell guard every call, and the companion asked twice a frame — 4.8 ms a
-/// frame on a phone (2026-09-13). A placed object is at most a cell across, so
+/// One pass rather than a 27-cell neighbourhood query at each step upward: with
+/// nothing placed at the XY a probe runs to its 64-cell guard on every call,
+/// and the companion asks twice a frame. A placed object is at most a cell across, so
 /// one whose footprint covers the point lives in the chunk the point is in or a
 /// chunk within a cell of it; those are read once.
 fn collect_boxes(map_origin: IVec, local_x: f64, local_y: f64) -> Vec<(f64, f64)> {
@@ -40,7 +39,10 @@ fn collect_boxes(map_origin: IVec, local_x: f64, local_y: f64) -> Vec<(f64, f64)
             }
             cols.push(col_idx);
             // The chunk's corner in the local frame; entries are relative to it.
-            let local = PVF3 { i: ivec::sub(FROM_L2_IDX(col_idx), map_origin), f: 0 };
+            let local = PVF3 {
+                i: ivec::sub(FROM_L2_IDX(col_idx), map_origin),
+                f: 0,
+            };
             let (bx, by, bz) = (pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local)));
             each_col_entry(
                 col_idx,

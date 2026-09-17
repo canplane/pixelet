@@ -63,7 +63,9 @@
     // 09-17. The host pass compiles every target, tests included, and runs
     // none of them. The same three crates `test:rust` names: pxl-wasm is
     // `core::arch::wasm32` throughout and has no host build at all.
-    "check:rust": "cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-shared -p pxl-core",
+    // Formatting is checked first, against crates/rustfmt.toml; the generated
+    // `.rs` files pass it because script/spec.ts writes them through rustfmt.
+    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-shared -p pxl-core",
     // The kits twice: every file, export and test of @xpute/core and of
     // @pxl/shared's space has its pair in the crates, and the vectors the
     // TypeScript writes are what the Rust tests read (script/pair.ts).

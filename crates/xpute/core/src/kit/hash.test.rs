@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::kit::encoding::hex_to_bytes;
-use crate::vector::Vector;
+use crate::sys::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/kit/hash.tsv");
 

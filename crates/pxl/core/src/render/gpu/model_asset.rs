@@ -1,7 +1,7 @@
 // pxl_core/render/gpu/model_asset.rs
 
 //! A parsed glTF (render/gltf/gltf.rs) handed to the scheduler's models as a
-//! model (crates/pxl/core/src/world/model.rs): the one place a parsed asset
+//! model (crates/pxl/core/src/module/world/gltf_cache.rs): the one place a parsed asset
 //! becomes the kernel's lanes, so a companion, a decor kind or an asset a player
 //! brings all enter the world the same way.
 //!
@@ -22,8 +22,8 @@ use std::collections::HashMap;
 
 use xpute_core::kit::mat4::{mat4_transform_point, Vec3};
 
-use crate::kernel::with_world;
 use crate::render::gltf::gltf::{scene_nodes, world_matrices, Gltf};
+use crate::sys::kernel::with_world;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelHandle {
@@ -177,7 +177,11 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
             let rest = [t[0], t[1], t[2], r[0], r[1], r[2], r[3], s[0], s[1], s[2]].map(|v| v as f32);
             // A root joint under a node that is not one carries that node's
             // world transform; a scene root carries nothing.
-            let root_pre = if parent < 0 && parent_node >= 0 { worlds[parent_node as usize].map(|v| v as f32) } else { IDENTITY };
+            let root_pre = if parent < 0 && parent_node >= 0 {
+                worlds[parent_node as usize].map(|v| v as f32)
+            } else {
+                IDENTITY
+            };
             sched.models.joint(model, j, parent, rest, root_pre, *inverse_bind_of.get(&n).unwrap_or(&IDENTITY));
         }
 
@@ -192,7 +196,17 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
                 // SAFETY: the keys' floats are this channel's own vectors, read
                 // before this returns; a null base makes their addresses absolute.
                 unsafe {
-                    sched.models.channel(core::ptr::null(), model, c, joint, channel.path as u8, channel.step, keys, channel.times.as_ptr() as usize, channel.values.as_ptr() as usize);
+                    sched.models.channel(
+                        core::ptr::null(),
+                        model,
+                        c,
+                        joint,
+                        channel.path as u8,
+                        channel.step,
+                        keys,
+                        channel.times.as_ptr() as usize,
+                        channel.values.as_ptr() as usize,
+                    );
                 }
             }
         }
@@ -204,7 +218,11 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
         };
         // SAFETY: the model's block is in the volumes' memory.
         unsafe { sched.models.seal(&mut sched.draw, mem, model, scale) };
-        Some(ModelHandle { model, clips, triangles: index_cnt / 3 })
+        Some(ModelHandle {
+            model,
+            clips,
+            triangles: index_cnt / 3,
+        })
     })
     .flatten()
 }

@@ -37,7 +37,6 @@ export const enum Major {
   ENV = 0x11,
   MODEL = 0x12,
   CHANGE = 0x13,
-  FRAME = 0x14,
   DRAW = 0x15,
   SHADER = 0x16,
   POOL = 0x17,
@@ -206,8 +205,9 @@ export const enum Cmd {
 
   // ---- shell → kernel ----
 
-  /** tag chunk · [base u64, tx0 u32, ty0 u32, base_x i32, base_y i32,
-   * stable_hash u32] */
+  /** tag chunk · [page_idx u64, base_x u32, base_y u32] — a chunk the
+   * kernel mounted. Raised, never submitted: the scheduler decides what is
+   * resident and where it sits */
   CHUNK_CREATE = 0x0101,
   /** tag chunk · [page: [land u32, water u32, structure u32, transport u32,
    * ele u32] addresses | null, show_structures bool] */
@@ -252,7 +252,7 @@ export const enum Cmd {
 
   // ---- the scene: what is drawn beside the chunks ----
   //
-  // A lane of floats crosses in the packet, not by address: the glue's
+  // A lane of floats crosses in the packet, not by address: the shell's
   // scratch is given back as soon as the command is sent, and the command
   // is applied later.
 
@@ -297,11 +297,11 @@ export const enum Cmd {
   /** [lat f64, lon f64, unix_ms f64] — the observer and the wall clock */
   ENV_OBSERVE = 0x1110,
 
-  // ---- models: a mesh block the glue writes, and its skeleton and clips ----
+  // ---- models: a mesh block the shell writes, and its skeleton and clips ----
 
   /** tag call · [vertex_cnt u32, index_cnt u32, joint_cnt u32] → result: the
    * model's id, or -1 when the mesh pool refused; with an id, [block_at u32]
-   * — where the glue writes the vertices and indices, in the module's
+   * — where the shell writes the vertices and indices, in the module's
    * memory */
   MODEL_CREATE = 0x1201,
   /** tag call · [model u32] → result: the renderer's handle for its mesh
@@ -342,10 +342,6 @@ export const enum Cmd {
   // Asked once, or once a frame for the draw lists: the answer is addresses
   // in the module's memory, which never grows.
 
-  /** tag call · no packet → [frame_at u32 (FRAME_WORDS doubles the glue
-   * writes before a tick), uniform u32[14]: the frame uniform's floats,
-   * then where each field starts] */
-  FRAME_READ = 0x1402,
   /** tag call · no packet → [census_at u32 (13 doubles), stat_at u32 (11
    * words)] */
   CHUNK_READ = 0x0102,
@@ -408,7 +404,7 @@ export const enum Cmd {
    * allocated, reused, refused */
   VOLUME_STAT = 0x1815,
   /** tag call · [at u32, count u32, span u32, lod_step u32] → result: 1, or 0
-   * while a bake is open — of the run set at `at`, in column_run.ts's layout,
+   * while a bake is open — of the run set at `at`, in the run set's own layout,
    * which the shell keeps until the bake closes */
   BAKE_CREATE = 0x1901,
   /** tag call · no packet → result: the step's; wanting a block, [words u32]:
@@ -456,7 +452,7 @@ export const enum Cmd {
 
   // ---- kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too) ----
   //
-  // CHUNK_CREATE: tag chunk · [page u64, base_x i32, base_y i32] — mounted
+  // CHUNK_CREATE: tag chunk · [page_idx u64, base_x u32, base_y u32] — mounted
   // CHUNK_DELETE: tag chunk · no packet — unmounted
 
   /** tag chunk · [on bool] */

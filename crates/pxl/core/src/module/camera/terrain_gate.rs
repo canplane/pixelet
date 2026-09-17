@@ -16,8 +16,8 @@ use xpute_core::kit::math::wrap;
 
 use super::config::camera_cfg;
 use super::orbit::{orbit_local_offset, rotate2};
-use crate::app::setting::store::{use_settings_store, CameraTerrain};
-use crate::module::map::store::use_map_store;
+use crate::app::setting::store::{settings_store, CameraTerrain};
+use crate::module::map::store::map_store;
 use crate::module::world::frame::coord::{get_local_world_origin, local_world_to_canonical};
 use crate::module::world::terrain::elevation::get_ele_at_local;
 
@@ -57,7 +57,7 @@ pub struct ViewPose {
 /// between them crosses frames; the store's current centre supplies it for
 /// every caller, and a candidate target is expressed against that same one.
 pub fn pose(view: ViewTriple, center: Option<&PVF3>) -> Option<ViewPose> {
-    let map_center = use_map_store().map_center?;
+    let map_center = map_store().map_center?;
     let at = center.copied().unwrap_or(map_center);
     let origin = get_local_world_origin(Some(&map_center));
     let local = PVF3 { i: ivec::sub(at.i, origin), f: at.f };
@@ -88,7 +88,7 @@ fn penetration(at: &ViewPose) -> Option<f64> {
     Some(required_rise(at)? - orbit_local_offset(at.dist, at.polar).vert_dist)
 }
 
-/// Testing only where a step lands lets the camera tunnel: use_camera.rs
+/// Testing only where a step lands lets the camera tunnel: damping.rs
 /// damps toward the new state and visits everything between. The straight
 /// line in pose space is the path it takes.
 const STEP_SAMPLES: u32 = 16;
@@ -105,13 +105,13 @@ pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     // Checked first so the setting skips the heightfield walk, not its result.
     // `climb` grants every control too — it answers terrain by pitching the
     // view, not by holding a control back.
-    if use_settings_store().camera_terrain != CameraTerrain::Stop {
+    if settings_store().camera_terrain != CameraTerrain::Stop {
         return *to;
     }
 
     let limit = penetration(from).map_or(0.0, |start| start.max(0.0));
 
-    // The short way round, matching how use_view_frame.rs damps azimuth.
+    // The short way round, matching how view_frame.rs damps azimuth.
     let turn = wrap(to.azimuth - from.azimuth, -core::f64::consts::PI, core::f64::consts::PI);
     let mut last = *from;
     for i in 1..=STEP_SAMPLES {
@@ -157,12 +157,14 @@ pub fn allowed_view(to: ViewTriple, from: ViewTriple) -> ViewTriple {
 /// worked. Jumps do not come through here — a search result or a GPS recentre
 /// is a destination the user named, not a path they dragged.
 pub fn allowed_pan(view: ViewTriple, to_center: &PVF3) -> PVF3 {
-    let (Some(from_pose), Some(to_pose)) = (pose(view, None), pose(view, Some(to_center))) else { return *to_center };
+    let (Some(from_pose), Some(to_pose)) = (pose(view, None), pose(view, Some(to_center))) else {
+        return *to_center;
+    };
     let reached = allowed_step(&to_pose, &from_pose);
     if reached == to_pose {
         return *to_center;
     }
-    let map_origin = get_local_world_origin(use_map_store().map_center.as_ref());
+    let map_origin = get_local_world_origin(map_store().map_center.as_ref());
     let mut out = PVF3::default();
     local_world_to_canonical(&mut out, &reached.target, map_origin);
     out

@@ -14,45 +14,43 @@
 //! Two kinds of turn. The tick's steps (sched/tick.rs) run inside the frame, by
 //! phase and under one budget; `world_boot` registers them once. The effects —
 //! the fetchers, the stores' followers, the markers — run once per turn before
-//! the tick (`world_turn`), each comparing what it last saw, the way their
-//! React effects compared their dependencies.
+//! the tick (`world_turn`), each comparing what it last saw.
 
 use pxl_shared::spec::space::indexer::{L1_IDX_IN_L4, L3_IDX};
 use pxl_shared::spec::space::pvf3::projection;
 use pxl_shared::spec::space::xy::TO_XY;
 use xpute_core::sched::quantum::Grant;
 
-use crate::app::setting::store::use_settings_store;
-use crate::global::{now, Global};
+use crate::app::setting::store::settings_store;
 use crate::lib::env::config::APP_ENV;
+use crate::module::camera::damping::camera_step;
 use crate::module::camera::input::camera_input_step;
-use crate::module::camera::use_camera::camera_step;
-use crate::module::device::pose::use_device_orientation::{orientation_watchdog_step, OrientationPlatform};
-use crate::module::device::pose::use_geolocation::geolocation_step;
+use crate::module::device::pose::device_orientation::{orientation_watchdog_step, OrientationPlatform};
+use crate::module::device::pose::geolocation::geolocation_step;
 use crate::module::map::environment::map_environment_step;
-use crate::module::map::navigation::use_follow_mode::follow_mode_step;
-use crate::module::map::navigation::use_map_bootstrap::map_bootstrap_step;
-use crate::module::map::navigation::use_map_navigation::use_map_navigation;
-use crate::module::map::store::use_map_store;
-use crate::module::map::ui::overlay::use_reverse_geocode::reverse_geocode_step;
+use crate::module::map::navigation::follow_mode::follow_mode_step;
+use crate::module::map::navigation::map_bootstrap::map_bootstrap_step;
+use crate::module::map::navigation::map_navigation::{map_navigation, map_navigation_step};
+use crate::module::map::store::map_store;
+use crate::module::map::ui::overlay::reverse_geocode::reverse_geocode_step;
 use crate::module::map::ui::toast::toast_controller::toast_controller_step;
+use crate::module::world::change::take_tick_request;
 use crate::module::world::character::companion::{companion_step, CompanionProps};
 use crate::module::world::chunk_node::chunk_nodes_step;
-use crate::module::world::core_tick::{chunk_mounts_step, core_tick_report_step, core_tick_visible_step, set_host_task_ms};
+use crate::module::world::chunk_stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms};
 use crate::module::world::decor::asset_store::decor_asset_step;
 use crate::module::world::environment::theme_clock::theme_clock_step;
 use crate::module::world::frame::coord::get_local_world_origin;
-use crate::module::world::frame::use_view_frame::{view_rotation_step, view_translation_step};
-use crate::module::world::marker::debug_gizmos::debug_gizmos_step;
+use crate::module::world::frame::view_frame::{view_rotation_step, view_translation_step};
+use crate::module::world::marker::frame_gizmo::debug_gizmos_step;
 use crate::module::world::marker::hover_cursor::hover_cursor_step;
 use crate::module::world::marker::location_puck::location_puck_step;
 use crate::module::world::object::teach::teach_objects;
 use crate::module::world::sched::fetch_scheduler::{fetch_pump, set_fetch_credits};
 use crate::module::world::sched::tick::{on_tick, run_tick, TickContext, TickReport, TickState, COSMETIC, INTERACTION, REPORT, VISIBLE};
-use crate::module::world::change::take_tick_request;
 use crate::module::world::terrain::teach::teach_terrain;
-use crate::module::world::terrain::use_ground_snap_sync::ground_snap_sync_step;
-use crate::module::world::terrain::use_tile_fetcher::tile_fetcher_step;
+use crate::module::world::terrain::tile_fetcher::tile_fetcher_step;
+use crate::sys::global::{now, Global};
 
 /// What the platform offers the sensors, as the shell found it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -66,7 +64,7 @@ static BOOTED: Global<bool> = Global::new();
 /// The companion's place, from map_center in the local floating-origin frame —
 /// wherever the camera actually is, not the L4 tile's centre up to 2048u away.
 fn companion_props() -> Option<CompanionProps> {
-    let map_center = use_map_store().map_center?;
+    let map_center = map_store().map_center?;
     let map_origin = get_local_world_origin(Some(&map_center));
     let mut local = [0.0; 3];
     projection::unproject(&mut local, L1_IDX_IN_L4(map_center.i), map_center.f);
@@ -84,8 +82,8 @@ fn companion_tick(ctx: &mut TickContext) {
 }
 
 fn debug_gizmos_tick(_: &mut TickContext) {
-    let map_center = use_map_store().map_center;
-    let show = APP_ENV() != "production" && use_settings_store().show_debug_objects && map_center.is_some();
+    let map_center = map_store().map_center;
+    let show = APP_ENV() != "production" && settings_store().show_debug_objects && map_center.is_some();
     debug_gizmos_step(show, map_center, get_local_world_origin(map_center.as_ref()));
 }
 
@@ -123,21 +121,20 @@ pub fn world_boot() {
 /// The effects' turn, before the tick.
 pub fn world_turn(platform: Platform) {
     world_boot();
+    map_navigation_step();
     map_bootstrap_step();
     crate::app::shell::shell_step();
     geolocation_step(platform.geolocation);
     orientation_watchdog_step(platform.orientation);
     tile_fetcher_step();
-    ground_snap_sync_step();
     follow_mode_step();
     theme_clock_step();
     decor_asset_step();
-    chunk_mounts_step();
     chunk_nodes_step();
     hover_cursor_step();
     // device_coord is deliberately not gated the way map_center is — the puck
     // holds its own last-known coordinate across a transient null.
-    location_puck_step(use_map_navigation().device_coord);
+    location_puck_step(map_navigation().device_coord);
     reverse_geocode_step();
     crate::module::map::ui::overlay::search_modal::search_step();
     toast_controller_step();

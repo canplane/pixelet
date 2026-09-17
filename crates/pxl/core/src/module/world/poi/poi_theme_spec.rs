@@ -6,11 +6,8 @@
 // (overture_provider.ts's `category_of()`), falling back to DEFAULT_THEME for
 // anything not explicitly listed rather than guessing a mapping.
 //
-// `icon` is a plain emoji — tried swapping these for tinted Lucide glyphs
-// (2026-09-08) and reverted: at this badge's actual on-screen size a thin
-// stroked icon reads far less recognizably than an emoji's own dense,
-// multi-shape glyph does, and that shape-level legibility (not stroke
-// weight, tried thickening it first) was the real problem.
+// `icon` is a plain emoji: at this badge's on-screen size a thin stroked
+// icon reads far less recognizably than an emoji's dense, multi-shape glyph.
 
 #![allow(non_upper_case_globals, non_snake_case, dead_code, clippy::excessive_precision)]
 
@@ -35,9 +32,8 @@ pub mod CATEGORY_THEME {
         pub const color: &str = "#e57373";
         pub const KEYS: &[&str] = &["icon", "color"];
     }
-    /// Food & drink — restaurant/fast_food/bar used to all share this exact
-    /// amber; fine with the emoji's own glyph carrying enough identity on its
-    /// own, but worth keeping separated regardless of icon style.
+    /// Food & drink, a colour of its own apart from fast_food and bar, whatever
+    /// the icon style.
     pub mod restaurant {
         pub const icon: &str = "🍴";
         pub const color: &str = "#ffb74d";
@@ -198,7 +194,44 @@ pub mod CATEGORY_THEME {
         pub const color: &str = "#7986cb";
         pub const KEYS: &[&str] = &["icon", "color"];
     }
-    pub const KEYS: &[&str] = &["hospital", "clinic", "pharmacy", "dentist", "restaurant", "cafe", "fast_food", "bar", "pub", "bank", "atm", "school", "university", "college", "kindergarten", "library", "supermarket", "convenience", "mall", "department_store", "clothes", "subway", "station", "bus_station", "fuel", "parking", "hotel", "guest_house", "park", "museum", "attraction", "place_of_worship", "police", "fire_station", "post_office", "townhall"];
+    pub const KEYS: &[&str] = &[
+        "hospital",
+        "clinic",
+        "pharmacy",
+        "dentist",
+        "restaurant",
+        "cafe",
+        "fast_food",
+        "bar",
+        "pub",
+        "bank",
+        "atm",
+        "school",
+        "university",
+        "college",
+        "kindergarten",
+        "library",
+        "supermarket",
+        "convenience",
+        "mall",
+        "department_store",
+        "clothes",
+        "subway",
+        "station",
+        "bus_station",
+        "fuel",
+        "parking",
+        "hotel",
+        "guest_house",
+        "park",
+        "museum",
+        "attraction",
+        "place_of_worship",
+        "police",
+        "fire_station",
+        "post_office",
+        "townhall",
+    ];
 }
 
 pub mod DEFAULT_THEME {

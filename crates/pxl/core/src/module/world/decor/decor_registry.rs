@@ -1,7 +1,7 @@
 // pxl_core/module/world/decor/decor_registry.rs
 
 //! Every decor kind's own bundle, in one place. What the scheduler is taught
-//! (decor_kinds.rs's teach_decor_kinds) and the hover ghost's shape resolution
+//! (decor_layer.rs's teach_decor_kinds) and the hover ghost's shape resolution
 //! (which bundle does a given decor_id's silhouette come from) both need this
 //! same lookup — one shared registry instead of two call sites independently
 //! assembling "every decor kind" and risking drifting out of sync.
@@ -10,10 +10,10 @@ use pxl_shared::spec::cell::DecorId;
 
 use super::boat_decor::BOAT_DECOR_BUNDLE;
 use super::car_decor::CAR_DECOR_BUNDLE;
-use super::decor_kinds::{teach_decor_kinds, DecorKindBundle};
+use super::decor_layer::{teach_decor_kinds, DecorKindBundle};
 use super::train_decor::TRAIN_DECOR_BUNDLE;
 use super::tree_decor::TREE_DECOR_BUNDLE;
-use crate::global::Global;
+use crate::sys::global::Global;
 
 static TAUGHT: Global<bool> = Global::new();
 

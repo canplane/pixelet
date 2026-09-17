@@ -91,6 +91,10 @@ lazy/random access _and_ relocation (subtree splice) without a schema — a real
 gap. It already has both TypeScript and Rust implementations, so it is
 cross-language validated. Plausible spin-out asset.
 
+That comparison left out Apache Arrow, the one format whose whole premise is
+typed buffers read in place across languages. It is weighed against how XTP
+is actually used in the section at the end of this document (2026-09-17).
+
 ## Why `xpute` and `pxl` are separate packages
 
 The intent was to grow `xpute` into a general-purpose
@@ -132,3 +136,64 @@ ever considered — and moderation explicitly out of scope. See
 spatial-computing/metaverse niche is not considered dead, and the option to
 resume is being kept open. When cleanup does happen, it goes to an archive branch
 rather than `git rm`.
+
+## 2026-09-17: XTP against Apache Arrow, by what XTP actually carries
+
+Arrow is a columnar memory format — typed buffers, `Array`s over them,
+`RecordBatch`es with a schema — with IPC and a file format that carry it
+unchanged, and compute kernels over it. It has no mutable general-purpose
+structures (an index set, an ordered set with ranks, a spatial hash, a handle
+table, allocators), so it overlaps with XTP, the wire format, and not with
+`xpute`'s `ds`. Arrow arrays are built through builders and then treated as
+immutable; that suits a published page, not a lane the kernel rewrites every
+frame.
+
+What XTP carries today, read from the code:
+
+| Use                              | Shape                                                                                                                                                   | Where                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Terrain page (published)         | `[i16 lane, [u8 lane × 4]]` — fixed shape, one record a page; the elevation lane is 68×68 and each ground lane 1024×1024, so the lanes differ in length | `bake/format.rs` `encode_terrain`                           |
+| POI page (published)             | `[f64×3, u16×2, u64, [str…]×4]` — an n-row table (x, y, z, category index, rank, id hash) and four string lists                                         | `encode_poi_page`                                           |
+| Bake input (server-internal)     | `[i16 lane, [[row tuple]…]×4]` — buildings, segments, base and coasts as row-oriented tuples, geometry as WKB                                           | `apps/api/src/bake/terrain/bake.ts`                         |
+| Object store save (localStorage) | `[[u64, f32×4, u32]…]` — five lanes a page                                                                                                              | `module/world/object/store.rs`                              |
+| Ring commands and signals        | a message is a positional tuple of a few scalars and strings, written straight into a ring slot                                                         | `crates/pxl/wasm/src/lib.rs`, `apps/web/src/wasm/kernel.ts` |
+
+Of what the comparison above named as XTP's own: GRAFT (splicing an encoded
+subtree) has no use outside the codec — the last, the object store's
+per-page Placement record, went on 2026-09-17; no writer outside the codec
+records a typed null; and "any tree" is at most two branches deep in
+practice, every shape fixed in code.
+
+The same uses as Arrow:
+
+| Use               | As Arrow                                                                                                                           | Fit                                                                                                       |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| POI page          | an n-row `RecordBatch`; `category` dictionary-encoded, `id`/`name`/`tags` as `Utf8` columns (a UTF-8 buffer and an offsets buffer) | Good. The backlog's XTP string-sequence leaf — one UTF-8 blob and a u32 offsets lane — is `Utf8`'s layout |
+| Object store save | a `RecordBatch` with a `page_idx` column                                                                                           | Good                                                                                                      |
+| Bake input        | four tables, geometry as a `Binary` column                                                                                         | Good; the columnar form is closer to Arrow than today's row tuples                                        |
+| Terrain page      | lanes of different lengths cannot be one batch's columns: a single row of `List`/`FixedSizeList` columns, or buffers apart         | Awkward                                                                                                   |
+| Ring messages     | an IPC message (schema plus Flatbuffers metadata) per command                                                                      | Poor                                                                                                      |
+
+Two principles it sits against:
+
+- **A specification is not sent** ([20260913-everything-is-a-file-the-placement-and-the-palette.md](./20260913-everything-is-a-file-the-placement-and-the-palette.md),
+  undone 2026-09-17). An Arrow IPC stream or file carries its schema. XTP is
+  not specification-free either — every node carries a type code — so the
+  difference is type tags against a named schema, not none against some.
+- **Immutable arrays.** Fine for what is published; not the representation of
+  what the kernel mutates.
+
+Not checked, and each bears on a decision:
+
+- **Size.** Neither `arrow-rs` built for wasm32 nor the `apache-arrow` npm
+  bundle was measured, against a floor of iOS 26 on an iPhone 11.
+- **Zero copy across the boundary.** Arrow IPC aligns buffers to 8 bytes, but
+  whether JavaScript and Rust can both open views without a copy over a block
+  inside `WebAssembly.Memory` was not tried.
+- **The bucket path.** Whether a published page as an Arrow file (Feather v2)
+  changes anything on the Worker's route or its cache was not looked at.
+
+In short: none of XTP's recorded distinctions — GRAFT, any tree, typed
+nulls — is in use. The tabular things it carries (the POI page, the saved
+store, the bake input) fit Arrow well; the terrain page's lanes of different
+lengths and the ring's messages do not.

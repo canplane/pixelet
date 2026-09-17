@@ -6,7 +6,7 @@
 //! is. Terrain fetch and the POI index already worked that way — both key on
 //! `map_center`, which is the target the view is heading to. Chunks were the
 //! one scheduler measuring from the camera as drawn, which lags that target by
-//! the frame's damping (frame/use_view_frame.rs), so during a pan they filled
+//! the frame's damping (frame/view_frame.rs), so during a pan they filled
 //! in behind the view rather than ahead of it, and during a search jump they
 //! kept polishing the place being left.
 //!
@@ -18,7 +18,7 @@
 //!
 //! Only the order changes. Which LOD tier a chunk shows is still decided by its
 //! distance from the camera as drawn, because that is what is on screen. The
-//! order itself is the scheduler's (crates/pxl/core/src/world/sched.rs); the
+//! order itself is the scheduler's (crates/pxl/core/src/module/world/sched/chunk_table.rs); the
 //! lead point it orders by is worked out here.
 
 use xpute_core::kit::mat4::{Mat4, Vec3};

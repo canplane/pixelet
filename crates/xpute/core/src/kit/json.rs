@@ -237,13 +237,11 @@ fn skip_string(s: &[u8], mut at: usize) -> Option<usize> {
     loop {
         match *s.get(at)? {
             b'"' => return Some(at + 1),
-            b'\\' => {
-                match *s.get(at + 1)? {
-                    b'"' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't' => at += 2,
-                    b'u' if s.get(at + 2..at + 6)?.iter().all(u8::is_ascii_hexdigit) => at += 6,
-                    _ => return None,
-                }
-            }
+            b'\\' => match *s.get(at + 1)? {
+                b'"' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't' => at += 2,
+                b'u' if s.get(at + 2..at + 6)?.iter().all(u8::is_ascii_hexdigit) => at += 6,
+                _ => return None,
+            },
             b if b < 0x20 => return None,
             // A byte of a UTF-8 sequence is never a quote or a backslash, so
             // the text is walked a byte at a time.
@@ -370,14 +368,20 @@ impl<'a> JsonValue<'a> {
     /// An array's items in order; nothing for any other value.
     pub fn items(&self) -> JsonItems<'a> {
         let open = self.kind() == JsonKind::Array;
-        JsonItems { s: self.s, at: if open { 1 } else { self.s.len() } }
+        JsonItems {
+            s: self.s,
+            at: if open { 1 } else { self.s.len() },
+        }
     }
 
     /// An object's fields in order, a key given twice given twice; nothing
     /// for any other value.
     pub fn fields(&self) -> JsonFields<'a> {
         let open = self.kind() == JsonKind::Object;
-        JsonFields { s: self.s, at: if open { 1 } else { self.s.len() } }
+        JsonFields {
+            s: self.s,
+            at: if open { 1 } else { self.s.len() },
+        }
     }
 
     /// `value[key]` on an object: the last field of that name, as the host's
@@ -439,7 +443,12 @@ impl<'a> Iterator for JsonFields<'a> {
         let value_at = skip_ws(b, skip_ws(b, key_end) + 1);
         let value_end = skip_value(b, value_at, 0).expect("a checked value");
         self.at = skip_ws(b, value_end) + 1;
-        Some((JsonStr { raw: &self.s[key_at + 1..key_end - 1] }, JsonValue { s: &self.s[value_at..value_end] }))
+        Some((
+            JsonStr {
+                raw: &self.s[key_at + 1..key_end - 1],
+            },
+            JsonValue { s: &self.s[value_at..value_end] },
+        ))
     }
 }
 

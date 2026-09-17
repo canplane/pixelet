@@ -52,43 +52,48 @@ pub mod camera_cfg {
         /// whole tilt range. Stated against the screen rather than as a rad/px
         /// rate, because that is the only form comparable to azimuth: azimuth
         /// has no gain at all, it tracks the cursor's angle around screen centre
-        /// 1:1 (arcball, see do_rotate() in input.tsx).
+        /// 1:1 (arcball — module/camera/input.rs's do_rotate).
         ///
-        /// They were far apart. The old fixed rate (-0.012 rad/px at a 1080px
-        /// reference) put the entire 90-degree range inside about a tenth of a
-        /// screen height — roughly six times azimuth's angular speed for the
-        /// same finger travel. Both damp toward their target at the same rate,
-        /// so polar's settle after release covered six times the distance and
-        /// read as the gesture still being held.
+        /// A fixed rad/px rate is what makes the two diverge: -0.012 at a 1080px
+        /// reference puts the whole 90-degree range inside about a tenth of a
+        /// screen height, roughly six times azimuth's angular speed for the same
+        /// finger travel. Both damp toward their target at the same rate, so a
+        /// polar settle after release would cover six times the distance and read
+        /// as the gesture still being held.
         pub const TILT_SWEEP_FRACTION: f64 = 0.5;
         pub const DOLLY_GAIN: f64 = 0.0022;
         /// azimuth is derived from atan2, unstable at small radius (Δangle ≈
         /// tangential_jitter / radius — a few px of jitter swings the angle
         /// wildly up close). Below this radius, azimuth tracking freezes instead
-        /// of following it; see do_rotate()/update_pinch() in input.tsx.
+        /// of following it (module/camera/input.rs's do_rotate and update_pinch).
         pub const MIN_ROTATE_RADIUS_PX: f64 = 24.0;
         pub const MIN_TWIST_DIST_PX: f64 = 24.0;
-        /// A rotate-drag used to derive azimuth and polar simultaneously on
-        /// every move event — a visually "straight down" drag still swept
-        /// azimuth unless it started exactly on the vertical centerline, most
-        /// visible once polar saturated (MIN/MAX_POLAR or the ground-collision
-        /// clamp) and the same drag read as a large, unrelated azimuth spin.
-        /// AXIS_LOCK_THRESHOLD_PX gates a one-time decision once total
-        /// displacement passes this radius: whichever axis dominates locks in
-        /// for the rest of the gesture (see do_rotate() in input.tsx). Smaller
-        /// than MIN_ROTATE_RADIUS_PX on purpose — this only needs enough
-        /// displacement to tell vertical from horizontal, not a stable angle reading.
+        /// Once a rotate-drag's total displacement passes this radius, whichever
+        /// axis dominates locks in for the rest of the gesture
+        /// (module/camera/input.rs's do_rotate). Without the lock a visually
+        /// "straight down" drag also sweeps azimuth unless it starts exactly on
+        /// the vertical centerline, which reads as a large unrelated spin once
+        /// polar has saturated against MIN/MAX_POLAR or the ground-collision
+        /// clamp. Smaller than MIN_ROTATE_RADIUS_PX on purpose — this needs only
+        /// enough displacement to tell vertical from horizontal, not a stable
+        /// angle reading.
         pub const AXIS_LOCK_THRESHOLD_PX: f64 = 12.0;
-        /// did_drag used to flip true on ANY nonzero pointermove delta between
-        /// pointerdown and pointerup — real pointers (trackpad clicks, high-DPI
-        /// mice, touch) almost always report a pixel or two of jitter even on a
-        /// "stationary" click, so genuine taps (map recenter, object place/erase)
-        /// were silently getting swallowed as a zero-distance drag. Gate on total
-        /// displacement from pointerdown instead (see tap_start_x/y in
-        /// input.tsx) — small enough that an intentional drag still starts
-        /// panning immediately, large enough to absorb click jitter.
+        /// A tap is a press whose total displacement from pointerdown stays
+        /// inside this (module/camera/input.rs's tap_start_x/y). Gating on any
+        /// nonzero pointermove delta instead would swallow genuine taps — map
+        /// recenter, object place and erase — because real pointers (trackpad
+        /// clicks, high-DPI mice, touch) report a pixel or two of jitter even on
+        /// a stationary click. Small enough that an intentional drag still starts
+        /// panning immediately, large enough to absorb that jitter.
         pub const TAP_DRAG_THRESHOLD_PX: f64 = 4.0;
-        pub const KEYS: &[&str] = &["TILT_SWEEP_FRACTION", "DOLLY_GAIN", "MIN_ROTATE_RADIUS_PX", "MIN_TWIST_DIST_PX", "AXIS_LOCK_THRESHOLD_PX", "TAP_DRAG_THRESHOLD_PX"];
+        pub const KEYS: &[&str] = &[
+            "TILT_SWEEP_FRACTION",
+            "DOLLY_GAIN",
+            "MIN_ROTATE_RADIUS_PX",
+            "MIN_TWIST_DIST_PX",
+            "AXIS_LOCK_THRESHOLD_PX",
+            "TAP_DRAG_THRESHOLD_PX",
+        ];
     }
     pub mod smooth {
         pub const ROT_DAMP: f64 = 10.0;

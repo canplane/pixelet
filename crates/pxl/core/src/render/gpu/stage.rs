@@ -7,13 +7,14 @@
 //! the projections to WebGPU's depth range, lays the numbers into its own
 //! uniform buffers and draws; it decides nothing.
 
-use crate::app::setting::store::use_settings_store;
-use crate::global::Global;
+use xpute_core::kit::mat4::{mat4, mat4_mul};
+
+use crate::app::setting::store::settings_store;
 use crate::module::map::environment::SKY_DOME_SCALE;
 use crate::module::world::environment::config::rim_cfg;
 use crate::module::world::frame::view::view;
-use crate::module::world::lod::{fade_end_u, fade_start_u, LOD_CELL_PER_DISTANCE};
-use xpute_core::kit::mat4::{mat4, mat4_mul};
+use crate::render::lod::{fade_end_u, fade_start_u, LOD_CELL_PER_DISTANCE};
+use crate::sys::global::Global;
 
 const EDGE_STRENGTH: f64 = 0.3;
 const EDGE_WIDTH: f64 = 0.03;
@@ -68,7 +69,7 @@ pub fn stage_lane() -> &'static [f64; STAGE_WORDS] {
 /// Writes the frame's uniforms from the view and the settings as they stand.
 pub fn stage_write() {
     let v = view();
-    let settings = use_settings_store();
+    let settings = settings_store();
     let s = stage();
     let mut m = mat4();
     mat4_mul(&mut m, &v.view_matrix, &v.root);

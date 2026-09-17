@@ -3,7 +3,6 @@
 
 import type { i32, u32 } from "@xpute/core/kit/word.ts";
 import type { ElementOf, TypedArray, TypedArrayCtor, U64Array } from "@xpute/core/kit/array.ts";
-import type { TypedAlloc } from "@xpute/core/ds/typed_alloc.ts";
 
 import { type IVec, ivec, type PVec, type PVecTraits, type PVF3, pvf3 } from "@pxl/shared/spec/space/pvf3/mod.ts";
 
@@ -30,15 +29,9 @@ export type SparseTree<T extends TypedArray> = {
  */
 const to_key = (coord: PVF3, min: i32): IVec => pvf3.sh(PVF3_REG, coord, -min).i;
 
-/** Allocate a sparse tree with the given layout and initial capacity, its
- * lanes from `typed` (the heap unless given). */
-export function alloc<T extends TypedArray>(layout: SparseTreeLayout, cap: u32, ctor: TypedArrayCtor<T>, typed?: TypedAlloc): SparseTree<T> {
-  return { layout, mem: st_mem.alloc(layout.dim, cap, ctor, typed) };
-}
-
-/** Hands the tree's lanes back. The tree must not be used afterwards. */
-export function free<T extends TypedArray>(tree: SparseTree<T>): void {
-  st_mem.free(tree.mem);
+/** Allocate a sparse tree with the given layout and initial capacity. */
+export function alloc<T extends TypedArray>(layout: SparseTreeLayout, cap: u32, ctor: TypedArrayCtor<T>): SparseTree<T> {
+  return { layout, mem: st_mem.alloc(layout.dim, cap, ctor) };
 }
 
 /** Moves the tree's leaf lane to another type in place, every value carried
@@ -57,10 +50,8 @@ export function decode<T extends TypedArray>(
   buf: U64Array,
   layout: SparseTreeLayout,
   ctor: TypedArrayCtor<T>,
-  typed?: TypedAlloc,
 ): SparseTree<T> {
-  const mem = st_mem.decode(buf, ctor);
-  return { layout, mem: typed ? st_mem.adopt(mem, typed) : mem };
+  return { layout, mem: st_mem.decode(buf, ctor) };
 }
 
 /** SparseTree<T> -> T. Reconstruct the dense array from an already-decoded sparse tree. */
@@ -97,9 +88,7 @@ export function fill<T extends TypedArray>(tree: SparseTree<T>, val: ElementOf<T
 
 /** Compact the tree in-place by pruning and relocating live blocks. */
 export function compact<T extends TypedArray>(tree: SparseTree<T>): SparseTree<T> {
-  const old = tree.mem;
-  tree.mem = st_mem.compact(old, tree.layout, 0).mem;
-  st_mem.free(old);
+  tree.mem = st_mem.compact(tree.mem, tree.layout, 0).mem;
   return tree;
 }
 

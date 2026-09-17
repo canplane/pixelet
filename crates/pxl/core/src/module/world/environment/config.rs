@@ -34,8 +34,8 @@
 /// rises with it and sees almost a full fog radius in every direction.
 /// CHUNK_RENDER_DIST is 1664u, two chunks past the range rather than one, so
 /// the margin (132u) also covers the anchor's own chunk quantization (up to
-/// ~90u). frame/view_range.test.ts pins this, and widening the field of view
-/// or letting the camera look away from its pivot breaks it there first.
+/// ~90u). Widening the field of view, or letting the camera look away from
+/// its pivot, is what would make the margin too small.
 ///
 /// 1536u is chosen against what it costs to hold. Chunks mount two chunks past
 /// it (CHUNK_RENDER_DIST, 1664u), which touches 21 pages at worst; the pages
@@ -76,12 +76,9 @@ pub mod render_cfg {
 /// Minimum-brightness floor shared by every lit surface — terrain and
 /// placed cells, decor, actors — through the one shading source
 /// (crates/pxl/core/src/render/shader/shade.wgsl, `frame.floor`, carried
-/// in the theme through environment.rs). One shared constant, not two
-/// separate copies, specifically so the two can't drift apart again the way
-/// they did before this existed (terrain used to be immune to scene-light
-/// dimming by construction while objects weren't, then briefly the reverse
-/// once terrain adopted real lighting too). Tune this one number to retune
-/// every surface's night floor at once.
+/// in the theme through environment.rs). One shared constant, so terrain
+/// and objects cannot dim apart. Tune this one number to retune every
+/// surface's night floor at once.
 pub mod light_cfg {
     /// Judged on a real device, not a desktop monitor — a darker floor that read
     /// as convincing night on a monitor was simply too dark to see the world on
@@ -89,7 +86,7 @@ pub mod light_cfg {
     ///
     /// Raising this alone flattens the scene, since it lifts every face by the
     /// same amount and erases the shading that carries depth. It moves together
-    /// with the moon's directional light (environment.tsx), which adds
+    /// with the moon's directional light, which adds
     /// brightness that still differs face to face.
     pub const FLOOR: f64 = 0.6;
     pub const KEYS: &[&str] = &["FLOOR"];

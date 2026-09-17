@@ -33,8 +33,7 @@
 
 use crate::ds::arena::{ArenaOptions, Vector};
 use crate::ds::map::{IndexedMap, I64_KEYS};
-use crate::ds::typed_alloc::{TypedAlloc, HEAP_ALLOC};
-use crate::kit::array::{AnyElement, I64Array, TypedArray, U32Array};
+use crate::kit::array::{I64Array, TypedArray, U32Array};
 
 pub type Topic = u32;
 pub type Revision = u32;
@@ -48,7 +47,6 @@ pub struct ChangeLogOptions {
     pub capacity: u32,
     /// Keys a topic's table holds before it grows.
     pub keys_per_topic: Option<u32>,
-    pub alloc: Option<Box<dyn TypedAlloc>>,
 }
 
 /// What a reader walks: the journal's lanes and positions. ChangeLog is one;
@@ -77,43 +75,27 @@ pub struct ChangeLog {
     revisions: Vec<Vector<u32>>,
 }
 
-/// A `Box<dyn TypedAlloc>` shared by several structures, as one allocator
-/// is passed to each there: each takes its views from the one pool.
-struct Shared(std::rc::Rc<core::cell::RefCell<Box<dyn TypedAlloc>>>);
-
-impl TypedAlloc for Shared {
-    fn take_view(&mut self, kind: crate::kit::array::Kind, length: u32) -> crate::kit::array::ArrayBufferView {
-        self.0.borrow_mut().take_view(kind, length)
-    }
-    fn give(&mut self, view: &crate::kit::array::ArrayBufferView) {
-        self.0.borrow_mut().give(view)
-    }
-}
-
 impl ChangeLog {
     pub fn new(opts: ChangeLogOptions) -> ChangeLog {
         let topics = opts.topics;
         let capacity = opts.capacity;
         let keys_per_topic = opts.keys_per_topic.unwrap_or(64);
-        let alloc = Shared(std::rc::Rc::new(core::cell::RefCell::new(opts.alloc.unwrap_or_else(|| Box::new(HEAP_ALLOC)))));
         if !(1..=0x10000).contains(&topics) {
             panic!("change: {topics} topics, want 1..65536");
         }
         if capacity < 1 {
             panic!("change: a journal needs a capacity");
         }
-        let mut a = Shared(alloc.0.clone());
-        let topic = TypedArray::of(&a.take_view(u16::KIND, capacity)).unwrap();
-        let key = TypedArray::of(&a.take_view(i64::KIND, capacity)).unwrap();
-        let revision = TypedArray::of(&a.take_view(u32::KIND, capacity)).unwrap();
-        let ticks = TypedArray::of(&a.take_view(u32::KIND, topics)).unwrap();
+        let topic = TypedArray::new(capacity as usize);
+        let key = TypedArray::new(capacity as usize);
+        let revision = TypedArray::new(capacity as usize);
+        let ticks = TypedArray::new(topics as usize);
         let mut tables = Vec::new();
         let mut revisions = Vec::new();
         for _ in 0..topics {
-            tables.push(IndexedMap::new(I64_KEYS, keys_per_topic, Some(Box::new(Shared(alloc.0.clone())))));
+            tables.push(IndexedMap::new(I64_KEYS, keys_per_topic));
             revisions.push(Vector::new(ArenaOptions {
                 init_cap: Some(keys_per_topic),
-                alloc: Some(Box::new(Shared(alloc.0.clone()))),
                 ..Default::default()
             }));
         }

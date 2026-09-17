@@ -2,7 +2,7 @@
 // (no pair: rng.ts has no test file)
 
 use super::*;
-use crate::vector::Vector;
+use crate::sys::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/kit/rng.tsv");
 

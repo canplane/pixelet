@@ -9,33 +9,31 @@
 //! written into a block of the memory, so nothing is copied across the
 //! boundary.
 //!
-//! One bake is open at a time, as with the TypeScript context; the module is
-//! single-threaded, so the state is a plain global.
+//! One bake is open at a time; the module is single-threaded, so the state is
+//! a plain global.
 
-use pxl_core::bake::mesher::Step;
-use pxl_core::bake::run_set::{run_set_bytes, RunSet};
-use pxl_core::bake::scan::{BandView, ExtraView, ScanStep};
-use pxl_core::bake::terrain::{PageView, ELE_PADDED_SPAN};
-use pxl_core::bake::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
-use pxl_core::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
-use pxl_core::kernel::{kernel, reindex_object, Kernel};
-use pxl_core::global::Global;
 use pxl_core::mem;
-use xpute_core::sys::mem::{write_section, SECTION_WORDS};
-use pxl_core::world::build::{Event as BuildEvent, PageLanes, World};
-use pxl_core::world::decor::{Kind as DecorKind, Rule as DecorRule};
-use pxl_core::world::object::{Carve, Kind};
-use pxl_core::world::raycast::Raycast;
-use pxl_core::world::sched::{Event, Frame, Scheduler};
+use pxl_core::module::world::chunk_node::{BuildEvent, PageLanes, World};
+use pxl_core::module::world::decor::decor_layer::{Kind as DecorKind, Rule as DecorRule};
+use pxl_core::module::world::sched::chunk_table::{Event, Scheduler};
+use pxl_core::render::layer::object::adapter::{Carve, Kind};
+use pxl_core::render::layer::pipeline::chunk_mesher::Step;
+use pxl_core::render::layer::pipeline::chunk_raycast::Raycast;
+use pxl_core::render::layer::pipeline::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
+use pxl_core::render::layer::pipeline::voxel_scan::{run_set_bytes, BandView, ExtraView, RunSet, ScanStep};
+use pxl_core::render::layer::terrain::adapter::PageView;
+use pxl_core::sys::global::Global;
+use pxl_core::sys::kernel::{kernel, reindex_object, Kernel};
+use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_shared::spec::cmd::{Cmd, StepResult};
 use xpute_core::io::marshal::tree::{BranchCursor, PacketWriter, TreeReader};
 use xpute_core::ipc::cmd::Interrupt;
 use xpute_core::ipc::frame::FrameFlag;
 use xpute_core::ipc::ring::{ring_bytes, slots_bytes, Ring};
-use xpute_core::kit::array::ArrayBuffer;
-use xpute_core::kit::array::U8Array;
+use xpute_core::kit::array::{ArrayBuffer, U8Array};
 use xpute_core::sys::errno::Errno;
 use xpute_core::sys::error::MarshalError;
+use xpute_core::sys::mem::{write_section, SECTION_WORDS};
 
 extern "C" {
     /// Where the linker stopped: the end of `.rodata`, `.data` and `.bss`, and
@@ -50,6 +48,10 @@ extern "C" {
     /// four megabytes apart.
     #[allow(non_upper_case_globals)]
     static __data_end: u8;
+    /// The top of the stack: `-z stack-size` past its start, which
+    /// `--stack-first` puts at the bottom of the memory. wasm-ld defines it.
+    #[allow(non_upper_case_globals)]
+    static __stack_high: u8;
 }
 
 /// Where the linker stopped, as an address.
@@ -110,8 +112,8 @@ impl xpute_core::ds::buddy_tree::Range for ModuleHeap {
 static ALLOC: xpute_core::ds::slab::SlabMalloc<ModuleHeap> = xpute_core::ds::slab::SlabMalloc::new();
 
 struct State {
-    /// The submission ring (glue → core) and the completion ring (core →
-    /// glue), in blocks of the fixed section taken once. Where in that section
+    /// The submission ring (shell → core) and the completion ring (core →
+    /// shell), in blocks of the fixed section taken once. Where in that section
     /// they sit is the section's to answer, and the boot block carries the
     /// answer out to the shell.
     sq: Ring,
@@ -224,7 +226,7 @@ fn band_views((at, count): (usize, u32)) -> Vec<BandView<'static>> {
         table
             .chunks_exact(BAND_WORDS)
             .map(|w| {
-                let voxels = pxl_core::bake::volume::BAND_VOXELS;
+                let voxels = pxl_core::render::layer::pipeline::volume::BAND_VOXELS;
                 let extras = w[4] as usize;
                 BandView {
                     band_z: w[0] as i32,
@@ -260,20 +262,20 @@ fn volumes_of(volumes: &mut Option<Volumes>) -> Result<&mut Volumes, MarshalErro
 // The client lowers a coordinate before it crosses: the chunk's key (an
 // IVec, passed as it is), the band's Z, the band-local lattice position in
 // finest-tier steps, and the level. What comes back is lanes to take views
-// over, valid until the next write or reindex. The store is the glue's
+// over, valid until the next write or reindex. The store is the shell's
 // (module/world/object/store.ts). Writes, reads and the reference paint
 // alike are commands in the rings (pxl_shared::spec::cmd's OBJECT_*).
 
-pub use pxl_core::kernel::{FRAME_WORDS, JOURNAL_CAPACITY, TOPIC_DECOR_COLUMN, TOPIC_OBJECT_CELL, TOPIC_OBJECT_COLUMN, WORLD_TOPICS};
+pub use pxl_core::sys::kernel::{JOURNAL_CAPACITY, TOPIC_DECOR_COLUMN, TOPIC_OBJECT_CELL, TOPIC_OBJECT_COLUMN, WORLD_TOPICS};
 
 // ---- Rings ----
 //
 // Commands and their effects cross in rings (crates/xpute/core/src/ipc/ring.rs):
 // a message names a command (pxl_shared::spec::cmd) and an XTP packet in the
-// ring's slot, which the kernel reads where it lies. The glue assembles
+// ring's slot, which the kernel reads where it lies. The shell assembles
 // what it submits and takes apart what completes; nothing here is shaped
-// for it. The glue pushes into the submission ring, rings `interrupt`
-// (DRAIN or TICK), and reads the completion ring when the call returns.
+// for it. The shell pushes into the submission ring, rings `interrupt`
+// (DRAIN), and reads the completion ring when the call returns.
 
 /// Words in the boot block: the section the module keeps for itself at the
 /// front of the memory; where the submission ring and the completion ring
@@ -318,6 +320,11 @@ pub extern "C" fn boot() -> *const u32 {
 /// range without being told (`buddy_tree`'s `Range`), so laying out is
 /// recording what the map says and opening the volumes over it.
 fn lay_out() -> mem::Map {
+    let stack_high = core::ptr::addr_of!(__stack_high) as u32;
+    assert!(
+        stack_high == pxl_core::mem::spec::STACK_BYTES,
+        "the stack was linked to end at {stack_high}, not at mem.json's STACK_BYTES"
+    );
     let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
     let map = mem::lay_out(given.min(u32::MAX as u64) as u32, data_end());
     // SAFETY: the memory is this module's own, addressed from 0.
@@ -328,15 +335,13 @@ fn lay_out() -> mem::Map {
 
 /// The doorbell. The vector says what the turn is for
 /// (xpute_core::ipc::cmd::Interrupt): DRAIN applies the submissions waiting
-/// and answers how many messages it posted; TICK drains, then runs the
-/// scheduler's pass, and answers 1 when the canvas has something new to
-/// draw. A vector nobody numbers answers u32::MAX.
+/// and answers how many messages it posted. Any other vector answers
+/// u32::MAX.
 #[no_mangle]
 pub extern "C" fn interrupt(vector: u32) -> u32 {
     let s = state();
     match vector {
         v if v == Interrupt::DRAIN as u32 => drain(s),
-        v if v == Interrupt::TICK as u32 => tick(s),
         _ => u32::MAX,
     }
 }
@@ -537,11 +542,11 @@ fn post_event(o: &Outbox, e: Event) {
 /// toasts, the sensors' watches, console lines, the UI's snapshot when it
 /// changed, the fetches to start and cancel, and the loads.
 fn post_shell(s: &mut State) {
-    use pxl_core::module::device::pose::use_device_orientation::{take_orientation_commands, OrientationCommand};
-    use pxl_core::module::device::pose::use_geolocation::{take_geolocation_commands, GeolocationCommand};
+    use pxl_core::module::device::pose::device_orientation::{take_orientation_commands, OrientationCommand};
+    use pxl_core::module::device::pose::geolocation::{take_geolocation_commands, GeolocationCommand};
     use pxl_core::module::map::ui::toast::toast_controller::{take_toast_commands, ToastCommand, ToastTone};
+    use pxl_core::module::world::gltf_cache::{take_load_requests, LoadKind};
     use pxl_core::module::world::sched::fetch_scheduler::{fetch_take_aborts, fetch_take_started};
-    use pxl_core::render::gltf::load::{take_load_requests, LoadKind};
 
     const GEOLOCATION: u32 = 0;
     const ORIENTATION: u32 = 1;
@@ -622,7 +627,7 @@ fn post_shell(s: &mut State) {
 fn post_turn(s: &mut State, report: pxl_core::module::world::sched::tick::TickReport) {
     post_shell(s);
     // A pass that left something new to draw asks for the turn that draws it.
-    let asked = report.invalidated | pxl_core::module::world::core_tick::take_draw();
+    let asked = report.invalidated | pxl_core::module::world::chunk_stage::take_draw();
     let draws = kernel().sched.draw.draw_count();
     raise(&s.outbox, Cmd::WORLD_UPDATE, 4, |b| {
         b.bool(Some(asked)).f64(Some(report.total_ms)).bool(Some(report.settled)).u32(Some(draws));
@@ -810,17 +815,6 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 }
             };
             return Ok(Some((revision as i32, None)));
-        }
-        Cmd::FRAME_READ => {
-            let mut uniform = [pxl_core::render::shader::FRAME_FLOATS; 14];
-            uniform[1..].copy_from_slice(&pxl_core::render::shader::FRAME_AT);
-            let frame_at = k.frame.as_ptr() as u32;
-            return Ok(Some((
-                0,
-                reply(2, |b| {
-                    b.u32(Some(frame_at)).u32_array(Some(&uniform[..]));
-                }),
-            )));
         }
         Cmd::CHUNK_READ => {
             let (census_at, stat_at) = (k.census.as_ptr() as u32, k.build_stat.as_ptr() as u32);
@@ -1083,7 +1077,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::TERRAIN_READ => {
             let f = fields(pkt)?;
             let (tx0, ty0) = (u32_at(&f, 5)?, u32_at(&f, 6)?);
-            if tx0 > PAGE_CELL_SPAN - CHUNK_SPAN || ty0 > PAGE_CELL_SPAN - CHUNK_SPAN {
+            if tx0 > PAGE_CELL_SPAN - CHUNK_CELL_SPAN || ty0 > PAGE_CELL_SPAN - CHUNK_CELL_SPAN {
                 return Err(MarshalError::new(Errno::EINVAL, Some("a chunk past its page"), None));
             }
             let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
@@ -1164,7 +1158,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let f = fields(pkt)?;
             let platform = pxl_core::module::world::world::Platform {
                 geolocation: bool_at(&f, 4)?,
-                orientation: pxl_core::module::device::pose::use_device_orientation::OrientationPlatform {
+                orientation: pxl_core::module::device::pose::device_orientation::OrientationPlatform {
                     supported: bool_at(&f, 5)?,
                     needs_permission: bool_at(&f, 6)?,
                 },
@@ -1187,7 +1181,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 build_number: f.at(3)?.get_str()?,
                 published_tiles: bool_at(&f, 4)?,
             });
-            pxl_core::host::set_handheld(bool_at(&f, 5)?);
+            pxl_core::sys::host::set_handheld(bool_at(&f, 5)?);
             pxl_core::module::world::object::store::load();
             return Ok(Some((0, None)));
         }
@@ -1232,11 +1226,11 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::SENSOR_UPDATE => {
             let f = fields(pkt)?;
             let opt = |v: f64| (!v.is_nan()).then_some(v);
-            pxl_core::module::device::pose::use_geolocation::geolocation_fix(number_at(&f, 0)?, number_at(&f, 1)?, opt(number_at(&f, 2)?), number_at(&f, 3)?, opt(number_at(&f, 4)?));
+            pxl_core::module::device::pose::geolocation::geolocation_fix(number_at(&f, 0)?, number_at(&f, 1)?, opt(number_at(&f, 2)?), number_at(&f, 3)?, opt(number_at(&f, 4)?));
             return Ok(Some((0, None)));
         }
         Cmd::SENSOR_ERROR => {
-            use pxl_core::module::device::pose::use_geolocation::{geolocation_error, GeolocationErrorCode};
+            use pxl_core::module::device::pose::geolocation::{geolocation_error, GeolocationErrorCode};
             let code = match u32_at(&fields(pkt)?, 0)? {
                 1 => GeolocationErrorCode::PermissionDenied,
                 2 => GeolocationErrorCode::PositionUnavailable,
@@ -1249,7 +1243,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::SENSOR_ORIENTATION => {
             let f = fields(pkt)?;
             let opt = |v: f64| (!v.is_nan()).then_some(v);
-            pxl_core::module::device::pose::use_device_orientation::orientation_event(opt(number_at(&f, 0)?), opt(number_at(&f, 1)?), opt(number_at(&f, 2)?), opt(number_at(&f, 3)?));
+            pxl_core::module::device::pose::device_orientation::orientation_event(opt(number_at(&f, 0)?), opt(number_at(&f, 1)?), opt(number_at(&f, 2)?), opt(number_at(&f, 3)?));
             return Ok(Some((0, None)));
         }
         Cmd::SENSOR_PERMISSION => {
@@ -1257,18 +1251,18 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let (granted, failed) = (bool_at(&f, 1)?, bool_at(&f, 2)?);
             let platform = pxl_core::module::world::world::world_platform();
             match (u32_at(&f, 0)?, granted) {
-                (0, true) => pxl_core::module::device::pose::use_geolocation::geolocation_permission_granted(platform.geolocation),
+                (0, true) => pxl_core::module::device::pose::geolocation::geolocation_permission_granted(platform.geolocation),
                 (0, false) => {}
-                _ => pxl_core::module::device::pose::use_device_orientation::orientation_permission(granted, failed),
+                _ => pxl_core::module::device::pose::device_orientation::orientation_permission(granted, failed),
             }
             return Ok(Some((0, None)));
         }
         Cmd::SENSOR_VISIBILITY => {
             let visible = bool_at(&fields(pkt)?, 0)?;
             let platform = pxl_core::module::world::world::world_platform();
-            pxl_core::module::device::pose::use_geolocation::geolocation_visibility(visible, platform.geolocation);
+            pxl_core::module::device::pose::geolocation::geolocation_visibility(visible, platform.geolocation);
             if visible {
-                pxl_core::module::device::pose::use_device_orientation::orientation_visible();
+                pxl_core::module::device::pose::device_orientation::orientation_visible();
             } else {
                 pxl_core::module::world::object::store::flush_save();
             }
@@ -1310,7 +1304,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             // SAFETY: a block this heap gave the shell, of `bytes`, written
             // and not read by anyone else.
             let body = unsafe { core::slice::from_raw_parts(at as *const u8, bytes) };
-            pxl_core::render::gltf::load::gltf_arrived(url.get_str_ref()?, body);
+            pxl_core::module::world::gltf_cache::gltf_arrived(url.get_str_ref()?, body);
             // SAFETY: the same block, at the size it was asked for.
             unsafe { ALLOC.free(at as *mut u8, bytes) };
             return Ok(Some((0, None)));
@@ -1318,13 +1312,13 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::LOAD_IMAGE => {
             let f = fields(pkt)?;
             let url = f.at(0)?;
-            pxl_core::render::gltf::load::image_arrived(url.get_str_ref()?, u32_at(&f, 1)?);
+            pxl_core::module::world::gltf_cache::image_arrived(url.get_str_ref()?, u32_at(&f, 1)?);
             return Ok(Some((0, None)));
         }
         Cmd::LOAD_DELETE => {
             let f = fields(pkt)?;
             let url = f.at(0)?;
-            pxl_core::render::gltf::load::load_rejected(url.get_str_ref()?);
+            pxl_core::module::world::gltf_cache::load_rejected(url.get_str_ref()?);
             return Ok(Some((0, None)));
         }
         Cmd::GPU_CREATE => {
@@ -1364,10 +1358,6 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 None => 0,
             };
             return Ok(Some((value as i32, None)));
-        }
-        Cmd::CHUNK_CREATE => {
-            let f = fields(pkt)?;
-            sched.add(tag, u64_at(&f, 0)?, i32_at(&f, 3)? as f64, i32_at(&f, 4)? as f64, u32_at(&f, 1)?, u32_at(&f, 2)?, u32_at(&f, 5)?);
         }
         Cmd::CHUNK_DELETE => sched.remove(&mut world, tag, &mut emit),
         Cmd::CHUNK_UPDATE => {
@@ -1436,7 +1426,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         }
         Cmd::DECOR_READ => {
             let r = ray_at(&fields(pkt)?)?;
-            let Some(h) = pxl_core::world::raycast::hit_decor(&world, sched, [r[0], r[1]], [r[2], r[3], r[4]], [r[5], r[6], r[7]], r[8]) else {
+            let Some(h) = pxl_core::render::layer::pipeline::chunk_raycast::hit_decor(&world, sched, [r[0], r[1]], [r[2], r[3], r[4]], [r[5], r[6], r[7]], r[8]) else {
                 return Ok(Some((0, None)));
             };
             return Ok(Some((
@@ -1462,7 +1452,6 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         | Cmd::CHANGE_UPDATE
         | Cmd::CHANGE_READ
         | Cmd::CHANGE_DELETE
-        | Cmd::FRAME_READ
         | Cmd::CHUNK_READ
         | Cmd::CHANGE_LANES
         | Cmd::POOL_READ
@@ -1569,8 +1558,8 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             unsafe { sched.debug.set(&mut world, &mut sched.draw, at, vertices.length() as u32 / 6, vertices.as_slice().as_ptr() as usize) };
         }
         Cmd::ENV_UPDATE => {
-            let lane = floats_at(&fields(pkt)?, 0, pxl_core::world::environment::THEME_FLOATS)?;
-            let theme = <[f32; pxl_core::world::environment::THEME_FLOATS]>::try_from(lane.as_slice())
+            let lane = floats_at(&fields(pkt)?, 0, pxl_core::module::map::environment::THEME_FLOATS)?;
+            let theme = <[f32; pxl_core::module::map::environment::THEME_FLOATS]>::try_from(lane.as_slice())
                 .map_err(|_| MarshalError::new(Errno::EBADMSG, Some(&format!("a theme of {} floats", lane.length())), None))?;
             sched.environment.set_theme(&theme);
         }
@@ -1665,8 +1654,29 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         // Signals: the kernel raises these, and a shell submitting one is
         // asking for something no handler does.
         // Applied before the world is borrowed, above.
-        Cmd::WORLD_CREATE | Cmd::WORLD_ACTION | Cmd::WORLD_LONG_FRAME | Cmd::WORLD_UPDATE | Cmd::INPUT_UPDATE | Cmd::INPUT_POINTER | Cmd::INPUT_WHEEL | Cmd::SENSOR_UPDATE | Cmd::SENSOR_ERROR | Cmd::SENSOR_ORIENTATION | Cmd::SENSOR_PERMISSION | Cmd::SENSOR_VISIBILITY | Cmd::FETCH_BODY | Cmd::FETCH_UPDATE | Cmd::LOAD_UPDATE | Cmd::LOAD_IMAGE | Cmd::LOAD_DELETE | Cmd::GPU_CREATE | Cmd::GPU_DELETE | Cmd::SURFACE_CREATE | Cmd::SURFACE_UPDATE | Cmd::SURFACE_DELETE => return Ok(None),
-        Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
+        Cmd::WORLD_CREATE
+        | Cmd::WORLD_ACTION
+        | Cmd::WORLD_LONG_FRAME
+        | Cmd::WORLD_UPDATE
+        | Cmd::INPUT_UPDATE
+        | Cmd::INPUT_POINTER
+        | Cmd::INPUT_WHEEL
+        | Cmd::SENSOR_UPDATE
+        | Cmd::SENSOR_ERROR
+        | Cmd::SENSOR_ORIENTATION
+        | Cmd::SENSOR_PERMISSION
+        | Cmd::SENSOR_VISIBILITY
+        | Cmd::FETCH_BODY
+        | Cmd::FETCH_UPDATE
+        | Cmd::LOAD_UPDATE
+        | Cmd::LOAD_IMAGE
+        | Cmd::LOAD_DELETE
+        | Cmd::GPU_CREATE
+        | Cmd::GPU_DELETE
+        | Cmd::SURFACE_CREATE
+        | Cmd::SURFACE_UPDATE
+        | Cmd::SURFACE_DELETE => return Ok(None),
+        Cmd::CHUNK_CREATE | Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
         Cmd::WORLD_TOAST | Cmd::WORLD_LOG | Cmd::WORLD_SNAPSHOT | Cmd::SENSOR_CREATE | Cmd::SENSOR_DELETE | Cmd::FETCH_CREATE | Cmd::FETCH_DELETE | Cmd::LOAD_CREATE => return Ok(None),
     }
     Ok(Some((0, None)))
@@ -1716,7 +1726,7 @@ fn drain(s: &mut State) -> u32 {
             s.outbox.post(tag, number, FrameFlag::RES as u32, value, packet.map(|_| &copy as Write<'_>));
         }
     }
-    // The rows the glue reads by address (the build stat, the census) are
+    // The rows the shell reads by address (the build stat, the census) are
     // as of the last command, as they are of the last tick.
     after();
     s.outbox.cq.tail().wrapping_sub(tail)
@@ -1780,56 +1790,7 @@ fn after() {
     ];
 }
 
-/// The frame's turn (Interrupt::TICK): applies the submissions waiting, then
-/// the scheduler's pass over every chunk with the frame the glue wrote at
-/// FRAME_READ's address. 1 when the canvas has something new to draw.
-fn tick(s: &mut State) -> u32 {
-    drain(s);
-    let k = kernel();
-    // Events the ring had no room for are posted first; a tick on top of
-    // them would only queue more. The glue reads the ring dry and drains
-    // again before the next tick, so this is a frame lost only when it
-    // does not.
-    if !s.outbox.spill.is_empty() || k.volumes.is_none() {
-        return 1;
-    }
-    let f = k.frame;
-    let mut frame = Frame::default();
-    frame.root.copy_from_slice(&f[0..16]);
-    frame.origin.copy_from_slice(&f[16..19]);
-    frame.planes.copy_from_slice(&f[19..43]);
-    frame.camera.copy_from_slice(&f[43..46]);
-    frame.lead.copy_from_slice(&f[46..49]);
-    frame.viewport_h = f[49];
-    frame.fov_deg = f[50];
-    frame.delta_s = f[51];
-    frame.budget_ms = f[52];
-    frame.hard_slack_ms = f[53];
-    frame.pixel_dither = f[54] != 0.0;
-    frame.retain_budget_bytes = f[55];
-    frame.anchor = (f[58] != 0.0).then_some([f[56], f[57]]);
-    frame.render_dist = f[59];
-    frame.range_hysteresis = f[60];
-    frame.show_decor = f[61] != 0.0;
-    let Parts { mut world, events, sched, .. } = parts(k, &s.outbox);
-    let draw = sched.tick(&mut world, frame, &now, &mut |e| post_event(events, e));
-    after();
-    draw as u32
-}
-
-// ---- The billboards (crates/pxl/core/src/world/billboard.rs) ----
-
-// ---- The shaders and the pipelines (crates/pxl/core/src/render/shader.rs) ----
-
-// ---- The dev gizmos (crates/pxl/core/src/world/debug.rs) ----
-
-// ---- The environment (crates/pxl/core/src/world/environment.rs) ----
-
-// ---- The location puck (crates/pxl/core/src/world/marker.rs) ----
-
-// ---- Models and actors (crates/pxl/core/src/world/model.rs) ----
-
-// ---- The host's hooks (pxl_core::host, pxl_core::global) ----
+// ---- The host's hooks (pxl_core::sys::host, pxl_core::sys::global) ----
 
 extern "C" {
     /// `localStorage.getItem(key)`'s length in UTF-8 bytes, or -1 for none.
@@ -1985,11 +1946,11 @@ fn hook_storage_set(key: &str, value: &str) {
     unsafe { host_storage_set(key.as_ptr(), key.len(), value.as_ptr(), value.len()) }
 }
 
-fn hook_local_time() -> pxl_core::host::LocalTime {
+fn hook_local_time() -> pxl_core::sys::host::LocalTime {
     let mut t = [0.0f64; 5];
     // SAFETY: the host writes five doubles into `t`.
     unsafe { host_local_time(t.as_mut_ptr()) };
-    pxl_core::host::LocalTime {
+    pxl_core::sys::host::LocalTime {
         unix_ms: t[0],
         hours: t[1],
         minutes: t[2],
@@ -2011,18 +1972,18 @@ fn hook_entropy() -> u64 {
 /// Hands the kernel the host's clock, storage, local time, text measure and
 /// entropy, before anything reads them.
 fn install_host() {
-    pxl_core::global::set_clock(hook_now);
-    pxl_core::host::set_storage(pxl_core::host::Storage {
+    pxl_core::sys::global::set_clock(hook_now);
+    pxl_core::sys::host::set_storage(pxl_core::sys::host::Storage {
         get: hook_storage_get,
         set: hook_storage_set,
     });
-    pxl_core::host::set_local_time(hook_local_time);
-    pxl_core::host::set_measure_text(hook_measure_text);
+    pxl_core::sys::host::set_local_time(hook_local_time);
+    pxl_core::sys::host::set_measure_text(hook_measure_text);
     xpute_core::kit::rng::set_entropy(hook_entropy);
-    pxl_core::host::set_heap_used(|| ALLOC.used());
-    pxl_core::host::set_heap_releases(|| ALLOC.releases());
-    pxl_core::host::set_heap_live(|| ALLOC.live());
-    pxl_core::host::set_heap_bytes(|| ALLOC.range_bytes());
+    pxl_core::sys::host::set_heap_used(|| ALLOC.used());
+    pxl_core::sys::host::set_heap_releases(|| ALLOC.releases());
+    pxl_core::sys::host::set_heap_live(|| ALLOC.live());
+    pxl_core::sys::host::set_heap_bytes(|| ALLOC.range_bytes());
     install_gpu();
 }
 
@@ -2030,13 +1991,12 @@ fn install_host() {
 ///
 /// The same range shape as the trace below, for the same reason: this is
 /// instrumentation, and instrumentation does not go out on the control ring.
-/// It used to — a line per settled task, raised as `WORLD_LOG` every tick —
-/// and that gave a debug feature the ring's failure policy, which is that
+/// On the ring a debug stream would take the ring's failure policy —
 /// `Outbox::post` asserts when the completion queue and its spill are both
-/// full. Turning the stream on during a fetch burst is the case that fills
-/// them, and it is also the only case anyone turns it on for.
-static LOG_TEXT: pxl_core::global::Global<String> = pxl_core::global::Global::new();
-static LOG_RANGE: pxl_core::global::Global<[u32; 2]> = pxl_core::global::Global::new();
+/// full — and a fetch burst, the one time anyone turns the stream on, is what
+/// fills them.
+static LOG_TEXT: pxl_core::sys::global::Global<String> = pxl_core::sys::global::Global::new();
+static LOG_RANGE: pxl_core::sys::global::Global<[u32; 2]> = pxl_core::sys::global::Global::new();
 
 /// What the stream has kept since the shell last came for it: the address of
 /// two words, where the JSON lies in this memory and how long it is. Zero
@@ -2065,8 +2025,8 @@ pub extern "C" fn ledger_log_release() {
 ///
 /// It is held between the two calls below rather than rebuilt, because the
 /// range handed out has to stay good until the shell has copied the bytes.
-static TRACE_TEXT: pxl_core::global::Global<String> = pxl_core::global::Global::new();
-static TRACE_RANGE: pxl_core::global::Global<[u32; 2]> = pxl_core::global::Global::new();
+static TRACE_TEXT: pxl_core::sys::global::Global<String> = pxl_core::sys::global::Global::new();
+static TRACE_RANGE: pxl_core::sys::global::Global<[u32; 2]> = pxl_core::sys::global::Global::new();
 
 /// The ledger's window as Chrome's Trace Event Format, for ui.perfetto.dev:
 /// the address of two words, where the JSON lies in this memory and how long

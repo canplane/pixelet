@@ -5,11 +5,13 @@
 //! no interests registry.
 
 use pxl_shared::spec::space::pvf3::ivec::IVec;
+use xpute_core::sys::mem::free;
 
 use super::repository::ResidentPoiPage;
-use crate::global::Global;
 use crate::module::world::change::POI_PAGE;
 use crate::module::world::page_table::PageTable;
+use crate::module::world::poi::poi_layer::poi_place_request;
+use crate::sys::global::Global;
 
 struct PoiStore {
     pages: PageTable<ResidentPoiPage>,
@@ -28,11 +30,6 @@ pub fn poi_pages() -> &'static mut PageTable<ResidentPoiPage> {
     &mut store().pages
 }
 
-/// poi_pages' revision, so a reader sees a page come and go.
-pub fn revision() -> u32 {
-    poi_pages().revision()
-}
-
 pub fn get_pois(page_idx: IVec) -> Option<&'static ResidentPoiPage> {
     poi_pages().get(page_idx)
 }
@@ -42,11 +39,13 @@ pub fn set_pois(page_idx: IVec, page: ResidentPoiPage) {
         release(held);
     }
     poi_pages().set(page_idx, page);
+    poi_place_request();
 }
 
 pub fn clear_pois(page_idx: IVec) {
     if let Some(held) = poi_pages().clear(page_idx) {
         release(held);
+        poi_place_request();
     }
 }
 
@@ -54,8 +53,8 @@ pub fn clear_pois(page_idx: IVec) {
 /// is disconnected until its per-page index is rewritten (issue/BACKLOG.md),
 /// and the page section is `.fixed.terrain` now.
 fn release(held: ResidentPoiPage) {
-    if let Some((at, bytes)) = held.block {
+    if let Some(block) = held.block {
         // SAFETY: the page's own block, taken when it arrived.
-        unsafe { crate::bake::volume::give_bytes(at, bytes as usize) };
+        unsafe { free(block) };
     }
 }

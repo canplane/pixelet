@@ -88,10 +88,14 @@ fn tick_the_visible_phase_cannot_take_the_content_share_and_content_sees_it() {
         |c| {
             c.state.a = c.budget.remaining();
             // Runs the budget it was shown to the floor.
-            c.budget.run(0..1000, |_| {
-                burn(0.05);
-                true
-            }, None);
+            c.budget.run(
+                0..1000,
+                |_| {
+                    burn(0.05);
+                    true
+                },
+                None,
+            );
         },
         "t",
     );
@@ -175,10 +179,17 @@ fn tick_a_storm_of_steps_that_report_work_stays_within_the_budget_plus_one_step(
     t.on_tick(
         VISIBLE,
         |c| {
-            c.state.runs = c.budget.run(0..2000, |_| {
-                burn(COST);
-                true
-            }, None).ran;
+            c.state.runs = c
+                .budget
+                .run(
+                    0..2000,
+                    |_| {
+                        burn(COST);
+                        true
+                    },
+                    None,
+                )
+                .ran;
         },
         "t",
     );
@@ -186,7 +197,12 @@ fn tick_a_storm_of_steps_that_report_work_stays_within_the_budget_plus_one_step(
     let report = t.run(&mut s, 0.016, GRANT);
     assert!(s.runs >= 1, "forward progress");
     assert!(s.runs < 2000, "the storm was cut short");
-    assert!(report.phase_ms[VISIBLE] <= report.budget_ms + COST + 1.0, "visible {} over budget {}", report.phase_ms[VISIBLE], report.budget_ms);
+    assert!(
+        report.phase_ms[VISIBLE] <= report.budget_ms + COST + 1.0,
+        "visible {} over budget {}",
+        report.phase_ms[VISIBLE],
+        report.budget_ms
+    );
 }
 
 #[test]
@@ -195,16 +211,25 @@ fn tick_a_storm_of_steps_that_cost_time_and_report_none_stays_within_the_hard_ce
     t.on_tick(
         VISIBLE,
         |c| {
-            c.budget.run(0..2000, |_| {
-                burn(COST);
-                false
-            }, None);
+            c.budget.run(
+                0..2000,
+                |_| {
+                    burn(COST);
+                    false
+                },
+                None,
+            );
         },
         "t",
     );
     let mut s = Seen::default();
     let report = t.run(&mut s, 0.016, GRANT);
-    assert!(report.phase_ms[VISIBLE] <= report.budget_ms + POLICY.hard_slack_ms + COST + 1.0, "visible {} over budget {}", report.phase_ms[VISIBLE], report.budget_ms);
+    assert!(
+        report.phase_ms[VISIBLE] <= report.budget_ms + POLICY.hard_slack_ms + COST + 1.0,
+        "visible {} over budget {}",
+        report.phase_ms[VISIBLE],
+        report.budget_ms
+    );
 }
 
 #[test]
