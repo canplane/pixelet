@@ -19,10 +19,10 @@
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 import { reserve_memory } from "@xpute/core/sys/mem.ts";
+import { Doorbell } from "@xpute/core/ipc/doorbell.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/wasm/mem_spec.ts";
 import { BOOT, boot_block, instantiate_kernel, type KernelExports } from "@/wasm/module.ts";
-import { CoreRing } from "@/wasm/core_ring.ts";
 
 export { REGION_BYTES };
 
@@ -54,5 +54,8 @@ export const CORE_MEMORY: WebAssembly.Memory = memory;
  * not a number chosen in advance, so it moves when the module's code does. */
 export const MODULE_SECTION: { readonly offset: u32; readonly bytes: u32 } = { offset: 0, bytes: boot_block(CORE_KERNEL)[BOOT.data_end] };
 
-/** The rings to the module, made with it. */
-export const CORE_RING: CoreRing = new CoreRing(CORE_KERNEL);
+/** The rings to the module and its doorbell, made with it. */
+export const CORE_DOORBELL: Doorbell = (() => {
+  const boot = boot_block(CORE_KERNEL);
+  return new Doorbell(memory.buffer, boot[BOOT.sq], boot[BOOT.cq], (quota_ms) => CORE_KERNEL.interrupt(quota_ms));
+})();

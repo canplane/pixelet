@@ -11,7 +11,7 @@ use pxl_shared::spec::space::adapter::epsg4326;
 use xpute_core::kit::hash::fnv1a64_str;
 
 use crate::module::map::store::map_store;
-use crate::module::world::change::request_world_tick;
+use crate::module::world::change::{request_world_tick, wake_at};
 use crate::module::world::geocode::label::{assemble_label, primary_lang, Label};
 use crate::module::world::poi::poi_theme::resolve_poi_theme;
 use crate::module::world::sched::demand::{Category, Demand, DemandKey};
@@ -106,7 +106,11 @@ pub fn search_close() {
 pub fn search_step() {
     let s = search();
     let q: Query = s.query.trim().to_string();
-    if q.is_empty() || s.submitted.as_ref() == Some(&q) || now() - s.typed_at < DEBOUNCE_MS {
+    if q.is_empty() || s.submitted.as_ref() == Some(&q) {
+        return;
+    }
+    if now() - s.typed_at < DEBOUNCE_MS {
+        wake_at(s.typed_at + DEBOUNCE_MS);
         return;
     }
     s.near = map_store().map_center.map(|c| {

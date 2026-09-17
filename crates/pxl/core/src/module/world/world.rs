@@ -11,15 +11,17 @@
 //! (module/world/frame/view.rs), the map's azimuth and the floating origin's
 //! translation, which the view's damping steps write.
 //!
-//! Two kinds of turn. The tick's steps (sched/tick.rs) run inside the frame, by
-//! phase and under one budget; `world_boot` registers them once. The effects —
-//! the fetchers, the stores' followers, the markers — run once per turn before
-//! the tick (`world_turn`), each comparing what it last saw.
+//! The kernel's work is tasks on whichever executor the module installed
+//! (`world_tasks`). The frame is one of them: the effects — the fetchers, the
+//! stores' followers, the markers — each comparing what it last saw
+//! (`world_turn`), then the tick's steps (sched/tick.rs) by phase under one
+//! budget, then the draw. The rest wait on what they work on: arrivals, the
+//! chunk builds, the decor models, the save.
 
 use pxl_shared::spec::space::indexer::{L1_IDX_IN_L4, L3_IDX};
 use pxl_shared::spec::space::pvf3::projection;
 use pxl_shared::spec::space::xy::TO_XY;
-use xpute_core::sched::quantum::Grant;
+use xpute_core::sched::edge::{notified, Notify};
 
 use crate::app::setting::store::settings_store;
 use crate::lib::env::config::APP_ENV;
@@ -34,11 +36,11 @@ use crate::module::map::navigation::map_navigation::{map_navigation, map_navigat
 use crate::module::map::store::map_store;
 use crate::module::map::ui::overlay::reverse_geocode::reverse_geocode_step;
 use crate::module::map::ui::toast::toast_controller::toast_controller_step;
-use crate::module::world::change::take_tick_request;
+use crate::module::world::change::{request_world_tick, world_edge};
 use crate::module::world::character::companion::{companion_step, CompanionProps};
 use crate::module::world::chunk_node::chunk_nodes_step;
-use crate::module::world::chunk_stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms};
-use crate::module::world::decor::asset_store::decor_asset_step;
+use crate::module::world::chunk_stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, take_draw};
+use crate::module::world::decor::asset_store::decor_assets_wanted;
 use crate::module::world::environment::theme_clock::theme_clock_step;
 use crate::module::world::frame::coord::get_local_world_origin;
 use crate::module::world::frame::view_frame::{view_rotation_step, view_translation_step};
@@ -116,6 +118,35 @@ pub fn world_boot() {
     on_tick(VISIBLE, core_tick_visible_step, "chunks");
     on_tick(COSMETIC, debug_gizmos_tick, "debug_gizmos");
     on_tick(REPORT, core_tick_report_step, "ledger");
+    world_tasks();
+}
+
+/// How soon each of the kernel's tasks wants polling, lower sooner. The
+/// installed executor may not order by it; nothing here rests on its order.
+#[repr(u8)]
+#[derive(Clone, Copy)]
+enum TaskPriority {
+    Frame,
+    Arrival,
+    Build,
+    Background,
+}
+
+/// Spawns the kernel's tasks on whichever executor the module installed —
+/// no more than change.rs's TASKS. One refused is a module whose executor
+/// holds fewer, which aborts.
+fn world_tasks() {
+    use xpute_core::sched::task::spawn;
+    use TaskPriority::*;
+    let spawned = spawn(frame_task(), Frame as u8)
+        && spawn(crate::module::world::fetch::fetch_task(), Arrival as u8)
+        && spawn(crate::module::world::gltf_cache::gltf_task(), Arrival as u8)
+        && spawn(crate::module::world::chunk_stage::build_task(), Build as u8)
+        && spawn(crate::module::world::decor::asset_store::decor_asset_task(), Background as u8)
+        && spawn(crate::module::world::object::store::save_task(), Background as u8);
+    if !spawned {
+        std::process::abort();
+    }
 }
 
 /// The effects' turn, before the tick.
@@ -129,7 +160,7 @@ pub fn world_turn(platform: Platform) {
     tile_fetcher_step();
     follow_mode_step();
     theme_clock_step();
-    decor_asset_step();
+    decor_assets_wanted();
     chunk_nodes_step();
     hover_cursor_step();
     // device_coord is deliberately not gated the way map_center is — the puck
@@ -161,10 +192,77 @@ pub fn world_platform() -> Platform {
     })
 }
 
-/// The turn the central scheduler strobed: the effects, then the tick's phases
-/// on its grant, and the fetches they asked for within its credits. What the
-/// tick spent, and whether a turn after this one was asked for.
-pub fn world_frame(width: f64, height: f64, dpr: f64, delta: f64, platform: Platform, grant: Grant, credits: u32) -> TickReport {
+/// What the host tells a frame: the viewport, the gap since the last, and how
+/// it sees the turn.
+pub struct HostFrame {
+    pub width: f64,
+    pub height: f64,
+    pub dpr: f64,
+    pub delta: f64,
+    pub platform: Platform,
+    pub frame_ms: f64,
+    pub interactive: bool,
+    /// The fetches the kernel may have in flight.
+    pub credits: u32,
+}
+
+static FRAME: Global<Option<HostFrame>> = Global::new();
+static FRAMES: Global<Notify> = Global::new();
+static DRAWN: Global<bool> = Global::new();
+
+fn frames() -> &'static mut Notify {
+    FRAMES.get(Notify::new)
+}
+
+/// The host asked for a frame: kept for the frame task, the latest winning.
+pub fn world_frame_asked(host: HostFrame) {
+    *FRAME.get(|| None) = Some(host);
+    frames().notify();
+}
+
+/// Whether the host asked for a frame not yet drawn: a turn that carries one
+/// polls the tasks, whatever its quota — a quota overrun to nothing still
+/// draws.
+pub fn world_frame_waiting() -> bool {
+    FRAME.get(|| None).is_some()
+}
+
+/// Whether a frame was drawn since the last take: what the module reports
+/// back to the shell after the turn.
+pub fn take_world_drawn() -> bool {
+    core::mem::take(DRAWN.get(|| false))
+}
+
+/// The frame task: a frame the host asked for, whole. What a frame does has an
+/// order within the turn — the effects, the tick's phases, the fetch pump,
+/// the draw — so it is one task, and the executor's order among tasks is
+/// never relied on.
+async fn frame_task() {
+    loop {
+        notified(frames).await;
+        let Some(host) = FRAME.get(|| None).take() else { continue };
+        let edge = world_edge();
+        world_frame(host, edge.quota_ms(), edge.edge_at());
+        DRAWN.set(true);
+    }
+}
+
+/// The frame of the turn the central scheduler strobed at `edge_at` with
+/// `quota_ms`: the effects, then the tick's phases on what is left of the
+/// quota, the fetches they asked for within the credits, and the draw. A pass
+/// that asked for a turn after this one, or left something new to draw, asks
+/// for the next edge.
+fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
+    let HostFrame {
+        width,
+        height,
+        dpr,
+        delta,
+        platform,
+        frame_ms,
+        interactive,
+        credits,
+    } = host;
     let t0 = now();
     *PLATFORM.get(|| None) = Some(platform);
     set_fetch_credits(credits);
@@ -174,11 +272,15 @@ pub fn world_frame(width: f64, height: f64, dpr: f64, delta: f64, platform: Plat
     state.height = height;
     state.dpr = dpr;
     state.elapsed_s += delta;
-    let mut report = run_tick(state, delta, grant);
+    state.frame_ms = frame_ms;
+    state.interactive = interactive;
+    let report = run_tick(state, delta, quota_ms, edge_at);
     fetch_pump();
     crate::render::gpu::stage::stage_write();
     crate::render::gpu::renderer::render_frame();
     set_host_task_ms(now() - t0);
-    report.invalidated |= take_tick_request();
+    if report.invalidated || take_draw() {
+        request_world_tick();
+    }
     report
 }

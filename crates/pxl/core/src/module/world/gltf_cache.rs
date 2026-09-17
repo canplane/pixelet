@@ -6,7 +6,8 @@
 //!
 //! The fetch is the shell's: a URL asked for here for the first time joins the
 //! request lane (`take_load_requests`), and the shell answers with the bytes of
-//! a model (`gltf_arrived`, parsed here) or the handle of an image it decoded
+//! a model it holds (`gltf_arrived`, queued, and read and parsed one a turn at
+//! most by `gltf_task` on the turn's quota) or the handle of an image it decoded
 //! and holds (`image_arrived`) — the file's own pixels, top row first, no
 //! colour conversion and no premultiplied alpha. A consumer polls: None while
 //! the load is in flight or has failed.
@@ -15,14 +16,17 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use pxl_shared::spec::space::v3::V3;
+use xpute_core::kit::hash::fnv1a64_str;
+use xpute_core::sched::edge::{notified, yield_if_spent, Notify};
 use xpute_core::sys::mem::{alloc, free};
 
-use crate::module::world::change::request_world_tick;
+use crate::module::world::change::{request_world_tick, world_edge};
 use crate::module::world::chunk_node::World;
 use crate::module::world::decor::asset_store::decor_assets_arrived;
 use crate::render::draw::{DrawList, PIPELINE_SKINNED};
 use crate::render::gltf::gltf::{parse_gltf, Gltf};
 use crate::sys::global::Global;
+use crate::sys::host::body_read;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoadKind {
@@ -46,6 +50,9 @@ struct Loader {
     gltf: HashMap<String, Entry<Rc<Gltf>>>,
     image: HashMap<String, Entry<u32>>,
     requests: Vec<LoadRequest>,
+    /// Models the shell holds and the task has not read: the URL's hash, the
+    /// shell's body and its length.
+    arrived: Vec<(u64, u32, u32)>,
 }
 
 static LOADER: Global<Loader> = Global::new();
@@ -55,6 +62,7 @@ fn loader() -> &'static mut Loader {
         gltf: HashMap::new(),
         image: HashMap::new(),
         requests: Vec::new(),
+        arrived: Vec::new(),
     })
 }
 
@@ -103,16 +111,41 @@ pub fn take_load_requests() -> Vec<LoadRequest> {
     core::mem::take(&mut loader().requests)
 }
 
-/// The shell's bytes for a model: parsed, or failed when they do not parse.
-pub fn gltf_arrived(url: &str, bytes: &[u8]) {
-    let l = loader();
-    let entry = match parse_gltf(bytes, &[]) {
-        Ok(g) => Entry::Ready(Rc::new(g)),
-        Err(_) => Entry::Failed,
-    };
-    l.gltf.insert(url.to_string(), entry);
-    decor_assets_arrived();
-    request_world_tick();
+static ARRIVALS: Global<Notify> = Global::new();
+
+fn arrivals() -> &'static mut Notify {
+    ARRIVALS.get(Notify::new)
+}
+
+/// The shell holds a model's bytes as `body`: queued for `gltf_task`.
+pub fn gltf_arrived(url: &str, body: u32, bytes: u32) {
+    loader().arrived.push((fnv1a64_str(url), body, bytes));
+    arrivals().notify();
+}
+
+/// The models' task: each arrival read and parsed, one a turn at least and
+/// as many as the quota lets. A model is one unit; its parse is not cut.
+pub async fn gltf_task() {
+    loop {
+        notified(arrivals).await;
+        while !loader().arrived.is_empty() {
+            yield_if_spent(world_edge).await;
+            let (url, body, bytes) = loader().arrived.remove(0);
+            let mut buf = vec![0u8; bytes as usize];
+            body_read(body, &mut buf);
+            let entry = match parse_gltf(&buf, &[]) {
+                Ok(g) => Entry::Ready(Rc::new(g)),
+                Err(_) => Entry::Failed,
+            };
+            // The URL was a key since it was asked for; the arrival names it by
+            // its hash so the queue holds numbers.
+            if let Some((_, e)) = loader().gltf.iter_mut().find(|(k, _)| fnv1a64_str(k) == url) {
+                *e = entry;
+            }
+            decor_assets_arrived();
+            request_world_tick();
+        }
+    }
 }
 
 /// The shell's handle for a decoded image.

@@ -4,11 +4,11 @@
  * A guest's scheduler: the middle of the scheduler's three levels.
  *
  * The guest knows little of what is outside it. The central scheduler
- * strobes it with a grant (sched/quantum.ts); in that turn the guest takes
+ * strobes it with a quota (sched/quantum.ts); in that turn the guest takes
  * what waits on its submission ring, runs its own tasks here, cooperatively,
- * and leaves what goes back on its completion ring. The grant says about how
+ * and leaves what goes back on its completion ring. The quota says about how
  * long the turn should take, not a deadline: nothing here is real time. The
- * tick sees the grant and the clock, and nothing of the host.
+ * tick sees the quota and the clock, and nothing of the host.
  *
  * One tick a turn, its phases in a fixed order against one budget. The order
  * *is* the priority:
@@ -24,11 +24,9 @@
  *
  * Within a phase, steps run in the order they registered.
  *
- * **The budget is the grant's, and the guest picks which.** The slice while
- * the view moves; the batch quantum once it has held still for `settle_ms`.
- * The interaction phase says whether it moved (`view_moving`) and the budget
- * is decided after it, so the turn a gesture starts on is already sized for
- * motion.
+ * **The budget is the quota, counted from the rising edge**, not from the
+ * tick's own start: what the guest did before the tick in the same turn has
+ * already been spent.
  *
  * **The content phase is guaranteed a share.** The visible phase may not take
  * `content_share` of the budget: phases run in priority order on one budget,
@@ -46,7 +44,6 @@
 import type { f64, u32 } from "../kit/word.ts";
 import { now } from "../sys/clock.ts";
 import { type PassStats, run_under_budget } from "./frame_budget.ts";
-import type { Grant } from "./quantum.ts";
 
 export type Phase = u32;
 export const INTERACTION: Phase = 0;
@@ -61,8 +58,6 @@ const OFFS_MAX = 8;
 
 /** The guest's numbers. */
 export type TickPolicy = {
-  /** How long the view must hold still before the batch quantum applies. */
-  settle_ms: f64;
   /** How far a pass may run past what is left, so a step that costs real
    * time and reports nothing done cannot walk the whole list —
    * frame_budget.ts's hard ceiling, as slack over the pool. */
@@ -82,8 +77,8 @@ export class FrameBudget {
    * it before the visible phase and clears it before content. */
   reserve_ms = 0;
 
-  /** `t0` is the tick's start, not this call's: the interaction phase runs
-   * before the budget is sized, and what it spent comes off the budget. */
+  /** `t0` is the rising edge, not this call's: what the turn spent before
+   * comes off the budget. */
   constructor(readonly total_ms: f64, readonly t0: f64, readonly hard_slack_ms: f64) {}
 
   remaining(): f64 {
@@ -98,21 +93,15 @@ export class FrameBudget {
 
 /** What a step may ask of the turn, and the guest's own state it runs over. */
 export class TickContext<S> {
-  /** Decided after the interaction phase; steps there must not read it. */
-  budget: FrameBudget;
-  /** Why the budget is the size it is — both set with it, for the report. */
-  frame_ms: f64;
-  settled = false;
+  readonly budget: FrameBudget;
   /** Wall time each phase has taken so far this tick, filled in as phases
    * complete — so the report phase can read everything before it. */
   readonly phase_ms = [0, 0, 0, 0, 0];
   invalidated = false;
-  moved = false;
   readonly offs: u32[] = [];
 
-  constructor(readonly state: S, readonly delta: f64, budget: FrameBudget, frame_ms: f64) {
+  constructor(readonly state: S, readonly delta: f64, budget: FrameBudget) {
     this.budget = budget;
-    this.frame_ms = frame_ms;
   }
 
   /** Asks for a turn after this one: the guest is strobed only when
@@ -120,11 +109,6 @@ export class TickContext<S> {
    * the next. */
   invalidate(): void {
     this.invalidated = true;
-  }
-
-  /** Called by an interaction step whose view is still moving. */
-  view_moving(): void {
-    this.moved = true;
   }
 
   /** Unregisters a step from inside the tick, before the next step runs. */
@@ -144,10 +128,6 @@ export type StepStats = { phase: Phase; name: string; ms: f64; count: u32; max_m
 /** What a turn spent: what the guest reports back to the central scheduler. */
 export type TickReport = {
   budget_ms: f64;
-  /** The display's frame interval the grant was sized from. */
-  frame_ms: f64;
-  /** The view had held still for `settle_ms` — the budget is the batch one. */
-  settled: boolean;
   phase_ms: f64[];
   /** The whole tick, interaction through report. */
   total_ms: f64;
@@ -162,8 +142,7 @@ export class Tick<S> {
   private next_id = 1;
   private readonly stats: StepStats[] = [];
   private step_timing = false;
-  private moved_at = -Infinity;
-  private last_report: TickReport = { budget_ms: 0, frame_ms: 0, settled: false, phase_ms: [0, 0, 0, 0, 0], total_ms: 0, invalidated: false };
+  private last_report: TickReport = { budget_ms: 0, phase_ms: [0, 0, 0, 0, 0], total_ms: 0, invalidated: false };
 
   constructor(private readonly policy: TickPolicy, private readonly capacity: u32) {}
 
@@ -217,7 +196,7 @@ export class Tick<S> {
     stat.max_ms = Math.max(stat.max_ms, ms);
   }
 
-  private run_phase(phase: Phase, ctx: TickContext<S>, t0: f64): void {
+  private run_phase(phase: Phase, ctx: TickContext<S>): void {
     const start = now();
     // Index loop rather than for-of: a step may unregister itself or a
     // sibling, and a snapshot would run something that just asked not to be.
@@ -231,10 +210,6 @@ export class Tick<S> {
       } else {
         r.step(ctx);
       }
-      if (ctx.moved) {
-        ctx.moved = false;
-        this.moved_at = t0;
-      }
       for (const id of ctx.offs) {
         const at = this.remove(id);
         if (at >= 0 && at < i) i--;
@@ -244,29 +219,18 @@ export class Tick<S> {
     ctx.phase_ms[phase] = now() - start;
   }
 
-  /** The guest's turn, on the grant it was strobed with. */
-  run(state: S, delta: f64, grant: Grant): TickReport {
-    const t0 = now();
-    const slack = this.policy.hard_slack_ms;
-    // Sized properly once the interaction phase has said whether the view moved.
-    const ctx = new TickContext(state, delta, new FrameBudget(0, t0, slack), grant.frame_ms);
+  /** The guest's turn, on the quota it was strobed with at `t0`. */
+  run(state: S, delta: f64, quota_ms: f64, t0: f64): TickReport {
+    const start = now();
+    const ctx = new TickContext(state, delta, new FrameBudget(quota_ms, t0, this.policy.hard_slack_ms));
 
-    this.run_phase(INTERACTION, ctx, t0);
-    ctx.settled = t0 - this.moved_at >= this.policy.settle_ms;
-    ctx.budget = new FrameBudget(ctx.settled ? grant.batch_ms : grant.slice_ms, t0, slack);
+    this.run_phase(INTERACTION, ctx);
     ctx.budget.reserve_ms = ctx.budget.total_ms * this.policy.content_share;
-    this.run_phase(VISIBLE, ctx, t0);
+    this.run_phase(VISIBLE, ctx);
     ctx.budget.reserve_ms = 0;
-    for (const phase of [CONTENT, COSMETIC, REPORT]) this.run_phase(phase, ctx, t0);
+    for (const phase of [CONTENT, COSMETIC, REPORT]) this.run_phase(phase, ctx);
 
-    this.last_report = {
-      budget_ms: ctx.budget.total_ms,
-      frame_ms: ctx.frame_ms,
-      settled: ctx.settled,
-      phase_ms: [...ctx.phase_ms],
-      total_ms: now() - t0,
-      invalidated: ctx.invalidated,
-    };
+    this.last_report = { budget_ms: ctx.budget.total_ms, phase_ms: [...ctx.phase_ms], total_ms: now() - start, invalidated: ctx.invalidated };
     return this.last_report;
   }
 }

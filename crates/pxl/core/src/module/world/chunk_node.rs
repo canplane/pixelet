@@ -23,11 +23,9 @@ use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPA
 use pxl_shared::bake::format::Tile;
 use pxl_shared::spec::space::indexer::{FROM_L3_IDX, L2_IDX};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
-use pxl_shared::spec::space::xy::TO_XY;
 use xpute_core::sys::mem::{alloc, free, Block};
 
 use crate::app::setting::store::settings_store;
-use crate::module::world::change::{world_changes, TERRAIN_PAGE};
 use crate::module::world::object::store::{decor_col_revision, object_col_idx_of, object_col_revision, Store};
 use crate::module::world::sched::chunk_table::Event;
 use crate::module::world::terrain::store::tile_store;
@@ -37,7 +35,7 @@ use crate::render::layer::pipeline::volume::Volumes;
 use crate::render::layer::pipeline::voxel_scan::{BandView, RunSet, ScanContext, ScanStep};
 use crate::render::layer::terrain::adapter::{ChunkSample, Materials, PageView, CHANNELS};
 use crate::render::lod::LodStep;
-use crate::sys::global::{now, Global};
+use crate::sys::global::Global;
 use crate::sys::kernel::{kernel, with_world};
 
 /// A tier as the scheduler hands it over and the node holds it: the block in
@@ -173,19 +171,17 @@ pub struct ChunkNode {
     /// The column this chunk stands in, as the object store keys it.
     pub col_idx: IVec,
     id: u32,
-    /// The tiers and the decor blocks the scheduler handed over, by step.
-    tiers: HashMap<LodStep, MeshBlock>,
-    decor_cache: HashMap<LodStep, DecorBlock>,
+    /// The tiers and the decor blocks the scheduler handed over, by step and
+    /// generation: a source changed leaves the older ones held until the
+    /// scheduler evicts them, when a layout of the newer is up.
+    tiers: HashMap<(LodStep, u32), MeshBlock>,
+    decor_cache: HashMap<(LodStep, u32), DecorBlock>,
     /// How many times the scheduler has been told this chunk's sources: a tier
-    /// built from an earlier telling is stale and released on arrival.
+    /// built from an earlier telling arriving after a newer one was told is
+    /// released on arrival.
     generation: u32,
     /// What this chunk's runs hold in the mesh section, as the scheduler said.
     runs_bytes: u32,
-    /// The page's tile as last told, by its revision in the world change log:
-    /// 0 while the page has none. Not by address: the tile store keeps its
-    /// tiles in a vector, and a push that grows it or a clear that moves its
-    /// last tile into the hole moves tiles no one replaced.
-    tile: u32,
     show_structures: bool,
     objects_revision: u32,
     decor_revision: u32,
@@ -207,13 +203,6 @@ fn page_lanes(tile: &Tile) -> PageLanes {
     }
 }
 
-/// The revision the tile store last gave `page_idx`'s tile: moved by every set
-/// and clear of the page, 0 once it has left. A topic's revisions only climb,
-/// so a tile set again after a clear never reads as the one before.
-fn tile_revision(page_idx: IVec) -> u32 {
-    world_changes().revision_of(TERRAIN_PAGE, TO_XY(page_idx) as i64)
-}
-
 impl ChunkNode {
     fn new(id: u32, page_idx: IVec, base_x: u32, base_y: u32) -> ChunkNode {
         let page_off = ivec::gather(base_x as i64, base_y as i64, 0);
@@ -228,7 +217,6 @@ impl ChunkNode {
             decor_cache: HashMap::new(),
             generation: 0,
             runs_bytes: 0,
-            tile: tile_revision(page_idx),
             show_structures: settings.show_structures,
             objects_revision: object_col_revision(col_idx),
             decor_revision: decor_col_revision(col_idx),
@@ -236,8 +224,7 @@ impl ChunkNode {
         }
     }
 
-    /// Every tier's and every decor block back to the pool: the scheduler let
-    /// them all go (its sources told again, or the chunk unmounted).
+    /// Every tier's and every decor block back to the pool: the chunk unmounted.
     fn release_all(&mut self) {
         for (_, t) in self.tiers.drain() {
             release_block(t.at, t.bytes);
@@ -255,29 +242,27 @@ impl ChunkNode {
         self.generation += 1;
     }
 
-    fn build_now(&self, queue: &mut Queue) {
-        let id = self.id;
-        with_world(|world, sched| sched.build_now(world, id, &now, &mut |e| queue.push_back(e)));
-    }
-
-    /// A source revision rebuilds what the chunk shows, not the whole visible
-    /// world: the scheduler is told, and builds this chunk's layout to the end at
-    /// once, so a placement shows in the frame it was made. `objects_revision`
-    /// is the SOLID-only revision; a solid change still clears decor's cache,
-    /// because a newly placed cube can occlude a scattered decor candidate.
+    /// A source change rebuilds what the chunk shows, not the whole visible
+    /// world: the scheduler is told, keeps drawing what the chunk shows, and
+    /// builds its layout ahead of every other chunk, swapping it in whole once
+    /// every tier and decor of it is built. `objects_revision` is the
+    /// SOLID-only revision; a solid change still rebuilds decor too, because a
+    /// newly placed cube can occlude a scattered decor candidate.
+    ///
+    /// The terrain page is not a source that changes. A bake is the same
+    /// whenever and wherever it is fetched — a page that differs is a broken
+    /// bake, not a change — and a mounted chunk's page stays in its record
+    /// until the chunk unmounts, so a page set again is the same lanes at the
+    /// same addresses and nothing to rebuild.
     fn on_source_change(&mut self, queue: &mut Queue) {
-        let tile = tile_revision(self.page_idx);
         let show_structures = settings_store().show_structures;
         let objects_revision = object_col_revision(self.col_idx);
-        if self.tile == tile && self.show_structures == show_structures && self.objects_revision == objects_revision {
+        if self.show_structures == show_structures && self.objects_revision == objects_revision {
             return;
         }
-        self.tile = tile;
         self.show_structures = show_structures;
         self.objects_revision = objects_revision;
-        self.release_all();
         self.tell_source(queue);
-        self.build_now(queue);
     }
 
     /// Decor's own revision-only rebuild. It must never touch the tiers: that
@@ -299,39 +284,40 @@ impl ChunkNode {
     }
 
     fn on_tier(&mut self, generation: u32, step: LodStep, mesh: MeshBlock) {
-        if generation != self.generation || self.tiers.contains_key(&step) {
+        if generation != self.generation || self.tiers.contains_key(&(step, generation)) {
             release_block(mesh.at, mesh.bytes);
             return;
         }
-        self.tiers.insert(step, mesh);
+        self.tiers.insert((step, generation), mesh);
     }
 
     /// The scheduler hands a step's decor over only where it believes this node
-    /// holds none, so one already held is stale and gives way.
-    fn on_decor(&mut self, step: LodStep, decor: DecorBlock) {
-        if let Some(held) = self.decor_cache.insert(step, decor) {
+    /// holds none of that generation, so one already held is stale and gives
+    /// way.
+    fn on_decor(&mut self, step: LodStep, generation: u32, decor: DecorBlock) {
+        if let Some(held) = self.decor_cache.insert((step, generation), decor) {
             release_block(held.at, held.bytes);
         }
     }
 
-    fn on_evict(&mut self, step: LodStep) {
-        if let Some(t) = self.tiers.remove(&step) {
+    fn on_evict(&mut self, step: LodStep, generation: u32) {
+        if let Some(t) = self.tiers.remove(&(step, generation)) {
             release_block(t.at, t.bytes);
         }
-        if let Some(d) = self.decor_cache.remove(&step) {
+        if let Some(d) = self.decor_cache.remove(&(step, generation)) {
             release_block(d.at, d.bytes);
         }
     }
 
     /// The layout is the scheduler's to draw; what is checked here is that this
-    /// node holds every tier it names. When it does not, the chunk starts over
-    /// from its sources.
-    fn on_layout(&mut self, primary: LodStep, secondary: Option<LodStep>, ready: bool) -> bool {
+    /// node holds every tier it names, of its generation. When it does not, the
+    /// chunk starts over from its sources.
+    fn on_layout(&mut self, primary: LodStep, secondary: Option<LodStep>, generation: u32, ready: bool) -> bool {
         if !ready {
             node_counts().released += 1;
             return true;
         }
-        let holds = self.tiers.contains_key(&primary) && secondary.is_none_or(|s| self.tiers.contains_key(&s));
+        let holds = self.tiers.contains_key(&(primary, generation)) && secondary.is_none_or(|s| self.tiers.contains_key(&(s, generation)));
         if holds {
             node_counts().layouts += 1;
         }
@@ -352,9 +338,7 @@ pub fn run_chunk_events(events: impl IntoIterator<Item = Event>) {
         }
         for id in ids {
             let Some(node) = nodes().nodes.get_mut(&id) else { continue };
-            node.release_all();
             node.tell_source(&mut queue);
-            node.build_now(&mut queue);
         }
     }
 }
@@ -399,19 +383,25 @@ fn dispatch(e: Event, queue: &mut Queue) {
                 node.runs_bytes = bytes;
             }
         }
-        Event::Decor { id, step, at, bytes } => match n.nodes.get_mut(&id) {
-            Some(node) => node.on_decor(step, DecorBlock { at: at as usize, bytes }),
+        Event::Decor { id, step, generation, at, bytes } => match n.nodes.get_mut(&id) {
+            Some(node) => node.on_decor(step, generation, DecorBlock { at: at as usize, bytes }),
             None => release_block(at as usize, bytes),
         },
-        Event::Layout { id, primary, secondary, ready } => {
+        Event::Layout {
+            id,
+            primary,
+            secondary,
+            generation,
+            ready,
+        } => {
             let Some(node) = n.nodes.get_mut(&id) else { return };
-            if !node.on_layout(primary, (secondary != 0).then_some(secondary), ready) {
+            if !node.on_layout(primary, (secondary != 0).then_some(secondary), generation, ready) {
                 n.rebuild.push(id);
             }
         }
-        Event::Evict { id, step } => {
+        Event::Evict { id, step, generation } => {
             if let Some(node) = n.nodes.get_mut(&id) {
-                node.on_evict(step);
+                node.on_evict(step, generation);
             }
         }
         Event::Visible { .. } | Event::Blend { .. } => {}
@@ -779,11 +769,12 @@ impl Builder {
     /// tick: the pool does not change until the scheduler reclaims after,
     /// so every later request would meet the same pool, and a refusal is
     /// not free — the direct runs are written whole before their block is
-    /// asked for.
-    pub fn tick_capped(&mut self, world: &mut World, order: &[u32], budget_ms: f64, max_chunks: u32, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent)) {
+    /// asked for. Whether any chunk did work.
+    pub fn tick_capped(&mut self, world: &mut World, order: &[u32], budget_ms: f64, max_chunks: u32, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent)) -> bool {
         let t0 = now();
         let starved = self.stat.starved;
         let mut stepped = false;
+        let mut worked = false;
         let mut moved = 0;
         let holders = self.holders();
         let [scan_holder, bake_holder] = holders;
@@ -793,16 +784,16 @@ impl Builder {
         // found by comparing against them, not by a list of everything seen.
         for id in holders_once.iter().flatten().copied().chain(order.iter().copied().filter(|&id| !held(id))) {
             if moved >= max_chunks {
-                return;
+                return worked;
             }
             let mut progressed = false;
             loop {
                 if stepped && now() - t0 >= budget_ms {
-                    return;
+                    return worked;
                 }
                 let progress = self.advance(world, id, emit);
                 if self.stat.starved != starved {
-                    return;
+                    return worked;
                 }
                 if progress != Progress::Blocked {
                     stepped = true;
@@ -810,12 +801,14 @@ impl Builder {
                 if progress != Progress::Busy {
                     break;
                 }
+                worked = true;
                 progressed = true;
             }
             if progressed {
                 moved += 1;
             }
         }
+        worked
     }
 
     fn advance(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) -> Progress {

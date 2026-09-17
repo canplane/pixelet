@@ -8,6 +8,7 @@ use crate::app::setting::store::settings_store;
 use crate::module::camera::store::{camera_store, ViewPatch};
 use crate::module::device::pose::store::{device_location_store, device_orientation_store, DevicePoseStatus};
 use crate::module::map::store::map_store;
+use crate::module::world::change::wake_at;
 use crate::module::world::terrain::elevation::ground_or_raw;
 use crate::sys::global::{now, Global};
 
@@ -73,10 +74,14 @@ pub fn follow_mode_step() {
             f.grace_for = Some(status);
             f.grace_due = Some(now() + SENSOR_GRACE_MS);
         }
-        if f.grace_due.is_some_and(|due| now() >= due) {
-            f.grace_due = None;
-            f.grace_for = None;
-            camera.is_follow_mode = false;
+        match f.grace_due {
+            Some(due) if now() >= due => {
+                f.grace_due = None;
+                f.grace_for = None;
+                camera.is_follow_mode = false;
+            }
+            Some(due) => wake_at(due),
+            None => {}
         }
     } else {
         f.grace_due = None;

@@ -120,7 +120,6 @@ pub fn camera_step(ctx: &mut TickContext) {
     // still settling — ask for one more frame. See DIST_EPS/POLAR_EPS above.
     if (view_state.dist - s.dist).abs() > DIST_EPS || (view_state.polar - s.polar).abs() > POLAR_EPS {
         ctx.invalidate();
-        ctx.view_moving();
     }
 
     // `climb` grants the control and answers terrain by pitching the view up
@@ -140,7 +139,6 @@ pub fn camera_step(ctx: &mut TickContext) {
     s.shown_climb += (want_climb - s.shown_climb) * damp_alpha(climb_k, ctx.delta);
     if (want_climb - s.shown_climb).abs() > CLIMB_EPS {
         ctx.invalidate();
-        ctx.view_moving();
     }
 
     // The offset lags the control, so a pitch steepening toward vertical can

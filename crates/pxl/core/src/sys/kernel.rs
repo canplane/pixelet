@@ -1,11 +1,9 @@
 // pxl_core/sys/kernel.rs
 //
-// The kernel's one state: every structure the world is made of — the bakes,
-// the volumes and the pools they draw on, the terrain tables, the object
-// store, the scheduler, the change log, the raycast — as one value made on
-// first use. The modules (module/, app/, render/) read and write it
-// directly; pxl-wasm
-// keeps only the rings and hands commands to it.
+// The kernel's one state: the volumes, the terrain tables, the object store
+// and its painter, the scheduler, the change log and the raycast — as one
+// value made on first use. The modules (module/, app/, render/) read and
+// write it directly; pxl-wasm keeps only the rings and hands commands to it.
 
 use pxl_shared::spec::space::pvf3::ivec::{self, gather};
 use xpute_core::ipc::change::{ChangeLog, ChangeLogOptions};
@@ -13,11 +11,9 @@ use xpute_core::ipc::change::{ChangeLog, ChangeLogOptions};
 use crate::module::world::object::store::Store;
 use crate::module::world::sched::chunk_table::Scheduler;
 use crate::render::layer::object::adapter::Painter;
-use crate::render::layer::pipeline::chunk_mesher::BakeContext;
 use crate::render::layer::pipeline::chunk_raycast::Raycast;
-use crate::render::layer::pipeline::volume::{Volumes, BAND_WORDS as VOLUME_BAND_WORDS};
-use crate::render::layer::pipeline::voxel_scan::{ColumnRuns, ScanContext};
-use crate::render::layer::terrain::adapter::{ChunkSample, Materials};
+use crate::render::layer::pipeline::volume::Volumes;
+use crate::render::layer::terrain::adapter::Materials;
 use crate::sys::global::Global;
 
 /// module/world/change.rs's WorldTopic numbers the store bumps, and the
@@ -29,32 +25,17 @@ pub const WORLD_TOPICS: u32 = 6;
 pub const JOURNAL_CAPACITY: u32 = 4096;
 
 pub struct Kernel {
-    pub ctx: BakeContext,
-    /// The open bake's run set: its address in the memory, and its shape.
-    pub input: (usize, u32, u32),
-    /// vertex_cnt, index_cnt, the six counters, then the heap's use.
-    pub result: [u32; 9],
-    pub scan: ScanContext,
-    /// The open scan's band table: its address, and how many bands.
-    pub bands: (usize, u32),
-    /// The volumes over the fixed and mesh pools, made at boot.
+    /// The volumes over the heap, made at boot.
     pub volumes: Option<Volumes>,
-    /// The open scan's bands, when it reads a volume of the module's.
-    pub scan_rows: Vec<[u32; VOLUME_BAND_WORDS]>,
-    /// The terrain tables, and the last chunk read.
+    /// The terrain tables.
     pub terrain: Materials,
-    pub chunk: ChunkSample,
-    /// The object store, its painter, and the rows its lookups answer in.
+    /// The object store and its painter.
     pub objects: Store,
     pub painter: Painter,
-    /// The raycast's column, and the row naming its lanes.
-    pub column: ColumnRuns,
     /// The chunks' builds.
     pub sched: Scheduler,
     /// The world's change log (module/world/change.rs's topics).
     pub changes: ChangeLog,
-    pub census: [f64; 13],
-    pub build_stat: [u32; 11],
     /// The world's raycast and its kept composites.
     pub raycast: Raycast,
 }
@@ -62,18 +43,10 @@ pub struct Kernel {
 impl Kernel {
     fn new() -> Kernel {
         Kernel {
-            ctx: BakeContext::new(),
-            input: (0, 0, 0),
-            result: [0; 9],
-            scan: ScanContext::new(),
-            bands: (0, 0),
             volumes: None,
-            scan_rows: Vec::new(),
             terrain: Materials::default(),
-            chunk: ChunkSample::default(),
             objects: Store::new(),
             painter: Painter::new(),
-            column: ColumnRuns::new(),
             sched: Scheduler::new(),
             raycast: Raycast::default(),
             changes: ChangeLog::new(ChangeLogOptions {
@@ -81,8 +54,6 @@ impl Kernel {
                 capacity: JOURNAL_CAPACITY,
                 keys_per_topic: None,
             }),
-            census: [0.0; 13],
-            build_stat: [0; 11],
         }
     }
 }

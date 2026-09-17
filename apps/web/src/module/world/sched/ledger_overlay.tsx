@@ -16,8 +16,10 @@
 import { useEffect, useState } from "react";
 
 import { LedgerGauge } from "./ledger_gauge.tsx";
-import { ledger_drain_log } from "./ledger_log.ts";
-import { install_long_frame_observers } from "./long_frame.ts";
+import { ledger_drain_log, ledger_log_long_frames } from "./ledger_log.ts";
+import { ledger_report_print, ledger_report_text } from "./ledger_report.ts";
+import { ledger_report_read } from "./ledger_view.ts";
+import { install_long_frame_observers, long_frames_clear } from "./long_frame.ts";
 import { ledger_trace_download } from "./trace.ts";
 import { kernel_action, useKernel } from "@/wasm/kernel.ts";
 
@@ -28,11 +30,17 @@ const BUTTON = "pointer-events-auto flex-1 rounded border border-white/15 bg-whi
 
 type LedgerGlobals = typeof globalThis & { __pxl_ledger_trace?: () => void };
 
+/** A fresh window on both sides: the kernel's rings and the shell's long frames. */
+function start_window(): void {
+  kernel_action({ type: "ledger_window_start" });
+  long_frames_clear();
+}
+
 export function LedgerOverlay() {
   const show = useKernel((s) => s.settings.show_ledger === true);
   const [logging, set_logging] = useState(false);
 
-  // Nothing is pushed: the kernel keeps the records and this comes for them,
+  // Nothing is pushed: the kernel keeps the rows and this comes for them,
   // in batches rather than per frame — the stream is read while watching, and
   // a drain that ran on every frame would be instrumentation paced by the
   // thing it measures. The buffer is capped, so a slow reader loses the
@@ -49,11 +57,11 @@ export function LedgerOverlay() {
     // overlay pays for none of it. This is the asking, and it happens on mount
     // rather than when the panel is opened: what makes a ledger worth having is
     // that the minute before you went looking is already in it.
-    kernel_action({ type: "ledger_window_start" });
+    start_window();
     // The observers outlive the panel — they are the ledger's, not its, so
     // closing the panel does not stop a window being recorded — but they do
-    // not outlive dev. Each long frame they see is a WORLD_LONG_FRAME on the
-    // submission ring, and a client with no overlay has nothing to send it to.
+    // not outlive dev: a client with no overlay has no one to read what they
+    // keep.
     install_long_frame_observers();
     const w = globalThis as LedgerGlobals;
     w.__pxl_ledger_trace = ledger_trace_download;
@@ -83,7 +91,7 @@ export function LedgerOverlay() {
             and then "start" is the button you cannot find when you want a
             clean window. */
         }
-        <button type="button" onClick={() => kernel_action({ type: "ledger_window_start" })} title="clear everything and begin a fresh window" className={BUTTON}>
+        <button type="button" onClick={start_window} title="clear everything and begin a fresh window" className={BUTTON}>
           start
         </button>
         <button type="button" onClick={() => kernel_action({ type: "ledger_window_stop" })} title="freeze the window so exports are stable while you read them" className={BUTTON}>
@@ -91,7 +99,7 @@ export function LedgerOverlay() {
         </button>
       </div>
       <div className="mt-1 flex gap-1">
-        <button type="button" onClick={() => kernel_action({ type: "ledger_report" })} title="print + copy a text report" className={BUTTON}>
+        <button type="button" onClick={() => void ledger_report_print(ledger_report_text(ledger_report_read()))} title="print + copy a text report" className={BUTTON}>
           report
         </button>
         <button type="button" onClick={ledger_trace_download} title="save the window as a Trace Event Format file for ui.perfetto.dev" className={BUTTON}>
@@ -101,6 +109,7 @@ export function LedgerOverlay() {
           type="button"
           onClick={() => {
             kernel_action({ type: "ledger_logging", on: !logging });
+            ledger_log_long_frames(!logging);
             set_logging(!logging);
           }}
           title="stream each settled task, missed frame and long frame to the console"

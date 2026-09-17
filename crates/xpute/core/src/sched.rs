@@ -1,6 +1,8 @@
 //! The pair of packages/xpute/core/src/sched.
 
+pub mod edge;
 pub mod frame_budget;
 pub mod io;
 pub mod quantum;
+pub mod task;
 pub mod tick;

@@ -10,7 +10,7 @@
 //! The table is for outside a tick: a step that unregisters asks its
 //! context, and no step reaches these while the tick runs.
 
-use xpute_core::sched::quantum::{Grant, QuantumPolicy};
+use xpute_core::sched::quantum::QuantumPolicy;
 pub use xpute_core::sched::tick::{FrameBudget, Phase, StepStats, TickReport, CONTENT, COSMETIC, INTERACTION, PHASES, REPORT, VISIBLE};
 use xpute_core::sched::tick::{Tick, TickPolicy};
 
@@ -25,6 +25,10 @@ pub struct TickState {
     pub dpr: f64,
     /// Seconds since the loop started.
     pub elapsed_s: f64,
+    /// The host's measured frame interval and whether it ran this turn as
+    /// interactive: the ledger's, which reads a frame against them.
+    pub frame_ms: f64,
+    pub interactive: bool,
 }
 
 pub type TickContext<'a> = xpute_core::sched::tick::TickContext<'a, TickState>;
@@ -35,22 +39,15 @@ pub const QUANTUM: QuantumPolicy = QuantumPolicy {
     // A share of the frame rather than a constant, so a fast display does not
     // lose most of its frame to it.
     margin_share: 0.15,
-    // The floor keeps a starved frame making progress; the ceiling keeps a
-    // cheap scene from letting one tick grow into most of a frame and leaving
-    // nothing for a spike.
-    min_ms: 2.0,
-    max_ms: 8.0,
-    // Past a 60 Hz frame on purpose: at 170 Hz this is two or three vsyncs of
-    // an unchanging image, and at 60 Hz one frame plus render — either way
-    // nothing the eye can follow is waiting on it.
-    batch_ms: 12.0,
-    // One frame is noise; ten is a trend.
-    outside_ema: 0.1,
+    // Past a frame on purpose: with nothing moving, a turn that takes two
+    // vsyncs shows the same image twice, and nothing the eye can follow is
+    // waiting on it.
+    batch_frames: 2.0,
+    // Long enough that a pause inside one drag does not count.
+    settle_ms: 150.0,
 };
 
 pub const POLICY: TickPolicy = TickPolicy {
-    // Long enough that a pause inside one drag does not count.
-    settle_ms: 150.0,
     hard_slack_ms: 4.0,
     // Without a share of its own, content waits for as long as a load keeps
     // the visible phase busy. A fixed share, not a feedback loop.
@@ -96,7 +93,8 @@ pub fn tick_last() -> TickReport {
     tick().last()
 }
 
-/// The world's tick, on the grant the central scheduler strobed it with.
-pub fn run_tick(state: &mut TickState, delta: f64, grant: Grant) -> TickReport {
-    tick().run(state, delta, grant)
+/// The world's tick, on the quota the central scheduler strobed it with at
+/// `edge_at`.
+pub fn run_tick(state: &mut TickState, delta: f64, quota_ms: f64, edge_at: f64) -> TickReport {
+    tick().run(state, delta, quota_ms, edge_at)
 }

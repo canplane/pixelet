@@ -8,10 +8,11 @@
 //!
 //! A source calls `bump_world`. Readers compare revisions or walk the
 //! journal. The canvas renders on demand, so a bump also asks for that frame;
-//! the request is taken by the tick driver, which is the one thing that knows
-//! a canvas exists.
+//! the request goes back to the host on the turn's falling edge.
 
 use xpute_core::ipc::change::{ChangeLog, Revision, Topic};
+
+use xpute_core::sched::edge::Edge;
 
 use crate::sys::global::Global;
 use crate::sys::kernel::kernel;
@@ -37,19 +38,38 @@ pub fn world_changes() -> &'static mut ChangeLog {
     &mut kernel().changes
 }
 
-static TICK_REQUESTED: Global<bool> = Global::new();
+/// The tasks the kernel spawns (world.rs's `world_tasks`), with room: the
+/// edge parks each at most once, and an executor sizes its pool by it.
+pub const TASKS: usize = 8;
+
+static EDGE: Global<Edge<TASKS>> = Global::new();
+
+/// The kernel's side of the turn (xpute_core::sched::edge): the doorbell
+/// rises and falls it, and a task yields against it.
+pub fn world_edge() -> &'static mut Edge<TASKS> {
+    EDGE.get(Edge::new)
+}
+
+/// The falling edge. A task queued and not yet polled — a turn with no frame
+/// polls none — asks for the next turn too.
+pub fn world_fall() -> f64 {
+    if xpute_core::sched::task::pending() {
+        world_edge().ask_next();
+    }
+    world_edge().fall()
+}
 
 /// Asks for the frame that delivers changes made in the kernel — the store's
 /// own bumps — the way bump_world does for a change made here.
 pub fn request_world_tick() {
-    TICK_REQUESTED.set(true);
+    world_edge().ask_next();
 }
 
-/// Whether a frame was asked for since the last take: the tick driver's.
-pub fn take_tick_request() -> bool {
-    let requested = *TICK_REQUESTED.get(|| false);
-    TICK_REQUESTED.set(false);
-    requested
+/// Asks for a turn once the host clock reaches `at`: a wait only time ends —
+/// a debounce, a retry, a dismissal. The earliest asked wins, and a wait
+/// still pending when its turn comes asks again.
+pub fn wake_at(at: f64) {
+    world_edge().wake_at(at);
 }
 
 /// Records a change to world state and asks for the frame that delivers it.

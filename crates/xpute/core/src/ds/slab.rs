@@ -95,6 +95,8 @@ pub struct SlabMalloc<R: Range> {
     /// Requests served, both paths, which is what a per-step probe counts. The
     /// buddy's own counter moves only when a run is borrowed.
     allocs: UnsafeCell<u32>,
+    /// Requests answered with null, both paths: the one way the heap is full.
+    refusals: UnsafeCell<u32>,
 }
 
 // SAFETY: one thread — a module instantiated once per memory, which is what
@@ -168,6 +170,7 @@ impl<R: Range> SlabMalloc<R> {
             buddy: BuddyMalloc::new(),
             partial: UnsafeCell::new([ptr::null_mut(); MAX_CLASSES]),
             allocs: UnsafeCell::new(0),
+            refusals: UnsafeCell::new(0),
         }
     }
 
@@ -205,6 +208,18 @@ impl<R: Range> SlabMalloc<R> {
     pub fn allocs(&self) -> usize {
         // SAFETY: single-threaded; see the Sync impl.
         unsafe { *self.allocs.get() as usize }
+    }
+
+    /// Requests refused since the first call. A slot request refused because
+    /// no run could be borrowed counts once, here, and not again below.
+    pub fn refusals(&self) -> u32 {
+        // SAFETY: single-threaded; see the Sync impl.
+        unsafe { *self.refusals.get() }
+    }
+
+    /// The largest block on the page level's free lists.
+    pub fn largest_free(&self) -> usize {
+        self.buddy.largest_free()
     }
 
     /// Where the page level's row lies, for a host to read in place.
@@ -314,17 +329,22 @@ unsafe impl<R: Range> GlobalAlloc for SlabMalloc<R> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         // SAFETY: single-threaded; see the Sync impl.
         let allocs = unsafe { &mut *self.allocs.get() };
+        // SAFETY: single-threaded; see the Sync impl.
+        let refused = || unsafe { *self.refusals.get() = (*self.refusals.get()).wrapping_add(1) };
 
         let Some(c) = Self::class_for(layout) else {
             // A page or more. The buddy places a block at a multiple of its
             // own size from a base that is a page boundary, so it satisfies
             // any alignment up to a page and none past one.
             if layout.align() > 1 << R::MIN_LOG2 {
+                refused();
                 return ptr::null_mut();
             }
             // SAFETY: the caller's.
             let at = unsafe { self.buddy.malloc(layout.size()) };
-            if !at.is_null() {
+            if at.is_null() {
+                refused();
+            } else {
                 *allocs = allocs.wrapping_add(1);
             }
             return at;
@@ -336,6 +356,7 @@ unsafe impl<R: Range> GlobalAlloc for SlabMalloc<R> {
             // SAFETY: the class has no run with a free slot.
             run = unsafe { self.open_run(c) };
             if run.is_null() {
+                refused();
                 return ptr::null_mut();
             }
         }

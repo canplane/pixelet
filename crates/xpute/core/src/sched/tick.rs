@@ -3,11 +3,11 @@
 //! A guest's scheduler: the middle of the scheduler's three levels.
 //!
 //! The guest knows little of what is outside it. The central scheduler
-//! strobes it with a grant (sched/quantum.rs); in that turn the guest takes
+//! strobes it with a quota (sched/quantum.rs); in that turn the guest takes
 //! what waits on its submission ring, runs its own tasks here, cooperatively,
-//! and leaves what goes back on its completion ring. The grant says about how
+//! and leaves what goes back on its completion ring. The quota says about how
 //! long the turn should take, not a deadline: nothing here is real time. The
-//! tick sees the grant and the clock, and nothing of the host.
+//! tick sees the quota and the clock, and nothing of the host.
 //!
 //! One tick a turn, its phases in a fixed order against one budget. The order
 //! *is* the priority:
@@ -23,11 +23,9 @@
 //!
 //! Within a phase, steps run in the order they registered.
 //!
-//! **The budget is the grant's, and the guest picks which.** The slice while
-//! the view moves; the batch quantum once it has held still for
-//! `settle_ms`. The interaction phase says whether it moved (`view_moving`)
-//! and the budget is decided after it, so the turn a gesture starts on is
-//! already sized for motion.
+//! **The budget is the quota, counted from the rising edge**, not from the
+//! tick's own start: what the guest did before the tick in the same turn has
+//! already been spent.
 //!
 //! **The content phase is guaranteed a share.** The visible phase may not take
 //! `content_share` of the budget: phases run in priority order on one budget,
@@ -42,7 +40,6 @@
 //! than grown into.
 
 use super::frame_budget::{run_under_budget, BudgetOpts, PassStats};
-use super::quantum::Grant;
 use crate::sys::clock::now;
 
 pub type Phase = usize;
@@ -59,8 +56,6 @@ const OFFS_MAX: usize = 8;
 /// The guest's numbers.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TickPolicy {
-    /// How long the view must hold still before the batch quantum applies.
-    pub settle_ms: f64,
     /// How far a pass may run past what is left, so a step that costs real
     /// time and reports nothing done cannot walk the whole list —
     /// frame_budget.rs's hard ceiling, as slack over the pool.
@@ -84,8 +79,8 @@ pub struct FrameBudget {
 }
 
 impl FrameBudget {
-    /// `t0` is the tick's start, not this call's: the interaction phase runs
-    /// before the budget is sized, and what it spent comes off the budget.
+    /// `t0` is the rising edge, not this call's: what the turn spent before
+    /// comes off the budget.
     pub fn new(total_ms: f64, t0: f64, hard_slack_ms: f64) -> FrameBudget {
         FrameBudget {
             t0,
@@ -117,16 +112,11 @@ impl FrameBudget {
 pub struct TickContext<'a, S> {
     pub state: &'a mut S,
     pub delta: f64,
-    /// Decided after the interaction phase; steps there must not read it.
     pub budget: FrameBudget,
-    /// Why the budget is the size it is — both set with it, for the report.
-    pub frame_ms: f64,
-    pub settled: bool,
     /// Wall time each phase has taken so far this tick, filled in as phases
     /// complete — so the report phase can read everything before it.
     pub phase_ms: [f64; 5],
     invalidated: bool,
-    moved: bool,
     offs: [u32; OFFS_MAX],
     off_len: usize,
 }
@@ -137,11 +127,6 @@ impl<S> TickContext<'_, S> {
     /// the next.
     pub fn invalidate(&mut self) {
         self.invalidated = true;
-    }
-
-    /// Called by an interaction step whose view is still moving.
-    pub fn view_moving(&mut self) {
-        self.moved = true;
     }
 
     /// Unregisters a step from inside the tick, before the next step runs.
@@ -170,10 +155,6 @@ pub struct StepStats {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TickReport {
     pub budget_ms: f64,
-    /// The display's frame interval the grant was sized from.
-    pub frame_ms: f64,
-    /// The view had held still for `settle_ms` — the budget is the batch one.
-    pub settled: bool,
     pub phase_ms: [f64; 5],
     /// The whole tick, interaction through report.
     pub total_ms: f64,
@@ -204,7 +185,6 @@ pub struct Tick<S, const N: usize> {
     stats: [StepStats; N],
     stats_len: usize,
     step_timing: bool,
-    moved_at: f64,
     last_report: TickReport,
 }
 
@@ -218,7 +198,6 @@ impl<S, const N: usize> Tick<S, N> {
             stats: [StepStats::default(); N],
             stats_len: 0,
             step_timing: false,
-            moved_at: f64::NEG_INFINITY,
             last_report: TickReport::default(),
         }
     }
@@ -282,7 +261,7 @@ impl<S, const N: usize> Tick<S, N> {
         stat.max_ms = stat.max_ms.max(ms);
     }
 
-    fn run_phase(&mut self, phase: Phase, ctx: &mut TickContext<S>, t0: f64) {
+    fn run_phase(&mut self, phase: Phase, ctx: &mut TickContext<S>) {
         let start = now();
         // Index loop rather than an iterator: a step may unregister itself or a
         // sibling, and a snapshot would run something that just asked not to be.
@@ -300,10 +279,6 @@ impl<S, const N: usize> Tick<S, N> {
             } else {
                 (r.step)(ctx);
             }
-            if ctx.moved {
-                ctx.moved = false;
-                self.moved_at = t0;
-            }
             for k in 0..ctx.off_len {
                 if self.remove(ctx.offs[k]).is_some_and(|at| at < i) {
                     i -= 1;
@@ -314,40 +289,31 @@ impl<S, const N: usize> Tick<S, N> {
         ctx.phase_ms[phase] = now() - start;
     }
 
-    /// The guest's turn, on the grant it was strobed with.
-    pub fn run(&mut self, state: &mut S, delta: f64, grant: Grant) -> TickReport {
-        let t0 = now();
-        let slack = self.policy.hard_slack_ms;
+    /// The guest's turn, on the quota it was strobed with at `t0`.
+    pub fn run(&mut self, state: &mut S, delta: f64, quota_ms: f64, t0: f64) -> TickReport {
+        let start = now();
         let mut ctx = TickContext {
             state,
             delta,
-            // Sized properly once the interaction phase has said whether the view moved.
-            budget: FrameBudget::new(0.0, t0, slack),
-            frame_ms: grant.frame_ms,
-            settled: false,
+            budget: FrameBudget::new(quota_ms, t0, self.policy.hard_slack_ms),
             phase_ms: [0.0; 5],
             invalidated: false,
-            moved: false,
             offs: [0; OFFS_MAX],
             off_len: 0,
         };
 
-        self.run_phase(INTERACTION, &mut ctx, t0);
-        ctx.settled = t0 - self.moved_at >= self.policy.settle_ms;
-        ctx.budget = FrameBudget::new(if ctx.settled { grant.batch_ms } else { grant.slice_ms }, t0, slack);
+        self.run_phase(INTERACTION, &mut ctx);
         ctx.budget.reserve_ms = ctx.budget.total_ms * self.policy.content_share;
-        self.run_phase(VISIBLE, &mut ctx, t0);
+        self.run_phase(VISIBLE, &mut ctx);
         ctx.budget.reserve_ms = 0.0;
         for phase in [CONTENT, COSMETIC, REPORT] {
-            self.run_phase(phase, &mut ctx, t0);
+            self.run_phase(phase, &mut ctx);
         }
 
         self.last_report = TickReport {
             budget_ms: ctx.budget.total_ms,
-            frame_ms: ctx.frame_ms,
-            settled: ctx.settled,
             phase_ms: ctx.phase_ms,
-            total_ms: now() - t0,
+            total_ms: now() - start,
             invalidated: ctx.invalidated,
         };
         self.last_report

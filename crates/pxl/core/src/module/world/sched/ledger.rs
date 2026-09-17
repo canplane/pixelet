@@ -6,24 +6,32 @@
 //! (issue/20260909-cooperative-scheduler-and-task-ledger.md).
 //!
 //! Two record types, one instrument:
-//! - TaskRecord — one finished unit of deferred work (a fetch_scheduler.rs
-//!   demand today; a CPU task later). `transport_ms` is 0 while a task body
-//!   runs inline, and holds the transfer cost once it runs in a worker.
+//! - TaskRow — one finished unit of deferred work (a fetch_scheduler.rs
+//!   demand today; a CPU task later), as the TaskRecord a scheduler settles
+//!   reduced to numbers.
 //! - FrameSample — one rendered frame's gauges (pacing, GPU ask, memory, queue
 //!   pressure). Only accrues while frames actually render (the tick runs only
 //!   when asked), which is correct: idle means nothing to sample.
 //!
-//! Readers: the overlay and the text report (log.rs), both through
-//! summary.rs, and the Chrome-trace export (trace.rs).
+//! Both are laid out word for word as ledger.json says, and the rings holding
+//! them are lanes the shell reads where they lie (pxl-wasm's `ledger_read`):
+//! nothing is built to be read, so reading the instrument allocates nothing in
+//! the heap it measures. The summary a panel or a report shows is summary.rs's,
+//! written into a block of the same kind; the words for any of it are the
+//! shell's. Long frames are the shell's own measurement and stay there.
 
 use core::fmt;
+use core::mem::{offset_of, size_of};
 
 use pxl_shared::spec::fetch::FetchFail;
 use xpute_core::sys::mem::alloc;
 
 use super::demand::{DemandKey, Phases};
+use super::ledger_spec::{CATEGORY_NAMES, FRAME, LIMITS, OUTCOME_NAMES, PHASE_NAMES, TASK, TASK_PHASE_NAMES, WORST};
 use super::tick::PHASES;
 use crate::sys::global::{now, Global};
+
+pub use super::ledger_spec::CENSUS_TAGS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -42,10 +50,10 @@ impl Outcome {
     }
 }
 
+/// A task as a scheduler settles it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TaskRecord {
-    /// The stream and the one thing in it — two numbers, so the ring holds a
-    /// record by value and the summary rolls up by the stream without text.
+    /// The stream and the one thing in it.
     pub key: DemandKey,
     pub priority: f64,
     /// monotonic ms at enqueue / first run / settle.
@@ -84,19 +92,77 @@ impl fmt::Display for Failure {
     }
 }
 
+/// Where `name` sits in `names`, as a record's number; -1 where it is absent.
+pub fn name_id(names: &[&str], name: &str) -> f64 {
+    names.iter().position(|n| *n == name).map_or(-1.0, |i| i as f64)
+}
+
+const PHASES_MAX: usize = LIMITS::PHASES_MAX as usize;
+const _: () = assert!(PHASES_MAX == super::demand::PHASES_MAX, "a task row holds every phase a run can report");
+
+/// A task as the ring holds it: every word a number, as TASK lays it out.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct TaskRow {
+    /// An index into CATEGORY_NAMES.
+    pub category: f64,
+    pub subject: u64,
+    pub priority: f64,
+    pub enqueue_ms: f64,
+    /// NaN for a task that never ran.
+    pub start_ms: f64,
+    pub end_ms: f64,
+    pub transport_ms: f64,
+    /// An index into OUTCOME_NAMES.
+    pub outcome: f64,
+    /// The FetchFail's own number, and the status beside it.
+    pub fail: f64,
+    pub status: f64,
+    /// How many of the phase lanes are filled; 0 where the run reported none.
+    pub phase_count: f64,
+    /// Indices into TASK_PHASE_NAMES, a timing's -1 where the list lacks it.
+    pub phase_ids: [f64; PHASES_MAX],
+    pub phase_values: [f64; PHASES_MAX],
+}
+
+impl TaskRow {
+    pub fn of(rec: &TaskRecord) -> TaskRow {
+        let mut row = TaskRow {
+            category: name_id(CATEGORY_NAMES, rec.key.category.as_str()),
+            subject: rec.key.subject,
+            priority: rec.priority,
+            enqueue_ms: rec.enqueue_ms,
+            start_ms: rec.start_ms.unwrap_or(f64::NAN),
+            end_ms: rec.end_ms,
+            transport_ms: rec.transport_ms,
+            outcome: name_id(OUTCOME_NAMES, rec.outcome.as_str()),
+            fail: rec.fail.fail as u32 as f64,
+            status: rec.fail.status as f64,
+            ..TaskRow::default()
+        };
+        for (k, (name, value)) in rec.phases.iter().flat_map(|p| p.iter()).enumerate() {
+            row.phase_ids[k] = name_id(TASK_PHASE_NAMES, name);
+            row.phase_values[k] = value;
+            row.phase_count = (k + 1) as f64;
+        }
+        row
+    }
+}
+
+pub const CENSUS_LEN: usize = CENSUS_TAGS.len();
+
 /// (draws, triangles) by the pipeline a draw names (render/draw.rs), for one
-/// frame's render.
-pub type DrawCensus = [(f64, f64); CENSUS_TAGS.len()];
+/// frame's render, in CENSUS_TAGS' order.
+pub type DrawCensus = [[f64; 2]; CENSUS_LEN];
 
-/// A census entry's tag: the pipeline at its index.
-pub const CENSUS_TAGS: [&str; 10] = ["chunk", "decor", "ghost_box", "ghost_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug"];
-
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CpuSample {
     /// The kernel's tick, inside the visible phase.
     pub tick_ms: f64,
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TexturesMb {
     pub depth: f64,
@@ -105,6 +171,7 @@ pub struct TexturesMb {
     pub layers: f64,
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct LodSample {
     pub chunks: f64,
@@ -125,6 +192,7 @@ pub struct LodSample {
     pub pressure: f64,
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct MountSample {
     pub added: f64,
@@ -132,18 +200,32 @@ pub struct MountSample {
     pub layouts: f64,
 }
 
+/// The heap as facts rather than one derived word: how far the allocator has
+/// ever reached into its range, how much of it is out on loan right now — runs
+/// at their whole size, not the slots live inside them — and how large the
+/// range is; then the two ways it runs out, requests refused since boot and
+/// the largest block its free lists hold.
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-/// The heap, as three facts rather than one derived word: how far the
-/// allocator has ever reached into its range, how much of it is out on loan
-/// right now, and how large the range is. They differ — space reached into and
-/// since given back is under the high-water mark and lent to nobody — and a
-/// single "idle" could only ever name one of the two gaps.
 pub struct PoolSample {
     pub used_mb: f64,
     pub live_mb: f64,
     pub range_mb: f64,
+    pub refusals: f64,
+    pub largest_free_mb: f64,
 }
 
+/// The completion ring and its spill at their fullest since the last frame: a
+/// post that finds both full asserts, so this is how close the control path
+/// came to that.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct RingSample {
+    pub cq_peak: f64,
+    pub spill_peak: f64,
+}
+
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WorkSample {
     pub scans: f64,
@@ -151,8 +233,8 @@ pub struct WorkSample {
 }
 
 /// One rendered frame. Lean on purpose — latency percentiles, decode bandwidth
-/// and upload cost are derived from TaskRecords or added later. Plain numbers,
-/// so the ring holds it in place.
+/// and upload cost are derived from task rows or added later.
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FrameSample {
     /// monotonic ms at record time.
@@ -162,9 +244,10 @@ pub struct FrameSample {
     /// The display's measured frame interval when this frame was scheduled
     /// (sched/tick.rs) — what `dt_ms` has to beat.
     pub frame_ms: f64,
-    /// The view had held still long enough that the tick took the large,
-    /// throughput budget. A long dt on such a frame was chosen, not suffered.
-    pub settled: bool,
+    /// 1 when the view had held still long enough that the tick took the
+    /// large, throughput budget: a long dt on such a frame was chosen, not
+    /// suffered. 0 otherwise.
+    pub settled: f64,
     /// The whole tick, every phase.
     pub sched_ms: f64,
     /// What the tick was allowed this frame — derived, so it moves.
@@ -172,10 +255,9 @@ pub struct FrameSample {
     /// sched_ms broken down by phase, in the tick's own order, as PHASES names them.
     pub phases: [f64; PHASES.len()],
     pub cpu: CpuSample,
-    /// The whole rAF task: from the scheduler pass starting to the JS stack
-    /// emptying, so it covers every phase of the tick *and* the renderer's
-    /// encode and submit. `dt_ms - task_ms` is then everything outside the main
-    /// thread's own task — vsync wait, compositor, GPU, GC between frames.
+    /// The kernel's whole turn: the strobe in, the tick, the draw and the
+    /// submit. `dt_ms - task_ms` is then everything outside it — vsync wait,
+    /// compositor, GPU, GC between frames, and the shell's own glue.
     pub task_ms: f64,
     /// From a submit to the queue reporting the work done: lags a frame or two.
     /// 0 before the renderer exists.
@@ -192,51 +274,74 @@ pub struct FrameSample {
     pub px: f64,
     pub lod: LodSample,
     pub mounts: MountSample,
-    /// used JS heap in MiB — Chrome only, 0 where unavailable.
-    pub heap_mb: f64,
     pub tile_pages: f64,
     pub poi_count: f64,
     pub pool: PoolSample,
+    pub rings: RingSample,
     pub work: WorkSample,
     // network pressure — fetch_scheduler queued + in-flight, per category
     pub q_terrain: f64,
     pub q_poi: f64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LongFrameSource {
-    Loaf,
-    Longtask,
+/// One of the window's worst frames by dt, kept whole with the frame before
+/// it, because geometry, textures and the heap only mean anything as deltas.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct WorstFrame {
+    pub sample: FrameSample,
+    /// 1 where `prev` is the frame before; 0 for the first frame of a window.
+    pub has_prev: f64,
+    pub prev: FrameSample,
 }
 
-/// One long animation frame (LoAF, >50ms). Carries LoAF's own attribution so a
-/// stutter pins to script (CPU) vs render/style-layout without guessing.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct LongFrameRecord {
-    /// which observer produced it — LoAF is richer but unsupported outside
-    /// Chromium, so `longtask` is the fallback that actually fires elsewhere.
-    pub source: LongFrameSource,
-    pub t: f64,
-    pub duration_ms: f64,
-    /// time past 50ms the frame blocked the event loop.
-    pub blocking_ms: f64,
-    /// summed <script> entry durations — the CPU half.
-    pub script_ms: f64,
-    /// the render/style/layout half; 0 if the browser didn't report renderStart.
-    pub render_ms: f64,
+/// Each named field at the word ledger.json gives it.
+macro_rules! words {
+    ($t:ty, $words:expr, $($($field:ident).+ => $at:expr),+ $(,)?) => {
+        const _: () = assert!(size_of::<$t>() == $words as usize * 8, concat!(stringify!($t), " is not the size ledger.json lays out"));
+        $(const _: () = assert!(offset_of!($t, $($field).+) == $at as usize * 8, concat!(stringify!($t), " puts ", stringify!($($field).+), " off the word ledger.json gives it"));)+
+    };
 }
+
+words!(FrameSample, FRAME::WORDS,
+    t => FRAME::t, dt_ms => FRAME::dt_ms, frame_ms => FRAME::frame_ms, settled => FRAME::settled,
+    sched_ms => FRAME::sched_ms, budget_ms => FRAME::budget_ms, phases => FRAME::phases, cpu.tick_ms => FRAME::tick_ms,
+    task_ms => FRAME::task_ms, gpu_ms => FRAME::gpu_ms, draw_calls => FRAME::draw_calls, triangles => FRAME::triangles,
+    buffers => FRAME::buffers, buffer_mb => FRAME::buffer_mb,
+    textures_mb.depth => FRAME::tex_depth, textures_mb.msaa => FRAME::tex_msaa, textures_mb.shadow => FRAME::tex_shadow, textures_mb.layers => FRAME::tex_layers,
+    census => FRAME::census, px => FRAME::px,
+    lod.chunks => FRAME::lod_chunks, lod.in_frustum => FRAME::lod_in_frustum, lod.pending => FRAME::lod_pending, lod.settling => FRAME::lod_settling,
+    lod.blend_active => FRAME::lod_blend_active, lod.offscreen_pending => FRAME::lod_offscreen_pending,
+    lod.oldest_release_ms => FRAME::lod_oldest_release_ms, lod.oldest_visible_ms => FRAME::lod_oldest_visible_ms, lod.pressure => FRAME::lod_pressure,
+    mounts.added => FRAME::mounts_added, mounts.removed => FRAME::mounts_removed, mounts.layouts => FRAME::mounts_layouts,
+    tile_pages => FRAME::tile_pages, poi_count => FRAME::poi_count,
+    pool.used_mb => FRAME::pool_used_mb, pool.live_mb => FRAME::pool_live_mb, pool.range_mb => FRAME::pool_range_mb,
+    pool.refusals => FRAME::pool_refusals, pool.largest_free_mb => FRAME::pool_largest_free_mb,
+    rings.cq_peak => FRAME::ring_cq_peak, rings.spill_peak => FRAME::ring_spill_peak,
+    work.scans => FRAME::work_scans, work.bakes => FRAME::work_bakes, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
+);
+
+words!(TaskRow, TASK::WORDS,
+    category => TASK::category, subject => TASK::subject, priority => TASK::priority, enqueue_ms => TASK::enqueue_ms,
+    start_ms => TASK::start_ms, end_ms => TASK::end_ms, transport_ms => TASK::transport_ms, outcome => TASK::outcome,
+    fail => TASK::fail, status => TASK::status, phase_count => TASK::phase_count, phase_ids => TASK::phase_ids, phase_values => TASK::phase_values,
+);
+
+words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
+
+const _: () = assert!(PHASE_NAMES.len() == PHASES.len(), "ledger.json names the tick's phases");
 
 /// The rings keep the last minute: a record older than WINDOW_MS is dropped as
 /// a new one lands, so what the ledger holds is bounded by the display's rate,
 /// not by how long the tab has been open. A report or a trace covers the minute
-/// before it was taken. The rings are lanes of the fixed section at the
-/// capacities below — a minute at 60 Hz is 3,600 frames, about 2 MB of samples
-/// — so a faster display, or a minute of more tasks than a pan asks for, fills
-/// its lane before the minute passes; filling one sets `truncated`.
+/// before it was taken. The rings are lanes at the capacities below — a minute
+/// at 60 Hz is 3,600 frames, about 2 MB of samples — so a faster display, or a
+/// minute of more tasks than a pan asks for, fills its lane before the minute
+/// passes; filling one sets `truncated`.
 pub const WINDOW_MS: f64 = 60_000.0;
-const TASK_LIMIT: usize = 2_048;
-const FRAME_LIMIT: usize = 4_096;
-const LONG_FRAME_LIMIT: usize = 1_024;
+pub const TASK_LIMIT: usize = 2_048;
+pub const FRAME_LIMIT: usize = 4_096;
+const WORST_CAP: usize = 12;
 
 /// Steps `head` past the records at the front of `ring[*head..]` older than
 /// `cutoff`; how many to drop from the front now — the head, once the dropped
@@ -253,20 +358,9 @@ fn trim<T>(ring: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> 
     }
 }
 
-/// `rec` onto a lane ring past its trim; when the lane is full the records the
-/// window already dropped make room first, and past that the ring is truncated.
-fn land<T>(ring: &mut Vec<T>, cap: usize, head: &mut usize, rec: T) -> bool {
-    if ring.len() == cap && *head > 0 {
-        ring.drain(..core::mem::take(head));
-    }
-    if ring.len() == cap {
-        return false;
-    }
-    ring.push(rec);
-    true
-}
-
-/// The same over a lane of the fixed section holding `len` records.
+/// `rec` onto a lane holding `len` records past its trim; when the lane is
+/// full the records the window already dropped make room first, and past that
+/// the ring is truncated.
 fn land_lane<T: Copy>(ring: &mut [T], len: &mut usize, head: &mut usize, rec: T) -> bool {
     if *len == ring.len() && *head > 0 {
         drop_front(ring, len, core::mem::take(head));
@@ -280,20 +374,19 @@ fn land_lane<T: Copy>(ring: &mut [T], len: &mut usize, head: &mut usize, rec: T)
 }
 
 /// The first `n` of a lane's `len` records dropped, the rest moved to the front.
-fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
+pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
     ring.copy_within(n..*len, 0);
     *len -= n;
 }
 
 /// A lane for `cap` records, zeroed; none where there is no heap yet (a native
 /// test), and then nothing is recorded into it.
-fn fixed_lane<T: Copy>(cap: usize) -> &'static mut [T] {
-    let bytes = cap * core::mem::size_of::<T>();
+pub(super) fn fixed_lane<T: Copy>(cap: usize) -> &'static mut [T] {
+    let bytes = cap * size_of::<T>();
     let Some((at, _)) = u32::try_from(bytes).ok().and_then(alloc) else { return &mut [] };
     // SAFETY: a block this lane holds alone and never gives back, `bytes` long
-    // and aligned past a record's alignment; zeroed,
-    // which is a valid record for the plain numbers, flags and field-less
-    // enums the rings hold.
+    // and aligned past a record's alignment; zeroed, which is a valid record
+    // for the plain numbers the rings hold.
     unsafe {
         core::ptr::write_bytes(at as *mut u8, 0, bytes);
         core::slice::from_raw_parts_mut(at as *mut T, cap)
@@ -304,9 +397,8 @@ fn fixed_lane<T: Copy>(cap: usize) -> &'static mut [T] {
 /// not a list: the instrument has a single output mode at a time.
 #[derive(Clone, Copy, Default)]
 pub struct LedgerSink {
-    pub task: Option<fn(&TaskRecord)>,
+    pub task: Option<fn(&TaskRow)>,
     pub frame: Option<fn(&FrameSample)>,
-    pub long_frame: Option<fn(&LongFrameRecord)>,
 }
 
 /// The worst-seen values since recording started, kept as frames land so the
@@ -319,7 +411,6 @@ pub struct FramePeak {
     pub tick_ms: f64,
     pub draw_calls: f64,
     pub triangles: f64,
-    pub heap_mb: f64,
     pub q_terrain: f64,
     pub q_poi: f64,
     pub chunks: f64,
@@ -333,16 +424,6 @@ pub struct FramePeak {
     pub pressure: f64,
 }
 
-/// The worst frames by dt since recording started, kept whole with the frame
-/// before each, because geometry/texture/heap only mean anything as deltas.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct WorstFrame {
-    pub sample: FrameSample,
-    pub prev: Option<FrameSample>,
-}
-
-const WORST_CAP: usize = 12;
-
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RecordingState {
     pub recording: bool,
@@ -350,25 +431,19 @@ pub struct RecordingState {
     pub elapsed_ms: f64,
     pub tasks: usize,
     pub frames: usize,
-    pub long_frames: usize,
     pub truncated: bool,
 }
 
 struct Ledger {
-    /// The tasks on the module heap: a record carries its key and its error
-    /// as strings.
-    task_ring: Vec<TaskRecord>,
-    /// The frames and the long frames in lanes of the fixed section, taken at
-    /// their first record, `*_len` of each in use.
+    /// The rings, lanes taken at their first record, `*_len` of each in use.
+    task_ring: &'static mut [TaskRow],
+    task_len: usize,
     frame_ring: &'static mut [FrameSample],
     frame_len: usize,
-    long_frame_ring: &'static mut [LongFrameRecord],
-    long_frame_len: usize,
     /// Where each ring's live window starts: records before it are past the
     /// minute and wait for `trim` to drop them.
     task_head: usize,
     frame_head: usize,
-    long_frame_head: usize,
     truncated: bool,
     sink: LedgerSink,
     /// Explicit recording window: stopping freezes the data so an export is
@@ -377,36 +452,39 @@ struct Ledger {
     /// Off until someone asks. Nothing in the world reads the ledger — the one
     /// caller outside the instrument writes a turn's task time back into the
     /// frame it belongs to and does nothing when there is no frame — so a
-    /// client with no dev overlay pays for none of this: the rings are 2.06 MiB of frames,
-    /// 368 KiB of tasks and 48 KiB of long frames, taken on the first record
-    /// and, being lanes, never given back.
+    /// client with no dev overlay pays for none of this: the rings are 2.1 MiB
+    /// of frames and 360 KiB of tasks, taken on the first record and, being
+    /// lanes, never given back.
     recording: bool,
     started_at: f64,
     stopped_at: Option<f64>,
     frame_peak: FramePeak,
-    /// Slowest first.
-    worst_frames: Vec<WorstFrame>,
+    /// Slowest first, in a lane so they lie where they are read.
+    worst: &'static mut [WorstFrame],
+    worst_len: usize,
+    /// The completion ring's and the spill's fullest since the last frame.
+    rings: RingSample,
 }
 
 static LEDGER: Global<Ledger> = Global::new();
 
 fn ledger() -> &'static mut Ledger {
     LEDGER.get(|| Ledger {
-        task_ring: Vec::new(),
+        task_ring: &mut [],
+        task_len: 0,
         frame_ring: &mut [],
         frame_len: 0,
-        long_frame_ring: &mut [],
-        long_frame_len: 0,
         task_head: 0,
         frame_head: 0,
-        long_frame_head: 0,
         truncated: false,
         sink: LedgerSink::default(),
         recording: false,
         started_at: now(),
         stopped_at: None,
         frame_peak: FramePeak::default(),
-        worst_frames: Vec::new(),
+        worst: &mut [],
+        worst_len: 0,
+        rings: RingSample::default(),
     })
 }
 
@@ -424,23 +502,17 @@ pub fn ledger_recording_state() -> RecordingState {
     RecordingState {
         recording: l.recording,
         elapsed_ms: l.stopped_at.unwrap_or_else(now) - l.started_at,
-        tasks: l.task_ring.len() - l.task_head,
+        tasks: l.task_len - l.task_head,
         frames: l.frame_len - l.frame_head,
-        long_frames: l.long_frame_len - l.long_frame_head,
         truncated: l.truncated,
     }
 }
 
-/// Clears everything and opens a fresh window, taking the room the rings need
-/// if this is the first one.
+/// Clears everything and opens a fresh window.
 pub fn ledger_recording_start() {
     let l = ledger();
-    l.task_ring.reserve_exact(TASK_LIMIT.saturating_sub(l.task_ring.capacity()));
-    l.worst_frames.reserve_exact(WORST_CAP.saturating_sub(l.worst_frames.capacity()));
-    l.task_ring.clear();
-    (l.frame_len, l.long_frame_len) = (0, 0);
-    (l.task_head, l.frame_head, l.long_frame_head) = (0, 0, 0);
-    l.worst_frames.clear();
+    (l.task_len, l.frame_len, l.worst_len) = (0, 0, 0);
+    (l.task_head, l.frame_head) = (0, 0);
     l.frame_peak = FramePeak::default();
     l.truncated = false;
     l.started_at = now();
@@ -463,12 +535,16 @@ pub fn ledger_record(rec: TaskRecord) {
     if !l.recording {
         return;
     }
+    let row = TaskRow::of(&rec);
     if let Some(task) = l.sink.task {
-        task(&rec);
+        task(&row);
     }
-    let dropped = trim(l.task_ring.as_slice(), &mut l.task_head, rec.end_ms - WINDOW_MS, |r| r.end_ms);
-    l.task_ring.drain(..dropped);
-    if !land(&mut l.task_ring, TASK_LIMIT, &mut l.task_head, rec) {
+    if l.task_ring.is_empty() {
+        l.task_ring = fixed_lane(TASK_LIMIT);
+    }
+    let dropped = trim(&l.task_ring[..l.task_len], &mut l.task_head, row.end_ms - WINDOW_MS, |r| r.end_ms);
+    drop_front(l.task_ring, &mut l.task_len, dropped);
+    if !land_lane(l.task_ring, &mut l.task_len, &mut l.task_head, row) {
         l.truncated = true;
     }
 }
@@ -478,9 +554,17 @@ pub fn ledger_frame_peak() -> FramePeak {
     ledger().frame_peak
 }
 
-/// Window worst frames, slowest first.
-pub fn ledger_worst_frames() -> &'static [WorstFrame] {
-    ledger().worst_frames.as_slice()
+/// The completion ring and its spill as a post left them: kept at their
+/// fullest until the next frame takes them.
+pub fn ledger_note_rings(cq_len: u32, spill_len: u32) {
+    let r = &mut ledger().rings;
+    r.cq_peak = r.cq_peak.max(cq_len as f64);
+    r.spill_peak = r.spill_peak.max(spill_len as f64);
+}
+
+/// The rings' fullest since the last take, cleared by taking.
+pub fn ledger_take_rings() -> RingSample {
+    core::mem::take(&mut ledger().rings)
 }
 
 pub fn ledger_record_frame(s: FrameSample) {
@@ -488,17 +572,20 @@ pub fn ledger_record_frame(s: FrameSample) {
     if !l.recording {
         return;
     }
-    let worst = &mut l.worst_frames;
-    let at = worst.as_slice().partition_point(|w| w.sample.dt_ms >= s.dt_ms);
-    if at < WORST_CAP {
-        worst.truncate(WORST_CAP - 1);
-        worst.insert(
-            at.min(worst.len()),
-            WorstFrame {
-                sample: s,
-                prev: l.frame_ring[..l.frame_len].last().copied(),
-            },
-        );
+    if l.worst.is_empty() {
+        l.worst = fixed_lane(WORST_CAP);
+    }
+    let at = l.worst[..l.worst_len].partition_point(|w| w.sample.dt_ms >= s.dt_ms);
+    if at < l.worst.len() {
+        let prev = l.frame_ring[..l.frame_len].last().copied();
+        let kept = l.worst_len.min(l.worst.len() - 1);
+        l.worst.copy_within(at..kept, at + 1);
+        l.worst[at] = WorstFrame {
+            sample: s,
+            has_prev: if prev.is_some() { 1.0 } else { 0.0 },
+            prev: prev.unwrap_or_default(),
+        };
+        l.worst_len = kept + 1;
     }
 
     let p = &mut l.frame_peak;
@@ -507,7 +594,6 @@ pub fn ledger_record_frame(s: FrameSample) {
     p.tick_ms = p.tick_ms.max(s.cpu.tick_ms);
     p.draw_calls = p.draw_calls.max(s.draw_calls);
     p.triangles = p.triangles.max(s.triangles);
-    p.heap_mb = p.heap_mb.max(s.heap_mb);
     p.q_terrain = p.q_terrain.max(s.q_terrain);
     p.q_poi = p.q_poi.max(s.q_poi);
     p.chunks = p.chunks.max(s.lod.chunks);
@@ -533,36 +619,9 @@ pub fn ledger_record_frame(s: FrameSample) {
     }
 }
 
-/// A long frame the shell's PerformanceObserver saw (LoAF, or longtask where
-/// LoAF is missing — both feed one ring and each record says which).
-pub fn ledger_record_long_frame(rec: LongFrameRecord) {
-    let l = ledger();
-    if !l.recording {
-        return;
-    }
-    if l.long_frame_ring.is_empty() {
-        l.long_frame_ring = fixed_lane(LONG_FRAME_LIMIT);
-    }
-    let dropped = trim(&l.long_frame_ring[..l.long_frame_len], &mut l.long_frame_head, rec.t - WINDOW_MS, |r| r.t);
-    drop_front(l.long_frame_ring, &mut l.long_frame_len, dropped);
-    if !land_lane(l.long_frame_ring, &mut l.long_frame_len, &mut l.long_frame_head, rec) {
-        l.truncated = true;
-        return;
-    }
-    if let Some(long_frame) = l.sink.long_frame {
-        long_frame(&rec);
-    }
-}
-
-/// The task window, newest last.
-pub fn ledger_snapshot() -> &'static [TaskRecord] {
-    let l = ledger();
-    &l.task_ring.as_slice()[l.task_head..]
-}
-
 /// The frame sample just recorded, so a late-arriving measurement (task_ms,
-/// which is only known once the rAF task's stack empties) can be written into
-/// the frame it belongs to instead of being attributed to the next one.
+/// which is only known once the turn is over) can be written into the frame it
+/// belongs to instead of being attributed to the next one.
 pub fn ledger_last_frame() -> Option<&'static mut FrameSample> {
     let l = ledger();
     l.frame_ring[..l.frame_len].last_mut()
@@ -573,38 +632,34 @@ fn first_at<T>(ring: &[T], t: f64, at: impl Fn(&T) -> f64) -> usize {
     ring.partition_point(|rec| at(rec) < t)
 }
 
-/// Frames recorded at or after `t`, newest last — a live reader's window, so
-/// it costs the tail it reads and not the whole recording.
-pub fn ledger_frames_since(t: f64) -> &'static [FrameSample] {
-    let l = ledger();
-    let ring = &l.frame_ring[l.frame_head..l.frame_len];
-    &ring[first_at(ring, t, |f| f.t)..]
-}
-
-/// Tasks settled at or after `t`. A task is recorded as it settles, so the
-/// ring is in `end_ms` order.
-pub fn ledger_tasks_since(t: f64) -> &'static [TaskRecord] {
-    let l = ledger();
-    let ring = &l.task_ring.as_slice()[l.task_head..];
-    &ring[first_at(ring, t, |r| r.end_ms)..]
-}
-
-/// Long frames starting at or after `t`. Filtered rather than searched: two
-/// observers feed this ring, so it is not strictly in time order, and it is
-/// short.
-pub fn ledger_long_frames_since(t: f64) -> Vec<LongFrameRecord> {
-    let l = ledger();
-    l.long_frame_ring[l.long_frame_head..l.long_frame_len].iter().filter(|r| r.t >= t).copied().collect()
-}
-
 /// The frame window, newest last.
-pub fn ledger_frames_snapshot() -> &'static [FrameSample] {
+pub fn ledger_frames() -> &'static [FrameSample] {
     let l = ledger();
     &l.frame_ring[l.frame_head..l.frame_len]
 }
 
-/// The long-frame window, newest last.
-pub fn ledger_long_frames_snapshot() -> &'static [LongFrameRecord] {
+/// The task window, newest last. A task is recorded as it settles, so the ring
+/// is in `end_ms` order.
+pub fn ledger_tasks() -> &'static [TaskRow] {
     let l = ledger();
-    &l.long_frame_ring[l.long_frame_head..l.long_frame_len]
+    &l.task_ring[l.task_head..l.task_len]
+}
+
+/// The window's worst frames, slowest first.
+pub fn ledger_worst() -> &'static [WorstFrame] {
+    let l = ledger();
+    &l.worst[..l.worst_len]
+}
+
+/// Frames recorded at or after `t`, newest last — a live reader's window, so
+/// it costs the tail it reads and not the whole recording.
+pub fn ledger_frames_since(t: f64) -> &'static [FrameSample] {
+    let ring = ledger_frames();
+    &ring[first_at(ring, t, |f| f.t)..]
+}
+
+/// Tasks settled at or after `t`.
+pub fn ledger_tasks_since(t: f64) -> &'static [TaskRow] {
+    let ring = ledger_tasks();
+    &ring[first_at(ring, t, |r| r.end_ms)..]
 }
