@@ -157,11 +157,36 @@ one, and `pxl-core` allocates without naming it.
   section's two, and two timer-queue hooks, one of which carries a panic
   message. Accepted over patching or writing an executor.
 
+## A changed chunk, without an immediate build
+
+What rebuilds a chunk was narrowed first. A terrain page set again is not a
+change: a bake is the same whenever and wherever it is fetched, and one that
+differs is a broken bake, not something to follow; a new bake is the user's
+to reload for. What does change a chunk's mesh is the objects in its column —
+a placement, an erase, a carve, and the eraser's preview of either — and the
+structures setting, a developer's toggle.
+
+A placement used to release the chunk's tiers and decor and build its layout
+to the end at once, so it showed in the frame it was made; deferred as it
+stood, that would have shown a hole. Minecraft offers the same choice as its
+Chunk Builder option — Threaded, Semi Blocking (what the player does compiles
+at once), Fully Blocking — and its Threaded option names the hole.
+
+Taken instead: **keep what is shown until the new layout is whole, and swap
+it in one step.** A tier and a decor block carry the builder's generation. A
+source change bumps it, marks the chunk pending, asks for its layout and puts
+it first in the build task's order; the old generation stays drawn while the
+new one is built on the turn's quota; a layout of the new generation is
+applied only once every tier and decor of it is there, and every older one is
+let go in that step. There is no hole and no mix of old and new within a
+layout. The cost is a frame or more before a placement shows, more under
+load, and for that moment one chunk's layout held twice — at most about 11
+MiB on terrain alone (4,096 columns of six faces at 360 bytes, the two finest
+tiers), against a phone's 256 MiB heap; a chunk with objects is not bounded
+by that figure.
+
 ## Not done yet
 
-- **A placement's immediate build** (`build_now`) still builds to the end at
-  once. The chunk releases what it shows before rebuilding, so deferring the
-  build to a task would show a hole, not a late frame.
 - **The tick's phase runner stays** inside the frame task, as the order its
   steps run in. The ledger's per-step times still come from it; the other
   tasks' times are not recorded. Embassy's `trace` hooks would give per-task
