@@ -228,10 +228,6 @@ impl BakeContext {
         }
     }
 
-    pub fn is_open(&self) -> bool {
-        self.open.is_some()
-    }
-
     /// Opens a bake of `set` at `lod_step`. False when one is already open.
     pub fn begin(&mut self, set: &RunSet, lod_step: u32) -> bool {
         if self.open.is_some() {

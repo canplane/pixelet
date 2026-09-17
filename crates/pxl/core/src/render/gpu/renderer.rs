@@ -864,8 +864,8 @@ impl Renderer {
             };
             triangles += tris;
             if let Some(c) = census.get_mut(d[4] as usize) {
-                c.0 += 1.0;
-                c.1 += tris as f64;
+                c[0] += 1.0;
+                c[1] += tris as f64;
             }
         }
         let px = world.width as f64 * world.height as f64;
@@ -882,7 +882,6 @@ impl Renderer {
                 layers: (self.layers.bytes as f64 / MB).round(),
             },
             px,
-            heap_mb: (crate::sys::host::heap_used() as f64 / MB).round(),
             task_ms: 0.0,
             census,
         });

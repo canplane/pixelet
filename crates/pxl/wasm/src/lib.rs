@@ -2,30 +2,17 @@
 //!
 //! No wasm-bindgen. The central scheduler gives the module its memory, and
 //! the module lays out everything inside it when it is booted (`boot`,
-//! pxl_core::memory); the shell reads the boot block once,
-//! and everything after crosses in the rings in that memory: a command and
-//! its packet in, its reply and the kernel's signals out, and `interrupt` to
-//! hand over the turn. A run set is baked where it lies and a mesh is
-//! written into a block of the memory, so nothing is copied across the
-//! boundary.
+//! pxl_core::mem); the shell reads the boot block once, and everything after
+//! crosses in the rings in that memory: a command and its packet in, its
+//! reply and the kernel's signals out, and `interrupt` to hand over the turn.
 //!
-//! One bake is open at a time; the module is single-threaded, so the state is
-//! a plain global.
+//! The module is single-threaded, so the state is a plain global.
 
 use pxl_core::mem;
-use pxl_core::module::world::chunk_node::{BuildEvent, PageLanes, World};
-use pxl_core::module::world::decor::decor_layer::{Kind as DecorKind, Rule as DecorRule};
-use pxl_core::module::world::sched::chunk_table::{Event, Scheduler};
-use pxl_core::render::layer::object::adapter::{Carve, Kind};
-use pxl_core::render::layer::pipeline::chunk_mesher::Step;
-use pxl_core::render::layer::pipeline::chunk_raycast::Raycast;
-use pxl_core::render::layer::pipeline::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
-use pxl_core::render::layer::pipeline::voxel_scan::{run_set_bytes, BandView, ExtraView, RunSet, ScanStep};
-use pxl_core::render::layer::terrain::adapter::PageView;
+use pxl_core::render::layer::pipeline::volume::Volumes;
 use pxl_core::sys::global::Global;
-use pxl_core::sys::kernel::{kernel, reindex_object, Kernel};
-use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
-use pxl_shared::spec::cmd::{Cmd, StepResult};
+use pxl_core::sys::kernel::kernel;
+use pxl_shared::spec::cmd::Cmd;
 use xpute_core::io::marshal::tree::{BranchCursor, PacketWriter, TreeReader};
 use xpute_core::ipc::frame::FrameFlag;
 use xpute_core::ipc::ring::{ring_bytes, slots_bytes, Ring};
@@ -204,74 +191,6 @@ fn state() -> &'static mut State {
     })
 }
 
-fn input_view((at, count, span): (usize, u32, u32)) -> RunSet<'static> {
-    // SAFETY: the client points the bake at a run set in a pool block, which
-    // starts 8-aligned and holds run_set_bytes(count, span), and keeps the
-    // block until the bake closes.
-    unsafe {
-        let raw = core::slice::from_raw_parts(at as *const u8, run_set_bytes(count, span) as usize);
-        RunSet::carve(raw, count, span)
-    }
-}
-
-/// Words a band takes in the table the scan reads (a volume of the module's
-/// says its bands in, VOLUME_READ): band_z;
-/// the addresses of the material, layer and sub-cell lanes (0 for no
-/// sub-cells); the extras' count and the addresses of their five lanes.
-pub const BAND_WORDS: usize = VOLUME_BAND_WORDS;
-
-fn band_views((at, count): (usize, u32)) -> Vec<BandView<'static>> {
-    // SAFETY: the table is either the client's, written into a lane of its
-    // own with every address naming a lane of a band it keeps until the scan
-    // closes, or the module's own, copied from a volume it holds;
-    // ScanContext::begin checks each lane's length against the band's.
-    unsafe {
-        let table = core::slice::from_raw_parts(at as *const u32, count as usize * BAND_WORDS);
-        table
-            .chunks_exact(BAND_WORDS)
-            .map(|w| {
-                let voxels = pxl_core::render::layer::pipeline::volume::BAND_VOXELS;
-                let extras = w[4] as usize;
-                BandView {
-                    band_z: w[0] as i32,
-                    material: core::slice::from_raw_parts(w[1] as usize as *const u32, voxels),
-                    layer_idx: core::slice::from_raw_parts(w[2] as usize as *const u8, voxels),
-                    sub_cell: (w[3] != 0).then(|| core::slice::from_raw_parts(w[3] as usize as *const u8, voxels * 4)),
-                    extra: ExtraView {
-                        col: core::slice::from_raw_parts(w[5] as usize as *const u32, extras),
-                        z: core::slice::from_raw_parts(w[6] as usize as *const i32, extras),
-                        material: core::slice::from_raw_parts(w[7] as usize as *const u32, extras),
-                        layer_idx: core::slice::from_raw_parts(w[8] as usize as *const u8, extras),
-                        sub: core::slice::from_raw_parts(w[9] as usize as *const u32, extras),
-                    },
-                }
-            })
-            .collect()
-    }
-}
-
-/// The volumes once `boot` opened them; by the field, so the
-/// state's other fields stay borrowable beside them.
-fn opened(volumes: &mut Option<Volumes>) -> &mut Volumes {
-    volumes.as_mut().expect("a volume before boot")
-}
-
-/// The volumes for a command: EINVAL before `boot`.
-fn volumes_of(volumes: &mut Option<Volumes>) -> Result<&mut Volumes, MarshalError> {
-    volumes.as_mut().ok_or_else(|| MarshalError::new(Errno::EINVAL, Some("a volume before boot"), None))
-}
-
-// ---- Objects ----
-//
-// The client lowers a coordinate before it crosses: the chunk's key (an
-// IVec, passed as it is), the band's Z, the band-local lattice position in
-// finest-tier steps, and the level. What comes back is lanes to take views
-// over, valid until the next write or reindex. The store is the shell's
-// (module/world/object/store.ts). Writes, reads and the reference paint
-// alike are commands in the rings (pxl_shared::spec::cmd's OBJECT_*).
-
-pub use pxl_core::sys::kernel::{JOURNAL_CAPACITY, TOPIC_DECOR_COLUMN, TOPIC_OBJECT_CELL, TOPIC_OBJECT_COLUMN, WORLD_TOPICS};
-
 // ---- Rings ----
 //
 // Commands and their effects cross in rings (crates/xpute/core/src/ipc/ring.rs):
@@ -351,50 +270,17 @@ pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
     pxl_core::module::world::change::take_wake()
 }
 
-/// Bytes a reply's packet may take, which is a ring slot's payload: a packet
-/// is at most that, so a reply written past one could never be posted and is
-/// better refused where it is written than where it is pushed. What a command
-/// answers with that cannot be bounded this way — a volume's band rows, the
-/// store's columns, the UI's snapshot — crosses as an address into a block the
-/// kernel holds (`Held`), the way OBJECT_CHUNK's lanes already do.
-const REPLY_BYTES: usize = RING_SLOT_BYTES as usize;
-
-/// Bytes the module writes into before it posts them: zeroed statics, so
-/// they lie in the module's data rather than on a heap.
-struct Scratch<const N: usize>(core::cell::UnsafeCell<[u8; N]>);
-
-// SAFETY: the module runs on one thread, and what is written into a scratch
-// is posted before anything writes it again.
-unsafe impl<const N: usize> Sync for Scratch<N> {}
-
-/// Where a command writes its reply's packet, for `drain` to post with the
-/// command's result once it is known.
-static REPLY: Scratch<REPLY_BYTES> = Scratch(core::cell::UnsafeCell::new([0; REPLY_BYTES]));
-
-/// A volume's band rows, the object store's columns and the UI's snapshot:
-/// what a reply or a signal names instead of carrying.
-static ROWS: Held<u32> = Held::new();
-static COLUMNS: Held<u64> = Held::new();
+/// The UI's snapshot: what WORLD_SNAPSHOT names instead of carrying.
 static SNAPSHOT: Held<u8> = Held::new();
-
-/// A reply's packet of `count` children written by `f` into the reply
-/// scratch: its length, for `apply` to answer with.
-fn reply(count: u32, f: impl FnOnce(&mut PacketWriter)) -> Option<u32> {
-    // SAFETY: see Scratch.
-    let buf = unsafe { &mut *REPLY.0.get() };
-    let mut w = PacketWriter::new(buf, count);
-    f(&mut w);
-    Some(w.finish().expect("a reply larger than the reply scratch"))
-}
 
 /// A packet's bytes written in place into a ring slot: its length, or none
 /// when it did not fit one.
 type Write<'a> = &'a dyn Fn(&mut [u8]) -> Option<u32>;
 
-/// What a reply names rather than carries: a block the kernel holds and grows,
-/// valid until the next reply of the same command fills it again. Which is the
-/// same promise OBJECT_CHUNK's lanes make — the shell reads the rows before it
-/// asks for more, and there is no block to hand back.
+/// What a signal names rather than carries: a block the kernel holds and
+/// grows, valid until the next signal of the same command fills it again —
+/// the shell reads it before the next turn can make another, and there is no
+/// block to hand back.
 struct Held<T>(core::cell::UnsafeCell<Vec<T>>);
 
 // SAFETY: the module runs on one thread, and what is held is read before
@@ -439,9 +325,11 @@ impl Outbox {
             None => r.push(tag, cmd, flags, None, result),
         };
         if self.spill.is_empty() && push(&self.cq) == Errno::OK {
+            pxl_core::module::world::sched::ledger::ledger_note_rings(self.cq.len(), 0);
             return;
         }
         let e = push(&self.spill);
+        pxl_core::module::world::sched::ledger::ledger_note_rings(self.cq.len(), self.spill.len());
         assert!(e == Errno::OK, "the completion ring and its spill are full: 0x{cmd:x} has nowhere to go (errno {})", e as i32);
     }
 
@@ -474,15 +362,15 @@ impl Outbox {
     }
 }
 
-/// Signals one command may raise before `drain` checks again. A build's tick
-/// is the many-signalled one and it is not a submission, so this bounds a
-/// single command rather than a turn.
+/// Signals one command may raise before `drain` checks again. A frame is the
+/// many-signalled one — its toasts, sensor asks, snapshot, fetches and loads —
+/// so this bounds a single command rather than a turn.
 const MOST_SIGNALS: u32 = 64;
 
-/// A signal about `tag` with a packet of `count` children written by `f`.
-fn signal(o: &Outbox, tag: u32, cmd: Cmd, count: u32, f: impl Fn(&mut PacketWriter)) {
+/// A signal for the shell with a packet of `count` children written by `f`.
+fn raise(o: &Outbox, cmd: Cmd, count: u32, f: impl Fn(&mut PacketWriter)) {
     o.post(
-        tag,
+        0,
         cmd as u32,
         0,
         0,
@@ -492,55 +380,6 @@ fn signal(o: &Outbox, tag: u32, cmd: Cmd, count: u32, f: impl Fn(&mut PacketWrit
             w.finish()
         }),
     );
-}
-
-/// A signal for the shell with a packet of `count` children written by `f`.
-fn raise(o: &Outbox, cmd: Cmd, count: u32, f: impl Fn(&mut PacketWriter)) {
-    signal(o, 0, cmd, count, f);
-}
-
-/// An event as the signal it raises about its chunk.
-fn post_event(o: &Outbox, e: Event) {
-    match e {
-        Event::Build(BuildEvent::Tier {
-            id,
-            generation,
-            step,
-            at,
-            bytes,
-            vertex_cnt,
-            index_cnt,
-        }) => signal(o, id, Cmd::TIER_CREATE, 6, |b| {
-            b.u32(Some(generation)).u32(Some(step)).u32(Some(at)).u32(Some(bytes)).u32(Some(vertex_cnt)).u32(Some(index_cnt));
-        }),
-        Event::Build(BuildEvent::Runs { id, bytes }) => signal(o, id, Cmd::RUNS_UPDATE, 1, |b| {
-            b.u32(Some(bytes));
-        }),
-        Event::Visible { id, on } => signal(o, id, Cmd::CHUNK_VISIBLE, 1, |b| {
-            b.bool(Some(on));
-        }),
-        Event::Layout { id, primary, secondary, ready } => signal(o, id, Cmd::CHUNK_LAYOUT, 3, |b| {
-            b.u32(Some(primary)).u32(Some(secondary)).bool(Some(ready));
-        }),
-        Event::Blend {
-            id,
-            primary,
-            secondary,
-            decor_secondary,
-        } => signal(o, id, Cmd::CHUNK_BLEND, 3, |b| {
-            b.f32(Some(primary)).f32(Some(secondary)).bool(Some(decor_secondary));
-        }),
-        Event::Evict { id, step } => signal(o, id, Cmd::TIER_DELETE, 1, |b| {
-            b.u32(Some(step));
-        }),
-        Event::Mount { id, page_idx, base_x, base_y } => signal(o, id, Cmd::CHUNK_CREATE, 3, |b| {
-            b.u64(Some(page_idx)).u32(Some(base_x)).u32(Some(base_y));
-        }),
-        Event::Unmount { id } => o.post(id, Cmd::CHUNK_DELETE as u32, 0, 0, None),
-        Event::Decor { id, step, at, bytes } => signal(o, id, Cmd::DECOR_CREATE, 3, |b| {
-            b.u32(Some(step)).u32(Some(at)).u32(Some(bytes));
-        }),
-    }
 }
 
 /// What the kernel asks of the shell since it last asked, raised as signals:
@@ -666,495 +505,22 @@ fn u64_at(b: &BranchCursor, i: u32) -> Result<u64, MarshalError> {
     Ok(b.at(i)?.get_bigint()? as u64)
 }
 
-/// A lane of floats whose length is a whole number of `stride`s — for a
-/// theme, exactly `stride`.
-fn floats_at(b: &BranchCursor, i: u32, stride: usize) -> Result<xpute_core::kit::array::F32Array, MarshalError> {
-    let a = b.at(i)?.get_array::<f32>()?;
-    if !a.length().is_multiple_of(stride) {
-        return Err(MarshalError::new(
-            Errno::EBADMSG,
-            Some(&format!("a lane of {} floats is not whole instances of {stride}", a.length())),
-            None,
-        ));
-    }
-    Ok(a)
-}
-
-/// A u8 lane of exactly `len` elements.
-fn bytes_at(b: &BranchCursor, i: u32, len: usize) -> Result<xpute_core::kit::array::U8Array, MarshalError> {
-    let a = b.at(i)?.get_array::<u8>()?;
-    if len != usize::MAX && a.length() != len {
-        return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("a lane of {} bytes, not {len}", a.length())), None));
-    }
-    Ok(a)
-}
-
 fn bool_at(b: &BranchCursor, i: u32) -> Result<bool, MarshalError> {
     b.at(i)?.get_bool()
 }
 
-/// A child branch, or none where the packet holds a null.
-fn branch_at(b: &BranchCursor, i: u32) -> Result<Option<BranchCursor>, MarshalError> {
-    b.at(i)?.opt().map(|c| c.as_branch()).transpose()
-}
-
-/// The volume a packet's child `i` names, as its index: 0 is never a volume.
-fn volume_at(f: &BranchCursor, i: u32) -> Result<usize, MarshalError> {
-    match u32_at(f, i)? {
-        0 => Err(MarshalError::new(Errno::EINVAL, Some("volume 0"), None)),
-        id => Ok(id as usize - 1),
-    }
-}
-
-/// A ray as a query's packet carries it: the map origin, the origin, the
-/// direction and the distance.
-fn ray_at(f: &BranchCursor) -> Result<[f64; 9], MarshalError> {
-    let r = f.at(0)?.get_array::<f64>()?;
-    <[f64; 9]>::try_from(r.as_slice()).map_err(|_| MarshalError::new(Errno::EBADMSG, Some(&format!("a ray of {} doubles, not 9", r.length())), None))
-}
-
-/// Applies one submission: its reply's value and the length of the packet it
-/// wrote into the reply scratch (`reply`), or none for a command nobody
-/// numbers, which replies ENOSYS; a packet that does not read as the
-/// command's replies with its errno.
-fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<Option<(i32, Option<u32>)>, MarshalError> {
-    let k = kernel();
+/// Applies one submission: its reply's value, or none for a command nobody
+/// numbers or a signal submitted as a command, which replies ENOSYS; a packet
+/// that does not read as the command's replies with its errno.
+fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32>, MarshalError> {
     let Some(cmd) = Cmd::of(number) else { return Ok(None) };
     match cmd {
-        Cmd::OBJECT_UPDATE => {
-            let f = fields(pkt)?;
-            k.objects
-                .write(u64_at(&f, 0)?, i32_at(&f, 1)?, [u32_at(&f, 2)?, u32_at(&f, 3)?, u32_at(&f, 4)?], i32_at(&f, 5)?, u32_at(&f, 6)?);
-            return Ok(Some((0, None)));
-        }
-        Cmd::OBJECT_DELETE => {
-            k.objects.clear();
-            return Ok(Some((0, None)));
-        }
-        Cmd::OBJECT_REINDEX => {
-            let key = u64_at(&fields(pkt)?, 0)?;
-            reindex_object(k, key);
-            return Ok(Some((0, None)));
-        }
-        Cmd::STATE_UPDATE => {
-            let f = fields(pkt)?;
-            let kind = match u32_at(&f, 1)? {
-                1 => Kind::Solid,
-                2 => Kind::Air,
-                3 => Kind::Decor,
-                _ => Kind::Untaught,
+        Cmd::NOP => {
+            let value = match pkt {
+                Some(_) => u32_at(&fields(pkt)?, 0)?,
+                None => 0,
             };
-            k.painter.teach(u32_at(&f, 0)?, kind, u32_at(&f, 2)?, u32_at(&f, 3)? as u8);
-            return Ok(Some((0, None)));
-        }
-        Cmd::TERRAIN_UPDATE => {
-            let f = fields(pkt)?;
-            let base = f.at(0)?.as_branch()?;
-            let channels = f.at(1)?.as_branch()?;
-            let t = &mut k.terrain;
-            t.base_rgb = [u32_at(&base, 0)? as u8, u32_at(&base, 1)? as u8, u32_at(&base, 2)? as u8];
-            t.base_layer = u32_at(&base, 3)? as u8;
-            t.base_class = u32_at(&base, 4)? as u8;
-            for (ch, dst) in t.channels.iter_mut().enumerate() {
-                let c = channels.at(ch as u32)?.as_branch()?;
-                let (rgb, has_color, layer, has_layer) = (bytes_at(&c, 1, 768)?, bytes_at(&c, 2, 256)?, bytes_at(&c, 3, 256)?, bytes_at(&c, 4, 256)?);
-                dst.class = u32_at(&c, 0)? as u8;
-                for k in 0..256 {
-                    dst.rgb[k] = [rgb[k * 3], rgb[k * 3 + 1], rgb[k * 3 + 2]];
-                    dst.has_color[k] = has_color[k] != 0;
-                    dst.layer[k] = layer[k];
-                    dst.has_layer[k] = has_layer[k] != 0;
-                }
-            }
-            return Ok(Some((0, None)));
-        }
-        Cmd::DECOR_KIND_UPDATE => {
-            let kinds = fields(pkt)?.at(0)?.as_branch()?;
-            k.sched.decor_forget();
-            for kd in kinds.iter() {
-                let kd = kd?.as_branch()?;
-                let value = i32_at(&kd, 5)?;
-                let idx = k.sched.decor_kind(DecorKind {
-                    tag: u64_at(&kd, 0)?,
-                    density: number_at(&kd, 1)?,
-                    variant_count: u32_at(&kd, 2)?,
-                    align_transport: bool_at(&kd, 3)?,
-                    extent: number_at(&kd, 4)?,
-                    decor_value: (value >= 0).then_some(value as u32),
-                    rules: [DecorRule::Any; 4],
-                });
-                let rules = kd.at(6)?.as_branch()?;
-                for ch in 0..4 {
-                    let r = rules.at(ch)?.as_branch()?;
-                    match u32_at(&r, 0)? {
-                        0 => {}
-                        1 => k.sched.decor_rule(idx, ch as usize, DecorRule::Void),
-                        _ => {
-                            k.sched.decor_rule(idx, ch as usize, DecorRule::OneOf([0; 4]));
-                            for &t in bytes_at(&r, 1, usize::MAX)?.as_slice() {
-                                k.sched.decor_allow(idx, ch as usize, t);
-                            }
-                        }
-                    }
-                }
-            }
-            return Ok(Some((0, None)));
-        }
-        Cmd::DECOR_KIND_MODEL => {
-            let f = fields(pkt)?;
-            k.sched.decor_model(u32_at(&f, 0)?, u32_at(&f, 1)?);
-            return Ok(Some((0, None)));
-        }
-        Cmd::CHANGE_UPDATE | Cmd::CHANGE_READ | Cmd::CHANGE_DELETE => {
-            let f = fields(pkt)?;
-            let (topic, key) = (u32_at(&f, 0)?, u64_at(&f, 1)? as i64);
-            let revision = match cmd {
-                Cmd::CHANGE_UPDATE => k.changes.bump(topic, key),
-                Cmd::CHANGE_READ => k.changes.revision_of(topic, key),
-                _ => {
-                    k.changes.forget(topic, key);
-                    0
-                }
-            };
-            return Ok(Some((revision as i32, None)));
-        }
-        Cmd::CHUNK_READ => {
-            let (census_at, stat_at) = (k.census.as_ptr() as u32, k.build_stat.as_ptr() as u32);
-            return Ok(Some((
-                0,
-                reply(2, |b| {
-                    b.u32(Some(census_at)).u32(Some(stat_at));
-                }),
-            )));
-        }
-        Cmd::CHANGE_LANES => {
-            let l = k.changes.lanes();
-            let capacity = k.changes.capacity;
-            return Ok(Some((
-                0,
-                reply(6, |b| {
-                    b.u32(Some(l[0] as u32))
-                        .u32(Some(l[1] as u32))
-                        .u32(Some(l[2] as u32))
-                        .u32(Some(l[3] as u32))
-                        .u32(Some(l[4] as u32))
-                        .u32(Some(capacity));
-                }),
-            )));
-        }
-        Cmd::MODEL_SEAL => {
-            let scale = number_at(&fields(pkt)?, 0)? as f32;
-            let mem = opened(&mut k.volumes).mem();
-            let sched = &mut k.sched;
-            // SAFETY: the model's block is in the volumes' memory.
-            unsafe { sched.models.seal(&mut sched.draw, mem, tag, scale) };
-            return Ok(Some((0, None)));
-        }
-        Cmd::OBJECT_READ => {
-            let f = fields(pkt)?;
-            let state = k.objects.read(u64_at(&f, 0)?, i32_at(&f, 1)?, [u32_at(&f, 2)?, u32_at(&f, 3)?, u32_at(&f, 4)?]);
-            return Ok(Some((state as i32, None)));
-        }
-        Cmd::OBJECT_LANES => {
-            let key = u64_at(&fields(pkt)?, 0)?;
-            let Some(lanes) = k.objects.chunk_lanes(key) else { return Ok(Some((0, None))) };
-            let packet = reply(3, |b| {
-                b.u32(Some(lanes.band_at as u32)).u32(Some(lanes.pos_at as u32)).u32(Some(lanes.state_at as u32));
-            });
-            return Ok(Some((lanes.count as i32, packet)));
-        }
-        Cmd::OBJECT_CELL => {
-            let f = fields(pkt)?;
-            let Some(rec) = k.objects.cell(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, i32_at(&f, 3)?) else {
-                return Ok(Some((0, None)));
-            };
-            return Ok(Some((
-                1,
-                reply(3, |b| {
-                    b.u32(Some(rec.start)).u32(Some(rec.count)).u32(Some(rec.solid));
-                }),
-            )));
-        }
-        Cmd::OBJECT_COLUMNS => {
-            let o = &k.objects;
-            // SAFETY: the keys of the last OBJECT_COLUMNS, read before this one.
-            let (at, len) = unsafe { COLUMNS.fill(o.chunk_count(), |i| o.chunk_key(i)) };
-            return Ok(Some((
-                0,
-                reply(2, |b| {
-                    b.u32(Some(at)).u32(Some(len));
-                }),
-            )));
-        }
-        Cmd::OBJECT_STAT => {
-            let o = &k.objects;
-            let (chunks, bands, cells) = (o.chunk_count() as u32, o.band_count() as u32, o.cell_count() as u32);
-            return Ok(Some((
-                0,
-                reply(3, |b| {
-                    b.u32(Some(chunks)).u32(Some(bands)).u32(Some(cells));
-                }),
-            )));
-        }
-        // There is one heap now, so the pool a packet names is ignored: every
-        // one of these answers for it.
-        Cmd::POOL_READ => {
-            return Ok(Some((ALLOC.stat() as usize as i32, None)));
-        }
-        Cmd::POOL_ACQUIRE => {
-            let f = fields(pkt)?;
-            let bytes = u32_at(&f, 1)?;
-            // SAFETY: the heap's own range; the caller keeps what it is given.
-            return Ok(Some((unsafe { ALLOC.malloc(bytes as usize) } as i32, None)));
-        }
-        Cmd::POOL_RELEASE => {
-            let f = fields(pkt)?;
-            let at = u32_at(&f, 1)? as usize;
-            let bytes = u32_at(&f, 2)? as usize;
-            // SAFETY: the caller's — a block this heap gave and has not taken
-            // back, at the size it was asked for.
-            unsafe { ALLOC.free(at as *mut u8, bytes) };
-            return Ok(Some((0, None)));
-        }
-        Cmd::POOL_FREE => {
-            // Whether a block is free is not a question this heap answers: it
-            // keeps no bit that says so of a block that is out.
-            return Ok(Some((0, None)));
-        }
-        Cmd::VOLUME_STAT => {
-            let at = &volumes_of(&mut k.volumes)?.stat as *const _ as usize;
-            return Ok(Some((at as i32, None)));
-        }
-        Cmd::VOLUME_CREATE => return Ok(Some((volumes_of(&mut k.volumes)?.open() as i32 + 1, None))),
-        Cmd::VOLUME_READ => {
-            let id = volume_at(&fields(pkt)?, 0)?;
-            let v = volumes_of(&mut k.volumes)?;
-            let count = v.band_count(id);
-            if count == 0 {
-                return Ok(Some((0, None)));
-            }
-            // The rows are copied out rather than named one by one: a row is
-            // written into one scratch the volumes keep, so every band's
-            // address would be the last band's.
-            let words = VOLUME_BAND_WORDS;
-            // SAFETY: the rows of the last VOLUME_READ, read before this one.
-            let (at, len) = unsafe { ROWS.fill(count * words, |i| v.band_row(id, i / words)[i % words]) };
-            return Ok(Some((
-                count as i32,
-                reply(2, |b| {
-                    b.u32(Some(at)).u32(Some(len));
-                }),
-            )));
-        }
-        Cmd::VOLUME_DELETE => {
-            let id = volume_at(&fields(pkt)?, 0)?;
-            volumes_of(&mut k.volumes)?.release(id);
-            return Ok(Some((0, None)));
-        }
-        Cmd::VOLUME_FILL => {
-            let f = fields(pkt)?;
-            let id = volume_at(&f, 0)?;
-            let voxel = Voxel {
-                material: u32_at(&f, 5)?,
-                layer_idx: u32_at(&f, 6)? as u8,
-                sub: 0,
-            };
-            let (cx, cy, z0, z1) = (u32_at(&f, 1)?, u32_at(&f, 2)?, i32_at(&f, 3)?, i32_at(&f, 4)?);
-            let ok = volumes_of(&mut k.volumes)?.fill_column(id, (cx, cy), z0, z1, voxel);
-            return Ok(Some((ok as i32, None)));
-        }
-        Cmd::VOLUME_VOXEL | Cmd::VOLUME_SUB_VOXEL => {
-            let f = fields(pkt)?;
-            let id = volume_at(&f, 0)?;
-            let cell = Cell {
-                cx: u32_at(&f, 1)?,
-                cy: u32_at(&f, 2)?,
-                z: i32_at(&f, 3)?,
-            };
-            let voxel = Voxel {
-                material: u32_at(&f, 4)?,
-                layer_idx: u32_at(&f, 5)? as u8,
-                sub: u32_at(&f, 6)?,
-            };
-            let v = volumes_of(&mut k.volumes)?;
-            let ok = if cmd == Cmd::VOLUME_VOXEL {
-                v.set_voxel(id, cell, voxel)
-            } else {
-                v.append_sub_voxel(id, cell, voxel)
-            };
-            return Ok(Some((ok as i32, None)));
-        }
-        Cmd::VOLUME_SEAL => {
-            let id = volume_at(&fields(pkt)?, 0)?;
-            volumes_of(&mut k.volumes)?.seal(id);
-            return Ok(Some((0, None)));
-        }
-        Cmd::BAKE_CREATE => {
-            if k.ctx.is_open() {
-                return Ok(Some((0, None)));
-            }
-            let f = fields(pkt)?;
-            k.input = (u32_at(&f, 0)? as usize, u32_at(&f, 1)?, u32_at(&f, 2)?);
-            let lod_step = u32_at(&f, 3)?;
-            return Ok(Some((k.ctx.begin(&input_view(k.input), lod_step) as i32, None)));
-        }
-        Cmd::BAKE_STEP => {
-            return Ok(Some(match k.ctx.step(&input_view(k.input)) {
-                Step::Working => (StepResult::WORKING as i32, None),
-                Step::NeedMesh(words) => (
-                    StepResult::NEED_BLOCK as i32,
-                    reply(1, |b| {
-                        b.u32(Some(words));
-                    }),
-                ),
-                Step::Done => (StepResult::DONE as i32, None),
-            }));
-        }
-        Cmd::BAKE_MESH => {
-            let f = fields(pkt)?;
-            let (at, words) = (u32_at(&f, 0)? as usize, u32_at(&f, 1)?);
-            // SAFETY: the shell's block, `words` words at `at`, 4-aligned, kept
-            // until the bake finishes or aborts.
-            unsafe { k.ctx.provide_mesh(at as *mut u32, words) }
-            return Ok(Some((0, None)));
-        }
-        Cmd::BAKE_FINISH => {
-            let mesh = k.ctx.finish();
-            let c = k.ctx.counters;
-            k.result = [
-                mesh.vertex_cnt,
-                mesh.index_cnt,
-                c.total_runs,
-                c.culled,
-                c.faces_possible,
-                c.faces_kept,
-                c.coarse_total,
-                c.coarse_low_fill,
-                ALLOC.used() as u32,
-            ];
-            return Ok(Some((k.result.as_ptr() as usize as i32, None)));
-        }
-        Cmd::BAKE_DELETE => {
-            k.ctx.abort();
-            return Ok(Some((0, None)));
-        }
-        Cmd::SCAN_CREATE => {
-            if k.scan.is_open() {
-                return Ok(Some((0, None)));
-            }
-            let id = volume_at(&fields(pkt)?, 0)?;
-            let v = volumes_of(&mut k.volumes)?;
-            let count = v.band_count(id);
-            // The rows copied out, so the scan reads them as a table of its own.
-            k.scan_rows.clear();
-            for i in 0..count {
-                k.scan_rows.push(*v.band_row(id, i));
-            }
-            k.bands = (k.scan_rows.as_ptr() as usize, count as u32);
-            return Ok(Some((k.scan.begin(&band_views(k.bands)) as i32, None)));
-        }
-        Cmd::SCAN_STEP => {
-            return Ok(Some(match k.scan.step(&band_views(k.bands)) {
-                ScanStep::Working => (StepResult::WORKING as i32, None),
-                ScanStep::NeedSet(bytes) => (
-                    StepResult::NEED_BLOCK as i32,
-                    reply(1, |b| {
-                        b.u32(Some(bytes));
-                    }),
-                ),
-                ScanStep::Done => (StepResult::DONE as i32, None),
-            }));
-        }
-        Cmd::SCAN_SET => {
-            let f = fields(pkt)?;
-            let (at, bytes) = (u32_at(&f, 0)? as usize, u32_at(&f, 1)?);
-            // SAFETY: the shell's block, `bytes` bytes at `at`, 4-aligned.
-            unsafe { k.scan.provide_set(at as *mut u8, bytes) }
-            return Ok(Some((k.scan.finish() as i32, None)));
-        }
-        Cmd::SCAN_DELETE => {
-            k.scan.abort();
-            return Ok(Some((0, None)));
-        }
-        Cmd::TERRAIN_READ => {
-            let f = fields(pkt)?;
-            let (tx0, ty0) = (u32_at(&f, 5)?, u32_at(&f, 6)?);
-            if tx0 > PAGE_CELL_SPAN - CHUNK_CELL_SPAN || ty0 > PAGE_CELL_SPAN - CHUNK_CELL_SPAN {
-                return Err(MarshalError::new(Errno::EINVAL, Some("a chunk past its page"), None));
-            }
-            let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
-            let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
-            let lanes = [u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, u32_at(&f, 3)?, u32_at(&f, 4)?].map(|at| at as usize);
-            // SAFETY: the shell's page lanes, kept in the core memory for as long
-            // as the page is resident; a page's shape is fixed.
-            let page = unsafe {
-                PageView {
-                    ground: [
-                        core::slice::from_raw_parts(lanes[0] as *const u8, cells),
-                        core::slice::from_raw_parts(lanes[1] as *const u8, cells),
-                        core::slice::from_raw_parts(lanes[2] as *const u8, cells),
-                        core::slice::from_raw_parts(lanes[3] as *const u8, cells),
-                    ],
-                    ele: core::slice::from_raw_parts(lanes[4] as *const i16, samples),
-                }
-            };
-            k.chunk.read(&page, &k.terrain, tx0, ty0, bool_at(&f, 7)?);
-            let c = &k.chunk;
-            let (floor, material_at, layer_at, ele_at) = (c.floor, c.material.as_ptr() as usize as u32, c.layer_idx.as_ptr() as usize as u32, c.ele.as_ptr() as usize as u32);
-            return Ok(Some((
-                0,
-                reply(4, |b| {
-                    b.i32(Some(floor)).u32(Some(material_at)).u32(Some(layer_at)).u32(Some(ele_at));
-                }),
-            )));
-        }
-        Cmd::TERRAIN_PAINT => {
-            let id = volume_at(&fields(pkt)?, 0)?;
-            let v = volumes_of(&mut k.volumes)?;
-            return Ok(Some((k.chunk.paint(v, id) as i32, None)));
-        }
-        Cmd::OBJECT_PAINT => {
-            let f = fields(pkt)?;
-            let (id, key) = (volume_at(&f, 0)?, u64_at(&f, 1)?);
-            let hide = match branch_at(&f, 2)? {
-                Some(h) => Some((i32_at(&h, 0)?, u32_at(&h, 1)?)),
-                None => None,
-            };
-            let carve = match branch_at(&f, 3)? {
-                Some(c) => Some(Carve {
-                    lx: number_at(&c, 0)?,
-                    ly: number_at(&c, 1)?,
-                    lz: number_at(&c, 2)?,
-                    size: number_at(&c, 3)?,
-                }),
-                None => None,
-            };
-            let v = volumes_of(&mut k.volumes)?;
-            let made = k.painter.paint(&k.objects, v, id, key, hide, carve);
-            return Ok(Some(((made.any as u32 | ((made.refused as u32) << 1)) as i32, None)));
-        }
-        Cmd::RAY_COLUMN => {
-            let f = fields(pkt)?;
-            let id = volume_at(&f, 0)?;
-            let (cx, cy) = (u32_at(&f, 1)?, u32_at(&f, 2)?);
-            let v = volumes_of(&mut k.volumes)?;
-            let rows: Vec<[u32; VOLUME_BAND_WORDS]> = (0..v.band_count(id)).map(|i| *v.band_row(id, i)).collect();
-            let n = k.column.walk(&band_views((rows.as_ptr() as usize, rows.len() as u32)), cx, cy);
-            let c = &k.column;
-            let lanes = [
-                c.z0.as_ptr() as usize as u32,
-                c.z1.as_ptr() as usize as u32,
-                c.material_class.as_ptr() as usize as u32,
-                c.sub.as_ptr() as usize as u32,
-            ];
-            return Ok(Some((
-                n as i32,
-                reply(4, |b| {
-                    for at in lanes {
-                        b.u32(Some(at));
-                    }
-                }),
-            )));
+            Ok(Some(value as i32))
         }
         Cmd::WORLD_UPDATE => {
             let f = fields(pkt)?;
@@ -1177,7 +543,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             };
             pxl_core::module::world::world::world_frame(host, s.quota_ms, s.edge_at);
             post_turn(s);
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::WORLD_CREATE => {
             let f = fields(pkt)?;
@@ -1190,14 +556,14 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             });
             pxl_core::sys::host::set_handheld(bool_at(&f, 5)?);
             pxl_core::module::world::object::store::load();
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::WORLD_ACTION => {
             let f = fields(pkt)?;
             let text = f.at(0)?;
             pxl_core::app::shell::ui_action(text.get_str_ref()?);
             post_shell(s);
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::INPUT_UPDATE => {
             let f = fields(pkt)?;
@@ -1207,7 +573,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 width: number_at(&f, 2)?,
                 height: number_at(&f, 3)?,
             });
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::INPUT_POINTER => {
             use pxl_core::module::camera::input::{camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, PointerKind};
@@ -1224,17 +590,17 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 2 => camera_pointer_up(kind, id),
                 _ => camera_pointer_out(),
             }
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::INPUT_WHEEL => {
             pxl_core::module::camera::input::camera_wheel(number_at(&fields(pkt)?, 0)?);
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::SENSOR_UPDATE => {
             let f = fields(pkt)?;
             let opt = |v: f64| (!v.is_nan()).then_some(v);
             pxl_core::module::device::pose::geolocation::geolocation_fix(number_at(&f, 0)?, number_at(&f, 1)?, opt(number_at(&f, 2)?), number_at(&f, 3)?, opt(number_at(&f, 4)?));
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::SENSOR_ERROR => {
             use pxl_core::module::device::pose::geolocation::{geolocation_error, GeolocationErrorCode};
@@ -1245,13 +611,13 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 _ => GeolocationErrorCode::Other,
             };
             geolocation_error(code);
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::SENSOR_ORIENTATION => {
             let f = fields(pkt)?;
             let opt = |v: f64| (!v.is_nan()).then_some(v);
             pxl_core::module::device::pose::device_orientation::orientation_event(opt(number_at(&f, 0)?), opt(number_at(&f, 1)?), opt(number_at(&f, 2)?), opt(number_at(&f, 3)?));
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::SENSOR_PERMISSION => {
             let f = fields(pkt)?;
@@ -1262,7 +628,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 (0, false) => {}
                 _ => pxl_core::module::device::pose::device_orientation::orientation_permission(granted, failed),
             }
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::SENSOR_VISIBILITY => {
             let visible = bool_at(&fields(pkt)?, 0)?;
@@ -1273,28 +639,12 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             } else {
                 pxl_core::module::world::object::store::flush_save();
             }
-            return Ok(Some((0, None)));
-        }
-        Cmd::WORLD_LONG_FRAME => {
-            let f = fields(pkt)?;
-            pxl_core::module::world::sched::ledger::ledger_record_long_frame(pxl_core::module::world::sched::ledger::LongFrameRecord {
-                source: if u32_at(&f, 0)? == 0 {
-                    pxl_core::module::world::sched::ledger::LongFrameSource::Loaf
-                } else {
-                    pxl_core::module::world::sched::ledger::LongFrameSource::Longtask
-                },
-                t: number_at(&f, 1)?,
-                duration_ms: number_at(&f, 2)?,
-                blocking_ms: number_at(&f, 3)?,
-                script_ms: number_at(&f, 4)?,
-                render_ms: number_at(&f, 5)?,
-            });
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::FETCH_UPDATE => {
             let f = fields(pkt)?;
             pxl_core::module::world::fetch::fetch_arrived(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), u32_at(&f, 5)?, number_at(&f, 6)?);
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::LOAD_UPDATE => {
             let f = fields(pkt)?;
@@ -1304,378 +654,46 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             let mut body = vec![0u8; u32_at(&f, 2)? as usize];
             pxl_core::sys::host::body_read(u32_at(&f, 1)?, &mut body);
             pxl_core::module::world::gltf_cache::gltf_arrived(url.get_str_ref()?, &body);
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::LOAD_IMAGE => {
             let f = fields(pkt)?;
             let url = f.at(0)?;
             pxl_core::module::world::gltf_cache::image_arrived(url.get_str_ref()?, u32_at(&f, 1)?);
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::LOAD_DELETE => {
             let f = fields(pkt)?;
             let url = f.at(0)?;
             pxl_core::module::world::gltf_cache::load_rejected(url.get_str_ref()?);
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::GPU_CREATE => {
             let f = fields(pkt)?;
             pxl_core::render::gpu::renderer::gpu_created(u32_at(&f, 0)?, bool_at(&f, 1)?);
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::GPU_DELETE => {
             pxl_core::render::gpu::renderer::gpu_lost();
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::SURFACE_CREATE => {
             let handle = pxl_core::render::gpu::surface::surface_create(u32_at(&fields(pkt)?, 0)?);
-            return Ok(Some((handle as i32, None)));
+            Ok(Some(handle as i32))
         }
         Cmd::SURFACE_UPDATE => {
             let f = fields(pkt)?;
             pxl_core::render::gpu::surface::surface_update(u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, number_at(&f, 3)?);
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
         Cmd::SURFACE_DELETE => {
             if let Some(closed) = pxl_core::render::gpu::surface::surface_delete(u32_at(&fields(pkt)?, 0)?) {
                 pxl_core::render::gpu::renderer::surface_closed(closed);
             }
-            return Ok(Some((0, None)));
+            Ok(Some(0))
         }
-        _ => {}
+        Cmd::WORLD_TOAST | Cmd::WORLD_SNAPSHOT | Cmd::SENSOR_CREATE | Cmd::SENSOR_DELETE | Cmd::FETCH_CREATE | Cmd::FETCH_DELETE | Cmd::LOAD_CREATE => Ok(None),
     }
-    let Parts {
-        mut world, events, sched, raycast, ..
-    } = parts(k, &s.outbox);
-    let mut emit = |e: Event| post_event(events, e);
-    match cmd {
-        Cmd::NOP => {
-            let value = match pkt {
-                Some(_) => u32_at(&fields(pkt)?, 0)?,
-                None => 0,
-            };
-            return Ok(Some((value as i32, None)));
-        }
-        Cmd::CHUNK_DELETE => sched.remove(&mut world, tag, &mut emit),
-        Cmd::CHUNK_UPDATE => {
-            let f = fields(pkt)?;
-            let page = match branch_at(&f, 0)? {
-                None => None,
-                Some(p) => Some(PageLanes {
-                    ground: [u32_at(&p, 0)? as usize, u32_at(&p, 1)? as usize, u32_at(&p, 2)? as usize, u32_at(&p, 3)? as usize],
-                    ele: u32_at(&p, 4)? as usize,
-                }),
-            };
-            sched.source(&mut world, tag, page, bool_at(&f, 1)?, &mut emit);
-        }
-        Cmd::CHUNK_WANT => {
-            let f = fields(pkt)?;
-            sched.builder.want(&mut world, tag, [u32_at(&f, 0)?, u32_at(&f, 1)?]);
-        }
-        Cmd::PAGE_CREATE | Cmd::PAGE_DELETE => sched.page(u64_at(&fields(pkt)?, 0)?, cmd == Cmd::PAGE_CREATE),
-        Cmd::EDIT_UPDATE => {
-            let f = fields(pkt)?;
-            let hide = match branch_at(&f, 0)? {
-                None => None,
-                Some(h) => Some((u64_at(&h, 0)?, i32_at(&h, 1)?, u32_at(&h, 2)?)),
-            };
-            let carve = match branch_at(&f, 1)? {
-                None => None,
-                Some(c) => Some((
-                    u64_at(&c, 0)?,
-                    Carve {
-                        lx: number_at(&c, 1)?,
-                        ly: number_at(&c, 2)?,
-                        lz: number_at(&c, 3)?,
-                        size: number_at(&c, 4)?,
-                    },
-                )),
-            };
-            sched.builder.set_edits(hide, carve);
-        }
-        Cmd::RAY_READ => {
-            let r = ray_at(&fields(pkt)?)?;
-            let Some(h) = raycast.hit(&mut world, sched, [r[0], r[1]], [r[2], r[3], r[4]], [r[5], r[6], r[7]], r[8]) else {
-                return Ok(Some((0, None)));
-            };
-            let row = [
-                h.material_class as f64,
-                h.normal[0],
-                h.normal[1],
-                h.normal[2],
-                h.point[0],
-                h.point[1],
-                h.point[2],
-                h.t,
-                h.box_min[0],
-                h.box_min[1],
-                h.box_min[2],
-                h.box_max[0],
-                h.box_max[1],
-                h.box_max[2],
-            ];
-            return Ok(Some((
-                1,
-                reply(1, |b| {
-                    b.f64_array(Some(&row[..]));
-                }),
-            )));
-        }
-        Cmd::DECOR_READ => {
-            let r = ray_at(&fields(pkt)?)?;
-            let Some(h) = pxl_core::render::layer::pipeline::chunk_raycast::hit_decor(&world, sched, [r[0], r[1]], [r[2], r[3], r[4]], [r[5], r[6], r[7]], r[8]) else {
-                return Ok(Some((0, None)));
-            };
-            return Ok(Some((
-                1,
-                reply(4, |b| {
-                    b.u32(Some(h.chunk)).u32(Some(h.band)).u32(Some(h.pos)).f64(Some(h.t));
-                }),
-            )));
-        }
-        Cmd::OBJECT_UPDATE
-        | Cmd::OBJECT_DELETE
-        | Cmd::OBJECT_REINDEX
-        | Cmd::STATE_UPDATE
-        | Cmd::TERRAIN_UPDATE
-        | Cmd::DECOR_KIND_UPDATE
-        | Cmd::DECOR_KIND_MODEL
-        | Cmd::OBJECT_READ
-        | Cmd::OBJECT_LANES
-        | Cmd::OBJECT_CELL
-        | Cmd::OBJECT_COLUMNS
-        | Cmd::OBJECT_STAT
-        | Cmd::MODEL_SEAL
-        | Cmd::CHANGE_UPDATE
-        | Cmd::CHANGE_READ
-        | Cmd::CHANGE_DELETE
-        | Cmd::CHUNK_READ
-        | Cmd::CHANGE_LANES
-        | Cmd::POOL_READ
-        | Cmd::POOL_ACQUIRE
-        | Cmd::POOL_RELEASE
-        | Cmd::POOL_FREE
-        | Cmd::VOLUME_STAT
-        | Cmd::VOLUME_CREATE
-        | Cmd::VOLUME_READ
-        | Cmd::VOLUME_DELETE
-        | Cmd::VOLUME_FILL
-        | Cmd::VOLUME_VOXEL
-        | Cmd::VOLUME_SUB_VOXEL
-        | Cmd::VOLUME_SEAL
-        | Cmd::BAKE_CREATE
-        | Cmd::BAKE_STEP
-        | Cmd::BAKE_MESH
-        | Cmd::BAKE_FINISH
-        | Cmd::BAKE_DELETE
-        | Cmd::SCAN_CREATE
-        | Cmd::SCAN_STEP
-        | Cmd::SCAN_SET
-        | Cmd::SCAN_DELETE
-        | Cmd::TERRAIN_READ
-        | Cmd::TERRAIN_PAINT
-        | Cmd::OBJECT_PAINT
-        | Cmd::RAY_COLUMN => {
-            unreachable!("applied before the parts are taken")
-        }
-        Cmd::GHOST_BOX => {
-            let f = fields(pkt)?;
-            let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
-            sched.ghost.set_box(&mut world, &mut sched.draw, at, number_at(&f, 3)?, u32_at(&f, 4)?, u32_at(&f, 5)?, bool_at(&f, 6)?);
-        }
-        Cmd::GHOST_DECOR => {
-            let f = fields(pkt)?;
-            let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
-            sched.ghost.set_decor(&mut world, &mut sched.draw, at, u32_at(&f, 3)?, number_at(&f, 4)? as f32);
-        }
-        Cmd::GHOST_DELETE => sched.ghost.clear(&mut sched.draw),
-        Cmd::PUCK_UPDATE => {
-            let f = fields(pkt)?;
-            let zone = floats_at(&f, 3, 7)?;
-            let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
-            // SAFETY: the zone's floats, in the slot, until this message is advanced past.
-            unsafe {
-                sched.markers.set_zone(
-                    &mut world,
-                    &mut sched.draw,
-                    at,
-                    zone.length() as u32 / 7,
-                    zone.as_slice().as_ptr() as usize,
-                    number_at(&f, 4)?,
-                    number_at(&f, 5)?,
-                )
-            };
-        }
-        Cmd::PUCK_BEACON => {
-            let f = fields(pkt)?;
-            sched.markers.set_beacon([number_at(&f, 0)?, number_at(&f, 1)?], bool_at(&f, 2)?);
-        }
-        Cmd::PUCK_DELETE => sched.markers.clear(&mut sched.draw),
-        Cmd::BILLBOARD_CREATE => {
-            let order = u32_at(&fields(pkt)?, 0)?;
-            return Ok(Some((sched.billboards.new_set(order) as i32, None)));
-        }
-        Cmd::BILLBOARD_UPDATE => {
-            let lane = floats_at(&fields(pkt)?, 0, 10)?;
-            // SAFETY: the instances' floats, in the slot, until this message is advanced past.
-            unsafe { sched.billboards.write(&mut world, &mut sched.draw, tag, lane.length() as u32 / 10, lane.as_slice().as_ptr() as usize) };
-        }
-        Cmd::BILLBOARD_PLACE => {
-            let f = fields(pkt)?;
-            sched.billboards.place(tag, [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?]);
-        }
-        Cmd::BILLBOARD_FOLLOW => {
-            let f = fields(pkt)?;
-            sched.billboards.follow(tag, u32_at(&f, 0)?, number_at(&f, 1)?);
-        }
-        Cmd::BILLBOARD_DELETE => sched.billboards.remove(&mut sched.draw, tag),
-        Cmd::ACTOR_CREATE => {
-            let model = u32_at(&fields(pkt)?, 0)?;
-            return Ok(Some((sched.models.new_actor(&mut world, &mut sched.draw, model).map_or(-1, |a| a as i32), None)));
-        }
-        Cmd::ACTOR_UPDATE => {
-            let f = fields(pkt)?;
-            let (at, rotation_z, visible) = ([number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?], number_at(&f, 3)?, bool_at(&f, 4)?);
-            if let Some(a) = sched.models.actor(tag) {
-                a.at = at;
-                a.rotation_z = rotation_z as f32;
-                a.visible = visible;
-            }
-        }
-        Cmd::ACTOR_PLAY => {
-            let f = fields(pkt)?;
-            sched.models.play(tag, u32_at(&f, 0)?, number_at(&f, 1)? as f32);
-        }
-        Cmd::ACTOR_DELETE => sched.models.remove_actor(&mut sched.draw, tag),
-        Cmd::DEBUG_UPDATE => {
-            let f = fields(pkt)?;
-            let vertices = floats_at(&f, 3, 6)?;
-            let at = [number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?];
-            // SAFETY: the vertices' floats, in the slot, until this message is advanced past.
-            unsafe { sched.debug.set(&mut world, &mut sched.draw, at, vertices.length() as u32 / 6, vertices.as_slice().as_ptr() as usize) };
-        }
-        Cmd::ENV_UPDATE => {
-            let lane = floats_at(&fields(pkt)?, 0, pxl_core::module::map::environment::THEME_FLOATS)?;
-            let theme = <[f32; pxl_core::module::map::environment::THEME_FLOATS]>::try_from(lane.as_slice())
-                .map_err(|_| MarshalError::new(Errno::EBADMSG, Some(&format!("a theme of {} floats", lane.length())), None))?;
-            sched.environment.set_theme(&theme);
-        }
-        Cmd::ENV_OBSERVE => {
-            let f = fields(pkt)?;
-            sched.environment.observe(number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?);
-        }
-        Cmd::MODEL_CREATE => {
-            let f = fields(pkt)?;
-            let Some((id, at)) = sched.models.new_model(u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?) else {
-                return Ok(Some((-1, None)));
-            };
-            return Ok(Some((
-                id as i32,
-                reply(1, |b| {
-                    b.u32(Some(at as u32));
-                }),
-            )));
-        }
-        Cmd::MODEL_READ => {
-            let model = u32_at(&fields(pkt)?, 0)?;
-            return Ok(Some((sched.models.mesh(model).map_or(0, |m| m.handle) as i32, None)));
-        }
-        Cmd::MODEL_JOINT => {
-            let f = fields(pkt)?;
-            let pose = floats_at(&f, 2, 42)?;
-            let p = pose.as_slice();
-            if p.len() != 42 {
-                return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("a joint of {} floats, not 42", p.len())), None));
-            }
-            let (mut rest, mut pre, mut ib) = ([0.0; 10], [0.0; 16], [0.0; 16]);
-            rest.copy_from_slice(&p[0..10]);
-            pre.copy_from_slice(&p[10..26]);
-            ib.copy_from_slice(&p[26..42]);
-            sched.models.joint(tag, u32_at(&f, 0)?, i32_at(&f, 1)?, rest, pre, ib);
-        }
-        Cmd::MODEL_CLIP => {
-            // A query's tag is its call's, so the model is in the packet.
-            let f = fields(pkt)?;
-            return Ok(Some((sched.models.clip(u32_at(&f, 0)?, number_at(&f, 1)? as f32) as i32, None)));
-        }
-        Cmd::MODEL_CHANNEL => {
-            let f = fields(pkt)?;
-            let path = u32_at(&f, 2)?;
-            let (times, values) = (floats_at(&f, 4, 1)?, floats_at(&f, 5, if path == 1 { 4 } else { 3 })?);
-            let width = if path == 1 { 4 } else { 3 };
-            if values.length() != times.length() * width {
-                return Err(MarshalError::new(
-                    Errno::EBADMSG,
-                    Some(&format!("{} keys and {} values of width {width}", times.length(), values.length())),
-                    None,
-                ));
-            }
-            // SAFETY: the keys' floats, in the slot, until this message is
-            // advanced past; the channel copies them.
-            unsafe {
-                sched.models.channel(
-                    core::ptr::null(),
-                    tag,
-                    u32_at(&f, 0)?,
-                    u32_at(&f, 1)?,
-                    path as u8,
-                    bool_at(&f, 3)?,
-                    times.length() as u32,
-                    times.as_slice().as_ptr() as usize,
-                    values.as_slice().as_ptr() as usize,
-                )
-            };
-        }
-        Cmd::CHUNK_BUILD => sched.build_now(&mut world, tag, &now, &mut emit),
-        Cmd::CHUNK_TICK => {
-            let f = fields(pkt)?;
-            let order = f.at(0)?.get_array::<u32>()?;
-            let budget_ms = number_at(&f, 1)?;
-            sched.builder.tick(&mut world, order.as_slice(), budget_ms, &now, &mut |e| emit(Event::Build(e)));
-        }
-        Cmd::CHUNK_DECOR => {
-            let show = bool_at(&fields(pkt)?, 0)?;
-            sched.decor_now(&mut world, tag, show, &mut emit);
-        }
-        Cmd::ENV_READ => {
-            let f = fields(pkt)?;
-            sched.environment.daylight(number_at(&f, 0)?, number_at(&f, 1)?, number_at(&f, 2)?);
-            let d = sched.environment.daylight;
-            return Ok(Some((
-                0,
-                reply(2, |b| {
-                    b.f64(Some(d[0])).f64(Some(d[1]));
-                }),
-            )));
-        }
-        // Signals: the kernel raises these, and a shell submitting one is
-        // asking for something no handler does.
-        // Applied before the world is borrowed, above.
-        Cmd::WORLD_CREATE
-        | Cmd::WORLD_ACTION
-        | Cmd::WORLD_LONG_FRAME
-        | Cmd::WORLD_UPDATE
-        | Cmd::INPUT_UPDATE
-        | Cmd::INPUT_POINTER
-        | Cmd::INPUT_WHEEL
-        | Cmd::SENSOR_UPDATE
-        | Cmd::SENSOR_ERROR
-        | Cmd::SENSOR_ORIENTATION
-        | Cmd::SENSOR_PERMISSION
-        | Cmd::SENSOR_VISIBILITY
-        | Cmd::FETCH_UPDATE
-        | Cmd::LOAD_UPDATE
-        | Cmd::LOAD_IMAGE
-        | Cmd::LOAD_DELETE
-        | Cmd::GPU_CREATE
-        | Cmd::GPU_DELETE
-        | Cmd::SURFACE_CREATE
-        | Cmd::SURFACE_UPDATE
-        | Cmd::SURFACE_DELETE => return Ok(None),
-        Cmd::CHUNK_CREATE | Cmd::CHUNK_VISIBLE | Cmd::CHUNK_LAYOUT | Cmd::CHUNK_BLEND | Cmd::TIER_CREATE | Cmd::TIER_DELETE | Cmd::RUNS_UPDATE | Cmd::DECOR_CREATE => return Ok(None),
-        Cmd::WORLD_TOAST | Cmd::WORLD_LOG | Cmd::WORLD_SNAPSHOT | Cmd::SENSOR_CREATE | Cmd::SENSOR_DELETE | Cmd::FETCH_CREATE | Cmd::FETCH_DELETE | Cmd::LOAD_CREATE => return Ok(None),
-    }
-    Ok(Some((0, None)))
 }
 
 /// Applies every submission waiting. What they make goes into the completion
@@ -1700,90 +718,20 @@ fn drain(s: &mut State) -> u32 {
         }
         let at = at as u32;
         let (tag, number, flags) = (s.sq.tag(at), s.sq.cmd(at), s.sq.flags(at));
-        let (result, reply) = match s.sq.packet(at) {
-            Ok(pkt) => match apply(s, tag, number, &pkt) {
-                Ok(Some((value, reply))) => (Ok(value), reply),
-                Ok(None) => (Err(Errno::ENOSYS as i32), None),
-                Err(e) => (Err(e.errno as i32), None),
+        let result = match s.sq.packet(at) {
+            Ok(pkt) => match apply(s, number, &pkt) {
+                Ok(Some(value)) => Ok(value),
+                Ok(None) => Err(Errno::ENOSYS as i32),
+                Err(e) => Err(e.errno as i32),
             },
-            Err(e) => (Err(e.errno as i32), None),
+            Err(e) => Err(e.errno as i32),
         };
         s.sq.advance();
         if flags & FrameFlag::ACKREQ as u32 != 0 || result.is_err() {
-            let value = result.unwrap_or_else(|errno| errno);
-            // SAFETY: the reply `apply` just wrote; nothing writes the scratch
-            // before it is posted.
-            let packet = reply.map(|n| unsafe { &(&*REPLY.0.get())[..n as usize] });
-            let copy = |out: &mut [u8]| {
-                let p = packet?;
-                out.get_mut(..p.len())?.copy_from_slice(p);
-                Some(p.len() as u32)
-            };
-            s.outbox.post(tag, number, FrameFlag::RES as u32, value, packet.map(|_| &copy as Write<'_>));
+            s.outbox.post(tag, number, FrameFlag::RES as u32, result.unwrap_or_else(|errno| errno), None);
         }
     }
-    // The rows the shell reads by address (the build stat, the census) are
-    // as of the last command, as they are of the last tick.
-    after();
     s.outbox.cq.tail().wrapping_sub(tail)
-}
-
-/// The state split into what a build, a tick or a raycast borrows at once:
-/// the world the core reads and writes, and the parts that drive it.
-struct Parts<'a> {
-    world: World<'a>,
-    events: &'a Outbox,
-    sched: &'a mut Scheduler,
-    raycast: &'a mut Raycast,
-}
-
-fn parts<'a>(k: &'a mut Kernel, events: &'a Outbox) -> Parts<'a> {
-    Parts {
-        world: World {
-            volumes: opened(&mut k.volumes),
-            materials: &k.terrain,
-            store: &k.objects,
-            painter: &mut k.painter,
-        },
-        events,
-        sched: &mut k.sched,
-        raycast: &mut k.raycast,
-    }
-}
-
-fn after() {
-    let k = kernel();
-    let st = k.sched.builder.stat;
-    let c = k.sched.builder.bake_context().counters;
-    k.build_stat = [
-        st.direct,
-        st.scans,
-        st.bakes,
-        st.starved,
-        c.total_runs,
-        c.culled,
-        c.faces_possible,
-        c.faces_kept,
-        c.coarse_total,
-        c.coarse_low_fill,
-        ALLOC.used() as u32,
-    ];
-    let c = k.sched.census;
-    k.census = [
-        c.chunks as f64,
-        c.in_frustum as f64,
-        c.settling as f64,
-        c.blend_active as f64,
-        c.pending as f64,
-        c.offscreen_pending as f64,
-        c.oldest_visible_ms,
-        c.oldest_release_ms,
-        c.committed as f64,
-        c.released as f64,
-        c.retained_on,
-        c.retained_off,
-        c.pressure as f64,
-    ];
 }
 
 // ---- The host's hooks (pxl_core::sys::host, pxl_core::sys::global) ----
@@ -1990,71 +938,61 @@ fn install_host() {
     pxl_core::sys::host::set_heap_releases(|| ALLOC.releases());
     pxl_core::sys::host::set_heap_live(|| ALLOC.live());
     pxl_core::sys::host::set_heap_bytes(|| ALLOC.range_bytes());
+    pxl_core::sys::host::set_heap_refusals(|| ALLOC.refusals());
+    pxl_core::sys::host::set_heap_largest_free(|| ALLOC.largest_free());
     install_gpu();
 }
 
-/// The live stream's records, and where they lie.
+/// The ledger, where it lies: the address of READ's words (ledger.json) —
+/// the summary block over the last `window_ms`, an infinite window being the
+/// whole recording, and the frame, task and worst-frame rings, each an address
+/// and a record count.
 ///
-/// The same range shape as the trace below, for the same reason: this is
-/// instrumentation, and instrumentation does not go out on the control ring.
-/// On the ring a debug stream would take the ring's failure policy —
-/// `Outbox::post` asserts when the completion queue and its spill are both
-/// full — and a fetch burst, the one time anyone turns the stream on, is what
-/// fills them.
-static LOG_TEXT: pxl_core::sys::global::Global<String> = pxl_core::sys::global::Global::new();
-static LOG_RANGE: pxl_core::sys::global::Global<[u32; 2]> = pxl_core::sys::global::Global::new();
+/// Read in place rather than sent: this is instrumentation, and
+/// instrumentation does not go out on the control ring, whose failure policy
+/// is that `Outbox::post` asserts when the completion queue and its spill are
+/// both full. Nothing is built for the read either — the rings are the ledger's
+/// own lanes and the summary a block written where it stays — so a reader
+/// allocates nothing from the heap the ledger measures. The addresses are good
+/// until the next turn.
+#[no_mangle]
+pub extern "C" fn ledger_read(window_ms: f64) -> *const u32 {
+    use pxl_core::module::world::sched::ledger::{ledger_frames, ledger_tasks, ledger_worst};
+    use pxl_core::module::world::sched::ledger_spec::READ;
+    static WORDS: pxl_core::sys::global::Global<[u32; READ::WORDS as usize]> = pxl_core::sys::global::Global::new();
+    let summary = pxl_core::module::world::sched::summary::ledger_summarize(window_ms);
+    let (frames, tasks, worst) = (ledger_frames(), ledger_tasks(), ledger_worst());
+    let w = WORDS.get(|| [0; READ::WORDS as usize]);
+    w[READ::summary_at as usize] = summary.as_ptr() as u32;
+    w[READ::summary_words as usize] = summary.len() as u32;
+    w[READ::frames_at as usize] = frames.as_ptr() as u32;
+    w[READ::frames_count as usize] = frames.len() as u32;
+    w[READ::tasks_at as usize] = tasks.as_ptr() as u32;
+    w[READ::tasks_count as usize] = tasks.len() as u32;
+    w[READ::worst_at as usize] = worst.as_ptr() as u32;
+    w[READ::worst_count as usize] = worst.len() as u32;
+    w.as_ptr()
+}
 
-/// What the stream has kept since the shell last came for it: the address of
-/// two words, where the JSON lies in this memory and how long it is. Zero
-/// length when there is nothing waiting, which a shell polling every frame is
-/// asking for most of the time.
+/// What the live stream kept since the shell last cleared it: the address of
+/// LOG's words (ledger.json), the task rows and the frames, each an address
+/// and a count. Zero counts when nothing is waiting, which a shell polling is
+/// asking about most of the time.
 #[no_mangle]
 pub extern "C" fn ledger_log() -> *const u32 {
-    let text = LOG_TEXT.get(String::new);
-    *text = if pxl_core::module::world::sched::log::log_pending() {
-        pxl_core::module::world::sched::report::ledger_log_json()
-    } else {
-        String::new()
-    };
-    let range = LOG_RANGE.get(|| [0; 2]);
-    *range = [text.as_ptr() as u32, text.len() as u32];
-    range.as_ptr()
+    use pxl_core::module::world::sched::ledger_spec::LOG;
+    static WORDS: pxl_core::sys::global::Global<[u32; LOG::WORDS as usize]> = pxl_core::sys::global::Global::new();
+    let (tasks, frames) = pxl_core::module::world::sched::log::ledger_log_rows();
+    let w = WORDS.get(|| [0; LOG::WORDS as usize]);
+    w[LOG::tasks_at as usize] = tasks.as_ptr() as u32;
+    w[LOG::tasks_count as usize] = tasks.len() as u32;
+    w[LOG::frames_at as usize] = frames.as_ptr() as u32;
+    w[LOG::frames_count as usize] = frames.len() as u32;
+    w.as_ptr()
 }
 
-/// Gives back what the last read took.
+/// Forgets what the stream kept, once the shell has read it.
 #[no_mangle]
-pub extern "C" fn ledger_log_release() {
-    LOG_TEXT.set(String::new());
-}
-
-/// The trace the shell saves, and where it lies.
-///
-/// It is held between the two calls below rather than rebuilt, because the
-/// range handed out has to stay good until the shell has copied the bytes.
-static TRACE_TEXT: pxl_core::sys::global::Global<String> = pxl_core::sys::global::Global::new();
-static TRACE_RANGE: pxl_core::sys::global::Global<[u32; 2]> = pxl_core::sys::global::Global::new();
-
-/// The ledger's window as Chrome's Trace Event Format, for ui.perfetto.dev:
-/// the address of two words, where the JSON lies in this memory and how long
-/// it is.
-///
-/// A range rather than a message. Recording covers the whole window
-/// (sched/ledger.rs), so a trace is routinely tens of megabytes — past a ring
-/// block, and past what the completion queue is for. The shell reads the two
-/// words, copies the bytes out, and says it is done with `ledger_trace_release`.
-#[no_mangle]
-pub extern "C" fn ledger_trace() -> *const u32 {
-    let text = TRACE_TEXT.get(String::new);
-    *text = pxl_core::module::world::sched::trace::ledger_trace_json();
-    let range = TRACE_RANGE.get(|| [0; 2]);
-    *range = [text.as_ptr() as u32, text.len() as u32];
-    range.as_ptr()
-}
-
-/// Gives back what the last trace took, once the shell has copied it. Tens of
-/// megabytes of the heap otherwise stay held until the next trace is asked
-/// for, on the heap the thing being measured allocates from.
-#[no_mangle]
-pub extern "C" fn ledger_trace_release() {
-    TRACE_TEXT.set(String::new());
+pub extern "C" fn ledger_log_clear() {
+    pxl_core::module::world::sched::log::ledger_log_clear();
 }

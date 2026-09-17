@@ -4,14 +4,10 @@
 
 //! The shell's and the kernel's commands, by number (xpute_core::ipc::cmd:
 //! `major << 8 | minor`), and the packet each carries — an XTP branch whose
-//! children are listed in order. A message's tag is its subject: a chunk's
-//! id where there is one, so no packet repeats it. A command with no
-//! children carries no packet.
+//! children are listed in order. A command with no children carries no packet.
 //!
 //! The same number is a command on the submission ring and a signal on the
-//! completion ring (its `RES` clear): a chunk the shell creates is a chunk
-//! it registers, a chunk the kernel creates is one it mounted. The direction
-//! is the ring.
+//! completion ring (its `RES` clear). The direction is the ring.
 
 #![allow(non_camel_case_types, clippy::upper_case_acronyms)]
 
@@ -20,31 +16,6 @@
 #[repr(u32)]
 pub enum Major {
     NOP = 0x00,
-    CHUNK = 0x01,
-    PAGE = 0x02,
-    EDIT = 0x03,
-    TIER = 0x04,
-    RUNS = 0x05,
-    DECOR = 0x06,
-    RAY = 0x07,
-    OBJECT = 0x08,
-    STATE = 0x09,
-    TERRAIN = 0x0a,
-    DECOR_KIND = 0x0b,
-    GHOST = 0x0c,
-    PUCK = 0x0d,
-    BILLBOARD = 0x0e,
-    ACTOR = 0x0f,
-    DEBUG = 0x10,
-    ENV = 0x11,
-    MODEL = 0x12,
-    CHANGE = 0x13,
-    DRAW = 0x15,
-    SHADER = 0x16,
-    POOL = 0x17,
-    VOLUME = 0x18,
-    BAKE = 0x19,
-    SCAN = 0x1a,
     WORLD = 0x1b,
     INPUT = 0x1c,
     SENSOR = 0x1d,
@@ -52,153 +23,6 @@ pub enum Major {
     LOAD = 0x1f,
     GPU = 0x20,
     SURFACE = 0x21,
-}
-
-/// The hover ghost's own verbs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum GhostMinor {
-    BOX = 0x10,
-    DECOR = 0x11,
-}
-
-/// The location puck's own verb.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum PuckMinor {
-    BEACON = 0x10,
-}
-
-/// A billboard set's own verbs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum BillboardMinor {
-    PLACE = 0x10,
-    FOLLOW = 0x11,
-}
-
-/// An actor's own verb.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum ActorMinor {
-    PLAY = 0x10,
-}
-
-/// A model's own verbs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum ModelMinor {
-    JOINT = 0x10,
-    CLIP = 0x11,
-    CHANNEL = 0x12,
-    SEAL = 0x13,
-}
-
-/// The environment's own verbs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum EnvMinor {
-    OBSERVE = 0x10,
-}
-
-/// The change log's own verb.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum ChangeMinor {
-    LANES = 0x10,
-}
-
-/// A pool's own verbs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum PoolMinor {
-    ACQUIRE = 0x10,
-    RELEASE = 0x11,
-    FREE = 0x12,
-}
-
-/// A volume's own verbs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum VolumeMinor {
-    FILL = 0x10,
-    VOXEL = 0x11,
-    SUB_VOXEL = 0x12,
-    SEAL = 0x13,
-    STAT = 0x15,
-}
-
-/// The bake's own verbs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum BakeMinor {
-    STEP = 0x10,
-    MESH = 0x11,
-    FINISH = 0x12,
-}
-
-/// The scan's own verbs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum ScanMinor {
-    STEP = 0x10,
-    SET = 0x11,
-}
-
-/// The terrain's own verb.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum TerrainMinor {
-    PAINT = 0x10,
-}
-
-/// The raycast's own verb.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum RayMinor {
-    COLUMN = 0x10,
-}
-
-/// An object store's own verb.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum ObjectMinor {
-    REINDEX = 0x10,
-    LANES = 0x11,
-    CELL = 0x12,
-    COLUMNS = 0x13,
-    STAT = 0x14,
-    PAINT = 0x15,
-}
-
-/// A decor kind's own verb.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum DecorKindMinor {
-    MODEL = 0x10,
-}
-
-/// A chunk's own verbs, past the four every subject has.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum ChunkMinor {
-    WANT = 0x10,
-    VISIBLE = 0x11,
-    LAYOUT = 0x12,
-    BLEND = 0x13,
-    BUILD = 0x14,
-    DECOR = 0x15,
-    TICK = 0x16,
-}
-
-/// What a step answers: BAKE_STEP's and SCAN_STEP's result.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum StepResult {
-    WORKING = 0,
-    /// Wanting a block, whose size the reply carries.
-    NEED_BLOCK = 1,
-    DONE = 2,
 }
 
 /// The pointer's own verbs.
@@ -219,13 +43,6 @@ pub enum SensorMinor {
     VISIBILITY = 0x13,
 }
 
-/// A fetch's own verb: room for a response's body.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum FetchMinor {
-    BODY = 0x10,
-}
-
 /// A load's own verb.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
@@ -238,9 +55,7 @@ pub enum LoadMinor {
 #[repr(u32)]
 pub enum WorldMinor {
     ACTION = 0x11,
-    LONG_FRAME = 0x12,
     TOAST = 0x13,
-    LOG = 0x14,
     SNAPSHOT = 0x15,
 }
 
@@ -250,294 +65,6 @@ pub enum Cmd {
     /// Replies with its packet's first child, a u32, or 0 — the rings' own
     /// test.
     NOP = 0x0000,
-
-    // ---- shell → kernel ----
-    /// tag chunk · [page_idx u64, base_x u32, base_y u32] — a chunk the
-    /// kernel mounted. Raised, never submitted: the scheduler decides what is
-    /// resident and where it sits
-    CHUNK_CREATE = 0x0101,
-    /// tag chunk · [page: [land u32, water u32, structure u32, transport u32,
-    /// ele u32] addresses | null, show_structures bool]
-    CHUNK_UPDATE = 0x0103,
-    /// tag chunk · no packet
-    CHUNK_DELETE = 0x0104,
-    /// tag chunk · [first u32, second u32], a step or 0 — the builder's ask,
-    /// past the scheduler, for the tests
-    CHUNK_WANT = 0x0110,
-    /// [page u64]
-    PAGE_CREATE = 0x0201,
-    /// [page u64]
-    PAGE_DELETE = 0x0204,
-    /// [hide: [column u64, band i32, pos u32] | null, carve: [column u64,
-    /// lx f32, ly f32, lz f32, size f32] | null]
-    EDIT_UPDATE = 0x0303,
-    /// [key u64, band_z i32, x u32, y u32, z u32, level i32, value u32] — one
-    /// leaf; the chunk's entries are not re-derived until OBJECT_REINDEX
-    OBJECT_UPDATE = 0x0803,
-    /// no packet — the whole store emptied
-    OBJECT_DELETE = 0x0804,
-    /// [key u64] — the chunk's entries and cells re-derived, and the change
-    /// recorded in the change log: the column in both topics, every cell
-    /// whose entries changed
-    OBJECT_REINDEX = 0x0810,
-    /// [state u32, kind u32 (1 solid, 2 air, 3 decor), material u32 (packed
-    /// 0xCC_RRGGBB), layer u32] — what a leaf's state paints as
-    STATE_UPDATE = 0x0903,
-    /// [base: [r u32, g u32, b u32, layer u32, class u32], channels: [land,
-    /// water, structure, transport: [class u32, rgb u8[768], has_color u8[256],
-    /// layer u8[256], has_layer u8[256]]]] — every table a cell's material is
-    /// read from, whole
-    TERRAIN_UPDATE = 0x0a03,
-    /// [kinds: [[tag u64, density f64, variant_count u32, align_transport
-    /// bool, extent f64, decor_value i32 (-1 none), rules: [land, water,
-    /// structure, transport: [mode u32 (0 any, 1 void, 2 one of), types u8[]]]]]]
-    /// — every decor kind, in group order, replacing what was taught
-    DECOR_KIND_UPDATE = 0x0b03,
-    /// [group u32, model u32] — the model a decor group is drawn with, for the
-    /// hit test
-    DECOR_KIND_MODEL = 0x0b10,
-
-    // ---- the scene: what is drawn beside the chunks ----
-    //
-    // A lane of floats crosses in the packet, not by address: the shell's
-    // scratch is given back as soon as the command is sent, and the command
-    // is applied later.
-    /// [x f64, y f64, z f64, size f64, value u32, rgb u32, coplanar bool] — the
-    /// hover ghost as a box, its min corner at (x, y, z)
-    GHOST_BOX = 0x0c10,
-    /// [x f64, y f64, z f64, group u32, rotation f64] — the hover ghost as one
-    /// instance of a decor group
-    GHOST_DECOR = 0x0c11,
-    /// no packet — the ghost gone
-    GHOST_DELETE = 0x0c04,
-    /// [x f64, y f64, z f64, zone f32[7 an instance], snap_dist f64, fog_far
-    /// f64] — the puck's zone about its centre
-    PUCK_UPDATE = 0x0d03,
-    /// [offset_x f64, offset_y f64, night bool]
-    PUCK_BEACON = 0x0d10,
-    /// no packet — the puck gone
-    PUCK_DELETE = 0x0d04,
-    /// tag call · [order u32] → result: the set's id
-    BILLBOARD_CREATE = 0x0e01,
-    /// tag set · [instances f32[10 an instance]], relative to its anchor
-    BILLBOARD_UPDATE = 0x0e03,
-    /// tag set · [x f64, y f64, z f64] — stood at a point
-    BILLBOARD_PLACE = 0x0e10,
-    /// tag set · [actor u32, lift f64] — stood above an actor
-    BILLBOARD_FOLLOW = 0x0e11,
-    /// tag set · no packet
-    BILLBOARD_DELETE = 0x0e04,
-    /// tag call · [model u32] → result: the actor's id, or -1
-    ACTOR_CREATE = 0x0f01,
-    /// tag actor · [x f64, y f64, z f64, rotation_z f64, visible bool]
-    ACTOR_UPDATE = 0x0f03,
-    /// tag actor · [clip u32, fade_s f32]
-    ACTOR_PLAY = 0x0f10,
-    /// tag actor · no packet
-    ACTOR_DELETE = 0x0f04,
-    /// [x f64, y f64, z f64, vertices f32[6 a vertex]] — the dev gizmos'
-    /// segments about an origin
-    DEBUG_UPDATE = 0x1003,
-    /// [theme f32[34]] — the theme the environment eases toward
-    ENV_UPDATE = 0x1103,
-    /// [lat f64, lon f64, unix_ms f64] — the observer and the wall clock
-    ENV_OBSERVE = 0x1110,
-
-    // ---- models: a mesh block the shell writes, and its skeleton and clips ----
-    /// tag call · [vertex_cnt u32, index_cnt u32, joint_cnt u32] → result: the
-    /// model's id, or -1 when the mesh pool refused; with an id, [block_at u32]
-    /// — where the shell writes the vertices and indices, in the module's
-    /// memory
-    MODEL_CREATE = 0x1201,
-    /// tag call · [model u32] → result: the renderer's handle for its mesh
-    /// block, 0 before it is sealed
-    MODEL_READ = 0x1202,
-    /// tag model · [joint u32, parent i32, pose f32[42]: rest (10), what
-    /// stands above a root (16), inverse bind (16)]
-    MODEL_JOINT = 0x1210,
-    /// tag call · [model u32, duration f32] → result: the clip's index
-    MODEL_CLIP = 0x1211,
-    /// tag model · [clip u32, joint u32, path u32 (0 translation, 1 rotation,
-    /// 2 scale), step bool, times f32[], values f32[]]
-    MODEL_CHANNEL = 0x1212,
-    /// tag model · [scale f32] — complete: its block goes to the GPU
-    MODEL_SEAL = 0x1213,
-
-    // ---- the change log, the chunks' rebuilds now, the day ----
-    /// tag call · [topic u32, key u64] → result: the key's new revision
-    CHANGE_UPDATE = 0x1303,
-    /// tag call · [topic u32, key u64] → result: the key's revision, 0 for
-    /// one never bumped
-    CHANGE_READ = 0x1302,
-    /// [topic u32, key u64] — the key's revision forgotten
-    CHANGE_DELETE = 0x1304,
-    /// tag chunk · no packet — its layout built to the end now: a placement
-    /// shows in the frame it was made
-    CHUNK_BUILD = 0x0114,
-    /// tag chunk · [show_decor bool] — its decor rebuilt now for the layout it
-    /// shows; the tiers untouched
-    CHUNK_DECOR = 0x0115,
-    /// tag call · [lat f64, lon f64, day_start_ms f64] → [sunrise f64, sunset
-    /// f64], in hours after the day's start
-    ENV_READ = 0x1102,
-
-    // ---- where the lanes the shell reads in place are ----
-    //
-    // Asked once, or once a frame for the draw lists: the answer is addresses
-    // in the module's memory, which never grows.
-    /// tag call · no packet → [census_at u32 (13 doubles), stat_at u32 (11
-    /// words)]
-    CHUNK_READ = 0x0102,
-    /// tag call · no packet → [topic_at u32, key_at u32, revision_at u32,
-    /// head_at u32, ticks_at u32, capacity u32]: the change log's lanes
-    CHANGE_LANES = 0x1310,
-
-    // ---- the memory's pools ----
-    //
-    // Mechanism rather than the world's: numbered here while this is the one
-    // table. The pool a command is about is its packet's first child, so a
-    // release can be asked about as well as sent. The pools are the kernel's
-    // sections, made at boot: fixed 0, page 1, mesh 2 (pxl_core::memory).
-    /// tag call · [pool u32] → result: where its stat is, twelve words in
-    /// BuddyStat's first twelve fields' order, at a fixed address
-    POOL_READ = 0x1702,
-    /// tag call · [pool u32, bytes u32] → result: the block's address, 0 when
-    /// the range is used up or the request is larger than a region
-    POOL_ACQUIRE = 0x1710,
-    /// [pool u32, at u32, bytes u32] — the block returned; EINVAL for one the
-    /// pool does not hold or holds already
-    POOL_RELEASE = 0x1711,
-    /// tag call · [pool u32, at u32, bytes u32] → result: 1 where the block is
-    /// free, 0 where not
-    POOL_FREE = 0x1712,
-
-    // ---- the reference paths ----
-    //
-    // A volume painted, baked and scanned by hand, as apps/web/src/reference/
-    // does to hold the module to the TypeScript pipeline it replaced; the live
-    // build composes, bakes and scans inside the scheduler. One bake and one
-    // scan are open at a time, so neither names a subject. A step's result is
-    // a StepResult.
-    /// tag call · no packet → result: a volume with no bands, its id (never 0)
-    VOLUME_CREATE = 0x1801,
-    /// tag call · [volume u32] → result: its band count; with bands, [rows
-    /// u32, count u32]: where BAND_WORDS words a band lie — band_z, the
-    /// material, layer and sub-cell lanes' addresses (0 for none), the extras'
-    /// count and their five lanes' addresses. Past a ring frame, so the rows
-    /// are a block the kernel holds, valid until the next VOLUME_READ
-    VOLUME_READ = 0x1802,
-    /// [volume u32] — its bands to the stores up to their cap, the rest to the
-    /// pools
-    VOLUME_DELETE = 0x1804,
-    /// tag call · [volume u32, cx u32, cy u32, z0 i32, z1 i32, material u32,
-    /// layer u32] → result: 1, or 0 when a band could not be made — no pool had
-    /// room — and the volume is not the composite asked for
-    VOLUME_FILL = 0x1810,
-    /// tag call · [volume u32, cx u32, cy u32, z i32, material u32, layer u32,
-    /// sub u32 (0 a full cell)] → result as VOLUME_FILL: the voxel replaced
-    VOLUME_VOXEL = 0x1811,
-    /// tag call · as VOLUME_VOXEL — another sub-cell object on a base voxel
-    /// already claimed
-    VOLUME_SUB_VOXEL = 0x1812,
-    /// [volume u32] — closed to painting, its overflow sorted by column
-    VOLUME_SEAL = 0x1813,
-    /// tag call · no packet → result: where the volumes' stat is, three words:
-    /// allocated, reused, refused
-    VOLUME_STAT = 0x1815,
-    /// tag call · [at u32, count u32, span u32, lod_step u32] → result: 1, or 0
-    /// while a bake is open — of the run set at `at`, in the run set's own layout,
-    /// which the shell keeps until the bake closes
-    BAKE_CREATE = 0x1901,
-    /// tag call · no packet → result: the step's; wanting a block, [words u32]:
-    /// the mesh's
-    BAKE_STEP = 0x1910,
-    /// [at u32, words u32] — where the mesh goes, 4-aligned, the shell's
-    BAKE_MESH = 0x1911,
-    /// tag call · no packet → result: where nine words are — vertex count,
-    /// index count, the six counters so far, the module heap's use — the
-    /// complete bake closed
-    BAKE_FINISH = 0x1912,
-    /// no packet — the open bake abandoned
-    BAKE_DELETE = 0x1904,
-    /// tag call · [volume u32] → result: 1, or 0 while a scan is open — the
-    /// volume kept sealed until it closes
-    SCAN_CREATE = 0x1a01,
-    /// tag call · no packet → result: the step's; wanting a block, [bytes u32]:
-    /// the run set's
-    SCAN_STEP = 0x1a10,
-    /// tag call · [at u32, bytes u32] → result: the run count of the set packed
-    /// there, the scan closed
-    SCAN_SET = 0x1a11,
-    /// no packet — the open scan abandoned
-    SCAN_DELETE = 0x1a04,
-    /// tag call · [land u32, water u32, structure u32, transport u32, ele u32
-    /// (addresses), tx0 u32, ty0 u32, show_structures bool] → [floor i32,
-    /// material_at u32, layer_at u32, ele_at u32]: the chunk read, and its 4096
-    /// packed materials, layer bytes and elevations, valid until the next read;
-    /// EINVAL for a chunk past its page
-    TERRAIN_READ = 0x0a02,
-    /// tag call · [volume u32] → result: 1, or 0 when a band could not be made —
-    /// the chunk last read, a column a cell from the floor
-    TERRAIN_PAINT = 0x0a10,
-    /// tag call · [volume u32, key u64, hide: [band i32, pos u32] | null, carve:
-    /// [lx f64, ly f64, lz f64, size f64] | null] → result: bit 0 a voxel
-    /// painted, bit 1 a paint refused
-    OBJECT_PAINT = 0x0815,
-    /// tag call · [volume u32, cx u32, cy u32] → result: the column's run count;
-    /// [z0_at u32, z1_at u32, class_at u32, sub_at u32]: its lanes, valid until
-    /// the next walk
-    RAY_COLUMN = 0x0710,
-    /// [ids u32[], budget_ms f64] — the builder alone over the chunks, no
-    /// scheduler
-    CHUNK_TICK = 0x0116,
-
-    // ---- kernel → shell (signals; CHUNK_CREATE and CHUNK_DELETE above too) ----
-    //
-    // CHUNK_CREATE: tag chunk · [page_idx u64, base_x u32, base_y u32] — mounted
-    // CHUNK_DELETE: tag chunk · no packet — unmounted
-    /// tag chunk · [on bool]
-    CHUNK_VISIBLE = 0x0111,
-    /// tag chunk · [primary u32, secondary u32 (0 for none), ready bool]
-    CHUNK_LAYOUT = 0x0112,
-    /// tag chunk · [primary f32, secondary f32, decor_secondary bool]
-    CHUNK_BLEND = 0x0113,
-    /// tag chunk · [generation u32, step u32, at u32, bytes u32, vertex_cnt u32,
-    /// index_cnt u32] — a tier built, in its mesh block
-    TIER_CREATE = 0x0401,
-    /// tag chunk · [step u32] — a tier evicted
-    TIER_DELETE = 0x0404,
-    /// tag chunk · [bytes u32]
-    RUNS_UPDATE = 0x0503,
-    /// tag chunk · [step u32, at u32, bytes u32]
-    DECOR_CREATE = 0x0601,
-
-    // ---- queries: ACKREQ, answered in the turn they are asked ----
-    //
-    // A ray: [ray f64[9]: origin_x, origin_y (the map origin, units), ox, oy,
-    // oz, dx, dy, dz, max_dist], in the root frame. The reply's result is 1
-    // on a hit and 0 on none.
-    /// tag call · [ray f64[9]] → [chunk u32, band u32, pos u32, t f64]: the
-    /// placed decor entry struck
-    DECOR_READ = 0x0602,
-    /// tag call · [ray f64[9]] → [hit f64[14]: material class, normal ×3,
-    /// point ×3, t, box min ×3, box max ×3]
-    RAY_READ = 0x0702,
-    /// tag call · [key u64, band_z i32, x u32, y u32, z u32] → result: the
-    /// state stored at the leaf, VOID where nothing is
-    OBJECT_READ = 0x0802,
-    /// tag call · [key u64] → result: the chunk's entry count, 0 where it
-    /// holds none; with entries, [band_at u32, pos_at u32, state_at u32] — the
-    /// addresses of its lanes, valid until the next write or reindex
-    OBJECT_LANES = 0x0811,
-    /// tag call · [key u64, cx u32, cy u32, cz i32] → result 1 where the cell
-    /// holds entries, 0 where not; with them, [start u32, count u32, solid u32]
-    OBJECT_CELL = 0x0812,
-    /// tag call · no packet → [keys u32, count u32]: where the columns holding
-    /// objects lie, in the store's order, as u64s in a block the kernel holds,
-    /// valid until the next OBJECT_COLUMNS
-    OBJECT_COLUMNS = 0x0813,
-    /// tag call · no packet → [chunks u32, bands u32, cells u32]
-    OBJECT_STAT = 0x0814,
 
     // ---- the world's turn: the shell's events in, the kernel's asks out ----
     /// [app_env str, build_time str, build_id str, build_number str, published_tiles bool,
@@ -555,13 +82,6 @@ pub enum Cmd {
     /// [action str (JSON, app/shell.rs)] — the UI's action; the host rings the doorbell for it at once,
     /// so what it asks of the host is heard inside the gesture that led to it
     WORLD_ACTION = 0x1b11,
-    /// send · [source u32 (0 loaf, 1 longtask), t f64, duration f64, blocking f64, script f64, render f64]
-    ///
-    /// A frame that blocked the event loop past 50ms, as the shell's own
-    /// observer saw it. The kernel cannot see one: a long animation frame is
-    /// a browser measurement of the whole task, and the tick is only part of
-    /// it. The ledger keeps it beside the frames it did measure.
-    WORLD_LONG_FRAME = 0x1b12,
     /// [left f64, top f64, width f64, height f64] — the canvas's client rect
     INPUT_UPDATE = 0x1c03,
     /// [phase u32 (0 down, 1 move, 2 up, 3 out), kind u32 (0 mouse, 1 touch, 2 pen), id i32,
@@ -615,11 +135,6 @@ pub enum Cmd {
     /// [show bool, id str, message_key str, tone u32 (0 loading, 1 error, 2 success)] — a
     /// toast shown or dismissed
     WORLD_TOAST = 0x1b13,
-    /// retired — the ledger's stream is read through pxl-wasm's
-    /// `ledger_log`, not raised here. The number stays taken: an old shell
-    /// reads a number a new kernel sends, so one that has meant something
-    /// must never come to mean another thing
-    WORLD_LOG = 0x1b14,
     /// [at u32, len u32] — app/shell.rs's snapshot, when it changed: UTF-8
     /// past a ring frame, so it is a block the kernel holds, valid until the
     /// next snapshot
@@ -628,107 +143,21 @@ pub enum Cmd {
     SENSOR_CREATE = 0x1d01,
     /// [sensor u32] — stop watching
     SENSOR_DELETE = 0x1d04,
-    /// [key str, url str] — a fetch the scheduler started
+    /// [key u64, url str] — a fetch the scheduler started; the key is a handle
+    /// the shell hands back and never reads into
     FETCH_CREATE = 0x1e01,
-    /// [key str] — a fetch yield aborted; the shell settles it as aborted
+    /// [key u64] — a fetch yield aborted; the shell settles it as aborted
     FETCH_DELETE = 0x1e04,
     /// [kind u32 (0 glTF, 1 image), url str] — a model or an image to load
     LOAD_CREATE = 0x1f01,
 }
 
 impl Cmd {
-    const ALL: [Cmd; 116] = [
+    const ALL: [Cmd; 28] = [
         Cmd::NOP,
-        Cmd::CHUNK_CREATE,
-        Cmd::CHUNK_UPDATE,
-        Cmd::CHUNK_DELETE,
-        Cmd::CHUNK_WANT,
-        Cmd::PAGE_CREATE,
-        Cmd::PAGE_DELETE,
-        Cmd::EDIT_UPDATE,
-        Cmd::OBJECT_UPDATE,
-        Cmd::OBJECT_DELETE,
-        Cmd::OBJECT_REINDEX,
-        Cmd::STATE_UPDATE,
-        Cmd::TERRAIN_UPDATE,
-        Cmd::DECOR_KIND_UPDATE,
-        Cmd::DECOR_KIND_MODEL,
-        Cmd::GHOST_BOX,
-        Cmd::GHOST_DECOR,
-        Cmd::GHOST_DELETE,
-        Cmd::PUCK_UPDATE,
-        Cmd::PUCK_BEACON,
-        Cmd::PUCK_DELETE,
-        Cmd::BILLBOARD_CREATE,
-        Cmd::BILLBOARD_UPDATE,
-        Cmd::BILLBOARD_PLACE,
-        Cmd::BILLBOARD_FOLLOW,
-        Cmd::BILLBOARD_DELETE,
-        Cmd::ACTOR_CREATE,
-        Cmd::ACTOR_UPDATE,
-        Cmd::ACTOR_PLAY,
-        Cmd::ACTOR_DELETE,
-        Cmd::DEBUG_UPDATE,
-        Cmd::ENV_UPDATE,
-        Cmd::ENV_OBSERVE,
-        Cmd::MODEL_CREATE,
-        Cmd::MODEL_READ,
-        Cmd::MODEL_JOINT,
-        Cmd::MODEL_CLIP,
-        Cmd::MODEL_CHANNEL,
-        Cmd::MODEL_SEAL,
-        Cmd::CHANGE_UPDATE,
-        Cmd::CHANGE_READ,
-        Cmd::CHANGE_DELETE,
-        Cmd::CHUNK_BUILD,
-        Cmd::CHUNK_DECOR,
-        Cmd::ENV_READ,
-        Cmd::CHUNK_READ,
-        Cmd::CHANGE_LANES,
-        Cmd::POOL_READ,
-        Cmd::POOL_ACQUIRE,
-        Cmd::POOL_RELEASE,
-        Cmd::POOL_FREE,
-        Cmd::VOLUME_CREATE,
-        Cmd::VOLUME_READ,
-        Cmd::VOLUME_DELETE,
-        Cmd::VOLUME_FILL,
-        Cmd::VOLUME_VOXEL,
-        Cmd::VOLUME_SUB_VOXEL,
-        Cmd::VOLUME_SEAL,
-        Cmd::VOLUME_STAT,
-        Cmd::BAKE_CREATE,
-        Cmd::BAKE_STEP,
-        Cmd::BAKE_MESH,
-        Cmd::BAKE_FINISH,
-        Cmd::BAKE_DELETE,
-        Cmd::SCAN_CREATE,
-        Cmd::SCAN_STEP,
-        Cmd::SCAN_SET,
-        Cmd::SCAN_DELETE,
-        Cmd::TERRAIN_READ,
-        Cmd::TERRAIN_PAINT,
-        Cmd::OBJECT_PAINT,
-        Cmd::RAY_COLUMN,
-        Cmd::CHUNK_TICK,
-        Cmd::CHUNK_VISIBLE,
-        Cmd::CHUNK_LAYOUT,
-        Cmd::CHUNK_BLEND,
-        Cmd::TIER_CREATE,
-        Cmd::TIER_DELETE,
-        Cmd::RUNS_UPDATE,
-        Cmd::DECOR_CREATE,
-        Cmd::DECOR_READ,
-        Cmd::RAY_READ,
-        Cmd::OBJECT_READ,
-        Cmd::OBJECT_LANES,
-        Cmd::OBJECT_CELL,
-        Cmd::OBJECT_COLUMNS,
-        Cmd::OBJECT_STAT,
         Cmd::WORLD_CREATE,
         Cmd::WORLD_UPDATE,
         Cmd::WORLD_ACTION,
-        Cmd::WORLD_LONG_FRAME,
         Cmd::INPUT_UPDATE,
         Cmd::INPUT_POINTER,
         Cmd::INPUT_WHEEL,
@@ -747,7 +176,6 @@ impl Cmd {
         Cmd::SURFACE_UPDATE,
         Cmd::SURFACE_DELETE,
         Cmd::WORLD_TOAST,
-        Cmd::WORLD_LOG,
         Cmd::WORLD_SNAPSHOT,
         Cmd::SENSOR_CREATE,
         Cmd::SENSOR_DELETE,

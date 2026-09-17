@@ -17,8 +17,9 @@
 //! instrumentation would be competing for ring slots with the fetch burst it
 //! was turned on to watch. This is what every operating system separates —
 //! ftrace and perf mmap their own per-CPU buffers, printk keeps `log_buf` and
-//! is read through /dev/kmsg, eBPF has its own ring — so the stream is a
-//! buffer the consumer reads at its own pace, through pxl-wasm's `ledger_log`.
+//! is read through /dev/kmsg, eBPF has its own ring — so the stream is two
+//! lanes of the ledger's own records the consumer reads in place at its own
+//! pace, through pxl-wasm's `ledger_log`, and clears when it has read them.
 //!
 //! A dev instrument that never feeds back into scheduling. The stream
 //! thresholds frames deliberately: an unfiltered per-frame record would bury
@@ -26,7 +27,7 @@
 //! moving, or overran the budget, are kept — summary.rs's `missed` and
 //! `overran`, the same tests the report counts.
 
-use super::ledger::{ledger_recording_start, ledger_recording_stop, ledger_set_sink, FrameSample, LedgerSink, LongFrameRecord, TaskRecord};
+use super::ledger::{drop_front, fixed_lane, ledger_recording_start, ledger_recording_stop, ledger_set_sink, FrameSample, LedgerSink, TaskRow};
 use super::summary::{missed, overran};
 use super::tick::{set_step_timing, tick_step_stats_reset};
 use crate::module::world::poi::poi_badge::badge_atlas;
@@ -117,16 +118,17 @@ fn counters() -> Counters {
 
 /// What the stream holds for the shell to come and get. A consumer that stops
 /// reading must not grow the heap the thing being measured allocates from, so
-/// each is capped and the oldest goes — printk's ring loses the oldest line
-/// too, rather than the producer waiting on the reader.
+/// each lane is capped and the oldest goes — printk's ring loses the oldest
+/// line too, rather than the producer waiting on the reader.
 const PENDING: usize = 512;
 
 struct Log {
     baseline: Counters,
     logging: bool,
-    tasks: Vec<TaskRecord>,
-    frames: Vec<FrameSample>,
-    longs: Vec<LongFrameRecord>,
+    tasks: &'static mut [TaskRow],
+    tasks_len: usize,
+    frames: &'static mut [FrameSample],
+    frames_len: usize,
 }
 
 static LOG: Global<Log> = Global::new();
@@ -135,9 +137,10 @@ fn log() -> &'static mut Log {
     LOG.get(|| Log {
         baseline: counters(),
         logging: false,
-        tasks: Vec::new(),
-        frames: Vec::new(),
-        longs: Vec::new(),
+        tasks: &mut [],
+        tasks_len: 0,
+        frames: &mut [],
+        frames_len: 0,
     })
 }
 
@@ -170,25 +173,28 @@ pub fn ledger_logging() -> bool {
     log().logging
 }
 
-fn keep<T>(held: &mut Vec<T>, one: T) {
-    if held.len() == PENDING {
-        held.remove(0);
+/// `one` onto a lane, the oldest dropped when it is full.
+fn keep<T: Copy>(lane: &mut [T], len: &mut usize, one: T) {
+    if lane.is_empty() {
+        return;
     }
-    held.push(one);
+    if *len == lane.len() {
+        drop_front(lane, len, 1);
+    }
+    lane[*len] = one;
+    *len += 1;
 }
 
-fn log_task(rec: &TaskRecord) {
-    keep(&mut log().tasks, rec.clone());
+fn log_task(rec: &TaskRow) {
+    let l = log();
+    keep(l.tasks, &mut l.tasks_len, *rec);
 }
 
 fn log_frame(s: &FrameSample) {
     if missed(s) || overran(s) {
-        keep(&mut log().frames, *s);
+        let l = log();
+        keep(l.frames, &mut l.frames_len, *s);
     }
-}
-
-fn log_long_frame(l: &LongFrameRecord) {
-    keep(&mut log().longs, *l);
 }
 
 /// Turns the live console stream on/off by installing (or clearing) the
@@ -199,22 +205,25 @@ pub fn ledger_set_logging(on: bool) {
         return;
     }
     l.logging = on;
+    if on && l.tasks.is_empty() {
+        l.tasks = fixed_lane(PENDING);
+        l.frames = fixed_lane(PENDING);
+    }
     ledger_set_sink(on.then_some(LedgerSink {
         task: Some(log_task),
         frame: Some(log_frame),
-        long_frame: Some(log_long_frame),
     }));
 }
 
-/// The records the stream kept since the last take, cleared by taking.
-pub fn take_log_records() -> (Vec<TaskRecord>, Vec<FrameSample>, Vec<LongFrameRecord>) {
+/// The rows the stream kept since the last clear, oldest first: tasks, then
+/// frames.
+pub fn ledger_log_rows() -> (&'static [TaskRow], &'static [FrameSample]) {
     let l = log();
-    (core::mem::take(&mut l.tasks), core::mem::take(&mut l.frames), core::mem::take(&mut l.longs))
+    (&l.tasks[..l.tasks_len], &l.frames[..l.frames_len])
 }
 
-/// Whether anything is waiting, so a turn that has nothing to say costs the
-/// shell no call.
-pub fn log_pending() -> bool {
+/// Forgets what the stream kept, once the shell has read it.
+pub fn ledger_log_clear() {
     let l = log();
-    !l.tasks.is_empty() || !l.frames.is_empty() || !l.longs.is_empty()
+    (l.tasks_len, l.frames_len) = (0, 0);
 }

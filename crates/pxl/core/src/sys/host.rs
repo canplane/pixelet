@@ -174,3 +174,29 @@ pub fn set_heap_bytes(bytes: fn() -> usize) {
 pub fn heap_bytes() -> usize {
     (HEAP_BYTES.get(|| no_heap))()
 }
+
+static HEAP_REFUSALS: Global<fn() -> u32> = Global::new();
+
+/// Installs the count of requests the heap answered with nothing: the one
+/// way this memory is full, since the fixed ranges cannot be.
+pub fn set_heap_refusals(refusals: fn() -> u32) {
+    HEAP_REFUSALS.set(refusals);
+}
+
+/// Requests the heap refused since boot; 0 where there is no heap.
+pub fn heap_refusals() -> u32 {
+    (HEAP_REFUSALS.get(|| no_releases))()
+}
+
+static HEAP_LARGEST_FREE: Global<fn() -> usize> = Global::new();
+
+/// Installs the size of the largest block on the heap's free lists — how
+/// fragmented the reached part is, where live against used says how full.
+pub fn set_heap_largest_free(largest: fn() -> usize) {
+    HEAP_LARGEST_FREE.set(largest);
+}
+
+/// The largest block on the heap's free lists; 0 where there is none.
+pub fn heap_largest_free() -> usize {
+    (HEAP_LARGEST_FREE.get(|| no_heap))()
+}

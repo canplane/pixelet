@@ -470,6 +470,7 @@ const DATA_SPECS: { json: string; ts?: string; rs?: string }[] = [
   { json: "crates/pxl/core/src/module/world/character/variant.json", ts: "apps/web/src/module/world/character/variant_spec.ts", rs: "crates/pxl/core/src/module/world/character/variant_spec.rs" },
   { json: "crates/pxl/core/src/module/world/terrain/config.json", rs: "crates/pxl/core/src/module/world/terrain/config_spec.rs" },
   { json: "crates/pxl/core/src/render/gpu/api.json", ts: "apps/web/src/wasm/gpu_spec.ts", rs: "crates/pxl/core/src/render/gpu/api_spec.rs" },
+  { json: "crates/pxl/core/src/module/world/sched/ledger.json", ts: "apps/web/src/module/world/sched/ledger_spec.ts", rs: "crates/pxl/core/src/module/world/sched/ledger_spec.rs" },
   { json: "crates/pxl/core/src/mem/mem.json", ts: "apps/web/src/wasm/mem_spec.ts", rs: "crates/pxl/core/src/mem/spec.rs" },
 ];
 

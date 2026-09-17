@@ -36,7 +36,6 @@ import { Strobe } from "@xpute/core/sched/strobe.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import { Message } from "@pxl/shared/spec/message.ts";
 import { cube_types } from "@pxl/shared/spec/cell/mod.ts";
-import { ledger_report_text, type LedgerReport } from "@/module/world/sched/ledger_report.ts";
 import { FetchFail } from "@pxl/shared/spec/fetch.ts";
 
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
@@ -72,7 +71,6 @@ export type UiSnapshot = {
   compass: { show: boolean };
   search: { loading: boolean; results: SearchRow[] };
   object_storage_version: number;
-  report: string | null;
 };
 
 const INITIAL: UiSnapshot = {
@@ -91,7 +89,6 @@ const INITIAL: UiSnapshot = {
   compass: { show: false },
   search: { loading: false, results: [] },
   object_storage_version: 0,
-  report: null,
 };
 
 let snapshot_text = "";
@@ -102,21 +99,7 @@ function set_snapshot(text: string): void {
   if (text === snapshot_text) return;
   snapshot_text = text;
   snapshot = JSON.parse(text) as UiSnapshot;
-  if (snapshot.report !== null) void print_report(ledger_report_text(JSON.parse(snapshot.report) as LedgerReport));
   for (const listener of snapshot_listeners) listener();
-}
-
-async function print_report(text: string): Promise<void> {
-  console.log(text);
-  let copied = false;
-  try {
-    await navigator.clipboard.writeText(text);
-    copied = true;
-  } catch {
-    // The clipboard can refuse without a user gesture or on an insecure
-    // origin; the console print above is the fallback.
-  }
-  console.log(`[ledger] report ${copied ? "copied to clipboard" : "printed above (clipboard refused)"} — ${text.length} bytes`);
 }
 
 function subscribe_snapshot(listener: () => void): () => void {

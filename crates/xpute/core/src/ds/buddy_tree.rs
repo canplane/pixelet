@@ -184,6 +184,25 @@ impl<R: Range> BuddyMalloc<R> {
         unsafe { (*self.heap.get()).releases }
     }
 
+    /// The largest block on a free list, or 0 when every list is empty. Past
+    /// the tree's current root the range is untouched rather than listed, and
+    /// that part is the range less what has been used.
+    pub fn largest_free(&self) -> usize {
+        // SAFETY: single-threaded; see the Sync impl.
+        let h = unsafe { &*self.heap.get() };
+        if h.base_ptr == 0 {
+            return 0;
+        }
+        (h.bucket_limit..h.bucket_count)
+            .find(|&b| {
+                let list = &h.buckets[b] as *const List;
+                // SAFETY: the head is this heap's own field; an empty list
+                // points at itself.
+                unsafe { !core::ptr::eq((*list).next, list) }
+            })
+            .map_or(0, |b| 1usize << (h.max_log2 - b))
+    }
+
     /// Requests served since the first call, moves included.
     pub fn allocs(&self) -> usize {
         // SAFETY: single-threaded; see the Sync impl.
