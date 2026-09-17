@@ -13,14 +13,20 @@
 //!
 //! **One quota, sized from what the host sees.** Nothing is preempted, so a
 //! turn may run past its quota by the step that noticed; what it overran
-//! comes off its own next quota, down to the floor, and the host's share of
+//! comes off its own next quota, down to nothing, and the host's share of
 //! the frame is left as it was (a constant bandwidth server's rule). Whether
 //! the turn is interactive is the host's call, as an OS scheduler's is, from
 //! behaviour rather than from the guest's inside: input within `settle_ms`,
 //! or a guest that asked for the very next edge. An interactive turn gets
-//! what the frame leaves after the margin; otherwise the batch quota, past a
-//! frame on purpose — with nothing moving, a frame that takes two vsyncs
-//! shows the same image twice.
+//! what the frame leaves after the margin; otherwise that of `batch_frames`
+//! frames, past one on purpose — with nothing moving, a frame that takes two
+//! vsyncs shows the same image twice.
+//!
+//! **No number here is a measured cost.** The quota is a share of the frame
+//! the display sets; how much work fits in it is the guest's to find out by
+//! yielding, and an overrun corrects itself through the next quota. The floor
+//! is not a number of milliseconds either: a pass always takes its first step
+//! (sched/frame_budget.rs), so a quota of nothing still makes progress.
 //!
 //! **The frame interval is measured, not assumed.** `1000 / 60` is wrong on
 //! any faster display: a 5.8 ms frame was once sized for 16.7, and a storm
@@ -49,12 +55,8 @@ pub struct QuantumPolicy {
     /// What is left of the frame unspent, as a share of it: the host's own
     /// work, its collector, and the turns the estimate is wrong about.
     pub margin_share: f64,
-    /// The interactive quota's clamp: the floor keeps a starved frame making
-    /// progress, the ceiling keeps a cheap turn from growing into the frame.
-    pub min_ms: f64,
-    pub max_ms: f64,
-    /// The quota of a turn that is not interactive.
-    pub batch_ms: f64,
+    /// The frames a turn that is not interactive may take.
+    pub batch_frames: f64,
     /// How long after the last input a turn is still interactive.
     pub settle_ms: f64,
 }
@@ -131,9 +133,9 @@ impl Quantum {
         let frame = gaps[FRAME_WINDOW / 4];
         let p = self.policy;
         let interactive = now - self.input_at < p.settle_ms || self.asked_next;
-        let quota = if interactive { p.max_ms.min(p.min_ms.max(frame - frame * p.margin_share)) } else { p.batch_ms };
+        let frames = if interactive { 1.0 } else { p.batch_frames };
         Grant {
-            quota_ms: p.min_ms.max(quota - self.overrun_ms),
+            quota_ms: (frame * frames * (1.0 - p.margin_share) - self.overrun_ms).max(0.0),
             frame_ms: frame,
             interactive,
         }

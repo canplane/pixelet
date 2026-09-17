@@ -51,12 +51,12 @@ export type KernelExports = {
 /** crates/pxl/wasm/src/lib.rs's boot block, word by word: where the module's
  * own front ends; where the submission and completion rings are; then `.fixed`
  * and the heap, each its offset, bytes and page size; then the quantum the
- * kernel declares, five words in thousandths; then the heap's row. */
+ * kernel declares, three words in thousandths; then the heap's row. */
 /** Where each thing the kernel reports lies in the boot block. `data_end` is
  * where the linker stopped, which is everything the module keeps for itself —
  * the stack, the rings and its own data. */
-export const BOOT = { data_end: 0, sq: 1, cq: 2, fixed: 3, heap: 6, quantum: 9, heap_row: 14 } as const;
-const BOOT_WORDS = 15;
+export const BOOT = { data_end: 0, sq: 1, cq: 2, fixed: 3, heap: 6, quantum: 9, heap_row: 12 } as const;
+const BOOT_WORDS = 13;
 
 /** The boot block, read in place. */
 export function boot_block(pxl: KernelExports): Uint32Array {
@@ -66,7 +66,7 @@ export function boot_block(pxl: KernelExports): Uint32Array {
 /** The quantum the kernel declared, for the central scheduler to grant by. */
 export function quantum_policy(boot: Uint32Array): QuantumPolicy {
   const at = (i: number) => boot[BOOT.quantum + i] / 1000;
-  return { margin_share: at(0), min_ms: at(1), max_ms: at(2), batch_ms: at(3), settle_ms: at(4) };
+  return { margin_share: at(0), batch_frames: at(1), settle_ms: at(2) };
 }
 
 const KERNEL_WASM_URL = new URL("./kernel.wasm", import.meta.url);

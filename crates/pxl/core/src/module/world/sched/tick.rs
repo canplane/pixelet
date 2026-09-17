@@ -39,15 +39,10 @@ pub const QUANTUM: QuantumPolicy = QuantumPolicy {
     // A share of the frame rather than a constant, so a fast display does not
     // lose most of its frame to it.
     margin_share: 0.15,
-    // The floor keeps a starved frame making progress; the ceiling keeps a
-    // cheap scene from letting one tick grow into most of a frame and leaving
-    // nothing for a spike.
-    min_ms: 2.0,
-    max_ms: 8.0,
-    // Past a 60 Hz frame on purpose: at 170 Hz this is two or three vsyncs of
-    // an unchanging image, and at 60 Hz one frame plus render — either way
-    // nothing the eye can follow is waiting on it.
-    batch_ms: 12.0,
+    // Past a frame on purpose: with nothing moving, a turn that takes two
+    // vsyncs shows the same image twice, and nothing the eye can follow is
+    // waiting on it.
+    batch_frames: 2.0,
     // Long enough that a pause inside one drag does not count.
     settle_ms: 150.0,
 };

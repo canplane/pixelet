@@ -202,12 +202,13 @@ fn state() -> &'static mut State {
 /// are; then the fixed, page and mesh sections, each its offset, its bytes
 /// and its pool's region size; then the quantum the kernel declares to the
 /// central scheduler (xpute_core::sched::quantum's QuantumPolicy): margin
-/// share, min, max and batch ms, and the settle time, each in thousandths.
-pub const BOOT_WORDS: usize = 15;
+/// share, batch frames and the settle time, each in thousandths; then the
+/// heap's row.
+pub const BOOT_WORDS: usize = 13;
 
 /// The boot word holding the address of the heap's row (`BuddyMalloc`'s
 /// `stat`): the range it spans, the top it has reached and what it has served.
-const BOOT_HEAP: usize = 14;
+const BOOT_HEAP: usize = 12;
 
 const BOOT_QUANTUM: usize = 9;
 
@@ -225,7 +226,7 @@ pub extern "C" fn boot() -> *const u32 {
         write_section(&mut s.boot, 3 + i * SECTION_WORDS as usize, sec);
     }
     let q = pxl_core::module::world::sched::tick::QUANTUM;
-    for (i, v) in [q.margin_share, q.min_ms, q.max_ms, q.batch_ms, q.settle_ms].into_iter().enumerate() {
+    for (i, v) in [q.margin_share, q.batch_frames, q.settle_ms].into_iter().enumerate() {
         s.boot[BOOT_QUANTUM + i] = (v * 1000.0).round() as u32;
     }
     s.boot.as_ptr()
