@@ -111,22 +111,50 @@ not yet reported.
 will be an I/O demand (`sched/io`), so a slab is owned by that key and the
 slabs not away are the worker credits. The Rust side's key decided it.
 
-## Not done here
+## Inside the turn
 
-This is the inside of the guest's turn, the second pass. The executor there
-(the hand-written step state, or a static executor such as Embassy's) can be
-swapped without touching the boundary.
+Taken the same day, on the same rule the allocator follows: `GlobalAlloc` is
+the interface, the slab and the buddy are xpute's parts, `pxl-wasm` installs
+one, and `pxl-core` allocates without naming it.
 
-- **Returning at the moment an overrun is noticed.** Only a pass checks its
-  budget. The phases after it, and the effects, `fetch_pump` and
-  `render_frame` around the tick, still run.
-- **What must run every turn versus what may yield.** The render and the
-  report are candidates for the first kind.
-- **The quota's clamp** (`min_ms` 2, `max_ms` 8) was derived when the render
-  and the effects were outside it. They are inside it now, and they are
-  charged as overrun until the numbers are taken again.
+- **The interface is xpute's and names no executor.** `sched/edge.rs` holds
+  the quota as a deadline on the host clock, a fixed table of tasks parked
+  for the next rising edge (woken there, never by themselves, so no
+  executor re-polls them past the quota), `yield_if_spent` and `next_turn`,
+  a `Notify` a task with nothing to do waits on without asking for a turn,
+  `wake_at`, and the falling edge's value. A task is a plain `async fn`.
+- **The executor is `pxl-wasm`'s: embassy's raw executor**, no platform
+  feature, so no wasm-bindgen. The pender only records that a task was
+  queued. A task's pool and its `#[task]` attribute are the module's, so
+  `pxl-core` never names embassy.
+- **Where the tasks run:** `world_frame` takes the module's poll as a hook and
+  calls it after the tick's phases and before the fetch pump and the draw.
+  A turn with no frame runs no task and asks for the next edge for the ones
+  it woke.
+- **What moved into tasks:** a fetch's body (read, decoded, settled), a
+  model's parse, and the chunk builds. The drain only queues arrivals, and
+  the tick leaves the build task its order. Each unit is one step, at least
+  one a turn.
+- **No measured number.** The quota is a share of the frame the display
+  sets: the frame less the margin while interactive, `batch_frames` frames
+  otherwise. `min_ms`, `max_ms` and `batch_ms` are gone, and a pass's first
+  step is the floor.
+- **What embassy costs at the boundary.** Its link-name hooks are module
+  exports and wasm-ld cannot keep them in: `__pender`, the critical
+  section's two, and two timer-queue hooks, one of which carries a panic
+  message. Accepted over patching or writing an executor.
+
+## Not done yet
+
+- **A placement's immediate build** (`build_now`) still builds to the end at
+  once. The chunk releases what it shows before rebuilding, so deferring the
+  build to a task would show a hole, not a late frame.
+- **The effects in `world_turn`** still run whole every frame: among them
+  the store's save encoding and the decor models' registration.
+- **The tick's phase runner stays** for what must run every frame. The
+  ledger's per-step times still come from it; embassy's `trace` hooks would
+  give per-task times, each needing a name as a number.
 - **The content phase is empty** while POI is off (BACKLOG P1).
-- **The chunk scheduler's pass is its own** (`under_budget`), not xpute's
-  `run_under_budget`.
 
-Nothing in this pass has been run; it passes `deno task check`.
+Nothing in these passes has been run; each passed clippy and `check` on its
+own changes over the last commit.
