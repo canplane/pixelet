@@ -16,6 +16,17 @@
     ]
   },
   "DEFAULT_TILT_DEG": { "$value": 30, "$doc": ["Default tilt angle in degrees from the ground plane."] },
+  "MIN_TILT_DEG": {
+    "$value": 5,
+    "$doc": [
+      "The shallowest tilt in degrees from the ground plane: where a drag toward",
+      "the horizon stops. Mapbox GL JS caps pitch at 85 degrees from vertical,",
+      "its maxPitch's default and ceiling alike, and MapLibre GL JS calls",
+      "anything past 85 experimental: past it the ground is a line and the",
+      "frame is sky, and an eye held above terrain (terrain_gate.rs's",
+      "EYE_CLEARANCE_U) is caught by the ground at ever shorter distances."
+    ]
+  },
   "camera_cfg": {
     "projection": { "FOV": 50, "NEAR": 0.1 },
     "view": {
@@ -38,7 +49,7 @@
       },
       "MAX_DIST": { "$value": 1024, "$doc": ["512 * 2; see MIN_DIST."] },
       "MIN_POLAR": 0.001,
-      "MAX_POLAR": { "$value": 0.7662421106316569, "$doc": ["PI / 2.05."] }
+      "MAX_POLAR": { "$value": 1.4835298641951802, "$doc": ["(90 - MIN_TILT_DEG) * PI / 180."] }
     },
     "input": {
       "TILT_SWEEP_FRACTION": {
