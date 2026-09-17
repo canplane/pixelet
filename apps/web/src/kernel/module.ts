@@ -24,6 +24,7 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import type { QuantumPolicy } from "@xpute/core/sched/quantum.ts";
 
 import { gpu_imports } from "@/device/gpu.ts";
+import { EXPORT, IMPORT } from "@/kernel/abi.ts";
 
 /** What the module exports: the boot block and the doorbell. Every address
  * is into the memory it was given. */
@@ -132,7 +133,7 @@ export async function instantiate_kernel(memory: WebAssembly.Memory): Promise<Ke
   // core under today's glue.
   const bytes = await (await fetch(KERNEL_WASM_URL, import.meta.env?.DEV ? { cache: "no-store" } : undefined)).arrayBuffer();
   const { instance } = await WebAssembly.instantiate(bytes, {
-    env: {
+    env: shortened({
       memory,
       // A panic's message, before the trap: what "unreachable" would otherwise hide.
       panic: (ptr: u32, len: u32) => console.error(`[pxl] ${text_at(memory, ptr, len)}`),
@@ -181,9 +182,30 @@ export async function instantiate_kernel(memory: WebAssembly.Memory): Promise<Ke
       },
       // The renderer's WebGPU (crates/pxl/render/src/gpu/api.rs).
       ...gpu_imports(memory),
-    },
+    }),
   });
-  const exports: KernelExports = { ...(instance.exports as unknown as KernelExports), memory };
+  const exports: KernelExports = { ...(lengthened(instance.exports) as unknown as KernelExports), memory };
   exports.boot();
   return exports;
+}
+
+// Binaryen minifies the names the two sides call each other by, down to a
+// letter apiece (script/build_wasm.ts), and writes the mapping it chose into
+// kernel/abi.ts. Neither side spells a letter: the build decides them, both
+// read them, and a module that renamed cannot leave the shell behind.
+
+/** What the host offers, under the names the module imports them by. */
+function shortened(host: WebAssembly.ModuleImports): WebAssembly.ModuleImports {
+  const out: WebAssembly.ModuleImports = {};
+  for (const [name, value] of Object.entries(host)) out[IMPORT[name] ?? name] = value;
+  return out;
+}
+
+/** What the module exports, under the names the shell calls them by. */
+function lengthened(from: WebAssembly.Exports): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...from };
+  for (const [name, short] of Object.entries(EXPORT)) {
+    if (short in from) out[name] = from[short];
+  }
+  return out;
 }

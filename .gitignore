@@ -185,6 +185,8 @@ vite.config.ts.timestamp-*
 
 # The core's module, built from crates/ by apps/web/script/build_wasm.ts
 apps/web/src/kernel/kernel.wasm
+# Binaryen's mapping for that module's minified ABI, written with it.
+apps/web/src/kernel/abi.ts
 
 # The last build number this checkout published (apps/web/script/deploy.ts)
 apps/web/.build_number

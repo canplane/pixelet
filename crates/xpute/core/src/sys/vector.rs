@@ -1,6 +1,6 @@
 // xpute-core/sys/vector.rs
-// (no pair: the writer is script/pair.ts, which flattens what a generator
-// under script/vector/ returns)
+// (the reader of the vectors committed under each crate's vector/, which a
+// test includes by path; what wrote them is gone and they stand as they are)
 
 #![cfg(any(test, feature = "vector"))]
 

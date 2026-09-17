@@ -1,7 +1,7 @@
 // xpute-core/kit/hash.rs
 
 //! The SHA-256 functions there are the host's WebCrypto and are not here
-//! (script/pair.exempt.json).
+//! (no vector of its own).
 
 use crate::kit::array::{Bytes, TypedArray};
 use crate::kit::encoding::bytes_to_hex;
