@@ -112,7 +112,7 @@
         "16 MB of map on a desktop, 4 on a phone."
       ],
       "kind": "toggle",
-      "default": true,
+      "default": false,
       "section": "lighting",
       "cost": "high"
     },
@@ -137,7 +137,7 @@
         "renderer is made."
       ],
       "kind": "toggle",
-      "default": true,
+      "default": false,
       "handheld_default": false,
       "section": "quality",
       "cost": "high"

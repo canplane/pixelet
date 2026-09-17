@@ -103,7 +103,7 @@ export const SETTINGS = {
    * 16 MB of map on a desktop, 4 on a phone. */
   show_shadow_map: {
     kind: "toggle",
-    default: true,
+    default: false,
     section: "lighting",
     cost: "high",
   },
@@ -124,7 +124,7 @@ export const SETTINGS = {
    * renderer is made. */
   msaa: {
     kind: "toggle",
-    default: true,
+    default: false,
     handheld_default: false,
     section: "quality",
     cost: "high",
