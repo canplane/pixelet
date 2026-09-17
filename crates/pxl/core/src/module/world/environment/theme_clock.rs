@@ -18,6 +18,7 @@ use pxl_shared::spec::space::adapter::epsg4326::{self, G4326};
 
 use super::theme::{get_theme_key, WorldThemeKey};
 use crate::module::map::store::map_store;
+use crate::module::world::change::wake_at;
 use crate::sys::global::{now, Global};
 use crate::sys::host::local_time;
 use crate::sys::kernel::kernel;
@@ -62,9 +63,11 @@ fn clock() -> &'static mut ThemeClock {
 pub fn theme_clock_step() {
     let c = clock();
     if now() - c.checked_at < THEME_CHECK_INTERVAL_MS {
+        wake_at(c.checked_at + THEME_CHECK_INTERVAL_MS);
         return;
     }
     c.checked_at = now();
+    wake_at(c.checked_at + THEME_CHECK_INTERVAL_MS);
     let next = compute_theme_key();
     if next != c.theme_key {
         c.theme_key = next;

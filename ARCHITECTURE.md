@@ -223,8 +223,9 @@ under the budget stays on the main thread, and that is nearly everything.
 A chunk's build runs in the Rust core (`crates/pxl/core`, compiled by
 `crates/pxl/wasm` into one module whose exports are a boot block and a doorbell, no bindgen, which
 imports the core memory): the node sends which tiers it lacks through a
-submission ring, the stage rings the tick interrupt once a frame with the pending
-chunks in priority order and what is left of the budget, and the module makes
+submission ring, the host rings the doorbell once a frame with the turn's quota,
+the tick takes the pending chunks in priority order on what is left of it, and
+the module makes
 the runs — straight from the terrain for a coarse tier with nothing placed,
 else by composing terrain and objects into a volume and scanning it — and
 bakes the tiers a step at a time, one scan and one bake open at once. Each
@@ -266,9 +267,9 @@ per-tick pull) is an adapter over it; listeners run when the tick pumps,
 never inside the write. Inside a page nothing on these boundaries is lost,
 so there is no acknowledgement, deadline or retry; reliability is decided at
 the network boundary alone, when a server exists. A command travels on a
-ring in the receiver's memory with a doorbell that names only a count — the
-submission ring is not built yet: the Rust mesher is still called export by
-export.
+ring in the receiver's memory with a doorbell that carries only the turn's
+quota and returns when the next turn is wanted
+([issue/20260917-the-turn-as-a-clock.md](./issue/20260917-the-turn-as-a-clock.md)).
 
 ## Camera
 

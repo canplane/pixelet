@@ -15,6 +15,7 @@ use super::store::{tile_pages, tile_store};
 use super::tile_repository::{ocean_retain, ocean_wanted, OCEAN_CATEGORY};
 use crate::module::map::navigation::map_navigation::map_navigation;
 use crate::module::map::store::{map_store, MapStatus};
+use crate::module::world::change::wake_at;
 use crate::module::world::frame::range_anchor::range_anchor;
 use crate::module::world::sched::demand::{Category, Demand, DemandKey};
 use crate::module::world::sched::fetch_scheduler::{fetch_pending_count, fetch_running, fetch_sync, page_key};
@@ -119,7 +120,9 @@ pub fn terrain_failed() {
 fn ocean_step(f: &mut Fetcher) {
     let wanted = ocean_wanted();
     let pending = fetch_pending_count(OCEAN_CATEGORY) > 0;
-    if wanted && !pending && now() >= f.ocean_ask_at {
+    if wanted && !pending && now() < f.ocean_ask_at {
+        wake_at(f.ocean_ask_at);
+    } else if wanted && !pending {
         f.ocean_ask_at = now() + OCEAN_RETRY_MS;
         // The stream has one member, so its subject names nothing.
         let demand = Demand {
@@ -154,9 +157,13 @@ pub fn tile_fetcher_step() {
     // marker silently vanishes until the camera pans back near it.
     let device_page_idx = map_navigation().device_coord.map(|c| TO_XY(L3_IDX(c.i)));
     let Some(anchor) = range_anchor() else { return };
-    if f.retry_at.is_some_and(|at| now() >= at) {
-        f.retry_at = None;
-        f.last = None;
+    match f.retry_at {
+        Some(at) if now() >= at => {
+            f.retry_at = None;
+            f.last = None;
+        }
+        Some(at) => wake_at(at),
+        None => {}
     }
     if f.last == Some((anchor, device_page_idx)) {
         return;

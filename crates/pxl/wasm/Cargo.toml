@@ -16,3 +16,8 @@ doctest = false
 xpute-core = { path = "../../xpute/core" }
 pxl-shared = { path = "../../pxl/shared" }
 pxl-core = { path = "../../pxl/core" }
+# The executor the module polls its tasks on inside a turn (src/executor.rs).
+# No platform feature: the pender is the module's own, and the platform one
+# for wasm brings wasm-bindgen.
+embassy-executor = { version = "0.10", default-features = false }
+critical-section = "1.1"

@@ -7,16 +7,18 @@
 //! lists. In the report phase it hands the frame's numbers to the ledger.
 
 use pxl_shared::spec::space::pvf3::{fvec, ivec};
+use xpute_core::sched::edge::{notified, yield_if_spent};
 
 use super::chunk_node::{run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES};
 use crate::app::setting::store::settings_store;
 use crate::module::map::store::map_store;
+use crate::module::world::change::{request_world_tick, world_edge};
 use crate::module::world::environment::config::render_cfg;
 use crate::module::world::frame::view::{view, view_resize};
 use crate::module::world::poi::poi_fetcher;
-use crate::module::world::sched::chunk_table::Frame;
+use crate::module::world::sched::chunk_table::{builds, Frame};
 use crate::module::world::sched::fetch_scheduler::fetch_pending_count;
-use crate::module::world::sched::ledger::{ledger_record_frame, CpuSample, DrawCensus, FrameSample, LodSample, MountSample, PoolSample, TexturesMb, WorkSample};
+use crate::module::world::sched::ledger::{ledger_record_frame, ledger_take_rings, CpuSample, DrawCensus, FrameSample, LodSample, MountSample, PoolSample, TexturesMb, WorkSample};
 use crate::module::world::sched::priority::lead_point;
 use crate::module::world::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::module::world::terrain::store::tile_pages;
@@ -28,8 +30,8 @@ use crate::sys::kernel::{kernel, with_world};
 
 const MB: f64 = 1_048_576.0;
 
-/// What the shell measured of the frame: the renderer's numbers, the task and
-/// the heap — the parts of a frame sample the kernel cannot see.
+/// What the turn measured of the frame outside the tick: the renderer's
+/// numbers and the turn's own time.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HostFrameStat {
     pub task_ms: f64,
@@ -41,7 +43,6 @@ pub struct HostFrameStat {
     pub textures_mb: TexturesMb,
     pub census: DrawCensus,
     pub px: f64,
-    pub heap_mb: f64,
 }
 
 struct CoreTick {
@@ -99,15 +100,17 @@ fn work_sample(c: &mut CoreTick) -> WorkSample {
     sample
 }
 
-/// The heap's gauges, straight off the allocator's seam (host.rs). There are
-/// no hits and misses to count — one allocator, and a request is served or it
-/// is refused — and `used` is a high-water mark (`max_ptr - base_ptr`) while
-/// `live` is what is out on loan, so the two are not each other's complement.
+/// The heap's gauges, straight off the allocator's seam (host.rs). `used` is a
+/// high-water mark (`max_ptr - base_ptr`) while `live` is what is out on loan,
+/// so the two are not each other's complement; a request is served or it is
+/// refused, and `refusals` counts the second.
 fn pool_sample() -> PoolSample {
     PoolSample {
         used_mb: (crate::sys::host::heap_used() as f64 / MB).round(),
         live_mb: (crate::sys::host::heap_live() as f64 / MB).round(),
         range_mb: (crate::sys::host::heap_bytes() as f64 / MB).round(),
+        refusals: crate::sys::host::heap_refusals() as f64,
+        largest_free_mb: crate::sys::host::heap_largest_free() as f64 / MB,
     }
 }
 
@@ -176,6 +179,27 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     c.visible_pass = Some((census.pending, census.committed, now() - t0));
 }
 
+/// The build task: the chunks each tick orders, advanced on what the turn's
+/// quota leaves after the tick, one step a turn at least. It waits while no
+/// tick has given it anything, and a turn whose builds did nothing — all
+/// built, blocked, or a block refused — waits for the next tick's order.
+pub async fn build_task() {
+    loop {
+        notified(builds).await;
+        loop {
+            yield_if_spent(world_edge).await;
+            let mut events = Vec::new();
+            let budget = world_edge().remaining();
+            let worked = with_world(|world, sched| sched.build_step(world, budget, &mut |e| events.push(e))).unwrap_or(false);
+            run_chunk_events(events);
+            if !worked {
+                break;
+            }
+            request_world_tick();
+        }
+    }
+}
+
 /// The report phase's step: the frame's numbers, after every other phase has
 /// run, so `sched_ms` is the whole tick.
 pub fn core_tick_report_step(ctx: &mut TickContext) {
@@ -190,8 +214,8 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     ledger_record_frame(FrameSample {
         t: now(),
         dt_ms: ctx.delta * 1000.0,
-        frame_ms: ctx.frame_ms,
-        settled: ctx.settled,
+        frame_ms: ctx.state.frame_ms,
+        settled: if ctx.state.interactive { 0.0 } else { 1.0 },
         sched_ms: now() - frame_t0,
         budget_ms: ctx.budget.total_ms,
         phases: ctx.phase_ms,
@@ -221,10 +245,10 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             oldest_visible_ms: census.oldest_visible_ms,
             pressure: census.pressure as f64,
         },
-        heap_mb: host.heap_mb,
         tile_pages: tile_pages().keys().count() as f64,
         poi_count,
         pool: pool_sample(),
+        rings: ledger_take_rings(),
         work: work_sample(c),
         q_terrain: fetch_pending_count(tile_fetcher::CATEGORY) as f64,
         q_poi: fetch_pending_count(poi_fetcher::CATEGORY) as f64,

@@ -120,10 +120,6 @@ impl ScanContext {
         }
     }
 
-    pub fn is_open(&self) -> bool {
-        self.open
-    }
-
     /// Opens a scan of `bands`, ascending by band_z. False when one is open.
     pub fn begin(&mut self, bands: &[BandView]) -> bool {
         if self.open {

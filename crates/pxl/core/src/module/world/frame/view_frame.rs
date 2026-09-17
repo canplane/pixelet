@@ -61,7 +61,6 @@ pub fn view_rotation_step(ctx: &mut TickContext) {
 
     if (err * (1.0 - alpha)).abs() > AZIMUTH_EPS {
         ctx.invalidate();
-        ctx.view_moving();
     }
 }
 
@@ -93,7 +92,6 @@ pub fn view_translation_step(ctx: &mut TickContext) {
         v.ty = ty;
         v.tz = tz;
         view_compose();
-        ctx.view_moving();
         return;
     }
 
@@ -108,6 +106,5 @@ pub fn view_translation_step(ctx: &mut TickContext) {
 
     if (tx - v.tx).abs() > POS_EPS || (ty - v.ty).abs() > POS_EPS || (tz - v.tz).abs() > POS_EPS {
         ctx.invalidate();
-        ctx.view_moving();
     }
 }

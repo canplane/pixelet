@@ -14,6 +14,7 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 
 use crate::module::map::store::map_store;
+use crate::module::world::change::wake_at;
 use crate::module::world::geocode::label::{assemble_label, Label};
 use crate::module::world::geocode::repository::{parse_geocode, PartTable, Rows};
 use crate::module::world::sched::demand::{Category, Demand};
@@ -81,7 +82,11 @@ pub fn reverse_geocode_step() {
         g.page = Some((page_idx, now()));
     }
     let Some((page, since)) = g.page else { return };
-    if now() - since < DEBOUNCE_MS || g.submitted_page == Some(page) {
+    if g.submitted_page == Some(page) {
+        return;
+    }
+    if now() - since < DEBOUNCE_MS {
+        wake_at(since + DEBOUNCE_MS);
         return;
     }
     g.submitted_page = Some(page);

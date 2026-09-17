@@ -1,14 +1,15 @@
 // @pxl/web/module/world/sched/ledger_report.ts
 //
-// The ledger's report, written from the numbers the kernel measured
-// (crates/pxl/core/src/module/world/sched/report.rs). Every word here is
-// this side's: the column titles, the units, and the asides that say what a
-// line means. The kernel carries none of them, the way libc rather than the
-// kernel carries what an errno reads as.
+// The ledger's report, written from the numbers the kernel measured and the
+// shell read in place (ledger_view.ts). Every word here is this side's: the
+// column titles, the units, and the asides that say what a line means. The
+// kernel carries none of them, the way libc rather than the kernel carries
+// what an errno reads as.
 //
-// Pasteable text, sized to land in a findings doc; trace.rs is the
+// Pasteable text, sized to land in a findings doc; trace.ts is the
 // machine-readable path.
 
+import { CENSUS_TAGS } from "./ledger_spec.ts";
 import { loaf_supported } from "./long_frame.ts";
 
 const MB = 1048576;
@@ -30,7 +31,7 @@ const spread = (s: Spread) => `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.ma
 const STARVED_MS = 2000;
 const starved = (ms: number) => (ms >= STARVED_MS ? "  STARVED" : "");
 
-// ---- what the kernel sends ----
+// ---- what the ledger holds, as ledger_view.ts reads it ----
 
 export type LedgerReport = {
   t: number;
@@ -66,12 +67,12 @@ export type Frame = {
   buffers: number;
   buffer_mb: number;
   px: number;
-  heap_mb: number;
   tile_pages: number;
   poi_count: number;
   textures_mb: { depth: number; msaa: number; shadow: number; layers: number };
   census: [number, number][];
-  pool: { used_mb: number; live_mb: number; range_mb: number };
+  pool: { used_mb: number; live_mb: number; range_mb: number; refusals: number; largest_free_mb: number };
+  rings: { cq_peak: number; spill_peak: number };
   mounts: { added: number; removed: number; layouts: number };
   lod: Record<string, number>;
   q_terrain: number;
@@ -97,7 +98,7 @@ export type FrameSummary = {
   backlog_per_s: [number, number];
   tick_per_bake: number | null;
   mounts: [number, number];
-  heap_delta: number;
+  used_delta_mb: number;
   census: { tag: string; draws: number; tris: number }[];
   last: Frame;
 };
@@ -106,7 +107,8 @@ type Peak = Record<string, number>;
 type PoiStats = { badge_count: number; dropped: number; place: Record<string, number>; index: Record<string, number> };
 export type TaskRecord = {
   category: string;
-  subject: number;
+  /** A u64, as its decimal digits. */
+  subject: string;
   priority: number;
   enqueue_ms: number;
   start_ms: number | null;
@@ -172,8 +174,6 @@ export const BOUND: Record<string, { bound: string; note: string }> = {
   },
 };
 
-const CENSUS_TAGS = ["chunk", "decor", "ghost_box", "ghost_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug"];
-
 const census_text = (rows: { tag: string; draws: number; tris: number }[]) => rows.map((r) => `${r.tag} ${round(r.draws)}/${tris(r.tris)}`).join("  ");
 
 /** One frame's own census, heaviest first — the same order the summary's
@@ -194,11 +194,13 @@ export function task_line(r: TaskRecord): string {
 }
 
 export function frame_line(s: Frame, prev: Frame | null): string {
-  const d = prev === null ? "" : `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap ${signed(s.heap_mb - prev.heap_mb)}MB`;
+  const d = prev === null ? "" : `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap ${signed(s.pool.used_mb - prev.pool.used_mb)}MB`;
   const offthread = s.dt_ms - s.task_ms;
   return `[${n1(s.t).padStart(9)}] dt ${n1(s.dt_ms)} = task ${n1(s.task_ms)} + offthread ${n1(offthread)}  gpu ${n1(s.gpu_ms)}  sched ${n1(s.sched_ms)}/${n1(s.budget_ms)}${
     s.settled ? " (still)" : ""
-  } (tick ${n1(s.tick_ms)})  draws ${s.draw_calls} tris ${tris(s.triangles)}  buf ${s.buffers}  heap ${s.heap_mb}MB  mount +${s.mounts.added}/-${s.mounts.removed} layouts ${s.mounts.layouts}${d}`;
+  } (tick ${n1(s.tick_ms)})  draws ${s.draw_calls} tris ${
+    tris(s.triangles)
+  }  buf ${s.buffers}  heap ${s.pool.used_mb}MB  mount +${s.mounts.added}/-${s.mounts.removed} layouts ${s.mounts.layouts}${d}`;
 }
 
 export const long_frame_line = (l: LongFrame) =>
@@ -218,8 +220,8 @@ function frames_section(r: LedgerReport): string[] {
   return [
     `frames n=${f.n}  over ${n1(f.seconds)}s  moving ${f.moving}  still ${f.n - f.moving}   display ${n1(last.frame_ms)} ms`,
     `  dt      ${spread(f.dt)} ms   missed ${f.missed} (${share(f.missed, f.moving)}% of moving frames)`,
-    `  task    p50 ${n1(f.task.p50)}  p95 ${n1(f.task.p95)} ms   (main thread's own rAF task)`,
-    `  offthd  p50 ${n1(f.offthread.p50)}  p95 ${n1(f.offthread.p95)} ms   (vsync/compositor/GPU/GC)`,
+    `  task    p50 ${n1(f.task.p50)}  p95 ${n1(f.task.p95)} ms   (the kernel's turn: tick, draw, submit)`,
+    `  offthd  p50 ${n1(f.offthread.p50)}  p95 ${n1(f.offthread.p95)} ms   (vsync/compositor/GPU/GC and the shell's glue)`,
     `  gpu     p50 ${n1(f.gpu.p50)}  p95 ${n1(f.gpu.p95)} ms${last.gpu_ms === 0 ? "   (no renderer yet)" : ""}`,
     `  sched   p95 ${n1(f.sched.p95)}  max ${n1(f.sched.max)} ms   overran ${f.overran}   budget ${n1(last.budget_ms)}${last.settled ? " (still)" : ""}   phase p95 ${
       f.phases.map((p) => `${p.name} ${n1(p.spread.p95)}`).join("  ")
@@ -233,7 +235,7 @@ function frames_section(r: LedgerReport): string[] {
     `  targets depth ${last.textures_mb.depth}MB  msaa ${last.textures_mb.msaa}MB  shadow ${last.textures_mb.shadow}MB  layers ${last.textures_mb.layers}MB`,
     `  by tag  mean ${census_text(f.census)}   (draws/tris per frame)`,
     `          last ${frame_census(last.census)}`,
-    `  mem     heap ${last.heap_mb}MB (${signed(f.heap_delta)})  tiles ${last.tile_pages}  poi ${last.poi_count}`,
+    `  mem     tiles ${last.tile_pages}  poi ${last.poi_count}`,
     `  place   poi ${
       n1(poi.place.ms)
     } ms over ${c.place_runs} runs   hit ${poi.place.hits} -> cand ${poi.place.candidates} -> kept ${poi.place.kept} (+${poi.place.absorbed} absorbed, biggest ${poi.place.biggest}${
@@ -257,7 +259,11 @@ function frames_section(r: LedgerReport): string[] {
       poi.index.dropped > 0 ? `  DROPPED ${poi.index.dropped}` : ""
     }`,
     // Idle inside the core reservation is the working budget, kept on purpose.
-    `  heap    used ${last.pool.used_mb}MB  live ${last.pool.live_mb}MB  of ${last.pool.range_mb}MB   window scans ${f.work[0]} bakes ${f.work[1]}`,
+    `  heap    used ${last.pool.used_mb}MB (${signed(f.used_delta_mb)})  live ${last.pool.live_mb}MB  of ${last.pool.range_mb}MB   refused ${last.pool.refusals}  largest free ${
+      n1(last.pool.largest_free_mb)
+    }MB   window scans ${f.work[0]} bakes ${f.work[1]}`,
+    // A post that finds both full asserts; this is how near the last frame came.
+    `  rings   completion ${last.rings.cq_peak}  spill ${last.rings.spill_peak}   (fullest since the frame before)`,
     `  fetch   queued ${fetch.queued} running ${fetch.running} of ${fetch.credits}`,
     // The builds run in the kernel under the tick; what they did this window.
     `  build   ${c.built_direct} direct  ${c.built_scans} scans  ${c.built_bakes} bakes  ${c.built_starved} refused a block${c.decor_dropped > 0 ? `   DECOR DROPPED ${c.decor_dropped}` : ""}`,
@@ -282,7 +288,7 @@ function peak_section(p: Peak): string[] {
   return [
     "peak (window)",
     `  dt ${n1(p.dt_ms)}  sched ${n1(p.sched_ms)}  tick ${n1(p.tick_ms)} ms`,
-    `  draws ${p.draw_calls}  tris ${round(p.triangles / 1000)}k  heap ${p.heap_mb}MB  queue t${p.q_terrain}/p${p.q_poi}`,
+    `  draws ${p.draw_calls}  tris ${round(p.triangles / 1000)}k  queue t${p.q_terrain}/p${p.q_poi}`,
     `  lod chunks ${p.chunks}  in-frustum ${p.in_frustum}  pending ${p.pending}  settling ${p.settling}  blending ${p.blend_active}  pressure ${p.pressure}`,
     `  wait releases ${p.offscreen_pending} pending, oldest ${round(p.oldest_release_ms)} ms${starved(p.oldest_release_ms)}   on-screen oldest ${round(p.oldest_visible_ms)} ms${
       starved(p.oldest_visible_ms)
@@ -329,4 +335,18 @@ export function ledger_report_text(r: LedgerReport): string {
     for (const l of r.longs) out.push(long_frame_line(l));
   }
   return out.join("\n");
+}
+
+/** Prints the report and puts it on the clipboard where the page may. */
+export async function ledger_report_print(text: string): Promise<void> {
+  console.log(text);
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(text);
+    copied = true;
+  } catch {
+    // The clipboard can refuse without a user gesture or on an insecure
+    // origin; the console print above is the fallback.
+  }
+  console.log(`[ledger] report ${copied ? "copied to clipboard" : "printed above (clipboard refused)"} — ${text.length} bytes`);
 }

@@ -34,7 +34,6 @@ use crate::module::world::environment::theme_clock::theme_key;
 use crate::module::world::frame::view::view;
 use crate::module::world::object::store::OBJECT_STORAGE_VERSION;
 use crate::module::world::sched::log::{ledger_set_logging, ledger_window_start, ledger_window_stop};
-use crate::module::world::sched::report::ledger_report_json;
 use crate::module::world::terrain::elevation::{get_ele, ground_or_raw};
 use crate::module::world::world::{set_world_platform, world_platform, Platform};
 use crate::sys::global::Global;
@@ -44,9 +43,6 @@ struct Shell {
     /// A search jump that landed on a page with no terrain yet: re-grounded
     /// the moment that page's tile arrives, while the map is still there.
     go_to: Option<PVF3>,
-    /// A report asked for, handed over with the next snapshot: the ledger's
-    /// numbers as one document, which the shell writes the words for.
-    report: Option<String>,
 }
 
 static SHELL: Global<Shell> = Global::new();
@@ -55,7 +51,6 @@ fn shell() -> &'static mut Shell {
     SHELL.get(|| Shell {
         language: "en".to_string(),
         go_to: None,
-        report: None,
     })
 }
 
@@ -220,8 +215,7 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
         }
     });
     rows?;
-    write!(out, "],\"loading\":{loading}}},")?;
-    write!(out, "\"report\":{}}}", Or(shell().report.take().as_deref().map(Quoted)))
+    write!(out, "],\"loading\":{loading}}}}}")
 }
 
 /// A string field of an action, its escapes decoded; none where it is
@@ -379,7 +373,6 @@ pub fn ui_action(text: &str) -> bool {
             search_query(&query);
         }
         "search_close" => search_close(),
-        "ledger_report" => shell().report = Some(ledger_report_json()),
         "ledger_logging" => {
             let Some(on) = bool_of(&action, "on") else { return false };
             ledger_set_logging(on);

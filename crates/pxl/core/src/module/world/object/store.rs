@@ -33,9 +33,10 @@ use pxl_shared::spec::space::xy::TO_XY;
 use xpute_core::io::marshal::tree::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_core::kit::array::{F32Array, U32Array};
 use xpute_core::kit::encoding::{b64url_to_bytes, bytes_to_b64url};
+use xpute_core::sched::edge::{notified, yield_if_spent, Notify};
 use xpute_core::sys::error::MarshalError;
 
-use crate::module::world::change::{bump_world, request_world_tick, world_changes, DECOR_COLUMN, OBJECT_COLUMN};
+use crate::module::world::change::{bump_world, request_world_tick, wake_at, world_changes, world_edge, DECOR_COLUMN, OBJECT_COLUMN};
 use crate::module::world::chunk_node::chunk_sources_changed;
 use crate::module::world::frame::coord::local_world_to_canonical;
 use crate::module::world::terrain::elevation::get_ground_type;
@@ -821,10 +822,28 @@ fn save() {
     }
 }
 
-/// Saves if the pending save is due: the turn's, on the shell's heartbeat when
-/// nothing else asks for one.
+static SAVES: Global<Notify> = Global::new();
+
+fn saves() -> &'static mut Notify {
+    SAVES.get(Notify::new)
+}
+
+/// The frame's check: a pending save that is due is asked of the save task,
+/// and one not yet due asks for the turn it falls due on.
 pub fn flush_save_if_due() {
-    if store_state().save_due_ms.is_some_and(|due| now() >= due) {
+    match store_state().save_due_ms {
+        Some(due) if now() >= due => saves().notify(),
+        Some(due) => wake_at(due),
+        None => {}
+    }
+}
+
+/// The save task: the store encoded and written whole, on a turn's quota. The
+/// page hiding does not wait for it (`flush_save`).
+pub async fn save_task() {
+    loop {
+        notified(saves).await;
+        yield_if_spent(world_edge).await;
         flush_save();
     }
 }

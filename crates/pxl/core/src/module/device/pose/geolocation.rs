@@ -7,6 +7,7 @@
 use pxl_shared::spec::message::Message;
 
 use super::store::{device_location_store, DevicePoseStatus};
+use crate::module::world::change::wake_at;
 use crate::sys::global::{now, Global};
 
 /// A TIMEOUT or POSITION_UNAVAILABLE is a report about this moment, not about
@@ -162,8 +163,10 @@ pub fn geolocation_error(code: GeolocationErrorCode) {
 
 /// The sensor's turn: a due retry starts the watch again.
 pub fn geolocation_step(supported: bool) {
-    if geolocation().retry_at.is_some_and(|at| now() >= at) {
-        start_watching(supported);
+    match geolocation().retry_at {
+        Some(at) if now() >= at => start_watching(supported),
+        Some(at) => wake_at(at),
+        None => {}
     }
 }
 

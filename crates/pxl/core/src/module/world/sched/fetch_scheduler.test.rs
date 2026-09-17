@@ -7,8 +7,9 @@
 use pxl_shared::spec::fetch::FetchFail;
 
 use super::*;
-use crate::module::world::sched::ledger::{ledger_recording_start, ledger_snapshot, Failure, Outcome};
-use crate::module::world::sched::summary::summarize_tasks;
+use crate::module::world::sched::ledger::{ledger_recording_start, ledger_tasks, name_id, Failure, Outcome, TaskRow};
+use crate::module::world::sched::ledger_spec::{CATEGORY_NAMES, OUTCOME_NAMES, SUMMARY, TASK_SUMMARY};
+use crate::module::world::sched::summary::ledger_summarize;
 use crate::sys::global::serial;
 
 fn d(category: Category, subject: u64, priority: f64) -> Demand {
@@ -93,10 +94,12 @@ fn fetch_scheduler_ledger_records_outcome_for_completed_and_aborted_demands() {
     for key in aborts() {
         fetch_settle(key, Outcome::Aborted, None, Failure::default());
     }
-    let mine: Vec<_> = ledger_snapshot().iter().filter(|r| r.key.category == cat).collect();
-    assert_eq!(mine.iter().find(|r| r.key == done.key).map(|r| r.outcome), Some(Outcome::Ok));
-    assert_eq!(mine.iter().find(|r| r.key == killed.key).map(|r| r.outcome), Some(Outcome::Aborted));
-    assert!(mine.iter().all(|r| r.start_ms.is_some()));
+    let c = name_id(CATEGORY_NAMES, cat.as_str());
+    let mine: Vec<&TaskRow> = ledger_tasks().iter().filter(|r| r.category == c).collect();
+    let outcome = |subject: u64| mine.iter().find(|r| r.subject == subject).map(|r| r.outcome);
+    assert_eq!(outcome(done.key.subject), Some(name_id(OUTCOME_NAMES, Outcome::Ok.as_str())));
+    assert_eq!(outcome(killed.key.subject), Some(name_id(OUTCOME_NAMES, Outcome::Aborted.as_str())));
+    assert!(mine.iter().all(|r| !r.start_ms.is_nan()));
 }
 
 /// What the reason's two numbers have to keep apart, now that nothing
@@ -119,11 +122,11 @@ fn a_failure_is_grouped_by_its_reason_and_its_status_not_by_any_text() {
         started();
         fetch_settle(demand.key, Outcome::Error, None, fail);
     }
-    let mine: Vec<_> = ledger_snapshot().iter().filter(|r| r.key.category == cat).cloned().collect();
-    let summary = summarize_tasks(&mine);
-    let reasons = &summary.iter().find(|s| s.cat == cat).expect("the category").reasons;
-    assert_eq!(reasons.len(), 3, "503, 429 and network are three reasons");
-    assert_eq!(reasons[0], (Failure { fail: FetchFail::Status, status: 503 }, 2), "commonest first");
+    let block = ledger_summarize(f64::INFINITY);
+    let at = (SUMMARY::tasks::AT + SUMMARY::tasks::slots + name_id(CATEGORY_NAMES, cat.as_str()) as u32 * TASK_SUMMARY::WORDS) as usize;
+    let reasons = at + TASK_SUMMARY::reasons as usize;
+    assert_eq!(block[at + TASK_SUMMARY::reason_count as usize], 3.0, "503, 429 and network are three reasons");
+    assert_eq!(&block[reasons..reasons + 3], &[FetchFail::Status as u32 as f64, 503.0, 2.0], "commonest first");
     assert_eq!(Failure { fail: FetchFail::Status, status: 503 }.to_string(), "status 503");
     assert_eq!(Failure { fail: FetchFail::Network, status: 0 }.to_string(), "network");
 }

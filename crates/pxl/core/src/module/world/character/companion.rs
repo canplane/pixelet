@@ -35,6 +35,7 @@ use crate::app::setting::store::settings_store;
 use crate::module::camera::config::camera_cfg;
 use crate::module::camera::orbit::damp_alpha;
 use crate::module::camera::store::camera_store;
+use crate::module::world::change::wake_at;
 use crate::module::world::frame::view::view;
 use crate::module::world::gltf_cache::{load_gltf, load_image};
 use crate::module::world::object::store::objects_revision;
@@ -242,6 +243,9 @@ impl Walker {
             }
             let update = update_settle_tracker(&self.settle, target, now, SETTLE_DELAY_S);
             self.settle = update.tracker;
+            if self.settle.last_seen != self.settle.settled {
+                wake_at((self.settle.last_change_time + SETTLE_DELAY_S) * 1000.0);
+            }
             if update.just_settled {
                 self.walk_plan = Some(WalkPlan {
                     start: Vec2 { x: self.pose[0], y: self.pose[1] },

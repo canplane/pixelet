@@ -39,6 +39,22 @@ pub fn storage_set(key: &str, value: &str) {
     (storage().set)(key, value)
 }
 
+static BODY_READ: Global<fn(body: u32, dst: &mut [u8])> = Global::new();
+
+fn read_nothing(_: u32, _: &mut [u8]) {}
+
+/// Installs the host's read of a body it holds for the kernel (a response, a
+/// model file): copies it into `dst` and lets it go.
+pub fn set_body_read(read: fn(body: u32, dst: &mut [u8])) {
+    BODY_READ.set(read);
+}
+
+/// Copies body `body` into `dst`, which is its length, and the host lets it
+/// go; an empty `dst` only lets it go.
+pub fn body_read(body: u32, dst: &mut [u8]) {
+    (BODY_READ.get(|| read_nothing))(body, dst)
+}
+
 static HANDHELD: Global<bool> = Global::new();
 
 /// Installs whether the device is a phone or a tablet (shared/lib/browser/handheld).
@@ -157,4 +173,30 @@ pub fn set_heap_bytes(bytes: fn() -> usize) {
 /// The bytes of the range the heap was given; 0 where there is none.
 pub fn heap_bytes() -> usize {
     (HEAP_BYTES.get(|| no_heap))()
+}
+
+static HEAP_REFUSALS: Global<fn() -> u32> = Global::new();
+
+/// Installs the count of requests the heap answered with nothing: the one
+/// way this memory is full, since the fixed ranges cannot be.
+pub fn set_heap_refusals(refusals: fn() -> u32) {
+    HEAP_REFUSALS.set(refusals);
+}
+
+/// Requests the heap refused since boot; 0 where there is no heap.
+pub fn heap_refusals() -> u32 {
+    (HEAP_REFUSALS.get(|| no_releases))()
+}
+
+static HEAP_LARGEST_FREE: Global<fn() -> usize> = Global::new();
+
+/// Installs the size of the largest block on the heap's free lists — how
+/// fragmented the reached part is, where live against used says how full.
+pub fn set_heap_largest_free(largest: fn() -> usize) {
+    HEAP_LARGEST_FREE.set(largest);
+}
+
+/// The largest block on the heap's free lists; 0 where there is none.
+pub fn heap_largest_free() -> usize {
+    (HEAP_LARGEST_FREE.get(|| no_heap))()
 }
