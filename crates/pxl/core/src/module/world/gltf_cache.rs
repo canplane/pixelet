@@ -6,8 +6,8 @@
 //!
 //! The fetch is the shell's: a URL asked for here for the first time joins the
 //! request lane (`take_load_requests`), and the shell answers with the bytes of
-//! a model it holds (`gltf_arrived`, queued, and read and parsed one a turn at
-//! most by `gltf_task` on the turn's quota) or the handle of an image it decoded
+//! a model it holds (`gltf_arrived`, queued, and read and parsed by
+//! `gltf_task` on the turns' quota) or the handle of an image it decoded
 //! and holds (`image_arrived`) — the file's own pixels, top row first, no
 //! colour conversion and no premultiplied alpha. A consumer polls: None while
 //! the load is in flight or has failed.
@@ -123,8 +123,8 @@ pub fn gltf_arrived(url: &str, body: u32, bytes: u32) {
     arrivals().notify();
 }
 
-/// The models' task: each arrival read and parsed, one a turn at least and
-/// as many as the quota lets. A model is one unit; its parse is not cut.
+/// The models' task: each arrival read and parsed on the turns' quota, the
+/// parse pausing between its units.
 pub async fn gltf_task() {
     loop {
         notified(arrivals).await;
@@ -133,7 +133,7 @@ pub async fn gltf_task() {
             let (url, body, bytes) = loader().arrived.remove(0);
             let mut buf = vec![0u8; bytes as usize];
             body_read(body, &mut buf);
-            let entry = match parse_gltf(&buf, &[]) {
+            let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
                 Ok(g) => Entry::Ready(Rc::new(g)),
                 Err(_) => Entry::Failed,
             };

@@ -710,36 +710,45 @@ fn f32_lane(v: &[f32]) -> F32Array {
 pub fn encode_objects() -> Result<String, MarshalError> {
     let mut by_page: Vec<(IVec, PageRows)> = Vec::new();
     for col_idx in object_cols() {
-        let page_idx = TO_XY(L3_IDX(FROM_L2_IDX(col_idx)));
-        let page_base = FROM_L3_IDX(page_idx);
-        let slot = match by_page.iter().position(|(p, _)| *p == page_idx) {
-            Some(slot) => slot,
-            None => {
-                by_page.push((page_idx, PageRows::default()));
-                by_page.len() - 1
-            }
-        };
-        let rows = &mut by_page[slot].1;
-        each_col_entry(
-            col_idx,
-            &mut |entry| {
-                let corner = entry.corner();
-                let local = PVF3 {
-                    i: ivec::sub(corner.i, page_base),
-                    f: corner.f,
-                };
-                rows.x.push(pvf3::to_real(pvf3::X(&local)) as f32);
-                rows.y.push(pvf3::to_real(pvf3::Y(&local)) as f32);
-                rows.z.push(pvf3::to_real(pvf3::Z(&local)) as f32);
-                rows.size.push(entry.size as f32);
-                rows.value.push(entry.state);
-            },
-            false,
-        );
+        collect_col(&mut by_page, col_idx);
     }
+    encode_pages(&by_page)
+}
+
+/// One column's entries added to its page's rows.
+fn collect_col(by_page: &mut Vec<(IVec, PageRows)>, col_idx: IVec) {
+    let page_idx = TO_XY(L3_IDX(FROM_L2_IDX(col_idx)));
+    let page_base = FROM_L3_IDX(page_idx);
+    let slot = match by_page.iter().position(|(p, _)| *p == page_idx) {
+        Some(slot) => slot,
+        None => {
+            by_page.push((page_idx, PageRows::default()));
+            by_page.len() - 1
+        }
+    };
+    let rows = &mut by_page[slot].1;
+    each_col_entry(
+        col_idx,
+        &mut |entry| {
+            let corner = entry.corner();
+            let local = PVF3 {
+                i: ivec::sub(corner.i, page_base),
+                f: corner.f,
+            };
+            rows.x.push(pvf3::to_real(pvf3::X(&local)) as f32);
+            rows.y.push(pvf3::to_real(pvf3::Y(&local)) as f32);
+            rows.z.push(pvf3::to_real(pvf3::Z(&local)) as f32);
+            rows.size.push(entry.size as f32);
+            rows.value.push(entry.state);
+        },
+        false,
+    );
+}
+
+fn encode_pages(by_page: &[(IVec, PageRows)]) -> Result<String, MarshalError> {
     let mut tree = TreeView::new();
     tree.branch(Some(&mut |b| {
-        for (page_idx, rows) in &by_page {
+        for (page_idx, rows) in by_page {
             if rows.value.is_empty() {
                 continue;
             }
@@ -838,13 +847,39 @@ pub fn flush_save_if_due() {
     }
 }
 
-/// The save task: the store encoded and written whole, on a turn's quota. The
-/// page hiding does not wait for it (`flush_save`).
+/// The save task: the store's columns walked on the turns' quota, pausing
+/// between columns, then encoded and written in one step. A walk the store
+/// moved under is not the store at any one moment, so it is dropped and the
+/// save still pending is walked again. The save is taken as done only when
+/// written, so the page hiding mid-walk still finds it (`flush_save`).
 pub async fn save_task() {
     loop {
         notified(saves).await;
+        if store_state().save_due_ms.is_none() {
+            continue;
+        }
+        let revision = objects_revision();
+        let mut by_page: Vec<(IVec, PageRows)> = Vec::new();
+        let mut whole = true;
+        for col_idx in object_cols() {
+            yield_if_spent(world_edge).await;
+            if objects_revision() != revision {
+                whole = false;
+                break;
+            }
+            collect_col(&mut by_page, col_idx);
+        }
         yield_if_spent(world_edge).await;
-        flush_save();
+        if !whole || objects_revision() != revision {
+            saves().notify();
+            continue;
+        }
+        if store_state().save_due_ms.take().is_none() {
+            continue;
+        }
+        if let Ok(blob) = encode_pages(&by_page) {
+            storage_set(&storage_key(), &blob);
+        }
     }
 }
 
