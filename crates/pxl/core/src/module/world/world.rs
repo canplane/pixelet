@@ -115,6 +115,18 @@ pub fn world_boot() {
     on_tick(VISIBLE, core_tick_visible_step, "chunks");
     on_tick(COSMETIC, debug_gizmos_tick, "debug_gizmos");
     on_tick(REPORT, core_tick_report_step, "ledger");
+    world_tasks();
+}
+
+/// Spawns the kernel's tasks on whichever executor the module installed —
+/// no more than change.rs's TASKS. One refused is a module whose executor
+/// holds fewer, which aborts.
+fn world_tasks() {
+    use xpute_core::sched::task::spawn;
+    let spawned = spawn(crate::module::world::fetch::fetch_task()) && spawn(crate::module::world::gltf_cache::gltf_task()) && spawn(crate::module::world::chunk_stage::build_task());
+    if !spawned {
+        std::process::abort();
+    }
 }
 
 /// The effects' turn, before the tick.
@@ -176,11 +188,11 @@ pub struct HostFrame {
 
 /// The frame of the turn the central scheduler strobed at `edge_at` with
 /// `quota_ms`: the effects, then the tick's phases on what is left of the
-/// quota, then the tasks (`poll_tasks`, whichever executor the module polls
-/// them on) on what is left after, the fetches they asked for within the
-/// credits, and the draw. A pass that asked for a turn after this one, or
-/// left something new to draw, asks for the next edge.
-pub fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64, poll_tasks: fn()) -> TickReport {
+/// quota, then the tasks on whichever executor the module installed, on what
+/// is left after, the fetches they asked for within the credits, and the
+/// draw. A pass that asked for a turn after this one, or left something new
+/// to draw, asks for the next edge.
+pub fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     let HostFrame {
         width,
         height,
@@ -203,8 +215,8 @@ pub fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64, poll_tasks: fn(
     state.frame_ms = frame_ms;
     state.interactive = interactive;
     let report = run_tick(state, delta, quota_ms, edge_at);
+    xpute_core::sched::task::poll();
     fetch_pump();
-    poll_tasks();
     crate::render::gpu::stage::stage_write();
     crate::render::gpu::renderer::render_frame();
     set_host_task_ms(now() - t0);

@@ -13,8 +13,9 @@
 //! **A parked task is woken on the next rising edge, not by itself.** A task
 //! that wakes itself is polled again by whichever executor re-reads its queue
 //! within one poll, past the quota; one woken at `rise` runs only in the turn
-//! after. The table is fixed at N: a task past it wakes itself, which an
-//! executor that drains its queue once per poll still defers to the next.
+//! after. The table is fixed at N, the guest's number of tasks: a task awaits
+//! one thing at a time and so is parked at most once, and a table that fills
+//! is a guest that spawned more than it declared, which aborts.
 //!
 //! What the falling edge carries: 0 when a turn asked for the next frame, the
 //! delay to the earliest `wake_at` otherwise, NO_WAKE for neither. Parked
@@ -108,7 +109,7 @@ impl<const N: usize> Edge<N> {
                 *slot = Some(waker.clone());
                 self.parked_len += 1;
             }
-            None => waker.wake_by_ref(),
+            None => std::process::abort(),
         }
     }
 }

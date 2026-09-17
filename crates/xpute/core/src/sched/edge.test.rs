@@ -68,19 +68,6 @@ fn edge_the_falling_edge_asks_for_the_earliest_wait_or_for_nothing() {
     assert_eq!(edge().fall(), 0.0);
 }
 
-#[test]
-fn edge_a_task_past_the_table_wakes_itself() {
-    set_clock(clock);
-    EDGE.set(Edge::new());
-    WOKEN.with(|w| w.set(0));
-    let w = waker();
-    edge().rise(0.0);
-    for _ in 0..3 {
-        edge().park(&w);
-    }
-    assert_eq!(WOKEN.with(|w| w.get()), 1);
-}
-
 static NOTIFY: Global<Notify> = Global::new();
 
 fn notify() -> &'static mut Notify {

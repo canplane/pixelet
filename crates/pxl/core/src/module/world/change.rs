@@ -38,15 +38,25 @@ pub fn world_changes() -> &'static mut ChangeLog {
     &mut kernel().changes
 }
 
-/// Tasks the kernel's turn can hold parked for the next one.
-const PARKED: usize = 32;
+/// The tasks the kernel spawns (world.rs's `world_tasks`), with room: the
+/// edge parks each at most once, and an executor sizes its pool by it.
+pub const TASKS: usize = 8;
 
-static EDGE: Global<Edge<PARKED>> = Global::new();
+static EDGE: Global<Edge<TASKS>> = Global::new();
 
 /// The kernel's side of the turn (xpute_core::sched::edge): the doorbell
 /// rises and falls it, and a task yields against it.
-pub fn world_edge() -> &'static mut Edge<PARKED> {
+pub fn world_edge() -> &'static mut Edge<TASKS> {
     EDGE.get(Edge::new)
+}
+
+/// The falling edge. A task queued and not yet polled — a turn with no frame
+/// polls none — asks for the next turn too.
+pub fn world_fall() -> f64 {
+    if xpute_core::sched::task::pending() {
+        world_edge().ask_next();
+    }
+    world_edge().fall()
 }
 
 /// Asks for the frame that delivers changes made in the kernel — the store's

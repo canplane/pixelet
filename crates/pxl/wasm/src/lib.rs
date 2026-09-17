@@ -217,7 +217,7 @@ const BOOT_QUANTUM: usize = 9;
 #[no_mangle]
 pub extern "C" fn boot() -> *const u32 {
     install_host();
-    executor::spawn();
+    executor::install();
     let map = mem::map().unwrap_or_else(lay_out);
     let s = state();
     let (sq, cq) = (ring_address(&s.sq), ring_address(&s.outbox.cq));
@@ -256,18 +256,16 @@ fn lay_out() -> mem::Map {
 
 /// The doorbell: the rising edge of a turn, with the time it may take. The
 /// kernel applies the submissions waiting — a frame among them runs its tick
-/// on what is left of `quota_ms` and then polls the tasks (executor.rs) — and
-/// the return is the falling edge: when
-/// the kernel wants the next turn, in ms from now, 0 for the next frame and
-/// xpute_core::sched::quantum's NO_WAKE for none. A turn rung with no quota
-/// only applies what waits.
+/// on what is left of `quota_ms` and then polls the tasks — and the return is
+/// the falling edge: when the kernel wants the next turn, in ms from now, 0
+/// for the next frame and xpute_core::sched::quantum's NO_WAKE for none. A
+/// turn rung with no quota only applies what waits.
 #[no_mangle]
 pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
     let s = state();
     pxl_core::module::world::change::world_edge().rise(quota_ms);
     drain(s);
-    executor::ask_if_pended();
-    pxl_core::module::world::change::world_edge().fall()
+    pxl_core::module::world::change::world_fall()
 }
 
 /// The UI's snapshot: what WORLD_SNAPSHOT names instead of carrying.
@@ -537,7 +535,7 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
                 credits: u32_at(&f, 9)?,
             };
             let edge = pxl_core::module::world::change::world_edge();
-            pxl_core::module::world::world::world_frame(host, edge.quota_ms(), edge.edge_at(), executor::poll);
+            pxl_core::module::world::world::world_frame(host, edge.quota_ms(), edge.edge_at());
             post_turn(s);
             Ok(Some(0))
         }
