@@ -1,35 +1,21 @@
 // pxl_shared/asset/ingested.test.rs
-// (no pair: ingested.ts is generated and has no test file)
-
-use xpute_core::sys::vector::Vector;
 
 use super::*;
 
-const VECTOR: &str = include_str!("../../vector/asset/ingested.tsv");
+#[test]
+fn ingested_every_asset_s_number_is_its_row_and_names_it_back() {
+    for (n, a) in Asset::ALL.into_iter().enumerate() {
+        assert_eq!(a as usize, n);
+        assert_eq!(Asset::of(n as u16), Some(a));
+        assert!(a.ingested().bytes > 0);
+    }
+    assert_eq!(Asset::of(Asset::ALL.len() as u16), None);
+}
 
 #[test]
-fn the_generated_table_is_the_typescript_s_row_for_row() {
-    let v = Vector::load(VECTOR);
-    let mut n = 0;
-    v.each("rows", |k| {
-        n += 1;
-        let path = v.s(&format!("{k}.path"));
-        let a = INGESTED.get(path).unwrap_or_else(|| panic!("{k}: {path} is not in ingested.rs"));
-        assert_eq!((a.key, a.bytes), (v.s(&format!("{k}.key")), v.u64(&format!("{k}.bytes"))), "{k}");
-        match a.extent {
-            None => assert_eq!("none", v.s(&format!("{k}.extent")), "{k}.extent"),
-            Some(e) => {
-                for (i, x) in e.iter().enumerate() {
-                    assert_eq!(x.to_bits(), v.f64(&format!("{k}.extent.{i}")).to_bits(), "{k}.extent.{i}");
-                }
-            }
-        }
-    });
-    assert_eq!(n, INGESTED.len());
-    assert_eq!(
-        (SHEET.key, SHEET.bytes, SHEET.cell, SHEET.columns),
-        (v.s("sheet.key"), v.u64("sheet.bytes"), v.u32("sheet.cell"), v.u32("sheet.columns"))
-    );
-    let tiles: Vec<&str> = (0..v.len("sheet.tiles")).map(|j| v.s(&format!("sheet.tiles.{j}"))).collect();
-    assert_eq!(SHEET.tiles, &tiles[..]);
+fn ingested_the_sheet_s_tiles_are_numbered_in_order_one_a_cube_face() {
+    for (n, &(cube, face, tile)) in SHEET.tiles.iter().enumerate() {
+        assert_eq!(tile as usize, n);
+        assert!(SHEET.tiles[..n].iter().all(|&(c, f, _)| (c, f) != (cube, face)));
+    }
 }

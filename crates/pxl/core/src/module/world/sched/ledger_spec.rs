@@ -14,7 +14,7 @@ pub const CENSUS_TAGS: &[&str] = &["chunk", "decor", "ghost_box", "ghost_coplana
 
 pub const PHASE_NAMES: &[&str] = &["interaction", "visible", "content", "cosmetic", "report"];
 
-pub const CATEGORY_NAMES: &[&str] = &["terrain", "ocean", "poi", "search", "geocode"];
+pub const CATEGORY_NAMES: &[&str] = &["terrain", "ocean", "poi"];
 
 pub const OUTCOME_NAMES: &[&str] = &["ok", "aborted", "error"];
 
@@ -290,11 +290,11 @@ pub mod SUMMARY {
     pub mod tasks {
         pub const AT: u32 = 143;
         pub const slots: u32 = 0;
-        pub const WORDS: u32 = 125;
+        pub const WORDS: u32 = 75;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 268;
+        pub const AT: u32 = 218;
         pub const faces_kept: u32 = 0;
         pub const faces_possible: u32 = 1;
         pub const runs_culled: u32 = 2;
@@ -342,7 +342,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod atlas {
-        pub const AT: u32 = 288;
+        pub const AT: u32 = 238;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -351,7 +351,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "WORDS"];
     }
     pub mod retain {
-        pub const AT: u32 = 292;
+        pub const AT: u32 = 242;
         pub const nodes: u32 = 0;
         pub const run_sets: u32 = 1;
         pub const run_set_mb: u32 = 2;
@@ -377,7 +377,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod fetch {
-        pub const AT: u32 = 301;
+        pub const AT: u32 = 251;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -385,7 +385,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod poi {
-        pub const AT: u32 = 304;
+        pub const AT: u32 = 254;
         pub const badge_count: u32 = 0;
         pub const dropped: u32 = 1;
         pub const place_ms: u32 = 2;
@@ -439,7 +439,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod peak {
-        pub const AT: u32 = 327;
+        pub const AT: u32 = 277;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -481,13 +481,13 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 344;
+        pub const AT: u32 = 294;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
-    pub const WORDS: u32 = 505;
+    pub const WORDS: u32 = 455;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "retain", "fetch", "poi", "peak", "steps", "WORDS"];
 }
 

@@ -8,6 +8,7 @@ import { useAppContext } from "@/app/provider/app_context.ts";
 import { use_camera_busy_interaction_style } from "@/module/camera/use_camera_busy_interaction_style.ts";
 import { useKernel } from "@/wasm/kernel.ts";
 import { CurrentAddress } from "./current_address.tsx";
+import { useReverseGeocode } from "./use_reverse_geocode.ts";
 import { SensorStatus } from "./sensor_status.tsx";
 import { DummyChatText } from "./dummy_chat_text.tsx";
 import { MapCompass } from "../control/compass.tsx";
@@ -20,7 +21,7 @@ export function TopOverlays() {
   const { ui } = useAppContext();
   const { t } = useTranslation();
 
-  const address_label = useKernel((s) => s.address.label);
+  const { label: address_label } = useReverseGeocode(useKernel((s) => s.map.center));
 
   return (
     <>

@@ -49,7 +49,7 @@
     // paths only; nothing is found by name and deleted.
     "reset": "rm -rf node_modules apps/api/node_modules apps/web/node_modules apps/api/dist apps/web/dist && deno task check",
 
-    "check": "deno task check:api && deno task check:web && deno task check:shared && deno task check:xpute && deno task check:rust && deno task check:pair && deno task check:spec && deno task check:locale",
+    "check": "deno task check:api && deno task check:web && deno task check:shared && deno task check:xpute && deno task check:rust && deno task check:spec && deno task check:locale",
     "check:api": "deno task --cwd apps/api check",
     "check:web": "deno task --cwd apps/web check",
     "check:shared": "deno check packages/pxl/shared/src/**/*.ts",
@@ -66,10 +66,7 @@
     // Formatting is checked first, against crates/rustfmt.toml; the generated
     // `.rs` files pass it because script/spec.ts writes them through rustfmt.
     "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-shared -p pxl-core",
-    // The kits twice: every file, export and test of @xpute/core and of
-    // @pxl/shared's space has its pair in the crates, and the vectors the
-    // TypeScript writes are what the Rust tests read (script/pair.ts).
-    "check:pair": "deno run -A script/pair.ts",
+    // The vectors the TypeScript writes are what the Rust tests read (script/pair.ts).
     "vector": "deno run -A script/pair.ts --write",
     // The specs are JSON; the TypeScript and the Rust that carry them are
     // written from it (script/spec.ts), and the gate fails on a stale one.

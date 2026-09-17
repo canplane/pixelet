@@ -34,8 +34,6 @@ use crate::module::map::navigation::follow_mode::follow_mode_step;
 use crate::module::map::navigation::map_bootstrap::map_bootstrap_step;
 use crate::module::map::navigation::map_navigation::{map_navigation, map_navigation_step};
 use crate::module::map::store::map_store;
-use crate::module::map::ui::overlay::reverse_geocode::reverse_geocode_step;
-use crate::module::map::ui::toast::toast_controller::toast_controller_step;
 use crate::module::world::change::{request_world_tick, world_edge};
 use crate::module::world::character::companion::{companion_step, CompanionProps};
 use crate::module::world::chunk_node::chunk_nodes_step;
@@ -166,9 +164,6 @@ pub fn world_turn(platform: Platform) {
     // device_coord is deliberately not gated the way map_center is — the puck
     // holds its own last-known coordinate across a transient null.
     location_puck_step(map_navigation().device_coord);
-    reverse_geocode_step();
-    crate::module::map::ui::overlay::search_modal::search_step();
-    toast_controller_step();
     crate::module::world::object::store::flush_save_if_due();
     fetch_pump();
 }

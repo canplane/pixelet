@@ -34,7 +34,8 @@ fn gltf_a_rigged_character_comes_out_with_its_skins_weights_and_clips() {
         }
         assert!(joints.iter().all(|&j| j < 7));
     }
-    let idle = g.animations.iter().find(|a| a.name == "idle").expect("idle");
+    // The pack's clips are in one order in every file: static, idle, walk, sprint, …
+    let idle = &g.animations[1];
     assert!((idle.duration - 1.3333).abs() < 1e-3);
     assert!(idle.channels.iter().all(|c| g.skins[0].joints.contains(&c.node)));
     assert!(idle.channels.iter().any(|c| c.path == GltfPath::Rotation && c.values.len() == c.times.len() * 4));
@@ -44,7 +45,8 @@ fn gltf_a_rigged_character_comes_out_with_its_skins_weights_and_clips() {
 fn gltf_an_unrigged_pet_is_animated_by_its_nodes_each_part_a_node_with_a_mesh() {
     let g = parse("actor/kenney_cube_pets/cat.glb");
     assert!(g.skins.is_empty());
-    let walk = g.animations.iter().find(|a| a.name == "walk").expect("walk");
+    // static, idle, walk, run, …
+    let walk = &g.animations[2];
     assert_eq!(walk.channels.len(), 24);
     let order = scene_nodes(&g);
     // Parents before children, every node reached once.

@@ -23,10 +23,11 @@ export const enum Major {
   SURFACE = 0x21,
 }
 
-/** The pointer's own verbs. */
+/** The pointer's own verbs, and the map controls'. */
 export const enum InputMinor {
   POINTER = 0x10,
   WHEEL = 0x11,
+  TRACKING = 0x12,
 }
 
 /** The device sensors' own verbs. */
@@ -45,7 +46,6 @@ export const enum LoadMinor {
 /** The world's own verbs. */
 export const enum WorldMinor {
   ACTION = 0x11,
-  TOAST = 0x13,
   SNAPSHOT = 0x15,
 }
 
@@ -78,6 +78,9 @@ export const enum Cmd {
   INPUT_POINTER = 0x1c10,
   /** [delta_y f64] */
   INPUT_WHEEL = 0x1c11,
+  /** no packet — the tracking button: back to the device when the map is off it, else
+   * follow mode on (the compass asked for first) or off again */
+  INPUT_TRACKING = 0x1c12,
   /** [lon f64, lat f64, altitude f64, accuracy f64, heading f64] — a GPS fix; NaN where the
    * browser gave none */
   SENSOR_UPDATE = 0x1d03,
@@ -98,12 +101,12 @@ export const enum Cmd {
    * the host as `body` until the kernel reads it (the `body_read` import); what the
    * status and the body mean is the kernel's */
   FETCH_UPDATE = 0x1e03,
-  /** [url str, body u32, bytes u32] — a model's bytes, held by the host as `body`
-   * until the kernel reads them (the `body_read` import) */
+  /** [load u32, body u32, bytes u32] — a model's bytes, held by the host as `body` until the
+   * kernel reads them (the `body_read` import) */
   LOAD_UPDATE = 0x1f03,
-  /** [url str, handle u32] — an image decoded and held by the shell */
+  /** [load u32, handle u32] — an image decoded and held by the shell */
   LOAD_IMAGE = 0x1f10,
-  /** [url str] — a load failed */
+  /** [load u32] — a load failed */
   LOAD_DELETE = 0x1f04,
   /** [min_uniform_offset_alignment u32, timestamps bool] — a device answered; the kernel's
    * renderer is made on it (render/gpu/renderer.rs) */
@@ -122,9 +125,6 @@ export const enum Cmd {
 
   // ---- the turn's signals: kernel → shell, left on the completion ring by a strobe or an action ----
 
-  /** [show bool, id str, message_key str, tone u32 (0 loading, 1 error, 2 success)] — a
-   * toast shown or dismissed */
-  WORLD_TOAST = 0x1b13,
   /** [at u32, len u32] — app/shell.rs's snapshot, when it changed: UTF-8
    * past a ring frame, so it is a block the kernel holds, valid until the
    * next snapshot */
@@ -138,6 +138,7 @@ export const enum Cmd {
   FETCH_CREATE = 0x1e01,
   /** [key u64] — a fetch yield aborted; the shell settles it as aborted */
   FETCH_DELETE = 0x1e04,
-  /** [kind u32 (0 glTF, 1 image), url str] — a model or an image to load */
+  /** [kind u32 (0 glTF, 1 image), load u32 (asset/ingested's asset number, the texture pack's
+   * sheet one past the last)] — a model or an image to load */
   LOAD_CREATE = 0x1f01,
 }

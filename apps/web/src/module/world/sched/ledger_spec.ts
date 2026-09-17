@@ -12,7 +12,7 @@ export const CENSUS_TAGS = ["chunk", "decor", "ghost_box", "ghost_coplanar", "gh
 
 export const PHASE_NAMES = ["interaction", "visible", "content", "cosmetic", "report"] as const;
 
-export const CATEGORY_NAMES = ["terrain", "ocean", "poi", "search", "geocode"] as const;
+export const CATEGORY_NAMES = ["terrain", "ocean", "poi"] as const;
 
 export const OUTCOME_NAMES = ["ok", "aborted", "error"] as const;
 
@@ -177,10 +177,10 @@ export const SUMMARY = {
   tasks: {
     AT: 143 as number,
     slots: 0 as number,
-    WORDS: 125 as number,
+    WORDS: 75 as number,
   },
   counters: {
-    AT: 268 as number,
+    AT: 218 as number,
     faces_kept: 0 as number,
     faces_possible: 1 as number,
     runs_culled: 2 as number,
@@ -204,7 +204,7 @@ export const SUMMARY = {
     WORDS: 20 as number,
   },
   atlas: {
-    AT: 288 as number,
+    AT: 238 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -212,7 +212,7 @@ export const SUMMARY = {
     WORDS: 4 as number,
   },
   retain: {
-    AT: 292 as number,
+    AT: 242 as number,
     nodes: 0 as number,
     run_sets: 1 as number,
     run_set_mb: 2 as number,
@@ -225,14 +225,14 @@ export const SUMMARY = {
     WORDS: 9 as number,
   },
   fetch: {
-    AT: 301 as number,
+    AT: 251 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   poi: {
-    AT: 304 as number,
+    AT: 254 as number,
     badge_count: 0 as number,
     dropped: 1 as number,
     place_ms: 2 as number,
@@ -259,7 +259,7 @@ export const SUMMARY = {
     WORDS: 23 as number,
   },
   peak: {
-    AT: 327 as number,
+    AT: 277 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -280,12 +280,12 @@ export const SUMMARY = {
     WORDS: 17 as number,
   },
   steps: {
-    AT: 344 as number,
+    AT: 294 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
-  WORDS: 505 as number,
+  WORDS: 455 as number,
 } as const;
 
 /** What `ledger_read` returns the address of: u32 words, each range's address in the module's memory and its record count. */

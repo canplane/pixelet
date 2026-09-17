@@ -10,7 +10,7 @@
  * I/O credits). In that turn the kernel applies what waits on the submission
  * ring, runs its tick, draws its canvases through the host's WebGPU
  * (wasm/gpu.ts), and leaves on the completion ring what it asks of the host —
- * toasts, the sensors' watches, console lines, the UI's snapshot when it
+ * the sensors' watches, console lines, the UI's snapshot when it
  * changed, the fetches to start and cancel, the loads — which the host reads
  * before the ring returns; the return is when the kernel wants its next turn.
  * What arrives later — a response, a sensor fix, a pointer — is submitted
@@ -28,14 +28,12 @@
  */
 
 import { useLayoutEffect, useSyncExternalStore } from "react";
-import i18next from "i18next";
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
 import { Strobe } from "@xpute/core/sched/strobe.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
-import { Message } from "@pxl/shared/spec/message.ts";
-import { cube_types, decor_types } from "@pxl/shared/spec/cell/mod.ts";
+import type { Message } from "@pxl/shared/spec/message.ts";
 import { FetchFail } from "@pxl/shared/spec/fetch.ts";
 
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
@@ -48,46 +46,35 @@ import { boot_block, hold_body, quantum_policy, text_at } from "@/wasm/module.ts
 // ---- the snapshot the UI renders (crates/pxl/core/src/app/shell.rs) ----
 
 export type PoseStatus = "idle" | "loading" | "ready" | "error";
-export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
-/** A cube crosses as the catalog number a leaf holds it as; the id it is
- * spelled out under is this side's to read off the same JSON the kernel was
- * numbered from (@pxl/shared/spec/cell). */
-export type RecentPick = { kind: "object"; num_id: number } | { kind: "decor"; num_id: number };
-export type ChatLine = { id: number; text: string; ts: number };
-export type SearchRow = { gers_id: string; kind: "poi" | "division"; name: string; subtitle: string; distance: string | null; icon: string; color: string; lon: number; lat: number };
-
 export type UiSnapshot = {
-  map: { status: "idle" | "loading" | "success" | "error"; is_off_center: boolean };
-  location: { status: PoseStatus; has_location: boolean };
+  /** `center` is the map centre as [lon, lat]. */
+  map: { status: "idle" | "loading" | "success" | "error"; is_off_center: boolean; center: [number, number] | null };
+  /** `error` is what went wrong, as @pxl/shared/spec/message's number. */
+  location: { status: PoseStatus; has_location: boolean; error: Message | null };
+  companion: { person_ready: boolean; pet_ready: boolean };
   orientation: { status: PoseStatus; heading: number | null };
   view: { azimuth: number };
   is_follow_mode: boolean;
   camera_busy: boolean;
   fog: string;
-  ui: { active_tool: ActiveTool; object_cube_num_id: number; object_size: number; decor_num_id: number; recent_picks: RecentPick[]; chat_lines: ChatLine[] };
   settings: Record<string, boolean | string | number>;
-  address: { label: string | null };
-  scale_bar: { total_meters: number; bar_width_px: number; is_default_zoom: boolean; label: string };
+  scale_bar: { total_meters: number; bar_width_px: number; is_default_zoom: boolean };
   compass: { show: boolean };
-  search: { loading: boolean; results: SearchRow[] };
   object_storage_version: number;
 };
 
 const INITIAL: UiSnapshot = {
-  map: { status: "idle", is_off_center: false },
-  location: { status: "idle", has_location: false },
+  map: { status: "idle", is_off_center: false, center: null },
+  location: { status: "idle", has_location: false, error: null },
+  companion: { person_ready: false, pet_ready: false },
   orientation: { status: "idle", heading: null },
   view: { azimuth: 0 },
   is_follow_mode: false,
   camera_busy: false,
   fog: "#000000",
-  // A flat colour is held as its own catalog number (spec/cell).
-  ui: { active_tool: "pointer", object_cube_num_id: cube_types.block.red, object_size: 1, decor_num_id: decor_types.tree, recent_picks: [], chat_lines: [] },
   settings: {},
-  address: { label: null },
-  scale_bar: { total_meters: 0, bar_width_px: 0, is_default_zoom: true, label: "" },
+  scale_bar: { total_meters: 0, bar_width_px: 0, is_default_zoom: true },
   compass: { show: false },
-  search: { loading: false, results: [] },
   object_storage_version: 0,
 };
 
@@ -127,23 +114,12 @@ export function kernel_action(action: KernelAction): void {
   request_frame();
 }
 
-// ---- toasts ----
-
-export type ToastEvent = { show: true; id: string; message: Message; tone: number } | { show: false; id: string };
-
-const toast_listeners = new Set<(e: ToastEvent) => void>();
-const toast_backlog: ToastEvent[] = [];
-
-/** Hears the kernel's toasts; the ones raised before anyone listened first. */
-export function on_toast(listener: (e: ToastEvent) => void): () => void {
-  toast_listeners.add(listener);
-  for (const e of toast_backlog.splice(0)) listener(e);
-  return () => toast_listeners.delete(listener);
-}
-
-function emit_toast(e: ToastEvent): void {
-  if (toast_listeners.size === 0) toast_backlog.push(e);
-  for (const listener of toast_listeners) listener(e);
+/** The tracking button, rung at once like an action: the compass's permission
+ * has to be asked inside the gesture that led to it. */
+export function kernel_tracking(): void {
+  CORE_BUILD.send(0, Cmd.INPUT_TRACKING);
+  CORE_BUILD.ring(0);
+  request_frame();
 }
 
 // ---- what the kernel asks: the completion ring's signals ----
@@ -153,11 +129,6 @@ const GEOLOCATION = 0;
 
 function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
   switch (cmd) {
-    case Cmd.WORLD_TOAST: {
-      const [show, id, message, tone] = f!.get<[boolean, string, Message, number]>();
-      emit_toast(show ? { show: true, id, message, tone } : { show: false, id });
-      return;
-    }
     case Cmd.WORLD_SNAPSHOT: {
       // The JSON is far past a ring frame, so the kernel names the block it
       // holds it in. It is the kernel's and stays valid until it makes the
@@ -455,14 +426,9 @@ function send_pointer(phase: number, e: PointerEvent): void {
   request_frame();
 }
 
-function send_language(language: string | undefined): void {
-  if (!language) return;
-  kernel_action({ type: "set_language", lang: language.split("-")[0].toLowerCase() });
-}
-
 /**
  * The one frame loop over `element`: the kernel's turns, the pointer's events
- * on it, the tab's visibility, the sensors' subscription and the language.
+ * on it, the tab's visibility and the sensors' subscription.
  */
 export function KernelDriver({ element }: { element: HTMLElement | null }): null {
   useLayoutEffect(() => {
@@ -499,7 +465,6 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
       request_frame();
     };
     const on_page_hide = () => send_visibility(false);
-    const on_language = (language: string) => send_language(language);
 
     element.addEventListener("pointerdown", on_down);
     element.addEventListener("pointermove", on_move);
@@ -512,7 +477,6 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     globalThis.addEventListener("pointercancel", on_up);
     document.addEventListener("visibilitychange", on_visibility);
     globalThis.addEventListener("pagehide", on_page_hide);
-    i18next.on("languageChanged", on_language);
     const observer = new ResizeObserver(on_resize);
     observer.observe(element);
 
@@ -529,7 +493,6 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     }).catch(() => {});
 
     send_rect(element);
-    send_language(i18next.language);
     kernel_action({ type: "sensors_subscribe", geolocation: "geolocation" in navigator, orientation: orientation_supported(), needs_permission: orientation_needs_permission() });
     strobe.start();
 
@@ -538,7 +501,6 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
       kernel_action({ type: "sensors_unsubscribe" });
       permission?.removeEventListener("change", on_permission);
       observer.disconnect();
-      i18next.off("languageChanged", on_language);
       globalThis.removeEventListener("pagehide", on_page_hide);
       document.removeEventListener("visibilitychange", on_visibility);
       globalThis.removeEventListener("pointercancel", on_up);

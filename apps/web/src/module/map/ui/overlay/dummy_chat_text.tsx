@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useKernel } from "@/wasm/kernel.ts";
+import { useUiStore } from "@/app/store/ui_store.ts";
 
 // Layered text-shadow, not -webkit-text-stroke: the stroke property renders
 // inconsistently across engines and can clip thin glyph strokes at small sizes.
@@ -13,7 +13,7 @@ const TEXT_OUTLINE_SHADOW = "-1px 0 0 #000, 1px 0 0 #000, 0 -1px 0 #000, 0 1px 0
 
 export function DummyChatText() {
   const { t } = useTranslation();
-  const chat_lines = useKernel((s) => s.ui.chat_lines);
+  const chat_lines = useUiStore((s) => s.chatLines);
   const [hovered, setHovered] = useState(false);
 
   if (chat_lines.length === 0) return null;

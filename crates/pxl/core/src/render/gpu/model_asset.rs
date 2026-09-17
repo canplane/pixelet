@@ -28,8 +28,9 @@ use crate::sys::kernel::with_world;
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelHandle {
     pub model: u32,
-    /// Clip index by the name the glTF gives it.
-    pub clips: HashMap<String, u32>,
+    /// Clips registered, one per animation in the file's order, so a clip's
+    /// number is its animation's index.
+    pub clip_count: u32,
     /// Triangles, for the ledger.
     pub triangles: u32,
 }
@@ -186,10 +187,8 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
         }
 
         // Clips: the channels on joints.
-        let mut clips = HashMap::new();
         for anim in &gltf.animations {
             let c = sched.models.clip(model, anim.duration as f32);
-            clips.insert(anim.name.clone(), c);
             for channel in &anim.channels {
                 let Some(&joint) = joint_of.get(&channel.node) else { continue };
                 let keys = channel.times.len() as u32;
@@ -220,7 +219,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
         unsafe { sched.models.seal(&mut sched.draw, mem, model, scale) };
         Some(ModelHandle {
             model,
-            clips,
+            clip_count: gltf.animations.len() as u32,
             triangles: index_cnt / 3,
         })
     })

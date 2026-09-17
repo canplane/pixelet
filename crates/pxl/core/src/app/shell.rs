@@ -8,7 +8,7 @@
 
 use core::fmt::{self, Write};
 
-use pxl_shared::spec::cell::{decor_num_id, placeable_cube_num_id, placeable_cube_of, DecorId};
+use pxl_shared::spec::cell::{placeable_cube_of, DecorId};
 use pxl_shared::spec::space::adapter::epsg4326;
 use pxl_shared::spec::space::indexer::L3_IDX;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
@@ -16,7 +16,7 @@ use xpute_core::kit::json::{read_json, JsonValue, Quoted};
 
 use crate::app::setting::schema::{SettingRef, SettingValue, SETTING_KEYS};
 use crate::app::setting::store::settings_store;
-use crate::app::store::ui_store::{ui_store, ActiveTool, RecentPick};
+use crate::app::store::ui_store::{ui_store, ActiveTool};
 use crate::module::camera::store::{camera_store, CameraStatus};
 use crate::module::device::pose::device_orientation::{orientation_subscribe, orientation_unsubscribe, request_orientation, OrientationPlatform};
 use crate::module::device::pose::geolocation::{geolocation_subscribe, geolocation_unsubscribe, start_watching};
@@ -25,10 +25,9 @@ use crate::module::map::navigation::map_navigation::map_navigation;
 use crate::module::map::store::map_store;
 use crate::module::map::ui::control::compass::{compass_reset, show_compass};
 use crate::module::map::ui::control::scale_bar::scale_bar;
-use crate::module::map::ui::overlay::reverse_geocode::reverse_geocode;
-use crate::module::map::ui::overlay::search_modal::{search_close, search_query, search_rows, SearchRow};
 use crate::module::world::change::request_world_tick;
 use crate::module::world::character::character_preview::{preview_close, preview_open};
+use crate::module::world::character::store::companion_load_store;
 use crate::module::world::character::variant::CharacterGroup;
 use crate::module::world::environment::theme::themes;
 use crate::module::world::environment::theme_clock::theme_key;
@@ -40,7 +39,6 @@ use crate::module::world::world::{set_world_platform, world_platform, Platform};
 use crate::sys::global::Global;
 
 struct Shell {
-    language: String,
     /// A search jump that landed on a page with no terrain yet: re-grounded
     /// the moment that page's tile arrives, while the map is still there.
     go_to: Option<PVF3>,
@@ -49,10 +47,7 @@ struct Shell {
 static SHELL: Global<Shell> = Global::new();
 
 fn shell() -> &'static mut Shell {
-    SHELL.get(|| Shell {
-        language: "en".to_string(),
-        go_to: None,
-    })
+    SHELL.get(|| Shell { go_to: None })
 }
 
 /// A number as JSON writes it: `null` for one that is not finite.
@@ -68,6 +63,15 @@ impl fmt::Display for Num {
     }
 }
 
+/// A point as JSON writes it: `[lon, lat]`.
+struct LonLat(f64, f64);
+
+impl fmt::Display for LonLat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{},{}]", Num(self.0), Num(self.1))
+    }
+}
+
 /// A value, or `null` for none.
 struct Or<T>(Option<T>);
 
@@ -77,15 +81,6 @@ impl<T: fmt::Display> fmt::Display for Or<T> {
             Some(v) => v.fmt(f),
             None => f.write_str("null"),
         }
-    }
-}
-
-pub fn active_tool_str(tool: ActiveTool) -> &'static str {
-    match tool {
-        ActiveTool::Pointer => "pointer",
-        ActiveTool::Object => "object",
-        ActiveTool::Decor => "decor",
-        ActiveTool::Eraser => "eraser",
     }
 }
 
@@ -108,26 +103,6 @@ fn pose_status_str(status: DevicePoseStatus) -> &'static str {
     }
 }
 
-/// One search result as the snapshot's JSON object, a comma before all but the first.
-fn search_row_json<W: Write>(out: &mut W, first: bool, r: &SearchRow) -> fmt::Result {
-    if !first {
-        out.write_char(',')?;
-    }
-    write!(
-        out,
-        "{{\"gers_id\":{},\"kind\":{},\"name\":{},\"subtitle\":{},\"distance\":{},\"icon\":{},\"color\":{},\"lon\":{},\"lat\":{}}}",
-        Quoted(r.gers_id),
-        Quoted(r.kind),
-        Quoted(r.name),
-        Quoted(&r.subtitle),
-        Or(r.distance.map(Quoted)),
-        Quoted(r.icon),
-        Quoted(r.color),
-        Num(r.lon),
-        Num(r.lat)
-    )
-}
-
 /// The state the UI shows, as one JSON document written into `out` — the
 /// lane the shell hands over, so a turn builds no string of it.
 pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
@@ -136,18 +111,32 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
     let location = device_location_store();
     let orientation = device_orientation_store();
     let camera = camera_store();
-    let ui = ui_store();
     let settings = settings_store();
-    let address = reverse_geocode(&shell().language);
     let bar = scale_bar(view().height.max(1.0));
 
-    write!(out, "{{\"map\":{{\"status\":{},\"is_off_center\":{}}},", Quoted(map.map_status.as_str()), nav.is_off_center)?;
+    // The map centre as the shell reads it, in degrees: what its reverse
+    // geocode keys a page by and its search measures distance from.
+    let center = map.map_center.map(|c| {
+        let mut g = [0.0; 3];
+        epsg4326::unproject(&mut g, c.i, c.f);
+        g
+    });
     write!(
         out,
-        "\"location\":{{\"status\":{},\"has_location\":{}}},",
-        Quoted(pose_status_str(location.status)),
-        location.location.is_some()
+        "{{\"map\":{{\"status\":{},\"is_off_center\":{},\"center\":{}}},",
+        Quoted(map.map_status.as_str()),
+        nav.is_off_center,
+        Or(center.map(|g| LonLat(g[0], g[1])))
     )?;
+    write!(
+        out,
+        "\"location\":{{\"status\":{},\"has_location\":{},\"error\":{}}},",
+        Quoted(pose_status_str(location.status)),
+        location.location.is_some(),
+        Or(location.error.map(|m| m as u32))
+    )?;
+    let companion = companion_load_store();
+    write!(out, "\"companion\":{{\"person_ready\":{},\"pet_ready\":{}}},", companion.person_ready, companion.pet_ready)?;
     write!(
         out,
         "\"orientation\":{{\"status\":{},\"heading\":{}}},",
@@ -155,31 +144,7 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
         Or(orientation.orientation.and_then(|o| o.heading).map(Num))
     )?;
     write!(out, "\"view\":{{\"azimuth\":{}}},\"is_follow_mode\":{},", Num(camera.view_state.azimuth), camera.is_follow_mode)?;
-    write!(
-        out,
-        "\"ui\":{{\"active_tool\":{},\"object_cube_num_id\":{},\"object_size\":{},\"decor_num_id\":{},\"recent_picks\":[",
-        Quoted(active_tool_str(ui.active_tool)),
-        placeable_cube_num_id(ui.object_cube),
-        Num(ui.object_size),
-        decor_num_id(ui.decor_id)
-    )?;
-    for (i, p) in ui.recent_picks.iter().enumerate() {
-        if i > 0 {
-            out.write_char(',')?;
-        }
-        match p {
-            RecentPick::Object(cube) => write!(out, "{{\"kind\":\"object\",\"num_id\":{}}}", placeable_cube_num_id(*cube))?,
-            RecentPick::Decor(id) => write!(out, "{{\"kind\":\"decor\",\"num_id\":{}}}", decor_num_id(*id))?,
-        }
-    }
-    out.write_str("],\"chat_lines\":[")?;
-    for (i, l) in ui.chat_lines.iter().enumerate() {
-        if i > 0 {
-            out.write_char(',')?;
-        }
-        write!(out, "{{\"id\":{},\"text\":{},\"ts\":{}}}", l.id, Quoted(&l.text), Num(l.ts))?;
-    }
-    out.write_str("]},\"settings\":{")?;
+    out.write_str("\"settings\":{")?;
     let mut first = true;
     for key in SETTING_KEYS() {
         let Some(value) = settings.value(key) else { continue };
@@ -193,14 +158,13 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
             SettingRef::Number(n) => write!(out, "{}:{n}", Quoted(key))?,
         }
     }
-    write!(out, "}},\"address\":{{\"label\":{}}},", Or(address.label.map(Quoted)))?;
+    out.write_str("},")?;
     write!(
         out,
-        "\"scale_bar\":{{\"total_meters\":{},\"bar_width_px\":{},\"is_default_zoom\":{},\"label\":{}}},",
+        "\"scale_bar\":{{\"total_meters\":{},\"bar_width_px\":{},\"is_default_zoom\":{}}},",
         Num(bar.total_meters),
         Num(bar.bar_width_px),
-        bar.is_default_zoom,
-        Quoted(bar.label)
+        bar.is_default_zoom
     )?;
     write!(out, "\"compass\":{{\"show\":{}}},", show_compass())?;
     // The fog is the one theme colour the shell paints too, so it crosses as
@@ -208,16 +172,7 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
     // lights with (environment/theme.json's `$type: "rgb"`); spelling it out
     // is this one writer's job, the way the shipped palette's is.
     write!(out, "\"camera_busy\":{},\"fog\":\"#{:06x}\",", camera.camera_status != CameraStatus::Idle, themes(theme_key()).fog)?;
-    write!(out, "\"object_storage_version\":{OBJECT_STORAGE_VERSION},\"search\":{{\"results\":[")?;
-    let (mut rows, mut first) = (Ok(()), true);
-    let loading = search_rows(&shell().language, |r| {
-        if rows.is_ok() {
-            rows = search_row_json(&mut *out, first, &r);
-            first = false;
-        }
-    });
-    rows?;
-    write!(out, "],\"loading\":{loading}}}}}")
+    write!(out, "\"object_storage_version\":{OBJECT_STORAGE_VERSION}}}")
 }
 
 /// A string field of an action, its escapes decoded; none where it is
@@ -234,8 +189,9 @@ fn bool_of(action: &JsonValue, key: &str) -> Option<bool> {
     action.get(key)?.as_bool()
 }
 /// The tracking button: back to the device when the map is off it, else
-/// follow mode on — the compass sensor asked for first — or off again.
-fn tracking_action() {
+/// follow mode on — the compass sensor asked for first — or off again
+/// (INPUT_TRACKING).
+pub fn tracking_action() {
     let location = device_location_store();
     let is_enabled = location.status == DevicePoseStatus::Ready && location.location.is_some();
     let is_loading = location.status == DevicePoseStatus::Loading;
@@ -313,10 +269,8 @@ pub fn ui_action(text: &str) -> bool {
             let Some(on) = bool_of(&action, "on") else { return false };
             camera_store().is_follow_mode = on;
         }
-        "reset_azimuth" => camera_store().reset_azimuth(),
         "reset_dist" => camera_store().reset_dist(),
         "compass_reset" => compass_reset(),
-        "tracking" => tracking_action(),
         "go_to" => {
             // A search result: its point, grounded the way every map_center
             // setter that respects ground_snap is.
@@ -331,10 +285,6 @@ pub fn ui_action(text: &str) -> bool {
             // ground falls back to the raw coordinate: grounded again once the
             // page's tile arrives, rather than left under the terrain.
             shell().go_to = (grounded == target).then_some(target);
-        }
-        "set_language" => {
-            let Some(lang) = text_of(&action, "lang") else { return false };
-            shell().language = lang.to_string();
         }
         "enable_sensors" => {
             // Orientation first: Safari consumes the gesture's activation, so a
@@ -377,11 +327,6 @@ pub fn ui_action(text: &str) -> bool {
             let Some(id) = f64_of(&action, "id") else { return false };
             preview_close(id as u32);
         }
-        "search_query" => {
-            let Some(query) = text_of(&action, "query") else { return false };
-            search_query(&query);
-        }
-        "search_close" => search_close(),
         "ledger_logging" => {
             let Some(on) = bool_of(&action, "on") else { return false };
             ledger_set_logging(on);

@@ -40,7 +40,6 @@ pub struct GltfPrimitive {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GltfNode {
-    pub name: String,
     pub parent: i32,
     pub children: Vec<u32>,
     pub mesh: i32,
@@ -79,8 +78,8 @@ pub struct GltfChannel {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+/// An animation, by its place in the file's `animations`.
 pub struct GltfAnimation {
-    pub name: String,
     pub duration: f64,
     pub channels: Vec<GltfChannel>,
 }
@@ -346,7 +345,6 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(json: JsonValue<'_>
             compose_trs(&mut local, &translation, &rotation, &scale);
         }
         nodes.push(GltfNode {
-            name: n.get("name").and_then(|v| v.as_str()).map_or(String::new(), |s| s.to_string()),
             parent: parents[i],
             children: arr(n.get("children")).filter_map(|c| c.as_f64()).map(|c| c as u32).collect(),
             mesh: num(n.get("mesh")).map_or(-1, |v| v as i32),
@@ -370,7 +368,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(json: JsonValue<'_>
     }
 
     let mut animations = Vec::new();
-    for (k, a) in arr(json.get("animations")).enumerate() {
+    for a in arr(json.get("animations")) {
         let mut duration = 0.0f64;
         let mut channels = Vec::new();
         for c in arr(a.get("channels")) {
@@ -416,11 +414,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(json: JsonValue<'_>
                 values,
             });
         }
-        animations.push(GltfAnimation {
-            name: a.get("name").and_then(|v| v.as_str()).map_or_else(|| format!("animation_{k}"), |s| s.to_string()),
-            duration,
-            channels,
-        });
+        animations.push(GltfAnimation { duration, channels });
     }
 
     let scene_index = num(json.get("scene")).unwrap_or(0.0) as usize;

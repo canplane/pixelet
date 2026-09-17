@@ -2,21 +2,21 @@
 
 //! Shared loading and caching of the models and the skins, so any consumer —
 //! the companions, the decor kinds, the picker's preview — hits the network and
-//! the parser at most once per URL.
+//! the parser at most once per asset.
 //!
-//! The fetch is the shell's: a URL asked for here for the first time joins the
-//! request lane (`take_load_requests`), and the shell answers with the bytes of
+//! The fetch is the shell's, and so is where an asset is fetched from: an asset
+//! asked for here for the first time joins the request lane
+//! (`take_load_requests`) by its number, and the shell answers with the bytes of
 //! a model it holds (`gltf_arrived`, queued, and read and parsed by
 //! `gltf_task` on the turns' quota) or the handle of an image it decoded
 //! and holds (`image_arrived`) — the file's own pixels, top row first, no
 //! colour conversion and no premultiplied alpha. A consumer polls: None while
 //! the load is in flight or has failed.
 
-use std::collections::HashMap;
 use std::rc::Rc;
 
+use pxl_shared::asset::ingested::Asset;
 use pxl_shared::spec::space::v3::V3;
-use xpute_core::kit::hash::fnv1a64_str;
 use xpute_core::sched::edge::{notified, yield_if_spent, Notify};
 use xpute_core::sys::mem::{alloc, free};
 
@@ -34,10 +34,37 @@ pub enum LoadKind {
     Image,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// What a load names: a shipped asset, or the texture pack's sheet, which the
+/// ingest writes beside the table rather than as a row of it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Load {
+    Asset(Asset),
+    Sheet,
+}
+
+impl Load {
+    /// Its number on the wire (LOAD_CREATE): an asset's own, the sheet one past
+    /// the last.
+    pub fn number(self) -> u32 {
+        match self {
+            Load::Asset(a) => a as u32,
+            Load::Sheet => Asset::ALL.len() as u32,
+        }
+    }
+
+    /// The load a number names, or none.
+    pub fn of(number: u32) -> Option<Load> {
+        if number == Asset::ALL.len() as u32 {
+            return Some(Load::Sheet);
+        }
+        u16::try_from(number).ok().and_then(Asset::of).map(Load::Asset)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LoadRequest {
     pub kind: LoadKind,
-    pub url: String,
+    pub load: Load,
 }
 
 enum Entry<T> {
@@ -46,67 +73,65 @@ enum Entry<T> {
     Failed,
 }
 
+/// Loads by number: an asset's own, the sheet one past the last.
+const LOADS: usize = Asset::ALL.len() + 1;
+
 struct Loader {
-    gltf: HashMap<String, Entry<Rc<Gltf>>>,
-    image: HashMap<String, Entry<u32>>,
+    gltf: Vec<Option<Entry<Rc<Gltf>>>>,
+    image: Vec<Option<Entry<u32>>>,
     requests: Vec<LoadRequest>,
-    /// Models the shell holds and the task has not read: the URL's hash, the
-    /// shell's body and its length.
-    arrived: Vec<(u64, u32, u32)>,
+    /// Models the shell holds and the task has not read: the load, the shell's
+    /// body and its length.
+    arrived: Vec<(Load, u32, u32)>,
 }
 
 static LOADER: Global<Loader> = Global::new();
 
 fn loader() -> &'static mut Loader {
     LOADER.get(|| Loader {
-        gltf: HashMap::new(),
-        image: HashMap::new(),
+        gltf: (0..LOADS).map(|_| None).collect(),
+        image: (0..LOADS).map(|_| None).collect(),
         requests: Vec::new(),
         arrived: Vec::new(),
     })
 }
 
-/// A parsed glTF by URL, once it has arrived.
-pub fn load_gltf(url: &str) -> Option<Rc<Gltf>> {
+/// A parsed glTF, once it has arrived.
+pub fn load_gltf(load: Load) -> Option<Rc<Gltf>> {
     let l = loader();
-    match l.gltf.get(url) {
+    match &l.gltf[load.number() as usize] {
         Some(Entry::Ready(g)) => Some(g.clone()),
         Some(_) => None,
         None => {
-            l.gltf.insert(url.to_string(), Entry::Pending);
-            l.requests.push(LoadRequest {
-                kind: LoadKind::Gltf,
-                url: url.to_string(),
-            });
+            l.gltf[load.number() as usize] = Some(Entry::Pending);
+            l.requests.push(LoadRequest { kind: LoadKind::Gltf, load });
             None
         }
     }
 }
 
-/// A skin by URL, as the shell's image handle, once it has arrived.
-pub fn load_image(url: &str) -> Option<u32> {
+/// An image, as the shell's handle, once it has arrived.
+pub fn load_image(load: Load) -> Option<u32> {
     let l = loader();
-    match l.image.get(url) {
+    match &l.image[load.number() as usize] {
         Some(Entry::Ready(h)) => Some(*h),
         Some(_) => None,
         None => {
-            l.image.insert(url.to_string(), Entry::Pending);
-            l.requests.push(LoadRequest {
-                kind: LoadKind::Image,
-                url: url.to_string(),
-            });
+            l.image[load.number() as usize] = Some(Entry::Pending);
+            l.requests.push(LoadRequest { kind: LoadKind::Image, load });
             None
         }
     }
 }
 
 /// Whether a load has failed: it is never asked for again.
-pub fn load_failed(url: &str) -> bool {
+pub fn load_failed(load: Load) -> bool {
     let l = loader();
-    matches!(l.gltf.get(url), Some(Entry::Failed)) || matches!(l.image.get(url), Some(Entry::Failed))
+    let n = load.number() as usize;
+    matches!(l.gltf[n], Some(Entry::Failed)) || matches!(l.image[n], Some(Entry::Failed))
 }
 
-/// The URLs to fetch, drained by the shell.
+/// The loads to fetch, drained by the shell.
 pub fn take_load_requests() -> Vec<LoadRequest> {
     core::mem::take(&mut loader().requests)
 }
@@ -118,8 +143,8 @@ fn arrivals() -> &'static mut Notify {
 }
 
 /// The shell holds a model's bytes as `body`: queued for `gltf_task`.
-pub fn gltf_arrived(url: &str, body: u32, bytes: u32) {
-    loader().arrived.push((fnv1a64_str(url), body, bytes));
+pub fn gltf_arrived(load: Load, body: u32, bytes: u32) {
+    loader().arrived.push((load, body, bytes));
     arrivals().notify();
 }
 
@@ -130,18 +155,14 @@ pub async fn gltf_task() {
         notified(arrivals).await;
         while !loader().arrived.is_empty() {
             yield_if_spent(world_edge).await;
-            let (url, body, bytes) = loader().arrived.remove(0);
+            let (load, body, bytes) = loader().arrived.remove(0);
             let mut buf = vec![0u8; bytes as usize];
             body_read(body, &mut buf);
             let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
                 Ok(g) => Entry::Ready(Rc::new(g)),
                 Err(_) => Entry::Failed,
             };
-            // The URL was a key since it was asked for; the arrival names it by
-            // its hash so the queue holds numbers.
-            if let Some((_, e)) = loader().gltf.iter_mut().find(|(k, _)| fnv1a64_str(k) == url) {
-                *e = entry;
-            }
+            loader().gltf[load.number() as usize] = Some(entry);
             decor_assets_arrived();
             request_world_tick();
         }
@@ -149,21 +170,21 @@ pub async fn gltf_task() {
 }
 
 /// The shell's handle for a decoded image.
-pub fn image_arrived(url: &str, handle: u32) {
-    let l = loader();
-    l.image.insert(url.to_string(), Entry::Ready(handle));
+pub fn image_arrived(load: Load, handle: u32) {
+    loader().image[load.number() as usize] = Some(Entry::Ready(handle));
     decor_assets_arrived();
     request_world_tick();
 }
 
 /// The shell's report that a fetch failed.
-pub fn load_rejected(url: &str) {
+pub fn load_rejected(load: Load) {
     let l = loader();
-    if l.gltf.contains_key(url) {
-        l.gltf.insert(url.to_string(), Entry::Failed);
+    let n = load.number() as usize;
+    if l.gltf[n].is_some() {
+        l.gltf[n] = Some(Entry::Failed);
     }
-    if l.image.contains_key(url) {
-        l.image.insert(url.to_string(), Entry::Failed);
+    if l.image[n].is_some() {
+        l.image[n] = Some(Entry::Failed);
     }
     decor_assets_arrived();
 }

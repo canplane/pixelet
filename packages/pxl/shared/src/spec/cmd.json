@@ -52,7 +52,7 @@
     {
       "name": "InputMinor",
       "doc": [
-        "The pointer's own verbs."
+        "The pointer's own verbs, and the map controls'."
       ],
       "format": "hex2",
       "entries": [
@@ -63,6 +63,10 @@
         {
           "name": "WHEEL",
           "value": 17
+        },
+        {
+          "name": "TRACKING",
+          "value": 18
         }
       ]
     },
@@ -114,10 +118,6 @@
         {
           "name": "ACTION",
           "value": 17
-        },
-        {
-          "name": "TOAST",
-          "value": 19
         },
         {
           "name": "SNAPSHOT",
@@ -193,6 +193,14 @@
           ]
         },
         {
+          "name": "INPUT_TRACKING",
+          "value": 7186,
+          "doc": [
+            "no packet — the tracking button: back to the device when the map is off it, else",
+            "follow mode on (the compass asked for first) or off again"
+          ]
+        },
+        {
           "name": "SENSOR_UPDATE",
           "value": 7427,
           "doc": [
@@ -246,22 +254,22 @@
           "name": "LOAD_UPDATE",
           "value": 7939,
           "doc": [
-            "[url str, body u32, bytes u32] — a model's bytes, held by the host as `body`",
-            "until the kernel reads them (the `body_read` import)"
+            "[load u32, body u32, bytes u32] — a model's bytes, held by the host as `body` until the",
+            "kernel reads them (the `body_read` import)"
           ]
         },
         {
           "name": "LOAD_IMAGE",
           "value": 7952,
           "doc": [
-            "[url str, handle u32] — an image decoded and held by the shell"
+            "[load u32, handle u32] — an image decoded and held by the shell"
           ]
         },
         {
           "name": "LOAD_DELETE",
           "value": 7940,
           "doc": [
-            "[url str] — a load failed"
+            "[load u32] — a load failed"
           ]
         },
         {
@@ -307,14 +315,6 @@
           "section": "the turn's signals: kernel → shell, left on the completion ring by a strobe or an action"
         },
         {
-          "name": "WORLD_TOAST",
-          "value": 6931,
-          "doc": [
-            "[show bool, id str, message_key str, tone u32 (0 loading, 1 error, 2 success)] — a",
-            "toast shown or dismissed"
-          ]
-        },
-        {
           "name": "WORLD_SNAPSHOT",
           "value": 6933,
           "doc": [
@@ -356,7 +356,8 @@
           "name": "LOAD_CREATE",
           "value": 7937,
           "doc": [
-            "[kind u32 (0 glTF, 1 image), url str] — a model or an image to load"
+            "[kind u32 (0 glTF, 1 image), load u32 (asset/ingested's asset number, the texture pack's",
+            "sheet one past the last)] — a model or an image to load"
           ]
         }
       ]

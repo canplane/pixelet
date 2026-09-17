@@ -9,14 +9,12 @@ pub mod decor;
 pub mod environment;
 pub mod fetch;
 pub mod frame;
-pub mod geocode;
 pub mod gltf_cache;
 pub mod marker;
 pub mod object;
 pub mod page_table;
 pub mod poi;
 pub mod sched;
-pub mod search;
 pub mod surface_height;
 pub mod terrain;
 #[allow(clippy::module_inception)]

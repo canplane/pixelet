@@ -45,14 +45,14 @@ fn fresh() -> std::sync::MutexGuard<'static, ()> {
 #[test]
 fn fetch_scheduler_a_started_demand_goes_out_under_the_key_it_was_asked_for() {
     let _g = fresh();
-    let x = d(Category::Search, 0xcafe_5678_9abc_def0, 0.0);
-    fetch_sync(Category::Search, std::slice::from_ref(&x));
+    let x = d(Category::Ocean, 0xcafe_5678_9abc_def0, 0.0);
+    fetch_sync(Category::Ocean, std::slice::from_ref(&x));
     fetch_pump();
     let mut out = Vec::new();
     fetch_take_started(|d| out.push(*d));
     assert_eq!(out, vec![x]);
     fetch_settle(x.key, Outcome::Ok, None, Failure::default());
-    assert_eq!(fetch_pending_count(Category::Search), 0);
+    assert_eq!(fetch_pending_count(Category::Ocean), 0);
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn fetch_scheduler_an_aborted_demand_goes_out_under_its_key_and_settles_under_it
 fn fetch_scheduler_ledger_records_outcome_for_completed_and_aborted_demands() {
     let _g = fresh();
     ledger_recording_start();
-    let cat = Category::Geocode;
+    let cat = Category::Poi;
     let (done, killed) = (d(cat, 1, 0.0), d(cat, 2, 1.0));
     fetch_sync(cat, &[done, killed]);
     started();

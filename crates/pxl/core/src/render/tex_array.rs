@@ -1,6 +1,6 @@
 // pxl_core/render/tex_array.rs
 
-use pxl_shared::spec::cell::cube_ids;
+use pxl_shared::spec::cell::{block_cubes, cube_types};
 
 use crate::render::layer::terrain::shader_meta::GROUND_LAYER_META;
 
@@ -10,11 +10,11 @@ use crate::render::layer::terrain::shader_meta::GROUND_LAYER_META;
 /// GROUND_LAYER_INDEX_LOOKUP_FLAT. A numbering, not a texture: what a placed
 /// cube's layer is must be answerable where no canvas exists.
 ///
-/// cube_ids is only ever the original 15 flat colors — the terrain-styled
+/// The blocks are only ever the original 15 flat colors — the terrain-styled
 /// catalog is a separate numbering, deliberately never mixed into this one:
-/// those ids are meant to look identical to an existing ground layer, not get
-/// a new one of their own.
+/// those cubes are meant to look identical to an existing ground layer, not
+/// get a new one of their own.
 #[allow(non_snake_case)]
-pub fn OBJECT_LAYER_IDX(color_id: &str) -> Option<u32> {
-    cube_ids.iter().position(|id| *id == color_id).map(|i| (GROUND_LAYER_META.len() + i) as u32)
+pub fn OBJECT_LAYER_IDX(block: cube_types::Block) -> Option<u32> {
+    block_cubes().iter().position(|b| *b == block).map(|i| (GROUND_LAYER_META.len() + i) as u32)
 }
