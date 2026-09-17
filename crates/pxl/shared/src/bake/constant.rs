@@ -121,6 +121,34 @@ pub const OBJECT_LAYOUT: SparseTreeLayout = SparseTreeLayout {
     max: CELL_SHAMT,
 };
 
+// ---- An object entry, as a column's lanes hold it ----
+
+/// A cell's Z and a band's, as wide as the coordinate carries them. PVF3
+/// gives Z sixteen bits (pvf3/core.rs's IVEC_Z_W), so a cell's Z is an i16 and
+/// a band's — that Z over BAND_CELLS — is narrower still. They are i32 here
+/// because the arithmetic over them (a band times its cells) leaves the range
+/// a Z has, and a type that cannot hold its own product is worse than a wide
+/// one: what the width is for is written down rather than enforced.
+pub type CellZ = i32;
+pub type BandZ = i32;
+
+/// OBJECT_LAYOUT's finest and coarsest levels: an eighth of a cell, and a
+/// cell. A band tree reaches six levels above that, to the band's 64 cells.
+pub const MIN_LEVEL: i32 = -3;
+pub const CELL_LEVEL: i32 = 0;
+pub const BAND_SHAMT: u32 = 6;
+pub const BAND_CELLS: u32 = 1 << BAND_SHAMT;
+/// Finest-tier steps along one side of a cell, and one such step in
+/// world units.
+pub const CELL_STEPS: u32 = 1 << (-MIN_LEVEL);
+pub const STEP_UNITS: f64 = 1.0 / CELL_STEPS as f64;
+/// One band's height, in world units.
+pub const BAND_UNITS: f64 = BAND_CELLS as f64;
+/// An entry's packed position: nine bits an axis in finest-tier steps,
+/// then its level above the finest in four.
+pub const POS_BITS: u32 = 9;
+pub const POS_MASK: u32 = (1 << POS_BITS) - 1;
+
 #[cfg(test)]
 #[path = "constant.test.rs"]
 mod test;

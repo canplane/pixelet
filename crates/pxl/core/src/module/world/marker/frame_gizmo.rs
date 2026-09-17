@@ -10,6 +10,7 @@
 //! the map moves, the frames' part when the view does; both go to the kernel
 //! as one set.
 
+use pxl_render::draw::{DrawList, Held, PIPELINE_DEBUG};
 use pxl_shared::bake::constant::U_PER_CELL;
 use pxl_shared::spec::space::indexer::{L1_IDX_IN_L4, L3_BASE, L3_CENTER};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
@@ -24,7 +25,6 @@ use crate::module::world::chunk_node::World;
 use crate::module::world::frame::view::view;
 use crate::module::world::terrain::elevation::{get_ele, with_ele};
 use crate::module::world::terrain::store::tile_pages;
-use crate::render::draw::{DrawList, Held, PIPELINE_DEBUG};
 use crate::sys::global::Global;
 use crate::sys::kernel::kernel;
 

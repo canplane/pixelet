@@ -1,6 +1,5 @@
 // pxl_core/module/world/billboard.rs
 
-pub mod atlas;
 pub mod batch;
 pub mod canvas_scale;
 pub mod canvas_text;

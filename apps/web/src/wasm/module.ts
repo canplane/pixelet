@@ -179,7 +179,7 @@ export async function instantiate_kernel(memory: WebAssembly.Memory): Promise<Ke
         bodies.delete(body);
         if (bytes !== undefined && len > 0) new Uint8Array(memory.buffer, dst, len).set(bytes.subarray(0, len));
       },
-      // The renderer's WebGPU (crates/pxl/core/src/render/gpu/api.rs).
+      // The renderer's WebGPU (crates/pxl/render/src/gpu/api.rs).
       ...gpu_imports(memory),
     },
   });

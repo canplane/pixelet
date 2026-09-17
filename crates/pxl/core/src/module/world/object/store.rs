@@ -17,6 +17,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use pxl_render::layer::object::adapter::{Carve, Entries};
 use pxl_shared::bake::constant::{OBJECT_LAYOUT, U_PER_CELL};
 use pxl_shared::bake::ground::shown_ground;
 use pxl_shared::spec::cell::{
@@ -40,7 +41,6 @@ use crate::module::world::change::{bump_world, request_world_tick, wake_at, worl
 use crate::module::world::chunk_node::chunk_sources_changed;
 use crate::module::world::frame::coord::local_world_to_canonical;
 use crate::module::world::terrain::elevation::get_ground_type;
-use crate::render::layer::object::adapter::Carve;
 use crate::sys::global::{now, Global};
 use crate::sys::host::{storage_get, storage_set};
 use crate::sys::kernel::{kernel, reindex_object};
@@ -995,7 +995,7 @@ pub fn remove(at: EntryAt) {
 // ---- the records as the kernel holds them ----
 //
 // The object store's records; the paint that turns them into voxels is
-// render/layer/object/adapter.rs.
+// crates/pxl/render/src/layer/object/adapter.rs.
 //
 // One record per L2 chunk column that holds user objects — a palette,
 // and one sparse octree per 64³ band whose leaves are palette indices —
@@ -1013,21 +1013,8 @@ pub fn remove(at: EntryAt) {
 // rebuilt a chunk at a time because a write touches one chunk and the cost
 // is bounded by what that chunk holds.
 
-/// A cell's Z and a band's, as wide as the coordinate carries them. PVF3
-/// gives Z sixteen bits (pvf3/core.rs's IVEC_Z_W), so a cell's Z is an i16 and
-/// a band's — that Z over BAND_CELLS — is narrower still. They are i32 here
-/// because the arithmetic over them (a band times its cells) leaves the range
-/// a Z has, and a type that cannot hold its own product is worse than a wide
-/// one: what the width is for is written down rather than enforced.
-pub type CellZ = i32;
-pub type BandZ = i32;
+pub use pxl_shared::bake::constant::{BandZ, CellZ, BAND_CELLS, BAND_SHAMT, BAND_UNITS, CELL_LEVEL, CELL_STEPS, MIN_LEVEL, POS_BITS, POS_MASK, STEP_UNITS};
 
-/// OBJECT_LAYOUT's finest and coarsest levels: an eighth of a cell, and a
-/// cell. A band tree reaches six levels above that, to the band's 64 cells.
-pub const MIN_LEVEL: i32 = -3;
-pub const CELL_LEVEL: i32 = 0;
-pub const BAND_SHAMT: u32 = 6;
-pub const BAND_CELLS: u32 = 1 << BAND_SHAMT;
 /// A band's tree: OBJECT_LAYOUT's levels, reaching six above the cell to
 /// the band's 64 cells.
 const BAND_LAYOUT: SparseTreeLayout = SparseTreeLayout {
@@ -1035,17 +1022,6 @@ const BAND_LAYOUT: SparseTreeLayout = SparseTreeLayout {
     min: MIN_LEVEL,
     max: CELL_LEVEL + BAND_SHAMT as i32,
 };
-/// Finest-tier steps along one side of a cell, and one such step in
-/// world units.
-pub const CELL_STEPS: u32 = 1 << (-MIN_LEVEL);
-pub const STEP_UNITS: f64 = 1.0 / CELL_STEPS as f64;
-/// One band's height, in world units.
-pub(crate) const BAND_UNITS: f64 = BAND_CELLS as f64;
-/// An entry's packed position: nine bits an axis in finest-tier steps,
-/// then its level above the finest in four.
-pub const POS_BITS: u32 = 9;
-pub(crate) const POS_MASK: u32 = (1 << POS_BITS) - 1;
-
 pub fn pack_pos(x: u32, y: u32, z: u32, level: i32) -> u32 {
     x | (y << POS_BITS) | (z << (2 * POS_BITS)) | (((level - MIN_LEVEL) as u32) << (3 * POS_BITS))
 }
@@ -1369,6 +1345,17 @@ impl Store {
         let n = self.touched.len();
         self.touched.clear();
         (self.touched.as_ptr() as *const i32, n)
+    }
+
+    /// A column's entries as the view paints them, or none where the column
+    /// holds no chunk.
+    pub fn entries(&self, col_idx: IVec) -> Option<Entries<'_>> {
+        let chunk = &self.chunks[*self.chunk_at.get(&col_idx)? as usize];
+        Some(Entries {
+            band: &chunk.e_band,
+            pos: &chunk.e_pos,
+            state: &chunk.e_state,
+        })
     }
 
     /// A chunk's entry lanes, or none where the chunk is gone.

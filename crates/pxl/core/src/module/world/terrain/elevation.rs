@@ -1,5 +1,6 @@
 // pxl_core/module/world/terrain/elevation.rs
 
+use pxl_render::layer::terrain::elevation::{is_water_family_at, sample_ele, WATER_RECESS_CELLS};
 use pxl_shared::bake::constant::{PAGE_CELL_SPAN, U_PER_CELL};
 use pxl_shared::bake::format::{GroundChannelKey, Terrain};
 use pxl_shared::spec::space::indexer::{L1_IDX_IN_L3, L3_IDX, L3_RANGE};
@@ -7,12 +8,11 @@ use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 
 use super::store::tile_store;
-use crate::render::layer::terrain::elevation::{is_water_family_at, sample_ele, WATER_RECESS_CELLS};
 
 const L3_RANGE_REAL: f64 = L3_RANGE as f64;
 
 /// The same real height the chunk's mesh and raycast bake
-/// (render/layer/terrain/elevation.rs's WATER_RECESS_CELLS), applied here too so this module's own consumers
+/// (crates/pxl/render/src/layer/terrain/elevation.rs's WATER_RECESS_CELLS), applied here too so this module's own consumers
 /// (camera ground-snap, ground_or_raw, any cell-marker probe) agree with the
 /// rendered terrain instead of reasoning about the un-recessed height while
 /// the mesh they're looking at shows the lowered one. A page's ele and ground

@@ -22,7 +22,7 @@
 /// `i32::MIN` and not `u32::MAX`, because the word it fills holds a `BandZ` —
 /// an `i32` — cast to `u32`, and the band below the origin is -1, which casts
 /// to exactly `u32::MAX`. A decor placed there read as procedural: the raycast
-/// passes over NO_ENTRY (render/layer/pipeline/chunk_raycast.rs), so the hit
+/// passes over NO_ENTRY (module/world/chunk_raycast.rs), so the hit
 /// never resolved to its entry and the thing could not be picked or erased. Any value a band can
 /// take has to stay out of the sentinel, and a band is `z >> BAND_SHAMT` over
 /// a sixteen-bit Z lane (spec/space/pvf3's IVEC_Z_W), so it fits in ten bits

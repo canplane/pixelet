@@ -30,10 +30,10 @@ rebuilt on 2026-09-12/13 into the shape below.
   (`../billboard/atlas.rs`) and cached by id hash; the width a candidate
   offers is estimated from its characters, the badge measured exactly when
   drawn.
-- **`/crates/pxl/core/src/world/billboard.rs` and `/crates/pxl/core/src/render/gpu/badges.rs`** —
+- **`/crates/pxl/core/src/world/billboard.rs` and `/crates/pxl/render/src/gpu/badges.rs`** —
   every badge as one instanced quad: anchor, size and sheet rectangle per
   instance; fit, fade and the occlusion twin in the vertex shader
-  (`/crates/pxl/core/src/render/shader/badge.wgsl`).
+  (`/crates/pxl/render/src/shader/badge.wgsl`).
 - **`poi_theme.rs`** — category → icon/colour. `OVERTURE_CATEGORY_MAP`
   (`/apps/api/src/bake/overture/model/category_map.ts`) translates Overture's
   `categories.primary` into this vocabulary.

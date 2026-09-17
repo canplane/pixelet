@@ -65,7 +65,7 @@
     // `core::arch::wasm32` throughout and has no host build at all.
     // Formatting is checked first, against crates/rustfmt.toml; the generated
     // `.rs` files pass it because script/spec.ts writes them through rustfmt.
-    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-shared -p pxl-core",
+    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-shared -p pxl-render -p pxl-core",
     // The vectors the TypeScript writes are what the Rust tests read (script/pair.ts).
     "vector": "deno run -A script/pair.ts --write",
     // The specs are JSON; the TypeScript and the Rust that carry them are
@@ -82,8 +82,8 @@
     "test:shared": "deno test -A packages/pxl/shared/src",
     "test:xpute": "deno test -A packages/xpute/core/src",
     // The Rust core natively, where naga compiles every shader and holds
-    // each pipeline's record to it (crates/pxl/core/src/shader.rs).
-    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p pxl-shared -p pxl-core",
+    // each pipeline's record to it (crates/pxl/render/src/shader.rs).
+    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p pxl-shared -p pxl-render -p pxl-core",
 
     "lint": "deno lint",
     "fmt": "deno fmt"

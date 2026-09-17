@@ -2,10 +2,12 @@
 
 //! The environment. The first half is its inputs: the time of day's theme when
 //! it changes, and each tick where the map is and what the wall clock says. The
-//! second places the sun and the moon (celestial_position.rs), eases the light,
-//! the fog and the sky toward the theme, and writes what the renderer draws them
-//! with.
+//! second places the sun and the moon (celestial_position.rs) and eases the
+//! light, the fog and the sky toward the theme; the view composes the lane the
+//! frame is lit with from that (crates/pxl/render/src/environment.rs).
 
+use pxl_render::environment::{write_environment, Light, ENV_FLOATS, NIGHT, THEME_FLOATS};
+use pxl_render::gpu::color::linear_rgb;
 use pxl_shared::spec::space::adapter::epsg4326;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 
@@ -18,7 +20,6 @@ use crate::module::world::environment::config::{light_cfg, render_cfg};
 use crate::module::world::environment::theme::{themes, WorldThemeKey};
 use crate::module::world::environment::theme_clock::theme_key;
 use crate::module::world::sched::chunk_table::Frame;
-use crate::render::gpu::color::linear_rgb;
 use crate::sys::global::{now, Global};
 use crate::sys::host::wall_now;
 use crate::sys::kernel::kernel;
@@ -133,51 +134,14 @@ pub fn map_environment_step() {
 
 // ---- the environment as the kernel eases it ----
 //
-// Where the sun and the moon are, and the light, fog and sky colours the
-// frame is drawn under, eased toward the time of day's theme. The inputs come
-// from above — the theme's colours when the theme changes, and each tick the
-// observer's latitude and longitude and the wall clock; this places the sun
-// and the moon from the clock, eases everything toward its target, turns the sky's copies of
-// the directions by the map's azimuth, and writes the result in the layout
-// the renderer's uniforms take (render/gpu/stage.rs).
-//
-// The terrain's light is the true, unturned direction: the world turns
-// under a fixed camera by the azimuth, and a light turned with it would
-// cancel the turn out. The sky is drawn in the camera's frame, where the
-// sun has to turn with the world to stay over the ground it lights.
+// Where the sun and the moon are, and the theme's light, fog and sky colours,
+// eased toward the time of day's theme. The inputs come from above — the
+// theme's colours when the theme changes, and each tick the observer's
+// latitude and longitude and the wall clock; this places the sun and the moon
+// from the clock and eases everything toward its target. What the frame is lit
+// with is composed from that by the view (crates/pxl/render/src/environment.rs).
 
-/// Floats a theme takes, linear colours: fog (3), sky top, middle and
-/// horizon (9), sun glow (3), ambient colour and intensity (4), hemisphere
-/// sky and ground and intensity (7), sun colour and intensity (4), night
-/// (1), fog near and far (2), the lighting floor (1).
-pub const THEME_FLOATS: usize = 34;
-/// Floats the output takes: the frame uniform's lighting run (24) and the
-/// sky uniform's colours and directions (24), each aligned to the renderer's
-/// own layout from its twentieth float; then the second light (8): the
-/// dimmer of the sun and the moon, its direction and its colour.
-pub const ENV_FLOATS: usize = 56;
-/// Where the second light starts in the output.
-pub const ENV_OTHER_LIGHT: usize = 48;
-
-/// Where the colours of a theme sit in its floats.
-const FOG: usize = 0;
-const SKY_TOP: usize = 3;
-const SKY_MIDDLE: usize = 6;
-const SKY_HORIZON: usize = 9;
-const SUN_GLOW: usize = 12;
-const AMBIENT: usize = 15;
-const HEMI_SKY: usize = 19;
-const HEMI_GROUND: usize = 22;
-const HEMI_INTENSITY: usize = 25;
-const SUN: usize = 26;
-const NIGHT: usize = 30;
-const FOG_NEAR: usize = 31;
-const FOG_FAR: usize = 32;
-const FLOOR: usize = 33;
-
-/// The moon's light: a fixed colour (#9fb4d6, linear), brighter than the
-/// night theme's sun so that at night it is the light the terrain takes.
-const MOON_COLOR: [f32; 3] = [0.3467, 0.4564, 0.6724];
+/// The moon's intensity at night, and where it starts on a first night.
 const MOON_NIGHT_INTENSITY: f64 = 0.18;
 const MOON_START_INTENSITY: f64 = 0.3;
 /// How close the stars have to be to where they are going before the
@@ -316,67 +280,19 @@ impl EnvironmentDraw {
         for k in 0..THEME_FLOATS {
             self.current[k] += (self.target[k] - self.current[k]) * a as f32;
         }
-        self.write(frame);
+        let light = Light {
+            theme: self.current,
+            sun: self.sun,
+            moon: self.moon,
+            moon_intensity: self.moon_intensity,
+            stars: self.stars,
+            time: self.time,
+            // The anchor root's turn about Z.
+            azimuth: frame.root[1].atan2(frame.root[0]),
+        };
+        write_environment(&mut self.out, &light);
         (self.stars - star_target).abs() > SETTLE_EPS
     }
-
-    fn write(&mut self, frame: &Frame) {
-        let c = &self.current;
-        let o = &mut self.out;
-        // The terrain is lit by both the sun and the moon, summed: the
-        // brighter is the frame's sun, which casts the shadow, and the other
-        // is the second light, unshadowed. Summed rather than the brighter
-        // alone, so the light does not snap from one direction to the other
-        // where their intensities cross during a dusk or dawn ease.
-        let sun_i = c[SUN + 3] as f64;
-        let sun = (self.sun, [c[SUN], c[SUN + 1], c[SUN + 2]], sun_i);
-        let moon = (self.moon, MOON_COLOR, self.moon_intensity);
-        let (first, other) = if self.moon_intensity > sun_i { (moon, sun) } else { (sun, moon) };
-        for (at, (dir, color, intensity)) in [(0, first), (ENV_OTHER_LIGHT, other)] {
-            let d = normalize(dir);
-            put3(o, at, [d[0] as f32, d[1] as f32, d[2] as f32]);
-            put3(o, at + 4, [color[0] * intensity as f32, color[1] * intensity as f32, color[2] * intensity as f32]);
-        }
-        o[7] = c[FOG_NEAR];
-        let ambient_i = c[AMBIENT + 3];
-        put3(o, 8, [c[AMBIENT] * ambient_i, c[AMBIENT + 1] * ambient_i, c[AMBIENT + 2] * ambient_i]);
-        o[11] = c[FOG_FAR];
-        let hemi_i = c[HEMI_INTENSITY];
-        put3(o, 12, [c[HEMI_SKY] * hemi_i, c[HEMI_SKY + 1] * hemi_i, c[HEMI_SKY + 2] * hemi_i]);
-        o[15] = c[FLOOR];
-        put3(o, 16, [c[HEMI_GROUND] * hemi_i, c[HEMI_GROUND + 1] * hemi_i, c[HEMI_GROUND + 2] * hemi_i]);
-        put3(o, 20, [c[FOG], c[FOG + 1], c[FOG + 2]]);
-
-        // The sky, turned by the map's azimuth: the anchor root's turn about Z.
-        let az = frame.root[1].atan2(frame.root[0]);
-        put3(o, 24, [c[SKY_TOP], c[SKY_TOP + 1], c[SKY_TOP + 2]]);
-        o[27] = self.time as f32;
-        put3(o, 28, [c[SKY_MIDDLE], c[SKY_MIDDLE + 1], c[SKY_MIDDLE + 2]]);
-        o[31] = self.stars as f32;
-        put3(o, 32, [c[SKY_HORIZON], c[SKY_HORIZON + 1], c[SKY_HORIZON + 2]]);
-        o[35] = az as f32;
-        put3(o, 36, turned(normalize(self.sun), az));
-        put3(o, 40, [c[SUN_GLOW], c[SUN_GLOW + 1], c[SUN_GLOW + 2]]);
-        put3(o, 44, turned(normalize(self.moon), az));
-    }
-}
-
-fn put3(o: &mut [f32; ENV_FLOATS], at: usize, v: [f32; 3]) {
-    o[at..at + 3].copy_from_slice(&v);
-}
-
-fn normalize(v: [f64; 3]) -> [f64; 3] {
-    let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-    if l > 0.0 {
-        [v[0] / l, v[1] / l, v[2] / l]
-    } else {
-        [0.0, 0.0, 1.0]
-    }
-}
-
-fn turned(v: [f64; 3], az: f64) -> [f32; 3] {
-    let (s, c) = az.sin_cos();
-    [(v[0] * c - v[1] * s) as f32, (v[0] * s + v[1] * c) as f32, v[2] as f32]
 }
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 // pxl_core/module/world/decor/decor_hit.rs
 
 //! Which user-placed decor entry the pointer's ray strikes, by the kernel's hit
-//! test (crates/pxl/core/src/render/layer/pipeline/chunk_raycast.rs's hit_decor): the ray against the
+//! test (crates/pxl/core/src/module/world/chunk_raycast.rs's hit_decor): the ray against the
 //! triangles of every placed instance the on-screen chunks show, from the same
 //! blocks the renderer draws. What comes back is the chunk it stands in and the
 //! entry's band and packed position in that column, which is the address the
@@ -10,8 +10,8 @@
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use xpute_core::kit::mat4::Vec3;
 
+use crate::module::world::chunk_raycast::{ray_hit_decor, RayLike};
 use crate::module::world::object::store::EntryAt;
-use crate::render::layer::pipeline::chunk_raycast::{ray_hit_decor, RayLike};
 use crate::sys::kernel::kernel;
 
 // A decor mesh sitting on the ground it also intersects (any tree's own

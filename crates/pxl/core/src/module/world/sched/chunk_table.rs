@@ -21,6 +21,9 @@
 
 use std::collections::BTreeMap;
 
+use pxl_render::draw::{DrawList, PIPELINE_CHUNK};
+use pxl_render::layer::terrain::adapter::ChunkSample;
+use pxl_render::lod::{Ladder, COARSEST};
 use pxl_shared::bake::constant::CHUNK_CELL_SPAN;
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::v3::V3;
@@ -32,16 +35,13 @@ use xpute_core::sys::mem::alloc;
 use crate::module::map::environment::EnvironmentDraw;
 use crate::module::world::billboard::field::Billboards;
 use crate::module::world::chunk_node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
+use crate::module::world::chunk_range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT, PAGE_SPAN};
 use crate::module::world::decor::decor_layer::{decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
 use crate::module::world::decor::instance::{decor_groups, DecorScratch};
 use crate::module::world::gltf_cache::Models;
 use crate::module::world::marker::frame_gizmo::DebugLines;
 use crate::module::world::marker::hover_cursor::GhostDraw;
 use crate::module::world::marker::location_puck::Markers;
-use crate::render::chunk_range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT, PAGE_SPAN};
-use crate::render::draw::{DrawList, PIPELINE_CHUNK};
-use crate::render::layer::terrain::adapter::ChunkSample;
-use crate::render::lod::{Ladder, COARSEST};
 use crate::sys::global::Global;
 
 /// The sphere a chunk nothing has measured is culled by.

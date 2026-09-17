@@ -2,18 +2,19 @@
 //
 // The kernel's one state: the volumes, the terrain tables, the object store
 // and its painter, the scheduler, the change log and the raycast — as one
-// value made on first use. The modules (module/, app/, render/) read and
-// write it directly; pxl-wasm keeps only the rings and hands commands to it.
+// value made on first use. The modules (module/, app/) read and write it
+// directly, and hand the view (pxl-render) what it draws; pxl-wasm keeps only
+// the rings and hands commands to it.
 
+use pxl_render::layer::object::adapter::Painter;
+use pxl_render::layer::pipeline::volume::Volumes;
+use pxl_render::layer::terrain::adapter::Materials;
 use pxl_shared::spec::space::pvf3::ivec::{self, gather};
 use xpute_core::ipc::change::{ChangeLog, ChangeLogOptions};
 
+use crate::module::world::chunk_raycast::Raycast;
 use crate::module::world::object::store::Store;
 use crate::module::world::sched::chunk_table::Scheduler;
-use crate::render::layer::object::adapter::Painter;
-use crate::render::layer::pipeline::chunk_raycast::Raycast;
-use crate::render::layer::pipeline::volume::Volumes;
-use crate::render::layer::terrain::adapter::Materials;
 use crate::sys::global::Global;
 
 /// module/world/change.rs's WorldTopic numbers the store bumps, and the

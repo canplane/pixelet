@@ -270,8 +270,8 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     state.interactive = interactive;
     let report = run_tick(state, delta, quota_ms, edge_at);
     fetch_pump();
-    crate::render::gpu::stage::stage_write();
-    crate::render::gpu::renderer::render_frame();
+    crate::module::world::frame::stage::stage_write();
+    crate::module::world::frame::stage::stage_render();
     set_host_task_ms(now() - t0);
     if report.invalidated || take_draw() {
         request_world_tick();

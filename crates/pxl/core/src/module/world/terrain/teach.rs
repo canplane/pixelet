@@ -1,15 +1,15 @@
 // pxl_core/module/world/terrain/teach.rs
 
 //! What the terrain paint is taught about the materials
-//! (crates/pxl/core/src/render/layer/terrain/adapter.rs): the channels' classes, the bare base,
+//! (crates/pxl/render/src/layer/terrain/adapter.rs): the channels' classes, the bare base,
 //! and each type's colour and layer from the palette's tables
-//! (render/layer/terrain/shader_meta.rs).
+//! (crates/pxl/render/src/layer/terrain/shader_meta.rs).
 
+use pxl_render::layer::pipeline::volume::{MaterialClass, MaterialClasses, NO_LAYER};
+use pxl_render::layer::terrain::shader_meta::{ground_color_lookup, ground_layer_index_lookup};
 use pxl_shared::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
 use pxl_shared::spec::cell::cube_types;
 
-use crate::render::layer::pipeline::volume::{MaterialClass, MaterialClasses, NO_LAYER};
-use crate::render::layer::terrain::shader_meta::{ground_color_lookup, ground_layer_index_lookup};
 use crate::sys::kernel::kernel;
 
 pub fn ch_to_class(ch: GroundChannelKey) -> MaterialClass {

@@ -31,7 +31,7 @@ use pxl_shared::bake::format::GROUND_CH_KEYS;
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 
 use super::config_spec::KEEP_DIST;
-use crate::render::chunk_range::PAGE_SPAN;
+use crate::module::world::chunk_range::PAGE_SPAN;
 
 // ---- The index ----
 
@@ -44,7 +44,7 @@ const _: () = assert!(
 );
 
 const _: () = assert!(
-    crate::module::world::environment::config::render_cfg::CHUNK_RENDER_DIST + crate::render::chunk_range::RANGE_HYSTERESIS <= KEEP_DIST,
+    crate::module::world::environment::config::render_cfg::CHUNK_RENDER_DIST + crate::module::world::chunk_range::RANGE_HYSTERESIS <= KEEP_DIST,
     "terrain: a chunk is mounted from a page, so the range chunks are kept to must sit inside the radius pages are loaded from"
 );
 

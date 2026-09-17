@@ -8,11 +8,12 @@
 //! the chat lines, the show/expire timer, and laying out the notched
 //! speech-bubble shape the shell paints.
 
-use crate::module::world::billboard::atlas::{DrawSpec, NO_SLOT};
+use pxl_render::billboard::atlas::{DrawSpec, NO_SLOT};
+use pxl_render::gpu::surface::DPR_MAX;
+
 use crate::module::world::billboard::canvas_scale::{FONT_FAMILY, FONT_WEIGHT_BOLD};
 use crate::module::world::billboard::canvas_text::wrap_text;
 use crate::module::world::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
-use crate::render::gpu::surface::DPR_MAX;
 use crate::sys::global::Global;
 use crate::sys::host::{measure_text, wall_now};
 

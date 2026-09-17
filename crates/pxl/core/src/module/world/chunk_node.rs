@@ -19,6 +19,12 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
+use pxl_render::layer::object::adapter::{Carve, Painted, Painter};
+use pxl_render::layer::pipeline::chunk_mesher::{mesh_words, BakeContext, Step};
+use pxl_render::layer::pipeline::volume::Volumes;
+use pxl_render::layer::pipeline::voxel_scan::{BandView, RunSet, ScanContext, ScanStep};
+use pxl_render::layer::terrain::adapter::{ChunkSample, Materials, PageView, CHANNELS};
+use pxl_render::lod::LodStep;
 use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_shared::bake::format::Tile;
 use pxl_shared::spec::space::indexer::{FROM_L3_IDX, L2_IDX};
@@ -29,12 +35,6 @@ use crate::app::setting::store::settings_store;
 use crate::module::world::object::store::{decor_col_revision, object_col_idx_of, object_col_revision, Store, BAND_CELLS};
 use crate::module::world::sched::chunk_table::Event;
 use crate::module::world::terrain::store::tile_store;
-use crate::render::layer::object::adapter::{Carve, Painted, Painter};
-use crate::render::layer::pipeline::chunk_mesher::{mesh_words, BakeContext, Step};
-use crate::render::layer::pipeline::volume::Volumes;
-use crate::render::layer::pipeline::voxel_scan::{BandView, RunSet, ScanContext, ScanStep};
-use crate::render::layer::terrain::adapter::{ChunkSample, Materials, PageView, CHANNELS};
-use crate::render::lod::LodStep;
 use crate::sys::global::Global;
 use crate::sys::kernel::{kernel, with_world};
 
@@ -939,7 +939,7 @@ impl Builder {
     fn compose(&mut self, world: &mut World, id: u32, page: PageLanes) -> Option<usize> {
         let col_idx = self.chunks[&id].col_idx;
         let volume = self.paint_terrain(world, id, page)?;
-        if world.painter.paint(world.store, world.volumes, volume, col_idx, None, None).refused {
+        if world.painter.paint(world.store.entries(col_idx), world.volumes, volume, None, None).refused {
             world.volumes.release(volume);
             return None;
         }
@@ -976,7 +976,7 @@ impl Builder {
         let mut any = false;
         match world
             .painter
-            .paint_entries(world.store, world.volumes, volume, col_idx, paint.hide, paint.next, PAINT_VOXELS, &mut self.claimed, &mut any)
+            .paint_entries(world.store.entries(col_idx), world.volumes, volume, paint.hide, paint.next, PAINT_VOXELS, &mut self.claimed, &mut any)
         {
             Painted::Refused => {
                 self.refuse(world, id);
@@ -1038,7 +1038,7 @@ impl Builder {
     }
 
     fn run_set(world: &World, runs: &Runs) -> RunSet<'static> {
-        let bytes = crate::render::layer::pipeline::voxel_scan::run_set_bytes(runs.count, CHUNK_CELL_SPAN) as usize;
+        let bytes = pxl_render::layer::pipeline::voxel_scan::run_set_bytes(runs.count, CHUNK_CELL_SPAN) as usize;
         // SAFETY: the chunk's own block, held until its runs are let go.
         unsafe { RunSet::carve(core::slice::from_raw_parts(world.volumes.mem().add(runs.at), bytes), runs.count, CHUNK_CELL_SPAN) }
     }

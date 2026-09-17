@@ -20,6 +20,8 @@
 //! and a rebuild that finishes mid-job swaps that index out from under them. The
 //! job checks the rebuild count and starts over when it moved.
 
+use pxl_render::billboard::atlas::NO_SLOT;
+use pxl_render::lod::{fade_end_u, get_lod_level, lod_step_at, BADGE_SHAMT_OVER_CUBE, LOD_STEP_BY_LEVEL};
 use pxl_shared::bake::format::PoiPage;
 use pxl_shared::spec::space::indexer::{FROM_L3_IDX, SPAN_CENTER};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
@@ -34,7 +36,6 @@ use super::poi_index::{
 use crate::app::setting::store::settings_store;
 use crate::module::camera::store::{camera_store, ViewState};
 use crate::module::map::store::map_store;
-use crate::module::world::billboard::atlas::NO_SLOT;
 use crate::module::world::billboard::batch::BillboardBatch;
 use crate::module::world::billboard::cell_node::CellNodes;
 use crate::module::world::billboard::frustum_budget::{select_begin, select_place, select_remaining};
@@ -43,7 +44,6 @@ use crate::module::world::change::request_world_tick;
 use crate::module::world::frame::coord::{get_local_world_origin, local_world_to_canonical};
 use crate::module::world::frame::view::view;
 use crate::module::world::sched::tick::{FrameBudget, TickContext};
-use crate::render::lod::{fade_end_u, get_lod_level, lod_step_at, BADGE_SHAMT_OVER_CUBE, LOD_STEP_BY_LEVEL};
 use crate::sys::global::{now, Global};
 
 /// A rail, not the mechanism. What decides how many badges are drawn is how

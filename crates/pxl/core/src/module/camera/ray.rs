@@ -7,12 +7,13 @@
 //! boxes and returns whichever box the ray actually struck first, regardless
 //! of whether it came from terrain or an object.
 //!
-//! The walk is the kernel's (crates/pxl/core/src/render/layer/pipeline/chunk_raycast.rs). What this
+//! The walk is the kernel's (crates/pxl/core/src/module/world/chunk_raycast.rs). What this
 //! module adds is the interact radius, and what a hit means for a placement:
 //! the corner a new cube takes, the voxel the eraser digs, and which placed
 //! object a hit resolves to. The ray itself is the view's
 //! (module/world/frame/view.rs), in the root frame the chunks are placed in.
 
+use pxl_render::layer::pipeline::volume::MaterialClasses;
 use pxl_shared::bake::constant::U_PER_CELL;
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::pvf3::projection;
@@ -20,12 +21,11 @@ use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 use pxl_shared::spec::space::v3::V3;
 use xpute_core::kit::mat4::Vec3;
 
+use crate::module::world::chunk_raycast::{ray_hit_world, RayLike, WorldHit};
 use crate::module::world::frame::coord::{get_local_world_origin, local_world_to_canonical};
 use crate::module::world::object::geometry::{aabb_overlap, object_aabb, AABB};
 use crate::module::world::object::store::{get_objects_near, OccupiedEntry};
 use crate::module::world::terrain::elevation::with_ele;
-use crate::render::layer::pipeline::chunk_raycast::{ray_hit_world, RayLike, WorldHit};
-use crate::render::layer::pipeline::volume::MaterialClasses;
 
 const INTERACT_RADIUS_CELL: f64 = 32.0 / U_PER_CELL - 0.707;
 const INTERACT_RADIUS_U: f64 = INTERACT_RADIUS_CELL * U_PER_CELL;

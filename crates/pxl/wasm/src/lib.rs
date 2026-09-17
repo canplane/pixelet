@@ -11,9 +11,9 @@
 mod executor;
 
 use pxl_core::mem;
-use pxl_core::render::layer::pipeline::volume::Volumes;
 use pxl_core::sys::global::Global;
 use pxl_core::sys::kernel::kernel;
+use pxl_render::layer::pipeline::volume::Volumes;
 use pxl_shared::spec::cmd::Cmd;
 use xpute_core::io::marshal::tree::{BranchCursor, PacketWriter, TreeReader};
 use xpute_core::ipc::frame::FrameFlag;
@@ -691,25 +691,31 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
         }
         Cmd::GPU_CREATE => {
             let f = fields(pkt)?;
-            pxl_core::render::gpu::renderer::gpu_created(u32_at(&f, 0)?, bool_at(&f, 1)?);
+            pxl_render::gpu::renderer::gpu_created(u32_at(&f, 0)?, bool_at(&f, 1)?);
+            pxl_core::module::world::change::request_world_tick();
             Ok(Some(0))
         }
         Cmd::GPU_DELETE => {
-            pxl_core::render::gpu::renderer::gpu_lost();
+            pxl_render::gpu::renderer::gpu_lost();
             Ok(Some(0))
         }
         Cmd::SURFACE_CREATE => {
-            let handle = pxl_core::render::gpu::surface::surface_create(u32_at(&fields(pkt)?, 0)?);
+            let handle = pxl_render::gpu::surface::surface_create(u32_at(&fields(pkt)?, 0)?);
+            if handle != 0 {
+                pxl_core::module::world::change::request_world_tick();
+            }
             Ok(Some(handle as i32))
         }
         Cmd::SURFACE_UPDATE => {
             let f = fields(pkt)?;
-            pxl_core::render::gpu::surface::surface_update(u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, number_at(&f, 3)?);
+            if pxl_render::gpu::surface::surface_update(u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, number_at(&f, 3)?) {
+                pxl_core::module::world::change::request_world_tick();
+            }
             Ok(Some(0))
         }
         Cmd::SURFACE_DELETE => {
-            if let Some(closed) = pxl_core::render::gpu::surface::surface_delete(u32_at(&fields(pkt)?, 0)?) {
-                pxl_core::render::gpu::renderer::surface_closed(closed);
+            if let Some(closed) = pxl_render::gpu::surface::surface_delete(u32_at(&fields(pkt)?, 0)?) {
+                pxl_render::gpu::renderer::surface_closed(closed);
             }
             Ok(Some(0))
         }
@@ -783,7 +789,7 @@ extern "C" {
     fn host_body_read(body: u32, dst: *mut u8, len: usize);
 }
 
-// ---- The host's WebGPU (pxl_core::render::gpu::api, apps/web/src/wasm/gpu.ts) ----
+// ---- The host's WebGPU (pxl_render::gpu::api, apps/web/src/wasm/gpu.ts) ----
 
 extern "C" {
     #[link_name = "gpu_reset"]
@@ -853,7 +859,7 @@ extern "C" {
 /// Hands the renderer the host's WebGPU. Every call passes numbers and the
 /// address and length of what it names, which the host reads during the call.
 fn install_gpu() {
-    use pxl_core::render::gpu::api::{set_gpu_api, GpuApi};
+    use pxl_render::gpu::api::{set_gpu_api, GpuApi};
     // SAFETY, for every call below: an import that reads its numbers and the
     // lanes it is given where they lie, and keeps no address past the call.
     set_gpu_api(GpuApi {

@@ -28,6 +28,7 @@ use super::store::{camera_store, CameraStatus, ViewPatch};
 use super::terrain_gate::{allowed_pan, ViewTriple};
 use crate::app::setting::store::settings_store;
 use crate::module::map::store::map_store;
+use crate::module::world::chunk_raycast::WorldHit;
 use crate::module::world::decor::decor_hit::raycast_decor;
 use crate::module::world::frame::coord::get_local_world_origin;
 use crate::module::world::frame::view::{view, view_ray_local};
@@ -36,7 +37,6 @@ use crate::module::world::object::geometry::{anchor_center, object_aabb, object_
 use crate::module::world::object::size::{DECOR_SIZE, DEFAULT_OBJECT_SIZE};
 use crate::module::world::object::store::{get_placed_object, place, place_air, place_decor, remove, OccupiedEntry};
 use crate::module::world::terrain::elevation::ground_or_raw;
-use crate::render::layer::pipeline::chunk_raycast::WorldHit;
 use crate::sys::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

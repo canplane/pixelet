@@ -9,19 +9,20 @@
 //! reached here: what a set shows is written as instances of
 //! BILLBOARD_FLOATS floats.
 
+use pxl_render::billboard::atlas::BillboardAtlas;
 use pxl_shared::spec::space::v3::V3;
 
-use super::atlas::BillboardAtlas;
 pub use super::order::BILLBOARD_ORDER;
 use crate::module::world::chunk_node::World;
 use crate::sys::global::Global;
+use crate::sys::host::handheld;
 use crate::sys::kernel::kernel;
 
 static SHEET: Global<BillboardAtlas> = Global::new();
 
 /// `billboard_sheet`.
 pub fn billboard_sheet() -> &'static mut BillboardAtlas {
-    SHEET.get(BillboardAtlas::new)
+    SHEET.get(|| BillboardAtlas::new(handheld()))
 }
 
 /// A billboard set, empty and standing at the origin, drawn in `order`.

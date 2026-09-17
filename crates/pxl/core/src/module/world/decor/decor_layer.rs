@@ -18,6 +18,8 @@
 //! store as its own entry kind alongside solid cubes, and is merged into the
 //! build next to the scattered instances, not kept in a separate store.
 
+use pxl_render::layer::terrain::adapter::{ChunkSample, PageView};
+use pxl_render::lod::{LodStep, TARGET_CELL_PX};
 use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
 use pxl_shared::spec::cell::{decor_num_id, DecorId};
 use pxl_shared::spec::space::pvf3::ivec::{gather, IVec};
@@ -28,8 +30,6 @@ use super::scatter::{DecorChannelRule, DecorKindSeed, DecorOrientationMode, Deco
 use crate::module::world::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::module::world::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::module::world::object::store::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
-use crate::render::layer::terrain::adapter::{ChunkSample, PageView};
-use crate::render::lod::{LodStep, TARGET_CELL_PX};
 use crate::sys::kernel::kernel;
 use pxl_shared::asset::ingested::Asset;
 

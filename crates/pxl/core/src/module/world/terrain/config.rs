@@ -6,7 +6,7 @@
 //! The page stays the unit of transfer and storage: one PostGIS query and bake
 //! on the API side, one ~4MB decode, one table key, one eviction. What is
 //! derived rather than chosen is *which* pages: the nearest RESIDENT_PAGES to
-//! the view anchor (render/chunk_range.rs's pages_to_hold), which is at
+//! the view anchor (module/world/chunk_range.rs's pages_to_hold), which is at
 //! once what gets fetched and what stays decoded.
 
 use super::config_spec;

@@ -227,7 +227,7 @@ const strobe = new Strobe(CORE_BUILD, quantum_policy(boot_block(CORE_KERNEL)), (
   );
 }, (run) => requestAnimationFrame(run));
 
-// ---- surfaces: the canvases the kernel draws (crates/pxl/core/src/render/gpu/surface.rs) ----
+// ---- surfaces: the canvases the kernel draws (crates/pxl/render/src/gpu/surface.rs) ----
 
 /** What a surface shows: surface.rs's ROLE_WORLD and ROLE_CASE. */
 export const SURFACE_WORLD = 0;
@@ -320,7 +320,7 @@ async function run_fetch(key: bigint, url: string): Promise<void> {
   }
 }
 
-// ---- loads (crates/pxl/core/src/render/gltf/load.rs) ----
+// ---- loads (crates/pxl/core/src/module/world/gltf_cache.rs) ----
 
 let next_image = 1;
 

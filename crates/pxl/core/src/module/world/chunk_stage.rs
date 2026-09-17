@@ -6,6 +6,7 @@
 //! chunk nodes (chunk_node.rs); the shell's renderer then draws the scheduler's
 //! lists. In the report phase it hands the frame's numbers to the ledger.
 
+use pxl_render::lod::set_lod_projection;
 use pxl_shared::spec::space::pvf3::{fvec, ivec};
 use xpute_core::sched::edge::{notified, yield_if_spent};
 
@@ -13,6 +14,7 @@ use super::chunk_node::{run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES}
 use crate::app::setting::store::settings_store;
 use crate::module::map::store::map_store;
 use crate::module::world::change::{request_world_tick, world_edge};
+use crate::module::world::chunk_range::{range_anchor_of, RANGE_HYSTERESIS};
 use crate::module::world::environment::config::render_cfg;
 use crate::module::world::frame::view::{view, view_resize};
 use crate::module::world::poi::poi_fetcher;
@@ -23,8 +25,6 @@ use crate::module::world::sched::priority::lead_point;
 use crate::module::world::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::module::world::terrain::store::tile_pages;
 use crate::module::world::terrain::tile_fetcher;
-use crate::render::chunk_range::{range_anchor_of, RANGE_HYSTERESIS};
-use crate::render::lod::set_lod_projection;
 use crate::sys::global::{now, Global};
 use crate::sys::kernel::{kernel, with_world};
 
@@ -120,7 +120,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     let c = core_tick();
     c.visible_pass = None;
     view_resize(ctx.state.width, ctx.state.height);
-    // The tier criterion is a screen-space one (render/lod.rs), and the
+    // The tier criterion is a screen-space one (crates/pxl/render/src/lod.rs), and the
     // other layers that read it read it from here; the scheduler takes the same
     // projection through the frame, and its pressure — the byte budget paid in
     // LOD — comes back through the census.

@@ -151,7 +151,7 @@ impl TaskRow {
 
 pub const CENSUS_LEN: usize = CENSUS_TAGS.len();
 
-/// (draws, triangles) by the pipeline a draw names (render/draw.rs), for one
+/// (draws, triangles) by the pipeline a draw names (crates/pxl/render/src/draw.rs), for one
 /// frame's render, in CENSUS_TAGS' order.
 pub type DrawCensus = [[f64; 2]; CENSUS_LEN];
 

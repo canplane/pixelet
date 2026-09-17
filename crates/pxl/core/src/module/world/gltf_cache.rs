@@ -15,6 +15,8 @@
 
 use std::rc::Rc;
 
+use pxl_render::draw::{DrawList, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
+use pxl_render::gltf::gltf::{parse_gltf, Gltf};
 use pxl_shared::asset::ingested::Asset;
 use pxl_shared::spec::space::v3::V3;
 use xpute_core::sched::edge::{notified, yield_if_spent, Notify};
@@ -23,8 +25,6 @@ use xpute_core::sys::mem::{alloc, free};
 use crate::module::world::change::{request_world_tick, world_edge};
 use crate::module::world::chunk_node::World;
 use crate::module::world::decor::asset_store::decor_assets_arrived;
-use crate::render::draw::{DrawList, PIPELINE_SKINNED};
-use crate::render::gltf::gltf::{parse_gltf, Gltf};
 use crate::sys::global::Global;
 use crate::sys::host::body_read;
 
@@ -210,10 +210,6 @@ pub fn load_rejected(load: Load) {
 // three's mixer did, walks the joints parent first, and writes the joint
 // palette into the actor's block, which the renderer is told to rewrite.
 
-/// Words a model vertex takes in the mesh block: position (3), normal (3),
-/// UV (2), joints (4, as u32), weights (4).
-pub const MODEL_VERTEX_WORDS: u32 = 16;
-
 /// A channel's path: translation, rotation; anything else is scale.
 const T: u8 = 0;
 const R: u8 = 1;
@@ -233,7 +229,7 @@ struct Clip {
     channels: Vec<Channel>,
 }
 
-/// Where a model's mesh is and how big, for a hit test (render/layer/pipeline/chunk_raycast.rs).
+/// Where a model's mesh is and how big, for a hit test (module/world/chunk_raycast.rs).
 #[derive(Clone, Copy)]
 pub struct MeshRef {
     pub at: usize,

@@ -17,7 +17,7 @@
 //!
 //! Position/facing math lives in path.rs; this file reads that math and tells
 //! the scheduler's actor where to stand. The model is registered once per
-//! variant (render/gpu/model_asset.rs) and shared with the settings variant
+//! variant (module/world/model_asset.rs) and shared with the settings variant
 //! picker's preview.
 //!
 //! Assets: Kenney's "Mini Characters" (person) and "Cube Pets" (pet) packs,
@@ -37,11 +37,11 @@ use crate::module::camera::store::camera_store;
 use crate::module::world::change::wake_at;
 use crate::module::world::frame::view::view;
 use crate::module::world::gltf_cache::{load_gltf, load_image, Load};
+use crate::module::world::model_asset::{register_model, ModelHandle};
 use crate::module::world::object::store::objects_revision;
 use crate::module::world::sched::tick::TickContext;
 use crate::module::world::surface_height::get_surface_z_at_local;
 use crate::module::world::terrain::store::tile_pages;
-use crate::render::gpu::model_asset::{register_model, ModelHandle};
 use crate::sys::global::Global;
 use crate::sys::kernel::{kernel, with_world};
 

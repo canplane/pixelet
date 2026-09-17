@@ -75,7 +75,7 @@ pub mod render_cfg {
 
 /// Minimum-brightness floor shared by every lit surface — terrain and
 /// placed cells, decor, actors — through the one shading source
-/// (crates/pxl/core/src/render/shader/shade.wgsl, `frame.floor`, carried
+/// (crates/pxl/render/src/shader/shade.wgsl, `frame.floor`, carried
 /// in the theme through environment.rs). One shared constant, so terrain
 /// and objects cannot dim apart. Tune this one number to retune every
 /// surface's night floor at once.
@@ -94,7 +94,7 @@ pub mod light_cfg {
 
 /// Fresnel/rim highlight, applied uniformly to everything lit — terrain,
 /// placed objects, decor and actors alike, since one shading source lights
-/// them (crates/pxl/core/src/render/shader/shade.wgsl) — a thin bright edge on
+/// them (crates/pxl/render/src/shader/shade.wgsl) — a thin bright edge on
 /// faces that graze the view direction, the classic "toy block catching
 /// light at its silhouette" cue. Originally object-only (meant to help
 /// placed objects read as distinct from terrain cells sharing the same
@@ -109,7 +109,7 @@ pub mod rim_cfg {
 }
 
 /// The canvas's resolution. The colour grade and the vignette are the
-/// shaders' own constants (crates/pxl/core/src/render/shader/{grade,shade}.wgsl);
+/// shaders' own constants (crates/pxl/render/src/shader/{grade,shade}.wgsl);
 /// the rest of the post stack three ran — contact AO, bloom, god rays,
 /// SMAA — is on archive/20260914-three-draw-paths with its tuning.
 pub mod post_cfg {

@@ -92,7 +92,7 @@ pub mod SETTINGS {
         pub const section: &str = "editing";
         pub const KEYS: &[&str] = &["kind", "default", "section"];
     }
-    /// Darkens cube edges that border open air (crates/pxl/core/src/render/shader/chunk.wgsl).
+    /// Darkens cube edges that border open air (crates/pxl/render/src/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
     pub mod show_edge_shade {
         pub const kind: &str = "toggle";
@@ -109,7 +109,7 @@ pub mod SETTINGS {
         pub const cost: &str = "low";
         pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
     }
-    /// The sun's shadow map (crates/pxl/core/src/render/gpu/shadow.rs): the world drawn once more
+    /// The sun's shadow map (crates/pxl/render/src/gpu/shadow.rs): the world drawn once more
     /// from the sun each frame, depth only, and a 3x3 compare per fragment;
     /// 16 MB of map on a desktop, 4 on a phone.
     pub mod show_shadow_map {

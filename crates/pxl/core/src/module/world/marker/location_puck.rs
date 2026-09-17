@@ -6,6 +6,7 @@
 //! beacon should stand; the second holds the zone, eases, spins and bobs the
 //! beacon, and draws both.
 
+use pxl_render::draw::{DrawList, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use pxl_shared::bake::constant::U_PER_CELL;
 use pxl_shared::spec::space::pvf3::projection;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
@@ -20,7 +21,6 @@ use crate::module::world::environment::theme_clock::theme_key;
 use crate::module::world::sched::chunk_table::Frame;
 use crate::module::world::terrain::elevation::get_ele;
 use crate::module::world::terrain::store::tile_pages;
-use crate::render::draw::{DrawList, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use crate::sys::global::Global;
 use crate::sys::kernel::kernel;
 

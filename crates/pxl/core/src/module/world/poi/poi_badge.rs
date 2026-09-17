@@ -15,12 +15,12 @@
 //! Eviction runs on the same trigger the index rebuild does, because it is the
 //! same event: a page leaving is exactly when a badge stops being reachable.
 
-use crate::render::gpu::surface::DPR_MAX;
+use pxl_render::billboard::atlas::{BillboardAtlas, DrawSpec, NO_SLOT};
+use pxl_render::gpu::surface::DPR_MAX;
 use pxl_shared::bake::format::PoiPage;
 use xpute_core::ds::map::{I64Keys, IndexedMap, U32Keys};
 
 use super::poi_theme::resolve_poi_theme;
-use crate::module::world::billboard::atlas::{BillboardAtlas, DrawSpec, NO_SLOT};
 use crate::module::world::billboard::canvas_scale::{FONT_FAMILY, FONT_WEIGHT_REGULAR};
 use crate::module::world::billboard::sheet::billboard_sheet;
 use crate::sys::global::{now, Global};

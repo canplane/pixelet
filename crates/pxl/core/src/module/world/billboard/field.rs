@@ -10,11 +10,11 @@
 //! the core holds the instances as a block and lists each set's draw,
 //! placed against the frame's origin, in the order the sets draw in.
 
+use pxl_render::draw::{DrawList, Held, PIPELINE_BADGE};
 use pxl_shared::spec::space::v3::V3;
 
 use crate::module::world::chunk_node::World;
 use crate::module::world::gltf_cache::Models;
-use crate::render::draw::{DrawList, Held, PIPELINE_BADGE};
 
 /// Floats an instance takes: its anchor relative to the set's (3), its
 /// logical size in pixels (2), its rectangle of the sheet (4), and where

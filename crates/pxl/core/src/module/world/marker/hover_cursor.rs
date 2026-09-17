@@ -5,6 +5,10 @@
 //! The first half decides which ghost and where; the second holds what it is
 //! drawn from.
 
+use pxl_render::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
+use pxl_render::layer::pipeline::chunk_mesher::{mesh_words, write_lone_box, LONE_BOX_INDICES, LONE_BOX_VERTICES};
+use pxl_render::layer::pipeline::volume::NO_LAYER;
+use pxl_render::marker::style::marker_colors;
 use pxl_shared::bake::constant::U_PER_CELL;
 use pxl_shared::bake::ground::shown_ground;
 use pxl_shared::spec::cell::{placeable_cube_num_id, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
@@ -13,7 +17,6 @@ use pxl_shared::spec::space::pvf3::{fvec, ivec};
 use pxl_shared::spec::space::v3::V3;
 use xpute_core::sys::mem::{alloc, free};
 
-use super::style::marker_colors;
 use crate::app::setting::store::settings_store;
 use crate::module::camera::input::{holding, ActiveTool};
 use crate::module::camera::store::camera_store;
@@ -29,9 +32,6 @@ use crate::module::world::object::collision::{is_placement_blocked, PlacementToo
 use crate::module::world::object::size::DECOR_SIZE;
 use crate::module::world::object::store::{clear_virtual_carve_preview, get_placed_object, set_virtual_carve_preview, set_virtual_hide, EntryAt, EntryKind};
 use crate::module::world::terrain::elevation::get_ground_type;
-use crate::render::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
-use crate::render::layer::pipeline::chunk_mesher::{mesh_words, write_lone_box, LONE_BOX_INDICES, LONE_BOX_VERTICES};
-use crate::render::layer::pipeline::volume::NO_LAYER;
 use crate::sys::global::Global;
 use crate::sys::kernel::with_world;
 

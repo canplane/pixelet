@@ -96,7 +96,7 @@ pub struct Demand {
     /// priority, one already in flight is left alone.
     pub key: DemandKey,
     /// Lower runs sooner. Convention: the page's Euclidean distance from the
-    /// view anchor in whole pages (render/chunk_range.rs's page_priority), so the nearest
+    /// view anchor in whole pages (module/world/chunk_range.rs's page_priority), so the nearest
     /// page loads first.
     pub priority: f64,
 }

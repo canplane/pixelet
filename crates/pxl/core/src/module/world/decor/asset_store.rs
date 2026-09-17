@@ -7,8 +7,8 @@
 //! re-reads the snapshot at the tick's pump.
 //!
 //! A model is registered with the scheduler's models as it arrives
-//! (render/gpu/model_asset.rs), so the kernel holds its triangles for the
-//! eraser's hit test (crates/pxl/core/src/render/layer/pipeline/chunk_raycast.rs) and the renderer
+//! (module/world/model_asset.rs), so the kernel holds its triangles for the
+//! eraser's hit test (crates/pxl/core/src/module/world/chunk_raycast.rs) and the renderer
 //! draws its instances from the same lanes; the group it is drawn as is its
 //! variant's place across every kind, in registry order. The registering is
 //! `decor_asset_task`'s, a variant at a time on a turn's quota.
@@ -20,7 +20,7 @@ use super::decor_layer::DecorKindBundle;
 use super::decor_registry::DECOR_BUNDLES;
 use crate::module::world::change::{bump_world, world_edge, DECOR_ASSET};
 use crate::module::world::gltf_cache::{load_failed, load_gltf, load_image, Load};
-use crate::render::gpu::model_asset::register_model;
+use crate::module::world::model_asset::register_model;
 use crate::sys::global::Global;
 use crate::sys::kernel::kernel;
 

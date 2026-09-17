@@ -6,7 +6,7 @@
 //! map_center, no ground-following, no catch-up walk — a display case, not a
 //! world entity.
 //!
-//! The case's drawing is the renderer's (render/gpu/renderer.rs's draw_cases):
+//! The case's drawing is the renderer's (crates/pxl/render/src/gpu/renderer.rs's draw_cases):
 //! an actor stood far below the world, where nothing looks, drawn into the
 //! case's own canvas alone each frame. The model is registered once more for the cases, so the
 //! walker's own draws of the same variant are not mistaken for it, at one unit
@@ -21,8 +21,8 @@ use crate::module::map::store::map_store;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::frame::coord::get_local_world_origin;
 use crate::module::world::gltf_cache::{load_gltf, load_image, Load};
+use crate::module::world::model_asset::{register_model, ModelHandle};
 use crate::module::world::sched::tick::TickContext;
-use crate::render::gpu::model_asset::{register_model, ModelHandle};
 use crate::sys::global::Global;
 use crate::sys::kernel::{kernel, with_world};
 
