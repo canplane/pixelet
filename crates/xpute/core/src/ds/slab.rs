@@ -1,4 +1,4 @@
-// xpute_core/ds/slab.rs
+// xpute-core/ds/slab.rs
 
 //! Size classes over `ds/buddy_tree.rs`: the level that lets a buddy whose
 //! smallest block is a 4 KiB page answer a twenty-four-byte `String`.

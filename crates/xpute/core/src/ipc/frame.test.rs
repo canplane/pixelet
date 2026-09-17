@@ -1,4 +1,4 @@
-// xpute_core/ipc/frame.test.rs
+// xpute-core/ipc/frame.test.rs
 // (no pair: frame.ts has no test file)
 
 use super::*;

@@ -1,4 +1,4 @@
-// xpute_core/kit/math.test.rs
+// xpute-core/kit/math.test.rs
 // (no pair: math.ts has no test file)
 
 use super::*;

@@ -2,7 +2,7 @@
 
 /**
  * The host's WebGPU: the device, and the calls the kernel's renderer makes
- * (crates/pxl/core/src/render/gpu/api.rs), every object named by the handle
+ * (crates/pxl/render/src/gpu/api.rs), every object named by the handle
  * the kernel gave it and kept here at that handle's slot. Nothing is decided
  * here — what is made, from what, and drawn when, is the renderer's; each
  * call is translated into WebGPU's and made. It exists because a WebAssembly
@@ -20,7 +20,18 @@ import { handle_slot } from "@xpute/core/ds/handle.ts";
 
 import { address, compare, dimension, filter, format, load, paint, record, resource } from "@/wasm/gpu_spec.ts";
 
-type GpuObject = GPUBuffer | GPUTexture | GPUTextureView | GPUSampler | GPUShaderModule | GPUBindGroupLayout | GPURenderPipeline | GPUBindGroup | GPUCommandEncoder | GPURenderPassEncoder | GPUQuerySet;
+type GpuObject =
+  | GPUBuffer
+  | GPUTexture
+  | GPUTextureView
+  | GPUSampler
+  | GPUShaderModule
+  | GPUBindGroupLayout
+  | GPURenderPipeline
+  | GPUBindGroup
+  | GPUCommandEncoder
+  | GPURenderPassEncoder
+  | GPUQuerySet;
 
 type Surface = { canvas: OffscreenCanvas; context: GPUCanvasContext | null };
 
@@ -143,7 +154,7 @@ function layout_entries(words: Uint32Array, samples: u32): GPUBindGroupLayoutEnt
   return out;
 }
 
-/** A pipeline record's words (crates/pxl/core/src/render/shader.rs) as WebGPU's descriptor. */
+/** A pipeline record's words (crates/pxl/render/src/shader.rs) as WebGPU's descriptor. */
 function pipeline_descriptor(words: Uint32Array, layouts: GPUBindGroupLayout[], module: GPUShaderModule, target: GPUTextureFormat, samples: u32): GPURenderPipelineDescriptor {
   let at = 11;
   const next = () => words[at++];
@@ -191,7 +202,9 @@ function begin_pass(encoder: GPUCommandEncoder, w: Uint32Array): GPURenderPassEn
   }
   if (depth !== 0) {
     const view = get<GPUTextureView>(depth);
-    descriptor.depthStencilAttachment = depth_load === load.READ_ONLY ? { view, depthReadOnly: true } : { view, depthLoadOp: depth_load === load.LOAD ? "load" : "clear", depthClearValue: float(depth_clear), depthStoreOp: "store" };
+    descriptor.depthStencilAttachment = depth_load === load.READ_ONLY
+      ? { view, depthReadOnly: true }
+      : { view, depthLoadOp: depth_load === load.LOAD ? "load" : "clear", depthClearValue: float(depth_clear), depthStoreOp: "store" };
   }
   if (query_set !== 0) {
     descriptor.timestampWrites = { querySet: get<GPUQuerySet>(query_set), beginningOfPassWriteIndex: begin === NONE ? undefined : begin, endOfPassWriteIndex: end === NONE ? undefined : end };
@@ -359,17 +372,41 @@ export function gpu_imports(memory: WebAssembly.Memory): WebAssembly.ModuleImpor
     gpu_image_texture: (id: u32, image: u32) => {
       const bitmap = images.get(image);
       if (!bitmap) return 0;
-      const texture = gpu().createTexture({ size: [bitmap.width, bitmap.height], format: "rgba8unorm-srgb", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
+      const texture = gpu().createTexture({
+        size: [bitmap.width, bitmap.height],
+        format: "rgba8unorm-srgb",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
       gpu().queue.copyExternalImageToTexture({ source: bitmap }, { texture }, [bitmap.width, bitmap.height]);
       put(id, texture);
       return 1;
     },
     gpu_view: (id: u32, texture: u32, dim: u32, base_mip: u32, mips: u32, base_layer: u32, layers: u32) =>
-      put(id, get<GPUTexture>(texture).createView({ dimension: dim === dimension.D2_ARRAY ? "2d-array" : "2d", baseMipLevel: base_mip, mipLevelCount: mips, baseArrayLayer: base_layer, arrayLayerCount: layers })),
+      put(
+        id,
+        get<GPUTexture>(texture).createView({
+          dimension: dim === dimension.D2_ARRAY ? "2d-array" : "2d",
+          baseMipLevel: base_mip,
+          mipLevelCount: mips,
+          baseArrayLayer: base_layer,
+          arrayLayerCount: layers,
+        }),
+      ),
     gpu_sampler: (id: u32, mag: u32, min: u32, mipmap: u32, addr: u32, cmp: u32, anisotropy: u32) => {
       const filtered = (code: u32): GPUFilterMode => code === filter.LINEAR ? "linear" : "nearest";
       const mode: GPUAddressMode = addr === address.REPEAT ? "repeat" : "clamp-to-edge";
-      put(id, gpu().createSampler({ magFilter: filtered(mag), minFilter: filtered(min), mipmapFilter: filtered(mipmap), addressModeU: mode, addressModeV: mode, compare: cmp === compare.LESS_EQUAL ? "less-equal" : undefined, maxAnisotropy: anisotropy }));
+      put(
+        id,
+        gpu().createSampler({
+          magFilter: filtered(mag),
+          minFilter: filtered(min),
+          mipmapFilter: filtered(mipmap),
+          addressModeU: mode,
+          addressModeV: mode,
+          compare: cmp === compare.LESS_EQUAL ? "less-equal" : undefined,
+          maxAnisotropy: anisotropy,
+        }),
+      );
     },
     gpu_shader: (id: u32, at: u32, len: u32) => put(id, gpu().createShaderModule({ code: utf8.decode(new Uint8Array(memory.buffer, at, len)) })),
     gpu_layout: (id: u32, at: u32, n: u32, samples: u32) => put(id, gpu().createBindGroupLayout({ entries: layout_entries(words(at, n), samples) })),
@@ -402,7 +439,8 @@ export function gpu_imports(memory: WebAssembly.Memory): WebAssembly.ModuleImpor
       else p.setIndexBuffer(get<GPUBuffer>(buffer), "uint32", offset, size);
     },
     gpu_draw: (pass: u32, vertices: u32, instances: u32, first_vertex: u32, first_instance: u32) => get<GPURenderPassEncoder>(pass).draw(vertices, instances, first_vertex, first_instance),
-    gpu_draw_indexed: (pass: u32, indices: u32, instances: u32, first_index: u32, first_instance: u32) => get<GPURenderPassEncoder>(pass).drawIndexed(indices, instances, first_index, 0, first_instance),
+    gpu_draw_indexed: (pass: u32, indices: u32, instances: u32, first_index: u32, first_instance: u32) =>
+      get<GPURenderPassEncoder>(pass).drawIndexed(indices, instances, first_index, 0, first_instance),
     gpu_end: (pass: u32) => get<GPURenderPassEncoder>(pass).end(),
     gpu_submit: (encoder: u32) => gpu().queue.submit([get<GPUCommandEncoder>(encoder).finish()]),
     gpu_configure: (handle: u32) => {

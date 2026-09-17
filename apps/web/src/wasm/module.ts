@@ -9,7 +9,7 @@
  * The module imports its memory: the central scheduler gives it one
  * (core_mem.ts), and booting the module lays out everything inside it —
  * the sections, their pools, the rings — as the kernel's map says
- * (crates/pxl/core/src/mem.rs).
+ * (crates/pxl/kernel/src/mem.rs).
  *
  * One instance per memory: instantiating writes the module's data segments
  * over the front of it, so a second instance over the same memory would
@@ -138,7 +138,7 @@ export async function instantiate_kernel(memory: WebAssembly.Memory): Promise<Ke
       panic: (ptr: u32, len: u32) => console.error(`[pxl] ${text_at(memory, ptr, len)}`),
       // The clock a tick's budget is spent against.
       now: () => performance.now(),
-      // The kernel's storage (crates/pxl/core/src/host.rs): an item's UTF-8
+      // The kernel's storage (crates/pxl/kernel/src/host.rs): an item's UTF-8
       // length, or -1 for none, then its bytes into the kernel's buffer.
       storage_len: (key: u32, key_len: u32) => {
         const value = storage_read(text_at(memory, key, key_len));
@@ -179,7 +179,7 @@ export async function instantiate_kernel(memory: WebAssembly.Memory): Promise<Ke
         bodies.delete(body);
         if (bytes !== undefined && len > 0) new Uint8Array(memory.buffer, dst, len).set(bytes.subarray(0, len));
       },
-      // The renderer's WebGPU (crates/pxl/core/src/render/gpu/api.rs).
+      // The renderer's WebGPU (crates/pxl/render/src/gpu/api.rs).
       ...gpu_imports(memory),
     },
   });

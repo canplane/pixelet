@@ -1,4 +1,4 @@
-// xpute_core/sys/clock.rs
+// xpute-core/sys/clock.rs
 
 //! The host's clock, in milliseconds: what `performance.now()` is to a
 //! script. The host installs it before the first turn; until then time

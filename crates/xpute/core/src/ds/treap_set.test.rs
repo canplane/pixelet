@@ -1,4 +1,4 @@
-// xpute_core/ds/treap_set.test.rs
+// xpute-core/ds/treap_set.test.rs
 // (no pair: treap_set.ts has no test file)
 
 use super::*;

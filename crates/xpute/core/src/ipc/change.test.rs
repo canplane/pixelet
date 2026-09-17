@@ -1,4 +1,4 @@
-// xpute_core/ipc/change.test.rs
+// xpute-core/ipc/change.test.rs
 
 use core::cell::RefCell;
 use std::rc::Rc;

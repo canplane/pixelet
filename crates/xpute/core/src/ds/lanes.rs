@@ -1,4 +1,4 @@
-// xpute_core/ds/lanes.rs
+// xpute-core/ds/lanes.rs
 
 //! A table of typed lanes that move as one: every lane has the same length,
 //! a row is one index across all of them, and growing, truncating and

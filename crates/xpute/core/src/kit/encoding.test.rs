@@ -1,4 +1,4 @@
-// xpute_core/kit/encoding.test.rs
+// xpute-core/kit/encoding.test.rs
 // (no pair: encoding.ts has no test file)
 
 use super::*;

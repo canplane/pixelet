@@ -1,4 +1,4 @@
-// xpute_core/sched/edge.rs
+// xpute-core/sched/edge.rs
 
 //! A guest's side of the turn (sched/quantum.rs has the host's): the rising
 //! edge's quota as a deadline on the host clock, the tasks parked until the

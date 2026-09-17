@@ -1,4 +1,4 @@
-// xpute_core/kit/hash.test.rs
+// xpute-core/kit/hash.test.rs
 // (no pair: hash.ts has no test file)
 
 use super::*;

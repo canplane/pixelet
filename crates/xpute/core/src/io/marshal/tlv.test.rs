@@ -1,4 +1,4 @@
-// xpute_core/io/marshal/tlv.test.rs
+// xpute-core/io/marshal/tlv.test.rs
 // (no pair: tlv.ts has no test file)
 
 use super::*;

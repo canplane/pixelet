@@ -1,4 +1,4 @@
-// xpute_core/kit/json.rs
+// xpute-core/kit/json.rs
 
 //! `JSON.stringify` and `JSON.parse` of a flat string map — the one JSON
 //! the records carry (a POI's tags, a placement's), written by either side

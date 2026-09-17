@@ -1,7 +1,7 @@
 // @pxl/web/module/world/sched/ledger_overlay.tsx
 
 /**
- * Dev overlay for the kernel's ledger (crates/pxl/core/src/module/world/sched):
+ * Dev overlay for the kernel's ledger (crates/pxl/kernel/src/module/world/sched):
  * the recording window and the exports as buttons, over the gauge panel
  * (ledger_gauge.tsx). Gated by `import.meta.env.DEV` and the `show_ledger`
  * setting — off by default.

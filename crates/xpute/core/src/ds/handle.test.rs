@@ -1,4 +1,4 @@
-// xpute_core/ds/handle.test.rs
+// xpute-core/ds/handle.test.rs
 
 use super::*;
 

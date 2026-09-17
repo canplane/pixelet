@@ -1,4 +1,4 @@
-// xpute_core/ds/heap.test.rs
+// xpute-core/ds/heap.test.rs
 // (no pair: heap.ts has no test file)
 
 use super::*;

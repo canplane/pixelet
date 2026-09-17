@@ -384,16 +384,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "pxl-core"
+name = "pxl-kernel"
 version = "0.0.0"
 dependencies = [
- "naga",
- "pxl-shared",
+ "pxl-render",
+ "pxl-spec",
  "xpute-core",
 ]
 
 [[package]]
-name = "pxl-shared"
+name = "pxl-render"
+version = "0.0.0"
+dependencies = [
+ "naga",
+ "pxl-spec",
+ "xpute-core",
+]
+
+[[package]]
+name = "pxl-spec"
 version = "0.0.0"
 dependencies = [
  "xpute-core",
@@ -405,8 +414,9 @@ version = "0.0.0"
 dependencies = [
  "critical-section",
  "embassy-executor",
- "pxl-core",
- "pxl-shared",
+ "pxl-kernel",
+ "pxl-render",
+ "pxl-spec",
  "xpute-core",
 ]
 

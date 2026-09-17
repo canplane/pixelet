@@ -1,4 +1,4 @@
-// xpute_core/ipc/ring.test.rs
+// xpute-core/ipc/ring.test.rs
 
 use super::*;
 use crate::io::marshal::tree::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};

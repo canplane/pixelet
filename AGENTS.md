@@ -44,9 +44,10 @@ asset                   the shipped models and texture pack; data, not code — 
 packages/xpute/core     generic runtime kit — collections, codecs, XTP binary protocol
 packages/pxl/shared     pixelet domain — PVF3 coordinates, cell/terrain model, bake wire format
 crates/xpute/core       the generic runtime kit in Rust; no domain
-crates/pxl/shared       the pixelet domain in Rust — PVF3, the indexer, the sparse tree, the adapters
-crates/pxl/core         the world in Rust — the bake, the scheduler, the objects, the draw list, the shaders
-crates/pxl/wasm         the one WebAssembly module: rings, a boot block and a doorbell over the two crates
+crates/pxl/spec         the spec in Rust, the server's and the client's — the space, the cell catalogs, the commands, the bake's formats, the assets' tables; @pxl/shared's counterpart
+crates/pxl/render       the view — the volumes and meshes a chunk bakes into, glTF, the billboards' sheet, the draw list, the shaders, the device
+crates/pxl/kernel       the kernel — the stores, the fetches, the schedulers, the turn; what is drawn and when, handed to the view
+crates/pxl/wasm         the one WebAssembly module: rings, a boot block and a doorbell over the crates
 apps/api                Hono server + the Overture/DEM bake pipeline
 apps/web                Vite + React 19 client, drawing through WebGPU
 ```
@@ -57,8 +58,9 @@ Two boundaries matter, and both are easy to erode by accident:
   portable to other projects. Coordinates, terrain, tiles, Overture — none of
   those concepts belong there. If something needs them, it belongs in
   `@pxl/shared`. The same line runs through the Rust: `crates/xpute/core`
-  holds no domain, and the domain is `crates/pxl/shared`'s.
-  `crates/pxl/core` is the only crate that knows what a chunk is.
+  holds no domain, and the domain is `crates/pxl/spec`'s. The view
+  (`crates/pxl/render`) knows the model and nothing of the kernel
+  (`crates/pxl/kernel`): the kernel hands a frame what it draws.
 - **`@pxl/shared` is a contract between `apps/web` and `apps/api`.** Both sides
   encode and decode the same binary formats from this one source. Changing a
   format changes both ends at once; there is no versioned negotiation between
@@ -224,9 +226,10 @@ Two rules that came out of doing it:
 
 This is the import-map path, not the filesystem path — extension included, so
 a `.tsx` file says `.tsx`. New files get one too, tests included. A Rust file
-names its own path the way Rust code names the crate — the crate's
-identifier, then the file's path under `src/`: `// pxl_shared/spec/space/indexer.rs`
-— never its TypeScript pair's, which the mirrored path already says.
+says it the same way: its package's name as Cargo.toml has it, hyphens and
+all, then the file's path under `src/`: `// pxl-spec/space/indexer.rs`. A
+comment that names a crate by name uses the same hyphenated form; only a
+`::` path, which is code, keeps the underscore.
 
 The one exception is `shared/ui/shadcn/`, where no file carries a header —
 it's a flat, one-file-per-component shadcn tree, uniformly header-less rather

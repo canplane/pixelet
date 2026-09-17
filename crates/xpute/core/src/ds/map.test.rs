@@ -1,4 +1,4 @@
-// xpute_core/ds/map.test.rs
+// xpute-core/ds/map.test.rs
 
 use std::collections::HashMap;
 

@@ -1,4 +1,4 @@
-// xpute_core/sched/tick.rs
+// xpute-core/sched/tick.rs
 
 //! A guest's scheduler: the middle of the scheduler's three levels.
 //!

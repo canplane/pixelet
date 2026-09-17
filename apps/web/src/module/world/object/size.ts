@@ -20,7 +20,7 @@ import { placeable_cube_id, type PlaceableCube, type PlaceableCubeId } from "@px
  * bake/constant.ts's OBJECT_LAYOUT, whose `max: CELL_SHAMT` is the other
  * half of that reasoning: object/store.ts's sparse tree never spans more
  * than one cell) — the other three (finer) tiers are what the object paint
- * (crates/pxl/core/src/world/object.rs) writes as sub-cell voxels (a
+ * (crates/pxl/kernel/src/world/object.rs) writes as sub-cell voxels (a
  * per-voxel offset+size payload within the volume's dense field)
  * instead of a full-cell voxel. Deliberately 4 tiers deep, not 3 — when
  * CELL_SHAMT changed

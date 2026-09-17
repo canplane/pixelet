@@ -1,4 +1,4 @@
-// xpute_core/sched/io.test.rs
+// xpute-core/sched/io.test.rs
 //
 // The outside runs nothing here: a demand starting is its key in `started`
 // after the pump, and finishing is `settle`.

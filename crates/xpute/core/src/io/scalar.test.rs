@@ -1,4 +1,4 @@
-// xpute_core/io/scalar.test.rs
+// xpute-core/io/scalar.test.rs
 // (no pair: scalar.ts has no test file)
 
 use super::*;

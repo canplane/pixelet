@@ -1,4 +1,4 @@
-// xpute_core/ipc/ring.rs
+// xpute-core/ipc/ring.rs
 
 //! A single-producer, single-consumer ring of messages in a buffer both
 //! sides can see — the submission and completion rings between a shell and

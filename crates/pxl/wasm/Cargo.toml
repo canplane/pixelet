@@ -8,14 +8,15 @@ publish.workspace = true
 crate-type = ["cdylib"]
 path = "src/lib.rs"
 # The module links against an imported memory and the glue's imports; it has
-# no native test binary. The core's tests are pxl-core's and xpute-core's.
+# no native test binary. The core's tests are pxl-kernel's and xpute-core's.
 test = false
 doctest = false
 
 [dependencies]
 xpute-core = { path = "../../xpute/core" }
-pxl-shared = { path = "../../pxl/shared" }
-pxl-core = { path = "../../pxl/core" }
+pxl-spec = { path = "../../pxl/spec" }
+pxl-render = { path = "../../pxl/render" }
+pxl-kernel = { path = "../../pxl/kernel" }
 # The executor the module polls its tasks on inside a turn (src/executor.rs).
 # No platform feature: the pender is the module's own, and the platform one
 # for wasm brings wasm-bindgen.

@@ -1,4 +1,4 @@
-// xpute_core/ds/treap_set.rs
+// xpute-core/ds/treap_set.rs
 
 //! treap_set.rs — Ordered set (BST key) with randomized balancing (heap priority)
 //!
