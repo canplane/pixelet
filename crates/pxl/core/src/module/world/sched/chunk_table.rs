@@ -24,6 +24,7 @@ use std::collections::BTreeMap;
 
 use pxl_shared::bake::constant::CHUNK_CELL_SPAN;
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
+use pxl_shared::spec::space::v3::V3;
 use xpute_core::kit::hash::fnv1a64_str;
 use xpute_core::sys::mem::alloc;
 
@@ -102,12 +103,12 @@ pub struct Frame {
     /// The anchor root's world matrix, column-major.
     pub root: [f64; 16],
     /// The map origin, in units.
-    pub origin: [f64; 3],
+    pub origin: V3,
     /// The frustum as six planes of (nx, ny, nz, constant).
     pub planes: [f64; 24],
-    pub camera: [f64; 3],
+    pub camera: V3,
     /// Where the camera is heading.
-    pub lead: [f64; 3],
+    pub lead: V3,
     pub viewport_h: f64,
     pub fov_deg: f64,
     pub delta_s: f64,
@@ -128,7 +129,7 @@ pub struct Frame {
 impl Frame {
     /// Where `at`, in the map's units, is in the world the camera is
     /// written in: against the origin, then through the anchor root.
-    pub fn world_of(&self, at: [f64; 3]) -> [f64; 3] {
+    pub fn world_of(&self, at: V3) -> V3 {
         let m = &self.root;
         let (lx, ly, lz) = (at[0] - self.origin[0], at[1] - self.origin[1], at[2] - self.origin[2]);
         [
@@ -241,7 +242,7 @@ struct Slot {
     base_y: f64,
     stable_hash: f64,
     /// The bounding sphere in the chunk's own space.
-    bc: [f64; 3],
+    bc: V3,
     radius: f64,
     distance2: f64,
     lead_distance2: f64,
@@ -1491,7 +1492,7 @@ fn priority_keyed(a: &Keyed, b: &Keyed) -> core::cmp::Ordering {
 
 /// Where a slot is from a frame: on screen, its world centre, and its two
 /// squared distances.
-fn measure(frame: &Frame, s: &Slot) -> (bool, [f64; 3], f64, f64) {
+fn measure(frame: &Frame, s: &Slot) -> (bool, V3, f64, f64) {
     let [x, y, z] = frame.world_of([s.base_x + s.bc[0], s.base_y + s.bc[1], s.bc[2]]);
     let c = frame.camera;
     let d2 = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2);

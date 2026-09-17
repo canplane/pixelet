@@ -27,6 +27,7 @@ use pxl_shared::spec::space::indexer::{FROM_L3_IDX, L3_IDX, L3_RANGE};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 use pxl_shared::spec::space::xy::TO_XY;
+use pxl_shared::spec::space::v3::V3;
 use xpute_core::ds::map::{I64Keys, IndexedMap};
 use xpute_core::ds::spatial_hash::SpatialHash;
 
@@ -152,7 +153,7 @@ impl Lanes {
 }
 
 /// Converts an absolute position into the local render frame of `origin`.
-pub type ToLocal = fn(&PVF3, IVec) -> [f64; 3];
+pub type ToLocal = fn(&PVF3, IVec) -> V3;
 /// A record's flat position (the bake's, before grounding), absolute.
 pub type FlatPos = fn(&PoiPage, u32, IVec) -> PVF3;
 

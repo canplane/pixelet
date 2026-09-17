@@ -34,10 +34,10 @@ const MAX_BANDS: usize = 8;
 pub struct Hit {
     pub material_class: u8,
     pub normal: [f64; 3],
-    pub point: [f64; 3],
+    pub point: V3,
     pub t: f64,
-    pub box_min: [f64; 3],
-    pub box_max: [f64; 3],
+    pub box_min: V3,
+    pub box_max: V3,
 }
 
 struct Entry {
@@ -65,7 +65,7 @@ struct Slab {
 /// Ray/AABB slab test: the entry and exit parameters along the ray, and
 /// which axis the entry was on — the caller wants the axis to know which
 /// face was hit.
-fn ray_aabb(o: &[f64; 3], d: &[f64; 3], min: &[f64; 3], max: &[f64; 3]) -> Option<Slab> {
+fn ray_aabb(o: &V3, d: &[f64; 3], min: &V3, max: &V3) -> Option<Slab> {
     let mut t_enter = f64::NEG_INFINITY;
     let mut t_exit = f64::INFINITY;
     let mut enter_axis = 0;
@@ -103,7 +103,7 @@ fn ray_aabb(o: &[f64; 3], d: &[f64; 3], min: &[f64; 3], max: &[f64; 3]) -> Optio
 
 /// The box run `i` of the column is, chunk-local: a whole cell where the run
 /// carries no sub-cell size, and the sub-cell's own box where it does.
-fn run_box(cx: u32, cy: u32, runs: &ColumnRuns, i: usize) -> ([f64; 3], [f64; 3]) {
+fn run_box(cx: u32, cy: u32, runs: &ColumnRuns, i: usize) -> (V3, V3) {
     let sub = runs.sub[i];
     let sub_sz = (sub >> 24) as u8;
     if sub_sz == SUB_CELL_NONE {
@@ -181,7 +181,7 @@ impl Raycast {
     /// on X and Y, or none. Chunks the scheduler holds are tested; a
     /// chunk with no page, or whose composite the heap refused, holds
     /// nothing.
-    pub fn hit(&mut self, world: &mut World, sched: &mut Scheduler, origin: [f64; 2], o: [f64; 3], d: [f64; 3], max_dist: f64) -> Option<Hit> {
+    pub fn hit(&mut self, world: &mut World, sched: &mut Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: f64) -> Option<Hit> {
         let (dx, dy) = (d[0], d[1]);
         if dx.abs() < 1e-9 && dy.abs() < 1e-9 {
             return self.test_chunk(world, sched, origin, &o, &d, (o[0] / CHUNK_W).floor(), (o[1] / CHUNK_W).floor(), max_dist);
@@ -203,7 +203,7 @@ impl Raycast {
     /// The chunk at grid cell (gx, gy) of the ray's space: its composite,
     /// kept or made, then the cell walk through it.
     #[allow(clippy::too_many_arguments)]
-    fn test_chunk(&mut self, world: &mut World, sched: &mut Scheduler, origin: [f64; 2], o: &[f64; 3], d: &[f64; 3], gx: f64, gy: f64, max_dist: f64) -> Option<Hit> {
+    fn test_chunk(&mut self, world: &mut World, sched: &mut Scheduler, origin: [f64; 2], o: &V3, d: &[f64; 3], gx: f64, gy: f64, max_dist: f64) -> Option<Hit> {
         // A point inside the grid cell, then the chunk it falls in.
         let bx = (((gx + 0.5) * CHUNK_W + origin[0]) / CHUNK_W).floor() * CHUNK_W;
         let by = (((gy + 0.5) * CHUNK_W + origin[1]) / CHUNK_W).floor() * CHUNK_W;
@@ -260,7 +260,7 @@ impl Raycast {
     /// testing every run of each cell it steps into and stopping at the
     /// nearest hit.
     #[allow(clippy::too_many_arguments)]
-    fn hit_chunk(&mut self, world: &mut World, volume: usize, o: &[f64; 3], d: &[f64; 3], chunk_ox: f64, chunk_oy: f64, max_dist: f64) -> Option<Hit> {
+    fn hit_chunk(&mut self, world: &mut World, volume: usize, o: &V3, d: &[f64; 3], chunk_ox: f64, chunk_oy: f64, max_dist: f64) -> Option<Hit> {
         // SAFETY: the composite is sealed and held until released here or kept.
         unsafe { world.volumes.band_views(volume, &mut self.bands) };
         let (bands, column) = (&self.bands, &mut self.column);
@@ -270,7 +270,7 @@ impl Raycast {
 
         let test_cell = |column: &mut ColumnRuns, cx: u32, cy: u32| -> Option<Hit> {
             let n = column.walk(bands, cx, cy);
-            let mut best: Option<(Slab, u8, [f64; 3], [f64; 3])> = None;
+            let mut best: Option<(Slab, u8, V3, V3)> = None;
             for i in 0..n {
                 let (mut min, mut max) = run_box(cx, cy, column, i);
                 min[0] += chunk_ox;
@@ -346,7 +346,7 @@ const DECOR_REACH: f64 = 16.0;
 /// after a bounding sphere. Procedural instances — the ones with no entry —
 /// are passed over, as the eraser has nothing to remove there; hidden
 /// ones are tested, since the hidden one is what the eraser is over.
-pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: [f64; 3], d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
+pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
     let mem = world.volumes.mem();
     let mut best: Option<DecorHit> = None;
     let mut limit = max_dist;
@@ -422,7 +422,7 @@ pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: [f64; 3]
 
 /// Whether the ray crosses the square [x0, x1] × [y0, y1] at any height
 /// within `limit`.
-fn ray_meets_square(o: &[f64; 3], d: &[f64; 3], x0: f64, y0: f64, x1: f64, y1: f64, limit: f64) -> bool {
+fn ray_meets_square(o: &V3, d: &[f64; 3], x0: f64, y0: f64, x1: f64, y1: f64, limit: f64) -> bool {
     let mut t0 = 0.0f64;
     let mut t1 = limit;
     for (p, v, lo, hi) in [(o[0], d[0], x0, x1), (o[1], d[1], y0, y1)] {
@@ -447,7 +447,7 @@ fn ray_meets_square(o: &[f64; 3], d: &[f64; 3], x0: f64, y0: f64, x1: f64, y1: f
 
 /// Whether the ray from `p` (relative to the sphere's centre) comes within
 /// `r` of it before `limit`.
-fn ray_meets_sphere(p: &[f64; 3], d: &[f64; 3], r: f64, limit: f64) -> bool {
+fn ray_meets_sphere(p: &V3, d: &[f64; 3], r: f64, limit: f64) -> bool {
     let b = p[0] * d[0] + p[1] * d[1] + p[2] * d[2];
     let c = p[0] * p[0] + p[1] * p[1] + p[2] * p[2] - r * r;
     if c <= 0.0 {

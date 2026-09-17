@@ -11,6 +11,8 @@
 //! colour conversion and no premultiplied alpha. A consumer polls: None while
 //! the load is in flight or has failed.
 
+use pxl_shared::spec::space::v3::V3;
+
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -221,7 +223,7 @@ struct Playing {
 pub struct Actor {
     model: u32,
     /// Where it stands, in units, and its turn about Z.
-    pub at: [f64; 3],
+    pub at: V3,
     pub rotation_z: f32,
     pub visible: bool,
     current: Option<Playing>,
@@ -635,7 +637,7 @@ impl Models {
     }
 
     /// Every visible actor's draw, placed against the frame's origin.
-    pub fn draw(&self, draw: &mut DrawList, origin: [f64; 3]) {
+    pub fn draw(&self, draw: &mut DrawList, origin: V3) {
         for a in self.actors.iter().flatten() {
             if !a.visible {
                 continue;

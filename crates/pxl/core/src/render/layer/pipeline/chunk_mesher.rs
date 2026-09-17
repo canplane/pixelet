@@ -14,6 +14,7 @@
 //! for as long as the answer is that there is no room.
 
 use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, U_PER_CELL};
+use pxl_shared::spec::space::v3::V3;
 use xpute_core::kit::fdlibm;
 
 use crate::render::layer::pipeline::volume::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};
@@ -498,7 +499,7 @@ impl BakeContext {
     }
 
     /// Writes one box's faces into the bake's mesh.
-    fn emit_box(&mut self, vertex_total: u32, min: [f64; 3], size: [f64; 3], rgb: [f64; 3], taps: [u32; 4], faces: u32) {
+    fn emit_box(&mut self, vertex_total: u32, min: V3, size: [f64; 3], rgb: [f64; 3], taps: [u32; 4], faces: u32) {
         let target = self.mesh.expect("emit with no mesh provided");
         // SAFETY: provide_mesh's contract — the range is the caller's, valid
         // and untouched until the bake closes.
@@ -676,7 +677,7 @@ pub fn write_lone_box(m: &mut [u32], size: f64, rgb: [u8; 3], layer: u8) {
 /// advances. Positions are summed in f64 and narrowed once, as a
 /// Float32Array store narrows them.
 #[allow(clippy::too_many_arguments)]
-fn write_box(m: &mut [u32], vertex_total: u32, v_cnt: &mut u32, i_cnt: &mut u32, min: [f64; 3], size: [f64; 3], rgb: [f64; 3], taps: [u32; 4], faces: u32) {
+fn write_box(m: &mut [u32], vertex_total: u32, v_cnt: &mut u32, i_cnt: &mut u32, min: V3, size: [f64; 3], rgb: [f64; 3], taps: [u32; 4], faces: u32) {
     let vt = vertex_total as usize;
     let lane = |k: usize| k * vt;
     let (position, normal, local_pos, box_scale, color, layer_taps, face_lane) = (lane(0), lane(3), lane(6), lane(9), lane(12), lane(15), lane(19));

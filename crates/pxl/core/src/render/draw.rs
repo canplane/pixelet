@@ -12,10 +12,11 @@
 //! cancels an upload not yet taken: the block is the glue's to release the
 //! moment it is told, and may be someone else's by the time the list runs.
 
-/// Words an upload record holds: the handle, the block's address and its
-/// length in bytes, and the vertex and index counts, which name the lanes.
+use pxl_shared::spec::space::v3::V3;
 use xpute_core::sys::mem::{alloc, free};
 
+/// Words an upload record holds: the handle, the block's address and its
+/// length in bytes, and the vertex and index counts, which name the lanes.
 pub const UPLOAD_WORDS: usize = 5;
 /// Words a draw record holds: the handle, the vertex and index counts, the
 /// index of its uniforms, and the pipeline.
@@ -131,7 +132,7 @@ impl DrawList {
 
     /// A draw's translation: where `at` is against the frame's `origin`,
     /// narrowed once the difference is small.
-    pub fn translation(at: [f64; 3], origin: [f64; 3]) -> [f32; 3] {
+    pub fn translation(at: V3, origin: V3) -> [f32; 3] {
         [(at[0] - origin[0]) as f32, (at[1] - origin[1]) as f32, (at[2] - origin[2]) as f32]
     }
 

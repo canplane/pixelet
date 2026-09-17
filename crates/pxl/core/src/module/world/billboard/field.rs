@@ -9,6 +9,8 @@
 //! the core holds the instances as a block and lists each set's draw,
 //! placed against the frame's origin, in the order the sets draw in.
 
+use pxl_shared::spec::space::v3::V3;
+
 use crate::module::world::chunk_node::World;
 use crate::module::world::gltf_cache::Models;
 use crate::render::draw::{DrawList, Held, PIPELINE_BADGE};
@@ -20,7 +22,7 @@ pub const BILLBOARD_FLOATS: usize = 10;
 
 #[derive(Clone, Copy)]
 enum Anchor {
-    At([f64; 3]),
+    At(V3),
     /// An actor, and how far above where it stands.
     On(u32, f64),
 }
@@ -73,7 +75,7 @@ impl Billboards {
     }
 
     /// Stands a set at `origin`, in units.
-    pub fn place(&mut self, id: u32, origin: [f64; 3]) {
+    pub fn place(&mut self, id: u32, origin: V3) {
         if let Some(Some(s)) = self.sets.get_mut(id as usize) {
             s.anchor = Anchor::At(origin);
         }
@@ -95,8 +97,8 @@ impl Billboards {
 
     /// Every set with something to show, in order; a set on an actor that
     /// is gone or hidden shows nothing.
-    pub fn draw(&self, draw: &mut DrawList, models: &Models, origin: [f64; 3]) {
-        let mut shown: Vec<(u32, u32, [f64; 3])> = Vec::new();
+    pub fn draw(&self, draw: &mut DrawList, models: &Models, origin: V3) {
+        let mut shown: Vec<(u32, u32, V3)> = Vec::new();
         for (i, s) in self.sets.iter().enumerate() {
             let Some(s) = s else { continue };
             if s.count == 0 || s.held.handle == 0 {

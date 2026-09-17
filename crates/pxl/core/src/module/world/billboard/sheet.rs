@@ -9,6 +9,8 @@
 //! reached here: what a set shows is written as instances of
 //! BILLBOARD_FLOATS floats.
 
+use pxl_shared::spec::space::v3::V3;
+
 use super::atlas::BillboardAtlas;
 pub use super::order::BILLBOARD_ORDER;
 use crate::module::world::chunk_node::World;
@@ -28,7 +30,7 @@ pub fn new_billboard_set(order: u32) -> u32 {
 }
 
 /// Stands a set at `origin`, in units.
-pub fn place_billboard_set(set: u32, origin: [f64; 3]) {
+pub fn place_billboard_set(set: u32, origin: V3) {
     kernel().sched.billboards.place(set, origin);
 }
 

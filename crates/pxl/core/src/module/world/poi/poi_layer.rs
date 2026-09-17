@@ -24,6 +24,7 @@ use pxl_shared::bake::format::PoiPage;
 use pxl_shared::spec::space::indexer::{FROM_L3_IDX, SPAN_CENTER};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
+use pxl_shared::spec::space::v3::V3;
 
 use super::poi_badge::{cluster_badge_logical_w, cluster_badge_slot, poi_badge_logical_w, poi_badge_slot, BADGE_CENTER_Y, BADGE_COLLIDE_H, BADGE_LOGICAL_H};
 use super::poi_index::{
@@ -84,7 +85,7 @@ pub fn poi_flat_pos(page: &PoiPage, rec: u32, page_idx: IVec) -> PVF3 {
 }
 
 /// absolute, projected into the local world frame's origin (map_origin).
-pub fn local_pos_from_absolute(absolute: &PVF3, map_origin: IVec) -> [f64; 3] {
+pub fn local_pos_from_absolute(absolute: &PVF3, map_origin: IVec) -> V3 {
     let local = PVF3 {
         i: ivec::sub(absolute.i, map_origin),
         f: absolute.f,

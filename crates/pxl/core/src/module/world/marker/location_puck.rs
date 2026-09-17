@@ -74,7 +74,7 @@ struct Puck {
     /// The zone as last written: its centre, and the tiles it was grounded
     /// against. A zone sample can reach a page not yet loaded; a page arriving
     /// grounds it again.
-    zone_for: Option<([f64; 3], u32)>,
+    zone_for: Option<(V3, u32)>,
     beacon_for: Option<([f64; 2], bool)>,
     shown: bool,
 }
@@ -192,7 +192,7 @@ pub struct PuckDraw {
     handle: u32,
     count: u32,
     /// The zone's centre, in units.
-    centre: [f64; 3],
+    centre: V3,
     /// Where the beacon should stand and where it stands, relative to the centre.
     target: [f64; 2],
     shown: Option<[f64; 2]>,
@@ -215,7 +215,7 @@ impl Markers {
     /// # Safety
     /// `lane` addresses count * ZONE_INSTANCE_FLOATS f32s in the memory.
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn set_zone(&mut self, world: &mut World, draw: &mut DrawList, centre: [f64; 3], count: u32, lane: usize, snap_dist: f64, fog_far: f64) {
+    pub unsafe fn set_zone(&mut self, world: &mut World, draw: &mut DrawList, centre: V3, count: u32, lane: usize, snap_dist: f64, fog_far: f64) {
         let bytes = (count as usize * ZONE_INSTANCE_FLOATS * 4).max(4) as u32;
         let keep = self.puck.as_ref().is_some_and(|p| p.bytes == bytes);
         if !keep {
@@ -293,7 +293,7 @@ impl Markers {
         p.visible
     }
 
-    pub fn draw(&self, draw: &mut DrawList, origin: [f64; 3]) {
+    pub fn draw(&self, draw: &mut DrawList, origin: V3) {
         let Some(p) = &self.puck else { return };
         if !p.visible || p.handle == 0 {
             return;

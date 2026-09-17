@@ -232,7 +232,7 @@ struct Gizmos {
 
 static GIZMOS: Global<Gizmos> = Global::new();
 
-fn set_lines(at: [f64; 3], vertices: &[f32]) {
+fn set_lines(at: V3, vertices: &[f32]) {
     let k = kernel();
     let Some(volumes) = k.volumes.as_mut() else { return };
     let mut world = World {
@@ -305,7 +305,7 @@ pub const DEBUG_VERTEX_FLOATS: usize = 6;
 pub struct DebugLines {
     held: Held,
     vertex_cnt: u32,
-    origin: [f64; 3],
+    origin: V3,
 }
 
 impl DebugLines {
@@ -314,14 +314,14 @@ impl DebugLines {
     ///
     /// # Safety
     /// `lane` addresses vertex_cnt * DEBUG_VERTEX_FLOATS f32s in the memory.
-    pub unsafe fn set(&mut self, world: &mut World, draw: &mut DrawList, origin: [f64; 3], vertex_cnt: u32, lane: usize) {
+    pub unsafe fn set(&mut self, world: &mut World, draw: &mut DrawList, origin: V3, vertex_cnt: u32, lane: usize) {
         let len = (vertex_cnt as usize * DEBUG_VERTEX_FLOATS * 4) as u32;
         let written = self.held.write(draw, world.volumes.mem(), lane, len);
         self.vertex_cnt = if written { vertex_cnt } else { 0 };
         self.origin = origin;
     }
 
-    pub fn draw(&self, draw: &mut DrawList, origin: [f64; 3]) {
+    pub fn draw(&self, draw: &mut DrawList, origin: V3) {
         if self.vertex_cnt == 0 || self.held.handle == 0 {
             return;
         }

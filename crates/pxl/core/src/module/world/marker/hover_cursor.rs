@@ -10,6 +10,7 @@ use pxl_shared::bake::ground::shown_ground;
 use pxl_shared::spec::cell::{placeable_cube_num_id, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 use pxl_shared::spec::space::pvf3::{fvec, ivec};
+use pxl_shared::spec::space::v3::V3;
 use xpute_core::sys::mem::{alloc, free};
 
 use super::style::marker_colors;
@@ -37,8 +38,8 @@ use crate::sys::kernel::with_world;
 #[derive(Clone, Debug, PartialEq)]
 enum Ghost {
     None,
-    Decor { at: [f64; 3], group: u32, rotation: f64 },
-    Box { at: [f64; 3], size: f64, value: u32, rgb: u32, coplanar: bool },
+    Decor { at: V3, group: u32, rotation: f64 },
+    Box { at: V3, size: f64, value: u32, rgb: u32, coplanar: bool },
 }
 
 struct Cursor {
@@ -260,14 +261,14 @@ struct Held {
 pub struct GhostDraw {
     held: Option<Held>,
     /// Where it stands, in units: a box's min corner, a decor instance's base.
-    at: [f64; 3],
+    at: V3,
 }
 
 impl GhostDraw {
     /// A box of `size` at `at`, painted as object value `state` paints, or
     /// as `rgb` with no texture when `state` paints nothing.
     #[allow(clippy::too_many_arguments)]
-    pub fn set_box(&mut self, world: &mut World, draw: &mut DrawList, at: [f64; 3], size: f64, state: u32, rgb: u32, coplanar: bool) {
+    pub fn set_box(&mut self, world: &mut World, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) {
         let (rgb, layer) = match world.painter.material_of(state) {
             Some((m, l)) => ([(m >> 16) as u8, (m >> 8) as u8, m as u8], l),
             None => ([(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8], NO_LAYER as u8),
@@ -291,7 +292,7 @@ impl GhostDraw {
     }
 
     /// One instance of decor group `group`, turned `rotation` about Z, at `at`.
-    pub fn set_decor(&mut self, world: &mut World, draw: &mut DrawList, at: [f64; 3], group: u32, rotation: f32) {
+    pub fn set_decor(&mut self, world: &mut World, draw: &mut DrawList, at: V3, group: u32, rotation: f32) {
         let shape = Shape::Decor {
             group,
             rotation_bits: rotation.to_bits(),
@@ -330,7 +331,7 @@ impl GhostDraw {
     }
 
     /// The ghost's draw this frame, placed against the frame's origin.
-    pub fn draw(&self, draw: &mut DrawList, origin: [f64; 3]) {
+    pub fn draw(&self, draw: &mut DrawList, origin: V3) {
         let Some(h) = &self.held else { return };
         let t = DrawList::translation(self.at, origin);
         match h.shape {
