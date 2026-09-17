@@ -10,7 +10,7 @@
  * the page's JavaScript memory (a Safari heap timeline read it as one
  * ArrayBuffer), which is why a phone gets half.
  *
- * What is where inside it is the kernel's alone (crates/pxl/kernel/src/mem.rs):
+ * What is where inside it is the kernel's alone (crates/pxl/kernel/src/sys/mem/section.rs):
  * the rings sit at addresses its build.rs fixed, the fixed ranges follow
  * whatever the linker placed, and the heap is everything past them. The shell
  * holds no picture of any of it — a block is an address and a length the

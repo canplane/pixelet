@@ -207,7 +207,7 @@ pub struct MountSample {
 /// the largest block its free lists hold.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct PoolSample {
+pub struct HeapSample {
     pub used_mb: f64,
     pub live_mb: f64,
     pub range_mb: f64,
@@ -276,7 +276,7 @@ pub struct FrameSample {
     pub mounts: MountSample,
     pub tile_pages: f64,
     pub poi_count: f64,
-    pub pool: PoolSample,
+    pub heap: HeapSample,
     pub rings: RingSample,
     pub work: WorkSample,
     // network pressure — fetch_scheduler queued + in-flight, per category
@@ -315,8 +315,8 @@ words!(FrameSample, FRAME::WORDS,
     lod.oldest_release_ms => FRAME::lod_oldest_release_ms, lod.oldest_visible_ms => FRAME::lod_oldest_visible_ms, lod.pressure => FRAME::lod_pressure,
     mounts.added => FRAME::mounts_added, mounts.removed => FRAME::mounts_removed, mounts.layouts => FRAME::mounts_layouts,
     tile_pages => FRAME::tile_pages, poi_count => FRAME::poi_count,
-    pool.used_mb => FRAME::pool_used_mb, pool.live_mb => FRAME::pool_live_mb, pool.range_mb => FRAME::pool_range_mb,
-    pool.refusals => FRAME::pool_refusals, pool.largest_free_mb => FRAME::pool_largest_free_mb,
+    heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.range_mb => FRAME::heap_range_mb,
+    heap.refusals => FRAME::heap_refusals, heap.largest_free_mb => FRAME::heap_largest_free_mb,
     rings.cq_peak => FRAME::ring_cq_peak, rings.spill_peak => FRAME::ring_spill_peak,
     work.scans => FRAME::work_scans, work.bakes => FRAME::work_bakes, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
 );

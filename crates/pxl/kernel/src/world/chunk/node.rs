@@ -38,8 +38,8 @@ use crate::sys::global::Global;
 use crate::sys::kernel::{kernel, with_world};
 use crate::world::chunk::table::Event;
 
-/// A tier as the scheduler hands it over and the node holds it: the block in
-/// the mesh section and the counts its lanes are read by.
+/// A tier as the scheduler hands it over and the node holds it: the heap
+/// block and the counts its lanes are read by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MeshBlock {
     pub at: usize,
@@ -48,7 +48,7 @@ pub struct MeshBlock {
     pub index_cnt: u32,
 }
 
-/// A chunk's decor at one tier: one block of the mesh section holding every
+/// A chunk's decor at one tier: one heap block holding every
 /// group's lanes (layer/decor/instance.rs).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DecorBlock {
@@ -56,7 +56,7 @@ pub struct DecorBlock {
     pub bytes: u32,
 }
 
-/// Hands a block back to the mesh section's pool. Every view into it is dead
+/// Hands a block back to the heap. Every view into it is dead
 /// afterwards.
 pub fn release_block(at: usize, bytes: u32) {
     // SAFETY: a block this chunk took and has not given back.
@@ -64,14 +64,13 @@ pub fn release_block(at: usize, bytes: u32) {
 }
 
 /// How much built work chunks may keep *while off screen*: run sets and cached
-/// tiers, both in the mesh section and sized in bytes. Leaving the frustum used
-/// to drop all of it on the first release, and a rotation or a zoom in and out
-/// rebuilt every chunk from the scan up; the scheduler reclaims only past this,
-/// farthest first. It budgets only the optional part: on-screen chunks hold
-/// their tiers because that is the layout. Half the mesh section: the other half
-/// is the on-screen layouts, the volumes a build composes in, and the room a
-/// large block needs in one piece — at a quarter the section fragments and
-/// refuses the fine tiers' blocks.
+/// tiers, both heap blocks and sized in bytes. Dropping all of it on the first
+/// release makes a rotation or a zoom in and out rebuild every chunk from the
+/// scan up, so the scheduler reclaims only past this, farthest first. It
+/// budgets only the optional part: on-screen chunks hold their tiers because
+/// that is the layout. Half the heap: the other half is the on-screen layouts,
+/// the volumes a build composes in, and the room a large block needs in one
+/// piece — at a quarter the heap fragments and refuses the fine tiers' blocks.
 #[allow(non_snake_case)]
 pub fn RETAIN_BUDGET_BYTES() -> f64 {
     crate::sys::mem::section::map().map_or(0.0, |m| (m.heap.bytes / 2) as f64)
@@ -102,7 +101,7 @@ pub fn take_node_counts() -> NodeCounts {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ChunkRetention {
     pub nodes: u32,
-    /// Nodes holding a run set, and what those sets cost in the pool.
+    /// Nodes holding a run set, and what those sets cost in the heap.
     pub run_sets: u32,
     pub run_set_mb: u32,
     /// Built tiers held across every node's cache.
@@ -180,7 +179,7 @@ pub struct ChunkNode {
     /// built from an earlier telling arriving after a newer one was told is
     /// released on arrival.
     generation: u32,
-    /// What this chunk's runs hold in the mesh section, as the scheduler said.
+    /// What this chunk's runs hold in the heap, as the scheduler said.
     runs_bytes: u32,
     show_structures: bool,
     objects_revision: u32,
@@ -224,7 +223,7 @@ impl ChunkNode {
         }
     }
 
-    /// Every tier's and every decor block back to the pool: the chunk unmounted.
+    /// Every tier's and every decor block back to the heap: the chunk unmounted.
     fn release_all(&mut self) {
         for (_, t) in self.tiers.drain() {
             release_block(t.at, t.bytes);
@@ -450,10 +449,10 @@ pub fn chunk_page(page_idx: IVec, present: bool) {
 // the terrain and the objects into a volume and scanning it. Its tiers are
 // baked from those runs, one bake and one scan open in the whole world at a
 // time. What comes
-// out is events: a tier's mesh in a block of the mesh section, handed over
+// out is events: a tier's mesh in a heap block, handed over
 // whole, and what the chunk's runs hold, for the retain budget.
 //
-// A block the pool refuses leaves the work where it is until a later tick;
+// A block the heap refuses leaves the work where it is until a later tick;
 // nothing is copied to a place the core cannot see.
 
 /// Chunks held at once: the mount radius and its hysteresis cover about
@@ -513,9 +512,9 @@ struct Chunk {
     /// The tiers the node lacks, in the order it wants them; 0 is none.
     want: [u32; 2],
     runs: Option<Runs>,
-    /// The mesh pool's release count when it last refused this chunk a
+    /// The heap's release count when it last refused this chunk a
     /// block: until a block is given back, the same request meets the
-    /// same pool, and the chunk is not tried.
+    /// same heap, and the chunk is not tried.
     refused: Option<u32>,
 }
 
@@ -575,7 +574,7 @@ enum Progress {
     /// Nothing more to do for it now.
     Done,
     /// Waiting on something outside it: the slot another chunk holds, a
-    /// block the pool refused, a page not yet arrived.
+    /// block the heap refused, a page not yet arrived.
     Blocked,
 }
 
@@ -758,9 +757,9 @@ impl Builder {
         }
     }
 
-    /// The pool refused chunk `id` a block: the slot it held is given up —
+    /// The heap refused chunk `id` a block: the slot it held is given up —
     /// held, it is every other chunk's wait, and the chunk cannot use it
-    /// until the pool changes — and the chunk waits for a release.
+    /// until the heap changes — and the chunk waits for a release.
     fn refuse(&mut self, world: &mut World, id: u32) {
         self.stat.starved += 1;
         self.abort_scan_of(world, id);
@@ -795,8 +794,8 @@ impl Builder {
     /// `tick`, stopping once `max_chunks` chunks have made progress: the
     /// scheduler's cap on how many chunks move in a frame. A chunk that
     /// waits on a slot or a block does not count. A block refused ends the
-    /// tick: the pool does not change until the scheduler reclaims after,
-    /// so every later request would meet the same pool, and a refusal is
+    /// tick: the heap does not change until the scheduler reclaims after,
+    /// so every later request would meet the same heap, and a refusal is
     /// not free — the direct runs are written whole before their block is
     /// asked for. Whether any chunk did work.
     pub fn tick_capped(&mut self, world: &mut World, order: &[u32], budget_ms: f64, max_chunks: u32, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent)) -> bool {

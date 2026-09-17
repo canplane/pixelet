@@ -145,7 +145,7 @@ fn frames(out: &mut [f64], scratch: &mut [f64], frames: &[FrameSample]) {
     out[at(a, F::tick_per_bake)] = if work.1 > 0.0 { tick_ms / work.1 } else { f64::NAN };
     out[at(a, F::mounts_added)] = sum(&|f| f.mounts.added);
     out[at(a, F::mounts_removed)] = sum(&|f| f.mounts.removed);
-    out[at(a, F::used_delta_mb)] = last.pool.used_mb - first.pool.used_mb;
+    out[at(a, F::used_delta_mb)] = last.heap.used_mb - first.heap.used_mb;
     let n = frames.len() as f64;
     for k in 0..CENSUS_LEN {
         out[at(a, F::census) + 2 * k] = sum(&|f| f.census[k][0]) / n;

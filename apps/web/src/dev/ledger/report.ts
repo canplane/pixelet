@@ -71,7 +71,7 @@ export type Frame = {
   poi_count: number;
   textures_mb: { depth: number; msaa: number; shadow: number; layers: number };
   census: [number, number][];
-  pool: { used_mb: number; live_mb: number; range_mb: number; refusals: number; largest_free_mb: number };
+  heap: { used_mb: number; live_mb: number; range_mb: number; refusals: number; largest_free_mb: number };
   rings: { cq_peak: number; spill_peak: number };
   mounts: { added: number; removed: number; layouts: number };
   lod: Record<string, number>;
@@ -194,13 +194,13 @@ export function task_line(r: TaskRecord): string {
 }
 
 export function frame_line(s: Frame, prev: Frame | null): string {
-  const d = prev === null ? "" : `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap ${signed(s.pool.used_mb - prev.pool.used_mb)}MB`;
+  const d = prev === null ? "" : `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap ${signed(s.heap.used_mb - prev.heap.used_mb)}MB`;
   const offthread = s.dt_ms - s.task_ms;
   return `[${n1(s.t).padStart(9)}] dt ${n1(s.dt_ms)} = task ${n1(s.task_ms)} + offthread ${n1(offthread)}  gpu ${n1(s.gpu_ms)}  sched ${n1(s.sched_ms)}/${n1(s.budget_ms)}${
     s.settled ? " (still)" : ""
   } (tick ${n1(s.tick_ms)})  draws ${s.draw_calls} tris ${
     tris(s.triangles)
-  }  buf ${s.buffers}  heap ${s.pool.used_mb}MB  mount +${s.mounts.added}/-${s.mounts.removed} layouts ${s.mounts.layouts}${d}`;
+  }  buf ${s.buffers}  heap ${s.heap.used_mb}MB  mount +${s.mounts.added}/-${s.mounts.removed} layouts ${s.mounts.layouts}${d}`;
 }
 
 export const long_frame_line = (l: LongFrame) =>
@@ -259,8 +259,8 @@ function frames_section(r: LedgerReport): string[] {
       poi.index.dropped > 0 ? `  DROPPED ${poi.index.dropped}` : ""
     }`,
     // Idle inside the core reservation is the working budget, kept on purpose.
-    `  heap    used ${last.pool.used_mb}MB (${signed(f.used_delta_mb)})  live ${last.pool.live_mb}MB  of ${last.pool.range_mb}MB   refused ${last.pool.refusals}  largest free ${
-      n1(last.pool.largest_free_mb)
+    `  heap    used ${last.heap.used_mb}MB (${signed(f.used_delta_mb)})  live ${last.heap.live_mb}MB  of ${last.heap.range_mb}MB   refused ${last.heap.refusals}  largest free ${
+      n1(last.heap.largest_free_mb)
     }MB   window scans ${f.work[0]} bakes ${f.work[1]}`,
     // A post that finds both full asserts; this is how near the last frame came.
     `  rings   completion ${last.rings.cq_peak}  spill ${last.rings.spill_peak}   (fullest since the frame before)`,
@@ -269,7 +269,7 @@ function frames_section(r: LedgerReport): string[] {
     `  build   ${c.built_direct} direct  ${c.built_scans} scans  ${c.built_bakes} bakes  ${c.built_starved} refused a block${c.decor_dropped > 0 ? `   DECOR DROPPED ${c.decor_dropped}` : ""}`,
     `  per     tick/bake ${f.tick_per_bake === null ? "-" : n1(f.tick_per_bake)}ms   (workload-normalised; comparable across sessions)`,
     `  rate    ${n1(f.per_s[1])} bakes/s  ${n1(f.per_s[0])} scans/s   while backlog ${n1(f.backlog_per_s[1])} bakes/s  ${n1(f.backlog_per_s[0])} scans/s over ${n1(f.backlog_s)}s`,
-    `  bands   reused ${c.bands_reused} / ${bands} (${share(c.bands_reused, bands)}%)  ~1.31MB each; a miss borrows from the core pool`,
+    `  bands   reused ${c.bands_reused} / ${bands} (${share(c.bands_reused, bands)}%)  ~1.31MB each; a miss borrows from the heap`,
     `  retain  nodes ${retain.nodes}  runsets ${retain.run_sets} (${retain.run_set_mb}MB)  tiers ${retain.tiers}  decor ${retain.decor_steps} steps ${retain.decor_instances} instances   kept on-screen ${
       round(retain.on_bytes / MB)
     }MB, off-screen ${round(retain.off_bytes / MB)} / ${round(retain.budget_bytes / MB)}MB budget`,

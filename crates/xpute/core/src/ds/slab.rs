@@ -35,7 +35,7 @@
 //! offset from the range's base that is a multiple of `S`, so a slot's run
 //! begins at `base + ((slot - base) & !(run_bytes - 1))`. The masking is of
 //! the offset and not of the address because the range's base is only known to
-//! be a page boundary; `HEAP_AT` is where the fixed sections happened to end,
+//! be a page boundary: it is where the ranges in front of it happened to end,
 //! rounded up, and nothing makes it a multiple of the largest run.
 //!
 //! `dealloc` is handed the `Layout` the allocation was made with, so the class

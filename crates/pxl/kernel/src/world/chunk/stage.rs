@@ -3,8 +3,9 @@
 //! The world's turn of the tick. In the visible phase it composes the frame the
 //! scheduler reads — the view, the frustum, the budget, the range anchor, the
 //! settings — runs the scheduler's pass once, and applies what it told to the
-//! chunk nodes (node.rs); the shell's renderer then draws the scheduler's
-//! lists. In the report phase it hands the frame's numbers to the ledger.
+//! chunk nodes (node.rs); the view's renderer (pxl-render's gpu/renderer.rs)
+//! then draws the scheduler's lists. In the report phase it hands the frame's
+//! numbers to the ledger.
 
 use pxl_render::look::lod::set_lod_projection;
 use pxl_spec::space::pvf3::{fvec, ivec};
@@ -15,7 +16,7 @@ use crate::layer::environment::config::render_cfg;
 use crate::layer::poi::fetcher;
 use crate::layer::terrain::store::tile_pages;
 use crate::layer::terrain::tile_fetcher;
-use crate::sched::ledger::record::{ledger_record_frame, ledger_take_rings, CpuSample, DrawCensus, FrameSample, LodSample, MountSample, PoolSample, TexturesMb, WorkSample};
+use crate::sched::ledger::record::{ledger_record_frame, ledger_take_rings, CpuSample, DrawCensus, FrameSample, HeapSample, LodSample, MountSample, TexturesMb, WorkSample};
 use crate::sched::priority::lead_point;
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::shell::map_store::map_store;
@@ -104,8 +105,8 @@ fn work_sample(c: &mut CoreTick) -> WorkSample {
 /// high-water mark (`max_ptr - base_ptr`) while `live` is what is out on loan,
 /// so the two are not each other's complement; a request is served or it is
 /// refused, and `refusals` counts the second.
-fn pool_sample() -> PoolSample {
-    PoolSample {
+fn heap_sample() -> HeapSample {
+    HeapSample {
         used_mb: (crate::sys::host::heap_used() as f64 / MB).round(),
         live_mb: (crate::sys::host::heap_live() as f64 / MB).round(),
         range_mb: (crate::sys::host::heap_bytes() as f64 / MB).round(),
@@ -247,7 +248,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         },
         tile_pages: tile_pages().keys().count() as f64,
         poi_count,
-        pool: pool_sample(),
+        heap: heap_sample(),
         rings: ledger_take_rings(),
         work: work_sample(c),
         q_terrain: fetch_pending_count(tile_fetcher::CATEGORY) as f64,

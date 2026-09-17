@@ -221,7 +221,7 @@ fn answer(category: Category, subject: u64, status: u32, block: Option<Block>, p
                     poi_store::set_pois(page, poi_repository::empty_page().map_err(|_| FetchFail::Decode)?);
                     Ok(())
                 }
-                // SAFETY: the block is the page section's, given for this body
+                // SAFETY: the block is the heap's, given for this body
                 // alone; the page keeps it and the store releases it with the page.
                 Some((at, bytes)) if ok => match unsafe { poi_repository::open_poi_page(at, bytes) } {
                     Ok(resident) => {

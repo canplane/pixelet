@@ -4,7 +4,7 @@
 //!
 //! The key index is an IndexedMap — dense positions, an open-addressing
 //! table over packed page keys — and what a page holds sits at its position
-//! in a handle array: for terrain the views over the page's pool blocks, for
+//! in a handle array: for terrain the views over the page's blocks, for
 //! POI the page's records. The keys, the positions and the walk are linear.
 //!
 //! A table given a world topic writes every set and clear to the world

@@ -33,7 +33,7 @@ extern "C" {
     /// would do. The linker calls it that because a C runtime starts its
     /// `sbrk` there; this kernel's heap is past the fixed ranges and past the
     /// terrain, so borrowing the name would leave `heap` meaning two things
-    /// four megabytes apart.
+    /// two hundred megabytes apart.
     #[allow(non_upper_case_globals)]
     static __data_end: u8;
     /// The top of the stack: `-z stack-size` past its start, which
@@ -100,10 +100,8 @@ impl xpute_core::ds::buddy_tree::Range for ModuleHeap {
 static ALLOC: xpute_core::ds::slab::SlabMalloc<ModuleHeap> = xpute_core::ds::slab::SlabMalloc::new();
 
 struct State {
-    /// The submission ring (shell → core) and the completion ring (core →
-    /// shell), in blocks of the fixed section taken once. Where in that section
-    /// they sit is the section's to answer, and the boot block carries the
-    /// answer out to the shell.
+    /// The submission ring (shell → core), at the address build.rs fixed;
+    /// the boot block carries it out to the shell.
     sq: Ring,
     /// The completion ring and its spill.
     outbox: Outbox,
@@ -197,10 +195,9 @@ fn state() -> &'static mut State {
 // for it. The shell pushes into the submission ring, rings `interrupt` with
 // the turn's quota, and reads the completion ring when the call returns.
 
-/// Words in the boot block: the section the module keeps for itself at the
-/// front of the memory; where the submission ring and the completion ring
-/// are; then the fixed, page and mesh sections, each its offset, its bytes
-/// and its pool's region size; then the quantum the kernel declares to the
+/// Words in the boot block: where the module's own data ends; where the
+/// submission ring and the completion ring are; then `.fixed` and the heap,
+/// each its offset, its bytes and the page it begins on; then the quantum the kernel declares to the
 /// central scheduler (xpute_core::sched::quantum's QuantumPolicy): margin
 /// share, batch frames and the settle time, each in thousandths; then the
 /// heap's row.
@@ -240,13 +237,12 @@ pub extern "C" fn boot() -> *const u32 {
     s.boot.as_ptr()
 }
 
-/// Cuts the memory the central scheduler gave into the kernel's map, and
+/// Records the kernel's map over the memory the central scheduler gave, and
 /// makes the volumes over it.
 ///
-/// Nothing is cut here any more. The sections are ranges the map names and
-/// their contents' own affair; the heap is the one allocator and it knows its
-/// range without being told (`buddy_tree`'s `Range`), so laying out is
-/// recording what the map says and opening the volumes over it.
+/// Nothing is cut here. The sections are ranges the map names and their
+/// contents' own affair; the heap is the one allocator and it knows its range
+/// without being told (`buddy_tree`'s `Range`).
 fn lay_out() -> section::Map {
     let stack_high = core::ptr::addr_of!(__stack_high) as u32;
     assert!(

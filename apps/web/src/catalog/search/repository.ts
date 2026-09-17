@@ -5,7 +5,7 @@ import type { GeocodePart } from "@/catalog/geocode/repository.ts";
 
 /**
  * One matched place, WGS84 lon/lat — mirrors the API's own SearchResult
- * (module/world/search/provider.ts).
+ * (apps/api/src/module/search/provider.ts).
  */
 export type SearchResult = {
   gers_id: string;

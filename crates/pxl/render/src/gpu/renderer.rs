@@ -158,7 +158,7 @@ pub fn skin_group(g: &GpuApi, layout: u32, sampler: u32, image: u32) -> Option<[
     Some([texture, view, group])
 }
 
-/// A block of the mesh section words are laid out in before they go to the
+/// A heap block words are laid out in before they go to the
 /// device: grown to the next power of two when a frame needs more, never shrunk.
 #[derive(Default)]
 pub struct Scratch {
@@ -176,7 +176,7 @@ impl Scratch {
             let size = bytes.next_power_of_two().max(4096);
             (self.at, self.bytes) = alloc(size).expect("the heap has no room for the renderer's scratch");
         }
-        // SAFETY: a block of the mesh section this scratch holds alone, at
+        // SAFETY: a heap block this scratch holds alone, at
         // least `bytes` long.
         unsafe { core::slice::from_raw_parts_mut(self.at as *mut u8, bytes as usize) }
     }
@@ -199,9 +199,9 @@ const EMPTY: u32 = 0;
 /// lies in the memory and its counts, and once a device has it the buffer and
 /// the one group made over it — the decor instances, a joint palette or the
 /// puck's zone, whichever the block is. The memory is the source and the
-/// device a copy: a block stays in its pool until its free is listed, so a
+/// device a copy: a block stays in the heap until its free is listed, so a
 /// device that went away, or lists taken while there was none, are made good
-/// from the addresses. Open addressing in lanes of the fixed section, since
+/// from the addresses. Open addressing in lanes of heap blocks never given back, since
 /// the handles are the list's and sparse.
 pub struct Blocks {
     handle: &'static mut [u32],
@@ -224,7 +224,7 @@ fn buffer_size(len: u32) -> u32 {
 
 /// `n` bytes of the memory at `at`.
 fn memory(at: u32, n: u32) -> &'static [u8] {
-    // SAFETY: a block of a pool the draw list named, live until its free is
+    // SAFETY: a heap block the draw list named, live until its free is
     // listed, in the memory addressed from 0.
     unsafe { core::slice::from_raw_parts(at as usize as *const u8, n as usize) }
 }

@@ -54,7 +54,7 @@ async function* walk_files(dir: string): AsyncGenerator<string> {
 
 /** What the bucket prefix for content-addressed objects is; a key is this
  * over the sha256 hex. Mirrored by the Worker's KEY_RE and by
- * lib/env/route.ts's asset_url. */
+ * apps/web/src/config/route.ts's asset_url. */
 const KEY_PREFIX = "asset/";
 
 type Ingested = {
