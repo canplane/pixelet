@@ -13,13 +13,12 @@ use pxl_shared::spec::space::indexer::L3_IDX;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 
-use crate::sys::global::{now, Global};
 use crate::module::map::store::use_map_store;
 use crate::module::world::geocode::label::{assemble_label, Label};
 use crate::module::world::geocode::repository::{parse_geocode, PartTable, Rows};
-use crate::module::world::sched::demand::Demand;
-use crate::module::world::sched::demand::Category;
+use crate::module::world::sched::demand::{Category, Demand};
 use crate::module::world::sched::fetch_scheduler::{fetch_sync, page_key};
+use crate::sys::global::{now, Global};
 
 // A short debounce still matters even though the real dedup key is an exact
 // page: panning fires map_center updates every frame, and most of those land

@@ -18,6 +18,7 @@
 //! fighting.
 
 use xpute_core::kit::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4, Vec3};
+use xpute_core::sys::mem::{alloc, free};
 
 use super::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, texture_usage, GpuApi, NONE};
 use super::api_spec::{dimension, format, load, resource};
@@ -31,18 +32,19 @@ use super::skinned::SkinnedPass;
 use super::stage::{stage_lane, STAGE_AT};
 use super::surface::{surface, surfaces, surfaces_lost, Surface, ROLE_CASE, ROLE_WORLD, SETTLE_TURNS, SURFACES};
 use crate::app::setting::store::use_settings_store;
-use crate::sys::global::Global;
-use crate::sys::kernel::kernel;
+use crate::module::map::environment::ENV_OTHER_LIGHT;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::character::character_preview::preview_rows;
 use crate::module::world::character::companion::companion_skins;
-use crate::module::world::core_tick::{set_host_frame_stat, HostFrameStat};
+use crate::module::world::chunk_stage::{set_host_frame_stat, HostFrameStat};
 use crate::module::world::sched::ledger::{DrawCensus, TexturesMb};
 use crate::render::draw::{
-    DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
+    DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
+    PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
 use crate::render::shader::{FRAME_AT, FRAME_FLOATS, PIPELINE_CHUNK_DEPTH, PIPELINE_SKY};
-use crate::module::map::environment::ENV_OTHER_LIGHT;
+use crate::sys::global::Global;
+use crate::sys::kernel::kernel;
 
 /// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
 pub const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
@@ -125,10 +127,10 @@ impl Scratch {
         if bytes > self.bytes {
             if self.bytes > 0 {
                 // SAFETY: the block this scratch held alone.
-                unsafe { xpute_core::sys::mem::give_block((self.at, self.bytes)) };
+                unsafe { free((self.at, self.bytes)) };
             }
             let size = bytes.next_power_of_two().max(4096);
-            (self.at, self.bytes) = xpute_core::sys::mem::take_block(size).expect("the heap has no room for the renderer's scratch");
+            (self.at, self.bytes) = alloc(size).expect("the heap has no room for the renderer's scratch");
         }
         // SAFETY: a block of the mesh section this scratch holds alone, at
         // least `bytes` long.
@@ -139,7 +141,7 @@ impl Scratch {
     pub fn free(&mut self) {
         if self.bytes > 0 {
             // SAFETY: the block this scratch held alone.
-            unsafe { xpute_core::sys::mem::give_block((self.at, self.bytes)) };
+            unsafe { free((self.at, self.bytes)) };
             self.bytes = 0;
         }
     }
@@ -184,7 +186,7 @@ fn memory(at: u32, n: u32) -> &'static [u8] {
 }
 
 fn fixed_lane() -> &'static mut [u32] {
-    let (at, _) = xpute_core::sys::mem::take_block((BLOCK_SLOTS * 4) as u32).expect("the heap has no room for the renderer's blocks");
+    let (at, _) = alloc((BLOCK_SLOTS * 4) as u32).expect("the heap has no room for the renderer's blocks");
     // SAFETY: a block never given back, BLOCK_SLOTS words.
     let lane = unsafe { core::slice::from_raw_parts_mut(at as *mut u32, BLOCK_SLOTS) };
     lane.fill(0);

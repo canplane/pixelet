@@ -12,30 +12,28 @@
 //! One bake is open at a time, as with the TypeScript context; the module is
 //! single-threaded, so the state is a plain global.
 
-use pxl_core::render::layer::pipeline::chunk_mesher::Step;
-use pxl_core::bake::run_set::{run_set_bytes, RunSet};
-use pxl_core::bake::scan::{BandView, ExtraView, ScanStep};
-use pxl_core::bake::terrain::{PageView, ELE_PADDED_SPAN};
-use pxl_core::render::layer::pipeline::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
-use pxl_core::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
-use pxl_core::sys::kernel::{kernel, reindex_object, Kernel};
-use pxl_core::sys::global::Global;
 use pxl_core::mem;
-use xpute_core::sys::mem::{write_section, SECTION_WORDS};
 use pxl_core::module::world::chunk_node::{BuildEvent, PageLanes, World};
 use pxl_core::module::world::decor::decor_layer::{Kind as DecorKind, Rule as DecorRule};
-use pxl_core::render::layer::object::adapter::{Carve, Kind};
-use pxl_core::render::layer::pipeline::chunk_raycast::Raycast;
 use pxl_core::module::world::sched::chunk_table::{Event, Frame, Scheduler};
+use pxl_core::render::layer::object::adapter::{Carve, Kind};
+use pxl_core::render::layer::pipeline::chunk_mesher::Step;
+use pxl_core::render::layer::pipeline::chunk_raycast::Raycast;
+use pxl_core::render::layer::pipeline::volume::{Cell, Volumes, Voxel, BAND_WORDS as VOLUME_BAND_WORDS};
+use pxl_core::render::layer::pipeline::voxel_scan::{run_set_bytes, BandView, ExtraView, RunSet, ScanStep};
+use pxl_core::render::layer::terrain::adapter::PageView;
+use pxl_core::sys::global::Global;
+use pxl_core::sys::kernel::{kernel, reindex_object, Kernel};
+use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_shared::spec::cmd::{Cmd, StepResult};
 use xpute_core::io::marshal::tree::{BranchCursor, PacketWriter, TreeReader};
 use xpute_core::ipc::cmd::Interrupt;
 use xpute_core::ipc::frame::FrameFlag;
 use xpute_core::ipc::ring::{ring_bytes, slots_bytes, Ring};
-use xpute_core::kit::array::ArrayBuffer;
-use xpute_core::kit::array::U8Array;
+use xpute_core::kit::array::{ArrayBuffer, U8Array};
 use xpute_core::sys::errno::Errno;
 use xpute_core::sys::error::MarshalError;
+use xpute_core::sys::mem::{write_section, SECTION_WORDS};
 
 extern "C" {
     /// Where the linker stopped: the end of `.rodata`, `.data` and `.bss`, and
@@ -50,6 +48,10 @@ extern "C" {
     /// four megabytes apart.
     #[allow(non_upper_case_globals)]
     static __data_end: u8;
+    /// The top of the stack: `-z stack-size` past its start, which
+    /// `--stack-first` puts at the bottom of the memory. wasm-ld defines it.
+    #[allow(non_upper_case_globals)]
+    static __stack_high: u8;
 }
 
 /// Where the linker stopped, as an address.
@@ -318,6 +320,8 @@ pub extern "C" fn boot() -> *const u32 {
 /// range without being told (`buddy_tree`'s `Range`), so laying out is
 /// recording what the map says and opening the volumes over it.
 fn lay_out() -> mem::Map {
+    let stack_high = core::ptr::addr_of!(__stack_high) as u32;
+    assert!(stack_high == pxl_core::mem::spec::STACK_BYTES, "the stack was linked to end at {stack_high}, not at mem.json's STACK_BYTES");
     let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
     let map = mem::lay_out(given.min(u32::MAX as u64) as u32, data_end());
     // SAFETY: the memory is this module's own, addressed from 0.
@@ -622,7 +626,7 @@ fn post_shell(s: &mut State) {
 fn post_turn(s: &mut State, report: pxl_core::module::world::sched::tick::TickReport) {
     post_shell(s);
     // A pass that left something new to draw asks for the turn that draws it.
-    let asked = report.invalidated | pxl_core::module::world::core_tick::take_draw();
+    let asked = report.invalidated | pxl_core::module::world::chunk_stage::take_draw();
     let draws = kernel().sched.draw.draw_count();
     raise(&s.outbox, Cmd::WORLD_UPDATE, 4, |b| {
         b.bool(Some(asked)).f64(Some(report.total_ms)).bool(Some(report.settled)).u32(Some(draws));
@@ -1083,7 +1087,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::TERRAIN_READ => {
             let f = fields(pkt)?;
             let (tx0, ty0) = (u32_at(&f, 5)?, u32_at(&f, 6)?);
-            if tx0 > PAGE_CELL_SPAN - CHUNK_SPAN || ty0 > PAGE_CELL_SPAN - CHUNK_SPAN {
+            if tx0 > PAGE_CELL_SPAN - CHUNK_CELL_SPAN || ty0 > PAGE_CELL_SPAN - CHUNK_CELL_SPAN {
                 return Err(MarshalError::new(Errno::EINVAL, Some("a chunk past its page"), None));
             }
             let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;

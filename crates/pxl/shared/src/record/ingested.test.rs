@@ -1,8 +1,9 @@
 // pxl_shared/record/ingested.test.rs
 // (no pair: ingested.ts is generated and has no test file)
 
-use super::*;
 use xpute_core::sys::vector::Vector;
+
+use super::*;
 
 const VECTOR: &str = include_str!("../../vector/record/ingested.tsv");
 

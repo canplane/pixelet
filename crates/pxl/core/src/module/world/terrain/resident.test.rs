@@ -4,10 +4,10 @@
 // to an address its own coordinate names, so there is nothing to arrange and
 // nothing that can be refused.
 
-use super::super::fixed::TERRAIN_AXIS;
-use super::*;
 use pxl_shared::spec::space::pvf3::ivec;
 
+use super::super::fixed::TERRAIN_AXIS;
+use super::*;
 use crate::sys::global::serial;
 
 #[test]

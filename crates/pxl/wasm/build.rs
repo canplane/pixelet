@@ -63,6 +63,8 @@ fn main() {
     const { assert!(MIN_MEMORY_BYTES.is_multiple_of(1 << 16), "a memory is declared in WebAssembly pages") };
 
     println!("cargo:rustc-link-arg=--import-memory");
+    println!("cargo:rustc-link-arg=--stack-first");
+    println!("cargo:rustc-link-arg=-zstack-size={STACK_BYTES}");
     println!("cargo:rustc-link-arg=--global-base={GLOBAL_BASE}");
     println!("cargo:rustc-link-arg=--initial-memory={MIN_MEMORY_BYTES}");
     println!("cargo:rerun-if-changed=build.rs");

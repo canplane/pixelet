@@ -32,18 +32,18 @@ use super::path::{heading_to, init_settle_tracker, sample_walk_plan, update_sett
 use super::store::use_companion_load_store;
 use super::variant::{find_person_variant, find_pet_variant, CharacterVariant};
 use crate::app::setting::store::use_settings_store;
-use crate::sys::global::Global;
-use crate::sys::kernel::{kernel, with_world};
 use crate::module::camera::config::camera_cfg;
 use crate::module::camera::orbit::damp_alpha;
 use crate::module::camera::store::use_camera_store;
 use crate::module::world::frame::view::view;
+use crate::module::world::gltf_cache::{load_gltf, load_image};
 use crate::module::world::object::store::objects_revision;
 use crate::module::world::sched::tick::TickContext;
 use crate::module::world::surface_height::get_surface_z_at_local;
 use crate::module::world::terrain::store::tile_pages;
-use crate::module::world::gltf_cache::{load_gltf, load_image};
 use crate::render::gpu::model_asset::{register_model, ModelHandle};
+use crate::sys::global::Global;
+use crate::sys::kernel::{kernel, with_world};
 
 /// A variant's model in the scheduler, registered once per model and height
 /// whoever asks first; None inside while it failed. By URL, then by height's

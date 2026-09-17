@@ -1,9 +1,10 @@
 // pxl_shared/record/shipped.test.rs
 // (no pair: shipped.ts's tests are record.test.ts, mirrored beside this)
 
-use super::*;
 use xpute_core::kit::hash::fnv1a_64_hex;
 use xpute_core::sys::vector::Vector;
+
+use super::*;
 
 const VECTOR: &str = include_str!("../../vector/record/shipped.tsv");
 

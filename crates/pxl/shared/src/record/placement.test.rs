@@ -1,9 +1,10 @@
 // pxl_shared/record/placement.test.rs
 // (no pair: placement.ts's tests are record.test.ts, mirrored beside this)
 
-use super::*;
 use xpute_core::kit::encoding::bytes_to_hex;
 use xpute_core::sys::vector::Vector;
+
+use super::*;
 
 const VECTOR: &str = include_str!("../../vector/record/placement.tsv");
 

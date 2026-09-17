@@ -10,8 +10,8 @@
 
 use xpute_core::ds::handle::{handle_slot, HandleTable};
 
-use crate::sys::global::Global;
 use crate::module::world::change::request_world_tick;
+use crate::sys::global::Global;
 
 /// What a surface shows.
 pub const ROLE_WORLD: u32 = 0;

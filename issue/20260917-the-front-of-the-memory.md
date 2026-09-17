@@ -134,3 +134,16 @@ and the ray/AABB slab test.
 - `ds/arena.rs`'s `Arena` and `ArenaGuard` are imported by nobody. Left alone.
 - Nothing was run. `cargo clippy -D warnings` and `deno task check`, and no
   more than that.
+
+## The stack, from mem.json (later the same day)
+
+The first item above is closed. build.rs passes `--stack-first` and
+`-z stack-size` from mem.json's `STACK_BYTES`, so the stack is a number this
+project chooses rather than one rustc's default happens to match, and
+`lay_out` asserts at boot that wasm-ld's `__stack_high` is `STACK_BYTES`. The
+layout above is otherwise unchanged; `.stack` is placed by build.rs, not by
+rustc.
+
+Checked with `cargo clippy` for wasm32, which does not link: that wasm-ld
+defines `__stack_high`, and that a `-z stack-size` given after rustc's own
+wins, are what the next linked build shows.

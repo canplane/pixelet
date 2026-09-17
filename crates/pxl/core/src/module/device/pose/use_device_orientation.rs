@@ -5,8 +5,9 @@
 //! the shell's — it takes `take_orientation_commands`, asks iOS's permission
 //! inside a gesture, and reports events back.
 
-use super::store::{use_device_orientation_store, DevicePoseStatus};
 use pxl_shared::spec::message::Message;
+
+use super::store::{use_device_orientation_store, DevicePoseStatus};
 use crate::sys::global::{now, Global};
 
 /// There's no Permissions-API equivalent for orientation (iOS Safari doesn't

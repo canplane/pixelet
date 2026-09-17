@@ -11,12 +11,12 @@ use xpute_core::kit::math::wrap;
 
 use super::coord::get_local_world_origin;
 use super::view::{view, view_compose};
-use crate::sys::global::Global;
 use crate::module::camera::config::camera_cfg::smooth::{POS_DAMP, ROT_DAMP};
 use crate::module::camera::orbit::damp_alpha;
 use crate::module::camera::store::use_camera_store;
 use crate::module::map::store::use_map_store;
 use crate::module::world::sched::tick::TickContext;
+use crate::sys::global::Global;
 
 // see use_camera.rs's DIST_EPS/POLAR_EPS comment — the same reasoning about
 // asking for frames.

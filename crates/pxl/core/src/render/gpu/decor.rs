@@ -19,11 +19,11 @@ use super::api_spec::{address, compare, filter, format, resource};
 use super::pipeline::{Built, Pipelines};
 use super::renderer::{frame_group, put_f32, put_u32, skin_group, Blocks, Scratch};
 use super::shadow::Shadow;
-use crate::sys::kernel::kernel;
 use crate::module::world::decor::asset_store::decor_bundle_assets;
+use crate::module::world::gltf_cache::MODEL_VERTEX_WORDS;
 use crate::render::draw::{DRAW_WORDS, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, UNIFORM_FLOATS};
 use crate::render::shader::PIPELINE_DECOR_DEPTH;
-use crate::module::world::gltf_cache::MODEL_VERTEX_WORDS;
+use crate::sys::kernel::kernel;
 
 /// A decor draw's dynamic uniform (shader/decor.wgsl's Draw): translation, the
 /// group's first lane word, the instance count, the opacity, padding.

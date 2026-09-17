@@ -17,10 +17,10 @@
 use pxl_shared::spec::space::adapter::epsg4326::{self, G4326};
 
 use super::theme::{get_theme_key, WorldThemeKey};
+use crate::module::map::store::use_map_store;
 use crate::sys::global::{now, Global};
 use crate::sys::host::local_time;
 use crate::sys::kernel::kernel;
-use crate::module::map::store::use_map_store;
 
 const THEME_CHECK_INTERVAL_MS: f64 = 60_000.0;
 

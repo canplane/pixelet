@@ -19,14 +19,14 @@ use pxl_shared::spec::space::v3::{floor3n, V3};
 use pxl_shared::spec::space::xy::TO_XY;
 use xpute_core::kit::mat4::{mat4_transform_point, Mat4, Vec3};
 
-use crate::sys::global::Global;
-use crate::sys::kernel::kernel;
 use crate::module::world::change::request_world_tick;
+use crate::module::world::chunk_node::World;
 use crate::module::world::frame::view::view;
 use crate::module::world::terrain::elevation::{get_ele, with_ele};
 use crate::module::world::terrain::store::tile_pages;
-use crate::module::world::chunk_node::World;
 use crate::render::draw::{DrawList, Held, PIPELINE_DEBUG};
+use crate::sys::global::Global;
+use crate::sys::kernel::kernel;
 
 const COLOR: V3 = [0.0, 0.0, 0.0];
 const DASH: f64 = 0.3;

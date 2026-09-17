@@ -1,4 +1,4 @@
-// pxl_core/bake/terrain.test.rs
+// pxl_core/render/layer/terrain/adapter.test.rs
 
 use super::*;
 

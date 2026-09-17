@@ -8,8 +8,8 @@
 
 /// Full opacity/size at or inside fade_start_u(), smoothstepped to gone by
 /// fade_end_u() — both a fixed number of the terrain's first tier handoff
-/// (module/world/lod.rs), so they move with the projection as the tiers do.
-pub use crate::module::world::lod::{fade_end_u, fade_start_u};
+/// (render/lod.rs), so they move with the projection as the tiers do.
+pub use crate::render::lod::{fade_end_u, fade_start_u};
 
 pub fn distance_fade_far(dist: f64) -> f64 {
     let (start, end) = (fade_start_u(), fade_end_u());

@@ -11,19 +11,19 @@
 //! sources its chunk was last told; the cursor does not teleport between
 //! frames, so the same chunks come up again and again.
 
+use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, U_PER_CELL};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::v3::V3;
 use xpute_core::kit::mat4::Vec3;
 
-use crate::bake::scan::{BandView, ColumnRuns};
-use crate::render::layer::pipeline::volume::{unpack_sub_cell_fraction, MaterialClass, SUB_CELL_NONE};
-use crate::space::constant::{CHUNK_SPAN, U_PER_CELL};
-use crate::sys::kernel::kernel;
 use crate::module::world::chunk_node::World;
 use crate::module::world::sched::chunk_table::Scheduler;
+use crate::render::layer::pipeline::volume::{unpack_sub_cell_fraction, MaterialClass, SUB_CELL_NONE};
+use crate::render::layer::pipeline::voxel_scan::{BandView, ColumnRuns};
+use crate::sys::kernel::kernel;
 
 /// A chunk's side, in units.
-const CHUNK_W: f64 = CHUNK_SPAN as f64 * U_PER_CELL;
+const CHUNK_W: f64 = CHUNK_CELL_SPAN as f64 * U_PER_CELL;
 /// A hover ray crosses at most a few chunks at the interact radius.
 const MAX_ENTRIES: usize = 4;
 /// Hard budget: at 1.25 MiB each, eight direct bands are about 10 MiB.
@@ -266,7 +266,7 @@ impl Raycast {
         let (bands, column) = (&self.bands, &mut self.column);
         let (ox, oy) = (o[0] - chunk_ox, o[1] - chunk_oy);
         let (dx, dy) = (d[0], d[1]);
-        let span = CHUNK_SPAN as f64;
+        let span = CHUNK_CELL_SPAN as f64;
 
         let test_cell = |column: &mut ColumnRuns, cx: u32, cy: u32| -> Option<Hit> {
             let n = column.walk(bands, cx, cy);
@@ -323,7 +323,6 @@ impl Raycast {
         None
     }
 }
-
 
 // ---- the decor ----
 

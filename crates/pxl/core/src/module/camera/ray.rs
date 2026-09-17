@@ -23,8 +23,8 @@ use xpute_core::kit::mat4::Vec3;
 use crate::module::world::frame::coord::{get_local_world_origin, local_world_to_canonical};
 use crate::module::world::object::geometry::{aabb_overlap, object_aabb, AABB};
 use crate::module::world::object::store::{get_objects_near, OccupiedEntry};
-use crate::render::layer::pipeline::chunk_raycast::{ray_hit_world, RayLike, WorldHit};
 use crate::module::world::terrain::elevation::with_ele;
+use crate::render::layer::pipeline::chunk_raycast::{ray_hit_world, RayLike, WorldHit};
 use crate::render::layer::pipeline::volume::MaterialClasses;
 
 const INTERACT_RADIUS_CELL: f64 = 32.0 / U_PER_CELL - 0.707;

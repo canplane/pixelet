@@ -27,12 +27,11 @@ use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 
 use super::poi_badge::{cluster_badge_logical_w, cluster_badge_slot, poi_badge_logical_w, poi_badge_slot, BADGE_CENTER_Y, BADGE_COLLIDE_H, BADGE_LOGICAL_H};
 use super::poi_index::{
-    invalidate_poi_index, poi_cell_x, poi_cell_y, poi_cell_z, poi_grounded, poi_index_stats, poi_index_sweep, poi_page, poi_rec, poi_tiebreak, poi_tier, poi_x, poi_y, poi_z,
-    query_poi_index, set_poi_tier, sync_poi_index, NO_TIER,
+    invalidate_poi_index, poi_cell_x, poi_cell_y, poi_cell_z, poi_grounded, poi_index_stats, poi_index_sweep, poi_page, poi_rec, poi_tiebreak, poi_tier, poi_x, poi_y, poi_z, query_poi_index,
+    set_poi_tier, sync_poi_index, NO_TIER,
 };
 use super::store::revision as poi_revision;
 use crate::app::setting::store::use_settings_store;
-use crate::sys::global::{now, Global};
 use crate::module::camera::store::{use_camera_store, ViewState};
 use crate::module::map::store::use_map_store;
 use crate::module::world::billboard::atlas::NO_SLOT;
@@ -43,9 +42,10 @@ use crate::module::world::billboard::sheet::{billboard_sheet, new_billboard_set,
 use crate::module::world::change::request_world_tick;
 use crate::module::world::frame::coord::{get_local_world_origin, local_world_to_canonical};
 use crate::module::world::frame::view::view;
-use crate::module::world::lod::{fade_end_u, get_lod_level, lod_step_at, BADGE_SHAMT_OVER_CUBE, LOD_STEP_BY_LEVEL};
 use crate::module::world::sched::tick::{FrameBudget, TickContext};
 use crate::module::world::terrain::store::tile_pages;
+use crate::render::lod::{fade_end_u, get_lod_level, lod_step_at, BADGE_SHAMT_OVER_CUBE, LOD_STEP_BY_LEVEL};
+use crate::sys::global::{now, Global};
 
 /// A rail, not the mechanism. What decides how many badges are drawn is how
 /// many fit: a candidate that lands on pixels another badge has taken is folded

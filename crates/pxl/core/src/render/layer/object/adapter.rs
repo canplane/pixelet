@@ -5,11 +5,13 @@
 //! column's entries painted band by band.
 
 use std::collections::BTreeSet;
+
+use pxl_shared::bake::constant::U_PER_CELL;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
-use crate::bake::terrain::js_round;
+
 use crate::module::world::object::store::{CellZ, Store, AIR, BAND_CELLS, BAND_UNITS, MIN_LEVEL, POS_BITS, POS_MASK, STEP_UNITS};
 use crate::render::layer::pipeline::volume::{pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};
-use crate::space::constant::U_PER_CELL;
+use crate::render::layer::terrain::adapter::js_round;
 
 /// What a state paints as: nothing (decor renders as instanced geometry,
 /// not a voxel), air, or a solid with a material.

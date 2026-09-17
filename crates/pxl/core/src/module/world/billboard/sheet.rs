@@ -9,11 +9,11 @@
 //! reached here: what a set shows is written as instances of
 //! BILLBOARD_FLOATS floats.
 
-pub use super::order::BILLBOARD_ORDER;
 use super::atlas::BillboardAtlas;
+pub use super::order::BILLBOARD_ORDER;
+use crate::module::world::chunk_node::World;
 use crate::sys::global::Global;
 use crate::sys::kernel::kernel;
-use crate::module::world::chunk_node::World;
 
 static SHEET: Global<BillboardAtlas> = Global::new();
 

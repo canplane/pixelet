@@ -12,11 +12,10 @@
 
 use pxl_shared::record::shipped::shipped_palette;
 
-use super::variant_spec::{MOVE_CLIP, PERSON_GENDER_PREFIXES};
-use crate::sys::global::Global;
-use crate::lib::env::route::asset_url;
-
 pub use super::variant_spec::{DEFAULT_PERSON_VARIANT_KEY, DEFAULT_PET_VARIANT_KEY};
+use super::variant_spec::{MOVE_CLIP, PERSON_GENDER_PREFIXES};
+use crate::lib::env::route::asset_url;
+use crate::sys::global::Global;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CharacterVariant {

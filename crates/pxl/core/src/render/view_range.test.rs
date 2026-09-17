@@ -1,4 +1,4 @@
-// pxl_core/module/world/frame/view_range.test.rs
+// pxl_core/render/view_range.test.rs
 //
 // The invariant the render range rests on. Ranges are measured from the view
 // centre on the ground (one anchor, chunk aligned), while the camera itself can

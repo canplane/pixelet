@@ -20,22 +20,26 @@
 //! let go. The glue holds the meshes and the scene; the core holds every
 //! decision about them.
 
-use xpute_core::kit::hash::fnv1a64_str;
-use crate::bake::terrain::ChunkSample;
 use std::collections::BTreeMap;
-use crate::render::draw::{DrawList, PIPELINE_CHUNK};
-use crate::space::constant::{CHUNK_SPAN, CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT, PAGE_SPAN};
-use crate::module::world::billboard::field::Billboards;
-use crate::module::world::chunk_node::{Builder, BuildEvent, PageLanes, World, MAX_CHUNKS};
-use crate::module::world::marker::frame_gizmo::DebugLines;
-use crate::module::world::decor::instance::{decor_groups, DecorScratch};
-use crate::module::world::decor::decor_layer::{decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
-use crate::module::map::environment::EnvironmentDraw;
-use crate::module::world::marker::hover_cursor::GhostDraw;
-use crate::module::world::lod::{Ladder, COARSEST, LOD_STEP_BY_LEVEL};
-use crate::module::world::marker::location_puck::Markers;
-use crate::module::world::gltf_cache::Models;
+
+use pxl_shared::bake::constant::CHUNK_CELL_SPAN;
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
+use xpute_core::kit::hash::fnv1a64_str;
+use xpute_core::sys::mem::alloc;
+
+use crate::module::map::environment::EnvironmentDraw;
+use crate::module::world::billboard::field::Billboards;
+use crate::module::world::chunk_node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
+use crate::module::world::decor::decor_layer::{decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
+use crate::module::world::decor::instance::{decor_groups, DecorScratch};
+use crate::module::world::gltf_cache::Models;
+use crate::module::world::marker::frame_gizmo::DebugLines;
+use crate::module::world::marker::hover_cursor::GhostDraw;
+use crate::module::world::marker::location_puck::Markers;
+use crate::render::chunk_range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT, PAGE_SPAN};
+use crate::render::draw::{DrawList, PIPELINE_CHUNK};
+use crate::render::layer::terrain::adapter::ChunkSample;
+use crate::render::lod::{Ladder, COARSEST, LOD_STEP_BY_LEVEL};
 
 /// The sphere a chunk nothing has measured is culled by.
 const APPROXIMATE_CHUNK_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
@@ -689,7 +693,7 @@ impl Scheduler {
             let Some(scratch) = self.decor_scratch.as_mut() else { return false };
             let built = DecorBuild::build(scratch, &self.decor_kinds, &chunk, &self.decor_sample, world.store, step);
             let bytes = built.bytes();
-            let Some((at, bytes)) = xpute_core::sys::mem::take_block(bytes) else {
+            let Some((at, bytes)) = alloc(bytes) else {
                 self.builder.stat.starved += 1;
                 self.slots[i].refused = Some(crate::sys::host::heap_releases());
                 return false;
@@ -828,7 +832,7 @@ impl Scheduler {
             }
             for cy in 0..PAGE_CHUNK_AXIS {
                 for cx in 0..PAGE_CHUNK_AXIS {
-                    let (bx, by) = (cx * CHUNK_SPAN, cy * CHUNK_SPAN);
+                    let (bx, by) = (cx * CHUNK_CELL_SPAN, cy * CHUNK_CELL_SPAN);
                     if self.mounted.contains_key(&(page_idx, bx, by)) || rect(x0 + bx as f64, y0 + by as f64, CHUNK_WORLD_SPAN) > r2 {
                         continue;
                     }

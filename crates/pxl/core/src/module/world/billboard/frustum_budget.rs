@@ -28,8 +28,8 @@ use xpute_core::kit::mat4::{mat4_transform_point, Vec3};
 
 use super::batch::BillboardBatch;
 use super::distance_fade::distance_fade_far;
-use crate::sys::global::Global;
 use crate::module::world::frame::view::{view, view_sees_sphere};
+use crate::sys::global::Global;
 
 /// Placed badges in screen pixels, so a candidate can find out whether its
 /// pixels are already taken. Sized once for a viewport larger than anything

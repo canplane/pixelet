@@ -19,24 +19,22 @@
 //! store as its own entry kind alongside solid cubes, and is merged into the
 //! build next to the scattered instances, not kept in a separate store.
 
-use pxl_shared::bake::constant::U_PER_CELL;
+use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
 use pxl_shared::record::palette::PaletteTable;
 use pxl_shared::record::shipped::shipped_palette;
 use pxl_shared::spec::cell::{decor_num_id, DecorId};
-use pxl_shared::spec::space::pvf3::ivec::IVec;
+use pxl_shared::spec::space::pvf3::ivec::{gather, IVec};
 use xpute_core::kit::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
-use pxl_shared::spec::space::pvf3::ivec::gather;
 
 use super::scatter::{DecorChannelRule, DecorKindSeed, DecorOrientationMode, DecorRules};
+use crate::lib::env::route::asset_url;
+use crate::module::world::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
+use crate::module::world::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
+use crate::module::world::object::store::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
+use crate::render::layer::terrain::adapter::{ChunkSample, PageView};
+use crate::render::lod::{LodStep, TARGET_CELL_PX};
 use crate::sys::global::Global;
 use crate::sys::kernel::kernel;
-use crate::lib::env::route::asset_url;
-use crate::module::world::lod::{LodStep, TARGET_CELL_PX};
-use crate::module::world::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
-use crate::module::world::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
-use crate::bake::terrain::{ChunkSample, PageView};
-use crate::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
-use crate::module::world::object::store::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
 
 // Fixed, arbitrary — the one thing every kind's own placement ultimately
 // derives from (alongside its own seed tag). Changing this reshuffles every
@@ -338,9 +336,9 @@ impl<'s> DecorBuild<'s> {
             if chunk.show_decor && d > 0.0 {
                 let kind_seed = derive_seed_u64(page_seed, kind.tag);
                 let g = &chunk.page.ground;
-                for dy in 0..CHUNK_SPAN {
+                for dy in 0..CHUNK_CELL_SPAN {
                     let cell_y = chunk.ty0 + dy;
-                    for dx in 0..CHUNK_SPAN {
+                    for dx in 0..CHUNK_CELL_SPAN {
                         let cell_x = chunk.tx0 + dx;
                         let idx = (cell_y * PAGE_CELL_SPAN + cell_x) as usize;
                         if !(0..4).all(|c| kind.rules[c].allows(g[c][idx])) {
@@ -358,7 +356,7 @@ impl<'s> DecorBuild<'s> {
                             rng.unit() * core::f64::consts::PI * 2.0
                         };
                         let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
-                        let ele = sample.ele[(dy * CHUNK_SPAN + dx) as usize] as i32;
+                        let ele = sample.ele[(dy * CHUNK_CELL_SPAN + dx) as usize] as i32;
                         if has_entries && store.cell(chunk.col_idx, dx, dy, ele).is_some_and(|c| c.solid > 0) {
                             continue;
                         }

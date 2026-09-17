@@ -34,10 +34,11 @@ import type { u32 } from "@xpute/core/kit/word.ts";
  * (issue/20260916-the-page-table-the-pool-did-not-need.md). */
 export const PAGE_BYTES: u32 = 4096 as number;
 
-/** The stack, at the bottom of the memory. Not a choice made here: rustc passes
- * `-z stack-size=1048576` and `--stack-first` to wasm-ld for
- * wasm32-unknown-unknown, and this is that number written where the ranges
- * above it are placed against it.
+/** The stack, at the bottom of the memory. build.rs hands this number to wasm-ld
+ * as `-z stack-size` with `--stack-first`, and the kernel asserts at boot that
+ * the linker's `__stack_high` is where it says, so the ranges above are placed
+ * against the stack the module was actually linked with rather than against a
+ * default that happens to agree.
  *
  * First so that an overflow goes below zero, wraps as an unsigned 32-bit
  * address and lands outside the memory, which traps. With the stack after the

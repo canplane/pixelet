@@ -7,17 +7,18 @@
 // read and write it directly, as their TypeScript read its stores; pxl-wasm
 // keeps only the rings and hands commands to it.
 
-use crate::render::layer::pipeline::chunk_mesher::BakeContext;
-use crate::bake::scan::{ColumnRuns, ScanContext};
-use crate::bake::terrain::{ChunkSample, Materials};
-use crate::render::layer::pipeline::volume::{Volumes, BAND_WORDS as VOLUME_BAND_WORDS};
-use crate::sys::global::Global;
-use crate::module::world::object::store::Store;
-use crate::render::layer::object::adapter::Painter;
-use crate::render::layer::pipeline::chunk_raycast::Raycast;
-use crate::module::world::sched::chunk_table::Scheduler;
 use pxl_shared::spec::space::pvf3::ivec::{self, gather};
 use xpute_core::ipc::change::{ChangeLog, ChangeLogOptions};
+
+use crate::module::world::object::store::Store;
+use crate::module::world::sched::chunk_table::Scheduler;
+use crate::render::layer::object::adapter::Painter;
+use crate::render::layer::pipeline::chunk_mesher::BakeContext;
+use crate::render::layer::pipeline::chunk_raycast::Raycast;
+use crate::render::layer::pipeline::volume::{Volumes, BAND_WORDS as VOLUME_BAND_WORDS};
+use crate::render::layer::pipeline::voxel_scan::{ColumnRuns, ScanContext};
+use crate::render::layer::terrain::adapter::{ChunkSample, Materials};
+use crate::sys::global::Global;
 
 /// module/world/change.rs's WorldTopic numbers the store bumps, and the
 /// log's shape.

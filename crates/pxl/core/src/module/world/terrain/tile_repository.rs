@@ -21,16 +21,16 @@ use pxl_shared::bake::format::{decode_terrain, Ground, Terrain, Tile};
 use pxl_shared::spec::fetch::FetchFail;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use xpute_core::kit::array::{ArrayBuffer, I16Array, U8Array};
+use xpute_core::sys::mem::alloc;
 
-use super::resident::take_slot;
 use super::fixed::{ele_at, ground_at, record_ele_at, record_ground_at, RECORD_BYTES};
+use super::resident::take_slot;
 use super::store::use_tile_store;
-use crate::module::world::sched::demand::Category;
-use crate::sys::global::{now, Global};
 use crate::lib::env::config::TILE_BASE_URL;
 use crate::lib::env::route::{Joined, TileBase};
 use crate::mem;
-use crate::module::world::sched::demand::Phases;
+use crate::module::world::sched::demand::{Category, Phases};
+use crate::sys::global::{now, Global};
 
 /// Object key of the single shared open-ocean tile in the static bucket.
 pub const OCEAN_KEY: &str = "_ocean";
@@ -186,7 +186,7 @@ pub fn adopt_ocean(pkt: U8Array) -> Result<(), FetchFail> {
         return Ok(());
     }
     let decoded = decode(pkt)?;
-    let (at, _) = xpute_core::sys::mem::take_block(RECORD_BYTES).ok_or(FetchFail::NoRoom)?;
+    let (at, _) = alloc(RECORD_BYTES).ok_or(FetchFail::NoRoom)?;
     let lanes = TerrainLanes {
         ground: [record_ground_at(at, 0), record_ground_at(at, 1), record_ground_at(at, 2), record_ground_at(at, 3)],
         ele: record_ele_at(at),

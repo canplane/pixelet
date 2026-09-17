@@ -5,8 +5,8 @@ use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 use super::elevation::ground_pivot;
 use super::store::tile_pages;
 use crate::app::setting::store::use_settings_store;
-use crate::sys::global::Global;
 use crate::module::map::store::use_map_store;
+use crate::sys::global::Global;
 
 /// Re-samples terrain elevation under the current map_center and snaps it in,
 /// if ground_snap is on. Shared by the tile-arrival retry below and by any

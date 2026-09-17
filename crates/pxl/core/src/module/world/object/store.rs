@@ -15,33 +15,36 @@
 //! adds is the eraser's two virtual edits, the change log's bumps, and the
 //! persisted form in the host's storage.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use pxl_shared::bake::constant::{OBJECT_LAYOUT, U_PER_CELL};
 use pxl_shared::bake::ground::shown_ground;
 use pxl_shared::record::placement::{encode_placements, Placement, PlacementTable};
 use pxl_shared::record::table::RecordSource;
-use pxl_shared::spec::cell::{cube_types, decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, DecorId, PlaceableCube};
+use pxl_shared::spec::cell::{
+    cube_types, decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, DecorId, PlaceableCube,
+};
 use pxl_shared::spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L2_SHAMT, L3_IDX};
 use pxl_shared::spec::space::pvf3::fvec::{self, FVec};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
+use pxl_shared::spec::space::pvf3::Ivec;
+use pxl_shared::spec::space::sparse_tree::mem;
+use pxl_shared::spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree, SparseTreeLayout};
 use pxl_shared::spec::space::xy::TO_XY;
 use xpute_core::io::marshal::tree::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_core::kit::encoding::{b64url_to_bytes, bytes_to_b64url};
 use xpute_core::kit::hash::fnv1a64_bytes;
 use xpute_core::sys::error::MarshalError;
-use std::collections::{BTreeMap, BTreeSet};
-use pxl_shared::spec::space::pvf3::Ivec;
-use pxl_shared::spec::space::sparse_tree::mem;
-use pxl_shared::spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree, SparseTreeLayout};
 
-use crate::bake::terrain::js_round;
-use crate::render::layer::object::adapter::Carve;
-use crate::sys::global::{now, Global};
-use crate::sys::host::{storage_get, storage_set};
-use crate::sys::kernel::{kernel, reindex_object};
 use crate::module::world::change::{bump_world, request_world_tick, world_changes, DECOR_COLUMN, OBJECT_COLUMN};
 use crate::module::world::frame::coord::local_world_to_canonical;
 use crate::module::world::terrain::elevation::get_ground_type;
+use crate::render::layer::object::adapter::Carve;
+use crate::render::layer::terrain::adapter::js_round;
+use crate::sys::global::{now, Global};
+use crate::sys::host::{storage_get, storage_set};
+use crate::sys::kernel::{kernel, reindex_object};
 
 /// What a leaf holds, past its corner and size. A solid is the catalog's own
 /// cube; the id it is spelled out under belongs to the two sides' shared

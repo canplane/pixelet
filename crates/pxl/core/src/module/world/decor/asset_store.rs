@@ -16,11 +16,11 @@ use xpute_core::kit::hash::fnv1a64_str;
 
 use super::decor_layer::DecorKindBundle;
 use super::decor_registry::DECOR_BUNDLES;
-use crate::sys::global::Global;
-use crate::sys::kernel::kernel;
 use crate::module::world::change::{bump_world, DECOR_ASSET};
 use crate::module::world::gltf_cache::{load_failed, load_gltf, load_image, load_revision};
 use crate::render::gpu::model_asset::register_model;
+use crate::sys::global::Global;
+use crate::sys::kernel::kernel;
 
 /// Variants a kind has room for; the palette's largest kind has nine.
 const VARIANTS: usize = 16;

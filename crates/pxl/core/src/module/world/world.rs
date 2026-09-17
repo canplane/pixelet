@@ -23,7 +23,6 @@ use pxl_shared::spec::space::xy::TO_XY;
 use xpute_core::sched::quantum::Grant;
 
 use crate::app::setting::store::use_settings_store;
-use crate::sys::global::{now, Global};
 use crate::lib::env::config::APP_ENV;
 use crate::module::camera::input::camera_input_step;
 use crate::module::camera::use_camera::camera_step;
@@ -36,9 +35,10 @@ use crate::module::map::navigation::use_map_navigation::use_map_navigation;
 use crate::module::map::store::use_map_store;
 use crate::module::map::ui::overlay::use_reverse_geocode::reverse_geocode_step;
 use crate::module::map::ui::toast::toast_controller::toast_controller_step;
+use crate::module::world::change::take_tick_request;
 use crate::module::world::character::companion::{companion_step, CompanionProps};
 use crate::module::world::chunk_node::chunk_nodes_step;
-use crate::module::world::core_tick::{chunk_mounts_step, core_tick_report_step, core_tick_visible_step, set_host_task_ms};
+use crate::module::world::chunk_stage::{chunk_mounts_step, core_tick_report_step, core_tick_visible_step, set_host_task_ms};
 use crate::module::world::decor::asset_store::decor_asset_step;
 use crate::module::world::environment::theme_clock::theme_clock_step;
 use crate::module::world::frame::coord::get_local_world_origin;
@@ -49,10 +49,10 @@ use crate::module::world::marker::location_puck::location_puck_step;
 use crate::module::world::object::teach::teach_objects;
 use crate::module::world::sched::fetch_scheduler::{fetch_pump, set_fetch_credits};
 use crate::module::world::sched::tick::{on_tick, run_tick, TickContext, TickReport, TickState, COSMETIC, INTERACTION, REPORT, VISIBLE};
-use crate::module::world::change::take_tick_request;
 use crate::module::world::terrain::teach::teach_terrain;
 use crate::module::world::terrain::use_ground_snap_sync::ground_snap_sync_step;
 use crate::module::world::terrain::use_tile_fetcher::tile_fetcher_step;
+use crate::sys::global::{now, Global};
 
 /// What the platform offers the sensors, as the shell found it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

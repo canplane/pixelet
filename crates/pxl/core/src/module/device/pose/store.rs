@@ -4,8 +4,8 @@
 //! The sensors themselves are the shell's; what they report lands here, and
 //! what is significant enough to keep is decided here.
 
-use pxl_shared::spec::space::adapter::epsg4326::G4326;
 use pxl_shared::spec::message::Message;
+use pxl_shared::spec::space::adapter::epsg4326::G4326;
 
 use crate::sys::global::{now, Global};
 

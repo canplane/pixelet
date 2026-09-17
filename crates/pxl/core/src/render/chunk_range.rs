@@ -1,19 +1,22 @@
-// pxl_core/module/world/frame/range.rs
+// pxl_core/render/chunk_range.rs
 
 //! What a view needs: which L3 pages, and which 64x64 chunks inside one.
 
-use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
-use pxl_shared::spec::space::indexer::{FROM_L3_IDX, L3_IDX};
+use pxl_shared::bake::constant::{CELL_SHAMT, CHUNK_CELL_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
+use pxl_shared::spec::space::indexer::{FROM_L3_IDX, L3_IDX, L3_SHAMT};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::xy::TO_XY;
 
 use crate::module::world::terrain::fixed::KEEP_PAGES;
 
-
-const PAGE_CHUNK_AXIS: u32 = PAGE_CELL_SPAN / CHUNK_CELL_SPAN;
-const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN as f64 * U_PER_CELL;
+pub const PAGE_CHUNK_AXIS: u32 = PAGE_CELL_SPAN / CHUNK_CELL_SPAN;
+pub const CHUNK_WORLD_SPAN: f64 = CHUNK_CELL_SPAN as f64 * U_PER_CELL;
 /// One page's span in world units.
 pub const PAGE_SPAN: f64 = PAGE_CELL_SPAN as f64 * U_PER_CELL;
+/// A page's side as a shift: the L3 level's, less the cell's.
+pub const PAGE_SHAMT: u32 = L3_SHAMT - CELL_SHAMT as u32;
+
+const _: () = assert!(1 << PAGE_SHAMT == PAGE_CELL_SPAN, "the shift is the span's");
 /// How far past the render range something already built is kept.
 ///
 /// Building is decided at CHUNK_RENDER_DIST and discarding only out here, so
@@ -164,7 +167,7 @@ pub fn js_round(x: f64) -> f64 {
 }
 
 #[cfg(test)]
-#[path = "range.test.rs"]
+#[path = "chunk_range.test.rs"]
 mod test;
 
 #[cfg(test)]

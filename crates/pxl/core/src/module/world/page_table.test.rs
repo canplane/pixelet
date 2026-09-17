@@ -1,9 +1,10 @@
 // pxl_core/module/world/page_table.test.rs
 
-use super::*;
-use crate::sys::global::serial;
-use crate::module::world::change::{world_changes, TERRAIN_PAGE};
 use pxl_shared::spec::space::pvf3::ivec;
+
+use super::*;
+use crate::module::world::change::{world_changes, TERRAIN_PAGE};
+use crate::sys::global::serial;
 
 fn page(x: i64, y: i64, z: i64) -> IVec {
     ivec::gather(x, y, z)

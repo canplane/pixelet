@@ -2,7 +2,7 @@
 
 //! The texture pack as two 2D array textures on the device — a top and a side
 //! face per layer, one layer per ground type and cube colour, indexed by the
-//! layer indices the mesher bakes into a vertex's taps (layer_table.rs). Every
+//! layer indices the mesher bakes into a vertex's taps (render/layer/terrain/shader_meta.rs). Every
 //! layer starts as its flat colour, and the pack's sheet replaces them tile by
 //! tile once it arrives; a side with no tile of its own wears the top's, the
 //! rule the shader assumes.
@@ -13,16 +13,17 @@
 //! chain is drawn on the device, a level from the one above (Mips).
 
 use pxl_shared::record::texture::{shipped_texture_tile, CubeFace, SHIPPED_SHEET};
-use pxl_shared::spec::cell::{cube_rgb, cube_ids};
+use pxl_shared::spec::cell::{cube_ids, cube_rgb};
 
 use super::api::{object, texture_usage, GpuApi};
 use super::api_spec::{address, compare, dimension, filter, format, load, resource};
-use super::layer_table::{rgb255, GROUND_LAYER_META, OBJECT_LAYER_IDX};
 use super::paint::Paint;
 use super::pipeline::Pipelines;
 use crate::lib::env::route::asset_url;
 use crate::module::world::gltf_cache::load_image;
+use crate::render::layer::terrain::shader_meta::{rgb255, GROUND_LAYER_META};
 use crate::render::shader::PIPELINE_MIPS;
+use crate::render::tex_array::OBJECT_LAYER_IDX;
 
 /// The tile edge in texels (apps/api's download_texture_pack.ts's TILE_SIZE).
 pub const LAYER_TEX_SZ: u32 = 256;

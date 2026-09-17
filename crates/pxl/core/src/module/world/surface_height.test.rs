@@ -1,11 +1,12 @@
 // pxl_core/module/world/surface_height.test.rs
 
-use super::*;
-use crate::sys::global::serial;
-use crate::module::world::object::store::place;
 use pxl_shared::spec::cell::cube_types::Block;
 use pxl_shared::spec::cell::PlaceableCube;
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
+
+use super::*;
+use crate::module::world::object::store::place;
+use crate::sys::global::serial;
 
 // place()/get_objects_near() are kernel-global state (object/store.rs), not
 // scoped per-test — every test below uses its own well-separated local X so

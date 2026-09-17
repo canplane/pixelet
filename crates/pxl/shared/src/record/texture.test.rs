@@ -1,9 +1,10 @@
 // pxl_shared/record/texture.test.rs
 // (no pair: texture.ts's tests are record.test.ts, mirrored beside this)
 
+use xpute_core::sys::vector::Vector;
+
 use super::*;
 use crate::spec::cell::cube::cube_types;
-use xpute_core::sys::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/record/texture.tsv");
 

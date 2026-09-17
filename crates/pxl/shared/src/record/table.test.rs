@@ -1,10 +1,11 @@
 // pxl_shared/record/table.test.rs
 // (no pair: table.ts's tests are record.test.ts, mirrored beside this)
 
-use super::*;
 use xpute_core::kit::array::{F32Array, I64Array, U32Array};
 use xpute_core::kit::encoding::bytes_to_hex;
 use xpute_core::sys::vector::Vector;
+
+use super::*;
 
 const VECTOR: &str = include_str!("../../vector/record/table.tsv");
 

@@ -5,11 +5,12 @@
 //! no interests registry.
 
 use pxl_shared::spec::space::pvf3::ivec::IVec;
+use xpute_core::sys::mem::free;
 
 use super::repository::ResidentPoiPage;
-use crate::sys::global::Global;
 use crate::module::world::change::POI_PAGE;
 use crate::module::world::page_table::PageTable;
+use crate::sys::global::Global;
 
 struct PoiStore {
     pages: PageTable<ResidentPoiPage>,
@@ -56,6 +57,6 @@ pub fn clear_pois(page_idx: IVec) {
 fn release(held: ResidentPoiPage) {
     if let Some(block) = held.block {
         // SAFETY: the page's own block, taken when it arrived.
-        unsafe { xpute_core::sys::mem::give_block(block) };
+        unsafe { free(block) };
     }
 }

@@ -1,4 +1,4 @@
-// pxl_core/module/world/lod.rs
+// pxl_core/render/lod.rs
 
 //! Which tier a thing at a distance shows, and everything that keeps step
 //! with that ladder.
@@ -17,7 +17,7 @@
 //! through `lod_step_at` and the derived quantities below — the badge tiers'
 //! shift over the cube tiers, the billboards' fade range, the badge
 //! occlusion's cell per distance, decor's target cell. The projection and
-//! the scheduler's pressure are told to it once a frame (core_tick.rs), so
+//! the scheduler's pressure are told to it once a frame (module/world/chunk_stage.rs), so
 //! badges climb the rungs the cubes are on.
 
 use pxl_shared::bake::constant::U_PER_CELL;
@@ -277,7 +277,7 @@ pub fn fade_end_u() -> f64 {
 
 /// Tells the process-wide ladder what it is projecting onto, and under which
 /// of the scheduler's pressures. Called once a frame by the tick
-/// (core_tick.rs), and a no-op while none of the three moves.
+/// (module/world/chunk_stage.rs), and a no-op while none of the three moves.
 ///
 /// Viewport height in CSS pixels, not device pixels: at dpr 2 the same cell
 /// covers twice the device pixels, and following that would double the

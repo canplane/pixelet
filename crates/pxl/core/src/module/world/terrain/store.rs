@@ -18,9 +18,9 @@
 use pxl_shared::bake::format::Tile;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 
-use crate::sys::global::Global;
 use crate::module::world::change::TERRAIN_PAGE;
 use crate::module::world::page_table::PageTable;
+use crate::sys::global::Global;
 
 static TILE_PAGES: Global<PageTable<Tile>> = Global::new();
 

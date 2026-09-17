@@ -4,11 +4,12 @@
 // What is the world's here: the key a demand goes out and comes back under,
 // the credits the central scheduler grants, and the ledger's record.
 
+use pxl_shared::spec::fetch::FetchFail;
+
 use super::*;
-use crate::sys::global::serial;
 use crate::module::world::sched::ledger::{ledger_recording_start, ledger_snapshot, Failure, Outcome};
 use crate::module::world::sched::summary::summarize_tasks;
-use pxl_shared::spec::fetch::FetchFail;
+use crate::sys::global::serial;
 
 fn d(category: Category, subject: u64, priority: f64) -> Demand {
     Demand {

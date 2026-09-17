@@ -18,10 +18,11 @@
 //! `{"state":{"overrides":{…}},"version":0}`, so a browser keeps its settings
 //! across the move.
 
+use xpute_core::kit::json::{read_json, Quoted};
+
 use super::schema::{is_valid_setting, SettingKey, SettingRef, SettingValue, DEFAULT_SETTINGS};
 use crate::sys::global::Global;
 use crate::sys::host::{storage_get, storage_set};
-use xpute_core::kit::json::{read_json, Quoted};
 
 const STORAGE_KEY: &str = "pxl:settings";
 
@@ -193,7 +194,6 @@ impl SettingsStore {
         }
     }
 }
-
 
 fn save(s: &SettingsStore) {
     let body: Vec<String> = s

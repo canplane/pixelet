@@ -8,7 +8,7 @@
 //! bands. What a band is made of and why (materials packed `0xCC_RRGGBB`,
 //! a layer byte apart so the direct payload is five bytes a voxel, sub-cell
 //! bytes only for bands that hold sub-cell objects, the overflow list for
-//! objects sharing a base voxel) is what bake/scan.rs reads back, so the two
+//! objects sharing a base voxel) is what render/layer/pipeline/voxel_scan.rs reads back, so the two
 //! agree on the payload's shape and nothing between them converts.
 //!
 //! Bands are stores kept for reuse. A composite produces several, one chunk
@@ -16,8 +16,6 @@
 //! so up to POOLED_BANDS of them are held with their lanes and handed to the
 //! next band that needs one; past that a released store gives its lanes back
 //! and is refilled when it is next taken.
-
-use xpute_core::sys::mem::{give_block, take_block, Block};
 
 // ---- the voxel ----
 //
@@ -28,6 +26,8 @@ use xpute_core::sys::mem::{give_block, take_block, Block};
 
 /// A run whose material is a placed object: exempt from hiding its
 /// neighbours' faces, and drawn with its bottom face.
+use xpute_core::sys::mem::{alloc, free, Block, Guard};
+
 pub const MATERIAL_OBJECT: u8 = 5;
 /// A coarse tier's cells, whatever they summarise.
 pub const MATERIAL_LAND: u8 = 1;
@@ -105,7 +105,7 @@ pub fn unpack_material(packed: u32, layer_idx: u32) -> VoxelMaterial {
 // ---- the volume ----
 
 /// A band is a chunk's span on every axis.
-pub const BAND_SPAN: u32 = crate::space::constant::CHUNK_SPAN;
+pub const BAND_SPAN: u32 = pxl_shared::bake::constant::CHUNK_CELL_SPAN;
 const BAND_MASK: u32 = BAND_SPAN - 1;
 const BAND_SPAN2: usize = (BAND_SPAN * BAND_SPAN) as usize;
 pub const BAND_VOXELS: usize = BAND_SPAN2 * BAND_SPAN as usize;
@@ -325,16 +325,15 @@ impl Volumes {
             self.stat.reused += 1;
             return Some(s);
         }
-        let Some((material, _)) = take_block(MATERIAL_BYTES) else {
+        let Some(material) = Guard::alloc(MATERIAL_BYTES) else {
             self.stat.refused += 1;
             return None;
         };
-        let Some((layer_idx, _)) = take_block(LAYER_BYTES) else {
-            // SAFETY: just taken, above.
-            unsafe { give_block((material, MATERIAL_BYTES)) };
+        let Some((layer_idx, _)) = alloc(LAYER_BYTES) else {
             self.stat.refused += 1;
             return None;
         };
+        let (material, _) = material.keep();
         self.stat.allocated += 1;
         if let Some(s) = self.empty_stores.pop() {
             let store = &mut self.stores[s];
@@ -376,7 +375,7 @@ impl Volumes {
     fn drop_sub_cell(&mut self, store: usize) {
         if let Some(block) = self.stores[store].sub_cell.take() {
             // SAFETY: the lane this store took and has not given back.
-            unsafe { give_block(block) };
+            unsafe { free(block) };
         }
     }
 
@@ -385,7 +384,7 @@ impl Volumes {
     /// SUB_CELL_NONE.
     fn ensure_sub_cell(&mut self, store: usize) -> Option<*mut u8> {
         if self.stores[store].sub_cell.is_none() {
-            let (at, bytes) = take_block(SUB_CELL_BYTES)?;
+            let (at, bytes) = alloc(SUB_CELL_BYTES)?;
             self.stores[store].sub_cell = Some((at, bytes));
             // SAFETY: a block of `bytes` this module just took.
             unsafe { core::slice::from_raw_parts_mut(self.mem.wrapping_add(at), bytes as usize).fill(0) };
@@ -510,8 +509,8 @@ impl Volumes {
                 let store = &mut self.stores[s];
                 // SAFETY: the lanes this store took and has not given back.
                 unsafe {
-                    give_block((store.material, MATERIAL_BYTES));
-                    give_block((store.layer_idx, LAYER_BYTES));
+                    free((store.material, MATERIAL_BYTES));
+                    free((store.layer_idx, LAYER_BYTES));
                 }
                 self.empty_stores.push(s);
             }
@@ -528,18 +527,18 @@ impl Volumes {
     ///
     /// # Safety
     /// The views are valid until the volume is painted again or released.
-    pub unsafe fn band_view(&mut self, id: usize, i: usize) -> crate::bake::scan::BandView<'static> {
+    pub unsafe fn band_view(&mut self, id: usize, i: usize) -> crate::render::layer::pipeline::voxel_scan::BandView<'static> {
         let row = *self.band_row(id, i);
         let mem = self.mem;
         let at = |w: u32| mem.add(w as usize);
         let voxels = BAND_VOXELS;
         let n = row[4] as usize;
-        crate::bake::scan::BandView {
+        crate::render::layer::pipeline::voxel_scan::BandView {
             band_z: row[0] as i32,
             material: core::slice::from_raw_parts(at(row[1]) as *const u32, voxels),
             layer_idx: core::slice::from_raw_parts(at(row[2]) as *const u8, voxels),
             sub_cell: (row[3] != 0).then(|| core::slice::from_raw_parts(at(row[3]) as *const u8, voxels * 4)),
-            extra: crate::bake::scan::ExtraView {
+            extra: crate::render::layer::pipeline::voxel_scan::ExtraView {
                 col: core::slice::from_raw_parts(at(row[5]) as *const u32, n),
                 z: core::slice::from_raw_parts(at(row[6]) as *const i32, n),
                 material: core::slice::from_raw_parts(at(row[7]) as *const u32, n),
@@ -555,7 +554,7 @@ impl Volumes {
     ///
     /// # Safety
     /// As `band_view`: valid until the volume is painted again or released.
-    pub unsafe fn band_views(&mut self, id: usize, out: &mut Vec<crate::bake::scan::BandView<'static>>) {
+    pub unsafe fn band_views(&mut self, id: usize, out: &mut Vec<crate::render::layer::pipeline::voxel_scan::BandView<'static>>) {
         out.clear();
         for i in 0..self.band_count(id) {
             out.push(self.band_view(id, i));

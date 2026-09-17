@@ -1,11 +1,11 @@
 // pxl_core/app/store/ui_store.rs
 
 use pxl_shared::spec::cell::{cube_types, decor_ids, placeable_cube_id, placeable_cubes, DecorId, PlaceableCube};
+use xpute_core::kit::json::{read_json, JsonStr, Quoted};
 
+use crate::module::world::object::size::DEFAULT_OBJECT_SIZE;
 use crate::sys::global::Global;
 use crate::sys::host::{storage_get, storage_set, wall_now};
-use xpute_core::kit::json::{read_json, JsonStr, Quoted};
-use crate::module::world::object::size::DEFAULT_OBJECT_SIZE;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ActiveTool {
@@ -161,7 +161,6 @@ impl UiStore {
         self.revision += 1;
     }
 }
-
 
 // Persisted: object_cube_id/decor_id/recent_picks — real picks worth
 // remembering across a reload. active_tool and chat_lines are deliberately left

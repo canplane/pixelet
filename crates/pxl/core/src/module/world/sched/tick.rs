@@ -11,8 +11,8 @@
 //! context, and no step reaches these while the tick runs.
 
 use xpute_core::sched::quantum::{Grant, QuantumPolicy};
-use xpute_core::sched::tick::{Tick, TickPolicy};
 pub use xpute_core::sched::tick::{FrameBudget, Phase, StepStats, TickReport, CONTENT, COSMETIC, INTERACTION, PHASES, REPORT, VISIBLE};
+use xpute_core::sched::tick::{Tick, TickPolicy};
 
 use crate::sys::global::Global;
 

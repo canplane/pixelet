@@ -1,5 +1,6 @@
 // pxl_core/module/camera/use_camera.rs
 
+use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 use xpute_core::kit::math::clamp;
 
 use super::config::camera_cfg::smooth::CAM_DAMP;
@@ -8,12 +9,11 @@ use super::orbit::damp_alpha;
 use super::store::use_camera_store;
 use super::terrain_gate::climb_polar;
 use crate::app::setting::store::{use_settings_store, CameraTerrain};
-use crate::sys::global::Global;
 use crate::module::map::store::use_map_store;
 use crate::module::world::frame::view::{view, view_compose};
 use crate::module::world::sched::tick::TickContext;
 use crate::module::world::terrain::store::tile_pages;
-use pxl_shared::spec::space::pvf3::pvf3::PVF3;
+use crate::sys::global::Global;
 
 // The tick runs another frame only when something asks (sched/tick.rs) —
 // this damping loop is the main thing asking while the camera is settling

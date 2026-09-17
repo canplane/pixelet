@@ -155,7 +155,84 @@ compared, so whether each was replaced or dropped is not established here.
 8. `world/environment.rs`, `module/map/environment.rs` and
    `module/world/environment/`: three
 
+## What was put back
+
+Everything above was folded back the same day, with the TypeScript's paths
+as the starting point — not because they are always right, but because a
+file at its old path is one whose origin reads at a glance, which is what a
+later split into a render crate has to start from. Each file's content was
+compared against the checkpoint's before it moved.
+
+Files cut into two or three went back whole:
+
+| TypeScript                            | From                                                                                          |
+| ------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `render/layer/pipeline/chunk_raycast` | `world/raycast.rs`, `module/world/raycast.rs`                                                 |
+| `render/layer/pipeline/chunk_mesher`  | `bake/mesher.rs`, `render/mesh/mesh_block.rs`, `bake/srgb.rs`                                 |
+| `render/layer/pipeline/volume`        | `bake/volume.rs`, `bake/voxel.rs`, `render/mesh/voxel.rs`                                     |
+| `render/layer/pipeline/voxel_scan`    | `bake/scan.rs`, `bake/run_set.rs`                                                             |
+| `render/layer/terrain/elevation`      | `module/world/terrain/elevation_sample.rs`, and the copy of `sample_ele` in `bake/terrain.rs` |
+| `render/layer/terrain/adapter`        | `bake/terrain.rs`                                                                             |
+| `module/world/decor/instance`         | `render/mesh/decor_block.rs` and part of `world/decor.rs`                                     |
+
+`world/` went back into the files it was the kernel's half of:
+
+| TypeScript                                    | From                                                                    |
+| --------------------------------------------- | ----------------------------------------------------------------------- |
+| `module/world/marker/location_puck`           | `world/marker.rs`                                                       |
+| `module/world/marker/hover_cursor`            | `world/ghost.rs`                                                        |
+| `module/world/marker/frame_gizmo`             | `world/debug.rs`, `module/world/marker/debug_gizmos.rs`                 |
+| `module/world/chunk_node`                     | `world/build.rs`                                                        |
+| `module/world/decor/decor_layer`              | `world/decor.rs`, `module/world/decor/decor_kinds.rs`                   |
+| `module/world/object/store`                   | `world/object.rs`'s records                                             |
+| `render/layer/object/adapter`                 | `world/object.rs`'s paint                                               |
+| `module/map/environment`                      | `world/environment.rs`'s easing                                         |
+| `module/world/environment/celestial_position` | `world/environment.rs`'s sun and moon                                   |
+| `module/world/billboard/field`                | `world/billboard.rs`                                                    |
+| `module/world/sched/chunk_table`              | `world/sched.rs`                                                        |
+| `module/world/gltf_cache`                     | `world/model.rs`, and `render/gltf/load.rs` back from where it had gone |
+
+And the files that had only moved:
+
+| TypeScript                         | From                                                    |
+| ---------------------------------- | ------------------------------------------------------- |
+| `render/lod`                       | `module/world/lod.rs`                                   |
+| `render/chunk_range`               | `module/world/frame/range.rs`                           |
+| `render/layer/terrain/shader_meta` | `render/gpu/layer_table.rs`, all but `OBJECT_LAYER_IDX` |
+| `render/tex_array`                 | `OBJECT_LAYER_IDX`                                      |
+| `module/world/chunk_stage`         | `module/world/core_tick.rs`                             |
+
+Four judgments went into it, where the TypeScript did not settle the
+question:
+
+- **`world/model.rs` has no TypeScript behind it.** Joints, clips and actors
+  were three.js's. It went into `gltf_cache`, the one file both the
+  characters and the decor load their models through.
+- **A merge that put two things of one name in a file** renamed the kernel's
+  drawn half: `PuckDraw`, `GhostDraw`, `EnvironmentDraw`. The build's event
+  took the alias it was already imported by, `BuildEvent`.
+- **Duplicates kept one copy.** `decor_layer` had two master seeds and two
+  density functions of one value and one formula, and kept the TypeScript's
+  names (`DECOR_MASTER_SEED`, `decor_density`); `volume` kept the `u8`
+  sub-cell set and dropped the `u32` one nothing called; `bake/terrain.rs`'s
+  own `PAGE_ELE_SPAN`, `ELE_PAD` and `ELE_PADDED_SPAN` were pxl-shared's
+  values and are now pxl-shared's constants.
+- **`space/constant.rs` did not go back to the TypeScript's shape.** The
+  TypeScript declared `CHUNK_WORLD_SPAN` in four files and exported only
+  `chunk_range.ts`'s `PAGE_SPAN`; restoring that would restore four copies.
+  The derived spans live in `render/chunk_range.rs`, where the TypeScript
+  exported one of them, `CHUNK_SPAN` is pxl-shared's `CHUNK_CELL_SPAN` again,
+  and `CHUNK_CELLS` is `terrain/adapter.rs`'s own `CHUNK_CELL_SPAN2`, as the
+  TypeScript had it.
+
+Code nothing reached went with the merges: `mesh_block`'s lanes,
+`DecorInstances` and its carve, `pack_sub_cell`.
+
 ## Where it stands
 
-**Open.** The survey is done and nothing is moved. `lod` is the one pair
-already folded.
+**Done** for the concepts with two homes and the moved files: pxl-core's
+root is `app`, `lib`, `mem`, `module`, `render` and `sys`, and every Rust file
+with a TypeScript source sits at that source's path. What this makes possible and has not been
+done is the reason for it — the drawn halves the merged files now carry
+(the `…Draw` types, and the second half of each file that names one) are
+what a render crate would take back out.

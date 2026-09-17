@@ -4,8 +4,8 @@
 //! palette's models for it, which is where the models, their skins and their
 //! extents come from (pxl_shared::record::shipped).
 
-use super::decor_layer::{bind_palette, DecorKindBundle};
 use super::car_kind::{CAR_KIND, CAR_RULES};
+use super::decor_layer::{bind_palette, DecorKindBundle};
 use crate::sys::global::Global;
 
 static BUNDLE: Global<DecorKindBundle> = Global::new();

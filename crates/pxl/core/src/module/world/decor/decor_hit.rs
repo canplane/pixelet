@@ -10,9 +10,9 @@
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 use xpute_core::kit::mat4::Vec3;
 
-use crate::sys::kernel::kernel;
 use crate::module::world::object::store::EntryAt;
 use crate::render::layer::pipeline::chunk_raycast::{ray_hit_decor, RayLike};
+use crate::sys::kernel::kernel;
 
 // A decor mesh sitting on the ground it also intersects (any tree's own
 // trunk-base, by construction) has its own hit distance land almost exactly AT

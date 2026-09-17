@@ -1,9 +1,10 @@
 // pxl_core/render/layer/terrain/elevation.test.rs
 
-use super::*;
 use pxl_shared::bake::constant::ELE_PADDED_SPAN;
 use pxl_shared::spec::cell::cube_types;
 use xpute_core::kit::array::U8Array;
+
+use super::*;
 
 const FLAT_ELE: i16 = 100;
 

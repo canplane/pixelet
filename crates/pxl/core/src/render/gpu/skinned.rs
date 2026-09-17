@@ -13,9 +13,9 @@ use super::api::{buffer_usage, object, release, GpuApi};
 use super::api_spec::{address, compare, filter, format, resource};
 use super::pipeline::{Built, Pipelines};
 use super::renderer::{frame_group, put_f32, skin_group, Blocks, Scratch};
+use crate::module::world::gltf_cache::MODEL_VERTEX_WORDS;
 use crate::render::draw::{DRAW_WORDS, PIPELINE_SKINNED, UNIFORM_FLOATS};
 use crate::render::shader::PIPELINE_SKINNED_DEPTH;
-use crate::module::world::gltf_cache::MODEL_VERTEX_WORDS;
 
 /// shader/skinned.wgsl's Draw: translation, the turn about Z, the opacity, the
 /// scale, padding.

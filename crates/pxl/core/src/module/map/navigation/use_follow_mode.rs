@@ -5,11 +5,11 @@ use xpute_core::kit::math::wrap;
 
 use super::use_map_navigation::use_map_navigation;
 use crate::app::setting::store::use_settings_store;
-use crate::sys::global::{now, Global};
 use crate::module::camera::store::{use_camera_store, ViewPatch};
 use crate::module::device::pose::store::{use_device_location_store, use_device_orientation_store, DevicePoseStatus};
 use crate::module::map::store::use_map_store;
 use crate::module::world::terrain::elevation::ground_or_raw;
+use crate::sys::global::{now, Global};
 
 /// EMA factor applied per heading sample (not per frame — device orientation
 /// events don't arrive frame-locked). Compass heading is inherently noisy

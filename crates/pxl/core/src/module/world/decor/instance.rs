@@ -27,6 +27,8 @@
 /// take has to stay out of the sentinel, and a band is `z >> BAND_SHAMT` over
 /// a sixteen-bit Z lane (spec/space/pvf3's IVEC_Z_W), so it fits in ten bits
 /// signed and nothing reaches `i32::MIN`.
+use xpute_core::sys::mem::{alloc, Guard};
+
 pub const NO_ENTRY: u32 = i32::MIN as u32;
 pub const HIDDEN_FLAG: u8 = 1;
 
@@ -72,12 +74,9 @@ impl DecorScratch {
     /// Its lanes, taken from the heap; none when it has no room for them.
     pub fn new() -> Option<DecorScratch> {
         let instance_bytes = (DECOR_INSTANCES * core::mem::size_of::<Instance>()) as u32;
-        let instances = xpute_core::sys::mem::take_block(instance_bytes)?;
-        let Some((groups, _)) = xpute_core::sys::mem::take_block((DECOR_INSTANCES * core::mem::size_of::<u16>()) as u32) else {
-            // SAFETY: just taken, above.
-            unsafe { xpute_core::sys::mem::give_block(instances) };
-            return None;
-        };
+        let instances = Guard::alloc(instance_bytes)?;
+        let (groups, _) = alloc((DECOR_INSTANCES * core::mem::size_of::<u16>()) as u32)?;
+        let instances = instances.keep();
         // SAFETY: two blocks of the pool this scratch holds alone and never
         // gives back, each DECOR_INSTANCES of its lane's element and aligned
         // past it; the elements are plain numbers, and none is read before a

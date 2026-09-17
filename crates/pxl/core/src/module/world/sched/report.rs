@@ -17,8 +17,6 @@ use super::ledger::{
 };
 use super::log::{take_log_records, window_counters};
 use super::summary::{summarize_frames, summarize_tasks, FrameSummary, Spread, TaskSummary};
-use crate::sys::global::now;
-use crate::sys::kernel::kernel;
 use crate::lib::env::config::{BUILD_ID, BUILD_NUMBER, BUILD_TIME};
 use crate::module::world::billboard::frustum_budget::billboard_dropped;
 use crate::module::world::chunk_node::{chunk_retention, RETAIN_BUDGET_BYTES};
@@ -27,6 +25,8 @@ use crate::module::world::poi::poi_index::PoiIndexStats;
 use crate::module::world::poi::poi_layer::PoiPlaceStats;
 use crate::module::world::sched::fetch_scheduler::{fetch_counts, fetch_credits};
 use crate::module::world::sched::tick::{tick_step_stats, PHASES};
+use crate::sys::global::now;
+use crate::sys::kernel::kernel;
 
 /// The tail of the task ring the report carries whole, newest last.
 const RECENT_TASKS: usize = 20;

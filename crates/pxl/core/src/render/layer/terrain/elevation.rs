@@ -20,7 +20,7 @@ use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, ELE_PAD, ELE_PADDED_SPAN, PAGE
 use pxl_shared::bake::format::Ground;
 use pxl_shared::spec::cell::cube_types;
 
-use crate::bake::terrain::js_round;
+use crate::render::layer::terrain::adapter::js_round;
 
 const ELE_CELL_STEP: f64 = PAGE_CELL_SPAN as f64 / PAGE_ELE_SPAN as f64;
 

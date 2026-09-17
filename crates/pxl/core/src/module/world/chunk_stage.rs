@@ -1,4 +1,4 @@
-// pxl_core/module/world/core_tick.rs
+// pxl_core/module/world/chunk_stage.rs
 
 //! The world's turn of the tick. In the visible phase it composes the frame the
 //! scheduler reads — the view, the frustum, the budget, the range anchor, the
@@ -13,21 +13,21 @@ use pxl_shared::spec::space::pvf3::{fvec, ivec};
 
 use super::chunk_node::{chunk_page, run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES};
 use crate::app::setting::store::use_settings_store;
-use crate::sys::global::{now, Global};
-use crate::sys::kernel::{kernel, with_world};
 use crate::module::map::store::use_map_store;
 use crate::module::world::environment::config::render_cfg;
-use crate::module::world::frame::range::{range_anchor_of, RANGE_HYSTERESIS};
 use crate::module::world::frame::view::{view, view_resize};
-use crate::module::world::lod::set_lod_projection;
 use crate::module::world::poi::use_poi_fetcher;
+use crate::module::world::sched::chunk_table::Frame;
 use crate::module::world::sched::fetch_scheduler::fetch_pending_count;
-use crate::module::world::terrain::use_tile_fetcher;
 use crate::module::world::sched::ledger::{ledger_record_frame, CpuSample, DrawCensus, FrameSample, LodSample, MountSample, PoolSample, TexturesMb, WorkSample};
 use crate::module::world::sched::priority::lead_point;
 use crate::module::world::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::module::world::terrain::store::tile_pages;
-use crate::module::world::sched::chunk_table::Frame;
+use crate::module::world::terrain::use_tile_fetcher;
+use crate::render::chunk_range::{range_anchor_of, RANGE_HYSTERESIS};
+use crate::render::lod::set_lod_projection;
+use crate::sys::global::{now, Global};
+use crate::sys::kernel::{kernel, with_world};
 
 const MB: f64 = 1_048_576.0;
 
@@ -124,7 +124,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     let c = core_tick();
     c.visible_pass = None;
     view_resize(ctx.state.width, ctx.state.height);
-    // The tier criterion is a screen-space one (module/world/lod.rs), and the
+    // The tier criterion is a screen-space one (render/lod.rs), and the
     // other layers that read it read it from here; the scheduler takes the same
     // projection through the frame, and its pressure — the byte budget paid in
     // LOD — comes back through the census.

@@ -17,31 +17,28 @@
 //! lists, so nothing here decides what is shown, and a block never has to
 //! outlive the scheduler's naming of it.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
+
+use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_shared::bake::format::Tile;
-use pxl_shared::spec::space::indexer::FROM_L3_IDX;
+use pxl_shared::spec::space::indexer::{FROM_L3_IDX, L2_IDX};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::xy::TO_XY;
-use std::collections::BTreeMap;
-use pxl_shared::spec::space::indexer::L2_IDX;
-use xpute_core::sys::mem::Block;
+use xpute_core::sys::mem::{alloc, free, Block};
 
 use crate::app::setting::store::use_settings_store;
 use crate::module::world::change::{world_changes, TERRAIN_PAGE};
+use crate::module::world::object::store::{decor_col_revision, object_col_idx_of, object_col_revision, objects_revision, Store};
+use crate::module::world::sched::chunk_table::Event;
+use crate::module::world::terrain::store::{tile_pages, use_tile_store};
+use crate::render::layer::object::adapter::{Carve, Painter};
+use crate::render::layer::pipeline::chunk_mesher::{mesh_words, BakeContext, Step};
+use crate::render::layer::pipeline::volume::Volumes;
+use crate::render::layer::pipeline::voxel_scan::{BandView, RunSet, ScanContext, ScanStep};
+use crate::render::layer::terrain::adapter::{ChunkSample, Materials, PageView, CHANNELS};
+use crate::render::lod::LodStep;
 use crate::sys::global::{now, Global};
 use crate::sys::kernel::{kernel, with_world};
-use crate::module::world::lod::LodStep;
-use crate::module::world::object::store::{decor_col_revision, object_col_idx_of, object_col_revision, objects_revision};
-use crate::module::world::terrain::store::{tile_pages, use_tile_store};
-use crate::module::world::sched::chunk_table::Event;
-use crate::render::layer::pipeline::chunk_mesher::{mesh_words, BakeContext, Step};
-use crate::bake::run_set::RunSet;
-use crate::bake::scan::{BandView, ScanContext, ScanStep};
-use crate::bake::terrain::{ChunkSample, Materials, PageView, CHANNELS, ELE_PADDED_SPAN};
-use crate::render::layer::pipeline::volume::Volumes;
-use crate::space::constant::{CHUNK_SPAN, PAGE_CELL_SPAN};
-use crate::module::world::object::store::Store;
-use crate::render::layer::object::adapter::{Carve, Painter};
 
 /// A tier as the scheduler hands it over and the node holds it: the block in
 /// the mesh section and the counts its lanes are read by.
@@ -65,7 +62,7 @@ pub struct DecorBlock {
 /// afterwards.
 pub fn release_block(at: usize, bytes: u32) {
     // SAFETY: a block this chunk took and has not given back.
-    unsafe { xpute_core::sys::mem::give_block((at, bytes)) };
+    unsafe { free((at, bytes)) };
 }
 
 /// How much built work chunks may keep *while off screen*: run sets and cached
@@ -652,7 +649,7 @@ impl Builder {
     // ---- commands ----
 
     pub fn add(&mut self, id: u32, base: IVec, tx0: u32, ty0: u32) {
-        assert!(tx0 + CHUNK_SPAN <= PAGE_CELL_SPAN && ty0 + CHUNK_SPAN <= PAGE_CELL_SPAN, "a chunk past its page");
+        assert!(tx0 + CHUNK_CELL_SPAN <= PAGE_CELL_SPAN && ty0 + CHUNK_CELL_SPAN <= PAGE_CELL_SPAN, "a chunk past its page");
         self.chunks.insert(
             id,
             Chunk {
@@ -719,7 +716,7 @@ impl Builder {
         if let Some(c) = self.chunks.get_mut(&id) {
             if let Some(r) = c.runs.take() {
                 // SAFETY: a block this build took and has not given back.
-                unsafe { xpute_core::sys::mem::give_block((r.at, r.bytes)) };
+                unsafe { free((r.at, r.bytes)) };
                 emit(BuildEvent::Runs { id, bytes: 0 });
             }
         }
@@ -752,7 +749,7 @@ impl Builder {
             self.bake.abort();
             if let Some(mesh) = job.mesh {
                 // SAFETY: a block this build took and has not given back.
-                unsafe { xpute_core::sys::mem::give_block(mesh) };
+                unsafe { free(mesh) };
             }
         }
     }
@@ -866,7 +863,7 @@ impl Builder {
             ScanStep::Working => Progress::Busy,
             ScanStep::Done => unreachable!("a scan is finished when its set is provided"),
             ScanStep::NeedSet(bytes) => {
-                let Some((at, bytes)) = xpute_core::sys::mem::take_block(bytes) else {
+                let Some((at, bytes)) = alloc(bytes) else {
                     self.refuse(world, id);
                     return Progress::Blocked;
                 };
@@ -936,7 +933,7 @@ impl Builder {
         self.sample.read(&view, world.materials, tx0, ty0, show);
         assert!(self.direct.begin_direct(), "the direct writer left open");
         let floor = self.sample.floor;
-        for i in 0..(CHUNK_SPAN * CHUNK_SPAN) as usize {
+        for i in 0..(CHUNK_CELL_SPAN * CHUNK_CELL_SPAN) as usize {
             self.direct.direct_column(i as u32);
             let top = self.sample.ele[i] as i32 - 1;
             if top >= floor {
@@ -944,7 +941,7 @@ impl Builder {
             }
         }
         let bytes = self.direct.close_direct();
-        let Some((at, bytes)) = xpute_core::sys::mem::take_block(bytes) else {
+        let Some((at, bytes)) = alloc(bytes) else {
             self.direct.abort();
             self.refuse(world, id);
             return Progress::Blocked;
@@ -963,9 +960,9 @@ impl Builder {
     }
 
     fn run_set(world: &World, runs: &Runs) -> RunSet<'static> {
-        let bytes = crate::bake::run_set::run_set_bytes(runs.count, CHUNK_SPAN) as usize;
+        let bytes = crate::render::layer::pipeline::voxel_scan::run_set_bytes(runs.count, CHUNK_CELL_SPAN) as usize;
         // SAFETY: the chunk's own block, held until its runs are let go.
-        unsafe { RunSet::carve(core::slice::from_raw_parts(world.volumes.mem().add(runs.at), bytes), runs.count, CHUNK_SPAN) }
+        unsafe { RunSet::carve(core::slice::from_raw_parts(world.volumes.mem().add(runs.at), bytes), runs.count, CHUNK_CELL_SPAN) }
     }
 
     fn advance_bake(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) -> Progress {
@@ -988,7 +985,7 @@ impl Builder {
         match self.bake.step(&set) {
             Step::Working => Progress::Busy,
             Step::NeedMesh(words) => {
-                let Some(mesh) = xpute_core::sys::mem::take_block(words * 4) else {
+                let Some(mesh) = alloc(words * 4) else {
                     self.refuse(world, id);
                     return Progress::Blocked;
                 };
@@ -1021,7 +1018,7 @@ impl Builder {
                 if c.wanted().next().is_none() {
                     if let Some(r) = c.runs.take_if(|r| r.direct) {
                         // SAFETY: a block this build took and has not given back.
-                        unsafe { xpute_core::sys::mem::give_block((r.at, r.bytes)) };
+                        unsafe { free((r.at, r.bytes)) };
                         emit(BuildEvent::Runs { id, bytes: 0 });
                     }
                 }

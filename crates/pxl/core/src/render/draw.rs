@@ -12,9 +12,10 @@
 //! cancels an upload not yet taken: the block is the glue's to release the
 //! moment it is told, and may be someone else's by the time the list runs.
 
-
 /// Words an upload record holds: the handle, the block's address and its
 /// length in bytes, and the vertex and index counts, which name the lanes.
+use xpute_core::sys::mem::{alloc, free};
+
 pub const UPLOAD_WORDS: usize = 5;
 /// Words a draw record holds: the handle, the vertex and index counts, the
 /// index of its uniforms, and the pipeline.
@@ -200,7 +201,6 @@ impl DrawList {
     }
 }
 
-
 /// A block of the mesh section the renderer holds a copy of, written whole
 /// each time by whoever owns it — the badges, the gizmos: grown to the
 /// next power of two when the write outgrows it, since a placement's count
@@ -224,7 +224,7 @@ impl Held {
         if need > self.bytes {
             self.free(draw);
             let bytes = need.next_power_of_two();
-            let Some((at, bytes)) = xpute_core::sys::mem::take_block(bytes) else { return false };
+            let Some((at, bytes)) = alloc(bytes) else { return false };
             self.at = at;
             self.bytes = bytes;
         }
@@ -242,7 +242,7 @@ impl Held {
         if self.bytes > 0 {
             draw.free(self.handle);
             // SAFETY: the block this lane took and has not given back.
-            unsafe { xpute_core::sys::mem::give_block((self.at, self.bytes)) };
+            unsafe { free((self.at, self.bytes)) };
             self.bytes = 0;
             self.handle = 0;
         }

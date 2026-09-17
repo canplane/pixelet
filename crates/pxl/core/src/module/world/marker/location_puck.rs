@@ -10,18 +10,19 @@ use pxl_shared::bake::constant::U_PER_CELL;
 use pxl_shared::spec::space::pvf3::projection;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
 use pxl_shared::spec::space::v3::{add3, center3n, floor3n, V3};
+use xpute_core::sys::mem::{alloc, free};
 
-use crate::sys::global::Global;
-use crate::sys::kernel::kernel;
 use crate::module::world::change::request_world_tick;
+use crate::module::world::chunk_node::World;
 use crate::module::world::environment::config::render_cfg::FOG_FAR;
 use crate::module::world::environment::theme::WorldThemeKey;
 use crate::module::world::environment::theme_clock::use_theme_key;
+use crate::module::world::sched::chunk_table::Frame;
 use crate::module::world::terrain::elevation::get_ele;
 use crate::module::world::terrain::store::tile_pages;
-use crate::module::world::chunk_node::World;
 use crate::render::draw::{DrawList, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
-use crate::module::world::sched::chunk_table::Frame;
+use crate::sys::global::Global;
+use crate::sys::kernel::kernel;
 
 // The numerator (4) is a world-space distance, not a cell count — it fixes the
 // zone's footprint size independent of U_PER_CELL. The .707 shave is a fixed
@@ -219,7 +220,7 @@ impl Markers {
         let keep = self.puck.as_ref().is_some_and(|p| p.bytes == bytes);
         if !keep {
             self.clear(draw);
-            let Some((at, bytes)) = xpute_core::sys::mem::take_block(bytes) else { return };
+            let Some((at, bytes)) = alloc(bytes) else { return };
             self.puck = Some(PuckDraw {
                 at,
                 bytes,
@@ -266,7 +267,7 @@ impl Markers {
         if let Some(p) = self.puck.take() {
             draw.free(p.handle);
             // SAFETY: the block this marker took and has not given back.
-            unsafe { xpute_core::sys::mem::give_block((p.at, p.bytes)) };
+            unsafe { free((p.at, p.bytes)) };
         }
     }
 

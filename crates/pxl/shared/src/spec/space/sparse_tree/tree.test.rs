@@ -1,11 +1,10 @@
 // pxl_shared/spec/space/sparse_tree/tree.test.rs
 
-
+use xpute_core::kit::array::TypedArray;
 
 use super::*;
 use crate::spec::space::pvf3::pvf3;
 use crate::spec::space::sparse_tree::tree as sparse_tree;
-use xpute_core::kit::array::TypedArray;
 
 const LAYOUT: SparseTreeLayout = SparseTreeLayout { dim: 3, min: -3, max: 6 };
 

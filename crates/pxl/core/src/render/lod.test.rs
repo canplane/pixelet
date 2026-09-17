@@ -1,4 +1,4 @@
-// pxl_core/module/world/lod.test.rs
+// pxl_core/render/lod.test.rs
 
 use super::*;
 use crate::sys::global::serial;

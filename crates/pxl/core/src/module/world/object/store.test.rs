@@ -4,14 +4,15 @@
 // store.ts's subscriber test is a revision test here: a col_idx's changes are
 // read as its revisions moving, which is what chunk_node.rs follows.
 
-use super::*;
-use crate::sys::global::serial;
-use crate::module::world::object::collision::find_overlapping_object;
-use crate::module::world::object::size::DECOR_SIZE;
 use pxl_shared::spec::cell::cube_types::Block;
 use pxl_shared::spec::space::indexer::{L2_IDX, L2_IDX_IN_L3, L3_IDX};
 use pxl_shared::spec::space::pvf3::{fvec, ivec};
 use pxl_shared::spec::space::xy::TO_XY;
+
+use super::*;
+use crate::module::world::object::collision::find_overlapping_object;
+use crate::module::world::object::size::DECOR_SIZE;
+use crate::sys::global::serial;
 
 // Distinct, far-apart corners per test so leftover state from one test never
 // collides with another: the store is kernel-global across the test binary.

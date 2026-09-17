@@ -6,8 +6,8 @@ use pxl_shared::spec::space::indexer::{L1_IDX_IN_L3, L3_IDX, L3_RANGE};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 
-use crate::render::layer::terrain::elevation::{is_water_family_at, sample_ele, WATER_RECESS_CELLS};
 use super::store::use_tile_store;
+use crate::render::layer::terrain::elevation::{is_water_family_at, sample_ele, WATER_RECESS_CELLS};
 
 const L3_RANGE_REAL: f64 = L3_RANGE as f64;
 

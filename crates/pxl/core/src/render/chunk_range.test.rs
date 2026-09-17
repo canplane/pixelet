@@ -1,12 +1,13 @@
-// pxl_core/module/world/frame/range.test.rs
+// pxl_core/render/chunk_range.test.rs
 
 use std::collections::HashSet;
 
-use super::*;
-use crate::module::world::environment::config::render_cfg;
 use pxl_shared::spec::space::indexer::L3_IDX;
 use pxl_shared::spec::space::pvf3::ivec;
 use pxl_shared::spec::space::xy::TO_XY;
+
+use super::*;
+use crate::module::world::environment::config::render_cfg;
 
 fn at(x: i64, y: i64) -> IVec {
     ivec::gather(x, y, 0)

@@ -5,9 +5,9 @@ use xpute_core::kit::math::{clamp, round_to_step, wrap};
 
 use super::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MAX_DIST, MAX_POLAR, MIN_DIST, MIN_POLAR};
 use super::terrain_gate::{allowed_view, ViewTriple};
-use crate::sys::global::Global;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::object::store::EntryAt;
+use crate::sys::global::Global;
 
 const PI: f64 = core::f64::consts::PI;
 

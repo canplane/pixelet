@@ -8,31 +8,31 @@
 use pxl_shared::bake::constant::U_PER_CELL;
 use pxl_shared::bake::ground::shown_ground;
 use pxl_shared::spec::cell::{placeable_cube_num_id, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
-use pxl_shared::spec::space::pvf3::fvec;
-use pxl_shared::spec::space::pvf3::ivec;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
+use pxl_shared::spec::space::pvf3::{fvec, ivec};
+use xpute_core::sys::mem::{alloc, free};
 
 use super::style::marker_colors;
 use crate::app::setting::store::use_settings_store;
 use crate::app::store::ui_store::{use_ui_store, ActiveTool};
-use crate::sys::global::Global;
-use crate::sys::kernel::with_world;
 use crate::module::camera::store::use_camera_store;
 use crate::module::map::store::use_map_store;
 use crate::module::world::change::request_world_tick;
+use crate::module::world::chunk_node::World;
+use crate::module::world::decor::asset_store::{decor_assets_for, decor_bundle_assets};
 use crate::module::world::decor::decor_layer::user_decor_pick;
 use crate::module::world::decor::decor_registry::{decor_bundle_for, DECOR_BUNDLES};
-use crate::module::world::decor::asset_store::{decor_assets_for, decor_bundle_assets};
+use crate::module::world::decor::instance::NO_ENTRY;
 use crate::module::world::frame::coord::get_local_world_origin;
 use crate::module::world::object::collision::{is_placement_blocked, PlacementTool};
 use crate::module::world::object::size::DECOR_SIZE;
 use crate::module::world::object::store::{clear_virtual_carve_preview, get_placed_object, set_virtual_carve_preview, set_virtual_hide, EntryAt, EntryKind};
 use crate::module::world::terrain::elevation::get_ground_type;
+use crate::render::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
 use crate::render::layer::pipeline::chunk_mesher::{mesh_words, write_lone_box, LONE_BOX_INDICES, LONE_BOX_VERTICES};
 use crate::render::layer::pipeline::volume::NO_LAYER;
-use crate::render::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
-use crate::module::world::chunk_node::World;
-use crate::module::world::decor::instance::NO_ENTRY;
+use crate::sys::global::Global;
+use crate::sys::kernel::with_world;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Ghost {
@@ -313,13 +313,13 @@ impl GhostDraw {
         if let Some(h) = self.held.take() {
             draw.free(h.handle);
             // SAFETY: the block the ghost took and has not given back.
-            unsafe { xpute_core::sys::mem::give_block((h.at, h.bytes)) };
+            unsafe { free((h.at, h.bytes)) };
         }
     }
 
     fn replace(&mut self, draw: &mut DrawList, shape: Shape, bytes: u32) -> Option<usize> {
         self.clear(draw);
-        let (at, bytes) = xpute_core::sys::mem::take_block(bytes)?;
+        let (at, bytes) = alloc(bytes)?;
         self.held = Some(Held { shape, at, bytes, handle: 0 });
         Some(at)
     }

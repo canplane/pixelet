@@ -8,16 +8,16 @@
 use core::fmt::{self, Write};
 
 use pxl_shared::spec::space::adapter::epsg4326;
+use xpute_core::kit::hash::fnv1a64_str;
 
-use crate::sys::global::{now, Global};
 use crate::module::map::store::use_map_store;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::geocode::label::{assemble_label, primary_lang, Label};
 use crate::module::world::poi::poi_theme::resolve_poi_theme;
 use crate::module::world::sched::demand::{Category, Demand, DemandKey};
-use xpute_core::kit::hash::fnv1a64_str;
 use crate::module::world::sched::fetch_scheduler::fetch_sync;
 use crate::module::world::search::repository::{parse_search, search_url, SearchKind, SearchTable, SearchUrl};
+use crate::sys::global::{now, Global};
 
 // Debounced like use_reverse_geocode.rs's own DEBOUNCE_MS, but shorter: that
 // one waits for panning to settle on a new page; this waits for typing to

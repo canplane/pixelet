@@ -13,11 +13,11 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 use xpute_core::kit::math::clamp;
 
-use crate::sys::global::Global;
 use crate::module::camera::config::camera_cfg::view::DEFAULT_DIST;
 use crate::module::map::store::use_map_store;
 use crate::module::world::terrain::store::tile_pages;
-use crate::render::gpu::layer_table::rgb255;
+use crate::render::layer::terrain::shader_meta::rgb255;
+use crate::sys::global::Global;
 
 const ATLAS_PAGE_PX: u32 = 64;
 const SAMPLE_STRIDE: u32 = PAGE_CELL_SPAN / ATLAS_PAGE_PX;
@@ -38,7 +38,7 @@ type Rgb = [u8; 3];
 
 /// Ground channel bytes are type IDs, not weights, so this must reuse the same
 /// per-channel override order the terrain paint resolves a cell by
-/// (crates/pxl/core/src/bake/terrain.rs) — reordering GROUND_CH_KEYS here would
+/// (crates/pxl/core/src/render/layer/terrain/adapter.rs) — reordering GROUND_CH_KEYS here would
 /// silently mismatch the 3D terrain's colors.
 struct Colors {
     base: Rgb,

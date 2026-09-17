@@ -17,13 +17,12 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 
 use super::store::{clear_pois, get_pois, poi_pages};
 use crate::app::setting::store::use_settings_store;
-use crate::sys::global::Global;
-use crate::module::world::frame::range::{page_priority, pages_to_hold, FETCH_HYSTERESIS};
 use crate::module::world::frame::use_range_anchor::use_range_anchor;
-use crate::module::world::sched::demand::Demand;
-use crate::module::world::sched::demand::Category;
+use crate::module::world::sched::demand::{Category, Demand};
 use crate::module::world::sched::fetch_scheduler::{fetch_running, fetch_sync, page_key};
 use crate::module::world::terrain::config::{KEEP_DIST, RESIDENT_PAGES};
+use crate::render::chunk_range::{page_priority, pages_to_hold, FETCH_HYSTERESIS};
+use crate::sys::global::Global;
 
 pub const CATEGORY: Category = Category::Poi;
 

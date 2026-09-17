@@ -22,8 +22,8 @@ use std::collections::HashMap;
 
 use xpute_core::kit::mat4::{mat4_transform_point, Vec3};
 
-use crate::sys::kernel::with_world;
 use crate::render::gltf::gltf::{scene_nodes, world_matrices, Gltf};
+use crate::sys::kernel::with_world;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelHandle {

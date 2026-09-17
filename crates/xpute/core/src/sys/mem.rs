@@ -82,7 +82,7 @@ const BLOCK_ALIGN: usize = 8;
 
 /// A block of `bytes` from the module's allocator. None when it has no room,
 /// and for zero bytes, which an allocator is never asked for.
-pub fn take_block(bytes: u32) -> Option<Block> {
+pub fn alloc(bytes: u32) -> Option<Block> {
     if bytes == 0 {
         return None;
     }
@@ -95,10 +95,33 @@ pub fn take_block(bytes: u32) -> Option<Block> {
 /// Gives a block back.
 ///
 /// # Safety
-/// `block` came from `take_block` and has not been given back.
-pub unsafe fn give_block((at, bytes): Block) {
-    // SAFETY: the caller's; `take_block` made this layout for this address.
+/// `block` came from `alloc` and has not been given back.
+pub unsafe fn free((at, bytes): Block) {
+    // SAFETY: the caller's; `alloc` made this layout for this address.
     unsafe { std::alloc::dealloc(at as *mut u8, std::alloc::Layout::from_size_align_unchecked(bytes as usize, BLOCK_ALIGN)) }
+}
+
+/// A block freed when it goes out of scope, as `ArenaGuard` rewinds an arena:
+/// for work that can still fail after taking it. `keep` hands the block on.
+pub struct Guard(Block);
+
+impl Guard {
+    pub fn alloc(bytes: u32) -> Option<Guard> {
+        alloc(bytes).map(Guard)
+    }
+
+    pub fn keep(self) -> Block {
+        let block = self.0;
+        core::mem::forget(self);
+        block
+    }
+}
+
+impl Drop for Guard {
+    fn drop(&mut self) {
+        // SAFETY: a guard is made only by `Guard::alloc`, and `keep` forgets it.
+        unsafe { free(self.0) }
+    }
 }
 
 #[cfg(test)]

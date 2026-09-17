@@ -1,3 +1,5 @@
+// pxl_core/render/layer/terrain/adapter.rs
+
 //! A terrain page's chunk as the render pipeline reads it.
 //!
 //! A page is a heightmap — four ground channels of one type byte a cell,
@@ -9,25 +11,21 @@
 //! writes as one run a column without a volume.
 //!
 //! The floor is rounded down to a whole band (`min_ele - TERRAIN_Z_MARGIN`,
-//! floored to CHUNK_SPAN) because a volume allocates in whole bands: a floor
+//! floored to CHUNK_CELL_SPAN) because a volume allocates in whole bands: a floor
 //! anywhere inside one would open a band below it for the few voxels that
 //! cross. Water-family cells sit WATER_RECESS_CELLS below their sampled
 //! height so a shoreline reads as water meeting land rather than as two
 //! surfaces at the same level.
 
+use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN};
+
 use crate::render::layer::pipeline::volume::{Volumes, Voxel, NO_LAYER};
 use crate::render::layer::terrain::elevation::{sample_ele, WATER_RECESS_CELLS};
-use crate::space::constant::{CHUNK_CELLS, CHUNK_SPAN, PAGE_CELL_SPAN};
-
-/// A page's cells on a side, and its elevation raster's samples on a side
-/// before and after the padding the bicubic reads past the edge.
-pub const PAGE_ELE_SPAN: u32 = 64;
-pub const ELE_PAD: u32 = 2;
-pub const ELE_PADDED_SPAN: u32 = PAGE_ELE_SPAN + 2 * ELE_PAD;
 
 /// How far below the chunk's lowest cell the shared floor sits, before it
 /// is rounded down to a band.
 const TERRAIN_Z_MARGIN: i32 = 4;
+const CHUNK_CELL_SPAN2: usize = (CHUNK_CELL_SPAN * CHUNK_CELL_SPAN) as usize;
 
 /// The channels, in override order: a later one's non-void type wins.
 pub const CHANNELS: usize = 4;
@@ -111,9 +109,9 @@ pub struct ChunkSample {
 impl Default for ChunkSample {
     fn default() -> Self {
         ChunkSample {
-            material: vec![0; CHUNK_CELLS],
-            layer_idx: vec![0; CHUNK_CELLS],
-            ele: vec![0; CHUNK_CELLS],
+            material: vec![0; CHUNK_CELL_SPAN2],
+            layer_idx: vec![0; CHUNK_CELL_SPAN2],
+            ele: vec![0; CHUNK_CELL_SPAN2],
             floor: 0,
         }
     }
@@ -124,9 +122,9 @@ impl ChunkSample {
     /// skips the structure channel, as the setting does.
     pub fn read(&mut self, page: &PageView, tables: &Materials, tx0: u32, ty0: u32, show_structures: bool) {
         let mut min_ele = i32::MAX;
-        for dy in 0..CHUNK_SPAN {
-            for dx in 0..CHUNK_SPAN {
-                let i = (dy * CHUNK_SPAN + dx) as usize;
+        for dy in 0..CHUNK_CELL_SPAN {
+            for dx in 0..CHUNK_CELL_SPAN {
+                let i = (dy * CHUNK_CELL_SPAN + dx) as usize;
                 let (tx, ty) = (tx0 + dx, ty0 + dy);
                 let page_idx = (ty * PAGE_CELL_SPAN + tx) as usize;
                 let types = [
@@ -168,14 +166,14 @@ impl ChunkSample {
             }
         }
         // One band-aligned floor shared by the whole chunk, under every peak.
-        self.floor = (min_ele - TERRAIN_Z_MARGIN).div_euclid(CHUNK_SPAN as i32) * CHUNK_SPAN as i32;
+        self.floor = (min_ele - TERRAIN_Z_MARGIN).div_euclid(CHUNK_CELL_SPAN as i32) * CHUNK_CELL_SPAN as i32;
     }
 
     /// Paints every column into `volume`, floor to top.
     pub fn paint(&self, volumes: &mut Volumes, volume: usize) -> bool {
-        for cy in 0..CHUNK_SPAN {
-            for cx in 0..CHUNK_SPAN {
-                let i = (cy * CHUNK_SPAN + cx) as usize;
+        for cy in 0..CHUNK_CELL_SPAN {
+            for cx in 0..CHUNK_CELL_SPAN {
+                let i = (cy * CHUNK_CELL_SPAN + cx) as usize;
                 let v = Voxel {
                     material: self.material[i],
                     layer_idx: self.layer_idx[i],
@@ -191,5 +189,5 @@ impl ChunkSample {
 }
 
 #[cfg(test)]
-#[path = "terrain.test.rs"]
+#[path = "adapter.test.rs"]
 mod test;

@@ -19,11 +19,11 @@ use pxl_shared::bake::format::PoiPage;
 use xpute_core::ds::map::{I64Keys, IndexedMap, U32Keys};
 
 use super::poi_theme::resolve_poi_theme;
-use crate::sys::global::{now, Global};
-use crate::sys::host::measure_text;
 use crate::module::world::billboard::atlas::{BillboardAtlas, DrawSpec, NO_SLOT};
 use crate::module::world::billboard::canvas_scale::{FONT_FAMILY, FONT_WEIGHT_REGULAR};
 use crate::module::world::billboard::sheet::billboard_sheet;
+use crate::sys::global::{now, Global};
+use crate::sys::host::measure_text;
 
 fn font() -> String {
     format!("{FONT_WEIGHT_REGULAR} 12px {FONT_FAMILY}")

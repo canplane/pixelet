@@ -13,13 +13,13 @@ use super::config::{KEEP_DIST, RESIDENT_PAGES};
 use super::resident::free_slot;
 use super::store::{tile_pages, use_tile_store};
 use super::tile_repository::{ocean_retain, ocean_wanted, OCEAN_CATEGORY};
-use crate::sys::global::{now, Global};
 use crate::module::map::navigation::use_map_navigation::use_map_navigation;
 use crate::module::map::store::{use_map_store, MapStatus};
-use crate::module::world::frame::range::{page_priority, pages_to_hold, FETCH_HYSTERESIS};
 use crate::module::world::frame::use_range_anchor::use_range_anchor;
 use crate::module::world::sched::demand::{Category, Demand, DemandKey};
 use crate::module::world::sched::fetch_scheduler::{fetch_pending_count, fetch_revision, fetch_running, fetch_sync, page_key};
+use crate::render::chunk_range::{page_priority, pages_to_hold, FETCH_HYSTERESIS};
+use crate::sys::global::{now, Global};
 
 pub const CATEGORY: Category = Category::Terrain;
 

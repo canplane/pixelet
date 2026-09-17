@@ -2,8 +2,8 @@
 
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 
-use super::range::range_anchor_of;
 use crate::module::map::store::use_map_store;
+use crate::render::chunk_range::range_anchor_of;
 
 /// The one anchor every range is measured from: what mounts, what is fetched,
 /// what stays resident.
