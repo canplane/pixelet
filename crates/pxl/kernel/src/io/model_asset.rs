@@ -15,13 +15,20 @@
 //! is not a joint carries that parent's transform above it. Each clip's
 //! channels on joints go over by node.
 //!
+//! A model nothing animates — no skin and no clip — is a still scene: its
+//! vertices are placed by their nodes here, once, and its joints are left at
+//! identity. The decor pass draws a model from its lanes alone, with no joint
+//! palette (frame/shader/decor.wgsl), so a node's transform has to be in the
+//! vertices for a wheel to sit beside its car rather than at the model's
+//! origin; the skinned pass, reading identity joints, draws the same thing.
+//!
 //! The height the model is scaled to is measured over its vertices at rest,
 //! through their nodes, as the box three drew around the scene.
 
 use std::collections::HashMap;
 
 use pxl_render::asset::gltf::{scene_nodes, world_matrices, Gltf};
-use xpute_core::kit::mat4::{mat4_transform_point, Vec3};
+use xpute_core::kit::mat4::{mat4_transform_direction, mat4_transform_point, Vec3};
 
 use crate::sys::kernel::with_world;
 
@@ -43,6 +50,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
     let order = scene_nodes(gltf);
     let worlds = world_matrices(gltf);
     let skinned = !gltf.skins.is_empty() && order.iter().any(|&n| gltf.nodes[n as usize].skin >= 0 && gltf.nodes[n as usize].mesh >= 0);
+    let still = !skinned && gltf.animations.is_empty();
 
     // The joints: the skins' joint nodes in first-seen order, or every node.
     let mut joint_nodes: Vec<u32> = Vec::new();
@@ -113,11 +121,17 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
             let world_m = &worlds[node_index as usize];
             for i in 0..count {
                 let v = v0 + i;
-                let (x, y, z) = (prim.position[i * 3], prim.position[i * 3 + 1], prim.position[i * 3 + 2]);
+                let (mut x, mut y, mut z) = (prim.position[i * 3], prim.position[i * 3 + 1], prim.position[i * 3 + 2]);
+                let mut normal = prim.normal.as_ref().map_or([0.0, 1.0, 0.0], |nm| [nm[i * 3], nm[i * 3 + 1], nm[i * 3 + 2]]);
+                if still {
+                    let at = mat4_transform_point(&mut p, world_m, x as f64, y as f64, z as f64);
+                    (x, y, z) = (at.x as f32, at.y as f32, at.z as f32);
+                    let n = mat4_transform_direction(&mut p, world_m, normal[0] as f64, normal[1] as f64, normal[2] as f64);
+                    normal = [n.x as f32, n.y as f32, n.z as f32];
+                }
                 put_f(words, lane(0) + v * 3, x);
                 put_f(words, lane(0) + v * 3 + 1, y);
                 put_f(words, lane(0) + v * 3 + 2, z);
-                let normal = prim.normal.as_ref().map_or([0.0, 1.0, 0.0], |nm| [nm[i * 3], nm[i * 3 + 1], nm[i * 3 + 2]]);
                 for (c, value) in normal.into_iter().enumerate() {
                     put_f(words, lane(3) + v * 3 + c, value);
                 }
@@ -138,7 +152,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
                     }
                 }
                 // The height, measured where the vertex stands at rest.
-                let at_y = if remap.is_some() {
+                let at_y = if remap.is_some() || still {
                     y as f64
                 } else {
                     mat4_transform_point(&mut p, world_m, x as f64, y as f64, z as f64).y
@@ -172,6 +186,10 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
             let node = &gltf.nodes[n as usize];
             let parent_node = node.parent;
             let parent = if parent_node >= 0 { joint_of.get(&(parent_node as u32)).map_or(-1, |&p| p as i32) } else { -1 };
+            if still {
+                sched.models.joint(model, j, parent, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], IDENTITY, IDENTITY);
+                continue;
+            }
             let t = node.translation;
             let r = node.rotation;
             let s = node.scale;
