@@ -116,7 +116,7 @@ impl Lanes {
     fn new() -> Lanes {
         let n = CAPACITY as usize;
         Lanes {
-            index: SpatialHash::new(CAPACITY, BUCKETS, CELL, None),
+            index: SpatialHash::new(CAPACITY, BUCKETS, CELL),
             page_idx: Vec::with_capacity(n),
             rec: Vec::with_capacity(n),
             pos_x: Vec::with_capacity(n),
@@ -233,7 +233,7 @@ fn index() -> &'static mut PoiIndex {
         max_wait_ms: 0.0,
         last_frames: 0,
         max_frames: 0,
-        seen: IndexedMap::new(I64Keys, CAPACITY, None),
+        seen: IndexedMap::new(I64Keys, CAPACITY),
     })
 }
 

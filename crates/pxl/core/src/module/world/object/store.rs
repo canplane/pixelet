@@ -1155,7 +1155,7 @@ impl Store {
         if self.bands.contains_key(&(key, band_idx)) {
             return;
         }
-        self.bands.insert((key, band_idx), sparse_tree::alloc::<u16>(BAND_LAYOUT, 64, None));
+        self.bands.insert((key, band_idx), sparse_tree::alloc::<u16>(BAND_LAYOUT, 64));
         let chunk = &mut self.chunks[cpos];
         chunk.band_min = chunk.band_min.min(band_idx);
         chunk.band_max = chunk.band_max.max(band_idx);
@@ -1165,9 +1165,7 @@ impl Store {
     /// chunk when nothing is left in it.
     fn close_band(&mut self, cpos: usize, band_idx: BandZ) {
         let key = self.chunks[cpos].col_idx;
-        if let Some(mut tree) = self.bands.remove(&(key, band_idx)) {
-            sparse_tree::free(&mut tree);
-        }
+        self.bands.remove(&(key, band_idx));
         let chunk = &self.chunks[cpos];
         let mut left = self.bands.range((key, chunk.band_min)..=(key, chunk.band_max)).map(|(&(_, bz), _)| bz);
         let lo = left.next().unwrap_or(BandZ::MAX);

@@ -6,7 +6,7 @@ use super::*;
 
 #[test]
 fn indexedmap_positions_are_dense_and_stable_until_a_removal() {
-    let mut m = IndexedMap::new(I64_KEYS, 4, None);
+    let mut m = IndexedMap::new(I64_KEYS, 4);
     assert_eq!(m.insert(10), 0);
     assert_eq!(m.insert(20), 1);
     assert_eq!(m.insert(10), 0, "an existing key keeps its position");
@@ -16,7 +16,7 @@ fn indexedmap_positions_are_dense_and_stable_until_a_removal() {
 
 #[test]
 fn indexedmap_removal_moves_the_last_entry_into_the_hole_and_says_where_it_came_from() {
-    let mut m = IndexedMap::new(U32_KEYS, 4, None);
+    let mut m = IndexedMap::new(U32_KEYS, 4);
     for k in [1, 2, 3] {
         m.insert(k);
     }
@@ -32,7 +32,7 @@ fn agrees_with_map<T: KeyTraits>(traits: T, make: impl Fn(u32) -> T::Key)
 where
     T::Key: std::hash::Hash + Eq,
 {
-    let mut m = IndexedMap::new(traits, 2, None);
+    let mut m = IndexedMap::new(traits, 2);
     let mut r: HashMap<T::Key, u32> = HashMap::new();
     let mut live: Vec<T::Key> = Vec::new();
     let mut seed: u32 = 12345;
@@ -77,7 +77,7 @@ fn indexedmap_agrees_with_a_map_across_growth_and_many_removals_32_bit_keys() {
 
 #[test]
 fn indexedmap_a_64_bit_key_past_2_63_finds_itself() {
-    let mut m = IndexedMap::new(I64_KEYS, 16, None);
+    let mut m = IndexedMap::new(I64_KEYS, 16);
     let big = ((1u64 << 63) + 5) as i64;
     let pos = m.insert(big);
     assert_eq!(m.find(big), pos as i32);
@@ -85,7 +85,7 @@ fn indexedmap_a_64_bit_key_past_2_63_finds_itself() {
 
 #[test]
 fn indexedmap_a_seeded_walk_visits_every_position_once() {
-    let mut m = IndexedMap::new(U32_KEYS, 16, None);
+    let mut m = IndexedMap::new(U32_KEYS, 16);
     for k in 0..37 {
         m.insert(k * 3);
     }
@@ -96,7 +96,7 @@ fn indexedmap_a_seeded_walk_visits_every_position_once() {
 
 #[test]
 fn indexedmap_clear_forgets_every_entry_and_the_next_inserts_start_from_zero() {
-    let mut m = IndexedMap::new(U32_KEYS, 4, None);
+    let mut m = IndexedMap::new(U32_KEYS, 4);
     for k in 0..40 {
         m.insert(k);
     }
@@ -115,7 +115,7 @@ fn replay<T: KeyTraits>(v: &crate::sys::vector::Vector, base: &str, traits: T, k
 where
     T::Key: std::fmt::Debug,
 {
-    let mut m = IndexedMap::new(traits, 2, None);
+    let mut m = IndexedMap::new(traits, 2);
     v.each(&format!("{base}.steps"), |k| {
         if v.s(&format!("{k}.op")) == "remove" {
             let pos = v.u32(&format!("{k}.pos"));

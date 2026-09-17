@@ -1,7 +1,6 @@
 // pxl_shared/spec/space/sparse_tree/tree.rs
 // sparse tree (2^d-ary sparse tree; quadtree/octree are special cases)
 
-use xpute_core::ds::typed_alloc::TypedAlloc;
 use xpute_core::kit::array::{NumberElement, TypedArray, U64Array};
 
 use crate::spec::space::pvf3::{pvf3, IVec, Ivec, PVecTraits, PVF3};
@@ -27,18 +26,12 @@ fn to_key(coord: &PVF3, min: i32) -> IVec {
     pvf3::sh(&mut reg, coord, -min).i
 }
 
-/// Allocate a sparse tree with the given layout and initial capacity, its
-/// lanes from `typed` (the heap unless given).
-pub fn alloc<T: NumberElement>(layout: SparseTreeLayout, cap: u32, typed: Option<Box<dyn TypedAlloc>>) -> SparseTree<T> {
+/// Allocate a sparse tree with the given layout and initial capacity.
+pub fn alloc<T: NumberElement>(layout: SparseTreeLayout, cap: u32) -> SparseTree<T> {
     SparseTree {
         layout,
-        mem: st_mem::alloc(layout.dim, cap, typed),
+        mem: st_mem::alloc(layout.dim, cap),
     }
-}
-
-/// Hands the tree's lanes back. The tree must not be used afterwards.
-pub fn free<T: NumberElement>(tree: &mut SparseTree<T>) {
-    st_mem::free(&mut tree.mem);
 }
 
 /// Moves the tree's leaf lane to another type, every value carried across —
@@ -57,11 +50,10 @@ pub fn encode<T: NumberElement>(tree: &SparseTree<T>) -> U64Array {
 }
 
 /// U64Array -> SparseTree<T>. Decode a wire/storage blob into a sparse tree with the given layout.
-pub fn decode<T: NumberElement>(buf: &U64Array, layout: SparseTreeLayout, typed: Option<Box<dyn TypedAlloc>>) -> SparseTree<T> {
-    let mem = st_mem::decode::<T>(buf);
+pub fn decode<T: NumberElement>(buf: &U64Array, layout: SparseTreeLayout) -> SparseTree<T> {
     SparseTree {
         layout,
-        mem: if let Some(typed) = typed { st_mem::adopt(&mem, typed) } else { mem },
+        mem: st_mem::decode::<T>(buf),
     }
 }
 
@@ -97,9 +89,7 @@ pub fn fill<T: NumberElement>(tree: &mut SparseTree<T>, val: T) {
 
 /// Compact the tree in-place by pruning and relocating live blocks.
 pub fn compact<T: NumberElement>(tree: &mut SparseTree<T>) -> &mut SparseTree<T> {
-    let compacted = st_mem::compact(&mut tree.mem, &tree.layout, 0).mem;
-    let mut old = core::mem::replace(&mut tree.mem, compacted);
-    st_mem::free(&mut old);
+    tree.mem = st_mem::compact(&mut tree.mem, &tree.layout, 0).mem;
     tree
 }
 
@@ -119,7 +109,7 @@ pub fn walk<T: NumberElement>(tree: &SparseTree<T>, visit: &mut dyn FnMut(i32, i
 ///
 /// This is the preferred path when the producer already rasterized into a dense buffer.
 pub fn build_dense<'a, T: NumberElement>(tree: &'a mut SparseTree<T>, leaves: &[T]) -> &'a mut SparseTree<T> {
-    tree.mem = st_mem::alloc(tree.layout.dim, leaves.len() as u32, None);
+    tree.mem = st_mem::alloc(tree.layout.dim, leaves.len() as u32);
 
     let root = st_mem::build(&mut tree.mem, &tree.layout, leaves);
     tree.mem = st_mem::compact(&mut tree.mem, &tree.layout, root).mem;

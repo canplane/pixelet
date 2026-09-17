@@ -14,7 +14,6 @@ fn log(topics: u32, capacity: u32) -> ChangeLog {
         topics,
         capacity,
         keys_per_topic: None,
-        alloc: None,
     })
 }
 
@@ -122,7 +121,7 @@ fn change_the_topic_count_is_bounded_by_the_u16_a_topic_travels_as() {
 #[test]
 fn waker_a_pump_wakes_the_listeners_of_changed_keys_once_each_and_nothing_between_pumps() {
     let log = Rc::new(RefCell::new(log(2, 16)));
-    let mut waker = ChangeWaker::new(log.clone(), None);
+    let mut waker = ChangeWaker::new(log.clone());
     let (a, b, cell) = (Rc::new(RefCell::new(0)), Rc::new(RefCell::new(0)), Rc::new(RefCell::new(0)));
     let (a2, b2, cell2) = (a.clone(), b.clone(), cell.clone());
     waker.subscribe(PAGE, 1, Box::new(move || *a2.borrow_mut() += 1));
@@ -148,7 +147,7 @@ fn waker_a_pump_wakes_the_listeners_of_changed_keys_once_each_and_nothing_betwee
 #[test]
 fn waker_a_pump_whose_cursor_was_overwritten_wakes_every_listener_it_holds() {
     let log = Rc::new(RefCell::new(log(2, 2)));
-    let mut waker = ChangeWaker::new(log.clone(), None);
+    let mut waker = ChangeWaker::new(log.clone());
     let (a, cell) = (Rc::new(RefCell::new(0)), Rc::new(RefCell::new(0)));
     let (a2, cell2) = (a.clone(), cell.clone());
     waker.subscribe(PAGE, 1, Box::new(move || *a2.borrow_mut() += 1));
@@ -163,7 +162,7 @@ fn waker_a_pump_whose_cursor_was_overwritten_wakes_every_listener_it_holds() {
 #[test]
 fn waker_a_topic_listener_hears_each_changed_key_of_its_topic_once_per_pump_and_null_when_the_pump_was_lost() {
     let log = Rc::new(RefCell::new(log(2, 4)));
-    let mut waker = ChangeWaker::new(log.clone(), None);
+    let mut waker = ChangeWaker::new(log.clone());
     let heard: Rc<RefCell<Vec<Option<i64>>>> = Rc::new(RefCell::new(Vec::new()));
     let h = heard.clone();
     let off = waker.subscribe_topic(PAGE, Box::new(move |key| h.borrow_mut().push(key)));

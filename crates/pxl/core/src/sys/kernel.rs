@@ -90,7 +90,6 @@ impl Kernel {
                 topics: WORLD_TOPICS,
                 capacity: JOURNAL_CAPACITY,
                 keys_per_topic: None,
-                alloc: None,
             }),
             frame: [0.0; FRAME_WORDS],
             census: [0.0; 13],

@@ -15,7 +15,7 @@ fn at(x: f64, y: f64, z: f64) -> PVF3 {
 
 #[test]
 fn sparse_tree_retype_widening_the_leaf_lane_carries_every_value_across() {
-    let mut tree = sparse_tree::alloc::<u8>(LAYOUT, 64, None);
+    let mut tree = sparse_tree::alloc::<u8>(LAYOUT, 64);
     sparse_tree::write(&mut tree, &at(3.0, 4.0, 5.0), 200, 0);
     sparse_tree::write(&mut tree, &at(10.125, 1.0, 0.0), 7, LAYOUT.min);
     let mut tree = sparse_tree::retype::<u8, u16>(tree);
@@ -41,7 +41,7 @@ fn sparse_tree_computes_what_the_typescript_computes() {
             let mut p = PVF3::default();
             *pvf3::gather(&mut p, v.i64(&format!("{base}.x")), v.i64(&format!("{base}.y")), v.i64(&format!("{base}.z")))
         };
-        let mut tree = sparse_tree::alloc::<u16>(layout, 8, None);
+        let mut tree = sparse_tree::alloc::<u16>(layout, 8);
         v.each(&format!("{k}.writes"), |w| {
             sparse_tree::write(&mut tree, &coord(w), v.u32(&format!("{w}.val")) as u16, v.i32(&format!("{w}.level")));
         });
@@ -70,5 +70,5 @@ fn sparse_tree_computes_what_the_typescript_computes() {
 fn sparse_tree_decode_refuses_a_blob_whose_count_overflows_u32_rather_than_wrapping_under_it() {
     let blob: U64Array = TypedArray::new(4);
     blob.put(0, 0xffff_ffff);
-    let _ = decode::<u16>(&blob, SparseTreeLayout { dim: 3, min: -3, max: 3 }, None);
+    let _ = decode::<u16>(&blob, SparseTreeLayout { dim: 3, min: -3, max: 3 });
 }

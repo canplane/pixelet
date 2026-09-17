@@ -81,7 +81,7 @@ struct BadgeTable<K: xpute_core::ds::map::KeyTraits> {
 impl<K: xpute_core::ds::map::KeyTraits> BadgeTable<K> {
     fn new(traits: K) -> BadgeTable<K> {
         BadgeTable {
-            index: IndexedMap::new(traits, 256, None),
+            index: IndexedMap::new(traits, 256),
             logical_w: Vec::new(),
             slot: Vec::new(),
             built: 0,
