@@ -718,7 +718,7 @@
         {
           "section": "the scene: what is drawn beside the chunks",
           "doc": [
-            "A lane of floats crosses in the packet, not by address: the glue's",
+            "A lane of floats crosses in the packet, not by address: the shell's",
             "scratch is given back as soon as the command is sent, and the command",
             "is applied later."
           ]
@@ -854,7 +854,7 @@
           ]
         },
         {
-          "section": "models: a mesh block the glue writes, and its skeleton and clips"
+          "section": "models: a mesh block the shell writes, and its skeleton and clips"
         },
         {
           "name": "MODEL_CREATE",
@@ -862,7 +862,7 @@
           "doc": [
             "tag call · [vertex_cnt u32, index_cnt u32, joint_cnt u32] → result: the",
             "model's id, or -1 when the mesh pool refused; with an id, [block_at u32]",
-            "— where the glue writes the vertices and indices, in the module's",
+            "— where the shell writes the vertices and indices, in the module's",
             "memory"
           ]
         },

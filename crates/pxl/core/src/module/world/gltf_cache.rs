@@ -140,7 +140,7 @@ pub fn load_rejected(url: &str) {
 // Models and the actors that play them: a glTF asset as the core holds it,
 // and the instances placed in the world that animate it.
 //
-// A model is data the glue parses and hands over — the core does not read
+// A model is parsed from bytes the shell fetches — the core does not read
 // files. Its mesh is one block of the mesh section in a layout a draw reads
 // lane by lane (positions, normals, UVs, four joints and four weights a
 // vertex, then the indices); its skeleton is each joint's parent, its rest
@@ -148,7 +148,7 @@ pub fn load_rejected(url: &str) {
 // bind matrices expect; its clips are channels of keyframes, one joint and
 // one of translation, rotation or scale each. A model with no joints is
 // drawn as it lies. The mesh stands in glTF's Y-up with its height scaled
-// to what the glue measured; an actor turns it to this world's Z-up.
+// to the height it is registered with; an actor turns it to this world's Z-up.
 //
 // An actor is a model at a place, facing a way, playing a clip. Each tick
 // the core advances every actor's clips, samples them — linear keys, the
@@ -206,7 +206,7 @@ pub struct Model {
     clips: Vec<Clip>,
     /// Joints in an order where a parent comes before its children.
     order: Vec<u32>,
-    /// What the mesh is scaled by to stand as tall as the glue measured.
+    /// What the mesh is scaled by to stand as tall as it is registered.
     scale: f32,
     /// How far a vertex reaches from the model's origin, unscaled: a
     /// bounding sphere for a hit test to reject by.
@@ -356,7 +356,7 @@ fn blend(a: &[f32; 10], b: &[f32; 10], w: f32) -> [f32; 10] {
 impl Models {
     /// A model of `vertex_cnt` vertices, `index_cnt` indices and `joint_cnt`
     /// joints, its mesh block acquired: its id and the block's address, for
-    /// the glue to write; none when the heap refused.
+    /// the caller to write; none when the heap refused.
     pub fn new_model(&mut self, vertex_cnt: u32, index_cnt: u32, joint_cnt: u32) -> Option<(u32, usize)> {
         let bytes = (vertex_cnt * MODEL_VERTEX_WORDS + index_cnt) * 4;
         let (at, bytes) = alloc(bytes)?;

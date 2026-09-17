@@ -24,3 +24,13 @@ fn math_computes_what_the_typescript_computes() {
         bits("ceil_to_step", ceil_to_step(x, s));
     });
 }
+
+#[test]
+fn a_half_way_case_rounds_toward_positive_infinity() {
+    assert_eq!(round_half_up(2.5), 3.0);
+    assert_eq!(round_half_up(-2.5), -2.0);
+    assert_eq!(round_half_up(-2.4), -2.0);
+    assert_eq!(round_half_up(-2.6), -3.0);
+    assert_eq!(round_half_up(-0.5), 0.0);
+    assert_eq!(round_half_up(0.49999999999999994), 0.0);
+}

@@ -1,8 +1,8 @@
 // pxl_core/module/world/object/store.test.rs
 
 //
-// store.ts's subscriber test is a revision test here: a col_idx's changes are
-// read as its revisions moving, which is what chunk_node.rs follows.
+// A col_idx's changes are read as its revisions moving, which is what
+// chunk_node.rs follows.
 
 use pxl_shared::spec::cell::cube_types::Block;
 use pxl_shared::spec::space::indexer::{L2_IDX, L2_IDX_IN_L3, L3_IDX};

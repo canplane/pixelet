@@ -530,8 +530,7 @@ pub fn set_poi_tier(i: u32, level: u32) {
 /// and is held back from drawing until a rebuild grounds it. A rebuild already
 /// running was grounding against the tiles of the moment it started, so it has
 /// to go too — left alone, the next sync saw a job for the same pages and
-/// origin and deduped the request against it. A fresh load with every tile
-/// arriving after the POI pages drew nothing until the first pan (2026-09-12).
+/// origin and deduped the request against it.
 pub fn invalidate_poi_index() {
     let x = index();
     x.built_from = -1;

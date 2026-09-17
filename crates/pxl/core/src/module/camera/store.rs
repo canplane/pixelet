@@ -118,10 +118,8 @@ impl CameraStore {
     }
 
     // azimuth-only: "align north" is what both the dedicated compass button
-    // and the follow-mode-off action actually mean — resetting polar (tilt)
-    // alongside it used to also flatten/steepen whatever view angle the user
-    // had deliberately set, on a click whose entire purpose was "point me
-    // north," not "also forget my tilt."
+    // and the follow-mode-off action actually mean, so polar (tilt) is left
+    // as the user set it.
     pub fn reset_azimuth(&mut self) {
         let azimuth = norm_azimuth(DEFAULT_AZIMUTH);
         let from = self.view_state;

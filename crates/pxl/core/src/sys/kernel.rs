@@ -3,8 +3,8 @@
 // The kernel's one state: every structure the world is made of — the bakes,
 // the volumes and the pools they draw on, the terrain tables, the object
 // store, the scheduler, the change log, the raycast — as one value made on
-// first use. The modules translated from the client (module/, app/, render/)
-// read and write it directly, as their TypeScript read its stores; pxl-wasm
+// first use. The modules (module/, app/, render/) read and write it
+// directly; pxl-wasm
 // keeps only the rings and hands commands to it.
 
 use pxl_shared::spec::space::pvf3::ivec::{self, gather};

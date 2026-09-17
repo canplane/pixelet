@@ -3,7 +3,7 @@
 //! What the page's UI reads of the kernel and what it asks of it. The UI is an
 //! interrupt source and a display: it renders one snapshot of the state it
 //! shows — a JSON document the kernel writes after each turn, which the shell
-//! compares whole and hands to React only when it changed — and every control
+//! compares whole and hands to the UI only when it changed — and every control
 //! it has is an action by name, applied here to the stores.
 
 use core::fmt::{self, Write};

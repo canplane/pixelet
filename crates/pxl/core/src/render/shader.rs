@@ -1,8 +1,8 @@
 //! The shaders and the pipelines that run them, as their one source: the
 //! WGSL in `shader/`, assembled here from its shared pieces, and each
 //! pipeline's definition — its vertex lanes, its bind group layouts, its
-//! primitive, depth and blend state — as a record of words the glue turns
-//! into WebGPU's descriptor and a native shell into wgpu's. What the glue
+//! primitive, depth and blend state — as a record of words the shell turns
+//! into WebGPU's descriptor and a native host into wgpu's. What the shell
 //! decides is nothing: which shader a pipeline runs and how its lanes are
 //! read are the same facts the mesher and the draw list (draw.rs) are built
 //! on, and they are written once, here.
@@ -57,7 +57,7 @@ pub const FRAME_FLOATS: u32 = 76;
 /// through fog_color, environment.rs's output as it is), low_spec,
 /// edge_width, rim_intensity, viewport, shadow_strength, shadow_texel,
 /// vignette, light_view_proj, the second light's run (other_dir through
-/// other_color, environment.rs's ENV_OTHER_LIGHT). The glue reads the
+/// other_color, environment.rs's ENV_OTHER_LIGHT). The shell reads the
 /// table rather than counting; the test below holds it to the struct.
 pub const FRAME_AT: [u32; 13] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 52, 68];
 #[cfg(test)]
@@ -340,7 +340,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
 #[cfg(test)]
 pub type Buffer = (u32, u32, Vec<(u32, u32, u32)>);
 
-/// A record read back into its parts, as the glue reads it: what the
+/// A record read back into its parts, as the shell reads it: what the
 /// tests check each pipeline's words against its shader by.
 #[cfg(test)]
 pub struct Record {

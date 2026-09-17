@@ -39,7 +39,7 @@ fn moon_equatorial(d: f64, obliquity: f64) -> (f64, f64) {
 
 /// Equatorial to the observer's local direction: X east, Y north, Z up, at
 /// distance 100 as the three lights stood. Azimuth is the Duffett-Smith
-/// construction, acos and a sign from the hour angle, as the glue had it.
+/// construction, acos and a sign from the hour angle.
 fn local_direction(ra: f64, dec: f64, lat: f64, lon: f64, d: f64) -> [f64; 3] {
     let gmst = norm360(280.460_618_37 + 360.985_647_366_29 * d);
     let lst = norm360(gmst + lon);

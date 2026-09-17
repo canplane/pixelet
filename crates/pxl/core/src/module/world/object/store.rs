@@ -40,10 +40,10 @@ use crate::module::world::chunk_node::chunk_sources_changed;
 use crate::module::world::frame::coord::local_world_to_canonical;
 use crate::module::world::terrain::elevation::get_ground_type;
 use crate::render::layer::object::adapter::Carve;
-use crate::render::layer::terrain::adapter::js_round;
 use crate::sys::global::{now, Global};
 use crate::sys::host::{storage_get, storage_set};
 use crate::sys::kernel::{kernel, reindex_object};
+use xpute_core::kit::math::round_half_up;
 
 /// What a leaf holds, past its corner and size. A solid is the catalog's own
 /// cube; the id it is spelled out under belongs to the two sides' shared
@@ -86,21 +86,8 @@ pub type ObjectAir = ObjectLayerEntry;
 /// shared fields (i/f/size/at).
 pub type OccupiedEntry = ObjectLayerEntry;
 
-// v9 (2026-09-17): a page is five bare lanes — x, y, z, size, value — with no
-// record header, column names or id and heading lanes (the persistence
-// section below). A v8 blob is a self-describing table this code does not
-// read.
-//
-// v8 (2026-09-17): a terrain-styled cube's leaf value is its channel and its
-// type (spec/cell's TERRAIN_STYLE_BASE), not a number counted out as the
-// catalog was walked. A v7 blob's terrain-styled values are 1..32 in walk
-// order and name different cubes under the new rule, which is exactly the
-// case this version exists for.
-//
-// v7 (2026-09-13): one Placement record per page in a page-keyed container
-// (the persistence section below) — the same form every placed thing has.
-//
-// Not migrated. Bump this again whenever a future change makes an older
+// A page is five bare lanes — x, y, z, size, value — with no record header
+// (the persistence section below). A blob of an older version is not read. Bump this again whenever a future change makes an older
 // entry's encoding mean something different from what it meant when it was
 // written.
 pub const OBJECT_STORAGE_VERSION: u32 = 9;
@@ -585,8 +572,7 @@ fn store_state() -> &'static mut StoreState {
 /// occupancy) or a raycast paint: the object has not been removed, and the
 /// raycaster is what resolves the hover in the first place — if it stopped
 /// seeing the hidden object, hover would clear, the hide would lift, the
-/// raycaster would hit it again: an infinite loop ("Maximum update depth
-/// exceeded", 2026-09-03). Bumps the column's revision, the same path a real
+/// raycaster would hit it again: an infinite loop. Bumps the column's revision, the same path a real
 /// place()/remove() takes.
 pub fn set_virtual_hide(at: Option<EntryAt>) {
     let st = store_state();
@@ -873,7 +859,7 @@ pub fn object_store_stats() -> (u32, u32, u32) {
 fn write_object_value(coord: &PVF3, size: f64, val: u32) {
     // size is always an exact power of two by construction (object/size.rs's
     // OBJECT_SIZES); the round only guards against float noise.
-    let level = js_round(size.log2()) as i32;
+    let level = round_half_up(size.log2()) as i32;
     let at = lower(coord);
     kernel().objects.write(at.col_idx, at.band, [at.x, at.y, at.z], level, val);
     if store_state().restoring {

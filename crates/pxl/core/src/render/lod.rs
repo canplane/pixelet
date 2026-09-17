@@ -79,8 +79,7 @@ const BLEND_BAND_FRACTION: f64 = 0.05;
 
 /// Only thresholds inside the current visible range get dither-blended. At the
 /// reference projection the third handoff (768u) is the last one comfortably
-/// inside render_cfg.RENDER_DIST, so including it removes both its hard pop
-/// and the old 29% non-blended hysteresis gap. The handoff that lands at the
+/// inside render_cfg.RENDER_DIST, so including it removes its hard pop. The handoff that lands at the
 /// range's own edge, and everything past it, stay hard transitions: geometry
 /// ends there and fog is already opaque, so a second mesh would be retained
 /// for nothing.
@@ -247,10 +246,7 @@ const _: () = assert!((1 << BADGE_SHAMT_OVER_CUBE) as f64 == BADGE_CELLS_PER_CUB
 /// Where a world-anchored billboard starts to fade and where it is gone, in
 /// first-handoff units (billboard/distance_fade.rs): full strength inside
 /// 5/4 of the first handoff, gone by 10/3 of it — 240u and 640u at the
-/// reference. Twice the 120u and 320u the fade was first tuned at, which
-/// read as too near once the badges gathered by the cube ladder
-/// (2026-09-12); and moving with the projection now rather than staying
-/// fixed while the tiers under them moved.
+/// reference, moving with the projection as the tiers under them do.
 const FADE_START_TIERS: f64 = 240.0 / REFERENCE_THRESHOLD_0;
 const FADE_END_TIERS: f64 = 640.0 / REFERENCE_THRESHOLD_0;
 

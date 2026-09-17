@@ -72,9 +72,8 @@ pub fn release_block(at: usize, bytes: u32) {
 /// farthest first. It budgets only the optional part: on-screen chunks hold
 /// their tiers because that is the layout. Half the mesh section: the other half
 /// is the on-screen layouts, the volumes a build composes in, and the room a
-/// large block needs in one piece — at a quarter of the whole core reservation
-/// (128 MB of a 256 MB section) the section sat two-thirds full and fragmented,
-/// and refused the fine tiers' blocks 88,000 times in a minute (2026-09-14).
+/// large block needs in one piece — at a quarter the section fragments and
+/// refuses the fine tiers' blocks.
 #[allow(non_snake_case)]
 pub fn RETAIN_BUDGET_BYTES() -> f64 {
     crate::mem::map().map_or(0.0, |m| (m.heap.bytes / 2) as f64)
@@ -453,13 +452,14 @@ pub fn chunk_page(page_idx: IVec, present: bool) {
 // A chunk's build, from its sources to its meshes, a chunk at a time under
 // the frame's budget.
 //
-// The glue says which chunks exist, what each is made of (its terrain
+// The chunk nodes say which chunks exist, what each is made of (its terrain
 // page's lanes and the settings that change what they paint), and which
 // tiers it still lacks; each tick it hands over the order to take them in
 // and a budget. A chunk's runs come the direct way — one run a column
 // from the terrain, when no object stands in its column — or by painting
-// the terrain and the objects into a volume and scanning it. Its tiers are baked from those runs, one bake
-// and one scan open in the whole world at a time, as before. What comes
+// the terrain and the objects into a volume and scanning it. Its tiers are
+// baked from those runs, one bake and one scan open in the whole world at a
+// time. What comes
 // out is events: a tier's mesh in a block of the mesh section, handed over
 // whole, and what the chunk's runs hold, for the retain budget.
 //
@@ -467,16 +467,16 @@ pub fn chunk_page(page_idx: IVec, present: bool) {
 // nothing is copied to a place the core cannot see.
 
 /// Chunks held at once: the mount radius and its hysteresis cover about
-/// three thousand, and the glue's own chunks come on top. The mount pass stops
+/// three thousand. The mount pass stops
 /// at it rather than trapping (`Scheduler::mount`), so `Scheduler::add`'s
 /// assert past it says the caller has a bug, not that the view grew.
 pub const MAX_CHUNKS: usize = 4096;
 
-/// What the glue is told.
+/// What the chunk nodes are told.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BuildEvent {
     /// Tier `step` of chunk `id`, built from its sources as of `generation`:
-    /// the mesh is `bytes` bytes at `at`, the glue's to release.
+    /// the mesh is `bytes` bytes at `at`, the node's to release.
     Tier {
         id: u32,
         generation: u32,
@@ -520,7 +520,7 @@ struct Chunk {
     page: Option<PageLanes>,
     show_structures: bool,
     generation: u32,
-    /// The tiers the glue lacks, in the order it wants them; 0 is none.
+    /// The tiers the node lacks, in the order it wants them; 0 is none.
     want: [u32; 2],
     runs: Option<Runs>,
     /// The mesh pool's release count when it last refused this chunk a
@@ -779,8 +779,7 @@ impl Builder {
     /// tick: the pool does not change until the scheduler reclaims after,
     /// so every later request would meet the same pool, and a refusal is
     /// not free — the direct runs are written whole before their block is
-    /// asked for. A thousand chunks pending on a starved pool spun a
-    /// hundred milliseconds a frame this way (2026-09-14).
+    /// asked for.
     pub fn tick_capped(&mut self, world: &mut World, order: &[u32], budget_ms: f64, max_chunks: u32, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent)) {
         let t0 = now();
         let starved = self.stat.starved;
@@ -841,10 +840,9 @@ impl Builder {
         // whichever way it is made: the direct runs and the scan bake the
         // same mesh at every tier, and the scan's
         // exactness — a cube carving the terrain, a sub-cell object — is
-        // only ever about what is placed. The direct path used to stop at
-        // step 8 on the principle that the fine tiers keep the voxel
-        // pipeline; a zoom-in then scanned every chunk in view, about
-        // 25 a second, most of them empty of objects (2026-09-14).
+        // only ever about what is placed, so the direct path serves every
+        // tier: a zoom-in would otherwise scan every chunk in view, most of
+        // them empty of objects.
         if !holding && !self.has_objects(world, c.col_idx) {
             return self.direct_runs(world, id, page, emit);
         }
@@ -897,7 +895,7 @@ impl Builder {
     ///
     /// # Safety
     /// `page` names lanes of a page's fixed shape inside the world's memory,
-    /// resident for as long as the view is read: what the glue promises
+    /// resident for as long as the view is read: what the chunk node promises
     /// when it tells a chunk its source.
     pub unsafe fn page_view(world: &World, page: PageLanes) -> PageView<'static> {
         let mem = world.volumes.mem();
@@ -1021,10 +1019,9 @@ impl Builder {
                     }
                 }
                 // Direct runs are not worth keeping past the last tier
-                // wanted: a chunk's worth is 0.15 ms to make again, and a
-                // thousand of them held is a hundred megabytes of small
-                // blocks the fine tiers' large ones then fail to find room
-                // among (2026-09-14). A scan's runs stay: those cost the scan.
+                // wanted: they are cheap to make again, and held they are small
+                // blocks the fine tiers' large ones fail to find room among. A
+                // scan's runs stay: those cost the scan.
                 if c.wanted().next().is_none() {
                     if let Some(r) = c.runs.take_if(|r| r.direct) {
                         // SAFETY: a block this build took and has not given back.

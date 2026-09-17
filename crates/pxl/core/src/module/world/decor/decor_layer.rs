@@ -11,7 +11,7 @@
 //! removing that object clears the very same filter on the next rebuild, so the
 //! decoration reappears with no bookkeeping of its own.
 //!
-//! The tier split is Minecraft's own block model, taken literally (2026-09-05):
+//! The tier split is Minecraft's own block model, taken literally:
 //! static grid content — cubes and decor alike — bakes into the chunk's own
 //! blocks; anything that moves under its own logic every frame (the companion)
 //! lives outside the grid as an actor. User-placed decor lands in the object
@@ -34,8 +34,7 @@ use crate::sys::kernel::kernel;
 
 // Fixed, arbitrary — the one thing every kind's own placement ultimately
 // derives from (alongside its own seed tag). Changing this reshuffles every
-// decoration in the world. The TypeScript literal is wider than a word; a seed
-// derivation masks to 64 bits, so this is the part of it that ever mattered.
+// decoration in the world. A seed derivation masks to 64 bits.
 pub const DECOR_MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
 
 /// How far a kind is drawn, from its size and nothing else.
@@ -49,7 +48,7 @@ pub const DECOR_MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
 /// absence makes no visible difference, and the tier's cubes are already
 /// coarser than it. Twelve pixels at the reference viewport — the middle of the
 /// range at which Google's map products stop drawing a building in 3D
-/// (2026-09-13, decided by eye).
+/// (decided by eye).
 ///
 /// No fade: a kind is drawn at full density up to its last tier and not past
 /// it. What softens the edge is the blend across a band boundary, which
@@ -186,7 +185,7 @@ pub fn user_decor_pick(i: IVec, variant_count: u32) -> (u32, f64) {
 // is one block: for each kind and variant, the instances' lanes.
 //
 // A kind is drawn on a tier only where it is at least two of the tier's
-// cells across; why, and every other rule, is the TypeScript's.
+// cells across (decor_density).
 
 /// A decor stream: SplitMix64, drawn as units in [0, 1).
 struct Rng(SplitMix64);

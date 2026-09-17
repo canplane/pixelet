@@ -84,12 +84,9 @@
       "Minimum-brightness floor shared by every lit surface — terrain and",
       "placed cells, decor, actors — through the one shading source",
       "(crates/pxl/core/src/render/shader/shade.wgsl, `frame.floor`, carried",
-      "in the theme through environment.rs). One shared constant, not two",
-      "separate copies, specifically so the two can't drift apart again the way",
-      "they did before this existed (terrain used to be immune to scene-light",
-      "dimming by construction while objects weren't, then briefly the reverse",
-      "once terrain adopted real lighting too). Tune this one number to retune",
-      "every surface's night floor at once."
+      "in the theme through environment.rs). One shared constant, so terrain",
+      "and objects cannot dim apart. Tune this one number to retune every",
+      "surface's night floor at once."
     ],
     "FLOOR": {
       "$value": 0.6,

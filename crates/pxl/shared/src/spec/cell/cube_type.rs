@@ -168,7 +168,7 @@ pub mod cube_types {
         ];
     }
 
-    // Flat user-painted colors only — no sentinels of its own anymore.
+    // Flat user-painted colors only — no sentinels of its own.
     // cube_types.common.void (sparse-tree absence) and .air (explicit erase)
     // already cover every non-color case a placed cube's own byte can mean;
     // every real key here is a real, pickable color.
@@ -407,7 +407,7 @@ pub mod cube_types {
         }
     }
 
-    // Flat user-painted colors only — no sentinels of its own anymore.
+    // Flat user-painted colors only — no sentinels of its own.
     // cube_types.common.void (sparse-tree absence) and .air (explicit erase)
     // already cover every non-color case a placed cube's own byte can mean;
     // every real key here is a real, pickable color.

@@ -19,6 +19,15 @@ pub fn near(a: f64, b: f64, tol: f64) -> bool {
     (a - b).abs() < tol
 }
 
+/// Rounds to the nearest integer, a half-way case toward +∞.
+pub fn round_half_up(x: f64) -> f64 {
+    if x.fract() == -0.5 {
+        x.ceil()
+    } else {
+        x.round()
+    }
+}
+
 pub fn lerp(a: f64, b: f64, t: f64) -> f64 {
     a + (b - a) * t
 }

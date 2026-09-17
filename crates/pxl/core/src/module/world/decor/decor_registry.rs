@@ -1,7 +1,7 @@
 // pxl_core/module/world/decor/decor_registry.rs
 
 //! Every decor kind's own bundle, in one place. What the scheduler is taught
-//! (decor_kinds.rs's teach_decor_kinds) and the hover ghost's shape resolution
+//! (decor_layer.rs's teach_decor_kinds) and the hover ghost's shape resolution
 //! (which bundle does a given decor_id's silhouette come from) both need this
 //! same lookup — one shared registry instead of two call sites independently
 //! assembling "every decor kind" and risking drifting out of sync.

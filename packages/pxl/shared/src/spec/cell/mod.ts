@@ -42,7 +42,7 @@ export const cell_colors = {
 // =============================================================================
 
 /** Zero (cube_types.common.void) means sparse absence/fallback here, not
- * explicit air — the only real distinction left (2026-09-06) now that a
+ * explicit air — the only real distinction left now that a
  * real value doesn't need to share a bit with every other real value; see
  * cube.ts's own top comment. */
 export function object_value_is_present(value: number): boolean {
@@ -122,7 +122,7 @@ export const decor_ids: readonly DecorId[] = NUM_ID_TO_DECOR.filter(() => true);
 // =============================================================================
 // Terrain-styled cube catalog — user-placeable references into cube_types'
 // own land/water/structure/transport channels, derived generically (no
-// hand-typed per-type catalog to keep in sync — 2026-09-06, see
+// hand-typed per-type catalog to keep in sync — see
 // issue/20260906-unified-block-palette.md). Its own local value
 // (cube_types.land.green_deep) is whatever the bake pipeline already uses;
 // the *global* sparse-tree byte a placed cube of this kind actually gets
@@ -206,7 +206,7 @@ for (const [channel, types] of Object.entries(cube_types)) {
 // Placeable cube catalog — everything mode_bar.tsx's hotbar (cube_ids alone)
 // and drawer_modal.tsx's own full grid (this) can offer a user. A separate
 // concept from cube_ids itself: the hotbar deliberately stays scoped to just
-// the original 15 flat colors (2026-09-06 UX decision — the full catalog
+// the original 15 flat colors (the full catalog
 // lives behind its own modal, not folded into the everyday quick-pick).
 // =============================================================================
 

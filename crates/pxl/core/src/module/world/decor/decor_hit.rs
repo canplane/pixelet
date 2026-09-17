@@ -21,7 +21,7 @@ use crate::sys::kernel::kernel;
 // walk's slab test for max_dist), so they only ever agree up to float noise. A
 // strict reject flipped on essentially every frame right at that boundary as a
 // real mouse's sub-pixel jitter walked the disagreement across zero, which read
-// as the hover ghost flickering while the cursor sat still (2026-09-05). 1e-3
+// as the hover ghost flickering while the cursor sat still. 1e-3
 // units is small enough never to let a decor mesh that is genuinely occluded by
 // terrain win, and larger than the round-off.
 const SAME_SURFACE_EPS: f64 = 1e-3;

@@ -152,9 +152,8 @@ pub mod themes {
 }
 
 /// Where get_theme_key splits the daylight span: MORNING before MORNING_END
-/// of it, DAY before DAY_END, EVENING after (37.5% / 37.5% / 25%, the old
-/// 6h/6h/4h split of a 16h fixed daylight span, scaled to however long
-/// daylight actually is today).
+/// of it, DAY before DAY_END, EVENING after (37.5% / 37.5% / 25%, scaled to
+/// however long daylight actually is today).
 pub mod daylight_split {
     pub const MORNING_END: f64 = 0.375;
     pub const DAY_END: f64 = 0.75;

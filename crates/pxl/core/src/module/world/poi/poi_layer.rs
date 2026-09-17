@@ -49,9 +49,7 @@ use crate::sys::global::{now, Global};
 /// A rail, not the mechanism. What decides how many badges are drawn is how
 /// many fit: a candidate that lands on pixels another badge has taken is folded
 /// into that badge's count, so density answers itself. This only bounds the
-/// sprite and draw count if something goes wrong. It used to be 80, and it used
-/// to be the whole answer — four POI in one building meant one drawn and three
-/// deleted. Aggregation is what a budget should buy; deletion is what it bought.
+/// sprite and draw count if something goes wrong.
 const MAX_RENDERED: u32 = 512;
 
 /// The finest and coarsest cell a badge is allowed to snap to, as shifts of the

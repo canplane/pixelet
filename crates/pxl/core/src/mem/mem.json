@@ -9,13 +9,7 @@
     "  crates/pxl/core/src/mem.rs           the map — the fixed ranges and the heap",
     "  crates/pxl/wasm/build.rs             the front — the linker flags and the",
     "                                       ring addresses it writes for the module",
-    "  apps/web/src/wasm/core_mem.ts        the reservation the shell makes",
-    "",
-    "The one before this was three copies: the shell picked the reservation, the",
-    "kernel wrote the same number down beside a comment saying it was not read",
-    "here, and nothing compared them — so a shell that asked for too little",
-    "instantiated fine and the kernel asserted its way out of it a moment later,",
-    "long after the point where the mistake could be named."
+    "  apps/web/src/wasm/core_mem.ts        the reservation the shell makes"
   ],
 
   "PAGE_BYTES": {
@@ -117,9 +111,8 @@
     "$value": 67108864,
     "$type": "u32",
     "$doc": [
-      "What a device's memory is counted in, and all that is left of the regions the",
-      "pools used to cut: a reservation is a whole number of these and the bytes",
-      "past the last one are left out."
+      "What a device's memory is counted in: a reservation is a whole number of",
+      "these and the bytes past the last one are left out."
     ]
   },
 

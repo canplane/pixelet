@@ -104,8 +104,7 @@ pub fn mesh_words(vertex_cnt: u32, index_cnt: u32) -> u32 {
     vertex_cnt * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) + index_cnt
 }
 
-/// What bakes have counted, for the ledger. Cumulative, like the context's
-/// in the TypeScript.
+/// What bakes have counted, for the ledger. Cumulative.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 pub struct Counters {
     pub total_runs: u32,
@@ -514,10 +513,9 @@ impl BakeContext {
             // Each cell is accumulated and packed before the next: a cell's
             // buckets depend on nothing outside it (find_or_create_bucket
             // searches its own range), so the packed runs come out as they
-            // would from a pass over every cell's buckets held at once — the
-            // TypeScript's two phases — without holding them. Held, a dense
-            // chunk's buckets ran to megabytes and, doubling as they grew,
-            // past the module's heap (b3, 2026-09-13).
+            // would from a pass over every cell's buckets held at once,
+            // without holding them: held, a dense chunk's buckets run to
+            // megabytes.
             if b.row == 0 {
                 self.coarse.clear();
                 self.coarse.span = res;
@@ -603,7 +601,7 @@ impl BakeContext {
 
     /// Packs one coarse cell's buckets bottom to top. A cell's buckets have
     /// distinct heights (find_or_create_bucket), so sorting them by height
-    /// visits them in the order the TypeScript's repeated minimum search did.
+    /// visits them lowest first.
     fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32) {
         let step = lod_step as i32;
         let cell = start as usize..(start + cnt) as usize;
@@ -921,8 +919,8 @@ fn bucket_taps(acc: &ZBucketAccum) -> u32 {
     packed
 }
 
-/// JavaScript's `Math.round` and Rust's `round` differ only on negative
-/// ties, and the averages rounded here are never negative.
+/// The averages rounded here are never negative, where `f64::round` and
+/// `round_half_up` agree.
 fn to_u8(v: f64) -> u32 {
     v.round().clamp(0.0, 255.0) as u32
 }
@@ -942,9 +940,8 @@ fn coarse_rows_per_step(lod_step: u32) -> u32 {
 // sRGB byte to linear, as a table of 256 values.
 //
 // Written out rather than computed: `pow` is a transcendental function and
-// two libms may disagree in the last bit, which would break the mesh's
-// byte-for-byte agreement with the TypeScript bake — and the determinism
-// the destination issue asks to pin across toolchains. Generated once from
+// two libms may disagree in the last bit, which would break the determinism
+// a mesh is pinned to across toolchains. Generated once from
 // `c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)`, each
 // written to 17 digits so it parses back to the same bits.
 

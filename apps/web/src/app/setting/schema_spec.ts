@@ -52,8 +52,8 @@ export const SETTINGS = {
     dev: true,
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
-   * Off by default since 2026-09-13 — the tilt is the one control a map
-   * view is expected to have, and locking it read as the app being stuck. */
+   * Off by default: the tilt is the one control a map view is expected to
+   * have, and locking it reads as the app being stuck. */
   lock_camera_tilt: {
     kind: "toggle",
     default: false,

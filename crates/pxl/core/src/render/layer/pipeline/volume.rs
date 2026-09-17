@@ -48,8 +48,8 @@ const SUB_CELL_SCALE: f64 = 256.0;
 const SUB_CELL_FULL: u8 = 255;
 
 /// A fraction of a cell packed into a byte, rounded to the nearest 1/256.
-/// JavaScript's `Math.round` breaks ties upward and Rust's `round` away from
-/// zero; for the non-negative fractions this packs, the two agree.
+/// The fractions this packs are never negative, where `f64::round` and
+/// `round_half_up` agree.
 pub fn pack_sub_cell_fraction(fraction: f64) -> u32 {
     ((fraction * SUB_CELL_SCALE).round()).clamp(0.0, SUB_CELL_SCALE - 1.0) as u32
 }

@@ -74,9 +74,7 @@ impl Category {
 ///
 /// The subject is a page's own coordinate where the stream is pages, the
 /// query's hash where it is a search, and nothing where the stream has one
-/// member. It used to be `"<category>:<subject>"` spelled out, which the
-/// arrival then split back apart and parsed — two numbers folded into text so
-/// that the text could be unfolded into two numbers.
+/// member.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct DemandKey {
     pub category: Category,

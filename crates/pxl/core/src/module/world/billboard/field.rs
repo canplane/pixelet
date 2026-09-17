@@ -5,7 +5,8 @@
 //! every label on screen, replaced whole when a placement commits — or on
 //! an actor, a height above wherever the actor stands this tick, which is
 //! what a chat bubble over the companion is.
-//! What a set shows is the glue's (the sheet, the rectangles, the sizes);
+//! What a set shows is its layer's (poi_badge.rs, chat_bubble.rs: the sheet,
+//! the rectangles, the sizes);
 //! the core holds the instances as a block and lists each set's draw,
 //! placed against the frame's origin, in the order the sets draw in.
 

@@ -9,8 +9,8 @@
 //! written into a block of the memory, so nothing is copied across the
 //! boundary.
 //!
-//! One bake is open at a time, as with the TypeScript context; the module is
-//! single-threaded, so the state is a plain global.
+//! One bake is open at a time; the module is single-threaded, so the state is
+//! a plain global.
 
 use pxl_core::mem;
 use pxl_core::module::world::chunk_node::{BuildEvent, PageLanes, World};
@@ -112,8 +112,8 @@ impl xpute_core::ds::buddy_tree::Range for ModuleHeap {
 static ALLOC: xpute_core::ds::slab::SlabMalloc<ModuleHeap> = xpute_core::ds::slab::SlabMalloc::new();
 
 struct State {
-    /// The submission ring (glue → core) and the completion ring (core →
-    /// glue), in blocks of the fixed section taken once. Where in that section
+    /// The submission ring (shell → core) and the completion ring (core →
+    /// shell), in blocks of the fixed section taken once. Where in that section
     /// they sit is the section's to answer, and the boot block carries the
     /// answer out to the shell.
     sq: Ring,
@@ -262,7 +262,7 @@ fn volumes_of(volumes: &mut Option<Volumes>) -> Result<&mut Volumes, MarshalErro
 // The client lowers a coordinate before it crosses: the chunk's key (an
 // IVec, passed as it is), the band's Z, the band-local lattice position in
 // finest-tier steps, and the level. What comes back is lanes to take views
-// over, valid until the next write or reindex. The store is the glue's
+// over, valid until the next write or reindex. The store is the shell's
 // (module/world/object/store.ts). Writes, reads and the reference paint
 // alike are commands in the rings (pxl_shared::spec::cmd's OBJECT_*).
 
@@ -272,7 +272,7 @@ pub use pxl_core::sys::kernel::{FRAME_WORDS, JOURNAL_CAPACITY, TOPIC_DECOR_COLUM
 //
 // Commands and their effects cross in rings (crates/xpute/core/src/ipc/ring.rs):
 // a message names a command (pxl_shared::spec::cmd) and an XTP packet in the
-// ring's slot, which the kernel reads where it lies. The glue assembles
+// ring's slot, which the kernel reads where it lies. The shell assembles
 // what it submits and takes apart what completes; nothing here is shaped
 // for it. The glue pushes into the submission ring, rings `interrupt`
 // (DRAIN or TICK), and reads the completion ring when the call returns.
@@ -1740,7 +1740,7 @@ fn drain(s: &mut State) -> u32 {
             s.outbox.post(tag, number, FrameFlag::RES as u32, value, packet.map(|_| &copy as Write<'_>));
         }
     }
-    // The rows the glue reads by address (the build stat, the census) are
+    // The rows the shell reads by address (the build stat, the census) are
     // as of the last command, as they are of the last tick.
     after();
     s.outbox.cq.tail().wrapping_sub(tail)
@@ -2054,11 +2054,10 @@ fn install_host() {
 ///
 /// The same range shape as the trace below, for the same reason: this is
 /// instrumentation, and instrumentation does not go out on the control ring.
-/// It used to — a line per settled task, raised as `WORLD_LOG` every tick —
-/// and that gave a debug feature the ring's failure policy, which is that
+/// On the ring a debug stream would take the ring's failure policy —
 /// `Outbox::post` asserts when the completion queue and its spill are both
-/// full. Turning the stream on during a fetch burst is the case that fills
-/// them, and it is also the only case anyone turns it on for.
+/// full — and a fetch burst, the one time anyone turns the stream on, is what
+/// fills them.
 static LOG_TEXT: pxl_core::sys::global::Global<String> = pxl_core::sys::global::Global::new();
 static LOG_RANGE: pxl_core::sys::global::Global<[u32; 2]> = pxl_core::sys::global::Global::new();
 

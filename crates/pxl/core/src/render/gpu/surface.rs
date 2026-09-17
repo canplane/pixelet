@@ -22,9 +22,10 @@ pub const SURFACES: usize = 9;
 
 /// The device pixels a CSS pixel is drawn at: the device's, clamped. Past two
 /// the texels cost more than the eye resolves at arm's length; under one is a
-/// zoomed-out page, drawn at least at its own pixels.
+/// zoomed-out page, drawn at least at its own pixels. The billboards' sheets
+/// are drawn at DPR_MAX, so a label is never shown smaller than it was drawn.
 const DPR_MIN: f64 = 1.0;
-const DPR_MAX: f64 = 2.0;
+pub const DPR_MAX: f64 = 2.0;
 
 /// A case's buffer on its long side, at most: the picker shows it at a
 /// thumbnail's size, and a buffer past that only costs.

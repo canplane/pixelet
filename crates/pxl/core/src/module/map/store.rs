@@ -15,7 +15,7 @@ pub enum MapStatus {
 }
 
 impl MapStatus {
-    /// The TypeScript enum's string.
+    /// The name the UI snapshot carries.
     pub fn as_str(self) -> &'static str {
         match self {
             MapStatus::Idle => "idle",

@@ -194,7 +194,7 @@ pub struct EnvironmentDraw {
     started: bool,
     lat: f64,
     lon: f64,
-    /// Days since J2000.0, from the glue's wall clock.
+    /// Days since J2000.0, from the host's wall clock.
     days: f64,
     sun: [f64; 3],
     moon: [f64; 3],

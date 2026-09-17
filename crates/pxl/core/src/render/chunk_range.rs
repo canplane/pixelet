@@ -6,6 +6,7 @@ use pxl_shared::bake::constant::{CELL_SHAMT, CHUNK_CELL_SPAN, PAGE_CELL_SPAN, U_
 use pxl_shared::spec::space::indexer::{FROM_L3_IDX, L3_IDX, L3_SHAMT};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::xy::TO_XY;
+use xpute_core::kit::math::round_half_up;
 
 use crate::module::world::terrain::fixed::KEEP_PAGES;
 
@@ -23,7 +24,7 @@ const _: () = assert!(1 << PAGE_SHAMT == PAGE_CELL_SPAN, "the shift is the span'
 /// the two thresholds cannot trade a chunk back and forth. Without it, a page
 /// whose nearest corner sat 1680u away against a 1664u range was unmounted
 /// with every chunk in it, and panning 16u back rebuilt all of them from the
-/// scan up: measured 2026-09-12, and it reads on screen as the side you are
+/// scan up, which reads on screen as the side you are
 /// moving away from being cut off and redrawn
 /// (issue/20260912-what-to-render-when.md).
 ///
@@ -149,7 +150,7 @@ pub fn pages_to_hold(anchor: IVec, radius: f64, count: u32) -> Pages {
 /// still asked for. Without it, the 32nd-nearest page changed with every 64u
 /// of panning, and fetch_scheduler yields what a category no longer wants —
 /// so panning aborted its own requests at the edge of the set and refetched
-/// them a moment later (200 terrain aborts in one session, 2026-09-12). One
+/// them a moment later. One
 /// page: a pan cannot carry a page that far out before its request settles,
 /// while a search jump, which moves by many pages, still yields as designed.
 pub const FETCH_HYSTERESIS: f64 = PAGE_SPAN;
@@ -158,12 +159,7 @@ pub const FETCH_HYSTERESIS: f64 = PAGE_SPAN;
 /// pages, doubled so a second subsystem can interleave at equal distance
 /// (POI sits one behind terrain — see poi_fetcher.rs).
 pub fn page_priority(dist2: f64) -> f64 {
-    js_round(dist2.sqrt() / PAGE_SPAN) * 2.0
-}
-
-/// `Math.round`: half away from zero is Rust's; half toward +∞ is JavaScript's.
-pub fn js_round(x: f64) -> f64 {
-    (x + 0.5).floor()
+    round_half_up(dist2.sqrt() / PAGE_SPAN) * 2.0
 }
 
 #[cfg(test)]

@@ -1,15 +1,15 @@
-//! What the renderer draws, as lists the glue executes against WebGPU: the
+//! What the renderer draws, as lists the shell executes against WebGPU: the
 //! blocks to put on the GPU and the ones to let go, and each frame the
-//! draws, with what each needs beyond its geometry. The glue holds no
+//! draws, with what each needs beyond its geometry. The shell holds no
 //! decision — which mesh, at what weight, where — only the API calls; a
 //! native shell executes the same lists against wgpu.
 //!
 //! A block is named by a handle the core hands out when a tier lands; the
 //! upload says where the block lies in the memory and how long it is, and
-//! the glue reads the lanes by the mesher's layout from the vertex count.
-//! Uploads and frees accumulate until the glue takes them, whatever calls
+//! the shell reads the lanes by the mesher's layout from the vertex count.
+//! Uploads and frees accumulate until the shell takes them, whatever calls
 //! made them (a tick, a build now); the draws are the last tick's. A free
-//! cancels an upload not yet taken: the block is the glue's to release the
+//! cancels an upload not yet taken: the block is the shell's to release the
 //! moment it is told, and may be someone else's by the time the list runs.
 
 use pxl_shared::spec::space::v3::V3;
@@ -67,7 +67,7 @@ pub struct DrawList {
     draws: Vec<u32>,
     uniforms: Vec<f32>,
     next_handle: u32,
-    /// The lanes the glue last took, kept until it takes again.
+    /// The lanes the shell last took, kept until it takes again.
     taken: Taken,
 }
 
@@ -81,7 +81,7 @@ struct Taken {
 }
 
 impl DrawList {
-    /// A handle for a block the glue is to upload.
+    /// A handle for a block the shell is to upload.
     pub fn upload(&mut self, at: u32, bytes: u32, vertex_cnt: u32, index_cnt: u32) -> u32 {
         self.next_handle = self.next_handle.wrapping_add(1).max(1);
         let handle = self.next_handle;
@@ -89,7 +89,7 @@ impl DrawList {
         handle
     }
 
-    /// The block behind `handle` is gone from the glue's memory, or about to
+    /// The block behind `handle` is gone from the shell's memory, or about to
     /// be; 0 names no block.
     pub fn free(&mut self, handle: u32) {
         if handle == 0 {
@@ -172,7 +172,7 @@ impl DrawList {
         (self.draws.len() / DRAW_WORDS) as u32
     }
 
-    /// Hands the lists to the glue: the lanes' addresses and counts, valid
+    /// Hands the lists to the shell: the lanes' addresses and counts, valid
     /// until the next take. Uploads and frees start fresh; the draws stay
     /// until the next frame writes them.
     pub fn take(&mut self) -> [usize; 10] {

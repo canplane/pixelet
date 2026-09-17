@@ -377,8 +377,7 @@ struct Ledger {
     /// Off until someone asks. Nothing in the world reads the ledger — the one
     /// caller outside the instrument writes a turn's task time back into the
     /// frame it belongs to and does nothing when there is no frame — so a
-    /// client with no dev overlay should be paying for none of this, and until
-    /// this was gated it paid for all of it: the rings are 2.06 MiB of frames,
+    /// client with no dev overlay pays for none of this: the rings are 2.06 MiB of frames,
     /// 368 KiB of tasks and 48 KiB of long frames, taken on the first record
     /// and, being lanes, never given back.
     recording: bool,

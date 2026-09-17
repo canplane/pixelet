@@ -86,15 +86,6 @@ pub struct PageView<'a> {
     pub ele: &'a [i16],
 }
 
-/// JavaScript's Math.round: ties toward +∞, where Rust's go away from zero.
-pub fn js_round(x: f64) -> f64 {
-    if x.fract() == -0.5 {
-        x.ceil()
-    } else {
-        x.round()
-    }
-}
-
 /// One chunk of a page, sampled: a material and a top a cell, and the
 /// floor the columns share.
 pub struct ChunkSample {
@@ -187,7 +178,3 @@ impl ChunkSample {
         true
     }
 }
-
-#[cfg(test)]
-#[path = "adapter.test.rs"]
-mod test;

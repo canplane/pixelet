@@ -12,12 +12,6 @@
 //   crates/pxl/wasm/build.rs             the front — the linker flags and the
 //                                        ring addresses it writes for the module
 //   apps/web/src/wasm/core_mem.ts        the reservation the shell makes
-//
-// The one before this was three copies: the shell picked the reservation, the
-// kernel wrote the same number down beside a comment saying it was not read
-// here, and nothing compared them — so a shell that asked for too little
-// instantiated fine and the kernel asserted its way out of it a moment later,
-// long after the point where the mistake could be named.
 
 #![allow(non_upper_case_globals, non_snake_case, dead_code, clippy::excessive_precision)]
 
@@ -83,9 +77,8 @@ pub const GLOBAL_BASE: u32 = 33554432;
 /// there are 27 MiB of headroom over the guarantee.
 pub const MIN_HEAP_BYTES: u32 = 268435456;
 
-/// What a device's memory is counted in, and all that is left of the regions the
-/// pools used to cut: a reservation is a whole number of these and the bytes
-/// past the last one are left out.
+/// What a device's memory is counted in: a reservation is a whole number of
+/// these and the bytes past the last one are left out.
 pub const REGION_BYTES: u32 = 67108864;
 
 /// What a handheld is asked to reserve. Half of the desktop's, because a

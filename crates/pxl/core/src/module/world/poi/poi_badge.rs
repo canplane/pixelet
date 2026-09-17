@@ -15,6 +15,7 @@
 //! Eviction runs on the same trigger the index rebuild does, because it is the
 //! same event: a page leaving is exactly when a badge stops being reachable.
 
+use crate::render::gpu::surface::DPR_MAX;
 use pxl_shared::bake::format::PoiPage;
 use xpute_core::ds::map::{I64Keys, IndexedMap, U32Keys};
 
@@ -35,13 +36,6 @@ const ICON_SIZE: f64 = 20.0;
 // the text's own left and right breathing room should match each other.
 const GAP: f64 = 8.0;
 const PAD_Y: f64 = 7.0;
-/// Supersampling, and it should equal the renderer's own device pixel ratio.
-/// The tick clamps that to [1, 2], and the distance fade returns at most 1, so a
-/// billboard's drawn size never exceeds its logical size in CSS pixels — two is
-/// the exact requirement rather than a guess. It was 3, which is 2.25x the
-/// pixels for nothing: drawing at 3 to display at 2 is a minification, so it
-/// went through the mipmap chain and came out softer.
-pub const RENDER_SCALE: f64 = 2.0;
 
 // A small dot under the pill marking the actual ground point, since the pill
 // itself floats above and offset from it.
@@ -162,9 +156,8 @@ pub fn poi_badge_build_stats() -> PoiBadgeBuildStats {
 ///
 /// Every candidate a placement offers to the screen needs a width for the
 /// collision test, and a placement over a new area offers a couple of
-/// thousand. `measureText` on a phone is around a millisecond for a Korean
-/// name — shaping — so measuring every candidate was a third of a second of
-/// main-thread time per new area (2026-09-13). An estimate from the character
+/// thousand. `measureText` shapes each name, so measuring every candidate
+/// stalls the main thread for every new area. An estimate from the character
 /// classes is within a glyph or two of the truth, which the collision test does
 /// not notice, and costs nothing. The font's own advances are measured once per
 /// class rather than assumed, so a font change does not drift it. What is drawn
@@ -235,8 +228,8 @@ fn build_poi_badge(page: &PoiPage, rec: u32, logical_w: f64) -> i32 {
     let theme = resolve_poi_theme(page.category_of(rec));
     let name = display_name(page, rec);
     badge_atlas().add(
-        logical_w * RENDER_SCALE,
-        LOGICAL_H * RENDER_SCALE,
+        logical_w * DPR_MAX,
+        LOGICAL_H * DPR_MAX,
         DrawSpec::PoiBadge {
             icon: theme.icon,
             color: theme.color,
@@ -328,8 +321,8 @@ pub fn cluster_badge_slot(count: u32) -> i32 {
 
     let t0 = now();
     let slot = badge_atlas().add(
-        logical_w * RENDER_SCALE,
-        LOGICAL_H * RENDER_SCALE,
+        logical_w * DPR_MAX,
+        LOGICAL_H * DPR_MAX,
         DrawSpec::Cluster {
             label: cluster_label(count),
             logical_w,

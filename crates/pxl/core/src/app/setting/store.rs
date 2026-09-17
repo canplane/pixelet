@@ -14,9 +14,8 @@
 //! no longer exists, or a choice that no longer has that option, falls back
 //! rather than lingers.
 //!
-//! Stored under the same key and in the same shape zustand's persist wrote,
-//! `{"state":{"overrides":{…}},"version":0}`, so a browser keeps its settings
-//! across the move.
+//! Stored as `{"state":{"overrides":{…}},"version":0}`, the shape settings
+//! already sit in in a browser's storage.
 
 use xpute_core::kit::json::{read_json, Quoted};
 

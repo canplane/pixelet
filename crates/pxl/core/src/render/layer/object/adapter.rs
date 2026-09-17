@@ -11,7 +11,7 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 
 use crate::module::world::object::store::{CellZ, Store, AIR, BAND_CELLS, BAND_UNITS, MIN_LEVEL, POS_BITS, POS_MASK, STEP_UNITS};
 use crate::render::layer::pipeline::volume::{pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};
-use crate::render::layer::terrain::adapter::js_round;
+use xpute_core::kit::math::round_half_up;
 
 /// What a state paints as: nothing (decor renders as instanced geometry,
 /// not a voxel), air, or a solid with a material.
@@ -155,14 +155,14 @@ impl Painter {
             return true;
         }
         let is_sub_cell = size < U_PER_CELL;
-        let cell_of = |v: f64| if is_sub_cell { (v / U_PER_CELL).floor() } else { js_round(v / U_PER_CELL) };
+        let cell_of = |v: f64| if is_sub_cell { (v / U_PER_CELL).floor() } else { round_half_up(v / U_PER_CELL) };
         let cx0 = cell_of(lx).max(0.0) as u32;
         let cy0 = cell_of(ly).max(0.0) as u32;
         let z = cell_of(lz) as i32;
         if cx0 >= BAND_CELLS || cy0 >= BAND_CELLS {
             return true;
         }
-        let sz_cells = (js_round(size / U_PER_CELL) as u32).max(1);
+        let sz_cells = (round_half_up(size / U_PER_CELL) as u32).max(1);
         let cx1 = (cx0 + sz_cells).min(BAND_CELLS);
         let cy1 = (cy0 + sz_cells).min(BAND_CELLS);
         let is_air = kind == Kind::Air;

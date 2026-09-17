@@ -18,10 +18,7 @@
 //! Distance restores monotonicity: widening the view can only append farther
 //! candidates, so the ones already on screen keep their slots and what falls
 //! off the end is the farthest — which is also the smallest and the least
-//! legible. The ranking used to be the hash alone, and the cap was a cliff: one
-//! candidate over, the whole set was ranked by a value unrelated to where
-//! anything is and cut, deleting a badge in the middle of the screen while
-//! keeping one at the edge.
+//! legible.
 
 use xpute_core::ds::grid_index::{GridIndex, DEFAULT_CELL_PX, NO_ROOM, PLACED};
 use xpute_core::kit::mat4::{mat4_transform_point, Vec3};

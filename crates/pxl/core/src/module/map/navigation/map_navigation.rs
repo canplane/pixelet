@@ -17,16 +17,27 @@ pub struct MapNavigation {
 
 static OFF_CENTER: Global<bool> = Global::new();
 
-/// Device location projected into canonical PVF3 world space, and whether
-/// the map centre has wandered off it.
-pub fn map_navigation() -> MapNavigation {
-    let device_coord = device_location_store().location.map(|location| {
+/// The device's location in canonical world space.
+fn device_coord() -> Option<PVF3> {
+    device_location_store().location.map(|location| {
         let mut out = PVF3::default();
         epsg4326::project(&mut out, &location.coords);
         out
-    });
-    let map_center = map_store().map_center;
+    })
+}
 
+/// Device location projected into canonical PVF3 world space, and whether
+/// the map centre has wandered off it as of this turn.
+pub fn map_navigation() -> MapNavigation {
+    MapNavigation {
+        device_coord: device_coord(),
+        is_off_center: *OFF_CENTER.get(|| false),
+    }
+}
+
+/// Whether the map centre is off the device, decided once a turn.
+pub fn map_navigation_step() {
+    let off = OFF_CENTER.get(|| false);
     // Off-center hysteresis over horizontal (X/Y only) distance, not full 3D.
     // device_coord's Z is raw GPS altitude while map_center's Z is baked
     // terrain elevation from a different source (see ground_or_raw) — a real
@@ -34,8 +45,7 @@ pub fn map_navigation() -> MapNavigation {
     // distance above threshold indefinitely, even sitting exactly on the
     // recentered X/Y spot. Navigation here is inherently horizontal (a top-down
     // map), so only X/Y should decide "did the user wander away".
-    let off = OFF_CENTER.get(|| false);
-    match (map_center, device_coord) {
+    match (map_store().map_center, device_coord()) {
         (Some(center), Some(device)) => {
             // X occupies one complete signed lane/world period, so PVF3
             // subtraction gives the short delta across the antimeridian instead
@@ -54,6 +64,4 @@ pub fn map_navigation() -> MapNavigation {
         }
         _ => *off = false,
     }
-
-    MapNavigation { device_coord, is_off_center: *off }
 }

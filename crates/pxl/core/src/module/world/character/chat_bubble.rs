@@ -13,6 +13,7 @@ use crate::module::world::billboard::atlas::{DrawSpec, NO_SLOT};
 use crate::module::world::billboard::canvas_scale::{FONT_FAMILY, FONT_WEIGHT_BOLD};
 use crate::module::world::billboard::canvas_text::wrap_text;
 use crate::module::world::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
+use crate::render::gpu::surface::DPR_MAX;
 use crate::sys::global::Global;
 use crate::sys::host::{measure_text, wall_now};
 
@@ -32,10 +33,6 @@ const TAIL_H: f64 = 10.0;
 // A long message wraps onto more lines instead of growing the bubble
 // arbitrarily wide.
 const MAX_TEXT_WIDTH_PX: f64 = 220.0;
-
-/// Real pixels per logical unit, equal to the renderer's device pixel ratio
-/// clamp — see poi_badge.rs's RENDER_SCALE.
-const RENDER_SCALE: f64 = 2.0;
 
 // Air gap between the character model's own top and the bubble's tail tip: a
 // fixed clearance added on top of wherever the model's bounding box actually
@@ -108,8 +105,8 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
         if let Some((_, text)) = want {
             let layout = layout_bubble(&text);
             let slot = billboard_sheet().add(
-                layout.box_w * RENDER_SCALE,
-                layout.logical_h * RENDER_SCALE,
+                layout.box_w * DPR_MAX,
+                layout.logical_h * DPR_MAX,
                 DrawSpec::Bubble {
                     lines: layout.lines.clone(),
                     box_w: layout.box_w,

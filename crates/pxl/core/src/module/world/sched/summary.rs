@@ -2,11 +2,8 @@
 
 //! The ledger window, reduced once.
 //!
-//! The overlay and the report (log.rs) each used to reduce the rings
-//! themselves, and they drifted: the report named failure reasons the panel
-//! did not, and both counted missed frames against a 60 Hz constant the
-//! display did not have. Both now format what this returns, so a number on
-//! the panel and the same number in a pasted report agree.
+//! The overlay and the report (log.rs) both format what this returns, so a
+//! number on the panel and the same number in a pasted report agree.
 
 use super::demand::Category;
 use super::ledger::{DrawCensus, Failure, FrameSample, Outcome, TaskRecord, CENSUS_TAGS};

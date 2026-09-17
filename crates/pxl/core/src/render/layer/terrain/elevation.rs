@@ -19,14 +19,11 @@
 use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN};
 use pxl_shared::bake::format::Ground;
 use pxl_shared::spec::cell::cube_types;
+use xpute_core::kit::math::lerp;
 
-use crate::render::layer::terrain::adapter::js_round;
+use xpute_core::kit::math::round_half_up;
 
 const ELE_CELL_STEP: f64 = PAGE_CELL_SPAN as f64 / PAGE_ELE_SPAN as f64;
-
-fn lerp(a: f64, b: f64, t: f64) -> f64 {
-    a + (b - a) * t
-}
 
 /// Bilinear elevation sample from the padded elevation tile raster.
 ///
@@ -51,7 +48,7 @@ pub fn sample_ele_bilinear(page_ele: &[i16], tx: u32, ty: u32) -> i16 {
     let at = |x: f64, y: f64| page_ele[y as usize * span + x as usize] as f64;
     let ab = lerp(at(sx0, sy0), at(sx1, sy0), sdx);
     let cd = lerp(at(sx0, sy1), at(sx1, sy1), sdx);
-    js_round(lerp(ab, cd, sdy)) as i16
+    round_half_up(lerp(ab, cd, sdy)) as i16
 }
 
 /// Bicubic elevation sampling from the padded source raster.
@@ -88,7 +85,7 @@ fn sample_ele_bicubic(page_ele: &[i16], tx: u32, ty: u32) -> i16 {
             let idx = y * span + sx0;
             e(idx - 1) * wx[0] + e(idx) * wx[1] + e(idx + 1) * wx[2] + e(idx + 2) * wx[3]
         };
-        return js_round(row(sy0 - 1) * wy[0] + row(sy0) * wy[1] + row(sy0 + 1) * wy[2] + row(sy0 + 2) * wy[3]) as i16;
+        return round_half_up(row(sy0 - 1) * wy[0] + row(sy0) * wy[1] + row(sy0 + 1) * wy[2] + row(sy0 + 2) * wy[3]) as i16;
     }
 
     // slow boundary path with clamped coordinates.
@@ -102,7 +99,7 @@ fn sample_ele_bicubic(page_ele: &[i16], tx: u32, ty: u32) -> i16 {
         }
         out += row_out * wyj;
     }
-    js_round(out) as i16
+    round_half_up(out) as i16
 }
 
 /// `sample_ele`: the bicubic sample.

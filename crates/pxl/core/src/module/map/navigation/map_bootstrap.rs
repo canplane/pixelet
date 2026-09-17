@@ -33,7 +33,7 @@ fn is_at(a: &PVF3, b: &PVF3) -> bool {
 }
 
 struct Bootstrap {
-    /// The effect's dependencies as they were last run.
+    /// The inputs as last seen.
     last: Option<(Option<PVF3>, DevicePoseStatus)>,
     /// A seed set and not yet grounded: retried each turn until the ground
     /// under it has arrived.

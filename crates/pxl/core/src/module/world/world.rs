@@ -14,8 +14,7 @@
 //! Two kinds of turn. The tick's steps (sched/tick.rs) run inside the frame, by
 //! phase and under one budget; `world_boot` registers them once. The effects —
 //! the fetchers, the stores' followers, the markers — run once per turn before
-//! the tick (`world_turn`), each comparing what it last saw, the way their
-//! React effects compared their dependencies.
+//! the tick (`world_turn`), each comparing what it last saw.
 
 use pxl_shared::spec::space::indexer::{L1_IDX_IN_L4, L3_IDX};
 use pxl_shared::spec::space::pvf3::projection;
@@ -31,7 +30,7 @@ use crate::module::device::pose::geolocation::geolocation_step;
 use crate::module::map::environment::map_environment_step;
 use crate::module::map::navigation::follow_mode::follow_mode_step;
 use crate::module::map::navigation::map_bootstrap::map_bootstrap_step;
-use crate::module::map::navigation::map_navigation::map_navigation;
+use crate::module::map::navigation::map_navigation::{map_navigation, map_navigation_step};
 use crate::module::map::store::map_store;
 use crate::module::map::ui::overlay::reverse_geocode::reverse_geocode_step;
 use crate::module::map::ui::toast::toast_controller::toast_controller_step;
@@ -122,6 +121,7 @@ pub fn world_boot() {
 /// The effects' turn, before the tick.
 pub fn world_turn(platform: Platform) {
     world_boot();
+    map_navigation_step();
     map_bootstrap_step();
     crate::app::shell::shell_step();
     geolocation_step(platform.geolocation);

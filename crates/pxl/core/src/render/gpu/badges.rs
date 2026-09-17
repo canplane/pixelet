@@ -20,6 +20,7 @@
 //! a badge was drawn cost 64 MB at 4096 px once for every frame a badge was
 //! drawn in, and a phone paid it as a hundred-millisecond task each time.
 
+use crate::render::gpu::surface::DPR_MAX;
 use core::f32::consts::TAU;
 
 use super::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, GpuApi, NONE};
@@ -36,8 +37,6 @@ use crate::render::draw::{DRAW_WORDS, PIPELINE_BADGE, UNIFORM_FLOATS};
 const BADGE_FLOATS: usize = 44;
 /// Sets drawn in one frame at most.
 const SETS: usize = 32;
-/// Supersampling: the renderer's device pixel ratio, clamped to 2.
-const RENDER_SCALE: f32 = 2.0;
 
 macro_rules! font_family {
     () => {
@@ -275,7 +274,7 @@ impl BadgePass {
             p.save();
             p.translate(PAD as f32, PAD as f32);
             p.smoothing(false);
-            p.scale(RENDER_SCALE, RENDER_SCALE);
+            p.scale(DPR_MAX as f32, DPR_MAX as f32);
             match spec {
                 DrawSpec::PoiBadge { icon, color, name, logical_w } => place(&mut p, icon, color, name, *logical_w as f32),
                 DrawSpec::Cluster { label, logical_w } => cluster(&mut p, label, *logical_w as f32),

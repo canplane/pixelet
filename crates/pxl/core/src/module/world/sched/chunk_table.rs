@@ -12,13 +12,12 @@
 //! order, and a build that is refused for want of memory waits for the heap
 //! to release something before it is tried again.
 //!
-//! The glue says which chunks exist and what they are made of, writes the
-//! frame — the camera, the anchor root's matrix, the frustum — where the
-//! core reads it, and calls the tick. What comes back is events: a chunk's
-//! group shown or hidden, the layout it should show (its tiers), how the two
-//! tiers of a blend are weighted, a tier's mesh handed over and a tier to
-//! let go. The glue holds the meshes and the scene; the core holds every
-//! decision about them.
+//! The chunk nodes (chunk_node.rs) say what each chunk is made of; the chunk
+//! stage (chunk_stage.rs) composes the frame — the camera, the anchor root's
+//! matrix, the frustum — and calls the tick. What comes back is events: a
+//! chunk shown or hidden, the layout it should show (its tiers), how the two
+//! tiers of a blend are weighted, a tier's mesh handed over and a tier to let
+//! go. The nodes hold the meshes; this holds every decision about them.
 
 use std::collections::BTreeMap;
 
@@ -49,9 +48,8 @@ const RECHECK_INTERVAL_S: f64 = 0.15;
 /// Layouts applied per frame on screen, and releases off it — more of the
 /// latter after a frame that had a block refused: a release is cheap, and
 /// what an off-screen chunk still shows is what the refused block needs
-/// room among. A zoom-in leaves a thousand chunks showing their last
-/// layout off screen; at two a frame that is eight seconds of the fine
-/// tiers finding no room (2026-09-14).
+/// room among: a zoom-in leaves many chunks showing their last layout off
+/// screen, and the fine tiers find no room until they are released.
 const MAX_COMMITS_PER_FRAME: u32 = 8;
 const MAX_RELEASES_PER_FRAME: u32 = 2;
 const MAX_RELEASES_WHEN_REFUSED: u32 = 64;
@@ -61,7 +59,7 @@ const MAX_RELEASES_WHEN_REFUSED: u32 = 64;
 const MAX_RECLAIMS_PER_FRAME: u32 = 16;
 const MAX_RECLAIMS_WHEN_REFUSED: u32 = 64;
 /// Chunks mounted in one frame: a page comes into range as 256, and the
-/// glue makes a node for each, which is a frame's worth of work.
+/// chunk nodes make a node for each, which is a frame's worth of work.
 const MAX_MOUNTS_PER_FRAME: u32 = 64;
 /// The mesh section's live share past which off-screen chunks are reclaimed
 /// whatever the retain budget says.
@@ -77,9 +75,7 @@ const AGE_HALF_MS: f64 = 4000.0;
 /// most this often, so the coarser layouts have time to land and free
 /// what they replace before the next is taken, and up to three tiers. A
 /// step is let out again after this long with no refusal and the section
-/// off its pressure mark. Seen on the desktop, 2026-09-14: a zoom through
-/// a city left 1,091 chunks pending on tiers the section could not hold,
-/// nothing off screen to reclaim, for the rest of the session.
+/// off its pressure mark.
 const MAX_PRESSURE: u32 = 6;
 const PRESSURE_STEP_MS: f64 = 500.0;
 const PRESSURE_RELIEF_MS: f64 = 5000.0;
@@ -97,7 +93,7 @@ fn build_request(primary: u32, secondary: u32) -> i32 {
     ((primary << 8) | secondary) as i32
 }
 
-/// What the glue writes before a tick.
+/// What the chunk stage composes before a tick.
 #[derive(Clone, Copy, Default)]
 pub struct Frame {
     /// The anchor root's world matrix, column-major.
@@ -140,7 +136,7 @@ impl Frame {
     }
 }
 
-/// What the glue is told.
+/// What the chunk nodes are told.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Event {
     Build(BuildEvent),
@@ -175,14 +171,14 @@ pub enum Event {
         secondary: f32,
         decor_secondary: bool,
     },
-    /// Let go of a tier the glue holds, and the decor at its step; the
+    /// Let go of a tier the chunk nodes hold, and the decor at its step; the
     /// layout keeps what it shows.
     Evict {
         id: u32,
         step: u32,
     },
     /// The chunk's decor at a tier, as decor_layer.rs's block of `bytes` at `at`,
-    /// the glue's to release; every tier of a layout has its decor handed
+    /// the chunk nodes' to release; every tier of a layout has its decor handed
     /// over before the layout.
     Decor {
         id: u32,
@@ -213,7 +209,7 @@ struct Tier {
     index_cnt: u32,
 }
 
-/// A decor block the glue holds: its step and bytes, and the renderer's
+/// A decor block the chunk nodes hold: its step and bytes, and the renderer's
 /// handle. Each group's lanes are where the block's own header says.
 #[derive(Clone, Copy, Default)]
 pub struct Decor {
@@ -250,9 +246,9 @@ struct Slot {
     pending_since: f64,
     request: i32,
     runs_bytes: u32,
-    /// The tiers the glue holds, oldest built first.
+    /// The tiers the chunk nodes hold, oldest built first.
     tiers: Vec<Tier>,
-    /// The decor blocks the glue holds.
+    /// The decor blocks the chunk nodes hold.
     decor: Vec<Decor>,
     layout_primary: u32,
     layout_secondary: u32,
@@ -318,7 +314,7 @@ pub struct Scheduler {
     pub markers: Markers,
     /// The billboards (billboard/field.rs).
     pub billboards: Billboards,
-    /// The model each decor group is drawn with, by group, once the glue
+    /// The model each decor group is drawn with, by group, once the decor assets
     /// registered it: what a hit test reads the triangles of.
     pub decor_models: Vec<Option<u32>>,
     /// The sun, the moon, the light and the sky (module/map/environment.rs).
@@ -335,8 +331,7 @@ pub struct Scheduler {
     /// Something changed that a recheck has not seen: the view moved, a
     /// chunk came or went, a source was told. The canvas is asked for
     /// frames until a full recheck has run over it, or the world stops at
-    /// whatever the last frame left — nothing else asks for a frame now
-    /// that chunks are not React children.
+    /// whatever the last frame left — nothing else asks for a frame.
     view_dirty: bool,
     retained_on: f64,
     retained_off: f64,
@@ -351,7 +346,7 @@ pub struct Scheduler {
     gone: Vec<((IVec, u32, u32), u32)>,
     next_mount_id: u32,
     mounted_for: Option<([f64; 2], f64, f64, u32)>,
-    /// The decor kinds, in the order the glue taught them — the order of
+    /// The decor kinds, in the order decor_layer.rs taught them — the order of
     /// the groups in every decor block.
     decor_kinds: Vec<DecorKind>,
     decor_sample: ChunkSample,
@@ -467,7 +462,7 @@ impl Scheduler {
         (self.decor_kinds.len() - 1) as u32
     }
 
-    /// Forgets every kind taught, for a glue that teaches them again.
+    /// Forgets every kind taught, so they can be taught again.
     pub fn decor_forget(&mut self) {
         self.decor_kinds.clear();
     }
@@ -571,7 +566,7 @@ impl Scheduler {
         }
     }
 
-    /// The chunk's sources changed. The tiers and decor the glue holds are
+    /// The chunk's sources changed. The tiers and decor the chunk nodes hold are
     /// stale and it lets them go itself; what is on screen stays until the
     /// rebuild lands.
     pub fn source(&mut self, world: &mut World, id: u32, page: Option<PageLanes>, show_structures: bool, emit: &mut impl FnMut(Event)) {
@@ -621,7 +616,7 @@ impl Scheduler {
     }
 
     /// Only the chunk's decor changed (an entry placed or hidden, the
-    /// setting): the decor the glue holds is stale and it let it go; the
+    /// setting): the decor the chunk nodes hold is stale and they let it go; the
     /// layout's decor is rebuilt now and the layout told again, the tiers
     /// untouched. Unless a block was refused, when it lands on a later tick.
     pub fn decor_now(&mut self, world: &mut World, id: u32, show_decor: bool, emit: &mut impl FnMut(Event)) {
@@ -647,7 +642,7 @@ impl Scheduler {
         }
     }
 
-    /// Whether the glue holds the decor of every tier in `steps`, building
+    /// Whether the chunk nodes hold the decor of every tier in `steps`, building
     /// and handing over what it lacks: false when the heap refused a block.
     /// A chunk with no page has no decor to build.
     fn ensure_decor(&mut self, world: &mut World, i: usize, steps: [u32; 2], emit: &mut impl FnMut(Event)) -> bool {
@@ -701,7 +696,7 @@ impl Scheduler {
                 self.slots[i].refused = Some(crate::sys::host::heap_releases());
                 return false;
             };
-            // SAFETY: a block of the bytes the build asked for, the glue's
+            // SAFETY: a block of the bytes the build asked for, the chunk node's
             // once handed over.
             unsafe { built.write(world.volumes.mem().add(at)) };
             let before = self.slots[i].retained();
@@ -1178,7 +1173,7 @@ impl Scheduler {
         self.decide(i, p as f32, q as f32, emit);
     }
 
-    /// Whether the glue holds every tier of (primary, secondary), asking the
+    /// Whether the chunk nodes hold every tier of (primary, secondary), asking the
     /// builder for the ones it lacks when not.
     fn ask(&mut self, world: &mut World, i: usize, primary: u32, secondary: u32) -> bool {
         let s = &self.slots[i];
@@ -1414,7 +1409,7 @@ fn mesh_pressed(_world: &World) -> bool {
     crate::sys::host::heap_live() as f64 > crate::sys::host::heap_bytes() as f64 * MESH_PRESSURE
 }
 
-/// Ids the module gives the chunks it mounts, apart from any the glue adds.
+/// Ids the scheduler gives the chunks it mounts.
 const MOUNT_ID_BASE: u32 = 1 << 31;
 /// Whether two frames look at the world the same way: what a recheck's
 /// answer depends on, not the budget or the elapsed time.

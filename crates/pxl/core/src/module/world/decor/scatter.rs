@@ -10,8 +10,7 @@
 //! it walks a chunk's cells into the decor block's lanes, drawing from a
 //! stream seeded by the page, the kind and the cell. Which cells it may use
 //! and what it does with the draws is declared here, so a kind is one
-//! description rather than a rule in the glue and a second one in the
-//! kernel. Nothing here reaches for a tile store — plain ground-channel
+//! description rather than two rules kept in step. Nothing here reaches for a tile store — plain ground-channel
 //! arrays and numbers, so it can be read head-on.
 
 use pxl_shared::bake::constant::PAGE_CELL_SPAN;

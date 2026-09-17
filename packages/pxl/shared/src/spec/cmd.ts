@@ -253,7 +253,7 @@ export const enum Cmd {
 
   // ---- the scene: what is drawn beside the chunks ----
   //
-  // A lane of floats crosses in the packet, not by address: the glue's
+  // A lane of floats crosses in the packet, not by address: the shell's
   // scratch is given back as soon as the command is sent, and the command
   // is applied later.
 
@@ -298,11 +298,11 @@ export const enum Cmd {
   /** [lat f64, lon f64, unix_ms f64] — the observer and the wall clock */
   ENV_OBSERVE = 0x1110,
 
-  // ---- models: a mesh block the glue writes, and its skeleton and clips ----
+  // ---- models: a mesh block the shell writes, and its skeleton and clips ----
 
   /** tag call · [vertex_cnt u32, index_cnt u32, joint_cnt u32] → result: the
    * model's id, or -1 when the mesh pool refused; with an id, [block_at u32]
-   * — where the glue writes the vertices and indices, in the module's
+   * — where the shell writes the vertices and indices, in the module's
    * memory */
   MODEL_CREATE = 0x1201,
   /** tag call · [model u32] → result: the renderer's handle for its mesh
