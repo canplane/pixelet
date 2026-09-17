@@ -15,6 +15,12 @@
 //! A task yields against the turn (sched/edge.rs), and the guest polls the
 //! executor inside its turn; `pending` is how a turn that polled nothing
 //! learns it still owes the tasks it woke a turn.
+//!
+//! **A task carries its priority from the start, and an executor may ignore
+//! it.** One that orders its queue by it can be installed later without a
+//! spawn changing, the way a layout carries its alignment to whichever
+//! allocator. Until one does, nothing may rest on the order tasks are polled
+//! in: work that has an order within a turn runs in one task, in that order.
 
 use core::future::Future;
 use core::pin::Pin;
@@ -24,9 +30,12 @@ use crate::sys::global::Global;
 /// A task: a future kept for the program's life.
 pub type Task = Pin<&'static mut (dyn Future<Output = ()> + 'static)>;
 
+/// How soon a task wants polling among those queued: lower sooner.
+pub type Priority = u8;
+
 pub trait Executor {
-    /// Takes `task` to poll; false when it has no room for it.
-    fn spawn(&self, task: Task) -> bool;
+    /// Takes `task` to poll at `priority`; false when it has no room for it.
+    fn spawn(&self, task: Task, priority: Priority) -> bool;
     /// Polls every task queued since the last poll. Never from inside a task.
     fn poll(&self);
     /// Whether a task was queued since the last poll began.
@@ -44,12 +53,12 @@ pub fn set_executor(executor: &'static dyn Executor) {
     EXECUTOR.set(Some(executor));
 }
 
-/// Spawns `future` for the program's life. False when no executor is
-/// installed or it has no room.
-pub fn spawn(future: impl Future<Output = ()> + 'static) -> bool {
+/// Spawns `future` at `priority` for the program's life. False when no
+/// executor is installed or it has no room.
+pub fn spawn(future: impl Future<Output = ()> + 'static, priority: Priority) -> bool {
     let Some(e) = executor() else { return false };
     let task: &'static mut (dyn Future<Output = ()> + 'static) = Box::leak(Box::new(future));
-    e.spawn(Pin::static_mut(task))
+    e.spawn(Pin::static_mut(task), priority)
 }
 
 /// Polls the installed executor, if there is one.

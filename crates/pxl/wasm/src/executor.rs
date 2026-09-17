@@ -19,7 +19,7 @@
 use embassy_executor::raw::Executor as Raw;
 use pxl_core::module::world::change::TASKS;
 use pxl_core::sys::global::Global;
-use xpute_core::sched::task::{set_executor, Executor, Task};
+use xpute_core::sched::task::{set_executor, Executor, Priority, Task};
 
 struct OneThread;
 
@@ -54,7 +54,9 @@ async fn run(task: Task) {
 struct Embassy;
 
 impl Executor for Embassy {
-    fn spawn(&self, task: Task) -> bool {
+    /// The priority is not kept: embassy's own queue has no order the kernel
+    /// relies on, and its priority scheduler is a feature this build leaves off.
+    fn spawn(&self, task: Task, _: Priority) -> bool {
         match run(task) {
             Ok(token) => {
                 raw().spawner().spawn(token);
@@ -66,8 +68,8 @@ impl Executor for Embassy {
 
     fn poll(&self) {
         PENDED.set(false);
-        // SAFETY: called from the kernel's frame alone, which no turn
-        // re-enters, and never from the pender.
+        // SAFETY: called from the doorbell alone, which no turn re-enters,
+        // and never from the pender.
         unsafe { raw().poll() };
     }
 

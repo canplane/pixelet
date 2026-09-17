@@ -10,13 +10,15 @@
 //! (render/gpu/model_asset.rs), so the kernel holds its triangles for the
 //! eraser's hit test (crates/pxl/core/src/render/layer/pipeline/chunk_raycast.rs) and the renderer
 //! draws its instances from the same lanes; the group it is drawn as is its
-//! variant's place across every kind, in registry order.
+//! variant's place across every kind, in registry order. The registering is
+//! `decor_asset_task`'s, a variant at a time on a turn's quota.
 
 use xpute_core::kit::hash::fnv1a64_str;
+use xpute_core::sched::edge::{notified, yield_if_spent, Notify};
 
 use super::decor_layer::DecorKindBundle;
 use super::decor_registry::DECOR_BUNDLES;
-use crate::module::world::change::{bump_world, DECOR_ASSET};
+use crate::module::world::change::{bump_world, world_edge, DECOR_ASSET};
 use crate::module::world::gltf_cache::{load_failed, load_gltf, load_image};
 use crate::render::gpu::model_asset::register_model;
 use crate::sys::global::Global;
@@ -93,45 +95,61 @@ fn store() -> &'static mut Store {
     })
 }
 
-/// The store's turn: asks for every variant's model and skin, and registers
-/// whatever arrived since the last turn.
 /// A model or a skin arrived or failed.
 pub fn decor_assets_arrived() {
     store().arrived = true;
 }
 
-pub fn decor_asset_step() {
-    let s = store();
-    if !s.arrived {
-        return;
+static WANTED: Global<Notify> = Global::new();
+
+fn wanted() -> &'static mut Notify {
+    WANTED.get(Notify::new)
+}
+
+/// The frame's check: something arrived since the task last ran, so the task
+/// is asked to run.
+pub fn decor_assets_wanted() {
+    if store().arrived {
+        wanted().notify();
     }
-    // A model the mesh pool had no room for, this turn: the flag stays set and
-    // the next turn — which may have room — asks again.
-    let mut refused = false;
-    for b in 0..s.entries.len() {
-        let bundle = s.entries[b].bundle;
-        for (v, variant) in bundle.variants.iter().enumerate() {
-            if s.entries[b].models[v].is_none() && !load_failed(&variant.model_url) {
-                if let Some(gltf) = load_gltf(&variant.model_url) {
-                    match register_model(&gltf, None) {
-                        Some(handle) => {
-                            settle(&mut s.entries, &variant.model_url, handle.model, false);
-                            publish(s, &variant.model_url);
+}
+
+/// The store's task: asks for every variant's model and skin, and registers
+/// whatever arrived, a variant at a time on a turn's quota.
+pub async fn decor_asset_task() {
+    loop {
+        notified(wanted).await;
+        store().arrived = false;
+        // A model the mesh pool had no room for: the flag is set again, and
+        // the frame after — which may have room — asks again.
+        let mut refused = false;
+        for b in 0..store().entries.len() {
+            let bundle = store().entries[b].bundle;
+            for (v, variant) in bundle.variants.iter().enumerate() {
+                yield_if_spent(world_edge).await;
+                let s = store();
+                if s.entries[b].models[v].is_none() && !load_failed(&variant.model_url) {
+                    if let Some(gltf) = load_gltf(&variant.model_url) {
+                        match register_model(&gltf, None) {
+                            Some(handle) => {
+                                settle(&mut s.entries, &variant.model_url, handle.model, false);
+                                publish(s, &variant.model_url);
+                            }
+                            None => refused = true,
                         }
-                        None => refused = true,
+                    }
+                }
+                if s.entries[b].skins[v].is_none() && !load_failed(&variant.skin_url) {
+                    if let Some(image) = load_image(&variant.skin_url) {
+                        settle(&mut s.entries, &variant.skin_url, image, true);
+                        publish(s, &variant.skin_url);
                     }
                 }
             }
-            if s.entries[b].skins[v].is_none() && !load_failed(&variant.skin_url) {
-                if let Some(image) = load_image(&variant.skin_url) {
-                    settle(&mut s.entries, &variant.skin_url, image, true);
-                    publish(s, &variant.skin_url);
-                }
-            }
         }
-    }
-    if !refused {
-        s.arrived = false;
+        if refused {
+            store().arrived = true;
+        }
     }
 }
 

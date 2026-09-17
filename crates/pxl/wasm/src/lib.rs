@@ -255,16 +255,23 @@ fn lay_out() -> mem::Map {
 }
 
 /// The doorbell: the rising edge of a turn, with the time it may take. The
-/// kernel applies the submissions waiting — a frame among them runs its tick
-/// on what is left of `quota_ms` and then polls the tasks — and the return is
+/// kernel applies the submissions waiting, then polls its tasks on the quota
+/// — the frame among them, when the host asked for one — and the return is
 /// the falling edge: when the kernel wants the next turn, in ms from now, 0
 /// for the next frame and xpute_core::sched::quantum's NO_WAKE for none. A
-/// turn rung with no quota only applies what waits.
+/// turn rung with no quota and no frame only applies what waits.
 #[no_mangle]
 pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
+    use pxl_core::module::world::world::{take_world_drawn, world_frame_waiting};
     let s = state();
     pxl_core::module::world::change::world_edge().rise(quota_ms);
     drain(s);
+    if quota_ms > 0.0 || world_frame_waiting() {
+        xpute_core::sched::task::poll();
+    }
+    if take_world_drawn() {
+        post_turn(s);
+    }
     pxl_core::module::world::change::world_fall()
 }
 
@@ -534,9 +541,7 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
                 interactive: bool_at(&f, 8)?,
                 credits: u32_at(&f, 9)?,
             };
-            let edge = pxl_core::module::world::change::world_edge();
-            pxl_core::module::world::world::world_frame(host, edge.quota_ms(), edge.edge_at());
-            post_turn(s);
+            pxl_core::module::world::world::world_frame_asked(host);
             Ok(Some(0))
         }
         Cmd::WORLD_CREATE => {
