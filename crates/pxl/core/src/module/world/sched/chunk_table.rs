@@ -41,7 +41,7 @@ use crate::module::world::marker::location_puck::Markers;
 use crate::render::chunk_range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT, PAGE_SPAN};
 use crate::render::draw::{DrawList, PIPELINE_CHUNK};
 use crate::render::layer::terrain::adapter::ChunkSample;
-use crate::render::lod::{Ladder, COARSEST, LOD_STEP_BY_LEVEL};
+use crate::render::lod::{Ladder, COARSEST};
 use crate::sys::global::Global;
 
 /// The sphere a chunk nothing has measured is culled by.
@@ -159,12 +159,13 @@ pub enum Event {
         id: u32,
         on: bool,
     },
-    /// The layout to show: its tiers, all of them already handed over.
-    /// `ready` false is the release: nothing shown.
+    /// The layout to show: its tiers, all of them already handed over, of
+    /// `generation`. `ready` false is the release: nothing shown.
     Layout {
         id: u32,
         primary: u32,
         secondary: u32,
+        generation: u32,
         ready: bool,
     },
     /// How the layout's two tiers are weighted, and which one decor takes.
@@ -174,18 +175,20 @@ pub enum Event {
         secondary: f32,
         decor_secondary: bool,
     },
-    /// Let go of a tier the chunk nodes hold, and the decor at its step; the
-    /// layout keeps what it shows.
+    /// Let go of a tier the chunk nodes hold, and the decor at its step, of
+    /// `generation`; the layout keeps what it shows.
     Evict {
         id: u32,
         step: u32,
+        generation: u32,
     },
-    /// The chunk's decor at a tier, as decor_layer.rs's block of `bytes` at `at`,
-    /// the chunk nodes' to release; every tier of a layout has its decor handed
-    /// over before the layout.
+    /// The chunk's decor at a tier of `generation`, as decor_layer.rs's block of
+    /// `bytes` at `at`, the chunk nodes' to release; every tier of a layout has
+    /// its decor handed over before the layout.
     Decor {
         id: u32,
         step: u32,
+        generation: u32,
         at: u32,
         bytes: u32,
     },
@@ -203,6 +206,8 @@ struct Bounds {
 #[derive(Clone, Copy, Default)]
 struct Tier {
     step: u32,
+    /// The telling of the chunk's sources it was built from (the builder's).
+    generation: u32,
     bytes: u32,
     bounds: Option<Bounds>,
     /// The renderer's name for the block, and the counts its lanes are
@@ -217,6 +222,7 @@ struct Tier {
 #[derive(Clone, Copy, Default)]
 pub struct Decor {
     step: u32,
+    generation: u32,
     /// Where the block is in the memory, and its size.
     pub at: u32,
     pub bytes: u32,
@@ -249,12 +255,16 @@ struct Slot {
     pending_since: f64,
     request: i32,
     runs_bytes: u32,
-    /// The tiers the chunk nodes hold, oldest built first.
+    /// The tiers the chunk nodes hold, oldest built first. A source changed
+    /// leaves them where they are: a step's tier of the new generation joins
+    /// the old one's, and the old go when a layout of the new is applied.
     tiers: Vec<Tier>,
-    /// The decor blocks the chunk nodes hold.
+    /// The decor blocks the chunk nodes hold, by step and generation alike.
     decor: Vec<Decor>,
     layout_primary: u32,
     layout_secondary: u32,
+    /// The generation the layout's tiers and decor are drawn from.
+    layout_generation: u32,
     layout_ready: bool,
     desired: (u32, u32),
     /// The last blend told, so an unchanged one is not resent.
@@ -281,8 +291,12 @@ impl Slot {
         self.runs_bytes as f64 + self.tiers.iter().map(|t| t.bytes as f64).sum::<f64>() + self.decor.iter().map(|d| d.bytes as f64).sum::<f64>()
     }
 
-    fn tier(&self, step: u32) -> Option<&Tier> {
-        self.tiers.iter().find(|t| t.step == step)
+    fn tier(&self, step: u32, generation: u32) -> Option<&Tier> {
+        self.tiers.iter().find(|t| t.step == step && t.generation == generation)
+    }
+
+    fn decor_of(&self, step: u32, generation: u32) -> Option<&Decor> {
+        self.decor.iter().find(|d| d.step == step && d.generation == generation)
     }
 }
 
@@ -361,9 +375,11 @@ pub struct Scheduler {
     /// frame's release cap.
     refused_seen: u32,
     refused_last: bool,
-    /// The chunks the build task advances, in order: the visible pending, as
-    /// the last tick left them.
+    /// The chunks the build task advances, in order: the ones whose sources
+    /// changed first, then the visible pending, as the last tick left them.
     builds: Vec<u32>,
+    /// Chunks whose sources changed, pending until their new layout is up.
+    urgent: Vec<u32>,
     landed: Vec<u32>,
     /// Chunks the build task committed since the last census.
     build_committed: u32,
@@ -413,16 +429,6 @@ fn under_budget<T: Copy>(items: &[T], cap: u32, deadline: f64, hard: f64, now: &
     run_under_budget(items.iter().copied(), step, opts).ran
 }
 
-/// An evict for every step in `steps`, a set of the steps as bits — each
-/// is a power of two (LOD_STEP_BY_LEVEL) — finest first.
-fn emit_evicts(id: u32, steps: u32, emit: &mut impl FnMut(Event)) {
-    for &step in &LOD_STEP_BY_LEVEL {
-        if steps & step != 0 {
-            emit(Event::Evict { id, step });
-        }
-    }
-}
-
 impl Scheduler {
     pub fn new() -> Scheduler {
         Scheduler {
@@ -458,6 +464,7 @@ impl Scheduler {
             scratch: Scratch::default(),
             refused_last: false,
             builds: Vec::new(),
+            urgent: Vec::new(),
             landed: Vec::new(),
             build_committed: 0,
             pressure_at: f64::NEG_INFINITY,
@@ -529,6 +536,7 @@ impl Scheduler {
             decor: Vec::new(),
             layout_primary: COARSEST,
             layout_secondary: 0,
+            layout_generation: 0,
             layout_ready: false,
             desired: (COARSEST, 0),
             told: None,
@@ -576,29 +584,38 @@ impl Scheduler {
         }
     }
 
-    /// The chunk's sources changed. The tiers and decor the chunk nodes hold are
-    /// stale and it lets them go itself; what is on screen stays until the
-    /// rebuild lands.
+    /// The builder's generation for slot `i`: the telling of its sources a
+    /// tier must be built from to count.
+    fn generation(&self, i: usize) -> u32 {
+        self.builder.generation_of(self.slots[i].id).unwrap_or(0)
+    }
+
+    /// The chunk's sources changed. What it shows stays up: the tiers and the
+    /// decor it holds are an older generation now, drawn until a layout of
+    /// the new one is whole and then let go at once, so a change is never a
+    /// hole and never half of one. The chunk goes to the front of the builds.
     pub fn source(&mut self, world: &mut World, id: u32, page: Option<PageLanes>, show_structures: bool, emit: &mut impl FnMut(Event)) {
         let Some(&i) = self.index.get(&id) else { return };
         self.view_dirty = true;
         let before = self.slots[i].retained();
         self.builder.source(world, id, page, show_structures, &mut |e| emit(Event::Build(e)));
         let s = &mut self.slots[i];
-        for t in s.tiers.iter() {
-            self.draw.free(t.handle);
-        }
-        for d in s.decor.iter() {
-            self.draw.free(d.handle);
-        }
-        s.tiers.clear();
-        s.decor.clear();
         s.runs_bytes = 0;
         if !s.layout_ready {
             s.bc = [CHUNK_WORLD_SPAN * 0.5, CHUNK_WORLD_SPAN * 0.5, 0.0];
             s.radius = APPROXIMATE_CHUNK_RADIUS;
         }
         self.account(i, before);
+        if self.slots[i].layout_ready && self.slots[i].has(IN_FRUSTUM) {
+            let (p, q) = self.slots[i].desired;
+            self.set_pending(i, true, build_request(p, q), crate::sys::global::now());
+            // Asked now rather than at the tick's commit pass, which a spent
+            // budget may not reach this chunk in.
+            self.ask(world, i, p, q);
+            if !self.urgent.contains(&id) {
+                self.urgent.push(id);
+            }
+        }
     }
 
     /// The build task's step: the chunks the last tick ordered, holders of the
@@ -629,30 +646,6 @@ impl Scheduler {
         worked
     }
 
-    /// Rebuilds the layout the chunk shows, to the end, now: a placement
-    /// shows in the frame it was made. Unless a block was refused, when the
-    /// layout is marked not ready and lands on a later tick.
-    pub fn build_now(&mut self, world: &mut World, id: u32, now: &impl Fn() -> f64, emit: &mut impl FnMut(Event)) {
-        let Some(&i) = self.index.get(&id) else { return };
-        if !self.slots[i].layout_ready {
-            return;
-        }
-        let (p, s2) = (self.slots[i].layout_primary, self.slots[i].layout_secondary);
-        if !self.ask(world, i, p, s2) {
-            let mem = world_mem(world);
-            let (slots, index, ron, roff, draw) = (&mut self.slots, &self.index, &mut self.retained_on, &mut self.retained_off, &mut self.draw);
-            self.builder.tick(world, &[id], f64::INFINITY, now, &mut |e| self_record(slots, index, mem, ron, roff, draw, e, emit));
-        }
-        if self.ask(world, i, p, s2) && self.ensure_decor(world, i, [p, s2], emit) {
-            self.trim(i, [p, s2], emit);
-            self.apply_layout(i, p, s2, true, emit);
-        } else {
-            let s = &mut self.slots[i];
-            s.layout_ready = false;
-            s.set(EMPTY, true);
-        }
-    }
-
     /// Only the chunk's decor changed (an entry placed or hidden, the
     /// setting): the decor the chunk nodes hold is stale and they let it go; the
     /// layout's decor is rebuilt now and the layout told again, the tiers
@@ -670,9 +663,9 @@ impl Scheduler {
         if !self.slots[i].layout_ready {
             return;
         }
-        let (p, s2) = (self.slots[i].layout_primary, self.slots[i].layout_secondary);
-        if self.ensure_decor(world, i, [p, s2], emit) {
-            self.apply_layout(i, p, s2, true, emit);
+        let (p, s2, g) = (self.slots[i].layout_primary, self.slots[i].layout_secondary, self.slots[i].layout_generation);
+        if self.ensure_decor(world, i, [p, s2], g, emit) {
+            self.apply_layout(i, p, s2, g, true, emit);
         } else {
             let s = &mut self.slots[i];
             s.layout_ready = false;
@@ -680,10 +673,10 @@ impl Scheduler {
         }
     }
 
-    /// Whether the chunk nodes hold the decor of every tier in `steps`, building
-    /// and handing over what it lacks: false when the heap refused a block.
-    /// A chunk with no page has no decor to build.
-    fn ensure_decor(&mut self, world: &mut World, i: usize, steps: [u32; 2], emit: &mut impl FnMut(Event)) -> bool {
+    /// Whether the chunk nodes hold the decor of every tier in `steps` of
+    /// `generation`, building and handing over what it lacks: false when the
+    /// heap refused a block. A chunk with no page has no decor to build.
+    fn ensure_decor(&mut self, world: &mut World, i: usize, steps: [u32; 2], generation: u32, emit: &mut impl FnMut(Event)) -> bool {
         let id = self.slots[i].id;
         let Some((base, col_idx, tx0, ty0, page, show_structures)) = self.builder.source_of(id) else {
             return true;
@@ -701,7 +694,7 @@ impl Scheduler {
             }
         }
         for step in steps {
-            if step == 0 || self.slots[i].decor.iter().any(|d| d.step == step) {
+            if step == 0 || self.slots[i].decor_of(step, generation).is_some() {
                 continue;
             }
             // SAFETY: the chunk's page, as its source named it, resident
@@ -739,9 +732,21 @@ impl Scheduler {
             unsafe { built.write(world.volumes.mem().add(at)) };
             let before = self.slots[i].retained();
             let handle = self.draw.upload(at as u32, bytes, 0, 0);
-            self.slots[i].decor.push(Decor { step, at: at as u32, bytes, handle });
+            self.slots[i].decor.push(Decor {
+                step,
+                generation,
+                at: at as u32,
+                bytes,
+                handle,
+            });
             self.account(i, before);
-            emit(Event::Decor { id, step, at: at as u32, bytes });
+            emit(Event::Decor {
+                id,
+                step,
+                generation,
+                at: at as u32,
+                bytes,
+            });
         }
         true
     }
@@ -764,7 +769,7 @@ impl Scheduler {
                 Some((_, _, true)) if s.layout_secondary != 0 => s.layout_secondary,
                 _ => s.layout_primary,
             };
-            s.decor.iter().find(|d| d.step == decor_step).map(|d| (s.id, s.base_x, s.base_y, d))
+            s.decor_of(decor_step, s.layout_generation).map(|d| (s.id, s.base_x, s.base_y, d))
         })
     }
 
@@ -960,9 +965,16 @@ impl Scheduler {
         committed += under_budget(offscreen, releases, deadline, hard, now, |i| self.commit(world, i, emit));
 
         // The builds are the build task's (`build_step`), on the turn's quota:
-        // what they take, visible pending first in order, is set here.
+        // what they take is set here — the chunks whose sources changed first,
+        // while still pending, then the visible pending in order.
+        let (slots, index) = (&self.slots, &self.index);
+        let pending = |id: &u32| index.get(id).is_some_and(|&i| slots[i].has(PENDING));
+        self.urgent.retain(pending);
         self.builds.clear();
-        self.builds.extend(visible.iter().filter(|&&i| self.slots[i].has(PENDING)).map(|&i| self.slots[i].id));
+        self.builds.extend(self.urgent.iter().copied());
+        let urgent = &self.urgent;
+        self.builds
+            .extend(visible.iter().filter(|&&i| slots[i].has(PENDING)).map(|&i| slots[i].id).filter(|id| !urgent.contains(id)));
         if !self.builds.is_empty() {
             builds().notify();
         }
@@ -1026,7 +1038,7 @@ impl Scheduler {
                 if step == 0 {
                     continue;
                 }
-                let Some(t) = s.tier(step) else { continue };
+                let Some(t) = s.tier(step, s.layout_generation) else { continue };
                 if t.vertex_cnt == 0 {
                     continue;
                 }
@@ -1038,7 +1050,7 @@ impl Scheduler {
                 Some((_, _, true)) if s.layout_secondary != 0 => s.layout_secondary,
                 _ => s.layout_primary,
             };
-            if let Some(d) = s.decor.iter().find(|d| d.step == decor_step) {
+            if let Some(d) = s.decor_of(decor_step, s.layout_generation) {
                 for (group, (offset, count)) in d.groups(mem).enumerate() {
                     if count > 0 {
                         self.draw.draw_decor(d.handle, group as u32, count, offset, translation);
@@ -1160,8 +1172,9 @@ impl Scheduler {
             None => (guide.step, 0),
         };
         self.slots[i].desired = (primary, secondary);
+        let current = self.generation(i);
         let s = &self.slots[i];
-        let pending = !s.layout_ready || s.layout_primary != primary || s.layout_secondary != secondary;
+        let pending = !s.layout_ready || s.layout_primary != primary || s.layout_secondary != secondary || s.layout_generation != current;
         self.set_pending(i, pending, build_request(primary, secondary), now);
         let s = &mut self.slots[i];
         let settling = s.has(PENDING) && s.layout_ready;
@@ -1190,14 +1203,15 @@ impl Scheduler {
         self.decide(i, p as f32, q as f32, emit);
     }
 
-    /// Whether the chunk nodes hold every tier of (primary, secondary), asking the
-    /// builder for the ones it lacks when not.
+    /// Whether the chunk nodes hold every tier of (primary, secondary) of the
+    /// current generation, asking the builder for the ones it lacks when not.
     fn ask(&mut self, world: &mut World, i: usize, primary: u32, secondary: u32) -> bool {
+        let generation = self.generation(i);
         let s = &self.slots[i];
         let steps = if secondary == 0 || secondary == primary { [primary, 0] } else { [primary, secondary] };
         let mut want = [0; 2];
         let mut n = 0;
-        for st in steps.into_iter().filter(|&st| st != 0 && s.tier(st).is_none()) {
+        for st in steps.into_iter().filter(|&st| st != 0 && s.tier(st, generation).is_none()) {
             want[n] = st;
             n += 1;
         }
@@ -1205,17 +1219,26 @@ impl Scheduler {
         n == 0
     }
 
-    fn apply_layout(&mut self, i: usize, primary: u32, secondary: u32, ready: bool, emit: &mut impl FnMut(Event)) {
+    /// Shows (primary, secondary) of `generation`. A ready layout of a newer
+    /// generation than the one shown lets every older tier and decor go in the
+    /// same step, so what is drawn changes whole.
+    fn apply_layout(&mut self, i: usize, primary: u32, secondary: u32, generation: u32, ready: bool, emit: &mut impl FnMut(Event)) {
+        if ready && self.slots[i].layout_generation != generation {
+            self.drop_older(i, generation, emit);
+        }
         let s = &mut self.slots[i];
         s.layout_primary = primary;
         s.layout_secondary = if secondary == primary { 0 } else { secondary };
+        if ready {
+            s.layout_generation = generation;
+        }
         s.layout_ready = ready;
         s.set(EMPTY, !ready);
         s.told = None;
         if ready {
             let mut b: Option<Bounds> = None;
             for st in [s.layout_primary, s.layout_secondary] {
-                if let Some(Some(t)) = s.tier(st).map(|t| t.bounds) {
+                if let Some(Some(t)) = s.tier(st, generation).map(|t| t.bounds) {
                     b = Some(match b {
                         None => t,
                         Some(o) => Bounds {
@@ -1241,8 +1264,41 @@ impl Scheduler {
             id: s.id,
             primary: s.layout_primary,
             secondary: s.layout_secondary,
+            generation: s.layout_generation,
             ready,
         });
+    }
+
+    /// Lets go of every tier and decor of slot `i` older than `generation`.
+    fn drop_older(&mut self, i: usize, generation: u32, emit: &mut impl FnMut(Event)) {
+        let before = self.slots[i].retained();
+        let s = &mut self.slots[i];
+        let (id, draw) = (s.id, &mut self.draw);
+        s.tiers.retain(|t| {
+            let keep = t.generation == generation;
+            if !keep {
+                draw.free(t.handle);
+                emit(Event::Evict {
+                    id,
+                    step: t.step,
+                    generation: t.generation,
+                });
+            }
+            keep
+        });
+        s.decor.retain(|d| {
+            let keep = d.generation == generation;
+            if !keep {
+                draw.free(d.handle);
+                emit(Event::Evict {
+                    id,
+                    step: d.step,
+                    generation: d.generation,
+                });
+            }
+            keep
+        });
+        self.account(i, before);
     }
 
     /// Lets go of tiers past MAX_CACHED_TIERS, oldest built first, never the
@@ -1252,7 +1308,7 @@ impl Scheduler {
         let s = &mut self.slots[i];
         let mut k = 0;
         while s.tiers.len() > MAX_CACHED_TIERS && k < s.tiers.len() {
-            let st = s.tiers[k].step;
+            let (st, g) = (s.tiers[k].step, s.tiers[k].generation);
             if st == COARSEST || active.contains(&st) {
                 k += 1;
                 continue;
@@ -1261,12 +1317,13 @@ impl Scheduler {
             self.draw.free(gone.handle);
             let draw = &mut self.draw;
             s.decor.retain(|d| {
-                if d.step == st {
+                let hit = d.step == st && d.generation == g;
+                if hit {
                     draw.free(d.handle);
                 }
-                d.step != st
+                !hit
             });
-            emit(Event::Evict { id: s.id, step: st });
+            emit(Event::Evict { id: s.id, step: st, generation: g });
         }
         self.account(i, before);
     }
@@ -1288,7 +1345,8 @@ impl Scheduler {
         }
         if !in_frustum {
             self.stop_work(world, i);
-            self.apply_layout(i, COARSEST, 0, false, emit);
+            let g = self.slots[i].layout_generation;
+            self.apply_layout(i, COARSEST, 0, g, false, emit);
             self.set_pending(i, false, RELEASE_REQUEST, 0.0);
             self.census.released += 1;
             return true;
@@ -1298,11 +1356,12 @@ impl Scheduler {
             return false;
         }
         let asked = self.ask(world, i, p, q);
-        if !asked || !self.ensure_decor(world, i, [p, q], emit) {
+        let generation = self.generation(i);
+        if !asked || !self.ensure_decor(world, i, [p, q], generation, emit) {
             return false;
         }
         self.trim(i, [p, q], emit);
-        self.apply_layout(i, p, q, true, emit);
+        self.apply_layout(i, p, q, generation, true, emit);
         self.set_pending(i, false, RELEASE_REQUEST, 0.0);
         true
     }
@@ -1333,16 +1392,22 @@ impl Scheduler {
             self.builder.reclaim(world, id, &mut |e| emit(Event::Build(e)));
             let s = &mut self.slots[i];
             s.runs_bytes = 0;
-            let mut steps = 0;
             for t in core::mem::take(&mut s.tiers) {
                 self.draw.free(t.handle);
-                steps |= t.step;
+                emit(Event::Evict {
+                    id,
+                    step: t.step,
+                    generation: t.generation,
+                });
             }
             for d in core::mem::take(&mut s.decor) {
                 self.draw.free(d.handle);
-                steps |= d.step;
+                emit(Event::Evict {
+                    id,
+                    step: d.step,
+                    generation: d.generation,
+                });
             }
-            emit_evicts(id, steps, emit);
             self.account(i, before);
             freed += 1;
         }
@@ -1363,35 +1428,42 @@ impl Scheduler {
             if !s.has(IN_FRUSTUM) || s.has(PENDING) {
                 continue;
             }
-            let spare = s.runs_bytes > 0 || s.tiers.iter().any(|t| t.step != s.layout_primary && t.step != s.layout_secondary);
+            let (p, q, g) = (s.layout_primary, s.layout_secondary, s.layout_generation);
+            let shown = |step: u32, generation: u32| generation == g && (step == p || step == q);
+            let spare = s.runs_bytes > 0 || s.tiers.iter().any(|t| !shown(t.step, t.generation));
             if !spare {
                 continue;
             }
             let id = s.id;
-            let (p, q) = (s.layout_primary, s.layout_secondary);
             let before = s.retained();
             self.builder.reclaim(world, id, &mut |e| emit(Event::Build(e)));
             let s = &mut self.slots[i];
             s.runs_bytes = 0;
-            let mut steps = 0;
             let draw = &mut self.draw;
             s.tiers.retain(|t| {
-                let keep = t.step == p || t.step == q;
+                let keep = shown(t.step, t.generation);
                 if !keep {
                     draw.free(t.handle);
-                    steps |= t.step;
+                    emit(Event::Evict {
+                        id,
+                        step: t.step,
+                        generation: t.generation,
+                    });
                 }
                 keep
             });
             s.decor.retain(|d| {
-                let keep = d.step == p || d.step == q;
+                let keep = shown(d.step, d.generation);
                 if !keep {
                     draw.free(d.handle);
-                    steps |= d.step;
+                    emit(Event::Evict {
+                        id,
+                        step: d.step,
+                        generation: d.generation,
+                    });
                 }
                 keep
             });
-            emit_evicts(id, steps, emit);
             self.account(i, before);
             freed += 1;
         }
@@ -1532,16 +1604,16 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
     match e {
         BuildEvent::Tier {
             id,
+            generation,
             step,
             at,
             bytes,
             vertex_cnt,
             index_cnt,
-            ..
         } => {
             if let Some(&i) = index.get(&id) {
                 let s = &mut slots[i];
-                if s.tier(step).is_none() {
+                if s.tier(step, generation).is_none() {
                     // SAFETY: the mesh's position lane, the first three floats
                     // a vertex of the block the bake just wrote.
                     let bounds = (vertex_cnt > 0).then(|| unsafe {
@@ -1562,6 +1634,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
                     let handle = if vertex_cnt > 0 { draw.upload(at, bytes, vertex_cnt, index_cnt) } else { 0 };
                     s.tiers.push(Tier {
                         step,
+                        generation,
                         bytes,
                         bounds,
                         handle,
