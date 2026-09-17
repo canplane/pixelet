@@ -1,3 +1,5 @@
+// pxl_core/module/world/billboard/field.rs
+
 //! Billboards: labels and bubbles drawn flat to the camera over the world,
 //! as sets of instances in one layout. A set stands either at an origin —
 //! every label on screen, replaced whole when a placement commits — or on
@@ -8,8 +10,8 @@
 //! placed against the frame's origin, in the order the sets draw in.
 
 use crate::render::draw::{DrawList, Held, PIPELINE_BADGE};
-use crate::world::build::World;
-use crate::world::model::Models;
+use crate::module::world::chunk_node::World;
+use crate::module::world::gltf_cache::Models;
 
 /// Floats an instance takes: its anchor relative to the set's (3), its
 /// logical size in pixels (2), its rectangle of the sheet (4), and where

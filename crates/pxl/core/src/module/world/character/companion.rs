@@ -42,7 +42,7 @@ use crate::module::world::object::store::objects_revision;
 use crate::module::world::sched::tick::TickContext;
 use crate::module::world::surface_height::get_surface_z_at_local;
 use crate::module::world::terrain::store::tile_pages;
-use crate::render::gltf::load::{load_gltf, load_image};
+use crate::module::world::gltf_cache::{load_gltf, load_image};
 use crate::render::gpu::model_asset::{register_model, ModelHandle};
 
 /// A variant's model in the scheduler, registered once per model and height
@@ -321,7 +321,7 @@ impl Walker {
             self.actor_clip = Some(clip.to_string());
         }
         // The next frame is the scheduler's to ask for: an actor playing a clip
-        // keeps the tick awake (model.rs), and nothing here moves otherwise.
+        // keeps the tick awake (gltf_cache.rs), and nothing here moves otherwise.
     }
 }
 

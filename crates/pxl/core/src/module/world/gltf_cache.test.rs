@@ -1,4 +1,4 @@
-// pxl_core/world/model.test.rs
+// pxl_core/module/world/gltf_cache.test.rs
 
 use super::*;
 

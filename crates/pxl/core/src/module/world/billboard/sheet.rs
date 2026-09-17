@@ -5,7 +5,7 @@
 //! billboard set share a pipeline and a binding: a second sheet would be a
 //! second pass's worth of state for a bubble or two.
 //!
-//! And the billboard sets themselves (crates/pxl/core/src/world/billboard.rs),
+//! And the billboard sets themselves (crates/pxl/core/src/module/world/billboard/field.rs),
 //! reached here: what a set shows is written as instances of
 //! BILLBOARD_FLOATS floats.
 
@@ -13,7 +13,7 @@ pub use super::order::BILLBOARD_ORDER;
 use super::atlas::BillboardAtlas;
 use crate::sys::global::Global;
 use crate::sys::kernel::kernel;
-use crate::world::build::World;
+use crate::module::world::chunk_node::World;
 
 static SHEET: Global<BillboardAtlas> = Global::new();
 
@@ -48,7 +48,7 @@ pub fn write_billboard_set(set: u32, lane: &[f32]) {
         painter: &mut k.painter,
     };
     let sched = &mut k.sched;
-    let count = (lane.len() / crate::world::billboard::BILLBOARD_FLOATS) as u32;
+    let count = (lane.len() / crate::module::world::billboard::field::BILLBOARD_FLOATS) as u32;
     // SAFETY: `lane` is `count` instances of f32s in the kernel's memory, read
     // before this returns.
     unsafe { sched.billboards.write(&mut world, &mut sched.draw, set, count, lane.as_ptr() as usize) };

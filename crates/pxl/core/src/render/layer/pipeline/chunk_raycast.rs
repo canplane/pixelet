@@ -19,8 +19,8 @@ use crate::bake::scan::{BandView, ColumnRuns};
 use crate::render::layer::pipeline::volume::{unpack_sub_cell_fraction, MaterialClass, SUB_CELL_NONE};
 use crate::space::constant::{CHUNK_SPAN, U_PER_CELL};
 use crate::sys::kernel::kernel;
-use crate::world::build::World;
-use crate::world::sched::Scheduler;
+use crate::module::world::chunk_node::World;
+use crate::module::world::sched::chunk_table::Scheduler;
 
 /// A chunk's side, in units.
 const CHUNK_W: f64 = CHUNK_SPAN as f64 * U_PER_CELL;
@@ -372,7 +372,7 @@ pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: [f64; 3]
                 (
                     core::slice::from_raw_parts(mem.add(mesh.at) as *const f32, mesh.vertex_cnt as usize * 3),
                     core::slice::from_raw_parts(
-                        (mem.add(mesh.at) as *const u32).add(mesh.vertex_cnt as usize * crate::world::model::MODEL_VERTEX_WORDS as usize),
+                        (mem.add(mesh.at) as *const u32).add(mesh.vertex_cnt as usize * crate::module::world::gltf_cache::MODEL_VERTEX_WORDS as usize),
                         mesh.index_cnt as usize,
                     ),
                 )

@@ -1,3 +1,5 @@
+// pxl_core/module/world/sched/chunk_table.rs
+
 //! The chunks' scheduler: which chunks are on screen, which tier each shows,
 //! what to build and in what order, and what to give back.
 //!
@@ -18,23 +20,21 @@
 //! let go. The glue holds the meshes and the scene; the core holds every
 //! decision about them.
 
-
 use xpute_core::kit::hash::fnv1a64_str;
-
 use crate::bake::terrain::ChunkSample;
 use std::collections::BTreeMap;
 use crate::render::draw::{DrawList, PIPELINE_CHUNK};
 use crate::space::constant::{CHUNK_SPAN, CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT, PAGE_SPAN};
-use crate::world::billboard::Billboards;
-use crate::world::build::{Builder, Event as BuildEvent, PageLanes, World, MAX_CHUNKS};
-use crate::world::debug::DebugLines;
+use crate::module::world::billboard::field::Billboards;
+use crate::module::world::chunk_node::{Builder, BuildEvent, PageLanes, World, MAX_CHUNKS};
+use crate::module::world::marker::frame_gizmo::DebugLines;
 use crate::module::world::decor::instance::{decor_groups, DecorScratch};
-use crate::world::decor::{density as decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
-use crate::world::environment::Environment;
-use crate::world::ghost::Ghost;
+use crate::module::world::decor::decor_layer::{decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
+use crate::module::map::environment::EnvironmentDraw;
+use crate::module::world::marker::hover_cursor::GhostDraw;
 use crate::module::world::lod::{Ladder, COARSEST, LOD_STEP_BY_LEVEL};
-use crate::world::marker::Markers;
-use crate::world::model::Models;
+use crate::module::world::marker::location_puck::Markers;
+use crate::module::world::gltf_cache::Models;
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 
 /// The sphere a chunk nothing has measured is culled by.
@@ -176,7 +176,7 @@ pub enum Event {
         id: u32,
         step: u32,
     },
-    /// The chunk's decor at a tier, as decor.rs's block of `bytes` at `at`,
+    /// The chunk's decor at a tier, as decor_layer.rs's block of `bytes` at `at`,
     /// the glue's to release; every tier of a layout has its decor handed
     /// over before the layout.
     Decor {
@@ -221,7 +221,7 @@ pub struct Decor {
 
 impl Decor {
     /// Each group's first lane word in the block and its count
-    /// (decor.rs's decor_groups), the block read in `mem`.
+    /// (decor/instance.rs's decor_groups), the block read in `mem`.
     fn groups(&self, mem: *const u8) -> impl Iterator<Item = (u32, u32)> {
         // SAFETY: the block the scheduler wrote at `at`, `bytes` long, held
         // for as long as this decor is.
@@ -305,20 +305,20 @@ pub struct Scheduler {
     pub builder: Builder,
     /// What the renderer uploads, frees and draws (draw.rs).
     pub draw: DrawList,
-    /// The hover ghost (ghost.rs).
-    pub ghost: Ghost,
-    /// Models and the actors that play them (model.rs).
+    /// The hover ghost (marker/hover_cursor.rs).
+    pub ghost: GhostDraw,
+    /// Models and the actors that play them (gltf_cache.rs).
     pub models: Models,
-    /// The location puck (marker.rs).
+    /// The location puck (marker/location_puck.rs).
     pub markers: Markers,
-    /// The billboards (billboard.rs).
+    /// The billboards (billboard/field.rs).
     pub billboards: Billboards,
     /// The model each decor group is drawn with, by group, once the glue
     /// registered it: what a hit test reads the triangles of.
     pub decor_models: Vec<Option<u32>>,
-    /// The sun, the moon, the light and the sky (environment.rs).
-    pub environment: Environment,
-    /// The dev gizmos (debug.rs).
+    /// The sun, the moon, the light and the sky (module/map/environment.rs).
+    pub environment: EnvironmentDraw,
+    /// The dev gizmos (marker/frame_gizmo.rs).
     pub debug: DebugLines,
     slots: Vec<Slot>,
     index: BTreeMap<u32, usize>,
@@ -421,12 +421,12 @@ impl Scheduler {
         Scheduler {
             builder: Builder::new(),
             draw: DrawList::default(),
-            ghost: Ghost::default(),
+            ghost: GhostDraw::default(),
             models: Models::default(),
             markers: Markers::default(),
             billboards: Billboards::default(),
             decor_models: Vec::new(),
-            environment: Environment::default(),
+            environment: EnvironmentDraw::default(),
             debug: DebugLines::default(),
             slots: Vec::with_capacity(MAX_CHUNKS),
             index: BTreeMap::new(),
@@ -1580,5 +1580,5 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
 }
 
 #[cfg(test)]
-#[path = "sched.test.rs"]
+#[path = "chunk_table.test.rs"]
 mod test;

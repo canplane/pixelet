@@ -89,7 +89,7 @@ pub fn themes(key: WorldThemeKey) -> WorldTheme {
 }
 
 /// Theme derived from the current hour and the real sunrise/sunset for wherever
-/// the map is centered (crates/pxl/core/src/world/environment.rs) — replaces a
+/// the map is centered (crates/pxl/core/src/module/map/environment.rs) — replaces a
 /// fixed 05:00/21:00 split that didn't track season or location.
 /// MORNING/DAY/EVENING still split the daylight span the same way the old fixed
 /// version did (theme.json's daylight_split), just scaled to however long

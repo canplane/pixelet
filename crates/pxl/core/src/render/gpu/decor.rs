@@ -2,11 +2,11 @@
 
 //! Decor on the device: the scheduler's decor draws (render/draw.rs) executed
 //! as instanced draws of each variant's model, the instances read straight out
-//! of the decor block the scheduler built (world/decor.rs's layout) as it lies
+//! of the decor block the scheduler built (module/world/decor/decor_layer.rs's layout) as it lies
 //! on the GPU: the block is the instance buffer, the chunk's translation is its
 //! uniform, and the scheduler says which block a chunk shows.
 //!
-//! A model is the scheduler's (world/model.rs), registered by the decor asset
+//! A model is the scheduler's (module/world/gltf_cache.rs), registered by the decor asset
 //! store and drawn from the same block the kernel holds its triangles in for
 //! the hit test — the vertex lanes of model_asset.rs's layout, and the indices
 //! past them. The groups are every bundle's variants in bundle order, the order
@@ -23,7 +23,7 @@ use crate::sys::kernel::kernel;
 use crate::module::world::decor::asset_store::decor_bundle_assets;
 use crate::render::draw::{DRAW_WORDS, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, UNIFORM_FLOATS};
 use crate::render::shader::PIPELINE_DECOR_DEPTH;
-use crate::world::model::MODEL_VERTEX_WORDS;
+use crate::module::world::gltf_cache::MODEL_VERTEX_WORDS;
 
 /// A decor draw's dynamic uniform (shader/decor.wgsl's Draw): translation, the
 /// group's first lane word, the instance count, the opacity, padding.

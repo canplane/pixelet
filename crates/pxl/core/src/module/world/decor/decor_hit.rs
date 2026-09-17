@@ -34,7 +34,7 @@ const SAME_SURFACE_EPS: f64 = 1e-3;
 pub fn raycast_decor(origin: Vec3, direction: Vec3, map_origin: IVec, max_dist: f64) -> Option<EntryAt> {
     let hit = ray_hit_decor(&RayLike { origin, direction }, map_origin, max_dist + SAME_SURFACE_EPS)?;
     let (_, col_idx, ..) = kernel().sched.builder.source_of(hit.chunk)?;
-    // The lane holds the band's own i32 as a word (world/decor.rs), NO_ENTRY
+    // The lane holds the band's own i32 as a word (module/world/decor/decor_layer.rs), NO_ENTRY
     // apart, which the kernel has already passed over.
     Some(EntryAt {
         col_idx,

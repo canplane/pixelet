@@ -1,4 +1,4 @@
-// pxl_core/world/decor.test.rs
+// pxl_core/module/world/decor/decor_layer.test.rs
 
 #[test]
 fn a_draw_rounds_the_word_to_a_double_first_as_javascript_does() {

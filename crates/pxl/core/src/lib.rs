@@ -15,4 +15,3 @@ pub mod module;
 pub mod render;
 pub mod space;
 pub mod sys;
-pub mod world;

@@ -1,6 +1,6 @@
 // pxl_core/render/gpu/skinned.rs
 
-//! Actors on the device: the scheduler's skinned draws (world/model.rs)
+//! Actors on the device: the scheduler's skinned draws (module/world/gltf_cache.rs)
 //! executed against each model's mesh block and each actor's joint palette,
 //! both as the scheduler wrote them, under shader/skinned.wgsl. A model's skin
 //! is the image its asset loaded, by model id.
@@ -15,7 +15,7 @@ use super::pipeline::{Built, Pipelines};
 use super::renderer::{frame_group, put_f32, skin_group, Blocks, Scratch};
 use crate::render::draw::{DRAW_WORDS, PIPELINE_SKINNED, UNIFORM_FLOATS};
 use crate::render::shader::PIPELINE_SKINNED_DEPTH;
-use crate::world::model::MODEL_VERTEX_WORDS;
+use crate::module::world::gltf_cache::MODEL_VERTEX_WORDS;
 
 /// shader/skinned.wgsl's Draw: translation, the turn about Z, the opacity, the
 /// scale, padding.

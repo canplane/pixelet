@@ -1,4 +1,4 @@
-// pxl_core/world/sched.test.rs
+// pxl_core/module/world/sched/chunk_table.test.rs
 
 use super::*;
 

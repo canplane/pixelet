@@ -12,9 +12,10 @@ use crate::bake::scan::{ColumnRuns, ScanContext};
 use crate::bake::terrain::{ChunkSample, Materials};
 use crate::render::layer::pipeline::volume::{Volumes, BAND_WORDS as VOLUME_BAND_WORDS};
 use crate::sys::global::Global;
-use crate::world::object::{Painter, Store};
+use crate::module::world::object::store::Store;
+use crate::render::layer::object::adapter::Painter;
 use crate::render::layer::pipeline::chunk_raycast::Raycast;
-use crate::world::sched::Scheduler;
+use crate::module::world::sched::chunk_table::Scheduler;
 use pxl_shared::spec::space::pvf3::ivec::{self, gather};
 use xpute_core::ipc::change::{ChangeLog, ChangeLogOptions};
 
@@ -123,10 +124,10 @@ pub fn reindex_object(k: &mut Kernel, key: u64) {
 
 /// The kernel's world and its scheduler, borrowed together for a call that
 /// builds, draws or reads the volumes; None before the volumes are opened.
-pub fn with_world<R>(f: impl FnOnce(&mut crate::world::build::World, &mut crate::world::sched::Scheduler) -> R) -> Option<R> {
+pub fn with_world<R>(f: impl FnOnce(&mut crate::module::world::chunk_node::World, &mut crate::module::world::sched::chunk_table::Scheduler) -> R) -> Option<R> {
     let k = kernel();
     let volumes = k.volumes.as_mut()?;
-    let mut world = crate::world::build::World {
+    let mut world = crate::module::world::chunk_node::World {
         volumes,
         materials: &k.terrain,
         store: &k.objects,

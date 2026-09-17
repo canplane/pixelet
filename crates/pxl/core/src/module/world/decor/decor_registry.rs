@@ -10,7 +10,7 @@ use pxl_shared::spec::cell::DecorId;
 
 use super::boat_decor::BOAT_DECOR_BUNDLE;
 use super::car_decor::CAR_DECOR_BUNDLE;
-use super::decor_kinds::{teach_decor_kinds, DecorKindBundle};
+use super::decor_layer::{teach_decor_kinds, DecorKindBundle};
 use super::train_decor::TRAIN_DECOR_BUNDLE;
 use super::tree_decor::TREE_DECOR_BUNDLE;
 use crate::sys::global::Global;

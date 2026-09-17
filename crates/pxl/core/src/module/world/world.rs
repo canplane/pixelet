@@ -43,7 +43,7 @@ use crate::module::world::decor::asset_store::decor_asset_step;
 use crate::module::world::environment::theme_clock::theme_clock_step;
 use crate::module::world::frame::coord::get_local_world_origin;
 use crate::module::world::frame::use_view_frame::{view_rotation_step, view_translation_step};
-use crate::module::world::marker::debug_gizmos::debug_gizmos_step;
+use crate::module::world::marker::frame_gizmo::debug_gizmos_step;
 use crate::module::world::marker::hover_cursor::hover_cursor_step;
 use crate::module::world::marker::location_puck::location_puck_step;
 use crate::module::world::object::teach::teach_objects;

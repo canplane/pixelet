@@ -1,7 +1,7 @@
 // pxl_core/render/gpu/badges.rs
 
 //! The billboards on the device — the POI badges and the chat bubble: one
-//! instanced quad over the scheduler's billboard sets (world/billboard.rs), one
+//! instanced quad over the scheduler's billboard sets (module/world/billboard/field.rs), one
 //! draw a set, in a pass of their own after the world with the world's depth
 //! attached read-only and bound as a texture at once (shader/badge.wgsl asks
 //! both of its depth questions of this frame's depth).

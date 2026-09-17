@@ -4,7 +4,7 @@
 //! palette's models for it, which is where the models, their skins and their
 //! extents come from (pxl_shared::record::shipped).
 
-use super::decor_kinds::{bind_palette, DecorKindBundle};
+use super::decor_layer::{bind_palette, DecorKindBundle};
 use super::train_kind::{TRAIN_KIND, TRAIN_RULES};
 use crate::sys::global::Global;
 

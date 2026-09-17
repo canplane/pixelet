@@ -13,7 +13,7 @@
 //! hit test keeps seeing it.
 //!
 //! The scheduler builds a chunk's decor at one tier as one block of the mesh
-//! section (crates/pxl/core/src/world/decor.rs's DecorBuild): every group's
+//! section (crates/pxl/core/src/module/world/decor/decor_layer.rs's DecorBuild): every group's
 //! lanes — a group per (kind, variant) in the order the kinds were taught —
 //! laid out here.
 

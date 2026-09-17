@@ -27,7 +27,7 @@ use crate::module::world::sched::ledger::{ledger_record_frame, CpuSample, DrawCe
 use crate::module::world::sched::priority::lead_point;
 use crate::module::world::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::module::world::terrain::store::tile_pages;
-use crate::world::sched::Frame;
+use crate::module::world::sched::chunk_table::Frame;
 
 const MB: f64 = 1_048_576.0;
 

@@ -23,7 +23,7 @@ use crate::module::map::store::use_map_store;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::frame::coord::get_local_world_origin;
 use crate::module::world::sched::tick::TickContext;
-use crate::render::gltf::load::{load_gltf, load_image};
+use crate::module::world::gltf_cache::{load_gltf, load_image};
 use crate::render::gpu::model_asset::{register_model, ModelHandle};
 
 const SPIN_RATE_RAD_S: f64 = 0.6;

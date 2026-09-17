@@ -18,7 +18,7 @@
 //!
 //! Only the order changes. Which LOD tier a chunk shows is still decided by its
 //! distance from the camera as drawn, because that is what is on screen. The
-//! order itself is the scheduler's (crates/pxl/core/src/world/sched.rs); the
+//! order itself is the scheduler's (crates/pxl/core/src/module/world/sched/chunk_table.rs); the
 //! lead point it orders by is worked out here.
 
 use xpute_core::kit::mat4::{Mat4, Vec3};

@@ -21,7 +21,7 @@ use super::layer_table::{rgb255, GROUND_LAYER_META, OBJECT_LAYER_IDX};
 use super::paint::Paint;
 use super::pipeline::Pipelines;
 use crate::lib::env::route::asset_url;
-use crate::render::gltf::load::load_image;
+use crate::module::world::gltf_cache::load_image;
 use crate::render::shader::PIPELINE_MIPS;
 
 /// The tile edge in texels (apps/api's download_texture_pack.ts's TILE_SIZE).

@@ -22,11 +22,11 @@ use pxl_core::sys::kernel::{kernel, reindex_object, Kernel};
 use pxl_core::sys::global::Global;
 use pxl_core::mem;
 use xpute_core::sys::mem::{write_section, SECTION_WORDS};
-use pxl_core::world::build::{Event as BuildEvent, PageLanes, World};
-use pxl_core::world::decor::{Kind as DecorKind, Rule as DecorRule};
-use pxl_core::world::object::{Carve, Kind};
+use pxl_core::module::world::chunk_node::{BuildEvent, PageLanes, World};
+use pxl_core::module::world::decor::decor_layer::{Kind as DecorKind, Rule as DecorRule};
+use pxl_core::render::layer::object::adapter::{Carve, Kind};
 use pxl_core::render::layer::pipeline::chunk_raycast::Raycast;
-use pxl_core::world::sched::{Event, Frame, Scheduler};
+use pxl_core::module::world::sched::chunk_table::{Event, Frame, Scheduler};
 use pxl_shared::spec::cmd::{Cmd, StepResult};
 use xpute_core::io::marshal::tree::{BranchCursor, PacketWriter, TreeReader};
 use xpute_core::ipc::cmd::Interrupt;
@@ -541,7 +541,7 @@ fn post_shell(s: &mut State) {
     use pxl_core::module::device::pose::use_geolocation::{take_geolocation_commands, GeolocationCommand};
     use pxl_core::module::map::ui::toast::toast_controller::{take_toast_commands, ToastCommand, ToastTone};
     use pxl_core::module::world::sched::fetch_scheduler::{fetch_take_aborts, fetch_take_started};
-    use pxl_core::render::gltf::load::{take_load_requests, LoadKind};
+    use pxl_core::module::world::gltf_cache::{take_load_requests, LoadKind};
 
     const GEOLOCATION: u32 = 0;
     const ORIENTATION: u32 = 1;
@@ -1310,7 +1310,7 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             // SAFETY: a block this heap gave the shell, of `bytes`, written
             // and not read by anyone else.
             let body = unsafe { core::slice::from_raw_parts(at as *const u8, bytes) };
-            pxl_core::render::gltf::load::gltf_arrived(url.get_str_ref()?, body);
+            pxl_core::module::world::gltf_cache::gltf_arrived(url.get_str_ref()?, body);
             // SAFETY: the same block, at the size it was asked for.
             unsafe { ALLOC.free(at as *mut u8, bytes) };
             return Ok(Some((0, None)));
@@ -1318,13 +1318,13 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         Cmd::LOAD_IMAGE => {
             let f = fields(pkt)?;
             let url = f.at(0)?;
-            pxl_core::render::gltf::load::image_arrived(url.get_str_ref()?, u32_at(&f, 1)?);
+            pxl_core::module::world::gltf_cache::image_arrived(url.get_str_ref()?, u32_at(&f, 1)?);
             return Ok(Some((0, None)));
         }
         Cmd::LOAD_DELETE => {
             let f = fields(pkt)?;
             let url = f.at(0)?;
-            pxl_core::render::gltf::load::load_rejected(url.get_str_ref()?);
+            pxl_core::module::world::gltf_cache::load_rejected(url.get_str_ref()?);
             return Ok(Some((0, None)));
         }
         Cmd::GPU_CREATE => {
@@ -1565,8 +1565,8 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
             unsafe { sched.debug.set(&mut world, &mut sched.draw, at, vertices.length() as u32 / 6, vertices.as_slice().as_ptr() as usize) };
         }
         Cmd::ENV_UPDATE => {
-            let lane = floats_at(&fields(pkt)?, 0, pxl_core::world::environment::THEME_FLOATS)?;
-            let theme = <[f32; pxl_core::world::environment::THEME_FLOATS]>::try_from(lane.as_slice())
+            let lane = floats_at(&fields(pkt)?, 0, pxl_core::module::map::environment::THEME_FLOATS)?;
+            let theme = <[f32; pxl_core::module::map::environment::THEME_FLOATS]>::try_from(lane.as_slice())
                 .map_err(|_| MarshalError::new(Errno::EBADMSG, Some(&format!("a theme of {} floats", lane.length())), None))?;
             sched.environment.set_theme(&theme);
         }
@@ -1813,17 +1813,17 @@ fn tick(s: &mut State) -> u32 {
     draw as u32
 }
 
-// ---- The billboards (crates/pxl/core/src/world/billboard.rs) ----
+// ---- The billboards (crates/pxl/core/src/module/world/billboard/field.rs) ----
 
 // ---- The shaders and the pipelines (crates/pxl/core/src/render/shader.rs) ----
 
-// ---- The dev gizmos (crates/pxl/core/src/world/debug.rs) ----
+// ---- The dev gizmos (crates/pxl/core/src/module/world/marker/frame_gizmo.rs) ----
 
-// ---- The environment (crates/pxl/core/src/world/environment.rs) ----
+// ---- The environment (crates/pxl/core/src/module/map/environment.rs) ----
 
-// ---- The location puck (crates/pxl/core/src/world/marker.rs) ----
+// ---- The location puck (crates/pxl/core/src/module/world/marker/location_puck.rs) ----
 
-// ---- Models and actors (crates/pxl/core/src/world/model.rs) ----
+// ---- Models and actors (crates/pxl/core/src/module/world/gltf_cache.rs) ----
 
 // ---- The host's hooks (pxl_core::sys::host, pxl_core::sys::global) ----
 

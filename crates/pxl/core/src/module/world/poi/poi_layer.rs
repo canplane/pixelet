@@ -462,7 +462,7 @@ fn build_stage() {
     }
 }
 
-/// Floats a badge takes in the core's block (crates/pxl/core/src/world/billboard.rs).
+/// Floats a badge takes in the core's block (crates/pxl/core/src/module/world/billboard/field.rs).
 const BADGE_FLOATS: usize = 10;
 
 /// Writes the whole placement in one step into the core, which holds the badges

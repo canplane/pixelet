@@ -6,7 +6,7 @@
 //! (trees, boats, cars, and trains today; more kinds later declare their own
 //! DecorKindSeed + eligibility rules, never their own bespoke RNG).
 //!
-//! The scatter itself is the kernel's (crates/pxl/core/src/world/decor.rs):
+//! The scatter itself is the kernel's (crates/pxl/core/src/module/world/decor/decor_layer.rs):
 //! it walks a chunk's cells into the decor block's lanes, drawing from a
 //! stream seeded by the page, the kind and the cell. Which cells it may use
 //! and what it does with the draws is declared here, so a kind is one
@@ -27,7 +27,7 @@ pub enum DecorChannelRule {
 }
 
 /// A kind's rule per ground channel, declared so the scheduler can be taught
-/// the same rule (crates/pxl/core/src/world/decor.rs) and `eligibility_of`
+/// the same rule (crates/pxl/core/src/module/world/decor/decor_layer.rs) and `eligibility_of`
 /// derives the predicate from it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DecorRules {

@@ -38,17 +38,17 @@ pub const PIPELINE_DECOR: u32 = 1;
 pub const PIPELINE_GHOST_BOX: u32 = 2;
 pub const PIPELINE_GHOST_BOX_COPLANAR: u32 = 3;
 pub const PIPELINE_GHOST_DECOR: u32 = 4;
-/// An actor (model.rs): words (the model's handle, the joint palette's
+/// An actor (gltf_cache.rs): words (the model's handle, the joint palette's
 /// handle, the model id, uniform, pipeline), its uniform's fourth float the
 /// turn about Z.
 pub const PIPELINE_SKINNED: u32 = 5;
-/// The location puck (marker.rs): the zone's instances as (the zone block's
+/// The location puck (marker/location_puck.rs): the zone's instances as (the zone block's
 /// handle, the instance count, 0, uniform, pipeline), translated to the
 /// zone's centre; the beacon as (0, night, 0, uniform, pipeline), its
 /// uniform's fourth float its spin.
 pub const PIPELINE_PUCK_ZONE: u32 = 6;
 pub const PIPELINE_PUCK_BEACON: u32 = 7;
-/// The badges (billboard.rs): (the block's handle, the count, 0, uniform,
+/// The badges (billboard/field.rs): (the block's handle, the count, 0, uniform,
 /// pipeline), translated to the placement's origin.
 pub const PIPELINE_BADGE: u32 = 8;
 /// Line segments over everything: handle, vertex count.
@@ -158,7 +158,7 @@ impl DrawList {
     }
 
     /// A decor group's instances: `offset` is the group's first lane word in
-    /// the block (decor.rs's layout), exact in a float to 2^24 words.
+    /// the block (decor_layer.rs's layout), exact in a float to 2^24 words.
     pub fn draw_decor(&mut self, handle: u32, group: u32, count: u32, offset: u32, translation: [f32; 3]) {
         let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, 1.0, 0.0, 0.0, 0.0]);

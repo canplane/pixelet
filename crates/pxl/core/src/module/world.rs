@@ -10,6 +10,7 @@ pub mod environment;
 pub mod fetch;
 pub mod frame;
 pub mod geocode;
+pub mod gltf_cache;
 pub mod lod;
 pub mod marker;
 pub mod object;

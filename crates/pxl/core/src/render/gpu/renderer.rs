@@ -42,7 +42,7 @@ use crate::render::draw::{
     DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
 use crate::render::shader::{FRAME_AT, FRAME_FLOATS, PIPELINE_CHUNK_DEPTH, PIPELINE_SKY};
-use crate::world::environment::ENV_OTHER_LIGHT;
+use crate::module::map::environment::ENV_OTHER_LIGHT;
 
 /// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
 pub const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
@@ -796,7 +796,7 @@ impl Renderer {
             u[CAMERA_POS] = (CASE_EYE.x + actor[0]) as f32;
             u[CAMERA_POS + 1] = (CASE_EYE.y + actor[1]) as f32;
             u[CAMERA_POS + 2] = (CASE_EYE.z + actor[2]) as f32;
-            // No fog: the near and far pushed out of reach (environment.rs's
+            // No fog: the near and far pushed out of reach (module/map/environment.rs's
             // fog_near and fog_far in the run).
             u[ENV + 7] = 1e9;
             u[ENV + 11] = 2e9;
