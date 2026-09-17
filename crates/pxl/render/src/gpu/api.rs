@@ -1,4 +1,4 @@
-// pxl_render/gpu/api.rs
+// pxl-render/gpu/api.rs
 
 //! The WebGPU calls the renderer makes, as the host installs them: one table
 //! of functions over numbers, every object named by a handle the kernel hands

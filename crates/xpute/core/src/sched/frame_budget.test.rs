@@ -1,4 +1,4 @@
-// xpute_core/sched/frame_budget.test.rs
+// xpute-core/sched/frame_budget.test.rs
 
 use std::sync::OnceLock;
 use std::time::Instant;

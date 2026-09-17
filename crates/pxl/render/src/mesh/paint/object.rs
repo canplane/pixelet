@@ -1,3 +1,3 @@
-// pxl_render/mesh/paint/object.rs
+// pxl-render/mesh/paint/object.rs
 
 pub mod adapter;

@@ -1,4 +1,4 @@
-// xpute_core/sched/frame_budget.rs
+// xpute-core/sched/frame_budget.rs
 
 //! The pass: the innermost of the scheduler's three levels
 //! (sched/quantum.rs grants a guest its slice, sched/tick.rs spends it in

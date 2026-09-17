@@ -1,7 +1,7 @@
-// pxl_render/mesh/paint/terrain/elevation.test.rs
+// pxl-render/mesh/paint/terrain/elevation.test.rs
 
-use pxl_shared::bake::constant::ELE_PADDED_SPAN;
-use pxl_shared::spec::cell::cube_types;
+use pxl_spec::bake::constant::ELE_PADDED_SPAN;
+use pxl_spec::cell::cube_types;
 use xpute_core::kit::array::U8Array;
 
 use super::*;

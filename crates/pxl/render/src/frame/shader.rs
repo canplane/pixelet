@@ -1,3 +1,3 @@
-// pxl_render/frame/shader.rs
+// pxl-render/frame/shader.rs
 
 pub mod record;

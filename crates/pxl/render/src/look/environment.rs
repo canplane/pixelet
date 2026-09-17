@@ -1,8 +1,8 @@
-// pxl_render/look/environment.rs
+// pxl-render/look/environment.rs
 
 //! The light, the fog and the sky as the frame is lit: a theme's floats as the
 //! kernel eased them and the sun and the moon where it placed them
-//! (crates/pxl/core/src/layer/environment/state.rs), composed into the lane the
+//! (crates/pxl/kernel/src/layer/environment/state.rs), composed into the lane the
 //! renderer's frame and sky uniforms are laid out from (gpu/renderer.rs).
 //!
 //! The terrain's light is the true, unturned direction: the world turns

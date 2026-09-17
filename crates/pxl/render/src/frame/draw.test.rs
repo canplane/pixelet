@@ -1,4 +1,4 @@
-// pxl_render/frame/draw.test.rs
+// pxl-render/frame/draw.test.rs
 
 use super::*;
 

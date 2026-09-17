@@ -1,4 +1,4 @@
-// pxl_render/mesh/voxel_scan.rs
+// pxl-render/mesh/voxel_scan.rs
 
 //! A chunk's bands to its column runs: the whole-chunk scan.
 //!

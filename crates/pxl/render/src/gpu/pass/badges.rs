@@ -1,7 +1,7 @@
-// pxl_render/gpu/pass/badges.rs
+// pxl-render/gpu/pass/badges.rs
 
 //! The billboards on the device — the POI badges and the chat bubble: one
-//! instanced quad over the scheduler's billboard sets (crates/pxl/core/src/layer/billboard/field.rs), one
+//! instanced quad over the scheduler's billboard sets (crates/pxl/kernel/src/layer/billboard/field.rs), one
 //! draw a set, in a pass of their own after the world with the world's depth
 //! attached read-only and bound as a texture at once (shader/badge.wgsl asks
 //! both of its depth questions of this frame's depth).
@@ -43,7 +43,7 @@ macro_rules! font_family {
     };
 }
 
-// ---- a place and a cluster (crates/pxl/core/src/layer/poi/badge.rs) ----
+// ---- a place and a cluster (crates/pxl/kernel/src/layer/poi/badge.rs) ----
 
 const BADGE_FONT: &str = concat!("400 12px ", font_family!());
 const ICON_FONT: &str = "14px sans-serif";
@@ -110,7 +110,7 @@ fn cluster<'a>(p: &mut Paint<'a>, label: &'a str, logical_w: f32) {
     anchor_dot(p, logical_w);
 }
 
-// ---- a speech bubble (crates/pxl/core/src/layer/character/chat_bubble.rs) ----
+// ---- a speech bubble (crates/pxl/kernel/src/layer/character/chat_bubble.rs) ----
 
 const BUBBLE_FONT: &str = concat!("600 14px ", font_family!());
 const PADDING_Y: f32 = 8.0;

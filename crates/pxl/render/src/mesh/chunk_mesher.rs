@@ -1,4 +1,4 @@
-// pxl_render/mesh/chunk_mesher.rs
+// pxl-render/mesh/chunk_mesher.rs
 
 //! A chunk's column runs to one mesh.
 //!
@@ -13,8 +13,8 @@
 //! knows the mesh's size (`Step::NeedMesh`), and the bake waits at that step
 //! for as long as the answer is that there is no room.
 
-use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, U_PER_CELL};
-use pxl_shared::spec::space::v3::V3;
+use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, U_PER_CELL};
+use pxl_spec::space::v3::V3;
 use xpute_core::kit::fdlibm;
 
 use crate::mesh::volume::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};

@@ -1,4 +1,4 @@
-// xpute_core/kit/mat4.rs
+// xpute-core/kit/mat4.rs
 
 //! 4x4 matrices as sixteen doubles, column-major — the layout GL, WebGPU and
 //! glTF share, so a matrix here uploads as it is. Every function writes into

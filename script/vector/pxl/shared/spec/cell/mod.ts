@@ -2,7 +2,7 @@
 //
 // The cell catalogs as the TypeScript builds them — every channel's types
 // and colours, the flat and decor ids, and every placeable id with its
-// number, colour and source — for crates/pxl/shared/src/spec/cell/mod.test.rs.
+// number, colour and source — for crates/pxl/spec/src/cell/mod.test.rs.
 
 import { GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import * as cell from "@pxl/shared/spec/cell/mod.ts";

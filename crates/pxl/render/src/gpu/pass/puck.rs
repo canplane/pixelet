@@ -1,7 +1,7 @@
-// pxl_render/gpu/pass/puck.rs
+// pxl-render/gpu/pass/puck.rs
 
 //! The location puck on the device: the scheduler's zone and beacon draws
-//! (crates/pxl/core/src/layer/marker/location_puck.rs) — the zone a unit box a cell instanced from the zone
+//! (crates/pxl/kernel/src/layer/marker/location_puck.rs) — the zone a unit box a cell instanced from the zone
 //! block, the beacon a small octahedron — under shader/puck_zone.wgsl and
 //! puck_beacon.wgsl. The geometry is built here, once.
 

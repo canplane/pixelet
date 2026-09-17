@@ -1,4 +1,4 @@
-// xpute_core/io/marshal/tree/encode.test.rs
+// xpute-core/io/marshal/tree/encode.test.rs
 // (no pair: the TypeScript tree has no test file; the vector holds it to the
 // TypeScript encoder byte for byte)
 

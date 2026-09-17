@@ -1,4 +1,4 @@
-// xpute_core/io/marshal/tree/encode.rs
+// xpute-core/io/marshal/tree/encode.rs
 
 use crate::kit::array::{Bytes, Kind, TypedArray, U8Array};
 use crate::kit::encoding;

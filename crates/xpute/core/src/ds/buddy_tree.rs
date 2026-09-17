@@ -1,4 +1,4 @@
-// xpute_core/ds/buddy_tree.rs
+// xpute-core/ds/buddy_tree.rs
 
 //! evanw/buddy-malloc, line for line, over a range that is given rather than
 //! asked for — the kernel's page allocator, with `ds/slab.rs` over it for

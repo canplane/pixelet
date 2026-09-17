@@ -1,10 +1,10 @@
-// pxl_render/lib.rs
+// pxl-render/lib.rs
 
-//! pixelet's view: what the model (pxl-shared) looks like when drawn — the
+//! pixelet's view: what the model (pxl-spec) looks like when drawn — the
 //! voxel volumes and the meshes a chunk bakes into, the terrain's elevation,
 //! the LOD ladder, the models' glTF, the billboards' sheet, the draw list,
 //! the shaders and pipelines — and the device that draws it. It knows the
-//! model and nothing of the kernel (pxl-core): the kernel decides what and
+//! model and nothing of the kernel (pxl-kernel): the kernel decides what and
 //! when, and hands a frame what it reads (`gpu::renderer::FrameInput`).
 
 pub mod asset;

@@ -43,7 +43,7 @@ Extent is a linear range on one packed lane (`RANGE` in `indexer.ts`), not an in
 
 L5 is reserved, not active code today (`L5_SHAMT` stays commented out in `indexer.ts`). Once implemented, its Z lane collapses — Z is only 16 bits wide, narrower than `L5_SHAMT` — so L5 can only ever address X/Y, regardless of what any layer does with it.
 
-Objects have no server persistence yet — the store is client-local. Its records are the module's (`crates/pxl/core/src/world/object.rs`): a palette per L2 chunk and one sparse octree per occupied `64³` band whose leaves are palette indices, with the chunk's entries derived as lanes and a cell index over them for occupancy and hit tests; `module/world/object/store.ts` lowers a coordinate to what the module keys by, reads the lanes back as views, and keeps the leaf ids, the change-log bumps and the eraser's virtual edits. The object layer paints in the module too. It persists as five lanes per L3 page — a page-local position, the footprint's side and the value — under a storage key that carries its layout's version.
+Objects have no server persistence yet — the store is client-local. Its records are the module's (`crates/pxl/kernel/src/world/object.rs`): a palette per L2 chunk and one sparse octree per occupied `64³` band whose leaves are palette indices, with the chunk's entries derived as lanes and a cell index over them for occupancy and hit tests; `module/world/object/store.ts` lowers a coordinate to what the module keys by, reads the lanes back as views, and keeps the leaf ids, the change-log bumps and the eraser's virtual edits. The object layer paints in the module too. It persists as five lanes per L3 page — a page-local position, the footprint's side and the value — under a storage key that carries its layout's version.
 
 One chunk node (`module/world/chunk_node.ts`) owns one L2 XY column and composes however many signed 64-cell L2 Z bands its content touches. One L3 page therefore contains 256 possible L2 columns.
 
@@ -220,7 +220,7 @@ memory budget over the retained meshes.
 The renderer follows a single-threaded cooperative-yield model, closer to
 Figma's than to a preemptive one: everything that can be cut into units
 under the budget stays on the main thread, and that is nearly everything.
-A chunk's build runs in the Rust core (`crates/pxl/core`, compiled by
+A chunk's build runs in the Rust core (`crates/pxl/kernel`, compiled by
 `crates/pxl/wasm` into one module whose exports are a boot block and a doorbell, no bindgen, which
 imports the core memory): the node sends which tiers it lacks through a
 submission ring, the host rings the doorbell once a frame with the turn's quota,

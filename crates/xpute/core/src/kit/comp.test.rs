@@ -1,4 +1,4 @@
-// xpute_core/kit/comp.test.rs
+// xpute-core/kit/comp.test.rs
 // (no pair: comp.ts has no test file)
 
 use super::*;

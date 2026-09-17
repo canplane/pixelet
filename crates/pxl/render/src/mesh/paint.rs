@@ -1,4 +1,4 @@
-// pxl_render/mesh/paint.rs
+// pxl-render/mesh/paint.rs
 
 pub mod object;
 pub mod palette;

@@ -1,4 +1,4 @@
-// xpute_core/ds/spatial_hash.test.rs
+// xpute-core/ds/spatial_hash.test.rs
 
 use std::collections::{HashMap, HashSet};
 

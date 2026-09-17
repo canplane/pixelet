@@ -1,4 +1,4 @@
-// pxl_render/mesh/paint/terrain/adapter.rs
+// pxl-render/mesh/paint/terrain/adapter.rs
 
 //! A terrain page's chunk as the render pipeline reads it.
 //!
@@ -17,7 +17,7 @@
 //! height so a shoreline reads as water meeting land rather than as two
 //! surfaces at the same level.
 
-use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN};
+use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN};
 
 use crate::mesh::paint::terrain::elevation::{sample_ele, WATER_RECESS_CELLS};
 use crate::mesh::volume::{Volumes, Voxel, NO_LAYER};

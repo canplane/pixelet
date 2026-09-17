@@ -1,4 +1,4 @@
-// pxl_render/mesh/paint/object/adapter.rs
+// pxl-render/mesh/paint/object/adapter.rs
 
 //! The paint that turns the object store's records into voxels of a chunk
 //! volume: what each state paints as, the eraser's carve preview, and a
@@ -6,8 +6,8 @@
 
 use std::collections::BTreeSet;
 
-use pxl_shared::bake::constant::{BandZ, CellZ, BAND_CELLS, BAND_UNITS, MIN_LEVEL, POS_BITS, POS_MASK, STEP_UNITS, U_PER_CELL};
-use pxl_shared::spec::cell::cube_types;
+use pxl_spec::bake::constant::{BandZ, CellZ, BAND_CELLS, BAND_UNITS, MIN_LEVEL, POS_BITS, POS_MASK, STEP_UNITS, U_PER_CELL};
+use pxl_spec::cell::cube_types;
 use xpute_core::kit::math::round_half_up;
 
 use crate::mesh::volume::{pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};

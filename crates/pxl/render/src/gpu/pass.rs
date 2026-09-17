@@ -1,4 +1,4 @@
-// pxl_render/gpu/pass.rs
+// pxl-render/gpu/pass.rs
 
 pub mod badges;
 pub mod decor;

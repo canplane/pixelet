@@ -1,4 +1,4 @@
-// pxl_render/asset/gltf.rs
+// pxl-render/asset/gltf.rs
 
 //! A glTF 2.0 parser for what the shipped models use: a GLB container or a
 //! JSON document with its buffers already in hand; nodes with TRS or a matrix;
@@ -11,7 +11,7 @@
 //!
 //! Nothing here is Y-up or Z-up: the vertices, poses and keys come out as the
 //! file holds them, in the file's own frame, and whoever registers the model
-//! (crates/pxl/core/src/io/model_asset.rs) decides how it stands.
+//! (crates/pxl/kernel/src/io/model_asset.rs) decides how it stands.
 //!
 //! The parse is a future that awaits `pause` between its units — an
 //! accessor's elements a slice at a time, a node, a skin, a channel — so a

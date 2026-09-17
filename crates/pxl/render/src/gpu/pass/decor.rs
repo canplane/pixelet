@@ -1,14 +1,14 @@
-// pxl_render/gpu/pass/decor.rs
+// pxl-render/gpu/pass/decor.rs
 
 //! Decor on the device: the scheduler's decor draws (draw.rs) executed
 //! as instanced draws of each variant's model, the instances read straight out
-//! of the decor block the scheduler built (crates/pxl/core/src/layer/decor/build.rs's layout) as it lies
+//! of the decor block the scheduler built (crates/pxl/kernel/src/layer/decor/build.rs's layout) as it lies
 //! on the GPU: the block is the instance buffer, the chunk's translation is its
 //! uniform, and the scheduler says which block a chunk shows.
 //!
-//! A model is the scheduler's (crates/pxl/core/src/io/load.rs), registered by the decor asset
+//! A model is the scheduler's (crates/pxl/kernel/src/io/load.rs), registered by the decor asset
 //! store and drawn from the same block the kernel holds its triangles in for
-//! the hit test — the vertex lanes of crates/pxl/core/src/io/model_asset.rs's layout, and the indices
+//! the hit test — the vertex lanes of crates/pxl/kernel/src/io/model_asset.rs's layout, and the indices
 //! past them. The groups are every bundle's variants in bundle order, the order
 //! the kinds were taught; a group's skin is the image its variant loaded, held
 //! by image rather than by group, since two variants — two kinds, even — may

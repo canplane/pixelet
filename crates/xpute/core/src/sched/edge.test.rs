@@ -1,4 +1,4 @@
-// xpute_core/sched/edge.test.rs
+// xpute-core/sched/edge.test.rs
 
 use core::cell::Cell;
 use core::pin::pin;

@@ -1,4 +1,4 @@
-// pxl_render/mesh/paint/palette/shader_meta.rs
+// pxl-render/mesh/paint/palette/shader_meta.rs
 
 //! The palette as tables: every (channel, type) the cube catalogue colours,
 //! numbered as the layers of the texture pack's arrays (layers builds the
@@ -10,8 +10,8 @@
 
 use std::sync::LazyLock;
 
-use pxl_shared::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
-use pxl_shared::spec::cell::{ground_channel_colors, ground_channel_types};
+use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
+use pxl_spec::cell::{ground_channel_colors, ground_channel_types};
 
 /// A coloured type of a channel, and the array layer it is.
 #[derive(Clone, Debug, PartialEq)]

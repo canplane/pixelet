@@ -1,4 +1,4 @@
-// pxl_render/gpu/shadow.rs
+// pxl-render/gpu/shadow.rs
 
 //! The sun's shadow map: the world drawn once more each frame from the sun,
 //! depth only, into a square map over the map centre, which every lit pass

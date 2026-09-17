@@ -1,4 +1,4 @@
-// pxl_render/asset/atlas.rs
+// pxl-render/asset/atlas.rs
 
 //! Every billboard's bitmap in one texture.
 //!

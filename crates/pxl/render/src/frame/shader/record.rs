@@ -1,4 +1,4 @@
-// pxl_render/frame/shader/record.rs
+// pxl-render/frame/shader/record.rs
 
 //! The shaders and the pipelines that run them, as their one source: the
 //! WGSL in `shader/`, assembled here from its shared pieces, and each

@@ -1,4 +1,4 @@
-// xpute_core/ds/handle.rs
+// xpute-core/ds/handle.rs
 
 //! Handles to what another side keeps: the number is the table's, the thing it
 //! names is the holder's — the way an OS hands out a descriptor and keeps the

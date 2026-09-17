@@ -108,3 +108,20 @@ spec `kind.json` generates — where it was a `_kind` file and a `_decor` file.
 
 Nothing here has been run; `cargo check`, clippy on wasm32 and natively on
 every target, and the spec check passed.
+
+## The crates' names
+
+The same day, two crates were named for what they are. `pxl-shared` is
+`pxl-spec`: everything in it — the space and its coordinates, the cell
+catalogs, the command and message numbers, the bake's formats, the assets'
+tables — is a definition every side follows, with its reference
+implementation, and "shared" named who uses it, which is the TypeScript
+monorepo's convention rather than a Rust crate's. Its inner `spec/` level went,
+so a path is `pxl_spec::cell` rather than `pxl_spec::spec::cell`. `pxl-core` is
+`pxl-kernel`, which is what its own docs called it, and `core` in `xpute-core`
+means a generic kit, not the centre of pixelet.
+
+The TypeScript package keeps `@pxl/shared` for now. Once the server and the
+bake tools are Rust, what the shell still reads of it (the command numbers,
+the catalogs, the assets' paths) is generated into the web app from the JSON
+the way the other `*_spec.ts` files are, and the package goes.

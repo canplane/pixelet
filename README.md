@@ -103,7 +103,7 @@ Two more pieces of the stack are built for this project rather than adopted: a p
 │                                    # the asset ingest
 ├── crates/                         # The Rust core: xpute-core (the generic kit, @xpute/core's
 │   ├── xpute-core/                 # counterpart: pools, the arena, the rings, the change log),
-│   ├── pxl-core/                   # pxl-core (the world: bake/, world/, render/, space/), and
+│   ├── pxl-kernel/                   # pxl-kernel (the world: bake/, world/, render/, space/), and
 │   └── pxl-wasm/                   # pxl-wasm (the one WebAssembly module over both)
 ├── asset/                          # The shipped models and texture pack, by rendering tier
 │   ├── cube/                       # (cube, decor, actor) — no code imports these: they are

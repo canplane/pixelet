@@ -1,4 +1,4 @@
-// xpute_core/sys/vector.rs
+// xpute-core/sys/vector.rs
 // (no pair: the writer is script/pair.ts, which flattens what a generator
 // under script/vector/ returns)
 

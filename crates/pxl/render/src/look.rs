@@ -1,4 +1,4 @@
-// pxl_render/look.rs
+// pxl-render/look.rs
 
 pub mod color;
 pub mod environment;

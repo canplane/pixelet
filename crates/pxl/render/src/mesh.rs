@@ -1,4 +1,4 @@
-// pxl_render/mesh.rs
+// pxl-render/mesh.rs
 
 pub mod chunk_mesher;
 pub mod paint;

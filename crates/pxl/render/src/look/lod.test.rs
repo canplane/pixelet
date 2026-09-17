@@ -1,4 +1,4 @@
-// pxl_render/look/lod.test.rs
+// pxl-render/look/lod.test.rs
 
 use super::*;
 use crate::serial;

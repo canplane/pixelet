@@ -2,7 +2,7 @@
 //
 // The baked terrain packet and the POI page as the TypeScript writes them —
 // tags with escapes, index-like keys and undefined values included — and
-// what the reader gives back, for crates/pxl/shared/src/bake/format.test.rs.
+// what the reader gives back, for crates/pxl/spec/src/bake/format.test.rs.
 
 import * as f from "@pxl/shared/bake/format.ts";
 import type { POI } from "@pxl/shared/bake/model/feature.ts";

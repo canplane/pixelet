@@ -1,4 +1,4 @@
-// pxl_render/gpu/paint.rs
+// pxl-render/gpu/paint.rs
 
 //! A 2D paint stream: what to draw on the host's scratch canvas, as words
 //! (api.json's `paint`), run in one call. The host has the fonts and the text

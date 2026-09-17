@@ -1,4 +1,4 @@
-// xpute_core/ds/grid_index.rs
+// xpute-core/ds/grid_index.rs
 
 //! Screen-space collision grid for greedy label placement.
 //!

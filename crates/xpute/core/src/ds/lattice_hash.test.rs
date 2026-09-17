@@ -1,4 +1,4 @@
-// xpute_core/ds/lattice_hash.test.rs
+// xpute-core/ds/lattice_hash.test.rs
 // (no pair: the hashes are tested beside the spatial hash, and this holds
 // them to the TypeScript over signed addresses)
 

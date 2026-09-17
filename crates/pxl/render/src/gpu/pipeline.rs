@@ -1,4 +1,4 @@
-// pxl_render/gpu/pipeline.rs
+// pxl-render/gpu/pipeline.rs
 
 //! The pipelines as shader.rs defines them, made on the device once
 //! each: a pipeline at a format and a sample count, its shader modules, and

@@ -1,4 +1,4 @@
-// xpute_core/kit/rng.test.rs
+// xpute-core/kit/rng.test.rs
 // (no pair: rng.ts has no test file)
 
 use super::*;

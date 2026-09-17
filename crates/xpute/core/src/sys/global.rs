@@ -1,4 +1,4 @@
-// xpute_core/sys/global.rs
+// xpute-core/sys/global.rs
 
 //! One value for the module's lifetime, made on first use: what a TypeScript
 //! module's top-level `let` is here.

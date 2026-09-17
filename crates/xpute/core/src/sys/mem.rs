@@ -1,4 +1,4 @@
-// xpute_core/sys/mem.rs
+// xpute-core/sys/mem.rs
 
 //! Ranges laid end to end in a linear memory: the mechanism under a kernel's
 //! memory map.
@@ -14,7 +14,7 @@
 //! `memory.buffer` is one `ArrayBuffer` for the module's life: a view over it
 //! stays valid, which is what lets a ring hold its words and a lane be read
 //! where it lies. What the ranges are for, and how large each one is, is the
-//! kernel's policy (crates/pxl/core/src/mem.rs).
+//! kernel's policy (crates/pxl/kernel/src/mem.rs).
 
 /// A WebAssembly page.
 pub const WASM_PAGE_BYTES: u32 = 1 << 16;

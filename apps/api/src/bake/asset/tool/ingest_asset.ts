@@ -11,7 +11,7 @@
 // stored with it). And packages/pxl/shared/src/asset/ingested.ts is the
 // table the catalogs read — asset path to key, size and extent —
 // generated in sorted order so a re-run with no changes writes no diff,
-// and crates/pxl/shared/src/asset/ingested.rs is the same table for the
+// and crates/pxl/spec/src/asset/ingested.rs is the same table for the
 // Rust pair, from the same rows.
 //
 // The texture pack is also ingested as one object: every image under
@@ -42,7 +42,7 @@ const ROOT = fileURLToPath(new URL("../../../../../../", import.meta.url));
 const ASSET_DIR = resolve(ROOT, "asset");
 const OUT_DIR = resolve(ROOT, "out/asset");
 const TABLE_PATH = resolve(ROOT, "packages/pxl/shared/src/asset/ingested.ts");
-const RUST_TABLE_PATH = resolve(ROOT, "crates/pxl/shared/src/asset/ingested.rs");
+const RUST_TABLE_PATH = resolve(ROOT, "crates/pxl/spec/src/asset/ingested.rs");
 
 async function* walk_files(dir: string): AsyncGenerator<string> {
   for await (const entry of Deno.readDir(dir)) {

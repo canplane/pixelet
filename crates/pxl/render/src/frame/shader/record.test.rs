@@ -1,4 +1,4 @@
-// pxl_render/frame/shader/record.test.rs
+// pxl-render/frame/shader/record.test.rs
 
 use std::collections::BTreeMap;
 

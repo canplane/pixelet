@@ -1,9 +1,9 @@
-// pxl_render/frame/stage.rs
+// pxl-render/frame/stage.rs
 
 //! The frame's uniforms as the kernel decides them, in one lane of doubles at
 //! a fixed address: the camera and the root frame, the LOD fade, and what the
 //! settings switch on. The kernel writes it after every frame's turn
-//! (crates/pxl/core/src/world/frame/stage.rs); the renderer reads it in place,
+//! (crates/pxl/kernel/src/world/frame/stage.rs); the renderer reads it in place,
 //! converts the projections to WebGPU's depth range, lays the numbers into its
 //! own uniform buffers and draws; it decides nothing.
 

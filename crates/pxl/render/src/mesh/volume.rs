@@ -1,4 +1,4 @@
-// pxl_render/mesh/volume.rs
+// pxl-render/mesh/volume.rs
 
 //! The render-time volume for one 64×64 chunk.
 //!
@@ -105,7 +105,7 @@ pub fn unpack_material(packed: u32, layer_idx: u32) -> VoxelMaterial {
 // ---- the volume ----
 
 /// A band is a chunk's span on every axis.
-pub const BAND_SPAN: u32 = pxl_shared::bake::constant::CHUNK_CELL_SPAN;
+pub const BAND_SPAN: u32 = pxl_spec::bake::constant::CHUNK_CELL_SPAN;
 const BAND_MASK: u32 = BAND_SPAN - 1;
 const BAND_SPAN2: usize = (BAND_SPAN * BAND_SPAN) as usize;
 pub const BAND_VOXELS: usize = BAND_SPAN2 * BAND_SPAN as usize;

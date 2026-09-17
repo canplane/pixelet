@@ -1,4 +1,4 @@
-// pxl_render/frame.rs
+// pxl-render/frame.rs
 
 pub mod draw;
 pub mod shader;

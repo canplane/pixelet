@@ -1,4 +1,4 @@
-// xpute_core/ds/heap.rs
+// xpute-core/ds/heap.rs
 // heap primitives over an external array (0-based).
 //
 // Element:

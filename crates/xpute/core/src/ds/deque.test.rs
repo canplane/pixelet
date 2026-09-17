@@ -1,4 +1,4 @@
-// xpute_core/ds/deque.test.rs
+// xpute-core/ds/deque.test.rs
 // (no pair: deque.ts has no test file)
 
 use super::*;

@@ -1,4 +1,4 @@
-// pxl_render/look/color.rs
+// pxl-render/look/color.rs
 
 /// A packed `0xRRGGBB` in linear light, which is what every colour the shaders
 /// light and blend with is in.

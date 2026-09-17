@@ -1,4 +1,4 @@
-// xpute_core/sched/tick.test.rs
+// xpute-core/sched/tick.test.rs
 //
 // A step is a plain fn, so what a step sees goes in the state it runs over.
 

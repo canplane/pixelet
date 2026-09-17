@@ -1,4 +1,4 @@
-// pxl_render/asset.rs
+// pxl-render/asset.rs
 
 pub mod atlas;
 pub mod gltf;

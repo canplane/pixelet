@@ -1,4 +1,4 @@
-// pxl_render/gpu/renderer.rs
+// pxl-render/gpu/renderer.rs
 
 //! The renderer: what the scheduler lists (draw.rs) drawn on the device
 //! through the host's calls (api.rs) into the canvases the shell handed the
@@ -875,7 +875,7 @@ impl Renderer {
             u[CAMERA_POS] = (CASE_EYE.x + actor[0]) as f32;
             u[CAMERA_POS + 1] = (CASE_EYE.y + actor[1]) as f32;
             u[CAMERA_POS + 2] = (CASE_EYE.z + actor[2]) as f32;
-            // No fog: the near and far pushed out of reach (crates/pxl/core/src/layer/environment/state.rs's
+            // No fog: the near and far pushed out of reach (crates/pxl/kernel/src/layer/environment/state.rs's
             // fog_near and fog_far in the run).
             u[ENV + 7] = 1e9;
             u[ENV + 11] = 2e9;

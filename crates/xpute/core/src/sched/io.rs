@@ -1,4 +1,4 @@
-// xpute_core/sched/io.rs
+// xpute-core/sched/io.rs
 
 //! A guest's I/O queue: the asynchronous half of its scheduler, beside the
 //! tick.

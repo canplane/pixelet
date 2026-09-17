@@ -1,4 +1,4 @@
-// xpute_core/ipc/change.rs
+// xpute-core/ipc/change.rs
 
 //! The read half of the channel: which units of state changed, as data.
 //!

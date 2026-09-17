@@ -1,4 +1,4 @@
-// pxl_render/mesh/paint/terrain/elevation.rs
+// pxl-render/mesh/paint/terrain/elevation.rs
 
 //! Coordinate prefix rules:
 //! - c (chunk)  : chunk lattice index (e.g. cx, cy)
@@ -16,9 +16,9 @@
 //! - 1 [cell] = 1 [texel]
 //! - Elevation stored in the i16 lane is in [cell] units.
 
-use pxl_shared::bake::constant::{CHUNK_CELL_SPAN, ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN};
-use pxl_shared::bake::format::Ground;
-use pxl_shared::spec::cell::cube_types;
+use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN};
+use pxl_spec::bake::format::Ground;
+use pxl_spec::cell::cube_types;
 use xpute_core::kit::math::lerp;
 
 use xpute_core::kit::math::round_half_up;
@@ -112,7 +112,7 @@ pub fn sample_ele(page_ele: &[i16], tx: u32, ty: u32) -> i16 {
 /// is_water_family_at) — a real height change, not a cosmetic mesh-only
 /// offset: it's applied here, at the one shared elevation query surface, so
 /// every consumer (chunk mesh, placement/snap raycast, and
-/// crates/pxl/core/src/layer/terrain/elevation.rs's own camera ground-snap, which reads a
+/// crates/pxl/kernel/src/layer/terrain/elevation.rs's own camera ground-snap, which reads a
 /// page's raw ele directly) sees the same lowered height instead of only the
 /// rendered mesh looking recessed while placement math, ground-snap, or a
 /// cell marker still reasons about the un-recessed one.

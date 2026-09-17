@@ -1,4 +1,4 @@
-// xpute_core/kit/hash.rs
+// xpute-core/kit/hash.rs
 
 //! The SHA-256 functions there are the host's WebCrypto and are not here
 //! (script/pair.exempt.json).

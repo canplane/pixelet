@@ -1,4 +1,4 @@
-// pxl_render/gpu/surface.rs
+// pxl-render/gpu/surface.rs
 
 //! The canvases the kernel draws into, each named by the handle it gave the
 //! shell when the shell handed one over: the world's, and a case's for the

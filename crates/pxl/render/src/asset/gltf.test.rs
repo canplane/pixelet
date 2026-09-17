@@ -1,4 +1,4 @@
-// pxl_render/asset/gltf.test.rs
+// pxl-render/asset/gltf.test.rs
 
 use core::pin::pin;
 use core::task::{Context, Poll, Waker};

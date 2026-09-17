@@ -1,4 +1,4 @@
-// pxl_render/gpu.rs
+// pxl-render/gpu.rs
 
 pub mod api;
 pub mod api_spec;
