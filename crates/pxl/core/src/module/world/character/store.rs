@@ -18,8 +18,6 @@ pub struct CompanionLoadStore {
     pub pet_ready: bool,
 }
 
-impl CompanionLoadStore {}
-
 static STORE: Global<CompanionLoadStore> = Global::new();
 
 pub fn companion_load_store() -> &'static mut CompanionLoadStore {

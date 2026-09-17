@@ -28,9 +28,7 @@
   "CATEGORY_NAMES": [
     "terrain",
     "ocean",
-    "poi",
-    "search",
-    "geocode"
+    "poi"
   ],
   "OUTCOME_NAMES": [
     "ok",
@@ -225,10 +223,10 @@
     "tasks": {
       "AT": 143,
       "slots": 0,
-      "WORDS": 125
+      "WORDS": 75
     },
     "counters": {
-      "AT": 268,
+      "AT": 218,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -252,7 +250,7 @@
       "WORDS": 20
     },
     "atlas": {
-      "AT": 288,
+      "AT": 238,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -260,7 +258,7 @@
       "WORDS": 4
     },
     "retain": {
-      "AT": 292,
+      "AT": 242,
       "nodes": 0,
       "run_sets": 1,
       "run_set_mb": 2,
@@ -273,14 +271,14 @@
       "WORDS": 9
     },
     "fetch": {
-      "AT": 301,
+      "AT": 251,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "poi": {
-      "AT": 304,
+      "AT": 254,
       "badge_count": 0,
       "dropped": 1,
       "place_ms": 2,
@@ -307,7 +305,7 @@
       "WORDS": 23
     },
     "peak": {
-      "AT": 327,
+      "AT": 277,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -328,12 +326,12 @@
       "WORDS": 17
     },
     "steps": {
-      "AT": 344,
+      "AT": 294,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
-    "WORDS": 505
+    "WORDS": 455
   },
   "READ": {
     "$type": "u32",

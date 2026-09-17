@@ -75,7 +75,7 @@ pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: WorldThemeKey) {
         put(lane, v);
     }
     put(lane, t.directional.intensity);
-    put(lane, if key == WorldThemeKey::Night { 1.0 } else { 0.0 });
+    put(lane, if key == WorldThemeKey::night { 1.0 } else { 0.0 });
     put(lane, render_cfg::FOG_NEAR);
     put(lane, render_cfg::FOG_FAR);
     put(lane, light_cfg::FLOOR);

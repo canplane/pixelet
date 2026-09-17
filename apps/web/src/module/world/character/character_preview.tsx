@@ -27,12 +27,12 @@ export function CharacterPreview(props: CharacterPreviewProps) {
     const canvas = ref.current;
     if (!canvas) return;
     const surface = open_surface(canvas, SURFACE_CASE);
-    if (surface.handle !== 0) kernel_action({ type: "preview_open", id: surface.handle, key: variant.key });
+    if (surface.handle !== 0) kernel_action({ type: "preview_open", id: surface.handle, group: variant.group, number: variant.number });
     return () => {
       if (surface.handle !== 0) kernel_action({ type: "preview_close", id: surface.handle });
       surface.close();
     };
-  }, [variant.key]);
+  }, [variant.group, variant.number]);
 
   return (
     <div className={className}>

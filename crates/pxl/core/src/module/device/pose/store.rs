@@ -142,6 +142,17 @@ impl DeviceLocationStore {
     }
 }
 
+/// A sensor permission, as SENSOR_PERMISSION carries it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PermissionAnswer {
+    /// The shell's prompt is up.
+    Asking,
+    Granted,
+    Denied,
+    /// The prompt itself threw.
+    Failed,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DeviceOrientationStore {
     /// Whether the compass listener is registered and running.

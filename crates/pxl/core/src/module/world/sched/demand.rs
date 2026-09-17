@@ -52,8 +52,6 @@ pub enum Category {
     /// The one tile every open-water page shares.
     Ocean,
     Poi,
-    Search,
-    Geocode,
 }
 
 impl Category {
@@ -63,8 +61,6 @@ impl Category {
             Category::Terrain => "terrain",
             Category::Ocean => "ocean",
             Category::Poi => "poi",
-            Category::Search => "search",
-            Category::Geocode => "geocode",
         }
     }
 }
@@ -72,9 +68,8 @@ impl Category {
 /// What names one demand: the stream it belongs to, and the one thing in that
 /// stream it is for.
 ///
-/// The subject is a page's own coordinate where the stream is pages, the
-/// query's hash where it is a search, and nothing where the stream has one
-/// member.
+/// The subject is a page's own coordinate where the stream is pages, and
+/// nothing where the stream has one member.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct DemandKey {
     pub category: Category,

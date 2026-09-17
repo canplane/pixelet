@@ -185,6 +185,28 @@ MiB on terrain alone (4,096 columns of six faces at 360 bytes, the two finest
 tiers), against a phone's 256 MiB heap; a chunk with objects is not bounded
 by that figure.
 
+## What a step is bounded by
+
+A cooperative step cannot be cut from outside, so a step whose size the
+user's data decides can run past any quota. Three were found that way and
+cut, with no measured number: each is bounded by a structural one.
+
+- **The save** walks the store a column at a time, pausing between. A walk
+  the store moved under is dropped and walked again, and the pending save is
+  taken only once written, so the page hiding mid-walk still flushes it. The
+  encoding and the write are one step still: `storage_set` takes the whole
+  text.
+- **A chunk's objects** are painted into the scan's volume a step at a time,
+  each stopping past a band's cells in voxels, which is also the most one
+  entry sets. The paint holds the scan slot, its own claims, and the column's
+  revisions it began on; a store written between steps begins it again. The
+  hover's composite is not cut: the raycast needs it whole in the frame that
+  asks.
+- **A model's parse** is a future awaiting a pause the caller gives: between
+  accessors, every 4,096 elements within one, between nodes, skins and
+  channels. A model could come from a user, so its size is not the shipped
+  assets'. One JSON lookup still reads the document's text whole.
+
 ## Not done yet
 
 - **The tick's phase runner stays** inside the frame task, as the order its

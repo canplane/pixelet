@@ -13,14 +13,13 @@
 //! chain is drawn on the device, a level from the one above (Mips).
 
 use pxl_shared::asset::texture::{shipped_texture_tile, CubeFace, SHIPPED_SHEET};
-use pxl_shared::spec::cell::{cube_ids, cube_rgb};
+use pxl_shared::spec::cell::{block_cubes, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 
 use super::api::{object, texture_usage, GpuApi};
 use super::api_spec::{address, compare, dimension, filter, format, load, resource};
 use super::paint::Paint;
 use super::pipeline::Pipelines;
-use crate::lib::env::route::asset_url;
-use crate::module::world::gltf_cache::load_image;
+use crate::module::world::gltf_cache::{load_image, Load};
 use crate::render::layer::terrain::shader_meta::{rgb255, GROUND_LAYER_META};
 use crate::render::shader::PIPELINE_MIPS;
 use crate::render::tex_array::OBJECT_LAYER_IDX;
@@ -86,14 +85,16 @@ impl Mips {
     }
 }
 
-/// Every layer: its channel, its type, its index, and its colour.
-fn each_layer(mut f: impl FnMut(&str, &str, u32, u32)) {
+/// Every layer: the cube it is, where one stands for it, its index, and its
+/// colour. A ground type no cube stands in for (common's) has no tile.
+fn each_layer(mut f: impl FnMut(Option<PlaceableCube>, u32, u32)) {
     for m in GROUND_LAYER_META.iter() {
-        f(m.ch_key.as_str(), m.type_key, m.layer_index, m.rgb);
+        f(terrain_style_cube_for(m.ch_key, m.type_id as u32), m.layer_index, m.rgb);
     }
-    for id in cube_ids.iter() {
-        if let Some(layer) = OBJECT_LAYER_IDX(id) {
-            f("block", id, layer, cube_rgb(id));
+    for block in block_cubes() {
+        let cube = PlaceableCube::Block(block);
+        if let (Some(layer), Some(rgb)) = (OBJECT_LAYER_IDX(block), placeable_cube_rgb(cube)) {
+            f(Some(cube), layer, rgb);
         }
     }
 }
@@ -115,7 +116,7 @@ impl Layers {
     /// Both arrays, each layer its flat colour — laid out in `fill`, a tile's
     /// texels — with their mip chains.
     pub fn new(g: &GpuApi, mips: &Mips, fill: &mut [u8]) -> Layers {
-        let count = (GROUND_LAYER_META.len() + cube_ids.len()) as u32;
+        let count = (GROUND_LAYER_META.len() + block_cubes().len()) as u32;
         let levels = mip_levels(LAYER_TEX_SZ, LAYER_TEX_SZ);
         let usage = texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT;
         let make = || {
@@ -126,7 +127,7 @@ impl Layers {
             (tex, view)
         };
         let ((top, top_view), (side, side_view)) = (make(), make());
-        each_layer(|_, _, layer, rgb| {
+        each_layer(|_, layer, rgb| {
             let [r, gr, b] = rgb255(rgb);
             for px in fill.chunks_exact_mut(4) {
                 px.copy_from_slice(&[r, gr, b, 255]);
@@ -162,11 +163,11 @@ impl Layers {
         if self.loaded {
             return;
         }
-        let Some(image) = load_image(&asset_url(SHIPPED_SHEET.key)) else { return };
+        let Some(image) = load_image(Load::Sheet) else { return };
         let (cell, size) = (SHIPPED_SHEET.cell as f32, LAYER_TEX_SZ as f32);
         for (tex, face) in [(self.top, CubeFace::Top), (self.side, CubeFace::Side)] {
-            each_layer(|channel, type_key, layer, _| {
-                let Some(tile) = shipped_texture_tile(channel, type_key, face).or_else(|| shipped_texture_tile(channel, type_key, CubeFace::Top)) else {
+            each_layer(|cube, layer, _| {
+                let Some(tile) = cube.and_then(|cube| shipped_texture_tile(cube, face).or_else(|| shipped_texture_tile(cube, CubeFace::Top))) else {
                     return;
                 };
                 let mut p = Paint::new();

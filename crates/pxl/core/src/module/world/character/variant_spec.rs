@@ -7,101 +7,241 @@
 // player starts as. What a path's bytes are is the asset ingest's
 // (pxl_shared::asset::ingested).
 
-#![allow(non_upper_case_globals, non_snake_case, dead_code, clippy::excessive_precision)]
+#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code, clippy::excessive_precision)]
 
-/// The people a player can be: the key the settings store persists, row for
-/// row with the model under asset/. One pack, so one colormap.
-pub mod PERSON {
-    /// World units tall — one cell.
-    pub const size: f64 = 1.0;
-    pub const keys: &[&str] = &[
-        "female-1", "female-2", "female-3", "female-4", "female-5", "female-6", "male-1", "male-2", "male-3", "male-4", "male-5", "male-6",
-    ];
-    pub const models: &[&str] = &[
-        "actor/kenney_mini_characters/female-a.glb",
-        "actor/kenney_mini_characters/female-b.glb",
-        "actor/kenney_mini_characters/female-c.glb",
-        "actor/kenney_mini_characters/female-d.glb",
-        "actor/kenney_mini_characters/female-e.glb",
-        "actor/kenney_mini_characters/female-f.glb",
-        "actor/kenney_mini_characters/male-a.glb",
-        "actor/kenney_mini_characters/male-b.glb",
-        "actor/kenney_mini_characters/male-c.glb",
-        "actor/kenney_mini_characters/male-d.glb",
-        "actor/kenney_mini_characters/male-e.glb",
-        "actor/kenney_mini_characters/male-f.glb",
-    ];
-    pub const skin: &str = "actor/kenney_mini_characters/colormap.png";
-    pub const KEYS: &[&str] = &["size", "keys", "models", "skin"];
+/// The groups a character is of, each numbered, and in each its variants by
+/// key, row for row with its models, the colormap its pack shares, how tall it
+/// stands and which clip is its move.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Group {
+    person = 0,
+    pet = 1,
 }
 
-/// The pets, the same way. A pet's key is its model's name.
-pub mod PET {
-    /// World units tall — a quarter cell, the step OBJECT_SIZES also takes.
-    pub const size: f64 = 0.25;
-    pub const keys: &[&str] = &[
-        "beaver",
-        "bee",
-        "bunny",
-        "cat",
-        "caterpillar",
-        "chick",
-        "cow",
-        "crab",
-        "deer",
-        "dog",
-        "elephant",
-        "fish",
-        "fox",
-        "giraffe",
-        "hog",
-        "koala",
-        "lion",
-        "monkey",
-        "panda",
-        "parrot",
-        "penguin",
-        "pig",
-        "polar",
-        "tiger",
-    ];
-    pub const models: &[&str] = &[
-        "actor/kenney_cube_pets/beaver.glb",
-        "actor/kenney_cube_pets/bee.glb",
-        "actor/kenney_cube_pets/bunny.glb",
-        "actor/kenney_cube_pets/cat.glb",
-        "actor/kenney_cube_pets/caterpillar.glb",
-        "actor/kenney_cube_pets/chick.glb",
-        "actor/kenney_cube_pets/cow.glb",
-        "actor/kenney_cube_pets/crab.glb",
-        "actor/kenney_cube_pets/deer.glb",
-        "actor/kenney_cube_pets/dog.glb",
-        "actor/kenney_cube_pets/elephant.glb",
-        "actor/kenney_cube_pets/fish.glb",
-        "actor/kenney_cube_pets/fox.glb",
-        "actor/kenney_cube_pets/giraffe.glb",
-        "actor/kenney_cube_pets/hog.glb",
-        "actor/kenney_cube_pets/koala.glb",
-        "actor/kenney_cube_pets/lion.glb",
-        "actor/kenney_cube_pets/monkey.glb",
-        "actor/kenney_cube_pets/panda.glb",
-        "actor/kenney_cube_pets/parrot.glb",
-        "actor/kenney_cube_pets/penguin.glb",
-        "actor/kenney_cube_pets/pig.glb",
-        "actor/kenney_cube_pets/polar.glb",
-        "actor/kenney_cube_pets/tiger.glb",
-    ];
-    pub const skin: &str = "actor/kenney_cube_pets/colormap.png";
-    pub const KEYS: &[&str] = &["size", "keys", "models", "skin"];
+impl Group {
+    /// Every member, in the JSON's own order.
+    pub const ALL: [Group; 2] = [Group::person, Group::pet];
+
+    /// The member a number names, or none for a number the set does not
+    /// give out.
+    pub fn of(value: u8) -> Option<Group> {
+        Group::ALL.into_iter().find(|member| *member as u8 == value)
+    }
 }
 
-/// Clip name for the catch-up/preview move — Kenney doesn't name this
-/// "walk" consistently across packs (person: "sprint", pet: "run").
-pub mod MOVE_CLIP {
-    pub const person: &str = "sprint";
-    pub const pet: &str = "run";
-    pub const KEYS: &[&str] = &["person", "pet"];
+pub mod groups {
+    /// The people a player can be: the key the settings store persists, row for
+    /// row with the model under asset/. One pack, so one colormap.
+    pub mod person {
+        /// World units tall — one cell.
+        pub const size: f64 = 1.0;
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        #[repr(u8)]
+        pub enum Key {
+            female_1 = 0,
+            female_2 = 1,
+            female_3 = 2,
+            female_4 = 3,
+            female_5 = 4,
+            female_6 = 5,
+            male_1 = 6,
+            male_2 = 7,
+            male_3 = 8,
+            male_4 = 9,
+            male_5 = 10,
+            male_6 = 11,
+        }
+
+        impl Key {
+            /// Every member, in the JSON's own order.
+            pub const ALL: [Key; 12] = [
+                Key::female_1,
+                Key::female_2,
+                Key::female_3,
+                Key::female_4,
+                Key::female_5,
+                Key::female_6,
+                Key::male_1,
+                Key::male_2,
+                Key::male_3,
+                Key::male_4,
+                Key::male_5,
+                Key::male_6,
+            ];
+
+            /// The member a number names, or none for a number the set does not
+            /// give out.
+            pub fn of(value: u8) -> Option<Key> {
+                Key::ALL.into_iter().find(|member| *member as u8 == value)
+            }
+        }
+
+        pub mod keys {
+            pub const female_1: u8 = 0;
+            pub const female_2: u8 = 1;
+            pub const female_3: u8 = 2;
+            pub const female_4: u8 = 3;
+            pub const female_5: u8 = 4;
+            pub const female_6: u8 = 5;
+            pub const male_1: u8 = 6;
+            pub const male_2: u8 = 7;
+            pub const male_3: u8 = 8;
+            pub const male_4: u8 = 9;
+            pub const male_5: u8 = 10;
+            pub const male_6: u8 = 11;
+        }
+        pub const models: [pxl_shared::asset::ingested::Asset; 12] = [
+            pxl_shared::asset::ingested::Asset::actor_kenney_mini_characters_female_a_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_mini_characters_female_b_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_mini_characters_female_c_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_mini_characters_female_d_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_mini_characters_female_e_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_mini_characters_female_f_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_mini_characters_male_a_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_mini_characters_male_b_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_mini_characters_male_c_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_mini_characters_male_d_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_mini_characters_male_e_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_mini_characters_male_f_glb,
+        ];
+        pub const skin: pxl_shared::asset::ingested::Asset = pxl_shared::asset::ingested::Asset::actor_kenney_mini_characters_colormap_png;
+        /// The catch-up/preview move's clip, by its index in the pack's animations —
+        /// every file of a pack lists them in one order, and Kenney doesn't name this
+        /// "walk" consistently: the person's is "sprint", the pet's "run".
+        pub const move_clip: u32 = 3;
+    }
+    /// The pets, the same way. A pet's key is its model's name.
+    pub mod pet {
+        /// World units tall — a quarter cell, the step OBJECT_SIZES also takes.
+        pub const size: f64 = 0.25;
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        #[repr(u8)]
+        pub enum Key {
+            beaver = 0,
+            bee = 1,
+            bunny = 2,
+            cat = 3,
+            caterpillar = 4,
+            chick = 5,
+            cow = 6,
+            crab = 7,
+            deer = 8,
+            dog = 9,
+            elephant = 10,
+            fish = 11,
+            fox = 12,
+            giraffe = 13,
+            hog = 14,
+            koala = 15,
+            lion = 16,
+            monkey = 17,
+            panda = 18,
+            parrot = 19,
+            penguin = 20,
+            pig = 21,
+            polar = 22,
+            tiger = 23,
+        }
+
+        impl Key {
+            /// Every member, in the JSON's own order.
+            pub const ALL: [Key; 24] = [
+                Key::beaver,
+                Key::bee,
+                Key::bunny,
+                Key::cat,
+                Key::caterpillar,
+                Key::chick,
+                Key::cow,
+                Key::crab,
+                Key::deer,
+                Key::dog,
+                Key::elephant,
+                Key::fish,
+                Key::fox,
+                Key::giraffe,
+                Key::hog,
+                Key::koala,
+                Key::lion,
+                Key::monkey,
+                Key::panda,
+                Key::parrot,
+                Key::penguin,
+                Key::pig,
+                Key::polar,
+                Key::tiger,
+            ];
+
+            /// The member a number names, or none for a number the set does not
+            /// give out.
+            pub fn of(value: u8) -> Option<Key> {
+                Key::ALL.into_iter().find(|member| *member as u8 == value)
+            }
+        }
+
+        pub mod keys {
+            pub const beaver: u8 = 0;
+            pub const bee: u8 = 1;
+            pub const bunny: u8 = 2;
+            pub const cat: u8 = 3;
+            pub const caterpillar: u8 = 4;
+            pub const chick: u8 = 5;
+            pub const cow: u8 = 6;
+            pub const crab: u8 = 7;
+            pub const deer: u8 = 8;
+            pub const dog: u8 = 9;
+            pub const elephant: u8 = 10;
+            pub const fish: u8 = 11;
+            pub const fox: u8 = 12;
+            pub const giraffe: u8 = 13;
+            pub const hog: u8 = 14;
+            pub const koala: u8 = 15;
+            pub const lion: u8 = 16;
+            pub const monkey: u8 = 17;
+            pub const panda: u8 = 18;
+            pub const parrot: u8 = 19;
+            pub const penguin: u8 = 20;
+            pub const pig: u8 = 21;
+            pub const polar: u8 = 22;
+            pub const tiger: u8 = 23;
+        }
+        pub const models: [pxl_shared::asset::ingested::Asset; 24] = [
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_beaver_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_bee_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_bunny_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_cat_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_caterpillar_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_chick_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_cow_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_crab_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_deer_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_dog_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_elephant_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_fish_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_fox_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_giraffe_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_hog_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_koala_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_lion_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_monkey_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_panda_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_parrot_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_penguin_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_pig_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_polar_glb,
+            pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_tiger_glb,
+        ];
+        pub const skin: pxl_shared::asset::ingested::Asset = pxl_shared::asset::ingested::Asset::actor_kenney_cube_pets_colormap_png;
+        /// The catch-up/preview move's clip, by its index in the pack's animations —
+        /// every file of a pack lists them in one order, and Kenney doesn't name this
+        /// "walk" consistently: the person's is "sprint", the pet's "run".
+        pub const move_clip: u32 = 3;
+    }
 }
+
+/// The clip a character stands in, "idle", by its index in both packs' animations.
+pub const IDLE_CLIP: u32 = 1;
 
 /// Split by gender (not one flat list) so the settings UI can show two
 /// separate rows instead of one row a user has to scan by label text to tell
@@ -110,9 +250,8 @@ pub mod MOVE_CLIP {
 pub mod PERSON_GENDER_PREFIXES {
     pub const female: &str = "female-";
     pub const male: &str = "male-";
-    pub const KEYS: &[&str] = &["female", "male"];
 }
 
-pub const DEFAULT_PERSON_VARIANT_KEY: &str = "female-2";
+pub const DEFAULT_PERSON_VARIANT_KEY: crate::module::world::character::variant_spec::groups::person::Key = crate::module::world::character::variant_spec::groups::person::Key::female_2;
 
-pub const DEFAULT_PET_VARIANT_KEY: &str = "chick";
+pub const DEFAULT_PET_VARIANT_KEY: crate::module::world::character::variant_spec::groups::pet::Key = crate::module::world::character::variant_spec::groups::pet::Key::chick;

@@ -11,13 +11,12 @@
 use std::sync::LazyLock;
 
 use pxl_shared::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
-use pxl_shared::spec::cell::{cube_colors, cube_types};
+use pxl_shared::spec::cell::{ground_channel_colors, ground_channel_types};
 
 /// A coloured type of a channel, and the array layer it is.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerrainLayerMeta {
     pub ch_key: GroundChannelKey,
-    pub type_key: &'static str,
     pub type_id: u8,
     /// Packed `0xRRGGBB`, as the catalog gives it.
     pub rgb: u32,
@@ -33,9 +32,8 @@ fn layer_meta() -> Vec<TerrainLayerMeta> {
         // iteration, not merged into the data: AIR never resolves to a colour
         // for any of these channels, so it's filtered out below as any other
         // type with no real colour is; VOID and UNKNOWN do.
-        let channel = cube_types::CHANNELS.iter().find(|(name, _)| *name == ch_key.as_str()).map_or(&[][..], |(_, types)| types);
-        let Some(colors) = cube_colors.get(ch_key.as_str()) else { continue };
-        for &(type_key, type_id) in cube_types::common::ENTRIES.iter().chain(channel.iter()) {
+        let Some(colors) = ground_channel_colors(ch_key) else { continue };
+        for type_id in ground_channel_types(ch_key) {
             // Every swatch the catalog holds is a colour: the generator packs
             // it from the JSON and refuses anything that is not #RRGGBB, so
             // there is nothing left here to validate.
@@ -43,7 +41,6 @@ fn layer_meta() -> Vec<TerrainLayerMeta> {
                 let layer_index = out.len() as u32;
                 out.push(TerrainLayerMeta {
                     ch_key,
-                    type_key,
                     type_id,
                     rgb: swatch.rgb,
                     layer_index,

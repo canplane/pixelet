@@ -20,7 +20,7 @@ pub fn teach_objects() {
         painter.teach(placeable_cube_num_id(cube), Kind::Solid, pack_material(&m), m.layer_idx as u8);
     }
     painter.teach(cube_types::common::air as u32, Kind::Air, 0, NO_LAYER as u8);
-    for id in decor_ids.iter() {
+    for &id in decor_ids.iter() {
         painter.teach(decor_num_id(id), Kind::Decor, 0, NO_LAYER as u8);
     }
 }

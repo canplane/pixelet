@@ -4,7 +4,27 @@
 //
 // The world's time-of-day themes, by WorldThemeKey's value.
 
-#![allow(non_upper_case_globals, non_snake_case, dead_code, clippy::excessive_precision)]
+#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code, clippy::excessive_precision)]
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Theme {
+    morning = 0,
+    day = 1,
+    evening = 2,
+    night = 3,
+}
+
+impl Theme {
+    /// Every member, in the JSON's own order.
+    pub const ALL: [Theme; 4] = [Theme::morning, Theme::day, Theme::evening, Theme::night];
+
+    /// The member a number names, or none for a number the set does not
+    /// give out.
+    pub fn of(value: u8) -> Option<Theme> {
+        Theme::ALL.into_iter().find(|member| *member as u8 == value)
+    }
+}
 
 pub mod themes {
     pub mod morning {
@@ -14,21 +34,17 @@ pub mod themes {
                 pub const top: u32 = 0xf7d9bc;
                 pub const middle: u32 = 0xf9e7d2;
                 pub const horizon: u32 = 0xfff6ea;
-                pub const KEYS: &[&str] = &["top", "middle", "horizon"];
             }
-            pub const KEYS: &[&str] = &["colors"];
         }
         pub mod lighting {
             pub mod ambient {
                 pub const color: u32 = 0xfff2e3;
                 pub const intensity: f64 = 0.62;
-                pub const KEYS: &[&str] = &["color", "intensity"];
             }
             pub mod hemisphere {
                 pub const sky: u32 = 0xfff3df;
                 pub const ground: u32 = 0xd8b894;
                 pub const intensity: f64 = 0.78;
-                pub const KEYS: &[&str] = &["sky", "ground", "intensity"];
             }
             /// Lowered from full strength to avoid blown-out highlights on
             /// sun-facing slopes. Only the directional (sun) light is cut — ambient/
@@ -37,11 +53,8 @@ pub mod themes {
             pub mod directional {
                 pub const color: u32 = 0xffd9a8;
                 pub const intensity: f64 = 0.45;
-                pub const KEYS: &[&str] = &["color", "intensity"];
             }
-            pub const KEYS: &[&str] = &["ambient", "hemisphere", "directional"];
         }
-        pub const KEYS: &[&str] = &["fog", "sky", "lighting"];
     }
     pub mod day {
         pub const fog: u32 = 0xc8def0;
@@ -50,32 +63,25 @@ pub mod themes {
                 pub const top: u32 = 0xb9ddff;
                 pub const middle: u32 = 0xdff1ff;
                 pub const horizon: u32 = 0xf8fcff;
-                pub const KEYS: &[&str] = &["top", "middle", "horizon"];
             }
-            pub const KEYS: &[&str] = &["colors"];
         }
         pub mod lighting {
             pub mod ambient {
                 pub const color: u32 = 0xf9fcff;
                 pub const intensity: f64 = 0.68;
-                pub const KEYS: &[&str] = &["color", "intensity"];
             }
             pub mod hemisphere {
                 pub const sky: u32 = 0xedf6ff;
                 pub const ground: u32 = 0xc2cbd3;
                 pub const intensity: f64 = 0.82;
-                pub const KEYS: &[&str] = &["sky", "ground", "intensity"];
             }
             /// Directional light only, same reasoning as morning — ~61% of full
             /// strength, in step with the other daylight themes.
             pub mod directional {
                 pub const color: u32 = 0xfff8ef;
                 pub const intensity: f64 = 0.5;
-                pub const KEYS: &[&str] = &["color", "intensity"];
             }
-            pub const KEYS: &[&str] = &["ambient", "hemisphere", "directional"];
         }
-        pub const KEYS: &[&str] = &["fog", "sky", "lighting"];
     }
     pub mod evening {
         pub const fog: u32 = 0xc9865f;
@@ -84,21 +90,17 @@ pub mod themes {
                 pub const top: u32 = 0x6f4d4d;
                 pub const middle: u32 = 0xc9865f;
                 pub const horizon: u32 = 0xffd7b0;
-                pub const KEYS: &[&str] = &["top", "middle", "horizon"];
             }
-            pub const KEYS: &[&str] = &["colors"];
         }
         pub mod lighting {
             pub mod ambient {
                 pub const color: u32 = 0xffe4cd;
                 pub const intensity: f64 = 0.58;
-                pub const KEYS: &[&str] = &["color", "intensity"];
             }
             pub mod hemisphere {
                 pub const sky: u32 = 0xffb874;
                 pub const ground: u32 = 0x6a3920;
                 pub const intensity: f64 = 0.82;
-                pub const KEYS: &[&str] = &["sky", "ground", "intensity"];
             }
             /// Directional light only, same pass as day. Landed at ~53% of full
             /// strength rather than the ~61% the other two share, chosen so the
@@ -107,11 +109,8 @@ pub mod themes {
             pub mod directional {
                 pub const color: u32 = 0xffc29d;
                 pub const intensity: f64 = 0.35;
-                pub const KEYS: &[&str] = &["color", "intensity"];
             }
-            pub const KEYS: &[&str] = &["ambient", "hemisphere", "directional"];
         }
-        pub const KEYS: &[&str] = &["fog", "sky", "lighting"];
     }
     pub mod night {
         pub const fog: u32 = 0x1e293b;
@@ -120,21 +119,17 @@ pub mod themes {
                 pub const top: u32 = 0x0b1220;
                 pub const middle: u32 = 0x172338;
                 pub const horizon: u32 = 0x243248;
-                pub const KEYS: &[&str] = &["top", "middle", "horizon"];
             }
-            pub const KEYS: &[&str] = &["colors"];
         }
         pub mod lighting {
             pub mod ambient {
                 pub const color: u32 = 0x24304a;
                 pub const intensity: f64 = 0.4;
-                pub const KEYS: &[&str] = &["color", "intensity"];
             }
             pub mod hemisphere {
                 pub const sky: u32 = 0x314764;
                 pub const ground: u32 = 0x0b1322;
                 pub const intensity: f64 = 0.68;
-                pub const KEYS: &[&str] = &["sky", "ground", "intensity"];
             }
             /// The one theme where directional intensity was raised rather than
             /// cut like the daytime themes above — moonlight needs to read as
@@ -142,13 +137,9 @@ pub mod themes {
             pub mod directional {
                 pub const color: u32 = 0x5a6d8d;
                 pub const intensity: f64 = 0.15;
-                pub const KEYS: &[&str] = &["color", "intensity"];
             }
-            pub const KEYS: &[&str] = &["ambient", "hemisphere", "directional"];
         }
-        pub const KEYS: &[&str] = &["fog", "sky", "lighting"];
     }
-    pub const KEYS: &[&str] = &["morning", "day", "evening", "night"];
 }
 
 /// Where get_theme_key splits the daylight span: MORNING before MORNING_END
@@ -157,5 +148,4 @@ pub mod themes {
 pub mod daylight_split {
     pub const MORNING_END: f64 = 0.375;
     pub const DAY_END: f64 = 0.75;
-    pub const KEYS: &[&str] = &["MORNING_END", "DAY_END"];
 }

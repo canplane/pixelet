@@ -22,9 +22,7 @@ use xpute_core::sched::edge::{notified, yield_if_spent, Notify};
 use xpute_core::sys::mem::{alloc, free, Block};
 
 use crate::lib::env::config::PUBLISHED_TILES;
-use crate::module::map::ui::overlay::{reverse_geocode, search_modal};
 use crate::module::world::change::world_edge;
-use crate::module::world::geocode::repository::geocode_url;
 use crate::module::world::poi::{repository as poi_repository, store as poi_store};
 use crate::module::world::sched::demand::{Category, Demand, Phases};
 use crate::module::world::sched::fetch_scheduler::{demand_of, fetch_settle};
@@ -44,8 +42,6 @@ impl fmt::Display for DemandUrl<'_> {
             // The one tile the stream has, at the name the bake gives it.
             Category::Ocean => write!(f, "{}", tile_repository::ocean_url()),
             Category::Poi => write!(f, "{}", poi_repository::poi_url(key.subject)),
-            Category::Geocode => write!(f, "{}", geocode_url(key.subject)),
-            Category::Search => write!(f, "{}", search_modal::search_request_url()),
         }
     }
 }
@@ -79,14 +75,6 @@ fn view((at, bytes): Block) -> U8Array {
     // `bytes` long, and it is not released while the view is read.
     let buffer = unsafe { ArrayBuffer::from_raw(at as *mut u8, bytes as usize) };
     U8Array::over(buffer, 0, bytes as usize)
-}
-
-/// A body's text, read where the shell wrote it.
-fn text<'a>((at, bytes): Block) -> Result<&'a str, FetchFail> {
-    // SAFETY: as `view`'s: the block is this body's alone, and it is released
-    // only after the text has been read.
-    let raw = unsafe { core::slice::from_raw_parts(at as *const u8, bytes as usize) };
-    core::str::from_utf8(raw).map_err(|_| FetchFail::Decode)
 }
 
 /// The shell's report that a started demand's fetch finished: `outcome` 0
@@ -176,16 +164,14 @@ fn fetch_arrived(key: u64, outcome: u32, status: u32, body: (u32, u32), fail: u3
         }
     };
     if outcome != Outcome::Ok {
-        failed(category, subject, outcome == Outcome::Aborted);
+        failed(category, outcome == Outcome::Aborted);
     }
     fetch_settle(name, outcome, Some(phases), Failure { fail, status: status as u16 });
 }
 
-fn failed(category: Category, subject: u64, aborted: bool) {
+fn failed(category: Category, aborted: bool) {
     match category {
         Category::Terrain if !aborted => tile_fetcher::terrain_failed(),
-        Category::Search => search_modal::search_failed(subject, aborted),
-        Category::Geocode => reverse_geocode::reverse_geocode_failed(subject, aborted),
         _ => {}
     }
 }
@@ -252,30 +238,6 @@ fn answer(category: Category, subject: u64, status: u32, block: Option<Block>, p
                     Err(refused())
                 }
             }
-        }
-        Category::Search => {
-            let result = match block {
-                Some(b) if ok => text(b).map(|body| search_modal::search_arrived(subject, Some(body))),
-                None if ok => {
-                    search_modal::search_arrived(subject, Some(""));
-                    Ok(())
-                }
-                _ => Err(refused()),
-            };
-            release(block);
-            result
-        }
-        Category::Geocode => {
-            let result = match block {
-                _ if status == 404 => {
-                    reverse_geocode::reverse_geocode_arrived(subject, None);
-                    Ok(())
-                }
-                Some(b) if ok => text(b).map(|body| reverse_geocode::reverse_geocode_arrived(subject, Some(body))),
-                _ => Err(refused()),
-            };
-            release(block);
-            result
         }
     }
 }

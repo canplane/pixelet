@@ -82,8 +82,10 @@ pub struct SettingsStore {
     pub show_debug_objects: bool,
     pub show_ledger: bool,
     pub pixel_dither: bool,
-    pub person_variant_key: String,
-    pub pet_variant_key: String,
+    /// The person's variant, by its number in variant.json's person keys.
+    pub person_variant: u8,
+    /// The pet's variant, by its number in variant.json's pet keys.
+    pub pet_variant: u8,
     /// The user's layer: only what differs from the defaults.
     pub overrides: Vec<(SettingKey, SettingValue)>,
 }
@@ -106,8 +108,8 @@ impl SettingsStore {
             show_debug_objects: false,
             show_ledger: false,
             pixel_dither: false,
-            person_variant_key: String::new(),
-            pet_variant_key: String::new(),
+            person_variant: 0,
+            pet_variant: 0,
             overrides: Vec::new(),
         };
         for (key, value) in DEFAULT_SETTINGS() {
@@ -133,8 +135,8 @@ impl SettingsStore {
             ("show_debug_objects", SettingValue::Toggle(v)) => self.show_debug_objects = v,
             ("show_ledger", SettingValue::Toggle(v)) => self.show_ledger = v,
             ("pixel_dither", SettingValue::Toggle(v)) => self.pixel_dither = v,
-            ("person_variant_key", SettingValue::Text(v)) => self.person_variant_key = v,
-            ("pet_variant_key", SettingValue::Text(v)) => self.pet_variant_key = v,
+            ("person_variant", SettingValue::Number(v)) => self.person_variant = v as u8,
+            ("pet_variant", SettingValue::Number(v)) => self.pet_variant = v as u8,
             _ => {}
         }
     }
@@ -157,8 +159,8 @@ impl SettingsStore {
             "show_debug_objects" => SettingRef::Toggle(self.show_debug_objects),
             "show_ledger" => SettingRef::Toggle(self.show_ledger),
             "pixel_dither" => SettingRef::Toggle(self.pixel_dither),
-            "person_variant_key" => SettingRef::Text(&self.person_variant_key),
-            "pet_variant_key" => SettingRef::Text(&self.pet_variant_key),
+            "person_variant" => SettingRef::Number(self.person_variant as u32),
+            "pet_variant" => SettingRef::Number(self.pet_variant as u32),
             _ => return None,
         })
     }
@@ -168,6 +170,7 @@ impl SettingsStore {
         self.value(key).map(|v| match v {
             SettingRef::Toggle(b) => SettingValue::Toggle(b),
             SettingRef::Text(t) => SettingValue::Text(t.to_string()),
+            SettingRef::Number(n) => SettingValue::Number(n),
         })
     }
 
@@ -202,6 +205,7 @@ fn save(s: &SettingsStore) {
             let value = match v {
                 SettingValue::Toggle(b) => b.to_string(),
                 SettingValue::Text(t) => Quoted(t).to_string(),
+                SettingValue::Number(n) => n.to_string(),
             };
             format!("{}:{}", Quoted(k), value)
         })
@@ -209,8 +213,8 @@ fn save(s: &SettingsStore) {
     storage_set(STORAGE_KEY, &format!("{{\"state\":{{\"overrides\":{{{}}}}},\"version\":0}}", body.join(",")));
 }
 
-/// The overrides object of a persisted blob, as pairs of a key and a boolean
-/// or string value; anything else in it is skipped.
+/// The overrides object of a persisted blob, as pairs of a key and a boolean,
+/// string or number value; anything else in it is skipped.
 fn parse_overrides(raw: &str) -> Vec<(String, SettingValue)> {
     let Some(overrides) = read_json(raw).and_then(|j| j.get("state")).and_then(|state| state.get("overrides")) else {
         return Vec::new();
@@ -218,9 +222,10 @@ fn parse_overrides(raw: &str) -> Vec<(String, SettingValue)> {
     overrides
         .fields()
         .filter_map(|(key, value)| {
-            let held = match (value.as_bool(), value.as_str()) {
-                (Some(on), _) => SettingValue::Toggle(on),
-                (_, Some(text)) => SettingValue::Text(text.to_string()),
+            let held = match (value.as_bool(), value.as_str(), value.as_f64()) {
+                (Some(on), _, _) => SettingValue::Toggle(on),
+                (_, Some(text), _) => SettingValue::Text(text.to_string()),
+                (_, _, Some(n)) => SettingValue::Number(n as u32),
                 _ => return None,
             };
             Some((key.to_string(), held))

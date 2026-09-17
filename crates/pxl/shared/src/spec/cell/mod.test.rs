@@ -138,7 +138,7 @@ fn the_catalogs_are_what_the_typescript_builds() {
     assert_eq!(colors, want);
     let ids: Vec<String> = cube_ids.iter().map(|id| format!("{id}={}={}", cube_num_id(id), cube_hex(id))).collect();
     assert_eq!(ids, list(&v, "cube_ids"));
-    let ids: Vec<String> = decor_ids.iter().map(|id| format!("{id}={}", decor_num_id(id))).collect();
+    let ids: Vec<String> = decor_ids.iter().map(|id| format!("{id:?}={}", decor_num_id(*id))).collect();
     assert_eq!(ids, list(&v, "decor_ids"));
     let mut n = 0;
     v.each("placeable", |k| {

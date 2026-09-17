@@ -10,8 +10,8 @@ import type { f64 } from "@xpute/core/kit/word.ts";
 import { cn } from "@/shared/lib/util/cn.ts";
 import { TextField } from "@/shared/ui/text_field.tsx";
 import { useAppContext } from "@/app/provider/app_context.ts";
-import { kernel_action, useKernel } from "@/wasm/kernel.ts";
-import { type DecorId, placeable_cube_id, placeable_cube_num_id, placeable_cube_of, type PlaceableCube } from "@pxl/shared/spec/cell/mod.ts";
+import { useUiStore } from "@/app/store/ui_store.ts";
+import { type DecorId, placeable_cube_id, type PlaceableCube, placeable_cubes } from "@pxl/shared/spec/cell/mod.ts";
 import { object_scale_exponents, OBJECT_SIZES } from "@/module/world/object/size.ts";
 import { cube_swatch_style } from "./cube_swatch.ts";
 
@@ -48,7 +48,7 @@ const FLYOUT_HOLD_MS = 150;
 const FLYOUT_AXIS_PX = 12;
 
 function use_size_flyout(on_activate: () => void) {
-  const set_object_size = (size: f64) => kernel_action({ type: "set_object_size", size });
+  const set_object_size = useUiStore.getState().set_object_size;
 
   const [menu_open, set_menu_open] = useState(false);
   const [drag_index, set_drag_index] = useState<number | null>(null);
@@ -189,10 +189,10 @@ function SizeFlyout({ anchor, drag_index, item_refs, object_size, tiers }: SizeF
 
 function ColorSwatchButton({ cube }: { cube: PlaceableCube }) {
   const { t } = useTranslation();
-  const activeTool = useKernel((s) => s.ui.active_tool);
-  const object_cube_num_id = useKernel((s) => s.ui.object_cube_num_id);
-  const object_size = useKernel((s) => s.ui.object_size);
-  const select_cube = (pick: PlaceableCube) => kernel_action({ type: "select_cube", num_id: placeable_cube_num_id(pick) });
+  const activeTool = useUiStore((s) => s.activeTool);
+  const object_color_id = useUiStore((s) => s.object_color_id);
+  const object_size = useUiStore((s) => s.object_size);
+  const select_cube = (pick: PlaceableCube) => useUiStore.getState().select_cube(placeable_cube_id(pick));
 
   const { menu_open, anchor, drag_index, item_refs, button_ref, on_pointer_down } = use_size_flyout(() => select_cube(cube));
   const tiers = size_tiers_for(cube);
@@ -211,7 +211,7 @@ function ColorSwatchButton({ cube }: { cube: PlaceableCube }) {
           style={cube_swatch_style(cube)}
           className={cn(
             "w-5 h-5 rounded-full transition-transform",
-            activeTool === "object" && object_cube_num_id === placeable_cube_num_id(cube) ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
+            activeTool === "object" && object_color_id === placeable_cube_id(cube) ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
           )}
         />
       </button>
@@ -225,9 +225,9 @@ function ColorSwatchButton({ cube }: { cube: PlaceableCube }) {
 // is fixed, object/size.ts), so this stays a plain tap button.
 function DecorIconButton({ id }: { id: DecorId }) {
   const { t } = useTranslation();
-  const activeTool = useKernel((s) => s.ui.active_tool);
-  const decor_id = useKernel((s) => s.ui.decor_id);
-  const select_decor = (decor: DecorId) => kernel_action({ type: "select_decor", id: decor });
+  const activeTool = useUiStore((s) => s.activeTool);
+  const decor_id = useUiStore((s) => s.decor_id);
+  const select_decor = useUiStore.getState().select_decor;
   const Icon = DECOR_ICONS[id];
   const active = activeTool === "decor" && decor_id === id;
 
@@ -260,10 +260,10 @@ export function ModeBar() {
   const { t } = useTranslation();
   const { ui } = useAppContext();
   const [mode, set_mode] = useState<ModeId>("palette");
-  const activeTool = useKernel((s) => s.ui.active_tool);
-  const set_activeTool = (tool: "pointer" | "eraser") => kernel_action({ type: "set_active_tool", tool });
-  const recent_picks = useKernel((s) => s.ui.recent_picks);
-  const append_chat_line = (text: string) => kernel_action({ type: "append_chat_line", text });
+  const activeTool = useUiStore((s) => s.activeTool);
+  const set_activeTool = useUiStore.getState().set_activeTool;
+  const recent_picks = useUiStore((s) => s.recent_picks);
+  const append_chat_line = useUiStore.getState().append_chat_line;
   const [message_text, set_message_text] = useState("");
   const [is_sending, set_is_sending] = useState(false);
   const input_ref = useRef<HTMLInputElement | null>(null);
@@ -510,8 +510,8 @@ export function ModeBar() {
                   <div className="flex items-center px-[4px] min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     {recent_picks.map((pick) =>
                       pick.kind === "object"
-                        ? <ColorSwatchButton key={`object:${pick.num_id}`} cube={placeable_cube_of(pick.num_id)!} />
-                        : <DecorIconButton key={`decor:${pick.id}`} id={pick.id as DecorId} />
+                        ? <ColorSwatchButton key={`object:${pick.id}`} cube={placeable_cubes.find((c) => placeable_cube_id(c) === pick.id)!} />
+                        : <DecorIconButton key={`decor:${pick.id}`} id={pick.id} />
                     )}
                   </div>
 

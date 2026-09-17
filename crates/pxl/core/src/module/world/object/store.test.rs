@@ -29,17 +29,17 @@ fn in_cell(c: &PVF3) -> Vec<OccupiedEntry> {
 fn object_store_place_decor_stores_a_real_decor_entry_not_a_color() {
     let _g = serial();
     let c = corner(100_001, 0, 0);
-    place_decor(&c, DECOR_SIZE, "tree");
+    place_decor(&c, DECOR_SIZE, DecorId::tree);
     let entries = in_cell(&c);
     assert_eq!(entries.len(), 1);
-    assert!(matches!(entries[0].kind, EntryKind::Decor { decor_id: "tree" }));
+    assert!(matches!(entries[0].kind, EntryKind::Decor { decor_id: DecorId::tree }));
 }
 
 #[test]
 fn object_store_place_decor_is_retrievable_by_its_own_address_same_path_a_solid_cube_uses() {
     let _g = serial();
     let c = corner(100_002, 0, 0);
-    place_decor(&c, DECOR_SIZE, "tree");
+    place_decor(&c, DECOR_SIZE, DecorId::tree);
     let entry = in_cell(&c).remove(0);
     let fetched = get_placed_object(entry.at).expect("fetched by its address");
     assert!(matches!(fetched.kind, EntryKind::Decor { .. }));
@@ -49,7 +49,7 @@ fn object_store_place_decor_is_retrievable_by_its_own_address_same_path_a_solid_
 fn object_store_place_decor_blocks_a_second_placement_at_the_exact_same_corner() {
     let _g = serial();
     let c = corner(100_003, 0, 0);
-    place_decor(&c, DECOR_SIZE, "tree");
+    place_decor(&c, DECOR_SIZE, DecorId::tree);
     let blocked = find_overlapping_object(&c, DECOR_SIZE, 0).expect("blocked");
     assert!(matches!(blocked.kind, EntryKind::Decor { .. }));
 }
@@ -67,7 +67,7 @@ fn object_store_place_decor_a_solid_cube_still_blocks_placement_the_same_way_a_d
 fn object_store_remove_erases_a_decor_entry_the_same_way_it_erases_a_solid_cube() {
     let _g = serial();
     let c = corner(100_005, 0, 0);
-    place_decor(&c, DECOR_SIZE, "tree");
+    place_decor(&c, DECOR_SIZE, DecorId::tree);
     let entry = in_cell(&c).remove(0);
     remove(entry.at);
     assert_eq!(in_cell(&c).len(), 0);
@@ -183,7 +183,7 @@ fn object_store_revisions_a_column_s_revisions_move_on_its_own_changes_on_the_ri
     let col_idx = L2_IDX(TO_XY(c.i));
     let elsewhere = L2_IDX(TO_XY(ivec::gather(1_000_000, 1_000_000, 0)));
     let (objects0, decor0, other0) = (object_col_revision(col_idx), decor_col_revision(col_idx), object_col_revision(elsewhere));
-    place_decor(&c, DECOR_SIZE, "tree");
+    place_decor(&c, DECOR_SIZE, DecorId::tree);
     assert!(decor_col_revision(col_idx) > decor0, "decor channel moved");
     assert_eq!(object_col_revision(elsewhere), other0, "another col_idx did not");
     let objects1 = object_col_revision(col_idx);
@@ -211,7 +211,7 @@ fn object_store_persistence_a_save_is_placement_records_per_page_and_loading_it_
             f: 0,
         },
         DECOR_SIZE,
-        "tree",
+        DecorId::tree,
     );
     let shape = |o: &OccupiedEntry| (o.i, o.f, o.size.to_bits(), matches!(o.kind, EntryKind::Decor { .. }));
     let before: Vec<_> = get_objects_near(&a, 1.0).iter().map(shape).collect();
