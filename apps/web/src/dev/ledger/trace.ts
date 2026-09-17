@@ -69,11 +69,11 @@ function frame_args(f: Frame): Args {
     mounted: f.mounts.added,
     unmounted: f.mounts.removed,
     layouts: f.mounts.layouts,
-    pool_used_mb: f.pool.used_mb,
-    pool_live_mb: f.pool.live_mb,
-    pool_range_mb: f.pool.range_mb,
-    pool_refusals: f.pool.refusals,
-    pool_largest_free_mb: fixed(f.pool.largest_free_mb, 2),
+    heap_used_mb: f.heap.used_mb,
+    heap_live_mb: f.heap.live_mb,
+    heap_range_mb: f.heap.range_mb,
+    heap_refusals: f.heap.refusals,
+    heap_largest_free_mb: fixed(f.heap.largest_free_mb, 2),
     ring_cq_peak: f.rings.cq_peak,
     ring_spill_peak: f.rings.spill_peak,
     tile_pages: f.tile_pages,
@@ -142,7 +142,7 @@ export function ledger_trace_json(): string {
       const f = w.sample;
       const args = frame_args(f);
       args.d_buffers = w.prev === null ? null : f.buffers - w.prev.buffers;
-      args.d_pool_used_mb = w.prev === null ? null : f.pool.used_mb - w.prev.pool.used_mb;
+      args.d_heap_used_mb = w.prev === null ? null : f.heap.used_mb - w.prev.heap.used_mb;
       events.push(event(`stall ${f.dt_ms.toFixed(0)}ms`, "worst", "X", us(f.t - f.dt_ms), us(f.dt_ms), TID_WORST, args));
     }
   }

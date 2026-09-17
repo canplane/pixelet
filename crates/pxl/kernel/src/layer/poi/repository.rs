@@ -1,7 +1,7 @@
 // pxl-kernel/layer/poi/repository.rs
 
-//! A resident POI page: the packet the shell fetched into the block of the
-//! page section the kernel gave its body (io/fetch.rs), and the page
+//! A resident POI page: the packet the shell fetched into the heap block the
+//! kernel gave its body (io/fetch.rs), and the page
 //! opened over it. The lanes the index reads are views into that block, so
 //! the block lives exactly as long as the page is resident (store.rs gives it
 //! back with the page). The empty page — a 404 from the static bake, or a page
@@ -40,7 +40,7 @@ pub fn empty_page() -> Result<ResidentPoiPage, MarshalError> {
 /// Opens the page fetched into the block at `at`.
 ///
 /// # Safety
-/// The block is one of the page section's, held for this page alone, `bytes`
+/// The block is a heap block held for this page alone, `bytes`
 /// long, until the page is released.
 pub unsafe fn open_poi_page(at: usize, bytes: u32) -> Result<ResidentPoiPage, MarshalError> {
     // SAFETY: the caller's contract above.

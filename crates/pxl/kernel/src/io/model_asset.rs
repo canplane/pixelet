@@ -45,7 +45,7 @@ pub struct ModelHandle {
 const IDENTITY: [f32; 16] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
 
 /// Registers `gltf` as a model standing `height_u` tall, or at its own size
-/// when None; None when it has no mesh or the pool refused its block.
+/// when None; None when it has no mesh or the heap refused its block.
 pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle> {
     let order = scene_nodes(gltf);
     let worlds = world_matrices(gltf);

@@ -2,11 +2,6 @@
 
 //! The world as the kernel runs it: every layer's turn, in one place.
 //!
-//! Structure:
-//! 1. Environment: terrain, POI
-//! 2. Content: placed voxels and user objects
-//! 3. Interaction: highlighters and guide markers
-//!
 //! Coordinate model: every layer places what it has in the root frame
 //! (world/frame/view.rs), the map's azimuth and the floating origin's
 //! translation, which the view's damping steps write.

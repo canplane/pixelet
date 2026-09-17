@@ -16,8 +16,8 @@
 #![allow(non_upper_case_globals, non_snake_case, dead_code, clippy::excessive_precision)]
 
 /// What every range in the memory begins on, and the smallest block the heap's
-/// buddy hands out (xpute ds/buddy_tree.rs's MIN_ALLOC, which mem/section.rs asserts
-/// against this). A ring slot's payload is one of these too.
+/// buddy hands out (pxl-wasm's HEAP_MIN_LOG2 is derived from it). A ring slot's
+/// payload is one of these too.
 ///
 /// A borrowed analogy rather than a hardware number: this kernel is handed one
 /// fixed range, addresses it with 32-bit offsets and has no MMU, which is the

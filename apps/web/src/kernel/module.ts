@@ -8,12 +8,12 @@
  *
  * The module imports its memory: the central scheduler gives it one
  * (core_mem.ts), and booting the module lays out everything inside it —
- * the sections, their pools, the rings — as the kernel's map says
- * (crates/pxl/kernel/src/mem.rs).
+ * the rings, `.fixed` and the heap — as the kernel's map says
+ * (crates/pxl/kernel/src/sys/mem/section.rs).
  *
  * One instance per memory: instantiating writes the module's data segments
  * over the front of it, so a second instance over the same memory would
- * erase the first's state — its pools' free lists among it.
+ * erase the first's state — its heap's free lists among it.
  *
  * Instantiated from bytes rather than streamed: streaming insists on an
  * `application/wasm` response, which neither a `file:` URL under Deno nor

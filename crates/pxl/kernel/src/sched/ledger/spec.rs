@@ -76,11 +76,11 @@ pub mod FRAME {
     pub const mounts_layouts: u32 = 54;
     pub const tile_pages: u32 = 55;
     pub const poi_count: u32 = 56;
-    pub const pool_used_mb: u32 = 57;
-    pub const pool_live_mb: u32 = 58;
-    pub const pool_range_mb: u32 = 59;
-    pub const pool_refusals: u32 = 60;
-    pub const pool_largest_free_mb: u32 = 61;
+    pub const heap_used_mb: u32 = 57;
+    pub const heap_live_mb: u32 = 58;
+    pub const heap_range_mb: u32 = 59;
+    pub const heap_refusals: u32 = 60;
+    pub const heap_largest_free_mb: u32 = 61;
     pub const ring_cq_peak: u32 = 62;
     pub const ring_spill_peak: u32 = 63;
     pub const work_scans: u32 = 64;
@@ -123,11 +123,11 @@ pub mod FRAME {
         "mounts_layouts",
         "tile_pages",
         "poi_count",
-        "pool_used_mb",
-        "pool_live_mb",
-        "pool_range_mb",
-        "pool_refusals",
-        "pool_largest_free_mb",
+        "heap_used_mb",
+        "heap_live_mb",
+        "heap_range_mb",
+        "heap_refusals",
+        "heap_largest_free_mb",
         "ring_cq_peak",
         "ring_spill_peak",
         "work_scans",

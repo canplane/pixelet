@@ -135,8 +135,8 @@ export function LedgerGauge() {
               bytes, which is what let the last probe read a deleted
               structure's row for two commits without saying so. */
           }
-          <Row k="  used/live of" v={`${f.last.pool.used_mb}/${f.last.pool.live_mb} of ${f.last.pool.range_mb}MB`} warn={f.last.pool.used_mb >= f.last.pool.range_mb} />
-          <Row k="  refused / free" v={`${f.last.pool.refusals} / ${n1(f.last.pool.largest_free_mb)}MB`} warn={f.last.pool.refusals > 0} />
+          <Row k="  used/live of" v={`${f.last.heap.used_mb}/${f.last.heap.live_mb} of ${f.last.heap.range_mb}MB`} warn={f.last.heap.used_mb >= f.last.heap.range_mb} />
+          <Row k="  refused / free" v={`${f.last.heap.refusals} / ${n1(f.last.heap.largest_free_mb)}MB`} warn={f.last.heap.refusals > 0} />
           <Row k="rings cq/spill" v={`${f.last.rings.cq_peak}/${f.last.rings.spill_peak}`} warn={f.last.rings.spill_peak > 0} />
           <Row k="tiles ~mb / poi" v={`${f.last.tile_pages} ~${f.last.tile_pages * TILE_DECODED_MB} / ${f.last.poi_count}`} />
           {

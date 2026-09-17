@@ -1,18 +1,19 @@
 // pxl-render/frame/draw.rs
 
-//! What the renderer draws, as lists the shell executes against WebGPU: the
-//! blocks to put on the GPU and the ones to let go, and each frame the
-//! draws, with what each needs beyond its geometry. The shell holds no
-//! decision — which mesh, at what weight, where — only the API calls; a
-//! native shell executes the same lists against wgpu.
+//! What the renderer draws, as lists: the blocks to put on the GPU and the
+//! ones to let go, and each frame the draws, with what each needs beyond its
+//! geometry. The scheduler decides the lists — which mesh, at what weight,
+//! where — and the renderer (gpu/renderer.rs) executes them through the
+//! host's WebGPU calls (gpu/api.rs) and decides nothing; a native host would
+//! answer the same calls with wgpu.
 //!
-//! A block is named by a handle the core hands out when a tier lands; the
+//! A block is named by a handle the kernel hands out when a tier lands; the
 //! upload says where the block lies in the memory and how long it is, and
-//! the shell reads the lanes by the mesher's layout from the vertex count.
-//! Uploads and frees accumulate until the shell takes them, whatever calls
+//! the renderer reads the lanes by the mesher's layout from the vertex count.
+//! Uploads and frees accumulate until the renderer takes them, whatever calls
 //! made them (a tick, a build now); the draws are the last tick's. A free
-//! cancels an upload not yet taken: the block is the shell's to release the
-//! moment it is told, and may be someone else's by the time the list runs.
+//! cancels an upload not yet taken: the block is released the moment the
+//! free is listed, and may be someone else's by the time the list runs.
 
 use pxl_spec::space::v3::V3;
 use xpute_core::sys::mem::{alloc, free};
@@ -208,7 +209,7 @@ impl DrawList {
     }
 }
 
-/// A block of the mesh section the renderer holds a copy of, written whole
+/// A heap block the renderer holds a copy of, written whole
 /// each time by whoever owns it — the badges, the gizmos: grown to the
 /// next power of two when the write outgrows it, since a placement's count
 /// wobbles by a few; uploaded once, rewritten after.

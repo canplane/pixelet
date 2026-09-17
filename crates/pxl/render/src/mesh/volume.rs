@@ -217,7 +217,7 @@ pub struct Voxel {
     pub sub: u32,
 }
 
-/// One band's lanes: blocks of the pools, addressed in the memory. A store
+/// One band's lanes: heap blocks, addressed in the memory. A store
 /// past the cap gives its lanes back when its band is released and is
 /// refilled by the next band that needs one, so the list never grows past
 /// the most bands alive at once.
@@ -249,7 +249,7 @@ pub const BAND_WORDS: usize = 10;
 #[derive(Clone, Copy, Default, Debug)]
 #[repr(C)]
 pub struct VolumeStat {
-    /// Bands built fresh from the pools, and bands reused from the stores.
+    /// Bands built fresh from the heap, and bands reused from the stores.
     pub allocated: u32,
     pub reused: u32,
     /// Volumes and bands refused for want of a block.
@@ -318,8 +318,8 @@ impl Volumes {
         self.stores[store].sub_cell.map(|(at, _)| self.mem.wrapping_add(at))
     }
 
-    /// A store for a new band: a free one, or one built from the pools —
-    /// None when neither pool has room.
+    /// A store for a new band: a free one, or one built from the heap —
+    /// None when the heap has no room.
     fn take_store(&mut self) -> Option<usize> {
         if let Some(s) = self.free_stores.pop() {
             self.stat.reused += 1;
@@ -379,9 +379,8 @@ impl Volumes {
         }
     }
 
-    /// The sub-cell lane of `store`, taken from the mesh pool — or the fixed
-    /// one when the mesh section is over — and zeroed, since zero is
-    /// SUB_CELL_NONE.
+    /// The sub-cell lane of `store`, taken from the heap and zeroed, since
+    /// zero is SUB_CELL_NONE.
     fn ensure_sub_cell(&mut self, store: usize) -> Option<*mut u8> {
         if self.stores[store].sub_cell.is_none() {
             let (at, bytes) = alloc(SUB_CELL_BYTES)?;
@@ -401,7 +400,7 @@ impl Volumes {
     /// False when a band could not be made.
     pub fn set_voxel(&mut self, id: usize, at: Cell, v: Voxel) -> bool {
         let Cell { cx, cy, z } = at;
-        // A column past the band would index the next block in the pool:
+        // A column past the band would index the next block in the heap:
         // refused rather than written.
         if cx >= BAND_SPAN || cy >= BAND_SPAN {
             return false;
@@ -496,7 +495,7 @@ impl Volumes {
     }
 
     /// Returns the volume's bands to the stores, and the stores past the
-    /// cap to their pools.
+    /// cap to the heap.
     pub fn release(&mut self, id: usize) {
         let Some(v) = self.volumes[id].take() else { return };
         for band in v.bands {
