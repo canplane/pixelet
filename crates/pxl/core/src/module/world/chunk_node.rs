@@ -779,11 +779,12 @@ impl Builder {
     /// tick: the pool does not change until the scheduler reclaims after,
     /// so every later request would meet the same pool, and a refusal is
     /// not free — the direct runs are written whole before their block is
-    /// asked for.
-    pub fn tick_capped(&mut self, world: &mut World, order: &[u32], budget_ms: f64, max_chunks: u32, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent)) {
+    /// asked for. Whether any chunk did work.
+    pub fn tick_capped(&mut self, world: &mut World, order: &[u32], budget_ms: f64, max_chunks: u32, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent)) -> bool {
         let t0 = now();
         let starved = self.stat.starved;
         let mut stepped = false;
+        let mut worked = false;
         let mut moved = 0;
         let holders = self.holders();
         let [scan_holder, bake_holder] = holders;
@@ -793,16 +794,16 @@ impl Builder {
         // found by comparing against them, not by a list of everything seen.
         for id in holders_once.iter().flatten().copied().chain(order.iter().copied().filter(|&id| !held(id))) {
             if moved >= max_chunks {
-                return;
+                return worked;
             }
             let mut progressed = false;
             loop {
                 if stepped && now() - t0 >= budget_ms {
-                    return;
+                    return worked;
                 }
                 let progress = self.advance(world, id, emit);
                 if self.stat.starved != starved {
-                    return;
+                    return worked;
                 }
                 if progress != Progress::Blocked {
                     stepped = true;
@@ -810,12 +811,14 @@ impl Builder {
                 if progress != Progress::Busy {
                     break;
                 }
+                worked = true;
                 progressed = true;
             }
             if progressed {
                 moved += 1;
             }
         }
+        worked
     }
 
     fn advance(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) -> Progress {

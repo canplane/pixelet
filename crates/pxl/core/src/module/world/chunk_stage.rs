@@ -7,14 +7,16 @@
 //! lists. In the report phase it hands the frame's numbers to the ledger.
 
 use pxl_shared::spec::space::pvf3::{fvec, ivec};
+use xpute_core::sched::edge::{notified, yield_if_spent};
 
 use super::chunk_node::{run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES};
 use crate::app::setting::store::settings_store;
 use crate::module::map::store::map_store;
+use crate::module::world::change::{request_world_tick, world_edge};
 use crate::module::world::environment::config::render_cfg;
 use crate::module::world::frame::view::{view, view_resize};
 use crate::module::world::poi::poi_fetcher;
-use crate::module::world::sched::chunk_table::Frame;
+use crate::module::world::sched::chunk_table::{builds, Frame};
 use crate::module::world::sched::fetch_scheduler::fetch_pending_count;
 use crate::module::world::sched::ledger::{ledger_record_frame, ledger_take_rings, CpuSample, DrawCensus, FrameSample, LodSample, MountSample, PoolSample, TexturesMb, WorkSample};
 use crate::module::world::sched::priority::lead_point;
@@ -175,6 +177,27 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     }
     let census = kernel().sched.census;
     c.visible_pass = Some((census.pending, census.committed, now() - t0));
+}
+
+/// The build task: the chunks each tick orders, advanced on what the turn's
+/// quota leaves after the tick, one step a turn at least. It waits while no
+/// tick has given it anything, and a turn whose builds did nothing — all
+/// built, blocked, or a block refused — waits for the next tick's order.
+pub async fn build_task() {
+    loop {
+        notified(builds).await;
+        loop {
+            yield_if_spent(world_edge).await;
+            let mut events = Vec::new();
+            let budget = world_edge().remaining();
+            let worked = with_world(|world, sched| sched.build_step(world, budget, &mut |e| events.push(e))).unwrap_or(false);
+            run_chunk_events(events);
+            if !worked {
+                break;
+            }
+            request_world_tick();
+        }
+    }
 }
 
 /// The report phase's step: the frame's numbers, after every other phase has

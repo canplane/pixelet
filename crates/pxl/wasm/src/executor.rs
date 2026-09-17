@@ -10,7 +10,8 @@
 //! it links to by name. Here that only records the fact: poll is never
 //! called from it, which the executor forbids, and a task woken while the
 //! turn polls asks for the next edge rather than running again past the
-//! quota. A task the turn's rising edge woke is polled in that same turn.
+//! quota. A task the turn's rising edge woke is polled in that same turn's
+//! frame; a turn with no frame, which runs no task, asks for the next one.
 //!
 //! The tasks are pxl-core's own `async fn`s, each given a pool of one here: the
 //! executor's task attribute is this module's, so pxl-core never names it.
@@ -53,6 +54,11 @@ async fn fetches() {
 }
 
 #[embassy_executor::task]
+async fn builds() {
+    pxl_core::module::world::chunk_stage::build_task().await
+}
+
+#[embassy_executor::task]
 async fn models() {
     pxl_core::module::world::gltf_cache::gltf_task().await
 }
@@ -66,6 +72,17 @@ pub fn spawn() {
     }
     if let Ok(t) = models() {
         spawner.spawn(t);
+    }
+    if let Ok(t) = builds() {
+        spawner.spawn(t);
+    }
+}
+
+/// A turn that polled no task still asks for the next edge for the tasks it
+/// queued.
+pub fn ask_if_pended() {
+    if *PENDED.get(|| false) {
+        world_edge().ask_next();
     }
 }
 

@@ -25,6 +25,7 @@ use pxl_shared::bake::constant::CHUNK_CELL_SPAN;
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::v3::V3;
 use xpute_core::kit::hash::fnv1a64_str;
+use xpute_core::sched::edge::Notify;
 use xpute_core::sched::frame_budget::{run_under_budget, BudgetOpts};
 use xpute_core::sys::mem::alloc;
 
@@ -41,6 +42,7 @@ use crate::render::chunk_range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT, 
 use crate::render::draw::{DrawList, PIPELINE_CHUNK};
 use crate::render::layer::terrain::adapter::ChunkSample;
 use crate::render::lod::{Ladder, COARSEST, LOD_STEP_BY_LEVEL};
+use crate::sys::global::Global;
 
 /// The sphere a chunk nothing has measured is culled by.
 const APPROXIMATE_CHUNK_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
@@ -359,6 +361,12 @@ pub struct Scheduler {
     /// frame's release cap.
     refused_seen: u32,
     refused_last: bool,
+    /// The chunks the build task advances, in order: the visible pending, as
+    /// the last tick left them.
+    builds: Vec<u32>,
+    landed: Vec<u32>,
+    /// Chunks the build task committed since the last census.
+    build_committed: u32,
     /// When the pressure last moved, and when a block was last refused.
     pressure_at: f64,
     refused_at: f64,
@@ -377,14 +385,19 @@ struct Scratch {
     visible: Vec<usize>,
     offscreen: Vec<usize>,
     eligible: Vec<usize>,
-    still: Vec<u32>,
-    landed: Vec<u32>,
 }
 
 impl Default for Scheduler {
     fn default() -> Self {
         Scheduler::new()
     }
+}
+
+static BUILDS: Global<Notify> = Global::new();
+
+/// What the build task waits on while no tick has given it chunks to build.
+pub fn builds() -> &'static mut Notify {
+    BUILDS.get(Notify::new)
 }
 
 /// xpute's pass over `items` against the tick's absolute deadlines: the first
@@ -444,6 +457,9 @@ impl Scheduler {
             refused_seen: 0,
             scratch: Scratch::default(),
             refused_last: false,
+            builds: Vec::new(),
+            landed: Vec::new(),
+            build_committed: 0,
             pressure_at: f64::NEG_INFINITY,
             refused_at: f64::NEG_INFINITY,
         }
@@ -583,6 +599,34 @@ impl Scheduler {
             s.radius = APPROXIMATE_CHUNK_RADIUS;
         }
         self.account(i, before);
+    }
+
+    /// The build task's step: the chunks the last tick ordered, holders of the
+    /// scan and the bake slot first, advanced for what is left of the turn's
+    /// quota and at least one step, and the chunks a tier landed on
+    /// committed. Whether any did work; none did when all are built, blocked,
+    /// or a block was refused — the pool is the same until the next tick
+    /// reclaims.
+    pub fn build_step(&mut self, world: &mut World, budget_ms: f64, emit: &mut impl FnMut(Event)) -> bool {
+        let mem = world_mem(world);
+        let (slots, index, ron, roff, draw, landed) = (&mut self.slots, &self.index, &mut self.retained_on, &mut self.retained_off, &mut self.draw, &mut self.landed);
+        landed.clear();
+        let worked = self.builder.tick_capped(world, &self.builds, budget_ms, u32::MAX, &crate::sys::global::now, &mut |e| {
+            if let BuildEvent::Tier { id, .. } = e {
+                landed.push(id);
+            }
+            self_record(slots, index, mem, ron, roff, draw, e, emit);
+        });
+        let landed = core::mem::take(&mut self.landed);
+        for &id in &landed {
+            if let Some(&i) = self.index.get(&id) {
+                if self.commit(world, i, emit) {
+                    self.build_committed += 1;
+                }
+            }
+        }
+        self.landed = landed;
+        worked
     }
 
     /// Rebuilds the layout the chunk shows, to the end, now: a placement
@@ -853,8 +897,8 @@ impl Scheduler {
 
     // ---- the tick ----
 
-    /// One frame: measure every chunk, recheck, commit, build and reclaim
-    /// under the frame's budget. Whether the canvas has something new to draw.
+    /// One frame: measure every chunk, recheck, commit and reclaim under the
+    /// frame's budget, and set what the build task takes. Whether the canvas has something new to draw.
     pub fn tick(&mut self, world: &mut World, frame: Frame, now: &impl Fn() -> f64, emit: &mut impl FnMut(Event)) -> bool {
         let t0 = now();
         let deadline = t0 + frame.budget_ms;
@@ -875,13 +919,7 @@ impl Scheduler {
         let mut sc = core::mem::take(&mut self.scratch);
         self.order(t0, &mut sc.order, &mut sc.keys);
         let Scratch {
-            order,
-            visible,
-            offscreen,
-            eligible,
-            still,
-            landed,
-            ..
+            order, visible, offscreen, eligible, ..
         } = &mut sc;
 
         // The pending lists from the flags as the frame found them, before
@@ -921,29 +959,14 @@ impl Scheduler {
         let releases = if self.refused_last { MAX_RELEASES_WHEN_REFUSED } else { MAX_RELEASES_PER_FRAME };
         committed += under_budget(offscreen, releases, deadline, hard, now, |i| self.commit(world, i, emit));
 
-        // The builds, visible pending first in order, with what is left; the
-        // chunks a tier landed on are committed after.
-        still.clear();
-        still.extend(visible.iter().filter(|&&i| self.slots[i].has(PENDING)).map(|&i| self.slots[i].id));
-        landed.clear();
-        let budget = (deadline - now()).max(0.0);
-        {
-            let (slots, index, ron, roff, draw) = (&mut self.slots, &self.index, &mut self.retained_on, &mut self.retained_off, &mut self.draw);
-            let mem = world_mem(world);
-            self.builder.tick_capped(world, still, budget, MAX_COMMITS_PER_FRAME, now, &mut |e| {
-                if let BuildEvent::Tier { id, .. } = e {
-                    landed.push(id);
-                }
-                self_record(slots, index, mem, ron, roff, draw, e, emit);
-            });
+        // The builds are the build task's (`build_step`), on the turn's quota:
+        // what they take, visible pending first in order, is set here.
+        self.builds.clear();
+        self.builds.extend(visible.iter().filter(|&&i| self.slots[i].has(PENDING)).map(|&i| self.slots[i].id));
+        if !self.builds.is_empty() {
+            builds().notify();
         }
-        for &id in landed.iter() {
-            if let Some(&i) = self.index.get(&id) {
-                if self.commit(world, i, emit) {
-                    committed += 1;
-                }
-            }
-        }
+        committed += core::mem::take(&mut self.build_committed);
 
         let freed = self.reclaim(world, order, emit);
         self.scratch = sc;

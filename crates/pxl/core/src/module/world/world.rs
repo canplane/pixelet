@@ -176,10 +176,11 @@ pub struct HostFrame {
 
 /// The frame of the turn the central scheduler strobed at `edge_at` with
 /// `quota_ms`: the effects, then the tick's phases on what is left of the
-/// quota, and the fetches they asked for within the credits. A pass that
-/// asked for a turn after this one, or left something new to draw, asks for
-/// the next edge.
-pub fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
+/// quota, then the tasks (`poll_tasks`, whichever executor the module polls
+/// them on) on what is left after, the fetches they asked for within the
+/// credits, and the draw. A pass that asked for a turn after this one, or
+/// left something new to draw, asks for the next edge.
+pub fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64, poll_tasks: fn()) -> TickReport {
     let HostFrame {
         width,
         height,
@@ -203,6 +204,7 @@ pub fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     state.interactive = interactive;
     let report = run_tick(state, delta, quota_ms, edge_at);
     fetch_pump();
+    poll_tasks();
     crate::render::gpu::stage::stage_write();
     crate::render::gpu::renderer::render_frame();
     set_host_task_ms(now() - t0);
