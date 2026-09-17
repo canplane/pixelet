@@ -35,8 +35,10 @@ import { Strobe } from "@xpute/core/sched/strobe.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 import type { Message } from "@pxl/shared/spec/message.ts";
 import { FetchFail } from "@pxl/shared/spec/fetch.ts";
+import { load_key } from "@pxl/shared/asset/load.ts";
 
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/lib/env/config.ts";
+import { asset_url } from "@/lib/env/route.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { CORE_BUILD, packet } from "@/wasm/core_build.ts";
 import { CORE_KERNEL } from "@/wasm/core_mem.ts";
@@ -174,8 +176,8 @@ function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
       running.get(f!.at(0).get<bigint>())?.abort();
       return;
     case Cmd.LOAD_CREATE: {
-      const [kind, url] = f!.get<[number, string]>();
-      void (kind === 0 ? load_model(url) : load_image(url));
+      const [kind, load] = f!.get<[number, number]>();
+      void (kind === 0 ? load_model(load) : load_image(load));
       return;
     }
   }
@@ -324,34 +326,39 @@ async function run_fetch(key: bigint, url: string): Promise<void> {
 
 let next_image = 1;
 
-async function load_model(url: string): Promise<void> {
+/** The bytes a load names: the kernel says a number, the shell knows the URL. */
+async function fetch_load(load: number): Promise<Response> {
+  const key = load_key(load);
+  if (key === null) throw new Error(`load ${load} names no asset`);
+  const res = await fetch(asset_url(key));
+  if (!res.ok) throw new Error(`${key} ${res.status}`);
+  return res;
+}
+
+async function load_model(load: number): Promise<void> {
   try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`gltf: ${url} ${res.status}`);
-    const bytes = new Uint8Array(await res.arrayBuffer());
+    const bytes = new Uint8Array(await (await fetch_load(load)).arrayBuffer());
     // A model is far past a ring frame: the host holds it, and the kernel
     // reads it in its turn.
-    CORE_BUILD.send(0, Cmd.LOAD_UPDATE, packet((b) => b.str(url).u32(hold_body(bytes)).u32(bytes.byteLength)));
+    CORE_BUILD.send(0, Cmd.LOAD_UPDATE, packet((b) => b.u32(load).u32(hold_body(bytes)).u32(bytes.byteLength)));
   } catch (err) {
-    console.error(`[kernel] ${err instanceof Error ? err.message : String(err)}`);
-    CORE_BUILD.send(0, Cmd.LOAD_DELETE, packet((b) => b.str(url)));
+    console.error(`[kernel] gltf: ${err instanceof Error ? err.message : String(err)}`);
+    CORE_BUILD.send(0, Cmd.LOAD_DELETE, packet((b) => b.u32(load)));
   }
   request_frame();
 }
 
 /** An image, as the kernel's renderer uploads it: the file's own pixels, top
  * row first, no colour conversion and no premultiplied alpha. */
-async function load_image(url: string): Promise<void> {
+async function load_image(load: number): Promise<void> {
   try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`image: ${url} ${res.status}`);
-    const image = await createImageBitmap(await res.blob(), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+    const image = await createImageBitmap(await (await fetch_load(load)).blob(), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
     const handle = next_image++;
     register_image(handle, image);
-    CORE_BUILD.send(0, Cmd.LOAD_IMAGE, packet((b) => b.str(url).u32(handle)));
+    CORE_BUILD.send(0, Cmd.LOAD_IMAGE, packet((b) => b.u32(load).u32(handle)));
   } catch (err) {
-    console.error(`[kernel] ${err instanceof Error ? err.message : String(err)}`);
-    CORE_BUILD.send(0, Cmd.LOAD_DELETE, packet((b) => b.str(url)));
+    console.error(`[kernel] image: ${err instanceof Error ? err.message : String(err)}`);
+    CORE_BUILD.send(0, Cmd.LOAD_DELETE, packet((b) => b.u32(load)));
   }
   request_frame();
 }
