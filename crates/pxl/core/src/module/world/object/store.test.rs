@@ -111,7 +111,7 @@ fn object_store_band_tree_a_2_2_2_block_of_one_colour_reads_back_as_eight_cells(
         }
     }
     for c in &corners {
-        place(&c, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
+        place(c, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
     }
     for c in &corners {
         let found = in_cell(c);
