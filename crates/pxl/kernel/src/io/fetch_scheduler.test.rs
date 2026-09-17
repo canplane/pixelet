@@ -107,7 +107,9 @@ fn fetch_scheduler_ledger_records_outcome_for_completed_and_aborted_demands() {
 /// transport failure.
 #[test]
 fn a_failure_is_grouped_by_its_reason_and_its_status_not_by_any_text() {
-    let _g = serial();
+    // `fresh`, not a bare `serial`: without the credits it grants, the pump
+    // starts nothing, so nothing settles and the ledger has nothing to group.
+    let _g = fresh();
     let cat = Category::Ocean;
     ledger_recording_start();
     let fails = [

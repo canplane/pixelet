@@ -278,6 +278,9 @@ pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
     pxl_kernel::world::change::world_fall()
 }
 
+/// The buffer the UI's snapshot is written into, turn after turn.
+static SNAPSHOT_TEXT: Global<String> = Global::new();
+
 /// The UI's snapshot: what WORLD_SNAPSHOT names instead of carrying.
 static SNAPSHOT: Held<u8> = Held::new();
 
@@ -418,9 +421,15 @@ fn post_shell(s: &mut State) {
             OrientationCommand::Remove => sensor(Cmd::SENSOR_DELETE, ORIENTATION),
         }
     }
-    let mut text = String::new();
-    pxl_kernel::shell::shell::ui_snapshot_json(&mut text).expect("a UI snapshot");
-    let hash = xpute_core::kit::hash::fnv1a64_str(&text);
+    // The same buffer every turn, cleared rather than made again: `clear`
+    // keeps what it grew to, so once the snapshot has reached its size a
+    // settled turn asks the heap for nothing. A fresh `String` here was two
+    // requests a turn — one to start it and one to grow it — for a frame that
+    // had nothing else to do.
+    let text = SNAPSHOT_TEXT.get(String::new);
+    text.clear();
+    pxl_kernel::shell::shell::ui_snapshot_json(text).expect("a UI snapshot");
+    let hash = xpute_core::kit::hash::fnv1a64_str(text);
     if hash != s.snapshot {
         s.snapshot = hash;
         // The JSON is far past a slot and the shell reads it before the next

@@ -383,7 +383,17 @@ pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
 /// test), and then nothing is recorded into it.
 pub(super) fn fixed_lane<T: Copy>(cap: usize) -> &'static mut [T] {
     let bytes = cap * size_of::<T>();
-    let Some((at, _)) = u32::try_from(bytes).ok().and_then(alloc) else { return &mut [] };
+    let Some((at, _)) = u32::try_from(bytes).ok().and_then(alloc) else {
+        // No kernel heap to take it from: a native check, where there is no
+        // memory to lay out and the host's own allocator stands in. Leaked
+        // once, which is what the kernel's lane is too — the ledger holds its
+        // rings for the program's life either way. Without this the ledger
+        // records nothing under `cargo test` and every check of what it
+        // summarises reads zero.
+        // SAFETY: the rings hold plain numbers, which the kernel's own lane
+        // is handed zeroed below for the same reason.
+        return Box::leak(vec![unsafe { core::mem::zeroed::<T>() }; cap].into_boxed_slice());
+    };
     // SAFETY: a block this lane holds alone and never gives back, `bytes` long
     // and aligned past a record's alignment; zeroed, which is a valid record
     // for the plain numbers the rings hold.
