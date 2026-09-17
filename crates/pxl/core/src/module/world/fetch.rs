@@ -3,10 +3,10 @@
 //! The world's fetches at the shell's edge. The shell runs HTTP and nothing
 //! else: for a demand the scheduler started it is told the URL
 //! (`demand_url`); when a response arrives it keeps the body and reports the
-//! status and the body's length (`fetch_arrived`), and the kernel, in its own
-//! turn, takes a block and has the host copy the body into it — the way a
-//! driver reads what a device holds. Which category a key is, what a 404 means
-//! and how a body decodes are decided here.
+//! status and the body's length (`fetch_queued`), and `fetch_task`, on a
+//! turn's quota, takes a block and has the host copy the body into it — the
+//! way a driver reads what a device holds — and decodes it. Which category a
+//! key is, what a 404 means and how a body decodes are decided here.
 //!
 //! Every body is a heap block the kernel owns throughout. A body is decoded or
 //! read and released in the same command. A terrain body does not outlive its
@@ -18,16 +18,19 @@ use core::fmt;
 
 use pxl_shared::spec::fetch::FetchFail;
 use xpute_core::kit::array::{ArrayBuffer, U8Array};
+use xpute_core::sched::edge::{notified, yield_if_spent, Notify};
 use xpute_core::sys::mem::{alloc, free, Block};
 
 use crate::lib::env::config::PUBLISHED_TILES;
 use crate::module::map::ui::overlay::{reverse_geocode, search_modal};
+use crate::module::world::change::world_edge;
 use crate::module::world::geocode::repository::geocode_url;
 use crate::module::world::poi::{repository as poi_repository, store as poi_store};
 use crate::module::world::sched::demand::{Category, Demand, Phases};
 use crate::module::world::sched::fetch_scheduler::{demand_of, fetch_settle};
 use crate::module::world::sched::ledger::{Failure, Outcome};
 use crate::module::world::terrain::{tile_fetcher, tile_repository};
+use crate::sys::global::Global;
 use crate::sys::host::body_read;
 
 /// Where a started demand is fetched from, as it is written where it is sent.
@@ -87,9 +90,59 @@ fn text<'a>((at, bytes): Block) -> Result<&'a str, FetchFail> {
 }
 
 /// The shell's report that a started demand's fetch finished: `outcome` 0
+/// A finished fetch as the shell reported it, waiting for `fetch_task`.
+#[derive(Clone, Copy)]
+struct Arrival {
+    key: u64,
+    outcome: u32,
+    status: u32,
+    body: (u32, u32),
+    fail: u32,
+    net_ms: f64,
+}
+
+static ARRIVED: Global<Vec<Arrival>> = Global::new();
+static ARRIVALS: Global<Notify> = Global::new();
+
+fn arrived() -> &'static mut Vec<Arrival> {
+    ARRIVED.get(Vec::new)
+}
+
+fn arrivals() -> &'static mut Notify {
+    ARRIVALS.get(Notify::new)
+}
+
+/// The shell's report that a started demand's fetch finished, queued for
+/// `fetch_task`: `outcome` 0 with the response's status and the body it
+/// holds, `(body, bytes)`, 1 aborted, 2 failed with `fail`.
+pub fn fetch_queued(key: u64, outcome: u32, status: u32, body: (u32, u32), fail: u32, net_ms: f64) {
+    arrived().push(Arrival {
+        key,
+        outcome,
+        status,
+        body,
+        fail,
+        net_ms,
+    });
+    arrivals().notify();
+}
+
+/// The fetches' task: each arrival read, decoded and settled, one a turn at
+/// least and as many as the quota lets. A body is one unit.
+pub async fn fetch_task() {
+    loop {
+        notified(arrivals).await;
+        while !arrived().is_empty() {
+            yield_if_spent(world_edge).await;
+            let a = arrived().remove(0);
+            fetch_arrived(a.key, a.outcome, a.status, a.body, a.fail, a.net_ms);
+        }
+    }
+}
+
 /// with the response's status and the body it holds, `(body, bytes)`, 1
 /// aborted, 2 failed with `fail`.
-pub fn fetch_arrived(key: u64, outcome: u32, status: u32, body: (u32, u32), fail: u32, net_ms: f64) {
+fn fetch_arrived(key: u64, outcome: u32, status: u32, body: (u32, u32), fail: u32, net_ms: f64) {
     let (outcome, fail, block) = match receive(body) {
         Ok(block) => (outcome, fail, block),
         Err(no_room) => (2, no_room as u32, None),

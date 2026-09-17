@@ -217,6 +217,7 @@ const BOOT_QUANTUM: usize = 9;
 #[no_mangle]
 pub extern "C" fn boot() -> *const u32 {
     install_host();
+    executor::spawn();
     let map = mem::map().unwrap_or_else(lay_out);
     let s = state();
     let (sq, cq) = (ring_address(&s.sq), ring_address(&s.outbox.cq));
@@ -638,17 +639,15 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
         }
         Cmd::FETCH_UPDATE => {
             let f = fields(pkt)?;
-            pxl_core::module::world::fetch::fetch_arrived(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), u32_at(&f, 5)?, number_at(&f, 6)?);
+            pxl_core::module::world::fetch::fetch_queued(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), u32_at(&f, 5)?, number_at(&f, 6)?);
             Ok(Some(0))
         }
         Cmd::LOAD_UPDATE => {
             let f = fields(pkt)?;
             let url = f.at(0)?;
             // A model's bytes are far past a slot: the host holds them, and
-            // they are read here, in the kernel's turn.
-            let mut body = vec![0u8; u32_at(&f, 2)? as usize];
-            pxl_core::sys::host::body_read(u32_at(&f, 1)?, &mut body);
-            pxl_core::module::world::gltf_cache::gltf_arrived(url.get_str_ref()?, &body);
+            // the models' task reads them on a turn's quota.
+            pxl_core::module::world::gltf_cache::gltf_arrived(url.get_str_ref()?, u32_at(&f, 1)?, u32_at(&f, 2)?);
             Ok(Some(0))
         }
         Cmd::LOAD_IMAGE => {

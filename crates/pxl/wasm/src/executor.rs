@@ -12,6 +12,9 @@
 //! turn polls asks for the next edge rather than running again past the
 //! quota. A task the turn's rising edge woke is polled in that same turn.
 //!
+//! The tasks are pxl-core's own `async fn`s, each given a pool of one here: the
+//! executor's task attribute is this module's, so pxl-core never names it.
+//!
 //! One thread, and no turn re-enters another, so the critical section the
 //! executor takes has nothing to exclude.
 
@@ -42,6 +45,28 @@ fn pender(_: *mut ()) {
 
 fn executor() -> &'static Executor {
     EXECUTOR.get(|| Executor::new(core::ptr::null_mut()))
+}
+
+#[embassy_executor::task]
+async fn fetches() {
+    pxl_core::module::world::fetch::fetch_task().await
+}
+
+#[embassy_executor::task]
+async fn models() {
+    pxl_core::module::world::gltf_cache::gltf_task().await
+}
+
+/// Spawns the module's tasks, once, before the first turn. Each has a pool of
+/// one and is spawned only here, so a spawn is never refused.
+pub fn spawn() {
+    let spawner = executor().spawner();
+    if let Ok(t) = fetches() {
+        spawner.spawn(t);
+    }
+    if let Ok(t) = models() {
+        spawner.spawn(t);
+    }
 }
 
 /// Polls every task queued for this turn; one queued again while polling

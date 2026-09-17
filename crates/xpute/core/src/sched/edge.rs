@@ -147,6 +147,49 @@ pub fn next_turn<const N: usize>(edge: fn() -> &'static mut Edge<N>) -> impl Fut
     })
 }
 
+/// Where a task with nothing to do waits for something to arrive, one task a
+/// notify. It asks for no turn while it waits: a task parked for the next
+/// turn instead would ask for every frame, and an idle guest would never be
+/// left alone. A notice that comes before the task waits is kept for it.
+pub struct Notify {
+    waker: Option<Waker>,
+    notified: bool,
+}
+
+impl Notify {
+    pub const fn new() -> Notify {
+        Notify { waker: None, notified: false }
+    }
+
+    /// Something arrived: the waiting task is woken, or the next to wait
+    /// returns at once.
+    pub fn notify(&mut self) {
+        self.notified = true;
+        if let Some(w) = self.waker.take() {
+            w.wake();
+        }
+    }
+}
+
+impl Default for Notify {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Pending until `notify` is notified. `notify` is asked for at each poll, so
+/// no borrow of it is held across the await.
+pub fn notified(notify: fn() -> &'static mut Notify) -> impl Future<Output = ()> {
+    poll_fn(move |cx| {
+        let n = notify();
+        if core::mem::take(&mut n.notified) {
+            return Poll::Ready(());
+        }
+        n.waker = Some(cx.waker().clone());
+        Poll::Pending
+    })
+}
+
 #[cfg(test)]
 #[path = "edge.test.rs"]
 mod test;
