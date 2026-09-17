@@ -100,10 +100,6 @@
           "value": 19
         },
         {
-          "name": "FRAME",
-          "value": 20
-        },
-        {
           "name": "DRAW",
           "value": 21
         },
@@ -958,15 +954,6 @@
           "doc": [
             "Asked once, or once a frame for the draw lists: the answer is addresses",
             "in the module's memory, which never grows."
-          ]
-        },
-        {
-          "name": "FRAME_READ",
-          "value": 5122,
-          "doc": [
-            "tag call · no packet → [frame_at u32 (FRAME_WORDS doubles the glue",
-            "writes before a tick), uniform u32[14]: the frame uniform's floats,",
-            "then where each field starts]"
           ]
         },
         {

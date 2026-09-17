@@ -28,14 +28,6 @@ pub const TOPIC_OBJECT_CELL: u32 = 2;
 pub const WORLD_TOPICS: u32 = 6;
 pub const JOURNAL_CAPACITY: u32 = 4096;
 
-/// Doubles in the frame block, in the order sched::Frame names them: the
-/// root matrix (16), the origin (3), the planes (24), the camera (3), the
-/// lead (3), then viewport height, fov, delta seconds, budget, hard slack,
-/// pixel dither and the retain budget, then the range anchor's x and y,
-/// whether there is one, the render distance and the range hysteresis, and
-/// whether decor is scattered.
-pub const FRAME_WORDS: usize = 62;
-
 pub struct Kernel {
     pub ctx: BakeContext,
     /// The open bake's run set: its address in the memory, and its shape.
@@ -61,8 +53,6 @@ pub struct Kernel {
     pub sched: Scheduler,
     /// The world's change log (module/world/change.rs's topics).
     pub changes: ChangeLog,
-    /// The frame the glue writes before each tick (FRAME_WORDS doubles).
-    pub frame: [f64; FRAME_WORDS],
     pub census: [f64; 13],
     pub build_stat: [u32; 11],
     /// The world's raycast and its kept composites.
@@ -91,7 +81,6 @@ impl Kernel {
                 capacity: JOURNAL_CAPACITY,
                 keys_per_topic: None,
             }),
-            frame: [0.0; FRAME_WORDS],
             census: [0.0; 13],
             build_stat: [0; 11],
         }

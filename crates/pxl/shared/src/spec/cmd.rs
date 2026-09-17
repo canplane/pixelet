@@ -39,7 +39,6 @@ pub enum Major {
     ENV = 0x11,
     MODEL = 0x12,
     CHANGE = 0x13,
-    FRAME = 0x14,
     DRAW = 0x15,
     SHADER = 0x16,
     POOL = 0x17,
@@ -386,10 +385,6 @@ pub enum Cmd {
     //
     // Asked once, or once a frame for the draw lists: the answer is addresses
     // in the module's memory, which never grows.
-    /// tag call · no packet → [frame_at u32 (FRAME_WORDS doubles the glue
-    /// writes before a tick), uniform u32[14]: the frame uniform's floats,
-    /// then where each field starts]
-    FRAME_READ = 0x1402,
     /// tag call · no packet → [census_at u32 (13 doubles), stat_at u32 (11
     /// words)]
     CHUNK_READ = 0x0102,
@@ -645,7 +640,7 @@ pub enum Cmd {
 }
 
 impl Cmd {
-    const ALL: [Cmd; 118] = [
+    const ALL: [Cmd; 117] = [
         Cmd::NOP,
         Cmd::CHUNK_CREATE,
         Cmd::CHUNK_UPDATE,
@@ -691,7 +686,6 @@ impl Cmd {
         Cmd::CHUNK_BUILD,
         Cmd::CHUNK_DECOR,
         Cmd::ENV_READ,
-        Cmd::FRAME_READ,
         Cmd::CHUNK_READ,
         Cmd::CHANGE_LANES,
         Cmd::POOL_READ,

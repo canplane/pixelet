@@ -15,7 +15,7 @@
 use pxl_core::mem;
 use pxl_core::module::world::chunk_node::{BuildEvent, PageLanes, World};
 use pxl_core::module::world::decor::decor_layer::{Kind as DecorKind, Rule as DecorRule};
-use pxl_core::module::world::sched::chunk_table::{Event, Frame, Scheduler};
+use pxl_core::module::world::sched::chunk_table::{Event, Scheduler};
 use pxl_core::render::layer::object::adapter::{Carve, Kind};
 use pxl_core::render::layer::pipeline::chunk_mesher::Step;
 use pxl_core::render::layer::pipeline::chunk_raycast::Raycast;
@@ -266,7 +266,7 @@ fn volumes_of(volumes: &mut Option<Volumes>) -> Result<&mut Volumes, MarshalErro
 // (module/world/object/store.ts). Writes, reads and the reference paint
 // alike are commands in the rings (pxl_shared::spec::cmd's OBJECT_*).
 
-pub use pxl_core::sys::kernel::{FRAME_WORDS, JOURNAL_CAPACITY, TOPIC_DECOR_COLUMN, TOPIC_OBJECT_CELL, TOPIC_OBJECT_COLUMN, WORLD_TOPICS};
+pub use pxl_core::sys::kernel::{JOURNAL_CAPACITY, TOPIC_DECOR_COLUMN, TOPIC_OBJECT_CELL, TOPIC_OBJECT_COLUMN, WORLD_TOPICS};
 
 // ---- Rings ----
 //
@@ -274,8 +274,8 @@ pub use pxl_core::sys::kernel::{FRAME_WORDS, JOURNAL_CAPACITY, TOPIC_DECOR_COLUM
 // a message names a command (pxl_shared::spec::cmd) and an XTP packet in the
 // ring's slot, which the kernel reads where it lies. The shell assembles
 // what it submits and takes apart what completes; nothing here is shaped
-// for it. The glue pushes into the submission ring, rings `interrupt`
-// (DRAIN or TICK), and reads the completion ring when the call returns.
+// for it. The shell pushes into the submission ring, rings `interrupt`
+// (DRAIN), and reads the completion ring when the call returns.
 
 /// Words in the boot block: the section the module keeps for itself at the
 /// front of the memory; where the submission ring and the completion ring
@@ -335,15 +335,13 @@ fn lay_out() -> mem::Map {
 
 /// The doorbell. The vector says what the turn is for
 /// (xpute_core::ipc::cmd::Interrupt): DRAIN applies the submissions waiting
-/// and answers how many messages it posted; TICK drains, then runs the
-/// scheduler's pass, and answers 1 when the canvas has something new to
-/// draw. A vector nobody numbers answers u32::MAX.
+/// and answers how many messages it posted. Any other vector answers
+/// u32::MAX.
 #[no_mangle]
 pub extern "C" fn interrupt(vector: u32) -> u32 {
     let s = state();
     match vector {
         v if v == Interrupt::DRAIN as u32 => drain(s),
-        v if v == Interrupt::TICK as u32 => tick(s),
         _ => u32::MAX,
     }
 }
@@ -817,17 +815,6 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
                 }
             };
             return Ok(Some((revision as i32, None)));
-        }
-        Cmd::FRAME_READ => {
-            let mut uniform = [pxl_core::render::shader::FRAME_FLOATS; 14];
-            uniform[1..].copy_from_slice(&pxl_core::render::shader::FRAME_AT);
-            let frame_at = k.frame.as_ptr() as u32;
-            return Ok(Some((
-                0,
-                reply(2, |b| {
-                    b.u32(Some(frame_at)).u32_array(Some(&uniform[..]));
-                }),
-            )));
         }
         Cmd::CHUNK_READ => {
             let (census_at, stat_at) = (k.census.as_ptr() as u32, k.build_stat.as_ptr() as u32);
@@ -1465,7 +1452,6 @@ fn apply(s: &mut State, tag: u32, number: u32, pkt: &Option<U8Array>) -> Result<
         | Cmd::CHANGE_UPDATE
         | Cmd::CHANGE_READ
         | Cmd::CHANGE_DELETE
-        | Cmd::FRAME_READ
         | Cmd::CHUNK_READ
         | Cmd::CHANGE_LANES
         | Cmd::POOL_READ
@@ -1803,55 +1789,6 @@ fn after() {
         c.pressure as f64,
     ];
 }
-
-/// The frame's turn (Interrupt::TICK): applies the submissions waiting, then
-/// the scheduler's pass over every chunk with the frame the glue wrote at
-/// FRAME_READ's address. 1 when the canvas has something new to draw.
-fn tick(s: &mut State) -> u32 {
-    drain(s);
-    let k = kernel();
-    // Events the ring had no room for are posted first; a tick on top of
-    // them would only queue more. The glue reads the ring dry and drains
-    // again before the next tick, so this is a frame lost only when it
-    // does not.
-    if !s.outbox.spill.is_empty() || k.volumes.is_none() {
-        return 1;
-    }
-    let f = k.frame;
-    let mut frame = Frame::default();
-    frame.root.copy_from_slice(&f[0..16]);
-    frame.origin.copy_from_slice(&f[16..19]);
-    frame.planes.copy_from_slice(&f[19..43]);
-    frame.camera.copy_from_slice(&f[43..46]);
-    frame.lead.copy_from_slice(&f[46..49]);
-    frame.viewport_h = f[49];
-    frame.fov_deg = f[50];
-    frame.delta_s = f[51];
-    frame.budget_ms = f[52];
-    frame.hard_slack_ms = f[53];
-    frame.pixel_dither = f[54] != 0.0;
-    frame.retain_budget_bytes = f[55];
-    frame.anchor = (f[58] != 0.0).then_some([f[56], f[57]]);
-    frame.render_dist = f[59];
-    frame.range_hysteresis = f[60];
-    frame.show_decor = f[61] != 0.0;
-    let Parts { mut world, events, sched, .. } = parts(k, &s.outbox);
-    let draw = sched.tick(&mut world, frame, &now, &mut |e| post_event(events, e));
-    after();
-    draw as u32
-}
-
-// ---- The billboards (crates/pxl/core/src/module/world/billboard/field.rs) ----
-
-// ---- The shaders and the pipelines (crates/pxl/core/src/render/shader.rs) ----
-
-// ---- The dev gizmos (crates/pxl/core/src/module/world/marker/frame_gizmo.rs) ----
-
-// ---- The environment (crates/pxl/core/src/module/map/environment.rs) ----
-
-// ---- The location puck (crates/pxl/core/src/module/world/marker/location_puck.rs) ----
-
-// ---- Models and actors (crates/pxl/core/src/module/world/gltf_cache.rs) ----
 
 // ---- The host's hooks (pxl_core::sys::host, pxl_core::sys::global) ----
 
