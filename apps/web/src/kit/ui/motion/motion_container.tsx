@@ -1,4 +1,4 @@
-// @pxl/web/shared/ui/motion/motion_container.tsx
+// @pxl/web/kit/ui/motion/motion_container.tsx
 
 import { AnimatePresence, type HTMLMotionProps, motion } from "framer-motion";
 

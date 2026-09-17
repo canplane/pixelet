@@ -1,19 +1,19 @@
-// @pxl/web/module/world/character/character_picker.tsx
+// @pxl/web/ui/character/picker.tsx
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { cn } from "@/shared/lib/util/cn.ts";
-import { CharacterPreview } from "@/module/world/character/character_preview.tsx";
-import { kernel_action, useKernel } from "@/wasm/kernel.ts";
-import { find_person_variant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_VARIANTS } from "@/module/world/character/variant.ts";
+import { cn } from "@/kit/lib/util/cn.ts";
+import { CharacterPreview } from "@/ui/character/preview.tsx";
+import { kernel_action, useKernel } from "@/kernel/kernel.ts";
+import { find_person_variant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_VARIANTS } from "@/catalog/character/variant.ts";
 
 // Moved out of app/setting/section/ (2026-09-07): person/pet variant is a
 // companion *appearance* pick, not a setting you configure once and forget —
 // same "which of these do I want equipped" shape as a cube color or decor
 // kind, just always-on-one-of-each instead of placed-many. It now lives in
 // drawer_modal.tsx's own Character tab, and this file moved alongside the
-// rest of the character world module (character_preview.tsx, companion.tsx)
+// rest of the character world module (preview.tsx, companion.tsx)
 // since it's no longer a settings-modal-specific component.
 
 // Every chip in this component — gender, person variant, pet variant alike —

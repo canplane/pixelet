@@ -1,17 +1,17 @@
-// @pxl/web/module/map/ui/overlay/drawer_modal.tsx
+// @pxl/web/ui/map/overlay/drawer_modal.tsx
 
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 
 import { GroundChannelKey } from "@pxl/shared/bake/format.ts";
-import { decor_ids, type DecorId, placeable_cube_id, type PlaceableCube, placeable_cubes } from "@pxl/shared/spec/cell/mod.ts";
+import { decor_ids, type DecorId, placeable_cube_id, placeable_cubes, type PlaceableCube } from "@pxl/shared/spec/cell/mod.ts";
 
 import type { BaseModalProps } from "@/app/type/ui.types.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
-import { cn } from "@/shared/lib/util/cn.ts";
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs.tsx";
-import { CharacterPicker } from "@/module/world/character/character_picker.tsx";
+import { cn } from "@/kit/lib/util/cn.ts";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/kit/ui/shadcn/sheet.tsx";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/kit/ui/shadcn/tabs.tsx";
+import { CharacterPicker } from "@/ui/character/picker.tsx";
 import { cube_swatch_style } from "./cube_swatch.ts";
 import { DECOR_ICONS } from "./mode_bar.tsx";
 

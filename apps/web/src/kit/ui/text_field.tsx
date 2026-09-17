@@ -1,4 +1,4 @@
-// @pxl/web/shared/ui/text_field.tsx
+// @pxl/web/kit/ui/text_field.tsx
 
 /**
  * A text input that carries the two browser behaviours nobody remembers
@@ -30,7 +30,7 @@
 
 import * as React from "react";
 
-import { cn } from "@/shared/lib/util/cn.ts";
+import { cn } from "@/kit/lib/util/cn.ts";
 
 type TextFieldProps = Omit<React.ComponentPropsWithoutRef<"input">, "onSubmit"> & {
   /** Enter, with an IME composition's own Enter excluded. */

@@ -1,4 +1,4 @@
-// @pxl/web/module/world/character/character_preview.tsx
+// @pxl/web/ui/character/preview.tsx
 
 /**
  * Small display case for the variant picker — one character playing its idle
@@ -11,8 +11,8 @@
 
 import { useEffect, useRef } from "react";
 
-import { kernel_action, open_surface, SURFACE_CASE } from "@/wasm/kernel.ts";
-import type { CharacterVariant } from "@/module/world/character/variant.ts";
+import { kernel_action, open_surface, SURFACE_CASE } from "@/kernel/kernel.ts";
+import type { CharacterVariant } from "@/catalog/character/variant.ts";
 
 export type CharacterPreviewProps = {
   variant: CharacterVariant;

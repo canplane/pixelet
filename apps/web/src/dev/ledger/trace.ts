@@ -1,4 +1,4 @@
-// @pxl/web/module/world/sched/trace.ts
+// @pxl/web/dev/ledger/trace.ts
 
 /**
  * The ledger window as Chrome's Trace Event Format, saved as a file openable
@@ -8,19 +8,19 @@
  * category is slow, the timeline shows it's slow *because* it's contending
  * with a fetch burst that the same pan kicked off.
  *
- * Built here from the kernel's rings read in place (ledger_view.ts) and the
+ * Built here from the kernel's rings read in place (view.ts) and the
  * shell's own long frames, so the tens of megabytes a window's trace runs to
  * are this side's to allocate and never the kernel heap's. A download rather
  * than the clipboard: the clipboard handles that size badly, and Perfetto
- * wants a file anyway. Wired to `window` in dev (ledger_overlay.tsx) so it is
+ * wants a file anyway. Wired to `window` in dev (overlay.tsx) so it is
  * reachable from the console.
  */
 
-import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/lib/env/config.ts";
+import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 
-import { fail_text, type Frame } from "./ledger_report.ts";
-import { CENSUS_TAGS, PHASE_NAMES } from "./ledger_spec.ts";
-import { ledger_rings_read } from "./ledger_view.ts";
+import { fail_text, type Frame } from "./report.ts";
+import { CENSUS_TAGS, PHASE_NAMES } from "./spec.ts";
+import { ledger_rings_read } from "./view.ts";
 import { long_frames_since } from "./long_frame.ts";
 
 const PID = 1;

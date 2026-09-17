@@ -1,4 +1,4 @@
-// @pxl/web/shared/lib/store/wait_until.ts
+// @pxl/web/kit/lib/store/wait_until.ts
 
 export type Unsubscribe = () => void;
 export type SubscribeWake = (wake: () => void) => Unsubscribe;

@@ -1,4 +1,4 @@
-// @pxl/web/module/world/sched/ledger_gauge.tsx
+// @pxl/web/dev/ledger/gauge.tsx
 
 /**
  * The gauge half of the instrument in
@@ -9,7 +9,7 @@
  * What the report has and this does not is detail, not kind: per-unit costs,
  * retention counts, band reuse, mounts and the window peak stay in the report.
  * Everything here comes from the kernel's summary block, read in place
- * (ledger_view.ts) — the same block the report is built from: pacing against
+ * (view.ts) — the same block the report is built from: pacing against
  * the display's measured frame, the tick and its budget, throughput, LOD waits, the GPU ask, retained footprint,
  * queue pressure, task latency with its commonest failure, and the LoAF
  * CPU-vs-render split.
@@ -17,10 +17,10 @@
 
 import { useEffect, useState } from "react";
 
-import { BOUND, fail_text, type FrameSummary, type LongFrame, n1, type Spread, tris } from "./ledger_report.ts";
-import { type Gauge, ledger_gauge_read } from "./ledger_view.ts";
+import { BOUND, fail_text, type FrameSummary, type LongFrame, n1, type Spread, tris } from "./report.ts";
+import { type Gauge, ledger_gauge_read } from "./view.ts";
 import { loaf_supported } from "./long_frame.ts";
-import { CORE_MEMORY } from "@/wasm/core_mem.ts";
+import { CORE_MEMORY } from "@/kernel/core_mem.ts";
 
 /** How often the panel repaints. */
 const POLL_MS = 500;

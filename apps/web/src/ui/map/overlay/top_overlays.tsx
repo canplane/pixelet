@@ -1,20 +1,20 @@
-// @pxl/web/module/map/ui/overlay/top_overlays.tsx
+// @pxl/web/ui/map/overlay/top_overlays.tsx
 
 import { Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { cn } from "@/shared/lib/util/cn.ts";
-import { useAppContext } from "@/app/provider/app_context.ts";
-import { use_camera_busy_interaction_style } from "@/module/camera/use_camera_busy_interaction_style.ts";
-import { useKernel } from "@/wasm/kernel.ts";
+import { cn } from "@/kit/lib/util/cn.ts";
+import { useAppContext } from "@/app/provider/context.ts";
+import { use_camera_busy_interaction_style } from "@/ui/map/use_camera_busy_interaction_style.ts";
+import { useKernel } from "@/kernel/kernel.ts";
 import { CurrentAddress } from "./current_address.tsx";
 import { useReverseGeocode } from "./use_reverse_geocode.ts";
 import { SensorStatus } from "./sensor_status.tsx";
 import { DummyChatText } from "./dummy_chat_text.tsx";
 import { MapCompass } from "../control/compass.tsx";
 import { MapScaleBar } from "../control/scale_bar.tsx";
-import { TrackingButton } from "@/module/map/ui/control/tracking_button.tsx";
-import { SettingsTriggerButton } from "@/app/setting/trigger_button.tsx";
+import { TrackingButton } from "@/ui/map/control/tracking_button.tsx";
+import { SettingsTriggerButton } from "@/ui/setting/trigger_button.tsx";
 
 export function TopOverlays() {
   const { is_camera_busy, interaction_style } = use_camera_busy_interaction_style();

@@ -1,8 +1,8 @@
-// @pxl/web/app/setting/section/attribution_section.tsx
+// @pxl/web/ui/setting/section/attribution.tsx
 
 import { useTranslation } from "react-i18next";
 
-import { SectionTitle } from "@/app/setting/setting_row.tsx";
+import { SectionTitle } from "@/ui/setting/row.tsx";
 
 /**
  * Source notices. Hardcoded rather than run through t(): these are licence

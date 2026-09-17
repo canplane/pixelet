@@ -1,4 +1,4 @@
-// @pxl/web/module/map/ui/overlay/current_address.tsx
+// @pxl/web/ui/map/overlay/current_address.tsx
 
 import { AnimatePresence, motion } from "framer-motion";
 

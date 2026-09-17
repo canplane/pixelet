@@ -45,7 +45,7 @@ const cube_ids = placeable_cubes.map(placeable_cube_id);
 const channels = [...new Set(placeable_cubes.map((cube) => cube.channel))];
 
 for (const locale of LOCALES) {
-  const doc: Catalogue = JSON.parse(await Deno.readTextFile(join(root, `apps/web/src/bootstrap/locale/${locale}.json`)));
+  const doc: Catalogue = JSON.parse(await Deno.readTextFile(join(root, `apps/web/src/locale/${locale}.json`)));
   branch(locale, doc, "cubes", cube_ids);
   branch(locale, doc, "decors", [...decor_ids]);
   // The drawer groups the catalog by channel, one heading each.

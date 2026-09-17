@@ -1,4 +1,4 @@
-// @pxl/web/wasm/core_mem.ts
+// @pxl/web/kernel/core_mem.ts
 
 /**
  * The central scheduler's big memory, and the kernel booted over it.
@@ -20,9 +20,9 @@
 import type { u32 } from "@xpute/core/kit/word.ts";
 import { reserve_memory } from "@xpute/core/sys/mem.ts";
 import { Doorbell } from "@xpute/core/ipc/doorbell.ts";
-import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
-import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/wasm/mem_spec.ts";
-import { BOOT, boot_block, instantiate_kernel, type KernelExports } from "@/wasm/module.ts";
+import { HANDHELD } from "@/kit/lib/browser/handheld.ts";
+import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/kernel/mem_spec.ts";
+import { BOOT, boot_block, instantiate_kernel, type KernelExports } from "@/kernel/module.ts";
 
 export { REGION_BYTES };
 

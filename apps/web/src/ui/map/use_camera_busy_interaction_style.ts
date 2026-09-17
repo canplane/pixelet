@@ -1,7 +1,7 @@
-// @pxl/web/module/camera/use_camera_busy_interaction_style.ts
+// @pxl/web/ui/map/use_camera_busy_interaction_style.ts
 
-import { cn } from "@/shared/lib/util/cn.ts";
-import { useKernel } from "@/wasm/kernel.ts";
+import { cn } from "@/kit/lib/util/cn.ts";
+import { useKernel } from "@/kernel/kernel.ts";
 
 /**
  * The standard "dim and stop responding to touch while the camera is busy"

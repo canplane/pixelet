@@ -1,4 +1,4 @@
-// @pxl/web/shared/hook/use_is_mobile.tsx
+// @pxl/web/kit/hook/use_is_mobile.tsx
 
 import { useEffect, useState } from "react";
 

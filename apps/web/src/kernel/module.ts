@@ -1,4 +1,4 @@
-// @pxl/web/wasm/module.ts
+// @pxl/web/kernel/module.ts
 
 /**
  * The Rust core's module (crates/pxl/wasm). The bytes are built by `deno task
@@ -23,7 +23,7 @@
 import type { u32 } from "@xpute/core/kit/word.ts";
 import type { QuantumPolicy } from "@xpute/core/sched/quantum.ts";
 
-import { gpu_imports } from "@/wasm/gpu.ts";
+import { gpu_imports } from "@/device/gpu.ts";
 
 /** What the module exports: the boot block and the doorbell. Every address
  * is into the memory it was given. */
@@ -36,7 +36,7 @@ export type KernelExports = {
    * (@xpute/core/sched/quantum.ts). */
   interrupt(quota_ms: number): number;
   /** The ledger, where it lies: the address of `READ`'s u32 words
-   * (module/world/sched/ledger_spec.ts) — the summary block over the last
+   * (dev/ledger/spec.ts) — the summary block over the last
    * `window_ms`, Infinity for the whole recording, and the frame, task and
    * worst-frame rings. Read in place and good until the next turn; nothing is
    * built for it, and nothing crosses the control ring. */

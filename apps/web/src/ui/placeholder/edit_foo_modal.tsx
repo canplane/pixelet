@@ -1,10 +1,10 @@
-// @pxl/web/feature/manage_foo/ui/edit_foo_modal.tsx
+// @pxl/web/ui/placeholder/edit_foo_modal.tsx
 
 import { useCallback, useEffect } from "react";
 
 import type { BaseModalProps } from "@/app/type/ui.types.ts";
 
-import { useAppContext } from "@/app/provider/app_context.ts";
+import { useAppContext } from "@/app/provider/context.ts";
 
 /**
  * Temporary dialog placeholder.

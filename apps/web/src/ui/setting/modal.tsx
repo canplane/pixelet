@@ -1,19 +1,19 @@
-// @pxl/web/app/setting/modal.tsx
+// @pxl/web/ui/setting/modal.tsx
 
 import { useTranslation } from "react-i18next";
 
 import type { BaseModalProps } from "@/app/type/ui.types.ts";
 import { Info, Sparkles, X } from "lucide-react";
 
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
-import { Separator } from "@/shared/ui/shadcn/separator.tsx";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs.tsx";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/kit/ui/shadcn/sheet.tsx";
+import { Separator } from "@/kit/ui/shadcn/separator.tsx";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/kit/ui/shadcn/tabs.tsx";
 import { SettingsSection } from "./section.tsx";
-import { LanguageSection } from "./section/language_section.tsx";
-import { DebugSection } from "./section/debug_section.tsx";
-import { DisclaimerSection } from "./section/disclaimer_section.tsx";
-import { AboutSection } from "./section/about_section.tsx";
-import { AttributionSection } from "./section/attribution_section.tsx";
+import { LanguageSection } from "./section/language.tsx";
+import { DebugSection } from "./section/debug.tsx";
+import { DisclaimerSection } from "./section/disclaimer.tsx";
+import { AboutSection } from "./section/about.tsx";
+import { AttributionSection } from "./section/attribution.tsx";
 
 export type SettingsModalProps = {
   type: "settings";

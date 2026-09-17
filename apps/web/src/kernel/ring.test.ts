@@ -1,4 +1,4 @@
-// @pxl/web/wasm/ring.test.ts
+// @pxl/web/kernel/ring.test.ts
 
 import { assert, assertEquals } from "@std/assert";
 
@@ -8,8 +8,8 @@ import { FrameFlag } from "@xpute/core/ipc/frame.ts";
 import { Ring } from "@xpute/core/ipc/ring.ts";
 import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
-import { CORE_KERNEL } from "@/wasm/core_mem.ts";
-import { BOOT, boot_block } from "@/wasm/module.ts";
+import { CORE_KERNEL } from "@/kernel/core_mem.ts";
+import { BOOT, boot_block } from "@/kernel/module.ts";
 
 /** A command crates/pxl/wasm/src/lib.rs does not number. */
 const UNNUMBERED = 0x0fff;

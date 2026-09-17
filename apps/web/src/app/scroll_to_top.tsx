@@ -1,4 +1,4 @@
-// @pxl/web/app/router/helper/scroll_to_top.tsx
+// @pxl/web/app/scroll_to_top.tsx
 
 import { useEffect } from "react";
 import { useLocation, useNavigationType } from "react-router-dom";

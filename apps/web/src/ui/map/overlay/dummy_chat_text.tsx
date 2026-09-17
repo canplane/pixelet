@@ -1,4 +1,4 @@
-// @pxl/web/module/map/ui/overlay/dummy_chat_text.tsx
+// @pxl/web/ui/map/overlay/dummy_chat_text.tsx
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";

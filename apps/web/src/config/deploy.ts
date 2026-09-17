@@ -1,4 +1,4 @@
-// @pxl/web/lib/env/config.ts
+// @pxl/web/config/deploy.ts
 
 /**
  * Deployment configuration: values that ship as data.
@@ -16,7 +16,7 @@
 
 import { id as build_id, number as build_number, time as build_time } from "virtual:pxl-build";
 
-import { tile_base } from "@/lib/env/route.ts";
+import { tile_base } from "@/config/route.ts";
 
 /** Application environment name, from VITE_APP_ENV (falling back to Vite's
  * mode). Shown in settings so it is possible to tell which build is on screen

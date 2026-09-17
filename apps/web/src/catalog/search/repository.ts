@@ -1,7 +1,7 @@
-// @pxl/web/module/world/search/repository.ts
+// @pxl/web/catalog/search/repository.ts
 
-import { SEARCH_URL } from "@/lib/env/route.ts";
-import type { GeocodePart } from "@/module/world/geocode/repository.ts";
+import { SEARCH_URL } from "@/config/route.ts";
+import type { GeocodePart } from "@/catalog/geocode/repository.ts";
 
 /**
  * One matched place, WGS84 lon/lat — mirrors the API's own SearchResult

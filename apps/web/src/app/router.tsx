@@ -1,12 +1,12 @@
-// @pxl/web/app/router/app_router.tsx
+// @pxl/web/app/router.tsx
 
 import { createBrowserRouter, Navigate, Outlet, RouterProvider } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
 
-import { ScrollToTop } from "./helper/scroll_to_top.tsx";
+import { ScrollToTop } from "./scroll_to_top.tsx";
 import { devRoutes } from "../dev/dev_route.tsx";
-import { AppLayout } from "../ui/app_layout.tsx";
-import MapPage from "@/page/map_page.tsx";
+import { AppLayout } from "./layout.tsx";
+import MapPage from "@/app/page/map_page.tsx";
 
 /** Main Router Configuration */
 const routes: RouteObject[] = [

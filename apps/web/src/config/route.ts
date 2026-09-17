@@ -1,4 +1,4 @@
-// @pxl/web/lib/env/route.ts
+// @pxl/web/config/route.ts
 
 /** Every same-origin route the app requests, and how a dev server forwards them. */
 

@@ -1,10 +1,10 @@
-// @pxl/web/app/setting/setting_row.tsx
+// @pxl/web/ui/setting/row.tsx
 
 import type { LucideIcon } from "lucide-react";
 
-import { cn } from "@/shared/lib/util/cn.ts";
-import { Switch } from "@/shared/ui/shadcn/switch.tsx";
-import type { SettingCost } from "./schema.ts";
+import { cn } from "@/kit/lib/util/cn.ts";
+import { Switch } from "@/kit/ui/shadcn/switch.tsx";
+import type { SettingCost } from "../../catalog/setting/schema.ts";
 
 const COST_CLASS: Record<SettingCost, string> = {
   low: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600",

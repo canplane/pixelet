@@ -1,11 +1,11 @@
-// @pxl/web/module/map/ui/overlay/sensor_status.tsx
+// @pxl/web/ui/map/overlay/sensor_status.tsx
 
 import { Compass, Locate } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { kernel_enable_sensors, type PoseStatus, useKernel } from "@/wasm/kernel.ts";
+import { kernel_enable_sensors, type PoseStatus, useKernel } from "@/kernel/kernel.ts";
 
-import { cn } from "@/shared/lib/util/cn.ts";
+import { cn } from "@/kit/lib/util/cn.ts";
 
 function status_class(status: PoseStatus): string {
   switch (status) {

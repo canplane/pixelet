@@ -1,1 +1,1 @@
-// @pxl/web/app/model/app.store.ts
+// @pxl/web/app/model/store.ts

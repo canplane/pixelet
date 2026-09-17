@@ -1,4 +1,4 @@
-// @pxl/web/module/world/object/size.ts
+// @pxl/web/catalog/object/size.ts
 
 import type { f64 } from "@xpute/core/kit/word.ts";
 import { U_PER_CELL } from "@pxl/shared/bake/constant.ts";

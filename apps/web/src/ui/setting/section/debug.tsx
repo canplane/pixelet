@@ -1,12 +1,12 @@
-// @pxl/web/app/setting/section/debug_section.tsx
+// @pxl/web/ui/setting/section/debug.tsx
 
 import { useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 
-import { SettingRow } from "@/app/setting/setting_row.tsx";
-import { SettingsSection } from "@/app/setting/section.tsx";
-import { Toast } from "@/shared/ui/toast/toast.tsx";
-import { getToastEntries, subscribeToastEntries, toastCustom, toastDismiss } from "@/shared/ui/toast/store.ts";
+import { SettingRow } from "@/ui/setting/row.tsx";
+import { SettingsSection } from "@/ui/setting/section.tsx";
+import { Toast } from "@/kit/ui/toast/toast.tsx";
+import { getToastEntries, subscribeToastEntries, toastCustom, toastDismiss } from "@/kit/ui/toast/store.ts";
 
 const DUMMY_TOAST_IDS = ["dummy-1", "dummy-2", "dummy-3", "dummy-4"];
 

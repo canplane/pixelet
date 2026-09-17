@@ -14,7 +14,7 @@
 
 /// The sheet's sections, in the order they are shown. `character` is not a
 /// section of the sheet at all — its two settings are picked from the
-/// drawer's Character tab (character/character_picker.tsx).
+/// drawer's Character tab (ui/character/picker.tsx).
 pub const SETTING_SECTIONS: &[&str] = &["display", "camera", "editing", "lighting", "quality", "debug", "character"];
 
 /// What terrain does to the camera.
@@ -114,7 +114,7 @@ pub mod SETTINGS {
     /// 16 MB of map on a desktop, 4 on a phone.
     pub mod show_shadow_map {
         pub const kind: &str = "toggle";
-        pub const default: bool = true;
+        pub const default: bool = false;
         pub const section: &str = "lighting";
         pub const cost: &str = "high";
         pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
@@ -137,7 +137,7 @@ pub mod SETTINGS {
     /// renderer is made.
     pub mod msaa {
         pub const kind: &str = "toggle";
-        pub const default: bool = true;
+        pub const default: bool = false;
         pub const handheld_default: bool = false;
         pub const section: &str = "quality";
         pub const cost: &str = "high";

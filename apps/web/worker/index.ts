@@ -53,7 +53,7 @@ export type Env = {
   API_ORIGIN: string;
 };
 
-/** Mirrors src/lib/env/route.ts's EDGE_* prefixes, as literals: this file
+/** Mirrors src/config/route.ts's EDGE_* prefixes, as literals: this file
  * is bundled for the Workers runtime rather than from src/. Neither branch
  * reads past its prefix. */
 const API_PREFIX = "/api/";

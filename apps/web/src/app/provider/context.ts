@@ -1,8 +1,8 @@
-// @pxl/web/app/provider/app_context.ts
+// @pxl/web/app/provider/context.ts
 
 import { createContext, useContext } from "react";
 
-// import AppStore from "../model/app.store";
+// import AppStore from "../model/store";
 import type { UiController } from "../type/ui.types.ts";
 
 /**

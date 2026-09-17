@@ -1,4 +1,4 @@
-// @pxl/web/module/world/sched/long_frame.ts
+// @pxl/web/dev/ledger/long_frame.ts
 //
 // The long-frame observers, and the ring they fill. A frame that blocks the
 // event loop past 50ms is a browser measurement of the whole task, and the
@@ -16,7 +16,7 @@
 // A dev instrument: the shipped monitor cannot lean on LoAF, which is why
 // this is wired from the ledger overlay rather than from boot.
 
-import type { LongFrame } from "./ledger_report.ts";
+import type { LongFrame } from "./report.ts";
 
 type LoafEntry = PerformanceEntry & {
   blockingDuration?: number;
