@@ -17,7 +17,7 @@ struct Point {
 /// boundary case can be written down by hand. 1021 is prime and far above
 /// the point counts here, which is the sizing Teschner measured.
 fn index(cell_size: f64, capacity: u32) -> SpatialHash {
-    SpatialHash::new(capacity, 1021, cell_size, None)
+    SpatialHash::new(capacity, 1021, cell_size)
 }
 
 fn fill(h: &mut SpatialHash, points: &[Point]) {
@@ -255,7 +255,7 @@ fn spatial_hash_ten_thousand_points_in_one_small_volume_still_resolve() {
 fn spatial_hash_a_saturated_table_returns_no_id_twice_and_none_from_a_colliding_cell() {
     // 61 buckets against a scatter over a million cells: every bucket holds
     // several unrelated cells.
-    let mut h = SpatialHash::new(4096, 61, 1.0, None);
+    let mut h = SpatialHash::new(4096, 61, 1.0);
     let points = scatter(1500, 100.0);
     let by_id: HashMap<u32, Point> = points.iter().map(|p| (p.id, *p)).collect();
     fill(&mut h, &points);

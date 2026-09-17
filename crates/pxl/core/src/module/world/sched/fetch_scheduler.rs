@@ -19,7 +19,7 @@ use xpute_core::sched::io::{Demand as Queued, IoQueue};
 
 use super::demand::{Category, Demand, DemandKey, Phases};
 use super::ledger::{ledger_record, Failure, Outcome, TaskRecord};
-use crate::global::Global;
+use crate::sys::global::Global;
 
 /// Demands held at once: the pages near the view in each category, and a
 /// search. Past it a demand is refused and asked for again.
@@ -130,11 +130,6 @@ pub fn fetch_credits() -> u32 {
     sched().credits
 }
 
-/// Moves after every queue/running change — the revision map_status follows.
-pub fn fetch_revision() -> u32 {
-    sched().queue.revision()
-}
-
 /// Everything the scheduler holds, for the ledger's resources line.
 pub fn fetch_counts() -> FetchCounts {
     sched().queue.counts()
@@ -224,7 +219,7 @@ pub fn fetch_sync(category: Category, wanted: &[Demand]) {
 
 /// Whether a demand with this key is in flight right now. Read-only, for a
 /// caller deciding whether to keep asking for something it has already asked
-/// for (see terrain/use_tile_fetcher.rs's in-flight hysteresis).
+/// for (see terrain/tile_fetcher.rs's in-flight hysteresis).
 pub fn fetch_running(key: DemandKey) -> bool {
     let s = sched();
     held_key(s, key).is_some_and(|k| s.queue.running(k))

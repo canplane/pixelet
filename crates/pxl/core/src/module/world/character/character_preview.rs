@@ -17,14 +17,14 @@ use std::collections::HashMap;
 use pxl_shared::spec::space::pvf3::ivec;
 
 use super::variant::{CharacterVariant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_VARIANTS};
-use crate::global::Global;
-use crate::kernel::{kernel, with_world};
-use crate::module::map::store::use_map_store;
+use crate::module::map::store::map_store;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::frame::coord::get_local_world_origin;
+use crate::module::world::gltf_cache::{load_gltf, load_image};
 use crate::module::world::sched::tick::TickContext;
-use crate::render::gltf::load::{load_gltf, load_image};
 use crate::render::gpu::model_asset::{register_model, ModelHandle};
+use crate::sys::global::Global;
+use crate::sys::kernel::{kernel, with_world};
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
 const IDLE_CLIP: &str = "idle";
@@ -57,11 +57,7 @@ fn cases() -> &'static mut Cases {
 }
 
 fn variant_of(key: &str) -> Option<&'static CharacterVariant> {
-    PET_VARIANTS()
-        .iter()
-        .chain(PERSON_VARIANTS_FEMALE())
-        .chain(PERSON_VARIANTS_MALE())
-        .find(|v| v.key == key)
+    PET_VARIANTS().iter().chain(PERSON_VARIANTS_FEMALE()).chain(PERSON_VARIANTS_MALE()).find(|v| v.key == key)
 }
 
 /// Opens case `id` over the variant named `key`; a case already open under
@@ -103,7 +99,7 @@ pub fn preview_step(ctx: &mut TickContext) {
     // the actor's place back out either way, but it reads that place from the
     // draw's f32 uniform, and the absolute origin can be millions of units from
     // the render frame's, where a float no longer resolves a model a unit tall.
-    let origin = get_local_world_origin(use_map_store().map_center.as_ref());
+    let origin = get_local_world_origin(map_store().map_center.as_ref());
     let at = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin)) - CASE_DEPTH_U];
     for case in &mut c.cases {
         if case.model.is_none() {

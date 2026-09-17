@@ -11,7 +11,7 @@
 //! the way a device writes into a buffer its driver allocated. The block is the
 //! kernel's throughout. Every body is a block of the mesh section: a body is
 //! decoded or read and released in the same command, which is what that section
-//! is for. A terrain body no longer outlives its command — the page it carries
+//! is for. A terrain body does not outlive its command — the page it carries
 //! is written into `.fixed.terrain`, whose record is the page's own coordinate
 //! — and a POI page still keeps its body as the page, until its per-page index is
 //! rewritten (issue/BACKLOG.md).
@@ -20,19 +20,17 @@ use core::fmt;
 
 use pxl_shared::spec::fetch::FetchFail;
 use xpute_core::kit::array::{ArrayBuffer, U8Array};
+use xpute_core::sys::mem::{alloc, free, Block};
 
-use crate::global::Global;
 use crate::lib::env::config::PUBLISHED_TILES;
-use crate::module::map::ui::overlay::{search_modal, use_reverse_geocode};
+use crate::module::map::ui::overlay::{reverse_geocode, search_modal};
 use crate::module::world::geocode::repository::geocode_url;
 use crate::module::world::poi::{repository as poi_repository, store as poi_store};
 use crate::module::world::sched::demand::{Category, Demand, Phases};
 use crate::module::world::sched::fetch_scheduler::{demand_of, fetch_settle};
 use crate::module::world::sched::ledger::{Failure, Outcome};
-use crate::module::world::terrain::{tile_repository, use_tile_fetcher};
-
-/// A body's block: its address and size.
-type Block = (usize, u32);
+use crate::module::world::terrain::{tile_fetcher, tile_repository};
+use crate::sys::global::Global;
 
 /// Bodies given room and not yet reported: the fetches in flight, with room
 /// to spare. A body past them is refused room, and its fetch fails.
@@ -65,9 +63,9 @@ impl fmt::Display for DemandUrl<'_> {
 /// its section has none.
 pub fn fetch_body(key: u64, bytes: u32) -> u32 {
     let Some(slot) = bodies().iter().position(|(_, b)| b.1 == 0) else { return 0 };
-    let Some(at) = crate::bake::volume::take_bytes(bytes as usize) else { return 0 };
-    bodies()[slot] = (key, (at, bytes));
-    at as u32
+    let Some(block) = alloc(bytes) else { return 0 };
+    bodies()[slot] = (key, block);
+    block.0 as u32
 }
 
 /// The body the shell reports, only when it is one given room for `key`.
@@ -81,9 +79,9 @@ fn take_body(key: u64, at: u32, bytes: u32) -> Option<Block> {
 }
 
 fn release(block: Option<Block>) {
-    if let Some((at, bytes)) = block {
+    if let Some(block) = block {
         // SAFETY: a body's block, given room by `fetch_body` and reported once.
-        unsafe { crate::bake::volume::give_bytes(at, bytes as usize) };
+        unsafe { free(block) };
     }
 }
 
@@ -143,9 +141,9 @@ pub fn fetch_arrived(key: u64, outcome: u32, status: u32, body: (u32, u32), fail
 
 fn failed(category: Category, subject: u64, aborted: bool) {
     match category {
-        Category::Terrain if !aborted => use_tile_fetcher::terrain_failed(),
+        Category::Terrain if !aborted => tile_fetcher::terrain_failed(),
         Category::Search => search_modal::search_failed(subject, aborted),
-        Category::Geocode => use_reverse_geocode::reverse_geocode_failed(subject, aborted),
+        Category::Geocode => reverse_geocode::reverse_geocode_failed(subject, aborted),
         _ => {}
     }
 }
@@ -228,10 +226,10 @@ fn answer(category: Category, subject: u64, status: u32, block: Option<Block>, p
         Category::Geocode => {
             let result = match block {
                 _ if status == 404 => {
-                    use_reverse_geocode::reverse_geocode_arrived(subject, None);
+                    reverse_geocode::reverse_geocode_arrived(subject, None);
                     Ok(())
                 }
-                Some(b) if ok => text(b).map(|body| use_reverse_geocode::reverse_geocode_arrived(subject, Some(body))),
+                Some(b) if ok => text(b).map(|body| reverse_geocode::reverse_geocode_arrived(subject, Some(body))),
                 _ => Err(refused()),
             };
             release(block);

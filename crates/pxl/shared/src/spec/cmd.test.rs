@@ -53,7 +53,6 @@ fn every_number_is_its_major_and_minor() {
         (CHUNK_BUILD, Major::CHUNK as u32, ChunkMinor::BUILD as u32),
         (CHUNK_DECOR, Major::CHUNK as u32, ChunkMinor::DECOR as u32),
         (ENV_READ, Major::ENV as u32, Minor::READ as u32),
-        (FRAME_READ, Major::FRAME as u32, Minor::READ as u32),
         (CHUNK_READ, Major::CHUNK as u32, Minor::READ as u32),
         (CHANGE_LANES, Major::CHANGE as u32, ChangeMinor::LANES as u32),
         (POOL_READ, Major::POOL as u32, Minor::READ as u32),

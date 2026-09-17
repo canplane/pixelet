@@ -118,8 +118,8 @@ export const ELE_PADDED_SPAN: u32 = PAGE_ELE_SPAN + 2 * ELE_PAD;
  * automatically the same way object/size.ts's OBJECT_SIZES already does.
  *
  * dep = max - min = 3 matches OBJECT_SIZES exactly (4 tiers: the root plus
- * 3 halving steps down to U_PER_CELL/8). max = CELL_SHAMT (not L3_SHAMT,
- * unlike the old TERRAIN_LAYOUT above) because objects never merge past
+ * 3 halving steps down to U_PER_CELL/8). max = CELL_SHAMT (not L3_SHAMT)
+ * because objects never merge past
  * one cell — sparse_tree's own set()/compact() enforce that ceiling
  * structurally, since there's no coarser level for a tree this shallow to
  * ever report.

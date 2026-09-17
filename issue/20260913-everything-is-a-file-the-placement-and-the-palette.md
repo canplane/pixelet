@@ -251,3 +251,40 @@ imports.
 What is left of this document's list: the scatter emitting `Placement`
 (waits for a reader across a boundary), and the ingest route (`POST /api/models`), which
 now stands on a path that exists.
+
+## Undone 2026-09-17: a specification is not sent
+
+The record layer is removed — `record/table`, the `Palette` and `Placement`
+records, and the shipped palette built as one — in both trees, with their
+tests and vectors.
+
+Every use it had was a program telling itself what it already knew. The
+shipped palette was encoded and parsed back in the same process; a
+placement was written and read by the same store. What the column layer
+adds — a kind, a version, column names, a required flag — is for a reader
+that might not share the writer's code, and nothing here is that. The
+client is a monorepo's build and the server will be the same crates', so a
+catalog is a constant both compile, not a message; what is decided at
+build time is written once, as JSON, and each language reads its generated
+module. Where bytes do cross — a published bake, a saved blob — the layout
+is the shared code's and the version is in the envelope, the path or the
+key: a reader of the wrong version never opens it, and nothing is
+negotiated per column.
+
+What moved rather than went:
+
+- The shipped models are the catalogs' own lanes — each decor kind's
+  `models` and `skins` in `module/world/decor/kind.json`, each character
+  group's `keys`, `models`, `skin` and `size` in
+  `module/world/character/variant.json` — by their path under `asset/`,
+  resolved to a bucket key and an extent through `record/ingested`. A
+  kind's `variant_count` is its models' count.
+- The object store saves a page as five bare lanes (x, y, z, size, value)
+  under `pxl:object:v9`. The id and heading lanes were written and never
+  read.
+
+What went with no replacement: palette ids and their ranges
+(`CHANNEL_ID_BASE`, `MODEL_ID_BASE`, `ACTOR_ID_BASE`, `USER_ID_BASE`), the
+licence and author columns, `model_hash`, and the two items this document
+left open — the scatter emitting `Placement` and the ingest route issuing
+palette rows. Nothing read any of them.

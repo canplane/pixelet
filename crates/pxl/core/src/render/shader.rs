@@ -1,8 +1,8 @@
 //! The shaders and the pipelines that run them, as their one source: the
 //! WGSL in `shader/`, assembled here from its shared pieces, and each
 //! pipeline's definition — its vertex lanes, its bind group layouts, its
-//! primitive, depth and blend state — as a record of words the glue turns
-//! into WebGPU's descriptor and a native shell into wgpu's. What the glue
+//! primitive, depth and blend state — as a record of words the shell turns
+//! into WebGPU's descriptor and a native host into wgpu's. What the shell
 //! decides is nothing: which shader a pipeline runs and how its lanes are
 //! read are the same facts the mesher and the draw list (draw.rs) are built
 //! on, and they are written once, here.
@@ -57,7 +57,7 @@ pub const FRAME_FLOATS: u32 = 76;
 /// through fog_color, environment.rs's output as it is), low_spec,
 /// edge_width, rim_intensity, viewport, shadow_strength, shadow_texel,
 /// vignette, light_view_proj, the second light's run (other_dir through
-/// other_color, environment.rs's ENV_OTHER_LIGHT). The glue reads the
+/// other_color, environment.rs's ENV_OTHER_LIGHT). The shell reads the
 /// table rather than counting; the test below holds it to the struct.
 pub const FRAME_AT: [u32; 13] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 52, 68];
 #[cfg(test)]
@@ -219,7 +219,7 @@ const LIT_FRAME: [[u32; 3]; 3] = [[0, BOTH, UNIFORM], [1, FRAGMENT, DEPTH], [2, 
 /// A skin and its sampler.
 const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
 
-/// The chunk's lanes as the mesher lays them out (mesher.rs): position,
+/// The chunk's lanes as the mesher lays them out (chunk_mesher.rs): position,
 /// normal, local_pos, box_scale, rgb, layer_taps, faces — a vertex slot a
 /// lane, at the lane's offset from the vertex count.
 fn chunk_lanes() -> Vec<Vec<u32>> {
@@ -263,9 +263,8 @@ pub fn pipeline(id: u32) -> Vec<u32> {
     match id {
         crate::render::draw::PIPELINE_CHUNK => record(lit(SHADER_CHUNK, CULL_BACK), &chunk_lanes(), &chunk_groups()),
         crate::render::draw::PIPELINE_DECOR => record(lit(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
-        // The hover ghost: biased toward the eye as hover_cursor.tsx's
-        // polygon offsets were — slightly clear of a surface, strongly in
-        // one.
+        // The hover ghost, biased toward the eye: slightly clear of a
+        // surface it sits on, strongly clear of one it sits in.
         crate::render::draw::PIPELINE_GHOST_BOX => record(blended(SHADER_CHUNK, CULL_BACK, 1, 1.0), &chunk_lanes(), &chunk_groups()),
         crate::render::draw::PIPELINE_GHOST_BOX_COPLANAR => record(blended(SHADER_CHUNK, CULL_BACK, 8, 2.0), &chunk_lanes(), &chunk_groups()),
         crate::render::draw::PIPELINE_GHOST_DECOR => record(blended(SHADER_DECOR, CULL_NONE, 1, 1.0), &model_lanes(false), &model_groups()),
@@ -341,7 +340,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
 #[cfg(test)]
 pub type Buffer = (u32, u32, Vec<(u32, u32, u32)>);
 
-/// A record read back into its parts, as the glue reads it: what the
+/// A record read back into its parts, as the shell reads it: what the
 /// tests check each pipeline's words against its shader by.
 #[cfg(test)]
 pub struct Record {

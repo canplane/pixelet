@@ -29,21 +29,21 @@ use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 
 use super::chat_bubble::chat_bubble_step;
 use super::path::{heading_to, init_settle_tracker, sample_walk_plan, update_settle_tracker, SettleTracker, Vec2, WalkPlan, WalkSample};
-use super::store::use_companion_load_store;
+use super::store::companion_load_store;
 use super::variant::{find_person_variant, find_pet_variant, CharacterVariant};
-use crate::app::setting::store::use_settings_store;
-use crate::global::Global;
-use crate::kernel::{kernel, with_world};
+use crate::app::setting::store::settings_store;
 use crate::module::camera::config::camera_cfg;
 use crate::module::camera::orbit::damp_alpha;
-use crate::module::camera::store::use_camera_store;
+use crate::module::camera::store::camera_store;
 use crate::module::world::frame::view::view;
+use crate::module::world::gltf_cache::{load_gltf, load_image};
 use crate::module::world::object::store::objects_revision;
 use crate::module::world::sched::tick::TickContext;
 use crate::module::world::surface_height::get_surface_z_at_local;
 use crate::module::world::terrain::store::tile_pages;
-use crate::render::gltf::load::{load_gltf, load_image};
 use crate::render::gpu::model_asset::{register_model, ModelHandle};
+use crate::sys::global::Global;
+use crate::sys::kernel::{kernel, with_world};
 
 /// A variant's model in the scheduler, registered once per model and height
 /// whoever asks first; None inside while it failed. By URL, then by height's
@@ -81,7 +81,7 @@ const SETTLE_DELAY_S: f64 = 0.15;
 // Follow mode only: glides toward the target with a plain per-frame
 // exponential lerp at the SAME rate the world scroll damps. Because the two run
 // at the same rate toward the same point, they cancel: the character's world
-// position stays at screen center. use_follow_mode.rs drops its own position
+// position stays at screen center. follow_mode.rs drops its own position
 // EMA to match, so this lerp is the one and only position-smoothing stage.
 const FOLLOW_LERP_K: f64 = camera_cfg::smooth::POS_DAMP;
 
@@ -170,10 +170,10 @@ impl Walker {
     }
 
     fn set_ready(&self, ready: bool) {
-        let store = use_companion_load_store();
+        let store = companion_load_store();
         match self.role {
-            Role::Person => store.set_person_ready(ready),
-            Role::Pet => store.set_pet_ready(ready),
+            Role::Person => store.person_ready = ready,
+            Role::Pet => store.pet_ready = ready,
         }
     }
 
@@ -185,7 +185,9 @@ impl Walker {
             return;
         }
         let (Some(model), Some(skin)) = (model_for(variant), load_image(&variant.skin_url)) else { return };
-        let Some(Some(actor)) = with_world(|world, sched| sched.models.new_actor(world, &mut sched.draw, model.model)) else { return };
+        let Some(Some(actor)) = with_world(|world, sched| sched.models.new_actor(world, &mut sched.draw, model.model)) else {
+            return;
+        };
         self.held = Some(Held { actor, model, skin });
         self.pose = [target.x, target.y, 0.0, self.pose[3]];
         self.set_ready(true);
@@ -208,7 +210,7 @@ impl Walker {
         // linger are spans of real time; the tick's elapsed is a sum of deltas
         // clamped at 0.1 s, which stretches every one of them across a gap
         // where the world did not tick.
-        let now = crate::global::now() / 1000.0;
+        let now = crate::sys::global::now() / 1000.0;
         let rebased = map_origin != self.prev_map_origin;
         let (px, py, is_walking);
 
@@ -309,7 +311,11 @@ impl Walker {
         let Some(held) = &self.held else { return };
         let sched = &mut kernel().sched;
         if let Some(a) = sched.models.actor(held.actor) {
-            a.at = [ivec::to_real(ivec::X(map_origin)) + px, ivec::to_real(ivec::Y(map_origin)) + py, ivec::to_real(ivec::Z(map_origin)) + self.pose[2]];
+            a.at = [
+                ivec::to_real(ivec::X(map_origin)) + px,
+                ivec::to_real(ivec::Y(map_origin)) + py,
+                ivec::to_real(ivec::Z(map_origin)) + self.pose[2],
+            ];
             a.rotation_z = self.pose[3] as f32;
             a.visible = true;
         }
@@ -321,7 +327,7 @@ impl Walker {
             self.actor_clip = Some(clip.to_string());
         }
         // The next frame is the scheduler's to ask for: an actor playing a clip
-        // keeps the tick awake (model.rs), and nothing here moves otherwise.
+        // keeps the tick awake (gltf_cache.rs), and nothing here moves otherwise.
     }
 }
 
@@ -365,9 +371,11 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         chat_bubble_step(None, 0.0);
         return;
     };
-    let settings = use_settings_store();
-    let (Some(person_variant), Some(pet_variant)) = (find_person_variant(&settings.person_variant_key), find_pet_variant(&settings.pet_variant_key)) else { return };
-    let is_follow_mode = use_camera_store().is_follow_mode;
+    let settings = settings_store();
+    let (Some(person_variant), Some(pet_variant)) = (find_person_variant(&settings.person_variant_key), find_pet_variant(&settings.pet_variant_key)) else {
+        return;
+    };
+    let is_follow_mode = camera_store().is_follow_mode;
 
     let person_target = Vec2 { x: p.center_x, y: p.center_y };
     let person = walker_for(&mut c.person, person_variant, Role::Person, person_target, p.map_origin);
@@ -375,7 +383,10 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
     // Only the person talks — the pet doesn't get a chat bubble.
     chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
 
-    let pet_target = Vec2 { x: p.center_x + PET_OFFSET.x, y: p.center_y + PET_OFFSET.y };
+    let pet_target = Vec2 {
+        x: p.center_x + PET_OFFSET.x,
+        y: p.center_y + PET_OFFSET.y,
+    };
     let pet = walker_for(&mut c.pet, pet_variant, Role::Pet, pet_target, p.map_origin);
     pet.step(ctx, pet_variant, p.origin_page_idx_xy, p.map_origin, pet_target, p.center_z, is_follow_mode);
 }

@@ -1,8 +1,9 @@
 // pxl_shared/bake/ground.test.rs
 // (no pair: ground.ts has no test file)
 
+use xpute_core::sys::vector::Vector;
+
 use super::*;
-use xpute_core::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/bake/ground.tsv");
 

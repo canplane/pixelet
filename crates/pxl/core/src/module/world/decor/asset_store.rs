@@ -8,21 +8,21 @@
 //!
 //! A model is registered with the scheduler's models as it arrives
 //! (render/gpu/model_asset.rs), so the kernel holds its triangles for the
-//! eraser's hit test (crates/pxl/core/src/world/raycast.rs) and the renderer
+//! eraser's hit test (crates/pxl/core/src/render/layer/pipeline/chunk_raycast.rs) and the renderer
 //! draws its instances from the same lanes; the group it is drawn as is its
 //! variant's place across every kind, in registry order.
 
 use xpute_core::kit::hash::fnv1a64_str;
 
-use super::decor_kinds::DecorKindBundle;
+use super::decor_layer::DecorKindBundle;
 use super::decor_registry::DECOR_BUNDLES;
-use crate::global::Global;
-use crate::kernel::kernel;
 use crate::module::world::change::{bump_world, DECOR_ASSET};
-use crate::render::gltf::load::{load_failed, load_gltf, load_image, load_revision};
+use crate::module::world::gltf_cache::{load_failed, load_gltf, load_image};
 use crate::render::gpu::model_asset::register_model;
+use crate::sys::global::Global;
+use crate::sys::kernel::kernel;
 
-/// Variants a kind has room for; the palette's largest kind has nine.
+/// Variants a kind has room for; kind.json's largest kind has nine.
 const VARIANTS: usize = 16;
 
 #[derive(Clone)]
@@ -38,8 +38,9 @@ struct Store {
     /// One entry per kind, in registry order, written in place as its
     /// variants' assets arrive: the snapshot is the store itself.
     entries: [DecorBundleAssets; 4],
-    revision: u32,
-    load_revision: u32,
+    /// Set when a model or a skin arrives or fails, and kept while a model the
+    /// mesh pool refused is still waiting for room.
+    arrived: bool,
 }
 
 static STORE: Global<Store> = Global::new();
@@ -60,7 +61,6 @@ fn settle(entries: &mut [DecorBundleAssets], url: &str, value: u32, skin: bool) 
 }
 
 fn publish(s: &mut Store, url: &str) {
-    s.revision += 1;
     // The group each variant is drawn as, told to the scheduler for its hit test.
     let mut group = 0u32;
     for entry in &s.entries {
@@ -80,26 +80,32 @@ fn store() -> &'static mut Store {
             let n = bundle.variants.len();
             assert!(n <= VARIANTS, "decor: {} has {n} variants, room for {VARIANTS}", bundle.kind);
             let none = vec![None; n];
-            DecorBundleAssets { bundle, models: none.clone(), skins: none }
+            DecorBundleAssets {
+                bundle,
+                models: none.clone(),
+                skins: none,
+            }
         };
         Store {
             entries: DECOR_BUNDLES().map(entry),
-            revision: 0,
-            load_revision: u32::MAX,
+            arrived: true,
         }
     })
 }
 
 /// The store's turn: asks for every variant's model and skin, and registers
 /// whatever arrived since the last turn.
+/// A model or a skin arrived or failed.
+pub fn decor_assets_arrived() {
+    store().arrived = true;
+}
+
 pub fn decor_asset_step() {
     let s = store();
-    let revision = load_revision();
-    if s.load_revision == revision {
+    if !s.arrived {
         return;
     }
-    // A model the mesh pool had no room for, this turn. Nothing else will move
-    // the load revision on its behalf, so the revision is left unconsumed and
+    // A model the mesh pool had no room for, this turn: the flag stays set and
     // the next turn — which may have room — asks again.
     let mut refused = false;
     for b in 0..s.entries.len() {
@@ -125,7 +131,7 @@ pub fn decor_asset_step() {
         }
     }
     if !refused {
-        s.load_revision = revision;
+        s.arrived = false;
     }
 }
 
@@ -133,11 +139,6 @@ pub fn decor_asset_step() {
 /// flight reads as None, which is how a consumer knows to leave it out.
 pub fn decor_bundle_assets() -> &'static [DecorBundleAssets] {
     &store().entries
-}
-
-/// Moves on every arrival.
-pub fn decor_assets_revision() -> u32 {
-    store().revision
 }
 
 /// One kind's assets, or None while nothing of it has loaded yet.

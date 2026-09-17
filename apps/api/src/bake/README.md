@@ -12,7 +12,7 @@ bake/
 ├── terrain/     db-geo → out/terrain/<version>: one XTP page per land page, one _ocean
 ├── poi/         db-geo → out/poi/<version>: one XTP page per page with POI
 ├── geocode/     db-geo → out/geocode/<version>: one JSON page per page with a label
-├── asset/       asset/ tree → out/asset/{glb,png,webp}/<sha256> and the shipped palette's table
+├── asset/       asset/ tree → out/asset/{glb,png,webp}/<sha256> and the table of their keys
 ├── bake_util.ts what every tool shares: gzip, the git sha and source catalogs a manifest records
 └── wkb.ts       the WKB decoder the Overture and coast adapters read geometry through
 ```

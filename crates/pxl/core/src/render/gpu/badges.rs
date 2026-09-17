@@ -1,7 +1,7 @@
 // pxl_core/render/gpu/badges.rs
 
 //! The billboards on the device — the POI badges and the chat bubble: one
-//! instanced quad over the scheduler's billboard sets (world/billboard.rs), one
+//! instanced quad over the scheduler's billboard sets (module/world/billboard/field.rs), one
 //! draw a set, in a pass of their own after the world with the world's depth
 //! attached read-only and bound as a texture at once (shader/badge.wgsl asks
 //! both of its depth questions of this frame's depth).
@@ -20,6 +20,7 @@
 //! a badge was drawn cost 64 MB at 4096 px once for every frame a badge was
 //! drawn in, and a phone paid it as a hundred-millisecond task each time.
 
+use crate::render::gpu::surface::DPR_MAX;
 use core::f32::consts::TAU;
 
 use super::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, GpuApi, NONE};
@@ -36,8 +37,6 @@ use crate::render::draw::{DRAW_WORDS, PIPELINE_BADGE, UNIFORM_FLOATS};
 const BADGE_FLOATS: usize = 44;
 /// Sets drawn in one frame at most.
 const SETS: usize = 32;
-/// Supersampling: the renderer's device pixel ratio, clamped to 2.
-const RENDER_SCALE: f32 = 2.0;
 
 macro_rules! font_family {
     () => {
@@ -242,11 +241,24 @@ impl BadgePass {
             }
             self.levels = mip_levels(flush.size, flush.size);
             self.sheet = object();
-            (g.texture)(self.sheet, flush.size, flush.size, 1, format::RGBA8_SRGB, self.levels, 1, texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT);
+            (g.texture)(
+                self.sheet,
+                flush.size,
+                flush.size,
+                1,
+                format::RGBA8_SRGB,
+                self.levels,
+                1,
+                texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT,
+            );
             self.sheet_view = object();
             (g.view)(self.sheet_view, self.sheet, dimension::D2, 0, self.levels, 0, 1);
             self.sheet_group = object();
-            (g.bind_group)(self.sheet_group, self.built.layouts[1], &[0, resource::VIEW, self.sheet_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
+            (g.bind_group)(
+                self.sheet_group,
+                self.built.layouts[1],
+                &[0, resource::VIEW, self.sheet_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0],
+            );
             atlas.live()
         } else {
             flush.dirty
@@ -262,7 +274,7 @@ impl BadgePass {
             p.save();
             p.translate(PAD as f32, PAD as f32);
             p.smoothing(false);
-            p.scale(RENDER_SCALE, RENDER_SCALE);
+            p.scale(DPR_MAX as f32, DPR_MAX as f32);
             match spec {
                 DrawSpec::PoiBadge { icon, color, name, logical_w } => place(&mut p, icon, color, name, *logical_w as f32),
                 DrawSpec::Cluster { label, logical_w } => cluster(&mut p, label, *logical_w as f32),

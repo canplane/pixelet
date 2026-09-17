@@ -5,7 +5,6 @@ pub mod api_spec;
 pub mod badges;
 pub mod color;
 pub mod decor;
-pub mod layer_table;
 pub mod layers;
 pub mod model_asset;
 pub mod paint;

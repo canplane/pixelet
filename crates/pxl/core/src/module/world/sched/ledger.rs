@@ -19,10 +19,11 @@
 use core::fmt;
 
 use pxl_shared::spec::fetch::FetchFail;
+use xpute_core::sys::mem::alloc;
 
 use super::demand::{DemandKey, Phases};
 use super::tick::PHASES;
-use crate::global::{now, Global};
+use crate::sys::global::{now, Global};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -288,7 +289,7 @@ fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
 /// test), and then nothing is recorded into it.
 fn fixed_lane<T: Copy>(cap: usize) -> &'static mut [T] {
     let bytes = cap * core::mem::size_of::<T>();
-    let Some(at) = crate::bake::volume::take_bytes(bytes) else { return &mut [] };
+    let Some((at, _)) = u32::try_from(bytes).ok().and_then(alloc) else { return &mut [] };
     // SAFETY: a block this lane holds alone and never gives back, `bytes` long
     // and aligned past a record's alignment; zeroed,
     // which is a valid record for the plain numbers, flags and field-less
@@ -376,8 +377,7 @@ struct Ledger {
     /// Off until someone asks. Nothing in the world reads the ledger — the one
     /// caller outside the instrument writes a turn's task time back into the
     /// frame it belongs to and does nothing when there is no frame — so a
-    /// client with no dev overlay should be paying for none of this, and until
-    /// this was gated it paid for all of it: the rings are 2.06 MiB of frames,
+    /// client with no dev overlay pays for none of this: the rings are 2.06 MiB of frames,
     /// 368 KiB of tasks and 48 KiB of long frames, taken on the first record
     /// and, being lanes, never given back.
     recording: bool,

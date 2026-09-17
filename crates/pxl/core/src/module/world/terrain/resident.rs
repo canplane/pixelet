@@ -19,7 +19,7 @@ use pxl_shared::spec::space::pvf3::ivec::IVec;
 use pxl_shared::spec::space::xy::TO_XY;
 
 use super::fixed::{slot_of, TERRAIN_SLOTS};
-use crate::global::Global;
+use crate::sys::global::Global;
 
 static SLOT_PAGE: Global<[Option<IVec>; TERRAIN_SLOTS as usize]> = Global::new();
 

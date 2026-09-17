@@ -7,7 +7,7 @@
 //! boxes and returns whichever box the ray actually struck first, regardless
 //! of whether it came from terrain or an object.
 //!
-//! The walk is the kernel's (crates/pxl/core/src/world/raycast.rs). What this
+//! The walk is the kernel's (crates/pxl/core/src/render/layer/pipeline/chunk_raycast.rs). What this
 //! module adds is the interact radius, and what a hit means for a placement:
 //! the corner a new cube takes, the voxel the eraser digs, and which placed
 //! object a hit resolves to. The ray itself is the view's
@@ -23,9 +23,9 @@ use xpute_core::kit::mat4::Vec3;
 use crate::module::world::frame::coord::{get_local_world_origin, local_world_to_canonical};
 use crate::module::world::object::geometry::{aabb_overlap, object_aabb, AABB};
 use crate::module::world::object::store::{get_objects_near, OccupiedEntry};
-use crate::module::world::raycast::{ray_hit_world, RayLike, WorldHit};
 use crate::module::world::terrain::elevation::with_ele;
-use crate::render::mesh::voxel::MaterialClasses;
+use crate::render::layer::pipeline::chunk_raycast::{ray_hit_world, RayLike, WorldHit};
+use crate::render::layer::pipeline::volume::MaterialClasses;
 
 const INTERACT_RADIUS_CELL: f64 = 32.0 / U_PER_CELL - 0.707;
 const INTERACT_RADIUS_U: f64 = INTERACT_RADIUS_CELL * U_PER_CELL;
@@ -59,7 +59,7 @@ pub fn world_hover_pvf3(hit: &WorldHit, map_origin: IVec) -> Option<PVF3> {
 
 // Tolerance for "same nominal size"/"integer-aligned" comparisons below —
 // bigger than the sub_cell 1/256-grid round trip's own worst-case error
-// (±U_PER_CELL/512, voxel.rs's pack/unpack pair), smaller than the gap
+// (±U_PER_CELL/512, volume.rs's pack/unpack pair), smaller than the gap
 // between any two OBJECT_SIZES tiers (smallest U_PER_CELL/8).
 const SAME_EXTENT_EPS: f64 = U_PER_CELL / 128.0;
 
@@ -101,7 +101,7 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 ///
 /// `precise_box`: use the caller's exact, known AABB instead of
 /// `hit.box_min/box_max` when available. hit's own box for a sub-cell object
-/// comes back through voxel.rs's u8-packed sub_cell payload — accurate to only
+/// comes back through volume.rs's u8-packed sub_cell payload — accurate to only
 /// ~1/510 of a cell — so stacking off it compounded that error stack-to-stack,
 /// visibly drifting. Terrain/unknown hits have no more precise source.
 ///

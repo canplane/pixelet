@@ -18,6 +18,7 @@
 //! fighting.
 
 use xpute_core::kit::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4, Vec3};
+use xpute_core::sys::mem::{alloc, free};
 
 use super::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, texture_usage, GpuApi, NONE};
 use super::api_spec::{dimension, format, load, resource};
@@ -30,19 +31,20 @@ use super::shadow::Shadow;
 use super::skinned::SkinnedPass;
 use super::stage::{stage_lane, STAGE_AT};
 use super::surface::{surface, surfaces, surfaces_lost, Surface, ROLE_CASE, ROLE_WORLD, SETTLE_TURNS, SURFACES};
-use crate::app::setting::store::use_settings_store;
-use crate::global::Global;
-use crate::kernel::kernel;
+use crate::app::setting::store::settings_store;
+use crate::module::map::environment::ENV_OTHER_LIGHT;
 use crate::module::world::change::request_world_tick;
 use crate::module::world::character::character_preview::preview_rows;
 use crate::module::world::character::companion::companion_skins;
-use crate::module::world::core_tick::{set_host_frame_stat, HostFrameStat};
+use crate::module::world::chunk_stage::{set_host_frame_stat, HostFrameStat};
 use crate::module::world::sched::ledger::{DrawCensus, TexturesMb};
 use crate::render::draw::{
-    DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
+    DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
+    PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
 use crate::render::shader::{FRAME_AT, FRAME_FLOATS, PIPELINE_CHUNK_DEPTH, PIPELINE_SKY};
-use crate::world::environment::ENV_OTHER_LIGHT;
+use crate::sys::global::Global;
+use crate::sys::kernel::kernel;
 
 /// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
 pub const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
@@ -125,11 +127,10 @@ impl Scratch {
         if bytes > self.bytes {
             if self.bytes > 0 {
                 // SAFETY: the block this scratch held alone.
-                unsafe { crate::bake::volume::give_bytes(self.at, self.bytes as usize) };
+                unsafe { free((self.at, self.bytes)) };
             }
             let size = bytes.next_power_of_two().max(4096);
-            self.at = crate::bake::volume::take_bytes(size as usize).expect("the heap has no room for the renderer's scratch");
-            self.bytes = size;
+            (self.at, self.bytes) = alloc(size).expect("the heap has no room for the renderer's scratch");
         }
         // SAFETY: a block of the mesh section this scratch holds alone, at
         // least `bytes` long.
@@ -140,7 +141,7 @@ impl Scratch {
     pub fn free(&mut self) {
         if self.bytes > 0 {
             // SAFETY: the block this scratch held alone.
-            unsafe { crate::bake::volume::give_bytes(self.at, self.bytes as usize) };
+            unsafe { free((self.at, self.bytes)) };
             self.bytes = 0;
         }
     }
@@ -185,7 +186,7 @@ fn memory(at: u32, n: u32) -> &'static [u8] {
 }
 
 fn fixed_lane() -> &'static mut [u32] {
-    let at = crate::bake::volume::take_bytes(BLOCK_SLOTS * 4).expect("the heap has no room for the renderer's blocks");
+    let (at, _) = alloc((BLOCK_SLOTS * 4) as u32).expect("the heap has no room for the renderer's blocks");
     // SAFETY: a block never given back, BLOCK_SLOTS words.
     let lane = unsafe { core::slice::from_raw_parts_mut(at as *mut u32, BLOCK_SLOTS) };
     lane.fill(0);
@@ -238,7 +239,11 @@ impl Blocks {
         let buffer = object();
         // Every block is usable every way a draw reads one: a mesh's lanes as
         // vertices and indices, a decor block's as storage.
-        (g.buffer)(buffer, buffer_size(self.len[i]), buffer_usage::VERTEX | buffer_usage::INDEX | buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        (g.buffer)(
+            buffer,
+            buffer_size(self.len[i]),
+            buffer_usage::VERTEX | buffer_usage::INDEX | buffer_usage::STORAGE | buffer_usage::COPY_DST,
+        );
         (g.write_buffer)(buffer, 0, memory(self.at[i], self.len[i] & !3));
         self.buffer[i] = buffer;
         self.group[i] = 0;
@@ -407,7 +412,12 @@ impl DebugPass {
         (g.bind_group)(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
         let draw_group = object();
         (g.bind_group)(draw_group, built.layouts[1], &buffer_entry(0, draw_buffer));
-        DebugPass { built, draw_buffer, frame_group, draw_group }
+        DebugPass {
+            built,
+            draw_buffer,
+            frame_group,
+            draw_group,
+        }
     }
 
     /// The frame's segments into the open pass; how many vertices.
@@ -524,9 +534,20 @@ impl Renderer {
             query_set,
             chunk,
             chunk_depth: pipelines.build(g, PIPELINE_CHUNK_DEPTH, format::CANVAS, samples),
-            ghost: [pipelines.build(g, PIPELINE_GHOST_BOX, format::CANVAS, samples), pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples)],
+            ghost: [
+                pipelines.build(g, PIPELINE_GHOST_BOX, format::CANVAS, samples),
+                pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples),
+            ],
             decor: DecorPass::new(g, &mut pipelines, samples, frame_buffer, &shadow, device.align),
-            skinned: SkinnedPass::new(g, &mut pipelines, samples, frame_buffer, shadow.entries(1), Some((shadow.light_frame, shadow.blank_entries(1))), device.align),
+            skinned: SkinnedPass::new(
+                g,
+                &mut pipelines,
+                samples,
+                frame_buffer,
+                shadow.entries(1),
+                Some((shadow.light_frame, shadow.blank_entries(1))),
+                device.align,
+            ),
             puck: PuckPass::new(g, &mut pipelines, samples, frame_buffer),
             badges: BadgePass::new(g, &mut pipelines, samples),
             debug: DebugPass::new(g, &mut pipelines, samples, frame_buffer),
@@ -575,7 +596,10 @@ impl Renderer {
         let p = &mut self.pipelines;
         self.chunk = p.build(g, PIPELINE_CHUNK, format::CANVAS, samples);
         self.chunk_depth = p.build(g, PIPELINE_CHUNK_DEPTH, format::CANVAS, samples);
-        self.ghost = [p.build(g, PIPELINE_GHOST_BOX, format::CANVAS, samples), p.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples)];
+        self.ghost = [
+            p.build(g, PIPELINE_GHOST_BOX, format::CANVAS, samples),
+            p.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples),
+        ];
         self.sky_built = p.build(g, PIPELINE_SKY, format::CANVAS, samples);
         self.decor.set_samples(g, p, samples);
         self.skinned.set_samples(g, p, samples);
@@ -727,7 +751,11 @@ impl Renderer {
         let (color, resolve) = if world.msaa_view != 0 { (world.msaa_view, canvas_view) } else { (canvas_view, 0) };
         let q = self.query_set;
         let pass = object();
-        (g.pass)(pass, encoder, &pass_desc(color, resolve, load::CLEAR, world.depth_view, load::CLEAR, 0.0, q, if q != 0 { 0 } else { NONE }, NONE));
+        (g.pass)(
+            pass,
+            encoder,
+            &pass_desc(color, resolve, load::CLEAR, world.depth_view, load::CLEAR, 0.0, q, if q != 0 { 0 } else { NONE }, NONE),
+        );
         (g.set_pipeline)(pass, self.sky_built.pipeline);
         (g.set_bind_group)(pass, 0, self.sky_group, &[]);
         (g.draw)(pass, 3, 1, 0, 0);
@@ -771,7 +799,9 @@ impl Renderer {
             }
             // The case's actor's draw, and where it stands; nothing drawn until
             // the actor has one.
-            let Some(own) = draws.chunks_exact(DRAW_WORDS).find(|d| d[4] == PIPELINE_SKINNED && d[2] == model) else { continue };
+            let Some(own) = draws.chunks_exact(DRAW_WORDS).find(|d| d[4] == PIPELINE_SKINNED && d[2] == model) else {
+                continue;
+            };
             targets(g, s, 1);
             let slot = xpute_core::ds::handle::handle_slot(id) as usize;
             if self.cases[slot].is_none() {
@@ -797,7 +827,7 @@ impl Renderer {
             u[CAMERA_POS] = (CASE_EYE.x + actor[0]) as f32;
             u[CAMERA_POS + 1] = (CASE_EYE.y + actor[1]) as f32;
             u[CAMERA_POS + 2] = (CASE_EYE.z + actor[2]) as f32;
-            // No fog: the near and far pushed out of reach (environment.rs's
+            // No fog: the near and far pushed out of reach (module/map/environment.rs's
             // fog_near and fog_far in the run).
             u[ENV + 7] = 1e9;
             u[ENV + 11] = 2e9;
@@ -852,7 +882,7 @@ impl Renderer {
                 layers: (self.layers.bytes as f64 / MB).round(),
             },
             px,
-            heap_mb: (crate::host::heap_used() as f64 / MB).round(),
+            heap_mb: (crate::sys::host::heap_used() as f64 / MB).round(),
             task_ms: 0.0,
             census,
         });
@@ -893,7 +923,16 @@ fn targets(g: &GpuApi, s: &mut Surface, samples: u32) {
         release(id);
     }
     s.depth = object();
-    (g.texture)(s.depth, width, height, 1, format::DEPTH32, 1, samples, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
+    (g.texture)(
+        s.depth,
+        width,
+        height,
+        1,
+        format::DEPTH32,
+        1,
+        samples,
+        texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
+    );
     s.depth_view = object();
     (g.view)(s.depth_view, s.depth, dimension::D2, 0, 1, 0, 1);
     if samples > 1 {
@@ -920,7 +959,7 @@ pub fn render_frame() {
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()));
         return;
     };
-    let samples = if use_settings_store().msaa { 4 } else { 1 };
+    let samples = if settings_store().msaa { 4 } else { 1 };
     let slot = RENDERER.get(|| None);
     let r = slot.get_or_insert_with(|| Renderer::new(g, device, samples));
     blocks().restore(g);

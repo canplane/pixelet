@@ -41,12 +41,8 @@
 //! The leaf lane's constructor is the element type `T` here, and a key's
 //! traits the `PVecTraits` implementor `K`.
 
-use core::cell::RefCell;
-use std::rc::Rc;
-
-use xpute_core::ds::typed_alloc::{TypedAlloc, HEAP_ALLOC};
 use xpute_core::io::marshal::tree::spec::{ALIGN, GET_WORD, NONE, RESERVED, SET_WORD, WORD_SZ};
-use xpute_core::kit::array::{copy_ab_view, AnyElement, ArrayBuffer, NumberElement, TypedArray, U32Array, U64Array, U8Array};
+use xpute_core::kit::array::{copy_ab_view, ArrayBuffer, NumberElement, TypedArray, U32Array, U64Array, U8Array};
 
 use crate::spec::space::pvf3::PVecTraits;
 
@@ -67,15 +63,7 @@ pub struct SparseTreeMemory<T: NumberElement> {
     pub data: TypedArray<T>, // leaf payload values
     pub head: u32,           // allocator cursor (next free slot)
     pub cap: u32,            // current capacity in slots
-    /// Where heap and data come from, and go back to (typed_alloc.rs): one
-    /// allocator the memory and every memory compacted from it hold, as the
-    /// TypeScript hands the one object on. A decoded tree's lanes are views
-    /// over its blob and come from nowhere.
-    pub alloc: SharedAlloc,
 }
-
-/// One allocator several memories hold.
-pub type SharedAlloc = Rc<RefCell<Box<dyn TypedAlloc>>>;
 
 /// Sparse tree layout.
 ///
@@ -124,69 +112,32 @@ fn validate_layout(layout: &SparseTreeLayout) {
     }
 }
 
-fn take<E: AnyElement>(alloc: &SharedAlloc, n: u32) -> TypedArray<E> {
-    TypedArray::of(&alloc.borrow_mut().take_view(E::KIND, n)).expect("take_view gave a view of another element")
-}
-
 /// Allocate sparse tree memory and reserve the root child block at base 0.
-pub fn alloc<T: NumberElement>(dim: u32, cap: u32, typed: Option<Box<dyn TypedAlloc>>) -> SparseTreeMemory<T> {
-    alloc_in(dim, cap, Rc::new(RefCell::new(typed.unwrap_or_else(|| Box::new(HEAP_ALLOC)))))
-}
-
-/// `alloc`, over an allocator already held.
-fn alloc_in<T: NumberElement>(dim: u32, cap: u32, alloc: SharedAlloc) -> SparseTreeMemory<T> {
+pub fn alloc<T: NumberElement>(dim: u32, cap: u32) -> SparseTreeMemory<T> {
     let root_width = block_width(dim);
     let cap = if cap >= root_width { cap } else { root_width };
 
-    let heap = take::<u32>(&alloc, cap);
-    let data = take::<T>(&alloc, cap);
     SparseTreeMemory {
-        heap,
-        data,
+        heap: TypedArray::new(cap as usize),
+        data: TypedArray::new(cap as usize),
         head: root_width, // reserve base 0..root_width-1 for root block
         cap,
-        alloc,
     }
-}
-
-/// Hands a memory's lanes back to where they came from.
-pub fn free<T: NumberElement>(mem: &mut SparseTreeMemory<T>) {
-    mem.alloc.borrow_mut().give(&mem.heap.view());
-    mem.alloc.borrow_mut().give(&mem.data.view());
 }
 
 /// The same tree with its data lane in another type — the heap is shared,
 /// every value is carried across. For widening a leaf lane when its values
 /// outgrow it.
 pub fn retype<T: NumberElement, U: NumberElement>(mem: SparseTreeMemory<T>) -> SparseTreeMemory<U> {
-    let data = take::<U>(&mem.alloc, mem.cap);
+    let data = TypedArray::<U>::new(mem.cap as usize);
     for i in 0..mem.head as usize {
         data.put(i, U::from_f64(mem.data[i].to_f64()));
     }
-    mem.alloc.borrow_mut().give(&mem.data.view());
     SparseTreeMemory {
         heap: mem.heap,
         data,
         head: mem.head,
         cap: mem.cap,
-        alloc: mem.alloc,
-    }
-}
-
-/// A copy of `mem` whose lanes come from `typed` — for a decoded tree,
-/// whose lanes are views over the blob it was read from.
-pub fn adopt<T: NumberElement>(mem: &SparseTreeMemory<T>, typed: Box<dyn TypedAlloc>) -> SparseTreeMemory<T> {
-    let typed: SharedAlloc = Rc::new(RefCell::new(typed));
-    let heap = take::<u32>(&typed, mem.head);
-    let data = take::<T>(&typed, mem.head);
-    heap.set(&mem.heap.subarray(0, mem.head as usize));
-    data.set(&mem.data.subarray(0, mem.head as usize));
-    SparseTreeMemory {
-        heap,
-        data,
-        head: mem.head,
-        cap: mem.head,
-        alloc: typed,
     }
 }
 
@@ -197,13 +148,12 @@ fn grow<T: NumberElement>(mem: &mut SparseTreeMemory<T>, end: u32) {
         cap <<= 1;
     }
 
-    let heap = take::<u32>(&mem.alloc, cap);
-    let data = take::<T>(&mem.alloc, cap);
+    let heap = U32Array::new(cap as usize);
+    let data = TypedArray::<T>::new(cap as usize);
 
     heap.set(&mem.heap);
     data.set(&mem.data);
 
-    free(mem);
     mem.heap = heap;
     mem.data = data;
     mem.cap = cap;
@@ -604,10 +554,7 @@ pub fn compact<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseT
 
     _prune(mem, root, layout.max - layout.min, width);
 
-    // The new memories hold the tree's own allocator, not a wrapper around
-    // it: a wrapper made per compact would stack, one forwarding layer more
-    // for every compact the tree has been through.
-    let mut new_mem = alloc_in::<T>(layout.dim, mem.head, mem.alloc.clone());
+    let mut new_mem = alloc::<T>(layout.dim, mem.head);
 
     fn relocate<T: NumberElement>(mem: &SparseTreeMemory<T>, new_mem: &mut SparseTreeMemory<T>, dim: u32, width: u32, old_base: u32, new_base: u32) {
         for i in 0..width {
@@ -629,12 +576,11 @@ pub fn compact<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseT
 
     relocate(mem, &mut new_mem, layout.dim, width, root, 0);
 
-    let mut compacted = alloc_in::<T>(layout.dim, new_mem.head, mem.alloc.clone());
+    let mut compacted = alloc::<T>(layout.dim, new_mem.head);
 
     compacted.heap.set(&new_mem.heap.subarray(0, new_mem.head as usize));
     compacted.data.set(&new_mem.data.subarray(0, new_mem.head as usize));
     compacted.head = new_mem.head;
-    free(&mut new_mem);
 
     Compacted { mem: compacted, root: 0 }
 }
@@ -771,13 +717,7 @@ fn read_mem<T: NumberElement>(buf: &U8Array) -> (SparseTreeMemory<T>, u32) {
         copy_ab_view::<T>(&buffer, (buf.byte_offset() + data_off as usize) as u32, used)
     };
 
-    let mem = SparseTreeMemory {
-        heap,
-        data,
-        head: used,
-        cap: used,
-        alloc: Rc::new(RefCell::new(Box::new(HEAP_ALLOC))),
-    };
+    let mem = SparseTreeMemory { heap, data, head: used, cap: used };
 
     (mem, off)
 }

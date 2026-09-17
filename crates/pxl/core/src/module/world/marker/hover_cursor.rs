@@ -1,39 +1,45 @@
 // pxl_core/module/world/marker/hover_cursor.rs
 
-//! The ghost is the kernel's (crates/pxl/core/src/world/ghost.rs): a box written
-//! in the mesher's layout and drawn by the chunk shader, or one decor instance
-//! drawn by decor's, half transparent. Everything here decides which ghost and
-//! where.
+//! The hover cursor's ghost: a box written in the mesher's layout and drawn by
+//! the chunk shader, or one decor instance drawn by decor's, half transparent.
+//! The first half decides which ghost and where; the second holds what it is
+//! drawn from.
 
 use pxl_shared::bake::constant::U_PER_CELL;
 use pxl_shared::bake::ground::shown_ground;
 use pxl_shared::spec::cell::{placeable_cube_num_id, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
-use pxl_shared::spec::space::pvf3::fvec;
-use pxl_shared::spec::space::pvf3::ivec;
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
+use pxl_shared::spec::space::pvf3::{fvec, ivec};
+use pxl_shared::spec::space::v3::V3;
+use xpute_core::sys::mem::{alloc, free};
 
 use super::style::marker_colors;
-use crate::app::setting::store::use_settings_store;
-use crate::app::store::ui_store::{use_ui_store, ActiveTool};
-use crate::global::Global;
-use crate::kernel::with_world;
-use crate::module::camera::store::use_camera_store;
-use crate::module::map::store::use_map_store;
+use crate::app::setting::store::settings_store;
+use crate::app::store::ui_store::{ui_store, ActiveTool};
+use crate::module::camera::store::camera_store;
+use crate::module::map::store::map_store;
 use crate::module::world::change::request_world_tick;
-use crate::module::world::decor::decor_kinds::user_decor_pick;
-use crate::module::world::decor::decor_registry::{decor_bundle_for, DECOR_BUNDLES};
+use crate::module::world::chunk_node::World;
 use crate::module::world::decor::asset_store::{decor_assets_for, decor_bundle_assets};
+use crate::module::world::decor::decor_layer::user_decor_pick;
+use crate::module::world::decor::decor_registry::{decor_bundle_for, DECOR_BUNDLES};
+use crate::module::world::decor::instance::NO_ENTRY;
 use crate::module::world::frame::coord::get_local_world_origin;
 use crate::module::world::object::collision::{is_placement_blocked, PlacementTool};
 use crate::module::world::object::size::DECOR_SIZE;
 use crate::module::world::object::store::{clear_virtual_carve_preview, get_placed_object, set_virtual_carve_preview, set_virtual_hide, EntryAt, EntryKind};
 use crate::module::world::terrain::elevation::get_ground_type;
+use crate::render::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
+use crate::render::layer::pipeline::chunk_mesher::{mesh_words, write_lone_box, LONE_BOX_INDICES, LONE_BOX_VERTICES};
+use crate::render::layer::pipeline::volume::NO_LAYER;
+use crate::sys::global::Global;
+use crate::sys::kernel::with_world;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Ghost {
     None,
-    Decor { at: [f64; 3], group: u32, rotation: f64 },
-    Box { at: [f64; 3], size: f64, value: u32, rgb: u32, coplanar: bool },
+    Decor { at: V3, group: u32, rotation: f64 },
+    Box { at: V3, size: f64, value: u32, rgb: u32, coplanar: bool },
 }
 
 struct Cursor {
@@ -56,12 +62,12 @@ pub fn hover_cursor_step() {
         carve_preview: None,
         ghost: Ghost::None,
     });
-    let camera = use_camera_store();
-    let ui = use_ui_store();
-    let settings = use_settings_store();
+    let camera = camera_store();
+    let ui = ui_store();
+    let settings = settings_store();
     let hovered = camera.hovered_coord;
     let active_tool = ui.active_tool;
-    let map_center = use_map_store().map_center;
+    let map_center = map_store().map_center;
     let enable_terrain_carving = settings.enable_terrain_carving;
 
     let hovered_object = camera.hovered_object_at.and_then(get_placed_object);
@@ -223,6 +229,117 @@ pub fn hover_cursor_step() {
         if written.is_some() {
             c.ghost = ghost;
             request_world_tick();
+        }
+    }
+}
+
+// ---- the ghost as the kernel holds it ----
+//
+// What a placement or an erase would change, drawn half transparent where the
+// cursor is — a box written in the mesher's layout (chunk_mesher.rs's
+// write_lone_box), so a ghost cube is lit, textured and edge-shaded by the
+// chunk shader exactly as the cube it previews, or one decor instance in a
+// block of decor_layer.rs's layout, drawn by decor's shader from the same model a
+// placed one uses.
+
+pub const GHOST_OPACITY: f32 = 0.5;
+
+#[derive(Clone, Copy, PartialEq)]
+enum Shape {
+    Box { size_bits: u64, rgb: [u8; 3], layer: u8, coplanar: bool },
+    Decor { group: u32, rotation_bits: u32 },
+}
+
+struct Held {
+    shape: Shape,
+    at: usize,
+    bytes: u32,
+    handle: u32,
+}
+
+#[derive(Default)]
+pub struct GhostDraw {
+    held: Option<Held>,
+    /// Where it stands, in units: a box's min corner, a decor instance's base.
+    at: V3,
+}
+
+impl GhostDraw {
+    /// A box of `size` at `at`, painted as object value `state` paints, or
+    /// as `rgb` with no texture when `state` paints nothing.
+    #[allow(clippy::too_many_arguments)]
+    pub fn set_box(&mut self, world: &mut World, draw: &mut DrawList, at: V3, size: f64, state: u32, rgb: u32, coplanar: bool) {
+        let (rgb, layer) = match world.painter.material_of(state) {
+            Some((m, l)) => ([(m >> 16) as u8, (m >> 8) as u8, m as u8], l),
+            None => ([(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8], NO_LAYER as u8),
+        };
+        let shape = Shape::Box {
+            size_bits: size.to_bits(),
+            rgb,
+            layer,
+            coplanar,
+        };
+        self.at = at;
+        if self.held.as_ref().is_some_and(|h| h.shape == shape) {
+            return;
+        }
+        let bytes = mesh_words(LONE_BOX_VERTICES, LONE_BOX_INDICES) * 4;
+        let Some(block) = self.replace(draw, shape, bytes) else { return };
+        // SAFETY: a block of the words asked for, this ghost's until replaced.
+        let m = unsafe { core::slice::from_raw_parts_mut(world.volumes.mem().add(block) as *mut u32, bytes as usize / 4) };
+        write_lone_box(m, size, rgb, layer);
+        self.upload(draw, LONE_BOX_VERTICES, LONE_BOX_INDICES);
+    }
+
+    /// One instance of decor group `group`, turned `rotation` about Z, at `at`.
+    pub fn set_decor(&mut self, world: &mut World, draw: &mut DrawList, at: V3, group: u32, rotation: f32) {
+        let shape = Shape::Decor {
+            group,
+            rotation_bits: rotation.to_bits(),
+        };
+        self.at = at;
+        if self.held.as_ref().is_some_and(|h| h.shape == shape) {
+            return;
+        }
+        // A group of one: five float lanes, the flags in a word, band, pos.
+        let bytes = 8 * 4;
+        let Some(block) = self.replace(draw, shape, bytes) else { return };
+        // SAFETY: as for the box.
+        let m = unsafe { core::slice::from_raw_parts_mut(world.volumes.mem().add(block) as *mut u32, 8) };
+        m.copy_from_slice(&[0f32.to_bits(), 0f32.to_bits(), 0f32.to_bits(), rotation.to_bits(), 1f32.to_bits(), 0, NO_ENTRY, 0]);
+        self.upload(draw, 0, 0);
+    }
+
+    pub fn clear(&mut self, draw: &mut DrawList) {
+        if let Some(h) = self.held.take() {
+            draw.free(h.handle);
+            // SAFETY: the block the ghost took and has not given back.
+            unsafe { free((h.at, h.bytes)) };
+        }
+    }
+
+    fn replace(&mut self, draw: &mut DrawList, shape: Shape, bytes: u32) -> Option<usize> {
+        self.clear(draw);
+        let (at, bytes) = alloc(bytes)?;
+        self.held = Some(Held { shape, at, bytes, handle: 0 });
+        Some(at)
+    }
+
+    fn upload(&mut self, draw: &mut DrawList, vertex_cnt: u32, index_cnt: u32) {
+        let h = self.held.as_mut().unwrap();
+        h.handle = draw.upload(h.at as u32, h.bytes, vertex_cnt, index_cnt);
+    }
+
+    /// The ghost's draw this frame, placed against the frame's origin.
+    pub fn draw(&self, draw: &mut DrawList, origin: V3) {
+        let Some(h) = &self.held else { return };
+        let t = DrawList::translation(self.at, origin);
+        match h.shape {
+            Shape::Box { coplanar, .. } => {
+                let pipeline = if coplanar { PIPELINE_GHOST_BOX_COPLANAR } else { PIPELINE_GHOST_BOX };
+                draw.draw_as(pipeline, h.handle, LONE_BOX_VERTICES, LONE_BOX_INDICES, t, 1.0, GHOST_OPACITY);
+            }
+            Shape::Decor { group, .. } => draw.draw_as(PIPELINE_GHOST_DECOR, h.handle, group, 1, t, 0.0, GHOST_OPACITY),
         }
     }
 }

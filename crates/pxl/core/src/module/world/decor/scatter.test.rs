@@ -4,110 +4,50 @@ use super::*;
 use crate::module::world::decor::car_kind::CAR_RULES;
 use crate::module::world::decor::train_kind::TRAIN_RULES;
 use crate::module::world::decor::tree_kind::TREE_RULES;
-use xpute_core::kit::array::U8Array;
 
-// A whole page's lanes. scatter.ts's tests used eight rows and let an
-// alignment vote near the last row read past the array, which JavaScript
-// answers with undefined; a page is always PAGE_CELL_SPAN² cells, so the
-// fixture is one.
+// A whole page's lanes, because that is what a page is: PAGE_CELL_SPAN²
+// cells. A fixture of fewer rows lets an alignment vote near the last row
+// read past the lane.
 const SPAN: usize = PAGE_CELL_SPAN as usize;
 const PI: f64 = core::f64::consts::PI;
+const VOID: u32 = cube_types::common::void as u32;
 
-struct Lanes {
-    land: Vec<u8>,
-    water: Vec<u8>,
-    structure: Vec<u8>,
-    transport: Vec<u8>,
-}
-
-impl Lanes {
-    fn new(land_fill: u8) -> Lanes {
-        let size = SPAN * SPAN;
-        let void = cube_types::common::void;
-        Lanes {
-            land: vec![land_fill; size],
-            water: vec![void; size],
-            structure: vec![void; size],
-            transport: vec![void; size],
-        }
+fn transport_page(cells: &[(usize, usize)], t: u8) -> Vec<u8> {
+    let mut lane = vec![cube_types::common::void; SPAN * SPAN];
+    for &(x, y) in cells {
+        lane[y * SPAN + x] = t;
     }
+    lane
+}
 
-    fn ground(&self) -> Ground {
-        Ground {
-            land: U8Array::from(&self.land),
-            water: U8Array::from(&self.water),
-            structure: U8Array::from(&self.structure),
-            transport: U8Array::from(&self.transport),
-        }
+#[test]
+fn eligibility_of_a_tree_stands_on_green_and_bare_land_and_on_nothing_else() {
+    for land in [cube_types::land::green_light, cube_types::land::green_deep, cube_types::land::bare] {
+        assert!(eligibility_of(&TREE_RULES(), land as u32, VOID, VOID, VOID), "land {land}");
     }
-}
-
-fn seed(tag: u64, density: f64, orientation: DecorOrientationMode) -> DecorKindSeed {
-    DecorKindSeed { tag, density, variant_count: 5, orientation }
-}
-
-const RANDOM: DecorOrientationMode = DecorOrientationMode::Random;
-const ALIGN: DecorOrientationMode = DecorOrientationMode::AlignTransport;
-
-#[test]
-fn scatter_decor_candidates_density_1_places_on_every_eligible_cell_in_range() {
-    let g = Lanes::new(cube_types::land::green_light).ground();
-    assert_eq!(scatter_decor_candidates(&g, 0, 0, 4, 42, &seed(1, 1.0, RANDOM), &TREE_RULES(), 1.0).len(), 16);
+    assert!(!eligibility_of(&TREE_RULES(), cube_types::land::residential as u32, VOID, VOID, VOID));
 }
 
 #[test]
-fn scatter_decor_candidates_density_0_never_places_regardless_of_eligibility() {
-    let g = Lanes::new(cube_types::land::green_light).ground();
-    assert_eq!(scatter_decor_candidates(&g, 0, 0, 4, 42, &seed(1, 0.0, RANDOM), &TREE_RULES(), 1.0).len(), 0);
+fn eligibility_of_any_painted_water_structure_or_transport_overrides_otherwise_green_land() {
+    let green = cube_types::land::green_deep as u32;
+    assert!(eligibility_of(&TREE_RULES(), green, VOID, VOID, VOID));
+    assert!(!eligibility_of(&TREE_RULES(), green, cube_types::water::lake as u32, VOID, VOID));
+    assert!(!eligibility_of(&TREE_RULES(), green, VOID, cube_types::structure::building as u32, VOID));
+    assert!(!eligibility_of(&TREE_RULES(), green, VOID, VOID, cube_types::transport::road_motorway as u32));
 }
 
 #[test]
-fn scatter_decor_candidates_ineligible_land_type_not_green_is_never_a_candidate_even_at_density_1() {
-    let g = Lanes::new(cube_types::land::residential).ground();
-    assert_eq!(scatter_decor_candidates(&g, 0, 0, 4, 42, &seed(1, 1.0, RANDOM), &TREE_RULES(), 1.0).len(), 0);
+fn eligibility_of_a_car_stands_on_a_motorway_and_not_on_a_plain_road_or_a_rail() {
+    assert!(eligibility_of(&CAR_RULES(), VOID, VOID, VOID, cube_types::transport::road_motorway as u32));
+    assert!(!eligibility_of(&CAR_RULES(), VOID, VOID, VOID, cube_types::transport::road_default as u32));
+    assert!(!eligibility_of(&CAR_RULES(), VOID, VOID, VOID, cube_types::transport::rail_main as u32));
 }
 
 #[test]
-fn scatter_decor_candidates_bare_land_counts_as_eligible() {
-    let g = Lanes::new(cube_types::land::bare).ground();
-    assert_eq!(scatter_decor_candidates(&g, 0, 0, 4, 42, &seed(1, 1.0, RANDOM), &TREE_RULES(), 1.0).len(), 16);
-}
-
-#[test]
-fn scatter_decor_candidates_a_non_void_water_structure_transport_cell_overrides_an_otherwise_green_cell() {
-    let mut lanes = Lanes::new(cube_types::land::green_deep);
-    lanes.water[2 * SPAN + 1] = cube_types::water::lake; // cell (1, 2)
-    let c = scatter_decor_candidates(&lanes.ground(), 0, 0, 4, 42, &seed(1, 1.0, RANDOM), &TREE_RULES(), 1.0);
-    assert_eq!(c.len(), 15);
-    assert!(!c.iter().any(|c| c.cell_x == 1 && c.cell_y == 2));
-}
-
-#[test]
-fn scatter_decor_candidates_deterministic_identical_inputs_always_produce_identical_output() {
-    let g = Lanes::new(cube_types::land::green_light).ground();
-    let kind = seed(7, 0.5, RANDOM);
-    let a = scatter_decor_candidates(&g, 0, 0, 8, 1234, &kind, &TREE_RULES(), 1.0);
-    let b = scatter_decor_candidates(&g, 0, 0, 8, 1234, &kind, &TREE_RULES(), 1.0);
-    assert_eq!(a, b);
-    assert!(!a.is_empty() && a.len() < 64);
-}
-
-#[test]
-fn scatter_decor_candidates_a_different_page_seed_reshuffles_which_cells_get_placed() {
-    let g = Lanes::new(cube_types::land::green_light).ground();
-    let kind = seed(7, 0.5, RANDOM);
-    assert_ne!(
-        scatter_decor_candidates(&g, 0, 0, 8, 1234, &kind, &TREE_RULES(), 1.0),
-        scatter_decor_candidates(&g, 0, 0, 8, 5678, &kind, &TREE_RULES(), 1.0)
-    );
-}
-
-#[test]
-fn scatter_decor_candidates_every_candidate_s_variant_is_within_0_variant_count() {
-    let g = Lanes::new(cube_types::land::green_light).ground();
-    for c in scatter_decor_candidates(&g, 0, 0, 8, 99, &seed(3, 1.0, RANDOM), &TREE_RULES(), 1.0) {
-        assert!(c.variant < 5);
-    }
+fn eligibility_of_a_train_stands_on_a_rail_and_not_on_a_motorway() {
+    assert!(eligibility_of(&TRAIN_RULES(), VOID, VOID, VOID, cube_types::transport::rail_main as u32));
+    assert!(!eligibility_of(&TRAIN_RULES(), VOID, VOID, VOID, cube_types::transport::road_motorway as u32));
 }
 
 /// align_transport also randomly flips the heading +PI, so these check
@@ -121,55 +61,36 @@ fn assert_on_axis(rotation: f64, axis: f64) {
 }
 
 #[test]
-fn scatter_decor_candidates_align_transport_faces_along_x_when_the_road_runs_east_west() {
-    let mut lanes = Lanes::new(cube_types::common::void);
-    for x in [1, 2, 3] {
-        lanes.transport[2 * SPAN + x] = cube_types::transport::road_motorway;
-    }
-    let c = scatter_decor_candidates(&lanes.ground(), 0, 0, 8, 42, &seed(1, 1.0, ALIGN), &CAR_RULES(), 1.0);
-    let at = c.iter().find(|c| c.cell_x == 2 && c.cell_y == 2).expect("a car at (2, 2)");
-    assert_on_axis(at.rotation, PI / 2.0);
+fn transport_aligned_rotation_faces_along_x_when_the_road_runs_east_west() {
+    let lane = transport_page(&[(1, 2), (2, 2), (3, 2)], cube_types::transport::road_motorway);
+    assert_on_axis(transport_aligned_rotation(&lane, 2, 2, false), PI / 2.0);
 }
 
 #[test]
-fn scatter_decor_candidates_align_transport_faces_along_y_when_the_road_runs_north_south() {
-    let mut lanes = Lanes::new(cube_types::common::void);
-    for y in [1, 2, 3] {
-        lanes.transport[y * SPAN + 2] = cube_types::transport::road_motorway;
-    }
-    let c = scatter_decor_candidates(&lanes.ground(), 0, 0, 8, 42, &seed(1, 1.0, ALIGN), &CAR_RULES(), 1.0);
-    let at = c.iter().find(|c| c.cell_x == 2 && c.cell_y == 2).expect("a car at (2, 2)");
-    assert_on_axis(at.rotation, 0.0);
+fn transport_aligned_rotation_faces_along_y_when_the_road_runs_north_south() {
+    let lane = transport_page(&[(2, 1), (2, 2), (2, 3)], cube_types::transport::road_motorway);
+    assert_on_axis(transport_aligned_rotation(&lane, 2, 2, false), 0.0);
 }
 
 #[test]
-fn scatter_decor_candidates_align_transport_isn_t_thrown_off_by_a_single_cell_diagonal_stairstep_on_an_otherwise_vertical_rail() {
-    let mut lanes = Lanes::new(cube_types::common::void);
-    for y in 0..=6 {
-        lanes.transport[y * SPAN + 2] = cube_types::transport::rail_main;
-    }
-    lanes.transport[3 * SPAN + 3] = cube_types::transport::rail_main;
-    let c = scatter_decor_candidates(&lanes.ground(), 0, 0, 8, 42, &seed(1, 1.0, ALIGN), &TRAIN_RULES(), 1.0);
-    let at = c.iter().find(|c| c.cell_x == 2 && c.cell_y == 3).expect("a train at (2, 3)");
-    assert_on_axis(at.rotation, 0.0);
+fn transport_aligned_rotation_isn_t_thrown_off_by_a_single_cell_diagonal_stairstep_on_an_otherwise_vertical_rail() {
+    let mut cells: Vec<(usize, usize)> = (0..=6).map(|y| (2, y)).collect();
+    cells.push((3, 3));
+    let lane = transport_page(&cells, cube_types::transport::rail_main);
+    assert_on_axis(transport_aligned_rotation(&lane, 2, 3, false), 0.0);
 }
 
 #[test]
-fn scatter_decor_candidates_align_transport_headings_aren_t_all_identical_along_one_straight_road() {
-    let mut lanes = Lanes::new(cube_types::common::void);
-    for x in 0..8 {
-        lanes.transport[2 * SPAN + x] = cube_types::transport::road_motorway;
-    }
-    let c = scatter_decor_candidates(&lanes.ground(), 0, 0, 8, 42, &seed(1, 1.0, ALIGN), &CAR_RULES(), 1.0);
-    let mut headings: Vec<u64> = c.iter().filter(|c| c.cell_y == 2).map(|c| c.rotation.to_bits()).collect();
-    headings.sort_unstable();
-    headings.dedup();
-    assert!(headings.len() > 1, "expected at least one flipped heading among 8 candidates on the same road");
+fn transport_aligned_rotation_flips_a_heading_by_a_half_turn_so_one_road_isn_t_all_one_way() {
+    let cells: Vec<(usize, usize)> = (0..8).map(|x| (x, 2)).collect();
+    let lane = transport_page(&cells, cube_types::transport::road_motorway);
+    let (a, b) = (transport_aligned_rotation(&lane, 3, 2, false), transport_aligned_rotation(&lane, 3, 2, true));
+    assert_ne!(a.to_bits(), b.to_bits());
+    assert_on_axis(b, PI / 2.0);
 }
 
 #[test]
-fn scatter_decor_candidates_a_road_cell_not_road_motorway_is_never_a_car_candidate() {
-    let mut lanes = Lanes::new(cube_types::common::void);
-    lanes.transport[2 * SPAN + 2] = cube_types::transport::road_default;
-    assert_eq!(scatter_decor_candidates(&lanes.ground(), 0, 0, 8, 42, &seed(1, 1.0, ALIGN), &CAR_RULES(), 1.0).len(), 0);
+fn transport_aligned_rotation_an_isolated_cell_has_no_axis_and_falls_back_to_zero() {
+    let lane = transport_page(&[(4, 4)], cube_types::transport::road_motorway);
+    assert_eq!(transport_aligned_rotation(&lane, 4, 4, false), 0.0);
 }

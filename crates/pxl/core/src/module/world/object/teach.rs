@@ -1,15 +1,15 @@
 // pxl_core/module/world/object/teach.rs
 
 //! What the painter is taught about the objects' states
-//! (crates/pxl/core/src/world/object.rs): every placeable cube's material, AIR,
-//! and the decor kinds. Once, before any page is told.
+//! (crates/pxl/core/src/render/layer/object/adapter.rs): every placeable cube's
+//! material, AIR, and the decor kinds. Once, before any page is told.
 
 use pxl_shared::spec::cell::{cube_types, decor_ids, decor_num_id, placeable_cube_num_id, placeable_cubes};
 
-use crate::kernel::kernel;
 use crate::module::world::object::material::resolve_solid_material;
-use crate::render::mesh::voxel::{pack_material, NO_LAYER};
-use crate::world::object::Kind;
+use crate::render::layer::object::adapter::Kind;
+use crate::render::layer::pipeline::volume::{pack_material, NO_LAYER};
+use crate::sys::kernel::kernel;
 
 /// Teaches the painter every state the catalog can put in a leaf: each
 /// placeable cube's material, AIR, and the decor kinds, which paint nothing.

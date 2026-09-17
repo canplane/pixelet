@@ -1,4 +1,4 @@
-// pxl_core/memory.test.rs
+// pxl_core/mem.test.rs
 
 use super::*;
 use crate::module::world::terrain::fixed::TERRAIN_BYTES;

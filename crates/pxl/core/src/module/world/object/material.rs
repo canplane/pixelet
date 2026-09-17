@@ -5,19 +5,18 @@
 
 use pxl_shared::spec::cell::{placeable_cube_id, placeable_cube_rgb, terrain_style_cube_source, PlaceableCube};
 
-use crate::render::gpu::layer_table::{ground_color_lookup, ground_layer_index_lookup, rgb255, OBJECT_LAYER_IDX};
-use crate::render::mesh::voxel::{MaterialClasses, VoxelMaterial, NO_LAYER};
+use crate::render::layer::pipeline::volume::{MaterialClasses, VoxelMaterial, NO_LAYER};
+use crate::render::layer::terrain::shader_meta::{ground_color_lookup, ground_layer_index_lookup, rgb255};
+use crate::render::tex_array::OBJECT_LAYER_IDX;
 
 /// A placed "solid" cube's own real color/layer_idx — either a flat color or,
-/// for a terrain-styled pick (2026-09-06), the exact same color/layer_idx
-/// real baked terrain of that type gets, read straight from layer_table.rs's
+/// for a terrain-styled pick, the exact same color/layer_idx
+/// real baked terrain of that type gets, read straight from shader_meta.rs's
 /// lookup tables. material_class stays OBJECT either way — the mesher's own
 /// open-bottom/occlusion-exemption/run-merge behavior for OBJECT-classed runs
 /// has nothing to do with which texture a cube samples, and reusing a terrain
-/// class here would trade away real, already-fixed correctness (a solid
-/// object no longer shields whatever's beneath it from occlusion culling, the
-/// mesher's own 2026-08-16 bug) for a distinction layer-tap blending never
-/// needs: it only cares whether layer_idx is real.
+/// class here would stop a solid object shielding whatever is beneath it from
+/// occlusion culling, for a distinction layer-tap blending never needs: it only cares whether layer_idx is real.
 pub fn resolve_solid_material(cube: PlaceableCube) -> VoxelMaterial {
     if let Some(source) = terrain_style_cube_source(cube) {
         let t = source.terrain_num_id as usize;

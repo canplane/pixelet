@@ -11,10 +11,10 @@
 //! context, and no step reaches these while the tick runs.
 
 use xpute_core::sched::quantum::{Grant, QuantumPolicy};
-use xpute_core::sched::tick::{Tick, TickPolicy};
 pub use xpute_core::sched::tick::{FrameBudget, Phase, StepStats, TickReport, CONTENT, COSMETIC, INTERACTION, PHASES, REPORT, VISIBLE};
+use xpute_core::sched::tick::{Tick, TickPolicy};
 
-use crate::global::Global;
+use crate::sys::global::Global;
 
 /// What a step reads of the frame beside the tick's own numbers.
 #[derive(Clone, Copy, Debug, Default)]
@@ -52,9 +52,8 @@ pub const POLICY: TickPolicy = TickPolicy {
     // Long enough that a pause inside one drag does not count.
     settle_ms: 150.0,
     hard_slack_ms: 4.0,
-    // Without it a placement of a few dozen units took 25 frames and 3.3 s on
-    // a phone while a load kept the visible phase busy, and an index rebuild
-    // 49 frames (2026-09-13). A fixed share, not a feedback loop.
+    // Without a share of its own, content waits for as long as a load keeps
+    // the visible phase busy. A fixed share, not a feedback loop.
     content_share: 0.2,
 };
 

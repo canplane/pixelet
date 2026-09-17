@@ -17,26 +17,25 @@
 use pxl_shared::spec::space::adapter::epsg4326::{self, G4326};
 
 use super::theme::{get_theme_key, WorldThemeKey};
-use crate::global::{now, Global};
-use crate::host::local_time;
-use crate::kernel::kernel;
-use crate::module::map::store::use_map_store;
+use crate::module::map::store::map_store;
+use crate::sys::global::{now, Global};
+use crate::sys::host::local_time;
+use crate::sys::kernel::kernel;
 
 const THEME_CHECK_INTERVAL_MS: f64 = 60_000.0;
 
-// The same Seoul fallback the map bootstrap uses before a real GPS fix (or that
-// fallback itself) resolves map_center.
-const FALLBACK_LAT: f64 = 37.5665;
-const FALLBACK_LON: f64 = 126.978;
+// The map's own fallback, so a theme is chosen for a real place before
+// map_center exists.
+use crate::module::map::navigation::map_bootstrap::FALLBACK_G4326;
 
 fn compute_theme_key() -> WorldThemeKey {
-    let (lon, lat) = match use_map_store().map_center {
+    let (lon, lat) = match map_store().map_center {
         Some(center) => {
             let mut g: G4326 = [0.0; 3];
             epsg4326::unproject(&mut g, center.i, center.f);
             (g[0], g[1])
         }
-        None => (FALLBACK_LON, FALLBACK_LAT),
+        None => (FALLBACK_G4326[0], FALLBACK_G4326[1]),
     };
     let t = local_time();
     let environment = &mut kernel().sched.environment;
@@ -48,7 +47,6 @@ fn compute_theme_key() -> WorldThemeKey {
 struct ThemeClock {
     theme_key: WorldThemeKey,
     checked_at: f64,
-    revision: u32,
 }
 
 static CLOCK: Global<ThemeClock> = Global::new();
@@ -57,7 +55,6 @@ fn clock() -> &'static mut ThemeClock {
     CLOCK.get(|| ThemeClock {
         theme_key: compute_theme_key(),
         checked_at: now(),
-        revision: 0,
     })
 }
 
@@ -71,16 +68,10 @@ pub fn theme_clock_step() {
     let next = compute_theme_key();
     if next != c.theme_key {
         c.theme_key = next;
-        c.revision += 1;
     }
 }
 
 /// The current theme key.
-pub fn use_theme_key() -> WorldThemeKey {
+pub fn theme_key() -> WorldThemeKey {
     clock().theme_key
-}
-
-/// Moves when the hour band changes.
-pub fn theme_revision() -> u32 {
-    clock().revision
 }

@@ -30,7 +30,7 @@ pub struct PageTable<T> {
 impl<T> PageTable<T> {
     pub fn new(topic: Option<WorldTopic>) -> PageTable<T> {
         PageTable {
-            index: IndexedMap::new(I64Keys, 64, None),
+            index: IndexedMap::new(I64Keys, 64),
             handles: Vec::new(),
             count: 0,
             topic,

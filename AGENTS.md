@@ -299,9 +299,6 @@ load-bearing as real profiling data or a non-trivial derivation (the same bar
 "what a constant was re-derived from" already sets above), not just a
 stylistic preference.
 
-**No dead code by deletion.** Code being retired gets archived on a branch rather
-than deleted outright, so the reasoning stays recoverable.
-
 **Comments are working notes, not a contract.** Never cite an in-repo comment,
 doc-string, or "the contract says X" as evidence when justifying something —
 verify against the actual code, its behavior, or git history instead, every
@@ -340,10 +337,7 @@ just don't treat them as authority.
   of us actually turns on; otherwise say what is known and move on.
 - **"Revert" means leave no trace.** Restore the exact prior text — no comment
   explaining what was tried, no `// removed: ...` marker, no doc note about the
-  tradeoff. An abandoned in-session experiment gets erased completely. That is
-  the opposite of the archive-a-branch rule above, and the distinction is
-  deliberate: shipped code being retired is worth preserving, a change made this
-  session that didn't pan out is not.
+  tradeoff. An abandoned in-session experiment gets erased completely.
 - **Keep mechanisms orthogonal.** Gestures, animations, and styling stay
   independently verifiable; do not fuse them into one library mechanism because
   it's convenient at the call site.

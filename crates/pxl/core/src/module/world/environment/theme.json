@@ -1,5 +1,5 @@
 {
-  "$doc": ["The world's time-of-day themes, by WorldThemeKey's value (theme.ts)."],
+  "$doc": ["The world's time-of-day themes, by WorldThemeKey's value."],
   "themes": {
     "morning": {
       "fog": { "$value": "#e9dccb", "$type": "rgb" },
@@ -71,9 +71,8 @@
   "daylight_split": {
     "$doc": [
       "Where get_theme_key splits the daylight span: MORNING before MORNING_END",
-      "of it, DAY before DAY_END, EVENING after (37.5% / 37.5% / 25%, the old",
-      "6h/6h/4h split of a 16h fixed daylight span, scaled to however long",
-      "daylight actually is today)."
+      "of it, DAY before DAY_END, EVENING after (37.5% / 37.5% / 25%, scaled to",
+      "however long daylight actually is today)."
     ],
     "MORNING_END": 0.375,
     "DAY_END": 0.75

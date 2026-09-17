@@ -2,7 +2,7 @@
 // (no pair: frame.ts has no test file)
 
 use super::*;
-use crate::vector::Vector;
+use crate::sys::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/ipc/frame.tsv");
 

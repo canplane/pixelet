@@ -8,8 +8,8 @@
 use pxl_shared::spec::space::adapter::epsg3857;
 
 use crate::module::camera::config::camera_cfg;
-use crate::module::camera::store::use_camera_store;
-use crate::module::map::store::use_map_store;
+use crate::module::camera::store::camera_store;
+use crate::module::map::store::map_store;
 
 pub const SCALE_BAR_MAX_WIDTH_PX: f64 = 56.0;
 pub const SCALE_BAR_TICK_PX: f64 = 6.0;
@@ -59,13 +59,13 @@ impl core::fmt::Display for ScaleLabel {
 
 /// The scale bar for a viewport `screen_height` CSS pixels tall.
 pub fn scale_bar(screen_height: f64) -> ScaleBar {
-    let dist = use_camera_store().view_state.dist;
+    let dist = camera_store().view_state.dist;
     let fov_rad = camera_cfg::projection::FOV.to_radians();
     let visible_u = 2.0 * (fov_rad / 2.0).tan() * dist;
     // `dist` is in canonical "u" units, not meters — the conversion is required.
     let visible_planar_m = visible_u / epsg3857::U_PER_M;
     let planar_m_per_px = visible_planar_m / screen_height;
-    let mercator_scale = match use_map_store().map_center {
+    let mercator_scale = match map_store().map_center {
         Some(c) => {
             let mut g = [0.0; 3];
             epsg3857::unproject(&mut g, c.i, c.f);

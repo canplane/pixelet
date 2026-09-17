@@ -188,7 +188,11 @@ impl Reader<'_> {
         let width = type_size(plain(a.get("type")).unwrap_or("SCALAR"));
         let mut out = vec![T::default(); count * width];
         if let Some(bv_index) = num(a.get("bufferView")) {
-            let bv = self.json.get("bufferViews").and_then(|x| x.at(bv_index as usize)).ok_or_else(|| format!("gltf: no buffer view {bv_index}"))?;
+            let bv = self
+                .json
+                .get("bufferViews")
+                .and_then(|x| x.at(bv_index as usize))
+                .ok_or_else(|| format!("gltf: no buffer view {bv_index}"))?;
             let buffer_index = num(bv.get("buffer")).unwrap_or(0.0) as usize;
             let buffer = *self.buffers.get(buffer_index).ok_or_else(|| format!("gltf: buffer {buffer_index} not provided"))?;
             let component_type = num(a.get("componentType")).unwrap_or(5126.0) as u32;
@@ -348,14 +352,20 @@ fn read_document(json: JsonValue, buffers: &[&[u8]]) -> Result<Gltf, String> {
                 Some("scale") => GltfPath::Scale,
                 _ => continue,
             };
-            let Some(sampler) = a.get("samplers").and_then(|s| s.at(num(c.get("sampler")).unwrap_or(0.0) as usize)) else { continue };
+            let Some(sampler) = a.get("samplers").and_then(|s| s.at(num(c.get("sampler")).unwrap_or(0.0) as usize)) else {
+                continue;
+            };
             let mut times = r.f32s(num(sampler.get("input")).unwrap_or(0.0) as usize)?;
             let mut values = r.f32s(num(sampler.get("output")).unwrap_or(0.0) as usize)?;
             let width = if path == GltfPath::Rotation { 4 } else { 3 };
             let interpolation = plain(sampler.get("interpolation")).unwrap_or("LINEAR");
             if interpolation == "CUBICSPLINE" {
                 // In-tangent, value, out-tangent per key: the value.
-                values = (0..times.len()).filter_map(|t| values.get(t * width * 3 + width..t * width * 3 + width * 2)).flatten().copied().collect();
+                values = (0..times.len())
+                    .filter_map(|t| values.get(t * width * 3 + width..t * width * 3 + width * 2))
+                    .flatten()
+                    .copied()
+                    .collect();
             }
             // The draw reads a channel's keys as `keys * width` floats by
             // pointer, so a file whose output is shorter than its input claims
@@ -388,7 +398,13 @@ fn read_document(json: JsonValue, buffers: &[&[u8]]) -> Result<Gltf, String> {
         Some(n) => arr(Some(n)).filter_map(|v| v.as_f64()).map(|v| v as u32).collect(),
         None => (0..raw_nodes.len() as u32).filter(|&i| parents[i as usize] < 0).collect(),
     };
-    Ok(Gltf { nodes, meshes, skins, animations, roots })
+    Ok(Gltf {
+        nodes,
+        meshes,
+        skins,
+        animations,
+        roots,
+    })
 }
 
 /// T × R × S, column-major, from a translation, a unit quaternion and a scale.

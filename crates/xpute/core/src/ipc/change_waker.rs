@@ -22,7 +22,6 @@ use std::rc::Rc;
 
 use crate::ds::arena::{ArenaOptions, Vector};
 use crate::ds::map::{I64Keys, IndexedMap, I64_KEYS};
-use crate::ds::typed_alloc::{TypedAlloc, HEAP_ALLOC};
 
 use super::change::{ChangeJournal, Cursor, Topic};
 
@@ -36,17 +35,6 @@ pub struct Subscription {
     topic: Topic,
     key: Option<i64>,
     id: u32,
-}
-
-struct Shared(Rc<RefCell<Box<dyn TypedAlloc>>>);
-
-impl TypedAlloc for Shared {
-    fn take_view(&mut self, kind: crate::kit::array::Kind, length: u32) -> crate::kit::array::ArrayBufferView {
-        self.0.borrow_mut().take_view(kind, length)
-    }
-    fn give(&mut self, view: &crate::kit::array::ArrayBufferView) {
-        self.0.borrow_mut().give(view)
-    }
 }
 
 pub struct ChangeWaker<J: ChangeJournal> {
@@ -66,8 +54,7 @@ pub struct ChangeWaker<J: ChangeJournal> {
 }
 
 impl<J: ChangeJournal> ChangeWaker<J> {
-    pub fn new(log: Rc<RefCell<J>>, alloc: Option<Box<dyn TypedAlloc>>) -> ChangeWaker<J> {
-        let alloc = Shared(Rc::new(RefCell::new(alloc.unwrap_or_else(|| Box::new(HEAP_ALLOC)))));
+    pub fn new(log: Rc<RefCell<J>>) -> ChangeWaker<J> {
         let (cursor, topics) = {
             let l = log.borrow();
             (l.head(), l.topics())
@@ -84,15 +71,14 @@ impl<J: ChangeJournal> ChangeWaker<J> {
             next_id: 0,
         };
         for _ in 0..topics {
-            waker.keys.push(IndexedMap::new(I64_KEYS, 16, Some(Box::new(Shared(alloc.0.clone())))));
+            waker.keys.push(IndexedMap::new(I64_KEYS, 16));
             waker.lists.push(Vec::new());
             waker.woken.push(Vector::new(ArenaOptions {
                 init_cap: Some(16),
-                alloc: Some(Box::new(Shared(alloc.0.clone()))),
                 ..Default::default()
             }));
             waker.topic_lists.push(Vec::new());
-            waker.topic_seen.push(IndexedMap::new(I64_KEYS, 64, Some(Box::new(Shared(alloc.0.clone())))));
+            waker.topic_seen.push(IndexedMap::new(I64_KEYS, 64));
         }
         waker
     }

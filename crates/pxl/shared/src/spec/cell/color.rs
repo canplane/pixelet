@@ -21,7 +21,10 @@ const fn e(hex: &'static str, rgb: u32) -> ColorJsonEntry {
 }
 
 pub const default: ColorJsonFile = ColorJsonFile {
-    _meta: Some(ColorJsonMeta { description: None, source: Some("land/water/structure/transport: OpenStreetMap Carto; block: hand-picked") }),
+    _meta: Some(ColorJsonMeta {
+        description: None,
+        source: Some("land/water/structure/transport: OpenStreetMap Carto; block: hand-picked"),
+    }),
     channels: &[
         (
             "land",
@@ -42,14 +45,7 @@ pub const default: ColorJsonFile = ColorJsonFile {
                 ("helipad", e("#BBBBCC", 0xbbbbcc)),
             ],
         ),
-        (
-            "water",
-            &[
-                ("river", e("#AAD3DF", 0xaad3df)),
-                ("lake", e("#AAD3DF", 0xaad3df)),
-                ("wetland", e("#AAD3DF", 0xaad3df)),
-            ],
-        ),
+        ("water", &[("river", e("#AAD3DF", 0xaad3df)), ("lake", e("#AAD3DF", 0xaad3df)), ("wetland", e("#AAD3DF", 0xaad3df))]),
         (
             "structure",
             &[

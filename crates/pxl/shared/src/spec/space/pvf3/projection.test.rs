@@ -1,7 +1,7 @@
 // pxl_shared/spec/space/pvf3/projection.test.rs
 // (no pair: projection.ts has no test file)
 
-use xpute_core::vector::Vector;
+use xpute_core::sys::vector::Vector;
 
 use super::*;
 

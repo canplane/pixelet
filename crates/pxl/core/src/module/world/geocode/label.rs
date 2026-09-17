@@ -7,7 +7,6 @@
 
 use core::fmt;
 
-
 use super::repository::{PartTable, Rows};
 
 // Broad-to-narrow ("강남구 역삼1동") is a Korean/Japanese/Chinese address
@@ -39,7 +38,11 @@ pub struct Label<'a> {
 }
 
 pub fn assemble_label<'a>(table: &'a PartTable, parts: Rows, language: &str) -> Label<'a> {
-    Label { table, parts, lang: primary_lang(language) }
+    Label {
+        table,
+        parts,
+        lang: primary_lang(language),
+    }
 }
 
 impl fmt::Display for Label<'_> {

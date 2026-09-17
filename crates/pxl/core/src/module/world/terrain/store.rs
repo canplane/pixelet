@@ -18,9 +18,13 @@
 use pxl_shared::bake::format::Tile;
 use pxl_shared::spec::space::pvf3::ivec::IVec;
 
-use crate::global::Global;
 use crate::module::world::change::TERRAIN_PAGE;
+use crate::module::world::chunk_node::{chunk_page, chunk_sources_changed};
 use crate::module::world::page_table::PageTable;
+use crate::module::world::poi::poi_index::invalidate_poi_index;
+use crate::module::world::poi::poi_layer::poi_place_request;
+use crate::module::world::terrain::ground_snap::reground_map_center;
+use crate::sys::global::Global;
 
 static TILE_PAGES: Global<PageTable<Tile>> = Global::new();
 
@@ -33,25 +37,32 @@ pub fn tile_pages() -> &'static mut PageTable<Tile> {
 pub struct TileStore;
 
 impl TileStore {
-    /// tile_pages.revision, so a reader sees a page come and go.
-    pub fn revision(&self) -> u32 {
-        tile_pages().revision()
-    }
-
     pub fn get_tile(&self, page_idx: IVec) -> Option<&'static Tile> {
         tile_pages().get(page_idx)
     }
 
+    /// A page arrived: the scheduler mounts from it, the chunks and the POI
+    /// placement read it, and a map centre that could not be grounded before
+    /// may be now.
     pub fn set_tile(&self, page_idx: IVec, tile: Tile) {
         tile_pages().set(page_idx, tile);
+        chunk_page(page_idx, true);
+        chunk_sources_changed();
+        invalidate_poi_index();
+        poi_place_request();
+        reground_map_center();
     }
 
     pub fn clear_tile(&self, page_idx: IVec) -> Option<Tile> {
-        tile_pages().clear(page_idx)
+        let held = tile_pages().clear(page_idx)?;
+        chunk_page(page_idx, false);
+        chunk_sources_changed();
+        invalidate_poi_index();
+        poi_place_request();
+        Some(held)
     }
 }
 
-/// `useTileStore.getState()`.
-pub fn use_tile_store() -> TileStore {
+pub fn tile_store() -> TileStore {
     TileStore
 }

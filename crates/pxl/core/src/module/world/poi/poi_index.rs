@@ -26,16 +26,17 @@ use pxl_shared::bake::format::PoiPage;
 use pxl_shared::spec::space::indexer::{FROM_L3_IDX, L3_IDX, L3_RANGE};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::pvf3::pvf3::PVF3;
+use pxl_shared::spec::space::v3::V3;
 use pxl_shared::spec::space::xy::TO_XY;
 use xpute_core::ds::map::{I64Keys, IndexedMap};
 use xpute_core::ds::spatial_hash::SpatialHash;
 
 use super::poi_badge::evict_poi_badges;
 use super::store::poi_pages;
-use crate::global::{now, Global};
 use crate::module::world::billboard::distance_fade::fade_end_u;
 use crate::module::world::sched::tick::FrameBudget;
 use crate::module::world::terrain::elevation::with_ele;
+use crate::sys::global::{now, Global};
 
 /// How far out this keeps POI, as a multiple of the query reach.
 ///
@@ -115,7 +116,7 @@ impl Lanes {
     fn new() -> Lanes {
         let n = CAPACITY as usize;
         Lanes {
-            index: SpatialHash::new(CAPACITY, BUCKETS, CELL, None),
+            index: SpatialHash::new(CAPACITY, BUCKETS, CELL),
             page_idx: Vec::with_capacity(n),
             rec: Vec::with_capacity(n),
             pos_x: Vec::with_capacity(n),
@@ -152,7 +153,7 @@ impl Lanes {
 }
 
 /// Converts an absolute position into the local render frame of `origin`.
-pub type ToLocal = fn(&PVF3, IVec) -> [f64; 3];
+pub type ToLocal = fn(&PVF3, IVec) -> V3;
 /// A record's flat position (the bake's, before grounding), absolute.
 pub type FlatPos = fn(&PoiPage, u32, IVec) -> PVF3;
 
@@ -232,7 +233,7 @@ fn index() -> &'static mut PoiIndex {
         max_wait_ms: 0.0,
         last_frames: 0,
         max_frames: 0,
-        seen: IndexedMap::new(I64Keys, CAPACITY, None),
+        seen: IndexedMap::new(I64Keys, CAPACITY),
     })
 }
 
@@ -529,8 +530,7 @@ pub fn set_poi_tier(i: u32, level: u32) {
 /// and is held back from drawing until a rebuild grounds it. A rebuild already
 /// running was grounding against the tiles of the moment it started, so it has
 /// to go too — left alone, the next sync saw a job for the same pages and
-/// origin and deduped the request against it. A fresh load with every tile
-/// arriving after the POI pages drew nothing until the first pan (2026-09-12).
+/// origin and deduped the request against it.
 pub fn invalidate_poi_index() {
     let x = index();
     x.built_from = -1;

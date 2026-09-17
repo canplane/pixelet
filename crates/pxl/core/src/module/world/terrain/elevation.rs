@@ -6,13 +6,13 @@ use pxl_shared::spec::space::indexer::{L1_IDX_IN_L3, L3_IDX, L3_RANGE};
 use pxl_shared::spec::space::pvf3::ivec::{self, IVec};
 use pxl_shared::spec::space::pvf3::pvf3::{self, PVF3};
 
-use super::elevation_sample::{is_water_family_at, sample_ele, WATER_RECESS_CELLS};
-use super::store::use_tile_store;
+use super::store::tile_store;
+use crate::render::layer::terrain::elevation::{is_water_family_at, sample_ele, WATER_RECESS_CELLS};
 
 const L3_RANGE_REAL: f64 = L3_RANGE as f64;
 
-/// The same real height the chunk's mesh and raycast bake (elevation_sample's
-/// WATER_RECESS_CELLS), applied here too so this module's own consumers
+/// The same real height the chunk's mesh and raycast bake
+/// (render/layer/terrain/elevation.rs's WATER_RECESS_CELLS), applied here too so this module's own consumers
 /// (camera ground-snap, ground_or_raw, any cell-marker probe) agree with the
 /// rendered terrain instead of reasoning about the un-recessed height while
 /// the mesh they're looking at shows the lowered one. A page's ele and ground
@@ -35,7 +35,7 @@ fn page_cell(at: &PVF3) -> (u32, u32) {
 
 /// Returns ground height in lattice/render units.
 pub fn get_ele(at: &PVF3) -> Option<f64> {
-    let tile = use_tile_store().get_tile(L3_IDX(at.i))?;
+    let tile = tile_store().get_tile(L3_IDX(at.i))?;
     let (tx, ty) = page_cell(at);
     Some(sample_ele_grounded(&tile.terrain, tx, ty) * U_PER_CELL)
 }
@@ -47,7 +47,7 @@ pub fn get_ele(at: &PVF3) -> Option<f64> {
 /// actually change anything — painting "land.green_deep" over ground the bake
 /// already recorded as GREEN_DEEP land paints nothing new.
 pub fn get_ground_type(at: &PVF3, channel: GroundChannelKey) -> Option<u32> {
-    let tile = use_tile_store().get_tile(L3_IDX(at.i))?;
+    let tile = tile_store().get_tile(L3_IDX(at.i))?;
     let (tx, ty) = page_cell(at);
     Some(tile.terrain.ground.get(channel).get((ty * PAGE_CELL_SPAN + tx) as usize) as u32)
 }
@@ -72,7 +72,7 @@ pub fn get_ele_at_local(origin_page_idx_xy: IVec, local_x: f64, local_y: f64) ->
     } else {
         ivec::add(origin_page_idx_xy, ivec::gather(local_page_x as i64, local_page_y as i64, 0))
     };
-    let tile = use_tile_store().get_tile(page_idx)?;
+    let tile = tile_store().get_tile(page_idx)?;
 
     let page_local_x = local_x - local_page_x * L3_RANGE_REAL;
     let page_local_y = local_y - local_page_y * L3_RANGE_REAL;

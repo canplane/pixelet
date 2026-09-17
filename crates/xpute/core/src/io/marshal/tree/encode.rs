@@ -570,9 +570,15 @@ impl<'a> PacketWriter<'a> {
             self.fits = false;
             return self.entry(None, SequenceType::STR as u8);
         }
-        let mut room = Room { buf: &mut self.buf[payload..], len: 0 };
+        let mut room = Room {
+            buf: &mut self.buf[payload..],
+            len: 0,
+        };
         let written = core::fmt::Write::write_fmt(&mut room, format_args!("{v}")).map(|_| room.len);
-        let end = written.ok().map(|len| (len, align((payload + len + 1) as u32, WORD_SZ) as usize)).filter(|&(_, end)| end <= self.buf.len());
+        let end = written
+            .ok()
+            .map(|len| (len, align((payload + len + 1) as u32, WORD_SZ) as usize))
+            .filter(|&(_, end)| end <= self.buf.len());
         let Some((len, end)) = end else {
             self.fits = false;
             return self.entry(None, SequenceType::STR as u8);

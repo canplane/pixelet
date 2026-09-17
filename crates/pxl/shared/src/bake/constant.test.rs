@@ -1,8 +1,9 @@
 // pxl_shared/bake/constant.test.rs
 // (no pair: constant.ts has no test file)
 
+use xpute_core::sys::vector::Vector;
+
 use super::*;
-use xpute_core::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/bake/constant.tsv");
 

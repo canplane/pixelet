@@ -17,8 +17,6 @@ use super::ledger::{
 };
 use super::log::{take_log_records, window_counters};
 use super::summary::{summarize_frames, summarize_tasks, FrameSummary, Spread, TaskSummary};
-use crate::global::now;
-use crate::kernel::kernel;
 use crate::lib::env::config::{BUILD_ID, BUILD_NUMBER, BUILD_TIME};
 use crate::module::world::billboard::frustum_budget::billboard_dropped;
 use crate::module::world::chunk_node::{chunk_retention, RETAIN_BUDGET_BYTES};
@@ -27,6 +25,8 @@ use crate::module::world::poi::poi_index::PoiIndexStats;
 use crate::module::world::poi::poi_layer::PoiPlaceStats;
 use crate::module::world::sched::fetch_scheduler::{fetch_counts, fetch_credits};
 use crate::module::world::sched::tick::{tick_step_stats, PHASES};
+use crate::sys::global::now;
+use crate::sys::kernel::kernel;
 
 /// The tail of the task ring the report carries whole, newest last.
 const RECENT_TASKS: usize = 20;
@@ -128,7 +128,13 @@ fn frame<W: Write>(out: &mut W, s: &FrameSample) -> fmt::Result {
         N(s.pool.live_mb),
         N(s.pool.range_mb)
     )?;
-    write!(out, "\"mounts\":{{\"added\":{},\"removed\":{},\"layouts\":{}}},", N(s.mounts.added), N(s.mounts.removed), N(s.mounts.layouts))?;
+    write!(
+        out,
+        "\"mounts\":{{\"added\":{},\"removed\":{},\"layouts\":{}}},",
+        N(s.mounts.added),
+        N(s.mounts.removed),
+        N(s.mounts.layouts)
+    )?;
     write!(
         out,
         "\"lod\":{{\"chunks\":{},\"in_frustum\":{},\"pending\":{},\"settling\":{},\"blend_active\":{},\"offscreen_pending\":{},\"oldest_release_ms\":{},\"oldest_visible_ms\":{},\"pressure\":{}}},",
@@ -215,7 +221,15 @@ fn long_frame<W: Write>(out: &mut W, l: &LongFrameRecord) -> fmt::Result {
 }
 
 fn frames_summary<W: Write>(out: &mut W, f: &FrameSummary) -> fmt::Result {
-    write!(out, "{{\"n\":{},\"seconds\":{},\"moving\":{},\"missed\":{},\"overran\":{},", f.n, N(f.seconds), f.moving, f.missed, f.overran)?;
+    write!(
+        out,
+        "{{\"n\":{},\"seconds\":{},\"moving\":{},\"missed\":{},\"overran\":{},",
+        f.n,
+        N(f.seconds),
+        f.moving,
+        f.missed,
+        f.overran
+    )?;
     for (name, s) in [("dt", &f.dt), ("task", &f.task), ("offthread", &f.offthread), ("gpu", &f.gpu), ("sched", &f.sched), ("tick", &f.tick)] {
         write!(out, "{}:", Q(name))?;
         spread(out, s)?;

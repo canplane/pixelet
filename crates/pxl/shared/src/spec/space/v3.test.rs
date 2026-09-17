@@ -1,7 +1,7 @@
 // pxl_shared/spec/space/v3.test.rs
 // (no pair: v3.ts has no test file)
 
-use xpute_core::vector::Vector;
+use xpute_core::sys::vector::Vector;
 
 use super::*;
 

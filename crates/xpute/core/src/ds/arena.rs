@@ -9,14 +9,10 @@ use crate::sys::console;
 use crate::sys::errno::Errno;
 use crate::sys::error::MarshalError;
 
-use super::typed_alloc::{TypedAlloc, HEAP_ALLOC};
-
 #[derive(Default)]
 pub struct ArenaOptions {
     pub init_cap: Option<u32>, // soft initial size hint
     pub max_cap: Option<u32>,  // hard size limit
-    /// Vector only: where its storage comes from (typed_alloc.rs).
-    pub alloc: Option<Box<dyn TypedAlloc>>,
 }
 
 // ============ Arena ============
@@ -177,7 +173,6 @@ pub struct Vector<T: AnyElement> {
     pub mem: TypedArray<T>,
 
     pub max_cap: u32,
-    _alloc: Box<dyn TypedAlloc>,
     _cap: u32,
     _len: u32,
 }
@@ -186,17 +181,10 @@ impl<T: AnyElement> Vector<T> {
     pub fn new(opts: ArenaOptions) -> Vector<T> {
         let _init_cap = opts.init_cap.unwrap_or(1 << 10);
         let max_cap = opts.max_cap.unwrap_or(1 << 24);
-        let mut alloc = opts.alloc.unwrap_or_else(|| Box::new(HEAP_ALLOC));
         let _cap = _init_cap.min(max_cap);
 
-        let mem = TypedArray::of(&alloc.take_view(T::KIND, _cap)).expect("take_view gave a view of another element");
-        Vector {
-            mem,
-            max_cap,
-            _alloc: alloc,
-            _cap,
-            _len: 0,
-        }
+        let mem = TypedArray::new(_cap as usize);
+        Vector { mem, max_cap, _cap, _len: 0 }
     }
 
     pub fn cap(&self) -> u32 {
@@ -279,10 +267,9 @@ impl<T: AnyElement> Vector<T> {
             return Err(MarshalError::new(Errno::EOVERFLOW, Some(&format!("vector: required size exceeds max_cap={}", self.max_cap)), None));
         }
 
-        let new_mem: TypedArray<T> = TypedArray::of(&self._alloc.take_view(T::KIND, new_cap)).expect("take_view gave a view of another element");
+        let new_mem: TypedArray<T> = TypedArray::new(new_cap as usize);
         new_mem.set(&self.mem);
 
-        self._alloc.give(&self.mem.view());
         self.mem = new_mem;
         self._cap = new_cap;
         Ok(())
