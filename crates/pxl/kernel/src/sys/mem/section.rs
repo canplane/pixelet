@@ -38,10 +38,12 @@
 //! the heap is the same on both: the terrain is what a load radius reaches,
 //! not a share of what the device happens to have.
 //!
+//! ```text
 //!              offset         end            phone        desktop
 //!   module     0              ~32.5 MiB      the linker's
 //!   .fixed     ~32.5 MiB      ~228.9 MiB     196.43 MiB   196.43 MiB
 //!   heap       ~228.9 MiB     —              283.08 MiB   795.08 MiB
+//! ```
 //!
 //! What everything in front of the heap is checked against is MIN_HEAP_BYTES —
 //! the heap a phone is guaranteed — asked once at compile time of the lowest

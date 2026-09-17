@@ -3,12 +3,19 @@
 use super::*;
 use crate::layer::terrain::fixed::TERRAIN_BYTES;
 
-/// The fewest regions a map can be cut from: the module's front and the fixed
-/// ranges run into the fifth, and the heap needs one past it.
-const MIN_REGIONS: u32 = 6;
-
-/// What a linker might leave behind it. The map is a function of this.
+/// What a linker might leave behind it. The map is a function of this. A page
+/// boundary already, so `page_up` does nothing to it.
 const DATA_END: u32 = 32 << 20;
+
+/// The fewest regions a map can be cut from: everything in front of the heap,
+/// and the heap a phone is guaranteed past it, rounded up to a whole region.
+///
+/// Derived rather than written down. It was a 6 while the resident terrain
+/// was smaller, and `lay_out` began refusing every map in the loops below the
+/// moment the terrain outgrew it — the assert it trips is the real one, about
+/// a memory too small to hold what is fixed and still leave MIN_HEAP_BYTES.
+/// Taken from the same constants, it follows the terrain instead.
+const MIN_REGIONS: u32 = (DATA_END + FIXED_BYTES + MIN_HEAP_BYTES).div_ceil(REGION_BYTES);
 
 #[test]
 fn the_fixed_ranges_are_what_they_hold_and_nothing_more() {

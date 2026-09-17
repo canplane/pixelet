@@ -10,6 +10,7 @@ import { Cmd } from "@pxl/shared/spec/cmd.ts";
 
 import { CORE_KERNEL } from "@/kernel/core_mem.ts";
 import { BOOT, boot_block } from "@/kernel/module.ts";
+import { RING_CAPACITY } from "@/kernel/mem_spec.ts";
 
 /** A command crates/pxl/wasm/src/lib.rs does not number. */
 const UNNUMBERED = 0x0fff;
@@ -20,7 +21,8 @@ Deno.test("rings - the shell submits, one ring replies to each in order, and a f
   const boot = boot_block(p);
   const sq = new Ring(p.memory.buffer, boot[BOOT.sq]);
   const cq = new Ring(p.memory.buffer, boot[BOOT.cq]);
-  assertEquals([sq.capacity, cq.capacity], [4096, 4096]);
+  // mem.json's, not a number written here: the rings were 4096 once.
+  assertEquals([sq.capacity, cq.capacity], [RING_CAPACITY, RING_CAPACITY]);
 
   const n = sq.capacity;
   for (let k = 0; k < n; k++) {

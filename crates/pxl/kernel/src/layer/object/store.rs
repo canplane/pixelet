@@ -1184,12 +1184,16 @@ impl Store {
         self.bands.remove(&(key, band_idx));
         let chunk = &self.chunks[cpos];
         let mut left = self.bands.range((key, chunk.band_min)..=(key, chunk.band_max)).map(|(&(_, bz), _)| bz);
-        let lo = left.next().unwrap_or(BandZ::MAX);
-        let hi = left.next_back().unwrap_or(lo);
-        if lo > hi {
+        // Nothing left in the range is the chunk's last band gone, and it is
+        // the empty iterator that says so. Read as a pair of bounds it does
+        // not: the low one falls back to `BandZ::MAX` and the high one to the
+        // low, so the two come out equal and a `lo > hi` never fires — the
+        // chunk stayed, and a column placed in and erased again kept one.
+        let Some(lo) = left.next() else {
             self.close_chunk(cpos);
             return;
-        }
+        };
+        let hi = left.next_back().unwrap_or(lo);
         let chunk = &mut self.chunks[cpos];
         chunk.band_min = lo;
         chunk.band_max = hi;
