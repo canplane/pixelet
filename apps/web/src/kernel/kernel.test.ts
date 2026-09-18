@@ -31,7 +31,7 @@ function rng(seed: u32): () => u32 {
 }
 
 type Snapshot = {
-  map: { status: string; is_off_center: boolean; center: [number, number] | null };
+  map: { status: string; is_off_center: boolean; center: [number, number] | null; page: string | null };
   settings: Record<string, boolean | string | number>;
 };
 
@@ -144,6 +144,10 @@ Deno.test("kernel - a map centre fetches its terrain and draws it, and the map s
   action({ type: "go_to", lon: 126.978, lat: 37.5665 });
   let first = turn();
   assert(first.snapshot.map.center !== null, "the centre is set");
+  // The page the shell keys a reverse-geocode label by, checked against the
+  // terrain fetches below.
+  const page = first.snapshot.map.page;
+  assert(page !== null && /^\d+$/.test(page), `the centre's page is a decimal index: ${page}`);
   const statuses = new Set<string>([first.snapshot.map.status]);
   const categories = new Set(first.fetched.map((f) => f.category));
   let terrain_urls = first.fetched.filter((f) => f.category === "terrain").map((f) => f.url);
@@ -157,6 +161,10 @@ Deno.test("kernel - a map centre fetches its terrain and draws it, and the map s
     first = t;
   }
   assert(categories.has("terrain"), `terrain was asked for: ${[...categories]}`);
+  // The centre's own page is among the pages the kernel fetched terrain for,
+  // which is what says `map.page` is that centre's page and not merely a
+  // well-shaped number.
+  assert(terrain_urls.some((u) => u.endsWith(`/${page}`)), `the centre's page ${page} was fetched`);
   assert(terrain_urls.every((u) => /\/\d+$/.test(u)), `terrain URLs end in a page: ${terrain_urls.slice(0, 3)}`);
   assert(max_draws > 0, "something was drawn");
   assert(statuses.has("loading"), `the map loaded: ${[...statuses]}`);

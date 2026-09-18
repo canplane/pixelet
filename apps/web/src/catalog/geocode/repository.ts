@@ -1,8 +1,5 @@
 // @pxl/web/catalog/geocode/repository.ts
 
-import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
-import { ivec } from "@pxl/shared/spec/space/pvf3/mod.ts";
-
 import { GEOCODE_TILE_BASE_URL } from "@/config/deploy.ts";
 
 /** One administrative division, mirrors the API's own GeocodePart
@@ -34,9 +31,11 @@ function geocode_url(key: string): string {
   return `${GEOCODE_TILE_BASE_URL}/${key}`;
 }
 
-export async function fetch_geocode(page_idx: IVec, signal?: AbortSignal): Promise<GeocodeResult | null> {
-  const res = await fetch(geocode_url(page_idx.toString()), { signal });
+/** `page` is the snapshot's own `map.page` — the decimal L3 index, which is
+ * both the bucket key and the last segment of the URL. */
+export async function fetch_geocode(page: string, signal?: AbortSignal): Promise<GeocodeResult | null> {
+  const res = await fetch(geocode_url(page), { signal });
   if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`[geocode/${ivec.repr(page_idx)}] http ${res.status}`);
+  if (!res.ok) throw new Error(`[geocode/${page}] http ${res.status}`);
   return await res.json() as GeocodeResult;
 }

@@ -49,8 +49,11 @@ import { boot_block, hold_body, quantum_policy, text_at } from "@/kernel/module.
 
 export type PoseStatus = "idle" | "loading" | "ready" | "error";
 export type UiSnapshot = {
-  /** `center` is the map centre as [lon, lat]. */
-  map: { status: "idle" | "loading" | "success" | "error"; is_off_center: boolean; center: [number, number] | null };
+  /** `center` is the map centre as [lon, lat]; `page` is the L3 page it falls
+   * in, as the decimal string a bucket key and a page URL both are. The kernel
+   * sends both because it has both — recomputing the page here would mean a
+   * second implementation of the space in TypeScript. */
+  map: { status: "idle" | "loading" | "success" | "error"; is_off_center: boolean; center: [number, number] | null; page: string | null };
   /** `error` is what went wrong, as @pxl/shared/spec/message's number. */
   location: { status: PoseStatus; has_location: boolean; error: Message | null };
   companion: { person_ready: boolean; pet_ready: boolean };
@@ -66,7 +69,7 @@ export type UiSnapshot = {
 };
 
 const INITIAL: UiSnapshot = {
-  map: { status: "idle", is_off_center: false, center: null },
+  map: { status: "idle", is_off_center: false, center: null, page: null },
   location: { status: "idle", has_location: false, error: null },
   companion: { person_ready: false, pet_ready: false },
   orientation: { status: "idle", heading: null },
