@@ -1,16 +1,16 @@
 // pxl-spec/bake/format.test.rs
 // (no pair: format.ts's tests are poi_page.test.ts, mirrored beside this)
 
+use xpute_core::golden::Golden;
 use xpute_core::kit::array::TypedArray;
 use xpute_core::kit::encoding::{bytes_to_hex, hex_to_bytes, td};
 use xpute_core::kit::json::stringify_str_map;
-use xpute_core::sys::vector::Vector;
 
 use super::*;
 
-const VECTOR: &str = include_str!("../../vector/bake/format.tsv");
+const GOLDEN: &str = include_str!("../../golden/bake/format.tsv");
 
-fn text(v: &Vector, key: &str) -> String {
+fn text(v: &Golden, key: &str) -> String {
     if v.has(key) {
         td.decode(&hex_to_bytes(v.s(key)))
     } else {
@@ -20,7 +20,7 @@ fn text(v: &Vector, key: &str) -> String {
 
 #[test]
 fn the_formats_write_and_read_what_the_typescript_does() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     let ele: I16Array = TypedArray::from(&(0..v.len("ele")).map(|j| v.i32(&format!("ele.{j}")) as i16).collect::<Vec<_>>());
     let ch = |j: usize| hex_to_bytes(v.s(&format!("ground.{j}")));
     let ground = Ground {

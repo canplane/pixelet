@@ -2,17 +2,17 @@
 
 import { assert, assertEquals } from "@std/assert";
 
-import { Errno } from "@xpute/core/sys/errno.ts";
+import { Errno } from "@xpute/core/errno.ts";
 import { encoder, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
-import { FrameFlag } from "@xpute/core/ipc/frame.ts";
-import { Ring } from "@xpute/core/ipc/ring.ts";
+import { FrameFlag } from "@xpute/runtime/ipc/frame.ts";
+import { Ring } from "@xpute/runtime/ipc/ring.ts";
 import { Cmd } from "@/kernel/cmd_spec.ts";
 
 import { CORE_KERNEL } from "@/kernel/core_mem.ts";
 import { BOOT, boot_block } from "@/kernel/module.ts";
 import { RING_CAPACITY } from "@/kernel/mem_spec.ts";
 
-/** A command crates/pxl/wasm/src/lib.rs does not number. */
+/** A command crates/pxl/web/wasm/src/lib.rs does not number. */
 const UNNUMBERED = 0x0fff;
 
 Deno.test("rings - the shell submits, one ring replies to each in order, and a full completion ring holds the rest back", () => {

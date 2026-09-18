@@ -1,15 +1,15 @@
 // pxl-spec/bake/ground.test.rs
 // (no pair: ground.ts has no test file)
 
-use xpute_core::sys::vector::Vector;
+use xpute_core::golden::Golden;
 
 use super::*;
 
-const VECTOR: &str = include_str!("../../vector/bake/ground.tsv");
+const GOLDEN: &str = include_str!("../../golden/bake/ground.tsv");
 
 #[test]
 fn shown_ground_is_what_the_typescript_shows() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     assert_eq!(LAND_BASE_TYPE, v.u32("LAND_BASE_TYPE"));
     v.each("shown", |k| {
         let (mask, show) = (v.u32(&format!("{k}.mask")), v.bool(&format!("{k}.show")));

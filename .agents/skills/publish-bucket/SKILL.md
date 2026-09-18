@@ -10,18 +10,19 @@ that is not the app itself. One Cloudflare Worker (`apps/web/worker/index.ts`,
 `apps/web/wrangler.jsonc`) serves the built app and reads the bucket under
 `/geo/tiles/*` and `/asset/*` on the app's own hostname — same-origin, no CORS, and the
 client's paths stay relative. Producing what goes in is
-[bake-tiles](../bake-tiles/SKILL.md) and `deno task ingest:asset`; this is
+[bake-tiles](../bake-tiles/SKILL.md) and `./asset/script/ingest_asset.rs`; this is
 how it gets there and how you know it arrived.
 
 ## What the bucket holds
 
-| Prefix                  | Object                       | Named by            | Policy                                                         |
-| ----------------------- | ---------------------------- | ------------------- | -------------------------------------------------------------- |
-| `terrain/<version>/`    | gzipped XTP page, `_ocean`   | `page_idx`          | immutable; a re-bake is a new version                          |
-| `poi/<version>/`        | gzipped XTP page             | `page_idx`          | version = format; content rewritten in place monthly           |
-| `geocode/<version>/`    | gzipped JSON page            | `page_idx`          | same as poi                                                    |
-| `asset/`                | glb, png, webp — not gzipped | sha256 of the bytes | immutable by construction; unreferenced keys deleted whenever  |
-| `_meta/land_pages.json` | terrain's land/ocean list    | fixed name          | the one mutable named object; rewritten with a terrain re-bake |
+| Prefix                  | Object                       | Named by            | Policy                                                        |
+| ----------------------- | ---------------------------- | ------------------- | ------------------------------------------------------------- |
+| `terrain/<version>/`    | gzipped XTP page, `_ocean`   | `page_idx`          | immutable; a re-bake is a new version                         |
+| `poi/<version>/`        | gzipped XTP page             | `page_idx`          | version = format; content rewritten in place monthly          |
+| `geocode/<version>/`    | gzipped JSON page            | `page_idx`          | same as poi                                                   |
+| `asset/`                | glb, png, webp — not gzipped | sha256 of the bytes | immutable by construction; unreferenced keys deleted whenever |
+| `_meta/land_pages.json` | terrain's land/ocean list    | fixed name          | mutable; rewritten with a terrain re-bake                     |
+| `_meta/build-counter`   | the official build count     | fixed name          | mutable; taken and written by CI's gate, never by hand        |
 
 The versions the client requests are `PUBLISHED_VERSION` in
 `spec/bake/published.json`; the asset keys are the generated table
@@ -106,8 +107,9 @@ the two in step.
 ### Assets
 
 ```bash
-deno task ingest:asset     # -> ./out/asset/{glb,png,webp}/<sha256>, and regenerates
-                           #    apps/web/src/catalog/asset/ingested_spec.ts
+./asset/script/ingest_asset.rs   # -> ./out/asset/{glb,png,webp}/<sha256>, and regenerates
+                                 #    crates/pxl/spec/src/asset/ingested.rs and
+                                 #    apps/web/src/catalog/asset/ingested_spec.ts
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
   aws s3 sync ./out/asset/${t%%:*} s3://pixelet-tiles/asset \
@@ -120,7 +122,7 @@ One sync per type so the content-type is stored with the object. Not
 gzipped — glb, png and webp are already compressed — so no
 `Content-Encoding`. A re-run uploads only new hashes.
 
-**Commit the regenerated `ingested.ts` with the asset change, and upload
+**Commit both regenerated tables with the asset change, and upload
 before deploying**: the shipped palette reads that table, and a key it
 names that is not in the bucket is a 404 on the live site. `deno task
 deploy`'s bundle check fails if a model or image byte is back in the bundle.
@@ -152,7 +154,7 @@ Through the task, not around it: it runs `check:bundle` between the build
 and the publish, which is what stops a dev-only surface from reaching the
 live site, and it drives wrangler through Deno rather than a system Node
 that may be older than wrangler requires. What the Worker is and how it
-routes is [infra/README.md](../../../infra/README.md) §6, along with the
+routes is [infra/README.md](../../../infra/README.md) §4, along with the
 one-loop smoke test over every path the app takes.
 
 ## Verify what is served

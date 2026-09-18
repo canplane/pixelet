@@ -4,10 +4,9 @@
  * The locale key a kernel message reads as — `strerror` to the kernel's
  * `errno`.
  *
- * The kernel sends a number and never the words (@pxl/shared/spec/message.ts
- * says why). This is the one place that knows which words a number stands
- * for, and it is here rather than beside the enum because the words are the
- * shell's: locale/ holds them, in every language.
+ * The kernel sends a number and never the words. This is the one place that
+ * knows which words a number stands for, and it is here rather than beside
+ * the enum because the words are the shell's.
  */
 
 import { Message } from "@/kernel/message_spec.ts";

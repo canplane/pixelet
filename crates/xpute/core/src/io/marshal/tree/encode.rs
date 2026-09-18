@@ -1,9 +1,9 @@
 // xpute-core/io/marshal/tree/encode.rs
 
+use crate::errno::Errno;
+use crate::error::MarshalError;
 use crate::kit::array::{Bytes, Kind, TypedArray, U8Array};
 use crate::kit::encoding;
-use crate::sys::errno::Errno;
-use crate::sys::error::MarshalError;
 
 use super::spec::{
     AlignUnit, BranchNode, EncodingState, GraftNode, Node, NodeType, Numeric, ScalarNode, ScalarType, SequenceNode, SequenceType, SequenceVal, SpecialType, ALIGN, ALIGN_SZ, DESC_TYPE_MASK,

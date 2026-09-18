@@ -45,8 +45,13 @@ export const TILE_ROOT = "/geo/tiles";
 /** Forward search, the one geo query with no finite page to bake it against. */
 export const SEARCH_URL = "/geo/search";
 
-/** Ops routes, behind the shared admin token. */
-export const INTERNAL_ROOT = "/geo/internal";
+/** Ops routes, behind the shared admin token. One per root rather than one
+ * shared branch: each server gates its own prefix, and a token that opened
+ * both would make either server's leak the other's. */
+export const GEO_INTERNAL = "/geo/internal";
+
+/** pxl-api's own, gated the same way. */
+export const API_INTERNAL = "/api/internal";
 
 export const GEO_PREFIX = "/geo/";
 

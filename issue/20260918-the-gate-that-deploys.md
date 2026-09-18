@@ -71,12 +71,12 @@ commit the gate never saw, and that is the whole property wanted.
 | Job             | When                                       | What                                                             |
 | :-------------- | :----------------------------------------- | :--------------------------------------------------------------- |
 | `gate`          | every push to main, every PR               | `check`, `test`, `lint`                                          |
-| `deploy-web`    | main, green                                | `deno task deploy`, then the smoke                               |
+| `deploy-web`    | main, green, and the client's tree changed | `deno task deploy`, then the smoke                               |
 | `deploy-server` | main, green, and the server's tree changed | ssh, reset, `up --build --force-recreate`, then the origin smoke |
 
 **The two deploys are gated differently, and the asymmetry is the point.**
 Publishing to the edge is idempotent, uploads only changed assets and is
-reversible from a dashboard, so it runs on every green push. Reaching into the
+reversible from a dashboard, so it ran on every green push. Reaching into the
 production VM over SSH is none of those, so it runs only when `crates/`,
 `infra/prod/` or the Dockerfile changed. A docs commit does not touch
 production.
@@ -90,6 +90,11 @@ comes from a single counter object in the bucket, and `deploy.ts` is written
 around "this has one deployer" without being able to enforce it. A hand deploy
 is still the fallback and is still outside the group — which is now the one way
 to collide, and is worth knowing rather than preventing.
+
+> Since 2026-09-19 the number is the gate's, not the deploy's: every build of
+> main takes one whether or not it ships, `script/build_counter.ts` is what
+> takes it, and `deploy.ts` is handed it. The group covers both jobs, and a
+> hand deploy publishes unnumbered rather than taking one.
 
 ## The smoke check is a script, not a list
 

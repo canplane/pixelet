@@ -2,7 +2,7 @@
 
 import { useTranslation } from "react-i18next";
 
-import type { BaseModalProps } from "@/app/type/ui.types.ts";
+import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { Info, Sparkles, X } from "lucide-react";
 
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/kit/ui/shadcn/sheet.tsx";

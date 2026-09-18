@@ -11,7 +11,7 @@ export type { CubeFace };
  * keyed, so the id is the lookup.
  *
  * Side falls back to top when a kind has no side of its own — the same rule
- * the layer arrays the chunks sample are built by (crates/pxl/render/src/gpu/layers.rs).
+ * the layer arrays the chunks sample are built by (crates/pxl/web/render/src/gpu/layers.rs).
  * Only the land channel has sides today; object blocks never do.
  */
 export function texture_key(cube: PlaceableCube, face: CubeFace): string | null {

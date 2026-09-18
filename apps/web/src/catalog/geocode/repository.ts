@@ -16,7 +16,7 @@ export type GeocodeResult = { parts: GeocodePart[] };
 
 /**
  * Reverse-geocode transport — the pre-baked static set when one is
- * configured (crates/pxl/geo-bake/src/geocode/tool/bake_geocode_tiles.rs), the
+ * configured (crates/pxl/server/geo-bake/src/geocode/tool/bake_geocode_tiles.rs), the
  * live API otherwise. Same PUBLISHED_TILES shape poi/repository.ts uses: a
  * missing object just means "outside Overture's Divisions coverage for
  * this page", not a genuine failure, so a 404 resolves straight to `null`.

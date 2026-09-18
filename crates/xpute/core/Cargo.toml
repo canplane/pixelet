@@ -8,5 +8,5 @@ publish.workspace = true
 path = "src/lib.rs"
 
 [features]
-# The vectors' reader (src/sys/vector.rs), for another crate's tests.
-vector = []
+# The golden records' reader (src/golden.rs), for another crate's tests.
+golden = []

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import type { BaseModalProps } from "@/app/type/ui.types.ts";
+import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/kit/ui/shadcn/sheet.tsx";
 import { TextField } from "@/kit/ui/text_field.tsx";
 import { kernel_action, kernel_snapshot } from "@/kernel/kernel.ts";

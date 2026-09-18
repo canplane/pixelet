@@ -18,8 +18,8 @@
 
 import type { u32 } from "../kit/word.ts";
 import type { AnyTypedArray, AnyTypedArrayCtor } from "../kit/array.ts";
-import { MarshalError } from "../sys/error.ts";
-import { Errno } from "../sys/errno.ts";
+import { MarshalError } from "@xpute/core/error.ts";
+import { Errno } from "@xpute/core/errno.ts";
 
 export type LaneSpec = Record<string, AnyTypedArrayCtor<AnyTypedArray>>;
 export type LaneViews<S extends LaneSpec> = { readonly [K in keyof S]: InstanceType<S[K]> };

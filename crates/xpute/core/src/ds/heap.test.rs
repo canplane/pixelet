@@ -2,9 +2,9 @@
 // (no pair: heap.ts has no test file)
 
 use super::*;
-use crate::sys::vector::Vector;
+use crate::golden::Golden;
 
-const VECTOR: &str = include_str!("../../vector/ds/heap.tsv");
+const GOLDEN: &str = include_str!("../../golden/ds/heap.tsv");
 
 fn show(e: Option<Element<i32>>) -> String {
     e.map_or("none".to_string(), |e| format!("{}:{}", e.key, e.val))
@@ -12,7 +12,7 @@ fn show(e: Option<Element<i32>>) -> String {
 
 #[test]
 fn heaps_pop_what_the_typescript_pops() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     let (mut a, mut b): (Vec<Element<i32>>, Vec<Element<i32>>) = (Vec::new(), Vec::new());
     v.each("steps", |k| {
         if v.s(&format!("{k}.op")) == "pop" {

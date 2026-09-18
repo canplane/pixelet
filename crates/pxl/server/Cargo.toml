@@ -1,0 +1,15 @@
+[package]
+name = "pxl-server"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+# What both servers need to start and nothing either one answers with. The
+# router, the routes and the queries are each server's own.
+[dependencies]
+axum = "0.8"
+deadpool-postgres = "0.14"
+tokio-postgres = "0.7"

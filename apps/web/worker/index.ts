@@ -60,12 +60,12 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route_spec.
  *
  * - `terrain/<version>/<page_idx>`, plus the shared `terrain/<version>/_ocean`
  *   tile.
- * - `poi/<version>/<page_idx>` — crates/pxl/geo-bake/src/poi/tool/bake_poi_tiles.rs's
+ * - `poi/<version>/<page_idx>` — crates/pxl/server/geo-bake/src/poi/tool/bake_poi_tiles.rs's
  *   own sibling prefix in the same bucket. No `_ocean`-equivalent: a missing
  *   POI object means "no POI on this page", which poi/repository.ts resolves
  *   to `[]` directly, not a shared fallback object this Worker would need to
  *   know about.
- * - `geocode/<version>/<page_idx>` — crates/pxl/geo-bake/src/geocode/tool/
+ * - `geocode/<version>/<page_idx>` — crates/pxl/server/geo-bake/src/geocode/tool/
  *   bake_geocode_tiles.ts's own sibling prefix, same no-fallback shape as
  *   POI (a missing object means "outside Overture's Divisions coverage",
  *   geocode/repository.ts resolves that to `null` directly).

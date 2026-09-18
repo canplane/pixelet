@@ -7,10 +7,10 @@
 
 #![allow(non_snake_case)]
 
+use crate::errno::Errno;
+use crate::error::MarshalError;
 use crate::kit::array::{AnyElement, ArrayBufferView, Bytes, TypedArray, U8Array};
 use crate::kit::encoding;
-use crate::sys::errno::Errno;
-use crate::sys::error::MarshalError;
 
 use super::spec::{AlignUnit, NodeType, NodeValue, ScalarType, SequenceType, SpecialType, ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT, GET_WORD, HDR_SZ, MAGIC, NONE, TYPE_IS_LEAF, WORD_SZ};
 

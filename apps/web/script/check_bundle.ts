@@ -1,5 +1,4 @@
-// @pxl/web/../script/check_bundle.ts
-//
+#!/usr/bin/env -S deno run -A
 // Fails a production build that still carries development-only material.
 //
 // Gating a dev surface behind __IS_DEV__ removes the *component*, but not

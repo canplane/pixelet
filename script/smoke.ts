@@ -1,5 +1,4 @@
-// script/smoke.ts
-//
+#!/usr/bin/env -S deno run -A
 // What a deployment must answer, checked against a running one.
 //
 //   deno run -A script/smoke.ts https://plei.me
@@ -27,7 +26,7 @@ import { INGESTED } from "../apps/web/src/catalog/asset/ingested_spec.ts";
 
 // The generated constants directly: route_spec.ts imports nothing itself, and
 // the root has no mapping into apps/web because nothing else here reaches in.
-import { API_ROOT, GEO_ROOT, INTERNAL_ROOT, SEARCH_URL, TILE_ROOT } from "../apps/web/src/config/route_spec.ts";
+import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT } from "../apps/web/src/config/route_spec.ts";
 
 /** A land page in Gangnam — the one infra/README's own procedure names, so a
  * check here and a check by hand are looking at the same object. */
@@ -61,8 +60,8 @@ function edge_checks(): Check[] {
  * both are in front of the same two servers. */
 function common_checks(): Check[] {
   return [
-    { path: `${INTERNAL_ROOT}/x`, want: 401, why: "pxl-geo's internal prefix, gated by the admin token" },
-    { path: `${API_ROOT}/internal/x`, want: 401, why: "pxl-api's internal prefix, gated the same way" },
+    { path: `${GEO_INTERNAL}/x`, want: 401, why: "pxl-geo's internal prefix, gated by the admin token" },
+    { path: `${API_INTERNAL}/x`, want: 401, why: "pxl-api's internal prefix, gated the same way" },
     { path: `${API_ROOT}/nothing-is-here`, want: 404, why: "pxl-api answers its root and has no route yet" },
   ];
 }

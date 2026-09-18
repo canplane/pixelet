@@ -2,10 +2,10 @@
 // (no pair: tlv.ts has no test file)
 
 use super::*;
+use crate::golden::Golden;
 use crate::kit::encoding::bytes_to_hex;
-use crate::sys::vector::Vector;
 
-const VECTOR: &str = include_str!("../../../vector/io/marshal/tlv.tsv");
+const GOLDEN: &str = include_str!("../../../golden/io/marshal/tlv.tsv");
 
 /// A read value as the TypeScript prints it: `typeof`, a colon, the value.
 fn show(v: &TLVValue) -> String {
@@ -32,7 +32,7 @@ fn show(v: &TLVValue) -> String {
 
 #[test]
 fn tlv_computes_what_the_typescript_computes() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     let mut w = TLVWriter::new(4);
     w.u8(200).unwrap().i8(-3).unwrap().u16(65535).unwrap().i16(-2).unwrap().u32(4000000000).unwrap().i32(-7).unwrap();
     w.u64(1 << 63).unwrap().i64(-(1 << 40)).unwrap().f32(0.25).unwrap().f64(-1.5).unwrap().bool(true).unwrap();

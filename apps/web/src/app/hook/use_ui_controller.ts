@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 
-import type { UiController } from "../type/ui.types.ts";
+import type { UiController } from "../type/ui.type.ts";
 
 /**
  * Hook for managing the global UI controller.

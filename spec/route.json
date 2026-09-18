@@ -61,6 +61,15 @@
       ]
     },
     "SEARCH_URL": { "under": "GEO_ROOT", "name": "search", "bundle": true, "$doc": ["Forward search, the one geo query with no finite page to bake it against."] },
-    "INTERNAL_ROOT": { "under": "GEO_ROOT", "name": "internal", "$doc": ["Ops routes, behind the shared admin token."] }
+    "GEO_INTERNAL": {
+      "under": "GEO_ROOT",
+      "name": "internal",
+      "$doc": [
+        "Ops routes, behind the shared admin token. One per root rather than one",
+        "shared branch: each server gates its own prefix, and a token that opened",
+        "both would make either server's leak the other's."
+      ]
+    },
+    "API_INTERNAL": { "under": "API_ROOT", "name": "internal", "$doc": ["pxl-api's own, gated the same way."] }
   }
 }

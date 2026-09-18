@@ -55,11 +55,11 @@ fn mat4_the_frustum_s_planes_hold_the_target_and_reject_what_is_behind_the_eye()
 
 /// What the TypeScript computed, recorded: the generator that wrote it
 /// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
-const VECTOR: &str = include_str!("../../vector/kit/mat4.tsv");
+const GOLDEN: &str = include_str!("../../golden/kit/mat4.tsv");
 
 #[test]
 fn mat4_computes_what_the_typescript_computes() {
-    let v = crate::sys::vector::Vector::load(VECTOR);
+    let v = crate::golden::Golden::load(GOLDEN);
     // Exact where the arithmetic alone decides; a few ulps where a value
     // passed through Math's transcendental functions (kit/fdlibm.rs).
     let exact = |name: &str, got: &[f64]| {

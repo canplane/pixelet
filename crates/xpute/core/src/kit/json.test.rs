@@ -2,10 +2,10 @@
 // (no pair: json.rs is the host's JSON, ported for the records' tags)
 
 use super::*;
+use crate::golden::Golden;
 use crate::kit::encoding::{bytes_to_hex, hex_to_bytes, td, te};
-use crate::sys::vector::Vector;
 
-const VECTOR: &str = include_str!("../../vector/kit/json.tsv");
+const GOLDEN: &str = include_str!("../../golden/kit/json.tsv");
 
 #[test]
 fn json_read_in_place_walks_what_the_text_holds_and_refuses_what_is_not_json() {
@@ -32,7 +32,7 @@ fn json_read_in_place_walks_what_the_text_holds_and_refuses_what_is_not_json() {
     assert!(read_json(&deep).is_none(), "nesting past the stack's depth");
 }
 
-fn text(v: &Vector, key: &str) -> String {
+fn text(v: &Golden, key: &str) -> String {
     if v.has(key) {
         td.decode(&hex_to_bytes(v.s(key)))
     } else {
@@ -40,7 +40,7 @@ fn text(v: &Vector, key: &str) -> String {
     }
 }
 
-fn list(v: &Vector, base: &str) -> Vec<String> {
+fn list(v: &Golden, base: &str) -> Vec<String> {
     if !v.has(&format!("{base}.0")) {
         return Vec::new();
     }
@@ -49,7 +49,7 @@ fn list(v: &Vector, base: &str) -> Vec<String> {
 
 #[test]
 fn json_writes_and_reads_what_the_host_does() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     v.each("stringify", |k| {
         let keys = list(&v, &format!("{k}.keys"));
         let values = list(&v, &format!("{k}.values"));

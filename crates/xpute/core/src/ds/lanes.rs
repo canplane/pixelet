@@ -18,9 +18,9 @@
 //! names and their element kinds in order, `mem` the views in that order,
 //! and `lane::<T>(name)` the typed view of one.
 
+use crate::errno::Errno;
+use crate::error::MarshalError;
 use crate::kit::array::{AnyElement, ArrayBuffer, ArrayBufferView, Kind, TypedArray};
-use crate::sys::errno::Errno;
-use crate::sys::error::MarshalError;
 
 pub type LaneSpec = Vec<(&'static str, Kind)>;
 pub type LaneViews = Vec<ArrayBufferView>;

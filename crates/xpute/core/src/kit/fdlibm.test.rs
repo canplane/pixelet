@@ -2,11 +2,11 @@
 // (no pair: fdlibm.rs is JavaScript's Math, ported)
 
 use super::*;
-use crate::sys::vector::Vector;
+use crate::golden::Golden;
 
 /// What the TypeScript computed, recorded: the generator that wrote it
 /// is gone and the vector stands as it is (xpute-core/sys/vector.rs) — V8's Math.
-const VECTOR: &str = include_str!("../../vector/kit/fdlibm.tsv");
+const GOLDEN: &str = include_str!("../../golden/kit/fdlibm.tsv");
 
 /// How many representable doubles lie between `a` and `b`: 0 when equal,
 /// NaN with NaN, and a large number across a sign or a special.
@@ -26,7 +26,7 @@ fn ulps(a: f64, b: f64) -> u64 {
 /// round — to the bit.
 #[test]
 fn math_is_v8_s_to_the_bit_and_the_transcendental_functions_to_one_ulp() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     let mut off_by_one = 0;
     v.each("", |k| {
         let (x, y) = (v.f64(&format!("{k}.x")), v.f64(&format!("{k}.y")));

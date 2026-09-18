@@ -20,7 +20,7 @@
 #   VM_SSH_KEY             A private key whose public half is in that user's
 #                          authorized_keys. Deploy-only; nothing else uses it.
 #
-# See infra/README.md §5 and §6 for what the two deploys do by hand, which is
+# See infra/README.md §3 and §4 for what the two deploys do by hand, which is
 # what these automate and what to fall back to.
 
 name: Check and deploy
@@ -35,14 +35,14 @@ on:
   workflow_dispatch: {}
 
 # A pull request's run is superseded by its next commit and may be cancelled.
-# A run on main may not: the deploy jobs below take a build number, and one
-# killed between taking it and publishing would burn it.
+# A run on main may not: the gate takes a build number, and one killed between
+# taking it and publishing would burn it.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  # What crates/Cargo.toml's edition and crates/pxl/geo/Dockerfile's base image are
+  # What crates/Cargo.toml's edition and crates/pxl/server/geo/Dockerfile's base image are
   # built with. Pinned so that a toolchain release cannot turn a clippy lint on
   # under us and fail a push that changed nothing.
   RUST_VERSION: "1.94"
@@ -55,6 +55,15 @@ jobs:
   gate:
     name: check, test, lint
     runs-on: ubuntu-latest
+    # One holder of the counter at a time, across every ref and trigger: the
+    # take is read-add-write and two runs holding it together would take the
+    # same number. deploy-web is in the same group, so a main push queues
+    # behind the one in front of it.
+    concurrency:
+      group: build-counter
+      cancel-in-progress: false
+    outputs:
+      build_number: ${{ steps.number.outputs.value }}
     steps:
       - uses: actions/checkout@v4
 
@@ -67,6 +76,8 @@ jobs:
           rustup toolchain install "$RUST_VERSION" --profile minimal \
             --component clippy,rustfmt --target wasm32-unknown-unknown
           rustup default "$RUST_VERSION"
+          # `test:asset` is a single-file cargo script, which is nightly-only.
+          rustup toolchain install nightly --profile minimal
 
       - name: Install Binaryen
         run: |
@@ -103,38 +114,86 @@ jobs:
       - run: deno task test
       - run: deno task lint
 
+      # Every build of main is numbered, shipped or not — a build lab's count.
+      # After the gate rather than before it, so that a push that never
+      # compiled does not consume one; a push that passed and then failed to
+      # deploy does, and that number is simply never published.
+      - name: Take the next build number
+        id: number
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: echo "value=$(./script/build_counter.ts)" >> "$GITHUB_OUTPUT"
+
   deploy-web:
     name: publish the client and the Worker
     needs: gate
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    # One deployer, across every ref and every trigger: the build number comes
-    # from a counter object in the bucket, and two runs holding it at once
-    # would take the same one. apps/web/script/deploy.ts is written around that
-    # rule and cannot enforce it by itself.
+    # The gate's group, so that a run cannot publish while the next one is
+    # already taking its number: the bucket's counter and what is live on
+    # plei.me move together.
     concurrency:
-      group: deploy-web
+      group: build-counter
       cancel-in-progress: false
     steps:
+      # The whole history, as deploy-server takes it and for the same reason:
+      # the filter below diffs the push's base rather than its last commit.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Everything the bundle is built from. A whitelist rather than a list of
+      # what to skip, because the set that does not ship is the one that keeps
+      # growing — `issue/`, `infra/`, `asset/script/` and the rest — and a root
+      # forgotten from a skip list is a republish nobody asked for.
+      #
+      # It used to run on every green push, which was right while a rebuild
+      # produced the same bytes. It does not any more: the build number is an
+      # input, so a docs-only push would ship a bundle identical but for a
+      # number, take a number for it, and make every edge cache fetch it again.
+      - name: Decide whether the client changed
+        id: scope
+        env:
+          BASE: ${{ github.event.before }}
+        run: |
+          # No usable base — a first push, a force-push, workflow_dispatch —
+          # deploys: a republish costs a cached build, a skip that should not
+          # have happened leaves plei.me behind main.
+          if [ -n "${BASE:-}" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            changed=$(git diff --name-only "$BASE" HEAD)
+          else
+            changed="apps/web/"
+          fi
+          if printf '%s\n' "$changed" | grep -qE '^(apps/|crates/|packages/|spec/|deno\.json|deno\.lock)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "nothing the bundle is built from changed — b${{ needs.gate.outputs.build_number }} is counted but not published"
+          fi
 
       - uses: denoland/setup-deno@v2
+        if: steps.scope.outputs.run == 'true'
         with:
           deno-version: v2.x
 
       - name: Install the Rust toolchain
+        if: steps.scope.outputs.run == 'true'
         run: |
           rustup toolchain install "$RUST_VERSION" --profile minimal \
             --target wasm32-unknown-unknown
           rustup default "$RUST_VERSION"
 
       - name: Install Binaryen
+        if: steps.scope.outputs.run == 'true'
         run: |
           curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-x86_64-linux.tar.gz" \
             | tar xz -C /opt
           echo "/opt/binaryen-version_${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
 
       - uses: actions/cache@v4
+        if: steps.scope.outputs.run == 'true'
         with:
           path: |
             ~/.cargo/registry/index
@@ -145,6 +204,7 @@ jobs:
           restore-keys: rust-${{ runner.os }}-${{ env.RUST_VERSION }}-
 
       - uses: actions/cache@v4
+        if: steps.scope.outputs.run == 'true'
         with:
           path: |
             ~/.cache/deno
@@ -153,16 +213,19 @@ jobs:
           key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
           restore-keys: deno-${{ runner.os }}-
 
-      # Takes the next build number, builds, runs the bundle guard and
-      # publishes — and takes the number only once the publish succeeded.
-      # apps/web/script/deploy.ts is the same script a hand deploy runs.
+      # Builds under the number the gate took, runs the bundle guard and
+      # publishes. apps/web/script/deploy.ts is the same script a hand deploy
+      # runs; a hand deploy just has no number to give it.
       - name: Deploy
+        if: steps.scope.outputs.run == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PXL_BUILD_NUMBER: ${{ needs.gate.outputs.build_number }}
         run: deno task deploy
 
       - name: Smoke-test the published routes
+        if: steps.scope.outputs.run == 'true'
         run: deno task smoke https://plei.me
 
   deploy-server:
@@ -197,7 +260,7 @@ jobs:
           else
             changed="crates/"
           fi
-          if printf '%s\n' "$changed" | grep -qE '^(crates/|infra/prod/|crates/pxl/geo/Dockerfile|\.dockerignore)'; then
+          if printf '%s\n' "$changed" | grep -qE '^(crates/|infra/prod/|crates/pxl/server/geo/Dockerfile|\.dockerignore)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"

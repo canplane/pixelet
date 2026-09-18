@@ -4,10 +4,10 @@
 //! - Arena: reusable object slots
 //! - Vector: reusable typed-array scratch
 
+use crate::errno::Errno;
+use crate::error::MarshalError;
 use crate::kit::array::{AnyElement, TypedArray};
-use crate::sys::console;
-use crate::sys::errno::Errno;
-use crate::sys::error::MarshalError;
+use crate::log;
 
 #[derive(Default)]
 pub struct ArenaOptions {
@@ -19,7 +19,10 @@ pub struct ArenaOptions {
 
 /// Arena allocator with bump allocation and mark/rewind reset.
 ///
-/// Intended for transient objects to reduce GC churn.
+/// For work whose lifetime is one pass: a page's features, a chunk's
+/// scratch. What it saves is not a collector — there is none here — but the
+/// allocator: one bump against a few hundred thousand frees, and one rewind
+/// at the end instead of unwinding them.
 /// - alloc: bump cursor (O(1))
 /// - truncate: rewind by mark/scope (bulk reset)
 ///
@@ -97,7 +100,7 @@ impl<T> Arena<T> {
     /// - if new_len exceeds the current len, the request is ignored with a warning
     pub fn truncate(&mut self, new_len: u32) {
         if new_len > self._len {
-            console::warn(&format!("[arena] truncate ignored: new_len={new_len} > len={}", self._len));
+            log::warn(&format!("[arena] truncate ignored: new_len={new_len} > len={}", self._len));
             return;
         }
         self._len = new_len;
@@ -160,7 +163,7 @@ impl<T> Drop for ArenaGuard<'_, T> {
 
 /// Contiguous typed scratch store with bump write and mark/rewind control.
 ///
-/// Intended for transient primitive data to reduce GC churn.
+/// The same for primitives: one range, written forward and rewound whole.
 /// - push: append one element (amortized O(1))
 /// - set : random write with auto-grow and len extension
 /// - truncate: rewind by mark/scope (bulk reset)
@@ -248,7 +251,7 @@ impl<T: AnyElement> Vector<T> {
     /// - if new_len exceeds the current len, the request is ignored with a warning
     pub fn truncate(&mut self, new_len: u32) {
         if new_len > self._len {
-            console::warn(&format!("[vector] truncate ignored: new_len={new_len} > len={}", self._len));
+            log::warn(&format!("[vector] truncate ignored: new_len={new_len} > len={}", self._len));
             return;
         }
         self._len = new_len;

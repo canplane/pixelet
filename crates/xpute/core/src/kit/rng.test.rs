@@ -2,13 +2,13 @@
 // (no pair: rng.ts has no test file)
 
 use super::*;
-use crate::sys::vector::Vector;
+use crate::golden::Golden;
 
-const VECTOR: &str = include_str!("../../vector/kit/rng.tsv");
+const GOLDEN: &str = include_str!("../../golden/kit/rng.tsv");
 
 #[test]
 fn rng_computes_what_the_typescript_computes() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     v.each("", |k| {
         let seed = v.u64(&format!("{k}.seed"));
         assert_eq!(mix64(seed), v.u64(&format!("{k}.mix64")), "{k}.mix64");

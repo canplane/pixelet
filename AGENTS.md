@@ -7,8 +7,7 @@ through a symlink), so nothing here should assume a particular assistant.
 For what the system is, see [README.md](./README.md) and
 [ARCHITECTURE.md](./ARCHITECTURE.md). For why past decisions went the way they
 did, see [issue/](./issue/). For what is queued and in what order,
-see [issue/BACKLOG.md](./issue/BACKLOG.md) — work follows the list, not what was last
-noticed.
+see [issue/BACKLOG.md](./issue/BACKLOG.md).
 
 ---
 
@@ -18,23 +17,23 @@ noticed.
 install from, and `node_modules/` exists only because Deno materializes it.
 Always drive the repo through its tasks, run from the repo root:
 
-| Task                     | Purpose                                                                           |
-| ------------------------ | --------------------------------------------------------------------------------- |
-| `deno task dev`          | the client and the three servers a deployment has two of                          |
-| `deno task dev:remote`   | client only, server routes from the published deployment                          |
-| `deno task bake:tiles`   | bake every land page into `./out/terrain/<version>`                               |
-| `deno task ingest:asset` | hash every file under `asset/` into `./out/asset`, regenerate the palette's table |
-| `deno task deploy`       | build the client and publish the Cloudflare Worker                                |
-| `deno task smoke <url>`  | what a deployment must answer, against a running one                              |
-| `deno task check`        | type-check every workspace member                                                 |
-| `deno task test`         | tests, every workspace member                                                     |
-| `deno task fmt` / `lint` | format / lint                                                                     |
+| Task                     | Purpose                                                     |
+| ------------------------ | ----------------------------------------------------------- |
+| `deno task dev`          | the client alone, every route from the published deployment |
+| `deno task dev:local`    | the client and the three servers a deployment has two of    |
+| `deno task bake:tiles`   | bake every land page into `./out/terrain/<version>`         |
+| `deno task deploy`       | build the client and publish the Cloudflare Worker          |
+| `deno task smoke <url>`  | what a deployment must answer, against a running one        |
+| `deno task check`        | type-check every workspace member                           |
+| `deno task test`         | tests, every workspace member                               |
+| `deno task fmt` / `lint` | format / lint                                               |
 
 `deno task check` is the gate. Do not report work as done without it passing.
 `check`, `test` and `lint` are also what CI runs on every push and pull
-request, and a green push to main deploys
-(`.github/workflows/check-and-deploy.yml`, infra/README.md §7) — so a red gate
-is not just a local inconvenience, it is a deploy that does not happen.
+request; a green push to main takes a build number and deploys whichever half
+its files reached (`.github/workflows/check-and-deploy.yml`, infra/README.md
+§5) — so a red gate is not just a local inconvenience, it is a deploy that does
+not happen.
 
 The two Postgres containers come from `infra/local/docker-compose.yml`, and the geo one
 (`pixelet-db-geo`) holds a multi-gigabyte PostGIS dataset that is expensive to
@@ -45,29 +44,39 @@ follow that rather than improvising SQL against the raw tables.
 ## Repository layers
 
 ```
-asset                   the shipped models and texture pack; data, not code — nothing imports it
+asset                   the shipped models and texture pack; data, not code — nothing imports it. asset/script/ hashes the tree into the bucket's shape and writes the catalogs' tables
 spec                    the numbers and names every language is generated from (script/spec.ts): pxl-spec's at the top, kernel/, render/ and xpute/ below
-packages/xpute/core     generic runtime kit — collections, codecs, XTP binary protocol
-crates/xpute/core       the generic runtime kit in Rust; no domain
-crates/pxl/spec         the spec: the space, the cell catalogs, the commands, the bake's formats, the assets' tables — the one model the servers and the kernel all follow
-crates/pxl/render       the view — the volumes and meshes a chunk bakes into, glTF, the billboards' sheet, the draw list, the shaders, the device
-crates/pxl/kernel       the kernel — the stores, the fetches, the schedulers, the turn; what is drawn and when, handed to the view
-crates/pxl/wasm         the one WebAssembly module: rings, a boot block and a doorbell over the crates
-crates/pxl/geo-bake     the offline half of the geo data: the Overture ingests, the three page bakes, and the dev tile server
-crates/pxl/asset-bake   the asset tree's own tooling: the texture pack, the brand's icons, and the ingest that writes the catalogs' tables
-tool                    what is left of the hand-run tools: the DEM into db-geo, in bash and GDAL
+packages/xpute          the generic kit and the runtime over it, in TypeScript: core/ and runtime/
+crates/xpute            the same two in Rust — core is collections, codecs, XTP and errno; runtime is the rings, the turn and the memory a module is given. runtime depends on core, never the reverse
+crates/pxl/spec         the spec: the space and its routes, the cell catalogs, the commands, the bake's formats, the assets' tables — the one model both ends follow
+crates/pxl/web          what reaches the browser: render (the view), kernel (the stores, the schedulers, the turn) and wasm (the one module over them)
+crates/pxl/server       what does not: pxl-server itself (what geo and api both need to start), the two processes inside it, overture (what its values mean) and geo-bake (the three page bakes and the dev tile server)
+infra                   the two environments' compose files, and what fills db-geo: the Overture ingests and the DEM, as scripts beside the schema each writes
 apps/web                Vite + React 19 client, drawing through WebGPU
 ```
 
-Two boundaries matter, and both are easy to erode by accident:
+Three boundaries matter, and all are easy to erode by accident:
 
 - **`@xpute/core` must contain no pixelet domain knowledge.** It is meant to stay
   portable to other projects. Coordinates, terrain, tiles, Overture — none of
   those concepts belong there. If something needs them, it belongs in
-  `pxl-spec`. The same line runs through the Rust: `crates/xpute/core`
+  `pxl-spec`. The same line runs through the Rust: `crates/xpute`
   holds no domain, and the domain is `crates/pxl/spec`'s. The view
-  (`crates/pxl/render`) knows the model and nothing of the kernel
-  (`crates/pxl/kernel`): the kernel hands a frame what it draws.
+  (`crates/pxl/web/render`) knows the model and nothing of the kernel
+  (`crates/pxl/web/kernel`): the kernel hands a frame what it draws.
+- **`xpute/core` is taken as it is; `xpute/runtime` asks you to run its way.**
+  The kit — collections, codecs, XTP, the errno table, the libm — works in any
+  program that links it. The runtime does not: using the rings and the tick
+  means a turn on a doorbell, a quota measured from the frame, and I/O granted
+  by credits. `runtime` depends on `core` and never the reverse, as `kernel/`
+  depends on `lib/`. And **`core` is symmetric across the languages while
+  `runtime` is not**: both sides of `core` implement the same thing and the
+  golden records hold them to each other, while the two sides of `runtime` are
+  the two ends of one arrangement — the doorbell and the strobe are the host's
+  alone, the executor and its yields the guest's. A module missing on one side
+  of `runtime` is not a gap to fill. What must still agree there is the
+  format — the ring's layout, the message words, the frame — and never the
+  machinery around it.
 - **`pxl-spec` is the one model, and it has no TypeScript twin.** The shell
   reads a page through the kernel, never by decoding one itself, so a wire
   format has exactly one implementation and there is nothing to keep in step.
@@ -94,34 +103,28 @@ and working (place, erase, stack, raycast, persist). The chat/social half is a U
 shell wired to nothing. UI polish here does not imply feature completeness; check
 current code before characterizing any part of the product surface.
 
-**The WASM/WebGPU move is the priority, and the renderer is through it.**
-The destination — a Rust core compiled to WASM, drawing through WebGPU,
-three.js gone, iOS 26 and iPhone 11 as the floor
-([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md))
-— is where the client stands since 2026-09-14: the core builds, decides
-and lists what to draw, and the renderer (`crates/pxl/render/src/gpu/`)
-executes the list through the host's WebGPU and decides nothing. What is still TypeScript is glue and the pieces not
-yet moved, listed in P0 of [issue/BACKLOG.md](./issue/BACKLOG.md): a piece
-is first cut out behind a boundary that carries typed arrays, still in
-TypeScript, and only then does what sits behind the boundary become Rust.
-The state is already in the shape the move wants: lanes in one linear
-memory, one tick, records. Build the next thing in that shape; don't port
-a piece ahead of the list, and don't propose keeping a WebGL path or
-supporting pre-WebGPU devices — that question is closed.
+**The client is a Rust core compiled to WASM, drawing through WebGPU**
+([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md)).
+three.js is gone; iOS 26 and an iPhone 11 are the floor. The core builds,
+decides and lists what to draw, and the renderer
+(`crates/pxl/web/render/src/gpu/`) executes the list through the host's
+WebGPU and decides nothing. **Don't propose keeping a WebGL path or
+supporting pre-WebGPU devices** — that question is closed.
 
-**That doesn't license implementation-shaped architecture.** What is still
-TypeScript is going to move — by whoever ends up doing it, on whatever
-timeline — so building in TypeScript now is a language/runtime choice, not
-licence to let a React quirk decide a core design. Pick the structurally correct shape for the problem (matching
-real prior art where one exists, e.g. Minecraft's own chunk model for
-grid-content rendering) even in TS, so a later rewrite carries the design
-over rather than rediscovering it. Two failure modes to avoid, both hit in
-practice (2026-09-03, terrain/decor render-pipeline desync): don't use "we
-might rewrite this later" to justify a lesser design now, and don't treat
-implementation size/effort as a cost that argues for a smaller ad-hoc patch
-over the correct structure — the only real costs are server spend and
+What language a thing is written in follows one line: **what shares
+`pxl-spec` is Rust, and what does not is free.** The kernel and the bakes
+compile the same model the client does, so they are crates. An ingest that
+moves a provider's columns into Postgres columns shares nothing, so it is a
+script. `apps/web` is the shell and stays TypeScript: it drives the kernel
+and draws no conclusion of its own.
+
+**Pick the structurally correct shape for the problem**, matching real prior
+art where one exists (Minecraft's own chunk model for grid-content
+rendering). Implementation size is not a cost that argues for a smaller
+ad-hoc patch over the right structure — the real costs are server spend and
 end-user device load, and a correct larger rewrite usually beats several
-rounds of patching a wrong one anyway.
+rounds of patching a wrong one (2026-09-03, terrain/decor render-pipeline
+desync).
 
 **One validated UI pattern worth keeping:** `mode_bar` reuses an idle slot
 instead of adding a new element — the send button borrows the palette pill's
@@ -136,27 +139,27 @@ These look like defects and are not. They were found, understood, and left
 alone on purpose. Re-flagging them as fresh discoveries wastes everyone's time;
 "fixing" them unprompted causes regressions or premature hardening.
 
-- **Tile API hardening is absent by choice.** No response cache beyond the
-  in-process LRU, no app-level concurrency cap, no cancellation on client abort,
-  no per-request timeout, no rate limiting. The client-server integration shape
-  isn't settled, and hardening it now would be premature. Revisit only when
-  deployment/traffic planning makes it concrete.
+- **`pxl-geo`'s forward search is unhardened by choice.** No rate limit, no
+  per-request timeout, no cancellation on client abort. It is the one route
+  that reaches a database at request time — everything else the client asks
+  for is baked and served out of the bucket — and it is one indexed query
+  against one table. Hardening it is a traffic decision and there is no
+  traffic. The tiles are not in this picture: they are the Worker's and the
+  bucket's, and what guards those is the last item here.
 - **`MapStatus.ERROR` is unreachable.** Tile fetch failures are logged and
   swallowed; the effect sets `SUCCESS` regardless of per-tile outcome, even
   though the toast UI has real ERROR rendering wired up. Known, same reasoning as
   above.
-- **`OVERTURE_BUILDINGS_SQL`/`OVERTURE_TRANSPORTATION_SQL` (repository.ts) do not
-  clip feature geometry to the page envelope.** A sprawling polygon that merely
-  grazes a page's bbox can spike that one page's bake cost, independent of page
-  size. Clipping was tried and destroyed closed-ring topology — polygons
-  rendered broken. The unclipped version is the fix for that regression, not an
-  oversight. Any future attempt has to preserve ring closure across the
-  boundary (clip-and-reclose, Weiler–Atherton, Sutherland–Hodgman with hole
-  handling), never naive bbox clipping. `OVERTURE_BASE_SQL`'s water branch and
-  `OVERTURE_COAST_SQL` already clip via `ST_Intersection` (guarded by
-  `ST_IsEmpty` against `&&`'s bbox-only false positives) and are not affected —
-  their rows run large enough (up to 444,626 points) that skipping the clip
-  costs far more than any topology risk.
+- **`OVERTURE_BUILDINGS_SQL` and `OVERTURE_TRANSPORTATION_SQL`
+  (`terrain/repository.rs`) do not clip to the page envelope**, so a sprawling
+  polygon that merely grazes a page's bbox costs that page its whole geometry.
+  Clipping was tried and broke closed-ring topology. Any future attempt has to
+  preserve ring closure across the boundary (clip-and-reclose,
+  Weiler–Atherton, Sutherland–Hodgman with hole handling), never naive bbox
+  clipping. The water branch of `OVERTURE_BASE_SQL` and `OVERTURE_COAST_SQL` do
+  clip, via `ST_Intersection` guarded by `ST_IsEmpty`: their rows run to
+  hundreds of thousands of points, where skipping the clip costs more than the
+  topology risk.
 - **Placed objects live in `localStorage`.** Deliberate for a demo with no
   server-side user state.
 - **Nothing configures a spending cap, and R2 still cannot bill.** The
@@ -248,22 +251,21 @@ absence as licence to drop them anywhere else.
 **Naming:** `snake_case` for files, functions, and locals; `PascalCase` for types;
 `SCREAMING_SNAKE_CASE` for module constants. **Directories are singular**:
 a directory is named for the concept it holds — `object/`, `marker/`,
-`tool/`, `issue/` — not for how many files are in it, which is
+`script/`, `issue/` — not for how many files are in it, which is
 always several and never the point. A plural would have to answer whether
 the directory is one thing or a collection of things, and for most
 directories that has no clear answer (is `object/` the object layer or
 the objects?), so nothing here asks it. The exceptions are names the
 ecosystem fixes and tooling reads: `apps/`, `packages/`, `node_modules/`,
 `@types/`, `.github/workflows/`, `.agents/skills/`. The same holds for a
-module: `constant.ts`, `route.ts`, `slab.ts` — and a file inside a
+module: `constant.ts`, `route.ts`, `transfer.ts` — and a file inside a
 directory that already names the concept does not repeat it
-(`setting/store.ts`, not `setting/settings_store.ts`). Two things are not
-concept names and keep their plurals: a tool script, which is a command
-(`bake_tiles.ts` bakes the tiles; `ingest_buildings.ts` ingests Overture's
-Buildings theme), and code ported from elsewhere, which keeps its own
-names (`shadcn/tabs.tsx`). React hooks, stores, and components
+(`setting/store.ts`, not `setting/settings_store.ts`). Code ported from elsewhere is not
+a concept name and keeps its own (`shadcn/tabs.tsx`). React hooks, stores, and components
 keep their ecosystem's `camelCase`/`PascalCase` (`useTileStore`, `MapStatus`) —
-that is not an inconsistency to fix.
+that is not an inconsistency to fix, and a component file is named for the
+component, so one that holds several is plural (`overlays.tsx` for
+`<Overlays />`).
 
 **Code ported from elsewhere keeps its original conventions.** Some of
 `@xpute/core` came in from other projects to stay reusable. Do not sweep it into
@@ -332,11 +334,6 @@ just don't treat them as authority.
   reached only by reading code is a hypothesis. Say so when that's all you have,
   and if a predicted fix turns out not to work, revert it rather than leaving it
   in.
-- **Don't propose measuring what is going to be replaced.** Instrumenting
-  code the plan already retires — the React glue a piece leaves behind on its
-  way into the core, today — decides nothing before it leaves and only
-  lengthens the milestone. Measure what survives the move, or what a decision in front
-  of us actually turns on; otherwise say what is known and move on.
 - **"Revert" means leave no trace.** Restore the exact prior text — no comment
   explaining what was tried, no `// removed: ...` marker, no doc note about the
   tradeoff. An abandoned in-session experiment gets erased completely.

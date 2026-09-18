@@ -2,7 +2,7 @@
 
 /**
  * The host's WebGPU: the device, and the calls the kernel's renderer makes
- * (crates/pxl/render/src/gpu/api.rs), every object named by the handle
+ * (crates/pxl/web/render/src/gpu/api.rs), every object named by the handle
  * the kernel gave it and kept here at that handle's slot. Nothing is decided
  * here — what is made, from what, and drawn when, is the renderer's; each
  * call is translated into WebGPU's and made. It exists because a WebAssembly
@@ -154,7 +154,7 @@ function layout_entries(words: Uint32Array, samples: u32): GPUBindGroupLayoutEnt
   return out;
 }
 
-/** A pipeline record's words (crates/pxl/render/src/shader.rs) as WebGPU's descriptor. */
+/** A pipeline record's words (crates/pxl/web/render/src/shader.rs) as WebGPU's descriptor. */
 function pipeline_descriptor(words: Uint32Array, layouts: GPUBindGroupLayout[], module: GPUShaderModule, target: GPUTextureFormat, samples: u32): GPURenderPipelineDescriptor {
   let at = 11;
   const next = () => words[at++];

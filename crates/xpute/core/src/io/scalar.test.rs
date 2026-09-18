@@ -2,14 +2,14 @@
 // (no pair: scalar.ts has no test file)
 
 use super::*;
+use crate::golden::Golden;
 use crate::kit::encoding::bytes_to_hex;
-use crate::sys::vector::Vector;
 
-const VECTOR: &str = include_str!("../../vector/io/scalar.tsv");
+const GOLDEN: &str = include_str!("../../golden/io/scalar.tsv");
 
 #[test]
 fn scalar_computes_what_the_typescript_computes() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     let buf: Bytes = TypedArray::new(64);
     let mut st = stream(buf.clone(), 0);
     putu8(&mut st, 0xab);

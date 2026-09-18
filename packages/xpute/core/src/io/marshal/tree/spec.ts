@@ -92,8 +92,8 @@
 import type { numeric, primitive, u32, u8 } from "@xpute/core/kit/word.ts";
 import type { BigTypedArray, TypedArray, U8Array } from "@xpute/core/kit/array.ts";
 import type { Nullable } from "@xpute/core/kit/type.ts";
-import { Errno } from "@xpute/core/sys/errno.ts";
-import { MarshalError } from "@xpute/core/sys/error.ts";
+import { Errno } from "@xpute/core/errno.ts";
+import { MarshalError } from "@xpute/core/error.ts";
 
 // ============ Type Encoding ============
 //

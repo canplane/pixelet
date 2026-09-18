@@ -33,7 +33,7 @@ export type CharacterVariant = {
 /** Where a shipped asset is fetched from, by its path under asset/. */
 function shipped_asset_url(path: string): string {
   const row = INGESTED[path];
-  if (!row) throw new Error(`${path} is not in @pxl/shared/asset/ingested.ts — run the asset ingest`);
+  if (!row) throw new Error(`${path} is not in the asset table — run the asset ingest`);
   return asset_url(row.key);
 }
 

@@ -8,8 +8,8 @@
 
 import type { u32 } from "../kit/word.ts";
 import type { AnyElementOf, AnyTypedArray, AnyTypedArrayCtor } from "../kit/array.ts";
-import { MarshalError } from "@xpute/core/sys/error.ts";
-import { Errno } from "@xpute/core/sys/errno.ts";
+import { MarshalError } from "@xpute/core/error.ts";
+import { Errno } from "@xpute/core/errno.ts";
 
 export type ArenaOptions = {
   init_cap?: u32; // soft initial size hint

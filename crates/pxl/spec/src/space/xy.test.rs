@@ -1,15 +1,15 @@
 // pxl-spec/space/xy.test.rs
 // (no pair: xy.ts has no test file)
 
-use xpute_core::sys::vector::Vector;
+use xpute_core::golden::Golden;
 
 use super::*;
 
-const VECTOR: &str = include_str!("../../vector/spec/space/xy.tsv");
+const GOLDEN: &str = include_str!("../../golden/spec/space/xy.tsv");
 
 #[test]
 fn xy_computes_what_the_typescript_computes() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     v.each("words", |k| {
         let i = v.u64(&format!("{k}.i"));
         assert_eq!(TO_XY(i), v.u64(&format!("{k}.TO_XY")), "{k}.TO_XY");

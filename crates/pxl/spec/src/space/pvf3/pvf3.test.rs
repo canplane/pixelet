@@ -2,16 +2,16 @@
 // (no pair: pvf3.ts has no test file; the vector holds ivec, fvec and pvf3
 // to the TypeScript bit for bit)
 
-use xpute_core::sys::vector::{caught, Vector};
+use xpute_core::golden::{caught, Golden};
 
 use super::*;
 use crate::space::pvf3::{fvec, ivec};
 
 /// What the TypeScript computed, recorded: the generator that wrote it
 /// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
-const VECTOR: &str = include_str!("../../../vector/spec/space/pvf3/pvf3.tsv");
+const GOLDEN: &str = include_str!("../../../golden/spec/space/pvf3/pvf3.tsv");
 
-fn tuple(v: &Vector, k: &str) -> PVF3 {
+fn tuple(v: &Golden, k: &str) -> PVF3 {
     PVF3 {
         i: v.u64(&format!("{k}.i")),
         f: v.u64(&format!("{k}.f")),
@@ -75,7 +75,7 @@ macro_rules! words {
 
 #[test]
 fn ivec_computes_what_the_typescript_computes() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     words!(v, ivec, "ivec", |k: &str, w: u64| {
         assert_eq!(ivec::neg(w), v.u64(&format!("{k}.neg")), "{k}.neg");
         assert_eq!(ivec::abs(w), v.u64(&format!("{k}.abs")), "{k}.abs");
@@ -91,13 +91,13 @@ fn ivec_computes_what_the_typescript_computes() {
 
 #[test]
 fn fvec_computes_what_the_typescript_computes() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     words!(v, fvec, "fvec", |_: &str, _: u64| {});
 }
 
 #[test]
 fn pvf3_computes_what_the_typescript_computes() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     let out = || PVF3::default();
     v.each("pvf3.unary", |k| {
         let p = tuple(&v, &format!("{k}.p"));

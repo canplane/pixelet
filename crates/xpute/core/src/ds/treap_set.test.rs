@@ -2,12 +2,12 @@
 // (no pair: treap_set.ts has no test file)
 
 use super::*;
+use crate::golden::Golden;
 use crate::kit::comp::comp_numeric;
-use crate::sys::vector::Vector;
 
-const VECTOR: &str = include_str!("../../vector/ds/treap_set.tsv");
+const GOLDEN: &str = include_str!("../../golden/ds/treap_set.tsv");
 
-fn list(v: &Vector, base: &str) -> Vec<f64> {
+fn list(v: &Golden, base: &str) -> Vec<f64> {
     if !v.has(&format!("{base}.0")) {
         return Vec::new();
     }
@@ -16,7 +16,7 @@ fn list(v: &Vector, base: &str) -> Vec<f64> {
 
 #[test]
 fn treap_set_holds_what_the_typescript_holds() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     let mut t = TreapSet::<f64>::new(Box::new(|a: &f64, b: &f64| comp_numeric(*a, *b)), Some(42));
     v.each("ops", |k| {
         let x = v.u32(&format!("{k}.v")) as f64;

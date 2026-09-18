@@ -14,77 +14,77 @@ definitions excluded.
 
 ## 1. The bottom types: absent from `main`, or different there
 
-| Type | Where | On `main` | Role | What `main` xpute has for it | References (uses / files) |
-|---|---|---|---|---|---|
-| `FixStr<N>` | xpute `kit/text.rs` | absent | inline fixed-capacity string | nothing; text is `String`, bytes can sit in a `TypedArray<u8>` lane | 77 / 24 (incl. xpute `sys/error.rs`) |
-| `Text<'a>` | xpute `kit/text.rs` | absent | `fmt::Write` over caller bytes | nothing | 8 / 3 |
-| `Quoted<T>` | xpute `kit/text.rs` | absent | JSON string escaping as a formatter | `json.rs`'s private `quote(&mut String)` | 37 / 5 |
-| `Span`, `TextLane<A>` | xpute `kit/text.rs` | absent | strings laid one after another in a lane | `Lanes` with a U8 lane (internally `Vec`/`Box`) | 17 / 5, 5 / 2 |
-| `InlineVec<T, N>` | xpute `ds/inline_vec.rs` (untracked) | absent | `[T; N]` + len inside a struct | no generic type | 110 / 29 |
-| `HandleTable<N>` | xpute `ds/handle.rs` | absent | slot + generation handles | buddy's address handles (`handle_at`/`handle_base`) only | 14 / 4 (`render/gpu/api.rs`, `surface.rs`) |
-| `Vector<T: Copy, A>` | xpute `ds/arena.rs` | different | lane of records, allocator as a type parameter | `Vector<T: AnyElement>`: numeric elements over a `TypedArray`, holding a `Box<dyn TypedAlloc>` | 36 / 7 |
-| `TypedAlloc::take_bytes`/`give_bytes` | xpute `ds/typed_alloc.rs` | absent | byte room for record lanes | `take_view`/`give` (typed views only) | 1 / 1, 2 / 1 (`arena.rs` only) |
-| `IndexedMap<T, V, A>` | xpute `ds/map.rs` | different | key and value lanes; `get`/`set`/`remove`/`fixed`/`keyed` | `IndexedMap<T: KeyTraits>`: keys only; `new(traits, cap, Option<Box<dyn TypedAlloc>>)`, `find`/`insert`/`remove_at`/`clear` | 35 / 8 |
-| `KeyHash`, `HashKeys<K>` | xpute `ds/map.rs` | absent | tuple / arbitrary keys | `I64Keys`, `U32Keys` only | 9 / 1, 13 / 3 |
-| `Deque<T, A>` | xpute `ds/deque.rs` | different | owning ring | `Deque<'a, T>` over a caller's `&mut [Option<T>]` | 4 / 2 (tests only; no pxl use) |
-| `FixedAlloc` | pxl `memory.rs` | absent | takes from the fixed section's pool, never gives back | `TypedAlloc` impls: `buddy_alloc(Rc<RefCell<BuddyAllocator>>)`, `HeapAlloc`, `Carver`; as a global allocator, `FixedHeap<R>` | 12 / 5 |
-| `FixedVec<T>` | pxl `memory.rs` | absent | alias of `Vector<T, FixedAlloc>` | see `Vector` | 256 / 30 |
-| `filled()` | pxl `memory.rs` | absent | a filled fixed lane | nothing | 44 / 8 |
-| `LaneMap<K, V>` | pxl `memory.rs` | absent | alias of `IndexedMap<HashKeys<K>, V, FixedAlloc>` | see `IndexedMap` | 15 / 3 |
-| `TextLane` (pxl alias) | pxl `memory.rs` | absent | `TextLane<FixedAlloc>` | see `TextLane` | 9 / 3 |
-| `ChangeLog<A>` | xpute `ipc/change.rs` | different | allocator as a type parameter, revisions in an `IndexedMap` | `ChangeLog` with its internal `Shared` allocator | — |
-| `XputeError.message` | xpute `sys/error.rs` | different | `FixStr<256>` inline message, `of(errno, format_args!)` | `new(errno, Option<&str>, opts)` | — |
+| Type                                  | Where                                | On `main` | Role                                                        | What `main` xpute has for it                                                                                                 | References (uses / files)                  |
+| ------------------------------------- | ------------------------------------ | --------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `FixStr<N>`                           | xpute `kit/text.rs`                  | absent    | inline fixed-capacity string                                | nothing; text is `String`, bytes can sit in a `TypedArray<u8>` lane                                                          | 77 / 24 (incl. xpute `sys/error.rs`)       |
+| `Text<'a>`                            | xpute `kit/text.rs`                  | absent    | `fmt::Write` over caller bytes                              | nothing                                                                                                                      | 8 / 3                                      |
+| `Quoted<T>`                           | xpute `kit/text.rs`                  | absent    | JSON string escaping as a formatter                         | `json.rs`'s private `quote(&mut String)`                                                                                     | 37 / 5                                     |
+| `Span`, `TextLane<A>`                 | xpute `kit/text.rs`                  | absent    | strings laid one after another in a lane                    | `Lanes` with a U8 lane (internally `Vec`/`Box`)                                                                              | 17 / 5, 5 / 2                              |
+| `InlineVec<T, N>`                     | xpute `ds/inline_vec.rs` (untracked) | absent    | `[T; N]` + len inside a struct                              | no generic type                                                                                                              | 110 / 29                                   |
+| `HandleTable<N>`                      | xpute `ds/handle.rs`                 | absent    | slot + generation handles                                   | buddy's address handles (`handle_at`/`handle_base`) only                                                                     | 14 / 4 (`render/gpu/api.rs`, `surface.rs`) |
+| `Vector<T: Copy, A>`                  | xpute `ds/arena.rs`                  | different | lane of records, allocator as a type parameter              | `Vector<T: AnyElement>`: numeric elements over a `TypedArray`, holding a `Box<dyn TypedAlloc>`                               | 36 / 7                                     |
+| `TypedAlloc::take_bytes`/`give_bytes` | xpute `ds/typed_alloc.rs`            | absent    | byte room for record lanes                                  | `take_view`/`give` (typed views only)                                                                                        | 1 / 1, 2 / 1 (`arena.rs` only)             |
+| `IndexedMap<T, V, A>`                 | xpute `ds/map.rs`                    | different | key and value lanes; `get`/`set`/`remove`/`fixed`/`keyed`   | `IndexedMap<T: KeyTraits>`: keys only; `new(traits, cap, Option<Box<dyn TypedAlloc>>)`, `find`/`insert`/`remove_at`/`clear`  | 35 / 8                                     |
+| `KeyHash`, `HashKeys<K>`              | xpute `ds/map.rs`                    | absent    | tuple / arbitrary keys                                      | `I64Keys`, `U32Keys` only                                                                                                    | 9 / 1, 13 / 3                              |
+| `Deque<T, A>`                         | xpute `ds/deque.rs`                  | different | owning ring                                                 | `Deque<'a, T>` over a caller's `&mut [Option<T>]`                                                                            | 4 / 2 (tests only; no pxl use)             |
+| `FixedAlloc`                          | pxl `memory.rs`                      | absent    | takes from the fixed section's pool, never gives back       | `TypedAlloc` impls: `buddy_alloc(Rc<RefCell<BuddyAllocator>>)`, `HeapAlloc`, `Carver`; as a global allocator, `FixedHeap<R>` | 12 / 5                                     |
+| `FixedVec<T>`                         | pxl `memory.rs`                      | absent    | alias of `Vector<T, FixedAlloc>`                            | see `Vector`                                                                                                                 | 256 / 30                                   |
+| `filled()`                            | pxl `memory.rs`                      | absent    | a filled fixed lane                                         | nothing                                                                                                                      | 44 / 8                                     |
+| `LaneMap<K, V>`                       | pxl `memory.rs`                      | absent    | alias of `IndexedMap<HashKeys<K>, V, FixedAlloc>`           | see `IndexedMap`                                                                                                             | 15 / 3                                     |
+| `TextLane` (pxl alias)                | pxl `memory.rs`                      | absent    | `TextLane<FixedAlloc>`                                      | see `TextLane`                                                                                                               | 9 / 3                                      |
+| `ChangeLog<A>`                        | xpute `ipc/change.rs`                | different | allocator as a type parameter, revisions in an `IndexedMap` | `ChangeLog` with its internal `Shared` allocator                                                                             | —                                          |
+| `XputeError.message`                  | xpute `sys/error.rs`                 | different | `FixStr<256>` inline message, `of(errno, format_args!)`     | `new(errno, Option<&str>, opts)`                                                                                             | —                                          |
 
 Added after the checkpoint and uncommitted: `InlineVec::insert`/`swap_remove`/`Eq`,
 `Vector::pop`, `KeyHash for FixStr`.
 
 ## 2. In the checkpoint, absent from `main`, not among the bottom types
 
-| Item | Heap inside |
-|---|---|
-| `sched/{tick, quantum, io, frame_budget}.rs` | none (`[T; N]` arrays, `fn` pointers) |
-| `sys/{memory, clock}.rs` | none |
-| `kit/json.rs`'s in-place reader (`read_json`, `JsonValue`, `JsonStr`) | none |
-| `io/marshal/tree/encode.rs`'s `PacketWriter` | none |
-| `ipc/ring.rs`'s `push_in_place` | none |
-| `cursor.rs`'s `get_str_ref` | none |
+| Item                                                                  | Heap inside                           |
+| --------------------------------------------------------------------- | ------------------------------------- |
+| `sched/{tick, quantum, io, frame_budget}.rs`                          | none (`[T; N]` arrays, `fn` pointers) |
+| `sys/{memory, clock}.rs`                                              | none                                  |
+| `kit/json.rs`'s in-place reader (`read_json`, `JsonValue`, `JsonStr`) | none                                  |
+| `io/marshal/tree/encode.rs`'s `PacketWriter`                          | none                                  |
+| `ipc/ring.rs`'s `push_in_place`                                       | none                                  |
+| `cursor.rs`'s `get_str_ref`                                           | none                                  |
 
 ## 3. Heap that xpute on `main` still uses itself
 
-| File | Heap |
-|---|---|
-| `kit/array.rs` | `ArrayBuffer(Rc<Storage>)`; `new` owns a `Box<[UnsafeCell<u8>]>`, and `from_raw` still allocates an `Rc` per handle |
-| `ds/arena.rs` | `Arena<T>`: `Vec<T>`, `Box<dyn Fn>` |
-| `ds/buddy.rs` | `Region`'s `Vec`/`Vec<Vec<u8>>`, `HashMap`/`HashSet`, `Box<dyn PoolKernel>`, `format!` |
-| `ds/lanes.rs` | `LaneSpec = Vec<…>`, `LaneViews = Vec<…>`, `Box<dyn TypedAlloc>` |
-| `ds/spatial_hash.rs` | `Option<Box<dyn TypedAlloc>>` (the lanes themselves come from the allocator) |
-| `ds/grid_index.rs` | every lane a `Vec` |
-| `ds/heap.rs` | the caller's `&mut Vec<Element<T>>` |
-| `ds/treap_set.rs` | `Box<Tree<T>>`, iterator `Vec` stacks |
-| `ds/typed_alloc.rs` | `HeapAlloc` (`ArrayBuffer::new`), `Rc<RefCell<BuddyAllocator>>` |
-| `io/marshal/tree/{spec, view, cursor, encode}.rs` | `String`/`Vec` in `Node`/`NodeValue`, `TreeEncoder` growing `TypedArray::new`, `Vec<u8>` payloads |
-| `io/marshal/tlv.rs` | `TLVValue::Str(String)`, buffer growth, `read_all`'s `Vec` |
-| `kit/encoding.rs` | `TextDecoder`'s `String`, base64/hex `String`/`Vec` |
-| `kit/json.rs` (the `main` part) | `StrMap = Vec<(String, Option<String>)>` |
-| `kit/hash.rs` | `fnv1a_64_final`'s `TypedArray::new`, `fnv1a_64_hex`'s `String` |
-| `kit/comp.rs`, `kit/rng.rs` | `Box<dyn Fn>` |
-| `ipc/change_waker.rs` | `Vec`, `Box<dyn FnMut>`, `Rc<RefCell<J>>` |
-| `ipc/port.rs` | `Vec<Option<Box<dyn FnMut>>>`, `format!` |
-| `ipc/frame.rs` | `ArrayBuffer` handles |
-| `sys/error.rs` | `cause: Option<Box<dyn Error>>` |
-| `vector.rs` | tests only (`HashMap`, `format!`) |
+| File                                              | Heap                                                                                                                |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `kit/array.rs`                                    | `ArrayBuffer(Rc<Storage>)`; `new` owns a `Box<[UnsafeCell<u8>]>`, and `from_raw` still allocates an `Rc` per handle |
+| `ds/arena.rs`                                     | `Arena<T>`: `Vec<T>`, `Box<dyn Fn>`                                                                                 |
+| `ds/buddy.rs`                                     | `Region`'s `Vec`/`Vec<Vec<u8>>`, `HashMap`/`HashSet`, `Box<dyn PoolKernel>`, `format!`                              |
+| `ds/lanes.rs`                                     | `LaneSpec = Vec<…>`, `LaneViews = Vec<…>`, `Box<dyn TypedAlloc>`                                                    |
+| `ds/spatial_hash.rs`                              | `Option<Box<dyn TypedAlloc>>` (the lanes themselves come from the allocator)                                        |
+| `ds/grid_index.rs`                                | every lane a `Vec`                                                                                                  |
+| `ds/heap.rs`                                      | the caller's `&mut Vec<Element<T>>`                                                                                 |
+| `ds/treap_set.rs`                                 | `Box<Tree<T>>`, iterator `Vec` stacks                                                                               |
+| `ds/typed_alloc.rs`                               | `HeapAlloc` (`ArrayBuffer::new`), `Rc<RefCell<BuddyAllocator>>`                                                     |
+| `io/marshal/tree/{spec, view, cursor, encode}.rs` | `String`/`Vec` in `Node`/`NodeValue`, `TreeEncoder` growing `TypedArray::new`, `Vec<u8>` payloads                   |
+| `io/marshal/tlv.rs`                               | `TLVValue::Str(String)`, buffer growth, `read_all`'s `Vec`                                                          |
+| `kit/encoding.rs`                                 | `TextDecoder`'s `String`, base64/hex `String`/`Vec`                                                                 |
+| `kit/json.rs` (the `main` part)                   | `StrMap = Vec<(String, Option<String>)>`                                                                            |
+| `kit/hash.rs`                                     | `fnv1a_64_final`'s `TypedArray::new`, `fnv1a_64_hex`'s `String`                                                     |
+| `kit/comp.rs`, `kit/rng.rs`                       | `Box<dyn Fn>`                                                                                                       |
+| `ipc/change_waker.rs`                             | `Vec`, `Box<dyn FnMut>`, `Rc<RefCell<J>>`                                                                           |
+| `ipc/port.rs`                                     | `Vec<Option<Box<dyn FnMut>>>`, `format!`                                                                            |
+| `ipc/frame.rs`                                    | `ArrayBuffer` handles                                                                                               |
+| `sys/error.rs`                                    | `cause: Option<Box<dyn Error>>`                                                                                     |
+| `vector.rs`                                       | tests only (`HashMap`, `format!`)                                                                                   |
 
 ## 4. What `main` xpute offers with no heap
 
-| Mechanism | Note |
-|---|---|
-| `FixedHeap<R: Range>` | a `GlobalAlloc` over a fixed range, a free list per size class |
-| `TypedArray<T>::over(buffer, offset, len)` | numeric views; the `ArrayBuffer` handle itself is an `Rc` |
-| `Carver` | typed views cut one after another from one block |
-| `TypedAlloc` / `AddressedAlloc` | the view-at-a-time allocation interface |
-| `BuddyAllocator` through `PoolKernel` | addresses in and out; the allocator's own state is `HashMap`/`Vec` |
-| `Ring::new`/`init` | a ring laid out as views over a buffer |
-| `sys/errno.rs`, `kit/{math, mat4, fdlibm, lattice_hash}`, `rng::SplitMix64` | no heap |
+| Mechanism                                                                   | Note                                                               |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `FixedHeap<R: Range>`                                                       | a `GlobalAlloc` over a fixed range, a free list per size class     |
+| `TypedArray<T>::over(buffer, offset, len)`                                  | numeric views; the `ArrayBuffer` handle itself is an `Rc`          |
+| `Carver`                                                                    | typed views cut one after another from one block                   |
+| `TypedAlloc` / `AddressedAlloc`                                             | the view-at-a-time allocation interface                            |
+| `BuddyAllocator` through `PoolKernel`                                       | addresses in and out; the allocator's own state is `HashMap`/`Vec` |
+| `Ring::new`/`init`                                                          | a ring laid out as views over a buffer                             |
+| `sys/errno.rs`, `kit/{math, mat4, fdlibm, lattice_hash}`, `rng::SplitMix64` | no heap                                                            |
 
 ## Roles no existing structure fills
 

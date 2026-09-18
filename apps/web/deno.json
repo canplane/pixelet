@@ -16,14 +16,15 @@
     // task that loads it depends on this, so it is never stale or missing.
     "build:wasm": "deno run -A script/build_wasm.ts",
 
+    // Server routes answered by the published deployment: no local server,
+    // database or Docker. See vite.config.ts's VITE_DEV_SOURCE comment.
     "dev": { "command": "deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
-    // Server routes answered by the published deployment instead of a local
-    // API + PostGIS. See vite.config.ts's VITE_DEV_SOURCE comment.
-    "dev:remote": { "command": "VITE_DEV_SOURCE=remote deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
+    // The same client against the servers on this machine.
+    "dev:local": { "command": "VITE_DEV_SOURCE=local deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
 
     "build": { "command": "deno run -A --node-modules-dir=auto npm:vite build", "dependencies": ["build:wasm"] },
-    "preview": "deno run -A --node-modules-dir=auto npm:vite preview",
-    "preview:remote": { "command": "VITE_DEV_SOURCE=remote deno run -A --node-modules-dir=auto npm:vite preview", "dependencies": ["build"] },
+    "preview": { "command": "deno run -A --node-modules-dir=auto npm:vite preview", "dependencies": ["build"] },
+    "preview:local": "VITE_DEV_SOURCE=local deno run -A --node-modules-dir=auto npm:vite preview",
 
     // Build, then publish the Worker (app + R2 tile route). Run through Deno
     // rather than npx: wrangler requires Node >=22 and the system Node may be
@@ -41,7 +42,10 @@
     // Through build:wasm, as dev, build and test are: the module's minified
     // ABI is written beside it (src/kernel/abi.ts) and the shell imports it,
     // so a checkout that has never built cannot be type-checked without it.
-    "check": { "command": "deno check src/index.ts", "dependencies": ["build:wasm"] },
+    // A catalog entry is a number, an id and a name in every locale; the first
+    // two are written from the JSON under spec/, the last is people's.
+    "check:locale": "./script/locale.ts",
+    "check": { "command": "deno check src/index.ts", "dependencies": ["build:wasm", "check:locale"] },
     // Pure-logic modules: none of them touches the DOM or the GPU, so plain
     // `deno test` works with no browser harness, over the module built for
     // it. What needs a canvas is verified live.

@@ -12,13 +12,13 @@ it. Nothing here is built yet.
 
 `REGION_BYTES` is 64 MiB. Every reader of it:
 
-| use | code | the region's own job |
-| --- | --- | --- |
-| the mesh pool's largest block | `mesh.region_bytes`; the buddy refuses `bytes > region_bytes` under `no_spill` | **yes** |
-| the fixed section's size | `bytes: REGION_BYTES - MODULE_BYTES` | no |
-| the slab's start | `slab.offset = REGION_BYTES` | no |
-| where the mesh begins | `MESH_AT = SLAB_END.div_ceil(REGION_BYTES) * REGION_BYTES` | no |
-| the reservation's rounding | `regions = bytes / REGION_BYTES` | no |
+| use                           | code                                                                           | the region's own job |
+| ----------------------------- | ------------------------------------------------------------------------------ | -------------------- |
+| the mesh pool's largest block | `mesh.region_bytes`; the buddy refuses `bytes > region_bytes` under `no_spill` | **yes**              |
+| the fixed section's size      | `bytes: REGION_BYTES - MODULE_BYTES`                                           | no                   |
+| the slab's start              | `slab.offset = REGION_BYTES`                                                   | no                   |
+| where the mesh begins         | `MESH_AT = SLAB_END.div_ceil(REGION_BYTES) * REGION_BYTES`                     | no                   |
+| the reservation's rounding    | `regions = bytes / REGION_BYTES`                                               | no                   |
 
 Only the first is inherent — a buddy region is the largest block that pool can
 hand out. The other four are what is left of counting every section in regions,
@@ -165,19 +165,18 @@ it, which is the thing this whole choice is not doing.
 
 Whatever the number, it is pulled three ways:
 
-| page | bookkeeping over 1 GiB (2 B a page) | average waste per request | page number |
-| --- | --- | --- | --- |
-| 512 B | 4.0 MiB (0.39%) | 256 B | 21 bits |
-| **4 KiB** | **512 KiB (0.05%)** | **2 KiB** | **18 bits** |
-| 16 KiB | 128 KiB (0.01%) | 8 KiB | 16 bits |
-| 64 KiB | 32 KiB (0.003%) | 32 KiB | 14 bits |
+| page      | bookkeeping over 1 GiB (2 B a page) | average waste per request | page number |
+| --------- | ----------------------------------- | ------------------------- | ----------- |
+| 512 B     | 4.0 MiB (0.39%)                     | 256 B                     | 21 bits     |
+| **4 KiB** | **512 KiB (0.05%)**                 | **2 KiB**                 | **18 bits** |
+| 16 KiB    | 128 KiB (0.01%)                     | 8 KiB                     | 16 bits     |
+| 64 KiB    | 32 KiB (0.003%)                     | 32 KiB                    | 14 bits     |
 
 Bookkeeping falls as the page grows, internal waste rises with it, and the index
 narrows. Which end hurts depends on how much a sub-allocator takes at a time: an
 arena that takes one page at a time pays the waste in full, one that takes
 sixteen dilutes it. 4 KiB is the point where the table is already negligible
 (0.05%) and the waste is still small enough not to need diluting.
-
 
 ### It is already the unit, unnamed
 
@@ -228,6 +227,6 @@ end, and the end is only ever rounded up once.
 2. Section starts stop being multiples of `REGION_BYTES` and become multiples
    of the kernel's page. `REGION_BYTES` goes back to meaning the mesh pool's
    largest block and nothing else; `fixed.bytes` says its own size (rings 3 MiB
-   + 16 standing band stores 20 MiB = 23 MiB) instead of `REGION_BYTES - MODULE_BYTES`.
-The first is worth doing whether or not the second is, and the second cannot be
-done without it.
+   - 16 standing band stores 20 MiB = 23 MiB) instead of `REGION_BYTES - MODULE_BYTES`.
+     The first is worth doing whether or not the second is, and the second cannot be
+     done without it.

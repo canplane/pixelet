@@ -2,14 +2,14 @@
 // (no pair: hash.ts has no test file)
 
 use super::*;
+use crate::golden::Golden;
 use crate::kit::encoding::hex_to_bytes;
-use crate::sys::vector::Vector;
 
-const VECTOR: &str = include_str!("../../vector/kit/hash.tsv");
+const GOLDEN: &str = include_str!("../../golden/kit/hash.tsv");
 
 #[test]
 fn hash_computes_what_the_typescript_computes() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     v.each("strings", |k| {
         assert_eq!(fnv1a64_str(v.s(&format!("{k}.s"))), v.u64(&format!("{k}.fnv")), "{k}");
     });

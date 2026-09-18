@@ -77,11 +77,11 @@
 //! `BigInt` are the TypeScript's runtime shapes, for `write_all`'s
 //! auto-dispatch.
 
+use crate::errno::Errno;
+use crate::error::MarshalError;
 use crate::io::scalar::{self, Stream};
 use crate::kit::array::{Bytes, TypedArray};
 use crate::kit::encoding;
-use crate::sys::errno::Errno;
-use crate::sys::error::MarshalError;
 
 const U8_SZ: u32 = 1;
 const U16_SZ: u32 = 2;

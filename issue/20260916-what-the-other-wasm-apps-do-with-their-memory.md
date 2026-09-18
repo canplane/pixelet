@@ -82,8 +82,8 @@ The design, point for point:
 - **one bit per node** for the free/used state
 - **circular doubly-linked free lists**, the links threaded through the free
   blocks themselves, taken from the Linux kernel's implementation
-- `brk` to ask for more, and explicitly: *"While archaic, this method is a good
-  fit for WebAssembly's linear memory model"*
+- `brk` to ask for more, and explicitly: _"While archaic, this method is a good
+  fit for WebAssembly's linear memory model"_
 - `malloc` and `free` both O(log N) in the maximum number of allocations
 
 Two things are worth taking from it. The first is that the same author chose
@@ -163,14 +163,14 @@ itself the signal that the glue has been demoted to a driver.
 
 ## Why none of it transfers
 
-| | Figma (2018) | Emscripten apps | Google Earth | here |
-| --- | --- | --- | --- | --- |
-| JavaScript's role | host platform | host | host | driver |
-| memory | grows | grows | grows | **fixed at boot** |
-| large buffers | JS heap, by handle | WASM heap | not stated | linear memory, by address |
-| how often the core walks them | rarely (handed to GL) | — | — | **every frame** |
-| glue boundary | `ccall` / `EM_ASM` | `ccall` | — | **rings (SQ/CQ)** |
-| renderer | WebGL, driven by JS | varies | WebGL2 | WebGPU, driven by the core |
+|                               | Figma (2018)          | Emscripten apps | Google Earth | here                       |
+| ----------------------------- | --------------------- | --------------- | ------------ | -------------------------- |
+| JavaScript's role             | host platform         | host            | host         | driver                     |
+| memory                        | grows                 | grows           | grows        | **fixed at boot**          |
+| large buffers                 | JS heap, by handle    | WASM heap       | not stated   | linear memory, by address  |
+| how often the core walks them | rarely (handed to GL) | —               | —            | **every frame**            |
+| glue boundary                 | `ccall` / `EM_ASM`    | `ccall`         | —            | **rings (SQ/CQ)**          |
+| renderer                      | WebGL, driven by JS   | varies          | WebGL2       | WebGPU, driven by the core |
 
 The two rows that decide it: the memory does not grow, so a standard allocator
 is out; and the core walks the large buffers every frame — the scan and the
@@ -178,7 +178,7 @@ raycast step through band lanes, the mesher reads terrain lanes — so Figma's
 handle-plus-`EM_ASM` indirection is not available. The repository had already
 drawn that line for its own reasons
 ([20260912-linear-memory-what-is-left.md](./20260912-linear-memory-what-is-left.md)):
-*a resource the canvas reads every frame is linear memory*.
+_a resource the canvas reads every frame is linear memory_.
 
 ## What the decision rests on
 
@@ -224,11 +224,11 @@ needs the space.
 
 Laid beside this kernel, the correspondence is close enough to be worth naming:
 
-| Quake | here |
-| --- | --- |
-| hunk low — permanent | fixed (rings, standing band stores), slab (terrain) |
-| zone — small dynamic | FixedHeap (`Vec`, `Box`, `String`) |
-| cache — rebuildable, yields | mesh, and `RETAIN_BUDGET_BYTES`'s reclaim pass |
+| Quake                       | here                                                |
+| --------------------------- | --------------------------------------------------- |
+| hunk low — permanent        | fixed (rings, standing band stores), slab (terrain) |
+| zone — small dynamic        | FixedHeap (`Vec`, `Box`, `String`)                  |
+| cache — rebuildable, yields | mesh, and `RETAIN_BUDGET_BYTES`'s reclaim pass      |
 
 And it answers the objection that stopped fixed partitions here. The problem was
 never that the regions are separate; it is that `MODULE_BYTES` fixes the small
@@ -255,13 +255,13 @@ That is a synchronisation primitive — a fixed set of buffers cycled between a
 producer and a consumer, the shape a driver hands DMA buffers round in — not a
 policy about what belongs in a heap.
 
-| | Zephyr `k_mem_slab` | the terrain slab |
-| --- | --- | --- |
-| alloc / free | yes, with a timeout | **none** |
-| waiting | threads queue by priority | — |
-| which block | any free one, off a list | **computed from the coordinate** |
-| purpose | zero-copy handoff between threads | resident cache |
-| threads | several | one |
+|              | Zephyr `k_mem_slab`               | the terrain slab                 |
+| ------------ | --------------------------------- | -------------------------------- |
+| alloc / free | yes, with a timeout               | **none**                         |
+| waiting      | threads queue by priority         | —                                |
+| which block  | any free one, off a list          | **computed from the coordinate** |
+| purpose      | zero-copy handoff between threads | resident cache                   |
+| threads      | several                           | one                              |
 
 What they share is "fixed-size blocks, a known count", which is the shape of the
 data structure and not the reason either exists. Zephyr separates slabs from its
