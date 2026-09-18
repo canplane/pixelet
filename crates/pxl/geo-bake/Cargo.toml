@@ -7,6 +7,12 @@ publish.workspace = true
 [lib]
 path = "src/lib.rs"
 
+[features]
+# What `serve_tiles` needs. Off by default, and the binary declares it as
+# required, so `cargo build` without it builds the three bake tools and skips
+# the server entirely.
+serve = ["dep:axum", "dep:tokio"]
+
 [dependencies]
 pxl-overture = { path = "../overture" }
 pxl-spec = { path = "../spec" }
@@ -24,9 +30,12 @@ flate2 = "1"
 # The manifest only; nothing on the wire to the client is JSON.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# The dev tile server alone; the bake tools want none of it.
-axum = "0.8"
-tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread"] }
+# The dev tile server alone, and optional so that a build of the bake tools
+# does not compile them: axum's own subtree is 51 of this crate's 101 packages,
+# and `bake_tiles` links none of it — the linker already leaves it out, so what
+# a feature saves here is compile time rather than bytes.
+axum = { version = "0.8", optional = true }
+tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread"], optional = true }
 
 [[bin]]
 name = "bake_tiles"
@@ -35,6 +44,7 @@ path = "src/terrain/tool/bake_tiles.rs"
 [[bin]]
 name = "serve_tiles"
 path = "src/tool/serve_tiles.rs"
+required-features = ["serve"]
 
 [[bin]]
 name = "bake_poi_tiles"

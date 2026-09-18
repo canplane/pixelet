@@ -677,6 +677,37 @@ commit for after the Rust has served for a while. What that leaves in the tree
 is dead code with a reason, which is worth saying out loud so it does not read
 as an oversight.
 
+## The dev tile server behind a feature, and what it was actually worth
+
+`serve_tiles` is `--features serve` now, and its axum and tokio are optional
+dependencies, so `cargo build -p pxl-geo-bake --bins` builds the three bake
+tools and skips the server. A build that asks for it without the feature says
+so — `target serve_tiles in package pxl-geo-bake requires the features: serve`
+— rather than failing obscurely.
+
+The saving is real and smaller than the figure that motivated it. Clean builds
+into an empty target directory:
+
+|                      | crates |   wall |
+| :------------------- | -----: | -----: |
+| bake tools alone     |     74 | 23.7 s |
+| plus the tile server |     98 | 32.0 s |
+
+24 crates and 8.3 s, not the 51 crates axum's subtree has: 25 of those 51 are
+already pulled in by `postgres`, which every bake tool needs anyway. Quoting
+the subtree's own size overstated the marginal cost by about half, which is
+what measuring it was for.
+
+It costs something too. `check:rust` now lints the bake crate twice, once in
+each configuration, because a lint run under only one of them leaves the
+other's code unlinted until it breaks — the failure mode a feature gate has
+that a separate binary does not. Warm, the whole Rust gate is still under a
+second.
+
+Worth keeping, narrowly: what it buys is a bake-only build not compiling a web
+framework, and the machines that would feel that are a CI job or an image that
+carries the tools alone. Neither exists yet.
+
 ## Where it stands
 
 **Steps 1–6 built** 09-18, verified against a live geo DB as above.

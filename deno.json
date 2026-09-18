@@ -25,7 +25,7 @@
     // slow enough to be felt on every page.
     "dev": "sh -c \"(deno task dev:api) & (deno task dev:tiles) & (deno task dev:web) & wait\"",
     "dev:api": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo -- \"$@\"' --",
-    "dev:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin serve_tiles -- \"$@\"' --",
+    "dev:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --features serve --bin serve_tiles -- \"$@\"' --",
     "dev:web": "deno task --cwd apps/web dev",
     // Client only, tiles served from the published deployment — no Docker, no
     // database, no API process. Not usable for bake work: a published tile
@@ -80,11 +80,15 @@
     //
     // The server's own pass is separate because it is a host binary: nothing
     // of it reaches the module, and nothing of the module's targets reaches it.
+    // Twice, because the bake crate has a feature: the first pass is what a
+    // build of the bake tools compiles, the second adds the dev tile server,
+    // and a lint run under only one of them would leave the other's code
+    // unlinted until it broke.
     //
     // Formatting is checked first, over the whole workspace, against
     // crates/rustfmt.toml; the generated `.rs` files pass it because
     // script/spec.ts writes them through rustfmt.
-    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-overture -p pxl-geo -p pxl-geo-bake -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel",
+    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-overture -p pxl-geo -p pxl-geo-bake -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel",
     // The specs are JSON; the TypeScript and the Rust that carry them are
     // written from it (script/spec.ts), and the gate fails on a stale one.
     "check:spec": "deno run -A script/spec.ts",
