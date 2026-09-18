@@ -19,7 +19,6 @@ use tokio_postgres::Row;
 
 use crate::db::DbError;
 use crate::geocode::{self, GeocodePart};
-use crate::search::category;
 use crate::search::Near;
 
 /// Divisions never crowd out POI results — a handful of admin-area matches
@@ -181,14 +180,6 @@ impl DivisionRow {
     }
 }
 
-fn category_of(properties: &serde_json::Value) -> String {
-    let primary = properties.get("categories").and_then(|c| c.get("primary")).and_then(|p| p.as_str());
-    match primary {
-        Some(primary) => category::map(primary).unwrap_or(primary).to_string(),
-        None => "place".to_string(),
-    }
-}
-
 /// The same area/point name can legitimately show up twice (a `locality`
 /// polygon and a `division` point both named "종로구", say) — keeping the
 /// first occurrence is enough, since the query already orders area rows before
@@ -272,7 +263,7 @@ pub async fn search(pool: &Pool, query: &str, near: Option<&Near>, limit: u32) -
         gers_id: r.gers_id,
         name: r.name,
         kind: "poi",
-        category: category_of(&r.properties),
+        category: pxl_overture::properties::category_of(&r.properties),
         common: None,
         context,
         lon: r.lon,

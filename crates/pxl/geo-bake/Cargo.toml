@@ -8,6 +8,7 @@ publish.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+pxl-overture = { path = "../overture" }
 pxl-spec = { path = "../spec" }
 xpute-core = { path = "../../xpute/core" }
 # The blocking client rather than tokio-postgres, which pxl-geo takes. A page
@@ -16,13 +17,20 @@ xpute-core = { path = "../../xpute/core" }
 # on a synchronous client the whole page is one call that nothing has to be
 # `Send` across, and the concurrency is a thread per worker with a connection
 # of its own. It is tokio-postgres underneath either way.
-postgres = "0.19"
+postgres = { version = "0.19", features = ["with-serde_json-1"] }
 # The objects are stored pre-gzipped, so the client's fetch() decompresses them
 # transparently and the bucket never has to.
 flate2 = "1"
 # The manifest only; nothing on the wire to the client is JSON.
 serde_json = "1"
+# The dev tile server alone; the bake tools want none of it.
+axum = "0.8"
+tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread"] }
 
 [[bin]]
 name = "bake_tiles"
 path = "src/terrain/tool/bake_tiles.rs"
+
+[[bin]]
+name = "serve_tiles"
+path = "src/tool/serve_tiles.rs"

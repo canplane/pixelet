@@ -11,32 +11,11 @@
 use std::collections::HashMap;
 
 use deadpool_postgres::Pool;
-use serde::Serialize;
+pub use pxl_overture::division::GeocodePart;
+use pxl_overture::division::{broad_rank, FINE_SUBTYPE_PRIORITY};
 use tokio_postgres::Row;
 
 use crate::db::DbError;
-
-/// Broad-to-narrow, e.g. `[{name:"강남구"}, {name:"역삼1동"}]` — a fixed
-/// canonical order regardless of any viewer's language, since joining these
-/// into one display string, and picking which language's name to show per
-/// part, is the client's job against whatever UI language is active.
-#[derive(Serialize)]
-pub struct GeocodePart {
-    pub name: String,
-    /// A language-tag-keyed name map, when Overture's Divisions theme has one
-    /// for this division. Omitted rather than null, so the client's own
-    /// optional field reads the same as it does from the baked pages.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub common: Option<serde_json::Value>,
-}
-
-const BROAD_SUBTYPE_ORDER: [&str; 2] = ["region", "county"];
-
-/// Overture's four sub-city subtypes, most-specific-for-Korea first — the
-/// same ladder the reverse geocode walks, kept identical so a search result
-/// and the current-location label never disagree about what the fine level
-/// of a place is called.
-const FINE_SUBTYPE_PRIORITY: [&str; 4] = ["locality", "neighborhood", "microhood", "macrohood"];
 
 /// `gers_id <> $3` matters when the point being resolved is itself a
 /// region/county centroid (e.g. resolving context for a "성남시" match) —
@@ -86,15 +65,15 @@ impl Part {
     }
 
     fn into_geocode_part(self) -> GeocodePart {
-        GeocodePart { name: self.name, common: self.common }
+        GeocodePart::new(self.name, self.common)
     }
 }
 
 /// Broad before narrow, each name once. Shared by both resolvers so a batched
 /// answer and a single one cannot order themselves differently.
 fn order_broad(parts: Vec<Part>) -> Vec<GeocodePart> {
-    let mut ordered: Vec<Part> = parts.into_iter().filter(|p| BROAD_SUBTYPE_ORDER.contains(&p.subtype.as_str())).collect();
-    ordered.sort_by_key(|p| BROAD_SUBTYPE_ORDER.iter().position(|s| *s == p.subtype));
+    let mut ordered: Vec<Part> = parts.into_iter().filter(|p| broad_rank(&p.subtype).is_some()).collect();
+    ordered.sort_by_key(|p| broad_rank(&p.subtype));
 
     let mut seen: Vec<String> = Vec::new();
     let mut out: Vec<GeocodePart> = Vec::new();
@@ -137,10 +116,10 @@ pub async fn resolve_point_context_batch(pool: &Pool, xs: &[f64], ys: &[f64]) ->
     for (i, list) in by_point {
         // The fine subtypes are alternatives rather than a chain, so the most
         // specific one that matched wins and the rest are dropped.
-        let fine = FINE_SUBTYPE_PRIORITY.iter().find_map(|subtype| list.iter().position(|p| p.subtype == *subtype)).map(|at| GeocodePart {
-            name: list[at].name.clone(),
-            common: list[at].common.clone(),
-        });
+        let fine = FINE_SUBTYPE_PRIORITY
+            .iter()
+            .find_map(|subtype| list.iter().position(|p| p.subtype == *subtype))
+            .map(|at| GeocodePart::new(list[at].name.clone(), list[at].common.clone()));
 
         let mut parts = order_broad(list);
         if let Some(fine) = fine {

@@ -513,19 +513,51 @@ holds only if baking the same empty source at different pages — different
 bbox, different `Z_SCALE` by latitude — gives identical bytes. The assertion
 came across with the tool, and passes.
 
+## What the dev tile server turned up
+
+**All four routes answer what the TypeScript answers.** Both servers against
+the same database, twelve pages each: terrain and POI byte for byte, geocode
+equal as JSON, the same 400 for a page index that is not one, the same 404 for
+an asset key that is not there, the same 401/200 on the invalidate route. The
+cached second request was compared too, not only the first.
+
+**The asset route in the TypeScript is broken in the built server, and has
+been.** `module/tile/asset/service.ts` resolves `out/asset/` as six `../`
+from `import.meta.url`, which is right for the file's own path under
+`src/module/tile/asset/` and wrong for what actually runs: `deno task dev`
+serves `dist/main/server.js`, where the same six steps land two directories
+above the repository. An ingested model that exists on disk 404s. The port
+takes the directory as a flag defaulting to `./out/asset`, relative to the
+working directory the tasks already run from, which is how every other tool
+here finds `out/`.
+
+**`pxl-overture` exists now, and the category map's home is settled.** Forward
+search and the POI bake both translate an Overture category into one of ours,
+and a badge on the map and a row in the search list have to draw the same icon
+— so the table cannot be duplicated. `pxl-spec` was refused for it: the
+TypeScript keeps it on the provider side rather than in `@pxl/shared`, and an
+Overture vocabulary is not the spec. The crate turned out to hold more than
+the one table: `GeocodePart` and the two subtype ladders were also the same
+lists in two files, once the reverse geocode came across.
+
 ## Where it stands
 
-**Steps 1–4 and 6 built** 09-18, verified against a live geo DB as above.
+**Steps 1–6 built** 09-18, verified against a live geo DB as above.
 `crates/pxl/geo` is 954 lines including its tests, takes `DB_GEO_URL` alone,
 and `apps/api` still serves — the Dockerfile, the compose file and
 infra/README change when the deploy cuts over, not before. `check:rust` is
 three passes now: the client's crates for wasm32 by name, the server's for the
 host, then the host check with every target.
 
-Step 5 is the work left — the dev tile server, which is the pipeline behind
-four routes. `bake_poi_tiles` and `bake_geocode_tiles` are not ported: they
-read the POI and Divisions tables rather than this pipeline, and neither has
-been looked at yet. 7 and 8 wait on a second server existing.
+What is left of the move: `bake_poi_tiles` and `bake_geocode_tiles`, which now
+have their providers in Rust and want only the walk around them, the way
+`bake_tiles` did; and then the cutover itself — the Dockerfile, the compose
+file and infra/README, which change when the deploy switches and not before.
+7 and 8 wait on a second server existing.
+
+The dev tasks still start the Deno server. `deno task dev` is `dev:api` and
+`dev:web`; pointing it at `pxl-geo` and `serve_tiles` is part of the cutover,
+because until then the TypeScript is what the byte comparisons run against.
 
 Still open, and now to settle in step 4: the Overture category map. It is
 search's and the POI bake's, and the terrain pipeline never touches it, so step

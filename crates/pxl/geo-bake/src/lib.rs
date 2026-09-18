@@ -11,6 +11,8 @@
 //! and which stays beside it: a page baked here has to come out byte for byte
 //! what that produces, and the comparison needs both.
 
+pub mod geocode;
 pub mod overture;
+pub mod poi;
 pub mod terrain;
 pub mod wkb;

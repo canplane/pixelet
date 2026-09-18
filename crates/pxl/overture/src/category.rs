@@ -1,4 +1,4 @@
-// pxl-geo/search/category.rs
+// pxl-overture/category.rs
 
 /// Overture's Places taxonomy (docs.overturemaps.org/schema/reference/places/)
 /// has thousands of `categories.primary` values — this maps the common ones to
@@ -10,9 +10,6 @@
 /// actually turned up plus the obvious common ones), not an attempt to cover
 /// Overture's full taxonomy — extend as real gaps show up rather than
 /// front-loading a guess at every possible value.
-///
-/// The POI bake wants the same table, and when it is ported this is the piece
-/// that decides where an Overture vocabulary shared by two crates lives.
 pub fn map(primary: &str) -> Option<&'static str> {
     Some(match primary {
         // health

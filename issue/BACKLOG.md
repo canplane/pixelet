@@ -46,9 +46,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   baking 114 pages byte for byte what the TypeScript bakes, coastal pages
   among them, and the same 114 again end to end once it read its own source;
   `bake_tiles`, writing the same tile set as the TypeScript's at 45 ms a tile
-  against 250; and `[profile.server]`. Left: the dev tile server, and the POI
-  and geocode bake tools, which read other tables and have not been looked
-  at. The reason is not throughput: `pxl-spec` already carries the
+  against 250; `serve_tiles`, the four dev tile routes over the same
+  pipeline, answering what the TypeScript answers; `pxl-overture` for what
+  both servers know about Overture's Places and Divisions; and
+  `[profile.server]`. Left: `bake_poi_tiles` and `bake_geocode_tiles`, whose
+  providers are in Rust and which want only the walk around them, and then
+  the cutover — the Dockerfile, the compose file, infra/README and the dev
+  tasks. The reason is not throughput: `pxl-spec` already carries the
   encoders only the server uses, so one source can hold both ends of the
   wire format instead of two. `apps/api` is three workloads wearing one
   process, and they split along a line `infra/` had already drawn — one

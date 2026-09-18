@@ -7,7 +7,6 @@
 //! would mostly add complexity to a feature whose whole point is that
 //! *different* queries are the norm.
 
-pub mod category;
 pub mod overture;
 
 use axum::extract::{Query, State};
