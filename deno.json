@@ -99,6 +99,11 @@
     // first two are written from the JSON, the last is people's (script/locale.ts).
     "check:locale": "deno run -A script/locale.ts",
 
+    // What a deployment must answer, against a running one. The gate is what a
+    // checkout proves; this is what a deploy proves, and it is the last step of
+    // both deploy jobs in .github/workflows/check-and-deploy.yml.
+    "smoke": "deno run -A script/smoke.ts",
+
     "test": "deno task test:web && deno task test:api && deno task test:shared && deno task test:xpute && deno task test:rust",
     "test:web": "deno task --cwd apps/web test",
     "test:api": "deno test -A apps/api/src",

@@ -57,7 +57,7 @@ function cmd_ts(spec: CmdSpec): string {
         if (entry.doc) out.push("  //", ...entry.doc.map((l) => (l === "" ? "  //" : `  // ${l}`)));
         out.push("");
       } else {
-        if (entry.doc) out.push(...ts_doc(entry.doc, "  ").map((l, i) => (i === 0 ? l : l.replace(/^  \*/, "   *"))));
+        if (entry.doc) out.push(...ts_doc(entry.doc, "  ").map((l, i) => (i === 0 ? l : l.replace(/^ {2}\*/, "   *"))));
         out.push(`  ${entry.name} = ${literal(entry.value, e.format)},`);
       }
       first = false;
@@ -308,7 +308,7 @@ async function cube_type_outputs(): Promise<Output[]> {
         rs.push(`        // ---- ${e.section} ----`, "");
         return;
       }
-      if (e.doc) ts.push(...ts_doc(e.doc, "    ").map((l, i) => (i === 0 ? l : l.replace(/^    \*/, "     *"))));
+      if (e.doc) ts.push(...ts_doc(e.doc, "    ").map((l, i) => (i === 0 ? l : l.replace(/^ {4}\*/, "     *"))));
       if (e.doc) rs.push(...rs_doc(e.doc, "        "));
       const lit = ch.name === "common" ? `0x${e.value.toString(16).padStart(2, "0")}` : String(e.value);
       ts.push(`    ${e.name}: ${lit},`);

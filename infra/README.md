@@ -302,6 +302,9 @@ bucket answers those two prefixes.
 
 ### Deploying the client
 
+**A green push to main publishes it** — see §7. What follows is the same thing
+by hand, which is the fallback when CI is unavailable and what CI itself runs.
+
 One Worker serves the built app, the R2 tiles, and the relay to the API, so
 publishing all three is one command from the repo root:
 
@@ -323,27 +326,81 @@ the R2 tiles are untouched by it. Uploading tiles and assets is a separate
 procedure with its own verification, in
 [.agents/skills/publish-bucket/SKILL.md](../.agents/skills/publish-bucket/SKILL.md).
 
-Afterwards, the routes that between them cover every path the app takes
-(the versions are `PUBLISHED_VERSION` in
-`packages/pxl/shared/src/bake/published.ts`; the asset key is any
-`key` in `asset/ingested.ts`):
+Afterwards, every path the app takes, plus the gates and the addresses that
+must be gone:
 
 ```sh
-for p in / \
-  /geo/tiles/terrain/v2/6359575375314944 \
-  /geo/tiles/terrain/v2/_ocean \
-  /geo/tiles/poi/v3/6359575375314944 \
-  /asset/e8d81b97297de62699b92559cee7b247da84b1815df2515e42fd5a318a30b8d7 \
-  '/geo/search?q=%EB%B6%84%EB%8B%B9'
-do curl -s -o /dev/null -w "$p %{http_code}\n" "https://plei.me$p"; done
+deno task smoke https://plei.me
+deno task smoke https://api.plei.me --origin   # the stack behind the edge
 ```
 
-A tile's first two bytes must be `5854` (`XT`); `1f8b` means it is reaching
-the client still gzipped, and HTML means the static-asset fallback answered
-a route the Worker should have claimed. An asset answers `model/gltf-binary`
-or `image/png` with no `content-encoding`.
+It builds the URLs from the same generated constants the client and the Worker
+read, so a version bump or a moved root cannot leave it checking something
+nobody serves. Both deploy jobs end with it.
 
-## 7. Licensing and attribution
+What it does not check, and is worth an eye on a format change: a tile's first
+two bytes must be `5854` (`XT`); `1f8b` means it is reaching the client still
+gzipped, and HTML means the static-asset fallback answered a route the Worker
+should have claimed. An asset answers `model/gltf-binary` or `image/png` with
+no `content-encoding`.
+
+## 7. CI/CD
+
+`.github/workflows/check-and-deploy.yml` runs on every push to main and every
+pull request. One workflow, three jobs, because a deploy must not be able to
+start against a commit the gate never saw:
+
+| Job             | When                                                                 | What                                                                                                        |
+| :-------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------- |
+| `gate`          | always                                                               | `deno task check`, `test`, `lint`                                                                           |
+| `deploy-web`    | main, gate green                                                     | `deno task deploy`, then `deno task smoke https://plei.me`                                                  |
+| `deploy-server` | main, gate green, and `crates/`/`infra/prod/`/the Dockerfile changed | ssh, `git reset --hard origin/main`, `docker compose up -d --build --force-recreate`, then the origin smoke |
+
+The two deploys are gated differently on purpose. Publishing to the edge is
+idempotent and reversible from the Cloudflare dashboard; reaching into the
+production VM over SSH is neither, so a push that could not have changed
+either image does not touch it.
+
+`--force-recreate` is not decoration: the Caddyfile is a bind mount and a bind
+mount is read at start, so an `up --build` alone leaves a stale relay in front
+of a fresh server. On 2026-09-18 that looked like `/api/*` answering 404 from
+the wrong process rather than like a failure.
+
+`deploy-web` is `concurrency: deploy-web` across every ref, because the build
+number comes from one counter object in the bucket and two runs holding it at
+once would take the same one. A hand `deno task deploy` is outside that group —
+it is the fallback, not a second deployer, and running one while CI is mid-
+deploy is the one way to collide.
+
+### Secrets
+
+Repository secrets, all of them set in GitHub's own settings and nowhere else:
+
+| Name                    | For                                                                                                                             |
+| :---------------------- | :------------------------------------------------------------------------------------------------------------------------------ |
+| `CLOUDFLARE_API_TOKEN`  | wrangler: publish the Worker, read/write the build counter in R2                                                                |
+| `CLOUDFLARE_ACCOUNT_ID` | which account, since a token may reach more than one                                                                            |
+| `VM_HOST` / `VM_USER`   | the Hetzner box                                                                                                                 |
+| `VM_SSH_KEY`            | a deploy-only private key; its public half in that user's `authorized_keys`                                                     |
+| `VM_KNOWN_HOSTS`        | `ssh-keyscan <host>` run on the VM. Optional, and the deploy warns without it: the fallback accepts whatever answers on the day |
+| `R2_*`                  | the monthly refresh's own, already set — see below                                                                              |
+
+The VM key should be its own keypair rather than a personal one, so revoking
+it costs nothing else.
+
+### The monthly refresh
+
+`.github/workflows/overture-monthly-refresh.yml`, 03:00 UTC on the 1st. It
+ingests Overture Places and Divisions into a throwaway PostGIS service
+container, bakes POI and reverse geocode with `--force`, and syncs the two
+published prefixes in place. It needs both toolchains: the two ingests are
+Deno and staying that way, the two bakes have been Rust since 2026-09-18.
+
+It never rebuilds terrain's land/ocean classification — it fetches
+`_meta/land_pages.json` from the bucket. Re-upload that object by hand (the
+publish-bucket skill's terrain step) if the classification is ever rebuilt.
+
+## 8. Licensing and attribution
 
 The notices below are required, shown in
 `apps/web/src/app/setting/section/attribution_section.tsx`. Check the
@@ -367,7 +424,7 @@ Still open: GEDTM30 also fuses JAXA's ALOS World 3D-30m. JAXA's terms page was
 not readable when this was written, so no claim is made here about its exact
 required wording rather than inventing one.
 
-## 8. Secrets
+## 9. Secrets
 
 DB passwords and `ADMIN_TOKEN` come from `.env` only. `DB_GEO_USER`,
 `DB_GEO_PASSWORD` and the rest must be exported before running any script.

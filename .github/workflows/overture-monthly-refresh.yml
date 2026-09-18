@@ -53,6 +53,26 @@ jobs:
         with:
           python-version: "3.12"
 
+      # The two bakes are Rust since 2026-09-18; the two ingests above them are
+      # not and are not going to be
+      # (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md), so
+      # this job needs both toolchains. Pinned to what apps/api/Dockerfile
+      # builds with.
+      - name: Install the Rust toolchain
+        run: |
+          rustup toolchain install 1.94 --profile minimal
+          rustup default 1.94
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            crates/target
+          key: rust-bake-${{ hashFiles('crates/Cargo.lock') }}
+          restore-keys: rust-bake-
+
       - name: Configure R2 credentials
         run: |
           aws configure set aws_access_key_id "${{ secrets.R2_ACCESS_KEY_ID }}" --profile r2
@@ -73,11 +93,17 @@ jobs:
       # The POI page is an XTP packet (packages/pxl/shared/src/bake/format.ts,
       # encode_poi_page) since v3; the version here must match
       # PUBLISHED_VERSION.poi in packages/pxl/shared/src/bake/published.ts.
+      #
+      # The `server` profile rather than release: a profile belongs to the
+      # workspace root and release is the module's, which aborts on panic — one
+      # bad page would end the whole bake with nothing written
+      # (crates/Cargo.toml). --force because a monthly refresh is a full
+      # rewrite, not a resume.
       - name: Bake POI
-        run: deno run -A apps/api/src/bake/poi/tool/bake_poi_tiles.ts --out ./out/poi/v3 --force
+        run: deno task bake:poi --out ./out/poi/v3 --force
 
       - name: Bake reverse geocode
-        run: deno run -A apps/api/src/bake/geocode/tool/bake_geocode_tiles.ts --out ./out/geocode/v1 --force
+        run: deno task bake:geocode --out ./out/geocode/v1 --force
 
       # The same syncs as the publish-bucket skill's POI/geocode step — keep
       # the two in step.
