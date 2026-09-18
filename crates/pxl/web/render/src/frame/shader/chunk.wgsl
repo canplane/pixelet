@@ -1,6 +1,6 @@
 // The chunk mesh: the mesher's lanes as they lie in a block, one vertex
 // slot a lane. Every rule here was chunk_material.ts's injected GLSL over
-// three's standard material (archive/20260914-three-draw-paths) — the
+// three's standard material (b9e31004) — the
 // real-size tile UV from a box's own corner and scale, the edge shading
 // from the mesher's face bits, the screen-space dither a blend is punched
 // with — with the lighting three did for us written out in shade.wgsl. No

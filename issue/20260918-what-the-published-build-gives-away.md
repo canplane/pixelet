@@ -220,10 +220,10 @@ matters (`block[offset + k*count + i]`). It hides the grouping and leaves the
 offsets.
 
 **The comments were still worth taking off.** They carried what the code does
-not: why a branch exists, and file names (`volume.rs`, `shade.wgsl`,
-`archive/20260914-three-draw-paths`) that leaked the module tree a second time
-after the name section was stripped. The sources keep them; `build.rs` strips
-them on the way in. 77,816 → 46,376 characters assembled.
+not: why a branch exists, and file names (`volume.rs`, `shade.wgsl`) that
+leaked the module tree a second time after the name section was stripped.
+The sources keep them; `build.rs` strips them on the way in. 77,816 →
+46,376 characters assembled.
 
 ### Renaming the identifiers was built, measured and dropped
 

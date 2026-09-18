@@ -111,7 +111,7 @@ pub mod rim_cfg {
 /// The canvas's resolution. The colour grade and the vignette are the
 /// shaders' own constants (crates/pxl/web/render/src/frame/shader/{grade,shade}.wgsl);
 /// the rest of the post stack three ran — contact AO, bloom, god rays,
-/// SMAA — is on archive/20260914-three-draw-paths with its tuning.
+/// SMAA — is at b9e31004 with its tuning.
 pub mod post_cfg {
     /// The canvas draws at the device's pixel ratio clamped to this
     /// (issue/20260911-taa-tried-and-closed.md on why the cap is where it is).

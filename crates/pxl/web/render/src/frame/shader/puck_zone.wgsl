@@ -1,6 +1,6 @@
 // The puck's zone: a unit box a cell, instanced from the zone block, drawn
 // unlit and half transparent with a border on the edges the ring's rim runs
-// along — location_puck.tsx's shader (archive/20260914-three-draw-paths),
+// along — location_puck.tsx's shader (b9e31004),
 // deliberately unlit so the zone reads as an indicator rather than a
 // surface.
 

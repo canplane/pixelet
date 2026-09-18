@@ -2,7 +2,7 @@
 // over the module's billboard sets (billboard.rs), one draw a set, drawn
 // after the world with the world's depth attached read-only and bound as
 // a texture at once, so both of anchor_occlusion.ts's questions
-// (archive/20260914-three-draw-paths) are asked of this frame's depth.
+// (b9e31004) are asked of this frame's depth.
 // Whether the labelled point is visible is asked in the vertex shader, at
 // five points up the badge from just above the anchor, and answered for
 // the whole badge; whether something stands between the camera and the

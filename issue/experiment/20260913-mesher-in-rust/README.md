@@ -214,7 +214,7 @@ cost and the longest step carry the case without it. `stepped` stays behind
 the setting as the reference the byte-for-byte test and this comparison run
 against, until the TypeScript mesher is retired; a module that fails to
 load falls back to it. Both went on 2026-09-14
-(`archive/20260914-ts-build-paths`): the TypeScript bake is only the
+(`559fc68a`): the TypeScript bake is only the
 tests' reference now, and there is no fallback. The algorithmic rewrite is next on P0-1, measured with
 bench.ts and the phone again.
 

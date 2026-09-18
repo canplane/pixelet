@@ -3,7 +3,7 @@
 **2026-09-14** — with the renderer, the shaders and the scheduler the
 module's and the trees reorganised, three read-only audits went over what
 the two days left: the Rust against the TypeScript it replaced (the
-hand-ported parts, read against `archive/20260914-three-draw-paths`), the
+hand-ported parts, read against `b9e31004`), the
 crates for duplication, hot-path waste, stale comments and unsafe surfaces,
 and the client's live code for the same. This is the consolidated list,
 each item with a decision, and it is worked in the order at the end; an
