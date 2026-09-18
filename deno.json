@@ -53,16 +53,15 @@
     // — see .agents/skills/publish-bucket/SKILL.md.
     "ingest:asset": "deno run -A apps/api/src/bake/asset/tool/ingest_asset.ts",
 
-    "build:api": "deno task --cwd apps/api build",
     "build:web": "deno task --cwd apps/web build",
     "build:wasm": "deno task --cwd apps/web build:wasm",
 
     // Drops what Deno and Vite materialize and re-checks from nothing. Named
     // paths only; nothing is found by name and deleted.
-    "reset": "rm -rf node_modules apps/api/node_modules apps/web/node_modules apps/api/dist apps/web/dist && deno task check",
+    "reset": "rm -rf node_modules apps/api/node_modules apps/web/node_modules apps/web/dist && deno task check",
 
     "check": "deno task check:api && deno task check:web && deno task check:shared && deno task check:xpute && deno task check:rust && deno task check:spec && deno task check:locale",
-    "check:api": "deno task --cwd apps/api check",
+    "check:api": "deno check apps/api/src/**/*.ts",
     "check:web": "deno task --cwd apps/web check",
     "check:shared": "deno check packages/pxl/shared/src/**/*.ts",
     "check:xpute": "deno check packages/xpute/core/src/**/*.ts",
@@ -128,7 +127,6 @@
   },
 
   "imports": {
-    "@pxl/api/": "./apps/api/src/",
     "@pxl/shared/": "./packages/pxl/shared/src/",
     "@xpute/core/": "./packages/xpute/core/src/",
 

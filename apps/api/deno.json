@@ -1,27 +1,9 @@
 {
-  "name": "@pxl/api",
-  "version": "0.0.0",
-  "exports": "./src/index.ts",
-
-  "tasks": {
-    "dev": "deno task build:dev && (deno task watch:dev & deno task serve:dev)",
-
-    "build:dev": "deno run -A --node-modules-dir=auto npm:vite build --mode development",
-    "watch:dev": "deno run -A --node-modules-dir=auto npm:vite build --watch --mode development",
-    "serve:dev": "deno run -A --watch=dist/main/server.js --env=../.env dist/main/server.js",
-
-    "build": "deno run -A --node-modules-dir=auto npm:vite build",
-
-    "check": "deno check src/index.ts"
-  },
-
-  "compilerOptions": { "types": ["./@types/index.d.ts"] },
-
+  // No name and no exports: nothing imports this as a package any more. It is
+  // a workspace member so that the tools under src/ resolve `@/` and Deno
+  // materializes @db/postgres for them — which is all a member has to be.
   "imports": {
     "@/": "./src/",
-
-    // server framework
-    "@hono/hono": "jsr:@hono/hono@^4.12.2",
 
     // database
     "@db/postgres": "jsr:@db/postgres@^0.19.5"

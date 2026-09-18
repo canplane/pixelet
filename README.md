@@ -44,9 +44,10 @@ The client is a small operating system in a browser tab. A Rust **kernel**, comp
           │ HTTP: XTP pages, content-addressed assets
           ▼
   Cloudflare Worker + R2 (the client, baked pages, assets)
-          │ /api
+          │ /geo/*  /api/*      (/geo/tiles/* and /asset/* never leave the edge)
           ▼
-  API  apps/api  (Hono)  ── PostGIS (Overture, GEDTM30) ── offline bake
+  Hetzner: Caddy ─┬─ pxl-geo (/geo)  ── PostGIS (Overture) ── offline bake, in pxl-geo-bake
+                  └─ pxl-api (/api)  ── PostgreSQL
 ```
 
 The kernel decides what exists, what is on screen, at what detail, and what to draw. The shell decides nothing about the world. It forwards events, runs the fetches the kernel names, decodes images, renders the UI from the kernel's snapshot, and turns the renderer's calls into WebGPU. The line between them is [issue/20260914-what-stays-in-javascript.md](./issue/20260914-what-stays-in-javascript.md).
@@ -62,19 +63,26 @@ generic kit  │ @xpute/core  │  mirrors  │ xpute-core   │  no domain know
              └──────┬───────┘           └──────┬───────┘
              ┌──────▼───────┐           ┌──────▼───────┐
 model        │ @pxl/shared  │  mirrors  │ pxl-spec     │  space, cells, commands, bake formats
-             └──┬────────┬──┘           └──────┬───────┘
-                │        │              ┌──────▼───────┐
-view            │        │              │ pxl-render   │  meshes, glTF, LOD, draw list, GPU
-                │        │              └──────┬───────┘
-                │        │              ┌──────▼───────┐
-kernel          │        │              │ pxl-kernel   │  stores, schedulers, the turn
-                │        │              └──────┬───────┘
-                │        │              ┌──────▼───────┐
-module          │        │              │ pxl-wasm     │  boot block, rings, doorbell
-                │        │              └──────┬───────┘
-             ┌──▼─────┐ ┌▼─────────┐           │ kernel.wasm
-apps         │apps/api│ │ apps/web │◀──────────┘
-             └────────┘ └──────────┘
+             └──┬────────┬──┘           └───┬──────┬───┘
+                │        │        ┌─────────▼──┐   │
+view            │        │        │ pxl-render │   │  meshes, glTF, LOD, draw list, GPU
+                │        │        └─────────┬──┘   │
+                │        │        ┌─────────▼──┐   │
+kernel          │        │        │ pxl-kernel │   │  stores, schedulers, the turn
+                │        │        └─────────┬──┘   │
+                │        │        ┌─────────▼──┐   │
+module          │        │        │ pxl-wasm   │   │  boot block, rings, doorbell
+                │        │        └─────────┬──┘   │
+                │        │                  │  ┌───▼────────────┐
+server          │        │                  │  │ pxl-geo-bake   │  the three offline bakes
+                │        │                  │  └────────────────┘
+                │        │                  │  ┌────────────────┐
+                │        │                  │  │ pxl-geo  /geo  │  the world's data
+                │        │                  │  │ pxl-api  /api  │  the application
+                │        │                  │  └────────────────┘
+             ┌──▼─────┐ ┌▼─────────┐        │      ▲
+apps         │apps/api│ │ apps/web │◀───────┘      └── pxl-overture: what Overture means,
+             └────────┘ └──────────┘  kernel.wasm      read by pxl-geo and pxl-geo-bake
 ```
 
 - **`xpute`** is the runtime kit, meant to stay portable to other projects. It has collections, the allocators (a slab over a buddy), the rings, the change log, the three levels of the scheduler, and XTP. It has no coordinates, terrain or tiles.
@@ -213,14 +221,15 @@ contract between them, and what to verify after each.
 ## Tech Stack
 
 The monorepo, package management, and task execution are unified under Deno.
-The web app uses Vite as its bundling/build entry; the api runs directly under Deno.
+The web app uses Vite as its bundling/build entry; the servers are Rust binaries
+and Deno drives their tasks.
 
 | Layer               | Technology                                                                   |
 | ------------------- | ---------------------------------------------------------------------------- |
 | Runtime / Workspace | Deno + TypeScript                                                            |
 | Bundler (web)       | Vite                                                                         |
 | Web UI              | React 19                                                                     |
-| API                 | Hono                                                                         |
+| Servers             | Rust: axum, tokio-postgres — one per URL root, one database each             |
 | Kernel              | Rust → one WebAssembly module, no wasm-bindgen; `embassy-executor` for tasks |
 | 3D Rendering        | WebGPU (WGSL), driven from the kernel                                        |
 | Database            | PostgreSQL (main + geographic/PostGIS)                                       |
@@ -249,14 +258,18 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path (
 │   │       ├── config/       #   deployment config and routes
 │   │       ├── dev/          #   dev tools: the ledger overlay, test page
 │   │       └── kit/          #   shared UI kit and browser helpers
-│   └── api/                  # Hono server, the Overture/DEM bake pipeline, the asset ingest
+│   └── api/                  # the Overture/DEM ingests and the asset ingest — no server since 09-18
 ├── crates/                   # The Rust workspace
 │   ├── xpute/core/           #   xpute-core: generic runtime kit
 │   └── pxl/
 │       ├── spec/             #   pxl-spec: the model
 │       ├── render/           #   pxl-render: the view
 │       ├── kernel/           #   pxl-kernel: the kernel
-│       └── wasm/             #   pxl-wasm: the one WebAssembly module
+│       ├── wasm/             #   pxl-wasm: the one WebAssembly module
+│       ├── overture/         #   pxl-overture: what Overture means, for both servers
+│       ├── geo/              #   pxl-geo: the world's data server (/geo)
+│       ├── geo-bake/         #   pxl-geo-bake: the offline bakes and the dev tile server
+│       └── api/              #   pxl-api: the application server (/api)
 ├── packages/                 # The TypeScript workspace packages
 │   ├── xpute/core/           #   @xpute/core: generic kit, XTP, rings, doorbell, strobe
 │   └── pxl/shared/           #   @pxl/shared: PVF3, cells, bake formats, asset tables

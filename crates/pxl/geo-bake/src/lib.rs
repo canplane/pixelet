@@ -7,9 +7,11 @@
 //! run on different machines, and nothing passes between them but the spec.
 //! See issue/20260918-the-server-in-rust-and-the-line-already-drawn.md.
 //!
-//! The tree mirrors apps/api/src/bake, whose TypeScript this is ported from
-//! and which stays beside it: a page baked here has to come out byte for byte
-//! what that produces, and the comparison needs both.
+//! The tree still mirrors apps/api/src/bake, the TypeScript this was ported
+//! from, which was kept beside it until the two had been compared page by page
+//! and then deleted. The shape is worth keeping anyway: it is the one the
+//! pipeline's own stages fall into, and a reader following the old file names
+//! through git history lands in the right module.
 
 pub mod geocode;
 pub mod overture;

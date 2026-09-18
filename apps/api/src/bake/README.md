@@ -1,27 +1,28 @@
 # bake
 
-Everything the client fetches that is not the app itself is produced here,
-offline, and published to the bucket. Nothing under this directory runs in
-the deployed API; the tile routes in `module/tile/` are the same code served
-on demand for local development only.
+What fills db-geo, and what turns the shipped asset tree into the objects the
+bucket holds. Everything here is run by hand a few times, never by a server.
 
 ```
 bake/
 ├── overture/    ingests: Overture Buildings, Transportation, Base, Places, Divisions → db-geo
 ├── elevation/   ingest: GEDTM30 → db-geo (bash + GDAL)
-├── terrain/     db-geo → out/terrain/<version>: one XTP page per land page, one _ocean
-├── poi/         db-geo → out/poi/<version>: one XTP page per page with POI
-├── geocode/     db-geo → out/geocode/<version>: one JSON page per page with a label
-├── asset/       asset/ tree → out/asset/{glb,png,webp}/<sha256> and the table of their keys
-├── bake_util.ts what every tool shares: gzip, the git sha and source catalogs a manifest records
-└── wkb.ts       the WKB decoder the Overture and coast adapters read geometry through
+└── asset/       asset/ tree → out/asset/{glb,png,webp}/<sha256> and the table of their keys
 ```
 
-Each tool's flags are in its own header; each `tool/` directory is the
-command line, the rest of the directory is the pipeline behind it.
+**The three page bakes are not here any more.** terrain, POI and reverse
+geocode are `crates/pxl/geo-bake` since 2026-09-18 — `deno task bake:tiles`,
+`bake:poi`, `bake:geocode`
+([the server in Rust](../../../../issue/20260918-the-server-in-rust-and-the-line-already-drawn.md)).
+The ingests above did not move and are not going to: they run a handful of
+times a year, their cost is Overture's download and Postgres's `COPY`, and
+they lean on the `overturemaps` Python CLI and on `sharp`.
 
-The procedures — what to bring up, what order, what to check, how to upload
-and verify what is served — are not here:
+Each tool's flags are in its own header; each `tool/` directory is the command
+line, the rest of the directory is the pipeline behind it.
+
+The procedures — what to bring up, what order, what to check, how to upload and
+verify what is served — are not here:
 
 - filling db-geo (the ingests): [infra/README.md](../../../../infra/README.md) §2–4
 - baking terrain, POI, geocode: [.agents/skills/bake-tiles](../../../../.agents/skills/bake-tiles/SKILL.md)

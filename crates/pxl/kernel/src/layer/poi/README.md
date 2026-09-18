@@ -35,19 +35,21 @@ rebuilt on 2026-09-12/13 into the shape below.
   instance; fit, fade and the occlusion twin in the vertex shader
   (`/crates/pxl/render/src/frame/shader/badge.wgsl`).
 - **`theme.rs`** — category → icon/colour. `OVERTURE_CATEGORY_MAP`
-  (`/apps/api/src/bake/overture/model/category_map.ts`) translates Overture's
-  `categories.primary` into this vocabulary.
+  (`/crates/pxl/overture/src/category_spec.rs`, generated from
+  `/spec/overture/category.json`) translates Overture's `categories.primary`
+  into this vocabulary, and the generator fails when a theme entry here has no
+  category resolving to it.
 
-**Server side**: `/apps/api/src/bake/poi/{provider.ts,provider/overture_provider.ts}`
-and `/apps/api/src/module/tile/poi/service.ts` (the dev-only live
-endpoint). `PoiProvider` is the seam behind which the data source can be
-swapped; Overture Places is CDLA-Permissive-2.0. The per-page query is
-uncapped on purpose — a dense page is thousands of rows, and the rendering
-budget is enforced client-side by the placement, not by dropping data.
+**Server side**: `/crates/pxl/geo-bake/src/poi/provider/overture_provider.rs`,
+and `serve_tiles` for the dev-only live endpoint. The provider is the seam
+behind which the data source can be swapped; Overture Places is
+CDLA-Permissive-2.0. The per-page query is uncapped on purpose — a dense page
+is thousands of rows, and the rendering budget is enforced client-side by the
+placement, not by dropping data.
 
-**Static bake**: `/apps/api/src/bake/poi/tool/bake_poi_tiles.ts` writes a
-packet per page (`repack_poi_tiles.ts` re-encodes an earlier JSON bake),
-published to R2 under that prefix and refreshed monthly
+**Static bake**: `deno task bake:poi`
+(`/crates/pxl/geo-bake/src/poi/tool/bake_poi_tiles.rs`) writes a packet per
+page, published to R2 under that prefix and refreshed monthly
 (`/.github/workflows/overture-monthly-refresh.yml`).
 
 ## Not done

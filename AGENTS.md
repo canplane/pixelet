@@ -54,7 +54,7 @@ crates/pxl/spec         the spec in Rust, the server's and the client's — the 
 crates/pxl/render       the view — the volumes and meshes a chunk bakes into, glTF, the billboards' sheet, the draw list, the shaders, the device
 crates/pxl/kernel       the kernel — the stores, the fetches, the schedulers, the turn; what is drawn and when, handed to the view
 crates/pxl/wasm         the one WebAssembly module: rings, a boot block and a doorbell over the crates
-apps/api                Hono server + the Overture/DEM bake pipeline
+apps/api                the Overture/DEM ingests and the asset ingest; the server and the page bakes are Rust
 apps/web                Vite + React 19 client, drawing through WebGPU
 ```
 
@@ -67,7 +67,7 @@ Two boundaries matter, and both are easy to erode by accident:
   holds no domain, and the domain is `crates/pxl/spec`'s. The view
   (`crates/pxl/render`) knows the model and nothing of the kernel
   (`crates/pxl/kernel`): the kernel hands a frame what it draws.
-- **`@pxl/shared` is a contract between `apps/web` and `apps/api`.** Both sides
+- **`@pxl/shared` is a contract between `apps/web` and the servers.** Both sides
   encode and decode the same binary formats from this one source. Changing a
   format changes both ends at once; there is no versioned negotiation between
   them.

@@ -2,7 +2,6 @@
   "version": "5",
   "specifiers": {
     "jsr:@db/postgres@~0.19.5": "0.19.5",
-    "jsr:@hono/hono@^4.12.2": "4.12.2",
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/bytes@^1.0.5": "1.0.6",
     "jsr:@std/crypto@^1.0.4": "1.0.5",
@@ -56,9 +55,6 @@
         "jsr:@std/fmt",
         "jsr:@std/path@^1.0.8"
       ]
-    },
-    "@hono/hono@4.12.2": {
-      "integrity": "a3344827d814799503bb3bba77285344aaa2798643d1cc56345f9e3537ece886"
     },
     "@std/assert@1.0.19": {
       "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
@@ -2519,8 +2515,7 @@
     "members": {
       "apps/api": {
         "dependencies": [
-          "jsr:@db/postgres@~0.19.5",
-          "jsr:@hono/hono@^4.12.2"
+          "jsr:@db/postgres@~0.19.5"
         ]
       },
       "apps/web": {

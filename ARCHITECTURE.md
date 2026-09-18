@@ -22,7 +22,7 @@ Earlier states of the project are preserved on `checkpoint/20260107-float`, `che
 
 ```text
 xpute-core ◀── pxl-spec ◀── pxl-render ◀── pxl-kernel ◀── pxl-wasm ──▶ kernel.wasm ──▶ apps/web
-@xpute/core ◀── @pxl/shared ◀─────────────────────────────────────────────────────────── apps/web, apps/api
+@xpute/core ◀── @pxl/shared ◀─────────────────────────────────────────────────────────── apps/web
 ```
 
 | Crate / package | Role                                                                                                                                        |
@@ -234,7 +234,7 @@ Overture PostGIS rows
   → compressed HTTP page response
 ```
 
-The bake is TypeScript under Deno (`apps/api/src/bake/`), over `@pxl/shared`'s formats. Polygon rasterization uses even-odd fill with hole support. Linear features use a thickness kernel. Arena-backed scratch allocation reduces garbage-collection pressure during geometry work. Elevation is stored as signed 16-bit cell units, using one page-constant Mercator Z scale so the API, terrain, and objects do not drift by applying different pointwise scale rules.
+The bake is Rust (`crates/pxl/geo-bake/`), over `pxl-spec`'s formats, ported from the TypeScript it replaced and compared against it page by page before that was deleted. Polygon rasterization uses even-odd fill with hole support. Linear features use a thickness kernel. Arena-backed scratch allocation reduces garbage-collection pressure during geometry work. Elevation is stored as signed 16-bit cell units, using one page-constant Mercator Z scale so the API, terrain, and objects do not drift by applying different pointwise scale rules.
 
 ## Chunk Pipeline
 
