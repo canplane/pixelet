@@ -166,8 +166,8 @@ The unwired block was not free: the scan's and the mesher's scratch were
 sized for a 4×4 unit (a megabyte of core memory), and the fine bake
 cleared the whole merge plane on every open — 256 KB of memset for the
 16 KB a chunk uses, two thousand times per zoom-out. `chunk_block.ts`,
-its tests and the span-parametric scan are on
-`archive/20260913-chunk-block`; the scan is one chunk again and the
+its tests and the span-parametric scan are at
+`17cb91c0`; the scan is one chunk again and the
 scratch is sized to it. If draw calls ever make a wider unit worth it, it
 is built on the direct path as the document above says, and the archived
 module is the reference, not the base.

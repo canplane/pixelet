@@ -3,7 +3,7 @@
 // then a saturation step in linear light, the formulas of the post stack
 // three ran (postprocessing's BrightnessContrastEffect, whose input colour
 // space is sRGB, and HueSaturationEffect, whose is linear —
-// archive/20260914-three-draw-paths). The contrast step in linear light
+// b9e31004). The contrast step in linear light
 // would put its zero at linear 0.05 and crush every night colour below it
 // to black. The numbers are cosmetic dials.
 

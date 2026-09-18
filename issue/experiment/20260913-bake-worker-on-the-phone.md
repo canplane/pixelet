@@ -73,7 +73,7 @@ deferrals, no failures.
 `stepped` stays the default and the worker path stays behind the setting,
 not deleted: it is small, tested, and the frame, port and link it stands on
 are the boundary the later pieces use. Both paths and the setting were
-retired on 2026-09-14 (`archive/20260914-ts-build-paths`), when the bake
+retired on 2026-09-14 (`559fc68a`), when the bake
 became the module's. P0-1 is closed on these numbers, and
 the Rust mesher no longer presumes a worker — where it runs is
 measured when it exists.

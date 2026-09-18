@@ -1,4 +1,4 @@
-// The sky: environment.tsx's dome shader (archive/20260914-three-draw-paths),
+// The sky: environment.tsx's dome shader (b9e31004),
 // drawn as one full-screen triangle behind everything. The dome was a
 // sphere of radius SKY_DOME_SCALE centred on the world origin, coloured by
 // the direction from the origin to the point a pixel's ray meets it; that

@@ -83,8 +83,8 @@ Each is pinned by a vector now, so both sides answer the same.
   constant size went from 46 µs a write to 1.7 ms over 20,000 writes. The
   TypeScript hands the one allocator object on; the memory now holds it
   shared (`SharedAlloc`) and a compact clones the handle. Found folding
-  pxl-core's own band tree onto this one (2026-09-15, the old one on
-  `archive/20260915-core-sparse-tree`): the same leaves after each of
+  pxl-core's own band tree onto this one (2026-09-15, the old one at
+  `a1722d4d`): the same leaves after each of
   3,000 random writes, and 6.7 µs a write on a band of a player's size
   against the specialised tree's 4.6.
 
