@@ -1,6 +1,6 @@
 # XTP: Xpute Tree Packet
 
-A small **relocatable binary tree packet** format for JavaScript / TypeScript.
+A small **relocatable binary tree packet** format, with two implementations held to each other: this directory in TypeScript and `crates/xpute/core/src/io/marshal/tree/` in Rust. The wire format is the contract between them; the walkthrough below is the TypeScript API, which the Rust mirrors.
 
 It is designed to stay simple at the surface:
 
