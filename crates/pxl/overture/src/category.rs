@@ -1,62 +1,18 @@
 // pxl-overture/category.rs
 
-/// Overture's Places taxonomy (docs.overturemaps.org/schema/reference/places/)
-/// has thousands of `categories.primary` values — this maps the common ones to
-/// the vocabulary the client's POI theme keys off, so that table does not need
-/// to know which provider is behind a given POI. An Overture category with no
-/// entry here passes through unmapped and resolves to the theme's default.
+use crate::category_spec::OVERTURE_CATEGORY_MAP;
+
+/// Overture's `categories.primary` translated into the vocabulary the POI
+/// badge's theme keys off, or none when the table has no entry for it.
 ///
-/// Deliberately a starting set (the categories Gangnam/Suwon spot-checks
-/// actually turned up plus the obvious common ones), not an attempt to cover
-/// Overture's full taxonomy — extend as real gaps show up rather than
-/// front-loading a guess at every possible value.
+/// The table itself is generated from spec/overture/category.json, which is
+/// also where the TypeScript's copy comes from — they were two hand-maintained
+/// lists before, and the generator now fails if either drifts from the theme
+/// they both have to land in.
 pub fn map(primary: &str) -> Option<&'static str> {
-    Some(match primary {
-        // health
-        "hospital" | "medical_center" => "hospital",
-        "clinic" | "doctor" => "clinic",
-        "pharmacy" => "pharmacy",
-        "dentist" => "dentist",
-        // food & drink
-        "korean_restaurant" | "restaurant" | "sandwich_shop" => "restaurant",
-        "chicken_restaurant" | "fast_food_restaurant" => "fast_food",
-        "cafe" | "coffee_shop" => "cafe",
-        "bar" | "brewery" => "bar",
-        "pub" => "pub",
-        // money
-        "bank" => "bank",
-        "atm" => "atm",
-        // education
-        "school" | "elementary_school" | "middle_school" | "high_school" => "school",
-        "university" => "university",
-        "college" => "college",
-        "kindergarten" | "preschool" => "kindergarten",
-        "library" => "library",
-        // shopping
-        "supermarket" | "grocery_store" => "supermarket",
-        "convenience_store" => "convenience",
-        "shopping_mall" => "mall",
-        "department_store" => "department_store",
-        "clothing_store" => "clothes",
-        // transport
-        "subway_station" | "metro_station" => "subway",
-        "train_station" => "station",
-        "bus_station" | "bus_stop" => "bus_station",
-        "gas_station" | "fuel_station" => "fuel",
-        "parking" | "parking_garage" => "parking",
-        // lodging & leisure
-        "hotel" | "motel" => "hotel",
-        "guest_house" | "bed_and_breakfast" => "guest_house",
-        "park" | "national_park" => "park",
-        "museum" => "museum",
-        "tourist_attraction" | "landmark_and_historical_building" => "attraction",
-        // religion
-        "church_cathedral" | "place_of_worship" | "temple" | "mosque" | "synagogue" => "place_of_worship",
-        // civic
-        "police_station" => "police",
-        "fire_station" => "fire_station",
-        "post_office" => "post_office",
-        "city_hall" | "government_office" => "townhall",
-        _ => return None,
-    })
+    OVERTURE_CATEGORY_MAP.binary_search_by_key(&primary, |(key, _)| *key).ok().map(|at| OVERTURE_CATEGORY_MAP[at].1)
 }
+
+#[cfg(test)]
+#[path = "category.test.rs"]
+mod test;

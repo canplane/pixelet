@@ -17,5 +17,6 @@
 //! the wrong place under a provider's name.
 
 pub mod category;
+pub mod category_spec;
 pub mod division;
 pub mod properties;

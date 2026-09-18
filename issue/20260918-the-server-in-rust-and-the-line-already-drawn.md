@@ -570,6 +570,36 @@ what a divergence in the category table or the ladders would cost is a place
 drawing different icons in two parts of the UI, which is why those are still
 shared.
 
+## The category table is generated now, and checked against the theme
+
+Porting it left two hand-maintained copies of the same 61 entries, one in
+TypeScript and one in Rust. They agreed — checked, key for key — but that is a
+thing that stays true until it does not, and the repository's own model is that
+a name is written from JSON rather than decided in a language.
+
+So `spec/overture/category.json` is the table, and `script/spec.ts` writes both
+sides from it. The Rust is a static sorted by the Overture name, looked up by
+binary search; the TypeScript is the same object it was. Neither can drift from
+the other any more, because `check:spec` already fails on a generated file that
+is not what its JSON writes.
+
+The generator also checks the thing nothing was checking: every target the map
+names has to be a key of `spec/kernel/layer/poi/theme.json`, and every key of
+that theme has to be named by at least one entry. They were exactly 36 and 36
+already. Both directions were broken deliberately to confirm the gate fires:
+
+    spec/overture/category.json maps to 1 category the POI theme does not know:
+    hospitaal. A POI in one of them draws the default badge and says nothing —
+    add it to spec/kernel/layer/poi/theme.json or map to a key that is there.
+
+    spec/kernel/layer/poi/theme.json has 1 category nothing maps to: aquarium.
+    A theme entry exists because some Overture category resolves to it — add the
+    mapping in spec/overture/category.json or drop the entry.
+
+The first is the one worth a gate: a POI whose category the theme does not know
+falls back to the default badge and reports nothing, so the only way to notice
+was to look at the map and recognise the wrong icon.
+
 ## Where it stands
 
 **Steps 1–6 built** 09-18, verified against a live geo DB as above.
