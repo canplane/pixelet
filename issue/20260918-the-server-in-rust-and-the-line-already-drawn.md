@@ -496,6 +496,17 @@ Both numbers are extrapolations from 200 of 43,505 pages, which is 0.46% of
 the set, and a real walk goes in index order rather than at random — spatial
 locality should help it and a dense city should hurt. Only a full run says.
 
+Where the time goes was then measured rather than assumed
+([where the bake spends its time](./experiment/20260918-where-the-bake-spends-its-time.md)),
+and it is not the rasterizer. `bake_terrain` is 64 ms a page against 29, a
+factor of 2.2 and the smaller half. The `base` statement is 167 of the
+TypeScript's 277, and 149 of that 167 is 3.2 MB of WKB arriving — the server
+hands both clients the same rows in the same time, and a pure-TypeScript
+driver then takes eight times as long to turn them into arrays. XTP costs 2.0
+ms against 1.8, which is to say nothing. The rest of the end-to-end gap is
+that JavaScript is one thread, so eight workers overlap the database waits and
+serialize every byte of decode and every cell of fill.
+
 **The ocean tile is still page-independent, and the tool still checks.** The
 client keeps one decoded copy of `_ocean` for every open-ocean page, which
 holds only if baking the same empty source at different pages — different
