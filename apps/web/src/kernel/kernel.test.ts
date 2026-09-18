@@ -11,7 +11,7 @@
 import { assert, assertEquals } from "@std/assert";
 
 import type { u32 } from "@xpute/core/kit/word.ts";
-import { Cmd } from "@pxl/shared/spec/cmd.ts";
+import { Cmd } from "@/kernel/cmd_spec.ts";
 import { ELE_PADDED_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
 import { encode_poi_page, encode_terrain } from "@pxl/shared/bake/format.ts";
 import { cube_types } from "@pxl/shared/spec/cell/cube.ts";

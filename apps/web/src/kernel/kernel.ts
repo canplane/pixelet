@@ -32,7 +32,7 @@ import { useLayoutEffect, useSyncExternalStore } from "react";
 import type { u32 } from "@xpute/core/kit/word.ts";
 import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
 import { Strobe } from "@xpute/core/sched/strobe.ts";
-import { Cmd } from "@pxl/shared/spec/cmd.ts";
+import { Cmd } from "@/kernel/cmd_spec.ts";
 import type { Message } from "@pxl/shared/spec/message.ts";
 import { FetchFail } from "@pxl/shared/spec/fetch.ts";
 import { load_key } from "@pxl/shared/asset/load.ts";

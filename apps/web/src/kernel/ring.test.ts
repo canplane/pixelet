@@ -6,7 +6,7 @@ import { Errno } from "@xpute/core/sys/errno.ts";
 import { encoder, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
 import { FrameFlag } from "@xpute/core/ipc/frame.ts";
 import { Ring } from "@xpute/core/ipc/ring.ts";
-import { Cmd } from "@pxl/shared/spec/cmd.ts";
+import { Cmd } from "@/kernel/cmd_spec.ts";
 
 import { CORE_KERNEL } from "@/kernel/core_mem.ts";
 import { BOOT, boot_block } from "@/kernel/module.ts";
