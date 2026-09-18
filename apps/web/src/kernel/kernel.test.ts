@@ -12,9 +12,9 @@ import { assert, assertEquals } from "@std/assert";
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 import { Cmd } from "@/kernel/cmd_spec.ts";
-import { ELE_PADDED_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
-import { encode_poi_page, encode_terrain } from "@pxl/shared/bake/format.ts";
 import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
+
+import { ELE_PADDED_SPAN, encode_empty_poi_page, encode_terrain, PAGE_CELL_SPAN } from "@/kernel/fixture.ts";
 
 import { CORE_BUILD, packet } from "@/kernel/core_build.ts";
 import { CORE_KERNEL } from "@/kernel/core_mem.ts";
@@ -118,7 +118,7 @@ function turn(delta = 1 / 60): Turn {
   const started = fetched;
   for (const f of started) {
     if (f.category === "terrain") answer(f, 200, terrain_body(Number(BigInt(f.url.slice(f.url.lastIndexOf("/") + 1)) & 0xffffn)));
-    else if (f.category === "poi") answer(f, 200, encode_poi_page([]));
+    else if (f.category === "poi") answer(f, 200, encode_empty_poi_page());
     else fail(f);
   }
   for (const load of loads) CORE_BUILD.send(0, Cmd.LOAD_DELETE, packet((b) => b.u32(load)));

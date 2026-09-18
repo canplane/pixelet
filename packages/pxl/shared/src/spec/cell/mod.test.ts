@@ -2,14 +2,13 @@
 
 import { assertEquals, assertNotEquals, assertThrows } from "@std/assert";
 
-import { GroundChannelKey } from "@pxl/shared/bake/format.ts";
-
 import { cube_types } from "./cube.ts";
 import {
   cube_hex,
   cube_id_from_num,
   cube_ids,
   cube_num_id,
+  GroundChannelKey,
   object_value_is_air,
   object_value_is_present,
   placeable_cube_hex,

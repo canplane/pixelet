@@ -1,11 +1,22 @@
 // @pxl/shared/spec/cell/mod.ts
 // Entry point for the cell model. Assembles and re-exports the modular definitions.
 
-import { GROUND_CH_KEYS, GroundChannelKey } from "@pxl/shared/bake/format.ts";
-
 import { cube_colors, cube_types, type CubeColorId } from "./cube.ts";
 import type { Swatch } from "./type.ts";
 import { decor_types, type DecorId } from "./decor.ts";
+
+/** The four channels a baked ground cell can be painted in, in the order the
+ * page's own lanes carry them — which is what `channel_slot` numbers a
+ * terrain-styled cube by, so the order is part of the numbering and not a
+ * presentation choice. `common` and `block` are not ground: one is the shared
+ * absence markers, the other is what a player paints. */
+export const enum GroundChannelKey {
+  LAND = "land",
+  WATER = "water",
+  STRUCTURE = "structure",
+  TRANSPORT = "transport",
+}
+export const GROUND_CH_KEYS = [GroundChannelKey.LAND, GroundChannelKey.WATER, GroundChannelKey.STRUCTURE, GroundChannelKey.TRANSPORT] as const;
 
 export { cube_colors, cube_types, type CubeColorId } from "./cube.ts";
 export { decor_types, type DecorId } from "./decor.ts";
@@ -185,9 +196,7 @@ export const TERRAIN_STYLE_BASE = 256;
  * A cube is built by widening `{channel, type}` from the catalog's own tables,
  * which is where the check that the pair is a real one happens — the cast says
  * the walk is that check. */
-const TERRAIN_STYLE: PlaceableCube[] = TERRAIN_CHANNELS.flatMap((channel) =>
-  Object.values(cube_types[channel] as Record<string, number>).map((type) => ({ channel, type }) as PlaceableCube)
-);
+const TERRAIN_STYLE: PlaceableCube[] = TERRAIN_CHANNELS.flatMap((channel) => Object.values(cube_types[channel] as Record<string, number>).map((type) => ({ channel, type }) as PlaceableCube));
 
 /** The slot a ground channel is, which is the enum's own order — a bake's
  * lanes are in it already, so it is a number the format has fixed rather than

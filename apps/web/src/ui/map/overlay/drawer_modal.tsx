@@ -3,7 +3,6 @@
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 
-import { GroundChannelKey } from "@pxl/shared/bake/format.ts";
 import { decor_ids, type DecorId, placeable_cube_id, placeable_cubes, type PlaceableCube } from "@pxl/shared/spec/cell/mod.ts";
 
 import type { BaseModalProps } from "@/app/type/ui.types.ts";
@@ -23,9 +22,13 @@ export type DrawerModalProps = {
  * scrolling strip (no sections, that's the point of a hotbar), but a grid
  * with 30+ terrain-styled entries alongside the original 15 colors reads as
  * noise without headers. A section is a cube channel and nothing else, block
- * first (the original, most-used set) then the four ground channels in the
- * LAND/WATER/STRUCTURE/TRANSPORT order GROUND_CH_KEYS uses. */
-const SECTION_ORDER = ["block", GroundChannelKey.LAND, GroundChannelKey.WATER, GroundChannelKey.STRUCTURE, GroundChannelKey.TRANSPORT] as const;
+ * first — the original, most-used set — then the four ground channels coarse
+ * to fine, which is how a place reads: what the ground is, then what is on it.
+ *
+ * The order is the drawer's own. A channel's name comes from the catalog, but
+ * which order a palette shows them in is a decision about this list and
+ * belongs beside it. */
+const SECTION_ORDER = ["block", "land", "water", "structure", "transport"] as const;
 type SectionKey = (typeof SECTION_ORDER)[number];
 
 function group_by_section(cubes: readonly PlaceableCube[]): Map<SectionKey, PlaceableCube[]> {
