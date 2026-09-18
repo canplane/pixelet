@@ -1,4 +1,4 @@
-// @pxl/api/bake/overture/catalog.ts
+// tool/ingest/overture/catalog.ts
 //
 // Provenance tracking for Overture-sourced tables, shared by every
 // bake/overture/tool/ingest_*.ts — mirrors the region_code/data_date/

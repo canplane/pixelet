@@ -2,7 +2,6 @@
   "description": "A droplet fades. A pixelet remains.",
 
   "workspace": [
-    "apps/api",
     "apps/web",
 
     "packages/pxl/shared",
@@ -51,17 +50,17 @@
     // Copies every file under asset/ to ./out/asset/{glb,png}/<sha256> and
     // regenerates the table the shipped palette reads. Uploading is separate
     // — see .agents/skills/publish-bucket/SKILL.md.
-    "ingest:asset": "deno run -A apps/api/src/bake/asset/tool/ingest_asset.ts",
+    "ingest:asset": "deno run -A tool/ingest/asset/ingest_asset.ts",
 
     "build:web": "deno task --cwd apps/web build",
     "build:wasm": "deno task --cwd apps/web build:wasm",
 
     // Drops what Deno and Vite materialize and re-checks from nothing. Named
     // paths only; nothing is found by name and deleted.
-    "reset": "rm -rf node_modules apps/api/node_modules apps/web/node_modules apps/web/dist && deno task check",
+    "reset": "rm -rf node_modules apps/web/node_modules apps/web/dist && deno task check",
 
-    "check": "deno task check:api && deno task check:web && deno task check:shared && deno task check:xpute && deno task check:rust && deno task check:spec && deno task check:locale",
-    "check:api": "deno check apps/api/src/**/*.ts",
+    "check": "deno task check:tool && deno task check:web && deno task check:shared && deno task check:xpute && deno task check:rust && deno task check:spec && deno task check:locale",
+    "check:tool": "deno check tool/**/*.ts",
     "check:web": "deno task --cwd apps/web check",
     "check:shared": "deno check packages/pxl/shared/src/**/*.ts",
     "check:xpute": "deno check packages/xpute/core/src/**/*.ts",
@@ -103,9 +102,9 @@
     // both deploy jobs in .github/workflows/check-and-deploy.yml.
     "smoke": "deno run -A script/smoke.ts",
 
-    "test": "deno task test:web && deno task test:api && deno task test:shared && deno task test:xpute && deno task test:rust",
+    "test": "deno task test:web && deno task test:tool && deno task test:shared && deno task test:xpute && deno task test:rust",
     "test:web": "deno task --cwd apps/web test",
-    "test:api": "deno test -A apps/api/src",
+    "test:tool": "deno test -A tool",
     "test:shared": "deno test -A packages/pxl/shared/src",
     "test:xpute": "deno test -A packages/xpute/core/src",
     // The Rust core natively, where naga compiles every shader and holds
@@ -129,6 +128,9 @@
   "imports": {
     "@pxl/shared/": "./packages/pxl/shared/src/",
     "@xpute/core/": "./packages/xpute/core/src/",
+
+    // database — the Overture ingests under tool/ are its only readers
+    "@db/postgres": "jsr:@db/postgres@^0.19.5",
 
     // testing
     "@std/assert": "jsr:@std/assert@^1",

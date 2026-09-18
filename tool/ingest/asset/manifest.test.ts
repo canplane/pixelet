@@ -1,4 +1,4 @@
-// @pxl/api/bake/asset/tool/manifest.test.ts
+// tool/ingest/asset/manifest.test.ts
 //
 // Validates manifest.json's own shape and distinctness
 // invariants — the same ones download_texture_pack.ts enforces at fetch

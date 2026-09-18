@@ -140,5 +140,6 @@ Not verified, and cannot be from here: the workflow actually running. It needs
 its secrets set, and the monthly refresh should be tried once through
 `workflow_dispatch` before 10-01 rather than discovered by the cron.
 
-Left: deleting `apps/api`'s dead 34, which the audit above unblocks and the
-verified refresh gates.
+Done since: `apps/api` is deleted and what survived it moved to `tool/`. The
+refresh is still unrun — which is a risk taken knowingly, against a checkpoint
+branch, rather than the gate the audit called it.

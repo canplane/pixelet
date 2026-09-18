@@ -1,4 +1,4 @@
-// @pxl/api/bake/asset/tool/ingest_asset.ts
+// tool/ingest/asset/ingest_asset.ts
 //
 // Ingests every shipped asset — the texture pack under asset/cube, the
 // model packs under asset/decor and asset/actor — into the form the bucket
@@ -21,7 +21,7 @@
 // one file, which is what a pack is.
 //
 // Run with:
-//   deno run -A apps/api/src/bake/asset/tool/ingest_asset.ts
+//   deno run -A tool/ingest/asset/ingest_asset.ts
 //
 // A glb's extent is the size of its axis-aligned bounds over every node in
 // every scene, node transforms applied, read from the POSITION accessors'
@@ -36,9 +36,9 @@ import sharp from "npm:sharp@0.33";
 
 import { cube_types } from "@pxl/shared/spec/cell/cube_type.ts";
 
-import { render_rust_table, render_table, type Sheet } from "../table.ts";
+import { render_rust_table, render_table, type Sheet } from "./table.ts";
 
-const ROOT = fileURLToPath(new URL("../../../../../../", import.meta.url));
+const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const ASSET_DIR = resolve(ROOT, "asset");
 const OUT_DIR = resolve(ROOT, "out/asset");
 const TABLE_PATH = resolve(ROOT, "packages/pxl/shared/src/asset/ingested.ts");
@@ -231,10 +231,29 @@ async function ingest_sheet(rows: Ingested[]): Promise<Sheet> {
   return { key: KEY_PREFIX + hex, bytes: bytes.byteLength, cell: SHEET_CELL, columns: SHEET_COLUMNS, tiles };
 }
 
+/** Through the formatter the tree is checked with, so that writing a table and
+ * then formatting the repo do not disagree — `deno fmt --check` and
+ * `cargo fmt --check` are both gates, and a generator that emits unformatted
+ * output makes the next unrelated run of either fail. script/spec.ts pipes its
+ * own outputs the same way. */
+async function write_formatted(path: string, text: string): Promise<void> {
+  const rust = path.endsWith(".rs");
+  const command = rust
+    ? new Deno.Command("rustfmt", { args: ["--edition", "2021", "--emit", "stdout", "--config-path", resolve(ROOT, "crates/rustfmt.toml")], stdin: "piped", stdout: "piped", stderr: "piped" })
+    : new Deno.Command(Deno.execPath(), { args: ["fmt", "--ext", "ts", "-"], cwd: ROOT, stdin: "piped", stdout: "piped", stderr: "piped" });
+  const child = command.spawn();
+  const writer = child.stdin.getWriter();
+  await writer.write(new TextEncoder().encode(text));
+  await writer.close();
+  const { code, stdout, stderr } = await child.output();
+  if (code !== 0) throw new Error(`fmt ${path}: ${new TextDecoder().decode(stderr)}`);
+  await Deno.writeFile(path, stdout);
+}
+
 const rows = await ingest();
 const sheet = await ingest_sheet(rows);
-await Deno.writeTextFile(TABLE_PATH, render_table(rows, sheet));
-await Deno.writeTextFile(RUST_TABLE_PATH, render_rust_table(rows, sheet, cube_types));
+await write_formatted(TABLE_PATH, render_table(rows, sheet));
+await write_formatted(RUST_TABLE_PATH, render_rust_table(rows, sheet, cube_types));
 const total = rows.reduce((n, r) => n + r.bytes, 0);
 console.log(
   `[ingest] ${rows.length} assets, ${(total / 1024 / 1024).toFixed(1)} MiB, sheet ${sheet.tiles.length} tiles ${(sheet.bytes / 1024).toFixed(0)} KiB -> ${

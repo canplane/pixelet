@@ -1,4 +1,4 @@
-// @pxl/api/lib/env/must.ts
+// tool/lib/env/must.ts
 
 export type MustOptions = { allow_empty?: boolean };
 

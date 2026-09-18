@@ -1,4 +1,4 @@
-// @pxl/api/bake/asset/tool/manifest.ts
+// tool/ingest/asset/manifest.ts
 //
 // asset/cube/manifest.json loading/flattening, shared between
 // download_texture_pack.ts and manifest.test.ts so both agree on what an
@@ -51,7 +51,7 @@ export type WorkItem = {
 
 /** The texture pack's home: the manifest, the normalized images the client
  * draws (`terrain/`, `block/`), and the native-resolution originals. */
-export const CUBE_ASSET_DIR = new URL("../../../../../../asset/cube/", import.meta.url);
+export const CUBE_ASSET_DIR = new URL("../../../asset/cube/", import.meta.url);
 
 export async function load_manifest(): Promise<Manifest> {
   const manifest_url = new URL("manifest.json", CUBE_ASSET_DIR);

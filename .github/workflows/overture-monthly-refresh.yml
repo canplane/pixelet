@@ -56,7 +56,7 @@ jobs:
       # The two bakes are Rust since 2026-09-18; the two ingests above them are
       # not and are not going to be
       # (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md), so
-      # this job needs both toolchains. Pinned to what apps/api/Dockerfile
+      # this job needs both toolchains. Pinned to what crates/pxl/geo/Dockerfile
       # builds with.
       - name: Install the Rust toolchain
         run: |
@@ -87,8 +87,8 @@ jobs:
 
       - name: Ingest Overture Places + Divisions (Korea)
         run: |
-          deno run -A apps/api/src/bake/overture/tool/ingest_places.ts
-          deno run -A apps/api/src/bake/overture/tool/ingest_divisions.ts
+          deno run -A tool/ingest/overture/ingest_places.ts
+          deno run -A tool/ingest/overture/ingest_divisions.ts
 
       # The POI page is an XTP packet (packages/pxl/shared/src/bake/format.ts,
       # encode_poi_page) since v3; the version here must match

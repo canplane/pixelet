@@ -1,4 +1,4 @@
-// @pxl/api/bake/overture/tool/ingest_places.ts
+// tool/ingest/overture/ingest_places.ts
 //
 // Pulls Overture's Places theme for a bbox (default: all of South Korea)
 // from Overture's public S3 release into a dedicated `overture_places`
@@ -31,7 +31,7 @@
 // by line keeps memory flat regardless of country size.
 //
 // Usage (from repo root):
-//   deno run -A --env=.env apps/api/src/bake/overture/tool/ingest_places.ts [flags]
+//   deno run -A --env=.env tool/ingest/overture/ingest_places.ts [flags]
 //
 // Flags:
 //   --bbox <minLon,minLat,maxLon,maxLat>  WGS84 box to pull (default: all of South Korea)
@@ -39,9 +39,9 @@
 
 import { Pool } from "@db/postgres";
 
-import * as env from "@/lib/env/mod.ts";
+import * as env from "../../lib/env/mod.ts";
 
-import { get_overture_release, record_overture_catalog } from "../catalog.ts";
+import { get_overture_release, record_overture_catalog } from "./catalog.ts";
 
 // Mainland + Jeju + far western islands + Ulleungdo/Dokdo — the same
 // overall coverage rationale infra/README.md's Elevation section

@@ -1,4 +1,4 @@
-// @pxl/api/bake/asset/tool/download_texture_pack.ts
+// tool/ingest/asset/download_texture_pack.ts
 //
 // Re-runnable, one-off tool — not part of the app build. For every entry in
 // asset/cube/manifest.json: fetches the URL only if asset/cube/original/
@@ -8,7 +8,7 @@
 // asset/cube/{terrain,block}/. The client fetches those by content hash
 // from the bucket, so a changed image is followed by ingest_asset.ts.
 // Run with:
-//   deno run -A apps/api/src/bake/asset/tool/download_texture_pack.ts
+//   deno run -A tool/ingest/asset/download_texture_pack.ts
 //
 // - a failed URL is retried a few times, then reported by name
 // - a source whose aspect ratio isn't square is rejected as a possible

@@ -1,8 +1,8 @@
-// @pxl/api/bake/overture/tool/ingest_divisions.ts
+// tool/ingest/overture/ingest_divisions.ts
 //
 // Pulls Overture's Divisions theme for Korea into two tables — reverse
-// geocoding's own source (apps/api/src/bake/geocode/provider/
-// overture_provider.ts), same shape as ingest_places.ts's own pipeline for
+// geocoding's own source (crates/pxl/geo-bake/src/geocode/provider/
+// overture_provider.rs), same shape as ingest_places.ts's own pipeline for
 // POI:
 //
 //   overture_divisions        (division_area: real boundary polygons)
@@ -26,7 +26,7 @@
 // examples: zero rows in `division_area` at ANY subtype, but present in
 // `division` as `microhood` points. This is a real upstream OSM boundary-
 // coverage gap, not a filter bug here dropping something that exists —
-// `overture_provider.ts`'s point-in-polygon query genuinely has nothing to
+// `overture_provider.rs`'s point-in-polygon query genuinely has nothing to
 // find for these, which is why the point table exists as a fallback.
 //
 // Korea's own administrative depth is also NOT uniform, which is a
@@ -36,7 +36,7 @@
 // province like Gyeonggi-do contains cities that can themselves be split
 // into districts (경기도=region, 성남시=county, 분당구=locality — also 3
 // levels, but `locality` here lands on a district, not a neighborhood).
-// `overture_provider.ts` handles this by always taking whatever's actually
+// `overture_provider.rs` handles this by always taking whatever's actually
 // the finest data available for a given point — polygon match first
 // (locality > neighborhood > microhood > macrohood priority), nearest
 // point within a radius only when no polygon at any of those four
@@ -60,7 +60,7 @@
 // separate wording needed.
 //
 // Usage (from repo root):
-//   deno run -A --env=.env apps/api/src/bake/overture/tool/ingest_divisions.ts [flags]
+//   deno run -A --env=.env tool/ingest/overture/ingest_divisions.ts [flags]
 //
 // Flags:
 //   --bbox <minLon,minLat,maxLon,maxLat>  WGS84 box to pull (default: all of South Korea)
@@ -68,9 +68,9 @@
 
 import { Pool, type PoolClient } from "@db/postgres";
 
-import * as env from "@/lib/env/mod.ts";
+import * as env from "../../lib/env/mod.ts";
 
-import { get_overture_release, record_overture_catalog } from "../catalog.ts";
+import { get_overture_release, record_overture_catalog } from "./catalog.ts";
 
 const KR_BBOX_DEFAULT = "124,33,132,39";
 const BATCH_SIZE = 200; // polygons/points are heavier payloads than Places'

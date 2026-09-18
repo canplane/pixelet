@@ -135,7 +135,7 @@ export type Tile = {
 // { ele, ground } -> [ele, [land, water, structure, transport]]
 //
 // A terrain page carries no POI: POI pages are their own bake
-// (apps/api/src/bake/poi/), with no relationship to a terrain page's bytes.
+// (crates/pxl/geo-bake/src/poi/), with no relationship to a terrain page's bytes.
 export function encode_terrain(ele: I16Array, ground: Ground): U8Array {
   /**
    * Final baked terrain format:

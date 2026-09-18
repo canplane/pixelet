@@ -195,5 +195,5 @@ apps/web/.build_number
 **/*.rs.bk
 
 # Overture ingestion scratch (venv + downloaded extracts)
-apps/api/src/bake/overture/tool/.venv/
+tool/ingest/overture/.venv/
 out/overture/

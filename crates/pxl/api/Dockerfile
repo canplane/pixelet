@@ -7,8 +7,7 @@
 # build.
 #
 # The same two stages pxl-geo's image has, and the same reasons — see
-# apps/api/Dockerfile, which is that one and keeps its path because the compose
-# file and infra/README name it there.
+# crates/pxl/geo/Dockerfile, which sits beside its own crate as this one does.
 
 FROM rust:1.94-slim-trixie AS build
 WORKDIR /src

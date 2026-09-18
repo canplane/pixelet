@@ -7,11 +7,9 @@
 //! run on different machines, and nothing passes between them but the spec.
 //! See issue/20260918-the-server-in-rust-and-the-line-already-drawn.md.
 //!
-//! The tree still mirrors apps/api/src/bake, the TypeScript this was ported
-//! from, which was kept beside it until the two had been compared page by page
-//! and then deleted. The shape is worth keeping anyway: it is the one the
-//! pipeline's own stages fall into, and a reader following the old file names
-//! through git history lands in the right module.
+//! One module per stage of the pipeline, and `tool/` under each for the command
+//! line that drives it: what a bake does is a sequence, and the tree says which
+//! step a file belongs to rather than which type it holds.
 
 pub mod geocode;
 pub mod overture;

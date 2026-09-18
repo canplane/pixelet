@@ -1,4 +1,4 @@
-// @pxl/api/bake/asset/tool/render_brand.ts
+// tool/ingest/asset/render_brand.ts
 //
 // Renders the app's icons and link-preview image from the brand sources in
 // asset/brand — the world-cube symbol (a transparent 1024² PNG) and the
@@ -7,7 +7,7 @@
 // ships as static assets. Re-runnable; the outputs are committed, so a
 // changed source is followed by running this and committing what it wrote.
 //
-//   deno run -A apps/api/src/bake/asset/tool/render_brand.ts
+//   deno run -A tool/ingest/asset/render_brand.ts
 //
 // Sizes: apple-touch-icon 180 (iOS paints transparency black, so it is
 // flattened onto the preview's own sky and inset a little); the manifest's
@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import sharp from "npm:sharp@0.33";
 
-const ROOT = fileURLToPath(new URL("../../../../../../", import.meta.url));
+const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const SYMBOL = resolve(ROOT, "asset/brand/symbol.png");
 const PREVIEW = resolve(ROOT, "asset/brand/og.png");
 const OUT = resolve(ROOT, "apps/web/public");

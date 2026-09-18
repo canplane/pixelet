@@ -42,7 +42,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  # What crates/Cargo.toml's edition and apps/api/Dockerfile's base image are
+  # What crates/Cargo.toml's edition and crates/pxl/geo/Dockerfile's base image are
   # built with. Pinned so that a toolchain release cannot turn a clippy lint on
   # under us and fail a push that changed nothing.
   RUST_VERSION: "1.94"
@@ -197,7 +197,7 @@ jobs:
           else
             changed="crates/"
           fi
-          if printf '%s\n' "$changed" | grep -qE '^(crates/|infra/prod/|apps/api/Dockerfile|\.dockerignore)'; then
+          if printf '%s\n' "$changed" | grep -qE '^(crates/|infra/prod/|crates/pxl/geo/Dockerfile|\.dockerignore)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"

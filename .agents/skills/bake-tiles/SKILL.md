@@ -7,7 +7,7 @@ description: Bake terrain, POI and reverse-geocode pages from the geo DB into ou
 
 The deployed API answers forward search only. Terrain, POI and reverse
 geocode are static objects in the bucket, one per L3 page, produced offline
-by the tools under `apps/api/src/bake/` from the local geo database. This is
+by the tools in `crates/pxl/geo-bake` from the local geo database. This is
 how each set gets built and checked; getting it into the bucket is
 [publish-bucket](../publish-bucket/SKILL.md).
 
@@ -106,9 +106,9 @@ and reused unless `--reclassify` is passed.
    at three different pages and aborts if the bytes differ. If it ever does,
    the single-fallback design no longer holds — stop and re-read the
    discussion doc rather than working around it.
-4. **Spot-check a known tile against the live API.** Static and live tiles are
-   byte-identical by construction, since both go through
-   `apps/api/src/bake/terrain/source.ts`. With the API running:
+4. **Spot-check a known tile against the dev tile server.** A baked page and a
+   served one are byte-identical by construction, since both go through
+   `crates/pxl/geo-bake/src/terrain/source.rs`. With `deno task dev` up:
 
    ```bash
    curl -s localhost:3001/geo/tiles/terrain/<page_idx> --compressed | shasum
@@ -132,9 +132,10 @@ Verify the same way: `failed=` at zero, and one page opened by hand —
 `gunzip -c ./out/poi/<version>/<page_idx> | head -c 2 | xxd -p` is `5854`
 (XTP), a geocode page is JSON.
 
-A POI format change that does not touch the data is a **repack**, not a
-re-bake: `apps/api/src/bake/poi/tool/repack_poi_tiles.ts --from ./out/poi/<old>`
-re-encodes what is on disk into the current format without the database.
+A POI format change that does not touch the data used to be a **repack** —
+re-encoding what is on disk without the database. That tool was v1/v2 JSON to
+v3 XTP and went with the TypeScript; a format change now is a re-bake, which
+at 300 pages is not the cost it was when the shortcut was written.
 
 These two are also refreshed monthly without a human:
 `.github/workflows/overture-monthly-refresh.yml` ingests Overture Places
@@ -150,7 +151,7 @@ whole change on the client's side; the bake tools read it for their
 default output directory.
 
 A published **terrain** version is immutable: a change to `bake_terrain` or
-anything under `apps/api/src/bake/terrain/` invalidates every existing tile
+anything under `crates/pxl/geo-bake/src/terrain/` invalidates every existing tile
 and means a full re-bake into a **new** version — not a partial one, because
 a mixed bucket serves tiles from two pipelines with no way to tell them
 apart.

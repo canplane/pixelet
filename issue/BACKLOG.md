@@ -46,12 +46,9 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   list; the monthly refresh moved onto the Rust bakes, which it had never left.
   Left, in order: **set the secrets and run the monthly refresh once through
   `workflow_dispatch`** before 10-01, since a cron is the one caller nobody
-  watches fail; then delete `apps/api`'s dead 34 files (the Hono server, the
-  ported bake, the scaffolding, and `category_map.ts`'s generator output),
-  which an import closure identified and which nothing invokes; then decide
-  where the surviving 17 live, because `apps/api` holding no API is a directory
-  named for what it used to be. The Dockerfile moves with that decision — it
-  builds pxl-geo, and infra/prod and infra/README name its path.
+  watches fail. The rest is done: `apps/api` is gone — 38 dead files deleted,
+  the 14 that survive moved to `tool/` (a root of its own, since nothing under
+  it is deployed) and each Dockerfile now beside its own crate.
 
 - **The server to Rust, and `apps/api` into three.** Decided and begun
   2026-09-18

@@ -48,13 +48,14 @@ services:
     networks:
       - pixelet
 
-  # crates/pxl/geo, built by apps/api/Dockerfile — the file kept its path when
-  # the server stopped being TypeScript
-  # (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md).
+  # crates/pxl/geo, the world's data server
+  # (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md). The
+  # service is still called `api` because that is the hostname Caddy proxies to
+  # and renaming it is a restart of the stack for a word.
   api:
     build:
       context: ../..
-      dockerfile: apps/api/Dockerfile
+      dockerfile: crates/pxl/geo/Dockerfile
     container_name: pixelet-api
     restart: unless-stopped
     depends_on:

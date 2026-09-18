@@ -1,14 +1,10 @@
 # pxl-geo's image — the world's data server.
 #
-# Build context is the repo ROOT (docker build -f apps/api/Dockerfile .), not
-# apps/api — the server is `crates/pxl/geo` and its dependencies are path
-# dependencies inside the same Cargo workspace, so the whole `crates/` tree has
-# to be present for Cargo to resolve the workspace at all. .dockerignore strips
-# node_modules/.git/out/dist before any of this reaches the build.
-#
-# This file still lives under apps/api because that is where infra/prod's
-# compose file points and where the deploy procedure in infra/README.md names
-# it. It builds none of apps/api's TypeScript.
+# Build context is the repo ROOT (docker build -f crates/pxl/geo/Dockerfile .),
+# not this directory — its dependencies are path dependencies inside the same
+# Cargo workspace, so the whole `crates/` tree has to be present for Cargo to
+# resolve the workspace at all. .dockerignore strips node_modules/.git/out/dist
+# before any of this reaches the build.
 
 FROM rust:1.94-slim-trixie AS build
 WORKDIR /src

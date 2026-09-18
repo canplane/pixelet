@@ -2505,6 +2505,7 @@
   },
   "workspace": {
     "dependencies": [
+      "jsr:@db/postgres@~0.19.5",
       "jsr:@std/assert@1",
       "jsr:@std/path@1",
       "npm:@deno/vite-plugin@^1.0.6",
@@ -2513,11 +2514,6 @@
       "npm:vite@^7.2.4"
     ],
     "members": {
-      "apps/api": {
-        "dependencies": [
-          "jsr:@db/postgres@~0.19.5"
-        ]
-      },
       "apps/web": {
         "dependencies": [
           "npm:@radix-ui/react-dialog@^1.1.15",

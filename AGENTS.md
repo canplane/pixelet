@@ -54,7 +54,7 @@ crates/pxl/spec         the spec in Rust, the server's and the client's — the 
 crates/pxl/render       the view — the volumes and meshes a chunk bakes into, glTF, the billboards' sheet, the draw list, the shaders, the device
 crates/pxl/kernel       the kernel — the stores, the fetches, the schedulers, the turn; what is drawn and when, handed to the view
 crates/pxl/wasm         the one WebAssembly module: rings, a boot block and a doorbell over the crates
-apps/api                the Overture/DEM ingests and the asset ingest; the server and the page bakes are Rust
+tool                    the ingests run by hand: Overture and the DEM into db-geo, the asset tree into the bucket
 apps/web                Vite + React 19 client, drawing through WebGPU
 ```
 

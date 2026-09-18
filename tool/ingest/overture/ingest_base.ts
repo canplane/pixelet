@@ -1,4 +1,4 @@
-// @pxl/api/bake/overture/tool/ingest_base.ts
+// tool/ingest/overture/ingest_base.ts
 //
 // Pulls Overture's Base theme for Korea into four tables. Base is
 // fragmented across several `overturemaps --type` values rather than one,
@@ -30,7 +30,7 @@
 // and "why geojsonseq" reasoning.
 //
 // Usage (from repo root):
-//   deno run -A --env=.env apps/api/src/bake/overture/tool/ingest_base.ts [flags]
+//   deno run -A --env=.env tool/ingest/overture/ingest_base.ts [flags]
 //
 // Flags:
 //   --bbox <minLon,minLat,maxLon,maxLat>  WGS84 box to pull (default: all of South Korea)
@@ -38,9 +38,9 @@
 
 import { Pool, type PoolClient } from "@db/postgres";
 
-import * as env from "@/lib/env/mod.ts";
+import * as env from "../../lib/env/mod.ts";
 
-import { get_overture_release, record_overture_catalog } from "../catalog.ts";
+import { get_overture_release, record_overture_catalog } from "./catalog.ts";
 
 const KR_BBOX_DEFAULT = "124,33,132,39";
 const BATCH_SIZE = 300;

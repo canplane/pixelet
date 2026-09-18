@@ -81,7 +81,7 @@ server          │        │                  │  │ pxl-geo-bake   │  the
                 │        │                  │  │ pxl-api  /api  │  the application
                 │        │                  │  └────────────────┘
              ┌──▼─────┐ ┌▼─────────┐        │      ▲
-apps         │apps/api│ │ apps/web │◀───────┘      └── pxl-overture: what Overture means,
+apps         │  tool  │ │ apps/web │◀───────┘      └── pxl-overture: what Overture means,
              └────────┘ └──────────┘  kernel.wasm      read by pxl-geo and pxl-geo-bake
 ```
 
@@ -248,17 +248,16 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path (
 ```
 .
 ├── apps/
-│   ├── web/                  # The shell: Vite + React 19, and the Cloudflare Worker (worker/)
-│   │   └── src/
-│   │       ├── kernel/       #   the kernel's driver: memory, module, doorbell, signals
-│   │       ├── device/       #   the WebGPU host the renderer calls
-│   │       ├── app/ ui/      #   the frame, screens and controls
-│   │       ├── catalog/      #   the data screens show (settings schema, variants, geocode)
-│   │       ├── locale/       #   i18n catalogues, dev-only ones apart
-│   │       ├── config/       #   deployment config and routes
-│   │       ├── dev/          #   dev tools: the ledger overlay, test page
-│   │       └── kit/          #   shared UI kit and browser helpers
-│   └── api/                  # the Overture/DEM ingests and the asset ingest — no server since 09-18
+│   └── web/                  # The shell: Vite + React 19, and the Cloudflare Worker (worker/)
+│       └── src/
+│           ├── kernel/       #   the kernel's driver: memory, module, doorbell, signals
+│           ├── device/       #   the WebGPU host the renderer calls
+│           ├── app/ ui/      #   the frame, screens and controls
+│           ├── catalog/      #   the data screens show (settings schema, variants, geocode)
+│           ├── locale/       #   i18n catalogues, dev-only ones apart
+│           ├── config/       #   deployment config and routes
+│           ├── dev/          #   dev tools: the ledger overlay, test page
+│           └── kit/          #   shared UI kit and browser helpers
 ├── crates/                   # The Rust workspace
 │   ├── xpute/core/           #   xpute-core: generic runtime kit
 │   └── pxl/
@@ -277,7 +276,9 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path (
 │                             #   pxl-spec's at the top; kernel/, render/, xpute/ below
 ├── asset/                    # Shipped models and texture pack (cube, decor, actor, brand);
 │                             #   input to `deno task ingest:asset`, imported by nothing
-├── script/                   # spec and locale generators and checks
+├── tool/                     # The ingests, run by hand: Overture and the DEM into db-geo,
+│                             #   the asset tree into the bucket. Deployed by nothing
+├── script/                   # spec and locale generators and checks, the deployment smoke
 ├── infra/                    # local and production compose files, operations
 └── issue/                    # Decisions and why, the backlog, experiment/ for measurements
 ```
