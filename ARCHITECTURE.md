@@ -34,6 +34,13 @@ xpute-core ◀── pxl-spec ◀── pxl-render ◀── pxl-kernel ◀─�
 | `pxl-wasm`      | The module: the allocator and executor it installs, the linker flags that fix the memory's front, the rings, and the exports.               |
 | `@xpute/core`   | The TypeScript kit: XTP, the rings' host end (`ipc/doorbell.ts`), the strobe and quantum (`sched/`), the memory reservation (`sys/mem.ts`). |
 
+Those are what the client is built from. Five more crates sit over `pxl-spec`
+and never reach the browser: `pxl-geo` and `pxl-api` are the two servers,
+`pxl-geo-bake` holds the Overture ingests and the three page bakes,
+`pxl-asset-bake` turns the asset tree into what the bucket holds, and
+`pxl-overture` is what Overture's own values mean, read by the server and the
+bake alike ([issue/20260918-the-server-in-rust-and-the-line-already-drawn.md](./issue/20260918-the-server-in-rust-and-the-line-already-drawn.md)).
+
 Two boundaries are kept on purpose:
 
 - **xpute has no domain.** It holds no coordinates, terrain or tiles, so it stays portable to other projects ([issue/20260914-mechanism-and-policy-and-what-xpute-is.md](./issue/20260914-mechanism-and-policy-and-what-xpute-is.md)). A mechanism belongs to xpute, and the policy over it belongs to the kernel. The tick's phases are xpute's, for example, while their shares and the steps registered in them are the kernel's.
@@ -160,7 +167,7 @@ PVF3 = { i: IVec (64-bit), f: FVec (32-bit) }
 
 - **IVec** packs three signed integer lanes in a `24/24/16` X/Y/Z layout. X is cyclic so the canonical world wraps at the longitude seam.
 - **FVec** packs three unsigned 8-bit fractional residues, giving `1/256` resolution within one canonical unit, the same lattice the render payload below uses.
-- Arithmetic is integer and deterministic across platforms: 64-bit words in Rust, BigInt in TypeScript.
+- Arithmetic is integer and deterministic across platforms: 64-bit words throughout. There is one implementation — the shell reads a coordinate through the kernel rather than computing one.
 - The bit fields contain no guard lanes: IVec uses its full signed `24/24/16` ranges, while FVec uses all 8 bits per residue lane (the top byte of its 32-bit word remains unused).
 - The EPSG:3857 adapter assigns physical meaning: currently `1u = 1 L1 block ≈ 2.389` planar Mercator meters at the equator. Geographic distortion and page-constant vertical correction live in the adapter, not in PVF3 itself.
 
@@ -233,7 +240,7 @@ Overture PostGIS rows
   → compressed HTTP page response
 ```
 
-The bake is Rust (`crates/pxl/geo-bake/`), over `pxl-spec`'s formats, ported from the TypeScript it replaced and compared against it page by page before that was deleted. Polygon rasterization uses even-odd fill with hole support. Linear features use a thickness kernel. Arena-backed scratch allocation reduces garbage-collection pressure during geometry work. Elevation is stored as signed 16-bit cell units, using one page-constant Mercator Z scale so the API, terrain, and objects do not drift by applying different pointwise scale rules.
+The bake is Rust (`crates/pxl/geo-bake/`), over `pxl-spec`'s formats, ported from the TypeScript it replaced and compared against it page by page before that was deleted. Polygon rasterization uses even-odd fill with hole support. Linear features use a thickness kernel. Scratch geometry comes from an arena rather than one allocation per feature — it was what kept the TypeScript's collector out of the inner loop, and in Rust it is still one bump per page against a few hundred thousand frees. Elevation is stored as signed 16-bit cell units, using one page-constant Mercator Z scale so the bake, the terrain and the objects do not drift by applying different pointwise scale rules.
 
 ## Chunk Pipeline
 
@@ -370,7 +377,7 @@ gizmos, the ledger panel, a render-path bisect — are entries marked `dev`.
 
 **POI is disconnected** until its per-page index is rewritten ([issue/BACKLOG.md](./issue/BACKLOG.md)). What follows is the design the code holds.
 
-A POI page is an XTP record the API emits — positions, category, rank and
+A POI page is an XTP record the bake emits — positions, category, rank and
 id hash as lanes, the strings as leaves read one at a time — copied into
 the core memory on arrival. A spatial index over the resident disc
 (`crates/pxl/kernel/src/layer/poi/index.rs`) is rebuilt a range of records per unit
@@ -394,7 +401,7 @@ Chat bubbles still use the sprite form of the same patch.
 
 ## XTP — Xpute Tree Packet
 
-XTP is the binary wire format used by the bake pipeline and terrain-page API:
+XTP is the binary wire format the bake writes, the bucket holds and the kernel reads. It is also what the rings carry:
 
 - **Tree-shaped**: scalar leaves, typed-array sequences, and branch nodes;
 - **C-layout-compatible**: 8-byte word alignment, little-endian, relative offsets;

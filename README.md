@@ -16,7 +16,7 @@ The client is a small operating system in a browser tab. A Rust **kernel**, comp
 - **Rings and a doorbell.** Commands go in on a submission ring and results come back on a completion ring. The doorbell is one call, `interrupt(quota_ms)`, and its return value says when the kernel wants its next turn.
 - **One cooperative scheduler.** A turn gets a quota sized from the display's measured frame. Inside it, one tick runs its phases in priority order, and async tasks yield when the quota is spent. A read-only ledger records where the time went.
 - **Numbers, not strings.** Commands, catalogs, assets and messages are numbered in JSON under `spec/`. Rust and TypeScript are both generated from it, so the kernel never looks anything up by name.
-- **Baked offline, streamed as pages.** The server rasterizes Overture geometry and elevation into 1024² pages in XTP, a zero-copy binary tree format. The client reads those pages where they land in memory.
+- **Baked offline, streamed as pages.** Overture geometry and elevation are rasterized into 1024² pages in XTP, a zero-copy binary tree format, and published to a bucket. The client reads those pages where they land in memory.
 
 ---
 
@@ -173,27 +173,31 @@ docker compose --env-file .env -f infra/local/docker-compose.yml up -d
 deno task dev
 ```
 
-| Task                       | Description                                                          |
-| -------------------------- | -------------------------------------------------------------------- |
-| `deno task dev`            | Start web + api concurrently                                         |
-| `deno task dev:web`        | Frontend only                                                        |
-| `deno task dev:api`        | Backend only                                                         |
-| `deno task dev:remote`     | Frontend only, served by the live deployment                         |
-| `deno task preview:remote` | The production bundle, served locally, data from the live deployment |
-| `deno task build:web`      | Build frontend                                                       |
-| `deno task build:api`      | Build backend                                                        |
-| `deno task build:wasm`     | Build the kernel module into `apps/web/src/kernel/kernel.wasm`       |
-| `deno task bake:tiles`     | Bake terrain into `./out/terrain/<version>`                          |
-| `deno task ingest:asset`   | Hash `asset/` into `./out/asset` and regenerate the asset table      |
-| `deno task spec`           | Generate Rust and TypeScript from the JSON under `spec/`             |
-| `deno task deploy`         | Build the client and publish the Cloudflare Worker                   |
-| `deno task check`          | Type-check all packages                                              |
-| `deno task test`           | Run all tests                                                        |
-| `deno task lint`           | Lint                                                                 |
-| `deno task fmt`            | Format                                                               |
+| Task                                 | Description                                                                       |
+| ------------------------------------ | --------------------------------------------------------------------------------- |
+| `deno task dev`                      | The client and the three servers it talks to                                      |
+| `deno task dev:web`                  | The client only                                                                   |
+| `deno task dev:geo`                  | pxl-geo only (`/geo`)                                                             |
+| `deno task dev:api`                  | pxl-api only (`/api`)                                                             |
+| `deno task dev:tiles`                | The dev tile server, baking each page on demand                                   |
+| `deno task dev:remote`               | The client only, every route served by the live deployment                        |
+| `deno task preview:remote`           | The production bundle, served locally, data from the live deployment              |
+| `deno task build:web`                | Build the client                                                                  |
+| `deno task build:wasm`               | Build the kernel module into `apps/web/src/kernel/kernel.wasm`                    |
+| `deno task ingest:<theme>`           | An Overture theme into db-geo: base, buildings, transportation, places, divisions |
+| `deno task bake:{tiles,poi,geocode}` | db-geo into `./out/<kind>/<version>`                                              |
+| `deno task ingest:asset`             | Hash `asset/` into `./out/asset` and regenerate the asset tables                  |
+| `deno task download:pack`            | Normalize the texture pack's sources into 256² tiles                              |
+| `deno task render:brand`             | The brand's icons and link preview into `apps/web/public`                         |
+| `deno task spec`                     | Generate Rust and TypeScript from the JSON under `spec/`                          |
+| `deno task deploy`                   | Build the client and publish the Cloudflare Worker                                |
+| `deno task smoke <url>`              | What a deployment must answer, against a running one                              |
+| `deno task check`                    | Type-check every workspace member                                                 |
+| `deno task test`                     | Run every test                                                                    |
+| `deno task lint` / `fmt`             | Lint / format                                                                     |
 
-`dev:remote` needs no Docker, no database and no API process: every server
-route is proxied to the published deployment. It is the quickest way in, and
+`dev:remote` needs no Docker, no database and no server process: every route
+is proxied to the published deployment. It is the quickest way in, and
 the wrong way to work on a bake, since a published tile prefix is frozen.
 `preview:remote` is the same data under the built client at
 `localhost:4173`: what to measure the client against, since the dev server's
@@ -204,18 +208,22 @@ compiled in for development only, so a reading there is DevTools' profile.
 
 ## Deployment
 
-One Cloudflare Worker serves the built client, the baked pages and the
-assets out of R2 — terrain, POI and geocode by version, every model and texture by
-content hash — and a reverse proxy to the API, so everything the server
-answers is same-origin under `/api`, and `deno task deploy` publishes all
-three.
+One Cloudflare Worker serves the built client and reads R2 for everything
+baked — terrain, POI and geocode by version under `/geo/tiles/`, every model
+and texture by content hash under `/asset/` — and reverse-proxies the rest of
+`/geo/` and all of `/api/` to the origin. Every address is same-origin and
+unrewritten, and the three roots come from one file (`spec/route.json`), so
+adding a route is a change to the one server that answers it.
 
-The API itself, forward search's only real dependency, runs on a single
-Hetzner VM alongside its two Postgres instances and Caddy. Everything else
-is baked offline.
+The origin is a single Hetzner VM: Caddy in front of `pxl-geo` (`/geo`, the
+world's data) and `pxl-api` (`/api`, the application), each with a Postgres of
+its own. Forward search is the only feature that needs any of it at request
+time; everything else is baked offline and already in the bucket.
 
-[infra/README.md](./infra/README.md) has both procedures, the routing
-contract between them, and what to verify after each.
+A green push to main deploys both halves and smoke-tests each
+(`.github/workflows/check-and-deploy.yml`).
+[infra/README.md](./infra/README.md) has the procedures by hand, the routing
+contract, and what to verify after each.
 
 ---
 
