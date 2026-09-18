@@ -131,6 +131,8 @@ jobs:
     needs: gate
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.scope.outputs.run }}
     # The gate's group, so that a run cannot publish while the next one is
     # already taking its number: the bucket's counter and what is live on
     # plei.me move together.
@@ -224,15 +226,13 @@ jobs:
           PXL_BUILD_NUMBER: ${{ needs.gate.outputs.build_number }}
         run: deno task deploy
 
-      - name: Smoke-test the published routes
-        if: steps.scope.outputs.run == 'true'
-        run: deno task smoke https://plei.me
-
   deploy-server:
     name: rebuild the servers on the VM
     needs: gate
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    outputs:
+      rebuilt: ${{ steps.scope.outputs.run }}
     concurrency:
       group: deploy-server
       cancel-in-progress: false
@@ -312,3 +312,27 @@ jobs:
       - name: Smoke-test the origin directly
         if: steps.scope.outputs.run == 'true'
         run: deno task smoke https://api.plei.me --origin
+
+  # What plei.me answers is the two deploys composed, so it is asked once both
+  # have settled rather than from inside either. One of the twelve checks,
+  # /geo/search, is the Worker proxying to the VM: asked from deploy-web it can
+  # land while deploy-server is still recreating the stack, and Cloudflare
+  # answers 521 for an origin that is merely restarting.
+  #
+  # The outputs rather than the jobs' own conditions, because a job that
+  # decided it had nothing to publish still succeeds, and a docs-only push
+  # should not spend a runner re-asking what no deploy touched. `!cancelled()`
+  # is what lets this run at all — a needs: on a job that skipped would
+  # otherwise skip this one too.
+  smoke:
+    name: smoke-test the public surface
+    needs: [deploy-web, deploy-server]
+    if: ${{ !cancelled() && !failure() && (needs.deploy-web.outputs.published == 'true' || needs.deploy-server.outputs.rebuilt == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Smoke-test the published routes
+        run: deno task smoke https://plei.me
