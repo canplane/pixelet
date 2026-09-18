@@ -53,11 +53,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      # The two bakes are Rust since 2026-09-18; the two ingests above them are
-      # not and are not going to be
-      # (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md), so
-      # this job needs both toolchains. Pinned to what crates/pxl/geo/Dockerfile
-      # builds with.
+      # Everything past the R2 fetch is Rust: the two ingests and the two bakes
+      # are binaries of one crate, so the whole path from Overture's release to
+      # the published pages is the same code the bake tools are. Deno is still
+      # set up above, because the tasks are how they are invoked, and Python
+      # because the download is Overture's own CLI. Pinned to what
+      # crates/pxl/geo/Dockerfile builds with.
       - name: Install the Rust toolchain
         run: |
           rustup toolchain install 1.94 --profile minimal
@@ -87,10 +88,10 @@ jobs:
 
       - name: Ingest Overture Places + Divisions (Korea)
         run: |
-          deno run -A tool/ingest/overture/ingest_places.ts
-          deno run -A tool/ingest/overture/ingest_divisions.ts
+          deno task ingest:places
+          deno task ingest:divisions
 
-      # The POI page is an XTP packet (packages/pxl/shared/src/bake/format.ts,
+      # The POI page is an XTP packet (crates/pxl/spec/src/bake/format.rs,
       # encode_poi_page) since v3; the version here must match
       # PUBLISHED_VERSION.poi in packages/pxl/shared/src/bake/published.ts.
       #

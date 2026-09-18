@@ -1,24 +1,25 @@
 # tool
 
-What fills db-geo, and what turns the shipped asset tree into the objects the
-bucket holds. Everything here is run by hand a few times a year, never by a
-server — which is why it is a root of its own rather than an `apps/` member:
-nothing under it is deployed.
+What turns the shipped asset tree into the objects the bucket holds, and what
+puts the elevation raster into db-geo. Run by hand a few times a year, never by
+a server — which is why this is a root of its own rather than an `apps/`
+member: nothing under it is deployed.
 
 ```
 tool/
-├── ingest/overture/   Overture Buildings, Transportation, Base, Places, Divisions → db-geo
-├── ingest/asset/      asset/ tree → out/asset/{glb,png,webp}/<sha256> and the table of their keys
-├── elevation/         GEDTM30 → db-geo (bash + GDAL)
-└── lib/env/           reading and validating an environment variable
+├── ingest/asset/   asset/ tree → out/asset/{glb,png,webp}/<sha256> and the table of their keys
+└── elevation/      GEDTM30 → db-geo (bash + GDAL)
 ```
 
-**The three page bakes are not here.** terrain, POI and reverse geocode are
-`crates/pxl/geo-bake` — `deno task bake:tiles`, `bake:poi`, `bake:geocode`
+**What fills db-geo from Overture is not here.** The five ingests are binaries
+of `crates/pxl/geo-bake`, the crate that bakes from those tables — one
+pipeline, one connection, one catalog: `deno task ingest:{base,buildings,
+transportation,places,divisions}`. The three page bakes are the same crate's:
+`bake:tiles`, `bake:poi`, `bake:geocode`
 ([the server in Rust](../issue/20260918-the-server-in-rust-and-the-line-already-drawn.md)).
-The ingests stayed in Deno and are not going to move: their cost is Overture's
-download and Postgres's `COPY`, not the language, and they lean on the
-`overturemaps` Python CLI and on `sharp`.
+
+The asset ingest is still Deno because it is `sharp`'s, and elevation is bash
+and GDAL and was never TypeScript.
 
 Each tool's flags are in its own header.
 

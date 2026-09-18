@@ -52,6 +52,15 @@
     // — see .agents/skills/publish-bucket/SKILL.md.
     "ingest:asset": "deno run -A tool/ingest/asset/ingest_asset.ts",
 
+    // The five Overture themes into db-geo, each a binary of the same crate
+    // the bakes are: one pipeline, one connection, one catalog table. Each
+    // takes --bbox and --out.
+    "ingest:base": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin ingest_base -- \"$@\"' --",
+    "ingest:buildings": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin ingest_buildings -- \"$@\"' --",
+    "ingest:transportation": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin ingest_transportation -- \"$@\"' --",
+    "ingest:places": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin ingest_places -- \"$@\"' --",
+    "ingest:divisions": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin ingest_divisions -- \"$@\"' --",
+
     "build:web": "deno task --cwd apps/web build",
     "build:wasm": "deno task --cwd apps/web build:wasm",
 
@@ -129,8 +138,6 @@
     "@pxl/shared/": "./packages/pxl/shared/src/",
     "@xpute/core/": "./packages/xpute/core/src/",
 
-    // database — the Overture ingests under tool/ are its only readers
-    "@db/postgres": "jsr:@db/postgres@^0.19.5",
 
     // testing
     "@std/assert": "jsr:@std/assert@^1",

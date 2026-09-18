@@ -10,7 +10,7 @@ infra/
 ```
 
 The ingests that fill db-geo are bake tools, not infrastructure, and live
-with the rest of the bake: `tool/ingest/overture/ingest_*.ts`
+with the rest of the bake: `crates/pxl/geo-bake`'s own `ingest_*` binaries
 and `tool/elevation/` (a bash + GDAL pipeline). Their
 procedures are documented here because they are run against these
 databases.
@@ -37,11 +37,11 @@ Twelve tables from two sources. Terrain, POI and geocode are baked from
 these offline and published to R2; only forward search queries them at
 request time.
 
-| Source                                                                           | Tables                                                                                                                                                 | Catalog             | Ingest                                                           |
-| :------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :--------------------------------------------------------------- |
-| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `tool/ingest/overture/ingest_{buildings,transportation,base}.ts` |
-| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                    | `overture_catalog`  | `tool/ingest/overture/ingest_{places,divisions}.ts`              |
-| **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                     | `elevation_catalog` | `tool/elevation/setup_elevation.sh`                              |
+| Source                                                                           | Tables                                                                                                                                                 | Catalog             | Ingest                                             |
+| :------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :------------------------------------------------- |
+| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `deno task ingest:{buildings,transportation,base}` |
+| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                    | `overture_catalog`  | `deno task ingest:{places,divisions}`              |
+| **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                     | `elevation_catalog` | `tool/elevation/setup_elevation.sh`                |
 
 Coastline is not its own table: `OVERTURE_COAST_SQL`
 (`crates/pxl/geo-bake/src/terrain/repository.rs`) carves it at bake time from
@@ -106,11 +106,11 @@ until docker exec "$DB_GEO_CONTAINER" pg_isready -U postgres; do sleep 2; done
 Order does not matter. Each reads the root `.env` itself.
 
 ```sh
-deno run -A --env=.env tool/ingest/overture/ingest_buildings.ts
-deno run -A --env=.env tool/ingest/overture/ingest_transportation.ts
-deno run -A --env=.env tool/ingest/overture/ingest_base.ts
-deno run -A --env=.env tool/ingest/overture/ingest_places.ts
-deno run -A --env=.env tool/ingest/overture/ingest_divisions.ts
+deno task ingest:buildings
+deno task ingest:transportation
+deno task ingest:base
+deno task ingest:places
+deno task ingest:divisions
 
 chmod +x tool/elevation/setup_elevation.sh
 ./tool/elevation/setup_elevation.sh
