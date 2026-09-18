@@ -113,7 +113,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   header, a NUL and word padding (the POI repack: 60 MB gzipped against
   51 MB of JSON) and one node object at encode.
 - **XTP encoder without per-leaf objects.** A node object per leaf and a
-  closure per scalar at encode; mechanical, format-unchanged. Measured on
+  closure per scalar at encode; mechanical, format-unchanged. The bake is not
+  a beneficiary and should not be used to justify it: packing a page's source
+  is 2.0 ms in TypeScript against 1.8 in Rust
+  ([where the bake spends its time](./experiment/20260918-where-the-bake-spends-its-time.md)),
+  because a page is four large typed arrays and a few thousand short tuples —
+  the per-leaf cost is real where the packets are tiny and the call rate is
+  millions, which is the rings. Measured on
   the rings (2026-09-14,
   [experiment/20260914-xtp-by-fixed-shape.md](./experiment/20260914-xtp-by-fixed-shape.md)):
   a ray query is 709 ns through TreeView and TreeReader and 215 ns with the

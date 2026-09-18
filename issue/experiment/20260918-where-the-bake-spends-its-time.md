@@ -79,14 +79,35 @@ per-leaf object churn that
 does not show up at this scale, because a page is four big typed arrays and a
 few thousand short tuples rather than millions of tiny calls.
 
-**Workers are why the end-to-end gap is wider than the per-page one.** A page
-is 277 ms against 82, a factor of 3.4, but the tools at concurrency 8 are
-250 ms a tile against 45, a factor of 5.6. JavaScript is one thread: eight
-`Promise.all` workers overlap the database waits and serialize every byte of
-decode and every cell of rasterization, so the TypeScript goes from 277 to
-250 ms a page — eight workers bought ten percent. The Rust threads parallelize
-both halves, and stop at the database: 35.7, 32.3, 33.5 and 34.0 ms a tile at
-4, 8, 16 and 24 workers.
+**Two of the five-and-a-half times are JavaScript's one thread, and they are
+recoverable.** A page is 277 ms against 82, a factor of 3.4, but the tools at
+concurrency 8 are 250 ms a tile against 45. The difference is that
+`Promise.all` over eight "workers" is one thread: it overlaps the database
+waits and serializes every byte of decode and every cell of fill, so the
+TypeScript goes from 277 to 250 ms a page — eight workers bought ten percent.
+
+Run the TypeScript tool as several processes over disjoint page lists instead,
+which is what a `Worker` would be, and it saturates at about 110 ms a tile on
+this 10-core machine. The same 200 pages, all warm:
+
+|                                                     | ms a tile |
+| :-------------------------------------------------- | --------: |
+| TypeScript, one process, concurrency 8 (as written) |       250 |
+| TypeScript, 4 processes × concurrency 2             |       113 |
+| TypeScript, 8 processes × concurrency 1             |       108 |
+| TypeScript, 12 processes × concurrency 1            |       107 |
+| Rust, one process, concurrency 8                    |        32 |
+| Rust, one process, concurrency 10                   |        33 |
+
+So the end-to-end 5.6 is 2.3 of it being on one thread and 3.4 of it being the
+work a page costs — and that 3.4 is exactly the single-connection per-page
+ratio above, which is where the driver's bytes and the rasterizer live. Both
+sides then stop at the database.
+
+The honest form of the comparison is therefore that the tool as it was written
+left a factor of two on the floor, and that a `Worker` pool would have
+collected it without any of this. What a Worker pool could not have reached is
+the other 3.4.
 
 ## What it does not show
 
@@ -96,8 +117,14 @@ cache should help that and a dense city should hurt it. The full-set figures in
 the issue come from a 200-page sample and are extrapolations, marked as such
 there.
 
-Nothing here was tuned. No attempt was made to make the TypeScript faster
-after the fact — asking for the bytes in a different form, or moving the bake
-into workers — because the pipeline is moving anyway and the question was
-where the time goes, not what the last of it could be argued down to. What the
-numbers do say is which lever would have mattered: not the rasterizer.
+Nothing in the TypeScript was changed for this. The one lever that was tried
+— real parallelism, as processes — was tried because leaving it out would have
+credited the language with a factor that belongs to the thread count. The
+others were not: asking for the bytes in a different form, or holding the WKB
+on the server and doing the clip differently, might well move the remaining
+3.4 and were not attempted, because the pipeline is moving anyway and the
+question was where the time goes rather than what the last of it could be
+argued down to.
+
+What the numbers do say is which lever would have mattered, and it was never
+the rasterizer.
