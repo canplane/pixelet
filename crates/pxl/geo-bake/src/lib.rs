@@ -15,4 +15,6 @@ pub mod geocode;
 pub mod overture;
 pub mod poi;
 pub mod terrain;
+pub mod util;
+pub mod walk;
 pub mod wkb;

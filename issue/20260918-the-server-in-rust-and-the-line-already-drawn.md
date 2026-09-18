@@ -600,6 +600,38 @@ The first is the one worth a gate: a POI whose category the theme does not know
 falls back to the default badge and reports nothing, so the only way to notice
 was to look at the map and recognise the wrong icon.
 
+## The POI and geocode bakes, and what they did not gain
+
+Both write what the TypeScript writes. Over the same 300 random land pages:
+the same file set including the `.empty` markers, 158 POI objects byte for byte
+after decompression, 300 geocode objects equal as JSON, and a resumed run
+skipping all 300.
+
+**They are barely faster, and that is the interesting part.** POI 0.48 s
+against 0.26, geocode 0.56 against 0.37 — 1.8x and 1.5x, where the terrain bake
+was 5.6x. The reason is the same one the phase timings gave: terrain's per-page
+cost is 3.2 MB of WKB arriving and a rasterizer running over it, and these two
+have neither. A POI page is one indexed point query and a few thousand short
+strings; a label is two or three. Almost all of what is left is the database
+answering, which is the same database either way. Over the full coverage both
+come to about a minute.
+
+So the move buys these two nothing on the clock. What it buys is that they stop
+being the reason Deno has to be installed to publish a tile set — which is the
+whole of why they were ported.
+
+**One walk, not three.** The two are the same shape — terrain's land-page list,
+one object per page, an `.empty` marker where there is nothing, resume by what
+is on disk — so that is `walk.rs` and each tool is about 120 lines of what is
+its own. `bake_tiles` deliberately does not go through it: its walk is over a
+candidate grid it classifies itself, it has the shared ocean tile, and it has no
+`.empty`. Folding it in would have bent all three.
+
+Two deliberate differences from the TypeScript's manifests, both additions: the
+page manifests now carry `git_sha` and an `objects`/`gz_bytes` measured from
+disk, which only terrain's had. The count excludes the `.empty` markers, since
+they are local to a resume and never uploaded.
+
 ## Where it stands
 
 **Steps 1–6 built** 09-18, verified against a live geo DB as above.
@@ -609,11 +641,9 @@ infra/README change when the deploy cuts over, not before. `check:rust` is
 three passes now: the client's crates for wasm32 by name, the server's for the
 host, then the host check with every target.
 
-What is left of the move: `bake_poi_tiles` and `bake_geocode_tiles`, which now
-have their providers in Rust and want only the walk around them, the way
-`bake_tiles` did; and then the cutover itself — the Dockerfile, the compose
-file and infra/README, which change when the deploy switches and not before.
-7 and 8 wait on a second server existing.
+What is left of the move is the cutover itself — the Dockerfile, the compose
+file, infra/README and the dev tasks, which change when the deploy switches
+and not before. 7 and 8 wait on a second server existing.
 
 The dev tasks still start the Deno server. `deno task dev` is `dev:api` and
 `dev:web`; pointing it at `pxl-geo` and `serve_tiles` is part of the cutover,

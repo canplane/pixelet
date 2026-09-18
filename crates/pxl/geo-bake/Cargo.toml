@@ -35,3 +35,11 @@ path = "src/terrain/tool/bake_tiles.rs"
 [[bin]]
 name = "serve_tiles"
 path = "src/tool/serve_tiles.rs"
+
+[[bin]]
+name = "bake_poi_tiles"
+path = "src/poi/tool/bake_poi_tiles.rs"
+
+[[bin]]
+name = "bake_geocode_tiles"
+path = "src/geocode/tool/bake_geocode_tiles.rs"
