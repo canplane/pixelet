@@ -11,8 +11,19 @@ fn vec3(v: &Vector, k: &str) -> V3 {
     [v.f64(&format!("{k}.0")), v.f64(&format!("{k}.1")), v.f64(&format!("{k}.2"))]
 }
 
+/// Bitwise, so that 0.0 and -0.0 are told apart — except between two NaNs,
+/// whose sign and payload IEEE 754 leaves to the implementation and which do
+/// differ by architecture: `0.0 / 0.0` is the negative quiet NaN on x86-64 and
+/// the positive one on aarch64 and in JavaScript. A vector records the machine
+/// that wrote it, so comparing a NaN's bits compares machines rather than
+/// implementations. xpute-core's `fdlibm.test.rs` already draws the line here.
+fn same_f64(got: f64, want: f64) -> bool {
+    got.to_bits() == want.to_bits() || (got.is_nan() && want.is_nan())
+}
+
 fn same(got: &V3, want: V3, what: &str) {
-    assert_eq!(got.map(f64::to_bits), want.map(f64::to_bits), "{what}: {got:?} vs {want:?}");
+    let ok = got.iter().zip(want.iter()).all(|(g, w)| same_f64(*g, *w));
+    assert!(ok, "{what}: {got:?} vs {want:?} ({:016x?} vs {:016x?})", got.map(f64::to_bits), want.map(f64::to_bits));
 }
 
 #[test]
@@ -44,7 +55,8 @@ fn v3_computes_what_the_typescript_computes() {
         same(mul3(&a, &b, &mut o), vec3(&v, &format!("{k}.mul3")), &format!("{k}.mul3"));
         same(div3(&a, &b, &mut o), vec3(&v, &format!("{k}.div3")), &format!("{k}.div3"));
         same(mod3(&a, &b, &mut o), vec3(&v, &format!("{k}.mod3")), &format!("{k}.mod3"));
-        assert_eq!(dot3(&a, &b).to_bits(), v.f64(&format!("{k}.dot3")).to_bits(), "{k}.dot3");
+        let (got, want) = (dot3(&a, &b), v.f64(&format!("{k}.dot3")));
+        assert!(same_f64(got, want), "{k}.dot3: {got} vs {want}");
         same(cross3(&a, &b, &mut o), vec3(&v, &format!("{k}.cross3")), &format!("{k}.cross3"));
         same(floor3(&a, &b, &mut o), vec3(&v, &format!("{k}.floor3")), &format!("{k}.floor3"));
         same(center3(&a, &b, &mut o), vec3(&v, &format!("{k}.center3")), &format!("{k}.center3"));
