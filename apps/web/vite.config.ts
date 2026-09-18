@@ -17,8 +17,9 @@ import { DEV_PROXY_ROUTES } from "./src/config/route.ts";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const apiBaseDefault = "http://127.0.0.1:3000";
+const geoBaseDefault = "http://127.0.0.1:3000";
 const tileBaseDefault = "http://127.0.0.1:3001";
+const apiBaseDefault = "http://127.0.0.1:3002";
 
 /**
  * Which source a build is: `r<commits>-<hash>`, and `-dirty` when the
@@ -294,11 +295,12 @@ export default defineConfig(({ mode }) => {
   const appEnv = mode === "production" && rawAppEnv === "development" ? "production" : rawAppEnv;
   const isDev = appEnv === "development";
 
-  const apiBase = env.VITE_API_BASE_URL || apiBaseDefault;
-  // Two local servers now: search answers out of db-geo's three tables and the
-  // tiles are baked on demand out of the whole of it. See
+  // Three local servers, one per root plus the tiles a deployment reads out of
+  // the bucket instead. See
   // issue/20260918-the-server-in-rust-and-the-line-already-drawn.md.
+  const geoBase = env.VITE_GEO_BASE_URL || geoBaseDefault;
   const tileBase = env.VITE_TILE_BASE_URL || tileBaseDefault;
+  const apiBase = env.VITE_API_BASE_URL || apiBaseDefault;
 
   //   local  (default) — the live API, baking on demand.
   //   remote            — an already-published deployment, so no local API,
@@ -312,7 +314,7 @@ export default defineConfig(({ mode }) => {
   const remoteOrigin = remote ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault) : "";
   const proxy = Object.fromEntries(DEV_PROXY_ROUTES.map((route) => [
     route.path,
-    remoteOrigin && route.published ? { target: remoteOrigin, changeOrigin: true } : { target: route.tiles ? tileBase : apiBase, changeOrigin: true },
+    remoteOrigin && route.published ? { target: remoteOrigin, changeOrigin: true } : { target: route.tiles ? tileBase : route.app ? apiBase : geoBase, changeOrigin: true },
   ]));
 
   return {

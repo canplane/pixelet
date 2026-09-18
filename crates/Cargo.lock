@@ -993,6 +993,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pxl-api"
+version = "0.0.0"
+dependencies = [
+ "axum",
+ "deadpool-postgres",
+ "tokio",
+ "tokio-postgres",
+ "tower",
+ "tower-http",
+]
+
+[[package]]
 name = "pxl-geo"
 version = "0.0.0"
 dependencies = [

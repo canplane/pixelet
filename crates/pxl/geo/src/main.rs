@@ -6,13 +6,12 @@
 //! are served as static objects out of the bucket, while a free-text query
 //! has no such key and has to reach Postgres at request time.
 //!
-//! What this crate is not is the whole server. `/api/` is one root, and
-//! everything the server answers sits under it
-//! (issue/20260910-one-server-root.md); the crate that will hold sessions,
-//! chat and the realtime half is named for being the application's server
-//! rather than for owning that prefix, and it answers under the same root.
-//! The two are separate processes because they read separate databases —
-//! see issue/20260918-the-server-in-rust-and-the-line-already-drawn.md.
+//! It answers under `/geo/`, one of the three roots spec/route.json reserves:
+//! the world's data. The application's is `/api/`, which pxl-api answers, and
+//! the assets have their own. Each root is one prefix a relay reads and never a
+//! route it enumerates (issue/20260910-one-server-root.md), and the two servers
+//! are separate processes because they read separate databases — see
+//! issue/20260918-the-server-in-rust-and-the-line-already-drawn.md.
 
 mod admin_auth;
 mod config;
@@ -46,7 +45,7 @@ fn router(cfg: &config::Config, pool: deadpool_postgres::Pool) -> Router {
 
     Router::new()
         .merge(search::routes(pool))
-        .nest("/api/internal", internal)
+        .nest("/geo/internal", internal)
         // Search answers JSON, which compresses well and which the browser
         // decodes transparently.
         .layer(CompressionLayer::new().gzip(true))

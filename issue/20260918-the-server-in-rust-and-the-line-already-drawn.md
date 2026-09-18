@@ -299,6 +299,8 @@ bucket-served things stay a `tiles` branch under each root
 (`/geo/tiles/terrain/…`, `/api/tiles/asset/…`) or move somewhere of their own
 is open.
 
+Both were settled the same day, in the other direction — see _The frame_ below.
+
 ## What is not moving
 
 The Overture ingests (`ingest_{base,buildings,divisions,places,transportation}.ts`),
@@ -708,29 +710,110 @@ Worth keeping, narrowly: what it buys is a bake-only build not compiling a web
 framework, and the machines that would feel that are a CI job or an image that
 carries the tools alone. Neither exists yet.
 
+## The frame
+
+The split above was argued as something to do at deploy time. It was built
+instead, and the reason is that a deployment is the worst moment to first
+discover what the addresses are: the Worker, the client bundle, the Caddyfile
+and two servers all have to agree, and the ones that disagree fail in
+production rather than in a check. Meet in the middle — put the frame in place
+while nothing depends on it, so the pieces that arrive later arrive into
+something.
+
+**Three roots, not two.** `asset/` came out as its own. Models and textures are
+content-addressed ingest output; under `/geo` they would be claiming to be
+geography, and under `/api` they would be claiming to be state. They are
+neither — they are bytes named by their own sha256, which is as immutable as a
+URL gets. `asset_url()` returns `/<key>` now because the key already begins
+`asset/`.
+
+```
+Worker:  /geo/tiles/* → R2   /asset/* → R2   /geo/* → GEO_ORIGIN   /api/* → API_ORIGIN
+Caddy:   /geo/* → pxl-geo    /api/* → pxl-api
+dev:     /geo/tiles/* → 3001 /asset/* → 3001 /geo/* → 3000         /api/* → 3002
+```
+
+**The addresses are generated.** `spec/route.json` is the one place the roots
+and the branches are written, and `script/spec.ts` writes three files from it —
+`apps/web/src/config/route_spec.ts`, `apps/web/worker/route_spec.ts` and
+`crates/pxl/kernel/src/shell/config/route_spec.rs`. They had been five
+hand-kept copies before, which is four too many for a constant that only ever
+fails at the edge.
+
+Two of them cannot be generated, so they are checked instead. `wrangler.jsonc`'s
+`run_worker_first` is Cloudflare's own config format and `check_bundle.ts`'s
+sentinels are the deploy guard's; the generator compares both against the spec
+and throws when they drift. It earned that on its first run, before any of this
+was wired:
+
+```
+apps/web/wrangler.jsonc's run_worker_first is ["/api/*"]
+where spec/route.json's roots are ["/geo/*","/api/*","/asset/*"]
+```
+
+What is deliberately _not_ generated is a server's own routes. `pxl-geo` spells
+`/geo/search` and `pxl-api` spells `/api/internal` in its own source, because
+adding a route is a change to one server and to nothing else — that is
+[one server root](./20260910-one-server-root.md)'s whole point, and reading
+route names out of a shared file would undo it. Only the relays are written
+from the spec, since a relay is the thing that must agree with everyone.
+
+**pxl-api exists, and answers nothing.** It is the same frame the TypeScript
+had: a process that connects to db-main, probes it with `select 1` at boot, and
+reserves `/api/internal/*` behind the admin token with a `.fallback()` under
+the gate so the prefix is covered rather than a list of routes. `main_pool` had
+been created and queried by nothing in the Deno server since before this
+started; dropping it here would have meant putting it back — along with the
+root, the origin, the container and the secret — on the day the first route is
+written. What does not belong in it yet is a command schema or a payload shape;
+the order those come in is
+[point density and the order to multiplayer](./20260910-point-density-and-the-order-to-multiplayer.md)'s,
+and an address space is not a carrier.
+
+**Each server reads its own root's variables.** `GEO_HOST`/`GEO_PORT` and
+`API_HOST`/`API_PORT`, defaulting to 3000 and 3002. Sharing `API_PORT` between
+them, which is what the first cut did, collides the moment both run locally; in
+a deployment each has a container to itself and both listen on 3000 again.
+
+**A misroute worth recording, because it was not in the code.** `/api/*` kept
+reaching 3000 after every file said 3002. The cause was `apps/web/.env`'s
+`VITE_API_BASE_URL`, a single origin from when there was a single server, which
+the dev proxy read in preference to its default. It is three variables now —
+`VITE_GEO_BASE_URL`, `VITE_TILE_BASE_URL`, `VITE_API_BASE_URL` — one per thing
+that can be pointed somewhere else. A constant moved out of the source into a
+gitignored file is a constant no gate can check, which is the general form of
+what went wrong.
+
+Verified end to end through vite with all four processes up:
+
+```
+/geo/search?q=강남                    200   7,693 B
+/geo/tiles/terrain/6361774393589760   200   4,203,672 B
+/geo/tiles/poi/6361774393589760       200   184 B
+/geo/tiles/geocode/6361774393589760   200   248 B
+/asset/0831346f…                      200   148,892 B
+/geo/internal/x                       401
+/api/internal/x                       401
+/api/anything                         404
+```
+
 ## Where it stands
 
-**Steps 1–6 built** 09-18, verified against a live geo DB as above.
-`crates/pxl/geo` is 954 lines including its tests, takes `DB_GEO_URL` alone,
-and `apps/api` still serves — the Dockerfile, the compose file and
-infra/README change when the deploy cuts over, not before. `check:rust` is
-three passes now: the client's crates for wasm32 by name, the server's for the
-host, then the host check with every target.
+**The move is through, and the frame is in.** `crates/pxl/geo` answers `/geo/*`
+against db-geo, `crates/pxl/api` answers `/api/*` against db-main and has no
+routes, `serve_tiles` bakes `/geo/tiles/*` and serves `/asset/*` on demand
+behind `--features serve`, and `deno task dev` starts all four processes.
+`check:rust` is four passes — the client's crates for wasm32 by name, the
+server's for the host, the bake crate again with its feature, then the host
+check with every target — and `check:spec` is what keeps the addresses honest.
 
-The move is through. What is left is not part of it: removing `apps/api`'s
-TypeScript server once the Rust has served for a while, and steps 7 and 8,
-which wait on a second server existing.
+**Not deployed.** The Worker and the client must go together, because published
+tile URLs move from `/api/tiles/…` to `/geo/tiles/…` and `/asset/…`. R2 keys do
+not change — only the prefix stripped to reach them — so there is no re-bake and
+no re-upload, and the cache goes cold once.
 
-Not deployed yet — the image builds and runs, and `docker compose up -d --build`
-on the VM is what makes it live.
-
-The dev tasks still start the Deno server. `deno task dev` is `dev:api` and
-`dev:web`; pointing it at `pxl-geo` and `serve_tiles` is part of the cutover,
-because until then the TypeScript is what the byte comparisons run against.
-
-Still open, and now to settle in step 4: the Overture category map. It is
-search's and the POI bake's, and the terrain pipeline never touches it, so step
-3 did not force the question after all — the second consumer arrives with
-`bake_poi_tiles`. `pxl-spec` is out: the TypeScript keeps the table on the
-provider side rather than in `@pxl/shared`, and an Overture vocabulary is not
-the spec. That leaves a small crate of its own, decided when there are two.
+**Still not deleted:** `apps/api`'s TypeScript server. It is what every byte
+comparison in this document was made against, and removing it is a separate
+commit for after the Rust has served for a while. The Overture ingests, the
+asset ingest and the brand renderer stay in Deno for the reasons under _What is
+not moving_, and those are not waiting on anything.

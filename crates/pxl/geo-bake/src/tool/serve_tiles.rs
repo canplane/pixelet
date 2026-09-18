@@ -316,11 +316,13 @@ fn run() -> Result<(), String> {
     });
 
     let router = Router::new()
-        .route("/api/tiles/terrain/{page_idx}", get(terrain))
-        .route("/api/tiles/poi/{page_idx}", get(poi))
-        .route("/api/tiles/geocode/{page_idx}", get(geocode))
-        .route("/api/tiles/asset/{hash}", get(asset))
-        .route("/api/internal/world/{kind}/cache/invalidate", post(invalidate))
+        .route("/geo/tiles/terrain/{page_idx}", get(terrain))
+        .route("/geo/tiles/poi/{page_idx}", get(poi))
+        .route("/geo/tiles/geocode/{page_idx}", get(geocode))
+        // Its own root: an asset is neither server's, and its URL is its bucket
+        // key with a leading slash.
+        .route("/asset/{hash}", get(asset))
+        .route("/geo/internal/world/{kind}/cache/invalidate", post(invalidate))
         .with_state(app);
 
     tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| e.to_string())?.block_on(async move {

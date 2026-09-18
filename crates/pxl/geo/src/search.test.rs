@@ -34,13 +34,13 @@ async fn get(uri: &str) -> StatusCode {
 
 #[tokio::test]
 async fn a_query_outside_the_length_bounds_is_refused_before_the_database() {
-    assert_eq!(get("/api/search").await, StatusCode::BAD_REQUEST);
-    assert_eq!(get("/api/search?q=").await, StatusCode::BAD_REQUEST);
+    assert_eq!(get("/geo/search").await, StatusCode::BAD_REQUEST);
+    assert_eq!(get("/geo/search?q=").await, StatusCode::BAD_REQUEST);
     // Whitespace only: trimmed to empty, so it is the empty query.
-    assert_eq!(get("/api/search?q=%20%20").await, StatusCode::BAD_REQUEST);
+    assert_eq!(get("/geo/search?q=%20%20").await, StatusCode::BAD_REQUEST);
 
     let over = "a".repeat(MAX_QUERY_LEN + 1);
-    assert_eq!(get(&format!("/api/search?q={over}")).await, StatusCode::BAD_REQUEST);
+    assert_eq!(get(&format!("/geo/search?q={over}")).await, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
@@ -49,10 +49,10 @@ async fn the_length_bound_counts_characters_rather_than_bytes() {
     // is the case that makes the two readings of "length" differ, and the
     // TypeScript's own bound was UTF-16 units, which agrees here.
     let korean = "가".repeat(MAX_QUERY_LEN);
-    assert_ne!(get(&format!("/api/search?q={korean}")).await, StatusCode::BAD_REQUEST);
+    assert_ne!(get(&format!("/geo/search?q={korean}")).await, StatusCode::BAD_REQUEST);
 
     let over = "가".repeat(MAX_QUERY_LEN + 1);
-    assert_eq!(get(&format!("/api/search?q={over}")).await, StatusCode::BAD_REQUEST);
+    assert_eq!(get(&format!("/geo/search?q={over}")).await, StatusCode::BAD_REQUEST);
 }
 
 #[test]

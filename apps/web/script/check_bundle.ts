@@ -45,7 +45,7 @@ const DEV_MARKERS = ["dev/test", "development"];
  * esbuild leaves unfolded, so it never appears contiguously. The shell's
  * sentinel is looked for in the JavaScript, the kernel's in its module: the
  * terrain's page names are the kernel's (layer/terrain/tile_repository.rs). */
-const SENTINELS = ['"/api"'];
+const SENTINELS = ['"/geo"', '"/api"', '"/asset"'];
 const KERNEL_SENTINELS = ["_ocean"];
 
 function leaves(o: unknown, path = ""): [string, string][] {

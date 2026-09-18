@@ -111,7 +111,7 @@ and reused unless `--reclassify` is passed.
    `apps/api/src/bake/terrain/source.ts`. With the API running:
 
    ```bash
-   curl -s localhost:3000/api/tiles/terrain/<page_idx> --compressed | shasum
+   curl -s localhost:3001/geo/tiles/terrain/<page_idx> --compressed | shasum
    gunzip -c ./out/terrain/<version>/<page_idx> | shasum
    ```
 

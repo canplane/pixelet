@@ -17,14 +17,16 @@
   "exclude": ["**/.vite/", "**/dist/", "**/node_modules/"],
 
   "tasks": {
-    // Three processes: the client, the search server a deployment runs, and
-    // the tile server it does not — a deployment serves baked tiles out of the
-    // bucket, and this bakes them on demand instead
+    // Four processes: the client, the two servers a deployment runs — geo for
+    // the world's data and api for the application's — and the tile server it
+    // does not, since a deployment serves baked tiles out of the bucket and
+    // this bakes them on demand instead
     // (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md). The
     // `server` profile rather than a debug build: the rasterizer under one is
     // slow enough to be felt on every page.
-    "dev": "sh -c \"(deno task dev:api) & (deno task dev:tiles) & (deno task dev:web) & wait\"",
-    "dev:api": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo -- \"$@\"' --",
+    "dev": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task dev:web) & wait\"",
+    "dev:geo": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo -- \"$@\"' --",
+    "dev:api": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-api -- \"$@\"' --",
     "dev:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --features serve --bin serve_tiles -- \"$@\"' --",
     "dev:web": "deno task --cwd apps/web dev",
     // Client only, tiles served from the published deployment — no Docker, no
@@ -88,7 +90,7 @@
     // Formatting is checked first, over the whole workspace, against
     // crates/rustfmt.toml; the generated `.rs` files pass it because
     // script/spec.ts writes them through rustfmt.
-    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-overture -p pxl-geo -p pxl-geo-bake -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel",
+    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-overture -p pxl-geo -p pxl-geo-bake -p pxl-api -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel",
     // The specs are JSON; the TypeScript and the Rust that carry them are
     // written from it (script/spec.ts), and the gate fails on a stale one.
     "check:spec": "deno run -A script/spec.ts",
@@ -104,7 +106,7 @@
     "test:xpute": "deno test -A packages/xpute/core/src",
     // The Rust core natively, where naga compiles every shader and holds
     // each pipeline's record to it (crates/pxl/render/src/frame/shader/record.rs).
-    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-overture -p pxl-geo -p pxl-geo-bake",
+    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-overture -p pxl-geo -p pxl-geo-bake -p pxl-api",
 
     "lint": "deno lint",
     "fmt": "deno fmt"

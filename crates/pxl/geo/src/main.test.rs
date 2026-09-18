@@ -50,15 +50,15 @@ async fn get(uri: &str, token: Option<&str>) -> StatusCode {
 /// get wrong and impossible to notice.
 #[tokio::test]
 async fn the_internal_prefix_is_gated_even_where_nothing_is_mounted() {
-    assert_eq!(get("/api/internal/anything", None).await, StatusCode::UNAUTHORIZED);
-    assert_eq!(get("/api/internal/anything", Some("wrong")).await, StatusCode::UNAUTHORIZED);
+    assert_eq!(get("/geo/internal/anything", None).await, StatusCode::UNAUTHORIZED);
+    assert_eq!(get("/geo/internal/anything", Some("wrong")).await, StatusCode::UNAUTHORIZED);
 
     // Past the gate there is genuinely nothing there, and saying so is the
     // right answer — a 404 here means the token was accepted.
-    assert_eq!(get("/api/internal/anything", Some(TOKEN)).await, StatusCode::NOT_FOUND);
+    assert_eq!(get("/geo/internal/anything", Some(TOKEN)).await, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
 async fn the_gate_does_not_reach_past_its_own_prefix() {
-    assert_eq!(get("/api/search?q=", None).await, StatusCode::BAD_REQUEST);
+    assert_eq!(get("/geo/search?q=", None).await, StatusCode::BAD_REQUEST);
 }
