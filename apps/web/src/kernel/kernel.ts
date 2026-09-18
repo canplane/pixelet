@@ -33,9 +33,9 @@ import type { u32 } from "@xpute/core/kit/word.ts";
 import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
 import { Strobe } from "@xpute/core/sched/strobe.ts";
 import { Cmd } from "@/kernel/cmd_spec.ts";
-import type { Message } from "@pxl/shared/spec/message.ts";
-import { FetchFail } from "@pxl/shared/spec/fetch.ts";
-import { load_key } from "@pxl/shared/asset/load.ts";
+import type { Message } from "@/kernel/message_spec.ts";
+import { FetchFail } from "@/kernel/fetch_spec.ts";
+import { load_key } from "@/catalog/asset/load.ts";
 
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
 import { asset_url } from "@/config/route.ts";

@@ -225,7 +225,7 @@ async function color_outputs(): Promise<Output[]> {
     packed_spec[ch] = Object.fromEntries(Object.entries(entries as Record<string, { hex: string; note?: string }>).map(([n, e]) => [n, { ...e, rgb: packed(e.hex) }]));
   }
   const ts = [
-    "// @pxl/shared/spec/cell/color.ts",
+    "// @pxl/web/catalog/cell/color_spec.ts",
     ...head,
     "",
     "export default " + JSON.stringify(packed_spec, null, 2).replace(/"([A-Za-z_][A-Za-z0-9_]*)":/g, "$1:").replace(/\n(\s*)\}/g, ",\n$1}").replace(/\n(\s*)\]/g, ",\n$1]") + ";",
@@ -261,7 +261,7 @@ async function color_outputs(): Promise<Output[]> {
   }
   rs.push("    ],", "};");
   return [
-    { path: "packages/pxl/shared/src/spec/cell/color.ts", text: ts.join("\n") + "\n" },
+    { path: "apps/web/src/catalog/cell/color_spec.ts", text: ts.join("\n") + "\n" },
     { path: "crates/pxl/spec/src/cell/color.rs", text: rs.join("\n") + "\n" },
   ];
 }
@@ -279,7 +279,7 @@ async function cube_type_outputs(): Promise<Output[]> {
     "// builds the colours from it and its top comment says what each channel",
     "// is.",
   ];
-  const ts = ["// @pxl/shared/spec/cell/cube_type.ts", ...head, "", "export const cube_types = {"];
+  const ts = ["// @pxl/web/catalog/cell/cube_type_spec.ts", ...head, "", "export const cube_types = {"];
   const enums: string[] = [];
   const rs = ["// pxl-spec/cell/cube_type.rs", ...head, "", "#![allow(non_camel_case_types, non_upper_case_globals)]", "", "use super::r#type::Channels;", ""];
   rs.push(
@@ -352,7 +352,7 @@ async function cube_type_outputs(): Promise<Output[]> {
   rs.push("", "    pub const CHANNELS: &super::Channels = &[", ...spec.channels.map((ch) => `        (${JSON.stringify(ch.name)}, ${ch.name}::ENTRIES),`), "    ];");
   rs.push(...enums, "}");
   return [
-    { path: "packages/pxl/shared/src/spec/cell/cube_type.ts", text: ts.join("\n") + "\n" },
+    { path: "apps/web/src/catalog/cell/cube_type_spec.ts", text: ts.join("\n") + "\n" },
     { path: "crates/pxl/spec/src/cell/cube_type.rs", text: rs.join("\n") + "\n" },
   ];
 }
@@ -448,7 +448,7 @@ async function decor_outputs(): Promise<Output[]> {
   ];
   const entries = Object.entries(spec.decor_types);
   const ts = [
-    "// @pxl/shared/spec/cell/decor.ts",
+    "// @pxl/web/catalog/cell/decor_spec.ts",
     ...head,
     ...spec.doc.map((l) => `// ${l}`),
     "export const decor_types = {",
@@ -487,7 +487,7 @@ async function decor_outputs(): Promise<Output[]> {
     "pub type DecorId = decor_types::Decor;",
   );
   return [
-    { path: "packages/pxl/shared/src/spec/cell/decor.ts", text: ts.join("\n") + "\n" },
+    { path: "apps/web/src/catalog/cell/decor_spec.ts", text: ts.join("\n") + "\n" },
     { path: "crates/pxl/spec/src/cell/decor.rs", text: rs.join("\n") + "\n" },
   ];
 }

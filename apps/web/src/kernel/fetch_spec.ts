@@ -1,4 +1,4 @@
-// @pxl/shared/spec/fetch.ts
+// @pxl/web/kernel/fetch_spec.ts
 // Why a fetch failed, as a number; the words are the shell's.
 
 /** Why a demand the scheduler started did not deliver.

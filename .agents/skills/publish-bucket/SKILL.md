@@ -24,8 +24,8 @@ how it gets there and how you know it arrived.
 | `_meta/land_pages.json` | terrain's land/ocean list    | fixed name          | the one mutable named object; rewritten with a terrain re-bake |
 
 The versions the client requests are `PUBLISHED_VERSION` in
-`packages/pxl/shared/src/bake/published.ts`; the asset keys are the
-generated table `packages/pxl/shared/src/asset/ingested.ts`. The object
+`spec/bake/published.json`; the asset keys are the generated table
+`apps/web/src/catalog/asset/ingested_spec.ts`. The object
 name carries no extension, so **content-type and content-encoding are
 stored with the object at upload** — that is what every flag below is for.
 
@@ -107,7 +107,7 @@ the two in step.
 
 ```bash
 deno task ingest:asset     # -> ./out/asset/{glb,png,webp}/<sha256>, and regenerates
-                           #    packages/pxl/shared/src/asset/ingested.ts
+                           #    apps/web/src/catalog/asset/ingested_spec.ts
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
   aws s3 sync ./out/asset/${t%%:*} s3://pixelet-tiles/asset \

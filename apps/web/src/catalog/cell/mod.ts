@@ -1,9 +1,9 @@
-// @pxl/shared/spec/cell/mod.ts
+// @pxl/web/catalog/cell/mod.ts
 // Entry point for the cell model. Assembles and re-exports the modular definitions.
 
 import { cube_colors, cube_types, type CubeColorId } from "./cube.ts";
 import type { Swatch } from "./type.ts";
-import { decor_types, type DecorId } from "./decor.ts";
+import { decor_types, type DecorId } from "./decor_spec.ts";
 
 /** The four channels a baked ground cell can be painted in, in the order the
  * page's own lanes carry them — which is what `channel_slot` numbers a
@@ -19,7 +19,7 @@ export const enum GroundChannelKey {
 export const GROUND_CH_KEYS = [GroundChannelKey.LAND, GroundChannelKey.WATER, GroundChannelKey.STRUCTURE, GroundChannelKey.TRANSPORT] as const;
 
 export { cube_colors, cube_types, type CubeColorId } from "./cube.ts";
-export { decor_types, type DecorId } from "./decor.ts";
+export { decor_types, type DecorId } from "./decor_spec.ts";
 
 // =============================================================================
 // Aggregated Types

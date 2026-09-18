@@ -1,4 +1,4 @@
-// @pxl/shared/spec/cell/mod.test.ts
+// @pxl/web/catalog/cell/mod.test.ts
 
 import { assertEquals, assertNotEquals, assertThrows } from "@std/assert";
 

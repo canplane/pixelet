@@ -1,7 +1,7 @@
 // @pxl/web/catalog/object/size.ts
 
 import type { f64 } from "@xpute/core/kit/word.ts";
-import { placeable_cube_id, type PlaceableCube, type PlaceableCubeId } from "@pxl/shared/spec/cell/mod.ts";
+import { placeable_cube_id, type PlaceableCube, type PlaceableCubeId } from "@/catalog/cell/mod.ts";
 
 import { OBJECT_SCALE_EXPONENTS, OBJECT_SIZES, type ObjectScaleExponent } from "./size_spec.ts";
 

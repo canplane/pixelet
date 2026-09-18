@@ -3,7 +3,7 @@
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 
-import { decor_ids, type DecorId, placeable_cube_id, placeable_cubes, type PlaceableCube } from "@pxl/shared/spec/cell/mod.ts";
+import { decor_ids, type DecorId, placeable_cube_id, placeable_cubes, type PlaceableCube } from "@/catalog/cell/mod.ts";
 
 import type { BaseModalProps } from "@/app/type/ui.types.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";

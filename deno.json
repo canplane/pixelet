@@ -4,7 +4,6 @@
   "workspace": [
     "apps/web",
 
-    "packages/pxl/shared",
     "packages/xpute/core"
   ],
   "nodeModulesDir": "auto",
@@ -73,9 +72,8 @@
     // paths only; nothing is found by name and deleted.
     "reset": "rm -rf node_modules apps/web/node_modules apps/web/dist && deno task check",
 
-    "check": "deno task check:web && deno task check:shared && deno task check:xpute && deno task check:rust && deno task check:spec && deno task check:locale",
+    "check": "deno task check:web && deno task check:xpute && deno task check:rust && deno task check:spec && deno task check:locale",
     "check:web": "deno task --cwd apps/web check",
-    "check:shared": "deno check packages/pxl/shared/src/**/*.ts",
     "check:xpute": "deno check packages/xpute/core/src/**/*.ts",
     // The Rust, for the targets it ships to. Clippy type-checks as it lints,
     // and a warning fails it, as a type error fails the others. Three passes,
@@ -115,9 +113,8 @@
     // both deploy jobs in .github/workflows/check-and-deploy.yml.
     "smoke": "deno run -A script/smoke.ts",
 
-    "test": "deno task test:web && deno task test:shared && deno task test:xpute && deno task test:rust",
+    "test": "deno task test:web && deno task test:xpute && deno task test:rust",
     "test:web": "deno task --cwd apps/web test",
-    "test:shared": "deno test -A packages/pxl/shared/src",
     "test:xpute": "deno test -A packages/xpute/core/src",
     // The Rust core natively, where naga compiles every shader and holds
     // each pipeline's record to it (crates/pxl/render/src/frame/shader/record.rs).
@@ -138,7 +135,6 @@
   },
 
   "imports": {
-    "@pxl/shared/": "./packages/pxl/shared/src/",
     "@xpute/core/": "./packages/xpute/core/src/",
 
     // testing

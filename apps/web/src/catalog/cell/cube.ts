@@ -1,4 +1,4 @@
-// @pxl/shared/spec/cell/cube.ts
+// @pxl/web/catalog/cell/cube.ts
 // [Layer: cube] The one numeric-id/color catalog for every placeable cell
 // type — both the baked 2.5D terrain raster's own four channels
 // (land/water/structure/transport, filled by the bake pipeline, one
@@ -28,9 +28,9 @@ import { build_colors_from_json, type Swatch } from "./type.ts";
 // .ts export, not a real .json file imported via `with { type: "json" }`:
 // see that module's own top comment for why (a real, reproduced
 // @deno/vite-plugin limitation, not a style preference).
-import cube_palette_json from "./color.ts";
+import cube_palette_json from "./color_spec.ts";
 
-import { cube_types } from "./cube_type.ts";
+import { cube_types } from "./cube_type_spec.ts";
 
 export { cube_types };
 

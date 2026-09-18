@@ -24,7 +24,7 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 | geocode | `deno task bake:geocode` (crates/pxl/geo-bake) | Overture divisions, terrain's `land_pages.json` | gzipped JSON, one per page with a label | no object              |
 
 Every tool writes to `./out/<kind>/<version>`, where the version defaults to
-`PUBLISHED_VERSION.<kind>` in `packages/pxl/shared/src/bake/published.ts`
+`PUBLISHED_VERSION.<kind>` in `spec/bake/published.json`
 and the last path segment of `--out` overrides it. The object name is the
 page's `page_idx` with no extension — the filename _is_ the object key.
 

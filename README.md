@@ -61,33 +61,33 @@ The code is split two ways: generic kit (`xpute`) versus pixelet domain (`pxl`),
              ┌──────────────┐           ┌──────────────┐
 generic kit  │ @xpute/core  │  mirrors  │ xpute-core   │  no domain knowledge
              └──────┬───────┘           └──────┬───────┘
-             ┌──────▼───────┐           ┌──────▼───────┐
-model        │ @pxl/shared  │  mirrors  │ pxl-spec     │  space, cells, commands, bake formats
-             └──┬────────┬──┘           └───┬──────┬───┘
-                │        │        ┌─────────▼──┐   │
-view            │        │        │ pxl-render │   │  meshes, glTF, LOD, draw list, GPU
-                │        │        └─────────┬──┘   │
-                │        │        ┌─────────▼──┐   │
-kernel          │        │        │ pxl-kernel │   │  stores, schedulers, the turn
-                │        │        └─────────┬──┘   │
-                │        │        ┌─────────▼──┐   │
-module          │        │        │ pxl-wasm   │   │  boot block, rings, doorbell
-                │        │        └─────────┬──┘   │
-                │        │                  │  ┌───▼────────────┐
-server          │        │                  │  │ pxl-geo-bake   │  the ingests and the bakes
-                │        │                  │  │ pxl-asset-bake │  the asset tree's tooling
-                │        │                  │  └────────────────┘
-                │        │                  │  ┌────────────────┐
-                │        │                  │  │ pxl-geo  /geo  │  the world's data
-                │        │                  │  │ pxl-api  /api  │  the application
-                │        │                  │  └────────────────┘
-             ┌──▼─────┐ ┌▼─────────┐        │      ▲
-apps         │  tool  │ │ apps/web │◀───────┘      └── pxl-overture: what Overture means,
-             └────────┘ └──────────┘  kernel.wasm      read by pxl-geo and pxl-geo-bake
+                    │                   ┌──────▼───────┐
+model               │                   │ pxl-spec     │  space, cells, commands, bake formats
+                    │                   └───┬──────┬───┘
+                    │          ┌────────────▼─┐    │
+view                │          │ pxl-render   │    │  meshes, glTF, LOD, draw list, GPU
+                    │          └────────────┬─┘    │
+                    │          ┌────────────▼─┐    │
+kernel              │          │ pxl-kernel   │    │  stores, schedulers, the turn
+                    │          └────────────┬─┘    │
+                    │          ┌────────────▼─┐    │
+module              │          │ pxl-wasm     │    │  boot block, rings, doorbell
+                    │          └────────────┬─┘    │
+                    │                       │  ┌───▼────────────┐
+offline             │                       │  │ pxl-geo-bake   │  the ingests and the bakes
+                    │                       │  │ pxl-asset-bake │  the asset tree's tooling
+                    │                       │  └────────────────┘
+                    │                       │  ┌────────────────┐
+server              │                       │  │ pxl-geo  /geo  │  the world's data
+                    │                       │  │ pxl-api  /api  │  the application
+                    │                       │  └────────────────┘
+             ┌──────▼───────┐               │      ▲
+apps         │  apps/web    │◀──────────────┘      └── pxl-overture: what Overture means,
+             └──────────────┘  kernel.wasm              read by pxl-geo and pxl-geo-bake
 ```
 
 - **`xpute`** is the runtime kit, meant to stay portable to other projects. It has collections, the allocators (a slab over a buddy), the rings, the change log, the three levels of the scheduler, and XTP. It has no coordinates, terrain or tiles.
-- **`pxl-spec`** is the model that both the server and the client follow. It holds the PVF3 coordinate system, the spatial hierarchy, the cell catalogs, the command numbers and the bake's wire formats. `@pxl/shared` is its TypeScript counterpart, and the API bakes with it.
+- **`pxl-spec`** is the model everything follows — the servers, the bakes and the kernel. It holds the PVF3 coordinate system, the spatial hierarchy, the cell catalogs, the command numbers and the bake's wire formats. It has no TypeScript twin: the shell reads a page through the kernel rather than decoding one, so a format has one implementation.
 - **`pxl-render`** is the view: what the model looks like when drawn. It builds voxel volumes and meshes, loads glTF, runs the LOD ladder, packs the billboards' sheet, writes the draw list, and holds the WGSL shaders and the renderer. It knows the model and nothing of the kernel. The kernel hands it a frame.
 - **`pxl-kernel`** is the kernel. It owns the chunk scheduler, the stores, the fetch queue, the camera, the environment and the turn. Nothing in it knows about WebAssembly or a browser, so it runs natively under `cargo test`.
 - **`pxl-wasm`** is the only crate that knows it is WebAssembly. It installs the allocator and the executor, fixes the memory's front with linker flags, and exports `boot`, `interrupt` and the ledger's reads. It uses no wasm-bindgen.
@@ -273,7 +273,6 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path (
 │       └── api/              #   pxl-api: the application server (/api)
 ├── packages/                 # The TypeScript workspace packages
 │   ├── xpute/core/           #   @xpute/core: generic kit, XTP, rings, doorbell, strobe
-│   └── pxl/shared/           #   @pxl/shared: PVF3, cells, bake formats, asset tables
 ├── spec/                     # JSON every language is generated from (script/spec.ts):
 │                             #   pxl-spec's at the top; kernel/, render/, xpute/ below
 ├── asset/                    # Shipped models and texture pack (cube, decor, actor, brand);

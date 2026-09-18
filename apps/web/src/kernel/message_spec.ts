@@ -1,4 +1,4 @@
-// @pxl/shared/spec/message.ts
+// @pxl/web/kernel/message_spec.ts
 // What the kernel has to say, as a number; the words are the shell's.
 
 /**

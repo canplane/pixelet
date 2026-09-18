@@ -1,4 +1,4 @@
-// @pxl/shared/asset/texture.ts
+// @pxl/web/catalog/asset/texture.ts
 
 /**
  * The texture pack this build ships: which image a cube type wears on
@@ -14,7 +14,7 @@
  * come from ingested.ts.
  */
 
-import { INGESTED, SHEET } from "./ingested.ts";
+import { INGESTED, SHEET } from "./ingested_spec.ts";
 
 /** Which of a box's images this is. The split is the renderer's own:
  * chunk_material.ts calls a face lateral at `abs(normal.z) < 0.5`, so a

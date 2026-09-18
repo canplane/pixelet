@@ -1,4 +1,4 @@
-// @pxl/shared/spec/cell/type.ts
+// @pxl/web/catalog/cell/type.ts
 
 /** A catalog colour, in both the forms anyone wants it: as written, for a
  * record a person reads, and packed, for everything that has to light or blend

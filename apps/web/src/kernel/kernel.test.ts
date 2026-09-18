@@ -12,7 +12,7 @@ import { assert, assertEquals } from "@std/assert";
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 import { Cmd } from "@/kernel/cmd_spec.ts";
-import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
+import { cube_types } from "@/catalog/cell/cube.ts";
 
 import { ELE_PADDED_SPAN, encode_empty_poi_page, encode_terrain, PAGE_CELL_SPAN } from "@/kernel/fixture.ts";
 

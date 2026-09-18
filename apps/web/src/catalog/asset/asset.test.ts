@@ -1,4 +1,4 @@
-// @pxl/shared/asset/asset.test.ts
+// @pxl/web/catalog/asset/asset.test.ts
 
 import { assert, assertEquals } from "@std/assert";
 

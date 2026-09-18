@@ -22,7 +22,7 @@ Earlier states of the project are preserved on `checkpoint/20260107-float`, `che
 
 ```text
 xpute-core ◀── pxl-spec ◀── pxl-render ◀── pxl-kernel ◀── pxl-wasm ──▶ kernel.wasm ──▶ apps/web
-@xpute/core ◀── @pxl/shared ◀─────────────────────────────────────────────────────────── apps/web
+@xpute/core ◀───────────────────────────────────────────────────────────────────────────── apps/web
 ```
 
 | Crate / package | Role                                                                                                                                        |
@@ -33,7 +33,6 @@ xpute-core ◀── pxl-spec ◀── pxl-render ◀── pxl-kernel ◀─�
 | `pxl-kernel`    | The kernel: the chunk scheduler and nodes, the layers and their stores, fetches and loads, the camera and sensors, the turn, the ledger.    |
 | `pxl-wasm`      | The module: the allocator and executor it installs, the linker flags that fix the memory's front, the rings, and the exports.               |
 | `@xpute/core`   | The TypeScript kit: XTP, the rings' host end (`ipc/doorbell.ts`), the strobe and quantum (`sched/`), the memory reservation (`sys/mem.ts`). |
-| `@pxl/shared`   | The model in TypeScript for the API's bake and the shell: PVF3, cells, bake formats, asset tables, command numbers.                         |
 
 Two boundaries are kept on purpose:
 
@@ -413,5 +412,5 @@ What a build ships is decided at build time and written once as JSON under `spec
 Nothing in a catalog is sent between shell and kernel or between client and server. Both sides compile the same catalog, so a message carrying it would be a program telling itself what it already has ([issue/20260913-everything-is-a-file-the-placement-and-the-palette.md](./issue/20260913-everything-is-a-file-the-placement-and-the-palette.md)). Where bytes do cross, as a published bake or a saved blob, their layout is the model's and their version is in the envelope: the path or the storage key.
 
 - **Cubes and decor kinds** are `spec/cell/`'s (`cube_type.json`, `color.json`, `decor.json`); a value's number is what the object store writes.
-- **Models** are named by their path under the top-level `asset/` tree, in the catalog that uses them: each decor kind's `models` and `skins` in `spec/kernel/layer/decor/kind/kind.json`, each character group's `keys`, `models`, `skin` and `size` in `spec/kernel/layer/character/variant.json`. A path resolves to a bucket key and a measured extent through the asset table (`crates/pxl/spec/src/asset/ingested.rs`, `@pxl/shared/asset/ingested.ts`) that `deno task ingest:asset` generates, which hashes every model, skin and texture into the bucket (`asset/<sha256>`) and measures each glb's bounds. Nothing imports a model or an image: the client fetches a key, the same key from the dev API's `./out/asset` and from R2.
+- **Models** are named by their path under the top-level `asset/` tree, in the catalog that uses them: each decor kind's `models` and `skins` in `spec/kernel/layer/decor/kind/kind.json`, each character group's `keys`, `models`, `skin` and `size` in `spec/kernel/layer/character/variant.json`. A path resolves to a bucket key and a measured extent through the asset table (`crates/pxl/spec/src/asset/ingested.rs`, `apps/web/src/catalog/asset/ingested_spec.ts`) that `deno task ingest:asset` generates, which hashes every model, skin and texture into the bucket (`asset/<sha256>`) and measures each glb's bounds. Nothing imports a model or an image: the client fetches a key, the same key from the dev API's `./out/asset` and from R2.
 - **The texture pack** is one table (`crates/pxl/spec/src/asset/texture.rs`, which image a cube type wears on which face) and one object in the bucket: the ingest composes its images into a single WebP sheet, and the client fills its layer array from that one download, a layer at a time. A cube's colour is `spec/cell/color.json`'s, what the minimap and the coarse tiers draw, and a pack decorates it.

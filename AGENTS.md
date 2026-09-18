@@ -48,9 +48,8 @@ follow that rather than improvising SQL against the raw tables.
 asset                   the shipped models and texture pack; data, not code — nothing imports it
 spec                    the numbers and names every language is generated from (script/spec.ts): pxl-spec's at the top, kernel/, render/ and xpute/ below
 packages/xpute/core     generic runtime kit — collections, codecs, XTP binary protocol
-packages/pxl/shared     pixelet domain — PVF3 coordinates, cell/terrain model, bake wire format
 crates/xpute/core       the generic runtime kit in Rust; no domain
-crates/pxl/spec         the spec in Rust, the server's and the client's — the space, the cell catalogs, the commands, the bake's formats, the assets' tables; @pxl/shared's counterpart
+crates/pxl/spec         the spec: the space, the cell catalogs, the commands, the bake's formats, the assets' tables — the one model the servers and the kernel all follow
 crates/pxl/render       the view — the volumes and meshes a chunk bakes into, glTF, the billboards' sheet, the draw list, the shaders, the device
 crates/pxl/kernel       the kernel — the stores, the fetches, the schedulers, the turn; what is drawn and when, handed to the view
 crates/pxl/wasm         the one WebAssembly module: rings, a boot block and a doorbell over the crates
@@ -65,14 +64,16 @@ Two boundaries matter, and both are easy to erode by accident:
 - **`@xpute/core` must contain no pixelet domain knowledge.** It is meant to stay
   portable to other projects. Coordinates, terrain, tiles, Overture — none of
   those concepts belong there. If something needs them, it belongs in
-  `@pxl/shared`. The same line runs through the Rust: `crates/xpute/core`
+  `pxl-spec`. The same line runs through the Rust: `crates/xpute/core`
   holds no domain, and the domain is `crates/pxl/spec`'s. The view
   (`crates/pxl/render`) knows the model and nothing of the kernel
   (`crates/pxl/kernel`): the kernel hands a frame what it draws.
-- **`@pxl/shared` is a contract between `apps/web` and the servers.** Both sides
-  encode and decode the same binary formats from this one source. Changing a
-  format changes both ends at once; there is no versioned negotiation between
-  them.
+- **`pxl-spec` is the one model, and it has no TypeScript twin.** The shell
+  reads a page through the kernel, never by decoding one itself, so a wire
+  format has exactly one implementation and there is nothing to keep in step.
+  What the shell does hold is what it draws with — the cell catalog, the asset
+  tables, the ABI enums — and those are generated into `apps/web/src/` from
+  `spec/`, beside the Rust they are generated with.
 
 ## Scope and maturity
 
@@ -269,7 +270,7 @@ that is not an inconsistency to fix.
 house style; the divergence is deliberate.
 
 **`pxl` is for code, `pixelet` is for infrastructure.** Import paths and storage
-keys abbreviate (`@pxl/shared`, `pxl:lang`); provisioned resources spell the
+keys abbreviate (`@xpute/core`, `pxl:lang`); provisioned resources spell the
 project out — `pixelet-db-geo`, `pixelet-network`, `pixelet_geo` in
 `.env.example`, and the tile bucket in `apps/web/wrangler.jsonc`. Neither is a
 lapse to normalize into the other.
