@@ -21,7 +21,9 @@
 //! switch did.
 
 use postgres::{Client, Row, Statement};
-use pxl_overture::division::{broad_rank, GeocodePart, GeocodeResult, FINE_SUBTYPE_PRIORITY};
+use pxl_overture::division::{broad_rank, FINE_SUBTYPE_PRIORITY};
+
+use crate::geocode::provider::{GeocodePart, GeocodeResult};
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
 

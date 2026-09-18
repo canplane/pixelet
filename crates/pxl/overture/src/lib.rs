@@ -8,10 +8,13 @@
 //! resolve to the same one of ours whichever side asked, or a place's badge on
 //! the map and its row in the search list draw different icons.
 //!
-//! So this holds the translation and the accessors over Overture's `properties`
-//! JSON, and nothing else. It is not the Overture tables' data layer: each
+//! So this holds what Overture's values mean — the category translation, the
+//! accessors over its `properties` JSON, its Divisions subtypes and the order
+//! they are read in — and nothing else. It is not the tables' data layer: each
 //! server keeps its own statements, because what they ask for differs even
-//! where the table does not.
+//! where the table does not. Nor does it hold what either server *answers*
+//! with: a wire shape of ours survives a change of provider, and would be in
+//! the wrong place under a provider's name.
 
 pub mod category;
 pub mod division;

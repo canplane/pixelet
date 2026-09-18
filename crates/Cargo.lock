@@ -1016,6 +1016,7 @@ dependencies = [
  "postgres",
  "pxl-overture",
  "pxl-spec",
+ "serde",
  "serde_json",
  "tokio",
  "xpute-core",
@@ -1034,7 +1035,6 @@ dependencies = [
 name = "pxl-overture"
 version = "0.0.0"
 dependencies = [
- "serde",
  "serde_json",
 ]
 

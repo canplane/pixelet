@@ -554,8 +554,21 @@ and a badge on the map and a row in the search list have to draw the same icon
 — so the table cannot be duplicated. `pxl-spec` was refused for it: the
 TypeScript keeps it on the provider side rather than in `@pxl/shared`, and an
 Overture vocabulary is not the spec. The crate turned out to hold more than
-the one table: `GeocodePart` and the two subtype ladders were also the same
-lists in two files, once the reverse geocode came across.
+the one table — the two Divisions subtype ladders were also the same lists in
+two files, once the reverse geocode came across.
+
+It briefly held `GeocodePart` as well, and that was wrong. A crate named for a
+provider holds what the provider's values mean; `GeocodePart` is a shape _we_
+answer in, and swapping the provider would keep it while changing every ladder
+beside it. It was there because the crate was the only shared place allowed a
+serde dependency, which is a reason about the build and not about the
+boundary. Each server defines its own now, and they are not the same type:
+the reverse geocode's carries `approx` for a part that came from a nearby
+point, and search's never does. Nothing is lost by the duplication that the
+client would not see immediately — the shape is three optional fields — while
+what a divergence in the category table or the ladders would cost is a place
+drawing different icons in two parts of the UI, which is why those are still
+shared.
 
 ## Where it stands
 

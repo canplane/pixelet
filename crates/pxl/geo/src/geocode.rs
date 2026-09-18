@@ -11,11 +11,32 @@
 use std::collections::HashMap;
 
 use deadpool_postgres::Pool;
-pub use pxl_overture::division::GeocodePart;
 use pxl_overture::division::{broad_rank, FINE_SUBTYPE_PRIORITY};
+use serde::Serialize;
 use tokio_postgres::Row;
 
 use crate::db::DbError;
+
+/// One level of a search result's context, broad to narrow. The shape is this
+/// server's own rather than the Divisions theme's: what the provider is decides
+/// which subtypes exist and in what order (pxl-overture), and what the answer
+/// looks like is decided here. The reverse geocode answers in the same shape
+/// from its own crate, and the client reads both the same way.
+#[derive(Serialize)]
+pub struct GeocodePart {
+    pub name: String,
+    /// A language-tag-keyed name map, when Overture has one for this division.
+    /// Omitted rather than null, so the client's own optional field reads the
+    /// same whichever side produced it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub common: Option<serde_json::Value>,
+}
+
+impl GeocodePart {
+    fn new(name: String, common: Option<serde_json::Value>) -> GeocodePart {
+        GeocodePart { name, common }
+    }
+}
 
 /// `gers_id <> $3` matters when the point being resolved is itself a
 /// region/county centroid (e.g. resolving context for a "성남시" match) —
