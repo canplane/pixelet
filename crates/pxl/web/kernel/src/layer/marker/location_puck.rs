@@ -11,7 +11,7 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::PVF3;
 use pxl_spec::space::v3::{add3, center3n, floor3n, V3};
-use xpute_core::sys::mem::{alloc, free};
+use xpute_runtime::sys::mem::{alloc, free};
 
 use crate::layer::environment::config::render_cfg::FOG_FAR;
 use crate::layer::environment::theme::WorldThemeKey;

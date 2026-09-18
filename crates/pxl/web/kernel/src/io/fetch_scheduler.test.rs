@@ -1,6 +1,6 @@
 // pxl-kernel/io/fetch_scheduler.test.rs
 //
-// How the queue orders, yields and counts is xpute_core::sched::io's to test.
+// How the queue orders, yields and counts is xpute_runtime::sched::io's to test.
 // What is the world's here: the key a demand goes out and comes back under,
 // the credits the central scheduler grants, and the ledger's record.
 

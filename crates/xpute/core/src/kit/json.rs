@@ -16,8 +16,8 @@
 //! The one thing it cannot be: a lone surrogate, which a JavaScript string
 //! holds and a Rust one cannot; `\ud800` alone parses to U+FFFD.
 
-use crate::sys::errno::Errno;
-use crate::sys::error::MarshalError;
+use crate::errno::Errno;
+use crate::error::MarshalError;
 
 /// `Record<string, string | undefined>`, in the order it was built.
 pub type StrMap = Vec<(String, Option<String>)>;

@@ -4,7 +4,7 @@
  * The central scheduler's driver of the kernel (crates/pxl/kernel behind
  * crates/pxl/wasm), and the devices it runs for it: nothing decided here.
  *
- * The turns are the strobe's (@xpute/core/sched/strobe.ts): a frame rings
+ * The turns are the strobe's (@xpute/runtime/sched/strobe.ts): a frame rings
  * the doorbell with a quota after submitting what the frame carries
  * (WORLD_UPDATE: the viewport, the gap, the frame interval as measured, the
  * I/O credits). In that turn the kernel applies what waits on the submission
@@ -31,7 +31,7 @@ import { useLayoutEffect, useSyncExternalStore } from "react";
 
 import type { u32 } from "@xpute/core/kit/word.ts";
 import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
-import { Strobe } from "@xpute/core/sched/strobe.ts";
+import { Strobe } from "@xpute/runtime/sched/strobe.ts";
 import { Cmd } from "@/kernel/cmd_spec.ts";
 import type { Message } from "@/kernel/message_spec.ts";
 import { FetchFail } from "@/kernel/fetch_spec.ts";

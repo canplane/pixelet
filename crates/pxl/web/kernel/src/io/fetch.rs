@@ -18,8 +18,8 @@ use core::fmt;
 
 use pxl_spec::fetch::FetchFail;
 use xpute_core::kit::array::{ArrayBuffer, U8Array};
-use xpute_core::sched::edge::{notified, yield_if_spent, Notify};
-use xpute_core::sys::mem::{alloc, free, Block};
+use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
+use xpute_runtime::sys::mem::{alloc, free, Block};
 
 use crate::io::demand::{Category, Demand, Phases};
 use crate::io::fetch_scheduler::{demand_of, fetch_settle};

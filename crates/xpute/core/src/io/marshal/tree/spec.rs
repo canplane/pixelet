@@ -94,9 +94,9 @@
 
 #![allow(non_snake_case, non_camel_case_types, clippy::upper_case_acronyms, clippy::identity_op)]
 
+use crate::errno::Errno;
+use crate::error::MarshalError;
 use crate::kit::array::{ArrayBufferView, Bytes, U8Array};
-use crate::sys::errno::Errno;
-use crate::sys::error::MarshalError;
 
 // ============ Type Encoding ============
 //

@@ -16,7 +16,7 @@
 use pxl_spec::space::indexer::{L1_IDX_IN_L4, L3_IDX};
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::xy::TO_XY;
-use xpute_core::sched::edge::{notified, Notify};
+use xpute_runtime::sched::edge::{notified, Notify};
 
 use crate::control::camera::damping::camera_step;
 use crate::control::camera::input::camera_input_step;
@@ -124,7 +124,7 @@ enum TaskPriority {
 /// no more than change.rs's TASKS. One refused is a module whose executor
 /// holds fewer, which aborts.
 fn world_tasks() {
-    use xpute_core::sched::task::spawn;
+    use xpute_runtime::sched::task::spawn;
     use TaskPriority::*;
     let spawned = spawn(frame_task(), Frame as u8)
         && spawn(crate::io::fetch::fetch_task(), Arrival as u8)

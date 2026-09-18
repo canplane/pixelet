@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::kit::comp::comp_numeric;
-use crate::sys::vector::Vector;
+use crate::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/ds/treap_set.tsv");
 

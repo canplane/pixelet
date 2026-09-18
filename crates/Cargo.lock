@@ -1052,6 +1052,7 @@ dependencies = [
  "pxl-render",
  "pxl-spec",
  "xpute-core",
+ "xpute-runtime",
 ]
 
 [[package]]
@@ -1061,6 +1062,7 @@ dependencies = [
  "naga",
  "pxl-spec",
  "xpute-core",
+ "xpute-runtime",
 ]
 
 [[package]]
@@ -1089,6 +1091,7 @@ dependencies = [
  "pxl-render",
  "pxl-spec",
  "xpute-core",
+ "xpute-runtime",
 ]
 
 [[package]]
@@ -1739,6 +1742,13 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 [[package]]
 name = "xpute-core"
 version = "0.0.0"
+
+[[package]]
+name = "xpute-runtime"
+version = "0.0.0"
+dependencies = [
+ "xpute-core",
+]
 
 [[package]]
 name = "zerocopy"

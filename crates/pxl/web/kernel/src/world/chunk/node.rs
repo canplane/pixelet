@@ -29,7 +29,7 @@ use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN}
 use pxl_spec::bake::format::Tile;
 use pxl_spec::space::indexer::{FROM_L3_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use xpute_core::sys::mem::{alloc, free, Block};
+use xpute_runtime::sys::mem::{alloc, free, Block};
 
 use crate::layer::object::store::{decor_col_revision, object_col_idx_of, object_col_revision, Store, BAND_CELLS};
 use crate::layer::terrain::store::tile_store;

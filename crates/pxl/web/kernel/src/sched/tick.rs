@@ -1,6 +1,6 @@
 // pxl-kernel/sched/tick.rs
 
-//! The world's tick: xpute_core::sched::tick run over the world's frame
+//! The world's tick: xpute_runtime::sched::tick run over the world's frame
 //! state, with the numbers this world measured. How a tick runs is the
 //! mechanism's; what is here is what the kernel asks of it — its phases'
 //! share, its settle time, and the quantum it declares to the central
@@ -10,9 +10,9 @@
 //! The table is for outside a tick: a step that unregisters asks its
 //! context, and no step reaches these while the tick runs.
 
-use xpute_core::sched::quantum::QuantumPolicy;
-pub use xpute_core::sched::tick::{FrameBudget, Phase, StepStats, TickReport, CONTENT, COSMETIC, INTERACTION, PHASES, REPORT, VISIBLE};
-use xpute_core::sched::tick::{Tick, TickPolicy};
+use xpute_runtime::sched::quantum::QuantumPolicy;
+pub use xpute_runtime::sched::tick::{FrameBudget, Phase, StepStats, TickReport, CONTENT, COSMETIC, INTERACTION, PHASES, REPORT, VISIBLE};
+use xpute_runtime::sched::tick::{Tick, TickPolicy};
 
 use crate::sys::global::Global;
 
@@ -31,8 +31,8 @@ pub struct TickState {
     pub interactive: bool,
 }
 
-pub type TickContext<'a> = xpute_core::sched::tick::TickContext<'a, TickState>;
-pub type TickStep = xpute_core::sched::tick::TickStep<TickState>;
+pub type TickContext<'a> = xpute_runtime::sched::tick::TickContext<'a, TickState>;
+pub type TickStep = xpute_runtime::sched::tick::TickStep<TickState>;
 
 /// The quantum the kernel declares to the central scheduler.
 pub const QUANTUM: QuantumPolicy = QuantumPolicy {

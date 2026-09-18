@@ -21,7 +21,7 @@
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
-import type { QuantumPolicy } from "@xpute/core/sched/quantum.ts";
+import type { QuantumPolicy } from "@xpute/runtime/sched/quantum.ts";
 
 import { gpu_imports } from "@/device/gpu.ts";
 import { EXPORT, IMPORT } from "@/kernel/abi.ts";
@@ -34,7 +34,7 @@ export type KernelExports = {
    * block's address. */
   boot(): u32;
   /** Hands the kernel a turn of `quota_ms`; when it wants the next, in ms
-   * (@xpute/core/sched/quantum.ts). */
+   * (@xpute/runtime/sched/quantum.ts). */
   interrupt(quota_ms: number): number;
   /** The ledger, where it lies: the address of `READ`'s u32 words
    * (dev/ledger/spec.ts) — the summary block over the last

@@ -5,7 +5,7 @@
  *
  * How much memory the kernel gets is the central scheduler's: one fixed
  * `WebAssembly.Memory`, reserved and handed to the module
- * (@xpute/core/sys/mem.ts). A reservation is committed lazily, so it is
+ * (@xpute/runtime/sys/mem.ts). A reservation is committed lazily, so it is
  * sized for the peak; JavaScriptCore nonetheless reports the whole of it as
  * the page's JavaScript memory (a Safari heap timeline read it as one
  * ArrayBuffer), which is why a phone gets half.
@@ -18,8 +18,8 @@
  */
 
 import type { u32 } from "@xpute/core/kit/word.ts";
-import { reserve_memory } from "@xpute/core/sys/mem.ts";
-import { Doorbell } from "@xpute/core/ipc/doorbell.ts";
+import { reserve_memory } from "@xpute/runtime/sys/mem.ts";
+import { Doorbell } from "@xpute/runtime/ipc/doorbell.ts";
 import { HANDHELD } from "@/kit/lib/browser/handheld.ts";
 import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/kernel/mem_spec.ts";
 import { BOOT, boot_block, instantiate_kernel, type KernelExports } from "@/kernel/module.ts";

@@ -2,7 +2,7 @@
 // (no pair: pvf3.ts has no test file; the vector holds ivec, fvec and pvf3
 // to the TypeScript bit for bit)
 
-use xpute_core::sys::vector::{caught, Vector};
+use xpute_core::vector::{caught, Vector};
 
 use super::*;
 use crate::space::pvf3::{fvec, ivec};

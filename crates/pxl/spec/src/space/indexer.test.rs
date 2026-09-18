@@ -98,7 +98,7 @@ const VECTOR: &str = include_str!("../../vector/spec/space/indexer.tsv");
 
 #[test]
 fn indexer_computes_what_the_typescript_computes() {
-    let v = xpute_core::sys::vector::Vector::load(VECTOR);
+    let v = xpute_core::vector::Vector::load(VECTOR);
     assert_eq!(L2_RANGE, v.u64("constants.L2_RANGE"));
     assert_eq!(L3_RANGE, v.u64("constants.L3_RANGE"));
     assert_eq!(L4_RANGE, v.u64("constants.L4_RANGE"));

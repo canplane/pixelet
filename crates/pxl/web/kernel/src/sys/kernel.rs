@@ -10,7 +10,7 @@ use pxl_render::mesh::paint::object::adapter::Painter;
 use pxl_render::mesh::paint::terrain::adapter::Materials;
 use pxl_render::mesh::volume::Volumes;
 use pxl_spec::space::pvf3::ivec::{self, gather};
-use xpute_core::ipc::change::{ChangeLog, ChangeLogOptions};
+use xpute_runtime::ipc::change::{ChangeLog, ChangeLogOptions};
 
 use crate::layer::object::store::Store;
 use crate::sys::global::Global;

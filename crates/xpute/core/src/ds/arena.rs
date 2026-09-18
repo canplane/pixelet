@@ -4,10 +4,10 @@
 //! - Arena: reusable object slots
 //! - Vector: reusable typed-array scratch
 
+use crate::errno::Errno;
+use crate::error::MarshalError;
 use crate::kit::array::{AnyElement, TypedArray};
-use crate::sys::console;
-use crate::sys::errno::Errno;
-use crate::sys::error::MarshalError;
+use crate::log;
 
 #[derive(Default)]
 pub struct ArenaOptions {
@@ -97,7 +97,7 @@ impl<T> Arena<T> {
     /// - if new_len exceeds the current len, the request is ignored with a warning
     pub fn truncate(&mut self, new_len: u32) {
         if new_len > self._len {
-            console::warn(&format!("[arena] truncate ignored: new_len={new_len} > len={}", self._len));
+            log::warn(&format!("[arena] truncate ignored: new_len={new_len} > len={}", self._len));
             return;
         }
         self._len = new_len;
@@ -248,7 +248,7 @@ impl<T: AnyElement> Vector<T> {
     /// - if new_len exceeds the current len, the request is ignored with a warning
     pub fn truncate(&mut self, new_len: u32) {
         if new_len > self._len {
-            console::warn(&format!("[vector] truncate ignored: new_len={new_len} > len={}", self._len));
+            log::warn(&format!("[vector] truncate ignored: new_len={new_len} > len={}", self._len));
             return;
         }
         self._len = new_len;

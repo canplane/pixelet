@@ -19,8 +19,8 @@ use pxl_render::asset::gltf::{parse_gltf, Gltf};
 use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::space::v3::V3;
-use xpute_core::sched::edge::{notified, yield_if_spent, Notify};
-use xpute_core::sys::mem::{alloc, free};
+use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
+use xpute_runtime::sys::mem::{alloc, free};
 
 use crate::layer::decor::asset_store::decor_assets_arrived;
 use crate::sys::global::Global;

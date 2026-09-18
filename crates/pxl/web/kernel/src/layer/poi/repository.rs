@@ -13,9 +13,9 @@
 
 use pxl_spec::bake::format::{encode_empty_poi_page, PoiPage};
 use pxl_spec::space::pvf3::ivec::IVec;
+use xpute_core::error::MarshalError;
 use xpute_core::kit::array::{ArrayBuffer, U8Array};
-use xpute_core::sys::error::MarshalError;
-use xpute_core::sys::mem::Block;
+use xpute_runtime::sys::mem::Block;
 
 use crate::shell::config::env::POI_TILE_BASE_URL;
 use crate::shell::config::route::{Joined, TileBase};

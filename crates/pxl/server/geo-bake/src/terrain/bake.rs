@@ -14,9 +14,9 @@ use pxl_spec::bake::format::{encode_terrain, BaseRow, BuildingRow, CoastRow, Gro
 use pxl_spec::bake::model::feature::Feature;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
+use xpute_core::error::MarshalError;
 use xpute_core::io::marshal::tree::{BranchCursor, SequenceType, TreeReader};
 use xpute_core::kit::array::{I16Array, U8Array};
-use xpute_core::sys::error::MarshalError;
 
 use crate::terrain::pipeline::coast_adapter::from_coast_row;
 use crate::terrain::pipeline::coast_policy::CoastPolicy;

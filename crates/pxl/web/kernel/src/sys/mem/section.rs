@@ -2,7 +2,7 @@
 
 //! The kernel's policy over the memory the central scheduler gives it: which
 //! sections there are and where each begins. Cutting the memory into sections
-//! is the mechanism's (xpute_core::sys::memory); what a section holds, and
+//! is the mechanism's (xpute_runtime::sys::memory); what a section holds, and
 //! what "full" means in it, is decided here
 //! (issue/20260913-sections-of-the-core-memory-and-what-full-means.md).
 //!
@@ -54,7 +54,7 @@
 //! one's business but its own, so the terrain is what it holds and not a byte
 //! more, and what is left over is under a page.
 
-use xpute_core::sys::mem::{align_up, Section};
+use xpute_runtime::sys::mem::{align_up, Section};
 
 use crate::sys::global::Global;
 

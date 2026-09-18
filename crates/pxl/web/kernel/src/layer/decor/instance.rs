@@ -27,7 +27,7 @@
 /// take has to stay out of the sentinel, and a band is `z >> BAND_SHAMT` over
 /// a sixteen-bit Z lane (spec/space/pvf3's IVEC_Z_W), so it fits in ten bits
 /// signed and nothing reaches `i32::MIN`.
-use xpute_core::sys::mem::{alloc, Guard};
+use xpute_runtime::sys::mem::{alloc, Guard};
 
 pub const NO_ENTRY: u32 = i32::MIN as u32;
 pub const HIDDEN_FLAG: u8 = 1;

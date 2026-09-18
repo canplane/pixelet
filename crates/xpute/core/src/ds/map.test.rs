@@ -112,7 +112,7 @@ fn indexedmap_clear_forgets_every_entry_and_the_next_inserts_start_from_zero() {
 /// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
 const VECTOR: &str = include_str!("../../vector/ds/map.tsv");
 
-fn replay<T: KeyTraits>(v: &crate::sys::vector::Vector, base: &str, traits: T, key: impl Fn(&str) -> T::Key)
+fn replay<T: KeyTraits>(v: &crate::vector::Vector, base: &str, traits: T, key: impl Fn(&str) -> T::Key)
 where
     T::Key: std::fmt::Debug,
 {
@@ -137,7 +137,7 @@ where
 
 #[test]
 fn indexedmap_places_and_moves_what_the_typescript_places_and_moves() {
-    let v = crate::sys::vector::Vector::load(VECTOR);
+    let v = crate::vector::Vector::load(VECTOR);
     replay(&v, "i64", I64_KEYS, |s| s.parse().unwrap());
     replay(&v, "u32", U32_KEYS, |s| s.parse().unwrap());
 }

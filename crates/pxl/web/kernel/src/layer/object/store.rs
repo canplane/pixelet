@@ -31,11 +31,11 @@ use pxl_spec::space::pvf3::Ivec;
 use pxl_spec::space::sparse_tree::mem;
 use pxl_spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree, SparseTreeLayout};
 use pxl_spec::space::xy::TO_XY;
+use xpute_core::error::MarshalError;
 use xpute_core::io::marshal::tree::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_core::kit::array::{F32Array, U32Array};
 use xpute_core::kit::encoding::{b64url_to_bytes, bytes_to_b64url};
-use xpute_core::sched::edge::{notified, yield_if_spent, Notify};
-use xpute_core::sys::error::MarshalError;
+use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::layer::terrain::elevation::get_ground_type;
 use crate::sys::global::{now, Global};

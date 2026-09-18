@@ -21,7 +21,7 @@ use pxl_spec::bake::format::{decode_terrain, Ground, Terrain, Tile};
 use pxl_spec::fetch::FetchFail;
 use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_core::kit::array::{ArrayBuffer, I16Array, U8Array};
-use xpute_core::sys::mem::alloc;
+use xpute_runtime::sys::mem::alloc;
 
 use crate::io::demand::{Category, Phases};
 use crate::layer::terrain::fixed::{ele_at, ground_at, record_ele_at, record_ground_at, RECORD_BYTES};

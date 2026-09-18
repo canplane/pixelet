@@ -9,7 +9,7 @@
 //! box is only passing through, still shows whole and in proportion.
 
 use xpute_core::ds::handle::{handle_slot, HandleTable};
-use xpute_core::sys::global::Global;
+use xpute_runtime::sys::global::Global;
 
 /// What a surface shows.
 pub const ROLE_WORLD: u32 = 0;

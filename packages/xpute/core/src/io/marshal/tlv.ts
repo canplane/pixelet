@@ -79,8 +79,8 @@ import type { Bytes } from "@xpute/core/kit/array.ts";
 import * as encoding from "@xpute/core/kit/encoding.ts";
 import type { Stream } from "@xpute/core/io/scalar.ts";
 import * as scalar from "@xpute/core/io/scalar.ts";
-import { Errno } from "@xpute/core/sys/errno.ts";
-import { MarshalError } from "@xpute/core/sys/error.ts";
+import { Errno } from "@xpute/core/errno.ts";
+import { MarshalError } from "@xpute/core/error.ts";
 
 // ============ ABI ============
 

@@ -27,11 +27,11 @@
 //!
 //! each ground channel is st.encode(...) => U64Array
 
+use xpute_core::error::MarshalError;
 use xpute_core::io::marshal::tree::{encoder, BranchCursor, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_core::kit::array::{F64Array, I16Array, U16Array, U64Array, U8Array};
 use xpute_core::kit::hash::fnv1a64_str;
 use xpute_core::kit::json::{parse_str_map, stringify_str_map, StrMap};
-use xpute_core::sys::error::MarshalError;
 
 use super::model::feature::POI;
 

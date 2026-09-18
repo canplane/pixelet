@@ -15,13 +15,13 @@ use pxl_kernel::sys::kernel::kernel;
 use pxl_kernel::sys::mem::section;
 use pxl_render::mesh::volume::Volumes;
 use pxl_spec::cmd::Cmd;
+use xpute_core::errno::Errno;
+use xpute_core::error::MarshalError;
 use xpute_core::io::marshal::tree::{BranchCursor, PacketWriter, TreeReader};
-use xpute_core::ipc::frame::FrameFlag;
-use xpute_core::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_core::kit::array::{ArrayBuffer, U8Array};
-use xpute_core::sys::errno::Errno;
-use xpute_core::sys::error::MarshalError;
-use xpute_core::sys::mem::{write_section, SECTION_WORDS};
+use xpute_runtime::ipc::frame::FrameFlag;
+use xpute_runtime::ipc::ring::{ring_bytes, slots_bytes, Ring};
+use xpute_runtime::sys::mem::{write_section, SECTION_WORDS};
 
 extern "C" {
     /// Where the linker stopped: the end of `.rodata`, `.data` and `.bss`, and
@@ -198,7 +198,7 @@ fn state() -> &'static mut State {
 /// Words in the boot block: where the module's own data ends; where the
 /// submission ring and the completion ring are; then `.fixed` and the heap,
 /// each its offset, its bytes and the page it begins on; then the quantum the kernel declares to the
-/// central scheduler (xpute_core::sched::quantum's QuantumPolicy): margin
+/// central scheduler (xpute_runtime::sched::quantum's QuantumPolicy): margin
 /// share, batch frames and the settle time, each in thousandths; then the
 /// heap's row.
 pub const BOOT_WORDS: usize = 13;
@@ -261,7 +261,7 @@ fn lay_out() -> section::Map {
 /// kernel applies the submissions waiting, then polls its tasks on the quota
 /// — the frame among them, when the host asked for one — and the return is
 /// the falling edge: when the kernel wants the next turn, in ms from now, 0
-/// for the next frame and xpute_core::sched::quantum's NO_WAKE for none. A
+/// for the next frame and xpute_runtime::sched::quantum's NO_WAKE for none. A
 /// turn rung with no quota and no frame only applies what waits.
 #[no_mangle]
 pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
@@ -270,7 +270,7 @@ pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
     pxl_kernel::world::change::world_edge().rise(quota_ms);
     drain(s);
     if quota_ms > 0.0 || world_frame_waiting() {
-        xpute_core::sched::task::poll();
+        xpute_runtime::sched::task::poll();
     }
     if take_world_drawn() {
         post_turn(s);

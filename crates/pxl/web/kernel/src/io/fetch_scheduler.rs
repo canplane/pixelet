@@ -1,6 +1,6 @@
 // pxl-kernel/io/fetch_scheduler.rs
 
-//! The world's fetches, on the kernel's I/O queue (xpute_core::sched::io):
+//! The world's fetches, on the kernel's I/O queue (xpute_runtime::sched::io):
 //! what a demand is called — `<category>:<page>`, or what stands for a search
 //! query — and the ledger's record of each, over a queue that knows keys as
 //! numbers.
@@ -14,8 +14,8 @@
 
 use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_core::kit::hash::fnv1a64_bytes;
-pub use xpute_core::sched::io::IoCounts as FetchCounts;
-use xpute_core::sched::io::{Demand as Queued, IoQueue};
+pub use xpute_runtime::sched::io::IoCounts as FetchCounts;
+use xpute_runtime::sched::io::{Demand as Queued, IoQueue};
 
 use crate::io::demand::{Category, Demand, DemandKey, Phases};
 use crate::sched::ledger::record::{ledger_record, Failure, Outcome, TaskRecord};

@@ -1,7 +1,7 @@
 // pxl-spec/space/xy.test.rs
 // (no pair: xy.ts has no test file)
 
-use xpute_core::sys::vector::Vector;
+use xpute_core::vector::Vector;
 
 use super::*;
 

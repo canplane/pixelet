@@ -4,8 +4,8 @@ import type { f32, f64, i16, i32, i64, i8, u16, u32, u64, u8 } from "@xpute/core
 import { BOOL, FIELD_GET } from "@xpute/core/kit/word.ts";
 import type { AnyTypedArray, AnyTypedArrayCtor, F32Array, F64Array, I16Array, I32Array, I64Array, I8Array, U16Array, U32Array, U64Array, U8Array } from "@xpute/core/kit/array.ts";
 import * as encoding from "@xpute/core/kit/encoding.ts";
-import { Errno } from "@xpute/core/sys/errno.ts";
-import { MarshalError } from "@xpute/core/sys/error.ts";
+import { Errno } from "@xpute/core/errno.ts";
+import { MarshalError } from "@xpute/core/error.ts";
 
 import type { AlignUnit, NodeType, NodeValue } from "./spec.ts";
 import { ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT, GET_WORD, HDR_SZ, LE, MAGIC, NONE, ScalarType, SequenceType, SpecialType, TYPE_IS_LEAF, WORD_SZ } from "./spec.ts";

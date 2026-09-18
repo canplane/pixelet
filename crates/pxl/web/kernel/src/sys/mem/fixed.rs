@@ -19,7 +19,7 @@
 //!                    (layer/terrain/fixed.rs), so nothing in it is
 //!                    allocated, asked for or refused.
 
-use xpute_core::sys::mem::{nth_at, span_of};
+use xpute_runtime::sys::mem::{nth_at, span_of};
 
 use crate::layer::terrain::fixed::TERRAIN_BYTES;
 use crate::sys::mem::section::{map, PAGE_BYTES};

@@ -1,7 +1,7 @@
 // pxl-wasm/executor.rs
 
 //! The executor the module installs for the kernel's tasks, as it installs the
-//! slab for its memory: embassy's raw executor behind xpute_core::sched::task's
+//! slab for its memory: embassy's raw executor behind xpute_runtime::sched::task's
 //! `Executor`. pxl-kernel spawns and polls through that interface and never
 //! names this; which tasks there are is pxl-kernel's.
 //!
@@ -19,7 +19,7 @@
 use embassy_executor::raw::Executor as Raw;
 use pxl_kernel::sys::global::Global;
 use pxl_kernel::world::change::TASKS;
-use xpute_core::sched::task::{set_executor, Executor, Priority, Task};
+use xpute_runtime::sched::task::{set_executor, Executor, Priority, Task};
 
 struct OneThread;
 

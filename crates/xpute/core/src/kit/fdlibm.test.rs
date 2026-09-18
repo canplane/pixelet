@@ -2,7 +2,7 @@
 // (no pair: fdlibm.rs is JavaScript's Math, ported)
 
 use super::*;
-use crate::sys::vector::Vector;
+use crate::vector::Vector;
 
 /// What the TypeScript computed, recorded: the generator that wrote it
 /// is gone and the vector stands as it is (xpute-core/sys/vector.rs) — V8's Math.

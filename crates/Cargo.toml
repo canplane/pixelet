@@ -22,6 +22,7 @@
 resolver = "2"
 members = [
   "xpute/core",
+  "xpute/runtime",
   "pxl/spec",
   "pxl/web/render",
   "pxl/web/kernel",

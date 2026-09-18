@@ -9,7 +9,7 @@
 
 use pxl_render::look::lod::set_lod_projection;
 use pxl_spec::space::pvf3::{fvec, ivec};
-use xpute_core::sched::edge::{notified, yield_if_spent};
+use xpute_runtime::sched::edge::{notified, yield_if_spent};
 
 use crate::io::fetch_scheduler::fetch_pending_count;
 use crate::layer::environment::config::render_cfg;

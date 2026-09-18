@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::kit::encoding::{bytes_to_hex, hex_to_bytes, td, te};
-use crate::sys::vector::Vector;
+use crate::vector::Vector;
 
 const VECTOR: &str = include_str!("../../vector/kit/json.tsv");
 

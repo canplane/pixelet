@@ -14,7 +14,7 @@
 //! `decor_asset_task`'s, a variant at a time on a turn's quota.
 
 use pxl_spec::asset::ingested::Asset;
-use xpute_core::sched::edge::{notified, yield_if_spent, Notify};
+use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::io::load::{load_failed, load_gltf, load_image, Load};
 use crate::io::model_asset::register_model;

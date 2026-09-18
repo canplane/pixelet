@@ -135,7 +135,7 @@ const VECTOR: &str = include_str!("../../../vector/spec/space/adapter/3857.tsv")
 
 #[test]
 fn the_adapters_compute_what_the_typescript_computes() {
-    let v = xpute_core::sys::vector::Vector::load(VECTOR);
+    let v = xpute_core::vector::Vector::load(VECTOR);
     let triple = |k: &str| [v.f64(&format!("{k}.0")), v.f64(&format!("{k}.1")), v.f64(&format!("{k}.2"))];
     // The kernel's transcendental functions are its own, within one ulp of
     // V8's correctly rounded ones (kit/fdlibm.rs), and a chain of them

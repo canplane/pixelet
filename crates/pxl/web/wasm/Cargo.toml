@@ -13,6 +13,7 @@ test = false
 doctest = false
 
 [dependencies]
+xpute-runtime = { path = "../../../xpute/runtime" }
 xpute-core = { path = "../../../xpute/core" }
 pxl-spec = { path = "../../spec" }
 pxl-render = { path = "../render" }

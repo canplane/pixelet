@@ -7,8 +7,8 @@
 //! What makes `Global` sound is xpute's promise and not this crate's: one
 //! thread, and no turn re-entering another.
 
-pub use xpute_core::sys::clock::{now, set_clock};
-pub use xpute_core::sys::global::Global;
+pub use xpute_runtime::sys::clock::{now, set_clock};
+pub use xpute_runtime::sys::global::Global;
 
 /// Serializes the native checks that touch the kernel's globals: they run on
 /// several threads, and a `Global` is for one.

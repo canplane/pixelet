@@ -47,8 +47,8 @@ follow that rather than improvising SQL against the raw tables.
 ```
 asset                   the shipped models and texture pack; data, not code — nothing imports it. asset/script/ hashes the tree into the bucket's shape and writes the catalogs' tables
 spec                    the numbers and names every language is generated from (script/spec.ts): pxl-spec's at the top, kernel/, render/ and xpute/ below
-packages/xpute/core     generic runtime kit — collections, codecs, XTP binary protocol
-crates/xpute/core       the generic runtime kit in Rust; no domain
+packages/xpute          the generic kit and the runtime over it, in TypeScript: core/ and runtime/
+crates/xpute            the same two in Rust — core is collections, codecs, XTP and errno; runtime is the rings, the turn and the memory a module is given. runtime depends on core, never the reverse
 crates/pxl/spec         the spec: the space and its routes, the cell catalogs, the commands, the bake's formats, the assets' tables — the one model both ends follow
 crates/pxl/web          what reaches the browser: render (the view), kernel (the stores, the schedulers, the turn) and wasm (the one module over them)
 crates/pxl/server       what does not: pxl-server itself (what geo and api both need to start), the two processes inside it, overture (what its values mean) and geo-bake (the three page bakes and the dev tile server)
@@ -61,7 +61,7 @@ Two boundaries matter, and both are easy to erode by accident:
 - **`@xpute/core` must contain no pixelet domain knowledge.** It is meant to stay
   portable to other projects. Coordinates, terrain, tiles, Overture — none of
   those concepts belong there. If something needs them, it belongs in
-  `pxl-spec`. The same line runs through the Rust: `crates/xpute/core`
+  `pxl-spec`. The same line runs through the Rust: `crates/xpute`
   holds no domain, and the domain is `crates/pxl/spec`'s. The view
   (`crates/pxl/web/render`) knows the model and nothing of the kernel
   (`crates/pxl/web/kernel`): the kernel hands a frame what it draws.

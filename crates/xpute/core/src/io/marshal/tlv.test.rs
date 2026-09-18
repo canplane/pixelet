@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::kit::encoding::bytes_to_hex;
-use crate::sys::vector::Vector;
+use crate::vector::Vector;
 
 const VECTOR: &str = include_str!("../../../vector/io/marshal/tlv.tsv");
 

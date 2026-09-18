@@ -8,9 +8,9 @@
 
 #![allow(non_snake_case)]
 
+use crate::errno::Errno;
+use crate::error::MarshalError;
 use crate::kit::array::{AnyElement, ArrayBufferView, TypedArray, U8Array};
-use crate::sys::errno::Errno;
-use crate::sys::error::MarshalError;
 
 use super::spec::{BranchNode, GraftNode, Node, NodeValue, Numeric, ScalarNode, ScalarType, SequenceNode, SequenceType, SequenceVal, NIL_NODE, WORD_SZ};
 

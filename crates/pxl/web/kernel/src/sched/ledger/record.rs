@@ -24,7 +24,7 @@ use core::fmt;
 use core::mem::{offset_of, size_of};
 
 use pxl_spec::fetch::FetchFail;
-use xpute_core::sys::mem::alloc;
+use xpute_runtime::sys::mem::alloc;
 
 use crate::io::demand::{DemandKey, Phases};
 use crate::sched::ledger::spec::{CATEGORY_NAMES, FRAME, LIMITS, OUTCOME_NAMES, PHASE_NAMES, TASK, TASK_PHASE_NAMES, WORST};

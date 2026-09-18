@@ -15,7 +15,7 @@ use pxl_spec::cell::{placeable_cube_num_id, placeable_cube_rgb, terrain_style_cu
 use pxl_spec::space::pvf3::pvf3::PVF3;
 use pxl_spec::space::pvf3::{fvec, ivec};
 use pxl_spec::space::v3::V3;
-use xpute_core::sys::mem::{alloc, free};
+use xpute_runtime::sys::mem::{alloc, free};
 
 use crate::control::camera::input::{holding, ActiveTool};
 use crate::control::camera::store::camera_store;

@@ -21,18 +21,23 @@ Earlier states of the project are preserved on `checkpoint/20260107-float`, `che
 ## Crates and packages
 
 ```text
-xpute-core ◀── pxl-spec ◀── pxl-render ◀── pxl-kernel ◀── pxl-wasm ──▶ kernel.wasm ──▶ apps/web
-@xpute/core ◀───────────────────────────────────────────────────────────────────────────── apps/web
+xpute-core ◀── pxl-spec ◀── pxl-render ◀── pxl-kernel ◀── pxl-wasm ──▶ kernel.wasm
+     ▲                            │              │            │                │
+     └── xpute-runtime ◀──────────┴──────────────┴────────────┘                ▼
+                                                                            apps/web
+@xpute/core ◀── @xpute/runtime ◀───────────────────────────────────────────────┘
 ```
 
-| Crate / package | Role                                                                                                                                        |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `xpute-core`    | The generic runtime kit: collections and lanes, the slab and buddy allocators, the rings and change log, the scheduler's three levels, XTP. |
-| `pxl-spec`      | The model: PVF3 and the spatial hierarchy, the cell catalogs, the command and message numbers, the bake's formats, the asset tables.        |
-| `pxl-render`    | The view: volumes, the column scan and the mesher, glTF, the LOD ladder, the billboards' atlas, the draw list, the shaders, the renderer.   |
-| `pxl-kernel`    | The kernel: the chunk scheduler and nodes, the layers and their stores, fetches and loads, the camera and sensors, the turn, the ledger.    |
-| `pxl-wasm`      | The module: the allocator and executor it installs, the linker flags that fix the memory's front, the rings, and the exports.               |
-| `@xpute/core`   | The TypeScript kit: XTP, the rings' host end (`ipc/doorbell.ts`), the strobe and quantum (`sched/`), the memory reservation (`sys/mem.ts`). |
+| Crate / package  | Role                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `xpute-core`     | The generic kit: collections and lanes, the codecs and XTP, the errno table both languages are written from, the libm that agrees with V8. |
+| `xpute-runtime`  | What runs over it: the rings and the change log, the scheduler's three levels, and the memory a module is given — the slab over a buddy.   |
+| `pxl-spec`       | The model: PVF3 and the spatial hierarchy, the cell catalogs, the command and message numbers, the bake's formats, the asset tables.       |
+| `pxl-render`     | The view: volumes, the column scan and the mesher, glTF, the LOD ladder, the billboards' atlas, the draw list, the shaders, the renderer.  |
+| `pxl-kernel`     | The kernel: the chunk scheduler and nodes, the layers and their stores, fetches and loads, the camera and sensors, the turn, the ledger.   |
+| `pxl-wasm`       | The module: the allocator and executor it installs, the linker flags that fix the memory's front, the rings, and the exports.              |
+| `@xpute/core`    | The same kit in TypeScript: XTP, the codecs, the errno table, the words.                                                                   |
+| `@xpute/runtime` | The same runtime's host end: the rings' doorbell (`ipc/doorbell.ts`), the strobe and quantum (`sched/`), the reservation (`sys/mem.ts`).   |
 
 Those are what the client is built from. Three more crates sit over `pxl-spec`
 and never reach the browser: `pxl-geo` and `pxl-api` are the two servers, and
@@ -61,7 +66,7 @@ Two boundaries are kept on purpose:
 The shell (`apps/web`) is a driver. It does five things:
 
 - It reserves the memory and instantiates the module (`kernel/core_mem.ts`, `kernel/module.ts`).
-- It runs the turns (`@xpute/core/sched/strobe.ts`) and submits what a frame carries: the viewport, the gap since the last frame, the measured frame interval and the I/O credits.
+- It runs the turns (`@xpute/runtime/sched/strobe.ts`) and submits what a frame carries: the viewport, the gap since the last frame, the measured frame interval and the I/O credits.
 - It forwards pointer, wheel, sensor and visibility events as commands.
 - It answers the kernel's signals: it starts and cancels the fetches the kernel names, reads a response body into a block the kernel gives it, decodes images, and runs the sensors' watches.
 - It hands a canvas over as a surface. The canvas is transferred to an `OffscreenCanvas` and from then on is drawn by the kernel alone, through the calls in `device/gpu.ts`.

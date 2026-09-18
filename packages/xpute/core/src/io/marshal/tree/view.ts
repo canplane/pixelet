@@ -4,8 +4,8 @@ import type { f32, f64, i16, i32, i64, i8, u16, u32, u64, u8 } from "@xpute/core
 import { BOOL, F32, F64, I16, I32, I64, I8, U16, U32, U64, U8 } from "@xpute/core/kit/word.ts";
 import { fits_i32, fits_i64 } from "@xpute/core/kit/word.ts";
 import type { F32Array, F64Array, I16Array, I32Array, I64Array, I8Array, U16Array, U32Array, U64Array, U8Array } from "@xpute/core/kit/array.ts";
-import { Errno } from "@xpute/core/sys/errno.ts";
-import { MarshalError } from "@xpute/core/sys/error.ts";
+import { Errno } from "@xpute/core/errno.ts";
+import { MarshalError } from "@xpute/core/error.ts";
 
 import type { BranchNode, Node, NodeValue } from "./spec.ts";
 import { NIL_NODE, ScalarType, SequenceType, SpecialType, WORD_SZ } from "./spec.ts";

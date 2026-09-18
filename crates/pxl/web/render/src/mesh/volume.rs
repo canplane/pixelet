@@ -26,7 +26,7 @@
 
 /// A run whose material is a placed object: exempt from hiding its
 /// neighbours' faces, and drawn with its bottom face.
-use xpute_core::sys::mem::{alloc, free, Block, Guard};
+use xpute_runtime::sys::mem::{alloc, free, Block, Guard};
 
 pub const MATERIAL_OBJECT: u8 = 5;
 /// A coarse tier's cells, whatever they summarise.

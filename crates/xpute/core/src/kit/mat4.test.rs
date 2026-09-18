@@ -59,7 +59,7 @@ const VECTOR: &str = include_str!("../../vector/kit/mat4.tsv");
 
 #[test]
 fn mat4_computes_what_the_typescript_computes() {
-    let v = crate::sys::vector::Vector::load(VECTOR);
+    let v = crate::vector::Vector::load(VECTOR);
     // Exact where the arithmetic alone decides; a few ulps where a value
     // passed through Math's transcendental functions (kit/fdlibm.rs).
     let exact = |name: &str, got: &[f64]| {

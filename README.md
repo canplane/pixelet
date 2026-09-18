@@ -135,7 +135,9 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path.
 │           ├── dev/          #   dev tools: the ledger overlay, test page
 │           └── kit/          #   shared UI kit and browser helpers
 ├── crates/                   # The Rust workspace, grouped by where a crate runs
-│   ├── xpute/core/           #   xpute-core: generic runtime kit
+│   ├── xpute/
+│   │   ├── core/             #   xpute-core: collections, codecs, XTP, errno — no domain
+│   │   └── runtime/          #   xpute-runtime: the rings, the turn, the memory a module is given
 │   └── pxl/
 │       ├── spec/             #   pxl-spec: the model both ends follow
 │       ├── web/              #   what the browser runs
@@ -148,7 +150,9 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path.
 │           ├── api/          #     pxl-api: the application server (/api)
 │           └── geo-bake/     #     pxl-geo-bake: the three page bakes and the dev tile server
 ├── packages/                 # The TypeScript workspace packages
-│   ├── xpute/core/           #   @xpute/core: generic kit, XTP, rings, doorbell, strobe
+│   └── xpute/
+│       ├── core/             #   @xpute/core: the same kit in TypeScript
+│       └── runtime/          #   @xpute/runtime: the rings' host end, the strobe, the reservation
 ├── spec/                     # JSON every language is generated from (script/spec.ts):
 │                             #   pxl-spec's at the top; kernel/, render/, xpute/ below
 ├── asset/                    # Shipped models and texture pack (cube, decor, actor),
@@ -163,13 +167,14 @@ Inside the Rust crates, a crate's root holds only its directories, sorted by
 kind. `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat, being five or six
 files each.
 
-| Crate          | Directories                                                   |
-| -------------- | ------------------------------------------------------------- |
-| `xpute-core`   | `ds` `io` `ipc` `kit` `sched` `sys`                           |
-| `pxl-spec`     | `asset` `bake` `cell` `space`, plus `cmd`, `fetch`, `message` |
-| `pxl-render`   | `mesh` `asset` `look` `frame` `gpu`                           |
-| `pxl-kernel`   | `sys` `sched` `world` `layer` `io` `control` `shell`          |
-| `pxl-geo-bake` | `terrain` `poi` `geocode` `page`, and `bin` beside them       |
+| Crate           | Directories                                                    |
+| --------------- | -------------------------------------------------------------- |
+| `xpute-core`    | `ds` `io` `kit`, plus `cmd`, `errno`, `error`, `log`, `vector` |
+| `xpute-runtime` | `ipc` `sched` `sys`                                            |
+| `pxl-spec`      | `asset` `bake` `cell` `space`, plus `cmd`, `fetch`, `message`  |
+| `pxl-render`    | `mesh` `asset` `look` `frame` `gpu`                            |
+| `pxl-kernel`    | `sys` `sched` `world` `layer` `io` `control` `shell`           |
+| `pxl-geo-bake`  | `terrain` `poi` `geocode` `page`, and `bin` beside them        |
 
 ---
 

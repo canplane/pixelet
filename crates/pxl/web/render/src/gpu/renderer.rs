@@ -18,8 +18,8 @@
 //! fighting.
 
 use xpute_core::kit::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4, Vec3};
-use xpute_core::sys::global::Global;
-use xpute_core::sys::mem::{alloc, free};
+use xpute_runtime::sys::global::Global;
+use xpute_runtime::sys::mem::{alloc, free};
 
 use crate::asset::atlas::BillboardAtlas;
 use crate::frame::draw::{

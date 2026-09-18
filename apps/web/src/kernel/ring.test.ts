@@ -2,10 +2,10 @@
 
 import { assert, assertEquals } from "@std/assert";
 
-import { Errno } from "@xpute/core/sys/errno.ts";
+import { Errno } from "@xpute/core/errno.ts";
 import { encoder, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
-import { FrameFlag } from "@xpute/core/ipc/frame.ts";
-import { Ring } from "@xpute/core/ipc/ring.ts";
+import { FrameFlag } from "@xpute/runtime/ipc/frame.ts";
+import { Ring } from "@xpute/runtime/ipc/ring.ts";
 import { Cmd } from "@/kernel/cmd_spec.ts";
 
 import { CORE_KERNEL } from "@/kernel/core_mem.ts";

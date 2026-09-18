@@ -5,7 +5,7 @@
 //! no interests registry.
 
 use pxl_spec::space::pvf3::ivec::IVec;
-use xpute_core::sys::mem::free;
+use xpute_runtime::sys::mem::free;
 
 use crate::layer::poi::placement::poi_place_request;
 use crate::layer::poi::repository::ResidentPoiPage;

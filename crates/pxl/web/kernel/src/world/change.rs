@@ -2,7 +2,7 @@
 
 //! The world's change log: which units of world-shared state changed, read by
 //! whoever cares, the way issue/20260913-the-read-direction-a-change-log.md
-//! describes. The log is the kernel's (xpute_core::ipc::change), where the
+//! describes. The log is the kernel's (xpute_runtime::ipc::change), where the
 //! state that changes most — the object store — bumps it itself; this is its
 //! face for the modules: the topics, a bump, and the frame a bump asks for.
 //!
@@ -10,9 +10,9 @@
 //! journal. The canvas renders on demand, so a bump also asks for that frame;
 //! the request goes back to the host on the turn's falling edge.
 
-use xpute_core::ipc::change::{ChangeLog, Revision, Topic};
+use xpute_runtime::ipc::change::{ChangeLog, Revision, Topic};
 
-use xpute_core::sched::edge::Edge;
+use xpute_runtime::sched::edge::Edge;
 
 use crate::sys::global::Global;
 use crate::sys::kernel::kernel;
@@ -44,7 +44,7 @@ pub const TASKS: usize = 8;
 
 static EDGE: Global<Edge<TASKS>> = Global::new();
 
-/// The kernel's side of the turn (xpute_core::sched::edge): the doorbell
+/// The kernel's side of the turn (xpute_runtime::sched::edge): the doorbell
 /// rises and falls it, and a task yields against it.
 pub fn world_edge() -> &'static mut Edge<TASKS> {
     EDGE.get(Edge::new)
@@ -53,7 +53,7 @@ pub fn world_edge() -> &'static mut Edge<TASKS> {
 /// The falling edge. A task queued and not yet polled — a turn with no frame
 /// polls none — asks for the next turn too.
 pub fn world_fall() -> f64 {
-    if xpute_core::sched::task::pending() {
+    if xpute_runtime::sched::task::pending() {
         world_edge().ask_next();
     }
     world_edge().fall()

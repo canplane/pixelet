@@ -28,9 +28,9 @@ use pxl_spec::bake::constant::CHUNK_CELL_SPAN;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::v3::V3;
 use xpute_core::kit::hash::fnv1a64_str;
-use xpute_core::sched::edge::Notify;
-use xpute_core::sched::frame_budget::{run_under_budget, BudgetOpts};
-use xpute_core::sys::mem::alloc;
+use xpute_runtime::sched::edge::Notify;
+use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts};
+use xpute_runtime::sys::mem::alloc;
 
 use crate::io::load::Models;
 use crate::layer::billboard::field::Billboards;

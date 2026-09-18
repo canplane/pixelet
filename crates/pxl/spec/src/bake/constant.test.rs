@@ -1,7 +1,7 @@
 // pxl-spec/bake/constant.test.rs
 // (no pair: constant.ts has no test file)
 
-use xpute_core::sys::vector::Vector;
+use xpute_core::vector::Vector;
 
 use super::*;
 

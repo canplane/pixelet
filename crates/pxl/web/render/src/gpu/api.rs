@@ -13,7 +13,7 @@
 
 use xpute_core::ds::handle::HandleTable;
 
-use xpute_core::sys::global::Global;
+use xpute_runtime::sys::global::Global;
 
 /// WebGPU's buffer usage bits.
 pub mod buffer_usage {
