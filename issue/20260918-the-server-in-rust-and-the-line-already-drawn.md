@@ -807,10 +807,43 @@ behind `--features serve`, and `deno task dev` starts all four processes.
 server's for the host, the bake crate again with its feature, then the host
 check with every target — and `check:spec` is what keeps the addresses honest.
 
-**Not deployed.** The Worker and the client must go together, because published
-tile URLs move from `/api/tiles/…` to `/geo/tiles/…` and `/asset/…`. R2 keys do
-not change — only the prefix stripped to reach them — so there is no re-bake and
-no re-upload, and the cache goes cold once.
+**Deployed 09-18**, server then client, as build b15. Published tile URLs moved
+from `/api/tiles/…` to `/geo/tiles/…` and `/asset/…`; R2 keys did not change —
+only the prefix stripped to reach them — so there was no re-bake and no
+re-upload, and the cache went cold once. Every route answered afterwards, both
+at the edge and against the origin directly:
+
+```
+/                                       200   3,193 B (the app)
+/geo/search?q=분당                       200   7,593 B
+/geo/tiles/{terrain,poi,geocode}/…      200
+/asset/e8d81b97…                        200  18,188 B  model/gltf-binary
+/geo/internal/x                         401  (pxl-geo's gate)
+/api/internal/x                         401  (pxl-api's)
+/api/anything                           404
+/api/tiles/…, /api/search               404  (the old addresses)
+```
+
+Two things the deploy itself taught, both worth more than the move:
+
+**The bundle guard stopped the first attempt, and it was right.** `deno task
+deploy` failed with `sentinel "/geo" missing from the bundle`. The old
+`'"/api"'` sentinel had survived because `API_ROOT` was a constant the client
+spelled on its own while `TILE_ROOT` was a template literal esbuild left
+unfolded — the root reached the bundle and the branch never did. Generating the
+branches folds them at spec time, which reverses it exactly: `"/geo/tiles"` and
+`"/geo/search"` reach the bundle and nothing spells `"/geo"` alone. The spec
+carries a `bundle` flag now, and the generator compares SENTINELS against it in
+both directions, since a sentinel the build never emits fails every deploy and
+one the build dropped passes a guard that is checking nothing.
+
+**Caddy's config is a bind mount, and a bind mount is read at start.** After the
+server rebuilt, `/geo/*` answered correctly while `/api/internal/x` returned 404
+instead of 401 — the request was reaching pxl-geo, not pxl-api. `docker compose
+up -d --build` had not recreated caddy, because from compose's side neither its
+image nor its service definition had changed. `--force-recreate caddy` was what
+made the Caddyfile current. A missing container would have been a 502; a 404
+from the wrong server is what a stale relay looks like.
 
 **Still not deleted:** `apps/api`'s TypeScript server. It is what every byte
 comparison in this document was made against, and removing it is a separate

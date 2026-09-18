@@ -58,11 +58,10 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   the Worker and the kernel, with `wrangler.jsonc` and the deploy guard
   checked against it rather than generated, and `crates/pxl/api` on db-main
   answering nothing behind a gated `/api/internal/*`, the shape the
-  TypeScript already had. Not yet deployed: `docker compose up -d --build` on
-  the VM, and the Worker and the client together, since published tile URLs
-  move to `/geo/tiles/…` and `/asset/…` (same R2 keys, one cold cache, no
-  re-bake). Left, and not part of the move: removing apps/api's TypeScript
-  server once the Rust has served for a while. The reason is not throughput: `pxl-spec` already carries the
+  TypeScript already had. Deployed 09-18 as b15, server then client, every
+  route verified at the edge and against the origin. Left, and not part of the
+  move: removing apps/api's TypeScript server once the Rust has served for a
+  while. The reason is not throughput: `pxl-spec` already carries the
   encoders only the server uses, so one source can hold both ends of the
   wire format instead of two. `apps/api` is three workloads wearing one
   process, and they split along a line `infra/` had already drawn — one
