@@ -114,6 +114,8 @@ and Deno drives their tasks.
 
 Two formats are built for this project rather than adopted: PVF3, a packed fixed-point coordinate, and XTP, a relocatable binary tree whose typed-array leaves are read without copying. Every page the client receives is XTP, and so is every packet on the rings.
 
+Three things inside the client are not this project's, and are named where they are used: `embassy-executor`'s raw executor polls the kernel's tasks, evanw/buddy-malloc is the page allocator under the heap, ported line for line, and the libm the core computes with is FreeBSD's msun, so a float is the same bits on every target. What stands around them is this project's — the three levels of scheduling and the one priority every layer shares, the size classes that let a page allocator answer a twenty-four-byte string, and the rings the two ends talk over. [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) says where each notice lives.
+
 The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path.
 
 **Naming:** Most identifiers use `snake_case`, the TypeScript included. React hooks, stores and components keep the ecosystem's own convention. The engine is data-oriented and shares its vocabulary with the Rust (`len`, `u32`, `new_len`), and `snake_case` keeps the two languages consistent at the boundary.
