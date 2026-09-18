@@ -17,3 +17,12 @@ xpute-core = { path = "../../xpute/core" }
 # `Send` across, and the concurrency is a thread per worker with a connection
 # of its own. It is tokio-postgres underneath either way.
 postgres = "0.19"
+# The objects are stored pre-gzipped, so the client's fetch() decompresses them
+# transparently and the bucket never has to.
+flate2 = "1"
+# The manifest only; nothing on the wire to the client is JSON.
+serde_json = "1"
+
+[[bin]]
+name = "bake_tiles"
+path = "src/terrain/tool/bake_tiles.rs"

@@ -1010,8 +1010,10 @@ dependencies = [
 name = "pxl-geo-bake"
 version = "0.0.0"
 dependencies = [
+ "flate2",
  "postgres",
  "pxl-spec",
+ "serde_json",
  "xpute-core",
 ]
 

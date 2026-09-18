@@ -464,19 +464,46 @@ either side: the TypeScript takes 5.3 s and this takes 2.1 s. The tool's own
 win is still ahead of it — walking the coverage is what wants workers — but
 the per-page figure is what a worker multiplies.
 
+## What the tool turned up
+
+**The two tools write the same tile set.** Both were run over the same 200
+land pages at the same concurrency: 201 objects each — the tiles and the
+shared `_ocean` — and every one identical after decompression. The manifests
+carry the same keys and the same counts (123,735 candidate pages, 43,505 land,
+80,230 ocean, the same source catalogs and the same git sha).
+
+**The gzip bytes are not identical, and should not be expected to be.** Two
+encoders at their own default levels produce different streams from the same
+input; what the client sees is the decompressed bytes, which agree. flate2's
+default happens to come out 3.4% smaller than `CompressionStream`, so a
+re-bake shrinks the set slightly rather than growing it.
+
+**236 ms a tile against 31.** Two hundred pages, concurrency 8 on both:
+47.1 s against 6.3 s, which over the 43,505 land pages is about 2h50m against
+about 22m. The single-connection figure was 263 ms against 107, so most of the
+rest is the worker shape — a thread per worker owning its connection and its
+prepared statements for the whole run, where the TypeScript hands each page a
+pooled client and prepares per checkout.
+
+**The ocean tile is still page-independent, and the tool still checks.** The
+client keeps one decoded copy of `_ocean` for every open-ocean page, which
+holds only if baking the same empty source at different pages — different
+bbox, different `Z_SCALE` by latitude — gives identical bytes. The assertion
+came across with the tool, and passes.
+
 ## Where it stands
 
-**Steps 1, 2, 3, 6 and the source half of 4 built** 09-18, verified against a live geo DB as above.
+**Steps 1–4 and 6 built** 09-18, verified against a live geo DB as above.
 `crates/pxl/geo` is 954 lines including its tests, takes `DB_GEO_URL` alone,
 and `apps/api` still serves — the Dockerfile, the compose file and
 infra/README change when the deploy cuts over, not before. `check:rust` is
 three passes now: the client's crates for wasm32 by name, the server's for the
 host, then the host check with every target.
 
-Left in step 4 is the tool itself: the land/ocean classification scan and its
-cached page list, the shared `_ocean` tile, resume by what is already on disk,
-the workers, and the manifest with its provenance. Then step 5, the dev tile
-server. 7 and 8 wait on a second server existing.
+Step 5 is the work left — the dev tile server, which is the pipeline behind
+four routes. `bake_poi_tiles` and `bake_geocode_tiles` are not ported: they
+read the POI and Divisions tables rather than this pipeline, and neither has
+been looked at yet. 7 and 8 wait on a second server existing.
 
 Still open, and now to settle in step 4: the Overture category map. It is
 search's and the POI bake's, and the terrain pipeline never touches it, so step
