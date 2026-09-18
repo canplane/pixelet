@@ -15,9 +15,8 @@
 //! CPU — so the layout outranks the algorithm, and more cores do not help.
 //! The build is therefore three passes over flat integer arrays: count per
 //! bucket, prefix-sum the starts, place each id with a bump. No `Map`, no
-//! per-entity object, no array literal. That is also what makes a per-frame
-//! rebuild free of garbage, which on this platform is the difference between
-//! a frame and a collection pause.
+//! per-entity object, no array literal. A per-frame rebuild therefore asks
+//! the allocator for nothing: the arrays are the ones it already has.
 //!
 //! **A generation stamp replaces the clear.** Teschner's trick: each rebuild
 //! increments a counter, and a bucket whose stamp is stale reads as empty

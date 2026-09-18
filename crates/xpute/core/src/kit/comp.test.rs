@@ -2,12 +2,12 @@
 // (no pair: comp.ts has no test file)
 
 use super::*;
-use crate::vector::Vector;
+use crate::golden::Golden;
 
-const VECTOR: &str = include_str!("../../vector/kit/comp.tsv");
+const GOLDEN: &str = include_str!("../../golden/kit/comp.tsv");
 
 /// A string field, which the flattening leaves out when it is empty.
-fn text(v: &Vector, key: &str) -> &'static str {
+fn text(v: &Golden, key: &str) -> &'static str {
     if v.has(key) {
         v.s(key)
     } else {
@@ -17,7 +17,7 @@ fn text(v: &Vector, key: &str) -> &'static str {
 
 #[test]
 fn comp_orders_what_the_typescript_orders() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     v.each("str", |k| {
         let (a, b) = (text(&v, &format!("{k}.a")), text(&v, &format!("{k}.b")));
         assert_eq!(comp_str(a, b), v.i32(&format!("{k}.c")), "comp_str({a:?}, {b:?})");

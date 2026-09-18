@@ -1,15 +1,15 @@
 // pxl-spec/space/pvf3/projection.test.rs
 // (no pair: projection.ts has no test file)
 
-use xpute_core::vector::Vector;
+use xpute_core::golden::Golden;
 
 use super::*;
 
-const VECTOR: &str = include_str!("../../../vector/spec/space/pvf3/projection.tsv");
+const GOLDEN: &str = include_str!("../../../golden/spec/space/pvf3/projection.tsv");
 
 #[test]
 fn projection_computes_what_the_typescript_computes() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     v.each("", |k| {
         let (x, y, z) = (v.f64(&format!("{k}.x")), v.f64(&format!("{k}.y")), v.f64(&format!("{k}.z")));
         let mut p = PVF3::default();

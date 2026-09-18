@@ -2,13 +2,13 @@
 // (no pair: deque.ts has no test file)
 
 use super::*;
-use crate::vector::Vector;
+use crate::golden::Golden;
 
-const VECTOR: &str = include_str!("../../vector/ds/deque.tsv");
+const GOLDEN: &str = include_str!("../../golden/ds/deque.tsv");
 
 #[test]
 fn deque_holds_what_the_typescript_holds() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     let mut buf: [Option<u32>; 8] = [None; 8];
     let mut d = Deque::new(&mut buf, 0, 0);
     v.each("", |k| {

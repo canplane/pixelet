@@ -16,14 +16,15 @@
     // task that loads it depends on this, so it is never stale or missing.
     "build:wasm": "deno run -A script/build_wasm.ts",
 
+    // Server routes answered by the published deployment: no local server,
+    // database or Docker. See vite.config.ts's VITE_DEV_SOURCE comment.
     "dev": { "command": "deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
-    // Server routes answered by the published deployment instead of a local
-    // API + PostGIS. See vite.config.ts's VITE_DEV_SOURCE comment.
-    "dev:remote": { "command": "VITE_DEV_SOURCE=remote deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
+    // The same client against the servers on this machine.
+    "dev:local": { "command": "VITE_DEV_SOURCE=local deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
 
     "build": { "command": "deno run -A --node-modules-dir=auto npm:vite build", "dependencies": ["build:wasm"] },
-    "preview": "deno run -A --node-modules-dir=auto npm:vite preview",
-    "preview:remote": { "command": "VITE_DEV_SOURCE=remote deno run -A --node-modules-dir=auto npm:vite preview", "dependencies": ["build"] },
+    "preview": { "command": "deno run -A --node-modules-dir=auto npm:vite preview", "dependencies": ["build"] },
+    "preview:local": "VITE_DEV_SOURCE=local deno run -A --node-modules-dir=auto npm:vite preview",
 
     // Build, then publish the Worker (app + R2 tile route). Run through Deno
     // rather than npx: wrangler requires Node >=22 and the system Node may be

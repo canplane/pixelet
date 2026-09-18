@@ -2,13 +2,13 @@
 // (no pair: frame.ts has no test file)
 
 use super::*;
-use xpute_core::vector::Vector;
+use xpute_core::golden::Golden;
 
-const VECTOR: &str = include_str!("../../vector/ipc/frame.tsv");
+const GOLDEN: &str = include_str!("../../golden/ipc/frame.tsv");
 
 #[test]
 fn frame_lays_out_what_the_typescript_lays_out() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     v.each("tx", |k| {
         let id = make_tx_id(v.u32(&format!("{k}.w")), v.u32(&format!("{k}.s")));
         assert_eq!(

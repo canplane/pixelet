@@ -12,4 +12,4 @@ xpute-core = { path = "../core" }
 
 # The vectors' reader, for this crate's own tests.
 [dev-dependencies]
-xpute-core = { path = "../core", features = ["vector"] }
+xpute-core = { path = "../core", features = ["golden"] }

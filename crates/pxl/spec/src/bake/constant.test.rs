@@ -1,15 +1,15 @@
 // pxl-spec/bake/constant.test.rs
 // (no pair: constant.ts has no test file)
 
-use xpute_core::vector::Vector;
+use xpute_core::golden::Golden;
 
 use super::*;
 
-const VECTOR: &str = include_str!("../../vector/bake/constant.tsv");
+const GOLDEN: &str = include_str!("../../golden/bake/constant.tsv");
 
 #[test]
 fn constants_are_what_the_typescript_computes() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     assert_eq!(CELL_SHAMT, v.i32("CELL_SHAMT"));
     assert_eq!(U_PER_CELL.to_bits(), v.f64("U_PER_CELL").to_bits());
     assert_eq!(XY_CELL_PER_M.to_bits(), v.f64("XY_CELL_PER_M").to_bits());

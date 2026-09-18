@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 
 import { decor_ids, type DecorId, placeable_cube_id, placeable_cubes, type PlaceableCube } from "@/catalog/cell/mod.ts";
 
-import type { BaseModalProps } from "@/app/type/ui.types.ts";
+import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
 import { cn } from "@/kit/lib/util/cn.ts";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/kit/ui/shadcn/sheet.tsx";

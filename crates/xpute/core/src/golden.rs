@@ -1,26 +1,31 @@
-// xpute-core/vector.rs
-// (the reader of the vectors committed under each crate's vector/, which a
-// test includes by path; what wrote them is gone and they stand as they are)
+// xpute-core/golden.rs
 
-#![cfg(any(test, feature = "vector"))]
+#![cfg(any(test, feature = "golden"))]
 
-//! The reader of the vectors: lines of `path<TAB>value`, the path the keys
-//! and indices down to the value joined by dots. A split per line and no
-//! parser, so reading is not itself a thing to verify. Under `cargo test`
-//! only — the crate's own tests, and another crate's through the `vector`
-//! feature on its dev-dependency.
+//! The reader of the golden records under each crate's `golden/`: lines of
+//! `path<TAB>value`, the path the keys and indices down to the value joined
+//! by dots. A split per line and no parser, so reading is not itself a thing
+//! to verify.
+//!
+//! A record is an output that was checked once and then frozen. These were
+//! written by the TypeScript the Rust was ported from, and what wrote them is
+//! gone — so what they hold to now is the Rust against itself, which is what
+//! they are worth either way.
+//!
+//! Under `cargo test` only: the crate's own tests, and another crate's
+//! through the `golden` feature on its dev-dependency.
 
 use std::collections::HashMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-pub struct Vector {
+pub struct Golden {
     map: HashMap<&'static str, &'static str>,
 }
 
-impl Vector {
+impl Golden {
     /// The vector an `include_str!` read.
-    pub fn load(src: &'static str) -> Vector {
-        Vector {
+    pub fn load(src: &'static str) -> Golden {
+        Golden {
             map: src.lines().filter_map(|l| l.split_once('\t')).collect(),
         }
     }
@@ -30,36 +35,36 @@ impl Vector {
     }
 
     pub fn s(&self, key: &str) -> &'static str {
-        self.map.get(key).unwrap_or_else(|| panic!("vector: no {key}"))
+        self.map.get(key).unwrap_or_else(|| panic!("golden: no {key}"))
     }
 
     pub fn u64(&self, key: &str) -> u64 {
-        self.s(key).parse().unwrap_or_else(|_| panic!("vector: {key} is not a u64"))
+        self.s(key).parse().unwrap_or_else(|_| panic!("golden: {key} is not a u64"))
     }
 
     pub fn i64(&self, key: &str) -> i64 {
-        self.s(key).parse().unwrap_or_else(|_| panic!("vector: {key} is not an i64"))
+        self.s(key).parse().unwrap_or_else(|_| panic!("golden: {key} is not an i64"))
     }
 
     pub fn u32(&self, key: &str) -> u32 {
-        self.s(key).parse().unwrap_or_else(|_| panic!("vector: {key} is not a u32"))
+        self.s(key).parse().unwrap_or_else(|_| panic!("golden: {key} is not a u32"))
     }
 
     pub fn i32(&self, key: &str) -> i32 {
-        self.s(key).parse().unwrap_or_else(|_| panic!("vector: {key} is not an i32"))
+        self.s(key).parse().unwrap_or_else(|_| panic!("golden: {key} is not an i32"))
     }
 
     /// A double written through f64_bits.
     pub fn f64(&self, key: &str) -> f64 {
         let text = self.s(key);
-        f64::from_bits(u64::from_str_radix(text.trim_start_matches("0x"), 16).unwrap_or_else(|_| panic!("vector: {key} is not a double's bits")))
+        f64::from_bits(u64::from_str_radix(text.trim_start_matches("0x"), 16).unwrap_or_else(|_| panic!("golden: {key} is not a double's bits")))
     }
 
     pub fn bool(&self, key: &str) -> bool {
         match self.s(key) {
             "true" => true,
             "false" => false,
-            other => panic!("vector: {key} is {other}, not a boolean"),
+            other => panic!("golden: {key} is {other}, not a boolean"),
         }
     }
 
@@ -68,7 +73,7 @@ impl Vector {
         let text = self.s(key);
         (0..text.len())
             .step_by(2)
-            .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap_or_else(|_| panic!("vector: {key} is not hex")))
+            .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap_or_else(|_| panic!("golden: {key} is not hex")))
             .collect()
     }
 
@@ -84,7 +89,7 @@ impl Vector {
             f(&prefix);
             k += 1;
         }
-        assert!(k > 0, "vector: {base} is empty");
+        assert!(k > 0, "golden: {base} is empty");
     }
 
     /// How many entries `base` has.

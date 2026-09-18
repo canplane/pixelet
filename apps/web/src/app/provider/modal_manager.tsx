@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import type { ModalController, UiController } from "../type/ui.types.ts";
+import type { ModalController, UiController } from "../type/ui.type.ts";
 
 import { EditFooModal } from "@/ui/placeholder/edit_foo_modal.tsx";
 import type { EditFooProps } from "@/ui/placeholder/edit_foo_modal.tsx";

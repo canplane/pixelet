@@ -2,10 +2,10 @@
 
 import { assertEquals } from "@std/assert";
 
-import { LittleSlabs } from "./slab.ts";
+import { TransferPool } from "./transfer.ts";
 
 Deno.test("slabs - the cap is the backpressure, and a slab that comes home is reused before a new one is made", () => {
-  const slabs = new LittleSlabs(1 << 10, 2, 1000);
+  const slabs = new TransferPool(1 << 10, 2, 1000);
   const a = slabs.borrow(1n)!;
   slabs.borrow(2n)!;
   assertEquals(slabs.borrow(3n), null);
@@ -17,7 +17,7 @@ Deno.test("slabs - the cap is the backpressure, and a slab that comes home is re
 });
 
 Deno.test("slabs - a forgotten demand frees its slot, and an idle slab is released after the wait", () => {
-  const slabs = new LittleSlabs(1 << 10, 1, 1000);
+  const slabs = new TransferPool(1 << 10, 1, 1000);
   const a = slabs.borrow(1n)!;
   assertEquals(slabs.borrow(2n), null);
   slabs.forget(1n);

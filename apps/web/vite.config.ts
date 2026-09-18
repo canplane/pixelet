@@ -190,11 +190,11 @@ function const_enum(roots: string[]): Plugin {
   };
 }
 
-// Where `deno task dev:remote` points when nothing overrides it: the project's
+// Where `deno task dev` points when nothing overrides it: the project's
 // own published deployment. Override with VITE_REMOTE_ORIGIN — which
 // .env.example now pre-fills with this exact value, so updating that file
 // alone (no source edit) is enough going forward; this constant only exists
-// so dev:remote still works before anyone has copied .env.example to .env.
+// so dev still works before anyone has copied .env.example to .env.
 // (Previously pointed at the workers.dev subdomain, which silently 404'd on
 // every request once that route was disabled at the Cloudflare edge —
 // nothing here ever surfaced that a hardcoded domain had gone stale.)
@@ -301,10 +301,11 @@ export default defineConfig(({ mode }) => {
   const tileBase = env.VITE_TILE_BASE_URL || tileBaseDefault;
   const apiBase = env.VITE_API_BASE_URL || apiBaseDefault;
 
-  //   local  (default) — the live API, baking on demand.
-  //   remote            — an already-published deployment, so no local API,
-  //                       database or Docker. `deno task dev:remote`.
-  const remote = (env.VITE_DEV_SOURCE || "local") === "remote";
+  //   remote (default) — an already-published deployment, so no local API,
+  //                        database or Docker. `deno task dev`.
+  //   local             — the servers above, baking on demand.
+  //                        `deno task dev:local`.
+  const remote = env.VITE_DEV_SOURCE !== "local";
 
   // Injected as __PUBLISHED_TILES__: route.ts builds every tile path from
   // it, config.ts reads it for what a 404 means.

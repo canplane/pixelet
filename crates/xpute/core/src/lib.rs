@@ -12,7 +12,7 @@ pub mod cmd;
 pub mod ds;
 pub mod errno;
 pub mod error;
+pub mod golden;
 pub mod io;
 pub mod kit;
 pub mod log;
-pub mod vector;

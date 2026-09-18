@@ -32,13 +32,13 @@ deno task dev
 
 | Task                                 | Description                                                          |
 | ------------------------------------ | -------------------------------------------------------------------- |
-| `deno task dev`                      | The client and the three servers it talks to                         |
-| `deno task dev:web`                  | The client only                                                      |
+| `deno task dev`                      | The client alone, every route served by the live deployment          |
+| `deno task dev:local`                | The client and the three servers it talks to, on this machine        |
+| `deno task dev:web`                  | The client alone, against those servers                              |
 | `deno task dev:geo`                  | pxl-geo only (`/geo`)                                                |
 | `deno task dev:api`                  | pxl-api only (`/api`)                                                |
 | `deno task dev:tiles`                | The dev tile server, baking each page on demand                      |
-| `deno task dev:remote`               | The client only, every route served by the live deployment           |
-| `deno task preview:remote`           | The production bundle, served locally, data from the live deployment |
+| `deno task preview`                  | The production bundle, served locally, data from the live deployment |
 | `deno task build:web`                | Build the client                                                     |
 | `deno task build:wasm`               | Build the kernel module into `apps/web/src/kernel/kernel.wasm`       |
 | `deno task bake:{tiles,poi,geocode}` | db-geo into `./out/<kind>/<version>`                                 |
@@ -62,13 +62,14 @@ The client has its own tasks under `apps/web`, reached with
 `deno task --cwd apps/web <name>`: `build`, `preview`, `check:bundle` and the
 rest. The root tasks above wrap the ones worth a short name.
 
-`dev:remote` needs no Docker, no database and no server process: every route
-is proxied to the published deployment. It is the quickest way in, and
-the wrong way to work on a bake, since a published tile prefix is frozen.
-`preview:remote` is the same data under the built client at
-`localhost:4173`: what to measure the client against, since the dev server's
-unbundled modules and hooks are not in it — the ledger overlay is, being
-compiled in for development only, so a reading there is DevTools' profile.
+`dev` needs no Docker, no database and no server process: every route is
+proxied to the published deployment. That is the default because it is what
+most work needs, and it is the wrong way to work on a bake, since a published
+tile prefix is frozen — `dev:local` brings the servers up instead.
+`preview` is the same data under the built client at `localhost:4173`: what to
+measure the client against, since the dev server's unbundled modules and hooks
+are not in it — the ledger overlay is, being compiled in for development only,
+so a reading there is DevTools' profile.
 
 ---
 
@@ -169,7 +170,7 @@ files each.
 
 | Crate           | Directories                                                    |
 | --------------- | -------------------------------------------------------------- |
-| `xpute-core`    | `ds` `io` `kit`, plus `cmd`, `errno`, `error`, `log`, `vector` |
+| `xpute-core`    | `ds` `io` `kit`, plus `cmd`, `errno`, `error`, `log`, `golden` |
 | `xpute-runtime` | `ipc` `sched` `sys`                                            |
 | `pxl-spec`      | `asset` `bake` `cell` `space`, plus `cmd`, `fetch`, `message`  |
 | `pxl-render`    | `mesh` `asset` `look` `frame` `gpu`                            |

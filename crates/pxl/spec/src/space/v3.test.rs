@@ -1,13 +1,13 @@
 // pxl-spec/space/v3.test.rs
 // (no pair: v3.ts has no test file)
 
-use xpute_core::vector::Vector;
+use xpute_core::golden::Golden;
 
 use super::*;
 
-const VECTOR: &str = include_str!("../../vector/spec/space/v3.tsv");
+const GOLDEN: &str = include_str!("../../golden/spec/space/v3.tsv");
 
-fn vec3(v: &Vector, k: &str) -> V3 {
+fn vec3(v: &Golden, k: &str) -> V3 {
     [v.f64(&format!("{k}.0")), v.f64(&format!("{k}.1")), v.f64(&format!("{k}.2"))]
 }
 
@@ -28,7 +28,7 @@ fn same(got: &V3, want: V3, what: &str) {
 
 #[test]
 fn v3_computes_what_the_typescript_computes() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     v.each("unary", |k| {
         let a = vec3(&v, &format!("{k}.v"));
         let mut o = [0.0; 3];

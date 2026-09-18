@@ -11,10 +11,10 @@ use crate::kit::encoding::bytes_to_hex;
 
 /// What the TypeScript computed, recorded: the generator that wrote it
 /// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
-const VECTOR: &str = include_str!("../../../../vector/io/marshal/tree/encode.tsv");
+const GOLDEN: &str = include_str!("../../../../golden/io/marshal/tree/encode.tsv");
 
 fn expected(name: &str) -> String {
-    let v: std::collections::HashMap<&str, &str> = VECTOR.lines().filter_map(|l| l.split_once('\t')).collect();
+    let v: std::collections::HashMap<&str, &str> = GOLDEN.lines().filter_map(|l| l.split_once('\t')).collect();
     let k = (0..).find(|k| v.get(format!("{k}.name").as_str()).is_none_or(|n| *n == name)).unwrap();
     v.get(format!("{k}.packet").as_str()).unwrap_or_else(|| panic!("no vector {name}")).to_string()
 }

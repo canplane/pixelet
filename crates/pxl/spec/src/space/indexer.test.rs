@@ -94,11 +94,11 @@ fn indexer_every_point_in_a_cell_resolves_to_the_same_centre() {
 
 /// What the TypeScript computed, recorded: the generator that wrote it
 /// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
-const VECTOR: &str = include_str!("../../vector/spec/space/indexer.tsv");
+const GOLDEN: &str = include_str!("../../golden/spec/space/indexer.tsv");
 
 #[test]
 fn indexer_computes_what_the_typescript_computes() {
-    let v = xpute_core::vector::Vector::load(VECTOR);
+    let v = xpute_core::golden::Golden::load(GOLDEN);
     assert_eq!(L2_RANGE, v.u64("constants.L2_RANGE"));
     assert_eq!(L3_RANGE, v.u64("constants.L3_RANGE"));
     assert_eq!(L4_RANGE, v.u64("constants.L4_RANGE"));

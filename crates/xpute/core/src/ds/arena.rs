@@ -19,7 +19,10 @@ pub struct ArenaOptions {
 
 /// Arena allocator with bump allocation and mark/rewind reset.
 ///
-/// Intended for transient objects to reduce GC churn.
+/// For work whose lifetime is one pass: a page's features, a chunk's
+/// scratch. What it saves is not a collector — there is none here — but the
+/// allocator: one bump against a few hundred thousand frees, and one rewind
+/// at the end instead of unwinding them.
 /// - alloc: bump cursor (O(1))
 /// - truncate: rewind by mark/scope (bulk reset)
 ///
@@ -160,7 +163,7 @@ impl<T> Drop for ArenaGuard<'_, T> {
 
 /// Contiguous typed scratch store with bump write and mark/rewind control.
 ///
-/// Intended for transient primitive data to reduce GC churn.
+/// The same for primitives: one range, written forward and rewound whole.
 /// - push: append one element (amortized O(1))
 /// - set : random write with auto-grow and len extension
 /// - truncate: rewind by mark/scope (bulk reset)

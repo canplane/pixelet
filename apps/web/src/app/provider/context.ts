@@ -3,7 +3,7 @@
 import { createContext, useContext } from "react";
 
 // import AppStore from "../model/store";
-import type { UiController } from "../type/ui.types.ts";
+import type { UiController } from "../type/ui.type.ts";
 
 /**
  * Values provided by the AppContext

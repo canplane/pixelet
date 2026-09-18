@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect } from "react";
 
-import type { BaseModalProps } from "@/app/type/ui.types.ts";
+import type { BaseModalProps } from "@/app/type/ui.type.ts";
 
 import { useAppContext } from "@/app/provider/context.ts";
 

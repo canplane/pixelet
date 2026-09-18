@@ -2,12 +2,12 @@
 // (no pair: encoding.ts has no test file)
 
 use super::*;
-use crate::vector::Vector;
+use crate::golden::Golden;
 
-const VECTOR: &str = include_str!("../../vector/kit/encoding.tsv");
+const GOLDEN: &str = include_str!("../../golden/kit/encoding.tsv");
 
 /// A string field, which the flattening leaves out when it is empty.
-fn text(v: &Vector, key: &str) -> &'static str {
+fn text(v: &Golden, key: &str) -> &'static str {
     if v.has(key) {
         v.s(key)
     } else {
@@ -17,7 +17,7 @@ fn text(v: &Vector, key: &str) -> &'static str {
 
 #[test]
 fn encoding_computes_what_the_typescript_computes() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     v.each("blobs", |k| {
         let b = hex_to_bytes(text(&v, &format!("{k}.hex")));
         let s = bytes_to_b64url(&b);

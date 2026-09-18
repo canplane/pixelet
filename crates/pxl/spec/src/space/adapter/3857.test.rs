@@ -131,11 +131,11 @@ fn epsg3857_z_scale_constant_within_one_l3_page_the_documented_coarse_scale_cont
 
 /// What the TypeScript computed, recorded: the generator that wrote it
 /// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
-const VECTOR: &str = include_str!("../../../vector/spec/space/adapter/3857.tsv");
+const GOLDEN: &str = include_str!("../../../golden/spec/space/adapter/3857.tsv");
 
 #[test]
 fn the_adapters_compute_what_the_typescript_computes() {
-    let v = xpute_core::vector::Vector::load(VECTOR);
+    let v = xpute_core::golden::Golden::load(GOLDEN);
     let triple = |k: &str| [v.f64(&format!("{k}.0")), v.f64(&format!("{k}.1")), v.f64(&format!("{k}.2"))];
     // The kernel's transcendental functions are its own, within one ulp of
     // V8's correctly rounded ones (kit/fdlibm.rs), and a chain of them

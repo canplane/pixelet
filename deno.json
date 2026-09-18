@@ -18,14 +18,20 @@
     // ── Run it locally ──
     // The `server` profile, not a debug build: the rasterizer under one is
     // slow enough to be felt on every page.
-    "dev": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task dev:web) & wait\"",
+    // The client alone, every route answered by the published deployment: no
+    // Docker, no database, no server process. Not usable for bake work — a
+    // published tile prefix is frozen.
+    "dev": "deno task --cwd apps/web dev",
+    // The whole stack on this machine instead.
+    "dev:local": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task dev:web) & wait\"",
     "dev:geo": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo -- \"$@\"' --",
     "dev:api": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-api -- \"$@\"' --",
     "dev:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --features serve --bin serve_tiles -- \"$@\"' --",
-    "dev:web": "deno task --cwd apps/web dev",
-    // Not usable for bake work: a published tile prefix is frozen.
-    "dev:remote": "deno task --cwd apps/web dev:remote",
-    "preview:remote": "deno task --cwd apps/web preview:remote",
+    "dev:web": "deno task --cwd apps/web dev:local",
+    // The production bundle at localhost:4173 on the same data: what to
+    // measure the client against, since the dev server's unbundled modules
+    // and hooks are not in it.
+    "preview": "deno task --cwd apps/web preview",
 
     // ── Fill the bucket ──
     // Resumable: an interrupted run picks up where it stopped.

@@ -2,13 +2,13 @@
 // (no pair: math.ts has no test file)
 
 use super::*;
-use crate::vector::Vector;
+use crate::golden::Golden;
 
-const VECTOR: &str = include_str!("../../vector/kit/math.tsv");
+const GOLDEN: &str = include_str!("../../golden/kit/math.tsv");
 
 #[test]
 fn math_computes_what_the_typescript_computes() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     v.each("", |k| {
         let (x, s) = (v.f64(&format!("{k}.x")), v.f64(&format!("{k}.s")));
         let bits = |name: &str, got: f64| assert_eq!(got.to_bits(), v.f64(&format!("{k}.{name}")).to_bits(), "{k}.{name}({x}, {s}) = {got}");

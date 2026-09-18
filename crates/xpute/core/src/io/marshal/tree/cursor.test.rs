@@ -2,14 +2,14 @@
 // (no pair: the TypeScript tree has no test file)
 
 use super::*;
+use crate::golden::Golden;
 use crate::io::marshal::tree::encode::{TreeEncoder, TreeEncoderOptions};
 use crate::io::marshal::tree::spec::NodeValue;
 use crate::io::marshal::tree::view::{NodeView, TreeView};
 use crate::kit::array::Kind;
 use crate::kit::encoding::{bytes_to_hex, hex_to_bytes};
-use crate::vector::Vector;
 
-const VECTOR: &str = include_str!("../../../../vector/io/marshal/tree/cursor.tsv");
+const GOLDEN: &str = include_str!("../../../../golden/io/marshal/tree/cursor.tsv");
 
 fn typed_name(kind: Kind) -> &'static str {
     match kind {
@@ -65,7 +65,7 @@ fn aligned(hex: &str) -> U8Array {
 
 #[test]
 fn the_cursor_reads_what_the_typescript_reads() {
-    let v = Vector::load(VECTOR);
+    let v = Golden::load(GOLDEN);
     v.each("packets", |k| {
         let reader = TreeReader::new(aligned(v.s(&format!("{k}.packet")))).unwrap();
         let root = reader.read();

@@ -1,4 +1,4 @@
-// @pxl/web/app/type/ui.types.ts
+// @pxl/web/app/type/ui.type.ts
 
 /** Base props shared by modal components */
 export type BaseModalProps = {

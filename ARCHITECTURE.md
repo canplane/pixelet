@@ -31,7 +31,7 @@ xpute-core ◀── pxl-spec ◀── pxl-render ◀── pxl-kernel ◀─�
 | Crate / package  | Role                                                                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `xpute-core`     | The generic kit: collections and lanes, the codecs and XTP, the errno table both languages are written from, the libm that agrees with V8. |
-| `xpute-runtime`  | What runs over it: the rings and the change log, the scheduler's three levels, and the memory a module is given — the slab over a buddy.   |
+| `xpute-runtime`  | What runs over it: the rings and the change log, the scheduler's three levels, and the ranges a module's memory is laid out in.            |
 | `pxl-spec`       | The model: PVF3 and the spatial hierarchy, the cell catalogs, the command and message numbers, the bake's formats, the asset tables.       |
 | `pxl-render`     | The view: volumes, the column scan and the mesher, glTF, the LOD ladder, the billboards' atlas, the draw list, the shaders, the renderer.  |
 | `pxl-kernel`     | The kernel: the chunk scheduler and nodes, the layers and their stores, fetches and loads, the camera and sensors, the turn, the ledger.   |
