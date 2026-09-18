@@ -11,7 +11,7 @@ import { cn } from "@/kit/lib/util/cn.ts";
 import { TextField } from "@/kit/ui/text_field.tsx";
 import { useAppContext } from "@/app/provider/context.ts";
 import { useUiStore } from "@/app/store/ui_store.ts";
-import { type DecorId, placeable_cube_id, placeable_cubes, type PlaceableCube } from "@pxl/shared/spec/cell/mod.ts";
+import { type DecorId, placeable_cube_id, placeable_cubes, type PlaceableCube } from "@/catalog/cell/mod.ts";
 import { object_scale_exponents, OBJECT_SIZES } from "@/catalog/object/size.ts";
 import { cube_swatch_style } from "./cube_swatch.ts";
 

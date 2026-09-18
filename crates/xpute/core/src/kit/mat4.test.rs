@@ -53,7 +53,8 @@ fn mat4_the_frustum_s_planes_hold_the_target_and_reject_what_is_behind_the_eye()
     assert!(!inside(0.0, 3000.0, 0.0));
 }
 
-/// script/vector/xpute/core/kit/mat4.ts's output.
+/// What the TypeScript computed, recorded: the generator that wrote it
+/// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
 const VECTOR: &str = include_str!("../../vector/kit/mat4.tsv");
 
 #[test]

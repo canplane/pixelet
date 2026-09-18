@@ -1,18 +1,13 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@db/postgres@~0.19.5": "0.19.5",
-    "jsr:@hono/hono@^4.12.2": "4.12.2",
     "jsr:@std/assert@1": "1.0.19",
-    "jsr:@std/bytes@^1.0.5": "1.0.6",
-    "jsr:@std/crypto@^1.0.4": "1.0.5",
-    "jsr:@std/encoding@^1.0.9": "1.0.10",
-    "jsr:@std/fmt@^1.0.6": "1.0.9",
-    "jsr:@std/internal@^1.0.12": "1.0.12",
+    "jsr:@std/internal@^1.0.12": "1.0.14",
+    "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/json@^1.0.2": "1.1.0",
     "jsr:@std/jsonc@1": "1.0.2",
-    "jsr:@std/path@1": "1.1.4",
-    "jsr:@std/path@^1.0.8": "1.1.4",
+    "jsr:@std/path@1": "1.1.6",
+    "jsr:@std/yaml@1": "1.2.0",
     "npm:@deno/vite-plugin@^1.0.6": "1.0.6_vite@7.3.1__picomatch@4.0.3",
     "npm:@radix-ui/react-dialog@^1.1.15": "1.1.15_@types+react@19.2.14_@types+react-dom@19.2.3__@types+react@19.2.14_react@19.2.4_react-dom@19.2.4__react@19.2.4",
     "npm:@radix-ui/react-separator@^1.1.8": "1.1.8_@types+react@19.2.14_@types+react-dom@19.2.3__@types+react@19.2.14_react@19.2.4_react-dom@19.2.4__react@19.2.4",
@@ -47,39 +42,14 @@
     "npm:zustand@^5.0.9": "5.0.11_@types+react@19.2.14_immer@11.1.4_react@19.2.4_use-sync-external-store@1.6.0__react@19.2.4"
   },
   "jsr": {
-    "@db/postgres@0.19.5": {
-      "integrity": "afdbe608bd066cda2ee5dba37c416d332098b9238c51aec223331108e281954c",
-      "dependencies": [
-        "jsr:@std/bytes",
-        "jsr:@std/crypto",
-        "jsr:@std/encoding",
-        "jsr:@std/fmt",
-        "jsr:@std/path@^1.0.8"
-      ]
-    },
-    "@hono/hono@4.12.2": {
-      "integrity": "a3344827d814799503bb3bba77285344aaa2798643d1cc56345f9e3537ece886"
-    },
     "@std/assert@1.0.19": {
       "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
       "dependencies": [
-        "jsr:@std/internal"
+        "jsr:@std/internal@^1.0.12"
       ]
     },
-    "@std/bytes@1.0.6": {
-      "integrity": "f6ac6adbd8ccd99314045f5703e23af0a68d7f7e58364b47d2c7f408aeb5820a"
-    },
-    "@std/crypto@1.0.5": {
-      "integrity": "0dcfbb319fe0bba1bd3af904ceb4f948cde1b92979ec1614528380ed308a3b40"
-    },
-    "@std/encoding@1.0.10": {
-      "integrity": "8783c6384a2d13abd5e9e87a7ae0520a30e9f56aeeaa3bdf910a3eaaf5c811a1"
-    },
-    "@std/fmt@1.0.9": {
-      "integrity": "2487343e8899fb2be5d0e3d35013e54477ada198854e52dd05ed0422eddcabe0"
-    },
-    "@std/internal@1.0.12": {
-      "integrity": "972a634fd5bc34b242024402972cd5143eac68d8dffaca5eaa4dba30ce17b027"
+    "@std/internal@1.0.14": {
+      "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
     },
     "@std/json@1.1.0": {
       "integrity": "93330d3ed4054d6b1ffe54b075432c80a5f671be77277b978931e018014cb1cc"
@@ -90,11 +60,14 @@
         "jsr:@std/json"
       ]
     },
-    "@std/path@1.1.4": {
-      "integrity": "1d2d43f39efb1b42f0b1882a25486647cb851481862dc7313390b2bb044314b5",
+    "@std/path@1.1.6": {
+      "integrity": "c68485c2a4dfbb5ae3cc74fae4e8c4e5d874cf8a8ed12927917235c758b46cbe",
       "dependencies": [
-        "jsr:@std/internal"
+        "jsr:@std/internal@^1.0.14"
       ]
+    },
+    "@std/yaml@1.2.0": {
+      "integrity": "20beb41e4983ba3437dbefac62b14061ab058e8a187596f19d28ff9035f6e6cf"
     }
   },
   "npm": {
@@ -2517,12 +2490,6 @@
       "npm:vite@^7.2.4"
     ],
     "members": {
-      "apps/api": {
-        "dependencies": [
-          "jsr:@db/postgres@~0.19.5",
-          "jsr:@hono/hono@^4.12.2"
-        ]
-      },
       "apps/web": {
         "dependencies": [
           "npm:@radix-ui/react-dialog@^1.1.15",

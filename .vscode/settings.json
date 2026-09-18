@@ -7,7 +7,7 @@
   "deno.lint": true,
   "deno.unstable": ["webgpu"],
   // No "deno.config" pin here on purpose: this repo is a Deno workspace
-  // (root deno.json's "workspace" field lists apps/api, apps/web, ...),
+  // (root deno.json's "workspace" field lists apps/web and packages/*),
   // and each member has its own import map (e.g. apps/web/deno.json's
   // "@/" -> "./src/"). Pinning deno.config to the root file disables
   // auto-detection and forces every open file to resolve against the

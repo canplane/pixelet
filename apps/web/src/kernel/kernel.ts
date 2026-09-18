@@ -32,10 +32,10 @@ import { useLayoutEffect, useSyncExternalStore } from "react";
 import type { u32 } from "@xpute/core/kit/word.ts";
 import type { BranchCursor } from "@xpute/core/io/marshal/tree/mod.ts";
 import { Strobe } from "@xpute/core/sched/strobe.ts";
-import { Cmd } from "@pxl/shared/spec/cmd.ts";
-import type { Message } from "@pxl/shared/spec/message.ts";
-import { FetchFail } from "@pxl/shared/spec/fetch.ts";
-import { load_key } from "@pxl/shared/asset/load.ts";
+import { Cmd } from "@/kernel/cmd_spec.ts";
+import type { Message } from "@/kernel/message_spec.ts";
+import { FetchFail } from "@/kernel/fetch_spec.ts";
+import { load_key } from "@/catalog/asset/load.ts";
 
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
 import { asset_url } from "@/config/route.ts";
@@ -49,8 +49,11 @@ import { boot_block, hold_body, quantum_policy, text_at } from "@/kernel/module.
 
 export type PoseStatus = "idle" | "loading" | "ready" | "error";
 export type UiSnapshot = {
-  /** `center` is the map centre as [lon, lat]. */
-  map: { status: "idle" | "loading" | "success" | "error"; is_off_center: boolean; center: [number, number] | null };
+  /** `center` is the map centre as [lon, lat]; `page` is the L3 page it falls
+   * in, as the decimal string a bucket key and a page URL both are. The kernel
+   * sends both because it has both — recomputing the page here would mean a
+   * second implementation of the space in TypeScript. */
+  map: { status: "idle" | "loading" | "success" | "error"; is_off_center: boolean; center: [number, number] | null; page: string | null };
   /** `error` is what went wrong, as @pxl/shared/spec/message's number. */
   location: { status: PoseStatus; has_location: boolean; error: Message | null };
   companion: { person_ready: boolean; pet_ready: boolean };
@@ -66,7 +69,7 @@ export type UiSnapshot = {
 };
 
 const INITIAL: UiSnapshot = {
-  map: { status: "idle", is_off_center: false, center: null },
+  map: { status: "idle", is_off_center: false, center: null, page: null },
   location: { status: "idle", has_location: false, error: null },
   companion: { person_ready: false, pet_ready: false },
   orientation: { status: "idle", heading: null },

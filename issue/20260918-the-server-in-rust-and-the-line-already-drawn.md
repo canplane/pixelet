@@ -845,8 +845,11 @@ image nor its service definition had changed. `--force-recreate caddy` was what
 made the Caddyfile current. A missing container would have been a 502; a 404
 from the wrong server is what a stale relay looks like.
 
-**Still not deleted:** `apps/api`'s TypeScript server. It is what every byte
-comparison in this document was made against, and removing it is a separate
-commit for after the Rust has served for a while. The Overture ingests, the
+**Deleted 09-18, after this had served for a few hours:** `apps/api` entirely.
+38 files — the server and the bake every byte comparison in this document was
+made against — and the 14 that were never part of the move (the Overture and
+asset ingests, the brand renderer, the texture-pack tool, the elevation
+pipeline) went to `tool/`, a root of its own because nothing under it is
+deployed. See [the gate that deploys](./20260918-the-gate-that-deploys.md). The Overture ingests, the
 asset ingest and the brand renderer stay in Deno for the reasons under _What is
 not moving_, and those are not waiting on anything.

@@ -1,7 +1,7 @@
 // @pxl/web/ui/map/overlay/cube_swatch.ts
 
 import type { CSSProperties } from "react";
-import { placeable_cube_hex, type PlaceableCube } from "@pxl/shared/spec/cell/mod.ts";
+import { placeable_cube_hex, type PlaceableCube } from "@/catalog/cell/mod.ts";
 import { asset_url } from "@/config/route.ts";
 import { texture_key } from "@/catalog/object/tex.ts";
 

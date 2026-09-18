@@ -1,4 +1,4 @@
-# Repo-root .dockerignore — apps/api/Dockerfile builds from this context
+# Repo-root .dockerignore — crates/pxl/geo/Dockerfile builds from this context
 # (see that file's own top comment on why the context is the whole repo,
 # not just apps/api/).
 

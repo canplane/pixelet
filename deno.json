@@ -2,10 +2,8 @@
   "description": "A droplet fades. A pixelet remains.",
 
   "workspace": [
-    "apps/api",
     "apps/web",
 
-    "packages/pxl/shared",
     "packages/xpute/core"
   ],
   "nodeModulesDir": "auto",
@@ -51,20 +49,31 @@
     // Copies every file under asset/ to ./out/asset/{glb,png}/<sha256> and
     // regenerates the table the shipped palette reads. Uploading is separate
     // — see .agents/skills/publish-bucket/SKILL.md.
-    "ingest:asset": "deno run -A apps/api/src/bake/asset/tool/ingest_asset.ts",
+    // The asset tree into the bucket's shape and the catalogs' tables, and the
+    // two tools that feed it: the texture pack normalized from its sources,
+    // and the brand's icons. pxl-asset-bake, beside pxl-geo-bake.
+    "ingest:asset": "cargo run --manifest-path crates/Cargo.toml --profile server --bin ingest_asset",
+    "download:pack": "cargo run --manifest-path crates/Cargo.toml --profile server --bin download_texture_pack",
+    "render:brand": "cargo run --manifest-path crates/Cargo.toml --profile server --bin render_brand",
 
-    "build:api": "deno task --cwd apps/api build",
+    // The five Overture themes into db-geo, each a binary of the same crate
+    // the bakes are: one pipeline, one connection, one catalog table. Each
+    // takes --bbox and --out.
+    "ingest:base": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin ingest_base -- \"$@\"' --",
+    "ingest:buildings": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin ingest_buildings -- \"$@\"' --",
+    "ingest:transportation": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin ingest_transportation -- \"$@\"' --",
+    "ingest:places": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin ingest_places -- \"$@\"' --",
+    "ingest:divisions": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin ingest_divisions -- \"$@\"' --",
+
     "build:web": "deno task --cwd apps/web build",
     "build:wasm": "deno task --cwd apps/web build:wasm",
 
     // Drops what Deno and Vite materialize and re-checks from nothing. Named
     // paths only; nothing is found by name and deleted.
-    "reset": "rm -rf node_modules apps/api/node_modules apps/web/node_modules apps/api/dist apps/web/dist && deno task check",
+    "reset": "rm -rf node_modules apps/web/node_modules apps/web/dist && deno task check",
 
-    "check": "deno task check:api && deno task check:web && deno task check:shared && deno task check:xpute && deno task check:rust && deno task check:spec && deno task check:locale",
-    "check:api": "deno task --cwd apps/api check",
+    "check": "deno task check:web && deno task check:xpute && deno task check:rust && deno task check:spec && deno task check:locale",
     "check:web": "deno task --cwd apps/web check",
-    "check:shared": "deno check packages/pxl/shared/src/**/*.ts",
     "check:xpute": "deno check packages/xpute/core/src/**/*.ts",
     // The Rust, for the targets it ships to. Clippy type-checks as it lints,
     // and a warning fails it, as a type error fails the others. Three passes,
@@ -90,7 +99,7 @@
     // Formatting is checked first, over the whole workspace, against
     // crates/rustfmt.toml; the generated `.rs` files pass it because
     // script/spec.ts writes them through rustfmt.
-    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-overture -p pxl-geo -p pxl-geo-bake -p pxl-api -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel",
+    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-overture -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-asset-bake -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel",
     // The specs are JSON; the TypeScript and the Rust that carry them are
     // written from it (script/spec.ts), and the gate fails on a stale one.
     "check:spec": "deno run -A script/spec.ts",
@@ -104,14 +113,12 @@
     // both deploy jobs in .github/workflows/check-and-deploy.yml.
     "smoke": "deno run -A script/smoke.ts",
 
-    "test": "deno task test:web && deno task test:api && deno task test:shared && deno task test:xpute && deno task test:rust",
+    "test": "deno task test:web && deno task test:xpute && deno task test:rust",
     "test:web": "deno task --cwd apps/web test",
-    "test:api": "deno test -A apps/api/src",
-    "test:shared": "deno test -A packages/pxl/shared/src",
     "test:xpute": "deno test -A packages/xpute/core/src",
     // The Rust core natively, where naga compiles every shader and holds
     // each pipeline's record to it (crates/pxl/render/src/frame/shader/record.rs).
-    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-overture -p pxl-geo -p pxl-geo-bake -p pxl-api",
+    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-overture -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-asset-bake",
 
     "lint": "deno lint",
     "fmt": "deno fmt"
@@ -128,8 +135,6 @@
   },
 
   "imports": {
-    "@pxl/api/": "./apps/api/src/",
-    "@pxl/shared/": "./packages/pxl/shared/src/",
     "@xpute/core/": "./packages/xpute/core/src/",
 
     // testing

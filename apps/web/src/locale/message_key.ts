@@ -10,7 +10,7 @@
  * shell's: locale/ holds them, in every language.
  */
 
-import { Message } from "@pxl/shared/spec/message.ts";
+import { Message } from "@/kernel/message_spec.ts";
 
 export function message_key(message: Message): string | null {
   switch (message) {

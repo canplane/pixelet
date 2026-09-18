@@ -9,7 +9,8 @@ use crate::io::marshal::tree::view::{NodeView, TreeView, ViewValue};
 use crate::kit::array::TypedArray;
 use crate::kit::encoding::bytes_to_hex;
 
-/// script/vector/xpute/core/io/marshal/tree/encode.ts's output.
+/// What the TypeScript computed, recorded: the generator that wrote it
+/// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
 const VECTOR: &str = include_str!("../../../../vector/io/marshal/tree/encode.tsv");
 
 fn expected(name: &str) -> String {

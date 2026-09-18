@@ -23,7 +23,7 @@ use crate::gpu::pipeline::Pipelines;
 use crate::mesh::paint::palette::shader_meta::{rgb255, GROUND_LAYER_META};
 use crate::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
 
-/// The tile edge in texels (apps/api's download_texture_pack.ts's TILE_SIZE).
+/// The tile edge in texels (pxl-asset-bake/pack.rs's TILE_SIZE).
 pub const LAYER_TEX_SZ: u32 = 256;
 
 /// Levels a texture of `width` by `height` has, down to one texel.

@@ -12,11 +12,10 @@ use crate::space::sparse_tree::mem::SparseTreeLayout;
 /// - [m]    : Physical meters (EPSG:3857 based).
 ///
 /// SCALE HIERARCHY:
-/// - CELL_SHAMT defines the cell<->u relation.
+/// - CELL_SHAMT defines the cell<->u relation (cell_spec.rs, from cell.json).
 /// - when CELL_SHAMT = -1, 1u = 2cell.
-pub const CELL_SHAMT: i32 = 0;
-/// `2 ** CELL_SHAMT`, a shift either way.
-pub const U_PER_CELL: f64 = if CELL_SHAMT >= 0 { (1u64 << CELL_SHAMT) as f64 } else { 1.0 / (1u64 << -CELL_SHAMT) as f64 };
+pub use super::cell_spec::{CELL_SHAMT, U_PER_CELL};
+
 // Valid when CELL_SHAMT <= 0.
 const CELL_PER_U: u32 = 1 << -CELL_SHAMT;
 

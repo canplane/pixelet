@@ -102,19 +102,27 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
     let settings = settings_store();
     let bar = scale_bar(view().height.max(1.0));
 
-    // The map centre as the shell reads it, in degrees: what its reverse
-    // geocode keys a page by and its search measures distance from.
+    // The map centre as the shell reads it, in degrees: what its search
+    // measures distance from.
     let center = map.map_center.map(|c| {
         let mut g = [0.0; 3];
         epsg4326::unproject(&mut g, c.i, c.f);
         g
     });
+    // The L3 page that centre falls in, which is what a reverse-geocode label
+    // is keyed by. Sent because the shell would otherwise recompute it: it
+    // would have to project the degrees back and index them again, in a second
+    // implementation of the space, to reach the number this line already has.
+    // A decimal string rather than a number — a page index is 64-bit, and
+    // JSON's number is not.
+    let page = map.map_center.map(|c| L3_IDX(c.i));
     write!(
         out,
-        "{{\"map\":{{\"status\":{},\"is_off_center\":{},\"center\":{}}},",
+        "{{\"map\":{{\"status\":{},\"is_off_center\":{},\"center\":{},\"page\":{}}},",
         Quoted(map.map_status.as_str()),
         nav.is_off_center,
-        Or(center.map(|g| LonLat(g[0], g[1])))
+        Or(center.map(|g| LonLat(g[0], g[1]))),
+        Or(page.map(|p| Quoted(p.to_string())))
     )?;
     write!(
         out,

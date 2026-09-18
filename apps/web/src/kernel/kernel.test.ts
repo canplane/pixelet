@@ -11,10 +11,10 @@
 import { assert, assertEquals } from "@std/assert";
 
 import type { u32 } from "@xpute/core/kit/word.ts";
-import { Cmd } from "@pxl/shared/spec/cmd.ts";
-import { ELE_PADDED_SPAN, PAGE_CELL_SPAN } from "@pxl/shared/bake/constant.ts";
-import { encode_poi_page, encode_terrain } from "@pxl/shared/bake/format.ts";
-import { cube_types } from "@pxl/shared/spec/cell/cube.ts";
+import { Cmd } from "@/kernel/cmd_spec.ts";
+import { cube_types } from "@/catalog/cell/cube.ts";
+
+import { ELE_PADDED_SPAN, encode_empty_poi_page, encode_terrain, PAGE_CELL_SPAN } from "@/kernel/fixture.ts";
 
 import { CORE_BUILD, packet } from "@/kernel/core_build.ts";
 import { CORE_KERNEL } from "@/kernel/core_mem.ts";
@@ -31,7 +31,7 @@ function rng(seed: u32): () => u32 {
 }
 
 type Snapshot = {
-  map: { status: string; is_off_center: boolean; center: [number, number] | null };
+  map: { status: string; is_off_center: boolean; center: [number, number] | null; page: string | null };
   settings: Record<string, boolean | string | number>;
 };
 
@@ -118,7 +118,7 @@ function turn(delta = 1 / 60): Turn {
   const started = fetched;
   for (const f of started) {
     if (f.category === "terrain") answer(f, 200, terrain_body(Number(BigInt(f.url.slice(f.url.lastIndexOf("/") + 1)) & 0xffffn)));
-    else if (f.category === "poi") answer(f, 200, encode_poi_page([]));
+    else if (f.category === "poi") answer(f, 200, encode_empty_poi_page());
     else fail(f);
   }
   for (const load of loads) CORE_BUILD.send(0, Cmd.LOAD_DELETE, packet((b) => b.u32(load)));
@@ -144,6 +144,10 @@ Deno.test("kernel - a map centre fetches its terrain and draws it, and the map s
   action({ type: "go_to", lon: 126.978, lat: 37.5665 });
   let first = turn();
   assert(first.snapshot.map.center !== null, "the centre is set");
+  // The page the shell keys a reverse-geocode label by, checked against the
+  // terrain fetches below.
+  const page = first.snapshot.map.page;
+  assert(page !== null && /^\d+$/.test(page), `the centre's page is a decimal index: ${page}`);
   const statuses = new Set<string>([first.snapshot.map.status]);
   const categories = new Set(first.fetched.map((f) => f.category));
   let terrain_urls = first.fetched.filter((f) => f.category === "terrain").map((f) => f.url);
@@ -157,6 +161,10 @@ Deno.test("kernel - a map centre fetches its terrain and draws it, and the map s
     first = t;
   }
   assert(categories.has("terrain"), `terrain was asked for: ${[...categories]}`);
+  // The centre's own page is among the pages the kernel fetched terrain for,
+  // which is what says `map.page` is that centre's page and not merely a
+  // well-shaped number.
+  assert(terrain_urls.some((u) => u.endsWith(`/${page}`)), `the centre's page ${page} was fetched`);
   assert(terrain_urls.every((u) => /\/\d+$/.test(u)), `terrain URLs end in a page: ${terrain_urls.slice(0, 3)}`);
   assert(max_draws > 0, "something was drawn");
   assert(statuses.has("loading"), `the map loaded: ${[...statuses]}`);

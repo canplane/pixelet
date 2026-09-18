@@ -14,7 +14,7 @@
 
 import { dirname, join } from "@std/path";
 
-import { decor_ids, placeable_cube_id, placeable_cubes } from "@pxl/shared/spec/cell/mod.ts";
+import { decor_ids, placeable_cube_id, placeable_cubes } from "../apps/web/src/catalog/cell/mod.ts";
 
 const root = dirname(dirname(new URL(import.meta.url).pathname));
 const LOCALES = ["en", "ko"];

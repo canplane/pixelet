@@ -1,7 +1,7 @@
 // @pxl/web/catalog/object/tex.ts
 
-import { placeable_cube_id, type PlaceableCube } from "@pxl/shared/spec/cell/mod.ts";
-import { type CubeFace, shipped_texture_key } from "@pxl/shared/asset/texture.ts";
+import { placeable_cube_id, type PlaceableCube } from "@/catalog/cell/mod.ts";
+import { type CubeFace, shipped_texture_key } from "@/catalog/asset/texture.ts";
 
 export type { CubeFace };
 

@@ -1,6 +1,13 @@
 //! Bakes pages straight out of the geo database, the whole path the offline
-//! tool will walk — five queries, the packet, the rasterize — so it can be
-//! held against what the TypeScript produces for the same pages.
+//! tool walks — five queries, the packet, the rasterize — and writes each
+//! tile beside the last. One page at a time, without the walk's threads,
+//! resume or manifest, which is what makes it useful for looking at a single
+//! page that came out wrong.
+//!
+//! It had a sibling, `bake_from_packet`, that baked from a packet already on
+//! disk so the same bytes could go through this pipeline and the TypeScript's.
+//! Its only producer was `dump_page_source.ts`, and both went when the
+//! TypeScript did.
 //!
 //!   cargo run -p pxl-geo-bake --example bake_from_db -- <dir> <page>...
 //!

@@ -10,8 +10,8 @@ infra/
 ```
 
 The ingests that fill db-geo are bake tools, not infrastructure, and live
-with the rest of the bake: `apps/api/src/bake/overture/tool/ingest_*.ts`
-and `apps/api/src/bake/elevation/` (a bash + GDAL pipeline). Their
+with the rest of the bake: `crates/pxl/geo-bake`'s own `ingest_*` binaries
+and `tool/elevation/` (a bash + GDAL pipeline). Their
 procedures are documented here because they are run against these
 databases.
 
@@ -37,14 +37,14 @@ Twelve tables from two sources. Terrain, POI and geocode are baked from
 these offline and published to R2; only forward search queries them at
 request time.
 
-| Source                                                                           | Tables                                                                                                                                                 | Catalog             | Ingest                                                                      |
-| :------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :-------------------------------------------------------------------------- |
-| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `apps/api/src/bake/overture/tool/ingest_{buildings,transportation,base}.ts` |
-| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                    | `overture_catalog`  | `apps/api/src/bake/overture/tool/ingest_{places,divisions}.ts`              |
-| **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                     | `elevation_catalog` | `apps/api/src/bake/elevation/script/setup-elevation.sh`                     |
+| Source                                                                           | Tables                                                                                                                                                 | Catalog             | Ingest                                             |
+| :------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :------------------------------------------------- |
+| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `deno task ingest:{buildings,transportation,base}` |
+| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                    | `overture_catalog`  | `deno task ingest:{places,divisions}`              |
+| **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                     | `elevation_catalog` | `tool/elevation/setup_elevation.sh`                |
 
 Coastline is not its own table: `OVERTURE_COAST_SQL`
-(`apps/api/src/bake/terrain/repository.ts`) carves it at bake time from
+(`crates/pxl/geo-bake/src/terrain/repository.rs`) carves it at bake time from
 `overture_base_water`'s `ocean` subtype, and `HAS_LAND_SQL`
 (`bake/terrain/tool/bake_tiles.ts`) classifies a page as open ocean when
 no `overture_base_land` row touches its bbox.
@@ -106,14 +106,14 @@ until docker exec "$DB_GEO_CONTAINER" pg_isready -U postgres; do sleep 2; done
 Order does not matter. Each reads the root `.env` itself.
 
 ```sh
-deno run -A --env=.env apps/api/src/bake/overture/tool/ingest_buildings.ts
-deno run -A --env=.env apps/api/src/bake/overture/tool/ingest_transportation.ts
-deno run -A --env=.env apps/api/src/bake/overture/tool/ingest_base.ts
-deno run -A --env=.env apps/api/src/bake/overture/tool/ingest_places.ts
-deno run -A --env=.env apps/api/src/bake/overture/tool/ingest_divisions.ts
+deno task ingest:buildings
+deno task ingest:transportation
+deno task ingest:base
+deno task ingest:places
+deno task ingest:divisions
 
-chmod +x apps/api/src/bake/elevation/script/setup-elevation.sh
-./apps/api/src/bake/elevation/script/setup-elevation.sh
+chmod +x tool/elevation/setup_elevation.sh
+./tool/elevation/setup_elevation.sh
 ```
 
 Each Overture tool's own top comment is the source of truth for its
@@ -142,7 +142,7 @@ downtime is acceptable) reclaims what drop-and-recreate leaves behind.
 ## 4. The elevation pipeline
 
 The one script-driven ingest, in bash + `envsubst` + GDAL, at
-`apps/api/src/bake/elevation/`:
+`tool/elevation/`:
 
 |                  |                                            |
 | :--------------- | :----------------------------------------- |
@@ -217,9 +217,8 @@ are unrelated to this project.
    take the whole repo as their build context: the servers are `crates/pxl/geo`
    and `crates/pxl/api`, and their dependencies are path dependencies in the
    same Cargo workspace, so `crates/` has to be present whole for Cargo to
-   resolve it. pxl-geo's file is still `apps/api/Dockerfile` — it kept its path
-   when the server stopped being TypeScript — and builds none of apps/api;
-   pxl-api's is `crates/pxl/api/Dockerfile`.
+   resolve it. Each sits beside its own crate: `crates/pxl/geo/Dockerfile` and
+   `crates/pxl/api/Dockerfile`.
 
 6. **Secrets**
    ```sh
@@ -406,11 +405,11 @@ The notices below are required, shown in
 `apps/web/src/app/setting/section/attribution_section.tsx`. Check the
 source license before shortening, rewording or dropping any of them.
 
-| Source              | License                                                                                                  | Notice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| :------------------ | :------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OpenStreetMap       | [ODbL](https://opendatacommons.org/licenses/odbl/)                                                       | `© OpenStreetMap contributors, available under the Open Database License` — the [OSMF Attribution Guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines) require the credit to make clear the data is under ODbL, so the licence is named rather than left to the link alone. Overture's Buildings/Transportation/Base/Divisions are substantially OSM-sourced and carry this obligation through.                                                                                                                                                                                                 |
-| GEDTM30             | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)                                                | Creator, title, licence link and an indication of change — the pipeline crops and reprojects, so it changed: `Elevation: modified GEDTM30 by OpenGeoHub, licensed under CC BY 4.0.` The author list and journal reference that used to sit here are an academic courtesy, not part of what CC BY asks, and were long enough to crowd out the Copernicus row below, which is not optional. Link the [DOI this pipeline consumes](https://doi.org/10.5281/zenodo.15689805) (`apps/api/src/bake/elevation/metadata.json`), which is what the app's own notice and README link too — one source, not three mirrors of it. |
-| Copernicus WorldDEM | [Copernicus DEM licence](https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model) | Compulsory, and the wording is dictated. GEDTM30 is a fusion whose inputs include Copernicus WorldDEM, and the licence binds anyone communicating adapted data to its "produced using" form, verbatim: `produced using Copernicus WorldDEM © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved`.                                                                                                                                                                                                                          |
+| Source              | License                                                                                                  | Notice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| :------------------ | :------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenStreetMap       | [ODbL](https://opendatacommons.org/licenses/odbl/)                                                       | `© OpenStreetMap contributors, available under the Open Database License` — the [OSMF Attribution Guidelines](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines) require the credit to make clear the data is under ODbL, so the licence is named rather than left to the link alone. Overture's Buildings/Transportation/Base/Divisions are substantially OSM-sourced and carry this obligation through.                                                                                                                                                                                    |
+| GEDTM30             | [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)                                                | Creator, title, licence link and an indication of change — the pipeline crops and reprojects, so it changed: `Elevation: modified GEDTM30 by OpenGeoHub, licensed under CC BY 4.0.` The author list and journal reference that used to sit here are an academic courtesy, not part of what CC BY asks, and were long enough to crowd out the Copernicus row below, which is not optional. Link the [DOI this pipeline consumes](https://doi.org/10.5281/zenodo.15689805) (`tool/elevation/metadata.json`), which is what the app's own notice and README link too — one source, not three mirrors of it. |
+| Copernicus WorldDEM | [Copernicus DEM licence](https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model) | Compulsory, and the wording is dictated. GEDTM30 is a fusion whose inputs include Copernicus WorldDEM, and the licence binds anyone communicating adapted data to its "produced using" form, verbatim: `produced using Copernicus WorldDEM © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved`.                                                                                                                                                                                                             |
 
 Overture Maps Foundation itself needs no notice. Places is
 CDLA-Permissive-2.0, whose only condition is shipping the license text with

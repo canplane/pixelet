@@ -92,7 +92,8 @@ fn indexer_every_point_in_a_cell_resolves_to_the_same_centre() {
     assert_eq!(a.f, 0);
 }
 
-/// script/vector/pxl/shared/spec/space/indexer.ts's output.
+/// What the TypeScript computed, recorded: the generator that wrote it
+/// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
 const VECTOR: &str = include_str!("../../vector/spec/space/indexer.tsv");
 
 #[test]

@@ -22,8 +22,8 @@
 // be gone, and a 200 from one means a relay is still carrying the pre-09-18
 // shape.
 
-import { PUBLISHED_VERSION } from "@pxl/shared/bake/published.ts";
-import { INGESTED } from "@pxl/shared/asset/ingested.ts";
+import { PUBLISHED_VERSION } from "../apps/web/src/config/published_spec.ts";
+import { INGESTED } from "../apps/web/src/catalog/asset/ingested_spec.ts";
 
 // The generated constants directly: route_spec.ts imports nothing itself, and
 // the root has no mapping into apps/web because nothing else here reaches in.

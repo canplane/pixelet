@@ -129,7 +129,8 @@ fn epsg3857_z_scale_constant_within_one_l3_page_the_documented_coarse_scale_cont
     assert_eq!(Z_SCALE(base), Z_SCALE(base + 3.0));
 }
 
-/// script/vector/pxl/shared/spec/space/adapter/3857.ts's output.
+/// What the TypeScript computed, recorded: the generator that wrote it
+/// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
 const VECTOR: &str = include_str!("../../../vector/spec/space/adapter/3857.tsv");
 
 #[test]

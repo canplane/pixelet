@@ -7,9 +7,9 @@
 //! run on different machines, and nothing passes between them but the spec.
 //! See issue/20260918-the-server-in-rust-and-the-line-already-drawn.md.
 //!
-//! The tree mirrors apps/api/src/bake, whose TypeScript this is ported from
-//! and which stays beside it: a page baked here has to come out byte for byte
-//! what that produces, and the comparison needs both.
+//! One module per stage of the pipeline, and `tool/` under each for the command
+//! line that drives it: what a bake does is a sequence, and the tree says which
+//! step a file belongs to rather than which type it holds.
 
 pub mod geocode;
 pub mod overture;

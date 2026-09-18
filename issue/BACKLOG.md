@@ -37,6 +37,20 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     packet on one machine under dev:remote, the fetched bytes whole in the
     console — into_core's view the suspect, not reproduced elsewhere.
 
+- **The last TypeScript that was not the shell.** 2026-09-19
+  ([the doc](./20260919-the-last-typescript-that-was-not-the-shell.md)). In:
+  the five Overture ingests into `pxl-geo-bake`, beside the bakes that read
+  what they write, verified against the TypeScript at one bbox over nine
+  tables with the geometry as WKB — which is how three float bugs came out
+  that reading could not have found; the asset tree's tooling as
+  `pxl-asset-bake`, where the WebP sheet turned out byte-identical and the
+  sixty tiles were re-normalized and re-uploaded; and `@pxl/shared` dissolved
+  to nothing, its thirteen surviving files moved beside the shell that draws
+  with them. `packages/` is `@xpute/core` alone and `tool/` is bash and GDAL.
+  The line that decided each piece: what a thing **is** is generated from
+  `spec/` into both languages, how the UI **arranges** it is hand-written
+  beside the list it is about.
+
 - **CI/CD, and what is left of `apps/api`.** 2026-09-18
   ([the gate that deploys](./20260918-the-gate-that-deploys.md)). In: one
   workflow with a gate (`check`, `test`, `lint`) and two deploy jobs behind it,
@@ -44,14 +58,10 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   the VM only when `crates/`, `infra/prod/` or the Dockerfile changed; a smoke
   check that builds its URLs from the generated constants rather than a path
   list; the monthly refresh moved onto the Rust bakes, which it had never left.
-  Left, in order: **set the secrets and run the monthly refresh once through
-  `workflow_dispatch`** before 10-01, since a cron is the one caller nobody
-  watches fail; then delete `apps/api`'s dead 34 files (the Hono server, the
-  ported bake, the scaffolding, and `category_map.ts`'s generator output),
-  which an import closure identified and which nothing invokes; then decide
-  where the surviving 17 live, because `apps/api` holding no API is a directory
-  named for what it used to be. The Dockerfile moves with that decision — it
-  builds pxl-geo, and infra/prod and infra/README name its path.
+  Done: the secrets are set, the whole workflow ran green end to end, and the
+  monthly refresh was triggered by hand rather than left to the cron.
+  `apps/api` is gone — 38 dead files deleted, the survivors moved out, each
+  Dockerfile beside its own crate.
 
 - **The server to Rust, and `apps/api` into three.** Decided and begun
   2026-09-18

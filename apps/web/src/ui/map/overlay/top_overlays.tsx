@@ -21,7 +21,7 @@ export function TopOverlays() {
   const { ui } = useAppContext();
   const { t } = useTranslation();
 
-  const { label: address_label } = useReverseGeocode(useKernel((s) => s.map.center));
+  const { label: address_label } = useReverseGeocode(useKernel((s) => s.map.page));
 
   return (
     <>

@@ -1,0 +1,46 @@
+[package]
+name = "pxl-asset-bake"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+pxl-spec = { path = "../spec" }
+xpute-core = { path = "../../xpute/core" }
+# The manifest and the glb's own JSON chunk.
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+# A bucket key is the sha256 of an object's bytes.
+sha2 = "0.10"
+# PNG only: the pack's tiles and the brand's sources are PNG, and pulling in
+# every decoder `image` can build would cost compile time for formats this
+# tree does not contain.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+# libwebp itself, for the sheet. `image`'s own WebP support encodes lossless
+# only, and the sheet is quality-92 lossy — 60 tiles of 256² lossless is
+# several megabytes where this is 400 kB, and it is downloaded on every cold
+# start. Same library sharp reaches through libvips, so the encoder is the one
+# the committed sheet was made with even though the bytes will differ.
+webp = "0.3"
+# Mozilla's JPEG encoder, which is what sharp reached for on the link preview.
+# `image`'s own encoder writes the same picture at nearly twice the size — 55 kB
+# against 30 — and the preview is fetched by every crawler that unfurls a link.
+mozjpeg = "0.10"
+# The pack's sources are third-party URLs. A blocking client, because this
+# fetches at most sixty files once and has nothing to overlap them with.
+ureq = "2"
+
+[[bin]]
+name = "ingest_asset"
+path = "src/tool/ingest_asset.rs"
+
+[[bin]]
+name = "download_texture_pack"
+path = "src/tool/download_texture_pack.rs"
+
+[[bin]]
+name = "render_brand"
+path = "src/tool/render_brand.rs"

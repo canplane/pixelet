@@ -4,7 +4,7 @@
   "exports": "./src/index.ts",
 
   // no-window/no-window-prefix assume runtime-portable code (the default
-  // for apps/api and packages/*, which the root config's own rules target);
+  // for tool/ and packages/*, which the root config's own rules target);
   // this workspace member is browser-only, where `window` is the correct
   // global, not a portability footgun.
   "lint": {

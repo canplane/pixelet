@@ -3,17 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import * as epsg4326 from "@pxl/shared/spec/space/adapter/4326.ts";
-import { L3_IDX } from "@pxl/shared/spec/space/indexer.ts";
-import type { IVec } from "@pxl/shared/spec/space/pvf3/mod.ts";
-
 import { fetch_geocode, type GeocodePart } from "@/catalog/geocode/repository.ts";
 import { assemble_label } from "@/catalog/geocode/label.ts";
 
-// A short debounce still matters even though the real dedup key below is
-// now an exact page_idx (not a rounded lat/lon string): panning fires
-// map_center updates every frame, and most of those land on the same page
-// as the last one — no need to even compute L3_IDX that often.
+// A short debounce still matters even though the dedup key below is an exact
+// page: panning fires a snapshot every frame, and most of those land on the
+// page the last one did.
 const DEBOUNCE_MS = 500;
 
 export type ReverseGeocodeResult = {
@@ -22,12 +17,17 @@ export type ReverseGeocodeResult = {
 };
 
 /**
- * Neighborhood label for the current map_center, baked per L3 page from
- * Overture's Divisions theme (apps/api/src/module/tile/geocode) — no
+ * Neighborhood label for the page the map centre is on, baked per L3 page
+ * from Overture's Divisions theme (crates/pxl/geo-bake/src/geocode/) — no
  * longer a live per-coordinate call to public Nominatim (see
  * issue/20260908-overture-poi-adoption.md). Page-keyed like POI, so
- * the "have we already resolved this one" check is exact IVec equality,
- * not the old rounded-lat/lon string comparison.
+ * the "have we already resolved this one" check is exact page equality, not
+ * the old rounded-lat/lon string comparison.
+ *
+ * The page is the kernel's (`map.page`): it indexes the centre it already
+ * holds. The shell used to project the snapshot's degrees back and index them
+ * itself, which is the space implemented a second time in TypeScript for one
+ * call.
  *
  * Stores the fetched result as GeocodeResult's own unjoined parts, not a
  * display string — assemble_label() runs every render against the current
@@ -35,7 +35,7 @@ export type ReverseGeocodeResult = {
  * label instantly instead of needing a re-fetch (the data never changes,
  * only how it reads).
  */
-export function useReverseGeocode(map_center: [number, number] | null): ReverseGeocodeResult {
+export function useReverseGeocode(page_idx: string | null): ReverseGeocodeResult {
   const { i18n } = useTranslation();
   const [parts, set_parts] = useState<GeocodePart[] | null>(null);
   const [loading, set_loading] = useState(false);
@@ -44,13 +44,9 @@ export function useReverseGeocode(map_center: [number, number] | null): ReverseG
    * received for. It exists to stop the same page being asked about twice,
    * so it has to be released again the moment an attempt stops being one —
    * see the abort handling below. */
-  const submitted_page_ref = useRef<IVec | null>(null);
+  const submitted_page_ref = useRef<string | null>(null);
   /** The request in flight: one at a time, the latest page's. */
   const request_ref = useRef<AbortController | null>(null);
-
-  // The kernel hands the centre over as degrees (the snapshot's `map.center`),
-  // and the page is what the label is keyed by.
-  const page_idx: IVec | null = map_center === null ? null : L3_IDX(epsg4326.project({ i: 0n, f: 0n }, map_center).i);
 
   useEffect(() => {
     if (page_idx === null) return;

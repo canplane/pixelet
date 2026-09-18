@@ -7,7 +7,8 @@ use xpute_core::sys::vector::{caught, Vector};
 use super::*;
 use crate::space::pvf3::{fvec, ivec};
 
-/// script/vector/pxl/shared/spec/space/pvf3/pvf3.ts's output.
+/// What the TypeScript computed, recorded: the generator that wrote it
+/// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
 const VECTOR: &str = include_str!("../../../vector/spec/space/pvf3/pvf3.tsv");
 
 fn tuple(v: &Vector, k: &str) -> PVF3 {

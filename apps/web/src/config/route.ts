@@ -2,7 +2,7 @@
 
 /** Every same-origin route the app requests, and how a dev server forwards them. */
 
-import { type BakeKind, PUBLISHED_VERSION } from "@pxl/shared/bake/published.ts";
+import { type BakeKind, PUBLISHED_VERSION } from "@/config/published_spec.ts";
 
 import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX, TILE_ROOT } from "./route_spec.ts";
 

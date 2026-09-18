@@ -108,7 +108,8 @@ fn indexedmap_clear_forgets_every_entry_and_the_next_inserts_start_from_zero() {
     assert_eq!(m.find(7), 0);
 }
 
-/// script/vector/xpute/core/ds/map.ts's output.
+/// What the TypeScript computed, recorded: the generator that wrote it
+/// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
 const VECTOR: &str = include_str!("../../vector/ds/map.tsv");
 
 fn replay<T: KeyTraits>(v: &crate::sys::vector::Vector, base: &str, traits: T, key: impl Fn(&str) -> T::Key)

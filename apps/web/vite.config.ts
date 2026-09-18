@@ -205,7 +205,7 @@ const remoteOriginDefault = "https://plei.me";
 // and the world at module load, and its importers are component modules Vite
 // hot-swaps, so a hot update ran that boot again against the one kernel the
 // memory holds — a second device beside the renderer's objects on the first.
-const corePathIncludes = ["/packages/pxl/shared/", "/packages/xpute/core/", "/apps/web/src/kernel/"];
+const corePathIncludes = ["/packages/xpute/core/", "/apps/web/src/kernel/", "/apps/web/src/catalog/"];
 function fullReloadOnCoreChange() {
   function isCoreFile(file: string): boolean {
     const p = file.replaceAll("\\", "/");
@@ -239,7 +239,7 @@ function fullReloadOnCoreChange() {
       if (isCoreFile(file)) {
         // Invalidate by hand, because Vite cannot make the connection
         // itself. The deno plugin resolves a core import to a virtual id —
-        // `\0deno::TypeScript::@pxl/shared/...::/abs/path.ts` — and the
+        // `\0deno::TypeScript::@xpute/core/...::/abs/path.ts` — and the
         // module graph is keyed by resolved id while onFileChange looks up
         // by file path, so a changed core file leaves its transform cached
         // under a name nothing matched. The full-reload below then fetched
@@ -375,7 +375,7 @@ export default defineConfig(({ mode }) => {
       // for a file outside apps/web — invisible for plain .ts imports
       // (those go through the deno plugin's own resolution, not this gate)
       // but broke real asset imports (import x from "*.png") the moment
-      // any of them started pointing into packages/pxl/shared instead of
+      // any of them started pointing into packages/xpute/core instead of
       // staying under apps/web. Explicitly allowing the repo root fixes
       // every such path at once instead of allow-listing each package.
       fs: { allow: [path.resolve(__dirname, "..", "..")] },

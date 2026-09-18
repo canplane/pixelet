@@ -4,7 +4,8 @@
 use super::*;
 use crate::sys::vector::Vector;
 
-/// script/vector/xpute/core/kit/fdlibm.ts's output: V8's Math.
+/// What the TypeScript computed, recorded: the generator that wrote it
+/// is gone and the vector stands as it is (xpute-core/sys/vector.rs) — V8's Math.
 const VECTOR: &str = include_str!("../../vector/kit/fdlibm.tsv");
 
 /// How many representable doubles lie between `a` and `b`: 0 when equal,
