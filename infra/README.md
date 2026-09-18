@@ -209,14 +209,21 @@ no `content-encoding`.
 ## 5. CI/CD
 
 `.github/workflows/check-and-deploy.yml` runs on every push to main and every
-pull request. One workflow, three jobs, because a deploy must not be able to
+pull request. One workflow, four jobs, because a deploy must not be able to
 start against a commit the gate never saw:
 
 | Job             | When                                                                 | What                                                                                                        |
 | :-------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------- |
 | `gate`          | always; takes a build number on main                                 | `deno task check`, `test`, `lint`, then `./script/build_counter.ts`                                         |
-| `deploy-web`    | main, gate green, and `apps/`/`crates/`/`packages/`/`spec/` changed  | `deno task deploy` under that number, then `deno task smoke https://plei.me`                                |
+| `deploy-web`    | main, gate green, and `apps/`/`crates/`/`packages/`/`spec/` changed  | `deno task deploy` under that number                                                                        |
 | `deploy-server` | main, gate green, and `crates/`/`infra/prod/`/the Dockerfile changed | ssh, `git reset --hard origin/main`, `docker compose up -d --build --force-recreate`, then the origin smoke |
+| `smoke`         | after both, if either of them deployed                               | `deno task smoke https://plei.me`                                                                           |
+
+The two deploys run in parallel, so the public smoke is a job after them
+rather than a step inside either: `/geo/search` is the one route the Worker
+proxies to the VM, and asked from `deploy-web` it can land while
+`deploy-server` is still recreating the stack — Cloudflare answers 521 for an
+origin that is merely restarting, and the run fails though nothing is wrong.
 
 Both deploys are filtered on what a push touched, for different reasons.
 Reaching into the production VM over SSH is neither idempotent nor reversible,
