@@ -1,17 +1,14 @@
 // pxl-kernel/shell/config/route.rs
 
-//! Every same-origin route the app requests.
+//! Every same-origin route the app requests. The roots and branches are
+//! spec/route.json's, written into route_spec.rs; what is here is how a URL is
+//! built out of them.
 
 use core::fmt;
 
 pub use pxl_spec::bake::published::{BakeKind as TileKind, PUBLISHED_VERSION};
 
-/// Everything the server answers. The app routes on paths of its own, so a
-/// relay tells a deep link from a server request by this root alone.
-const API_ROOT: &str = "/api";
-
-/// Bucket-served bakes, a branch under the same root.
-const TILE_ROOT: &str = "/api/tiles";
+pub use crate::shell::config::route_spec::{ASSET_PREFIX, GEO_PREFIX, SEARCH_URL, TILE_PREFIX, TILE_ROOT};
 
 /// `<root>/<kind>[/<version>]`, joined with a page index by the caller —
 /// written where the URL is written.
@@ -53,11 +50,13 @@ impl<B: fmt::Display, K: fmt::Display> fmt::Display for Joined<B, K> {
 /// A URL kept inline: every route the app has is well inside it.
 pub type Url = String;
 
-pub const SEARCH_URL: &str = "/api/search";
+/// A content-addressed asset by its bucket key (`asset/<sha256>`). The root and
+/// the bucket's own prefix are the same word deliberately, so the URL is the key
+/// with a leading slash.
+pub struct AssetUrl<K>(pub K);
 
-/// Mirrored as literals in worker/index.ts, which is bundled for the Workers
-/// runtime rather than from src/.
-pub const EDGE_TILE_PREFIX: &str = "/api/tiles/";
-pub const EDGE_API_PREFIX: &str = "/api/";
-
-const _: () = assert!(API_ROOT.len() == 4, "the API root");
+impl<K: fmt::Display> fmt::Display for AssetUrl<K> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "/{}", self.0)
+    }
+}

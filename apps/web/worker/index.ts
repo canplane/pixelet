@@ -53,11 +53,7 @@ export type Env = {
   API_ORIGIN: string;
 };
 
-/** Mirrors src/config/route.ts's EDGE_* prefixes, as literals: this file
- * is bundled for the Workers runtime rather than from src/. Neither branch
- * reads past its prefix. */
-const API_PREFIX = "/api/";
-const PREFIX = "/api/tiles/";
+import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route_spec.ts";
 
 /**
  * Object keys this Worker is willing to ask R2 for. Four shapes:
@@ -101,12 +97,19 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // Tiles sit inside the API root and are claimed first; the rest of that
-    // root is reverse-proxied to API_ORIGIN, same path, host header
-    // rewritten for Caddy.
-    if (!url.pathname.startsWith(PREFIX)) {
-      if (url.pathname.startsWith(API_PREFIX)) {
-        const target = new URL(url.pathname + url.search, env.API_ORIGIN);
+    // What the bucket answers, claimed first: the baked pages under the geo
+    // root's tile branch, and the assets under their own root. An asset's key
+    // *is* its path without the leading slash — the root and the bucket's
+    // prefix are the same word — where a page's key is the tile branch removed.
+    const bucket = url.pathname.startsWith(TILE_PREFIX) ? url.pathname.slice(TILE_PREFIX.length) : url.pathname.startsWith(ASSET_PREFIX) ? url.pathname.slice(1) : null;
+
+    // Everything else under a claimed root is reverse-proxied to that root's
+    // origin, same path, host header rewritten for Caddy. Neither branch reads
+    // past its prefix.
+    if (bucket === null) {
+      const origin = url.pathname.startsWith(GEO_PREFIX) ? env.GEO_ORIGIN : url.pathname.startsWith(API_PREFIX) ? env.API_ORIGIN : null;
+      if (origin) {
+        const target = new URL(url.pathname + url.search, origin);
         const headers = new Headers(request.headers);
         headers.set("host", target.host);
         return fetch(new Request(target, { method: request.method, headers, body: request.body }));
@@ -118,7 +121,7 @@ export default {
       return new Response("method not allowed", { status: 405, headers: { allow: "GET, HEAD" } });
     }
 
-    const key = url.pathname.slice(PREFIX.length);
+    const key = bucket;
     // Rejected before R2 is touched — see KEY_RE. Same 404 a real miss
     // returns, deliberately: a distinct status would tell a prober which of
     // its guesses were the right shape, and the client cannot act on the

@@ -1,4 +1,4 @@
-# pxl-geo's image.
+# pxl-geo's image — the world's data server.
 #
 # Build context is the repo ROOT (docker build -f apps/api/Dockerfile .), not
 # apps/api — the server is `crates/pxl/geo` and its dependencies are path

@@ -41,11 +41,14 @@ const DEV_MARKERS = ["dev/test", "development"];
  * a guard like this most easily falls into.
  *
  * These have to be literals that survive minification, not paths the app
- * composes at runtime: `/api/tiles` is built from a template literal that
- * esbuild leaves unfolded, so it never appears contiguously. The shell's
+ * composes at runtime, and what survives is the whole branch the client
+ * requests rather than the root it hangs off: spec/route.json folds a branch
+ * into one constant, so `"/geo/tiles"` reaches the bundle and `"/geo"` never
+ * does. Which branches those are is the spec's own `bundle` flag, and
+ * script/spec.ts fails when this list and the flag disagree. The shell's
  * sentinel is looked for in the JavaScript, the kernel's in its module: the
  * terrain's page names are the kernel's (layer/terrain/tile_repository.rs). */
-const SENTINELS = ['"/api"'];
+const SENTINELS = ['"/geo/tiles"', '"/geo/search"'];
 const KERNEL_SENTINELS = ["_ocean"];
 
 function leaves(o: unknown, path = ""): [string, string][] {

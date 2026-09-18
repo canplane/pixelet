@@ -37,10 +37,26 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     packet on one machine under dev:remote, the fetched bytes whole in the
     console — into_core's view the suspect, not reproduced elsewhere.
 
+- **CI/CD, and what is left of `apps/api`.** 2026-09-18
+  ([the gate that deploys](./20260918-the-gate-that-deploys.md)). In: one
+  workflow with a gate (`check`, `test`, `lint`) and two deploy jobs behind it,
+  gated by what each costs to get wrong — the edge on every green push to main,
+  the VM only when `crates/`, `infra/prod/` or the Dockerfile changed; a smoke
+  check that builds its URLs from the generated constants rather than a path
+  list; the monthly refresh moved onto the Rust bakes, which it had never left.
+  Left, in order: **set the secrets and run the monthly refresh once through
+  `workflow_dispatch`** before 10-01, since a cron is the one caller nobody
+  watches fail; then delete `apps/api`'s dead 34 files (the Hono server, the
+  ported bake, the scaffolding, and `category_map.ts`'s generator output),
+  which an import closure identified and which nothing invokes; then decide
+  where the surviving 17 live, because `apps/api` holding no API is a directory
+  named for what it used to be. The Dockerfile moves with that decision — it
+  builds pxl-geo, and infra/prod and infra/README name its path.
+
 - **The server to Rust, and `apps/api` into three.** Decided and begun
   2026-09-18
   ([the server in Rust](./20260918-the-server-in-rust-and-the-line-already-drawn.md)).
-  In: socket.io out; `crates/pxl/geo` answering `/api/search` off
+  In: socket.io out; `crates/pxl/geo` answering `/geo/search` off
   `DB_GEO_URL` alone and agreeing with the TypeScript over 311 results against
   the same database; `crates/pxl/geo-bake` carrying the terrain pipeline and
   baking 114 pages byte for byte what the TypeScript bakes, coastal pages
@@ -52,17 +68,22 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   `[profile.server]`; and `bake_poi_tiles` and `bake_geocode_tiles` over one
   shared walk, writing what the TypeScript writes; and the cutover — a 51 MB
   distroless image of the Rust binary, db-main out of the server's
-  environment, and `deno task dev` starting `pxl-geo` and `serve_tiles` with
-  the proxy splitting on `/api/tiles/` the way the Worker does. Not yet
-  deployed: `docker compose up -d --build` on the VM is what makes it live.
-  Left, and not part of the move: removing apps/api's TypeScript server once
-  the Rust has served for a while. The reason is not throughput: `pxl-spec` already carries the
+  environment, and `deno task dev` starting the servers with the proxy
+  splitting on a prefix the way the Worker does; and the frame — three roots
+  (`/geo`, `/api`, `/asset`) written from `spec/route.json` into the client,
+  the Worker and the kernel, with `wrangler.jsonc` and the deploy guard
+  checked against it rather than generated, and `crates/pxl/api` on db-main
+  answering nothing behind a gated `/api/internal/*`, the shape the
+  TypeScript already had. Deployed 09-18 as b15, server then client, every
+  route verified at the edge and against the origin. Left, and not part of the
+  move: removing apps/api's TypeScript server once the Rust has served for a
+  while. The reason is not throughput: `pxl-spec` already carries the
   encoders only the server uses, so one source can hold both ends of the
   wire format instead of two. `apps/api` is three workloads wearing one
   process, and they split along a line `infra/` had already drawn — one
   database each: `pxl-geo` (search, db-geo's three tables), `pxl-geo-bake`
   (the pipeline, the tool binaries, the dev tile server; db-geo whole,
-  offline), and later `pxl-api` (db-main, sessions and the realtime half).
+  offline), and `pxl-api` (db-main, sessions and the realtime half).
   That the line was never crossed is not a guess — `main_pool` is created,
   probed with `select 1`, and queried by nothing. In order: socket.io out
   (dead on both ends); `pxl-geo`; the pipeline, verified by baking real

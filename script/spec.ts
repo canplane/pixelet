@@ -57,7 +57,7 @@ function cmd_ts(spec: CmdSpec): string {
         if (entry.doc) out.push("  //", ...entry.doc.map((l) => (l === "" ? "  //" : `  // ${l}`)));
         out.push("");
       } else {
-        if (entry.doc) out.push(...ts_doc(entry.doc, "  ").map((l, i) => (i === 0 ? l : l.replace(/^  \*/, "   *"))));
+        if (entry.doc) out.push(...ts_doc(entry.doc, "  ").map((l, i) => (i === 0 ? l : l.replace(/^ {2}\*/, "   *"))));
         out.push(`  ${entry.name} = ${literal(entry.value, e.format)},`);
       }
       first = false;
@@ -308,7 +308,7 @@ async function cube_type_outputs(): Promise<Output[]> {
         rs.push(`        // ---- ${e.section} ----`, "");
         return;
       }
-      if (e.doc) ts.push(...ts_doc(e.doc, "    ").map((l, i) => (i === 0 ? l : l.replace(/^    \*/, "     *"))));
+      if (e.doc) ts.push(...ts_doc(e.doc, "    ").map((l, i) => (i === 0 ? l : l.replace(/^ {4}\*/, "     *"))));
       if (e.doc) rs.push(...rs_doc(e.doc, "        "));
       const lit = ch.name === "common" ? `0x${e.value.toString(16).padStart(2, "0")}` : String(e.value);
       ts.push(`    ${e.name}: ${lit},`);
@@ -925,7 +925,119 @@ async function category_outputs(): Promise<Output[]> {
   ];
 }
 
-const GENERATORS: (() => Promise<Output[]>)[] = [cmd_outputs, errno_outputs, color_outputs, cube_type_outputs, decor_outputs, published_outputs, data_outputs, category_outputs];
+// ---- the address space ----
+//
+// One JSON for every root and branch, written into the three places that build
+// a URL or read one — the client's shell, its kernel, and the Worker — and
+// checked against the two that can only carry literals: wrangler's own
+// `run_worker_first`, and the deploy guard's sentinels. Five copies of one
+// decision was what this replaced, and the split that made them five was
+// exactly the shape issue/20260910-one-server-root.md was written about.
+
+type RouteSpec = {
+  $doc: string[];
+  roots: Record<string, { path: string; $doc?: string[] }>;
+  branches: Record<string, { under: string; name: string; bundle?: boolean; $doc?: string[] }>;
+};
+
+async function route_outputs(): Promise<Output[]> {
+  const spec: RouteSpec = JSON.parse(await Deno.readTextFile(join(root, "spec/route.json")));
+
+  const paths = new Map<string, string>();
+  for (const [name, r] of Object.entries(spec.roots)) paths.set(name, r.path);
+  for (const [name, b] of Object.entries(spec.branches)) {
+    const base = paths.get(b.under);
+    if (base === undefined) throw new Error(`spec/route.json: ${name} is under ${b.under}, which is not a root`);
+    paths.set(name, `${base}/${b.name}`);
+  }
+
+  const docs = new Map<string, string[]>();
+  for (const [name, r] of Object.entries(spec.roots)) if (r.$doc) docs.set(name, r.$doc);
+  for (const [name, b] of Object.entries(spec.branches)) if (b.$doc) docs.set(name, b.$doc);
+
+  // Every root is one entry in the edge's own list, which is what keeps a
+  // relay reading a prefix rather than a route.
+  const root_names = Object.keys(spec.roots);
+  const worker_first = root_names.map((n) => `${paths.get(n)}/*`);
+
+  // ---- what only carries literals, checked rather than written ----
+  const wrangler = await Deno.readTextFile(join(root, "apps/web/wrangler.jsonc"));
+  const declared = wrangler.match(/"run_worker_first"\s*:\s*\[([^\]]*)\]/);
+  if (!declared) throw new Error("apps/web/wrangler.jsonc: no run_worker_first to check against spec/route.json");
+  const listed = [...declared[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
+  if (JSON.stringify(listed) !== JSON.stringify([...worker_first].sort())) {
+    throw new Error(
+      `apps/web/wrangler.jsonc's run_worker_first is ${JSON.stringify(listed)} where spec/route.json's roots are ` +
+        `${JSON.stringify(worker_first)}. A root the edge does not claim is answered by the static-asset fallback with index.html, ` +
+        `which reads as the app loading rather than as a route that is not there.`,
+    );
+  }
+
+  // A root never reaches the bundle as its own literal — a branch is folded
+  // into one constant here, so the client carries `"/geo/tiles"` and nothing
+  // spelling `"/geo"` alone — and a guard that looked for one would fail every
+  // build. What it can look for is the branches the client requests whole,
+  // which is what `bundle` marks.
+  const guard = await Deno.readTextFile(join(root, "apps/web/script/check_bundle.ts"));
+  const sentinels = guard.match(/const SENTINELS = \[([^\]]*)\]/);
+  if (!sentinels) throw new Error("apps/web/script/check_bundle.ts: no SENTINELS to check against spec/route.json");
+  const listed_sentinels = [...sentinels[1].matchAll(/'"([^"]+)"'/g)].map((m) => m[1]).sort();
+  const want_sentinels = Object.entries(spec.branches).filter(([, b]) => b.bundle).map(([n]) => paths.get(n)!).sort();
+  if (JSON.stringify(listed_sentinels) !== JSON.stringify(want_sentinels)) {
+    throw new Error(
+      `apps/web/script/check_bundle.ts's SENTINELS is ${JSON.stringify(listed_sentinels)} where spec/route.json marks ` +
+        `${JSON.stringify(want_sentinels)} as reaching the bundle. A sentinel the build never emits fails every deploy; ` +
+        `one the build dropped passes a guard that is checking nothing.`,
+    );
+  }
+
+  const named = (name: string, value: string) => ({ name, value });
+  const all = [
+    ...root_names.map((n) => named(n, paths.get(n)!)),
+    ...Object.keys(spec.branches).map((n) => named(n, paths.get(n)!)),
+    // The edge and the dev proxy match on a prefix, which is the root or
+    // branch with its separator — never a bare root, which would also match a
+    // sibling whose name merely starts with it.
+    ...root_names.map((n) => named(`${n.replace(/_ROOT$/, "")}_PREFIX`, `${paths.get(n)}/`)),
+    named("TILE_PREFIX", `${paths.get("TILE_ROOT")}/`),
+  ];
+
+  const head = (path: string, from: string) => [`// ${path}`, "//", `// GENERATED by script/spec.ts from ${from} — do not edit.`, ...spec.$doc.map((l) => (l === "" ? "//" : `// ${l}`)), ""];
+
+  const rs = [
+    ...head("pxl-kernel/shell/config/route_spec.rs", "spec/route.json"),
+    ...all.flatMap(({ name, value }) => [...(docs.get(name) ?? []).map((l) => (l === "" ? "///" : `/// ${l}`)), `pub const ${name}: &str = ${JSON.stringify(value)};`, ""]),
+    `/// Every root, as the edge claims them.`,
+    `pub const WORKER_FIRST: [&str; ${worker_first.length}] = [${worker_first.map((w) => JSON.stringify(w)).join(", ")}];`,
+    "",
+  ].join("\n");
+
+  const ts = [
+    ...head("@pxl/web/config/route_spec.ts", "spec/route.json"),
+    ...all.flatMap(({ name, value }) => [...ts_doc(docs.get(name) ?? [], ""), `export const ${name} = ${JSON.stringify(value)};`, ""]),
+    "/** Every root, as the edge claims them. */",
+    `export const WORKER_FIRST = [${worker_first.map((w) => JSON.stringify(w)).join(", ")}] as const;`,
+    "",
+  ].join("\n");
+
+  const worker = [
+    ...head("@pxl/web/../worker/route_spec.ts", "spec/route.json"),
+    "// The Worker is bundled for the Workers runtime rather than from src/, so it",
+    "// cannot import the shell's copy — but it can import this one, which sits",
+    "// beside it and is written from the same JSON.",
+    "",
+    ...all.flatMap(({ name, value }) => [`export const ${name} = ${JSON.stringify(value)};`]),
+    "",
+  ].join("\n");
+
+  return [
+    { path: "crates/pxl/kernel/src/shell/config/route_spec.rs", text: rs },
+    { path: "apps/web/src/config/route_spec.ts", text: ts },
+    { path: "apps/web/worker/route_spec.ts", text: worker },
+  ];
+}
+
+const GENERATORS: (() => Promise<Output[]>)[] = [cmd_outputs, errno_outputs, color_outputs, cube_type_outputs, decor_outputs, published_outputs, data_outputs, category_outputs, route_outputs];
 
 /** An output as `cargo fmt` or `deno fmt` leaves it, so formatting the tree
  * does not make a generated file stale. */

@@ -60,11 +60,28 @@ services:
     depends_on:
       - db-geo
     environment:
-      # db-geo alone. The server answers forward search and nothing else, and
-      # `main_pool` in the TypeScript it replaces was created, probed once and
-      # queried by nothing — db-main below is there for the application server
-      # that does not exist yet, not for this one.
+      # db-geo alone: one server, one database. db-main is the app service's.
       DB_GEO_URL: postgresql://${DB_GEO_USER}:${DB_GEO_PASSWORD}@db-geo:5432/${DB_GEO_NAME}
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      GEO_HOST: 0.0.0.0
+      GEO_PORT: "3000"
+    networks:
+      - pixelet
+
+  # crates/pxl/api. It answers nothing yet and is here for the same reason the
+  # TypeScript's own db-main pool was: the shape a first route arrives into —
+  # the root, the origin, the container and the secret — rather than one to be
+  # assembled on the day it is written.
+  app:
+    build:
+      context: ../..
+      dockerfile: crates/pxl/api/Dockerfile
+    container_name: pixelet-app
+    restart: unless-stopped
+    depends_on:
+      - db-main
+    environment:
+      DB_MAIN_URL: postgresql://${DB_MAIN_USER}:${DB_MAIN_PASSWORD}@db-main:5432/${DB_MAIN_NAME}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       API_HOST: 0.0.0.0
       API_PORT: "3000"
@@ -77,6 +94,7 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+      - app
     ports:
       - "80:80"
       - "443:443"

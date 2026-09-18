@@ -8,7 +8,7 @@ description: Upload baked tiles, ingested models and textures to the R2 bucket t
 One private R2 bucket, `pixelet-tiles`, holds everything the client fetches
 that is not the app itself. One Cloudflare Worker (`apps/web/worker/index.ts`,
 `apps/web/wrangler.jsonc`) serves the built app and reads the bucket under
-`/api/tiles/*` on the app's own hostname — same-origin, no CORS, and the
+`/geo/tiles/*` and `/asset/*` on the app's own hostname — same-origin, no CORS, and the
 client's paths stay relative. Producing what goes in is
 [bake-tiles](../bake-tiles/SKILL.md) and `deno task ingest:asset`; this is
 how it gets there and how you know it arrived.
@@ -161,7 +161,7 @@ one-loop smoke test over every path the app takes.
 perfectly correct while the serving path is not:
 
 ```bash
-U=https://plei.me/api/tiles/terrain/<version>/<page_idx>
+U=https://plei.me/geo/tiles/terrain/<version>/<page_idx>
 curl -s -H "Accept-Encoding: gzip" -D - -o /dev/null "$U"   # expect content-encoding: gzip
 curl -s --compressed "$U" | head -c 2 | xxd -p              # expect 5854 (XT), never 1f8b
 ```
@@ -199,7 +199,7 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache
 # or by URL, up to 30 per call
 curl -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
   -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
-  --data '{"files":["https://plei.me/api/tiles/poi/<version>/<page_idx>"]}'
+  --data '{"files":["https://plei.me/geo/tiles/poi/<version>/<page_idx>"]}'
 ```
 
 The token needs the `Zone → Cache Purge` permission; the zone ID is on the

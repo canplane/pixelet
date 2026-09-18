@@ -4,51 +4,46 @@
 
 import { type BakeKind, PUBLISHED_VERSION } from "@pxl/shared/bake/published.ts";
 
+import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX, TILE_ROOT } from "./route_spec.ts";
+
 export { PUBLISHED_VERSION };
+export { API_PREFIX, API_ROOT, ASSET_PREFIX, ASSET_ROOT, GEO_PREFIX, GEO_ROOT, SEARCH_URL, TILE_PREFIX, TILE_ROOT } from "./route_spec.ts";
 export type TileKind = BakeKind;
 
-/** Everything the server answers. The app routes on paths of its own, so a
- * relay tells a deep link from a server request by this root alone. */
-const API_ROOT = "/api";
-
-/** Bucket-served bakes, a branch under the same root. */
-const TILE_ROOT = `${API_ROOT}/tiles`;
-
-/** `<root>/<kind>[/<version>]`, joined with a page index by the caller. */
+/** `<tiles>/<kind>[/<version>]`, joined with a page index by the caller. */
 export function tile_base(kind: TileKind, published: boolean): string {
   return published ? `${TILE_ROOT}/${kind}/${PUBLISHED_VERSION[kind]}` : `${TILE_ROOT}/${kind}`;
 }
 
 /** A content-addressed asset — a model, a texture — by its bucket key
- * (`asset/<sha256>`, the key the asset ingest gave its bytes). No
- * version: the key is the content. Same path published or not, since the
- * dev API serves the ingest's output under it. */
+ * (`asset/<sha256>`, what the ingest gave its bytes). The root and the bucket's
+ * own prefix are the same word deliberately, so the URL is the key with a
+ * leading slash and the edge's mapping back is that slash removed. No version:
+ * the key is the content, so the URL is as immutable as one gets. */
 export function asset_url(key: string): string {
-  return `${TILE_ROOT}/${key}`;
+  return `/${key}`;
 }
-
-export const SEARCH_URL = `${API_ROOT}/search`;
-
-/** Mirrored as literals in worker/index.ts, which is bundled for the Workers
- * runtime rather than from src/. */
-export const EDGE_TILE_PREFIX = `${TILE_ROOT}/`;
-export const EDGE_API_PREFIX = `${API_ROOT}/`;
 
 /**
  * Prefixes a dev server forwards. Paths rather than URLs: a deployment serves
  * all of them itself, and nothing is rewritten in transit.
  *
- * Two entries, and the split is the one the edge already makes: the Worker
- * sends `/api/tiles/*` to the bucket and the rest of `/api/*` to the API's
- * origin, so a dev server sending the same prefix to the tile server and the
- * rest to the search server is that arrangement with the bucket's side baked
- * on demand. `tiles` says which — a relay reading a prefix, never a route.
+ * The split is the edge's own. The Worker sends `/geo/tiles/` and `/asset/` to
+ * the bucket and the rest of `/geo/` to the origin, so a dev server sending the
+ * first two to the tile server and the rest to the search server is that
+ * arrangement with the bucket's side baked on demand rather than read. `tiles`
+ * says which — a relay reading a prefix, never a route.
  *
  * `published` marks what a published deployment answers, so `dev:remote` can
- * forward it there and leave the local process out of the loop entirely.
+ * forward it there and leave the local processes out of the loop entirely.
+ * `/api/` is not among them — pxl-api answers nothing yet, so a published
+ * deployment has nothing there to forward to — but it is still proxied
+ * locally, because the process is running and a 404 from it reads differently
+ * from the app's own index.html coming back.
  */
 export const DEV_PROXY_ROUTES = [
-  { path: EDGE_TILE_PREFIX, tiles: true, published: true },
-  { path: API_ROOT, published: true },
-] as const satisfies readonly { path: string; tiles?: boolean; published?: boolean }[];
-
+  { path: TILE_PREFIX, tiles: true, published: true },
+  { path: ASSET_PREFIX, tiles: true, published: true },
+  { path: GEO_PREFIX, published: true },
+  { path: API_PREFIX, app: true },
+] as const satisfies readonly { path: string; tiles?: boolean; app?: boolean; published?: boolean }[];

@@ -111,7 +111,7 @@ and reused unless `--reclassify` is passed.
    `apps/api/src/bake/terrain/source.ts`. With the API running:
 
    ```bash
-   curl -s localhost:3000/api/tiles/terrain/<page_idx> --compressed | shasum
+   curl -s localhost:3001/geo/tiles/terrain/<page_idx> --compressed | shasum
    gunzip -c ./out/terrain/<version>/<page_idx> | shasum
    ```
 
@@ -139,7 +139,9 @@ re-encodes what is on disk into the current format without the database.
 These two are also refreshed monthly without a human:
 `.github/workflows/overture-monthly-refresh.yml` ingests Overture Places
 and Divisions into a throwaway PostGIS, bakes both with `--force`, and
-syncs the published version prefixes in place.
+syncs the published version prefixes in place. It runs the same tasks this
+file does, so a flag that works here works there; it carries both toolchains,
+since the ingests are Deno and the bakes are Rust.
 
 ## Versions, and when the bake logic changes
 

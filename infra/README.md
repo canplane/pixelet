@@ -22,9 +22,8 @@ databases.
 | **db-main** | 5432:5432      | nothing yet       | PostgreSQL 16  |
 | **db-geo**  | 5433:5432      | every table in §2 | PostGIS 16-3.4 |
 
-db-main holds nothing and nothing reads it: the search server takes
-`DB_GEO_URL` alone, and the application server that will own db-main does not
-exist yet
+db-main holds nothing. pxl-geo takes `DB_GEO_URL` alone; pxl-api owns db-main,
+connects to it and probes it at boot, and has no route that reads it yet
 ([the server in Rust](../issue/20260918-the-server-in-rust-and-the-line-already-drawn.md)).
 
 - Local access: `localhost:5433`
@@ -178,8 +177,10 @@ them from the public release.
 ## 5. Production (Hetzner Cloud)
 
 Forward search is the only feature that needs a live server. Everything
-else is baked to R2. One CX23 (2 vCPU / 4 GB / 40 GB) runs the API, both
-Postgres instances and Caddy in one compose stack — `./prod/`.
+else is baked to R2. One CX23 (2 vCPU / 4 GB / 40 GB) runs both servers, both
+Postgres instances and Caddy in one compose stack — `./prod/`: `api` is pxl-geo
+on `/geo/*`, `app` is pxl-api on `/api/*`, and Caddy is what sends each root to
+its own container. Neither server has a published host port; only Caddy does.
 
 Production's db-geo holds **only** `overture_places`, `overture_divisions`
 and `overture_division_points`. Terrain's ingestion tables and the
@@ -212,12 +213,13 @@ are unrelated to this project.
    makes the firewall above pointless. Caddy's ACME challenge still
    reaches the origin through a proxied record.
 
-5. **Repo** — `git clone` or `rsync` the tree onto the VM. The Dockerfile's
-   build context is the whole repo: the server is `crates/pxl/geo` and its
-   dependencies are path dependencies in the same Cargo workspace, so
-   `crates/` has to be present whole for Cargo to resolve it. The file is
-   still `apps/api/Dockerfile` — it kept its path when the server stopped
-   being TypeScript — and builds none of apps/api.
+5. **Repo** — `git clone` or `rsync` the tree onto the VM. Both Dockerfiles
+   take the whole repo as their build context: the servers are `crates/pxl/geo`
+   and `crates/pxl/api`, and their dependencies are path dependencies in the
+   same Cargo workspace, so `crates/` has to be present whole for Cargo to
+   resolve it. pxl-geo's file is still `apps/api/Dockerfile` — it kept its path
+   when the server stopped being TypeScript — and builds none of apps/api;
+   pxl-api's is `crates/pxl/api/Dockerfile`.
 
 6. **Secrets**
    ```sh
@@ -263,35 +265,45 @@ git pull
 docker compose up -d --build
 ```
 
-## 6. Cloudflare (the client, the tiles, and the API relay)
+## 6. Cloudflare (the client, the tiles, and the relays)
 
 ### Wiring
 
-Everything the server answers is under `/api`. The Worker claims
-`/api/tiles/*` and reads it out of R2 — the baked pages by version, and
-every model and texture by content under `asset/<sha256>`; everything
-else under that root is
-reverse-proxied whole to `API_ORIGIN` (`apps/web/wrangler.jsonc`'s `vars`,
-`https://api.plei.me`), path unchanged. Vite's dev proxy splits the same
-root the same way, both from `apps/web/src/lib/env/route.ts`. Nothing is
-rewritten in transit: client, relay and origin use identical paths.
+Three roots, decided in `spec/route.json` and written from there into every
+place that builds a URL or reads one:
 
-Neither relay reads past the root, so a new live route is a change to the
-server alone. Every route must be mounted under `/api` — a bare path is
-unreachable in production, where the static-asset fallback answers it with
-`index.html`.
+| Root      | What it is                                        | Who answers it                            |
+| :-------- | :------------------------------------------------ | :---------------------------------------- |
+| `/geo/`   | the world's data                                  | R2 under `/geo/tiles/`, pxl-geo otherwise |
+| `/api/`   | the application                                   | pxl-api                                   |
+| `/asset/` | models and textures, by the sha256 of their bytes | R2                                        |
 
-Locally there are two servers under that root rather than one:
-`deno task dev` starts `pxl-geo` on 3000 for search and `serve_tiles` on 3001
-for the tiles, and the dev proxy splits on `/api/tiles/` — the same prefix the
-Worker splits on to reach the bucket. A deployment has no tile server at all,
-because the bucket answers that prefix.
+The Worker claims all three (`wrangler.jsonc`'s `run_worker_first`) and splits
+them: `/geo/tiles/*` and `/asset/*` come straight out of the bucket, and the
+rest of `/geo/*` and all of `/api/*` are reverse-proxied to `GEO_ORIGIN` and
+`API_ORIGIN` with the path unchanged. An asset's key _is_ its path without the
+leading slash — the root and the bucket's own prefix are the same word — where
+a page's key is the tile branch removed. Caddy on the VM then sends each root
+to the container that answers it. Nothing is rewritten in transit: client,
+relay and origin use identical paths.
 
-The root is reserved on the server's side because the app routes on paths
-of its own; giving the app the prefix instead would put one in every URL a
-user sees.
+No relay reads past a root or its one branch, so a new live route is a change
+to the one server that answers it. Every route must be under a claimed root —
+a bare path is unreachable in production, where the static-asset fallback
+answers it with `index.html`, which reads as the app loading rather than as a
+route that is not there. A root is reserved on the server's side because the
+app routes on paths of its own; giving the app the prefix instead would put one
+in every URL a user sees.
+
+`deno task dev` runs one process per root plus the tiles: pxl-geo on 3000,
+serve_tiles on 3001, pxl-api on 3002, and the dev proxy splits on the same
+prefixes the Worker does. A deployment has no tile server at all, because the
+bucket answers those two prefixes.
 
 ### Deploying the client
+
+**A green push to main publishes it** — see §7. What follows is the same thing
+by hand, which is the fallback when CI is unavailable and what CI itself runs.
 
 One Worker serves the built app, the R2 tiles, and the relay to the API, so
 publishing all three is one command from the repo root:
@@ -314,27 +326,81 @@ the R2 tiles are untouched by it. Uploading tiles and assets is a separate
 procedure with its own verification, in
 [.agents/skills/publish-bucket/SKILL.md](../.agents/skills/publish-bucket/SKILL.md).
 
-Afterwards, the routes that between them cover every path the app takes
-(the versions are `PUBLISHED_VERSION` in
-`packages/pxl/shared/src/bake/published.ts`; the asset key is any
-`key` in `asset/ingested.ts`):
+Afterwards, every path the app takes, plus the gates and the addresses that
+must be gone:
 
 ```sh
-for p in / \
-  /api/tiles/terrain/v2/6359575375314944 \
-  /api/tiles/terrain/v2/_ocean \
-  /api/tiles/poi/v3/6359575375314944 \
-  /api/tiles/asset/e8d81b97297de62699b92559cee7b247da84b1815df2515e42fd5a318a30b8d7 \
-  '/api/search?q=%EB%B6%84%EB%8B%B9'
-do curl -s -o /dev/null -w "$p %{http_code}\n" "https://plei.me$p"; done
+deno task smoke https://plei.me
+deno task smoke https://api.plei.me --origin   # the stack behind the edge
 ```
 
-A tile's first two bytes must be `5854` (`XT`); `1f8b` means it is reaching
-the client still gzipped, and HTML means the static-asset fallback answered
-a route the Worker should have claimed. An asset answers `model/gltf-binary`
-or `image/png` with no `content-encoding`.
+It builds the URLs from the same generated constants the client and the Worker
+read, so a version bump or a moved root cannot leave it checking something
+nobody serves. Both deploy jobs end with it.
 
-## 7. Licensing and attribution
+What it does not check, and is worth an eye on a format change: a tile's first
+two bytes must be `5854` (`XT`); `1f8b` means it is reaching the client still
+gzipped, and HTML means the static-asset fallback answered a route the Worker
+should have claimed. An asset answers `model/gltf-binary` or `image/png` with
+no `content-encoding`.
+
+## 7. CI/CD
+
+`.github/workflows/check-and-deploy.yml` runs on every push to main and every
+pull request. One workflow, three jobs, because a deploy must not be able to
+start against a commit the gate never saw:
+
+| Job             | When                                                                 | What                                                                                                        |
+| :-------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------- |
+| `gate`          | always                                                               | `deno task check`, `test`, `lint`                                                                           |
+| `deploy-web`    | main, gate green                                                     | `deno task deploy`, then `deno task smoke https://plei.me`                                                  |
+| `deploy-server` | main, gate green, and `crates/`/`infra/prod/`/the Dockerfile changed | ssh, `git reset --hard origin/main`, `docker compose up -d --build --force-recreate`, then the origin smoke |
+
+The two deploys are gated differently on purpose. Publishing to the edge is
+idempotent and reversible from the Cloudflare dashboard; reaching into the
+production VM over SSH is neither, so a push that could not have changed
+either image does not touch it.
+
+`--force-recreate` is not decoration: the Caddyfile is a bind mount and a bind
+mount is read at start, so an `up --build` alone leaves a stale relay in front
+of a fresh server. On 2026-09-18 that looked like `/api/*` answering 404 from
+the wrong process rather than like a failure.
+
+`deploy-web` is `concurrency: deploy-web` across every ref, because the build
+number comes from one counter object in the bucket and two runs holding it at
+once would take the same one. A hand `deno task deploy` is outside that group —
+it is the fallback, not a second deployer, and running one while CI is mid-
+deploy is the one way to collide.
+
+### Secrets
+
+Repository secrets, all of them set in GitHub's own settings and nowhere else:
+
+| Name                    | For                                                                                                                             |
+| :---------------------- | :------------------------------------------------------------------------------------------------------------------------------ |
+| `CLOUDFLARE_API_TOKEN`  | wrangler: publish the Worker, read/write the build counter in R2                                                                |
+| `CLOUDFLARE_ACCOUNT_ID` | which account, since a token may reach more than one                                                                            |
+| `VM_HOST` / `VM_USER`   | the Hetzner box                                                                                                                 |
+| `VM_SSH_KEY`            | a deploy-only private key; its public half in that user's `authorized_keys`                                                     |
+| `VM_KNOWN_HOSTS`        | `ssh-keyscan <host>` run on the VM. Optional, and the deploy warns without it: the fallback accepts whatever answers on the day |
+| `R2_*`                  | the monthly refresh's own, already set — see below                                                                              |
+
+The VM key should be its own keypair rather than a personal one, so revoking
+it costs nothing else.
+
+### The monthly refresh
+
+`.github/workflows/overture-monthly-refresh.yml`, 03:00 UTC on the 1st. It
+ingests Overture Places and Divisions into a throwaway PostGIS service
+container, bakes POI and reverse geocode with `--force`, and syncs the two
+published prefixes in place. It needs both toolchains: the two ingests are
+Deno and staying that way, the two bakes have been Rust since 2026-09-18.
+
+It never rebuilds terrain's land/ocean classification — it fetches
+`_meta/land_pages.json` from the bucket. Re-upload that object by hand (the
+publish-bucket skill's terrain step) if the classification is ever rebuilt.
+
+## 8. Licensing and attribution
 
 The notices below are required, shown in
 `apps/web/src/app/setting/section/attribution_section.tsx`. Check the
@@ -358,7 +424,7 @@ Still open: GEDTM30 also fuses JAXA's ALOS World 3D-30m. JAXA's terms page was
 not readable when this was written, so no claim is made here about its exact
 required wording rather than inventing one.
 
-## 8. Secrets
+## 9. Secrets
 
 DB passwords and `ADMIN_TOKEN` come from `.env` only. `DB_GEO_USER`,
 `DB_GEO_PASSWORD` and the rest must be exported before running any script.

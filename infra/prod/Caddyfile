@@ -1,9 +1,23 @@
 # infra/prod/Caddyfile
 #
-# Automatic HTTPS (Let's Encrypt) for the API's own subdomain — needs a
-# real DNS A record for this host pointed at the VM's public IP before
-# Caddy can complete the ACME challenge (see infra/README.md).
+# Automatic HTTPS (Let's Encrypt) for the API's own subdomain — needs a real
+# DNS A record for this host pointed at the VM's public IP before Caddy can
+# complete the ACME challenge (see infra/README.md).
+#
+# One hostname, two roots. A hostname is a box and a root is a service, and the
+# two do not have to match: the Worker sends `/geo/*` and `/api/*` here with the
+# path unchanged, and each goes to the container that answers it. Matching on a
+# prefix and never on a route is what keeps adding a route a change to one
+# server (issue/20260910-one-server-root.md).
 
 api.plei.me {
-	reverse_proxy api:3000
+	handle /geo/* {
+		reverse_proxy api:3000
+	}
+	handle /api/* {
+		reverse_proxy app:3000
+	}
+	handle {
+		respond "not found" 404
+	}
 }

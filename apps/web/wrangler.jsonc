@@ -41,7 +41,11 @@
   // file's own top comment already gives for the bucket half. An env var, not a
   // literal in worker/index.ts, so pointing at a different box later (or a
   // local one for testing) never needs a code change.
+  // The origins the Worker relays to. A hostname is a box and a root is a
+  // service, and the two do not have to match: both roots reach the same VM
+  // today, where Caddy sends each to the container that answers it.
   "vars": {
+    "GEO_ORIGIN": "https://api.plei.me",
     "API_ORIGIN": "https://api.plei.me"
   },
 
@@ -53,10 +57,12 @@
     // index.html, or a deep link 404s instead of routing client-side.
     "not_found_handling": "single-page-application",
 
-    // ...but that fallback would also swallow every request meant for the
-    // server, answering a page_idx or a query with index.html. Everything
-    // the server answers is under this one root.
-    "run_worker_first": ["/api/*"]
+    // ...but that fallback would also swallow every request meant for a
+    // server, answering a page index or a query with index.html. Three roots
+    // are claimed here instead of one: the world's data, the application, and
+    // the content-addressed assets. spec/route.json is where they are decided
+    // and script/spec.ts fails when this list drifts from it.
+    "run_worker_first": ["/geo/*", "/api/*", "/asset/*"]
   },
 
   "r2_buckets": [

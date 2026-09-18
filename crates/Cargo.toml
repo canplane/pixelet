@@ -5,7 +5,8 @@
 # (issue/20260912-why-the-destination-is-wasm.md): xpute/core, pxl/spec,
 # pxl/render, pxl/kernel and pxl/wasm. The server is a native binary over the
 # same spec (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md):
-# pxl/geo and pxl/geo-bake, over pxl/overture where they read the same tables.
+# pxl/geo and pxl/geo-bake over pxl/overture where they read the same tables,
+# and pxl/api beside them over the other database.
 #
 # The two ends share the spec and nothing else, in either direction: no
 # third-party dependency belongs in xpute/core or pxl/spec, whose every byte
@@ -14,7 +15,7 @@
 
 [workspace]
 resolver = "2"
-members = ["xpute/core", "pxl/spec", "pxl/render", "pxl/kernel", "pxl/wasm", "pxl/overture", "pxl/geo", "pxl/geo-bake"]
+members = ["xpute/core", "pxl/spec", "pxl/render", "pxl/kernel", "pxl/wasm", "pxl/overture", "pxl/geo", "pxl/geo-bake", "pxl/api"]
 
 [workspace.package]
 edition = "2021"

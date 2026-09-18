@@ -20,16 +20,21 @@ Always drive the repo through its tasks, run from the repo root:
 
 | Task                     | Purpose                                                                           |
 | ------------------------ | --------------------------------------------------------------------------------- |
-| `deno task dev`          | web + api together                                                                |
+| `deno task dev`          | the client and the three servers a deployment has two of                          |
 | `deno task dev:remote`   | client only, server routes from the published deployment                          |
 | `deno task bake:tiles`   | bake every land page into `./out/terrain/<version>`                               |
 | `deno task ingest:asset` | hash every file under `asset/` into `./out/asset`, regenerate the palette's table |
 | `deno task deploy`       | build the client and publish the Cloudflare Worker                                |
+| `deno task smoke <url>`  | what a deployment must answer, against a running one                              |
 | `deno task check`        | type-check every workspace member                                                 |
 | `deno task test`         | tests, every workspace member                                                     |
 | `deno task fmt` / `lint` | format / lint                                                                     |
 
 `deno task check` is the gate. Do not report work as done without it passing.
+`check`, `test` and `lint` are also what CI runs on every push and pull
+request, and a green push to main deploys
+(`.github/workflows/check-and-deploy.yml`, infra/README.md §7) — so a red gate
+is not just a local inconvenience, it is a deploy that does not happen.
 
 The two Postgres containers come from `infra/local/docker-compose.yml`, and the geo one
 (`pixelet-db-geo`) holds a multi-gigabyte PostGIS dataset that is expensive to

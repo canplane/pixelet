@@ -1,0 +1,251 @@
+# The gate every push runs, and what a push to main publishes once it passes.
+#
+# One workflow rather than two, so that a deploy cannot start against a commit
+# the gate never saw: `deploy-web` and `deploy-server` are jobs that need
+# `gate`, not a separate workflow reacting to its outcome. A `workflow_run`
+# trigger would read its own definition from the default branch and lose the
+# push's context, which is a subtlety worth not owning.
+#
+# The two deploys differ in what they cost to get wrong, and are gated
+# accordingly. Publishing to the edge is idempotent and reversible from the
+# Cloudflare dashboard, so it runs on every green push to main. Reaching into
+# the production VM over SSH is neither, so it runs only when something it
+# could possibly change did change.
+#
+# Secrets this needs, all repository secrets:
+#   CLOUDFLARE_API_TOKEN   Workers + R2 write. Wrangler publishes the Worker
+#                          with it and reads/writes the build counter object.
+#   CLOUDFLARE_ACCOUNT_ID  Which account, since a token may reach more than one.
+#   VM_HOST / VM_USER      The Hetzner box the compose stack runs on.
+#   VM_SSH_KEY             A private key whose public half is in that user's
+#                          authorized_keys. Deploy-only; nothing else uses it.
+#
+# See infra/README.md §5 and §6 for what the two deploys do by hand, which is
+# what these automate and what to fall back to.
+
+name: Check and deploy
+
+# main and pull requests, not every branch: a push to a branch with a pull
+# request open would otherwise run this twice for the one commit, and a Rust
+# build is not cheap enough to do twice for nothing.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+# A pull request's run is superseded by its next commit and may be cancelled.
+# A run on main may not: the deploy jobs below take a build number, and one
+# killed between taking it and publishing would burn it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # What crates/Cargo.toml's edition and apps/api/Dockerfile's base image are
+  # built with. Pinned so that a toolchain release cannot turn a clippy lint on
+  # under us and fail a push that changed nothing.
+  RUST_VERSION: "1.94"
+  # wasm-opt prints the import/export mapping the shell imports, and which
+  # letters it assigns is the optimizer's own business — so the version is
+  # pinned rather than taken from apt, where it also lags by years.
+  BINARYEN_VERSION: "132"
+
+jobs:
+  gate:
+    name: check, test, lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Install the Rust toolchain
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal \
+            --component clippy,rustfmt --target wasm32-unknown-unknown
+          rustup default "$RUST_VERSION"
+
+      - name: Install Binaryen
+        run: |
+          curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-x86_64-linux.tar.gz" \
+            | tar xz -C /opt
+          echo "/opt/binaryen-version_${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
+
+      # Keyed on the lockfiles, so a run that changed no dependency restores
+      # exactly and a run that changed one still starts from the nearest
+      # earlier tree rather than from nothing.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            crates/target
+          key: rust-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ hashFiles('crates/Cargo.lock') }}
+          restore-keys: rust-${{ runner.os }}-${{ env.RUST_VERSION }}-
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/deno
+            node_modules
+            apps/web/node_modules
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: deno-${{ runner.os }}-
+
+      # The repo's own gate (AGENTS.md): every workspace member type-checked,
+      # the Rust linted for both targets it ships to, and every generated file
+      # held against the JSON it is written from.
+      - run: deno task check
+      - run: deno task test
+      - run: deno task lint
+
+  deploy-web:
+    name: publish the client and the Worker
+    needs: gate
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # One deployer, across every ref and every trigger: the build number comes
+    # from a counter object in the bucket, and two runs holding it at once
+    # would take the same one. apps/web/script/deploy.ts is written around that
+    # rule and cannot enforce it by itself.
+    concurrency:
+      group: deploy-web
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Install the Rust toolchain
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal \
+            --target wasm32-unknown-unknown
+          rustup default "$RUST_VERSION"
+
+      - name: Install Binaryen
+        run: |
+          curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-x86_64-linux.tar.gz" \
+            | tar xz -C /opt
+          echo "/opt/binaryen-version_${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            crates/target
+          key: rust-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ hashFiles('crates/Cargo.lock') }}
+          restore-keys: rust-${{ runner.os }}-${{ env.RUST_VERSION }}-
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/deno
+            node_modules
+            apps/web/node_modules
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: deno-${{ runner.os }}-
+
+      # Takes the next build number, builds, runs the bundle guard and
+      # publishes — and takes the number only once the publish succeeded.
+      # apps/web/script/deploy.ts is the same script a hand deploy runs.
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: deno task deploy
+
+      - name: Smoke-test the published routes
+        run: deno task smoke https://plei.me
+
+  deploy-server:
+    name: rebuild the servers on the VM
+    needs: gate
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-server
+      cancel-in-progress: false
+    steps:
+      # The whole history, because the filter below diffs the push's base
+      # rather than its last commit: a push of several commits where only a
+      # middle one touched the server would otherwise look like it did not.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Everything the two images are built from, plus the compose file and the
+      # Caddyfile that place them. A docs-only push does not reach the VM.
+      - name: Decide whether the VM needs this push
+        id: scope
+        env:
+          BASE: ${{ github.event.before }}
+        run: |
+          # A branch's first push, a force-push and workflow_dispatch all leave
+          # no usable base. Deploying then is the safe direction: a rebuild
+          # that changed nothing costs a cached build, a skipped one that
+          # should have run leaves production behind main.
+          if [ -n "${BASE:-}" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            changed=$(git diff --name-only "$BASE" HEAD)
+          else
+            changed="crates/"
+          fi
+          if printf '%s\n' "$changed" | grep -qE '^(crates/|infra/prod/|apps/api/Dockerfile|\.dockerignore)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "nothing under crates/, infra/prod/ or the Dockerfile changed — the VM is left alone"
+          fi
+
+      - name: Rebuild and restart the stack
+        if: steps.scope.outputs.run == 'true'
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+          VM_KNOWN_HOSTS: ${{ secrets.VM_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          # Pinned when the secret carries it — `ssh-keyscan HOST` on the VM
+          # produces the lines. Without it this trusts whatever answers on the
+          # day, which is the usual trust-on-first-use hole and is worth
+          # closing for a host that takes a deploy.
+          if [ -n "${VM_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "::warning::VM_KNOWN_HOSTS is not set — the host key is being accepted unverified"
+            ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+          # --force-recreate because the Caddyfile is a bind mount, read once
+          # at start: an `up --build` alone leaves a stale relay behind a fresh
+          # server, which on 09-18 looked like /api/* answering 404 from the
+          # wrong process rather than like a failure.
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$VM_USER@$VM_HOST" bash -eu <<'REMOTE'
+            cd /opt/pixelet
+            # reset rather than pull: the VM is a deploy target and nothing is
+            # authored on it. infra/prod/.env is gitignored and survives this.
+            git fetch --prune origin main
+            git reset --hard origin/main
+            cd infra/prod
+            docker compose up -d --build --force-recreate
+            docker image prune -f
+            docker compose ps
+          REMOTE
+
+      - uses: denoland/setup-deno@v2
+        if: steps.scope.outputs.run == 'true'
+        with:
+          deno-version: v2.x
+
+      - name: Smoke-test the origin directly
+        if: steps.scope.outputs.run == 'true'
+        run: deno task smoke https://api.plei.me --origin
