@@ -44,8 +44,10 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   `DB_GEO_URL` alone and agreeing with the TypeScript over 311 results against
   the same database; `crates/pxl/geo-bake` carrying the terrain pipeline and
   baking 114 pages byte for byte what the TypeScript bakes, coastal pages
-  among them; and `[profile.server]`. Left: the source half (the five
-  statements and their packet), the tool binaries and the dev tile server. The reason is not throughput: `pxl-spec` already carries the
+  among them, and the same 114 again end to end once it read its own source;
+  and `[profile.server]`. Left: the bake tool around it (the land scan, the
+  shared ocean tile, resume, the workers, the manifest) and the dev tile
+  server. The reason is not throughput: `pxl-spec` already carries the
   encoders only the server uses, so one source can hold both ends of the
   wire format instead of two. `apps/api` is three workloads wearing one
   process, and they split along a line `infra/` had already drawn — one
@@ -57,8 +59,9 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   (dead on both ends); `pxl-geo`; the pipeline, verified by baking real
   pages through both implementations and diffing the bytes, since the
   offline tool and the live endpoint are required to agree byte for byte;
-  the tool binaries, which is where the move pays (the terrain bake walks
-  the coverage single-threaded today); the dev tile server;
+  the tool binaries, which is where the move pays — the terrain bake walks
+  the coverage single-threaded today, and a page alone is already 107 ms
+  against 263; the dev tile server;
   `[profile.server]` for `panic = "unwind"`, since the workspace's `abort`
   would end a bake on one bad page and there is no catching it. The
   Overture and asset ingests stay in Deno, and so does the TypeScript pair

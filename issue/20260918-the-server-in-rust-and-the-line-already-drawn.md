@@ -425,18 +425,58 @@ paint over each other the same way; that a typed array's `sort` is numeric
 where a plain array's is lexicographic; and that `j` trails `i` by one around a
 ring, which `j = i++` says and a first port gets wrong.
 
+## What the source half turned up
+
+**The same 114 pages come out identical end to end.** Step 3 compared the
+pipeline on a packet handed to both; this is Rust running its own five
+statements, packing its own packet and baking it — repository, source and
+pipeline together — against the TypeScript's tile for the same page. Identical
+for all 114, which also settles the row-order worry that made the earlier
+comparison feed both the same packet: the statements carry no ORDER BY, but
+two drivers against the same static data and the same plan see the same rows
+in the same order.
+
+**The packet itself is not byte-identical, and does not need to be.** A
+`double precision` column reaches the Deno driver as text and this one as a
+number, so `height` is a `str` node in one packet and an `f64` node in the
+other; the typed absences a Rust view writes are not the untyped nils
+`put(null)` lowers to either. What has to match is the tile, and the tile is
+what the encoders both write from the same `Ground`.
+
+**`PREPARE`/`EXECUTE` and its literal argument list did not come across.** The
+TypeScript reaches for them because its driver re-parsed and re-planned an
+ordinary parameterized query every call — ~34 ms of a bbox lookup's ~44 ms in
+planning, cut to ~2–3 ms by preparing once per physical connection. A prepared
+statement here is that, so the workaround and the `lit()` guard that made it
+safe are gone rather than ported.
+
+**A synchronous client, not tokio-postgres.** pxl-geo takes the async one
+because it serves requests; a bake is five queries, a pack and a rasterize,
+and the pack and the rasterize are `Rc`-backed throughout. On a blocking
+client the page is one call that nothing has to be `Send` across, and the
+concurrency is a thread per worker with a connection of its own — where an
+async client would have wanted the whole `Rc` half inside `spawn_blocking`
+anyway. (This replaces the earlier note about rayon: the shape is the same,
+the reason is the client rather than the CPU.)
+
+**107 ms a page against 263.** Twenty pages, one connection, no concurrency on
+either side: the TypeScript takes 5.3 s and this takes 2.1 s. The tool's own
+win is still ahead of it — walking the coverage is what wants workers — but
+the per-page figure is what a worker multiplies.
+
 ## Where it stands
 
-**Steps 1, 2, 3 and 6 built** 09-18, verified against a live geo DB as above.
+**Steps 1, 2, 3, 6 and the source half of 4 built** 09-18, verified against a live geo DB as above.
 `crates/pxl/geo` is 954 lines including its tests, takes `DB_GEO_URL` alone,
 and `apps/api` still serves — the Dockerfile, the compose file and
 infra/README change when the deploy cuts over, not before. `check:rust` is
 three passes now: the client's crates for wasm32 by name, the server's for the
 host, then the host check with every target.
 
-Steps 4 and 5 are the work left — the tool binaries and the dev tile server,
-both of which need the source half (the five statements and the packet they
-pack into) that step 3 did not move. 7 and 8 wait on a second server existing.
+Left in step 4 is the tool itself: the land/ocean classification scan and its
+cached page list, the shared `_ocean` tile, resume by what is already on disk,
+the workers, and the manifest with its provenance. Then step 5, the dev tile
+server. 7 and 8 wait on a second server existing.
 
 Still open, and now to settle in step 4: the Overture category map. It is
 search's and the POI bake's, and the terrain pipeline never touches it, so step

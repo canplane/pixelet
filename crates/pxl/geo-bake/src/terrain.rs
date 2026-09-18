@@ -2,3 +2,5 @@
 
 pub mod bake;
 pub mod pipeline;
+pub mod repository;
+pub mod source;
