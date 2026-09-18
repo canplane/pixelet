@@ -478,12 +478,23 @@ input; what the client sees is the decompressed bytes, which agree. flate2's
 default happens to come out 3.4% smaller than `CompressionStream`, so a
 re-bake shrinks the set slightly rather than growing it.
 
-**236 ms a tile against 31.** Two hundred pages, concurrency 8 on both:
-47.1 s against 6.3 s, which over the 43,505 land pages is about 2h50m against
-about 22m. The single-connection figure was 263 ms against 107, so most of the
-rest is the worker shape — a thread per worker owning its connection and its
-prepared statements for the whole run, where the TypeScript hands each page a
-pooled client and prepares per checkout.
+**250 ms a tile against 45**, and the first figures taken for it were too
+kind. `--limit n` takes the first n of a page list ordered by index, so a
+sample drawn that way is one contiguous patch of the country; the first 200
+land pages averaged 15.5 kB gzipped against 29.9 kB for 200 drawn at random,
+which is to say they were half the work. On the random set, cold: 50.0 s
+against 8.9 s, so over the 43,505 land pages about 3h against about 32m.
+
+Run again with the pages warm in Postgres it is 6.5 s, and raising the workers
+past 8 does not move it — 35.7, 32.3, 33.5 and 34.0 ms a tile at 4, 8, 16 and
+24. Past that point the bake is waiting on the database, not on itself, which
+is also why the single-connection gap (263 ms against 107) is smaller than
+this one: a thread owning its connection and its prepared statements for the
+whole run is most of what the rest buys.
+
+Both numbers are extrapolations from 200 of 43,505 pages, which is 0.46% of
+the set, and a real walk goes in index order rather than at random — spatial
+locality should help it and a dense city should hurt. Only a full run says.
 
 **The ocean tile is still page-independent, and the tool still checks.** The
 client keeps one decoded copy of `_ocean` for every open-ocean page, which

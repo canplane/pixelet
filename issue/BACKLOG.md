@@ -45,8 +45,8 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   the same database; `crates/pxl/geo-bake` carrying the terrain pipeline and
   baking 114 pages byte for byte what the TypeScript bakes, coastal pages
   among them, and the same 114 again end to end once it read its own source;
-  `bake_tiles`, writing the same tile set as the TypeScript's at 31 ms a tile
-  against 236; and `[profile.server]`. Left: the dev tile server, and the POI
+  `bake_tiles`, writing the same tile set as the TypeScript's at 45 ms a tile
+  against 250; and `[profile.server]`. Left: the dev tile server, and the POI
   and geocode bake tools, which read other tables and have not been looked
   at. The reason is not throughput: `pxl-spec` already carries the
   encoders only the server uses, so one source can hold both ends of the
@@ -60,8 +60,8 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   (dead on both ends); `pxl-geo`; the pipeline, verified by baking real
   pages through both implementations and diffing the bytes, since the
   offline tool and the live endpoint are required to agree byte for byte;
-  the tool binaries, which is where the move pays — the full terrain set is
-  about 22m against about 2h50m; the dev tile server;
+  the tool binaries, which is where the move pays — the full terrain set
+  extrapolates to about 32m against about 3h; the dev tile server;
   `[profile.server]` for `panic = "unwind"`, since the workspace's `abort`
   would end a bake on one bad page and there is no catching it. The
   Overture and asset ingests stay in Deno, and so does the TypeScript pair
