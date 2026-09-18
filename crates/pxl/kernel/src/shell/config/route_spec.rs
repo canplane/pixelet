@@ -13,6 +13,11 @@
 // is where all of them read it from — the client's shell and its kernel are
 // written from it, and the generator fails when the Worker's own literals or
 // the deploy guard's sentinels drift from it.
+//
+// `bundle` marks a branch the client requests whole, so its path survives
+// minification as one literal and the deploy guard can look for it. A root
+// never does: a branch is folded into a single constant here, and nothing in
+// the client spells a root on its own.
 
 /// The world's data: what is baked from Overture and the elevation raster,
 /// and the one query over it that cannot be baked. pxl-geo answers what the

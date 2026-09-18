@@ -937,7 +937,7 @@ async function category_outputs(): Promise<Output[]> {
 type RouteSpec = {
   $doc: string[];
   roots: Record<string, { path: string; $doc?: string[] }>;
-  branches: Record<string, { under: string; name: string; $doc?: string[] }>;
+  branches: Record<string, { under: string; name: string; bundle?: boolean; $doc?: string[] }>;
 };
 
 async function route_outputs(): Promise<Output[]> {
@@ -973,16 +973,22 @@ async function route_outputs(): Promise<Output[]> {
     );
   }
 
+  // A root never reaches the bundle as its own literal — a branch is folded
+  // into one constant here, so the client carries `"/geo/tiles"` and nothing
+  // spelling `"/geo"` alone — and a guard that looked for one would fail every
+  // build. What it can look for is the branches the client requests whole,
+  // which is what `bundle` marks.
   const guard = await Deno.readTextFile(join(root, "apps/web/script/check_bundle.ts"));
   const sentinels = guard.match(/const SENTINELS = \[([^\]]*)\]/);
   if (!sentinels) throw new Error("apps/web/script/check_bundle.ts: no SENTINELS to check against spec/route.json");
-  for (const name of root_names) {
-    const literal = `'"${paths.get(name)}"'`;
-    if (!sentinels[1].includes(literal)) {
-      throw new Error(
-        `apps/web/script/check_bundle.ts's SENTINELS does not carry ${literal}, so a build that dropped ${name} would pass the deploy guard.`,
-      );
-    }
+  const listed_sentinels = [...sentinels[1].matchAll(/'"([^"]+)"'/g)].map((m) => m[1]).sort();
+  const want_sentinels = Object.entries(spec.branches).filter(([, b]) => b.bundle).map(([n]) => paths.get(n)!).sort();
+  if (JSON.stringify(listed_sentinels) !== JSON.stringify(want_sentinels)) {
+    throw new Error(
+      `apps/web/script/check_bundle.ts's SENTINELS is ${JSON.stringify(listed_sentinels)} where spec/route.json marks ` +
+        `${JSON.stringify(want_sentinels)} as reaching the bundle. A sentinel the build never emits fails every deploy; ` +
+        `one the build dropped passes a guard that is checking nothing.`,
+    );
   }
 
   const named = (name: string, value: string) => ({ name, value });
