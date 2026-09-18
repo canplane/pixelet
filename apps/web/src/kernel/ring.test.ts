@@ -12,7 +12,7 @@ import { CORE_KERNEL } from "@/kernel/core_mem.ts";
 import { BOOT, boot_block } from "@/kernel/module.ts";
 import { RING_CAPACITY } from "@/kernel/mem_spec.ts";
 
-/** A command crates/pxl/wasm/src/lib.rs does not number. */
+/** A command crates/pxl/web/wasm/src/lib.rs does not number. */
 const UNNUMBERED = 0x0fff;
 
 Deno.test("rings - the shell submits, one ring replies to each in order, and a full completion ring holds the rest back", () => {

@@ -8,8 +8,8 @@
 // Every one of these is read by more than one language or by more than one
 // stage of the build, which is why they are here rather than in any of them:
 //
-//   crates/pxl/kernel/src/sys/mem/section.rs   the map — the fixed ranges and the heap
-//   crates/pxl/wasm/build.rs                   the front — the linker flags and the
+//   crates/pxl/web/kernel/src/sys/mem/section.rs   the map — the fixed ranges and the heap
+//   crates/pxl/web/wasm/build.rs                   the front — the linker flags and the
 //                                              ring addresses it writes for the module
 //   apps/web/src/kernel/core_mem.ts            the reservation the shell makes
 

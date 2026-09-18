@@ -134,17 +134,19 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path.
 │           ├── config/       #   deployment config and routes
 │           ├── dev/          #   dev tools: the ledger overlay, test page
 │           └── kit/          #   shared UI kit and browser helpers
-├── crates/                   # The Rust workspace
+├── crates/                   # The Rust workspace, grouped by where a crate runs
 │   ├── xpute/core/           #   xpute-core: generic runtime kit
 │   └── pxl/
-│       ├── spec/             #   pxl-spec: the model
-│       ├── render/           #   pxl-render: the view
-│       ├── kernel/           #   pxl-kernel: the kernel
-│       ├── wasm/             #   pxl-wasm: the one WebAssembly module
-│       ├── overture/         #   pxl-overture: what Overture means, for both servers
-│       ├── geo/              #   pxl-geo: the world's data server (/geo)
-│       ├── geo-bake/         #   pxl-geo-bake: the three page bakes and the dev tile server
-│       └── api/              #   pxl-api: the application server (/api)
+│       ├── spec/             #   pxl-spec: the model both ends follow
+│       ├── web/              #   what the browser runs
+│       │   ├── render/       #     pxl-render: the view
+│       │   ├── kernel/       #     pxl-kernel: the stores, the schedulers, the turn
+│       │   └── wasm/         #     pxl-wasm: the one WebAssembly module
+│       └── server/           #   pxl-server: what geo and api both need to start
+│           ├── overture/     #     pxl-geo-spec: what Overture's own values mean
+│           ├── geo/          #     pxl-geo: the world's data server (/geo)
+│           ├── api/          #     pxl-api: the application server (/api)
+│           └── geo-bake/     #     pxl-geo-bake: the three page bakes and the dev tile server
 ├── packages/                 # The TypeScript workspace packages
 │   ├── xpute/core/           #   @xpute/core: generic kit, XTP, rings, doorbell, strobe
 ├── spec/                     # JSON every language is generated from (script/spec.ts):
@@ -158,7 +160,7 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path.
 ```
 
 Inside the Rust crates, a crate's root holds only its directories, sorted by
-kind. `pxl-geo`, `pxl-api` and `pxl-overture` are flat, being five or six
+kind. `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat, being five or six
 files each.
 
 | Crate          | Directories                                                   |

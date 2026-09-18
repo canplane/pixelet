@@ -53,7 +53,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      # The bakes are pinned to what crates/pxl/geo/Dockerfile builds with.
+      # The bakes are pinned to what crates/pxl/server/geo/Dockerfile builds with.
       # The ingests are single-file cargo scripts, which is nightly-only.
       - name: Install the Rust toolchain
         run: |

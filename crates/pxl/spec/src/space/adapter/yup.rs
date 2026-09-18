@@ -6,8 +6,8 @@
 //! **Nothing imports this, and that is the expected state, not rot.** The
 //! engine is Z-up throughout; ENU maps straight onto the render axes. The one
 //! Y-up input it has, glTF models, is not converted here either:
-//! crates/pxl/render/src/asset/gltf.rs keeps a model's own basis, and
-//! crates/pxl/render/src/frame/shader/place.wgsl turns it to Z-up on the GPU as the model is placed.
+//! crates/pxl/web/render/src/asset/gltf.rs keeps a model's own basis, and
+//! crates/pxl/web/render/src/frame/shader/place.wgsl turns it to Z-up on the GPU as the model is placed.
 //!
 //! So: don't reach for these while working inside the world. Reach for them
 //! only where Y-up coordinates have to be read on the CPU at an asset or

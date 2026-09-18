@@ -55,7 +55,7 @@ services:
   api:
     build:
       context: ../..
-      dockerfile: crates/pxl/geo/Dockerfile
+      dockerfile: crates/pxl/server/geo/Dockerfile
     container_name: pixelet-api
     restart: unless-stopped
     depends_on:
@@ -76,7 +76,7 @@ services:
   app:
     build:
       context: ../..
-      dockerfile: crates/pxl/api/Dockerfile
+      dockerfile: crates/pxl/server/api/Dockerfile
     container_name: pixelet-app
     restart: unless-stopped
     depends_on:

@@ -1,12 +1,17 @@
-# The project's Rust, both ends of it.
+# The project's Rust, both ends of it, grouped by which end a crate is on:
+# pxl/web reaches the browser, pxl/server does not, and pxl/spec is what both
+# follow. `server` is what geo and api are called together, so pxl-server —
+# what either needs before it can answer anything — is the group's own
+# directory, and the two processes sit inside it.
 #
 # The client is one core compiled to one WebAssembly module that the main
 # thread and each worker instantiate for themselves
-# (issue/20260912-why-the-destination-is-wasm.md): xpute/core, pxl/spec,
-# pxl/render, pxl/kernel and pxl/wasm. The server is a native binary over the
-# same spec (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md):
-# pxl/geo and pxl/geo-bake over pxl/overture where they read the same tables,
-# and pxl/api beside them over the other database.
+# (issue/20260912-why-the-destination-is-wasm.md): pxl/render, pxl/kernel and
+# pxl/wasm. The server end is native
+# (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md): pxl/geo
+# and pxl/api over pxl/server, pxl/geo-bake beside them for what is baked
+# rather than answered, and pxl/overture where the two geo halves read the
+# same tables.
 #
 # The two ends share the spec and nothing else, in either direction: no
 # third-party dependency belongs in xpute/core or pxl/spec, whose every byte
@@ -15,7 +20,18 @@
 
 [workspace]
 resolver = "2"
-members = ["xpute/core", "pxl/spec", "pxl/render", "pxl/kernel", "pxl/wasm", "pxl/overture", "pxl/server", "pxl/geo", "pxl/geo-bake", "pxl/api"]
+members = [
+  "xpute/core",
+  "pxl/spec",
+  "pxl/web/render",
+  "pxl/web/kernel",
+  "pxl/web/wasm",
+  "pxl/server",
+  "pxl/server/geo-spec",
+  "pxl/server/geo",
+  "pxl/server/api",
+  "pxl/server/geo-bake",
+]
 
 [workspace.package]
 edition = "2021"

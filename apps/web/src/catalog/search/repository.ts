@@ -5,7 +5,7 @@ import type { GeocodePart } from "@/catalog/geocode/repository.ts";
 
 /**
  * One matched place, WGS84 lon/lat — mirrors the API's own SearchResult
- * (crates/pxl/geo/src/search/overture.rs).
+ * (crates/pxl/server/geo/src/search/overture.rs).
  */
 export type SearchResult = {
   gers_id: string;

@@ -15,7 +15,7 @@
  * `memory.buffer` is one `ArrayBuffer` for the module's life: a view over it
  * stays valid, which is what lets a ring hold its words and a lane be read
  * where it lies. What the ranges are for, and how large each one is, is the
- * kernel's policy (crates/pxl/kernel/src/sys/mem/section.rs).
+ * kernel's policy (crates/pxl/web/kernel/src/sys/mem/section.rs).
  */
 
 import type { u32 } from "../kit/word.ts";

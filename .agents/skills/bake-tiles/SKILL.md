@@ -7,7 +7,7 @@ description: Bake terrain, POI and reverse-geocode pages from the geo DB into ou
 
 The deployed API answers forward search only. Terrain, POI and reverse
 geocode are static objects in the bucket, one per L3 page, produced offline
-by the tools in `crates/pxl/geo-bake` from the local geo database. This is
+by the tools in `crates/pxl/server/geo-bake` from the local geo database. This is
 how each set gets built and checked; getting it into the bucket is
 [publish-bucket](../publish-bucket/SKILL.md).
 
@@ -17,11 +17,11 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 
 ## The three bakes
 
-| Kind    | Tool                                           | Reads                                           | Output                                  | Empty page             |
-| ------- | ---------------------------------------------- | ----------------------------------------------- | --------------------------------------- | ---------------------- |
-| terrain | `deno task bake:tiles` (crates/pxl/geo-bake)   | Overture buildings/transportation/base, GEDTM30 | gzipped XTP, one per land page          | shared `_ocean`        |
-| poi     | `deno task bake:poi` (crates/pxl/geo-bake)     | Overture places, terrain's `land_pages.json`    | gzipped XTP, one per page with POI      | no object (404 → `[]`) |
-| geocode | `deno task bake:geocode` (crates/pxl/geo-bake) | Overture divisions, terrain's `land_pages.json` | gzipped JSON, one per page with a label | no object              |
+| Kind    | Tool                                                  | Reads                                           | Output                                  | Empty page             |
+| ------- | ----------------------------------------------------- | ----------------------------------------------- | --------------------------------------- | ---------------------- |
+| terrain | `deno task bake:tiles` (crates/pxl/server/geo-bake)   | Overture buildings/transportation/base, GEDTM30 | gzipped XTP, one per land page          | shared `_ocean`        |
+| poi     | `deno task bake:poi` (crates/pxl/server/geo-bake)     | Overture places, terrain's `land_pages.json`    | gzipped XTP, one per page with POI      | no object (404 → `[]`) |
+| geocode | `deno task bake:geocode` (crates/pxl/server/geo-bake) | Overture divisions, terrain's `land_pages.json` | gzipped JSON, one per page with a label | no object              |
 
 Every tool writes to `./out/<kind>/<version>`, where the version defaults to
 `PUBLISHED_VERSION.<kind>` in `spec/bake/published.json`
@@ -108,7 +108,7 @@ and reused unless `--reclassify` is passed.
    discussion doc rather than working around it.
 4. **Spot-check a known tile against the dev tile server.** A baked page and a
    served one are byte-identical by construction, since both go through
-   `crates/pxl/geo-bake/src/terrain/source.rs`. With `deno task dev` up:
+   `crates/pxl/server/geo-bake/src/terrain/source.rs`. With `deno task dev` up:
 
    ```bash
    curl -s localhost:3001/geo/tiles/terrain/<page_idx> --compressed | shasum
@@ -151,7 +151,7 @@ whole change on the client's side; the bake tools read it for their
 default output directory.
 
 A published **terrain** version is immutable: a change to `bake_terrain` or
-anything under `crates/pxl/geo-bake/src/terrain/` invalidates every existing tile
+anything under `crates/pxl/server/geo-bake/src/terrain/` invalidates every existing tile
 and means a full re-bake into a **new** version — not a partial one, because
 a mixed bucket serves tiles from two pipelines with no way to tell them
 apart.

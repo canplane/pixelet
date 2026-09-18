@@ -73,7 +73,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   among them, and the same 114 again end to end once it read its own source;
   `bake_tiles`, writing the same tile set as the TypeScript's at 45 ms a tile
   against 250; `serve_tiles`, the four dev tile routes over the same
-  pipeline, answering what the TypeScript answers; `pxl-overture` for what
+  pipeline, answering what the TypeScript answers; `pxl-geo-spec` for what
   both servers know about Overture's Places and Divisions; and
   `[profile.server]`; and `bake_poi_tiles` and `bake_geocode_tiles` over one
   shared walk, writing what the TypeScript writes; and the cutover — a 51 MB

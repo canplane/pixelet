@@ -281,7 +281,7 @@
           "value": 8193,
           "doc": [
             "[min_uniform_offset_alignment u32, timestamps bool] — a device answered; the kernel's",
-            "renderer is made on it (crates/pxl/render/src/gpu/renderer.rs)"
+            "renderer is made on it (crates/pxl/web/render/src/gpu/renderer.rs)"
           ]
         },
         {

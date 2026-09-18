@@ -4,7 +4,7 @@
  * The ledger's live console stream, read out of the module's memory rather
  * than received on the ring.
  *
- * The kernel keeps the rows (crates/pxl/kernel/src/sched/ledger/log.rs) and this
+ * The kernel keeps the rows (crates/pxl/web/kernel/src/sched/ledger/log.rs) and this
  * comes for them; nothing is pushed. That is the shape every operating system
  * gives instrumentation — ftrace and perf mmap their own buffers, printk is
  * read through /dev/kmsg — and here it also keeps a debug feature away from a

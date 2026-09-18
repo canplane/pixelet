@@ -10,7 +10,7 @@ infra/
 ```
 
 The ingests that fill db-geo are bake tools, not infrastructure, and live
-with the rest of the bake: `crates/pxl/geo-bake`'s own `ingest_*` binaries
+with the rest of the bake: `crates/pxl/server/geo-bake`'s own `ingest_*` binaries
 and `tool/elevation/` (a bash + GDAL pipeline). Their
 procedures are documented here because they are run against these
 databases.
@@ -77,11 +77,11 @@ are unrelated to this project.
    reaches the origin through a proxied record.
 
 5. **Repo** — `git clone` or `rsync` the tree onto the VM. Both Dockerfiles
-   take the whole repo as their build context: the servers are `crates/pxl/geo`
-   and `crates/pxl/api`, and their dependencies are path dependencies in the
+   take the whole repo as their build context: the servers are `crates/pxl/server/geo`
+   and `crates/pxl/server/api`, and their dependencies are path dependencies in the
    same Cargo workspace, so `crates/` has to be present whole for Cargo to
-   resolve it. Each sits beside its own crate: `crates/pxl/geo/Dockerfile` and
-   `crates/pxl/api/Dockerfile`.
+   resolve it. Each sits beside its own crate: `crates/pxl/server/geo/Dockerfile` and
+   `crates/pxl/server/api/Dockerfile`.
 
 6. **Secrets**
    ```sh

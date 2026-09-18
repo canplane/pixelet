@@ -550,7 +550,7 @@ link it, there is nothing for a bundler to prove dead, no flag that can be set
 wrong, and no shared layout to resolve against — and it can take axum and
 tokio, which a module gated inside the API's own bundle never could.
 
-**`pxl-overture` exists now, and the category map's home is settled.** Forward
+**`pxl-geo-spec` exists now, and the category map's home is settled.** Forward
 search and the POI bake both translate an Overture category into one of ours,
 and a badge on the map and a row in the search list have to draw the same icon
 — so the table cannot be duplicated. `pxl-spec` was refused for it: the

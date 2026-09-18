@@ -48,7 +48,7 @@
     // The wasm32 pass builds libraries only, so a broken `.test.rs` still
     // passes it; the host pass is what compiles those. geo-bake runs twice
     // because `serve` gates the dev tile server.
-    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-overture -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel",
+    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel",
     "check:spec": "./script/spec.ts",
     // The write half of it: the same generator, allowed to touch the tree.
     "spec": "./script/spec.ts --write",
@@ -56,7 +56,7 @@
     "test": "deno task test:web && deno task test:xpute && deno task test:rust && deno task test:asset",
     "test:web": "deno task --cwd apps/web test",
     "test:xpute": "deno test -A packages/xpute/core/src",
-    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-overture -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api",
+    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api",
     // Every shipped model measured from its file and held against the table the
     // ingest wrote. The table is committed, and it has been wrong by hand before.
     "test:asset": "cargo +nightly -Zscript test --manifest-path asset/script/ingest_asset.rs",

@@ -49,11 +49,9 @@ asset                   the shipped models and texture pack; data, not code — 
 spec                    the numbers and names every language is generated from (script/spec.ts): pxl-spec's at the top, kernel/, render/ and xpute/ below
 packages/xpute/core     generic runtime kit — collections, codecs, XTP binary protocol
 crates/xpute/core       the generic runtime kit in Rust; no domain
-crates/pxl/spec         the spec: the space, the cell catalogs, the commands, the bake's formats, the assets' tables — the one model the servers and the kernel all follow
-crates/pxl/render       the view — the volumes and meshes a chunk bakes into, glTF, the billboards' sheet, the draw list, the shaders, the device
-crates/pxl/kernel       the kernel — the stores, the fetches, the schedulers, the turn; what is drawn and when, handed to the view
-crates/pxl/wasm         the one WebAssembly module: rings, a boot block and a doorbell over the crates
-crates/pxl/geo-bake     the offline half of the geo data: the three page bakes and the dev tile server
+crates/pxl/spec         the spec: the space and its routes, the cell catalogs, the commands, the bake's formats, the assets' tables — the one model both ends follow
+crates/pxl/web          what reaches the browser: render (the view), kernel (the stores, the schedulers, the turn) and wasm (the one module over them)
+crates/pxl/server       what does not: pxl-server itself (what geo and api both need to start), the two processes inside it, overture (what its values mean) and geo-bake (the three page bakes and the dev tile server)
 infra                   the two environments' compose files, and what fills db-geo: the Overture ingests and the DEM, as scripts beside the schema each writes
 apps/web                Vite + React 19 client, drawing through WebGPU
 ```
@@ -65,8 +63,8 @@ Two boundaries matter, and both are easy to erode by accident:
   those concepts belong there. If something needs them, it belongs in
   `pxl-spec`. The same line runs through the Rust: `crates/xpute/core`
   holds no domain, and the domain is `crates/pxl/spec`'s. The view
-  (`crates/pxl/render`) knows the model and nothing of the kernel
-  (`crates/pxl/kernel`): the kernel hands a frame what it draws.
+  (`crates/pxl/web/render`) knows the model and nothing of the kernel
+  (`crates/pxl/web/kernel`): the kernel hands a frame what it draws.
 - **`pxl-spec` is the one model, and it has no TypeScript twin.** The shell
   reads a page through the kernel, never by decoding one itself, so a wire
   format has exactly one implementation and there is nothing to keep in step.
@@ -98,7 +96,7 @@ The destination — a Rust core compiled to WASM, drawing through WebGPU,
 three.js gone, iOS 26 and iPhone 11 as the floor
 ([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md))
 — is where the client stands since 2026-09-14: the core builds, decides
-and lists what to draw, and the renderer (`crates/pxl/render/src/gpu/`)
+and lists what to draw, and the renderer (`crates/pxl/web/render/src/gpu/`)
 executes the list through the host's WebGPU and decides nothing. What is still TypeScript is glue and the pieces not
 yet moved, listed in P0 of [issue/BACKLOG.md](./issue/BACKLOG.md): a piece
 is first cut out behind a boundary that carries typed arrays, still in

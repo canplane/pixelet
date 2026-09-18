@@ -37,7 +37,7 @@ xpute-core ◀── pxl-spec ◀── pxl-render ◀── pxl-kernel ◀─�
 Those are what the client is built from. Three more crates sit over `pxl-spec`
 and never reach the browser: `pxl-geo` and `pxl-api` are the two servers, and
 `pxl-geo-bake` holds the three page bakes and the dev tile server. A fourth,
-`pxl-overture`, is what Overture's own values mean, read by the server and the
+`pxl-geo-spec`, is what Overture's own values mean, read by the server and the
 bake alike.
 
 What fills the databases those read is not a crate. The Overture ingests and
@@ -177,7 +177,7 @@ PVF3 = { i: IVec (64-bit), f: FVec (32-bit) }
 - The bit fields contain no guard lanes: IVec uses its full signed `24/24/16` ranges, while FVec uses all 8 bits per residue lane (the top byte of its 32-bit word remains unused).
 - The EPSG:3857 adapter assigns physical meaning: currently `1u = 1 L1 block ≈ 2.389` planar Mercator meters at the equator. Geographic distortion and page-constant vertical correction live in the adapter, not in PVF3 itself.
 
-Placed-object render payloads (`SUB_CELL_SCALE` in `crates/pxl/render/src/mesh/volume.rs`) quantize their sub-cell offset and size to the same `1/256` of an L1 block, so a placed position round-trips between the coordinate and the mesh without rounding. A page-local `f32`, which is how the object store saves a position, is exact on that lattice too.
+Placed-object render payloads (`SUB_CELL_SCALE` in `crates/pxl/web/render/src/mesh/volume.rs`) quantize their sub-cell offset and size to the same `1/256` of an L1 block, so a placed position round-trips between the coordinate and the mesh without rounding. A page-local `f32`, which is how the object store saves a position, is exact on that lattice too.
 
 ## Spatial Hierarchy
 
@@ -196,9 +196,9 @@ Extent is a linear range on one packed lane (`RANGE` in `crates/pxl/spec/src/spa
 
 L5 is reserved, not active code today (`L5_SHAMT` stays commented out in `crates/pxl/spec/src/space/indexer.rs`). Once implemented, its Z lane collapses — Z is only 16 bits wide, narrower than `L5_SHAMT` — so L5 can only ever address X/Y, regardless of what any layer does with it.
 
-Objects have no server persistence yet: the store is client-local. Its records (`crates/pxl/kernel/src/layer/object/store.rs`) are a palette per L2 chunk and one sparse octree per occupied `64³` band, whose leaves are palette indices. The chunk's entries are derived from those as lanes, with a cell index over them for occupancy and hit tests. The store also keeps the leaf ids, the change-log bumps and the eraser's virtual edits. It persists to `localStorage` as five lanes per L3 page (a page-local position, the footprint's side and the value) under a storage key that carries its layout's version.
+Objects have no server persistence yet: the store is client-local. Its records (`crates/pxl/web/kernel/src/layer/object/store.rs`) are a palette per L2 chunk and one sparse octree per occupied `64³` band, whose leaves are palette indices. The chunk's entries are derived from those as lanes, with a cell index over them for occupancy and hit tests. The store also keeps the leaf ids, the change-log bumps and the eraser's virtual edits. It persists to `localStorage` as five lanes per L3 page (a page-local position, the footprint's side and the value) under a storage key that carries its layout's version.
 
-One chunk node (`crates/pxl/kernel/src/world/chunk/node.rs`) owns one L2 XY column and composes however many signed 64-cell L2 Z bands its content touches. One L3 page therefore contains 256 possible L2 columns.
+One chunk node (`crates/pxl/web/kernel/src/world/chunk/node.rs`) owns one L2 XY column and composes however many signed 64-cell L2 Z bands its content touches. One L3 page therefore contains 256 possible L2 columns.
 
 ### Layer, space, and shape
 
@@ -246,7 +246,7 @@ Overture PostGIS rows
   → compressed HTTP page response
 ```
 
-The bake is Rust (`crates/pxl/geo-bake/`), over `pxl-spec`'s formats, ported from the TypeScript it replaced and compared against it page by page before that was deleted. Polygon rasterization uses even-odd fill with hole support. Linear features use a thickness kernel. Scratch geometry comes from an arena rather than one allocation per feature — it was what kept the TypeScript's collector out of the inner loop, and in Rust it is still one bump per page against a few hundred thousand frees. Elevation is stored as signed 16-bit cell units, using one page-constant Mercator Z scale so the bake, the terrain and the objects do not drift by applying different pointwise scale rules.
+The bake is Rust (`crates/pxl/server/geo-bake/`), over `pxl-spec`'s formats, ported from the TypeScript it replaced and compared against it page by page before that was deleted. Polygon rasterization uses even-odd fill with hole support. Linear features use a thickness kernel. Scratch geometry comes from an arena rather than one allocation per feature — it was what kept the TypeScript's collector out of the inner loop, and in Rust it is still one bump per page against a few hundred thousand frees. Elevation is stored as signed 16-bit cell units, using one page-constant Mercator Z scale so the bake, the terrain and the objects do not drift by applying different pointwise scale rules.
 
 ## Chunk Pipeline
 
@@ -276,7 +276,7 @@ A chunk with nothing placed in it skips the volume altogether: the terrain write
 
 ### Temporary dense bands
 
-A composed chunk is a set of sorted, signed 64-cell Z bands (`crates/pxl/render/src/mesh/volume.rs`). A band is allocated whole even when one peak touches it; sparsity exists only between bands. Within a band the lanes are flat:
+A composed chunk is a set of sorted, signed 64-cell Z bands (`crates/pxl/web/render/src/mesh/volume.rs`). A band is allocated whole even when one peak touches it; sparsity exists only between bands. Within a band the lanes are flat:
 
 - `material`, u32: material class and RGB (`0xCC_RRGGBB`);
 - `layer_idx`, u8: the texture-array layer;
@@ -290,23 +290,23 @@ The raycast needs exact composed voxels, but only near the pointer, so it keeps 
 
 ### The chunk scheduler
 
-Every decision about a chunk is `crates/pxl/kernel/src/world/chunk/table.rs`'s, one slot a chunk (flags, distances, bounding sphere, pending-since, retained bytes); the nodes (`node.rs`) hold what the decisions act on. A tick is four passes: **mount** decides which chunks exist, by range from the anchor, with hysteresis so a chunk at the edge is not traded back and forth; **refresh** measures each against the frustum; **recheck** asks the LOD ladder which tiers distance wants and marks the slot pending; **commit** applies a layout whose tiers are all in hand, or releases one that has gone off screen.
+Every decision about a chunk is `crates/pxl/web/kernel/src/world/chunk/table.rs`'s, one slot a chunk (flags, distances, bounding sphere, pending-since, retained bytes); the nodes (`node.rs`) hold what the decisions act on. A tick is four passes: **mount** decides which chunks exist, by range from the anchor, with hysteresis so a chunk at the edge is not traded back and forth; **refresh** measures each against the frustum; **recheck** asks the LOD ladder which tiers distance wants and marks the slot pending; **commit** applies a layout whose tiers are all in hand, or releases one that has gone off screen.
 
-What to build next is one priority: slot holders first, then chunks in the frustum by distance from the **lead point** — where the camera is going rather than where it is drawn, so a pan fills in ahead of the view (`crates/pxl/kernel/src/sched/priority.rs`) — with ageing, so a chunk the camera keeps almost reaching cannot wait forever. Builds run in the build task on what the quota leaves after the tick, one scan and one bake open at a time, a step at a time.
+What to build next is one priority: slot holders first, then chunks in the frustum by distance from the **lead point** — where the camera is going rather than where it is drawn, so a pan fills in ahead of the view (`crates/pxl/web/kernel/src/sched/priority.rs`) — with ageing, so a chunk the camera keeps almost reaching cannot wait forever. Builds run in the build task on what the quota leaves after the tick, one scan and one bake open at a time, a step at a time.
 
 **Memory is paid for in LOD.** A block the heap refuses ends the tick's builds, the chunk gives up its slot and is not tried again until the heap releases something, and reclaim gives back off-screen work farthest first. When a refusal finds nothing to reclaim, the ladder steps in one tier (at most every half second, up to three), and steps back out after five seconds without one — the view gets coarser rather than the page dying.
 
 ## Rendering and LOD
 
-The world is drawn from a draw list (`crates/pxl/render/src/frame/draw.rs`). Each tick, the scheduler lists what to upload, free and draw: the chunks' mesh blocks at the weights its blend decided, decor as instanced draws of a group's model over the block a chunk shows, the actors with their joint palettes, the puck, the billboards and the dev gizmos. The renderer (`crates/pxl/render/src/gpu/renderer.rs` and the passes in `gpu/pass/`) executes the list with no decision of its own.
+The world is drawn from a draw list (`crates/pxl/web/render/src/frame/draw.rs`). Each tick, the scheduler lists what to upload, free and draw: the chunks' mesh blocks at the weights its blend decided, decor as instanced draws of a group's model over the block a chunk shows, the actors with their joint palettes, the puck, the billboards and the dev gizmos. The renderer (`crates/pxl/web/render/src/gpu/renderer.rs` and the passes in `gpu/pass/`) executes the list with no decision of its own.
 
-The renderer reaches WebGPU through the host's calls (`gpu/api.rs`, answered by `apps/web/src/device/gpu.ts`). Every call passes numbers and the address and length of what it names, and every GPU object is named by a handle the kernel gave it. The shaders and pipelines are the kernel's too (`crates/pxl/render/src/frame/shader/`). Each pipeline is a record of words (its shaders, its vertex lanes, its bind group layouts, its primitive, depth and blend state) that the host turns into a WebGPU descriptor, and that a native host could turn into wgpu's. `cargo test` compiles every shader with naga and holds each record to what its shader declares. Depth is reversed float throughout, with near at 1 and far at 0, so a float's precision falls where a perspective depth needs it and far coplanar terrain faces do not fight. When the device is lost, the blocks stay in memory and are put back on the next device from their addresses.
+The renderer reaches WebGPU through the host's calls (`gpu/api.rs`, answered by `apps/web/src/device/gpu.ts`). Every call passes numbers and the address and length of what it names, and every GPU object is named by a handle the kernel gave it. The shaders and pipelines are the kernel's too (`crates/pxl/web/render/src/frame/shader/`). Each pipeline is a record of words (its shaders, its vertex lanes, its bind group layouts, its primitive, depth and blend state) that the host turns into a WebGPU descriptor, and that a native host could turn into wgpu's. `cargo test` compiles every shader with naga and holds each record to what its shader declares. Depth is reversed float throughout, with near at 1 and far at 0, so a float's precision falls where a perspective depth needs it and far coplanar terrain faces do not fight. When the device is lost, the blocks stay in memory and are put back on the next device from their addresses.
 
-The view (`crates/pxl/kernel/src/world/frame/view.rs`) is the orbit camera and the root frame the world stands in. The eye never turns: the world turns under it, by the map's azimuth, and is translated to put the map centre at the origin. The local origin is the map centre's L4 base, so the world stays in `f32` range near the camera, and the translation rebases in the same step that it snaps. The matrices are doubles, composed the moment a damping step writes them, and read by the chunk scheduler, the renderer, placement and the pointer's ray.
+The view (`crates/pxl/web/kernel/src/world/frame/view.rs`) is the orbit camera and the root frame the world stands in. The eye never turns: the world turns under it, by the map's azimuth, and is translated to put the map centre at the origin. The local origin is the map centre's L4 base, so the world stays in `f32` range near the camera, and the translation rebases in the same step that it snaps. The matrices are doubles, composed the moment a damping step writes them, and read by the chunk scheduler, the renderer, placement and the pointer's ray.
 
 A drawn frame is handed over whole. After the tick, the kernel writes the frame's uniforms into the stage lane (`pxl-render frame/stage.rs`), then calls the renderer with a `FrameInput`: the draw list, the environment, the models and skins as they stand, the billboard sheet and the surfaces. The renderer returns what the frame cost and whether another turn is wanted. It draws into every open surface: the world's canvas and the character picker's case.
 
-LOD samples the 64² chunk at strides `1/2/4/8/16/32/64`. A tier hands off to the next when one of its cells would project to about six pixels — screen-space error, derived from the viewport height and field of view (`crates/pxl/render/src/look/lod.rs`), which at the reference viewport puts the handoffs at `192/384/768/1536/3072/6144` world units, proportional to the stride so projected coarse-cell size changes smoothly. Everything that keeps step with the tiers — the POI badge lattice, the badge fade, decor's range — is a multiple of that first handoff. Decor is drawn by the same criterion applied to a kind's extent: a thing that would cover fewer pixels than two of the tier's cells is not drawn, at full density up to that tier and not past it (`crates/pxl/kernel/src/layer/decor/build.rs`).
+LOD samples the 64² chunk at strides `1/2/4/8/16/32/64`. A tier hands off to the next when one of its cells would project to about six pixels — screen-space error, derived from the viewport height and field of view (`crates/pxl/web/render/src/look/lod.rs`), which at the reference viewport puts the handoffs at `192/384/768/1536/3072/6144` world units, proportional to the stride so projected coarse-cell size changes smoothly. Everything that keeps step with the tiers — the POI badge lattice, the badge fade, decor's range — is a multiple of that first handoff. Decor is drawn by the same criterion applied to a kind's extent: a thing that would cover fewer pixels than two of the tier's cells is not drawn, at full density up to that tier and not past it (`crates/pxl/web/kernel/src/layer/decor/build.rs`).
 
 The visible handoffs dither between adjacent LOD meshes with complementary screen-space masks instead of alpha-overlapping them. A newly visible chunk starts from its distance-derived tier instead of flashing through the coarsest one.
 
@@ -314,7 +314,7 @@ Frustum culling uses the exact union of the terrain, object, primary and seconda
 
 ### Coarse LOD
 
-A coarse cell (`lod_step > 1`, `crates/pxl/render/src/mesh/chunk_mesher.rs`)
+A coarse cell (`lod_step > 1`, `crates/pxl/web/render/src/mesh/chunk_mesher.rs`)
 merges `lod_step³` voxels into one box, and says three things about them.
 
 - **How much is there.** Fill is coverage over `lod_step³` — one scalar, no
@@ -362,7 +362,7 @@ the border it is about to swallow rather than the one the box started at.
 
 The orbit camera is driven by three controls — `dist`, `polar`, `azimuth` —
 and nothing else writes them. Terrain is allowed one question, in
-`crates/pxl/kernel/src/control/camera/terrain_gate.rs`: would this view state put the eye inside
+`crates/pxl/web/kernel/src/control/camera/terrain_gate.rs`: would this view state put the eye inside
 it. The gate is a pure function of the three controls rather than of the
 live scene graph, and it sits in `set_view_state`, the one funnel every
 input path goes through, so a refused move never leaves the controls and the
@@ -386,20 +386,20 @@ gizmos, the ledger panel, a render-path bisect — are entries marked `dev`.
 A POI page is an XTP record the bake emits — positions, category, rank and
 id hash as lanes, the strings as leaves read one at a time — copied into
 the core memory on arrival. A spatial index over the resident disc
-(`crates/pxl/kernel/src/layer/poi/index.rs`) is rebuilt a range of records per unit
+(`crates/pxl/web/kernel/src/layer/poi/index.rs`) is rebuilt a range of records per unit
 in the content phase while the previous build keeps answering; placement
-(`crates/pxl/kernel/src/layer/poi/placement.rs`) is a job of the same phase — query, file the hits into an
+(`crates/pxl/web/kernel/src/layer/poi/placement.rs`) is a job of the same phase — query, file the hits into an
 implicit lattice by tier, offer them with estimated widths, greedy
 placement on a screen grid in distance order, build the badges — committed
-whole. Badges are drawn from one atlas (`crates/pxl/render/src/asset/atlas.rs`,
+whole. Badges are drawn from one atlas (`crates/pxl/web/render/src/asset/atlas.rs`,
 shelf-packed, uploaded by rectangle) as **one instanced quad**
-(`crates/pxl/kernel/src/layer/billboard/field.rs`): anchor, size and sheet rectangle are per-instance
+(`crates/pxl/web/kernel/src/layer/billboard/field.rs`): anchor, size and sheet rectangle are per-instance
 attributes, and the fit to screen pixels, the distance fade and the anchor
 pinning are the vertex shader's.
 
 Occlusion is all or nothing per badge, on purpose: the badge pass
 attaches the world's depth read-only and binds it as a texture, and its shader
-(`crates/pxl/render/src/frame/shader/badge.wgsl`) reprojects several points up each badge
+(`crates/pxl/web/render/src/frame/shader/badge.wgsl`) reprojects several points up each badge
 through it and discards the badge when most are behind terrain.
 The same pass writes `gl_FragDepth` from an upright twin of the quad, so
 billboards sort against the world along world-up rather than camera-up.

@@ -1011,7 +1011,7 @@ version = "0.0.0"
 dependencies = [
  "axum",
  "deadpool-postgres",
- "pxl-overture",
+ "pxl-geo-spec",
  "pxl-server",
  "serde",
  "serde_json",
@@ -1028,12 +1028,19 @@ dependencies = [
  "axum",
  "flate2",
  "postgres",
- "pxl-overture",
+ "pxl-geo-spec",
  "pxl-spec",
  "serde",
  "serde_json",
  "tokio",
  "xpute-core",
+]
+
+[[package]]
+name = "pxl-geo-spec"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
@@ -1043,13 +1050,6 @@ dependencies = [
  "pxl-render",
  "pxl-spec",
  "xpute-core",
-]
-
-[[package]]
-name = "pxl-overture"
-version = "0.0.0"
-dependencies = [
- "serde_json",
 ]
 
 [[package]]
