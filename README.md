@@ -103,7 +103,7 @@ and Deno drives their tasks.
 
 | Layer               | Technology                                                                   |
 | ------------------- | ---------------------------------------------------------------------------- |
-| Runtime / Workspace | Deno + TypeScript                                                            |
+| Workspace / Tooling | Deno + TypeScript                                                            |
 | Bundler (web)       | Vite                                                                         |
 | Web UI              | React 19                                                                     |
 | Servers             | Rust: axum, tokio-postgres — one per URL root, one database each             |
@@ -146,7 +146,7 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path.
 │       │   ├── kernel/       #     pxl-kernel: the stores, the schedulers, the turn
 │       │   └── wasm/         #     pxl-wasm: the one WebAssembly module
 │       └── server/           #   pxl-server: what geo and api both need to start
-│           ├── overture/     #     pxl-geo-spec: what Overture's own values mean
+│           ├── geo-spec/     #     pxl-geo-spec: geographic provider values (Overture today)
 │           ├── geo/          #     pxl-geo: the world's data server (/geo)
 │           ├── api/          #     pxl-api: the application server (/api)
 │           └── geo-bake/     #     pxl-geo-bake: the three page bakes and the dev tile server
