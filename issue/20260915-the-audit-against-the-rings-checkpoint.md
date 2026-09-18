@@ -2,7 +2,7 @@
 
 **2026-09-15** — with the client moved into the kernel and the heap work on
 `wip/kernel-heap` stopped, a read-only audit went over the Rust against the
-last checkpoint, `checkpoint/20260915-rings`: every pair of a checkpoint
+last checkpoint, `archive/20260915-rings`: every pair of a checkpoint
 TypeScript file under `apps/web/src` with its `crates/pxl/core` file, the
 xpute and shared crates' deltas, and the pre-existing core crate's diffs.
 Static reading only; nothing was run. Line numbers are as of `eeae374`, the

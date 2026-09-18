@@ -12,8 +12,6 @@ Three properties hold throughout:
 
 The destination is WebAssembly and WebGPU. The kernel decides and draws, and the TypeScript that remains is the shell.
 
-Earlier states of the project are preserved on `checkpoint/20260107-float`, `checkpoint/20260405-xpute` and `checkpoint/20260409-wasm-aborted`.
-
 ---
 
 # Runtime

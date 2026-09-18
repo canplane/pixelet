@@ -12,7 +12,7 @@ This is deliberately **not** where reference documentation goes. The split:
 | Kind                                   | Where                            | Example                                            |
 | -------------------------------------- | -------------------------------- | -------------------------------------------------- |
 | What the system _is_                   | `README.md`, `ARCHITECTURE.md`   | the L0–L5 spatial hierarchy                        |
-| How a subsystem works                  | a `README.md` next to that code  | `packages/.../pvf3/README.md`                      |
+| How a subsystem works                  | a `README.md` next to that code  | `crates/.../pvf3/README.md`                        |
 | How to operate something               | a `README.md` next to that infra | `infra/README.md`                                  |
 | **What is queued, and in what order**  | **`BACKLOG.md`, here**           | the worker for the bake                            |
 | **Why a decision went the way it did** | **a dated file here**            | why terrain tiles are pre-baked to an object store |
