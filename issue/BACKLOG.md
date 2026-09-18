@@ -50,8 +50,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   pipeline, answering what the TypeScript answers; `pxl-overture` for what
   both servers know about Overture's Places and Divisions; and
   `[profile.server]`; and `bake_poi_tiles` and `bake_geocode_tiles` over one
-  shared walk, writing what the TypeScript writes. Left: the cutover — the
-  Dockerfile, the compose file, infra/README and the dev tasks. The reason is not throughput: `pxl-spec` already carries the
+  shared walk, writing what the TypeScript writes; and the cutover — a 51 MB
+  distroless image of the Rust binary, db-main out of the server's
+  environment, and `deno task dev` starting `pxl-geo` and `serve_tiles` with
+  the proxy splitting on `/api/tiles/` the way the Worker does. Not yet
+  deployed: `docker compose up -d --build` on the VM is what makes it live.
+  Left, and not part of the move: removing apps/api's TypeScript server once
+  the Rust has served for a while. The reason is not throughput: `pxl-spec` already carries the
   encoders only the server uses, so one source can hold both ends of the
   wire format instead of two. `apps/api` is three workloads wearing one
   process, and they split along a line `infra/` had already drawn — one

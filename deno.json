@@ -17,8 +17,15 @@
   "exclude": ["**/.vite/", "**/dist/", "**/node_modules/"],
 
   "tasks": {
-    "dev": "sh -c \"(deno task dev:api) & (deno task dev:web) & wait\"",
-    "dev:api": "deno task --cwd apps/api dev",
+    // Three processes: the client, the search server a deployment runs, and
+    // the tile server it does not — a deployment serves baked tiles out of the
+    // bucket, and this bakes them on demand instead
+    // (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md). The
+    // `server` profile rather than a debug build: the rasterizer under one is
+    // slow enough to be felt on every page.
+    "dev": "sh -c \"(deno task dev:api) & (deno task dev:tiles) & (deno task dev:web) & wait\"",
+    "dev:api": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo -- \"$@\"' --",
+    "dev:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin serve_tiles -- \"$@\"' --",
     "dev:web": "deno task --cwd apps/web dev",
     // Client only, tiles served from the published deployment — no Docker, no
     // database, no API process. Not usable for bake work: a published tile
@@ -26,10 +33,13 @@
     "dev:remote": "deno task --cwd apps/web dev:remote",
     "preview:remote": "deno task --cwd apps/web preview:remote",
 
-    // Bakes every land page in the geo DB's coverage into ./out/terrain/<version>.
-    // Needs the geo DB up; resumable. Procedure and verification are in
+    // The three offline bakes, all resumable and all needing the geo DB up.
+    // terrain walks the coverage and classifies land against ocean; poi and
+    // geocode reuse the land list it writes. Procedure and verification are in
     // .agents/skills/bake-tiles/SKILL.md; uploading is publish-bucket.
-    "bake:tiles": "deno run -A --env=.env apps/api/src/bake/terrain/tool/bake_tiles.ts",
+    "bake:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_tiles -- \"$@\"' --",
+    "bake:poi": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_poi_tiles -- \"$@\"' --",
+    "bake:geocode": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_geocode_tiles -- \"$@\"' --",
 
     // Builds the client and publishes the Cloudflare Worker that serves it
     // along with the R2 tiles. Uploading the tiles themselves is separate —

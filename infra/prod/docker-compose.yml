@@ -1,7 +1,7 @@
 # infra/prod/docker-compose.yml
 #
-# The Hetzner VM's own stack — apps/api plus the two Postgres instances it
-# needs (same DB_MAIN/DB_GEO split infra/local/docker-compose.yml already uses
+# The Hetzner VM's own stack — the search server plus the two Postgres
+# instances it and its successor need (same DB_MAIN/DB_GEO split infra/local/docker-compose.yml already uses
 # for local dev, kept identical here rather than consolidating into one
 # Postgres server: same env var shape, same mental model, and Postgres's
 # own idle footprint is small enough that two containers costs nothing
@@ -48,6 +48,9 @@ services:
     networks:
       - pixelet
 
+  # crates/pxl/geo, built by apps/api/Dockerfile — the file kept its path when
+  # the server stopped being TypeScript
+  # (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md).
   api:
     build:
       context: ../..
@@ -55,12 +58,15 @@ services:
     container_name: pixelet-api
     restart: unless-stopped
     depends_on:
-      - db-main
       - db-geo
     environment:
-      DB_MAIN_URL: postgresql://${DB_MAIN_USER}:${DB_MAIN_PASSWORD}@db-main:5432/${DB_MAIN_NAME}
+      # db-geo alone. The server answers forward search and nothing else, and
+      # `main_pool` in the TypeScript it replaces was created, probed once and
+      # queried by nothing — db-main below is there for the application server
+      # that does not exist yet, not for this one.
       DB_GEO_URL: postgresql://${DB_GEO_USER}:${DB_GEO_PASSWORD}@db-geo:5432/${DB_GEO_NAME}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
+      API_HOST: 0.0.0.0
       API_PORT: "3000"
     networks:
       - pixelet

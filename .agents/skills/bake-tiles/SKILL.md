@@ -17,11 +17,11 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 
 ## The three bakes
 
-| Kind    | Tool                                                   | Reads                                           | Output                                  | Empty page             |
-| ------- | ------------------------------------------------------ | ----------------------------------------------- | --------------------------------------- | ---------------------- |
-| terrain | `apps/api/src/bake/terrain/tool/bake_tiles.ts`         | Overture buildings/transportation/base, GEDTM30 | gzipped XTP, one per land page          | shared `_ocean`        |
-| poi     | `apps/api/src/bake/poi/tool/bake_poi_tiles.ts`         | Overture places, terrain's `land_pages.json`    | gzipped XTP, one per page with POI      | no object (404 → `[]`) |
-| geocode | `apps/api/src/bake/geocode/tool/bake_geocode_tiles.ts` | Overture divisions, terrain's `land_pages.json` | gzipped JSON, one per page with a label | no object              |
+| Kind    | Tool                                           | Reads                                           | Output                                  | Empty page             |
+| ------- | ---------------------------------------------- | ----------------------------------------------- | --------------------------------------- | ---------------------- |
+| terrain | `deno task bake:tiles` (crates/pxl/geo-bake)   | Overture buildings/transportation/base, GEDTM30 | gzipped XTP, one per land page          | shared `_ocean`        |
+| poi     | `deno task bake:poi` (crates/pxl/geo-bake)     | Overture places, terrain's `land_pages.json`    | gzipped XTP, one per page with POI      | no object (404 → `[]`) |
+| geocode | `deno task bake:geocode` (crates/pxl/geo-bake) | Overture divisions, terrain's `land_pages.json` | gzipped JSON, one per page with a label | no object              |
 
 Every tool writes to `./out/<kind>/<version>`, where the version defaults to
 `PUBLISHED_VERSION.<kind>` in `packages/pxl/shared/src/bake/published.ts`
@@ -120,8 +120,8 @@ and reused unless `--reclassify` is passed.
 ## POI and geocode
 
 ```bash
-deno run -A --env=.env apps/api/src/bake/poi/tool/bake_poi_tiles.ts --out ./out/poi/<version>
-deno run -A --env=.env apps/api/src/bake/geocode/tool/bake_geocode_tiles.ts --out ./out/geocode/<version>
+deno task bake:poi --out ./out/poi/<version>
+deno task bake:geocode --out ./out/geocode/<version>
 ```
 
 Both take `--out`, `--land-cache <path>`, `--concurrency <n>`, `--limit <n>`

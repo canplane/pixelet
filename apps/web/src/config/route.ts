@@ -29,18 +29,26 @@ export function asset_url(key: string): string {
 
 export const SEARCH_URL = `${API_ROOT}/search`;
 
-/**
- * Prefixes a dev server forwards. Paths rather than URLs: a deployment
- * serves all of them itself, and nothing is rewritten in transit.
- *
- * The API root needs no tile entry beside it — tiles are a branch under it
- * and forward with it, whichever origin it points at.
- */
-export const DEV_PROXY_ROUTES = [
-  { path: API_ROOT },
-] as const satisfies readonly { path: string }[];
-
 /** Mirrored as literals in worker/index.ts, which is bundled for the Workers
  * runtime rather than from src/. */
 export const EDGE_TILE_PREFIX = `${TILE_ROOT}/`;
 export const EDGE_API_PREFIX = `${API_ROOT}/`;
+
+/**
+ * Prefixes a dev server forwards. Paths rather than URLs: a deployment serves
+ * all of them itself, and nothing is rewritten in transit.
+ *
+ * Two entries, and the split is the one the edge already makes: the Worker
+ * sends `/api/tiles/*` to the bucket and the rest of `/api/*` to the API's
+ * origin, so a dev server sending the same prefix to the tile server and the
+ * rest to the search server is that arrangement with the bucket's side baked
+ * on demand. `tiles` says which — a relay reading a prefix, never a route.
+ *
+ * `published` marks what a published deployment answers, so `dev:remote` can
+ * forward it there and leave the local process out of the loop entirely.
+ */
+export const DEV_PROXY_ROUTES = [
+  { path: EDGE_TILE_PREFIX, tiles: true, published: true },
+  { path: API_ROOT, published: true },
+] as const satisfies readonly { path: string; tiles?: boolean; published?: boolean }[];
+

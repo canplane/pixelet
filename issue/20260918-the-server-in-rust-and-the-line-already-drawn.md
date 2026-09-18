@@ -632,6 +632,51 @@ page manifests now carry `git_sha` and an `objects`/`gz_bytes` measured from
 disk, which only terrain's had. The count excludes the `.empty` markers, since
 they are local to a resume and never uploaded.
 
+## The cutover
+
+What a deployment runs is `crates/pxl/geo` now, and what `deno task dev` starts
+is that plus `serve_tiles`.
+
+**The image is the Rust binary and 51 MB.** `apps/api/Dockerfile` keeps its path
+— that is where the compose file points and where the deploy procedure names it
+— and builds none of apps/api. Two stages: `cargo build --profile server -p
+pxl-geo` over the whole `crates/` tree (the workspace has to resolve, so it is
+copied whole), and a distroless runtime with glibc and nothing else. No shell,
+no package manager, no CA bundle: the only thing it connects to is db-geo, over
+the compose file's own network and without TLS, so there is no certificate to
+verify. Built and run for real against the live database before this was
+written — 160 MB on `debian:trixie-slim` with ca-certificates, 51 MB without
+either.
+
+**db-main is out of the server's environment.** It stays provisioned and
+running, because the application server will own it; nothing reads it until
+then. `main_pool` had been created, probed with `select 1` and queried by
+nothing since before this started.
+
+**The dev proxy splits where the edge already splits.** Two local servers under
+one root — `pxl-geo` on 3000 for search, `serve_tiles` on 3001 for the tiles —
+and the proxy sends `/api/tiles/` to the second and the rest of `/api/` to the
+first. That is the Worker's own split with the bucket's side baked on demand
+instead of read, so dev mirrors production rather than inventing a shape. It
+reads a prefix and never a route, which is what
+[one server root](./20260910-one-server-root.md) asks of a relay.
+
+The `/api` + `/geo` root split stays where it was: deferred. With one origin in
+production there is nothing to route between, and moving published tile URLs
+costs a cache generation for nothing.
+
+**`cargo run` does not read `.env`**, where `deno run --env=.env` did, so the
+tasks load it and forward their arguments. `bake:tiles` now runs the Rust
+binary, and `bake:poi` and `bake:geocode` exist beside it — the two had no tasks
+before and were invoked by full path.
+
+**Nothing was deleted.** `apps/api`'s TypeScript server still builds, still
+type-checks and still runs if started directly; it is what every byte
+comparison in this document was made against, and removing it is a separate
+commit for after the Rust has served for a while. What that leaves in the tree
+is dead code with a reason, which is worth saying out loud so it does not read
+as an oversight.
+
 ## Where it stands
 
 **Steps 1–6 built** 09-18, verified against a live geo DB as above.
@@ -641,9 +686,12 @@ infra/README change when the deploy cuts over, not before. `check:rust` is
 three passes now: the client's crates for wasm32 by name, the server's for the
 host, then the host check with every target.
 
-What is left of the move is the cutover itself — the Dockerfile, the compose
-file, infra/README and the dev tasks, which change when the deploy switches
-and not before. 7 and 8 wait on a second server existing.
+The move is through. What is left is not part of it: removing `apps/api`'s
+TypeScript server once the Rust has served for a while, and steps 7 and 8,
+which wait on a second server existing.
+
+Not deployed yet — the image builds and runs, and `docker compose up -d --build`
+on the VM is what makes it live.
 
 The dev tasks still start the Deno server. `deno task dev` is `dev:api` and
 `dev:web`; pointing it at `pxl-geo` and `serve_tiles` is part of the cutover,
