@@ -70,7 +70,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route_spec.
  *   POI (a missing object means "outside Overture's Divisions coverage",
  *   geocode/repository.ts resolves that to `null` directly).
  * - `asset/<sha256>` — a model or an image, named by its content;
- *   tool/ingest/asset/ingest_asset.ts writes them and the
+ *   pxl-asset-bake's ingest_asset writes them and the
  *   catalogs name them by path. No version segment: a changed file is a
  *   new key, which is what makes `immutable` true of it.
  *

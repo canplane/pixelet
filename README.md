@@ -74,7 +74,8 @@ kernel          │        │        │ pxl-kernel │   │  stores, schedule
 module          │        │        │ pxl-wasm   │   │  boot block, rings, doorbell
                 │        │        └─────────┬──┘   │
                 │        │                  │  ┌───▼────────────┐
-server          │        │                  │  │ pxl-geo-bake   │  the three offline bakes
+server          │        │                  │  │ pxl-geo-bake   │  the ingests and the bakes
+                │        │                  │  │ pxl-asset-bake │  the asset tree's tooling
                 │        │                  │  └────────────────┘
                 │        │                  │  ┌────────────────┐
                 │        │                  │  │ pxl-geo  /geo  │  the world's data
@@ -267,7 +268,8 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path (
 │       ├── wasm/             #   pxl-wasm: the one WebAssembly module
 │       ├── overture/         #   pxl-overture: what Overture means, for both servers
 │       ├── geo/              #   pxl-geo: the world's data server (/geo)
-│       ├── geo-bake/         #   pxl-geo-bake: the offline bakes and the dev tile server
+│       ├── geo-bake/         #   pxl-geo-bake: the Overture ingests, the bakes, the dev tile server
+│       ├── asset-bake/       #   pxl-asset-bake: the asset tree into the bucket and the tables
 │       └── api/              #   pxl-api: the application server (/api)
 ├── packages/                 # The TypeScript workspace packages
 │   ├── xpute/core/           #   @xpute/core: generic kit, XTP, rings, doorbell, strobe
@@ -276,8 +278,8 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path (
 │                             #   pxl-spec's at the top; kernel/, render/, xpute/ below
 ├── asset/                    # Shipped models and texture pack (cube, decor, actor, brand);
 │                             #   input to `deno task ingest:asset`, imported by nothing
-├── tool/                     # The ingests, run by hand: Overture and the DEM into db-geo,
-│                             #   the asset tree into the bucket. Deployed by nothing
+├── tool/                     # The DEM into db-geo, in bash and GDAL. Deployed by nothing;
+│                             #   what else was here is crates/pxl/{geo,asset}-bake
 ├── script/                   # spec and locale generators and checks, the deployment smoke
 ├── infra/                    # local and production compose files, operations
 └── issue/                    # Decisions and why, the backlog, experiment/ for measurements

@@ -1,25 +1,24 @@
 # tool
 
-What turns the shipped asset tree into the objects the bucket holds, and what
-puts the elevation raster into db-geo. Run by hand a few times a year, never by
-a server — which is why this is a root of its own rather than an `apps/`
-member: nothing under it is deployed.
+What puts the elevation raster into db-geo. Run by hand a few times a year,
+never by a server — which is why this is a root of its own rather than an
+`apps/` member: nothing under it is deployed.
 
 ```
 tool/
-├── ingest/asset/   asset/ tree → out/asset/{glb,png,webp}/<sha256> and the table of their keys
-└── elevation/      GEDTM30 → db-geo (bash + GDAL)
+└── elevation/   GEDTM30 → db-geo (bash + GDAL)
 ```
 
-**What fills db-geo from Overture is not here.** The five ingests are binaries
-of `crates/pxl/geo-bake`, the crate that bakes from those tables — one
-pipeline, one connection, one catalog: `deno task ingest:{base,buildings,
-transportation,places,divisions}`. The three page bakes are the same crate's:
-`bake:tiles`, `bake:poi`, `bake:geocode`
+**What was here is Rust now.** The asset tree's own tooling — the ingest that
+hashes every file into the bucket's shape and writes the catalogs' tables, the
+texture pack's normalizer, the brand's icon renderer — is `crates/pxl/asset-bake`:
+`deno task ingest:asset`, `download:pack`, `render:brand`. What fills db-geo from
+Overture, and the three page bakes, are `crates/pxl/geo-bake`'s
 ([the server in Rust](../issue/20260918-the-server-in-rust-and-the-line-already-drawn.md)).
 
-The asset ingest is still Deno because it is `sharp`'s, and elevation is bash
-and GDAL and was never TypeScript.
+What is left is bash and GDAL, which was never TypeScript and has no reason to
+become Rust: the work is `gdalwarp`'s, and this is the command line that drives
+it.
 
 Each tool's flags are in its own header.
 
