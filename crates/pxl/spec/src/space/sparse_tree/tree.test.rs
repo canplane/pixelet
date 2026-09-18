@@ -25,7 +25,8 @@ fn sparse_tree_retype_widening_the_leaf_lane_carries_every_value_across() {
     assert_eq!(sparse_tree::read(&tree, &at(20.0, 20.0, 20.0)), 300);
 }
 
-/// script/vector/pxl/shared/spec/space/sparse_tree/tree.ts's output.
+/// What the TypeScript computed, recorded: the generator that wrote it
+/// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
 const VECTOR: &str = include_str!("../../../vector/spec/space/sparse_tree/tree.tsv");
 
 #[test]

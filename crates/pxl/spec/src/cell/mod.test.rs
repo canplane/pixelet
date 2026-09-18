@@ -96,7 +96,8 @@ fn placeable_cube_num_id_a_terrain_styled_cube_never_collides_with_a_flat_color_
     }
 }
 
-/// script/vector/pxl/shared/spec/cell/mod.ts's output.
+/// What the TypeScript computed, recorded: the generator that wrote it
+/// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
 const VECTOR: &str = include_str!("../../vector/spec/cell/mod.tsv");
 
 fn list(v: &xpute_core::sys::vector::Vector, base: &str) -> Vec<&'static str> {
