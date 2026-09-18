@@ -531,6 +531,23 @@ takes the directory as a flag defaulting to `./out/asset`, relative to the
 working directory the tasks already run from, which is how every other tool
 here finds `out/`.
 
+That bug is what `__IS_DEV__` costs, and it is worth separating from what it
+buys. What it buys works: the production bundle is 268.8 kB against the dev
+build's 313.4, and every string only the tile path carries —
+`ST_MakeEmptyRaster`, `overture_buildings`, `api/tiles` — is absent from it
+(`overture_places` survives, because forward search really does query it). The
+branch is dead and the bundler drops what only it referenced.
+
+What it costs is that the dev-only code still has to live inside the
+production server: its source tree, its dependency set, its build, and — the
+part that bit — its runtime file layout. `out/asset/` was written as six `../`
+from a module under `src/module/tile/asset/`, and that module only ever runs
+from inside `dist/main/server.js`. The code was eliminated; the coupling was
+not. A separate binary in a separate crate has neither: production does not
+link it, there is nothing for a bundler to prove dead, no flag that can be set
+wrong, and no shared layout to resolve against — and it can take axum and
+tokio, which a module gated inside the API's own bundle never could.
+
 **`pxl-overture` exists now, and the category map's home is settled.** Forward
 search and the POI bake both translate an Overture category into one of ours,
 and a badge on the map and a row in the search list have to draw the same icon
