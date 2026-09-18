@@ -1,10 +1,20 @@
-# The Rust half of the client: one core, compiled to one WebAssembly module
-# that the main thread and each worker instantiate for themselves.
-# issue/20260912-why-the-destination-is-wasm.md; BACKLOG P0.
+# The project's Rust, both ends of it.
+#
+# The client is one core compiled to one WebAssembly module that the main
+# thread and each worker instantiate for themselves
+# (issue/20260912-why-the-destination-is-wasm.md): xpute/core, pxl/spec,
+# pxl/render, pxl/kernel and pxl/wasm. The server is a native binary over the
+# same spec (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md):
+# pxl/geo, and pxl/geo-bake beside it when the pipeline moves.
+#
+# The two ends share the spec and nothing else, in either direction: no
+# third-party dependency belongs in xpute/core or pxl/spec, whose every byte
+# ships to the client, and nothing in the client's crates may assume
+# WebAssembly — pxl/wasm is the one crate that does.
 
 [workspace]
 resolver = "2"
-members = ["xpute/core", "pxl/spec", "pxl/render", "pxl/kernel", "pxl/wasm"]
+members = ["xpute/core", "pxl/spec", "pxl/render", "pxl/kernel", "pxl/wasm", "pxl/geo"]
 
 [workspace.package]
 edition = "2021"
@@ -24,3 +34,16 @@ panic = "abort"
 
 [profile.dev]
 panic = "abort"
+
+# What the server and the bake tools are built with. `panic` is a profile
+# setting and a profile is the root manifest's alone, so a member cannot ask
+# for one; the release profile above aborts because unwinding costs the module
+# code size and a trap ends the client anyway, and neither reason holds off the
+# browser. The bake wraps each page so that one bad page out of tens of
+# thousands is counted rather than fatal, and there is nothing to catch under
+# `abort`; a request handler wrapped by the web framework is the same story.
+# The module is untouched — apps/web/script/build_wasm.ts builds `--release`,
+# and the two binaries never link together.
+[profile.server]
+inherits = "release"
+panic = "unwind"

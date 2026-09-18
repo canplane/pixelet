@@ -6,8 +6,9 @@ the Hono server to Rust, the dependencies resolve through `pxl-spec` and
 what, exactly, is the server, and where does it split. The answer to the
 second turned out to be written down already — in `infra/`, not in the code.
 
-Nothing here is built. This records the arguments, what was rejected and why,
-and the order the pieces go in.
+This records the arguments, what was rejected and why, and the order the
+pieces go in. The first steps were taken the same day — what they turned up is
+at the end.
 
 ## What `apps/api` actually is
 
@@ -353,7 +354,54 @@ rasterizer, encoder — rather than one function at a time.
 Standing constraints for all of it: external dependencies stay out of
 `pxl-spec` and `xpute-core`; no WASM-only assumptions in `pxl-kernel`.
 
+## What steps 1 and 2 turned up
+
+**The two servers answer the same, and the one difference was dead.** Both were
+run against the same local geo DB and asked the same 15 queries — 311 results,
+covering the plain and the `near`-biased ranking, division matches, the
+name dedupe, the empty result and the 400s. Every field agreed: names,
+categories, the resolved context arrays, ordering, and the coordinates to the
+digit. The only difference was `address: null` on division results, which the
+TypeScript still emitted and the client's own `SearchResult` has never
+declared; the comment beside it already said the field's job had disappeared
+rather than moved, so the port drops it.
+
+One query differed on ordering and turned out not to be a difference at all.
+`q=공원` matches three rows literally named 공원, so `ORDER BY
+similarity(name, $1) DESC, name` leaves them exactly tied and Postgres returns
+them in scan order — the _same_ server shuffles them between calls. Worth
+knowing rather than fixing here: adding `gers_id` as a last tiebreaker would
+make the order stable, and would also be the first deliberate behaviour change
+of the port, so it is a decision rather than a repair.
+
+**The framework is off the critical path, as expected, and now measured.**
+Medians over 15 warm calls each, TypeScript against Rust: 46.3/42.1 ms,
+51.0/47.4 ms, 555.8/590.0 ms, 618.6/584.1 ms, 563.4/599.9 ms. Both are
+DB-bound and the spread is noise, which is the number behind choosing axum on
+process ownership rather than throughput.
+
+**A gate over an empty router gates nothing.** The admin middleware is
+registered on the `/api/internal/*` prefix rather than on a list of routes, so
+that whatever is mounted there later is behind the token by construction —
+and axum's `.layer()` over a router with no routes of its own wraps nothing,
+so the request fell through to the outer 404 without the middleware ever
+running. An explicit fallback gives the layer something to wrap. Nothing is
+mounted under that prefix today, which is exactly the condition under which
+this is invisible; it was found by a test written to pin the claim, not by
+reading.
+
 ## Where it stands
 
-Decided, not started. Steps 1–6 are the work; 7 and 8 wait on a second server
-existing.
+**Steps 1, 2 and 6 built** 09-18, verified against a live geo DB as above.
+`crates/pxl/geo` is 954 lines including its tests, takes `DB_GEO_URL` alone,
+and `apps/api` still serves — the Dockerfile, the compose file and
+infra/README change when the deploy cuts over, not before. `check:rust` is
+three passes now: the client's crates for wasm32 by name, the server's for the
+host, then the host check with every target.
+
+Steps 3–5 are the work left; 7 and 8 wait on a second server existing.
+
+Open from step 2, to settle in step 3: the Overture category map is wanted by
+both search and the POI bake, and it sits in `pxl-geo` with one consumer. With
+two in hand the choice is `pxl-spec` (which ships the table to the client for
+nothing) or a small crate of its own.

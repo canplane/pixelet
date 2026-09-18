@@ -37,9 +37,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     packet on one machine under dev:remote, the fetched bytes whole in the
     console — into_core's view the suspect, not reproduced elsewhere.
 
-- **The server to Rust, and `apps/api` into three.** Decided 2026-09-18
-  ([the server in Rust](./20260918-the-server-in-rust-and-the-line-already-drawn.md)),
-  not started. The reason is not throughput: `pxl-spec` already carries the
+- **The server to Rust, and `apps/api` into three.** Decided and begun
+  2026-09-18
+  ([the server in Rust](./20260918-the-server-in-rust-and-the-line-already-drawn.md)).
+  In: socket.io out, `crates/pxl/geo` answering `/api/search` off `DB_GEO_URL`
+  alone and agreeing with the TypeScript over 311 results against the same
+  database, and `[profile.server]`. Left: the pipeline, the tool binaries and
+  the dev tile server. The reason is not throughput: `pxl-spec` already carries the
   encoders only the server uses, so one source can hold both ends of the
   wire format instead of two. `apps/api` is three workloads wearing one
   process, and they split along a line `infra/` had already drawn — one
