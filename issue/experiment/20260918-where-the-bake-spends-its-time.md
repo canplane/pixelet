@@ -72,12 +72,31 @@ rows to both clients in the same time; a pure-TypeScript Postgres driver then
 takes eight times as long to turn them into arrays as a Rust one does. That
 single difference is larger than every other phase put together.
 
-**XTP is not a cost on either side.** 2.0 ms against 1.8. The format is the
-same algorithm in both languages and it is already cheap; the encoder's
-per-leaf object churn that
-[XTP by fixed shape](./20260914-xtp-by-fixed-shape.md) measured on the rings
-does not show up at this scale, because a page is four big typed arrays and a
-few thousand short tuples rather than millions of tiny calls.
+**XTP is not a cost here, and the reason is worth stating precisely.** Packing
+a page is 2.0 ms against 1.8 — nothing. But that is a fact about this payload,
+not about the format, and the two are easy to confuse. Timed on its own, at
+the two shapes the project actually uses:
+
+|                                      | TypeScript |   Rust |      |
+| :----------------------------------- | ---------: | -----: | ---: |
+| encode, 9 doubles (the rings' shape) |     654 ns | 189 ns | 3.5x |
+| read, 9 doubles                      |     316 ns |  42 ns | 7.5x |
+| encode, 64 kB + 9 kB (a channel)     |     7.1 µs | 4.6 µs | 1.5x |
+| read, 64 kB + 9 kB                   |     450 ns |  53 ns | 8.5x |
+
+XTP's cost is **per node, not per byte**. Bulk encode is a memcpy behind a
+handful of nodes, so it is within 1.5x and the language barely enters; every
+other row is per-call overhead, where JavaScript pays 3.5 to 8.5 times as
+much. A read never scales with the payload at all — it returns a view — so its
+gap is the same 8.5x whether the leaf is nine doubles or 64 kB, and it is
+irrelevant here because a page is read twice.
+
+So the bake is free of XTP because it does a few thousand node operations over
+megabytes. The rings are the opposite shape and are where the format's cost
+lives, which is what
+[XTP by fixed shape](./20260914-xtp-by-fixed-shape.md) measured from the
+inside. "XTP is fast enough in any language" is true of the first shape and
+not of the second.
 
 **Two of the five-and-a-half times are JavaScript's one thread, and they are
 recoverable.** A page is 277 ms against 82, a factor of 3.4, but the tools at
@@ -108,6 +127,19 @@ The honest form of the comparison is therefore that the tool as it was written
 left a factor of two on the floor, and that a `Worker` pool would have
 collected it without any of this. What a Worker pool could not have reached is
 the other 3.4.
+
+**The arena in the normalizer was worth 19%, and Rust does not need one.**
+`normalizer.ts` allocates every projected vertex out of a module-level `Arena`
+rather than as its own array. Replacing `V3_ARENA.alloc()` with a fresh `V3`
+at all four sites and baking the same 24 pages: 80.2 ms a page against 64.8,
+so the arena is taking a fifth off the bake. It earns its place.
+
+What it is doing is turning a few hundred thousand small heap objects a page
+into one preallocated pool — which is to say, emulating a value type. A `V3`
+in Rust _is_ a value type, so a `Vec<V3>` is already one contiguous
+allocation, and the port dropped the mechanism rather than carrying it. The
+Rust bake with no arena is 28.7 ms a page against the TypeScript's 64.8 with
+one, and 80.2 without.
 
 ## What it does not show
 
