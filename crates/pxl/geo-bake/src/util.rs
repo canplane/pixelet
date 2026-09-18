@@ -16,20 +16,6 @@ pub fn gzip(raw: &[u8]) -> std::io::Result<Vec<u8>> {
     enc.finish()
 }
 
-/// A count with thousands separators, which is how a row count reads at the
-/// scale these tables come in — 1,234,567 rather than 1234567.
-pub fn fmt_int(n: u64) -> String {
-    let digits = n.to_string();
-    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    out
-}
-
 pub fn fmt_bytes(n: f64) -> String {
     if n < 1024.0 * 1024.0 {
         format!("{:.1} kB", n / 1024.0)

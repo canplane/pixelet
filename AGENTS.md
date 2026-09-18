@@ -18,23 +18,23 @@ noticed.
 install from, and `node_modules/` exists only because Deno materializes it.
 Always drive the repo through its tasks, run from the repo root:
 
-| Task                     | Purpose                                                                           |
-| ------------------------ | --------------------------------------------------------------------------------- |
-| `deno task dev`          | the client and the three servers a deployment has two of                          |
-| `deno task dev:remote`   | client only, server routes from the published deployment                          |
-| `deno task bake:tiles`   | bake every land page into `./out/terrain/<version>`                               |
-| `deno task ingest:asset` | hash every file under `asset/` into `./out/asset`, regenerate the palette's table |
-| `deno task deploy`       | build the client and publish the Cloudflare Worker                                |
-| `deno task smoke <url>`  | what a deployment must answer, against a running one                              |
-| `deno task check`        | type-check every workspace member                                                 |
-| `deno task test`         | tests, every workspace member                                                     |
-| `deno task fmt` / `lint` | format / lint                                                                     |
+| Task                     | Purpose                                                  |
+| ------------------------ | -------------------------------------------------------- |
+| `deno task dev`          | the client and the three servers a deployment has two of |
+| `deno task dev:remote`   | client only, server routes from the published deployment |
+| `deno task bake:tiles`   | bake every land page into `./out/terrain/<version>`      |
+| `deno task deploy`       | build the client and publish the Cloudflare Worker       |
+| `deno task smoke <url>`  | what a deployment must answer, against a running one     |
+| `deno task check`        | type-check every workspace member                        |
+| `deno task test`         | tests, every workspace member                            |
+| `deno task fmt` / `lint` | format / lint                                            |
 
 `deno task check` is the gate. Do not report work as done without it passing.
 `check`, `test` and `lint` are also what CI runs on every push and pull
-request, and a green push to main deploys
-(`.github/workflows/check-and-deploy.yml`, infra/README.md §7) — so a red gate
-is not just a local inconvenience, it is a deploy that does not happen.
+request; a green push to main takes a build number and deploys whichever half
+its files reached (`.github/workflows/check-and-deploy.yml`, infra/README.md
+§5) — so a red gate is not just a local inconvenience, it is a deploy that does
+not happen.
 
 The two Postgres containers come from `infra/local/docker-compose.yml`, and the geo one
 (`pixelet-db-geo`) holds a multi-gigabyte PostGIS dataset that is expensive to
@@ -45,7 +45,7 @@ follow that rather than improvising SQL against the raw tables.
 ## Repository layers
 
 ```
-asset                   the shipped models and texture pack; data, not code — nothing imports it
+asset                   the shipped models and texture pack; data, not code — nothing imports it. asset/script/ hashes the tree into the bucket's shape and writes the catalogs' tables
 spec                    the numbers and names every language is generated from (script/spec.ts): pxl-spec's at the top, kernel/, render/ and xpute/ below
 packages/xpute/core     generic runtime kit — collections, codecs, XTP binary protocol
 crates/xpute/core       the generic runtime kit in Rust; no domain
@@ -53,9 +53,8 @@ crates/pxl/spec         the spec: the space, the cell catalogs, the commands, th
 crates/pxl/render       the view — the volumes and meshes a chunk bakes into, glTF, the billboards' sheet, the draw list, the shaders, the device
 crates/pxl/kernel       the kernel — the stores, the fetches, the schedulers, the turn; what is drawn and when, handed to the view
 crates/pxl/wasm         the one WebAssembly module: rings, a boot block and a doorbell over the crates
-crates/pxl/geo-bake     the offline half of the geo data: the Overture ingests, the three page bakes, and the dev tile server
-crates/pxl/asset-bake   the asset tree's own tooling: the texture pack, the brand's icons, and the ingest that writes the catalogs' tables
-tool                    what is left of the hand-run tools: the DEM into db-geo, in bash and GDAL
+crates/pxl/geo-bake     the offline half of the geo data: the three page bakes and the dev tile server
+infra                   the two environments' compose files, and what fills db-geo: the Overture ingests and the DEM, as scripts beside the schema each writes
 apps/web                Vite + React 19 client, drawing through WebGPU
 ```
 
@@ -248,7 +247,7 @@ absence as licence to drop them anywhere else.
 **Naming:** `snake_case` for files, functions, and locals; `PascalCase` for types;
 `SCREAMING_SNAKE_CASE` for module constants. **Directories are singular**:
 a directory is named for the concept it holds — `object/`, `marker/`,
-`tool/`, `issue/` — not for how many files are in it, which is
+`script/`, `issue/` — not for how many files are in it, which is
 always several and never the point. A plural would have to answer whether
 the directory is one thing or a collection of things, and for most
 directories that has no clear answer (is `object/` the object layer or
@@ -257,11 +256,8 @@ ecosystem fixes and tooling reads: `apps/`, `packages/`, `node_modules/`,
 `@types/`, `.github/workflows/`, `.agents/skills/`. The same holds for a
 module: `constant.ts`, `route.ts`, `slab.ts` — and a file inside a
 directory that already names the concept does not repeat it
-(`setting/store.ts`, not `setting/settings_store.ts`). Two things are not
-concept names and keep their plurals: a tool script, which is a command
-(`bake_tiles.ts` bakes the tiles; `ingest_buildings.ts` ingests Overture's
-Buildings theme), and code ported from elsewhere, which keeps its own
-names (`shadcn/tabs.tsx`). React hooks, stores, and components
+(`setting/store.ts`, not `setting/settings_store.ts`). Code ported from elsewhere is not
+a concept name and keeps its own (`shadcn/tabs.tsx`). React hooks, stores, and components
 keep their ecosystem's `camelCase`/`PascalCase` (`useTileStore`, `MapStatus`) —
 that is not an inconsistency to fix.
 

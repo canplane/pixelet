@@ -53,7 +53,7 @@ Terrain needs `overture_buildings`, `overture_transportation`,
 `overture_base_{land,land_use,water,infrastructure}` and `elevation_raster`;
 POI needs `overture_places`; geocode needs `overture_divisions` and
 `overture_division_points`. If a table is missing, that is an ingestion
-job, not a bake job — [infra/README.md](../../../infra/README.md) §2–3.
+job, not a bake job — [infra/geo/README.md](../../../infra/geo/README.md).
 Never `down -v` to "reset" the database; the volume is several gigabytes of
 ingested data.
 

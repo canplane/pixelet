@@ -53,15 +53,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Everything past the R2 fetch is Rust: the two ingests and the two bakes
-      # are binaries of one crate, so the whole path from Overture's release to
-      # the published pages is the same code the bake tools are. Deno is still
-      # set up above, because the tasks are how they are invoked, and Python
-      # because the download is Overture's own CLI. Pinned to what
-      # crates/pxl/geo/Dockerfile builds with.
+      # The bakes are pinned to what crates/pxl/geo/Dockerfile builds with.
+      # The ingests are single-file cargo scripts, which is nightly-only.
       - name: Install the Rust toolchain
         run: |
           rustup toolchain install 1.94 --profile minimal
+          rustup toolchain install nightly --profile minimal
           rustup default 1.94
 
       - uses: actions/cache@v4
@@ -88,8 +85,8 @@ jobs:
 
       - name: Ingest Overture Places + Divisions (Korea)
         run: |
-          deno task ingest:places
-          deno task ingest:divisions
+          ./infra/geo/overture/script/ingest_places.rs
+          ./infra/geo/overture/script/ingest_divisions.rs
 
       # The POI page is an XTP packet (crates/pxl/spec/src/bake/format.rs,
       # encode_poi_page) since v3; the version here must match

@@ -287,15 +287,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   for nothing today. Either the coarse bake learns to fit XY and Z
   separately, or the lanes go; decided with the Rust mesher, since the
   format is its input.
-- **The build number moves to CI when there is one.** Official builds are
-  counted like a build lab's (2026-09-13): one counter outside git, in the
-  bucket at `meta/build-number`, taken by `deno task deploy` because that is
-  the only central build today (apps/web/script/deploy.ts). A build lab
-  numbers every build of main and ships some of them; with a CI building
-  main, the increment moves into it, deploy picks one of its numbered
-  builds, and the count continues from the counter as it stands — never
-  reset.
-
 - **The scheduler's port, read against the TypeScript it replaced.**
   Read line for line on 2026-09-14 after the move (crates/pxl/kernel/src/world/sched.rs
   against 9ff57fe's chunk_node.ts, chunk_stage.tsx, chunk_table.ts,

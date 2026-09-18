@@ -15,7 +15,7 @@ use pxl_overture::division::{broad_rank, FINE_SUBTYPE_PRIORITY};
 use serde::Serialize;
 use tokio_postgres::Row;
 
-use crate::db::DbError;
+use pxl_server::db::DbError;
 
 /// One level of a search result's context, broad to narrow. The shape is this
 /// server's own rather than the Divisions theme's: what the provider is decides

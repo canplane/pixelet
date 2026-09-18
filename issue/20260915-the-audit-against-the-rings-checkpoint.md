@@ -324,17 +324,17 @@ the client now share it.
 What is reserved at its worst case the first time it is touched, sizes from
 `-Zprint-type-sizes` on wasm32:
 
-| Where | Lane | Elements × bytes | Class taken |
-|---|---|---|---|
-| `ledger.rs:318-330` | frame ring | 4096 × 528 | 4 MB |
-| | task ring | 2048 × 192 | 512 KB |
-| | long frame ring | 1024 × 48 | 64 KB |
-| | worst frames | 12 × 1056 | 16 KB |
-| `world/decor.rs:158-159` | instances | 65536 × 32 | 2 MB |
-| | groups | 65536 × 2 | 128 KB |
-| `world/sched.rs:433` | slots | 4096 × 160 | 1 MB |
-| ~~`world/sched.rs:374-380`~~ | ~~tick scratch, seven lists~~ | ~~4096 × 4…32~~ | ~~224 KB~~ — and again every tick: the tick's `mem::take` made a fresh reserved one and dropped it (`sched.rs:868,947`). Empty by default now; the one put back keeps what it grew to. |
-| `world/sched.rs:443,446` | pages, gone | 1024 × 8, 4096 × 24 | 136 KB |
+| Where                        | Lane                          | Elements × bytes    | Class taken                                                                                                                                                                            |
+| ---------------------------- | ----------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ledger.rs:318-330`          | frame ring                    | 4096 × 528          | 4 MB                                                                                                                                                                                   |
+|                              | task ring                     | 2048 × 192          | 512 KB                                                                                                                                                                                 |
+|                              | long frame ring               | 1024 × 48           | 64 KB                                                                                                                                                                                  |
+|                              | worst frames                  | 12 × 1056           | 16 KB                                                                                                                                                                                  |
+| `world/decor.rs:158-159`     | instances                     | 65536 × 32          | 2 MB                                                                                                                                                                                   |
+|                              | groups                        | 65536 × 2           | 128 KB                                                                                                                                                                                 |
+| `world/sched.rs:433`         | slots                         | 4096 × 160          | 1 MB                                                                                                                                                                                   |
+| ~~`world/sched.rs:374-380`~~ | ~~tick scratch, seven lists~~ | ~~4096 × 4…32~~     | ~~224 KB~~ — and again every tick: the tick's `mem::take` made a fresh reserved one and dropped it (`sched.rs:868,947`). Empty by default now; the one put back keeps what it grew to. |
+| `world/sched.rs:443,446`     | pages, gone                   | 1024 × 8, 4096 × 24 | 136 KB                                                                                                                                                                                 |
 
 About 8 MB. The parse read each accessor into `f64`s, kept a copy in its
 cache, cloned that copy for the read and converted the clone: 28 bytes a

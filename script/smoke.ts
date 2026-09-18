@@ -1,5 +1,4 @@
-// script/smoke.ts
-//
+#!/usr/bin/env -S deno run -A
 // What a deployment must answer, checked against a running one.
 //
 //   deno run -A script/smoke.ts https://plei.me

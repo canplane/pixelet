@@ -17,7 +17,7 @@ fn cfg() -> config::Config {
         port: 0,
         max_body_sz: 1 << 20,
         admin_token: TOKEN.to_string(),
-        db_geo_url: String::new(),
+        db_url: String::new(),
         db_pool_size: 1,
     }
 }

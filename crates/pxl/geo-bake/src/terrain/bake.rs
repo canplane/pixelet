@@ -18,11 +18,11 @@ use xpute_core::io::marshal::tree::{BranchCursor, SequenceType, TreeReader};
 use xpute_core::kit::array::{I16Array, U8Array};
 use xpute_core::sys::error::MarshalError;
 
-use crate::overture::model::overture_adapter::{from_base_row, from_building_row, from_segment_row};
 use crate::terrain::pipeline::coast_adapter::from_coast_row;
 use crate::terrain::pipeline::coast_policy::CoastPolicy;
 use crate::terrain::pipeline::ground_baker::bake_ground;
 use crate::terrain::pipeline::normalizer::normalize;
+use crate::terrain::pipeline::overture_adapter::{from_base_row, from_building_row, from_segment_row};
 use crate::terrain::pipeline::overture_policy::OverturePolicy;
 
 fn opt_str(row: &BranchCursor, at: u32) -> Result<Option<String>, MarshalError> {

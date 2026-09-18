@@ -17,8 +17,8 @@ use pxl_spec::bake::model::feature::{FeatureComputed, FeatureExtra};
 use pxl_spec::cell::cube::cube_types;
 use pxl_spec::space::adapter::epsg3857::G3857;
 
-use crate::overture::model::overture_adapter::{BaseSource, OvertureRawFeature};
 use crate::terrain::pipeline::normalizer::{NormalizePolicy, RawFeature};
+use crate::terrain::pipeline::overture_adapter::{BaseSource, OvertureRawFeature};
 
 // ============ Domain knowledge constants ============
 

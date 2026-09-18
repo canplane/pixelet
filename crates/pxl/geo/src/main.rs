@@ -13,9 +13,6 @@
 //! are separate processes because they read separate databases — see
 //! issue/20260918-the-server-in-rust-and-the-line-already-drawn.md.
 
-mod admin_auth;
-mod config;
-mod db;
 mod geocode;
 mod search;
 
@@ -24,6 +21,7 @@ use std::process::ExitCode;
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use axum::Router;
+use pxl_server::{admin_auth, config, db};
 use tower_http::compression::CompressionLayer;
 
 fn router(cfg: &config::Config, pool: deadpool_postgres::Pool) -> Router {
@@ -53,8 +51,20 @@ fn router(cfg: &config::Config, pool: deadpool_postgres::Pool) -> Router {
 }
 
 async fn run() -> Result<(), db::DbError> {
-    let cfg = config::Config::from_env()?;
-    let pool = db::connect(&cfg.db_geo_url, cfg.db_pool_size).await?;
+    let cfg = config::Config::from_env(&config::Env {
+        prefix: "GEO",
+        default_port: 3000,
+        db_url_key: "DB_GEO_URL",
+    })?;
+    let pool = db::connect(
+        &cfg.db_url,
+        cfg.db_pool_size,
+        &db::Probe {
+            sql: "select postgis_full_version()",
+            name: "geo",
+        },
+    )
+    .await?;
 
     let listener = tokio::net::TcpListener::bind((cfg.host.as_str(), cfg.port)).await?;
     println!("[app] listening on {}:{}", cfg.host, cfg.port);

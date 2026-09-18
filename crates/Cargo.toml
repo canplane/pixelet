@@ -15,7 +15,7 @@
 
 [workspace]
 resolver = "2"
-members = ["xpute/core", "pxl/spec", "pxl/render", "pxl/kernel", "pxl/wasm", "pxl/overture", "pxl/geo", "pxl/geo-bake", "pxl/api", "pxl/asset-bake"]
+members = ["xpute/core", "pxl/spec", "pxl/render", "pxl/kernel", "pxl/wasm", "pxl/overture", "pxl/server", "pxl/geo", "pxl/geo-bake", "pxl/api"]
 
 [workspace.package]
 edition = "2021"

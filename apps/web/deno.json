@@ -41,7 +41,10 @@
     // Through build:wasm, as dev, build and test are: the module's minified
     // ABI is written beside it (src/kernel/abi.ts) and the shell imports it,
     // so a checkout that has never built cannot be type-checked without it.
-    "check": { "command": "deno check src/index.ts", "dependencies": ["build:wasm"] },
+    // A catalog entry is a number, an id and a name in every locale; the first
+    // two are written from the JSON under spec/, the last is people's.
+    "check:locale": "./script/locale.ts",
+    "check": { "command": "deno check src/index.ts", "dependencies": ["build:wasm", "check:locale"] },
     // Pure-logic modules: none of them touches the DOM or the GPU, so plain
     // `deno test` works with no browser harness, over the module built for
     // it. What needs a canvas is verified live.

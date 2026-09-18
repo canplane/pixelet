@@ -46,39 +46,9 @@ serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 axum = { version = "0.8", optional = true }
 tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread"], optional = true }
 
-[[bin]]
-name = "ingest_base"
-path = "src/overture/tool/ingest_base.rs"
-
-[[bin]]
-name = "ingest_buildings"
-path = "src/overture/tool/ingest_buildings.rs"
-
-[[bin]]
-name = "ingest_divisions"
-path = "src/overture/tool/ingest_divisions.rs"
-
-[[bin]]
-name = "ingest_places"
-path = "src/overture/tool/ingest_places.rs"
-
-[[bin]]
-name = "ingest_transportation"
-path = "src/overture/tool/ingest_transportation.rs"
-
-[[bin]]
-name = "bake_tiles"
-path = "src/terrain/tool/bake_tiles.rs"
-
+# Cargo finds the other three in src/bin/. This one is declared because a
+# feature gates it: the dev tile server is 51 of this crate's 101 packages, and
+# a build of the bakes should not compile them.
 [[bin]]
 name = "serve_tiles"
-path = "src/tool/serve_tiles.rs"
 required-features = ["serve"]
-
-[[bin]]
-name = "bake_poi_tiles"
-path = "src/poi/tool/bake_poi_tiles.rs"
-
-[[bin]]
-name = "bake_geocode_tiles"
-path = "src/geocode/tool/bake_geocode_tiles.rs"

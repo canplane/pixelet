@@ -17,9 +17,9 @@ use serde::Serialize;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::Row;
 
-use crate::db::DbError;
 use crate::geocode::{self, GeocodePart};
 use crate::search::Near;
+use pxl_server::db::DbError;
 
 /// Divisions never crowd out POI results — a handful of admin-area matches
 /// (there is rarely more than one real "서울특별시") capped well under the

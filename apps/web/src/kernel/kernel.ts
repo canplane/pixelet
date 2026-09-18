@@ -54,7 +54,6 @@ export type UiSnapshot = {
    * sends both because it has both — recomputing the page here would mean a
    * second implementation of the space in TypeScript. */
   map: { status: "idle" | "loading" | "success" | "error"; is_off_center: boolean; center: [number, number] | null; page: string | null };
-  /** `error` is what went wrong, as @pxl/shared/spec/message's number. */
   location: { status: PoseStatus; has_location: boolean; error: Message | null };
   companion: { person_ready: boolean; pet_ready: boolean };
   orientation: { status: PoseStatus; heading: number | null };

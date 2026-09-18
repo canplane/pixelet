@@ -22,15 +22,12 @@
 //! not it: an address space is not a carrier, and fixing the second before the
 //! storage model is settled is the failure that document names.
 
-mod admin_auth;
-mod config;
-mod db;
-
 use std::process::ExitCode;
 
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use axum::Router;
+use pxl_server::{admin_auth, config, db};
 use tower_http::compression::CompressionLayer;
 
 fn router(cfg: &config::Config, _pool: deadpool_postgres::Pool) -> Router {
@@ -50,8 +47,12 @@ fn router(cfg: &config::Config, _pool: deadpool_postgres::Pool) -> Router {
 }
 
 async fn run() -> Result<(), db::DbError> {
-    let cfg = config::Config::from_env()?;
-    let pool = db::connect(&cfg.db_main_url, cfg.db_pool_size).await?;
+    let cfg = config::Config::from_env(&config::Env {
+        prefix: "API",
+        default_port: 3002,
+        db_url_key: "DB_MAIN_URL",
+    })?;
+    let pool = db::connect(&cfg.db_url, cfg.db_pool_size, &db::Probe { sql: "select 1", name: "main" }).await?;
 
     let listener = tokio::net::TcpListener::bind((cfg.host.as_str(), cfg.port)).await?;
     println!("[app] listening on {}:{}", cfg.host, cfg.port);

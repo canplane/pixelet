@@ -1,5 +1,4 @@
-// @pxl/web/../script/build_wasm.ts
-//
+#!/usr/bin/env -S deno run -A
 // Builds the Rust core's module (crates/pxl/wasm) and puts it where
 // src/kernel/module.ts loads it from. Run by every task that loads the module —
 // dev, build, test — so a checkout never runs against a stale or missing

@@ -1,5 +1,4 @@
-// script/spec.ts
-//
+#!/usr/bin/env -S deno run -A
 // The specs are JSON, and the TypeScript and the Rust that carry them are
 // written from it: neither language is where a number or a name is decided.
 // Run as `deno task spec` to write every generated file, and as `deno task

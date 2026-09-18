@@ -31,150 +31,13 @@ connects to it and probes it at boot, and has no route that reads it yet
 
 All spatial data is **EPSG:3857**. The renderer's voxel math assumes it.
 
-## 2. What db-geo holds
+## 2. Filling db-geo
 
-Twelve tables from two sources. Terrain, POI and geocode are baked from
-these offline and published to R2; only forward search queries them at
-request time.
+Twelve tables from Overture and GEDTM30, and the ingests that write them,
+are [infra/geo/README.md](./geo/README.md) — the sources, what each pipeline
+drops before it writes, how to run one and how to check it afterwards.
 
-| Source                                                                           | Tables                                                                                                                                                 | Catalog             | Ingest                                             |
-| :------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------ | :------------------------------------------------- |
-| **Overture — Buildings, Transportation, Base**<br>terrain features and coastline | `overture_buildings`, `overture_transportation`, `overture_base_land`, `overture_base_land_use`, `overture_base_water`, `overture_base_infrastructure` | `overture_catalog`  | `deno task ingest:{buildings,transportation,base}` |
-| **Overture — Places, Divisions**<br>POI, reverse geocode, forward search         | `overture_places`, `overture_divisions`, `overture_division_points`                                                                                    | `overture_catalog`  | `deno task ingest:{places,divisions}`              |
-| **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                     | `elevation_catalog` | `tool/elevation/setup_elevation.sh`                |
-
-Coastline is not its own table: `OVERTURE_COAST_SQL`
-(`crates/pxl/geo-bake/src/terrain/repository.rs`) carves it at bake time from
-`overture_base_water`'s `ocean` subtype, and `HAS_LAND_SQL`
-(`bake/terrain/tool/bake_tiles.ts`) classifies a page as open ocean when
-no `overture_base_land` row touches its bbox.
-
-Both catalogs record one row per table with the source's own as-of date.
-`read_source_catalogs()` (`bake/bake_util.ts`) copies them into every baked
-tile version's `manifest.json`.
-
-Every pipeline is **drop-and-recreate**: re-running one never duplicates or
-conflicts.
-
-### Sources
-
-**Overture Maps** — public S3 release, no key or portal step. Ingested
-through the official `overturemaps` Python CLI, auto-installed into a
-`.venv` beside the tools on first run (gitignored). `--bbox` defaults to
-South Korea, `124,33,132,39`.
-
-**GEDTM30 v1.2** (OpenGeoHub / OpenLandMap) — one global Cloud-Optimized
-GeoTIFF, cropped to each region's `bbox_4326` straight out of the remote
-file over HTTP range requests. No raw-file staging step. A bare-earth DTM:
-ground elevation carries no building or canopy height. Real elevation
-exists only inside `metadata.json`'s `bbox_4326`; outside it, nothing.
-
-## 3. Local build
-
-### Prerequisites (macOS)
-
-```sh
-brew install gdal postgis jq gettext
-brew link --force gettext   # puts envsubst on PATH
-```
-
-`gdal` for `gdalwarp`/`raster2pgsql`, `postgis` for the ingestion
-utilities, `jq` for `metadata.json`, `envsubst` for the shell scripts.
-
-### 1. Bring up db-geo
-
-Run from the project root.
-
-> `down -v` destroys the data volume, and that volume is the only copy of
-> the ingested data on this machine. The sources are not in the repository
-> (the warped rasters land under the gitignored `out/elevation/`). Re-ingesting
-> reproduces an equivalent dataset from each source's current state, not a
-> byte-for-byte copy. Drop the `down -v` line to start an already-built
-> database.
-
-```sh
-docker compose -f infra/local/docker-compose.yml --env-file .env down -v
-docker compose -f infra/local/docker-compose.yml --env-file .env up -d db-geo
-
-export $(grep -v '^#' .env | xargs)
-
-until docker exec "$DB_GEO_CONTAINER" pg_isready -U postgres; do sleep 2; done
-```
-
-### 2. Ingest
-
-Order does not matter. Each reads the root `.env` itself.
-
-```sh
-deno task ingest:buildings
-deno task ingest:transportation
-deno task ingest:base
-deno task ingest:places
-deno task ingest:divisions
-
-chmod +x tool/elevation/setup_elevation.sh
-./tool/elevation/setup_elevation.sh
-```
-
-Each Overture tool's own top comment is the source of truth for its
-mechanics — which `--type` values it pulls, which subtypes it skips.
-
-### 3. Verify
-
-```sql
-SELECT 'overture_buildings' AS t, count(*) FROM overture_buildings
-UNION ALL SELECT 'overture_transportation', count(*) FROM overture_transportation
-UNION ALL SELECT 'overture_base_land', count(*) FROM overture_base_land
-UNION ALL SELECT 'overture_base_land_use', count(*) FROM overture_base_land_use
-UNION ALL SELECT 'overture_base_water', count(*) FROM overture_base_water
-UNION ALL SELECT 'overture_base_infrastructure', count(*) FROM overture_base_infrastructure
-UNION ALL SELECT 'overture_places', count(*) FROM overture_places
-UNION ALL SELECT 'overture_divisions', count(*) FROM overture_divisions
-UNION ALL SELECT 'overture_division_points', count(*) FROM overture_division_points;
-
-SELECT r_table_name, srid, scale_x, scale_y FROM raster_columns
-WHERE r_table_name = 'elevation_raster';
-```
-
-After a large ingest, `VACUUM ANALYZE` (or `VACUUM FULL ANALYZE` when
-downtime is acceptable) reclaims what drop-and-recreate leaves behind.
-
-## 4. The elevation pipeline
-
-The one script-driven ingest, in bash + `envsubst` + GDAL, at
-`tool/elevation/`:
-
-|                  |                                            |
-| :--------------- | :----------------------------------------- |
-| **Source**       | GEDTM30 v1.2, Cloud-Optimized GeoTIFF      |
-| **Working data** | `out/elevation/region/[CODE]/warped/*.tif` |
-| **Table**        | `elevation_raster`                         |
-| **Catalog**      | `elevation_catalog`                        |
-| **Schema**       | `01_elevation_schema.sql`                  |
-
-1. **Schema** — drops `elevation_raster`/`elevation_catalog`, runs
-   `init/01_elevation_schema.sql`. The raster table itself is created by
-   `raster2pgsql`.
-2. **Crop and reproject** — `gdalwarp` inside the container reads the
-   remote COG through `/vsicurl/`, crops to `bbox_4326` (`-te`, source
-   CRS), writes EPSG:3857 with DEFLATE.
-3. **Ingest** — `raster2pgsql -t 256x256` piped into `psql`, one row per
-   region file. The tile size matches the voxel grid's page size.
-4. **Finalize** — `ANALYZE`, then `elevation_catalog.status = COMPLETED`.
-
-### Backup
-
-```sh
-docker exec -t $DB_GEO_CONTAINER pg_dump -U $PGUSER -d $PGDATABASE \
-  -t public.elevation_raster -t public.elevation_catalog | gzip > elevation_backup.sql.gz
-
-gunzip -c elevation_backup.sql.gz | docker exec -i $DB_GEO_CONTAINER psql -U $PGUSER -d $PGDATABASE
-```
-
-The Overture tables need no backup: re-running their ingest tools rebuilds
-them from the public release.
-
-## 5. Production (Hetzner Cloud)
+## 3. Production (Hetzner Cloud)
 
 Forward search is the only feature that needs a live server. Everything
 else is baked to R2. One CX23 (2 vCPU / 4 GB / 40 GB) runs both servers, both
@@ -264,7 +127,7 @@ git pull
 docker compose up -d --build
 ```
 
-## 6. Cloudflare (the client, the tiles, and the relays)
+## 4. Cloudflare (the client, the tiles, and the relays)
 
 ### Wiring
 
@@ -343,7 +206,7 @@ gzipped, and HTML means the static-asset fallback answered a route the Worker
 should have claimed. An asset answers `model/gltf-binary` or `image/png` with
 no `content-encoding`.
 
-## 7. CI/CD
+## 5. CI/CD
 
 `.github/workflows/check-and-deploy.yml` runs on every push to main and every
 pull request. One workflow, three jobs, because a deploy must not be able to
@@ -351,25 +214,42 @@ start against a commit the gate never saw:
 
 | Job             | When                                                                 | What                                                                                                        |
 | :-------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------- |
-| `gate`          | always                                                               | `deno task check`, `test`, `lint`                                                                           |
-| `deploy-web`    | main, gate green                                                     | `deno task deploy`, then `deno task smoke https://plei.me`                                                  |
+| `gate`          | always; takes a build number on main                                 | `deno task check`, `test`, `lint`, then `./script/build_counter.ts`                                         |
+| `deploy-web`    | main, gate green, and `apps/`/`crates/`/`packages/`/`spec/` changed  | `deno task deploy` under that number, then `deno task smoke https://plei.me`                                |
 | `deploy-server` | main, gate green, and `crates/`/`infra/prod/`/the Dockerfile changed | ssh, `git reset --hard origin/main`, `docker compose up -d --build --force-recreate`, then the origin smoke |
 
-The two deploys are gated differently on purpose. Publishing to the edge is
-idempotent and reversible from the Cloudflare dashboard; reaching into the
-production VM over SSH is neither, so a push that could not have changed
-either image does not touch it.
+Both deploys are filtered on what a push touched, for different reasons.
+Reaching into the production VM over SSH is neither idempotent nor reversible,
+so it runs only when an image's own tree changed. Publishing to the edge is
+both — but the build number is an input to the bundle, so a docs-only push
+would otherwise ship bytes identical except for a number, spend a number on
+them, and make every edge cache fetch the lot again.
+
+Both filters are whitelists rather than lists of what to skip: the set that
+ships nothing is the one that keeps growing, and a root forgotten from a skip
+list is a deploy nobody asked for. Where a push has no usable base — a
+force-push, a `workflow_dispatch` — both deploy: a republish costs a cached
+build, and a skip that should not have happened leaves production behind
+main.
 
 `--force-recreate` is not decoration: the Caddyfile is a bind mount and a bind
 mount is read at start, so an `up --build` alone leaves a stale relay in front
 of a fresh server. On 2026-09-18 that looked like `/api/*` answering 404 from
 the wrong process rather than like a failure.
 
-`deploy-web` is `concurrency: deploy-web` across every ref, because the build
-number comes from one counter object in the bucket and two runs holding it at
-once would take the same one. A hand `deno task deploy` is outside that group —
-it is the fallback, not a second deployer, and running one while CI is mid-
-deploy is the one way to collide.
+`gate` and `deploy-web` share `concurrency: build-counter` across every ref,
+because the count is one object in the bucket and the take is read-add-write:
+two runs holding it together would take the same number. A main push therefore
+queues behind the one in front of it. A hand `./script/deploy.ts` is outside
+the group and takes no number at all — it publishes an unnumbered build, which
+is the fallback rather than a second deployer.
+
+**Every build of main is numbered, and only some are published.** That is a
+build lab's count: the gate takes a number once it is green, `deploy-web`
+publishes under it when the client's own tree changed, and a number nobody
+published is simply never seen. The counter is never reset — not from git,
+where a squash or a fresh clone would renumber it, and not from the workflow's
+own run number, which restarts at 1 if the workflow is recreated.
 
 ### Secrets
 
@@ -399,7 +279,7 @@ It never rebuilds terrain's land/ocean classification — it fetches
 `_meta/land_pages.json` from the bucket. Re-upload that object by hand (the
 publish-bucket skill's terrain step) if the classification is ever rebuilt.
 
-## 8. Licensing and attribution
+## 6. Licensing and attribution
 
 The notices below are required, shown in
 `apps/web/src/app/setting/section/attribution_section.tsx`. Check the
@@ -423,7 +303,7 @@ Still open: GEDTM30 also fuses JAXA's ALOS World 3D-30m. JAXA's terms page was
 not readable when this was written, so no claim is made here about its exact
 required wording rather than inventing one.
 
-## 9. Secrets
+## 7. Secrets
 
 DB passwords and `ADMIN_TOKEN` come from `.env` only. `DB_GEO_USER`,
 `DB_GEO_PASSWORD` and the rest must be exported before running any script.
