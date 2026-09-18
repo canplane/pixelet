@@ -27,7 +27,7 @@ WORKDIR /app
 # whole npm graph, which carries wrangler and the asset tools' sharp from
 # bare `npm:` specifiers the API never runs — 265 MB against 27 MB without
 # it, measured. The members' own import ranges pin what is fetched; the API
-# in production imports hono, postgres and socket.io and nothing else.
+# in production imports hono and postgres and nothing else.
 COPY deno.json ./
 RUN sed -i '/"apps\/web",/d' deno.json
 COPY packages ./packages

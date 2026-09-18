@@ -22,7 +22,6 @@
 
     // server framework
     "@hono/hono": "jsr:@hono/hono@^4.12.2",
-    "socket.io": "npm:socket.io@^4",
 
     // database
     "@db/postgres": "jsr:@db/postgres@^0.19.5"

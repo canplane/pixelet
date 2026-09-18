@@ -37,6 +37,31 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     packet on one machine under dev:remote, the fetched bytes whole in the
     console — into_core's view the suspect, not reproduced elsewhere.
 
+- **The server to Rust, and `apps/api` into three.** Decided 2026-09-18
+  ([the server in Rust](./20260918-the-server-in-rust-and-the-line-already-drawn.md)),
+  not started. The reason is not throughput: `pxl-spec` already carries the
+  encoders only the server uses, so one source can hold both ends of the
+  wire format instead of two. `apps/api` is three workloads wearing one
+  process, and they split along a line `infra/` had already drawn — one
+  database each: `pxl-geo` (search, db-geo's three tables), `pxl-geo-bake`
+  (the pipeline, the tool binaries, the dev tile server; db-geo whole,
+  offline), and later `pxl-api` (db-main, sessions and the realtime half).
+  That the line was never crossed is not a guess — `main_pool` is created,
+  probed with `select 1`, and queried by nothing. In order: socket.io out
+  (dead on both ends); `pxl-geo`; the pipeline, verified by baking real
+  pages through both implementations and diffing the bytes, since the
+  offline tool and the live endpoint are required to agree byte for byte;
+  the tool binaries, which is where the move pays (the terrain bake walks
+  the coverage single-threaded today); the dev tile server;
+  `[profile.server]` for `panic = "unwind"`, since the workspace's `abort`
+  would end a bake on one bad page and there is no catching it. The
+  Overture and asset ingests stay in Deno, and so does the TypeScript pair
+  — the byte diff needs both sides alive. Two standing constraints out of
+  it: external dependencies stay out of `pxl-spec` and `xpute-core`, which
+  have none and one, and `pxl-kernel` takes no WASM-only assumption, which
+  is what keeps a server running the kernel as the authority possible
+  later.
+
 ## P1
 
 - **One byte budget over everything drawn, paid for in LOD.** The phone's

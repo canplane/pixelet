@@ -307,7 +307,7 @@ export default defineConfig(({ mode }) => {
   const remoteOrigin = remote ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault) : "";
   const proxy = Object.fromEntries(DEV_PROXY_ROUTES.map((route) => [
     route.path,
-    remoteOrigin && !route.local_only ? { target: remoteOrigin, changeOrigin: true } : { target: apiBase, changeOrigin: true, ws: route.ws },
+    remoteOrigin ? { target: remoteOrigin, changeOrigin: true } : { target: apiBase, changeOrigin: true },
   ]));
 
   return {

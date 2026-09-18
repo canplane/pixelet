@@ -7,7 +7,6 @@ import { bodyLimit } from "@hono/hono/body-limit";
 import { compress } from "@hono/hono/compress";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { Readable } from "node:stream";
-import { Server as SocketIoServer } from "socket.io";
 
 import { type AppResources, make_app_resrcs } from "@/app/resource.ts";
 import { mount_app } from "@/app/mount.ts";
@@ -17,8 +16,6 @@ import { admin_auth } from "@/lib/admin_auth.ts";
 export type ServerContext = {
   server: ReturnType<typeof createServer>; // Node HTTP server (owns the listening port and request lifecycle)
   router: Hono; // HTTP router/app (routes requests; mounted behind server via fetch adapter)
-
-  io: SocketIoServer; // Socket.IO server (real-time transport bound to the same server)
 };
 
 function make_router(cfg: AppConfig): Hono {
@@ -88,7 +85,7 @@ function make_node_http_handler(cfg: AppConfig, router: Hono) {
 function make_listen(cfg: AppConfig, server: ReturnType<typeof createServer>) {
   return function listen(): void {
     server.listen(cfg.port, cfg.host, () => {
-      console.log(`[app] listening on ${cfg.host}:${cfg.port} (ws: ${cfg.socket_path})`);
+      console.log(`[app] listening on ${cfg.host}:${cfg.port}`);
     });
   };
 }
@@ -104,14 +101,8 @@ export async function main(): Promise<void> {
   const handle_node_request = make_node_http_handler(cfg, router);
   const server = createServer((req, res) => void handle_node_request(req, res));
 
-  // ---- socket.io ----
-  const io = new SocketIoServer(server, {
-    path: cfg.socket_path,
-    transports: ["websocket"],
-  });
-
   // ---- wiring ----
-  const ctx: ServerContext = { server, router, io };
+  const ctx: ServerContext = { server, router };
 
   let resrc: AppResources | null = null;
 
@@ -131,11 +122,6 @@ export async function main(): Promise<void> {
       await resrc?.dispose();
     } catch {
       // dispose() itself failing has no fallback — err below is the real signal
-    }
-    try {
-      io.close();
-    } catch {
-      // io was never listening yet in most failure paths; close() on that is a no-op that can still throw
     }
     try {
       server.close();

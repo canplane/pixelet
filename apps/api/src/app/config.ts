@@ -8,7 +8,6 @@ export type AppConfig = {
   max_body_sz: i32;
   port: i32;
   host: string;
-  socket_path: string;
   admin_token: string;
 };
 
@@ -20,10 +19,9 @@ export function make_cfg(): AppConfig {
 
   // keep literals centralized (override later if you want)
   const host = env.get("API_HOST") || "0.0.0.0";
-  const socket_path = env.get("SOCKET_PATH") || "/io";
 
   // gates /api/internal/* (cache invalidation, etc.) — see lib/admin_auth.ts
   const admin_token = env.must("ADMIN_TOKEN");
 
-  return { max_body_sz, port, host, socket_path, admin_token };
+  return { max_body_sz, port, host, admin_token };
 }
