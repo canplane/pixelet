@@ -246,7 +246,9 @@ comment that names a crate by name uses the same hyphenated form; only a
 The one exception is `kit/ui/shadcn/`, where no file carries a header —
 it's a flat, one-file-per-component shadcn tree, uniformly header-less rather
 than inconsistently so. Don't mass-add headers there, and don't read its
-absence as licence to drop them anywhere else.
+absence as licence to drop them anywhere else. What shadcn's own MIT licence
+asks for is in [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md), which is
+what lets that tree stay header-less.
 
 **Naming:** `snake_case` for files, functions, and locals; `PascalCase` for types;
 `SCREAMING_SNAKE_CASE` for module constants. **Directories are singular**:
