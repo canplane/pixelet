@@ -1,0 +1,11 @@
+[package]
+name = "pxl-overture"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+serde_json = "1"

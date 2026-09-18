@@ -1,0 +1,30 @@
+[package]
+name = "pxl-geo"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "pxl-geo"
+path = "src/main.rs"
+
+# The first third-party dependencies in this workspace, and they stay here:
+# xpute-core has none and pxl-spec has one, because those two compile to the
+# module and every byte of them ships.
+[dependencies]
+axum = "0.8"
+deadpool-postgres = "0.14"
+pxl-overture = { path = "../overture" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Raw SQL is what this reads, and PostGIS does the geometry, so there is no
+# ORM to want. tokio-postgres over sqlx because sqlx's compile-time checked
+# queries need a reachable database at build time, and `deno task check` has
+# to pass on a machine with no geo DB up.
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
+tower-http = { version = "0.6", features = ["compression-gzip"] }
+
+# `oneshot`, to drive the router in a test without a listener.
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

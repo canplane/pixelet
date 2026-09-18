@@ -17,8 +17,15 @@
   "exclude": ["**/.vite/", "**/dist/", "**/node_modules/"],
 
   "tasks": {
-    "dev": "sh -c \"(deno task dev:api) & (deno task dev:web) & wait\"",
-    "dev:api": "deno task --cwd apps/api dev",
+    // Three processes: the client, the search server a deployment runs, and
+    // the tile server it does not — a deployment serves baked tiles out of the
+    // bucket, and this bakes them on demand instead
+    // (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md). The
+    // `server` profile rather than a debug build: the rasterizer under one is
+    // slow enough to be felt on every page.
+    "dev": "sh -c \"(deno task dev:api) & (deno task dev:tiles) & (deno task dev:web) & wait\"",
+    "dev:api": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo -- \"$@\"' --",
+    "dev:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --features serve --bin serve_tiles -- \"$@\"' --",
     "dev:web": "deno task --cwd apps/web dev",
     // Client only, tiles served from the published deployment — no Docker, no
     // database, no API process. Not usable for bake work: a published tile
@@ -26,10 +33,13 @@
     "dev:remote": "deno task --cwd apps/web dev:remote",
     "preview:remote": "deno task --cwd apps/web preview:remote",
 
-    // Bakes every land page in the geo DB's coverage into ./out/terrain/<version>.
-    // Needs the geo DB up; resumable. Procedure and verification are in
+    // The three offline bakes, all resumable and all needing the geo DB up.
+    // terrain walks the coverage and classifies land against ocean; poi and
+    // geocode reuse the land list it writes. Procedure and verification are in
     // .agents/skills/bake-tiles/SKILL.md; uploading is publish-bucket.
-    "bake:tiles": "deno run -A --env=.env apps/api/src/bake/terrain/tool/bake_tiles.ts",
+    "bake:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_tiles -- \"$@\"' --",
+    "bake:poi": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_poi_tiles -- \"$@\"' --",
+    "bake:geocode": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_geocode_tiles -- \"$@\"' --",
 
     // Builds the client and publishes the Cloudflare Worker that serves it
     // along with the R2 tiles. Uploading the tiles themselves is separate —
@@ -54,18 +64,31 @@
     "check:web": "deno task --cwd apps/web check",
     "check:shared": "deno check packages/pxl/shared/src/**/*.ts",
     "check:xpute": "deno check packages/xpute/core/src/**/*.ts",
-    // The Rust core, for the target it ships to. Clippy type-checks as it
-    // lints, and a warning fails it, as a type error fails the others.
-    // Twice, because one run cannot cover both. The wasm32 pass lints what
-    // ships; it builds the libraries only, so a `.test.rs` — `#[cfg(test)]`,
-    // and never compiled for a target whose tests cannot link — can be broken
-    // by a type change and every gate here still pass, which happened twice on
-    // 09-17. The host pass compiles every target, tests included, and runs
-    // none of them. The same three crates `test:rust` names: pxl-wasm is
-    // `core::arch::wasm32` throughout and has no host build at all.
-    // Formatting is checked first, against crates/rustfmt.toml; the generated
-    // `.rs` files pass it because script/spec.ts writes them through rustfmt.
-    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel",
+    // The Rust, for the targets it ships to. Clippy type-checks as it lints,
+    // and a warning fails it, as a type error fails the others. Three passes,
+    // because no one run covers all of it.
+    //
+    // The wasm32 pass lints what the client ships, and names its crates rather
+    // than taking the workspace: the server's do not build for wasm32 and are
+    // not meant to. It builds the libraries only, so a `.test.rs` —
+    // `#[cfg(test)]`, and never compiled for a target whose tests cannot link
+    // — can be broken by a type change and every gate here still pass, which
+    // happened twice on 09-17; the host pass below is what covers that, and it
+    // compiles every target, tests included, and runs none of them. pxl-wasm
+    // is `core::arch::wasm32` throughout and has no host build at all, so it
+    // appears in the first pass and not the second.
+    //
+    // The server's own pass is separate because it is a host binary: nothing
+    // of it reaches the module, and nothing of the module's targets reaches it.
+    // Twice, because the bake crate has a feature: the first pass is what a
+    // build of the bake tools compiles, the second adds the dev tile server,
+    // and a lint run under only one of them would leave the other's code
+    // unlinted until it broke.
+    //
+    // Formatting is checked first, over the whole workspace, against
+    // crates/rustfmt.toml; the generated `.rs` files pass it because
+    // script/spec.ts writes them through rustfmt.
+    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-overture -p pxl-geo -p pxl-geo-bake -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel",
     // The specs are JSON; the TypeScript and the Rust that carry them are
     // written from it (script/spec.ts), and the gate fails on a stale one.
     "check:spec": "deno run -A script/spec.ts",
@@ -81,7 +104,7 @@
     "test:xpute": "deno test -A packages/xpute/core/src",
     // The Rust core natively, where naga compiles every shader and holds
     // each pipeline's record to it (crates/pxl/render/src/frame/shader/record.rs).
-    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel",
+    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-overture -p pxl-geo -p pxl-geo-bake",
 
     "lint": "deno lint",
     "fmt": "deno fmt"

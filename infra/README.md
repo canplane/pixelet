@@ -22,8 +22,10 @@ databases.
 | **db-main** | 5432:5432      | nothing yet       | PostgreSQL 16  |
 | **db-geo**  | 5433:5432      | every table in §2 | PostGIS 16-3.4 |
 
-`apps/api/src/app/resource.ts` probes db-main at startup, so `DB_MAIN_URL`
-is required even though no query reads it.
+db-main holds nothing and nothing reads it: the search server takes
+`DB_GEO_URL` alone, and the application server that will own db-main does not
+exist yet
+([the server in Rust](../issue/20260918-the-server-in-rust-and-the-line-already-drawn.md)).
 
 - Local access: `localhost:5433`
 - Container access: `db-geo:5432`
@@ -211,7 +213,11 @@ are unrelated to this project.
    reaches the origin through a proxied record.
 
 5. **Repo** — `git clone` or `rsync` the tree onto the VM. The Dockerfile's
-   build context is the whole repo, not just `apps/api/`.
+   build context is the whole repo: the server is `crates/pxl/geo` and its
+   dependencies are path dependencies in the same Cargo workspace, so
+   `crates/` has to be present whole for Cargo to resolve it. The file is
+   still `apps/api/Dockerfile` — it kept its path when the server stopped
+   being TypeScript — and builds none of apps/api.
 
 6. **Secrets**
    ```sh
@@ -270,10 +276,16 @@ reverse-proxied whole to `API_ORIGIN` (`apps/web/wrangler.jsonc`'s `vars`,
 root the same way, both from `apps/web/src/lib/env/route.ts`. Nothing is
 rewritten in transit: client, relay and origin use identical paths.
 
-Neither relay reads past the root, so a new live route is a change to
-`apps/api` alone. Every route must be mounted under `/api`
-(`apps/api/src/app/mount.ts`) — a bare path is unreachable in production,
-where the static-asset fallback answers it with `index.html`.
+Neither relay reads past the root, so a new live route is a change to the
+server alone. Every route must be mounted under `/api` — a bare path is
+unreachable in production, where the static-asset fallback answers it with
+`index.html`.
+
+Locally there are two servers under that root rather than one:
+`deno task dev` starts `pxl-geo` on 3000 for search and `serve_tiles` on 3001
+for the tiles, and the dev proxy splits on `/api/tiles/` — the same prefix the
+Worker splits on to reach the bucket. A deployment has no tile server at all,
+because the bucket answers that prefix.
 
 The root is reserved on the server's side because the app routes on paths
 of its own; giving the app the prefix instead would put one in every URL a

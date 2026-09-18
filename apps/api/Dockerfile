@@ -1,40 +1,37 @@
-# @pxl/api/Dockerfile
+# pxl-geo's image.
 #
-# Build context is the repo ROOT (docker build -f apps/api/Dockerfile .),
-# not apps/api/ itself — apps/api resolves @pxl/shared/ and @xpute/core/
-# through the root deno.json's own workspace import map, not published
-# packages, so the image needs the whole workspace tree to resolve those
-# imports at all. .dockerignore strips node_modules/.git/out/dist before
-# any of this ever reaches the build.
-FROM denoland/deno:2.7.11
-
-WORKDIR /app
-
-# No npm-style two-phase "install deps, then copy source" cache split —
-# the vite build below walks the real local import graph (packages/pxl/shared,
-# packages/xpute/core, apps/api/src/**) to know which third-party
-# jsr/npm specifiers it even needs, so the source has to be present
-# before it can run at all.
+# Build context is the repo ROOT (docker build -f apps/api/Dockerfile .), not
+# apps/api — the server is `crates/pxl/geo` and its dependencies are path
+# dependencies inside the same Cargo workspace, so the whole `crates/` tree has
+# to be present for Cargo to resolve the workspace at all. .dockerignore strips
+# node_modules/.git/out/dist before any of this reaches the build.
 #
-# Only what the API's own graph imports is fetched, two things make sure of
-# it. apps/web is taken out of the workspace inside the image: its deno.json
-# used to be copied in to satisfy the root's member list, and that alone had
-# `nodeModulesDir: "auto"` install every npm package the web client declares
-# — React, three.js, Tailwind's native binary, lottie — into an image that
-# runs none of them; a build failed on one of those downloads ("error
-# reading a body from connection" on lottie-web, 2026-09-13). And deno.lock
-# is not copied: with a lock present, node_modules is filled from the lock's
-# whole npm graph, which carries wrangler and the asset tools' sharp from
-# bare `npm:` specifiers the API never runs — 265 MB against 27 MB without
-# it, measured. The members' own import ranges pin what is fetched; the API
-# in production imports hono, postgres and socket.io and nothing else.
-COPY deno.json ./
-RUN sed -i '/"apps\/web",/d' deno.json
-COPY packages ./packages
-COPY apps/api ./apps/api
+# This file still lives under apps/api because that is where infra/prod's
+# compose file points and where the deploy procedure in infra/README.md names
+# it. It builds none of apps/api's TypeScript.
 
-RUN deno task --cwd apps/api build
+FROM rust:1.94-slim-trixie AS build
+WORKDIR /src
+
+# Only `crates/` is copied: pxl-geo reads nothing outside it, and the generated
+# files it does read are committed rather than produced at build time.
+COPY crates ./crates
+
+# The server profile, not release: a profile belongs to the workspace root and
+# release is the module's, which aborts on panic. Off the browser that is
+# wrong — a panicking request should take the request down and not the process.
+# See crates/Cargo.toml.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/src/crates/target \
+    cargo build --manifest-path crates/Cargo.toml --profile server -p pxl-geo \
+ && cp crates/target/server/pxl-geo /usr/local/bin/pxl-geo
+
+# glibc and nothing else. No shell, no package manager, and no CA bundle: the
+# only thing this connects to is db-geo, over the compose file's own internal
+# network and without TLS, so there is no certificate to verify and nothing for
+# a shell in the image to be useful for.
+FROM gcr.io/distroless/cc-debian12
+COPY --from=build /usr/local/bin/pxl-geo /usr/local/bin/pxl-geo
 
 EXPOSE 3000
-
-CMD ["deno", "run", "-A", "apps/api/dist/main/server.js"]
+CMD ["pxl-geo"]

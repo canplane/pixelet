@@ -37,6 +37,48 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     packet on one machine under dev:remote, the fetched bytes whole in the
     console — into_core's view the suspect, not reproduced elsewhere.
 
+- **The server to Rust, and `apps/api` into three.** Decided and begun
+  2026-09-18
+  ([the server in Rust](./20260918-the-server-in-rust-and-the-line-already-drawn.md)).
+  In: socket.io out; `crates/pxl/geo` answering `/api/search` off
+  `DB_GEO_URL` alone and agreeing with the TypeScript over 311 results against
+  the same database; `crates/pxl/geo-bake` carrying the terrain pipeline and
+  baking 114 pages byte for byte what the TypeScript bakes, coastal pages
+  among them, and the same 114 again end to end once it read its own source;
+  `bake_tiles`, writing the same tile set as the TypeScript's at 45 ms a tile
+  against 250; `serve_tiles`, the four dev tile routes over the same
+  pipeline, answering what the TypeScript answers; `pxl-overture` for what
+  both servers know about Overture's Places and Divisions; and
+  `[profile.server]`; and `bake_poi_tiles` and `bake_geocode_tiles` over one
+  shared walk, writing what the TypeScript writes; and the cutover — a 51 MB
+  distroless image of the Rust binary, db-main out of the server's
+  environment, and `deno task dev` starting `pxl-geo` and `serve_tiles` with
+  the proxy splitting on `/api/tiles/` the way the Worker does. Not yet
+  deployed: `docker compose up -d --build` on the VM is what makes it live.
+  Left, and not part of the move: removing apps/api's TypeScript server once
+  the Rust has served for a while. The reason is not throughput: `pxl-spec` already carries the
+  encoders only the server uses, so one source can hold both ends of the
+  wire format instead of two. `apps/api` is three workloads wearing one
+  process, and they split along a line `infra/` had already drawn — one
+  database each: `pxl-geo` (search, db-geo's three tables), `pxl-geo-bake`
+  (the pipeline, the tool binaries, the dev tile server; db-geo whole,
+  offline), and later `pxl-api` (db-main, sessions and the realtime half).
+  That the line was never crossed is not a guess — `main_pool` is created,
+  probed with `select 1`, and queried by nothing. In order: socket.io out
+  (dead on both ends); `pxl-geo`; the pipeline, verified by baking real
+  pages through both implementations and diffing the bytes, since the
+  offline tool and the live endpoint are required to agree byte for byte;
+  the tool binaries, which is where the move pays — the full terrain set
+  extrapolates to about 32m against about 3h; the dev tile server;
+  `[profile.server]` for `panic = "unwind"`, since the workspace's `abort`
+  would end a bake on one bad page and there is no catching it. The
+  Overture and asset ingests stay in Deno, and so does the TypeScript pair
+  — the byte diff needs both sides alive. Two standing constraints out of
+  it: external dependencies stay out of `pxl-spec` and `xpute-core`, which
+  have none and one, and `pxl-kernel` takes no WASM-only assumption, which
+  is what keeps a server running the kernel as the authority possible
+  later.
+
 ## P1
 
 - **One byte budget over everything drawn, paid for in LOD.** The phone's
@@ -79,7 +121,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   header, a NUL and word padding (the POI repack: 60 MB gzipped against
   51 MB of JSON) and one node object at encode.
 - **XTP encoder without per-leaf objects.** A node object per leaf and a
-  closure per scalar at encode; mechanical, format-unchanged. Measured on
+  closure per scalar at encode; mechanical, format-unchanged. The bake is not
+  a beneficiary and should not be used to justify it: packing a page's source
+  is 2.0 ms in TypeScript against 1.8 in Rust
+  ([where the bake spends its time](./experiment/20260918-where-the-bake-spends-its-time.md)),
+  because a page is four large typed arrays and a few thousand short tuples —
+  the per-leaf cost is real where the packets are tiny and the call rate is
+  millions, which is the rings. Measured on
   the rings (2026-09-14,
   [experiment/20260914-xtp-by-fixed-shape.md](./experiment/20260914-xtp-by-fixed-shape.md)):
   a ray query is 709 ns through TreeView and TreeReader and 215 ns with the
