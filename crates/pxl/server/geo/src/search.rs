@@ -52,9 +52,8 @@ fn parse_limit(raw: Option<&str>) -> u32 {
 }
 
 pub fn routes(pool: Pool) -> Router {
-    // spec/route.json's SEARCH_URL — the branch the relays forward to this
-    // server rather than to the bucket.
-    Router::new().route("/geo/search", get(search)).with_state(pool)
+    // The branch the relays forward to this server rather than to the bucket.
+    Router::new().route(pxl_spec::route::SEARCH_URL, get(search)).with_state(pool)
 }
 
 async fn search(State(pool): State<Pool>, Query(params): Query<Params>) -> Response {

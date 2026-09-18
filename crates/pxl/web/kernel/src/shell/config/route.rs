@@ -1,14 +1,14 @@
 // pxl-kernel/shell/config/route.rs
 
 //! Every same-origin route the app requests. The roots and branches are
-//! spec/route.json's, written into route_spec.rs; what is here is how a URL is
-//! built out of them.
+//! spec/route.json's, written into `pxl-spec`'s own `route`; what is here is
+//! how a URL is built out of them.
 
 use core::fmt;
 
 pub use pxl_spec::bake::published::{BakeKind as TileKind, PUBLISHED_VERSION};
 
-pub use crate::shell::config::route_spec::{ASSET_PREFIX, GEO_PREFIX, SEARCH_URL, TILE_PREFIX, TILE_ROOT};
+pub use pxl_spec::route::{ASSET_PREFIX, GEO_PREFIX, SEARCH_URL, TILE_PREFIX, TILE_ROOT};
 
 /// `<root>/<kind>[/<version>]`, joined with a page index by the caller —
 /// written where the URL is written.

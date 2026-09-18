@@ -22,6 +22,7 @@ use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use axum::Router;
 use pxl_server::{admin_auth, config, db};
+use pxl_spec::route::GEO_INTERNAL;
 use tower_http::compression::CompressionLayer;
 
 fn router(cfg: &config::Config, pool: deadpool_postgres::Pool) -> Router {
@@ -43,7 +44,7 @@ fn router(cfg: &config::Config, pool: deadpool_postgres::Pool) -> Router {
 
     Router::new()
         .merge(search::routes(pool))
-        .nest("/geo/internal", internal)
+        .nest(GEO_INTERNAL, internal)
         // Search answers JSON, which compresses well and which the browser
         // decodes transparently.
         .layer(CompressionLayer::new().gzip(true))

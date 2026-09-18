@@ -28,6 +28,7 @@ use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use axum::Router;
 use pxl_server::{admin_auth, config, db};
+use pxl_spec::route::API_INTERNAL;
 use tower_http::compression::CompressionLayer;
 
 fn router(cfg: &config::Config, _pool: deadpool_postgres::Pool) -> Router {
@@ -41,7 +42,7 @@ fn router(cfg: &config::Config, _pool: deadpool_postgres::Pool) -> Router {
         .layer(axum::middleware::from_fn_with_state(cfg.admin_token.clone(), admin_auth::admin_auth));
 
     Router::new()
-        .nest("/api/internal", internal)
+        .nest(API_INTERNAL, internal)
         .layer(CompressionLayer::new().gzip(true))
         .layer(DefaultBodyLimit::max(cfg.max_body_sz))
 }

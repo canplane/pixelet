@@ -37,6 +37,7 @@ use axum::routing::{get, post};
 use axum::Router;
 use postgres::{Client, NoTls};
 use pxl_spec::bake::format::encode_poi_page;
+use pxl_spec::route::{ASSET_ROOT, GEO_INTERNAL, TILE_ROOT};
 use pxl_spec::space::indexer::L3_SHAMT;
 use pxl_spec::space::pvf3::core::IVEC_WORD_MASK;
 use pxl_spec::space::pvf3::ivec::IVec;
@@ -315,14 +316,16 @@ fn run() -> Result<(), String> {
         admin_token: std::env::var("ADMIN_TOKEN").ok().filter(|t| !t.is_empty()),
     });
 
+    // The roots and branches are spec/route.json's, as the client's and the
+    // relays' are; what each one carries past them is this server's.
     let router = Router::new()
-        .route("/geo/tiles/terrain/{page_idx}", get(terrain))
-        .route("/geo/tiles/poi/{page_idx}", get(poi))
-        .route("/geo/tiles/geocode/{page_idx}", get(geocode))
+        .route(&format!("{TILE_ROOT}/terrain/{{page_idx}}"), get(terrain))
+        .route(&format!("{TILE_ROOT}/poi/{{page_idx}}"), get(poi))
+        .route(&format!("{TILE_ROOT}/geocode/{{page_idx}}"), get(geocode))
         // Its own root: an asset is neither server's, and its URL is its bucket
         // key with a leading slash.
-        .route("/asset/{hash}", get(asset))
-        .route("/geo/internal/world/{kind}/cache/invalidate", post(invalidate))
+        .route(&format!("{ASSET_ROOT}/{{hash}}"), get(asset))
+        .route(&format!("{GEO_INTERNAL}/world/{{kind}}/cache/invalidate"), post(invalidate))
         .with_state(app);
 
     tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| e.to_string())?.block_on(async move {

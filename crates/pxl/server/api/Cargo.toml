@@ -12,6 +12,7 @@ path = "src/main.rs"
 axum = "0.8"
 deadpool-postgres = "0.14"
 pxl-server = { path = ".." }
+pxl-spec = { path = "../../spec" }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tokio-postgres = "0.7"
 tower-http = { version = "0.6", features = ["compression-gzip"] }
