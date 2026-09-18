@@ -74,7 +74,7 @@
     // Formatting is checked first, over the whole workspace, against
     // crates/rustfmt.toml; the generated `.rs` files pass it because
     // script/spec.ts writes them through rustfmt.
-    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel",
+    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo -p pxl-geo-bake -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel",
     // The specs are JSON; the TypeScript and the Rust that carry them are
     // written from it (script/spec.ts), and the gate fails on a stale one.
     "check:spec": "deno run -A script/spec.ts",
@@ -90,7 +90,7 @@
     "test:xpute": "deno test -A packages/xpute/core/src",
     // The Rust core natively, where naga compiles every shader and holds
     // each pipeline's record to it (crates/pxl/render/src/frame/shader/record.rs).
-    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo",
+    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo -p pxl-geo-bake",
 
     "lint": "deno lint",
     "fmt": "deno fmt"

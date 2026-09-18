@@ -993,6 +993,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pxl-geo-bake"
+version = "0.0.0"
+dependencies = [
+ "pxl-spec",
+ "xpute-core",
+]
+
+[[package]]
 name = "pxl-kernel"
 version = "0.0.0"
 dependencies = [

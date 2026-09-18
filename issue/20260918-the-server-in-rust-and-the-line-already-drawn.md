@@ -390,18 +390,57 @@ mounted under that prefix today, which is exactly the condition under which
 this is invisible; it was found by a test written to pin the claim, not by
 reading.
 
+## What step 3 turned up
+
+**The pipeline agrees byte for byte, over 114 pages.** Both implementations
+were fed the _same_ source packet rather than each querying for itself: the
+source statements carry no ORDER BY, so two runs can see the same rows in a
+different order, and a difference in the tile would then say nothing about the
+pipeline. `dump_page_source.ts` writes a page's packet and the TypeScript's
+tile; `cargo run -p pxl-geo-bake --example bake_from_packet` bakes the same
+packet; the tiles are compared whole. 4,203,672 bytes each, identical for a
+spread of fourteen across the coverage, sixty at random, and forty coastal —
+the last picked deliberately, by running the coast query alone over 2,500 land
+pages and keeping the 355 whose ocean does not cover the whole envelope, since
+without them the sea fill, the carve and the land/water mask never run at all.
+
+**A `double precision` column reaches the packet as a string.** The Deno
+driver decodes those as text — the same thing forward search had to undo on
+its own coordinates — so `overture_buildings.height` is a `str` node where the
+row type says `f64`, while `num_floors`, an `integer`, is a number. The
+TypeScript never noticed, because the only thing it does with the value is
+`Math.max(0, x)`, and that coerces. Reading it strictly is what turned it up:
+the first fourteen pages happened to carry no populated height, and twenty-two
+of the next sixty failed outright. Nothing downstream reads the result —
+`FeatureComputed::height` reaches no rasterizer — so this was a decode that had
+to accept what the packet holds, not a difference in any tile.
+
+**Two pieces of TypeScript machinery did not come across, and neither changes
+a byte.** The normalizer's module-level `V3` arena exists to keep a per-page
+burst of small objects off JavaScript's heap; a `V3` here is `[f64; 3]` by
+value. The rasterizer's `XS_SCRATCH` is the same thing for its scanline
+crossings. What did have to come across exactly is subtler: that the rank sort
+is stable, so equal-ranked features keep the order their rows arrived in and
+paint over each other the same way; that a typed array's `sort` is numeric
+where a plain array's is lexicographic; and that `j` trails `i` by one around a
+ring, which `j = i++` says and a first port gets wrong.
+
 ## Where it stands
 
-**Steps 1, 2 and 6 built** 09-18, verified against a live geo DB as above.
+**Steps 1, 2, 3 and 6 built** 09-18, verified against a live geo DB as above.
 `crates/pxl/geo` is 954 lines including its tests, takes `DB_GEO_URL` alone,
 and `apps/api` still serves — the Dockerfile, the compose file and
 infra/README change when the deploy cuts over, not before. `check:rust` is
 three passes now: the client's crates for wasm32 by name, the server's for the
 host, then the host check with every target.
 
-Steps 3–5 are the work left; 7 and 8 wait on a second server existing.
+Steps 4 and 5 are the work left — the tool binaries and the dev tile server,
+both of which need the source half (the five statements and the packet they
+pack into) that step 3 did not move. 7 and 8 wait on a second server existing.
 
-Open from step 2, to settle in step 3: the Overture category map is wanted by
-both search and the POI bake, and it sits in `pxl-geo` with one consumer. With
-two in hand the choice is `pxl-spec` (which ships the table to the client for
-nothing) or a small crate of its own.
+Still open, and now to settle in step 4: the Overture category map. It is
+search's and the POI bake's, and the terrain pipeline never touches it, so step
+3 did not force the question after all — the second consumer arrives with
+`bake_poi_tiles`. `pxl-spec` is out: the TypeScript keeps the table on the
+provider side rather than in `@pxl/shared`, and an Overture vocabulary is not
+the spec. That leaves a small crate of its own, decided when there are two.
