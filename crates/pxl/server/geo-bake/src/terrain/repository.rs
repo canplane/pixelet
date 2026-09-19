@@ -9,7 +9,6 @@ use postgres::{Client, Statement};
 use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, XY_CELL_PER_M};
 use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857::BBox3857;
-use xpute_core::kit::array::U8Array;
 
 /// The elevation raster, clipped and resampled onto this page's own grid.
 ///
@@ -158,13 +157,9 @@ pub struct PageSource {
 
 /// The five statements, prepared once against one connection.
 ///
-/// The TypeScript reaches the same place through `PREPARE`/`EXECUTE` with
-/// literal arguments, because its driver re-parsed and re-planned an ordinary
-/// parameterized query every call — a bbox lookup against `overture_buildings`
-/// alone spent ~34 ms of its ~44 ms in planning, and preparing once per
-/// physical connection cut that to ~2–3 ms. Here that is what a prepared
-/// statement is, so the workaround and its hand-built literal list go away
-/// rather than being ported.
+/// An ordinary parameterized query re-planned every call spends ~34 ms of a
+/// ~44 ms bbox lookup against `overture_buildings` in planning; prepared once
+/// per physical connection, the lookup is ~2–3 ms.
 pub struct TerrainRepository {
     ele: Statement,
     buildings: Statement,
@@ -256,6 +251,6 @@ impl TerrainRepository {
     }
 }
 
-fn wkb(row: &postgres::Row) -> U8Array {
-    U8Array::from(row.get::<_, &[u8]>("geom_wkb"))
+fn wkb(row: &postgres::Row) -> Box<[u8]> {
+    row.get::<_, &[u8]>("geom_wkb").into()
 }

@@ -1,6 +1,8 @@
 // pxl-render/mesh/paint/palette/tex_array.rs
 
-use pxl_spec::cell::{block_cubes, cube_types};
+use pxl_spec::cell::cube_types;
+
+use pxl_spec::cell::object::block_cubes;
 
 use crate::mesh::paint::palette::shader_meta::GROUND_LAYER_META;
 

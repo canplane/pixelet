@@ -25,7 +25,7 @@
 //! Shares nothing across calls itself. The frame-wide pool is sched/tick.rs's
 //! FrameBudget, which calls this with whatever the frame has left.
 
-use crate::sys::clock::now;
+use crate::clock::now;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BudgetOpts {

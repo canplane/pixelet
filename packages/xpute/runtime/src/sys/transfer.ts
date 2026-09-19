@@ -15,8 +15,8 @@
  * buffers not away are the worker credits the central scheduler grants.
  */
 
-import type { f64, u32 } from "@xpute/core/kit/word.ts";
-import { Vector } from "@xpute/core/ds/arena.ts";
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import { Vector } from "@xpute/core/collection/arena.ts";
 
 const NONE = 0;
 const HOME = 1;

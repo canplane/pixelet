@@ -23,13 +23,14 @@
 use core::fmt;
 use core::mem::{offset_of, size_of};
 
-use pxl_spec::fetch::FetchFail;
-use xpute_runtime::sys::mem::alloc;
+use xpute_runtime::abi::fetch::FetchFail;
+use xpute_runtime::mem::heap::alloc;
 
+use crate::global::Global;
+use crate::host::now;
 use crate::io::demand::{DemandKey, Phases};
 use crate::sched::ledger::spec::{CATEGORY_NAMES, FRAME, LIMITS, OUTCOME_NAMES, PHASE_NAMES, TASK, TASK_PHASE_NAMES, WORST};
 use crate::sched::tick::PHASES;
-use crate::sys::global::{now, Global};
 
 pub use crate::sched::ledger::spec::CENSUS_TAGS;
 

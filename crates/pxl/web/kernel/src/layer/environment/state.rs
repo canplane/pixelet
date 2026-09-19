@@ -9,18 +9,18 @@
 use pxl_render::look::color::linear_rgb;
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS, NIGHT, THEME_FLOATS};
 use pxl_spec::space::adapter::epsg4326;
-use pxl_spec::space::pvf3::pvf3::PVF3;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::navigation::bootstrap::FALLBACK_G4326;
+use crate::global::Global;
+use crate::host::{now, wall_now};
+use crate::kernel::kernel;
 use crate::layer::environment::celestial_position::{moon_position, sun_position};
 use crate::layer::environment::config::{light_cfg, render_cfg};
 use crate::layer::environment::theme::{themes, WorldThemeKey};
 use crate::layer::environment::theme_clock::theme_key;
 use crate::shell::map_store::map_store;
-use crate::sys::global::{now, Global};
-use crate::sys::host::wall_now;
-use crate::sys::kernel::kernel;
 use crate::world::change::{request_world_tick, wake_at};
 use crate::world::chunk::table::Frame;
 
@@ -84,7 +84,7 @@ pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: WorldThemeKey) {
 
 struct Environment {
     theme_key: Option<WorldThemeKey>,
-    observed_centre: Option<PVF3>,
+    observed_centre: Option<Pvf3>,
     observed_lat: f64,
     observed_lon: f64,
     clock_frame_at: f64,

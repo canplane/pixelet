@@ -14,9 +14,11 @@
 # same tables.
 #
 # pxl/spec is what both ends follow, and xpute/core what both are built on.
-# Nothing else crosses: no third-party dependency belongs in either, whose
-# every byte ships to the client, and nothing in the client's crates may
-# assume WebAssembly — pxl/wasm is the one crate that does.
+# Nothing else crosses: a third-party dependency in either ships every byte
+# to the client and is read as this tree's own code, so each one below is
+# there because it was held to what it replaced and did not differ — and
+# nothing in the client's crates may assume WebAssembly; pxl/wasm is the one
+# crate that does.
 
 [workspace]
 resolver = "2"
@@ -33,6 +35,27 @@ members = [
   "pxl/server/api",
   "pxl/server/geo-bake",
 ]
+
+# The transcendental functions, FreeBSD msun's as the libm crate carries
+# them, so a double is the same bits on the server, in the module and in a
+# test, whichever libm the platform has. Pinned: 0.2.12 replaces `cbrt` with
+# a correctly rounded one, which is not what V8's `Math.cbrt` computes and
+# not what the pages were baked with — 0.2.11 agrees with both on every
+# recorded input.
+[workspace.dependencies]
+libm = "=0.2.11"
+# FNV-1a, 64 bits: what a POI page keys a record by (id_hash) and the
+# kernel keys a demand by. Over UTF-8 bytes, the same as script/spec.ts's.
+fnv = "1"
+# base64url without padding: the blob a placement set is kept under in the
+# shell's storage. hex: the tests' reading of a golden packet.
+base64 = "0.22"
+hex = "0.4"
+# A set whose position is the value: insert appends, swap_remove moves the
+# last entry into the hole, and a caller keeps its own lanes at the same
+# positions. What a change log keys a topic by, a page table a page by, a
+# badge table a place by — hashed by the FNV above, so no random state.
+indexmap = "2"
 
 [workspace.package]
 edition = "2021"

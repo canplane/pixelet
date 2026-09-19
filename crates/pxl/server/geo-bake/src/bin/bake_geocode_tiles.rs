@@ -25,7 +25,7 @@ use std::process::ExitCode;
 use postgres::{Client, NoTls};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 
-use pxl_geo_bake::geocode::provider::overture_provider::GeocodeProvider;
+use pxl_geo_bake::geocode::provider::overture::GeocodeProvider;
 use pxl_geo_bake::page::bake::{self, Bake};
 use pxl_geo_bake::page::walk::Page;
 use pxl_geo_spec::table;

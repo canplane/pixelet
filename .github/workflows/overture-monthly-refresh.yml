@@ -90,7 +90,7 @@ jobs:
 
       # The POI page is an XTP packet (crates/pxl/spec/src/bake/format.rs,
       # encode_poi_page) since v3; the version here must match
-      # PUBLISHED_VERSION.poi in spec/bake/published.json.
+      # PUBLISHED_VERSION.poi in spec/pxl/spec/bake/published.json.
       #
       # The `server` profile rather than release: a profile belongs to the
       # workspace root and release is the module's, which aborts on panic — one

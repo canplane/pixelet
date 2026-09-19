@@ -11,24 +11,24 @@ use crate::space::pvf3::{fvec, ivec};
 /// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
 const GOLDEN: &str = include_str!("../../../golden/spec/space/pvf3/pvf3.tsv");
 
-fn tuple(v: &Golden, k: &str) -> PVF3 {
-    PVF3 {
+fn tuple(v: &Golden, k: &str) -> Pvf3 {
+    Pvf3 {
         i: v.u64(&format!("{k}.i")),
-        f: v.u64(&format!("{k}.f")),
+        f: v.u32(&format!("{k}.f")),
     }
 }
 
 const SHIFTS: [i32; 11] = [-40, -24, -17, -8, -1, 0, 1, 7, 8, 16, 23];
 
 macro_rules! words {
-    ($v:ident, $m:ident, $base:literal, $with_signed:expr) => {{
+    ($v:ident, $m:ident, $w:ty, $base:literal, $with_signed:expr) => {{
         $v.each(concat!($base, ".unary"), |k| {
-            let w = $v.u64(&format!("{k}.w"));
+            let w = $v.u64(&format!("{k}.w")) as $w;
             assert_eq!($m::X(w), $v.i64(&format!("{k}.X")), "{k}.X");
             assert_eq!($m::Y(w), $v.i64(&format!("{k}.Y")), "{k}.Y");
             assert_eq!($m::Z(w), $v.i64(&format!("{k}.Z")), "{k}.Z");
             assert_eq!($m::repr(w), $v.s(&format!("{k}.repr")), "{k}.repr");
-            assert_eq!($m::not(w), $v.u64(&format!("{k}.not")), "{k}.not");
+            assert_eq!($m::not(w), $v.u64(&format!("{k}.not")) as $w, "{k}.not");
             for (j, &sh) in SHIFTS.iter().enumerate() {
                 let want = $v.s(&format!("{k}.sh.{j}"));
                 let got = caught(|| $m::sh(w, sh)).map_or("throw".to_string(), |x| x.to_string());
@@ -42,8 +42,8 @@ macro_rules! words {
             $with_signed(k, w);
         });
         $v.each(concat!($base, ".binary"), |k| {
-            let (a, b) = ($v.u64(&format!("{k}.v")), $v.u64(&format!("{k}.w")));
-            let u = |name: &str, got: u64| assert_eq!(got, $v.u64(&format!("{k}.{name}")), "{k}.{name}");
+            let (a, b) = ($v.u64(&format!("{k}.v")) as $w, $v.u64(&format!("{k}.w")) as $w);
+            let u = |name: &str, got: $w| assert_eq!(got, $v.u64(&format!("{k}.{name}")) as $w, "{k}.{name}");
             let i = |name: &str, got: i64| assert_eq!(got, $v.i64(&format!("{k}.{name}")), "{k}.{name}");
             u("and", $m::and(a, b));
             u("or", $m::or(a, b));
@@ -74,9 +74,9 @@ macro_rules! words {
 }
 
 #[test]
-fn ivec_computes_what_the_typescript_computes() {
+fn ivec_computes_what_the_record_holds() {
     let v = Golden::load(GOLDEN);
-    words!(v, ivec, "ivec", |k: &str, w: u64| {
+    words!(v, ivec, u64, "ivec", |k: &str, w: u64| {
         assert_eq!(ivec::neg(w), v.u64(&format!("{k}.neg")), "{k}.neg");
         assert_eq!(ivec::abs(w), v.u64(&format!("{k}.abs")), "{k}.abs");
     });
@@ -90,15 +90,15 @@ fn ivec_computes_what_the_typescript_computes() {
 }
 
 #[test]
-fn fvec_computes_what_the_typescript_computes() {
+fn fvec_computes_what_the_record_holds() {
     let v = Golden::load(GOLDEN);
-    words!(v, fvec, "fvec", |_: &str, _: u64| {});
+    words!(v, fvec, u32, "fvec", |_: &str, _: u32| {});
 }
 
 #[test]
-fn pvf3_computes_what_the_typescript_computes() {
+fn pvf3_computes_what_the_record_holds() {
     let v = Golden::load(GOLDEN);
-    let out = || PVF3::default();
+    let out = || Pvf3::default();
     v.each("pvf3.unary", |k| {
         let p = tuple(&v, &format!("{k}.p"));
         assert_eq!(X(&p), v.i64(&format!("{k}.X")), "{k}.X");
@@ -126,8 +126,8 @@ fn pvf3_computes_what_the_typescript_computes() {
     });
     v.each("pvf3.binary", |k| {
         let (a, b) = (tuple(&v, &format!("{k}.v")), tuple(&v, &format!("{k}.w")));
-        let pp = |name: &str, got: PVF3| assert_eq!(got, tuple(&v, &format!("{k}.{name}")), "{k}.{name}");
-        let thrown = |name: &str, got: Option<PVF3>| {
+        let pp = |name: &str, got: Pvf3| assert_eq!(got, tuple(&v, &format!("{k}.{name}")), "{k}.{name}");
+        let thrown = |name: &str, got: Option<Pvf3>| {
             let key = format!("{k}.{name}");
             if v.has(&key) {
                 assert_eq!(v.s(&key), "throw", "{key}");

@@ -6,7 +6,7 @@ use pxl_spec::bake::constant::{CELL_SHAMT, CHUNK_CELL_SPAN, PAGE_CELL_SPAN, U_PE
 use pxl_spec::space::indexer::{FROM_L3_IDX, L3_IDX, L3_SHAMT};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::xy::TO_XY;
-use xpute_core::kit::math::round_half_up;
+use xpute_core::math::scalar::round;
 
 use crate::layer::terrain::fixed::KEEP_PAGES;
 
@@ -159,7 +159,7 @@ pub const FETCH_HYSTERESIS: f64 = PAGE_SPAN;
 /// pages, doubled so a second subsystem can interleave at equal distance
 /// (POI sits one behind terrain — see fetcher.rs).
 pub fn page_priority(dist2: f64) -> f64 {
-    round_half_up(dist2.sqrt() / PAGE_SPAN) * 2.0
+    round(dist2.sqrt() / PAGE_SPAN) * 2.0
 }
 
 #[cfg(test)]

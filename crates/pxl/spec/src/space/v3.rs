@@ -1,10 +1,7 @@
 // pxl-spec/space/v3.rs
 
-//! The TypeScript's optional `out` parameter, defaulting to a new vector,
-//! is a required one here: every function writes into the `out` it is
-//! given and returns it.
-
-use xpute_core::kit::fdlibm;
+//! Three doubles, and the arithmetic over them. Every function writes into
+//! the `out` it is given and returns it; nothing here allocates.
 
 /// Fixed-length 3D float vector.
 pub type V3 = [f64; 3];
@@ -117,7 +114,7 @@ pub fn cross3<'a>(v: &V3, w: &V3, out: &'a mut V3) -> &'a mut V3 {
     out
 }
 pub fn norm3<'a>(v: &V3, out: &'a mut V3) -> &'a mut V3 {
-    let hypot = fdlibm::hypot(&[v[0], v[1], v[2]]);
+    let hypot = libm::hypot(libm::hypot(v[0], v[1]), v[2]);
     let len = if hypot == 0.0 { 1.0 } else { hypot };
     out[0] = v[0] / len;
     out[1] = v[1] / len;
@@ -125,7 +122,7 @@ pub fn norm3<'a>(v: &V3, out: &'a mut V3) -> &'a mut V3 {
     out
 }
 
-use xpute_core::kit::fdlibm::round;
+use xpute_core::math::scalar::round;
 
 /// Floors each lane to the lower multiple of the corresponding span.
 pub fn floor3<'a>(base: &V3, span: &V3, out: &'a mut V3) -> &'a mut V3 {

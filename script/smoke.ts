@@ -5,7 +5,7 @@
 //   deno run -A script/smoke.ts https://api.plei.me --origin
 //
 // The addresses come from the same generated constants the client and the
-// Worker read (spec/route.json), the versions from published.json and the
+// Worker read (spec/pxl/spec/route.json), the versions from published.json and the
 // asset key from the ingest's own table, so a version bump or a moved root
 // cannot leave this checking a URL nobody serves any more. That is the whole
 // reason it is a Deno script and not a list of curls: a hand-kept list of
@@ -21,12 +21,12 @@
 // be gone, and a 200 from one means a relay is still carrying the pre-09-18
 // shape.
 
-import { PUBLISHED_VERSION } from "../apps/web/src/config/published_spec.ts";
-import { INGESTED } from "../apps/web/src/catalog/asset/ingested_spec.ts";
+import { PUBLISHED_VERSION } from "../apps/web/src/config/published-spec.ts";
+import { INGESTED } from "../apps/web/src/catalog/asset/ingested-spec.ts";
 
-// The generated constants directly: route_spec.ts imports nothing itself, and
+// The generated constants directly: route-spec.ts imports nothing itself, and
 // the root has no mapping into apps/web because nothing else here reaches in.
-import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT } from "../apps/web/src/config/route_spec.ts";
+import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT } from "../apps/web/src/config/route-spec.ts";
 
 /** A land page in Gangnam — the one infra/README's own procedure names, so a
  * check here and a check by hand are looking at the same object. */

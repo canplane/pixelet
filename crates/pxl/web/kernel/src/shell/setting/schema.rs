@@ -9,8 +9,8 @@
 //! the defaults with the user's overrides on top, and only the overrides are
 //! stored. See store.rs for why that matters.
 
+use crate::host::handheld;
 use crate::shell::setting::schema_spec::SETTINGS as S;
-use crate::sys::host::handheld;
 
 /// Rough per-frame cost, shown as a badge on the row.
 pub type SettingCost = &'static str;

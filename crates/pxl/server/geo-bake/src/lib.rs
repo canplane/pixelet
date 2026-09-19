@@ -1,3 +1,5 @@
+// pxl-geo-bake/lib.rs
+
 //! The offline half of the geo data: what turns Overture and the elevation
 //! raster into the static pages the bucket serves, and the tools that run it
 //! over a coverage.

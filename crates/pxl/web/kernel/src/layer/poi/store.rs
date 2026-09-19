@@ -5,11 +5,11 @@
 //! no interests registry.
 
 use pxl_spec::space::pvf3::ivec::IVec;
-use xpute_runtime::sys::mem::free;
+use xpute_runtime::mem::heap::free;
 
+use crate::global::Global;
 use crate::layer::poi::placement::poi_place_request;
 use crate::layer::poi::repository::ResidentPoiPage;
-use crate::sys::global::Global;
 use crate::world::change::POI_PAGE;
 use crate::world::page_table::PageTable;
 

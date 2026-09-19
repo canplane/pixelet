@@ -16,16 +16,18 @@ use std::collections::BTreeMap;
 use camera_cfg::input::{AXIS_LOCK_THRESHOLD_PX, DOLLY_GAIN, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
 use camera_cfg::projection::FOV;
 use camera_cfg::view::{MAX_POLAR, MIN_POLAR};
-use pxl_spec::cell::{cube_types, DecorId, PlaceableCube};
+use pxl_spec::cell::object::PlaceableCube;
+use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pvf3::pvf3::PVF3;
-use xpute_core::kit::mat4::Vec3;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use xpute_core::math::vec3::Vec3;
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::ray::{ray_pick, resolve_hit_object, world_adjacent_corner, world_hover_pvf3, world_struck_corner};
 use crate::control::camera::store::{camera_store, CameraStatus, ViewPatch};
 use crate::control::camera::terrain_gate::{allowed_pan, ViewTriple};
+use crate::global::Global;
 use crate::layer::decor::hit::raycast_decor;
 use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::geometry::{anchor_center, object_aabb, object_center};
@@ -34,7 +36,6 @@ use crate::layer::object::store::{get_placed_object, place, place_air, place_dec
 use crate::layer::terrain::elevation::ground_or_raw;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
-use crate::sys::global::Global;
 use crate::world::chunk::raycast::WorldHit;
 use crate::world::frame::coord::get_local_world_origin;
 use crate::world::frame::view::{view, view_ray_local};
@@ -217,7 +218,7 @@ fn resolve_hit_target(hit: &WorldHit, origin: Vec3, direction: Vec3, map_origin:
 /// place a cube (object tool), or remove/dig with the eraser tool (an existing
 /// placed object if there's one under the cursor, the terrain's own real surface
 /// otherwise).
-fn handle_tap(hovered: PVF3) {
+fn handle_tap(hovered: Pvf3) {
     let ui = input().holding;
     let object_size = ui.object_size;
 
@@ -295,7 +296,7 @@ fn do_pan(dx: f64, dy: f64) {
 
     let mut center = [0.0; 3];
     projection::unproject(&mut center, map_center.i, map_center.f);
-    let mut next_center = PVF3::default();
+    let mut next_center = Pvf3::default();
     projection::project(&mut next_center, center[0] + wx, center[1] + wy, center[2]);
 
     // ground_or_raw shares the exact same "zero Z, then sample real terrain
@@ -578,7 +579,7 @@ fn update_hover(s: &Input) {
     let struck = resolve_hit_target(&hit, origin, direction, map_origin);
     camera.hovered_object_at = struck.as_ref().map(|o| o.at);
     if let Some(o) = struck {
-        camera.hovered_coord = Some(PVF3 { i: o.i, f: o.f });
+        camera.hovered_coord = Some(Pvf3 { i: o.i, f: o.f });
     } else if ui.active_tool == ActiveTool::Eraser && settings_store().enable_terrain_carving {
         // Bare terrain under the eraser wants the struck voxel's OWN corner
         // (real, possibly dug-into height included), not the baked-elevation

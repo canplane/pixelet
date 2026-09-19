@@ -14,8 +14,8 @@ use xpute_runtime::ipc::change::{ChangeLog, Revision, Topic};
 
 use xpute_runtime::sched::edge::Edge;
 
-use crate::sys::global::Global;
-use crate::sys::kernel::kernel;
+use crate::global::Global;
+use crate::kernel::kernel;
 
 /// A column's cube content (object/store.rs), keyed by column base.
 pub const OBJECT_COLUMN: Topic = 0;

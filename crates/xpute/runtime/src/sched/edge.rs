@@ -1,8 +1,8 @@
 // xpute-runtime/sched/edge.rs
 
-//! A guest's side of the turn (sched/quantum.rs has the host's): the rising
-//! edge's quota as a deadline on the host clock, the tasks parked until the
-//! next rising edge, and what the falling edge asks for.
+//! A guest's side of the turn the host grants it (sched/quantum.rs): the
+//! rising edge's quota as a deadline on the host clock, the tasks parked
+//! until the next rising edge, and what the falling edge asks for.
 //!
 //! This is the interface a guest's work is written against, whichever
 //! executor polls it, the way `GlobalAlloc` is whichever allocator serves it.
@@ -25,7 +25,7 @@ use core::future::{poll_fn, Future};
 use core::task::{Poll, Waker};
 
 use super::quantum::NO_WAKE;
-use crate::sys::clock::now;
+use crate::clock::now;
 
 pub struct Edge<const N: usize> {
     edge_at: f64,

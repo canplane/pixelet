@@ -4,10 +4,11 @@
 //! The sensors themselves are the shell's; what they report lands here, and
 //! what is significant enough to keep is decided here.
 
-use pxl_spec::message::Message;
+use pxl_spec::abi::message::Message;
 use pxl_spec::space::adapter::epsg4326::G4326;
 
-use crate::sys::global::{now, Global};
+use crate::global::Global;
+use crate::host::now;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DevicePoseStatus {

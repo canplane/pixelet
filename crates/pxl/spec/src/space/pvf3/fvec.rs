@@ -1,48 +1,35 @@
 // pxl-spec/space/pvf3/fvec.rs
 
-//! PVF3 (Packed 3-Vector w/ Fixed-Point Arithmetic)
-//! Fractional Residue Precision System
+//! The fraction lanes: one word holding an unsigned 8-bit X, Y and Z, the
+//! position within a cell in 256ths.
 //!
-//! This module provides atomic, stateless operations for the packed fractional
-//! residue layer within the PVF3 coordinate system.
-//!
-//! Offset Architecture (Internal Resolution):
 //! [ 31 .. 24 | 23 ....... 16 | 15 ....... 8 | 7 ........ 0 ]
 //! [ Reserved |  Lane X (8b) |  Lane Y (8b) |  Lane Z (8b) ]
-//! [  Unused  |  Residue X    |  Residue Y    |  Residue Z    ]
 //!
-//! Operational Integrity & Masking Policy:
-//! - Deterministic Isolation: Each lane is strictly bound to its bit-field
-//!   via masking during assembly (gather). Cross-lane leakage is impossible.
-//! - Bit-level Parity: Uses BigInt for bit-exact operations to eliminate
-//!   floating-point jitter and ensure cross-platform reproducibility.
-//! - Residue Wrapping: Per-lane overflow is truncated modulo 2^FRAC_W.
-//! - Carry Policy: Integer carry/borrow across lattice boundaries is out of scope;
-//!   callers must handle cross-boundary semantics before injecting values here.
-//!
-//! Mathematical Domain:
-//! - Lanes are unsigned fractional residues in [0, 2^FRAC_W), i.e. [0, ONE).
-//! - They do not encode sign; signed direction belongs to ivec.
-//! - Arithmetic and comparisons operate in the residue domain and therefore
-//!   follow wrapped modular behavior after gather().
-//!
-//! Real Mapping:
-//! - Each residue maps to a normalized real in [0, 1).
-//! - This gives O(1) sub-lattice positioning independent of physical scale.
-//!
-//! Format Scalability:
-//! - Width-parametric packing: WORD_W and FRAC_W define the format.
-//! - Higher fractional precision is achieved by increasing FRAC_W without
-//!   changing the arithmetic surface.
+//! - A lane is a residue in [0, ONE): it carries no sign, and the direction
+//!   belongs to `ivec`. Arithmetic is in the residue domain, wrapping modulo
+//!   2^FRAC_W through `gather`; a carry into the integer lane is not made
+//!   here, and a caller that needs one handles the boundary before packing.
+//! - A residue maps to a real in [0, 1): a position within the cell at no
+//!   physical scale.
+//! - `FRAC_W` is `core`'s; the arithmetic does not depend on its value.
 
+// Uppercase throughout, as the notation these operations are written in: one
+// that holds no state and closes over nothing is named the way a C header
+// names its macros. Rust's own answer to a macro like that is a `const fn`,
+// which it cases snake, so the notation and the language disagree here and
+// the file keeps the notation — suspended once for the file, which is the
+// level the choice is made at rather than item by item.
 #![allow(non_snake_case)]
+
+use xpute_core::abi::word::field_mask32;
 
 use super::core::{EQ, GT, LT, MAX, MIN};
 use super::core::{FRAC_W, FVEC_WORD_MASK as WORD_MASK, ONE, ONE_MASK};
 
 /// FVec: PVF3-Packed Fractional Residue Word (Nominal Type)
 /// Represents packed unsigned fractional residues within a single lattice unit.
-pub type FVec = u64;
+pub type FVec = u32;
 
 // ---- Bit Layout Configuration (Symmetric Lane-based) ----
 
@@ -52,20 +39,11 @@ const Z_SHAMT: u32 = 0;
 const Y_SHAMT: u32 = Z_SHAMT + FRAC_W;
 const X_SHAMT: u32 = Y_SHAMT + FRAC_W;
 
-const fn field_mask64(nbit: u32, shamt: u32) -> u64 {
-    let field = if nbit >= 64 { u64::MAX } else { (1u64 << nbit) - 1 };
-    if shamt >= 64 {
-        0
-    } else {
-        field << shamt
-    }
-}
-
 // ---- Component Axis Isolation Masks ----
 
-const X_MASK: u64 = field_mask64(FRAC_W, X_SHAMT);
-const Y_MASK: u64 = field_mask64(FRAC_W, Y_SHAMT);
-const Z_MASK: u64 = field_mask64(FRAC_W, Z_SHAMT);
+const X_MASK: u32 = field_mask32(FRAC_W, X_SHAMT);
+const Y_MASK: u32 = field_mask32(FRAC_W, Y_SHAMT);
+const Z_MASK: u32 = field_mask32(FRAC_W, Z_SHAMT);
 
 /// Axis Getters: Extract residue lanes.
 /// Returned as i64 for scalar-surface uniformity;
@@ -109,9 +87,9 @@ pub fn fill(e: i64) -> FVec {
 /// Assembles discrete components into a packed bit-field word.
 /// Strict masking (& MASK) ensures no bit leakage between component fields.
 pub fn gather(x: i64, y: i64, z: i64) -> FVec {
-    let xn = ((x as u64).wrapping_shl(X_SHAMT)) & X_MASK;
-    let yn = ((y as u64).wrapping_shl(Y_SHAMT)) & Y_MASK;
-    let zn = ((z as u64).wrapping_shl(Z_SHAMT)) & Z_MASK;
+    let xn = ((x as u32).wrapping_shl(X_SHAMT)) & X_MASK;
+    let yn = ((y as u32).wrapping_shl(Y_SHAMT)) & Y_MASK;
+    let zn = ((z as u32).wrapping_shl(Z_SHAMT)) & Z_MASK;
     xn | yn | zn
 }
 
@@ -137,9 +115,8 @@ pub fn xor(v: FVec, w: FVec) -> FVec {
     v ^ w
 }
 
-/// Signed shift: +k => shl, -k => shr
-/// - fvec lanes are UNSIGNED residues, so right shift is effectively logical
-///   (BigInt has no >>>; but X/Y/Z are non-negative so >> behaves as logical here).
+/// Signed shift: +k => shl, -k => shr. A lane is a non-negative residue,
+/// so the arithmetic right shift on its `i64` is a logical one.
 fn shl(v: FVec, shamt: i32) -> FVec {
     gather(X(v).wrapping_shl(shamt as u32), Y(v).wrapping_shl(shamt as u32), Z(v).wrapping_shl(shamt as u32))
 }

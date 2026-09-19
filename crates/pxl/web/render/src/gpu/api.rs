@@ -11,9 +11,9 @@
 //! A pass's description, a bind group's entries and a sampler's filters are
 //! words (api.json's codes); a string is its bytes where they lie.
 
-use xpute_core::ds::handle::HandleTable;
+use xpute_runtime::abi::handle::HandleTable;
 
-use xpute_runtime::sys::global::Global;
+use xpute_runtime::global::Global;
 
 /// WebGPU's buffer usage bits.
 pub mod buffer_usage {

@@ -6,10 +6,11 @@
 
 use pxl_render::mesh::paint::object::adapter::Kind;
 use pxl_render::mesh::volume::{pack_material, NO_LAYER};
-use pxl_spec::cell::{cube_types, decor_ids, decor_num_id, placeable_cube_num_id, placeable_cubes};
+use pxl_spec::cell::cube_types;
+use pxl_spec::cell::object::{decor_ids, decor_num_id, placeable_cube_num_id, placeable_cubes};
 
+use crate::kernel::kernel;
 use crate::layer::object::material::resolve_solid_material;
-use crate::sys::kernel::kernel;
 
 /// Teaches the painter every state the catalog can put in a leaf: each
 /// placeable cube's material, AIR, and the decor kinds, which paint nothing.

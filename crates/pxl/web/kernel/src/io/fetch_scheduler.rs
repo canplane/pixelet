@@ -1,6 +1,6 @@
 // pxl-kernel/io/fetch_scheduler.rs
 
-//! The world's fetches, on the kernel's I/O queue (xpute_runtime::sched::io):
+//! The world's fetches, on the kernel's I/O queue (xpute_runtime::io::queue):
 //! what a demand is called — `<category>:<page>`, or what stands for a search
 //! query — and the ledger's record of each, over a queue that knows keys as
 //! numbers.
@@ -13,13 +13,12 @@
 //! store.
 
 use pxl_spec::space::pvf3::ivec::IVec;
-use xpute_core::kit::hash::fnv1a64_bytes;
-pub use xpute_runtime::sched::io::IoCounts as FetchCounts;
-use xpute_runtime::sched::io::{Demand as Queued, IoQueue};
+pub use xpute_runtime::io::queue::IoCounts as FetchCounts;
+use xpute_runtime::io::queue::{Demand as Queued, IoQueue};
 
+use crate::global::Global;
 use crate::io::demand::{Category, Demand, DemandKey, Phases};
 use crate::sched::ledger::record::{ledger_record, Failure, Outcome, TaskRecord};
-use crate::sys::global::Global;
 
 /// Demands held at once: the pages near the view in each category, and a
 /// search. Past it a demand is refused and asked for again.
@@ -53,7 +52,9 @@ pub fn hash_of(name: DemandKey) -> u64 {
     let mut bytes = [0u8; 12];
     bytes[..4].copy_from_slice(&(name.category as u32).to_le_bytes());
     bytes[4..].copy_from_slice(&name.subject.to_le_bytes());
-    fnv1a64_bytes(&bytes)
+    let mut h = fnv::FnvHasher::default();
+    std::hash::Hasher::write(&mut h, &bytes);
+    std::hash::Hasher::finish(&h)
 }
 
 static SCHED: Global<Scheduler> = Global::new();

@@ -15,14 +15,14 @@
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::space::pvf3::ivec;
 
+use crate::global::Global;
 use crate::io::load::{load_gltf, load_image, Load};
 use crate::io::model_asset::{register_model, ModelHandle};
+use crate::kernel::{kernel, with_world};
 use crate::layer::character::variant::{character_variant, CharacterGroup, CharacterVariant};
 use crate::layer::character::variant_spec::IDLE_CLIP;
 use crate::sched::tick::TickContext;
 use crate::shell::map_store::map_store;
-use crate::sys::global::Global;
-use crate::sys::kernel::{kernel, with_world};
 use crate::world::change::request_world_tick;
 use crate::world::frame::coord::get_local_world_origin;
 

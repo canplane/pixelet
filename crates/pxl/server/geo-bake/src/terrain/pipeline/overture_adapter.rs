@@ -14,7 +14,7 @@
 use pxl_spec::bake::format::{BaseRow, BuildingRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857::G3857;
 
-use crate::wkb::{wkb_to_geometries, WKBGeometry};
+use crate::wkb::{wkb_to_geometries, WkbGeometry};
 
 pub struct OvertureBuildingRawFeature {
     pub gers_id: String,
@@ -22,7 +22,7 @@ pub struct OvertureBuildingRawFeature {
     pub class: Option<String>,
     pub height: Option<f64>,
     pub num_floors: Option<f64>,
-    pub geometry: WKBGeometry,
+    pub geometry: WkbGeometry,
     pub center: G3857,
 }
 
@@ -30,7 +30,7 @@ pub struct OvertureSegmentRawFeature {
     pub gers_id: String,
     pub subtype: String,
     pub class: Option<String>,
-    pub geometry: WKBGeometry,
+    pub geometry: WkbGeometry,
     pub center: G3857,
 }
 
@@ -47,8 +47,7 @@ pub enum BaseSource {
 
 impl BaseSource {
     /// The wire values are exactly these strings — see the table set
-    /// ingest_base.ts writes. Anything else is read as land_use, which is what
-    /// the TypeScript's own `default` branch does with an unknown source.
+    /// ingest_base.ts writes. Anything else is read as land_use.
     fn from_wire(s: &str) -> BaseSource {
         match s {
             "water" => BaseSource::Water,
@@ -64,7 +63,7 @@ pub struct OvertureBaseRawFeature {
     pub source: BaseSource,
     pub subtype: Option<String>,
     pub class: Option<String>,
-    pub geometry: WKBGeometry,
+    pub geometry: WkbGeometry,
     pub center: G3857,
 }
 
@@ -76,12 +75,12 @@ pub enum OvertureRawFeature {
 
 /// The centre a row's geometry gives, or the origin when it gives none —
 /// `g.points[0] ?? [0, 0, 0]`.
-fn center_of(g: &WKBGeometry) -> G3857 {
+fn center_of(g: &WkbGeometry) -> G3857 {
     g.points.first().copied().unwrap_or([0.0, 0.0, 0.0])
 }
 
 pub fn from_building_row(row: &BuildingRow) -> Vec<OvertureRawFeature> {
-    wkb_to_geometries(row.geom_wkb.as_slice())
+    wkb_to_geometries(&row.geom_wkb)
         .into_iter()
         .map(|g| {
             OvertureRawFeature::Building(OvertureBuildingRawFeature {
@@ -102,7 +101,7 @@ pub fn from_building_row(row: &BuildingRow) -> Vec<OvertureRawFeature> {
 /// would be a tunnel flag whose field path is not sample-confirmed, so it is
 /// parsed by nobody and carried by nothing here.
 pub fn from_segment_row(row: &SegmentRow) -> Vec<OvertureRawFeature> {
-    wkb_to_geometries(row.geom_wkb.as_slice())
+    wkb_to_geometries(&row.geom_wkb)
         .into_iter()
         .map(|g| {
             OvertureRawFeature::Segment(OvertureSegmentRawFeature {
@@ -118,7 +117,7 @@ pub fn from_segment_row(row: &SegmentRow) -> Vec<OvertureRawFeature> {
 
 pub fn from_base_row(row: &BaseRow) -> Vec<OvertureRawFeature> {
     let source = BaseSource::from_wire(&row.source);
-    wkb_to_geometries(row.geom_wkb.as_slice())
+    wkb_to_geometries(&row.geom_wkb)
         .into_iter()
         .map(|g| {
             OvertureRawFeature::Base(OvertureBaseRawFeature {

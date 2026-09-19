@@ -1,7 +1,8 @@
 // pxl-kernel/sched/priority.test.rs
 
 use super::*;
-use xpute_core::kit::mat4::{mat4, mat4_mul, mat4_rotation_z, mat4_translation, Vec3};
+use xpute_core::math::mat4::{mat4, mat4_mul, mat4_rotation_z, mat4_translation};
+use xpute_core::math::vec3::Vec3;
 
 const CAMERA: Vec3 = Vec3 { x: 0.0, y: -300.0, z: 200.0 };
 

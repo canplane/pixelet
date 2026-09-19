@@ -5,23 +5,11 @@
  * sides can see — the submission and completion rings between a shell and
  * its kernel, laid out once and shared by address.
  *
- * A message is what a frame (frame.ts) needs once the transport is shared
- * memory rather than transfer: no spill, since a packet is as large as a slot
- * allows; no args/body split, since the packet is a tree and a large
- * body is a leaf of it; no worker id, since one ring joins two sides. What
- * is left is four words:
- *
- *   0  tag          the submitter's, echoed on the reply; on a signal, its
- *                   subject
- *   1  cmd | flags  cmd (cmd.ts: major << 8 | minor) in the low 16 bits,
- *                   FrameFlag in the high 16
- *   2  result       on a reply: a value, or a negative Errno; else 0
- *   3  packet       where the message's XTP packet starts, an address in
- *                   the memory the two sides share, or 0 for none — its
- *                   length is in its header
- *
- * On the completion ring, `RES` tells a reply from a signal the kernel
- * raised itself. `ACKREQ` on a submission asks for exactly one reply.
+ * A message is a frame (frame.ts), and this is where its four words sit: a
+ * slot's descriptor, with word 3 the address of that slot's payload in the
+ * memory both sides see. Nothing is added to it here — a packet is as large
+ * as a slot allows, so there is no spill, and one ring joins two sides, so
+ * `tag` carries no sender.
  *
  * ## A slot in two places
  *
@@ -68,22 +56,18 @@
  * part of the ring; it is whatever call the two sides already take turns at.
  */
 
-import type { i32, u32 } from "@xpute/core/kit/word.ts";
-import type { U8Array } from "@xpute/core/kit/array.ts";
-import { Errno } from "@xpute/core/errno.ts";
-import { MarshalError } from "@xpute/core/error.ts";
+import type { i32, u32 } from "@xpute/core/abi/word.ts";
+import type { U8Array } from "@xpute/core/abi/array.ts";
+import { Errno } from "@xpute/core/status/errno.ts";
+import { MarshalError } from "@xpute/core/status/error.ts";
+
+import { cmd_of, cmd_word, flags_of, FRAME_CMD, FRAME_PACKET, FRAME_RESULT, FRAME_TAG, FRAME_WORDS } from "@xpute/runtime/ipc/frame.ts";
 
 export const RING_HEADER_WORDS: u32 = 8;
-export const RING_ENTRY_WORDS: u32 = 4;
-
-export const RING_TAG: u32 = 0;
-export const RING_CMD: u32 = 1;
-export const RING_RESULT: u32 = 2;
-export const RING_PACKET: u32 = 3;
 
 /** Bytes the descriptors of a ring of `capacity` messages take. */
 export function ring_bytes(capacity: u32): u32 {
-  return (RING_HEADER_WORDS + capacity * RING_ENTRY_WORDS) * 4;
+  return (RING_HEADER_WORDS + capacity * FRAME_WORDS) * 4;
 }
 
 /** Bytes the payloads of a ring of `capacity` slots of `slot_bytes` take. */
@@ -120,7 +104,7 @@ export class Ring {
     this.slot_bytes = head[3];
     this.slot_base = head[4];
     this.mask = capacity - 1;
-    this.words = new Uint32Array(mem, at, RING_HEADER_WORDS + capacity * RING_ENTRY_WORDS);
+    this.words = new Uint32Array(mem, at, RING_HEADER_WORDS + capacity * FRAME_WORDS);
     // The memory a ring lives in is never a SharedArrayBuffer here (the core
     // memory is fixed, not shared), and the packets it hands out are read by
     // the tree reader, which takes an ArrayBuffer view.
@@ -157,7 +141,7 @@ export class Ring {
 
   /** Where the message at `position` starts in `words`. */
   entry_at(position: u32): u32 {
-    return RING_HEADER_WORDS + ((position & this.mask) >>> 0) * RING_ENTRY_WORDS;
+    return RING_HEADER_WORDS + ((position & this.mask) >>> 0) * FRAME_WORDS;
   }
 
   /** Where the payload of the message at `position` starts, the pair of
@@ -186,10 +170,10 @@ export class Ring {
       packet_at = this.slot_base + start;
     }
     const at = this.entry_at(w[2]);
-    w[at + RING_TAG] = tag;
-    w[at + RING_CMD] = ((cmd & 0xffff) | ((flags & 0xffff) << 16)) >>> 0;
-    w[at + RING_RESULT] = result >>> 0;
-    w[at + RING_PACKET] = packet_at;
+    w[at + FRAME_TAG] = tag;
+    w[at + FRAME_CMD] = cmd_word(cmd, flags);
+    w[at + FRAME_RESULT] = result >>> 0;
+    w[at + FRAME_PACKET] = packet_at;
     w[2] = (w[2] + 1) >>> 0;
     return Errno.OK;
   }
@@ -203,25 +187,25 @@ export class Ring {
   }
 
   tag(at: u32): u32 {
-    return this.words[at + RING_TAG];
+    return this.words[at + FRAME_TAG];
   }
 
   cmd(at: u32): u32 {
-    return this.words[at + RING_CMD] & 0xffff;
+    return cmd_of(this.words[at + FRAME_CMD]);
   }
 
   flags(at: u32): u32 {
-    return this.words[at + RING_CMD] >>> 16;
+    return flags_of(this.words[at + FRAME_CMD]);
   }
 
   result(at: u32): i32 {
-    return this.words[at + RING_RESULT] | 0;
+    return this.words[at + FRAME_RESULT] | 0;
   }
 
   /** The message's packet, a view into its slot valid until `advance`, or
    * null when it has none. EBADMSG when it names bytes outside a slot. */
   packet(at: u32): U8Array | null {
-    const packet_at = this.words[at + RING_PACKET];
+    const packet_at = this.words[at + FRAME_PACKET];
     if (packet_at === 0) return null;
     const off = packet_at - this.slot_base;
     if (off < 0 || off % this.slot_bytes !== 0 || off + 16 > this.slots.byteLength || packet_bytes(this.slots, off) > this.slot_bytes) {

@@ -13,9 +13,8 @@ use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
-use xpute_core::error::MarshalError;
-use xpute_core::io::marshal::tree::{encoder, BranchView, BranchViewImpl, NodeView, TreeEncoderOptions, TreeView};
-use xpute_core::kit::array::{I16Array, U8Array};
+use xpute_core::status::error::MarshalError;
+use xpute_core::wire::xtp::{encoder, BranchView, BranchViewImpl, NodeView, TreeEncoderOptions, TreeView};
 
 use crate::terrain::bake::bake_terrain;
 use crate::terrain::repository::{PageSource, TerrainRepository};
@@ -34,13 +33,13 @@ pub struct SourceStats {
     pub invalid_ele_shape: u64,
 }
 
-fn rows_branch<F: FnMut(&mut BranchViewImpl)>(mut each: F) -> TreeView {
+fn rows_branch<'a, F: FnMut(&mut BranchViewImpl<'a>)>(mut each: F) -> TreeView<'a> {
     let mut view = TreeView::new();
     view.branch(Some(&mut each));
     view
 }
 
-fn building_tuple(b: &mut BranchViewImpl, row: &BuildingRow) {
+fn building_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a BuildingRow) {
     b.branch(Some(&mut |t| {
         t.str(Some(&row.gers_id))
             .str(row.subtype.as_deref())
@@ -51,7 +50,7 @@ fn building_tuple(b: &mut BranchViewImpl, row: &BuildingRow) {
     }));
 }
 
-fn segment_tuple(b: &mut BranchViewImpl, row: &SegmentRow) {
+fn segment_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a SegmentRow) {
     b.branch(Some(&mut |t| {
         t.str(Some(&row.gers_id))
             .str(Some(&row.subtype))
@@ -61,7 +60,7 @@ fn segment_tuple(b: &mut BranchViewImpl, row: &SegmentRow) {
     }));
 }
 
-fn base_tuple(b: &mut BranchViewImpl, row: &BaseRow) {
+fn base_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a BaseRow) {
     b.branch(Some(&mut |t| {
         t.str(Some(&row.gers_id))
             .str(Some(&row.source))
@@ -71,7 +70,7 @@ fn base_tuple(b: &mut BranchViewImpl, row: &BaseRow) {
     }));
 }
 
-fn coast_tuple(b: &mut BranchViewImpl, row: &CoastRow) {
+fn coast_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a CoastRow) {
     b.branch(Some(&mut |t| {
         t.str(Some(&row.id)).u8_array(Some(&row.geom_wkb)).bool(Some(row.covers_page));
     }));
@@ -79,12 +78,12 @@ fn coast_tuple(b: &mut BranchViewImpl, row: &CoastRow) {
 
 /// Packs what the database gave into `[ele, buildings, segments, base, coasts]`,
 /// each row a tuple in the order pxl-spec's `*_ROW_KEYS` name.
-pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<U8Array, MarshalError> {
+pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u8>, MarshalError> {
     let ele = match &source.ele {
-        Some(v) if v.len() == ELE_PADDED_SPAN2 => I16Array::from(v),
+        Some(v) if v.len() == ELE_PADDED_SPAN2 => v.clone(),
         _ => {
             stats.invalid_ele_shape += 1;
-            I16Array::new(ELE_PADDED_SPAN2)
+            vec![0i16; ELE_PADDED_SPAN2]
         }
     };
 
@@ -122,7 +121,7 @@ pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<U8Arr
 }
 
 /// The page's source, assembled straight out of the database.
-pub fn fetch_terrain_source(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, stats: &mut SourceStats) -> Result<U8Array, BakeError> {
+pub fn fetch_terrain_source(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, stats: &mut SourceStats) -> Result<Vec<u8>, BakeError> {
     let page_bbox = epsg3857::get_page_bbox(page_idx);
     let page_z_scale = epsg3857::Z_SCALE(page_bbox[0][1]);
     let source = repo.fetch_page_source(client, page_bbox, page_z_scale)?;
@@ -130,9 +129,9 @@ pub fn fetch_terrain_source(repo: &TerrainRepository, client: &mut Client, page_
 }
 
 /// Raw Overture and elevation source, baked into client-ready ground channels.
-pub fn fetch_tile(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, stats: &mut SourceStats) -> Result<U8Array, BakeError> {
+pub fn fetch_tile(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, stats: &mut SourceStats) -> Result<Vec<u8>, BakeError> {
     let raw = fetch_terrain_source(repo, client, page_idx, stats)?;
-    Ok(bake_terrain(page_idx, raw)?)
+    Ok(bake_terrain(page_idx, &raw)?)
 }
 
 #[derive(Debug)]

@@ -6,7 +6,7 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use super::*;
-use crate::sys::clock::set_clock;
+use crate::clock::set_clock;
 
 fn wall_clock() -> f64 {
     static START: OnceLock<Instant> = OnceLock::new();

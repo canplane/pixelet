@@ -10,14 +10,15 @@ use core::fmt::{self, Write};
 
 use pxl_spec::space::adapter::epsg4326;
 use pxl_spec::space::indexer::L3_IDX;
-use pxl_spec::space::pvf3::pvf3::PVF3;
-use xpute_core::kit::json::{read_json, JsonValue, Quoted};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use xpute_core::codec::json::{read_json, JsonValue, Quoted};
 
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::device_orientation::{orientation_close, orientation_open, request_orientation};
 use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, start_watching};
 use crate::control::sensor::store::{device_location_store, device_orientation_store, DevicePoseStatus};
+use crate::global::Global;
 use crate::layer::character::preview::{preview_close, preview_open};
 use crate::layer::character::store::companion_load_store;
 use crate::layer::character::variant::CharacterGroup;
@@ -32,14 +33,13 @@ use crate::shell::setting::schema::{SettingRef, SettingValue, SETTING_KEYS};
 use crate::shell::setting::store::settings_store;
 use crate::shell::ui::compass::{compass_reset, show_compass};
 use crate::shell::ui::scale_bar::scale_bar;
-use crate::sys::global::Global;
 use crate::world::change::request_world_tick;
 use crate::world::frame::view::view;
 
 struct Shell {
     /// A search jump that landed on a page with no terrain yet: re-grounded
     /// the moment that page's tile arrives, while the map is still there.
-    go_to: Option<PVF3>,
+    go_to: Option<Pvf3>,
 }
 
 static SHELL: Global<Shell> = Global::new();
@@ -255,7 +255,7 @@ pub fn ui_action(text: &str) -> bool {
             // A search result: its point, grounded the way every map_center
             // setter that respects ground_snap is.
             let (Some(lon), Some(lat)) = (f64_of(&action, "lon"), f64_of(&action, "lat")) else { return false };
-            let mut target = PVF3::default();
+            let mut target = Pvf3::default();
             epsg4326::project(&mut target, &[lon, lat, 0.0]);
             // The user drove the camera: GPS stops overriding it.
             camera_store().is_follow_mode = false;

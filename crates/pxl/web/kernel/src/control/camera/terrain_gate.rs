@@ -9,10 +9,10 @@
 
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::{self, PVF3};
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::V3;
 use pxl_spec::space::xy::TO_XY;
-use xpute_core::kit::math::wrap;
+use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::orbit::{orbit_local_offset, rotate2};
@@ -56,11 +56,11 @@ pub struct ViewPose {
 /// Both ends of a step have to be built against one origin or the walk
 /// between them crosses frames; the store's current centre supplies it for
 /// every caller, and a candidate target is expressed against that same one.
-pub fn pose(view: ViewTriple, center: Option<&PVF3>) -> Option<ViewPose> {
+pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
     let map_center = map_store().map_center?;
     let at = center.copied().unwrap_or(map_center);
     let origin = get_local_world_origin(Some(&map_center));
-    let local = PVF3 { i: ivec::sub(at.i, origin), f: at.f };
+    let local = Pvf3 { i: ivec::sub(at.i, origin), f: at.f };
     Some(ViewPose {
         origin_page: TO_XY(L3_IDX(origin)),
         target: [pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local))],
@@ -156,7 +156,7 @@ pub fn allowed_view(to: ViewTriple, from: ViewTriple) -> ViewTriple {
 /// it went through no gate at all and walking into a hill sideways simply
 /// worked. Jumps do not come through here — a search result or a GPS recentre
 /// is a destination the user named, not a path they dragged.
-pub fn allowed_pan(view: ViewTriple, to_center: &PVF3) -> PVF3 {
+pub fn allowed_pan(view: ViewTriple, to_center: &Pvf3) -> Pvf3 {
     let (Some(from_pose), Some(to_pose)) = (pose(view, None), pose(view, Some(to_center))) else {
         return *to_center;
     };
@@ -165,7 +165,7 @@ pub fn allowed_pan(view: ViewTriple, to_center: &PVF3) -> PVF3 {
         return *to_center;
     }
     let map_origin = get_local_world_origin(map_store().map_center.as_ref());
-    let mut out = PVF3::default();
+    let mut out = Pvf3::default();
     local_world_to_canonical(&mut out, &reached.target, map_origin);
     out
 }

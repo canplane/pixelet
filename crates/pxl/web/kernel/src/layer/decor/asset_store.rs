@@ -16,12 +16,12 @@
 use pxl_spec::asset::ingested::Asset;
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
+use crate::global::Global;
 use crate::io::load::{load_failed, load_gltf, load_image, Load};
 use crate::io::model_asset::register_model;
+use crate::kernel::kernel;
 use crate::layer::decor::build::DecorKindBundle;
 use crate::layer::decor::registry::DECOR_BUNDLES;
-use crate::sys::global::Global;
-use crate::sys::kernel::kernel;
 use crate::world::change::{bump_world, world_edge, DECOR_ASSET};
 
 /// Variants a kind has room for; kind.json's largest kind has nine.

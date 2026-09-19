@@ -1,6 +1,6 @@
 // pxl-kernel/layer/terrain/ground_snap.rs
 
-use pxl_spec::space::pvf3::pvf3::{self, PVF3};
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
 use crate::layer::terrain::elevation::ground_pivot;
 use crate::shell::map_store::map_store;
@@ -16,10 +16,10 @@ pub fn reground_map_center() {
         return;
     }
     let Some(map_center) = map_store().map_center else { return };
-    let mut probe = PVF3::default();
+    let mut probe = Pvf3::default();
     pvf3::gather(&mut probe, pvf3::X(&map_center), pvf3::Y(&map_center), 0);
     let (i, f) = (probe.i, probe.f);
-    let Some(grounded) = ground_pivot(&mut probe, &PVF3 { i, f }) else { return };
+    let Some(grounded) = ground_pivot(&mut probe, &Pvf3 { i, f }) else { return };
     if grounded != map_center {
         map_store().map_center = Some(grounded);
     }

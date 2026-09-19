@@ -14,7 +14,7 @@ use xpute_runtime::sched::quantum::QuantumPolicy;
 pub use xpute_runtime::sched::tick::{FrameBudget, Phase, StepStats, TickReport, CONTENT, COSMETIC, INTERACTION, PHASES, REPORT, VISIBLE};
 use xpute_runtime::sched::tick::{Tick, TickPolicy};
 
-use crate::sys::global::Global;
+use crate::global::Global;
 
 /// What a step reads of the frame beside the tick's own numbers.
 #[derive(Clone, Copy, Debug, Default)]

@@ -20,12 +20,13 @@
 //! off the end is the farthest — which is also the smallest and the least
 //! legible.
 
-use xpute_core::ds::grid_index::{GridIndex, DEFAULT_CELL_PX, NO_ROOM, PLACED};
-use xpute_core::kit::mat4::{mat4_transform_point, Vec3};
+use pxl_spec::space::lattice::grid_index::{GridIndex, Placement, DEFAULT_CELL_PX};
+use xpute_core::math::mat4::mat4_transform_point;
+use xpute_core::math::vec3::Vec3;
 
+use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::distance_fade::distance_fade_far;
-use crate::sys::global::Global;
 use crate::world::frame::view::{view, view_sees_sphere};
 
 /// Placed badges in screen pixels, so a candidate can find out whether its
@@ -177,26 +178,19 @@ pub fn select_place(batch: &mut BillboardBatch, max_count: u32, viewport_w: f64,
         let room = kept < max_count && (kept as usize) < out.len();
         let blocker = if room { sel.screen.place(x0, y0, x1, y1) } else { sel.screen.first_hit(x0, y0, x1, y1) };
 
-        if blocker == PLACED {
-            if room {
+        match blocker {
+            Placement::Placed if room => {
                 out[kept as usize] = i as u32;
                 kept += 1;
-            } else {
-                sel.dropped += 1;
             }
-            continue;
+            Placement::Placed | Placement::NoRoom => sel.dropped += 1,
+            // The whole point. This candidate is not drawn, and it is not gone
+            // either: the badge standing on its pixels now stands for it too.
+            // `id` is what the grid handed out on insert, which is the order
+            // things were placed in, which is this loop's own `kept` at the
+            // time — so it indexes `out` directly.
+            Placement::Blocked(id) => batch.absorbed[out[id as usize] as usize] += 1,
         }
-        if blocker == NO_ROOM {
-            sel.dropped += 1;
-            continue;
-        }
-
-        // The whole point. This candidate is not drawn, and it is not gone
-        // either: the badge standing on its pixels now stands for it too.
-        // `blocker` is the id the grid handed out on insert, which is the order
-        // things were placed in, which is this loop's own `kept` at the time —
-        // so it indexes `out` directly.
-        batch.absorbed[out[blocker as usize] as usize] += 1;
     }
     sel.k = end;
     sel.kept = kept;

@@ -59,23 +59,17 @@
 //! - BASE is inclusive
 //! - LIMIT is exclusive
 
+// Uppercase throughout, as the notation these operations are written in: one
+// that holds no state and closes over nothing is named the way a C header
+// names its macros. Rust's own answer to a macro like that is a `const fn`,
+// which it cases snake, so the notation and the language disagree here and
+// the file keeps the notation — suspended once for the file, which is the
+// level the choice is made at rather than item by item.
 #![allow(non_snake_case)]
 
 use super::pvf3::ivec::{self, add, fill, IVec};
-use super::pvf3::pvf3::{self, PVF3};
-
-/// `FIELD_MASK64(nbit)`: the low `nbit` bits.
-const fn field_mask64(nbit: u32) -> u64 {
-    if nbit >= 64 {
-        u64::MAX
-    } else {
-        (1u64 << nbit) - 1
-    }
-}
-/// `BIT64(shamt)`.
-const fn bit64(shamt: u32) -> u64 {
-    1u64 << shamt
-}
+use super::pvf3::pvf3::{self, Pvf3};
+use xpute_core::abi::word::{bit64, field_mask64};
 
 // ---- Hierarchy Configuration ----
 
@@ -106,9 +100,9 @@ pub const L3_SPAN_IN_L4: u64 = bit64(L4_SHAMT - L3_SHAMT);
 /// These are component-wise packed masks used to isolate lower-level bits.
 /// `ivec::fill` is not const, so each is the word it evaluates to, pinned
 /// by a test against `fill`.
-pub const L2_MASK: IVec = fill_const(field_mask64(L2_SHAMT));
-pub const L3_MASK: IVec = fill_const(field_mask64(L3_SHAMT));
-pub const L4_MASK: IVec = fill_const(field_mask64(L4_SHAMT));
+pub const L2_MASK: IVec = fill_const(field_mask64(L2_SHAMT, 0));
+pub const L3_MASK: IVec = fill_const(field_mask64(L3_SHAMT, 0));
+pub const L4_MASK: IVec = fill_const(field_mask64(L4_SHAMT, 0));
 // pub const L5_MASK: IVec = fill_const(field_mask64(L5_SHAMT)); // Z masks out completely at this level (Z_W = 16)
 
 /// `ivec::fill(e)` for a non-negative `e`, at compile time.
@@ -156,8 +150,8 @@ pub fn L4_CENTER(addr: IVec) -> IVec {
 /// systems in one point, and everything that marks a cell here already avoids
 /// it: a cell's anchor centre adds the half on every axis, and hover, placed
 /// cubes and the location puck all read a cell the same way.
-pub fn SPAN_CENTER(out: &mut PVF3, addr: IVec, shamt: u32) -> &mut PVF3 {
-    out.i = if shamt == 0 { addr } else { addr & !fill(field_mask64(shamt) as i64) };
+pub fn SPAN_CENTER(out: &mut Pvf3, addr: IVec, shamt: u32) -> &mut Pvf3 {
+    out.i = if shamt == 0 { addr } else { addr & !fill(field_mask64(shamt, 0) as i64) };
     out.f = 0;
     let half = pvf3::from_real(bit64(shamt) as f64 / 2.0);
     let (x, y, z) = (pvf3::X(out) + half, pvf3::Y(out) + half, pvf3::Z(out) + half);

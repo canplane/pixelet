@@ -28,7 +28,7 @@ use pxl_spec::bake::published::PUBLISHED_VERSION;
 
 use pxl_geo_bake::page::bake::{self, Bake};
 use pxl_geo_bake::page::walk::Page;
-use pxl_geo_bake::poi::provider::overture_provider::PoiProvider;
+use pxl_geo_bake::poi::provider::overture::PoiProvider;
 use pxl_geo_spec::table;
 
 struct Worker {

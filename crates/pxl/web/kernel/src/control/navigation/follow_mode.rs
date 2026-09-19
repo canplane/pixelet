@@ -1,15 +1,16 @@
 // pxl-kernel/control/navigation/follow_mode.rs
 
-use pxl_spec::space::pvf3::pvf3::PVF3;
-use xpute_core::kit::math::wrap;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::store::{camera_store, ViewPatch};
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::store::{device_location_store, device_orientation_store, DevicePoseStatus};
+use crate::global::Global;
+use crate::host::now;
 use crate::layer::terrain::elevation::ground_or_raw;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
-use crate::sys::global::{now, Global};
 use crate::world::change::wake_at;
 
 /// EMA factor applied per heading sample (not per frame — device orientation
@@ -28,7 +29,7 @@ const SENSOR_GRACE_MS: f64 = 12000.0;
 struct Follow {
     smoothed_azimuth: Option<f64>,
     was_following: bool,
-    last_device: Option<PVF3>,
+    last_device: Option<Pvf3>,
     last_heading: Option<f64>,
     /// When follow mode gives up, while a sensor is away from READY, and the
     /// pair of statuses that deadline was set for.

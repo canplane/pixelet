@@ -4,14 +4,14 @@
 //! realtime half when it arrives.
 //!
 //! It answers nothing yet, and that is not the same as not existing. The
-//! TypeScript it replaces already held this shape — a process that connected to
-//! db-main, probed it at boot and reserved the internal prefix behind the admin
-//! token — and the shape is what a later route arrives into. Taking it away
+//! shape — a process that connects to db-main, probes it at boot and reserves
+//! the internal prefix behind the admin token — is what a later route arrives
+//! into. Taking it away
 //! because no query read db-main yet would mean putting it back, along with the
 //! root, the origin, the container and the secret, on the day the first route
 //! is written.
 //!
-//! `/api/` is its root, one of the three spec/route.json reserves. The world's
+//! `/api/` is its root, one of the three spec/pxl/spec/route.json reserves. The world's
 //! data is pxl-geo's `/geo/`, and neither server depends on the other: they read
 //! separate databases and run for separate reasons — see
 //! issue/20260918-the-server-in-rust-and-the-line-already-drawn.md.

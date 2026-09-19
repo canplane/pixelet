@@ -11,14 +11,16 @@ use pxl_render::mesh::chunk_mesher::{mesh_words, write_lone_box, LONE_BOX_INDICE
 use pxl_render::mesh::volume::NO_LAYER;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::ground::shown_ground;
-use pxl_spec::cell::{placeable_cube_num_id, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
-use pxl_spec::space::pvf3::pvf3::PVF3;
+use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{fvec, ivec};
 use pxl_spec::space::v3::V3;
-use xpute_runtime::sys::mem::{alloc, free};
+use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::control::camera::input::{holding, ActiveTool};
 use crate::control::camera::store::camera_store;
+use crate::global::Global;
+use crate::kernel::with_world;
 use crate::layer::decor::asset_store::{decor_assets_for, decor_bundle_assets};
 use crate::layer::decor::build::user_decor_pick;
 use crate::layer::decor::instance::NO_ENTRY;
@@ -29,8 +31,6 @@ use crate::layer::object::store::{clear_virtual_carve_preview, get_placed_object
 use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
-use crate::sys::global::Global;
-use crate::sys::kernel::with_world;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::node::World;
 use crate::world::frame::coord::get_local_world_origin;
@@ -49,7 +49,7 @@ struct Cursor {
     virtual_hide_target: Option<EntryAt>,
     /// The carve preview as last set: its cell and size, compared as words, so
     /// two hover ticks landing in the same cell skip re-running.
-    carve_preview: Option<(PVF3, f64)>,
+    carve_preview: Option<(Pvf3, f64)>,
     ghost: Ghost,
 }
 

@@ -6,7 +6,7 @@
 use pxl_render::mesh::paint::palette::shader_meta::{ground_color_lookup, ground_layer_index_lookup, rgb255};
 use pxl_render::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
 use pxl_render::mesh::volume::{MaterialClasses, VoxelMaterial, NO_LAYER};
-use pxl_spec::cell::{placeable_cube_rgb, terrain_style_cube_source, PlaceableCube};
+use pxl_spec::cell::object::{placeable_cube_rgb, terrain_style_cube_source, PlaceableCube};
 
 /// A placed "solid" cube's own real color/layer_idx — either a flat color or,
 /// for a terrain-styled pick, the exact same color/layer_idx

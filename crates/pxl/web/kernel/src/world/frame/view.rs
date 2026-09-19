@@ -16,14 +16,15 @@
 //! Held here the matrices are current the moment a step writes them.
 
 use pxl_spec::space::pvf3::ivec::IVec;
-use xpute_core::kit::mat4::{
-    mat4, mat4_frustum_planes, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_rotation_z, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4, Vec3,
+use xpute_core::math::mat4::{
+    mat4, mat4_frustum_planes, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_rotation_z, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4,
 };
+use xpute_core::math::vec3::Vec3;
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::orbit::orbit_local_offset;
+use crate::global::Global;
 use crate::layer::environment::config::render_cfg;
-use crate::sys::global::Global;
 
 const UP: Vec3 = Vec3 { x: 0.0, y: 0.0, z: 1.0 };
 const ORIGIN: Vec3 = Vec3 { x: 0.0, y: 0.0, z: 0.0 };

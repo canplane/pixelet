@@ -27,11 +27,11 @@ use pxl_render::mesh::paint::terrain::adapter::ChunkSample;
 use pxl_spec::bake::constant::CHUNK_CELL_SPAN;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::v3::V3;
-use xpute_core::kit::hash::fnv1a64_str;
+use xpute_runtime::mem::heap::alloc;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts};
-use xpute_runtime::sys::mem::alloc;
 
+use crate::global::Global;
 use crate::io::load::Models;
 use crate::layer::billboard::field::Billboards;
 use crate::layer::decor::build::{decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
@@ -40,7 +40,6 @@ use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::frame_gizmo::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
-use crate::sys::global::Global;
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
 use crate::world::chunk::range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT, PAGE_SPAN};
 
@@ -608,7 +607,7 @@ impl Scheduler {
         self.account(i, before);
         if self.slots[i].layout_ready && self.slots[i].has(IN_FRUSTUM) {
             let (p, q) = self.slots[i].desired;
-            self.set_pending(i, true, build_request(p, q), crate::sys::global::now());
+            self.set_pending(i, true, build_request(p, q), crate::host::now());
             // Asked now rather than at the tick's commit pass, which a spent
             // budget may not reach this chunk in.
             self.ask(world, i, p, q);
@@ -628,7 +627,7 @@ impl Scheduler {
         let mem = world_mem(world);
         let (slots, index, ron, roff, draw, landed) = (&mut self.slots, &self.index, &mut self.retained_on, &mut self.retained_off, &mut self.draw, &mut self.landed);
         landed.clear();
-        let worked = self.builder.tick_capped(world, &self.builds, budget_ms, u32::MAX, &crate::sys::global::now, &mut |e| {
+        let worked = self.builder.tick_capped(world, &self.builds, budget_ms, u32::MAX, &crate::host::now, &mut |e| {
             if let BuildEvent::Tier { id, .. } = e {
                 landed.push(id);
             }
@@ -689,7 +688,7 @@ impl Scheduler {
             self.decor_scratch = DecorScratch::new();
             if self.decor_scratch.is_none() {
                 self.builder.stat.starved += 1;
-                self.slots[i].refused = Some(crate::sys::host::heap_releases());
+                self.slots[i].refused = Some(crate::host::heap_releases());
                 return false;
             }
         }
@@ -724,7 +723,7 @@ impl Scheduler {
             let bytes = built.bytes();
             let Some((at, bytes)) = alloc(bytes) else {
                 self.builder.stat.starved += 1;
-                self.slots[i].refused = Some(crate::sys::host::heap_releases());
+                self.slots[i].refused = Some(crate::host::heap_releases());
                 return false;
             };
             // SAFETY: a block of the bytes the build asked for, the chunk node's
@@ -1352,7 +1351,7 @@ impl Scheduler {
             return true;
         }
         let (p, q) = s.desired;
-        if s.refused.is_some_and(|r| r == crate::sys::host::heap_releases()) {
+        if s.refused.is_some_and(|r| r == crate::host::heap_releases()) {
             return false;
         }
         let asked = self.ask(world, i, p, q);
@@ -1494,7 +1493,7 @@ impl Scheduler {
 
 /// Whether the heap is live past HEAP_PRESSURE.
 fn heap_pressed(_world: &World) -> bool {
-    crate::sys::host::heap_live() as f64 > crate::sys::host::heap_bytes() as f64 * HEAP_PRESSURE
+    crate::host::heap_live() as f64 > crate::host::heap_bytes() as f64 * HEAP_PRESSURE
 }
 
 /// Ids the scheduler gives the chunks it mounts.
@@ -1522,7 +1521,9 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
 /// switching at once. It only has to be spread and to be the same for a chunk
 /// every time it is mounted; nothing reads the number itself.
 fn blend_point(page_idx: IVec, bx: u32, by: u32) -> f64 {
-    fnv1a64_str(&format!("{page_idx}:{bx},{by}")) as f64 / 2f64.powi(64)
+    let mut h = fnv::FnvHasher::default();
+    std::hash::Hasher::write(&mut h, format!("{page_idx}:{bx},{by}").as_bytes());
+    std::hash::Hasher::finish(&h) as f64 / 2f64.powi(64)
 }
 
 /// What a chunk's place in the order is decided by.

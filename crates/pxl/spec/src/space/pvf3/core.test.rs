@@ -21,5 +21,5 @@ fn pvf3_core_fvec_exposes_all_frac_w_bits_in_every_residue_lane() {
     assert_eq!(fvec::X(packed), max);
     assert_eq!(fvec::Y(packed), max);
     assert_eq!(fvec::Z(packed), max);
-    assert_eq!(fvec::not(0), (1u64 << (frac_w * 3)) - 1);
+    assert_eq!(fvec::not(0), (1u32 << (frac_w * 3)) - 1);
 }

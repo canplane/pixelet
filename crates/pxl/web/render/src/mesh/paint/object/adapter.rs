@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 
 use pxl_spec::bake::constant::{BandZ, CellZ, BAND_CELLS, BAND_UNITS, MIN_LEVEL, POS_BITS, POS_MASK, STEP_UNITS, U_PER_CELL};
 use pxl_spec::cell::cube_types;
-use xpute_core::kit::math::round_half_up;
+use xpute_core::math::scalar::round;
 
 use crate::mesh::volume::{pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};
 
@@ -205,14 +205,14 @@ impl Painter {
             return Some(0);
         }
         let is_sub_cell = size < U_PER_CELL;
-        let cell_of = |v: f64| if is_sub_cell { (v / U_PER_CELL).floor() } else { round_half_up(v / U_PER_CELL) };
+        let cell_of = |v: f64| if is_sub_cell { (v / U_PER_CELL).floor() } else { round(v / U_PER_CELL) };
         let cx0 = cell_of(lx).max(0.0) as u32;
         let cy0 = cell_of(ly).max(0.0) as u32;
         let z = cell_of(lz) as i32;
         if cx0 >= BAND_CELLS || cy0 >= BAND_CELLS {
             return Some(0);
         }
-        let sz_cells = (round_half_up(size / U_PER_CELL) as u32).max(1);
+        let sz_cells = (round(size / U_PER_CELL) as u32).max(1);
         let cx1 = (cx0 + sz_cells).min(BAND_CELLS);
         let cy1 = (cy0 + sz_cells).min(BAND_CELLS);
         let is_air = kind == Kind::Air;

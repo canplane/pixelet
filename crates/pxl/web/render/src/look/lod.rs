@@ -21,9 +21,9 @@
 //! badges climb the rungs the cubes are on.
 
 use pxl_spec::bake::constant::U_PER_CELL;
-use xpute_core::kit::fdlibm;
+use std::sync::LazyLock;
 
-use xpute_runtime::sys::global::Global;
+use xpute_runtime::global::Global;
 
 /// XY sampling stride in L1 blocks inside one 64x64 chunk.
 pub const LOD_STEP_BY_LEVEL: [LodStep; 7] = [1, 2, 4, 8, 16, 32, 64];
@@ -58,15 +58,12 @@ pub const REFERENCE_THRESHOLD_0: f64 = 192.0;
 /// factor the badges and billboard/distance_fade.rs size their own screen
 /// measurements with.
 pub fn px_per_unit(viewport_h: f64, fov_deg: f64) -> f64 {
-    viewport_h / (2.0 * fdlibm::tan((fov_deg * core::f64::consts::PI) / 360.0))
+    viewport_h / (2.0 * libm::tan((fov_deg * core::f64::consts::PI) / 360.0))
 }
 
 /// Six pixels at the reference. For whoever applies the same criterion to
 /// something other than a cell — decor, by its extent.
-#[allow(non_snake_case)]
-pub fn TARGET_CELL_PX() -> f64 {
-    px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) / REFERENCE_THRESHOLD_0
-}
+pub static TARGET_CELL_PX: LazyLock<f64> = LazyLock::new(|| px_per_unit(REFERENCE_VIEWPORT_H, REFERENCE_FOV_DEG) / REFERENCE_THRESHOLD_0);
 
 /// Half-width (fraction of the threshold's own distance) of the band where
 /// two LOD steps dither-blend. A wide pulled-back/top-down view puts a huge
@@ -120,7 +117,7 @@ impl Ladder {
     /// pressure): the set on screen gets coarser until it fits, as Cesium
     /// raises a tileset's screen-space error when its tiles exceed its cache.
     pub fn new(viewport_h: f64, fov_deg: f64, pressure: u32) -> Ladder {
-        let k = px_per_unit(viewport_h, fov_deg) / TARGET_CELL_PX() * 2f64.powf(-(pressure as f64) / 2.0);
+        let k = px_per_unit(viewport_h, fov_deg) / *TARGET_CELL_PX * 2f64.powf(-(pressure as f64) / 2.0);
         let mut thresholds = [0.0; 6];
         for (i, t) in thresholds.iter_mut().enumerate() {
             *t = LOD_STEP_BY_LEVEL[i] as f64 * U_PER_CELL * k;

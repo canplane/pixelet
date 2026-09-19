@@ -1,5 +1,10 @@
 // pxl-kernel/layer/decor.rs
 
+//! What the world grows on its own: trees on green, cars on roads, boats on
+//! water, trains on rails. A kind says what it may stand on and how a place
+//! is chosen; the layer holds every kind's models, scatters the instances a
+//! chunk gets, and answers which one a ray struck.
+
 pub mod asset_store;
 pub mod build;
 pub mod hit;

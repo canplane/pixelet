@@ -1,5 +1,11 @@
 // pxl-spec/space/xy.rs
 
+// Uppercase throughout, as the notation these operations are written in: one
+// that holds no state and closes over nothing is named the way a C header
+// names its macros. Rust's own answer to a macro like that is a `const fn`,
+// which it cases snake, so the notation and the language disagree here and
+// the file keeps the notation — suspended once for the file, which is the
+// level the choice is made at rather than item by item.
 #![allow(non_snake_case)]
 
 use super::pvf3::{ivec, IVec};

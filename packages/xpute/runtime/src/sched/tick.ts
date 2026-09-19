@@ -41,7 +41,7 @@
  * there rather than grown into.
  */
 
-import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { now } from "../sys/clock.ts";
 import { type PassStats, run_under_budget } from "./frame_budget.ts";
 

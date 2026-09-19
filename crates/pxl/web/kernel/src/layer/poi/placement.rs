@@ -25,10 +25,12 @@ use pxl_render::look::lod::{fade_end_u, get_lod_level, lod_step_at, BADGE_SHAMT_
 use pxl_spec::bake::format::PoiPage;
 use pxl_spec::space::indexer::{FROM_L3_IDX, SPAN_CENTER};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::{self, PVF3};
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::V3;
 
 use crate::control::camera::store::{camera_store, ViewState};
+use crate::global::Global;
+use crate::host::now;
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::cell_node::CellNodes;
 use crate::layer::billboard::frustum_budget::{select_begin, select_place, select_remaining};
@@ -41,7 +43,6 @@ use crate::layer::poi::index::{
 use crate::sched::tick::{FrameBudget, TickContext};
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
-use crate::sys::global::{now, Global};
 use crate::world::change::request_world_tick;
 use crate::world::frame::coord::{get_local_world_origin, local_world_to_canonical};
 use crate::world::frame::view::view;
@@ -77,16 +78,16 @@ fn tier_shamt(dist: f64, i: u32) -> u32 {
 
 /// center.xyz (page-local real units) resolved against the page's own global
 /// corner, untouched. The index grounds it and the lattice snaps it.
-pub fn poi_flat_pos(page: &PoiPage, rec: u32, page_idx: IVec) -> PVF3 {
-    let center = [page.x.get(rec as usize), page.y.get(rec as usize), page.z.get(rec as usize)];
-    let mut out = PVF3::default();
+pub fn poi_flat_pos(page: &PoiPage, rec: u32, page_idx: IVec) -> Pvf3 {
+    let center = [page.x[rec as usize], page.y[rec as usize], page.z[rec as usize]];
+    let mut out = Pvf3::default();
     local_world_to_canonical(&mut out, &center, FROM_L3_IDX(page_idx));
     out
 }
 
 /// absolute, projected into the local world frame's origin (map_origin).
-pub fn local_pos_from_absolute(absolute: &PVF3, map_origin: IVec) -> V3 {
-    let local = PVF3 {
+pub fn local_pos_from_absolute(absolute: &Pvf3, map_origin: IVec) -> V3 {
+    let local = Pvf3 {
         i: ivec::sub(absolute.i, map_origin),
         f: absolute.f,
     };
@@ -191,7 +192,7 @@ struct Layer {
     badge_set: Option<u32>,
     stats: PoiPlaceStats,
     /// The inputs a placement depends on, as last seen.
-    seen: Option<(ViewState, Option<PVF3>, bool)>,
+    seen: Option<(ViewState, Option<Pvf3>, bool)>,
 }
 
 static LAYER: Global<Layer> = Global::new();
@@ -249,7 +250,7 @@ fn badge_set() -> u32 {
 
 /// Advances the placement under the budget. Returns true on the step that
 /// commits one.
-fn poi_place_step(budget: &FrameBudget, t: f64, map_center: Option<PVF3>, show_poi: bool, viewport_w: f64, viewport_h: f64) -> bool {
+fn poi_place_step(budget: &FrameBudget, t: f64, map_center: Option<Pvf3>, show_poi: bool, viewport_w: f64, viewport_h: f64) -> bool {
     let l = layer();
     if l.job.is_none() {
         if !l.wanted || t - l.last_start < PLACEMENT_MS {
@@ -326,7 +327,7 @@ fn query_stage() {
     // distance while the fade drew them as if near.
     let eye = view().eye_local;
     (j.cx, j.cy, j.cz) = (eye.x, eye.y, eye.z);
-    let mut centre = PVF3::default();
+    let mut centre = Pvf3::default();
     local_world_to_canonical(&mut centre, &[j.cx, j.cy, j.cz], j.map_origin);
 
     // Only asks; the rebuild itself is the poi_index step's.
@@ -531,7 +532,7 @@ fn pick_of(nodes: &CellNodes, node: u32, absorbed_extra: u32, map_origin: IVec) 
         map_origin,
         ivec::gather((nodes.key_x[n] as i64) << shamt, (nodes.key_y[n] as i64) << shamt, (nodes.key_z[n] as i64) << shamt),
     );
-    let mut anchor = PVF3::default();
+    let mut anchor = Pvf3::default();
     SPAN_CENTER(&mut anchor, base, shamt);
     let [lx, ly, lz] = local_pos_from_absolute(&anchor, map_origin);
     Some(PoiPick {

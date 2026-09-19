@@ -9,9 +9,13 @@
 
 use pxl_render::look::lod::set_lod_projection;
 use pxl_spec::space::pvf3::{fvec, ivec};
+use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
 
+use crate::global::Global;
+use crate::host::now;
 use crate::io::fetch_scheduler::fetch_pending_count;
+use crate::kernel::{kernel, with_world};
 use crate::layer::environment::config::render_cfg;
 use crate::layer::poi::fetcher;
 use crate::layer::terrain::store::tile_pages;
@@ -21,8 +25,6 @@ use crate::sched::priority::lead_point;
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
-use crate::sys::global::{now, Global};
-use crate::sys::kernel::{kernel, with_world};
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::node::{run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES};
 use crate::world::chunk::range::{range_anchor_of, RANGE_HYSTERESIS};
@@ -107,11 +109,11 @@ fn work_sample(c: &mut CoreTick) -> WorkSample {
 /// refused, and `refusals` counts the second.
 fn heap_sample() -> HeapSample {
     HeapSample {
-        used_mb: (crate::sys::host::heap_used() as f64 / MB).round(),
-        live_mb: (crate::sys::host::heap_live() as f64 / MB).round(),
-        range_mb: (crate::sys::host::heap_bytes() as f64 / MB).round(),
-        refusals: crate::sys::host::heap_refusals() as f64,
-        largest_free_mb: crate::sys::host::heap_largest_free() as f64 / MB,
+        used_mb: round(crate::host::heap_used() as f64 / MB),
+        live_mb: round(crate::host::heap_live() as f64 / MB),
+        range_mb: round(crate::host::heap_bytes() as f64 / MB),
+        refusals: crate::host::heap_refusals() as f64,
+        largest_free_mb: crate::host::heap_largest_free() as f64 / MB,
     }
 }
 
@@ -226,7 +228,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         draw_calls: host.draw_calls,
         triangles: host.triangles,
         buffers: host.buffers,
-        buffer_mb: (host.buffer_bytes / MB).round(),
+        buffer_mb: round(host.buffer_bytes / MB),
         textures_mb: host.textures_mb,
         census: host.census,
         px: host.px,

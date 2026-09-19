@@ -26,7 +26,8 @@
 
 /// A run whose material is a placed object: exempt from hiding its
 /// neighbours' faces, and drawn with its bottom face.
-use xpute_runtime::sys::mem::{alloc, free, Block, Guard};
+use xpute_core::math::scalar::round;
+use xpute_runtime::mem::heap::{alloc, free, Block, Guard};
 
 pub const MATERIAL_OBJECT: u8 = 5;
 /// A coarse tier's cells, whatever they summarise.
@@ -48,10 +49,8 @@ const SUB_CELL_SCALE: f64 = 256.0;
 const SUB_CELL_FULL: u8 = 255;
 
 /// A fraction of a cell packed into a byte, rounded to the nearest 1/256.
-/// The fractions this packs are never negative, where `f64::round` and
-/// `round_half_up` agree.
 pub fn pack_sub_cell_fraction(fraction: f64) -> u32 {
-    ((fraction * SUB_CELL_SCALE).round()).clamp(0.0, SUB_CELL_SCALE - 1.0) as u32
+    round(fraction * SUB_CELL_SCALE).clamp(0.0, SUB_CELL_SCALE - 1.0) as u32
 }
 
 pub fn unpack_sub_cell_fraction(packed: u8) -> f64 {
@@ -69,14 +68,15 @@ pub fn unpack_sub_cell_size(packed: u8) -> f64 {
 /// `MaterialClass`.
 pub type MaterialClass = u32;
 
-#[allow(non_snake_case)]
-pub mod MaterialClasses {
-    pub const AIR: u32 = 0;
-    pub const LAND: u32 = 1;
-    pub const WATER: u32 = 2;
-    pub const TRANSPORT: u32 = 3;
-    pub const STRUCTURE: u32 = 4;
-    pub const OBJECT: u32 = 5;
+pub struct MaterialClasses;
+
+impl MaterialClasses {
+    pub const AIR: MaterialClass = 0;
+    pub const LAND: MaterialClass = 1;
+    pub const WATER: MaterialClass = 2;
+    pub const TRANSPORT: MaterialClass = 3;
+    pub const STRUCTURE: MaterialClass = 4;
+    pub const OBJECT: MaterialClass = 5;
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

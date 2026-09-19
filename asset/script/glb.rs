@@ -14,7 +14,8 @@
 //! vertices to rediscover it would be slower and no more correct.
 
 use serde::Deserialize;
-use xpute_core::kit::mat4::{mat4_identity, mat4_mul, mat4_transform_point, Mat4, Vec3};
+use xpute_core::math::mat4::{mat4_identity, mat4_mul, mat4_transform_point, Mat4};
+use xpute_core::math::vec3::Vec3;
 
 #[derive(Deserialize)]
 struct Gltf {

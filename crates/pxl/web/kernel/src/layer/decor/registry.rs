@@ -8,12 +8,12 @@
 
 use pxl_spec::cell::DecorId;
 
+use crate::global::Global;
 use crate::layer::decor::build::{teach_decor_kinds, DecorKindBundle};
 use crate::layer::decor::kind::boat::BOAT_DECOR_BUNDLE;
 use crate::layer::decor::kind::car::CAR_DECOR_BUNDLE;
 use crate::layer::decor::kind::train::TRAIN_DECOR_BUNDLE;
 use crate::layer::decor::kind::tree::TREE_DECOR_BUNDLE;
-use crate::sys::global::Global;
 
 static TAUGHT: Global<bool> = Global::new();
 

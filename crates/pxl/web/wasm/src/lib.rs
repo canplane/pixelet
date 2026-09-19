@@ -1,8 +1,10 @@
+// pxl-wasm/lib.rs
+
 //! The one WebAssembly module: pxl-kernel behind a boot block and a doorbell.
 //!
 //! No wasm-bindgen. The central scheduler gives the module its memory, and
 //! the module lays out everything inside it when it is booted (`boot`,
-//! pxl_kernel::sys::mem); the shell reads the boot block once, and everything after
+//! pxl_kernel::mem); the shell reads the boot block once, and everything after
 //! crosses in the rings in that memory: a command and its packet in, its
 //! reply and the kernel's signals out, and `interrupt` to hand over the turn.
 //!
@@ -10,18 +12,18 @@
 
 mod executor;
 
-use pxl_kernel::sys::global::Global;
-use pxl_kernel::sys::kernel::kernel;
-use pxl_kernel::sys::mem::section;
+use pxl_kernel::global::Global;
+use pxl_kernel::kernel::kernel;
+use pxl_kernel::mem::section;
 use pxl_render::mesh::volume::Volumes;
-use pxl_spec::cmd::Cmd;
-use xpute_core::errno::Errno;
-use xpute_core::error::MarshalError;
-use xpute_core::io::marshal::tree::{BranchCursor, PacketWriter, TreeReader};
-use xpute_core::kit::array::{ArrayBuffer, U8Array};
+use pxl_spec::abi::cmd::Cmd;
+use xpute_core::math::scalar::round;
+use xpute_core::status::errno::Errno;
+use xpute_core::status::error::MarshalError;
+use xpute_core::wire::xtp::{BranchCursor, PacketWriter, TreeReader};
 use xpute_runtime::ipc::frame::FrameFlag;
 use xpute_runtime::ipc::ring::{ring_bytes, slots_bytes, Ring};
-use xpute_runtime::sys::mem::{write_section, SECTION_WORDS};
+use xpute_runtime::mem::section::{write_section, SECTION_WORDS};
 
 extern "C" {
     /// Where the linker stopped: the end of `.rodata`, `.data` and `.bss`, and
@@ -74,7 +76,7 @@ const fn memory_shift(bytes: u32) -> usize {
 /// once here and `BuddyMalloc` checks it against them on the first request.
 const HEAP_SPLIT_BYTES: usize = (1 << (HEAP_MAX_LOG2 - HEAP_MIN_LOG2)) / 8;
 
-impl xpute_core::ds::buddy_tree::Range for ModuleHeap {
+impl xpute_core::alloc::buddy_tree::Range for ModuleHeap {
     const MIN_LOG2: usize = HEAP_MIN_LOG2;
     const MAX_LOG2: usize = HEAP_MAX_LOG2;
     type Split = [u8; HEAP_SPLIT_BYTES];
@@ -97,7 +99,7 @@ impl xpute_core::ds::buddy_tree::Range for ModuleHeap {
 /// borrows and returns whole runs of pages to the same buddy, so neither level
 /// can starve while the other has room.
 #[global_allocator]
-static ALLOC: xpute_core::ds::slab::SlabMalloc<ModuleHeap> = xpute_core::ds::slab::SlabMalloc::new();
+static ALLOC: xpute_core::alloc::slab::SlabMalloc<ModuleHeap> = xpute_core::alloc::slab::SlabMalloc::new();
 
 struct State {
     /// The submission ring (shell → core), at the address build.rs fixed;
@@ -131,8 +133,13 @@ const _: () = assert!(RING_SLOT_BYTES == section::PAGE_BYTES, "a slot's payload 
 ///
 /// # Safety
 /// The module's own memory, addressed from 0.
-unsafe fn module_memory() -> ArrayBuffer {
-    unsafe { ArrayBuffer::from_raw(core::ptr::null_mut(), core::arch::wasm32::memory_size(0) * (1 << 16)) }
+unsafe fn module_memory() -> *mut u8 {
+    // An address, not a pointer into anything: the linear memory is the
+    // machine's and address 0 is its base. `null_mut()` would say the same
+    // number and mean something else — offsetting a null pointer is undefined,
+    // and the optimizer is free to drop the stores that follow, which it does:
+    // a ring's capacity word went missing from an otherwise correct header.
+    core::ptr::with_exposed_provenance_mut(0)
 }
 
 /// The nth ring, laid out empty.
@@ -140,12 +147,13 @@ fn new_ring(n: u32) -> Ring {
     // SAFETY: the module's own memory; the two ranges are build.rs's and no
     // one else's, the linker included.
     let mem = unsafe { module_memory() };
-    Ring::init(mem, RING_DESC_AT + n * RING_DESC_STRIDE, RING_CAPACITY, RING_SLOT_AT + n * RING_SLOT_STRIDE, RING_SLOT_BYTES)
+    // SAFETY: the module's memory never moves and outlives every ring over it.
+    unsafe { Ring::init(mem, RING_DESC_AT + n * RING_DESC_STRIDE, RING_CAPACITY, RING_SLOT_AT + n * RING_SLOT_STRIDE, RING_SLOT_BYTES) }
 }
 
 /// Where a ring's words start in the memory.
 fn ring_address(ring: &Ring) -> u32 {
-    ring.words.as_slice().as_ptr() as u32
+    ring.words().as_ptr() as u32
 }
 
 /// The module's one state, made on first use. xpute's device for it rather
@@ -189,7 +197,7 @@ fn state() -> &'static mut State {
 // ---- Rings ----
 //
 // Commands and their effects cross in rings (crates/xpute/core/src/ipc/ring.rs):
-// a message names a command (pxl_spec::cmd) and an XTP packet in the
+// a message names a command (pxl_spec::abi::cmd) and an XTP packet in the
 // ring's slot, which the kernel reads where it lies. The shell assembles
 // what it submits and takes apart what completes; nothing here is shaped
 // for it. The shell pushes into the submission ring, rings `interrupt` with
@@ -232,7 +240,7 @@ pub extern "C" fn boot() -> *const u32 {
     }
     let q = pxl_kernel::sched::tick::QUANTUM;
     for (i, v) in [q.margin_share, q.batch_frames, q.settle_ms].into_iter().enumerate() {
-        s.boot[BOOT_QUANTUM + i] = (v * 1000.0).round() as u32;
+        s.boot[BOOT_QUANTUM + i] = round(v * 1000.0) as u32;
     }
     s.boot.as_ptr()
 }
@@ -246,7 +254,7 @@ pub extern "C" fn boot() -> *const u32 {
 fn lay_out() -> section::Map {
     let stack_high = core::ptr::addr_of!(__stack_high) as u32;
     assert!(
-        stack_high == pxl_kernel::sys::mem::spec::STACK_BYTES,
+        stack_high == pxl_kernel::mem::spec::STACK_BYTES,
         "the stack was linked to end at {stack_high}, not at mem.json's STACK_BYTES"
     );
     let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
@@ -365,7 +373,7 @@ impl Outbox {
             }
             let at = at as u32;
             let pkt = self.spill.packet(at).expect("a spilled packet is the kernel's own");
-            if self.cq.push(self.spill.tag(at), self.spill.cmd(at), self.spill.flags(at), pkt.as_ref(), self.spill.result(at)) != Errno::OK {
+            if self.cq.push(self.spill.tag(at), self.spill.cmd(at), self.spill.flags(at), pkt, self.spill.result(at)) != Errno::OK {
                 return;
             }
             self.spill.advance();
@@ -429,7 +437,9 @@ fn post_shell(s: &mut State) {
     let text = SNAPSHOT_TEXT.get(String::new);
     text.clear();
     pxl_kernel::shell::shell::ui_snapshot_json(text).expect("a UI snapshot");
-    let hash = xpute_core::kit::hash::fnv1a64_str(text);
+    let mut h = fnv::FnvHasher::default();
+    std::hash::Hasher::write(&mut h, text.as_bytes());
+    let hash = std::hash::Hasher::finish(&h);
     if hash != s.snapshot {
         s.snapshot = hash;
         // The JSON is far past a slot and the shell reads it before the next
@@ -477,27 +487,27 @@ fn post_turn(s: &mut State) {
 
 /// A packet's branch of children, refused when the command needs one and
 /// the message has none.
-fn fields(pkt: &Option<U8Array>) -> Result<BranchCursor, MarshalError> {
+fn fields<'a>(pkt: &Option<&'a [u8]>) -> Result<BranchCursor<'a>, MarshalError> {
     match pkt {
-        Some(pkt) => TreeReader::new(pkt.clone())?.read_branch(),
+        Some(pkt) => TreeReader::new(pkt)?.read_branch(),
         None => Err(MarshalError::new(Errno::EBADMSG, Some("command without its packet"), None)),
     }
 }
 
-fn u32_at(b: &BranchCursor, i: u32) -> Result<u32, MarshalError> {
+fn u32_at(b: &BranchCursor<'_>, i: u32) -> Result<u32, MarshalError> {
     Ok(b.at(i)?.get_number()? as u32)
 }
 
-fn i32_at(b: &BranchCursor, i: u32) -> Result<i32, MarshalError> {
+fn i32_at(b: &BranchCursor<'_>, i: u32) -> Result<i32, MarshalError> {
     Ok(b.at(i)?.get_number()? as i32)
 }
 
-fn number_at(b: &BranchCursor, i: u32) -> Result<f64, MarshalError> {
+fn number_at(b: &BranchCursor<'_>, i: u32) -> Result<f64, MarshalError> {
     b.at(i)?.get_number()
 }
 
-fn u64_at(b: &BranchCursor, i: u32) -> Result<u64, MarshalError> {
-    Ok(b.at(i)?.get_bigint()? as u64)
+fn u64_at(b: &BranchCursor<'_>, i: u32) -> Result<u64, MarshalError> {
+    b.at(i)?.get_u64()
 }
 
 fn bool_at(b: &BranchCursor, i: u32) -> Result<bool, MarshalError> {
@@ -512,7 +522,7 @@ fn load_at(b: &BranchCursor, i: u32) -> Result<pxl_kernel::io::load::Load, Marsh
 /// Applies one submission: its reply's value, or none for a command nobody
 /// numbers or a signal submitted as a command, which replies ENOSYS; a packet
 /// that does not read as the command's replies with its errno.
-fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32>, MarshalError> {
+fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
     let Some(cmd) = Cmd::of(number) else { return Ok(None) };
     match cmd {
         Cmd::NOP => {
@@ -545,7 +555,7 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
                 build_number: f.at(3)?.get_str()?,
                 published_tiles: bool_at(&f, 4)?,
             });
-            pxl_kernel::sys::host::set_handheld(bool_at(&f, 5)?);
+            pxl_kernel::host::set_handheld(bool_at(&f, 5)?);
             pxl_kernel::sched::turn::set_world_platform(pxl_kernel::sched::turn::Platform {
                 geolocation: bool_at(&f, 6)?,
                 orientation: pxl_kernel::control::sensor::device_orientation::OrientationPlatform {
@@ -575,7 +585,8 @@ fn apply(s: &mut State, number: u32, pkt: &Option<U8Array>) -> Result<Option<i32
         }
         Cmd::INPUT_POINTER => {
             use pxl_kernel::control::camera::input::{camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, ActiveTool, Holding, PointerKind};
-            use pxl_spec::cell::{placeable_cube_of, DecorId};
+            use pxl_spec::cell::object::placeable_cube_of;
+            use pxl_spec::cell::DecorId;
             let f = fields(pkt)?;
             let kind = match u32_at(&f, 1)? {
                 1 => PointerKind::Touch,
@@ -773,7 +784,7 @@ fn drain(s: &mut State) -> u32 {
     s.outbox.cq.tail().wrapping_sub(tail)
 }
 
-// ---- The host's hooks (pxl_kernel::sys::host, pxl_kernel::sys::global) ----
+// ---- The host's hooks (pxl_kernel::host) ----
 
 extern "C" {
     /// `localStorage.getItem(key)`'s length in UTF-8 bytes, or -1 for none.
@@ -792,9 +803,6 @@ extern "C" {
     /// A canvas context's `measureText(text).width` in `font`.
     #[link_name = "measure_text"]
     fn host_measure_text(font: *const u8, font_len: usize, text: *const u8, text_len: usize) -> f64;
-    /// 32 random bits.
-    #[link_name = "entropy"]
-    fn host_entropy() -> u32;
     /// Copies the body the host holds as `body` into `dst`, `len` bytes, and
     /// lets it go; a `len` of 0 only lets it go.
     #[link_name = "body_read"]
@@ -933,11 +941,11 @@ fn hook_storage_set(key: &str, value: &str) {
     unsafe { host_storage_set(key.as_ptr(), key.len(), value.as_ptr(), value.len()) }
 }
 
-fn hook_local_time() -> pxl_kernel::sys::host::LocalTime {
+fn hook_local_time() -> pxl_kernel::host::LocalTime {
     let mut t = [0.0f64; 5];
     // SAFETY: the host writes five doubles into `t`.
     unsafe { host_local_time(t.as_mut_ptr()) };
-    pxl_kernel::sys::host::LocalTime {
+    pxl_kernel::host::LocalTime {
         unix_ms: t[0],
         hours: t[1],
         minutes: t[2],
@@ -956,29 +964,23 @@ fn hook_body_read(body: u32, dst: &mut [u8]) {
     unsafe { host_body_read(body, dst.as_mut_ptr(), dst.len()) }
 }
 
-fn hook_entropy() -> u64 {
-    // SAFETY: an import with no arguments.
-    unsafe { ((host_entropy() as u64) << 32) | host_entropy() as u64 }
-}
-
-/// Hands the kernel the host's clock, storage, local time, text measure and
-/// entropy, before anything reads them.
+/// Hands the kernel the host's clock, storage, local time and text measure,
+/// before anything reads them.
 fn install_host() {
-    pxl_kernel::sys::global::set_clock(hook_now);
-    pxl_kernel::sys::host::set_storage(pxl_kernel::sys::host::Storage {
+    pxl_kernel::host::set_clock(hook_now);
+    pxl_kernel::host::set_storage(pxl_kernel::host::Storage {
         get: hook_storage_get,
         set: hook_storage_set,
     });
-    pxl_kernel::sys::host::set_local_time(hook_local_time);
-    pxl_kernel::sys::host::set_measure_text(hook_measure_text);
-    pxl_kernel::sys::host::set_body_read(hook_body_read);
-    xpute_core::kit::rng::set_entropy(hook_entropy);
-    pxl_kernel::sys::host::set_heap_used(|| ALLOC.used());
-    pxl_kernel::sys::host::set_heap_releases(|| ALLOC.releases());
-    pxl_kernel::sys::host::set_heap_live(|| ALLOC.live());
-    pxl_kernel::sys::host::set_heap_bytes(|| ALLOC.range_bytes());
-    pxl_kernel::sys::host::set_heap_refusals(|| ALLOC.refusals());
-    pxl_kernel::sys::host::set_heap_largest_free(|| ALLOC.largest_free());
+    pxl_kernel::host::set_local_time(hook_local_time);
+    pxl_kernel::host::set_measure_text(hook_measure_text);
+    pxl_kernel::host::set_body_read(hook_body_read);
+    pxl_kernel::host::set_heap_used(|| ALLOC.used());
+    pxl_kernel::host::set_heap_releases(|| ALLOC.releases());
+    pxl_kernel::host::set_heap_live(|| ALLOC.live());
+    pxl_kernel::host::set_heap_bytes(|| ALLOC.range_bytes());
+    pxl_kernel::host::set_heap_refusals(|| ALLOC.refusals());
+    pxl_kernel::host::set_heap_largest_free(|| ALLOC.largest_free());
     install_gpu();
 }
 
@@ -998,7 +1000,7 @@ fn install_host() {
 pub extern "C" fn ledger_read(window_ms: f64) -> *const u32 {
     use pxl_kernel::sched::ledger::record::{ledger_frames, ledger_tasks, ledger_worst};
     use pxl_kernel::sched::ledger::spec::READ;
-    static WORDS: pxl_kernel::sys::global::Global<[u32; READ::WORDS as usize]> = pxl_kernel::sys::global::Global::new();
+    static WORDS: pxl_kernel::global::Global<[u32; READ::WORDS as usize]> = pxl_kernel::global::Global::new();
     let summary = pxl_kernel::sched::ledger::summary::ledger_summarize(window_ms);
     let (frames, tasks, worst) = (ledger_frames(), ledger_tasks(), ledger_worst());
     let w = WORDS.get(|| [0; READ::WORDS as usize]);
@@ -1020,7 +1022,7 @@ pub extern "C" fn ledger_read(window_ms: f64) -> *const u32 {
 #[no_mangle]
 pub extern "C" fn ledger_log() -> *const u32 {
     use pxl_kernel::sched::ledger::spec::LOG;
-    static WORDS: pxl_kernel::sys::global::Global<[u32; LOG::WORDS as usize]> = pxl_kernel::sys::global::Global::new();
+    static WORDS: pxl_kernel::global::Global<[u32; LOG::WORDS as usize]> = pxl_kernel::global::Global::new();
     let (tasks, frames) = pxl_kernel::sched::ledger::log::ledger_log_rows();
     let w = WORDS.get(|| [0; LOG::WORDS as usize]);
     w[LOG::tasks_at as usize] = tasks.as_ptr() as u32;

@@ -6,7 +6,7 @@
 //! aggregate.
 //!
 //! What is streamed is what was measured. The lines a person reads are the
-//! shell's (apps/web/src/dev/ledger/report.ts), the same
+//! shell's (apps/web/src/feature/dev/ledger/report.ts), the same
 //! formatters the report already uses, so a streamed task and a reported one
 //! read alike without this side knowing a word of it.
 //!
@@ -27,12 +27,12 @@
 //! moving, or overran the budget, are kept — summary.rs's `missed` and
 //! `overran`, the same tests the report counts.
 
+use crate::global::Global;
+use crate::kernel::kernel;
 use crate::layer::poi::badge::badge_atlas;
 use crate::sched::ledger::record::{drop_front, fixed_lane, ledger_recording_start, ledger_recording_stop, ledger_set_sink, FrameSample, LedgerSink, TaskRow};
 use crate::sched::ledger::summary::{missed, overran};
 use crate::sched::tick::{set_step_timing, tick_step_stats_reset};
-use crate::sys::global::Global;
-use crate::sys::kernel::kernel;
 
 /// The side counters printed beside the rings, cumulative from load.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

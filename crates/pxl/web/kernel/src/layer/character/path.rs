@@ -5,8 +5,6 @@
 //! survived the move from three to the kernel's actors
 //! (crates/pxl/web/kernel/src/io/load.rs) unchanged.
 
-use xpute_core::kit::fdlibm;
-
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Vec2 {
     pub x: f64,
@@ -15,7 +13,7 @@ pub struct Vec2 {
 
 /// Bearing from `from` to `to`, in radians (0 = +x).
 pub fn heading_to(from: Vec2, to: Vec2) -> f64 {
-    fdlibm::atan2(to.y - from.y, to.x - from.x)
+    libm::atan2(to.y - from.y, to.x - from.x)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

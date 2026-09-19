@@ -16,8 +16,6 @@
 //! transform means rotate2(..., +azimuth), and un-rotating a camera-local
 //! point back to its ground origin means rotate2(..., -azimuth).
 
-use xpute_core::kit::fdlibm;
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct OrbitOffset {
     pub horiz_dist: f64,
@@ -32,8 +30,8 @@ pub struct OrbitOffset {
 /// apparent viewing direction, by spinning the world underneath it instead.
 pub fn orbit_local_offset(dist: f64, polar: f64) -> OrbitOffset {
     OrbitOffset {
-        horiz_dist: dist * fdlibm::sin(polar),
-        vert_dist: dist * fdlibm::cos(polar),
+        horiz_dist: dist * libm::sin(polar),
+        vert_dist: dist * libm::cos(polar),
     }
 }
 
@@ -49,8 +47,8 @@ pub struct Rotated {
 /// `angle` for their own direction of conversion — see this module's doc
 /// comment above.
 pub fn rotate2(x: f64, y: f64, angle: f64) -> Rotated {
-    let c = fdlibm::cos(angle);
-    let s = fdlibm::sin(angle);
+    let c = libm::cos(angle);
+    let s = libm::sin(angle);
     Rotated { x: x * c - y * s, y: x * s + y * c }
 }
 
@@ -61,7 +59,7 @@ pub fn rotate2(x: f64, y: f64, angle: f64) -> Rotated {
 /// the same characteristic curve — apply as
 /// `current += (target - current) * damp_alpha(k, delta)`.
 pub fn damp_alpha(k: f64, delta: f64) -> f64 {
-    1.0 - fdlibm::exp(-k * delta)
+    1.0 - libm::exp(-k * delta)
 }
 
 #[cfg(test)]

@@ -8,7 +8,10 @@
 //! and the sorts a percentile needs run in a scratch lane taken once, so
 //! reading the instrument does not allocate from the heap it measures.
 
+use crate::global::Global;
+use crate::host::now;
 use crate::io::fetch_scheduler::{fetch_counts, fetch_credits};
+use crate::kernel::kernel;
 use crate::layer::billboard::frustum_budget::billboard_dropped;
 use crate::layer::poi::badge::badge_atlas;
 use crate::layer::poi::index::PoiIndexStats;
@@ -19,8 +22,6 @@ use crate::sched::ledger::record::{
 };
 use crate::sched::ledger::spec::{CATEGORY_NAMES, LIMITS, OUTCOME_NAMES, PHASE_NAMES, SPREAD, STEP, STEP_NAMES, SUMMARY, TASK_PHASE_NAMES, TASK_SUMMARY};
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
-use crate::sys::global::{now, Global};
-use crate::sys::kernel::kernel;
 use crate::world::chunk::node::{chunk_retention, RETAIN_BUDGET_BYTES};
 
 use crate::sched::ledger::record::name_id;

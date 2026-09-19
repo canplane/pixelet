@@ -17,11 +17,11 @@ use pxl_render::mesh::volume::MaterialClasses;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pvf3::pvf3::{self, PVF3};
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::V3;
-use xpute_core::kit::mat4::Vec3;
+use xpute_core::math::vec3::Vec3;
 
-use crate::layer::object::geometry::{aabb_overlap, object_aabb, AABB};
+use crate::layer::object::geometry::{aabb_overlap, object_aabb, Aabb};
 use crate::layer::object::store::{get_objects_near, OccupiedEntry};
 use crate::layer::terrain::elevation::with_ele;
 use crate::world::chunk::raycast::{ray_hit_world, RayLike, WorldHit};
@@ -31,7 +31,7 @@ const INTERACT_RADIUS_CELL: f64 = 32.0 / U_PER_CELL - 0.707;
 const INTERACT_RADIUS_U: f64 = INTERACT_RADIUS_CELL * U_PER_CELL;
 const INTERACT_RADIUS2_U: f64 = INTERACT_RADIUS_U * INTERACT_RADIUS_U;
 
-pub fn in_interact_radius(a: &PVF3, b: &PVF3) -> bool {
+pub fn in_interact_radius(a: &Pvf3, b: &Pvf3) -> bool {
     let dx = pvf3::to_real(pvf3::X(a)) - pvf3::to_real(pvf3::X(b));
     let dy = pvf3::to_real(pvf3::Y(a)) - pvf3::to_real(pvf3::Y(b));
     dx * dx + dy * dy <= INTERACT_RADIUS2_U
@@ -46,15 +46,15 @@ pub fn in_interact_radius(a: &PVF3, b: &PVF3) -> bool {
 /// convention world_struck_corner / world_adjacent_corner already use, which
 /// lets the ghost and the recenter both apply a symmetric + half a cell on all
 /// three axes. Objects don't go through this — see resolve_hit_object.
-pub fn world_hover_pvf3(hit: &WorldHit, map_origin: IVec) -> Option<PVF3> {
+pub fn world_hover_pvf3(hit: &WorldHit, map_origin: IVec) -> Option<Pvf3> {
     // -U_PER_CELL, not 0: with_ele adds the real surface height onto this Z, so
     // starting one cell low lands the result on the struck top voxel's floor
     // (min-z corner) instead of its top face.
-    let mut p = PVF3::default();
+    let mut p = Pvf3::default();
     projection::project(&mut p, hit.box_min[0], hit.box_min[1], -U_PER_CELL);
     p.i = ivec::add(p.i, map_origin);
     let (i, f) = (p.i, p.f);
-    with_ele(&mut p, &PVF3 { i, f })
+    with_ele(&mut p, &Pvf3 { i, f })
 }
 
 // Tolerance for "same nominal size"/"integer-aligned" comparisons below —
@@ -112,7 +112,7 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 /// overlap/blocked check, and the actual write all agreeing on the same target
 /// cell.
 #[allow(clippy::needless_range_loop)]
-pub fn world_adjacent_corner(hit: &WorldHit, new_size: f64, map_origin: IVec, precise_box: Option<&AABB>) -> PVF3 {
+pub fn world_adjacent_corner(hit: &WorldHit, new_size: f64, map_origin: IVec, precise_box: Option<&Aabb>) -> Pvf3 {
     let box_min = precise_box.map_or(hit.box_min, |b| b.min);
     let box_max = precise_box.map_or(hit.box_max, |b| b.max);
     let mut out: V3 = [0.0; 3];
@@ -141,7 +141,7 @@ pub fn world_adjacent_corner(hit: &WorldHit, new_size: f64, map_origin: IVec, pr
         }
     }
 
-    let mut p = PVF3::default();
+    let mut p = Pvf3::default();
     local_world_to_canonical(&mut p, &out, map_origin);
     p
 }
@@ -162,7 +162,7 @@ pub fn world_adjacent_corner(hit: &WorldHit, new_size: f64, map_origin: IVec, pr
 /// use hit_point itself, since only hit_point is guaranteed to fall inside the
 /// ONE real cell that was struck rather than the merged run's whole footprint.
 #[allow(clippy::needless_range_loop)]
-pub fn world_struck_corner(hit: &WorldHit, size: f64, map_origin: IVec) -> PVF3 {
+pub fn world_struck_corner(hit: &WorldHit, size: f64, map_origin: IVec) -> Pvf3 {
     let mut out: V3 = [0.0; 3];
     for axis in 0..3 {
         let n = hit.face_normal[axis];
@@ -174,7 +174,7 @@ pub fn world_struck_corner(hit: &WorldHit, size: f64, map_origin: IVec) -> PVF3 
             grid_floor(hit.hit_point[axis], size)
         };
     }
-    let mut p = PVF3::default();
+    let mut p = Pvf3::default();
     local_world_to_canonical(&mut p, &out, map_origin);
     p
 }
@@ -189,11 +189,11 @@ pub fn resolve_hit_object(hit: &WorldHit, map_origin: IVec) -> Option<OccupiedEn
     if hit.material_class != MaterialClasses::OBJECT {
         return None;
     }
-    let hit_aabb = AABB { min: hit.box_min, max: hit.box_max };
+    let hit_aabb = Aabb { min: hit.box_min, max: hit.box_max };
 
     // Only checks objects near the hit point (the containing cell plus its 26
     // neighbors), not every placed object in the world.
-    let mut hit_point_abs = PVF3::default();
+    let mut hit_point_abs = Pvf3::default();
     local_world_to_canonical(&mut hit_point_abs, &hit.hit_point, map_origin);
 
     // Nearest-to-hit_point match, not first-in-order — two objects flush
@@ -226,13 +226,13 @@ pub struct PickResult {
 
 /// Single raycast entry point — see this module's own doc comment. The ray is
 /// in the root frame.
-pub fn ray_pick(origin: Vec3, direction: Vec3, map_center: Option<&PVF3>) -> Option<PickResult> {
+pub fn ray_pick(origin: Vec3, direction: Vec3, map_center: Option<&Pvf3>) -> Option<PickResult> {
     let map_center = map_center?;
     let map_origin = get_local_world_origin(Some(map_center));
 
     let hit = ray_hit_world(&RayLike { origin, direction }, map_origin, INTERACT_RADIUS_U * 1.5)?;
 
-    let mut probe = PVF3::default();
+    let mut probe = Pvf3::default();
     local_world_to_canonical(&mut probe, &hit.hit_point, map_origin);
     if !in_interact_radius(&probe, map_center) {
         return None;

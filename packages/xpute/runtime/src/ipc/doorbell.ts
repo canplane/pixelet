@@ -16,10 +16,10 @@
  * back full is read and rung again with no quota until it does not.
  */
 
-import type { f64, u32 } from "@xpute/core/kit/word.ts";
-import type { U8Array } from "@xpute/core/kit/array.ts";
-import { Errno } from "@xpute/core/errno.ts";
-import { type BranchCursor, type BranchView, encoder, TreeReader, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import type { U8Array } from "@xpute/core/abi/array.ts";
+import { Errno } from "@xpute/core/status/errno.ts";
+import { type BranchCursor, type BranchView, encoder, TreeReader, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 import { FrameFlag } from "./frame.ts";
 import { Ring } from "./ring.ts";
 

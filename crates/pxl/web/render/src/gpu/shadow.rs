@@ -17,7 +17,8 @@
 //! cannot read the map it writes — binds a blank map, where every fragment
 //! reads as lit.
 
-use xpute_core::kit::mat4::{mat4, mat4_look_at, mat4_mul, Mat4, Vec3};
+use xpute_core::math::mat4::{mat4, mat4_look_at, mat4_mul, Mat4};
+use xpute_core::math::vec3::Vec3;
 
 use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS};
 use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, GpuApi, NONE};

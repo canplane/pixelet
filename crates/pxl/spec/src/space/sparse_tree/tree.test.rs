@@ -1,15 +1,13 @@
 // pxl-spec/space/sparse_tree/tree.test.rs
 
-use xpute_core::kit::array::TypedArray;
-
 use super::*;
 use crate::space::pvf3::pvf3;
 use crate::space::sparse_tree::tree as sparse_tree;
 
 const LAYOUT: SparseTreeLayout = SparseTreeLayout { dim: 3, min: -3, max: 6 };
 
-fn at(x: f64, y: f64, z: f64) -> PVF3 {
-    let mut out = PVF3::default();
+fn at(x: f64, y: f64, z: f64) -> Pvf3 {
+    let mut out = Pvf3::default();
     *pvf3::gather(&mut out, pvf3::from_real(x), pvf3::from_real(y), pvf3::from_real(z))
 }
 
@@ -30,7 +28,7 @@ fn sparse_tree_retype_widening_the_leaf_lane_carries_every_value_across() {
 const GOLDEN: &str = include_str!("../../../golden/spec/space/sparse_tree/tree.tsv");
 
 #[test]
-fn sparse_tree_computes_what_the_typescript_computes() {
+fn sparse_tree_computes_what_the_record_holds() {
     let v = xpute_core::golden::Golden::load(GOLDEN);
     v.each("", |k| {
         let layout = SparseTreeLayout {
@@ -39,7 +37,7 @@ fn sparse_tree_computes_what_the_typescript_computes() {
             max: v.i32(&format!("{k}.max")),
         };
         let coord = |base: &str| {
-            let mut p = PVF3::default();
+            let mut p = Pvf3::default();
             *pvf3::gather(&mut p, v.i64(&format!("{base}.x")), v.i64(&format!("{base}.y")), v.i64(&format!("{base}.z")))
         };
         let mut tree = sparse_tree::alloc::<u16>(layout, 8);
@@ -57,11 +55,7 @@ fn sparse_tree_computes_what_the_typescript_computes() {
         sparse_tree::compact(&mut tree);
         assert_eq!(tree.mem.head, v.u32(&format!("{k}.compacted_head")), "{k}.compacted_head");
         let blob = sparse_tree::encode(&tree);
-        let hex: String = TypedArray::<u8>::over(blob.buffer().clone(), blob.byte_offset(), blob.byte_length())
-            .as_slice()
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect();
+        let hex: String = blob.iter().flat_map(|w| w.to_le_bytes()).map(|b| format!("{b:02x}")).collect();
         assert_eq!(hex, v.s(&format!("{k}.encoded")), "{k}.encoded");
     });
 }
@@ -69,7 +63,7 @@ fn sparse_tree_computes_what_the_typescript_computes() {
 #[test]
 #[should_panic(expected = "does not align within u32")]
 fn sparse_tree_decode_refuses_a_blob_whose_count_overflows_u32_rather_than_wrapping_under_it() {
-    let blob: U64Array = TypedArray::new(4);
-    blob.put(0, 0xffff_ffff);
+    let mut blob = vec![0u64; 4];
+    blob[0] = 0xffff_ffff;
     let _ = decode::<u16>(&blob, SparseTreeLayout { dim: 3, min: -3, max: 3 });
 }

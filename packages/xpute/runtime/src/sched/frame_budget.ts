@@ -27,7 +27,7 @@
  * FrameBudget, which calls this with whatever the frame has left.
  */
 
-import type { f64, u32 } from "@xpute/core/kit/word.ts";
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { now } from "../sys/clock.ts";
 
 export type BudgetOpts = {

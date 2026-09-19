@@ -8,8 +8,9 @@
 //! into the box, so a buffer smaller than the box, or one made for a size the
 //! box is only passing through, still shows whole and in proportion.
 
-use xpute_core::ds::handle::{handle_slot, HandleTable};
-use xpute_runtime::sys::global::Global;
+use xpute_core::math::scalar::round;
+use xpute_runtime::abi::handle::{handle_slot, HandleTable};
+use xpute_runtime::global::Global;
 
 /// What a surface shows.
 pub const ROLE_WORLD: u32 = 0;
@@ -68,7 +69,7 @@ impl Surface {
         if self.role == ROLE_CASE {
             k = k.min(CASE_LONG_SIDE_MAX / w.max(h));
         }
-        ((w * k).round().max(1.0) as u32, (h * k).round().max(1.0) as u32)
+        (round(w * k).max(1.0) as u32, round(h * k).max(1.0) as u32)
     }
 }
 

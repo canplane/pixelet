@@ -28,9 +28,10 @@
 use std::collections::HashMap;
 
 use pxl_render::asset::gltf::{scene_nodes, world_matrices, Gltf};
-use xpute_core::kit::mat4::{mat4_transform_direction, mat4_transform_point, Vec3};
+use xpute_core::math::mat4::{mat4_transform_direction, mat4_transform_point};
+use xpute_core::math::vec3::Vec3;
 
-use crate::sys::kernel::with_world;
+use crate::kernel::with_world;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelHandle {

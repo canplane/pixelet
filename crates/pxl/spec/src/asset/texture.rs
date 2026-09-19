@@ -12,7 +12,7 @@
 
 pub use super::ingested::CubeFace;
 use super::ingested::{Sheet, SHEET};
-use crate::cell::PlaceableCube;
+use crate::cell::object::PlaceableCube;
 
 /// The pack as one image, for the layer array: the sheet's geometry, and
 /// where a type's face sits on it.

@@ -5,8 +5,8 @@ use core::pin::pin;
 use core::task::{Context, RawWaker, RawWakerVTable};
 
 use super::*;
-use crate::sys::clock::set_clock;
-use crate::sys::global::Global;
+use crate::clock::set_clock;
+use crate::global::Global;
 
 thread_local! {
     static CLOCK_MS: Cell<f64> = const { Cell::new(0.0) };

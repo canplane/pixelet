@@ -8,7 +8,9 @@
 
 #![allow(non_camel_case_types)]
 
-use crate::cell::{cube_types, PlaceableCube};
+use crate::cell::cube_types;
+
+use crate::cell::object::PlaceableCube;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u16)]

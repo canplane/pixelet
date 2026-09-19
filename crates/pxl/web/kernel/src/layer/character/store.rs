@@ -1,6 +1,6 @@
 // pxl-kernel/layer/character/store.rs
 
-use crate::sys::global::Global;
+use crate::global::Global;
 
 /// Whether the in-world companion's person/pet models have finished loading
 /// (the companion registers them with the kernel once parsed) — not persisted,

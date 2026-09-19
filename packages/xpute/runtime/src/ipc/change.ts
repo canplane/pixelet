@@ -33,10 +33,10 @@
  * not pay. The layout is what matters now.
  */
 
-import type { u32 } from "@xpute/core/kit/word.ts";
-import type { I64Array, U32Array } from "@xpute/core/kit/array.ts";
-import { Vector } from "@xpute/core/ds/arena.ts";
-import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
+import type { I64Array, U32Array } from "@xpute/core/abi/array.ts";
+import { Vector } from "@xpute/core/collection/arena.ts";
+import { I64_KEYS, IndexedMap } from "@xpute/core/collection/map.ts";
 
 export type Topic = u32;
 export type Revision = u32;

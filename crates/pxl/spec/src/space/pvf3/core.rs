@@ -1,37 +1,21 @@
 // pxl-spec/space/pvf3/core.rs
 
-//! PVF3 (Packed 3-Vector w/ Fixed-Point Arithmetic)
-//! Central Metadata Configuration
-//!
-//! This module defines the raw bit-width specifications and fundamental bitwise
-//! utilities for the PVF3 system. It serves as the single source of truth for
-//! canonical bit-layout specifications across all generalized vector kernels.
-//!
-//! Design Philosophy:
-//! - Domain Agnostic: This system is a pure numerical framework. No assumptions
-//!   are made about the coordinate domain (e.g., Geographic or Local).
-//! - Width-Parametric Specification: All width constants are adjustable to fit
-//!   specific spatial requirements and word-size constraints.
-//! - Functional Encapsulation: Only raw widths are defined here. Shift amounts
-//!   (SHAMT) and masks are derived within individual kernels to maintain
-//!   internal operational autonomy and configuration flexibility.
-//! - Deterministic Arithmetic: All utilities operate in the BigInt domain to
-//!   ensure bit-exact behavior and avoid floating-point side effects — an
-//!   i64 here, wrapping where the BigInt is unbounded, since a lane's low
-//!   bits are what a gather keeps.
+//! The bit layout the three modules share — how wide a lane is, where the
+//! fraction's one is — and the scalar comparisons a lane's arithmetic is
+//! built from. Only widths are fixed here; each module derives its own shift
+//! amounts and masks from them. A lane value is an `i64` that wraps: a lane
+//! is 24 bits at most and a gather keeps only a lane's low bits, so the low
+//! bits of a wrapped result are the lane's either way.
 
+// Uppercase throughout, as the notation these operations are written in: one
+// that holds no state and closes over nothing is named the way a C header
+// names its macros. Rust's own answer to a macro like that is a `const fn`,
+// which it cases snake, so the notation and the language disagree here and
+// the file keeps the notation — suspended once for the file, which is the
+// level the choice is made at rather than item by item.
 #![allow(non_snake_case)]
 
-/// `FIELD_MASK64(nbit, shamt)`: a contiguous 64-bit field mask, a width of
-/// 64 being the whole word.
-const fn field_mask64(nbit: u32, shamt: u32) -> u64 {
-    let field = if nbit >= 64 { u64::MAX } else { (1u64 << nbit) - 1 };
-    if shamt >= 64 {
-        0
-    } else {
-        field << shamt
-    }
-}
+use xpute_core::abi::word::{field_mask32, field_mask64};
 
 // ---- IVec: Integer Part Specification ----
 
@@ -53,7 +37,7 @@ pub const FVEC_WORD_W: u32 = 32;
 /// Symmetric bit-depth resolution assigned per fractional lane.
 pub const FRAC_W: u32 = 8;
 /// Mask for the 3 packed lanes (24 bits used of 32).
-pub const FVEC_WORD_MASK: u64 = field_mask64(FRAC_W * 3, 0);
+pub const FVEC_WORD_MASK: u32 = field_mask32(FRAC_W * 3, 0);
 /// Cardinality of one fractional lane (2^FRAC_W).
 pub const ONE: u64 = 1 << FRAC_W;
 /// Low fractional-lane bit mask.

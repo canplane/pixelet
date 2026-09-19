@@ -4,8 +4,8 @@
 //! them for the shell (`__APP_ENV__`, `virtual:pxl-build`,
 //! `__PUBLISHED_TILES__`), and the shell hands them over once at boot.
 
+use crate::global::Global;
 use crate::shell::config::route::{tile_base, TileBase, TileKind};
-use crate::sys::global::Global;
 
 #[derive(Clone, Debug, Default)]
 pub struct BuildInfo {

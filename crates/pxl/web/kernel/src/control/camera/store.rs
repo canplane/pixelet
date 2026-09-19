@@ -1,12 +1,12 @@
 // pxl-kernel/control/camera/store.rs
 
-use pxl_spec::space::pvf3::pvf3::PVF3;
-use xpute_core::kit::math::{clamp, round_to_step, wrap};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use xpute_core::math::scalar::{clamp, round_to_step, wrap};
 
 use crate::control::camera::config::camera_cfg::view::{DEFAULT_AZIMUTH, DEFAULT_DIST, DEFAULT_POLAR, MAX_DIST, MAX_POLAR, MIN_DIST, MIN_POLAR};
 use crate::control::camera::terrain_gate::{allowed_view, ViewTriple};
+use crate::global::Global;
 use crate::layer::object::store::EntryAt;
-use crate::sys::global::Global;
 use crate::world::change::request_world_tick;
 
 const PI: f64 = core::f64::consts::PI;
@@ -64,7 +64,7 @@ pub struct ViewPatch {
 
 pub struct CameraStore {
     pub camera_status: CameraStatus,
-    pub hovered_coord: Option<PVF3>,
+    pub hovered_coord: Option<Pvf3>,
     /// Where the placed object currently under the cursor is filed, if there
     /// is one — see camera/ray.rs's PickResult.
     pub hovered_object_at: Option<EntryAt>,

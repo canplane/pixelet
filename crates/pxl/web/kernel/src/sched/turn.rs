@@ -25,6 +25,8 @@ use crate::control::navigation::follow_mode::follow_mode_step;
 use crate::control::navigation::store::{map_navigation, map_navigation_step};
 use crate::control::sensor::device_orientation::{orientation_watchdog_step, OrientationPlatform};
 use crate::control::sensor::geolocation::geolocation_step;
+use crate::global::Global;
+use crate::host::now;
 use crate::io::fetch_scheduler::{fetch_pump, set_fetch_credits};
 use crate::layer::character::companion::{companion_step, CompanionProps};
 use crate::layer::decor::asset_store::decor_assets_wanted;
@@ -40,7 +42,6 @@ use crate::sched::tick::{on_tick, run_tick, TickContext, TickReport, TickState, 
 use crate::shell::config::env::APP_ENV;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
-use crate::sys::global::{now, Global};
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::node::chunk_nodes_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, take_draw};

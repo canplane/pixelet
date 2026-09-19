@@ -13,7 +13,7 @@
 //! chain is drawn on the device, a level from the one above (Mips).
 
 use pxl_spec::asset::texture::{shipped_texture_tile, CubeFace, SHIPPED_SHEET};
-use pxl_spec::cell::{block_cubes, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
+use pxl_spec::cell::object::{block_cubes, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 
 use crate::frame::shader::record::PIPELINE_MIPS;
 use crate::gpu::api::{object, texture_usage, GpuApi};

@@ -21,13 +21,17 @@
 //!
 //! The optional altitude of a G3857 is its third lane here, 0 when absent.
 
+// Uppercase throughout, as the notation these operations are written in: one
+// that holds no state and closes over nothing is named the way a C header
+// names its macros. Rust's own answer to a macro like that is a `const fn`,
+// which it cases snake, so the notation and the language disagree here and
+// the file keeps the notation — suspended once for the file, which is the
+// level the choice is made at rather than item by item.
 #![allow(non_snake_case)]
-
-use xpute_core::kit::fdlibm;
 
 use crate::space::indexer::{FROM_L3_IDX, L3_RANGE};
 use crate::space::pvf3::core::{FRAC_W, IVEC_X_W, IVEC_Y_W};
-use crate::space::pvf3::{projection, FVec, IVec, PVF3};
+use crate::space::pvf3::{projection, FVec, IVec, Pvf3};
 use crate::space::v3::V3;
 
 use super::epsg4326;
@@ -107,7 +111,7 @@ const Z_SCALE_STRIDE_U: f64 = L3_RANGE as f64;
 
 fn Z_SCALE_FINE(y_m: f64) -> f64 {
     let lat_rad = (epsg4326::Y_TO_LAT(y_m) * core::f64::consts::PI) / 180.0;
-    1.0 / fdlibm::cos(lat_rad)
+    1.0 / libm::cos(lat_rad)
 }
 
 pub fn Z_SCALE(y_m: f64) -> f64 {
@@ -125,7 +129,7 @@ pub fn Z_SCALE(y_m: f64) -> f64 {
 /// 2) Apply Mercator vertical scaling to altitude
 /// 3) Convert meters to normalized lattice units
 /// 4) Store the projected G64 coordinate into PVF3
-pub fn project(out: &mut PVF3, x: f64, y: f64, z: f64) -> &mut PVF3 {
+pub fn project(out: &mut Pvf3, x: f64, y: f64, z: f64) -> &mut Pvf3 {
     // Canonical Mercator wrap-around
     let mut x = ((((x + HALF_W_3857) % WORLD_WIDTH_3857) + WORLD_WIDTH_3857) % WORLD_WIDTH_3857) - HALF_W_3857;
     // The signed Y lane represents a half-open Mercator square. Unlike X, Y

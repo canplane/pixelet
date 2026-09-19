@@ -24,7 +24,7 @@
 //! cleared, for the same reason spatial_hash is: a per-frame structure that
 //! allocates is a per-frame collection pause.
 
-use xpute_core::ds::lattice_hash::lattice_hash4;
+use pxl_spec::space::lattice::hash::hash4;
 
 /// Marks a slot as never written in this generation.
 pub const EMPTY: i32 = -1;
@@ -118,7 +118,7 @@ impl CellNodes {
         let (kx, ky, kz) = (cell_x >> shamt, cell_y >> shamt, cell_z >> shamt);
         // The shamt joins the key: two tiers can be live at once, and a parent's
         // address collides with its child's on a coarse axis.
-        let h = lattice_hash4(kx, ky, kz, shamt);
+        let h = hash4(kx, ky, kz, shamt);
 
         for probe in 0..=self.mask {
             let slot = (h.wrapping_add(probe) & self.mask) as usize;

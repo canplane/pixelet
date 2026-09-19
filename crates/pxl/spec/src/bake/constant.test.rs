@@ -8,7 +8,7 @@ use super::*;
 const GOLDEN: &str = include_str!("../../golden/bake/constant.tsv");
 
 #[test]
-fn constants_are_what_the_typescript_computes() {
+fn constants_are_what_the_record_holds() {
     let v = Golden::load(GOLDEN);
     assert_eq!(CELL_SHAMT, v.i32("CELL_SHAMT"));
     assert_eq!(U_PER_CELL.to_bits(), v.f64("U_PER_CELL").to_bits());

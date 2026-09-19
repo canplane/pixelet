@@ -20,7 +20,7 @@ fn assert_almost(a: f64, b: f64, tol: f64) {
 }
 
 fn round_trip(x: f64, y: f64, z: f64) -> [f64; 3] {
-    let mut p = PVF3::default();
+    let mut p = Pvf3::default();
     project(&mut p, x, y, z);
     let mut out: G3857 = [0.0; 3];
     unproject(&mut out, p.i, p.f);
@@ -53,7 +53,7 @@ fn epsg3857_project_unproject_round_trips_a_nonzero_altitude_mercator_corrected_
 
 #[test]
 fn epsg3857_project_wraps_x_across_the_antimeridian_instead_of_growing_unbounded() {
-    let mut p = PVF3::default();
+    let mut p = Pvf3::default();
     project(&mut p, WORLD_WIDTH_M * 1.5, 0.0, 0.0);
     let mut out: G3857 = [0.0; 3];
     unproject(&mut out, p.i, p.f);
@@ -70,7 +70,7 @@ fn epsg3857_scale_maps_one_complete_world_onto_the_full_24_bit_x_lane() {
 
 #[test]
 fn epsg3857_project_keeps_the_clamped_north_edge_below_the_signed_y_seam() {
-    let mut coord = PVF3::default();
+    let mut coord = Pvf3::default();
     project(&mut coord, 0.0, HALF_WORLD_M, 0.0);
 
     assert_eq!(ivec::Y(coord.i), (1 << 23) - 1);
@@ -84,7 +84,7 @@ fn epsg3857_project_keeps_the_clamped_north_edge_below_the_signed_y_seam() {
 
 #[test]
 fn epsg3857_project_pvf3_x_subtraction_takes_the_short_antimeridian_path() {
-    let (mut east, mut west, mut delta) = (PVF3::default(), PVF3::default(), PVF3::default());
+    let (mut east, mut west, mut delta) = (Pvf3::default(), Pvf3::default(), Pvf3::default());
 
     project(&mut east, HALF_WORLD_M - 1.0, 0.0, 0.0);
     project(&mut west, -HALF_WORLD_M + 1.0, 0.0, 0.0);
@@ -134,12 +134,11 @@ fn epsg3857_z_scale_constant_within_one_l3_page_the_documented_coarse_scale_cont
 const GOLDEN: &str = include_str!("../../../golden/spec/space/adapter/3857.tsv");
 
 #[test]
-fn the_adapters_compute_what_the_typescript_computes() {
+fn the_adapters_compute_what_the_record_holds() {
     let v = xpute_core::golden::Golden::load(GOLDEN);
     let triple = |k: &str| [v.f64(&format!("{k}.0")), v.f64(&format!("{k}.1")), v.f64(&format!("{k}.2"))];
-    // The kernel's transcendental functions are its own, within one ulp of
-    // V8's correctly rounded ones (kit/fdlibm.rs), and a chain of them
-    // compounds: a double that passed through one is held to a few ulps,
+    // The kernel's transcendental functions are `libm`'s msun, within one
+    // ulp of V8's fdlibm, and a chain of them compounds: a double that passed through one is held to a few ulps,
     // and the lattice a coordinate lands on — what is stored — to the bit.
     const ULPS: u64 = 8;
     let near = |a: f64, b: f64| a.to_bits() == b.to_bits() || (a.is_sign_negative() == b.is_sign_negative() && a.abs().to_bits().abs_diff(b.abs().to_bits()) <= ULPS);
@@ -156,16 +155,16 @@ fn the_adapters_compute_what_the_typescript_computes() {
         assert!((0..3).all(|a| near(back[a], want[a])), "{k}.from_mercator: {back:?} vs {want:?}");
         assert!(near(epsg4326::Y_TO_LAT(m[1]), v.f64(&format!("{k}.Y_TO_LAT"))), "{k}.Y_TO_LAT");
         assert!(near(Z_SCALE(m[1]), v.f64(&format!("{k}.Z_SCALE"))), "{k}.Z_SCALE");
-        let mut p = PVF3::default();
+        let mut p = Pvf3::default();
         epsg4326::project(&mut p, &g);
-        assert_eq!((p.i, p.f), (v.u64(&format!("{k}.project.i")), v.u64(&format!("{k}.project.f"))), "{k}.project");
+        assert_eq!((p.i, p.f), (v.u64(&format!("{k}.project.i")), v.u32(&format!("{k}.project.f"))), "{k}.project");
         let mut un = [0.0; 3];
         epsg4326::unproject(&mut un, p.i, p.f);
         let want = triple(&format!("{k}.unproject"));
         assert!((0..3).all(|a| near(un[a], want[a])), "{k}.unproject: {un:?} vs {want:?}");
-        let mut q = PVF3::default();
+        let mut q = Pvf3::default();
         project(&mut q, m[0], m[1], m[2]);
-        assert_eq!((q.i, q.f), (v.u64(&format!("{k}.project3857.i")), v.u64(&format!("{k}.project3857.f"))), "{k}.project3857");
+        assert_eq!((q.i, q.f), (v.u64(&format!("{k}.project3857.i")), v.u32(&format!("{k}.project3857.f"))), "{k}.project3857");
         let mut un3 = [0.0; 3];
         unproject(&mut un3, q.i, q.f);
         let want = triple(&format!("{k}.unproject3857"));

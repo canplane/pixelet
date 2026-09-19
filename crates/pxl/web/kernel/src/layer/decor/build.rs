@@ -21,16 +21,17 @@
 use pxl_render::look::lod::{LodStep, TARGET_CELL_PX};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
-use pxl_spec::cell::{decor_num_id, DecorId};
+use pxl_spec::cell::object::decor_num_id;
+use pxl_spec::cell::DecorId;
 use pxl_spec::space::pvf3::ivec::{gather, IVec};
-use xpute_core::kit::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
+use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
+use crate::kernel::kernel;
 use crate::layer::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::layer::decor::kind::spec::DecorKind;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::layer::decor::scatter::{DecorChannelRule, DecorKindSeed, DecorOrientationMode, DecorRules};
 use crate::layer::object::store::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
-use crate::sys::kernel::kernel;
 use pxl_spec::asset::ingested::Asset;
 
 // Fixed, arbitrary — the one thing every kind's own placement ultimately
@@ -57,13 +58,13 @@ pub const DECOR_MASTER_SEED: u64 = 0xd0c0_dec0_5eed_0001;
 /// not the criterion's; a tree and a car of the same size are drawn to the same
 /// range.
 fn decor_gone_px() -> f64 {
-    TARGET_CELL_PX() * 2.0
+    *TARGET_CELL_PX * 2.0
 }
 
 /// The density a kind is scattered at on a tier: 1, or 0 when it is not drawn
 /// there.
 pub fn decor_density(extent_u: f64, lod_step: LodStep) -> f64 {
-    let projected_px = (extent_u / U_PER_CELL) * TARGET_CELL_PX() / lod_step as f64;
+    let projected_px = (extent_u / U_PER_CELL) * *TARGET_CELL_PX / lod_step as f64;
     if projected_px < decor_gone_px() {
         0.0
     } else {

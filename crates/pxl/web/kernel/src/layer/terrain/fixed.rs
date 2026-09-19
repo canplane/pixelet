@@ -4,7 +4,7 @@
 //! coordinate and not by an allocator.
 //!
 //! The first and so far only range of the kernel's `.fixed` section
-//! (sys/mem/fixed.rs), which is what the name says — placed once when the
+//! (mem/fixed.rs), which is what the name says — placed once when the
 //! module boots, never freed, and of a size settled at compile time.
 //!
 //! Two stages, and they know nothing of each other.

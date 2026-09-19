@@ -5,7 +5,7 @@ use pxl_spec::bake::constant::{PAGE_CELL_SPAN, U_PER_CELL};
 use pxl_spec::bake::format::{GroundChannelKey, Terrain};
 use pxl_spec::space::indexer::{L1_IDX_IN_L3, L3_IDX, L3_RANGE};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::{self, PVF3};
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
 use crate::layer::terrain::store::tile_store;
 
@@ -18,7 +18,7 @@ const L3_RANGE_REAL: f64 = L3_RANGE as f64;
 /// the mesh they're looking at shows the lowered one. A page's ele and ground
 /// are page-level here, so tx/ty index them directly at PAGE_CELL_SPAN stride.
 fn sample_ele_grounded(terrain: &Terrain, tx: u32, ty: u32) -> f64 {
-    let ele = sample_ele(terrain.ele.as_slice(), tx, ty);
+    let ele = sample_ele(&terrain.ele, tx, ty);
     if is_water_family_at(&terrain.ground, ty * PAGE_CELL_SPAN + tx) {
         (ele - WATER_RECESS_CELLS) as f64
     } else {
@@ -26,15 +26,15 @@ fn sample_ele_grounded(terrain: &Terrain, tx: u32, ty: u32) -> f64 {
     }
 }
 
-fn page_cell(at: &PVF3) -> (u32, u32) {
-    let page_off = PVF3 { i: L1_IDX_IN_L3(at.i), f: at.f };
+fn page_cell(at: &Pvf3) -> (u32, u32) {
+    let page_off = Pvf3 { i: L1_IDX_IN_L3(at.i), f: at.f };
     let tx = (pvf3::to_real(pvf3::X(&page_off)) / U_PER_CELL).floor() as u32;
     let ty = (pvf3::to_real(pvf3::Y(&page_off)) / U_PER_CELL).floor() as u32;
     (tx, ty)
 }
 
 /// Returns ground height in lattice/render units.
-pub fn get_ele(at: &PVF3) -> Option<f64> {
+pub fn get_ele(at: &Pvf3) -> Option<f64> {
     let tile = tile_store().get_tile(L3_IDX(at.i))?;
     let (tx, ty) = page_cell(at);
     Some(sample_ele_grounded(&tile.terrain, tx, ty) * U_PER_CELL)
@@ -46,10 +46,10 @@ pub fn get_ele(at: &PVF3) -> Option<f64> {
 /// by object/store.rs's place() to tell whether a terrain-styled pick would
 /// actually change anything — painting "land.green_deep" over ground the bake
 /// already recorded as GREEN_DEEP land paints nothing new.
-pub fn get_ground_type(at: &PVF3, channel: GroundChannelKey) -> Option<u32> {
+pub fn get_ground_type(at: &Pvf3, channel: GroundChannelKey) -> Option<u32> {
     let tile = tile_store().get_tile(L3_IDX(at.i))?;
     let (tx, ty) = page_cell(at);
-    Some(tile.terrain.ground.get(channel).get((ty * PAGE_CELL_SPAN + tx) as usize) as u32)
+    Some(tile.terrain.ground.get(channel)[(ty * PAGE_CELL_SPAN + tx) as usize] as u32)
 }
 
 /// Fast path for hot per-step loops (e.g. raycasting): looks up elevation from
@@ -82,7 +82,7 @@ pub fn get_ele_at_local(origin_page_idx_xy: IVec, local_x: f64, local_y: f64) ->
     Some(sample_ele_grounded(&tile.terrain, tx, ty) * U_PER_CELL)
 }
 
-pub fn with_ele(out: &mut PVF3, at: &PVF3) -> Option<PVF3> {
+pub fn with_ele(out: &mut Pvf3, at: &Pvf3) -> Option<Pvf3> {
     // sample terrain height at the current X/Y position.
     let ele = get_ele(at)?;
 
@@ -107,7 +107,7 @@ pub fn with_ele(out: &mut PVF3, at: &PVF3) -> Option<PVF3> {
 /// camera by the half cell between the two. with_ele itself answers the top
 /// face, which is what standing things (the puck, decor, a place) are
 /// grounded to; this is the one place the camera's own convention is applied.
-pub fn ground_pivot(out: &mut PVF3, at: &PVF3) -> Option<PVF3> {
+pub fn ground_pivot(out: &mut Pvf3, at: &Pvf3) -> Option<Pvf3> {
     with_ele(out, at)?;
     let half_cell_fp = pvf3::from_real(U_PER_CELL / 2.0);
     let (x, y, z) = (pvf3::X(out), pvf3::Y(out), pvf3::Z(out));
@@ -125,8 +125,8 @@ pub fn ground_pivot(out: &mut PVF3, at: &PVF3) -> Option<PVF3> {
 /// setting map_center to the device's raw GPS altitude instead of real
 /// terrain height, visibly disagreeing on "where the ground is" depending on
 /// which interaction moved the camera).
-pub fn ground_or_raw(coord: &PVF3) -> PVF3 {
-    let mut probe = PVF3::default();
+pub fn ground_or_raw(coord: &Pvf3) -> Pvf3 {
+    let mut probe = Pvf3::default();
     pvf3::gather(&mut probe, pvf3::X(coord), pvf3::Y(coord), 0);
     let flat = probe;
     ground_pivot(&mut probe, &flat).unwrap_or(*coord)

@@ -18,8 +18,8 @@
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::xy::TO_XY;
 
+use crate::global::Global;
 use crate::layer::terrain::fixed::{slot_of, TERRAIN_SLOTS};
-use crate::sys::global::Global;
 
 static SLOT_PAGE: Global<[Option<IVec>; TERRAIN_SLOTS as usize]> = Global::new();
 

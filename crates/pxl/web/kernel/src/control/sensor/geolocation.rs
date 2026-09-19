@@ -4,10 +4,11 @@
 //! error means, and when to try again. The watch itself is the shell's — it
 //! takes `take_geolocation_commands` and reports fixes and errors back.
 
-use pxl_spec::message::Message;
+use pxl_spec::abi::message::Message;
 
 use crate::control::sensor::store::{device_location_store, DevicePoseStatus};
-use crate::sys::global::{now, Global};
+use crate::global::Global;
+use crate::host::now;
 use crate::world::change::wake_at;
 
 /// A TIMEOUT or POSITION_UNAVAILABLE is a report about this moment, not about

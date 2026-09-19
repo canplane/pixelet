@@ -3,7 +3,7 @@
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::fvec::FVec;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::{self, PVF3};
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::V3;
 
 use crate::world::frame::coord::local_world_to_canonical;
@@ -26,9 +26,9 @@ use crate::layer::object::store::OccupiedEntry;
 /// decor/decor_kinds.rs centers user-placed decor the same way on X/Y but
 /// keeps Z on the slot (a decor model's origin sits at its base, not its
 /// middle) — the X/Y half of this, not the whole thing.
-pub fn anchor_center(anchor: &PVF3) -> PVF3 {
+pub fn anchor_center(anchor: &Pvf3) -> Pvf3 {
     let half = pvf3::from_real(U_PER_CELL / 2.0);
-    let mut out = PVF3::default();
+    let mut out = Pvf3::default();
     pvf3::gather(&mut out, pvf3::X(anchor) + half, pvf3::Y(anchor) + half, pvf3::Z(anchor) + half);
     out
 }
@@ -39,26 +39,26 @@ pub fn anchor_center(anchor: &PVF3) -> PVF3 {
 /// same low-magnitude space the billboards' local positions and camera/ray.rs's
 /// raycast already operate in.
 pub fn object_local_corner(i: IVec, f: FVec, map_origin: IVec) -> V3 {
-    let local = PVF3 { i: ivec::sub(i, map_origin), f };
+    let local = Pvf3 { i: ivec::sub(i, map_origin), f };
     [pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local))]
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct AABB {
+pub struct Aabb {
     pub min: V3,
     pub max: V3,
 }
 
-pub fn object_aabb(obj: &OccupiedEntry, map_origin: IVec) -> AABB {
+pub fn object_aabb(obj: &OccupiedEntry, map_origin: IVec) -> Aabb {
     corner_aabb(obj.i, obj.f, obj.size, map_origin)
 }
 
 /// Same box shape object_aabb produces, for a candidate corner+size that isn't
 /// (yet) a stored entry — e.g. a placement/overlap check before committing.
-pub fn corner_aabb(i: IVec, f: FVec, size: f64, map_origin: IVec) -> AABB {
+pub fn corner_aabb(i: IVec, f: FVec, size: f64, map_origin: IVec) -> Aabb {
     let min = object_local_corner(i, f, map_origin);
     let max = [min[0] + size, min[1] + size, min[2] + size];
-    AABB { min, max }
+    Aabb { min, max }
 }
 
 // Two AABBs must overlap by MORE than this to count — a flush-touching pair
@@ -73,7 +73,7 @@ pub fn corner_aabb(i: IVec, f: FVec, size: f64, map_origin: IVec) -> AABB {
 // OBJECT_SIZES tier, U_PER_CELL/8 at minimum).
 const OVERLAP_EPS: f64 = 1e-6;
 
-pub fn aabb_overlap(a: &AABB, b: &AABB) -> bool {
+pub fn aabb_overlap(a: &Aabb, b: &Aabb) -> bool {
     a.min[0] < b.max[0] - OVERLAP_EPS
         && b.min[0] < a.max[0] - OVERLAP_EPS
         && a.min[1] < b.max[1] - OVERLAP_EPS
@@ -84,11 +84,11 @@ pub fn aabb_overlap(a: &AABB, b: &AABB) -> bool {
 
 /// This object's true center (corner + size/2 on every axis), as an absolute
 /// PVF3 — e.g. for recentering the map on an object rather than its corner.
-pub fn object_center(obj: &OccupiedEntry, map_origin: IVec) -> PVF3 {
+pub fn object_center(obj: &OccupiedEntry, map_origin: IVec) -> Pvf3 {
     let corner = object_local_corner(obj.i, obj.f, map_origin);
     let half = obj.size / 2.0;
     let center = [corner[0] + half, corner[1] + half, corner[2] + half];
-    let mut out = PVF3::default();
+    let mut out = Pvf3::default();
     local_world_to_canonical(&mut out, &center, map_origin);
     out
 }

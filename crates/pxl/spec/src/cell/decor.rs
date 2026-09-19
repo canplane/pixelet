@@ -8,6 +8,10 @@
 // though the two never collide in practice (each placed leaf holds one
 // value from exactly one of the two catalogs) — just so a raw byte's value
 // alone still hints at which catalog it came from during debugging.
+//
+// Casing here is the spec's and not Rust's: a name is spelled as the JSON
+// spells it, so that one record is indexed by one name on both sides. To
+// case them the way Rust would is to rename the protocol.
 #[allow(non_upper_case_globals, non_camel_case_types)]
 pub mod decor_types {
     pub const tree: u8 = 228;

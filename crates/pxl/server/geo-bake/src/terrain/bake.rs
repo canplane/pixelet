@@ -14,9 +14,8 @@ use pxl_spec::bake::format::{encode_terrain, BaseRow, BuildingRow, CoastRow, Gro
 use pxl_spec::bake::model::feature::Feature;
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
-use xpute_core::error::MarshalError;
-use xpute_core::io::marshal::tree::{BranchCursor, SequenceType, TreeReader};
-use xpute_core::kit::array::{I16Array, U8Array};
+use xpute_core::status::error::MarshalError;
+use xpute_core::wire::xtp::{BranchCursor, SequenceType, TreeReader};
 
 use crate::terrain::pipeline::coast_adapter::from_coast_row;
 use crate::terrain::pipeline::coast_policy::CoastPolicy;
@@ -38,9 +37,8 @@ fn opt_str(row: &BranchCursor, at: u32) -> Result<Option<String>, MarshalError> 
 /// decodes those as strings rather than numbers — the same thing the forward
 /// search had to undo on its own coordinates. So the row says `f64` and the
 /// packet holds a `str` for every building that has a height, while
-/// `num_floors` is an `integer` and arrives as a number. The TypeScript never
-/// noticed, because it only ever puts the value through `Math.max(0, x)` and
-/// that coerces; reading it strictly here is what turned it up.
+/// `num_floors` is an `integer` and arrives as a number. Both forms are
+/// read.
 ///
 /// Nothing downstream reads the result — `FeatureComputed::height` reaches no
 /// rasterizer — so this is about decoding the packet that exists rather than
@@ -55,53 +53,53 @@ fn opt_num(row: &BranchCursor, at: u32) -> Result<Option<f64>, MarshalError> {
     Ok(Some(c.get_number()?))
 }
 
-fn building_row(row: &BranchCursor) -> Result<BuildingRow, MarshalError> {
+fn building_row(row: &BranchCursor<'_>) -> Result<BuildingRow, MarshalError> {
     Ok(BuildingRow {
         gers_id: row.at(0)?.get_str()?,
         subtype: opt_str(row, 1)?,
         class: opt_str(row, 2)?,
         height: opt_num(row, 3)?,
         num_floors: opt_num(row, 4)?,
-        geom_wkb: row.at(5)?.get_array::<u8>()?,
+        geom_wkb: row.at(5)?.get_array::<u8>()?.into(),
     })
 }
 
-fn segment_row(row: &BranchCursor) -> Result<SegmentRow, MarshalError> {
+fn segment_row(row: &BranchCursor<'_>) -> Result<SegmentRow, MarshalError> {
     Ok(SegmentRow {
         gers_id: row.at(0)?.get_str()?,
         subtype: row.at(1)?.get_str()?,
         class: opt_str(row, 2)?,
         road: opt_str(row, 3)?,
-        geom_wkb: row.at(4)?.get_array::<u8>()?,
+        geom_wkb: row.at(4)?.get_array::<u8>()?.into(),
     })
 }
 
-fn base_row(row: &BranchCursor) -> Result<BaseRow, MarshalError> {
+fn base_row(row: &BranchCursor<'_>) -> Result<BaseRow, MarshalError> {
     Ok(BaseRow {
         gers_id: row.at(0)?.get_str()?,
         source: row.at(1)?.get_str()?,
         subtype: opt_str(row, 2)?,
         class: opt_str(row, 3)?,
-        geom_wkb: row.at(4)?.get_array::<u8>()?,
+        geom_wkb: row.at(4)?.get_array::<u8>()?.into(),
     })
 }
 
-fn coast_row(row: &BranchCursor) -> Result<CoastRow, MarshalError> {
+fn coast_row(row: &BranchCursor<'_>) -> Result<CoastRow, MarshalError> {
     Ok(CoastRow {
         id: row.at(0)?.get_str()?,
-        geom_wkb: row.at(1)?.get_array::<u8>()?,
+        geom_wkb: row.at(1)?.get_array::<u8>()?.into(),
         covers_page: row.at(2)?.get_bool()?,
     })
 }
 
-pub fn bake_terrain(page_idx: IVec, pkt: U8Array) -> Result<U8Array, MarshalError> {
+pub fn bake_terrain(page_idx: IVec, pkt: &[u8]) -> Result<Vec<u8>, MarshalError> {
     let page_bbox = epsg3857::get_page_bbox(page_idx);
     let page_min = page_bbox[0];
     let page_z_scale = epsg3857::Z_SCALE(page_bbox[0][1]);
 
     let root = TreeReader::new(pkt)?.read_branch()?;
 
-    let ele: I16Array = root.at(0)?.get_array::<i16>()?;
+    let ele: &[i16] = root.at(0)?.get_array::<i16>()?;
     let buildings = root.at(1)?.as_branch()?;
     let segments = root.at(2)?.as_branch()?;
     let base = root.at(3)?.as_branch()?;
@@ -138,5 +136,5 @@ pub fn bake_terrain(page_idx: IVec, pkt: U8Array) -> Result<U8Array, MarshalErro
 
     let ground: Ground = bake_ground(&feats, has_coast_row);
 
-    encode_terrain(&ele, &ground)
+    encode_terrain(ele, &ground)
 }

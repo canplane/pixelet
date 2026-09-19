@@ -16,9 +16,9 @@ use pxl_render::mesh::voxel_scan::{BandView, ColumnRuns};
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, U_PER_CELL};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::v3::V3;
-use xpute_core::kit::mat4::Vec3;
+use xpute_core::math::vec3::Vec3;
 
-use crate::sys::kernel::kernel;
+use crate::kernel::kernel;
 use crate::world::chunk::node::World;
 use crate::world::chunk::table::Scheduler;
 
