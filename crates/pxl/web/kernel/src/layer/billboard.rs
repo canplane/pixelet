@@ -7,8 +7,7 @@
 //! from drawing a hundred of them.
 
 pub mod batch;
-pub mod canvas_scale;
-pub mod canvas_text;
+pub mod canvas;
 pub mod cell_node;
 pub mod distance_fade;
 pub mod field;

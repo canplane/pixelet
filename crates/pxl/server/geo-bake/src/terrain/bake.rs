@@ -17,12 +17,12 @@ use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{BranchCursor, SequenceType, TreeReader};
 
-use crate::terrain::pipeline::coast_adapter::from_coast_row;
-use crate::terrain::pipeline::coast_policy::CoastPolicy;
-use crate::terrain::pipeline::ground_baker::bake_ground;
+use crate::terrain::pipeline::coast::adapter::from_coast_row;
+use crate::terrain::pipeline::coast::policy::CoastPolicy;
+use crate::terrain::pipeline::ground::bake_ground;
 use crate::terrain::pipeline::normalizer::normalize;
-use crate::terrain::pipeline::overture_adapter::{from_base_row, from_building_row, from_segment_row};
-use crate::terrain::pipeline::overture_policy::OverturePolicy;
+use crate::terrain::pipeline::overture::adapter::{from_base_row, from_building_row, from_segment_row};
+use crate::terrain::pipeline::overture::policy::OverturePolicy;
 
 fn opt_str(row: &BranchCursor, at: u32) -> Result<Option<String>, MarshalError> {
     match row.at(at)?.opt() {

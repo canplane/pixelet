@@ -1,8 +1,8 @@
 // pxl-geo-bake/terrain/pipeline/normalizer.rs
 
 //! Raw feature normalization and local coordinate projection —
-//! provider-agnostic, parameterized by a policy so coast_policy.rs
-//! (coastline) and overture_policy.rs (Buildings/Transportation/Base) share
+//! provider-agnostic, parameterized by a policy so coast/policy.rs
+//! (coastline) and overture/policy.rs (Buildings/Transportation/Base) share
 //! the same geometry projection and closure-detection code instead of
 //! duplicating it.
 //!

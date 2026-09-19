@@ -1,4 +1,4 @@
-// pxl-kernel/layer/billboard/canvas_text.rs
+// pxl-kernel/layer/billboard/canvas/text.rs
 
 //! Text helpers shared by every world-anchored billboard that draws its own
 //! content rather than sourcing an image asset — the chat bubble today. The

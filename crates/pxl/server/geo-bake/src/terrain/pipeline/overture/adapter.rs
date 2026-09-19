@@ -1,14 +1,14 @@
-// pxl-geo-bake/terrain/pipeline/overture_adapter.rs
+// pxl-geo-bake/terrain/pipeline/overture/adapter.rs
 
 //! Overture ingress adapter for WKB-based terrain source rows — the
 //! Buildings/Transportation/Base counterpart to
-//! terrain/pipeline/coast_adapter.rs. Reuses wkb.rs's decoder as is. Overture
+//! terrain/pipeline/coast/adapter.rs. Reuses wkb.rs's decoder as is. Overture
 //! rows carry structured columns straight from Postgres instead of hstore, so
 //! there is no tag-parsing step to mirror.
 //!
 //! Deliberately its own raw-feature shape per theme rather than one shared
 //! shape — Overture's subtype/class enums vary per theme, so
-//! terrain/pipeline/overture_policy.rs reads these shapes directly instead of
+//! terrain/pipeline/overture/policy.rs reads these shapes directly instead of
 //! through a translation layer.
 
 use pxl_spec::bake::format::{BaseRow, BuildingRow, SegmentRow};
@@ -35,7 +35,7 @@ pub struct OvertureSegmentRawFeature {
 }
 
 /// land_use / water / land / infrastructure — one row shape, four tables with
-/// different subtype/class vocabularies; `source` tells overture_policy.rs
+/// different subtype/class vocabularies; `source` tells overture/policy.rs
 /// which one a given row came from.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum BaseSource {

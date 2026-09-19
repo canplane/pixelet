@@ -407,8 +407,8 @@ fn raise(o: &Outbox, cmd: Cmd, count: u32, f: impl Fn(&mut PacketWriter)) {
 fn post_shell(s: &mut State) {
     use pxl_kernel::control::sensor::device_orientation::{take_orientation_commands, OrientationCommand};
     use pxl_kernel::control::sensor::geolocation::{take_geolocation_commands, GeolocationCommand};
-    use pxl_kernel::io::fetch_scheduler::{fetch_take_aborts, fetch_take_started};
     use pxl_kernel::io::load::{take_load_requests, LoadKind};
+    use pxl_kernel::io::scheduler::{fetch_take_aborts, fetch_take_started};
 
     const GEOLOCATION: u32 = 0;
     const ORIENTATION: u32 = 1;
@@ -453,13 +453,13 @@ fn post_shell(s: &mut State) {
     // The key crosses as the one word the queue orders by; the shell holds it
     // as a handle and hands it back, and never reads into it.
     fetch_take_started(|d| {
-        let key = pxl_kernel::io::fetch_scheduler::hash_of(d.key);
+        let key = pxl_kernel::io::scheduler::hash_of(d.key);
         raise(&s.outbox, Cmd::FETCH_CREATE, 2, |e| {
             e.u64(Some(key)).str_display(pxl_kernel::io::fetch::DemandUrl(d));
         });
     });
     fetch_take_aborts(|name| {
-        let key = pxl_kernel::io::fetch_scheduler::hash_of(name);
+        let key = pxl_kernel::io::scheduler::hash_of(name);
         raise(&s.outbox, Cmd::FETCH_DELETE, 1, |e| {
             e.u64(Some(key));
         });

@@ -27,7 +27,7 @@ use crate::control::sensor::device_orientation::{orientation_watchdog_step, Orie
 use crate::control::sensor::geolocation::geolocation_step;
 use crate::global::Global;
 use crate::host::now;
-use crate::io::fetch_scheduler::{fetch_pump, set_fetch_credits};
+use crate::io::scheduler::{fetch_pump, set_fetch_credits};
 use crate::layer::character::companion::{companion_step, CompanionProps};
 use crate::layer::decor::asset_store::decor_assets_wanted;
 use crate::layer::environment::state::map_environment_step;

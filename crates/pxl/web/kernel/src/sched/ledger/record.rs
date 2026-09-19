@@ -6,7 +6,7 @@
 //! (issue/20260909-cooperative-scheduler-and-task-ledger.md).
 //!
 //! Two record types, one instrument:
-//! - TaskRow — one finished unit of deferred work (a fetch_scheduler.rs
+//! - TaskRow — one finished unit of deferred work (a scheduler.rs
 //!   demand today; a CPU task later), as the TaskRecord a scheduler settles
 //!   reduced to numbers.
 //! - FrameSample — one rendered frame's gauges (pacing, GPU ask, memory, queue
@@ -280,7 +280,7 @@ pub struct FrameSample {
     pub heap: HeapSample,
     pub rings: RingSample,
     pub work: WorkSample,
-    // network pressure — fetch_scheduler queued + in-flight, per category
+    // network pressure — io/scheduler queued + in-flight, per category
     pub q_terrain: f64,
     pub q_poi: f64,
 }

@@ -10,7 +10,7 @@
 
 use crate::global::Global;
 use crate::host::now;
-use crate::io::fetch_scheduler::{fetch_counts, fetch_credits};
+use crate::io::scheduler::{fetch_counts, fetch_credits};
 use crate::kernel::kernel;
 use crate::layer::billboard::frustum_budget::billboard_dropped;
 use crate::layer::poi::badge::badge_atlas;

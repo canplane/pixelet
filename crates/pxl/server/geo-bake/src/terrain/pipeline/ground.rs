@@ -1,4 +1,4 @@
-// pxl-geo-bake/terrain/pipeline/ground_baker.rs
+// pxl-geo-bake/terrain/pipeline/ground.rs
 
 //! Rasterize normalized features into the four ground channels of the current
 //! tile.
@@ -86,7 +86,7 @@ pub fn bake_ground(elements: &[Feature], has_coast_row: bool) -> Ground {
             }
         }
     } else if has_coast_row {
-        // No sea feature reached here, but coast_adapter.rs's from_coast_row
+        // No sea feature reached here, but coast/adapter.rs's from_coast_row
         // did see a coastline row for this page and dropped it (covers_page):
         // a single land polygon covers the page's full envelope, so painting
         // bare directly is equivalent to carving it, without paying for the

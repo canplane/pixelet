@@ -13,7 +13,7 @@ use crate::control::navigation::store::map_navigation;
 use crate::global::Global;
 use crate::host::now;
 use crate::io::demand::{Category, Demand, DemandKey};
-use crate::io::fetch_scheduler::{fetch_pending_count, fetch_running, fetch_sync, page_key};
+use crate::io::scheduler::{fetch_pending_count, fetch_running, fetch_sync, page_key};
 use crate::layer::terrain::config::{KEEP_DIST, RESIDENT_PAGES};
 use crate::layer::terrain::resident::free_slot;
 use crate::layer::terrain::store::{tile_pages, tile_store};

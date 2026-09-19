@@ -1,4 +1,4 @@
-// pxl-kernel/layer/billboard/canvas_scale.rs
+// pxl-kernel/layer/billboard/canvas/scale.rs
 
 //! Canvas-drawing constants shared by every world-anchored billboard consumer
 //! (the chat bubble, the POI badges) so they stay matched by construction

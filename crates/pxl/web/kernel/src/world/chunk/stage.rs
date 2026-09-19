@@ -14,7 +14,7 @@ use xpute_runtime::sched::edge::{notified, yield_if_spent};
 
 use crate::global::Global;
 use crate::host::now;
-use crate::io::fetch_scheduler::fetch_pending_count;
+use crate::io::scheduler::fetch_pending_count;
 use crate::kernel::{kernel, with_world};
 use crate::layer::environment::config::render_cfg;
 use crate::layer::poi::fetcher;

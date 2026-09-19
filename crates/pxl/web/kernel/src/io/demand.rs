@@ -1,6 +1,6 @@
 // pxl-kernel/io/demand.rs
 
-//! One unit of deferrable I/O handed to fetch_scheduler.rs.
+//! One unit of deferrable I/O handed to scheduler.rs.
 //!
 //! The scheduler owns ordering, the concurrency quota, and cancellation of
 //! demands that stop being wanted; the shell owns the actual transport — the
