@@ -28,7 +28,7 @@
  */
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
-import { now } from "../sys/clock.ts";
+import { now } from "../clock.ts";
 
 export type BudgetOpts = {
   /** wall-time this pass may consume, in ms. Waived while the pass has not

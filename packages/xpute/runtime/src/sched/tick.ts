@@ -42,7 +42,7 @@
  */
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
-import { now } from "../sys/clock.ts";
+import { now } from "../clock.ts";
 import { type PassStats, run_under_budget } from "./frame_budget.ts";
 
 export type Phase = u32;

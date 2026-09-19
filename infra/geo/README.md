@@ -38,9 +38,9 @@ infra/geo/
 | **GEDTM30**<br>ground elevation                                                  | `elevation_raster`                                                                                                                                     | `elevation_catalog` | `elevation/script/setup-elevation.sh`                       |
 
 Coastline is not a table of its own. `OVERTURE_COAST_SQL`
-(`crates/pxl/geo-bake/src/terrain/repository.rs`) carves it at bake time out of
+(`crates/pxl/server/geo-bake/src/terrain/repository.rs`) carves it at bake time out of
 `overture_base_water`'s `ocean` subtype, and `HAS_LAND_SQL`
-(`crates/pxl/geo-bake/src/terrain/tool/bake_tiles.rs`) calls a page open ocean
+(`crates/pxl/server/geo-bake/src/bin/bake_tiles.rs`) calls a page open ocean
 when no `overture_base_land` row touches its bbox.
 
 Both catalogs keep one row per table: which bbox it was pulled with and which

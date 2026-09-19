@@ -1,4 +1,4 @@
-// @xpute/runtime/sys/slab.test.ts
+// @xpute/runtime/mem/transfer.test.ts
 
 import { assertEquals } from "@std/assert";
 

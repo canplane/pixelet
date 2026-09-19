@@ -26,16 +26,16 @@ xpute-core ◀── pxl-spec ◀── pxl-render ◀── pxl-kernel ◀─�
 @xpute/core ◀── @xpute/runtime ◀───────────────────────────────────────────────┘
 ```
 
-| Crate / package  | Role                                                                                                                                                    |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `xpute-core`     | The generic kit: collections and lanes, the codecs and XTP, the errno table both languages are written from, FreeBSD msun's libm, which agrees with V8. |
-| `xpute-runtime`  | What runs over it: the rings and the change log, the scheduler's three levels, and the ranges a module's memory is laid out in.                         |
-| `pxl-spec`       | The model: PVF3 and the spatial hierarchy, the cell catalogs, the command and message numbers, the bake's formats, the asset tables.                    |
-| `pxl-render`     | The view: volumes, the column scan and the mesher, glTF, the LOD ladder, the billboards' atlas, the draw list, the shaders, the renderer.               |
-| `pxl-kernel`     | The kernel: the chunk scheduler and nodes, the layers and their stores, fetches and loads, the camera and sensors, the turn, the ledger.                |
-| `pxl-wasm`       | The module: the allocator and executor it installs, the linker flags that fix the memory's front, the rings, and the exports.                           |
-| `@xpute/core`    | The same kit in TypeScript: XTP, the codecs, the errno table, the words.                                                                                |
-| `@xpute/runtime` | The same runtime's host end: the rings' doorbell (`ipc/doorbell.ts`), the strobe and quantum (`sched/`), the reservation (`sys/mem.ts`).                |
+| Crate / package  | Role                                                                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `xpute-core`     | The generic kit: the collections, the codecs, XTP and TLV, the errno table both languages are written from, and the allocator; msun's libm through the crate. |
+| `xpute-runtime`  | What runs over it: the rings and the change log, the scheduler's three levels, and the ranges a module's memory is laid out in.                               |
+| `pxl-spec`       | The model: PVF3 and the spatial hierarchy, the cell catalogs, the command and message numbers, the bake's formats, the asset tables.                          |
+| `pxl-render`     | The view: volumes, the column scan and the mesher, glTF, the LOD ladder, the billboards' atlas, the draw list, the shaders, the renderer.                     |
+| `pxl-kernel`     | The kernel: the chunk scheduler and nodes, the layers and their stores, fetches and loads, the camera and sensors, the turn, the ledger.                      |
+| `pxl-wasm`       | The module: the allocator and executor it installs, the linker flags that fix the memory's front, the rings, and the exports.                                 |
+| `@xpute/core`    | The same kit in TypeScript: XTP, the codecs, the errno table, the words.                                                                                      |
+| `@xpute/runtime` | The same runtime's host end: the rings' doorbell (`ipc/doorbell.ts`), the strobe and quantum (`sched/`), the reservation (`mem/section.ts`).                  |
 
 Those are what the client is built from. Three more crates sit over `pxl-spec`
 and never reach the browser: `pxl-geo` and `pxl-api` are the two servers, and
@@ -63,11 +63,11 @@ Two boundaries are kept on purpose:
 
 The shell (`apps/web`) is a driver. It does five things:
 
-- It reserves the memory and instantiates the module (`kernel/core_mem.ts`, `kernel/module.ts`).
+- It reserves the memory and instantiates the module (`kernel/mem.ts`, `kernel/module.ts`).
 - It runs the turns (`@xpute/runtime/sched/strobe.ts`) and submits what a frame carries: the viewport, the gap since the last frame, the measured frame interval and the I/O credits.
 - It forwards pointer, wheel, sensor and visibility events as commands.
 - It answers the kernel's signals: it starts and cancels the fetches the kernel names, reads a response body into a block the kernel gives it, decodes images, and runs the sensors' watches.
-- It hands a canvas over as a surface. The canvas is transferred to an `OffscreenCanvas` and from then on is drawn by the kernel alone, through the calls in `device/gpu.ts`.
+- It hands a canvas over as a surface. The canvas is transferred to an `OffscreenCanvas` and from then on is drawn by the kernel alone, through the calls in `kernel/render/gpu.ts`.
 
 The UI renders one snapshot, a JSON document the kernel writes after a turn when it has changed. Every control on the UI is an action the kernel applies. What draws on the canvas is the kernel's, and what is only UI state is the shell's.
 
@@ -303,7 +303,7 @@ What to build next is one priority: slot holders first, then chunks in the frust
 
 The world is drawn from a draw list (`crates/pxl/web/render/src/frame/draw.rs`). Each tick, the scheduler lists what to upload, free and draw: the chunks' mesh blocks at the weights its blend decided, decor as instanced draws of a group's model over the block a chunk shows, the actors with their joint palettes, the puck, the billboards and the dev gizmos. The renderer (`crates/pxl/web/render/src/gpu/renderer.rs` and the passes in `gpu/pass/`) executes the list with no decision of its own.
 
-The renderer reaches WebGPU through the host's calls (`gpu/api.rs`, answered by `apps/web/src/device/gpu.ts`). Every call passes numbers and the address and length of what it names, and every GPU object is named by a handle the kernel gave it. The shaders and pipelines are the kernel's too (`crates/pxl/web/render/src/frame/shader/`). Each pipeline is a record of words (its shaders, its vertex lanes, its bind group layouts, its primitive, depth and blend state) that the host turns into a WebGPU descriptor, and that a native host could turn into wgpu's. `cargo test` compiles every shader with naga and holds each record to what its shader declares. Depth is reversed float throughout, with near at 1 and far at 0, so a float's precision falls where a perspective depth needs it and far coplanar terrain faces do not fight. When the device is lost, the blocks stay in memory and are put back on the next device from their addresses.
+The renderer reaches WebGPU through the host's calls (`gpu/api.rs`, answered by `apps/web/src/kernel/render/gpu.ts`). Every call passes numbers and the address and length of what it names, and every GPU object is named by a handle the kernel gave it. The shaders and pipelines are the kernel's too (`crates/pxl/web/render/src/frame/shader/`). Each pipeline is a record of words (its shaders, its vertex lanes, its bind group layouts, its primitive, depth and blend state) that the host turns into a WebGPU descriptor, and that a native host could turn into wgpu's. `cargo test` compiles every shader with naga and holds each record to what its shader declares. Depth is reversed float throughout, with near at 1 and far at 0, so a float's precision falls where a perspective depth needs it and far coplanar terrain faces do not fight. When the device is lost, the blocks stay in memory and are put back on the next device from their addresses.
 
 The view (`crates/pxl/web/kernel/src/world/frame/view.rs`) is the orbit camera and the root frame the world stands in. The eye never turns: the world turns under it, by the map's azimuth, and is translated to put the map centre at the origin. The local origin is the map centre's L4 base, so the world stays in `f32` range near the camera, and the translation rebases in the same step that it snaps. The matrices are doubles, composed the moment a damping step writes them, and read by the chunk scheduler, the renderer, placement and the pointer's ray.
 
@@ -427,6 +427,6 @@ What a build ships is decided at build time and written once as JSON under `spec
 
 Nothing in a catalog is sent between shell and kernel or between client and server. Both sides compile the same catalog, so a message carrying it would be a program telling itself what it already has. Where bytes do cross, as a published bake or a saved blob, their layout is the model's and their version is in the envelope: the path or the storage key.
 
-- **Cubes and decor kinds** are `spec/cell/`'s (`cube_type.json`, `color.json`, `decor.json`); a value's number is what the object store writes.
+- **Cubes and decor kinds** are `spec/pxl/spec/cell/`'s (`cube_type.json`, `color.json`, `decor.json`); a value's number is what the object store writes.
 - **Models** are named by their path under the top-level `asset/` tree, in the catalog that uses them: each decor kind's `models` and `skins` in `spec/pxl/web/kernel/layer/decor/kind/kind.json`, each character group's `keys`, `models`, `skin` and `size` in `spec/pxl/web/kernel/layer/character/variant.json`. A path resolves to a bucket key and a measured extent through the asset table (`crates/pxl/spec/src/asset/ingested.rs`, `apps/web/src/catalog/asset/ingested-spec.ts`) that `asset/script/ingest_asset.rs` generates, which hashes every model, skin and texture into the bucket (`asset/<sha256>`) and measures each glb's bounds. Nothing imports a model or an image: the client fetches a key, the same key from the dev API's `./out/asset` and from R2.
 - **The texture pack** is one table (`crates/pxl/spec/src/asset/texture.rs`, which image a cube type wears on which face) and one object in the bucket: the ingest composes its images into a single WebP sheet, and the client fills its layer array from that one download, a layer at a time. A cube's colour is `spec/pxl/spec/cell/color.json`'s, what the minimap and the coarse tiers draw, and a pack decorates it.

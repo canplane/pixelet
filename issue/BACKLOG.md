@@ -273,7 +273,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   places outside the tests: 53 functions and 21 fields, concentrated in
   `wire/xtp/cursor.rs` (25), `wire/tlv.rs` (23), `collection/arena.rs`
   (8) and `wire/xtp/encode.rs` (6), with a few each in
-  `ipc/change.rs`, `wire/xtp/view.rs`, `ds/map.rs`,
+  `ipc/change.rs` and `wire/xtp/view.rs`,
   `pxl-spec`'s `sparse_tree/mem.rs` and its three `cell/` files. Rust has one
   meaning for a leading underscore and it is not privacy — privacy is the
   absence of `pub` — it silences the unused warning, which `rustc` confirms
@@ -288,7 +288,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     `_check_unsealed`, `_prune`, `_walk`, and every field — `_cap`, `_len`,
     `_size`, `_head`, `_buf`, `_off`, `_sealed`, `_factory`, `_mark`.
     `pxl-spec`'s `cell/type.rs` carries `pub _meta`, which says both at once
-    and wants reading before it is renamed. `ds/heap.rs`'s `build_of` is the
+    and wants reading before it is renamed. `collection/heap.rs`'s `build_of` is the
     precedent for the forced kind, and the free kind just loses the underscore.
 
 - **The TypeScript's numeric model, still named in the Rust.** `Number` and
