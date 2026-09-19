@@ -55,6 +55,9 @@ export function ToastController() {
   const location_error_key: string | null = location_error === null ? null : location_message_key(location_error);
 
   const map_status = useKernel((s) => s.map.status);
+  // The L3 page the map centre falls in — what "the area I am looking at"
+  // means to the kernel, and the key the world toast is announced per.
+  const map_page = useKernel((s) => s.map.page);
   // Merged with map_status below into a single "world-status" toast, not a
   // toast of its own — both represent the same thing to a viewer ("is the
   // world I'm looking at actually ready yet"), unlike location_status
@@ -101,6 +104,24 @@ export function ToastController() {
   // the transition into !isLoading && !isError is what distinguishes
   // "just finished, flash success" from "never started, nothing to show."
   const wasWorldLoadingRef = useRef(false);
+  // The last page announced as ready. `undefined` rather than null so that the
+  // very first announcement is not swallowed by a centre that has none yet.
+  const announcedPageRef = useRef<string | null | undefined>(undefined);
+  const shownWorldToastRef = useRef(false);
+  // The ready toast's own timer, held here rather than returned as the
+  // effect's cleanup: the effect re-runs whenever the page changes, and a
+  // cleanup that cancelled the timer would leave the toast standing forever.
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dropWorldToast = () => {
+    if (dismissTimerRef.current !== null) {
+      clearTimeout(dismissTimerRef.current);
+      dismissTimerRef.current = null;
+    }
+    if (!shownWorldToastRef.current) return;
+    toastDismiss("world-status");
+    shownWorldToastRef.current = false;
+  };
+  useEffect(() => dropWorldToast, []);
   // Once the companion has completed its very first load, every later
   // person_ready/pet_ready dip is from the user swapping a variant in
   // settings (Walker remounts on a key change, so a fresh instance briefly
@@ -114,13 +135,27 @@ export function ToastController() {
     if (!companion_loading) companionFirstLoadDoneRef.current = true;
     const isLoading = isMapLoading || relevantCompanionLoading;
 
+    // A page already announced is one the user has been told about, and what
+    // reaches the terrain queue for it afterwards is the fetcher asking again
+    // for a tile that did not arrive — every OCEAN_RETRY_MS, for as long as it
+    // keeps not arriving (terrain/tile_fetcher.rs). The queue filling and
+    // draining on that beat is not the world loading and becoming ready, and
+    // announcing it as such replayed this toast every two seconds forever.
+    // An error still speaks, since that is news whatever page it is on.
+    const already_announced = map_page === announcedPageRef.current;
+
     if (isLoading || isError) {
       wasWorldLoadingRef.current = true;
+      if (already_announced && !isError) {
+        dropWorldToast();
+        return;
+      }
       // Map load takes priority in the message when both are in flight —
       // it's the more foundational "is there a world to stand on at all"
       // concern; companion_loading only surfaces once map_status has
       // nothing left to report.
       const message_key = isError ? "toast.map_load_error" : isMapLoading ? "toast.map_loading" : "toast.companion_loading";
+      shownWorldToastRef.current = true;
       toastCustom("world-status", ({ index, stackSize, isRemoving }) => (
         <Toast
           id="world-status"
@@ -139,6 +174,12 @@ export function ToastController() {
 
     if (!wasWorldLoadingRef.current) return;
     wasWorldLoadingRef.current = false;
+    if (already_announced) {
+      dropWorldToast();
+      return;
+    }
+    announcedPageRef.current = map_page;
+    shownWorldToastRef.current = true;
     toastCustom("world-status", ({ index, stackSize, isRemoving }) => (
       <Toast
         id="world-status"
@@ -150,9 +191,12 @@ export function ToastController() {
         icon={<StatusIcon>{SuccessIcon}</StatusIcon>}
       />
     ));
-    const timer = setTimeout(() => toastDismiss("world-status"), 3000);
-    return () => clearTimeout(timer);
-  }, [map_status, companion_loading]);
+    dismissTimerRef.current = setTimeout(() => {
+      dismissTimerRef.current = null;
+      toastDismiss("world-status");
+      shownWorldToastRef.current = false;
+    }, 3000);
+  }, [map_status, companion_loading, map_page]);
 
   return null;
 }
