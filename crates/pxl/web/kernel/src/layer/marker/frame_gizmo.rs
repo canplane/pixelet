@@ -26,7 +26,7 @@ use xpute_core::math::vec3::Vec3;
 use crate::global::Global;
 use crate::host::measure_text;
 use crate::kernel::kernel;
-use crate::layer::billboard::canvas_scale::{FONT_FAMILY, FONT_WEIGHT_REGULAR};
+use crate::layer::billboard::canvas::scale::{FONT_FAMILY, FONT_WEIGHT_REGULAR};
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
 use crate::layer::terrain::elevation::{get_ele, with_ele};
 use crate::layer::terrain::store::tile_pages;

@@ -17,7 +17,7 @@ use pxl_spec::space::pvf3::ivec::IVec;
 
 use crate::global::Global;
 use crate::io::demand::{Category, Demand};
-use crate::io::fetch_scheduler::{fetch_running, fetch_sync, page_key};
+use crate::io::scheduler::{fetch_running, fetch_sync, page_key};
 use crate::layer::poi::store::{clear_pois, get_pois, poi_pages};
 use crate::layer::terrain::config::{KEEP_DIST, RESIDENT_PAGES};
 use crate::shell::setting::store::settings_store;

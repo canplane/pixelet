@@ -13,8 +13,8 @@ use pxl_render::gpu::surface::DPR_MAX;
 
 use crate::global::Global;
 use crate::host::{measure_text, wall_now};
-use crate::layer::billboard::canvas_scale::{FONT_FAMILY, FONT_WEIGHT_BOLD};
-use crate::layer::billboard::canvas_text::wrap_text;
+use crate::layer::billboard::canvas::scale::{FONT_FAMILY, FONT_WEIGHT_BOLD};
+use crate::layer::billboard::canvas::text::wrap_text;
 use crate::layer::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
 
 // ts (wall clock at append) lets the bubble derive its own remaining show

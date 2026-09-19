@@ -1,4 +1,4 @@
-// pxl-kernel/io/fetch_scheduler.test.rs
+// pxl-kernel/io/scheduler.test.rs
 //
 // How the queue orders, yields and counts is xpute_runtime::io::queue's to test.
 // What is the world's here: the key a demand goes out and comes back under,
@@ -35,7 +35,7 @@ fn aborts() -> Vec<DemandKey> {
 
 fn fresh() -> std::sync::MutexGuard<'static, ()> {
     let g = serial();
-    fetch_scheduler_reset();
+    scheduler_reset();
     fetch_take_started(|_| {});
     fetch_take_aborts(|_| {});
     set_fetch_credits(6);
@@ -43,7 +43,7 @@ fn fresh() -> std::sync::MutexGuard<'static, ()> {
 }
 
 #[test]
-fn fetch_scheduler_a_started_demand_goes_out_under_the_key_it_was_asked_for() {
+fn scheduler_a_started_demand_goes_out_under_the_key_it_was_asked_for() {
     let _g = fresh();
     let x = d(Category::Ocean, 0xcafe_5678_9abc_def0, 0.0);
     fetch_sync(Category::Ocean, std::slice::from_ref(&x));
@@ -56,7 +56,7 @@ fn fetch_scheduler_a_started_demand_goes_out_under_the_key_it_was_asked_for() {
 }
 
 #[test]
-fn fetch_scheduler_starts_no_more_than_the_credits_the_central_scheduler_granted() {
+fn scheduler_starts_no_more_than_the_credits_the_central_scheduler_granted() {
     let _g = fresh();
     set_fetch_credits(2);
     let h: Vec<Demand> = (0..5).map(|i| d(Category::Poi, i, i as f64)).collect();
@@ -68,7 +68,7 @@ fn fetch_scheduler_starts_no_more_than_the_credits_the_central_scheduler_granted
 }
 
 #[test]
-fn fetch_scheduler_an_aborted_demand_goes_out_under_its_key_and_settles_under_it() {
+fn scheduler_an_aborted_demand_goes_out_under_its_key_and_settles_under_it() {
     let _g = fresh();
     let (keep, drop) = (d(Category::Terrain, 11, 0.0), d(Category::Terrain, 22, 1.0));
     fetch_sync(Category::Terrain, &[keep, drop]);
@@ -82,7 +82,7 @@ fn fetch_scheduler_an_aborted_demand_goes_out_under_its_key_and_settles_under_it
 }
 
 #[test]
-fn fetch_scheduler_ledger_records_outcome_for_completed_and_aborted_demands() {
+fn scheduler_ledger_records_outcome_for_completed_and_aborted_demands() {
     let _g = fresh();
     ledger_recording_start();
     let cat = Category::Poi;

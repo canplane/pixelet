@@ -1,8 +1,8 @@
 // pxl-geo-bake/wkb.rs
 
 //! Minimal WKB decoder shared by every source adapter that reads
-//! `ST_AsBinary(geom)` rows (terrain/pipeline/coast_adapter.rs,
-//! terrain/pipeline/overture_adapter.rs). Supports Point, LineString, Polygon
+//! `ST_AsBinary(geom)` rows (terrain/pipeline/coast/adapter.rs,
+//! terrain/pipeline/overture/adapter.rs). Supports Point, LineString, Polygon
 //! and MultiPolygon. Accepts EWKB flags (Z/SRID) and ignores SRID and Z
 //! because the pipeline assumes 3857.
 

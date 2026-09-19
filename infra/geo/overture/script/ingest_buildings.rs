@@ -15,7 +15,7 @@ serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 //! Confirmed live against a real Gangnam-area sample: only ~14% of Korean
 //! building features carry `height`/`num_floors`/`class`/`subtype` at all.
 //! `height`/`num_floors` are kept in the table regardless (a future consumer's
-//! problem), but baking never reads them — `ground_baker` reads only
+//! problem), but baking never reads them — `ground` reads only
 //! `computed.width`, for linear features, which buildings never are. A
 //! structure cell needs to know it is a building and roughly which kind, for
 //! `cube_types.structure`'s own small enum, not its real height, so an absent

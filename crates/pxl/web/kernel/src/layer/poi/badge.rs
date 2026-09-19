@@ -26,7 +26,7 @@ use pxl_spec::bake::format::PoiPage;
 
 use crate::global::Global;
 use crate::host::{measure_text, now};
-use crate::layer::billboard::canvas_scale::{FONT_FAMILY, FONT_WEIGHT_REGULAR};
+use crate::layer::billboard::canvas::scale::{FONT_FAMILY, FONT_WEIGHT_REGULAR};
 use crate::layer::billboard::sheet::billboard_sheet;
 use crate::layer::poi::theme::resolve_poi_theme;
 

@@ -244,7 +244,7 @@ Overture PostGIS rows
   → XTP decode
   → overture_adapter / coast_adapter (row → feature)
   → normalizer (classify, rank, assign tags — policy-parameterized: overture_policy / coast_policy)
-  → ground_baker (rasterize geometry into ground channels)
+  → ground (rasterize geometry into ground channels)
   → encode_terrain (elevation + ground → XTP)
   → compressed HTTP page response
 ```

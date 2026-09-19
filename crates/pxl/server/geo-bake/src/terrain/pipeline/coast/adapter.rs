@@ -1,4 +1,4 @@
-// pxl-geo-bake/terrain/pipeline/coast_adapter.rs
+// pxl-geo-bake/terrain/pipeline/coast/adapter.rs
 
 //! Coastline ingress adapter for the repository's OVERTURE_COAST_SQL rows —
 //! computed from `overture_base_water`'s `ocean` subtype (see that query's own

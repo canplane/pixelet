@@ -1,8 +1,8 @@
-// pxl-geo-bake/terrain/pipeline/overture_policy.rs
+// pxl-geo-bake/terrain/pipeline/overture/policy.rs
 
 //! Policy for interpreting Overture Buildings/Transportation/Base rows into
 //! categories, metrics, flags and terrain cell configuration — the
-//! counterpart to coast_policy.rs (coastline only).
+//! counterpart to coast/policy.rs (coastline only).
 //!
 //! Mapped value by value against each theme's own subtype/class vocabulary.
 //! The Segments/Land_use/Water/Land class and subtype values below are the
@@ -18,7 +18,7 @@ use pxl_spec::cell::cube::cube_types;
 use pxl_spec::space::adapter::epsg3857::G3857;
 
 use crate::terrain::pipeline::normalizer::{NormalizePolicy, RawFeature};
-use crate::terrain::pipeline::overture_adapter::{BaseSource, OvertureRawFeature};
+use crate::terrain::pipeline::overture::adapter::{BaseSource, OvertureRawFeature};
 
 // ============ Domain knowledge constants ============
 
@@ -177,7 +177,7 @@ fn compute_extra(feat: &OvertureRawFeature, category: &str) -> FeatureExtra {
     let institutional = is_institutional(feat);
     FeatureExtra {
         rank: calculate_rank(feat, category, institutional),
-        // Sea fill is coast_policy.rs's job, never this policy's.
+        // Sea fill is coast/policy.rs's job, never this policy's.
         is_ocean: false,
         is_parking: category == "parking",
         is_institutional: institutional,

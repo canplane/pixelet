@@ -23,7 +23,7 @@ use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 use crate::global::Global;
 use crate::host::body_read;
 use crate::io::demand::{Category, Demand, Phases};
-use crate::io::fetch_scheduler::{demand_of, fetch_settle};
+use crate::io::scheduler::{demand_of, fetch_settle};
 use crate::layer::poi::{repository as poi_repository, store as poi_store};
 use crate::layer::terrain::{tile_fetcher, tile_repository};
 use crate::sched::ledger::record::{Failure, Outcome};

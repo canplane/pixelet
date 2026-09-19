@@ -1,8 +1,8 @@
-// pxl-geo-bake/terrain/pipeline/coast_policy.rs
+// pxl-geo-bake/terrain/pipeline/coast/policy.rs
 
 //! Coastline-only normalize policy — the repository's OVERTURE_COAST_SQL,
 //! computed from `overture_base_water`'s `ocean` subtype, feeds
-//! coast_adapter.rs's `from_coast_row`, which synthesizes
+//! coast/adapter.rs's `from_coast_row`, which synthesizes
 //! `{natural: "ocean", source: "overture_ocean"}` tags for this file and
 //! normalizer.rs to key off of.
 

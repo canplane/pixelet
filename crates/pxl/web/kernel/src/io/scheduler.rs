@@ -1,4 +1,4 @@
-// pxl-kernel/io/fetch_scheduler.rs
+// pxl-kernel/io/scheduler.rs
 
 //! The world's fetches, on the kernel's I/O queue (xpute_runtime::io::queue):
 //! what a demand is called — `<category>:<page>`, or what stands for a search
@@ -228,7 +228,7 @@ pub fn fetch_running(key: DemandKey) -> bool {
 
 /// Test-only: abort everything in flight and forget the queue, so each test
 /// starts against an empty scheduler.
-pub fn fetch_scheduler_reset() {
+pub fn scheduler_reset() {
     sched().queue.reset();
 }
 
@@ -238,5 +238,5 @@ pub fn page_key(category: Category, page_idx: IVec) -> DemandKey {
 }
 
 #[cfg(test)]
-#[path = "fetch_scheduler.test.rs"]
+#[path = "scheduler.test.rs"]
 mod test;
