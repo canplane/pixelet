@@ -247,7 +247,7 @@ the wrong process rather than like a failure.
 `gate` and `deploy-web` share `concurrency: build-counter` across every ref,
 because the count is one object in the bucket and the take is read-add-write:
 two runs holding it together would take the same number. A main push therefore
-queues behind the one in front of it. A hand `./script/deploy.ts` is outside
+queues behind the one in front of it. A hand `deno task deploy` is outside
 the group and takes no number at all — it publishes an unnumbered build, which
 is the fallback rather than a second deployer.
 

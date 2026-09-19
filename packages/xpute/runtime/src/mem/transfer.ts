@@ -1,4 +1,4 @@
-// @xpute/runtime/sys/transfer.ts
+// @xpute/runtime/mem/transfer.ts
 
 /**
  * The little memory: transferable `ArrayBuffer`s for work that leaves the

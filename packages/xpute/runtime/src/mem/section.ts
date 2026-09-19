@@ -1,4 +1,4 @@
-// @xpute/runtime/sys/mem.ts
+// @xpute/runtime/mem/section.ts
 
 /**
  * Ranges laid end to end in a linear memory: the mechanism under a kernel's

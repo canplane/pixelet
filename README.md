@@ -127,16 +127,15 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path.
 ```
 .
 ├── apps/
-│   └── web/                  # The shell: Vite + React 19, and the Cloudflare Worker (worker/)
+│   └── web/                  # The shell: Vite + React 19, and the Cloudflare Worker (cloudflare-worker/)
 │       └── src/
-│           ├── kernel/       #   the kernel's driver: memory, module, doorbell, signals
-│           ├── device/       #   the WebGPU host the renderer calls
-│           ├── app/ ui/      #   the frame, screens and controls
-│           ├── catalog/      #   the data screens show (settings schema, variants, geocode)
+│           ├── kernel/       #   the kernel's driver: abi, control, io, mem, render, sched, shell
+│           ├── app/ page/    #   the frame, the router, the pages
+│           ├── feature/      #   a screen's own pieces: map, search, setting, character, dev
+│           ├── catalog/      #   the data screens show (cells, assets, geocode)
 │           ├── locale/       #   i18n catalogues, dev-only ones apart
 │           ├── config/       #   deployment config and routes
-│           ├── dev/          #   dev tools: the ledger overlay, test page
-│           └── shared/          #   shared UI kit and browser helpers
+│           └── shared/       #   shared UI kit and browser helpers
 ├── crates/                   # The Rust workspace, grouped by where a crate runs
 │   ├── xpute/
 │   │   ├── core/             #   xpute-core: collections, codecs, XTP, errno — no domain
@@ -156,8 +155,8 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path.
 │   └── xpute/
 │       ├── core/             #   @xpute/core: the same kit in TypeScript
 │       └── runtime/          #   @xpute/runtime: the rings' host end, the strobe, the reservation
-├── spec/                     # JSON every language is generated from (script/spec.ts):
-│                             #   pxl-spec's at the top; kernel/, render/, xpute/ below
+├── spec/                     # JSON every language is generated from (script/spec.ts),
+│                             #   grouped as crates/ is: xpute/, pxl/{spec, web, server}
 ├── asset/                    # Shipped models and texture pack (cube, decor, actor),
 │                             #   imported by nothing — asset/README.md
 ├── script/                   # spec and locale generators and checks, the deployment smoke

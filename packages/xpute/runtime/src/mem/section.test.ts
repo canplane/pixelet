@@ -1,8 +1,8 @@
-// @xpute/runtime/sys/mem.test.ts
+// @xpute/runtime/mem/section.test.ts
 
 import { assert, assertEquals } from "@std/assert";
 
-import { align_up, nth_at, read_section, type Section, SECTION_WORDS, span_of, write_section } from "./mem.ts";
+import { align_up, nth_at, read_section, type Section, SECTION_WORDS, span_of, write_section } from "./section.ts";
 
 const PAGE = 1 << 12;
 

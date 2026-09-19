@@ -1,4 +1,4 @@
-// @xpute/runtime/sys/clock.ts
+// @xpute/runtime/clock.ts
 
 /**
  * The host's clock, in milliseconds: `performance.now()` unless something

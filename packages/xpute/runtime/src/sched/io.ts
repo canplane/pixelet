@@ -34,7 +34,7 @@
  */
 
 import type { f64, u32, u64 } from "@xpute/core/abi/word.ts";
-import { now } from "../sys/clock.ts";
+import { now } from "../clock.ts";
 
 export type Demand = {
   /** Stable identity across syncs. Two demands sharing a key are the same

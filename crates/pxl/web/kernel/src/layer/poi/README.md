@@ -30,12 +30,12 @@ rebuilt on 2026-09-12/13 into the shape below.
   (`../billboard/atlas.rs`) and cached by id hash; the width a candidate
   offers is estimated from its characters, the badge measured exactly when
   drawn.
-- **`/crates/pxl/web/kernel/src/world/billboard.rs` and `/crates/pxl/web/render/src/gpu/pass/badges.rs`** —
+- **`/crates/pxl/web/kernel/src/layer/billboard.rs` and `/crates/pxl/web/render/src/gpu/pass/badges.rs`** —
   every badge as one instanced quad: anchor, size and sheet rectangle per
   instance; fit, fade and the occlusion twin in the vertex shader
   (`/crates/pxl/web/render/src/frame/shader/badge.wgsl`).
 - **`theme.rs`** — category → icon/colour. `OVERTURE_CATEGORY_MAP`
-  (`/crates/pxl/overture/src/category_spec.rs`, generated from
+  (`/crates/pxl/server/geo-spec/src/overture/category_spec.rs`, generated from
   `/spec/pxl/server/overture/category.json`) translates Overture's `categories.primary`
   into this vocabulary, and the generator fails when a theme entry here has no
   category resolving to it.
@@ -48,7 +48,7 @@ is thousands of rows, and the rendering budget is enforced client-side by the
 placement, not by dropping data.
 
 **Static bake**: `deno task bake:poi`
-(`/crates/pxl/geo-bake/src/poi/tool/bake_poi_tiles.rs`) writes a packet per
+(`/crates/pxl/server/geo-bake/src/bin/bake_poi_tiles.rs`) writes a packet per
 page, published to R2 under that prefix and refreshed monthly
 (`/.github/workflows/overture-monthly-refresh.yml`).
 
