@@ -20,7 +20,7 @@ pub const PUBLISHED_VERSION: PublishedVersion = PublishedVersion {
     geocode: "v1",
 };
 
-/// `keyof typeof PUBLISHED_VERSION`.
+/// The kinds a version is published for: the fields of `PUBLISHED_VERSION`.
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BakeKind {

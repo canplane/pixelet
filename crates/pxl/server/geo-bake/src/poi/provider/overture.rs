@@ -4,7 +4,7 @@
 //! CDLA-Permissive-2.0, sourced from Meta/Microsoft/Foursquare/PinMeTo, with
 //! none of the display or caching restrictions Google/Naver/Kakao carry. Reads
 //! `overture_places` — a Korea-bbox extract pulled from Overture's public S3
-//! release and refreshed on whatever cadence `ingest_places.ts` is re-run at,
+//! release and refreshed on whatever cadence `ingest_places.rs` is re-run at,
 //! not a live per-request call.
 //!
 //! Deliberately its own table, kept structurally independent of the terrain

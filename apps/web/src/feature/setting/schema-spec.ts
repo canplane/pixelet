@@ -45,7 +45,7 @@ export const SETTINGS = {
     cost: "low",
   },
   /** Whether the STRUCTURE ground channel is painted. The bake writes it
-   * either way (overture_policy.ts); this is a render decision. */
+   * either way (pipeline/overture/policy.rs); this is a render decision. */
   show_structures: {
     kind: "toggle",
     default: true,

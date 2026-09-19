@@ -86,22 +86,6 @@ pub const PAGE_ELE_SPAN: u32 = 1 << (L3_SHAMT + 1 - 5);
 pub const ELE_PAD: u32 = 2;
 pub const ELE_PADDED_SPAN: u32 = PAGE_ELE_SPAN + 2 * ELE_PAD;
 
-// ---- Sparse Tree ----
-
-// TERRAIN_LAYOUT — orphaned, no consumers anywhere in the repo. Terrain
-// currently stores/serves dense arrays via bake/format.rs's
-// encode_terrain/decode_terrain + gzip; moving it onto sparse_tree isn't
-// recommended, since terrain data is dense/varied rather than
-// sparse/mergeable like objects, so a tree would likely add overhead
-// without a clear payoff. Commented out rather than deleted in case that
-// direction is ever revisited.
-// pub const TERRAIN_LAYOUT: SparseTreeLayout = SparseTreeLayout {
-//     dim: 2,
-//
-//     min: CELL_SHAMT,
-//     max: L3_SHAMT as i32,
-// };
-
 /// Object sub-block (SVO) octree layout — one instance per occupied L1
 /// cell, not one global tree (`resolve`/`set` only ever consume the low
 /// `max-min` bits of the key, so a tree only distinguishes position within

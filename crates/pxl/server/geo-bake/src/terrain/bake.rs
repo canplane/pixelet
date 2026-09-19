@@ -46,8 +46,7 @@ fn opt_str(row: &BranchCursor, at: u32) -> Result<Option<String>, MarshalError> 
 fn opt_num(row: &BranchCursor, at: u32) -> Result<Option<f64>, MarshalError> {
     let Some(c) = row.at(at)?.opt() else { return Ok(None) };
     if c.type_() == SequenceType::STR as u8 {
-        // `Math.max(0, s)` on an unparseable string is NaN, and NaN is what
-        // this returns for one too.
+        // An unparseable string is NaN, which the caller clamps away.
         return Ok(Some(c.get_str()?.trim().parse::<f64>().unwrap_or(f64::NAN)));
     }
     Ok(Some(c.get_number()?))

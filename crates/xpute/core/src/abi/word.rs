@@ -7,9 +7,8 @@
 //! — in the two word widths the formats use. A width of the whole word is
 //! the whole word, which the shift alone cannot say.
 //!
-//! Thin, as the TypeScript's are: `nbit` and `shamt` are the caller's to
-//! keep inside the word, and nothing past it is guarded beyond the whole
-//! word itself.
+//! Thin: `nbit` and `shamt` are the caller's to keep inside the word, and
+//! nothing past it is guarded beyond the whole word itself.
 
 pub const fn bit64(shamt: u32) -> u64 {
     1u64 << shamt

@@ -4,7 +4,7 @@
 // Every shipped asset as a member of `Asset`, in the ingest's sorted order:
 // its size, and for a model its extent in ENU world units, measured from the
 // glb. A catalog names an asset by its member; its path and its bucket key are
-// the shell's (ingested.ts), and the bytes themselves are in the bucket.
+// the shell's (ingested-spec.ts), and the bytes themselves are in the bucket.
 
 #![allow(non_camel_case_types)]
 

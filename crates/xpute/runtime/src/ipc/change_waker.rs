@@ -11,7 +11,7 @@
 //! means.
 //!
 //! A topic listener hears every changed key of its topic instead, once per
-//! key per pump, and null when the pump was lost — its filter is its own.
+//! key per pump, and none when the pump was lost — its filter is its own.
 //!
 //! `subscribe` returns a `Subscription` that `unsubscribe` takes, since a
 //! closure could not hold the waker mutably. The waker holds the journal
@@ -27,7 +27,7 @@ use indexmap::IndexSet;
 use super::change::{ChangeJournal, Cursor, Topic};
 
 type Listener = Box<dyn FnMut()>;
-/// A changed key, or null: the pump lost its place, re-read the topic.
+/// A changed key, or none: the pump lost its place, re-read the topic.
 pub type TopicListener = Box<dyn FnMut(Option<i64>)>;
 
 /// What `subscribe` hands back, for `unsubscribe`.

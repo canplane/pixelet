@@ -55,7 +55,7 @@ pub mod SETTINGS {
         pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
     }
     /// Whether the STRUCTURE ground channel is painted. The bake writes it
-    /// either way (overture_policy.ts); this is a render decision.
+    /// either way (pipeline/overture/policy.rs); this is a render decision.
     pub mod show_structures {
         pub const kind: &str = "toggle";
         pub const default: bool = true;

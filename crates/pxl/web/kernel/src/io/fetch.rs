@@ -133,7 +133,7 @@ fn fetch_arrived(key: u64, outcome: u32, status: u32, body: (u32, u32), fail: u3
         Ok(block) => (outcome, fail, block),
         Err(no_room) => (2, no_room as u32, None),
     };
-    // A hash the scheduler no longer holds is one a reset forgot; its body is
+    // A hash the scheduler does not hold is one a reset forgot; its body is
     // already back.
     let Some(name) = demand_of(key) else {
         release(block);

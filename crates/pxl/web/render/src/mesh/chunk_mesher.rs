@@ -936,7 +936,8 @@ fn coarse_rows_per_step(lod_step: u32) -> u32 {
 // Written out rather than computed: `pow` is a transcendental function and
 // two libms may disagree in the last bit, which would break the determinism
 // a mesh is pinned to across toolchains. Generated once from
-// `c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)`, each
+// the sRGB transfer, c / 12.92 below 0.04045 and ((c + 0.055) / 1.055)^2.4
+// above, each
 // written to 17 digits so it parses back to the same bits.
 
 #[rustfmt::skip]

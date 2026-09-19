@@ -60,7 +60,7 @@ pub fn get_ground_type(at: &Pvf3, channel: GroundChannelKey) -> Option<u32> {
 /// `origin_page_idx_xy` must be TO_XY(L3_IDX(map_origin)), precomputed once by
 /// the caller outside the loop. map_origin is L4-aligned, which is coarser
 /// than (and therefore also aligned to) L3, so page indices compose
-/// additively: L3_IDX(local + origin) === L3_IDX(local) + L3_IDX(origin).
+/// additively: L3_IDX(local + origin) = L3_IDX(local) + L3_IDX(origin).
 pub fn get_ele_at_local(origin_page_idx_xy: IVec, local_x: f64, local_y: f64) -> Option<f64> {
     let local_page_x = (local_x / L3_RANGE_REAL).floor();
     let local_page_y = (local_y / L3_RANGE_REAL).floor();
@@ -118,13 +118,12 @@ pub fn ground_pivot(out: &mut Pvf3, at: &Pvf3) -> Option<Pvf3> {
 /// ground_pivot for a coordinate, falling back to the coordinate itself when
 /// no elevation is loaded yet.
 ///
-/// The single shared "follow the actual ground" step any map_center-setting
-/// interaction should use, instead of each call site hand-rolling its own
-/// zero-Z-then-with_ele probe — do_pan and the GPS recenter button used to
-/// each build this independently (the recenter button skipped it entirely,
-/// setting map_center to the device's raw GPS altitude instead of real
-/// terrain height, visibly disagreeing on "where the ground is" depending on
-/// which interaction moved the camera).
+/// The one "follow the actual ground" step every map_center-setting
+/// interaction takes — a pan, the GPS recenter — so that all of them agree
+/// on where the ground is: the coordinate probed at Z = 0 and lifted to the
+/// terrain's height, or the coordinate as given where no terrain is loaded.
+/// A recenter that set map_center to the device's raw GPS altitude instead
+/// would put the camera at a different ground than a pan does.
 pub fn ground_or_raw(coord: &Pvf3) -> Pvf3 {
     let mut probe = Pvf3::default();
     pvf3::gather(&mut probe, pvf3::X(coord), pvf3::Y(coord), 0);

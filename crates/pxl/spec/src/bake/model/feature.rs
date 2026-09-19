@@ -6,13 +6,13 @@ use crate::bake::format::CellConfig;
 use crate::space::adapter::epsg3857::G3857;
 use crate::space::v3::V3;
 
-/// Synthetic tag set attached to coastline rows (coast_adapter.ts's
-/// from_coast_row) — coast_policy.ts's own IS_COAST check reads `natural`/
+/// Synthetic tag set attached to coastline rows (pipeline/coast/adapter.rs's
+/// from_coast_row) — coast/policy.rs's own IS_COAST check reads `natural`/
 /// `source` off this shape.
 pub type CoastTags = StrMap;
 
-/// Raw coastline row form exchanged between coast_adapter.ts and
-/// normalizer.ts. Coordinates are expected to be in EPSG:3857 meters. This
+/// Raw coastline row form exchanged between coast/adapter.rs and
+/// pipeline/normalizer.rs. Coordinates are expected to be in EPSG:3857 meters. This
 /// type preserves source geometry before local page projection.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CoastRawFeature {
@@ -54,7 +54,7 @@ pub struct FeatureExtra {
 /// are already converted into engine-local units.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Feature {
-    /// Source-provider identifier (Overture GERS id, or coast_adapter.ts's synthetic row id) carried through normalization.
+    /// Source-provider identifier (Overture GERS id, or coast/adapter.rs's synthetic row id) carried through normalization.
     pub id: String,
     /// Feature center used for labels, POI markers, and camera focus.
     pub center: V3,

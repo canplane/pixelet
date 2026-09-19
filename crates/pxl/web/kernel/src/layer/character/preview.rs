@@ -93,7 +93,7 @@ pub fn preview_step(ctx: &mut TickContext) {
     // Under the map origin rather than the lattice's: the case's own view takes
     // the actor's place back out either way, but it reads that place from the
     // draw's f32 uniform, and the absolute origin can be millions of units from
-    // the render frame's, where a float no longer resolves a model a unit tall.
+    // the render frame's, where a float cannot resolve a model a unit tall.
     let origin = get_local_world_origin(map_store().map_center.as_ref());
     let at = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin)) - CASE_DEPTH_U];
     for case in &mut c.cases {

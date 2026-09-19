@@ -25,7 +25,7 @@
 //! baked wire = [ele, ground]
 //!   ground = [land, water, structure, transport]
 //!
-//! each ground channel is st.encode(...) => U64Array
+//! each ground channel a sparse tree, encoded as words
 
 use std::hash::Hasher;
 

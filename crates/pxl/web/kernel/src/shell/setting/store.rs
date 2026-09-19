@@ -8,10 +8,10 @@
 //! two merged, so a consumer reads `show_poi` and never asks which layer it
 //! came from. Only the overrides are stored, and an override equal to the
 //! default is dropped rather than kept: a default that has been written to
-//! storage is no longer a default — it is a decision nobody made, and changing
+//! storage is not a default — it is a decision nobody made, and changing
 //! the value in the source would then reach only people with empty storage. A
 //! stored override is checked against the schema on load, so a setting that
-//! no longer exists, or a choice that no longer has that option, falls back
+//! does not exist, or a choice that lacks that option, falls back
 //! rather than lingers.
 //!
 //! Stored as `{"state":{"overrides":{…}},"version":0}`, the shape settings
@@ -44,7 +44,7 @@ pub enum CameraTerrain {
 
 impl CameraTerrain {
     /// The choice `text` names, or the default where it names none: a stored
-    /// choice the schema no longer offers reads as the default rather than as
+    /// choice the schema does not offer reads as the default rather than as
     /// a fourth behaviour.
     fn of(text: &str) -> CameraTerrain {
         match text {

@@ -88,7 +88,7 @@ impl SkinnedPass {
             // on its own: with the table full a new model would go untextured
             // for good. The character preview walks every shipped variant,
             // more of them than there are slots. The slot asked for longest
-            // ago is the one no longer drawn.
+            // ago is the one not drawn.
             .unwrap_or_else(|| self.skins.iter().enumerate().min_by_key(|(_, s)| s.seq).map_or(0, |(i, _)| i));
         self.seq += 1;
         let seq = self.seq;

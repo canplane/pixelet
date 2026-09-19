@@ -289,7 +289,7 @@ where
 /// reaching `target_u` unconditionally claims that slot as one uniform
 /// leaf at `val`, discarding whatever finer structure lived beneath it (its
 /// child block, if any, is simply orphaned — never visited again once
-/// `heap[slot]` no longer points at it, and reclaimed the next time the
+/// `heap[slot]` stops pointing at it, and reclaimed the next time the
 /// caller compacts).
 ///
 /// Traversal invariant:
@@ -590,7 +590,7 @@ pub fn compact<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, lay
 ///
 /// Return:
 /// - uniform leaf value if the whole block can collapse into one value
-/// - null otherwise
+/// - `None` otherwise
 fn _prune<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, base: u32, dep: i32, width: u32) -> Option<T> {
     if dep == 0 {
         return None;

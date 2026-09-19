@@ -499,8 +499,8 @@ async function errno_outputs(): Promise<Output[]> {
     "//",
     ...tail_doc.map((l) => `// ${l}`),
     "//",
-    '// `None` is the canonical "no value / no payload" sentinel, as `null` is on',
-    "// the TypeScript side: the empty result slot, nothing about pointers.",
+    '// `None` is the "no value / no payload" sentinel: the empty result slot,',
+    "// nothing about pointers.",
     "pub type ErrnoResult<T> = (Errno, Option<T>);",
   );
   ts.push(
@@ -665,7 +665,7 @@ async function published_outputs(): Promise<Output[]> {
   const rs = ["// pxl-spec/bake/published.rs", ...head, ...rs_doc(spec.doc, ""), "pub struct PublishedVersion {", ...kinds.map(([k]) => `    pub ${k}: &'static str,`), "}", ""];
   rs.push("pub const PUBLISHED_VERSION: PublishedVersion = PublishedVersion {", ...kinds.map(([k, v]) => `    ${k}: ${JSON.stringify(v)},`), "};", "");
   rs.push(
-    "/// `keyof typeof PUBLISHED_VERSION`.",
+    "/// The kinds a version is published for: the fields of `PUBLISHED_VERSION`.",
     "#[allow(non_camel_case_types)]",
     "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
     "pub enum BakeKind {",
