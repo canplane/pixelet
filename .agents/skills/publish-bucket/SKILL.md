@@ -6,7 +6,7 @@ description: Upload baked tiles, ingested models and textures to the R2 bucket t
 # Publishing the bucket
 
 One private R2 bucket, `pixelet-tiles`, holds everything the client fetches
-that is not the app itself. One Cloudflare Worker (`apps/web/worker/index.ts`,
+that is not the app itself. One Cloudflare Worker (`apps/web/cloudflare-worker/index.ts`,
 `apps/web/wrangler.jsonc`) serves the built app and reads the bucket under
 `/geo/tiles/*` and `/asset/*` on the app's own hostname — same-origin, no CORS, and the
 client's paths stay relative. Producing what goes in is
@@ -25,8 +25,8 @@ how it gets there and how you know it arrived.
 | `_meta/build-counter`   | the official build count     | fixed name          | mutable; taken and written by CI's gate, never by hand        |
 
 The versions the client requests are `PUBLISHED_VERSION` in
-`spec/bake/published.json`; the asset keys are the generated table
-`apps/web/src/catalog/asset/ingested_spec.ts`. The object
+`spec/pxl/spec/bake/published.json`; the asset keys are the generated table
+`apps/web/src/catalog/asset/ingested-spec.ts`. The object
 name carries no extension, so **content-type and content-encoding are
 stored with the object at upload** — that is what every flag below is for.
 
@@ -109,7 +109,7 @@ the two in step.
 ```bash
 ./asset/script/ingest_asset.rs   # -> ./out/asset/{glb,png,webp}/<sha256>, and regenerates
                                  #    crates/pxl/spec/src/asset/ingested.rs and
-                                 #    apps/web/src/catalog/asset/ingested_spec.ts
+                                 #    apps/web/src/catalog/asset/ingested-spec.ts
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
   aws s3 sync ./out/asset/${t%%:*} s3://pixelet-tiles/asset \

@@ -80,7 +80,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   distroless image of the Rust binary, db-main out of the server's
   environment, and `deno task dev` starting the servers with the proxy
   splitting on a prefix the way the Worker does; and the frame — three roots
-  (`/geo`, `/api`, `/asset`) written from `spec/route.json` into the client,
+  (`/geo`, `/api`, `/asset`) written from `spec/pxl/spec/route.json` into the client,
   the Worker and the kernel, with `wrangler.jsonc` and the deploy guard
   checked against it rather than generated, and `crates/pxl/api` on db-main
   answering nothing behind a gated `/api/internal/*`, the shape the
@@ -269,6 +269,57 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P3
 
+- **The TypeScript's private marker, ported as a leading underscore.** 74
+  places outside the tests: 53 functions and 21 fields, concentrated in
+  `wire/xtp/cursor.rs` (25), `wire/tlv.rs` (23), `collection/arena.rs`
+  (8) and `wire/xtp/encode.rs` (6), with a few each in
+  `ipc/change.rs`, `wire/xtp/view.rs`, `ds/map.rs`,
+  `pxl-spec`'s `sparse_tree/mem.rs` and its three `cell/` files. Rust has one
+  meaning for a leading underscore and it is not privacy — privacy is the
+  absence of `pub` — it silences the unused warning, which `rustc` confirms
+  for items as well as bindings: `fn _never_called()` draws nothing where
+  `fn never_called()` draws `never used`. So the marker turns the dead-code
+  lint off for exactly the functions most likely to go dead. Two kinds:
+  - Forced, where a private helper shares a name with the public method that
+    calls it — `tlv.rs`'s `_u8`/`_i64`/`_f64`, `cursor.rs`'s
+    `_bool`/`_f32_array`, about twenty in all. These need some
+    disambiguator; `heap.rs`'s `build_of` is the suffix precedent.
+  - Free, where nothing collides: `_grow`, `_need`, `_put`, `_take`,
+    `_check_unsealed`, `_prune`, `_walk`, and every field — `_cap`, `_len`,
+    `_size`, `_head`, `_buf`, `_off`, `_sealed`, `_factory`, `_mark`.
+    `pxl-spec`'s `cell/type.rs` carries `pub _meta`, which says both at once
+    and wants reading before it is renamed. `ds/heap.rs`'s `build_of` is the
+    precedent for the forced kind, and the free kind just loses the underscore.
+
+- **The TypeScript's numeric model, still named in the Rust.** `Number` and
+  `BigInt` are the only numeric types TypeScript has, so the widths were
+  typedef'd on top of them (`u64 = bigint`, `u8 = number`), and
+  `TypedArray`/`BigTypedArray`/`ArrayBuffer`/`SharedArrayBuffer` do not union
+  cleanly, so they were merged as far as they would go and the rest told
+  apart by name. Rust needs none of that, and nothing here was ever meant to
+  correspond to `Number` or `BigInt`: the port is not allowed to carry the
+  other language's constraints across. `@xpute/core` and `xpute-runtime` are
+  clear as of 2026-09-19; what the same sweep found and left alone:
+  - `crates/pxl/spec/src/space/pvf3/` carries `BigInt` prose in twelve places
+    (`core.rs`, `ivec.rs`, `fvec.rs`, `mod.rs`, `projection.rs`, `pvf3.rs`):
+    "uses BigInt for bit-exact operations", "BigInt has no `>>>`",
+    "`BigInt.asIntN(w, v)`". `pxl-spec` has no TypeScript twin at all, so
+    these describe a file that does not exist.
+  - `crates/pxl/web/kernel/src/shell/setting/`'s `SettingKind::Number` and
+    `SettingValue::Number` (`schema.rs`, `store.rs`, `shell.rs`) — code
+    rather than prose, so read first whether the schema's value kinds are
+    JSON's or JavaScript's.
+  - `ArrayBuffer` in `xpute/runtime/src/mem.rs`,
+    `pxl/web/render/src/asset/atlas.rs` and
+    `pxl/web/kernel/src/mem/spec.rs`, where the module's `memory.buffer`
+    really is one on the host's side. The boundary's name, kept unless the
+    sentence is about the Rust.
+  - `geo-bake/src/wkb.rs`'s "the TypeScript's `DataView` throws".
+    `codec/json.rs`'s `JsonKind::Number` stays: that is JSON's own type name.
+    `i128` is not part of this either — `xpute` has none, and `pvf3.rs`'s seven
+    are the 64x64 intermediate of a fixed-point multiply rather than a width of
+    the model.
+
 - **Decor culling by page.** Decor is drawn for the whole loaded world
   in one instanced draw per variant; with the threshold it exists only in
   the nearest ring, so culling saves the half behind the camera. If the
@@ -306,6 +357,9 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## Parked, with the reason on file
 
+- **`ds/treap_set` and `kit/comp`'s Rust side, removed from the pair.**
+  Their consumers and what would bring them back are in
+  [20260919-the-pair-audited-what-left.md](./20260919-the-pair-audited-what-left.md).
 - **Coarse tiers: draw calls, a wider unit.** Not a bottleneck after the
   direct path; not without a measurement —
   [20260912-coarse-tiers-what-the-field-does.md](./20260912-coarse-tiers-what-the-field-does.md).

@@ -131,7 +131,7 @@ docker compose up -d --build
 
 ### Wiring
 
-Three roots, decided in `spec/route.json` and written from there into every
+Three roots, decided in `spec/pxl/spec/route.json` and written from there into every
 place that builds a URL or reads one:
 
 | Root      | What it is                                        | Who answers it                            |
@@ -289,7 +289,7 @@ publish-bucket skill's terrain step) if the classification is ever rebuilt.
 ## 6. Licensing and attribution
 
 The notices below are required, shown in
-`apps/web/src/app/setting/section/attribution_section.tsx`. Check the
+`apps/web/src/feature/setting/section/attribution.tsx`. Check the
 source license before shortening, rewording or dropping any of them.
 
 | Source              | License                                                                                                  | Notice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |

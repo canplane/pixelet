@@ -45,14 +45,16 @@ follow that rather than improvising SQL against the raw tables.
 
 ```
 asset                   the shipped models and texture pack; data, not code — nothing imports it. asset/script/ hashes the tree into the bucket's shape and writes the catalogs' tables
-spec                    the numbers and names every language is generated from (script/spec.ts): pxl-spec's at the top, kernel/, render/ and xpute/ below
+spec                    the numbers and names every language is generated from (script/spec.ts), grouped as crates/ is: xpute/, and pxl/{spec, web, server} — what every side follows, what only the browser half does, what only a server does
 packages/xpute          the generic kit and the runtime over it, in TypeScript: core/ and runtime/
 crates/xpute            the same two in Rust — core is collections, codecs, XTP and errno; runtime is the rings, the turn and the memory a module is given. runtime depends on core, never the reverse
 crates/pxl/spec         the spec: the space and its routes, the cell catalogs, the commands, the bake's formats, the assets' tables — the one model both ends follow
 crates/pxl/web          what reaches the browser: render (the view), kernel (the stores, the schedulers, the turn) and wasm (the one module over them)
 crates/pxl/server       what does not: pxl-server itself (what geo and api both need to start), the two processes inside it, overture (what its values mean) and geo-bake (the three page bakes and the dev tile server)
 infra                   the two environments' compose files, and what fills db-geo: the Overture ingests and the DEM, as scripts beside the schema each writes
-apps/web                Vite + React 19 client, drawing through WebGPU
+apps/web                two runtimes, one deployment: src/ is the Vite + React 19 client drawing through WebGPU,
+                        and cloudflare-worker/ is the Worker that serves it — the app, the bucket's tiles and
+                        a proxy to the API, all on one origin, so nothing is cross-origin
 ```
 
 Three boundaries matter, and all are easy to erode by accident:
@@ -233,7 +235,7 @@ Two rules that came out of doing it:
 **Every source file opens with a comment naming its own logical path:**
 
 ```ts
-// @pxl/web/ui/map/view.tsx
+// @pxl/web/feature/map/ui/view.tsx
 ```
 
 This is the import-map path, not the filesystem path — extension included, so
@@ -243,15 +245,19 @@ all, then the file's path under `src/`: `// pxl-spec/space/indexer.rs`. A
 comment that names a crate by name uses the same hyphenated form; only a
 `::` path, which is code, keeps the underscore.
 
-The one exception is `kit/ui/shadcn/`, where no file carries a header —
+The one exception is `shared/ui/shadcn/`, where no file carries a header —
 it's a flat, one-file-per-component shadcn tree, uniformly header-less rather
 than inconsistently so. Don't mass-add headers there, and don't read its
 absence as licence to drop them anywhere else. What shadcn's own MIT licence
 asks for is in [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md), which is
 what lets that tree stay header-less.
 
-**Naming:** `snake_case` for files, functions, and locals; `PascalCase` for types;
-`SCREAMING_SNAKE_CASE` for module constants. **Directories are singular**:
+**Naming:** `snake_case` for functions and locals; `PascalCase` for types;
+`SCREAMING_SNAKE_CASE` for module constants. **A file's name is its own
+language's**: `snake_case` in the Rust and in `packages/`, `kebab-case` in
+`apps/web`, which is the shell and nothing but TypeScript — the same rule
+the separators follow below, applied to a source tree rather than to a
+provisioned name. **Directories are singular**:
 a directory is named for the concept it holds — `object/`, `marker/`,
 `script/`, `issue/` — not for how many files are in it, which is
 always several and never the point. A plural would have to answer whether
@@ -268,6 +274,23 @@ keep their ecosystem's `camelCase`/`PascalCase` (`useTileStore`, `MapStatus`) �
 that is not an inconsistency to fix, and a component file is named for the
 component, so one that holds several is plural (`overlays.tsx` for
 `<Overlays />`).
+
+**A name Rust would case differently carries an `allow` and a reason.** Two
+shapes earn one. A value that is conceptually a constant but cannot be a
+`const` — it reads what the shell installed at boot, or its arithmetic is not
+const-evaluable — keeps the constant's casing as a zero-argument function
+(`APP_ENV()`, `RETAIN_BUDGET_BYTES()`). And a file written in the spec's own
+notation, where an operation holding no state is named the way a C header names
+a macro, keeps that notation for the whole file rather than for whichever items
+the lint happens to reach (`wire/xtp/`, `space/pvf3/`, `space/adapter/`); the
+`allow` goes at the top of the file, with the reason above it.
+
+Reach first for a shape that needs no `allow`, since each of these keeps the
+name: a `const` where the value is one, a `LazyLock` static where it must be
+built once, and a type with associated constants where a module was standing in
+for a namespace (`MaterialClasses`). `macro_rules!` also escapes the lint and is
+the wrong trade here — these take typed arguments and return `Result`, and what
+C needed a macro for is what `const fn` already is.
 
 **Code ported from elsewhere keeps its original conventions.** Some of
 `@xpute/core` came in from other projects to stay reusable. Do not sweep it into
@@ -332,6 +355,18 @@ just don't treat them as authority.
   unrelated new tool do not, because reverting one should not drag in the
   other. When in doubt, ask whether the two halves would ever be undone
   separately.
+- **A commit's subject is `type(scope): a sentence`.** The prefix is
+  Conventional Commits' — `feat`, `fix`, `refactor`, `docs`, `test`, `chore`,
+  `perf`, `build`, `ci` — so a log can be filtered and a changelog written
+  from it; the rest is a sentence in lowercase that says what the change is
+  and why, the way a comment here does, not a label of what was touched
+  (`refactor(xpute): the runtime's TypeScript loses sys/ as the Rust did`,
+  not `refactor(xpute): move sys files`). The scope is the directory the
+  change lives in, as the tree names it — `xpute`, `spec`, `render`,
+  `kernel`, `wasm`, `web`, `geo`, `geo-bake`, `api`, `infra`, `asset` — and
+  a change across several has none. The body says the rest, in the same
+  voice. Commits before 2026-09-20 follow whichever of the two earlier
+  conventions was current; they are not rewritten.
 - **Verify claims against a running system where one exists.** A conclusion
   reached only by reading code is a hypothesis. Say so when that's all you have,
   and if a predicted fix turns out not to work, revert it rather than leaving it
