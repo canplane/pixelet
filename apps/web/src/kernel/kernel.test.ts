@@ -10,14 +10,14 @@
 
 import { assert, assertEquals } from "@std/assert";
 
-import type { u32 } from "@xpute/core/kit/word.ts";
-import { Cmd } from "@/kernel/cmd_spec.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
+import { Cmd } from "@/kernel/abi/cmd.ts";
 import { cube_types } from "@/catalog/cell/cube.ts";
 
 import { ELE_PADDED_SPAN, encode_empty_poi_page, encode_terrain, PAGE_CELL_SPAN } from "@/kernel/fixture.ts";
 
-import { CORE_BUILD, packet } from "@/kernel/core_build.ts";
-import { CORE_KERNEL } from "@/kernel/core_mem.ts";
+import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
+import { CORE_KERNEL } from "@/kernel/mem.ts";
 import { BOOT, boot_block, hold_body, text_at } from "@/kernel/module.ts";
 
 function rng(seed: u32): () => u32 {

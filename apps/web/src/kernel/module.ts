@@ -7,9 +7,9 @@
  * read them through the same URL.
  *
  * The module imports its memory: the central scheduler gives it one
- * (core_mem.ts), and booting the module lays out everything inside it —
+ * (mem.ts), and booting the module lays out everything inside it —
  * the rings, `.fixed` and the heap — as the kernel's map says
- * (crates/pxl/web/kernel/src/sys/mem/section.rs).
+ * (crates/pxl/web/kernel/src/mem/section.rs).
  *
  * One instance per memory: instantiating writes the module's data segments
  * over the front of it, so a second instance over the same memory would
@@ -20,11 +20,11 @@
  * every static host gives.
  */
 
-import type { u32 } from "@xpute/core/kit/word.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
 import type { QuantumPolicy } from "@xpute/runtime/sched/quantum.ts";
 
-import { gpu_imports } from "@/device/gpu.ts";
-import { EXPORT, IMPORT } from "@/kernel/abi.ts";
+import { gpu_imports } from "@/kernel/render/gpu.ts";
+import { EXPORT, IMPORT } from "@/kernel/abi/symbol.ts";
 
 /** What the module exports: the boot block and the doorbell. Every address
  * is into the memory it was given. */
@@ -173,7 +173,6 @@ export async function instantiate_kernel(memory: WebAssembly.Memory): Promise<Ke
         ctx.font = text_at(memory, font, font_len);
         return ctx.measureText(s).width;
       },
-      entropy: () => crypto.getRandomValues(new Uint32Array(1))[0],
       // A body the host holds, copied where the kernel asks and let go.
       body_read: (body: u32, dst: u32, len: u32) => {
         const bytes = bodies.get(body);
@@ -190,7 +189,7 @@ export async function instantiate_kernel(memory: WebAssembly.Memory): Promise<Ke
 }
 
 // Binaryen minifies the names the two sides call each other by, down to a
-// letter apiece (script/build_wasm.ts), and writes the mapping it chose into
+// letter apiece (script/build-wasm.ts), and writes the mapping it chose into
 // kernel/abi.ts. Neither side spells a letter: the build decides them, both
 // read them, and a module that renamed cannot leave the shell behind.
 

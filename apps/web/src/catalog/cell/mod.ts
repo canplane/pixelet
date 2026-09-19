@@ -3,7 +3,7 @@
 
 import { cube_colors, cube_types, type CubeColorId } from "./cube.ts";
 import type { Swatch } from "./type.ts";
-import { decor_types, type DecorId } from "./decor_spec.ts";
+import { decor_types, type DecorId } from "./decor-spec.ts";
 
 /** The four channels a baked ground cell can be painted in, in the order the
  * page's own lanes carry them — which is what `channel_slot` numbers a
@@ -19,7 +19,7 @@ export const enum GroundChannelKey {
 export const GROUND_CH_KEYS = [GroundChannelKey.LAND, GroundChannelKey.WATER, GroundChannelKey.STRUCTURE, GroundChannelKey.TRANSPORT] as const;
 
 export { cube_colors, cube_types, type CubeColorId } from "./cube.ts";
-export { decor_types, type DecorId } from "./decor_spec.ts";
+export { decor_types, type DecorId } from "./decor-spec.ts";
 
 // =============================================================================
 // Aggregated Types
@@ -127,7 +127,7 @@ export function decor_id_from_num(num_id: number): DecorId {
   return id;
 }
 
-/** Every real decor id in encoded numeric-id order — mode_bar.tsx's decor buttons iterate this, same shape as cube_ids. */
+/** Every real decor id in encoded numeric-id order — mode-bar.tsx's decor buttons iterate this, same shape as cube_ids. */
 export const decor_ids: readonly DecorId[] = NUM_ID_TO_DECOR.filter(() => true);
 
 // =============================================================================
@@ -212,8 +212,8 @@ for (const [channel, types] of Object.entries(cube_types)) {
 }
 
 // =============================================================================
-// Placeable cube catalog — everything mode_bar.tsx's hotbar (cube_ids alone)
-// and drawer_modal.tsx's own full grid (this) can offer a user. A separate
+// Placeable cube catalog — everything mode-bar.tsx's hotbar (cube_ids alone)
+// and drawer-modal.tsx's own full grid (this) can offer a user. A separate
 // concept from cube_ids itself: the hotbar deliberately stays scoped to just
 // the original 15 flat colors (the full catalog
 // lives behind its own modal, not folded into the everyday quick-pick).

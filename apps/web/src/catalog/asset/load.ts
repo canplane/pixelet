@@ -8,7 +8,7 @@
  * numbered by (pxl-asset-bake/table.rs renders both).
  */
 
-import { INGESTED, SHEET } from "./ingested_spec.ts";
+import { INGESTED, SHEET } from "./ingested-spec.ts";
 
 const KEYS: readonly string[] = Object.values(INGESTED).map((a) => a.key);
 

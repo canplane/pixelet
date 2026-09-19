@@ -28,9 +28,9 @@ import { build_colors_from_json, type Swatch } from "./type.ts";
 // .ts export, not a real .json file imported via `with { type: "json" }`:
 // see that module's own top comment for why (a real, reproduced
 // @deno/vite-plugin limitation, not a style preference).
-import cube_palette_json from "./color_spec.ts";
+import cube_palette_json from "./color-spec.ts";
 
-import { cube_types } from "./cube_type_spec.ts";
+import { cube_types } from "./cube-type-spec.ts";
 
 export { cube_types };
 

@@ -2,15 +2,15 @@
 
 import { assert, assertEquals } from "@std/assert";
 
-import { Errno } from "@xpute/core/errno.ts";
-import { encoder, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
+import { Errno } from "@xpute/core/status/errno.ts";
+import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 import { FrameFlag } from "@xpute/runtime/ipc/frame.ts";
 import { Ring } from "@xpute/runtime/ipc/ring.ts";
-import { Cmd } from "@/kernel/cmd_spec.ts";
+import { Cmd } from "@/kernel/abi/cmd.ts";
 
-import { CORE_KERNEL } from "@/kernel/core_mem.ts";
+import { CORE_KERNEL } from "@/kernel/mem.ts";
 import { BOOT, boot_block } from "@/kernel/module.ts";
-import { RING_CAPACITY } from "@/kernel/mem_spec.ts";
+import { RING_CAPACITY } from "@/kernel/mem/spec.ts";
 
 /** A command crates/pxl/web/wasm/src/lib.rs does not number. */
 const UNNUMBERED = 0x0fff;

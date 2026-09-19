@@ -1,7 +1,7 @@
 {
   "name": "@pxl/web",
   "version": "0.0.0",
-  "exports": "./src/index.ts",
+  "exports": "./src/main.tsx",
 
   // no-window/no-window-prefix assume runtime-portable code (the default
   // for tool/ and packages/*, which the root config's own rules target);
@@ -14,7 +14,7 @@
   "tasks": {
     // The Rust core's module, from crates/, into src/wasm/kernel.wasm. Every
     // task that loads it depends on this, so it is never stale or missing.
-    "build:wasm": "deno run -A script/build_wasm.ts",
+    "build:wasm": "deno run -A script/build-wasm.ts",
 
     // Server routes answered by the published deployment: no local server,
     // database or Docker. See vite.config.ts's VITE_DEV_SOURCE comment.
@@ -34,7 +34,7 @@
     // correctly and still leave its strings in the bundle. Runs between build
     // and publish so a leak stops the deploy rather than being noticed on the
     // live site.
-    "check:bundle": "deno run -A script/check_bundle.ts",
+    "check:bundle": "deno run -A script/check-bundle.ts",
     // Takes the next build number from the counter in the bucket, then does
     // the three steps above under it — see script/deploy.ts.
     "deploy": "deno run -A script/deploy.ts",
@@ -45,7 +45,7 @@
     // A catalog entry is a number, an id and a name in every locale; the first
     // two are written from the JSON under spec/, the last is people's.
     "check:locale": "./script/locale.ts",
-    "check": { "command": "deno check src/index.ts", "dependencies": ["build:wasm", "check:locale"] },
+    "check": { "command": "deno check src/main.tsx", "dependencies": ["build:wasm", "check:locale"] },
     // Pure-logic modules: none of them touches the DOM or the GPU, so plain
     // `deno test` works with no browser harness, over the module built for
     // it. What needs a canvas is verified live.
