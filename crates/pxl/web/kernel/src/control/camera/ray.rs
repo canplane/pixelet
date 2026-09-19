@@ -239,3 +239,7 @@ pub fn ray_pick(origin: Vec3, direction: Vec3, map_center: Option<&Pvf3>) -> Opt
     }
     Some(PickResult { hit })
 }
+
+#[cfg(test)]
+#[path = "ray.test.rs"]
+mod test;

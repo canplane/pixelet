@@ -82,12 +82,15 @@ pub fn hover_cursor_step() {
     let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Eraser) || hovered_object.is_some();
 
     // Eraser sizes to whatever's actually hovered when there's a real object
-    // under the cursor but falls through to object_size, like the object tool,
-    // over bare terrain — its "dig into the terrain itself" case shares the
-    // tier picker object placement uses.
+    // under the cursor, and to the cell when it is carving terrain: a carve
+    // writes AIR, and a zero material is a voxel the scan emits nothing for
+    // whatever its sub-cell bytes say (render/mesh/voxel_scan.rs), so the cell
+    // goes whole however small the tier is set. Everything else takes the tier
+    // picker object placement uses.
     let preview_size = match (&hovered_object, active_tool) {
         (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size,
         (_, ActiveTool::Decor) => DECOR_SIZE,
+        _ if digging_terrain => U_PER_CELL,
         _ => ui.object_size,
     };
 

@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use camera_cfg::input::{AXIS_LOCK_THRESHOLD_PX, DOLLY_GAIN, MIN_ROTATE_RADIUS_PX, MIN_TWIST_DIST_PX, TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION};
 use camera_cfg::projection::FOV;
 use camera_cfg::view::{MAX_POLAR, MIN_POLAR};
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::cell::object::PlaceableCube;
 use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::pvf3::ivec::IVec;
@@ -245,7 +246,13 @@ fn handle_tap(hovered: Pvf3) {
                 // once the user has opted into that. AIR, not VOID: real terrain
                 // has no object-layer leaf of its own to delete, so an explicit
                 // "nothing here on purpose" leaf is the only way to override it.
-                None if settings_store().enable_terrain_carving => place_air(&hovered, object_size),
+                //
+                // A cell, never the size tier. A zero material is a voxel the
+                // scan emits nothing for whatever its sub-cell bytes say
+                // (render/mesh/voxel_scan.rs), so a smaller leaf would still
+                // take the cell whole while recording a bite nobody took — and
+                // the store is saved, so that number outlives the session.
+                None if settings_store().enable_terrain_carving => place_air(&hovered, U_PER_CELL),
                 None => {}
             }
         }
@@ -583,8 +590,9 @@ fn update_hover(s: &Input) {
     } else if ui.active_tool == ActiveTool::Eraser && settings_store().enable_terrain_carving {
         // Bare terrain under the eraser wants the struck voxel's OWN corner
         // (real, possibly dug-into height included), not the baked-elevation
-        // "flush on top" slot.
-        camera.hovered_coord = Some(world_struck_corner(&hit, ui.object_size, map_origin));
+        // "flush on top" slot. On the cell's grid and not the tier's, because
+        // that is the size the carve is written at.
+        camera.hovered_coord = Some(world_struck_corner(&hit, U_PER_CELL, map_origin));
     } else {
         match world_hover_pvf3(&hit, map_origin) {
             Some(grounded) => camera.hovered_coord = Some(grounded),
@@ -689,3 +697,7 @@ pub fn camera_input_step() {
 pub fn holding() -> Holding {
     input().holding
 }
+
+#[cfg(test)]
+#[path = "input.test.rs"]
+mod test;
