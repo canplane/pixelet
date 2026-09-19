@@ -7,14 +7,14 @@
 
 use pxl_spec::space::pvf3::fvec;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use xpute_core::kit::math::wrap;
+use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::config::camera_cfg::smooth::{POS_DAMP, ROT_DAMP};
 use crate::control::camera::orbit::damp_alpha;
 use crate::control::camera::store::camera_store;
+use crate::global::Global;
 use crate::sched::tick::TickContext;
 use crate::shell::map_store::map_store;
-use crate::sys::global::Global;
 use crate::world::frame::coord::get_local_world_origin;
 use crate::world::frame::view::{view, view_compose};
 

@@ -15,12 +15,12 @@
  * `memory.buffer` is one `ArrayBuffer` for the module's life: a view over it
  * stays valid, which is what lets a ring hold its words and a lane be read
  * where it lies. What the ranges are for, and how large each one is, is the
- * kernel's policy (crates/pxl/web/kernel/src/sys/mem/section.rs).
+ * kernel's policy (crates/pxl/web/kernel/src/mem/section.rs).
  */
 
-import type { u32 } from "@xpute/core/kit/word.ts";
-import { MarshalError } from "@xpute/core/error.ts";
-import { Errno } from "@xpute/core/errno.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
+import { MarshalError } from "@xpute/core/status/error.ts";
+import { Errno } from "@xpute/core/status/errno.ts";
 
 /** A WebAssembly page. */
 export const WASM_PAGE_BYTES: u32 = 1 << 16;

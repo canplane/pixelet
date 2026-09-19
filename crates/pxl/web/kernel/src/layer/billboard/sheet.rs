@@ -12,10 +12,10 @@
 use pxl_render::asset::atlas::BillboardAtlas;
 use pxl_spec::space::v3::V3;
 
+use crate::global::Global;
+use crate::host::handheld;
+use crate::kernel::kernel;
 pub use crate::layer::billboard::order::BILLBOARD_ORDER;
-use crate::sys::global::Global;
-use crate::sys::host::handheld;
-use crate::sys::kernel::kernel;
 use crate::world::chunk::node::World;
 
 static SHEET: Global<BillboardAtlas> = Global::new();

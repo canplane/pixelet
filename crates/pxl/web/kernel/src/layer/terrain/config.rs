@@ -14,10 +14,7 @@ use crate::layer::terrain::config_spec;
 /// How many pages stay decoded: every record `.fixed.terrain` has, which is every
 /// page the load radius reaches. Not a count to be chosen and not a division
 /// to be measured — the range is the set (fixed.rs).
-#[allow(non_snake_case)]
-pub fn RESIDENT_PAGES() -> u32 {
-    crate::layer::terrain::fixed::TERRAIN_SLOTS
-}
+pub const RESIDENT_PAGES: u32 = crate::layer::terrain::fixed::TERRAIN_SLOTS;
 
 /// How far to look when picking those pages.
 pub const KEEP_DIST: f64 = config_spec::KEEP_DIST;

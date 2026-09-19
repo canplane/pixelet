@@ -9,17 +9,17 @@
 use pxl_render::frame::draw::{DrawList, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pvf3::pvf3::PVF3;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{add3, center3n, floor3n, V3};
-use xpute_runtime::sys::mem::{alloc, free};
+use xpute_runtime::mem::heap::{alloc, free};
 
+use crate::global::Global;
+use crate::kernel::kernel;
 use crate::layer::environment::config::render_cfg::FOG_FAR;
 use crate::layer::environment::theme::WorldThemeKey;
 use crate::layer::environment::theme_clock::theme_key;
 use crate::layer::terrain::elevation::get_ele;
 use crate::layer::terrain::store::tile_pages;
-use crate::sys::global::Global;
-use crate::sys::kernel::kernel;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::node::World;
 use crate::world::chunk::table::Frame;
@@ -72,7 +72,7 @@ struct Puck {
     /// Without this, a blip tore down and rebuilt the zone — that, not the
     /// position math, was the source of a "stacked/cube" rendering glitch after
     /// tab-away-and-back.
-    last_known_device_coord: Option<PVF3>,
+    last_known_device_coord: Option<Pvf3>,
     /// Not yet grounded gates drawing, instead of drawing the marker at a
     /// guessed height while the device's own page isn't loaded yet.
     last_known_center_z: Option<f64>,
@@ -99,7 +99,7 @@ fn world_of<R>(f: impl FnOnce(&mut World, &mut crate::world::chunk::table::Sched
 }
 
 /// The puck's turn, for the device's coordinate as it stands.
-pub fn location_puck_step(device_coord: Option<PVF3>) {
+pub fn location_puck_step(device_coord: Option<Pvf3>) {
     let p = PUCK.get(|| Puck {
         samples: zone_samples(),
         last_known_device_coord: None,
@@ -134,7 +134,7 @@ pub fn location_puck_step(device_coord: Option<PVF3>) {
         let mut v = [0.0; 3];
         for s in &p.samples {
             add3(&center_pos, &s.off, &mut v);
-            let mut coord = PVF3::default();
+            let mut coord = Pvf3::default();
             projection::project(&mut coord, v[0], v[1], v[2]);
             // Falls back to flat (center height) rather than 0 when a sample
             // lands on an unloaded neighboring page — absolute 0 would sink or

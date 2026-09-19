@@ -27,13 +27,13 @@
 //! lives, so the journal stays small and a span of it crosses a boundary as a
 //! frame body unchanged.
 //!
-//! Keys are i64 in the lane, as the TypeScript's BigInt64Array; a key past
-//! 2^63 is the same key folded. A cursor is a u32 here: the position word the
-//! glue reads is one, and a wrap is four billion changes.
+//! A key is i64 in the lane, so a packed word past 2^63 is that word's bits
+//! read as signed and always finds the same entry. A cursor is u32: the
+//! position word the glue reads is one, and a wrap is four billion changes.
 
-use xpute_core::ds::arena::{ArenaOptions, Vector};
-use xpute_core::ds::map::{IndexedMap, I64_KEYS};
-use xpute_core::kit::array::{I64Array, TypedArray, U32Array};
+use std::collections::HashMap;
+
+use fnv::FnvBuildHasher;
 
 pub type Topic = u32;
 pub type Revision = u32;
@@ -56,23 +56,23 @@ pub trait ChangeJournal {
     fn head(&self) -> Cursor;
     fn readable(&self, cursor: Cursor) -> bool;
     fn slot(&self, position: Cursor) -> u32;
-    fn topic(&self) -> &TypedArray<u16>;
-    fn key(&self) -> &I64Array;
-    fn revision(&self) -> &U32Array;
+    fn topic(&self) -> &[u16];
+    fn key(&self) -> &[i64];
+    fn revision(&self) -> &[u32];
 }
 
 pub struct ChangeLog {
     pub capacity: u32,
 
     /// Journal lanes. Entry at position p is at index `slot(p)`.
-    pub topic: TypedArray<u16>,
-    pub key: I64Array,
-    pub revision: U32Array,
+    pub topic: Box<[u16]>,
+    pub key: Box<[i64]>,
+    pub revision: Box<[u32]>,
 
     _head: Cursor,
-    ticks: U32Array,
-    tables: Vec<IndexedMap<xpute_core::ds::map::I64Keys>>,
-    revisions: Vec<Vector<u32>>,
+    ticks: Box<[u32]>,
+    /// Per topic: each live key's latest revision.
+    revisions: Vec<HashMap<i64, u32, FnvBuildHasher>>,
 }
 
 impl ChangeLog {
@@ -86,18 +86,13 @@ impl ChangeLog {
         if capacity < 1 {
             panic!("change: a journal needs a capacity");
         }
-        let topic = TypedArray::new(capacity as usize);
-        let key = TypedArray::new(capacity as usize);
-        let revision = TypedArray::new(capacity as usize);
-        let ticks = TypedArray::new(topics as usize);
-        let mut tables = Vec::new();
+        let topic = vec![0u16; capacity as usize].into_boxed_slice();
+        let key = vec![0i64; capacity as usize].into_boxed_slice();
+        let revision = vec![0u32; capacity as usize].into_boxed_slice();
+        let ticks = vec![0u32; topics as usize].into_boxed_slice();
         let mut revisions = Vec::new();
         for _ in 0..topics {
-            tables.push(IndexedMap::new(I64_KEYS, keys_per_topic));
-            revisions.push(Vector::new(ArenaOptions {
-                init_cap: Some(keys_per_topic),
-                ..Default::default()
-            }));
+            revisions.push(HashMap::with_capacity_and_hasher(keys_per_topic as usize, FnvBuildHasher::default()));
         }
         ChangeLog {
             capacity,
@@ -106,13 +101,12 @@ impl ChangeLog {
             revision,
             _head: 0,
             ticks,
-            tables,
             revisions,
         }
     }
 
     pub fn topics(&self) -> u32 {
-        self.ticks.length() as u32
+        self.ticks.len() as u32
     }
 
     // ---- source ----
@@ -120,20 +114,14 @@ impl ChangeLog {
     /// Records that `key` in `topic` changed. Returns its new revision.
     pub fn bump(&mut self, topic: Topic, key: i64) -> Revision {
         let tick = self.ticks[topic as usize].wrapping_add(1);
-        self.ticks.put(topic as usize, tick);
+        self.ticks[topic as usize] = tick;
 
-        let pos = self.tables[topic as usize].insert(key);
-        let revs = &mut self.revisions[topic as usize];
-        if pos == revs.len() {
-            revs.push(tick).expect("change: a revision lane past its cap");
-        } else {
-            revs.set(pos, tick).expect("change: a revision lane past its cap");
-        }
+        self.revisions[topic as usize].insert(key, tick);
 
         let i = self.slot(self._head) as usize;
-        self.topic.put(i, topic as u16);
-        self.key.put(i, key);
-        self.revision.put(i, tick);
+        self.topic[i] = topic as u16;
+        self.key[i] = key;
+        self.revision[i] = tick;
         self._head = self._head.wrapping_add(1);
         tick
     }
@@ -141,31 +129,14 @@ impl ChangeLog {
     /// Drops a key that has left — a page unloaded — from its topic's table.
     /// Its revision reads 0 afterwards; the journal keeps what was written.
     pub fn forget(&mut self, topic: Topic, key: i64) {
-        let table = &mut self.tables[topic as usize];
-        let pos = table.find(key);
-        if pos < 0 {
-            return;
-        }
-        let pos = pos as u32;
-        let from = table.remove_at(pos);
-        let revs = &mut self.revisions[topic as usize];
-        if from != pos {
-            let moved = revs.get(from);
-            revs.set(pos, moved).expect("change: a revision lane past its cap");
-        }
-        revs.truncate(from);
+        self.revisions[topic as usize].remove(&key);
     }
 
     // ---- reader: point ----
 
     /// The key's revision, or 0 when it has never changed or was forgotten.
     pub fn revision_of(&self, topic: Topic, key: i64) -> Revision {
-        let pos = self.tables[topic as usize].find(key);
-        if pos < 0 {
-            0
-        } else {
-            self.revisions[topic as usize].get(pos as u32)
-        }
+        self.revisions[topic as usize].get(&key).copied().unwrap_or(0)
     }
 
     /// The topic's tick: moved means something in the topic changed.
@@ -195,11 +166,11 @@ impl ChangeLog {
     /// key, revision, the head word and the ticks.
     pub fn lanes(&self) -> [usize; 5] {
         [
-            self.topic.as_slice().as_ptr() as usize,
-            self.key.as_slice().as_ptr() as usize,
-            self.revision.as_slice().as_ptr() as usize,
+            self.topic.as_ptr() as usize,
+            self.key.as_ptr() as usize,
+            self.revision.as_ptr() as usize,
             &self._head as *const u32 as usize,
-            self.ticks.as_slice().as_ptr() as usize,
+            self.ticks.as_ptr() as usize,
         ]
     }
 }
@@ -217,13 +188,13 @@ impl ChangeJournal for ChangeLog {
     fn slot(&self, position: Cursor) -> u32 {
         ChangeLog::slot(self, position)
     }
-    fn topic(&self) -> &TypedArray<u16> {
+    fn topic(&self) -> &[u16] {
         &self.topic
     }
-    fn key(&self) -> &I64Array {
+    fn key(&self) -> &[i64] {
         &self.key
     }
-    fn revision(&self) -> &U32Array {
+    fn revision(&self) -> &[u32] {
         &self.revision
     }
 }

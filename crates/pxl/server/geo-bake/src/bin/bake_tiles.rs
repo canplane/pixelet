@@ -38,9 +38,8 @@ use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::PVF3;
-use xpute_core::io::marshal::tree::{encoder, BranchView, NodeView, TreeEncoderOptions, TreeView};
-use xpute_core::kit::array::{I16Array, U8Array};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use xpute_core::wire::xtp::{encoder, BranchView, NodeView, TreeEncoderOptions, TreeView};
 
 use pxl_geo_bake::terrain::bake::bake_terrain;
 use pxl_geo_bake::terrain::repository::TerrainRepository;
@@ -151,7 +150,7 @@ struct Candidate {
 }
 
 fn project_page(lng: f64, lat: f64) -> IVec {
-    let mut p = PVF3 { i: 0, f: 0 };
+    let mut p = Pvf3 { i: 0, f: 0 };
     epsg4326::project(&mut p, &[lng, lat, 0.0]);
     L3_IDX(p.i)
 }
@@ -209,12 +208,12 @@ fn classify_land_pages(client: &mut Client, candidates: &[Candidate]) -> Result<
 /// grid, no terrain features, no coastline rows. Synthesised rather than read
 /// from the DB so the fallback tile is exactly "nothing here but water",
 /// independent of whichever far-offshore page happened to get sampled.
-fn empty_source() -> U8Array {
-    let ele = I16Array::new((ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize);
-    let mut empty = TreeView::new();
+fn empty_source() -> Vec<u8> {
+    let ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
+    let mut empty: TreeView<'_> = TreeView::new();
     empty.branch(Some(&mut |_| {}));
 
-    let mut root = TreeView::new();
+    let mut root: TreeView<'_> = TreeView::new();
     root.branch(Some(&mut |r| {
         r.i16_array(Some(&ele));
         r.subtree(&empty); // buildings
@@ -229,19 +228,19 @@ fn empty_source() -> U8Array {
 /// client reuses one decoded copy for every ocean page, which is only sound if
 /// baking the same empty source at different pages (different bbox, different
 /// `Z_SCALE` by latitude) yields identical bytes.
-fn bake_ocean_tile(samples: &[IVec]) -> Result<U8Array, String> {
+fn bake_ocean_tile(samples: &[IVec]) -> Result<Vec<u8>, String> {
     let src = empty_source();
-    let baked: Vec<U8Array> = samples.iter().map(|p| bake_terrain(*p, src.clone()).expect("ocean bake")).collect();
+    let baked: Vec<Vec<u8>> = samples.iter().map(|p| bake_terrain(*p, &src).expect("ocean bake")).collect();
 
     for (i, tile) in baked.iter().enumerate().skip(1) {
-        if tile.as_slice() != baked[0].as_slice() {
+        if tile != &baked[0] {
             return Err(format!(
                 "[bake/ocean] ocean tile is NOT page-independent: page {} and {} baked to different bytes ({} vs {}). \
                  The shared-fallback plan does not hold; ocean pages would each need their own tile.",
                 ivec::repr(samples[0]),
                 ivec::repr(samples[i]),
-                baked[0].length(),
-                tile.length()
+                baked[0].len(),
+                tile.len()
             ));
         }
     }
@@ -266,7 +265,7 @@ fn bake_one(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, path:
 
     write_atomic(path, &gz).map_err(|e| e.to_string())?;
 
-    Ok((raw.length(), gz.len()))
+    Ok((raw.len(), gz.len()))
 }
 
 fn run() -> Result<(), String> {
@@ -314,7 +313,7 @@ fn run() -> Result<(), String> {
         fs::write(&ocean_path, &ocean_gz).map_err(|e| e.to_string())?;
         println!(
             "[bake/ocean] wrote {OCEAN_KEY}: raw={} gz={} (page-independent: verified)",
-            fmt_bytes(ocean_raw.length() as f64),
+            fmt_bytes(ocean_raw.len() as f64),
             fmt_bytes(ocean_gz.len() as f64)
         );
     }

@@ -16,7 +16,7 @@ fn vec3(v: &Golden, k: &str) -> V3 {
 /// differ by architecture: `0.0 / 0.0` is the negative quiet NaN on x86-64 and
 /// the positive one on aarch64 and in JavaScript. A vector records the machine
 /// that wrote it, so comparing a NaN's bits compares machines rather than
-/// implementations. xpute-core's `fdlibm.test.rs` already draws the line here.
+/// implementations.
 fn same_f64(got: f64, want: f64) -> bool {
     got.to_bits() == want.to_bits() || (got.is_nan() && want.is_nan())
 }
@@ -27,7 +27,7 @@ fn same(got: &V3, want: V3, what: &str) {
 }
 
 #[test]
-fn v3_computes_what_the_typescript_computes() {
+fn v3_computes_what_the_record_holds() {
     let v = Golden::load(GOLDEN);
     v.each("unary", |k| {
         let a = vec3(&v, &format!("{k}.v"));

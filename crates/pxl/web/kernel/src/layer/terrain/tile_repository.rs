@@ -18,19 +18,19 @@
 
 use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_spec::bake::format::{decode_terrain, Ground, Terrain, Tile};
-use pxl_spec::fetch::FetchFail;
 use pxl_spec::space::pvf3::ivec::IVec;
-use xpute_core::kit::array::{ArrayBuffer, I16Array, U8Array};
-use xpute_runtime::sys::mem::alloc;
+use xpute_runtime::abi::fetch::FetchFail;
+use xpute_runtime::mem::heap::alloc;
 
+use crate::global::Global;
+use crate::host::now;
 use crate::io::demand::{Category, Phases};
 use crate::layer::terrain::fixed::{ele_at, ground_at, record_ele_at, record_ground_at, RECORD_BYTES};
 use crate::layer::terrain::resident::take_slot;
 use crate::layer::terrain::store::tile_store;
+use crate::mem;
 use crate::shell::config::env::TILE_BASE_URL;
 use crate::shell::config::route::{Joined, TileBase};
-use crate::sys::global::{now, Global};
-use crate::sys::mem;
 
 /// Object key of the single shared open-ocean tile in the static bucket.
 pub const OCEAN_KEY: &str = "_ocean";
@@ -64,13 +64,8 @@ pub struct TerrainLanes {
 pub unsafe fn open_terrain(lanes: TerrainLanes) -> Terrain {
     let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
     let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
-    let u8_lane = |at: usize| {
-        // SAFETY: the caller's contract.
-        let buffer = unsafe { ArrayBuffer::from_raw(at as *mut u8, cells) };
-        U8Array::over(buffer, 0, cells)
-    };
-    // SAFETY: the caller's contract; an i16 lane is 2 bytes a sample.
-    let ele_buffer = unsafe { ArrayBuffer::from_raw(lanes.ele as *mut u8, samples * 2) };
+    // SAFETY: the caller's contract.
+    let u8_lane = |at: usize| unsafe { core::slice::from_raw_parts(at as *const u8, cells) }.into();
     Terrain {
         ground: Ground {
             land: u8_lane(lanes.ground[0]),
@@ -78,17 +73,18 @@ pub unsafe fn open_terrain(lanes: TerrainLanes) -> Terrain {
             structure: u8_lane(lanes.ground[2]),
             transport: u8_lane(lanes.ground[3]),
         },
-        ele: I16Array::over(ele_buffer, 0, samples),
+        // SAFETY: the caller's contract; an i16 lane is 2 bytes a sample.
+        ele: unsafe { core::slice::from_raw_parts(lanes.ele as *const i16, samples) }.into(),
     }
 }
 
 /// A body decoded, refused unless every lane is the page's size.
-fn decode(pkt: U8Array) -> Result<Terrain, FetchFail> {
+fn decode(pkt: &[u8]) -> Result<Terrain, FetchFail> {
     let t = decode_terrain(pkt).map_err(|_| FetchFail::Decode)?;
     let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
     let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
     let g = &t.ground;
-    if [&g.land, &g.water, &g.structure, &g.transport].iter().any(|l| l.length() != cells) || t.ele.length() != samples {
+    if [&g.land, &g.water, &g.structure, &g.transport].iter().any(|l| l.len() != cells) || t.ele.len() != samples {
         return Err(FetchFail::Decode);
     }
     Ok(t)
@@ -102,10 +98,10 @@ fn terrain_base() -> Option<usize> {
 /// A decoded page's lanes, as bytes to be written somewhere.
 fn sources(t: &Terrain) -> [&[u8]; 5] {
     let g = &t.ground;
-    let ele = t.ele.as_slice();
+    let ele = &t.ele;
     // SAFETY: an i16 lane read as its bytes, where it lies.
     let ele_bytes = unsafe { core::slice::from_raw_parts(ele.as_ptr() as *const u8, ele.len() * 2) };
-    [g.land.as_slice(), g.water.as_slice(), g.structure.as_slice(), g.transport.as_slice(), ele_bytes]
+    [&g.land, &g.water, &g.structure, &g.transport, ele_bytes]
 }
 
 /// Writes a decoded page into `lanes`, which must be the page's own room.
@@ -131,7 +127,7 @@ fn lanes_of(page_idx: IVec) -> Result<TerrainLanes, FetchFail> {
 
 /// A page's fetched body, decoded and made resident: its lanes owned by the
 /// page until release_terrain.
-pub fn adopt_terrain(page_idx: IVec, pkt: U8Array, phases: &mut Phases) -> Result<(), FetchFail> {
+pub fn adopt_terrain(page_idx: IVec, pkt: &[u8], phases: &mut Phases) -> Result<(), FetchFail> {
     let t0 = now();
     let decoded = decode(pkt)?;
     let t1 = now();
@@ -181,7 +177,7 @@ pub fn ocean_page(page_idx: IVec) {
 /// It is not in the range. Every open-ocean page reads these same bytes, and a
 /// record is one page's; a page whose tile is the shared one leaves its
 /// own record untouched.
-pub fn adopt_ocean(pkt: U8Array) -> Result<(), FetchFail> {
+pub fn adopt_ocean(pkt: &[u8]) -> Result<(), FetchFail> {
     if ocean().terrain.is_some() {
         return Ok(());
     }

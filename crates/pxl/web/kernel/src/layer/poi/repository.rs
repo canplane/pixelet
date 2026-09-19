@@ -13,9 +13,8 @@
 
 use pxl_spec::bake::format::{encode_empty_poi_page, PoiPage};
 use pxl_spec::space::pvf3::ivec::IVec;
-use xpute_core::error::MarshalError;
-use xpute_core::kit::array::{ArrayBuffer, U8Array};
-use xpute_runtime::sys::mem::Block;
+use xpute_core::status::error::MarshalError;
+use xpute_runtime::mem::heap::Block;
 
 use crate::shell::config::env::POI_TILE_BASE_URL;
 use crate::shell::config::route::{Joined, TileBase};
@@ -25,14 +24,18 @@ pub fn poi_url(page_idx: IVec) -> Joined<TileBase, IVec> {
 }
 
 pub struct ResidentPoiPage {
-    pub page: PoiPage,
+    /// The page reads the block's bytes where they lie, at an address that
+    /// holds until the page is released.
+    pub page: PoiPage<'static>,
     pub block: Option<Block>,
 }
 
 /// The shared empty page.
 pub fn empty_page() -> Result<ResidentPoiPage, MarshalError> {
     Ok(ResidentPoiPage {
-        page: PoiPage::new(encode_empty_poi_page()?)?,
+        // The one empty page, which every page without POI shares and which
+        // is never released.
+        page: PoiPage::new(Vec::leak(encode_empty_poi_page()?))?,
         block: None,
     })
 }
@@ -44,8 +47,7 @@ pub fn empty_page() -> Result<ResidentPoiPage, MarshalError> {
 /// long, until the page is released.
 pub unsafe fn open_poi_page(at: usize, bytes: u32) -> Result<ResidentPoiPage, MarshalError> {
     // SAFETY: the caller's contract above.
-    let buffer = unsafe { ArrayBuffer::from_raw(at as *mut u8, bytes as usize) };
-    let pkt = U8Array::over(buffer, 0, bytes as usize);
+    let pkt = unsafe { core::slice::from_raw_parts(at as *const u8, bytes as usize) };
     Ok(ResidentPoiPage {
         page: PoiPage::new(pkt)?,
         block: Some((at, bytes)),

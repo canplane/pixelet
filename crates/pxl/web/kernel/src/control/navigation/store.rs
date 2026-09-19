@@ -1,16 +1,16 @@
 // pxl-kernel/control/navigation/store.rs
 
 use pxl_spec::space::adapter::epsg4326;
-use pxl_spec::space::pvf3::pvf3::{self, PVF3};
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
 use crate::control::sensor::store::device_location_store;
+use crate::global::Global;
 use crate::shell::map_store::map_store;
-use crate::sys::global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct MapNavigation {
     /// Device coordinate in canonical world space.
-    pub device_coord: Option<PVF3>,
+    pub device_coord: Option<Pvf3>,
     /// Whether the current center is off from device location.
     pub is_off_center: bool,
 }
@@ -18,9 +18,9 @@ pub struct MapNavigation {
 static OFF_CENTER: Global<bool> = Global::new();
 
 /// The device's location in canonical world space.
-fn device_coord() -> Option<PVF3> {
+fn device_coord() -> Option<Pvf3> {
     device_location_store().location.map(|location| {
-        let mut out = PVF3::default();
+        let mut out = Pvf3::default();
         epsg4326::project(&mut out, &location.coords);
         out
     })
@@ -51,7 +51,7 @@ pub fn map_navigation_step() {
             // subtraction gives the short delta across the antimeridian instead
             // of a nearly world-wide raw difference. Y remains ordinary/clamped
             // Mercator space.
-            let mut delta = PVF3::default();
+            let mut delta = Pvf3::default();
             pvf3::sub(&mut delta, &device, &center);
             let dx = pvf3::to_real(pvf3::X(&delta));
             let dy = pvf3::to_real(pvf3::Y(&device) - pvf3::Y(&center));

@@ -8,6 +8,10 @@ publish.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+base64.workspace = true
+fnv.workspace = true
+indexmap.workspace = true
+libm.workspace = true
 xpute-runtime = { path = "../../../xpute/runtime" }
 xpute-core = { path = "../../../xpute/core" }
 pxl-spec = { path = "../../spec" }

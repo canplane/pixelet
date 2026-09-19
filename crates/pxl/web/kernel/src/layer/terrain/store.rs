@@ -18,10 +18,10 @@
 use pxl_spec::bake::format::Tile;
 use pxl_spec::space::pvf3::ivec::IVec;
 
+use crate::global::Global;
 use crate::layer::poi::index::invalidate_poi_index;
 use crate::layer::poi::placement::poi_place_request;
 use crate::layer::terrain::ground_snap::reground_map_center;
-use crate::sys::global::Global;
 use crate::world::change::TERRAIN_PAGE;
 use crate::world::chunk::node::{chunk_page, chunk_sources_changed};
 use crate::world::page_table::PageTable;

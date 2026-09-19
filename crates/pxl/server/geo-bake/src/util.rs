@@ -1,7 +1,6 @@
 // pxl-geo-bake/util.rs
 
-//! What every bake tool needs and none of them owns — the counterpart of
-//! bake_util.ts, which sits at the same place in the TypeScript.
+//! What every bake tool needs and none of them owns.
 
 use std::io::Write;
 use std::path::Path;
@@ -9,6 +8,7 @@ use std::process::Command;
 
 use flate2::write::GzEncoder;
 use flate2::Compression;
+use xpute_core::math::scalar::round;
 
 pub fn gzip(raw: &[u8]) -> std::io::Result<Vec<u8>> {
     let mut enc = GzEncoder::new(Vec::new(), Compression::default());
@@ -27,7 +27,7 @@ pub fn fmt_bytes(n: f64) -> String {
 }
 
 pub fn fmt_dur(ms: f64) -> String {
-    let s = (ms / 1000.0).round() as u64;
+    let s = round(ms / 1000.0) as u64;
     let (h, m) = (s / 3600, (s % 3600) / 60);
     if h > 0 {
         format!("{h}h{m}m")

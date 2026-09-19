@@ -17,34 +17,33 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use base64::Engine;
 use pxl_render::mesh::paint::object::adapter::{Carve, Entries};
 use pxl_spec::bake::constant::{OBJECT_LAYOUT, U_PER_CELL};
 use pxl_spec::bake::ground::shown_ground;
-use pxl_spec::cell::{
-    cube_types, decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, DecorId, PlaceableCube,
-};
+use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube};
+use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L2_SHAMT, L3_IDX};
 use pxl_spec::space::pvf3::fvec::{self, FVec};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::{self, PVF3};
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pvf3::Ivec;
 use pxl_spec::space::sparse_tree::mem;
 use pxl_spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree, SparseTreeLayout};
 use pxl_spec::space::xy::TO_XY;
-use xpute_core::error::MarshalError;
-use xpute_core::io::marshal::tree::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
-use xpute_core::kit::array::{F32Array, U32Array};
-use xpute_core::kit::encoding::{b64url_to_bytes, bytes_to_b64url};
+use xpute_core::status::errno::Errno;
+use xpute_core::status::error::MarshalError;
+use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
+use crate::global::Global;
+use crate::host::{now, storage_get, storage_set};
+use crate::kernel::{kernel, reindex_object};
 use crate::layer::terrain::elevation::get_ground_type;
-use crate::sys::global::{now, Global};
-use crate::sys::host::{storage_get, storage_set};
-use crate::sys::kernel::{kernel, reindex_object};
 use crate::world::change::{bump_world, request_world_tick, wake_at, world_changes, world_edge, DECOR_COLUMN, OBJECT_COLUMN};
 use crate::world::chunk::node::chunk_sources_changed;
 use crate::world::frame::coord::local_world_to_canonical;
-use xpute_core::kit::math::round_half_up;
+use xpute_core::math::scalar::round;
 
 /// What a leaf holds, past its corner and size. A solid is the catalog's own
 /// cube; the id it is spelled out under belongs to the two sides' shared
@@ -125,15 +124,15 @@ fn floor_div(a: i64, b: i64) -> i64 {
 /// occupancy directly (get_objects_in_cell) instead of get_objects_near's
 /// ±1-cell neighborhood, e.g. decor, which must tell "no object in this
 /// exact ground cell" apart from "an object one cell over".
-pub fn cell_index(coord: &PVF3) -> [i64; 3] {
+pub fn cell_index(coord: &Pvf3) -> [i64; 3] {
     let fp = cell_size_fp();
     [floor_div(pvf3::X(coord), fp), floor_div(pvf3::Y(coord), fp), floor_div(pvf3::Z(coord), fp)]
 }
 
 /// Absolute PVF3 corner (min-x/y/z) of cell (ix,iy,iz).
-fn cell_corner(ix: i64, iy: i64, iz: i64) -> PVF3 {
+fn cell_corner(ix: i64, iy: i64, iz: i64) -> Pvf3 {
     let fp = cell_size_fp();
-    let mut out = PVF3::default();
+    let mut out = Pvf3::default();
     pvf3::gather(&mut out, ix * fp, iy * fp, iz * fp);
     out
 }
@@ -175,8 +174,8 @@ struct At {
     z: u32,
 }
 
-fn lower(coord: &PVF3) -> At {
-    let mut lattice = PVF3::default();
+fn lower(coord: &Pvf3) -> At {
+    let mut lattice = Pvf3::default();
     pvf3::sh(&mut lattice, coord, -OBJECT_LAYOUT.min);
     At {
         col_idx: L2_IDX(TO_XY(coord.i)),
@@ -188,7 +187,7 @@ fn lower(coord: &PVF3) -> At {
 }
 
 /// The state stored at `coord`, VOID where nothing is.
-fn read_state(coord: &PVF3) -> u32 {
+fn read_state(coord: &Pvf3) -> u32 {
     let at = lower(coord);
     kernel().objects.read(at.col_idx, at.band, [at.x, at.y, at.z])
 }
@@ -218,10 +217,10 @@ fn entry_count(col_idx: IVec) -> u32 {
 
 /// Real-unit local offset (x,y,z at min-level lattice units) as a PVF3,
 /// computed via exact bit-shift (pvf3::sh), not a float multiply.
-fn local_offset(x: u32, y: u32, z: u32) -> PVF3 {
-    let mut scalar = PVF3::default();
+fn local_offset(x: u32, y: u32, z: u32) -> Pvf3 {
+    let mut scalar = Pvf3::default();
     pvf3::gather(&mut scalar, pvf3::from_real(x as f64), pvf3::from_real(y as f64), pvf3::from_real(z as f64));
-    let mut out = PVF3::default();
+    let mut out = Pvf3::default();
     pvf3::sh(&mut out, &scalar, OBJECT_LAYOUT.min);
     out
 }
@@ -282,7 +281,7 @@ pub struct EntryCursor {
 impl EntryCursor {
     /// Points the cursor at a column; `load` then reads its entries.
     pub fn at_chunk(&mut self, col_idx: IVec) {
-        let [cx0, cy0, _] = cell_index(&PVF3 { i: FROM_L2_IDX(col_idx), f: 0 });
+        let [cx0, cy0, _] = cell_index(&Pvf3 { i: FROM_L2_IDX(col_idx), f: 0 });
         self.col_idx = col_idx;
         self.cx0 = cx0;
         self.cy0 = cy0;
@@ -301,7 +300,7 @@ impl EntryCursor {
     }
 
     /// An entry given by its absolute corner rather than read from lanes.
-    pub fn load_fixed(&mut self, col_idx: IVec, at: &PVF3, size: f64, state: u32) {
+    pub fn load_fixed(&mut self, col_idx: IVec, at: &Pvf3, size: f64, state: u32) {
         self.fixed = Some(Fixed { i: at.i, f: at.f });
         self.col_idx = col_idx;
         let local = ivec::sub(at.i, FROM_L2_IDX(col_idx));
@@ -323,11 +322,11 @@ impl EntryCursor {
     }
 
     /// The absolute corner.
-    pub fn corner(&self) -> PVF3 {
+    pub fn corner(&self) -> Pvf3 {
         if let Some(fixed) = &self.fixed {
-            return PVF3 { i: fixed.i, f: fixed.f };
+            return Pvf3 { i: fixed.i, f: fixed.f };
         }
-        let mut out = PVF3::default();
+        let mut out = Pvf3::default();
         pvf3::add(&mut out, &cell_corner(self.cx0, self.cy0, self.band_idx as i64 * CHUNK_CELLS), &local_offset(self.x, self.y, self.z));
         out
     }
@@ -347,7 +346,7 @@ impl EntryCursor {
     /// The entry as an object, for the few callers that keep one — every one
     /// of them reading entries out of the lanes, never the carve preview.
     pub fn object(&self) -> ObjectLayerEntry {
-        let PVF3 { i, f } = self.corner();
+        let Pvf3 { i, f } = self.corner();
         let kind = if object_value_is_decor(self.state) {
             EntryKind::Decor {
                 decor_id: decor_id_from_num(self.state),
@@ -388,7 +387,7 @@ struct CellRun {
 /// cell holds nothing.
 fn cell_run(ix: i64, iy: i64, iz: i64) -> Option<CellRun> {
     let col_idx = col_idx_of_cell(ix, iy, iz);
-    let [cx0, cy0, _] = cell_index(&PVF3 { i: FROM_L2_IDX(col_idx), f: 0 });
+    let [cx0, cy0, _] = cell_index(&Pvf3 { i: FROM_L2_IDX(col_idx), f: 0 });
     let rec = kernel().objects.cell(col_idx, (ix - cx0) as u32, (iy - cy0) as u32, iz as i32)?;
     Some(CellRun {
         start: rec.start,
@@ -458,7 +457,7 @@ pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor), render
     }
     let carve = store_state().virtual_carve_preview.clone();
     if let Some(carve) = carve.filter(|c| render && c.col_idx == col_idx) {
-        cursor.load_fixed(col_idx, &PVF3 { i: carve.i, f: carve.f }, carve.size, cube_types::common::air as u32);
+        cursor.load_fixed(col_idx, &Pvf3 { i: carve.i, f: carve.f }, carve.size, cube_types::common::air as u32);
         visit(&cursor);
     }
 }
@@ -501,7 +500,7 @@ pub fn cell_is_occupied(ix: i64, iy: i64, iz: i64) -> bool {
 /// an object one cell over (collision.rs's find_overlapping_object, ray.rs's
 /// resolve_hit_object). 27 O(1) lookups, still independent of total object
 /// count.
-pub fn get_objects_near(corner: &PVF3, _size: f64) -> Vec<OccupiedEntry> {
+pub fn get_objects_near(corner: &Pvf3, _size: f64) -> Vec<OccupiedEntry> {
     let [cx, cy, cz] = cell_index(corner);
     // size can push the candidate's own far corner into the NEXT cell too —
     // covered by the same 3x3x3 neighborhood as long as size <= one cell
@@ -608,7 +607,7 @@ fn bump_for_object(at: EntryAt) {
 /// never written — same render-only scoping as virtual_hide_id, for the same
 /// reason. `i`/`f`/`size` match what a real place_air() at this hover would
 /// write, so the preview renders identically to what it stands in for.
-pub fn set_virtual_carve_preview(at: &PVF3, size: f64) {
+pub fn set_virtual_carve_preview(at: &Pvf3, size: f64) {
     let cell = cell_index(at);
     let [ix, iy, iz] = cell;
     let st = store_state();
@@ -644,7 +643,7 @@ fn send_render_edits() {
     let hide = st.virtual_hide.map(|h| (h.col_idx, h.band_idx, h.pos));
     let carve = st.virtual_carve_preview.as_ref().map(|c| {
         let mut cursor = EntryCursor::default();
-        cursor.load_fixed(c.col_idx, &PVF3 { i: c.i, f: c.f }, c.size, cube_types::common::air as u32);
+        cursor.load_fixed(c.col_idx, &Pvf3 { i: c.i, f: c.f }, c.size, cube_types::common::air as u32);
         (
             c.col_idx,
             Carve {
@@ -699,14 +698,6 @@ struct PageRows {
     value: Vec<u32>,
 }
 
-fn f32_lane(v: &[f32]) -> F32Array {
-    let a = F32Array::new(v.len());
-    for (i, x) in v.iter().enumerate() {
-        a.put(i, *x);
-    }
-    a
-}
-
 pub fn encode_objects() -> Result<String, MarshalError> {
     let mut by_page: Vec<(IVec, PageRows)> = Vec::new();
     for col_idx in object_cols() {
@@ -731,7 +722,7 @@ fn collect_col(by_page: &mut Vec<(IVec, PageRows)>, col_idx: IVec) {
         col_idx,
         &mut |entry| {
             let corner = entry.corner();
-            let local = PVF3 {
+            let local = Pvf3 {
                 i: ivec::sub(corner.i, page_base),
                 f: corner.f,
             };
@@ -752,17 +743,14 @@ fn encode_pages(by_page: &[(IVec, PageRows)]) -> Result<String, MarshalError> {
             if rows.value.is_empty() {
                 continue;
             }
-            let value = U32Array::new(rows.value.len());
-            for (i, v) in rows.value.iter().enumerate() {
-                value.put(i, *v);
-            }
+            let value = &rows.value;
             b.branch(Some(&mut |p| {
                 p.u64(Some(*page_idx))
-                    .f32_array(Some(&f32_lane(&rows.x)))
-                    .f32_array(Some(&f32_lane(&rows.y)))
-                    .f32_array(Some(&f32_lane(&rows.z)))
-                    .f32_array(Some(&f32_lane(&rows.size)))
-                    .u32_array(Some(&value));
+                    .f32_array(Some(&rows.x))
+                    .f32_array(Some(&rows.y))
+                    .f32_array(Some(&rows.z))
+                    .f32_array(Some(&rows.size))
+                    .u32_array(Some(value));
             }));
         }
     }));
@@ -773,24 +761,26 @@ fn encode_pages(by_page: &[(IVec, PageRows)]) -> Result<String, MarshalError> {
             max_cap: None,
         },
     )?;
-    Ok(bytes_to_b64url(&pkt))
+    Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&pkt))
 }
 
 pub fn decode_objects(blob: &str) -> Result<(), MarshalError> {
-    let bytes = b64url_to_bytes(blob);
-    let root = TreeReader::new(bytes)?.read_branch()?;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(blob)
+        .map_err(|_| MarshalError::new(Errno::EINVAL, Some("objects: the stored blob is not base64url"), None))?;
+    let root = TreeReader::new(&bytes)?.read_branch()?;
     store_state().restoring = true;
     let result = (|| {
         for k in 0..root.len {
             let page = root.at_branch(k)?;
-            let page_base = FROM_L3_IDX(page.at(0)?.get_bigint()? as u64);
+            let page_base = FROM_L3_IDX(page.at(0)?.get_u64()?);
             let (x, y, z) = (page.at(1)?.get_array::<f32>()?, page.at(2)?.get_array::<f32>()?, page.at(3)?.get_array::<f32>()?);
             let (size, value) = (page.at(4)?.get_array::<f32>()?, page.at(5)?.get_array::<u32>()?);
-            for r in 0..value.length() {
-                let local = [x.get(r) as f64, y.get(r) as f64, z.get(r) as f64];
-                let mut corner = PVF3::default();
+            for r in 0..value.len() {
+                let local = [x[r] as f64, y[r] as f64, z[r] as f64];
+                let mut corner = Pvf3::default();
                 local_world_to_canonical(&mut corner, &local, page_base);
-                write_object_value(&corner, size.get(r) as f64, value.get(r));
+                write_object_value(&corner, size[r] as f64, value[r]);
             }
         }
         Ok(())
@@ -910,10 +900,10 @@ pub fn object_store_stats() -> (u32, u32, u32) {
 /// — once every leaf in it reads back VOID: a redundant place() and a
 /// remove() both write VOID on purpose, and a record carrying no information
 /// would otherwise sit in every save for nothing.
-fn write_object_value(coord: &PVF3, size: f64, val: u32) {
+fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
     // size is always an exact power of two by construction (object/size.rs's
     // OBJECT_SIZES); the round only guards against float noise.
-    let level = round_half_up(size.log2()) as i32;
+    let level = round(size.log2()) as i32;
     let at = lower(coord);
     kernel().objects.write(at.col_idx, at.band, [at.x, at.y, at.z], level, val);
     if store_state().restoring {
@@ -943,7 +933,7 @@ fn write_object_value(coord: &PVF3, size: f64, val: u32) {
 /// type is a per-column (2.5D) fact while a placement lands in the empty cell
 /// above the surface, so without this every cube stacked on matching ground
 /// read as redundant and was silently dropped.
-fn place_value_is_redundant(at: &PVF3, size: f64, cube: PlaceableCube, show_structures: bool) -> bool {
+fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube, show_structures: bool) -> bool {
     if size < U_PER_CELL {
         return false;
     }
@@ -960,7 +950,7 @@ fn place_value_is_redundant(at: &PVF3, size: f64, cube: PlaceableCube, show_stru
 /// nothing: rather than storing a "solid" leaf that only ever repaints what
 /// terrain would already show, this writes VOID — the same absence remove()
 /// itself produces.
-pub fn place(at: &PVF3, size: f64, cube: PlaceableCube, show_structures: bool) {
+pub fn place(at: &Pvf3, size: f64, cube: PlaceableCube, show_structures: bool) {
     let val = if place_value_is_redundant(at, size, cube, show_structures) {
         VOID
     } else {
@@ -971,7 +961,7 @@ pub fn place(at: &PVF3, size: f64, cube: PlaceableCube, show_structures: bool) {
 
 /// Same write path as place(), just tagged with a decor kind instead of a
 /// color.
-pub fn place_decor(at: &PVF3, size: f64, decor_id: DecorId) {
+pub fn place_decor(at: &Pvf3, size: f64, decor_id: DecorId) {
     write_object_value(at, size, decor_num_id(decor_id));
 }
 
@@ -981,7 +971,7 @@ pub fn place_decor(at: &PVF3, size: f64, decor_id: DecorId) {
 /// whatever's underneath (almost always real baked terrain) show through
 /// again; that's no help against terrain itself, which has no object-layer
 /// leaf of its own to delete.
-pub fn place_air(at: &PVF3, size: f64) {
+pub fn place_air(at: &Pvf3, size: f64) {
     write_object_value(at, size, cube_types::common::air as u32);
 }
 

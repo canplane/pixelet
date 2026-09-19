@@ -15,7 +15,7 @@
 
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, U_PER_CELL};
 use pxl_spec::space::v3::V3;
-use xpute_core::kit::fdlibm;
+use xpute_core::math::scalar::round;
 
 use crate::mesh::volume::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};
 use crate::mesh::voxel_scan::{OwnedRunSet, RunSet};
@@ -614,7 +614,7 @@ impl BakeContext {
             if fill < LOW_FILL_THRESHOLD {
                 self.counters.coarse_low_fill += 1;
             }
-            let linear = fdlibm::cbrt(fill);
+            let linear = libm::cbrt(fill);
             // A full cell is a plain run; a sparse one is inset, scaled by
             // the cube root of its fill about its centre on every axis.
             let inset = (linear < 1.0).then(|| pack_inset(linear));
@@ -915,10 +915,8 @@ fn bucket_taps(acc: &ZBucketAccum) -> u32 {
     packed
 }
 
-/// The averages rounded here are never negative, where `f64::round` and
-/// `round_half_up` agree.
 fn to_u8(v: f64) -> u32 {
-    v.round().clamp(0.0, 255.0) as u32
+    round(v).clamp(0.0, 255.0) as u32
 }
 
 /// A sparse cell's (inset, scale) as sub-cell fractions: a box of `linear`

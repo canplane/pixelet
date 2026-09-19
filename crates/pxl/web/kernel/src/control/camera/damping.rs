@@ -1,18 +1,18 @@
 // pxl-kernel/control/camera/damping.rs
 
-use pxl_spec::space::pvf3::pvf3::PVF3;
-use xpute_core::kit::math::clamp;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use xpute_core::math::scalar::clamp;
 
 use crate::control::camera::config::camera_cfg::smooth::CAM_DAMP;
 use crate::control::camera::config::camera_cfg::view::{MAX_DIST, MAX_POLAR, MIN_DIST, MIN_POLAR};
 use crate::control::camera::orbit::damp_alpha;
 use crate::control::camera::store::camera_store;
 use crate::control::camera::terrain_gate::climb_polar;
+use crate::global::Global;
 use crate::layer::terrain::store::tile_pages;
 use crate::sched::tick::TickContext;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, CameraTerrain};
-use crate::sys::global::Global;
 use crate::world::frame::view::{view, view_compose};
 
 // The tick runs another frame only when something asks (sched/tick.rs) —
@@ -43,7 +43,7 @@ struct ClimbMemo {
     dist: f64,
     polar: f64,
     azimuth: f64,
-    centre: Option<PVF3>,
+    centre: Option<Pvf3>,
     revision: u32,
     polar_out: f64,
 }

@@ -1,47 +1,31 @@
 // pxl-spec/space/pvf3/ivec.rs
 
-//! PVF3 (Packed 3-Vector w/ Fixed-Point Arithmetic)
-//! Integer Component Precision System
+//! The integer lanes: one `u64` holding a signed 24-bit X, a signed 24-bit Y
+//! and a signed 16-bit Z, the cell index a position has.
 //!
-//! This module provides atomic, stateless operations for the high-capacity
-//! packed integer grid indexing. It handles the primary spatial partitioning
-//! and discrete addressing logic for multi-layered coordinate systems.
-//!
-//! Memory Layout (N-bit Packed Index):
-//! [ MSB ........................................................... LSB ]
-//! [ Lane X (X_W bits) | Lane Y (Y_W bits) | Lane Z (Z_W bits) ]
-//!
-//! Example Configuration (64-bit Word):
 //! [ 63 ................. 40 | 39 ................. 16 | 15 ................. 0 ]
 //! [      Lane X (24b)       |      Lane Y (24b)       |      Lane Z (16b)       ]
 //!
-//! Mathematical Domain & Topology:
-//! - X/Y/Z lanes are interpreted as signed (two's complement).
-//! - X is cyclic (wrap-around) in the chosen world model: the signed boundary represents a continuous seam
-//!   (i.e., MIN and MAX meet at the seam, e.g., antimeridian behavior) rather than a clamp.
-//!
-//! Operational Integrity & Overflow Policy:
-//! - Deterministic Arithmetic: Uses BigInt for bit-exact operations; per-lane modular wrapping
-//!   is enforced by masking in gather().
-//! - Lane Isolation: Cross-lane carry is structurally impossible, as all arithmetic is performed
-//!   on deconstructed lane values and re-packed via gather().
-//! - Overflow Policy: Each lane wraps/truncates modulo 2^W; the caller must ensure semantic validity
-//!   (e.g., displacements stay within lane-specific bit-depth when required by higher-level policies).
-//! - Semantic Validity: 'Absolute + Absolute' addition is semantically invalid at the coordinate level
-//!   and should be handled by the application.
-//!
-//! Format Scalability:
-//! - This module is width-parametric: lane widths (X_W/Y_W/Z_W) and word width (WORD_W)
-//!   define the packing. Increasing these bit-field sizes does not require changes to
-//!   the core operations (gather/scatter/arithmetic); only the specification constants change.
-//! - Any semantic interpretation (projection, cyclic seams, clamping, carry policy) is
-//!   intentionally out of scope and must be implemented by the caller.
-//!
-//! The BigInt lane arithmetic is i64 here, wrapping: a lane is 24 bits at
-//! most and a gather keeps only a lane's low bits, so the low 64 bits of the
-//! unbounded result are what the word gets either way.
+//! - Lanes are two's complement. X is cyclic: its signed boundary is a seam
+//!   where MIN meets MAX, the antimeridian, rather than a clamp.
+//! - Every operation unpacks the lanes, computes on each as an `i64`, and
+//!   repacks through `gather`, which masks each result to its lane. So a
+//!   lane wraps modulo 2^W, and no carry crosses from one lane to the next.
+//!   Whether a wrapped result means anything — a displacement that fits, an
+//!   absolute plus an absolute — is the caller's to know.
+//! - The widths are `core`'s constants; nothing here depends on their values
+//!   beyond fitting a `u64`. What a lane means — a projection, the seam, a
+//!   clamp — is not decided here.
 
+// Uppercase throughout, as the notation these operations are written in: one
+// that holds no state and closes over nothing is named the way a C header
+// names its macros. Rust's own answer to a macro like that is a `const fn`,
+// which it cases snake, so the notation and the language disagree here and
+// the file keeps the notation — suspended once for the file, which is the
+// level the choice is made at rather than item by item.
 #![allow(non_snake_case)]
+
+use xpute_core::abi::word::{as_int_n64, field_mask64};
 
 use super::core::{ABS, EQ, GT, LT, MAX, MIN};
 use super::core::{IVEC_WORD_MASK as WORD_MASK, IVEC_X_W as X_W, IVEC_Y_W as Y_W, IVEC_Z_W as Z_W};
@@ -58,36 +42,22 @@ const Z_SHAMT: u32 = 0;
 const Y_SHAMT: u32 = Z_W;
 const X_SHAMT: u32 = Z_W + Y_W;
 
-const fn field_mask64(nbit: u32, shamt: u32) -> u64 {
-    let field = if nbit >= 64 { u64::MAX } else { (1u64 << nbit) - 1 };
-    if shamt >= 64 {
-        0
-    } else {
-        field << shamt
-    }
-}
-
 // ---- Component Axis Isolation Masks ----
 
 pub const X_MASK: u64 = field_mask64(X_W, X_SHAMT);
 pub const Y_MASK: u64 = field_mask64(Y_W, Y_SHAMT);
 pub const Z_MASK: u64 = field_mask64(Z_W, Z_SHAMT);
 
-/// `BigInt.asIntN(w, v)`: the low `w` bits of `v`, sign-extended.
-const fn as_int_n(w: u32, v: u64) -> i64 {
-    ((v << (64 - w)) as i64) >> (64 - w)
-}
-
 /// Axis Getters: Extract signed integer lanes.
 /// Semantic domain follows the lane's signed two's-complement interpretation.
 pub fn X(v: IVec) -> i64 {
-    as_int_n(X_W, v >> X_SHAMT)
+    as_int_n64(X_W, v >> X_SHAMT)
 }
 pub fn Y(v: IVec) -> i64 {
-    as_int_n(Y_W, v >> Y_SHAMT)
+    as_int_n64(Y_W, v >> Y_SHAMT)
 }
 pub fn Z(v: IVec) -> i64 {
-    as_int_n(Z_W, v >> Z_SHAMT)
+    as_int_n64(Z_W, v >> Z_SHAMT)
 }
 
 /// Integer scalar <-> real.
@@ -144,9 +114,8 @@ pub fn xor(v: IVec, w: IVec) -> IVec {
     v ^ w
 }
 
-/// Signed shift: +k => shl, -k => shr (arith)
-/// - ivec lanes are SIGNED (two's complement semantics via X/Y/Z sign-extension)
-/// - right shift is arithmetic (sign-preserving) by construction of bigint >> on signed values
+/// Signed shift: +k => shl, -k => shr. A lane is sign-extended by X/Y/Z,
+/// so the right shift on its `i64` is arithmetic.
 fn shl(v: IVec, shamt: i32) -> IVec {
     gather(X(v).wrapping_shl(shamt as u32), Y(v).wrapping_shl(shamt as u32), Z(v).wrapping_shl(shamt as u32))
 }

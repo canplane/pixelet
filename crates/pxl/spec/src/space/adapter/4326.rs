@@ -17,11 +17,15 @@
 //!
 //! The optional altitude of a G4326 is its third lane here, 0 when absent.
 
+// Uppercase throughout, as the notation these operations are written in: one
+// that holds no state and closes over nothing is named the way a C header
+// names its macros. Rust's own answer to a macro like that is a `const fn`,
+// which it cases snake, so the notation and the language disagree here and
+// the file keeps the notation — suspended once for the file, which is the
+// level the choice is made at rather than item by item.
 #![allow(non_snake_case)]
 
-use xpute_core::kit::fdlibm;
-
-use crate::space::pvf3::{FVec, IVec, PVF3};
+use crate::space::pvf3::{FVec, IVec, Pvf3};
 
 use super::epsg3857::{self, G3857};
 
@@ -58,7 +62,7 @@ fn LNG_TO_X(lng: f64) -> f64 {
 /// Latitude (degrees) -> Web Mercator Y (meters).
 fn LAT_TO_Y(lat: f64) -> f64 {
     let lat_rad = CLAMP_LAT(lat) * DEG_TO_RAD;
-    fdlibm::log(fdlibm::tan(core::f64::consts::PI / 4.0 + lat_rad / 2.0)) * EARTH_RADIUS
+    libm::log(libm::tan(core::f64::consts::PI / 4.0 + lat_rad / 2.0)) * EARTH_RADIUS
 }
 
 /// Web Mercator X (meters) -> longitude (degrees).
@@ -68,7 +72,7 @@ fn X_TO_LNG(x: f64) -> f64 {
 
 /// Web Mercator Y (meters) -> latitude (degrees).
 pub fn Y_TO_LAT(y: f64) -> f64 {
-    let lat_rad = 2.0 * fdlibm::atan(fdlibm::exp(y / EARTH_RADIUS)) - core::f64::consts::PI / 2.0;
+    let lat_rad = 2.0 * libm::atan(libm::exp(y / EARTH_RADIUS)) - core::f64::consts::PI / 2.0;
     lat_rad * RAD_TO_DEG
 }
 
@@ -101,7 +105,7 @@ pub fn from_mercator<'a>(dst: &'a mut G4326, src: &G3857) -> &'a mut G4326 {
 
 /// EPSG:4326 -> G64
 /// 4326 geodetic -> 3857 planar meters -> G64 stored in PVF3
-pub fn project<'a>(dst: &'a mut PVF3, src: &G4326) -> &'a mut PVF3 {
+pub fn project<'a>(dst: &'a mut Pvf3, src: &G4326) -> &'a mut Pvf3 {
     // 1. LonLat -> Meters (Store in static buffer)
     let mut reg: G3857 = [0.0; 3];
     to_mercator(&mut reg, src);
@@ -131,12 +135,12 @@ pub fn dist(a: &G4326, b: &G4326) -> f64 {
     let d_lng = (b[0] - a[0]) * DEG_TO_RAD;
     let d_lat = (b[1] - a[1]) * DEG_TO_RAD;
 
-    let sa = fdlibm::sin(d_lat / 2.0);
-    let sb = fdlibm::sin(d_lng / 2.0);
+    let sa = libm::sin(d_lat / 2.0);
+    let sb = libm::sin(d_lng / 2.0);
 
-    let h = sa * sa + fdlibm::cos(a[1] * DEG_TO_RAD) * fdlibm::cos(b[1] * DEG_TO_RAD) * sb * sb;
+    let h = sa * sa + libm::cos(a[1] * DEG_TO_RAD) * libm::cos(b[1] * DEG_TO_RAD) * sb * sb;
 
-    2.0 * EARTH_RADIUS * fdlibm::atan2(h.sqrt(), (1.0 - h).sqrt())
+    2.0 * EARTH_RADIUS * libm::atan2(h.sqrt(), (1.0 - h).sqrt())
 }
 
 // ---- Bounding Box ----

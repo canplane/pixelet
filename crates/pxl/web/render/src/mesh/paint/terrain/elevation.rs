@@ -19,9 +19,9 @@
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN};
 use pxl_spec::bake::format::Ground;
 use pxl_spec::cell::cube_types;
-use xpute_core::kit::math::lerp;
+use xpute_core::math::scalar::lerp;
 
-use xpute_core::kit::math::round_half_up;
+use xpute_core::math::scalar::round;
 
 const ELE_CELL_STEP: f64 = PAGE_CELL_SPAN as f64 / PAGE_ELE_SPAN as f64;
 
@@ -48,7 +48,7 @@ pub fn sample_ele_bilinear(page_ele: &[i16], tx: u32, ty: u32) -> i16 {
     let at = |x: f64, y: f64| page_ele[y as usize * span + x as usize] as f64;
     let ab = lerp(at(sx0, sy0), at(sx1, sy0), sdx);
     let cd = lerp(at(sx0, sy1), at(sx1, sy1), sdx);
-    round_half_up(lerp(ab, cd, sdy)) as i16
+    round(lerp(ab, cd, sdy)) as i16
 }
 
 /// Bicubic elevation sampling from the padded source raster.
@@ -85,7 +85,7 @@ fn sample_ele_bicubic(page_ele: &[i16], tx: u32, ty: u32) -> i16 {
             let idx = y * span + sx0;
             e(idx - 1) * wx[0] + e(idx) * wx[1] + e(idx + 1) * wx[2] + e(idx + 2) * wx[3]
         };
-        return round_half_up(row(sy0 - 1) * wy[0] + row(sy0) * wy[1] + row(sy0 + 1) * wy[2] + row(sy0 + 2) * wy[3]) as i16;
+        return round(row(sy0 - 1) * wy[0] + row(sy0) * wy[1] + row(sy0 + 1) * wy[2] + row(sy0 + 2) * wy[3]) as i16;
     }
 
     // slow boundary path with clamped coordinates.
@@ -99,7 +99,7 @@ fn sample_ele_bicubic(page_ele: &[i16], tx: u32, ty: u32) -> i16 {
         }
         out += row_out * wyj;
     }
-    round_half_up(out) as i16
+    round(out) as i16
 }
 
 /// `sample_ele`: the bicubic sample.
@@ -126,16 +126,16 @@ pub const WATER_RECESS_CELLS: i16 = 1;
 pub fn is_water_family_at(ground: &Ground, idx: u32) -> bool {
     let i = idx as usize;
     let void = cube_types::common::void;
-    if ground.structure.get(i) != void {
+    if ground.structure[i] != void {
         return false;
     }
-    if ground.transport.get(i) != void {
+    if ground.transport[i] != void {
         return false;
     }
-    if ground.water.get(i) != void {
+    if ground.water[i] != void {
         return true;
     }
-    ground.land.get(i) == cube_types::land::sea
+    ground.land[i] == cube_types::land::sea
 }
 
 /// Unpacks a dense (CHUNK_CELL_SPAN x CHUNK_CELL_SPAN) elevation chunk from

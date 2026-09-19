@@ -15,10 +15,10 @@
  * key per pump, and null when the pump was lost — its filter is its own.
  */
 
-import type { u32 } from "@xpute/core/kit/word.ts";
-import type { U32Array } from "@xpute/core/kit/array.ts";
-import { Vector } from "@xpute/core/ds/arena.ts";
-import { I64_KEYS, IndexedMap } from "@xpute/core/ds/map.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
+import type { U32Array } from "@xpute/core/abi/array.ts";
+import { Vector } from "@xpute/core/collection/arena.ts";
+import { I64_KEYS, IndexedMap } from "@xpute/core/collection/map.ts";
 
 import type { ChangeJournal, Cursor, Topic } from "./change.ts";
 

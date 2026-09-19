@@ -10,17 +10,17 @@ use pxl_spec::space::pvf3::{fvec, ivec};
 use pxl_spec::space::xy::TO_XY;
 
 use super::*;
+use crate::global::serial;
 use crate::layer::object::collision::find_overlapping_object;
 use crate::layer::object::size::DECOR_SIZE;
-use crate::sys::global::serial;
 
 // Distinct, far-apart corners per test so leftover state from one test never
 // collides with another: the store is kernel-global across the test binary.
-fn corner(x: i64, y: i64, z: i64) -> PVF3 {
-    PVF3 { i: ivec::gather(x, y, z), f: 0 }
+fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
+    Pvf3 { i: ivec::gather(x, y, z), f: 0 }
 }
 
-fn in_cell(c: &PVF3) -> Vec<OccupiedEntry> {
+fn in_cell(c: &Pvf3) -> Vec<OccupiedEntry> {
     let [ix, iy, iz] = cell_index(c);
     get_objects_in_cell(ix, iy, iz)
 }
@@ -199,14 +199,14 @@ fn object_store_revisions_a_column_s_revisions_move_on_its_own_changes_on_the_ri
 fn object_store_persistence_a_save_is_placement_records_per_page_and_loading_it_puts_every_object_back_where_it_was() {
     let _g = serial();
     let a = corner(5000, 7000, 12);
-    let b = PVF3 {
+    let b = Pvf3 {
         i: ivec::gather(5001, 7000, 12),
         f: fvec::gather(fvec::from_real(0.25), 0, 0),
     };
     place(&a, 1.0, PlaceableCube::Block(Block::red), false);
     place(&b, 0.25, PlaceableCube::Block(Block::blue), false);
     place_decor(
-        &PVF3 {
+        &Pvf3 {
             i: ivec::gather(5000, 7001, 12),
             f: 0,
         },

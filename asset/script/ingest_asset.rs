@@ -177,7 +177,7 @@ fn run() -> Result<(), String> {
         tiles: composed.tiles,
     };
 
-    write_formatted(&root.join("apps/web/src/catalog/asset/ingested_spec.ts"), &table::render_ts(&rows, &sheet))?;
+    write_formatted(&root.join("apps/web/src/catalog/asset/ingested-spec.ts"), &table::render_ts(&rows, &sheet))?;
     write_formatted(
         &root.join("crates/pxl/spec/src/asset/ingested.rs"),
         &table::render_rs(&rows, &sheet, pxl_spec::cell::cube_type::cube_types::CHANNELS),

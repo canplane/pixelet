@@ -7,8 +7,8 @@
 use pxl_spec::space::pvf3::ivec;
 
 use super::*;
+use crate::global::serial;
 use crate::layer::terrain::fixed::TERRAIN_AXIS;
-use crate::sys::global::serial;
 
 #[test]
 fn a_page_takes_the_record_its_coordinate_names() {

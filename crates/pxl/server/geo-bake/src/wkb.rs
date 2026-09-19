@@ -8,16 +8,15 @@
 
 use pxl_spec::space::adapter::epsg3857::G3857;
 
-pub struct WKBGeometry {
+pub struct WkbGeometry {
     pub points: Vec<G3857>,
     pub holes: Vec<Vec<G3857>>,
     pub is_polygon_source: bool,
 }
 
 /// A cursor over the bytes. Every read is bounds-checked and a short buffer
-/// ends the decode rather than panicking: the TypeScript's `DataView` throws
-/// on a read past the end and the caller treats a malformed row as no
-/// geometry, which is what `None` here becomes.
+/// ends the decode rather than panicking: a malformed row is no geometry,
+/// which is what `None` becomes.
 struct Reader<'a> {
     b: &'a [u8],
     at: usize,
@@ -48,7 +47,7 @@ impl<'a> Reader<'a> {
     }
 }
 
-pub fn wkb_to_geometries(wkb: &[u8]) -> Vec<WKBGeometry> {
+pub fn wkb_to_geometries(wkb: &[u8]) -> Vec<WkbGeometry> {
     if wkb.is_empty() {
         return Vec::new();
     }
@@ -56,7 +55,7 @@ pub fn wkb_to_geometries(wkb: &[u8]) -> Vec<WKBGeometry> {
     read_any(&mut r).unwrap_or_default()
 }
 
-fn read_any(r: &mut Reader) -> Option<Vec<WKBGeometry>> {
+fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
     let le = r.u8()? == 1;
     let t = r.u32(le)?;
 
@@ -75,7 +74,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WKBGeometry>> {
             if has_z {
                 r.skip(8)?;
             }
-            Some(vec![WKBGeometry {
+            Some(vec![WkbGeometry {
                 points: vec![[x, y, 0.0]],
                 holes: Vec::new(),
                 is_polygon_source: false,
@@ -84,7 +83,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WKBGeometry>> {
         2 => {
             // LineString
             let pts = read_ring(r, le, has_z)?;
-            Some(vec![WKBGeometry {
+            Some(vec![WkbGeometry {
                 points: pts,
                 holes: Vec::new(),
                 is_polygon_source: false,
@@ -94,7 +93,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WKBGeometry>> {
             // Polygon: ring 0 is the outer, the rest are holes.
             let nr = r.u32(le)?;
             if nr == 0 {
-                return Some(vec![WKBGeometry {
+                return Some(vec![WkbGeometry {
                     points: Vec::new(),
                     holes: Vec::new(),
                     is_polygon_source: true,
@@ -105,7 +104,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WKBGeometry>> {
             for _ in 1..nr {
                 holes.push(read_ring(r, le, has_z)?);
             }
-            Some(vec![WKBGeometry {
+            Some(vec![WkbGeometry {
                 points: outer,
                 holes,
                 is_polygon_source: true,
@@ -114,7 +113,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WKBGeometry>> {
         6 => {
             // MultiPolygon
             let np = r.u32(le)?;
-            let mut out: Vec<WKBGeometry> = Vec::new();
+            let mut out: Vec<WkbGeometry> = Vec::new();
             for _ in 0..np {
                 for mut g in read_any(r)? {
                     // Each element is a Polygon; force polygon semantics.

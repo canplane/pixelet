@@ -8,7 +8,7 @@ use super::*;
 const GOLDEN: &str = include_str!("../../golden/spec/space/xy.tsv");
 
 #[test]
-fn xy_computes_what_the_typescript_computes() {
+fn xy_computes_what_the_record_holds() {
     let v = Golden::load(GOLDEN);
     v.each("words", |k| {
         let i = v.u64(&format!("{k}.i"));

@@ -40,7 +40,7 @@
 //! than grown into.
 
 use super::frame_budget::{run_under_budget, BudgetOpts, PassStats};
-use crate::sys::clock::now;
+use crate::clock::now;
 
 pub type Phase = usize;
 pub const INTERACTION: Phase = 0;

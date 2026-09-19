@@ -16,7 +16,7 @@
  * took and what the guest asked for.
  */
 
-import type { f64 } from "@xpute/core/kit/word.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
 import type { Doorbell } from "../ipc/doorbell.ts";
 import { type Grant, Quantum, type QuantumPolicy } from "./quantum.ts";
 

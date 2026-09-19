@@ -1,7 +1,7 @@
 // pxl-kernel/shell/config/route.rs
 
 //! Every same-origin route the app requests. The roots and branches are
-//! spec/route.json's, written into `pxl-spec`'s own `route`; what is here is
+//! spec/pxl/spec/route.json's, written into `pxl-spec`'s own `route`; what is here is
 //! how a URL is built out of them.
 
 use core::fmt;

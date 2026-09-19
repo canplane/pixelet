@@ -1,10 +1,8 @@
 // pxl-spec/bake/format.test.rs
 // (no pair: format.ts's tests are poi_page.test.ts, mirrored beside this)
 
+use xpute_core::codec::json::stringify_str_map;
 use xpute_core::golden::Golden;
-use xpute_core::kit::array::TypedArray;
-use xpute_core::kit::encoding::{bytes_to_hex, hex_to_bytes, td};
-use xpute_core::kit::json::stringify_str_map;
 
 use super::*;
 
@@ -12,17 +10,17 @@ const GOLDEN: &str = include_str!("../../golden/bake/format.tsv");
 
 fn text(v: &Golden, key: &str) -> String {
     if v.has(key) {
-        td.decode(&hex_to_bytes(v.s(key)))
+        String::from_utf8(hex::decode(v.s(key)).unwrap()).unwrap()
     } else {
         String::new()
     }
 }
 
 #[test]
-fn the_formats_write_and_read_what_the_typescript_does() {
+fn the_formats_write_and_read_what_the_record_holds() {
     let v = Golden::load(GOLDEN);
-    let ele: I16Array = TypedArray::from(&(0..v.len("ele")).map(|j| v.i32(&format!("ele.{j}")) as i16).collect::<Vec<_>>());
-    let ch = |j: usize| hex_to_bytes(v.s(&format!("ground.{j}")));
+    let ele: Vec<i16> = (0..v.len("ele")).map(|j| v.i32(&format!("ele.{j}")) as i16).collect();
+    let ch = |j: usize| -> std::borrow::Cow<'static, [u8]> { hex::decode(v.s(&format!("ground.{j}"))).unwrap().into() };
     let ground = Ground {
         land: ch(0),
         water: ch(1),
@@ -30,14 +28,14 @@ fn the_formats_write_and_read_what_the_typescript_does() {
         transport: ch(3),
     };
     let terrain = encode_terrain(&ele, &ground).unwrap();
-    assert_eq!(bytes_to_hex(&terrain), v.s("terrain"));
-    let decoded = decode_terrain(terrain).unwrap();
-    assert_eq!(decoded.ele.as_slice(), ele.as_slice());
+    assert_eq!(hex::encode(&terrain), v.s("terrain"));
+    let decoded = decode_terrain(&terrain).unwrap();
+    assert_eq!(decoded.ele.as_ref(), ele.as_slice());
     for (j, key) in GROUND_CH_KEYS.into_iter().enumerate() {
-        assert_eq!(bytes_to_hex(decoded.ground.get(key)), v.s(&format!("decoded.{j}")), "decoded.{j}");
+        assert_eq!(hex::encode(decoded.ground.get(key)), v.s(&format!("decoded.{j}")), "decoded.{j}");
     }
 
-    let pois: Vec<POI> = (0..v.len("pois"))
+    let pois: Vec<Poi> = (0..v.len("pois"))
         .map(|j| {
             let k = format!("pois.{j}");
             let n = if v.has(&format!("{k}.tag_keys.0")) { v.len(&format!("{k}.tag_keys")) } else { 0 };
@@ -56,7 +54,7 @@ fn the_formats_write_and_read_what_the_typescript_does() {
                     (key, val)
                 })
                 .collect();
-            POI {
+            Poi {
                 id: text(&v, &format!("{k}.id")),
                 r#type: "poi",
                 category: v.s(&format!("{k}.category")).to_string(),
@@ -68,9 +66,9 @@ fn the_formats_write_and_read_what_the_typescript_does() {
         })
         .collect();
     let page_pkt = encode_poi_page(&pois).unwrap();
-    assert_eq!(bytes_to_hex(&page_pkt), v.s("page"));
-    assert_eq!(bytes_to_hex(&encode_empty_poi_page().unwrap()), v.s("empty"));
-    let page = PoiPage::new(page_pkt).unwrap();
+    assert_eq!(hex::encode(&page_pkt), v.s("page"));
+    assert_eq!(hex::encode(encode_empty_poi_page().unwrap()), v.s("empty"));
+    let page = PoiPage::new(&page_pkt).unwrap();
     v.each("read", |k| {
         let i: u32 = k.rsplit('.').next().unwrap().parse().unwrap();
         assert_eq!(page.category_of(i), v.s(&format!("{k}.category")), "{k}.category");

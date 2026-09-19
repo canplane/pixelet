@@ -10,6 +10,8 @@ use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::xy::TO_XY;
 
 use crate::control::navigation::store::map_navigation;
+use crate::global::Global;
+use crate::host::now;
 use crate::io::demand::{Category, Demand, DemandKey};
 use crate::io::fetch_scheduler::{fetch_pending_count, fetch_running, fetch_sync, page_key};
 use crate::layer::terrain::config::{KEEP_DIST, RESIDENT_PAGES};
@@ -17,7 +19,6 @@ use crate::layer::terrain::resident::free_slot;
 use crate::layer::terrain::store::{tile_pages, tile_store};
 use crate::layer::terrain::tile_repository::{ocean_retain, ocean_wanted, OCEAN_CATEGORY};
 use crate::shell::map_store::{map_store, MapStatus};
-use crate::sys::global::{now, Global};
 use crate::world::change::wake_at;
 use crate::world::chunk::range::{page_priority, pages_to_hold, FETCH_HYSTERESIS};
 use crate::world::frame::range_anchor::range_anchor;
@@ -50,14 +51,14 @@ fn terrain_demands(anchor: IVec, pinned_page_idx: Option<IVec>) -> Vec<Demand> {
         });
     };
 
-    let held = pages_to_hold(anchor, KEEP_DIST, RESIDENT_PAGES());
+    let held = pages_to_hold(anchor, KEEP_DIST, RESIDENT_PAGES);
     for p in &held {
         add(p.page_idx, page_priority(p.dist2));
     }
     // A request already running for a page that has only just left the held
     // set is kept in the wishlist rather than withdrawn, so a pan does not
     // cancel work it will ask for again — see FETCH_HYSTERESIS.
-    for p in pages_to_hold(anchor, KEEP_DIST + FETCH_HYSTERESIS, RESIDENT_PAGES() + 16) {
+    for p in pages_to_hold(anchor, KEEP_DIST + FETCH_HYSTERESIS, RESIDENT_PAGES + 16) {
         if !held.iter().any(|h| h.page_idx == p.page_idx) && fetch_running(page_key(CATEGORY, p.page_idx)) {
             add(p.page_idx, page_priority(p.dist2));
         }
@@ -74,7 +75,7 @@ fn terrain_demands(anchor: IVec, pinned_page_idx: Option<IVec>) -> Vec<Demand> {
 /// fetched. The pinned (device-own) page is exempt: it is kept warm regardless
 /// of camera distance so the user marker can always ground itself.
 fn cleanup_far_tiles(anchor: IVec, pinned_page_idx: Option<IVec>) {
-    let held = pages_to_hold(anchor, KEEP_DIST, RESIDENT_PAGES());
+    let held = pages_to_hold(anchor, KEEP_DIST, RESIDENT_PAGES);
     let holds = |p: IVec| held.iter().any(|h| h.page_idx == p);
     ocean_retain(|p| Some(p) == pinned_page_idx || holds(p));
     // Collected first: clearing moves the table's last page into the hole.

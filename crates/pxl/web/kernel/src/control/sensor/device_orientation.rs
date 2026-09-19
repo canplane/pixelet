@@ -7,10 +7,11 @@
 //! way a page's handler calls `requestPermission` and the browser answers, and
 //! the kernel hears only the answer (`orientation_permission`).
 
-use pxl_spec::message::Message;
+use pxl_spec::abi::message::Message;
 
 use crate::control::sensor::store::{device_orientation_store, DevicePoseStatus, PermissionAnswer};
-use crate::sys::global::{now, Global};
+use crate::global::Global;
+use crate::host::now;
 use crate::world::change::wake_at;
 
 /// There's no Permissions-API equivalent for orientation (iOS Safari doesn't

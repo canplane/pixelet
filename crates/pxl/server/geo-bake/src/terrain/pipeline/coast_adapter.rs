@@ -16,7 +16,7 @@ pub fn from_coast_row(row: &CoastRow) -> Vec<CoastRawFeature> {
         return Vec::new();
     }
 
-    wkb_to_geometries(row.geom_wkb.as_slice())
+    wkb_to_geometries(&row.geom_wkb)
         .into_iter()
         .map(|g| {
             let center = g.points.first().copied().unwrap_or([0.0, 0.0, 0.0]);

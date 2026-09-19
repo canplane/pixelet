@@ -1,12 +1,12 @@
 // pxl-kernel/world/surface_height.test.rs
 
 use pxl_spec::cell::cube_types::Block;
-use pxl_spec::cell::PlaceableCube;
-use pxl_spec::space::pvf3::pvf3::{self, PVF3};
+use pxl_spec::cell::object::PlaceableCube;
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
 use super::*;
+use crate::global::serial;
 use crate::layer::object::store::place;
-use crate::sys::global::serial;
 
 // place()/get_objects_near() are kernel-global state (object/store.rs), not
 // scoped per-test — every test below uses its own well-separated local X so
@@ -15,7 +15,7 @@ use crate::sys::global::serial;
 const MAP_ORIGIN: IVec = 0;
 
 fn put_block(x: f64, y: f64, z: f64) {
-    let mut corner = PVF3::default();
+    let mut corner = Pvf3::default();
     pvf3::gather(&mut corner, pvf3::from_real(x), pvf3::from_real(y), pvf3::from_real(z));
     place(&corner, 1.0, PlaceableCube::Block(Block::red), false);
 }

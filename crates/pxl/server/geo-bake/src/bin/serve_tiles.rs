@@ -42,8 +42,8 @@ use pxl_spec::space::indexer::L3_SHAMT;
 use pxl_spec::space::pvf3::core::IVEC_WORD_MASK;
 use pxl_spec::space::pvf3::ivec::IVec;
 
-use pxl_geo_bake::geocode::provider::overture_provider::GeocodeProvider;
-use pxl_geo_bake::poi::provider::overture_provider::PoiProvider;
+use pxl_geo_bake::geocode::provider::overture::GeocodeProvider;
+use pxl_geo_bake::poi::provider::overture::PoiProvider;
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::terrain::source::{fetch_tile, SourceStats};
 
@@ -316,7 +316,7 @@ fn run() -> Result<(), String> {
         admin_token: std::env::var("ADMIN_TOKEN").ok().filter(|t| !t.is_empty()),
     });
 
-    // The roots and branches are spec/route.json's, as the client's and the
+    // The roots and branches are spec/pxl/spec/route.json's, as the client's and the
     // relays' are; what each one carries past them is this server's.
     let router = Router::new()
         .route(&format!("{TILE_ROOT}/terrain/{{page_idx}}"), get(terrain))

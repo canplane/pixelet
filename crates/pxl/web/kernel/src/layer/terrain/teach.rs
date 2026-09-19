@@ -10,7 +10,7 @@ use pxl_render::mesh::volume::{MaterialClass, MaterialClasses, NO_LAYER};
 use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
 use pxl_spec::cell::cube_types;
 
-use crate::sys::kernel::kernel;
+use crate::kernel::kernel;
 
 pub fn ch_to_class(ch: GroundChannelKey) -> MaterialClass {
     match ch {

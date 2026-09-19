@@ -16,11 +16,11 @@
 
 use pxl_spec::space::adapter::epsg4326::{self, G4326};
 
+use crate::global::Global;
+use crate::host::{local_time, now};
+use crate::kernel::kernel;
 use crate::layer::environment::theme::{get_theme_key, WorldThemeKey};
 use crate::shell::map_store::map_store;
-use crate::sys::global::{now, Global};
-use crate::sys::host::local_time;
-use crate::sys::kernel::kernel;
 use crate::world::change::wake_at;
 
 const THEME_CHECK_INTERVAL_MS: f64 = 60_000.0;

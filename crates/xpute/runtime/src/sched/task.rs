@@ -25,7 +25,7 @@
 use core::future::Future;
 use core::pin::Pin;
 
-use crate::sys::global::Global;
+use crate::global::Global;
 
 /// A task: a future kept for the program's life.
 pub type Task = Pin<&'static mut (dyn Future<Output = ()> + 'static)>;

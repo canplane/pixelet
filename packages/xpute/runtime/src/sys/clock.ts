@@ -5,7 +5,7 @@
  * installs another — a test that has to hold time still.
  */
 
-import type { f64 } from "@xpute/core/kit/word.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
 
 let clock: () => f64 = () => performance.now();
 

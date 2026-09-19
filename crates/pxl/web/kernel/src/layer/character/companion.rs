@@ -28,8 +28,10 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::orbit::damp_alpha;
 use crate::control::camera::store::camera_store;
+use crate::global::Global;
 use crate::io::load::{load_gltf, load_image, Load};
 use crate::io::model_asset::{register_model, ModelHandle};
+use crate::kernel::{kernel, with_world};
 use crate::layer::character::chat_bubble::chat_bubble_step;
 use crate::layer::character::path::{heading_to, init_settle_tracker, sample_walk_plan, update_settle_tracker, SettleTracker, Vec2, WalkPlan, WalkSample};
 use crate::layer::character::store::companion_load_store;
@@ -39,8 +41,6 @@ use crate::layer::object::store::objects_revision;
 use crate::layer::terrain::store::tile_pages;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::settings_store;
-use crate::sys::global::Global;
-use crate::sys::kernel::{kernel, with_world};
 use crate::world::change::wake_at;
 use crate::world::frame::view::view;
 use crate::world::surface_height::get_surface_z_at_local;
@@ -204,7 +204,7 @@ impl Walker {
         // linger are spans of real time; the tick's elapsed is a sum of deltas
         // clamped at 0.1 s, which stretches every one of them across a gap
         // where the world did not tick.
-        let now = crate::sys::global::now() / 1000.0;
+        let now = crate::host::now() / 1000.0;
         let rebased = map_origin != self.prev_map_origin;
         let (px, py, is_walking);
 

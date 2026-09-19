@@ -17,18 +17,19 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::indexer::{L1_IDX_IN_L4, L3_BASE, L3_CENTER};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::projection;
-use pxl_spec::space::pvf3::pvf3::PVF3;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{floor3n, V3};
 use pxl_spec::space::xy::TO_XY;
-use xpute_core::kit::mat4::{mat4_transform_point, Mat4, Vec3};
+use xpute_core::math::mat4::{mat4_transform_point, Mat4};
+use xpute_core::math::vec3::Vec3;
 
+use crate::global::Global;
+use crate::host::measure_text;
+use crate::kernel::kernel;
 use crate::layer::billboard::canvas_scale::{FONT_FAMILY, FONT_WEIGHT_REGULAR};
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
 use crate::layer::terrain::elevation::{get_ele, with_ele};
 use crate::layer::terrain::store::tile_pages;
-use crate::sys::global::Global;
-use crate::sys::host::measure_text;
-use crate::sys::kernel::kernel;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::node::World;
 use crate::world::frame::view::view;
@@ -204,14 +205,14 @@ fn sketch_frames(s: &mut Sketch) {
 }
 
 /// A point in the root frame: its address's offset from the map origin.
-fn local_of(p: &PVF3, map_origin: IVec) -> V3 {
+fn local_of(p: &Pvf3, map_origin: IVec) -> V3 {
     let local = ivec::sub(p.i, map_origin);
     let mut v = [0.0; 3];
     projection::unproject(&mut v, 0, p.f);
     [ivec::to_real(ivec::X(local)) + v[0], ivec::to_real(ivec::Y(local)) + v[1], ivec::to_real(ivec::Z(local)) + v[2]]
 }
 
-fn sketch_map(map_center: &PVF3, map_origin: IVec) -> Sketch {
+fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     let mut s = Sketch::default();
 
     // raw_v: the map centre as placed, no elevation override. quant_v: the cell
@@ -225,7 +226,7 @@ fn sketch_map(map_center: &PVF3, map_origin: IVec) -> Sketch {
     // The floating origin, grounded and floored: local (0, 0, ground).
     let mut anchor_base_gnd_v = [0.0; 3];
     projection::unproject(&mut anchor_base_gnd_v, L1_IDX_IN_L4(map_origin), 0);
-    anchor_base_gnd_v[2] = get_ele(&PVF3 { i: map_origin, f: 0 }).unwrap_or(0.0);
+    anchor_base_gnd_v[2] = get_ele(&Pvf3 { i: map_origin, f: 0 }).unwrap_or(0.0);
     let mut anchor_base_quant_v = [0.0; 3];
     floor3n(&anchor_base_gnd_v, U_PER_CELL, &mut anchor_base_quant_v);
 
@@ -235,8 +236,8 @@ fn sketch_map(map_center: &PVF3, map_origin: IVec) -> Sketch {
     s.labelled_line(quant_v, anchor_base_quant_v, Some("floor(map_center) <-> anchor_base (map_origin)"), true);
 
     for (corner, label) in [(TO_XY(L3_BASE(map_center.i)), "page_base"), (TO_XY(L3_CENTER(map_center.i)), "page_center")] {
-        let mut out = PVF3::default();
-        if let Some(grounded) = with_ele(&mut out, &PVF3 { i: corner, f: 0 }) {
+        let mut out = Pvf3::default();
+        if let Some(grounded) = with_ele(&mut out, &Pvf3 { i: corner, f: 0 }) {
             s.r#box(local_of(&grounded, map_origin), 1.0, Some(label));
         }
     }
@@ -247,7 +248,7 @@ fn sketch_map(map_center: &PVF3, map_origin: IVec) -> Sketch {
 struct Gizmos {
     /// What the drawn sketch was built from: the map centre, the origin, the
     /// tiles' revision, and the view's frame.
-    built_for: Option<(PVF3, IVec, u32, [f64; 4])>,
+    built_for: Option<(Pvf3, IVec, u32, [f64; 4])>,
     drawn: Sketch,
     shown: bool,
     /// The labels' billboard set, and each drawn label's slot of the sheet
@@ -353,7 +354,7 @@ fn set_lines(at: V3, vertices: &[f32]) {
 
 /// The gizmos' turn, while `show` is on: the set rebuilt when the map or the
 /// view moved, and gone when `show` turns off.
-pub fn debug_gizmos_step(show: bool, map_center: Option<PVF3>, map_origin: IVec) {
+pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec) {
     let g = gizmos();
     let Some(center) = map_center.filter(|_| show) else {
         if g.shown {

@@ -12,15 +12,19 @@
 // — and the other channels do not spread its keys into their own. Only
 // land/water/structure/transport can hold VOID or UNKNOWN, those being raw
 // bytes a baked raster legitimately produces; AIR means something only
-// within the object-placement encoding (mod.rs), never as a terrain value,
+// within the object-placement encoding (object.rs), never as a terrain value,
 // so a channel that can never produce it does not list it.
 //
-// mod.rs is where a placed cube's own value is derived from these channels,
+// object.rs is where a placed cube's own value is derived from these channels,
 // banding the terrain channels into disjoint ranges — a real terrain cell
 // can hold one value from every channel at once, where a placed cube is
 // exactly one of them. Nothing here needs to know that; this file is cell
 // definitions and nothing else.
 
+// `RASTER_SEED` is named as the spec's other stateless operations are, in the
+// casing a C header gives a macro. `cube_colors` is lowercase to sit beside
+// the generated `cube_types` it is built from: a catalog's name here is the
+// JSON's and not one this file chose.
 #![allow(non_upper_case_globals, non_snake_case)]
 
 use std::collections::BTreeMap;

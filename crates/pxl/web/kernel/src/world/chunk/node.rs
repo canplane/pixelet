@@ -29,13 +29,14 @@ use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN}
 use pxl_spec::bake::format::Tile;
 use pxl_spec::space::indexer::{FROM_L3_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use xpute_runtime::sys::mem::{alloc, free, Block};
+use xpute_core::math::scalar::round;
+use xpute_runtime::mem::heap::{alloc, free, Block};
 
+use crate::global::Global;
+use crate::kernel::{kernel, with_world};
 use crate::layer::object::store::{decor_col_revision, object_col_idx_of, object_col_revision, Store, BAND_CELLS};
 use crate::layer::terrain::store::tile_store;
 use crate::shell::setting::store::settings_store;
-use crate::sys::global::Global;
-use crate::sys::kernel::{kernel, with_world};
 use crate::world::chunk::table::Event;
 
 /// A tier as the scheduler hands it over and the node holds it: the heap
@@ -73,7 +74,7 @@ pub fn release_block(at: usize, bytes: u32) {
 /// piece — at a quarter the heap fragments and refuses the fine tiers' blocks.
 #[allow(non_snake_case)]
 pub fn RETAIN_BUDGET_BYTES() -> f64 {
-    crate::sys::mem::section::map().map_or(0.0, |m| (m.heap.bytes / 2) as f64)
+    crate::mem::section::map().map_or(0.0, |m| (m.heap.bytes / 2) as f64)
 }
 
 // ---- Dev-only counters, read by the scheduler's frame sample ----
@@ -158,7 +159,7 @@ pub fn chunk_retention() -> ChunkRetention {
             out.decor_instances += crate::layer::decor::instance::decor_groups(words).map(|(_, n)| n).sum::<u32>();
         }
     }
-    out.run_set_mb = (run_bytes as f64 / 1_048_576.0).round() as u32;
+    out.run_set_mb = round(run_bytes as f64 / 1_048_576.0) as u32;
     out
 }
 
@@ -192,13 +193,8 @@ type Queue = VecDeque<Event>;
 fn page_lanes(tile: &Tile) -> PageLanes {
     let g = &tile.terrain.ground;
     PageLanes {
-        ground: [
-            g.land.as_slice().as_ptr() as usize,
-            g.water.as_slice().as_ptr() as usize,
-            g.structure.as_slice().as_ptr() as usize,
-            g.transport.as_slice().as_ptr() as usize,
-        ],
-        ele: tile.terrain.ele.as_slice().as_ptr() as usize,
+        ground: [g.land.as_ptr() as usize, g.water.as_ptr() as usize, g.structure.as_ptr() as usize, g.transport.as_ptr() as usize],
+        ele: tile.terrain.ele.as_ptr() as usize,
     }
 }
 
@@ -766,7 +762,7 @@ impl Builder {
         if matches!(&self.bake_job, Some(j) if j.id == id) {
             self.abort_bake();
         }
-        let releases = crate::sys::host::heap_releases();
+        let releases = crate::host::heap_releases();
         if let Some(c) = self.chunks.get_mut(&id) {
             c.refused = Some(releases);
         }
@@ -844,7 +840,7 @@ impl Builder {
         if c.wanted().next().is_none() {
             return Progress::Done;
         }
-        if c.refused.is_some_and(|r| r == crate::sys::host::heap_releases()) {
+        if c.refused.is_some_and(|r| r == crate::host::heap_releases()) {
             return Progress::Blocked;
         }
         if c.runs.is_none() {

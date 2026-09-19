@@ -1,8 +1,8 @@
 // pxl-kernel/shell/map_store.rs
 
-use pxl_spec::space::pvf3::pvf3::PVF3;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 
-use crate::sys::global::Global;
+use crate::global::Global;
 
 /// Data loading lifecycle.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -33,7 +33,7 @@ pub struct MapStore {
 
     // ---- Navigation & Coordinate ----
     /// Canonical absolute target.
-    pub map_center: Option<PVF3>,
+    pub map_center: Option<Pvf3>,
 }
 
 impl MapStore {}

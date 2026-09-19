@@ -16,19 +16,18 @@
 
 use core::fmt;
 
-use pxl_spec::fetch::FetchFail;
-use xpute_core::kit::array::{ArrayBuffer, U8Array};
+use xpute_runtime::abi::fetch::FetchFail;
+use xpute_runtime::mem::heap::{alloc, free, Block};
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
-use xpute_runtime::sys::mem::{alloc, free, Block};
 
+use crate::global::Global;
+use crate::host::body_read;
 use crate::io::demand::{Category, Demand, Phases};
 use crate::io::fetch_scheduler::{demand_of, fetch_settle};
 use crate::layer::poi::{repository as poi_repository, store as poi_store};
 use crate::layer::terrain::{tile_fetcher, tile_repository};
 use crate::sched::ledger::record::{Failure, Outcome};
 use crate::shell::config::env::PUBLISHED_TILES;
-use crate::sys::global::Global;
-use crate::sys::host::body_read;
 use crate::world::change::world_edge;
 
 /// Where a started demand is fetched from, as it is written where it is sent.
@@ -70,11 +69,10 @@ fn release(block: Option<Block>) {
 }
 
 /// A body's bytes, read where the host copied them.
-fn view((at, bytes): Block) -> U8Array {
+fn view<'a>((at, bytes): Block) -> &'a [u8] {
     // SAFETY: the block is one `receive` acquired for this body alone,
     // `bytes` long, and it is not released while the view is read.
-    let buffer = unsafe { ArrayBuffer::from_raw(at as *mut u8, bytes as usize) };
-    U8Array::over(buffer, 0, bytes as usize)
+    unsafe { core::slice::from_raw_parts(at as *const u8, bytes as usize) }
 }
 
 /// The shell's report that a started demand's fetch finished: `outcome` 0

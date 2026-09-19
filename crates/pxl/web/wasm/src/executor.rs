@@ -17,7 +17,7 @@
 //! executor takes has nothing to exclude.
 
 use embassy_executor::raw::Executor as Raw;
-use pxl_kernel::sys::global::Global;
+use pxl_kernel::global::Global;
 use pxl_kernel::world::change::TASKS;
 use xpute_runtime::sched::task::{set_executor, Executor, Priority, Task};
 

@@ -1,6 +1,6 @@
 // pxl-spec/bake/model/feature.rs
 
-use xpute_core::kit::json::StrMap;
+use xpute_core::codec::json::StrMap;
 
 use crate::bake::format::CellConfig;
 use crate::space::adapter::epsg3857::G3857;
@@ -96,9 +96,8 @@ pub struct FeatureComputed {
 
 // ---- Derived object models ----
 
-#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Debug, PartialEq)]
-pub struct POI {
+pub struct Poi {
     pub id: String,
     /// Always "poi".
     pub r#type: &'static str,

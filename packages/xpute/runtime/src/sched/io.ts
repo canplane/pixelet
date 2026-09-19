@@ -33,7 +33,7 @@
  * turn.
  */
 
-import type { f64, u32, u64 } from "@xpute/core/kit/word.ts";
+import type { f64, u32, u64 } from "@xpute/core/abi/word.ts";
 import { now } from "../sys/clock.ts";
 
 export type Demand = {

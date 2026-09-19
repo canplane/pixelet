@@ -36,13 +36,13 @@
 //! 7. heap slot: MSB=0 means leaf; payload lives in data[slot].
 //! 8. fill() sets the root block to one uniform leaf value.
 //! 9. compact() preserves semantics and returns a tree whose root base is 0.
-//! 10. encode()/decode() use U64Array as the sparse-tree wire/storage blob surface.
+//! 10. encode()/decode() carry the tree as words: `[used | 0][heap][data]`,
+//!     each part padded to the word.
 //!
-//! The leaf lane's constructor is the element type `T` here, and a key's
-//! traits the `PVecTraits` implementor `K`.
+//! The leaf lane's element type is `T`, and a key's operations are the
+//! `PVecTraits` implementor `K`.
 
-use xpute_core::io::marshal::tree::spec::{ALIGN, GET_WORD, NONE, RESERVED, SET_WORD, WORD_SZ};
-use xpute_core::kit::array::{copy_ab_view, ArrayBuffer, NumberElement, TypedArray, U32Array, U64Array, U8Array};
+use xpute_core::wire::xtp::spec::{ALIGN, GET_WORD, NONE, RESERVED, SET_WORD, WORD_SZ};
 
 use crate::space::pvf3::PVecTraits;
 
@@ -58,11 +58,11 @@ const WORD_REG: [u32; 2] = [NONE, NONE];
 /// - heap and data are slot-aligned arenas sharing the same logical index space
 /// - slot 0..(1<<dim)-1 is reserved for the root child block
 /// - head is the next free slot after the last allocated block
-pub struct SparseTreeMemory<T: NumberElement> {
-    pub heap: U32Array,      // tagged child pointers (branch => MSB set, leaf => 0)
-    pub data: TypedArray<T>, // leaf payload values
-    pub head: u32,           // allocator cursor (next free slot)
-    pub cap: u32,            // current capacity in slots
+pub struct SparseTreeMemory<T: Copy + Default + PartialEq> {
+    pub heap: Vec<u32>, // tagged child pointers (branch => MSB set, leaf => 0)
+    pub data: Vec<T>,   // leaf payload values
+    pub head: u32,      // allocator cursor (next free slot)
+    pub cap: u32,       // current capacity in slots
 }
 
 /// Sparse tree layout.
@@ -113,13 +113,13 @@ fn validate_layout(layout: &SparseTreeLayout) {
 }
 
 /// Allocate sparse tree memory and reserve the root child block at base 0.
-pub fn alloc<T: NumberElement>(dim: u32, cap: u32) -> SparseTreeMemory<T> {
+pub fn alloc<T: Copy + Default + PartialEq>(dim: u32, cap: u32) -> SparseTreeMemory<T> {
     let root_width = block_width(dim);
     let cap = if cap >= root_width { cap } else { root_width };
 
     SparseTreeMemory {
-        heap: TypedArray::new(cap as usize),
-        data: TypedArray::new(cap as usize),
+        heap: vec![0u32; cap as usize],
+        data: vec![T::default(); cap as usize],
         head: root_width, // reserve base 0..root_width-1 for root block
         cap,
     }
@@ -128,10 +128,10 @@ pub fn alloc<T: NumberElement>(dim: u32, cap: u32) -> SparseTreeMemory<T> {
 /// The same tree with its data lane in another type — the heap is shared,
 /// every value is carried across. For widening a leaf lane when its values
 /// outgrow it.
-pub fn retype<T: NumberElement, U: NumberElement>(mem: SparseTreeMemory<T>) -> SparseTreeMemory<U> {
-    let data = TypedArray::<U>::new(mem.cap as usize);
-    for i in 0..mem.head as usize {
-        data.put(i, U::from_f64(mem.data[i].to_f64()));
+pub fn retype<T: Copy + Default + PartialEq, U: Copy + Default + PartialEq + From<T>>(mem: SparseTreeMemory<T>) -> SparseTreeMemory<U> {
+    let mut data = vec![U::default(); mem.cap as usize];
+    for (to, from) in data.iter_mut().zip(mem.data.iter().take(mem.head as usize)) {
+        *to = U::from(*from);
     }
     SparseTreeMemory {
         heap: mem.heap,
@@ -142,17 +142,17 @@ pub fn retype<T: NumberElement, U: NumberElement>(mem: SparseTreeMemory<T>) -> S
 }
 
 /// Grow backing buffers so that slot range [0, end) fits.
-fn grow<T: NumberElement>(mem: &mut SparseTreeMemory<T>, end: u32) {
+fn grow<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, end: u32) {
     let mut cap = mem.cap;
     while cap < end {
         cap <<= 1;
     }
 
-    let heap = U32Array::new(cap as usize);
-    let data = TypedArray::<T>::new(cap as usize);
+    let mut heap = vec![0u32; cap as usize];
+    let mut data = vec![T::default(); cap as usize];
 
-    heap.set(&mem.heap);
-    data.set(&mem.data);
+    heap[..mem.heap.len()].copy_from_slice(&mem.heap);
+    data[..mem.data.len()].copy_from_slice(&mem.data);
 
     mem.heap = heap;
     mem.data = data;
@@ -160,7 +160,7 @@ fn grow<T: NumberElement>(mem: &mut SparseTreeMemory<T>, end: u32) {
 }
 
 /// Allocate an arbitrary contiguous slot span and return its first slot.
-fn alloc_slots<T: NumberElement>(mem: &mut SparseTreeMemory<T>, cnt: u32) -> u32 {
+fn alloc_slots<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, cnt: u32) -> u32 {
     let base = mem.head;
     let end = base + cnt;
 
@@ -179,12 +179,12 @@ fn alloc_slots<T: NumberElement>(mem: &mut SparseTreeMemory<T>, cnt: u32) -> u32
 /// Postconditions:
 /// - returned range [base, base+block_width(dim)) is reserved
 /// - heap/data in that block are zero-initialized
-fn alloc_block<T: NumberElement>(mem: &mut SparseTreeMemory<T>, dim: u32) -> u32 {
+fn alloc_block<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, dim: u32) -> u32 {
     alloc_slots(mem, block_width(dim))
 }
 
 /// Reset to the root-only state.
-pub fn reset<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout) {
+pub fn reset<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout) {
     validate_layout(layout);
 
     let root_width = block_width(layout.dim);
@@ -194,7 +194,7 @@ pub fn reset<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseTre
 }
 
 /// Reset the tree and fill the root block with one uniform value.
-pub fn fill<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, val: T) {
+pub fn fill<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, val: T) {
     reset(mem, layout);
     mem.data.as_mut_slice()[..mem.head as usize].fill(val);
 }
@@ -226,7 +226,7 @@ where
 ///
 /// Return value:
 /// - always one concrete slot, never a block base for the next level unless target landed there
-pub fn resolve<K: PVecTraits, T: NumberElement>(mem: &SparseTreeMemory<T>, layout: &SparseTreeLayout, key: K::V, target_shift: i32, root: u32) -> u32
+pub fn resolve<K: PVecTraits, T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, layout: &SparseTreeLayout, key: K::V, target_shift: i32, root: u32) -> u32
 where
     K::V: Copy,
 {
@@ -266,7 +266,7 @@ where
 }
 
 /// Read one leaf value from the tree.
-pub fn get<K: PVecTraits, T: NumberElement>(mem: &SparseTreeMemory<T>, layout: &SparseTreeLayout, key: K::V, root: u32) -> T
+pub fn get<K: PVecTraits, T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, layout: &SparseTreeLayout, key: K::V, root: u32) -> T
 where
     K::V: Copy,
 {
@@ -295,7 +295,7 @@ where
 /// Traversal invariant:
 /// - `base` is always the current child-block base
 /// - `slot` is the selected child entry inside that block
-pub fn set<K: PVecTraits, T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, key: K::V, val: T, target_shift: i32, root: u32)
+pub fn set<K: PVecTraits, T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, key: K::V, val: T, target_shift: i32, root: u32)
 where
     K::V: Copy,
 {
@@ -321,8 +321,8 @@ where
             if mem.heap[slot] & NODE_MSB == 0 && mem.data[slot] == val {
                 return;
             }
-            mem.heap.put(slot, 0);
-            mem.data.put(slot, val);
+            mem.heap[slot] = 0;
+            mem.data[slot] = val;
             return;
         }
 
@@ -341,7 +341,7 @@ where
         let next_base = alloc_block(mem, layout.dim);
         let was = mem.data[slot];
         mem.data.as_mut_slice()[next_base as usize..(next_base + width) as usize].fill(was);
-        mem.heap.put(slot, next_base | NODE_MSB);
+        mem.heap[slot] = next_base | NODE_MSB;
         base = next_base;
         u -= 1;
     }
@@ -354,7 +354,7 @@ where
 /// Root invariant:
 /// - the sparse-tree root is one top-level child block, not one scalar node
 /// - therefore the final returned root must be a block base whose block width is (1 << dim)
-pub fn build<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, leaves: &[T]) -> u32 {
+pub fn build<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, leaves: &[T]) -> u32 {
     validate_layout(layout);
 
     let width = block_width(layout.dim);
@@ -400,10 +400,10 @@ pub fn build<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseTre
             }
 
             if uniform {
-                mem.data.put(parent_slot, first);
-                mem.heap.put(parent_slot, 0);
+                mem.data[parent_slot] = first;
+                mem.heap[parent_slot] = 0;
             } else {
-                mem.heap.put(parent_slot, child_base as u32 | NODE_MSB);
+                mem.heap[parent_slot] = child_base as u32 | NODE_MSB;
             }
         }
 
@@ -415,7 +415,7 @@ pub fn build<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseTre
 }
 
 /// Append one raw child block.
-pub fn append<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, vals: &[T]) -> u32 {
+pub fn append<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, vals: &[T]) -> u32 {
     validate_layout(layout);
 
     let width = block_width(layout.dim);
@@ -433,7 +433,7 @@ pub fn append<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseTr
 /// Reconstruct dense leaf values from a sparse subtree.
 /// dim=2 is row-major with x contiguous.
 /// dim=3 is slab-major [z][y][x] with x contiguous inside each row.
-pub fn dense<K: PVecTraits, T: NumberElement>(mem: &SparseTreeMemory<T>, layout: &SparseTreeLayout, root: u32) -> TypedArray<T>
+pub fn dense<K: PVecTraits, T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, layout: &SparseTreeLayout, root: u32) -> Box<[T]>
 where
     K::V: Copy,
 {
@@ -445,18 +445,18 @@ where
     let plane = side * side;
     let total = if layout.dim == 2 { plane } else { plane * side };
 
-    let out = TypedArray::<T>::new(total as usize);
+    let mut out = vec![T::default(); total as usize];
 
     if layout.dim == 2 {
         let mut i = 0;
         for y in 0..side {
             for x in 0..side {
                 let key = K::gather(x as i64, y as i64, 0);
-                out.put(i, get::<K, T>(mem, layout, key, root));
+                out[i] = get::<K, T>(mem, layout, key, root);
                 i += 1;
             }
         }
-        return out;
+        return out.into_boxed_slice();
     }
 
     let mut i = 0;
@@ -464,12 +464,12 @@ where
         for y in 0..side {
             for x in 0..side {
                 let key = K::gather(x as i64, y as i64, z as i64);
-                out.put(i, get::<K, T>(mem, layout, key, root));
+                out[i] = get::<K, T>(mem, layout, key, root);
                 i += 1;
             }
         }
     }
-    out
+    out.into_boxed_slice()
 }
 
 // ============ Traversal (Enumerate) ============
@@ -483,7 +483,7 @@ where
 /// leaves), so a caller building a sparse "list of occupied regions" view
 /// (e.g. one render/placement record per uniform block) never has to
 /// re-detect uniformity itself the way `dense()`-then-rescan would.
-pub fn walk<T: NumberElement>(mem: &SparseTreeMemory<T>, layout: &SparseTreeLayout, visit: &mut dyn FnMut(i32, i32, i32, i32, T), root: u32) {
+pub fn walk<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, layout: &SparseTreeLayout, visit: &mut dyn FnMut(i32, i32, i32, i32, T), root: u32) {
     validate_layout(layout);
     let dep = layout.max - layout.min;
     let width = block_width(layout.dim);
@@ -516,7 +516,7 @@ pub fn walk<T: NumberElement>(mem: &SparseTreeMemory<T>, layout: &SparseTreeLayo
 }
 
 #[allow(clippy::too_many_arguments)]
-fn _walk<T: NumberElement>(mem: &SparseTreeMemory<T>, dim: u32, min: i32, base: u32, u: i32, x: i32, y: i32, z: i32, visit: &mut dyn FnMut(i32, i32, i32, i32, T)) {
+fn _walk<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, dim: u32, min: i32, base: u32, u: i32, x: i32, y: i32, z: i32, visit: &mut dyn FnMut(i32, i32, i32, i32, T)) {
     let width = block_width(dim);
 
     for c in 0..width {
@@ -541,13 +541,13 @@ fn _walk<T: NumberElement>(mem: &SparseTreeMemory<T>, dim: u32, min: i32, base: 
 // ============ Maintenance (Pack) ============
 
 /// What `compact` hands back: the memory, and its root base (0).
-pub struct Compacted<T: NumberElement> {
+pub struct Compacted<T: Copy + Default + PartialEq> {
     pub mem: SparseTreeMemory<T>,
     pub root: u32,
 }
 
 /// Compact the tree by pruning redundant nodes and relocating live blocks.
-pub fn compact<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, root: u32) -> Compacted<T> {
+pub fn compact<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, root: u32) -> Compacted<T> {
     validate_layout(layout);
 
     let width = block_width(layout.dim);
@@ -556,7 +556,7 @@ pub fn compact<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseT
 
     let mut new_mem = alloc::<T>(layout.dim, mem.head);
 
-    fn relocate<T: NumberElement>(mem: &SparseTreeMemory<T>, new_mem: &mut SparseTreeMemory<T>, dim: u32, width: u32, old_base: u32, new_base: u32) {
+    fn relocate<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, new_mem: &mut SparseTreeMemory<T>, dim: u32, width: u32, old_base: u32, new_base: u32) {
         for i in 0..width {
             let old_slot = (old_base + i) as usize;
             let new_slot = (new_base + i) as usize;
@@ -566,10 +566,10 @@ pub fn compact<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseT
                 let child_base = node & BLOCK_MASK;
                 let next_base = alloc_block(new_mem, dim);
 
-                new_mem.heap.put(new_slot, next_base | NODE_MSB);
+                new_mem.heap[new_slot] = next_base | NODE_MSB;
                 relocate(mem, new_mem, dim, width, child_base, next_base);
             } else {
-                new_mem.data.put(new_slot, mem.data[old_slot]);
+                new_mem.data[new_slot] = mem.data[old_slot];
             }
         }
     }
@@ -578,8 +578,9 @@ pub fn compact<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseT
 
     let mut compacted = alloc::<T>(layout.dim, new_mem.head);
 
-    compacted.heap.set(&new_mem.heap.subarray(0, new_mem.head as usize));
-    compacted.data.set(&new_mem.data.subarray(0, new_mem.head as usize));
+    let used = new_mem.head as usize;
+    compacted.heap[..used].copy_from_slice(&new_mem.heap[..used]);
+    compacted.data[..used].copy_from_slice(&new_mem.data[..used]);
     compacted.head = new_mem.head;
 
     Compacted { mem: compacted, root: 0 }
@@ -590,7 +591,7 @@ pub fn compact<T: NumberElement>(mem: &mut SparseTreeMemory<T>, layout: &SparseT
 /// Return:
 /// - uniform leaf value if the whole block can collapse into one value
 /// - null otherwise
-fn _prune<T: NumberElement>(mem: &mut SparseTreeMemory<T>, base: u32, dep: i32, width: u32) -> Option<T> {
+fn _prune<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, base: u32, dep: i32, width: u32) -> Option<T> {
     if dep == 0 {
         return None;
     }
@@ -608,8 +609,8 @@ fn _prune<T: NumberElement>(mem: &mut SparseTreeMemory<T>, base: u32, dep: i32, 
             let child_val = _prune(mem, child_base, dep - 1, width);
 
             if let Some(child_val) = child_val {
-                mem.heap.put(slot, 0);
-                mem.data.put(slot, child_val);
+                mem.heap[slot] = 0;
+                mem.data[slot] = child_val;
                 val = Some(child_val);
             } else {
                 uniform = false;
@@ -632,7 +633,7 @@ fn _prune<T: NumberElement>(mem: &mut SparseTreeMemory<T>, base: u32, dep: i32, 
 
 // ============ Memory I/O ============
 
-fn total_nbyte<T: NumberElement>(mem: &SparseTreeMemory<T>, data_bpe: u32) -> u32 {
+fn total_nbyte<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, data_bpe: u32) -> u32 {
     let hdr_nbyte = WORD_SZ; // [head(u32) | reserved(u32)]
 
     let used = mem.head;
@@ -642,17 +643,20 @@ fn total_nbyte<T: NumberElement>(mem: &SparseTreeMemory<T>, data_bpe: u32) -> u3
     hdr_nbyte + heap_nbyte + data_nbyte
 }
 
-pub fn encode<T: NumberElement>(mem: &SparseTreeMemory<T>) -> U64Array {
-    let data_bpe = T::BYTES_PER_ELEMENT as u32;
+pub fn encode<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>) -> Vec<u64> {
+    let data_bpe = core::mem::size_of::<T>() as u32;
     let total = total_nbyte(mem, data_bpe);
 
-    let buf: U8Array = TypedArray::new(total as usize);
-    write_mem(mem, &buf);
-
-    TypedArray::over(buf.buffer().clone(), buf.byte_offset(), (total >> 3) as usize)
+    // The blob is words on the wire, so it is allocated as words and written
+    // as the bytes they are.
+    let mut words = vec![0u64; (total >> 3) as usize];
+    // SAFETY: the words' own bytes, which `total` is the length of.
+    let buf = unsafe { core::slice::from_raw_parts_mut(words.as_mut_ptr() as *mut u8, total as usize) };
+    write_mem(mem, buf);
+    words
 }
 
-fn write_mem<T: NumberElement>(mem: &SparseTreeMemory<T>, buf: &U8Array) -> u32 {
+fn write_mem<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, buf: &mut [u8]) -> u32 {
     let used = mem.head;
 
     let mut off: u32 = 0;
@@ -661,14 +665,12 @@ fn write_mem<T: NumberElement>(mem: &SparseTreeMemory<T>, buf: &U8Array) -> u32 
     off += WORD_SZ;
 
     let heap_nbyte = used << 2;
-    let heap_buf: U8Array = TypedArray::over(mem.heap.buffer().clone(), mem.heap.byte_offset(), heap_nbyte as usize);
-    buf.set_at(&heap_buf, off as usize);
+    buf[off as usize..(off + heap_nbyte) as usize].copy_from_slice(bytes_of(&mem.heap[..used as usize]));
     off += ALIGN(heap_nbyte, WORD_SZ).unwrap();
 
-    let data_bpe = T::BYTES_PER_ELEMENT as u32;
+    let data_bpe = core::mem::size_of::<T>() as u32;
     let data_nbyte = used * data_bpe;
-    let data_buf: U8Array = TypedArray::over(mem.data.buffer().clone(), mem.data.byte_offset(), data_nbyte as usize);
-    buf.set_at(&data_buf, off as usize);
+    buf[off as usize..(off + data_nbyte) as usize].copy_from_slice(bytes_of(&mem.data[..used as usize]));
     off += ALIGN(data_nbyte, WORD_SZ).unwrap();
 
     off
@@ -683,12 +685,25 @@ fn aligned_word(nbyte: u64) -> u64 {
     }
 }
 
-pub fn decode<T: NumberElement>(buf64: &U64Array) -> SparseTreeMemory<T> {
-    let buf: U8Array = TypedArray::over(buf64.buffer().clone(), buf64.byte_offset(), buf64.byte_length());
-    read_mem::<T>(&buf).0
+pub fn decode<T: Copy + Default + PartialEq>(buf64: &[u64]) -> SparseTreeMemory<T> {
+    // SAFETY: the blob's own bytes, which are what it was written as.
+    let buf = unsafe { core::slice::from_raw_parts(buf64.as_ptr() as *const u8, buf64.len() * 8) };
+    read_mem::<T>(buf).0
 }
 
-fn read_mem<T: NumberElement>(buf: &U8Array) -> (SparseTreeMemory<T>, u32) {
+/// A lane's elements as the bytes they lie in.
+fn bytes_of_mut<T: Copy>(a: &mut [T]) -> &mut [u8] {
+    // SAFETY: as `bytes_of`.
+    unsafe { core::slice::from_raw_parts_mut(a.as_mut_ptr() as *mut u8, core::mem::size_of_val(a)) }
+}
+
+/// A lane's elements as the bytes they lie in.
+fn bytes_of<T: Copy>(a: &[T]) -> &[u8] {
+    // SAFETY: the elements read back as bytes, which is what the blob holds.
+    unsafe { core::slice::from_raw_parts(a.as_ptr() as *const u8, core::mem::size_of_val(a)) }
+}
+
+fn read_mem<T: Copy + Default + PartialEq>(buf: &[u8]) -> (SparseTreeMemory<T>, u32) {
     // The sizes are the blob's word times an element, and the blob may be
     // anything: they are summed in u64 so a large count cannot wrap back
     // under the buffer's length.
@@ -700,22 +715,20 @@ fn read_mem<T: NumberElement>(buf: &U8Array) -> (SparseTreeMemory<T>, u32) {
     off += aligned_word(used as u64 * 4);
 
     let data_off = off;
-    let data_bpe = T::BYTES_PER_ELEMENT as u32;
+    let data_bpe = core::mem::size_of::<T>() as u32;
     off += aligned_word(used as u64 * data_bpe as u64);
 
-    if off > buf.byte_length() as u64 {
+    if off > buf.len() as u64 {
         panic!("sparse_tree: truncated buffer");
     }
     let (data_off, off) = (data_off as u32, off as u32);
 
-    let buffer: ArrayBuffer = buf.buffer().clone();
-    let heap: U32Array = TypedArray::over(buffer.clone(), buf.byte_offset() + heap_off as usize, used as usize);
-
-    let data: TypedArray<T> = if (buf.byte_offset() + data_off as usize).is_multiple_of(data_bpe as usize) {
-        TypedArray::over(buffer.clone(), buf.byte_offset() + data_off as usize, used as usize)
-    } else {
-        copy_ab_view::<T>(&buffer, (buf.byte_offset() + data_off as usize) as u32, used)
-    };
+    // Copied rather than read where they lie: the memory grows, and a grow
+    // reallocates what a view would have pointed into.
+    let mut heap = vec![0u32; used as usize];
+    let mut data = vec![T::default(); used as usize];
+    bytes_of_mut(&mut heap).copy_from_slice(&buf[heap_off as usize..heap_off as usize + used as usize * 4]);
+    bytes_of_mut(&mut data).copy_from_slice(&buf[data_off as usize..data_off as usize + used as usize * data_bpe as usize]);
 
     let mem = SparseTreeMemory { heap, data, head: used, cap: used };
 

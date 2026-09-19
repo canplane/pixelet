@@ -45,7 +45,7 @@
  * declared to the central scheduler, not chosen here.
  */
 
-import type { f64 } from "@xpute/core/kit/word.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
 
 export const FRAME_WINDOW = 64;
 const MAX_FRAME_GAP_MS = 50;

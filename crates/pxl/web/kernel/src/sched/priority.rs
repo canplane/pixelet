@@ -21,7 +21,8 @@
 //! order itself is the scheduler's (crates/pxl/web/kernel/src/world/chunk/table.rs); the
 //! lead point it orders by is worked out here.
 
-use xpute_core::kit::mat4::{Mat4, Vec3};
+use xpute_core::math::mat4::Mat4;
+use xpute_core::math::vec3::Vec3;
 
 /// The camera position the view is heading to, in the view frame.
 ///

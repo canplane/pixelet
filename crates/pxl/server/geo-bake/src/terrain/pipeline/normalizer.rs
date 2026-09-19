@@ -6,11 +6,8 @@
 //! the same geometry projection and closure-detection code instead of
 //! duplicating it.
 //!
-//! The TypeScript allocates its projected vectors out of a module-level
-//! arena. That arena exists to keep a per-page burst of small objects off
-//! JavaScript's heap; a `V3` here is `[f64; 3]` by value, so a `Vec` of them
-//! is the same shape without the machinery, and the numbers it produces are
-//! identical either way.
+//! A projected vector is a `V3`, `[f64; 3]` by value, and a page's burst of
+//! them is one `Vec`.
 
 use pxl_spec::bake::constant::XY_CELL_PER_M;
 use pxl_spec::bake::format::CellConfig;
@@ -47,9 +44,8 @@ fn project_to_local_cell(src: G3857, page_min: G3857) -> V3 {
 
 /// Converts a raw 3857-space feature into the final local normalized feature.
 ///
-/// `None` where the TypeScript throws: a feature with no points at all. The
-/// caller drops it, which is what the thrown error did to the page one level
-/// up — except that here it costs the one feature rather than the page.
+/// `None` for a feature with no points at all; the caller drops that one
+/// feature and keeps the page.
 pub fn normalize<F: RawFeature, P: NormalizePolicy<F>>(raw_feat: &F, page_min: G3857, page_z_scale: f64, policy: &P) -> Option<Feature> {
     let points = raw_feat.points();
     let holes = raw_feat.holes();

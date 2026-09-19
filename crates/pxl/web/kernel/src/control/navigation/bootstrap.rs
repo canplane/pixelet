@@ -1,13 +1,13 @@
 // pxl-kernel/control/navigation/bootstrap.rs
 
 use pxl_spec::space::adapter::epsg4326::{self, G4326};
-use pxl_spec::space::pvf3::pvf3::{self, PVF3};
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 
 use crate::control::navigation::store::map_navigation;
 use crate::control::sensor::store::{device_location_store, DevicePoseStatus};
+use crate::global::Global;
 use crate::layer::terrain::elevation::ground_pivot;
 use crate::shell::map_store::map_store;
-use crate::sys::global::Global;
 
 // Seoul City Hall — the approximate coordinate used when GPS genuinely never
 // comes up (permission denied, no signal, timeout, unsupported browser),
@@ -22,22 +22,22 @@ use crate::sys::global::Global;
 /// clock's day-or-night — so it is one constant and they read it.
 pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 
-fn fallback_seed() -> PVF3 {
-    let mut out = PVF3::default();
+fn fallback_seed() -> Pvf3 {
+    let mut out = Pvf3::default();
     epsg4326::project(&mut out, &FALLBACK_G4326);
     out
 }
 
-fn is_at(a: &PVF3, b: &PVF3) -> bool {
+fn is_at(a: &Pvf3, b: &Pvf3) -> bool {
     pvf3::X(a) == pvf3::X(b) && pvf3::Y(a) == pvf3::Y(b)
 }
 
 struct Bootstrap {
     /// The inputs as last seen.
-    last: Option<(Option<PVF3>, DevicePoseStatus)>,
+    last: Option<(Option<Pvf3>, DevicePoseStatus)>,
     /// A seed set and not yet grounded: retried each turn until the ground
     /// under it has arrived.
-    pending: Option<PVF3>,
+    pending: Option<Pvf3>,
 }
 
 static BOOTSTRAP: Global<Bootstrap> = Global::new();
@@ -59,7 +59,7 @@ pub fn map_bootstrap_step() {
         let fallback = fallback_seed();
         let seed = match device_coord {
             Some(device) => {
-                let mut s = PVF3::default();
+                let mut s = Pvf3::default();
                 pvf3::gather(&mut s, pvf3::X(&device), pvf3::Y(&device), 0);
                 Some(s)
             }

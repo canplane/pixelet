@@ -13,15 +13,16 @@
 //! A topic listener hears every changed key of its topic instead, once per
 //! key per pump, and null when the pump was lost — its filter is its own.
 //!
-//! The TypeScript's `subscribe` returns the unsubscribe closure; a closure
-//! cannot hold the waker mutably here, so it returns a `Subscription` that
-//! `unsubscribe` takes. The waker holds the journal with whoever writes it.
+//! `subscribe` returns a `Subscription` that `unsubscribe` takes, since a
+//! closure could not hold the waker mutably. The waker holds the journal
+//! with whoever writes it.
 
 use core::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
-use xpute_core::ds::arena::{ArenaOptions, Vector};
-use xpute_core::ds::map::{I64Keys, IndexedMap, I64_KEYS};
+use fnv::FnvBuildHasher;
+use indexmap::IndexSet;
 
 use super::change::{ChangeJournal, Cursor, Topic};
 
@@ -43,13 +44,13 @@ pub struct ChangeWaker<J: ChangeJournal> {
     pumps: u32,
     /// Per topic: the keys listened to, their listeners, and the pump that
     /// last woke each, so a key bumped twice in one span wakes once.
-    keys: Vec<IndexedMap<I64Keys>>,
+    keys: Vec<IndexSet<i64, FnvBuildHasher>>,
     lists: Vec<Vec<Vec<(u32, Listener)>>>,
-    woken: Vec<Vector<u32>>,
+    woken: Vec<Vec<u32>>,
     /// Per topic: whole-topic listeners, and the keys already given to them
     /// this pump.
     topic_lists: Vec<Vec<(u32, TopicListener)>>,
-    topic_seen: Vec<IndexedMap<I64Keys>>,
+    topic_seen: Vec<HashSet<i64, FnvBuildHasher>>,
     next_id: u32,
 }
 
@@ -71,23 +72,20 @@ impl<J: ChangeJournal> ChangeWaker<J> {
             next_id: 0,
         };
         for _ in 0..topics {
-            waker.keys.push(IndexedMap::new(I64_KEYS, 16));
+            waker.keys.push(IndexSet::with_capacity_and_hasher(16, FnvBuildHasher::default()));
             waker.lists.push(Vec::new());
-            waker.woken.push(Vector::new(ArenaOptions {
-                init_cap: Some(16),
-                ..Default::default()
-            }));
+            waker.woken.push(Vec::with_capacity(16));
             waker.topic_lists.push(Vec::new());
-            waker.topic_seen.push(IndexedMap::new(I64_KEYS, 64));
+            waker.topic_seen.push(HashSet::with_capacity_and_hasher(64, FnvBuildHasher::default()));
         }
         waker
     }
 
     pub fn subscribe(&mut self, topic: Topic, key: i64, listener: Listener) -> Subscription {
         let t = topic as usize;
-        let pos = self.keys[t].insert(key) as usize;
-        if pos == self.woken[t].len() as usize {
-            self.woken[t].push(0).expect("waker: a woken lane past its cap");
+        let (pos, _) = self.keys[t].insert_full(key);
+        if pos == self.woken[t].len() {
+            self.woken[t].push(0);
         }
         if self.lists[t].len() <= pos {
             self.lists[t].resize_with(pos + 1, Vec::new);
@@ -113,25 +111,22 @@ impl<J: ChangeJournal> ChangeWaker<J> {
             self.topic_lists[t].retain(|(id, _)| *id != sub.id);
             return;
         };
-        let p = self.keys[t].find(key);
-        if p < 0 {
-            return;
-        }
-        let p = p as usize;
+        let Some(p) = self.keys[t].get_index_of(&key) else { return };
         self.lists[t][p].retain(|(id, _)| *id != sub.id);
         if !self.lists[t][p].is_empty() {
             return;
         }
-        let from = self.keys[t].remove_at(p as u32) as usize;
+        // The last position moves into the hole; the lanes follow it.
+        let from = self.keys[t].len() - 1;
+        self.keys[t].swap_remove_index(p);
         if from != p {
             let moved = self.lists[t].swap_remove(from);
             self.lists[t][p] = moved;
-            let w = self.woken[t].get(from as u32);
-            self.woken[t].set(p as u32, w).expect("waker: a woken lane past its cap");
+            self.woken[t][p] = self.woken[t][from];
         } else {
             self.lists[t].truncate(from);
         }
-        self.woken[t].truncate(from as u32);
+        self.woken[t].truncate(from);
     }
 
     /// Wakes the listeners of every key changed since the last pump. Returns
@@ -147,8 +142,8 @@ impl<J: ChangeJournal> ChangeWaker<J> {
         let readable = self.log.borrow().readable(self.cursor);
         if !readable {
             for t in 0..self.lists.len() {
-                for p in 0..self.keys[t].size() {
-                    ran += self.wake(t as Topic, p, pump);
+                for p in 0..self.keys[t].len() {
+                    ran += self.wake(t as Topic, p as u32, pump);
                 }
                 for (_, listener) in self.topic_lists[t].iter_mut() {
                     listener(None);
@@ -165,18 +160,12 @@ impl<J: ChangeJournal> ChangeWaker<J> {
                     let i = log.slot(c) as usize;
                     (log.topic()[i] as usize, log.key()[i])
                 };
-                let p = self.keys[t].find(key);
-                if p >= 0 {
+                if let Some(p) = self.keys[t].get_index_of(&key) {
                     ran += self.wake(t as Topic, p as u32, pump);
                 }
-                if self.topic_lists[t].is_empty() {
+                if self.topic_lists[t].is_empty() || !self.topic_seen[t].insert(key) {
                     continue;
                 }
-                let seen = &mut self.topic_seen[t];
-                if seen.find(key) >= 0 {
-                    continue;
-                }
-                seen.insert(key);
                 for (_, listener) in self.topic_lists[t].iter_mut() {
                     listener(Some(key));
                     ran += 1;
@@ -189,13 +178,12 @@ impl<J: ChangeJournal> ChangeWaker<J> {
 
     fn wake(&mut self, topic: Topic, pos: u32, pump: u32) -> u32 {
         let woken = &mut self.woken[topic as usize];
-        if woken.get(pos) == pump {
+        if woken[pos as usize] == pump {
             return 0;
         }
-        woken.set(pos, pump).expect("waker: a woken lane past its cap");
-        // A listener may unsubscribe as it runs; the TypeScript walks a copy
-        // of the list. Here the list is borrowed for the walk, and an
-        // unsubscribe is a call on the waker after it.
+        woken[pos as usize] = pump;
+        // The list is borrowed for the walk, so a listener cannot unsubscribe
+        // as it runs: an unsubscribe is a call on the waker after it.
         let list = &mut self.lists[topic as usize][pos as usize];
         for (_, listener) in list.iter_mut() {
             listener();

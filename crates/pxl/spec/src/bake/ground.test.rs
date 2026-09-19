@@ -8,7 +8,7 @@ use super::*;
 const GOLDEN: &str = include_str!("../../golden/bake/ground.tsv");
 
 #[test]
-fn shown_ground_is_what_the_typescript_shows() {
+fn shown_ground_is_what_the_record_holds() {
     let v = Golden::load(GOLDEN);
     assert_eq!(LAND_BASE_TYPE, v.u32("LAND_BASE_TYPE"));
     v.each("shown", |k| {

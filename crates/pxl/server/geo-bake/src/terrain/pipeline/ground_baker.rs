@@ -8,22 +8,20 @@
 //! - the raster contract is driven by the baked ground constants
 //!
 //! The channels are built as plain `Vec<u8>` and handed to `Ground` at the
-//! end. The TypeScript writes into the typed arrays directly because that is
-//! what it has; here the buffer is reference-counted and this is the one place
-//! that touches every cell of a page.
+//! end: the buffer is reference-counted, and this is the one place that
+//! touches every cell of a page.
 //!
 //! Row and column bounds are computed in `f64` and carried as `i64`, not as
-//! the unsigned indices they end up being. That is the arithmetic the
-//! TypeScript does: a bound below zero or past the page leaves a loop that
-//! simply does not run, and the same expression in `u32` would wrap into a
-//! very long one.
+//! the unsigned indices they end up being: a bound below zero or past the
+//! page leaves a loop that simply does not run, where the same expression in
+//! `u32` would wrap into a very long one.
 
 use pxl_spec::bake::constant::PAGE_CELL_SPAN;
 use pxl_spec::bake::format::{Ground, GroundChannelKey};
 use pxl_spec::bake::model::feature::Feature;
 use pxl_spec::cell::cube::cube_types;
 use pxl_spec::space::v3::V3;
-use xpute_core::kit::array::U8Array;
+use xpute_core::math::scalar::round;
 
 const PAGE_CELL_SPAN2: usize = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
 const SPAN: i64 = PAGE_CELL_SPAN as i64;
@@ -46,7 +44,7 @@ fn cell_idx(x: i64, y: i64) -> usize {
 /// How a pass reads the sea mask. Water and land overlays must not paint over
 /// true sea cells, and the land channel is the mask for both — which for a
 /// land feature means the mask is the buffer being written, read as it is
-/// written, exactly as the TypeScript reads `ground.land` while writing it.
+/// written.
 #[derive(Clone, Copy)]
 enum Mask<'a> {
     None,
@@ -73,8 +71,8 @@ pub fn bake_ground(elements: &[Feature], has_coast_row: bool) -> Ground {
 
     let sea_feats: Vec<&Feature> = elements.iter().filter(|f| f.extra.is_ocean).collect();
     let mut other_feats: Vec<&Feature> = elements.iter().filter(|f| !f.extra.is_ocean).collect();
-    // Stable, as the TypeScript's own sort is: features of equal rank keep the
-    // order their rows arrived in, and that order decides what paints over what.
+    // Stable: features of equal rank keep the order their rows arrived in,
+    // and that order decides what paints over what.
     other_feats.sort_by_key(|f| f.extra.rank);
     let has_sea = !sea_feats.is_empty();
 
@@ -121,10 +119,10 @@ pub fn bake_ground(elements: &[Feature], has_coast_row: bool) -> Ground {
     }
 
     Ground {
-        land: U8Array::from(&land),
-        water: U8Array::from(&water),
-        structure: U8Array::from(&structure),
-        transport: U8Array::from(&transport),
+        land: land.into(),
+        water: water.into(),
+        structure: structure.into(),
+        transport: transport.into(),
     }
 }
 
@@ -236,7 +234,7 @@ fn render_linear_feat(points: &[V3], value: u8, target: &mut [u8], width_cell: f
         return;
     }
 
-    let thickness = (width_cell * 0.5).round().max(1.0) as i64;
+    let thickness = round(width_cell * 0.5).max(1.0) as i64;
 
     for i in 0..points.len() - 1 {
         let p1 = points[i];
@@ -273,7 +271,7 @@ fn render_linear_feat(points: &[V3], value: u8, target: &mut [u8], width_cell: f
 }
 
 /// Collect scanline edge intersections in tile pixel space. `j` trails `i` by
-/// one around the ring, as the TypeScript's own `j = i++` leaves it.
+/// one around the ring.
 fn find_intersections(nodes: &[V3], y: i64, out: &mut Vec<f64>) {
     if nodes.is_empty() {
         return;

@@ -11,13 +11,13 @@ use pxl_spec::bake::format::GROUND_CH_KEYS;
 use pxl_spec::cell::{cube_colors, cube_types};
 use pxl_spec::space::indexer::{FROM_L3_IDX, L3_CENTER, L3_IDX, L3_RANGE};
 use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pvf3::pvf3::{self, PVF3};
-use xpute_core::kit::math::clamp;
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
+use xpute_core::math::scalar::clamp;
 
 use crate::control::camera::config::camera_cfg::view::DEFAULT_DIST;
+use crate::global::Global;
 use crate::layer::terrain::store::tile_pages;
 use crate::shell::map_store::map_store;
-use crate::sys::global::Global;
 
 const ATLAS_PAGE_PX: u32 = 64;
 const SAMPLE_STRIDE: u32 = PAGE_CELL_SPAN / ATLAS_PAGE_PX;
@@ -63,16 +63,16 @@ fn colors() -> Colors {
     Colors { base, by_channel }
 }
 
-fn page_rel_u(page_idx: IVec, origin: &PVF3) -> (f64, f64) {
-    let mut delta = PVF3::default();
-    pvf3::sub(&mut delta, &PVF3 { i: FROM_L3_IDX(page_idx), f: 0 }, origin);
+fn page_rel_u(page_idx: IVec, origin: &Pvf3) -> (f64, f64) {
+    let mut delta = Pvf3::default();
+    pvf3::sub(&mut delta, &Pvf3 { i: FROM_L3_IDX(page_idx), f: 0 }, origin);
     (pvf3::to_real(pvf3::X(&delta)), pvf3::to_real(pvf3::Y(&delta)))
 }
 
 pub struct MinimapAtlas {
     /// ATLAS_PX² RGBA pixels, north up.
     pub pixels: Vec<u8>,
-    pub origin: PVF3,
+    pub origin: Pvf3,
     /// Moves on every rebake, so the shell uploads once per image.
     pub revision: u32,
 }
@@ -96,7 +96,7 @@ pub fn minimap_atlas() -> Option<&'static MinimapAtlas> {
     let key = (tile_pages().revision(), L3_IDX(map_center.i));
     if a.baked_for != Some(key) {
         a.baked_for = Some(key);
-        let origin = PVF3 { i: L3_CENTER(map_center.i), f: 0 };
+        let origin = Pvf3 { i: L3_CENTER(map_center.i), f: 0 };
         let mut pixels = vec![0u8; (ATLAS_PX * ATLAS_PX * 4) as usize];
         for px in pixels.chunks_exact_mut(4) {
             px.copy_from_slice(&[a.colors.base[0], a.colors.base[1], a.colors.base[2], 255]);
@@ -120,7 +120,7 @@ pub fn minimap_atlas() -> Option<&'static MinimapAtlas> {
                     let off = (cy * PAGE_CELL_SPAN + sx * SAMPLE_STRIDE) as usize;
                     let mut color = a.colors.base;
                     for (slot, ch) in GROUND_CH_KEYS.iter().enumerate() {
-                        let v = ground.get(*ch).get(off);
+                        let v = ground.get(*ch)[off];
                         if v == 0 {
                             continue;
                         }
@@ -143,8 +143,8 @@ pub fn minimap_atlas() -> Option<&'static MinimapAtlas> {
     a.image.as_ref()
 }
 
-pub fn minimap_pan_px(map_center: &PVF3, origin: &PVF3) -> (f64, f64) {
-    let mut delta = PVF3::default();
+pub fn minimap_pan_px(map_center: &Pvf3, origin: &Pvf3) -> (f64, f64) {
+    let mut delta = Pvf3::default();
     pvf3::sub(&mut delta, map_center, origin);
     (-pvf3::to_real(pvf3::X(&delta)) * MINIMAP_PX_PER_U, pvf3::to_real(pvf3::Y(&delta)) * MINIMAP_PX_PER_U)
 }

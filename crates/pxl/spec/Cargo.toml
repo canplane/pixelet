@@ -8,7 +8,10 @@ publish.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+fnv.workspace = true
+libm.workspace = true
 xpute-core = { path = "../../xpute/core" }
 
 [dev-dependencies]
+hex.workspace = true
 xpute-core = { path = "../../xpute/core", features = ["golden"] }

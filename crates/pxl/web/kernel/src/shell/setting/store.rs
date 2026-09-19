@@ -17,11 +17,11 @@
 //! Stored as `{"state":{"overrides":{…}},"version":0}`, the shape settings
 //! already sit in in a browser's storage.
 
-use xpute_core::kit::json::{read_json, Quoted};
+use xpute_core::codec::json::{read_json, Quoted};
 
+use crate::global::Global;
+use crate::host::{storage_get, storage_set};
 use crate::shell::setting::schema::{is_valid_setting, SettingKey, SettingRef, SettingValue, DEFAULT_SETTINGS};
-use crate::sys::global::Global;
-use crate::sys::host::{storage_get, storage_set};
 use crate::world::chunk::node::chunk_sources_changed;
 
 const STORAGE_KEY: &str = "pxl:settings";

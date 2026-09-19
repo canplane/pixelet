@@ -21,22 +21,24 @@
 //! candidate per tick.
 
 use core::cell::Cell;
+use std::collections::HashSet;
 
+use fnv::FnvBuildHasher;
 use pxl_spec::bake::format::PoiPage;
 use pxl_spec::space::indexer::{FROM_L3_IDX, L3_IDX, L3_RANGE};
+use pxl_spec::space::lattice::spatial_hash::SpatialHash;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::PVF3;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 use pxl_spec::space::xy::TO_XY;
-use xpute_core::ds::map::{I64Keys, IndexedMap};
-use xpute_core::ds::spatial_hash::SpatialHash;
 
+use crate::global::Global;
+use crate::host::now;
 use crate::layer::billboard::distance_fade::fade_end_u;
 use crate::layer::poi::badge::evict_poi_badges;
 use crate::layer::poi::store::poi_pages;
 use crate::layer::terrain::elevation::with_ele;
 use crate::sched::tick::FrameBudget;
-use crate::sys::global::{now, Global};
 
 /// How far out this keeps POI, as a multiple of the query reach.
 ///
@@ -153,9 +155,9 @@ impl Lanes {
 }
 
 /// Converts an absolute position into the local render frame of `origin`.
-pub type ToLocal = fn(&PVF3, IVec) -> V3;
+pub type ToLocal = fn(&Pvf3, IVec) -> V3;
 /// A record's flat position (the bake's, before grounding), absolute.
-pub type FlatPos = fn(&PoiPage, u32, IVec) -> PVF3;
+pub type FlatPos = fn(&PoiPage, u32, IVec) -> Pvf3;
 
 /// The unit of work is SWEEP_UNIT records, not a page. A page of the densest
 /// bake is over ten thousand records, and the budget's forward-progress rule
@@ -214,7 +216,7 @@ struct PoiIndex {
     max_frames: u32,
     /// The ids seen this rebuild, by their 64-bit hash — a place near a page
     /// boundary is baked into both pages. What eviction asks against, too.
-    seen: IndexedMap<I64Keys>,
+    seen: HashSet<u64, FnvBuildHasher>,
 }
 
 static INDEX: Global<PoiIndex> = Global::new();
@@ -233,7 +235,7 @@ fn index() -> &'static mut PoiIndex {
         max_wait_ms: 0.0,
         last_frames: 0,
         max_frames: 0,
-        seen: IndexedMap::new(I64Keys, CAPACITY),
+        seen: HashSet::with_capacity_and_hasher(CAPACITY as usize, FnvBuildHasher::default()),
     })
 }
 
@@ -246,7 +248,7 @@ fn index() -> &'static mut PoiIndex {
 /// A job already running is replaced only when the page set or the origin
 /// moved — a camera that keeps walking during a rebuild would otherwise
 /// restart it every frame and never finish.
-pub fn sync_poi_index(map_center: &PVF3, map_origin: IVec, to_local: ToLocal, flat_pos: FlatPos) -> bool {
+pub fn sync_poi_index(map_center: &Pvf3, map_origin: IVec, to_local: ToLocal, flat_pos: FlatPos) -> bool {
     let x = index();
     // The centre page, and where the camera sits inside it, in page-local real
     // units: a page's own POI already carry page-local centres.
@@ -355,19 +357,18 @@ fn sweep_unit(x: &mut PoiIndex) {
         // real elevation. A cylinder contains the sphere the exact test uses,
         // so admitting a few extra costs a terrain lookup each and rejects
         // nothing that should have been kept.
-        let (ox, oy) = (pois.x.get(r as usize) - px, pois.y.get(r as usize) - py);
+        let (ox, oy) = (pois.x[r as usize] - px, pois.y[r as usize] - py);
         if ox * ox + oy * oy > j.residency2 {
             continue;
         }
-        let id_hash = pois.id_hash.get(r as usize);
-        if x.seen.find(id_hash as i64) >= 0 {
-            continue;
-        }
+        let id_hash = pois.id_hash[r as usize];
         // Seen before it is refused: a record the capacity turns away is still
         // one this rebuild has met, and leaving it unseen lets the same place
         // in again from the next page it was baked into — which evicts the
         // badge the first one is already drawing.
-        x.seen.insert(id_hash as i64);
+        if !x.seen.insert(id_hash) {
+            continue;
+        }
         if lanes.count() >= CAPACITY {
             lanes.dropped += 1;
             continue;
@@ -377,7 +378,7 @@ fn sweep_unit(x: &mut PoiIndex) {
         // it at build time — and what makes the index isotropic: the query is a
         // sphere in xyz, and map_center carries the terrain height under it.
         let flat = (j.flat_pos)(pois, r, page_idx);
-        let mut ground = PVF3::default();
+        let mut ground = Pvf3::default();
         let grounded = with_ele(&mut ground, &flat);
 
         // Not snapped here. Which cell a badge stands in depends on its tier
@@ -468,7 +469,7 @@ pub fn query_poi_index(x: f64, y: f64, z: f64, radius: f64, out: &mut [u32]) -> 
 }
 
 /// A record's page, while it is resident.
-pub fn poi_page(i: u32) -> Option<&'static PoiPage> {
+pub fn poi_page(i: u32) -> Option<&'static PoiPage<'static>> {
     poi_pages().get(index().live.page_idx[i as usize]).map(|r| &r.page)
 }
 

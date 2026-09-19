@@ -15,16 +15,20 @@
 //! Eviction runs on the same trigger the index rebuild does, because it is the
 //! same event: a page leaving is exactly when a badge stops being reachable.
 
+use std::collections::HashSet;
+use std::hash::Hash;
+
+use fnv::FnvBuildHasher;
+use indexmap::IndexSet;
 use pxl_render::asset::atlas::{BillboardAtlas, DrawSpec, NO_SLOT};
 use pxl_render::gpu::surface::DPR_MAX;
 use pxl_spec::bake::format::PoiPage;
-use xpute_core::ds::map::{I64Keys, IndexedMap, U32Keys};
 
+use crate::global::Global;
+use crate::host::{measure_text, now};
 use crate::layer::billboard::canvas_scale::{FONT_FAMILY, FONT_WEIGHT_REGULAR};
 use crate::layer::billboard::sheet::billboard_sheet;
 use crate::layer::poi::theme::resolve_poi_theme;
-use crate::sys::global::{now, Global};
-use crate::sys::host::measure_text;
 
 fn font() -> String {
     format!("{FONT_WEIGHT_REGULAR} 12px {FONT_FAMILY}")
@@ -64,26 +68,26 @@ pub fn badge_atlas() -> &'static mut BillboardAtlas {
 /// What is known about each badge: its measured width, and the atlas slot it
 /// is drawn in once it has been (NO_SLOT until then). A place by its id hash, a
 /// cluster by its count.
-struct BadgeTable<K: xpute_core::ds::map::KeyTraits> {
-    index: IndexedMap<K>,
+struct BadgeTable<K> {
+    index: IndexSet<K, FnvBuildHasher>,
     logical_w: Vec<f64>,
     slot: Vec<i32>,
     /// Badges drawn in the sheet.
     built: u32,
 }
 
-impl<K: xpute_core::ds::map::KeyTraits> BadgeTable<K> {
-    fn new(traits: K) -> BadgeTable<K> {
+impl<K: Hash + Eq> BadgeTable<K> {
+    fn new() -> BadgeTable<K> {
         BadgeTable {
-            index: IndexedMap::new(traits, 256),
+            index: IndexSet::with_capacity_and_hasher(256, FnvBuildHasher::default()),
             logical_w: Vec::new(),
             slot: Vec::new(),
             built: 0,
         }
     }
 
-    fn insert(&mut self, key: K::Key, logical_w: f64) -> usize {
-        let pos = self.index.insert(key) as usize;
+    fn insert(&mut self, key: K, logical_w: f64) -> usize {
+        let (pos, _) = self.index.insert_full(key);
         if pos >= self.logical_w.len() {
             self.logical_w.resize(pos + 1, 0.0);
             self.slot.resize(pos + 1, NO_SLOT);
@@ -98,7 +102,9 @@ impl<K: xpute_core::ds::map::KeyTraits> BadgeTable<K> {
             badge_atlas().release(self.slot[pos] as u32);
             self.built -= 1;
         }
-        let from = self.index.remove_at(pos as u32) as usize;
+        // The last position moves into the hole; the lanes follow it.
+        let from = self.index.len() - 1;
+        self.index.swap_remove_index(pos);
         if from != pos {
             self.logical_w[pos] = self.logical_w[from];
             self.slot[pos] = self.slot[from];
@@ -109,8 +115,8 @@ impl<K: xpute_core::ds::map::KeyTraits> BadgeTable<K> {
 }
 
 struct Badges {
-    places: BadgeTable<I64Keys>,
-    clusters: BadgeTable<U32Keys>,
+    places: BadgeTable<u64>,
+    clusters: BadgeTable<u32>,
     advance: Option<Advances>,
     stats: PoiBadgeBuildStats,
 }
@@ -119,8 +125,8 @@ static BADGES: Global<Badges> = Global::new();
 
 fn badges() -> &'static mut Badges {
     BADGES.get(|| Badges {
-        places: BadgeTable::new(I64Keys),
-        clusters: BadgeTable::new(U32Keys),
+        places: BadgeTable::new(),
+        clusters: BadgeTable::new(),
         advance: None,
         stats: PoiBadgeBuildStats::default(),
     })
@@ -211,11 +217,10 @@ fn estimate_text_w(text: &str) -> f64 {
 /// The badge's width in logical pixels: estimated on first ask, exact once the
 /// badge has been drawn.
 pub fn poi_badge_logical_w(page: &PoiPage, rec: u32) -> f64 {
-    let key = page.id_hash.get(rec as usize) as i64;
+    let key = page.id_hash[rec as usize];
     let places = &mut badges().places;
-    let pos = places.index.find(key);
-    if pos >= 0 {
-        return places.logical_w[pos as usize];
+    if let Some(pos) = places.index.get_index_of(&key) {
+        return places.logical_w[pos];
     }
     let w = TEXT_X + estimate_text_w(&display_name(page, rec)) + GAP;
     let pos = badges().places.insert(key, w);
@@ -245,8 +250,8 @@ fn build_poi_badge(page: &PoiPage, rec: u32, logical_w: f64) -> i32 {
 /// full, which the caller shows as nothing rather than as a wrong rectangle.
 pub fn poi_badge_slot(page: &PoiPage, rec: u32) -> i32 {
     poi_badge_logical_w(page, rec);
-    let key = page.id_hash.get(rec as usize) as i64;
-    let pos = badges().places.index.find(key) as usize;
+    let key = page.id_hash[rec as usize];
+    let pos = badges().places.index.get_index_of(&key).unwrap();
     if badges().places.slot[pos] != NO_SLOT {
         return badges().places.slot[pos];
     }
@@ -303,9 +308,8 @@ fn cluster_label(count: u32) -> String {
 
 pub fn cluster_badge_logical_w(count: u32) -> f64 {
     let clusters = &mut badges().clusters;
-    let pos = clusters.index.find(count);
-    if pos >= 0 {
-        return clusters.logical_w[pos as usize];
+    if let Some(pos) = clusters.index.get_index_of(&count) {
+        return clusters.logical_w[pos];
     }
     let text_w = measure_text(&font(), &cluster_label(count)).ceil();
     let pos = badges().clusters.insert(count, PILL_H.max(text_w + CLUSTER_PAD_X * 2.0));
@@ -314,7 +318,7 @@ pub fn cluster_badge_logical_w(count: u32) -> f64 {
 
 pub fn cluster_badge_slot(count: u32) -> i32 {
     let logical_w = cluster_badge_logical_w(count);
-    let pos = badges().clusters.index.find(count) as usize;
+    let pos = badges().clusters.index.get_index_of(&count).unwrap();
     if badges().clusters.slot[pos] != NO_SLOT {
         return badges().clusters.slot[pos];
     }
@@ -342,13 +346,13 @@ pub fn cluster_badge_slot(count: u32) -> i32 {
 /// Drops every badge whose POI is no longer reachable. What this reclaims is
 /// the rectangle, and what it prevents is a session-long table that grows with
 /// every page ever visited.
-pub fn evict_poi_badges(live: &IndexedMap<I64Keys>) -> u32 {
+pub fn evict_poi_badges(live: &HashSet<u64, FnvBuildHasher>) -> u32 {
     let places = &mut badges().places;
     let mut dropped = 0;
     // Backwards, since a removal moves the last position into the hole. The
     // measured width goes with it: a stale size is a wrong collision box.
-    for pos in (0..places.index.size() as usize).rev() {
-        if live.find(places.index.key_at(pos as u32)) >= 0 {
+    for pos in (0..places.index.len()).rev() {
+        if live.contains(&places.index[pos]) {
             continue;
         }
         if places.slot[pos] != NO_SLOT {

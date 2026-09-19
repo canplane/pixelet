@@ -6,7 +6,7 @@
 //! are served as static objects out of the bucket, while a free-text query
 //! has no such key and has to reach Postgres at request time.
 //!
-//! It answers under `/geo/`, one of the three roots spec/route.json reserves:
+//! It answers under `/geo/`, one of the three roots spec/pxl/spec/route.json reserves:
 //! the world's data. The application's is `/api/`, which pxl-api answers, and
 //! the assets have their own. Each root is one prefix a relay reads and never a
 //! route it enumerates (issue/20260910-one-server-root.md), and the two servers
@@ -43,7 +43,7 @@ fn router(cfg: &config::Config, pool: deadpool_postgres::Pool) -> Router {
         .layer(axum::middleware::from_fn_with_state(cfg.admin_token.clone(), admin_auth::admin_auth));
 
     Router::new()
-        .merge(search::routes(pool))
+        .merge(search::endpoint::routes(pool))
         .nest(GEO_INTERNAL, internal)
         // Search answers JSON, which compresses well and which the browser
         // decodes transparently.

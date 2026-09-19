@@ -16,7 +16,7 @@
 //! free is listed, and may be someone else's by the time the list runs.
 
 use pxl_spec::space::v3::V3;
-use xpute_runtime::sys::mem::{alloc, free};
+use xpute_runtime::mem::heap::{alloc, free};
 
 /// Words an upload record holds: the handle, the block's address and its
 /// length in bytes, and the vertex and index counts, which name the lanes.

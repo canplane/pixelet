@@ -8,10 +8,10 @@
 //! object store files the entry under.
 
 use pxl_spec::space::pvf3::ivec::IVec;
-use xpute_core::kit::mat4::Vec3;
+use xpute_core::math::vec3::Vec3;
 
+use crate::kernel::kernel;
 use crate::layer::object::store::EntryAt;
-use crate::sys::kernel::kernel;
 use crate::world::chunk::raycast::{ray_hit_decor, RayLike};
 
 // A decor mesh sitting on the ground it also intersects (any tree's own

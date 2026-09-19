@@ -1,16 +1,16 @@
 // pxl-kernel/io/fetch_scheduler.test.rs
 //
-// How the queue orders, yields and counts is xpute_runtime::sched::io's to test.
+// How the queue orders, yields and counts is xpute_runtime::io::queue's to test.
 // What is the world's here: the key a demand goes out and comes back under,
 // the credits the central scheduler grants, and the ledger's record.
 
-use pxl_spec::fetch::FetchFail;
+use xpute_runtime::abi::fetch::FetchFail;
 
 use super::*;
+use crate::global::serial;
 use crate::sched::ledger::record::{ledger_recording_start, ledger_tasks, name_id, Failure, Outcome, TaskRow};
 use crate::sched::ledger::spec::{CATEGORY_NAMES, OUTCOME_NAMES, SUMMARY, TASK_SUMMARY};
 use crate::sched::ledger::summary::ledger_summarize;
-use crate::sys::global::serial;
 
 fn d(category: Category, subject: u64, priority: f64) -> Demand {
     Demand {

@@ -4,7 +4,7 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use super::*;
-use crate::sys::clock::set_clock;
+use crate::clock::set_clock;
 
 /// The budget is measured with the host's clock, so a step has to actually
 /// take time for the deadline to mean anything: a real one for these tests.

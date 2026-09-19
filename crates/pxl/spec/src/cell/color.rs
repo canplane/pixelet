@@ -12,6 +12,9 @@
 // `default` is the TypeScript module's default export, the colour file
 // cube.rs builds its colours from.
 
+// Casing here is the spec's and not Rust's: a name is spelled as the JSON
+// spells it, so that one record is indexed by one name on both sides. To
+// case them the way Rust would is to rename the protocol.
 #![allow(non_upper_case_globals)]
 
 use super::r#type::{ColorJsonEntry, ColorJsonFile, ColorJsonMeta};

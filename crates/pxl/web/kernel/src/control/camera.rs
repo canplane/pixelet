@@ -1,5 +1,10 @@
 // pxl-kernel/control/camera.rs
 
+//! The camera and everything that moves it: the pointer's gestures, the
+//! orbit model they drive, the damping between what was asked and what is
+//! drawn, the raycast a control needs, and how far one gets before terrain is
+//! in the way.
+
 pub mod config;
 pub mod damping;
 pub mod input;

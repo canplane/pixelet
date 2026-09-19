@@ -2,7 +2,6 @@
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::cell::cube_types;
-use xpute_core::kit::array::U8Array;
 
 use super::*;
 
@@ -17,10 +16,10 @@ fn flat_page_ele() -> Vec<i16> {
 
 /// Channels of `span`² cells, each lane's cell 0 set as given.
 fn ground(span: usize, land: u8, water: u8, structure: u8, transport: u8) -> Ground {
-    let lane = |first: u8| {
+    let lane = |first: u8| -> std::borrow::Cow<'static, [u8]> {
         let mut v = vec![0u8; span * span];
         v[0] = first;
-        U8Array::from(&v)
+        v.into()
     };
     Ground {
         land: lane(land),

@@ -7,10 +7,24 @@
 //! by dots. A split per line and no parser, so reading is not itself a thing
 //! to verify.
 //!
-//! A record is an output that was checked once and then frozen. These were
-//! written by the TypeScript the Rust was ported from, and what wrote them is
-//! gone — so what they hold to now is the Rust against itself, which is what
-//! they are worth either way.
+//! A record is an output that was checked once and then frozen. The
+//! TypeScript the Rust was ported from wrote them, and what wrote them is
+//! gone; the lines a rule below has since moved were re-recorded from the
+//! Rust. They are not all worth the same thing, because the two languages
+//! are not held to each other everywhere.
+//!
+//! **Inside a language, each follows its own.** Where a value never leaves the
+//! side that computed it, the two are free to differ — Rust rounds to even
+//! through `libm` where JavaScript's `Math` rounds half up, and neither is
+//! wrong. A record of one of those holds that implementation to what it did,
+//! and nothing more: a deliberate change to it is re-recorded, and an
+//! accidental one is what the record is there to catch.
+//!
+//! **Across a protocol, the results must match exactly.** XTP's packets and
+//! TLV's bytes are read by the side that did not write them, so a record of
+//! one of those is a claim about both languages. It is never re-recorded to
+//! make a test pass: a difference there is not a stale baseline, it is the
+//! protocol having come apart, and the fix is in whichever side moved.
 //!
 //! Under `cargo test` only: the crate's own tests, and another crate's
 //! through the `golden` feature on its dev-dependency.

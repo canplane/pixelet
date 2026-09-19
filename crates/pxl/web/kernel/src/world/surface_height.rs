@@ -1,10 +1,10 @@
 // pxl-kernel/world/surface_height.rs
 
 use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::cell::object_value_is_air;
+use pxl_spec::cell::object::object_value_is_air;
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::{self, PVF3};
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::layer::object::store::each_col_entry;
@@ -31,7 +31,7 @@ fn collect_boxes(map_origin: IVec, local_x: f64, local_y: f64) -> Vec<(f64, f64)
     for dx in -1..=1 {
         for dy in -1..=1 {
             let probe = [local_x + dx as f64 * U_PER_CELL, local_y + dy as f64 * U_PER_CELL, 0.0];
-            let mut corner = PVF3::default();
+            let mut corner = Pvf3::default();
             local_world_to_canonical(&mut corner, &probe, map_origin);
             let col_idx = L2_IDX(TO_XY(corner.i));
             if cols.contains(&col_idx) {
@@ -39,7 +39,7 @@ fn collect_boxes(map_origin: IVec, local_x: f64, local_y: f64) -> Vec<(f64, f64)
             }
             cols.push(col_idx);
             // The chunk's corner in the local frame; entries are relative to it.
-            let local = PVF3 {
+            let local = Pvf3 {
                 i: ivec::sub(FROM_L2_IDX(col_idx), map_origin),
                 f: 0,
             };

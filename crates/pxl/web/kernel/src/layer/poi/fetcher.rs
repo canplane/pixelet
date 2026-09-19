@@ -15,12 +15,12 @@
 
 use pxl_spec::space::pvf3::ivec::IVec;
 
+use crate::global::Global;
 use crate::io::demand::{Category, Demand};
 use crate::io::fetch_scheduler::{fetch_running, fetch_sync, page_key};
 use crate::layer::poi::store::{clear_pois, get_pois, poi_pages};
 use crate::layer::terrain::config::{KEEP_DIST, RESIDENT_PAGES};
 use crate::shell::setting::store::settings_store;
-use crate::sys::global::Global;
 use crate::world::chunk::range::{page_priority, pages_to_hold, FETCH_HYSTERESIS};
 use crate::world::frame::range_anchor::range_anchor;
 
@@ -33,7 +33,7 @@ const PRIORITY_BIAS: f64 = 1.0;
 
 /// Evicts cached pages outside the held set, mirroring terrain's own cleanup.
 fn cleanup_far_pois(anchor: IVec) {
-    let held = pages_to_hold(anchor, KEEP_DIST, RESIDENT_PAGES());
+    let held = pages_to_hold(anchor, KEEP_DIST, RESIDENT_PAGES);
     // Collected first: clearing moves the table's last page into the hole.
     // What a run leaves uncollected, the next one takes.
     let mut evict: Vec<IVec> = Vec::new();
@@ -58,12 +58,12 @@ fn poi_demands(anchor: IVec) -> Vec<Demand> {
         });
     };
 
-    let held = pages_to_hold(anchor, KEEP_DIST, RESIDENT_PAGES());
+    let held = pages_to_hold(anchor, KEEP_DIST, RESIDENT_PAGES);
     for p in &held {
         add(p.page_idx, p.dist2);
     }
     // Same in-flight hysteresis as terrain — see FETCH_HYSTERESIS.
-    for p in pages_to_hold(anchor, KEEP_DIST + FETCH_HYSTERESIS, RESIDENT_PAGES() + 16) {
+    for p in pages_to_hold(anchor, KEEP_DIST + FETCH_HYSTERESIS, RESIDENT_PAGES + 16) {
         if !held.iter().any(|h| h.page_idx == p.page_idx) && fetch_running(page_key(CATEGORY, p.page_idx)) {
             add(p.page_idx, p.dist2);
         }

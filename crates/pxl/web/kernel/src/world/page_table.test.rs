@@ -3,7 +3,7 @@
 use pxl_spec::space::pvf3::ivec;
 
 use super::*;
-use crate::sys::global::serial;
+use crate::global::serial;
 use crate::world::change::{world_changes, TERRAIN_PAGE};
 
 fn page(x: i64, y: i64, z: i64) -> IVec {

@@ -5,7 +5,7 @@ Places as badges over the terrain — one of the rendering tiers in
 rebuilt on 2026-09-12/13 into the shape below.
 
 - **`store.rs`** — the resident pages as a `PageTable` (`../page_table.rs`):
-  an `IndexedMap` of page keys in the core memory, each holding a
+  an `IndexSet` of page keys in the core memory, each holding a
   `ResidentPoiPage` and the pool block its lanes were copied into. A page is
   the XTP record the API emits (`pxl_spec::bake::format`'s
   `encode_poi_page`): x, y, z, category, rank and the id hash as lanes, the
@@ -36,11 +36,11 @@ rebuilt on 2026-09-12/13 into the shape below.
   (`/crates/pxl/web/render/src/frame/shader/badge.wgsl`).
 - **`theme.rs`** — category → icon/colour. `OVERTURE_CATEGORY_MAP`
   (`/crates/pxl/overture/src/category_spec.rs`, generated from
-  `/spec/overture/category.json`) translates Overture's `categories.primary`
+  `/spec/pxl/server/overture/category.json`) translates Overture's `categories.primary`
   into this vocabulary, and the generator fails when a theme entry here has no
   category resolving to it.
 
-**Server side**: `/crates/pxl/geo-bake/src/poi/provider/overture_provider.rs`,
+**Server side**: `crates/pxl/server/geo-bake/src/poi/provider/overture.rs`,
 and `serve_tiles` for the dev-only live endpoint. The provider is the seam
 behind which the data source can be swapped; Overture Places is
 CDLA-Permissive-2.0. The per-page query is uncapped on purpose — a dense page

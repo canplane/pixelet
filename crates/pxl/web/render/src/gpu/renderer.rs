@@ -17,9 +17,11 @@
 //! the eye, so the two cancel and the far terrain's coplanar faces stop
 //! fighting.
 
-use xpute_core::kit::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4, Vec3};
-use xpute_runtime::sys::global::Global;
-use xpute_runtime::sys::mem::{alloc, free};
+use xpute_core::math::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
+use xpute_core::math::scalar::round;
+use xpute_core::math::vec3::Vec3;
+use xpute_runtime::global::Global;
+use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::asset::atlas::BillboardAtlas;
 use crate::frame::draw::{
@@ -435,7 +437,7 @@ pub fn surface_closed(s: Surface) {
     for id in [s.depth_view, s.depth, s.msaa_view, s.msaa] {
         release(id);
     }
-    let slot = xpute_core::ds::handle::handle_slot(s.handle) as usize;
+    let slot = xpute_runtime::abi::handle::handle_slot(s.handle) as usize;
     if let Some(r) = RENDERER.get(|| None).as_mut() {
         if let Some(case) = r.cases[slot].take() {
             case.release();
@@ -851,7 +853,7 @@ impl Renderer {
                 continue;
             };
             targets(g, s, 1);
-            let slot = xpute_core::ds::handle::handle_slot(id) as usize;
+            let slot = xpute_runtime::abi::handle::handle_slot(id) as usize;
             if self.cases[slot].is_none() {
                 self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.shadow, self.align));
             }
@@ -924,10 +926,10 @@ impl Renderer {
             triangles: triangles as f64,
             buffers: b.count as f64,
             buffer_bytes: b.bytes as f64,
-            depth_mb: (px * 4.0 * world.samples as f64 / MB).round(),
-            msaa_mb: if world.samples > 1 { (px * 4.0 * world.samples as f64 / MB).round() } else { 0.0 },
-            shadow_mb: (self.shadow.bytes as f64 / MB).round(),
-            layers_mb: (self.layers.bytes as f64 / MB).round(),
+            depth_mb: round(px * 4.0 * world.samples as f64 / MB),
+            msaa_mb: if world.samples > 1 { round(px * 4.0 * world.samples as f64 / MB) } else { 0.0 },
+            shadow_mb: round(self.shadow.bytes as f64 / MB),
+            layers_mb: round(self.layers.bytes as f64 / MB),
             px,
             census,
         }

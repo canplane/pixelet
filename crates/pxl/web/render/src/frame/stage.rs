@@ -7,7 +7,7 @@
 //! converts the projections to WebGPU's depth range, lays the numbers into its
 //! own uniform buffers and draws; it decides nothing.
 
-use xpute_runtime::sys::global::Global;
+use xpute_runtime::global::Global;
 
 /// A cube edge's shade where it borders open air, while edge shading is on,
 /// and the shaded band's width.
