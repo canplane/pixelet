@@ -1,4 +1,4 @@
-// @pxl/web/../vite.config.ts
+// @pxl/web/vite.config.ts
 
 import { defineConfig, type HmrContext, loadEnv, type Plugin } from "vite";
 import deno from "@deno/vite-plugin";
@@ -70,7 +70,7 @@ function build_number(): string {
  * does mean the bundle hash changes on every build even when no source
  * did; that is the cost of it being accurate, chosen over the commit date.
  * UTC: it is formatted for the reader's own timezone where it is shown
- * (about_section.tsx).
+ * (feature/setting/section/about.tsx).
  */
 function build_stamp(): Plugin {
   const id = "virtual:pxl-build";
@@ -191,13 +191,11 @@ function const_enum(roots: string[]): Plugin {
 }
 
 // Where `deno task dev` points when nothing overrides it: the project's
-// own published deployment. Override with VITE_REMOTE_ORIGIN — which
-// .env.example now pre-fills with this exact value, so updating that file
-// alone (no source edit) is enough going forward; this constant only exists
-// so dev still works before anyone has copied .env.example to .env.
-// (Previously pointed at the workers.dev subdomain, which silently 404'd on
-// every request once that route was disabled at the Cloudflare edge —
-// nothing here ever surfaced that a hardcoded domain had gone stale.)
+// own published deployment. VITE_REMOTE_ORIGIN overrides it, and
+// .env.example carries this same value, so the origin is changed there;
+// this constant is only for a checkout that has not copied .env.example to
+// .env yet. A domain that is retired at the Cloudflare edge answers 404 to
+// everything, and nothing here would say why.
 const remoteOriginDefault = "https://plei.me";
 
 // anti-HMR. The shell's kernel glue is here too: kernel.ts boots the device
@@ -219,13 +217,11 @@ function fullReloadOnCoreChange() {
     name: "full-reload-core",
     enforce: "pre" as const,
 
-    // Vite's watcher covers `root`, which here is apps/web — so nothing under
-    // packages/ was ever watched, handleHotUpdate below never ran for a core
-    // file, and the server went on serving the transform it had cached at
-    // first import. Editing a core file appeared to do nothing at all, and a
-    // browser reload did not help because the staleness was on the server.
-    // Confirmed rather than guessed: a core edit produced no line in the dev
-    // log, while an apps/web edit in the same second produced two.
+    // Vite's watcher covers `root`, which here is apps/web: without this,
+    // nothing under packages/ is watched, handleHotUpdate below never runs
+    // for a core file, and the server keeps serving the transform it cached
+    // at first import — a core edit does nothing, and a browser reload does
+    // not help because the staleness is on the server.
     configureServer(server) {
       for (const pat of corePathIncludes) {
         server.watcher.add(path.resolve(__dirname, "..", "..", pat.replace(/^\/|\/$/g, "")));
@@ -240,29 +236,24 @@ function fullReloadOnCoreChange() {
         // itself. The deno plugin resolves a core import to a virtual id —
         // `\0deno::TypeScript::@xpute/core/...::/abs/path.ts` — and the
         // module graph is keyed by resolved id while onFileChange looks up
-        // by file path, so a changed core file leaves its transform cached
-        // under a name nothing matched. The full-reload below then fetched
-        // the same stale module again, which is why editing a core file
-        // looked like editing nothing at all and a browser reload did not
-        // help. The absolute path is inside the virtual id, so matching on
-        // it is enough to find them.
+        // by file path, so a changed core file would leave its transform
+        // cached under a name nothing matches, and the full-reload below
+        // would fetch the same stale module again. The absolute path is
+        // inside the virtual id, so matching on it is enough to find them.
         for (const mod of ctx.server.moduleGraph.idToModuleMap.values()) {
           if (mod.id?.includes(file)) ctx.server.moduleGraph.invalidateModule(mod);
         }
         ctx.server.ws.send({ type: "full-reload" });
         // Vite prints "page reload" for the ones it decides itself and says
         // nothing about this one, so without a line here a core edit looks
-        // exactly like a core edit that was never noticed — which is what it
-        // was, before configureServer above put packages/ under the watcher.
+        // exactly like a core edit that was never noticed.
         ctx.server.config.logger.info(`core reload ${path.relative(path.resolve(__dirname, "..", ".."), file)}`, { timestamp: true });
         return [];
       }
-      // Returning [] here (even though it's "empty") tells Vite "no
-      // modules to update" for EVERY non-core file too, since Vite treats
-      // any array return — including [] — as truthy and overwrites
-      // ctx.modules with it. That silently disabled HMR for the entire
-      // app. Returning nothing lets Vite fall through to its default
-      // HMR behavior for anything that isn't a core-package file.
+      // Nothing returned, not `[]`: Vite takes any array — an empty one
+      // too — as the modules to update and overwrites ctx.modules with it,
+      // which would disable HMR for every non-core file. Returning nothing
+      // lets Vite fall through to its default HMR for those.
     },
   };
 }
@@ -272,24 +263,19 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, Deno.cwd(), "VITE_");
 
   // A production build is never a development build, whatever .env says.
-  // VITE_APP_ENV lives in .env, which Vite loads for *every* mode — so a
-  // developer's local `VITE_APP_ENV=development` rode along into the deployed
-  // bundle and shipped the debug settings section and the dev routes with it.
-  // Observed in production before this guard existed.
+  // VITE_APP_ENV lives in .env, which Vite loads for *every* mode, so a
+  // developer's local `VITE_APP_ENV=development` would ride into the
+  // deployed bundle and ship the debug settings section and the dev routes
+  // with it.
   //
-  // The VITE_APP_ENV half is still honoured in the other direction: running
-  // the dev server with VITE_APP_ENV=production turns dev-only surfaces off
-  // locally, which is the point of having the variable at all. Only the
-  // "development" value is overridden, so a production build labelled
-  // `staging` still says staging.
+  // The other direction is honoured: running the dev server with
+  // VITE_APP_ENV=production turns dev-only surfaces off locally, which is
+  // the point of the variable. Only the "development" value is overridden,
+  // so a production build labelled `staging` still says staging.
   //
-  // The override lands on the NAME, not on a separate boolean, and isDev is
-  // derived from it. It used to be the other way round — the guard was
-  // written into isDev alone while __APP_ENV__ kept the raw value — and the
-  // two then disagreed in exactly the way this was meant to prevent: the
-  // deployed settings panel read "development" while the debug section it
-  // implies was correctly absent. One value, one rule, nothing left to
-  // contradict.
+  // The override lands on the NAME, and isDev is derived from it: a guard
+  // on isDev alone would leave __APP_ENV__ reading "development" while the
+  // debug section it implies is absent. One value, one rule.
   const rawAppEnv = env.VITE_APP_ENV || mode;
   const appEnv = mode === "production" && rawAppEnv === "development" ? "production" : rawAppEnv;
   const isDev = appEnv === "development";
@@ -318,10 +304,9 @@ export default defineConfig(({ mode }) => {
   ]));
 
   return {
-    // root `deno task dev` runs dev:api and dev:web concurrently in one
-    // terminal (`sh -c "(deno task dev:api) & (deno task dev:web) & wait"`).
-    // Vite's default clearScreen wipes the whole terminal — including the
-    // API server's output — on every restart/error.
+    // Root `deno task dev:local` runs the three servers and this in one
+    // terminal, and Vite's default clearScreen would wipe the whole of it —
+    // the servers' output too — on every restart or error.
     clearScreen: false,
 
     plugins: [
@@ -341,23 +326,20 @@ export default defineConfig(({ mode }) => {
     },
 
     // A worker is bundled by its own Rollup pass, which gets none of the
-    // plugins above: without the deno resolver there, the bake worker's first
-    // `@xpute/` import failed to resolve and the build stopped. ES modules
-    // because the worker is spawned with `type: "module"`.
+    // plugins above: without the deno resolver there, a worker's first
+    // `@xpute/` import does not resolve and the build stops. ES modules,
+    // for a worker spawned with `type: "module"`.
     worker: {
       format: "es",
       plugins: () => [deno()],
     },
 
-    // .glb isn't in Vite's default recognized-asset extension list, so
-    // without this each import (companion character/pet models) has to
-    // rely solely on its own `?url` query suffix to be treated as an
-    // asset rather than parsed as JS — which held up fine at a handful of
-    // files but became flaky once the character variant list grew to 36
-    // (concurrent dev-server requests would occasionally misclassify one
-    // and throw "invalid JS syntax", nondeterministically, a different
-    // file each time). Declaring the extension here makes every .glb a
-    // recognized asset unconditionally, in both dev and build.
+    // .glb is not in Vite's default asset extensions: without this each
+    // import relies on its own `?url` suffix to be treated as an asset
+    // rather than parsed as JS, and under concurrent dev-server requests
+    // one of 36 character variants is misclassified now and then and throws
+    // "invalid JS syntax", a different file each time. Declared here, every
+    // .glb is an asset in both dev and build.
     assetsInclude: ["**/*.glb"],
 
     build: {
@@ -369,15 +351,13 @@ export default defineConfig(({ mode }) => {
     server: {
       host: true,
       // Vite's default fs.allow walks up from this config's own directory
-      // looking for an npm/pnpm/yarn workspace root — this repo is a Deno
-      // workspace, which that heuristic doesn't recognize, so it fell back
-      // to just apps/web itself. That silently 403'd any `/@fs/` request
-      // for a file outside apps/web — invisible for plain .ts imports
-      // (those go through the deno plugin's own resolution, not this gate)
-      // but broke real asset imports (import x from "*.png") the moment
-      // any of them started pointing into packages/xpute/core instead of
-      // staying under apps/web. Explicitly allowing the repo root fixes
-      // every such path at once instead of allow-listing each package.
+      // looking for an npm/pnpm/yarn workspace root; this is a Deno
+      // workspace, which that heuristic does not recognize, so it falls
+      // back to apps/web itself and 403s any `/@fs/` request for a file
+      // outside it — invisible for plain .ts imports, which the deno plugin
+      // resolves, but fatal for an asset import (`import x from "*.png"`)
+      // that points into packages/. The repo root allowed once covers every
+      // such path.
       fs: { allow: [path.resolve(__dirname, "..", "..")] },
       // Each prefix forwarded whole and unrewritten.
       proxy,

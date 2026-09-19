@@ -12,7 +12,7 @@
   },
 
   "tasks": {
-    // The Rust core's module, from crates/, into src/wasm/kernel.wasm. Every
+    // The Rust core's module, from crates/, into src/kernel/kernel.wasm. Every
     // task that loads it depends on this, so it is never stale or missing.
     "build:wasm": "deno run -A script/build-wasm.ts",
 
@@ -40,7 +40,7 @@
     "deploy": "deno run -A script/deploy.ts",
 
     // Through build:wasm, as dev, build and test are: the module's minified
-    // ABI is written beside it (src/kernel/abi.ts) and the shell imports it,
+    // ABI is written beside it (src/kernel/abi/symbol.ts) and the shell imports it,
     // so a checkout that has never built cannot be type-checked without it.
     // A catalog entry is a number, an id and a name in every locale; the first
     // two are written from the JSON under spec/, the last is people's.
