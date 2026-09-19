@@ -85,6 +85,6 @@ pub enum Errno {
 // - errno != Errno::OK  -> failure
 // - data == None        -> no payload
 //
-// `None` is the canonical "no value / no payload" sentinel, as `null` is on
-// the TypeScript side: the empty result slot, nothing about pointers.
+// `None` is the "no value / no payload" sentinel: the empty result slot,
+// nothing about pointers.
 pub type ErrnoResult<T> = (Errno, Option<T>);

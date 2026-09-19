@@ -56,9 +56,8 @@ pub static cell_colors: CellColors = CellColors { cube: &cube_colors };
 // =============================================================================
 
 /// Zero (cube_types::common::void) means sparse absence/fallback here, not
-/// explicit air — the only real distinction left now that a
-/// real value doesn't need to share a bit with every other real value; see
-/// cube.rs's own top comment.
+/// explicit air — the one distinction there is, since a real value shares
+/// no bit with any other real value; see cube.rs's own top comment.
 pub fn object_value_is_present(value: u32) -> bool {
     value != cube_types::common::void as u32
 }
@@ -133,7 +132,7 @@ pub fn decor_id_from_num(num_id: u32) -> DecorId {
     }
 }
 
-/// Every decor kind in encoded numeric-id order — mode_bar.tsx's decor buttons iterate this, same shape as cube_ids.
+/// Every decor kind in encoded numeric-id order — mode-bar.tsx's decor buttons iterate this, same shape as cube_ids.
 pub static decor_ids: LazyLock<Vec<DecorId>> = LazyLock::new(|| {
     let mut ids = decor_types::Decor::ALL.to_vec();
     ids.sort_by_key(|id| *id as u8);
@@ -184,10 +183,10 @@ fn ground_key(channel: &str) -> GroundChannelKey {
 pub const TERRAIN_STYLE_BASE: u32 = 256;
 
 /// Every terrain-styled cube, channel by channel, for the callers that want
-/// the catalog walked. The numbering is no longer this walk's to give out:
-/// counting one out as it was met meant a type inserted into cube_type.json
-/// renumbered every type after it, in every other channel too, and a stored
-/// placement then named a different cube than the one that was placed.
+/// the catalog walked. The numbering is not this walk's to give out: a
+/// number handed out in walking order would change for every type after one
+/// inserted into cube_type.json, in every other channel too, and a stored
+/// placement would then name a different cube than the one that was placed.
 static TERRAIN_STYLE: LazyLock<Vec<PlaceableCube>> = LazyLock::new(|| {
     let mut cubes = Vec::new();
     for (channel, local_types) in TERRAIN_CHANNELS.iter() {
@@ -228,8 +227,8 @@ static TYPE_NAME: LazyLock<HashMap<(&'static str, u32), &'static str>> = LazyLoc
 });
 
 // =============================================================================
-// Placeable cube catalog — everything mode_bar.tsx's hotbar (cube_ids alone)
-// and drawer_modal.tsx's own full grid (this) can offer a user. A separate
+// Placeable cube catalog — everything mode-bar.tsx's hotbar (cube_ids alone)
+// and drawer-modal.tsx's own full grid (this) can offer a user. A separate
 // concept from cube_ids itself: the hotbar deliberately stays scoped to just
 // the original 15 flat colors (the full catalog
 // lives behind its own modal, not folded into the everyday quick-pick).

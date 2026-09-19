@@ -713,7 +713,7 @@ impl Builder {
         self.drop_work(world, id, emit);
     }
 
-    /// The tiers the chunk still lacks. A bake of a tier no longer wanted
+    /// The tiers the chunk still lacks. A bake of a tier not wanted
     /// gives the slot back now.
     pub fn want(&mut self, world: &mut World, id: u32, want: [u32; 2]) {
         let Some(c) = self.chunks.get_mut(&id) else { return };

@@ -343,7 +343,7 @@ pub fn cluster_badge_slot(count: u32) -> i32 {
     slot
 }
 
-/// Drops every badge whose POI is no longer reachable. What this reclaims is
+/// Drops every badge whose POI is unreachable. What this reclaims is
 /// the rectangle, and what it prevents is a session-long table that grows with
 /// every page ever visited.
 pub fn evict_poi_badges(live: &HashSet<u64, FnvBuildHasher>) -> u32 {

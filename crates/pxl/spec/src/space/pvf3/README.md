@@ -1,7 +1,7 @@
 # PVF3: why packed add/sub isn't done as a single raw word op
 
-`ivec`/`fvec` pack 3 lanes (X/Y/Z) into one `u64` for cheap single-key
-addressing and scaling — one comparable, hashable value and one
+`ivec`/`fvec` pack 3 lanes (X/Y/Z) into one word — a `u64` and a `u32` —
+for cheap single-key addressing and scaling — one comparable, hashable value and one
 shift-and-mask projection step — not to enable SIMD-style packed arithmetic.
 `add()`/`sub()` in both modules unpack each lane, compute, and re-`gather()`.
 This note is the record of why that is the right call here, not an oversight.

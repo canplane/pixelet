@@ -153,7 +153,7 @@ pub fn world_turn() {
     chunk_nodes_step();
     hover_cursor_step();
     // device_coord is deliberately not gated the way map_center is — the puck
-    // holds its own last-known coordinate across a transient null.
+    // holds its own last-known coordinate across a transient none.
     location_puck_step(map_navigation().device_coord);
     crate::layer::object::store::flush_save_if_due();
     fetch_pump();

@@ -176,7 +176,7 @@ PVF3 = { i: IVec (64-bit), f: FVec (32-bit) }
 
 - **IVec** packs three signed integer lanes in a `24/24/16` X/Y/Z layout. X is cyclic so the canonical world wraps at the longitude seam.
 - **FVec** packs three unsigned 8-bit fractional residues, giving `1/256` resolution within one canonical unit, the same lattice the render payload below uses.
-- Arithmetic is integer and deterministic across platforms: 64-bit words throughout. There is one implementation — the shell reads a coordinate through the kernel rather than computing one.
+- Arithmetic is integer and deterministic across platforms: a lane is computed as an `i64` and packed back, IVec into its `u64`, FVec into its `u32`. There is one implementation — the shell reads a coordinate through the kernel rather than computing one.
 - The bit fields contain no guard lanes: IVec uses its full signed `24/24/16` ranges, while FVec uses all 8 bits per residue lane (the top byte of its 32-bit word remains unused).
 - The EPSG:3857 adapter assigns physical meaning: currently `1u = 1 L1 block ≈ 2.389` planar Mercator meters at the equator. Geographic distortion and page-constant vertical correction live in the adapter, not in PVF3 itself.
 
@@ -242,8 +242,8 @@ Sea is a `LAND` value with the high bit set (`sea = 129`, `spec/pxl/spec/cell/cu
 ```text
 Overture PostGIS rows
   → XTP decode
-  → overture_adapter / coast_adapter (row → feature)
-  → normalizer (classify, rank, assign tags — policy-parameterized: overture_policy / coast_policy)
+  → overture/adapter, coast/adapter (row → feature)
+  → normalizer (classify, rank, assign tags — policy-parameterized: overture/policy, coast/policy)
   → ground (rasterize geometry into ground channels)
   → encode_terrain (elevation + ground → XTP)
   → compressed HTTP page response

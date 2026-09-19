@@ -45,7 +45,7 @@
 //! - If a level range reaches or exceeds a lane width, that lane collapses at that
 //!   level.
 //! - In a collapsed lane, BASE and LIMIT become identical on that axis, so that
-//!   axis no longer contributes a meaningful partition range above that level.
+//!   axis contributes no partition range above that level.
 //!
 //! Current consequence:
 //! - X / Y remain hierarchical through L5.

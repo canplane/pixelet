@@ -14,8 +14,8 @@ use crate::world::change::wake_at;
 /// A TIMEOUT or POSITION_UNAVAILABLE is a report about this moment, not about
 /// the session: indoors, in a tunnel, between buildings, a fix simply does not
 /// arrive for a while. The error path has to stop the watch — a dead watch left
-/// subscribed is what once had two of them racing and flickering device_coord
-/// null/non-null — but that left nothing running afterwards either, and the
+/// subscribed races the next one and flickers device_coord between none and
+/// some — but stopping it alone leaves nothing running afterwards, and the
 /// only things that ever restart it are a permission change or a return to the
 /// foreground. So one bad minute underground ended location tracking until the
 /// app was backgrounded and reopened, taking follow mode with it.

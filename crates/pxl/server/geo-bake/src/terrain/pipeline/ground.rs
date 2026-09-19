@@ -240,7 +240,7 @@ fn render_linear_feat(points: &[V3], value: u8, target: &mut [u8], width_cell: f
         let p1 = points[i];
         let p2 = points[i + 1];
 
-        // The cap behaviour at pixel centres, as the old tile baker had it.
+        // A round cap at each end, centred on the pixel.
         draw_circle(target, mask, snap_px(p1[0]), snap_px(p1[1]), thickness, value);
         if i == points.len() - 2 {
             draw_circle(target, mask, snap_px(p2[0]), snap_px(p2[1]), thickness, value);
@@ -249,7 +249,7 @@ fn render_linear_feat(points: &[V3], value: u8, target: &mut [u8], width_cell: f
         let dx = p2[0] - p1[0];
         let dy = p2[1] - p1[1];
         // Grid-cover sampling: the max-axis delta gives slope-independent
-        // coverage, at the 2x stepping density the old tile baker used.
+        // coverage, at twice the pixel density so no pixel is stepped over.
         let steps = (dx.abs().max(dy.abs()) * 2.0).ceil().max(1.0);
         if !steps.is_finite() {
             continue;

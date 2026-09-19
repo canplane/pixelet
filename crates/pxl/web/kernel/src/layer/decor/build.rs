@@ -107,7 +107,7 @@ pub struct DecorKindBundle {
 pub fn bind_models(kind: DecorKind, seed: DecorKindSeed, rules: DecorRules, models: &[Asset], skins: &[Asset], decor_id: Option<DecorId>) -> DecorKindBundle {
     assert_eq!(models.len(), skins.len(), "decor: kind.json lists {} models for {kind:?} and {} skins", models.len(), skins.len());
     let variants = models.iter().zip(skins).map(|(&model, &skin)| DecorVariantAsset { model, skin }).collect();
-    // Math.max: a NaN extent stays NaN rather than being dropped.
+    // A NaN extent stays NaN rather than being dropped.
     let extent = models
         .iter()
         .flat_map(|m| m.ingested().extent.unwrap_or([0.0; 3]))

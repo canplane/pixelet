@@ -48,7 +48,7 @@
       "cost": "low"
     },
     "show_structures": {
-      "$doc": ["Whether the STRUCTURE ground channel is painted. The bake writes it", "either way (overture_policy.ts); this is a render decision."],
+      "$doc": ["Whether the STRUCTURE ground channel is painted. The bake writes it", "either way (pipeline/overture/policy.rs); this is a render decision."],
       "kind": "toggle",
       "default": true,
       "section": "display"

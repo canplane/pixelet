@@ -132,7 +132,7 @@ pub type Pages = Vec<PageAt>;
 /// the point rather than a convenience. When the two were separate — fetch a
 /// radius, keep a count — a page could be requested and then fall out of the
 /// fetch set a moment later while its request was still in flight, and
-/// io/scheduler sheds demands its category no longer wants. Panning
+/// io/scheduler sheds demands its category does not want. Panning
 /// therefore cancelled its own tiles before they arrived, the page stayed
 /// unmounted because a page with no tile is not mounted at all, and the view
 /// lost a square of terrain on whichever side it was moving away from
@@ -148,7 +148,7 @@ pub fn pages_to_hold(anchor: IVec, radius: f64, count: u32) -> Pages {
 
 /// How far past the held set a page whose request is already in flight is
 /// still asked for. Without it, the 32nd-nearest page changed with every 64u
-/// of panning, and io/scheduler yields what a category no longer wants —
+/// of panning, and io/scheduler yields what a category does not want —
 /// so panning aborted its own requests at the edge of the set and refetched
 /// them a moment later. One
 /// page: a pan cannot carry a page that far out before its request settles,

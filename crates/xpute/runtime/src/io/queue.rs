@@ -18,7 +18,7 @@
 //!   category, ordered by priority — a near page of one category beats a far
 //!   page of another.
 //! - **yield:** `sync` takes a category's *entire* current wishlist. Anything
-//!   of that category queued or in flight and no longer wished for is dropped
+//!   of that category queued or in flight that is not on it is dropped
 //!   (queued) or aborted (in flight), freeing its slot for what is wanted now.
 //!
 //! **One pump a turn, after every category has submitted.** With a pump per

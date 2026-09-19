@@ -47,7 +47,7 @@ pub enum BaseSource {
 
 impl BaseSource {
     /// The wire values are exactly these strings — see the table set
-    /// ingest_base.ts writes. Anything else is read as land_use.
+    /// ingest_base.rs writes. Anything else is read as land_use.
     fn from_wire(s: &str) -> BaseSource {
         match s {
             "water" => BaseSource::Water,
