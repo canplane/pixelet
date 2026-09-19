@@ -6,7 +6,7 @@
   // in the dashboard afterwards. Rationale for this shape — one Worker, one
   // origin, no CORS — is in issue/20260816-deployment-hosting.md.
   "name": "pixelet",
-  "main": "worker/index.ts",
+  "main": "cloudflare-worker/index.ts",
 
   // The demo answers on its own hostname, not on *.workers.dev. That is not
   // cosmetic: WAF and rate-limiting rules attach to a zone, and a workers.dev
@@ -39,7 +39,7 @@
   // proxy through this same Worker keeps /api/* same-origin with the app,
   // same "no CORS policy exists to configure or get wrong" reasoning this
   // file's own top comment already gives for the bucket half. An env var, not a
-  // literal in worker/index.ts, so pointing at a different box later (or a
+  // literal in cloudflare-worker/index.ts, so pointing at a different box later (or a
   // local one for testing) never needs a code change.
   // The origins the Worker relays to. A hostname is a box and a root is a
   // service, and the two do not have to match: both roots reach the same VM

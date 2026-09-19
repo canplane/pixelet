@@ -14,7 +14,7 @@
  * come from ingested.ts.
  */
 
-import { INGESTED, SHEET } from "./ingested_spec.ts";
+import { INGESTED, SHEET } from "./ingested-spec.ts";
 
 /** Which of a box's images this is. The split is the renderer's own:
  * chunk_material.ts calls a face lateral at `abs(normal.z) < 0.5`, so a

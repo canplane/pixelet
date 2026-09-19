@@ -14,8 +14,8 @@
  * loudly rather than silently passing on a fixture nobody reads.
  */
 
-import type { I16Array, U8Array } from "@xpute/core/kit/array.ts";
-import { encoder, TreeView } from "@xpute/core/io/marshal/tree/mod.ts";
+import type { I16Array, U8Array } from "@xpute/core/abi/array.ts";
+import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 
 /**
  * One L3 page's span in raster cells, and the elevation raster's own padded
