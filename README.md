@@ -79,7 +79,7 @@ One Cloudflare Worker serves the built client and reads R2 for everything
 baked — terrain, POI and geocode by version under `/geo/tiles/`, every model
 and texture by content hash under `/asset/` — and reverse-proxies the rest of
 `/geo/` and all of `/api/` to the origin. Every address is same-origin and
-unrewritten, and the three roots come from one file (`spec/route.json`), so
+unrewritten, and the three roots come from one file (`spec/pxl/spec/route.json`), so
 adding a route is a change to the one server that answers it.
 
 The origin is a single Hetzner VM: Caddy in front of `pxl-geo` (`/geo`, the
@@ -136,7 +136,7 @@ The floor is iOS 26 and an iPhone 11, with WebGPU only. There is no WebGL path.
 │           ├── locale/       #   i18n catalogues, dev-only ones apart
 │           ├── config/       #   deployment config and routes
 │           ├── dev/          #   dev tools: the ledger overlay, test page
-│           └── kit/          #   shared UI kit and browser helpers
+│           └── shared/          #   shared UI kit and browser helpers
 ├── crates/                   # The Rust workspace, grouped by where a crate runs
 │   ├── xpute/
 │   │   ├── core/             #   xpute-core: collections, codecs, XTP, errno — no domain
@@ -170,14 +170,14 @@ Inside the Rust crates, a crate's root holds only its directories, sorted by
 kind. `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat, being five or six
 files each.
 
-| Crate           | Directories                                                    |
-| --------------- | -------------------------------------------------------------- |
-| `xpute-core`    | `ds` `io` `kit`, plus `cmd`, `errno`, `error`, `log`, `golden` |
-| `xpute-runtime` | `ipc` `sched` `sys`                                            |
-| `pxl-spec`      | `asset` `bake` `cell` `space`, plus `cmd`, `fetch`, `message`  |
-| `pxl-render`    | `mesh` `asset` `look` `frame` `gpu`                            |
-| `pxl-kernel`    | `sys` `sched` `world` `layer` `io` `control` `shell`           |
-| `pxl-geo-bake`  | `terrain` `poi` `geocode` `page`, and `bin` beside them        |
+| Crate           | Directories                                                              |
+| --------------- | ------------------------------------------------------------------------ |
+| `xpute-core`    | `abi` `alloc` `codec` `collection` `math` `status` `wire`, plus `golden` |
+| `xpute-runtime` | `abi` `io` `ipc` `mem` `sched`, plus `clock`, `global`                   |
+| `pxl-spec`      | `abi` `asset` `bake` `cell` `space`, plus `route`                        |
+| `pxl-render`    | `mesh` `asset` `look` `frame` `gpu`                                      |
+| `pxl-kernel`    | `mem` `sched` `world` `layer` `io` `control` `shell`                     |
+| `pxl-geo-bake`  | `terrain` `poi` `geocode` `page`, and `bin` beside them                  |
 
 ---
 
