@@ -13,6 +13,12 @@ use xpute_runtime::global::Global;
 /// and the shaded band's width.
 pub const EDGE_STRENGTH: f64 = 0.3;
 pub const EDGE_WIDTH: f64 = 0.03;
+/// How much of the ambient light a face loses where it meets a wall, while
+/// the corner occlusion is on; the reach is chunk.wgsl's AO_REACH. Down from
+/// 0.45 as the reach widened from half a cell to a whole one, and again once
+/// the corners were shaded too: it scales the warm tint as well as the
+/// darkening, so the two came on together.
+pub const AO_STRENGTH: f64 = 0.25;
 
 pub const STAGE_WORDS: usize = 96;
 
@@ -50,6 +56,9 @@ pub mod STAGE_AT {
     /// MSAA is the renderer's targets and every pipeline's sample count: a
     /// change rebuilds both over the same canvas.
     pub const MSAA: usize = 87;
+    pub const AO_STRENGTH: usize = 88;
+    /// The screen-space occlusion (gpu/ao.rs): 1 to run it, 0 not to.
+    pub const SCREEN_AO: usize = 89;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

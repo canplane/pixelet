@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { type SettingKey, SETTINGS, type SettingSection, settingsIn, type ToggleKey } from "@/feature/setting/schema.ts";
-import { SectionTitle, SettingRadioRow, SettingRow } from "./row.tsx";
+import { SectionTitle, SettingGroup, SettingRadioRow, SettingRow } from "./row.tsx";
 import { kernel_action, useKernel } from "@/kernel/shell.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, LucideIcon>> = {
@@ -26,6 +26,8 @@ export function SettingsSection(props: { section: SettingSection; children?: Rea
   const { section, children } = props;
   const { t } = useTranslation();
   const keys = settingsIn(section).filter((key) => __IS_DEV__ || !SETTINGS[key].dev);
+  // A section whose every entry is dev-only has nothing to show outside dev.
+  if (keys.length === 0 && children === undefined) return null;
 
   return (
     <div className="flex flex-col gap-1">
@@ -61,18 +63,18 @@ function SettingControl(props: { name: SettingKey }) {
       );
     case "choice":
       return (
-        <div className="flex flex-col gap-0.5 -mx-3 rounded-[10px] border border-border p-1">
-          {setting.options.map((option) => (
+        <SettingGroup label={t(`${base}.label`)} cost={setting.cost} dev={setting.dev && setting.section !== "debug"}>
+          {setting.options.map((option, i) => (
             <SettingRadioRow
               key={option}
               label={t(`${base}.${option}.label`)}
               description={t(`${base}.${option}.description`)}
               selected={value === option}
               onSelect={() => set_setting(name, option)}
-              cost={setting.cost}
+              cost={setting.costs?.[i] || setting.cost}
             />
           ))}
-        </div>
+        </SettingGroup>
       );
     case "text":
       return null;

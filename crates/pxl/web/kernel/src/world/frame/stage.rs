@@ -7,7 +7,7 @@
 //! back: whether another turn is wanted, and what the frame cost, for the
 //! ledger. The renderer reads nothing of the kernel on its own.
 
-use pxl_render::frame::stage::{stage_lane_mut, EDGE_STRENGTH, EDGE_WIDTH, STAGE_AT};
+use pxl_render::frame::stage::{stage_lane_mut, AO_STRENGTH, EDGE_STRENGTH, EDGE_WIDTH, STAGE_AT};
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
@@ -24,7 +24,7 @@ use crate::layer::decor::asset_store::decor_bundle_assets;
 use crate::layer::environment::config::rim_cfg;
 use crate::layer::environment::state::SKY_RADIUS;
 use crate::sched::ledger::record::{DrawCensus, TexturesMb, CENSUS_LEN};
-use crate::shell::setting::store::settings_store;
+use crate::shell::setting::store::{settings_store, AoMode};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::stage::{set_host_frame_stat, HostFrameStat};
 use crate::world::frame::view::view;
@@ -52,6 +52,8 @@ pub fn stage_write() {
     s[STAGE_AT::FADE_END] = fade_end_u();
     s[STAGE_AT::LOD_CELL] = LOD_CELL_PER_DISTANCE();
     s[STAGE_AT::EDGE_STRENGTH] = if settings.show_edge_shade { EDGE_STRENGTH } else { 0.0 };
+    s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::Corner { AO_STRENGTH } else { 0.0 };
+    s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::Screen { 1.0 } else { 0.0 };
     s[STAGE_AT::LOW_SPEC] = if settings.texture_pack { 0.0 } else { 1.0 };
     s[STAGE_AT::EDGE_WIDTH] = EDGE_WIDTH;
     s[STAGE_AT::RIM_INTENSITY] = if settings.show_rim_light { rim_cfg::INTENSITY } else { 0.0 };

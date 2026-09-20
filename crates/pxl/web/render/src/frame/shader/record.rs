@@ -29,7 +29,11 @@ pub const SHADER_BADGE_MSAA: u32 = 6;
 pub const SHADER_SKY: u32 = 7;
 pub const SHADER_DEBUG: u32 = 8;
 pub const SHADER_MIPS: u32 = 9;
-pub const SHADERS: u32 = 10;
+pub const SHADER_AO_DOWNSAMPLE: u32 = 10;
+pub const SHADER_AO_SAMPLE: u32 = 11;
+pub const SHADER_AO_BLUR: u32 = 12;
+pub const SHADER_AO_UPSAMPLE: u32 = 13;
+pub const SHADERS: u32 = 14;
 
 /// A shader's pieces, as build.rs wrote them: the files beside this one with
 /// their comments and indentation off, since what ships is what the GPU
@@ -41,9 +45,9 @@ macro_rules! wgsl {
 /// A shader's WGSL; empty for a kind that is not one.
 pub fn source(kind: u32) -> &'static str {
     match kind {
-        SHADER_CHUNK => wgsl!("frame", "grade", "shade", "shadow", "faces", "chunk"),
-        SHADER_DECOR => wgsl!("frame", "grade", "shade", "shadow", "place", "decor"),
-        SHADER_SKINNED => wgsl!("frame", "grade", "shade", "shadow", "place", "skinned"),
+        SHADER_CHUNK => wgsl!("frame", "grade", "shade", "shadow", "ao_map", "faces", "chunk"),
+        SHADER_DECOR => wgsl!("frame", "grade", "shade", "shadow", "ao_map", "place", "decor"),
+        SHADER_SKINNED => wgsl!("frame", "grade", "shade", "shadow", "ao_map", "place", "skinned"),
         SHADER_PUCK_ZONE => wgsl!("frame", "grade", "shade", "puck", "puck_zone"),
         SHADER_PUCK_BEACON => wgsl!("frame", "grade", "shade", "place", "puck", "puck_beacon"),
         SHADER_BADGE => wgsl!("grade", "depth", "badge_depth", "badge"),
@@ -51,6 +55,10 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_SKY => wgsl!("frame", "grade", "shade", "sky"),
         SHADER_DEBUG => wgsl!("frame", "grade", "debug"),
         SHADER_MIPS => wgsl!("mips"),
+        SHADER_AO_DOWNSAMPLE => wgsl!("ao_view", "ao_downsample"),
+        SHADER_AO_SAMPLE => wgsl!("ao_view", "ao_sample"),
+        SHADER_AO_BLUR => wgsl!("ao_view", "ao_blur"),
+        SHADER_AO_UPSAMPLE => wgsl!("ao_view", "ao_upsample"),
         _ => "",
     }
 }
@@ -61,12 +69,13 @@ pub const FRAME_FLOATS: u32 = 76;
 /// view_proj, camera_pos, edge_strength, the environment's run (sun_dir
 /// through fog_color, look/environment.rs's output as it is), low_spec,
 /// edge_width, rim_intensity, viewport, shadow_strength, shadow_texel,
-/// vignette, light_view_proj, the second light's run (other_dir through
-/// other_color, look/environment.rs's ENV_OTHER_LIGHT). The shell reads the
-/// table rather than counting; the test below holds it to the struct.
-pub const FRAME_AT: [u32; 13] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 52, 68];
+/// vignette, ao_strength, screen_ao, light_view_proj, the second light's run
+/// (other_dir through other_color, look/environment.rs's ENV_OTHER_LIGHT). The
+/// shell reads the table rather than counting; the test below holds it to
+/// the struct.
+pub const FRAME_AT: [u32; 15] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68];
 #[cfg(test)]
-const FRAME_FIELDS: [&str; 13] = [
+const FRAME_FIELDS: [&str; 15] = [
     "view_proj",
     "camera_pos",
     "edge_strength",
@@ -78,19 +87,29 @@ const FRAME_FIELDS: [&str; 13] = [
     "shadow_strength",
     "shadow_texel",
     "vignette",
+    "ao_strength",
+    "screen_ao",
     "light_view_proj",
     "other_dir",
 ];
 
 /// The pipelines, by id: draw.rs's ten, which a draw names, then the ones
 /// a frame runs on its own — the depth-only passes into the shadow map,
-/// the sky, and the mip builder.
+/// the sky, the mip builder, the depth-only passes from the eye that the
+/// screen-space occlusion reads, and the occlusion's four (gpu/ao.rs).
 pub const PIPELINE_CHUNK_DEPTH: u32 = 10;
 pub const PIPELINE_DECOR_DEPTH: u32 = 11;
 pub const PIPELINE_SKINNED_DEPTH: u32 = 12;
 pub const PIPELINE_SKY: u32 = 13;
 pub const PIPELINE_MIPS: u32 = 14;
-pub const PIPELINES: u32 = 15;
+pub const PIPELINE_CHUNK_PREPASS: u32 = 15;
+pub const PIPELINE_DECOR_PREPASS: u32 = 16;
+pub const PIPELINE_SKINNED_PREPASS: u32 = 17;
+pub const PIPELINE_AO_DOWNSAMPLE: u32 = 18;
+pub const PIPELINE_AO_SAMPLE: u32 = 19;
+pub const PIPELINE_AO_BLUR: u32 = 20;
+pub const PIPELINE_AO_UPSAMPLE: u32 = 21;
+pub const PIPELINES: u32 = 22;
 
 // A pipeline record's words, in order: the shader for a frame at one
 // sample and the one for a multisampled frame; whether it has a fragment
@@ -179,6 +198,29 @@ const fn depth_only(shader: u32) -> Head {
     }
 }
 
+/// A depth-only pass from the eye, at one sample whatever the frame's:
+/// the depth the screen-space occlusion reads, under the frame's reversed
+/// depth and the lit pass's culling, so it holds the surfaces the lit pass
+/// draws.
+const fn prepass(shader: u32, cull: u32) -> Head {
+    Head {
+        cull,
+        depth_compare: GREATER,
+        ..depth_only(shader)
+    }
+}
+
+/// One of the screen-space occlusion's full-screen passes: no depth, one
+/// sample, into the target's own format.
+const fn screen(shader: u32) -> Head {
+    Head {
+        depth_compare: NO_DEPTH,
+        blend: OPAQUE,
+        samples: ONE_SAMPLE,
+        ..blended(shader, CULL_NONE, 0, 0.0)
+    }
+}
+
 /// One vertex buffer feeding one location from its start.
 fn lane(stride: u32, location: u32, format: u32) -> Vec<u32> {
     vec![stride, PER_VERTEX, 1, location, 0, format]
@@ -218,9 +260,9 @@ fn record(h: Head, lanes: &[Vec<u32>], groups: &[Vec<u32>]) -> Vec<u32> {
     out
 }
 
-/// The frame uniform, the shadow map and its sampler: group 0's first
-/// three entries in every lit pass.
-const LIT_FRAME: [[u32; 3]; 3] = [[0, BOTH, UNIFORM], [1, FRAGMENT, DEPTH], [2, FRAGMENT, SAMPLER_COMPARISON]];
+/// The frame uniform, the shadow map and its sampler, and the screen-space
+/// occlusion map at 7, past the chunk's own: group 0 in every lit pass.
+const LIT_FRAME: [[u32; 3]; 4] = [[0, BOTH, UNIFORM], [1, FRAGMENT, DEPTH], [2, FRAGMENT, SAMPLER_COMPARISON], [7, FRAGMENT, TEXTURE]];
 /// A skin and its sampler.
 const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
 
@@ -235,7 +277,7 @@ fn chunk_lanes() -> Vec<Vec<u32>> {
         lane(12, 3, F32X3),
         lane(12, 4, F32X3),
         lane(16, 5, F32X4),
-        lane(4, 6, F32),
+        lane(4, 6, U32),
     ]
 }
 /// The chunk's one group: the lit frame, the draws, the texture pack's two
@@ -313,6 +355,9 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         PIPELINE_CHUNK_DEPTH => record(depth_only(SHADER_CHUNK), &chunk_lanes(), &chunk_groups()),
         PIPELINE_DECOR_DEPTH => record(depth_only(SHADER_DECOR), &model_lanes(false), &model_groups()),
         PIPELINE_SKINNED_DEPTH => record(depth_only(SHADER_SKINNED), &model_lanes(true), &model_groups()),
+        PIPELINE_CHUNK_PREPASS => record(prepass(SHADER_CHUNK, CULL_BACK), &chunk_lanes(), &chunk_groups()),
+        PIPELINE_DECOR_PREPASS => record(prepass(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
+        PIPELINE_SKINNED_PREPASS => record(prepass(SHADER_SKINNED, CULL_BACK), &model_lanes(true), &model_groups()),
         // The sky: one triangle over the screen, first, writing no depth;
         // the frame beside its own uniform, for the vignette.
         PIPELINE_SKY => record(
@@ -326,15 +371,39 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         ),
         // A mip level from the one above: no depth, one sample, into the
         // texture's own format.
-        PIPELINE_MIPS => record(
-            Head {
-                depth_compare: NO_DEPTH,
-                blend: OPAQUE,
-                samples: ONE_SAMPLE,
-                ..blended(SHADER_MIPS, CULL_NONE, 0, 0.0)
-            },
+        PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),
+        // The screen-space occlusion (gpu/ao.rs): the frame's depth to half
+        // resolution with a normal; the occlusion from that; the denoise,
+        // reading the blue noise, the pass before it and which run it is;
+        // the occlusion back at full resolution against the frame's depth.
+        PIPELINE_AO_DOWNSAMPLE => record(screen(SHADER_AO_DOWNSAMPLE), &[], &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, DEPTH]])]),
+        PIPELINE_AO_SAMPLE => record(
+            screen(SHADER_AO_SAMPLE),
             &[],
-            &[group(&SKIN)],
+            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, TEXTURE_UNFILTERED], [2, FRAGMENT, TEXTURE]])],
+        ),
+        PIPELINE_AO_BLUR => record(
+            screen(SHADER_AO_BLUR),
+            &[],
+            &[group(&[
+                [0, FRAGMENT, UNIFORM],
+                [1, FRAGMENT, TEXTURE_UNFILTERED],
+                [2, FRAGMENT, TEXTURE],
+                [3, FRAGMENT, TEXTURE],
+                [4, FRAGMENT, SAMPLER],
+                [5, FRAGMENT, UNIFORM_DYNAMIC],
+            ])],
+        ),
+        PIPELINE_AO_UPSAMPLE => record(
+            screen(SHADER_AO_UPSAMPLE),
+            &[],
+            &[group(&[
+                [0, FRAGMENT, UNIFORM],
+                [1, FRAGMENT, DEPTH],
+                [2, FRAGMENT, TEXTURE_UNFILTERED],
+                [3, FRAGMENT, TEXTURE],
+                [4, FRAGMENT, SAMPLER],
+            ])],
         ),
         _ => Vec::new(),
     }

@@ -2,7 +2,7 @@
 
 pixelet turns geographic data and player-built blocks into one voxel world and draws it in a browser. It is an application written over [xpute](./ARCHITECTURE.xpute.md): a Rust kernel that runs as xpute's guest in one WebAssembly module, a TypeScript shell that is xpute's host, and Rust servers and bakes that share the kernel's model. This document is what pixelet builds; what it builds on — the memory, the rings, the turn, the credits — is the other one.
 
-Three properties hold everywhere:
+Three properties hold everywhere. The first two are the runtime's and everything here lives inside them; the third is pixelet's own.
 
 - The world's state lives in **one linear memory**, fixed at boot.
 - All work runs in **turns under one quota**.
@@ -77,27 +77,36 @@ The UI is React over one snapshot, a JSON document the kernel writes after a tur
 
 ## The kernel's turn
 
+The turn is xpute's, and so are the quota and the credits: the host rings once, the guest spends what it was given, and the falling edge says when to ring again ([ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) is the mechanism). What pixelet decides is what fills it.
+
 ```text
-host (shell)                                        guest (kernel)
-────────────                                        ──────────────
-requestAnimationFrame, only if asked
-quantum: quota from the measured frame,
-  interactive or batch, less the last overrun
-submit WORLD_UPDATE (viewport, gap, credits)
-interrupt(quota_ms) ─────── rising edge ──────────▶ drain the submission ring
-                                                    poll tasks on the quota:
-                                                      frame: effects → tick phases → draw
-                                                             interaction · visible · content
-                                                             · cosmetic · report
-                                                      build · fetch · glTF · decor · save
-                                                    post signals to the completion ring
-read the completion ring ◀── falling edge ───────── return wake_ms:
-schedule the next turn                                0 next frame · n ms · NO_WAKE none
+                           the rising edge
+                                  │
+                                  ▼
+┌──────────────────────────────────────────────────────────────────┐
+│ the frame task, in an order of its own                           │
+│                                                                  │
+│   effects   the fetchers, the followers a store's change wakes,  │
+│             the markers — each compares the world with what it   │
+│             last saw                                             │
+│   tick      interaction → visible → content → cosmetic → report  │
+│   pump      start the I/O this turn's credits bought             │
+│   draw      the frame's draw list                                │
+│                                                                  │
+│ five tasks beside it, polled on what the tick left               │
+│                                                                  │
+│   build · fetch decode · glTF · decor · the object store's save  │
+└──────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+                          the falling edge  ──▶  wake_ms
 ```
 
-The turn, the quota and the credits are xpute's. What pixelet decides is what fills them.
+The host submits one `WORLD_UPDATE` before it rings — the viewport, the gap since the last turn, and this turn's credits by category — and reads the completion ring after. Everything else here is the kernel's.
 
-**The quota's policy** is the kernel's (`sched/tick.rs`, `QUANTUM`), carried to the host in the boot block — the words `boot` writes at the front of the memory for the shell to read once: the frame is the 25th percentile of recent gaps between frames, ignoring gaps over 50 ms; a turn with input within `settle_ms`, or one the kernel asked for next, is interactive and gets the frame less a margin; any other gets `batch_frames` frames.
+**The quota's policy** is the kernel's (`sched/tick.rs`, `QUANTUM`). It reaches the host in the boot block, the words `boot` writes at the front of the memory for the shell to read once.
+
+What the policy says: the frame is the 25th percentile of recent gaps between frames, ignoring any gap over 50 ms. A turn is interactive when input arrived within `settle_ms`, or when the kernel asked for it on its last falling edge. An interactive turn gets that frame less a margin; every other turn gets `batch_frames` frames.
 
 **The phases**, in the order that is their priority:
 
@@ -109,7 +118,7 @@ The turn, the quota and the credits are xpute's. What pixelet decides is what fi
 | `cosmetic`    | what only looks better for running (debug gizmos)                                                                                                     |
 | `report`      | the ledger, last, so it sees everything                                                                                                               |
 
-**The tasks**, six of them on `embassy-executor`'s raw executor, which the module installs: the frame itself, fetch decoding, glTF parsing, chunk builds, decor assets, and the object store's save. The frame is a task rather than a function so that its order — the effects (steps that compare the world with what they last saw — the fetchers, the followers a store's change wakes, the markers that show where something is), the phases, the fetch pump that starts the granted I/O, the draw — is its own, and no task relies on the order the executor polls them.
+**The tasks**, six of them on `embassy-executor`'s raw executor, which the module installs: the frame itself, fetch decoding, glTF parsing, chunk builds, decor assets, and the object store's save. The frame is a task rather than a function so that the order above is its own, and no task depends on the order the executor happens to poll them in.
 
 **The credits** are spent by category — terrain pages, the one shared ocean page, POI pages — each syncing its whole wishlist once a turn; what is no longer wanted is dropped or aborted, and the fetch pump starts what remains in priority order.
 
@@ -153,6 +162,10 @@ What the renderer reads each frame is laid out as **lanes**, structure-of-arrays
 ---
 
 # The engine
+
+Everything here serves one meeting. The ground is a dense raster for a whole page; what the player places is a sparse tree per band. The two are stored apart and travel apart, and they meet once — when a chunk is built. What comes out of that meeting is one set of column runs, and it is what is drawn and what is hit, so the picture and the pointer can never disagree.
+
+The sections below build up to it: the coordinate a position is written in, the levels it is addressed at, where the ground comes from and how it is baked. Then the meeting itself, then what is made of what it produces.
 
 ## Coordinate System — PVF3
 
@@ -217,7 +230,7 @@ The bake is `pxl-geo-bake`, over the model's formats. Polygons are filled even-o
 
 ## Chunk pipeline
 
-Terrain and objects are stored differently — dense rasters per page, sparse trees per band — and meet only when a chunk is built. In a band, `0` is VOID, `128` is explicit AIR (a leaf that erases what a lower layer would show), `255` is UNKNOWN, and any other value is at once a placed colour, a terrain pick or a decor kind and its id in the one global palette (`pxl-spec cell/`).
+This is the meeting. In a band, `0` is VOID, `128` is explicit AIR (a leaf that erases what a lower layer would show), `255` is UNKNOWN, and any other value is at once a placed colour, a terrain pick or a decor kind and its id in the one global palette (`pxl-spec cell/`).
 
 ```text
 terrain record ──▶ terrain paint (mesh/paint/terrain) ──┐
@@ -238,13 +251,13 @@ Objects paint after terrain, so a placed value wins the voxel. A chunk records t
 
 **The column run set survives.** Each of a chunk's `64²` columns as merged material runs, 22 bytes a run, in one heap block. It is scanned once and serves every LOD tier and every transition until the chunk is released or its sources change. Each tier's mesh is kept as one block, under a retain budget of half the heap for what is off screen (`RETAIN_BUDGET_BYTES`). The raycast keeps its own exact composites near the pointer — four chunks, eight bands, about 10 MiB.
 
-**The scheduler** (`pxl-kernel world/chunk/table.rs`) is one table with a slot per chunk — flags, distances, bounding sphere, pending-since, retained bytes — and runs four passes a tick: **mount** decides which chunks exist, by range from the anchor with hysteresis; **refresh** measures each against the frustum; **recheck** asks the LOD ladder which tiers distance wants; **commit** applies a layout whose tiers are all in hand, or releases one that has gone off screen. What to build next is one priority: the two chunks holding the scan and bake slots first, then chunks in the frustum by distance from the lead point — where the camera is going, so a pan fills in ahead of the view (`sched/priority.rs`) — aged so nothing waits forever. Builds run in the build task on what the tick left of the quota, one scan and one bake open at a time.
+**The scheduler** (`pxl-kernel world/chunk/table.rs`) is one table with a slot per chunk: flags, distances, bounding sphere, pending-since, retained bytes. It runs four passes a tick. **mount** decides which chunks exist, by range from the anchor with hysteresis; **refresh** measures each against the frustum; **recheck** asks the LOD ladder which tiers distance wants; **commit** applies a layout whose tiers are all in hand, or releases one that has gone off screen. What to build next is one priority (`sched/priority.rs`): the two chunks holding the scan and bake slots first, then chunks in the frustum by distance from the lead point, aged so that nothing waits forever. The lead point is where the camera is going, so a pan fills in ahead of the view. Builds run in the build task on what the tick left of the quota, one scan and one bake open at a time.
 
 **Memory is paid for in LOD.** A refused block ends the tick's builds and the chunk waits for a release; reclaim gives back off-screen work, farthest first. If a refusal finds nothing to reclaim, the ladder steps in one tier — at most every half second, up to three — and steps back out after five seconds without a refusal. The view gets coarser; the page does not die.
 
 ## Rendering
 
-Each tick ends with a **draw list** (`pxl-render frame/draw.rs`): the chunk meshes at the weights the LOD blend chose; decor as instanced draws, one model at many placements; the actors — the companion and other characters, each with a joint palette for skinning; the location puck; the billboards, labels and bubbles drawn flat to the camera; and the dev gizmos.
+Each tick ends with a **draw list** (`pxl-render frame/draw.rs`). In it: the chunk meshes at the weights the LOD blend chose; decor as instanced draws, one model at many placements; the actors — the companion and other characters, each with a joint palette for skinning; the location puck; the billboards, labels and bubbles drawn flat to the camera; and the dev gizmos.
 
 The kernel writes the frame's uniforms into the stage lane (`frame/stage.rs`) and calls `render_frame` (`gpu/renderer.rs`) with a `FrameInput`: the list, the environment, the models and their skins, the billboard sheet (the one texture every label is drawn into), and the surfaces. The renderer draws into every open surface — the world's canvas and the character picker's display case — and reports what the frame cost and whether it wants another turn. It decides nothing.
 
@@ -252,7 +265,7 @@ It reaches WebGPU through calls the host answers (`gpu/api.rs` ↔ `apps/web/src
 
 The **view** (`pxl-kernel world/frame/view.rs`) is an orbit camera in a root frame the world stands in. The eye never turns: the world rotates under it by the map's azimuth and is translated so the map centre is the origin. The local origin is the map centre's L4 base, which keeps the world in `f32` range near the camera; the translation rebases in the same step that it snaps. The matrices are doubles, written the moment a damping step moves, and read by the scheduler, the renderer, placement and the pointer's ray.
 
-**LOD** samples a chunk at strides `1/2/4/8/16/32/64`. A tier hands off when one of its cells would project to about six pixels — screen-space error from viewport height and field of view (`pxl-render look/lod.rs`) — which at the reference viewport height puts the handoffs at `192/384/768/1536/3072/6144` units, proportional to the stride. Adjacent tiers dither with complementary screen-space masks, and a chunk coming into view starts at its distance's tier.
+**LOD** samples a chunk at strides `1/2/4/8/16/32/64`. A tier hands off when one of its cells would project to about six pixels, a screen-space error from viewport height and field of view (`pxl-render look/lod.rs`). At the reference viewport height that puts the handoffs at `192/384/768/1536/3072/6144` units, proportional to the stride. Adjacent tiers dither with complementary screen-space masks, and a chunk coming into view starts at its distance's tier.
 
 The first handoff is the unit everything else keeps step with: the POI lattice (the grid place labels are filed into by tier), the fade of their badges, and decor's range. Decor is drawn by the same rule on a kind's extent — a thing covering fewer pixels than two of the tier's cells is not drawn.
 

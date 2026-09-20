@@ -60,7 +60,7 @@ const put = await run(wrangler("r2", "object", "put", `${BUCKET}/${KEY}`, "--rem
 await Deno.remove(file);
 if (!put.ok) {
   console.error(put.stderr);
-  die(`could not write the counter back; b${next} was not taken and the next build would reuse it`);
+  die(`could not write the counter back; #${next} was not taken and the next build would reuse it`);
 }
 
 // The number alone on stdout: the workflow reads it into a job output.

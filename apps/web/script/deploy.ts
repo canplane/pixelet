@@ -27,7 +27,7 @@ async function step(name: string, cmd: string, args: string[], env: Record<strin
 
 const wrangler = (...args: string[]) => ["run", "-A", "--node-modules-dir=auto", "npm:wrangler", ...args];
 
-console.log(number ? `[deploy] build b${number}` : "[deploy] no PXL_BUILD_NUMBER: publishing an unnumbered build");
+console.log(number ? `[deploy] build #${number}` : "[deploy] no PXL_BUILD_NUMBER: publishing an unnumbered build");
 
 // What the build id is about to call this tree. `git status --porcelain` from
 // here is exactly what vite.config.ts's build_id() asks, and it answers with
@@ -47,4 +47,4 @@ await step("publish", "deno", wrangler("deploy"));
 // can say which official build it follows without wrangler or a login. The
 // count itself is the bucket's; this is only a cache, and gitignored.
 if (number) await Deno.writeTextFile(new URL("../.build_number", import.meta.url), `${number}\n`);
-console.log(number ? `[deploy] b${number} published` : "[deploy] published, unnumbered");
+console.log(number ? `[deploy] #${number} published` : "[deploy] published, unnumbered");

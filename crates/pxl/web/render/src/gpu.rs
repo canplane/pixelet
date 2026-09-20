@@ -5,6 +5,7 @@
 //! shadow map, and the renderer that walks a draw list through them. This is
 //! the one layer that talks to WebGPU, and it decides nothing.
 
+pub mod ao;
 pub mod api;
 #[path = "gpu/api.spec.rs"]
 pub mod api_spec;

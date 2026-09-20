@@ -14,12 +14,18 @@
 // place in the JSON, not by having a caller in this crate.
 #![allow(non_upper_case_globals, non_snake_case, dead_code)]
 
-/// A texture's format: the texture pack, skins and the badge sheet; depth; the canvas's own.
+/// A texture's format: the texture pack, skins and the badge sheet; depth; the
+/// canvas's own; then the screen-space occlusion's — a half-resolution depth and
+/// normal in four floats, the full-resolution occlusion in one byte, and the blue
+/// noise it dithers with, four bytes read as they are.
 pub mod format {
     pub const RGBA8_SRGB: u32 = 0;
     pub const DEPTH32: u32 = 1;
     pub const CANVAS: u32 = 2;
-    pub const KEYS: &[&str] = &["RGBA8_SRGB", "DEPTH32", "CANVAS"];
+    pub const RGBA32F: u32 = 3;
+    pub const R8: u32 = 4;
+    pub const RGBA8: u32 = 5;
+    pub const KEYS: &[&str] = &["RGBA8_SRGB", "DEPTH32", "CANVAS", "RGBA32F", "R8", "RGBA8"];
 }
 
 pub mod dimension {
@@ -138,7 +144,8 @@ pub mod paint {
 /// depth compare under reversed Z (LESS is the shadow map's plain depth; NO_DEPTH, no
 /// depth attachment), the blend, the sample count, a vertex step and format, a
 /// binding's stages, and a binding's kind — FRAME_DEPTH a depth texture
-/// multisampled as the frame is.
+/// multisampled as the frame is, TEXTURE_UNFILTERED one in a format no sampler
+/// filters (RGBA32F), read by textureLoad alone.
 pub mod record {
     pub const TRIANGLES: u32 = 0;
     pub const STRIP: u32 = 1;
@@ -160,6 +167,7 @@ pub mod record {
     pub const F32X3: u32 = 2;
     pub const F32X4: u32 = 3;
     pub const U32X4: u32 = 4;
+    pub const U32: u32 = 5;
     pub const VERTEX: u32 = 1;
     pub const FRAGMENT: u32 = 2;
     pub const BOTH: u32 = 3;
@@ -172,6 +180,7 @@ pub mod record {
     pub const SAMPLER: u32 = 6;
     pub const SAMPLER_COMPARISON: u32 = 7;
     pub const FRAME_DEPTH: u32 = 8;
+    pub const TEXTURE_UNFILTERED: u32 = 9;
     pub const KEYS: &[&str] = &[
         "TRIANGLES",
         "STRIP",
@@ -193,6 +202,7 @@ pub mod record {
         "F32X3",
         "F32X4",
         "U32X4",
+        "U32",
         "VERTEX",
         "FRAGMENT",
         "BOTH",
@@ -205,5 +215,6 @@ pub mod record {
         "SAMPLER",
         "SAMPLER_COMPARISON",
         "FRAME_DEPTH",
+        "TEXTURE_UNFILTERED",
     ];
 }

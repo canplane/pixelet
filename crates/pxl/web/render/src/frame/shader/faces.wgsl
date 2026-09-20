@@ -13,3 +13,7 @@ const DIAG_NN: u32 = 131072u;
 const CREASE_BASE: u32 = 262144u;
 const CAP_PZ: u32 = 4194304u;
 const CAP_NZ: u32 = 8388608u;
+const DIAG_RISES_PP: u32 = 16777216u;
+const DIAG_RISES_PN: u32 = 33554432u;
+const DIAG_RISES_NP: u32 = 67108864u;
+const DIAG_RISES_NN: u32 = 134217728u;

@@ -18,12 +18,16 @@
       "section_title": "Display",
       "section_caption": "What the world shows",
       "show_decor": {
-        "label": "Scattered decor",
+        "label": "Decor",
         "description": "Draws the trees and vehicles scattered procedurally over the terrain. Anything you placed yourself stays either way."
       },
       "show_structures": {
-        "label": "Render Buildings",
+        "label": "Buildings",
         "description": "Toggles whether buildings are rendered on top of the terrain."
+      },
+      "texture_pack": {
+        "label": "Textures",
+        "description": "Applies detailed pixel-art textures to block and object surfaces instead of flat colors."
       }
     },
     "camera": {
@@ -32,57 +36,38 @@
       "lock_camera_tilt": {
         "label": "Camera Tilt Lock",
         "description": "Locks vertical camera rotation while horizontal rotation stays free."
-      },
-      "camera_terrain": {
-        "through": {
-          "label": "Pass through terrain",
-          "description": "The camera goes wherever the controls put it. Underground there are no inward-facing faces, so the scene reads inside out."
-        },
-        "stop": {
-          "label": "Stop at terrain",
-          "description": "Zoom, rotate and tilt go as far as they asked or as far as they can. Nothing moves on its own."
-        },
-        "climb": {
-          "label": "Climb over terrain",
-          "description": "Zoom always takes effect and the view pitches up to clear the ground instead. Every zoom level stays reachable, at the cost of an angle you did not set."
-        }
-      }
-    },
-    "editing": {
-      "section_title": "Editing",
-      "section_caption": "What the tools may change",
-      "enable_terrain_carving": {
-        "label": "Terrain Carving",
-        "description": "Lets the eraser dig into the real terrain itself, one voxel at a time, when nothing is placed there."
       }
     },
     "lighting": {
       "section_title": "Lighting & Shadows",
       "section_caption": "Effects that make shape and edges readable",
       "show_edge_shade": {
-        "label": "Cube edge shading",
+        "label": "Cube outlines",
         "description": "Darkens only edges that border open air, so flat ground stays seamless and height changes read as a line."
+      },
+      "ao": {
+        "label": "Shading",
+        "off": {
+          "label": "Off",
+          "description": "Every surface gets the full ambient light."
+        },
+        "corner": {
+          "label": "Corner (geometry)",
+          "description": "Darkens the floor along a cube and the inside of a corner, so blocks sit on the ground instead of floating over it. A few ops per pixel."
+        },
+        "screen": {
+          "label": "Detailed (SSAO)",
+          "description": "Enhances depth by adding detailed contact shadows in crevices and corners. Recomputed over the whole screen, so it is the heaviest."
+        }
       },
       "show_rim_light": {
         "label": "Rim Light",
         "description": "Adds a subtle highlight along object silhouettes to separate them from the background."
-      },
-      "show_shadow_map": {
-        "label": "Shadows",
-        "description": "The sun casts shadows from terrain, objects and characters onto the ground."
       }
     },
     "quality": {
       "section_title": "Graphics Quality",
-      "section_caption": "Adjust screen clarity and detail settings",
-      "texture_pack": {
-        "label": "Textures",
-        "description": "Applies detailed pixel-art textures to block and object surfaces instead of flat colors."
-      },
-      "msaa": {
-        "label": "Anti-aliasing (MSAA)",
-        "description": "Smooths the edges of far-away blocks by sampling each pixel four times. Costs a lot of graphics memory."
-      }
+      "section_caption": "Adjust screen clarity and detail settings"
     },
     "disclaimer": {
       "section_title": "Disclaimer",
@@ -90,7 +75,7 @@
       "coverage_notice": "Currently, only regions in South Korea are supported; all other areas are displayed as ocean.",
       "storage_notice": "Objects you place are not saved to the server, and are stored only on this device.",
       "location_notice": "Your location data is neither collected nor saved.",
-      "character_notice": "Character customization is an experimental feature. The CC0-licensed <kenney>Kenney</kenney> asset pack is applied."
+      "character_notice": "The CC0-licensed <kenney>Kenney</kenney> asset pack is applied to characters and decor."
     },
     "attribution": {
       "section_title": "Attribution"

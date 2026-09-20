@@ -7,7 +7,10 @@
 // and the sheet renders rows from here, so adding a setting is one entry in
 // SETTINGS plus its two strings in the locale catalogue under
 // `settings.<section>.<key>`. A `handheld_default` is the default on a
-// handheld device, where it differs. A `dev` setting exists in every build
+// handheld device, where it differs. A choice may carry `costs` beside its
+// `options`, one per option in the same order, for when what an option costs
+// differs from its neighbours'; an empty string is no badge. A `dev` setting
+// exists in every build
 // but is only offered in the sheet under `__IS_DEV__`.
 
 /** The sheet's sections, in the order they are shown. `character` is not a
@@ -27,15 +30,37 @@ export const SETTING_SECTIONS = ["display", "camera", "editing", "lighting", "qu
  *             reachable at the cost of an angle nobody asked for. */
 export const CAMERA_TERRAIN_MODES = ["through", "stop", "climb"] as const;
 
+/** Where the ambient occlusion comes from.
+ *
+ *   off    — none.
+ *   corner — a chunk shades its own corners from the face bits the edge
+ *            shading reads (crates/pxl/web/render/src/frame/shader/chunk.wgsl):
+ *            the floor along a cube and the inside of a corner, over about
+ *            half a cell, scaling the ambient and hemisphere light only.
+ *            A few fragment ops behind a uniform.
+ *   screen — N8AO as the three.js build ran it until 2026-09-14
+ *            (crates/pxl/web/render/src/gpu/ao.rs): the world's depth drawn
+ *            once more, the occlusion sampled from it at half resolution,
+ *            denoised, and applied to every lit surface as a warm dark
+ *            tint. Five passes and 11 bytes a pixel. */
+export const AO_MODES = ["off", "corner", "screen"] as const;
+
 export const SETTINGS = {
-  /** The index sweep, the badge draws and the atlas: a couple of ms a
-   * frame while places are being placed, nothing once they are. */
-  show_poi: {
+  /** Ground colour from the art pack (four sampler2DArray taps per fragment)
+   * instead of the flat per-instance average. The shader's `u_low_spec` is
+   * this, inverted. */
+  texture_pack: {
     kind: "toggle",
     default: true,
     section: "display",
-    cost: "low",
-    dev: true,
+    cost: "med",
+  },
+  /** Whether the STRUCTURE ground channel is painted. The bake writes it
+   * either way (pipeline/overture/policy.rs); this is a render decision. */
+  show_structures: {
+    kind: "toggle",
+    default: true,
+    section: "display",
   },
   /** Procedurally scattered decor only; what the player placed stays. */
   show_decor: {
@@ -44,12 +69,14 @@ export const SETTINGS = {
     section: "display",
     cost: "low",
   },
-  /** Whether the STRUCTURE ground channel is painted. The bake writes it
-   * either way (pipeline/overture/policy.rs); this is a render decision. */
-  show_structures: {
+  /** The index sweep, the badge draws and the atlas: a couple of ms a
+   * frame while places are being placed, nothing once they are. */
+  show_poi: {
     kind: "toggle",
     default: true,
     section: "display",
+    cost: "low",
+    dev: true,
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
    * Off by default: the tilt is the one control a map view is expected to
@@ -68,6 +95,7 @@ export const SETTINGS = {
     default: "climb",
     options: ["through", "stop", "climb"],
     section: "camera",
+    dev: true,
   },
   /** Panning re-samples the terrain height under the map centre each step. */
   ground_snap: {
@@ -82,6 +110,7 @@ export const SETTINGS = {
     kind: "toggle",
     default: false,
     section: "editing",
+    dev: true,
   },
   /** Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
@@ -98,6 +127,16 @@ export const SETTINGS = {
     section: "lighting",
     cost: "low",
   },
+  /** corner, the occlusion a voxel world gets from its own geometry with no
+   * screen-space pass; screen, the three.js build's N8AO, kept to be put
+   * beside it. AO_MODES says each. */
+  ao: {
+    kind: "choice",
+    default: "corner",
+    options: ["off", "corner", "screen"],
+    costs: ["", "low", "high"],
+    section: "lighting",
+  },
   /** The sun's shadow map (crates/pxl/web/render/src/gpu/shadow.rs): the world drawn once more
    * from the sun each frame, depth only, and a 3x3 compare per fragment;
    * 16 MB of map on a desktop, 4 on a phone. */
@@ -105,16 +144,8 @@ export const SETTINGS = {
     kind: "toggle",
     default: false,
     section: "lighting",
+    dev: true,
     cost: "high",
-  },
-  /** Ground colour from the art pack (four sampler2DArray taps per fragment)
-   * instead of the flat per-instance average. The shader's `u_low_spec` is
-   * this, inverted. */
-  texture_pack: {
-    kind: "toggle",
-    default: true,
-    section: "quality",
-    cost: "med",
   },
   /** Four samples a pixel for the frame's colour and depth:
    * the largest allocation the page makes — 32 bytes a device pixel, a
@@ -127,7 +158,20 @@ export const SETTINGS = {
     default: false,
     handheld_default: false,
     section: "quality",
+    dev: true,
     cost: "high",
+  },
+  /** LOD cross-fade per fragment instead of per chunk: both tiers draw with
+   * complementary dither and dissolve, at the cost of drawing a blending
+   * chunk twice and a pattern that crawls without temporal AA. On by
+   * default: what it replaces swaps a whole chunk at a hashed threshold,
+   * which reads as the ground popping tier by tier. */
+  pixel_dither: {
+    kind: "toggle",
+    default: true,
+    section: "quality",
+    dev: true,
+    cost: "med",
   },
   /** The debug gizmos: frame origins, page corners, the map centre and the rings. */
   show_debug_objects: {
@@ -138,15 +182,6 @@ export const SETTINGS = {
   },
   /** The scheduler ledger's corner panel. The console stream is a button on it. */
   show_ledger: {
-    kind: "toggle",
-    default: false,
-    section: "debug",
-    dev: true,
-  },
-  /** LOD cross-fade per fragment instead of per chunk: both tiers draw with
-   * complementary dither and dissolve, at the cost of drawing a blending
-   * chunk twice and a pattern that crawls without temporal AA. */
-  pixel_dither: {
     kind: "toggle",
     default: false,
     section: "debug",

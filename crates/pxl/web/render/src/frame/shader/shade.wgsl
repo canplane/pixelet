@@ -19,8 +19,13 @@ fn rim_light(n: vec3f, world_pos: vec3f) -> vec3f {
 // `view_depth` is the fragment's depth along the view axis — 1 / the
 // position builtin's w — the distance three's fog took, not the length of
 // the ray: at equal depth a pixel at the screen's edge is no foggier than
-// one at its centre.
-fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, view_depth: f32, lit: f32) -> vec3f {
+// one at its centre. `open` is how much of the ambient sky the point sees,
+// per channel, 1 for all of it: the corner occlusion a chunk computes from
+// its own geometry (chunk.wgsl's occlusion), tinted warm so a corner reads
+// as a contact shadow and not as a rendering artefact. It scales the
+// ambient, hemisphere and second light, which come from everywhere, and
+// not the sun, whose visibility is the shadow map's to say.
+fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, view_depth: f32, lit: f32, open: vec3f) -> vec3f {
   // three's standard material, roughness 1, metalness 0: the Lambert BRDF
   // is the albedo over pi, for the direct sun and for the ambient and
   // hemisphere irradiance alike; the emissive floor is added as it is. The
@@ -29,7 +34,7 @@ fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, view_depth: f32, lit: f32) -
   let sun = frame.sun_color * max(dot(n, frame.sun_dir), 0.0) * lit;
   let other = frame.other_color * max(dot(n, frame.other_dir), 0.0);
   let hemi = mix(frame.hemi_ground, frame.hemi_sky, n.z * 0.5 + 0.5);
-  var color = albedo * (sun + other + frame.ambient + hemi) / PI + albedo * frame.floor;
+  var color = albedo * (sun + (other + frame.ambient + hemi) * open) / PI + albedo * frame.floor * open;
   color += rim_light(n, world_pos);
   // three's linear fog: a smoothstep over the band, not a ramp.
   let fog = smoothstep(frame.fog_near, frame.fog_far, view_depth);

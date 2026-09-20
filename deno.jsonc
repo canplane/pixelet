@@ -22,13 +22,23 @@
     // The client alone, every route answered by the published deployment: no
     // Docker, no database, no server process. Not usable for bake work — a
     // published tile prefix is frozen.
-    "dev": "deno task --cwd apps/web dev",
+    "dev": { "command": "deno task --cwd apps/web dev", "dependencies": ["sync:build-number"] },
     // The whole stack on this machine instead.
     "dev:local": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task dev:web) & wait\"",
     "dev:geo": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo -- \"$@\"' --",
     "dev:api": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-api -- \"$@\"' --",
     "dev:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --features serve --bin serve_tiles -- \"$@\"' --",
-    "dev:web": "deno task --cwd apps/web dev:local",
+    "dev:web": { "command": "deno task --cwd apps/web dev:local", "dependencies": ["sync:build-number"] },
+    // The number a dev build labels itself after is the last published one
+    // this checkout has seen, cached in apps/web/.build_number — and
+    // vite.config.ts reads it once, as it starts. Nothing else writes it but
+    // a hand deploy, so a checkout that ships through CI alone drifts behind
+    // by however many builds went out. Reading the log writes the cache
+    // (script/build-log.ts), so the read goes before the server starts.
+    // It is a bucket read: it needs the network and wrangler's credentials,
+    // and where it cannot have them the server still starts on the cached
+    // number and says so.
+    "sync:build-number": "sh -c './script/build-log.ts >/dev/null || echo \"[build-number] not synced: this build is labelled from the cached number\" >&2'",
     // The production bundle at localhost:4173 on the same data: what to
     // measure the client against, since the dev server's unbundled modules
     // and hooks are not in it.
@@ -49,13 +59,18 @@
     "smoke": "./script/smoke.ts",
 
     // ── The gate ──
-    "check": "deno task check:web && deno task check:xpute && deno task check:rust && deno task check:spec",
+    "check": "deno task check:fmt && deno task check:web && deno task check:xpute && deno task check:rust && deno task check:spec",
+    // What check:rust's own `cargo fmt --check` does for the Rust: everything
+    // Deno formats — TypeScript, JSON, JSONC, Markdown — held to one shape.
+    // Without it the two languages were gated unevenly, and the half nothing
+    // ran was where a config broke and sat broken.
+    "check:fmt": "deno fmt --check",
     "check:web": "deno task --cwd apps/web check",
     "check:xpute": "deno check packages/xpute/core/src/**/*.ts && deno check packages/xpute/runtime/src/**/*.ts",
     // The wasm32 pass builds libraries only, so a broken `.test.rs` still
     // passes it; the host pass is what compiles those. geo-bake runs twice
     // because `serve` gates the dev tile server.
-    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -- -D warnings && cargo clippy --manifest-path asset/script/Cargo.toml --all-targets -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo check --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel",
+    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -- -D warnings && cargo clippy --manifest-path asset/script/Cargo.toml --all-targets -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -- -D warnings",
     "check:spec": "./script/spec.ts",
     // The write half of it: the same generator, allowed to touch the tree.
     "spec": "./script/spec.ts --write",
@@ -69,6 +84,9 @@
     "test:asset": "cargo test --manifest-path asset/script/Cargo.toml",
 
     "lint": "deno lint",
+
+    // xpute is developed here and copied out whole; see script/export-xpute.ts.
+    "export:xpute": "./script/export-xpute.ts",
     "fmt": "deno fmt",
 
     // ── Start over ──

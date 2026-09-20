@@ -103,10 +103,11 @@ const fn number(key: &'static str, default: u32, section: &'static str) -> Setti
 }
 
 /// Every setting, as schema.json declares it, in declaration order.
-pub const SETTINGS: [Setting; 17] = [
-    toggle("show_poi", S::show_poi::default, S::show_poi::section, Some(S::show_poi::cost), S::show_poi::dev),
-    toggle("show_decor", S::show_decor::default, S::show_decor::section, Some(S::show_decor::cost), false),
+pub const SETTINGS: [Setting; 18] = [
+    toggle("texture_pack", S::texture_pack::default, S::texture_pack::section, Some(S::texture_pack::cost), false),
     toggle("show_structures", S::show_structures::default, S::show_structures::section, None, false),
+    toggle("show_decor", S::show_decor::default, S::show_decor::section, Some(S::show_decor::cost), false),
+    toggle("show_poi", S::show_poi::default, S::show_poi::section, Some(S::show_poi::cost), S::show_poi::dev),
     toggle("lock_camera_tilt", S::lock_camera_tilt::default, S::lock_camera_tilt::section, None, false),
     Setting {
         key: "camera_terrain",
@@ -114,25 +115,45 @@ pub const SETTINGS: [Setting; 17] = [
         default: SettingDefault::Text(S::camera_terrain::default),
         section: S::camera_terrain::section,
         cost: None,
-        dev: false,
+        dev: S::camera_terrain::dev,
         options: S::camera_terrain::options,
     },
     toggle("ground_snap", S::ground_snap::default, S::ground_snap::section, None, S::ground_snap::dev),
-    toggle("enable_terrain_carving", S::enable_terrain_carving::default, S::enable_terrain_carving::section, None, false),
+    toggle(
+        "enable_terrain_carving",
+        S::enable_terrain_carving::default,
+        S::enable_terrain_carving::section,
+        None,
+        S::enable_terrain_carving::dev,
+    ),
     toggle("show_edge_shade", S::show_edge_shade::default, S::show_edge_shade::section, Some(S::show_edge_shade::cost), false),
     toggle("show_rim_light", S::show_rim_light::default, S::show_rim_light::section, Some(S::show_rim_light::cost), false),
-    toggle("show_shadow_map", S::show_shadow_map::default, S::show_shadow_map::section, Some(S::show_shadow_map::cost), false),
-    toggle("texture_pack", S::texture_pack::default, S::texture_pack::section, Some(S::texture_pack::cost), false),
+    Setting {
+        key: "ao",
+        kind: SettingKind::Choice,
+        default: SettingDefault::Text(S::ao::default),
+        section: S::ao::section,
+        cost: None,
+        dev: false,
+        options: S::ao::options,
+    },
+    toggle(
+        "show_shadow_map",
+        S::show_shadow_map::default,
+        S::show_shadow_map::section,
+        Some(S::show_shadow_map::cost),
+        S::show_shadow_map::dev,
+    ),
     Setting {
         default: SettingDefault::Toggle {
             desktop: S::msaa::default,
             handheld: S::msaa::handheld_default,
         },
-        ..toggle("msaa", S::msaa::default, S::msaa::section, Some(S::msaa::cost), false)
+        ..toggle("msaa", S::msaa::default, S::msaa::section, Some(S::msaa::cost), S::msaa::dev)
     },
+    toggle("pixel_dither", S::pixel_dither::default, S::pixel_dither::section, Some(S::pixel_dither::cost), S::pixel_dither::dev),
     toggle("show_debug_objects", S::show_debug_objects::default, S::show_debug_objects::section, None, S::show_debug_objects::dev),
     toggle("show_ledger", S::show_ledger::default, S::show_ledger::section, None, S::show_ledger::dev),
-    toggle("pixel_dither", S::pixel_dither::default, S::pixel_dither::section, None, S::pixel_dither::dev),
     number("person_variant", S::person_variant::default as u32, S::person_variant::section),
     number("pet_variant", S::pet_variant::default as u32, S::pet_variant::section),
 ];

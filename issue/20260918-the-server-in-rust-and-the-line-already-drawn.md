@@ -210,7 +210,7 @@ binary. That is what removes the last would-be edge from `pxl-geo` to the
 pipeline, and it keeps the deployed image to a static binary and a Postgres
 client with no pipeline in it. `dev:remote` already serves published tiles for
 ordinary work, so this binary is what one runs _while working on the bake_ —
-`deno.json` already draws that line ("Not usable for bake work: a published
+`deno.jsonc` already draws that line ("Not usable for bake work: a published
 tile prefix is frozen").
 
 **`pxl-api` for the db-main half**, decided after `pxl-app` was rejected:
@@ -325,7 +325,7 @@ The mechanism exists — `crates/*/vector/*.tsv`, written by the TypeScript and
 read back by the Rust test beside the module. `crates/pxl/spec/vector/bake/format.tsv`
 is already there. Note that the `deno task vector` and `check:pair` tasks that
 [where the pair differs](./20260914-where-the-pair-differs.md) names are no
-longer in `deno.json`; the vectors survived the migration and their emitters
+longer in `deno.jsonc`; the vectors survived the migration and their emitters
 did not.
 
 For this pipeline the coarser check is the better one anyway: bake the same

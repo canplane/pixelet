@@ -23,18 +23,19 @@ import { tileBase } from "@/config/route.ts";
  * — on a phone there is no URL bar or devtools to check against. */
 export const APP_ENV: string = __APP_ENV__;
 
-/** When this bundle was built, ISO-8601 in UTC. Formatted at the point it is
- * shown rather than here, so it reads in the viewer's own timezone. On a dev
- * server, when the page was loaded (vite.config.ts#build_stamp). */
+/** When this bundle was built, ISO-8601 in UTC. On a dev server, when the
+ * page was loaded (vite.config.ts#build_stamp). */
 export const BUILD_TIME: string = build_time;
 
-/** Which source this bundle was built from, `r<commits>-<hash>[-dirty]`
- * (vite.config.ts#build_id). Shown beside the build time, and stamped on
- * every ledger report and trace so a measurement names what it measured. */
+/** Which source this bundle was built from, `<hash>[-dirty]`
+ * (vite.config.ts#build_id). Stamped on every ledger report and trace so a
+ * measurement names what it measured, and carried in BUILD_NUMBER where the
+ * build is not one CI numbered. */
 export const BUILD_ID: string = build_id;
 
-/** Which official build this is, counted per deploy outside git: `b<n>`,
- * `b<n>+` for a local build after it, `b?` before any (script/deploy.ts). */
+/** Which build this is, counted per deploy outside git: `#<n>`, and
+ * `#<n>-<id>` for one built after it from source CI did not number
+ * (vite.config.ts#build_number). */
 export const BUILD_NUMBER: string = build_number;
 
 /**

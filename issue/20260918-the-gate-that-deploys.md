@@ -18,7 +18,7 @@ closure from the tools that are staying, its 58 tracked files fall out as:
 | 11 | the five Overture ingests, the asset ingest and the brand renderer, and everything they reach  |
 |  3 | the texture-pack tool and its manifest pair — `pxl-render`'s `layers.rs` cites its `TILE_SIZE` |
 |  3 | the elevation pipeline: bash, SQL, a metadata file                                             |
-|  2 | `Dockerfile` (which builds **pxl-geo**) and `deno.json`                                        |
+|  2 | `Dockerfile` (which builds **pxl-geo**) and `deno.jsonc`                                       |
 | 17 | the Hono server — `src/app/`, `src/module/**`, the entry points, the vite config               |
 | 17 | the bake, ported and byte-compared: terrain, POI, geocode, WKB                                 |
 |  3 | scaffolding: `dump_page_source.ts`, `repack_poi_tiles.ts` and the `bake_util.ts` they share    |

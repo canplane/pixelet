@@ -2,7 +2,7 @@
   "settings": {
     "display": {
       "show_poi": {
-        "label": "Show Places",
+        "label": "Places",
         "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
       }
     },
@@ -10,6 +10,37 @@
       "ground_snap": {
         "label": "Ground Altitude Lock",
         "description": "Constrains the camera focus altitude to the actual terrain height while panning."
+      },
+      "camera_terrain": {
+        "label": "Terrain collision",
+        "through": {
+          "label": "Pass through",
+          "description": "The camera goes wherever the controls put it. Underground there are no inward-facing faces, so the scene reads inside out."
+        },
+        "stop": {
+          "label": "Stop",
+          "description": "Zoom, rotate and tilt go as far as they asked or as far as they can. Nothing moves on its own."
+        },
+        "climb": {
+          "label": "Climb over",
+          "description": "Zoom always takes effect and the view pitches up to clear the ground instead. Every zoom level stays reachable, at the cost of an angle you did not set."
+        }
+      }
+    },
+    "lighting": {
+      "show_shadow_map": {
+        "label": "Shadows",
+        "description": "The sun casts shadows from terrain, objects and characters onto the ground."
+      }
+    },
+    "quality": {
+      "msaa": {
+        "label": "Anti-aliasing (MSAA)",
+        "description": "Smooths the edges of far-away blocks by sampling each pixel four times. Costs a lot of graphics memory."
+      },
+      "pixel_dither": {
+        "label": "LOD cross-fade (per pixel)",
+        "description": "Dissolves between LOD tiers with overlapping dither patterns instead of switching a whole chunk at once. Only the three nearest thresholds (192/384/768) blend at all. Draws blending chunks twice, and the pattern crawls without temporal AA."
       }
     },
     "debug": {
@@ -22,15 +53,14 @@
       "show_ledger": {
         "label": "Scheduler Ledger",
         "description": "Corner panel showing frame pacing, GPU load, fetch-queue depth and task latency from the world scheduler, with the report, trace and console-log buttons."
-      },
-      "pixel_dither": {
-        "label": "LOD cross-fade (per pixel)",
-        "description": "Dissolves between LOD tiers with overlapping dither patterns instead of switching a whole chunk at once. Only the three nearest thresholds (192/384/768) blend at all. Draws blending chunks twice, and the pattern crawls without temporal AA."
-      },
-      "dummy_toast": {
-        "label": "Test Toast Notifications",
-        "description": "Displays sample toast notifications for UI testing.",
-        "message": "Dummy Toast {{index}}"
+      }
+    },
+    "editing": {
+      "section_title": "Editing",
+      "section_caption": "What the tools may change",
+      "enable_terrain_carving": {
+        "label": "Terrain Carving",
+        "description": "Lets the eraser dig into the real terrain itself, one voxel at a time, when nothing is placed there."
       }
     }
   },

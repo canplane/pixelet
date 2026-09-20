@@ -10,47 +10,53 @@ _Started on December 15, 2025._
 
 <img alt="Voxel objects built on real-world terrain" src=".github/asset/screenshot.png" height="480">
 
-The client is a small operating system in a browser tab. A Rust **kernel**, compiled to one WebAssembly module, holds the world, schedules its own work and draws through WebGPU. A TypeScript **shell** drives it the way a driver drives a device: it hands over a fixed block of memory once, then talks to the kernel only through ring buffers and a doorbell.
+The client is a small operating system in a browser tab. A Rust **kernel**, compiled to one WebAssembly module, holds the world, schedules its own work and draws through WebGPU; a TypeScript **shell** drives it the way a driver drives a device, and decides nothing about the world. The arrangement they run in — one fixed memory, ring buffers, a turn on a doorbell — is [xpute](./ARCHITECTURE.xpute.md), which is generic and knows nothing of any of this. What follows is pixelet's own.
 
-- **One fixed linear memory.** 512 MiB on a phone, 1 GiB elsewhere, reserved once and never grown. The kernel lays it out like a linker script lays out an image: stack, rings, data, a resident terrain range, one heap.
-- **Rings and a doorbell.** Commands go in on a submission ring, results come back on a completion ring, and the doorbell is one call, `interrupt(quota_ms)`, whose return value says when the kernel wants its next turn.
-- **One cooperative scheduler.** A turn's quota is sized from the display's measured frame. One tick runs its phases in priority order inside it, and async tasks yield when it is spent. A read-only ledger records where the time went.
-- **Numbers, not strings.** Commands, catalogs, assets and messages are numbered once in JSON under `spec/`, and both languages are generated from it. The kernel never looks anything up by name.
-- **Baked offline, streamed as pages.** Overture geometry and elevation are rasterized ahead of time into 1024² pages in XTP, a binary tree format read without copying. The client reads a page where it lands in memory.
+- **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into pages of 1024² blocks, four categorical ground channels and one elevation raster each. A page is fetched, read where it lands in memory, and kept only while the view is near it.
+- **One coordinate, 96 bits of fixed point.** A position is three integer lanes and three 8-bit residues, so it resolves to 1/256 of a block. The arithmetic is integer, so it is the same bits on every machine, and the X lane is cyclic, so the world wraps at the longitude seam.
+- **Terrain and what you build meet only when a chunk is built.** The ground is a dense raster per page; placed objects are a sparse tree per band. They converge in one pipeline, and the mesher and the raycast walk the same runs out of it — so what is drawn is what is hit.
+- **Memory is paid for in detail.** A refused allocation does not fail a frame. Work off screen is reclaimed first, and if that is not enough the LOD ladder steps one tier coarser and climbs back when the pressure passes. The view gets blockier; the page does not die.
+- **Numbers, not strings.** Commands, catalogs, assets and messages are numbered once in JSON under `spec/`, and both languages are generated from it. Nothing is ever looked up by name.
 
 ---
 
 ## System Overview
 
+A block on screen has come a long way: a provider's geometry, a bake, a fetch, a chunk build. End to end it is one path.
+
 ```text
-┌─ browser tab ─────────────────────────────────────────────────────────────┐
-│                                                                           │
-│  shell  apps/web/src  (TypeScript, React)                                 │
-│    UI · input · sensors · HTTP · image decode · the WebGPU host           │
-│    strobe: a turn per animation frame, only when something asked for one  │
-│        │                                                   ▲              │
-│        │ submit          interrupt(quota_ms) → wake_ms     │ complete     │
-│        ▼                                                   │              │
-│  ┌─ WebAssembly.Memory  (fixed, shared by both sides) ─────┴───────────┐  │
-│  │   SQ ring ──▶  kernel  crates/pxl/web  (kernel.wasm)    ──▶ CQ ring │  │
-│  │                  world · chunks · camera · stores · ledger          │  │
-│  │                  tick + tasks under the turn's quota                │  │
-│  │                  view: meshes, draw list, shaders, renderer         │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-│        │ WebGPU calls (numbers and addresses)                             │
-│        ▼                                                                  │
-│      GPU                                                                  │
-└───────────────────────────────────────────────────────────────────────────┘
-          │ HTTP, one origin: /geo/tiles · /asset · /geo/search · /api
-          ▼
-  Cloudflare Worker  apps/web/cloudflare-worker  +  R2  (the client, baked pages, assets)
-          │ /geo/search · /api, relayed
-          ▼
-  Hetzner VM: Caddy ── pxl-geo ── db-geo (PostGIS: Overture, GEDTM30) ◀── the bakes, offline
-                    └─ pxl-api ── db-main                                   pxl-geo-bake → R2
+                   Overture Maps · GEDTM30
+                              │
+                              ▼             offline, once per version
+              db-geo (PostGIS) ──▶ pxl-geo-bake
+                              │
+                              ▼
+               a page of 1024² blocks, in XTP:
+             four ground channels and elevation
+─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┼ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+                              ▼             fetched by version, read in place
+                      a terrain record
+                              │
+the player's placements ──────┤
+a sparse tree per band        ▼             one L2 chunk, 64 blocks
+                terrain paint + object paint
+                              │
+                              ▼
+                         column runs
+                              │
+               ┌──────────────┴─────────────────┐
+               ▼                                ▼
+      a mesh per LOD tier               the pointer's ray
+               │                                │
+               ▼                                ▼
+     draw list ──▶ WebGPU         what is drawn is what is hit
 ```
 
-The kernel decides what exists, what is on screen, at what detail, and what to draw. The shell forwards events, does the I/O the kernel asks for, renders the UI from the kernel's snapshot (one JSON document of UI state, written after a turn that changed it), and turns the renderer's calls into WebGPU. It decides nothing about the world.
+`pxl-geo-bake` bakes, `pxl-kernel` holds the pages and schedules the builds, `pxl-render` paints, scans and meshes, and `apps/web` hands the draw list to WebGPU.
+
+Above the line happens once per version and is served as files; below it happens in the tab, on the turn's quota. The ground and what the player places are stored differently — a dense raster for a whole page, a sparse tree per band — and meet only when a chunk is built.
+
+The kernel decides what exists, what is on screen, at what detail, and what to draw. The shell forwards events, does the I/O the kernel names, renders the UI, and turns the renderer's calls into WebGPU. It decides nothing about the world. What it renders from is the kernel's snapshot: one JSON document of UI state, written after a turn that changed it. What each frame and task cost goes to a read-only ledger, which nothing that schedules is allowed to read.
 
 Almost nothing is computed at request time. Pages and assets are baked ahead and served from the bucket by version; the one exception is forward search, which queries a database when asked.
 
@@ -110,20 +116,32 @@ To measure the client, use `preview` (`localhost:4173`): it is the production bu
 
 ## What runs where
 
-| Layer     | Technology                                                         | Where                                   |
-| --------- | ------------------------------------------------------------------ | --------------------------------------- |
-| Shell     | TypeScript, React 19, Vite                                         | the browser, served by the Worker       |
-| Kernel    | Rust → one WebAssembly module, no wasm-bindgen; `embassy-executor` | the browser, in one fixed memory        |
-| Rendering | WebGPU (WGSL), driven from the kernel                              | the browser's GPU                       |
-| Edge      | Cloudflare Worker + R2                                             | the client, the baked pages, the assets |
-| Servers   | Rust: axum, tokio-postgres — one per URL root, one database each   | one Hetzner VM behind Caddy             |
-| Databases | PostgreSQL: `db-main`, and `db-geo` with PostGIS                   | the same VM                             |
-| Geodata   | Overture Maps + GEDTM30, ingested into db-geo, baked into pages    | offline, into R2                        |
-| Workspace | Deno drives every task, the Rust ones included                     | —                                       |
+| Layer     | Technology                                                         | Where                                                                 |
+| --------- | ------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| Shell     | TypeScript, React 19, Vite                                         | the browser, served by the Worker                                     |
+| Kernel    | Rust → one WebAssembly module, no wasm-bindgen; `embassy-executor` | the browser, in 512 MiB on a phone and 1 GiB elsewhere, reserved once |
+| Rendering | WebGPU (WGSL), driven from the kernel                              | the browser's GPU                                                     |
+| Edge      | Cloudflare Worker + R2                                             | the client, the baked pages, the assets                               |
+| Servers   | Rust: axum, tokio-postgres — one per URL root, one database each   | one Hetzner VM behind Caddy                                           |
+| Databases | PostgreSQL: `db-main`, and `db-geo` with PostGIS                   | the same VM                                                           |
+| Geodata   | Overture Maps + GEDTM30, ingested into db-geo, baked into pages    | offline, into R2                                                      |
+| Workspace | Deno drives every task, the Rust ones included                     | —                                                                     |
 
-One Worker on one hostname serves the built client, answers `/geo/tiles/` and `/asset/` from R2 — pages by version, models and textures by content hash — and relays everything else under `/geo/` and `/api/` to the VM. The three roots are written in one file, `spec/pxl/spec/route.json`, and every relay reads them from there. A green push to main takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
+```text
+                  plei.me
+                      │
+           one Worker, one origin
+┌─────────────────────┴─────────────────┐
+▼   answered here                       ▼   relayed to the VM
+the client                              /geo/search ─▶ pxl-geo ─▶ db-geo
+/geo/tiles   R2, by version                                     (PostGIS)
+/asset       R2, by hash                /api        ─▶ pxl-api ─▶ db-main
+filled by the bakes, offline            behind Caddy, on one VM
+```
 
-Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and **XTP**, a relocatable binary tree read without copying. One piece of the kernel is a port rather than a dependency — evanw/buddy-malloc under the heap — and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) carries what its licence asks; everything else that is not this project's is a crate or a package named in the manifests.
+The three roots are written in one file, `spec/pxl/spec/route.json`, and every relay reads them from there. A green push to main takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
+
+Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and **XTP**, a relocatable binary tree read without copying. One piece of the kernel is a port rather than a dependency: evanw/buddy-malloc, under the heap, and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) carries what its licence asks. Everything else that is not this project's is a crate or a package named in the manifests.
 
 The floor is iOS 26 on an iPhone 11, WebGPU only. There is no WebGL path.
 
@@ -183,7 +201,7 @@ A crate's root holds directories only, sorted by kind; `pxl-geo`, `pxl-api` and 
 | `pxl-kernel`    | `mem` `sched` `world` `layer` `io` `control` `shell`                     |
 | `pxl-geo-bake`  | `terrain` `poi` `geocode` `page`, and `bin` beside them                  |
 
-Rust, the xpute packages and the kernel's driver (`apps/web/src/kernel/`) share one `snake_case` vocabulary (`len`, `u32`, `new_len`) across the boundary; the rest of the shell and the scripts are `camelCase`, as TypeScript is, and a name that crosses — a snapshot field, an action, a catalog entry — keeps the kernel's.
+Rust, the xpute packages and the kernel's driver (`apps/web/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, an action, a catalog entry — keeps the kernel's.
 
 ---
 

@@ -48,7 +48,7 @@ fn tlv_computes_what_the_typescript_computes() {
     ])
     .unwrap();
     let packet = w.finish();
-    assert_eq!(hex::encode(&packet), v.s("packet"));
+    assert_eq!(hex::encode(packet), v.s("packet"));
     let read: Vec<String> = TlvReader::new(packet).read_all().unwrap().iter().map(show).collect();
     let want: Vec<&str> = (0..v.len("read")).map(|j| v.s(&format!("read.{j}"))).collect();
     assert_eq!(read, want);

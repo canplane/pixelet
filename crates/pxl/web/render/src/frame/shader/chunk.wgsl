@@ -32,7 +32,7 @@ struct VertexIn {
   @location(3) box_scale: vec3f,
   @location(4) rgb: vec3f,
   @location(5) layer_taps: vec4f,
-  @location(6) faces: f32,
+  @location(6) faces: u32,
 };
 
 struct VertexOut {
@@ -59,7 +59,7 @@ fn vs(v: VertexIn) -> VertexOut {
   o.local_pos = v.local_pos;
   o.box_scale = v.box_scale;
   o.normal = v.normal;
-  o.faces = u32(v.faces + 0.5);
+  o.faces = v.faces;
   o.draw = v.draw;
   o.world_pos = world;
   // Real-size tile UV: a box's own [-0.5, 0.5] corner times its real size
@@ -153,6 +153,108 @@ fn edge_factor(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) ->
   return t * t;
 }
 
+// Corner occlusion from the same bits: a face loses ambient light where the
+// surface turns inward — a top face along a lateral that rises above it, a
+// bottom face along one that dips below, a side face at the end where the
+// column in front of it continues, and the inside of a corner, which the
+// diagonal bit names. A silhouette edge faces open air and takes none. Each
+// concave edge contributes a falloff over AO_REACH cells, a smoothstep so it
+// leaves the crease gently; a corner sums two and reads darker, which is what
+// a corner does. Screen-space AO finds the same creases by probing depth
+// (gpu/ao.rs, the `screen` mode); the mesher already knows them, so this
+// costs the bits and a few ops. The reach and the profile were widened and
+// softened from 0.55 and a square once the two could be switched side by
+// side: the screen-space pass reaches 1.5 units and its occlusion is a
+// sample count that thins out over the whole radius.
+const AO_REACH: f32 = 1.0;
+// The occluded light's hue: #1a1006 as a ratio, red kept — the warm dark of
+// a contact shadow rather than a grey one, which is what the screen-space
+// pass this replaces was tuned to.
+const AO_TINT: vec3f = vec3f(1.0, 0.615, 0.231);
+
+fn occlusion_of(d: f32) -> f32 {
+  return 1.0 - smoothstep(0.0, AO_REACH, d);
+}
+
+fn occlusion(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) -> f32 {
+  if (frame.ao_strength <= 0.0) {
+    return 0.0;
+  }
+  let is_side = abs(normal.z) < 0.5;
+  // Every concave edge of the face counts, each at its own distance — the
+  // reach runs past the middle of a cell, so a face between two walls is
+  // shaded from both and a face with one is shaded from that one only,
+  // with no seam where the nearer edge would change.
+  let to_pos = (0.5 - local_pos) * box_scale;
+  let to_neg = (0.5 + local_pos) * box_scale;
+  let x_dom = abs(normal.x) > 0.5;
+  var n_positive: bool;
+  if (x_dom) {
+    n_positive = normal.x > 0.0;
+  } else {
+    n_positive = normal.y > 0.0;
+  }
+  var occ = 0.0;
+  if (!is_side) {
+    let base = select(DIPS_BASE, RISES_BASE, normal.z > 0.0);
+    if (face_bit(faces, lateral_bit(true, true, base))) {
+      occ += occlusion_of(to_pos.x);
+    }
+    if (face_bit(faces, lateral_bit(true, false, base))) {
+      occ += occlusion_of(to_neg.x);
+    }
+    if (face_bit(faces, lateral_bit(false, true, base))) {
+      occ += occlusion_of(to_pos.y);
+    }
+    if (face_bit(faces, lateral_bit(false, false, base))) {
+      occ += occlusion_of(to_neg.y);
+    }
+    // The corners, at the distance to the corner itself: a cube touching
+    // only there shades less than one along a whole edge, which falls out
+    // of the distance being the longer one.
+    if (normal.z > 0.0) {
+      if (face_bit(faces, DIAG_RISES_PP)) {
+        occ += occlusion_of(length(vec2f(to_pos.x, to_pos.y)));
+      }
+      if (face_bit(faces, DIAG_RISES_PN)) {
+        occ += occlusion_of(length(vec2f(to_pos.x, to_neg.y)));
+      }
+      if (face_bit(faces, DIAG_RISES_NP)) {
+        occ += occlusion_of(length(vec2f(to_neg.x, to_pos.y)));
+      }
+      if (face_bit(faces, DIAG_RISES_NN)) {
+        occ += occlusion_of(length(vec2f(to_neg.x, to_neg.y)));
+      }
+    }
+  } else {
+    let own = lateral_bit(x_dom, n_positive, FACE_BASE);
+    if (face_bit(faces, own * RISES_BASE)) {
+      occ += occlusion_of(to_pos.z);
+    }
+    if (face_bit(faces, own * DIPS_BASE)) {
+      occ += occlusion_of(to_neg.z);
+    }
+    // The inside corners at the face's two ends, which the diagonal bits
+    // name by the quadrant the neighbour is in.
+    if (x_dom) {
+      if (face_bit(faces, select(DIAG_NP, DIAG_PP, n_positive))) {
+        occ += occlusion_of(to_pos.y);
+      }
+      if (face_bit(faces, select(DIAG_NN, DIAG_PN, n_positive))) {
+        occ += occlusion_of(to_neg.y);
+      }
+    } else {
+      if (face_bit(faces, select(DIAG_PN, DIAG_PP, n_positive))) {
+        occ += occlusion_of(to_pos.x);
+      }
+      if (face_bit(faces, select(DIAG_NN, DIAG_NP, n_positive))) {
+        occ += occlusion_of(to_neg.x);
+      }
+    }
+  }
+  return clamp(occ, 0.0, 1.0);
+}
+
 // Both arrays are sampled and one chosen: textureSample must sit in
 // uniform control flow, and which face this is, is not.
 fn sample_tap(layer: f32, is_side: bool, uv: vec2f, fallback: vec3f) -> vec3f {
@@ -182,6 +284,9 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   base = base * mix(1.0, 1.0 - frame.edge_strength, edge_factor(i.local_pos, i.box_scale, i.normal, i.faces));
 
   let n = normalize(i.normal);
-  let color = shade(base, n, i.world_pos, 1.0 / i.clip.w, sun_lit(i.world_pos, n));
+  // Darkened by k, and warmed by the same k, so a fully open face is untouched.
+  let k = frame.ao_strength * occlusion(i.local_pos, i.box_scale, i.normal, i.faces);
+  let open = (1.0 - k) * mix(vec3f(1.0), AO_TINT, k);
+  let color = screen_ao(shade(base, n, i.world_pos, 1.0 / i.clip.w, sun_lit(i.world_pos, n), open), i.clip.xy);
   return vec4f(finish(color, i.clip.xy), d.opacity);
 }

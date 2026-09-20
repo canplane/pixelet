@@ -109,7 +109,7 @@ const TOPOLOGY: GPUPrimitiveTopology[] = ["triangle-list", "triangle-strip", "li
 const CULL: GPUCullMode[] = ["none", "back"];
 const COMPARE: GPUCompareFunction[] = ["always", "greater", "greater-equal", "less"];
 const STEP: GPUVertexStepMode[] = ["vertex", "instance"];
-const VERTEX_FORMAT: GPUVertexFormat[] = ["float32", "float32x2", "float32x3", "float32x4", "uint32x4"];
+const VERTEX_FORMAT: GPUVertexFormat[] = ["float32", "float32x2", "float32x3", "float32x4", "uint32x4", "uint32"];
 const NONE = 0xffffffff;
 
 /** Straight alpha over what is drawn. */
@@ -128,7 +128,20 @@ function float(word: u32): f32 {
 }
 
 function texture_format(code: u32): GPUTextureFormat {
-  return code === format.RGBA8_SRGB ? "rgba8unorm-srgb" : code === format.DEPTH32 ? "depth32float" : canvas_format;
+  switch (code) {
+    case format.RGBA8_SRGB:
+      return "rgba8unorm-srgb";
+    case format.DEPTH32:
+      return "depth32float";
+    case format.RGBA32F:
+      return "rgba32float";
+    case format.R8:
+      return "r8unorm";
+    case format.RGBA8:
+      return "rgba8unorm";
+    default:
+      return canvas_format;
+  }
 }
 
 function get<T extends GpuObject>(id: u32): T {
@@ -156,6 +169,7 @@ function layout_entries(words: U32Array, samples: u32): GPUBindGroupLayoutEntry[
     else if (kind === record.TEXTURE_ARRAY) e.texture = { viewDimension: "2d-array" };
     else if (kind === record.DEPTH) e.texture = { sampleType: "depth" };
     else if (kind === record.FRAME_DEPTH) e.texture = { sampleType: "depth", multisampled: samples > 1 };
+    else if (kind === record.TEXTURE_UNFILTERED) e.texture = { sampleType: "unfilterable-float" };
     else if (kind === record.SAMPLER) e.sampler = {};
     else if (kind === record.SAMPLER_COMPARISON) e.sampler = { type: "comparison" };
     out.push(e);

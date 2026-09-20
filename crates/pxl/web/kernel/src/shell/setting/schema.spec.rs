@@ -7,7 +7,10 @@
 // and the sheet renders rows from here, so adding a setting is one entry in
 // SETTINGS plus its two strings in the locale catalogue under
 // `settings.<section>.<key>`. A `handheld_default` is the default on a
-// handheld device, where it differs. A `dev` setting exists in every build
+// handheld device, where it differs. A choice may carry `costs` beside its
+// `options`, one per option in the same order, for when what an option costs
+// differs from its neighbours'; an empty string is no badge. A `dev` setting
+// exists in every build
 // but is only offered in the sheet under `__IS_DEV__`.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
@@ -35,23 +38,30 @@ pub const SETTING_SECTIONS: &[&str] = &["display", "camera", "editing", "lightin
 ///             reachable at the cost of an angle nobody asked for.
 pub const CAMERA_TERRAIN_MODES: &[&str] = &["through", "stop", "climb"];
 
+/// Where the ambient occlusion comes from.
+///
+///   off    — none.
+///   corner — a chunk shades its own corners from the face bits the edge
+///            shading reads (crates/pxl/web/render/src/frame/shader/chunk.wgsl):
+///            the floor along a cube and the inside of a corner, over about
+///            half a cell, scaling the ambient and hemisphere light only.
+///            A few fragment ops behind a uniform.
+///   screen — N8AO as the three.js build ran it until 2026-09-14
+///            (crates/pxl/web/render/src/gpu/ao.rs): the world's depth drawn
+///            once more, the occlusion sampled from it at half resolution,
+///            denoised, and applied to every lit surface as a warm dark
+///            tint. Five passes and 11 bytes a pixel.
+pub const AO_MODES: &[&str] = &["off", "corner", "screen"];
+
 pub mod SETTINGS {
-    /// The index sweep, the badge draws and the atlas: a couple of ms a
-    /// frame while places are being placed, nothing once they are.
-    pub mod show_poi {
+    /// Ground colour from the art pack (four sampler2DArray taps per fragment)
+    /// instead of the flat per-instance average. The shader's `u_low_spec` is
+    /// this, inverted.
+    pub mod texture_pack {
         pub const kind: &str = "toggle";
         pub const default: bool = true;
         pub const section: &str = "display";
-        pub const cost: &str = "low";
-        pub const dev: bool = true;
-        pub const KEYS: &[&str] = &["kind", "default", "section", "cost", "dev"];
-    }
-    /// Procedurally scattered decor only; what the player placed stays.
-    pub mod show_decor {
-        pub const kind: &str = "toggle";
-        pub const default: bool = true;
-        pub const section: &str = "display";
-        pub const cost: &str = "low";
+        pub const cost: &str = "med";
         pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
     }
     /// Whether the STRUCTURE ground channel is painted. The bake writes it
@@ -61,6 +71,24 @@ pub mod SETTINGS {
         pub const default: bool = true;
         pub const section: &str = "display";
         pub const KEYS: &[&str] = &["kind", "default", "section"];
+    }
+    /// Procedurally scattered decor only; what the player placed stays.
+    pub mod show_decor {
+        pub const kind: &str = "toggle";
+        pub const default: bool = true;
+        pub const section: &str = "display";
+        pub const cost: &str = "low";
+        pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
+    }
+    /// The index sweep, the badge draws and the atlas: a couple of ms a
+    /// frame while places are being placed, nothing once they are.
+    pub mod show_poi {
+        pub const kind: &str = "toggle";
+        pub const default: bool = true;
+        pub const section: &str = "display";
+        pub const cost: &str = "low";
+        pub const dev: bool = true;
+        pub const KEYS: &[&str] = &["kind", "default", "section", "cost", "dev"];
     }
     /// Rotate-drag and pinch stop writing polar; azimuth is unaffected.
     /// Off by default: the tilt is the one control a map view is expected to
@@ -80,7 +108,8 @@ pub mod SETTINGS {
         pub const default: &str = "climb";
         pub const options: &[&str] = &["through", "stop", "climb"];
         pub const section: &str = "camera";
-        pub const KEYS: &[&str] = &["kind", "default", "options", "section"];
+        pub const dev: bool = true;
+        pub const KEYS: &[&str] = &["kind", "default", "options", "section", "dev"];
     }
     /// Panning re-samples the terrain height under the map centre each step.
     pub mod ground_snap {
@@ -96,7 +125,8 @@ pub mod SETTINGS {
         pub const kind: &str = "toggle";
         pub const default: bool = false;
         pub const section: &str = "editing";
-        pub const KEYS: &[&str] = &["kind", "default", "section"];
+        pub const dev: bool = true;
+        pub const KEYS: &[&str] = &["kind", "default", "section", "dev"];
     }
     /// Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
@@ -115,6 +145,17 @@ pub mod SETTINGS {
         pub const cost: &str = "low";
         pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
     }
+    /// corner, the occlusion a voxel world gets from its own geometry with no
+    /// screen-space pass; screen, the three.js build's N8AO, kept to be put
+    /// beside it. AO_MODES says each.
+    pub mod ao {
+        pub const kind: &str = "choice";
+        pub const default: &str = "corner";
+        pub const options: &[&str] = &["off", "corner", "screen"];
+        pub const costs: &[&str] = &["", "low", "high"];
+        pub const section: &str = "lighting";
+        pub const KEYS: &[&str] = &["kind", "default", "options", "costs", "section"];
+    }
     /// The sun's shadow map (crates/pxl/web/render/src/gpu/shadow.rs): the world drawn once more
     /// from the sun each frame, depth only, and a 3x3 compare per fragment;
     /// 16 MB of map on a desktop, 4 on a phone.
@@ -122,18 +163,9 @@ pub mod SETTINGS {
         pub const kind: &str = "toggle";
         pub const default: bool = false;
         pub const section: &str = "lighting";
+        pub const dev: bool = true;
         pub const cost: &str = "high";
-        pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
-    }
-    /// Ground colour from the art pack (four sampler2DArray taps per fragment)
-    /// instead of the flat per-instance average. The shader's `u_low_spec` is
-    /// this, inverted.
-    pub mod texture_pack {
-        pub const kind: &str = "toggle";
-        pub const default: bool = true;
-        pub const section: &str = "quality";
-        pub const cost: &str = "med";
-        pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
+        pub const KEYS: &[&str] = &["kind", "default", "section", "dev", "cost"];
     }
     /// Four samples a pixel for the frame's colour and depth:
     /// the largest allocation the page makes — 32 bytes a device pixel, a
@@ -146,8 +178,22 @@ pub mod SETTINGS {
         pub const default: bool = false;
         pub const handheld_default: bool = false;
         pub const section: &str = "quality";
+        pub const dev: bool = true;
         pub const cost: &str = "high";
-        pub const KEYS: &[&str] = &["kind", "default", "handheld_default", "section", "cost"];
+        pub const KEYS: &[&str] = &["kind", "default", "handheld_default", "section", "dev", "cost"];
+    }
+    /// LOD cross-fade per fragment instead of per chunk: both tiers draw with
+    /// complementary dither and dissolve, at the cost of drawing a blending
+    /// chunk twice and a pattern that crawls without temporal AA. On by
+    /// default: what it replaces swaps a whole chunk at a hashed threshold,
+    /// which reads as the ground popping tier by tier.
+    pub mod pixel_dither {
+        pub const kind: &str = "toggle";
+        pub const default: bool = true;
+        pub const section: &str = "quality";
+        pub const dev: bool = true;
+        pub const cost: &str = "med";
+        pub const KEYS: &[&str] = &["kind", "default", "section", "dev", "cost"];
     }
     /// The debug gizmos: frame origins, page corners, the map centre and the rings.
     pub mod show_debug_objects {
@@ -159,16 +205,6 @@ pub mod SETTINGS {
     }
     /// The scheduler ledger's corner panel. The console stream is a button on it.
     pub mod show_ledger {
-        pub const kind: &str = "toggle";
-        pub const default: bool = false;
-        pub const section: &str = "debug";
-        pub const dev: bool = true;
-        pub const KEYS: &[&str] = &["kind", "default", "section", "dev"];
-    }
-    /// LOD cross-fade per fragment instead of per chunk: both tiers draw with
-    /// complementary dither and dissolve, at the cost of drawing a blending
-    /// chunk twice and a pattern that crawls without temporal AA.
-    pub mod pixel_dither {
         pub const kind: &str = "toggle";
         pub const default: bool = false;
         pub const section: &str = "debug";
@@ -190,21 +226,22 @@ pub mod SETTINGS {
         pub const KEYS: &[&str] = &["kind", "default", "section"];
     }
     pub const KEYS: &[&str] = &[
-        "show_poi",
-        "show_decor",
+        "texture_pack",
         "show_structures",
+        "show_decor",
+        "show_poi",
         "lock_camera_tilt",
         "camera_terrain",
         "ground_snap",
         "enable_terrain_carving",
         "show_edge_shade",
         "show_rim_light",
+        "ao",
         "show_shadow_map",
-        "texture_pack",
         "msaa",
+        "pixel_dither",
         "show_debug_objects",
         "show_ledger",
-        "pixel_dither",
         "person_variant",
         "pet_variant",
     ];

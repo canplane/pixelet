@@ -65,6 +65,36 @@ impl CameraTerrain {
     }
 }
 
+/// Where the ambient occlusion comes from, as schema.json's `ao` offers it;
+/// read as this past `apply`, as `camera_terrain` is.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AoMode {
+    Off,
+    /// A chunk shades its own corners (chunk.wgsl's occlusion).
+    #[default]
+    Corner,
+    /// The screen-space pass (pxl-render's gpu/ao.rs).
+    Screen,
+}
+
+impl AoMode {
+    fn of(text: &str) -> AoMode {
+        match text {
+            "off" => AoMode::Off,
+            "screen" => AoMode::Screen,
+            _ => AoMode::Corner,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            AoMode::Off => "off",
+            AoMode::Corner => "corner",
+            AoMode::Screen => "screen",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct SettingsStore {
     pub show_poi: bool,
@@ -75,6 +105,7 @@ pub struct SettingsStore {
     pub ground_snap: bool,
     pub enable_terrain_carving: bool,
     pub show_edge_shade: bool,
+    pub ao: AoMode,
     pub show_rim_light: bool,
     pub show_shadow_map: bool,
     pub texture_pack: bool,
@@ -101,6 +132,7 @@ impl SettingsStore {
             ground_snap: false,
             enable_terrain_carving: false,
             show_edge_shade: false,
+            ao: AoMode::default(),
             show_rim_light: false,
             show_shadow_map: false,
             texture_pack: false,
@@ -128,6 +160,7 @@ impl SettingsStore {
             ("ground_snap", SettingValue::Toggle(v)) => self.ground_snap = v,
             ("enable_terrain_carving", SettingValue::Toggle(v)) => self.enable_terrain_carving = v,
             ("show_edge_shade", SettingValue::Toggle(v)) => self.show_edge_shade = v,
+            ("ao", SettingValue::Text(v)) => self.ao = AoMode::of(&v),
             ("show_rim_light", SettingValue::Toggle(v)) => self.show_rim_light = v,
             ("show_shadow_map", SettingValue::Toggle(v)) => self.show_shadow_map = v,
             ("texture_pack", SettingValue::Toggle(v)) => self.texture_pack = v,
@@ -152,6 +185,7 @@ impl SettingsStore {
             "ground_snap" => SettingRef::Toggle(self.ground_snap),
             "enable_terrain_carving" => SettingRef::Toggle(self.enable_terrain_carving),
             "show_edge_shade" => SettingRef::Toggle(self.show_edge_shade),
+            "ao" => SettingRef::Text(self.ao.as_str()),
             "show_rim_light" => SettingRef::Toggle(self.show_rim_light),
             "show_shadow_map" => SettingRef::Toggle(self.show_shadow_map),
             "texture_pack" => SettingRef::Toggle(self.texture_pack),
