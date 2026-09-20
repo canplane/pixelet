@@ -1,0 +1,15 @@
+{
+  // Nearly empty on purpose, and here so the directory can be a workspace
+  // member at all — everything this package needs is said once at the root.
+  //
+  // What the package is called is `@xpute/core/`, and it is called that by
+  // the import maps: pixelet's deno.jsonc and the one the export writes for
+  // the xpute repository both map that prefix onto this `src/`, and every
+  // import resolves through it. Saying the name here as well would be a
+  // second place for it without a first consumer — nothing imports the bare
+  // name, and Deno asks a named package what it exports, which is a list of every
+  // module under src/ and so a copy of the tree to keep in step.
+  //
+  // Both belong here the day this is published, and will then say what is
+  // published rather than restate what already resolves.
+}

@@ -11,6 +11,7 @@
 use crate::control::camera::config::camera_cfg::projection::FOV;
 use crate::control::camera::config::camera_cfg::view::{MAX_DIST, MAX_POLAR, MIN_DIST, MIN_POLAR};
 use crate::layer::environment::config::render_cfg;
+use xpute_core::math::scalar::round;
 
 /// How far the chunk-aligned anchor can sit from the true view centre.
 fn anchor_quantization() -> f64 {
@@ -64,7 +65,7 @@ fn view_range_everything_the_camera_can_see_is_inside_the_distance_chunks_are_mo
             assert!(
                 reach <= render_cfg::CHUNK_RENDER_DIST,
                 "aspect {aspect}, pivot +{pivot_height}u: visible ground reaches {}u, mounted to {}u",
-                reach.round(),
+                round(reach),
                 render_cfg::CHUNK_RENDER_DIST
             );
         }

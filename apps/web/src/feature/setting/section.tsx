@@ -5,9 +5,10 @@ import { Bug, Eye, Gauge, Move3d, Pickaxe, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { type SettingKey, SETTINGS, type SettingSection, settingsIn, type ToggleKey } from "@/feature/setting/schema.ts";
+import { isDevSection, type SettingKey, SETTINGS, type SettingSection, settingsIn, type ToggleKey } from "@/feature/setting/schema.ts";
 import { SectionTitle, SettingGroup, SettingRadioRow, SettingRow } from "./row.tsx";
 import { kernel_action, useKernel } from "@/kernel/shell.ts";
+import { Separator } from "@/shared/ui/shadcn/separator.tsx";
 
 const SECTION_ICONS: Partial<Record<SettingSection, LucideIcon>> = {
   display: Eye,
@@ -25,13 +26,22 @@ const SECTION_ICONS: Partial<Record<SettingSection, LucideIcon>> = {
 export function SettingsSection(props: { section: SettingSection; children?: ReactNode }) {
   const { section, children } = props;
   const { t } = useTranslation();
-  const keys = settingsIn(section).filter((key) => __IS_DEV__ || !SETTINGS[key].dev);
+  // A dev section is a development build's as a whole (schema.json's
+  // DEV_SECTIONS); the constant folds, so outside dev the section is not in
+  // the bundle at all. Its rows would not be either — the table is the
+  // build's own (schema.ts) — but the section says so once, here, rather than
+  // being found empty.
+  const dev = isDevSection(section);
+  if (!__IS_DEV__ && dev) return null;
+  const keys = settingsIn(section);
   // A section whose every entry is dev-only has nothing to show outside dev.
   if (keys.length === 0 && children === undefined) return null;
 
   return (
     <div className="flex flex-col gap-1">
-      <SectionTitle icon={SECTION_ICONS[section]} caption={t(`settings.${section}.section_caption`)} dev={section === "debug"}>
+      {/* A dev section is set apart from the rest of the sheet, not just labelled. */}
+      {dev && <Separator />}
+      <SectionTitle icon={SECTION_ICONS[section]} caption={t(`settings.${section}.section_caption`)} dev={dev}>
         {t(`settings.${section}.section_title`)}
       </SectionTitle>
       {keys.map((key) => <SettingControl key={key} name={key} />)}
@@ -58,12 +68,12 @@ function SettingControl(props: { name: SettingKey }) {
           active={value as boolean}
           onToggle={() => toggle_setting(name as ToggleKey)}
           cost={setting.cost}
-          dev={setting.dev && setting.section !== "debug"}
+          dev={setting.dev && !isDevSection(setting.section)}
         />
       );
     case "choice":
       return (
-        <SettingGroup label={t(`${base}.label`)} cost={setting.cost} dev={setting.dev && setting.section !== "debug"}>
+        <SettingGroup label={t(`${base}.label`)} cost={setting.cost} dev={setting.dev && !isDevSection(setting.section)}>
           {setting.options.map((option, i) => (
             <SettingRadioRow
               key={option}

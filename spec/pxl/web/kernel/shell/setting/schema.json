@@ -8,8 +8,9 @@
     "handheld device, where it differs. A choice may carry `costs` beside its",
     "`options`, one per option in the same order, for when what an option costs",
     "differs from its neighbours'; an empty string is no badge. A `dev` setting",
-    "exists in every build",
-    "but is only offered in the sheet under `__IS_DEV__`."
+    "is in the kernel's table in every build and offered only under a",
+    "development one; the shell's production bundle carries SETTINGS_SHIPPED,",
+    "the table without them, in SETTINGS' place."
   ],
   "SETTING_SECTIONS": {
     "$value": ["display", "camera", "editing", "lighting", "quality", "debug", "character"],
@@ -17,6 +18,15 @@
       "The sheet's sections, in the order they are shown. `character` is not a",
       "section of the sheet at all — its two settings are picked from the",
       "drawer's Character tab (ui/character/picker.tsx)."
+    ]
+  },
+  "DEV_SECTIONS": {
+    "$value": ["debug"],
+    "$doc": [
+      "The sections that are a development build's as a whole. One of these is",
+      "shown under `__IS_DEV__` only and carries the badge on its heading, so",
+      "its rows do not repeat it; a `dev` row in any other section carries its",
+      "own. Which rows exist in a build is the rows' `dev`, not this."
     ]
   },
   "CAMERA_TERRAIN_MODES": {
@@ -57,12 +67,17 @@
       "$doc": [
         "Ground colour from the art pack (four sampler2DArray taps per fragment)",
         "instead of the flat per-instance average. The shader's `u_low_spec` is",
-        "this, inverted."
+        "this, inverted.",
+        "",
+        "Low because the four taps are all of it: fill rate, which scales with",
+        "the screen and not with the world, and nothing else — no geometry, no",
+        "pass of its own, and no work off the GPU past an atlas the client",
+        "already holds."
       ],
       "kind": "toggle",
       "default": true,
       "section": "display",
-      "cost": "med"
+      "cost": "low"
     },
     "show_structures": {
       "$doc": ["Whether the STRUCTURE ground channel is painted. The bake writes it", "either way (pipeline/overture/policy.rs); this is a render decision."],
@@ -71,11 +86,22 @@
       "section": "display"
     },
     "show_decor": {
-      "$doc": ["Procedurally scattered decor only; what the player placed stays."],
+      "$doc": [
+        "Procedurally scattered decor only; what the player placed stays.",
+        "",
+        "Med because it is models rather than a shading term: a chunk builds its",
+        "decor and the frame draws it, so what it costs follows what is in view.",
+        "It has been the frame's own bottleneck — 20260912-what-to-render-when.md",
+        "reads GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving",
+        "frames missing a vsync — and the projected-size criterion holds it to",
+        "the nearest tier without making far decor cheap, the impostor tier that",
+        "would being decided and not built. The badge is an ordering, and this is",
+        "the one to reach for before any shading term."
+      ],
       "kind": "toggle",
       "default": true,
       "section": "display",
-      "cost": "low"
+      "cost": "med"
     },
     "show_poi": {
       "$doc": ["The index sweep, the badge draws and the atlas: a couple of ms a", "frame while places are being placed, nothing once they are."],

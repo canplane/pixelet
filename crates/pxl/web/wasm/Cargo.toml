@@ -18,9 +18,16 @@ xpute-runtime = { path = "../../../xpute/runtime" }
 xpute-core = { path = "../../../xpute/core" }
 pxl-spec = { path = "../../spec" }
 pxl-render = { path = "../render" }
-pxl-kernel = { path = "../kernel" }
+pxl-kernel = { path = "../kernel", default-features = false }
 # The executor the module polls its tasks on inside a turn (src/executor.rs).
 # No platform feature: the pender is the module's own, and the platform one
 # for wasm brings wasm-bindgen.
 embassy-executor = { version = "0.10", default-features = false }
 critical-section = "1.1"
+
+[features]
+# Forwarded to the kernel. On for a module anyone works on; the published one
+# is built `--no-default-features` (apps/web/script/build-wasm.ts) and
+# carries no dev-only setting.
+default = ["dev"]
+dev = ["pxl-kernel/dev"]

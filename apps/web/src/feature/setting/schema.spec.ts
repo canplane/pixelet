@@ -10,13 +10,20 @@
 // handheld device, where it differs. A choice may carry `costs` beside its
 // `options`, one per option in the same order, for when what an option costs
 // differs from its neighbours'; an empty string is no badge. A `dev` setting
-// exists in every build
-// but is only offered in the sheet under `__IS_DEV__`.
+// is in the kernel's table in every build and offered only under a
+// development one; the shell's production bundle carries SETTINGS_SHIPPED,
+// the table without them, in SETTINGS' place.
 
 /** The sheet's sections, in the order they are shown. `character` is not a
  * section of the sheet at all — its two settings are picked from the
  * drawer's Character tab (ui/character/picker.tsx). */
 export const SETTING_SECTIONS = ["display", "camera", "editing", "lighting", "quality", "debug", "character"] as const;
+
+/** The sections that are a development build's as a whole. One of these is
+ * shown under `__IS_DEV__` only and carries the badge on its heading, so
+ * its rows do not repeat it; a `dev` row in any other section carries its
+ * own. Which rows exist in a build is the rows' `dev`, not this. */
+export const DEV_SECTIONS = ["debug"] as const;
 
 /** What terrain does to the camera.
  *
@@ -48,12 +55,17 @@ export const AO_MODES = ["off", "corner", "screen"] as const;
 export const SETTINGS = {
   /** Ground colour from the art pack (four sampler2DArray taps per fragment)
    * instead of the flat per-instance average. The shader's `u_low_spec` is
-   * this, inverted. */
+   * this, inverted.
+   *
+   * Low because the four taps are all of it: fill rate, which scales with
+   * the screen and not with the world, and nothing else — no geometry, no
+   * pass of its own, and no work off the GPU past an atlas the client
+   * already holds. */
   texture_pack: {
     kind: "toggle",
     default: true,
     section: "display",
-    cost: "med",
+    cost: "low",
   },
   /** Whether the STRUCTURE ground channel is painted. The bake writes it
    * either way (pipeline/overture/policy.rs); this is a render decision. */
@@ -62,12 +74,21 @@ export const SETTINGS = {
     default: true,
     section: "display",
   },
-  /** Procedurally scattered decor only; what the player placed stays. */
+  /** Procedurally scattered decor only; what the player placed stays.
+   *
+   * Med because it is models rather than a shading term: a chunk builds its
+   * decor and the frame draws it, so what it costs follows what is in view.
+   * It has been the frame's own bottleneck — 20260912-what-to-render-when.md
+   * reads GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving
+   * frames missing a vsync — and the projected-size criterion holds it to
+   * the nearest tier without making far decor cheap, the impostor tier that
+   * would being decided and not built. The badge is an ordering, and this is
+   * the one to reach for before any shading term. */
   show_decor: {
     kind: "toggle",
     default: true,
     section: "display",
-    cost: "low",
+    cost: "med",
   },
   /** The index sweep, the badge draws and the atlas: a couple of ms a
    * frame while places are being placed, nothing once they are. */
@@ -188,6 +209,92 @@ export const SETTINGS = {
     default: false,
     section: "debug",
     dev: true,
+  },
+  person_variant: {
+    kind: "number",
+    /** female-2, by its number in variant.json's person keys. */
+    default: 1 as number,
+    section: "character",
+  },
+  pet_variant: {
+    kind: "number",
+    /** chick, by its number in variant.json's pet keys. */
+    default: 5 as number,
+    section: "character",
+  },
+} as const;
+
+/** SETTINGS without its `dev` entries: what a production bundle carries in its place. */
+export const SETTINGS_SHIPPED = {
+  /** Ground colour from the art pack (four sampler2DArray taps per fragment)
+   * instead of the flat per-instance average. The shader's `u_low_spec` is
+   * this, inverted.
+   *
+   * Low because the four taps are all of it: fill rate, which scales with
+   * the screen and not with the world, and nothing else — no geometry, no
+   * pass of its own, and no work off the GPU past an atlas the client
+   * already holds. */
+  texture_pack: {
+    kind: "toggle",
+    default: true,
+    section: "display",
+    cost: "low",
+  },
+  /** Whether the STRUCTURE ground channel is painted. The bake writes it
+   * either way (pipeline/overture/policy.rs); this is a render decision. */
+  show_structures: {
+    kind: "toggle",
+    default: true,
+    section: "display",
+  },
+  /** Procedurally scattered decor only; what the player placed stays.
+   *
+   * Med because it is models rather than a shading term: a chunk builds its
+   * decor and the frame draws it, so what it costs follows what is in view.
+   * It has been the frame's own bottleneck — 20260912-what-to-render-when.md
+   * reads GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving
+   * frames missing a vsync — and the projected-size criterion holds it to
+   * the nearest tier without making far decor cheap, the impostor tier that
+   * would being decided and not built. The badge is an ordering, and this is
+   * the one to reach for before any shading term. */
+  show_decor: {
+    kind: "toggle",
+    default: true,
+    section: "display",
+    cost: "med",
+  },
+  /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
+   * Off by default: the tilt is the one control a map view is expected to
+   * have, and locking it reads as the app being stuck. */
+  lock_camera_tilt: {
+    kind: "toggle",
+    default: false,
+    section: "camera",
+  },
+  /** Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
+   * A few fragment ops behind a uniform; the shader is the same either way. */
+  show_edge_shade: {
+    kind: "toggle",
+    default: true,
+    section: "lighting",
+    cost: "low",
+  },
+  /** A uniform on an already-compiled shader term; not a pass. */
+  show_rim_light: {
+    kind: "toggle",
+    default: true,
+    section: "lighting",
+    cost: "low",
+  },
+  /** corner, the occlusion a voxel world gets from its own geometry with no
+   * screen-space pass; screen, the three.js build's N8AO, kept to be put
+   * beside it. AO_MODES says each. */
+  ao: {
+    kind: "choice",
+    default: "corner",
+    options: ["off", "corner", "screen"],
+    costs: ["", "low", "high"],
+    section: "lighting",
   },
   person_variant: {
     kind: "number",

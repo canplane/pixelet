@@ -15,6 +15,10 @@
     // The Rust core's module, from crates/, into src/kernel/kernel.wasm. Every
     // task that loads it depends on this, so it is never stale or missing.
     "build:wasm": "deno run -A script/build-wasm.ts",
+    // The same module in its published shape — without the dev-only settings
+    // and with its panic paths blanked — which is what `build` bundles, so a
+    // local build and the deploy's are the same bytes (script/build-wasm.ts).
+    "build:wasm:published": "deno run -A script/build-wasm.ts --published",
 
     // Server routes answered by the published deployment: no local server,
     // database or Docker. See vite.config.ts's VITE_DEV_SOURCE comment.
@@ -22,7 +26,7 @@
     // The same client against the servers on this machine.
     "dev:local": { "command": "VITE_DEV_SOURCE=local deno run -A --node-modules-dir=auto npm:vite", "dependencies": ["build:wasm"] },
 
-    "build": { "command": "deno run -A --node-modules-dir=auto npm:vite build", "dependencies": ["build:wasm"] },
+    "build": { "command": "deno run -A --node-modules-dir=auto npm:vite build", "dependencies": ["build:wasm:published"] },
     "preview": { "command": "deno run -A --node-modules-dir=auto npm:vite preview", "dependencies": ["build"] },
     "preview:local": "VITE_DEV_SOURCE=local deno run -A --node-modules-dir=auto npm:vite preview",
 

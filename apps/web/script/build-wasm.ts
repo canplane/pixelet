@@ -5,7 +5,8 @@
 // one; cargo's own cache makes a run with nothing changed cost a second.
 //
 // Usage (from apps/web):
-//   deno run -A script/build-wasm.ts
+//   deno run -A script/build-wasm.ts               # the module anyone works on
+//   deno run -A script/build-wasm.ts --published   # what `build` bundles
 
 import { fileURLToPath } from "node:url";
 
@@ -35,8 +36,16 @@ function remapped(): string {
   return [Deno.env.get("RUSTFLAGS"), ...flags].filter(Boolean).join(" ");
 }
 
+/** Whether this is the module in its published shape: what `deno task
+ * build` bundles, whoever runs it. What a published module leaves out — the
+ * dev-only settings (the crate's `dev` feature), its panic paths (below) —
+ * is gated on this and on nothing else, so a local build and the deploy's
+ * are the same bytes; the build number the deploy hands out is a stamp on
+ * the build info, not a change to the module. */
+const published = Deno.args.includes("--published");
+
 const cargo = new Deno.Command("cargo", {
-  args: ["build", "--release", "--package", "pxl-wasm", "--target", TARGET],
+  args: ["build", "--release", "--package", "pxl-wasm", "--target", TARGET, ...(published ? ["--no-default-features"] : [])],
   cwd: CRATES,
   env: { RUSTFLAGS: remapped() },
   stdout: "inherit",
@@ -93,8 +102,8 @@ async function minified(): Promise<Abi> {
 }
 
 /**
- * The source paths a panic carries, blanked where they lie — published builds
- * only.
+ * The source paths a panic carries, blanked where they lie — the published
+ * shape only.
  *
  * Rust embeds them and offers no way not to. `unwrap`, `expect` and an index
  * are `#[track_caller]`, so the location a panic reports is the caller's, and
@@ -176,9 +185,7 @@ if (!status.success) Deno.exit(status.code);
 await Deno.copyFile(BUILT, OUT);
 const linked = (await Deno.stat(OUT)).size;
 await writeAbi(await minified());
-// Only what is published loses its panic paths: a build number is handed out
-// by the deploy and by nothing else (script/deploy.ts), so it is the one
-// signal that says this module is going out rather than being worked on.
-const paths = Deno.env.get("PXL_BUILD_NUMBER") ? blanked() : 0;
-const said = paths > 0 ? `, and ${paths} source paths blanked` : "";
+// Only what is published loses its panic paths.
+const paths = published ? blanked() : 0;
+const said = (published ? ", without the dev-only settings" : "") + (paths > 0 ? `, and ${paths} source paths blanked` : "");
 console.log(`[build-wasm] ${linked} -> ${(await Deno.stat(OUT)).size} bytes, stripped and its names minified${said} -> src/kernel/kernel.wasm`);

@@ -70,12 +70,7 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
             <SettingsSection section="editing" />
             <SettingsSection section="lighting" />
             <SettingsSection section="quality" />
-            {__IS_DEV__ && (
-              <>
-                <Separator />
-                <SettingsSection section="debug" />
-              </>
-            )}
+            <SettingsSection section="debug" />
           </TabsContent>
 
           <TabsContent value="info" className={TAB_SCROLL} style={TAB_PAD}>

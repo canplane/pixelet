@@ -41,7 +41,7 @@ interface SettingRowProps {
   active: boolean;
   onToggle: () => void;
   cost?: SettingCost;
-  /** Marks a setting only reachable in dev builds (rendered under `__IS_DEV__`) — callers gate visibility themselves, this just labels the row once shown. */
+  /** Marks a setting only a development build offers (schema.json's `dev`) — the table decides whether the row is there at all, this just labels it once shown. */
   dev?: boolean;
 }
 
@@ -135,8 +135,9 @@ interface SectionTitleProps {
   children: string;
   icon?: LucideIcon;
   caption?: string;
-  /** Marks the whole section as dev-only — callers still gate visibility
-   * themselves (`__IS_DEV__ && <Section/>`), this just labels it once shown. */
+  /** Marks the whole section as a development build's (schema.json's
+   * DEV_SECTIONS) — section.tsx decides whether it is shown at all, this just
+   * labels it once shown. */
   dev?: boolean;
 }
 

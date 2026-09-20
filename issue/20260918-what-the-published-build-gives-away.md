@@ -168,11 +168,12 @@ people who build compilers rather than the people who ship applications.
 A `&'static str` is a pointer and a length held apart, so overwriting the bytes
 where they lie, to the same length, leaves a module that runs as it did:
 nothing compares a path at runtime. 87 paths, 4,443 bytes, to dots, in
-`build_wasm.ts` and gated on `PXL_BUILD_NUMBER`, which the deploy hands out and
-nothing else does. A build anyone is working on keeps its paths — what is lost
-is the file name in a panic's message, and it is lost only where nobody is
-reading it. It is the same result `-Z location-detail=none` gives, without the
-toolchain.
+`build_wasm.ts`, for the module `build` bundles (`--published`; until 09-21 it
+was gated on `PXL_BUILD_NUMBER` instead, which only the deploy hands out — see
+below for why that moved). A build anyone is working on keeps its paths — what
+is lost is the file name in a panic's message, and it is lost only where nobody
+is reading it. It is the same result `-Z location-detail=none` gives, without
+the toolchain.
 
 Two things make it safe rather than lucky. **Every match is filled with the same
 byte**, which is what an overlap needs: the linker merges a string that is
@@ -319,6 +320,95 @@ the authored half is open, and it is the existing policy's remaining work rather
 than a new one — with a residue of standard-library text that only the nightly
 switch reaches.
 
+## 2026-09-21 — the settings the build does not offer
+
+Read back again, the bundle named the nine settings a production build
+withholds, with their defaults: `enable_terrain_carving:{kind:"toggle",
+default:!1,section:"editing",dev:!0}` and the eight beside it, each carrying
+the `dev:!0` that says which rows a reader is not supposed to see. The kernel
+module held the same nine names in its data. And the action that sets one was
+reachable: `set_setting` checked what storage brought in against the build's
+offer and checked nothing that arrived live, so
+`kernel_action({type:"set_setting",key:"show_ledger",value:true})` from the
+console turned the scheduler ledger on in the published build.
+
+None of it was a decision either. The settings table is generated whole from
+`schema.json`, and the sheet filtered it on `__IS_DEV__` at run time — which
+removes the row from the screen and leaves it in the artifact, the same shape
+the debug section's labels had taken through the locale catalogue. The rule
+above already says what to do with it: the rows are something a production
+build does not need to run, so they go.
+
+**The shell takes a second table.** `script/spec.ts` writes `SETTINGS_SHIPPED`
+beside `SETTINGS`, the same literal without its `dev` entries, and
+`feature/setting/schema.ts` picks one with `__IS_DEV__ ? EVERY : SHIPPED`. The
+bundler folds the constant and drops the literal a production build never
+reads, so a dev row is absent rather than hidden. The type stays the whole
+table's — a dev key is a `SettingKey` in every build; what a production build
+lacks is its row — which is what lets the kernel's test still name `show_poi`.
+
+**The kernel takes a feature.** `pxl-kernel`'s `dev`, on by default and
+forwarded through `pxl-wasm`; the dev rows of the table and the store's arms
+for them sit under `#[cfg(feature = "dev")]`, and `build-wasm.ts` builds the
+published module `--no-default-features` — under its `--published`, the same
+flag the panic paths are blanked on. A setting out of the table is not
+offered, not stored and not named, and what it does the module still does: the
+store's defaults are written from the spec's constants rather than from the
+table, so the POI layer is on in a build that cannot turn it off. Two tests
+hold the seams — that a module without the feature has no `dev` row at all,
+which is what catches a `dev: true` added to the JSON without its `cfg`, and
+that the hand-written defaults agree with the table on either device.
+
+**The live path checks the offer.** `set_setting` refuses a key `is_offered`
+says no to, as `load` already did; the row is gone from the sheet, but the
+action that sets it is not gone from the console.
+
+**`check-bundle.ts` reads for all three.** A dev row in the JavaScript — the
+name as a property whose value is an object, not the bare name, since the
+ledger overlay reads `settings.show_ledger` and the ledger report has an
+`msaa` of its own — with `show_structures`'s row as the sentinel; and a dev
+name in the kernel's data.
+
+**One flag says what the published shape is.** Both of the module's
+omissions were first gated on `PXL_BUILD_NUMBER`, the number the deploy's
+gate hands out, on the reading that a number is what says a module is going
+out. It says who built it, not what shape it is: a local `deno task build`
+came out with the dev names and the panic paths in, so its `check:bundle`
+had to skip the kernel and the unnumbered deploy `deploy.ts` allows would
+have published both. Now `build` bundles the module `build-wasm.ts` makes
+with `--published`, whoever runs it, and the number is a stamp on the build
+info and nothing more: a local build and the deploy's are the same bytes,
+and the kernel is checked every time. What this costs is the file name in a
+panic under `vite preview`, which is the deploy's own behaviour reproduced
+rather than a loss.
+
+One row nearly changed sides and did not. `show_ledger` turns on the
+scheduler ledger's panel, and the panel's hook — `settings.show_ledger`, read
+by an overlay mounted in every build — was still in the production bundle,
+which read as the ledger being meant for a published build, measured on a
+phone. It is not: the overlay returns nothing outside `import.meta.env.DEV`,
+which `vite build` folds to false whatever `VITE_APP_ENV` says, and the
+panel's markup is absent from the published bundle. Taking the setting out of
+`dev` on that reading shipped a toggle that did nothing, for one build; it is
+`dev` again, and what was dev stays dev unless the thing it switches is made
+to work outside it first.
+
+| What it gave away                                  | What closed it                         | Size    |
+| -------------------------------------------------- | -------------------------------------- | ------- |
+| 9 dev setting rows in the bundle, defaults and all | `SETTINGS_SHIPPED`, folded on `define` | −100 B  |
+| The same 9 names in the kernel's data              | `pxl-kernel`'s `dev` feature, off      | −1.3 KB |
+| `set_setting` from the console, in production      | `is_offered` on the live path          | 0       |
+
+The kernel's figure is the published module against the same source with the
+feature on: 1,048,892 → 1,047,548 bytes, and 1.5 KB less gzipped. The build
+with the feature on is itself 91 B under the head it was cut from, the live
+guard included. Measured twice, because the first reading came out as growth:
+another change had bumped `libm` underneath it between the baseline and the
+build, and the module moved 1.6 KB on that alone. A size that goes the wrong
+way for no reason the diff shows is a baseline to re-cut, not a number to
+explain.
+
 ## Where it stands
 
-Deployed, b14 being the first build that carries all of it.
+Deployed, b14 being the first build that carries the 09-18 work. The settings
+are closed in the tree and not yet in a build.
