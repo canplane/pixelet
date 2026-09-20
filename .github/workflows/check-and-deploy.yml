@@ -430,10 +430,13 @@ jobs:
   # through — it reports a missing record and takes nothing back.
   record:
     name: record what this build carried
-    needs: [gate, deploy-web, deploy-server]
+    needs: [gate, deploy-web, deploy-server, smoke]
     # `!failure()` deliberately absent where the smoke has it: one half failing
     # does not unpublish the other, and a build that reached the edge and not
-    # the VM is exactly the one worth having a line about.
+    # the VM is exactly the one worth having a line about. It waits for the
+    # smoke so the line can say what the smoke found, and records whatever it
+    # found — a build that went out and failed the smoke is still a build that
+    # went out, and the one most worth finding in the log later.
     if: ${{ !cancelled() && (needs.deploy-web.outputs.published == 'true' || needs.deploy-server.outputs.rebuilt == 'true') }}
     runs-on: ubuntu-latest
     # R2 has no append, so the write is read-add-write as the counter's is, and
@@ -462,4 +465,5 @@ jobs:
         run: |
           ./script/build-log.ts --record "${{ needs.gate.outputs.build_number }}" \
             ${{ needs.deploy-web.outputs.published == 'true' && '--web' || '' }} \
-            ${{ needs.deploy-server.outputs.rebuilt == 'true' && '--server' || '' }}
+            ${{ needs.deploy-server.outputs.rebuilt == 'true' && '--server' || '' }} \
+            --smoke "${{ needs.smoke.result }}"
