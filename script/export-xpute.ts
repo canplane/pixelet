@@ -39,13 +39,17 @@ const ROOT = dirname(dirname(new URL(import.meta.url).pathname));
 
 /** The trees that are xpute's, and the root files that belong with them. */
 const TREES = ["crates/xpute", "packages/xpute", "spec/xpute"];
-const ROOT_FILES = ["rustfmt.toml", "ARCHITECTURE.xpute.md"];
+const ROOT_FILES = ["rustfmt.toml", "ARCHITECTURE.xpute.md", "LICENSE.xpute", "THIRD_PARTY_NOTICES.xpute.md"];
 
 /** Where a copied file lands under a different name. The `.xpute` infix tells
  * two documents apart in pixelet, where there are two; here there is one, and
  * the infix would name the other repository's arrangement in a tree that has
  * no second document to be told apart from. */
-const RENAMED: Record<string, string> = { "ARCHITECTURE.xpute.md": "ARCHITECTURE.md" };
+const RENAMED: Record<string, string> = {
+  "ARCHITECTURE.xpute.md": "ARCHITECTURE.md",
+  "LICENSE.xpute": "LICENSE",
+  "THIRD_PARTY_NOTICES.xpute.md": "THIRD_PARTY_NOTICES.md",
+};
 
 /** Names an earlier export wrote and this one does not. Leaving one behind is
  * not inert: where both are present Deno reads `deno.json` and never looks at
@@ -56,9 +60,9 @@ const RETIRED = ["deno.json"];
 const CRATES = ["xpute/core", "xpute/runtime"];
 
 /** What an export carries, for the purpose of saying what it carries: the
- * three trees and the two files that are copied, and this script, which is
- * not copied but decides four of the files that are. */
-const CARRIED = [...TREES, ...ROOT_FILES, "script/export-xpute.ts"];
+ * three trees and the two files that are copied, the README this tree keeps
+ * for the other repository, and this script, which decides the rest. */
+const CARRIED = [...TREES, ...ROOT_FILES, "README.xpute.md", "script/export-xpute.ts"];
 
 /** What the Rust half actually depends on. The versions and the reasons are
  * read out of pixelet's manifest rather than repeated here, so a re-pin
@@ -204,55 +208,10 @@ function denoManifest(): string {
 `;
 }
 
-function license(): string {
-  return `MIT License
-
-Copyright (c) 2025 canplane
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-`;
-}
-
 /** The one file here that is someone else's, and the file that says so. A
  * notice naming a path that is no longer exported would be a claim with
  * nothing behind it, so the export refuses rather than shipping one. */
 const PORTED = "crates/xpute/core/src/alloc/buddy_tree.rs";
-
-function notices(): string {
-  return `# Third-party notices
-
-One file here is a port of someone else's code rather than our own, and its
-licence asks for a notice to travel with the copy. It carries that notice
-inside itself; this records where it came from.
-
-This file covers copied source only. Crates and packages that are merely
-depended on are not listed: \`crates/Cargo.toml\` and the package manifests name
-them, and each carries its own licence where it is published.
-
-## evanw/buddy-malloc — \`${PORTED}\`
-
-That file is [evanw/buddy-malloc][buddy] (MIT) line for line, and the notice
-is at the top of it.
-
-[buddy]: https://github.com/evanw/buddy-malloc
-`;
-}
 
 /** The sections of pixelet's own `.gitignore` that apply to a repository with
  * no `apps/web`, no bake output and no bundler — taken by name rather than
@@ -291,91 +250,27 @@ function gitignore(): string {
 `;
 }
 
+/** A markdown link to a `.xpute` document, as the export renames it. The two
+ * documents point at each other, and each name has to be the right one in the
+ * repository the file is sitting in: `ARCHITECTURE.xpute.md` here, where a
+ * bare `ARCHITECTURE.md` is pixelet's own, and `ARCHITECTURE.md` there, where
+ * there is only one. Renaming the file without renaming what points at it
+ * would send out a link to something that does not exist. */
+function relink(md: string): string {
+  let out = md;
+  for (const [from, to] of Object.entries(RENAMED)) out = out.replaceAll(`(./${from})`, `(./${to})`).replaceAll(`[${from}]`, `[${to}]`);
+  return out;
+}
+
+/** The README as it goes out: this tree's `README.xpute.md`, with the one
+ * section it cannot carry spliced in. That section names pixelet, and a
+ * document that names pixelet cannot be the xpute repository's own — the
+ * point of the `.xpute` infix is that dropping it is the whole migration. */
 function readme(at: string): string {
-  return `# xpute
-
-A guest program runs inside a host. The host owns the clock, the memory and the I/O, and grants each of them a slice at a time; the guest computes with what it was granted and asks for the rest. **xpute is both ends of that arrangement, and the kit underneath it** — written twice, once in Rust and once in TypeScript.
-
-The shape it was written for is a Rust program compiled to one WebAssembly module, driven by TypeScript in a browser tab: one side owns a machine the other cannot leave. Nothing in xpute knows what that program computes.
-
-## The arrangement
-
-\`\`\`text
-host · TypeScript                          guest · Rust
-─────────────────                          ────────────
-
-strobe   a frame, and only when one
-         was asked for
-quantum  a quota, from the frame it
-         measured rather than assumed
-
-commands ─────────── SQ ring ───────────▶  drained on the rising edge
-doorbell ═════ interrupt(quota_ms) ═════▶  ┌ tick   phases in a fixed order
-                                           │ tasks  futures that yield when
-                                           │        the quota is spent
-                                           │ queue  what I/O it wants run
-completions ◀───────── CQ ring ──────────  └ posted before the falling edge
-         ◀═══════════ wake_ms ═══════════  next frame · in n ms · never
-
-credits  runs what that queue started,
-         as far as the grant goes
-
-         … nothing until wake_ms …         … nothing at all …
-\`\`\`
-
-Each of the host's levers faces one of the guest's. The **strobe** decides whether a turn happens at all, the **tick** what runs inside it. The **quantum** sizes the turn; the **tasks** yield when it is spent. The **credits** run the I/O the **queue** asked for, since the guest runs none. The **doorbell** is the one call in, \`wake_ms\` the one answer out.
-
-The strobe rings on an animation frame, and only when something asked for a turn: an input or an arrival on the host's side, or the guest's own last answer. A guest that wants nothing is rung for nothing. The quota is sized from a frame interval the host measures rather than assumes, and a turn that runs long is charged for it in the next one.
-
-The call itself carries nothing but the quota. Everything else crosses through one memory that both ends read where it lies.
-
-\`\`\`text
-┌─ one linear memory ─ reserved once, never grown, read in place ──────────┐
-│  sections    ranges laid end to end, placed at boot                      │
-│  rings       the SQ and CQ above: four-word frames, payloads apart       │
-│  change log  topic · key · revision, the read direction's own channel    │
-│  heap        one door, with a slab over a buddy behind it                │
-└──────────────────────────────────────────────────────────────────────────┘
-\`\`\`
-
-A tick spends a quota of time on the guest's own work; the queue spends a grant of credits on work the host does for it. The host owns the connections the way an operating system owns its devices, and that is the whole of the division.
-
-## \`core\`, and \`runtime\`
-
-\`core\` is a kit and nothing more: an arena, a deque and a binary heap; a JSON codec; scalar, vec3, mat4 and an rng; an errno table; XTP and TLV; and, on the Rust side, a buddy and a slab. Link it and use it — it knows nothing of turns, hosts or memories. It is the same kit on both sides, each with the few pieces only its own language needs, and the golden records under \`crates/xpute/core/golden/\` hold the two to each other wherever bytes cross. The TypeScript tests read those same record files rather than keeping a copy, because a second copy is how two implementations come to disagree without anything failing.
-
-\`runtime\` is the arrangement above, and it is not symmetric — the two halves are the two ends of one thing, not two implementations of it. A module on one side with nothing facing it is not a gap to fill. What the two must agree on is the format: the ring's layout, the frame's four words, the memory's sections.
-
-\`\`\`text
-crates/xpute/core     ·  packages/xpute/core       the same kit, twice
-crates/xpute/runtime  ·  packages/xpute/runtime    the guest end · the host end
-spec/xpute                                         numbers both are generated from
-\`\`\`
-
-## What it leaves to whoever uses it
-
-The line is drawn in the same place every time: xpute carries the mechanism, and the policy belongs to the program.
-
-- **It does not know what the guest computes.** No domain types reach \`core\`, which is what keeps it portable to a second program.
-- **It does not choose the memory map.** \`mem/section\` is told a base, a unit and a list of sizes, and answers where each range landed. What the ranges hold is the guest's.
-- **It does not choose an allocator.** The heap is one door. \`core\` offers a buddy and a slab that fit behind it, and a guest is free to put something else there.
-- **It is not a transport.** A ring is a producer, a consumer and a memory they share. What carries bytes to another machine is the host's business.
-- **It is not real time.** A quota is how long a turn should take, not a deadline. Nothing preempts: a turn that runs long is charged for it in the next one rather than cut off.
-- **It is not an RPC framework.** A message is four words — who asked, what is asked, what came back, where the packet is — and the numbers are the program's own.
-
-[ARCHITECTURE.md](./ARCHITECTURE.md) is what each piece is and why it is shaped that way: the memory, the rings, the change log, the turn, the credits, the handles, the wire formats, the records.
-
-## Running it
-
-Deno 2.x and a Rust toolchain.
-
-\`\`\`sh
-deno task check   # deno fmt --check, deno check, cargo fmt --check, clippy
-deno task test    # deno test and cargo test, the golden records included
-deno task lint    # deno lint
-\`\`\`
-
-## Where this comes from
+  const doc = relink(Deno.readTextFileSync(join(ROOT, "README.xpute.md")));
+  const at_licence = doc.indexOf("## Licence");
+  if (at_licence < 0) die("README.xpute.md has no Licence section to splice the provenance before");
+  const provenance = `## Where this comes from
 
 This is a copy. xpute is developed inside pixelet, a closed application that is its only consumer so far, and exported here whole — the layout is pixelet's own, so the day it moves for real nothing has to change. Pull requests are welcome as conversation, but the change has to land upstream.
 
@@ -385,10 +280,8 @@ Taken from **${at}**.
 
 The four files generated from \`spec/xpute/\` — the errno table and the fetch ABI, on both sides — are checked in as pixelet generates them. The generator itself knows every one of pixelet's specs and did not come along, so this copy reads but does not regenerate them.
 
-## Licence
-
-MIT ([LICENSE](./LICENSE)). One file under \`alloc/\` is a port rather than a dependency, and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) carries what its licence asks.
 `;
+  return doc.slice(0, at_licence) + provenance + doc.slice(at_licence);
 }
 
 /** The stamp the copy already carries, read before it is overwritten. It is
@@ -429,17 +322,24 @@ function build(): File[] {
   const listed = git(["ls-files", "-z", "--", ...TREES, ...ROOT_FILES]).split("\0").filter((p) => p !== "");
   if (listed.length === 0) die("git listed nothing to export");
 
-  if (!listed.includes(PORTED)) die(`${PORTED} is not being exported, and THIRD_PARTY_NOTICES.md names it`);
+  // The notices are a file now, so the path in them and the path here can drift.
+  // Neither is allowed to: the notice has to name the file it is a notice for.
+  if (!listed.includes(PORTED)) die(`${PORTED} is not being exported, and the notices name it`);
+  if (!Deno.readTextFileSync(join(ROOT, "THIRD_PARTY_NOTICES.xpute.md")).includes(PORTED)) {
+    die(`THIRD_PARTY_NOTICES.xpute.md does not name ${PORTED}, which is the file it exists for`);
+  }
 
-  const files: File[] = listed.map((path) => ({ path: RENAMED[path] ?? path, bytes: Deno.readFileSync(join(ROOT, path)) }));
+  const files: File[] = listed.map((path) => {
+    const bytes = Deno.readFileSync(join(ROOT, path));
+    const carried = path.endsWith(".md") ? encoder.encode(relink(new TextDecoder().decode(bytes))) : bytes;
+    return { path: RENAMED[path] ?? path, bytes: carried };
+  });
   const at = stamp();
   for (
     const [path, text] of [
       ["crates/Cargo.toml", cargoManifest()],
       ["deno.jsonc", denoManifest()],
       ["README.md", readme(at)],
-      ["LICENSE", license()],
-      ["THIRD_PARTY_NOTICES.md", notices()],
       [".gitignore", gitignore()],
     ] as const
   ) {

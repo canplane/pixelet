@@ -27,8 +27,43 @@
 use crate::mesh::volume::{BAND_SPAN, BAND_VOXELS, MATERIAL_OBJECT, SUB_CELL_NONE};
 
 /// Cells on a band's side; a chunk is one column of bands.
-const BAND_SPAN2: usize = (BAND_SPAN * BAND_SPAN) as usize;
-const COLUMN_CNT: usize = BAND_SPAN2;
+/// The ring of neighbour columns a run set carries around the chunk's own.
+///
+/// A chunk is meshed from its own columns, and every question the face mask
+/// asks — is the face hidden, does the cell beside it rise above this run,
+/// is the corner filled — is about the column next door. At the chunk's edge
+/// that column is the next chunk's, whose voxels are not here and may not be
+/// resident, so the mask was left saying "open air" and every seam lost its
+/// occlusion, its crease, and the culling of the face behind it.
+///
+/// The ring answers those questions without the neighbour. The ground beyond
+/// a page's own span is in the page already — the elevation raster is padded
+/// (pxl-spec's ELE_PAD) — so a column of it can be written here from the same
+/// source the chunk's own terrain came from. Nothing is emitted from an apron
+/// column: it exists to be asked about.
+pub const APRON: u32 = 1;
+/// Columns on a side of a run set: the chunk's own and the ring.
+pub const COL_SPAN: u32 = BAND_SPAN + 2 * APRON;
+const COLUMN_CNT: usize = (COL_SPAN * COL_SPAN) as usize;
+
+/// A padded column's index, from the chunk's own (cx, cy).
+pub fn apron_col(cx: u32, cy: u32) -> u32 {
+    (cy + APRON) * COL_SPAN + cx + APRON
+}
+
+/// What the apron columns are written from: the chunk's terrain sample, laid
+/// out over the padded column grid, and the floor every run starts at. The
+/// interior entries are never read — those columns come from the bands. A
+/// column whose ground does not reach the floor gets no run, and reads as
+/// open air exactly as an absent neighbour used to.
+pub struct Apron<'a> {
+    /// The ground's height a cell, as the sample holds it: the column's top
+    /// is one below.
+    pub ele: &'a [i16],
+    pub material: &'a [u32],
+    pub layer_idx: &'a [u8],
+    pub floor: i32,
+}
 const SCAN_ROWS_PER_STEP: u32 = 8;
 
 /// One band's overflow sub-voxels, sorted by column (volume.rs's Extras).
@@ -167,19 +202,7 @@ impl ScanContext {
     /// packed 0xCC_RRGGBB material on `layer_idx`.
     pub fn direct_run(&mut self, z0: i32, z1: i32, material: u32, layer_idx: u8) {
         assert!(self.next_col.is_some_and(|n| n > 0), "a run with no column started");
-        self.runs.push(Run {
-            z0,
-            z1,
-            layer_taps: taps_of(layer_idx),
-            r: (material >> 16) as u8,
-            g: (material >> 8) as u8,
-            b: material as u8,
-            material_class: (material >> 24) as u8,
-            sub_ox: 0,
-            sub_oy: 0,
-            sub_oz: 0,
-            sub_sz: SUB_CELL_NONE,
-        });
+        self.runs.push(run_of(z0, z1, material, layer_idx));
     }
 
     /// Closes the writer: the columns not started are empty, and the set
@@ -189,28 +212,38 @@ impl ScanContext {
         for c in next..=COLUMN_CNT as u32 {
             self.starts[c as usize] = self.runs.len() as u32;
         }
-        self.row = BAND_SPAN;
+        self.row = COL_SPAN;
         self.set_bytes()
     }
 
-    /// Walks up to a step's rows of `bands`, the bands it was opened with.
-    pub fn step(&mut self, bands: &[BandView]) -> ScanStep {
+    /// Walks up to a step's rows of `bands`, the bands it was opened with,
+    /// writing the apron's columns as it reaches them: the rows are the
+    /// padded ones, so every column of the set is written in the one order
+    /// its prefix array is read in.
+    pub fn step(&mut self, bands: &[BandView], apron: &Apron) -> ScanStep {
         assert!(self.open, "scan step with no scan open");
         if self.packed {
             return ScanStep::Done;
         }
-        if self.row >= BAND_SPAN {
+        if self.row >= COL_SPAN {
             return ScanStep::NeedSet(self.set_bytes());
         }
-        let end = BAND_SPAN.min(self.row + SCAN_ROWS_PER_STEP);
-        for cy in self.row..end {
-            for cx in 0..BAND_SPAN {
-                self.starts[(cy * BAND_SPAN + cx) as usize] = self.runs.len() as u32;
-                walk_column(&mut self.runs, bands, cx, cy);
+        let end = COL_SPAN.min(self.row + SCAN_ROWS_PER_STEP);
+        for py in self.row..end {
+            for px in 0..COL_SPAN {
+                let col = (py * COL_SPAN + px) as usize;
+                self.starts[col] = self.runs.len() as u32;
+                let own = APRON..COL_SPAN - APRON;
+                let inner = own.contains(&px) && own.contains(&py);
+                if inner {
+                    walk_column(&mut self.runs, bands, px - APRON, py - APRON);
+                } else {
+                    self.apron_run(apron, col);
+                }
             }
         }
         self.row = end;
-        if end >= BAND_SPAN {
+        if end >= COL_SPAN {
             self.starts[COLUMN_CNT] = self.runs.len() as u32;
             ScanStep::NeedSet(self.set_bytes())
         } else {
@@ -218,8 +251,17 @@ impl ScanContext {
         }
     }
 
+    /// The one run an apron column holds, where its ground reaches the floor.
+    fn apron_run(&mut self, apron: &Apron, col: usize) {
+        let top = apron.ele[col] as i32 - 1;
+        if top < apron.floor {
+            return;
+        }
+        self.runs.push(run_of(apron.floor, top, apron.material[col], apron.layer_idx[col]));
+    }
+
     fn set_bytes(&self) -> u32 {
-        run_set_bytes(self.runs.len() as u32, BAND_SPAN)
+        run_set_bytes(self.runs.len() as u32, COL_SPAN)
     }
 
     /// Packs the walked runs into `bytes` bytes at `ptr`, in
@@ -229,7 +271,7 @@ impl ScanContext {
     /// `ptr` must address at least the bytes asked for, 4-aligned, and be
     /// the caller's to write.
     pub unsafe fn provide_set(&mut self, ptr: *mut u8, bytes: u32) {
-        assert!(self.open && self.row >= BAND_SPAN && !self.packed, "set provided to a scan that did not ask");
+        assert!(self.open && self.row >= COL_SPAN && !self.packed, "set provided to a scan that did not ask");
         let need = self.set_bytes();
         assert!(bytes >= need, "set of {} bytes provided where {} were asked", bytes, need);
         let n = self.runs.len();
@@ -332,6 +374,23 @@ impl ColumnRuns {
                 .push(run.sub_ox as u32 | ((run.sub_oy as u32) << 8) | ((run.sub_oz as u32) << 16) | ((run.sub_sz as u32) << 24));
         }
         self.runs.len()
+    }
+}
+
+/// One full-cell run in a packed 0xCC_RRGGBB material on `layer_idx`.
+fn run_of(z0: i32, z1: i32, material: u32, layer_idx: u8) -> Run {
+    Run {
+        z0,
+        z1,
+        layer_taps: taps_of(layer_idx),
+        r: (material >> 16) as u8,
+        g: (material >> 8) as u8,
+        b: material as u8,
+        material_class: (material >> 24) as u8,
+        sub_ox: 0,
+        sub_oy: 0,
+        sub_oz: 0,
+        sub_sz: SUB_CELL_NONE,
     }
 }
 
@@ -465,6 +524,10 @@ pub struct RunSet<'a> {
     pub count: u32,
     /// Columns on a side; column `(cx, cy)` is `cy * span + cx`.
     pub span: u32,
+    /// The ring of neighbour columns around the chunk's own, in columns: one
+    /// for a scanned or directly written set, none for a coarse tier's,
+    /// which is summarised from one and carries no neighbours of its own.
+    pub apron: u32,
     pub start: &'a [u32],
     pub z0: &'a [i32],
     pub z1: &'a [i32],
@@ -493,7 +556,7 @@ impl<'a> RunSet<'a> {
     /// Carves the lanes out of `bytes`, which must start 4-aligned and hold
     /// at least `run_set_bytes(count, span)`; both are checked, so a wrong
     /// block is a panic and never a misread.
-    pub fn carve(bytes: &'a [u8], count: u32, span: u32) -> RunSet<'a> {
+    pub fn carve(bytes: &'a [u8], count: u32, span: u32, apron: u32) -> RunSet<'a> {
         let need = run_set_bytes(count, span) as usize;
         assert!(bytes.len() >= need, "run set of {} bytes shorter than {}", bytes.len(), need);
         assert!((bytes.as_ptr() as usize).is_multiple_of(4), "run set not 4-aligned");
@@ -522,6 +585,7 @@ impl<'a> RunSet<'a> {
         RunSet {
             count,
             span,
+            apron,
             start,
             z0,
             z1,
@@ -545,6 +609,7 @@ impl<'a> RunSet<'a> {
 #[derive(Default)]
 pub struct OwnedRunSet {
     pub span: u32,
+    pub apron: u32,
     pub start: Vec<u32>,
     pub z0: Vec<i32>,
     pub z1: Vec<i32>,
@@ -588,6 +653,7 @@ impl OwnedRunSet {
         RunSet {
             count: self.z0.len() as u32,
             span: self.span,
+            apron: self.apron,
             start: &self.start,
             z0: &self.z0,
             z1: &self.z1,

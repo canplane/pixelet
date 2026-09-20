@@ -1,6 +1,6 @@
 // pxl-kernel/layer/terrain/elevation.rs
 
-use pxl_render::mesh::paint::terrain::elevation::{is_water_family_at, sample_ele, WATER_RECESS_CELLS};
+use pxl_render::mesh::paint::terrain::elevation::{ground_ele, GroundLanes};
 use pxl_spec::bake::constant::{PAGE_CELL_SPAN, U_PER_CELL};
 use pxl_spec::bake::format::{GroundChannelKey, Terrain};
 use pxl_spec::space::indexer::{L1_IDX_IN_L3, L3_IDX, L3_RANGE};
@@ -11,19 +11,15 @@ use crate::layer::terrain::store::tile_store;
 
 const L3_RANGE_REAL: f64 = L3_RANGE as f64;
 
-/// The same real height the chunk's mesh and raycast bake
-/// (crates/pxl/web/render/src/mesh/paint/terrain/elevation.rs's WATER_RECESS_CELLS), applied here too so this module's own consumers
-/// (camera ground-snap, ground_or_raw, any cell-marker probe) agree with the
-/// rendered terrain instead of reasoning about the un-recessed height while
-/// the mesh they're looking at shows the lowered one. A page's ele and ground
-/// are page-level here, so tx/ty index them directly at PAGE_CELL_SPAN stride.
+/// The height the chunk's mesh and its raycast are built from, asked of the
+/// one query that answers it (crates/pxl/web/render/src/mesh/paint/terrain/elevation.rs's
+/// ground_ele), so this module's own consumers — camera ground-snap,
+/// ground_or_raw, any cell-marker probe — agree with the terrain on screen
+/// instead of reasoning about a height it does not show. A page's ele and
+/// ground are page-level here, so tx/ty index them at PAGE_CELL_SPAN stride.
 fn sample_ele_grounded(terrain: &Terrain, tx: u32, ty: u32) -> f64 {
-    let ele = sample_ele(&terrain.ele, tx, ty);
-    if is_water_family_at(&terrain.ground, ty * PAGE_CELL_SPAN + tx) {
-        (ele - WATER_RECESS_CELLS) as f64
-    } else {
-        ele as f64
-    }
+    let idx = (ty * PAGE_CELL_SPAN + tx) as usize;
+    ground_ele(&terrain.ele, Some(GroundLanes::of(&terrain.ground)), idx, tx as i32, ty as i32) as f64
 }
 
 fn page_cell(at: &Pvf3) -> (u32, u32) {

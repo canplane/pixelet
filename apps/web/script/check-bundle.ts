@@ -24,6 +24,19 @@ const DEV_LOCALE_FILES = [
   "./src/locale/dev/ko.json",
 ];
 
+/** The catalogues a production build is supposed to carry. A string one of
+ * these holds cannot be evidence that the dev catalogue leaked — the bundle
+ * is meant to have it — so a dev string that is also one of these is not
+ * counted against the build. `Places` is the case that found this: the
+ * attribution section names Overture's Places theme, and the dev row for the
+ * place badges is the same word. What is only ever dev-only still fires, and
+ * a whole catalogue riding along would light up every string of it that is
+ * not shared, which is nearly all of them. */
+const SHIPPED_LOCALE_FILES = [
+  "./src/locale/en.json",
+  "./src/locale/ko.json",
+];
+
 /** Markers that are not copy — route paths and the like.
  *
  * "development" is __APP_ENV__'s value, which the settings panel prints. A
@@ -119,7 +132,13 @@ function present(bundle: string, v: string): boolean {
   return bundle.includes(JSON.stringify(v)) || bundle.includes(`'${v}'`);
 }
 
-const leaked = forbidden.filter(([, v]) => present(bundle, v));
+const shipped = new Set<string>();
+for (const f of SHIPPED_LOCALE_FILES) {
+  for (const [, v] of leaves(JSON.parse(await Deno.readTextFile(f)))) shipped.add(v);
+}
+// A marker is not copy, so the catalogues cannot excuse one.
+const shared = (where: string, v: string) => where !== "marker" && shipped.has(v);
+const leaked = forbidden.filter(([where, v]) => present(bundle, v) && !shared(where, v));
 
 if (leaked.length > 0) {
   console.error(`[check-bundle] ${leaked.length} development-only string(s) present in the production bundle:`);
@@ -130,7 +149,8 @@ if (leaked.length > 0) {
   Deno.exit(1);
 }
 
-console.log(`[check-bundle] ok — ${forbidden.length} development-only string(s), none present`);
+const excused = forbidden.filter(([where, v]) => shared(where, v)).length;
+console.log(`[check-bundle] ok — ${forbidden.length} development-only string(s), none present${excused > 0 ? ` (${excused} the shipped catalogues carry too)` : ""}`);
 
 // A model or a texture in the bundle is a file the deploy is carrying that
 // the bucket should — every one the client draws is named by the shipped

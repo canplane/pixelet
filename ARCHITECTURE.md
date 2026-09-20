@@ -2,13 +2,98 @@
 
 pixelet turns geographic data and player-built blocks into one voxel world and draws it in a browser. It is an application written over [xpute](./ARCHITECTURE.xpute.md): a Rust kernel that runs as xpute's guest in one WebAssembly module, a TypeScript shell that is xpute's host, and Rust servers and bakes that share the kernel's model. This document is what pixelet builds; what it builds on — the memory, the rings, the turn, the credits — is the other one.
 
-Three properties hold everywhere. The first two are the runtime's and everything here lives inside them; the third is pixelet's own.
+Three properties hold everywhere. The first two are xpute's and everything here lives inside them; the third is pixelet's own.
 
 - The world's state lives in **one linear memory**, fixed at boot.
 - All work runs in **turns under one quota**.
 - What the client measures about itself goes to a **read-only ledger**. No decision reads it.
 
-The first half is how the client is put together and how it uses the runtime. The second is the engine: what it computes and draws.
+This document is in three parts. **The world** is the vocabulary: what a position is, what each level addresses, and what arrives at one. **The client** is the machine that holds it — the crates, the two sides of the browser tab, and how a turn is spent. **The engine** is what is computed with it, from a chunk being built to a frame being drawn.
+
+---
+
+# The world
+
+## Spatial Hierarchy
+
+| Level | Name      | Extent per axis | Used for                                  |
+| ----- | --------- | --------------- | ----------------------------------------- |
+| L0    | Sub-block | within one L1   | fine placement, below one block           |
+| L1    | Block     | `1u`            | the unit a position names                 |
+| L2    | Chunk     | `64` blocks     | meshing, LOD, raycasting, frustum culling |
+| L3    | Page      | `1024` blocks   | terrain streaming and storage             |
+| L4    | Anchor    | `4096` blocks   | the floating origin                       |
+| L5    | Shard     | `65536` blocks  | reserved                                  |
+
+The table gives each level an extent. What is stored at a level is a separate question, and the answer is not always a cube: a level is an extent on one axis, not on three. `BASE`, `CENTER`, `LIMIT` and `IDX` (`pxl-spec space/indexer.rs`) are the same operations at every level, and whether a layer fills one axis, two or three is that layer's own choice.
+
+The words for what sits at a level build on one another. A **Cell** is an address and nothing else — one L1 block, named and possibly empty. A **Pixel** is a cell carrying a 2D sample; a **Voxel** is a cell carrying a material. A **Tile** is a level filled on two axes — terrain at L3, a raster of pixels with height, which is why it is 2.5D and not 3D. A **Volume** is a level filled on all three, which is the shape a chunk's objects take and the shape a chunk is built into.
+
+One more word belongs to the renderer rather than to the model. A **Band** is one `64³` volume materialized as voxels, the working storage a chunk is composed into. It is never a level and never persisted.
+
+L5 is commented out (`L5_SHAMT`). When it exists it will address X and Y only, since the Z field of a packed position is 16 bits.
+
+| Layer                       | Level              | Shape  | Concrete type                                   |
+| --------------------------- | ------------------ | ------ | ----------------------------------------------- |
+| terrain, source             | L3 Page            | Tile   | a `.fixed.terrain` record                       |
+| object, source              | L2 Chunk, per band | Volume | palette per chunk, sparse tree per band         |
+| terrain + object, for build | L2 Chunk           | Volume | a volume of bands (`pxl-render mesh/volume.rs`) |
+| any                         | L4 Anchor          | —      | the view's frame of reference                   |
+
+Objects are client-local. The store (`pxl-kernel layer/object/store.rs`) keeps a palette per chunk and a sparse octree per occupied band, leaves being palette indices, and derives the chunk's entries as columns with a cell index for occupancy and hits. It persists to `localStorage` as five columns per page — page-local position, footprint side, value — under a key that carries the layout's version. One chunk node (`world/chunk/node.rs`) owns one L2 column and composes as many signed 64-cell Z bands as its content touches; a page holds 256 columns.
+
+## Coordinate System — PVF3
+
+A position inside that hierarchy is 96 bits of fixed point, in two words: which block, and where inside that block.
+
+```text
+IVec, one 64-bit word                 FVec, one 32-bit word
+┌───────────┬───────────┬────────┐    ┌──────┬──────┬──────┬──────┐
+│     X     │     Y     │   Z    │    │  X   │  Y   │  Z   │      │
+│  24 bits  │  24 bits  │   16   │    │  8   │  8   │  8   │unused│
+└───────────┴───────────┴────────┘    └──────┴──────┴──────┴──────┘
+signed; X is cyclic, so the world     unsigned residues:
+wraps at the longitude seam           1/256 of a block on each axis
+```
+
+Each field is a **lane** of its word. The arithmetic is integer — a lane is computed as `i64` and packed back — so a coordinate is the same bits on every machine. There is one implementation of it, and the shell reads coordinates through the kernel rather than decoding them itself.
+
+The EPSG:3857 adapter gives the unit its meaning: `1u` is one L1 block, about 2.389 Mercator meters at the equator. Distortion and the page-constant vertical scale live in the adapter. Placed objects quantize their sub-cell offset and size to the same `1/256` (`SUB_CELL_SCALE`, `pxl-render mesh/volume.rs`), so a position round-trips through the mesh without rounding, and the `f32` the store saves is exact on that lattice.
+
+## Terrain
+
+Terrain arrives as L3 pages: four categorical ground rasters and a padded elevation raster, sampled bicubically.
+
+| Channel     | Contents                                  |
+| ----------- | ----------------------------------------- |
+| `LAND`      | ground surface: bare, green, sand, rock … |
+| `WATER`     | inland water: river, lake, wetland …      |
+| `STRUCTURE` | buildings and constructed surfaces        |
+| `TRANSPORT` | roads, paths, railways                    |
+
+Sea is a `LAND` value with the high bit set (`sea = 129`, `spec/pxl/spec/cell/cube_type.json`), so a channel stays one byte per cell. The channels are rasterized from Overture's Buildings, Transportation and Base themes, the coastline from Base's `water`.
+
+Which pages are held is decided from one point and one radius. The point is the **range anchor** (`world/chunk/range.rs`): the view centre on the ground, snapped to a chunk. It is not the camera, so rotating does not sweep pages in and out.
+
+The radius is `KEEP_DIST` (`spec/pxl/web/kernel/layer/terrain/config.json`), and it decides all three questions at once: the pages within it of the range anchor are the pages fetched, the pages kept decoded, and the pages `.fixed.terrain` has records for. One radius for all three means a page cannot be requested and then dropped from under its own request. A page is copied into its record and its body released in the same command.
+
+## Bake
+
+```text
+Overture PostGIS rows
+  → XTP decode
+  → overture/adapter, coast/adapter (row → feature)
+  → normalizer (classify, rank, assign tags — policy-parameterized: overture/policy, coast/policy)
+  → ground (rasterize geometry into ground channels)
+  → encode_terrain (elevation + ground → XTP)
+  → compressed HTTP page response
+```
+
+The bake is `pxl-geo-bake`, and it writes the same formats the client reads, so nothing is translated on arrival.
+
+Rasterizing is the bulk of it: polygons are filled even-odd with holes, lines are drawn with a thickness kernel, and the scratch geometry for both comes from one arena per page. Elevation is stored as signed 16-bit cell units under one Mercator Z scale per page, which is what makes the bake, the terrain and the objects agree on what a unit of height is.
+
+Every land page is baked once into a versioned prefix. Open ocean is one shared page, since every one of them would be identical.
 
 ---
 
@@ -110,13 +195,13 @@ What the policy says: the frame is the 25th percentile of recent gaps between fr
 
 **The phases**, in the order that is their priority:
 
-| Phase         | What                                                                                                                                                  |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `interaction` | input, camera damping, the environment (sun, moon, theme), the view frame, the companion (the player's character at the map centre); O(1), unbudgeted |
-| `visible`     | the chunk scheduler's pass                                                                                                                            |
-| `content`     | what is about to be on screen; guaranteed `content_share` of the budget                                                                               |
-| `cosmetic`    | what only looks better for running (debug gizmos)                                                                                                     |
-| `report`      | the ledger, last, so it sees everything                                                                                                               |
+| Phase         | What                                                                                                                                                                 |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `interaction` | input, camera damping, the environment (sun, moon, theme), the view's frame of reference, the companion (the player's character at the map centre); O(1), unbudgeted |
+| `visible`     | the chunk scheduler's pass                                                                                                                                           |
+| `content`     | what is about to be on screen; guaranteed `content_share` of the budget                                                                                              |
+| `cosmetic`    | what only looks better for running (debug gizmos)                                                                                                                    |
+| `report`      | the ledger, last, so it sees everything                                                                                                                              |
 
 **The tasks**, six of them on `embassy-executor`'s raw executor, which the module installs: the frame itself, fetch decoding, glTF parsing, chunk builds, decor assets, and the object store's save. The frame is a task rather than a function so that the order above is its own, and no task depends on the order the executor happens to poll them in.
 
@@ -126,13 +211,17 @@ What the policy says: the frame is the 25th percentile of recent gaps between fr
 
 ## The channel
 
-Three rings, each 2048 messages of four words with 4 KiB payload slots: submission, completion, and a spill the completion ring overflows into so that order is kept. The command numbers are `spec/pxl/spec/abi/cmd.json`'s; a packet is an XTP tree the kernel reads where it lies, and anything larger than a slot crosses in a heap block the kernel hands out. What the kernel posts on its own — a fetch to start or cancel, a model or image to decode, a sensor to watch, a console line, a new snapshot — are its signals.
+The shell and the kernel share three rings, each 2048 messages of four words with 4 KiB payload slots. Two of them are the pair xpute describes: one for what the shell submits, one for what the kernel completes. The third is a spill, which the completion ring overflows into when it is full, so that nothing is dropped and completions stay in order.
+
+The command numbers are `spec/pxl/spec/abi/cmd.json`'s. A packet is an XTP tree the kernel reads where it lies, and anything larger than a slot crosses in a heap block the kernel hands out.
+
+The kernel also posts messages nobody asked for: a fetch to start or cancel, a model or image to decode, a sensor to watch, a console line, a new snapshot. Those are its signals.
 
 The world's change log (`world/change.rs`) has six topics: object column, decor column, object cell, terrain page, POI page, decor asset. Listeners run when the tick pumps, never inside the write.
 
 ## The memory map
 
-The client's state is one `WebAssembly.Memory`, 1 GiB on the desktop and 512 MiB on a phone, `initial == maximum`, never grown. Since it never moves, a ring keeps its words and a lane is read in place for the module's whole life. A phone gets half because JavaScriptCore counts the whole reservation as the page's JavaScript memory, committed or not.
+The client's state is one `WebAssembly.Memory`, 1 GiB on the desktop and 512 MiB on a phone, `initial == maximum`, never grown. Since it never moves, a ring keeps its words and a table is read where it lies for the module's whole life. A phone gets half because JavaScriptCore counts the whole reservation as the page's JavaScript memory, committed or not.
 
 ```text
 address        bytes                    range                  placed by
@@ -157,80 +246,17 @@ The map is `pxl-kernel mem/section.rs`'s, over xpute's sections. The stack is fi
 
 The numbers — page size, stack, ring addresses, `--global-base`, the two reservations, the heap a phone is guaranteed (`MIN_HEAP_BYTES`) — are one file, `spec/pxl/web/kernel/mem/mem.json`, read by the kernel's map, by `build.rs` and by the shell's reservation, and asserted at compile time and at boot.
 
-What the renderer reads each frame is laid out as **lanes**, structure-of-arrays: terrain planes, voxel bands, column runs, a mesh per LOD tier, the chunk table, decor instances, the object store's records, and every registry. A table whose columns move together is one struct of lanes with one length. Slots are dense, and an index is told when its slot moves — except in a handle table, where the slot is what the other side holds, so it stays and is reused under a new generation. A lane set has one owner; a consumer borrows it for one call. The JavaScript heap holds only glue: React, the WebGPU objects behind the kernel's handles, and response bodies until the kernel takes them.
+What the renderer reads each frame is laid out as **column lanes**, structure-of-arrays — a different thing from the lanes packed into one word above. They are terrain planes, voxel bands, column runs, a mesh per LOD tier, the chunk table, decor instances, the object store's records, and every registry. A table whose columns move together is one struct of lanes with one length. Slots are dense, and an index is told when its slot moves — except in a handle table, where the slot is what the other side holds, so it stays and is reused under a new generation. A lane set has one owner; a consumer borrows it for one call. The JavaScript heap holds only glue: React, the WebGPU objects behind the kernel's handles, and response bodies until the kernel takes them.
 
 ---
 
 # The engine
 
-Everything here serves one meeting. The ground is a dense raster for a whole page; what the player places is a sparse tree per band. The two are stored apart and travel apart, and they meet once — when a chunk is built. What comes out of that meeting is one set of column runs, and it is what is drawn and what is hit, so the picture and the pointer can never disagree.
-
-The sections below build up to it: the coordinate a position is written in, the levels it is addressed at, where the ground comes from and how it is baked. Then the meeting itself, then what is made of what it produces.
-
-## Coordinate System — PVF3
-
-```text
-PVF3 = { i: IVec (64-bit), f: FVec (32-bit) }
-```
-
-A position is 96 bits of fixed point. `IVec` packs three signed integer lanes, `24/24/16` bits for X/Y/Z; X is cyclic, so the world wraps at the longitude seam. `FVec` packs three unsigned 8-bit residues, so a position resolves to `1/256` of a block on every axis; the word's top byte is unused. Arithmetic is integer — a lane is computed as `i64` and packed back — so a coordinate is the same bits on every machine, and there is one implementation: the shell reads coordinates through the kernel.
-
-The EPSG:3857 adapter gives the unit its meaning: `1u` is one L1 block, about 2.389 Mercator meters at the equator. Distortion and the page-constant vertical scale live in the adapter. Placed objects quantize their sub-cell offset and size to the same `1/256` (`SUB_CELL_SCALE`, `pxl-render mesh/volume.rs`), so a position round-trips through the mesh without rounding, and the `f32` the store saves is exact on that lattice.
-
-## Spatial Hierarchy
-
-| Level | Name      | Extent per axis | Used for                                   |
-| ----- | --------- | --------------- | ------------------------------------------ |
-| L0    | Sub-block | within one L1   | fine placement (the FVec residue)          |
-| L1    | Block     | `1u`            | the cell; a voxel once it carries material |
-| L2    | Chunk     | `64` blocks     | meshing, LOD, raycasting, frustum culling  |
-| L3    | Page      | `1024` blocks   | terrain streaming and storage              |
-| L4    | Anchor    | `4096` blocks   | the floating origin                        |
-| L5    | Shard     | `65536` blocks  | reserved                                   |
-
-A level is an extent on one lane, not a cube: `BASE`, `CENTER`, `LIMIT` and `IDX` (`pxl-spec space/indexer.rs`) are the same operations at every level, and whether a level is filled on one axis, two or three is the layer's choice. So terrain is a **Tile** at L3 — a 2.5D raster — and objects are a **Volume** per `64³` band of an L2 chunk. A **Cell** is an address with no payload; a **Pixel** is a cell with a 2D sample, a **Voxel** a cell with a material. A **Band** is one materialized `64³` volume, the renderer's working storage, never a level and never persisted. L5 is commented out (`L5_SHAMT`); when it exists it will address X/Y only, since the Z lane is 16 bits.
-
-| Layer                       | Level              | Shape  | Concrete type                                   |
-| --------------------------- | ------------------ | ------ | ----------------------------------------------- |
-| terrain, source             | L3 Page            | Tile   | a `.fixed.terrain` record                       |
-| object, source              | L2 Chunk, per band | Volume | palette per chunk, sparse tree per band         |
-| terrain + object, for build | L2 Chunk           | Volume | a volume of bands (`pxl-render mesh/volume.rs`) |
-| any                         | L4 Anchor          | —      | the view's root frame                           |
-
-Objects are client-local. The store (`pxl-kernel layer/object/store.rs`) keeps a palette per chunk and a sparse octree per occupied band, leaves being palette indices, and derives the chunk's entries as lanes with a cell index for occupancy and hits. It persists to `localStorage` as five lanes per page — page-local position, footprint side, value — under a key that carries the layout's version. One chunk node (`world/chunk/node.rs`) owns one L2 column and composes as many signed 64-cell Z bands as its content touches; a page holds 256 columns.
-
-## Terrain
-
-Terrain arrives as L3 pages: four categorical ground rasters and a padded elevation raster, sampled bicubically.
-
-| Channel     | Contents                                  |
-| ----------- | ----------------------------------------- |
-| `LAND`      | ground surface: bare, green, sand, rock … |
-| `WATER`     | inland water: river, lake, wetland …      |
-| `STRUCTURE` | buildings and constructed surfaces        |
-| `TRANSPORT` | roads, paths, railways                    |
-
-Sea is a `LAND` value with the high bit set (`sea = 129`, `spec/pxl/spec/cell/cube_type.json`), so a channel stays one byte per cell. The channels are rasterized from Overture's Buildings, Transportation and Base themes, the coastline from Base's `water`.
-
-One radius, `KEEP_DIST` (`spec/pxl/web/kernel/layer/terrain/config.json`), decides everything: the pages within it of the range anchor are the pages fetched, the pages kept decoded and the pages `.fixed.terrain` has records for. A page therefore cannot be requested and then dropped from under its own request. The anchor is the view centre on the ground, snapped to a chunk — not the camera, so rotating does not sweep pages in and out. A page is copied into its record and its body released in the same command.
-
-## Bake
-
-```text
-Overture PostGIS rows
-  → XTP decode
-  → overture/adapter, coast/adapter (row → feature)
-  → normalizer (classify, rank, assign tags — policy-parameterized: overture/policy, coast/policy)
-  → ground (rasterize geometry into ground channels)
-  → encode_terrain (elevation + ground → XTP)
-  → compressed HTTP page response
-```
-
-The bake is `pxl-geo-bake`, over the model's formats. Polygons are filled even-odd with holes; lines are drawn with a thickness kernel; scratch geometry comes from one arena per page. Elevation is stored as signed 16-bit cell units under one Mercator Z scale per page, so the bake, the terrain and the objects agree on what a unit of height is. Every land page is baked once into a versioned prefix; open ocean is one shared page.
+Everything here serves one meeting. The ground arrives as a dense raster for a whole page; what the player places is a sparse tree per band. The two are stored apart and travel apart, and they meet once, when a chunk is built. What comes out of that meeting is one set of spans, one per stretch of a column that holds a single material — the **runs** the rest of this half is about. The same runs are drawn and hit, so the picture and the pointer can never disagree.
 
 ## Chunk pipeline
 
-This is the meeting. In a band, `0` is VOID, `128` is explicit AIR (a leaf that erases what a lower layer would show), `255` is UNKNOWN, and any other value is at once a placed colour, a terrain pick or a decor kind and its id in the one global palette (`pxl-spec cell/`).
+This is the meeting.
 
 ```text
 terrain record ──▶ terrain paint (mesh/paint/terrain) ──┐
@@ -245,15 +271,17 @@ terrain record ──▶ direct runs, one a column ─────────�
                                         a mesh per LOD tier               the same column walk
 ```
 
-Objects paint after terrain, so a placed value wins the voxel. A chunk records the revisions it was built from — its terrain page's, its column's object and decor revisions — and is not rebuilt while they stand. A chunk with nothing placed skips the volume and writes one run per column straight into the run set. The mesher and the raycast walk the same runs, so what is drawn and what is hit are the same geometry.
+In a band, `0` is VOID, `128` is explicit AIR — a leaf that erases what a lower layer would show — and `255` is UNKNOWN. Any other value is at once a placed colour, a terrain pick or a decor kind, and its id in the one global palette (`pxl-spec cell/`).
+
+Objects paint after terrain, so a placed value wins the voxel. A chunk records the revisions it was built from — its terrain page's, its column's object and decor revisions — and is not rebuilt while they stand. A chunk with nothing placed skips the volume entirely and writes one run per column straight into the run set.
 
 **Bands are temporary** (`pxl-render mesh/volume.rs`). A band is `64³` voxels, five bytes each — a `u32` `material` `0xCC_RRGGBB` and a `u8` `layer_idx`, plus a sub-cell payload where fine objects need it — about 1.25 MiB, allocated whole when one peak touches it. That is too much to keep for every visible chunk on a phone, so bands live only while a chunk is composed and scanned; sixteen band stores keep their lanes between composites, because reallocating them was the heap's worst churn.
 
-**The column run set survives.** Each of a chunk's `64²` columns as merged material runs, 22 bytes a run, in one heap block. It is scanned once and serves every LOD tier and every transition until the chunk is released or its sources change. Each tier's mesh is kept as one block, under a retain budget of half the heap for what is off screen (`RETAIN_BUDGET_BYTES`). The raycast keeps its own exact composites near the pointer — four chunks, eight bands, about 10 MiB.
+**The column run set survives.** A column is read bottom to top; a run opens at its first voxel and extends while the material holds. A chunk's `64²` columns become their runs, 22 bytes a run, in one heap block. It is scanned once and serves every LOD tier and every transition until the chunk is released or its sources change. Each tier's mesh is kept as one block, under a retain budget of half the heap for what is off screen (`RETAIN_BUDGET_BYTES`). The raycast keeps its own exact composites near the pointer — four chunks, eight bands, about 10 MiB.
 
-**The scheduler** (`pxl-kernel world/chunk/table.rs`) is one table with a slot per chunk: flags, distances, bounding sphere, pending-since, retained bytes. It runs four passes a tick. **mount** decides which chunks exist, by range from the anchor with hysteresis; **refresh** measures each against the frustum; **recheck** asks the LOD ladder which tiers distance wants; **commit** applies a layout whose tiers are all in hand, or releases one that has gone off screen. What to build next is one priority (`sched/priority.rs`): the two chunks holding the scan and bake slots first, then chunks in the frustum by distance from the lead point, aged so that nothing waits forever. The lead point is where the camera is going, so a pan fills in ahead of the view. Builds run in the build task on what the tick left of the quota, one scan and one bake open at a time.
+**The scheduler** (`pxl-kernel world/chunk/table.rs`) is one table with a slot per chunk: flags, distances, bounding sphere, pending-since, retained bytes. It runs four passes a tick. **mount** decides which chunks exist, by range from the range anchor with hysteresis; **refresh** measures each against the frustum; **recheck** asks the LOD ladder which tiers distance wants; **commit** applies a layout whose tiers are all in hand, or releases one that has gone off screen. A chunk build runs in two stages, a scan and a mesh bake, and one of each is open at a time. What to build next is one priority (`sched/priority.rs`): the two chunks holding those slots first, then chunks in the frustum by distance from the lead point, aged so that nothing waits forever. The lead point is where the camera is going, so a pan fills in ahead of the view. Builds run in the build task on what the tick left of the quota.
 
-**Memory is paid for in LOD.** A refused block ends the tick's builds and the chunk waits for a release; reclaim gives back off-screen work, farthest first. If a refusal finds nothing to reclaim, the ladder steps in one tier — at most every half second, up to three — and steps back out after five seconds without a refusal. The view gets coarser; the page does not die.
+**Memory is paid for in LOD.** A refused block ends the tick's builds and the chunk waits for a release; reclaim gives back off-screen work, farthest first. If a refusal finds nothing to reclaim, the ladder steps in one tier — at most every half second, up to three — and steps back out after five seconds without a refusal. The view gets coarser; the tab does not die.
 
 ## Rendering
 
@@ -263,7 +291,7 @@ The kernel writes the frame's uniforms into the stage lane (`frame/stage.rs`) an
 
 It reaches WebGPU through calls the host answers (`gpu/api.rs` ↔ `apps/web/src/kernel/render/gpu.ts`). A call carries numbers and the address and length of what it names, and every GPU object is one of xpute's handles: 2^15 slots for objects, 8 for surfaces. Shaders and pipelines are the kernel's (`frame/shader/`). A pipeline is a record of words — shaders, vertex lanes, bind group layouts, primitive, depth and blend state — that the host turns into a WebGPU descriptor, and that a native host could turn into wgpu's. `cargo test` compiles every shader with naga, the WGSL compiler, and checks each record against its shader. Depth is reversed float, near at 1, so precision falls where perspective needs it and far coplanar faces do not fight. On device loss the blocks are still in memory and are re-uploaded from their addresses.
 
-The **view** (`pxl-kernel world/frame/view.rs`) is an orbit camera in a root frame the world stands in. The eye never turns: the world rotates under it by the map's azimuth and is translated so the map centre is the origin. The local origin is the map centre's L4 base, which keeps the world in `f32` range near the camera; the translation rebases in the same step that it snaps. The matrices are doubles, written the moment a damping step moves, and read by the scheduler, the renderer, placement and the pointer's ray.
+The **view** (`pxl-kernel world/frame/view.rs`) is an orbit camera in a root frame of reference that the world stands in — a frame in the coordinate sense, not a drawn one. The eye never turns: the world rotates under it by the map's azimuth and is translated so the map centre is the origin. The local origin is the map centre's L4 base, which keeps the world in `f32` range near the camera; the translation rebases in the same step that it snaps. The matrices are doubles, written the moment a damping step moves, and read by the scheduler, the renderer, placement and the pointer's ray.
 
 **LOD** samples a chunk at strides `1/2/4/8/16/32/64`. A tier hands off when one of its cells would project to about six pixels, a screen-space error from viewport height and field of view (`pxl-render look/lod.rs`). At the reference viewport height that puts the handoffs at `192/384/768/1536/3072/6144` units, proportional to the stride. Adjacent tiers dither with complementary screen-space masks, and a chunk coming into view starts at its distance's tier.
 
@@ -277,15 +305,15 @@ Culling uses the exact union of the terrain, object, primary and secondary mesh 
 
 ## Camera and settings
 
-The camera is three controls — `dist`, `polar`, `azimuth` — and nothing else writes them. Terrain may ask one question, in `control/camera/terrain_gate.rs`: would this state put the eye inside it. The gate is a function of the three controls only, and it sits in `set_view_state`, the one funnel every input path goes through, so a refused move never leaves the controls and the drawn camera disagreeing. `Settings > Camera` picks the answer: `through` ignores terrain, `stop` takes a control as far as it can, `climb` grants the controls and raises the drawn pitch instead, so the pitch relaxes back on its own.
+The camera is three controls — `dist`, `polar`, `azimuth` — and nothing else writes them. Terrain may ask one question, in `control/camera/terrain_gate.rs`: would this state put the eye inside the ground. The gate is a function of the three controls only, and it sits in `set_view_state`, the one funnel every input path goes through, so a refused move never leaves the controls and the drawn camera disagreeing. `Settings > Camera` picks the answer: `through` ignores terrain, `stop` takes a control as far as it can, `climb` grants the controls and raises the drawn pitch instead, so the pitch relaxes back on its own.
 
 Every setting is one entry of one schema (`spec/pxl/web/kernel/shell/setting/schema.json`): default, kind, section. The store keeps only the user's overrides, and the settings sheet renders its rows from the schema. Dev-only entries — gizmos, the ledger panel, a render-path bisect — are marked `dev`.
 
 ## Billboards and POI
 
-POI is disconnected until its per-page index is rewritten. The design the code holds: a POI page is an XTP record — positions, category, rank and id hash as lanes, strings as leaves — copied into the core memory on arrival. A spatial index over the resident disc (`layer/poi/index.rs`) is rebuilt a range of records per unit, in the content phase, while the previous index keeps answering. Placement (`layer/poi/placement.rs`) is a job of the same phase — query, file hits into a lattice by tier, offer them with estimated widths, place greedily on a screen grid in distance order, build the badges — committed whole.
+POI is disconnected until its per-page index is rewritten. The design the code holds: a POI page is an XTP record — positions, category, rank and id hash as lanes, strings as leaves — copied into the core memory on arrival. The pages held at any moment make a disc around the range anchor, and a spatial index over that disc (`layer/poi/index.rs`) is what a tick queries instead of reading every record. It is rebuilt a slice of records at a time, in the content phase, while the previous index keeps answering. Placement (`layer/poi/placement.rs`) is a job of the same phase — query, file hits into a lattice by tier, offer them with estimated widths, place greedily on a screen grid in distance order, build the badges — committed whole.
 
-Badges are one instanced quad (`layer/billboard/field.rs`) drawn from one atlas (`pxl-render asset/atlas.rs`, one texture the badges are packed into shelf by shelf): anchor, size and sheet rectangle per instance, with the fit to screen pixels, the distance fade and the anchor pinning in the vertex shader. Occlusion is all or nothing per badge: the pass (`frame/shader/badge.wgsl`) binds the world's depth as a texture, reprojects several points up each badge through it, and discards the badge when most are behind terrain. The same pass writes `gl_FragDepth` from an upright twin of the quad, so billboards sort against the world along world-up. Chat bubbles are the sprite form of the same patch.
+Badges are one instanced quad (`layer/billboard/field.rs`) drawn from one atlas (`pxl-render asset/atlas.rs`, one texture the badges are packed into shelf by shelf): anchor, size and sheet rectangle per instance, with the fit to screen pixels, the distance fade and the badge's anchor pinning in the vertex shader. Occlusion is all or nothing per badge: the pass (`frame/shader/badge.wgsl`) binds the world's depth as a texture, reprojects several points up each badge through it, and discards the badge when most are behind terrain. The same pass writes `gl_FragDepth` from an upright twin of the quad, so billboards sort against the world along world-up. Chat bubbles are drawn by the same pass, with a sprite where a badge has text.
 
 ## Catalogs and assets
 
