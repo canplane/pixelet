@@ -5,7 +5,7 @@ our own, and their licences ask for a notice to travel with the copy. One
 carries it inside the file; the other cannot, so it is reproduced here.
 
 This file covers copied source only. Crates and npm packages that are merely
-depended on are not listed: `crates/Cargo.toml` and `apps/web/deno.json`
+depended on are not listed: `crates/Cargo.toml` and `apps/web/deno.jsonc`
 name them, and each carries its own licence where it is published.
 
 ## shadcn/ui — `apps/web/src/shared/ui/shadcn/`

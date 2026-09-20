@@ -108,7 +108,7 @@ fn ring_one_payload_a_slot_so_the_payloads_run_out_with_the_slots_and_never_befo
     }
     assert_eq!(r.push(9, 0x0101, 0, Some(&pkt(9)), 0), Errno::OK, "a slot freed is a payload freed");
 
-    assert_eq!(r.push(10, 0x0101, 0, Some(&vec![0u8; 72]), 0), Errno::EMSGSIZE);
+    assert_eq!(r.push(10, 0x0101, 0, Some(&[0u8; 72]), 0), Errno::EMSGSIZE);
     let at = r.entry_at(r.tail());
     r.push(11, 0, 0, None, 0);
     r.words()[(at + FRAME_PACKET) as usize] = 4;

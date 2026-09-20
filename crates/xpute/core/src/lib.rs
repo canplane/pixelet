@@ -1,8 +1,8 @@
 // xpute-core/lib.rs
 
 //! The generic kit, in Rust: `@xpute/core`'s counterpart, and held to the
-//! same rule — no pixelet domain knowledge, so that it stays portable to
-//! other projects. Collections and lanes, the codecs and XTP, the errno
+//! same rule — no domain knowledge of the program over it, so that it
+//! stays portable to another one. Collections and lanes, the codecs and XTP, the errno
 //! table both languages are written from, and the libm every end computes
 //! with, so a double is the same bits wherever it is made.
 //!

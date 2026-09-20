@@ -15,7 +15,7 @@
 //! name the same skin and a texture is uploaded per row, not per group.
 
 use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, UNIFORM_FLOATS};
-use crate::frame::shader::record::PIPELINE_DECOR_DEPTH;
+use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS};
 use crate::gpu::api::{buffer_usage, object, release, GpuApi};
 use crate::gpu::api_spec::{address, compare, filter, format, resource};
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -65,6 +65,7 @@ pub struct DecorPass {
     lit: Built,
     ghost: Built,
     depth: Built,
+    prepass: Built,
     frame_group: u32,
     light_group: u32,
     sampler: u32,
@@ -78,15 +79,17 @@ pub struct DecorPass {
 }
 
 impl DecorPass {
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, samples: u32, frame_buffer: u32, shadow: &Shadow, align: u32) -> DecorPass {
+    /// Over `frame_buffer`, the shadow map and the occlusion map's entry `ao`.
+    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, samples: u32, frame_buffer: u32, shadow: &Shadow, ao: [u32; 5], align: u32) -> DecorPass {
         let lit = pipelines.build(g, PIPELINE_DECOR, format::CANVAS, samples);
         let sampler = object();
         (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::REPEAT, compare::NONE, 1);
         DecorPass {
             ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, format::CANVAS, samples),
             depth: pipelines.build(g, PIPELINE_DECOR_DEPTH, format::CANVAS, samples),
-            frame_group: frame_group(g, lit.layouts[0], frame_buffer, shadow.entries(1)),
-            light_group: frame_group(g, lit.layouts[0], shadow.light_frame, shadow.blank_entries(1)),
+            prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, format::CANVAS, 1),
+            frame_group: frame_group(g, lit.layouts[0], frame_buffer, shadow.entries(1), ao),
+            light_group: frame_group(g, lit.layouts[0], shadow.light_frame, shadow.blank_entries(1), ao),
             lit,
             sampler,
             stride: DRAW_UNIFORM_BYTES.max(align),
@@ -103,6 +106,14 @@ impl DecorPass {
         self.lit = pipelines.build(g, PIPELINE_DECOR, format::CANVAS, samples);
         self.ghost = pipelines.build(g, PIPELINE_GHOST_DECOR, format::CANVAS, samples);
         self.depth = pipelines.build(g, PIPELINE_DECOR_DEPTH, format::CANVAS, samples);
+    }
+
+    /// Group 0 again over a new occlusion map's entry `ao`.
+    pub fn rebind(&mut self, g: &GpuApi, frame_buffer: u32, shadow: &Shadow, ao: [u32; 5]) {
+        release(self.frame_group);
+        release(self.light_group);
+        self.frame_group = frame_group(g, self.lit.layouts[0], frame_buffer, shadow.entries(1), ao);
+        self.light_group = frame_group(g, self.lit.layouts[0], shadow.light_frame, shadow.blank_entries(1), ao);
     }
 
     /// Each group's model block and skin image as the kernel has them now, in
@@ -200,6 +211,11 @@ impl DecorPass {
     /// The opaque decor's depth from the light.
     pub fn draw_depth(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
         self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, self.depth.pipeline, self.light_group)
+    }
+
+    /// The opaque decor's depth from the eye, for the screen-space occlusion.
+    pub fn draw_prepass(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
+        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, self.prepass.pipeline, self.frame_group)
     }
 
     /// The ghost's decor, blended, after everything opaque.

@@ -27,7 +27,7 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::orbit::damp_alpha;
-use crate::control::camera::store::camera_store;
+use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::global::Global;
 use crate::io::load::{load_gltf, load_image, Load};
 use crate::io::model_asset::{register_model, ModelHandle};
@@ -91,11 +91,14 @@ const FOLLOW_LERP_K: f64 = camera_cfg::smooth::POS_DAMP;
 // to the camera.
 const FOLLOW_FACING: f64 = core::f64::consts::PI;
 
-// Follow-mode walk clip: play it while the glide has a real gap to close, then
-// hold it that much longer before dropping to idle, so it doesn't strobe
-// once per GPS fix. EPS is well under one fix's worth of travel (~0.5u at a
-// walking pace) and over the near-zero settled gap.
-const FOLLOW_WALK_EPS: f64 = 0.03;
+// A gap narrower than this is not worth walking to: well under one GPS fix's
+// worth of travel (~0.5u at a walking pace) and over the near-zero gap a map
+// that has not moved leaves. Follow mode plays the walk clip while the glide
+// has this much to close and holds it LINGER longer before dropping to idle,
+// so it doesn't strobe once per fix; a catch-up is not planned at all across
+// a gap this small, which a rotate or a pinch leaves — the walk clip would
+// play in place and turn the walker to the heading of a zero-length step.
+const WALK_EPS: f64 = 0.03;
 const FOLLOW_WALK_LINGER_S: f64 = 1.5;
 
 struct Held {
@@ -124,6 +127,9 @@ struct Walker {
     actor_clip: Option<u32>,
     was_follow_mode: bool,
     walk_plan: Option<WalkPlan>,
+    /// The camera was under a pointer last turn: its falling edge is a
+    /// gesture's end, which is when a destination is fixed.
+    was_dragging: bool,
     settle: SettleTracker,
     /// Faces the camera exactly once — the moment it first has a pose to
     /// resolve the camera against — and never again.
@@ -145,6 +151,7 @@ impl Walker {
             actor_clip: None,
             was_follow_mode: false,
             walk_plan: None,
+            was_dragging: false,
             settle: init_settle_tracker(target, 0.0),
             initial_facing_done: false,
             prev_map_origin: map_origin,
@@ -206,6 +213,8 @@ impl Walker {
         // where the world did not tick.
         let now = crate::host::now() / 1000.0;
         let rebased = map_origin != self.prev_map_origin;
+        let dragging = camera_store().camera_status == CameraStatus::Drag;
+        let released = self.was_dragging && !dragging;
         let (px, py, is_walking);
 
         if is_follow_mode {
@@ -221,7 +230,7 @@ impl Walker {
             }
             // Back to the camera, held there while the map spins underneath.
             self.pose[3] = FOLLOW_FACING - view().azimuth;
-            if (target.x - px).hypot(target.y - py) > FOLLOW_WALK_EPS {
+            if (target.x - px).hypot(target.y - py) > WALK_EPS {
                 self.follow_walk_until = now + FOLLOW_WALK_LINGER_S;
             }
             is_walking = now < self.follow_walk_until;
@@ -239,17 +248,49 @@ impl Walker {
             if self.settle.last_seen != self.settle.settled {
                 wake_at((self.settle.last_change_time + SETTLE_DELAY_S) * 1000.0);
             }
-            if update.just_settled {
-                self.walk_plan = Some(WalkPlan {
-                    start: Vec2 { x: self.pose[0], y: self.pose[1] },
-                    target: self.settle.settled,
-                    start_time: now,
-                    duration: CATCHUP_DURATION_S,
-                });
+            // Where the walker is headed is decided when a gesture ends: the
+            // map stands where the pointer left it, and the walker leaves for
+            // there from wherever it has got to. The settle tracker answers
+            // for every other way the map moves — a search jump, a GPS
+            // recenter, a keyboard nudge — which is why a release is not the
+            // only trigger; but a release cannot wait for the tracker's
+            // delay, since a pan begun inside it holds the target moving and
+            // no catch-up was ever planned (camera/input.rs asks for the turn
+            // that carries the release).
+            let destination = if released {
+                // The tracker has seen this place come to rest, and must not
+                // plan for it again a moment later.
+                self.settle = init_settle_tracker(target, now);
+                Some(target)
+            } else if update.just_settled {
+                Some(self.settle.settled)
+            } else {
+                None
+            };
+            if let Some(to) = destination {
+                // A release that leaves the map where it already stood — a
+                // rotate, a pinch, a tap — has nowhere to send the walker,
+                // and re-planning a walk already under way toward the same
+                // place would restart its clock and slow it to a crawl.
+                let under_way = self.walk_plan.as_ref().is_some_and(|plan| (plan.target.x - to.x).hypot(plan.target.y - to.y) <= WALK_EPS);
+                if !under_way && (to.x - self.pose[0]).hypot(to.y - self.pose[1]) > WALK_EPS {
+                    self.walk_plan = Some(WalkPlan {
+                        start: Vec2 { x: self.pose[0], y: self.pose[1] },
+                        target: to,
+                        start_time: now,
+                        duration: CATCHUP_DURATION_S,
+                    });
+                }
             }
-            if update.moved {
-                self.walk_plan = None;
-            }
+            // A plan in flight is left to finish, even once the map is
+            // moving again: it was dropped here, which stood the walker still
+            // from the moment a new gesture began, and the distance it had not
+            // covered was added to the next catch-up — which takes
+            // CATCHUP_DURATION_S however wide the gap has grown, so a run of
+            // quick pans ended in one jump. Walking on to a target the map has
+            // since left behind is the point: the walker moves when a gesture
+            // ends, never during one, and each catch-up starts that much
+            // nearer.
             let step = match &self.walk_plan {
                 Some(plan) => sample_walk_plan(plan, now),
                 None => WalkSample {
@@ -281,6 +322,7 @@ impl Walker {
 
         self.prev_map_origin = map_origin;
         self.was_follow_mode = is_follow_mode;
+        self.was_dragging = dragging;
 
         // Z aligns to the surface under the walker — terrain, or the top of a
         // placed object standing on it, whichever is higher. Asked again only

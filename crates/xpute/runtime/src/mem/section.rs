@@ -14,7 +14,7 @@
 //! `memory.buffer` is one `ArrayBuffer` for the module's life: a view over it
 //! stays valid, which is what lets a ring hold its words and a lane be read
 //! where it lies. What the ranges are for, and how large each one is, is the
-//! kernel's policy (pxl-kernel mem/section.rs).
+//! kernel's own policy, and nothing here reads it.
 
 /// A WebAssembly page.
 pub const WASM_PAGE_BYTES: u32 = 1 << 16;

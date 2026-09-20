@@ -6,11 +6,17 @@
 // (gpu/api.rs, apps/web/src/device/gpu.ts). Usage flags are WebGPU's own
 // bits, spelled out where they are used, and are not here.
 
-/** A texture's format: the texture pack, skins and the badge sheet; depth; the canvas's own. */
+/** A texture's format: the texture pack, skins and the badge sheet; depth; the
+ * canvas's own; then the screen-space occlusion's — a half-resolution depth and
+ * normal in four floats, the full-resolution occlusion in one byte, and the blue
+ * noise it dithers with, four bytes read as they are. */
 export const format = {
   RGBA8_SRGB: 0 as number,
   DEPTH32: 1 as number,
   CANVAS: 2 as number,
+  RGBA32F: 3 as number,
+  R8: 4 as number,
+  RGBA8: 5 as number,
 } as const;
 
 export const dimension = {
@@ -98,7 +104,8 @@ export const paint = {
  * depth compare under reversed Z (LESS is the shadow map's plain depth; NO_DEPTH, no
  * depth attachment), the blend, the sample count, a vertex step and format, a
  * binding's stages, and a binding's kind — FRAME_DEPTH a depth texture
- * multisampled as the frame is. */
+ * multisampled as the frame is, TEXTURE_UNFILTERED one in a format no sampler
+ * filters (RGBA32F), read by textureLoad alone. */
 export const record = {
   TRIANGLES: 0 as number,
   STRIP: 1 as number,
@@ -120,6 +127,7 @@ export const record = {
   F32X3: 2 as number,
   F32X4: 3 as number,
   U32X4: 4 as number,
+  U32: 5 as number,
   VERTEX: 1 as number,
   FRAGMENT: 2 as number,
   BOTH: 3 as number,
@@ -132,4 +140,5 @@ export const record = {
   SAMPLER: 6 as number,
   SAMPLER_COMPARISON: 7 as number,
   FRAME_DEPTH: 8 as number,
+  TEXTURE_UNFILTERED: 9 as number,
 } as const;

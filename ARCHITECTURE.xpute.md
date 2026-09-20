@@ -1,13 +1,13 @@
 # Architecture — xpute
 
-xpute is the system pixelet runs on: a kit of generic code, and a runtime that runs a guest program in turns inside a host. The host owns the clock, the memory and the I/O, the way an operating system owns the machine; the guest is given one memory at boot, a quota of time on each turn, and credits for the I/O it wants. Nothing in xpute knows what the guest does — no coordinates, no terrain, no tiles — and that is what keeps it portable to another program.
+xpute is a kit of generic code and a runtime that runs a guest program in turns inside a host. The host owns the clock, the memory and the I/O, the way an operating system owns the machine; the guest is given one memory at boot, a quota of time on each turn, and credits for the I/O it wants. Nothing in xpute knows what the guest does — no domain types of any kind reach it — and that is what keeps it portable to another program.
 
 It is written twice, in Rust and TypeScript, and the two halves are not the same kind of pair:
 
 - **`core` is symmetric.** Both languages implement the same kit, and golden records hold them to each other where bytes cross.
 - **`runtime` is two ends of one arrangement.** The host end is TypeScript — the doorbell (the one call into the guest), the strobe (the clock that decides when to make it), the reservation (the memory handed over at boot). The guest end is Rust — the executor, the tick, the tasks. A module that exists on one side only is not a gap on the other. What both must agree on is the format: the frame's four words, the ring's layout, the memory's sections.
 
-[ARCHITECTURE.pixelet.md](./ARCHITECTURE.pixelet.md) is what pixelet builds over this.
+pixelet is the first program built on it.
 
 ---
 

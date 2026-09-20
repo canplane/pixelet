@@ -34,7 +34,7 @@ interface Common {
   dev?: boolean;
 }
 export type ToggleSetting = Common & { kind: "toggle"; default: boolean };
-export type ChoiceSetting<T extends string = string> = Common & { kind: "choice"; default: T; options: readonly T[] };
+export type ChoiceSetting<T extends string = string> = Common & { kind: "choice"; default: T; options: readonly T[]; costs?: readonly (SettingCost | "")[] };
 export type TextSetting = Common & { kind: "text"; default: string };
 export type Setting = ToggleSetting | ChoiceSetting | TextSetting;
 

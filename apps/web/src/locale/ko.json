@@ -18,12 +18,16 @@
       "section_title": "표시",
       "section_caption": "월드에 무엇을 보여줄지 설정합니다",
       "show_decor": {
-        "label": "자연물 표시",
+        "label": "데코",
         "description": "지형에 절차적으로 흩뿌려진 나무와 차량 등을 그립니다. 직접 놓은 것은 이 설정과 관계없이 남습니다."
       },
       "show_structures": {
-        "label": "건물 표시",
+        "label": "건물",
         "description": "지형 위에 건물을 그릴지 설정합니다."
+      },
+      "texture_pack": {
+        "label": "텍스처",
+        "description": "블록과 오브젝트 표면에 단색 대신 디테일한 픽셀 아트 텍스처를 적용합니다."
       }
     },
     "camera": {
@@ -32,57 +36,38 @@
       "lock_camera_tilt": {
         "label": "카메라 기울기 고정",
         "description": "카메라의 수직 회전은 고정하고 수평 회전은 유지합니다."
-      },
-      "camera_terrain": {
-        "through": {
-          "label": "지형 통과",
-          "description": "카메라가 지형을 그대로 지나갑니다. 땅속에서는 안쪽 면을 그리지 않아 화면이 뒤집혀 보입니다."
-        },
-        "stop": {
-          "label": "지형에서 멈춤",
-          "description": "줌과 회전, 기울이기가 요청한 만큼 가되 갈 수 있는 데까지만 갑니다. 카메라가 스스로 움직이지는 않습니다."
-        },
-        "climb": {
-          "label": "지형 타고 넘기",
-          "description": "줌은 항상 그대로 적용하고, 대신 시야가 위로 서면서 지형을 넘어갑니다. 모든 배율에 닿을 수 있지만 각도가 저절로 바뀝니다."
-        }
-      }
-    },
-    "editing": {
-      "section_title": "편집",
-      "section_caption": "도구가 무엇을 바꿀 수 있는지 설정합니다",
-      "enable_terrain_carving": {
-        "label": "지형 파내기",
-        "description": "아무것도 놓여있지 않은 곳에서 지우개로 실제 지형을 한 칸씩 파낼 수 있게 합니다."
       }
     },
     "lighting": {
       "section_title": "조명 & 그림자",
       "section_caption": "형태와 경계를 또렷하게 보여주는 효과",
       "show_edge_shade": {
-        "label": "큐브 모서리 음영",
+        "label": "큐브 외곽선",
         "description": "허공과 맞닿은 모서리만 어둡게 합니다. 평지는 이음매 없이 이어지고, 높낮이가 바뀌는 곳만 선으로 드러납니다."
+      },
+      "ao": {
+        "label": "음영",
+        "off": {
+          "label": "없음",
+          "description": "모든 면이 주변광을 그대로 받습니다."
+        },
+        "corner": {
+          "label": "모서리 (기하)",
+          "description": "큐브가 닿은 바닥과 안쪽 모서리를 어둡게 해, 블록이 바닥 위에 떠 있지 않고 놓여 있는 것처럼 보이게 합니다. 픽셀당 연산 몇 개."
+        },
+        "screen": {
+          "label": "정밀 (SSAO)",
+          "description": "오브젝트가 맞닿는 구석이나 틈새에 세밀한 음영을 표현하여 입체감을 높입니다. 화면 전체를 다시 계산하므로 가장 무겁습니다."
+        }
       },
       "show_rim_light": {
         "label": "림 라이트",
         "description": "오브젝트 실루엣에 얇은 하이라이트를 추가하여 배경과 선명하게 분리합니다."
-      },
-      "show_shadow_map": {
-        "label": "그림자",
-        "description": "지형, 오브젝트, 캐릭터가 햇빛을 받아 땅에 그림자를 드리웁니다."
       }
     },
     "quality": {
       "section_title": "그래픽 품질",
-      "section_caption": "화면의 선명도와 디테일을 설정합니다",
-      "texture_pack": {
-        "label": "텍스처",
-        "description": "블록과 오브젝트 표면에 단색 대신 디테일한 픽셀 아트 텍스처를 적용합니다."
-      },
-      "msaa": {
-        "label": "안티에일리어싱 (MSAA)",
-        "description": "픽셀마다 네 번 샘플링해 먼 블록의 가장자리를 매끄럽게 합니다. 그래픽 메모리를 많이 씁니다."
-      }
+      "section_caption": "화면의 선명도와 디테일을 설정합니다"
     },
     "disclaimer": {
       "section_title": "유의사항",
@@ -90,7 +75,7 @@
       "coverage_notice": "현재 대한민국 지역만 지원하며, 그 외 지역은 바다로 표시됩니다.",
       "storage_notice": "배치한 오브젝트는 서버에 저장되지 않으며, 현재 기기에만 보관됩니다.",
       "location_notice": "사용자의 위치 정보는 수집하거나 저장하지 않습니다.",
-      "character_notice": "캐릭터 커스터마이징은 실험적 기능입니다. CC0 라이선스의 <kenney>Kenney</kenney> 에셋 팩이 적용됩니다."
+      "character_notice": "캐릭터와 데코는 CC0 라이선스의 <kenney>Kenney</kenney> 에셋 팩이 적용됩니다."
     },
     "attribution": {
       "section_title": "출처"

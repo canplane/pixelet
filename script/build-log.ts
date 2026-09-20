@@ -8,7 +8,7 @@
 //
 // It records the commit subjects and not a commit id, which is the whole
 // point. main's history is rewritten here as a matter of course, so a tag, a
-// stored sha and `BUILD_ID`'s own `r<count>-<hash>` all name something that
+// stored sha and `BUILD_ID`'s own hash all name something that
 // may not exist by the time anyone looks. Text written while the history is
 // still that history survives every rewrite after it. The sha is kept beside
 // it anyway — it resolves right up until it doesn't, and a record that says
@@ -27,7 +27,8 @@ import type { u32 } from "@xpute/core/abi/word.ts";
 
 const BUCKET = "pixelet-tiles";
 const KEY = "_meta/build-log.jsonl";
-/** What a dev build reads to say `b<n>+` (apps/web/vite.config.ts). */
+/** What a build with no number of its own reads to say `#<n>-<id>`
+ * (apps/web/vite.config.ts). */
 const CACHE = new URL("../apps/web/.build_number", import.meta.url);
 
 /** One published build. `from` is the build this one's commits are counted
@@ -83,7 +84,7 @@ async function read(): Promise<{ raw: string; entries: Entry[] }> {
   }
   // Every read is a chance to bring this checkout's cache of the last number
   // it saw published up to date — otherwise only `deno task deploy` writes
-  // it, and a checkout that deploys through CI alone shows `b<n>+` against a
+  // it, and a checkout that deploys through CI alone shows `#<n>-<id>` against a
   // number that stopped moving. The count itself is the bucket's; this is
   // only the cache, and gitignored.
   if (entries.length > 0) await Deno.writeTextFile(CACHE, `${entries[entries.length - 1].n}\n`);
@@ -97,7 +98,7 @@ async function record(n: u32, web: boolean, server: boolean): Promise<void> {
   // reason finds its own record already there. That is the record, so say so
   // and stop rather than appending a second one or reporting a failure.
   if (entries.some((e) => e.n === n)) {
-    console.log(`b${n} is already recorded`);
+    console.log(`#${n} is already recorded`);
     return;
   }
 
@@ -126,14 +127,14 @@ async function record(n: u32, web: boolean, server: boolean): Promise<void> {
   await Deno.remove(file);
   if (!put.ok) {
     console.error(put.stderr);
-    die(`could not write the log back; b${n} went out and is not recorded`);
+    die(`could not write the log back; #${n} went out and is not recorded`);
   }
-  console.log(`b${n} recorded: ${entry.commits.length} commit(s) from ${sha.slice(0, 8)}`);
+  console.log(`#${n} recorded: ${entry.commits.length} commit(s) from ${sha.slice(0, 8)}`);
 }
 
 function show(entry: Entry): void {
   const went = [entry.web ? "web" : null, entry.server ? "server" : null].filter(Boolean).join(" + ");
-  console.log(`b${entry.n}  ${entry.at.slice(0, 16).replace("T", " ")}  ${entry.sha.slice(0, 8)}  ${went}`);
+  console.log(`#${entry.n}  ${entry.at.slice(0, 16).replace("T", " ")}  ${entry.sha.slice(0, 8)}  ${went}`);
   for (const subject of entry.commits) console.log(`    ${subject}`);
 }
 

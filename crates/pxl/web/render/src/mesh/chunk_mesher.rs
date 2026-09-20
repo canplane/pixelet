@@ -72,12 +72,20 @@ pub const CREASE_NY: u32 = 1 << 21;
 const ALL_CREASES: u32 = CREASE_PX | CREASE_NX | CREASE_PY | CREASE_NY;
 pub const CAP_PZ: u32 = 1 << 22;
 pub const CAP_NZ: u32 = 1 << 23;
+/// A diagonal column filled at the cell above: the corner of a top face,
+/// where the lateral RISES bits are its four edges. The mask is a u32 lane
+/// of the vertex, so bits run to 31.
+pub const DIAG_RISES_PP: u32 = 1 << 24;
+pub const DIAG_RISES_PN: u32 = 1 << 25;
+pub const DIAG_RISES_NP: u32 = 1 << 26;
+pub const DIAG_RISES_NN: u32 = 1 << 27;
 
 const X_SEAM_BITS: u32 = FACE_PX | CREASE_PX | RISES_PX | DIPS_PX;
 const Y_SEAM_BITS: u32 = FACE_PY | CREASE_PY | RISES_PY | DIPS_PY;
-const FROM_FAR_BITS: u32 = X_SEAM_BITS | Y_SEAM_BITS | DIAG_PP | DIAG_PN | DIAG_NP;
-const X_BORDER_BITS: u32 = FACE_PX | FACE_NX | CREASE_PX | CREASE_NX | RISES_PX | RISES_NX | DIPS_PX | DIPS_NX | DIAG_PP | DIAG_PN | DIAG_NP | DIAG_NN;
-const Y_BORDER_BITS: u32 = FACE_PY | FACE_NY | CREASE_PY | CREASE_NY | RISES_PY | RISES_NY | DIPS_PY | DIPS_NY | DIAG_PP | DIAG_PN | DIAG_NP | DIAG_NN;
+const ALL_DIAGONALS: u32 = DIAG_PP | DIAG_PN | DIAG_NP | DIAG_NN | DIAG_RISES_PP | DIAG_RISES_PN | DIAG_RISES_NP | DIAG_RISES_NN;
+const FROM_FAR_BITS: u32 = X_SEAM_BITS | Y_SEAM_BITS | DIAG_PP | DIAG_PN | DIAG_NP | DIAG_RISES_PP | DIAG_RISES_PN | DIAG_RISES_NP;
+const X_BORDER_BITS: u32 = FACE_PX | FACE_NX | CREASE_PX | CREASE_NX | RISES_PX | RISES_NX | DIPS_PX | DIPS_NX | ALL_DIAGONALS;
+const Y_BORDER_BITS: u32 = FACE_PY | FACE_NY | CREASE_PY | CREASE_NY | RISES_PY | RISES_NY | DIPS_PY | DIPS_NY | ALL_DIAGONALS;
 
 const HIDES_SIDE: u32 = 1;
 const RISES_ABOVE: u32 = 2;
@@ -490,7 +498,7 @@ impl BakeContext {
         let far_x = self.merge_mask[col + (w - 1)];
         let far_y = self.merge_mask[col + (h - 1) * span];
         let far_xy = self.merge_mask[col + (h - 1) * span + (w - 1)];
-        (near & !FROM_FAR_BITS) | (far_x & (X_SEAM_BITS | DIAG_PN)) | (far_y & (Y_SEAM_BITS | DIAG_NP)) | (far_xy & DIAG_PP)
+        (near & !FROM_FAR_BITS) | (far_x & (X_SEAM_BITS | DIAG_PN | DIAG_RISES_PN)) | (far_y & (Y_SEAM_BITS | DIAG_NP | DIAG_RISES_NP)) | (far_xy & (DIAG_PP | DIAG_RISES_PP))
     }
 
     /// Writes one box's faces into the bake's mesh.
@@ -699,7 +707,7 @@ fn write_box(m: &mut [u32], vertex_total: u32, v_cnt: &mut u32, i_cnt: &mut u32,
             for (t, tap) in taps.iter().enumerate() {
                 m[layer_taps + lo + t] = f32_word(*tap as f64);
             }
-            m[face_lane + vi] = f32_word(faces as f64);
+            m[face_lane + vi] = faces;
         }
         for d in [0, 1, 2, 0, 2, 3] {
             m[index + *i_cnt as usize] = base_v + d;
@@ -731,8 +739,9 @@ fn column_spans_range(set: &RunSet, col: u32, z0: i32, z1: i32) -> bool {
 
 /// Whether a whole-cell run of column `col` covers `z`, and whether one
 /// that is not an object does, in one walk.
-fn column_covers(set: &RunSet, col: u32, z: i32) -> (bool, bool) {
-    let (mut any, mut terrain) = (false, false);
+/// Whether a whole cell of `col` is filled at `z`. A sub-cell run does not
+/// count: it leaves the face it would hide partly open.
+fn column_covers(set: &RunSet, col: u32, z: i32) -> bool {
     let end = set.start[col as usize + 1] as usize;
     for i in set.start[col as usize] as usize..end {
         if set.z0[i] > z {
@@ -741,13 +750,9 @@ fn column_covers(set: &RunSet, col: u32, z: i32) -> (bool, bool) {
         if set.sub_sz[i] != SUB_CELL_NONE || set.z1[i] < z {
             continue;
         }
-        any = true;
-        if set.material_class[i] != MATERIAL_OBJECT {
-            terrain = true;
-            break;
-        }
+        return true;
     }
-    (any, terrain)
+    false
 }
 
 fn neighbour_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
@@ -819,20 +824,22 @@ fn run_face_mask(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
     let mut mask = mask_all;
     let col = cy * span + cx;
     let (z0, z1) = (set.z0[i], set.z1[i]);
-    // The cell above and the cell below: terrain there hides the face,
-    // anything there caps it.
-    let (above_any, above_terrain) = column_covers(set, col, z1 + 1);
-    let (below_any, below_terrain) = column_covers(set, col, z0 - 1);
-    if above_terrain {
+    // The cell above and the cell below: a filled cell there hides the face
+    // and caps it, a placed cube as much as terrain. The face between two
+    // stacked cubes is seen by nothing — except the shadow map, which draws
+    // both sides of everything: left in the mesh, it shadows the side faces
+    // for the fifth of a cell that sun_lit offsets a sample along the normal
+    // (shadow.rs's texel), so a stack of cubes striped under every seam on
+    // whichever side the sun's azimuth put the offset under the overhang,
+    // while merged terrain, which has no interior faces, never did.
+    let above = column_covers(set, col, z1 + 1);
+    let below = column_covers(set, col, z0 - 1);
+    if above {
         mask &= !FACE_PZ;
-    }
-    if below_terrain {
-        mask &= !FACE_NZ;
-    }
-    if above_any {
         mask |= CAP_PZ;
     }
-    if below_any {
+    if below {
+        mask &= !FACE_NZ;
         mask |= CAP_NZ;
     }
     if cx + 1 < span {
@@ -858,6 +865,23 @@ fn run_face_mask(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
     }
     if cx > 0 && cy > 0 && wants_diagonal(mask, FACE_NX, FACE_NY) && column_spans_range(set, col - span - 1, z0, z1) {
         mask |= DIAG_NN;
+    }
+    // A cube touching only at a corner shades the top face there, the way a
+    // cube along an edge shades it along that edge. It is its own group of
+    // bits rather than the DIAG ones above, which say something else: that
+    // a diagonal column spans this run's own height, for the inside corner
+    // where a side face meets a wall.
+    if cx + 1 < span && cy + 1 < span && column_covers(set, col + span + 1, z1 + 1) {
+        mask |= DIAG_RISES_PP;
+    }
+    if cx + 1 < span && cy > 0 && column_covers(set, col - span + 1, z1 + 1) {
+        mask |= DIAG_RISES_PN;
+    }
+    if cx > 0 && cy + 1 < span && column_covers(set, col + span - 1, z1 + 1) {
+        mask |= DIAG_RISES_NP;
+    }
+    if cx > 0 && cy > 0 && column_covers(set, col - span - 1, z1 + 1) {
+        mask |= DIAG_RISES_NN;
     }
     mask
 }

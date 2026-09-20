@@ -10,7 +10,7 @@
 //! blank map where the shadow would be.
 
 use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_SKINNED, UNIFORM_FLOATS};
-use crate::frame::shader::record::PIPELINE_SKINNED_DEPTH;
+use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_PREPASS};
 use crate::gpu::api::{buffer_usage, object, release, GpuApi};
 use crate::gpu::api_spec::{address, compare, filter, format, resource};
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -35,6 +35,7 @@ struct Skin {
 pub struct SkinnedPass {
     lit: Built,
     depth: Built,
+    prepass: Built,
     frame_group: u32,
     light_group: u32,
     sampler: u32,
@@ -49,16 +50,19 @@ pub struct SkinnedPass {
 }
 
 impl SkinnedPass {
-    /// Over `frame_buffer` and a shadow map's entries; `light` the light's frame
-    /// and its entries where the pass draws into the shadow map too.
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, samples: u32, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, align: u32) -> SkinnedPass {
+    /// Over `frame_buffer`, a shadow map's entries and the occlusion map's
+    /// entry `ao`; `light` the light's frame and its entries where the pass
+    /// draws into the shadow map too.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, samples: u32, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5], align: u32) -> SkinnedPass {
         let lit = pipelines.build(g, PIPELINE_SKINNED, format::CANVAS, samples);
         let sampler = object();
         (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::REPEAT, compare::NONE, 1);
         SkinnedPass {
             depth: pipelines.build(g, PIPELINE_SKINNED_DEPTH, format::CANVAS, samples),
-            frame_group: frame_group(g, lit.layouts[0], frame_buffer, shadow),
-            light_group: light.map_or(0, |(frame, entries)| frame_group(g, lit.layouts[0], frame, entries)),
+            prepass: pipelines.build(g, PIPELINE_SKINNED_PREPASS, format::CANVAS, 1),
+            frame_group: frame_group(g, lit.layouts[0], frame_buffer, shadow, ao),
+            light_group: light.map_or(0, |(frame, entries)| frame_group(g, lit.layouts[0], frame, entries, ao)),
             lit,
             sampler,
             stride: DRAW_UNIFORM_BYTES.max(align),
@@ -74,6 +78,14 @@ impl SkinnedPass {
     pub fn set_samples(&mut self, g: &GpuApi, pipelines: &mut Pipelines, samples: u32) {
         self.lit = pipelines.build(g, PIPELINE_SKINNED, format::CANVAS, samples);
         self.depth = pipelines.build(g, PIPELINE_SKINNED_DEPTH, format::CANVAS, samples);
+    }
+
+    /// Group 0 again over a new occlusion map's entry `ao`.
+    pub fn rebind(&mut self, g: &GpuApi, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5]) {
+        release(self.frame_group);
+        release(self.light_group);
+        self.frame_group = frame_group(g, self.lit.layouts[0], frame_buffer, shadow, ao);
+        self.light_group = light.map_or(0, |(frame, entries)| frame_group(g, self.lit.layouts[0], frame, entries, ao));
     }
 
     /// Model `model`'s skin; the same image again changes nothing, and one not
@@ -147,6 +159,11 @@ impl SkinnedPass {
             return 0;
         }
         self.draw_pipeline(g, pass, draws, blocks, self.depth.pipeline, self.light_group)
+    }
+
+    /// The actors' depth from the eye, for the screen-space occlusion.
+    pub fn draw_prepass(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
+        self.draw_pipeline(g, pass, draws, blocks, self.prepass.pipeline, self.frame_group)
     }
 
     fn draw_pipeline(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks, pipeline: u32, group0: u32) -> u32 {

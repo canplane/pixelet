@@ -22,38 +22,43 @@ const tileBaseDefault = "http://127.0.0.1:3001";
 const apiBaseDefault = "http://127.0.0.1:3002";
 
 /**
- * Which source a build is: `r<commits>-<hash>`, and `-dirty` when the
- * working tree had uncommitted changes. The hash is the identity; the count
- * is only there so two builds read in order at a glance, and it is not
- * stable — a rewritten history renumbers it. Derived from git rather than a
- * counter kept in a file, which would have to be bumped by a commit of its
- * own and would count builds rather than source.
+ * Which source a build is: the short hash, and `-dirty` where the working
+ * tree had uncommitted changes. Derived from git rather than a counter kept
+ * in a file, which would have to be bumped by a commit of its own and would
+ * count builds rather than source. The commit count that used to lead it
+ * (`r<commits>`) is gone: it renumbers whenever the history is rewritten,
+ * which main's is here as a matter of course, and the hash was the identity
+ * either way.
  */
 function build_id(): string {
   try {
     const git = (args: string) => execSync(`git ${args}`, { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
     const dirty = git("status --porcelain") !== "" ? "-dirty" : "";
-    return `r${git("rev-list --count HEAD")}-${git("rev-parse --short HEAD")}${dirty}`;
+    return `${git("rev-parse --short HEAD")}${dirty}`;
   } catch {
     return "unknown";
   }
 }
 
 /**
- * Which official build this is: `b<n>` when CI handed the build its number,
- * `b<n>+` for any other build after the last one this checkout saw published,
- * `b?` before one. The count lives in the bucket and is taken by the gate job
- * (script/build-counter.ts); .build_number is only this checkout's cache of it,
- * written by `deno task deploy` and by any read of `./script/build-log.ts`.
+ * Which build this is: `#<n>` where CI handed the build its number, and
+ * `#<n>-<id>` — the last number this checkout saw published, then what this
+ * one actually is — where it did not. A build with no number from CI is not
+ * that build whatever it was built from, so the source says so itself rather
+ * than a sign meaning "after"; before any number is cached, the id alone.
+ * The count lives in the bucket and is taken by the gate job
+ * (script/build-counter.ts); .build_number is only this checkout's cache of
+ * it, written by `deno task deploy` and by any read of
+ * `./script/build-log.ts`.
  */
-function build_number(): string {
+function build_number(id: string): string {
   const official = process.env.PXL_BUILD_NUMBER;
-  if (official) return `b${official}`;
+  if (official) return `#${official}`;
   try {
     const last = readFileSync(path.join(__dirname, ".build_number"), "utf8").trim();
-    return /^\d+$/.test(last) ? `b${last}+` : "b?";
+    return /^\d+$/.test(last) ? `#${last}-${id}` : id;
   } catch {
-    return "b?";
+    return id;
   }
 }
 
@@ -83,9 +88,10 @@ function build_stamp(): Plugin {
     },
     load(source) {
       if (source !== resolved) return undefined;
+      const id = build_id();
       return `export const time = ${JSON.stringify(new Date().toISOString())};\n` +
-        `export const id = ${JSON.stringify(build_id())};\n` +
-        `export const number = ${JSON.stringify(build_number())};\n`;
+        `export const id = ${JSON.stringify(id)};\n` +
+        `export const number = ${JSON.stringify(build_number(id))};\n`;
     },
     configureServer(server) {
       server.middlewares.use((req, _res, next) => {

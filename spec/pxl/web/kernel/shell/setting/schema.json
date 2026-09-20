@@ -5,7 +5,10 @@
     "and the sheet renders rows from here, so adding a setting is one entry in",
     "SETTINGS plus its two strings in the locale catalogue under",
     "`settings.<section>.<key>`. A `handheld_default` is the default on a",
-    "handheld device, where it differs. A `dev` setting exists in every build",
+    "handheld device, where it differs. A choice may carry `costs` beside its",
+    "`options`, one per option in the same order, for when what an option costs",
+    "differs from its neighbours'; an empty string is no badge. A `dev` setting",
+    "exists in every build",
     "but is only offered in the sheet under `__IS_DEV__`."
   ],
   "SETTING_SECTIONS": {
@@ -31,14 +34,41 @@
       "            reachable at the cost of an angle nobody asked for."
     ]
   },
+  "AO_MODES": {
+    "$value": ["off", "corner", "screen"],
+    "$doc": [
+      "Where the ambient occlusion comes from.",
+      "",
+      "  off    — none.",
+      "  corner — a chunk shades its own corners from the face bits the edge",
+      "           shading reads (crates/pxl/web/render/src/frame/shader/chunk.wgsl):",
+      "           the floor along a cube and the inside of a corner, over about",
+      "           half a cell, scaling the ambient and hemisphere light only.",
+      "           A few fragment ops behind a uniform.",
+      "  screen — N8AO as the three.js build ran it until 2026-09-14",
+      "           (crates/pxl/web/render/src/gpu/ao.rs): the world's depth drawn",
+      "           once more, the occlusion sampled from it at half resolution,",
+      "           denoised, and applied to every lit surface as a warm dark",
+      "           tint. Five passes and 11 bytes a pixel."
+    ]
+  },
   "SETTINGS": {
-    "show_poi": {
-      "$doc": ["The index sweep, the badge draws and the atlas: a couple of ms a", "frame while places are being placed, nothing once they are."],
+    "texture_pack": {
+      "$doc": [
+        "Ground colour from the art pack (four sampler2DArray taps per fragment)",
+        "instead of the flat per-instance average. The shader's `u_low_spec` is",
+        "this, inverted."
+      ],
       "kind": "toggle",
       "default": true,
       "section": "display",
-      "cost": "low",
-      "dev": true
+      "cost": "med"
+    },
+    "show_structures": {
+      "$doc": ["Whether the STRUCTURE ground channel is painted. The bake writes it", "either way (pipeline/overture/policy.rs); this is a render decision."],
+      "kind": "toggle",
+      "default": true,
+      "section": "display"
     },
     "show_decor": {
       "$doc": ["Procedurally scattered decor only; what the player placed stays."],
@@ -47,11 +77,13 @@
       "section": "display",
       "cost": "low"
     },
-    "show_structures": {
-      "$doc": ["Whether the STRUCTURE ground channel is painted. The bake writes it", "either way (pipeline/overture/policy.rs); this is a render decision."],
+    "show_poi": {
+      "$doc": ["The index sweep, the badge draws and the atlas: a couple of ms a", "frame while places are being placed, nothing once they are."],
       "kind": "toggle",
       "default": true,
-      "section": "display"
+      "section": "display",
+      "cost": "low",
+      "dev": true
     },
     "lock_camera_tilt": {
       "$doc": [
@@ -73,7 +105,8 @@
       "kind": "choice",
       "default": "climb",
       "options": ["through", "stop", "climb"],
-      "section": "camera"
+      "section": "camera",
+      "dev": true
     },
     "ground_snap": {
       "$doc": ["Panning re-samples the terrain height under the map centre each step."],
@@ -86,7 +119,8 @@
       "$doc": ["The eraser digs into the baked terrain where nothing is placed. Off by", "default: the terrain is real map data, not the player's scratch canvas."],
       "kind": "toggle",
       "default": false,
-      "section": "editing"
+      "section": "editing",
+      "dev": true
     },
     "show_edge_shade": {
       "$doc": [
@@ -105,6 +139,18 @@
       "section": "lighting",
       "cost": "low"
     },
+    "ao": {
+      "$doc": [
+        "corner, the occlusion a voxel world gets from its own geometry with no",
+        "screen-space pass; screen, the three.js build's N8AO, kept to be put",
+        "beside it. AO_MODES says each."
+      ],
+      "kind": "choice",
+      "default": "corner",
+      "options": ["off", "corner", "screen"],
+      "costs": ["", "low", "high"],
+      "section": "lighting"
+    },
     "show_shadow_map": {
       "$doc": [
         "The sun's shadow map (crates/pxl/web/render/src/gpu/shadow.rs): the world drawn once more",
@@ -114,18 +160,8 @@
       "kind": "toggle",
       "default": false,
       "section": "lighting",
+      "dev": true,
       "cost": "high"
-    },
-    "texture_pack": {
-      "$doc": [
-        "Ground colour from the art pack (four sampler2DArray taps per fragment)",
-        "instead of the flat per-instance average. The shader's `u_low_spec` is",
-        "this, inverted."
-      ],
-      "kind": "toggle",
-      "default": true,
-      "section": "quality",
-      "cost": "med"
     },
     "msaa": {
       "$doc": [
@@ -140,7 +176,22 @@
       "default": false,
       "handheld_default": false,
       "section": "quality",
+      "dev": true,
       "cost": "high"
+    },
+    "pixel_dither": {
+      "$doc": [
+        "LOD cross-fade per fragment instead of per chunk: both tiers draw with",
+        "complementary dither and dissolve, at the cost of drawing a blending",
+        "chunk twice and a pattern that crawls without temporal AA. On by",
+        "default: what it replaces swaps a whole chunk at a hashed threshold,",
+        "which reads as the ground popping tier by tier."
+      ],
+      "kind": "toggle",
+      "default": true,
+      "section": "quality",
+      "dev": true,
+      "cost": "med"
     },
     "show_debug_objects": {
       "$doc": ["The debug gizmos: frame origins, page corners, the map centre and the rings."],
@@ -151,17 +202,6 @@
     },
     "show_ledger": {
       "$doc": ["The scheduler ledger's corner panel. The console stream is a button on it."],
-      "kind": "toggle",
-      "default": false,
-      "section": "debug",
-      "dev": true
-    },
-    "pixel_dither": {
-      "$doc": [
-        "LOD cross-fade per fragment instead of per chunk: both tiers draw with",
-        "complementary dither and dissolve, at the cost of drawing a blending",
-        "chunk twice and a pattern that crawls without temporal AA."
-      ],
       "kind": "toggle",
       "default": false,
       "section": "debug",

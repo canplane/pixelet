@@ -10,7 +10,6 @@ import { Separator } from "@/shared/ui/shadcn/separator.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs.tsx";
 import { SettingsSection } from "./section.tsx";
 import { LanguageSection } from "./section/language.tsx";
-import { DebugSection } from "./section/debug.tsx";
 import { DisclaimerSection } from "./section/disclaimer.tsx";
 import { AboutSection } from "./section/about.tsx";
 import { AttributionSection } from "./section/attribution.tsx";
@@ -74,7 +73,7 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
             {__IS_DEV__ && (
               <>
                 <Separator />
-                <DebugSection />
+                <SettingsSection section="debug" />
               </>
             )}
           </TabsContent>

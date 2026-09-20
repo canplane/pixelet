@@ -187,11 +187,11 @@ jobs:
           else
             changed="apps/web/"
           fi
-          if printf '%s\n' "$changed" | grep -qE '^(apps/|crates/|packages/|spec/|deno\.json|deno\.lock)'; then
+          if printf '%s\n' "$changed" | grep -qE '^(apps/|crates/|packages/|spec/|deno\.jsonc|deno\.lock)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "nothing the bundle is built from changed — b${{ needs.gate.outputs.build_number }} is counted but not published"
+            echo "nothing the bundle is built from changed — #${{ needs.gate.outputs.build_number }} is counted but not published"
           fi
 
       - uses: denoland/setup-deno@v2
@@ -386,12 +386,12 @@ jobs:
 
   # The one thing the repository could not answer about itself: what went out
   # in a given build. The counter is an object in the bucket and deliberately
-  # outside git (script/build-counter.ts), so `b18` existed with nothing to
+  # outside git (script/build-counter.ts), so `#18` existed with nothing to
   # look it up by, and the question meant opening this workflow's run history.
   #
   # The record is the commit subjects and not a commit id, because main's
   # history is rewritten here as a matter of course: a tag, a stored sha and
-  # BUILD_ID's own `r<count>-<hash>` all name something that may not exist by
+  # BUILD_ID's own hash all name something that may not exist by
   # the time anyone looks, while text written while the history is still that
   # history survives every rewrite after it. It goes beside the counter for the
   # counter's own reason — no squash, rebase or fresh clone reaches what is not

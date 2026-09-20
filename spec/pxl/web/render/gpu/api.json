@@ -6,10 +6,18 @@
   ],
   "format": {
     "$type": "u32",
-    "$doc": ["A texture's format: the texture pack, skins and the badge sheet; depth; the canvas's own."],
+    "$doc": [
+      "A texture's format: the texture pack, skins and the badge sheet; depth; the",
+      "canvas's own; then the screen-space occlusion's — a half-resolution depth and",
+      "normal in four floats, the full-resolution occlusion in one byte, and the blue",
+      "noise it dithers with, four bytes read as they are."
+    ],
     "RGBA8_SRGB": 0,
     "DEPTH32": 1,
-    "CANVAS": 2
+    "CANVAS": 2,
+    "RGBA32F": 3,
+    "R8": 4,
+    "RGBA8": 5
   },
   "dimension": {
     "$type": "u32",
@@ -84,7 +92,8 @@
       "depth compare under reversed Z (LESS is the shadow map's plain depth; NO_DEPTH, no",
       "depth attachment), the blend, the sample count, a vertex step and format, a",
       "binding's stages, and a binding's kind — FRAME_DEPTH a depth texture",
-      "multisampled as the frame is."
+      "multisampled as the frame is, TEXTURE_UNFILTERED one in a format no sampler",
+      "filters (RGBA32F), read by textureLoad alone."
     ],
     "TRIANGLES": 0,
     "STRIP": 1,
@@ -106,6 +115,7 @@
     "F32X3": 2,
     "F32X4": 3,
     "U32X4": 4,
+    "U32": 5,
     "VERTEX": 1,
     "FRAGMENT": 2,
     "BOTH": 3,
@@ -117,6 +127,7 @@
     "DEPTH": 5,
     "SAMPLER": 6,
     "SAMPLER_COMPARISON": 7,
-    "FRAME_DEPTH": 8
+    "FRAME_DEPTH": 8,
+    "TEXTURE_UNFILTERED": 9
   }
 }

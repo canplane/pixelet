@@ -28,8 +28,9 @@ use crate::frame::draw::{
     DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
     PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
-use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_DEPTH, PIPELINE_SKY};
+use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_SKY};
 use crate::frame::stage::{stage_lane, STAGE_AT};
+use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, texture_usage, GpuApi, NONE};
 use crate::gpu::api_spec::{dimension, format, load, resource};
 use crate::gpu::layers::{Layers, Mips, LAYER_TEX_SZ};
@@ -57,8 +58,10 @@ const VIEWPORT: usize = FRAME_AT[7] as usize;
 const SHADOW_STRENGTH: usize = FRAME_AT[8] as usize;
 const SHADOW_TEXEL: usize = FRAME_AT[9] as usize;
 const VIGNETTE: usize = FRAME_AT[10] as usize;
-const LIGHT_VIEW_PROJ: usize = FRAME_AT[11] as usize;
-const OTHER: usize = FRAME_AT[12] as usize;
+const AO_STRENGTH: usize = FRAME_AT[11] as usize;
+const SCREEN_AO: usize = FRAME_AT[12] as usize;
+const LIGHT_VIEW_PROJ: usize = FRAME_AT[13] as usize;
+const OTHER: usize = FRAME_AT[14] as usize;
 
 /// Floats the sky uniform holds (shader/sky.wgsl's Sky).
 const SKY_FLOATS: usize = 16 + 4 * 7;
@@ -136,11 +139,12 @@ fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
 }
 
 /// A frame group: the frame uniform at 0 and a shadow map's two entries.
-pub fn frame_group(g: &GpuApi, layout: u32, frame: u32, shadow: [u32; 10]) -> u32 {
+pub fn frame_group(g: &GpuApi, layout: u32, frame: u32, shadow: [u32; 10], ao: [u32; 5]) -> u32 {
     let id = object();
-    let mut e = [0u32; 15];
+    let mut e = [0u32; 20];
     e[..5].copy_from_slice(&buffer_entry(0, frame));
-    e[5..].copy_from_slice(&shadow);
+    e[5..15].copy_from_slice(&shadow);
+    e[15..].copy_from_slice(&ao);
     (g.bind_group)(id, layout, &e);
     id
 }
@@ -501,10 +505,10 @@ const CASE_TARGET: Vec3 = Vec3 { x: 0.0, y: 0.0, z: 0.55 };
 const CASE_FOV_DEG: f64 = 35.0;
 
 impl Case {
-    fn new(g: &GpuApi, pipelines: &mut Pipelines, shadow: &Shadow, align: u32) -> Case {
+    fn new(g: &GpuApi, pipelines: &mut Pipelines, shadow: &Shadow, ao: &ScreenAo, align: u32) -> Case {
         let frame_buffer = object();
         (g.buffer)(frame_buffer, FRAME_FLOATS * 4, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let skinned = SkinnedPass::new(g, pipelines, 1, frame_buffer, shadow.blank_entries(1), None, align);
+        let skinned = SkinnedPass::new(g, pipelines, 1, frame_buffer, shadow.blank_entries(1), None, ao.blank_entry(7), align);
         Case {
             frame_buffer,
             frame: [0.0; FRAME_FLOATS as usize],
@@ -531,6 +535,7 @@ pub struct Renderer {
     sky_group: u32,
     chunk: Built,
     chunk_depth: Built,
+    chunk_prepass: Built,
     ghost: [Built; 2],
     draws_buffer: u32,
     draws_bytes: u32,
@@ -538,6 +543,8 @@ pub struct Renderer {
     light_group: u32,
     shadow: Shadow,
     shadows: bool,
+    ao: ScreenAo,
+    screen_ao: bool,
     mips: Mips,
     layers: Layers,
     decor: DecorPass,
@@ -557,6 +564,7 @@ impl Renderer {
         let sky_buffer = object();
         (g.buffer)(sky_buffer, (SKY_FLOATS * 4) as u32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let shadow = Shadow::new(g, handheld);
+        let ao = ScreenAo::new(g, &mut pipelines, device.align);
         let mips = Mips::new(g, &mut pipelines);
         let mut fill = Scratch::default();
         let layers = Layers::new(g, &mips, fill.take(LAYER_TEX_SZ * LAYER_TEX_SZ * 4));
@@ -583,11 +591,12 @@ impl Renderer {
             query_set,
             chunk,
             chunk_depth: pipelines.build(g, PIPELINE_CHUNK_DEPTH, format::CANVAS, samples),
+            chunk_prepass: pipelines.build(g, PIPELINE_CHUNK_PREPASS, format::CANVAS, 1),
             ghost: [
                 pipelines.build(g, PIPELINE_GHOST_BOX, format::CANVAS, samples),
                 pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples),
             ],
-            decor: DecorPass::new(g, &mut pipelines, samples, frame_buffer, &shadow, device.align),
+            decor: DecorPass::new(g, &mut pipelines, samples, frame_buffer, &shadow, ao.blank_entry(7), device.align),
             skinned: SkinnedPass::new(
                 g,
                 &mut pipelines,
@@ -595,6 +604,7 @@ impl Renderer {
                 frame_buffer,
                 shadow.entries(1),
                 Some((shadow.light_frame, shadow.blank_entries(1))),
+                ao.blank_entry(7),
                 device.align,
             ),
             puck: PuckPass::new(g, &mut pipelines, samples, frame_buffer),
@@ -613,6 +623,8 @@ impl Renderer {
             light_group: 0,
             shadow,
             shadows: false,
+            ao,
+            screen_ao: false,
             mips,
             layers,
             cases: [const { None }; SURFACES],
@@ -624,18 +636,31 @@ impl Renderer {
     }
 
     /// The chunk pass's group over `frame`: the frame, a shadow map, the draws,
-    /// the texture pack's two arrays and their sampler.
+    /// the texture pack's two arrays and their sampler, the occlusion map.
     fn chunk_group(&self, g: &GpuApi, frame: u32, shadow: [u32; 10]) -> u32 {
-        let mut e = [0u32; 35];
+        let mut e = [0u32; 40];
         e[..5].copy_from_slice(&buffer_entry(0, frame));
         e[5..15].copy_from_slice(&shadow);
         e[15..20].copy_from_slice(&buffer_entry(3, self.draws_buffer));
         e[20..25].copy_from_slice(&[4, resource::VIEW, self.layers.top_view, 0, 0]);
         e[25..30].copy_from_slice(&[5, resource::VIEW, self.layers.side_view, 0, 0]);
         e[30..35].copy_from_slice(&[6, resource::SAMPLER, self.layers.sampler, 0, 0]);
+        e[35..40].copy_from_slice(&self.ao.entry(7));
         let id = object();
         (g.bind_group)(id, self.chunk.layouts[0], &e);
         id
+    }
+
+    /// Every lit pass's group 0 again: the occlusion map is a new object.
+    fn rebind(&mut self, g: &GpuApi) {
+        release(self.bind_group);
+        release(self.light_group);
+        self.bind_group = self.chunk_group(g, self.frame_buffer, self.shadow.entries(1));
+        self.light_group = self.chunk_group(g, self.shadow.light_frame, self.shadow.blank_entries(1));
+        let ao = self.ao.entry(7);
+        self.decor.rebind(g, self.frame_buffer, &self.shadow, ao);
+        self.skinned
+            .rebind(g, self.frame_buffer, self.shadow.entries(1), Some((self.shadow.light_frame, self.shadow.blank_entries(1))), ao);
     }
 
     /// MSAA is every pipeline's sample count and the targets': a change
@@ -694,6 +719,12 @@ impl Renderer {
         u[VIEWPORT] = width as f32;
         u[VIEWPORT + 1] = height as f32;
         u[VIGNETTE] = 1.0;
+        u[AO_STRENGTH] = s[STAGE_AT::AO_STRENGTH] as f32;
+        self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
+        u[SCREEN_AO] = if self.screen_ao { 1.0 } else { 0.0 };
+        if self.screen_ao {
+            self.ao.lay_out(g, &proj, width, height, env[7], env[11]);
+        }
         // The sun's shadow, over the map centre — the root frame's origin undone
         // — from the light the environment lit the terrain with.
         self.shadows = s[STAGE_AT::SHADOWS] != 0.0;
@@ -763,6 +794,9 @@ impl Renderer {
         let samples = self.samples;
         targets(g, world, samples);
         self.lay_out(g, world.width, world.height, input.environment);
+        if self.screen_ao && self.ao.ensure(g, world.width, world.height) {
+            self.rebind(g);
+        }
         (g.write_buffer)(self.frame_buffer, 0, bytes(&self.frame));
         (g.write_buffer)(self.sky_buffer, 0, bytes(&self.sky));
         let uniform_bytes = (uniforms.len() * 4) as u32;
@@ -795,6 +829,19 @@ impl Renderer {
             self.skinned.draw_depth(g, pass, draws, b);
             (g.end)(pass);
             release(pass);
+        }
+        // The world's depth from the eye, and the screen-space occlusion
+        // from it, where that mode is on: the lit passes read the map.
+        if self.screen_ao {
+            let pass = self.ao.begin_prepass(g, encoder);
+            (g.set_pipeline)(pass, self.chunk_prepass.pipeline);
+            (g.set_bind_group)(pass, 0, self.bind_group, &[]);
+            self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, None);
+            self.decor.draw_prepass(g, pass, draws, b);
+            self.skinned.draw_prepass(g, pass, draws, b);
+            (g.end)(pass);
+            release(pass);
+            self.ao.run(g, encoder);
         }
         let canvas_view = object();
         (g.current)(world.handle, canvas_view);
@@ -855,7 +902,7 @@ impl Renderer {
             targets(g, s, 1);
             let slot = xpute_runtime::abi::handle::handle_slot(id) as usize;
             if self.cases[slot].is_none() {
-                self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.shadow, self.align));
+                self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.shadow, &self.ao, self.align));
             }
             let world_frame = self.frame;
             let case = self.cases[slot].as_mut().expect("just made");
@@ -885,6 +932,7 @@ impl Renderer {
             u[VIEWPORT + 1] = s.height as f32;
             u[SHADOW_STRENGTH] = 0.0;
             u[VIGNETTE] = 0.0;
+            u[SCREEN_AO] = 0.0;
             (g.write_buffer)(case.frame_buffer, 0, bytes(&case.frame));
             case.skinned.prepare(g, own, uniforms);
             let view_id = object();

@@ -37,6 +37,7 @@ use crate::layer::object::store::{get_placed_object, place, place_air, place_dec
 use crate::layer::terrain::elevation::ground_or_raw;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
+use crate::world::change::request_world_tick;
 use crate::world::chunk::raycast::WorldHit;
 use crate::world::frame::coord::get_local_world_origin;
 use crate::world::frame::view::{view, view_ray_local};
@@ -622,6 +623,7 @@ pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32, holding: Holding) {
                 let mode = s.drag_mode;
                 s.drag_mode = DragMode::None;
                 camera.camera_status = CameraStatus::Idle;
+                request_world_tick();
                 if mode != DragMode::None {
                     tap_if_still(s, mode);
                 }
@@ -646,6 +648,10 @@ pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32, holding: Holding) {
     let mode = s.drag_mode;
     s.drag_mode = DragMode::None;
     camera.camera_status = CameraStatus::Idle;
+    // The turn the companion reads the release in (layer/character/companion.rs):
+    // a pan moves nothing on its own once the pointer is up, so without this
+    // the release would not be seen until something else asked for a turn.
+    request_world_tick();
     tap_if_still(s, mode);
 }
 
