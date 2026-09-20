@@ -21,10 +21,10 @@
 
 import type { primitive, u32 } from "../abi/word.ts";
 
-export type Element<K extends primitive, T> = {
+export interface Element<K extends primitive, T> {
   key: K;
   val: T;
-};
+}
 
 export class MinHeap<K extends primitive, T> {
   // external storage (DOD-friendly): we operate on caller-owned array.

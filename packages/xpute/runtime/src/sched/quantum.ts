@@ -54,7 +54,7 @@ const MAX_FRAME_GAP_MS = 50;
  * only the host can bring, an input or an arrival. */
 export const NO_WAKE: f64 = -1;
 
-export type QuantumPolicy = {
+export interface QuantumPolicy {
   /** What is left of the frame unspent, as a share of it: the host's own
    * work, its collector, and the turns the estimate is wrong about. */
   margin_share: f64;
@@ -62,18 +62,18 @@ export type QuantumPolicy = {
   batch_frames: f64;
   /** How long after the last input a turn is still interactive. */
   settle_ms: f64;
-};
+}
 
 /** The rising edge: how long the guest may take, and why. */
-export type Grant = {
+export interface Grant {
   quota_ms: f64;
   /** The display's measured frame interval. */
   frame_ms: f64;
   interactive: boolean;
-};
+}
 
 /** A turn as the host saw it, once the falling edge came back. */
-export type Turn = {
+export interface Turn {
   /** The gap before the turn, in seconds. */
   delta_s: f64;
   /** The whole turn, around the call. */
@@ -83,7 +83,7 @@ export type Turn = {
   /** When the guest wants the next edge, in ms from now: 0 the next frame,
    * NO_WAKE none. */
   wake_ms: f64;
-};
+}
 
 export class Quantum {
   private readonly gaps = new Float64Array(FRAME_WINDOW).fill(1000 / 60);

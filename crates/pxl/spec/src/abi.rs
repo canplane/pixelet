@@ -5,5 +5,6 @@
 //! The words are the shell's; what crosses is the number. What any guest
 //! and host agree on is `xpute_runtime::abi`'s.
 
+#[path = "abi/cmd.spec.rs"]
 pub mod cmd;
 pub mod message;

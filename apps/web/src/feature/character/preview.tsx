@@ -15,10 +15,10 @@ import { kernel_action } from "@/kernel/shell.ts";
 import { open_surface, SURFACE_CASE } from "@/kernel/render/surface.ts";
 import type { CharacterVariant } from "@/feature/character/variant.ts";
 
-export type CharacterPreviewProps = {
+export interface CharacterPreviewProps {
   variant: CharacterVariant;
   className?: string;
-};
+}
 
 export function CharacterPreview(props: CharacterPreviewProps) {
   const { variant, className } = props;

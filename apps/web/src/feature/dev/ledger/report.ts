@@ -9,10 +9,11 @@
 // Pasteable text, sized to land in a findings doc; trace.ts is the
 // machine-readable path.
 
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
 
-import { CENSUS_TAGS } from "./spec.ts";
-import { loaf_supported } from "./long-frame.ts";
+import { CENSUS_TAGS } from "./ledger.spec.ts";
+import { loafSupported } from "./long-frame.ts";
 
 const MB = 1048576;
 
@@ -24,7 +25,11 @@ const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
  * rounded them. */
 export const tris = (t: number) => (t >= 1000 ? `${round(t / 1000)}k` : String(round(t)));
 
-export type Spread = { p50: number; p95: number; max: number };
+export interface Spread {
+  p50: f64;
+  p95: f64;
+  max: f64;
+}
 const spread = (s: Spread) => `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 
 /** A wait long enough to be starvation rather than queueing. The kernel's own
@@ -35,17 +40,17 @@ const starved = (ms: number) => (ms >= STARVED_MS ? "  STARVED" : "");
 // ---- what the ledger holds, as view.ts reads it ----
 
 export type LedgerReport = {
-  t: number;
+  t: f64;
   build: { number: string; id: string; time: string };
   frames: FrameSummary | null;
-  counters: Record<string, number>;
-  atlas: { size: number; entries: number; shelves: number; used_px: number };
-  retain: Record<string, number>;
-  fetch: { queued: number; running: number; credits: number };
+  counters: Record<string, f64>;
+  atlas: { size: u32; entries: u32; shelves: u32; used_px: u32 };
+  retain: Record<string, f64>;
+  fetch: { queued: u32; running: u32; credits: u32 };
   poi: PoiStats;
-  steps: { phase: string; name: string; ms: number; count: number; max_ms: number }[];
+  steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
   peak: Peak | null;
-  task_n: number;
+  taskN: u32;
   tasks: TaskSummary[];
   recent: TaskRecord[];
   worst: { sample: Frame; prev: Frame | null }[];
@@ -53,39 +58,39 @@ export type LedgerReport = {
 };
 
 export type Frame = {
-  t: number;
-  dt_ms: number;
-  frame_ms: number;
+  t: f64;
+  dt_ms: f64;
+  frame_ms: f64;
   settled: boolean;
-  sched_ms: number;
-  budget_ms: number;
-  task_ms: number;
-  gpu_ms: number;
-  tick_ms: number;
-  phases: number[];
-  draw_calls: number;
-  triangles: number;
-  buffers: number;
-  buffer_mb: number;
-  px: number;
-  tile_pages: number;
-  poi_count: number;
-  textures_mb: { depth: number; msaa: number; shadow: number; layers: number };
-  census: [number, number][];
-  heap: { used_mb: number; live_mb: number; range_mb: number; refusals: number; largest_free_mb: number };
-  rings: { cq_peak: number; spill_peak: number };
-  mounts: { added: number; removed: number; layouts: number };
-  lod: Record<string, number>;
-  q_terrain: number;
-  q_poi: number;
+  sched_ms: f64;
+  budget_ms: f64;
+  task_ms: f64;
+  gpu_ms: f64;
+  tick_ms: f64;
+  phases: f64[];
+  draw_calls: f64;
+  triangles: f64;
+  buffers: f64;
+  buffer_mb: f64;
+  px: f64;
+  tile_pages: f64;
+  poi_count: f64;
+  textures_mb: { depth: f64; msaa: f64; shadow: f64; layers: f64 };
+  census: [f64, f64][];
+  heap: { used_mb: f64; live_mb: f64; range_mb: f64; refusals: f64; largest_free_mb: f64 };
+  rings: { cq_peak: f64; spill_peak: f64 };
+  mounts: { added: f64; removed: f64; layouts: f64 };
+  lod: Record<string, f64>;
+  q_terrain: f64;
+  q_poi: f64;
 };
 
-export type FrameSummary = {
-  n: number;
-  seconds: number;
-  moving: number;
-  missed: number;
-  overran: number;
+export interface FrameSummary {
+  n: u32;
+  seconds: f64;
+  moving: f64;
+  missed: f64;
+  overran: f64;
   dt: Spread;
   task: Spread;
   offthread: Spread;
@@ -93,50 +98,62 @@ export type FrameSummary = {
   sched: Spread;
   tick: Spread;
   phases: { name: string; spread: Spread }[];
-  work: [number, number];
-  per_s: [number, number];
-  backlog_s: number;
-  backlog_per_s: [number, number];
-  tick_per_bake: number | null;
-  mounts: [number, number];
-  used_delta_mb: number;
-  census: { tag: string; draws: number; tris: number }[];
+  work: [f64, f64];
+  perS: [f64, f64];
+  backlog_s: f64;
+  backlogPerS: [f64, f64];
+  tick_per_bake: f64 | null;
+  mounts: [f64, f64];
+  used_delta_mb: f64;
+  census: { tag: string; draws: f64; tris: f64 }[];
   last: Frame;
-};
+}
 
-type Peak = Record<string, number>;
-type PoiStats = { badge_count: number; dropped: number; place: Record<string, number>; index: Record<string, number> };
-export type TaskRecord = {
+type Peak = Record<string, f64>;
+interface PoiStats {
+  badge_count: f64;
+  dropped: f64;
+  place: Record<string, f64>;
+  index: Record<string, f64>;
+}
+export interface TaskRecord {
   category: string;
   /** A u64, as its decimal digits. */
   subject: string;
-  priority: number;
-  enqueue_ms: number;
-  start_ms: number | null;
-  end_ms: number;
-  transport_ms: number;
+  priority: f64;
+  enqueue_ms: f64;
+  start_ms: f64 | null;
+  end_ms: f64;
+  transport_ms: f64;
   outcome: string;
-  fail: number;
-  status: number;
-  phases: [string, number][];
-};
-export type TaskSummary = {
+  fail: u32;
+  status: u32;
+  phases: [string, f64][];
+}
+export interface TaskSummary {
   category: string;
-  n: number;
-  ok: number;
-  aborted: number;
-  error: number;
+  n: u32;
+  ok: u32;
+  aborted: u32;
+  error: u32;
   lat: Spread;
-  reasons: { fail: number; status: number; n: number }[];
-  phase_mean: [string, number][] | null;
-};
-export type LongFrame = { source: string; t: number; duration_ms: number; blocking_ms: number; script_ms: number; render_ms: number };
+  reasons: { fail: u32; status: u32; n: u32 }[];
+  phase_mean: [string, f64][] | null;
+}
+export interface LongFrame {
+  source: string;
+  t: f64;
+  durationMs: f64;
+  blockingMs: f64;
+  scriptMs: f64;
+  renderMs: f64;
+}
 
 // ---- the words ----
 
 /** Why a fetch failed, as `spec/fetch.ts` numbers it. A refusal says its
  * status instead, which is the part that tells one from another. */
-export function fail_text(fail: number, status: number): string {
+export function failText(fail: u32, status: u32): string {
   switch (fail) {
     case 0x0101:
       return "network";
@@ -175,26 +192,26 @@ export const BOUND: Record<string, { bound: string; note: string }> = {
   },
 };
 
-const census_text = (rows: { tag: string; draws: number; tris: number }[]) => rows.map((r) => `${r.tag} ${round(r.draws)}/${tris(r.tris)}`).join("  ");
+const censusText = (rows: { tag: string; draws: f64; tris: f64 }[]) => rows.map((r) => `${r.tag} ${round(r.draws)}/${tris(r.tris)}`).join("  ");
 
 /** One frame's own census, heaviest first — the same order the summary's
  * mean is in, worked out here so the kernel ships the lanes and nothing more. */
-function frame_census(c: [number, number][]): string {
+function frameCensus(c: [f64, f64][]): string {
   const rows = c.map(([draws, t], i) => ({ tag: CENSUS_TAGS[i] ?? String(i), draws, tris: t })).filter((r) => r.draws > 0 || r.tris > 0);
   rows.sort((a, b) => b.tris - a.tris || b.draws - a.draws);
-  return census_text(rows);
+  return censusText(rows);
 }
 
-const phases_text = (p: [string, number][]) => p.length === 0 ? "" : `  [${p.map(([k, v]) => `${k.replace(/_ms$/, "")} ${k === "bytes" ? v : n1(v)}`).join(" ")}]`;
+const phasesText = (p: [string, f64][]) => p.length === 0 ? "" : `  [${p.map(([k, v]) => `${k.replace(/_ms$/, "")} ${k === "bytes" ? v : n1(v)}`).join(" ")}]`;
 
-export function task_line(r: TaskRecord): string {
+export function taskLine(r: TaskRecord): string {
   const total = r.end_ms - r.enqueue_ms;
   const timing = r.start_ms === null ? "" : `  q ${n1(r.start_ms - r.enqueue_ms)} + run ${n1(r.end_ms - r.start_ms)}`;
-  const why = r.fail === 0 ? "" : `  [${fail_text(r.fail, r.status)}]`;
-  return `[${n1(r.enqueue_ms).padStart(9)}] ${`${r.category}:${r.subject}`.padEnd(34)}${r.outcome.padEnd(7)}${n1(total).padStart(8)}ms${timing} p${r.priority}${phases_text(r.phases)}${why}`;
+  const why = r.fail === 0 ? "" : `  [${failText(r.fail, r.status)}]`;
+  return `[${n1(r.enqueue_ms).padStart(9)}] ${`${r.category}:${r.subject}`.padEnd(34)}${r.outcome.padEnd(7)}${n1(total).padStart(8)}ms${timing} p${r.priority}${phasesText(r.phases)}${why}`;
 }
 
-export function frame_line(s: Frame, prev: Frame | null): string {
+export function frameLine(s: Frame, prev: Frame | null): string {
   const d = prev === null ? "" : `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap ${signed(s.heap.used_mb - prev.heap.used_mb)}MB`;
   const offthread = s.dt_ms - s.task_ms;
   return `[${n1(s.t).padStart(9)}] dt ${n1(s.dt_ms)} = task ${n1(s.task_ms)} + offthread ${n1(offthread)}  gpu ${n1(s.gpu_ms)}  sched ${n1(s.sched_ms)}/${n1(s.budget_ms)}${
@@ -204,12 +221,12 @@ export function frame_line(s: Frame, prev: Frame | null): string {
   }  buf ${s.buffers}  heap ${s.heap.used_mb}MB  mount +${s.mounts.added}/-${s.mounts.removed} layouts ${s.mounts.layouts}${d}`;
 }
 
-export const long_frame_line = (l: LongFrame) =>
-  `[${n1(l.t).padStart(9)}] ${l.source.padEnd(8)} ${n1(l.duration_ms)} ms  blocking ${n1(l.blocking_ms)}  script ${n1(l.script_ms)}  render ${n1(l.render_ms)}`;
+export const longFrameLine = (l: LongFrame) =>
+  `[${n1(l.t).padStart(9)}] ${l.source.padEnd(8)} ${n1(l.durationMs)} ms  blocking ${n1(l.blockingMs)}  script ${n1(l.scriptMs)}  render ${n1(l.renderMs)}`;
 
 // ---- the sections ----
 
-function frames_section(r: LedgerReport): string[] {
+function framesSection(r: LedgerReport): string[] {
   const f = r.frames;
   if (f === null) return ["frames n=0"];
   const last = f.last;
@@ -234,8 +251,8 @@ function frames_section(r: LedgerReport): string[] {
     `  steps   ${steps}   (ms per frame, max)`,
     `  gpu     draws ${last.draw_calls}  tris ${round(last.triangles / 1000)}k  buffers ${last.buffers} ${last.buffer_mb}MB  fill ${(last.px / 1e6).toFixed(1)}Mpx`,
     `  targets depth ${last.textures_mb.depth}MB  msaa ${last.textures_mb.msaa}MB  shadow ${last.textures_mb.shadow}MB  layers ${last.textures_mb.layers}MB`,
-    `  by tag  mean ${census_text(f.census)}   (draws/tris per frame)`,
-    `          last ${frame_census(last.census)}`,
+    `  by tag  mean ${censusText(f.census)}   (draws/tris per frame)`,
+    `          last ${frameCensus(last.census)}`,
     `  mem     tiles ${last.tile_pages}  poi ${last.poi_count}`,
     `  place   poi ${
       n1(poi.place.ms)
@@ -269,7 +286,7 @@ function frames_section(r: LedgerReport): string[] {
     // The builds run in the kernel under the tick; what they did this window.
     `  build   ${c.built_direct} direct  ${c.built_scans} scans  ${c.built_bakes} bakes  ${c.built_starved} refused a block${c.decor_dropped > 0 ? `   DECOR DROPPED ${c.decor_dropped}` : ""}`,
     `  per     tick/bake ${f.tick_per_bake === null ? "-" : n1(f.tick_per_bake)}ms   (workload-normalised; comparable across sessions)`,
-    `  rate    ${n1(f.per_s[1])} bakes/s  ${n1(f.per_s[0])} scans/s   while backlog ${n1(f.backlog_per_s[1])} bakes/s  ${n1(f.backlog_per_s[0])} scans/s over ${n1(f.backlog_s)}s`,
+    `  rate    ${n1(f.perS[1])} bakes/s  ${n1(f.perS[0])} scans/s   while backlog ${n1(f.backlogPerS[1])} bakes/s  ${n1(f.backlogPerS[0])} scans/s over ${n1(f.backlog_s)}s`,
     `  bands   reused ${c.bands_reused} / ${bands} (${share(c.bands_reused, bands)}%)  ~1.31MB each; a miss borrows from the heap`,
     `  retain  nodes ${retain.nodes}  runsets ${retain.run_sets} (${retain.run_set_mb}MB)  tiers ${retain.tiers}  decor ${retain.decor_steps} steps ${retain.decor_instances} instances   kept on-screen ${
       round(retain.on_bytes / MB)
@@ -285,7 +302,7 @@ function frames_section(r: LedgerReport): string[] {
 
 /** The window's worst-seen values, including the LOD gauges the frame summary
  * only reads off the last frame. */
-function peak_section(p: Peak): string[] {
+function peakSection(p: Peak): string[] {
   return [
     "peak (window)",
     `  dt ${n1(p.dt_ms)}  sched ${n1(p.sched_ms)}  tick ${n1(p.tick_ms)} ms`,
@@ -297,12 +314,12 @@ function peak_section(p: Peak): string[] {
   ];
 }
 
-function tasks_section(r: LedgerReport): string[] {
-  if (r.task_n === 0) return ["tasks n=0"];
-  const lines = [`tasks n=${r.task_n}`];
+function tasksSection(r: LedgerReport): string[] {
+  if (r.taskN === 0) return ["tasks n=0"];
+  const lines = [`tasks n=${r.taskN}`];
   for (const t of r.tasks) {
     const bound = BOUND[t.category]?.bound ?? "?";
-    const reasons = t.reasons.length === 0 ? "" : ` (${t.reasons.map((x) => `${fail_text(x.fail, x.status)} x${x.n}`).join(", ")})`;
+    const reasons = t.reasons.length === 0 ? "" : ` (${t.reasons.map((x) => `${failText(x.fail, x.status)} x${x.n}`).join(", ")})`;
     lines.push(
       `  ${t.category.padEnd(9)}${bound.padEnd(9)}n=${t.n}   p50 ${n1(t.lat.p50)}  p95 ${n1(t.lat.p95)} ms   ok ${t.ok}  ab ${t.aborted}  err ${t.error}${reasons}`,
     );
@@ -316,30 +333,30 @@ function tasks_section(r: LedgerReport): string[] {
 
 /** The whole instrument as pasteable text: aggregate summary, then the raw
  * tail of each ring. */
-export function ledger_report_text(r: LedgerReport): string {
+export function ledgerReportText(r: LedgerReport): string {
   const out = [`=== sched/ledger @ t=${n1(r.t)}ms  build ${r.build.number} ${r.build.id} (${r.build.time}) ===`];
-  out.push(...frames_section(r));
-  if (r.peak !== null) out.push(...peak_section(r.peak));
-  out.push(...tasks_section(r));
-  out.push(`long frames n=${r.longs.length}${loaf_supported() ? "" : " (LoAF unsupported; longtask only)"}`);
+  out.push(...framesSection(r));
+  if (r.peak !== null) out.push(...peakSection(r.peak));
+  out.push(...tasksSection(r));
+  out.push(`long frames n=${r.longs.length}${loafSupported() ? "" : " (LoAF unsupported; longtask only)"}`);
 
   if (r.recent.length > 0) {
     out.push(`--- last ${r.recent.length} tasks ---`);
-    for (const rec of r.recent) out.push(task_line(rec));
+    for (const rec of r.recent) out.push(taskLine(rec));
   }
   if (r.worst.length > 0) {
     out.push(`--- worst ${r.worst.length} frames in the window ---`);
-    for (const w of r.worst) out.push(frame_line(w.sample, w.prev));
+    for (const w of r.worst) out.push(frameLine(w.sample, w.prev));
   }
   if (r.longs.length > 0) {
     out.push("--- long frames ---");
-    for (const l of r.longs) out.push(long_frame_line(l));
+    for (const l of r.longs) out.push(longFrameLine(l));
   }
   return out.join("\n");
 }
 
 /** Prints the report and puts it on the clipboard where the page may. */
-export async function ledger_report_print(text: string): Promise<void> {
+export async function ledgerReportPrint(text: string): Promise<void> {
   console.log(text);
   let copied = false;
   try {

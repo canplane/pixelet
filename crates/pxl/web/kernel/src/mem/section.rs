@@ -59,7 +59,7 @@ use xpute_runtime::mem::section::{align_up, Section};
 use crate::global::Global;
 
 // The numbers the map is made of are mem.json's, since the shell and the
-// linker read the same ones (mem/spec.rs).
+// linker read the same ones (mem/mem.spec.rs).
 pub use crate::mem::spec::{DESKTOP_BYTES, GLOBAL_BASE, MIN_HEAP_BYTES, PAGE_BYTES, PHONE_BYTES, REGION_BYTES};
 
 /// `n` at the page. The kernel's one application of xpute's `align_up`: the

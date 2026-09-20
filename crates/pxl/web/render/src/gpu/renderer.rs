@@ -709,7 +709,7 @@ impl Renderer {
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
         }
 
-        // The sky, in the view frame, where the dome stood.
+        // The sky, in the view frame.
         a.copy_from_slice(&s[STAGE_AT::VIEW_MATRIX..STAGE_AT::VIEW_MATRIX + 16]);
         mat4_mul(&mut m, &proj, &a);
         mat4_invert(&mut a, &m);

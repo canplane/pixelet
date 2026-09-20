@@ -11,4 +11,5 @@ pub mod path;
 pub mod preview;
 pub mod store;
 pub mod variant;
+#[path = "character/variant.spec.rs"]
 pub mod variant_spec;

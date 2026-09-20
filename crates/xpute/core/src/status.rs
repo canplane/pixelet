@@ -7,6 +7,7 @@
 //! answers with is a status whether or not anything went wrong — a kernel
 //! function returns 0 or a negative errno, and both are this.
 
+#[path = "status/errno.spec.rs"]
 pub mod errno;
 pub mod error;
 pub mod log;

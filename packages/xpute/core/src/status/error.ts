@@ -1,10 +1,10 @@
 // @xpute/core/status/error.ts
 
-import { Errno } from "./errno.ts";
+import { Errno } from "./errno.spec.ts";
 
-export type XputeErrorOptions = {
+export interface XputeErrorOptions {
   cause?: unknown;
-};
+}
 
 /**
  * Error policy:

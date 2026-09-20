@@ -2,15 +2,15 @@
 
 import { assert, assertEquals } from "@std/assert";
 
-import { Errno } from "@xpute/core/status/errno.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 import { FrameFlag } from "@xpute/runtime/ipc/frame.ts";
 import { Ring } from "@xpute/runtime/ipc/ring.ts";
-import { Cmd } from "@/kernel/abi/cmd.ts";
+import { Command } from "@/kernel/abi/cmd.spec.ts";
 
 import { CORE_KERNEL } from "@/kernel/mem.ts";
 import { BOOT, boot_block } from "@/kernel/module.ts";
-import { RING_CAPACITY } from "@/kernel/mem/spec.ts";
+import { RING_CAPACITY } from "@/kernel/mem/mem.spec.ts";
 
 /** A command crates/pxl/web/wasm/src/lib.rs does not number. */
 const UNNUMBERED = 0x0fff;
@@ -26,9 +26,9 @@ Deno.test("rings - the shell submits, one ring replies to each in order, and a f
 
   const n = sq.capacity;
   for (let k = 0; k < n; k++) {
-    assertEquals(sq.push(k, Cmd.NOP, FrameFlag.ACKREQ, encoder.encode(new TreeView().branch((b) => b.u32(k * 3)))), Errno.OK);
+    assertEquals(sq.push(k, Command.NOP, FrameFlag.ACKREQ, encoder.encode(new TreeView().branch((b) => b.u32(k * 3)))), Errno.OK);
   }
-  assertEquals(sq.push(n, Cmd.NOP, FrameFlag.ACKREQ), Errno.EAGAIN, "a full submission ring refuses");
+  assertEquals(sq.push(n, Command.NOP, FrameFlag.ACKREQ), Errno.EAGAIN, "a full submission ring refuses");
   p.interrupt(0);
   assertEquals(cq.len, n);
   assertEquals(sq.len, 0);
@@ -42,7 +42,7 @@ Deno.test("rings - the shell submits, one ring replies to each in order, and a f
 
   for (let k = 0; k < n; k++) {
     const at = cq.peek();
-    assertEquals([cq.tag(at), cq.cmd(at), cq.flags(at), cq.result(at)], [k, Cmd.NOP, FrameFlag.RES, k * 3]);
+    assertEquals([cq.tag(at), cq.cmd(at), cq.flags(at), cq.result(at)], [k, Command.NOP, FrameFlag.RES, k * 3]);
     cq.advance();
   }
   p.interrupt(0);

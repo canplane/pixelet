@@ -28,8 +28,8 @@ It copies every file to `./out/asset/{glb,png,webp}/<sha256>`, composes the
 sixty texture tiles into one WebP sheet, measures every model's extent out of
 its glTF, and writes the two tables that name them:
 
-- `crates/pxl/spec/src/asset/ingested.rs` — what the kernel compiles
-- `apps/web/src/catalog/asset/ingested-spec.ts` — what the shell compiles
+- `crates/pxl/spec/src/asset/ingested.spec.rs` — what the kernel compiles
+- `apps/web/src/catalog/asset/ingested.spec.ts` — what the shell compiles
 
 **Commit both tables with the asset change, and upload before deploying.**
 The shipped palette reads that table, and a key it names that is not in the

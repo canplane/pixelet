@@ -92,7 +92,7 @@
 import type { numeric, primitive, u32, u8 } from "@xpute/core/abi/word.ts";
 import type { BigTypedArray, TypedArray, U8Array } from "@xpute/core/abi/array.ts";
 import type { Nullable } from "@xpute/core/kit/type.ts";
-import { Errno } from "@xpute/core/status/errno.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { MarshalError } from "@xpute/core/status/error.ts";
 
 // ============ Type Encoding ============
@@ -219,33 +219,33 @@ export type Node = LeafNode | SpecialNode;
 
 export type LeafNode = ScalarNode | SequenceNode;
 
-export type ScalarNode = {
+export interface ScalarNode {
   readonly type: ScalarType;
 
   val: Nullable<numeric>;
-};
+}
 
-export type SequenceNode = {
+export interface SequenceNode {
   readonly type: SequenceType;
 
   val: Nullable<string | TypedArray | BigTypedArray>;
-};
+}
 
 // ---- Special Nodes ----
 
 export type SpecialNode = NilNode | BranchNode | GraftNode;
-export type BranchNode = {
+export interface BranchNode {
   readonly type: SpecialType.BRANCH;
 
   val: Nullable<Node[]>;
-};
+}
 
 // special splice primitive for a previously encoded subtree packet
-export type GraftNode = {
+export interface GraftNode {
   readonly type: SpecialType.GRAFT;
 
   val: U8Array;
-};
+}
 
 // ---- Optional ----
 
@@ -255,11 +255,11 @@ export type GraftNode = {
 // - branch-child physical absence is encoded as child_rel_off == 0
 // - generic set(null) / put(null) lower to NIL
 // - typed writers preserve their original node kind
-export type NilNode = {
+export interface NilNode {
   readonly type: SpecialType.NIL;
 
   val: null;
-};
+}
 
 export const NIL_NODE: NilNode = { type: SpecialType.NIL, val: null } as const;
 
@@ -293,11 +293,11 @@ export const MAGIC = 0x00505458 as const; // "XTP\0" little-endian word
 // ---- Descriptor Layout ----
 
 // encoder work state for one node; updated progressively during encode
-export type EncodingState = {
+export interface EncodingState {
   base: u32;
   lim: u32;
   type: NodeType;
-};
+}
 
 // NONE is reused as the local uninitialized sentinel during encode.
 export const DESC_TYPE_W: u32 = 8;

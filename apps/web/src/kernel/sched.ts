@@ -11,8 +11,9 @@
  * (control/input.ts), and a turn with nothing mounted carries no frame.
  */
 
+import type { f64 } from "@xpute/core/abi/word.ts";
 import { Strobe } from "@xpute/runtime/sched/strobe.ts";
-import { Cmd } from "@/kernel/abi/cmd.ts";
+import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
 import { CORE_KERNEL } from "@/kernel/mem.ts";
 import { boot_block, quantum_policy } from "@/kernel/module.ts";
@@ -28,7 +29,7 @@ export function set_driver(element: HTMLElement | null): void {
   driver = element;
 }
 
-export function dpr(): number {
+export function dpr(): f64 {
   return globalThis.devicePixelRatio || 1;
 }
 
@@ -46,7 +47,7 @@ const strobe = new Strobe(CORE_BUILD, quantum_policy(boot_block(CORE_KERNEL)), (
   const height = Math.max(1, element.clientHeight);
   CORE_BUILD.send(
     0,
-    Cmd.WORLD_UPDATE,
+    Command.WORLD_UPDATE,
     packet((b) => b.f64(width).f64(height).f64(dpr()).f64(delta_s).f64(grant.frame_ms).bool(grant.interactive).u32(NET_CREDITS)),
   );
 }, (run) => requestAnimationFrame(run));

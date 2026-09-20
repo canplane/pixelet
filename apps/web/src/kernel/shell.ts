@@ -14,7 +14,7 @@
 import { useSyncExternalStore } from "react";
 
 import type { u32 } from "@xpute/core/abi/word.ts";
-import { Cmd } from "@/kernel/abi/cmd.ts";
+import { Command } from "@/kernel/abi/cmd.spec.ts";
 import type { Message } from "@/kernel/abi/message.ts";
 import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
 import { orientation_permit } from "@/kernel/control/sensor.ts";
@@ -80,13 +80,16 @@ export function useKernel<T>(select: (s: UiSnapshot) => T): T {
   return select(useSyncExternalStore(subscribe_snapshot, kernel_snapshot));
 }
 
-export type KernelAction = { type: string; [key: string]: unknown };
+export interface KernelAction {
+  type: string;
+  [key: string]: unknown;
+}
 
 /** Applies one UI action in the kernel, rung at once with no quota: what it
  * asks of the host is heard inside the call, including the sensors' close sent
  * after the strobe has stopped. */
 export function kernel_action(action: KernelAction): void {
-  CORE_BUILD.send(0, Cmd.WORLD_ACTION, packet((b) => b.str(JSON.stringify(action))));
+  CORE_BUILD.send(0, Command.WORLD_ACTION, packet((b) => b.str(JSON.stringify(action))));
   CORE_BUILD.ring(0);
   request_frame();
 }
@@ -103,7 +106,7 @@ export async function kernel_tracking(tracking: u32): Promise<void> {
     console.error("[orientation] could not start the sensor.");
     return;
   }
-  CORE_BUILD.send(0, Cmd.INPUT_TRACKING, packet((b) => b.u32(tracking)));
+  CORE_BUILD.send(0, Command.INPUT_TRACKING, packet((b) => b.u32(tracking)));
   strobe.input();
   request_frame();
 }

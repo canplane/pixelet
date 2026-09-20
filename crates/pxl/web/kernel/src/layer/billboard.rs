@@ -12,5 +12,6 @@ pub mod cell_node;
 pub mod distance_fade;
 pub mod field;
 pub mod frustum_budget;
+#[path = "billboard/order.spec.rs"]
 pub mod order;
 pub mod sheet;

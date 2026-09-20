@@ -7,8 +7,8 @@ import { cn } from "@/shared/lib/util/cn.ts";
 import { SectionTitle } from "@/feature/setting/row.tsx";
 
 const SUPPORTED_LANGUAGES = [
-  { code: "en", label_key: "settings.language.english" },
-  { code: "ko", label_key: "settings.language.korean" },
+  { code: "en", labelKey: "settings.language.english" },
+  { code: "ko", labelKey: "settings.language.korean" },
 ] as const;
 
 export function LanguageSection() {
@@ -18,7 +18,7 @@ export function LanguageSection() {
     <div className="flex flex-col gap-1">
       <SectionTitle icon={Languages}>{t("settings.language.section_title")}</SectionTitle>
       <div className="flex gap-1.5 -mx-3 px-3">
-        {SUPPORTED_LANGUAGES.map(({ code, label_key }) => (
+        {SUPPORTED_LANGUAGES.map(({ code, labelKey }) => (
           <button
             key={code}
             type="button"
@@ -28,7 +28,7 @@ export function LanguageSection() {
               i18n.resolvedLanguage === code ? "border-primary bg-primary/10 text-foreground" : "border-transparent bg-accent/50 text-muted-foreground hover:bg-accent",
             )}
           >
-            {t(label_key)}
+            {t(labelKey)}
           </button>
         ))}
       </div>

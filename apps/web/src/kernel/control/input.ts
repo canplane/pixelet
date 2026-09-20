@@ -14,8 +14,8 @@
 
 import { useLayoutEffect } from "react";
 
-import type { u32 } from "@xpute/core/abi/word.ts";
-import { Cmd } from "@/kernel/abi/cmd.ts";
+import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
+import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { GEOLOCATION, PERMISSION_DENIED, PERMISSION_GRANTED, send_permission } from "@/kernel/control/sensor.ts";
 import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
 import { request_frame, set_driver, strobe } from "@/kernel/sched.ts";
@@ -23,25 +23,29 @@ import { kernel_action } from "@/kernel/shell.ts";
 
 export function send_rect(element: HTMLElement): void {
   const r = element.getBoundingClientRect();
-  CORE_BUILD.send(0, Cmd.INPUT_UPDATE, packet((b) => b.f64(r.left).f64(r.top).f64(r.width).f64(r.height)));
+  CORE_BUILD.send(0, Command.INPUT_UPDATE, packet((b) => b.f64(r.left).f64(r.top).f64(r.width).f64(r.height)));
 }
 
 /** What the pointer holds: a tool, the placeable cube's or decor's catalog
  * number, and the object size. The kernel keeps no pick of its own; each
  * pointer event carries this. */
-type Holding = { tool: u32; value: u32; size: number };
+interface Holding {
+  tool: u32;
+  value: u32;
+  size: f64;
+}
 
 let holding: Holding = { tool: 0, value: 0, size: 0 };
 /** The last hovering pointer, while it is over the canvas. */
-let last_hover: { kind: number; id: number; button: number; x: number; y: number } | null = null;
+let last_hover: { kind: u32; id: i32; button: i32; x: f64; y: f64 } | null = null;
 
-function send_pointer_at(phase: number, kind: number, id: number, button: number, x: number, y: number): void {
-  CORE_BUILD.send(0, Cmd.INPUT_POINTER, packet((b) => b.u32(phase).u32(kind).i32(id).i32(button).f64(x).f64(y).u32(holding.tool).u32(holding.value).f64(holding.size)));
+function send_pointer_at(phase: u32, kind: u32, id: i32, button: i32, x: f64, y: f64): void {
+  CORE_BUILD.send(0, Command.INPUT_POINTER, packet((b) => b.u32(phase).u32(kind).i32(id).i32(button).f64(x).f64(y).u32(holding.tool).u32(holding.value).f64(holding.size)));
   strobe.input();
   request_frame();
 }
 
-function send_pointer(phase: number, e: PointerEvent): void {
+function send_pointer(phase: u32, e: PointerEvent): void {
   const kind = e.pointerType === "touch" ? 1 : e.pointerType === "pen" ? 2 : 0;
   last_hover = phase === 3 || kind === 1 ? null : { kind, id: e.pointerId, button: e.button, x: e.clientX, y: e.clientY };
   send_pointer_at(phase, kind, e.pointerId, e.button, e.clientX, e.clientY);
@@ -53,7 +57,7 @@ function send_pointer(phase: number, e: PointerEvent): void {
  * is sent, as a browser synthesizes a mouse move when what is under a still
  * cursor changes.
  */
-export function kernel_hold(tool: u32, value: u32, size: number): void {
+export function kernel_hold(tool: u32, value: u32, size: f64): void {
   holding = { tool, value, size };
   if (last_hover) send_pointer_at(1, last_hover.kind, last_hover.id, last_hover.button, last_hover.x, last_hover.y);
 }
@@ -76,7 +80,7 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     const on_leave = (e: PointerEvent) => send_pointer(3, e);
     const on_wheel = (e: WheelEvent) => {
       if (e.ctrlKey) e.preventDefault();
-      CORE_BUILD.send(0, Cmd.INPUT_WHEEL, packet((b) => b.f64(e.deltaY)));
+      CORE_BUILD.send(0, Command.INPUT_WHEEL, packet((b) => b.f64(e.deltaY)));
       strobe.input();
       request_frame();
     };
@@ -89,7 +93,7 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     // hiding is the last moment a phone's tab is sure to get for the pending
     // save.
     const send_visibility = (visible: boolean) => {
-      CORE_BUILD.send(0, Cmd.SENSOR_VISIBILITY, packet((b) => b.bool(visible)));
+      CORE_BUILD.send(0, Command.SENSOR_VISIBILITY, packet((b) => b.bool(visible)));
       CORE_BUILD.ring(0);
     };
     const on_visibility = () => {

@@ -15,10 +15,11 @@
  * texture.
  */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { U32Array } from "@xpute/core/abi/array.ts";
+import type { f32, u32 } from "@xpute/core/abi/word.ts";
 import { handle_slot } from "@xpute/runtime/abi/handle.ts";
 
-import { address, compare, dimension, filter, format, load, paint, record, resource } from "@/kernel/render/gpu/api-spec.ts";
+import { address, compare, dimension, filter, format, load, paint, record, resource } from "@/kernel/render/gpu/api.spec.ts";
 
 type GpuObject =
   | GPUBuffer
@@ -33,7 +34,10 @@ type GpuObject =
   | GPURenderPassEncoder
   | GPUQuerySet;
 
-type Surface = { canvas: OffscreenCanvas; context: GPUCanvasContext | null };
+interface Surface {
+  canvas: OffscreenCanvas;
+  context: GPUCanvasContext | null;
+}
 
 let device: GPUDevice | null = null;
 let canvas_format: GPUTextureFormat = "bgra8unorm";
@@ -44,11 +48,16 @@ const transferred = new WeakMap<HTMLCanvasElement, OffscreenCanvas>();
 const images = new Map<u32, ImageBitmap>();
 const utf8 = new TextDecoder();
 
-export type DeviceInfo = { align: u32; timestamps: boolean };
+export interface DeviceInfo {
+  align: u32;
+  timestamps: boolean;
+}
 /** Why the browser answered with no device, in the words of whoever has to
  * act on it: the ways WebGPU goes missing are fixed in different places and
  * one sentence for all of them sends the reader to the wrong one. */
-export type NoDevice = { reason: string };
+export interface NoDevice {
+  reason: string;
+}
 
 /** The device, once the browser answers, or why there is none. `lost` hears
  * it go. */
@@ -113,7 +122,7 @@ const word_f32 = new Float32Array(1);
 const word_u32 = new Uint32Array(word_f32.buffer);
 
 /** A word's bits as a float. */
-function float(word: u32): number {
+function float(word: u32): f32 {
   word_u32[0] = word;
   return word_f32[0];
 }
@@ -135,7 +144,7 @@ function gpu(): GPUDevice {
   return device;
 }
 
-function layout_entries(words: Uint32Array, samples: u32): GPUBindGroupLayoutEntry[] {
+function layout_entries(words: U32Array, samples: u32): GPUBindGroupLayoutEntry[] {
   const out: GPUBindGroupLayoutEntry[] = [];
   for (let k = 0; k < words.length; k += 3) {
     const [binding, stages, kind] = [words[k], words[k + 1], words[k + 2]];
@@ -155,7 +164,7 @@ function layout_entries(words: Uint32Array, samples: u32): GPUBindGroupLayoutEnt
 }
 
 /** A pipeline record's words (crates/pxl/web/render/src/shader.rs) as WebGPU's descriptor. */
-function pipeline_descriptor(words: Uint32Array, layouts: GPUBindGroupLayout[], module: GPUShaderModule, target: GPUTextureFormat, samples: u32): GPURenderPipelineDescriptor {
+function pipeline_descriptor(words: U32Array, layouts: GPUBindGroupLayout[], module: GPUShaderModule, target: GPUTextureFormat, samples: u32): GPURenderPipelineDescriptor {
   let at = 11;
   const next = () => words[at++];
   const buffers: GPUVertexBufferLayout[] = Array.from({ length: next() }, () => {
@@ -177,7 +186,7 @@ function pipeline_descriptor(words: Uint32Array, layouts: GPUBindGroupLayout[], 
   return descriptor;
 }
 
-function group_entries(words: Uint32Array): GPUBindGroupEntry[] {
+function group_entries(words: U32Array): GPUBindGroupEntry[] {
   const out: GPUBindGroupEntry[] = [];
   for (let k = 0; k < words.length; k += 5) {
     const [binding, kind, id, offset, size] = [words[k], words[k + 1], words[k + 2], words[k + 3], words[k + 4]];
@@ -188,7 +197,7 @@ function group_entries(words: Uint32Array): GPUBindGroupEntry[] {
   return out;
 }
 
-function begin_pass(encoder: GPUCommandEncoder, w: Uint32Array): GPURenderPassEncoder {
+function begin_pass(encoder: GPUCommandEncoder, w: U32Array): GPURenderPassEncoder {
   const [color, resolve, color_load, r, g, b, a, depth, depth_load, depth_clear, query_set, begin, end] = w;
   const descriptor: GPURenderPassDescriptor = { colorAttachments: [] };
   if (color !== 0) {
@@ -257,7 +266,7 @@ function scratch_canvas(): [OffscreenCanvas, OffscreenCanvasRenderingContext2D] 
   return [scratch, scratch_ctx!];
 }
 
-function run_paint(w: Uint32Array, memory: WebAssembly.Memory): void {
+function run_paint(w: U32Array, memory: WebAssembly.Memory): void {
   const [canvas, ctx] = scratch_canvas();
   let k = 0;
   const f = () => float(w[k++]);

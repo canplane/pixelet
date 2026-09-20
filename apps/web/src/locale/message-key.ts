@@ -11,7 +11,7 @@
 
 import { Message } from "@/kernel/abi/message.ts";
 
-export function message_key(message: Message): string | null {
+export function messageKey(message: Message): string | null {
   switch (message) {
     case Message.None:
       return null;

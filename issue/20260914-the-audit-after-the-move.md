@@ -68,8 +68,9 @@ mapping (the composer never tone-mapped), reversed-Z.
   page table's revision.
 - ~~**B3**~~ The store's save is put off 300 ms and flushed when the page
   hides; a burst of writes is one save. Immediate off the page (the tests).
-  Lost in the move to the kernel (2026-09-15): nothing calls
-  `flush_save_if_due` and nothing flushes on hide, so nothing is saved.
+  Lost in the move to the kernel (2026-09-15) and back on 09-17
+  (`fb7b1417`): the turn flushes a due save, and the module flushes at once
+  when the page hides.
 - ~~**B4**~~ The allocation probe is installed only from the console
   (`__pxl_alloc_probe()`), never by default. Not carried into the kernel;
   it is in apps/web1 only.
@@ -114,15 +115,15 @@ TypeScript file is that whole file, at the same path (`script/pair.ts`).
 - ~~**C3**~~ `place.wgsl` (`place_up`, `spin_z`) for decor, the actors and
   the beacon; `PI` once in grade.wgsl; `faces.wgsl` names the face bits
   and a naga test reads its constants back against the mesher's.
-- **C4** TS: `DRAW_WORDS` / `UNIFORM_FLOATS` / pipeline ids restated in
+- ~~**C4**~~ TS: `DRAW_WORDS` / `UNIFORM_FLOATS` / pipeline ids restated in
   seven passes, the same draw-list walk twelve times, lane binding three
   times, the dynamic uniform buffer's growth twice → a layout table read
   from the module, the list bucketed by pipeline once a frame, `bind_lanes`,
   one uniform ring. **Do.**
-- **C5** "Read a row of the module's memory" thirteen times, `take → fill
+- ~~**C5**~~ "Read a row of the module's memory" thirteen times, `take → fill
   → pxl_* → give` five times → `row()` and `with_lane()` in `wasm/pxl.ts`.
   **Do.**
-- **C6** FNV twice (the kit has it), hex colour three times, pixels per
+- ~~**C6**~~ FNV twice (the kit has it), hex colour three times, pixels per
   unit four times (the scale bar's against `innerHeight`, which can
   disagree), degrees/radians at seven sites, the Seoul fallback three
   times, the DPR clamp three times, canonical→local three times, the
@@ -133,7 +134,7 @@ TypeScript file is that whole file, at the same path (`script/pair.ts`).
   `DrawList::translation` the one "against the origin"; `Held` the one
   grow-and-upload, for the badges and the gizmos — the puck's block is
   replaced at its exact size and keeps its own path.
-- **C8** The ledger's formatting helpers (MB rounding twelve times, n1/r1,
+- ~~**C8**~~ The ledger's formatting helpers (MB rounding twelve times, n1/r1,
   the long-frame literal, the phase-key formatter). **Do.**
 
 ## D. Dead code
@@ -182,10 +183,10 @@ TypeScript file is that whole file, at the same path (`script/pair.ts`).
 
 ## F. Comments and names the word sweep missed
 
-- **F1** Crate comments naming TypeScript files that no longer exist
+- ~~**F1**~~ Crate comments naming TypeScript files that no longer exist
   (`chunk_stage.tsx`, `chunk_table.ts`, `celestial_position.ts`,
   `debug_layer.tsx`, `decor_layer.ts`, `arena.rs`, …), nine places. **Do.**
-- **F2** Comments describing behaviour the code no longer has: `sched_ms`
+- ~~**F2**~~ Comments describing behaviour the code no longer has: `sched_ms`
   "does not include the render" (the WebGPU submit is inside the visible
   phase now), `mounts` as React mounts (they are node constructions),
   hover_cursor's "which polygon offset wins" (it is the coplanar pipeline),
@@ -194,7 +195,7 @@ TypeScript file is that whole file, at the same path (`script/pair.ts`).
   places, `frame_wgsl.ts` in shadow.ts, `SKY_DOME_SCALE` → `SKY_RADIUS`,
   elevation.ts's header naming files that do not exist, terrain/store.ts's
   ownership list. **Do.**
-- **F3** Twelve comments naming a `reference/` file as the live mechanism
+- ~~**F3**~~ Twelve comments naming a `reference/` file as the live mechanism
   (`terrain_layer.ts`, `chunk_mesher.ts`, `object_layer.ts`,
   `voxel_scan.ts`) → the crate. **Do.**
 - **F4** `poi_layer.tsx` / `PoiLayer`, `ChunkMountsProps = Record<string,
@@ -202,12 +203,12 @@ TypeScript file is that whole file, at the same path (`script/pair.ts`).
 
 ## G. Tests
 
-- **G1** `fdlibm.rs` and `srgb.rs` claim agreement with V8 and pin nothing;
+- ~~**G1**~~ `fdlibm.rs` and `srgb.rs` claim agreement with V8 and pin nothing;
   decor's RNG test never calls `Rng::next`. Pin values from the kit. **Do.**
 - **G2** The mesher, scan, volume, build and terrain are held only by
   `reference/*.test.ts`; Rust fixtures are needed before `reference/`
   retires. **Hold** — that is the condition reference/README.md states.
-- **G3** `elevation_sample.test.ts`, `scatter.test.ts`,
+- ~~**G3**~~ `elevation_sample.test.ts`, `scatter.test.ts`,
   `store_reference.test.ts` are reference tests in the live tree → move.
   **Do.**
 - **G4** Live logic with no test: chunk_node's ownership rules (three bugs
@@ -242,4 +243,10 @@ Each step is one commit with the gate green; a ledger capture after 2 and
 3 says what the frame gained.
 
 Steps 5 and 6 were not taken up before the client moved into the kernel
-(2026-09-15); most of the TypeScript their items name is gone.
+(2026-09-15). Step 5's TypeScript is gone with the move — C4, C5, C8 have
+nothing left to fold, and C6's FNV is the `fnv` crate on 09-19. Of step 6,
+F1 and F3 name files that no longer exist anywhere, F2's last three (the
+shadow camera, the dome, `SKY_DOME_SCALE` → `SKY_RADIUS`) went on 09-19,
+G1's `fdlibm.rs` is the `libm` crate and its records are the kit's, and
+G3's files are gone. G4 stands: chunk_node's ownership rules and
+poi_index's job lifecycle still have no test.

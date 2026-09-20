@@ -2,7 +2,7 @@
 
 import { assert, assertEquals, assertThrows } from "@std/assert";
 
-import { Errno } from "@xpute/core/status/errno.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { encoder, TreeReader, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 import { Ring, ring_bytes, slots_bytes } from "./ring.ts";
 import { FrameFlag } from "./frame.ts";

@@ -7,7 +7,7 @@ use xpute_core::abi::cmd::{cmd, Minor, MINOR_OWN};
 
 #[test]
 fn every_number_is_its_major_and_minor() {
-    use Cmd::*;
+    use Command::*;
     let parts = [
         (WORLD_CREATE, Major::WORLD as u32, Minor::CREATE as u32),
         (WORLD_UPDATE, Major::WORLD as u32, Minor::UPDATE as u32),
@@ -39,9 +39,9 @@ fn every_number_is_its_major_and_minor() {
     ];
     for (c, major, minor) in parts {
         assert_eq!(c as u32, cmd(major, minor), "{c:?}");
-        assert_eq!(Cmd::of(c as u32), Some(c));
+        assert_eq!(Command::of(c as u32), Some(c));
     }
-    assert_eq!(Cmd::of(0x0fff), None);
+    assert_eq!(Command::of(0x0fff), None);
 }
 
 /// Nothing computes a minor at run time — every number here is a constant

@@ -1,7 +1,7 @@
 // @pxl/web/feature/map/object/tex.ts
 
-import { placeable_cube_id, type PlaceableCube } from "@/catalog/cell/mod.ts";
-import { type CubeFace, shipped_texture_key } from "@/catalog/asset/texture.ts";
+import { type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
+import { type CubeFace, shippedTextureKey } from "@/catalog/asset/texture.ts";
 
 export type { CubeFace };
 
@@ -14,7 +14,7 @@ export type { CubeFace };
  * the layer arrays the chunks sample are built by (crates/pxl/web/render/src/gpu/layers.rs).
  * Only the land channel has sides today; object blocks never do.
  */
-export function texture_key(cube: PlaceableCube, face: CubeFace): string | null {
-  const [channel, type] = placeable_cube_id(cube).split(".");
-  return shipped_texture_key(channel, type, face) ?? shipped_texture_key(channel, type, "top");
+export function textureKey(cube: PlaceableCube, face: CubeFace): string | null {
+  const [channel, type] = placeableCubeId(cube).split(".");
+  return shippedTextureKey(channel, type, face) ?? shippedTextureKey(channel, type, "top");
 }

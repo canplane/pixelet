@@ -146,6 +146,10 @@ shelf; whether it is used decides nothing here.
 own-property order, and the reader is a cursor over borrowed text where a
 crate's is a DOM), and the removals. `math.rs` is a barrel now, as `collection.rs` and `kit.rs` are;
 the scalars are `math/scalar.rs` and `Vec3` is `math/vec3.rs`, out of the
-matrix file four of its twelve users never needed. Not yet read: `wire/`
-(`tlv`, `tree/*`), and `cmd`, `errno`, `error`, `log` at the root. The tests the removals and signatures broke are the
-next thing after the structure stands, not before.
+matrix file four of its twelve users never needed. `wire/` (`tlv`, `xtp/*`)
+read line by line against the 09-12 TypeScript on 09-19, and what differs is
+the language's edge — a shift past the word, a NaN cast, a division by
+zero — never a byte of a packet; `abi/word` holds the bit-field helpers
+that had been copied into six files. Not yet read as a pair: `status/error`
+and `status/log`. The tests the removals and signatures broke were the
+next thing after the structure stood, and are green.

@@ -6,13 +6,18 @@ import { GEOCODE_TILE_BASE_URL } from "@/config/deploy.ts";
  * (bake/geocode/provider.ts) — `name` is Overture's local-language
  * `names.primary`, `common` is a language-tag-keyed subset of
  * `names.common` present only when Overture had a translation. */
-export type GeocodePart = { name: string; common?: Record<string, string> };
+export interface GeocodePart {
+  name: string;
+  common?: Record<string, string>;
+}
 
 /** Broad-to-narrow, e.g. `[{name:"강남구"}, {name:"역삼1동"}]` — see the
  * API's own provider.ts doc comment for why this stays unjoined (and each
  * part's language unresolved) until use-reverse-geocode.ts assembles it
  * against the viewer's own UI language. */
-export type GeocodeResult = { parts: GeocodePart[] };
+export interface GeocodeResult {
+  parts: GeocodePart[];
+}
 
 /**
  * Reverse-geocode transport — the pre-baked static set when one is
@@ -27,14 +32,14 @@ export type GeocodeResult = { parts: GeocodePart[] };
  * now page-keyed like everything else this app bakes, not per exact
  * coordinate.
  */
-function geocode_url(key: string): string {
+function geocodeUrl(key: string): string {
   return `${GEOCODE_TILE_BASE_URL}/${key}`;
 }
 
 /** `page` is the snapshot's own `map.page` — the decimal L3 index, which is
  * both the bucket key and the last segment of the URL. */
-export async function fetch_geocode(page: string, signal?: AbortSignal): Promise<GeocodeResult | null> {
-  const res = await fetch(geocode_url(page), { signal });
+export async function fetchGeocode(page: string, signal?: AbortSignal): Promise<GeocodeResult | null> {
+  const res = await fetch(geocodeUrl(page), { signal });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`[geocode/${page}] http ${res.status}`);
   return await res.json() as GeocodeResult;

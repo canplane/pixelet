@@ -1,5 +1,6 @@
 // @pxl/web/feature/search/modal.tsx
 
+import type { f64 } from "@xpute/core/abi/word.ts";
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, X } from "lucide-react";
 import { round } from "@xpute/core/math/scalar.ts";
@@ -9,9 +10,9 @@ import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { kernel_action, kernel_snapshot } from "@/kernel/shell.ts";
-import { resolve_poi_theme } from "@/feature/search/poi-theme.ts";
-import { assemble_label } from "@/feature/map/geocode/label.ts";
-import { fetch_search, type SearchResult } from "@/feature/search/repository.ts";
+import { resolvePoiTheme } from "@/feature/search/poi-theme.ts";
+import { assembleLabel } from "@/feature/map/geocode/label.ts";
+import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
 
 // Debounced like use-reverse-geocode.ts's own DEBOUNCE_MS, but shorter:
 // that one waits for panning to *settle* on a new page; this waits for
@@ -19,14 +20,17 @@ import { fetch_search, type SearchResult } from "@/feature/search/repository.ts"
 // search box.
 const DEBOUNCE_MS = 300;
 
-export type SearchModalProps = {
+export interface SearchModalProps {
   type: "search";
-};
+}
 
-type LonLat = { lon: number; lat: number };
+interface LonLat {
+  lon: f64;
+  lat: f64;
+}
 
 /** The kernel's map centre, as the snapshot's `map.center` gives it in degrees. */
-function map_center_to_near(map_center: [number, number]): LonLat {
+function mapCenterToNear(map_center: [number, number]): LonLat {
   return { lon: map_center[0], lat: map_center[1] };
 }
 
@@ -42,7 +46,7 @@ const DEG_TO_RAD = Math.PI / 180;
  * not a rounding error on a label whose whole job is to say how far away
  * something is.
  */
-function ground_distance_m(a: LonLat, b: LonLat): number {
+function groundDistanceM(a: LonLat, b: LonLat): f64 {
   const lat1 = a.lat * DEG_TO_RAD, lat2 = b.lat * DEG_TO_RAD;
   const dlat = lat2 - lat1;
   const dlon = (b.lon - a.lon) * DEG_TO_RAD;
@@ -52,14 +56,14 @@ function ground_distance_m(a: LonLat, b: LonLat): number {
 
 /** Whole metres under a kilometre, then one decimal, then whole kilometres —
  * the precision a reader can actually act on at each scale. */
-function format_distance(m: number): string {
+function formatDistance(m: f64): string {
   if (m < 1000) return `${round(m)}m`;
   if (m < 10000) return `${(m / 1000).toFixed(1)}km`;
   return `${round(m / 1000).toLocaleString()}km`;
 }
 
 // Same "pick a language against i18n.language, fall back to the given
-// name" rule use-reverse-geocode.ts's own display_name() applies to
+// name" rule use-reverse-geocode.ts's own displayName() applies to
 // GeocodePart — SearchResult's `common` is the identical shape for exactly
 // the same reason (division results share the same multilingual source).
 // Never touches `name` itself for a "poi" result (always null there) or
@@ -67,7 +71,7 @@ function format_distance(m: number): string {
 // resolved from its coordinates. It replaced Overture's own address text,
 // which arrived in a different shape from every contributor and could name
 // a different city than the geometry beside it.
-function display_name(result: SearchResult, lang: string): string {
+function displayName(result: SearchResult, lang: string): string {
   return result.common?.[lang] ?? result.name;
 }
 
@@ -106,17 +110,17 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language.split("-")[0].toLowerCase();
 
-  const [query, set_query] = useState("");
-  const [results, set_results] = useState<SearchResult[]>([]);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
   // Where the distances on the rows are measured from, frozen at the moment
   // the query ran rather than read live. It is the same point the API ranked
   // against, so the numbers shown always agree with the order they are shown
   // in — and a camera still drifting behind the open sheet cannot renumber a
   // list the reader is looking at.
-  const [origin, set_origin] = useState<LonLat | null>(null);
-  const [loading, set_loading] = useState(false);
+  const [origin, setOrigin] = useState<LonLat | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const input_ref = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Sheet's own open/close animation still runs on the frame `open` flips —
   // focusing synchronously in the same render would fight it, so this
@@ -124,7 +128,7 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
   // portal-mounted dialog.
   useEffect(() => {
     if (!open) return;
-    const id = setTimeout(() => input_ref.current?.focus(), 50);
+    const id = setTimeout(() => inputRef.current?.focus(), 50);
     return () => clearTimeout(id);
   }, [open]);
 
@@ -133,37 +137,37 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
   // for a place already visited.
   useEffect(() => {
     if (!open) {
-      set_query("");
-      set_results([]);
-      set_origin(null);
-      set_loading(false);
+      setQuery("");
+      setResults([]);
+      setOrigin(null);
+      setLoading(false);
     }
   }, [open]);
 
   useEffect(() => {
     const q = query.trim();
     if (q.length === 0) {
-      set_results([]);
-      set_loading(false);
+      setResults([]);
+      setLoading(false);
       return;
     }
 
-    set_loading(true);
+    setLoading(true);
 
     // Latest wins: the next keystroke's query aborts this one.
     const controller = new AbortController();
     const signal = controller.signal;
     const timer = setTimeout(() => {
       const map_center = kernel_snapshot().map.center;
-      const near = map_center ? map_center_to_near(map_center) : undefined;
-      fetch_search(q, { near, signal })
+      const near = map_center ? mapCenterToNear(map_center) : undefined;
+      fetchSearch(q, { near, signal })
         .then((found) => {
-          set_origin(near ?? null);
-          set_results(found);
+          setOrigin(near ?? null);
+          setResults(found);
         })
         .catch(() => {})
         .finally(() => {
-          if (!signal.aborted) set_loading(false);
+          if (!signal.aborted) setLoading(false);
         });
     }, DEBOUNCE_MS);
 
@@ -181,12 +185,12 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
     onOpenChange(false);
   }
 
-  function distance_of(result: SearchResult): string | null {
-    return origin === null ? null : format_distance(ground_distance_m(origin, { lon: result.lon, lat: result.lat }));
+  function distanceOf(result: SearchResult): string | null {
+    return origin === null ? null : formatDistance(groundDistanceM(origin, { lon: result.lon, lat: result.lat }));
   }
 
-  const division_results = results.filter((r) => r.kind === "division");
-  const poi_results = results.filter((r) => r.kind === "poi");
+  const divisionResults = results.filter((r) => r.kind === "division");
+  const poiResults = results.filter((r) => r.kind === "poi");
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -212,9 +216,9 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
             </button>
             <SheetTitle asChild>
               <TextField
-                ref={input_ref}
+                ref={inputRef}
                 value={query}
-                onChange={(e) => set_query(e.target.value)}
+                onChange={(e) => setQuery(e.target.value)}
                 placeholder={t("map.search.placeholder")}
                 className="flex-1 min-w-0 bg-transparent outline-none"
               />
@@ -231,8 +235,8 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
               <button
                 type="button"
                 onClick={() => {
-                  set_query("");
-                  set_results([]);
+                  setQuery("");
+                  setResults([]);
                 }}
                 aria-label={t("map.search.clear_aria_label")}
                 className="shrink-0 flex items-center justify-center size-4 rounded-full bg-muted-foreground/50 hover:bg-muted-foreground/70"
@@ -258,8 +262,8 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
             section header on each group makes that ordering legible
             instead of just an unlabeled jump from areas to places. */
           }
-          {division_results.length > 0 && <SectionHeader label={t("map.search.section_areas")} />}
-          {division_results.map((r) => (
+          {divisionResults.length > 0 && <SectionHeader label={t("map.search.section_areas")} />}
+          {divisionResults.map((r) => (
             <button
               key={r.gers_id}
               type="button"
@@ -271,17 +275,17 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
                 have a "kind of place" to badge the way a category does,
                 and the section header already says what these are. */
               }
-              <span className="text-sm truncate">{display_name(r, lang)}</span>
-              <SubtitleRow label={r.context.length > 0 ? assemble_label(r.context, lang) : ""} distance={distance_of(r)} />
+              <span className="text-sm truncate">{displayName(r, lang)}</span>
+              <SubtitleRow label={r.context.length > 0 ? assembleLabel(r.context, lang) : ""} distance={distanceOf(r)} />
             </button>
           ))}
 
-          {poi_results.length > 0 && <SectionHeader label={t("map.search.section_places")} />}
-          {poi_results.map((r) => {
+          {poiResults.length > 0 && <SectionHeader label={t("map.search.section_places")} />}
+          {poiResults.map((r) => {
             // Same emoji/color table poi_layer.tsx's own map badge uses
             // (catalog/poi/theme.ts's own doc comment on why emoji beats a Lucide
             // glyph at this size).
-            const theme = resolve_poi_theme(r.category);
+            const theme = resolvePoiTheme(r.category);
             return (
               <button
                 key={r.gers_id}
@@ -301,8 +305,8 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
                     beside the address instead of at the row's right edge. */
                 }
                 <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-                  <span className="text-sm truncate">{display_name(r, lang)}</span>
-                  <SubtitleRow label={r.context.length > 0 ? assemble_label(r.context, lang) : ""} distance={distance_of(r)} />
+                  <span className="text-sm truncate">{displayName(r, lang)}</span>
+                  <SubtitleRow label={r.context.length > 0 ? assembleLabel(r.context, lang) : ""} distance={distanceOf(r)} />
                 </div>
               </button>
             );

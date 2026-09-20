@@ -35,7 +35,7 @@ rebuilt on 2026-09-12/13 into the shape below.
   instance; fit, fade and the occlusion twin in the vertex shader
   (`/crates/pxl/web/render/src/frame/shader/badge.wgsl`).
 - **`theme.rs`** — category → icon/colour. `OVERTURE_CATEGORY_MAP`
-  (`/crates/pxl/server/geo-spec/src/overture/category_spec.rs`, generated from
+  (`/crates/pxl/server/geo-spec/src/overture/category.spec.rs`, generated from
   `/spec/pxl/server/overture/category.json`) translates Overture's `categories.primary`
   into this vocabulary, and the generator fails when a theme entry here has no
   category resolving to it.

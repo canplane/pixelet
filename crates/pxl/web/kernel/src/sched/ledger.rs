@@ -7,5 +7,6 @@
 
 pub mod log;
 pub mod record;
+#[path = "ledger/ledger.spec.rs"]
 pub mod spec;
 pub mod summary;

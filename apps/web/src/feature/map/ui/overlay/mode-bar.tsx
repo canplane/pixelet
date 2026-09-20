@@ -6,14 +6,14 @@ import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { Eraser, LayoutGrid, MessageCircle, MousePointer, Palette, Send, TreePine } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { cn } from "@/shared/lib/util/cn.ts";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { useAppContext } from "@/app/provider/context.ts";
 import { useUiStore } from "@/app/store/ui-store.ts";
-import { type DecorId, placeable_cube_id, placeable_cubes, type PlaceableCube } from "@/catalog/cell/mod.ts";
-import { object_scale_exponents, OBJECT_SIZES } from "@/feature/map/object/size.ts";
-import { cube_swatch_style } from "./cube-swatch.ts";
+import { type DecorId, placeable_cubes, type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
+import { OBJECT_SIZES, objectScaleExponents } from "@/feature/map/object/size.ts";
+import { cubeSwatchStyle } from "./cube-swatch.ts";
 
 type ModeId = "message" | "palette";
 
@@ -31,34 +31,37 @@ export const MODE_BAR_HEIGHT_PX = 48;
 
 // Static strings, not a computed w-[Npx] — Tailwind's JIT scanner needs
 // literal classes to generate them.
-function size_button_dims(i: number): string {
+function sizeButtonDims(i: u32): string {
   return i === 0 ? "w-6 h-6" : i === 1 ? "w-4 h-4" : i === 2 ? "w-2 h-2" : "w-1 h-1";
 }
 
-// Tier index i is exponent -i (object_scale_exponents), sign-flipped and
-// sorted here for display only — item_refs/drag_index/on_up still index by
+// Tier index i is exponent -i (objectScaleExponents), sign-flipped and
+// sorted here for display only — itemRefs/dragIndex/on_up still index by
 // tier (OBJECT_SIZES' own index), not by render position.
-function size_tiers_for(cube: PlaceableCube): number[] {
-  return object_scale_exponents(cube).map((exp) => -exp).sort((a, b) => b - a);
+function sizeTiersFor(cube: PlaceableCube): f64[] {
+  return objectScaleExponents(cube).map((exp) => -exp).sort((a, b) => b - a);
 }
 
-type SizeFlyoutAnchor = { left: f64; bottom: f64 };
+interface SizeFlyoutAnchor {
+  left: f64;
+  bottom: f64;
+}
 
 const FLYOUT_HOLD_MS = 150;
 const FLYOUT_AXIS_PX = 12;
 
-function use_size_flyout(on_activate: () => void) {
-  const set_object_size = useUiStore.getState().set_object_size;
+function useSizeFlyout(onActivate: () => void) {
+  const setObjectSize = useUiStore.getState().setObjectSize;
 
-  const [menu_open, set_menu_open] = useState(false);
-  const [drag_index, set_drag_index] = useState<number | null>(null);
-  const [anchor, set_anchor] = useState<SizeFlyoutAnchor | null>(null);
-  const item_refs = useRef<(HTMLButtonElement | null)[]>([]);
-  const button_ref = useRef<HTMLElement | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [anchor, setAnchor] = useState<SizeFlyoutAnchor | null>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const buttonRef = useRef<HTMLElement | null>(null);
 
-  function index_at(x: f64, y: f64): number | null {
-    for (let i = 0; i < item_refs.current.length; i++) {
-      const el = item_refs.current[i];
+  function indexAt(x: f64, y: f64): u32 | null {
+    for (let i = 0; i < itemRefs.current.length; i++) {
+      const el = itemRefs.current[i];
       if (!el) continue;
       const r = el.getBoundingClientRect();
       if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return i;
@@ -66,87 +69,87 @@ function use_size_flyout(on_activate: () => void) {
     return null;
   }
 
-  function on_pointer_down(e: React.PointerEvent) {
-    const start_x = e.clientX;
-    const start_y = e.clientY;
+  function onPointerDown(e: React.PointerEvent) {
+    const startX = e.clientX;
+    const startY = e.clientY;
 
     let gesture: "flyout" | "scroll" | null = null;
 
-    function open_flyout() {
+    function openFlyout() {
       if (gesture !== null) return;
       gesture = "flyout";
-      on_activate();
-      const r = button_ref.current?.getBoundingClientRect();
-      if (r) set_anchor({ left: r.left + r.width / 2, bottom: globalThis.innerHeight - r.top + 20 });
-      set_menu_open(true);
-      set_drag_index(null);
+      onActivate();
+      const r = buttonRef.current?.getBoundingClientRect();
+      if (r) setAnchor({ left: r.left + r.width / 2, bottom: globalThis.innerHeight - r.top + 20 });
+      setMenuOpen(true);
+      setDragIndex(null);
     }
 
-    const hold_timer = globalThis.setTimeout(open_flyout, FLYOUT_HOLD_MS);
+    const holdTimer = globalThis.setTimeout(openFlyout, FLYOUT_HOLD_MS);
 
     function cleanup() {
-      globalThis.clearTimeout(hold_timer);
+      globalThis.clearTimeout(holdTimer);
       globalThis.removeEventListener("pointermove", on_move);
       globalThis.removeEventListener("pointerup", on_up);
-      globalThis.removeEventListener("pointercancel", on_cancel);
+      globalThis.removeEventListener("pointercancel", onCancel);
     }
 
     function on_move(ev: PointerEvent) {
       if (gesture === "flyout") {
-        set_drag_index(index_at(ev.clientX, ev.clientY));
+        setDragIndex(indexAt(ev.clientX, ev.clientY));
         return;
       }
       if (gesture === "scroll") return;
 
-      const dx = Math.abs(ev.clientX - start_x);
-      const dy = Math.abs(ev.clientY - start_y);
+      const dx = Math.abs(ev.clientX - startX);
+      const dy = Math.abs(ev.clientY - startY);
       if (dx < FLYOUT_AXIS_PX && dy < FLYOUT_AXIS_PX) return;
 
       if (dy >= dx) {
-        globalThis.clearTimeout(hold_timer);
-        open_flyout();
-        set_drag_index(index_at(ev.clientX, ev.clientY));
+        globalThis.clearTimeout(holdTimer);
+        openFlyout();
+        setDragIndex(indexAt(ev.clientX, ev.clientY));
       } else {
         gesture = "scroll";
-        globalThis.clearTimeout(hold_timer);
+        globalThis.clearTimeout(holdTimer);
       }
     }
 
     function on_up(ev: PointerEvent) {
       if (gesture === "flyout") {
-        const idx = index_at(ev.clientX, ev.clientY);
-        if (idx !== null) set_object_size(OBJECT_SIZES[idx]);
+        const idx = indexAt(ev.clientX, ev.clientY);
+        if (idx !== null) setObjectSize(OBJECT_SIZES[idx]);
       } else if (gesture === null) {
-        on_activate();
+        onActivate();
       }
-      set_menu_open(false);
-      set_drag_index(null);
+      setMenuOpen(false);
+      setDragIndex(null);
       cleanup();
     }
 
-    function on_cancel() {
-      set_menu_open(false);
-      set_drag_index(null);
+    function onCancel() {
+      setMenuOpen(false);
+      setDragIndex(null);
       cleanup();
     }
 
     globalThis.addEventListener("pointermove", on_move);
     globalThis.addEventListener("pointerup", on_up);
-    globalThis.addEventListener("pointercancel", on_cancel);
+    globalThis.addEventListener("pointercancel", onCancel);
   }
 
-  return { menu_open, anchor, drag_index, item_refs, button_ref, on_pointer_down };
+  return { menuOpen, anchor, dragIndex, itemRefs, buttonRef, onPointerDown };
 }
 
-type SizeFlyoutProps = {
+interface SizeFlyoutProps {
   anchor: SizeFlyoutAnchor;
-  drag_index: number | null;
-  item_refs: React.MutableRefObject<(HTMLButtonElement | null)[]>;
+  dragIndex: u32 | null;
+  itemRefs: React.MutableRefObject<(HTMLButtonElement | null)[]>;
   object_size: f64;
-  tiers: readonly number[];
-};
+  tiers: readonly f64[];
+}
 
-function SizeFlyout({ anchor, drag_index, item_refs, object_size, tiers }: SizeFlyoutProps) {
+function SizeFlyout({ anchor, dragIndex, itemRefs, object_size, tiers }: SizeFlyoutProps) {
   return createPortal(
     // Portaled to document.body, not positioned relative to the owning
     // button: that button sits in a horizontally scrolling row, and CSS
@@ -166,7 +169,7 @@ function SizeFlyout({ anchor, drag_index, item_refs, object_size, tiers }: SizeF
           <button
             key={s}
             ref={(el) => {
-              item_refs.current[tier] = el;
+              itemRefs.current[tier] = el;
             }}
             type="button"
             className="flex items-center justify-center w-10 h-10 rounded-full shrink-0"
@@ -175,8 +178,8 @@ function SizeFlyout({ anchor, drag_index, item_refs, object_size, tiers }: SizeF
             <div
               className={cn(
                 "rounded-sm transition-transform",
-                size_button_dims(tier),
-                drag_index === tier ? "bg-white scale-125 ring-1 ring-white" : object_size === s ? "bg-white/80" : "bg-white/40",
+                sizeButtonDims(tier),
+                dragIndex === tier ? "bg-white scale-125 ring-1 ring-white" : object_size === s ? "bg-white/80" : "bg-white/40",
               )}
             />
           </button>
@@ -190,28 +193,28 @@ function SizeFlyout({ anchor, drag_index, item_refs, object_size, tiers }: SizeF
 function ColorSwatchButton({ cube }: { cube: PlaceableCube }) {
   const { t } = useTranslation();
   const activeTool = useUiStore((s) => s.activeTool);
-  const object_color_id = useUiStore((s) => s.object_color_id);
+  const objectColorId = useUiStore((s) => s.objectColorId);
   const object_size = useUiStore((s) => s.object_size);
-  const select_cube = (pick: PlaceableCube) => useUiStore.getState().select_cube(placeable_cube_id(pick));
+  const selectCube = (pick: PlaceableCube) => useUiStore.getState().selectCube(placeableCubeId(pick));
 
-  const { menu_open, anchor, drag_index, item_refs, button_ref, on_pointer_down } = use_size_flyout(() => select_cube(cube));
-  const tiers = size_tiers_for(cube);
+  const { menuOpen, anchor, dragIndex, itemRefs, buttonRef, onPointerDown } = useSizeFlyout(() => selectCube(cube));
+  const tiers = sizeTiersFor(cube);
 
   return (
     <div className="relative w-[38px] h-[38px] flex items-center justify-center">
-      {menu_open && anchor && <SizeFlyout anchor={anchor} drag_index={drag_index} item_refs={item_refs} object_size={object_size} tiers={tiers} />}
+      {menuOpen && anchor && <SizeFlyout anchor={anchor} dragIndex={dragIndex} itemRefs={itemRefs} object_size={object_size} tiers={tiers} />}
       <button
         type="button"
-        onPointerDown={on_pointer_down}
+        onPointerDown={onPointerDown}
         className="w-[38px] h-[38px] flex items-center justify-center cursor-pointer shrink-0 touch-pan-x"
-        title={t(`cubes.${placeable_cube_id(cube)}`)}
+        title={t(`cubes.${placeableCubeId(cube)}`)}
       >
         <span
-          ref={button_ref}
-          style={cube_swatch_style(cube)}
+          ref={buttonRef}
+          style={cubeSwatchStyle(cube)}
           className={cn(
             "w-5 h-5 rounded-full transition-transform",
-            activeTool === "object" && object_color_id === placeable_cube_id(cube) ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
+            activeTool === "object" && objectColorId === placeableCubeId(cube) ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
           )}
         />
       </button>
@@ -219,7 +222,7 @@ function ColorSwatchButton({ cube }: { cube: PlaceableCube }) {
   );
 }
 
-// The hotbar's decor slot(s) — reinstated (2026-09-07) now that recent_picks
+// The hotbar's decor slot(s) — reinstated (2026-09-07) now that recentPicks
 // (ui-store.ts) is one shared MRU list across cube and decor: unlike a
 // ColorSwatchButton, a decor pick has no size flyout of its own (DECOR_SIZE
 // is fixed, object/size.ts), so this stays a plain tap button.
@@ -227,14 +230,14 @@ function DecorIconButton({ id }: { id: DecorId }) {
   const { t } = useTranslation();
   const activeTool = useUiStore((s) => s.activeTool);
   const decor_id = useUiStore((s) => s.decor_id);
-  const select_decor = useUiStore.getState().select_decor;
+  const selectDecor = useUiStore.getState().selectDecor;
   const Icon = DECOR_ICONS[id];
   const active = activeTool === "decor" && decor_id === id;
 
   return (
     <button
       type="button"
-      onClick={() => select_decor(id)}
+      onClick={() => selectDecor(id)}
       className={cn(
         "flex items-center justify-center w-[38px] h-[38px] rounded-full cursor-pointer transition-colors shrink-0",
         active ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
@@ -259,34 +262,34 @@ export const DECOR_ICONS: Record<DecorId, typeof TreePine> = {
 export function ModeBar() {
   const { t } = useTranslation();
   const { ui } = useAppContext();
-  const [mode, set_mode] = useState<ModeId>("palette");
+  const [mode, setMode] = useState<ModeId>("palette");
   const activeTool = useUiStore((s) => s.activeTool);
   const set_activeTool = useUiStore.getState().set_activeTool;
-  const recent_picks = useUiStore((s) => s.recent_picks);
+  const recentPicks = useUiStore((s) => s.recentPicks);
   const append_chat_line = useUiStore.getState().append_chat_line;
-  const [message_text, set_message_text] = useState("");
-  const [is_sending, set_is_sending] = useState(false);
-  const input_ref = useRef<HTMLInputElement | null>(null);
+  const [messageText, setMessageText] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  function send_message() {
-    const text = message_text.trim();
-    if (text === "" || is_sending) return;
-    set_is_sending(true);
+  function sendMessage() {
+    const text = messageText.trim();
+    if (text === "" || isSending) return;
+    setIsSending(true);
     setTimeout(() => {
       append_chat_line(text);
-      set_message_text("");
-      set_is_sending(false);
-      input_ref.current?.focus();
+      setMessageText("");
+      setIsSending(false);
+      inputRef.current?.focus();
     }, SEND_FADE_MS);
   }
 
-  const message_expanded = mode === "message";
-  const palette_expanded = mode === "palette";
+  const messageExpanded = mode === "message";
+  const paletteExpanded = mode === "palette";
   // Reuses the palette pill's own idle collapsed-icon slot as the send
   // button rather than adding a separate one inside the message pill — the
   // same idle-slot-reuse pattern as the size flyout anchoring per-swatch
   // instead of to one shared control (see AGENTS.md).
-  const show_send_in_palette_slot = message_expanded && !palette_expanded && message_text.trim() !== "";
+  const showSendInPaletteSlot = messageExpanded && !paletteExpanded && messageText.trim() !== "";
 
   return (
     <div className="flex items-center justify-center gap-2.5 min-w-0 w-full">
@@ -313,16 +316,16 @@ export function ModeBar() {
             layout
             transition={SPRING}
             style={{ borderRadius: "999px" }}
-            className={cn("relative flex items-center h-full overflow-hidden", message_expanded && "pl-2")}
+            className={cn("relative flex items-center h-full overflow-hidden", messageExpanded && "pl-2")}
           >
             <motion.button
               type="button"
               layout
               transition={SPRING}
-              onClick={() => set_mode("message")}
+              onClick={() => setMode("message")}
               className={cn(
                 "flex items-center justify-center rounded-full cursor-pointer text-black/50 hover:text-black/80 transition-colors shrink-0",
-                message_expanded ? "w-9 h-9" : "h-full aspect-square",
+                messageExpanded ? "w-9 h-9" : "h-full aspect-square",
               )}
               title={t("map.mode_bar.message_tooltip")}
             >
@@ -351,7 +354,7 @@ export function ModeBar() {
             */
             }
             <AnimatePresence mode="popLayout">
-              {message_expanded && (
+              {messageExpanded && (
                 <motion.div
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -360,15 +363,15 @@ export function ModeBar() {
                   className="flex items-center gap-2 min-w-0 pr-2"
                 >
                   <TextField
-                    ref={input_ref}
-                    value={message_text}
-                    onChange={(e) => set_message_text(e.target.value)}
-                    onSubmit={send_message}
+                    ref={inputRef}
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    onSubmit={sendMessage}
                     placeholder={t("map.mode_bar.message_placeholder")}
                     autoFocus
                     className={cn(
                       "bg-transparent text-black placeholder:text-black/40 outline-none w-96 max-w-full min-w-0 transition-opacity duration-200",
-                      is_sending && "opacity-0",
+                      isSending && "opacity-0",
                     )}
                   />
                 </motion.div>
@@ -398,8 +401,8 @@ export function ModeBar() {
             className="relative flex items-center h-full min-w-0 overflow-hidden"
           >
             <AnimatePresence>
-              {!palette_expanded && (
-                show_send_in_palette_slot
+              {!paletteExpanded && (
+                showSendInPaletteSlot
                   ? (
                     <motion.button
                       key="send"
@@ -414,8 +417,8 @@ export function ModeBar() {
                       // before it happens, so it doesn't flicker a mobile
                       // virtual keyboard closed/open.
                       onMouseDown={(e) => e.preventDefault()}
-                      onClick={send_message}
-                      disabled={is_sending}
+                      onClick={sendMessage}
+                      disabled={isSending}
                       className={cn(
                         "absolute inset-0 flex items-center justify-center shrink-0 cursor-pointer",
                         "bg-linear-to-br from-orange-400 to-orange-500 text-white shadow-md shadow-orange-500/40",
@@ -437,7 +440,7 @@ export function ModeBar() {
                       exit={{ opacity: 0 }}
                       transition={SWAP_FADE}
                       style={{ borderRadius: "999px" }}
-                      onClick={() => set_mode("palette")}
+                      onClick={() => setMode("palette")}
                       className="absolute inset-0 flex items-center justify-center cursor-pointer bg-neutral-900 text-white/60 hover:text-white/90 transition-colors shrink-0"
                       title={t("map.mode_bar.palette_tooltip")}
                     >
@@ -446,7 +449,7 @@ export function ModeBar() {
                   )
               )}
             </AnimatePresence>
-            {!palette_expanded && <div className="w-12 h-full shrink-0" aria-hidden="true" />}
+            {!paletteExpanded && <div className="w-12 h-full shrink-0" aria-hidden="true" />}
 
             {
               /*
@@ -470,7 +473,7 @@ export function ModeBar() {
             */
             }
             <AnimatePresence mode="popLayout">
-              {palette_expanded && (
+              {paletteExpanded && (
                 <motion.div
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -508,9 +511,9 @@ export function ModeBar() {
                   <div className="w-px h-7 bg-white/15 shrink-0" />
 
                   <div className="flex items-center px-[4px] min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    {recent_picks.map((pick) =>
+                    {recentPicks.map((pick) =>
                       pick.kind === "object"
-                        ? <ColorSwatchButton key={`object:${pick.id}`} cube={placeable_cubes.find((c) => placeable_cube_id(c) === pick.id)!} />
+                        ? <ColorSwatchButton key={`object:${pick.id}`} cube={placeable_cubes.find((c) => placeableCubeId(c) === pick.id)!} />
                         : <DecorIconButton key={`decor:${pick.id}`} id={pick.id} />
                     )}
                   </div>

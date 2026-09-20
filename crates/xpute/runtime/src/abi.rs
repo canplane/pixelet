@@ -6,5 +6,6 @@
 //! one here, the slot read off it there, and the split between them a
 //! number both sides write.
 
+#[path = "abi/fetch.spec.rs"]
 pub mod fetch;
 pub mod handle;

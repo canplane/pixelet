@@ -1,6 +1,6 @@
 // @pxl/web/feature/search/poi-theme.ts
 
-import { CATEGORY_THEME, DEFAULT_THEME } from "./poi-theme-spec.ts";
+import { CATEGORY_THEME, DEFAULT_THEME } from "./poi_theme.spec.ts";
 
 /**
  * Category -> icon/color lookup for poi_layer.tsx's badge — the one visual
@@ -25,8 +25,11 @@ import { CATEGORY_THEME, DEFAULT_THEME } from "./poi-theme-spec.ts";
  * weight, tried thickening it first) was the real problem.
  */
 
-export type PoiTheme = { icon: string; color: string };
+export interface PoiTheme {
+  icon: string;
+  color: string;
+}
 
-export function resolve_poi_theme(category: string): PoiTheme {
+export function resolvePoiTheme(category: string): PoiTheme {
   return (CATEGORY_THEME as Record<string, PoiTheme>)[category] ?? DEFAULT_THEME;
 }

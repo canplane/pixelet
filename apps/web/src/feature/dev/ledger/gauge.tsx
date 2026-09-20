@@ -15,23 +15,12 @@
  * CPU-vs-render split.
  */
 
-import { useEffect, useState } from "react";
-
 import { round } from "@xpute/core/math/scalar.ts";
 
-import { BOUND, fail_text, type FrameSummary, type LongFrame, n1, type Spread, tris } from "./report.ts";
-import { type Gauge, ledger_gauge_read } from "./view.ts";
-import { loaf_supported } from "./long-frame.ts";
+import { BOUND, failText, type FrameSummary, type LongFrame, n1, type Spread, tris } from "./report.ts";
+import type { Gauge } from "./view.ts";
+import { loafSupported } from "./long-frame.ts";
 import { CORE_MEMORY } from "@/kernel/mem.ts";
-
-/** How often the panel repaints. */
-const POLL_MS = 500;
-
-/** The panel reads the recent past, not the whole recording. Folding every
- * frame since load on each repaint grew into a 60 ms task every half second
- * two minutes in — the panel was the stall it was showing. The report still
- * covers the whole window. */
-const LIVE_WINDOW_MS = 10_000;
 
 /** Tags listed under the triangle total — the heaviest few carry the cost. */
 const CENSUS_ROWS = 5;
@@ -70,22 +59,15 @@ const Rule = () => <div className="my-1 border-t border-white/10" />;
 
 const phase = (f: FrameSummary, name: string): Spread => f.phases.find((p) => p.name === name)?.spread ?? { p50: 0, p95: 0, max: 0 };
 
-export function LedgerGauge() {
-  const [g, set_g] = useState<Gauge | null>(null);
-
-  useEffect(() => {
-    const read = () => set_g(ledger_gauge_read(LIVE_WINDOW_MS));
-    read();
-    const id = setInterval(read, POLL_MS);
-    return () => clearInterval(id);
-  }, []);
-
+/** The panel over one read of the window; the overlay polls and hands it down,
+ * since the start/stop buttons above the panel read the same `rec`. */
+export function LedgerGauge({ g }: { g: Gauge | null }) {
   if (g === null) return <div className="text-white/45">no window open</div>;
 
   const { rec, frames: f, poi } = g;
-  const atlas_pct = round((g.atlas.used_px / (g.atlas.size * g.atlas.size)) * 100);
+  const atlasPct = round((g.atlas.used_px / (g.atlas.size * g.atlas.size)) * 100);
   const [kept, possible] = g.faces;
-  const worst_long = g.longs.reduce<LongFrame | null>((w, l) => (!w || l.duration_ms > w.duration_ms ? l : w), null);
+  const worstLong = g.longs.reduce<LongFrame | null>((w, l) => (!w || l.durationMs > w.durationMs ? l : w), null);
 
   return (
     <>
@@ -112,7 +94,7 @@ export function LedgerGauge() {
             v={`${n1(phase(f, "interaction").p95)}/${n1(phase(f, "visible").p95)}/${n1(phase(f, "content").p95)}/${n1(phase(f, "cosmetic").p95)}`}
             warn={phase(f, "interaction").p95 > INTERACTION_WARN_MS}
           />
-          <Row k="bake/scan per s busy" v={`${round(f.backlog_per_s[1])}/${round(f.backlog_per_s[0])}`} />
+          <Row k="bake/scan per s busy" v={`${round(f.backlogPerS[1])}/${round(f.backlogPerS[0])}`} />
           <Rule />
           <Row k="lod c/f/p" v={`${f.last.lod.chunks}/${f.last.lod.in_frustum}/${f.last.lod.pending}`} warn={f.last.lod.pending > 32} />
           <Row
@@ -150,7 +132,7 @@ export function LedgerGauge() {
           <Row k="faces kept" v={`${possible > 0 ? round((kept / possible) * 100) : 0}%`} />
           <Row k="poi place ms/f" v={`${n1(poi.ms)}/${poi.frames} max${poi.max_frames}f hit${poi.hits}`} />
           <Row k="  cand/kept idx" v={`${poi.candidates}/${poi.kept} ${poi.indexed}${poi.dropped > 0 ? ` -${poi.dropped}` : ""}`} warn={poi.dropped > 0} />
-          <Row k="atlas" v={`${g.atlas.size}px ${g.atlas.entries} ${atlas_pct}%`} warn={g.atlas.size > ATLAS_INITIAL && atlas_pct < ATLAS_SPARSE_PCT} />
+          <Row k="atlas" v={`${g.atlas.size}px ${g.atlas.entries} ${atlasPct}%`} warn={g.atlas.size > ATLAS_INITIAL && atlasPct < ATLAS_SPARSE_PCT} />
           <Row k="queue t/p" v={`${f.last.q_terrain}/${f.last.q_poi}`} warn={f.last.q_terrain + f.last.q_poi > 12} />
         </>
       )}
@@ -160,17 +142,17 @@ export function LedgerGauge() {
         <div key={t.category}>
           <Row k={`${t.category}${BOUND[t.category] ? ` (${BOUND[t.category].bound})` : ""} p50/p95`} v={`${n1(t.lat.p50)}/${n1(t.lat.p95)}ms`} />
           <Row k="  ok/ab/err" v={`${t.ok}/${t.aborted}/${t.error}`} warn={t.error > 0} />
-          {t.reasons.length > 0 && <Row k="  top err" v={`${fail_text(t.reasons[0].fail, t.reasons[0].status)} x${t.reasons[0].n}`} warn />}
+          {t.reasons.length > 0 && <Row k="  top err" v={`${failText(t.reasons[0].fail, t.reasons[0].status)} x${t.reasons[0].n}`} warn />}
         </div>
       ))}
 
       <Rule />
-      {!loaf_supported() && <Row k="LoAF" v="unsupported" />}
-      {loaf_supported() && (
+      {!loafSupported() && <Row k="LoAF" v="unsupported" />}
+      {loafSupported() && (
         <Row
           k="LoAF worst"
-          v={worst_long ? `${n1(worst_long.duration_ms)}ms s${n1(worst_long.script_ms)}/r${n1(worst_long.render_ms)}` : `0 (${g.longs.length})`}
-          warn={!!worst_long && worst_long.duration_ms > 100}
+          v={worstLong ? `${n1(worstLong.durationMs)}ms s${n1(worstLong.scriptMs)}/r${n1(worstLong.renderMs)}` : `0 (${g.longs.length})`}
+          warn={!!worstLong && worstLong.durationMs > 100}
         />
       )}
     </>

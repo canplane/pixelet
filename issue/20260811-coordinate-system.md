@@ -3,7 +3,7 @@
 **2026-08-11**, reconstructed from git history — the reasoning behind PVF3, the
 L4 anchor registry, the three-tier camera frame, and the 3857/4326 adapters.
 
-[ARCHITECTURE.md](../ARCHITECTURE.md) describes _what_ these are. This document
+[ARCHITECTURE.pixelet.md](../ARCHITECTURE.pixelet.md) describes _what_ these are. This document
 covers _why_, and what the design went through to get there.
 
 ---

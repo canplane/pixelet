@@ -2,9 +2,9 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 
-type CurrentAddressProps = {
+interface CurrentAddressProps {
   label: string | null;
-};
+}
 
 export function CurrentAddress(props: CurrentAddressProps) {
   const { label } = props;

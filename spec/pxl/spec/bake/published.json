@@ -7,5 +7,5 @@
     "overwriting objects, which is what invalidates CDN edge and browser",
     "caches. Bumping one here is the whole change."
   ],
-  "PUBLISHED_VERSION": { "terrain": "v2", "poi": "v3", "geocode": "v1" }
+  "PUBLISHED_VERSION": { "terrain": "v3", "poi": "v4", "geocode": "v1" }
 }

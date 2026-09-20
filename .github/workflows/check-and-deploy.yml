@@ -7,7 +7,7 @@
 # push's context, which is a subtlety worth not owning.
 #
 # The two deploys differ in what they cost to get wrong, and are gated
-# accordingly. Publishing to the edge is idempotent and reversible from the
+# accordingly. They also run in order, the servers first; see deploy-web. Publishing to the edge is idempotent and reversible from the
 # Cloudflare dashboard, so it runs on every green push to main. Reaching into
 # the production VM over SSH is neither, so it runs only when something it
 # could possibly change did change.
@@ -22,6 +22,12 @@
 #
 # See infra/README.md §3 and §4 for what the two deploys do by hand, which is
 # what these automate and what to fall back to.
+#
+# Every checkout pins `ref: github.sha`. Left to itself the action takes the
+# branch's tip at fetch time, which is not the commit the run was started for
+# once a push lands — or a history is rewritten — while an earlier run is
+# still going. Main is rewritten here as a matter of course, so the default
+# would have runs building something other than what they report.
 
 name: Check and deploy
 
@@ -65,7 +71,9 @@ jobs:
     outputs:
       build_number: ${{ steps.number.outputs.value }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
 
       - uses: denoland/setup-deno@v2
         with:
@@ -76,8 +84,6 @@ jobs:
           rustup toolchain install "$RUST_VERSION" --profile minimal \
             --component clippy,rustfmt --target wasm32-unknown-unknown
           rustup default "$RUST_VERSION"
-          # `test:asset` is a single-file cargo script, which is nightly-only.
-          rustup toolchain install nightly --profile minimal
 
       - name: Install Binaryen
         run: |
@@ -88,7 +94,7 @@ jobs:
       # Keyed on the lockfiles, so a run that changed no dependency restores
       # exactly and a run that changed one still starts from the nearest
       # earlier tree rather than from nothing.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry/index
@@ -98,7 +104,7 @@ jobs:
           key: rust-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ hashFiles('crates/Cargo.lock') }}
           restore-keys: rust-${{ runner.os }}-${{ env.RUST_VERSION }}-
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             ~/.cache/deno
@@ -124,15 +130,27 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: echo "value=$(./script/build_counter.ts)" >> "$GITHUB_OUTPUT"
+        run: echo "value=$(./script/build-counter.ts)" >> "$GITHUB_OUTPUT"
 
   deploy-web:
     name: publish the client and the Worker
-    needs: gate
+    # After the servers and not beside them. A new client against an old server
+    # is the direction that breaks; an old client against a new one is not, so
+    # long as the server still answers the old shape for a release. That order
+    # is what the b15 deploy followed by hand
+    # (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md) and
+    # what running the two in parallel left to whichever finished first.
+    #
+    # A failed server deploy now keeps the client back too, which is the
+    # failure worth having: nothing goes out ahead of what it talks to.
+    needs: [gate, deploy-server]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # What landed, not what was decided: the scope step says whether to try and
+    # the last step says whether it worked, because a job that fails still
+    # carries its earlier steps' outputs and the build log believed one.
     outputs:
-      published: ${{ steps.scope.outputs.run }}
+      published: ${{ steps.landed.outputs.yes }}
     # The gate's group, so that a run cannot publish while the next one is
     # already taking its number: the bucket's counter and what is live on
     # plei.me move together.
@@ -142,8 +160,9 @@ jobs:
     steps:
       # The whole history, as deploy-server takes it and for the same reason:
       # the filter below diffs the push's base rather than its last commit.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       # Everything the bundle is built from. A whitelist rather than a list of
@@ -194,7 +213,7 @@ jobs:
             | tar xz -C /opt
           echo "/opt/binaryen-version_${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         if: steps.scope.outputs.run == 'true'
         with:
           path: |
@@ -205,7 +224,7 @@ jobs:
           key: rust-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ hashFiles('crates/Cargo.lock') }}
           restore-keys: rust-${{ runner.os }}-${{ env.RUST_VERSION }}-
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         if: steps.scope.outputs.run == 'true'
         with:
           path: |
@@ -226,13 +245,19 @@ jobs:
           PXL_BUILD_NUMBER: ${{ needs.gate.outputs.build_number }}
         run: deno task deploy
 
+      # Last, so a failure anywhere above leaves it unset.
+      - id: landed
+        if: steps.scope.outputs.run == 'true'
+        run: echo "yes=true" >> "$GITHUB_OUTPUT"
+
   deploy-server:
     name: rebuild the servers on the VM
     needs: gate
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # As deploy-web: what landed, not what was decided.
     outputs:
-      rebuilt: ${{ steps.scope.outputs.run }}
+      rebuilt: ${{ steps.landed.outputs.yes }}
     concurrency:
       group: deploy-server
       cancel-in-progress: false
@@ -240,8 +265,9 @@ jobs:
       # The whole history, because the filter below diffs the push's base
       # rather than its last commit: a push of several commits where only a
       # middle one touched the server would otherwise look like it did not.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       # Everything the two images are built from, plus the compose file and the
@@ -274,6 +300,7 @@ jobs:
           VM_HOST: ${{ secrets.VM_HOST }}
           VM_USER: ${{ secrets.VM_USER }}
           VM_KNOWN_HOSTS: ${{ secrets.VM_KNOWN_HOSTS }}
+          SHA: ${{ github.sha }}
         run: |
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/id_deploy
@@ -292,12 +319,25 @@ jobs:
           # at start: an `up --build` alone leaves a stale relay behind a fresh
           # server, which on 09-18 looked like /api/* answering 404 from the
           # wrong process rather than like a failure.
-          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$VM_USER@$VM_HOST" bash -eu <<'REMOTE'
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes "$VM_USER@$VM_HOST" bash -eu -s -- "$SHA" <<'REMOTE'
+            sha="$1"
             cd /opt/pixelet
             # reset rather than pull: the VM is a deploy target and nothing is
             # authored on it. infra/prod/.env is gitignored and survives this.
             git fetch --prune origin main
-            git reset --hard origin/main
+            # The commit this run was started for, so the VM's half of a build
+            # is the half the runner published rather than whatever main has
+            # reached by the time the ssh lands. A rewritten history can leave
+            # that commit unreachable here, and a deploy that refused over it
+            # would leave production on the old code for something this project
+            # does on purpose — so it says so and takes the tip instead.
+            git fetch origin "$sha" 2>/dev/null || true
+            if git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+              git reset --hard "$sha"
+            else
+              echo "::warning::$sha is unreachable on the VM; the servers are built from origin/main instead"
+              git reset --hard origin/main
+            fi
             cd infra/prod
             docker compose up -d --build --force-recreate
             docker image prune -f
@@ -312,6 +352,11 @@ jobs:
       - name: Smoke-test the origin directly
         if: steps.scope.outputs.run == 'true'
         run: deno task smoke https://api.plei.me --origin
+
+      # Last, so a failure anywhere above leaves it unset.
+      - id: landed
+        if: steps.scope.outputs.run == 'true'
+        run: echo "yes=true" >> "$GITHUB_OUTPUT"
 
   # What plei.me answers is the two deploys composed, so it is asked once both
   # have settled rather than from inside either. One of the twelve checks,
@@ -330,9 +375,66 @@ jobs:
     if: ${{ !cancelled() && !failure() && (needs.deploy-web.outputs.published == 'true' || needs.deploy-server.outputs.rebuilt == 'true') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
       - name: Smoke-test the published routes
         run: deno task smoke https://plei.me
+
+  # The one thing the repository could not answer about itself: what went out
+  # in a given build. The counter is an object in the bucket and deliberately
+  # outside git (script/build-counter.ts), so `b18` existed with nothing to
+  # look it up by, and the question meant opening this workflow's run history.
+  #
+  # The record is the commit subjects and not a commit id, because main's
+  # history is rewritten here as a matter of course: a tag, a stored sha and
+  # BUILD_ID's own `r<count>-<hash>` all name something that may not exist by
+  # the time anyone looks, while text written while the history is still that
+  # history survives every rewrite after it. It goes beside the counter for the
+  # counter's own reason — no squash, rebase or fresh clone reaches what is not
+  # in git.
+  #
+  # Not gated on the smoke, which is why it does not need it: a build that
+  # answered badly still went out, and what is recorded is what is live rather
+  # than what is well. A number with no record was counted and never published.
+  #
+  # It runs after both deploys, so a red job here has already let the deploy
+  # through — it reports a missing record and takes nothing back.
+  record:
+    name: record what this build carried
+    needs: [gate, deploy-web, deploy-server]
+    # `!failure()` deliberately absent where the smoke has it: one half failing
+    # does not unpublish the other, and a build that reached the edge and not
+    # the VM is exactly the one worth having a line about.
+    if: ${{ !cancelled() && (needs.deploy-web.outputs.published == 'true' || needs.deploy-server.outputs.rebuilt == 'true') }}
+    runs-on: ubuntu-latest
+    # R2 has no append, so the write is read-add-write as the counter's is, and
+    # this is what keeps two of them from losing a line. Its own group rather
+    # than the counter's: a run may record while the next one is already being
+    # numbered, and the two objects have nothing to say to each other.
+    concurrency:
+      group: build-log
+      cancel-in-progress: false
+    steps:
+      # The whole history, because the log counts commits since the build it
+      # last recorded and a shallow checkout cannot reach back that far.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Append this build to the log
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          ./script/build-log.ts --record "${{ needs.gate.outputs.build_number }}" \
+            ${{ needs.deploy-web.outputs.published == 'true' && '--web' || '' }} \
+            ${{ needs.deploy-server.outputs.rebuilt == 'true' && '--server' || '' }}

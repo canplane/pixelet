@@ -6,6 +6,7 @@
 //! says why each is what it is.
 
 pub mod config;
+#[path = "terrain/config.spec.rs"]
 pub mod config_spec;
 pub mod elevation;
 pub mod fixed;

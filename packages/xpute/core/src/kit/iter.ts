@@ -1,5 +1,6 @@
 // @xpute/core/kit/iter.ts
 
+import type { u32 } from "../abi/word.ts";
 export function* dedupe<T>(it: Iterable<T>): IterableIterator<T> {
   const seen = new Set<T>();
   for (const e of it) {
@@ -19,7 +20,7 @@ export function* except<T>(universe: Iterable<T>, excluded: Iterable<T>): Iterab
   }
 }
 
-export function* take<T>(it: Iterable<T>, k: number): IterableIterator<T> {
+export function* take<T>(it: Iterable<T>, k: u32): IterableIterator<T> {
   if (k <= 0) return;
   let i = 0;
   for (const e of it) {

@@ -6,7 +6,8 @@
  * an `out` the caller owns; nothing allocates.
  */
 
-import type { f64 } from "../abi/word.ts";
+import type { F64Array } from "../abi/array.ts";
+import type { f64, u32 } from "../abi/word.ts";
 import type { Vec3 } from "./vec3.ts";
 
 export type Mat4 = Float64Array;
@@ -170,7 +171,7 @@ export function mat4_clip_w(m: Mat4, x: f64, y: f64, z: f64): f64 {
  * the normals pointing in, normalized: a point is inside when
  * n · p + d ≥ 0 for every plane. Left, right, bottom, top, near, far.
  */
-export function mat4_frustum_planes(out: Float64Array, m: Mat4): Float64Array {
+export function mat4_frustum_planes(out: F64Array, m: Mat4): F64Array {
   const rows = [
     [m[0], m[4], m[8], m[12]],
     [m[1], m[5], m[9], m[13]],
@@ -178,7 +179,7 @@ export function mat4_frustum_planes(out: Float64Array, m: Mat4): Float64Array {
     [m[3], m[7], m[11], m[15]],
   ];
   const w = rows[3];
-  const put = (k: number, a: f64[], sign: 1 | -1) => {
+  const put = (k: u32, a: f64[], sign: 1 | -1) => {
     const nx = w[0] + sign * a[0], ny = w[1] + sign * a[1], nz = w[2] + sign * a[2], d = w[3] + sign * a[3];
     const l = Math.hypot(nx, ny, nz) || 1;
     out[k * 4] = nx / l;

@@ -735,7 +735,7 @@ dev:     /geo/tiles/* → 3001 /asset/* → 3001 /geo/* → 3000         /api/* 
 
 **The addresses are generated.** `spec/route.json` is the one place the roots
 and the branches are written, and `script/spec.ts` writes three files from it —
-`apps/web/src/config/route_spec.ts`, `apps/web/worker/route_spec.ts` and
+`apps/web/src/config/route-spec.ts`, `apps/web/worker/route-spec.ts` and
 `crates/pxl/kernel/src/shell/config/route_spec.rs`. They had been five
 hand-kept copies before, which is four too many for a constant that only ever
 fails at the edge.

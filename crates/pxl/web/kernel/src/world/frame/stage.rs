@@ -22,7 +22,7 @@ use crate::layer::character::companion::companion_skins;
 use crate::layer::character::preview::preview_rows;
 use crate::layer::decor::asset_store::decor_bundle_assets;
 use crate::layer::environment::config::rim_cfg;
-use crate::layer::environment::state::SKY_DOME_SCALE;
+use crate::layer::environment::state::SKY_RADIUS;
 use crate::sched::ledger::record::{DrawCensus, TexturesMb, CENSUS_LEN};
 use crate::shell::setting::store::settings_store;
 use crate::world::change::request_world_tick;
@@ -56,7 +56,7 @@ pub fn stage_write() {
     s[STAGE_AT::EDGE_WIDTH] = EDGE_WIDTH;
     s[STAGE_AT::RIM_INTENSITY] = if settings.show_rim_light { rim_cfg::INTENSITY } else { 0.0 };
     s[STAGE_AT::SHADOWS] = if settings.show_shadow_map { 1.0 } else { 0.0 };
-    s[STAGE_AT::SKY_RADIUS] = SKY_DOME_SCALE;
+    s[STAGE_AT::SKY_RADIUS] = SKY_RADIUS;
     s[STAGE_AT::MSAA] = if settings.msaa { 1.0 } else { 0.0 };
 }
 

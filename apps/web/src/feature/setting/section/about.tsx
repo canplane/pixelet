@@ -8,9 +8,9 @@ import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/
 import { PUBLISHED_VERSION } from "@/config/route.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
-const env_label: string = APP_ENV.charAt(0).toUpperCase() + APP_ENV.slice(1);
+const envLabel: string = APP_ENV.charAt(0).toUpperCase() + APP_ENV.slice(1);
 
-function build_label(): string {
+function buildLabel(): string {
   const d = new Date(BUILD_TIME);
   if (Number.isNaN(d.getTime())) return BUILD_TIME;
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -34,8 +34,8 @@ export function AboutSection() {
         <span>© 2025 pixelet. All rights reserved.</span>
 
         <span className="text-muted-foreground/70">
-          {APP_ENV !== "production" && `${env_label} · `}
-          {`${BUILD_NUMBER} · ${BUILD_ID} · ${build_label()}`}
+          {APP_ENV !== "production" && `${envLabel} · `}
+          {`${BUILD_NUMBER} · ${BUILD_ID} · ${buildLabel()}`}
           {` · ${PUBLISHED_TILES ? `Terrain ${PUBLISHED_VERSION.terrain}` : "Live terrain"}`}
           {` · ${PUBLISHED_TILES ? `POI ${PUBLISHED_VERSION.poi}` : "Live POI"}`}
           {` · Object v${object_storage_version}`}

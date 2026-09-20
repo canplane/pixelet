@@ -1,8 +1,8 @@
 # Third-party notices
 
-Three files in this repository are ports of someone else's code rather than
-our own, and their licences ask for a notice to travel with the copy. Two
-carry it inside the file; the third cannot, so it is reproduced here.
+Two places in this repository are ports of someone else's code rather than
+our own, and their licences ask for a notice to travel with the copy. One
+carries it inside the file; the other cannot, so it is reproduced here.
 
 This file covers copied source only. Crates and npm packages that are merely
 depended on are not listed: `crates/Cargo.toml` and `apps/web/deno.json`
@@ -41,14 +41,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## The two that carry their own
+## evanw/buddy-malloc — `crates/xpute/core/src/alloc/buddy_tree.rs`
 
-- **[evanw/buddy-malloc][buddy]**, MIT — `crates/xpute/core/src/alloc/buddy_tree.rs`
-  is that allocator line for line, and the notice is at the top of it.
-- **FreeBSD msun** (SunPro), whose permission is granted "provided that this
-  notice is preserved" — reached through the `libm` crate (MIT), which preserves it
-  once per ported function, beside the `origin:` line naming the source file
-  each came from.
+That file is [evanw/buddy-malloc][buddy] (MIT) line for line, and the notice
+is at the top of it.
 
 [buddy]: https://github.com/evanw/buddy-malloc
 

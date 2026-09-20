@@ -292,8 +292,8 @@ export type AnyElementOf<T extends AnyTypedArray> = T extends U8Array ? u8
   : never;
 
 /** Minimal ctor shape for zero-copy typed-array view rewraps. */
-export type AnyTypedArrayCtor<T extends AnyTypedArray> = {
+export interface AnyTypedArrayCtor<T extends AnyTypedArray> {
   new (length: number): T;
   new (buffer: ArrayBufferLike, byteOffset: number, length: number): T;
   readonly BYTES_PER_ELEMENT: number;
-};
+}

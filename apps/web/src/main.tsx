@@ -13,11 +13,11 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "@/app/app.tsx";
-import { bootstrap_app } from "@/app/bootstrap.ts";
+import { bootstrapApp } from "@/app/bootstrap.ts";
 import "@/app/style/index.css";
 
 try {
-  bootstrap_app();
+  bootstrapApp();
 
   const container = document.getElementById("root");
   if (!container) throw new Error("web: missing root container: #root");

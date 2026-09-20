@@ -1,15 +1,19 @@
 // @pxl/web/shared/ui/toast/store.ts
 
+import type { i32, u32 } from "@xpute/core/abi/word.ts";
 import type { ReactNode } from "react";
 
-export type ToastRenderInfo = {
-  index: number;
-  stackSize: number;
+export interface ToastRenderInfo {
+  index: u32;
+  stackSize: u32;
   isRemoving: boolean;
-};
+}
 export type ToastRenderFn = (info: ToastRenderInfo) => ReactNode;
 
-type Entry = { id: string; render: ToastRenderFn };
+interface Entry {
+  id: string;
+  render: ToastRenderFn;
+}
 
 const REMOVE_GRACE_MS = 200;
 
@@ -120,28 +124,28 @@ export function subscribeToastEntries(listener: () => void): () => void {
   };
 }
 
-type RotationListener = (rotation: number, direction: -1 | 0 | 1) => void;
+type RotationListener = (rotation: u32, direction: -1 | 0 | 1) => void;
 
 let rotation = 0;
 const rotationListeners = new Set<RotationListener>();
 
-function notify_rotation(direction: -1 | 0 | 1): void {
+function notifyRotation(direction: -1 | 0 | 1): void {
   for (const listener of rotationListeners) listener(rotation, direction);
 }
 
-export function getToastStackRotation(): number {
+export function getToastStackRotation(): u32 {
   return rotation;
 }
 
-export function rotateToastStack(delta: number): void {
+export function rotateToastStack(delta: i32): void {
   rotation += delta;
-  notify_rotation(delta < 0 ? -1 : delta > 0 ? 1 : 0);
+  notifyRotation(delta < 0 ? -1 : delta > 0 ? 1 : 0);
 }
 
 export function resetToastStackRotation(): void {
   if (rotation === 0) return;
   rotation = 0;
-  notify_rotation(0);
+  notifyRotation(0);
 }
 
 export function subscribeToastStackRotation(listener: RotationListener): () => void {

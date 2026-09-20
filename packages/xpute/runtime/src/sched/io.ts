@@ -33,10 +33,11 @@
  * turn.
  */
 
-import type { f64, u32, u64 } from "@xpute/core/abi/word.ts";
+import type { F64Array, U32Array, U64Array, U8Array } from "@xpute/core/abi/array.ts";
+import type { f64, i32, u32, u64 } from "@xpute/core/abi/word.ts";
 import { now } from "../clock.ts";
 
-export type Demand = {
+export interface Demand {
   /** Stable identity across syncs. Two demands sharing a key are the same
    * work: re-submitting one already queued updates its priority, one
    * already in flight is left alone. */
@@ -45,24 +46,32 @@ export type Demand = {
   category: u32;
   /** Lower runs sooner. */
   priority: f64;
-};
+}
 
 /** A demand that finished, and when it was enqueued, started and ended. */
-export type Settled = { demand: Demand; enqueue_ms: f64; start_ms: f64; end_ms: f64 };
+export interface Settled {
+  demand: Demand;
+  enqueue_ms: f64;
+  start_ms: f64;
+  end_ms: f64;
+}
 
-export type IoCounts = { queued: u32; running: u32 };
+export interface IoCounts {
+  queued: u32;
+  running: u32;
+}
 
 const QUEUED = 1;
 const RUNNING = 2;
 
 export class IoQueue {
-  private readonly key: BigUint64Array;
-  private readonly category: Uint32Array;
-  private readonly priority: Float64Array;
-  private readonly state: Uint8Array;
-  private readonly abort_sent: Uint8Array;
-  private readonly enqueue_ms: Float64Array;
-  private readonly start_ms: Float64Array;
+  private readonly key: U64Array;
+  private readonly category: U32Array;
+  private readonly priority: F64Array;
+  private readonly state: U8Array;
+  private readonly abort_sent: U8Array;
+  private readonly enqueue_ms: F64Array;
+  private readonly start_ms: F64Array;
   private len = 0;
   private readonly started_rows: Demand[] = [];
   private readonly aborted_keys: u64[] = [];
@@ -78,12 +87,12 @@ export class IoQueue {
     this.start_ms = new Float64Array(capacity);
   }
 
-  private find(key: u64): number {
+  private find(key: u64): i32 {
     for (let k = 0; k < this.len; k++) if (this.key[k] === key) return k;
     return -1;
   }
 
-  private remove(at: number): void {
+  private remove(at: u32): void {
     const last = --this.len;
     this.key[at] = this.key[last];
     this.category[at] = this.category[last];

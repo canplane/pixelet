@@ -12,4 +12,5 @@ pub mod placement;
 pub mod repository;
 pub mod store;
 pub mod theme;
+#[path = "poi/theme.spec.rs"]
 pub mod theme_spec;

@@ -124,7 +124,7 @@ means a generic kit, not the centre of pixelet.
 The TypeScript package keeps `@pxl/shared` for now. Once the server and the
 bake tools are Rust, what the shell still reads of it (the command numbers,
 the catalogs, the assets' paths) is generated into the web app from the JSON
-the way the other `*_spec.ts` files are, and the package goes.
+the way the other `*-spec.ts` files are, and the package goes.
 
 ## The spec's source and the shell's tree
 

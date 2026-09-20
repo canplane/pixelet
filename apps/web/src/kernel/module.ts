@@ -20,7 +20,8 @@
  * every static host gives.
  */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import type { QuantumPolicy } from "@xpute/runtime/sched/quantum.ts";
 
 import { gpu_imports } from "@/kernel/render/gpu.ts";
@@ -28,26 +29,26 @@ import { EXPORT, IMPORT } from "@/kernel/abi/symbol.ts";
 
 /** What the module exports: the boot block and the doorbell. Every address
  * is into the memory it was given. */
-export type KernelExports = {
+export interface KernelExports {
   memory: WebAssembly.Memory;
   /** Lays out the memory the module was given, the first time; the boot
    * block's address. */
   boot(): u32;
   /** Hands the kernel a turn of `quota_ms`; when it wants the next, in ms
    * (@xpute/runtime/sched/quantum.ts). */
-  interrupt(quota_ms: number): number;
+  interrupt(quota_ms: f64): f64;
   /** The ledger, where it lies: the address of `READ`'s u32 words
-   * (dev/ledger/spec.ts) — the summary block over the last
+   * (dev/ledger/ledger.spec.ts) — the summary block over the last
    * `window_ms`, Infinity for the whole recording, and the frame, task and
    * worst-frame rings. Read in place and good until the next turn; nothing is
    * built for it, and nothing crosses the control ring. */
-  ledger_read(window_ms: number): u32;
+  ledger_read(window_ms: f64): u32;
   /** The rows the ledger's live stream kept since the last clear: the address
    * of `LOG`'s u32 words. */
   ledger_log(): u32;
   /** Forgets the stream's rows once they have been read. */
   ledger_log_clear(): void;
-};
+}
 
 /** crates/pxl/web/wasm/src/lib.rs's boot block, word by word: where the module's
  * own front ends; where the submission and completion rings are; then `.fixed`
@@ -60,13 +61,13 @@ export const BOOT = { data_end: 0, sq: 1, cq: 2, fixed: 3, heap: 6, quantum: 9, 
 const BOOT_WORDS = 13;
 
 /** The boot block, read in place. */
-export function boot_block(pxl: KernelExports): Uint32Array {
+export function boot_block(pxl: KernelExports): U32Array {
   return new Uint32Array(pxl.memory.buffer, pxl.boot(), BOOT_WORDS);
 }
 
 /** The quantum the kernel declared, for the central scheduler to grant by. */
-export function quantum_policy(boot: Uint32Array): QuantumPolicy {
-  const at = (i: number) => boot[BOOT.quantum + i] / 1000;
+export function quantum_policy(boot: U32Array): QuantumPolicy {
+  const at = (i: u32) => boot[BOOT.quantum + i] / 1000;
   return { margin_share: at(0), batch_frames: at(1), settle_ms: at(2) };
 }
 
@@ -80,7 +81,7 @@ const bodies = new Map<u32, Uint8Array>();
 let next_body: u32 = 1;
 
 /** Holds `bytes` for the kernel: the number a command names them by. */
-export function hold_body(bytes: Uint8Array): u32 {
+export function hold_body(bytes: U8Array): u32 {
   const body = next_body;
   next_body = (next_body + 1) >>> 0 || 1;
   bodies.set(body, bytes);
@@ -100,7 +101,7 @@ export function range_at(memory: WebAssembly.Memory, at: u32): readonly [u32, u3
  *
  * The core memory is reserved here and never shared, so the cast holds; what
  * it buys is a view the platform accepts where an `ArrayBuffer` is asked for. */
-export function bytes_at(memory: WebAssembly.Memory, at: u32, len: u32): Uint8Array<ArrayBuffer> {
+export function bytes_at(memory: WebAssembly.Memory, at: u32, len: u32): U8Array {
   return new Uint8Array(memory.buffer as ArrayBuffer, at, len);
 }
 

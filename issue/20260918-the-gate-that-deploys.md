@@ -92,7 +92,7 @@ is still the fallback and is still outside the group — which is now the one wa
 to collide, and is worth knowing rather than preventing.
 
 > Since 2026-09-19 the number is the gate's, not the deploy's: every build of
-> main takes one whether or not it ships, `script/build_counter.ts` is what
+> main takes one whether or not it ships, `script/build-counter.ts` is what
 > takes it, and `deploy.ts` is handed it. The group covers both jobs, and a
 > hand deploy publishes unnumbered rather than taking one.
 
@@ -141,10 +141,9 @@ four real bases, including the force-push and dispatch cases that have none;
 the Binaryen URL; and the monthly refresh's exact command chain, run locally
 against `_meta/land_pages.json` fetched from the bucket the way CI fetches it.
 
-Not verified, and cannot be from here: the workflow actually running. It needs
-its secrets set, and the monthly refresh should be tried once through
-`workflow_dispatch` before 10-01 rather than discovered by the cron.
+Running: the workflow took build numbers and deployed both halves on 09-18
+(b15, five runs, one red on a smoke that the next push fixed), and the
+monthly refresh ran green through `workflow_dispatch` the same day, so the
+cron on 10-01 repeats a path that has been walked.
 
-Done since: `apps/api` is deleted and what survived it moved to `tool/`. The
-refresh is still unrun — which is a risk taken knowingly, against a checkpoint
-branch, rather than the gate the audit called it.
+Done since: `apps/api` is deleted and what survived it moved to `tool/`.

@@ -122,11 +122,11 @@ migration.
   `render/mesh/decor_block.rs`, `render/mesh/mesh_block.rs`,
   `render/gltf/gltf.rs`
 
-Files generated from JSON (`*_spec.rs`, `billboard/order.rs`,
+Files generated from JSON (`*_spec.rs`, `billboard/order.spec.rs`,
 `decor/kind.rs`) are not counted.
 
 `crates/pxl/shared`: `spec/cmd.rs`, `spec/fetch.rs`, `spec/message.rs` and
-`spec/cell/cube_type.rs` arrived after the checkpoint together with their
+`spec/cell/cube_type.spec.rs` arrived after the checkpoint together with their
 TypeScript. They are new protocol, not moved files.
 
 ## TypeScript with no Rust found

@@ -8,7 +8,7 @@
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
-import { Cmd } from "@/kernel/abi/cmd.ts";
+import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
 import { bind_surface, unbind_surface } from "@/kernel/render/gpu.ts";
 import { dpr, request_frame } from "@/kernel/sched.ts";
@@ -17,7 +17,10 @@ import { dpr, request_frame } from "@/kernel/sched.ts";
 export const SURFACE_WORLD = 0;
 export const SURFACE_CASE = 1;
 
-export type OpenSurface = { handle: u32; close: () => void };
+export interface OpenSurface {
+  handle: u32;
+  close: () => void;
+}
 
 /** Hands `canvas` to the kernel to draw `role` into, and follows its layout
  * box in device pixels. The handle is 0 when the kernel has no surface left,
@@ -30,11 +33,11 @@ export type OpenSurface = { handle: u32; close: () => void };
  * does not (Safari), the CSS box times the pixel ratio stands in, and a zoom —
  * which changes the ratio and not the box — is caught by the window's resize. */
 export function open_surface(canvas: HTMLCanvasElement, role: u32): OpenSurface {
-  const handle = CORE_BUILD.call(Cmd.SURFACE_CREATE, packet((b) => b.u32(role)), (result) => result >>> 0);
+  const handle = CORE_BUILD.call(Command.SURFACE_CREATE, packet((b) => b.u32(role)), (result) => result >>> 0);
   if (handle === 0) return { handle, close: () => {} };
   bind_surface(handle, canvas);
-  const send = (width: number, height: number) => {
-    CORE_BUILD.send(0, Cmd.SURFACE_UPDATE, packet((b) => b.u32(handle).u32(width).u32(height).f64(dpr())));
+  const send = (width: u32, height: u32) => {
+    CORE_BUILD.send(0, Command.SURFACE_UPDATE, packet((b) => b.u32(handle).u32(width).u32(height).f64(dpr())));
     request_frame();
   };
   const send_box = () => send(round(canvas.clientWidth * dpr()), round(canvas.clientHeight * dpr()));
@@ -55,7 +58,7 @@ export function open_surface(canvas: HTMLCanvasElement, role: u32): OpenSurface 
     close: () => {
       globalThis.removeEventListener("resize", send_box);
       observer.disconnect();
-      CORE_BUILD.call(Cmd.SURFACE_DELETE, packet((b) => b.u32(handle)), (result) => result);
+      CORE_BUILD.call(Command.SURFACE_DELETE, packet((b) => b.u32(handle)), (result) => result);
       unbind_surface(handle);
     },
   };

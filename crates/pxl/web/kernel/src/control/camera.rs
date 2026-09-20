@@ -5,6 +5,7 @@
 //! drawn, the raycast a control needs, and how far one gets before terrain is
 //! in the way.
 
+#[path = "camera/config.spec.rs"]
 pub mod config;
 pub mod damping;
 pub mod input;

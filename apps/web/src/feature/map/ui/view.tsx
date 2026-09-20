@@ -22,15 +22,15 @@ export function MapView() {
   const ref = useRef<HTMLCanvasElement>(null);
   /** The world's canvas once the kernel has it: the frame loop's viewport and
    * the pointer's target. */
-  const [canvas, set_canvas] = useState<HTMLCanvasElement | null>(null);
+  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
     const surface = open_surface(element, SURFACE_WORLD);
-    set_canvas(element);
+    setCanvas(element);
     return () => {
-      set_canvas(null);
+      setCanvas(null);
       surface.close();
     };
   }, []);

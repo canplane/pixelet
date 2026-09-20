@@ -41,7 +41,7 @@
  * there rather than grown into.
  */
 
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
 import { now } from "../clock.ts";
 import { type PassStats, run_under_budget } from "./frame_budget.ts";
 
@@ -57,14 +57,14 @@ export const PHASES = ["interaction", "visible", "content", "cosmetic", "report"
 const OFFS_MAX = 8;
 
 /** The guest's numbers. */
-export type TickPolicy = {
+export interface TickPolicy {
   /** How far a pass may run past what is left, so a step that costs real
    * time and reports nothing done cannot walk the whole list —
    * frame_budget.ts's hard ceiling, as slack over the pool. */
   hard_slack_ms: f64;
   /** The share of the budget held back from the visible phase for content. */
   content_share: f64;
-};
+}
 
 /**
  * One turn's allowance, shared by every phase.
@@ -123,19 +123,30 @@ export type TickStep<S> = (ctx: TickContext<S>) => void;
 /** Wall time per step, cumulative until reset. The phase totals can say a
  * phase is heavy and not which of its steps is; this can. Two registrations
  * under one name in one phase add into one row. */
-export type StepStats = { phase: Phase; name: string; ms: f64; count: u32; max_ms: f64 };
+export interface StepStats {
+  phase: Phase;
+  name: string;
+  ms: f64;
+  count: u32;
+  max_ms: f64;
+}
 
 /** What a turn spent: what the guest reports back to the central scheduler. */
-export type TickReport = {
+export interface TickReport {
   budget_ms: f64;
   phase_ms: f64[];
   /** The whole tick, interaction through report. */
   total_ms: f64;
   /** A turn after this one was asked for. */
   invalidated: boolean;
-};
+}
 
-type Registered<S> = { id: u32; phase: Phase; step: TickStep<S>; name: string };
+interface Registered<S> {
+  id: u32;
+  phase: Phase;
+  step: TickStep<S>;
+  name: string;
+}
 
 export class Tick<S> {
   private readonly registry: Registered<S>[] = [];
@@ -178,7 +189,7 @@ export class Tick<S> {
     return this.last_report;
   }
 
-  private remove(id: u32): number {
+  private remove(id: u32): i32 {
     const at = this.registry.findIndex((r) => r.id === id);
     if (at >= 0) this.registry.splice(at, 1);
     return at;

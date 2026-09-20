@@ -8,13 +8,14 @@
  * numbered by (pxl-asset-bake/table.rs renders both).
  */
 
-import { INGESTED, SHEET } from "./ingested-spec.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
+import { INGESTED, SHEET } from "./ingested.spec.ts";
 
 const KEYS: readonly string[] = Object.values(INGESTED).map((a) => a.key);
 
 /** The bucket key a load number names, or null for a number the table does
  * not give out. */
-export function load_key(number: number): string | null {
+export function load_key(number: u32): string | null {
   if (number === KEYS.length) return SHEET.key;
   return KEYS[number] ?? null;
 }

@@ -9,12 +9,12 @@
 import type { u32 } from "../abi/word.ts";
 import type { AnyElementOf, AnyTypedArray, AnyTypedArrayCtor } from "../abi/array.ts";
 import { MarshalError } from "@xpute/core/status/error.ts";
-import { Errno } from "@xpute/core/status/errno.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
 
-export type ArenaOptions = {
+export interface ArenaOptions {
   init_cap?: u32; // soft initial size hint
   max_cap?: u32; // hard size limit
-};
+}
 
 // ============ Arena ============
 

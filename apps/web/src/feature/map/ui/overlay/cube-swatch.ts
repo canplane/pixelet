@@ -1,12 +1,12 @@
 // @pxl/web/feature/map/ui/overlay/cube-swatch.ts
 
 import type { CSSProperties } from "react";
-import { placeable_cube_hex, type PlaceableCube } from "@/catalog/cell/mod.ts";
+import { type PlaceableCube, placeableCubeHex } from "@/catalog/cell/mod.ts";
 import { asset_url } from "@/config/route.ts";
-import { texture_key } from "@/feature/map/object/tex.ts";
+import { textureKey } from "@/feature/map/object/tex.ts";
 
-function placeable_cube_texture_url(cube: PlaceableCube): string | null {
-  const key = texture_key(cube, "top");
+function placeableCubeTextureUrl(cube: PlaceableCube): string | null {
+  const key = textureKey(cube, "top");
   return key ? asset_url(key) : null;
 }
 
@@ -15,10 +15,10 @@ function placeable_cube_texture_url(cube: PlaceableCube): string | null {
  * hover_cursor.tsx's own ghost preview already relies on for
  * object/tex.ts's own get_object_texture). Shared by drawer-modal.tsx and
  * mode-bar.tsx so their swatches never drift apart. */
-export function cube_swatch_style(cube: PlaceableCube): CSSProperties {
-  const texture_url = placeable_cube_texture_url(cube);
-  if (texture_url) {
-    return { backgroundImage: `url(${texture_url})`, backgroundSize: "cover", imageRendering: "pixelated" };
+export function cubeSwatchStyle(cube: PlaceableCube): CSSProperties {
+  const textureUrl = placeableCubeTextureUrl(cube);
+  if (textureUrl) {
+    return { backgroundImage: `url(${textureUrl})`, backgroundSize: "cover", imageRendering: "pixelated" };
   }
-  return { backgroundColor: placeable_cube_hex(cube) ?? undefined };
+  return { backgroundColor: placeableCubeHex(cube) ?? undefined };
 }

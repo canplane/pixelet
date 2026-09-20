@@ -21,12 +21,13 @@
 // be gone, and a 200 from one means a relay is still carrying the pre-09-18
 // shape.
 
-import { PUBLISHED_VERSION } from "../apps/web/src/config/published-spec.ts";
-import { INGESTED } from "../apps/web/src/catalog/asset/ingested-spec.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
+import { PUBLISHED_VERSION } from "../apps/web/src/config/published.spec.ts";
+import { INGESTED } from "../apps/web/src/catalog/asset/ingested.spec.ts";
 
-// The generated constants directly: route-spec.ts imports nothing itself, and
+// The generated constants directly: route.spec.ts imports nothing itself, and
 // the root has no mapping into apps/web because nothing else here reaches in.
-import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT } from "../apps/web/src/config/route-spec.ts";
+import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT } from "../apps/web/src/config/route.spec.ts";
 
 /** A land page in Gangnam — the one infra/README's own procedure names, so a
  * check here and a check by hand are looking at the same object. */
@@ -36,9 +37,13 @@ const PAGE = "6359575375314944";
  * point is that the bucket answers the asset root, not which model does. */
 const ASSET_KEY = Object.values(INGESTED)[0].key;
 
-type Check = { path: string; want: number; why: string };
+interface Check {
+  path: string;
+  want: u32;
+  why: string;
+}
 
-function edge_checks(): Check[] {
+function edgeChecks(): Check[] {
   const tile = (kind: keyof typeof PUBLISHED_VERSION) => `${TILE_ROOT}/${kind}/${PUBLISHED_VERSION[kind]}/${PAGE}`;
   return [
     { path: "/", want: 200, why: "the app itself, from the Worker's static assets" },
@@ -48,7 +53,7 @@ function edge_checks(): Check[] {
     { path: tile("poi"), want: 200, why: "a POI page" },
     { path: tile("geocode"), want: 200, why: "a reverse-geocode page" },
     { path: `/${ASSET_KEY}`, want: 200, why: "a content-addressed asset, its own root" },
-    ...common_checks(),
+    ...commonChecks(),
     // The pre-09-18 shape. A 200 from any of these means a relay somewhere is
     // still claiming the old root.
     { path: `${API_ROOT}/tiles/terrain/${PUBLISHED_VERSION.terrain}/${PAGE}`, want: 404, why: "the old tile address, which must be gone" },
@@ -58,7 +63,7 @@ function edge_checks(): Check[] {
 
 /** The gates and the fallbacks, which the edge and the origin answer alike —
  * both are in front of the same two servers. */
-function common_checks(): Check[] {
+function commonChecks(): Check[] {
   return [
     { path: `${GEO_INTERNAL}/x`, want: 401, why: "pxl-geo's internal prefix, gated by the admin token" },
     { path: `${API_INTERNAL}/x`, want: 401, why: "pxl-api's internal prefix, gated the same way" },
@@ -66,24 +71,24 @@ function common_checks(): Check[] {
   ];
 }
 
-function origin_checks(): Check[] {
+function originChecks(): Check[] {
   return [
     { path: `${SEARCH_URL}?q=${encodeURIComponent("강남")}`, want: 200, why: "pxl-geo, reached through Caddy without the edge" },
-    ...common_checks(),
+    ...commonChecks(),
     { path: `${GEO_ROOT}/nothing-is-here`, want: 404, why: "pxl-geo answers its root and not this" },
   ];
 }
 
 const argv = Deno.args.filter((a) => a !== "--origin");
-const origin_only = Deno.args.includes("--origin");
+const originOnly = Deno.args.includes("--origin");
 const base = argv[0]?.replace(/\/$/, "");
 if (!base) {
   console.error("usage: deno run -A script/smoke.ts <base-url> [--origin]");
   Deno.exit(2);
 }
 
-const checks = origin_only ? origin_checks() : edge_checks();
-console.log(`[smoke] ${base}${origin_only ? " (origin, behind the edge)" : ""} — ${checks.length} checks\n`);
+const checks = originOnly ? originChecks() : edgeChecks();
+console.log(`[smoke] ${base}${originOnly ? " (origin, behind the edge)" : ""} — ${checks.length} checks\n`);
 
 let failed = 0;
 for (const { path, want, why } of checks) {
@@ -91,7 +96,7 @@ for (const { path, want, why } of checks) {
   // told to, and a check that read a cached answer would pass for a
   // deployment that is no longer there.
   const url = `${base}${path}${path.includes("?") ? "&" : "?"}_smoke=${crypto.randomUUID()}`;
-  let got: number | string;
+  let got: u32 | string;
   let size = 0;
   try {
     const res = await fetch(url, { redirect: "manual" });

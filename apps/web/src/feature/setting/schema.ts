@@ -20,7 +20,7 @@
 
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 
-import { CAMERA_TERRAIN_MODES as MODES, SETTINGS as SPEC } from "./schema-spec.ts";
+import { CAMERA_TERRAIN_MODES as MODES, SETTINGS as SPEC } from "./schema.spec.ts";
 
 /** Rough per-frame cost, shown as a badge on the row. */
 export type SettingCost = "low" | "med" | "high";
@@ -28,7 +28,11 @@ export type SettingCost = "low" | "med" | "high";
 /** The sheet's sections, in the order they are shown (schema.json). */
 export type SettingSection = "display" | "camera" | "editing" | "lighting" | "quality" | "debug" | "character";
 
-type Common = { section: SettingSection; cost?: SettingCost; dev?: boolean };
+interface Common {
+  section: SettingSection;
+  cost?: SettingCost;
+  dev?: boolean;
+}
 export type ToggleSetting = Common & { kind: "toggle"; default: boolean };
 export type ChoiceSetting<T extends string = string> = Common & { kind: "choice"; default: T; options: readonly T[] };
 export type TextSetting = Common & { kind: "text"; default: string };
@@ -62,13 +66,13 @@ export const DEFAULT_SETTINGS: Readonly<SettingValues> = Object.fromEntries(
 ) as SettingValues;
 
 /** The settings shown under a section, in declaration order. */
-export function settings_in(section: SettingSection): SettingKey[] {
+export function settingsIn(section: SettingSection): SettingKey[] {
   return SETTING_KEYS.filter((key) => SETTINGS[key].section === section);
 }
 
 /** Whether `value` is something `key` may hold — what a stored override is
  * checked against before it is trusted. */
-export function is_valid_setting(key: SettingKey, value: unknown): value is SettingValues[SettingKey] {
+export function isValidSetting(key: SettingKey, value: unknown): value is SettingValues[SettingKey] {
   const setting: Setting = SETTINGS[key];
   switch (setting.kind) {
     case "toggle":

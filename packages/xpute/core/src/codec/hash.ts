@@ -1,5 +1,6 @@
 // @xpute/core/codec/hash.ts
 
+import type { u64 } from "../abi/word.ts";
 import type { Bytes } from "../abi/array.ts";
 import { bytes_to_hex, te } from "./encoding.ts";
 
@@ -11,13 +12,13 @@ const FNV64_PRIME = 0x100000001b3n;
 /** FNV-1a over a string's UTF-8 bytes, 64 bits wide — the same word the
  * Rust side and script/spec.ts compute, so an id hashed anywhere is one
  * number. */
-export function fnv1a64_str(s: string): bigint {
+export function fnv1a64_str(s: string): u64 {
   return fnv1a64_bytes(te.encode(s));
 }
 
 /** The same word over a byte string, for an id built from numbers rather
  * than spelled out as text. */
-export function fnv1a64_bytes(bytes: Bytes): bigint {
+export function fnv1a64_bytes(bytes: Bytes): u64 {
   let h = FNV64_OFFSET;
   for (let i = 0; i < bytes.length; i++) {
     h ^= BigInt(bytes[i]);

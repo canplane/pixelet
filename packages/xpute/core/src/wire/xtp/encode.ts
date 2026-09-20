@@ -1,9 +1,9 @@
 // @xpute/core/wire/xtp/encode.ts
 
-import { BOOL, FIELD_GET, FIELD_SET, type u32 } from "@xpute/core/abi/word.ts";
+import { BOOL, type f32, type f64, FIELD_GET, FIELD_SET, type i16, type i32, type i64, type i8, type u16, type u32, type u64, type u8 } from "@xpute/core/abi/word.ts";
 import type { BigTypedArray, TypedArray, U8Array } from "@xpute/core/abi/array.ts";
 import * as encoding from "@xpute/core/codec/encoding.ts";
-import { Errno } from "@xpute/core/status/errno.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { MarshalError } from "@xpute/core/status/error.ts";
 
 import type { AlignUnit, BranchNode, EncodingState, GraftNode, Node, NodeType, ScalarNode, SequenceNode } from "./spec.ts";
@@ -40,10 +40,10 @@ const WORD_REG: [u32, u32] = [NONE, NONE];
 
 // ============ Encoder ============
 
-export type TreeEncoderOptions = {
+export interface TreeEncoderOptions {
   init_cap?: u32; // soft initial buffer size hint
   max_cap?: u32; // hard packet size limit
-};
+}
 
 // The encoder assumes the normal construction path went through the view layer.
 // It still enforces minimal packet-boundary invariants such as cap/offset/type fallback.
@@ -212,43 +212,43 @@ export class TreeEncoder {
     switch (type) {
       case ScalarType.U8:
         elem_sz = 1;
-        set_payload = (off: u32): void => this.buf_view.setUint8(off, val as number);
+        set_payload = (off: u32): void => this.buf_view.setUint8(off, val as u8);
         break;
       case ScalarType.I8:
         elem_sz = 1;
-        set_payload = (off: u32): void => this.buf_view.setInt8(off, val as number);
+        set_payload = (off: u32): void => this.buf_view.setInt8(off, val as i8);
         break;
       case ScalarType.U16:
         elem_sz = 2;
-        set_payload = (off: u32): void => this.buf_view.setUint16(off, val as number, LE);
+        set_payload = (off: u32): void => this.buf_view.setUint16(off, val as u16, LE);
         break;
       case ScalarType.I16:
         elem_sz = 2;
-        set_payload = (off: u32): void => this.buf_view.setInt16(off, val as number, LE);
+        set_payload = (off: u32): void => this.buf_view.setInt16(off, val as i16, LE);
         break;
       case ScalarType.U32:
         elem_sz = 4;
-        set_payload = (off: u32): void => this.buf_view.setUint32(off, val as number, LE);
+        set_payload = (off: u32): void => this.buf_view.setUint32(off, val as u32, LE);
         break;
       case ScalarType.I32:
         elem_sz = 4;
-        set_payload = (off: u32): void => this.buf_view.setInt32(off, val as number, LE);
+        set_payload = (off: u32): void => this.buf_view.setInt32(off, val as i32, LE);
         break;
       case ScalarType.U64:
         elem_sz = 8;
-        set_payload = (off: u32): void => this.buf_view.setBigUint64(off, val as bigint, LE);
+        set_payload = (off: u32): void => this.buf_view.setBigUint64(off, val as u64, LE);
         break;
       case ScalarType.I64:
         elem_sz = 8;
-        set_payload = (off: u32): void => this.buf_view.setBigInt64(off, val as bigint, LE);
+        set_payload = (off: u32): void => this.buf_view.setBigInt64(off, val as i64, LE);
         break;
       case ScalarType.F32:
         elem_sz = 4;
-        set_payload = (off: u32): void => this.buf_view.setFloat32(off, val as number, LE);
+        set_payload = (off: u32): void => this.buf_view.setFloat32(off, val as f32, LE);
         break;
       case ScalarType.F64:
         elem_sz = 8;
-        set_payload = (off: u32): void => this.buf_view.setFloat64(off, val as number, LE);
+        set_payload = (off: u32): void => this.buf_view.setFloat64(off, val as f64, LE);
         break;
 
       case ScalarType.BOOL:

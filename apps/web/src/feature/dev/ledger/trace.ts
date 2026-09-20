@@ -16,14 +16,15 @@
  * reachable from the console.
  */
 
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
 
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 
-import { fail_text, type Frame } from "./report.ts";
-import { CENSUS_TAGS, PHASE_NAMES } from "./spec.ts";
-import { ledger_rings_read } from "./view.ts";
-import { long_frames_since } from "./long-frame.ts";
+import { failText, type Frame } from "./report.ts";
+import { CENSUS_TAGS, PHASE_NAMES } from "./ledger.spec.ts";
+import { ledgerRingsRead } from "./view.ts";
+import { longFramesSince } from "./long-frame.ts";
 
 const PID = 1;
 const TID_FRAMES = 1;
@@ -32,27 +33,36 @@ const TID_WORST = 3;
 /** Task threads are assigned per category from here up. */
 const TID_TASK_BASE = 10;
 
-type Args = Record<string, number | string | null>;
-type TraceEvent = { name: string; cat: string; ph: string; ts: number; dur?: number; pid: number; tid: number; args?: Args };
+type Args = Record<string, f64 | string | null>;
+interface TraceEvent {
+  name: string;
+  cat: string;
+  ph: string;
+  ts: f64;
+  dur?: f64;
+  pid: u32;
+  tid: u32;
+  args?: Args;
+}
 
-const us = (ms: number) => round(ms * 1000);
+const us = (ms: f64) => round(ms * 1000);
 const fixed = (n: number, d: number) => +n.toFixed(d);
 
-function event(name: string, cat: string, ph: string, ts: number, dur: number | null, tid: number, args?: Args): TraceEvent {
+function event(name: string, cat: string, ph: string, ts: f64, dur: f64 | null, tid: u32, args?: Args): TraceEvent {
   return { name, cat, ph, ts, ...(dur === null ? {} : { dur }), pid: PID, tid, ...(args ? { args } : {}) };
 }
 
-const thread_name = (tid: number, name: string) => event("thread_name", "__metadata", "M", 0, null, tid, { name });
+const thread_name = (tid: u32, name: string) => event("thread_name", "__metadata", "M", 0, null, tid, { name });
 
 /** One frame's numbers as trace args — the counter track and the worst-frame
  * spans both carry them, so the two never disagree on what a frame was. */
-function frame_args(f: Frame): Args {
+function frameArgs(f: Frame): Args {
   const args: Args = {
     dt_ms: fixed(f.dt_ms, 2),
     task_ms: fixed(f.task_ms, 2),
     // Everything the kernel's turn did not account for: vsync wait,
     // compositor, GPU, GC between frames, the shell's glue.
-    offthread_ms: fixed(Math.max(0, f.dt_ms - f.task_ms), 2),
+    offthreadMs: fixed(Math.max(0, f.dt_ms - f.task_ms), 2),
     gpu_ms: fixed(f.gpu_ms, 2),
     sched_ms: fixed(f.sched_ms, 2),
     budget_ms: fixed(f.budget_ms, 2),
@@ -67,7 +77,7 @@ function frame_args(f: Frame): Args {
   Object.assign(args, {
     buffers: f.buffers,
     buffer_mb: f.buffer_mb,
-    targets_mb: fixed(t.depth + t.msaa + t.shadow + t.layers, 1),
+    targetsMb: fixed(t.depth + t.msaa + t.shadow + t.layers, 1),
     mounted: f.mounts.added,
     unmounted: f.mounts.removed,
     layouts: f.mounts.layouts,
@@ -86,7 +96,7 @@ function frame_args(f: Frame): Args {
     lod_oldest_release_ms: round(f.lod.oldest_release_ms),
     lod_oldest_visible_ms: round(f.lod.oldest_visible_ms),
     draw_calls: f.draw_calls,
-    fill_mpx: fixed(f.px / 1e6, 2),
+    fillMpx: fixed(f.px / 1e6, 2),
     q_terrain: f.q_terrain,
     q_poi: f.q_poi,
   });
@@ -94,29 +104,29 @@ function frame_args(f: Frame): Args {
 }
 
 /** The trace as a JSON string. */
-export function ledger_trace_json(): string {
-  const { frames, tasks, worst } = ledger_rings_read();
-  const longs = long_frames_since(-Infinity);
+export function ledgerTraceJson(): string {
+  const { frames, tasks, worst } = ledgerRingsRead();
+  const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];
 
   // ---- task spans, one thread per category ----
-  const cat_tid = new Map<string, number>();
+  const catTid = new Map<string, u32>();
   for (const r of tasks) {
-    let tid = cat_tid.get(r.category);
+    let tid = catTid.get(r.category);
     if (tid === undefined) {
-      tid = TID_TASK_BASE + cat_tid.size;
-      cat_tid.set(r.category, tid);
+      tid = TID_TASK_BASE + catTid.size;
+      catTid.set(r.category, tid);
       events.push(thread_name(tid, `task: ${r.category}`));
     }
     const args: Args = {
       outcome: r.outcome,
       priority: r.priority,
-      queued_ms: r.start_ms === null ? null : fixed(r.start_ms - r.enqueue_ms, 1),
-      ran_ms: r.start_ms === null ? null : fixed(r.end_ms - r.start_ms, 1),
+      queuedMs: r.start_ms === null ? null : fixed(r.start_ms - r.enqueue_ms, 1),
+      ranMs: r.start_ms === null ? null : fixed(r.end_ms - r.start_ms, 1),
       transport_ms: r.transport_ms,
     };
     if (r.fail !== 0) {
-      args.fail = fail_text(r.fail, r.status);
+      args.fail = failText(r.fail, r.status);
       if (r.status !== 0) args.status = r.status;
     }
     for (const [k, v] of r.phases) args[k] = v;
@@ -128,7 +138,7 @@ export function ledger_trace_json(): string {
     events.push(thread_name(TID_FRAMES, "frames"));
     for (const f of frames) {
       const ts = us(f.t);
-      events.push(event("frame", "frame", "C", ts, null, TID_FRAMES, frame_args(f)));
+      events.push(event("frame", "frame", "C", ts, null, TID_FRAMES, frameArgs(f)));
       // Also a duration bar for the scheduler pass, so a slow frame is
       // visible as width, not only as a counter spike.
       events.push(event("sched pass", "frame", "X", ts - us(f.sched_ms), us(f.sched_ms), TID_FRAMES));
@@ -142,7 +152,7 @@ export function ledger_trace_json(): string {
     events.push(thread_name(TID_WORST, "worst frames"));
     for (const w of worst) {
       const f = w.sample;
-      const args = frame_args(f);
+      const args = frameArgs(f);
       args.d_buffers = w.prev === null ? null : f.buffers - w.prev.buffers;
       args.d_heap_used_mb = w.prev === null ? null : f.heap.used_mb - w.prev.heap.used_mb;
       events.push(event(`stall ${f.dt_ms.toFixed(0)}ms`, "worst", "X", us(f.t - f.dt_ms), us(f.dt_ms), TID_WORST, args));
@@ -153,8 +163,8 @@ export function ledger_trace_json(): string {
   if (longs.length > 0) {
     events.push(thread_name(TID_LONG, "LoAF"));
     for (const l of longs) {
-      const args = { blocking_ms: fixed(l.blocking_ms, 1), script_ms: fixed(l.script_ms, 1), render_ms: fixed(l.render_ms, 1) };
-      events.push(event(`long frame ${l.duration_ms.toFixed(0)}ms`, "loaf", "X", us(l.t), us(l.duration_ms), TID_LONG, args));
+      const args = { blockingMs: fixed(l.blockingMs, 1), scriptMs: fixed(l.scriptMs, 1), renderMs: fixed(l.renderMs, 1) };
+      events.push(event(`long frame ${l.durationMs.toFixed(0)}ms`, "loaf", "X", us(l.t), us(l.durationMs), TID_LONG, args));
     }
   }
 
@@ -163,8 +173,8 @@ export function ledger_trace_json(): string {
   return JSON.stringify({ traceEvents: events, displayTimeUnit: "ms", metadata: { build_number: BUILD_NUMBER, build_id: BUILD_ID, build_time: BUILD_TIME } });
 }
 
-export function ledger_trace_download(): void {
-  const json = ledger_trace_json();
+export function ledgerTraceDownload(): void {
+  const json = ledgerTraceJson();
   const mb = (json.length / 1e6).toFixed(1);
   const name = `pxl-ledger-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   try {

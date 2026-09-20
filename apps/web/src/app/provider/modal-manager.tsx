@@ -17,9 +17,9 @@ import { SearchModal, type SearchModalProps } from "@/feature/search/modal.tsx";
 export type ModalState = EditFooProps | SettingsModalProps | DrawerModalProps | SearchModalProps | null;
 
 /** ModalManager props */
-type ModalManagerProps = {
+interface ModalManagerProps {
   mergeUiController: (o: Partial<UiController>) => void; // Merges modal-related UI actions into the global UI controller
-};
+}
 
 /**
  * Global modal host

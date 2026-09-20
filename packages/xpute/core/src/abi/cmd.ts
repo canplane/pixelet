@@ -1,4 +1,4 @@
-// @xpute/core/abi/cmd.ts
+// @xpute/core/abi/cmd.spec.ts
 
 /**
  * A command's number: a major that names what it is about, and a minor that

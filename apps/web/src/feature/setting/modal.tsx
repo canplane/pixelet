@@ -15,9 +15,9 @@ import { DisclaimerSection } from "./section/disclaimer.tsx";
 import { AboutSection } from "./section/about.tsx";
 import { AttributionSection } from "./section/attribution.tsx";
 
-export type SettingsModalProps = {
+export interface SettingsModalProps {
   type: "settings";
-};
+}
 
 // Each tab scrolls on its own. One scroller around both panels kept its
 // scrollTop across a switch, so a long scroll down the effects list opened

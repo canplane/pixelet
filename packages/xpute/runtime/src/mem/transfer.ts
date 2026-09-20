@@ -15,7 +15,7 @@
  * buffers not away are the worker credits the central scheduler grants.
  */
 
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import type { f64, u32, u64 } from "@xpute/core/abi/word.ts";
 import { Vector } from "@xpute/core/collection/arena.ts";
 
 const NONE = 0;
@@ -42,7 +42,7 @@ export class TransferPool {
    * A buffer for demand `key`, or null when the cap is reached — the demand
    * waits. A buffer at home is reused; otherwise one is made, up to the cap.
    */
-  borrow(key: bigint): { id: u32; buffer: ArrayBuffer } | null {
+  borrow(key: u64): { id: u32; buffer: ArrayBuffer } | null {
     let id = -1;
     for (let i = 0; i < this.state.len; i++) {
       if (this.state.mem[i] === HOME) {
@@ -91,7 +91,7 @@ export class TransferPool {
    * through give_back. The slot is freed for a new buffer; whatever the worker
    * still holds is its own to drop.
    */
-  forget(key: bigint): void {
+  forget(key: u64): void {
     for (let i = 0; i < this.state.len; i++) {
       if (this.state.mem[i] === AWAY && this.owner.mem[i] === key) {
         this.state.mem[i] = NONE;
