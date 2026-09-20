@@ -107,12 +107,14 @@ function build_stamp(): Plugin {
 
 /**
  * A `const enum` is a compile-time name for a number, and a published bundle
- * should hold the number alone. It does not: Vite transpiles each file on its
- * own with esbuild and bundles the results with Rollup, so nothing ever sees
- * the declaration and its use at once, and esbuild — which inlines a const
- * enum perfectly well when it bundles — emits the runtime object instead,
- * reverse mapping and all. A build carried every command's and every errno's
- * name as a string that way (`e[e.WORLD_SNAPSHOT=6933]="WORLD_SNAPSHOT"`).
+ * should hold the number alone. It does not, because Vite transpiles each
+ * file on its own and nothing ever sees the declaration and its use at once.
+ * What that costs depends on which transpiler is under it, and neither
+ * answer is the one wanted: esbuild emitted the runtime object, reverse
+ * mapping and all, so a build carried every command's and every errno's name
+ * as a string (`e[e.WORLD_SNAPSHOT=6933]="WORLD_SNAPSHOT"`); oxc erases the
+ * declaration as the type syntax it is, which leaves every importer bound to
+ * an export that no longer exists.
  *
  * What a per-file pass cannot do is done by reading the declarations up front:
  * every member of every `export const enum` under `roots`, then each member
@@ -162,12 +164,20 @@ function const_enum(roots: string[]): Plugin {
     }
   }
 
+  // An id can carry a query or a hash — `?worker`, and the `#deno` the Deno
+  // resolver appends to the virtual id it hands back — and either one hides
+  // the extension from a `$`-anchored test. Missing a module that way is
+  // silent and asymmetric: the file holding the declaration is reached under
+  // its plain path and loses it, while the importer keeps the name it can no
+  // longer bind.
+  const source_of = (id: string) => id.split("?")[0].split("#")[0];
+
   return {
     name: "const-enum",
-    // Before esbuild erases the types: the declarations are still here.
+    // Before the transpiler reaches the types: the declarations are still here.
     enforce: "pre",
     transform(code, id) {
-      if (!/\.tsx?$/.test(id) || id.includes("node_modules")) return null;
+      if (!/\.tsx?$/.test(source_of(id)) || id.includes("node_modules")) return null;
       let out = code;
       const struck: string[] = [];
       for (const [name, members] of enums) {
@@ -351,7 +361,11 @@ export default defineConfig(({ mode }) => {
 
     build: {
       target: "esnext",
-      minify: "esbuild",
+      // Named rather than left to `true`, because the two Vite ships are not
+      // interchangeable and which one is the default has already changed
+      // once. Measured on this bundle: oxc 762.86 kB / 248.49 kB gzipped,
+      // esbuild 785.03 / 261.15.
+      minify: "oxc",
       sourcemap: mode !== "production",
     },
 

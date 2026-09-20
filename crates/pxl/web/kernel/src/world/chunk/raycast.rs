@@ -398,7 +398,7 @@ pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: V3, d: [
                     [u[0] / s, u[2] / s, -u[1] / s]
                 };
                 let (mo, md) = (to_model(p), to_model(d));
-                for tri in indices.chunks_exact(3) {
+                for tri in indices.as_chunks::<3>().0 {
                     let a = &positions[tri[0] as usize * 3..tri[0] as usize * 3 + 3];
                     let b = &positions[tri[1] as usize * 3..tri[1] as usize * 3 + 3];
                     let cc = &positions[tri[2] as usize * 3..tri[2] as usize * 3 + 3];

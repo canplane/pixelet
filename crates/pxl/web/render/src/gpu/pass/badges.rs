@@ -310,7 +310,7 @@ impl BadgePass {
         let mut pass = 0;
         let mut n = 0;
         let mut drawn = 0;
-        for d in draws.chunks_exact(DRAW_WORDS).filter(|d| d[4] == PIPELINE_BADGE && d[1] > 0) {
+        for d in draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| d[4] == PIPELINE_BADGE && d[1] > 0) {
             let Some((block, _, _)) = blocks.get(d[0]) else { continue };
             if n == SETS {
                 break;

@@ -29,7 +29,7 @@ fn gltf_a_rigged_character_comes_out_with_its_skins_weights_and_clips() {
     assert_eq!(g.skins[0].inverse_bind.len(), 7 * 16);
     for p in &prims {
         let (joints, weights) = (p.joints.as_ref().expect("joints"), p.weights.as_ref().expect("weights"));
-        for w in weights.chunks_exact(4) {
+        for w in weights.as_chunks::<4>().0 {
             assert!((w.iter().sum::<f32>() - 1.0).abs() < 1e-3);
         }
         assert!(joints.iter().all(|&j| j < 7));
@@ -80,7 +80,7 @@ fn gltf_a_node_s_world_matrix_composes_its_parents_transforms() {
         }
         let w = &worlds[n as usize];
         for p in &g.meshes[node.mesh as usize] {
-            for v in p.position.chunks_exact(3) {
+            for v in p.position.as_chunks::<3>().0 {
                 let y = w[1] * v[0] as f64 + w[5] * v[1] as f64 + w[9] * v[2] as f64 + w[13];
                 lo = lo.min(y);
                 hi = hi.max(y);

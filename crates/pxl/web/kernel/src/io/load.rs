@@ -485,7 +485,7 @@ impl Models {
         m.scale = scale;
         m.handle = draw.upload(m.at as u32, m.bytes, m.vertex_cnt, m.index_cnt);
         let positions = core::slice::from_raw_parts(mem.add(m.at) as *const f32, m.vertex_cnt as usize * 3);
-        m.radius = positions.chunks_exact(3).map(|p| p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).fold(0.0f32, f32::max).sqrt();
+        m.radius = positions.as_chunks::<3>().0.iter().map(|p| p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).fold(0.0f32, f32::max).sqrt();
         let n = m.parent.len();
         let mut placed = vec![false; n];
         m.order.clear();

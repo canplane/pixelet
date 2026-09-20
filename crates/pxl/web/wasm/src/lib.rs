@@ -162,6 +162,16 @@ fn ring_address(ring: &Ring) -> u32 {
 /// `Global` is built on.
 static STATE: Global<State> = Global::new();
 
+// `wasm_import_module` is what makes these imports, and it is load-bearing
+// rather than documentation. wasm-ld used to be handed `--allow-undefined`,
+// under which any symbol nothing defined became an import of the module named
+// `env` — which is the module the shell instantiates with
+// (apps/web/src/kernel/module.ts). Rust stopped passing that flag in 1.96, so
+// an extern block that says nothing is a link error naming every host call by
+// hand. Naming `env` here is the same binary as before and does not depend on
+// a default: wasm-opt's --minify-imports-and-exports renames the entries and
+// leaves the module alone, so the shell's `env:` still answers them.
+#[link(wasm_import_module = "env")]
 extern "C" {
     /// The client's: told a panic's message before the trap, since the trap
     /// itself carries none — `panic = "abort"` and no hook would leave only
@@ -786,6 +796,7 @@ fn drain(s: &mut State) -> u32 {
 
 // ---- The host's hooks (pxl_kernel::host) ----
 
+#[link(wasm_import_module = "env")]
 extern "C" {
     /// `localStorage.getItem(key)`'s length in UTF-8 bytes, or -1 for none.
     #[link_name = "storage_len"]
@@ -811,6 +822,7 @@ extern "C" {
 
 // ---- The host's WebGPU (pxl_render::gpu::api, apps/web/src/device/gpu.ts) ----
 
+#[link(wasm_import_module = "env")]
 extern "C" {
     #[link_name = "gpu_reset"]
     fn host_gpu_reset();

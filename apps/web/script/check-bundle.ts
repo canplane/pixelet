@@ -60,7 +60,7 @@ const DEV_MARKERS = ["dev/test", "development"];
  * script/spec.ts fails when this list and the flag disagree. The shell's
  * sentinel is looked for in the JavaScript, the kernel's in its module: the
  * terrain's page names are the kernel's (layer/terrain/tile_repository.rs). */
-const SENTINELS = ['"/geo/tiles"', '"/geo/search"'];
+const SENTINELS = ["/geo/tiles", "/geo/search"];
 const KERNEL_SENTINELS = ["_ocean"];
 
 function leaves(o: unknown, path = ""): [string, string][] {
@@ -99,12 +99,26 @@ async function readKernel(): Promise<string> {
 const bundle = await readBundle();
 const kernel = await readKernel();
 
-for (const [where, text, sentinels] of [["bundle", bundle, SENTINELS], ["kernel", kernel, KERNEL_SENTINELS]] as const) {
-  for (const s of sentinels) {
-    if (!text.includes(s)) {
-      console.error(`[check-bundle] sentinel ${JSON.stringify(s)} missing from the ${where} — the build is not what this expects, so a pass would mean nothing`);
-      Deno.exit(1);
-    }
+/** A string as a bundler may have written it. Which delimiter comes out is
+ * the minifier's own choice and it does change: esbuild quotes, and oxc —
+ * what Vite bundles with from 8 — writes backticks, so every check here went
+ * blind on a bundle that was carrying the strings all along. The sentinels
+ * are what caught that, which is what they are for. */
+function quoted(text: string, v: string): boolean {
+  return text.includes(JSON.stringify(v)) || text.includes(`'${v}'`) || text.includes(`\`${v}\``);
+}
+
+for (const s of SENTINELS) {
+  if (!quoted(bundle, s)) {
+    console.error(`[check-bundle] sentinel ${JSON.stringify(s)} missing from the bundle — the build is not what this expects, so a pass would mean nothing`);
+    Deno.exit(1);
+  }
+}
+// Raw bytes, not a literal in source: the kernel's strings lie in its data.
+for (const s of KERNEL_SENTINELS) {
+  if (!kernel.includes(s)) {
+    console.error(`[check-bundle] sentinel ${JSON.stringify(s)} missing from the kernel — the build is not what this expects, so a pass would mean nothing`);
+    Deno.exit(1);
   }
 }
 
@@ -119,7 +133,7 @@ for (const f of DEV_LOCALE_FILES) {
  * letters — short dictionary words will collide with minified identifiers
  * every time. A catalogue string reaches the bundle as a string literal, so
  * requiring its delimiters is both stricter and closer to what is being
- * asked. Both quote styles, since which one a minifier emits is its choice.
+ * asked.
  *
  * Very short strings are skipped regardless: at that length a collision is
  * likely even quoted, and a false failure that blocks deploys would get this
@@ -129,7 +143,7 @@ const MIN_LEN = 4;
 
 function present(bundle: string, v: string): boolean {
   if (v.length < MIN_LEN) return false;
-  return bundle.includes(JSON.stringify(v)) || bundle.includes(`'${v}'`);
+  return quoted(bundle, v);
 }
 
 const shipped = new Set<string>();

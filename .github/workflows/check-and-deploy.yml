@@ -34,10 +34,27 @@ name: Check and deploy
 # main and pull requests, not every branch: a push to a branch with a pull
 # request open would otherwise run this twice for the one commit, and a Rust
 # build is not cheap enough to do twice for nothing.
+#
+# Prose does not build. A push that touches only markdown cannot fail a gate
+# that type-checks, lints and tests code, and it cannot change what the
+# bundle is made of — it was costing a full run, six minutes of it, to prove
+# both. It is excluded rather than the code being included: the set of paths
+# that matter is nearly the whole tree, so a list of them would be long and
+# would fail the wrong way — a directory added later and left off it would
+# be skipped in silence, where a file type left off this one only costs a
+# run. deploy-web's own scope step is a list of what to include, and should
+# stay one: it answers the narrower question of whether the bundle's input
+# moved.
+#
+# What this gives up is a build number for such a push. The counter now
+# counts builds of code rather than pushes to main, which is the honest
+# reading of a count that nothing was ever built for.
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md"]
   pull_request:
+    paths-ignore: ["**.md"]
   workflow_dispatch: {}
 
 # A pull request's run is superseded by its next commit and may be cancelled.
@@ -48,10 +65,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  # What crates/Cargo.toml's edition and crates/pxl/server/geo/Dockerfile's base image are
-  # built with. Pinned so that a toolchain release cannot turn a clippy lint on
-  # under us and fail a push that changed nothing.
-  RUST_VERSION: "1.94"
+  # The Rust version is not here. rust-toolchain.toml is what says it and
+  # rustup reads that file on its own, so a job installs from it rather than
+  # being told — see the install steps below.
+  #
   # wasm-opt prints the import/export mapping the shell imports, and which
   # letters it assigns is the optimizer's own business — so the version is
   # pinned rather than taken from apt, where it also lags by years.
@@ -79,11 +96,12 @@ jobs:
         with:
           deno-version: v2.x
 
+      # No version, no components, no target: rust-toolchain.toml names all
+      # three and a bare install reads it. A step of its own rather than left
+      # to the first cargo command, so that a toolchain that cannot be
+      # fetched fails here, where the log says what happened.
       - name: Install the Rust toolchain
-        run: |
-          rustup toolchain install "$RUST_VERSION" --profile minimal \
-            --component clippy,rustfmt --target wasm32-unknown-unknown
-          rustup default "$RUST_VERSION"
+        run: rustup toolchain install
 
       - name: Install Binaryen
         run: |
@@ -101,8 +119,8 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             crates/target
-          key: rust-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ hashFiles('crates/Cargo.lock') }}
-          restore-keys: rust-${{ runner.os }}-${{ env.RUST_VERSION }}-
+          key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('crates/Cargo.lock') }}
+          restore-keys: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
 
       - uses: actions/cache@v5
         with:
@@ -121,9 +139,11 @@ jobs:
       - run: deno task lint
 
       # Every build of main is numbered, shipped or not — a build lab's count.
-      # After the gate rather than before it, so that a push that never
-      # compiled does not consume one; a push that passed and then failed to
-      # deploy does, and that number is simply never published.
+      # A push of prose alone never reaches here and takes no number (see the
+      # trigger), so the count is of builds and not of pushes. After the gate
+      # rather than before it, so that a push that never compiled does not
+      # consume one; a push that passed and then failed to deploy does, and
+      # that number is simply never published.
       - name: Take the next build number
         id: number
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -187,7 +207,10 @@ jobs:
           else
             changed="apps/web/"
           fi
-          if printf '%s\n' "$changed" | grep -qE '^(apps/|crates/|packages/|spec/|deno\.jsonc|deno\.lock)'; then
+          # rust-toolchain.toml is in the list because the module is what that
+          # file's compiler emitted, and unlike the servers the client has no
+          # second copy of the version to change alongside it.
+          if printf '%s\n' "$changed" | grep -qE '^(apps/|crates/|packages/|spec/|deno\.jsonc|deno\.lock|rust-toolchain\.toml)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -199,12 +222,12 @@ jobs:
         with:
           deno-version: v2.x
 
+      # As the gate does. This job builds the module and needs no linter, but
+      # what it installs is the file's business now, and a component it does
+      # not use costs a download nobody waits on.
       - name: Install the Rust toolchain
         if: steps.scope.outputs.run == 'true'
-        run: |
-          rustup toolchain install "$RUST_VERSION" --profile minimal \
-            --target wasm32-unknown-unknown
-          rustup default "$RUST_VERSION"
+        run: rustup toolchain install
 
       - name: Install Binaryen
         if: steps.scope.outputs.run == 'true'
@@ -221,8 +244,8 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             crates/target
-          key: rust-${{ runner.os }}-${{ env.RUST_VERSION }}-${{ hashFiles('crates/Cargo.lock') }}
-          restore-keys: rust-${{ runner.os }}-${{ env.RUST_VERSION }}-
+          key: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('crates/Cargo.lock') }}
+          restore-keys: rust-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
 
       - uses: actions/cache@v5
         if: steps.scope.outputs.run == 'true'

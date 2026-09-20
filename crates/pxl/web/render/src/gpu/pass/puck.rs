@@ -140,7 +140,7 @@ impl PuckPass {
 
     /// The beacon, opaque; before anything blended.
     pub fn draw_beacon(&self, g: &GpuApi, pass: u32, draws: &[u32], uniforms: &[f32]) {
-        for d in draws.chunks_exact(DRAW_WORDS).filter(|d| d[4] == PIPELINE_PUCK_BEACON) {
+        for d in draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| d[4] == PIPELINE_PUCK_BEACON) {
             self.write_uniform(g, self.beacon_uniform, uniforms, d[3] as usize * UNIFORM_FLOATS, d[1] as f32);
             (g.set_pipeline)(pass, self.beacon.pipeline);
             (g.set_bind_group)(pass, 0, self.frame_group, &[]);
@@ -153,7 +153,7 @@ impl PuckPass {
 
     /// The zone, blended; with the rest of what is blended.
     pub fn draw_zone(&self, g: &GpuApi, pass: u32, draws: &[u32], uniforms: &[f32], blocks: &mut Blocks) {
-        for d in draws.chunks_exact(DRAW_WORDS).filter(|d| d[4] == PIPELINE_PUCK_ZONE && d[1] > 0) {
+        for d in draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| d[4] == PIPELINE_PUCK_ZONE && d[1] > 0) {
             let Some(group) = blocks.group(g, d[0], self.zone.layouts[2]) else { continue };
             self.write_uniform(g, self.zone_uniform, uniforms, d[3] as usize * UNIFORM_FLOATS, 0.0);
             (g.set_pipeline)(pass, self.zone.pipeline);

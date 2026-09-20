@@ -86,20 +86,20 @@ Overture CLI's venv. Docker runs the database and the GDAL image.
 
 Run from the project root.
 
-> `down -v` destroys the data volume, and that volume is the only copy of the
-> ingested data on this machine. The sources are not in the repository — the
-> warped rasters land under the gitignored `out/elevation/`. Re-ingesting
-> reproduces an equivalent dataset from each source's current state, not a
-> byte-for-byte copy. Leave that line out to start a database that is already
-> built.
-
 ```sh
-docker compose -f infra/local/docker-compose.yml --env-file .env down -v
 docker compose -f infra/local/docker-compose.yml --env-file .env up -d db-geo
 
 export $(grep -v '^#' .env | xargs)
 until docker exec "$DB_GEO_CONTAINER" pg_isready -U postgres; do sleep 2; done
 ```
+
+That starts a database that is already built. Emptying it first takes a
+`down -v` before that line, and is almost never what you want:
+
+> The data volume is the only copy of the ingested data on this machine. The
+> sources are not in the repository — the warped rasters land under the
+> gitignored `out/elevation/`. Re-ingesting reproduces an equivalent dataset
+> from each source's current state, not a byte-for-byte copy.
 
 ## 4. Run the ingests
 
@@ -172,7 +172,7 @@ Bash, `envsubst` and GDAL, driven by `metadata.json`:
    COG through `/vsicurl/`, crops to `bbox_4326` (`-te`, in the source CRS), and
    writes EPSG:3857 with DEFLATE into `out/elevation/region/<CODE>/warped/`.
 3. **Ingest.** `raster2pgsql -t 256x256` piped into `psql`, one row per region
-   file. The tile size is the voxel grid's page size, not an arbitrary choice.
+   file, the raster chunked into 256×256 tiles inside the table.
 4. **Finalize.** `ANALYZE`, then `elevation_catalog.status = COMPLETED` with the
    row count.
 

@@ -184,12 +184,14 @@ pub mod SETTINGS {
     }
     /// LOD cross-fade per fragment instead of per chunk: both tiers draw with
     /// complementary dither and dissolve, at the cost of drawing a blending
-    /// chunk twice and a pattern that crawls without temporal AA. On by
-    /// default: what it replaces swaps a whole chunk at a hashed threshold,
-    /// which reads as the ground popping tier by tier.
+    /// chunk twice and a pattern that crawls without temporal AA. Off by
+    /// default: the crawl is there to see, so the second draw buys one
+    /// artefact with another. What it replaces swaps a whole chunk at a
+    /// hashed threshold and pops tier by tier, which is the cheaper of the
+    /// two to live with until the pattern holds still.
     pub mod pixel_dither {
         pub const kind: &str = "toggle";
-        pub const default: bool = true;
+        pub const default: bool = false;
         pub const section: &str = "quality";
         pub const dev: bool = true;
         pub const cost: &str = "med";

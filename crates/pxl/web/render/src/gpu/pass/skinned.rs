@@ -124,7 +124,7 @@ impl SkinnedPass {
 
     /// Writes every skinned draw's uniforms in one write.
     pub fn prepare(&mut self, g: &GpuApi, draws: &[u32], uniforms: &[f32]) {
-        let n = draws.chunks_exact(DRAW_WORDS).filter(|d| d[4] == PIPELINE_SKINNED).count() as u32;
+        let n = draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| d[4] == PIPELINE_SKINNED).count() as u32;
         if n == 0 {
             return;
         }
@@ -140,7 +140,7 @@ impl SkinnedPass {
         }
         let stride = self.stride as usize;
         let buf = self.scratch.take(n * self.stride);
-        for (slot, d) in draws.chunks_exact(DRAW_WORDS).filter(|d| d[4] == PIPELINE_SKINNED).enumerate() {
+        for (slot, d) in draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| d[4] == PIPELINE_SKINNED).enumerate() {
             let (at, u) = (slot * stride, d[3] as usize * UNIFORM_FLOATS);
             for i in 0..8 {
                 put_f32(buf, at + i * 4, if i < 6 { uniforms[u + i] } else { 0.0 });
@@ -169,7 +169,7 @@ impl SkinnedPass {
     fn draw_pipeline(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks, pipeline: u32, group0: u32) -> u32 {
         let mut slot = 0;
         let mut drawn = 0;
-        for d in draws.chunks_exact(DRAW_WORDS) {
+        for d in draws.as_chunks::<DRAW_WORDS>().0 {
             if d[4] != PIPELINE_SKINNED {
                 continue;
             }

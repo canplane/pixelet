@@ -17,11 +17,11 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 
 ## The three bakes
 
-| Kind    | Tool                                                  | Reads                                           | Output                                  | Empty page             |
-| ------- | ----------------------------------------------------- | ----------------------------------------------- | --------------------------------------- | ---------------------- |
-| terrain | `deno task bake:tiles` (crates/pxl/server/geo-bake)   | Overture buildings/transportation/base, GEDTM30 | gzipped XTP, one per land page          | shared `_ocean`        |
-| poi     | `deno task bake:poi` (crates/pxl/server/geo-bake)     | Overture places, terrain's `land_pages.json`    | gzipped XTP, one per page with POI      | no object (404 → `[]`) |
-| geocode | `deno task bake:geocode` (crates/pxl/server/geo-bake) | Overture divisions, terrain's `land_pages.json` | gzipped JSON, one per page with a label | no object              |
+| Kind    | Tool                     | Reads                                           | Output                                  | Empty page             |
+| ------- | ------------------------ | ----------------------------------------------- | --------------------------------------- | ---------------------- |
+| terrain | `deno task bake:tiles`   | Overture buildings/transportation/base, GEDTM30 | gzipped XTP, one per land page          | shared `_ocean`        |
+| poi     | `deno task bake:poi`     | Overture places, terrain's `land_pages.json`    | gzipped XTP, one per page with POI      | no object (404 → `[]`) |
+| geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | gzipped JSON, one per page with a label | no object              |
 
 Every tool writes to `./out/<kind>/<version>`, where the version defaults to
 `PUBLISHED_VERSION.<kind>` in `spec/pxl/spec/bake/published.json`
@@ -108,7 +108,8 @@ and reused unless `--reclassify` is passed.
    discussion doc rather than working around it.
 4. **Spot-check a known tile against the dev tile server.** A baked page and a
    served one are byte-identical by construction, since both go through
-   `crates/pxl/server/geo-bake/src/terrain/source.rs`. With `deno task dev` up:
+   `crates/pxl/server/geo-bake/src/terrain/source.rs`. With `deno task dev:tiles`
+   up — not `dev`, which proxies every route to the live deployment:
 
    ```bash
    curl -s localhost:3001/geo/tiles/terrain/<page_idx> --compressed | shasum
@@ -134,8 +135,8 @@ Verify the same way: `failed=` at zero, and one page opened by hand —
 
 A POI format change that does not touch the data used to be a **repack** —
 re-encoding what is on disk without the database. That tool was v1/v2 JSON to
-v3 XTP and went with the TypeScript; a format change now is a re-bake, which
-at 300 pages is not the cost it was when the shortcut was written.
+v3 XTP and went with the TypeScript; a format change now is a re-bake, which is
+no longer the cost it was when the shortcut was written.
 
 These two are also refreshed monthly without a human:
 `.github/workflows/overture-monthly-refresh.yml` ingests Overture Places
@@ -158,14 +159,16 @@ apart.
 
 A **POI or geocode** version names the page _format_, not the data: the
 monthly refresh rewrites the same prefix with newer Overture content. A
-format change (a new field, a new encoding) is a new version and a repack or
-re-bake; a data refresh is not.
+format change (a new field, a new encoding) is a new version and a re-bake; a
+data refresh is not.
 
-The live API caches baked tiles in memory, so during development a bake
-change also needs the running server's cache dropped — or the server
-restarted, the cache is purely in-process:
+The dev tile server caches baked pages in memory, so during development a
+bake change also needs its cache dropped — or the server restarted, the
+cache is purely in-process. The route is the geo root's internal branch
+(`route.json`), on the tile server rather than on either API:
 
 ```bash
-curl -X POST localhost:3000/api/internal/world/terrain/cache/invalidate -H "x-admin-token: $ADMIN_TOKEN"
-# likewise .../world/poi/cache/invalidate and .../world/geocode/cache/invalidate
+curl -X POST localhost:3001/geo/internal/world/terrain/cache/invalidate -H "x-admin-token: $ADMIN_TOKEN"
+# likewise .../world/poi/... and .../world/geocode/...; the header is only
+# checked when ADMIN_TOKEN is set
 ```

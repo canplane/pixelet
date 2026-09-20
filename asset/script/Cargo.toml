@@ -23,7 +23,7 @@ path = "ingest_asset.rs"
 
 [dependencies]
 # A bucket key is the sha256 of an object's bytes.
-sha2 = "0.10"
+sha2 = "0.11"
 # The glb's own JSON chunk.
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }

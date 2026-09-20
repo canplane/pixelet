@@ -443,7 +443,7 @@ impl BakeContext {
                 return false;
             }
             let (mut vertex_total, mut index_total) = (0u32, 0u32);
-            for boxed in self.surviving.chunks_exact(6) {
+            for boxed in self.surviving.as_chunks::<6>().0 {
                 let faces = (boxed[3] & ALL_FACES).count_ones();
                 self.counters.faces_kept += faces;
                 vertex_total += faces * 4;

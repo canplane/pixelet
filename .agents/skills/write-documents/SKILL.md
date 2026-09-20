@@ -9,12 +9,28 @@ The documents are read by someone who has not seen the code. They are not
 reference cards and not essays: each one explains a mechanism in an order
 that can be followed from the top. This is what to hold them to.
 
-`deno fmt` runs with `proseWrap: preserve`, which means it keeps whatever line
-breaks you wrote and imposes none. The convention is therefore per file, and
-the rule is to match the file's neighbours: `README.md` and the two
-`ARCHITECTURE` documents run a paragraph to one line, while `AGENTS.md`, the
-skills and `issue/` wrap at about eighty columns. Reformatting a document to
-the other convention makes a diff of the whole file for no reason.
+## Lead with the core
+
+Write as if pitching the project: the sooner the thing lands, the better the
+document, and everything else here serves that. Someone who has not seen the
+code should be able to say what this is after the first screen. The test of
+any paragraph, picture or heading is whether it got them there sooner.
+
+That is what Occam's razor means here. Find the claim the rest follows from,
+put it first, and let the consequences come after it. xpute's README opened on
+the turn — seven invented names at once — when the core was that the interface
+is three edges and no others. Turns are a consequence of that narrowness, not
+the other way round. Moving the narrow picture to the front let the README
+drop all seven names.
+
+Plain words carry a reader faster than precise-sounding ones. Where a plainer
+word is about as short and just as accurate, it wins: the document exists for
+someone who does not know the subject yet.
+
+The masthead is not the body. A tagline, a date, a play link, a screenshot sit
+above the argument the way a title page does, and a reader passes over them.
+Counting them as delay and moving them down costs what they were doing and
+buys a reader nothing.
 
 ## Readability is the goal, and length is only a symptom
 
@@ -46,6 +62,17 @@ Write the need first, and let the name land on the sentence that answers it:
 Never introduce a term inside a parenthetical or an em-dash aside. An aside is
 the mark of something a reader may skip, and a definition is not skippable.
 
+Only a name this tree invented needs earning. `strobe`, `doorbell`, `ring`,
+`change`, `handle`, `band`, `run`, `XTP` and `PVF3` were made here, and nobody
+can look them up. `arena`, `deque`, `errno`, `buddy`, `slab`, `golden records`,
+`virtio` belong to the world, and a reader either knows one or can find it.
+Explaining those is padding. Paraphrasing one away is worse: `recorded output`
+says less than `golden records` and cannot be checked against anything.
+
+Where a borrowed term is genuinely hard, name it and move on rather than
+unpacking it — a document that stops to teach its dependencies never gets to
+its own subject. Where a plainer word is as precise, prefer the plainer one.
+
 ## Order by dependency
 
 Nothing may be used before it exists. This governs the order of sections, not
@@ -73,6 +100,12 @@ reference` — and let the qualifier do the work silently from then on.
 
 ## A diagram shows what prose cannot
 
+Judge a figure the way a paper does. A **figure** when the thing has a shape a
+sentence cannot hold — a layout, a flow, which end writes what. A **table**
+when the content is values a reader looks up rather than reads. **Prose** for
+the rest. A picture that is neither a shape nor a lookup is decoration, and
+decoration in a document someone has to search is a cost.
+
 Before drawing, ask what the picture carries that a sentence would not. Two
 things that are not diagrams:
 
@@ -94,9 +127,18 @@ not repeat the claim in the same words. Watch for an asymmetry there: a fork
 where one branch names an output and the other states a moral is a fork with
 a sentence stuck to it.
 
-Diagrams are hand-aligned ASCII. Build them with a short script rather than by
-eye; a column that is one character out is invisible in review and obvious on
-the page. Keep them under about 78 columns.
+Drawing is also a check on the prose. A diagram cannot hand-wave: it has to
+commit to numbers, and to which thing points at which. Putting the coarse-cell
+rule into a picture turned up a sentence that said "quarter-size" where the
+code takes a cube root and the answer is half.
+
+An analogy is a picture too, and it must not argue. Its job is to hand the
+reader a shape they already hold: one clause, attached to the sentence it
+illustrates. Add a second clause defending the comparison and it stops being a
+picture and becomes a claim — one that then has to survive the difference
+between the two things. A line here said another editor reserves memory the
+same way and then explained that it does so for a reason that does not apply,
+which left a name and no picture. Cut back to the clause, it works again.
 
 ## Each document says what is its own
 
@@ -104,6 +146,13 @@ A document that sits over another one (pixelet over xpute) must not re-explain
 the layer below. Say what is inherited, link it, and move on. Three of five
 headline properties in one README belonged to the layer underneath, which left
 no room for what the project itself does.
+
+A document can only defer to one its reader will open. AGENTS.md is written
+for agents; a README cannot send a human there and call the subject covered.
+Two statements of one rule at two depths — a paragraph for someone browsing
+the tree, the full rule for whoever writes code — are not duplication, because
+no single reader meets both. Ask who opens the file before treating a pointer
+to it as coverage.
 
 The same rule inside a document: if a section has already said the turn is
 somebody else's, it should not then draw that turn.
@@ -138,15 +187,61 @@ After the first draft, look for sentences that carry no fact:
 - a clause about the benefit of what was just described
 - scaffolding — "which is the next section", "note that"
 - a claim the diagram above it already makes
+- a fact the table beside it already carries
 
-Motivation earns its words. Commentary does not. One rewrite added 58% and
-came down to 48% purely by removing this, with no fact lost.
+A table and a figure are content, not decoration, so read them as part of the
+section before writing a line near one. A README here ended a section with
+"WebGPU only" three rows under a table whose Rendering row said WebGPU.
+
+Motivation earns its words. Commentary does not. Removing only this from one
+rewrite cut a fifth of its length, with no fact lost.
+
+## Name what outlives the document
+
+A README describes a system, not a deployment of it. A hostname, a device
+model, a version floor are facts about today's arrangement: they go stale
+without anyone noticing, and a reader who has a different one is told
+something false. The masthead is where today belongs — a play link, a date,
+a badge — because a reader takes it as current by construction.
+
+Two lines here named today in the body. One made an iPhone 11 sound like a
+design input when the decision was WebGPU and the phone was a consequence;
+the other put the domain at the top of a diagram whose subject was that every
+request arrives at one Worker. Both said less than the thing they displaced.
+
+Ask what the sentence would have to say if the fact changed. If the answer is
+"nothing" — the structure holds either way — the fact was never the point.
+
+## Symmetry is not a reason
+
+Every rule above pushes toward consistency, and applied without judgement that
+becomes its own fault. A section does not need an opening because its siblings
+have one; it needs one when its point is buried or when the first thing a
+reader meets has no frame. Two parts of one document here earned an opening —
+one began on a twenty-five-line graph, the other kept its thesis sixty lines
+down — and the third did not, because it begins on a table, which explains
+itself. Adding one there would only have repeated the map in the introduction.
+
+Ask what a reader gains, not what the shape would look like.
 
 ## Rewrite rather than patch
 
 When the order is wrong, moving sentences inside it keeps it wrong. Take the
 sections apart, put them in dependency order, and write the joins. Patching is
 for a document whose order is already right.
+
+## Mechanics
+
+`deno fmt` runs with `proseWrap: preserve`, which means it keeps whatever line
+breaks you wrote and imposes none. The convention is therefore per file, and
+the rule is to match the file's neighbours: `README.md` and the two
+`ARCHITECTURE` documents run a paragraph to one line, while `AGENTS.md`, the
+skills and `issue/` wrap at about eighty columns. Reformatting a document to
+the other convention makes a diff of the whole file for no reason.
+
+Diagrams are hand-aligned ASCII. Build them with a short script rather than by
+eye; a column that is one character out is invisible in review and obvious on
+the page. Keep them under about 78 columns.
 
 ## Before committing
 

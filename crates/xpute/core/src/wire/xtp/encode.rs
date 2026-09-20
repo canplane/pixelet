@@ -571,8 +571,8 @@ impl<'a> PacketWriter<'a> {
     /// A number array of `len` elements, element `i` being `value(i)`'s bytes.
     fn array_with<const N: usize>(&mut self, type_: SequenceType, len: u32, mut value: impl FnMut(u32) -> [u8; N]) -> &mut Self {
         self.seq(type_, len, len * N as u32, |out| {
-            for (i, o) in out.chunks_exact_mut(N).enumerate() {
-                o.copy_from_slice(&value(i as u32));
+            for (i, o) in out.as_chunks_mut::<N>().0.iter_mut().enumerate() {
+                *o = value(i as u32);
             }
         })
     }

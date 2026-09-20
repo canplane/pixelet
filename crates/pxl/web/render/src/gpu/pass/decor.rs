@@ -173,7 +173,7 @@ impl DecorPass {
     /// Writes every decor draw's uniforms, ghosts included, in one write: a
     /// later write to the same buffer before the submit would stand for every draw.
     pub fn prepare(&mut self, g: &GpuApi, draws: &[u32], uniforms: &[f32]) {
-        let n = draws.chunks_exact(DRAW_WORDS).filter(|d| is_decor(d[4])).count() as u32;
+        let n = draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| is_decor(d[4])).count() as u32;
         if n == 0 {
             return;
         }
@@ -189,7 +189,7 @@ impl DecorPass {
         }
         let stride = self.stride as usize;
         let buf = self.scratch.take(n * self.stride);
-        for (slot, d) in draws.chunks_exact(DRAW_WORDS).filter(|d| is_decor(d[4])).enumerate() {
+        for (slot, d) in draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| is_decor(d[4])).enumerate() {
             let (at, u) = (slot * stride, d[3] as usize * UNIFORM_FLOATS);
             put_f32(buf, at, uniforms[u]);
             put_f32(buf, at + 4, uniforms[u + 1]);
@@ -227,7 +227,7 @@ impl DecorPass {
     fn draw_pipeline(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks, which: u32, pipeline: u32, group0: u32) -> u32 {
         let mut slot = 0;
         let mut drawn = 0;
-        for d in draws.chunks_exact(DRAW_WORDS) {
+        for d in draws.as_chunks::<DRAW_WORDS>().0 {
             if !is_decor(d[4]) {
                 continue;
             }

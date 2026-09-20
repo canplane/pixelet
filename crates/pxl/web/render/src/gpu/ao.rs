@@ -17,9 +17,9 @@
 //! fragment stage; a full-resolution depth (4 bytes a pixel), the
 //! half-resolution depth and normal (16 bytes a half-pixel, 4 a pixel), two
 //! half-resolution occlusion images (4 bytes a half-pixel, 1 a pixel each),
-//! and the full-resolution map (1 byte a pixel) — 11 bytes a pixel, 16 MB at
-//! an iPhone 11's 828 x 1792 — and three half-resolution and one
-//! full-resolution fragment pass. The blue noise is 64 KB in the module.
+//! and the full-resolution map (1 byte a pixel) — 11 bytes a pixel — and
+//! three half-resolution and one full-resolution fragment pass. The blue
+//! noise is 64 KB in the module.
 
 use xpute_core::math::mat4::{mat4_invert, Mat4};
 

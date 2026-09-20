@@ -1583,7 +1583,7 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3, f64, f64) {
     let mut visible = (c[0] - x).abs() <= half && (c[1] - y).abs() <= half;
     if !visible {
         visible = true;
-        for p in frame.planes.chunks_exact(4) {
+        for p in frame.planes.as_chunks::<4>().0 {
             if p[0] * x + p[1] * y + p[2] * z + p[3] < -s.radius {
                 visible = false;
                 break;
@@ -1622,7 +1622,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
                             min: [f32::INFINITY; 3],
                             max: [f32::NEG_INFINITY; 3],
                         };
-                        for v in p.chunks_exact(3) {
+                        for v in p.as_chunks::<3>().0 {
                             for ((lo, hi), &x) in b.min.iter_mut().zip(b.max.iter_mut()).zip(v) {
                                 *lo = lo.min(x);
                                 *hi = hi.max(x);
