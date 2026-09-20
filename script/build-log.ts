@@ -21,7 +21,7 @@
 //
 // Usage (from the repo root):
 //   ./script/build-log.ts                      every build, newest first
-//   ./script/build-log.ts --record 18 --web --server     append one (CI)
+//   ./script/build-log.ts --record 18 --web --server --smoke success     append one (CI)
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 
@@ -33,14 +33,30 @@ const CACHE = new URL("../apps/web/.build_number", import.meta.url);
 
 /** One published build. `from` is the build this one's commits are counted
  * since, null when there was no previous record to count from. */
+/** What the public smoke said about the build once both halves settled. */
+type Smoke = "pass" | "fail";
+
 interface Entry {
   n: u32;
   sha: string;
   at: string;
   web: boolean;
   server: boolean;
+  /** Absent on a line written before the smoke was recorded; `null` where it
+   * did not run — a half failed, or the run was stopped — so a build that went
+   * out and was never checked reads differently from one that was checked and
+   * failed. A build is recorded either way: what went out went out, and the
+   * one whose smoke failed is the line most worth finding again. */
+  smoke?: Smoke | null;
   from: string | null;
   commits: string[];
+}
+
+/** A job's result as GitHub Actions spells it, in the log's words. */
+function smokeOf(result: string | undefined): Smoke | null {
+  if (result === "success") return "pass";
+  if (result === "failure") return "fail";
+  return null;
 }
 
 const wrangler = (...args: string[]) => ["run", "-A", "--node-modules-dir=auto", "npm:wrangler", ...args];
@@ -91,7 +107,7 @@ async function read(): Promise<{ raw: string; entries: Entry[] }> {
   return { raw, entries };
 }
 
-async function record(n: u32, web: boolean, server: boolean): Promise<void> {
+async function record(n: u32, web: boolean, server: boolean, smoke: Smoke | null): Promise<void> {
   const sha = git(["rev-parse", "HEAD"]) ?? die("not a git checkout; nothing to record");
   const { raw, entries } = await read();
   // A re-run of a job that wrote its line and then failed for some other
@@ -117,6 +133,7 @@ async function record(n: u32, web: boolean, server: boolean): Promise<void> {
     at: new Date().toISOString(),
     web,
     server,
+    smoke,
     from: reachable ? previous : null,
     commits: subjects.split("\n").filter((s) => s !== ""),
   };
@@ -134,7 +151,8 @@ async function record(n: u32, web: boolean, server: boolean): Promise<void> {
 
 function show(entry: Entry): void {
   const went = [entry.web ? "web" : null, entry.server ? "server" : null].filter(Boolean).join(" + ");
-  console.log(`#${entry.n}  ${entry.at.slice(0, 16).replace("T", " ")}  ${entry.sha.slice(0, 8)}  ${went}`);
+  const smoke = entry.smoke === undefined ? "" : entry.smoke === null ? "  · smoke did not run" : `  · smoke ${entry.smoke}`;
+  console.log(`#${entry.n}  ${entry.at.slice(0, 16).replace("T", " ")}  ${entry.sha.slice(0, 8)}  ${went}${smoke}`);
   for (const subject of entry.commits) console.log(`    ${subject}`);
 }
 
@@ -142,7 +160,8 @@ const args = Deno.args;
 if (args[0] === "--record") {
   const n = Number(args[1]);
   if (!Number.isSafeInteger(n) || n < 0) die(`--record wants a build number, not ${JSON.stringify(args[1])}`);
-  await record(n, args.includes("--web"), args.includes("--server"));
+  const at = args.indexOf("--smoke");
+  await record(n, args.includes("--web"), args.includes("--server"), smokeOf(at < 0 ? undefined : args[at + 1]));
 } else if (args.length === 0) {
   const { entries } = await read();
   for (const entry of entries.slice().reverse()) show(entry);
