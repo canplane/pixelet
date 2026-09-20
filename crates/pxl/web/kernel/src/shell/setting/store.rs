@@ -12,7 +12,11 @@
 //! the value in the source would then reach only people with empty storage. A
 //! stored override is checked against the schema on load, so a setting that
 //! does not exist, or a choice that lacks that option, falls back
-//! rather than lingers.
+//! rather than lingers. A setting this build does not offer goes the same
+//! way and for the same reason — a dev-only one has no row outside a
+//! development build, so nothing on screen could undo it — and a load that
+//! leaves anything out writes the rest back, so what is stored stays what
+//! the page can reach.
 //!
 //! Stored as `{"state":{"overrides":{…}},"version":0}`, the shape settings
 //! already sit in in a browser's storage.
@@ -20,8 +24,9 @@
 use xpute_core::codec::json::{read_json, Quoted};
 
 use crate::global::Global;
-use crate::host::{storage_get, storage_set};
-use crate::shell::setting::schema::{is_valid_setting, SettingKey, SettingRef, SettingValue, DEFAULT_SETTINGS};
+use crate::host::{handheld, storage_get, storage_set};
+use crate::shell::setting::schema::{is_offered, is_valid_setting, SettingKey, SettingRef, SettingValue, DEFAULT_SETTINGS};
+use crate::shell::setting::schema_spec::SETTINGS as S;
 use crate::world::chunk::node::chunk_sources_changed;
 
 const STORAGE_KEY: &str = "pxl:settings";
@@ -56,6 +61,7 @@ impl CameraTerrain {
 
     /// The name the schema offers it under, which is what a stored choice and
     /// the sheet's own radio both read.
+    #[cfg(feature = "dev")]
     fn as_str(self) -> &'static str {
         match self {
             CameraTerrain::Through => "through",
@@ -122,51 +128,64 @@ pub struct SettingsStore {
 }
 
 impl SettingsStore {
+    /// Every setting at schema.json's default for this device, from the
+    /// spec's constants rather than from the table: a `dev` setting is not in
+    /// the table of a module built without them (schema.rs), and what it does
+    /// the module still does, at this default. The test beside this holds the
+    /// two to the same values where the table has the setting.
     fn defaults() -> SettingsStore {
-        let mut s = SettingsStore {
-            show_poi: false,
-            show_decor: false,
-            show_structures: false,
-            lock_camera_tilt: false,
-            camera_terrain: CameraTerrain::default(),
-            ground_snap: false,
-            enable_terrain_carving: false,
-            show_edge_shade: false,
-            ao: AoMode::default(),
-            show_rim_light: false,
-            show_shadow_map: false,
-            texture_pack: false,
-            msaa: false,
-            show_debug_objects: false,
-            show_ledger: false,
-            pixel_dither: false,
-            person_variant: 0,
-            pet_variant: 0,
+        SettingsStore {
+            show_poi: S::show_poi::default,
+            show_decor: S::show_decor::default,
+            show_structures: S::show_structures::default,
+            lock_camera_tilt: S::lock_camera_tilt::default,
+            camera_terrain: CameraTerrain::of(S::camera_terrain::default),
+            ground_snap: S::ground_snap::default,
+            enable_terrain_carving: S::enable_terrain_carving::default,
+            show_edge_shade: S::show_edge_shade::default,
+            ao: AoMode::of(S::ao::default),
+            show_rim_light: S::show_rim_light::default,
+            show_shadow_map: S::show_shadow_map::default,
+            texture_pack: S::texture_pack::default,
+            msaa: if handheld() { S::msaa::handheld_default } else { S::msaa::default },
+            show_debug_objects: S::show_debug_objects::default,
+            show_ledger: S::show_ledger::default,
+            pixel_dither: S::pixel_dither::default,
+            person_variant: S::person_variant::default,
+            pet_variant: S::pet_variant::default,
             overrides: Vec::new(),
-        };
-        for (key, value) in DEFAULT_SETTINGS() {
-            s.write(key, value);
         }
-        s
     }
 
+    /// `state[key] = value`, for a key the table has. A `dev` key's arm is
+    /// under the feature with its row (schema.rs): out of the table, the key
+    /// is a string the module has no reason to carry.
     fn write(&mut self, key: &str, value: SettingValue) {
         match (key, value) {
+            #[cfg(feature = "dev")]
             ("show_poi", SettingValue::Toggle(v)) => self.show_poi = v,
             ("show_decor", SettingValue::Toggle(v)) => self.show_decor = v,
             ("show_structures", SettingValue::Toggle(v)) => self.show_structures = v,
             ("lock_camera_tilt", SettingValue::Toggle(v)) => self.lock_camera_tilt = v,
+            #[cfg(feature = "dev")]
             ("camera_terrain", SettingValue::Text(v)) => self.camera_terrain = CameraTerrain::of(&v),
+            #[cfg(feature = "dev")]
             ("ground_snap", SettingValue::Toggle(v)) => self.ground_snap = v,
+            #[cfg(feature = "dev")]
             ("enable_terrain_carving", SettingValue::Toggle(v)) => self.enable_terrain_carving = v,
             ("show_edge_shade", SettingValue::Toggle(v)) => self.show_edge_shade = v,
             ("ao", SettingValue::Text(v)) => self.ao = AoMode::of(&v),
             ("show_rim_light", SettingValue::Toggle(v)) => self.show_rim_light = v,
+            #[cfg(feature = "dev")]
             ("show_shadow_map", SettingValue::Toggle(v)) => self.show_shadow_map = v,
             ("texture_pack", SettingValue::Toggle(v)) => self.texture_pack = v,
+            #[cfg(feature = "dev")]
             ("msaa", SettingValue::Toggle(v)) => self.msaa = v,
+            #[cfg(feature = "dev")]
             ("show_debug_objects", SettingValue::Toggle(v)) => self.show_debug_objects = v,
+            #[cfg(feature = "dev")]
             ("show_ledger", SettingValue::Toggle(v)) => self.show_ledger = v,
+            #[cfg(feature = "dev")]
             ("pixel_dither", SettingValue::Toggle(v)) => self.pixel_dither = v,
             ("person_variant", SettingValue::Number(v)) => self.person_variant = v as u8,
             ("pet_variant", SettingValue::Number(v)) => self.pet_variant = v as u8,
@@ -177,21 +196,30 @@ impl SettingsStore {
     /// `state[key]`, where it lies.
     pub fn value(&self, key: &str) -> Option<SettingRef<'_>> {
         Some(match key {
+            #[cfg(feature = "dev")]
             "show_poi" => SettingRef::Toggle(self.show_poi),
             "show_decor" => SettingRef::Toggle(self.show_decor),
             "show_structures" => SettingRef::Toggle(self.show_structures),
             "lock_camera_tilt" => SettingRef::Toggle(self.lock_camera_tilt),
+            #[cfg(feature = "dev")]
             "camera_terrain" => SettingRef::Text(self.camera_terrain.as_str()),
+            #[cfg(feature = "dev")]
             "ground_snap" => SettingRef::Toggle(self.ground_snap),
+            #[cfg(feature = "dev")]
             "enable_terrain_carving" => SettingRef::Toggle(self.enable_terrain_carving),
             "show_edge_shade" => SettingRef::Toggle(self.show_edge_shade),
             "ao" => SettingRef::Text(self.ao.as_str()),
             "show_rim_light" => SettingRef::Toggle(self.show_rim_light),
+            #[cfg(feature = "dev")]
             "show_shadow_map" => SettingRef::Toggle(self.show_shadow_map),
             "texture_pack" => SettingRef::Toggle(self.texture_pack),
+            #[cfg(feature = "dev")]
             "msaa" => SettingRef::Toggle(self.msaa),
+            #[cfg(feature = "dev")]
             "show_debug_objects" => SettingRef::Toggle(self.show_debug_objects),
+            #[cfg(feature = "dev")]
             "show_ledger" => SettingRef::Toggle(self.show_ledger),
+            #[cfg(feature = "dev")]
             "pixel_dither" => SettingRef::Toggle(self.pixel_dither),
             "person_variant" => SettingRef::Number(self.person_variant as u32),
             "pet_variant" => SettingRef::Number(self.pet_variant as u32),
@@ -208,8 +236,15 @@ impl SettingsStore {
         })
     }
 
+    /// Sets `key` to `value` and stores the difference from the default, or
+    /// does nothing: for a value the key may not hold, for the value it
+    /// already has, and for a setting this build does not offer. The last is
+    /// the same rule `load` applies to storage, kept here for the live path
+    /// — a dev-only setting has no row outside a development build, but the
+    /// action that sets one is reachable from the console all the same, and
+    /// what the sheet cannot show it cannot undo.
     pub fn set_setting(&mut self, key: &str, value: SettingValue) {
-        if !is_valid_setting(key, &value) || self.get(key).as_ref() == Some(&value) {
+        if !is_offered(key) || !is_valid_setting(key, &value) || self.get(key).as_ref() == Some(&value) {
             return;
         }
         let Some((key, default)) = DEFAULT_SETTINGS().into_iter().find(|(k, _)| *k == key) else { return };
@@ -271,12 +306,29 @@ fn load() -> SettingsStore {
     let mut s = SettingsStore::defaults();
     let Some(raw) = storage_get(STORAGE_KEY) else { return s };
     let defaults = DEFAULT_SETTINGS();
+    let mut left_out = false;
     for (key, value) in parse_overrides(&raw) {
-        let Some((key, default)) = defaults.iter().find(|(k, _)| *k == key) else { continue };
-        if is_valid_setting(key, &value) && value != *default {
-            s.write(key, value.clone());
-            s.overrides.push((key, value));
+        let Some((key, default)) = defaults.iter().find(|(k, _)| *k == key) else {
+            left_out = true;
+            continue;
+        };
+        if !is_offered(key) || !is_valid_setting(key, &value) || value == *default {
+            left_out = true;
+            continue;
         }
+        s.write(key, value.clone());
+        s.overrides.push((key, value));
+    }
+    // Written back wherever something was left out, so that what is stored is
+    // what this build can express. A setting it does not offer has no row to
+    // undo it by, and a value carried but not applied is a state the page
+    // disagrees with; taking it out makes one read enough rather than leaving
+    // the storage to be corrected whenever a setting next happens to change.
+    // The cost is a development build finding its dev toggles at their
+    // defaults after the production one has been opened on the same origin,
+    // which is a toggle to flip and not a state to recover.
+    if left_out {
+        save(&s);
     }
     s
 }
@@ -286,3 +338,7 @@ static SETTINGS_STORE: Global<SettingsStore> = Global::new();
 pub fn settings_store() -> &'static mut SettingsStore {
     SETTINGS_STORE.get(load)
 }
+
+#[cfg(test)]
+#[path = "store.test.rs"]
+mod test;

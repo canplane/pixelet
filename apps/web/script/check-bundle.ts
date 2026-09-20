@@ -166,6 +166,52 @@ if (leaked.length > 0) {
 const excused = forbidden.filter(([where, v]) => shared(where, v)).length;
 console.log(`[check-bundle] ok — ${forbidden.length} development-only string(s), none present${excused > 0 ? ` (${excused} the shipped catalogues carry too)` : ""}`);
 
+// A dev setting's row: the settings table is generated whole from
+// schema.json, and a build that filtered it at run time shipped every dev
+// row under its name — `enable_terrain_carving:{kind:...}` and the rest,
+// readable in the artifact with their defaults. The shell now takes the
+// table without them (feature/setting/schema.ts), and this reads the
+// artifact to see that it did. What is looked for is the row and not the
+// bare name: a name may be read elsewhere for its own reasons (the ledger
+// overlay reads `settings.show_ledger`; the ledger report has an `msaa` of
+// its own), and a row is a property whose value is an object. A row every
+// build offers is the sentinel, so that a minifier writing rows some other
+// way fails this loudly rather than passing it blind.
+const SETTINGS_SPEC = "../../spec/pxl/web/kernel/shell/setting/schema.json";
+const SETTING_ROW_SENTINEL = "show_structures";
+
+function row(bundle: string, key: string): boolean {
+  return new RegExp(`[{,]\\s*["'\`]?${key}["'\`]?\\s*:\\s*\\{`).test(bundle);
+}
+
+const settingsSpec = JSON.parse(await Deno.readTextFile(SETTINGS_SPEC)) as { SETTINGS: Record<string, { dev?: boolean }> };
+if (!row(bundle, SETTING_ROW_SENTINEL)) {
+  console.error(`[check-bundle] sentinel row ${JSON.stringify(SETTING_ROW_SENTINEL)} missing from the bundle — the settings table is not written the way this reads it, so a pass would mean nothing`);
+  Deno.exit(1);
+}
+const devRows = Object.entries(settingsSpec.SETTINGS).filter(([, s]) => s.dev === true).map(([k]) => k);
+const shippedRows = devRows.filter((k) => row(bundle, k));
+if (shippedRows.length > 0) {
+  console.error(`[check-bundle] ${shippedRows.length} development-only setting row(s) present in the production bundle:`);
+  for (const k of shippedRows) console.error(`  ${k}`);
+  console.error("\nfeature/setting/schema.ts is meant to take SETTINGS_SHIPPED under a production build; the bundler kept the whole table.");
+  Deno.exit(1);
+}
+console.log(`[check-bundle] ok — ${devRows.length} development-only setting row(s), none present`);
+
+// The kernel's table has the same rows, and the module `build` bundles is
+// built without them (pxl-kernel's `dev` feature, off under build-wasm.ts's
+// `--published`), so their names are not in its data either. Raw bytes, as
+// the kernel's sentinel is.
+const named = devRows.filter((k) => kernel.includes(k));
+if (named.length > 0) {
+  console.error(`[check-bundle] ${named.length} development-only setting name(s) in the kernel module:`);
+  for (const k of named) console.error(`  ${k}`);
+  console.error("\n`build` is meant to bundle the module build-wasm.ts makes with --published; this one still has the table's dev rows.");
+  Deno.exit(1);
+}
+console.log(`[check-bundle] ok — none of the ${devRows.length} named in the kernel module`);
+
 // A model or a texture in the bundle is a file the deploy is carrying that
 // the bucket should — every one the client draws is named by the shipped
 // palette and fetched by content key. A `?url` import of a

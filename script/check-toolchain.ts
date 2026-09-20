@@ -1,5 +1,7 @@
 #!/usr/bin/env -S deno run -A
-// Holds every hand-written Rust version in the tree to rust-toolchain.toml.
+// Holds the toolchains the tree names to the one file that names each.
+//
+// Rust first, to rust-toolchain.toml.
 //
 // rustup reads that file and nothing else needs to be told: a cargo command
 // here uses it whatever `rustup default` is, and CI installs from it with no
@@ -45,6 +47,25 @@ if (wrong.length > 0) {
   for (const line of wrong) console.error(`  ${line}`);
   console.error("\nrust-toolchain.toml is the one that decides; an image tag follows it.");
   Deno.exit(1);
+}
+
+// Deno second, to .tool-versions, and against the runtime actually reading
+// this. rustup switches a checkout onto rust-toolchain.toml by itself; Deno
+// has nothing that does, so CI installs from the file and a machine is left
+// to match it by hand. Saying so here is what makes the gate a checkout runs
+// the same gate CI runs, rather than two that agree by luck.
+//
+// A mismatch is a warning and not a failure: what CI installs is the file's,
+// so the published build is never the odd one, and a developer a patch
+// behind should be told rather than stopped.
+const tools = await Deno.readTextFile(join(root, ".tool-versions"));
+const want = tools.match(/^deno\s+v?(\S+)$/m)?.[1];
+if (!want) throw new Error(".tool-versions: no `deno <version>` line for the gate to hold anything to");
+
+if (want !== Deno.version.deno) {
+  console.warn(`[check-toolchain] deno ${Deno.version.deno} here where .tool-versions says ${want} — \`deno upgrade --version ${want}\``);
+} else {
+  console.log(`[check-toolchain] ok — deno ${want}, as .tool-versions says`);
 }
 
 console.log(`[check-toolchain] ok — rust ${channel}, in rust-toolchain.toml and in ${IMAGES.length} image(s)`);

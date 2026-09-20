@@ -768,14 +768,25 @@ type DataSpec = { $doc?: string[]; $ts?: string; $rs?: string; $tsHeader?: strin
 
 /** `enums`: the spec's closed sets are also written as Rust enums (see rsItems). */
 /** `mod` is the Rust module the router declares for the file, where it is not the file's stem. */
-const DATA_SPECS: { json: string; ts?: string; rs?: string; mod?: string; enums?: true }[] = [
+/** `devKey`: the key an entry of a top-level table is marked development-only
+ * by. The TypeScript then also gets `<NAME>_SHIPPED`, the table without those
+ * entries, for a production bundle to carry in the table's place: a filter
+ * on the whole table at run time leaves every name in the artifact, and a
+ * literal the build does not read is one the bundler drops. */
+const DATA_SPECS: { json: string; ts?: string; rs?: string; mod?: string; enums?: true; devKey?: string }[] = [
   { json: "spec/pxl/web/kernel/control/camera/config.json", rs: "crates/pxl/web/kernel/src/control/camera/config.spec.rs" },
   { json: "spec/pxl/web/kernel/layer/environment/config.json", rs: "crates/pxl/web/kernel/src/layer/environment/config.spec.rs" },
   { json: "spec/pxl/web/kernel/layer/environment/theme.json", rs: "crates/pxl/web/kernel/src/layer/environment/theme.spec.rs", mod: "theme_spec", enums: true },
   { json: "spec/pxl/web/render/look/style.json", rs: "crates/pxl/web/render/src/look/style.spec.rs" },
   { json: "spec/pxl/web/kernel/layer/billboard/order.json", rs: "crates/pxl/web/kernel/src/layer/billboard/order.spec.rs" },
   { json: "spec/pxl/web/kernel/layer/decor/kind/kind.json", rs: "crates/pxl/web/kernel/src/layer/decor/kind/kind.spec.rs", mod: "spec", enums: true },
-  { json: "spec/pxl/web/kernel/shell/setting/schema.json", ts: "apps/web/src/feature/setting/schema.spec.ts", rs: "crates/pxl/web/kernel/src/shell/setting/schema.spec.rs", mod: "schema_spec" },
+  {
+    json: "spec/pxl/web/kernel/shell/setting/schema.json",
+    ts: "apps/web/src/feature/setting/schema.spec.ts",
+    rs: "crates/pxl/web/kernel/src/shell/setting/schema.spec.rs",
+    mod: "schema_spec",
+    devKey: "dev",
+  },
   { json: "spec/pxl/web/kernel/layer/poi/theme.json", ts: "apps/web/src/feature/search/poi_theme.spec.ts", rs: "crates/pxl/web/kernel/src/layer/poi/theme.spec.rs", mod: "theme_spec" },
   {
     json: "spec/pxl/web/kernel/layer/character/variant.json",
@@ -1023,6 +1034,17 @@ async function dataOutputs(): Promise<Output[]> {
           const entries = typeof n === "object" && !Array.isArray(n) ? Object.entries(n).filter(([k]) => !k.startsWith("$")) : [];
           if (d.enums && entries.length > 0 && entries.every(([, v]) => typeof v === "object" && !Array.isArray(v) && typeof (v as Record<string, DataNode>).$number === "number")) {
             body.push("", `export const ${enumName(name)} = {`, ...entries.map(([k, v]) => `  ${k}: ${(v as Record<string, DataNode>).$number},`), "} as const;");
+          }
+          // The same table without its development-only entries, where it has any.
+          const devKey = d.devKey;
+          const isDev = ([, v]: [string, DataNode]) => devKey !== undefined && typeof v === "object" && !Array.isArray(v) && (v as Record<string, DataNode>)[devKey] === true;
+          if (devKey !== undefined && entries.some(isDev)) {
+            const shipped = Object.fromEntries(entries.filter((e) => !isDev(e)));
+            body.push(
+              "",
+              `/** ${name} without its \`${devKey}\` entries: what a production bundle carries in its place. */`,
+              `export const ${name}_SHIPPED = ${tsLiteral(shipped, "f64", "")} as const;`,
+            );
           }
         }
       }

@@ -10,8 +10,9 @@
 // handheld device, where it differs. A choice may carry `costs` beside its
 // `options`, one per option in the same order, for when what an option costs
 // differs from its neighbours'; an empty string is no badge. A `dev` setting
-// exists in every build
-// but is only offered in the sheet under `__IS_DEV__`.
+// is in the kernel's table in every build and offered only under a
+// development one; the shell's production bundle carries SETTINGS_SHIPPED,
+// the table without them, in SETTINGS' place.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To
@@ -25,6 +26,12 @@
 /// section of the sheet at all — its two settings are picked from the
 /// drawer's Character tab (ui/character/picker.tsx).
 pub const SETTING_SECTIONS: &[&str] = &["display", "camera", "editing", "lighting", "quality", "debug", "character"];
+
+/// The sections that are a development build's as a whole. One of these is
+/// shown under `__IS_DEV__` only and carries the badge on its heading, so
+/// its rows do not repeat it; a `dev` row in any other section carries its
+/// own. Which rows exist in a build is the rows' `dev`, not this.
+pub const DEV_SECTIONS: &[&str] = &["debug"];
 
 /// What terrain does to the camera.
 ///
@@ -57,11 +64,16 @@ pub mod SETTINGS {
     /// Ground colour from the art pack (four sampler2DArray taps per fragment)
     /// instead of the flat per-instance average. The shader's `u_low_spec` is
     /// this, inverted.
+    ///
+    /// Low because the four taps are all of it: fill rate, which scales with
+    /// the screen and not with the world, and nothing else — no geometry, no
+    /// pass of its own, and no work off the GPU past an atlas the client
+    /// already holds.
     pub mod texture_pack {
         pub const kind: &str = "toggle";
         pub const default: bool = true;
         pub const section: &str = "display";
-        pub const cost: &str = "med";
+        pub const cost: &str = "low";
         pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
     }
     /// Whether the STRUCTURE ground channel is painted. The bake writes it
@@ -73,11 +85,20 @@ pub mod SETTINGS {
         pub const KEYS: &[&str] = &["kind", "default", "section"];
     }
     /// Procedurally scattered decor only; what the player placed stays.
+    ///
+    /// Med because it is models rather than a shading term: a chunk builds its
+    /// decor and the frame draws it, so what it costs follows what is in view.
+    /// It has been the frame's own bottleneck — 20260912-what-to-render-when.md
+    /// reads GPU p95 24.1 ms with 2.26 M decor triangles and 15% of moving
+    /// frames missing a vsync — and the projected-size criterion holds it to
+    /// the nearest tier without making far decor cheap, the impostor tier that
+    /// would being decided and not built. The badge is an ordering, and this is
+    /// the one to reach for before any shading term.
     pub mod show_decor {
         pub const kind: &str = "toggle";
         pub const default: bool = true;
         pub const section: &str = "display";
-        pub const cost: &str = "low";
+        pub const cost: &str = "med";
         pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
     }
     /// The index sweep, the badge draws and the atlas: a couple of ms a

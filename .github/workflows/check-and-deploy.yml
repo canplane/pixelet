@@ -65,9 +65,11 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  # The Rust version is not here. rust-toolchain.toml is what says it and
-  # rustup reads that file on its own, so a job installs from it rather than
-  # being told — see the install steps below.
+  # Neither language's version is here. rust-toolchain.toml says the Rust and
+  # rustup reads it on its own; .tool-versions says the Deno and setup-deno is
+  # pointed at it. A job installs from a file rather than being told, so the
+  # number is in one place and a checkout can be held to the same one
+  # (script/check-toolchain.ts).
   #
   # wasm-opt prints the import/export mapping the shell imports, and which
   # letters it assigns is the optimizer's own business — so the version is
@@ -94,7 +96,7 @@ jobs:
 
       - uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
+          deno-version-file: .tool-versions
 
       # No version, no components, no target: rust-toolchain.toml names all
       # three and a bare install reads it. A step of its own rather than left
@@ -220,7 +222,7 @@ jobs:
       - uses: denoland/setup-deno@v2
         if: steps.scope.outputs.run == 'true'
         with:
-          deno-version: v2.x
+          deno-version-file: .tool-versions
 
       # As the gate does. This job builds the module and needs no linter, but
       # what it installs is the file's business now, and a component it does
@@ -370,7 +372,7 @@ jobs:
       - uses: denoland/setup-deno@v2
         if: steps.scope.outputs.run == 'true'
         with:
-          deno-version: v2.x
+          deno-version-file: .tool-versions
 
       - name: Smoke-test the origin directly
         if: steps.scope.outputs.run == 'true'
@@ -403,7 +405,7 @@ jobs:
           ref: ${{ github.sha }}
       - uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
+          deno-version-file: .tool-versions
       - name: Smoke-test the published routes
         run: deno task smoke https://plei.me
 
@@ -451,7 +453,7 @@ jobs:
 
       - uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
+          deno-version-file: .tool-versions
 
       - name: Append this build to the log
         env:

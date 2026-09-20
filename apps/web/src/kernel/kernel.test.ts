@@ -173,11 +173,19 @@ Deno.test("kernel - a map centre fetches its terrain and draws it, and the map s
 });
 
 Deno.test("kernel - the settings actions reach the snapshot", () => {
-  const before = turn().snapshot.settings.show_poi;
+  const before = turn().snapshot.settings.lock_camera_tilt;
+  action({ type: "toggle_setting", key: "lock_camera_tilt" });
+  assertEquals(turn().snapshot.settings.lock_camera_tilt, !before);
+  action({ type: "set_setting", key: "lock_camera_tilt", value: before });
+  assertEquals(turn().snapshot.settings.lock_camera_tilt, before);
+  // The world was created under "test", not "development": a dev-only
+  // setting is one this build does not offer, and the action is refused
+  // rather than applied to a row nothing on screen could undo.
+  const dev = turn().snapshot.settings.show_poi;
   action({ type: "toggle_setting", key: "show_poi" });
-  assertEquals(turn().snapshot.settings.show_poi, !before);
-  action({ type: "set_setting", key: "show_poi", value: before });
-  assertEquals(turn().snapshot.settings.show_poi, before);
+  assertEquals(turn().snapshot.settings.show_poi, dev);
+  action({ type: "set_setting", key: "show_poi", value: !dev });
+  assertEquals(turn().snapshot.settings.show_poi, dev);
 });
 
 Deno.test("kernel - a settled turn asks the module heap for nothing", () => {
