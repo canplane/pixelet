@@ -19,13 +19,14 @@
 
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN};
 
-use crate::mesh::paint::terrain::elevation::{sample_ele, WATER_RECESS_CELLS};
+use crate::mesh::paint::terrain::elevation::{ground_ele, GroundLanes};
 use crate::mesh::volume::{Volumes, Voxel, NO_LAYER};
+use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
 
 /// How far below the chunk's lowest cell the shared floor sits, before it
 /// is rounded down to a band.
 const TERRAIN_Z_MARGIN: i32 = 4;
-const CHUNK_CELL_SPAN2: usize = (CHUNK_CELL_SPAN * CHUNK_CELL_SPAN) as usize;
+const COL_SPAN2: usize = (COL_SPAN * COL_SPAN) as usize;
 
 /// The channels, in override order: a later one's non-void type wins.
 pub const CHANNELS: usize = 4;
@@ -35,8 +36,6 @@ const STRUCTURE: usize = 2;
 const TRANSPORT: usize = 3;
 
 const VOID: u8 = 0;
-/// land.sea: bare land masked as water-looking, so it recesses like water.
-const SEA: u8 = 1 | 0x80;
 
 /// What a channel's type byte means: the colour and the texture-array
 /// layer of each type it has, and the material class the channel paints.
@@ -88,6 +87,11 @@ pub struct PageView<'a> {
 
 /// One chunk of a page, sampled: a material and a top a cell, and the
 /// floor the columns share.
+/// A chunk's terrain over the run set's padded column grid: the chunk's own
+/// cells and the ring of neighbours around them (voxel_scan.rs's APRON). The
+/// ring is sampled from the same page — the elevation raster is padded, so a
+/// cell outside the page still has a height — and is never painted into the
+/// volume or emitted; it is there for the face mask to ask about.
 pub struct ChunkSample {
     /// Packed 0xCC_RRGGBB a cell.
     pub material: Vec<u32>,
@@ -100,9 +104,9 @@ pub struct ChunkSample {
 impl Default for ChunkSample {
     fn default() -> Self {
         ChunkSample {
-            material: vec![0; CHUNK_CELL_SPAN2],
-            layer_idx: vec![0; CHUNK_CELL_SPAN2],
-            ele: vec![0; CHUNK_CELL_SPAN2],
+            material: vec![0; COL_SPAN2],
+            layer_idx: vec![0; COL_SPAN2],
+            ele: vec![0; COL_SPAN2],
             floor: 0,
         }
     }
@@ -113,17 +117,29 @@ impl ChunkSample {
     /// skips the structure channel, as the setting does.
     pub fn read(&mut self, page: &PageView, tables: &Materials, tx0: u32, ty0: u32, show_structures: bool) {
         let mut min_ele = i32::MAX;
-        for dy in 0..CHUNK_CELL_SPAN {
-            for dx in 0..CHUNK_CELL_SPAN {
-                let i = (dy * CHUNK_CELL_SPAN + dx) as usize;
-                let (tx, ty) = (tx0 + dx, ty0 + dy);
-                let page_idx = (ty * PAGE_CELL_SPAN + tx) as usize;
-                let types = [
-                    page.ground[LAND][page_idx],
-                    page.ground[WATER][page_idx],
-                    page.ground[STRUCTURE][page_idx],
-                    page.ground[TRANSPORT][page_idx],
-                ];
+        let last = PAGE_CELL_SPAN as i32 - 1;
+        for py in 0..COL_SPAN {
+            for px in 0..COL_SPAN {
+                let i = (py * COL_SPAN + px) as usize;
+                let own = APRON..COL_SPAN - APRON;
+                let inner = own.contains(&px) && own.contains(&py);
+                let (tx, ty) = (tx0 as i32 + px as i32 - APRON as i32, ty0 as i32 + py as i32 - APRON as i32);
+                // The ground channels are the page's own span; only the
+                // elevation is padded past it. An apron cell outside the
+                // page keeps the height — which is all the face mask reads
+                // — and takes the base material, which nothing draws.
+                let on_page = (0..=last).contains(&tx) && (0..=last).contains(&ty);
+                let page_idx = (ty.clamp(0, last) * PAGE_CELL_SPAN as i32 + tx.clamp(0, last)) as usize;
+                let types = if on_page {
+                    [
+                        page.ground[LAND][page_idx],
+                        page.ground[WATER][page_idx],
+                        page.ground[STRUCTURE][page_idx],
+                        page.ground[TRANSPORT][page_idx],
+                    ]
+                } else {
+                    [VOID; 4]
+                };
 
                 // The material: the base, then each channel in order.
                 let (mut rgb, mut class, mut layer) = (tables.base_rgb, tables.base_class, tables.base_layer);
@@ -145,26 +161,35 @@ impl ChunkSample {
                 self.material[i] = ((class as u32) << 24) | ((rgb[0] as u32) << 16) | ((rgb[1] as u32) << 8) | rgb[2] as u32;
                 self.layer_idx[i] = layer;
 
-                // The height, a cell lower for water-family ground: the water
-                // channel, or bare land masked as sea, under nothing built.
-                let mut ele = sample_ele(page.ele, tx, ty) as i32;
-                let water_family = types[STRUCTURE] == VOID && types[TRANSPORT] == VOID && (types[WATER] != VOID || types[LAND] == SEA);
-                if water_family {
-                    ele -= WATER_RECESS_CELLS as i32;
-                }
+                // The height every consumer of this page takes, recess and
+                // all (elevation.rs's ground_ele). An apron cell off the page
+                // has no channels to judge by and takes the raw height.
+                let lanes = on_page.then(|| GroundLanes {
+                    land: page.ground[LAND],
+                    water: page.ground[WATER],
+                    structure: page.ground[STRUCTURE],
+                    transport: page.ground[TRANSPORT],
+                });
+                let ele = ground_ele(page.ele, lanes, page_idx, tx, ty) as i32;
                 self.ele[i] = ele as i16;
-                min_ele = min_ele.min(ele);
+                // The floor is the chunk's own: an apron column is written
+                // from it, and a neighbour's valley must not drop it.
+                if inner {
+                    min_ele = min_ele.min(ele);
+                }
             }
         }
         // One band-aligned floor shared by the whole chunk, under every peak.
         self.floor = (min_ele - TERRAIN_Z_MARGIN).div_euclid(CHUNK_CELL_SPAN as i32) * CHUNK_CELL_SPAN as i32;
     }
 
-    /// Paints every column into `volume`, floor to top.
+    /// Paints the chunk's own columns into `volume`, floor to top. The
+    /// apron's are not painted: the volume is the chunk's, and they exist
+    /// only as columns of the run set.
     pub fn paint(&self, volumes: &mut Volumes, volume: usize) -> bool {
         for cy in 0..CHUNK_CELL_SPAN {
             for cx in 0..CHUNK_CELL_SPAN {
-                let i = (cy * CHUNK_CELL_SPAN + cx) as usize;
+                let i = apron_col(cx, cy) as usize;
                 let v = Voxel {
                     material: self.material[i],
                     layer_idx: self.layer_idx[i],

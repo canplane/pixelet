@@ -13,12 +13,16 @@ use xpute_runtime::global::Global;
 /// and the shaded band's width.
 pub const EDGE_STRENGTH: f64 = 0.3;
 pub const EDGE_WIDTH: f64 = 0.03;
-/// How much of the ambient light a face loses where it meets a wall, while
-/// the corner occlusion is on; the reach is chunk.wgsl's AO_REACH. Down from
-/// 0.45 as the reach widened from half a cell to a whole one, and again once
-/// the corners were shaded too: it scales the warm tint as well as the
-/// darkening, so the two came on together.
-pub const AO_STRENGTH: f64 = 0.25;
+/// How much of the ambient light a face loses where it meets a wall, at the
+/// wall itself, while the corner occlusion is on. It is a Rust constant and
+/// not one of chunk.wgsl's, where the rest of the shading's numbers are,
+/// because the kernel decides whether the mode is on and writes this or
+/// zero into the lane; the shader cannot see a setting. It scales the warm
+/// tint by the same amount as the darkening, so a face reads no more
+/// coloured than it reads dark. How far the shading reaches from the wall,
+/// and how it falls away over that distance, are chunk.wgsl's AO_REACH and
+/// occlusion_of.
+pub const AO_STRENGTH: f64 = 0.2;
 
 pub const STAGE_WORDS: usize = 96;
 

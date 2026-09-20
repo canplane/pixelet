@@ -24,7 +24,7 @@ use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Step};
 use pxl_render::mesh::paint::object::adapter::{Carve, Painted, Painter};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView, CHANNELS};
 use pxl_render::mesh::volume::Volumes;
-use pxl_render::mesh::voxel_scan::{BandView, RunSet, ScanContext, ScanStep};
+use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_spec::bake::format::Tile;
 use pxl_spec::space::indexer::{FROM_L3_IDX, L2_IDX};
@@ -888,7 +888,16 @@ impl Builder {
         }
         // SAFETY: the scan job's volume, held until the scan finishes.
         unsafe { world.volumes.band_views(volume, &mut self.bands) };
-        match self.scan.step(&self.bands) {
+        // The apron's columns are the sample's, which paint_terrain read
+        // before the volume was painted: the bands hold the chunk's own
+        // cells and nothing beyond them.
+        let apron = Apron {
+            ele: &self.sample.ele,
+            material: &self.sample.material,
+            layer_idx: &self.sample.layer_idx,
+            floor: self.sample.floor,
+        };
+        match self.scan.step(&self.bands, &apron) {
             ScanStep::Working => Progress::Busy,
             ScanStep::Done => unreachable!("a scan is finished when its set is provided"),
             ScanStep::NeedSet(bytes) => {
@@ -1006,7 +1015,9 @@ impl Builder {
         self.sample.read(&view, world.materials, tx0, ty0, show);
         assert!(self.direct.begin_direct(), "the direct writer left open");
         let floor = self.sample.floor;
-        for i in 0..(CHUNK_CELL_SPAN * CHUNK_CELL_SPAN) as usize {
+        // Every column of the set, the chunk's own and the apron's: the
+        // sample holds both, and the writer wants them in one order.
+        for i in 0..(COL_SPAN * COL_SPAN) as usize {
             self.direct.direct_column(i as u32);
             let top = self.sample.ele[i] as i32 - 1;
             if top >= floor {
@@ -1033,9 +1044,9 @@ impl Builder {
     }
 
     fn run_set(world: &World, runs: &Runs) -> RunSet<'static> {
-        let bytes = pxl_render::mesh::voxel_scan::run_set_bytes(runs.count, CHUNK_CELL_SPAN) as usize;
+        let bytes = pxl_render::mesh::voxel_scan::run_set_bytes(runs.count, COL_SPAN) as usize;
         // SAFETY: the chunk's own block, held until its runs are let go.
-        unsafe { RunSet::carve(core::slice::from_raw_parts(world.volumes.mem().add(runs.at), bytes), runs.count, CHUNK_CELL_SPAN) }
+        unsafe { RunSet::carve(core::slice::from_raw_parts(world.volumes.mem().add(runs.at), bytes), runs.count, COL_SPAN, APRON) }
     }
 
     fn advance_bake(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) -> Progress {

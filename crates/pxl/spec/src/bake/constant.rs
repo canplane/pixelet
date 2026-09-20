@@ -83,6 +83,17 @@ pub const PAGE_ELE_SPAN: u32 = 1 << (L3_SHAMT + 1 - 5);
 /// Two-cell padding (ELE_PAD=2) enables C1 continuous Bicubic interpolation
 /// at page boundaries by providing a 4x4 sample kernel for every edge texel.
 /// (64 inner + 2*2 padding = 68x68 total grid).
+///
+/// The pad buys a second thing, and that is why it is a property of the
+/// format rather than of the interpolator that reads it: the padded raster
+/// reaches ELE_PAD samples — 2 * (PAGE_CELL_SPAN / PAGE_ELE_SPAN) = 32 cells
+/// — past the page's own span, so the ground height of a cell outside the
+/// page is readable from inside it. Whatever has to know what the ground
+/// beyond its own span does can ask without the neighbouring page being
+/// resident: a mesh deciding whether the cell past its edge rises above the
+/// face it is about to draw, a raycast stepping off the page. Reconstruction
+/// is the reason the pad is two samples wide; this is the reason it is worth
+/// carrying in every page rather than recomputed from neighbours.
 pub const ELE_PAD: u32 = 2;
 pub const ELE_PADDED_SPAN: u32 = PAGE_ELE_SPAN + 2 * ELE_PAD;
 

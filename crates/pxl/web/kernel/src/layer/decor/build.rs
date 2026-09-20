@@ -20,6 +20,7 @@
 
 use pxl_render::look::lod::{LodStep, TARGET_CELL_PX};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
+use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
@@ -340,7 +341,7 @@ impl<'s> DecorBuild<'s> {
                             rng.unit() * core::f64::consts::PI * 2.0
                         };
                         let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
-                        let ele = sample.ele[(dy * CHUNK_CELL_SPAN + dx) as usize] as i32;
+                        let ele = sample.ele[apron_col(dx, dy) as usize] as i32;
                         if has_entries && store.cell(chunk.col_idx, dx, dy, ele).is_some_and(|c| c.solid > 0) {
                             continue;
                         }

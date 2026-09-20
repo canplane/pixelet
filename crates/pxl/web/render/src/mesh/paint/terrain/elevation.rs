@@ -34,7 +34,7 @@ const ELE_CELL_STEP: f64 = PAGE_CELL_SPAN as f64 / PAGE_ELE_SPAN as f64;
 /// Therefore the source-grid coordinates are:
 ///   sx = tx / step + pad - 0.5
 ///   sy = ty / step + pad - 0.5
-pub fn sample_ele_bilinear(page_ele: &[i16], tx: u32, ty: u32) -> i16 {
+pub fn sample_ele_bilinear(page_ele: &[i16], tx: i32, ty: i32) -> i16 {
     let sx = (tx as f64 + 0.5) / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
     let sy = (ty as f64 + 0.5) / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
     let last = (ELE_PADDED_SPAN - 1) as f64;
@@ -57,7 +57,7 @@ pub fn sample_ele_bilinear(page_ele: &[i16], tx: u32, ty: u32) -> i16 {
 /// - keeps the hot path allocation-free
 /// - uses an unclamped fast path for the common interior case
 /// - falls back to clamped sampling near tile boundaries
-fn sample_ele_bicubic(page_ele: &[i16], tx: u32, ty: u32) -> i16 {
+fn sample_ele_bicubic(page_ele: &[i16], tx: i32, ty: i32) -> i16 {
     let sx = (tx as f64 + 0.5) / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
     let sy = (ty as f64 + 0.5) / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
 
@@ -103,7 +103,11 @@ fn sample_ele_bicubic(page_ele: &[i16], tx: u32, ty: u32) -> i16 {
 }
 
 /// `sample_ele`: the bicubic sample.
-pub fn sample_ele(page_ele: &[i16], tx: u32, ty: u32) -> i16 {
+/// `tx`/`ty` are signed because the padded raster reaches ELE_PAD samples
+/// past the page's own span (pxl-spec's ELE_PAD): a cell just outside the
+/// page has a height here, which is what lets a chunk at the page's edge
+/// read the ground its neighbour stands on.
+pub fn sample_ele(page_ele: &[i16], tx: i32, ty: i32) -> i16 {
     sample_ele_bicubic(page_ele, tx, ty)
 }
 
@@ -124,18 +128,64 @@ pub const WATER_RECESS_CELLS: i16 = 1;
 /// WATER channel: cube.rs models it as land.sea (a masked BARE-family id),
 /// not one of WATER's own RIVER/LAKE/WETLAND types.
 pub fn is_water_family_at(ground: &Ground, idx: u32) -> bool {
-    let i = idx as usize;
-    let void = cube_types::common::void;
-    if ground.structure[i] != void {
-        return false;
+    GroundLanes::of(ground).is_water_family(idx as usize)
+}
+
+/// One page's four ground channels, however the caller holds them: a page's
+/// own `Ground`, or lanes viewed out of the block it was read into. The
+/// question below is asked of this and not of either shape, so there is one
+/// answer and not one per caller.
+#[derive(Clone, Copy)]
+pub struct GroundLanes<'a> {
+    pub land: &'a [u8],
+    pub water: &'a [u8],
+    pub structure: &'a [u8],
+    pub transport: &'a [u8],
+}
+
+impl<'a> GroundLanes<'a> {
+    pub fn of(ground: &'a Ground) -> GroundLanes<'a> {
+        GroundLanes {
+            land: &ground.land,
+            water: &ground.water,
+            structure: &ground.structure,
+            transport: &ground.transport,
+        }
     }
-    if ground.transport[i] != void {
-        return false;
+
+    pub fn is_water_family(&self, i: usize) -> bool {
+        let void = cube_types::common::void;
+        if self.structure[i] != void {
+            return false;
+        }
+        if self.transport[i] != void {
+            return false;
+        }
+        if self.water[i] != void {
+            return true;
+        }
+        self.land[i] == cube_types::land::sea
     }
-    if ground.water[i] != void {
-        return true;
+}
+
+/// The ground's height at cell (tx, ty) — the one answer every consumer of a
+/// page's elevation takes, so that none of them reasons about a height the
+/// others do not see. The sampled elevation, a cell lower where the cell is
+/// water-family: the recess is a real height change and is applied here,
+/// once, rather than at each place that asks.
+///
+/// `ground` is none where the channels are not to hand, and the recess is
+/// then not applied. That is a cell outside the page: the elevation raster
+/// is padded and still has its height (pxl-spec's ELE_PAD), while the ground
+/// channels are the page's own span and stop at its edge. The one place this
+/// policy is not whole, and it is written here rather than left for each
+/// caller to discover.
+pub fn ground_ele(page_ele: &[i16], ground: Option<GroundLanes>, idx: usize, tx: i32, ty: i32) -> i16 {
+    let ele = sample_ele(page_ele, tx, ty);
+    match ground {
+        Some(g) if g.is_water_family(idx) => ele - WATER_RECESS_CELLS,
+        _ => ele,
     }
-    ground.land[i] == cube_types::land::sea
 }
 
 /// Unpacks a dense (CHUNK_CELL_SPAN x CHUNK_CELL_SPAN) elevation chunk from
@@ -157,11 +207,7 @@ pub fn dense_ele_region<'a>(page_ele: &[i16], tx0: u32, ty0: u32, span: u32, gro
         let ty = ty0 + dy;
         for dx in 0..span {
             let tx = tx0 + dx;
-            let mut ele = sample_ele(page_ele, tx, ty);
-            if ground.is_some_and(|g| is_water_family_at(g, idx)) {
-                ele -= WATER_RECESS_CELLS;
-            }
-            out[idx as usize] = ele;
+            out[idx as usize] = ground_ele(page_ele, ground.map(GroundLanes::of), idx as usize, tx as i32, ty as i32);
             idx += 1;
         }
     }

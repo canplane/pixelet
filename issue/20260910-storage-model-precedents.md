@@ -723,7 +723,7 @@ placement in `poi_layer.tsx`, in distance order with absorbed badges
 becoming counts; the per-tier buffers are one instanced quad over one
 slot atlas uploaded by rectangle
 ([20260912-linear-memory-what-is-left.md](./20260912-linear-memory-what-is-left.md),
-[20260913 POI under the tick](../ARCHITECTURE.pixelet.md#billboards-and-poi)).
+[20260913 POI under the tick](../ARCHITECTURE.md#billboards-and-poi)).
 Step 4, baked clustering, was not taken: the runtime absorb-into-count is
 enough at current densities, and the order-independence condition above
 is the price still on record. The `cell_shift` question resolved itself

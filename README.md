@@ -13,16 +13,16 @@ _Started on December 15, 2025._
 The client is a small operating system in a browser tab. A Rust **kernel**, compiled to one WebAssembly module, holds the world, schedules its own work and draws through WebGPU; a TypeScript **shell** drives it the way a driver drives a device, and decides nothing about the world. The arrangement they run in — one fixed memory, ring buffers, a turn on a doorbell — is [xpute](./ARCHITECTURE.xpute.md), which is generic and knows nothing of any of this. What follows is pixelet's own.
 
 - **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into pages of 1024² blocks, four categorical ground channels and one elevation raster each. A page is fetched, read where it lands in memory, and kept only while the view is near it.
-- **One coordinate, 96 bits of fixed point.** A position is three integer lanes and three 8-bit residues, so it resolves to 1/256 of a block. The arithmetic is integer, so it is the same bits on every machine, and the X lane is cyclic, so the world wraps at the longitude seam.
-- **Terrain and what you build meet only when a chunk is built.** The ground is a dense raster per page; placed objects are a sparse tree per band. They converge in one pipeline, and the mesher and the raycast walk the same runs out of it — so what is drawn is what is hit.
-- **Memory is paid for in detail.** A refused allocation does not fail a frame. Work off screen is reclaimed first, and if that is not enough the LOD ladder steps one tier coarser and climbs back when the pressure passes. The view gets blockier; the page does not die.
+- **One coordinate, 96 bits of fixed point.** A position is two packed words — three integer fields for which block, three 8-bit fractions for where inside it — so it resolves to 1/256 of a block. The arithmetic is integer, so it is the same bits on every machine, and the X field is cyclic, so the world wraps at the longitude seam.
+- **Terrain and what you build meet only when a chunk is built.** The ground is a dense raster for a whole page; placed objects are a sparse tree per 64³ band. They converge in one pipeline, and the mesher and the pointer's ray read the same spans out of it — so what is drawn is what is hit.
+- **Running short of memory costs detail, not the frame.** Work off screen is reclaimed first, and if that is not enough the LOD ladder steps one tier coarser and climbs back when the pressure passes. The view gets blockier; the tab does not die.
 - **Numbers, not strings.** Commands, catalogs, assets and messages are numbered once in JSON under `spec/`, and both languages are generated from it. Nothing is ever looked up by name.
 
 ---
 
 ## System Overview
 
-A block on screen has come a long way: a provider's geometry, a bake, a fetch, a chunk build. End to end it is one path.
+A block on screen has come a long way: a provider's geometry, a bake, a fetch, a chunk build.
 
 ```text
                    Overture Maps · GEDTM30
@@ -49,12 +49,12 @@ a sparse tree per band        ▼             one L2 chunk, 64 blocks
       a mesh per LOD tier               the pointer's ray
                │                                │
                ▼                                ▼
-     draw list ──▶ WebGPU         what is drawn is what is hit
+     draw list ──▶ WebGPU          a hit, from the same runs
 ```
 
 `pxl-geo-bake` bakes, `pxl-kernel` holds the pages and schedules the builds, `pxl-render` paints, scans and meshes, and `apps/web` hands the draw list to WebGPU.
 
-Above the line happens once per version and is served as files; below it happens in the tab, on the turn's quota. The ground and what the player places are stored differently — a dense raster for a whole page, a sparse tree per band — and meet only when a chunk is built.
+Above the line happens once per version and is served as files; below it happens in the tab, on the turn's quota.
 
 The kernel decides what exists, what is on screen, at what detail, and what to draw. The shell forwards events, does the I/O the kernel names, renders the UI, and turns the renderer's calls into WebGPU. It decides nothing about the world. What it renders from is the kernel's snapshot: one JSON document of UI state, written after a turn that changed it. What each frame and task cost goes to a read-only ledger, which nothing that schedules is allowed to read.
 
@@ -76,31 +76,31 @@ cp apps/web/.env.example apps/web/.env
 deno task dev
 ```
 
-`dev` runs the client alone: every server route is proxied to the live deployment, so no Docker, database or server process is needed. That is the way in for most work, and the wrong way for bake work, because a published tile prefix never changes. For that, start the databases and run the whole stack:
+`dev` runs the client alone: every server route is proxied to the live deployment, so no Docker, database or server process is needed. That is the way in for most work, and the wrong way for bake work: a published tile prefix never changes, so the proxy would keep serving the tiles that are already live rather than the ones just baked. For that, start the databases and run the whole stack:
 
 ```bash
 docker compose --env-file .env -f infra/local/docker-compose.yml up -d
 deno task dev:local
 ```
 
-| Task                                 | Description                                                          |
-| ------------------------------------ | -------------------------------------------------------------------- |
-| `deno task dev`                      | The client alone, every route served by the live deployment          |
-| `deno task dev:local`                | The client and the three servers it talks to, on this machine        |
-| `deno task dev:web`                  | The client alone, against those servers                              |
-| `deno task dev:geo`                  | pxl-geo only (`/geo`)                                                |
-| `deno task dev:api`                  | pxl-api only (`/api`)                                                |
-| `deno task dev:tiles`                | The dev tile server, baking each page on demand                      |
-| `deno task preview`                  | The production bundle, served locally, data from the live deployment |
-| `deno task build:web`                | Build the client                                                     |
-| `deno task build:wasm`               | Build the kernel module into `apps/web/src/kernel/kernel.wasm`       |
-| `deno task bake:{tiles,poi,geocode}` | db-geo into `./out/<kind>/<version>`                                 |
-| `deno task spec`                     | Generate Rust and TypeScript from the JSON under `spec/`             |
-| `deno task deploy`                   | Build the client and publish the Cloudflare Worker                   |
-| `deno task smoke <url>`              | What a deployment must answer, against a running one                 |
-| `deno task check`                    | Type-check every workspace member                                    |
-| `deno task test`                     | Every test, every workspace member                                   |
-| `deno task lint` / `fmt`             | Lint / format                                                        |
+| Task                                 | Description                                                           |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| `deno task dev`                      | The client alone, every route served by the live deployment           |
+| `deno task dev:local`                | The client and the three servers it talks to, on this machine         |
+| `deno task dev:web`                  | The client alone, against those servers                               |
+| `deno task dev:geo`                  | pxl-geo only (`/geo`)                                                 |
+| `deno task dev:api`                  | pxl-api only (`/api`)                                                 |
+| `deno task dev:tiles`                | The dev tile server, baking each page on demand                       |
+| `deno task preview`                  | The production bundle, served locally, data from the live deployment  |
+| `deno task build:web`                | Build the client                                                      |
+| `deno task build:wasm`               | Build the kernel module into `apps/web/src/kernel/kernel.wasm`        |
+| `deno task bake:{tiles,poi,geocode}` | db-geo into `./out/<kind>/<version>`                                  |
+| `deno task spec`                     | Generate Rust and TypeScript from the JSON under `spec/`              |
+| `deno task deploy`                   | Build the client and publish the Cloudflare Worker                    |
+| `deno task smoke <url>`              | What a deployment must answer, against a running one                  |
+| `deno task check`                    | The gate: format, types, clippy, and the files generated from `spec/` |
+| `deno task test`                     | Every test, every workspace member                                    |
+| `deno task lint` / `fmt`             | Lint / format                                                         |
 
 Three tools are run by path rather than by task, since each belongs to the tree it reads:
 
@@ -110,7 +110,7 @@ Three tools are run by path rather than by task, since each belongs to the tree 
 | `./asset/script/download_texture_pack.rs`           | Normalize the texture pack's sources into 256² tiles           |
 | `infra/geo/**/script/*`                             | Fill db-geo from Overture and GEDTM30 — infra/geo/README.md §4 |
 
-To measure the client, use `preview` (`localhost:4173`): it is the production bundle, without the dev server's unbundled modules and hooks, and with the ledger overlay, which is compiled in for development only.
+To measure the client, use `preview` (`localhost:4173`). It is the bundle as the deployment builds it, so the dev server's unbundled modules and hooks are gone. It is still a development build, so the ledger overlay is compiled in, and a deployed build has neither.
 
 ---
 
@@ -207,7 +207,9 @@ Rust, the xpute packages and the kernel's driver (`apps/web/src/kernel/`) share 
 
 ## Learn More
 
-[ARCHITECTURE.pixelet.md](./ARCHITECTURE.pixelet.md) is how the application is built: the client, how it uses the runtime, and the engine — coordinates, the hierarchy, terrain, the chunk pipeline, rendering, catalogs. [ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) is the system under it: the memory, the rings, the turn, the credits, the wire formats. [AGENTS.md](./AGENTS.md) is how to work in the tree.
+[ARCHITECTURE.md](./ARCHITECTURE.md) is how the application is built, in three parts: the world it addresses — the levels, the coordinate, where the ground comes from — then the client that holds it, then the engine that computes with it. [AGENTS.md](./AGENTS.md) is how to work in the tree.
+
+Four files carry a `.xpute` infix: [README.xpute.md](./README.xpute.md) and [ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) — the system under the application, its memory, rings, turn, credits and wire formats — with `LICENSE.xpute` and `THIRD_PARTY_NOTICES.xpute.md` beside them. They belong to the xpute repository and live here because xpute is developed here. None of them names pixelet, which is what lets `script/export-xpute.ts` drop the infix and send them out as they are.
 
 ---
 

@@ -4,10 +4,14 @@ Instructions for AI coding agents working in the pixelet repository. Tool-agnost
 on purpose — Claude Code, Copilot, and Cursor all read this file (directly or
 through a symlink), so nothing here should assume a particular assistant.
 
-What the system is: [README.md](./README.md),
-[ARCHITECTURE.pixelet.md](./ARCHITECTURE.pixelet.md),
-[ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md). Why past decisions went the
-way they did: [issue/](./issue/). What is queued: [issue/BACKLOG.md](./issue/BACKLOG.md).
+What the system is: [README.md](./README.md) and
+[ARCHITECTURE.md](./ARCHITECTURE.md) for the application,
+[README.xpute.md](./README.xpute.md) and
+[ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) for the system under it.
+**The two `.xpute` documents must never name pixelet**: they are the xpute
+repository's, and the export drops the infix and ships them unchanged. Why
+past decisions went the way they did: [issue/](./issue/). What is queued:
+[issue/BACKLOG.md](./issue/BACKLOG.md).
 
 ---
 

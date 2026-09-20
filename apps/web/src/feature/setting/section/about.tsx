@@ -12,13 +12,14 @@ import { useKernel } from "@/kernel/shell.ts";
 const ENV_SHORT: Record<string, string> = { development: "dev", staging: "stg" };
 
 /** What the map is made of, in the order it is built: the ground and what
- * stands on it, then what the places on it are called. A bake reads as the
- * prefix it is served from, `<kind>/<version>`, which is a path anyone can
- * put in a URL; the object store's version is not a path and is not spelled
- * as one. Where the tiles are a live API instead, that is a property of the
- * deployment rather than of any one kind, so it is said once. */
+ * stands on it, then what the places on it are called. Each reads as
+ * `<what>/<version>` — for a bake that is the prefix it is served from, a
+ * path anyone can put in a URL, and the object store's version is written
+ * the same way so the line has one form rather than two. Where the tiles are
+ * a live API instead, that is a property of the deployment rather than of
+ * any one kind, so it is said once. */
 function dataLabel(object_storage_version: number): string {
-  const object = `object-v${object_storage_version}`;
+  const object = `object/v${object_storage_version}`;
   if (!PUBLISHED_TILES) return `live tiles · ${object}`;
   const { terrain, poi, geocode } = PUBLISHED_VERSION;
   return `terrain/${terrain} · ${object} · poi/${poi} · geocode/${geocode}`;

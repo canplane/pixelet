@@ -166,14 +166,20 @@ fn edge_factor(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) ->
 // softened from 0.55 and a square once the two could be switched side by
 // side: the screen-space pass reaches 1.5 units and its occlusion is a
 // sample count that thins out over the whole radius.
-const AO_REACH: f32 = 1.0;
+const AO_REACH: f32 = 1.5;
 // The occluded light's hue: #1a1006 as a ratio, red kept — the warm dark of
 // a contact shadow rather than a grey one, which is what the screen-space
 // pass this replaces was tuned to.
 const AO_TINT: vec3f = vec3f(1.0, 0.615, 0.231);
 
+// The falloff from one concave edge, over AO_REACH cells. Squared and not a
+// smoothstep: a smoothstep is flat at both ends, so the shading sat against
+// the wall at nearly its full value and then fell away over the middle,
+// which reads as a dark strip with an edge rather than as a gradient. This
+// leaves the wall at once and tapers to nothing.
 fn occlusion_of(d: f32) -> f32 {
-  return 1.0 - smoothstep(0.0, AO_REACH, d);
+  let t = 1.0 - clamp(d / AO_REACH, 0.0, 1.0);
+  return t * t;
 }
 
 fn occlusion(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) -> f32 {
@@ -194,65 +200,70 @@ fn occlusion(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) -> f
   } else {
     n_positive = normal.y > 0.0;
   }
-  var occ = 0.0;
+  // What the face still sees, each edge taking its share of what the last
+  // one left. Summing them instead saturated: two edges at half their
+  // strength already reached the clamp, so the inside of a corner went flat
+  // at its darkest over the whole area where both reach. This darkens with
+  // every edge and never arrives.
+  var open = 1.0;
   if (!is_side) {
     let base = select(DIPS_BASE, RISES_BASE, normal.z > 0.0);
     if (face_bit(faces, lateral_bit(true, true, base))) {
-      occ += occlusion_of(to_pos.x);
+      open *= 1.0 - occlusion_of(to_pos.x);
     }
     if (face_bit(faces, lateral_bit(true, false, base))) {
-      occ += occlusion_of(to_neg.x);
+      open *= 1.0 - occlusion_of(to_neg.x);
     }
     if (face_bit(faces, lateral_bit(false, true, base))) {
-      occ += occlusion_of(to_pos.y);
+      open *= 1.0 - occlusion_of(to_pos.y);
     }
     if (face_bit(faces, lateral_bit(false, false, base))) {
-      occ += occlusion_of(to_neg.y);
+      open *= 1.0 - occlusion_of(to_neg.y);
     }
     // The corners, at the distance to the corner itself: a cube touching
     // only there shades less than one along a whole edge, which falls out
     // of the distance being the longer one.
     if (normal.z > 0.0) {
       if (face_bit(faces, DIAG_RISES_PP)) {
-        occ += occlusion_of(length(vec2f(to_pos.x, to_pos.y)));
+        open *= 1.0 - occlusion_of(length(vec2f(to_pos.x, to_pos.y)));
       }
       if (face_bit(faces, DIAG_RISES_PN)) {
-        occ += occlusion_of(length(vec2f(to_pos.x, to_neg.y)));
+        open *= 1.0 - occlusion_of(length(vec2f(to_pos.x, to_neg.y)));
       }
       if (face_bit(faces, DIAG_RISES_NP)) {
-        occ += occlusion_of(length(vec2f(to_neg.x, to_pos.y)));
+        open *= 1.0 - occlusion_of(length(vec2f(to_neg.x, to_pos.y)));
       }
       if (face_bit(faces, DIAG_RISES_NN)) {
-        occ += occlusion_of(length(vec2f(to_neg.x, to_neg.y)));
+        open *= 1.0 - occlusion_of(length(vec2f(to_neg.x, to_neg.y)));
       }
     }
   } else {
     let own = lateral_bit(x_dom, n_positive, FACE_BASE);
     if (face_bit(faces, own * RISES_BASE)) {
-      occ += occlusion_of(to_pos.z);
+      open *= 1.0 - occlusion_of(to_pos.z);
     }
     if (face_bit(faces, own * DIPS_BASE)) {
-      occ += occlusion_of(to_neg.z);
+      open *= 1.0 - occlusion_of(to_neg.z);
     }
     // The inside corners at the face's two ends, which the diagonal bits
     // name by the quadrant the neighbour is in.
     if (x_dom) {
       if (face_bit(faces, select(DIAG_NP, DIAG_PP, n_positive))) {
-        occ += occlusion_of(to_pos.y);
+        open *= 1.0 - occlusion_of(to_pos.y);
       }
       if (face_bit(faces, select(DIAG_NN, DIAG_PN, n_positive))) {
-        occ += occlusion_of(to_neg.y);
+        open *= 1.0 - occlusion_of(to_neg.y);
       }
     } else {
       if (face_bit(faces, select(DIAG_PN, DIAG_PP, n_positive))) {
-        occ += occlusion_of(to_pos.x);
+        open *= 1.0 - occlusion_of(to_pos.x);
       }
       if (face_bit(faces, select(DIAG_NN, DIAG_NP, n_positive))) {
-        occ += occlusion_of(to_neg.x);
+        open *= 1.0 - occlusion_of(to_neg.x);
       }
     }
   }
-  return clamp(occ, 0.0, 1.0);
+  return 1.0 - open;
 }
 
 // Both arrays are sampled and one chosen: textureSample must sit in

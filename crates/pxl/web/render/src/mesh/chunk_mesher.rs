@@ -13,15 +13,15 @@
 //! knows the mesh's size (`Step::NeedMesh`), and the bake waits at that step
 //! for as long as the answer is that there is no room.
 
-use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, U_PER_CELL};
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::round;
 
 use crate::mesh::volume::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};
-use crate::mesh::voxel_scan::{OwnedRunSet, RunSet};
+use crate::mesh::voxel_scan::{OwnedRunSet, RunSet, COL_SPAN};
 
 /// The widest span a bake is handed.
-const MAX_BAKE_SPAN: usize = CHUNK_CELL_SPAN as usize;
+const MAX_BAKE_SPAN: usize = COL_SPAN as usize;
 
 const LOW_FILL_THRESHOLD: f64 = 0.25;
 
@@ -169,6 +169,9 @@ struct ZBucketAccum {
 
 struct FineBake {
     span: u32,
+    /// The set's ring, in columns: read for what lies beyond an edge, never
+    /// walked and never emitted from (voxel_scan.rs's APRON).
+    apron: u32,
     xy_scale: u32,
     phase: u8,
     row: u32,
@@ -252,17 +255,15 @@ impl BakeContext {
         self.v_cnt = 0;
         self.i_cnt = 0;
         self.open = Some(if lod_step == 1 {
-            Open::Fine(self.begin_fine(set.span, 1))
+            Open::Fine(self.begin_fine(set.span, set.apron, 1))
         } else {
-            assert!(
-                lod_step.is_power_of_two() && set.span.is_multiple_of(lod_step),
-                "lod step {} does not divide span {}",
-                lod_step,
-                set.span
-            );
+            // The chunk's own columns, not the apron's: a coarse tier is
+            // summarised from them and carries no ring of its own.
+            let inner = set.span - 2 * set.apron;
+            assert!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step), "lod step {} does not divide span {}", lod_step, inner);
             Open::Coarse(CoarseBake {
                 lod_step,
-                res: set.span / lod_step,
+                res: inner / lod_step,
                 phase: 0,
                 row: 0,
                 fine: None,
@@ -327,13 +328,14 @@ impl BakeContext {
         self.buckets.clear();
     }
 
-    fn begin_fine(&mut self, span: u32, xy_scale: u32) -> FineBake {
+    fn begin_fine(&mut self, span: u32, apron: u32, xy_scale: u32) -> FineBake {
         self.merge_run[..(span * span) as usize].fill(None);
         FineBake {
             span,
+            apron,
             xy_scale,
             phase: 0,
-            row: 0,
+            row: apron,
             emit_at: 0,
             vertex_total: 0,
             index_total: 0,
@@ -342,11 +344,15 @@ impl BakeContext {
 
     fn step_fine(&mut self, b: &mut FineBake, set: &RunSet) -> bool {
         let span = b.span;
+        // The chunk's own columns. The ring outside them is read through
+        // run_face_mask's neighbour lookups and is never walked: nothing is
+        // emitted from a column that belongs to the next chunk.
+        let (lo, hi) = (b.apron, span - b.apron);
 
         if b.phase == 0 {
-            let row_end = span.min(b.row + BAKE_ROWS_PER_STEP);
+            let row_end = hi.min(b.row + BAKE_ROWS_PER_STEP);
             for cy in b.row..row_end {
-                for cx in 0..span {
+                for cx in lo..hi {
                     let col = cy * span + cx;
                     let end = set.start[col as usize + 1];
                     let mut mergeable: Option<(u32, u32)> = None;
@@ -372,17 +378,17 @@ impl BakeContext {
                 }
             }
             b.row = row_end;
-            if row_end >= span {
+            if row_end >= hi {
                 b.phase = 1;
-                b.row = 0;
+                b.row = lo;
             }
             return false;
         }
 
         if b.phase == 1 {
-            let row_end = span.min(b.row + BAKE_ROWS_PER_STEP);
+            let row_end = hi.min(b.row + BAKE_ROWS_PER_STEP);
             for cy in b.row..row_end {
-                for cx in 0..span {
+                for cx in lo..hi {
                     let col = (cy * span + cx) as usize;
                     let Some(run) = self.merge_run[col] else {
                         continue;
@@ -390,8 +396,9 @@ impl BakeContext {
                     let run = run as usize;
                     let span_u = span as usize;
                     let mask = self.merge_mask[col];
+                    let hi_u = hi as usize;
                     let mut w = 1usize;
-                    while cx as usize + w < span_u {
+                    while cx as usize + w < hi_u {
                         if self.merge_mask[col + w - 1] & X_SEAM_BITS != 0 {
                             break;
                         }
@@ -405,7 +412,7 @@ impl BakeContext {
                         w += 1;
                     }
                     let mut h = 1usize;
-                    'outer: while cy as usize + h < span_u {
+                    'outer: while cy as usize + h < hi_u {
                         let row = col + h * span_u;
                         for k in 0..w {
                             if self.merge_mask[col + (h - 1) * span_u + k] & Y_SEAM_BITS != 0 {
@@ -432,7 +439,7 @@ impl BakeContext {
                 }
             }
             b.row = row_end;
-            if row_end < span {
+            if row_end < hi {
                 return false;
             }
             let (mut vertex_total, mut index_total) = (0u32, 0u32);
@@ -453,6 +460,9 @@ impl BakeContext {
         }
 
         let unit = b.xy_scale as f64 * U_PER_CELL;
+        // A box is placed by the chunk's own grid; the columns were walked
+        // in the padded one.
+        let apron = b.apron as f64;
         let emit_end = self.surviving.len().min(b.emit_at + BAKE_BOXES_PER_STEP * 6);
         let mut s_i = b.emit_at;
         while s_i < emit_end {
@@ -462,15 +472,15 @@ impl BakeContext {
             let depth = (set.z1[i] as f64 + 1.0 - set.z0[i] as f64) * U_PER_CELL;
             let (min_x, min_y, min_z, size_x, size_y, size_z);
             if sub_sz == SUB_CELL_NONE {
-                min_x = cx * unit;
-                min_y = cy * unit;
+                min_x = (cx - apron) * unit;
+                min_y = (cy - apron) * unit;
                 min_z = set.z0[i] as f64 * U_PER_CELL;
                 size_x = w * unit;
                 size_y = h * unit;
                 size_z = depth;
             } else {
-                min_x = cx * unit + unpack_sub_cell_fraction(set.sub_ox[i]) * unit;
-                min_y = cy * unit + unpack_sub_cell_fraction(set.sub_oy[i]) * unit;
+                min_x = (cx - apron) * unit + unpack_sub_cell_fraction(set.sub_ox[i]) * unit;
+                min_y = (cy - apron) * unit + unpack_sub_cell_fraction(set.sub_oy[i]) * unit;
                 min_z = set.z0[i] as f64 * U_PER_CELL + unpack_sub_cell_fraction(set.sub_oz[i]) * depth;
                 size_x = unpack_sub_cell_size(set.sub_sx[i]) * unit;
                 size_y = unpack_sub_cell_size(set.sub_sy[i]) * unit;
@@ -523,6 +533,7 @@ impl BakeContext {
             if b.row == 0 {
                 self.coarse.clear();
                 self.coarse.span = res;
+                self.coarse.apron = 0;
             }
             let row_end = res.min(b.row + coarse_rows_per_step(lod_step));
             for by in b.row..row_end {
@@ -530,9 +541,9 @@ impl BakeContext {
                     let start = self.buckets.len() as u32;
                     let mut cnt = 0u32;
                     for j in 0..lod_step {
-                        let cy = by * lod_step + j;
+                        let cy = by * lod_step + j + set.apron;
                         for k in 0..lod_step {
-                            let cx = bx * lod_step + k;
+                            let cx = bx * lod_step + k + set.apron;
                             let col = cy * set.span + cx;
                             let end = set.start[col as usize + 1];
                             for i in set.start[col as usize]..end {
@@ -550,7 +561,7 @@ impl BakeContext {
                 return false;
             }
             self.coarse.start.push(self.coarse.z0.len() as u32);
-            b.fine = Some(self.begin_fine(res, lod_step));
+            b.fine = Some(self.begin_fine(res, 0, lod_step));
             b.phase = 2;
             return false;
         }
