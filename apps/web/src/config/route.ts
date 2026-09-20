@@ -2,7 +2,12 @@
 
 /** Every same-origin route the app requests, and how a dev server forwards them. */
 
-import { type BakeKind, PUBLISHED_VERSION } from "@/config/published.spec.ts";
+// A sibling by its own path, as route.spec.ts is below. The alias would be
+// the house style, but vite.config.ts imports this module for the dev
+// proxy's routes and its own bundler knows no aliases — under `@/` the
+// import went unresolved and was left external, and Deno's import map is
+// what quietly made it work.
+import { type BakeKind, PUBLISHED_VERSION } from "./published.spec.ts";
 
 import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
 

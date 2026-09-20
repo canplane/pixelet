@@ -475,7 +475,9 @@ impl DebugPass {
 
     /// The frame's segments into the open pass; how many vertices.
     fn draw(&self, g: &GpuApi, pass: u32, draws: &[u32], uniforms: &[f32], blocks: &Blocks) -> u32 {
-        let Some(d) = draws.chunks_exact(DRAW_WORDS).find(|d| d[4] == PIPELINE_DEBUG) else { return 0 };
+        let Some(d) = draws.as_chunks::<DRAW_WORDS>().0.iter().find(|d| d[4] == PIPELINE_DEBUG) else {
+            return 0;
+        };
         let (Some((block, _, _)), count) = (blocks.get(d[0]), d[1]) else { return 0 };
         if count == 0 {
             return 0;
@@ -758,7 +760,7 @@ impl Renderer {
         let b = blocks();
         let vertex_bytes = self.chunk.vertex_bytes() + VIS_BYTES_PER_VERTEX;
         let mut any = false;
-        for d in draws.chunks_exact(DRAW_WORDS) {
+        for d in draws.as_chunks::<DRAW_WORDS>().0 {
             let (handle, vertex_cnt, index_cnt, uniform, pipeline) = (d[0], d[1], d[2], d[3], d[4]);
             if pipeline != which {
                 continue;
@@ -896,7 +898,7 @@ impl Renderer {
             }
             // The case's actor's draw, and where it stands; nothing drawn until
             // the actor has one.
-            let Some(own) = draws.chunks_exact(DRAW_WORDS).find(|d| d[4] == PIPELINE_SKINNED && d[2] == model) else {
+            let Some(own) = draws.as_chunks::<DRAW_WORDS>().0.iter().find(|d| d[4] == PIPELINE_SKINNED && d[2] == model) else {
                 continue;
             };
             targets(g, s, 1);
@@ -950,7 +952,7 @@ impl Renderer {
         let b = blocks();
         let mut triangles = 0u32;
         let mut census = [[0.0; 2]; PIPELINES as usize];
-        for d in draws.chunks_exact(DRAW_WORDS) {
+        for d in draws.as_chunks::<DRAW_WORDS>().0 {
             let tris = match d[4] {
                 PIPELINE_CHUNK | PIPELINE_GHOST_BOX | PIPELINE_GHOST_BOX_COPLANAR => d[2] / 3,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
@@ -1076,10 +1078,10 @@ fn take_lists(g: Option<&GpuApi>, row: [usize; 10]) -> (&'static [u32], &'static
     // the next take.
     let words = |at: usize, n: usize| unsafe { core::slice::from_raw_parts(at as *const u32, n) };
     let b = blocks();
-    for u in words(row[0], row[1] * UPLOAD_WORDS).chunks_exact(UPLOAD_WORDS) {
+    for u in words(row[0], row[1] * UPLOAD_WORDS).as_chunks::<UPLOAD_WORDS>().0 {
         b.insert(g, u[0], u[1], u[2], u[3], u[4]);
     }
-    for r in words(row[8], row[9] * REWRITE_WORDS).chunks_exact(REWRITE_WORDS) {
+    for r in words(row[8], row[9] * REWRITE_WORDS).as_chunks::<REWRITE_WORDS>().0 {
         b.rewrite(g, r[0], r[1], r[2]);
     }
     for &handle in words(row[2], row[3]) {

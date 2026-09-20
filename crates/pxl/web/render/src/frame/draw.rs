@@ -125,7 +125,7 @@ impl DrawList {
     /// The block behind `handle` changed: its bytes go to the GPU again,
     /// into the buffer it already has. A rewrite already listed stands.
     pub fn rewrite(&mut self, handle: u32, at: u32, bytes: u32) {
-        if handle == 0 || self.rewrites.chunks_exact(REWRITE_WORDS).any(|r| r[0] == handle) {
+        if handle == 0 || self.rewrites.as_chunks::<REWRITE_WORDS>().0.iter().any(|r| r[0] == handle) {
             return;
         }
         self.rewrites.extend_from_slice(&[handle, at, bytes]);

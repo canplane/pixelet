@@ -9,7 +9,7 @@
 # The same two stages pxl-geo's image has, and the same reasons — see
 # crates/pxl/server/geo/Dockerfile, which sits beside its own crate as this one does.
 
-FROM rust:1.94-slim-trixie AS build
+FROM rust:1.98.1-slim-trixie AS build
 WORKDIR /src
 
 # Only `crates/` is copied: pxl-api reads nothing outside it, and the generated

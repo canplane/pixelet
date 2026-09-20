@@ -12,9 +12,9 @@ _Started on December 15, 2025._
 
 The client is a small operating system in a browser tab. A Rust **kernel**, compiled to one WebAssembly module, holds the world, schedules its own work and draws through WebGPU; a TypeScript **shell** drives it the way a driver drives a device, and decides nothing about the world. The arrangement they run in — one fixed memory, ring buffers, a turn on a doorbell — is [xpute](./ARCHITECTURE.xpute.md), which is generic and knows nothing of any of this. What follows is pixelet's own.
 
-- **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into pages of 1024² blocks, four categorical ground channels and one elevation raster each. A page is fetched, read where it lands in memory, and kept only while the view is near it.
+- **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into pages of 1024² blocks, four channels of ground type and one elevation raster each. A page is fetched, read where it lands in memory, and kept only while the view is near it.
 - **One coordinate, 96 bits of fixed point.** A position is two packed words — three integer fields for which block, three 8-bit fractions for where inside it — so it resolves to 1/256 of a block. The arithmetic is integer, so it is the same bits on every machine, and the X field is cyclic, so the world wraps at the longitude seam.
-- **Terrain and what you build meet only when a chunk is built.** The ground is a dense raster for a whole page; placed objects are a sparse tree per 64³ band. They converge in one pipeline, and the mesher and the pointer's ray read the same spans out of it — so what is drawn is what is hit.
+- **Terrain and what you build meet only when a chunk is built.** The chunk is Minecraft's, at 64 blocks. The ground is a dense raster for a whole page; placed objects are a sparse tree per 64³ band. They converge in one pipeline, and the mesher and the pointer's ray read the same spans out of it — so what is drawn is what is hit.
 - **Running short of memory costs detail, not the frame.** Work off screen is reclaimed first, and if that is not enough the LOD ladder steps one tier coarser and climbs back when the pressure passes. The view gets blockier; the tab does not die.
 - **Numbers, not strings.** Commands, catalogs, assets and messages are numbered once in JSON under `spec/`, and both languages are generated from it. Nothing is ever looked up by name.
 
@@ -31,7 +31,7 @@ A block on screen has come a long way: a provider's geometry, a bake, a fetch, a
               db-geo (PostGIS) ──▶ pxl-geo-bake
                               │
                               ▼
-               a page of 1024² blocks, in XTP:
+                   a page of 1024² blocks:
              four ground channels and elevation
 ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┼ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
                               ▼             fetched by version, read in place
@@ -54,11 +54,13 @@ a sparse tree per band        ▼             one L2 chunk, 64 blocks
 
 `pxl-geo-bake` bakes, `pxl-kernel` holds the pages and schedules the builds, `pxl-render` paints, scans and meshes, and `apps/web` hands the draw list to WebGPU.
 
-Above the line happens once per version and is served as files; below it happens in the tab, on the turn's quota.
+Above the dashed line is served as files; below it runs in the tab, on the turn's quota.
 
-The kernel decides what exists, what is on screen, at what detail, and what to draw. The shell forwards events, does the I/O the kernel names, renders the UI, and turns the renderer's calls into WebGPU. It decides nothing about the world. What it renders from is the kernel's snapshot: one JSON document of UI state, written after a turn that changed it. What each frame and task cost goes to a read-only ledger, which nothing that schedules is allowed to read.
+The kernel decides what exists, what is on screen, at what detail, and what to draw. The shell forwards events, does the I/O the kernel names, renders the UI, and turns the renderer's calls into WebGPU. What it renders from is the kernel's snapshot: one JSON document of UI state, written after a turn that changed it. What each frame and task cost goes to a read-only ledger, which nothing that schedules is allowed to read.
 
 Almost nothing is computed at request time. Pages and assets are baked ahead and served from the bucket by version; the one exception is forward search, which queries a database when asked.
+
+[ARCHITECTURE.md](./ARCHITECTURE.md) is how the application is built, in three parts: the world it addresses — the levels, the coordinate, where the ground comes from — then the client that holds it, then the engine that computes with it.
 
 ---
 
@@ -110,7 +112,7 @@ Three tools are run by path rather than by task, since each belongs to the tree 
 | `./asset/script/download_texture_pack.rs`           | Normalize the texture pack's sources into 256² tiles           |
 | `infra/geo/**/script/*`                             | Fill db-geo from Overture and GEDTM30 — infra/geo/README.md §4 |
 
-To measure the client, use `preview` (`localhost:4173`). It is the bundle as the deployment builds it, so the dev server's unbundled modules and hooks are gone. It is still a development build, so the ledger overlay is compiled in, and a deployed build has neither.
+To measure the client, use `preview` (`localhost:4173`). It is the bundle as the deployment builds it, so the dev server's unbundled modules and hooks are gone. It is still a development build, so the ledger overlay is compiled in — a deployed build does not have it.
 
 ---
 
@@ -122,13 +124,13 @@ To measure the client, use `preview` (`localhost:4173`). It is the bundle as the
 | Kernel    | Rust → one WebAssembly module, no wasm-bindgen; `embassy-executor` | the browser, in 512 MiB on a phone and 1 GiB elsewhere, reserved once |
 | Rendering | WebGPU (WGSL), driven from the kernel                              | the browser's GPU                                                     |
 | Edge      | Cloudflare Worker + R2                                             | the client, the baked pages, the assets                               |
-| Servers   | Rust: axum, tokio-postgres — one per URL root, one database each   | one Hetzner VM behind Caddy                                           |
+| Servers   | Rust: axum, tokio-postgres — one per URL root, one database each   | one VM behind Caddy                                                   |
 | Databases | PostgreSQL: `db-main`, and `db-geo` with PostGIS                   | the same VM                                                           |
 | Geodata   | Overture Maps + GEDTM30, ingested into db-geo, baked into pages    | offline, into R2                                                      |
 | Workspace | Deno drives every task, the Rust ones included                     | —                                                                     |
 
 ```text
-                  plei.me
+                every request
                       │
            one Worker, one origin
 ┌─────────────────────┴─────────────────┐
@@ -136,14 +138,12 @@ To measure the client, use `preview` (`localhost:4173`). It is the bundle as the
 the client                              /geo/search ─▶ pxl-geo ─▶ db-geo
 /geo/tiles   R2, by version                                     (PostGIS)
 /asset       R2, by hash                /api        ─▶ pxl-api ─▶ db-main
-filled by the bakes, offline            behind Caddy, on one VM
+filled by the bakes, offline
 ```
 
 The three roots are written in one file, `spec/pxl/spec/route.json`, and every relay reads them from there. A green push to main takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
 
-Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and **XTP**, a relocatable binary tree read without copying. One piece of the kernel is a port rather than a dependency: evanw/buddy-malloc, under the heap, and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) carries what its licence asks. Everything else that is not this project's is a crate or a package named in the manifests.
-
-The floor is iOS 26 on an iPhone 11, WebGPU only. There is no WebGL path.
+Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and **XTP**, a relocatable binary tree read without copying. One piece of the kernel is a port rather than a dependency: evanw/buddy-malloc, under the heap, and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) carries what its licence asks.
 
 ---
 
@@ -152,7 +152,7 @@ The floor is iOS 26 on an iPhone 11, WebGPU only. There is no WebGL path.
 ```
 .
 ├── apps/
-│   └── web/                  # The shell: Vite + React 19, and the Cloudflare Worker (cloudflare-worker/)
+│   └── web/                  # The shell, and the Cloudflare Worker that serves it (cloudflare-worker/)
 │       └── src/
 │           ├── kernel/       #   the kernel's driver: abi, control, io, mem, render, sched, shell
 │           ├── app/ page/    #   the frame, the router, the pages
@@ -179,7 +179,7 @@ The floor is iOS 26 on an iPhone 11, WebGPU only. There is no WebGL path.
 ├── packages/                 # The TypeScript workspace packages
 │   └── xpute/
 │       ├── core/             #   @xpute/core: the same kit in TypeScript
-│       └── runtime/          #   @xpute/runtime: the rings' host end, the strobe, the reservation
+│       └── runtime/          #   @xpute/runtime: the rings' host end and the reservation
 ├── spec/                     # JSON every language is generated from (script/spec.ts),
 │                             #   grouped as crates/ is: xpute/, pxl/{spec, web, server}
 ├── asset/                    # Shipped models and texture pack (cube, decor, actor),
@@ -190,7 +190,7 @@ The floor is iOS 26 on an iPhone 11, WebGPU only. There is no WebGL path.
 └── issue/                    # Decisions and why, the backlog, experiment/ for measurements
 ```
 
-A crate's root holds directories only, sorted by kind; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat, at five or six files each.
+A crate's root holds directories only, sorted by kind; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat.
 
 | Crate           | Directories                                                              |
 | --------------- | ------------------------------------------------------------------------ |
@@ -201,13 +201,13 @@ A crate's root holds directories only, sorted by kind; `pxl-geo`, `pxl-api` and 
 | `pxl-kernel`    | `mem` `sched` `world` `layer` `io` `control` `shell`                     |
 | `pxl-geo-bake`  | `terrain` `poi` `geocode` `page`, and `bin` beside them                  |
 
-Rust, the xpute packages and the kernel's driver (`apps/web/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, an action, a catalog entry — keeps the kernel's.
+The casing in the tree is not mixed by accident. Rust, the xpute packages and the kernel's driver (`apps/web/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, an action, a catalog entry — keeps the kernel's.
 
 ---
 
 ## Learn More
 
-[ARCHITECTURE.md](./ARCHITECTURE.md) is how the application is built, in three parts: the world it addresses — the levels, the coordinate, where the ground comes from — then the client that holds it, then the engine that computes with it. [AGENTS.md](./AGENTS.md) is how to work in the tree.
+[AGENTS.md](./AGENTS.md) is how to work in the tree.
 
 Four files carry a `.xpute` infix: [README.xpute.md](./README.xpute.md) and [ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) — the system under the application, its memory, rings, turn, credits and wire formats — with `LICENSE.xpute` and `THIRD_PARTY_NOTICES.xpute.md` beside them. They belong to the xpute repository and live here because xpute is developed here. None of them names pixelet, which is what lets `script/export-xpute.ts` drop the infix and send them out as they are.
 

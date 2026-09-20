@@ -1180,14 +1180,14 @@ async function routeOutputs(): Promise<Output[]> {
   }
 
   // A root never reaches the bundle as its own literal — a branch is folded
-  // into one constant here, so the client carries `"/geo/tiles"` and nothing
-  // spelling `"/geo"` alone — and a guard that looked for one would fail every
+  // into one constant here, so the client carries `/geo/tiles` and nothing
+  // spelling `/geo` alone — and a guard that looked for one would fail every
   // build. What it can look for is the branches the client requests whole,
   // which is what `bundle` marks.
   const guard = await Deno.readTextFile(join(root, "apps/web/script/check-bundle.ts"));
   const sentinels = guard.match(/const SENTINELS = \[([^\]]*)\]/);
   if (!sentinels) throw new Error("apps/web/script/check-bundle.ts: no SENTINELS to check against spec/pxl/spec/route.json");
-  const listedSentinels = [...sentinels[1].matchAll(/'"([^"]+)"'/g)].map((m) => m[1]).sort();
+  const listedSentinels = [...sentinels[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
   const wantSentinels = Object.entries(spec.branches).filter(([, b]) => b.bundle).map(([n]) => paths.get(n)!).sort();
   if (JSON.stringify(listedSentinels) !== JSON.stringify(wantSentinels)) {
     throw new Error(

@@ -15,7 +15,7 @@ pxl-server = { path = ".." }
 pxl-spec = { path = "../../spec" }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tokio-postgres = "0.7"
-tower-http = { version = "0.6", features = ["compression-gzip"] }
+tower-http = { version = "0.7", features = ["compression-gzip"] }
 
 # `oneshot`, to drive the router in a test without a listener.
 [dev-dependencies]

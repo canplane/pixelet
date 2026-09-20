@@ -1,16 +1,17 @@
 // @pxl/web/cloudflare-worker/index.ts
 
 /**
- * Cloudflare Worker that serves the app, its terrain tiles, and forward
- * search's own live API — all from one origin.
+ * Cloudflare Worker that serves the app, its baked pages and assets, and
+ * forward search's own live API — all from one origin.
  *
  * Static assets are handled by the platform before this script runs (see
- * wrangler.jsonc); what is routed here is `/api/*`, split into `/api/tiles/*`
- * (read straight out of the R2 bucket) and everything else (reverse-proxied
- * to API_ORIGIN as-is, see infra/README.md). Keeping it on the app's
- * own hostname is what
- * makes them same-origin, so no CORS policy exists to configure or get
- * wrong — see issue/20260816-deployment-hosting.md.
+ * wrangler.jsonc). What reaches this script is the roots of
+ * spec/pxl/spec/route.json: `/geo/tiles/*` and `/asset/*` come straight out
+ * of the R2 bucket, and the rest of `/geo/*` and all of `/api/*` are
+ * reverse-proxied to GEO_ORIGIN and API_ORIGIN as-is (see infra/README.md).
+ * Keeping it on the app's own hostname is what makes them same-origin, so no
+ * CORS policy exists to configure or get wrong — see
+ * issue/20260816-deployment-hosting.md.
  *
  * Lives outside src/ deliberately: this is the only server-side code in the
  * deployment, it targets the Workers runtime rather than the browser, and

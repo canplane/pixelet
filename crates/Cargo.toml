@@ -49,7 +49,7 @@ libm = "=0.2.11"
 fnv = "1"
 # base64url without padding: the blob a placement set is kept under in the
 # shell's storage. hex: the tests' reading of a golden packet.
-base64 = "0.22"
+base64 = "0.23"
 hex = "0.4"
 # A set whose position is the value: insert appends, swap_remove moves the
 # last entry into the hole, and a caller keeps its own lanes at the same
@@ -62,8 +62,23 @@ edition = "2021"
 version = "0.0.0"
 publish = false
 
+# The module's profile, and only the module's — `server` below builds on it
+# but does not take this line.
+#
+# A byte here is a byte every visitor downloads, and `3` is Cargo's answer for
+# a program that is already on the machine. Measured on this module, gzipped:
+# `3` is 439,124, `2` is 427,853, `s` is 365,493 and `z` is 357,360. The two
+# nearest things anyone ships — rerun's wgpu viewer and Bevy, both real-time
+# renderers in the browser — pick `z` as well, and egui's profile says of `3`
+# outright that it is "unnecessarily large wasm for no performance gain".
+#
+# What `z` usually costs, this target does not pay. It gives up
+# vectorization, and there is none to give up: `simd128` is not in the target
+# features and no v128 instruction is in the module. It prefers a memcpy call
+# over an unrolled copy, and on WebAssembly that call is `memory.copy`, one
+# instruction the engine implements itself.
 [profile.release]
-opt-level = 3
+opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"
@@ -85,6 +100,12 @@ panic = "abort"
 # `abort`; a request handler wrapped by the web framework is the same story.
 # The module is untouched — apps/web/script/build_wasm.ts builds `--release`,
 # and the two binaries never link together.
+#
+# `opt-level` is named again for the same reason `panic` is: what it inherits
+# is chosen for a download, and nothing here is downloaded. A bake walks tens
+# of thousands of pages and a handler answers a request, so both want the
+# faster code and neither cares what it weighs.
 [profile.server]
 inherits = "release"
+opt-level = 3
 panic = "unwind"

@@ -6,7 +6,13 @@
 # resolve the workspace at all. .dockerignore strips node_modules/.git/out/dist
 # before any of this reaches the build.
 
-FROM rust:1.94-slim-trixie AS build
+# The version is rust-toolchain.toml's, written again because a base image tag
+# is chosen before anything in the build context can be read — and the context
+# is `crates/` alone, so rustup in here would not find that file even if it
+# looked. Copying it in would be worse than this: a tag that had drifted would
+# quietly download the right toolchain mid-build instead of failing. The two
+# are held equal by script/check-toolchain.ts, which the gate runs.
+FROM rust:1.98.1-slim-trixie AS build
 WORKDIR /src
 
 # Only `crates/` is copied: pxl-geo reads nothing outside it, and the generated

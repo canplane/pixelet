@@ -28,6 +28,14 @@ avoided; and everything except the UI is meant to end up inside WASM.
   thread**, chosen for performance; only the plugin UI is split out, into an
   iframe. ([How we built the Figma plugin system](https://www.figma.com/blog/how-we-built-the-figma-plugin-system/),
   [How plugins run](https://developers.figma.com/docs/plugins/how-plugins-run))
+- The document lives in one reservation: "All C++ objects are just reserved
+  ranges in a pre-allocated typed array so the JavaScript GC is never
+  involved." Large allocations leave that heap through an `IndirectBuffer`
+  handing C++ an external typed array, to hold fragmentation down over a long
+  session. Evan Wallace, who wrote this, also wrote `evanw/buddy-malloc` —
+  the allocator `alloc/buddy_tree.rs` is a port of, which is why the prior
+  art lines up as closely as it does.
+  ([Building a professional design tool on the web](https://www.figma.com/blog/building-a-professional-design-tool-on-the-web/))
 - Code Layers runs "most of the development toolchain in a Web Worker" —
   esbuild for bundling, Tailwind v4 with Lightning CSS for styles, partly
   native code compiled to WASM. ([Building Figma's Code Layers](https://www.figma.com/blog/building-figmas-code-layers/))

@@ -98,7 +98,7 @@ pub fn minimap_atlas() -> Option<&'static MinimapAtlas> {
         a.baked_for = Some(key);
         let origin = Pvf3 { i: L3_CENTER(map_center.i), f: 0 };
         let mut pixels = vec![0u8; (ATLAS_PX * ATLAS_PX * 4) as usize];
-        for px in pixels.chunks_exact_mut(4) {
+        for px in pixels.as_chunks_mut::<4>().0 {
             px.copy_from_slice(&[a.colors.base[0], a.colors.base[1], a.colors.base[2], 255]);
         }
         let max_rel_u = (ATLAS_RADIUS_PAGES as f64 + 0.5) * L3_RANGE_REAL;

@@ -59,7 +59,7 @@
     "smoke": "./script/smoke.ts",
 
     // ── The gate ──
-    "check": "deno task check:fmt && deno task check:web && deno task check:xpute && deno task check:rust && deno task check:spec",
+    "check": "deno task check:fmt && deno task check:toolchain && deno task check:web && deno task check:xpute && deno task check:rust && deno task check:spec",
     // What check:rust's own `cargo fmt --check` does for the Rust: everything
     // Deno formats — TypeScript, JSON, JSONC, Markdown — held to one shape.
     // Without it the two languages were gated unevenly, and the half nothing
@@ -71,6 +71,9 @@
     // passes it; the host pass is what compiles those. geo-bake runs twice
     // because `serve` gates the dev tile server.
     "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -- -D warnings && cargo clippy --manifest-path asset/script/Cargo.toml --all-targets -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -- -D warnings",
+    // Before anything compiles: a Rust version written twice is a binary
+    // built on a compiler the gate never ran.
+    "check:toolchain": "./script/check-toolchain.ts",
     "check:spec": "./script/spec.ts",
     // The write half of it: the same generator, allowed to touch the tree.
     "spec": "./script/spec.ts --write",
@@ -115,11 +118,11 @@
     "@std/path": "jsr:@std/path@^1",
 
     // build tools
-    "vite": "npm:vite@^7.2.4",
-    "@deno/vite-plugin": "npm:@deno/vite-plugin@^1.0.6",
+    "vite": "npm:vite@^8.3.0",
+    "@deno/vite-plugin": "npm:@deno/vite-plugin@^2.0.3",
 
     // internationalization
-    "i18next": "npm:i18next@^25.7.3"
+    "i18next": "npm:i18next@^26.4.2"
   },
 
   "fmt": {

@@ -9,8 +9,11 @@ What the system is: [README.md](./README.md) and
 [README.xpute.md](./README.xpute.md) and
 [ARCHITECTURE.xpute.md](./ARCHITECTURE.xpute.md) for the system under it.
 **The two `.xpute` documents must never name pixelet**: they are the xpute
-repository's, and the export drops the infix and ships them unchanged. Why
-past decisions went the way they did: [issue/](./issue/). What is queued:
+repository's, and the export drops the infix and ships them unchanged. How all
+four are written and reviewed:
+[.agents/skills/write-documents](./.agents/skills/write-documents/SKILL.md) —
+read it before reworking one, not after. Why past decisions went the way they
+did: [issue/](./issue/). What is queued:
 [issue/BACKLOG.md](./issue/BACKLOG.md).
 
 ---
@@ -82,12 +85,11 @@ pipeline — is production-grade; the building layer works (place, erase, stack,
 raycast, persist); the chat/social half is a UI shell wired to nothing. Check
 the code before characterizing any part of the surface.
 
-**The client is a Rust kernel in WASM drawing through WebGPU; iOS 26 and an
-iPhone 11 are the floor**
+**The client is a Rust kernel in WASM drawing through WebGPU**
 ([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md)).
-three.js is gone. The kernel decides and lists what
-to draw; the renderer executes and decides nothing. **Don't propose a WebGL
-path or pre-WebGPU support** — closed.
+three.js is gone. The kernel decides and lists what to draw; the renderer
+executes and decides nothing. **Don't propose a WebGL path or pre-WebGPU
+support** — closed.
 
 **Pick the structurally correct shape**, matching real prior art where one
 exists (Minecraft's chunk model for grid content). Implementation size is not
@@ -176,31 +178,33 @@ header-less as a flat shadcn tree; its notice is in
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md). Don't add headers there,
 and don't drop them elsewhere.
 
-**Naming.** `PascalCase` for types, `SCREAMING_SNAKE_CASE` for module
-constants. Functions and locals follow the side they are on: `snake_case` in
-Rust, in `packages/xpute` and in `apps/web/src/kernel/`, which share the
-kernel's vocabulary; `camelCase` in the rest of `apps/web` and in `script/`,
-which is TypeScript and nothing else. An acronym is a word (`nextChatLineId`,
-`assetUrl`), as Rust cases it. A name that crosses — a snapshot field, an
-action string, a catalog entry, a ledger record — keeps the kernel's
-`snake_case` on both sides. A file's name is its language's: `snake_case` in
-Rust and `packages/`, `kebab-case` in `apps/web` and `script/`. What is
-generated from `spec/` is Rust's shadow: its stem is the JSON's, `snake_case`,
-and it carries the `.spec.` infix on both sides (`cube_type.spec.rs`,
-`cube_type.spec.ts`, `mem/mem.spec.rs` for `mem/mem.json`), the way a test
-carries `.test.`; a Rust module reaches it through `#[path]`, as `.test.rs` is
-reached, and keeps its module name. Every identifier in it is `snake_case`.
-The WGSL beside the Rust and the SQL Postgres runs in order are `snake_case`
-too; a file that belongs to no language — a document, a workflow, a shell
-script — is `kebab-case`. **Directories
-are singular** — named for the concept they hold (`object/`, `marker/`,
-`issue/`), never for their count; the exceptions are names tooling fixes
-(`apps/`, `packages/`, `node_modules/`, `@types/`, `.github/workflows/`,
-`.agents/skills/`). A module too (`constant.ts`, `route.ts`), and a file inside
-a directory that names the concept does not repeat it (`setting/store.ts`).
-Ported code keeps its own names (`shadcn/tabs.tsx`); React hooks, stores and
-components keep their ecosystem's `camelCase`/`PascalCase` (`useTileStore`, `MapStatus`), and a
-component file holding several is plural (`overlays.tsx` for `<Overlays />`).
+**A name's case follows the side it is on.** `PascalCase` for types,
+`SCREAMING_SNAKE_CASE` for module constants. Functions and locals are
+`snake_case` in Rust, in `packages/xpute` and in `apps/web/src/kernel/`,
+which share the kernel's vocabulary, and `camelCase` in the rest of
+`apps/web` and in `script/`, which is TypeScript and nothing else. An
+acronym is a word (`nextChatLineId`, `assetUrl`), as Rust cases it. A name
+that crosses — a snapshot field, an action string, a catalog entry, a ledger
+record — keeps the kernel's `snake_case` on both sides.
+
+**A file's name is its language's**: `snake_case` in Rust and `packages/`,
+`kebab-case` in `apps/web` and `script/`. The WGSL beside the Rust and the
+SQL Postgres runs in order are `snake_case` too; a file that belongs to no
+language — a document, a workflow, a shell script — is `kebab-case`. What is
+generated from `spec/` is Rust's shadow: its stem is the JSON's,
+`snake_case`, and it carries the `.spec.` infix on both sides
+(`cube_type.spec.rs`, `cube_type.spec.ts`, `mem/mem.spec.rs` for
+`mem/mem.json`), the way a test carries `.test.`; a Rust module reaches it
+through `#[path]`, as `.test.rs` is reached, and keeps its module name.
+Every identifier in it is `snake_case`.
+
+**Directories are singular** — named for the concept they hold (`object/`,
+`marker/`, `issue/`), never for their count. The exceptions are names an
+ecosystem already expects: ones its tooling fixes (`node_modules/`,
+`@types/`, `.github/workflows/`) and ones its people reach for (`apps/`,
+`packages/`, `crates/`, `.agents/skills/`). A module too (`constant.ts`,
+`route.ts`), and a file inside a directory that names the concept does not
+repeat it (`setting/store.ts`).
 
 **A name Rust would case differently carries an `allow` and a reason.** Two
 shapes earn one: a constant that cannot be a `const` — it reads what the shell
@@ -224,8 +228,11 @@ that is only a number stays `number`. A typed array over an `ArrayBuffer` for
 certain is `U32Array` and kin; one that may sit in a `SharedArrayBuffer` keeps
 `Uint32Array`.
 
-**Ported code keeps its original conventions.** Some of `@xpute/core` came
-from other projects to stay reusable; the divergence is deliberate.
+**Ported code keeps its original conventions** (`shadcn/tabs.tsx`). Some of
+`@xpute/core` came from other projects to stay reusable; the divergence is
+deliberate. React hooks, stores and components keep their ecosystem's
+`camelCase`/`PascalCase` (`useTileStore`, `MapStatus`), and a component file
+holding several is plural (`overlays.tsx` for `<Overlays />`).
 
 **`pxl` is for code, `pixelet` is for infrastructure.** Import paths and
 storage keys abbreviate (`@xpute/core`, `pxl:lang`); provisioned resources

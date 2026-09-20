@@ -1,0 +1,18 @@
+# Which Rust this checkout is, for rustup to read — locally, in CI and in an
+# editor alike. Before this file there was nothing in the tree that said so:
+# the version lived in the gate's environment and in the two server images'
+# base tags, and a working copy compiled with whatever `rustup default`
+# happened to be, so the gate a developer ran was not the gate CI ran.
+#
+# Pinned to the patch, not the minor. The point of pinning at all is that a
+# toolchain release cannot turn a clippy lint on under us and fail a push
+# that changed nothing, and `1.98` would still let 1.98.2 in.
+#
+# This is the one place the version is written. The server images name it
+# again because a base image tag is chosen before anything in the build
+# context can be read, and script/check-toolchain.ts holds them to this file.
+[toolchain]
+channel = "1.98.1"
+profile = "minimal"
+components = ["clippy", "rustfmt"]
+targets = ["wasm32-unknown-unknown"]

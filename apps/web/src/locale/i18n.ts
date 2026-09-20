@@ -35,10 +35,17 @@ function deepMerge(base: Catalogue, extra: Catalogue): Catalogue {
   return out;
 }
 
-function withDev<T>(base: T, dev: unknown): T {
-  if (!__IS_DEV__) return base;
-  return deepMerge(base as Catalogue, dev as Catalogue) as T;
-}
+/**
+ * The branch is written out here, at the top level, rather than inside a
+ * helper taking the dev catalogue as an argument. A helper reads better and
+ * is the wrong shape: whether the argument survives is then the bundler's
+ * parameter-level analysis, which Rollup did and Rolldown does not, and a
+ * production build carried all forty-seven dev strings the day Vite changed
+ * under it. A condition on a constant that folds to `false` is dead code to
+ * every bundler there is, and what is left holds no reference to the dev
+ * modules at all.
+ */
+const catalogue = __IS_DEV__ ? { en: deepMerge(en, enDev) as typeof en, ko: deepMerge(ko, koDev) as typeof ko } : { en, ko };
 
 let booted = false;
 
@@ -74,8 +81,8 @@ export function bootstrapI18n(): void {
       ns: ["translation"],
       defaultNS: "translation",
       resources: {
-        en: { translation: withDev(en, enDev) },
-        ko: { translation: withDev(ko, koDev) },
+        en: { translation: catalogue.en },
+        ko: { translation: catalogue.ko },
       },
       detection: {
         order: ["localStorage", "navigator"],

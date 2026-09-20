@@ -128,7 +128,7 @@ impl Layers {
         let ((top, top_view), (side, side_view)) = (make(), make());
         each_layer(|_, layer, rgb| {
             let [r, gr, b] = rgb255(rgb);
-            for px in fill.chunks_exact_mut(4) {
+            for px in fill.as_chunks_mut::<4>().0 {
                 px.copy_from_slice(&[r, gr, b, 255]);
             }
             for tex in [top, side] {

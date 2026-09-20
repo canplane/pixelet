@@ -14,14 +14,17 @@ asset/
 
 ## What to run, and when
 
-Both are single-file Rust scripts. They need a nightly toolchain
-(`rustup toolchain install nightly`), which is what runs a `.rs` file
-directly; nothing else about them is nightly.
+One is a crate and one is a script, and they run differently. The ingest is
+`asset/script/Cargo.toml`'s only binary, on the pinned toolchain, and
+`deno task check` clippies it with the rest. The texture-pack download
+stays a single file on nightly (`rustup toolchain install nightly`): it is
+run by hand, and its HTTP client would otherwise be compiled by every gate
+for nothing.
 
 ### After changing anything under `actor/`, `cube/` or `decor/`
 
 ```sh
-./asset/script/ingest_asset.rs
+cargo run --manifest-path asset/script/Cargo.toml
 ```
 
 It copies every file to `./out/asset/{glb,png,webp}/<sha256>`, composes the

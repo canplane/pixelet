@@ -6,14 +6,14 @@ up locally and in production.
 ```
 infra/
 ├── local/               the two databases for development: one compose
-└── prod/                the Hetzner stack: compose, Caddy, .env.example
+├── prod/                the Hetzner stack: compose, Caddy, .env.example
+└── geo/                 what fills db-geo: the Overture and elevation ingests
 ```
 
-The ingests that fill db-geo are bake tools, not infrastructure, and live
-with the rest of the bake: `crates/pxl/server/geo-bake`'s own `ingest_*` binaries
-and `tool/elevation/` (a bash + GDAL pipeline). Their
-procedures are documented here because they are run against these
-databases.
+The ingests live here rather than with the bakes that read what they write:
+they move a provider's columns into Postgres columns and share no model with
+anything, so they are scripts — `geo/overture/script/`'s five cargo scripts
+and `geo/elevation/script/`'s bash and GDAL pipeline.
 
 ## 1. Databases
 
@@ -30,6 +30,10 @@ connects to it and probes it at boot, and has no route that reads it yet
 - Container access: `db-geo:5432`
 
 All spatial data is **EPSG:3857**. The renderer's voxel math assumes it.
+
+DB passwords and `ADMIN_TOKEN` come from `.env` only. `DB_GEO_USER`,
+`DB_GEO_PASSWORD` and the rest must be exported before running any script.
+Production's `.env` uses its own generated values, never local dev's.
 
 ## 2. Filling db-geo
 
@@ -83,7 +87,7 @@ are unrelated to this project.
    resolve it. Each sits beside its own crate: `crates/pxl/server/geo/Dockerfile` and
    `crates/pxl/server/api/Dockerfile`.
 
-6. **Secrets**
+6. **The production `.env`**
    ```sh
    cd infra/prod
    cp .env.example .env     # fill in, then chmod 600
@@ -157,14 +161,14 @@ route that is not there. A root is reserved on the server's side because the
 app routes on paths of its own; giving the app the prefix instead would put one
 in every URL a user sees.
 
-`deno task dev` runs one process per root plus the tiles: pxl-geo on 3000,
+`deno task dev:local` runs one process per root plus the tiles: pxl-geo on 3000,
 serve_tiles on 3001, pxl-api on 3002, and the dev proxy splits on the same
 prefixes the Worker does. A deployment has no tile server at all, because the
 bucket answers those two prefixes.
 
 ### Deploying the client
 
-**A green push to main publishes it** — see §7. What follows is the same thing
+**A green push to main publishes it** — see §5. What follows is the same thing
 by hand, which is the fallback when CI is unavailable and what CI itself runs.
 
 One Worker serves the built app, the R2 tiles, and the relay to the API, so
@@ -307,9 +311,9 @@ with no line was counted and never published. A failed write leaves a red job
 after two deploys that already happened: it reports a missing record and takes
 nothing back.
 
-### Secrets
+### Repository secrets
 
-Repository secrets, all of them set in GitHub's own settings and nowhere else:
+All of them set in GitHub's own settings and nowhere else:
 
 | Name                    | For                                                                                                                             |
 | :---------------------- | :------------------------------------------------------------------------------------------------------------------------------ |
@@ -358,9 +362,3 @@ a choice rather than an obligation. This project keeps the required minimum.
 Still open: GEDTM30 also fuses JAXA's ALOS World 3D-30m. JAXA's terms page was
 not readable when this was written, so no claim is made here about its exact
 required wording rather than inventing one.
-
-## 7. Secrets
-
-DB passwords and `ADMIN_TOKEN` come from `.env` only. `DB_GEO_USER`,
-`DB_GEO_PASSWORD` and the rest must be exported before running any script.
-Production's `.env` uses its own generated values, never local dev's.

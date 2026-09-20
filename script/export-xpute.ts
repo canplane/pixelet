@@ -41,12 +41,15 @@ const ROOT = dirname(dirname(new URL(import.meta.url).pathname));
 const TREES = ["crates/xpute", "packages/xpute", "spec/xpute"];
 const ROOT_FILES = ["rustfmt.toml", "ARCHITECTURE.xpute.md", "LICENSE.xpute", "THIRD_PARTY_NOTICES.xpute.md"];
 
-/** Where a copied file lands under a different name. The `.xpute` infix tells
+/** What each `.xpute` name is called over there — what a copied file lands as,
+ * and what `relink` rewrites a cross-reference to. The `.xpute` infix tells
  * two documents apart in pixelet, where there are two; here there is one, and
  * the infix would name the other repository's arrangement in a tree that has
- * no second document to be told apart from. */
+ * no second document to be told apart from. `README.xpute.md` is here for the
+ * rewrite only: the README that ships is assembled by `readme`, not copied. */
 const RENAMED: Record<string, string> = {
   "ARCHITECTURE.xpute.md": "ARCHITECTURE.md",
+  "README.xpute.md": "README.md",
   "LICENSE.xpute": "LICENSE",
   "THIRD_PARTY_NOTICES.xpute.md": "THIRD_PARTY_NOTICES.md",
 };

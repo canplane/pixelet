@@ -3,9 +3,11 @@
 //
 // The count is a build lab's: one place hands numbers out, every build main
 // gets one, and some of those are shipped. That place is CI — the gate job,
-// which runs on every push to main, whether or not the build turns out to be
-// shippable. A number that a red gate consumed is a number nobody sees, which
-// is what a build lab's count does too.
+// which runs on every push to main that builds anything, whether or not the
+// build turns out to be shippable. A number that a red gate consumed is a
+// number nobody sees, which is what a build lab's count does too. A push of
+// prose alone does not run the gate and so is not a build
+// (.github/workflows/check-and-deploy.yml).
 //
 // The counter is one object in the bucket rather than anything in git, where
 // no squash, rebase or fresh clone can renumber it, and rather than the
