@@ -209,21 +209,30 @@ no `content-encoding`.
 ## 5. CI/CD
 
 `.github/workflows/check-and-deploy.yml` runs on every push to main and every
-pull request. One workflow, four jobs, because a deploy must not be able to
+pull request. One workflow, five jobs, because a deploy must not be able to
 start against a commit the gate never saw:
 
-| Job             | When                                                                 | What                                                                                                        |
-| :-------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------- |
-| `gate`          | always; takes a build number on main                                 | `deno task check`, `test`, `lint`, then `./script/build_counter.ts`                                         |
-| `deploy-web`    | main, gate green, and `apps/`/`crates/`/`packages/`/`spec/` changed  | `deno task deploy` under that number                                                                        |
-| `deploy-server` | main, gate green, and `crates/`/`infra/prod/`/the Dockerfile changed | ssh, `git reset --hard origin/main`, `docker compose up -d --build --force-recreate`, then the origin smoke |
-| `smoke`         | after both, if either of them deployed                               | `deno task smoke https://plei.me`                                                                           |
+| Job             | When                                                                 | What                                                                                                                    |
+| :-------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------- |
+| `gate`          | always; takes a build number on main                                 | `deno task check`, `test`, `lint`, then `./script/build-counter.ts`                                                     |
+| `deploy-web`    | main, gate green, and `apps/`/`crates/`/`packages/`/`spec/` changed  | `deno task deploy` under that number                                                                                    |
+| `deploy-server` | main, gate green, and `crates/`/`infra/prod/`/the Dockerfile changed | ssh, `git reset --hard` to the run's own commit, `docker compose up -d --build --force-recreate`, then the origin smoke |
+| `smoke`         | after both, if either of them deployed                               | `deno task smoke https://plei.me`                                                                                       |
+| `record`        | after both, if either of them deployed                               | `./script/build-log.ts --record`, appending what this build carried                                                     |
 
-The two deploys run in parallel, so the public smoke is a job after them
-rather than a step inside either: `/geo/search` is the one route the Worker
-proxies to the VM, and asked from `deploy-web` it can land while
-`deploy-server` is still recreating the stack — Cloudflare answers 521 for an
-origin that is merely restarting, and the run fails though nothing is wrong.
+**The servers go first, then the client.** A new client against an old server
+is the direction that breaks; an old client against a new one is not, so long
+as the server still answers the old shape for a release — which is the
+discipline that makes a deploy survivable at all, since nobody's open tab
+reloads on command and a session can outlive several builds. The b15 deploy
+followed that order by hand; `deploy-web` now needs `deploy-server`, so a run
+cannot get it wrong and a failed server deploy keeps the client back with it.
+
+The public smoke is still a job after both rather than a step inside either:
+`/geo/search` is the one route the Worker proxies to the VM, and asked from
+`deploy-web` it could land while the stack was still recreating — Cloudflare
+answers 521 for an origin that is merely restarting, and the run would fail
+though nothing was wrong.
 
 Both deploys are filtered on what a push touched, for different reasons.
 Reaching into the production VM over SSH is neither idempotent nor reversible,
@@ -238,6 +247,14 @@ list is a deploy nobody asked for. Where a push has no usable base — a
 force-push, a `workflow_dispatch` — both deploy: a republish costs a cached
 build, and a skip that should not have happened leaves production behind
 main.
+
+Both halves of a build are the same commit. Every checkout pins
+`ref: github.sha`, and the VM resets to that commit rather than to whatever
+`origin/main` has reached by the time the ssh lands — otherwise a push during a
+run, or a rewritten history, would have the edge serving one commit and the VM
+running another under one build number. A rewrite can leave that commit
+unreachable on the VM; rather than refuse the deploy and leave production on
+the old code, it warns in the run and takes the tip.
 
 `--force-recreate` is not decoration: the Caddyfile is a bind mount and a bind
 mount is read at start, so an `up --build` alone leaves a stale relay in front
@@ -257,6 +274,38 @@ publishes under it when the client's own tree changed, and a number nobody
 published is simply never seen. The counter is never reset — not from git,
 where a squash or a fresh clone would renumber it, and not from the workflow's
 own run number, which restarts at 1 if the workflow is recreated.
+
+The counter says how many builds there have been and nothing about what they
+were, so `record` keeps the other half: `_meta/build-log.jsonl`, a line per
+published build with its number, what it was built from, which halves it
+reached, and **the subjects of the commits it carried**.
+
+The subjects rather than a tag or a stored id, because main's history is
+rewritten here as a matter of course. A tag, a sha and `BUILD_ID`'s own
+`r<count>-<hash>` all name something that may not exist by the time anyone
+looks; text written while the history is still that history survives every
+rewrite after it. The sha is kept beside the subjects anyway — it resolves
+right up until it does not.
+
+```sh
+./script/build-log.ts        # every build, newest first, each with what it carried
+```
+
+The read also writes the last number into `apps/web/.build_number`, this
+checkout's cache of it, so a dev build says `b<n>+` against the build that
+actually went out last; `deno task deploy` writes the same file.
+
+R2 has no append, so the write is read-add-write as the counter's is, and the
+job's own `build-log` concurrency group is what keeps two of them from losing a
+line. A missing log object is refused rather than taken for an empty one: the
+two look alike from outside and the wrong guess would write one line over every
+line there was. Starting it is a one-off, and the script prints the command.
+
+`record` is not gated on the smoke — a build that answered badly still went
+out, and what is recorded is what is live rather than what is well. A number
+with no line was counted and never published. A failed write leaves a red job
+after two deploys that already happened: it reports a missing record and takes
+nothing back.
 
 ### Secrets
 

@@ -7,10 +7,9 @@
 //! draws its depth with the vertex shader it already has.
 //!
 //! Orthographic, 400 units across at the sun's angle, near enough for a texel
-//! to be a fifth of a unit on a 2048 map — the extent three's shadow camera was
-//! tuned at: further than that the map's texels grow past a cell and the shadow
-//! reads as blocks. What the map costs is its texels times four bytes, once:
-//! 16 MB at 2048, 4 MB at 1024, the phone's.
+//! to be a fifth of a unit on a 2048 map: further than that the map's texels
+//! grow past a cell and the shadow reads as blocks. What the map costs is its
+//! texels times four bytes, once: 16 MB at 2048, 4 MB at 1024, the phone's.
 //!
 //! The map and its sampler sit at group 0 bindings 1 and 2 in every pass that
 //! reads them. A pass with no shadow — a case, or the depth pass itself, which

@@ -3,7 +3,7 @@
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 
-import { decor_ids, type DecorId, placeable_cube_id, placeable_cubes, type PlaceableCube } from "@/catalog/cell/mod.ts";
+import { decor_ids, type DecorId, placeable_cubes, type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
 
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { useUiStore } from "@/app/store/ui-store.ts";
@@ -11,12 +11,12 @@ import { cn } from "@/shared/lib/util/cn.ts";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs.tsx";
 import { CharacterPicker } from "@/feature/character/picker.tsx";
-import { cube_swatch_style } from "./cube-swatch.ts";
+import { cubeSwatchStyle } from "./cube-swatch.ts";
 import { DECOR_ICONS } from "./mode-bar.tsx";
 
-export type DrawerModalProps = {
+export interface DrawerModalProps {
   type: "drawer";
-};
+}
 
 /** The full catalog's own grouping — mode-bar.tsx's hotbar stays a flat
  * scrolling strip (no sections, that's the point of a hotbar), but a grid
@@ -31,7 +31,7 @@ export type DrawerModalProps = {
 const SECTION_ORDER = ["block", "land", "water", "structure", "transport"] as const;
 type SectionKey = (typeof SECTION_ORDER)[number];
 
-function group_by_section(cubes: readonly PlaceableCube[]): Map<SectionKey, PlaceableCube[]> {
+function groupBySection(cubes: readonly PlaceableCube[]): Map<SectionKey, PlaceableCube[]> {
   const out = new Map<SectionKey, PlaceableCube[]>();
   for (const cube of cubes) {
     const key: SectionKey = cube.channel;
@@ -46,16 +46,16 @@ function group_by_section(cubes: readonly PlaceableCube[]): Map<SectionKey, Plac
  * "land.green_deep" or "block.white" — i18next's own default "."
  * keySeparator resolves that straight into the nested
  * `cubes.land.green_deep` locale entry (en.json/ko.json). */
-function cube_label(t: (key: string) => string, cube: PlaceableCube): string {
-  return t(`cubes.${placeable_cube_id(cube)}`);
+function cubeLabel(t: (key: string) => string, cube: PlaceableCube): string {
+  return t(`cubes.${placeableCubeId(cube)}`);
 }
 
 function CubeSwatchButton({ cube, onPick }: { cube: PlaceableCube; onPick: (cube: PlaceableCube) => void }) {
   const { t } = useTranslation();
   const activeTool = useUiStore((s) => s.activeTool);
-  const object_color_id = useUiStore((s) => s.object_color_id);
-  const active = activeTool === "object" && object_color_id === placeable_cube_id(cube);
-  const label = cube_label(t, cube);
+  const objectColorId = useUiStore((s) => s.objectColorId);
+  const active = activeTool === "object" && objectColorId === placeableCubeId(cube);
+  const label = cubeLabel(t, cube);
 
   return (
     <button
@@ -65,7 +65,7 @@ function CubeSwatchButton({ cube, onPick }: { cube: PlaceableCube; onPick: (cube
       title={label}
     >
       <span
-        style={cube_swatch_style(cube)}
+        style={cubeSwatchStyle(cube)}
         className={cn(
           "w-8 h-8 rounded-md transition-transform",
           active ? "ring-2 ring-foreground ring-offset-1 ring-offset-background scale-105" : "ring-1 ring-border",
@@ -119,18 +119,18 @@ function DecorGridButton({ id, onPick }: { id: DecorId; onPick: (id: DecorId) =>
 export function DrawerModal(props: BaseModalProps & DrawerModalProps) {
   const { open, onOpenChange } = props;
   const { t } = useTranslation();
-  const select_cube = (cube: PlaceableCube) => useUiStore.getState().select_cube(placeable_cube_id(cube));
-  const select_decor = useUiStore.getState().select_decor;
+  const selectCube = (cube: PlaceableCube) => useUiStore.getState().selectCube(placeableCubeId(cube));
+  const selectDecor = useUiStore.getState().selectDecor;
 
-  const sections = group_by_section(placeable_cubes);
+  const sections = groupBySection(placeable_cubes);
 
-  function pick_cube(cube: PlaceableCube): void {
-    select_cube(cube);
+  function pickCube(cube: PlaceableCube): void {
+    selectCube(cube);
     onOpenChange(false);
   }
 
-  function pick_decor(id: DecorId): void {
-    select_decor(id);
+  function pickDecor(id: DecorId): void {
+    selectDecor(id);
     onOpenChange(false);
   }
 
@@ -169,7 +169,7 @@ export function DrawerModal(props: BaseModalProps & DrawerModalProps) {
                   <div key={section}>
                     <h3 className="text-xs font-medium text-muted-foreground mb-2">{t(`drawer_modal.sections.${section}`)}</h3>
                     <div className="grid grid-cols-5 gap-1">
-                      {cubes.map((cube) => <CubeSwatchButton key={placeable_cube_id(cube)} cube={cube} onPick={pick_cube} />)}
+                      {cubes.map((cube) => <CubeSwatchButton key={placeableCubeId(cube)} cube={cube} onPick={pickCube} />)}
                     </div>
                   </div>
                 );
@@ -178,7 +178,7 @@ export function DrawerModal(props: BaseModalProps & DrawerModalProps) {
 
             <TabsContent value="decor" className="flex flex-col gap-4">
               <div className="grid grid-cols-5 gap-1">
-                {decor_ids.map((id) => <DecorGridButton key={id} id={id} onPick={pick_decor} />)}
+                {decor_ids.map((id) => <DecorGridButton key={id} id={id} onPick={pickDecor} />)}
               </div>
             </TabsContent>
 

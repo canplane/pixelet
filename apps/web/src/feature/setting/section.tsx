@@ -5,7 +5,7 @@ import { Bug, Eye, Gauge, Move3d, Pickaxe, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { type SettingKey, SETTINGS, settings_in, type SettingSection, type ToggleKey } from "@/feature/setting/schema.ts";
+import { type SettingKey, SETTINGS, type SettingSection, settingsIn, type ToggleKey } from "@/feature/setting/schema.ts";
 import { SectionTitle, SettingRadioRow, SettingRow } from "./row.tsx";
 import { kernel_action, useKernel } from "@/kernel/shell.ts";
 
@@ -25,7 +25,7 @@ const SECTION_ICONS: Partial<Record<SettingSection, LucideIcon>> = {
 export function SettingsSection(props: { section: SettingSection; children?: ReactNode }) {
   const { section, children } = props;
   const { t } = useTranslation();
-  const keys = settings_in(section).filter((key) => __IS_DEV__ || !SETTINGS[key].dev);
+  const keys = settingsIn(section).filter((key) => __IS_DEV__ || !SETTINGS[key].dev);
 
   return (
     <div className="flex flex-col gap-1">
@@ -54,7 +54,7 @@ function SettingControl(props: { name: SettingKey }) {
           label={t(`${base}.label`)}
           description={t(`${base}.description`)}
           active={value as boolean}
-          on_toggle={() => toggle_setting(name as ToggleKey)}
+          onToggle={() => toggle_setting(name as ToggleKey)}
           cost={setting.cost}
           dev={setting.dev && setting.section !== "debug"}
         />
@@ -68,7 +68,7 @@ function SettingControl(props: { name: SettingKey }) {
               label={t(`${base}.${option}.label`)}
               description={t(`${base}.${option}.description`)}
               selected={value === option}
-              on_select={() => set_setting(name, option)}
+              onSelect={() => set_setting(name, option)}
               cost={setting.cost}
             />
           ))}

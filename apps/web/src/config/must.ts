@@ -1,16 +1,22 @@
 // @pxl/web/config/must.ts
 
-export type MustOptions = { allow_empty?: boolean };
+export interface MustOptions {
+  allowEmpty?: boolean;
+}
 
 export function must(v: string | undefined, opts: MustOptions = {}): string {
   if (v == null) throw new Error("missing");
-  if (!opts.allow_empty && v.length === 0) throw new Error("empty");
+  if (!opts.allowEmpty && v.length === 0) throw new Error("empty");
   return v;
 }
 
-export type MustIntOptions = { fallback?: number; min?: number; max?: number };
+export interface MustIntOptions {
+  fallback?: number;
+  min?: number;
+  max?: number;
+}
 
-export function must_int(raw: string | undefined, opts: MustIntOptions = {}): number {
+export function mustInt(raw: string | undefined, opts: MustIntOptions = {}): number {
   if (raw == null || raw === "") {
     if (opts.fallback !== undefined) return opts.fallback;
     throw new Error("missing");
@@ -22,9 +28,11 @@ export function must_int(raw: string | undefined, opts: MustIntOptions = {}): nu
   return n;
 }
 
-export type MustBoolOptions = { fallback?: boolean };
+export interface MustBoolOptions {
+  fallback?: boolean;
+}
 
-export function must_bool(raw: string | undefined, opts: MustBoolOptions = {}): boolean {
+export function mustBool(raw: string | undefined, opts: MustBoolOptions = {}): boolean {
   if (raw == null || raw === "") {
     if (opts.fallback !== undefined) return opts.fallback;
     throw new Error("missing");
@@ -35,13 +43,13 @@ export function must_bool(raw: string | undefined, opts: MustBoolOptions = {}): 
   throw new Error("invalid bool");
 }
 
-export function must_match(v: string | undefined, re: RegExp, msg?: string): string {
+export function mustMatch(v: string | undefined, re: RegExp, msg?: string): string {
   const s = must(v);
   if (!re.test(s)) throw new Error(msg ?? "no match");
   return s;
 }
 
-export function must_one_of<T extends readonly string[]>(
+export function mustOneOf<T extends readonly string[]>(
   raw: string | undefined,
   allowed: T,
   fallback?: T[number],

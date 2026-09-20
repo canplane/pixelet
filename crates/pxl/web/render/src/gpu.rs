@@ -6,6 +6,7 @@
 //! the one layer that talks to WebGPU, and it decides nothing.
 
 pub mod api;
+#[path = "gpu/api.spec.rs"]
 pub mod api_spec;
 pub mod layers;
 pub mod paint;

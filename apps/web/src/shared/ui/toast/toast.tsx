@@ -1,5 +1,6 @@
 // @pxl/web/shared/ui/toast/toast.tsx
 
+import type { u32 } from "@xpute/core/abi/word.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { animate as animateValue, AnimatePresence, LayoutGroup, motion, useMotionValue } from "framer-motion";
@@ -20,10 +21,10 @@ const STACK_SWIPE_THRESHOLD_PX = 24;
 const DRAG_FOLLOW_RATIO = 0.35;
 const DRAG_FOLLOW_MAX_PX = 28;
 
-type ToastProps = {
+interface ToastProps {
   id: string;
-  index: number;
-  stackSize: number;
+  index: u32;
+  stackSize: u32;
   isRemoving: boolean;
   children?: ReactNode;
   icon?: ReactNode;
@@ -31,7 +32,7 @@ type ToastProps = {
   statusColor?: string;
   className?: string;
   backgroundColor?: string;
-};
+}
 
 export function Toast({
   id,

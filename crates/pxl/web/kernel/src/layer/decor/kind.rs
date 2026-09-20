@@ -6,6 +6,7 @@
 
 pub mod boat;
 pub mod car;
+#[path = "kind/kind.spec.rs"]
 pub mod spec;
 pub mod train;
 pub mod tree;

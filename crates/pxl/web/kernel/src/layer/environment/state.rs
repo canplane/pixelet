@@ -32,7 +32,7 @@ use crate::world::chunk::table::Frame;
 /// away from that origin, and looking toward the far side of the sphere from an
 /// off-centre point adds that same distance again; leaving out the margin clips
 /// the sky exactly where a wide-shot camera is most likely to be looking.
-pub const SKY_DOME_SCALE: f64 = (render_cfg::FAR_CLIP - camera_cfg::view::MAX_DIST) * 0.9;
+pub const SKY_RADIUS: f64 = (render_cfg::FAR_CLIP - camera_cfg::view::MAX_DIST) * 0.9;
 
 // The sun and the moon move with the wall clock, a full sweep every 24 real
 // hours, and nothing else asks for a frame while the view is still. A

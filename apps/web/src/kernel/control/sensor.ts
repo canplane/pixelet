@@ -11,7 +11,8 @@
  * that asked for it.
  */
 
-import { Cmd } from "@/kernel/abi/cmd.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
+import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
 import { request_frame } from "@/kernel/sched.ts";
 
@@ -19,7 +20,9 @@ import { request_frame } from "@/kernel/sched.ts";
 export const GEOLOCATION = 0;
 export const ORIENTATION = 1;
 
-type IOSOrientationEvent = DeviceOrientationEvent & { webkitCompassHeading?: number };
+interface IOSOrientationEvent extends DeviceOrientationEvent {
+  webkitCompassHeading?: number;
+}
 type IOSOrientationEventCtor = typeof DeviceOrientationEvent & { requestPermission?: () => Promise<"granted" | "denied"> };
 
 export function orientation_supported(): boolean {
@@ -42,7 +45,7 @@ export function geolocation_start(): void {
   geolocation_watch = navigator.geolocation.watchPosition(
     (pos) => {
       const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-      CORE_BUILD.send(0, Cmd.SENSOR_UPDATE, packet((b) => b.f64(longitude).f64(latitude).f64(altitude ?? NaN).f64(accuracy).f64(heading ?? NaN)));
+      CORE_BUILD.send(0, Command.SENSOR_UPDATE, packet((b) => b.f64(longitude).f64(latitude).f64(altitude ?? NaN).f64(accuracy).f64(heading ?? NaN)));
       request_frame();
     },
     (err) => {
@@ -50,7 +53,7 @@ export function geolocation_start(): void {
       // and a later start would race it.
       geolocation_stop();
       const code = err.code === err.PERMISSION_DENIED ? 1 : err.code === err.POSITION_UNAVAILABLE ? 2 : err.code === err.TIMEOUT ? 3 : 0;
-      CORE_BUILD.send(0, Cmd.SENSOR_ERROR, packet((b) => b.u32(code)));
+      CORE_BUILD.send(0, Command.SENSOR_ERROR, packet((b) => b.u32(code)));
       request_frame();
     },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 },
@@ -61,7 +64,7 @@ let orientation_event: string | null = null;
 
 function on_orientation(e: Event): void {
   const o = e as IOSOrientationEvent;
-  CORE_BUILD.send(0, Cmd.SENSOR_ORIENTATION, packet((b) => b.f64(o.webkitCompassHeading ?? NaN).f64(o.alpha ?? NaN).f64(o.beta ?? NaN).f64(o.gamma ?? NaN)));
+  CORE_BUILD.send(0, Command.SENSOR_ORIENTATION, packet((b) => b.f64(o.webkitCompassHeading ?? NaN).f64(o.alpha ?? NaN).f64(o.beta ?? NaN).f64(o.gamma ?? NaN)));
   request_frame();
 }
 
@@ -78,8 +81,8 @@ export function orientation_listen(): void {
 /** crates/pxl/web/kernel/src/control/sensor/store.rs's PermissionAnswer. */
 export const PERMISSION_ASKING = 0, PERMISSION_GRANTED = 1, PERMISSION_DENIED = 2, PERMISSION_FAILED = 3;
 
-export function send_permission(sensor: number, answer: number): void {
-  CORE_BUILD.send(0, Cmd.SENSOR_PERMISSION, packet((b) => b.u32(sensor).u32(answer)));
+export function send_permission(sensor: u32, answer: u32): void {
+  CORE_BUILD.send(0, Command.SENSOR_PERMISSION, packet((b) => b.u32(sensor).u32(answer)));
   request_frame();
 }
 

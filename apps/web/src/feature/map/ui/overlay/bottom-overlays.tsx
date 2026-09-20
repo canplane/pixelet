@@ -1,7 +1,7 @@
 // @pxl/web/feature/map/ui/overlay/bottom-overlays.tsx
 
 import { cn } from "@/shared/lib/util/cn.ts";
-import { use_camera_busy_interaction_style } from "@/feature/map/ui/use-camera-busy-interaction-style.ts";
+import { useCameraBusyInteractionStyle } from "@/feature/map/ui/use-camera-busy-interaction-style.ts";
 import { ModeBar } from "./mode-bar.tsx";
 
 // How far off the screen bottom this positions ModeBar — app/layout.tsx
@@ -10,7 +10,7 @@ import { ModeBar } from "./mode-bar.tsx";
 export const BOTTOM_OFFSET_PX = 16;
 
 export function BottomOverlays() {
-  const { is_camera_busy, interaction_style } = use_camera_busy_interaction_style();
+  const { isCameraBusy, interactionStyle } = useCameraBusyInteractionStyle();
 
   return (
     <>
@@ -24,11 +24,11 @@ export function BottomOverlays() {
         // BOTTOM_OFFSET_PX needs to reach here as a real value, and
         // Tailwind's JIT scanner can't see a variable interpolated into an
         // arbitrary-value class (see mode-bar.tsx's own note on this).
-        className={cn("absolute left-4 right-4 z-40 pointer-events-none transition-[bottom] duration-150 ease-out", interaction_style)}
+        className={cn("absolute left-4 right-4 z-40 pointer-events-none transition-[bottom] duration-150 ease-out", interactionStyle)}
         style={{ bottom: `calc(${BOTTOM_OFFSET_PX}px + var(--vv-bottom, 0px))` }}
       >
         {/* ModeBar's own w-full/flex-1 chain needs a real ancestor width to resolve against — without this wrapper, flex-grow has nothing to grow into. */}
-        <div className={cn("min-w-0 w-full flex justify-center", !is_camera_busy && "pointer-events-auto")}>
+        <div className={cn("min-w-0 w-full flex justify-center", !isCameraBusy && "pointer-events-auto")}>
           <ModeBar />
         </div>
       </div>

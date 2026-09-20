@@ -256,4 +256,4 @@ where it is chosen.
 ([20260911-taa-tried-and-closed.md](./20260911-taa-tried-and-closed.md));
 the shimmer it was for is handled by MSAA, and by SMAA under DPR 2. The
 rest — density as size, the stochastic handoff, the crease rules — is what
-ARCHITECTURE.md now describes.
+ARCHITECTURE.pixelet.md now describes.

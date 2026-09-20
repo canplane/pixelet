@@ -53,7 +53,7 @@ export type Env = {
   API_ORIGIN: string;
 };
 
-import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route-spec.ts";
+import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.ts";
 
 /**
  * Object keys this Worker is willing to ask R2 for. Four shapes:

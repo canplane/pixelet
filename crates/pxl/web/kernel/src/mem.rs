@@ -6,4 +6,5 @@
 
 pub mod fixed;
 pub mod section;
+#[path = "mem/mem.spec.rs"]
 pub mod spec;

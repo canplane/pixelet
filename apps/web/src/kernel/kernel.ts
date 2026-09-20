@@ -10,9 +10,9 @@
  * does the work.
  */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { u32, u64 } from "@xpute/core/abi/word.ts";
 import type { BranchCursor } from "@xpute/core/wire/xtp/mod.ts";
-import { Cmd } from "@/kernel/abi/cmd.ts";
+import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { GEOLOCATION, geolocation_start, geolocation_stop, orientation_listen, orientation_needs_permission, orientation_remove, orientation_supported } from "@/kernel/control/sensor.ts";
@@ -25,36 +25,36 @@ import { acquire_device } from "@/kernel/render/gpu.ts";
 import { request_frame } from "@/kernel/sched.ts";
 import { set_snapshot } from "@/kernel/shell.ts";
 
-function on_signal(_tag: u32, cmd: Cmd, f: BranchCursor | null): void {
+function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
   switch (cmd) {
-    case Cmd.WORLD_SNAPSHOT: {
+    case Command.WORLD_SNAPSHOT: {
       // The JSON is far past a ring frame, so the kernel names the block it
       // holds it in. It is the kernel's and stays valid until it makes the
       // next one, which is a turn away.
-      const [at, len] = f!.get<[number, number]>();
+      const [at, len] = f!.get<[u32, u32]>();
       set_snapshot(text_at(CORE_KERNEL.memory, at >>> 0, len >>> 0));
       return;
     }
-    case Cmd.WORLD_UPDATE:
+    case Command.WORLD_UPDATE:
       return;
-    case Cmd.SENSOR_CREATE:
-      if (f!.at(0).get<number>() === GEOLOCATION) geolocation_start();
+    case Command.SENSOR_CREATE:
+      if (f!.at(0).get<u32>() === GEOLOCATION) geolocation_start();
       else orientation_listen();
       return;
-    case Cmd.SENSOR_DELETE:
-      if (f!.at(0).get<number>() === GEOLOCATION) geolocation_stop();
+    case Command.SENSOR_DELETE:
+      if (f!.at(0).get<u32>() === GEOLOCATION) geolocation_stop();
       else orientation_remove();
       return;
-    case Cmd.FETCH_CREATE: {
-      const [key, url] = f!.get<[bigint, string]>();
+    case Command.FETCH_CREATE: {
+      const [key, url] = f!.get<[u64, string]>();
       void run_fetch(key, url);
       return;
     }
-    case Cmd.FETCH_DELETE:
-      abort_fetch(f!.at(0).get<bigint>());
+    case Command.FETCH_DELETE:
+      abort_fetch(f!.at(0).get<u64>());
       return;
-    case Cmd.LOAD_CREATE: {
-      const [kind, load] = f!.get<[number, number]>();
+    case Command.LOAD_CREATE: {
+      const [kind, load] = f!.get<[u32, u32]>();
       void (kind === 0 ? load_model(load) : load_image(load));
       return;
     }
@@ -68,7 +68,7 @@ CORE_BUILD.signal = on_signal;
  * one is lost. */
 function gpu_boot(): void {
   const lost = () => {
-    CORE_BUILD.send(0, Cmd.GPU_DELETE);
+    CORE_BUILD.send(0, Command.GPU_DELETE);
     gpu_boot();
     request_frame();
   };
@@ -77,7 +77,7 @@ function gpu_boot(): void {
       console.error(`[gpu] ${info.reason}; nothing can be drawn`);
       return;
     }
-    CORE_BUILD.send(0, Cmd.GPU_CREATE, packet((b) => b.u32(info.align).bool(info.timestamps)));
+    CORE_BUILD.send(0, Command.GPU_CREATE, packet((b) => b.u32(info.align).bool(info.timestamps)));
     request_frame();
   }, (err) => console.error("[gpu] the device request failed; nothing can be drawn:", err));
 }
@@ -88,7 +88,7 @@ function gpu_boot(): void {
 export function boot_kernel(): void {
   gpu_boot();
   CORE_BUILD.call(
-    Cmd.WORLD_CREATE,
+    Command.WORLD_CREATE,
     packet((b) =>
       b.str(APP_ENV).str(BUILD_TIME).str(BUILD_ID).str(BUILD_NUMBER).bool(PUBLISHED_TILES).bool(HANDHELD)
         .bool("geolocation" in navigator).bool(orientation_supported()).bool(orientation_needs_permission())

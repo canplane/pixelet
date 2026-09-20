@@ -43,7 +43,8 @@ function build_id(): string {
  * Which official build this is: `b<n>` when CI handed the build its number,
  * `b<n>+` for any other build after the last one this checkout saw published,
  * `b?` before one. The count lives in the bucket and is taken by the gate job
- * (script/build_counter.ts); .build_number is only this checkout's cache of it.
+ * (script/build-counter.ts); .build_number is only this checkout's cache of it,
+ * written by `deno task deploy` and by any read of `./script/build-log.ts`.
  */
 function build_number(): string {
   const official = process.env.PXL_BUILD_NUMBER;

@@ -79,7 +79,7 @@ named. The page was written twice as well, `PAGE_BYTES` in the map and `PAGE`
 in build.rs.
 
 `memory.json` is where all of it is decided now, and `script/spec.ts` writes
-both sides: `memory_spec.rs` for the map, `memory_spec.ts` for the shell, and
+both sides: `memory_spec.rs` for the map, `memory-spec.ts` for the shell, and
 build.rs takes the same generated Rust by `#[path]` rather than a copy.
 `deno task check:spec` fails where any of them drifts. Ten numbers, three
 consumers, nothing hardcoded in any of them.

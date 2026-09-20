@@ -6,7 +6,7 @@ export function get(key: string): string | undefined {
   return import.meta.env[key];
 }
 
-function wrap_err(key: string, err: unknown): never {
+function wrapErr(key: string, err: unknown): never {
   const msg = err instanceof Error ? err.message : String(err);
   throw new Error(`env:${key}:${msg}`);
 }
@@ -15,42 +15,42 @@ export function must(key: string, opts: mustv.MustOptions = {}): string {
   try {
     return mustv.must(get(key), opts);
   } catch (err) {
-    wrap_err(key, err);
+    wrapErr(key, err);
   }
 }
 
-export function must_int(key: string, opts: mustv.MustIntOptions = {}): number {
+export function mustInt(key: string, opts: mustv.MustIntOptions = {}): number {
   try {
-    return mustv.must_int(get(key), opts);
+    return mustv.mustInt(get(key), opts);
   } catch (err) {
-    wrap_err(key, err);
+    wrapErr(key, err);
   }
 }
 
-export function must_bool(key: string, opts: mustv.MustBoolOptions = {}): boolean {
+export function mustBool(key: string, opts: mustv.MustBoolOptions = {}): boolean {
   try {
-    return mustv.must_bool(get(key), opts);
+    return mustv.mustBool(get(key), opts);
   } catch (err) {
-    wrap_err(key, err);
+    wrapErr(key, err);
   }
 }
 
-export function must_match(key: string, re: RegExp, msg?: string): string {
+export function mustMatch(key: string, re: RegExp, msg?: string): string {
   try {
-    return mustv.must_match(get(key), re, msg);
+    return mustv.mustMatch(get(key), re, msg);
   } catch (err) {
-    wrap_err(key, err);
+    wrapErr(key, err);
   }
 }
 
-export function must_one_of<T extends readonly string[]>(
+export function mustOneOf<T extends readonly string[]>(
   key: string,
   allowed: T,
   fallback?: T[number],
 ): T[number] {
   try {
-    return mustv.must_one_of(get(key), allowed, fallback);
+    return mustv.mustOneOf(get(key), allowed, fallback);
   } catch (err) {
-    wrap_err(key, err);
+    wrapErr(key, err);
   }
 }

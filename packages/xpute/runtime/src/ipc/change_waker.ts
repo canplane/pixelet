@@ -15,7 +15,7 @@
  * key per pump, and null when the pump was lost — its filter is its own.
  */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { u32, u64 } from "@xpute/core/abi/word.ts";
 import type { U32Array } from "@xpute/core/abi/array.ts";
 import { Vector } from "@xpute/core/collection/arena.ts";
 import { I64_KEYS, IndexedMap } from "@xpute/core/collection/map.ts";
@@ -24,20 +24,20 @@ import type { ChangeJournal, Cursor, Topic } from "./change.ts";
 
 type Listener = () => void;
 /** A changed key, or null: the pump lost its place, re-read the topic. */
-export type TopicListener = (key: bigint | null) => void;
+export type TopicListener = (key: u64 | null) => void;
 
 export class ChangeWaker {
   private cursor: Cursor;
   private pumps: u32 = 0;
   /** Per topic: the keys listened to, their listeners, and the pump that
    * last woke each, so a key bumped twice in one span wakes once. */
-  private readonly keys: IndexedMap<bigint>[] = [];
+  private readonly keys: IndexedMap<u64>[] = [];
   private readonly lists: Listener[][][] = [];
   private readonly woken: Vector<U32Array>[] = [];
   /** Per topic: whole-topic listeners, and the keys already given to them
    * this pump. */
   private readonly topic_lists: TopicListener[][] = [];
-  private readonly topic_seen: IndexedMap<bigint>[] = [];
+  private readonly topic_seen: IndexedMap<u64>[] = [];
 
   constructor(private readonly log: ChangeJournal) {
     this.cursor = log.head;
@@ -50,7 +50,7 @@ export class ChangeWaker {
     }
   }
 
-  subscribe(topic: Topic, key: bigint, listener: Listener): () => void {
+  subscribe(topic: Topic, key: u64, listener: Listener): () => void {
     const keys = this.keys[topic], lists = this.lists[topic], woken = this.woken[topic];
     const pos = keys.insert(key);
     if (pos === woken.len) woken.push(0);

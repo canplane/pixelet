@@ -6,8 +6,10 @@
 //! between them.
 
 pub mod celestial_position;
+#[path = "environment/config.spec.rs"]
 pub mod config;
 pub mod state;
 pub mod theme;
 pub mod theme_clock;
+#[path = "environment/theme.spec.rs"]
 pub mod theme_spec;

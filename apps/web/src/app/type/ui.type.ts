@@ -1,10 +1,10 @@
 // @pxl/web/app/type/ui.type.ts
 
 /** Base props shared by modal components */
-export type BaseModalProps = {
+export interface BaseModalProps {
   open: boolean; // Whether the modal is open
   onOpenChange: (open: boolean) => void; // Callback invoked when the open state changes
-};
+}
 
 /**
  * UI controller interfaces
@@ -15,12 +15,12 @@ export type BaseModalProps = {
  */
 
 /** Modal-related UI actions */
-export type ModalController = {
+export interface ModalController {
   openUpdateFooModal: (id: number) => void; // DUMMY: Open the "Update Foo" modal for a specific entity
   openSettingsModal: () => void; // Opens the settings modal (rendering effects / debug / license)
   openDrawerModal: () => void; // Opens the full cube/decor/character catalog drawer (mode-bar.tsx's own hotbar stays separate)
   openSearchModal: () => void; // Opens forward search (right-side sheet, triggered from CurrentAddress)
-};
+}
 
 /**
  * Root UI controller interface

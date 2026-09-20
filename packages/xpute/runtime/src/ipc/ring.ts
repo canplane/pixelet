@@ -58,7 +58,7 @@
 
 import type { i32, u32 } from "@xpute/core/abi/word.ts";
 import type { U8Array } from "@xpute/core/abi/array.ts";
-import { Errno } from "@xpute/core/status/errno.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { MarshalError } from "@xpute/core/status/error.ts";
 
 import { cmd_of, cmd_word, flags_of, FRAME_CMD, FRAME_PACKET, FRAME_RESULT, FRAME_TAG, FRAME_WORDS } from "@xpute/runtime/ipc/frame.ts";

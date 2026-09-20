@@ -24,7 +24,7 @@ export function useVisualViewport(): void {
 
     const root = document.documentElement;
     let frame = 0;
-    let settle_timer = 0;
+    let settleTimer = 0;
 
     function apply() {
       frame = 0;
@@ -42,9 +42,9 @@ export function useVisualViewport(): void {
       // on their own — visible, and pointless, since nothing up there is ever
       // covered by a keyboard. Being briefly uncorrected costs nothing;
       // animating in sympathy with the system looked wrong.
-      if (settle_timer !== 0) clearTimeout(settle_timer);
-      settle_timer = setTimeout(() => {
-        settle_timer = 0;
+      if (settleTimer !== 0) clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => {
+        settleTimer = 0;
         if (!vv) return;
         root.style.setProperty("--vv-top", `${vv.offsetTop}px`);
       }, SETTLE_MS);
@@ -62,7 +62,7 @@ export function useVisualViewport(): void {
 
     return () => {
       if (frame !== 0) cancelAnimationFrame(frame);
-      if (settle_timer !== 0) clearTimeout(settle_timer);
+      if (settleTimer !== 0) clearTimeout(settleTimer);
       vv.removeEventListener("resize", schedule);
       vv.removeEventListener("scroll", schedule);
       root.style.removeProperty("--vv-top");

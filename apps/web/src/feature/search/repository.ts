@@ -1,5 +1,6 @@
 // @pxl/web/feature/search/repository.ts
 
+import type { f64 } from "@xpute/core/abi/word.ts";
 import { SEARCH_URL } from "@/config/route.ts";
 import type { GeocodePart } from "@/feature/map/geocode/repository.ts";
 
@@ -7,7 +8,7 @@ import type { GeocodePart } from "@/feature/map/geocode/repository.ts";
  * One matched place, WGS84 lon/lat — mirrors the API's own SearchResult
  * (crates/pxl/server/geo/src/search/overture.rs).
  */
-export type SearchResult = {
+export interface SearchResult {
   gers_id: string;
   kind: "poi" | "division";
   name: string;
@@ -16,14 +17,14 @@ export type SearchResult = {
    * populated for `kind: "division"`, always `null` for `kind: "poi"`. */
   common: Record<string, string> | null;
   /** The broader divisions (region/county) containing this result's own
-   * point — assemble via world/geocode/label.ts's own assemble_label(),
+   * point — assemble via world/geocode/label.ts's own assembleLabel(),
    * same as the current-address overlay. Populated for both kinds: it is
    * what tells two same-named results apart, and it replaced a raw address
    * field that could name a different city than its own coordinates. */
   context: GeocodePart[];
-  lon: number;
-  lat: number;
-};
+  lon: f64;
+  lat: f64;
+}
 
 /**
  * Forward search's own transport — always the live API, never a static
@@ -33,7 +34,7 @@ export type SearchResult = {
  * one world/ feature that genuinely requires a reachable server at request
  * time, not just at ingest/bake time.
  */
-export async function fetch_search(query: string, opts?: { near?: { lon: number; lat: number }; signal?: AbortSignal }): Promise<SearchResult[]> {
+export async function fetchSearch(query: string, opts?: { near?: { lon: f64; lat: f64 }; signal?: AbortSignal }): Promise<SearchResult[]> {
   const params = new URLSearchParams({ q: query });
   if (opts?.near) params.set("near", `${opts.near.lon},${opts.near.lat}`);
 

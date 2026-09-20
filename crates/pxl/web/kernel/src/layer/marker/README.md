@@ -13,7 +13,7 @@ persisted world data — and, the trait that actually separates this tier
 from tier 3 (world-anchored billboards), **not** camera-facing. The hover
 cursor's ghost box and the location puck's zone ring and beacon both sit and
 rotate in real world space; neither counter-rotates to face the camera the
-way a billboard would. `style.rs`'s `marker_colors` is shared styling for
+way a billboard would. `style.spec.rs`'s `marker_colors` is shared styling for
 this tier specifically (`ACTION`, `ERASE`), not a general color constant
 file.
 

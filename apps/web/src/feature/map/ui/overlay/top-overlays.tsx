@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { cn } from "@/shared/lib/util/cn.ts";
 import { useAppContext } from "@/app/provider/context.ts";
-import { use_camera_busy_interaction_style } from "@/feature/map/ui/use-camera-busy-interaction-style.ts";
+import { useCameraBusyInteractionStyle } from "@/feature/map/ui/use-camera-busy-interaction-style.ts";
 import { useKernel } from "@/kernel/shell.ts";
 import { CurrentAddress } from "./current-address.tsx";
 import { useReverseGeocode } from "./use-reverse-geocode.ts";
@@ -17,15 +17,15 @@ import { TrackingButton } from "@/feature/map/ui/control/tracking-button.tsx";
 import { SettingsTriggerButton } from "@/feature/setting/trigger-button.tsx";
 
 export function TopOverlays() {
-  const { is_camera_busy, interaction_style } = use_camera_busy_interaction_style();
+  const { isCameraBusy, interactionStyle } = useCameraBusyInteractionStyle();
   const { ui } = useAppContext();
   const { t } = useTranslation();
 
-  const { label: address_label } = useReverseGeocode(useKernel((s) => s.map.page));
+  const { label: addressLabel } = useReverseGeocode(useKernel((s) => s.map.page));
 
   return (
     <>
-      <div className={cn("absolute top-[calc(1rem+var(--vv-top,0px))] left-4 z-50 flex flex-col items-start gap-3", interaction_style)}>
+      <div className={cn("absolute top-[calc(1rem+var(--vv-top,0px))] left-4 z-50 flex flex-col items-start gap-3", interactionStyle)}>
         <div className="pointer-events-auto">
           <SettingsTriggerButton />
         </div>
@@ -35,7 +35,7 @@ export function TopOverlays() {
       <div
         className={cn(
           "absolute top-[calc(1rem+var(--vv-top,0px))] right-4 z-50 flex flex-col items-end gap-4 pointer-events-none",
-          interaction_style,
+          interactionStyle,
         )}
       >
         <div className="flex flex-col items-end gap-1">
@@ -69,13 +69,13 @@ export function TopOverlays() {
                 pill, not an arbitrary size of its own. */
               }
               <Search className="w-3.5 h-3.5 text-[#5B4636]/50 shrink-0" />
-              <CurrentAddress label={address_label} />
+              <CurrentAddress label={addressLabel} />
             </button>
             <SensorStatus />
           </div>
         </div>
 
-        <div className={cn("flex items-start gap-2.5", !is_camera_busy && "pointer-events-auto")}>
+        <div className={cn("flex items-start gap-2.5", !isCameraBusy && "pointer-events-auto")}>
           <MapScaleBar />
 
           <div className="flex flex-col items-center gap-2.5">

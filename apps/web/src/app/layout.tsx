@@ -27,9 +27,9 @@ function ErrorPage() {
 }
 
 /** AppLayout props */
-type AppLayoutProps = {
+interface AppLayoutProps {
   children: ReactNode;
-};
+}
 
 /** Root layout component */
 export function AppLayout(props: AppLayoutProps) {

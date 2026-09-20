@@ -32,7 +32,9 @@ export type LowerValue =
   | LowerValue[]
   | LowerRecord;
 
-export type LowerRecord = { [k: string]: LowerValue };
+export interface LowerRecord {
+  [k: string]: LowerValue;
+}
 
 export function is_plain_record(x: unknown): x is LowerRecord {
   if (x == null || typeof x !== "object") return false;

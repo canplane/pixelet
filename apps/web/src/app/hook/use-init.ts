@@ -10,10 +10,10 @@ export const enum LoadState {
   TIMEOUT = "timeout", // Operation exceeded threshold
 }
 
-type AppInitResult = {
+interface AppInitResult {
   loadState: LoadState;
   store: unknown;
-};
+}
 
 /**
  * Hook to manage the global application initialization process.

@@ -8,10 +8,11 @@
  * actions.
  */
 
+import type { U8Array } from "@xpute/core/abi/array.ts";
 import { assert, assertEquals } from "@std/assert";
 
 import type { u32 } from "@xpute/core/abi/word.ts";
-import { Cmd } from "@/kernel/abi/cmd.ts";
+import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { cube_types } from "@/catalog/cell/cube.ts";
 
 import { ELE_PADDED_SPAN, encode_empty_poi_page, encode_terrain, PAGE_CELL_SPAN } from "@/kernel/fixture.ts";
@@ -53,19 +54,19 @@ let loads: number[] = [];
 let draws = 0;
 
 CORE_BUILD.signal = (_tag, cmd, f) => {
-  if (cmd === Cmd.WORLD_SNAPSHOT) {
+  if (cmd === Command.WORLD_SNAPSHOT) {
     const [at, len] = f!.get<[number, number]>();
     snapshot = JSON.parse(text_at(CORE_KERNEL.memory, at >>> 0, len >>> 0)) as Snapshot;
-  } else if (cmd === Cmd.WORLD_UPDATE) draws = f!.at(0).get<number>();
-  else if (cmd === Cmd.FETCH_CREATE) {
+  } else if (cmd === Command.WORLD_UPDATE) draws = f!.at(0).get<number>();
+  else if (cmd === Command.FETCH_CREATE) {
     const [key, url] = f!.get<[bigint, string]>();
     fetched.push({ key, url, category: category_of(url) });
-  } else if (cmd === Cmd.LOAD_CREATE) loads.push(f!.at(1).get<number>());
+  } else if (cmd === Command.LOAD_CREATE) loads.push(f!.at(1).get<number>());
 };
 
 /** A page's body as the bake encodes it: a rolling elevation raster and
  * ground that is mostly land, with water, structures and roads sprinkled. */
-function terrain_body(seed: u32): Uint8Array {
+function terrain_body(seed: u32): U8Array {
   const next = rng(seed);
   const cells = PAGE_CELL_SPAN * PAGE_CELL_SPAN;
   const ele = new Int16Array(ELE_PADDED_SPAN * ELE_PADDED_SPAN);
@@ -90,12 +91,12 @@ let strobe_requests = 0;
 const answer_requests: Record<string, number> = {};
 
 /** A response as the driver reports one: the body held for the kernel. */
-function answer(f: Fetched, status: number, body: Uint8Array | null): void {
+function answer(f: Fetched, status: number, body: U8Array | null): void {
   const requests = heap_row[HEAP_REQUESTS];
   try {
     const bytes = body?.byteLength ?? 0;
     const held = body !== null && bytes > 0 ? hold_body(body) : 0;
-    CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.u64(f.key).u32(0).u32(status).u32(held).u32(bytes).u32(0).f64(0)));
+    CORE_BUILD.send(0, Command.FETCH_UPDATE, packet((b) => b.u64(f.key).u32(0).u32(status).u32(held).u32(bytes).u32(0).f64(0)));
     CORE_BUILD.ring(0);
   } finally {
     answer_requests[f.category] = (answer_requests[f.category] ?? 0) + heap_row[HEAP_REQUESTS] - requests;
@@ -103,7 +104,7 @@ function answer(f: Fetched, status: number, body: Uint8Array | null): void {
 }
 
 function fail(f: Fetched): void {
-  CORE_BUILD.send(0, Cmd.FETCH_UPDATE, packet((b) => b.u64(f.key).u32(2).u32(0).u32(0).u32(0).u32(0).f64(0)));
+  CORE_BUILD.send(0, Command.FETCH_UPDATE, packet((b) => b.u64(f.key).u32(2).u32(0).u32(0).u32(0).u32(0).f64(0)));
   CORE_BUILD.ring(0);
 }
 
@@ -112,7 +113,7 @@ function turn(delta = 1 / 60): Turn {
   fetched = [];
   loads = [];
   const requests = heap_row[HEAP_REQUESTS];
-  CORE_BUILD.send(0, Cmd.WORLD_UPDATE, packet((b) => b.f64(1280).f64(720).f64(1).f64(delta).f64(1000 / 60).bool(true).u32(6)));
+  CORE_BUILD.send(0, Command.WORLD_UPDATE, packet((b) => b.f64(1280).f64(720).f64(1).f64(delta).f64(1000 / 60).bool(true).u32(6)));
   CORE_BUILD.ring(8);
   strobe_requests += heap_row[HEAP_REQUESTS] - requests;
   const started = fetched;
@@ -121,18 +122,18 @@ function turn(delta = 1 / 60): Turn {
     else if (f.category === "poi") answer(f, 200, encode_empty_poi_page());
     else fail(f);
   }
-  for (const load of loads) CORE_BUILD.send(0, Cmd.LOAD_DELETE, packet((b) => b.u32(load)));
+  for (const load of loads) CORE_BUILD.send(0, Command.LOAD_DELETE, packet((b) => b.u32(load)));
   assert(snapshot !== null, "the kernel posted its snapshot");
   return { snapshot, fetched: started, draws };
 }
 
 function action(a: Record<string, unknown>): void {
-  CORE_BUILD.send(0, Cmd.WORLD_ACTION, packet((b) => b.str(JSON.stringify(a))));
+  CORE_BUILD.send(0, Command.WORLD_ACTION, packet((b) => b.str(JSON.stringify(a))));
   CORE_BUILD.ring(0);
 }
 
 CORE_BUILD.call(
-  Cmd.WORLD_CREATE,
+  Command.WORLD_CREATE,
   packet((b) => b.str("test").str("2026-09-15T00:00:00Z").str("r0-test").str("b?").bool(false).bool(false).bool(false).bool(false).bool(false)),
   (r) => r,
 );

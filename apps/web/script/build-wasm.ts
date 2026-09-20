@@ -75,14 +75,14 @@ type Abi = { imports: [string, string, string][]; exports: [string, string][] };
 
 async function minified(): Promise<Abi> {
   const out = new URL("kernel.opt.wasm", OUT);
-  const wasm_opt = new Deno.Command("wasm-opt", {
+  const wasmOpt = new Deno.Command("wasm-opt", {
     args: [...WASM_OPT, fileURLToPath(OUT), "-o", fileURLToPath(out)],
     stdout: "piped",
     stderr: "inherit",
   });
   let done: Deno.CommandOutput;
   try {
-    done = await wasm_opt.output();
+    done = await wasmOpt.output();
   } catch {
     console.error("[build-wasm] wasm-opt did not run. The module is finished by Binaryen: brew install binaryen (or your platform's package).");
     Deno.exit(1);
@@ -141,7 +141,7 @@ function blanked(): number {
 
 /** The mapping as the shell reads it: a logical name to the one letter the
  * module now answers to. */
-async function write_abi(abi: Abi): Promise<void> {
+async function writeAbi(abi: Abi): Promise<void> {
   const rows = (pairs: [string, string][]) => pairs.map(([name, short]) => `  ${JSON.stringify(name)}: ${JSON.stringify(short)},`).join("\n");
   await Deno.writeTextFile(
     new URL("../src/kernel/abi/symbol.ts", import.meta.url),
@@ -175,7 +175,7 @@ if (!status.success) Deno.exit(status.code);
 
 await Deno.copyFile(BUILT, OUT);
 const linked = (await Deno.stat(OUT)).size;
-await write_abi(await minified());
+await writeAbi(await minified());
 // Only what is published loses its panic paths: a build number is handed out
 // by the deploy and by nothing else (script/deploy.ts), so it is the one
 // signal that says this module is going out rather than being worked on.

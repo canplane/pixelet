@@ -30,7 +30,7 @@
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { now } from "../clock.ts";
 
-export type BudgetOpts = {
+export interface BudgetOpts {
   /** wall-time this pass may consume, in ms. Waived while the pass has not
    * yet completed a step — that is the forward-progress guarantee. */
   budget_ms: f64;
@@ -51,9 +51,9 @@ export type BudgetOpts = {
   hard_budget_ms?: f64;
   /** hard cap on completed steps, independent of time. Omit for no cap. */
   max_steps?: u32;
-};
+}
 
-export type PassStats = {
+export interface PassStats {
   /** steps that reported doing work. */
   ran: u32;
   /** items visited (including no-op steps and the one that tripped the stop). */
@@ -61,7 +61,7 @@ export type PassStats = {
   elapsed_ms: f64;
   /** true when the loop stopped early — there was more it would have run. */
   stopped_early: boolean;
-};
+}
 
 /**
  * Runs `step` over `items` in the order given, stopping once the budget or

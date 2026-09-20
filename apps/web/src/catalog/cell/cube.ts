@@ -21,16 +21,16 @@
 // exactly one of them. Nothing here needs to know that; this file is cell
 // definitions and nothing else.
 
-import { build_colors_from_json, type Swatch } from "./type.ts";
+import { buildColorsFromJson, type Swatch } from "./type.ts";
 
 // One shared palette module for every channel below (2026-09-06) — mirrors
 // cube_types' own merge of terrain.ts + objects.ts into one file. A plain
 // .ts export, not a real .json file imported via `with { type: "json" }`:
 // see that module's own top comment for why (a real, reproduced
 // @deno/vite-plugin limitation, not a style preference).
-import cube_palette_json from "./color-spec.ts";
+import cubePaletteJson from "./color.spec.ts";
 
-import { cube_types } from "./cube-type-spec.ts";
+import { cube_types } from "./cube_type.spec.ts";
 
 export { cube_types };
 
@@ -41,7 +41,7 @@ export { cube_types };
 /** VOID/UNKNOWN's own shared colors, seeded into every raster channel below
  * (land/water/structure/transport) so a real cell holding either sentinel
  * still resolves to *some* real color — VOID to nothing (null, the same
- * "don't render this" signal build_colors_from_json already uses
+ * "don't render this" signal buildColorsFromJson already uses
  * elsewhere) and UNKNOWN to a visible neutral gray, so an unresolved cell
  * reads as "we don't know" instead of silently showing as whatever
  * happened to render last. AIR is deliberately not included: no raster
@@ -52,12 +52,12 @@ const RASTER_SEED: Record<number, Swatch | null> = {
   [cube_types.common.unknown]: { hex: "#D9D0CC", rgb: 0xd9d0cc },
 };
 
-// build_colors_from_json processes every channel present in the JSON it's
+// buildColorsFromJson processes every channel present in the JSON it's
 // handed, regardless of what `types` restricts to — so the raster call
-// below needs cube_palette_json's own "block" section stripped first, or
+// below needs cubePaletteJson's own "block" section stripped first, or
 // it'd throw "unknown channel block" against a `types` that only lists
 // land/water/structure/transport.
-const { block: block_palette_json, ...raster_palette_json } = cube_palette_json;
+const { block: blockPaletteJson, ...rasterPaletteJson } = cubePaletteJson;
 
 export const cube_colors: Record<string, Record<number, Swatch | null>> = {
   common: {
@@ -65,14 +65,14 @@ export const cube_colors: Record<string, Record<number, Swatch | null>> = {
     [cube_types.common.air]: null,
     [cube_types.common.unknown]: { hex: "#D9D0CC", rgb: 0xd9d0cc },
   },
-  ...build_colors_from_json(
+  ...buildColorsFromJson(
     { land: cube_types.land, water: cube_types.water, structure: cube_types.structure, transport: cube_types.transport },
-    raster_palette_json,
+    rasterPaletteJson,
     RASTER_SEED,
   ),
   // No seed at all for block — every one of its keys is a real color
   // straight from the palette file, nothing to pre-populate.
-  ...build_colors_from_json({ block: cube_types.block }, { block: block_palette_json }, {}),
+  ...buildColorsFromJson({ block: cube_types.block }, { block: blockPaletteJson }, {}),
 };
 
 /** A real, user-paintable flat color — every key of cube_types.block, no

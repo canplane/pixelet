@@ -4,11 +4,11 @@
 //! type wears on each face.
 //!
 //! A pack decorates the cube catalog; it does not define it. A cube's identity
-//! and colour are spec/cell's (spec/cell/color.rs), and the pack is one image
+//! and colour are spec/cell's (spec/cell/color.spec.rs), and the pack is one image
 //! per type and face on top of that, so a type with no image here still draws
 //! — as its colour — and a pack can be swapped without touching an id. Which
 //! cube face a tile is, the ingest reads off the file's name and writes into
-//! ingested.rs; the sheet's bucket key is the shell's.
+//! ingested.spec.rs; the sheet's bucket key is the shell's.
 
 pub use super::ingested::CubeFace;
 use super::ingested::{Sheet, SHEET};

@@ -16,9 +16,9 @@
  * back full is read and rung again with no quota until it does not.
  */
 
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
 import type { U8Array } from "@xpute/core/abi/array.ts";
-import { Errno } from "@xpute/core/status/errno.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { type BranchCursor, type BranchView, encoder, TreeReader, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 import { FrameFlag } from "./frame.ts";
 import { Ring } from "./ring.ts";
@@ -49,7 +49,7 @@ export class Doorbell {
    * made inside a listener read ahead of the completion ring's head, which
    * the read under it then passes over. */
   private next_call: u32 = 0;
-  private readonly waiting = new Map<u32, (result: number, f: BranchCursor | null) => void>();
+  private readonly waiting = new Map<u32, (result: i32, f: BranchCursor | null) => void>();
   private readonly taken = new Set<u32>();
   /** How deep in `read` this is: a listener runs inside it. */
   private reading = 0;
@@ -89,7 +89,7 @@ export class Doorbell {
    * behind whatever waits, and rung with no quota until the reply comes back.
    * `take` reads the reply; its packet is valid only inside it.
    */
-  call<T>(cmd: u32, pkt: U8Array | null, take: (result: number, reply: BranchCursor | null) => T): T {
+  call<T>(cmd: u32, pkt: U8Array | null, take: (result: i32, reply: BranchCursor | null) => T): T {
     const tag = this.next_call = (this.next_call + 1) >>> 0;
     let out: { value: T } | null = null;
     this.waiting.set(tag, (result, f) => out = { value: take(result, f) });

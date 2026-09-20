@@ -7,7 +7,7 @@ import { kernel_enable_sensors, type PoseStatus, useKernel } from "@/kernel/shel
 
 import { cn } from "@/shared/lib/util/cn.ts";
 
-function status_class(status: PoseStatus): string {
+function statusClass(status: PoseStatus): string {
   switch (status) {
     case "ready":
       return "text-emerald-500";
@@ -28,19 +28,19 @@ function status_class(status: PoseStatus): string {
 export function SensorStatus() {
   const { t } = useTranslation();
 
-  const location_status = useKernel((s) => s.location.status);
-  const orientation_status = useKernel((s) => s.orientation.status);
+  const locationStatus = useKernel((s) => s.location.status);
+  const orientationStatus = useKernel((s) => s.orientation.status);
 
-  const can_request: boolean = location_status !== "ready" || orientation_status !== "ready";
+  const canRequest: boolean = locationStatus !== "ready" || orientationStatus !== "ready";
 
   const icons = (
     <>
-      <Locate className={cn("w-3.5 h-3.5 transition-colors duration-500", status_class(location_status))} strokeWidth={2.5} />
-      <Compass className={cn("w-3.5 h-3.5 transition-colors duration-500", status_class(orientation_status))} strokeWidth={2.5} />
+      <Locate className={cn("w-3.5 h-3.5 transition-colors duration-500", statusClass(locationStatus))} strokeWidth={2.5} />
+      <Compass className={cn("w-3.5 h-3.5 transition-colors duration-500", statusClass(orientationStatus))} strokeWidth={2.5} />
     </>
   );
 
-  if (!can_request) return <div className="flex items-center gap-2">{icons}</div>;
+  if (!canRequest) return <div className="flex items-center gap-2">{icons}</div>;
 
   return (
     <button

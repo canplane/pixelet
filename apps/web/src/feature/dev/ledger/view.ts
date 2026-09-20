@@ -13,23 +13,25 @@
  * copies what it keeps into plain objects before returning.
  */
 
+import type { F64Array } from "@xpute/core/abi/array.ts";
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { CORE_KERNEL } from "@/kernel/mem.ts";
 
 import type { Frame, FrameSummary, LedgerReport, LongFrame, Spread, TaskRecord, TaskSummary } from "./report.ts";
-import { CATEGORY_NAMES, CENSUS_TAGS, FRAME, LOG, OUTCOME_NAMES, PHASE_NAMES, READ, SPREAD, STEP, STEP_NAMES, SUMMARY, TASK, TASK_PHASE_NAMES, TASK_SUMMARY, WORST } from "./spec.ts";
-import { long_frames_since } from "./long-frame.ts";
+import { CATEGORY_NAMES, CENSUS_TAGS, FRAME, LOG, OUTCOME_NAMES, PHASE_NAMES, READ, SPREAD, STEP, STEP_NAMES, SUMMARY, TASK, TASK_PHASE_NAMES, TASK_SUMMARY, WORST } from "./ledger.spec.ts";
+import { longFramesSince } from "./long-frame.ts";
 
 const WORD = 8;
 /** The tail of the task ring the report carries whole, newest last. */
 const RECENT_TASKS = 20;
 
-const words = (at: number, n: number) => new Float64Array(CORE_KERNEL.memory.buffer, at, n);
-const u32s = (at: number, n: number) => new Uint32Array(CORE_KERNEL.memory.buffer, at, n);
+const words = (at: u32, n: u32) => new Float64Array(CORE_KERNEL.memory.buffer, at, n);
+const u32s = (at: u32, n: u32) => new Uint32Array(CORE_KERNEL.memory.buffer, at, n);
 
-function frame_at(w: Float64Array, o: number): Frame {
-  const at = (k: number) => w[o + k];
-  const lod: Record<string, number> = {
+function frameAt(w: F64Array, o: u32): Frame {
+  const at = (k: u32) => w[o + k];
+  const lod: Record<string, f64> = {
     chunks: at(FRAME.lod_chunks),
     in_frustum: at(FRAME.lod_in_frustum),
     pending: at(FRAME.lod_pending),
@@ -59,7 +61,7 @@ function frame_at(w: Float64Array, o: number): Frame {
     tile_pages: at(FRAME.tile_pages),
     poi_count: at(FRAME.poi_count),
     textures_mb: { depth: at(FRAME.tex_depth), msaa: at(FRAME.tex_msaa), shadow: at(FRAME.tex_shadow), layers: at(FRAME.tex_layers) },
-    census: CENSUS_TAGS.map((_, k) => [at(FRAME.census + 2 * k), at(FRAME.census + 2 * k + 1)] as [number, number]),
+    census: CENSUS_TAGS.map((_, k) => [at(FRAME.census + 2 * k), at(FRAME.census + 2 * k + 1)] as [f64, f64]),
     heap: {
       used_mb: at(FRAME.heap_used_mb),
       live_mb: at(FRAME.heap_live_mb),
@@ -75,18 +77,18 @@ function frame_at(w: Float64Array, o: number): Frame {
   };
 }
 
-function frames_at(at: number, count: number): Frame[] {
+function frames_at(at: u32, count: u32): Frame[] {
   const w = words(at, count * FRAME.WORDS);
-  return Array.from({ length: count }, (_, i) => frame_at(w, i * FRAME.WORDS));
+  return Array.from({ length: count }, (_, i) => frameAt(w, i * FRAME.WORDS));
 }
 
-function tasks_at(at: number, count: number): TaskRecord[] {
+function tasks_at(at: u32, count: u32): TaskRecord[] {
   const w = words(at, count * TASK.WORDS);
   const subjects = new BigUint64Array(CORE_KERNEL.memory.buffer, at, count * TASK.WORDS);
   return Array.from({ length: count }, (_, i) => {
     const o = i * TASK.WORDS;
     const phase_count = w[o + TASK.phase_count];
-    const phases: [string, number][] = [];
+    const phases: [string, f64][] = [];
     for (let k = 0; k < phase_count; k++) {
       phases.push([TASK_PHASE_NAMES[w[o + TASK.phase_ids + k]] ?? "?", w[o + TASK.phase_values + k]]);
     }
@@ -107,41 +109,41 @@ function tasks_at(at: number, count: number): TaskRecord[] {
   });
 }
 
-const spread_at = (s: Float64Array, at: number): Spread => ({ p50: s[at + SPREAD.p50], p95: s[at + SPREAD.p95], max: s[at + SPREAD.max] });
+const spreadAt = (s: F64Array, at: u32): Spread => ({ p50: s[at + SPREAD.p50], p95: s[at + SPREAD.p95], max: s[at + SPREAD.max] });
 
-function frame_summary(s: Float64Array): FrameSummary | null {
+function frameSummary(s: F64Array): FrameSummary | null {
   const F = SUMMARY.frames;
   const a = F.AT;
   if (s[a + F.present] === 0) return null;
-  const nan_null = (v: number) => (Number.isNaN(v) ? null : v);
+  const nanNull = (v: f64) => (Number.isNaN(v) ? null : v);
   return {
     n: s[a + F.n],
     seconds: s[a + F.seconds],
     moving: s[a + F.moving],
     missed: s[a + F.missed],
     overran: s[a + F.overran],
-    dt: spread_at(s, a + F.dt),
-    task: spread_at(s, a + F.task),
-    offthread: spread_at(s, a + F.offthread),
-    gpu: spread_at(s, a + F.gpu),
-    sched: spread_at(s, a + F.sched),
-    tick: spread_at(s, a + F.tick),
-    phases: PHASE_NAMES.map((name, k) => ({ name, spread: spread_at(s, a + F.phases + k * SPREAD.WORDS) })),
+    dt: spreadAt(s, a + F.dt),
+    task: spreadAt(s, a + F.task),
+    offthread: spreadAt(s, a + F.offthread),
+    gpu: spreadAt(s, a + F.gpu),
+    sched: spreadAt(s, a + F.sched),
+    tick: spreadAt(s, a + F.tick),
+    phases: PHASE_NAMES.map((name, k) => ({ name, spread: spreadAt(s, a + F.phases + k * SPREAD.WORDS) })),
     work: [s[a + F.work_scans], s[a + F.work_bakes]],
-    per_s: [s[a + F.per_s_scans], s[a + F.per_s_bakes]],
+    perS: [s[a + F.per_s_scans], s[a + F.per_s_bakes]],
     backlog_s: s[a + F.backlog_s],
-    backlog_per_s: [s[a + F.backlog_per_s_scans], s[a + F.backlog_per_s_bakes]],
-    tick_per_bake: nan_null(s[a + F.tick_per_bake]),
+    backlogPerS: [s[a + F.backlog_per_s_scans], s[a + F.backlog_per_s_bakes]],
+    tick_per_bake: nanNull(s[a + F.tick_per_bake]),
     mounts: [s[a + F.mounts_added], s[a + F.mounts_removed]],
     used_delta_mb: s[a + F.used_delta_mb],
     census: CENSUS_TAGS.map((tag, k) => ({ tag, draws: s[a + F.census + 2 * k], tris: s[a + F.census + 2 * k + 1] }))
       .filter((r) => r.draws > 0)
       .sort((x, y) => y.tris - x.tris),
-    last: frame_at(s, a + F.last),
+    last: frameAt(s, a + F.last),
   };
 }
 
-function task_summaries(s: Float64Array): TaskSummary[] {
+function taskSummaries(s: F64Array): TaskSummary[] {
   const out: TaskSummary[] = [];
   CATEGORY_NAMES.forEach((category, c) => {
     const a = SUMMARY.tasks.AT + SUMMARY.tasks.slots + c * TASK_SUMMARY.WORDS;
@@ -151,14 +153,14 @@ function task_summaries(s: Float64Array): TaskSummary[] {
       const w = a + TASK_SUMMARY.reasons + 3 * i;
       return { fail: s[w], status: s[w + 1], n: s[w + 2] };
     });
-    const means = TASK_PHASE_NAMES.map((name, p) => [name, s[a + TASK_SUMMARY.phase_mean + p]] as [string, number]).filter(([, v]) => !Number.isNaN(v));
+    const means = TASK_PHASE_NAMES.map((name, p) => [name, s[a + TASK_SUMMARY.phase_mean + p]] as [string, f64]).filter(([, v]) => !Number.isNaN(v));
     out.push({
       category,
       n,
       ok: s[a + TASK_SUMMARY.ok],
       aborted: s[a + TASK_SUMMARY.aborted],
       error: s[a + TASK_SUMMARY.error],
-      lat: spread_at(s, a + TASK_SUMMARY.lat),
+      lat: spreadAt(s, a + TASK_SUMMARY.lat),
       reasons,
       phase_mean: s[a + TASK_SUMMARY.phase_n] > 0 ? means : null,
     });
@@ -168,15 +170,20 @@ function task_summaries(s: Float64Array): TaskSummary[] {
 
 /** A section of the block as named numbers, in the order ledger.json lists
  * its fields. */
-function section(s: Float64Array, sec: Record<string, number>): Record<string, number> {
-  const out: Record<string, number> = {};
+function section(s: F64Array, sec: Record<string, u32>): Record<string, f64> {
+  const out: Record<string, f64> = {};
   for (const [k, v] of Object.entries(sec)) if (k !== "AT" && k !== "WORDS") out[k] = s[sec.AT + v];
   return out;
 }
 
-type Read = { summary: Float64Array; frames: [number, number]; tasks: [number, number]; worst: [number, number] };
+interface Read {
+  summary: F64Array;
+  frames: [u32, u32];
+  tasks: [u32, u32];
+  worst: [u32, u32];
+}
 
-function read(window_ms: number): Read {
+function read(window_ms: f64): Read {
   const r = u32s(CORE_KERNEL.ledger_read(window_ms), READ.WORDS);
   return {
     summary: words(r[READ.summary_at], r[READ.summary_words]),
@@ -187,33 +194,33 @@ function read(window_ms: number): Read {
 }
 
 export type Gauge = {
-  rec: { recording: boolean; elapsed_ms: number; tasks: number; frames: number; truncated: boolean };
+  rec: { recording: boolean; elapsed_ms: f64; tasks: u32; frames: u32; truncated: boolean };
   frames: FrameSummary | null;
   tasks: TaskSummary[];
-  faces: [number, number];
-  atlas: { size: number; entries: number; shelves: number; used_px: number };
-  poi: { ms: number; frames: number; max_frames: number; hits: number; candidates: number; kept: number; indexed: number; dropped: number };
+  faces: [f64, f64];
+  atlas: { size: u32; entries: u32; shelves: u32; used_px: u32 };
+  poi: { ms: f64; frames: u32; max_frames: u32; hits: u32; candidates: u32; kept: u32; indexed: u32; dropped: u32 };
   longs: LongFrame[];
 };
 
-function rec_of(s: Float64Array): Gauge["rec"] {
+function recOf(s: F64Array): Gauge["rec"] {
   const r = section(s, SUMMARY.rec);
   return { recording: r.recording !== 0, elapsed_ms: r.elapsed_ms, tasks: r.tasks, frames: r.frames, truncated: r.truncated !== 0 };
 }
 
-const atlas_of = (s: Float64Array) => section(s, SUMMARY.atlas) as Gauge["atlas"];
+const atlasOf = (s: F64Array) => section(s, SUMMARY.atlas) as Gauge["atlas"];
 
 /** What the panel draws: the summary over the last `window_ms`. */
-export function ledger_gauge_read(window_ms: number): Gauge {
+export function ledgerGaugeRead(window_ms: f64): Gauge {
   const { summary: s } = read(window_ms);
   const c = section(s, SUMMARY.counters);
   const poi = section(s, SUMMARY.poi);
   return {
-    rec: rec_of(s),
-    frames: frame_summary(s),
-    tasks: task_summaries(s),
+    rec: recOf(s),
+    frames: frameSummary(s),
+    tasks: taskSummaries(s),
     faces: [c.faces_kept, c.faces_possible],
-    atlas: atlas_of(s),
+    atlas: atlasOf(s),
     poi: {
       ms: poi.place_ms,
       frames: poi.place_frames,
@@ -224,18 +231,18 @@ export function ledger_gauge_read(window_ms: number): Gauge {
       indexed: poi.index_indexed,
       dropped: poi.index_dropped,
     },
-    longs: long_frames_since(performance.now() - window_ms),
+    longs: longFramesSince(performance.now() - window_ms),
   };
 }
 
 /** The whole recording, as the report prints it. */
-export function ledger_report_read(): LedgerReport {
+export function ledgerReportRead(): LedgerReport {
   const { summary: s, tasks, worst } = read(Infinity);
   const poi = section(s, SUMMARY.poi);
   const peak = section(s, SUMMARY.peak);
-  const steps_at = SUMMARY.steps.AT;
-  const steps = Array.from({ length: s[steps_at + SUMMARY.steps.count] }, (_, i) => {
-    const w = steps_at + SUMMARY.steps.slots + i * STEP.WORDS;
+  const stepsAt = SUMMARY.steps.AT;
+  const steps = Array.from({ length: s[stepsAt + SUMMARY.steps.count] }, (_, i) => {
+    const w = stepsAt + SUMMARY.steps.slots + i * STEP.WORDS;
     return {
       phase: PHASE_NAMES[s[w + STEP.phase]] ?? "?",
       name: STEP_NAMES[s[w + STEP.name]] ?? "?",
@@ -244,15 +251,15 @@ export function ledger_report_read(): LedgerReport {
       max_ms: s[w + STEP.max_ms],
     };
   });
-  const recent_from = Math.max(0, tasks[1] - RECENT_TASKS);
-  const worst_words = words(worst[0], worst[1] * WORST.WORDS);
-  const task_summary = task_summaries(s);
+  const recentFrom = Math.max(0, tasks[1] - RECENT_TASKS);
+  const worstWords = words(worst[0], worst[1] * WORST.WORDS);
+  const taskSummary = taskSummaries(s);
   return {
     t: performance.now(),
     build: { number: BUILD_NUMBER, id: BUILD_ID, time: BUILD_TIME },
-    frames: frame_summary(s),
+    frames: frameSummary(s),
     counters: section(s, SUMMARY.counters),
-    atlas: atlas_of(s),
+    atlas: atlasOf(s),
     retain: section(s, SUMMARY.retain),
     fetch: section(s, SUMMARY.fetch) as LedgerReport["fetch"],
     poi: {
@@ -263,33 +270,33 @@ export function ledger_report_read(): LedgerReport {
     },
     steps,
     peak: peak.present === 0 ? null : peak,
-    task_n: task_summary.reduce((n, t) => n + t.n, 0),
-    tasks: task_summary,
-    recent: tasks_at(tasks[0] + recent_from * TASK.WORDS * WORD, tasks[1] - recent_from),
+    taskN: taskSummary.reduce((n, t) => n + t.n, 0),
+    tasks: taskSummary,
+    recent: tasks_at(tasks[0] + recentFrom * TASK.WORDS * WORD, tasks[1] - recentFrom),
     worst: Array.from({ length: worst[1] }, (_, i) => {
       const o = i * WORST.WORDS;
-      return { sample: frame_at(worst_words, o + WORST.sample), prev: worst_words[o + WORST.has_prev] === 0 ? null : frame_at(worst_words, o + WORST.prev) };
+      return { sample: frameAt(worstWords, o + WORST.sample), prev: worstWords[o + WORST.has_prev] === 0 ? null : frameAt(worstWords, o + WORST.prev) };
     }),
-    longs: long_frames_since(-Infinity),
+    longs: longFramesSince(-Infinity),
   };
 }
 
 /** The whole recording's rings, for the trace. */
-export function ledger_rings_read(): { frames: Frame[]; tasks: TaskRecord[]; worst: LedgerReport["worst"] } {
+export function ledgerRingsRead(): { frames: Frame[]; tasks: TaskRecord[]; worst: LedgerReport["worst"] } {
   const { tasks, frames, worst } = read(0);
-  const worst_words = words(worst[0], worst[1] * WORST.WORDS);
+  const worstWords = words(worst[0], worst[1] * WORST.WORDS);
   return {
     frames: frames_at(frames[0], frames[1]),
     tasks: tasks_at(tasks[0], tasks[1]),
     worst: Array.from({ length: worst[1] }, (_, i) => {
       const o = i * WORST.WORDS;
-      return { sample: frame_at(worst_words, o + WORST.sample), prev: worst_words[o + WORST.has_prev] === 0 ? null : frame_at(worst_words, o + WORST.prev) };
+      return { sample: frameAt(worstWords, o + WORST.sample), prev: worstWords[o + WORST.has_prev] === 0 ? null : frameAt(worstWords, o + WORST.prev) };
     }),
   };
 }
 
 /** What the live stream kept since the last take, cleared by taking. */
-export function ledger_log_take(): { tasks: TaskRecord[]; frames: Frame[] } {
+export function ledgerLogTake(): { tasks: TaskRecord[]; frames: Frame[] } {
   const l = u32s(CORE_KERNEL.ledger_log(), LOG.WORDS);
   const out = { tasks: tasks_at(l[LOG.tasks_at], l[LOG.tasks_count]), frames: frames_at(l[LOG.frames_at], l[LOG.frames_count]) };
   if (out.tasks.length + out.frames.length > 0) CORE_KERNEL.ledger_log_clear();

@@ -17,7 +17,14 @@ COPY crates ./crates
 # release is the module's, which aborts on panic. Off the browser that is
 # wrong — a panicking request should take the request down and not the process.
 # See crates/Cargo.toml.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
+# `sharing=locked` on the registry: the two images build in parallel and mount
+# the same cache, while cargo's own package lock lives at
+# $CARGO_HOME/.package-cache — outside the mount, so each container has its own
+# and neither excludes the other. Two cargos unpacking one crate into one
+# directory is what that costs: `failed to unpack libm v0.2.11 ... .cargo-ok:
+# File exists` (2026-09-19). The target mount needs no such flag; cargo's build
+# lock lives inside it and is therefore shared.
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/src/crates/target \
     cargo build --manifest-path crates/Cargo.toml --profile server -p pxl-geo \
  && cp crates/target/server/pxl-geo /usr/local/bin/pxl-geo

@@ -21,7 +21,7 @@ const BROAD_TO_NARROW_LANGS = new Set(["ko", "ja", "zh"]);
 // — for a `lang` UI can't find in `common` (ingest_divisions.ts's own
 // SUPPORTED_LANGS filter decides what's even possible here), falling back
 // to `name` means "show the Korean name" rather than an empty part.
-export function display_part_name(part: GeocodePart, lang: string): string {
+export function displayPartName(part: GeocodePart, lang: string): string {
   return part.common?.[lang] ?? part.name;
 }
 
@@ -29,8 +29,8 @@ export function display_part_name(part: GeocodePart, lang: string): string {
  * against `language` (typically i18n.language) — the join order and
  * separator flip per BROAD_TO_NARROW_LANGS, the per-part name resolves
  * against `language` regardless. */
-export function assemble_label(parts: GeocodePart[], language: string): string {
+export function assembleLabel(parts: GeocodePart[], language: string): string {
   const lang = language.split("-")[0].toLowerCase();
-  const names = parts.map((p) => display_part_name(p, lang));
+  const names = parts.map((p) => displayPartName(p, lang));
   return BROAD_TO_NARROW_LANGS.has(lang) ? names.join(" ") : [...names].reverse().join(", ");
 }

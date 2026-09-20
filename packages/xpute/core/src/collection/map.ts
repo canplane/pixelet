@@ -28,14 +28,14 @@ import { mix64 } from "../math/rng.ts";
 
 type KeyLane = I64Array | U32Array;
 
-export type KeyTraits<K extends numeric> = {
+export interface KeyTraits<K extends numeric> {
   readonly ctor: BigInt64ArrayConstructor | Uint32ArrayConstructor;
   /** The form a key is stored and compared in. */
   norm(key: K): K;
   /** A 32-bit mix whose high bits are well spread; the table takes a slot
    * from the top bits. */
   hash(key: K): u32;
-};
+}
 
 /** 64-bit keys, compared as signed: a key past 2^63 — an unsigned packed
  * word — folds with asIntN on the way in, so the same number always finds
@@ -56,7 +56,7 @@ export const U32_KEYS: KeyTraits<u32> = {
 export class IndexedMap<K extends numeric> {
   private keys: KeyLane;
   /** Per slot, position + 1; 0 is an empty slot. */
-  private table: Uint32Array;
+  private table: U32Array;
   /** 32 − log2(table size): a hash's top bits pick the home slot. */
   private shift: u32;
   private mask: u32;

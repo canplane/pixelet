@@ -10,14 +10,14 @@ import { CircularButton } from "@/shared/ui/shadcn/circular-button.tsx";
 export function MapCompass() {
   const { t } = useTranslation();
   const azimuth = useKernel((s) => s.view.azimuth);
-  const show_compass = useKernel((s) => s.compass.show);
+  const showCompass = useKernel((s) => s.compass.show);
 
   return (
     // layout={false}: without it, framer-motion's default layout={true}
     // auto-animates this button's bounding box whenever the shared flex
     // column it sits in (top-overlays.tsx) resizes for any reason, which
     // can leave it stuck mid-transition instead of cleanly disappearing.
-    <MotionContainer show={show_compass} variant="compass" delay={0.4} layout={false}>
+    <MotionContainer show={showCompass} variant="compass" delay={0.4} layout={false}>
       <CircularButton className="w-12 h-12" shadow={false} onClick={() => kernel_action({ type: "compass_reset" })} title={t("map.controls.reset_orientation")}>
         <span className="absolute top-0.5 text-[10px] font-medium tracking-tighter select-none z-20 text-[#5B4636]/50">
           N

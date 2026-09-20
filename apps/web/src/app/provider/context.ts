@@ -8,7 +8,7 @@ import type { UiController } from "../type/ui.type.ts";
 /**
  * Values provided by the AppContext
  */
-type AppContextValue = {
+interface AppContextValue {
   /**
    * Global application store
    *
@@ -24,7 +24,7 @@ type AppContextValue = {
    * such as opening modals or triggering overlays.
    */
   ui: UiController;
-};
+}
 
 /**
  * Application-level context

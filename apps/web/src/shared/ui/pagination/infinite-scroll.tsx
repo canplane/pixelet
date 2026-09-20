@@ -1,5 +1,6 @@
 // @pxl/web/shared/ui/pagination/infinite-scroll.tsx
 
+import type { u32 } from "@xpute/core/abi/word.ts";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 /** Default intersection threshold for infinite scroll */
@@ -13,7 +14,7 @@ type InfiniteScrollProps<T> = {
   items: T[];
 
   /** Number of items to load per batch */
-  batchSize: number;
+  batchSize: u32;
 
   /** Optional behavior overrides */
   options?: {
@@ -39,7 +40,7 @@ export function InfiniteScroll<T>(props: InfiniteScrollProps<T>) {
   } = options;
 
   // number of items currently visible
-  const [displayCount, setDisplayCount] = useState<number>(batchSize);
+  const [displayCount, setDisplayCount] = useState<u32>(batchSize);
   useEffect(() => {
     if (resetOnItemsChange) {
       setDisplayCount(batchSize);

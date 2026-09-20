@@ -18,9 +18,10 @@
  * kernel's policy (crates/pxl/web/kernel/src/mem/section.rs).
  */
 
+import type { U32Array } from "@xpute/core/abi/array.ts";
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { MarshalError } from "@xpute/core/status/error.ts";
-import { Errno } from "@xpute/core/status/errno.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
 
 /** A WebAssembly page. */
 export const WASM_PAGE_BYTES: u32 = 1 << 16;
@@ -28,13 +29,13 @@ export const WASM_PAGE_BYTES: u32 = 1 << 16;
 /** Words a section takes in a boot block: its offset, bytes and alignment. */
 export const SECTION_WORDS: u32 = 3;
 
-export type Section = {
+export interface Section {
   offset: u32;
   bytes: u32;
   /** The boundary the section begins on, and so the one the next begins on
    * past where this one's content ends. */
   align: u32;
-};
+}
 
 /** `n` at the next multiple of `unit`, which is where the range holding `n`
  * bytes ends and the one after it may begin. */
@@ -52,12 +53,12 @@ export function span_of(sizes: readonly u32[], unit: u32): u32 {
 }
 
 /** Where the `n`th of `sizes` begins, laid from `base` on `unit`. */
-export function nth_at(base: u32, sizes: readonly u32[], unit: u32, n: number): u32 {
+export function nth_at(base: u32, sizes: readonly u32[], unit: u32, n: u32): u32 {
   return base + span_of(sizes.slice(0, n), unit);
 }
 
 /** Writes a section's words at `at`. */
-export function write_section(words: Uint32Array, at: u32, s: Section): void {
+export function write_section(words: U32Array, at: u32, s: Section): void {
   words[at] = s.offset;
   words[at + 1] = s.bytes;
   words[at + 2] = s.align;

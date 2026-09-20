@@ -5,5 +5,6 @@
 //! drawer reads. A setting exists here or it does not exist.
 
 pub mod schema;
+#[path = "setting/schema.spec.rs"]
 pub mod schema_spec;
 pub mod store;

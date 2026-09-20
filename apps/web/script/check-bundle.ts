@@ -58,7 +58,7 @@ function leaves(o: unknown, path = ""): [string, string][] {
   return typeof o === "string" ? [[path, o]] : [];
 }
 
-async function read_bundle(): Promise<string> {
+async function readBundle(): Promise<string> {
   let out = "";
   let count = 0;
   for await (const entry of Deno.readDir(`${DIST}/assets`)) {
@@ -74,7 +74,7 @@ async function read_bundle(): Promise<string> {
 
 /** The kernel's module, as bytes read one to a character: its string data
  * lies in it uncompressed. */
-async function read_kernel(): Promise<string> {
+async function readKernel(): Promise<string> {
   const modules: string[] = [];
   for await (const entry of Deno.readDir(`${DIST}/assets`)) {
     if (entry.isFile && entry.name.endsWith(".wasm")) modules.push(entry.name);
@@ -83,8 +83,8 @@ async function read_kernel(): Promise<string> {
   return new TextDecoder("latin1").decode(await Deno.readFile(`${DIST}/assets/${modules[0]}`));
 }
 
-const bundle = await read_bundle();
-const kernel = await read_kernel();
+const bundle = await readBundle();
+const kernel = await readKernel();
 
 for (const [where, text, sentinels] of [["bundle", bundle, SENTINELS], ["kernel", kernel, KERNEL_SENTINELS]] as const) {
   for (const s of sentinels) {

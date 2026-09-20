@@ -43,18 +43,18 @@ export type Revision = u32;
 /** A position in the journal: how many changes had been written before it. */
 export type Cursor = number;
 
-export type ChangeLogOptions = {
+export interface ChangeLogOptions {
   /** Topics are 0 .. topics - 1. */
   topics: u32;
   /** Journal entries kept; a reader further behind than this is lost. */
   capacity: u32;
   /** Keys a topic's table holds before it grows. */
   keys_per_topic?: u32;
-};
+}
 
 /** What a reader walks: the journal's lanes and positions. ChangeLog is one;
  * a log kept in a WASM core and read through views is another. */
-export type ChangeJournal = {
+export interface ChangeJournal {
   readonly topics: u32;
   readonly head: Cursor;
   readable(cursor: Cursor): boolean;
@@ -62,7 +62,7 @@ export type ChangeJournal = {
   readonly topic: Uint16Array<ArrayBufferLike>;
   readonly key: BigInt64Array<ArrayBufferLike>;
   readonly revision: Uint32Array<ArrayBufferLike>;
-};
+}
 
 export class ChangeLog implements ChangeJournal {
   readonly capacity: u32;

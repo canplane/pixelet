@@ -10,7 +10,7 @@ that is not the app itself. One Cloudflare Worker (`apps/web/cloudflare-worker/i
 `apps/web/wrangler.jsonc`) serves the built app and reads the bucket under
 `/geo/tiles/*` and `/asset/*` on the app's own hostname — same-origin, no CORS, and the
 client's paths stay relative. Producing what goes in is
-[bake-tiles](../bake-tiles/SKILL.md) and `./asset/script/ingest_asset.rs`; this is
+[bake-tiles](../bake-tiles/SKILL.md) and `asset/script`'s own ingest; this is
 how it gets there and how you know it arrived.
 
 ## What the bucket holds
@@ -26,7 +26,7 @@ how it gets there and how you know it arrived.
 
 The versions the client requests are `PUBLISHED_VERSION` in
 `spec/pxl/spec/bake/published.json`; the asset keys are the generated table
-`apps/web/src/catalog/asset/ingested-spec.ts`. The object
+`apps/web/src/catalog/asset/ingested.spec.ts`. The object
 name carries no extension, so **content-type and content-encoding are
 stored with the object at upload** — that is what every flag below is for.
 
@@ -107,9 +107,10 @@ the two in step.
 ### Assets
 
 ```bash
-./asset/script/ingest_asset.rs   # -> ./out/asset/{glb,png,webp}/<sha256>, and regenerates
-                                 #    crates/pxl/spec/src/asset/ingested.rs and
-                                 #    apps/web/src/catalog/asset/ingested-spec.ts
+cargo run --manifest-path asset/script/Cargo.toml
+# -> ./out/asset/{glb,png,webp}/<sha256>, and regenerates
+#    crates/pxl/spec/src/asset/ingested.spec.rs and
+#    apps/web/src/catalog/asset/ingested.spec.ts
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
   aws s3 sync ./out/asset/${t%%:*} s3://pixelet-tiles/asset \

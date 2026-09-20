@@ -12,7 +12,7 @@ use crate::space::sparse_tree::mem::SparseTreeLayout;
 /// - [m]    : Physical meters (EPSG:3857 based).
 ///
 /// SCALE HIERARCHY:
-/// - CELL_SHAMT defines the cell<->u relation (cell_spec.rs, from cell.json).
+/// - CELL_SHAMT defines the cell<->u relation (cell.spec.rs, from cell.json).
 /// - when CELL_SHAMT = -1, 1u = 2cell.
 pub use super::cell_spec::{CELL_SHAMT, U_PER_CELL};
 

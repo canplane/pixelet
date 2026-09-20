@@ -25,7 +25,11 @@ import type { Bytes } from "@xpute/core/abi/array.ts";
 // - No validation: caller owns bounds checks.
 // ----------------------------------------------------------------------------
 
-export type Stream = { view: DataView; buf: Bytes; off: i32 };
+export interface Stream {
+  view: DataView;
+  buf: Bytes;
+  off: i32;
+}
 
 export const stream = (buf: Bytes, off: i32 = 0): Stream => ({
   buf,

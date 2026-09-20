@@ -4,7 +4,7 @@ import type { f32, f64, i16, i32, i64, i8, u16, u32, u64, u8 } from "@xpute/core
 import { BOOL, F32, F64, I16, I32, I64, I8, U16, U32, U64, U8 } from "@xpute/core/abi/word.ts";
 import { fits_i32, fits_i64 } from "@xpute/core/abi/word.ts";
 import type { F32Array, F64Array, I16Array, I32Array, I64Array, I8Array, U16Array, U32Array, U64Array, U8Array } from "@xpute/core/abi/array.ts";
-import { Errno } from "@xpute/core/status/errno.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { MarshalError } from "@xpute/core/status/error.ts";
 
 import type { BranchNode, Node, NodeValue } from "./spec.ts";

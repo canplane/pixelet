@@ -21,7 +21,7 @@ import type { u32 } from "@xpute/core/abi/word.ts";
 import { reserve_memory } from "@xpute/runtime/mem/section.ts";
 import { Doorbell } from "@xpute/runtime/ipc/doorbell.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
-import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/kernel/mem/spec.ts";
+import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/kernel/mem/mem.spec.ts";
 import { BOOT, boot_block, instantiate_kernel, type KernelExports } from "@/kernel/module.ts";
 
 export { REGION_BYTES };

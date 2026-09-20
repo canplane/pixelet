@@ -10,6 +10,7 @@
 //! agreement between the server and the bake, which is the crate.
 
 pub mod category;
+#[path = "overture/category.spec.rs"]
 pub mod category_spec;
 pub mod division;
 pub mod properties;

@@ -16,8 +16,8 @@ export function useUiController(_store: unknown) {
    * Progressively registers new UI actions into the controller.
    * Uses useCallback to maintain referential stability for child effects.
    */
-  const mergeUiController = useCallback((new_actions: Partial<UiController>) => {
-    setActions((prev) => ({ ...prev, ...new_actions }));
+  const mergeUiController = useCallback((newActions: Partial<UiController>) => {
+    setActions((prev) => ({ ...prev, ...newActions }));
   }, []);
 
   /**

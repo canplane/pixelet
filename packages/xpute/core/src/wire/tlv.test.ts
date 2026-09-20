@@ -9,7 +9,7 @@
 import { assertEquals } from "@std/assert";
 
 import { Golden } from "@xpute/core/golden.ts";
-import { Errno } from "@xpute/core/status/errno.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { FaultError } from "@xpute/core/status/error.ts";
 import { bytes_to_hex, hex_to_bytes } from "@xpute/core/codec/encoding.ts";
 import { TlvReader, type TlvValue, TlvWriter } from "@xpute/core/wire/tlv.ts";

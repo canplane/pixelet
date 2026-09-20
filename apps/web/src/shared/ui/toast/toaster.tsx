@@ -3,18 +3,19 @@
 // positioning/stacking/swipe-dismiss fought this app's card-deck + swipe-to-rotate
 // toast feature, so this owns layout end to end instead.
 
+import type { u32 } from "@xpute/core/abi/word.ts";
 import { memo, useEffect, useState } from "react";
 import { getToastEntries, isToastRemoving, subscribeToastEntries, type ToastRenderFn } from "./store.ts";
 
 const TOAST_EXTRA_LIFT_PX = 20;
 const BOTTOM_SAFE_GAP_PX = 16;
 
-type ToasterProps = {
+interface ToasterProps {
   /** Whatever's already reserved at the bottom of the screen (e.g. a mode
    * bar) that this toast stack shouldn't overlap — this component has no
    * feature-specific knowledge of its own, the caller supplies it. */
   bottomPx?: number;
-};
+}
 
 // Toaster re-renders on ANY entry changing (one shared subscription below), which
 // re-invokes entries.map() for every toast, not just the one that changed. Without
@@ -22,7 +23,7 @@ type ToasterProps = {
 // which ticks every few seconds) re-triggered every other toast's layout spring too,
 // even ones nothing had actually happened to.
 const ToastEntry = memo(function ToastEntry(
-  { render, index, stackSize, isRemoving }: { render: ToastRenderFn; index: number; stackSize: number; isRemoving: boolean },
+  { render, index, stackSize, isRemoving }: { render: ToastRenderFn; index: u32; stackSize: u32; isRemoving: boolean },
 ) {
   return <>{render({ index, stackSize, isRemoving })}</>;
 });

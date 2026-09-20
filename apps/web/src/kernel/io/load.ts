@@ -10,7 +10,8 @@
  * what the renderer uploads is the file's own pixels.
  */
 
-import { Cmd } from "@/kernel/abi/cmd.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
+import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { load_key } from "@/catalog/asset/load.ts";
 import { asset_url } from "@/config/route.ts";
 import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
@@ -21,7 +22,7 @@ import { request_frame } from "@/kernel/sched.ts";
 let next_image = 1;
 
 /** The bytes a load names: the kernel says a number, the shell knows the URL. */
-async function fetch_load(load: number): Promise<Response> {
+async function fetch_load(load: u32): Promise<Response> {
   const key = load_key(load);
   if (key === null) throw new Error(`load ${load} names no asset`);
   const res = await fetch(asset_url(key));
@@ -29,30 +30,30 @@ async function fetch_load(load: number): Promise<Response> {
   return res;
 }
 
-export async function load_model(load: number): Promise<void> {
+export async function load_model(load: u32): Promise<void> {
   try {
     const bytes = new Uint8Array(await (await fetch_load(load)).arrayBuffer());
     // A model is far past a ring frame: the host holds it, and the kernel
     // reads it in its turn.
-    CORE_BUILD.send(0, Cmd.LOAD_UPDATE, packet((b) => b.u32(load).u32(hold_body(bytes)).u32(bytes.byteLength)));
+    CORE_BUILD.send(0, Command.LOAD_UPDATE, packet((b) => b.u32(load).u32(hold_body(bytes)).u32(bytes.byteLength)));
   } catch (err) {
     console.error(`[kernel] gltf: ${err instanceof Error ? err.message : String(err)}`);
-    CORE_BUILD.send(0, Cmd.LOAD_DELETE, packet((b) => b.u32(load)));
+    CORE_BUILD.send(0, Command.LOAD_DELETE, packet((b) => b.u32(load)));
   }
   request_frame();
 }
 
 /** An image, as the kernel's renderer uploads it: the file's own pixels, top
  * row first, no colour conversion and no premultiplied alpha. */
-export async function load_image(load: number): Promise<void> {
+export async function load_image(load: u32): Promise<void> {
   try {
     const image = await createImageBitmap(await (await fetch_load(load)).blob(), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
     const handle = next_image++;
     register_image(handle, image);
-    CORE_BUILD.send(0, Cmd.LOAD_IMAGE, packet((b) => b.u32(load).u32(handle)));
+    CORE_BUILD.send(0, Command.LOAD_IMAGE, packet((b) => b.u32(load).u32(handle)));
   } catch (err) {
     console.error(`[kernel] image: ${err instanceof Error ? err.message : String(err)}`);
-    CORE_BUILD.send(0, Cmd.LOAD_DELETE, packet((b) => b.u32(load)));
+    CORE_BUILD.send(0, Command.LOAD_DELETE, packet((b) => b.u32(load)));
   }
   request_frame();
 }

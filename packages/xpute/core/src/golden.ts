@@ -17,6 +17,8 @@
  * to disagree without anything failing.
  */
 
+import type { U8Array } from "./abi/array.ts";
+import type { f64, u32, u64 } from "./abi/word.ts";
 const CRATE = new URL("../../../../crates/xpute/core/golden/", import.meta.url);
 
 export class Golden {
@@ -46,16 +48,16 @@ export class Golden {
     return v;
   }
 
-  u32(key: string): number {
+  u32(key: string): u32 {
     return Number(this.s(key));
   }
 
-  u64(key: string): bigint {
+  u64(key: string): u64 {
     return BigInt(this.s(key));
   }
 
   /** A double written through its bits, so that -0 and a NaN's payload survive. */
-  f64(key: string): number {
+  f64(key: string): f64 {
     const bits = BigInt(this.s(key));
     const view = new DataView(new ArrayBuffer(8));
     view.setBigUint64(0, bits);
@@ -70,7 +72,7 @@ export class Golden {
   }
 
   /** Bytes written as hex. */
-  bytes(key: string): Uint8Array {
+  bytes(key: string): U8Array {
     const text = this.s(key);
     const out = new Uint8Array(text.length / 2);
     for (let i = 0; i < out.length; i++) out[i] = parseInt(text.slice(i * 2, i * 2 + 2), 16);
@@ -97,7 +99,7 @@ export class Golden {
   }
 
   /** How many entries `base` has. */
-  len(base: string): number {
+  len(base: string): u32 {
     let n = 0;
     this.each(base, () => n++);
     return n;

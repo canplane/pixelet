@@ -16,7 +16,7 @@ use pxl_kernel::global::Global;
 use pxl_kernel::kernel::kernel;
 use pxl_kernel::mem::section;
 use pxl_render::mesh::volume::Volumes;
-use pxl_spec::abi::cmd::Cmd;
+use pxl_spec::abi::cmd::Command;
 use xpute_core::math::scalar::round;
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
@@ -387,7 +387,7 @@ impl Outbox {
 const MOST_SIGNALS: u32 = 64;
 
 /// A signal for the shell with a packet of `count` children written by `f`.
-fn raise(o: &Outbox, cmd: Cmd, count: u32, f: impl Fn(&mut PacketWriter)) {
+fn raise(o: &Outbox, cmd: Command, count: u32, f: impl Fn(&mut PacketWriter)) {
     o.post(
         0,
         cmd as u32,
@@ -412,21 +412,21 @@ fn post_shell(s: &mut State) {
 
     const GEOLOCATION: u32 = 0;
     const ORIENTATION: u32 = 1;
-    let sensor = |cmd: Cmd, which: u32| {
+    let sensor = |cmd: Command, which: u32| {
         raise(&s.outbox, cmd, 1, |e| {
             e.u32(Some(which));
         })
     };
     for c in take_geolocation_commands() {
         match c {
-            GeolocationCommand::Start => sensor(Cmd::SENSOR_CREATE, GEOLOCATION),
-            GeolocationCommand::Stop => sensor(Cmd::SENSOR_DELETE, GEOLOCATION),
+            GeolocationCommand::Start => sensor(Command::SENSOR_CREATE, GEOLOCATION),
+            GeolocationCommand::Stop => sensor(Command::SENSOR_DELETE, GEOLOCATION),
         }
     }
     for c in take_orientation_commands() {
         match c {
-            OrientationCommand::Listen => sensor(Cmd::SENSOR_CREATE, ORIENTATION),
-            OrientationCommand::Remove => sensor(Cmd::SENSOR_DELETE, ORIENTATION),
+            OrientationCommand::Listen => sensor(Command::SENSOR_CREATE, ORIENTATION),
+            OrientationCommand::Remove => sensor(Command::SENSOR_DELETE, ORIENTATION),
         }
     }
     // The same buffer every turn, cleared rather than made again: `clear`
@@ -446,7 +446,7 @@ fn post_shell(s: &mut State) {
         // turn can make another, so it crosses as an address and its bytes.
         // SAFETY: the last snapshot, read by the shell before this one.
         let (at, len) = unsafe { SNAPSHOT.fill(text.len(), |i| text.as_bytes()[i]) };
-        raise(&s.outbox, Cmd::WORLD_SNAPSHOT, 2, |e| {
+        raise(&s.outbox, Command::WORLD_SNAPSHOT, 2, |e| {
             e.u32(Some(at)).u32(Some(len));
         });
     }
@@ -454,13 +454,13 @@ fn post_shell(s: &mut State) {
     // as a handle and hands it back, and never reads into it.
     fetch_take_started(|d| {
         let key = pxl_kernel::io::scheduler::hash_of(d.key);
-        raise(&s.outbox, Cmd::FETCH_CREATE, 2, |e| {
+        raise(&s.outbox, Command::FETCH_CREATE, 2, |e| {
             e.u64(Some(key)).str_display(pxl_kernel::io::fetch::DemandUrl(d));
         });
     });
     fetch_take_aborts(|name| {
         let key = pxl_kernel::io::scheduler::hash_of(name);
-        raise(&s.outbox, Cmd::FETCH_DELETE, 1, |e| {
+        raise(&s.outbox, Command::FETCH_DELETE, 1, |e| {
             e.u64(Some(key));
         });
     });
@@ -469,7 +469,7 @@ fn post_shell(s: &mut State) {
             LoadKind::Gltf => 0,
             LoadKind::Image => 1,
         };
-        raise(&s.outbox, Cmd::LOAD_CREATE, 2, |e| {
+        raise(&s.outbox, Command::LOAD_CREATE, 2, |e| {
             e.u32(Some(kind)).u32(Some(q.load.number()));
         });
     }
@@ -480,7 +480,7 @@ fn post_shell(s: &mut State) {
 fn post_turn(s: &mut State) {
     post_shell(s);
     let draws = kernel().sched.draw.draw_count();
-    raise(&s.outbox, Cmd::WORLD_UPDATE, 1, |b| {
+    raise(&s.outbox, Command::WORLD_UPDATE, 1, |b| {
         b.u32(Some(draws));
     });
 }
@@ -523,16 +523,16 @@ fn load_at(b: &BranchCursor, i: u32) -> Result<pxl_kernel::io::load::Load, Marsh
 /// numbers or a signal submitted as a command, which replies ENOSYS; a packet
 /// that does not read as the command's replies with its errno.
 fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
-    let Some(cmd) = Cmd::of(number) else { return Ok(None) };
+    let Some(cmd) = Command::of(number) else { return Ok(None) };
     match cmd {
-        Cmd::NOP => {
+        Command::NOP => {
             let value = match pkt {
                 Some(_) => u32_at(&fields(pkt)?, 0)?,
                 None => 0,
             };
             Ok(Some(value as i32))
         }
-        Cmd::WORLD_UPDATE => {
+        Command::WORLD_UPDATE => {
             let f = fields(pkt)?;
             let host = pxl_kernel::sched::turn::HostFrame {
                 width: number_at(&f, 0)?,
@@ -546,7 +546,7 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
             pxl_kernel::sched::turn::world_frame_asked(host);
             Ok(Some(0))
         }
-        Cmd::WORLD_CREATE => {
+        Command::WORLD_CREATE => {
             let f = fields(pkt)?;
             pxl_kernel::shell::config::env::set_build_info(pxl_kernel::shell::config::env::BuildInfo {
                 app_env: f.at(0)?.get_str()?,
@@ -566,14 +566,14 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
             pxl_kernel::layer::object::store::load();
             Ok(Some(0))
         }
-        Cmd::WORLD_ACTION => {
+        Command::WORLD_ACTION => {
             let f = fields(pkt)?;
             let text = f.at(0)?;
             pxl_kernel::shell::shell::ui_action(text.get_str_ref()?);
             post_shell(s);
             Ok(Some(0))
         }
-        Cmd::INPUT_UPDATE => {
+        Command::INPUT_UPDATE => {
             let f = fields(pkt)?;
             pxl_kernel::control::camera::input::camera_input_rect(pxl_kernel::control::camera::input::Rect {
                 left: number_at(&f, 0)?,
@@ -583,7 +583,7 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
             });
             Ok(Some(0))
         }
-        Cmd::INPUT_POINTER => {
+        Command::INPUT_POINTER => {
             use pxl_kernel::control::camera::input::{camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, ActiveTool, Holding, PointerKind};
             use pxl_spec::cell::object::placeable_cube_of;
             use pxl_spec::cell::DecorId;
@@ -623,7 +623,7 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
             }
             Ok(Some(0))
         }
-        Cmd::INPUT_TRACKING => {
+        Command::INPUT_TRACKING => {
             use pxl_kernel::shell::shell::{tracking_action, Tracking};
             tracking_action(match u32_at(&fields(pkt)?, 0)? {
                 0 => Tracking::Recenter,
@@ -633,17 +633,17 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
             pxl_kernel::world::change::request_world_tick();
             Ok(Some(0))
         }
-        Cmd::INPUT_WHEEL => {
+        Command::INPUT_WHEEL => {
             pxl_kernel::control::camera::input::camera_wheel(number_at(&fields(pkt)?, 0)?);
             Ok(Some(0))
         }
-        Cmd::SENSOR_UPDATE => {
+        Command::SENSOR_UPDATE => {
             let f = fields(pkt)?;
             let opt = |v: f64| (!v.is_nan()).then_some(v);
             pxl_kernel::control::sensor::geolocation::geolocation_fix(number_at(&f, 0)?, number_at(&f, 1)?, opt(number_at(&f, 2)?), number_at(&f, 3)?, opt(number_at(&f, 4)?));
             Ok(Some(0))
         }
-        Cmd::SENSOR_ERROR => {
+        Command::SENSOR_ERROR => {
             use pxl_kernel::control::sensor::geolocation::{geolocation_error, GeolocationErrorCode};
             let code = match u32_at(&fields(pkt)?, 0)? {
                 1 => GeolocationErrorCode::PermissionDenied,
@@ -654,13 +654,13 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
             geolocation_error(code);
             Ok(Some(0))
         }
-        Cmd::SENSOR_ORIENTATION => {
+        Command::SENSOR_ORIENTATION => {
             let f = fields(pkt)?;
             let opt = |v: f64| (!v.is_nan()).then_some(v);
             pxl_kernel::control::sensor::device_orientation::orientation_event(opt(number_at(&f, 0)?), opt(number_at(&f, 1)?), opt(number_at(&f, 2)?), opt(number_at(&f, 3)?));
             Ok(Some(0))
         }
-        Cmd::SENSOR_PERMISSION => {
+        Command::SENSOR_PERMISSION => {
             use pxl_kernel::control::sensor::store::PermissionAnswer;
             let f = fields(pkt)?;
             let answer = match u32_at(&f, 1)? {
@@ -680,7 +680,7 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
             }
             Ok(Some(0))
         }
-        Cmd::SENSOR_VISIBILITY => {
+        Command::SENSOR_VISIBILITY => {
             let visible = bool_at(&fields(pkt)?, 0)?;
             let platform = pxl_kernel::sched::turn::world_platform();
             pxl_kernel::control::sensor::geolocation::geolocation_visibility(visible, platform.geolocation);
@@ -691,58 +691,58 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
             }
             Ok(Some(0))
         }
-        Cmd::FETCH_UPDATE => {
+        Command::FETCH_UPDATE => {
             let f = fields(pkt)?;
             pxl_kernel::io::fetch::fetch_queued(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), u32_at(&f, 5)?, number_at(&f, 6)?);
             Ok(Some(0))
         }
-        Cmd::LOAD_UPDATE => {
+        Command::LOAD_UPDATE => {
             let f = fields(pkt)?;
             // A model's bytes are far past a slot: the host holds them, and
             // the models' task reads them on a turn's quota.
             pxl_kernel::io::load::gltf_arrived(load_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?);
             Ok(Some(0))
         }
-        Cmd::LOAD_IMAGE => {
+        Command::LOAD_IMAGE => {
             let f = fields(pkt)?;
             pxl_kernel::io::load::image_arrived(load_at(&f, 0)?, u32_at(&f, 1)?);
             Ok(Some(0))
         }
-        Cmd::LOAD_DELETE => {
+        Command::LOAD_DELETE => {
             pxl_kernel::io::load::load_rejected(load_at(&fields(pkt)?, 0)?);
             Ok(Some(0))
         }
-        Cmd::GPU_CREATE => {
+        Command::GPU_CREATE => {
             let f = fields(pkt)?;
             pxl_render::gpu::renderer::gpu_created(u32_at(&f, 0)?, bool_at(&f, 1)?);
             pxl_kernel::world::change::request_world_tick();
             Ok(Some(0))
         }
-        Cmd::GPU_DELETE => {
+        Command::GPU_DELETE => {
             pxl_render::gpu::renderer::gpu_lost();
             Ok(Some(0))
         }
-        Cmd::SURFACE_CREATE => {
+        Command::SURFACE_CREATE => {
             let handle = pxl_render::gpu::surface::surface_create(u32_at(&fields(pkt)?, 0)?);
             if handle != 0 {
                 pxl_kernel::world::change::request_world_tick();
             }
             Ok(Some(handle as i32))
         }
-        Cmd::SURFACE_UPDATE => {
+        Command::SURFACE_UPDATE => {
             let f = fields(pkt)?;
             if pxl_render::gpu::surface::surface_update(u32_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, number_at(&f, 3)?) {
                 pxl_kernel::world::change::request_world_tick();
             }
             Ok(Some(0))
         }
-        Cmd::SURFACE_DELETE => {
+        Command::SURFACE_DELETE => {
             if let Some(closed) = pxl_render::gpu::surface::surface_delete(u32_at(&fields(pkt)?, 0)?) {
                 pxl_render::gpu::renderer::surface_closed(closed);
             }
             Ok(Some(0))
         }
-        Cmd::WORLD_SNAPSHOT | Cmd::SENSOR_CREATE | Cmd::SENSOR_DELETE | Cmd::FETCH_CREATE | Cmd::FETCH_DELETE | Cmd::LOAD_CREATE => Ok(None),
+        Command::WORLD_SNAPSHOT | Command::SENSOR_CREATE | Command::SENSOR_DELETE | Command::FETCH_CREATE | Command::FETCH_DELETE | Command::LOAD_CREATE => Ok(None),
     }
 }
 

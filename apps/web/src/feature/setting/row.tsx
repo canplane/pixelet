@@ -33,18 +33,18 @@ function DevBadge() {
   );
 }
 
-type SettingRowProps = {
+interface SettingRowProps {
   label: string;
   description: string;
   active: boolean;
-  on_toggle: () => void;
+  onToggle: () => void;
   cost?: SettingCost;
   /** Marks a setting only reachable in dev builds (rendered under `__IS_DEV__`) — callers gate visibility themselves, this just labels the row once shown. */
   dev?: boolean;
-};
+}
 
 export function SettingRow(props: SettingRowProps) {
-  const { label, description, active, on_toggle, cost, dev } = props;
+  const { label, description, active, onToggle, cost, dev } = props;
   return (
     <label className="flex items-center justify-between gap-3 rounded-[8px] px-3 py-2.5 -mx-3 transition-colors hover:bg-accent/50 cursor-pointer">
       <div className="min-w-0 flex flex-col gap-1">
@@ -55,18 +55,18 @@ export function SettingRow(props: SettingRowProps) {
         </div>
         <div className="text-[12px] leading-snug text-muted-foreground">{description}</div>
       </div>
-      <Switch checked={active} onCheckedChange={on_toggle} />
+      <Switch checked={active} onCheckedChange={onToggle} />
     </label>
   );
 }
 
-type SettingRadioRowProps = {
+interface SettingRadioRowProps {
   label: string;
   description: string;
   selected: boolean;
-  on_select: () => void;
+  onSelect: () => void;
   cost?: SettingCost;
-};
+}
 
 /** One option in a mutually-exclusive settings group — same label/
  * description/cost-badge layout as SettingRow, a radio instead of a Switch
@@ -75,7 +75,7 @@ type SettingRadioRowProps = {
  * meant to sit inside a small background-grouped wrapper (its own padding,
  * not the tab content's px-5), not directly against the tab content edge. */
 export function SettingRadioRow(props: SettingRadioRowProps) {
-  const { label, description, selected, on_select, cost } = props;
+  const { label, description, selected, onSelect, cost } = props;
   return (
     <label className="flex items-center justify-between gap-3 rounded-[8px] px-3 py-2.5 transition-colors hover:bg-accent/50 cursor-pointer">
       <div className="min-w-0 flex flex-col gap-1">
@@ -85,19 +85,19 @@ export function SettingRadioRow(props: SettingRadioRowProps) {
         </div>
         <div className="text-[12px] leading-snug text-muted-foreground">{description}</div>
       </div>
-      <input type="radio" checked={selected} onChange={on_select} className="size-4 shrink-0 accent-primary cursor-pointer" />
+      <input type="radio" checked={selected} onChange={onSelect} className="size-4 shrink-0 accent-primary cursor-pointer" />
     </label>
   );
 }
 
-type SectionTitleProps = {
+interface SectionTitleProps {
   children: string;
   icon?: LucideIcon;
   caption?: string;
   /** Marks the whole section as dev-only — callers still gate visibility
    * themselves (`__IS_DEV__ && <Section/>`), this just labels it once shown. */
   dev?: boolean;
-};
+}
 
 export function SectionTitle(props: SectionTitleProps) {
   const { children, icon: Icon, caption, dev } = props;

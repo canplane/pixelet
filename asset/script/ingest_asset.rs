@@ -1,26 +1,3 @@
-#!/usr/bin/env -S cargo +nightly -Zscript
----
-[package]
-edition = "2021"
-
-[dependencies]
-# A bucket key is the sha256 of an object's bytes.
-sha2 = "0.10"
-# The glb's own JSON chunk.
-serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["float_roundtrip"] }
-image = { version = "0.25", default-features = false, features = ["png"] }
-# libwebp itself, for the sheet. `image`'s own WebP support encodes lossless
-# only, and the sheet is quality-92 lossy — 60 tiles of 256² lossless is
-# several megabytes where this is 400 kB, and it is downloaded on every cold
-# start. Same library sharp reaches through libvips.
-webp = "0.3"
-xpute-core = { path = "../../crates/xpute/core" }
-# Both directions: the emitted table is laid out by the cell catalog's own
-# channels, and the test reads back the table this writes.
-pxl-spec = { path = "../../crates/pxl/spec" }
----
-
 //! Every shipped asset into the form the bucket holds and the catalogs name:
 //! one object per file, keyed by the SHA-256 of its bytes, with a model's
 //! bounds measured here rather than typed in.
@@ -96,7 +73,7 @@ fn write_formatted(path: &Path, text: &str) -> Result<(), String> {
     let rust = path.extension().is_some_and(|e| e == "rs");
     let mut cmd = if rust {
         let mut c = Command::new("rustfmt");
-        c.args(["--edition", "2021", "--emit", "stdout", "--config-path"]).arg(root().join("crates/rustfmt.toml"));
+        c.args(["--edition", "2021", "--emit", "stdout", "--config-path"]).arg(root().join("rustfmt.toml"));
         // The table is formatted with the toolchain the tree is checked with,
         // not this script's. A single-file script is nightly-only, and rustup
         // exports that choice to every child — nightly carries no rustfmt.
@@ -177,9 +154,9 @@ fn run() -> Result<(), String> {
         tiles: composed.tiles,
     };
 
-    write_formatted(&root.join("apps/web/src/catalog/asset/ingested-spec.ts"), &table::render_ts(&rows, &sheet))?;
+    write_formatted(&root.join("apps/web/src/catalog/asset/ingested.spec.ts"), &table::render_ts(&rows, &sheet))?;
     write_formatted(
-        &root.join("crates/pxl/spec/src/asset/ingested.rs"),
+        &root.join("crates/pxl/spec/src/asset/ingested.spec.rs"),
         &table::render_rs(&rows, &sheet, pxl_spec::cell::cube_type::cube_types::CHANNELS),
     )?;
 

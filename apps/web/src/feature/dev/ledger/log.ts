@@ -15,18 +15,18 @@
  * landing reads exactly as the same task does in the report printed later.
  */
 
-import { frame_line, long_frame_line, task_line } from "./report.ts";
-import { ledger_log_take } from "./view.ts";
-import { set_long_frame_sink } from "./long-frame.ts";
+import { frameLine, longFrameLine, taskLine } from "./report.ts";
+import { ledgerLogTake } from "./view.ts";
+import { setLongFrameSink } from "./long-frame.ts";
 
 /** Prints whatever the stream has kept since the last call. */
-export function ledger_drain_log(): void {
-  const log = ledger_log_take();
-  for (const t of log.tasks) console.log(`[ledger] ${task_line(t)}`);
-  for (const f of log.frames) console.log(`[ledger] ${frame_line(f, null)}`);
+export function ledgerDrainLog(): void {
+  const log = ledgerLogTake();
+  for (const t of log.tasks) console.log(`[ledger] ${taskLine(t)}`);
+  for (const f of log.frames) console.log(`[ledger] ${frameLine(f, null)}`);
 }
 
 /** Long frames go to the console as they land while the stream is on. */
-export function ledger_log_long_frames(on: boolean): void {
-  set_long_frame_sink(on ? (l) => console.log(`[ledger] ${long_frame_line(l)}`) : null);
+export function ledgerLogLongFrames(on: boolean): void {
+  setLongFrameSink(on ? (l) => console.log(`[ledger] ${longFrameLine(l)}`) : null);
 }

@@ -1,12 +1,13 @@
 // @pxl/web/catalog/cell/mod.ts
 // Entry point for the cell model. Assembles and re-exports the modular definitions.
 
+import type { i32, u32, u8 } from "@xpute/core/abi/word.ts";
 import { cube_colors, cube_types, type CubeColorId } from "./cube.ts";
 import type { Swatch } from "./type.ts";
-import { decor_types, type DecorId } from "./decor-spec.ts";
+import { decor_types, type DecorId } from "./decor.spec.ts";
 
 /** The four channels a baked ground cell can be painted in, in the order the
- * page's own lanes carry them — which is what `channel_slot` numbers a
+ * page's own lanes carry them — which is what `channelSlot` numbers a
  * terrain-styled cube by, so the order is part of the numbering and not a
  * presentation choice. `common` and `block` are not ground: one is the shared
  * absence markers, the other is what a player paints. */
@@ -19,13 +20,13 @@ export const enum GroundChannelKey {
 export const GROUND_CH_KEYS = [GroundChannelKey.LAND, GroundChannelKey.WATER, GroundChannelKey.STRUCTURE, GroundChannelKey.TRANSPORT] as const;
 
 export { cube_colors, cube_types, type CubeColorId } from "./cube.ts";
-export { decor_types, type DecorId } from "./decor-spec.ts";
+export { decor_types, type DecorId } from "./decor.spec.ts";
 
 // =============================================================================
 // Aggregated Types
 // =============================================================================
 
-export const cell_types = {
+export const cellTypes = {
   /** Terrain raster + user-placed block colors (cube_types.common holds the
    * shared VOID/AIR/UNKNOWN sentinel registry every other channel/consumer
    * references as needed — no separate top-level slot for it here, see
@@ -40,7 +41,7 @@ export const cell_types = {
 // Aggregated Colors
 // =============================================================================
 
-export const cell_colors = {
+export const cellColors = {
   /** Terrain raster + user-placed block colors */
   cube: cube_colors,
 } as const;
@@ -56,30 +57,30 @@ export const cell_colors = {
  * explicit air — the only real distinction left now that a
  * real value doesn't need to share a bit with every other real value; see
  * cube.ts's own top comment. */
-export function object_value_is_present(value: number): boolean {
+export function objectValueIsPresent(value: u8): boolean {
   return value !== cube_types.common.void;
 }
 
 /** Explicit object-layer air: retain this leaf and erase lower layers. */
-export function object_value_is_air(value: number): boolean {
+export function objectValueIsAir(value: u8): boolean {
   return value === cube_types.common.air;
 }
 
-export function cube_num_id(id: CubeColorId): number {
+export function cubeNumId(id: CubeColorId): u8 {
   return cube_types.block[id];
 }
 
-export function cube_hex(id: CubeColorId): string {
-  return cube_swatch(id).hex;
+export function cubeHex(id: CubeColorId): string {
+  return cubeSwatch(id).hex;
 }
 
 /** The same swatch packed `0xRRGGBB`, for the callers that light or blend with
  * it rather than write it down. */
-export function cube_rgb(id: CubeColorId): number {
-  return cube_swatch(id).rgb;
+export function cubeRgb(id: CubeColorId): u32 {
+  return cubeSwatch(id).rgb;
 }
 
-function cube_swatch(id: CubeColorId): Swatch {
+function cubeSwatch(id: CubeColorId): Swatch {
   // block carries no sentinels of its own any more — every key is a real color.
   return cube_colors.block[cube_types.block[id]] as Swatch;
 }
@@ -90,8 +91,8 @@ const NUM_ID_TO_CUBE: readonly CubeColorId[] = (() => {
   return out;
 })();
 
-/** Numeric id -> cube color name — the reverse of cube_num_id, used to decode a packed cube channel back into a PlacedObject's own CubeColorId. */
-export function cube_id_from_num(num_id: number): CubeColorId {
+/** Numeric id -> cube color name — the reverse of cubeNumId, used to decode a packed cube channel back into a PlacedObject's own CubeColorId. */
+export function cubeIdFromNum(num_id: u8): CubeColorId {
   const id = NUM_ID_TO_CUBE[num_id];
   if (id === undefined) throw new Error(`no cube color registered for numeric id ${num_id}`);
   return id;
@@ -100,17 +101,17 @@ export function cube_id_from_num(num_id: number): CubeColorId {
 /** Every real cube color id in encoded numeric-id order; `.filter()` compacts the sparse reverse table. */
 export const cube_ids: readonly CubeColorId[] = NUM_ID_TO_CUBE.filter(() => true);
 
-const DECOR_NUM_IDS: ReadonlySet<number> = new Set(Object.values(decor_types));
+const DECOR_NUM_IDS: ReadonlySet<u8> = new Set(Object.values(decor_types));
 
 /** A cube-catalog value and a decor-catalog one share the same numeric
  * range (both plain small numbers, no distinguishing bit) — this is the
- * one place that tells the two apart, same role object_value_is_air plays
+ * one place that tells the two apart, same role objectValueIsAir plays
  * for AIR within the cube catalog itself. */
-export function object_value_is_decor(value: number): boolean {
+export function objectValueIsDecor(value: u8): boolean {
   return DECOR_NUM_IDS.has(value);
 }
 
-export function decor_num_id(id: DecorId): number {
+export function decorNumId(id: DecorId): u8 {
   return decor_types[id];
 }
 
@@ -120,8 +121,8 @@ const NUM_ID_TO_DECOR: readonly DecorId[] = (() => {
   return out;
 })();
 
-/** Numeric id -> decor name — the reverse of decor_num_id, used to decode a packed decor leaf back into a PlacedDecor's own DecorId. */
-export function decor_id_from_num(num_id: number): DecorId {
+/** Numeric id -> decor name — the reverse of decorNumId, used to decode a packed decor leaf back into a PlacedDecor's own DecorId. */
+export function decorIdFromNum(num_id: u8): DecorId {
   const id = NUM_ID_TO_DECOR[num_id];
   if (id === undefined) throw new Error(`no decor kind registered for numeric id ${num_id}`);
   return id;
@@ -163,7 +164,7 @@ type CubeTypeOf<C extends keyof typeof cube_types> = (typeof cube_types)[C][keyo
 
 /** A placeable cube: a flat colour, or a stand-in for one baked terrain
  * type. Two numbers the catalog declares, never the words they are spelled
- * out with — those are what `placeable_cube_id` builds, for a label and for
+ * out with — those are what `placeableCubeId` builds, for a label and for
  * an asset path, and nothing else reads them. */
 export type PlaceableCube =
   | { readonly channel: "block"; readonly type: CubeTypeOf<"block"> }
@@ -173,7 +174,7 @@ export type PlaceableCube =
   | { readonly channel: GroundChannelKey.TRANSPORT; readonly type: CubeTypeOf<"transport"> };
 
 /** The two numbers as one map key. */
-function cube_key(channel: string, type: number): string {
+function cubeKey(channel: string, type: u8): string {
   return `${channel}:${type}`;
 }
 
@@ -201,14 +202,14 @@ const TERRAIN_STYLE: PlaceableCube[] = TERRAIN_CHANNELS.flatMap((channel) => Obj
 /** The slot a ground channel is, which is the enum's own order — a bake's
  * lanes are in it already, so it is a number the format has fixed rather than
  * one chosen here. */
-function channel_slot(channel: GroundChannelKey): number {
+function channelSlot(channel: GroundChannelKey): i32 {
   return GROUND_CH_KEYS.indexOf(channel);
 }
 
 /** Each channel's numbers back to the name cube_type.json gives them. */
 const TYPE_NAME = new Map<string, string>();
 for (const [channel, types] of Object.entries(cube_types)) {
-  for (const [name, num] of Object.entries(types as Record<string, number>)) TYPE_NAME.set(cube_key(channel, num), name);
+  for (const [name, num] of Object.entries(types as Record<string, number>)) TYPE_NAME.set(cubeKey(channel, num), name);
 }
 
 // =============================================================================
@@ -231,8 +232,8 @@ export type PlaceableCubeId = { [C in PlaceableChannelKey]: `${C}.${ChannelLocal
  * (`cubes.land.bare`, i18next resolving the dot itself) and the
  * shipped texture's path. It is what a cube is called, never what it is, so
  * nothing keys by it. */
-export function placeable_cube_id(cube: PlaceableCube): PlaceableCubeId {
-  return cube_id_of(cube.channel, TYPE_NAME.get(cube_key(cube.channel, cube.type))!);
+export function placeableCubeId(cube: PlaceableCube): PlaceableCubeId {
+  return cubeIdOf(cube.channel, TYPE_NAME.get(cubeKey(cube.channel, cube.type))!);
 }
 
 /** How a catalog id is spelled, for the callers that hold the two words
@@ -240,55 +241,55 @@ export function placeable_cube_id(cube: PlaceableCube): PlaceableCubeId {
  * channel's ENTRIES, `common` included, and `common` is not a `PlaceableCube`,
  * so it cannot come through the function above — but it must come out spelled
  * the same, and it was spelling it a second time instead. */
-export function cube_id_of(channel: string, type_name: string): PlaceableCubeId {
+export function cubeIdOf(channel: string, type_name: string): PlaceableCubeId {
   return `${channel}.${type_name}` as PlaceableCubeId;
 }
 
 /** The value a leaf holds the cube as: a flat colour's own catalog number, or
  * a terrain-styled cube's channel and type. */
-export function placeable_cube_num_id(cube: PlaceableCube): number {
-  return cube.channel === "block" ? cube.type : TERRAIN_STYLE_BASE * (channel_slot(cube.channel) + 1) + cube.type;
+export function placeableCubeNumId(cube: PlaceableCube): u8 {
+  return cube.channel === "block" ? cube.type : TERRAIN_STYLE_BASE * (channelSlot(cube.channel) + 1) + cube.type;
 }
 
 /** The cube a stored leaf value names, or null for a value that names no
  * cube — VOID, AIR, a decor kind. */
-export function placeable_cube_of(num_id: number): PlaceableCube | null {
+export function placeableCubeOf(num_id: u8): PlaceableCube | null {
   if (num_id >= TERRAIN_STYLE_BASE) {
     const channel = GROUND_CH_KEYS[Math.floor(num_id / TERRAIN_STYLE_BASE) - 1];
     if (channel === undefined) return null;
     const type = num_id % TERRAIN_STYLE_BASE;
-    return TYPE_NAME.has(cube_key(channel, type)) ? { channel, type } as PlaceableCube : null;
+    return TYPE_NAME.has(cubeKey(channel, type)) ? { channel, type } as PlaceableCube : null;
   }
-  return TYPE_NAME.has(cube_key("block", num_id)) ? { channel: "block", type: num_id as CubeTypeOf<"block"> } : null;
+  return TYPE_NAME.has(cubeKey("block", num_id)) ? { channel: "block", type: num_id as CubeTypeOf<"block"> } : null;
 }
 
 /** Which baked (channel, type) the cube stands in for, null for a flat
  * colour, which stands in for nothing. */
-export function terrain_style_cube_source(cube: PlaceableCube): { channel: GroundChannelKey; terrain_num_id: number } | null {
+export function terrainStyleCubeSource(cube: PlaceableCube): { channel: GroundChannelKey; terrain_num_id: u8 } | null {
   return cube.channel === "block" ? null : { channel: cube.channel, terrain_num_id: cube.type };
 }
 
 /** The cube standing in for a real baked (channel, type) pair — the inverse
- * of terrain_style_cube_source, for callers that hold what the terrain shows
+ * of terrainStyleCubeSource, for callers that hold what the terrain shows
  * and want the cube that looks like it. */
-export function terrain_style_cube_for(channel: GroundChannelKey, terrain_num_id: number): PlaceableCube | null {
-  return TYPE_NAME.has(cube_key(channel, terrain_num_id)) ? { channel, type: terrain_num_id } as PlaceableCube : null;
+export function terrainStyleCubeFor(channel: GroundChannelKey, terrain_num_id: u8): PlaceableCube | null {
+  return TYPE_NAME.has(cubeKey(channel, terrain_num_id)) ? { channel, type: terrain_num_id } as PlaceableCube : null;
 }
 
 /** The swatch colour the catalog gives it — cube_colors is keyed by channel
  * and number, so this is the palette's own row, not a second table. */
-export function placeable_cube_hex(cube: PlaceableCube): string | null {
-  return placeable_cube_swatch(cube)?.hex ?? null;
+export function placeableCubeHex(cube: PlaceableCube): string | null {
+  return placeableCubeSwatch(cube)?.hex ?? null;
 }
 
 /** The same swatch as the one number it is, which is what everything that
  * lights or blends with a colour wants — and what nothing has to parse text to
  * find out, the catalog's JSON having been packed by the generator. */
-export function placeable_cube_rgb(cube: PlaceableCube): number | null {
-  return placeable_cube_swatch(cube)?.rgb ?? null;
+export function placeableCubeRgb(cube: PlaceableCube): u32 | null {
+  return placeableCubeSwatch(cube)?.rgb ?? null;
 }
 
-function placeable_cube_swatch(cube: PlaceableCube): Swatch | null {
+function placeableCubeSwatch(cube: PlaceableCube): Swatch | null {
   return cube_colors[cube.channel]?.[cube.type] ?? null;
 }
 

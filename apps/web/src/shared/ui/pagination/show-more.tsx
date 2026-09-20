@@ -1,5 +1,6 @@
 // @pxl/web/shared/ui/pagination/show-more.tsx
 
+import type { u32 } from "@xpute/core/abi/word.ts";
 import { type ReactNode, useEffect, useState } from "react";
 
 /**
@@ -10,7 +11,7 @@ type ShowMoreProps<T> = {
   items: T[];
 
   /** Number of items to reveal per click */
-  batchSize: number;
+  batchSize: u32;
 
   /** Optional behavior overrides */
   options?: {
@@ -36,7 +37,7 @@ export function ShowMoreLayout<T>(props: ShowMoreProps<T>) {
   const { resetOnItemsChange = false } = options;
 
   // number of items currently visible
-  const [displayCount, setDisplayCount] = useState<number>(batchSize);
+  const [displayCount, setDisplayCount] = useState<u32>(batchSize);
   useEffect(() => {
     if (resetOnItemsChange) {
       setDisplayCount(batchSize);

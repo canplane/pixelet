@@ -16,13 +16,14 @@
 // A dev instrument: the shipped monitor cannot lean on LoAF, which is why
 // this is wired from the ledger overlay rather than from boot.
 
+import type { f64 } from "@xpute/core/abi/word.ts";
 import type { LongFrame } from "./report.ts";
 
-type LoafEntry = PerformanceEntry & {
-  blockingDuration?: number;
-  renderStart: number;
-  scripts?: { duration: number }[];
-};
+interface LoafEntry extends PerformanceEntry {
+  blockingDuration?: f64;
+  renderStart: f64;
+  scripts?: { duration: f64 }[];
+}
 
 /** As long as the kernel's rings keep: the last minute, and at most this many. */
 const WINDOW_MS = 60_000;
@@ -43,17 +44,17 @@ function land(l: LongFrame): void {
 
 /** Long frames starting at or after `t`. Filtered rather than searched: two
  * observers feed this ring, so it is not strictly in time order. */
-export function long_frames_since(t: number): LongFrame[] {
+export function longFramesSince(t: f64): LongFrame[] {
   return ring.filter((l) => l.t >= t);
 }
 
 /** Forgets every long frame: a fresh window. */
-export function long_frames_clear(): void {
+export function longFramesClear(): void {
   ring.length = 0;
 }
 
 /** Hands each long frame, as it lands, to the live stream; none turns it off. */
-export function set_long_frame_sink(to: ((l: LongFrame) => void) | null): void {
+export function setLongFrameSink(to: ((l: LongFrame) => void) | null): void {
   sink = to;
 }
 
@@ -64,24 +65,24 @@ function supports(type: string): boolean {
 /** Whether this browser has long-animation-frame entries at all — Safari and
  * iOS WKWebView do not, and the report says so rather than reading as a
  * window with no long frames in it. */
-export function loaf_supported(): boolean {
+export function loafSupported(): boolean {
   return supports("long-animation-frames");
 }
 
 let installed = false;
 
 /** Idempotent, and a no-op for an observer this browser lacks. */
-export function install_long_frame_observers(): void {
+export function installLongFrameObservers(): void {
   if (installed) return;
   installed = true;
 
-  if (loaf_supported()) {
+  if (loafSupported()) {
     new PerformanceObserver((list) => {
       for (const raw of list.getEntries()) {
         const e = raw as LoafEntry;
-        const script_ms = e.scripts?.reduce((sum, s) => sum + s.duration, 0) ?? 0;
-        const render_ms = e.renderStart > 0 ? Math.max(0, e.startTime + e.duration - e.renderStart) : 0;
-        land({ source: "loaf", t: e.startTime, duration_ms: e.duration, blocking_ms: e.blockingDuration ?? 0, script_ms, render_ms });
+        const scriptMs = e.scripts?.reduce((sum, s) => sum + s.duration, 0) ?? 0;
+        const renderMs = e.renderStart > 0 ? Math.max(0, e.startTime + e.duration - e.renderStart) : 0;
+        land({ source: "loaf", t: e.startTime, durationMs: e.duration, blockingMs: e.blockingDuration ?? 0, scriptMs, renderMs });
       }
     }).observe({ type: "long-animation-frames", buffered: true } as PerformanceObserverInit);
   }
@@ -89,7 +90,7 @@ export function install_long_frame_observers(): void {
   if (supports("longtask")) {
     new PerformanceObserver((list) => {
       for (const e of list.getEntries()) {
-        land({ source: "longtask", t: e.startTime, duration_ms: e.duration, blocking_ms: Math.max(0, e.duration - 50), script_ms: 0, render_ms: 0 });
+        land({ source: "longtask", t: e.startTime, durationMs: e.duration, blockingMs: Math.max(0, e.duration - 50), scriptMs: 0, renderMs: 0 });
       }
     }).observe({ type: "longtask", buffered: true } as PerformanceObserverInit);
   }

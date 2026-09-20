@@ -13,7 +13,7 @@
 
 import { dirname, join } from "@std/path";
 
-import { decor_ids, placeable_cube_id, placeable_cubes } from "../src/catalog/cell/mod.ts";
+import { decor_ids, placeable_cubes, placeableCubeId } from "../src/catalog/cell/mod.ts";
 
 const web = dirname(dirname(new URL(import.meta.url).pathname));
 const LOCALES = ["en", "ko"];
@@ -40,7 +40,7 @@ function branch(locale: string, doc: Catalogue, name: string, want: string[]): v
   }
 }
 
-const cube_ids = placeable_cubes.map(placeable_cube_id);
+const cube_ids = placeable_cubes.map(placeableCubeId);
 const channels = [...new Set(placeable_cubes.map((cube) => cube.channel))];
 
 for (const locale of LOCALES) {

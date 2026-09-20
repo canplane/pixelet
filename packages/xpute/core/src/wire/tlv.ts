@@ -79,7 +79,7 @@ import type { Bytes } from "@xpute/core/abi/array.ts";
 import * as encoding from "@xpute/core/codec/encoding.ts";
 import type { Stream } from "@xpute/core/wire/scalar.ts";
 import * as scalar from "@xpute/core/wire/scalar.ts";
-import { Errno } from "@xpute/core/status/errno.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { MarshalError } from "@xpute/core/status/error.ts";
 
 // ============ ABI ============
@@ -414,11 +414,11 @@ export class TlvReader implements Iterable<TlvValue> {
     this._need(U64_SZ, "I64");
     return scalar.geti64(this._stream);
   }
-  private _f32(): number {
+  private _f32(): f32 {
     this._need(U32_SZ, "F32");
     return scalar.getf32(this._stream);
   }
-  private _f64(): number {
+  private _f64(): f64 {
     this._need(U64_SZ, "F64");
     return scalar.getf64(this._stream);
   }

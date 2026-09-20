@@ -6,8 +6,8 @@ import LanguageDetector from "i18next-browser-languagedetector";
 
 import en from "./en.json" with { type: "json" };
 import ko from "./ko.json" with { type: "json" };
-import en_dev from "./dev/en.json" with { type: "json" };
-import ko_dev from "./dev/ko.json" with { type: "json" };
+import enDev from "./dev/en.json" with { type: "json" };
+import koDev from "./dev/ko.json" with { type: "json" };
 
 /**
  * Copy for development-only surfaces lives in its own catalogue, folded in
@@ -17,31 +17,33 @@ import ko_dev from "./dev/ko.json" with { type: "json" };
  * offers, named — even with the section itself eliminated. Behind a
  * compile-time constant the merge and both dev imports drop out entirely.
  */
-type Catalogue = { [key: string]: string | Catalogue };
+interface Catalogue {
+  [key: string]: string | Catalogue;
+}
 
 /**
  * Merges every level, not just the top one — a shallow merge silently drops
  * a nested dev-only branch instead of erroring, so a gated component would
  * render its raw key instead of its label.
  */
-function deep_merge(base: Catalogue, extra: Catalogue): Catalogue {
+function deepMerge(base: Catalogue, extra: Catalogue): Catalogue {
   const out: Catalogue = { ...base };
   for (const [key, value] of Object.entries(extra)) {
     const current = out[key];
-    out[key] = typeof value === "object" && typeof current === "object" ? deep_merge(current, value) : value;
+    out[key] = typeof value === "object" && typeof current === "object" ? deepMerge(current, value) : value;
   }
   return out;
 }
 
-function with_dev<T>(base: T, dev: unknown): T {
+function withDev<T>(base: T, dev: unknown): T {
   if (!__IS_DEV__) return base;
-  return deep_merge(base as Catalogue, dev as Catalogue) as T;
+  return deepMerge(base as Catalogue, dev as Catalogue) as T;
 }
 
 let booted = false;
 
 /**
- * Initializes i18next for the app. Called from bootstrap_app() rather
+ * Initializes i18next for the app. Called from bootstrapApp() rather
  * than running as a side effect of importing a module, so that every
  * one-time global setup happens in one place, in a defined order, inside
  * main.tsx's error handling — a side-effect import runs at module-eval time,
@@ -59,7 +61,7 @@ let booted = false;
  * a string — accepted because the app ships as a built bundle anyway, so a
  * copy change is always a deploy regardless of where the catalogue lives.
  */
-export function bootstrap_i18n(): void {
+export function bootstrapI18n(): void {
   if (booted) return;
   booted = true;
 
@@ -72,8 +74,8 @@ export function bootstrap_i18n(): void {
       ns: ["translation"],
       defaultNS: "translation",
       resources: {
-        en: { translation: with_dev(en, en_dev) },
-        ko: { translation: with_dev(ko, ko_dev) },
+        en: { translation: withDev(en, enDev) },
+        ko: { translation: withDev(ko, koDev) },
       },
       detection: {
         order: ["localStorage", "navigator"],
