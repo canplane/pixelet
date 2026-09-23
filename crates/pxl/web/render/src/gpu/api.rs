@@ -140,6 +140,12 @@ pub fn bytes<T: Copy>(lane: &[T]) -> &[u8] {
     unsafe { core::slice::from_raw_parts(lane.as_ptr() as *const u8, core::mem::size_of_val(lane)) }
 }
 
+/// The bytes `words` 32-bit words take — floats or u32s — as a size the
+/// device and the heap are told in, from a lane's length as Rust holds it.
+pub const fn word_bytes(words: usize) -> u32 {
+    (words * 4) as u32
+}
+
 /// A group's entry over a buffer, whole.
 pub fn buffer_entry(binding: u32, buffer: u32) -> [u32; 5] {
     [binding, crate::gpu::api_spec::resource::BUFFER, buffer, 0, 0]

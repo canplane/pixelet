@@ -7,6 +7,7 @@
 //! beacon, and draws both.
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
+use pxl_render::gpu::api::word_bytes;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
@@ -229,7 +230,7 @@ impl Markers {
     /// `lane` addresses count * ZONE_INSTANCE_FLOATS f32s in the memory.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn set_zone(&mut self, world: &mut World, draw: &mut DrawList, centre: V3, count: u32, lane: usize, snap_dist: f64) {
-        let bytes = (count as usize * ZONE_INSTANCE_FLOATS * 4).max(4) as u32;
+        let bytes = word_bytes(count as usize * ZONE_INSTANCE_FLOATS).max(4);
         let keep = self.puck.as_ref().is_some_and(|p| p.bytes == bytes);
         if !keep {
             self.clear(draw);

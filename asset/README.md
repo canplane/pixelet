@@ -9,6 +9,7 @@ asset/
 ├── actor/      character and companion models (Kenney)
 ├── cube/       the texture pack: terrain/ and block/ at 256², original/ at source size
 ├── decor/      trees, boats, cars, trains (Kenney)
+├── sky/        the Moon's near side (NASA's Scientific Visualization Studio)
 └── script/     what turns the tree above into what the bucket holds
 ```
 
@@ -53,3 +54,13 @@ writes them into `cube/`, keeping the source-size originals under
 resized tiles, and the sheet is composed from those.
 
 Run the ingest afterwards: the sheet's key changes with any tile.
+
+### After changing the Moon's map
+
+```sh
+./asset/script/download_moon.rs
+```
+
+It fetches the CGI Moon Kit's 1K colour map, cuts the near side, takes it to
+grey reflectance and writes `sky/moon.png`, and prints the face's mean,
+which `sky.wgsl`'s `MOON_MAP_MEAN` has to equal. Run the ingest afterwards.

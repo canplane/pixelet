@@ -105,12 +105,13 @@ deno task dev:local
 | `deno task test`                     | Every test, every workspace member                                    |
 | `deno task lint` / `fmt`             | Lint / format                                                         |
 
-Three tools are run by path rather than by task, since each belongs to the tree it reads:
+Four tools are run by path rather than by task, since each belongs to the tree it reads:
 
 | Run                                                 | What it does                                                   |
 | --------------------------------------------------- | -------------------------------------------------------------- |
 | `cargo run --manifest-path asset/script/Cargo.toml` | Hash `asset/` into `./out/asset`, regenerate the asset tables  |
 | `./asset/script/download_texture_pack.rs`           | Normalize the texture pack's sources into 256² tiles           |
+| `./asset/script/download_moon.rs`                   | Cut the Moon's near side from NASA SVS's map into `asset/sky/` |
 | `infra/geo/**/script/*`                             | Fill db-geo from Overture and GEDTM30 — infra/geo/README.md §4 |
 
 To measure the client, use `preview` (`localhost:4173`). It is the bundle as the deployment builds it, so the dev server's unbundled modules and hooks are gone. It is still a development build, so the ledger overlay is compiled in — a deployed build does not have it.

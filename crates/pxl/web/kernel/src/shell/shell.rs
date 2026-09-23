@@ -22,8 +22,6 @@ use crate::global::Global;
 use crate::layer::character::preview::{preview_close, preview_open};
 use crate::layer::character::store::companion_load_store;
 use crate::layer::character::variant::CharacterGroup;
-use crate::layer::environment::theme::themes;
-use crate::layer::environment::theme_clock::theme_key;
 use crate::layer::object::store::OBJECT_STORAGE_VERSION;
 use crate::layer::terrain::elevation::{get_ele, ground_or_raw};
 use crate::sched::ledger::log::{ledger_set_logging, ledger_window_start, ledger_window_stop};
@@ -163,11 +161,7 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
         bar.is_default_zoom
     )?;
     write!(out, "\"compass\":{{\"show\":{}}},", show_compass())?;
-    // The fog is the one theme colour the shell paints too, so it crosses as
-    // the CSS colour a stylesheet takes. The kernel holds it as the number it
-    // lights with (environment/theme.json's `$type: "rgb"`); spelling it out
-    // is this one writer's job, the way the shipped palette's is.
-    write!(out, "\"camera_busy\":{},\"fog\":\"#{:06x}\",", camera.camera_status != CameraStatus::Idle, themes(theme_key()).fog)?;
+    write!(out, "\"camera_busy\":{},", camera.camera_status != CameraStatus::Idle)?;
     write!(out, "\"object_storage_version\":{OBJECT_STORAGE_VERSION}}}")
 }
 

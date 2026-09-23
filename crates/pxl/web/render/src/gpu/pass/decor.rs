@@ -18,6 +18,7 @@ use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_DECOR, PIPELIN
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS};
 use crate::gpu::api::{buffer_usage, object, release, GpuApi};
 use crate::gpu::api_spec::{address, compare, filter, format, resource};
+use crate::gpu::atmosphere::AIR_WORDS;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::{frame_group, put_f32, put_u32, skin_group, Blocks, Scratch};
 use crate::gpu::shadow::Shadow;
@@ -68,6 +69,8 @@ pub struct DecorPass {
     prepass: Built,
     frame_group: u32,
     light_group: u32,
+    /// The air's entries, which group 0 is made with again on a rebind.
+    air: [u32; AIR_WORDS],
     sampler: u32,
     stride: u32,
     draw_buffer: u32,
@@ -79,8 +82,10 @@ pub struct DecorPass {
 }
 
 impl DecorPass {
-    /// Over `frame_buffer`, the shadow map and the occlusion map's entry `ao`.
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, samples: u32, frame_buffer: u32, shadow: &Shadow, ao: [u32; 5], align: u32) -> DecorPass {
+    /// Over `frame_buffer`, the shadow map, the occlusion map's entry `ao` and
+    /// the air's entries.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, samples: u32, frame_buffer: u32, shadow: &Shadow, ao: [u32; 5], air: [u32; AIR_WORDS], align: u32) -> DecorPass {
         let lit = pipelines.build(g, PIPELINE_DECOR, format::CANVAS, samples);
         let sampler = object();
         (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::REPEAT, compare::NONE, 1);
@@ -88,8 +93,9 @@ impl DecorPass {
             ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, format::CANVAS, samples),
             depth: pipelines.build(g, PIPELINE_DECOR_DEPTH, format::CANVAS, samples),
             prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, format::CANVAS, 1),
-            frame_group: frame_group(g, lit.layouts[0], frame_buffer, shadow.entries(1), ao),
-            light_group: frame_group(g, lit.layouts[0], shadow.light_frame, shadow.blank_entries(1), ao),
+            frame_group: frame_group(g, lit.layouts[0], frame_buffer, shadow.entries(1), ao, air),
+            light_group: frame_group(g, lit.layouts[0], shadow.light_frame, shadow.blank_entries(1), ao, air),
+            air,
             lit,
             sampler,
             stride: DRAW_UNIFORM_BYTES.max(align),
@@ -112,8 +118,8 @@ impl DecorPass {
     pub fn rebind(&mut self, g: &GpuApi, frame_buffer: u32, shadow: &Shadow, ao: [u32; 5]) {
         release(self.frame_group);
         release(self.light_group);
-        self.frame_group = frame_group(g, self.lit.layouts[0], frame_buffer, shadow.entries(1), ao);
-        self.light_group = frame_group(g, self.lit.layouts[0], shadow.light_frame, shadow.blank_entries(1), ao);
+        self.frame_group = frame_group(g, self.lit.layouts[0], frame_buffer, shadow.entries(1), ao, self.air);
+        self.light_group = frame_group(g, self.lit.layouts[0], shadow.light_frame, shadow.blank_entries(1), ao, self.air);
     }
 
     /// Each group's model block and skin image as the kernel has them now, in

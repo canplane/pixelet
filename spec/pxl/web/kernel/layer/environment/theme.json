@@ -1,74 +1,37 @@
 {
-  "$doc": ["The world's time-of-day themes, by WorldThemeKey's value."],
+  "$doc": [
+    "The world's time-of-day themes, by WorldThemeKey's value. The sun's light",
+    "and the sky, by day and by night, are the atmosphere's",
+    "(crates/pxl/web/render/src/look/atmosphere.rs), so a theme is the fill the",
+    "terrain is lit by and no more."
+  ],
   "themes": {
     "morning": {
       "$number": 0,
-      "fog": { "$value": "#e9dccb", "$type": "rgb" },
-      "sky": { "colors": { "$type": "rgb", "top": "#f7d9bc", "middle": "#f9e7d2", "horizon": "#fff6ea" } },
       "lighting": {
         "ambient": { "color": { "$value": "#fff2e3", "$type": "rgb" }, "intensity": 0.62 },
-        "hemisphere": { "sky": { "$value": "#fff3df", "$type": "rgb" }, "ground": { "$value": "#d8b894", "$type": "rgb" }, "intensity": 0.78 },
-        "directional": {
-          "$doc": [
-            "Lowered from full strength to avoid blown-out highlights on",
-            "sun-facing slopes. Only the directional (sun) light is cut — ambient/",
-            "hemisphere are the soft fill and weren't what read as harsh. Landed",
-            "near 62% of the original, a ratio morning/day/evening share."
-          ],
-          "color": { "$value": "#ffd9a8", "$type": "rgb" },
-          "intensity": 0.45
-        }
+        "hemisphere": { "sky": { "$value": "#fff3df", "$type": "rgb" }, "ground": { "$value": "#d8b894", "$type": "rgb" }, "intensity": 0.78 }
       }
     },
     "day": {
       "$number": 1,
-      "fog": { "$value": "#c8def0", "$type": "rgb" },
-      "sky": { "colors": { "$type": "rgb", "top": "#b9ddff", "middle": "#dff1ff", "horizon": "#f8fcff" } },
       "lighting": {
         "ambient": { "color": { "$value": "#f9fcff", "$type": "rgb" }, "intensity": 0.68 },
-        "hemisphere": { "sky": { "$value": "#edf6ff", "$type": "rgb" }, "ground": { "$value": "#c2cbd3", "$type": "rgb" }, "intensity": 0.82 },
-        "directional": {
-          "$doc": ["Directional light only, same reasoning as morning — ~61% of full", "strength, in step with the other daylight themes."],
-          "color": { "$value": "#fff8ef", "$type": "rgb" },
-          "intensity": 0.5
-        }
+        "hemisphere": { "sky": { "$value": "#edf6ff", "$type": "rgb" }, "ground": { "$value": "#c2cbd3", "$type": "rgb" }, "intensity": 0.82 }
       }
     },
     "evening": {
       "$number": 2,
-      "fog": { "$value": "#c9865f", "$type": "rgb" },
-      "sky": { "colors": { "$type": "rgb", "top": "#6f4d4d", "middle": "#c9865f", "horizon": "#ffd7b0" } },
       "lighting": {
         "ambient": { "color": { "$value": "#ffe4cd", "$type": "rgb" }, "intensity": 0.58 },
-        "hemisphere": { "sky": { "$value": "#ffb874", "$type": "rgb" }, "ground": { "$value": "#6a3920", "$type": "rgb" }, "intensity": 0.82 },
-        "directional": {
-          "$doc": [
-            "Directional light only, same pass as day. Landed at ~53% of full",
-            "strength rather than the ~61% the other two share, chosen so the",
-            "day(0.5)->evening->night(0.15) taper falls in roughly even steps",
-            "(0.15, 0.20) instead of a small step then a big one."
-          ],
-          "color": { "$value": "#ffc29d", "$type": "rgb" },
-          "intensity": 0.35
-        }
+        "hemisphere": { "sky": { "$value": "#ffb874", "$type": "rgb" }, "ground": { "$value": "#6a3920", "$type": "rgb" }, "intensity": 0.82 }
       }
     },
     "night": {
       "$number": 3,
-      "fog": { "$value": "#1e293b", "$type": "rgb" },
-      "sky": { "colors": { "$type": "rgb", "top": "#0b1220", "middle": "#172338", "horizon": "#243248" } },
       "lighting": {
         "ambient": { "color": { "$value": "#24304a", "$type": "rgb" }, "intensity": 0.4 },
-        "hemisphere": { "sky": { "$value": "#314764", "$type": "rgb" }, "ground": { "$value": "#0b1322", "$type": "rgb" }, "intensity": 0.68 },
-        "directional": {
-          "$doc": [
-            "The one theme where directional intensity was raised rather than",
-            "cut like the daytime themes above — moonlight needs to read as",
-            "present at all, not toned down from an already-low baseline."
-          ],
-          "color": { "$value": "#5a6d8d", "$type": "rgb" },
-          "intensity": 0.15
-        }
+        "hemisphere": { "sky": { "$value": "#314764", "$type": "rgb" }, "ground": { "$value": "#0b1322", "$type": "rgb" }, "intensity": 0.68 }
       }
     }
   },

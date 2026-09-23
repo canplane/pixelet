@@ -46,12 +46,16 @@ struct VertexOut {
   @location(6) world_pos: vec3f,
   @location(7) @interpolate(flat) faces: u32,
   @location(8) @interpolate(flat) draw: u32,
+  // The air in front of the vertex (atmos_view.wgsl's Seen).
+  @location(9) through: vec3f,
+  @location(10) scattered: vec3f,
+  @location(11) past: vec3f,
 };
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
   let d = draws[v.draw];
-  let world = v.position + d.translation;
+  let world = on_globe(v.position + d.translation);
   var o: VertexOut;
   o.clip = frame.view_proj * vec4f(world, 1.0);
   o.rgb = v.rgb;
@@ -62,6 +66,10 @@ fn vs(v: VertexIn) -> VertexOut {
   o.faces = v.faces;
   o.draw = v.draw;
   o.world_pos = world;
+  let seen = seen_from_eye(world);
+  o.through = seen.through;
+  o.scattered = seen.scattered;
+  o.past = seen.past;
   // Real-size tile UV: a box's own [-0.5, 0.5] corner times its real size
   // per axis, so a box spanning many cells repeats the tile once a cell.
   // Side faces put height in v with the box's top at v = 0, the image's
@@ -298,6 +306,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   // Darkened by k, and warmed by the same k, so a fully open face is untouched.
   let k = frame.ao_strength * occlusion(i.local_pos, i.box_scale, i.normal, i.faces);
   let open = (1.0 - k) * mix(vec3f(1.0), AO_TINT, k);
-  let color = screen_ao(shade(base, n, i.world_pos, 1.0 / i.clip.w, sun_lit(i.world_pos, n), open), i.clip.xy);
+  let color = screen_ao(shade(base, n, i.world_pos, 1.0 / i.clip.w, sun_lit(i.world_pos, n), open, Seen(i.through, i.scattered, i.past)), i.clip.xy);
   return vec4f(finish(color, i.clip.xy), d.opacity);
 }

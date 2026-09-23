@@ -3,45 +3,65 @@
 //! The light, the fog and the sky as the frame is lit: a theme's floats as the
 //! kernel eased them and the sun and the moon where it placed them
 //! (crates/pxl/web/kernel/src/layer/environment/state.rs), composed into the lane the
-//! renderer's frame and sky uniforms are laid out from (gpu/renderer.rs).
+//! renderer's frame, sky and atmosphere uniforms are laid out from
+//! (gpu/renderer.rs).
 //!
-//! The terrain's light is the true, unturned direction: the world turns
-//! under a fixed camera by the azimuth, and a light turned with it would
-//! cancel the turn out. The sky is drawn in the camera's frame, where the
-//! sun has to turn with the world to stay over the ground it lights.
+//! The sun's light is the air's (look/atmosphere.rs): what is left of it at
+//! the camera's altitude, which reddens it as it sets and takes it away
+//! below the horizon. The sky is the air's too, by day and by night: the
+//! moon lights it as the sun does, from its own table, at the brightness a
+//! moonlit sky reads at, and with no moon up the night is dark but for the
+//! stars. What a theme still gives is the fill the terrain is lit by — its
+//! ambient and hemisphere light and the floor — and whether it is night.
+//!
+//! Every direction here is in the map's own axes, X east, Y north, Z up —
+//! the root frame the meshes are placed in. The sky, the stars and the
+//! clouds are drawn in that frame too, so nothing is turned by the map's
+//! azimuth: the view's matrix turns them with the world.
 
-/// Floats a theme takes, linear colours: fog (3), sky top, middle and
-/// horizon (9), sun glow (3), ambient colour and intensity (4), hemisphere
-/// sky and ground and intensity (7), sun colour and intensity (4), night
-/// (1), fog near and far (2), the lighting floor (1).
-pub const THEME_FLOATS: usize = 34;
+use pxl_spec::space::v3::{dot3, norm3, V3};
+
+use crate::look::atmosphere::{moon_phase_light, sun_light, white, MOONLIT_SKY};
+
+/// Floats a theme takes, linear colours: ambient colour and intensity (4),
+/// hemisphere sky and ground and intensity (7), night (1). What is eased
+/// between themes and nothing else: the fog's band and the lighting floor are
+/// the same under every theme, and come with the light.
+pub const THEME_FLOATS: usize = 12;
 
 /// Where the colours of a theme sit in its floats.
-const FOG: usize = 0;
-const SKY_TOP: usize = 3;
-const SKY_MIDDLE: usize = 6;
-const SKY_HORIZON: usize = 9;
-const SUN_GLOW: usize = 12;
-const AMBIENT: usize = 15;
-const HEMI_SKY: usize = 19;
-const HEMI_GROUND: usize = 22;
-const HEMI_INTENSITY: usize = 25;
-const SUN: usize = 26;
-pub const NIGHT: usize = 30;
-const FOG_NEAR: usize = 31;
-const FOG_FAR: usize = 32;
-const FLOOR: usize = 33;
+const AMBIENT: usize = 0;
+const HEMI_SKY: usize = 4;
+const HEMI_GROUND: usize = 7;
+const HEMI_INTENSITY: usize = 10;
+pub const NIGHT: usize = 11;
 
-/// Floats the environment's lane takes: the frame uniform's lighting run (24)
-/// and the sky uniform's colours and directions (24), each aligned to the
-/// renderer's own layout from its twentieth float; then the second light (8):
-/// the dimmer of the sun and the moon, its direction and its colour.
-pub const ENV_FLOATS: usize = 56;
+/// Floats the environment's lane takes: the frame uniform's lighting run
+/// (24), laid out as the frame uniform has it; the stars' fade and the sky's
+/// clock (4); the air's (4): the camera's altitude and a unit's length, in
+/// kilometres, and the map centre's latitude; the second light (8), the
+/// dimmer of the sun and the moon, its direction and its colour; the sun's
+/// direction (4), which the air is lit from whichever light is the brighter;
+/// the stars' frame (12), the equatorial frame to the map's as three columns
+/// of four; and the moon's direction and how bright the sky it lights is
+/// shown (4).
+pub const ENV_FLOATS: usize = 60;
+/// Where the sky's run starts in the environment's lane: the stars' fade,
+/// then the sky's clock.
+pub const ENV_SKY: usize = 24;
+/// Where the air's run starts in the environment's lane.
+pub const ENV_AIR: usize = 28;
 /// Where the second light starts in the environment's lane.
-pub const ENV_OTHER_LIGHT: usize = 48;
+pub const ENV_OTHER_LIGHT: usize = 32;
+/// Where the sun's direction starts in the environment's lane.
+pub const ENV_SUN: usize = 40;
+/// Where the stars' frame starts in the environment's lane.
+pub const ENV_STARS: usize = 44;
+/// Where the moon's direction and its sky's brightness start.
+pub const ENV_MOON: usize = 56;
 
-/// The moon's light: a fixed colour (#9fb4d6, linear), brighter than the
-/// night theme's sun so that at night it is the light the terrain takes.
+/// The moon's light on the terrain: a fixed colour (#9fb4d6, linear), so
+/// that at night it is the light the terrain takes.
 const MOON_COLOR: [f32; 3] = [0.3467, 0.4564, 0.6724];
 
 /// What the lane is composed from.
@@ -50,18 +70,36 @@ pub struct Light {
     /// The theme as eased so far, THEME_FLOATS linear floats.
     pub theme: [f32; THEME_FLOATS],
     /// The sun's and the moon's directions, unturned.
-    pub sun: [f64; 3],
-    pub moon: [f64; 3],
+    pub sun: V3,
+    pub moon: V3,
     pub moon_intensity: f64,
     /// How far the stars have faded in, from 0 to 1.
     pub stars: f64,
-    /// The sky's clock, in seconds: the clouds drift and the stars twinkle by
-    /// it.
+    /// The sky's clock, in seconds: the clouds drift by it.
     pub time: f64,
-    /// The map's azimuth: the root frame's turn about Z.
-    pub azimuth: f64,
-    /// What the theme's fog band is scaled by for how far the view reaches.
-    pub fog_scale: f64,
+    /// The band that hides the world's drawn edge, from where it starts to
+    /// where the ground is hidden whole, as far as the view reaches now.
+    pub fog_near: f64,
+    pub fog_far: f64,
+    /// The light every lit face takes whatever it faces, which keeps a
+    /// phone's night from going black.
+    pub floor: f64,
+    /// The camera's altitude above the sea, and a world unit's length, in
+    /// kilometres; and the map centre's latitude, in radians.
+    pub altitude_km: f64,
+    pub km_per_u: f64,
+    pub latitude: f64,
+    /// The equatorial frame to the local one, X east, Y north, Z up, as rows
+    /// (the kernel's celestial_position.rs).
+    pub star_frame: [V3; 3],
+}
+
+/// A linear colour's luminance weights (Rec. 709), constant.wgsl's LUMA.
+pub(crate) const LUMA: [f64; 3] = [0.2126, 0.7152, 0.0722];
+
+/// A colour's luminance, for which of two lights is the brighter.
+fn luminance(c: [f64; 3]) -> f64 {
+    dot3(&LUMA, &c)
 }
 
 /// The lane `light` lights a frame with.
@@ -72,52 +110,59 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     // is the second light, unshadowed. Summed rather than the brighter
     // alone, so the light does not snap from one direction to the other
     // where their intensities cross during a dusk or dawn ease.
-    let sun_i = c[SUN + 3] as f64;
-    let sun = (light.sun, [c[SUN], c[SUN + 1], c[SUN + 2]], sun_i);
-    let moon = (light.moon, MOON_COLOR, light.moon_intensity);
-    let (first, other) = if light.moon_intensity > sun_i { (moon, sun) } else { (sun, moon) };
-    for (at, (dir, color, intensity)) in [(0, first), (ENV_OTHER_LIGHT, other)] {
-        let d = normalize(dir);
-        put3(o, at, [d[0] as f32, d[1] as f32, d[2] as f32]);
-        put3(o, at + 4, [color[0] * intensity as f32, color[1] * intensity as f32, color[2] * intensity as f32]);
+    let sun_dir = *norm3(&light.sun, &mut [0.0; 3]);
+    let sun_color = sun_light(light.altitude_km, sun_dir[2], white());
+    let moon_color = MOON_COLOR.map(|v| v as f64 * light.moon_intensity);
+    let sun = (sun_dir, sun_color);
+    let moon_dir = *norm3(&light.moon, &mut [0.0; 3]);
+    let moon = (moon_dir, moon_color);
+    let (first, other) = if luminance(moon_color) > luminance(sun_color) { (moon, sun) } else { (sun, moon) };
+    for (at, (d, color)) in [(0, first), (ENV_OTHER_LIGHT, other)] {
+        put3(o, at, f32s(&d));
+        put3(o, at + 4, [color[0] as f32, color[1] as f32, color[2] as f32]);
     }
-    o[7] = c[FOG_NEAR] * light.fog_scale as f32;
+    o[7] = light.fog_near as f32;
     let ambient_i = c[AMBIENT + 3];
     put3(o, 8, [c[AMBIENT] * ambient_i, c[AMBIENT + 1] * ambient_i, c[AMBIENT + 2] * ambient_i]);
-    o[11] = c[FOG_FAR] * light.fog_scale as f32;
+    o[11] = light.fog_far as f32;
     let hemi_i = c[HEMI_INTENSITY];
     put3(o, 12, [c[HEMI_SKY] * hemi_i, c[HEMI_SKY + 1] * hemi_i, c[HEMI_SKY + 2] * hemi_i]);
-    o[15] = c[FLOOR];
+    o[15] = light.floor as f32;
     put3(o, 16, [c[HEMI_GROUND] * hemi_i, c[HEMI_GROUND + 1] * hemi_i, c[HEMI_GROUND + 2] * hemi_i]);
-    put3(o, 20, [c[FOG], c[FOG + 1], c[FOG + 2]]);
 
-    // The sky, turned by the map's azimuth.
-    let az = light.azimuth;
-    put3(o, 24, [c[SKY_TOP], c[SKY_TOP + 1], c[SKY_TOP + 2]]);
-    o[27] = light.time as f32;
-    put3(o, 28, [c[SKY_MIDDLE], c[SKY_MIDDLE + 1], c[SKY_MIDDLE + 2]]);
-    o[31] = light.stars as f32;
-    put3(o, 32, [c[SKY_HORIZON], c[SKY_HORIZON + 1], c[SKY_HORIZON + 2]]);
-    o[35] = az as f32;
-    put3(o, 36, turned(normalize(light.sun), az));
-    put3(o, 40, [c[SUN_GLOW], c[SUN_GLOW + 1], c[SUN_GLOW + 2]]);
-    put3(o, 44, turned(normalize(light.moon), az));
+    o[ENV_SKY] = light.stars as f32;
+    o[ENV_SKY + 1] = light.time as f32;
+
+    o[ENV_AIR] = light.altitude_km as f32;
+    o[ENV_AIR + 1] = light.km_per_u as f32;
+    o[ENV_AIR + 2] = light.latitude as f32;
+    put3(o, ENV_SUN, f32s(&sun_dir));
+
+    // The moonlit sky: the moon's phase, from the angle between it and the
+    // sun as the observer sees them, and faded out as the sun comes up to
+    // the horizon, past which the day's sky is the one the eye is adapted to
+    // and a moon's is a four hundred thousandth of it.
+    let elongation = dot3(&sun_dir, &moon_dir).clamp(-1.0, 1.0).acos();
+    let night = 1.0 - smoothstep(-0.1, 0.0, sun_dir[2]);
+    put3(o, ENV_MOON, f32s(&moon_dir));
+    o[ENV_MOON + 3] = (MOONLIT_SKY * moon_phase_light(core::f64::consts::PI - elongation) * night) as f32;
+
+    // The stars' frame, laid out a column at a time.
+    let columns: [V3; 3] = core::array::from_fn(|k| light.star_frame.map(|row| row[k]));
+    for (k, column) in columns.iter().enumerate() {
+        put3(o, ENV_STARS + 4 * k, f32s(column));
+    }
+}
+
+fn smoothstep(edge0: f64, edge1: f64, x: f64) -> f64 {
+    let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
 }
 
 fn put3(o: &mut [f32; ENV_FLOATS], at: usize, v: [f32; 3]) {
     o[at..at + 3].copy_from_slice(&v);
 }
 
-fn normalize(v: [f64; 3]) -> [f64; 3] {
-    let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-    if l > 0.0 {
-        [v[0] / l, v[1] / l, v[2] / l]
-    } else {
-        [0.0, 0.0, 1.0]
-    }
-}
-
-fn turned(v: [f64; 3], az: f64) -> [f32; 3] {
-    let (s, c) = az.sin_cos();
-    [(v[0] * c - v[1] * s) as f32, (v[0] * s + v[1] * c) as f32, v[2] as f32]
+fn f32s(v: &V3) -> [f32; 3] {
+    v.map(|e| e as f32)
 }

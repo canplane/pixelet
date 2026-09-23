@@ -4,9 +4,16 @@
       "Fog and the far clip.",
       "",
       "RENDER_DIST is how far the ground is seen, in world `u`: where fog",
-      "finishes hiding it, with the camera 1,024u from its pivot or nearer;",
+      "finishes hiding it, with the camera 4,096u from its pivot or nearer;",
       "further out, it and every distance here grow with the camera's",
-      "(FOG_PER_DIST). Where ground geometry exists is no longer a distance",
+      "(FOG_PER_DIST). It is as far as the window reaches with its base at the",
+      "leaves, which a street-level view holds for its decoration: five levels",
+      "put the top at level 4, which draws step 2^5, wanted out to 192 · 2^5 =",
+      "6,144u (terrain/level.rs's level_at). The haze in front of it is the",
+      "air's (look/atmosphere.rs, aerial perspective), so the fog is only the",
+      "edge, and a coarser ring past it costs a ring of pages and not memory:",
+      "the window's records are placed at boot. Where ground geometry exists is",
+      "no longer a distance",
       "chosen beside it but the page pyramid's: a ring of pages at every level",
       "of a window, drawn to the window's top level's ring (terrain/level.rs,",
       "terrain/config.json), which at the finest window reaches 8192u. Fog",
@@ -24,41 +31,43 @@
       "(world/chunk/view_range.test.rs)."
     ],
     "FAR_CLIP": {
-      "$value": 6144,
+      "$value": 9216,
       "$doc": [
         "VIEW_DIST * 1.5. VIEW_DIST (camera/config.json) is sized past",
         "where the ground is seen, so FAR_CLIP keeps margin over it rather than",
-        "being an arbitrary multiple. The fog gradient is FOG_NEAR/FOG_FAR (linear,",
-        "in shade.wgsl, from the theme through state.rs), and it is total well",
-        "inside where the ground is drawn, so ground always fades into the fog",
-        "colour instead of being cut off while still visible. The sky is drawn unfogged",
-        "(sky.wgsl), so the horizon still reads as a full vista — only ground",
-        "geometry fades."
+        "being an arbitrary multiple. The fade is FOG_NEAR/FOG_FAR (a smoothstep",
+        "in shade.wgsl), and it is total well inside where the ground is drawn,",
+        "so ground always fades out instead of being cut off while still visible:",
+        "into the sky's own light along the same ray, which the sky pass draws",
+        "past it (atmos_view.wgsl), so the edge is not a seam. The haze nearer in",
+        "is the air's (aerial perspective), not this band's."
       ]
     },
     "FOG_NEAR": {
-      "$value": 645.12,
+      "$value": 4608,
       "$doc": [
-        "RENDER_DIST * 0.42. Haze starts here and is total at RENDER_DIST, a",
-        "distance the ground is drawn past, so the fade completes instead of",
-        "being cut."
+        "RENDER_DIST * 0.75. The fade starts here and is total at RENDER_DIST, a",
+        "distance the ground is drawn past, so it completes instead of being",
+        "cut. Narrow, because it only hides where the ground ends: the depth in",
+        "front of it is the air's haze."
       ]
     },
-    "FOG_FAR": { "$value": 1536, "$doc": ["RENDER_DIST."] },
+    "FOG_FAR": { "$value": 6144, "$doc": ["RENDER_DIST."] },
     "FOG_PER_DIST": {
       "$value": 1.5,
       "$doc": [
         "Fog's far edge per unit of the camera's distance from its pivot, where",
         "that is the further: FOG_FAR over the 1,024u the camera could stand at",
-        "when these were tuned. Past the distance where it overtakes FOG_FAR, the fog, the",
-        "clip planes and the sky all grow in proportion to the distance, so a",
+        "when these were first tuned, kept as the fog was pushed out to the window.",
+        "Past the distance where it overtakes FOG_FAR, 4,096u, the fade",
+        "and the clip planes grow in proportion to the distance, so a",
         "zoom out is a change of scale and nothing else: the screen spans the",
         "same octaves of ground, which is what the window of levels is sized",
         "for (environment/fog.rs). Nearer, they hold at their values here, so",
         "a street-level view keeps its horizon."
       ]
     },
-    "RENDER_DIST": 1536
+    "RENDER_DIST": 6144
   },
   "light_cfg": {
     "$doc": [

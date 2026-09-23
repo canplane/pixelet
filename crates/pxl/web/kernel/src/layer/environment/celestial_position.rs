@@ -1,10 +1,12 @@
 // pxl-kernel/layer/environment/celestial_position.rs
 
-//! Where the sun and the moon are.
+//! Where the sun, the moon and the stars are.
 //!
 //! The standard low-precision formulas: the sun good to about 0.01°, the
 //! moon's single dominant term per angle to roughly 0.3–1°. Degrees until
 //! the local direction, as they are conventionally published.
+
+use pxl_spec::space::v3::V3;
 
 const DEG: f64 = core::f64::consts::PI / 180.0;
 
@@ -37,12 +39,18 @@ fn moon_equatorial(d: f64, obliquity: f64) -> (f64, f64) {
     (ra, dec)
 }
 
+/// The local sidereal time at longitude `lon`, `d` days after J2000.0, in
+/// degrees: the right ascension on the meridian.
+fn local_sidereal(d: f64, lon: f64) -> f64 {
+    let gmst = norm360(280.460_618_37 + 360.985_647_366_29 * d);
+    norm360(gmst + lon)
+}
+
 /// Equatorial to the observer's local direction: X east, Y north, Z up, at
 /// distance 100 as the three lights stood. Azimuth is the Duffett-Smith
 /// construction, acos and a sign from the hour angle.
-fn local_direction(ra: f64, dec: f64, lat: f64, lon: f64, d: f64) -> [f64; 3] {
-    let gmst = norm360(280.460_618_37 + 360.985_647_366_29 * d);
-    let lst = norm360(gmst + lon);
+fn local_direction(ra: f64, dec: f64, lat: f64, lon: f64, d: f64) -> V3 {
+    let lst = local_sidereal(d, lon);
     let hour_angle = (lst - ra + 180.0).rem_euclid(360.0) - 180.0;
     let (ha, dec, lat) = (hour_angle * DEG, dec * DEG, lat * DEG);
     let alt = (dec.sin() * lat.sin() + dec.cos() * lat.cos() * ha.cos()).asin();
@@ -55,12 +63,25 @@ fn local_direction(ra: f64, dec: f64, lat: f64, lon: f64, d: f64) -> [f64; 3] {
     [az.sin() * horizontal, az.cos() * horizontal, alt.sin() * 100.0]
 }
 
-pub fn sun_position(d: f64, lat: f64, lon: f64) -> [f64; 3] {
+pub fn sun_position(d: f64, lat: f64, lon: f64) -> V3 {
     let (ra, dec, _) = sun_equatorial(d);
     local_direction(ra, dec, lat, lon, d)
 }
 
-pub fn moon_position(d: f64, lat: f64, lon: f64) -> [f64; 3] {
+/// The rotation from the equatorial frame — X to the vernal equinox, Z to
+/// the celestial pole — to the observer's local one, X east, Y north, Z up,
+/// as rows: what turns a star's catalogued direction into where it stands.
+/// The same sky as `local_direction` reads one body at a time, as a matrix,
+/// since the stars are nine thousand bodies and one sky: the hour angle is
+/// the sidereal time less the right ascension, turned about the pole, and the
+/// pole is tipped to the latitude.
+pub fn equatorial_to_local(d: f64, lat: f64, lon: f64) -> [V3; 3] {
+    let (sl, cl) = (local_sidereal(d, lon) * DEG).sin_cos();
+    let (sp, cp) = (lat * DEG).sin_cos();
+    [[-sl, cl, 0.0], [-sp * cl, -sp * sl, cp], [cp * cl, cp * sl, sp]]
+}
+
+pub fn moon_position(d: f64, lat: f64, lon: f64) -> V3 {
     let (_, _, obliquity) = sun_equatorial(d);
     let (ra, dec) = moon_equatorial(d, obliquity);
     local_direction(ra, dec, lat, lon, d)

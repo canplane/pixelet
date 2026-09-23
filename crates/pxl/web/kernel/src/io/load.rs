@@ -17,6 +17,7 @@ use std::rc::Rc;
 
 use pxl_render::asset::gltf::{parse_gltf, Gltf};
 use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
+use pxl_render::gpu::api::word_bytes;
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::heap::{alloc, free};
@@ -542,7 +543,7 @@ impl Models {
 
     pub fn new_actor(&mut self, world: &mut World, draw: &mut DrawList, model: u32) -> Option<u32> {
         let joints = self.models.get(model as usize)?.as_ref()?.parent.len();
-        let palette_bytes = (joints.max(1) * 16 * 4) as u32;
+        let palette_bytes = word_bytes(joints.max(1) * 16);
         let (palette_at, palette_bytes) = alloc(palette_bytes)?;
         // SAFETY: the block just acquired; identity joints until the first tick.
         unsafe {

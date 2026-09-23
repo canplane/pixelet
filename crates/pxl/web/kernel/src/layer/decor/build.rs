@@ -18,6 +18,7 @@
 //! store as its own entry kind alongside solid cubes, and is merged into the
 //! build next to the scattered instances, not kept in a separate store.
 
+use pxl_render::gpu::api::word_bytes;
 use pxl_render::look::lod::{LodStep, TARGET_CELL_PX};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
@@ -395,7 +396,7 @@ impl<'s> DecorBuild<'s> {
     pub fn bytes(&self) -> u32 {
         let s = self.scratch;
         let words: usize = 1 + s.group_count + s.counts[..s.group_count].iter().map(|&n| 7 * n as usize + (n as usize).div_ceil(4)).sum::<usize>();
-        (words * 4) as u32
+        word_bytes(words)
     }
 
     /// Writes the block: each group's lanes at the group's place, each

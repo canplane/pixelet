@@ -8,16 +8,18 @@
 
 use pxl_render::look::color::linear_rgb;
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS, NIGHT, THEME_FLOATS};
-use pxl_spec::space::adapter::epsg4326;
+use pxl_render::look::globe::Globe;
+use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::v3::V3;
 
 use crate::control::navigation::bootstrap::FALLBACK_G4326;
 use crate::global::Global;
 use crate::host::{now, wall_now};
 use crate::kernel::kernel;
-use crate::layer::environment::celestial_position::{moon_position, sun_position};
-use crate::layer::environment::config::{light_cfg, render_cfg};
-use crate::layer::environment::fog::view_scale;
+use crate::layer::environment::celestial_position::{equatorial_to_local, moon_position, sun_position};
+use crate::layer::environment::config::light_cfg;
+use crate::layer::environment::fog::{fog_far, fog_near};
 use crate::layer::environment::theme::{themes, WorldThemeKey};
 use crate::layer::environment::theme_clock::theme_key;
 use crate::shell::map_store::map_store;
@@ -44,15 +46,9 @@ pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: WorldThemeKey) {
             k += 1;
         }
     };
-    rgb(lane, t.fog);
-    rgb(lane, t.sky.top);
-    rgb(lane, t.sky.middle);
-    rgb(lane, t.sky.horizon);
-    rgb(lane, t.directional.color);
     rgb(lane, t.ambient.color);
-    // The rest, in order: the hemisphere's sky and ground and intensity, the
-    // directional colour and intensity, the night flag, the fog's range and the
-    // light floor.
+    // The rest, in order: the hemisphere's sky and ground and intensity, and
+    // the night flag.
     let mut at = k;
     let mut put = |lane: &mut [f32; THEME_FLOATS], v: f64| {
         lane[at] = v as f32;
@@ -66,14 +62,7 @@ pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: WorldThemeKey) {
         put(lane, v);
     }
     put(lane, t.hemisphere.intensity);
-    for v in linear_rgb(t.directional.color) {
-        put(lane, v);
-    }
-    put(lane, t.directional.intensity);
     put(lane, if key == WorldThemeKey::night { 1.0 } else { 0.0 });
-    put(lane, render_cfg::FOG_NEAR);
-    put(lane, render_cfg::FOG_FAR);
-    put(lane, light_cfg::FLOOR);
 }
 
 struct Environment {
@@ -86,16 +75,34 @@ struct Environment {
 
 static ENVIRONMENT: Global<Environment> = Global::new();
 
-/// The environment's turn, in the interaction phase: before the chunks' step,
-/// which runs the scheduler's pass.
-pub fn map_environment_step() {
-    let e = ENVIRONMENT.get(|| Environment {
+fn environment() -> &'static mut Environment {
+    ENVIRONMENT.get(|| Environment {
         theme_key: None,
         observed_centre: None,
         observed_lat: FALLBACK_G4326[1],
         observed_lon: FALLBACK_G4326[0],
         clock_frame_at: 0.0,
-    });
+    })
+}
+
+/// A world unit's true length where the map is, in kilometres: the
+/// projection's, which Mercator stretches by the secant of the latitude, in
+/// either axis alike since heights are stretched with it.
+pub fn km_per_u() -> f64 {
+    epsg3857::M_PER_U * environment().observed_lat.to_radians().cos() / 1000.0
+}
+
+/// The sphere about the map centre, which the flat map is laid back on
+/// (pxl-render's look/globe.rs), for the chunks' culling as the renderer
+/// takes it for its frame.
+pub fn globe() -> Globe {
+    Globe::at(environment().observed_lat.to_radians())
+}
+
+/// The environment's turn, in the interaction phase: before the chunks' step,
+/// which runs the scheduler's pass.
+pub fn map_environment_step() {
+    let e = environment();
     let sched = &mut kernel().sched;
 
     let theme_key = theme_key();
@@ -154,8 +161,8 @@ pub struct EnvironmentDraw {
     lon: f64,
     /// Days since J2000.0, from the host's wall clock.
     days: f64,
-    sun: [f64; 3],
-    moon: [f64; 3],
+    sun: V3,
+    moon: V3,
     moon_intensity: f64,
     stars: f64,
     /// The sky's clock, seconds of wall time since the first observation:
@@ -274,6 +281,14 @@ impl EnvironmentDraw {
         for k in 0..THEME_FLOATS {
             self.current[k] += (self.target[k] - self.current[k]) * a as f32;
         }
+        // The camera's height over the planet, measured from its centre,
+        // under the map centre's ground by the radius (look/globe.rs): the
+        // world is tangent to the planet at the map centre, and the planet
+        // falls away under a camera standing off it. Above the sea, it is
+        // that and the map centre's ground.
+        let km_per_u = km_per_u();
+        let r = Globe::at(self.lat.to_radians()).radius_u();
+        let over = frame.camera[0].hypot(frame.camera[1]).hypot(frame.camera[2] + r) - r;
         let light = Light {
             theme: self.current,
             sun: self.sun,
@@ -281,9 +296,13 @@ impl EnvironmentDraw {
             moon_intensity: self.moon_intensity,
             stars: self.stars,
             time: self.time,
-            // The anchor root's turn about Z.
-            azimuth: frame.root[1].atan2(frame.root[0]),
-            fog_scale: view_scale(view().dist),
+            fog_near: fog_near(view().dist),
+            fog_far: fog_far(view().dist),
+            floor: light_cfg::FLOOR,
+            altitude_km: (frame.ground_z + over) * km_per_u,
+            km_per_u,
+            latitude: self.lat.to_radians(),
+            star_frame: equatorial_to_local(self.days, self.lat, self.lon),
         };
         write_environment(&mut self.out, &light);
         (self.stars - star_target).abs() > SETTLE_EPS

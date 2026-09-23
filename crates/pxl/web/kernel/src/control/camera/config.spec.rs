@@ -21,8 +21,9 @@
 /// distance in the same units as the other two, so the chain can be read off.
 /// Only feeds render_cfg's FAR_CLIP (the camera's far-clip plane), sized past
 /// where ground geometry stops so the margin stays proportional rather than an
-/// arbitrary leftover multiple. 2048 * 2.
-pub const VIEW_DIST: f64 = 4096.0;
+/// arbitrary leftover multiple. RENDER_DIST, which FAR_CLIP keeps half again
+/// past.
+pub const VIEW_DIST: f64 = 6144.0;
 
 /// Default tilt angle in degrees from the ground plane.
 pub const DEFAULT_TILT_DEG: f64 = 30.0;

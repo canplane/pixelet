@@ -17,7 +17,9 @@
 /// A texture's format: the texture pack, skins and the badge sheet; depth; the
 /// canvas's own; then the screen-space occlusion's — a half-resolution depth and
 /// normal in four floats, the full-resolution occlusion in one byte, and the blue
-/// noise it dithers with, four bytes read as they are.
+/// noise it dithers with, four bytes read as they are; then the atmosphere's
+/// tables, radiance and transmittance in four half floats, filterable and
+/// renderable on every WebGPU device.
 pub mod format {
     pub const RGBA8_SRGB: u32 = 0;
     pub const DEPTH32: u32 = 1;
@@ -25,7 +27,8 @@ pub mod format {
     pub const RGBA32F: u32 = 3;
     pub const R8: u32 = 4;
     pub const RGBA8: u32 = 5;
-    pub const KEYS: &[&str] = &["RGBA8_SRGB", "DEPTH32", "CANVAS", "RGBA32F", "R8", "RGBA8"];
+    pub const RGBA16F: u32 = 6;
+    pub const KEYS: &[&str] = &["RGBA8_SRGB", "DEPTH32", "CANVAS", "RGBA32F", "R8", "RGBA8", "RGBA16F"];
 }
 
 pub mod dimension {
@@ -159,6 +162,7 @@ pub mod record {
     pub const NO_DEPTH: u32 = 4;
     pub const OPAQUE: u32 = 0;
     pub const ALPHA: u32 = 1;
+    pub const ADD: u32 = 2;
     pub const FRAME_SAMPLES: u32 = 0;
     pub const ONE_SAMPLE: u32 = 1;
     pub const PER_VERTEX: u32 = 0;
@@ -194,6 +198,7 @@ pub mod record {
         "NO_DEPTH",
         "OPAQUE",
         "ALPHA",
+        "ADD",
         "FRAME_SAMPLES",
         "ONE_SAMPLE",
         "PER_VERTEX",

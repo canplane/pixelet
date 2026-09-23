@@ -24,7 +24,7 @@
 use xpute_core::math::mat4::{mat4_invert, Mat4};
 
 use crate::frame::shader::record::{PIPELINE_AO_BLUR, PIPELINE_AO_DOWNSAMPLE, PIPELINE_AO_SAMPLE, PIPELINE_AO_UPSAMPLE};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, GpuApi, NONE};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, NONE};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::pipeline::{Built, Pipelines};
 
@@ -91,7 +91,7 @@ impl ScreenAo {
         let noise_view = object();
         (g.view)(noise_view, noise, dimension::D2, 0, 1, 0, 1);
         let uniform = object();
-        (g.buffer)(uniform, (AO_FLOATS * 4) as u32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        (g.buffer)(uniform, word_bytes(AO_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let stride = 16u32.max(align);
         let run = object();
         (g.buffer)(run, stride * 2, buffer_usage::UNIFORM | buffer_usage::COPY_DST);

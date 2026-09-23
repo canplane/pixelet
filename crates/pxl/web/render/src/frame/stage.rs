@@ -24,7 +24,7 @@ pub const EDGE_WIDTH: f64 = 0.03;
 /// occlusion_of.
 pub const AO_STRENGTH: f64 = 0.2;
 
-pub const STAGE_WORDS: usize = 96;
+pub const STAGE_WORDS: usize = 80;
 
 /// Where each value sits in the lane.
 #[allow(non_snake_case)]
@@ -35,34 +35,32 @@ pub mod STAGE_AT {
     pub const PROJ: usize = 16;
     /// Root frame to GL clip (16).
     pub const LOCAL_VIEW_PROJ: usize = 32;
-    /// View frame to camera (16), for the sky.
-    pub const VIEW_MATRIX: usize = 48;
     /// The eye in the root frame, where the meshes are (3).
-    pub const EYE_LOCAL: usize = 64;
-    /// The eye in the view frame (3).
-    pub const EYE: usize = 67;
+    pub const EYE_LOCAL: usize = 48;
     /// Where the root frame's origin stands (3): the shadow aims at its negation.
-    pub const TRANSLATION: usize = 70;
+    pub const TRANSLATION: usize = 51;
     /// The viewport in CSS pixels (2).
-    pub const VIEWPORT: usize = 73;
-    pub const FOV: usize = 75;
-    pub const NEAR: usize = 76;
-    pub const FAR: usize = 77;
-    pub const FADE_START: usize = 78;
-    pub const FADE_END: usize = 79;
-    pub const LOD_CELL: usize = 80;
-    pub const EDGE_STRENGTH: usize = 81;
-    pub const LOW_SPEC: usize = 82;
-    pub const EDGE_WIDTH: usize = 83;
-    pub const RIM_INTENSITY: usize = 84;
-    pub const SHADOWS: usize = 85;
-    pub const SKY_RADIUS: usize = 86;
+    pub const VIEWPORT: usize = 54;
+    pub const FOV: usize = 56;
+    pub const NEAR: usize = 57;
+    pub const FAR: usize = 58;
+    pub const FADE_START: usize = 59;
+    pub const FADE_END: usize = 60;
+    pub const LOD_CELL: usize = 61;
+    pub const EDGE_STRENGTH: usize = 62;
+    pub const LOW_SPEC: usize = 63;
+    pub const EDGE_WIDTH: usize = 64;
+    pub const RIM_INTENSITY: usize = 65;
+    pub const SHADOWS: usize = 66;
     /// MSAA is the renderer's targets and every pipeline's sample count: a
     /// change rebuilds both over the same canvas.
-    pub const MSAA: usize = 87;
-    pub const AO_STRENGTH: usize = 88;
+    pub const MSAA: usize = 67;
+    pub const AO_STRENGTH: usize = 68;
     /// The screen-space occlusion (gpu/ao.rs): 1 to run it, 0 not to.
-    pub const SCREEN_AO: usize = 89;
+    pub const SCREEN_AO: usize = 69;
+    /// The map origin the root frame is relative to, east and north, in
+    /// units (2): where the clouds are anchored to the ground.
+    pub const ORIGIN: usize = 70;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

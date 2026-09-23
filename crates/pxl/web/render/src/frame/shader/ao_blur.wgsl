@@ -42,7 +42,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let normal = data.gba * 2.0 - 1.0;
   let pos = view_pos(depth, uv);
   let noise = textureLoad(blue_noise, hp & vec2i(AO_NOISE_MASK), 0);
-  let angle = select(noise.z, noise.w, run.index < 0.5) * AO_PI * 2.0;
+  let angle = select(noise.z, noise.w, run.index < 0.5) * TAU;
   let c = cos(angle);
   let s = sin(angle);
   let spin = mat2x2f(c, -s, s, c);

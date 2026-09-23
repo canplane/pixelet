@@ -25,7 +25,7 @@ use core::f32::consts::TAU;
 
 use crate::asset::atlas::{BillboardAtlas, DrawSpec, PAD};
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_BADGE, UNIFORM_FLOATS};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, GpuApi, NONE};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, NONE};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::paint::Paint;
@@ -321,7 +321,7 @@ impl BadgePass {
             n += 1;
             if set.uniform == 0 {
                 set.uniform = object();
-                (g.buffer)(set.uniform, (BADGE_FLOATS * 4) as u32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+                (g.buffer)(set.uniform, word_bytes(BADGE_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
             }
             let at = d[3] as usize * UNIFORM_FLOATS;
             let s = &mut self.uniform;

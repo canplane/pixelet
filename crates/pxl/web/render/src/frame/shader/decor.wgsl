@@ -32,6 +32,10 @@ struct VertexOut {
   @location(0) uv: vec2f,
   @location(1) normal: vec3f,
   @location(2) world_pos: vec3f,
+  // The air in front of the vertex (atmos_view.wgsl's Seen).
+  @location(3) through: vec3f,
+  @location(4) scattered: vec3f,
+  @location(5) past: vec3f,
 };
 
 fn lane(k: u32, i: u32) -> f32 {
@@ -50,11 +54,15 @@ fn vs(v: VertexIn) -> VertexOut {
   let at = vec3f(lane(0u, v.i), lane(1u, v.i), lane(2u, v.i));
   let spin = lane(3u, v.i);
   let scale = lane(4u, v.i);
-  let world = place_up(v.position * scale, spin) + at + draw.translation;
+  let world = on_globe(place_up(v.position * scale, spin) + at + draw.translation);
   o.clip = frame.view_proj * vec4f(world, 1.0);
   o.uv = v.uv;
   o.normal = place_up(v.normal, spin);
   o.world_pos = world;
+  let seen = seen_from_eye(world);
+  o.through = seen.through;
+  o.scattered = seen.scattered;
+  o.past = seen.past;
   return o;
 }
 
@@ -62,6 +70,6 @@ fn vs(v: VertexIn) -> VertexOut {
 fn fs(i: VertexOut) -> @location(0) vec4f {
   let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
   let n = normalize(i.normal);
-  let color = screen_ao(shade(albedo, n, i.world_pos, 1.0 / i.clip.w, sun_lit(i.world_pos, n), vec3f(1.0)), i.clip.xy);
+  let color = screen_ao(shade(albedo, n, i.world_pos, 1.0 / i.clip.w, sun_lit(i.world_pos, n), vec3f(1.0), Seen(i.through, i.scattered, i.past)), i.clip.xy);
   return vec4f(finish(color, i.clip.xy), draw.opacity);
 }

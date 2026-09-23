@@ -139,11 +139,12 @@ pub enum Asset {
     decor_kenney_watercraft_pack_boat_sail_a_glb = 122,
     decor_kenney_watercraft_pack_boat_speed_a_glb = 123,
     decor_kenney_watercraft_pack_colormap_png = 124,
+    sky_moon_png = 125,
 }
 
 impl Asset {
     /// Every asset, in the table's order.
-    pub const ALL: [Asset; 125] = [
+    pub const ALL: [Asset; 126] = [
         Asset::actor_kenney_cube_pets_beaver_glb,
         Asset::actor_kenney_cube_pets_bee_glb,
         Asset::actor_kenney_cube_pets_bunny_glb,
@@ -269,6 +270,7 @@ impl Asset {
         Asset::decor_kenney_watercraft_pack_boat_sail_a_glb,
         Asset::decor_kenney_watercraft_pack_boat_speed_a_glb,
         Asset::decor_kenney_watercraft_pack_colormap_png,
+        Asset::sky_moon_png,
     ];
 
     /// The asset a number names, or none for a number the table does not
@@ -291,7 +293,7 @@ pub struct IngestedAsset {
 }
 
 /// Each asset's row, at its member's number.
-pub const INGESTED: [IngestedAsset; 125] = [
+pub const INGESTED: [IngestedAsset; 126] = [
     IngestedAsset {
         bytes: 149728,
         extent: Some([1.25, 1.84, 1.5]),
@@ -591,6 +593,7 @@ pub const INGESTED: [IngestedAsset; 125] = [
         extent: Some([1.78, 3.37, 1.5]),
     },
     IngestedAsset { bytes: 8814, extent: None },
+    IngestedAsset { bytes: 165698, extent: None },
 ];
 
 /// Which of a box's images a tile is. The split is the renderer's own: a face

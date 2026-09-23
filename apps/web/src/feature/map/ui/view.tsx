@@ -9,7 +9,6 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { useKernel } from "@/kernel/shell.ts";
 import { KernelDriver } from "@/kernel/control/input.ts";
 import { open_surface, SURFACE_WORLD } from "@/kernel/render/surface.ts";
 import { LedgerOverlay } from "@/feature/dev/ledger/overlay.tsx";
@@ -18,7 +17,6 @@ import { Overlays } from "./overlay/overlays.tsx";
 import { ToastController } from "./toast-controller.tsx";
 
 export function MapView() {
-  const fog = useKernel((s) => s.fog);
   const ref = useRef<HTMLCanvasElement>(null);
   /** The world's canvas once the kernel has it: the frame loop's viewport and
    * the pointer's target. */
@@ -40,8 +38,7 @@ export function MapView() {
       <ToastController />
       <LedgerOverlay />
 
-      {/* Theme background layer matched to fog color to hide the 2D/3D seam. */}
-      <div className="absolute inset-0 transition-colors duration-1500 ease-in-out" style={{ backgroundColor: fog }}>
+      <div className="absolute inset-0">
         <canvas ref={ref} className="absolute inset-0 h-full w-full touch-none" />
         <KernelDriver element={canvas} />
       </div>

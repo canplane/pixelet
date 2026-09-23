@@ -703,12 +703,13 @@ Decided while building, on top of the above:
   its coarse tier. Short of it a chunk splits and past it it merges, with a
   tenth of hysteresis either way, so every handoff above step 2 is a split or
   a merge.
-- **A chunk lives no longer than its page's record.** When a record goes —
+- **Nothing is built from a record that has gone.** When a record goes —
   let go by the eviction above, or taken by another page arriving at its
-  residue — every chunk of that page goes at the start of the next tick,
-  before anything can build one, stale or not: a build would read another
-  page's bytes, and a mesh kept past its record is memory `.fixed` does not
-  bound.
+  residue — every chunk of that page goes stale at the start of the next
+  tick and its scan and bake are given up, before anything can build one:
+  a build would read another page's bytes. What it has built stays drawn
+  until something covers its ground, as any stale chunk does; letting it go
+  with the record opened a hole wherever nothing else was ready.
 - **A split or a merge is never a hole.** A chunk no longer wanted is stale,
   drawn until every chunk replacing it has a layout; the replacements wait
   under it. One rule serves both directions and the view moving on.
