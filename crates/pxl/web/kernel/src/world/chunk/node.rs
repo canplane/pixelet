@@ -24,11 +24,12 @@ use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Heights, Step, FIN
 use pxl_render::mesh::paint::level::write_level_runs;
 use pxl_render::mesh::paint::object::adapter::{Carve, Painted, Painter};
 use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
-use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView, CHANNELS};
+use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_spec::bake::format::Tile;
+use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::xy::TO_XY;
@@ -193,9 +194,8 @@ pub struct ChunkNode {
 type Queue = VecDeque<Event>;
 
 fn page_lanes(tile: &Tile) -> PageLanes {
-    let g = &tile.terrain.ground;
     PageLanes {
-        ground: g.planes().map(|plane| plane.as_ptr() as usize),
+        cells: tile.terrain.ground.cells.as_ptr() as usize,
         ele: tile.terrain.ele.as_ptr() as usize,
     }
 }
@@ -503,7 +503,8 @@ pub struct LeafSource {
 /// A terrain page's lanes, as addresses into the memory.
 #[derive(Clone, Copy)]
 pub struct PageLanes {
-    pub ground: [usize; CHANNELS],
+    /// The page's ground cells, packed (pxl-spec bake/pack.rs).
+    pub cells: usize,
     pub ele: usize,
 }
 
@@ -1017,7 +1018,7 @@ impl Builder {
         let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
         let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
         PageView {
-            ground: page.ground.map(|at| core::slice::from_raw_parts(mem.add(at), cells)),
+            cells: core::slice::from_raw_parts(mem.add(page.cells) as *const GroundCell, cells),
             ele: core::slice::from_raw_parts(mem.add(page.ele) as *const i16, samples),
         }
     }

@@ -13,17 +13,17 @@
 //! wanted page always has room, and what is left over is room for pages the
 //! camera has left. A wider view wants more of them and leaves less over.
 //!
-//! The routing turns a record and a channel into an address, and it is the only
-//! thing here that knows how the bytes are ordered. The ground is held channel
-//! by channel: a channel's plane is a whole number of cache lines, so every one
-//! of its lanes starts aligned and every row of a lane with it. The elevation
-//! is a plane of its own past them, because its record is 2,592 bytes — 32
-//! past a cache line, and a grid whose rows are 72 bytes is not aligned at any
-//! offset anyway. Held with the ground it would carry that 32 into every
-//! second page's lanes; held apart it costs nothing.
+//! The routing turns a record into an address, and it is the only thing here
+//! that knows how the bytes are ordered. A page's ground is one lane of words,
+//! the four channels packed into each (pxl-spec bake/pack.rs), and the lane is
+//! a whole number of cache lines, so every record's starts aligned and every
+//! row of it with them. The elevation is a plane of its own past them, because
+//! its record is 2,592 bytes — 32 past a cache line, and a grid whose rows are
+//! 72 bytes is not aligned at any offset anyway. Held with the ground it would
+//! carry that 32 into every second page's lanes; held apart it costs nothing.
 
 use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
-use pxl_spec::bake::format::GROUND_CH_KEYS;
+use pxl_spec::bake::pack::GroundCell;
 
 use crate::layer::terrain::level::{HELD_AXIS, WINDOW_LEVELS};
 
@@ -38,14 +38,11 @@ pub const TERRAIN_SLOTS: u32 = WINDOW_LEVELS * GROUP_SLOTS;
 
 // ---- The routing ----
 
-/// One ground channel of a page: a byte a cell, no stride and no padding.
-pub const GROUND_LANE_BYTES: u32 = PAGE_CELL_SPAN * PAGE_CELL_SPAN;
+/// One page's ground: a word a cell, no stride and no padding.
+pub const GROUND_LANE_BYTES: u32 = PAGE_CELL_SPAN * PAGE_CELL_SPAN * core::mem::size_of::<GroundCell>() as u32;
 
-/// One channel across every record.
-pub const GROUND_PLANE_BYTES: u32 = TERRAIN_SLOTS * GROUND_LANE_BYTES;
-
-/// Every channel's plane, one after another.
-pub const GROUND_BYTES: u32 = GROUND_CH_KEYS.len() as u32 * GROUND_PLANE_BYTES;
+/// The ground across every record.
+pub const GROUND_BYTES: u32 = TERRAIN_SLOTS * GROUND_LANE_BYTES;
 
 /// A page's elevation: the inner samples and the two-cell skirt bicubic reads
 /// at the edges, two bytes a sample.
@@ -58,28 +55,28 @@ pub const ELE_PLANE_BYTES: u32 = TERRAIN_SLOTS * ELE_LANE_BYTES;
 pub const TERRAIN_BYTES: u32 = GROUND_BYTES + ELE_PLANE_BYTES;
 
 const _: () = assert!(
-    GROUND_PLANE_BYTES.is_multiple_of(64),
-    "terrain: a ground plane must be whole cache lines, or every second record's lanes start part way into one"
+    GROUND_LANE_BYTES.is_multiple_of(64),
+    "terrain: a ground lane must be whole cache lines, or every second record's lane starts part way into one"
 );
 
 /// One page's bytes on their own, channel after channel and the elevation
 /// past them: what the shared open-ocean tile is held as, since it belongs to
 /// no page and every ocean page reads it.
-pub const RECORD_BYTES: u32 = GROUND_CH_KEYS.len() as u32 * GROUND_LANE_BYTES + ELE_LANE_BYTES;
+pub const RECORD_BYTES: u32 = GROUND_LANE_BYTES + ELE_LANE_BYTES;
 
-/// Where a standalone record's ground channel lies.
-pub fn record_ground_at(record: usize, channel: usize) -> usize {
-    record + channel * GROUND_LANE_BYTES as usize
+/// Where a standalone record's ground lies.
+pub fn record_ground_at(record: usize) -> usize {
+    record
 }
 
 /// Where a standalone record's elevation grid lies.
 pub fn record_ele_at(record: usize) -> usize {
-    record + GROUND_CH_KEYS.len() * GROUND_LANE_BYTES as usize
+    record + GROUND_LANE_BYTES as usize
 }
 
-/// Where a record's ground channel lies, `base` the range's own.
-pub fn ground_at(base: usize, slot: u32, channel: usize) -> usize {
-    base + channel * GROUND_PLANE_BYTES as usize + slot as usize * GROUND_LANE_BYTES as usize
+/// Where a record's ground lies, `base` the range's own.
+pub fn ground_at(base: usize, slot: u32) -> usize {
+    base + slot as usize * GROUND_LANE_BYTES as usize
 }
 
 /// Where a record's elevation grid lies, `base` the range's own.

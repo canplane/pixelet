@@ -19,6 +19,7 @@
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN};
 use pxl_spec::bake::format::{Ground, GroundChannelKey};
 use pxl_spec::bake::ground::{recess, shown_ground};
+use pxl_spec::bake::pack::{channel_of, GroundCell};
 use xpute_core::math::scalar::lerp;
 
 use xpute_core::math::scalar::round;
@@ -111,36 +112,23 @@ pub fn sample_ele(page_ele: &[i16], tx: i32, ty: i32) -> i16 {
     sample_ele_bicubic(page_ele, tx, ty)
 }
 
-/// One page's four ground channels, however the caller holds them: a page's
-/// own `Ground`, or lanes viewed out of the block it was read into. The
+/// One page's ground cells, however the caller holds them: a page's own
+/// `Ground`, or the lane viewed out of the block it was read into. The
 /// question below is asked of this and not of either shape, so there is one
 /// answer and not one per caller.
 #[derive(Clone, Copy)]
 pub struct GroundLanes<'a> {
-    pub land: &'a [u8],
-    pub water: &'a [u8],
-    pub structure: &'a [u8],
-    pub transport: &'a [u8],
+    pub cells: &'a [GroundCell],
 }
 
 impl<'a> GroundLanes<'a> {
     pub fn of(ground: &'a Ground) -> GroundLanes<'a> {
-        GroundLanes {
-            land: &ground.land,
-            water: &ground.water,
-            structure: &ground.structure,
-            transport: &ground.transport,
-        }
+        GroundLanes { cells: &ground.cells }
     }
 
-    /// `lanes[key]`.
-    pub fn get(&self, key: GroundChannelKey) -> &'a [u8] {
-        match key {
-            GroundChannelKey::LAND => self.land,
-            GroundChannelKey::WATER => self.water,
-            GroundChannelKey::STRUCTURE => self.structure,
-            GroundChannelKey::TRANSPORT => self.transport,
-        }
+    /// The catalog number channel `key` holds at cell `i`.
+    pub fn get(&self, key: GroundChannelKey, i: usize) -> u8 {
+        channel_of(self.cells[i], key)
     }
 
     /// How far below its sampled height cell `i` sits, in units: the
@@ -153,7 +141,7 @@ impl<'a> GroundLanes<'a> {
     /// since the raycast and the ground-snap read it with the toggle nowhere
     /// in sight.
     pub fn recess(&self, i: usize) -> i16 {
-        recess(shown_ground(|k| self.get(k)[i] as u32, 0))
+        recess(shown_ground(|k| self.get(k, i) as u32, 0))
     }
 }
 

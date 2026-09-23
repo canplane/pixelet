@@ -11,7 +11,7 @@
  * caches. Bumping one here is the whole change.
  */
 export const PUBLISHED_VERSION = {
-  terrain: "v4",
+  terrain: "v5",
   poi: "v5",
   geocode: "v2",
 } as const;

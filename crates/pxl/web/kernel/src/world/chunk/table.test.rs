@@ -118,3 +118,64 @@ fn mounts_are_ordered_as_the_builds_take_them_and_not_by_level() {
     let mid = |level: u32| chunk_near(chunk(level, 0, 0), ax, ay);
     assert!((mid(0) - mid(4)).abs() < 1e-9, "every level's first chunk is equally near");
 }
+
+/// Where the selection starts when a page of the top ring has not arrived.
+/// The adversarial cases of a zoom out, which is when a top ring is new.
+mod selection_roots {
+    use super::*;
+
+    fn page(level: u32, x: i64, y: i64) -> LevelPage {
+        LevelPage::new(level, ivec::gather(x, y, 0))
+    }
+
+    fn held(of: &[LevelPage]) -> BTreeSet<LevelPage> {
+        of.iter().copied().collect()
+    }
+
+    fn roots_of(pages: &BTreeSet<LevelPage>, top: LevelPage, base: u32) -> Vec<LevelPage> {
+        let mut out = Vec::new();
+        roots(pages, top, base, &mut out);
+        out.sort_unstable();
+        out
+    }
+
+    #[test]
+    fn a_resident_page_is_the_root_and_its_children_are_left_to_the_split() {
+        let top = page(4, 3, 5);
+        let mut pages = held(&[top]);
+        pages.extend(top.children());
+        // Both resident: the page itself roots, and whether the finer ones
+        // are drawn is the ladder's question (`splits`), not this one.
+        assert_eq!(roots_of(&pages, top, 0), [top]);
+    }
+
+    #[test]
+    fn a_missing_page_is_stood_in_for_by_every_child_that_is_resident() {
+        let top = page(4, 3, 5);
+        let kids = top.children();
+        // All four: the whole of its ground is drawn, a level finer.
+        let all = held(&kids);
+        assert_eq!(roots_of(&all, top, 0).len(), 4);
+        // Two of four, which is what a held ring actually leaves
+        // (terrain/level.test.rs): half the ground rather than none of it.
+        let some = held(&kids[..2]);
+        assert_eq!(roots_of(&some, top, 0), {
+            let mut v = kids[..2].to_vec();
+            v.sort_unstable();
+            v
+        });
+    }
+
+    #[test]
+    fn it_goes_one_level_and_no_further_so_a_seam_is_never_more_than_one_apart() {
+        let top = page(4, 0, 0);
+        let deep = top.children()[0].children()[0];
+        assert!(roots_of(&held(&[deep]), top, 0).is_empty(), "a grandchild is not stood in for");
+        assert!(roots_of(&held(&top.children()), top, top.level).is_empty(), "not past the base");
+    }
+
+    #[test]
+    fn nothing_resident_under_it_is_nothing_drawn_and_not_a_guess() {
+        assert!(roots_of(&held(&[]), page(4, 3, 5), 0).is_empty());
+    }
+}

@@ -17,7 +17,7 @@
 //! `u32` would wrap into a very long one.
 
 use pxl_spec::bake::constant::PAGE_CELL_SPAN;
-use pxl_spec::bake::format::{Ground, GroundChannelKey};
+use pxl_spec::bake::format::{ch_index, Ground, GroundChannelKey, GROUND_CH_KEYS};
 use pxl_spec::bake::model::feature::Feature;
 use pxl_spec::cell::cube::cube_types;
 use pxl_spec::space::v3::V3;
@@ -118,12 +118,19 @@ pub fn bake_ground(elements: &[Feature], has_coast_row: bool) -> Ground {
         }
     }
 
-    Ground {
-        land: land.into(),
-        water: water.into(),
-        structure: structure.into(),
-        transport: transport.into(),
+    // The wire's order, which is the order `from_planes` reads them in.
+    let mut painted = [Some(land), Some(water), Some(structure), Some(transport)];
+    let by_key = |k: GroundChannelKey| match k {
+        GroundChannelKey::LAND => 0,
+        GroundChannelKey::WATER => 1,
+        GroundChannelKey::STRUCTURE => 2,
+        GroundChannelKey::TRANSPORT => 3,
+    };
+    let mut planes = [const { std::borrow::Cow::Owned(Vec::new()) }; 4];
+    for k in GROUND_CH_KEYS {
+        planes[ch_index(k)] = painted[by_key(k)].take().expect("each channel once").into();
     }
+    Ground::from_planes(planes)
 }
 
 fn paint(feat: &Feature, value: u8, target: &mut [u8], mask: Mask) {

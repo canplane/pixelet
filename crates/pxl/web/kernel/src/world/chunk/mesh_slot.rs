@@ -4,18 +4,31 @@
 //! own coordinate, the way a terrain page's record is (layer/terrain/fixed.rs),
 //! in the arena of fixed buffers the renderer keeps (pxl-render gpu/arena.rs).
 //!
-//! A slot is the chunk's coordinate at its level reduced modulo the drawn
-//! ring's axis in chunks, within a group of slots for its level reduced
-//! modulo the window's width: two chunks of one level share a slot only when
-//! they lie a whole drawn ring apart, and two levels only when they lie a
-//! whole window apart. The leaves' own tier — the one drawn at their cells —
-//! has a group to itself rather than sharing the leaves' group, because a
-//! group is one storage binding and a binding holds 128 MiB: with both in
-//! one, what either could hold was what the other left. A chunk's mesh takes its slot and keeps it
-//! until another chunk of the same residue takes it, which the scheduler
-//! lets happen only once the one holding it is no longer drawn
-//! (world/chunk/table.rs). So a mesh outlives its page's record — it is
-//! drawn until something covers its ground — and there is nothing to free.
+//! A slot is room, not an address. Any tier may take any slot of its pool,
+//! and which one it takes is the scheduler's to decide
+//! (world/chunk/table.rs): a free one, else one whose holder is not drawing
+//! from it. A chunk's mesh keeps the slot it took until something takes it
+//! back, so a mesh outlives its page's record — it is drawn until something
+//! covers its ground — and there is nothing to free.
+//!
+//! It used to be the chunk's coordinate reduced modulo the drawn ring's axis
+//! in chunks, within a group for its level modulo the window's width. That
+//! made a level's chunks addressable *only* inside its own drawn ring, and
+//! so it decided what could be drawn at all: `select` could not descend past
+//! a page it did not hold, because the chunks under it lie outside the ring
+//! below and two of them would land in one slot. Of the nine pages a top
+//! ring has, four fold from what is held and five do not — and every one of
+//! those five has one or two of its four children resident (level.test.rs).
+//! Nearly half the ground that showed as nothing was data the client already
+//! had and could not address. Cesium's answer to the same thing is
+//! `skipLevelOfDetail`: a tile whose content is missing is refined through
+//! rather than rendered, and the loaded descendants are drawn.
+//!
+//! Two pools, because a group is one storage binding and a binding holds
+//! 128 MiB. The leaves' own tier — the one drawn at their cells — has a
+//! group to itself, since its box is six words where every other is four and
+//! a group is one format throughout; the coarse tiers share the
+//! WINDOW_LEVELS groups between them, any tier in any of them.
 //!
 //! A slot holds as many boxes as its tier has been measured to need, and a
 //! mesh past that is cut to it — ground that is simply missing, which the
@@ -106,18 +119,26 @@ pub struct MeshSlot {
     pub index: usize,
 }
 
-/// The slot of the tier of step `step`, in the chunk's own cells, of the chunk
-/// at `(cx, cy)` in chunks of level `level`.
-pub fn slot_of(level: u32, cx: i64, cy: i64, step: u32) -> MeshSlot {
-    let fine = level == 0 && step == 1;
-    let group = if fine { FINE_GROUP } else { level % WINDOW_LEVELS };
-    let residue = cy.rem_euclid(AXIS as i64) as u32 * AXIS + cx.rem_euclid(AXIS as i64) as u32;
-    let capacity = if fine { FINE_BOXES } else { COARSE_BOXES };
+/// Which slots a tier of step `step` on a chunk of `level` may take. The
+/// leaves' own tier has its own pool; every other tier shares one.
+pub fn pool(level: u32, step: u32) -> core::ops::Range<usize> {
+    if level == 0 && step == 1 {
+        (FINE_GROUP * SLOTS) as usize..((FINE_GROUP + 1) * SLOTS) as usize
+    } else {
+        0..(WINDOW_LEVELS * SLOTS) as usize
+    }
+}
+
+/// The slot an index names: which group's arena it is in, where in it, and
+/// how many boxes it holds.
+pub fn slot_at(index: usize) -> MeshSlot {
+    let (group, residue) = (index as u32 / SLOTS, index as u32 % SLOTS);
+    let capacity = if group == FINE_GROUP { FINE_BOXES } else { COARSE_BOXES };
     MeshSlot {
         group,
         first_box: residue * capacity,
         capacity,
-        index: (group * SLOTS + residue) as usize,
+        index,
     }
 }
 

@@ -94,10 +94,8 @@ executes and decides nothing. **Don't propose a WebGL path or pre-WebGPU
 support** — closed.
 
 **Pick the structurally correct shape**, matching real prior art where one
-exists (Minecraft's chunk model for grid content). Implementation size is not
-a cost; server spend and end-user device load are. A correct larger rewrite
-beats rounds of patching a wrong structure (2026-09-03, the terrain/decor
-pipeline desync).
+exists (Minecraft's chunk model for grid content, Cesium's `skipLevelOfDetail`
+for a tile tree whose nodes arrive out of order).
 
 **One validated UI pattern to keep:** `mode_bar` reuses an idle slot rather
 than adding an element — the send button borrows the palette pill's
@@ -253,6 +251,94 @@ or visual code gets none unless the choice rests on profiling or a derivation.
 as evidence; verify against the code, its behaviour or git history. When the
 author contradicts a comment — even one written this session — defer. Keep
 comments accurate; don't treat them as authority.
+
+## Architecture first
+
+This tree is being built, not maintained. Making it structurally simple and
+correct is the objective; keeping what is here is not one. The current
+structure, the current tests and the current line count have no preservation
+value of their own.
+
+- **An existing mechanism is not a constraint.** An abstraction, a boundary,
+  a queue, a cache, a slot layout, a format, an API or a test does not earn
+  deference by existing. When a problem turns up inside one, ask first why
+  the mechanism is there at all, and whether deleting or replacing it makes
+  the problem impossible — before optimizing it, extending it, guarding it
+  or repairing it. Compatibility with an internal detail is worth nothing;
+  only a contract something outside this tree depends on is.
+- **Remove a state rather than handle it.** In order: make the bad state
+  unrepresentable; remove the boundary that creates it; fold two
+  representations into one; move ownership or lifetime so the conflict
+  cannot arise; then scheduling and policy; and last, capacity, a retry, a
+  cleanup pass, a periodic sweep, a flag, a guard, a local patch. Some of
+  those last are sometimes needed, but none of them is an architecture. Do
+  not start at the end because the diff is smaller.
+- **Question a transformation before optimizing it.** Where data is copied,
+  packed, mirrored, synchronised or reconciled across a boundary, ask whether
+  both representations are needed. Where two things are kept in step, ask
+  whether one owner would do. Where something is cleaned up, ask whether a
+  lifetime makes the cleanup unnecessary. Where a capacity is short, ask
+  whether capacity is the problem or whether unrelated states are competing
+  for one bounded resource — a queue held what was wanted and what was on
+  the wire in one array, and the rows had credits added to them to pay for
+  it (2026-09-23).
+- **Correctness comes from invariants, not from cleanup.** State them before
+  a substantial fix, in the form they will have to hold in: obsolete work
+  cannot keep current demand from being represented; residency cannot exceed
+  its byte budget; a missing ancestor cannot make a resident descendant
+  unreachable; the camera decides the authoritative demand at once; the
+  ground has one runtime representation. Prefer a structure the property
+  follows from. Do not claim correctness from a periodic sweep, an eventual
+  drain, generous capacity, a retry, a timing assumption, "this cannot
+  normally happen", or a green test run.
+- **Tests carry semantics, not architecture.** They are evidence of intended
+  behaviour, not a requirement to design around: one that encodes an
+  implementation detail is changed or deleted with the detail. Write them
+  for what is externally meaningful and for the invariants. The order is
+  invariant, architecture, implementation, verification, then the tests
+  worth keeping — never a regression test first and a minimal patch until it
+  goes green.
+- **Profiling chooses between architectures; it does not justify work that
+  should not exist.** Work that is only there because of an unnecessary
+  representation or an unnecessary boundary is removed with the boundary,
+  whether or not it currently measures as cheap — and it is not optimized
+  before its deletion has been considered. Implementation size is not a
+  cost; server spend and end-user device load are (the valid cost axes;
+  turns spent and lines written are not among them).
+- **Diff size is not a goal.** A five-hundred-line rewrite that leaves a
+  smaller state space beats a twenty-line patch that does not. Do not keep
+  an API, a type, a test or a module to hold churn down, and when a change
+  makes old machinery unnecessary, delete the machinery and its shims in the
+  same breath. A correct larger rewrite beats rounds of patching a wrong
+  structure (2026-09-03, the terrain/decor pipeline desync).
+- **Split the assumptions before editing.** For any bug or slowness worth a
+  change, name the symptom, the mechanism producing it, the assumptions that
+  make that mechanism necessary, which of those are the product's and which
+  are only the current code's, and whether dropping one of them kills the
+  whole class. A mesh slot was a chunk's coordinate, so a level's chunks were
+  addressable only inside that level's own ring — which silently decided what
+  could be drawn at all, and none of it was a requirement (2026-09-23). Do
+  not edit before that split is made.
+- **Put a consequential choice in the conversation first.** Where two designs
+  imply different representations, ownership, memory or scheduling, stop and
+  give both: the invariant, the resulting state space, what machinery goes,
+  what machinery arrives, runtime cost, memory cost, migration cost. Never
+  quietly take the one that preserves the most code. In the conversation, as
+  everything here is — not in a plan document.
+- **Review against the new invariant before saying it is done.** What is left
+  that exists only for the old architecture? What shim can go now? What
+  duplicate representation remains? What still needs cleaning up that could
+  instead be impossible? What correctness still rests on capacity or timing?
+  Did I optimize around an assumption I should have removed? Did I keep
+  something only because a test leaned on it? Designing this subsystem today,
+  against the invariant it now has, would I write what I just wrote? If the
+  last answer is no, it is not finished.
+
+**When these conflict**, the order is: semantic correctness and stated
+invariants; a smaller state space; simpler representation and ownership; a
+whole failure class gone; runtime responsiveness; bounded resource
+behaviour; performance; contracts genuinely outside this tree; effort; diff
+size.
 
 ## Working agreements
 

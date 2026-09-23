@@ -36,7 +36,7 @@
 use xpute_core::math::scalar::round;
 
 use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN};
-use super::format::{Ground, Terrain};
+use super::format::{ch_index, Ground, Terrain, GROUND_CH_KEYS};
 
 /// Which child of the 2×2 a tie takes when folding into `level`.
 ///
@@ -110,19 +110,18 @@ pub fn fold_plane(children: [&[u8]; 4], level: u32, out: &mut [u8]) {
     }
 }
 
-/// Every ground channel folded the same way.
+/// Every ground channel folded the same way, each on its own: a channel votes
+/// among its children's values for that channel and no other's, which is what
+/// keeps a road from taking the land's vote under it. The cells are packed, so
+/// the planes come out, fold, and go back in.
 pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
-    let plane = |pick: fn(&Ground) -> &[u8]| {
+    let planes = children.map(|g| g.planes());
+    let folded = GROUND_CH_KEYS.map(|k| {
         let mut out = vec![0u8; (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize];
-        fold_plane(children.map(pick), level, &mut out);
-        out.into()
-    };
-    Ground {
-        land: plane(|g| &g.land),
-        water: plane(|g| &g.water),
-        structure: plane(|g| &g.structure),
-        transport: plane(|g| &g.transport),
-    }
+        fold_plane(core::array::from_fn(|c| &planes[c][ch_index(k)][..]), level, &mut out);
+        std::borrow::Cow::from(out)
+    });
+    Ground::from_planes(folded)
 }
 
 /// The elevation folded: `around[(qx + 1) + 4·(qy + 1)]` is the padded grid of

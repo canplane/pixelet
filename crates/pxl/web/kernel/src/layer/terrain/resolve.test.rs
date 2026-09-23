@@ -20,13 +20,9 @@ fn page(level: u32, x: i64, y: i64) -> LevelPage {
 /// A page made resident, its lanes empty: nothing here reads the terrain,
 /// only whether a page is in the table.
 fn resident(p: LevelPage) {
-    let lane = || std::borrow::Cow::Owned(Vec::new());
     let terrain = Terrain {
         ground: Ground {
-            land: lane(),
-            water: lane(),
-            structure: lane(),
-            transport: lane(),
+            cells: std::borrow::Cow::Owned(Vec::new()),
         },
         ele: std::borrow::Cow::Owned(Vec::new()),
     };

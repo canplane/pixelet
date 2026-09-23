@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use pxl_spec::bake::constant::PAGE_CELL_SPAN;
 
 use super::*;
+use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
+use pxl_spec::cell::cube::cube_types;
 
 const SPAN: usize = PAGE_CELL_SPAN as usize;
 const PADDED: usize = ELE_PADDED_SPAN as usize;
@@ -13,15 +15,16 @@ fn at(x: i64, y: i64) -> IVec {
     ivec::gather(x, y, 0)
 }
 
+/// Four land types the catalog gives out, one a quarter, and the ocean's:
+/// a number outside the catalog is UNKNOWN once a cell is packed
+/// (pxl-spec bake/pack.rs), and every quarter would read alike.
+const MARK: [u8; 4] = [cube_types::land::bare, cube_types::land::green_deep, cube_types::land::green_light, cube_types::land::sand];
+const OCEAN_MARK: u8 = cube_types::land::sea;
+
 fn uniform(land: u8, height: i16) -> Terrain {
-    let plane = |v: u8| vec![v; SPAN * SPAN].into();
+    let plane = |v: u8| std::borrow::Cow::from(vec![v; SPAN * SPAN]);
     Terrain {
-        ground: Ground {
-            land: plane(land),
-            water: plane(0),
-            structure: plane(0),
-            transport: plane(0),
-        },
+        ground: Ground::from_planes(GROUND_CH_KEYS.map(|k| plane(if k == GroundChannelKey::LAND { land } else { 0 }))),
         ele: vec![height; PADDED * PADDED].into(),
     }
 }
@@ -63,15 +66,17 @@ fn the_neighbourhood_wraps_x_across_the_seam() {
 
 #[test]
 fn each_child_lands_in_its_quarter_and_a_missing_one_is_the_ocean() {
-    let ocean = uniform(99, 0);
-    let pages: HashMap<IVec, Terrain> = [(at(0, 0), uniform(1, 10)), (at(1, 0), uniform(2, 10)), (at(0, 1), uniform(3, 10))].into_iter().collect();
+    let ocean = uniform(OCEAN_MARK, 0);
+    let pages: HashMap<IVec, Terrain> = [(at(0, 0), uniform(MARK[0], 10)), (at(1, 0), uniform(MARK[1], 10)), (at(0, 1), uniform(MARK[2], 10))]
+        .into_iter()
+        .collect();
     let parent = fold_parent(at(0, 0), 1, |p| pages.get(&p).map(|t| &t.ground), |p| pages.get(&p).map(|t| &*t.ele), &ocean).expect("a parent");
     let half = SPAN / 2;
-    let land = &parent.ground.land;
-    assert_eq!(land[0], 1);
-    assert_eq!(land[half], 2);
-    assert_eq!(land[half * SPAN], 3);
-    assert_eq!(land[half * SPAN + half], 99, "the missing north-east child");
+    let land = |i: usize| parent.ground.channel(i, GroundChannelKey::LAND);
+    assert_eq!(land(0), MARK[0]);
+    assert_eq!(land(half), MARK[1]);
+    assert_eq!(land(half * SPAN), MARK[2]);
+    assert_eq!(land(half * SPAN + half), OCEAN_MARK, "the missing north-east child");
 }
 
 #[test]
@@ -79,8 +84,8 @@ fn the_parents_elevation_reads_its_neighbours_not_only_its_children() {
     // Children at 10, every other page absent and so the ocean's 0: the
     // parent's middle is 10 and its outermost skirt, which lies over the
     // neighbours alone, is 0.
-    let ocean = uniform(99, 0);
-    let pages: HashMap<IVec, Terrain> = [at(0, 0), at(1, 0), at(0, 1), at(1, 1)].into_iter().map(|p| (p, uniform(1, 10))).collect();
+    let ocean = uniform(OCEAN_MARK, 0);
+    let pages: HashMap<IVec, Terrain> = [at(0, 0), at(1, 0), at(0, 1), at(1, 1)].into_iter().map(|p| (p, uniform(MARK[0], 10))).collect();
     let parent = fold_parent(at(0, 0), 1, |p| pages.get(&p).map(|t| &t.ground), |p| pages.get(&p).map(|t| &*t.ele), &ocean).expect("a parent");
     assert_eq!(parent.ele[(PADDED / 2) * PADDED + PADDED / 2], 10);
     assert_eq!(parent.ele[0], 0);
@@ -88,8 +93,8 @@ fn the_parents_elevation_reads_its_neighbours_not_only_its_children() {
 
 #[test]
 fn a_parent_with_no_child_does_not_exist_whatever_its_neighbours_hold() {
-    let ocean = uniform(99, 0);
+    let ocean = uniform(OCEAN_MARK, 0);
     // Land beside the parent's block, none in it.
-    let pages: HashMap<IVec, Terrain> = [(at(2, 0), uniform(1, 10)), (at(-1, 1), uniform(1, 10))].into_iter().collect();
+    let pages: HashMap<IVec, Terrain> = [(at(2, 0), uniform(MARK[0], 10)), (at(-1, 1), uniform(MARK[0], 10))].into_iter().collect();
     assert!(fold_parent(at(0, 0), 1, |p| pages.get(&p).map(|t| &t.ground), |p| pages.get(&p).map(|t| &*t.ele), &ocean).is_none());
 }

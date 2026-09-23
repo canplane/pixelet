@@ -15,6 +15,7 @@
 
 use pxl_spec::bake::constant::PAGE_CELL_SPAN;
 use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
+use pxl_spec::bake::pack::{channel_of, GroundCell};
 use pxl_spec::cell::cube_types;
 
 /// What a channel's type must be for a kind to stand on the cell: anything,
@@ -138,12 +139,12 @@ const ALIGN_NEIGHBOR_RADIUS: i64 = 3;
 /// `flip` adds a random +PI on top of that axis — still lined up with the
 /// road/rail either way, but facing one direction or the opposite one, same as
 /// real two-way traffic never all pointing the same way.
-pub fn transport_aligned_rotation(transport: &[u8], cell_x: u32, cell_y: u32, flip: bool) -> f64 {
+pub fn transport_aligned_rotation(cells: &[GroundCell], cell_x: u32, cell_y: u32, flip: bool) -> f64 {
     let span = PAGE_CELL_SPAN as i64;
     let (x, y) = (cell_x as i64, cell_y as i64);
     let idx = y * span + x;
     let void = cube_types::common::void;
-    let at = |i: i64| transport[i as usize] != void;
+    let at = |i: i64| channel_of(cells[i as usize], GroundChannelKey::TRANSPORT) != void;
     let (mut horizontal_votes, mut vertical_votes) = (0, 0);
     for d in 1..=ALIGN_NEIGHBOR_RADIUS {
         if x - d >= 0 && at(idx - d) {
