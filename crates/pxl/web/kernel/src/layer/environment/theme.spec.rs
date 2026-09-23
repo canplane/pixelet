@@ -4,8 +4,9 @@
 //
 // The world's time-of-day themes, by WorldThemeKey's value. The sun's light
 // and the sky, by day and by night, are the atmosphere's
-// (crates/pxl/web/render/src/look/atmosphere.rs), so a theme is the fill the
-// terrain is lit by and no more.
+// (crates/pxl/web/render/src/look/atmosphere.rs), and so is the light a face
+// takes from the land under it (atmos_view.wgsl's ground_bounce), so a theme
+// is the ambient the fill still carries and whether it is night.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To
@@ -42,10 +43,6 @@ pub mod themes {
                 pub const color: u32 = 0xfff2e3;
                 pub const intensity: f64 = 0.62;
             }
-            pub mod hemisphere {
-                pub const ground: u32 = 0xd8b894;
-                pub const intensity: f64 = 0.78;
-            }
         }
     }
     pub mod day {
@@ -53,10 +50,6 @@ pub mod themes {
             pub mod ambient {
                 pub const color: u32 = 0xf9fcff;
                 pub const intensity: f64 = 0.68;
-            }
-            pub mod hemisphere {
-                pub const ground: u32 = 0xc2cbd3;
-                pub const intensity: f64 = 0.82;
             }
         }
     }
@@ -66,10 +59,6 @@ pub mod themes {
                 pub const color: u32 = 0xffe4cd;
                 pub const intensity: f64 = 0.58;
             }
-            pub mod hemisphere {
-                pub const ground: u32 = 0x6a3920;
-                pub const intensity: f64 = 0.82;
-            }
         }
     }
     pub mod night {
@@ -77,10 +66,6 @@ pub mod themes {
             pub mod ambient {
                 pub const color: u32 = 0x24304a;
                 pub const intensity: f64 = 0.4;
-            }
-            pub mod hemisphere {
-                pub const ground: u32 = 0x0b1322;
-                pub const intensity: f64 = 0.68;
             }
         }
     }

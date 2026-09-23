@@ -46,6 +46,9 @@ fn the_face_bits_are_the_meshers() {
             ref other => panic!("{name} is a literal, not {other:?}"),
         }
     };
+    for (name, bit) in [("CAP_PZ", m::CAP_PZ), ("CAP_NZ", m::CAP_NZ), ("UNDER_AS_TOP", m::UNDER_AS_TOP)] {
+        assert_eq!(value(name), bit, "{name}");
+    }
     for (name, base, group) in [
         ("FACE_BASE", m::FACE_PX, [m::FACE_PX, m::FACE_NX, m::FACE_PY, m::FACE_NY]),
         ("RISES_BASE", m::RISES_PX, [m::RISES_PX, m::RISES_NX, m::RISES_PY, m::RISES_NY]),
@@ -154,6 +157,7 @@ fn the_skys_layouts_match_their_structs() {
             ("moon_dir", a::MOON_DIR),
             ("moon_light", a::MOON_LIGHT),
             ("land", a::LAND),
+            ("land_altitude_km", a::LAND_ALTITUDE),
             ("sun_seen", a::SUN_SEEN),
             ("up", a::UP),
             ("cloud_base", a::CLOUD_BASE),

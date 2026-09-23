@@ -98,19 +98,22 @@ pub mod FRAME {
     pub const ring_spill_peak: u32 = 93;
     pub const work_scans: u32 = 94;
     pub const work_bakes: u32 = 95;
-    pub const q_terrain: u32 = 96;
-    pub const q_poi: u32 = 97;
-    pub const stale_chunks: u32 = 98;
-    pub const stale_drawn: u32 = 99;
-    pub const stale_levels: u32 = 100;
-    pub const stale_hidden: u32 = 101;
-    pub const stale_uncovered: u32 = 102;
-    pub const stale_unready: u32 = 103;
-    pub const stale_on_waiter: u32 = 104;
-    pub const slot_waits: u32 = 105;
-    pub const slot_wait_levels: u32 = 106;
-    pub const slot_holder_levels: u32 = 107;
-    pub const WORDS: u32 = 108;
+    pub const work_fine_boxes: u32 = 96;
+    pub const work_coarse_boxes: u32 = 97;
+    pub const q_terrain: u32 = 98;
+    pub const q_poi: u32 = 99;
+    pub const stale_chunks: u32 = 100;
+    pub const stale_drawn: u32 = 101;
+    pub const stale_levels: u32 = 102;
+    pub const stale_hidden: u32 = 103;
+    pub const stale_uncovered: u32 = 104;
+    pub const stale_unready: u32 = 105;
+    pub const stale_on_waiter: u32 = 106;
+    pub const slot_waits: u32 = 107;
+    pub const slot_wait_levels: u32 = 108;
+    pub const slot_holder_levels: u32 = 109;
+    pub const slot_cut: u32 = 110;
+    pub const WORDS: u32 = 111;
     pub const KEYS: &[&str] = &[
         "t",
         "dt_ms",
@@ -159,6 +162,8 @@ pub mod FRAME {
         "ring_spill_peak",
         "work_scans",
         "work_bakes",
+        "work_fine_boxes",
+        "work_coarse_boxes",
         "q_terrain",
         "q_poi",
         "stale_chunks",
@@ -171,6 +176,7 @@ pub mod FRAME {
         "slot_waits",
         "slot_wait_levels",
         "slot_holder_levels",
+        "slot_cut",
         "WORDS",
     ];
 }
@@ -195,10 +201,10 @@ pub mod FRAME_GROUPS {
     pub const pages: &[&str] = &["pages", "level_pages", "poi_count"];
     pub const heap: &[&str] = &["heap_used_mb", "heap_live_mb", "heap_range_mb", "heap_refusals", "heap_largest_free_mb"];
     pub const ring: &[&str] = &["ring_cq_peak", "ring_spill_peak"];
-    pub const work: &[&str] = &["work_scans", "work_bakes"];
+    pub const work: &[&str] = &["work_scans", "work_bakes", "work_fine_boxes", "work_coarse_boxes"];
     pub const q: &[&str] = &["q_terrain", "q_poi"];
     pub const stale: &[&str] = &["stale_chunks", "stale_drawn", "stale_levels", "stale_hidden", "stale_uncovered", "stale_unready", "stale_on_waiter"];
-    pub const slot: &[&str] = &["slot_waits", "slot_wait_levels", "slot_holder_levels"];
+    pub const slot: &[&str] = &["slot_waits", "slot_wait_levels", "slot_holder_levels", "slot_cut"];
     pub const KEYS: &[&str] = &["pace", "gpu", "device", "lod", "mounts", "pages", "heap", "ring", "work", "q", "stale", "slot"];
 }
 
@@ -239,9 +245,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 108;
-    pub const prev: u32 = 109;
-    pub const WORDS: u32 = 217;
+    pub const has_prev: u32 = 111;
+    pub const prev: u32 = 112;
+    pub const WORDS: u32 = 223;
     pub const KEYS: &[&str] = &["sample", "has_prev", "prev", "WORDS"];
 }
 
@@ -321,7 +327,7 @@ pub mod SUMMARY {
         pub const census: u32 = 71;
         pub const level_tris: u32 = 91;
         pub const last: u32 = 102;
-        pub const WORDS: u32 = 210;
+        pub const WORDS: u32 = 213;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -356,13 +362,13 @@ pub mod SUMMARY {
         ];
     }
     pub mod tasks {
-        pub const AT: u32 = 215;
+        pub const AT: u32 = 218;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 75;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 290;
+        pub const AT: u32 = 293;
         pub const faces_kept: u32 = 0;
         pub const faces_possible: u32 = 1;
         pub const runs_culled: u32 = 2;
@@ -410,7 +416,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod atlas {
-        pub const AT: u32 = 310;
+        pub const AT: u32 = 313;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -419,7 +425,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "WORDS"];
     }
     pub mod retain {
-        pub const AT: u32 = 314;
+        pub const AT: u32 = 317;
         pub const nodes: u32 = 0;
         pub const run_sets: u32 = 1;
         pub const run_set_mb: u32 = 2;
@@ -445,7 +451,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod fetch {
-        pub const AT: u32 = 323;
+        pub const AT: u32 = 326;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -453,7 +459,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod poi {
-        pub const AT: u32 = 326;
+        pub const AT: u32 = 329;
         pub const badge_count: u32 = 0;
         pub const dropped: u32 = 1;
         pub const place_ms: u32 = 2;
@@ -507,7 +513,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod peak {
-        pub const AT: u32 = 349;
+        pub const AT: u32 = 352;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -526,7 +532,9 @@ pub mod SUMMARY {
         pub const offscreen_pending: u32 = 15;
         pub const oldest_release_ms: u32 = 16;
         pub const oldest_visible_ms: u32 = 17;
-        pub const WORDS: u32 = 18;
+        pub const fine_boxes: u32 = 18;
+        pub const coarse_boxes: u32 = 19;
+        pub const WORDS: u32 = 20;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -547,17 +555,19 @@ pub mod SUMMARY {
             "offscreen_pending",
             "oldest_release_ms",
             "oldest_visible_ms",
+            "fine_boxes",
+            "coarse_boxes",
             "WORDS",
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 367;
+        pub const AT: u32 = 372;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
-    pub const WORDS: u32 = 528;
+    pub const WORDS: u32 = 533;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "retain", "fetch", "poi", "peak", "steps", "WORDS"];
 }
 

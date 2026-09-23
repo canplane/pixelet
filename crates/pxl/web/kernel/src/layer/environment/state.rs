@@ -19,7 +19,7 @@ use crate::host::{now, wall_now};
 use crate::kernel::kernel;
 use crate::layer::environment::celestial_position::{equatorial_to_local, moon_position, sun_position};
 use crate::layer::environment::config::light_cfg;
-use crate::layer::environment::fog::{band_at, camera_height};
+use crate::layer::environment::fog::{band_at, camera_height, centre_ground};
 use crate::layer::environment::theme::{themes, WorldThemeKey};
 use crate::layer::environment::theme_clock::theme_key;
 use crate::layer::terrain::level::{drawn_from_eye, window};
@@ -48,19 +48,9 @@ pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: WorldThemeKey) {
         }
     };
     rgb(lane, t.ambient.color);
-    // The rest, in order: the hemisphere's ground and intensity, and the
-    // night flag.
-    let mut at = k;
-    let mut put = |lane: &mut [f32; THEME_FLOATS], v: f64| {
-        lane[at] = v as f32;
-        at += 1;
-    };
-    put(lane, t.ambient.intensity);
-    for v in linear_rgb(t.hemisphere.ground) {
-        put(lane, v);
-    }
-    put(lane, t.hemisphere.intensity);
-    put(lane, if key == WorldThemeKey::night { 1.0 } else { 0.0 });
+    // The rest, in order: the ambient's intensity and the night flag.
+    lane[k] = t.ambient.intensity as f32;
+    lane[k + 1] = if key == WorldThemeKey::night { 1.0 } else { 0.0 };
 }
 
 struct Environment {
@@ -304,6 +294,7 @@ impl EnvironmentDraw {
             fog_far: band.1,
             floor: light_cfg::FLOOR,
             altitude_km: (frame.centre_z + over) * km_per_u,
+            ground_km: centre_ground() * km_per_u,
             km_per_u,
             latitude: self.lat.to_radians(),
             star_frame: equatorial_to_local(self.days, self.lat, self.lon),

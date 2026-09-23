@@ -12,15 +12,8 @@ pub struct Light {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Hemisphere {
-    pub ground: u32,
-    pub intensity: f64,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WorldTheme {
     pub ambient: Light,
-    pub hemisphere: Hemisphere,
 }
 
 macro_rules! theme {
@@ -29,10 +22,6 @@ macro_rules! theme {
             ambient: Light {
                 color: T::$k::lighting::ambient::color,
                 intensity: T::$k::lighting::ambient::intensity,
-            },
-            hemisphere: Hemisphere {
-                ground: T::$k::lighting::hemisphere::ground,
-                intensity: T::$k::lighting::hemisphere::intensity,
             },
         }
     };

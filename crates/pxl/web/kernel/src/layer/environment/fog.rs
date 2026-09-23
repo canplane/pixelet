@@ -69,6 +69,14 @@ pub fn reach_at(height: f64) -> f64 {
     horizon_at(height).min(haze_reach_at(height)).max(NEAREST_REACH)
 }
 
+/// How high the ground under the map centre stands over the datum the
+/// projection measures from: where the sky draws its own ground, so the
+/// terrain, which is drawn at its elevation, does not stand over it
+/// (pxl-render atmos_medium.wgsl's land_altitude_km).
+pub fn centre_ground() -> f64 {
+    map_store().map_center.and_then(|c| get_ele(&c)).unwrap_or(0.0)
+}
+
 /// How high the map centre stands over the ground under it: on a building,
 /// that much further below the camera.
 pub fn pivot_height() -> f64 {

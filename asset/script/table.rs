@@ -25,6 +25,8 @@ pub struct Sheet {
     pub columns: u32,
     /// The asset path of each tile, in the order they are laid out.
     pub tiles: Vec<String>,
+    /// Each tile's own mean colour (sheet.rs).
+    pub means: Vec<[u8; 3]>,
 }
 
 /// A double as a Rust literal. An integral double has no point in its shortest
@@ -199,6 +201,12 @@ pub struct Sheet {
     pub cell: u32,
     pub columns: u32,
     pub tiles: &'static [(PlaceableCube, CubeFace, u32)],
+    /// What each tile reads as from far enough away that the tile itself is
+    /// gone: its own mean colour, taken in linear light. A mesh that
+    /// summarises a patch of ground takes its colour from here rather than
+    /// from the catalog's swatch, which is the colour a type is filed under
+    /// and not the colour its material shows.
+    pub means: &'static [[u8; 3]],
 }
 
 pub const SHEET: Sheet = Sheet {
@@ -212,6 +220,10 @@ pub const SHEET: Sheet = Sheet {
         for (cube, face) in tile_cubes(t, channels) {
             let _ = writeln!(out, "        ({cube}, CubeFace::{face}, {n}),");
         }
+    }
+    out.push_str("    ],\n    means: &[\n");
+    for m in &sheet.means {
+        let _ = writeln!(out, "        [{}, {}, {}],", m[0], m[1], m[2]);
     }
     out.push_str("    ],\n};\n\n#[cfg(test)]\n#[path = \"ingested.test.rs\"]\nmod test;\n");
     out

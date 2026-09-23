@@ -37,6 +37,7 @@ use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, re
 use crate::gpu::clouds::CloudField;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::look::atmosphere as model;
+use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SUN};
 
 /// Floats the atmosphere uniform (atmos_medium.wgsl's Atmosphere) holds.
 /// Two past the last field: the struct is laid out in 16-byte rows and the
@@ -68,6 +69,7 @@ pub(crate) const ADAPTATION: usize = 27;
 pub(crate) const MOON_DIR: usize = 28;
 pub(crate) const MOON_LIGHT: usize = 31;
 pub(crate) const LAND: usize = 32;
+pub(crate) const LAND_ALTITUDE: usize = 35;
 pub(crate) const SUN_SEEN: usize = 36;
 pub(crate) const UP: usize = 40;
 /// The cloud field (gpu/clouds.rs's `field`), in its order: the lattice
@@ -232,16 +234,21 @@ impl Atmosphere {
         e
     }
 
-    /// The frame's air: the sun's direction in the root frame, unturned; the
-    /// moon's and how bright its sky is shown; the camera's altitude in
-    /// kilometres, and a unit's length in them; and straight up where the eye
-    /// stands, which every height of a light or a ray is measured from.
-    pub fn lay_out(&mut self, g: &GpuApi, sun: &[f32], moon: &[f32], altitude_km: f32, km_per_u: f32, up: &V3) {
-        self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(&sun[..3]);
+    /// The frame's air, from the environment's lane `env`: the sun's
+    /// direction in the root frame, unturned; the moon's and how bright its
+    /// sky is shown; the camera's altitude in kilometres, a unit's length in
+    /// them and the ground's own height, which the sky draws its ground at;
+    /// and straight up where the eye stands, which every height of a light or
+    /// a ray is measured from.
+    pub fn lay_out(&mut self, g: &GpuApi, env: &[f32], up: &V3) {
+        let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4]);
+        let altitude_km = env[ENV_AIR];
+        self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(sun);
         self.words[MOON_DIR..MOON_DIR + 3].copy_from_slice(&moon[..3]);
         self.words[MOON_LIGHT] = moon[3];
         self.words[CAMERA_ALTITUDE] = altitude_km;
-        self.words[KM_PER_U] = km_per_u;
+        self.words[KM_PER_U] = env[ENV_AIR + 1];
+        self.words[LAND_ALTITUDE] = env[ENV_AIR + 3];
         for (w, v) in self.words[UP..UP + 3].iter_mut().zip(up) {
             *w = *v as f32;
         }

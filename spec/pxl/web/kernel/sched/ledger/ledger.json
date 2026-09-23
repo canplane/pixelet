@@ -121,19 +121,22 @@
     "ring_spill_peak": 93,
     "work_scans": 94,
     "work_bakes": 95,
-    "q_terrain": 96,
-    "q_poi": 97,
-    "stale_chunks": 98,
-    "stale_drawn": 99,
-    "stale_levels": 100,
-    "stale_hidden": 101,
-    "stale_uncovered": 102,
-    "stale_unready": 103,
-    "stale_on_waiter": 104,
-    "slot_waits": 105,
-    "slot_wait_levels": 106,
-    "slot_holder_levels": 107,
-    "WORDS": 108
+    "work_fine_boxes": 96,
+    "work_coarse_boxes": 97,
+    "q_terrain": 98,
+    "q_poi": 99,
+    "stale_chunks": 100,
+    "stale_drawn": 101,
+    "stale_levels": 102,
+    "stale_hidden": 103,
+    "stale_uncovered": 104,
+    "stale_unready": 105,
+    "stale_on_waiter": 106,
+    "slot_waits": 107,
+    "slot_wait_levels": 108,
+    "slot_holder_levels": 109,
+    "slot_cut": 110,
+    "WORDS": 111
   },
   "FRAME_GROUPS": {
     "$doc": [
@@ -202,7 +205,9 @@
     ],
     "work": [
       "work_scans",
-      "work_bakes"
+      "work_bakes",
+      "work_fine_boxes",
+      "work_coarse_boxes"
     ],
     "q": [
       "q_terrain",
@@ -220,7 +225,8 @@
     "slot": [
       "slot_waits",
       "slot_wait_levels",
-      "slot_holder_levels"
+      "slot_holder_levels",
+      "slot_cut"
     ]
   },
   "TASK": {
@@ -249,9 +255,9 @@
       "One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0."
     ],
     "sample": 0,
-    "has_prev": 108,
-    "prev": 109,
-    "WORDS": 217
+    "has_prev": 111,
+    "prev": 112,
+    "WORDS": 223
   },
   "SPREAD": {
     "$type": "u32",
@@ -332,15 +338,15 @@
       "census": 71,
       "level_tris": 91,
       "last": 102,
-      "WORDS": 210
+      "WORDS": 213
     },
     "tasks": {
-      "AT": 215,
+      "AT": 218,
       "slots": 0,
       "WORDS": 75
     },
     "counters": {
-      "AT": 290,
+      "AT": 293,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -364,7 +370,7 @@
       "WORDS": 20
     },
     "atlas": {
-      "AT": 310,
+      "AT": 313,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -372,7 +378,7 @@
       "WORDS": 4
     },
     "retain": {
-      "AT": 314,
+      "AT": 317,
       "nodes": 0,
       "run_sets": 1,
       "run_set_mb": 2,
@@ -385,14 +391,14 @@
       "WORDS": 9
     },
     "fetch": {
-      "AT": 323,
+      "AT": 326,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "poi": {
-      "AT": 326,
+      "AT": 329,
       "badge_count": 0,
       "dropped": 1,
       "place_ms": 2,
@@ -419,7 +425,7 @@
       "WORDS": 23
     },
     "peak": {
-      "AT": 349,
+      "AT": 352,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -438,15 +444,17 @@
       "offscreen_pending": 15,
       "oldest_release_ms": 16,
       "oldest_visible_ms": 17,
-      "WORDS": 18
+      "fine_boxes": 18,
+      "coarse_boxes": 19,
+      "WORDS": 20
     },
     "steps": {
-      "AT": 367,
+      "AT": 372,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
-    "WORDS": 528
+    "WORDS": 533
   },
   "READ": {
     "$type": "u32",

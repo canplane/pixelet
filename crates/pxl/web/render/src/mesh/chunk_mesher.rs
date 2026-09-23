@@ -17,6 +17,7 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::round;
 
+use crate::mesh::paint::palette::shader_meta::layer_mean;
 use crate::mesh::volume::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};
 use crate::mesh::voxel_scan::{OwnedRunSet, RunSet, COL_SPAN};
 
@@ -55,6 +56,11 @@ pub const CREASE_NY: u32 = 1 << 21;
 const ALL_CREASES: u32 = CREASE_PX | CREASE_NX | CREASE_PY | CREASE_NY;
 pub const CAP_PZ: u32 = 1 << 22;
 pub const CAP_NZ: u32 = 1 << 23;
+/// The underside is the same surface as the top, and is lit as one: a coarse
+/// cell's box is shrunk about its centre and hangs over the rest of the
+/// ground it stands for, so an underside shaded as an overhang reads as a
+/// hole in the ground rather than as ground seen from below.
+pub const UNDER_AS_TOP: u32 = 1 << 28;
 /// A diagonal column filled at the cell above: the corner of a top face,
 /// where the lateral RISES bits are its four edges. The mask is a u32 lane
 /// of the vertex, so bits run to 31.
@@ -139,20 +145,53 @@ struct MeshTarget {
     words: usize,
 }
 
+/// What one coarse cell holds between two heights, as it is counted.
+///
+/// Two measures, both in the set's own cells — a column's footprint by a
+/// unit. `coverage` is how much of the bucket is not air, which sizes the
+/// box; `faces` is how many of those cells' six faces meet air, which
+/// colours it. A cell buried on every side weighs nothing, so flat ground
+/// takes the colour of its top and a wall the colour of its side.
 #[derive(Clone, Copy, Default)]
 struct ZBucketAccum {
     bz: i32,
     coverage: f64,
-    sr: f64,
-    sg: f64,
-    sb: f64,
-    surfaces: u32,
-    tag: u32,
-    tr: f64,
-    tg: f64,
-    tb: f64,
-    taps: u32,
-    tap_cnt: u32,
+    faces: f64,
+    /// The exposed faces' colour and the whole volume's, both summed in
+    /// linear light: a bucket with no face at all falls back to the volume.
+    fr: f64,
+    fg: f64,
+    fb: f64,
+    vr: f64,
+    vg: f64,
+    vb: f64,
+}
+
+impl ZBucketAccum {
+    /// `volume` cells of it are not air, `faces` of their faces meet it, and
+    /// they are `rgb` in linear light.
+    fn add(&mut self, volume: f64, faces: f64, rgb: [f64; 3]) {
+        self.coverage += volume;
+        self.faces += faces;
+        self.fr += rgb[0] * faces;
+        self.fg += rgb[1] * faces;
+        self.fb += rgb[2] * faces;
+        self.vr += rgb[0] * volume;
+        self.vg += rgb[1] * volume;
+        self.vb += rgb[2] * volume;
+    }
+
+    /// The colour the box shows on every face: the exposed surface's mean,
+    /// or the volume's where nothing of the bucket faces the air — which
+    /// happens once its neighbours have shrunk away from it.
+    fn colour(&self) -> [u8; 3] {
+        let (sum, weight) = if self.faces > 0.0 {
+            ([self.fr, self.fg, self.fb], self.faces)
+        } else {
+            ([self.vr, self.vg, self.vb], self.coverage.max(f64::MIN_POSITIVE))
+        };
+        srgb_of([sum[0] / weight, sum[1] / weight, sum[2] / weight])
+    }
 }
 
 struct FineBake {
@@ -509,7 +548,7 @@ impl BakeContext {
 
     fn step_coarse(&mut self, b: &mut CoarseBake, set: &RunSet) -> bool {
         let (lod_step, res, scale) = (b.lod_step, b.res, b.scale);
-        // A coarse cell of what is not ground: as tall as it is wide.
+        // A coarse cell is as tall as it is wide.
         let bucket = (lod_step * scale) as i32;
 
         if b.phase == 0 {
@@ -529,31 +568,22 @@ impl BakeContext {
                 for bx in 0..res {
                     let start = self.buckets.len() as u32;
                     let mut cnt = 0u32;
-                    let mut ground = GroundAccum::default();
                     for j in 0..lod_step {
                         let cy = by * lod_step + j + set.apron;
                         for k in 0..lod_step {
                             let cx = bx * lod_step + k + set.apron;
                             let col = cy * set.span + cx;
-                            let mut top: Option<usize> = None;
+                            // Ground and object alike: a coarse cell is what
+                            // is not air, whatever put it there
+                            // (issue/20260923-a-coarse-cell-is-isotropic.md).
                             let end = set.start[col as usize + 1];
                             for i in set.start[col as usize]..end {
-                                let i = i as usize;
-                                if is_ground(set, i) {
-                                    ground.floor = ground.floor.min(set.z0[i]);
-                                    top = Some(top.filter(|&t| set.z1[t] >= set.z1[i]).unwrap_or(i));
-                                } else {
-                                    cnt = self.accumulate_run(start, cnt, bucket, scale, set, i, col + 1);
-                                }
-                            }
-                            if let Some(t) = top {
-                                ground.add(set, t);
+                                cnt = self.accumulate_run(start, cnt, bucket, scale, set, i as usize, col);
                             }
                         }
                     }
                     self.coarse.start.push(self.coarse.z0.len() as u32);
-                    let ground = self.pack_ground(&ground, lod_step * lod_step);
-                    self.pack_coarse_cell(start, cnt, lod_step, bucket, ground);
+                    self.pack_coarse_cell(start, cnt, lod_step, bucket);
                     self.buckets.truncate(start as usize);
                 }
             }
@@ -586,87 +616,55 @@ impl BakeContext {
         self.buckets.len() as u32 - 1
     }
 
-    /// Adds what is not ground in one run to the coarse cell's buckets,
-    /// `bucket` units tall; a sub-cell run is its share of a cell `cell` units
-    /// on a side.
+    /// Adds one run of column `col` to the coarse cell's buckets, each
+    /// `bucket` units tall: how much of the bucket it fills, and how much of
+    /// its surface meets air, which is what the bucket's colour is weighed
+    /// by. A sub-cell run is its share of a cell `cell` units on a side.
     #[allow(clippy::too_many_arguments)]
-    fn accumulate_run(&mut self, start: u32, mut cnt: u32, bucket: i32, cell: u32, set: &RunSet, i: usize, tag: u32) -> u32 {
+    fn accumulate_run(&mut self, start: u32, mut cnt: u32, bucket: i32, cell: u32, set: &RunSet, i: usize, col: u32) -> u32 {
         let (run_z0, run_z1) = (set.z0[i], set.z1[i]);
-        let (run_r, run_g, run_b) = (set.r[i] as f64, set.g[i] as f64, set.b[i] as f64);
-        let run_layer = set.layer_taps[i] & 255;
+        // What the run reads as from here: its layer's own mean colour,
+        // which is what a patch of that material shows once the tile is too
+        // small to see. The catalog's swatch is what a type is filed under
+        // and is only the fallback, for a type the pack has no tile for.
+        let mean = layer_mean(set.layer_taps[i] & 255, [set.r[i], set.g[i], set.b[i]]);
+        let rgb = linear_of(mean[0], mean[1], mean[2]);
         if set.sub_sz[i] != SUB_CELL_NONE {
             let frac = unpack_sub_cell_size(set.sub_sz[i]);
-            let w = frac * frac * frac * cell as f64;
+            // A thing inside one cell: its volume is the fraction cubed, and
+            // every one of its six faces the fraction squared. It stands in
+            // the cell's air, so none of them is hidden.
             let idx = self.find_or_create_bucket(start, cnt, run_z0.div_euclid(bucket));
             let acc = &mut self.buckets[idx as usize];
-            acc.coverage += w;
-            collect_surface(acc, tag, run_r, run_g, run_b);
-            collect_layer_tap(acc, run_layer);
+            acc.add(frac * frac * frac * cell as f64, FULL_FACE_CNT as f64 * frac * frac, rgb);
             return cnt.max(idx - start + 1);
         }
         for bz in run_z0.div_euclid(bucket)..=run_z1.div_euclid(bucket) {
             let bucket_lo = bz * bucket;
             let bucket_hi = bucket_lo + bucket - 1;
-            let overlap = run_z1.min(bucket_hi) - run_z0.max(bucket_lo) + 1;
+            let (lo, hi) = (run_z0.max(bucket_lo), run_z1.min(bucket_hi));
             let idx = self.find_or_create_bucket(start, cnt, bz);
             cnt = cnt.max(idx - start + 1);
             let acc = &mut self.buckets[idx as usize];
-            acc.coverage += overlap as f64;
-            collect_surface(acc, tag, run_r, run_g, run_b);
-            collect_layer_tap(acc, run_layer);
+            acc.add((hi - lo + 1) as f64, exposed_faces(set, col, i, lo, hi), rgb);
         }
         cnt
-    }
-
-    /// The ground of one coarse cell as one run: from the lowest floor of the
-    /// columns under it to the mean of their tops, in units, its top surface
-    /// the mean of theirs. A column with no ground counts at that floor, so the
-    /// mean is over every column the cell covers and the ground's volume is
-    /// kept. The run it wrote, if any, and the top of what it fills.
-    fn pack_ground(&mut self, g: &GroundAccum, columns: u32) -> (Option<usize>, i32) {
-        if g.cols == 0 {
-            return (None, i32::MIN);
-        }
-        let sum = g.top_sum + (columns - g.cols) as i64 * g.floor as i64;
-        let top = round(sum as f64 / columns as f64) as i32;
-        if top <= g.floor {
-            return (None, g.floor - 1);
-        }
-        let n = g.cols as f64;
-        let co = &mut self.coarse;
-        co.z0.push(g.floor);
-        co.z1.push(top - 1);
-        co.r.push(to_u8(g.sr / n) as u8);
-        co.g.push(to_u8(g.sg / n) as u8);
-        co.b.push(to_u8(g.sb / n) as u8);
-        co.layer_taps.push(packed_taps(g.taps, g.tap_cnt));
-        co.material_class.push(MATERIAL_LAND);
-        co.sub_sz.push(SUB_CELL_NONE);
-        co.sub_sx.push(0);
-        co.sub_sy.push(0);
-        co.sub_ox.push(0);
-        co.sub_oy.push(0);
-        co.sub_oz.push(0);
-        (Some(co.z0.len() - 1), top - 1)
     }
 
     /// Packs one coarse cell's buckets bottom to top. A cell's buckets have
     /// distinct heights (find_or_create_bucket), so sorting them by height
     /// visits them lowest first.
-    fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, bucket: i32, (mut open, mut last_top): (Option<usize>, i32)) {
+    fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, bucket: i32) {
         let step = bucket;
         let cell = start as usize..(start + cnt) as usize;
         self.buckets[cell.clone()].sort_unstable_by_key(|acc| acc.bz);
         // A bucket's volume in coverage's measure: units tall by columns.
         let volume = step as f64 * (lod_step * lod_step) as f64;
+        let (mut open, mut last_top) = (None, i32::MIN);
         for k in cell {
             let acc = self.buckets[k];
             let bucket_hi = acc.bz * step + step - 1;
-            // What the ground already fills is the ground's.
-            if bucket_hi <= last_top {
-                continue;
-            }
-            let bucket_lo = (acc.bz * step).max(last_top.saturating_add(1));
+            let bucket_lo = acc.bz * step;
             let fill = (acc.coverage / volume).min(1.0);
             self.counters.coarse_total += 1;
             if fill < LOW_FILL_THRESHOLD {
@@ -676,9 +674,46 @@ impl BakeContext {
             // A full cell is a plain run; a sparse one is inset, scaled by
             // the cube root of its fill about its centre on every axis.
             let inset = (linear < 1.0).then(|| pack_inset(linear));
-            let n = acc.surfaces.max(1) as f64;
-            let rgb = [to_u8(acc.sr / n) as u8, to_u8(acc.sg / n) as u8, to_u8(acc.sb / n) as u8];
-            let taps = bucket_taps(&acc);
+            let rgb = acc.colour();
+            // No layer of its own: a box that merges cells is its colour
+            // and nothing else. The texture pack is for a leaf's own cells,
+            // where a top and a side mean something; a box summarising a
+            // patch of ground has no cut through earth to show (chunk.wgsl).
+            let taps = packed_taps(0, 0);
+            // What holds the box up. A box shrunk about its centre stands
+            // clear of its cell on every side, and a view from above reads
+            // those gaps as holes rather than as one surface
+            // (issue/20260923-a-coarse-cell-is-isotropic.md), so every box
+            // lays a floor of its own colour under itself: the whole
+            // footprint, from under the box down to the cell's floor. It is
+            // one run, so neighbouring cells of a colour merge into one box
+            // the way a floor always did.
+            //
+            // The cell's lowest box hangs its floor a cell lower still — the
+            // skirt every terrain LOD hangs off its tiles: two cells whose
+            // ground lands in different buckets leave a step between their
+            // floors, and a view along the ground would see daylight through
+            // it. A box over another needs none, since the one under it
+            // already fills that cell.
+            let gap = inset.map_or(0, |(o, _)| round(unpack_sub_cell_fraction(o) * step as f64) as i32);
+            let skirt = if open.is_none() { step } else { 0 };
+            if gap + skirt > 0 {
+                let co = &mut self.coarse;
+                co.z0.push(bucket_lo - skirt);
+                co.z1.push(bucket_lo + gap - 1);
+                co.r.push(rgb[0]);
+                co.g.push(rgb[1]);
+                co.b.push(rgb[2]);
+                co.layer_taps.push(taps);
+                co.material_class.push(MATERIAL_LAND);
+                co.sub_sz.push(SUB_CELL_NONE);
+                for lane in [&mut co.sub_sx, &mut co.sub_sy, &mut co.sub_ox, &mut co.sub_oy, &mut co.sub_oz] {
+                    lane.push(0);
+                }
+                // The run above is not this box, so nothing merges across it.
+                open = None;
+                last_top = bucket_lo + gap - 1;
+            }
             let co = &mut self.coarse;
             if let Some(o) = open.filter(|_| inset.is_none() && bucket_lo == last_top + 1) {
                 if [co.r[o], co.g[o], co.b[o]] == rgb && co.layer_taps[o] == taps && co.sub_sz[o] == SUB_CELL_NONE {
@@ -806,8 +841,11 @@ fn neighbour_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
     rel
 }
 
+/// Whether a run's underside is drawn: a placed cube's is, since it may
+/// stand clear of the ground, and so is an inset box's — a coarse cell's
+/// box is shrunk about its centre and rests on nothing.
 fn run_include_bottom(set: &RunSet, i: usize) -> bool {
-    set.material_class[i] == MATERIAL_OBJECT
+    set.material_class[i] == MATERIAL_OBJECT || set.sub_sz[i] != SUB_CELL_NONE
 }
 
 fn wants_diagonal(mask: u32, a: u32, b: u32) -> bool {
@@ -833,7 +871,10 @@ fn side_bits(mut mask: u32, rel: u32, face: u32, crease: u32, rises: u32, dips: 
 fn run_face_mask(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
     let mask_all = if run_include_bottom(set, i) { ALL_FACES } else { OPEN_BOTTOM_FACES };
     if set.sub_sz[i] != SUB_CELL_NONE {
-        return mask_all | ALL_CREASES;
+        // A thing placed in a cell is lit as it stands; a coarse cell's box
+        // is the ground itself, shrunk, and its underside is more ground.
+        let under = if set.material_class[i] == MATERIAL_OBJECT { 0 } else { UNDER_AS_TOP };
+        return mask_all | ALL_CREASES | under;
     }
     let mut mask = mask_all;
     let col = cy * span + cx;
@@ -912,88 +953,77 @@ fn runs_match(set: &RunSet, a: usize, b: usize) -> bool {
         && set.sub_sz[b] == SUB_CELL_NONE
 }
 
-fn collect_surface(acc: &mut ZBucketAccum, tag: u32, r: f64, g: f64, b: f64) {
-    if acc.tag == tag {
-        acc.sr += r - acc.tr;
-        acc.sg += g - acc.tg;
-        acc.sb += b - acc.tb;
+/// How much of one run's surface meets air, between `lo` and `hi`, in the
+/// faces of the set's own cells: its top and its bottom where they fall in
+/// that span and nothing of its own column is there, and along each of the
+/// four sides whatever the neighbouring column does not cover. A column
+/// outside the set — past the apron — counts as air, which is the edge of
+/// the chunk and is rare enough to leave generous.
+fn exposed_faces(set: &RunSet, col: u32, i: usize, lo: i32, hi: i32) -> f64 {
+    let height = (hi - lo + 1) as f64;
+    let mut faces = 0.0;
+    if set.z1[i] <= hi && !column_covers(set, col, hi + 1) {
+        faces += 1.0;
+    }
+    if set.z0[i] >= lo && !column_covers(set, col, lo - 1) {
+        faces += 1.0;
+    }
+    let span = set.span;
+    let (cx, cy) = (col % span, col / span);
+    let sides = [
+        (cx + 1 < span).then_some(col + 1),
+        (cx > 0).then(|| col - 1),
+        (cy + 1 < span).then(|| col + span),
+        (cy > 0).then(|| col - span),
+    ];
+    for side in sides {
+        faces += match side {
+            Some(n) => height - covered_height(set, n, lo, hi) as f64,
+            None => height,
+        };
+    }
+    faces
+}
+
+/// How much of `lo..=hi` whole cells of column `col` fill. Runs of one
+/// column do not overlap, so their overlaps with the span add up.
+fn covered_height(set: &RunSet, col: u32, lo: i32, hi: i32) -> i32 {
+    let mut covered = 0;
+    let end = set.start[col as usize + 1] as usize;
+    for i in set.start[col as usize] as usize..end {
+        if set.z0[i] > hi {
+            break;
+        }
+        if set.sub_sz[i] != SUB_CELL_NONE {
+            continue;
+        }
+        covered += (set.z1[i].min(hi) - set.z0[i].max(lo) + 1).max(0);
+    }
+    covered
+}
+
+/// sRGB bytes as linear light, 0 to 1 — where a mean of colours belongs, the
+/// transfer being what the eye needs and not what light does.
+fn linear_of(r: u8, g: u8, b: u8) -> [f64; 3] {
+    [linear_channel(r), linear_channel(g), linear_channel(b)]
+}
+
+fn linear_channel(v: u8) -> f64 {
+    let c = v as f64 / 255.0;
+    if c <= 0.04045 {
+        c / 12.92
     } else {
-        acc.sr += r;
-        acc.sg += g;
-        acc.sb += b;
-        acc.surfaces += 1;
-        acc.tag = tag;
-    }
-    acc.tr = r;
-    acc.tg = g;
-    acc.tb = b;
-}
-
-fn collect_layer_tap(acc: &mut ZBucketAccum, layer_idx: u32) {
-    collect_tap(&mut acc.taps, &mut acc.tap_cnt, layer_idx);
-}
-
-fn collect_tap(taps: &mut u32, tap_cnt: &mut u32, layer_idx: u32) {
-    if layer_idx == NO_LAYER || *tap_cnt >= 4 {
-        return;
-    }
-    for i in 0..*tap_cnt {
-        if (*taps >> (i * 8)) & 255 == layer_idx {
-            return;
-        }
-    }
-    *taps |= layer_idx << (*tap_cnt * 8);
-    *tap_cnt += 1;
-}
-
-/// Whether a run is the ground's: a height field, coarsened by its
-/// footprint alone. A placed object's, or a sub-cell's, is a volume.
-fn is_ground(set: &RunSet, i: usize) -> bool {
-    set.material_class[i] != MATERIAL_OBJECT && set.sub_sz[i] == SUB_CELL_NONE
-}
-
-/// The ground under one coarse cell: its columns' tops, the lowest floor
-/// among them, and their top surfaces.
-struct GroundAccum {
-    cols: u32,
-    top_sum: i64,
-    floor: i32,
-    sr: f64,
-    sg: f64,
-    sb: f64,
-    taps: u32,
-    tap_cnt: u32,
-}
-
-impl Default for GroundAccum {
-    fn default() -> Self {
-        GroundAccum {
-            cols: 0,
-            top_sum: 0,
-            floor: i32::MAX,
-            sr: 0.0,
-            sg: 0.0,
-            sb: 0.0,
-            taps: 0,
-            tap_cnt: 0,
-        }
+        libm::pow((c + 0.055) / 1.055, 2.4)
     }
 }
 
-impl GroundAccum {
-    /// A column whose ground's top run is `t`.
-    fn add(&mut self, set: &RunSet, t: usize) {
-        self.cols += 1;
-        self.top_sum += set.z1[t] as i64 + 1;
-        self.sr += set.r[t] as f64;
-        self.sg += set.g[t] as f64;
-        self.sb += set.b[t] as f64;
-        collect_tap(&mut self.taps, &mut self.tap_cnt, set.layer_taps[t] & 255);
-    }
-}
-
-fn bucket_taps(acc: &ZBucketAccum) -> u32 {
-    packed_taps(acc.taps, acc.tap_cnt)
+/// Linear light back to the sRGB bytes a run carries.
+fn srgb_of(rgb: [f64; 3]) -> [u8; 3] {
+    core::array::from_fn(|k| {
+        let c = rgb[k].clamp(0.0, 1.0);
+        let s = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * libm::pow(c, 1.0 / 2.4) - 0.055 };
+        to_u8(s * 255.0) as u8
+    })
 }
 
 /// Up to four distinct layers, packed a byte each and repeated round to fill
@@ -1018,6 +1048,10 @@ fn to_u8(v: f64) -> u32 {
 fn pack_inset(linear: f64) -> (u8, u8) {
     (pack_sub_cell_fraction((1.0 - linear) * 0.5) as u8, pack_sub_cell_fraction(linear) as u8)
 }
+
+#[cfg(test)]
+#[path = "chunk_mesher.test.rs"]
+mod test;
 
 fn coarse_rows_per_step(lod_step: u32) -> u32 {
     (BAKE_ROWS_PER_STEP / lod_step).max(1)

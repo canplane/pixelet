@@ -24,6 +24,15 @@ pub struct TileOrigin {
     pub y: u32,
 }
 
+/// What a cube type's face reads as from far enough away that the tile
+/// itself is gone: the tile's own mean colour, taken in linear light by the
+/// ingest. None where the pack has no image for it, and then the type's own
+/// colour is what it reads as.
+pub fn shipped_tile_mean(cube: PlaceableCube, face: CubeFace) -> Option<[u8; 3]> {
+    let &(_, _, n) = SHEET.tiles.iter().find(|(c, f, _)| *c == cube && *f == face)?;
+    SHEET.means.get(n as usize).copied()
+}
+
 /// The tile of the sheet a cube type wears on a face — its pixel origin on
 /// the sheet — or None when the pack has no image for it; the caller decides
 /// whether a side falls back to the top or the type to its colour.

@@ -33,9 +33,10 @@ fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, lit: f32, open: vec3f, seen:
   // the brighter's.
   let sun = frame.sun_color * max(dot(n, frame.sun_dir), 0.0) * lit;
   let other = frame.other_color * max(dot(n, frame.other_dir), 0.0);
-  // The hemisphere: the ground's bounce below, the sky's own light above
-  // (atmos_view.wgsl's sky_fill, as the vertices took it).
-  let hemi = mix(frame.hemi_ground, seen.fill, n.z * 0.5 + 0.5);
+  // The hemisphere: the ground's bounce below, the sky's own light above,
+  // both the air's (atmos_view.wgsl's ground_bounce and sky_fill, the latter
+  // as the vertices took it).
+  let hemi = mix(ground_bounce(seen.fill), seen.fill, n.z * 0.5 + 0.5);
   var color = albedo * (sun + (other + frame.ambient + hemi) * open) / PI + albedo * frame.floor * open;
   color += rim_light(n, world_pos);
   color = color * seen.through + seen.scattered;

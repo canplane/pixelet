@@ -2,36 +2,33 @@
   "$doc": [
     "The world's time-of-day themes, by WorldThemeKey's value. The sun's light",
     "and the sky, by day and by night, are the atmosphere's",
-    "(crates/pxl/web/render/src/look/atmosphere.rs), so a theme is the fill the",
-    "terrain is lit by and no more."
+    "(crates/pxl/web/render/src/look/atmosphere.rs), and so is the light a face",
+    "takes from the land under it (atmos_view.wgsl's ground_bounce), so a theme",
+    "is the ambient the fill still carries and whether it is night."
   ],
   "themes": {
     "morning": {
       "$number": 0,
       "lighting": {
-        "ambient": { "color": { "$value": "#fff2e3", "$type": "rgb" }, "intensity": 0.62 },
-        "hemisphere": { "ground": { "$value": "#d8b894", "$type": "rgb" }, "intensity": 0.78 }
+        "ambient": { "color": { "$value": "#fff2e3", "$type": "rgb" }, "intensity": 0.62 }
       }
     },
     "day": {
       "$number": 1,
       "lighting": {
-        "ambient": { "color": { "$value": "#f9fcff", "$type": "rgb" }, "intensity": 0.68 },
-        "hemisphere": { "ground": { "$value": "#c2cbd3", "$type": "rgb" }, "intensity": 0.82 }
+        "ambient": { "color": { "$value": "#f9fcff", "$type": "rgb" }, "intensity": 0.68 }
       }
     },
     "evening": {
       "$number": 2,
       "lighting": {
-        "ambient": { "color": { "$value": "#ffe4cd", "$type": "rgb" }, "intensity": 0.58 },
-        "hemisphere": { "ground": { "$value": "#6a3920", "$type": "rgb" }, "intensity": 0.82 }
+        "ambient": { "color": { "$value": "#ffe4cd", "$type": "rgb" }, "intensity": 0.58 }
       }
     },
     "night": {
       "$number": 3,
       "lighting": {
-        "ambient": { "color": { "$value": "#24304a", "$type": "rgb" }, "intensity": 0.4 },
-        "hemisphere": { "ground": { "$value": "#0b1322", "$type": "rgb" }, "intensity": 0.68 }
+        "ambient": { "color": { "$value": "#24304a", "$type": "rgb" }, "intensity": 0.4 }
       }
     }
   },
