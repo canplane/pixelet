@@ -46,16 +46,16 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
       else orientation_remove();
       return;
     case Command.FETCH_CREATE: {
-      const [key, url] = f!.get<[u64, string]>();
-      void run_fetch(key, url);
+      const [key, bake, name] = f!.get<[u64, u32, string]>();
+      void run_fetch(key, bake, name);
       return;
     }
     case Command.FETCH_DELETE:
       abort_fetch(f!.at(0).get<u64>());
       return;
     case Command.LOAD_CREATE: {
-      const [kind, load] = f!.get<[u32, u32]>();
-      void (kind === 0 ? load_model(load) : load_image(load));
+      const [key, kind, load] = f!.get<[u64, u32, u32]>();
+      void (kind === 0 ? load_model(key, load) : load_image(key, load));
       return;
     }
   }

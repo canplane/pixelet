@@ -251,7 +251,7 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
         <div key={t.category}>
           <Row k={`${t.category}${BOUND[t.category] ? ` (${BOUND[t.category].bound})` : ""} p50/p95`} v={`${n1(t.lat.p50)}/${n1(t.lat.p95)}ms`} />
           <Row k="  ok/ab/err" v={`${t.ok}/${t.aborted}/${t.error}`} warn={t.error > 0} />
-          {t.reasons.length > 0 && <Row k="  top err" v={`${failText(t.reasons[0].fail, t.reasons[0].status)} x${t.reasons[0].n}`} warn />}
+          {t.reasons.length > 0 && <Row k="  top err" v={`${failText(t.reasons[0].fail, t.reasons[0].detail)} x${t.reasons[0].n}`} warn />}
         </div>
       ))}
 

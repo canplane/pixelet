@@ -258,7 +258,7 @@ pub mod TASK {
     pub const transport_ms: u32 = 6;
     pub const outcome: u32 = 7;
     pub const fail: u32 = 8;
-    pub const status: u32 = 9;
+    pub const detail: u32 = 9;
     pub const phase_count: u32 = 10;
     pub const phase_ids: u32 = 11;
     pub const phase_values: u32 = 17;
@@ -273,7 +273,7 @@ pub mod TASK {
         "transport_ms",
         "outcome",
         "fail",
-        "status",
+        "detail",
         "phase_count",
         "phase_ids",
         "phase_values",
@@ -298,7 +298,7 @@ pub mod SPREAD {
     pub const KEYS: &[&str] = &["p50", "p95", "max", "WORDS"];
 }
 
-/// One category's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, status, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes.
+/// One category's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes.
 pub mod TASK_SUMMARY {
     pub const n: u32 = 0;
     pub const ok: u32 = 1;

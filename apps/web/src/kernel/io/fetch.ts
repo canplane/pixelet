@@ -1,49 +1,72 @@
 // @pxl/web/kernel/io/fetch.ts
 
 /**
- * HTTP for the kernel (crates/pxl/web/kernel/src/io/fetch.rs): the kernel
- * names a URL, this runs it, and the status and the bytes are reported back
- * for the kernel to decide what they mean.
+ * The bus under the kernel's reads (crates/pxl/web/kernel/src/io/fetch.rs).
  *
- * A fetch is HTTP and nothing more. The body is held where the kernel reads
- * it in its own turn, and an abort is the scheduler's own doing — it carries
- * no reason, where everything else does.
+ * The kernel names an object — which bake it belongs to, and its name inside
+ * that bake — and never an address. Turning that into a URL, running HTTP,
+ * and reading what the protocol says are all this side's: a kernel names what
+ * it wants and a driver knows the bus.
+ *
+ * Four outcomes go back, and only four. **404 is not one of them**: it is how
+ * HTTP spells "there is no such object", so it is translated here into the
+ * outcome that says so, and the kernel decides what an absent object means
+ * for its category without ever learning the number. The body is held where
+ * the kernel reads it in its own turn, and a stop is the scheduler's own
+ * doing — it carries no reason, where everything else does.
  */
 
 import type { u64 } from "@xpute/core/abi/word.ts";
 import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
+import { PUBLISHED_TILES } from "@/config/deploy.ts";
+import { tile_url, type TileKind } from "@/config/route.ts";
 import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
 import { hold_body } from "@/kernel/module.ts";
 import { request_frame } from "@/kernel/sched.ts";
 
-const running = new Map<bigint, AbortController>();
+/** What a read came to, as FETCH_UPDATE carries it (spec/pxl/spec/abi/cmd.json). */
+const READ = 0, STOPPED = 1, FAILED = 2, ABSENT = 3;
 
-/** Runs one fetch the kernel started: the response's bytes written into the
- * room the kernel gives them, and the status reported. */
-export async function run_fetch(key: u64, url: string): Promise<void> {
+/** The bakes, in the order `BakeKind` numbers them — which is the order
+ * `PUBLISHED_VERSION` declares them in, since the enum is generated from it. */
+const BAKE: readonly TileKind[] = ["terrain", "poi", "geocode"];
+
+/** Every read the scheduler started and the host has not settled, by the key
+ * it handed out. One map for both kinds: a stop names a key and nothing else,
+ * so which kind of read it was is not this side's question (load.ts). */
+export const running = new Map<bigint, AbortController>();
+
+/** Reads one object the kernel named: its bytes written into the room the
+ * kernel gives them, and what became of the read reported back. */
+export async function run_fetch(key: u64, bake: number, name: string): Promise<void> {
   const controller = new AbortController();
   running.set(key, controller);
   const signal = controller.signal;
-  let outcome = 0;
-  let status = 0;
+  let outcome: number = READ;
   let held = 0;
   let bytes = 0;
   let fail: FetchFail = FetchFail.None;
+  let detail = 0;
   let net_ms = 0;
   try {
     const t0 = performance.now();
-    const res = await fetch(url, { signal });
+    const res = await fetch(tile_url(BAKE[bake], name, PUBLISHED_TILES), { signal });
     const body = new Uint8Array(await res.arrayBuffer());
     net_ms = performance.now() - t0;
-    status = res.status;
-    if (body.byteLength > 0) {
+    if (res.status === 404) {
+      outcome = ABSENT;
+    } else if (!res.ok) {
+      outcome = FAILED;
+      fail = FetchFail.Refused;
+      detail = res.status;
+    } else if (body.byteLength > 0) {
       held = hold_body(body);
       bytes = body.byteLength;
     }
   } catch (err) {
-    outcome = signal.aborted ? 1 : 2;
-    // An abort is the scheduler's own doing and carries no reason. Everything
+    outcome = signal.aborted ? STOPPED : FAILED;
+    // A stop is the scheduler's own doing and carries no reason. Everything
     // else is the transport's: a browser raises TypeError for offline, DNS,
     // CORS and a refused connection alike, and its words for them are this
     // side's to log — what the kernel needs is which of these happened.
@@ -53,12 +76,13 @@ export async function run_fetch(key: u64, url: string): Promise<void> {
     }
   } finally {
     running.delete(key);
-    CORE_BUILD.send(0, Command.FETCH_UPDATE, packet((b) => b.u64(key).u32(outcome).u32(status).u32(held).u32(bytes).u32(fail).f64(net_ms)));
+    CORE_BUILD.send(0, Command.FETCH_UPDATE, packet((b) => b.u64(key).u32(outcome).u32(held).u32(bytes).u32(fail).u32(detail).f64(net_ms)));
     request_frame();
   }
 }
 
-/** Stops the fetch the kernel started under `key`, if it is still running. */
+/** Stops the read the kernel started under `key`, whichever kind it is, if it
+ * is still running. */
 export function abort_fetch(key: u64): void {
   running.get(key)?.abort();
 }

@@ -417,8 +417,7 @@ fn raise(o: &Outbox, cmd: Command, count: u32, f: impl Fn(&mut PacketWriter)) {
 fn post_shell(s: &mut State) {
     use pxl_kernel::control::sensor::device_orientation::{take_orientation_commands, OrientationCommand};
     use pxl_kernel::control::sensor::geolocation::{take_geolocation_commands, GeolocationCommand};
-    use pxl_kernel::io::load::{take_load_requests, LoadKind};
-    use pxl_kernel::io::scheduler::{fetch_take_aborts, fetch_take_started};
+    use pxl_kernel::io::sched::{take_started, take_stops};
 
     const GEOLOCATION: u32 = 0;
     const ORIENTATION: u32 = 1;
@@ -462,27 +461,24 @@ fn post_shell(s: &mut State) {
     }
     // The key crosses as the one word the queue orders by; the shell holds it
     // as a handle and hands it back, and never reads into it.
-    fetch_take_started(|d| {
-        let key = pxl_kernel::io::scheduler::hash_of(d.key);
-        raise(&s.outbox, Command::FETCH_CREATE, 2, |e| {
-            e.u64(Some(key)).str_display(pxl_kernel::io::fetch::DemandUrl(d));
-        });
+    take_started(|key, category, subject| match category.bake() {
+        Some(bake) => raise(&s.outbox, Command::FETCH_CREATE, 3, |e| {
+            e.u64(Some(key)).u32(Some(bake as u32)).str_display(pxl_kernel::io::fetch::DemandName(category, subject));
+        }),
+        // An asset belongs to no bake: it is named by its content, and the
+        // host is the one that knows what that is.
+        None => {
+            let Some((kind, load)) = pxl_kernel::io::load::of_subject(subject) else { return };
+            raise(&s.outbox, Command::LOAD_CREATE, 3, |e| {
+                e.u64(Some(key)).u32(Some(kind as u32)).u32(Some(load.number()));
+            });
+        }
     });
-    fetch_take_aborts(|name| {
-        let key = pxl_kernel::io::scheduler::hash_of(name);
+    take_stops(|key| {
         raise(&s.outbox, Command::FETCH_DELETE, 1, |e| {
             e.u64(Some(key));
         });
     });
-    for q in take_load_requests() {
-        let kind = match q.kind {
-            LoadKind::Gltf => 0,
-            LoadKind::Image => 1,
-        };
-        raise(&s.outbox, Command::LOAD_CREATE, 2, |e| {
-            e.u32(Some(kind)).u32(Some(q.load.number()));
-        });
-    }
 }
 
 /// The end of a frame, the kernel having drawn it: what it asks of the shell,
@@ -522,11 +518,6 @@ fn u64_at(b: &BranchCursor<'_>, i: u32) -> Result<u64, MarshalError> {
 
 fn bool_at(b: &BranchCursor, i: u32) -> Result<bool, MarshalError> {
     b.at(i)?.get_bool()
-}
-
-/// A load by its number, refused where the number names none.
-fn load_at(b: &BranchCursor, i: u32) -> Result<pxl_kernel::io::load::Load, MarshalError> {
-    pxl_kernel::io::load::Load::of(u32_at(b, i)?).ok_or_else(|| MarshalError::new(Errno::EINVAL, Some("no such load"), None))
 }
 
 /// Applies one submission: its reply's value, or none for a command nobody
@@ -703,23 +694,23 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
         }
         Command::FETCH_UPDATE => {
             let f = fields(pkt)?;
-            pxl_kernel::io::fetch::fetch_queued(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?, (u32_at(&f, 3)?, u32_at(&f, 4)?), u32_at(&f, 5)?, number_at(&f, 6)?);
+            pxl_kernel::io::fetch::fetch_queued(u64_at(&f, 0)?, u32_at(&f, 1)?, (u32_at(&f, 2)?, u32_at(&f, 3)?), u32_at(&f, 4)?, u32_at(&f, 5)?, number_at(&f, 6)?);
             Ok(Some(0))
         }
         Command::LOAD_UPDATE => {
             let f = fields(pkt)?;
             // A model's bytes are far past a slot: the host holds them, and
             // the models' task reads them on a turn's quota.
-            pxl_kernel::io::load::gltf_arrived(load_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?);
+            pxl_kernel::io::load::gltf_arrived(u64_at(&f, 0)?, u32_at(&f, 1)?, u32_at(&f, 2)?);
             Ok(Some(0))
         }
         Command::LOAD_IMAGE => {
             let f = fields(pkt)?;
-            pxl_kernel::io::load::image_arrived(load_at(&f, 0)?, u32_at(&f, 1)?);
+            pxl_kernel::io::load::image_arrived(u64_at(&f, 0)?, u32_at(&f, 1)?);
             Ok(Some(0))
         }
         Command::LOAD_DELETE => {
-            pxl_kernel::io::load::load_rejected(load_at(&fields(pkt)?, 0)?);
+            pxl_kernel::io::load::load_rejected(u64_at(&fields(pkt)?, 0)?);
             Ok(Some(0))
         }
         Command::GPU_CREATE => {

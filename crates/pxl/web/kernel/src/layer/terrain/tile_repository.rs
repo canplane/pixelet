@@ -16,6 +16,8 @@
 //! it settle at once and its one fetch is not tied to any of them. A failure
 //! is not kept: while pages wait, it is asked for again (tile_fetcher.rs).
 
+use core::fmt;
+
 use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_spec::bake::format::{decode_terrain, decode_terrain_into, Ground, PageRoom, Terrain, Tile};
 use pxl_spec::bake::pack::GroundCell;
@@ -32,8 +34,6 @@ use crate::layer::terrain::resident::{free_record, page_in, put, record_of, RECO
 use crate::layer::terrain::resolve::covered;
 use crate::layer::terrain::store::tile_store;
 use crate::mem;
-use crate::shell::config::env::TILE_BASE_URL;
-use crate::shell::config::route::{Joined, TileBase};
 use crate::world::frame::range_anchor::range_anchor;
 
 /// Object key of the single shared open-ocean tile in the static bucket.
@@ -42,17 +42,14 @@ pub const OCEAN_KEY: &str = "_ocean";
 /// The category the shared ocean tile is fetched under.
 pub const OCEAN_CATEGORY: Category = Category::Ocean;
 
-/// A page's URL. A page's key names it within its level and the level is the
-/// path segment before it.
-pub fn tile_url(p: LevelPage) -> Joined<Joined<TileBase, u32>, IVec> {
-    Joined(Joined(TILE_BASE_URL(), p.level), p.page)
-}
+/// A page's name in the terrain bake: its key within its level, and the level
+/// before it, which is how the bake writes it.
+pub struct TileName(pub LevelPage);
 
-/// The shared ocean tile, which the bake writes under a name rather than a
-/// coordinate — one page's worth of open water every open-water page reads,
-/// at every level, so it sits beside the levels rather than in one.
-pub fn ocean_url() -> Joined<TileBase, &'static str> {
-    Joined(TILE_BASE_URL(), OCEAN_KEY)
+impl fmt::Display for TileName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}/{}", self.0.level, self.0.page)
+    }
 }
 
 /// A page's lanes in the range: land, water, structure and transport, each

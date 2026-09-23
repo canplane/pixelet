@@ -72,22 +72,23 @@ pub struct TaskRecord {
     pub fail: Failure,
 }
 
-/// Why a task failed: the reason as its number, and the HTTP status beside it
-/// where the reason was a refused response. Two numbers, so a record is a row
-/// of plain values and the summary counts by them rather than by prose — the
-/// words for a reason are the shell's, as `strerror` is libc's.
+/// Why a task failed: the reason as its number, and whatever number the host
+/// refused with beside it. Two numbers, so a record is a row of plain values
+/// and the summary counts by them rather than by prose — the words for a
+/// reason are the shell's, as `strerror` is libc's. What `detail` means is
+/// the host's too: nothing here reads it, and it exists to be printed.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Failure {
     pub fail: FetchFail,
-    pub status: u16,
+    pub detail: u16,
 }
 
 impl fmt::Display for Failure {
-    /// `status 503`, or the reason's own name where no status says more.
+    /// `refused 503`, or the reason's own name where no number says more.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.fail {
             FetchFail::None => Ok(()),
-            FetchFail::Status => write!(f, "status {}", self.status),
+            FetchFail::Refused => write!(f, "refused {}", self.detail),
             fail => f.write_str(fail.as_str()),
         }
     }
@@ -116,9 +117,9 @@ pub struct TaskRow {
     pub transport_ms: f64,
     /// An index into OUTCOME_NAMES.
     pub outcome: f64,
-    /// The FetchFail's own number, and the status beside it.
+    /// The FetchFail's own number, and the host's own number beside it.
     pub fail: f64,
-    pub status: f64,
+    pub detail: f64,
     /// How many of the phase lanes are filled; 0 where the run reported none.
     pub phase_count: f64,
     /// Indices into TASK_PHASE_NAMES, a timing's -1 where the list lacks it.
@@ -138,7 +139,7 @@ impl TaskRow {
             transport_ms: rec.transport_ms,
             outcome: name_id(OUTCOME_NAMES, rec.outcome.as_str()),
             fail: rec.fail.fail as u32 as f64,
-            status: rec.fail.status as f64,
+            detail: rec.fail.detail as f64,
             ..TaskRow::default()
         };
         for (k, (name, value)) in rec.phases.iter().flat_map(|p| p.iter()).enumerate() {
@@ -466,7 +467,7 @@ words!(FrameSample, FRAME::WORDS,
 words!(TaskRow, TASK::WORDS,
     category => TASK::category, subject => TASK::subject, priority => TASK::priority, enqueue_ms => TASK::enqueue_ms,
     start_ms => TASK::start_ms, end_ms => TASK::end_ms, transport_ms => TASK::transport_ms, outcome => TASK::outcome,
-    fail => TASK::fail, status => TASK::status, phase_count => TASK::phase_count, phase_ids => TASK::phase_ids, phase_values => TASK::phase_values,
+    fail => TASK::fail, detail => TASK::detail, phase_count => TASK::phase_count, phase_ids => TASK::phase_ids, phase_values => TASK::phase_values,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);

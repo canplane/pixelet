@@ -26,16 +26,17 @@ const starved = (ms: number) => (ms >= STARVED_MS ? "  STARVED" : "");
 
 // ---- the words ----
 
-/** Why a fetch failed, as `spec/fetch.ts` numbers it. A refusal says its
- * status instead, which is the part that tells one from another. */
-export function failText(fail: u32, status: u32): string {
+/** Why a read failed, as `spec/fetch.ts` numbers it. A refusal says the
+ * number the host refused with instead, which is the part that tells one from
+ * another; what that number means is the host's, and nothing reads it. */
+export function failText(fail: u32, detail: u32): string {
   switch (fail) {
     case 0x0101:
       return "network";
     case 0x0102:
       return "shell";
     case 0x0201:
-      return `status ${status}`;
+      return `refused ${detail}`;
     case 0x0202:
       return "no_room";
     case 0x0301:
@@ -72,7 +73,7 @@ const phasesText = (p: [string, f64][]) => p.length === 0 ? "" : `  [${p.map(([k
 export function taskLine(r: TaskRecord): string {
   const total = r.end_ms - r.enqueue_ms;
   const timing = r.start_ms === null ? "" : `  q ${n1(r.start_ms - r.enqueue_ms)} + run ${n1(r.end_ms - r.start_ms)}`;
-  const why = r.fail === 0 ? "" : `  [${failText(r.fail, r.status)}]`;
+  const why = r.fail === 0 ? "" : `  [${failText(r.fail, r.detail)}]`;
   return `[${n1(r.enqueue_ms).padStart(9)}] ${`${r.category}:${r.subject}`.padEnd(34)}${r.outcome.padEnd(7)}${n1(total).padStart(8)}ms${timing} p${r.priority}${phasesText(r.phases)}${why}`;
 }
 
@@ -165,7 +166,7 @@ function tasksSection(n: u32, tasks: TaskSummary[]): string[] {
   const lines = [`tasks n=${n}`];
   for (const t of tasks) {
     const bound = BOUND[t.category]?.bound ?? "?";
-    const reasons = t.reasons.length === 0 ? "" : ` (${t.reasons.map((x) => `${failText(x.fail, x.status)} x${x.n}`).join(", ")})`;
+    const reasons = t.reasons.length === 0 ? "" : ` (${t.reasons.map((x) => `${failText(x.fail, x.detail)} x${x.n}`).join(", ")})`;
     lines.push(
       `  ${t.category.padEnd(9)}${bound.padEnd(9)}n=${t.n}   p50 ${n1(t.lat.p50)}  p95 ${n1(t.lat.p95)} ms   ok ${t.ok}  ab ${t.aborted}  err ${t.error}${reasons}`,
     );

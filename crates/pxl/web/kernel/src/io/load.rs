@@ -4,14 +4,28 @@
 //! the companions, the decor kinds, the picker's preview — hits the network and
 //! the parser at most once per asset.
 //!
-//! The fetch is the shell's, and so is where an asset is fetched from: an asset
-//! asked for here for the first time joins the request lane
-//! (`take_load_requests`) by its number, and the shell answers with the bytes of
-//! a model it holds (`gltf_arrived`, queued, and read and parsed by
-//! `gltf_task` on the turns' quota) or the handle of an image it decoded
-//! and holds (`image_arrived`) — the file's own pixels, top row first, no
-//! colour conversion and no premultiplied alpha. A consumer polls: None while
-//! the load is in flight or has failed.
+//! An asset asked for here for the first time becomes a want like any other
+//! (`load_wants`, `io/sched.rs`): it shares the credits with the pages, so a
+//! hundred and twenty-eight of them do not all go at once, and it waits its
+//! turn among them rather than beside them.
+//!
+//! It is never stale. A page is wanted while the view is where it is; an
+//! asset is wanted from the first time something needs it until it is there,
+//! so nothing withdraws one and `Pending` is the whole of the record that it
+//! is wanted.
+//!
+//! **Two failures, and only one of them is worth trying again.** A read that
+//! did not arrive is the transport's, and the asset goes back to being wanted
+//! — the scheduler holds it for a while first. Bytes that do not parse are
+//! the asset's own, and asking for them again brings back the same bytes, so
+//! that one is final.
+//!
+//! The reading is the shell's, and so is where an asset lives: it answers
+//! with the bytes of a model it holds (`gltf_arrived`, queued, and read and
+//! parsed by `gltf_task` on the turns' quota) or the handle of an image it
+//! decoded and holds (`image_arrived`) — the file's own pixels, top row
+//! first, no colour conversion and no premultiplied alpha. A consumer polls:
+//! None while the read is out or the asset is broken.
 
 use std::rc::Rc;
 
@@ -25,7 +39,10 @@ use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::global::Global;
 use crate::host::body_read;
+use crate::io::policy;
+use crate::io::sched::{attempt_of, settle, Rank};
 use crate::layer::decor::asset_store::decor_assets_arrived;
+use crate::sched::ledger::record::{Failure, Outcome};
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::node::World;
 
@@ -62,12 +79,6 @@ impl Load {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct LoadRequest {
-    pub kind: LoadKind,
-    pub load: Load,
-}
-
 enum Entry<T> {
     Pending,
     Ready(T),
@@ -80,7 +91,6 @@ const LOADS: usize = Asset::ALL.len() + 1;
 struct Loader {
     gltf: Vec<Option<Entry<Rc<Gltf>>>>,
     image: Vec<Option<Entry<u32>>>,
-    requests: Vec<LoadRequest>,
     /// Models the shell holds and the task has not read: the load, the shell's
     /// body and its length.
     arrived: Vec<(Load, u32, u32)>,
@@ -92,7 +102,6 @@ fn loader() -> &'static mut Loader {
     LOADER.get(|| Loader {
         gltf: (0..LOADS).map(|_| None).collect(),
         image: (0..LOADS).map(|_| None).collect(),
-        requests: Vec::new(),
         arrived: Vec::new(),
     })
 }
@@ -105,7 +114,6 @@ pub fn load_gltf(load: Load) -> Option<Rc<Gltf>> {
         Some(_) => None,
         None => {
             l.gltf[load.number() as usize] = Some(Entry::Pending);
-            l.requests.push(LoadRequest { kind: LoadKind::Gltf, load });
             None
         }
     }
@@ -119,7 +127,6 @@ pub fn load_image(load: Load) -> Option<u32> {
         Some(_) => None,
         None => {
             l.image[load.number() as usize] = Some(Entry::Pending);
-            l.requests.push(LoadRequest { kind: LoadKind::Image, load });
             None
         }
     }
@@ -132,9 +139,43 @@ pub fn load_failed(load: Load) -> bool {
     matches!(l.gltf[n], Some(Entry::Failed)) || matches!(l.image[n], Some(Entry::Failed))
 }
 
-/// The loads to fetch, drained by the shell.
-pub fn take_load_requests() -> Vec<LoadRequest> {
-    core::mem::take(&mut loader().requests)
+/// What a want names: the kind in the high word and the load's number in the
+/// low one, since one asset can be wanted as both a model and an image.
+pub fn subject_of(kind: LoadKind, load: Load) -> u64 {
+    (kind as u64) << 32 | load.number() as u64
+}
+
+pub fn of_subject(subject: u64) -> Option<(LoadKind, Load)> {
+    let kind = if subject >> 32 == 0 { LoadKind::Gltf } else { LoadKind::Image };
+    Load::of(subject as u32).map(|load| (kind, load))
+}
+
+/// Every asset something has asked for and has not got. Said in full every
+/// turn: a set that is the same set changes nothing.
+pub fn load_wants() -> Vec<(u64, Rank)> {
+    let l = loader();
+    let mut wants = Vec::new();
+    for n in 0..LOADS {
+        let load = Load::of(n as u32).expect("a load's own number");
+        if matches!(l.gltf[n], Some(Entry::Pending)) {
+            wants.push((subject_of(LoadKind::Gltf, load), policy::asset()));
+        }
+        if matches!(l.image[n], Some(Entry::Pending)) {
+            wants.push((subject_of(LoadKind::Image, load), policy::asset()));
+        }
+    }
+    wants
+}
+
+/// Ends the attempt a key names and says what it was for.
+///
+/// The read is over the moment the host reports it. Parsing what it brought
+/// is the kernel's own work afterwards and does not hold the credit — which
+/// is the difference between a read and what is done with it.
+fn ended(key: u64, outcome: Outcome) -> Option<(LoadKind, Load)> {
+    let what = attempt_of(key).and_then(|(_, subject)| of_subject(subject));
+    settle(key, outcome, None, Failure::default(), policy::retry_after(outcome));
+    what
 }
 
 static ARRIVALS: Global<Notify> = Global::new();
@@ -143,8 +184,9 @@ fn arrivals() -> &'static mut Notify {
     ARRIVALS.get(Notify::new)
 }
 
-/// The shell holds a model's bytes as `body`: queued for `gltf_task`.
-pub fn gltf_arrived(load: Load, body: u32, bytes: u32) {
+/// The host holds a model's bytes as `body`: queued for `gltf_task`.
+pub fn gltf_arrived(key: u64, body: u32, bytes: u32) {
+    let Some((_, load)) = ended(key, Outcome::Ok) else { return };
     loader().arrived.push((load, body, bytes));
     arrivals().notify();
 }
@@ -171,21 +213,23 @@ pub async fn gltf_task() {
 }
 
 /// The shell's handle for a decoded image.
-pub fn image_arrived(load: Load, handle: u32) {
+pub fn image_arrived(key: u64, handle: u32) {
+    let Some((_, load)) = ended(key, Outcome::Ok) else { return };
     loader().image[load.number() as usize] = Some(Entry::Ready(handle));
     decor_assets_arrived();
     request_world_tick();
 }
 
-/// The shell's report that a fetch failed.
-pub fn load_rejected(load: Load) {
+/// The host's report that a read did not arrive. The asset goes back to
+/// being wanted — the transport failed, not the asset — and the scheduler
+/// decides how long it waits before the next attempt.
+pub fn load_rejected(key: u64) {
+    let Some((kind, load)) = ended(key, Outcome::Error) else { return };
     let l = loader();
     let n = load.number() as usize;
-    if l.gltf[n].is_some() {
-        l.gltf[n] = Some(Entry::Failed);
-    }
-    if l.image[n].is_some() {
-        l.image[n] = Some(Entry::Failed);
+    match kind {
+        LoadKind::Gltf => l.gltf[n] = None,
+        LoadKind::Image => l.image[n] = None,
     }
     decor_assets_arrived();
 }

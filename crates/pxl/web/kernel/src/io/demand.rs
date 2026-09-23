@@ -13,6 +13,8 @@
 
 use core::fmt;
 
+use pxl_spec::bake::published::BakeKind;
+
 /// The most sub-timings one run reports.
 pub const PHASES_MAX: usize = 6;
 
@@ -56,9 +58,29 @@ pub enum Category {
     Geocode,
     /// Its dictionary, which is a stream of one.
     GeocodeDict,
+    /// A model or an image from the catalog. It shares the credits with the
+    /// pages and nothing else: a page is wanted while the view is where it
+    /// is, and an asset is wanted from the first time something needs it
+    /// until it is there, so it is never stale and never withdrawn.
+    Asset,
 }
 
 impl Category {
+    /// Which bake an object of this category belongs to. The name inside that
+    /// bake is the layer's (`DemandName`); where the two together are read
+    /// from is the host's, and nothing here knows it.
+    /// Which bake an object of this category belongs to, for the categories
+    /// whose objects are pages. An asset belongs to no bake — it is named by
+    /// its content — and is asked for by its own command.
+    pub fn bake(self) -> Option<BakeKind> {
+        match self {
+            Category::Terrain | Category::Ocean => Some(BakeKind::terrain),
+            Category::Poi => Some(BakeKind::poi),
+            Category::Geocode | Category::GeocodeDict => Some(BakeKind::geocode),
+            Category::Asset => None,
+        }
+    }
+
     /// A short name for a report to print, as `Outcome::as_str` is.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -67,6 +89,7 @@ impl Category {
             Category::Poi => "poi",
             Category::Geocode => "geocode",
             Category::GeocodeDict => "geocode_dict",
+            Category::Asset => "asset",
         }
     }
 }

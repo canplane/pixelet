@@ -16,11 +16,10 @@ use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_core::status::error::MarshalError;
 use xpute_runtime::mem::heap::Block;
 
-use crate::shell::config::env::POI_TILE_BASE_URL;
-use crate::shell::config::route::{Joined, TileBase};
-
-pub fn poi_url(page_idx: IVec) -> Joined<TileBase, IVec> {
-    Joined(POI_TILE_BASE_URL(), page_idx)
+/// A POI page's name in its bake: the page's own key, which is what the bake
+/// writes it under.
+pub fn poi_name(page_idx: IVec) -> IVec {
+    page_idx
 }
 
 pub struct ResidentPoiPage {

@@ -72,7 +72,7 @@ function tasks_at(at: u32, count: u32): TaskRecord[] {
       transport_ms: w[o + TASK.transport_ms],
       outcome: OUTCOME_NAMES[w[o + TASK.outcome]] ?? "?",
       fail: w[o + TASK.fail],
-      status: w[o + TASK.status],
+      detail: w[o + TASK.detail],
       phases,
     };
   });
@@ -125,7 +125,7 @@ export interface TaskRecord {
   transport_ms: f64;
   outcome: string;
   fail: u32;
-  status: u32;
+  detail: u32;
   phases: [string, f64][];
 }
 
@@ -136,7 +136,7 @@ export interface TaskSummary {
   aborted: u32;
   error: u32;
   lat: Spread;
-  reasons: { fail: u32; status: u32; n: u32 }[];
+  reasons: { fail: u32; detail: u32; n: u32 }[];
   phase_mean: [string, f64][] | null;
 }
 
@@ -199,7 +199,7 @@ function taskSummaries(s: F64Array): TaskSummary[] {
     if (n === 0) return;
     const reasons = Array.from({ length: s[a + TASK_SUMMARY.reason_count] }, (_, i) => {
       const w = a + TASK_SUMMARY.reasons + 3 * i;
-      return { fail: s[w], status: s[w + 1], n: s[w + 2] };
+      return { fail: s[w], detail: s[w + 1], n: s[w + 2] };
     });
     const means = TASK_PHASE_NAMES.map((name, p) => [name, s[a + TASK_SUMMARY.phase_mean + p]] as [string, f64]).filter(([, v]) => !Number.isNaN(v));
     out.push({

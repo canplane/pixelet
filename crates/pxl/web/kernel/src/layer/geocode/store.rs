@@ -53,28 +53,9 @@ pub fn dict_answered() -> bool {
     store().dict.is_some()
 }
 
-/// Forgets a dictionary answered with nothing, so it is asked about again.
-/// A dictionary that arrived is left alone: it does not go stale.
-pub fn forget_absent_dict() {
-    if let Some(None) = store().dict {
-        store().dict = None;
-    }
-}
-
 /// Whatever was held is dropped, which is what gives its block back.
 pub fn set_dict(dict: Option<ResidentDict>) {
     store().dict = Some(dict);
-}
-
-/// A dictionary that did not arrive answers only where nothing had. The
-/// stream is one key, so a failure and an arrival name the same slot — and
-/// a demand is not made while the slot is full, which is what makes this
-/// unreachable rather than merely unlikely. It is written down because what
-/// it would cost is a freed packet a view still points into.
-pub fn dict_failed() {
-    if !dict_answered() {
-        store().dict = Some(None);
-    }
 }
 
 /// The group the store has an answer for, whatever the answer was.

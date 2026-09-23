@@ -100,17 +100,22 @@ export const enum Command {
   /** [visible bool] — the tab's visibility; the host rings the doorbell for it at once,
    * since a hidden page gets no frame and hiding is the save's last sure moment */
   SENSOR_VISIBILITY = 0x1d13,
-  /** [key u64, outcome u32 (0 ok, 1 aborted, 2 error), status u32, body u32, body_bytes
-   * u32 (0 for none), fail u32, net_ms f64] — a started fetch finished, its body held by
-   * the host as `body` until the kernel reads it (the `body_read` import); what the
-   * status and the body mean is the kernel's */
+  /** [key u64, outcome u32 (0 read, 1 aborted, 2 error, 3 absent), body u32, body_bytes
+   * u32 (0 for none), fail u32, detail u32, net_ms f64] — a read the host finished, its
+   * body held as `body` until the kernel takes it (the `body_read` import).
+   * **Absent is an outcome, not a code the guest reads.** There is no such object,
+   * however the protocol spells that — an HTTP 404, a missing file — and the host is
+   * the one that can tell. `detail` is whatever number the host refused with, kept for
+   * the ledger to print and for nothing to branch on */
   FETCH_UPDATE = 0x1e03,
-  /** [load u32, body u32, bytes u32] — a model's bytes, held by the host as `body` until the
+  /** [key u64, body u32, bytes u32] — a model's bytes, held by the host as `body` until the
    * kernel reads them (the `body_read` import) */
   LOAD_UPDATE = 0x1f03,
-  /** [load u32, handle u32] — an image decoded and held by the shell */
+  /** [key u64, handle u32] — an image decoded and held by the shell */
   LOAD_IMAGE = 0x1f10,
-  /** [load u32] — a load failed */
+  /** [key u64] — a read of an asset failed. The guest wants it again, after whatever the
+   * scheduler makes it wait; a model whose *bytes* do not parse is a different thing and
+   * is not this */
   LOAD_DELETE = 0x1f04,
   /** [min_uniform_offset_alignment u32, timestamps bool] — a device answered; the kernel's
    * renderer is made on it (crates/pxl/web/render/src/gpu/renderer.rs) */
@@ -137,12 +142,19 @@ export const enum Command {
   SENSOR_CREATE = 0x1d01,
   /** [sensor u32] — stop watching */
   SENSOR_DELETE = 0x1d04,
-  /** [key u64, url str] — a fetch the scheduler started; the key is a handle
-   * the shell hands back and never reads into */
+  /** [key u64, bake u32 (BakeKind), name str] — an object the scheduler wants read.
+   * The guest names it in its own terms — which bake it belongs to, and the name
+   * inside that bake — and the host is the one that knows what address that is and
+   * what protocol reaches it. The key is a handle the shell hands back and never
+   * reads into */
   FETCH_CREATE = 0x1e01,
-  /** [key u64] — a fetch yield aborted; the shell settles it as aborted */
+  /** [key u64] — stop this read, whichever kind it is. The scheduler took its credit
+   * for something the viewer is more waiting on; the host settles it as stopped, and the
+   * guest still wants it */
   FETCH_DELETE = 0x1e04,
-  /** [kind u32 (0 glTF, 1 image), load u32 (asset/ingested's asset number, the texture pack's
-   * sheet one past the last)] — a model or an image to load */
+  /** [key u64, kind u32 (0 glTF, 1 image), load u32 (asset/ingested's asset number, the
+   * texture pack's sheet one past the last)] — an asset the scheduler wants read. It shares
+   * the credits with the pages, and so is started when one is free rather than all at once;
+   * what it is and where it lives is the host's, as a page's address is */
   LOAD_CREATE = 0x1f01,
 }

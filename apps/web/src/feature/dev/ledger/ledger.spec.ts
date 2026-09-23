@@ -137,7 +137,7 @@ export const TASK = {
   transport_ms: 6 as number,
   outcome: 7 as number,
   fail: 8 as number,
-  status: 9 as number,
+  detail: 9 as number,
   phase_count: 10 as number,
   phase_ids: 11 as number,
   phase_values: 17 as number,
@@ -159,7 +159,7 @@ export const SPREAD = {
   WORDS: 3 as number,
 } as const;
 
-/** One category's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, status, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes. */
+/** One category's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes. */
 export const TASK_SUMMARY = {
   n: 0 as number,
   ok: 1 as number,
