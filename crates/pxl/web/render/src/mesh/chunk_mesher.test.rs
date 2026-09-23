@@ -120,10 +120,17 @@ impl Baked {
     }
 }
 
-/// Bakes `set` at `lod_step`, its columns `scale` units across.
+/// Bakes `set` at `lod_step`, its columns `scale` units across, with the
+/// texture pack drawn.
 fn bake(set: &OwnedRunSet, lod_step: u32, scale: u32) -> Baked {
+    bake_in(set, lod_step, scale, true)
+}
+
+/// The same, saying whether the pack is drawn — which is what a summary's
+/// colour is taken from.
+fn bake_in(set: &OwnedRunSet, lod_step: u32, scale: u32, textured: bool) -> Baked {
     let mut ctx = BakeContext::new();
-    assert!(ctx.begin(&set.view(), lod_step, scale));
+    assert!(ctx.begin(&set.view(), lod_step, scale, textured));
     let mut words: Vec<u32> = Vec::new();
     loop {
         match ctx.step(&set.view()) {
@@ -209,4 +216,25 @@ fn a_box_that_merges_cells_carries_no_layer_of_its_own() {
     let set = set_of(4, &columns);
     let baked = bake(&set, 2, 1);
     assert_eq!(baked.box_words, COARSE_BOX_WORDS as usize, "a coarse box carries no taps at all");
+}
+
+#[test]
+fn a_summary_is_drawn_in_the_tile_where_the_pack_is_drawn_and_in_the_swatch_where_it_is_not() {
+    // A run whose catalog swatch is nothing like its layer's tile. With the
+    // pack drawn the summary must follow the tile, because that is what the
+    // leaves under it show; with it off it must follow the swatch, for the
+    // same reason. The box carries one colour either way — which one is the
+    // bake's, and the setting re-sources every chunk when it changes.
+    let swatch = [255, 0, 255];
+    let tile = layer_mean(0, swatch);
+    assert_ne!(tile, swatch, "layer 0 has a tile of its own, or this test says nothing");
+
+    let columns: Vec<Vec<Run>> = (0..16).map(|_| vec![Run { z0: 0, z1: 0, rgb: swatch, layer: 0 }]).collect();
+    let set = set_of(4, &columns);
+    for (textured, want) in [(true, tile), (false, swatch)] {
+        let baked = bake_in(&set, 2, 1, textured);
+        let word = baked.boxes().next().expect("a coarse box")[1];
+        let shown = [(word & 255) as u8, ((word >> 8) & 255) as u8, ((word >> 16) & 255) as u8];
+        assert_eq!(shown, srgb_of(linear_of(want[0], want[1], want[2])), "textured {textured}");
+    }
 }

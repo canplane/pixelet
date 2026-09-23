@@ -186,6 +186,11 @@ pub struct ChunkNode {
     /// released on arrival.
     generation: u32,
     show_structures: bool,
+    /// The texture setting the tiers were baked under. A leaf's box carries
+    /// its layer and the shader samples or does not, but a tier over it
+    /// carries one colour and no layer, so which colour that is was decided
+    /// when it was baked (mesh/chunk_mesher.rs).
+    textured: bool,
     objects_revision: u32,
     decor_revision: u32,
     show_decor: bool,
@@ -215,6 +220,7 @@ impl ChunkNode {
             decor_cache: HashMap::new(),
             generation: 0,
             show_structures: settings.show_structures,
+            textured: settings.texture_pack,
             objects_revision: objects_revision_of(page.level, base_i),
             decor_revision: decor_col_revision(col_idx),
             show_decor: settings.show_decor,
@@ -252,11 +258,13 @@ impl ChunkNode {
     /// same addresses and nothing to rebuild.
     fn on_source_change(&mut self) {
         let show_structures = settings_store().show_structures;
+        let textured = settings_store().texture_pack;
         let objects_revision = objects_revision_of(self.page.level, self.base_i);
-        if self.show_structures == show_structures && self.objects_revision == objects_revision {
+        if self.show_structures == show_structures && self.textured == textured && self.objects_revision == objects_revision {
             return;
         }
         self.show_structures = show_structures;
+        self.textured = textured;
         self.objects_revision = objects_revision;
         self.tell_source();
     }
@@ -1199,7 +1207,7 @@ impl Builder {
                 return Progress::Blocked;
             }
             let step = c.wanted().next().unwrap();
-            assert!(self.bake.begin(&set, step, 1 << c.level), "a bake open with no job naming it");
+            assert!(self.bake.begin(&set, step, 1 << c.level, settings_store().texture_pack), "a bake open with no job naming it");
             self.bake_job = Some(BakeJob {
                 id,
                 step,
