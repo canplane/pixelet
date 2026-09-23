@@ -8,11 +8,11 @@
 
 use std::path::PathBuf;
 
-use pxl_spec::space::pvf3::ivec::IVec;
+use std::path::Path;
 
 use crate::page::catalog;
-use crate::page::walk::{self, Args, Page};
-use crate::util::{fmt_bytes, git_sha, measure_output, now_iso8601, CONTENT_ENCODING};
+use crate::page::walk::{self, Args, Page, Target};
+use crate::util::{fmt_bytes, git_sha, measure_output, now_iso8601, refuse_mixed, CONTENT_ENCODING};
 
 /// What a page bake is, apart from the pages it writes: where they go, how
 /// they are served, and which tables they were read from.
@@ -22,6 +22,9 @@ pub struct Bake<'a> {
     /// How often the walk reports progress, in pages. A POI page is a packet
     /// and a geocode page is one label, so they are not the same cost.
     pub every: u64,
+    /// How many levels above a page one object of this bake covers. Zero is
+    /// one object a page.
+    pub group_shamt: u32,
     pub content_type: &'a str,
     pub format: Option<&'a str>,
     /// The `overture_catalog` rows this bake read from, named rather than
@@ -34,7 +37,12 @@ pub struct Bake<'a> {
 ///
 /// The two page bakes differ in their provider, their encoding and their
 /// tables, and in nothing else — this is the rest of both.
-pub fn bake<T>(b: &Bake, connect: impl Fn() -> Result<T, String> + Sync, one: impl Fn(&mut T, IVec) -> Result<Page, String> + Sync) -> Result<(), String> {
+pub fn bake<T>(
+    b: &Bake,
+    prelude: impl FnOnce(&Path) -> Result<(), String>,
+    connect: impl Fn() -> Result<T, String> + Sync,
+    one: impl Fn(&mut T, &Target) -> Result<Page, String> + Sync,
+) -> Result<(), String> {
     let args = Args::parse(b.out.clone())?;
     println!(
         "[bake/{}] out={} land_cache={} concurrency={} limit={} force={}",
@@ -46,7 +54,20 @@ pub fn bake<T>(b: &Bake, connect: impl Fn() -> Result<T, String> + Sync, one: im
         args.force
     );
 
-    let walked = walk::walk(&args, b.kind, b.every, connect, one)?;
+    std::fs::create_dir_all(&args.out).map_err(|e| e.to_string())?;
+    if !args.force {
+        refuse_mixed(&args.out)?;
+    }
+    prelude(&args.out)?;
+
+    let land = walk::land_pages(&args.land_cache)?;
+    println!("[bake/{}] {} land pages from {}", b.kind, land.len(), args.land_cache.display());
+    let mut targets = walk::targets_of(&land, b.group_shamt);
+    if let Some(n) = args.limit {
+        targets.truncate(n);
+    }
+
+    let walked = walk::walk(&args, b.kind, b.every, &targets, connect, one)?;
     let t = &walked.tally;
     println!("[bake/{}] {} items across {} non-empty pages, {}", b.kind, t.items, t.baked, fmt_bytes(t.bytes as f64));
 
@@ -57,7 +78,7 @@ pub fn bake<T>(b: &Bake, connect: impl Fn() -> Result<T, String> + Sync, one: im
         "version": args.out.file_name().map(|n| n.to_string_lossy().to_string()),
         "updated_at": now_iso8601(),
         "git_sha": git_sha(),
-        "land_pages": walked.land.len(),
+        "land_pages": land.len(),
 
         "objects": objects,
         "bytes": bytes,

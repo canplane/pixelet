@@ -7,18 +7,12 @@
 // proxy's routes and its own bundler knows no aliases — under `@/` the
 // import went unresolved and was left external, and Deno's import map is
 // what quietly made it work.
-import { type BakeKind, PUBLISHED_VERSION } from "./published.spec.ts";
+import { PUBLISHED_VERSION } from "./published.spec.ts";
 
-import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
+import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.ts";
 
 export { PUBLISHED_VERSION };
 export { API_PREFIX, API_ROOT, ASSET_PREFIX, ASSET_ROOT, GEO_PREFIX, GEO_ROOT, SEARCH_URL, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
-export type TileKind = BakeKind;
-
-/** `<tiles>/<kind>[/<version>]`, joined with a page index by the caller. */
-export function tileBase(kind: TileKind, published: boolean): string {
-  return published ? `${TILE_ROOT}/${kind}/${PUBLISHED_VERSION[kind]}` : `${TILE_ROOT}/${kind}`;
-}
 
 /** A content-addressed asset — a model, a texture — by its bucket key
  * (`asset/<sha256>`, what the ingest gave its bytes). The root and the bucket's

@@ -3,7 +3,7 @@
 //! `.fixed.terrain`: the room every resident terrain page lies in — how many
 //! records there are, and where a record's bytes are.
 //!
-//! The first and so far only range of the kernel's `.fixed` section
+//! The first and much the largest of the kernel's `.fixed` ranges
 //! (mem/fixed.rs), which is what the name says — placed once when the
 //! module boots, never freed, and of a size settled at compile time.
 //!

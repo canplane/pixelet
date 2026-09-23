@@ -136,11 +136,12 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// `get<string>()` read where it lies: the packet's own bytes for as long
-    /// as the cursor is held, with nothing decoded into a string of its own.
-    /// A string that is not UTF-8 is EBADMSG, where the host's decode would
-    /// have replaced what does not read.
-    pub fn get_str_ref(&self) -> Result<&str, MarshalError> {
+    /// `get<string>()` read where it lies: the packet's own bytes, with
+    /// nothing decoded into a string of its own — it outlives the cursor and
+    /// lives as long as the packet does. A string that is not UTF-8 is
+    /// EBADMSG, where the host's decode would have replaced what does not
+    /// read.
+    pub fn get_str_ref(&self) -> Result<&'a str, MarshalError> {
         match self {
             Cursor::Node(c) if c.type_ == SequenceType::STR as u8 => c._str_ref(),
             _ => Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected a string, got type 0x{:x}", self.type_())), None)),
@@ -507,7 +508,7 @@ impl<'a> NodeCursor<'a> {
     }
 
     /// The string's own bytes where they lie, checked as `_str` checks them.
-    fn _str_ref(&self) -> Result<&str, MarshalError> {
+    fn _str_ref(&self) -> Result<&'a str, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG, Some("len slot OOB"), None));
         }

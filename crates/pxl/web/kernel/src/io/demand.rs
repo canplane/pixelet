@@ -52,6 +52,10 @@ pub enum Category {
     /// The one tile every open-water page shares.
     Ocean,
     Poi,
+    /// One group of pages of the reverse-geocode bake.
+    Geocode,
+    /// Its dictionary, which is a stream of one.
+    GeocodeDict,
 }
 
 impl Category {
@@ -61,6 +65,8 @@ impl Category {
             Category::Terrain => "terrain",
             Category::Ocean => "ocean",
             Category::Poi => "poi",
+            Category::Geocode => "geocode",
+            Category::GeocodeDict => "geocode_dict",
         }
     }
 }

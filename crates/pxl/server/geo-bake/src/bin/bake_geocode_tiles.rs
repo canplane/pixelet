@@ -1,13 +1,17 @@
 // pxl-geo-bake/bin/bake_geocode_tiles.rs
 
-//! Offline pre-bake pass for reverse geocoding: for every land page, the
-//! neighbourhood label the provider resolves for its centre, as one small
-//! packed JSON object (util.rs). A page whose centre falls outside every ingested
-//! division polygon — open water, or simply outside Overture's Divisions
-//! coverage — writes an `.empty` marker instead.
+//! Offline pre-bake pass for reverse geocoding: which places contain each
+//! land page, as a dictionary of every place a polygon names and one packed
+//! object per **group** of pages saying which of them each page is in
+//! (`pxl-spec` bake/place_page.rs).
 //!
-//! The same shape as bake_poi_tiles, and through the same walk: the provider
-//! and the encoding are what differ.
+//! The dictionary is written first, from one ordered read of the divisions
+//! table, because a label is a number into it: a resumed run has to number
+//! the same places the same way, and a group written by an earlier run is
+//! read against the dictionary a later one wrote.
+//!
+//! A group no page of which is in any place writes an `.empty` marker
+//! instead — open water, or outside Overture's Divisions coverage.
 //!
 //! Usage (from the repo root):
 //!   cargo run --profile server -p pxl-geo-bake --bin bake_geocode_tiles -- [flags]
@@ -16,18 +20,21 @@
 //!   --out <dir>          output directory (default ./out/geocode/<published version>)
 //!   --land-cache <path>  terrain's own land_pages.json (default ./out/terrain/land_pages.json)
 //!   --concurrency <n>    parallel fetches, one connection each (default 8)
-//!   --limit <n>          stop after n land pages (smoke test)
-//!   --force              re-fetch pages that already have an object or a marker
+//!   --limit <n>          stop after n groups (smoke test)
+//!   --force              re-fetch groups that already have an object or a marker
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use postgres::{Client, NoTls};
+use pxl_spec::bake::place_page::{encode_place_group, DICT_OBJECT, GROUP_SHAMT};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 
 use pxl_geo_bake::geocode::provider::overture::GeocodeProvider;
+use pxl_geo_bake::geocode::PlaceDict;
 use pxl_geo_bake::page::bake::{self, Bake};
 use pxl_geo_bake::page::walk::Page;
+use pxl_geo_bake::util::{pack, write_atomic, Level};
 use pxl_geo_spec::table;
 
 struct Worker {
@@ -37,25 +44,35 @@ struct Worker {
 
 fn run() -> Result<(), String> {
     let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
+
+    let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
+    let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
+    let dict = PlaceDict::of(provider.divisions(&mut client).map_err(|e| e.to_string())?);
+    println!("[bake/geocode] {} divisions in the dictionary", dict.divisions.len());
+    let packed_dict = pack(&dict.packet().map_err(|e| format!("{e:?}"))?, Level::Stored).map_err(|e| e.to_string())?;
+    drop(client);
+
     bake::bake(
         &Bake {
             kind: "geocode",
             out: PathBuf::from(format!("./out/geocode/{}", PUBLISHED_VERSION.geocode)),
-            every: 2000,
-            content_type: "application/json",
-            format: None,
+            group_shamt: GROUP_SHAMT,
+            every: 200,
+            content_type: "application/octet-stream",
+            format: Some("xtp place dictionary and groups (encode_place_dict, encode_place_group)"),
             sources: &[table::DIVISIONS, table::DIVISION_POINTS],
         },
+        |out| write_atomic(&out.join(DICT_OBJECT), &packed_dict).map_err(|e| e.to_string()),
         || {
             let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
             let provider = GeocodeProvider::prepare(&mut client).map_err(|e| e.to_string())?;
             Ok(Worker { client, provider })
         },
-        |w, page_idx| match w.provider.reverse(&mut w.client, page_idx).map_err(|e| e.to_string())? {
+        |w, target| match w.provider.group(&mut w.client, &dict, &target.leaves)? {
             None => Ok(Page::Empty),
-            Some(result) => Ok(Page::Object {
-                raw: serde_json::to_vec(&result).map_err(|e| e.to_string())?,
-                items: result.parts.len() as u64,
+            Some(group) => Ok(Page::Object {
+                items: group.labels.len() as u64,
+                raw: encode_place_group(&group).map_err(|e| format!("{e:?}"))?,
             }),
         },
     )

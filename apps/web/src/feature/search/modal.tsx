@@ -63,9 +63,9 @@ function formatDistance(m: f64): string {
 }
 
 // Same "pick a language against i18n.language, fall back to the given
-// name" rule use-reverse-geocode.ts's own displayName() applies to
-// GeocodePart — SearchResult's `common` is the identical shape for exactly
-// the same reason (division results share the same multilingual source).
+// name" rule label.ts's own displayPartName() applies to a PlacePart —
+// SearchResult's `common` is the identical shape for exactly the same
+// reason (division results share the same multilingual source).
 // Never touches `name` itself for a "poi" result (always null there) or
 // The subtitle is the same for both kinds: where the point actually is,
 // resolved from its coordinates. It replaced Overture's own address text,

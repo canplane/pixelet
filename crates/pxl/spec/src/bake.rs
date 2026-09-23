@@ -15,5 +15,6 @@ pub mod format;
 pub mod ground;
 pub mod model;
 pub mod pack;
+pub mod place_page;
 #[path = "bake/published.spec.rs"]
 pub mod published;

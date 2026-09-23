@@ -24,6 +24,7 @@ use crate::global::Global;
 use crate::host::body_read;
 use crate::io::demand::{Category, Demand, Phases};
 use crate::io::scheduler::{demand_of, fetch_settle};
+use crate::layer::geocode::{repository as geocode_repository, store as geocode_store};
 use crate::layer::poi::{repository as poi_repository, store as poi_store};
 use crate::layer::terrain::level::LevelPage;
 use crate::layer::terrain::{tile_fetcher, tile_repository};
@@ -41,6 +42,9 @@ impl fmt::Display for DemandUrl<'_> {
             // The one tile the stream has, at the name the bake gives it.
             Category::Ocean => write!(f, "{}", tile_repository::ocean_url()),
             Category::Poi => write!(f, "{}", poi_repository::poi_url(key.subject)),
+            Category::Geocode => write!(f, "{}", geocode_repository::group_url(key.subject)),
+            // The one packet the stream has, at the name the bake gives it.
+            Category::GeocodeDict => write!(f, "{}", geocode_repository::dict_url()),
         }
     }
 }
@@ -162,14 +166,25 @@ fn fetch_arrived(key: u64, outcome: u32, status: u32, body: (u32, u32), fail: u3
         }
     };
     if outcome != Outcome::Ok {
-        failed(category, outcome == Outcome::Aborted);
+        failed(category, subject, outcome == Outcome::Aborted);
     }
     fetch_settle(name, outcome, Some(phases), Failure { fail, status: status as u16 });
 }
 
-fn failed(category: Category, aborted: bool) {
+/// What a demand that did not arrive means for its category.
+///
+/// An abort is not among them: the demand stopped being wanted, and nothing
+/// was answered. A real failure is this key's answer, so that a demand made
+/// from "no answer yet" is not re-made the turn after it was refused
+/// (layer/geocode/store.rs).
+fn failed(category: Category, subject: u64, aborted: bool) {
+    if aborted {
+        return;
+    }
     match category {
-        Category::Terrain if !aborted => tile_fetcher::terrain_failed(),
+        Category::Terrain => tile_fetcher::terrain_failed(),
+        Category::Geocode => geocode_store::set_group(subject, None),
+        Category::GeocodeDict => geocode_store::dict_failed(),
         _ => {}
     }
 }
@@ -238,5 +253,57 @@ fn answer(category: Category, subject: u64, status: u32, block: Option<Block>, p
                 }
             }
         }
+        // Both keep their body: the packet is read where it lies and the
+        // store releases the block with it.
+        Category::Geocode => {
+            let group = subject;
+            match block {
+                _ if absent => {
+                    release(block);
+                    geocode_store::set_group(group, None);
+                    Ok(())
+                }
+                // SAFETY: the block is the heap's, given for this body
+                // alone; the store keeps it and releases it with the packet.
+                Some((at, bytes)) if ok => match unsafe { geocode_repository::open_group(at, bytes) } {
+                    Ok(resident) => {
+                        geocode_store::set_group(group, Some(resident));
+                        Ok(())
+                    }
+                    Err(_) => {
+                        release(block);
+                        Err(FetchFail::Decode)
+                    }
+                },
+                _ => {
+                    release(block);
+                    Err(refused())
+                }
+            }
+        }
+        Category::GeocodeDict => match block {
+            // A bake with no dictionary is one whose groups name nothing:
+            // an answer, so the demand is not made again.
+            _ if absent => {
+                release(block);
+                geocode_store::set_dict(None);
+                Ok(())
+            }
+            // SAFETY: as above.
+            Some((at, bytes)) if ok => match unsafe { geocode_repository::open_dict(at, bytes) } {
+                Ok(resident) => {
+                    geocode_store::set_dict(Some(resident));
+                    Ok(())
+                }
+                Err(_) => {
+                    release(block);
+                    Err(FetchFail::Decode)
+                }
+            },
+            _ => {
+                release(block);
+                Err(refused())
+            }
+        },
     }
 }

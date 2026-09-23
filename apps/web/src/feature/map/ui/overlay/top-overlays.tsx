@@ -6,7 +6,6 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/shared/lib/util/cn.ts";
 import { useAppContext } from "@/app/provider/context.ts";
 import { useCameraBusyInteractionStyle } from "@/feature/map/ui/use-camera-busy-interaction-style.ts";
-import { useKernel } from "@/kernel/shell.ts";
 import { CurrentAddress } from "./current-address.tsx";
 import { useReverseGeocode } from "./use-reverse-geocode.ts";
 import { SensorStatus } from "./sensor-status.tsx";
@@ -21,7 +20,7 @@ export function TopOverlays() {
   const { ui } = useAppContext();
   const { t } = useTranslation();
 
-  const { label: addressLabel } = useReverseGeocode(useKernel((s) => s.map.page));
+  const addressLabel = useReverseGeocode();
 
   return (
     <>

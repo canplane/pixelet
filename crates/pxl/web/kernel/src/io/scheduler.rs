@@ -32,6 +32,10 @@ const TERRAIN_WANTED: usize = (WINDOW_LEVELS * HELD_AXIS * HELD_AXIS) as usize +
 /// The shared open-ocean tile, which is a stream of one.
 const OCEAN_WANTED: usize = 1;
 
+/// The reverse-geocode label's: the group the map centre is in, and the
+/// dictionary it is read against (layer/geocode/fetcher.rs).
+const GEOCODE_WANTED: usize = 2;
+
 /// Demands wanted at once, which is the *sum* of the wishlists and not the
 /// largest of them: each is replaced whole and they are replaced one at a
 /// time, so a category filling the queue would have the next one's demands
@@ -42,7 +46,7 @@ const OCEAN_WANTED: usize = 1;
 /// Nothing is added for what is still in flight after its page left a
 /// wishlist. That is not wanted, so it is not here: what is on the wire is a
 /// set of its own and takes none of this room (xpute_runtime::io::queue).
-const HELD: usize = TERRAIN_WANTED + OCEAN_WANTED;
+const HELD: usize = TERRAIN_WANTED + OCEAN_WANTED + GEOCODE_WANTED;
 
 /// Keys named at once: one per demand wanted, one per demand on the wire, and
 /// one per abort not yet handed out.

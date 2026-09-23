@@ -16,8 +16,6 @@
 
 import { id as build_id, number as build_number, time as build_time } from "virtual:pxl-build";
 
-import { tileBase } from "@/config/route.ts";
-
 /** Application environment name, from VITE_APP_ENV (falling back to Vite's
  * mode). Shown in settings so it is possible to tell which build is on screen
  * — on a phone there is no URL bar or devtools to check against. */
@@ -45,7 +43,3 @@ export const BUILD_NUMBER: string = build_number;
  * outside Overture's Divisions coverage — or a genuine failure.
  */
 export const PUBLISHED_TILES: boolean = __PUBLISHED_TILES__;
-
-export const TILE_BASE_URL: string = tileBase("terrain", PUBLISHED_TILES);
-export const POI_TILE_BASE_URL: string = tileBase("poi", PUBLISHED_TILES);
-export const GEOCODE_TILE_BASE_URL: string = tileBase("geocode", PUBLISHED_TILES);

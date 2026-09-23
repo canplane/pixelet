@@ -32,6 +32,7 @@ use crate::layer::character::companion::{companion_step, CompanionProps};
 use crate::layer::decor::asset_store::decor_assets_wanted;
 use crate::layer::environment::state::map_environment_step;
 use crate::layer::environment::theme_clock::theme_clock_step;
+use crate::layer::geocode::fetcher::geocode_fetcher_step;
 use crate::layer::marker::frame_gizmo::debug_gizmos_step;
 use crate::layer::marker::hover_cursor::hover_cursor_step;
 use crate::layer::marker::location_puck::location_puck_step;
@@ -177,6 +178,7 @@ pub fn world_turn() -> f64 {
     effect!(worst, "geolocation", geolocation_step(platform.geolocation));
     effect!(worst, "orientation", orientation_watchdog_step(platform.orientation));
     effect!(worst, "tiles", tile_fetcher_step());
+    effect!(worst, "geocode", geocode_fetcher_step());
     effect!(worst, "follow", follow_mode_step());
     effect!(worst, "theme", theme_clock_step());
     effect!(worst, "decor", decor_assets_wanted());

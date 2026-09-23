@@ -67,10 +67,13 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  *   POI object means "no POI on this page", which poi/repository.ts resolves
  *   to `[]` directly, not a shared fallback object this Worker would need to
  *   know about.
- * - `geocode/<version>/<page_idx>` — crates/pxl/server/geo-bake/src/geocode/tool/
- *   bake_geocode_tiles.ts's own sibling prefix, same no-fallback shape as
- *   POI (a missing object means "outside Overture's Divisions coverage",
- *   geocode/repository.ts resolves that to `null` directly).
+ * - `geocode/<version>/<group_idx>`, plus the one `geocode/<version>/_dict`
+ *   the whole set is read against. A reverse-geocode object covers a group
+ *   of 16 pages a side rather than one page, and names the places its pages
+ *   are in by number into that dictionary (pxl-spec bake/place_page.rs) — so
+ *   this prefix has a shared object the way terrain does, and unlike POI. A
+ *   missing group means "no page under it is in any place", which the
+ *   kernel's layer/geocode/ reads as no label.
  * - `asset/<sha256>` — a model or an image, named by its content;
  *   pxl-asset-bake's ingest_asset writes them and the
  *   catalogs name them by path. No version segment: a changed file is a
@@ -93,7 +96,8 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * It is not rate limiting and does not pretend to be — that needs WAF rules,
  * which need a real zone rather than a workers.dev hostname.
  */
-const KEY_RE = /^(?:(?:poi|geocode)\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/-?\d{1,20}|terrain\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|\d{1,2}\/-?\d{1,20})|asset\/[0-9a-f]{64})$/;
+const KEY_RE =
+  /^(?:poi\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/-?\d{1,20}|geocode\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_dict|-?\d{1,20})|terrain\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|\d{1,2}\/-?\d{1,20})|asset\/[0-9a-f]{64})$/;
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

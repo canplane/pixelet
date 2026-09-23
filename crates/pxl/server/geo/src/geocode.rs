@@ -11,31 +11,18 @@
 use std::collections::HashMap;
 
 use deadpool_postgres::Pool;
-use pxl_geo_spec::overture::division::{broad_rank, FINE_SUBTYPE_PRIORITY};
-use serde::Serialize;
+use pxl_geo_spec::overture::division::{broad_rank, rank_of, FINE_SUBTYPE_PRIORITY};
+use pxl_spec::place::PlacePart;
 use tokio_postgres::Row;
 
 use pxl_server::db::DbError;
 
-/// One level of a search result's context, broad to narrow. The shape is this
-/// server's own rather than the Divisions theme's: what the provider is decides
-/// which subtypes exist and in what order (pxl-geo-spec), and what the answer
-/// looks like is decided here. The reverse geocode answers in the same shape
-/// from its own crate, and the client reads both the same way.
-#[derive(Serialize)]
-pub struct GeocodePart {
-    pub name: String,
-    /// A language-tag-keyed name map, when Overture has one for this division.
-    /// Omitted rather than null, so the client's own optional field reads the
-    /// same whichever side produced it.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub common: Option<serde_json::Value>,
-}
-
-impl GeocodePart {
-    fn new(name: String, common: Option<serde_json::Value>) -> GeocodePart {
-        GeocodePart { name, common }
-    }
+/// A provider's name-by-language map, read into the answer's own. Overture
+/// gives `names.common` as `{"en": …, "ko": …}`; anything that is not a map
+/// of strings is nothing, because a name a reader cannot be shown is not one.
+fn names_of(common: &Option<serde_json::Value>) -> std::collections::BTreeMap<String, String> {
+    let Some(serde_json::Value::Object(map)) = common else { return Default::default() };
+    map.iter().filter_map(|(lang, name)| name.as_str().map(|n| (lang.clone(), n.to_string()))).collect()
 }
 
 /// `gers_id <> $3` matters when the point being resolved is itself a
@@ -85,25 +72,27 @@ impl Part {
         }
     }
 
-    fn into_geocode_part(self) -> GeocodePart {
-        GeocodePart::new(self.name, self.common)
+    /// The part this row is, or none for a subtype the ladder has no rung
+    /// for (`pxl-geo-spec`).
+    fn into_part(self) -> Option<PlacePart> {
+        rank_of(&self.subtype).map(|rank| PlacePart::new(rank, self.name, names_of(&self.common)))
     }
 }
 
 /// Broad before narrow, each name once. Shared by both resolvers so a batched
 /// answer and a single one cannot order themselves differently.
-fn order_broad(parts: Vec<Part>) -> Vec<GeocodePart> {
+fn order_broad(parts: Vec<Part>) -> Vec<PlacePart> {
     let mut ordered: Vec<Part> = parts.into_iter().filter(|p| broad_rank(&p.subtype).is_some()).collect();
     ordered.sort_by_key(|p| broad_rank(&p.subtype));
 
     let mut seen: Vec<String> = Vec::new();
-    let mut out: Vec<GeocodePart> = Vec::new();
+    let mut out: Vec<PlacePart> = Vec::new();
     for p in ordered {
         if seen.contains(&p.name) {
             continue;
         }
         seen.push(p.name.clone());
-        out.push(p.into_geocode_part());
+        out.extend(p.into_part());
     }
     out
 }
@@ -112,14 +101,14 @@ fn order_broad(parts: Vec<Part>) -> Vec<GeocodePart> {
 /// `overture_division_points.geom` are stored in), not WGS84 lon/lat.
 /// `exclude_gers_id` is the division being resolved itself, so it never shows
 /// up as its own parent.
-pub async fn resolve_broad_context(pool: &Pool, cx: f64, cy: f64, exclude_gers_id: &str) -> Result<Vec<GeocodePart>, DbError> {
+pub async fn resolve_broad_context(pool: &Pool, cx: f64, cy: f64, exclude_gers_id: &str) -> Result<Vec<PlacePart>, DbError> {
     let client = pool.get().await?;
     let rows = client.query(CONTAINING_BROAD_SQL, &[&cx, &cy, &exclude_gers_id]).await?;
     Ok(order_broad(rows.iter().map(Part::from_row).collect()))
 }
 
-pub async fn resolve_point_context_batch(pool: &Pool, xs: &[f64], ys: &[f64]) -> Result<Vec<Vec<GeocodePart>>, DbError> {
-    let mut out: Vec<Vec<GeocodePart>> = (0..xs.len()).map(|_| Vec::new()).collect();
+pub async fn resolve_point_context_batch(pool: &Pool, xs: &[f64], ys: &[f64]) -> Result<Vec<Vec<PlacePart>>, DbError> {
+    let mut out: Vec<Vec<PlacePart>> = (0..xs.len()).map(|_| Vec::new()).collect();
     if xs.is_empty() {
         return Ok(out);
     }
@@ -140,7 +129,7 @@ pub async fn resolve_point_context_batch(pool: &Pool, xs: &[f64], ys: &[f64]) ->
         let fine = FINE_SUBTYPE_PRIORITY
             .iter()
             .find_map(|subtype| list.iter().position(|p| p.subtype == *subtype))
-            .map(|at| GeocodePart::new(list[at].name.clone(), list[at].common.clone()));
+            .and_then(|at| rank_of(&list[at].subtype).map(|rank| PlacePart::new(rank, list[at].name.clone(), names_of(&list[at].common))));
 
         let mut parts = order_broad(list);
         if let Some(fine) = fine {

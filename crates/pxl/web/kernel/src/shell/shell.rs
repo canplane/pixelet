@@ -8,8 +8,11 @@
 
 use core::fmt::{self, Write};
 
+use pxl_spec::bake::place_page::leaf_slot;
+use pxl_spec::place::PlaceRank;
 use pxl_spec::space::adapter::epsg4326;
 use pxl_spec::space::indexer::L3_IDX;
+use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::codec::json::{read_json, JsonValue, Quoted};
 
@@ -22,6 +25,8 @@ use crate::global::Global;
 use crate::layer::character::preview::{preview_close, preview_open};
 use crate::layer::character::store::companion_load_store;
 use crate::layer::character::variant::CharacterGroup;
+use crate::layer::geocode::fetcher::centre_group;
+use crate::layer::geocode::store as geocode_store;
 use crate::layer::object::store::OBJECT_STORAGE_VERSION;
 use crate::layer::terrain::elevation::{get_ele, ground_or_raw};
 use crate::sched::ledger::log::{ledger_set_logging, ledger_window_start, ledger_window_stop};
@@ -30,7 +35,7 @@ use crate::shell::map_store::map_store;
 use crate::shell::setting::schema::{SettingRef, SettingValue, SETTING_KEYS};
 use crate::shell::setting::store::settings_store;
 use crate::shell::ui::compass::{compass_reset, show_compass};
-use crate::shell::ui::scale_bar::scale_bar;
+use crate::shell::ui::scale_bar::{mercator_zoom, scale_bar};
 use crate::world::change::request_world_tick;
 use crate::world::frame::view::view;
 
@@ -80,6 +85,42 @@ impl<T: fmt::Display> fmt::Display for Or<T> {
     }
 }
 
+/// The place the centre page is in, broad to narrow, cut at the rung this
+/// zoom asks for: `[{"name":…,"names":{…}}, …]`, and `[]` where the page is
+/// in none or the packets it is read out of are not here yet.
+///
+/// Every language the provider had, rather than one resolved name. The
+/// reader's language is the page's — i18next holds it — and switching it
+/// re-reads a label already sent instead of asking for another.
+fn place_json<W: Write>(out: &mut W, page: Option<IVec>, zoom: f64) -> fmt::Result {
+    out.write_char('[')?;
+    let deepest = PlaceRank::at_zoom(zoom);
+    let parts = page
+        .zip(centre_group())
+        .zip(geocode_store::dict())
+        .and_then(|((page, group), dict)| {
+            let group = geocode_store::group_of(group)?;
+            group.view.place_of(leaf_slot(ivec::X(page), ivec::Y(page)), &dict.view)
+        })
+        .into_iter()
+        .flatten()
+        .filter(|p| p.rank <= deepest);
+    for (i, part) in parts.enumerate() {
+        if i > 0 {
+            out.write_char(',')?;
+        }
+        write!(out, "{{\"name\":{},\"names\":{{", Quoted(part.name))?;
+        for (j, lang) in part.languages().enumerate() {
+            if j > 0 {
+                out.write_char(',')?;
+            }
+            write!(out, "{}:{}", Quoted(lang.0), Quoted(lang.1))?;
+        }
+        out.write_str("}}")?;
+    }
+    out.write_char(']')
+}
+
 fn pose_status_str(status: DevicePoseStatus) -> &'static str {
     match status {
         DevicePoseStatus::Idle => "idle",
@@ -107,8 +148,8 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
         epsg4326::unproject(&mut g, c.i, c.f);
         g
     });
-    // The L3 page that centre falls in, which is what a reverse-geocode label
-    // is keyed by. Sent because the shell would otherwise recompute it: it
+    // The L3 page that centre falls in: what "the area I am looking at" is
+    // announced per. Sent because the shell would otherwise recompute it: it
     // would have to project the degrees back and index them again, in a second
     // implementation of the space, to reach the number this line already has.
     // A decimal string rather than a number — a page index is 64-bit, and
@@ -160,7 +201,9 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
         Num(bar.bar_width_px),
         bar.is_default_zoom
     )?;
-    write!(out, "\"compass\":{{\"show\":{}}},", show_compass())?;
+    out.write_str("\"place\":")?;
+    place_json(out, page, mercator_zoom(view().height.max(1.0)))?;
+    write!(out, ",\"compass\":{{\"show\":{}}},", show_compass())?;
     write!(out, "\"camera_busy\":{},", camera.camera_status != CameraStatus::Idle)?;
     write!(out, "\"object_storage_version\":{OBJECT_STORAGE_VERSION}}}")
 }
