@@ -57,47 +57,51 @@ export type Env = {
 import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.ts";
 
 /**
- * Object keys this Worker is willing to ask R2 for. Four shapes:
+ * Object keys this Worker is willing to ask R2 for.
  *
- * - `terrain/<version>/<level>/<page_idx>`, plus the shared
- *   `terrain/<version>/_ocean` tile, which every level's open water reads. A
- *   page's key is within its level, so the level is its own segment.
- * - `poi/<version>/<page_idx>` — crates/pxl/server/geo-bake/src/poi/tool/bake_poi_tiles.rs's
- *   own sibling prefix in the same bucket. No `_ocean`-equivalent: a missing
- *   POI object means "no POI on this page", which poi/repository.ts resolves
- *   to `[]` directly, not a shared fallback object this Worker would need to
- *   know about.
- * - `geocode/<version>/<group_idx>`, plus the one `geocode/<version>/_dict`
- *   the whole set is read against. A reverse-geocode object covers a group
- *   of 16 pages a side rather than one page, and names the places its pages
- *   are in by number into that dictionary (pxl-spec bake/place_page.rs) — so
- *   this prefix has a shared object the way terrain does, and unlike POI. A
- *   missing group means "no page under it is in any place", which the
- *   kernel's layer/geocode/ reads as no label.
+ * A baked page is named by its **quadkey**: the Web Mercator tile key at the
+ * zoom the page is held at, one base-4 digit a zoom, coarsest first
+ * (pxl-spec bake/quadkey.rs). Nothing else is written — the number of digits
+ * is the level, and the digits are the index — so the three bakes differ only
+ * in how long a name they have and which shared object they keep beside it:
+ *
+ * - `terrain/<version>/<quadkey>`, 5 to 15 digits, a page at every level of
+ *   the pyramid from the leaf up to `PAGE_TOP_LEVEL`. Plus the shared
+ *   `_ocean` page every level's open water reads.
+ * - `poi/<version>/<quadkey>`, 15 digits, because POI is baked at the leaf and
+ *   nowhere else. No `_ocean`-equivalent: a missing POI object means "no POI
+ *   on this page", which the kernel resolves to the empty page directly, not a
+ *   shared fallback this Worker would need to know about.
+ * - `geocode/<version>/<quadkey>`, 11 digits, because a reverse-geocode object
+ *   covers a group of 16 pages a side (pxl-spec bake/place_page.rs's
+ *   `GROUP_SHAMT`). Plus the one `_dict` the whole set is read against, since
+ *   a group names the places its pages are in by number into it. A missing
+ *   group means "no page under it is in any place", which the kernel's
+ *   layer/geocode/ reads as no label.
  * - `asset/<sha256>` — a model or an image, named by its content;
- *   pxl-asset-bake's ingest_asset writes them and the
- *   catalogs name them by path. No version segment: a changed file is a
- *   new key, which is what makes `immutable` true of it.
+ *   pxl-asset-bake's ingest_asset writes them and the catalogs name them by
+ *   path. No version segment: a changed file is a new key, which is what makes
+ *   `immutable` true of it.
  *
- * page_idx is an L3 index printed as a decimal BigInt (see tile_repository.ts/
- * poi/repository.ts/geocode/repository.ts), so it can be negative; the
- * version segment is whatever the bake wrote as its output directory's last
- * path component (`v1` by default), kept permissive enough to survive a
- * rename. `poi`/`geocode` themselves are literals, not a permissive segment —
- * unlike the version, an unknown type prefix isn't a rename to allow for,
- * it's a new bake target this Worker needs its own line for (this stayed a
- * plain alternation rather than a generic segment for the two types there
- * are actually bake tools for; add to it when a third one ships, not before).
+ * The version is `v` and a number, and this pattern does not read which one:
+ * the client asks for whatever `published.json` says, so a bump is a client
+ * change and never a deploy of this file.
  *
- * This exists for cost, not correctness. A miss is still a billed R2 class-B
- * operation, so without it anyone can walk `/tile/<anything>` and charge
- * this account one read per request while every single one 404s. Matching
- * the shape first means a scraper's garbage never reaches the bucket at all.
- * It is not rate limiting and does not pretend to be — that needs WAF rules,
- * which need a real zone rather than a workers.dev hostname.
+ * **This exists for cost, not correctness.** A miss is still a billed R2
+ * class-B operation, so without it anyone can walk the tile root and charge
+ * this account one read per request while every single one 404s. Matching the
+ * shape first means a scraper's garbage never reaches the bucket at all. It is
+ * not rate limiting and does not pretend to be — that needs WAF rules, which
+ * need a real zone rather than a workers.dev hostname.
+ *
+ * What it has to sieve is now almost nothing. The old shape spelled a page as
+ * a decimal index of up to twenty digits under a level of up to two, so the
+ * key space was some 10^20 strings a level and all but a handful named
+ * nothing. A quadkey of a given length is a page and there are no others, so
+ * the key space here *is* the address space and this pattern turns away only
+ * what was never an address.
  */
-const KEY_RE =
-  /^(?:poi\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/-?\d{1,20}|geocode\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_dict|-?\d{1,20})|terrain\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|\d{1,2}\/-?\d{1,20})|asset\/[0-9a-f]{64})$/;
+const KEY_RE = /^(?:terrain\/v\d{1,3}\/(?:_ocean|[0-3]{5,15})|poi\/v\d{1,3}\/[0-3]{15}|geocode\/v\d{1,3}\/(?:_dict|[0-3]{11})|asset\/[0-9a-f]{64})$/;
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the
  * cache has no meaning for is a header it leaves alone, which is the whole

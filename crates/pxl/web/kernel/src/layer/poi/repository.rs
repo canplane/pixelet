@@ -11,15 +11,17 @@
 //! configured, the dev tile server otherwise; a 404 from either resolves to
 //! the empty page with no extra round trip.
 
+use pxl_spec::bake::constant::LEVEL0_ZOOM;
 use pxl_spec::bake::format::{encode_empty_poi_page, PoiPage};
+use pxl_spec::bake::quadkey::{quadkey_of, Quadkey};
 use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_core::status::error::MarshalError;
 use xpute_runtime::mem::heap::Block;
 
-/// A POI page's name in its bake: the page's own key, which is what the bake
-/// writes it under.
-pub fn poi_name(page_idx: IVec) -> IVec {
-    page_idx
+/// A POI page's name in its bake. POI is baked at the leaf and nowhere else,
+/// so its name is always a full-length quadkey (pxl-spec bake/quadkey.rs).
+pub fn poi_name(page_idx: IVec) -> Quadkey {
+    quadkey_of(LEVEL0_ZOOM, page_idx)
 }
 
 pub struct ResidentPoiPage {

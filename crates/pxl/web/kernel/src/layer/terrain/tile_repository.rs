@@ -18,9 +18,10 @@
 
 use core::fmt;
 
-use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
+use pxl_spec::bake::constant::{zoom_of_level, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_spec::bake::format::{decode_terrain, decode_terrain_into, Ground, PageRoom, Terrain, Tile};
 use pxl_spec::bake::pack::GroundCell;
+use pxl_spec::bake::quadkey::quadkey_of;
 use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::mem::heap::alloc;
@@ -42,13 +43,14 @@ pub const OCEAN_KEY: &str = "_ocean";
 /// The category the shared ocean tile is fetched under.
 pub const OCEAN_CATEGORY: Category = Category::Ocean;
 
-/// A page's name in the terrain bake: its key within its level, and the level
-/// before it, which is how the bake writes it.
+/// A page's name in the terrain bake: the quadkey of the tile it stands on, at
+/// the zoom its level is (pxl-spec bake/quadkey.rs). The level is not written
+/// beside it because the name's length is the level.
 pub struct TileName(pub LevelPage);
 
 impl fmt::Display for TileName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}/{}", self.0.level, self.0.page)
+        write!(f, "{}", quadkey_of(zoom_of_level(self.0.level), self.0.page))
     }
 }
 

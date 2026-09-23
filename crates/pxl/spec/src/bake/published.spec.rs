@@ -8,6 +8,10 @@
 /// A published bake is immutable: re-baking bumps the version rather than
 /// overwriting objects, which is what invalidates CDN edge and browser
 /// caches. Bumping one here is the whole change.
+///
+/// All three moved together at v6/v6/v4, which is the one time they have:
+/// that is the set baked before a page was named by its quadkey rather than
+/// by a level and a decimal index (pxl-spec bake/quadkey.rs).
 pub struct PublishedVersion {
     pub terrain: &'static str,
     pub poi: &'static str,
@@ -15,9 +19,9 @@ pub struct PublishedVersion {
 }
 
 pub const PUBLISHED_VERSION: PublishedVersion = PublishedVersion {
-    terrain: "v5",
-    poi: "v5",
-    geocode: "v3",
+    terrain: "v6",
+    poi: "v6",
+    geocode: "v4",
 };
 
 /// The kinds a version is published for: the fields of `PUBLISHED_VERSION`.

@@ -188,28 +188,37 @@ Deno.test("kernel - a map centre fetches its terrain and draws it, and the map s
   action({ type: "go_to", lon: 126.978, lat: 37.5665 });
   let first = turn();
   assert(first.snapshot.map.center !== null, "the centre is set");
-  // The page the shell keys a reverse-geocode label by, checked against the
-  // terrain fetches below.
+  // The page the shell keys a reverse-geocode label by. It is the index, not
+  // an object's name — what the kernel asks the host for is the name.
   const page = first.snapshot.map.page;
   assert(page !== null && /^\d+$/.test(page), `the centre's page is a decimal index: ${page}`);
   const statuses = new Set<string>([first.snapshot.map.status]);
   const categories = new Set(first.fetched.map((f) => f.category));
   let terrain_names = first.fetched.filter((f) => f.category === "terrain").map((f) => f.name);
+  let geocode_names = first.fetched.filter((f) => f.category === "geocode").map((f) => f.name);
   let max_draws = first.draws;
   for (let i = 0; i < 400; i++) {
     const t = turn();
     statuses.add(t.snapshot.map.status);
     for (const f of t.fetched) categories.add(f.category);
     terrain_names = terrain_names.concat(t.fetched.filter((f) => f.category === "terrain").map((f) => f.name));
+    geocode_names = geocode_names.concat(t.fetched.filter((f) => f.category === "geocode").map((f) => f.name));
     max_draws = Math.max(max_draws, t.draws);
     first = t;
   }
   assert(categories.has("terrain"), `terrain was asked for: ${[...categories]}`);
-  // The centre's own page is among the pages the kernel fetched terrain for,
-  // which is what says `map.page` is that centre's page and not merely a
-  // well-shaped number.
-  assert(terrain_names.some((n) => n.endsWith(`/${page}`)), `the centre's page ${page} was fetched`);
-  assert(terrain_names.every((n) => /^\d+\/-?\d+$/.test(n)), `a terrain name is a level and a page: ${terrain_names.slice(0, 3)}`);
+  assert(terrain_names.every((n) => /^[0-3]{5,15}$/.test(n)), `a terrain name is a quadkey: ${terrain_names.slice(0, 3)}`);
+  assert(geocode_names.every((n) => /^[0-3]{11}$/.test(n)), `a group's name is a shorter one: ${geocode_names.slice(0, 3)}`);
+  // The property the names have this shape for: a coarser object's name is a
+  // prefix of a finer one's over the same ground, so one prefix in the store
+  // is one region. Two layers that share no code arrive at the same digits
+  // from the same centre, which is also what says these are that centre's
+  // pages rather than well-shaped numbers.
+  assert(geocode_names.length > 0, "a reverse-geocode group was asked for");
+  assert(
+    terrain_names.some((t) => geocode_names.some((g) => t.startsWith(g))),
+    `no leaf sits under a fetched group: ${terrain_names.slice(0, 3)} / ${geocode_names.slice(0, 3)}`,
+  );
   assert(max_draws > 0, "something was drawn");
   assert(statuses.has("loading"), `the map loaded: ${[...statuses]}`);
   assertEquals(first.snapshot.map.status, "success");

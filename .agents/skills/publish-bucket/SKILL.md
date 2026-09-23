@@ -17,12 +17,23 @@ how it gets there and how you know it arrived.
 
 | Prefix                  | Object                      | Named by            | Policy                                                        |
 | ----------------------- | --------------------------- | ------------------- | ------------------------------------------------------------- |
-| `terrain/<version>/`    | packed XTP page, `_ocean`   | `level/page_idx`    | immutable; a re-bake is a new version                         |
-| `poi/<version>/`        | packed XTP page             | `page_idx`          | version = format; content rewritten in place monthly          |
-| `geocode/<version>/`    | packed JSON page            | `page_idx`          | same as poi                                                   |
+| `terrain/<version>/`    | packed XTP page, `_ocean`   | quadkey, 5–15       | immutable; a re-bake is a new version                         |
+| `poi/<version>/`        | packed XTP page             | quadkey, 15         | version = format; content rewritten in place monthly          |
+| `geocode/<version>/`    | packed JSON page, `_dict`   | quadkey, 11         | same as poi                                                   |
 | `asset/`                | glb, png, webp — not packed | sha256 of the bytes | immutable by construction; unreferenced keys deleted whenever |
 | `_meta/land_pages.json` | terrain's land/ocean list   | fixed name          | mutable; rewritten with a terrain re-bake                     |
 | `_meta/build-counter`   | the official build count    | fixed name          | mutable; taken and written by CI's gate, never by hand        |
+
+A page is named by its **quadkey**: the Web Mercator tile key at the zoom the
+page is held at, one base-4 digit a zoom, coarsest first (pxl-spec
+bake/quadkey.rs). The length is the level, so nothing writes a level down, and
+the three bakes differ only in how long a name they have — terrain 5 to 15
+digits for its pyramid, POI 15 because it is baked at the leaf alone, geocode
+11 because a group covers 16 pages a side. They land in one space, so
+`terrain/<v>/13211032`, `poi/<v>/13211032` and `geocode/<v>/13211032` are the
+same ground, and **one prefix is one region across all three at every level**.
+That is what a later split of the bucket would be: a prefix match, not a
+second re-keying.
 
 The versions the client requests are `PUBLISHED_VERSION` in
 `spec/pxl/spec/bake/published.json`; the asset keys are the generated table
@@ -64,9 +75,22 @@ checksums (v2 sends `x-amz-checksum-*` headers R2 refuses), set
 
 ### Terrain
 
+Terrain is the one bake whose disk layout is not the bucket's. It keeps
+`<level>/<page index>` because `bake_tiles.rs` clears a level's directory so
+that a parent cannot outlive a child it no longer has, and clears the levels
+past the top so that a level a run did not fold is not part of the set — both
+invariants a flat tree would have to restate as a rule about name lengths. So
+the names are translated on the way out, by hard links, which costs no bytes:
+
 ```bash
-aws s3 sync ./out/terrain/<version> s3://pixelet-tiles/terrain/<version> \
-  --profile r2 --endpoint-url $R2 --exclude "*.part" \
+version=$(jq -r .PUBLISHED_VERSION.terrain spec/pxl/spec/bake/published.json)
+cargo run --release --manifest-path crates/Cargo.toml --bin rekey_tiles -- link \
+  --bake terrain --from "./out/terrain/$version" --to "./out/terrain/$version.bucket"
+```
+
+```bash
+aws s3 sync ./out/terrain/<version>.bucket s3://pixelet-tiles/terrain/<version> \
+  --profile r2 --endpoint-url $R2 \
   --content-type application/octet-stream \
   --content-encoding "$(jq -r .content_encoding out/terrain/manifest.json)" \
   --cache-control "public, max-age=31536000, immutable"
@@ -92,6 +116,10 @@ cause. A bake refuses to add objects to a directory of the other encoding,
 so one version holds one encoding.
 
 ### POI and geocode
+
+Neither needs the step above: they keep no level directories, so nothing on
+disk wanted the page index as a name and the bake writes the bucket's straight
+out. A sync is a sync.
 
 ```bash
 for kind in poi geocode; do
@@ -133,6 +161,39 @@ before deploying**: the shipped palette reads that table, and a key it
 names that is not in the bucket is a 404 on the live site. `deno task
 deploy`'s bundle check fails if a model or image byte is back in the bundle.
 
+## Renaming a published set
+
+Only for a layout change, which has happened once: terrain v6, POI v6 and
+geocode v4 are v5/v5/v3 renamed onto quadkeys and nothing else. A rename
+inside a bucket is a server-side copy, so the bytes never leave R2 and the
+bill is one class-A operation an object — the same as an upload would cost,
+without the upload. The new set is then derived from what is actually
+published rather than from a local tree that may have drifted.
+
+`s5cmd` rather than `aws s3 cp`: the rename is one operation an object and
+227k of them, and the AWS CLI is a process a call at some 0.4 s, which is
+hours of process start alone. s5cmd runs a command file in one process.
+
+```bash
+export AWS_PROFILE=r2
+for pair in terrain/v5:terrain/v6 poi/v5:poi/v6 geocode/v3:geocode/v4; do
+  from=${pair%%:*}; to=${pair##*:}
+  s5cmd --endpoint-url $R2 ls "s3://pixelet-tiles/$from/*" | awk '{print $NF}' \
+    | sed "s|^|$from/|" \
+    | cargo run --release --manifest-path crates/Cargo.toml --bin rekey_tiles -- emit \
+        --bucket pixelet-tiles --from "$from" --to "$to" \
+    > /tmp/rekey-$to.txt
+  wc -l < /tmp/rekey-$to.txt            # must equal the old prefix's object count
+  s5cmd --endpoint-url $R2 run /tmp/rekey-$to.txt
+done
+```
+
+A copy carries the source's metadata, so the content-type, content-encoding
+and cache-control come across with it and none of the upload flags apply.
+Count both prefixes afterwards and only then delete the old ones — an object
+the rename skipped is one the new prefix does not have, and nothing else would
+say so.
+
 ## Verify what is stored
 
 ```bash
@@ -144,7 +205,7 @@ aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/_ocean --pr
 
 # metadata must have survived: expect the manifest's ContentEncoding on a page,
 # ContentType model/gltf-binary and no ContentEncoding on a glb
-aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/0/<page_idx> --profile r2 --endpoint-url $R2
+aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/<quadkey> --profile r2 --endpoint-url $R2
 aws s3api head-object --bucket pixelet-tiles --key asset/<sha256> --profile r2 --endpoint-url $R2
 ```
 
@@ -169,7 +230,7 @@ one-loop smoke test over every path the app takes.
 perfectly correct while the serving path is not:
 
 ```bash
-U=https://plei.me/geo/tiles/terrain/<version>/0/<page_idx>
+U=https://plei.me/geo/tiles/terrain/<version>/<quadkey>
 curl -s -H "Accept-Encoding: gzip, zstd" -D - -o /dev/null "$U"   # expect the manifest's content-encoding
 curl -s -H "Accept-Encoding: gzip, zstd" "$U" | zstd -dcq | head -c 2 | xxd -p   # zstd: expect 5854 (XT)
 curl -s --compressed "$U" | head -c 2 | xxd -p                  # gzip: expect 5854 (XT), never 1f8b
@@ -208,7 +269,7 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache
 # or by URL, up to 30 per call
 curl -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
   -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
-  --data '{"files":["https://plei.me/geo/tiles/poi/<version>/<page_idx>"]}'
+  --data '{"files":["https://plei.me/geo/tiles/poi/<version>/<quadkey>"]}'
 ```
 
 The token needs the `Zone → Cache Purge` permission; the zone ID is on the

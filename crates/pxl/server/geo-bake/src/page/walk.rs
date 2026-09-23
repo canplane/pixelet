@@ -23,6 +23,7 @@
 //! it classifies itself, it has the shared ocean tile, and it has no `.empty` —
 //! folding it in would bend all three.
 
+use pxl_spec::bake::quadkey::quadkey_of;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -159,6 +160,7 @@ pub fn write_land_pages(path: &Path, land: &[IVec]) -> Result<(), String> {
 pub fn walk<T>(
     args: &Args,
     tag: &str,
+    zoom: u32,
     every: u64,
     targets: &[Target],
     connect: impl Fn() -> Result<T, String> + Sync,
@@ -180,8 +182,13 @@ pub fn walk<T>(
                     let i = next.fetch_add(1, Ordering::Relaxed);
                     let Some(target) = targets.get(i) else { break };
                     let page_idx = target.idx;
-                    let path = args.out.join(page_idx.to_string());
-                    let marker = args.out.join(format!("{page_idx}{EMPTY_SUFFIX}"));
+                    // The name the bucket serves the object under, written
+                    // here so that publishing is a plain sync: unlike terrain,
+                    // these bakes keep no level directories, so nothing on
+                    // disk wants the index as a name (pxl-spec bake/quadkey.rs).
+                    let name = quadkey_of(zoom, page_idx).to_string();
+                    let path = args.out.join(&name);
+                    let marker = args.out.join(format!("{name}{EMPTY_SUFFIX}"));
 
                     if !args.force && (path.exists() || marker.exists()) {
                         totals.lock().expect("totals").skipped += 1;

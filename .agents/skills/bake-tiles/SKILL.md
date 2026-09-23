@@ -25,8 +25,14 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 
 Every tool writes to `./out/<kind>/<version>`, where the version defaults to
 `PUBLISHED_VERSION.<kind>` in `spec/pxl/spec/bake/published.json`
-and the last path segment of `--out` overrides it. The object name is the
-page's `page_idx` with no extension — the filename _is_ the object key.
+and the last path segment of `--out` overrides it.
+
+The bucket names a page by its **quadkey** and nothing else (publish-bucket).
+POI and geocode write that name straight out, so for them the filename _is_
+the object key. Terrain does not: it writes `<level>/<page index>`, because it
+clears a level's directory to redo it and to drop the levels a run did not
+fold. Its names are translated at publish, by hard links, which is the one
+step POI and geocode skip.
 
 Terrain goes first: POI and geocode do not classify land themselves, they
 read the `land_pages.json` terrain leaves next to its output directory
@@ -125,10 +131,12 @@ and reused unless `--reclassify` is passed.
    not the objects. With `deno task dev:tiles` up — not `dev`, which proxies
    every route to the live deployment:
 
+   The dev server answers the bucket's addresses, so it takes the quadkey
+   while the file on disk is still under its level — one page, two names:
+
    ```bash
-   p=<level>/<page_idx>
-   curl -s localhost:3001/geo/tiles/terrain/$p | zstd -dcq | shasum
-   zstd -dcq ./out/terrain/<version>/$p | shasum   # gunzip -c for a set baked before zstd
+   curl -s localhost:3001/geo/tiles/terrain/<quadkey> | zstd -dcq | shasum
+   zstd -dcq ./out/terrain/<version>/<level>/<page_idx> | shasum   # gunzip -c before zstd
    ```
 
    A level-k page makes the dev server fault the pages under it first, so the
@@ -147,8 +155,9 @@ and `--force` (re-fetch pages that already have an object or `.empty`
 marker). Neither needs terrain's tables, only its `land_pages.json`.
 
 Verify the same way: `failed=` at zero, and one page opened by hand —
-`zstd -dcq ./out/poi/<version>/<page_idx> | head -c 2 | xxd -p` is `5854`
-(XTP), a geocode page is JSON.
+`zstd -dcq ./out/poi/<version>/<quadkey> | head -c 2 | xxd -p` is `5854`
+(XTP), a geocode page is JSON. A geocode group's name is a page's first eleven
+digits, so the group a page falls in is that page's name cut short.
 
 A POI format change that does not touch the data used to be a **repack** —
 re-encoding what is on disk without the database. That tool was v1/v2 JSON to
