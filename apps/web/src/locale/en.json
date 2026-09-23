@@ -264,5 +264,9 @@
       "section_areas": "Areas",
       "section_places": "Places"
     }
+  },
+  "unsupported": {
+    "title": "This browser isn't supported",
+    "encoding": "The map data is sent compressed with zstd, and this browser can't read it. Open the page in a recent Chrome, Edge, Firefox or Safari."
   }
 }

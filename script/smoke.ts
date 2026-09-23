@@ -48,7 +48,15 @@ interface Check {
   path: string;
   want: u32;
   why: string;
+  /** What this check offers to accept, where that is the point of it. The
+   * default is a browser's list; Deno's own fetch offers no zstd, and a
+   * deployment serves a stored object in its own encoding or not at all. */
+  encoding?: string;
 }
+
+/** What every current browser sends, which is what the bucket branches are
+ * checked as. */
+const BROWSER_ENCODINGS = "gzip, deflate, br, zstd";
 
 function edgeChecks(): Check[] {
   const tile = (kind: keyof typeof PUBLISHED_VERSION) => `${TILE_ROOT}/${kind}/${PUBLISHED_VERSION[kind]}/${PAGE}`;
@@ -64,6 +72,11 @@ function edgeChecks(): Check[] {
     { path: `${TILE_ROOT}/geocode/${PUBLISHED_VERSION.geocode}/${GEOCODE_GROUP}`, want: 200, why: "a reverse-geocode group" },
     { path: `${TILE_ROOT}/geocode/${PUBLISHED_VERSION.geocode}/_dict`, want: 200, why: "the dictionary every group's numbers are read against" },
     { path: `/${ASSET_KEY}`, want: 200, why: "a content-addressed asset, its own root" },
+    // The other half of the rule above: what makes the packed bytes the only
+    // thing the edge ever holds is that there is no decoded copy to hold. A
+    // 200 here is the edge negotiating on the deployment's behalf again —
+    // 526,936 bytes where the packed page is 8,543 (cloudflare-worker/index.ts).
+    { path: terrain, want: 406, why: "a client offering no zstd is refused rather than handed a decoded copy", encoding: "gzip, deflate, br" },
     ...commonChecks(),
     // The pre-09-18 shape. A 200 from any of these means a relay somewhere is
     // still claiming the old root.
@@ -102,7 +115,7 @@ const checks = originOnly ? originChecks() : edgeChecks();
 console.log(`[smoke] ${base}${originOnly ? " (origin, behind the edge)" : ""} — ${checks.length} checks\n`);
 
 let failed = 0;
-for (const { path, want, why } of checks) {
+for (const { path, want, why, encoding } of checks) {
   // A query string of its own on every request: Cloudflare caches what it is
   // told to, and a check that read a cached answer would pass for a
   // deployment that is no longer there.
@@ -110,7 +123,7 @@ for (const { path, want, why } of checks) {
   let got: u32 | string;
   let size = 0;
   try {
-    const res = await fetch(url, { redirect: "manual" });
+    const res = await fetch(url, { redirect: "manual", headers: { "accept-encoding": encoding ?? BROWSER_ENCODINGS } });
     got = res.status;
     size = (await res.arrayBuffer()).byteLength;
   } catch (err) {
