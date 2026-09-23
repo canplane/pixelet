@@ -6,8 +6,9 @@ fn p(in_frustum: bool, lead_distance2: f64) -> Priority {
     Priority {
         holds: false,
         in_frustum,
-        empty: false,
+        hole: false,
         lead_distance2,
+        span: 1.0,
         pending_since: -1.0,
     }
 }
@@ -19,24 +20,27 @@ fn ordered(items: &[(&'static str, Priority)], now: f64) -> Vec<&'static str> {
 }
 
 #[test]
-fn slot_holders_then_on_screen_then_nearest() {
+fn slot_holders_then_holes_on_screen_then_sharper_then_off_screen() {
     let items = [
         ("far refine", p(true, 900.0)),
-        ("near hidden", Priority { empty: true, ..p(false, 1.0) }),
+        ("near hidden", Priority { hole: true, ..p(false, 1.0) }),
         ("holder", Priority { holds: true, ..p(false, 5000.0) }),
         ("near refine", p(true, 4.0)),
-        ("far hole", Priority { empty: true, ..p(true, 2500.0) }),
+        ("far hole", Priority { hole: true, ..p(true, 2500.0) }),
     ];
-    assert_eq!(ordered(&items, 0.0), ["holder", "near refine", "far refine", "far hole", "near hidden"]);
+    assert_eq!(ordered(&items, 0.0), ["holder", "far hole", "near refine", "far refine", "near hidden"]);
 }
 
 #[test]
-fn a_near_coarse_chunk_goes_before_a_far_empty_one_and_a_hole_wins_a_tie() {
-    assert_eq!(
-        ordered(&[("far, empty", Priority { empty: true, ..p(true, 1e6) }), ("near, coarse", p(true, 100.0))], 0.0),
-        ["near, coarse", "far, empty"]
-    );
-    assert_eq!(ordered(&[("coarse", p(true, 400.0)), ("empty", Priority { empty: true, ..p(true, 400.0) })], 0.0), ["empty", "coarse"]);
+fn on_screen_a_chunk_is_as_near_as_its_distance_in_its_own_sides() {
+    // A coarse chunk sixteen times as wide and eight times as far looks
+    // larger than a fine one near, and goes first.
+    let coarse = Priority { span: 16.0, ..p(true, 80.0 * 80.0) };
+    let fine = p(true, 10.0 * 10.0);
+    assert_eq!(ordered(&[("fine", fine), ("coarse", coarse)], 0.0), ["coarse", "fine"]);
+    // Off screen the release order is plain distance, farthest first.
+    let coarse_off = Priority { span: 16.0, ..p(false, 80.0 * 80.0) };
+    assert_eq!(ordered(&[("coarse", coarse_off), ("fine", p(false, 10.0 * 10.0))], 0.0), ["coarse", "fine"]);
 }
 
 #[test]

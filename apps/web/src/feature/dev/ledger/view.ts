@@ -74,6 +74,18 @@ function frameAt(w: F64Array, o: u32): Frame {
     lod,
     q_terrain: at(FRAME.q_terrain),
     q_poi: at(FRAME.q_poi),
+    stale: {
+      chunks: at(FRAME.stale_chunks),
+      drawn: at(FRAME.stale_drawn),
+      levels: at(FRAME.stale_levels),
+      hidden: at(FRAME.stale_hidden),
+      slot_waits: at(FRAME.slot_waits),
+      wait_levels: at(FRAME.slot_wait_levels),
+      holder_levels: at(FRAME.slot_holder_levels),
+      uncovered: at(FRAME.stale_uncovered),
+      unready: at(FRAME.stale_unready),
+      on_waiter: at(FRAME.stale_on_waiter),
+    },
   };
 }
 

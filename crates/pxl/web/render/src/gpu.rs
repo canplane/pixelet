@@ -9,6 +9,7 @@ pub mod ao;
 pub mod api;
 #[path = "gpu/api.spec.rs"]
 pub mod api_spec;
+pub mod arena;
 pub mod atmosphere;
 pub mod clouds;
 pub mod layers;

@@ -18,15 +18,25 @@
 //!                    the page's own coordinate reduced modulo the set's axis
 //!                    (layer/terrain/fixed.rs), so nothing in it is
 //!                    allocated, asked for or refused.
+//!   .fixed.bake      the one mesh a chunk bake has open, written there and
+//!                    sent to its slot on the device the moment it is done
+//!                    (world/chunk/mesh_slot.rs): a mesh has no home in the
+//!                    memory, since the device is where it is drawn from.
+//!   .fixed.runs      the run sets a chunk's tiers are baked from, two: one
+//!                    filled while the other is baked from (world/chunk/
+//!                    node.rs). A set is let go once its chunk's tiers are
+//!                    all on the device, which is what keeps them.
 
 use xpute_runtime::mem::section::{nth_at, span_of};
 
 use crate::layer::terrain::fixed::TERRAIN_BYTES;
 use crate::mem::section::{map, PAGE_BYTES};
+use crate::world::chunk::mesh_slot::BAKE_BYTES;
+use crate::world::chunk::node::{RUN_SETS, RUN_SET_BYTES};
 
 /// Each range's bytes, in address order. What a range holds is its own
 /// affair; this says how many bytes it takes and nothing more.
-const RANGES: [u32; 1] = [TERRAIN_BYTES];
+const RANGES: [u32; 3] = [TERRAIN_BYTES, BAKE_BYTES, RUN_SETS as u32 * RUN_SET_BYTES];
 
 /// What `.fixed` spans, which is where the heap begins past it.
 pub const BYTES: u32 = span_of(&RANGES, PAGE_BYTES);
@@ -39,4 +49,15 @@ const fn range_at(base: u32, n: usize) -> u32 {
 /// Where `.fixed.terrain` lies, once the module has laid its memory out.
 pub fn terrain_at() -> Option<u32> {
     map().map(|m| range_at(m.fixed.offset, 0))
+}
+
+/// Where `.fixed.bake` lies, once the module has laid its memory out.
+pub fn bake_at() -> Option<u32> {
+    map().map(|m| range_at(m.fixed.offset, 1))
+}
+
+/// Where run set `set` of `.fixed.runs` lies, once the module has laid its
+/// memory out.
+pub fn run_set_at(set: usize) -> Option<u32> {
+    map().map(|m| range_at(m.fixed.offset, 2) + set as u32 * RUN_SET_BYTES)
 }

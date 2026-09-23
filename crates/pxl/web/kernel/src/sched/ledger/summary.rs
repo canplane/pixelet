@@ -110,6 +110,7 @@ pub fn ledger_summarize(window_ms: f64) -> &'static [f64] {
 }
 
 fn frames(out: &mut [f64], scratch: &mut [f64], frames: &[FrameSample]) {
+    use crate::sched::ledger::spec::FRAME;
     use SUMMARY::frames as F;
     let (Some(first), Some(last)) = (frames.first(), frames.last()) else { return };
     let a = F::AT;
@@ -152,6 +153,7 @@ fn frames(out: &mut [f64], scratch: &mut [f64], frames: &[FrameSample]) {
         out[at(a, F::census) + 2 * k] = sum(&|f| f.census[k][0]) / n;
         out[at(a, F::census) + 2 * k + 1] = sum(&|f| f.census[k][1]) / n;
     }
+    const _: () = assert!(F::last + FRAME::WORDS <= F::WORDS, "the last frame runs past the summary's frames block");
     // SAFETY: a FrameSample is FRAME::WORDS plain f64s laid end to end
     // (ledger.rs asserts the layout).
     let words = unsafe { core::slice::from_raw_parts(last as *const FrameSample as *const f64, core::mem::size_of::<FrameSample>() / 8) };
@@ -250,7 +252,7 @@ fn side(out: &mut [f64]) {
     let a = SUMMARY::atlas::AT as usize;
     out[a..a + 4].copy_from_slice(&[atlas.size as f64, atlas.entries as f64, atlas.shelves as f64, atlas.used_px as f64]);
 
-    let retain = chunk_retention();
+    let retain = chunk_retention(kernel().sched.builder_run_sets());
     let census = kernel().sched.census;
     let a = SUMMARY::retain::AT as usize;
     out[a..a + 9].copy_from_slice(&[

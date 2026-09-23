@@ -132,3 +132,19 @@ fn a_failure_is_grouped_by_its_reason_and_its_status_not_by_any_text() {
     assert_eq!(Failure { fail: FetchFail::Status, status: 503 }.to_string(), "status 503");
     assert_eq!(Failure { fail: FetchFail::Network, status: 0 }.to_string(), "network");
 }
+
+#[test]
+fn scheduler_holds_a_whole_window_of_rings_beside_what_a_zoom_left_in_flight() {
+    let _g = fresh();
+    set_fetch_credits(u32::MAX);
+    let rings = (WINDOW_LEVELS * HELD_AXIS * HELD_AXIS) as u64;
+    // The window a zoom left: every request it could have running, then
+    // aborted by the next window's wishlist, and still unsettled.
+    let before: Vec<Demand> = (0..rings).map(|i| d(Category::Terrain, 1 << 40 | i, i as f64)).collect();
+    assert_eq!(fetch_sync(Category::Terrain, &before), 0);
+    assert_eq!(started().len(), MAX_CREDITS as usize);
+    let after: Vec<Demand> = (0..rings).map(|i| d(Category::Terrain, 2 << 40 | i, i as f64)).collect();
+    assert_eq!(fetch_sync(Category::Terrain, &after), 0, "a ring's page left unasked");
+    assert_eq!(aborts().len(), MAX_CREDITS as usize);
+    assert_eq!(fetch_sync(Category::Ocean, &[d(Category::Ocean, 0, 0.0)]), 0);
+}

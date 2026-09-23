@@ -33,25 +33,24 @@ use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::xy::TO_XY;
 use xpute_core::math::scalar::round;
-use xpute_runtime::mem::heap::{alloc, free, Block};
+use xpute_runtime::mem::heap::{free, Block};
 
 use crate::global::Global;
 use crate::kernel::{kernel, with_world};
 use crate::layer::object::store::{decor_col_revision, object_col_revision, object_cols, Store, BAND_CELLS};
 use crate::layer::terrain::level::LevelPage;
 use crate::layer::terrain::store::tile_store;
+use crate::mem::fixed::{bake_at, run_set_at};
 use crate::shell::setting::store::{hidden_ground, settings_store};
+use crate::world::chunk::mesh_slot::BAKE_BYTES;
 use crate::world::chunk::range::PAGE_SHAMT;
 use crate::world::chunk::table::Event;
 
-/// A tier as the scheduler hands it over and the node holds it: the heap
-/// block and the counts its lanes are read by.
+/// A tier as the node holds it: its boxes, which lie on the device in the
+/// chunk's slot (mesh_slot.rs) and nowhere in the memory.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MeshBlock {
-    pub at: usize,
-    pub bytes: u32,
-    pub vertex_cnt: u32,
-    pub index_cnt: u32,
+    pub box_cnt: u32,
 }
 
 /// A chunk's decor at one tier: one heap block holding every
@@ -69,14 +68,13 @@ pub fn release_block(at: usize, bytes: u32) {
     unsafe { free((at, bytes)) };
 }
 
-/// How much built work chunks may keep *while off screen*: run sets and cached
-/// tiers, both heap blocks and sized in bytes. Dropping all of it on the first
-/// release makes a rotation or a zoom in and out rebuild every chunk from the
-/// scan up, so the scheduler reclaims only past this, farthest first. It
-/// budgets only the optional part: on-screen chunks hold their tiers because
-/// that is the layout. Half the heap: the other half is the on-screen layouts,
-/// the volumes a build composes in, and the room a large block needs in one
-/// piece — at a quarter the heap fragments and refuses the fine tiers' blocks.
+/// How much built work chunks may keep in the heap *while off screen*: their
+/// decor, the one part of a chunk still there — its runs are a set of
+/// `.fixed.runs` and its tiers are on the device. Dropping all of it on the
+/// first release makes a rotation or a zoom in and out scatter every chunk's
+/// decor again, so the scheduler reclaims only past this, farthest first. Half
+/// the heap: the other half is the on-screen decor, the volumes a build
+/// composes in, and the room a large block needs in one piece.
 #[allow(non_snake_case)]
 pub fn RETAIN_BUDGET_BYTES() -> f64 {
     crate::mem::section::map().map_or(0.0, |m| (m.heap.bytes / 2) as f64)
@@ -146,15 +144,14 @@ pub fn chunk_nodes() -> &'static HashMap<u32, ChunkNode> {
     &nodes().nodes
 }
 
-pub fn chunk_retention() -> ChunkRetention {
+/// What the chunk nodes hold, with the run sets `.fixed.runs` has lent as the
+/// builder counts them (`Builder::run_sets`).
+pub fn chunk_retention(run_sets: (u32, u32)) -> ChunkRetention {
     let mut out = ChunkRetention::default();
-    let mut run_bytes = 0u64;
+    let (held, run_bytes) = run_sets;
+    out.run_sets = held;
     for node in nodes().nodes.values() {
         out.nodes += 1;
-        if node.runs_bytes > 0 {
-            out.run_sets += 1;
-            run_bytes += node.runs_bytes as u64;
-        }
         out.tiers += node.tiers.len() as u32;
         out.decor_steps += node.decor_cache.len() as u32;
         for d in node.decor_cache.values() {
@@ -185,8 +182,6 @@ pub struct ChunkNode {
     /// built from an earlier telling arriving after a newer one was told is
     /// released on arrival.
     generation: u32,
-    /// What this chunk's runs hold in the heap, as the scheduler said.
-    runs_bytes: u32,
     show_structures: bool,
     objects_revision: u32,
     decor_revision: u32,
@@ -217,7 +212,6 @@ impl ChunkNode {
             tiers: HashMap::new(),
             decor_cache: HashMap::new(),
             generation: 0,
-            runs_bytes: 0,
             show_structures: settings.show_structures,
             objects_revision: objects_revision_of(page.level, base_i),
             decor_revision: decor_col_revision(col_idx),
@@ -225,21 +219,20 @@ impl ChunkNode {
         }
     }
 
-    /// Every tier's and every decor block back to the heap: the chunk unmounted.
+    /// Every decor block back to the heap, and the tiers forgotten: the chunk
+    /// unmounted.
     fn release_all(&mut self) {
-        for (_, t) in self.tiers.drain() {
-            release_block(t.at, t.bytes);
-        }
+        self.tiers.clear();
         for (_, d) in self.decor_cache.drain() {
             release_block(d.at, d.bytes);
         }
     }
 
     /// Tells the scheduler what this chunk is made of now.
-    fn tell_source(&mut self, queue: &mut Queue) {
+    fn tell_source(&mut self) {
         let page = tile_store().get_page(self.page).map(page_lanes);
         let (id, show) = (self.id, self.show_structures);
-        with_world(|world, sched| sched.source(world, id, page, show, &mut |e| queue.push_back(e)));
+        with_world(|world, sched| sched.source(world, id, page, show));
         self.generation += 1;
     }
 
@@ -255,7 +248,7 @@ impl ChunkNode {
     /// bake, not a change — and a mounted chunk's page stays in its record
     /// until the chunk unmounts, so a page set again is the same lanes at the
     /// same addresses and nothing to rebuild.
-    fn on_source_change(&mut self, queue: &mut Queue) {
+    fn on_source_change(&mut self) {
         let show_structures = settings_store().show_structures;
         let objects_revision = objects_revision_of(self.page.level, self.base_i);
         if self.show_structures == show_structures && self.objects_revision == objects_revision {
@@ -263,7 +256,7 @@ impl ChunkNode {
         }
         self.show_structures = show_structures;
         self.objects_revision = objects_revision;
-        self.tell_source(queue);
+        self.tell_source();
     }
 
     /// Decor's own revision-only rebuild. It must never touch the tiers: that
@@ -291,7 +284,6 @@ impl ChunkNode {
 
     fn on_tier(&mut self, generation: u32, step: LodStep, mesh: MeshBlock) {
         if generation != self.generation || self.tiers.contains_key(&(step, generation)) {
-            release_block(mesh.at, mesh.bytes);
             return;
         }
         self.tiers.insert((step, generation), mesh);
@@ -307,9 +299,7 @@ impl ChunkNode {
     }
 
     fn on_evict(&mut self, step: LodStep, generation: u32) {
-        if let Some(t) = self.tiers.remove(&(step, generation)) {
-            release_block(t.at, t.bytes);
-        }
+        self.tiers.remove(&(step, generation));
         if let Some(d) = self.decor_cache.remove(&(step, generation)) {
             release_block(d.at, d.bytes);
         }
@@ -336,7 +326,7 @@ pub fn run_chunk_events(events: impl IntoIterator<Item = Event>) {
     let mut queue: Queue = events.into_iter().collect();
     loop {
         while let Some(e) = queue.pop_front() {
-            dispatch(e, &mut queue);
+            dispatch(e);
         }
         let ids = core::mem::take(&mut nodes().rebuild);
         if ids.is_empty() {
@@ -344,17 +334,17 @@ pub fn run_chunk_events(events: impl IntoIterator<Item = Event>) {
         }
         for id in ids {
             let Some(node) = nodes().nodes.get_mut(&id) else { continue };
-            node.tell_source(&mut queue);
+            node.tell_source();
         }
     }
 }
 
-fn dispatch(e: Event, queue: &mut Queue) {
+fn dispatch(e: Event) {
     let n = nodes();
     match e {
         Event::Mount { id, page, base_x, base_y } => {
             let mut node = ChunkNode::new(id, page, base_x, base_y);
-            node.tell_source(queue);
+            node.tell_source();
             n.nodes.insert(id, node);
             node_counts().added += 1;
         }
@@ -364,29 +354,9 @@ fn dispatch(e: Event, queue: &mut Queue) {
                 node_counts().removed += 1;
             }
         }
-        Event::Build(BuildEvent::Tier {
-            id,
-            generation,
-            step,
-            at,
-            bytes,
-            vertex_cnt,
-            index_cnt,
-        }) => {
-            let mesh = MeshBlock {
-                at: at as usize,
-                bytes,
-                vertex_cnt,
-                index_cnt,
-            };
-            match n.nodes.get_mut(&id) {
-                Some(node) => node.on_tier(generation, step, mesh),
-                None => release_block(mesh.at, mesh.bytes),
-            }
-        }
-        Event::Build(BuildEvent::Runs { id, bytes }) => {
+        Event::Build(BuildEvent::Tier { id, generation, step, box_cnt, .. }) => {
             if let Some(node) = n.nodes.get_mut(&id) {
-                node.runs_bytes = bytes;
+                node.on_tier(generation, step, MeshBlock { box_cnt });
             }
         }
         Event::Decor { id, step, generation, at, bytes } => match n.nodes.get_mut(&id) {
@@ -431,7 +401,7 @@ pub fn chunk_nodes_step() {
     let ids: Vec<u32> = n.nodes.keys().copied().collect();
     for id in ids {
         if let Some(node) = nodes().nodes.get_mut(&id) {
-            node.on_source_change(&mut queue);
+            node.on_source_change();
             node.on_decor_change(&mut queue);
         }
     }
@@ -472,12 +442,21 @@ fn objects_revision_of(level: u32, base: IVec) -> u32 {
 // from the terrain, when no object stands in its column — or by painting
 // the terrain and the objects into a volume and scanning it. Its tiers are
 // baked from those runs, one bake and one scan open in the whole world at a
-// time. What comes
-// out is events: a tier's mesh in a heap block, handed over
-// whole, and what the chunk's runs hold, for the retain budget.
+// time. What comes out is events: a tier's mesh, handed over whole, and what
+// the chunk's runs hold.
 //
-// A block the heap refuses leaves the work where it is until a later tick;
-// nothing is copied to a place the core cannot see.
+// A chunk's runs are one of `.fixed.runs`'s two sets, held from the moment
+// they are made until every tier of the chunk is baked from them: the tiers
+// are what lasts, on the device, so a set is not kept for a tier asked later
+// but the chunk's tiers are all baked while it is there. Two, so that one is
+// filled while the other is baked from. A chunk that finds both held waits.
+
+/// Run sets `.fixed.runs` holds.
+pub const RUN_SETS: usize = 2;
+/// Bytes a run set holds: a leaf chunk's columns at eleven runs each, where
+/// the terrain is one and what is placed on it rarely a handful more. A set
+/// past it is refused rather than cut, since a run left out is a hole.
+pub const RUN_SET_BYTES: u32 = 1 << 20;
 
 /// Chunks held at once: the mount radius and its hysteresis cover about
 /// three thousand. The mount pass stops
@@ -489,18 +468,9 @@ pub const MAX_CHUNKS: usize = 4096;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BuildEvent {
     /// Tier `step` of chunk `id`, built from its sources as of `generation`:
-    /// the mesh is `bytes` bytes at `at`, the node's to release.
-    Tier {
-        id: u32,
-        generation: u32,
-        step: u32,
-        at: u32,
-        bytes: u32,
-        vertex_cnt: u32,
-        index_cnt: u32,
-    },
-    /// The bytes chunk `id`'s runs now hold, zero once let go.
-    Runs { id: u32, bytes: u32 },
+    /// the mesh is `bytes` bytes at `at` in `.fixed.bake`, until it is sent
+    /// to its slot on the device.
+    Tier { id: u32, generation: u32, step: u32, at: u32, bytes: u32, box_cnt: u32 },
 }
 
 /// A leaf column, as a decor build reads it (Builder::leaf_source).
@@ -519,13 +489,12 @@ pub struct PageLanes {
     pub ele: usize,
 }
 
+/// A chunk's runs: which of `.fixed.runs`'s sets, and what is in it.
 #[derive(Clone, Copy)]
 struct Runs {
-    at: usize,
+    set: usize,
     bytes: u32,
     count: u32,
-    /// Made the direct way, which is cheap to make again.
-    direct: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -642,6 +611,9 @@ pub struct Builder {
     /// and packed position, and the carve preview by its column.
     hide: Option<(IVec, i32, u32)>,
     carve: Option<(IVec, Carve)>,
+    /// The chunk holding each run set, whether it is being filled or baked
+    /// from.
+    run_holders: [Option<u32>; RUN_SETS],
     /// The scan job's bands, kept between the scan's steps.
     bands: Vec<BandView<'static>>,
     /// The scan job's paint's claimed voxels, kept between its steps.
@@ -669,6 +641,7 @@ impl Builder {
             sample: ChunkSample::default(),
             hide: None,
             carve: None,
+            run_holders: [None; RUN_SETS],
             bands: Vec::new(),
             claimed: BTreeSet::new(),
             folded: HashMap::new(),
@@ -767,26 +740,20 @@ impl Builder {
         );
     }
 
-    pub fn remove(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) {
-        self.drop_work(world, id, emit);
+    pub fn remove(&mut self, world: &mut World, id: u32) {
+        self.drop_work(world, id);
         self.chunks.remove(&id);
     }
 
     /// The chunk's sources changed: what it was built from is gone, and a
     /// tier built before now is stale.
-    pub fn source(&mut self, world: &mut World, id: u32, page: Option<PageLanes>, show_structures: bool, emit: &mut impl FnMut(BuildEvent)) {
-        self.drop_work(world, id, emit);
+    pub fn source(&mut self, world: &mut World, id: u32, page: Option<PageLanes>, show_structures: bool) {
+        self.drop_work(world, id);
         if let Some(c) = self.chunks.get_mut(&id) {
             c.page = page;
             c.show_structures = show_structures;
             c.generation = c.generation.wrapping_add(1);
         }
-    }
-
-    /// Gives back the chunk's runs and its work in flight, keeping its
-    /// sources: the retain budget's reclaim.
-    pub fn reclaim(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) {
-        self.drop_work(world, id, emit);
     }
 
     /// The tiers the chunk still lacks. A bake of a tier not wanted
@@ -800,6 +767,7 @@ impl Builder {
         }
         if want == [0, 0] {
             self.abort_scan_of(world, id);
+            self.let_runs_go(id);
         }
     }
 
@@ -808,29 +776,49 @@ impl Builder {
         self.carve = carve;
     }
 
-    fn drop_work(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) {
+    fn drop_work(&mut self, world: &mut World, id: u32) {
         self.abort_scan_of(world, id);
         if matches!(&self.bake_job, Some(j) if j.id == id) {
             self.abort_bake();
         }
-        if let Some(c) = self.chunks.get_mut(&id) {
-            if let Some(r) = c.runs.take() {
-                // SAFETY: a block this build took and has not given back.
-                unsafe { free((r.at, r.bytes)) };
-                emit(BuildEvent::Runs { id, bytes: 0 });
-            }
-        }
+        self.let_runs_go(id);
     }
 
     fn abort_scan_of(&mut self, world: &mut World, id: u32) {
         if let Some(job) = self.scan_job.take_if(|j| j.id == id) {
             self.scan.abort();
             world.volumes.release(job.volume);
+            self.let_runs_go(id);
         }
     }
 
-    /// The heap refused chunk `id` a block: the slot it held is given up —
-    /// held, it is every other chunk's wait, and the chunk cannot use it
+    /// A run set for chunk `id`: the one it holds, or a free one it now
+    /// does. None while both are held by others.
+    fn run_set_for(&mut self, id: u32) -> Option<usize> {
+        let set = self.run_holders.iter().position(|&h| h == Some(id)).or_else(|| self.run_holders.iter().position(|h| h.is_none()))?;
+        self.run_holders[set] = Some(id);
+        Some(set)
+    }
+
+    /// Gives back the run set chunk `id` holds, if any.
+    fn let_runs_go(&mut self, id: u32) {
+        for h in self.run_holders.iter_mut().filter(|h| **h == Some(id)) {
+            *h = None;
+        }
+        if let Some(c) = self.chunks.get_mut(&id) {
+            c.runs = None;
+        }
+    }
+
+    /// The run sets lent now, and the bytes their runs fill.
+    pub fn run_sets(&self) -> (u32, u32) {
+        let held = self.run_holders.iter().flatten();
+        let bytes = held.clone().filter_map(|id| self.chunks.get(id)?.runs.map(|r| r.bytes)).sum();
+        (held.count() as u32, bytes)
+    }
+
+    /// The heap refused chunk `id` a block: the slots it held are given up —
+    /// held, each is every other chunk's wait, and the chunk cannot use them
     /// until the heap changes — and the chunk waits for a release.
     fn refuse(&mut self, world: &mut World, id: u32) {
         self.stat.starved += 1;
@@ -838,6 +826,7 @@ impl Builder {
         if matches!(&self.bake_job, Some(j) if j.id == id) {
             self.abort_bake();
         }
+        self.let_runs_go(id);
         let releases = crate::host::heap_releases();
         if let Some(c) = self.chunks.get_mut(&id) {
             c.refused = Some(releases);
@@ -845,12 +834,8 @@ impl Builder {
     }
 
     fn abort_bake(&mut self) {
-        if let Some(job) = self.bake_job.take() {
+        if self.bake_job.take().is_some() {
             self.bake.abort();
-            if let Some(mesh) = job.mesh {
-                // SAFETY: a block this build took and has not given back.
-                unsafe { free(mesh) };
-            }
         }
     }
 
@@ -876,13 +861,16 @@ impl Builder {
         let mut stepped = false;
         let mut worked = false;
         let mut moved = 0;
-        let holders = self.holders();
-        let [scan_holder, bake_holder] = holders;
-        let held = |id: u32| Some(id) == scan_holder || Some(id) == bake_holder;
-        let holders_once = if scan_holder == bake_holder { &holders[..1] } else { &holders[..] };
-        // The holders are at most two ids, so the ones `order` repeats are
-        // found by comparing against them, not by a list of everything seen.
-        for id in holders_once.iter().flatten().copied().chain(order.iter().copied().filter(|&id| !held(id))) {
+        // The chunks holding the scan, the bake or a run set go first, each
+        // once: held, a slot is every other chunk's wait.
+        let mut first = [None; 2 + RUN_SETS];
+        for (n, id) in self.holders().into_iter().chain(self.run_holders).enumerate() {
+            if !first[..n].contains(&id) {
+                first[n] = id;
+            }
+        }
+        let is_first = |id: u32| first.contains(&Some(id));
+        for id in first.iter().flatten().copied().chain(order.iter().copied().filter(|&id| !is_first(id))) {
             if moved >= max_chunks {
                 return worked;
             }
@@ -920,16 +908,16 @@ impl Builder {
             return Progress::Blocked;
         }
         if c.runs.is_none() {
-            return self.advance_runs(world, id, emit);
+            return self.advance_runs(world, id);
         }
         self.advance_bake(world, id, emit)
     }
 
-    fn advance_runs(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) -> Progress {
+    fn advance_runs(&mut self, world: &mut World, id: u32) -> Progress {
         let c = &self.chunks[&id];
         let Some(page) = c.page else { return Progress::Blocked };
         if c.level > 0 {
-            return self.level_runs(world, id, page, emit);
+            return self.level_runs(world, id, page);
         }
         let holding = matches!(&self.scan_job, Some(j) if j.id == id);
         // A column with nothing placed is one run of terrain, floor to top,
@@ -940,13 +928,13 @@ impl Builder {
         // tier: a zoom-in would otherwise scan every chunk in view, most of
         // them empty of objects.
         if !holding && !self.has_objects(world, c.col_idx) {
-            return self.direct_runs(world, id, page, emit);
+            return self.direct_runs(world, id, page);
         }
         if !holding {
-            if self.scan_job.is_some() {
+            let col_idx = c.col_idx;
+            if self.scan_job.is_some() || self.run_set_for(id).is_none() {
                 return Progress::Blocked;
             }
-            let col_idx = c.col_idx;
             let Some(volume) = self.paint_terrain(world, id, page) else {
                 self.refuse(world, id);
                 return Progress::Blocked;
@@ -980,17 +968,17 @@ impl Builder {
             ScanStep::Working => Progress::Busy,
             ScanStep::Done => unreachable!("a scan is finished when its set is provided"),
             ScanStep::NeedSet(bytes) => {
-                let Some((at, bytes)) = alloc(bytes) else {
+                let Some((set, at)) = self.set_of(id, bytes) else {
                     self.refuse(world, id);
                     return Progress::Blocked;
                 };
-                // SAFETY: a block of the bytes asked for, the chunk's until released.
+                // SAFETY: the run set the chunk holds, past the bytes asked for.
                 unsafe { self.scan.provide_set(world.volumes.mem().add(at), bytes) };
                 let count = self.scan.finish();
                 let job = self.scan_job.take().unwrap();
                 world.volumes.release(job.volume);
                 self.stat.scans += 1;
-                self.keep_runs(id, Runs { at, bytes, count, direct: false }, emit);
+                self.keep_runs(id, Runs { set, bytes, count });
                 Progress::Busy
             }
         }
@@ -1074,7 +1062,10 @@ impl Builder {
         Progress::Busy
     }
 
-    fn direct_runs(&mut self, world: &mut World, id: u32, page: PageLanes, emit: &mut impl FnMut(BuildEvent)) -> Progress {
+    fn direct_runs(&mut self, world: &mut World, id: u32, page: PageLanes) -> Progress {
+        if self.run_set_for(id).is_none() {
+            return Progress::Blocked;
+        }
         let c = &self.chunks[&id];
         let (tx0, ty0, show) = (c.tx0, c.ty0, c.show_structures);
         // SAFETY: the chunk's page, as its source named it, resident while
@@ -1093,7 +1084,7 @@ impl Builder {
             }
         }
         let bytes = self.direct.close_direct();
-        let Some((at, bytes)) = alloc(bytes) else {
+        let Some((set, at)) = self.set_of(id, bytes) else {
             self.direct.abort();
             self.refuse(world, id);
             return Progress::Blocked;
@@ -1102,14 +1093,17 @@ impl Builder {
         unsafe { self.direct.provide_set(world.volumes.mem().add(at), bytes) };
         let count = self.direct.finish();
         self.stat.direct += 1;
-        self.keep_runs(id, Runs { at, bytes, count, direct: true }, emit);
+        self.keep_runs(id, Runs { set, bytes, count });
         Progress::Busy
     }
 
     /// A level chunk's runs, written the direct way: its level page's ground
     /// and the object layer folded to its level (pxl-render mesh/paint/level.rs),
     /// in the level's cells. Cheap to make again, like a leaf's direct runs.
-    fn level_runs(&mut self, world: &mut World, id: u32, page: PageLanes, emit: &mut impl FnMut(BuildEvent)) -> Progress {
+    fn level_runs(&mut self, world: &mut World, id: u32, page: PageLanes) -> Progress {
+        if self.run_set_for(id).is_none() {
+            return Progress::Blocked;
+        }
         let c = &self.chunks[&id];
         let (tx0, ty0, show, level, base) = (c.tx0, c.ty0, c.show_structures, c.level, c.base);
         // SAFETY: the chunk's page, as its source named it, resident while
@@ -1140,7 +1134,7 @@ impl Builder {
         assert!(self.direct.begin_direct(), "the direct writer left open");
         write_level_runs(&mut self.direct, &self.sample, world.painter, &self.folded, (x0.div_euclid(s), y0.div_euclid(s)), scale);
         let bytes = self.direct.close_direct();
-        let Some((at, bytes)) = alloc(bytes) else {
+        let Some((set, at)) = self.set_of(id, bytes) else {
             self.direct.abort();
             self.refuse(world, id);
             return Progress::Blocked;
@@ -1149,19 +1143,32 @@ impl Builder {
         unsafe { self.direct.provide_set(world.volumes.mem().add(at), bytes) };
         let count = self.direct.finish();
         self.stat.direct += 1;
-        self.keep_runs(id, Runs { at, bytes, count, direct: true }, emit);
+        self.keep_runs(id, Runs { set, bytes, count });
         Progress::Busy
     }
 
-    fn keep_runs(&mut self, id: u32, runs: Runs, emit: &mut impl FnMut(BuildEvent)) {
-        emit(BuildEvent::Runs { id, bytes: runs.bytes });
+    /// The run set chunk `id` holds and where it lies, when `bytes` fit it.
+    /// A set past it is refused, and the set given back.
+    fn set_of(&mut self, id: u32, bytes: u32) -> Option<(usize, usize)> {
+        let set = self.run_set_for(id)?;
+        match run_set_at(set).filter(|_| bytes <= RUN_SET_BYTES) {
+            Some(at) => Some((set, at as usize)),
+            None => {
+                self.let_runs_go(id);
+                None
+            }
+        }
+    }
+
+    fn keep_runs(&mut self, id: u32, runs: Runs) {
         self.chunks.get_mut(&id).unwrap().runs = Some(runs);
     }
 
     fn run_set(world: &World, runs: &Runs) -> RunSet<'static> {
         let bytes = pxl_render::mesh::voxel_scan::run_set_bytes(runs.count, COL_SPAN) as usize;
-        // SAFETY: the chunk's own block, held until its runs are let go.
-        unsafe { RunSet::carve(core::slice::from_raw_parts(world.volumes.mem().add(runs.at), bytes), runs.count, COL_SPAN, APRON) }
+        let at = run_set_at(runs.set).expect("runs made before the memory was laid out") as usize;
+        // SAFETY: the chunk's own set, held until its runs are let go.
+        unsafe { RunSet::carve(core::slice::from_raw_parts(world.volumes.mem().add(at), bytes), runs.count, COL_SPAN, APRON) }
     }
 
     fn advance_bake(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) -> Progress {
@@ -1184,21 +1191,24 @@ impl Builder {
         match self.bake.step(&set) {
             Step::Working => Progress::Busy,
             Step::NeedMesh(words) => {
-                let Some(mesh) = alloc(words * 4) else {
+                // The one bake open writes into `.fixed.bake`, which is past
+                // any mesh a chunk has been measured to make (mesh_slot.rs).
+                let Some(at) = bake_at().filter(|_| words * 4 <= BAKE_BYTES) else {
+                    self.abort_bake();
                     self.refuse(world, id);
                     return Progress::Blocked;
                 };
-                // SAFETY: a block of the words asked for, the bake's until it
-                // is finished and handed over, or aborted and released.
-                unsafe { self.bake.provide_mesh(world.volumes.mem().add(mesh.0) as *mut u32, words) };
-                self.bake_job.as_mut().unwrap().mesh = Some(mesh);
+                // SAFETY: `.fixed.bake`, the open bake's alone until it is
+                // finished and handed over, or aborted.
+                unsafe { self.bake.provide_mesh(world.volumes.mem().add(at as usize) as *mut u32, words) };
+                self.bake_job.as_mut().unwrap().mesh = Some((at as usize, words * 4));
                 Progress::Busy
             }
             Step::Done => {
                 let job = self.bake_job.as_ref().unwrap();
                 // A mesh of nothing never asked for a block, and is handed
                 // over as none: zero bytes at zero.
-                debug_assert!(job.mesh.is_some() || mesh_words(0, 0) == 0);
+                debug_assert!(job.mesh.is_some() || mesh_words(0) == 0);
                 let (at, bytes) = job.mesh.unwrap_or((0, 0));
                 let mesh = self.bake.finish();
                 let job = self.bake_job.take().unwrap();
@@ -1209,16 +1219,8 @@ impl Builder {
                         *w = 0;
                     }
                 }
-                // Direct runs are not worth keeping past the last tier
-                // wanted: they are cheap to make again, and held they are small
-                // blocks the fine tiers' large ones fail to find room among. A
-                // scan's runs stay: those cost the scan.
                 if c.wanted().next().is_none() {
-                    if let Some(r) = c.runs.take_if(|r| r.direct) {
-                        // SAFETY: a block this build took and has not given back.
-                        unsafe { free((r.at, r.bytes)) };
-                        emit(BuildEvent::Runs { id, bytes: 0 });
-                    }
+                    self.let_runs_go(id);
                 }
                 emit(BuildEvent::Tier {
                     id,
@@ -1226,8 +1228,7 @@ impl Builder {
                     step: job.step,
                     at: at as u32,
                     bytes,
-                    vertex_cnt: mesh.vertex_cnt,
-                    index_cnt: mesh.index_cnt,
+                    box_cnt: mesh.box_cnt,
                 });
                 Progress::Busy
             }

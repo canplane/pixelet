@@ -261,17 +261,13 @@ pub fn ring_of(anchor: IVec, page: LevelPage) -> u32 {
     ivec::X(d).unsigned_abs().max(ivec::Y(d).unsigned_abs()) as u32
 }
 
-/// A level's held pages: its ring, less the pages whose ground the ring a
-/// level down already holds whole. Such a page would be drawn nowhere — the
-/// chunks over it split to the finer pages under it — so above the window's
-/// base a level holds only the rim the level below does not reach; the base
-/// has no finer level under it and holds its ring whole.
-pub fn held(level: u32, anchor: IVec, base: u32) -> Vec<LevelPage> {
-    let mut pages = ring(level, anchor, HELD_AXIS);
-    if level > base {
-        pages.retain(|&p| !p.children().iter().all(|&c| ring_of(anchor, c) <= HELD_AXIS / 2));
-    }
-    pages
+/// A level's held pages: its ring whole, the part the level below also
+/// holds included. Those are what a chunk draws where the finer page under
+/// it has not come, so the ground coarsens there rather than opening; a
+/// clipmap keeps every level whole for the same reason, and `.fixed` has a
+/// record for each (mem/fixed.rs).
+pub fn held(level: u32, anchor: IVec) -> Vec<LevelPage> {
+    ring(level, anchor, HELD_AXIS)
 }
 
 /// How far the anchor stands from `p`'s centre, in `p`'s own spans: what

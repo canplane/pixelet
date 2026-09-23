@@ -21,7 +21,7 @@ use crate::layer::poi::fetcher;
 use crate::layer::terrain::level::window;
 use crate::layer::terrain::store::tile_pages;
 use crate::layer::terrain::tile_fetcher;
-use crate::sched::ledger::record::{ledger_record_frame, ledger_take_rings, CpuSample, DrawCensus, FrameSample, HeapSample, LodSample, MountSample, TexturesMb, WorkSample};
+use crate::sched::ledger::record::{ledger_record_frame, ledger_take_rings, CpuSample, DrawCensus, FrameSample, HeapSample, LodSample, MountSample, StaleSample, TexturesMb, WorkSample};
 use crate::sched::priority::lead_point;
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::shell::map_store::map_store;
@@ -50,8 +50,8 @@ pub struct HostFrameStat {
 }
 
 struct CoreTick {
-    /// What the visible phase measured, handed to the report phase.
-    visible_pass: Option<(u32, u32, f64)>,
+    /// How long the visible phase took, handed to the report phase.
+    visible_pass: Option<f64>,
     last_work: (u32, u32),
     host: HostFrameStat,
     /// Whether the scheduler's pass left something new to draw.
@@ -183,8 +183,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
         c.draw = true;
         ctx.invalidate();
     }
-    let census = kernel().sched.census;
-    c.visible_pass = Some((census.pending, census.committed, now() - t0));
+    c.visible_pass = Some(now() - t0);
 }
 
 /// The build task: the chunks each tick orders, advanced on what the turn's
@@ -213,7 +212,7 @@ pub async fn build_task() {
 pub fn core_tick_report_step(ctx: &mut TickContext) {
     let c = core_tick();
     // No chunks this frame — a search jump empties the stage for a moment.
-    let Some((pending_total, committed, tick_ms)) = c.visible_pass else { return };
+    let Some(tick_ms) = c.visible_pass else { return };
     let frame_t0 = ctx.budget.t0;
     let census = kernel().sched.census;
     let node_work = take_node_counts();
@@ -244,7 +243,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         },
         lod: LodSample {
             chunks: crate::world::chunk::node::chunk_nodes().len() as f64,
-            pending: (pending_total - committed) as f64,
+            pending: census.left as f64,
             in_frustum: census.in_frustum as f64,
             settling: census.settling as f64,
             blend_active: census.blend_active as f64,
@@ -260,5 +259,17 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         work: work_sample(c),
         q_terrain: fetch_pending_count(tile_fetcher::CATEGORY) as f64,
         q_poi: fetch_pending_count(fetcher::CATEGORY) as f64,
+        stale: StaleSample {
+            chunks: census.stale as f64,
+            drawn: census.stale_drawn as f64,
+            levels: census.stale_levels as f64,
+            hidden: census.hidden as f64,
+            slot_waits: census.slot_waits as f64,
+            wait_levels: census.wait_levels as f64,
+            holder_levels: census.holder_levels as f64,
+            uncovered: census.stale_uncovered as f64,
+            unready: census.stale_unready as f64,
+            on_waiter: census.stale_on_waiter as f64,
+        },
     });
 }
