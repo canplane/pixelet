@@ -21,13 +21,6 @@
 //! at start and on invalidation, never a page at a time: one page from before
 //! a change beside one from after is a pyramid no bake would produce.
 //!
-//! Or it serves a finished bake: `--baked` answers terrain out of
-//! `out/terrain/<published version>` as the bucket would, every level already
-//! there, for work on the view rather than on the bake — zooming out to where
-//! a page folds a million leaves, which no request could wait for. Demand
-//! paging refuses the levels above `--top-level` for the same reason, with a
-//! status the client retries rather than the 404 it would paint as sea.
-//!
 //! It is a separate process from the live server on purpose. `pxl-geo` answers
 //! forward search against three tables and is what production runs; this reads
 //! the whole geo DB and is what a bake needs, and neither depends on the other
@@ -45,7 +38,6 @@
 //!   --workers <n>     database connections, one per in-flight page (default 4)
 //!   --cache <dir>     the terrain page cache (default ./out/dev/terrain/<published version>)
 //!   --top-level <n>   the coarsest level demand paging makes (default 3)
-//!   --baked           serve ./out/terrain/<published version> instead of baking
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -158,50 +150,7 @@ impl Pager {
     }
 }
 
-/// A finished tile set, served as it lies: its objects as the bake packed them,
-/// under the encoding its manifest records.
-struct Baked {
-    tiles: TileSet,
-    encoding: HeaderValue,
-    ocean: Bytes,
-}
-
-impl Baked {
-    fn open(root: PathBuf) -> Result<Baked, String> {
-        let manifest_path = root.join("../manifest.json");
-        let manifest: serde_json::Value = serde_json::from_slice(&std::fs::read(&manifest_path).map_err(|e| format!("{}: {e}", manifest_path.display()))?).map_err(|e| e.to_string())?;
-        let version = root.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-        if manifest["version"].as_str() != Some(version) {
-            return Err(format!("{}: records {}, not {version}", manifest_path.display(), manifest["version"]));
-        }
-        let encoding = manifest["content_encoding"].as_str().ok_or("the manifest names no content_encoding")?;
-        let tiles = TileSet::new(root);
-        let ocean = std::fs::read(tiles.ocean_path()).map_err(|e| format!("{}: {e}", tiles.ocean_path().display()))?;
-        Ok(Baked {
-            encoding: HeaderValue::from_str(encoding).map_err(|e| e.to_string())?,
-            ocean: Bytes::from(ocean),
-            tiles,
-        })
-    }
-
-    fn serve(&self, packed: Bytes) -> Response {
-        (
-            [
-                (header::CONTENT_TYPE, HeaderValue::from_static("application/octet-stream")),
-                (header::CONTENT_ENCODING, self.encoding.clone()),
-            ],
-            packed,
-        )
-            .into_response()
-    }
-}
-
 struct App {
-    /// Set when terrain is a finished bake rather than demand-paged.
-    baked: Option<Baked>,
-    /// No database behind this process: a bake is being served and none was
-    /// there to take. What the database answers answers nothing.
-    no_geo: bool,
     /// The coarsest level demand paging makes.
     top_level: u32,
     workers: Mutex<Vec<Worker>>,
@@ -241,9 +190,6 @@ impl App {
     }
 
     fn with_worker<T>(&self, f: impl FnOnce(&mut Worker) -> T) -> Option<T> {
-        if self.no_geo {
-            return None;
-        }
         let mut worker = loop {
             if let Some(w) = self.workers.lock().expect("workers").pop() {
                 break w;
@@ -348,27 +294,11 @@ async fn terrain(State(app): State<Arc<App>>, Path(raw): Path<String>) -> Respon
         return (StatusCode::BAD_REQUEST, "bad page name").into_response();
     };
     let level = LEVEL0_ZOOM - zoom;
-    if let Some(baked) = &app.baked {
-        return match tokio::fs::read(baked.tiles.path(level, idx)).await {
-            Ok(packed) => {
-                println!("[tile/terrain] {raw} {} B, baked", packed.len());
-                baked.serve(Bytes::from(packed))
-            }
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                println!("[tile/terrain] {raw} none (404), baked");
-                StatusCode::NOT_FOUND.into_response()
-            }
-            Err(err) => {
-                eprintln!("[tile/terrain/{raw}] {err}");
-                StatusCode::INTERNAL_SERVER_ERROR.into_response()
-            }
-        };
-    }
     // Not a 404, which reads as open water: the page exists, it is only not
     // made here. The client counts it a failure and asks again later.
     if level > app.top_level {
         println!("[tile/terrain] {raw} past --top-level {} (503)", app.top_level);
-        return (StatusCode::SERVICE_UNAVAILABLE, "past --top-level: serve a finished bake with --baked").into_response();
+        return (StatusCode::SERVICE_UNAVAILABLE, "past --top-level: raise it, or read the published set with dev:remote").into_response();
     }
     let pager = app.terrain.lock().expect("pager").clone();
     let cached = pager.tiles.settled(level, idx).is_some();
@@ -404,9 +334,6 @@ async fn terrain(State(app): State<Arc<App>>, Path(raw): Path<String>) -> Respon
 }
 
 async fn ocean(State(app): State<Arc<App>>) -> Response {
-    if let Some(baked) = &app.baked {
-        return baked.serve(baked.ocean.clone());
-    }
     stored(app.terrain.lock().expect("pager").ocean_packed.clone())
 }
 
@@ -542,9 +469,6 @@ async fn invalidate(State(app): State<Arc<App>>, headers: HeaderMap, Path(kind):
     // Terrain drops whole or not at all: a page is folded from the pages
     // under it, so dropping one would leave its ancestors from before.
     if kind == "terrain" {
-        if app.baked.is_some() {
-            return (StatusCode::CONFLICT, "serving a finished bake: nothing to invalidate").into_response();
-        }
         if !body.trim().is_empty() {
             return (StatusCode::BAD_REQUEST, "terrain invalidates whole: send no page_idx").into_response();
         }
@@ -601,7 +525,6 @@ fn run() -> Result<(), String> {
     let mut workers: usize = 4;
     let mut cache = PathBuf::from(format!("./out/dev/terrain/{}", PUBLISHED_VERSION.terrain));
     let mut top_level: u32 = 3;
-    let mut baked = false;
 
     let mut i = 0;
     while i < argv.len() {
@@ -616,7 +539,6 @@ fn run() -> Result<(), String> {
             "--workers" => workers = next(&mut i)?.parse().map_err(|_| "bad --workers")?,
             "--cache" => cache = PathBuf::from(next(&mut i)?),
             "--top-level" => top_level = next(&mut i)?.parse().map_err(|_| "bad --top-level")?,
-            "--baked" => baked = true,
             other => return Err(format!("unknown flag: {other}")),
         }
         i += 1;
@@ -628,47 +550,17 @@ fn run() -> Result<(), String> {
         std::fs::remove_dir_all(&cache).map_err(|e| format!("{}: {e}", cache.display()))?;
     }
 
-    let baked = if baked {
-        let b = Baked::open(PathBuf::from(format!("./out/terrain/{}", PUBLISHED_VERSION.terrain)))?;
-        println!("[tile] terrain: the finished bake at {}", b.tiles.root.display());
-        Some(b)
-    } else {
-        None
-    };
-
-    // The database is what a leaf is baked from, so a bake it is serving
-    // instead does not need one — and saying so is the difference between a
-    // view's work needing Docker and a Postgres and needing neither. It is
-    // still taken where it is there, since poi and geocode are the
-    // database's whatever the terrain comes from; where it is not, those
-    // answer that they have nothing and the terrain is served as it was.
-    let url = std::env::var("DB_GEO_URL");
-    let pool = match (&url, baked.is_some()) {
-        (Err(_), false) => return Err("env:DB_GEO_URL:missing".into()),
-        (Err(_), true) => Vec::new(),
-        (Ok(url), served) => {
-            let mut pool = Vec::with_capacity(workers.max(1));
-            for _ in 0..workers.max(1) {
-                match Worker::connect(url) {
-                    Ok(w) => pool.push(w),
-                    Err(e) if served => {
-                        println!("[tile] geo: none ({e}); poi and geocode answer nothing");
-                        break;
-                    }
-                    Err(e) => return Err(e.to_string()),
-                }
-            }
-            pool
-        }
-    };
-    if !pool.is_empty() {
-        println!("[tile] geo: ok ({} workers)", pool.len());
+    // Every page this serves is made from the database, so there is no
+    // running without one.
+    let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
+    let mut pool = Vec::with_capacity(workers.max(1));
+    for _ in 0..workers.max(1) {
+        pool.push(Worker::connect(&url).map_err(|e| e.to_string())?);
     }
+    println!("[tile] geo: ok ({} workers)", pool.len());
 
     let app = Arc::new(App {
-        baked,
         top_level,
-        no_geo: pool.is_empty(),
         workers: Mutex::new(pool),
         terrain: Mutex::new(Arc::new(Pager::open(&cache, 0, Coverage::of_source())?)),
         terrain_base: cache,

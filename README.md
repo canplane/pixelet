@@ -89,7 +89,6 @@ deno task dev:local
 | ------------------------------------ | --------------------------------------------------------------------- |
 | `deno task dev`                      | The client alone, every route served by the live deployment           |
 | `deno task dev:local`                | The client and the three servers it talks to, on this machine         |
-| `deno task dev:baked`                | The same, terrain served from the finished bake in `./out/terrain`    |
 | `deno task dev:web`                  | The client alone, against those servers                               |
 | `deno task dev:geo`                  | pxl-geo only (`/geo`)                                                 |
 | `deno task dev:api`                  | pxl-api only (`/api`)                                                 |
