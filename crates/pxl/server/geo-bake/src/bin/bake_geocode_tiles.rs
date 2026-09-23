@@ -2,7 +2,7 @@
 
 //! Offline pre-bake pass for reverse geocoding: for every land page, the
 //! neighbourhood label the provider resolves for its centre, as one small
-//! gzipped JSON object. A page whose centre falls outside every ingested
+//! packed JSON object (util.rs). A page whose centre falls outside every ingested
 //! division polygon — open water, or simply outside Overture's Divisions
 //! coverage — writes an `.empty` marker instead.
 //!

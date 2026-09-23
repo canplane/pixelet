@@ -318,8 +318,9 @@ async function colorOutputs(): Promise<Output[]> {
   ];
 }
 
-type CubeEntry = { name: string; value: number; doc?: string[] } | { section: string };
+type CubeEntry = { name: string; value: number; recess?: number; doc?: string[] } | { section: string };
 interface CubeSpec {
+  base: { channel: string; type: string; doc: string[] };
   channels: { name: string; note?: string[]; entries: CubeEntry[] }[];
 }
 
@@ -351,6 +352,7 @@ async function cubeTypeOutputs(): Promise<Output[]> {
     for (const l of ch.note ?? []) rs.push(l === "" ? "    //" : `    // ${l}`);
     rs.push(`    pub mod ${ch.name} {`);
     const names: string[] = [];
+    const recessed: [string, number][] = [];
     const types: { name: string; lit: string; doc?: string[] }[] = [];
     ch.entries.forEach((e, ei) => {
       if ("section" in e) {
@@ -368,10 +370,19 @@ async function cubeTypeOutputs(): Promise<Output[]> {
       ts.push(`    ${e.name}: ${lit},`);
       rs.push(`        pub const ${e.name}: u8 = ${lit};`);
       names.push(e.name);
+      if (e.recess !== undefined) recessed.push([e.name, e.recess]);
       types.push({ name: e.name, lit, doc: e.doc });
     });
     ts.push("  },");
-    rs.push("", `        pub const ENTRIES: &[(&str, u8)] = &[`, ...names.map((n) => `            (${JSON.stringify(n)}, ${n}),`), "        ];", "    }");
+    rs.push("", `        pub const ENTRIES: &[(&str, u8)] = &[`, ...names.map((n) => `            (${JSON.stringify(n)}, ${n}),`), "        ];");
+    // Rust alone: the recess is a height, and heights are the kernel's.
+    rs.push(
+      "",
+      "        /// How far below its sampled height a cell showing the type sits, in",
+      "        /// units; a type not listed sits at it.",
+      `        pub const RECESS: &[(u8, i16)] = &[${recessed.map(([n, r]) => `(${n}, ${r})`).join(", ")}];`,
+      "    }",
+    );
     // The same channel as one type, for Rust, which names a member of a closed
     // set with an enum rather than with the text the JSON spells it out under.
     // TypeScript already has this: `cube_types.land` IS the closed set there,
@@ -404,6 +415,14 @@ async function cubeTypeOutputs(): Promise<Output[]> {
   });
   ts.push("} as const satisfies Record<string, Record<string, number>>;");
   rs.push("", "    pub const CHANNELS: &super::Channels = &[", ...spec.channels.map((ch) => `        (${JSON.stringify(ch.name)}, ${ch.name}::ENTRIES),`), "    ];");
+  rs.push(
+    "",
+    ...rsDoc(spec.base.doc, "    "),
+    "    pub mod base {",
+    `        pub const CHANNEL: &str = ${JSON.stringify(spec.base.channel)};`,
+    `        pub const TYPE: u8 = super::${spec.base.channel}::${spec.base.type};`,
+    "    }",
+  );
   rs.push(...enums, "}");
   return [
     { path: "apps/web/src/catalog/cell/cube_type.spec.ts", text: ts.join("\n") + "\n" },

@@ -1,4 +1,12 @@
 {
+  "base": {
+    "channel": "land",
+    "type": "bare",
+    "doc": [
+      "What a cell shows when no ground channel has painted it: a cell with",
+      "nothing on it is still ground, not nothing."
+    ]
+  },
   "channels": [
     {
       "name": "common",
@@ -41,6 +49,7 @@
         {
           "name": "sea",
           "value": 129,
+          "recess": 1,
           "doc": [
             "sea water (MSB-partitioned)"
           ]
@@ -77,9 +86,9 @@
     {
       "name": "water",
       "entries": [
-        { "name": "river", "value": 1, "doc": ["flowing water"] },
-        { "name": "lake", "value": 2, "doc": ["still water"] },
-        { "name": "wetland", "value": 3, "doc": ["wetland"] }
+        { "name": "river", "value": 1, "recess": 1, "doc": ["flowing water"] },
+        { "name": "lake", "value": 2, "recess": 1, "doc": ["still water"] },
+        { "name": "wetland", "value": 3, "recess": 1, "doc": ["wetland"] }
       ]
     },
     {

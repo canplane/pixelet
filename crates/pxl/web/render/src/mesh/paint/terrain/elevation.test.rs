@@ -30,11 +30,11 @@ fn ground(span: usize, land: u8, water: u8, structure: u8, transport: u8) -> Gro
 }
 
 #[test]
-fn dense_ele_region_a_water_channel_cell_is_recessed_by_water_recess_cells() {
+fn dense_ele_region_a_water_channel_cell_is_recessed_by_its_types_recess() {
     let g = ground(2, 0, cube_types::water::river, 0, 0);
     let mut out = [0i16; 4];
     dense_ele_region(&flat_page_ele(), 0, 0, 2, Some(&g), &mut out);
-    assert_eq!(out[0], FLAT_ELE - WATER_RECESS_CELLS);
+    assert_eq!(out[0], FLAT_ELE - 1);
     assert_eq!(out[1], FLAT_ELE);
 }
 
@@ -43,7 +43,7 @@ fn dense_ele_region_land_sea_is_recessed_too_even_though_it_s_not_the_water_chan
     let g = ground(2, cube_types::land::sea, 0, 0, 0);
     let mut out = [0i16; 4];
     dense_ele_region(&flat_page_ele(), 0, 0, 2, Some(&g), &mut out);
-    assert_eq!(out[0], FLAT_ELE - WATER_RECESS_CELLS);
+    assert_eq!(out[0], FLAT_ELE - 1);
 }
 
 #[test]
@@ -71,7 +71,9 @@ fn dense_ele_region_omitting_ground_recesses_nothing() {
 }
 
 #[test]
-fn is_water_family_at_plain_land_is_not_water_family() {
-    let g = ground(1, cube_types::land::bare, 0, 0, 0);
-    assert!(!is_water_family_at(&g, 0));
+fn dense_ele_region_plain_land_is_not_recessed() {
+    let g = ground(2, cube_types::land::bare, 0, 0, 0);
+    let mut out = [0i16; 4];
+    dense_ele_region(&flat_page_ele(), 0, 0, 2, Some(&g), &mut out);
+    assert_eq!(out[0], FLAT_ELE);
 }

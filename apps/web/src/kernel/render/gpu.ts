@@ -383,6 +383,12 @@ function run_paint(w: U32Array, memory: WebAssembly.Memory): void {
 /** The kernel's WebGPU imports, over its memory. */
 export function gpu_imports(memory: WebAssembly.Memory): WebAssembly.ModuleImports {
   const words = (at: u32, n: u32) => new Uint32Array(memory.buffer, at, n);
+  // setBindGroup runs a few hundred times a frame, once or more per draw, so
+  // a fresh view or array per call is garbage that grows with what is drawn.
+  // One view over the whole memory, rebuilt only when growth detaches it, is
+  // what the (data, start, length) overload reads the offsets from instead.
+  let all = new Uint32Array(memory.buffer);
+  const all_words = () => all.buffer === memory.buffer ? all : (all = new Uint32Array(memory.buffer));
   const surface = (handle: u32) => surfaces[handle_slot(handle)];
   return {
     gpu_reset: () => {
@@ -449,8 +455,11 @@ export function gpu_imports(memory: WebAssembly.Memory): WebAssembly.ModuleImpor
     gpu_encoder: (id: u32) => put(id, gpu().createCommandEncoder()),
     gpu_pass: (id: u32, encoder: u32, at: u32, n: u32) => put(id, begin_pass(get<GPUCommandEncoder>(encoder), words(at, n))),
     gpu_set_pipeline: (pass: u32, pipeline: u32) => get<GPURenderPassEncoder>(pass).setPipeline(get<GPURenderPipeline>(pipeline)),
-    gpu_set_bind_group: (pass: u32, index: u32, group: u32, at: u32, count: u32) =>
-      get<GPURenderPassEncoder>(pass).setBindGroup(index, get<GPUBindGroup>(group), count === 0 ? [] : Array.from(words(at, count))),
+    gpu_set_bind_group: (pass: u32, index: u32, group: u32, at: u32, count: u32) => {
+      const p = get<GPURenderPassEncoder>(pass);
+      if (count === 0) p.setBindGroup(index, get<GPUBindGroup>(group));
+      else p.setBindGroup(index, get<GPUBindGroup>(group), all_words(), at >>> 2, count);
+    },
     gpu_set_vertex_buffer: (pass: u32, slot: u32, buffer: u32, offset: u32, size: u32) => {
       const p = get<GPURenderPassEncoder>(pass);
       if (size === 0) p.setVertexBuffer(slot, get<GPUBuffer>(buffer), offset);

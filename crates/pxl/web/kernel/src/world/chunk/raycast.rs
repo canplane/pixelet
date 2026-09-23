@@ -41,8 +41,10 @@ pub struct Hit {
 }
 
 struct Entry {
-    id: u32,
-    generation: u32,
+    /// The chunk corner it is the composite of, in units.
+    base: (i64, i64),
+    /// What it was made valid for (the builder's compose_leaf).
+    valid: u32,
     volume: usize,
     bands: usize,
     used: u32,
@@ -207,8 +209,7 @@ impl Raycast {
         // A point inside the grid cell, then the chunk it falls in.
         let bx = (((gx + 0.5) * CHUNK_W + origin[0]) / CHUNK_W).floor() * CHUNK_W;
         let by = (((gy + 0.5) * CHUNK_W + origin[1]) / CHUNK_W).floor() * CHUNK_W;
-        let id = sched.chunk_at(bx as i64, by as i64)?;
-        let (volume, temporary) = self.acquire(world, sched, id)?;
+        let (volume, temporary) = self.acquire(world, sched, (bx as i64, by as i64))?;
         let hit = self.hit_chunk(world, volume, o, d, bx - origin[0], by - origin[1], max_dist);
         if temporary {
             world.volumes.release(volume);
@@ -216,27 +217,28 @@ impl Raycast {
         hit
     }
 
-    /// The chunk's composite: the kept one when its chunk's sources have
-    /// not been told again since, else made now and kept unless too tall
-    /// to keep. Least recently used is let go first.
-    fn acquire(&mut self, world: &mut World, sched: &mut Scheduler, id: u32) -> Option<(usize, bool)> {
+    /// The leaf composite at a chunk corner: the kept one while what it was
+    /// made from is unchanged, else made now and kept unless too tall to
+    /// keep. Least recently used is let go first.
+    fn acquire(&mut self, world: &mut World, sched: &mut Scheduler, base: (i64, i64)) -> Option<(usize, bool)> {
         self.tick = self.tick.wrapping_add(1);
-        let generation = sched.builder.generation_of(id);
-        if let Some(k) = self.entries.iter().position(|e| e.id == id) {
-            if Some(self.entries[k].generation) == generation {
+        let at = ivec::gather(base.0, base.1, 0);
+        let valid = sched.builder.leaf_valid(at);
+        if let Some(k) = self.entries.iter().position(|e| e.base == base) {
+            if self.entries[k].valid == valid {
                 self.entries[k].used = self.tick;
                 return Some((self.entries[k].volume, false));
             }
             self.remove(world, k);
         }
-        let (volume, generation) = sched.builder.compose_real(world, id)?;
+        let (volume, valid) = sched.builder.compose_leaf(world, at)?;
         let bands = world.volumes.band_count(volume);
         if bands > MAX_BANDS {
             return Some((volume, true));
         }
         self.entries.push(Entry {
-            id,
-            generation,
+            base,
+            valid,
             volume,
             bands,
             used: self.tick,

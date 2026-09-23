@@ -1,24 +1,50 @@
 {
   "$doc": [
-    "Tile streaming, in world units.",
+    "Tile streaming, in pages of the pyramid.",
     "",
-    "The page stays the unit of transfer and storage: one PostGIS query and bake",
-    "on the API side, one ~4MB decode, one key, one eviction. What is derived",
-    "rather than chosen is *which* pages: every page KEEP_DIST reaches, which is",
-    "at once what gets fetched, what stays decoded, and what `.fixed.terrain` has",
-    "a record for (terrain/fixed.rs). One set, so a page can never be requested",
-    "and then dropped from under its own in-flight request."
+    "The page stays the unit of transfer and storage: one object, one decode,",
+    "one key, one eviction, the same record at every level. What is derived",
+    "rather than chosen is *which* pages: a ring around the view at every level",
+    "of a window, which is at once what gets fetched, what stays decoded, and",
+    "what `.fixed.terrain` has a record for (terrain/fixed.rs). One set, so a",
+    "page can never be requested and then dropped from under its own in-flight",
+    "request (issue/20260921-level-step-and-zoom-are-one-number.md)."
   ],
-  "KEEP_DIST": {
-    "$value": 3072,
+  "WINDOW_LEVELS": {
+    "$value": 5,
+    "$type": "u32",
     "$doc": [
-      "How far a page is loaded from. This is the one number the terrain's storage",
-      "is derived from: the range's axis is the width of the set this reaches, its",
-      "records are that squared, and its bytes are those records — no count to cap",
-      "and no margin to keep, since a page's record is its own coordinate and",
-      "cannot be refused.",
-      "",
-      "A whole number of pages, or the axis is not the width of the set it holds."
+      "The most levels held at once: a window holds the levels the ground in",
+      "view wants and no others (terrain/level.rs), and this is the widest that",
+      "can be, which `.fixed` is sized for. What a 50° field of view shows spans",
+      "log2(sin(θ + 25°) / sin(θ − 25°)) octaves of distance at a tilt θ above",
+      "the horizon: under one looking down, 3.2 at 30°, 4.5 at 27°. Five cover",
+      "every tilt to 27°; below 25° the top ray grazes the horizon and how far",
+      "to draw is a choice rather than a measurement, and fog ends it. The",
+      "window follows the camera rather than growing, so memory is constant in",
+      "zoom."
+    ]
+  },
+  "HELD_AXIS": {
+    "$value": 5,
+    "$type": "u32",
+    "$doc": [
+      "Pages held along one axis of a level's ring, around the view's own page.",
+      "Odd, so the ring is centred. Its records are this squared a level, and",
+      "the range's bytes are those records across the window."
+    ]
+  },
+  "RENDER_AXIS": {
+    "$value": 3,
+    "$type": "u32",
+    "$doc": [
+      "Pages drawn from along one axis: the held ring less its rim. That rim is",
+      "the margin that lets the view cross a page before the pages past it",
+      "arrive. Three pages reach one page past the view at any level, 512·2^k",
+      "units, against the 384·2^k the ladder wants step 2^(k+1) to, which is",
+      "the step level k draws: the level a chunk wants is resident, with a",
+      "third of slack at every level. Where a wide screen's corners see past",
+      "that, the window's top is a coarser level (terrain/level.rs)."
     ]
   }
 }

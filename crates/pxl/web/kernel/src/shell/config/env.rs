@@ -22,10 +22,8 @@ pub struct BuildInfo {
     /// Which official build this is, counted per deploy outside git: `b<n>`,
     /// `b<n>+` for a local build after it, `b?` before any.
     pub build_number: String,
-    /// Whether tiles come from a published bake rather than a live API. Decides
-    /// whether a version token is in the path and whether a 404 means "never
-    /// baked" — open ocean, an empty POI page, ground outside coverage — or a
-    /// genuine failure.
+    /// Whether tiles come from a published bake rather than the dev tile
+    /// server, which decides whether a version token is in the path.
     pub published_tiles: bool,
 }
 

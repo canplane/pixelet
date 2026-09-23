@@ -30,8 +30,8 @@ export { REGION_BYTES };
  * on a phone. Both are mem.json's, the same file the kernel's map and the
  * module's linker flags read, so there is no second place to keep them true.
  *
- * There is no smaller reservation to fall back to. The terrain a load radius
- * reaches is a fixed 196.43 MiB and the kernel lays its map out around it, so
+ * There is no smaller reservation to fall back to. The terrain the level rings
+ * hold is a fixed 125.31 MiB and the kernel lays its map out around it, so
  * a device that will not reserve this much cannot run the world at all — and
  * failing here says that, where failing in the map would say the map was
  * wrong. The module declares PHONE_BYTES as the floor it needs

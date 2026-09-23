@@ -23,7 +23,7 @@ This document is in three parts. **The world** is the vocabulary: what a positio
 | L0    | Sub-block | within one L1   | fine placement, below one block           |
 | L1    | Block     | `1u`            | the unit a position names                 |
 | L2    | Chunk     | `64` blocks     | meshing, LOD, raycasting, frustum culling |
-| L3    | Page      | `1024` blocks   | terrain streaming and storage             |
+| L3    | Page      | `512` blocks    | terrain streaming and storage             |
 | L4    | Anchor    | `4096` blocks   | the floating origin                       |
 | L5    | Shard     | `65536` blocks  | reserved                                  |
 
@@ -44,7 +44,7 @@ One more word belongs to the renderer rather than to the model. A **Band** is on
 | terrain + object, for build | L2 Chunk           | Volume | a volume of bands (`pxl-render mesh/volume.rs`) |
 | any                         | L4 Anchor          | —      | the view's frame of reference                   |
 
-Objects are client-local. The store (`pxl-kernel layer/object/store.rs`) keeps a palette per chunk and a sparse octree per occupied band, leaves being palette indices, and derives the chunk's entries as columns with a cell index for occupancy and hits. It persists to `localStorage` as five columns per page — page-local `x`, `y` and `z`, footprint side, value — under a key that carries the layout's version. One chunk node (`world/chunk/node.rs`) owns one L2 column and composes as many signed 64-cell Z bands as its content touches; a page holds 256 columns.
+Objects are client-local. The store (`pxl-kernel layer/object/store.rs`) keeps a palette per chunk and a sparse octree per occupied band, leaves being palette indices, and derives the chunk's entries as columns with a cell index for occupancy and hits. It persists to `localStorage` as five columns per page — page-local `x`, `y` and `z`, footprint side, value — under a key that carries the layout's version. One chunk node (`world/chunk/node.rs`) owns one L2 column and composes as many signed 64-cell Z bands as its content touches; a page holds 64 columns.
 
 ## Coordinate System — PVF3
 
@@ -73,14 +73,16 @@ Terrain arrives as L3 pages: four rasters of ground type, and one of elevation, 
 | ----------- | ----------------------------------------- |
 | `LAND`      | ground surface: bare, green, sand, rock … |
 | `WATER`     | inland water: river, lake, wetland …      |
-| `STRUCTURE` | buildings and constructed surfaces        |
 | `TRANSPORT` | roads, paths, railways                    |
+| `STRUCTURE` | buildings and constructed surfaces        |
+
+The rows are in the one order the channels have (`GROUND_CH_KEYS`, `pxl-spec bake/format.rs`): the order a page stores them in and the order a cell is painted in, a later channel's non-void type winning, so a building that overlaps a road keeps its cells.
 
 Sea is a `LAND` value with the high bit set (`sea = 129`, `spec/pxl/spec/cell/cube_type.json`), so a channel stays one byte per cell. The channels are rasterized from Overture's Buildings, Transportation and Base themes, the coastline from Base's `water`.
 
-Which pages are held is decided from one point and one radius. The point is the **range anchor** (`world/chunk/range.rs`): the view centre on the ground, snapped to a chunk — an anchor in the sense of a fixed point, not the L4 level of the same name. It is not the camera, so rotating does not sweep pages in and out.
+Which pages are held is decided from one point and the page pyramid. The point is the **range anchor** (`world/chunk/range.rs`): the view centre on the ground, snapped to a chunk — an anchor in the sense of a fixed point, not the L4 level of the same name. It is not the camera, so rotating does not sweep pages in and out.
 
-The radius is `KEEP_DIST` (`spec/pxl/web/kernel/layer/terrain/config.json`), and it decides all three questions at once: the pages within it of the range anchor are the pages fetched, the pages kept decoded, and the pages the resident terrain range has records for. One radius for all three means a page cannot be requested and then dropped from under its own request. A page is copied into its record and its body released in the same command.
+What a screen shows spans a few octaves of distance, and every octave costs the same, so the client holds a fixed number of pages a level rather than a radius (`pxl-kernel layer/terrain/level.rs`, `spec/pxl/web/kernel/layer/terrain/config.json`). At every level of a **window** — the levels the ground in view wants, from the nearest ground's to the farthest's, at most five, each one level finer than the step it is drawn at — it holds a 5 × 5 ring of that level's pages around the anchor's page, and draws from the inner 3 × 3; above the window's base, only the ring's rim, since the ring below covers the rest whole. Looking down at a street, the window is the leaves alone. It follows the camera rather than growing, so memory is constant in zoom. The ring decides all three questions at once: its pages are the pages fetched, the pages kept decoded, and the pages the resident terrain range has records for, so a page cannot be requested and then dropped from under its own request. Coarse pages are fetched first — a coarse page is the fallback a fine one refines — nearest first within a level; a page the ring leaves is let go once the page over it or the four under it are resident; and a page is copied into its record and its body released in the same command.
 
 ## Bake
 
@@ -99,6 +101,8 @@ Overture PostGIS rows
 Rasterizing is the bulk of it: polygons are filled even-odd with holes, lines are drawn with a thickness kernel, and the scratch geometry for both comes from one arena per page. Elevation is stored as signed 16-bit cell units under one Mercator Z scale per page, which is what makes the bake, the terrain and the objects agree on what a unit of height is.
 
 Every land page is baked once into a versioned prefix. Open ocean is one shared page, since every one of them would be identical.
+
+Those pages are the leaves, level 0. A view from farther away wants fewer, coarser pages, so the bake stacks levels on them: a level-k page covers the 2 × 2 level-(k − 1) pages under it at half their resolution and is the same record as a leaf, stored under `<level>/<page_idx>`. It is folded from the level below with no database in the loop — each ground channel by a majority of the four cells under it, the elevation by an average that reads past the page's edge — and the fold is `pxl-spec`'s (`bake/fold.rs`), so the client can fold the pages it already holds by the same function instead of fetching. Open water folds to itself, which is what lets the one ocean page serve every level.
 
 ---
 
@@ -240,16 +244,16 @@ address        bytes                    range                  placed by
 2 MiB          8 MiB × 3                .ring.slot             build.rs
 32 MiB         ~0.5 MiB                 .rodata .data .bss     wasm-ld (--global-base)
                ↑ __data_end, rounded up to 64 KiB
-~32.5 MiB      196.43 MiB               .fixed.terrain         the kernel (mem/fixed.rs)
-~229 MiB       283 MiB  (phone)         .heap                  the allocator
-               795 MiB  (desktop)
+~32.5 MiB      125.31 MiB               .fixed.terrain         the kernel (mem/fixed.rs)
+~158 MiB       354 MiB  (phone)         .heap                  the allocator
+               866 MiB  (desktop)
 512 MiB / 1 GiB                         end
 ──────────────────────────────────────────────────────────────────────────────────────
 ```
 
 The map is `pxl-kernel mem/section.rs`'s, over xpute's sections. The stack is first so that an overflow wraps below zero and traps — there is no MMU, so the wraparound is the only guard — and the kernel asserts at boot that the linker's `__stack_high` is where `mem.json` says. The rings sit at fixed addresses and `build.rs` emits `--global-base` from the same numbers, so the linker cannot place `.data` over them.
 
-`.fixed` is what the kernel places once, sizes at compile time and never frees. Today it is the resident terrain (`layer/terrain/fixed.rs`): one plane per ground channel plus an elevation plane, indexed by a page's own L3 coordinate modulo the axis, like a clipmap — a ring over a coordinate. The axis is `2 × KEEP_PAGES + 1 = 7` pages, 49 records. A page that arrives overwrites the one the view has left, so there is no eviction list and no page is refused.
+`.fixed` is what the kernel places once, sizes at compile time and never frees. Today it is the resident terrain (`layer/terrain/fixed.rs`): one plane per ground channel plus an elevation plane, indexed by a page's coordinate at its level modulo the ring's axis, like a clipmap — a ring over a coordinate — within a group of records for its level modulo the window's width. Five groups of 5 × 5 are 125 records. A page that arrives overwrites the one the view has left, and a level that enters the window overwrites the one that left it, so there is no eviction list and no page is refused.
 
 `.heap` is everything else, under xpute's slab over buddy. A `String`, a band's voxels, a chunk's mesh and a fetch body all come from here. A refused request is a wait, not a failure: the build keeps its place and asks again after a release, and the LOD ladder gets coarser.
 
@@ -286,9 +290,9 @@ Objects paint after terrain, so a placed value wins the voxel. A chunk records t
 
 **Bands are temporary** (`pxl-render mesh/volume.rs`). A band is `64³` voxels, five bytes each — a `u32` `material` `0xCC_RRGGBB` and a `u8` `layer_idx`, plus a sub-cell payload where fine objects need it — about 1.25 MiB, allocated whole when one peak touches it. That is too much to keep for every visible chunk on a phone, so bands live only while a chunk is composed and scanned; sixteen band stores keep their lanes between composites, because reallocating them was the heap's worst churn.
 
-**The column run set survives.** A column is read bottom to top; a run opens at its first voxel and extends while the material holds. A chunk's `64²` columns become their runs, 22 bytes a run, in one heap block. It is scanned once and serves every LOD tier and every transition until the chunk is released or its sources change. Each tier's mesh is kept as one block, under a retain budget of half the heap for what is off screen (`RETAIN_BUDGET_BYTES`). The raycast keeps its own exact composites near the pointer — four chunks, eight bands, about 10 MiB.
+**The column run set survives.** A column is read bottom to top; a run opens at its first voxel and extends while the material holds. A chunk's `64²` columns become their runs, 22 bytes a run, in one heap block. It is scanned once and serves every LOD tier and every transition until the chunk is released or its sources change. Each tier's mesh is kept as one block, under a retain budget of half the heap for what is off screen (`RETAIN_BUDGET_BYTES`). The raycast keeps its own exact composites near the pointer — four chunks, eight bands, about 10 MiB — made from the leaf page wherever one is resident, so the ground is hit at the finest level whichever level it is drawn at.
 
-**The scheduler** (`pxl-kernel world/chunk/table.rs`) is one table with a slot per chunk: flags, distances, bounding sphere, pending-since, retained bytes. It runs four passes a tick. **mount** decides which chunks exist, by range from the range anchor with hysteresis; **refresh** measures each against the frustum; **recheck** asks the LOD ladder which tiers distance wants; **commit** applies a layout whose tiers are all in hand, or releases one that has gone off screen.
+**The scheduler** (`pxl-kernel world/chunk/table.rs`) is one table with a slot per chunk: flags, distances, bounding sphere, pending-since, retained bytes. It runs four passes a tick. **mount** decides which chunks exist: every chunk of the window's top level that its drawn ring holds, each drawn whole or as its four children a level down wherever the ladder wants a finer step there and the finer pages can be drawn, down to the window's base; a page the level does not hold is drawn only as its children. A chunk no longer wanted is stale rather than gone: it is drawn until every chunk replacing it has a layout, and the replacements wait under it, so a split or a merge is never a hole. **refresh** measures each against the frustum; **recheck** asks the LOD ladder which tiers distance wants; **commit** applies a layout whose tiers are all in hand, or releases one that has gone off screen.
 
 **What to build next** is one priority. A chunk build runs in two stages, a scan and a mesh bake, and one of each is open at a time; the priority (`sched/priority.rs`) puts the two chunks holding those slots first, then chunks in the frustum by distance from the lead point, aged so that nothing waits forever. The lead point is where the camera is going, so a pan fills in ahead of the view. Builds run in the build task on what the tick left of the quota.
 
@@ -308,13 +312,13 @@ Two choices outlive a frame. Depth is reversed float, near at 1, so precision fa
 
 The **view** (`pxl-kernel world/frame/view.rs`) is an orbit camera in a root frame of reference that the world stands in — a frame in the coordinate sense, not a drawn one. The eye never turns: the world rotates under it by the map's azimuth and is translated so the map centre is the origin. The local origin is the map centre's L4 base, which keeps the world in `f32` range near the camera; the translation rebases in the same step that it snaps. The matrices are doubles, written the moment a damping step moves, and read by the scheduler, the renderer, placement and the pointer's ray.
 
-**LOD** samples a chunk at strides `1/2/4/8/16/32/64`. A tier hands off when one of its cells would project to about six pixels, a screen-space error from viewport height and field of view (`pxl-render look/lod.rs`). At the reference viewport height that puts the handoffs at `192/384/768/1536/3072/6144` units, proportional to the stride. Adjacent tiers dither with complementary screen-space masks, and a chunk coming into view starts at its distance's tier.
+**LOD** is a chunk's level and its tier together. A chunk is 64 cells of its level, 2^k units each, drawn from its level's page and from the objects folded to that level by the same majority as the terrain, one dimension up (`pxl-render mesh/paint/object/fold.rs`); decor is scattered from the leaves, whatever level draws the ground over them. A chunk at level 0 builds its own cell's stride and the next; above it, a chunk builds only the next, its cells averaged 2×2, so every stride past 1 is drawn one way — the mean of the level below it — and never as the fold's vote. Past that a chunk merges into its parent or splits into its children, so the world stride is `1/2/4/8/16/32/64` and on. A tier hands off when one of its cells would project to about six pixels, a screen-space error from viewport height and field of view (`pxl-render look/lod.rs`). At the reference viewport height that puts the handoffs at `192/384/768/1536/3072/6144` units, proportional to the stride. The leaves' two tiers dither with complementary screen-space masks; above them a handoff is a split or a merge. A chunk coming into view starts at its distance's tier.
 
 The first handoff is the unit everything else keeps step with: the POI lattice (the grid that files place labels by tier), the fade of their badges, and decor's range. Decor is drawn by the same rule on a kind's extent — a thing covering fewer pixels than two of the tier's cells is not drawn.
 
 Culling uses the exact union of the terrain, object, primary and secondary mesh bounds, which survive GPU eviction and are invalidated with their sources. Until a chunk has been measured, a conservative guard keeps a low camera from culling the ground under it.
 
-**A coarse cell** (`lod_step > 1`, `mesh/chunk_mesher.rs`) merges `lod_step³` voxels into one box that says three things. How much: fill is coverage over the cube, and the box shrinks about the cell centre, its side scaled by the cube root of the fill, so its volume is the fill's and a nearly empty cell still draws something. What colour: the average of each sub-column's topmost run, the voxel seen from above, updated in O(1) per run as runs arrive ascending. What material: up to four texture layers blend per cell. Full cells keep greedy merging and face culling; shrunken ones take an inset path with all four creases.
+**A coarse cell** (`lod_step > 1`, `mesh/chunk_mesher.rs`) is the `lod_step²` columns under it summarised, and the ground and what stands on it are summarised apart. The ground is a height field, so only its footprint coarsens: one run from the lowest floor to the columns' mean top, in units, its colour the mean of their top surfaces and up to four of their texture layers, a full run that merges and culls faces like any other. What objects add above it is a volume: `lod_step³` voxels to one box whose fill is coverage over the cube, shrunk about the cell centre by the cube root of the fill so its volume is the fill's, on an inset path with all four creases. Heights are units at every level, so no ground is ever a cell part full.
 
 ```text
    eight voxels, one solid            the box that replaces them

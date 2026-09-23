@@ -24,8 +24,13 @@ xpute-core = { path = "../../../xpute/core" }
 # `Send` across, and the concurrency is a thread per worker with a connection
 # of its own. It is tokio-postgres underneath either way.
 postgres = { version = "0.19", features = ["with-serde_json-1"] }
-# The objects are stored pre-gzipped, so the client's fetch() decompresses them
-# transparently and the bucket never has to.
+# The objects are stored zstd-compressed and served with that
+# Content-Encoding, so whatever fetches them — a browser, an app's HTTP stack
+# — decodes them transparently and the bucket never has to
+# (issue/20260913-compression-by-traffic.md). libzstd is the encoder with the
+# high levels, and a bake is native, so its C is no cost here.
+zstd = "0.13"
+# The reader for tile sets baked before zstd, which are gzip.
 flate2 = "1"
 # The manifest only; nothing on the wire to the client is JSON.
 serde = { version = "1", features = ["derive"] }
@@ -44,7 +49,7 @@ serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 # and `bake_tiles` links none of it — the linker already leaves it out, so what
 # a feature saves here is compile time rather than bytes.
 axum = { version = "0.8", optional = true }
-tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread"], optional = true }
+tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread", "sync"], optional = true }
 
 # Cargo finds the other three in src/bin/. This one is declared because a
 # feature gates it: the dev tile server is 51 of this crate's 101 packages, and

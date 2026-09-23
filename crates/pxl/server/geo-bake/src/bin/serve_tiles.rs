@@ -8,6 +8,26 @@
 //! the offline tool walks, so `deno task dev` draws what a deployment draws
 //! with no bucket in the loop.
 //!
+//! Terrain is demand-paged. The backing store is the bake itself — a leaf
+//! from the database by `terrain/leaf.rs`, a level above by folding the
+//! sixteen pages under it (`terrain/pyramid.rs`), the functions `bake_tiles`
+//! runs — and the page cache is a tile set on disk, laid out as the bucket is.
+//! A page not yet on disk is a fault: its dependencies fault first, in
+//! parallel, a page wanted twice at once is made once, and what is made is
+//! written before it is served. So a page here holds the packet `bake_tiles`
+//! would write — packed at the live level rather than the stored one, which is
+//! the transport's choice and not the page's — and a batch bake is every page
+//! faulted. The cache is dropped whole,
+//! at start and on invalidation, never a page at a time: one page from before
+//! a change beside one from after is a pyramid no bake would produce.
+//!
+//! Or it serves a finished bake: `--baked` answers terrain out of
+//! `out/terrain/<published version>` as the bucket would, every level already
+//! there, for work on the view rather than on the bake — zooming out to where
+//! a page folds a million leaves, which no request could wait for. Demand
+//! paging refuses the levels above `--top-level` for the same reason, with a
+//! status the client retries rather than the 404 it would paint as sea.
+//!
 //! It is a separate process from the live server on purpose. `pxl-geo` answers
 //! forward search against three tables and is what production runs; this reads
 //! the whole geo DB and is what a bake needs, and neither depends on the other
@@ -23,9 +43,14 @@
 //!   --host <addr>     bind address (default 127.0.0.1)
 //!   --asset <dir>     ingested assets (default ./out/asset)
 //!   --workers <n>     database connections, one per in-flight page (default 4)
+//!   --cache <dir>     the terrain page cache (default ./out/dev/terrain/<published version>)
+//!   --top-level <n>   the coarsest level demand paging makes (default 3)
+//!   --baked           serve ./out/terrain/<published version> instead of baking
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::process::ExitCode;
 use std::sync::{Arc, Mutex};
 
@@ -36,7 +61,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
 use postgres::{Client, NoTls};
-use pxl_spec::bake::format::encode_poi_page;
+use pxl_spec::bake::constant::PAGE_TOP_LEVEL;
+use pxl_spec::bake::format::{encode_poi_page, encode_terrain, Terrain};
+use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::route::{ASSET_ROOT, GEO_INTERNAL, TILE_ROOT};
 use pxl_spec::space::indexer::L3_SHAMT;
 use pxl_spec::space::pvf3::core::IVEC_WORD_MASK;
@@ -44,8 +71,13 @@ use pxl_spec::space::pvf3::ivec::IVec;
 
 use pxl_geo_bake::geocode::provider::overture::GeocodeProvider;
 use pxl_geo_bake::poi::provider::overture::PoiProvider;
+use pxl_geo_bake::terrain::leaf::{bake_leaf, bake_ocean, has_land, ocean_samples, Coverage};
+use pxl_geo_bake::terrain::pyramid::{fold_stored, neighbourhood};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
-use pxl_geo_bake::terrain::source::{fetch_tile, SourceStats};
+use pxl_geo_bake::terrain::source::SourceStats;
+use pxl_geo_bake::terrain::tile_set::{read_page, TileSet};
+use pxl_geo_bake::util::{pack, Level, CONTENT_ENCODING};
+use tokio::sync::OnceCell;
 
 const MAX_L3_IDX: IVec = IVEC_WORD_MASK >> L3_SHAMT;
 
@@ -84,9 +116,96 @@ enum Cached {
     Absent,
 }
 
+/// A page of the terrain pyramid, by level and key.
+type PageKey = (u32, IVec);
+
+/// Whether a page exists, once it has been settled; the error a failed fault
+/// ended in otherwise, which the next request for the page sees too until the
+/// cache is dropped.
+type Settled = Result<bool, String>;
+
+/// The terrain page cache and the faults in flight against it. Each
+/// invalidation opens a new generation in a directory of its own, so a fault
+/// still running against the old one writes where nothing reads.
+struct Pager {
+    generation: u32,
+    tiles: TileSet,
+    coverage: Coverage,
+    ocean: Terrain,
+    ocean_packed: Bytes,
+    faults: Mutex<HashMap<PageKey, Arc<OnceCell<Settled>>>>,
+    /// Leaves baked from the database since the cache opened, for the log's
+    /// word on a fault that runs long: a coarse page asks for every leaf
+    /// under it and its rim.
+    leaves: std::sync::atomic::AtomicU64,
+}
+
+impl Pager {
+    /// An empty cache under `base`, with the ocean page in it.
+    fn open(base: &std::path::Path, generation: u32, coverage: Coverage) -> Result<Pager, String> {
+        let tiles = TileSet::new(base.join(generation.to_string()));
+        std::fs::create_dir_all(&tiles.root).map_err(|e| e.to_string())?;
+        let raw = bake_ocean(&ocean_samples(&coverage))?;
+        let packed = pack(&raw, Level::Live).map_err(|e| e.to_string())?;
+        std::fs::write(tiles.ocean_path(), &packed).map_err(|e| e.to_string())?;
+        Ok(Pager {
+            generation,
+            ocean: read_page(&tiles.ocean_path())?,
+            ocean_packed: Bytes::from(packed),
+            tiles,
+            coverage,
+            faults: Mutex::new(HashMap::new()),
+            leaves: std::sync::atomic::AtomicU64::new(0),
+        })
+    }
+}
+
+/// A finished tile set, served as it lies: its objects as the bake packed them,
+/// under the encoding its manifest records.
+struct Baked {
+    tiles: TileSet,
+    encoding: HeaderValue,
+    ocean: Bytes,
+}
+
+impl Baked {
+    fn open(root: PathBuf) -> Result<Baked, String> {
+        let manifest_path = root.join("../manifest.json");
+        let manifest: serde_json::Value = serde_json::from_slice(&std::fs::read(&manifest_path).map_err(|e| format!("{}: {e}", manifest_path.display()))?).map_err(|e| e.to_string())?;
+        let version = root.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        if manifest["version"].as_str() != Some(version) {
+            return Err(format!("{}: records {}, not {version}", manifest_path.display(), manifest["version"]));
+        }
+        let encoding = manifest["content_encoding"].as_str().ok_or("the manifest names no content_encoding")?;
+        let tiles = TileSet::new(root);
+        let ocean = std::fs::read(tiles.ocean_path()).map_err(|e| format!("{}: {e}", tiles.ocean_path().display()))?;
+        Ok(Baked {
+            encoding: HeaderValue::from_str(encoding).map_err(|e| e.to_string())?,
+            ocean: Bytes::from(ocean),
+            tiles,
+        })
+    }
+
+    fn serve(&self, packed: Bytes) -> Response {
+        (
+            [
+                (header::CONTENT_TYPE, HeaderValue::from_static("application/octet-stream")),
+                (header::CONTENT_ENCODING, self.encoding.clone()),
+            ],
+            packed,
+        )
+            .into_response()
+    }
+}
+
 struct App {
+    /// Set when terrain is a finished bake rather than demand-paged.
+    baked: Option<Baked>,
+    /// The coarsest level demand paging makes.
+    top_level: u32,
     workers: Mutex<Vec<Worker>>,
-    terrain: Mutex<HashMap<IVec, Cached>>,
+    terrain_base: PathBuf,
+    terrain: Mutex<Arc<Pager>>,
     poi: Mutex<HashMap<IVec, Cached>>,
     geocode: Mutex<HashMap<IVec, Cached>>,
     asset_dir: PathBuf,
@@ -125,32 +244,140 @@ fn octet_stream(bytes: Bytes) -> Response {
     ([(header::CONTENT_TYPE, "application/octet-stream")], bytes).into_response()
 }
 
-async fn terrain(State(app): State<Arc<App>>, Path(raw): Path<String>) -> Response {
+/// A leaf, baked on demand. A level above it is folded from every leaf under it,
+/// which is the offline bake's work and not a request's, so this answers level
+/// 0 alone and anything else is not here.
+/// A stored object, labelled as the bucket labels it.
+fn stored(packed: Bytes) -> Response {
+    ([(header::CONTENT_TYPE, "application/octet-stream"), (header::CONTENT_ENCODING, CONTENT_ENCODING)], packed).into_response()
+}
+
+/// Settles a page: on disk already, or made now from what it depends on.
+/// Boxed because it recurses — a level's fault faults the level below.
+fn fault(app: Arc<App>, pager: Arc<Pager>, level: u32, page: IVec) -> Pin<Box<dyn Future<Output = Settled> + Send>> {
+    Box::pin(async move {
+        let cell = pager.faults.lock().expect("faults").entry((level, page)).or_default().clone();
+        cell.get_or_init(|| settle(app, pager.clone(), level, page)).await.clone()
+    })
+}
+
+async fn settle(app: Arc<App>, pager: Arc<Pager>, level: u32, page: IVec) -> Settled {
+    if let Some(exists) = pager.tiles.settled(level, page) {
+        return Ok(exists);
+    }
+    // No leaf under it, so nothing to fold and nothing to ask the database.
+    if !pager.coverage.meets(level, page) {
+        return Ok(false);
+    }
+    if level == 0 {
+        return tokio::task::spawn_blocking(move || {
+            app.with_worker(|w| {
+                if !has_land(&mut w.client, &[page]).map_err(|e| e.to_string())?[0] {
+                    pager.tiles.write_absent(0, page)?;
+                    return Ok(false);
+                }
+                let (_, packed) = bake_leaf(&w.terrain, &mut w.client, page, &mut w.stats, Level::Live)?;
+                pager.tiles.write(0, page, &packed)?;
+                let n = pager.leaves.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                if n.is_multiple_of(500) {
+                    println!("[tile/terrain] {n} leaves baked since the cache opened");
+                }
+                Ok(true)
+            })
+            .expect("a worker")
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+
+    let below: Vec<_> = neighbourhood(page, level).into_iter().map(|p| tokio::spawn(fault(app.clone(), pager.clone(), level - 1, p))).collect();
+    for task in below {
+        task.await.map_err(|e| e.to_string())??;
+    }
+    tokio::task::spawn_blocking(move || match fold_stored(&pager.tiles, page, level, &pager.ocean)? {
+        None => {
+            pager.tiles.write_absent(level, page)?;
+            Ok(false)
+        }
+        Some(t) => {
+            let raw = encode_terrain(&t.ele, &t.ground).map_err(|e| format!("{e:?}"))?;
+            pager.tiles.write(level, page, &pack(&raw, Level::Live).map_err(|e| e.to_string())?)?;
+            Ok(true)
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// A page of any level, served as the bucket serves it: the stored object,
+/// packed, or a 404 the client reads as open water.
+async fn terrain(State(app): State<Arc<App>>, Path((level, raw)): Path<(String, String)>) -> Response {
+    let Some(level) = level.parse::<u32>().ok().filter(|l| *l <= PAGE_TOP_LEVEL) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
     let Some(idx) = page_idx(&raw) else {
         return (StatusCode::BAD_REQUEST, "bad page_idx").into_response();
     };
-
-    if let Some(Cached::Bytes(b)) = app.terrain.lock().expect("cache").get(&idx).cloned() {
-        return octet_stream(b);
+    if let Some(baked) = &app.baked {
+        return match tokio::fs::read(baked.tiles.path(level, idx)).await {
+            Ok(packed) => {
+                println!("[tile/terrain] {level}/{raw} {} B, baked", packed.len());
+                baked.serve(Bytes::from(packed))
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                println!("[tile/terrain] {level}/{raw} none (404), baked");
+                StatusCode::NOT_FOUND.into_response()
+            }
+            Err(err) => {
+                eprintln!("[tile/terrain/{level}/{raw}] {err}");
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            }
+        };
     }
-    let baked = tokio::task::spawn_blocking(move || {
-        app.with_worker(|w| fetch_tile(&w.terrain, &mut w.client, idx, &mut w.stats).map(|t| Bytes::copy_from_slice(t.as_slice())))
-            .expect("a worker")
-            .inspect(|bytes| {
-                app.terrain.lock().expect("cache").insert(idx, Cached::Bytes(bytes.clone()));
-            })
-            .map_err(|e| e.to_string())
-    })
-    .await
-    .expect("bake task");
-
-    match baked {
-        Ok(bytes) => octet_stream(bytes),
+    // Not a 404, which reads as open water: the page exists, it is only not
+    // made here. The client counts it a failure and asks again later.
+    if level > app.top_level {
+        println!("[tile/terrain] {level}/{raw} past --top-level {} (503)", app.top_level);
+        return (StatusCode::SERVICE_UNAVAILABLE, "past --top-level: serve a finished bake with --baked").into_response();
+    }
+    let pager = app.terrain.lock().expect("pager").clone();
+    let cached = pager.tiles.settled(level, idx).is_some();
+    let started = std::time::Instant::now();
+    let log = |what: &str| {
+        let how = if cached {
+            "cached".to_string()
+        } else {
+            format!("made in {:.1}s", started.elapsed().as_secs_f64())
+        };
+        println!("[tile/terrain] {level}/{raw} {what}, {how}");
+    };
+    match fault(app, pager.clone(), level, idx).await {
+        Ok(true) => match tokio::fs::read(pager.tiles.path(level, idx)).await {
+            Ok(packed) => {
+                log(&format!("{} B", packed.len()));
+                stored(Bytes::from(packed))
+            }
+            Err(err) => {
+                eprintln!("[tile/terrain/{level}/{raw}] {err}");
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            }
+        },
+        Ok(false) => {
+            log("none (404)");
+            StatusCode::NOT_FOUND.into_response()
+        }
         Err(err) => {
-            eprintln!("[tile/terrain/{raw}] {err}");
+            eprintln!("[tile/terrain/{level}/{raw}] {err}");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
+}
+
+async fn ocean(State(app): State<Arc<App>>) -> Response {
+    if let Some(baked) = &app.baked {
+        return baked.serve(baked.ocean.clone());
+    }
+    stored(app.terrain.lock().expect("pager").ocean_packed.clone())
 }
 
 async fn poi(State(app): State<Arc<App>>, Path(raw): Path<String>) -> Response {
@@ -249,8 +476,32 @@ async fn invalidate(State(app): State<Arc<App>>, headers: HeaderMap, Path(kind):
             return (StatusCode::UNAUTHORIZED, "unauthorized").into_response();
         }
     }
+    // Terrain drops whole or not at all: a page is folded from the pages
+    // under it, so dropping one would leave its ancestors from before.
+    if kind == "terrain" {
+        if app.baked.is_some() {
+            return (StatusCode::CONFLICT, "serving a finished bake: nothing to invalidate").into_response();
+        }
+        if !body.trim().is_empty() {
+            return (StatusCode::BAD_REQUEST, "terrain invalidates whole: send no page_idx").into_response();
+        }
+        let (old, generation, coverage) = {
+            let pager = app.terrain.lock().expect("pager");
+            (pager.tiles.root.clone(), pager.generation + 1, pager.coverage)
+        };
+        let base = app.terrain_base.clone();
+        return match tokio::task::spawn_blocking(move || Pager::open(&base, generation, coverage)).await.expect("reopen") {
+            Ok(fresh) => {
+                *app.terrain.lock().expect("pager") = Arc::new(fresh);
+                // Best effort: a fault still running against it may put a
+                // directory back, which nothing reads and the next start drops.
+                let _ = tokio::fs::remove_dir_all(old).await;
+                (StatusCode::OK, "invalidated all").into_response()
+            }
+            Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err).into_response(),
+        };
+    }
     let cache = match kind.as_str() {
-        "terrain" => &app.terrain,
         "poi" => &app.poi,
         "geocode" => &app.geocode,
         _ => return (StatusCode::NOT_FOUND, "unknown cache").into_response(),
@@ -280,6 +531,9 @@ fn run() -> Result<(), String> {
     let mut host = "127.0.0.1".to_string();
     let mut asset_dir = PathBuf::from("./out/asset");
     let mut workers: usize = 4;
+    let mut cache = PathBuf::from(format!("./out/dev/terrain/{}", PUBLISHED_VERSION.terrain));
+    let mut top_level: u32 = 3;
+    let mut baked = false;
 
     let mut i = 0;
     while i < argv.len() {
@@ -292,9 +546,18 @@ fn run() -> Result<(), String> {
             "--host" => host = next(&mut i)?,
             "--asset" => asset_dir = PathBuf::from(next(&mut i)?),
             "--workers" => workers = next(&mut i)?.parse().map_err(|_| "bad --workers")?,
+            "--cache" => cache = PathBuf::from(next(&mut i)?),
+            "--top-level" => top_level = next(&mut i)?.parse().map_err(|_| "bad --top-level")?,
+            "--baked" => baked = true,
             other => return Err(format!("unknown flag: {other}")),
         }
         i += 1;
+    }
+
+    // Whatever the cache held was made by some earlier code against some
+    // earlier data, so a start drops it whole.
+    if cache.exists() {
+        std::fs::remove_dir_all(&cache).map_err(|e| format!("{}: {e}", cache.display()))?;
     }
 
     let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
@@ -304,9 +567,20 @@ fn run() -> Result<(), String> {
     }
     println!("[tile] geo: ok ({} workers)", pool.len());
 
+    let baked = if baked {
+        let b = Baked::open(PathBuf::from(format!("./out/terrain/{}", PUBLISHED_VERSION.terrain)))?;
+        println!("[tile] terrain: the finished bake at {}", b.tiles.root.display());
+        Some(b)
+    } else {
+        None
+    };
+
     let app = Arc::new(App {
+        baked,
+        top_level,
         workers: Mutex::new(pool),
-        terrain: Mutex::new(HashMap::new()),
+        terrain: Mutex::new(Arc::new(Pager::open(&cache, 0, Coverage::of_source())?)),
+        terrain_base: cache,
         poi: Mutex::new(HashMap::new()),
         geocode: Mutex::new(HashMap::new()),
         asset_dir,
@@ -319,20 +593,30 @@ fn run() -> Result<(), String> {
     // The roots and branches are spec/pxl/spec/route.json's, as the client's and the
     // relays' are; what each one carries past them is this server's.
     let router = Router::new()
-        .route(&format!("{TILE_ROOT}/terrain/{{page_idx}}"), get(terrain))
+        .route(&format!("{TILE_ROOT}/terrain/_ocean"), get(ocean))
+        .route(&format!("{TILE_ROOT}/terrain/{{level}}/{{page_idx}}"), get(terrain))
         .route(&format!("{TILE_ROOT}/poi/{{page_idx}}"), get(poi))
         .route(&format!("{TILE_ROOT}/geocode/{{page_idx}}"), get(geocode))
         // Its own root: an asset is neither server's, and its URL is its bucket
         // key with a leading slash.
         .route(&format!("{ASSET_ROOT}/{{hash}}"), get(asset))
         .route(&format!("{GEO_INTERNAL}/world/{{kind}}/cache/invalidate"), post(invalidate))
-        .with_state(app);
+        .with_state(app.clone());
 
-    tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| e.to_string())?.block_on(async move {
-        let listener = tokio::net::TcpListener::bind((host.as_str(), port)).await.map_err(|e| e.to_string())?;
+    // The workers' connections are the blocking client's, which drives a
+    // runtime of its own when it is dropped, and dropping one inside this
+    // runtime panics — mid-unwind, an abort that buries the error that ended
+    // the server, a port already taken, under a stack of the drop's. So the
+    // last hold on them is kept out here and let go once the runtime is gone.
+    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| e.to_string())?;
+    let served = runtime.block_on(async move {
+        let listener = tokio::net::TcpListener::bind((host.as_str(), port)).await.map_err(|e| format!("{host}:{port}: {e}"))?;
         println!("[tile] listening on {host}:{port}");
         axum::serve(listener, router).await.map_err(|e| e.to_string())
-    })
+    });
+    drop(runtime);
+    drop(app);
+    served
 }
 
 fn main() -> ExitCode {

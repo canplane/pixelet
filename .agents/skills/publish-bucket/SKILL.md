@@ -15,14 +15,14 @@ how it gets there and how you know it arrived.
 
 ## What the bucket holds
 
-| Prefix                  | Object                       | Named by            | Policy                                                        |
-| ----------------------- | ---------------------------- | ------------------- | ------------------------------------------------------------- |
-| `terrain/<version>/`    | gzipped XTP page, `_ocean`   | `page_idx`          | immutable; a re-bake is a new version                         |
-| `poi/<version>/`        | gzipped XTP page             | `page_idx`          | version = format; content rewritten in place monthly          |
-| `geocode/<version>/`    | gzipped JSON page            | `page_idx`          | same as poi                                                   |
-| `asset/`                | glb, png, webp — not gzipped | sha256 of the bytes | immutable by construction; unreferenced keys deleted whenever |
-| `_meta/land_pages.json` | terrain's land/ocean list    | fixed name          | mutable; rewritten with a terrain re-bake                     |
-| `_meta/build-counter`   | the official build count     | fixed name          | mutable; taken and written by CI's gate, never by hand        |
+| Prefix                  | Object                      | Named by            | Policy                                                        |
+| ----------------------- | --------------------------- | ------------------- | ------------------------------------------------------------- |
+| `terrain/<version>/`    | packed XTP page, `_ocean`   | `level/page_idx`    | immutable; a re-bake is a new version                         |
+| `poi/<version>/`        | packed XTP page             | `page_idx`          | version = format; content rewritten in place monthly          |
+| `geocode/<version>/`    | packed JSON page            | `page_idx`          | same as poi                                                   |
+| `asset/`                | glb, png, webp — not packed | sha256 of the bytes | immutable by construction; unreferenced keys deleted whenever |
+| `_meta/land_pages.json` | terrain's land/ocean list   | fixed name          | mutable; rewritten with a terrain re-bake                     |
+| `_meta/build-counter`   | the official build count    | fixed name          | mutable; taken and written by CI's gate, never by hand        |
 
 The versions the client requests are `PUBLISHED_VERSION` in
 `spec/pxl/spec/bake/published.json`; the asset keys are the generated table
@@ -67,7 +67,8 @@ checksums (v2 sends `x-amz-checksum-*` headers R2 refuses), set
 ```bash
 aws s3 sync ./out/terrain/<version> s3://pixelet-tiles/terrain/<version> \
   --profile r2 --endpoint-url $R2 --exclude "*.part" \
-  --content-type application/octet-stream --content-encoding gzip \
+  --content-type application/octet-stream \
+  --content-encoding "$(jq -r .content_encoding out/terrain/manifest.json)" \
   --cache-control "public, max-age=31536000, immutable"
 
 aws s3 cp ./out/terrain/land_pages.json s3://pixelet-tiles/_meta/land_pages.json \
@@ -79,23 +80,27 @@ prefix and point the app at it. The second command matters when the
 land/ocean classification was rebuilt: the monthly workflow bakes POI and
 geocode against this object, not against a local terrain bake.
 
-**Objects are stored already gzipped, so the upload must set
-`Content-Encoding: gzip`.** Without it the client receives compressed bytes
-it does not know to decode. This is the single easiest step to get wrong,
-and it fails as a decode error far from its cause.
+**Objects are stored already packed, so the upload must set the
+`Content-Encoding` they were packed in** — the manifest's `content_encoding`,
+which the bake writes beside the version: zstd from the bake after v4, gzip
+for terrain v4, POI v5 and geocode v2, which were baked before it. The
+browser decodes by that header, and the kernel and the shell never see the
+codec (issue/20260913-compression-by-traffic.md). A wrong label hands the
+client compressed bytes it does not know to decode. This is the single
+easiest step to get wrong, and it fails as a decode error far from its
+cause. A bake refuses to add objects to a directory of the other encoding,
+so one version holds one encoding.
 
 ### POI and geocode
 
 ```bash
-aws s3 sync ./out/poi/<version> s3://pixelet-tiles/poi/<version> \
-  --profile r2 --endpoint-url $R2 --exclude "*.empty" --exclude "*.part" \
-  --content-type application/octet-stream --content-encoding gzip \
-  --cache-control "public, max-age=86400" --delete
-
-aws s3 sync ./out/geocode/<version> s3://pixelet-tiles/geocode/<version> \
-  --profile r2 --endpoint-url $R2 --exclude "*.empty" --exclude "*.part" \
-  --content-type application/json --content-encoding gzip \
-  --cache-control "public, max-age=86400" --delete
+for kind in poi geocode; do
+  aws s3 sync ./out/$kind/<version> s3://pixelet-tiles/$kind/<version> \
+    --profile r2 --endpoint-url $R2 --exclude "*.empty" --exclude "*.part" \
+    --content-type "$(jq -r .content_type out/$kind/manifest.json)" \
+    --content-encoding "$(jq -r .content_encoding out/$kind/manifest.json)" \
+    --cache-control "public, max-age=86400" --delete
+done
 ```
 
 `--exclude "*.empty"` because the bake leaves a local marker per empty page
@@ -137,9 +142,9 @@ aws s3 ls s3://pixelet-tiles/terrain/<version>/ --profile r2 --endpoint-url $R2 
 # the shared ocean tile must exist
 aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/_ocean --profile r2 --endpoint-url $R2
 
-# metadata must have survived: expect ContentEncoding "gzip" on a page,
+# metadata must have survived: expect the manifest's ContentEncoding on a page,
 # ContentType model/gltf-binary and no ContentEncoding on a glb
-aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/<page_idx> --profile r2 --endpoint-url $R2
+aws s3api head-object --bucket pixelet-tiles --key terrain/<version>/0/<page_idx> --profile r2 --endpoint-url $R2
 aws s3api head-object --bucket pixelet-tiles --key asset/<sha256> --profile r2 --endpoint-url $R2
 ```
 
@@ -164,9 +169,10 @@ one-loop smoke test over every path the app takes.
 perfectly correct while the serving path is not:
 
 ```bash
-U=https://plei.me/geo/tiles/terrain/<version>/<page_idx>
-curl -s -H "Accept-Encoding: gzip" -D - -o /dev/null "$U"   # expect content-encoding: gzip
-curl -s --compressed "$U" | head -c 2 | xxd -p              # expect 5854 (XT), never 1f8b
+U=https://plei.me/geo/tiles/terrain/<version>/0/<page_idx>
+curl -s -H "Accept-Encoding: gzip, zstd" -D - -o /dev/null "$U"   # expect the manifest's content-encoding
+curl -s -H "Accept-Encoding: gzip, zstd" "$U" | zstd -dcq | head -c 2 | xxd -p   # zstd: expect 5854 (XT)
+curl -s --compressed "$U" | head -c 2 | xxd -p                  # gzip: expect 5854 (XT), never 1f8b
 ```
 
 A response whose gzip body is _smaller_ than the stored object means the

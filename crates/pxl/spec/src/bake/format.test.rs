@@ -31,7 +31,8 @@ fn the_formats_write_and_read_what_the_record_holds() {
     assert_eq!(hex::encode(&terrain), v.s("terrain"));
     let decoded = decode_terrain(&terrain).unwrap();
     assert_eq!(decoded.ele.as_ref(), ele.as_slice());
-    for (j, key) in GROUND_CH_KEYS.into_iter().enumerate() {
+    for key in GROUND_CH_KEYS {
+        let j = key as u8;
         assert_eq!(hex::encode(decoded.ground.get(key)), v.s(&format!("decoded.{j}")), "decoded.{j}");
     }
 

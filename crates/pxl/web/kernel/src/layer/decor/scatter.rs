@@ -14,7 +14,7 @@
 //! arrays and numbers, so it can be read head-on.
 
 use pxl_spec::bake::constant::PAGE_CELL_SPAN;
-use pxl_spec::bake::format::GroundChannelKey;
+use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
 use pxl_spec::cell::cube_types;
 
 /// What a channel's type must be for a kind to stand on the cell: anything,
@@ -40,11 +40,11 @@ pub struct DecorRules {
 impl DecorRules {
     /// A channel's rule, in GROUND_CH_KEYS' order.
     pub fn channel(&self, index: usize) -> &DecorChannelRule {
-        match index {
-            0 => &self.land,
-            1 => &self.water,
-            2 => &self.structure,
-            _ => &self.transport,
+        match GROUND_CH_KEYS[index] {
+            GroundChannelKey::LAND => &self.land,
+            GroundChannelKey::WATER => &self.water,
+            GroundChannelKey::STRUCTURE => &self.structure,
+            GroundChannelKey::TRANSPORT => &self.transport,
         }
     }
 }

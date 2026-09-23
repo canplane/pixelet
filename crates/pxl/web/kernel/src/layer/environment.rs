@@ -8,6 +8,7 @@
 pub mod celestial_position;
 #[path = "environment/config.spec.rs"]
 pub mod config;
+pub mod fog;
 pub mod state;
 pub mod theme;
 pub mod theme_clock;

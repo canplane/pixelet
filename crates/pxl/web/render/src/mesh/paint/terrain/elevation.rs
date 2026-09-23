@@ -17,8 +17,8 @@
 //! - Elevation stored in the i16 lane is in [cell] units.
 
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN};
-use pxl_spec::bake::format::Ground;
-use pxl_spec::cell::cube_types;
+use pxl_spec::bake::format::{Ground, GroundChannelKey};
+use pxl_spec::bake::ground::{recess, shown_ground};
 use xpute_core::math::scalar::lerp;
 
 use xpute_core::math::scalar::round;
@@ -111,26 +111,6 @@ pub fn sample_ele(page_ele: &[i16], tx: i32, ty: i32) -> i16 {
     sample_ele_bicubic(page_ele, tx, ty)
 }
 
-/// How much real ground elevation drops for water-look terrain (RIVER/LAKE/
-/// WETLAND, and SEA — its own land type, not the WATER channel, see
-/// is_water_family_at) — a real height change, not a cosmetic mesh-only
-/// offset: it's applied here, at the one shared elevation query surface, so
-/// every consumer (chunk mesh, placement/snap raycast, and
-/// crates/pxl/web/kernel/src/layer/terrain/elevation.rs's own camera ground-snap, which reads a
-/// page's raw ele directly) sees the same lowered height instead of only the
-/// rendered mesh looking recessed while placement math, ground-snap, or a
-/// cell marker still reasons about the un-recessed one.
-pub const WATER_RECESS_CELLS: i16 = 1;
-
-/// Mirrors the terrain paint's ground_material_at priority (LAND < WATER <
-/// STRUCTURE < TRANSPORT, last non-VOID wins) enough to answer one question:
-/// does this cell look like open water? SEA is checked separately from the
-/// WATER channel: cube.rs models it as land.sea (a masked BARE-family id),
-/// not one of WATER's own RIVER/LAKE/WETLAND types.
-pub fn is_water_family_at(ground: &Ground, idx: u32) -> bool {
-    GroundLanes::of(ground).is_water_family(idx as usize)
-}
-
 /// One page's four ground channels, however the caller holds them: a page's
 /// own `Ground`, or lanes viewed out of the block it was read into. The
 /// question below is asked of this and not of either shape, so there is one
@@ -153,26 +133,34 @@ impl<'a> GroundLanes<'a> {
         }
     }
 
-    pub fn is_water_family(&self, i: usize) -> bool {
-        let void = cube_types::common::void;
-        if self.structure[i] != void {
-            return false;
+    /// `lanes[key]`.
+    pub fn get(&self, key: GroundChannelKey) -> &'a [u8] {
+        match key {
+            GroundChannelKey::LAND => self.land,
+            GroundChannelKey::WATER => self.water,
+            GroundChannelKey::STRUCTURE => self.structure,
+            GroundChannelKey::TRANSPORT => self.transport,
         }
-        if self.transport[i] != void {
-            return false;
-        }
-        if self.water[i] != void {
-            return true;
-        }
-        self.land[i] == cube_types::land::sea
+    }
+
+    /// How far below its sampled height cell `i` sits, in units: the
+    /// recess of the type it shows (pxl-spec's `recess`), so a shoreline
+    /// reads as water meeting land a step lower rather than as two surfaces
+    /// at one level. A real height and not a mesh offset — every consumer
+    /// (the chunk mesh, the placement raycast, the camera's ground-snap)
+    /// takes it through `ground_ele` — and so it is asked with no channel
+    /// hidden: a structure covers the water whatever the dev toggle says,
+    /// since the raycast and the ground-snap read it with the toggle nowhere
+    /// in sight.
+    pub fn recess(&self, i: usize) -> i16 {
+        recess(shown_ground(|k| self.get(k)[i] as u32, 0))
     }
 }
 
 /// The ground's height at cell (tx, ty) — the one answer every consumer of a
 /// page's elevation takes, so that none of them reasons about a height the
-/// others do not see. The sampled elevation, a cell lower where the cell is
-/// water-family: the recess is a real height change and is applied here,
-/// once, rather than at each place that asks.
+/// others do not see. The sampled elevation less the cell's recess, applied
+/// here, once, rather than at each place that asks.
 ///
 /// `ground` is none where the channels are not to hand, and the recess is
 /// then not applied. That is a cell outside the page: the elevation raster
@@ -182,10 +170,7 @@ impl<'a> GroundLanes<'a> {
 /// caller to discover.
 pub fn ground_ele(page_ele: &[i16], ground: Option<GroundLanes>, idx: usize, tx: i32, ty: i32) -> i16 {
     let ele = sample_ele(page_ele, tx, ty);
-    match ground {
-        Some(g) if g.is_water_family(idx) => ele - WATER_RECESS_CELLS,
-        _ => ele,
-    }
+    ground.map_or(ele, |g| ele - g.recess(idx))
 }
 
 /// Unpacks a dense (CHUNK_CELL_SPAN x CHUNK_CELL_SPAN) elevation chunk from
@@ -199,8 +184,7 @@ pub fn dense_ele(page_ele: &[i16], tx0: u32, ty0: u32, ground: Option<&Ground>) 
 
 /// Dense reconstruction for a renderer-owned square region. `ground`, when
 /// given, must already be sliced/aligned to this same tx0/ty0/span region —
-/// every water-family cell in it gets WATER_RECESS_CELLS subtracted from its
-/// sampled height.
+/// every cell in it gets its recess subtracted from its sampled height.
 pub fn dense_ele_region<'a>(page_ele: &[i16], tx0: u32, ty0: u32, span: u32, ground: Option<&Ground>, out: &'a mut [i16]) -> &'a mut [i16] {
     let mut idx: u32 = 0;
     for dy in 0..span {

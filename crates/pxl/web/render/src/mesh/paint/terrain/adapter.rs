@@ -13,11 +13,13 @@
 //! The floor is rounded down to a whole band (`min_ele - TERRAIN_Z_MARGIN`,
 //! floored to CHUNK_CELL_SPAN) because a volume allocates in whole bands: a floor
 //! anywhere inside one would open a band below it for the few voxels that
-//! cross. Water-family cells sit WATER_RECESS_CELLS below their sampled
-//! height so a shoreline reads as water meeting land rather than as two
-//! surfaces at the same level.
+//! cross. A cell sits its type's recess below its sampled height, so a
+//! shoreline reads as water meeting land rather than as two surfaces at the
+//! same level.
 
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN};
+use pxl_spec::bake::format::{ch_index, GroundChannelKey, GROUND_CH_KEYS};
+use pxl_spec::bake::ground::{channel_bit, ChannelMask};
 
 use crate::mesh::paint::terrain::elevation::{ground_ele, GroundLanes};
 use crate::mesh::volume::{Volumes, Voxel, NO_LAYER};
@@ -28,12 +30,13 @@ use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
 const TERRAIN_Z_MARGIN: i32 = 4;
 const COL_SPAN2: usize = (COL_SPAN * COL_SPAN) as usize;
 
-/// The channels, in override order: a later one's non-void type wins.
+/// The channels, in `GROUND_CH_KEYS`' order, which is also the order they
+/// paint in: a later one's non-void type wins.
 pub const CHANNELS: usize = 4;
-const LAND: usize = 0;
-const WATER: usize = 1;
-const STRUCTURE: usize = 2;
-const TRANSPORT: usize = 3;
+const LAND: usize = ch_index(GroundChannelKey::LAND);
+const WATER: usize = ch_index(GroundChannelKey::WATER);
+const STRUCTURE: usize = ch_index(GroundChannelKey::STRUCTURE);
+const TRANSPORT: usize = ch_index(GroundChannelKey::TRANSPORT);
 
 const VOID: u8 = 0;
 
@@ -113,9 +116,10 @@ impl Default for ChunkSample {
 }
 
 impl ChunkSample {
-    /// Samples the chunk at page cell (tx0, ty0). `show_structures` off
-    /// skips the structure channel, as the setting does.
-    pub fn read(&mut self, page: &PageView, tables: &Materials, tx0: u32, ty0: u32, show_structures: bool) {
+    /// Samples the chunk at page cell (tx0, ty0). A channel in `hidden` is
+    /// stepped over, as `shown_ground` steps over it.
+    pub fn read(&mut self, page: &PageView, tables: &Materials, tx0: u32, ty0: u32, hidden: ChannelMask) {
+        let skip = GROUND_CH_KEYS.map(|k| hidden & channel_bit(k) != 0);
         let mut min_ele = i32::MAX;
         let last = PAGE_CELL_SPAN as i32 - 1;
         for py in 0..COL_SPAN {
@@ -130,24 +134,12 @@ impl ChunkSample {
                 // — and takes the base material, which nothing draws.
                 let on_page = (0..=last).contains(&tx) && (0..=last).contains(&ty);
                 let page_idx = (ty.clamp(0, last) * PAGE_CELL_SPAN as i32 + tx.clamp(0, last)) as usize;
-                let types = if on_page {
-                    [
-                        page.ground[LAND][page_idx],
-                        page.ground[WATER][page_idx],
-                        page.ground[STRUCTURE][page_idx],
-                        page.ground[TRANSPORT][page_idx],
-                    ]
-                } else {
-                    [VOID; 4]
-                };
+                let types = if on_page { page.ground.map(|plane| plane[page_idx]) } else { [VOID; 4] };
 
                 // The material: the base, then each channel in order.
                 let (mut rgb, mut class, mut layer) = (tables.base_rgb, tables.base_class, tables.base_layer);
                 for (ch, &t) in types.iter().enumerate() {
-                    if ch == STRUCTURE && !show_structures {
-                        continue;
-                    }
-                    if t == VOID {
+                    if skip[ch] || t == VOID {
                         continue;
                     }
                     let c = &tables.channels[ch];

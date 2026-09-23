@@ -8,7 +8,7 @@
 //! with nothing on it — is one shared packet nothing releases.
 //!
 //! Where a page is fetched from: the pre-baked static set when one is
-//! configured, the live API otherwise; a 404 from the static set resolves to
+//! configured, the dev tile server otherwise; a 404 from either resolves to
 //! the empty page with no extra round trip.
 
 use pxl_spec::bake::format::{encode_empty_poi_page, PoiPage};

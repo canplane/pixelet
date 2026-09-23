@@ -5,6 +5,7 @@
 //! from. The catalogs are the spec's (pxl-spec cell/); this is what reading
 //! one paints.
 
+pub mod level;
 pub mod object;
 pub mod palette;
 pub mod terrain;

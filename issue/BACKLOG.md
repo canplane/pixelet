@@ -248,10 +248,13 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 - **Compression, chosen by traffic.** Recorded 2026-09-13, not scheduled:
   [20260913-compression-by-traffic.md](./20260913-compression-by-traffic.md).
-  Brotli q11 takes a third off the baked terrain pages and a fifth off POI
-  against gzip, and every browser on the floor takes `br`; zstd is below
-  the floor in Safari. The baked pages go first when this is taken up (a new
-  terrain version, the bake, the uploads and the monthly workflow). Live
+  Measured again 2026-09-22 at 512 cells: zstd -22 is within 3% of Brotli
+  q11 and decodes twice as fast, 46% under the bake's gzip -6. Safari takes
+  zstd from 26.3, not on macOS before Tahoe; whether the host or the kernel
+  decodes a stored page is open, since a React Native host would not decode
+  what a browser does. Decided later that day: zstd -19 from the next bake,
+  decoded by the transport, for what the bucket holds; what is published now
+  stays gzip. Live
   responses want a fast level, realtime messages want an encoding and a
   stream more than a codec, and the codec stays in the transport, never in
   the command frame.
@@ -350,9 +353,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **First load on a phone: the fetch queue, not the network.** Terrain
   and POI pages p50 9.7 s / 13 s from request to adopt, of which the
   network was 1.4–1.9 s; the rest was queue wait behind `MAX_INFLIGHT`
-  6 with 64 pages asked at once, 4.2 MB per terrain page. The ordering
-  is right (nearest first); what is worth asking is whether the quota
-  and the page size are, on a phone's connection.
+  6 with 64 pages asked at once, 4.2 MB per terrain page. That was
+  measured before the 512-cell page, which is 1 MB, and before the
+  levels, which ask a ring of pages a level, coarse first; what is worth asking
+  is whether the quota and the page size are right on a phone's
+  connection, measured again.
 - **The run set's per-axis inset has no writer.** `sub_sx`/`sub_sy` are
   always a copy of `sub_sz` (the scan, the coarse pack and the object
   adapter all set the three equal), so the per-axis design column_run.ts

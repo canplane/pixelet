@@ -14,7 +14,7 @@ rebuilt on 2026-09-12/13 into the shape below.
   mirroring terrain's: a `Demand` per page through the fetch scheduler, the
   published static prefix when configured (`poi/<PUBLISHED_VERSION.poi>/…`
   from `pxl_spec::bake::published`, a sibling of terrain's own prefix
-  in the same bucket), the live API otherwise.
+  in the same bucket), the dev tile server otherwise.
 - **`index.rs`** — a spatial hash over the disc around the camera, as
   lanes: position, cell, page and record, grounded against the terrain at
   build time. Rebuilt a range of records per unit in the frame's content

@@ -75,7 +75,7 @@ use xpute_core::abi::word::{bit64, field_mask64};
 
 /// SHAMT is the cumulative packed bit distance from the canonical base unit (`u` = L1).
 pub const L2_SHAMT: u32 = 6;
-pub const L3_SHAMT: u32 = 10;
+pub const L3_SHAMT: u32 = 9;
 pub const L4_SHAMT: u32 = 12;
 // pub const L5_SHAMT: u32 = 16;
 
@@ -83,7 +83,7 @@ pub const L4_SHAMT: u32 = 12;
 
 // canonical base unit: 1u = 1 L1 block
 pub const L2_RANGE: u64 = bit64(L2_SHAMT); // 1 << 6  = 64u
-pub const L3_RANGE: u64 = bit64(L3_SHAMT); // 1 << 10 = 1024u
+pub const L3_RANGE: u64 = bit64(L3_SHAMT); // 1 << 9  = 512u
 pub const L4_RANGE: u64 = bit64(L4_SHAMT); // 1 << 12 = 4096u
                                            // pub const L5_RANGE: u64 = bit64(L5_SHAMT); // 1 << 16 = 65536u
 

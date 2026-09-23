@@ -9,57 +9,49 @@
 //!
 //! Two stages, and they know nothing of each other.
 //!
-//! The index is the page's L3 coordinate reduced modulo the range's axis, the
-//! way a clipmap addresses its ring. The axis is the width of the set the load
-//! radius reaches — the anchor's own page and KEEP_PAGES either side — so two
-//! pages share a record only when they lie a whole axis apart, which is further
-//! than the radius reaches. A page arriving therefore overwrites a page that
-//! has already left: eviction needs no list, no quarantine and no spare room,
-//! and the range is exactly as large as the set it holds.
+//! The index is the page's coordinate at its level reduced modulo the ring's
+//! axis, the way a clipmap addresses its ring, within a group of records for
+//! its level reduced modulo the window's width (level.rs). Two pages of one
+//! level share a record only when they lie a whole axis apart, further than a
+//! ring reaches; two levels share a group only when they lie a whole window
+//! apart, further than the window reaches. A page arriving therefore
+//! overwrites one that has already left: eviction needs no list, no
+//! quarantine and no spare room, and the range is exactly as large as the set
+//! it holds. When the window slides, the level it leaves and the level it
+//! takes share a group, so the level that leaves goes as the one that enters
+//! arrives.
 //!
 //! The routing turns a record and a channel into an address, and it is the only
 //! thing here that knows how the bytes are ordered. The ground is held channel
-//! by channel: a channel's plane is a whole number of mebibytes, so every one of
-//! its lanes starts aligned and every row of a lane with it. The elevation is a
-//! plane of its own past them, because its record is 9,248 bytes — 32 past a
-//! cache line, and a grid whose rows are 136 bytes is not aligned at any offset
-//! anyway. Held with the ground it would carry that 32 into every second page's
-//! lanes; held apart it costs nothing.
+//! by channel: a channel's plane is a whole number of cache lines, so every one
+//! of its lanes starts aligned and every row of a lane with it. The elevation
+//! is a plane of its own past them, because its record is 2,592 bytes — 32
+//! past a cache line, and a grid whose rows are 72 bytes is not aligned at any
+//! offset anyway. Held with the ground it would carry that 32 into every
+//! second page's lanes; held apart it costs nothing.
 
 use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_spec::bake::format::GROUND_CH_KEYS;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::ivec;
 
-use crate::layer::terrain::config_spec::KEEP_DIST;
-use crate::world::chunk::range::PAGE_SPAN;
+use crate::layer::terrain::level::{LevelPage, HELD_AXIS, WINDOW_LEVELS};
 
 // ---- The index ----
 
-/// How far the load radius reaches from the anchor's own page, in pages.
-pub const KEEP_PAGES: u32 = (KEEP_DIST / PAGE_SPAN) as u32;
+/// Records a level's ring takes: one group.
+const GROUP_SLOTS: u32 = HELD_AXIS * HELD_AXIS;
 
-const _: () = assert!(
-    KEEP_PAGES as f64 * PAGE_SPAN == KEEP_DIST,
-    "terrain: KEEP_DIST must be a whole number of pages, or the range's axis is not the width of the set it holds"
-);
+/// Records in the range: a ring for every level of the window, and exactly
+/// the pages it holds.
+pub const TERRAIN_SLOTS: u32 = WINDOW_LEVELS * GROUP_SLOTS;
 
-const _: () = assert!(
-    crate::layer::environment::config::render_cfg::CHUNK_RENDER_DIST + crate::world::chunk::range::RANGE_HYSTERESIS <= KEEP_DIST,
-    "terrain: a chunk is mounted from a page, so the range chunks are kept to must sit inside the radius pages are loaded from"
-);
-
-/// Records along one axis of the range.
-pub const TERRAIN_AXIS: u32 = 2 * KEEP_PAGES + 1;
-
-/// Records in the range: exactly the pages the load radius reaches.
-pub const TERRAIN_SLOTS: u32 = TERRAIN_AXIS * TERRAIN_AXIS;
-
-/// The record `page_idx` lies in. Every page has one; whether the page is
-/// there is the record's own key to say.
-pub fn slot_of(page_idx: IVec) -> u32 {
-    let x = ivec::X(page_idx).rem_euclid(TERRAIN_AXIS as i64) as u32;
-    let y = ivec::Y(page_idx).rem_euclid(TERRAIN_AXIS as i64) as u32;
-    y * TERRAIN_AXIS + x
+/// The record a page lies in. Every page has one; whether the page is there
+/// is the record's own key to say.
+pub fn slot_of(p: LevelPage) -> u32 {
+    let axis = HELD_AXIS as i64;
+    let x = ivec::X(p.page).rem_euclid(axis) as u32;
+    let y = ivec::Y(p.page).rem_euclid(axis) as u32;
+    (p.level % WINDOW_LEVELS) * GROUP_SLOTS + y * HELD_AXIS + x
 }
 
 // ---- The routing ----

@@ -203,3 +203,18 @@ client at all.
 - It does not touch objects, decor or POI, which have their own pages and
   their own reasons. The terrain page is the unit this note is about.
 - It does not decide the fold. It says where the decision already lives.
+
+## Where this stands
+
+**Superseded in part, 2026-09-21,** by
+[20260921-level-step-and-zoom-are-one-number.md](./20260921-level-step-and-zoom-are-one-number.md):
+the page is 512 cells rather than 1,024, which puts a level on Web Mercator's
+own zoom and a level-0 cell on its z16 pixel; and the fold this note says
+already exists in `chunk_mesher.rs` folds surface colour and coverage, not the
+ground channels' categories, so the rule had to be decided rather than moved.
+
+What is unchanged: the diagnosis — that the phone's memory, the reach of the
+view and the coarse tiers' build cost are one thing, because resolution is not
+a function of distance anywhere between the bake and the mesher — the shape of
+the pyramid, the ocean aliasing at every level, and the order to build it in,
+the bake alone first.

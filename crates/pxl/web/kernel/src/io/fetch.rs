@@ -25,9 +25,9 @@ use crate::host::body_read;
 use crate::io::demand::{Category, Demand, Phases};
 use crate::io::scheduler::{demand_of, fetch_settle};
 use crate::layer::poi::{repository as poi_repository, store as poi_store};
+use crate::layer::terrain::level::LevelPage;
 use crate::layer::terrain::{tile_fetcher, tile_repository};
 use crate::sched::ledger::record::{Failure, Outcome};
-use crate::shell::config::env::PUBLISHED_TILES;
 use crate::world::change::world_edge;
 
 /// Where a started demand is fetched from, as it is written where it is sent.
@@ -37,7 +37,7 @@ impl fmt::Display for DemandUrl<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let key = self.0.key;
         match key.category {
-            Category::Terrain => write!(f, "{}", tile_repository::tile_url(key.subject)),
+            Category::Terrain => write!(f, "{}", tile_repository::tile_url(LevelPage::of_subject(key.subject))),
             // The one tile the stream has, at the name the bake gives it.
             Category::Ocean => write!(f, "{}", tile_repository::ocean_url()),
             Category::Poi => write!(f, "{}", poi_repository::poi_url(key.subject)),
@@ -185,19 +185,20 @@ fn fetch_fail_of(fail: u32) -> FetchFail {
 }
 
 fn answer(category: Category, subject: u64, status: u32, block: Option<Block>, phases: &mut Phases) -> Result<(), FetchFail> {
-    // Only a static tile origin has no object for a page; against the live
-    // API a 404 is a genuine error (tile_repository.rs).
-    let absent = status == 404 && PUBLISHED_TILES();
+    // Every tile origin — the bucket, and the dev tile server laid out as the
+    // bucket is — has no object for a page it never baked, so a 404 is that
+    // page's answer rather than a failure (tile_repository.rs).
+    let absent = status == 404;
     let ok = (200..300).contains(&status);
     let refused = || FetchFail::Status;
     match category {
         Category::Terrain => {
             let result = match block {
                 _ if absent => {
-                    tile_repository::ocean_page(subject);
+                    tile_repository::ocean_page(LevelPage::of_subject(subject));
                     Ok(())
                 }
-                Some(b) if ok => tile_repository::adopt_terrain(subject, view(b), phases),
+                Some(b) if ok => tile_repository::adopt_terrain(LevelPage::of_subject(subject), view(b), phases),
                 _ => Err(refused()),
             };
             release(block);

@@ -26,9 +26,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::Instant;
 
+use pxl_spec::space::indexer::L3_SHAMT;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 
-use crate::util::{fmt_bytes, fmt_dur, gzip, write_atomic};
+use crate::util::{fmt_bytes, fmt_dur, pack, refuse_mixed, write_atomic, Level};
 
 /// A local marker saying "already asked, nothing here". Never uploaded — the
 /// publish step excludes it.
@@ -89,7 +90,7 @@ pub struct Tally {
     pub skipped: u64,
     pub failed: u64,
     pub items: u64,
-    pub gz: u64,
+    pub bytes: u64,
 }
 
 pub struct Walked {
@@ -99,15 +100,31 @@ pub struct Walked {
     pub elapsed_ms: f64,
 }
 
+/// Terrain's land pages, as its own classification wrote them.
+///
+/// A page index means a different square of ground at every page size, so the
+/// list carries the `L3_SHAMT` it was classified at and is refused at any
+/// other. Reused silently, a list from a larger page names a quarter of the
+/// land at the wrong places, and a bake of it looks like a bake.
 pub fn land_pages(path: &Path) -> Result<Vec<IVec>, String> {
-    let raw = std::fs::read_to_string(path).map_err(|_| {
-        format!(
-            "{} not found — run bake_tiles first, which writes it as a side effect of its own classification (`--limit 0` does the classification and bakes nothing).",
-            path.display()
-        )
-    })?;
-    let list: Vec<String> = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-    list.iter().map(|s| s.parse::<IVec>().map_err(|e| e.to_string())).collect()
+    let reclassify = "run bake_tiles, which writes it as a side effect of its own classification (`--limit 0` does the classification and bakes nothing)";
+    let raw = std::fs::read_to_string(path).map_err(|_| format!("{} not found — {reclassify}.", path.display()))?;
+    let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    let Some(shamt) = v.get("l3_shamt").and_then(|s| s.as_u64()) else {
+        return Err(format!("{} does not say the page size it was classified at — {reclassify}.", path.display()));
+    };
+    if shamt != L3_SHAMT as u64 {
+        return Err(format!("{} was classified at L3_SHAMT {shamt}, and a page is now L3_SHAMT {L3_SHAMT} — {reclassify}.", path.display()));
+    }
+    let list = v.get("pages").and_then(|p| p.as_array()).ok_or_else(|| format!("{} has no page list", path.display()))?;
+    list.iter().map(|s| s.as_str().ok_or("a page is not a string")?.parse::<IVec>().map_err(|e| e.to_string())).collect()
+}
+
+/// Writes the land list with the page size it was classified at.
+pub fn write_land_pages(path: &Path, land: &[IVec]) -> Result<(), String> {
+    let pages: Vec<String> = land.iter().map(|p| p.to_string()).collect();
+    let v = serde_json::json!({ "l3_shamt": L3_SHAMT, "pages": pages });
+    std::fs::write(path, serde_json::to_string(&v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
 
 /// Walks the pages with one worker per connection, writing what `one` returns.
@@ -116,6 +133,9 @@ pub fn land_pages(path: &Path) -> Result<Vec<IVec>, String> {
 /// prepared statements for the whole run.
 pub fn walk<T>(args: &Args, tag: &str, every: u64, connect: impl Fn() -> Result<T, String> + Sync, one: impl Fn(&mut T, IVec) -> Result<Page, String> + Sync) -> Result<Walked, String> {
     std::fs::create_dir_all(&args.out).map_err(|e| e.to_string())?;
+    if !args.force {
+        refuse_mixed(&args.out)?;
+    }
     let land = land_pages(&args.land_cache)?;
     println!("[bake/{tag}] {} land pages from {}", land.len(), args.land_cache.display());
 
@@ -150,18 +170,18 @@ pub fn walk<T>(args: &Args, tag: &str, every: u64, connect: impl Fn() -> Result<
                     let outcome = one(&mut worker, page_idx).and_then(|page| match page {
                         Page::Empty => std::fs::write(&marker, "").map(|_| None).map_err(|e| e.to_string()),
                         Page::Object { raw, items } => {
-                            let gz = gzip(&raw).map_err(|e| e.to_string())?;
-                            write_atomic(&path, &gz).map_err(|e| e.to_string())?;
-                            Ok(Some((gz.len() as u64, items)))
+                            let packed = pack(&raw, Level::Stored).map_err(|e| e.to_string())?;
+                            write_atomic(&path, &packed).map_err(|e| e.to_string())?;
+                            Ok(Some((packed.len() as u64, items)))
                         }
                     });
 
                     let done = {
                         let mut t = totals.lock().expect("totals");
                         match outcome {
-                            Ok(Some((gz, items))) => {
+                            Ok(Some((bytes, items))) => {
                                 t.baked += 1;
-                                t.gz += gz;
+                                t.bytes += bytes;
                                 t.items += items;
                             }
                             Ok(None) => t.empty += 1,
@@ -181,13 +201,13 @@ pub fn walk<T>(args: &Args, tag: &str, every: u64, connect: impl Fn() -> Result<
                         let worked = done - t.skipped;
                         let rate = if worked > 0 { elapsed / worked as f64 } else { 0.0 };
                         println!(
-                            "[bake/{tag}] {done}/{} baked={} empty={} skipped={} failed={} gz={} {rate:.0}ms/page eta={}",
+                            "[bake/{tag}] {done}/{} baked={} empty={} skipped={} failed={} bytes={} {rate:.0}ms/page eta={}",
                             targets.len(),
                             t.baked,
                             t.empty,
                             t.skipped,
                             t.failed,
-                            fmt_bytes(t.gz as f64),
+                            fmt_bytes(t.bytes as f64),
                             fmt_dur(rate * (targets.len() as u64 - done) as f64)
                         );
                     }

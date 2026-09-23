@@ -11,28 +11,22 @@ use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS, NIGHT,
 use pxl_spec::space::adapter::epsg4326;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 
-use crate::control::camera::config::camera_cfg;
 use crate::control::navigation::bootstrap::FALLBACK_G4326;
 use crate::global::Global;
 use crate::host::{now, wall_now};
 use crate::kernel::kernel;
 use crate::layer::environment::celestial_position::{moon_position, sun_position};
 use crate::layer::environment::config::{light_cfg, render_cfg};
+use crate::layer::environment::fog::view_scale;
 use crate::layer::environment::theme::{themes, WorldThemeKey};
 use crate::layer::environment::theme_clock::theme_key;
 use crate::shell::map_store::map_store;
 use crate::world::change::{request_world_tick, wake_at};
 use crate::world::chunk::table::Frame;
+use crate::world::frame::view::view;
 
 // The map's own fallback, so the first frames before map_center exists light
 // the world from a real place instead of computing sun and moon for (0, 0).
-
-/// The sky is the inside of a sphere centred on the world origin, and must stay
-/// inside the camera's far clip plane. The camera itself can sit up to MAX_DIST
-/// away from that origin, and looking toward the far side of the sphere from an
-/// off-centre point adds that same distance again; leaving out the margin clips
-/// the sky exactly where a wide-shot camera is most likely to be looking.
-pub const SKY_RADIUS: f64 = (render_cfg::FAR_CLIP - camera_cfg::view::MAX_DIST) * 0.9;
 
 // The sun and the moon move with the wall clock, a full sweep every 24 real
 // hours, and nothing else asks for a frame while the view is still. A
@@ -289,6 +283,7 @@ impl EnvironmentDraw {
             time: self.time,
             // The anchor root's turn about Z.
             azimuth: frame.root[1].atan2(frame.root[0]),
+            fog_scale: view_scale(view().dist),
         };
         write_environment(&mut self.out, &light);
         (self.stars - star_target).abs() > SETTLE_EPS

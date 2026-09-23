@@ -11,6 +11,7 @@ pub mod config_spec;
 pub mod elevation;
 pub mod fixed;
 pub mod ground_snap;
+pub mod level;
 pub mod resident;
 pub mod store;
 pub mod teach;

@@ -95,7 +95,10 @@ fn epsg3857_project_pvf3_x_subtraction_takes_the_short_antimeridian_path() {
 
 #[test]
 fn epsg3857_page_bbox_preserves_the_exclusive_positive_world_boundary() {
-    let page_idx = ivec::gather(8191, 8191, 0);
+    // The last page before X's positive edge: the lane is one world, so its
+    // positive half is 2^23 units, and a page is L3_RANGE of them.
+    let last = (1i64 << 23) / crate::space::indexer::L3_RANGE as i64 - 1;
+    let page_idx = ivec::gather(last, last, 0);
     let [_, max] = get_page_bbox(page_idx);
 
     assert_almost(max[0], HALF_WORLD_M, 1e-8);

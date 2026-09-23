@@ -172,7 +172,11 @@ struct FineBake {
     /// The set's ring, in columns: read for what lies beyond an edge, never
     /// walked and never emitted from (voxel_scan.rs's APRON).
     apron: u32,
+    /// Units a column's side and a run's cell are, where the set's own grid
+    /// is coarser than a unit: a coarse tier's columns are `lod_step` wide,
+    /// and a level-k chunk's 2^k. A run's cell is a unit tall at every level.
     xy_scale: u32,
+    z_scale: u32,
     phase: u8,
     row: u32,
     emit_at: usize,
@@ -182,6 +186,8 @@ struct FineBake {
 
 struct CoarseBake {
     lod_step: u32,
+    /// The set's own column, in units across.
+    scale: u32,
     res: u32,
     phase: u8,
     row: u32,
@@ -239,8 +245,10 @@ impl BakeContext {
         }
     }
 
-    /// Opens a bake of `set` at `lod_step`. False when one is already open.
-    pub fn begin(&mut self, set: &RunSet, lod_step: u32) -> bool {
+    /// Opens a bake of `set` at `lod_step`, the set's columns `scale` units
+    /// across: 1 for a leaf chunk, 2^k for a level-k one. Heights are units at
+    /// every level. False when one is already open.
+    pub fn begin(&mut self, set: &RunSet, lod_step: u32, scale: u32) -> bool {
         if self.open.is_some() {
             return false;
         }
@@ -255,7 +263,7 @@ impl BakeContext {
         self.v_cnt = 0;
         self.i_cnt = 0;
         self.open = Some(if lod_step == 1 {
-            Open::Fine(self.begin_fine(set.span, set.apron, 1))
+            Open::Fine(self.begin_fine(set.span, set.apron, scale, 1))
         } else {
             // The chunk's own columns, not the apron's: a coarse tier is
             // summarised from them and carries no ring of its own.
@@ -263,6 +271,7 @@ impl BakeContext {
             assert!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step), "lod step {} does not divide span {}", lod_step, inner);
             Open::Coarse(CoarseBake {
                 lod_step,
+                scale,
                 res: inner / lod_step,
                 phase: 0,
                 row: 0,
@@ -328,12 +337,13 @@ impl BakeContext {
         self.buckets.clear();
     }
 
-    fn begin_fine(&mut self, span: u32, apron: u32, xy_scale: u32) -> FineBake {
+    fn begin_fine(&mut self, span: u32, apron: u32, xy_scale: u32, z_scale: u32) -> FineBake {
         self.merge_run[..(span * span) as usize].fill(None);
         FineBake {
             span,
             apron,
             xy_scale,
+            z_scale,
             phase: 0,
             row: apron,
             emit_at: 0,
@@ -460,6 +470,7 @@ impl BakeContext {
         }
 
         let unit = b.xy_scale as f64 * U_PER_CELL;
+        let z_unit = b.z_scale as f64 * U_PER_CELL;
         // A box is placed by the chunk's own grid; the columns were walked
         // in the padded one.
         let apron = b.apron as f64;
@@ -469,19 +480,19 @@ impl BakeContext {
             let s = &self.surviving[s_i..s_i + 6];
             let (cx, cy, i, mask, w, h) = (s[0] as f64, s[1] as f64, s[2] as usize, s[3], s[4] as f64, s[5] as f64);
             let sub_sz = set.sub_sz[i];
-            let depth = (set.z1[i] as f64 + 1.0 - set.z0[i] as f64) * U_PER_CELL;
+            let depth = (set.z1[i] as f64 + 1.0 - set.z0[i] as f64) * z_unit;
             let (min_x, min_y, min_z, size_x, size_y, size_z);
             if sub_sz == SUB_CELL_NONE {
                 min_x = (cx - apron) * unit;
                 min_y = (cy - apron) * unit;
-                min_z = set.z0[i] as f64 * U_PER_CELL;
+                min_z = set.z0[i] as f64 * z_unit;
                 size_x = w * unit;
                 size_y = h * unit;
                 size_z = depth;
             } else {
                 min_x = (cx - apron) * unit + unpack_sub_cell_fraction(set.sub_ox[i]) * unit;
                 min_y = (cy - apron) * unit + unpack_sub_cell_fraction(set.sub_oy[i]) * unit;
-                min_z = set.z0[i] as f64 * U_PER_CELL + unpack_sub_cell_fraction(set.sub_oz[i]) * depth;
+                min_z = set.z0[i] as f64 * z_unit + unpack_sub_cell_fraction(set.sub_oz[i]) * depth;
                 size_x = unpack_sub_cell_size(set.sub_sx[i]) * unit;
                 size_y = unpack_sub_cell_size(set.sub_sy[i]) * unit;
                 size_z = unpack_sub_cell_size(sub_sz) * depth;
@@ -521,7 +532,9 @@ impl BakeContext {
     }
 
     fn step_coarse(&mut self, b: &mut CoarseBake, set: &RunSet) -> bool {
-        let (lod_step, res) = (b.lod_step, b.res);
+        let (lod_step, res, scale) = (b.lod_step, b.res, b.scale);
+        // A coarse cell of what is not ground: as tall as it is wide.
+        let bucket = (lod_step * scale) as i32;
 
         if b.phase == 0 {
             // Each cell is accumulated and packed before the next: a cell's
@@ -540,19 +553,31 @@ impl BakeContext {
                 for bx in 0..res {
                     let start = self.buckets.len() as u32;
                     let mut cnt = 0u32;
+                    let mut ground = GroundAccum::default();
                     for j in 0..lod_step {
                         let cy = by * lod_step + j + set.apron;
                         for k in 0..lod_step {
                             let cx = bx * lod_step + k + set.apron;
                             let col = cy * set.span + cx;
+                            let mut top: Option<usize> = None;
                             let end = set.start[col as usize + 1];
                             for i in set.start[col as usize]..end {
-                                cnt = self.accumulate_run(start, cnt, lod_step, set, i as usize, col + 1);
+                                let i = i as usize;
+                                if is_ground(set, i) {
+                                    ground.floor = ground.floor.min(set.z0[i]);
+                                    top = Some(top.filter(|&t| set.z1[t] >= set.z1[i]).unwrap_or(i));
+                                } else {
+                                    cnt = self.accumulate_run(start, cnt, bucket, scale, set, i, col + 1);
+                                }
+                            }
+                            if let Some(t) = top {
+                                ground.add(set, t);
                             }
                         }
                     }
                     self.coarse.start.push(self.coarse.z0.len() as u32);
-                    self.pack_coarse_cell(start, cnt, lod_step);
+                    let ground = self.pack_ground(&ground, lod_step * lod_step);
+                    self.pack_coarse_cell(start, cnt, lod_step, bucket, ground);
                     self.buckets.truncate(start as usize);
                 }
             }
@@ -561,7 +586,7 @@ impl BakeContext {
                 return false;
             }
             self.coarse.start.push(self.coarse.z0.len() as u32);
-            b.fine = Some(self.begin_fine(res, 0, lod_step));
+            b.fine = Some(self.begin_fine(res, 0, lod_step * scale, 1));
             b.phase = 2;
             return false;
         }
@@ -585,24 +610,27 @@ impl BakeContext {
         self.buckets.len() as u32 - 1
     }
 
-    fn accumulate_run(&mut self, start: u32, mut cnt: u32, lod_step: u32, set: &RunSet, i: usize, tag: u32) -> u32 {
+    /// Adds what is not ground in one run to the coarse cell's buckets,
+    /// `bucket` units tall; a sub-cell run is its share of a cell `cell` units
+    /// on a side.
+    #[allow(clippy::too_many_arguments)]
+    fn accumulate_run(&mut self, start: u32, mut cnt: u32, bucket: i32, cell: u32, set: &RunSet, i: usize, tag: u32) -> u32 {
         let (run_z0, run_z1) = (set.z0[i], set.z1[i]);
         let (run_r, run_g, run_b) = (set.r[i] as f64, set.g[i] as f64, set.b[i] as f64);
         let run_layer = set.layer_taps[i] & 255;
-        let step = lod_step as i32;
         if set.sub_sz[i] != SUB_CELL_NONE {
             let frac = unpack_sub_cell_size(set.sub_sz[i]);
-            let w = frac * frac * frac;
-            let idx = self.find_or_create_bucket(start, cnt, run_z0.div_euclid(step));
+            let w = frac * frac * frac * cell as f64;
+            let idx = self.find_or_create_bucket(start, cnt, run_z0.div_euclid(bucket));
             let acc = &mut self.buckets[idx as usize];
             acc.coverage += w;
             collect_surface(acc, tag, run_r, run_g, run_b);
             collect_layer_tap(acc, run_layer);
             return cnt.max(idx - start + 1);
         }
-        for bz in run_z0.div_euclid(step)..=run_z1.div_euclid(step) {
-            let bucket_lo = bz * step;
-            let bucket_hi = bucket_lo + step - 1;
+        for bz in run_z0.div_euclid(bucket)..=run_z1.div_euclid(bucket) {
+            let bucket_lo = bz * bucket;
+            let bucket_hi = bucket_lo + bucket - 1;
             let overlap = run_z1.min(bucket_hi) - run_z0.max(bucket_lo) + 1;
             let idx = self.find_or_create_bucket(start, cnt, bz);
             cnt = cnt.max(idx - start + 1);
@@ -614,21 +642,56 @@ impl BakeContext {
         cnt
     }
 
+    /// The ground of one coarse cell as one run: from the lowest floor of the
+    /// columns under it to the mean of their tops, in units, its top surface
+    /// the mean of theirs. A column with no ground counts at that floor, so the
+    /// mean is over every column the cell covers and the ground's volume is
+    /// kept. The run it wrote, if any, and the top of what it fills.
+    fn pack_ground(&mut self, g: &GroundAccum, columns: u32) -> (Option<usize>, i32) {
+        if g.cols == 0 {
+            return (None, i32::MIN);
+        }
+        let sum = g.top_sum + (columns - g.cols) as i64 * g.floor as i64;
+        let top = round(sum as f64 / columns as f64) as i32;
+        if top <= g.floor {
+            return (None, g.floor - 1);
+        }
+        let n = g.cols as f64;
+        let co = &mut self.coarse;
+        co.z0.push(g.floor);
+        co.z1.push(top - 1);
+        co.r.push(to_u8(g.sr / n) as u8);
+        co.g.push(to_u8(g.sg / n) as u8);
+        co.b.push(to_u8(g.sb / n) as u8);
+        co.layer_taps.push(packed_taps(g.taps, g.tap_cnt));
+        co.material_class.push(MATERIAL_LAND);
+        co.sub_sz.push(SUB_CELL_NONE);
+        co.sub_sx.push(0);
+        co.sub_sy.push(0);
+        co.sub_ox.push(0);
+        co.sub_oy.push(0);
+        co.sub_oz.push(0);
+        (Some(co.z0.len() - 1), top - 1)
+    }
+
     /// Packs one coarse cell's buckets bottom to top. A cell's buckets have
     /// distinct heights (find_or_create_bucket), so sorting them by height
     /// visits them lowest first.
-    fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32) {
-        let step = lod_step as i32;
+    fn pack_coarse_cell(&mut self, start: u32, cnt: u32, lod_step: u32, bucket: i32, (mut open, mut last_top): (Option<usize>, i32)) {
+        let step = bucket;
         let cell = start as usize..(start + cnt) as usize;
         self.buckets[cell.clone()].sort_unstable_by_key(|acc| acc.bz);
-        let mut open: Option<usize> = None;
-        let mut last_top = 0i32;
+        // A bucket's volume in coverage's measure: units tall by columns.
+        let volume = step as f64 * (lod_step * lod_step) as f64;
         for k in cell {
             let acc = self.buckets[k];
-            let bucket_lo = acc.bz * step;
-            let bucket_hi = bucket_lo + step - 1;
-            let cube = lod_step as f64;
-            let fill = (acc.coverage / (cube * cube * cube)).min(1.0);
+            let bucket_hi = acc.bz * step + step - 1;
+            // What the ground already fills is the ground's.
+            if bucket_hi <= last_top {
+                continue;
+            }
+            let bucket_lo = (acc.bz * step).max(last_top.saturating_add(1));
+            let fill = (acc.coverage / volume).min(1.0);
             self.counters.coarse_total += 1;
             if fill < LOW_FILL_THRESHOLD {
                 self.counters.coarse_low_fill += 1;
@@ -927,25 +990,81 @@ fn collect_surface(acc: &mut ZBucketAccum, tag: u32, r: f64, g: f64, b: f64) {
 }
 
 fn collect_layer_tap(acc: &mut ZBucketAccum, layer_idx: u32) {
-    if layer_idx == NO_LAYER || acc.tap_cnt >= 4 {
+    collect_tap(&mut acc.taps, &mut acc.tap_cnt, layer_idx);
+}
+
+fn collect_tap(taps: &mut u32, tap_cnt: &mut u32, layer_idx: u32) {
+    if layer_idx == NO_LAYER || *tap_cnt >= 4 {
         return;
     }
-    for i in 0..acc.tap_cnt {
-        if (acc.taps >> (i * 8)) & 255 == layer_idx {
+    for i in 0..*tap_cnt {
+        if (*taps >> (i * 8)) & 255 == layer_idx {
             return;
         }
     }
-    acc.taps |= layer_idx << (acc.tap_cnt * 8);
-    acc.tap_cnt += 1;
+    *taps |= layer_idx << (*tap_cnt * 8);
+    *tap_cnt += 1;
+}
+
+/// Whether a run is the ground's: a height field, coarsened by its
+/// footprint alone. A placed object's, or a sub-cell's, is a volume.
+fn is_ground(set: &RunSet, i: usize) -> bool {
+    set.material_class[i] != MATERIAL_OBJECT && set.sub_sz[i] == SUB_CELL_NONE
+}
+
+/// The ground under one coarse cell: its columns' tops, the lowest floor
+/// among them, and their top surfaces.
+struct GroundAccum {
+    cols: u32,
+    top_sum: i64,
+    floor: i32,
+    sr: f64,
+    sg: f64,
+    sb: f64,
+    taps: u32,
+    tap_cnt: u32,
+}
+
+impl Default for GroundAccum {
+    fn default() -> Self {
+        GroundAccum {
+            cols: 0,
+            top_sum: 0,
+            floor: i32::MAX,
+            sr: 0.0,
+            sg: 0.0,
+            sb: 0.0,
+            taps: 0,
+            tap_cnt: 0,
+        }
+    }
+}
+
+impl GroundAccum {
+    /// A column whose ground's top run is `t`.
+    fn add(&mut self, set: &RunSet, t: usize) {
+        self.cols += 1;
+        self.top_sum += set.z1[t] as i64 + 1;
+        self.sr += set.r[t] as f64;
+        self.sg += set.g[t] as f64;
+        self.sb += set.b[t] as f64;
+        collect_tap(&mut self.taps, &mut self.tap_cnt, set.layer_taps[t] & 255);
+    }
 }
 
 fn bucket_taps(acc: &ZBucketAccum) -> u32 {
-    if acc.tap_cnt == 0 {
+    packed_taps(acc.taps, acc.tap_cnt)
+}
+
+/// Up to four distinct layers, packed a byte each and repeated round to fill
+/// the four.
+fn packed_taps(taps: u32, tap_cnt: u32) -> u32 {
+    if tap_cnt == 0 {
         return NO_LAYER * 0x0101_0101;
     }
     let mut packed = 0;
     for i in 0..4 {
-        packed |= ((acc.taps >> ((i % acc.tap_cnt) * 8)) & 255) << (i * 8);
+        packed |= ((taps >> ((i % tap_cnt) * 8)) & 255) << (i * 8);
     }
     packed
 }

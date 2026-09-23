@@ -59,8 +59,9 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
 /**
  * Object keys this Worker is willing to ask R2 for. Four shapes:
  *
- * - `terrain/<version>/<page_idx>`, plus the shared `terrain/<version>/_ocean`
- *   tile.
+ * - `terrain/<version>/<level>/<page_idx>`, plus the shared
+ *   `terrain/<version>/_ocean` tile, which every level's open water reads. A
+ *   page's key is within its level, so the level is its own segment.
  * - `poi/<version>/<page_idx>` — crates/pxl/server/geo-bake/src/poi/tool/bake_poi_tiles.rs's
  *   own sibling prefix in the same bucket. No `_ocean`-equivalent: a missing
  *   POI object means "no POI on this page", which poi/repository.ts resolves
@@ -92,7 +93,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * It is not rate limiting and does not pretend to be — that needs WAF rules,
  * which need a real zone rather than a workers.dev hostname.
  */
-const KEY_RE = /^(?:(?:poi|geocode)\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/-?\d{1,20}|terrain\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|-?\d{1,20})|asset\/[0-9a-f]{64})$/;
+const KEY_RE = /^(?:(?:poi|geocode)\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/-?\d{1,20}|terrain\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|\d{1,2}\/-?\d{1,20})|asset\/[0-9a-f]{64})$/;
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -154,24 +155,25 @@ export default {
     if (cached) {
       // `encodeBody: "manual"` does not survive the cache round trip: the
       // entry comes back as an ordinary Response, and the runtime re-encodes
-      // an already-gzipped body on the way out. Re-assert it here.
+      // an already-encoded body on the way out. Re-assert it here.
       return new Response(cached.body, { headers: cached.headers, encodeBody: "manual" });
     }
 
     const object = await env.TILES.get(key);
     if (object === null) return new Response("not found", { status: 404 });
 
-    // writeHttpMetadata replays what was set at upload time — crucially
-    // `content-encoding: gzip`, since objects are stored pre-compressed and
-    // the client relies on fetch() transparently decoding them.
+    // writeHttpMetadata replays what was set at upload time — crucially the
+    // `content-encoding` the object was packed in, since objects are stored
+    // pre-compressed and the client relies on fetch() transparently decoding
+    // them.
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set("etag", object.httpEtag);
 
     // `encodeBody: "manual"` is load-bearing, and its absence fails quietly.
     // By default the runtime assumes a Response body is *not* encoded and
-    // applies its own compression, so an already-gzipped R2 object goes out
-    // as gzip-inside-gzip — measured: a stored 8,653-byte tile served as
+    // applies its own compression, so an already-packed R2 object goes out
+    // packed twice — measured on gzip: a stored 8,653-byte tile served as
     // 4,343 bytes to a gzip-accepting client, and as raw gzip bytes with no
     // content-encoding header at all to one asking for identity. Either way
     // decode_terrain() receives compressed bytes and fails far from here.

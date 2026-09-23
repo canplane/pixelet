@@ -1,56 +1,37 @@
 {
   "render_cfg": {
     "$doc": [
-      "Render-distance and fog configuration.",
+      "Fog and the far clip.",
       "",
-      "RENDER_DIST is the one render-range knob, in world `u`: how far ground",
-      "geometry exists, and where fog finishes hiding its edge. Everything else",
-      "about range is derived from it — the chunks that mount, the pages fetched,",
-      "the pages evicted (terrain/config.json).",
+      "RENDER_DIST is how far the ground is seen, in world `u`: where fog",
+      "finishes hiding it, with the camera 1,024u from its pivot or nearer;",
+      "further out, it and every distance here grow with the camera's",
+      "(FOG_PER_DIST). Where ground geometry exists is no longer a distance",
+      "chosen beside it but the page pyramid's: a ring of pages at every level",
+      "of a window, drawn to the window's top level's ring (terrain/level.rs,",
+      "terrain/config.json), which at the finest window reaches 8192u. Fog",
+      "therefore hides ground that is there rather than the edge of where it",
+      "stops.",
       "",
-      "It replaces three independently chosen numbers: a fog distance in world",
-      "units and two page radii in whole pages. Because both page radii keyed on",
-      "the page the view centre stood in, the delivered range was not the stated",
-      "one — geometry ended anywhere between one and two pages out depending on",
-      "where in its page the camera stood, and crossing a boundary moved the",
-      "boundary by a whole page. See issue/20260912-what-to-render-when.md.",
-      "",
-      "Ranges are measured from the view centre, not from the camera, because",
-      "residency has to be invariant under rotation: at a wide zoom the camera",
-      "sits up to ~1023u from that centre, and following it would sweep pages in",
-      "and out of the cache on a spin. Which tier a chunk shows and which chunk is",
-      "built first are camera-relative and always were — both measure the chunk's",
-      "own 3D bounds centre against the camera, so content standing 100u above the",
-      "ground is ranked where it actually is.",
-      "",
-      "Anchoring the range at the centre is only sufficient because the camera",
-      "always looks at it, which keeps the visible wedge nearby. Measured over",
-      "every zoom, tilt, aspect ratio and pivot height the camera allows, visible",
-      "ground reaches at most ~1532u from the centre — the worst case being a",
-      "close zoom onto something standing above the terrain, where the camera",
-      "rises with it and sees almost a full fog radius in every direction.",
-      "CHUNK_RENDER_DIST is 1664u, two chunks past the range rather than one, so",
-      "the margin (132u) also covers the anchor's own chunk quantization (up to",
-      "~90u). Widening the field of view, or letting the camera look away from",
-      "its pivot, is what would make the margin too small.",
-      "",
-      "1536u is chosen against what it costs to hold. Chunks mount two chunks past",
-      "it (CHUNK_RENDER_DIST, 1664u), which touches 21 pages at worst; the pages",
-      "actually held are the nearest 32 (~129MB decoded), against the 49 pages",
-      "(~197MB) that discarded the tab on an iPhone 13 mini. It is wider than the",
-      "1024u that was really guaranteed before, and it is the same everywhere",
-      "rather than only at the middle of a page."
+      "Anchoring the rings at the view centre rather than the camera is what",
+      "keeps residency invariant under rotation: at a wide zoom the camera sits",
+      "its whole distance from that centre, and following it would sweep pages",
+      "in and out on a spin. Which chunk is drawn at which level, and which tier",
+      "it shows, are camera-relative — both measure against the camera — so",
+      "ground standing above the terrain is ranked where it actually is. Over",
+      "every zoom, tilt, aspect ratio and pivot height the camera allows, the",
+      "ground in view lies inside what the window's top ring draws",
+      "(world/chunk/view_range.test.rs)."
     ],
     "FAR_CLIP": {
       "$value": 6144,
       "$doc": [
         "VIEW_DIST * 1.5. VIEW_DIST (camera/config.json) is sized past",
-        "CHUNK_RENDER_DIST below, the real edge of mounted terrain, so FAR_CLIP",
-        "keeps margin over where geometry stops existing rather than being an",
-        "arbitrary multiple. The fog gradient is FOG_NEAR/FOG_FAR (linear, in",
-        "shade.wgsl, from the theme through state.rs), and it ends exactly",
-        "where geometry does, so ground always fades into the fog colour instead",
-        "of being cut off while still visible. The sky is drawn unfogged",
+        "where the ground is seen, so FAR_CLIP keeps margin over it rather than",
+        "being an arbitrary multiple. The fog gradient is FOG_NEAR/FOG_FAR (linear,",
+        "in shade.wgsl, from the theme through state.rs), and it is total well",
+        "inside where the ground is drawn, so ground always fades into the fog",
+        "colour instead of being cut off while still visible. The sky is drawn unfogged",
         "(sky.wgsl), so the horizon still reads as a full vista — only ground",
         "geometry fades."
       ]
@@ -58,26 +39,26 @@
     "FOG_NEAR": {
       "$value": 645.12,
       "$doc": [
-        "RENDER_DIST * 0.42. Haze starts here and is total at RENDER_DIST, where",
-        "geometry stops. The fraction is the one the previous pair had, so the",
-        "near edge sits where it did; what changes is that the far edge is now a",
-        "distance geometry actually reaches, so the fade completes instead of",
+        "RENDER_DIST * 0.42. Haze starts here and is total at RENDER_DIST, a",
+        "distance the ground is drawn past, so the fade completes instead of",
         "being cut."
       ]
     },
     "FOG_FAR": { "$value": 1536, "$doc": ["RENDER_DIST."] },
-    "RENDER_DIST": 1536,
-    "CHUNK_RENDER_DIST": {
-      "$value": 1664,
+    "FOG_PER_DIST": {
+      "$value": 1.5,
       "$doc": [
-        "RENDER_DIST + 2 * CHUNK_CELL_SPAN * U_PER_CELL. How far out a chunk is",
-        "actually mounted. Which pages exist to mount from is a count rather than",
-        "a distance (terrain/config.json's RESIDENT_PAGES). Two chunks past the",
-        "range: one so a chunk's far edge does not visibly clip mid-fade at the",
-        "cutoff, and one for the margin the invariant above needs. 21 pages at",
-        "worst (~85MB decoded)."
+        "Fog's far edge per unit of the camera's distance from its pivot, where",
+        "that is the further: FOG_FAR over the 1,024u the camera could stand at",
+        "when these were tuned. Past the distance where it overtakes FOG_FAR, the fog, the",
+        "clip planes and the sky all grow in proportion to the distance, so a",
+        "zoom out is a change of scale and nothing else: the screen spans the",
+        "same octaves of ground, which is what the window of levels is sized",
+        "for (environment/fog.rs). Nearer, they hold at their values here, so",
+        "a street-level view keeps its horizon."
       ]
-    }
+    },
+    "RENDER_DIST": 1536
   },
   "light_cfg": {
     "$doc": [

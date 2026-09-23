@@ -11,9 +11,9 @@
  * caches. Bumping one here is the whole change.
  */
 export const PUBLISHED_VERSION = {
-  terrain: "v3",
-  poi: "v4",
-  geocode: "v1",
+  terrain: "v4",
+  poi: "v5",
+  geocode: "v2",
 } as const;
 
 export type BakeKind = keyof typeof PUBLISHED_VERSION;
