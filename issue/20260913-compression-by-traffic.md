@@ -250,24 +250,33 @@ egress, and the Workers plan that fails closed counts requests
 copy sixty-two times the size is billed the same. What it spends is the
 reader's transfer and the room in the cache.
 
-**An object goes out in the encoding it is stored in or not at all.** The
-Worker reads the client's `accept-encoding` and answers 406 before it makes a
-body, so the decoded copy is never produced and never cached. The cache hit
-and the bucket read leave through one function, so one rule holds both, and
-the encoding stays parked on a header the cache has no meaning for while the
-entry is stored — an encoding a cache can read is one it normalises, and it
-stores the decoded body.
+**The Worker cannot refuse such a client, and that was learned by deploying
+it.** "An object goes out in the encoding it is stored in or not at all" reads
+like a rule a Worker can hold, and it is not: Cloudflare rewrites
+`accept-encoding` on the request it hands a Worker and negotiates with the real
+client itself on the way out, so what the Worker reads is the edge's list and
+never the browser's. A 406 written there refused every client — `zstd`, `*`,
+`identity` and the header absent were all tried against the deployment, and all
+four were refused. Whatever refuses a client for its encoding has to run where
+the client's own header is still intact, which is not a Worker.
 
-**406 is a fact about the browser, not about the object.** That is why it is
-not one of the four outcomes a read reports: the shell says it once, covers
-the map with it, and settles every later read without making it, since each
-one would cost a bucket read to be refused again.
+What the Worker does keep is the cache: the encoding stays parked on a header
+the cache has no meaning for while the entry is stored, because an encoding a
+cache can read is one it normalises, and it stores the decoded body.
 
-**What is not a browser is refused too.** Deno's `fetch` and curl's default
-offer no zstd, so the smoke script sends a browser's list and checks the
-refusal as a line of its own. The dev tile server negotiates nothing — it
-sets the encoding unconditionally — so a browser that cannot decode fails
-there without the notice.
+**So the reader finds it in the body instead.** A browser handed a
+`Content-Encoding` it does not know passes the bytes through undecoded rather
+than saying anything, so a body that still begins with a compression magic is
+one the transport did not decode — a fact about the browser, found on the one
+side that can see it (`apps/web/src/kernel/io/fetch.ts`). It is the same
+judgement the bake makes on the other side of the wire (`geo-bake util.rs`'s
+`encoding_of`). Such a body is not handed to the kernel, which would spend a
+heap block and fail in its decoder far from the cause; the notice goes up and
+every later read is settled without being made.
+
+The decoded copy the edge makes for a client that did not offer zstd is
+therefore still made, and still cached. Nothing in a Worker prevents it. What
+it costs is in the table above, and the only lever left is the codec.
 
 **The codec, asked again now that the gap has a price.** The 09-22 table puts
 brotli q11 at 4.2 KB against zstd -22's 4.3, so the gap buys nothing in size;

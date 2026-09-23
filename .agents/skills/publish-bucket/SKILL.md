@@ -191,8 +191,39 @@ for pair in terrain/v5:terrain/v6 poi/v5:poi/v6 geocode/v3:geocode/v4; do
 done
 ```
 
-A copy carries the source's metadata, so the content-type, content-encoding
-and cache-control come across with it and none of the upload flags apply.
+**A copy does not carry the source's metadata, whatever it looks like.** s5cmd
+dropped `content-encoding` and `cache-control` on all 274,556 objects and
+rewrote `content-type` from what the bake stored to what it guessed from the
+bytes (`application/zstd`, `application/gzip`). The pages then went out as
+packed bytes with nothing saying so, which no browser decodes and which looks
+from the client like a corrupt page. That is what the flags below are for, and
+they have to be given per prefix because the prefixes do not agree: terrain and
+geocode are zstd, **POI v5 and the v6 renamed from it are gzip**
+(issue/20260913-compression-by-traffic.md — the sets baked before the switch
+stayed as they were).
+
+```bash
+# prefix : content-encoding : content-type : cache-control
+for row in \
+  "terrain/v6|zstd|application/octet-stream|public, max-age=31536000, immutable" \
+  "poi/v6|gzip|application/octet-stream|public, max-age=86400" \
+  "geocode/v4|zstd|application/json|public, max-age=86400"; do
+  IFS='|' read -r p enc ct cc <<<"$row"
+  s5cmd --endpoint-url $R2 ls "s3://pixelet-tiles/$p/*" | awk '{print $NF}' | sed "s|^|$p/|" \
+    | awk -v enc="$enc" -v ct="$ct" -v cc="$cc" '{printf "cp --metadata-directive REPLACE --content-type %s --content-encoding %s --cache-control \"%s\" s3://pixelet-tiles/%s s3://pixelet-tiles/%s\n", ct, enc, cc, $0, $0}'
+done > /tmp/rekey-meta.txt
+s5cmd --endpoint-url $R2 run /tmp/rekey-meta.txt
+```
+
+**Check one object of each prefix on the wire before running the rest**, and
+check that it decodes rather than that a header is present:
+
+```bash
+curl -s --compressed "https://plei.me/geo/tiles/poi/<v>/<quadkey>" | head -c 2 | xxd -p          # 5854
+curl -s -H "Accept-Encoding: zstd" "https://plei.me/geo/tiles/terrain/<v>/<quadkey>" \
+  | zstd -dcq | head -c 2 | xxd -p                                                              # 5854
+```
+
 Count both prefixes afterwards and only then delete the old ones — an object
 the rename skipped is one the new prefix does not have, and nothing else would
 say so.
