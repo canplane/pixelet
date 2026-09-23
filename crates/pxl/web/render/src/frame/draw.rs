@@ -66,6 +66,11 @@ pub const PIPELINE_PUCK_BEACON: u32 = 7;
 pub const PIPELINE_BADGE: u32 = 8;
 /// Line segments over everything: handle, vertex count.
 pub const PIPELINE_DEBUG: u32 = 9;
+/// A chunk mesh whose boxes are the coarse four-word format: the same shader
+/// and the same groups as PIPELINE_CHUNK over a vertex layout of four words
+/// rather than six, because a pipeline's stride is fixed and the two formats
+/// do not share one (frame/shader/record.rs's chunk_lanes).
+pub const PIPELINE_CHUNK_COARSE: u32 = 32;
 /// Words a rewrite record holds: the handle, and the block's address and
 /// length, whose bytes replace the buffer's.
 pub const REWRITE_WORDS: usize = 3;
@@ -164,28 +169,31 @@ impl DrawList {
     }
 
     /// A chunk mesh in arena group `group`, `box_cnt` boxes from `first_box`.
-    /// `unit`: the cell a box of this mesh is measured in, in units, `z_step`
-    /// what one step of its height is, and `box_words` which of the two box
-    /// formats the group holds (chunk.wgsl's Draw). The mesh's own floor is
-    /// in `translation`.
+    /// `unit`: the cell a box of this mesh is measured in, in units, and
+    /// `z_step` what one step of its height is; `fine` says which of the two
+    /// box formats the group holds, which is the pipeline and reaches the
+    /// shader as the entry point it is drawn at. The mesh's own floor is in
+    /// `translation`.
     #[allow(clippy::too_many_arguments)]
-    pub fn draw_arena(&mut self, group: u32, first_box: u32, box_cnt: u32, translation: [f32; 3], visible: f32, unit: f32, z_step: f32, box_words: f32) {
-        self.draw_in(PIPELINE_CHUNK, ARENA_DRAW | group, box_cnt, first_box, translation, visible, 1.0, unit, z_step, box_words);
+    pub fn draw_arena(&mut self, group: u32, first_box: u32, box_cnt: u32, translation: [f32; 3], visible: f32, unit: f32, z_step: f32, fine: bool) {
+        let pipeline = if fine { PIPELINE_CHUNK } else { PIPELINE_CHUNK_COARSE };
+        self.draw_in(pipeline, ARENA_DRAW | group, box_cnt, first_box, translation, visible, 1.0, unit, z_step);
     }
 
     #[allow(clippy::too_many_arguments)]
     pub fn draw(&mut self, pipeline: u32, handle: u32, vertex_cnt: u32, index_cnt: u32, translation: [f32; 3], visible: f32, opacity: f32) {
-        self.draw_in(pipeline, handle, vertex_cnt, index_cnt, translation, visible, opacity, 1.0, 1.0, 0.0);
+        self.draw_in(pipeline, handle, vertex_cnt, index_cnt, translation, visible, opacity, 1.0, 1.0);
     }
 
     /// A draw whose boxes are measured in cells of `unit` units, their
-    /// heights in steps of `z_step` from the floor in `translation`, `words`
-    /// to a box.
+    /// heights in steps of `z_step` from the floor in `translation`. The
+    /// eighth float is the record's own padding: eight is two vectors, and a
+    /// record of two vectors is the one a storage array cannot lay out two
+    /// ways (chunk.wgsl's Draw).
     #[allow(clippy::too_many_arguments)]
-    pub fn draw_in(&mut self, pipeline: u32, handle: u32, vertex_cnt: u32, index_cnt: u32, translation: [f32; 3], visible: f32, opacity: f32, unit: f32, z_step: f32, words: f32) {
+    pub fn draw_in(&mut self, pipeline: u32, handle: u32, vertex_cnt: u32, index_cnt: u32, translation: [f32; 3], visible: f32, opacity: f32, unit: f32, z_step: f32) {
         let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
-        self.uniforms
-            .extend_from_slice(&[translation[0], translation[1], translation[2], visible, opacity, unit, z_step, words]);
+        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], visible, opacity, unit, z_step, 0.0]);
         self.draws.extend_from_slice(&[handle, vertex_cnt, index_cnt, uniform, pipeline]);
     }
 

@@ -349,7 +349,7 @@ impl GhostDraw {
                 let pipeline = if coplanar { PIPELINE_GHOST_BOX_COPLANAR } else { PIPELINE_GHOST_BOX };
                 // The box was written in a cell of its own size (write_lone_box).
                 let unit = f64::from_bits(size_bits) as f32;
-                draw.draw_in(pipeline, h.handle, 1, 0, t, 1.0, GHOST_OPACITY, unit, h.heights.step as f32, FINE_BOX_WORDS as f32);
+                draw.draw_in(pipeline, h.handle, 1, 0, t, 1.0, GHOST_OPACITY, unit, h.heights.step as f32);
             }
             Shape::Decor { group, .. } => draw.draw_as(PIPELINE_GHOST_DECOR, h.handle, group, 1, t, 0.0, GHOST_OPACITY),
         }

@@ -12,7 +12,7 @@
 //! epoch moves, and whoever wrote into it builds again from what the memory
 //! does hold, the terrain records.
 
-use crate::gpu::api::{buffer_entry, buffer_usage, gpu, object, release};
+use crate::gpu::api::{buffer_usage, gpu, object};
 use xpute_runtime::global::Global;
 
 /// Buffers the arena can hold: one a group of levels.
@@ -23,8 +23,6 @@ struct Arena {
     sizes: [u32; ARENA_GROUPS],
     /// Each group's buffer on the device, 0 while there is none.
     buffers: [u32; ARENA_GROUPS],
-    /// Each group's bind group, and the layout it was made for.
-    groups: [(u32, u32); ARENA_GROUPS],
     /// Moves whenever what the buffers held is lost: made anew, or gone with
     /// the device.
     epoch: u32,
@@ -36,7 +34,6 @@ fn arena() -> &'static mut Arena {
     ARENA.get(|| Arena {
         sizes: [0; ARENA_GROUPS],
         buffers: [0; ARENA_GROUPS],
-        groups: [(0, 0); ARENA_GROUPS],
         epoch: 0,
     })
 }
@@ -73,7 +70,7 @@ pub fn arena_write(group: usize, offset: u32, bytes: &[u8]) -> bool {
         for i in 0..ARENA_GROUPS {
             if a.sizes[i] > 0 {
                 let id = object();
-                (g.buffer)(id, a.sizes[i], buffer_usage::STORAGE | buffer_usage::COPY_DST);
+                (g.buffer)(id, a.sizes[i], buffer_usage::VERTEX | buffer_usage::COPY_DST);
                 a.buffers[i] = id;
             }
         }
@@ -84,23 +81,14 @@ pub fn arena_write(group: usize, offset: u32, bytes: &[u8]) -> bool {
     true
 }
 
-/// Group `group`'s buffer as a bind group of `layout`, made on first use.
-pub fn arena_group(group: usize, layout: u32) -> Option<u32> {
-    let g = gpu()?;
-    let a = arena();
-    if a.buffers[group] == 0 {
+/// Group `group`'s buffer, or none where the device has not made it. The
+/// draw binds it as a vertex buffer at the offset of its own first box, so
+/// there is no bind group over it and nothing to key by a layout.
+pub fn arena_buffer(group: usize) -> Option<u32> {
+    let id = arena().buffers[group];
+    if id == 0 {
         return None;
     }
-    let (made_for, id) = a.groups[group];
-    if id != 0 && made_for == layout {
-        return Some(id);
-    }
-    if id != 0 {
-        release(id);
-    }
-    let id = object();
-    (g.bind_group)(id, layout, &buffer_entry(0, a.buffers[group]));
-    a.groups[group] = (layout, id);
     Some(id)
 }
 
@@ -108,6 +96,5 @@ pub fn arena_group(group: usize, layout: u32) -> Option<u32> {
 pub fn arena_lose() {
     let a = arena();
     a.buffers = [0; ARENA_GROUPS];
-    a.groups = [(0, 0); ARENA_GROUPS];
     a.epoch = a.epoch.wrapping_add(1);
 }

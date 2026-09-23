@@ -216,14 +216,16 @@ fn format_of(module: &Module, ty: naga::Handle<naga::Type>) -> u32 {
         TypeInner::Vector { size: VectorSize::Tri, scalar } if scalar.kind == ScalarKind::Float => F32X3,
         TypeInner::Vector { size: VectorSize::Quad, scalar } if scalar.kind == ScalarKind::Float => F32X4,
         TypeInner::Vector { size: VectorSize::Quad, scalar } if scalar.kind == ScalarKind::Uint => U32X4,
+        TypeInner::Vector { size: VectorSize::Bi, scalar } if scalar.kind == ScalarKind::Uint => U32X2,
         TypeInner::Scalar(s) if s.kind == ScalarKind::Uint => U32,
         other => panic!("no vertex format for {other:?}"),
     }
 }
 
 /// The vertex shader's inputs by location, and their formats.
-fn vertex_inputs(module: &Module) -> BTreeMap<u32, u32> {
-    let vs = module.entry_points.iter().find(|e| e.stage == ShaderStage::Vertex).unwrap();
+fn vertex_inputs(module: &Module, entry: u32) -> BTreeMap<u32, u32> {
+    let name = VERTEX_ENTRY[entry as usize];
+    let vs = module.entry_points.iter().find(|e| e.stage == ShaderStage::Vertex && e.name == name).unwrap();
     let mut out = BTreeMap::new();
     for arg in &vs.function.arguments {
         match &arg.binding {
@@ -287,7 +289,7 @@ fn every_pipeline_matches_its_shader() {
             // Every input the vertex shader declares is fed by exactly
             // one attribute of the same format, and no attribute feeds
             // an input that is not there.
-            let inputs = vertex_inputs(&module);
+            let inputs = vertex_inputs(&module, r.vertex);
             let mut fed = BTreeMap::new();
             for (stride, _, attrs) in &r.buffers {
                 for (location, offset, format) in attrs {

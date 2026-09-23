@@ -23,12 +23,17 @@ pub struct TickState {
     pub width: f64,
     pub height: f64,
     pub dpr: f64,
-    /// Seconds since the loop started.
+    /// Seconds the world has been stepped, which past a pause is behind the
+    /// wall clock by what the pause cost (sched/turn.rs's MAX_STEP_S).
     pub elapsed_s: f64,
     /// The host's measured frame interval and whether it ran this turn as
     /// interactive: the ledger's, which reads a frame against them.
     pub frame_ms: f64,
     pub interactive: bool,
+    /// The gap the host measured before this turn, in seconds — what passed,
+    /// which past MAX_STEP_S is more than the world is stepped by. The ledger
+    /// wants this one; nothing that moves does (sched/turn.rs).
+    pub gap_s: f64,
 }
 
 pub type TickContext<'a> = xpute_runtime::sched::tick::TickContext<'a, TickState>;

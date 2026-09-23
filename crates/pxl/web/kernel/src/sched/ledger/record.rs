@@ -285,7 +285,9 @@ pub struct WorkSample {
 pub struct FrameSample {
     /// monotonic ms at record time.
     pub t: f64,
-    /// rAF interval in ms — pacing, read against `frame_ms`.
+    /// rAF interval in ms — pacing, read against `frame_ms`. The gap the host
+    /// measured, not the step the world took: the two part past MAX_STEP_S
+    /// (sched/turn.rs), and the frames worth reading are all past it.
     pub dt_ms: f64,
     /// The display's measured frame interval when this frame was scheduled
     /// (sched/tick.rs) — what `dt_ms` has to beat.

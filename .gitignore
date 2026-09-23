@@ -210,3 +210,9 @@ out[0-9]*/
 
 # wrangler's local scratch: its simulated R2/KV, build state and temporaries.
 apps/web/.wrangler/
+
+# What a device posts to the dev server's /__console, for reading with tail.
+apps/web/.dev-console.log
+
+# A standalone WebGPU repro page is dev-only and not part of the app.
+apps/web/public/repro-*.html

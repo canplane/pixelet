@@ -255,7 +255,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     }
     ledger_record_frame(FrameSample {
         t: now(),
-        dt_ms: ctx.delta * 1000.0,
+        dt_ms: ctx.state.gap_s * 1000.0,
         frame_ms: ctx.state.frame_ms,
         settled: if ctx.state.interactive { 0.0 } else { 1.0 },
         sched_ms: now() - frame_t0,

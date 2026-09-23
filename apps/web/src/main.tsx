@@ -16,6 +16,12 @@ import { App } from "@/app/app.tsx";
 import { bootstrapApp } from "@/app/bootstrap.ts";
 import "@/app/style/index.css";
 
+// Before anything else, so a failure in the boot below is itself forwarded.
+if (import.meta.env.DEV) {
+  const { installRemoteConsole } = await import("@/feature/dev/remote-console.ts");
+  installRemoteConsole();
+}
+
 try {
   bootstrapApp();
 

@@ -224,7 +224,11 @@ pub const PIPELINE_STARS: u32 = 26;
 pub const PIPELINE_CLOUDS: u32 = 27;
 pub const PIPELINE_CLOUDS_ABOVE: u32 = 28;
 pub const PIPELINE_CLOUD_FIELD: u32 = 29;
-pub const PIPELINES: u32 = 30;
+/// The coarse box format's own pipelines: the same shader and groups, over a
+/// vertex layout of four words rather than six (`chunk_lanes`).
+pub const PIPELINE_CHUNK_COARSE_DEPTH: u32 = 30;
+pub const PIPELINE_CHUNK_COARSE_PREPASS: u32 = 31;
+pub const PIPELINES: u32 = 33;
 
 // A pipeline record's words, in order: the shader for a frame at one
 // sample and the one for a multisampled frame; whether it has a fragment
@@ -236,6 +240,8 @@ pub const PIPELINES: u32 = 30;
 // a count, and for each its entries as a count and (binding, visibility,
 // kind) each. The codes are the host's too (gpu/api.json).
 pub use crate::gpu::api_spec::record::*;
+
+use crate::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 
 const fn f(v: f32) -> u32 {
     v.to_bits()
@@ -256,6 +262,19 @@ struct Head {
     depth_bias_slope: u32,
     blend: u32,
     samples: u32,
+    /// Which vertex entry point of `shader` the pipeline enters. A format the
+    /// pipeline already fixes is the pipeline's, not a number carried on every
+    /// draw for the shader to branch on.
+    vertex: u32,
+}
+
+/// The vertex entry points a record can name, indexed by VS and kin. The
+/// shell holds the same list against the same numbers (kernel/render/gpu.ts).
+pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_coarse"];
+
+/// The same pipeline entered at the coarse boxes' vertex entry point.
+const fn at_coarse(h: Head) -> Head {
+    Head { vertex: VS_COARSE, ..h }
 }
 
 /// An opaque lit pipeline: writes depth, nearer wins, drawn at the frame's
@@ -273,6 +292,7 @@ const fn lit(shader: u32, cull: u32) -> Head {
         depth_bias_slope: 0,
         blend: OPAQUE,
         samples: FRAME_SAMPLES,
+        vertex: VS,
     }
 }
 
@@ -291,6 +311,7 @@ const fn blended(shader: u32, cull: u32, bias: i32, slope: f32) -> Head {
         depth_bias_slope: f(slope),
         blend: ALPHA,
         samples: FRAME_SAMPLES,
+        vertex: VS,
     }
 }
 
@@ -310,6 +331,7 @@ const fn depth_only(shader: u32) -> Head {
         depth_bias_slope: 0,
         blend: OPAQUE,
         samples: ONE_SAMPLE,
+        vertex: VS,
     }
 }
 
@@ -363,6 +385,7 @@ fn record(h: Head, lanes: &[Vec<u32>], groups: &[Vec<u32>]) -> Vec<u32> {
         h.depth_bias_slope,
         h.blend,
         h.samples,
+        h.vertex,
     ];
     out.push(lanes.len() as u32);
     for l in lanes {
@@ -433,20 +456,29 @@ const CLOUD_GROUP: [[u32; 3]; 10] = [
 /// A skin and its sampler.
 const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
 
-/// The chunk's lanes as the mesher lays them out (chunk_mesher.rs): position,
-/// normal, local_pos, box_scale, rgb, layer_taps, faces — a vertex slot a
-/// lane, at the lane's offset from the vertex count.
-/// A chunk's mesh has no vertex lanes: the vertex shader reads its boxes.
-fn chunk_lanes() -> Vec<Vec<u32>> {
-    Vec::new()
+/// A chunk's boxes, one record an instance, out of the arena or a block
+/// (gpu/arena.rs): the mesh is a vertex buffer stepped per instance rather
+/// than a storage buffer the shader indexes, so a draw reaches its own boxes
+/// by the offset it binds at and thirty-six vertices share one record.
+///
+/// The two formats differ only in stride — six words for a leaf's own tier,
+/// four for every other (mesh/chunk_mesher.rs) — and a pipeline's stride is
+/// fixed, so there is a pipeline for each. What is not duplicated is the
+/// shader: a coarse draw binds the same buffer a second time for the two
+/// words it does not have, which cost nothing to read and are never used,
+/// and one `BoxWords` then satisfies both layouts.
+fn chunk_lanes(fine: bool) -> Vec<Vec<u32>> {
+    let stride = if fine { FINE_BOX_WORDS * 4 } else { COARSE_BOX_WORDS * 4 };
+    let rest = if fine { 16 } else { 0 };
+    vec![vec![stride, PER_INSTANCE, 1, 0, 0, U32X4], vec![stride, PER_INSTANCE, 1, 1, rest, U32X2]]
 }
 /// The chunk's groups: the lit frame, the draws, the texture pack's array,
-/// the table its faces are found through and their sampler; then the block of
-/// the mesh it draws, whose boxes the vertex shader unfolds.
+/// the table its faces are found through and their sampler. The mesh is no
+/// group of its own any more — it arrives as vertex attributes.
 fn chunk_groups() -> Vec<Vec<u32>> {
     let mut g0 = LIT_FRAME.to_vec();
     g0.extend([[3, BOTH, STORAGE], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, STORAGE], [6, FRAGMENT, SAMPLER]]);
-    vec![group(&g0), group(&[[0, VERTEX, STORAGE]])]
+    vec![group(&g0)]
 }
 /// A model's lanes (model.rs): position, normal, uv; then, skinned, the
 /// joints and the weights.
@@ -469,12 +501,13 @@ fn model_groups() -> Vec<Vec<u32>> {
 pub fn pipeline(id: u32) -> Vec<u32> {
     let frame = |visibility: u32| group(&[[0, visibility, UNIFORM]]);
     match id {
-        crate::frame::draw::PIPELINE_CHUNK => record(lit(SHADER_CHUNK, CULL_BACK), &chunk_lanes(), &chunk_groups()),
+        crate::frame::draw::PIPELINE_CHUNK => record(lit(SHADER_CHUNK, CULL_BACK), &chunk_lanes(true), &chunk_groups()),
+        crate::frame::draw::PIPELINE_CHUNK_COARSE => record(at_coarse(lit(SHADER_CHUNK, CULL_BACK)), &chunk_lanes(false), &chunk_groups()),
         crate::frame::draw::PIPELINE_DECOR => record(lit(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
         // The hover ghost, biased toward the eye: slightly clear of a
         // surface it sits on, strongly clear of one it sits in.
-        crate::frame::draw::PIPELINE_GHOST_BOX => record(blended(SHADER_CHUNK, CULL_BACK, 1, 1.0), &chunk_lanes(), &chunk_groups()),
-        crate::frame::draw::PIPELINE_GHOST_BOX_COPLANAR => record(blended(SHADER_CHUNK, CULL_BACK, 8, 2.0), &chunk_lanes(), &chunk_groups()),
+        crate::frame::draw::PIPELINE_GHOST_BOX => record(blended(SHADER_CHUNK, CULL_BACK, 1, 1.0), &chunk_lanes(true), &chunk_groups()),
+        crate::frame::draw::PIPELINE_GHOST_BOX_COPLANAR => record(blended(SHADER_CHUNK, CULL_BACK, 8, 2.0), &chunk_lanes(true), &chunk_groups()),
         crate::frame::draw::PIPELINE_GHOST_DECOR => record(blended(SHADER_DECOR, CULL_NONE, 1, 1.0), &model_lanes(false), &model_groups()),
         // Back faces culled, as three's material (FrontSide) did: drawn both
         // sides, a closed body's inner faces fight its outer ones for the
@@ -513,10 +546,12 @@ pub fn pipeline(id: u32) -> Vec<u32> {
             &[vec![24, PER_VERTEX, 2, 0, 0, F32X3, 1, 12, F32X3]],
             &[frame(VERTEX), group(&[[0, VERTEX, UNIFORM]])],
         ),
-        PIPELINE_CHUNK_DEPTH => record(depth_only(SHADER_CHUNK), &chunk_lanes(), &chunk_groups()),
+        PIPELINE_CHUNK_DEPTH => record(depth_only(SHADER_CHUNK), &chunk_lanes(true), &chunk_groups()),
+        PIPELINE_CHUNK_COARSE_DEPTH => record(at_coarse(depth_only(SHADER_CHUNK)), &chunk_lanes(false), &chunk_groups()),
         PIPELINE_DECOR_DEPTH => record(depth_only(SHADER_DECOR), &model_lanes(false), &model_groups()),
         PIPELINE_SKINNED_DEPTH => record(depth_only(SHADER_SKINNED), &model_lanes(true), &model_groups()),
-        PIPELINE_CHUNK_PREPASS => record(prepass(SHADER_CHUNK, CULL_BACK), &chunk_lanes(), &chunk_groups()),
+        PIPELINE_CHUNK_PREPASS => record(prepass(SHADER_CHUNK, CULL_BACK), &chunk_lanes(true), &chunk_groups()),
+        PIPELINE_CHUNK_COARSE_PREPASS => record(at_coarse(prepass(SHADER_CHUNK, CULL_BACK)), &chunk_lanes(false), &chunk_groups()),
         PIPELINE_DECOR_PREPASS => record(prepass(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
         PIPELINE_SKINNED_PREPASS => record(prepass(SHADER_SKINNED, CULL_BACK), &model_lanes(true), &model_groups()),
         // The sky: one triangle over the screen at the far plane, after the
@@ -651,6 +686,7 @@ pub struct Record {
     pub depth_bias_slope: f32,
     pub blend: u32,
     pub samples: u32,
+    pub vertex: u32,
     pub buffers: Vec<Buffer>,
     /// Per group, its entries as (binding, visibility, kind).
     pub groups: Vec<Vec<(u32, u32, u32)>>,
@@ -659,7 +695,7 @@ pub struct Record {
 #[cfg(test)]
 impl Record {
     pub fn read(words: &[u32]) -> Record {
-        let mut at = 11;
+        let mut at = HEAD as usize;
         let mut next = || {
             at += 1;
             words[at - 1]
@@ -693,6 +729,7 @@ impl Record {
             depth_bias_slope: f32::from_bits(words[8]),
             blend: words[9],
             samples: words[10],
+            vertex: words[11],
             buffers,
             groups,
         }

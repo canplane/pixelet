@@ -143,13 +143,17 @@ pub mod paint {
     ];
 }
 
-/// A pipeline record's codes (shader.rs): the topology, the cull mode, the
+/// A pipeline record's codes (shader.rs), and HEAD, the words it opens with
+/// before its vertex buffers — the one number three parsers of a record would
+/// otherwise each hold their own copy of. Then: the topology, the cull mode, the
 /// depth compare under reversed Z (LESS is the shadow map's plain depth; NO_DEPTH, no
-/// depth attachment), the blend, the sample count, a vertex step and format, a
+/// depth attachment), the blend, the sample count, which vertex entry point of
+/// its shader the pipeline enters, a vertex step and format, a
 /// binding's stages, and a binding's kind — FRAME_DEPTH a depth texture
 /// multisampled as the frame is, TEXTURE_UNFILTERED one in a format no sampler
 /// filters (RGBA32F), read by textureLoad alone.
 pub mod record {
+    pub const HEAD: u32 = 12;
     pub const TRIANGLES: u32 = 0;
     pub const STRIP: u32 = 1;
     pub const LINES: u32 = 2;
@@ -165,7 +169,11 @@ pub mod record {
     pub const ADD: u32 = 2;
     pub const FRAME_SAMPLES: u32 = 0;
     pub const ONE_SAMPLE: u32 = 1;
+    pub const VS: u32 = 0;
+    pub const VS_COARSE: u32 = 1;
     pub const PER_VERTEX: u32 = 0;
+    pub const PER_INSTANCE: u32 = 1;
+    pub const U32X2: u32 = 6;
     pub const F32: u32 = 0;
     pub const F32X2: u32 = 1;
     pub const F32X3: u32 = 2;
@@ -186,6 +194,7 @@ pub mod record {
     pub const FRAME_DEPTH: u32 = 8;
     pub const TEXTURE_UNFILTERED: u32 = 9;
     pub const KEYS: &[&str] = &[
+        "HEAD",
         "TRIANGLES",
         "STRIP",
         "LINES",
@@ -201,7 +210,11 @@ pub mod record {
         "ADD",
         "FRAME_SAMPLES",
         "ONE_SAMPLE",
+        "VS",
+        "VS_COARSE",
         "PER_VERTEX",
+        "PER_INSTANCE",
+        "U32X2",
         "F32",
         "F32X2",
         "F32X3",
