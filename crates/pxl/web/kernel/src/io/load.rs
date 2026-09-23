@@ -21,8 +21,8 @@
 //! that one is final.
 //!
 //! The reading is the shell's, and so is where an asset lives: it answers
-//! with the bytes of a model it holds (`gltf_arrived`, queued, and read and
-//! parsed by `gltf_task` on the turns' quota) or the handle of an image it
+//! with the bytes of a model it holds (`gltf_arrived`, then read and parsed by
+//! `gltf_task` on the turns' quota) or the handle of an image it
 //! decoded and holds (`image_arrived`) — the file's own pixels, top row
 //! first, no colour conversion and no premultiplied alpha. A consumer polls:
 //! None while the read is out or the asset is broken.
@@ -79,8 +79,27 @@ impl Load {
     }
 }
 
+/// Where an asset is between being wanted and being usable.
+///
+/// `Arrived` is the state this had to grow, and the bug it was grown for: the
+/// read's credit is released the moment the bytes land, because parsing is not
+/// I/O and a parse that spans turns would starve the page reads — but the
+/// asset is not usable yet, and anything that reads "not usable" as "not asked
+/// for" asks again. One model was read thirty-eight times, once a turn, for as
+/// long as its parse took, each read holding another block of the same bytes.
+///
+/// So the credit ends at the network and the entry does not. It is the state
+/// Cesium calls `PROCESSING` — "request received, contents are being processed
+/// for rendering" — between its `LOADING` and `READY`, and the reason Bevy's
+/// one `Loading` runs until an asset is *in the World* rather than until its
+/// bytes arrive. Bevy can spend one state on both because it has no credits to
+/// free in the middle; this has, so it takes two.
 enum Entry<T> {
+    /// Wanted, and the read for it is the scheduler's business.
     Pending,
+    /// The shell holds the bytes at this body, this long, and nothing has
+    /// parsed them yet.
+    Arrived(u32, u32),
     Ready(T),
     Failed,
 }
@@ -91,9 +110,6 @@ const LOADS: usize = Asset::ALL.len() + 1;
 struct Loader {
     gltf: Vec<Option<Entry<Rc<Gltf>>>>,
     image: Vec<Option<Entry<u32>>>,
-    /// Models the shell holds and the task has not read: the load, the shell's
-    /// body and its length.
-    arrived: Vec<(Load, u32, u32)>,
 }
 
 static LOADER: Global<Loader> = Global::new();
@@ -102,7 +118,6 @@ fn loader() -> &'static mut Loader {
     LOADER.get(|| Loader {
         gltf: (0..LOADS).map(|_| None).collect(),
         image: (0..LOADS).map(|_| None).collect(),
-        arrived: Vec::new(),
     })
 }
 
@@ -184,11 +199,20 @@ fn arrivals() -> &'static mut Notify {
     ARRIVALS.get(Notify::new)
 }
 
-/// The host holds a model's bytes as `body`: queued for `gltf_task`.
+/// The host holds a model's bytes as `body`: `gltf_task`'s to parse.
 pub fn gltf_arrived(key: u64, body: u32, bytes: u32) {
     let Some((_, load)) = ended(key, Outcome::Ok) else { return };
-    loader().arrived.push((load, body, bytes));
+    loader().gltf[load.number() as usize] = Some(Entry::Arrived(body, bytes));
     arrivals().notify();
+}
+
+/// The first model whose bytes are in and unparsed.
+fn next_arrival() -> Option<(usize, u32, u32)> {
+    let l = loader();
+    (0..LOADS).find_map(|n| match l.gltf[n] {
+        Some(Entry::Arrived(body, bytes)) => Some((n, body, bytes)),
+        _ => None,
+    })
 }
 
 /// The models' task: each arrival read and parsed on the turns' quota, the
@@ -196,16 +220,15 @@ pub fn gltf_arrived(key: u64, body: u32, bytes: u32) {
 pub async fn gltf_task() {
     loop {
         notified(arrivals).await;
-        while !loader().arrived.is_empty() {
+        while let Some((n, body, bytes)) = next_arrival() {
             yield_if_spent(world_edge).await;
-            let (load, body, bytes) = loader().arrived.remove(0);
             let mut buf = vec![0u8; bytes as usize];
             body_read(body, &mut buf);
             let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
                 Ok(g) => Entry::Ready(Rc::new(g)),
                 Err(_) => Entry::Failed,
             };
-            loader().gltf[load.number() as usize] = Some(entry);
+            loader().gltf[n] = Some(entry);
             decor_assets_arrived();
             request_world_tick();
         }
