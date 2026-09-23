@@ -6,7 +6,7 @@
 //! declares the same group gets the same layout and a bind group made for one
 //! serves the others.
 
-use crate::frame::shader::record::{pipeline as record_of, source, ONE_SAMPLE, SHADERS};
+use crate::frame::shader::record::{pipeline as record_of, source, HEAD, ONE_SAMPLE, SHADERS};
 use crate::gpu::api::{object, GpuApi};
 
 /// Group layouts a pipeline has at most, and vertex lanes.
@@ -95,7 +95,7 @@ impl Pipelines {
         let count = if words[10] == ONE_SAMPLE { 1 } else { samples };
         let module = self.module(g, if count > 1 { words[1] } else { words[0] });
         let mut b = Built::default();
-        let mut at = 11;
+        let mut at = HEAD as usize;
         b.lanes = words[at] as usize;
         at += 1;
         for lane in 0..b.lanes {

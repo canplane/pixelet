@@ -46,7 +46,7 @@ use crate::layer::marker::location_puck::Markers;
 use crate::layer::terrain::level::{centre_page, chunk_span_of, decor_reach, ring, LevelPage, DECOR_REACH, RENDER_AXIS, WINDOW_LEVELS};
 use crate::sched::priority::view_centre;
 use crate::shell::setting::store::hidden_ground;
-use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
+use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
 use crate::world::chunk::range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT};
 use pxl_spec::space::indexer::L2_IDX;
@@ -1763,7 +1763,7 @@ impl Scheduler {
                     visible,
                     (step << s.level) as f32,
                     t.heights.step as f32,
-                    group_box_words(t.slot.group) as f32,
+                    group_is_fine(t.slot.group),
                 );
                 self.level_boxes[s.level as usize] += t.box_cnt;
             }

@@ -20,10 +20,6 @@ import type { f64 } from "@xpute/core/abi/word.ts";
 import type { Doorbell } from "../ipc/doorbell.ts";
 import { type Grant, Quantum, type QuantumPolicy } from "./quantum.ts";
 
-/** How long a turn's gap may count as motion: a gap past it is a pause, and
- * a step taken over it would jump. */
-const MAX_DELTA_S = 0.1;
-
 export class Strobe {
   private readonly quantum: Quantum;
   private frame = false;
@@ -85,7 +81,11 @@ export class Strobe {
   private turn(now: f64): void {
     this.frame = false;
     if (!this.running) return;
-    const delta_s = Math.min(MAX_DELTA_S, Math.max(0, (now - this.last) / 1000));
+    // What actually passed, and not what the guest may safely step over: how
+    // long a gap still counts as motion is a question about what the guest
+    // simulates, so the guest holds it. A host that clamps here cannot report
+    // the frames worth reporting, because the clamp is where they all land.
+    const delta_s = Math.max(0, (now - this.last) / 1000);
     this.last = now;
     // The turn asks again for whatever it still waits on.
     clearTimeout(this.timer);

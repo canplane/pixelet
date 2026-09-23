@@ -8,20 +8,22 @@
 // tone mapping: three applied it only when drawing to the screen, and the
 // shipped path drew into the composer's target.
 
+// The eight floats a draw is listed with (frame/draw.rs's `draw_in`), in two
+// vectors and not as a `vec3f` with scalars after it. A three-word member
+// followed by a fourth is the one storage layout two backends have been seen
+// to disagree about — the first member reads and everything past it slides —
+// and unlike the other shaders' draw records, this one is a struct inside a
+// `var<storage>` array, read in the vertex stage, on every device there is.
 struct Draw {
-  translation: vec3f,
-  visible: f32,
-  opacity: f32,
-  // The cell a box of this draw is measured in, in units: a leaf's own cell
-  // is one, a tier's is its step, and a level's is that shifted by the
-  // level. A box holds its corner and width in steps of it (Box), and its
-  // floor and height in steps of `z_step`, from the mesh's own floor, which
-  // is in the translation.
-  unit: f32,
-  z_step: f32,
-  // Which of the two box formats this draw's group holds, in words
-  // (chunk_mesher.rs's FINE_BOX_WORDS): a group is one format throughout.
-  box_words: f32,
+  // The mesh's corner in the frame's own space, and whether the draw shows:
+  // 0 or 1, and past 2 the same blend inverted (`fs`).
+  place: vec4f,
+  // The blend's opacity; the cell a box of this draw is measured in, in
+  // units — a leaf's own cell is one, a tier's is its step, and a level's is
+  // that shifted by the level; the step its floor and height count, from the
+  // mesh's own floor, which is in the corner above; and a fourth word the
+  // record has so that it is two vectors.
+  measure: vec4f,
 };
 
 @group(0) @binding(3) var<storage, read> draws: array<Draw>;
@@ -36,6 +38,15 @@ struct Draw {
 const NO_LAYER: f32 = 255.0;
 // gpu/layers.rs's NO_SLOT.
 const NO_SLOT: u32 = 0xffffu;
+
+// The words one box was handed, as vertex attributes stepped per instance.
+// The first four are always there; the last two only where the format is the
+// leaf's own six, and a coarse draw binds the same buffer for them so that
+// one shader serves both formats (frame/shader/record.rs's chunk_lanes).
+struct BoxWords {
+  @location(0) first: vec4<u32>,
+  @location(1) rest: vec2<u32>,
+};
 
 // One box of the mesh, unfolded from the words the mesher packed
 // (mesh/chunk_mesher.rs). Its corner and width across x and y are steps of
@@ -59,31 +70,36 @@ const COARSE_XY_STEPS: f32 = 8.0;
 // reason it need not carry them.
 const NO_TAPS: u32 = 0xffffffffu;
 
-@group(1) @binding(0) var<storage, read> boxes: array<u32>;
+// A box's own words, one record an instance: the arena is bound as a vertex
+// buffer stepped per instance and the draw offsets into it, so thirty-six
+// vertices share one record and nothing is indexed by hand. Four words always,
+// and two more where the format is the leaf's own six — a coarse draw binds
+// the same buffer twice so that one shader serves both
+// (frame/shader/record.rs's chunk_lanes).
 
 fn box_pair(word: u32, step: f32) -> vec2f {
   return vec2f(f32(word & 0xffffu), f32(word >> 16u)) * step;
 }
 
-// Box `i` of the group this draw reads, in the draw's own format. The floor
-// and the height sit in the same word in both.
-fn box_at(i: u32, d: Draw) -> Box {
+// The words an instance was handed, in the draw's own format. The floor and
+// the height sit in the same word in both.
+fn box_of(words: BoxWords, d: Draw, fine: bool) -> Box {
+  let unit = d.measure.y;
   var b: Box;
-  let base = i * u32(d.box_words);
-  b.z = box_pair(boxes[base + 2u], d.z_step);
-  if (d.box_words > 5.0) {
-    let step = d.unit / XY_STEPS;
-    b.min_xy = box_pair(boxes[base], step);
-    b.size_xy = box_pair(boxes[base + 1u], step);
-    b.rgb = boxes[base + 3u];
-    b.taps = boxes[base + 4u];
-    b.faces = boxes[base + 5u];
+  b.z = box_pair(words.first[2], d.measure.z);
+  if (fine) {
+    let step = unit / XY_STEPS;
+    b.min_xy = box_pair(words.first[0], step);
+    b.size_xy = box_pair(words.first[1], step);
+    b.rgb = words.first[3];
+    b.taps = words.rest[0];
+    b.faces = words.rest[1];
     return b;
   }
-  let step = d.unit / COARSE_XY_STEPS;
-  b.faces = boxes[base];
-  b.rgb = boxes[base + 1u];
-  let w = boxes[base + 3u];
+  let step = unit / COARSE_XY_STEPS;
+  b.faces = words.first[0];
+  b.rgb = words.first[1];
+  let w = words.first[3];
   b.min_xy = vec2f(f32(w & 0xffu), f32((w >> 8u) & 0xffu)) * step;
   // A width is held one short, so a whole mesh across fits in a byte.
   b.size_xy = (vec2f(f32((w >> 16u) & 0xffu), f32((w >> 24u) & 0xffu)) + 1.0) * step;
@@ -137,11 +153,31 @@ struct VertexOut {
   @location(12) fill: vec3f,
 };
 
+// Which draw record this box belongs to rides on `vertex_index`, not on
+// `instance_index`. Both attribute slots step per instance, and WebGPU
+// fetches an instance-stepped element at `first_instance + i` — so putting
+// the record's index in the first instance would slide the boxes themselves
+// by it. No attribute steps per vertex, so the first vertex slides nothing,
+// and the draw gives it the record's index times the cube.
 @vertex
-fn vs(@builtin(vertex_index) vertex: u32, @builtin(instance_index) draw: u32) -> VertexOut {
+fn vs(@builtin(vertex_index) v: u32, words: BoxWords) -> VertexOut {
+  return chunk_vertex(v, words, true);
+}
+
+// The same, over the format that merges cells. Which of the two a draw holds
+// is its pipeline's — the stride its attributes are fetched at is fixed when
+// the pipeline is made — so it is an entry point and not a number the shader
+// reads back off every draw (frame/shader/record.rs's VS_COARSE).
+@vertex
+fn vs_coarse(@builtin(vertex_index) v: u32, words: BoxWords) -> VertexOut {
+  return chunk_vertex(v, words, false);
+}
+
+fn chunk_vertex(v: u32, words: BoxWords, fine: bool) -> VertexOut {
+  let draw = v / BOX_VERTICES;
+  let k = v % BOX_VERTICES;
   let d = draws[draw];
-  let b = box_at(vertex / BOX_VERTICES, d);
-  let k = vertex % BOX_VERTICES;
+  let b = box_of(words, d, fine);
   let face = k / 6u;
   var o: VertexOut;
   // A face the mask leaves out: every vertex of it at one point, a triangle
@@ -154,7 +190,7 @@ fn vs(@builtin(vertex_index) vertex: u32, @builtin(instance_index) draw: u32) ->
   let size = vec3f(b.size_xy, b.z.y);
   let position = vec3f(b.min_xy, b.z.x) + size * 0.5 + local * size;
   let normal = FACE_NORMAL[face];
-  let world = on_globe(position + d.translation);
+  let world = on_globe(position + d.place.xyz);
   o.clip = frame.view_proj * vec4f(world, 1.0);
   o.rgb = srgb_to_linear(unpack4x8unorm(b.rgb).xyz);
   o.layer_taps = unpack4x8unorm(b.taps) * 255.0;
@@ -408,8 +444,8 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
       + sample_tap(i.layer_taps.w, is_side, i.box_uv, ddx, ddy, i.rgb)) * 0.25;
   }
   // The blend: an amount, or 2 + amount for the complementary pattern.
-  let inverted = d.visible > 1.5;
-  let amount = select(d.visible, d.visible - 2.0, inverted);
+  let inverted = d.place.w > 1.5;
+  let amount = select(d.place.w, d.place.w - 2.0, inverted);
   let pattern = dither_threshold(i.clip.xy);
   if (select(pattern >= amount, pattern < amount, inverted)) {
     discard;
@@ -425,5 +461,5 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let k = frame.ao_strength * occlusion(i.local_pos, i.box_scale, i.normal, i.faces);
   let open = (1.0 - k) * mix(vec3f(1.0), AO_TINT, k);
   let color = screen_ao(shade(base, n, i.world_pos, sun_lit(i.world_pos, n), open, Seen(i.through, i.scattered, i.past, i.fill)), i.clip.xy);
-  return vec4f(finish(color, i.clip.xy), d.opacity);
+  return vec4f(finish(color, i.clip.xy), d.measure.x);
 }

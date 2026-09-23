@@ -103,13 +103,17 @@ export const paint = {
   IMAGE: 23 as number,
 } as const;
 
-/** A pipeline record's codes (shader.rs): the topology, the cull mode, the
+/** A pipeline record's codes (shader.rs), and HEAD, the words it opens with
+ * before its vertex buffers — the one number three parsers of a record would
+ * otherwise each hold their own copy of. Then: the topology, the cull mode, the
  * depth compare under reversed Z (LESS is the shadow map's plain depth; NO_DEPTH, no
- * depth attachment), the blend, the sample count, a vertex step and format, a
+ * depth attachment), the blend, the sample count, which vertex entry point of
+ * its shader the pipeline enters, a vertex step and format, a
  * binding's stages, and a binding's kind — FRAME_DEPTH a depth texture
  * multisampled as the frame is, TEXTURE_UNFILTERED one in a format no sampler
  * filters (RGBA32F), read by textureLoad alone. */
 export const record = {
+  HEAD: 12 as number,
   TRIANGLES: 0 as number,
   STRIP: 1 as number,
   LINES: 2 as number,
@@ -125,7 +129,11 @@ export const record = {
   ADD: 2 as number,
   FRAME_SAMPLES: 0 as number,
   ONE_SAMPLE: 1 as number,
+  VS: 0 as number,
+  VS_COARSE: 1 as number,
   PER_VERTEX: 0 as number,
+  PER_INSTANCE: 1 as number,
+  U32X2: 6 as number,
   F32: 0 as number,
   F32X2: 1 as number,
   F32X3: 2 as number,

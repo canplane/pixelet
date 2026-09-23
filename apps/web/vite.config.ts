@@ -78,6 +78,43 @@ function build_number(id: string): string {
  * UTC: it is formatted for the reader's own timezone where it is shown
  * (feature/setting/section/about.tsx).
  */
+/** The other half of `feature/dev/remote-console.ts`: what a device posts to
+ * `/__console` is printed where this server's own output goes, so a phone or a
+ * tablet on a tunnel can be read without attaching a debugger to it. Dev only
+ * — a plugin's `configureServer` never runs for a build. */
+const CONSOLE_LOG = "./.dev-console.log";
+
+function remote_console(): Plugin {
+  return {
+    name: "pxl-remote-console",
+    configureServer(server) {
+      server.middlewares.use("/__console", (req, res) => {
+        if (req.method !== "POST") {
+          res.statusCode = 405;
+          return res.end();
+        }
+        let body = "";
+        req.on("data", (c: Buffer) => {
+          if (body.length < 1 << 16) body += c.toString();
+        });
+        req.on("end", () => {
+          const lines = body.split("\n").filter(Boolean);
+          for (const line of lines) console.log(line);
+          // Also to a file, because the terminal this prints in belongs to
+          // whoever started the server and an agent reading the same session
+          // cannot see it. Appended rather than held, so `tail -f` works and
+          // nothing here has to be flushed or closed.
+          if (lines.length > 0) {
+            Deno.writeTextFileSync(CONSOLE_LOG, lines.map((l) => `${new Date().toISOString()} ${l}\n`).join(""), { append: true, create: true });
+          }
+          res.statusCode = 204;
+          res.end();
+        });
+      });
+    },
+  };
+}
+
 function build_stamp(): Plugin {
   const id = "virtual:pxl-build";
   const resolved = "\0" + id;
@@ -328,6 +365,7 @@ export default defineConfig(({ mode }) => {
 
     plugins: [
       build_stamp(),
+      remote_console(),
       const_enum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "..", "packages")]),
       deno(),
       react(),
@@ -371,6 +409,13 @@ export default defineConfig(({ mode }) => {
 
     server: {
       host: true,
+      // A tunnel's hostname, so a device that is not this machine can reach
+      // the dev server over HTTPS: WebGPU is a secure context away, and a
+      // LAN address over plain http is not one, so an iPad on `http://<ip>`
+      // has no `navigator.gpu` at all. Named rather than opened to
+      // everything — Vite checks the Host header against this list, and the
+      // check is what stands between a dev server and DNS rebinding.
+      allowedHosts: [".trycloudflare.com"],
       // Vite's default fs.allow walks up from this config's own directory
       // looking for an npm/pnpm/yarn workspace root; this is a Deno
       // workspace, which that heuristic does not recognize, so it falls

@@ -222,6 +222,11 @@ pub fn world_platform() -> Platform {
     })
 }
 
+/// How long a gap may still be stepped over as motion. Past it the turn is a
+/// pause — a hidden tab, a stalled main thread — and the world holds still
+/// rather than leaping across it.
+const MAX_STEP_S: f64 = 0.1;
+
 /// What the host tells a frame: the viewport, the gap since the last, and how
 /// it sees the turn.
 pub struct HostFrame {
@@ -298,10 +303,18 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     state.width = width;
     state.height = height;
     state.dpr = dpr;
-    state.elapsed_s += delta;
+    // What the host measured is how long the tab was away as much as how long
+    // a frame took, and a step taken over a pause jumps: a character crosses a
+    // wall, a damped camera overshoots. So the world is stepped by at most
+    // MAX_STEP_S while the gap itself goes on the state, because a record that
+    // cannot say a frame was worse than the clamp cannot say the frames worth
+    // saying — and every bad frame lands exactly on it.
+    let step = delta.min(MAX_STEP_S);
+    state.gap_s = delta;
+    state.elapsed_s += step;
     state.frame_ms = frame_ms;
     state.interactive = interactive;
-    let report = run_tick(state, delta, quota_ms, edge_at);
+    let report = run_tick(state, step, quota_ms, edge_at);
     let after_tick = now();
     fetch_pump();
     crate::world::frame::stage::stage_write();

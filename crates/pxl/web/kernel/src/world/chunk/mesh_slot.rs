@@ -84,6 +84,13 @@ const _: () = assert!(
 const _: () = assert!(group_bytes_of(0) as u64 <= 128 << 20, "an arena group past a storage binding's limit");
 const _: () = assert!(group_bytes_of(FINE_GROUP) as u64 <= 128 << 20, "the leaves' group past a storage binding's limit");
 
+/// Whether group `group` holds the leaves' own box format, which is what the
+/// renderer draws it at: the two formats are two pipelines and two vertex
+/// entry points, so a draw says which by the one it is listed under.
+pub const fn group_is_fine(group: u32) -> bool {
+    group == FINE_GROUP
+}
+
 /// Words a box of group `group` takes.
 pub const fn group_box_words(group: u32) -> u32 {
     if group == FINE_GROUP {

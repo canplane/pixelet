@@ -27,15 +27,15 @@ use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::asset::atlas::BillboardAtlas;
 use crate::frame::draw::{
-    ARENA_DRAW, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_PUCK_BEACON,
-    PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
+    ARENA_DRAW, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
+    PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
-use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_SKY};
+use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_SKY};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, texture_usage, word_bytes, GpuApi, Stamp};
 use crate::gpu::api_spec::{dimension, format, load, resource};
-use crate::gpu::arena::{arena_group, arena_lose};
+use crate::gpu::arena::{arena_buffer, arena_lose};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
 use crate::gpu::clouds::{self, CloudPass};
 use crate::gpu::layers::{Layers, Mips};
@@ -50,6 +50,7 @@ use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, ROLE_CASE, ROLE_WORLD, SETTLE_TURNS, SURFACES};
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::look::globe::{Globe, MERCATOR_RADIUS_U};
+use crate::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 
 /// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
 pub const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
@@ -81,6 +82,9 @@ pub(crate) const SKY_POLE: usize = 12;
 pub(crate) const SKY_MAPPED: usize = 15;
 /// Vertices a chunk mesh's box is drawn with: chunk.wgsl's BOX_VERTICES.
 const BOX_VERTICES: u32 = 36;
+/// What one box takes in the arena, which is the stride its draw binds at.
+const FINE_BOX_BYTES: u32 = FINE_BOX_WORDS * 4;
+const COARSE_BOX_BYTES: u32 = COARSE_BOX_WORDS * 4;
 /// Floats of the frame's draws storage made before the first frame needs more.
 const DRAWS_INITIAL: u32 = 256 * UNIFORM_FLOATS as u32;
 const MB: f64 = 1_048_576.0;
@@ -460,6 +464,13 @@ impl Blocks {
     }
 
     /// The group over a block's buffer in `layout`, made on first use.
+    /// A block's buffer, for a draw that binds it as vertex rather than as a
+    /// group: the ghost's one box goes through the chunk pipeline, whose mesh
+    /// is a vertex buffer now (gpu/arena.rs).
+    pub fn buffer(&self, handle: u32) -> Option<u32> {
+        self.find(handle).filter(|&i| self.buffer[i] != 0).map(|i| self.buffer[i])
+    }
+
     pub fn group(&mut self, g: &GpuApi, handle: u32, layout: u32) -> Option<u32> {
         let i = self.find(handle).filter(|&i| self.buffer[i] != 0)?;
         if self.group[i] == 0 {
@@ -613,6 +624,11 @@ pub struct Renderer {
     chunk: Built,
     chunk_depth: Built,
     chunk_prepass: Built,
+    /// The same three over the coarse box format, which differs from the
+    /// leaf's own in stride alone (frame/shader/record.rs's chunk_lanes).
+    chunk_coarse: Built,
+    chunk_coarse_depth: Built,
+    chunk_coarse_prepass: Built,
     ghost: [Built; 2],
     draws_buffer: u32,
     draws_bytes: u32,
@@ -680,6 +696,9 @@ impl Renderer {
             chunk,
             chunk_depth: pipelines.build(g, PIPELINE_CHUNK_DEPTH, format::CANVAS, samples),
             chunk_prepass: pipelines.build(g, PIPELINE_CHUNK_PREPASS, format::CANVAS, 1),
+            chunk_coarse: pipelines.build(g, PIPELINE_CHUNK_COARSE, format::CANVAS, samples),
+            chunk_coarse_depth: pipelines.build(g, PIPELINE_CHUNK_COARSE_DEPTH, format::CANVAS, samples),
+            chunk_coarse_prepass: pipelines.build(g, PIPELINE_CHUNK_COARSE_PREPASS, format::CANVAS, 1),
             ghost: [
                 pipelines.build(g, PIPELINE_GHOST_BOX, format::CANVAS, samples),
                 pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples),
@@ -766,6 +785,8 @@ impl Renderer {
         let p = &mut self.pipelines;
         self.chunk = p.build(g, PIPELINE_CHUNK, format::CANVAS, samples);
         self.chunk_depth = p.build(g, PIPELINE_CHUNK_DEPTH, format::CANVAS, samples);
+        self.chunk_coarse = p.build(g, PIPELINE_CHUNK_COARSE, format::CANVAS, samples);
+        self.chunk_coarse_depth = p.build(g, PIPELINE_CHUNK_COARSE_DEPTH, format::CANVAS, samples);
         self.ghost = [
             p.build(g, PIPELINE_GHOST_BOX, format::CANVAS, samples),
             p.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples),
@@ -887,37 +908,56 @@ impl Renderer {
     /// A mesh is its boxes, read by the vertex shader from the buffer at
     /// group 1, a cube's worth of vertices each (chunk.wgsl): a chunk's in its
     /// arena group from its first box, the hover ghost's in a block of its own.
-    fn draw_meshes(&self, g: &GpuApi, pass: u32, draws: &[u32], which: u32, own: Option<u32>) -> bool {
+    /// Every chunk-pipeline draw of pipeline `which`, whose boxes are `stride`
+    /// bytes each; with `own`, that pipeline set before the first. Whether any
+    /// was drawn.
+    ///
+    /// A box is one instance and the thirty-six vertices of a cube share it,
+    /// so the mesh is bound as a vertex buffer and the draw's own first box is
+    /// the offset it is bound at. Nothing else may carry that offset: an
+    /// instance-stepped attribute is fetched at `first_instance + i`, so a
+    /// first instance would be added to it rather than read beside it. The
+    /// draw record's index goes on the first vertex instead, which no
+    /// attribute here steps by (chunk.wgsl).
+    fn draw_meshes(&self, g: &GpuApi, pass: u32, draws: &[u32], which: u32, stride: u32, own: Option<u32>) -> bool {
         let b = blocks();
-        let layout = self.chunk.layouts[1];
         let mut any = false;
-        // The group bound now; no object is 0, so nothing is bound to start.
-        let mut bound = 0u32;
         for d in draws.as_chunks::<DRAW_WORDS>().0 {
             let (handle, box_cnt, first_box, uniform, pipeline) = (d[0], d[1], d[2], d[3], d[4]);
             if pipeline != which {
                 continue;
             }
             let buffer = if handle & ARENA_DRAW != 0 {
-                arena_group((handle & !ARENA_DRAW) as usize, layout)
+                arena_buffer((handle & !ARENA_DRAW) as usize)
             } else {
-                b.group(g, handle, layout)
+                b.buffer(handle)
             };
-            let Some(buffer) = buffer else { continue };
+            // A draw naming a buffer that is not there is a fault in the list
+            // and not a frame to get through. Skipping it drew nothing and
+            // said nothing, and the census counted it drawn either way — which
+            // is how a device came to draw no ground at all with every gauge
+            // reading normal. Saying so here is also what lets the census be
+            // taken from the list: every draw listed is a draw issued.
+            let Some(buffer) = buffer else {
+                panic!("a draw named a buffer nothing holds: handle {handle:#x}, pipeline {pipeline}")
+            };
             if let (Some(p), false) = (own, any) {
                 (g.set_pipeline)(pass, p);
                 (g.set_bind_group)(pass, 0, self.bind_group, &[]);
             }
             any = true;
-            // The buffer is one of the arena's groups, of which there are six,
-            // against the draws a frame issues, of which there are a thousand:
-            // a call out of the module for every one of them where the group
-            // has not changed is the cost of the draw twice over.
-            if buffer != bound {
-                (g.set_bind_group)(pass, 1, buffer, &[]);
-                bound = buffer;
-            }
-            (g.draw)(pass, box_cnt * BOX_VERTICES, 1, first_box * BOX_VERTICES, uniform);
+            // Both slots over the one buffer: the second reads the two words a
+            // coarse box does not have, which its layout puts back at offset
+            // zero so that one shader serves both formats (chunk.wgsl).
+            // The run's own start is the buffer's offset and not a first
+            // instance: an instance-stepped attribute is fetched at
+            // `first_instance + i`, so the two would add up. That leaves the
+            // first vertex free to carry the draw record's index, which the
+            // shader divides back out (chunk.wgsl).
+            let at = first_box * stride;
+            (g.set_vertex_buffer)(pass, 0, buffer, at, 0);
+            (g.set_vertex_buffer)(pass, 1, buffer, at, 0);
+            (g.draw)(pass, BOX_VERTICES, box_cnt, uniform * BOX_VERTICES, 0);
         }
         any
     }
@@ -974,7 +1014,9 @@ impl Renderer {
             let pass = self.shadow.begin(g, encoder, &mut stamps[SPAN_SHADOW]);
             (g.set_pipeline)(pass, self.chunk_depth.pipeline);
             (g.set_bind_group)(pass, 0, self.light_group, &[]);
-            self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, None);
+            self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, FINE_BOX_BYTES, None);
+            (g.set_pipeline)(pass, self.chunk_coarse_depth.pipeline);
+            self.draw_meshes(g, pass, draws, PIPELINE_CHUNK_COARSE, COARSE_BOX_BYTES, None);
             self.decor.draw_depth(g, pass, draws, b);
             self.skinned.draw_depth(g, pass, draws, b);
             (g.end)(pass);
@@ -986,7 +1028,9 @@ impl Renderer {
             let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
             (g.set_pipeline)(pass, self.chunk_prepass.pipeline);
             (g.set_bind_group)(pass, 0, self.bind_group, &[]);
-            self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, None);
+            self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, FINE_BOX_BYTES, None);
+            (g.set_pipeline)(pass, self.chunk_coarse_prepass.pipeline);
+            self.draw_meshes(g, pass, draws, PIPELINE_CHUNK_COARSE, COARSE_BOX_BYTES, None);
             self.decor.draw_prepass(g, pass, draws, b);
             self.skinned.draw_prepass(g, pass, draws, b);
             (g.end)(pass);
@@ -1000,7 +1044,9 @@ impl Renderer {
         (g.pass)(pass, encoder, &pass_desc(color, resolve, load::CLEAR, world.depth_view, load::CLEAR, 0.0, stamps[SPAN_WORLD].pass()));
         (g.set_pipeline)(pass, self.chunk.pipeline);
         (g.set_bind_group)(pass, 0, self.bind_group, &[]);
-        self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, None);
+        self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, FINE_BOX_BYTES, None);
+        (g.set_pipeline)(pass, self.chunk_coarse.pipeline);
+        self.draw_meshes(g, pass, draws, PIPELINE_CHUNK_COARSE, COARSE_BOX_BYTES, None);
         self.decor.draw(g, pass, draws, b);
         self.skinned.draw(g, pass, draws, b);
         // The sky and the stars after the opaque world, at the far plane, so
@@ -1017,8 +1063,8 @@ impl Renderer {
         self.puck.draw_beacon(g, pass, draws, uniforms);
         self.puck.draw_zone(g, pass, draws, uniforms, b);
         // What is blended goes last, over everything opaque.
-        self.draw_meshes(g, pass, draws, PIPELINE_GHOST_BOX, Some(self.ghost[0].pipeline));
-        self.draw_meshes(g, pass, draws, PIPELINE_GHOST_BOX_COPLANAR, Some(self.ghost[1].pipeline));
+        self.draw_meshes(g, pass, draws, PIPELINE_GHOST_BOX, FINE_BOX_BYTES, Some(self.ghost[0].pipeline));
+        self.draw_meshes(g, pass, draws, PIPELINE_GHOST_BOX_COPLANAR, FINE_BOX_BYTES, Some(self.ghost[1].pipeline));
         self.decor.draw_ghosts(g, pass, draws, b);
         self.debug.draw(g, pass, draws, uniforms, b);
         (g.end)(pass);
@@ -1101,13 +1147,16 @@ impl Renderer {
         }
     }
 
+    /// The frame's census, taken from the draw list. It is the draws and not
+    /// a list of them because `draw_meshes` stops on a draw it cannot issue,
+    /// so the two cannot differ.
     fn stat(&self, draws: &[u32], world: &Surface, badges: u32) -> FrameStat {
         let b = blocks();
         let mut triangles = 0u32;
         let mut census = [[0.0; 2]; PIPELINES as usize];
         for d in draws.as_chunks::<DRAW_WORDS>().0 {
             let tris = match d[4] {
-                PIPELINE_CHUNK | PIPELINE_GHOST_BOX | PIPELINE_GHOST_BOX_COPLANAR => d[1] * 12,
+                PIPELINE_CHUNK | PIPELINE_CHUNK_COARSE | PIPELINE_GHOST_BOX | PIPELINE_GHOST_BOX_COPLANAR => d[1] * 12,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
                 PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, index_cnt)| index_cnt / 3),
                 PIPELINE_PUCK_ZONE => 12 * d[1],

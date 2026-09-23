@@ -72,6 +72,31 @@ export async function acquire_device(lost: () => void): Promise<DeviceInfo | NoD
   if (!adapter) return { reason: "navigator.gpu is here but no adapter answered — the GPU is unavailable or blocklisted (chrome://gpu)" };
   const timestamps = adapter.features.has("timestamp-query");
   const d = await adapter.requestDevice({ requiredFeatures: timestamps ? ["timestamp-query"] : [] });
+  // What the adapter says it can do, on a device nobody can attach a debugger
+  // to. The terrain's vertex stage reads its boxes out of a storage buffer
+  // (pxl-render frame/shader/chunk.wgsl), which is the one thing here a device
+  // is allowed to refuse outright: OpenGL ES 3.1 hardware may offer none in
+  // that stage at all, and a WebGPU running in compatibility mode says so in
+  // these numbers rather than in an error.
+  // `?.` because this file is also loaded by a test, which has no Vite and so
+  // no `import.meta.env` at all.
+  if (import.meta.env?.DEV) {
+    const l = d.limits as unknown as Record<string, number>;
+    const of = (k: string) => `${k}=${l[k] ?? "-"}`;
+    const info = (adapter as unknown as { info?: Record<string, string> }).info;
+    console.info(
+      `[gpu] adapter ${info ? `${info.vendor ?? "?"}/${info.architecture ?? "?"}/${info.device ?? "?"}` : "?"} features [${[...d.features].join(",")}] ` +
+        [
+          "maxStorageBuffersPerShaderStage",
+          "maxStorageBuffersInVertexStage",
+          "maxStorageBufferBindingSize",
+          "maxBufferSize",
+          "minStorageBufferOffsetAlignment",
+          "minUniformBufferOffsetAlignment",
+          "maxBindGroups",
+        ].map(of).join(" "),
+    );
+  }
   d.lost.then((info) => {
     if (info.reason !== "destroyed") console.error(`[gpu] device lost: ${info.message}`);
     if (device !== d) return;
@@ -109,7 +134,7 @@ const TOPOLOGY: GPUPrimitiveTopology[] = ["triangle-list", "triangle-strip", "li
 const CULL: GPUCullMode[] = ["none", "back"];
 const COMPARE: GPUCompareFunction[] = ["always", "greater", "greater-equal", "less"];
 const STEP: GPUVertexStepMode[] = ["vertex", "instance"];
-const VERTEX_FORMAT: GPUVertexFormat[] = ["float32", "float32x2", "float32x3", "float32x4", "uint32x4", "uint32"];
+const VERTEX_FORMAT: GPUVertexFormat[] = ["float32", "float32x2", "float32x3", "float32x4", "uint32x4", "uint32", "uint32x2"];
 const NONE = 0xffffffff;
 
 /** Straight alpha over what is drawn. */
@@ -186,9 +211,12 @@ function layout_entries(words: U32Array, samples: u32): GPUBindGroupLayoutEntry[
   return out;
 }
 
+/** The vertex entry points a pipeline record can name, by record.VS and kin. */
+const VERTEX_ENTRY = ["vs", "vs_coarse"];
+
 /** A pipeline record's words (crates/pxl/web/render/src/shader.rs) as WebGPU's descriptor. */
 function pipeline_descriptor(words: U32Array, layouts: GPUBindGroupLayout[], module: GPUShaderModule, target: GPUTextureFormat, samples: u32): GPURenderPipelineDescriptor {
-  let at = 11;
+  let at = record.HEAD;
   const next = () => words[at++];
   const buffers: GPUVertexBufferLayout[] = Array.from({ length: next() }, () => {
     const arrayStride = next();
@@ -198,7 +226,7 @@ function pipeline_descriptor(words: U32Array, layouts: GPUBindGroupLayout[], mod
   });
   const descriptor: GPURenderPipelineDescriptor = {
     layout: gpu().createPipelineLayout({ bindGroupLayouts: layouts }),
-    vertex: { module, entryPoint: "vs", buffers },
+    vertex: { module, entryPoint: VERTEX_ENTRY[words[record.HEAD - 1]], buffers },
     primitive: { topology: TOPOLOGY[words[3]], cullMode: CULL[words[4]], frontFace: "ccw" },
     multisample: { count: samples },
   };
@@ -423,7 +451,29 @@ export function gpu_imports(memory: WebAssembly.Memory): WebAssembly.ModuleImpor
       for (const o of objects) (o as { destroy?: () => void } | undefined)?.destroy?.();
       objects.length = 0;
     },
-    gpu_buffer: (id: u32, size: u32, usage: u32) => put(id, gpu().createBuffer({ size, usage })),
+    // Wrapped in an out-of-memory scope because a refused buffer is not an
+    // exception: WebGPU hands back an object that is invalid, and nothing
+    // says so until something uses it — by which point the kernel has long
+    // since recorded the id as live. The mesh arena asks for six buffers of
+    // 36–40 MiB the moment the first mesh is written, and a device that
+    // refuses one draws no terrain at all while every gauge reads normal,
+    // since `arena_bytes` counts a group by its id and the draw that finds
+    // no bind group is skipped without a word (pxl-render gpu/arena.rs,
+    // gpu/renderer.rs).
+    gpu_buffer: (id: u32, size: u32, usage: u32) => {
+      const d = gpu();
+      // Guarded on what comes back rather than on what is there, because a
+      // check stands in its own device here and answers the calls a kernel
+      // makes, not the ones an instrument does.
+      d.pushErrorScope?.("out-of-memory");
+      put(id, d.createBuffer({ size, usage }));
+      const scope = d.popErrorScope?.() as Promise<GPUError | null> | undefined;
+      if (typeof scope?.then === "function") {
+        scope.then((e) => {
+          if (e) console.error(`[gpu] buffer ${id} of ${(size / 1048576).toFixed(1)}MB refused: ${e.message}`);
+        }).catch(() => {});
+      }
+    },
     gpu_texture: (id: u32, width: u32, height: u32, layers: u32, fmt: u32, mips: u32, samples: u32, usage: u32) =>
       put(id, gpu().createTexture({ size: { width, height, depthOrArrayLayers: layers }, format: texture_format(fmt), mipLevelCount: mips, sampleCount: samples, usage })),
     gpu_image_texture: (id: u32, image: u32) => {
