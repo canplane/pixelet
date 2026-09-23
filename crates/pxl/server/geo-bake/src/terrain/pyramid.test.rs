@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use pxl_spec::bake::constant::PAGE_CELL_SPAN;
 
 use super::*;
-use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
+use pxl_spec::bake::format::GroundChannelKey;
+use pxl_spec::bake::pack::with_channel;
 use pxl_spec::cell::cube::cube_types;
 
 const SPAN: usize = PAGE_CELL_SPAN as usize;
@@ -22,9 +23,10 @@ const MARK: [u8; 4] = [cube_types::land::bare, cube_types::land::green_deep, cub
 const OCEAN_MARK: u8 = cube_types::land::sea;
 
 fn uniform(land: u8, height: i16) -> Terrain {
-    let plane = |v: u8| std::borrow::Cow::from(vec![v; SPAN * SPAN]);
     Terrain {
-        ground: Ground::from_planes(GROUND_CH_KEYS.map(|k| plane(if k == GroundChannelKey::LAND { land } else { 0 }))),
+        ground: Ground {
+            cells: vec![with_channel(0, GroundChannelKey::LAND, land); SPAN * SPAN].into(),
+        },
         ele: vec![height; PADDED * PADDED].into(),
     }
 }

@@ -7,6 +7,12 @@
 //! SUMMARY, every word an f64, written where it stays: a read builds nothing,
 //! and the sorts a percentile needs run in a scratch lane taken once, so
 //! reading the instrument does not allocate from the heap it measures.
+//!
+//! A section is built as its record (ledger/block.rs) and handed to `put`,
+//! which is the only way anything reaches the block. Nothing here indexes a
+//! lane, so no section can be written in an order of its own and no field can
+//! be quietly left out — which is what this file used to allow, and did
+//! (2026-09-23).
 
 use crate::global::Global;
 use crate::host::now;
@@ -16,15 +22,12 @@ use crate::layer::billboard::frustum_budget::billboard_dropped;
 use crate::layer::poi::badge::badge_atlas;
 use crate::layer::poi::index::PoiIndexStats;
 use crate::layer::poi::placement::PoiPlaceStats;
+use crate::sched::ledger::block::{AtlasBlock, CountersBlock, FetchBlock, FramesBlock, PoiBlock, RecBlock, RetainBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
 use crate::sched::ledger::log::window_counters;
-use crate::sched::ledger::record::{
-    fixed_lane, ledger_frame_peak, ledger_frames, ledger_frames_since, ledger_recording_state, ledger_tasks_since, FrameSample, TaskRow, CENSUS_LEN, FRAME_LIMIT, GPU_SPANS, LEVELS, TASK_LIMIT,
-};
-use crate::sched::ledger::spec::{CATEGORY_NAMES, LIMITS, OUTCOME_NAMES, PHASE_NAMES, SPREAD, STEP, STEP_NAMES, SUMMARY, TASK_PHASE_NAMES, TASK_SUMMARY};
+use crate::sched::ledger::record::{fixed_lane, ledger_frame_peak, ledger_frames_since, ledger_recording_state, ledger_tasks_since, name_id, put, FrameSample, TaskRow, FRAME_LIMIT, TASK_LIMIT};
+use crate::sched::ledger::spec::{LIMITS, OUTCOME_NAMES, STEP_NAMES, SUMMARY, TASK_PHASE_NAMES};
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
 use crate::world::chunk::node::{chunk_retention, RETAIN_BUDGET_BYTES};
-
-use crate::sched::ledger::record::name_id;
 
 /// A gap this many display intervals long skipped a vsync.
 const MISSED_INTERVALS: f64 = 1.5;
@@ -43,11 +46,9 @@ pub fn overran(f: &FrameSample) -> bool {
 }
 
 const WORDS: usize = SUMMARY::WORDS as usize;
-const CATEGORIES: usize = CATEGORY_NAMES.len();
 const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
 const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
-const _: () = assert!(SUMMARY::tasks::WORDS as usize == CATEGORIES * TASK_SUMMARY::WORDS as usize);
 
 struct Block {
     words: [f64; WORDS],
@@ -65,12 +66,8 @@ fn block() -> &'static mut Block {
     })
 }
 
-fn at(section: u32, field: u32) -> usize {
-    (section + field) as usize
-}
-
-/// p50, p95 and max of `values` at `out[at..]`, zeros for none.
-fn spread(out: &mut [f64], scratch: &mut [f64], at: usize, values: impl Iterator<Item = f64>) {
+/// p50, p95 and max of `values`, zeros for none.
+fn spread(scratch: &mut [f64], values: impl Iterator<Item = f64>) -> Spread {
     let mut n = 0;
     for v in values.take(scratch.len()) {
         scratch[n] = v;
@@ -79,9 +76,11 @@ fn spread(out: &mut [f64], scratch: &mut [f64], at: usize, values: impl Iterator
     let sorted = &mut scratch[..n];
     sorted.sort_by(f64::total_cmp);
     let pct = |q: f64| if n == 0 { 0.0 } else { sorted[((n - 1) as f64 * q).floor() as usize] };
-    out[at + SPREAD::p50 as usize] = pct(0.5);
-    out[at + SPREAD::p95 as usize] = pct(0.95);
-    out[at + SPREAD::max as usize] = if n == 0 { 0.0 } else { sorted[n - 1] };
+    Spread {
+        p50: pct(0.5),
+        p95: pct(0.95),
+        max: if n == 0 { 0.0 } else { sorted[n - 1] },
+    }
 }
 
 /// The window since `now - window_ms` reduced into the block, and the block —
@@ -96,120 +95,98 @@ pub fn ledger_summarize(window_ms: f64) -> &'static [f64] {
     let since = now() - window_ms;
 
     let rec = ledger_recording_state();
-    let r = SUMMARY::rec::AT;
-    out[at(r, SUMMARY::rec::recording)] = rec.recording as u8 as f64;
-    out[at(r, SUMMARY::rec::elapsed_ms)] = rec.elapsed_ms;
-    out[at(r, SUMMARY::rec::tasks)] = rec.tasks as f64;
-    out[at(r, SUMMARY::rec::frames)] = rec.frames as f64;
-    out[at(r, SUMMARY::rec::truncated)] = rec.truncated as u8 as f64;
+    put(
+        out,
+        SUMMARY::rec::AT,
+        &RecBlock {
+            recording: rec.recording as u8 as f64,
+            elapsed_ms: rec.elapsed_ms,
+            tasks: rec.tasks as f64,
+            frames: rec.frames as f64,
+            truncated: rec.truncated as u8 as f64,
+        },
+    );
 
-    frames(out, scratch, ledger_frames_since(since));
-    tasks(out, scratch, ledger_tasks_since(since));
+    put(out, SUMMARY::frames::AT, &frames(scratch, ledger_frames_since(since)));
+    put(out, SUMMARY::tasks::AT, &tasks(scratch, ledger_tasks_since(since)));
+    put(out, SUMMARY::peak::AT, &ledger_frame_peak());
     side(out);
     out
 }
 
-fn frames(out: &mut [f64], scratch: &mut [f64], frames: &[FrameSample]) {
-    use crate::sched::ledger::spec::FRAME;
-    use SUMMARY::frames as F;
-    let (Some(first), Some(last)) = (frames.first(), frames.last()) else { return };
-    let a = F::AT;
+fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
+    let (Some(first), Some(last)) = (frames.first(), frames.last()) else {
+        return FramesBlock::default();
+    };
     let sum = |pick: &dyn Fn(&FrameSample) -> f64| frames.iter().map(pick).sum::<f64>();
     let seconds = ((last.t - first.t) / 1000.0).max(1e-3);
     let moving = || frames.iter().filter(|f| f.settled == 0.0);
-    let work = (sum(&|f| f.work.scans), sum(&|f| f.work.bakes));
+    let (scans, bakes) = (sum(&|f| f.work.scans), sum(&|f| f.work.bakes));
     let backlog = || frames.iter().filter(|f| f.lod.pending > 0.0);
     let backlog_s = (backlog().map(|f| f.dt_ms).sum::<f64>() / 1000.0).max(1e-3);
-    let tick_ms = sum(&|f| f.tick_ms);
-
-    out[at(a, F::present)] = 1.0;
-    out[at(a, F::n)] = frames.len() as f64;
-    out[at(a, F::seconds)] = seconds;
-    out[at(a, F::moving)] = moving().count() as f64;
-    out[at(a, F::missed)] = moving().filter(|f| missed(f)).count() as f64;
-    out[at(a, F::overran)] = frames.iter().filter(|f| overran(f)).count() as f64;
-    spread(out, scratch, at(a, F::dt), moving().map(|f| f.dt_ms));
-    spread(out, scratch, at(a, F::task), frames.iter().map(|f| f.task_ms));
-    spread(out, scratch, at(a, F::offthread), frames.iter().map(|f| (f.dt_ms - f.task_ms).max(0.0)));
-    spread(out, scratch, at(a, F::gpu), frames.iter().map(|f| f.gpu.ms));
-    spread(out, scratch, at(a, F::sched), frames.iter().map(|f| f.sched_ms));
-    spread(out, scratch, at(a, F::tick), frames.iter().map(|f| f.tick_ms));
-    for k in 0..PHASE_NAMES.len() {
-        spread(out, scratch, at(a, F::phases) + k * SPREAD::WORDS as usize, frames.iter().map(|f| f.phases[k]));
-    }
-    // A span the frame did not run reads 0 and is left out, so the air's
-    // tables, drawn when the sun has moved, are what they cost when they are.
-    for k in 0..GPU_SPANS {
-        spread(
-            out,
-            scratch,
-            at(a, F::gpu_spans) + k * SPREAD::WORDS as usize,
-            frames.iter().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0),
-        );
-    }
-    out[at(a, F::work_scans)] = work.0;
-    out[at(a, F::work_bakes)] = work.1;
-    out[at(a, F::per_s_scans)] = work.0 / seconds;
-    out[at(a, F::per_s_bakes)] = work.1 / seconds;
-    out[at(a, F::backlog_s)] = backlog_s;
-    out[at(a, F::backlog_per_s_scans)] = backlog().map(|f| f.work.scans).sum::<f64>() / backlog_s;
-    out[at(a, F::backlog_per_s_bakes)] = backlog().map(|f| f.work.bakes).sum::<f64>() / backlog_s;
-    out[at(a, F::tick_per_bake)] = if work.1 > 0.0 { tick_ms / work.1 } else { f64::NAN };
-    out[at(a, F::mounts_added)] = sum(&|f| f.mounts.added);
-    out[at(a, F::mounts_removed)] = sum(&|f| f.mounts.removed);
-    out[at(a, F::used_delta_mb)] = last.heap.used_mb - first.heap.used_mb;
     let n = frames.len() as f64;
-    for k in 0..CENSUS_LEN {
-        out[at(a, F::census) + 2 * k] = sum(&|f| f.gpu.census[k][0]) / n;
-        out[at(a, F::census) + 2 * k + 1] = sum(&|f| f.gpu.census[k][1]) / n;
+
+    FramesBlock {
+        present: 1.0,
+        n,
+        seconds,
+        moving: moving().count() as f64,
+        missed: moving().filter(|f| missed(f)).count() as f64,
+        overran: frames.iter().filter(|f| overran(f)).count() as f64,
+        dt: spread(scratch, moving().map(|f| f.dt_ms)),
+        task: spread(scratch, frames.iter().map(|f| f.task_ms)),
+        offthread: spread(scratch, frames.iter().map(|f| (f.dt_ms - f.task_ms).max(0.0))),
+        gpu: spread(scratch, frames.iter().map(|f| f.gpu.ms)),
+        sched: spread(scratch, frames.iter().map(|f| f.sched_ms)),
+        chunks: spread(scratch, frames.iter().map(|f| f.chunks_ms)),
+        phases: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.phases[k]))),
+        // A span the frame did not run reads 0 and is left out, so the air's
+        // tables, drawn when the sun has moved, are what they cost when they
+        // are.
+        gpu_spans: core::array::from_fn(|k| spread(scratch, frames.iter().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0))),
+        work_scans: scans,
+        work_bakes: bakes,
+        per_s_scans: scans / seconds,
+        per_s_bakes: bakes / seconds,
+        backlog_s,
+        backlog_per_s_scans: backlog().map(|f| f.work.scans).sum::<f64>() / backlog_s,
+        backlog_per_s_bakes: backlog().map(|f| f.work.bakes).sum::<f64>() / backlog_s,
+        chunks_per_bake: if bakes > 0.0 { sum(&|f| f.chunks_ms) / bakes } else { f64::NAN },
+        mounts_added: sum(&|f| f.mounts.added),
+        mounts_removed: sum(&|f| f.mounts.removed),
+        used_delta_mb: last.heap.used_mb - first.heap.used_mb,
+        census: core::array::from_fn(|k| [sum(&|f| f.gpu.census[k][0]) / n, sum(&|f| f.gpu.census[k][1]) / n]),
+        level_tris: core::array::from_fn(|k| sum(&|f| f.gpu.level_tris[k]) / n),
+        last: *last,
     }
-    for k in 0..LEVELS {
-        out[at(a, F::level_tris) + k] = sum(&|f| f.gpu.level_tris[k]) / n;
-    }
-    const _: () = assert!(F::last + FRAME::WORDS <= F::WORDS, "the last frame runs past the summary's frames block");
-    // SAFETY: a FrameSample is FRAME::WORDS plain f64s laid end to end
-    // (ledger.rs asserts the layout).
-    let words = unsafe { core::slice::from_raw_parts(last as *const FrameSample as *const f64, core::mem::size_of::<FrameSample>() / 8) };
-    out[at(a, F::last)..at(a, F::last) + words.len()].copy_from_slice(words);
 }
 
-fn tasks(out: &mut [f64], scratch: &mut [f64], tasks: &[TaskRow]) {
-    use TASK_SUMMARY as T;
+fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
     let (ok, aborted, error) = (name_id(OUTCOME_NAMES, "ok"), name_id(OUTCOME_NAMES, "aborted"), name_id(OUTCOME_NAMES, "error"));
-    for c in 0..CATEGORIES {
-        let a = SUMMARY::tasks::AT + SUMMARY::tasks::slots + c as u32 * T::WORDS;
+    let mut block = TasksBlock::default();
+    for (c, slot) in block.slots.iter_mut().enumerate() {
         let mine = || tasks.iter().filter(move |r| r.category == c as f64);
         let n = mine().count();
         if n == 0 {
             continue;
         }
-        out[at(a, T::n)] = n as f64;
-        out[at(a, T::ok)] = mine().filter(|r| r.outcome == ok).count() as f64;
-        out[at(a, T::aborted)] = mine().filter(|r| r.outcome == aborted).count() as f64;
-        out[at(a, T::error)] = mine().filter(|r| r.outcome == error).count() as f64;
-        spread(out, scratch, at(a, T::lat), mine().filter(|r| r.outcome == ok).map(|r| r.end_ms - r.enqueue_ms));
 
         // Failures by (reason, status), commonest first: a short list, counted
         // on the stack.
-        let mut reasons = [(0.0f64, 0.0f64, 0.0f64); 16];
+        let mut counted = [(0.0f64, 0.0f64, 0.0f64); 16];
         let mut kinds = 0;
         for r in mine().filter(|r| r.outcome == error) {
-            match reasons[..kinds].iter().position(|x| x.0 == r.fail && x.1 == r.status) {
-                Some(i) => reasons[i].2 += 1.0,
-                None if kinds < reasons.len() => {
-                    reasons[kinds] = (r.fail, r.status, 1.0);
+            match counted[..kinds].iter().position(|x| x.0 == r.fail && x.1 == r.status) {
+                Some(i) => counted[i].2 += 1.0,
+                None if kinds < counted.len() => {
+                    counted[kinds] = (r.fail, r.status, 1.0);
                     kinds += 1;
                 }
                 None => {}
             }
         }
-        reasons[..kinds].sort_by(|x, y| y.2.total_cmp(&x.2));
+        counted[..kinds].sort_by(|x, y| y.2.total_cmp(&x.2));
         let shown = kinds.min(REASONS);
-        out[at(a, T::reason_count)] = shown as f64;
-        for (i, (fail, status, count)) in reasons[..shown].iter().enumerate() {
-            let w = at(a, T::reasons) + 3 * i;
-            (out[w], out[w + 1], out[w + 2]) = (*fail, *status, *count);
-        }
 
         let mut sums = [0.0f64; TASK_PHASES];
         let mut seen = [false; TASK_PHASES];
@@ -224,136 +201,138 @@ fn tasks(out: &mut [f64], scratch: &mut [f64], tasks: &[TaskRow]) {
                 }
             }
         }
-        out[at(a, T::phase_n)] = phase_n as f64;
-        for p in 0..TASK_PHASES {
-            out[at(a, T::phase_mean) + p] = if seen[p] { sums[p] / phase_n as f64 } else { f64::NAN };
-        }
+
+        *slot = TaskBlock {
+            n: n as f64,
+            ok: mine().filter(|r| r.outcome == ok).count() as f64,
+            aborted: mine().filter(|r| r.outcome == aborted).count() as f64,
+            error: mine().filter(|r| r.outcome == error).count() as f64,
+            lat: spread(scratch, mine().filter(|r| r.outcome == ok).map(|r| r.end_ms - r.enqueue_ms)),
+            reason_count: shown as f64,
+            reasons: core::array::from_fn(|i| if i < shown { [counted[i].0, counted[i].1, counted[i].2] } else { [0.0; 3] }),
+            phase_n: phase_n as f64,
+            phase_mean: core::array::from_fn(|p| if seen[p] { sums[p] / phase_n as f64 } else { f64::NAN }),
+        };
     }
+    block
 }
 
 /// What the report prints beside the rings: the side counters, the badge
-/// sheet, what chunks keep, the fetch queue, the POI placement, the window's
-/// peak and the steps.
+/// sheet, what chunks keep, the fetch queue, the POI placement and the steps.
 fn side(out: &mut [f64]) {
     let c = window_counters();
-    let a = SUMMARY::counters::AT as usize;
-    let counters = [
-        c.faces_kept,
-        c.faces_possible,
-        c.runs_culled,
-        c.runs_total,
-        c.coarse_boxes,
-        c.coarse_low_fill,
-        c.bands_reused,
-        c.bands_allocated,
-        c.built_direct,
-        c.built_scans,
-        c.built_bakes,
-        c.built_starved,
-        c.decor_dropped,
-        c.badge_metrics,
-        c.badge_builds,
-        c.badge_ms,
-        c.place_runs,
-        c.atlas_repacks,
-        c.atlas_uploads,
-        c.index_rebuilds,
-    ];
-    out[a..a + counters.len()].copy_from_slice(&counters);
+    put(
+        out,
+        SUMMARY::counters::AT,
+        &CountersBlock {
+            faces_kept: c.faces_kept,
+            faces_possible: c.faces_possible,
+            runs_culled: c.runs_culled,
+            runs_total: c.runs_total,
+            coarse_boxes: c.coarse_boxes,
+            coarse_low_fill: c.coarse_low_fill,
+            bands_reused: c.bands_reused,
+            bands_allocated: c.bands_allocated,
+            built_direct: c.built_direct,
+            built_scans: c.built_scans,
+            built_bakes: c.built_bakes,
+            built_starved: c.built_starved,
+            decor_dropped: c.decor_dropped,
+            badge_metrics: c.badge_metrics,
+            badge_builds: c.badge_builds,
+            badge_ms: c.badge_ms,
+            place_runs: c.place_runs,
+            atlas_repacks: c.atlas_repacks,
+            atlas_uploads: c.atlas_uploads,
+            index_rebuilds: c.index_rebuilds,
+        },
+    );
 
     let atlas = badge_atlas().stats();
-    let a = SUMMARY::atlas::AT as usize;
-    out[a..a + 4].copy_from_slice(&[atlas.size as f64, atlas.entries as f64, atlas.shelves as f64, atlas.used_px as f64]);
+    put(
+        out,
+        SUMMARY::atlas::AT,
+        &AtlasBlock {
+            size: atlas.size as f64,
+            entries: atlas.entries as f64,
+            shelves: atlas.shelves as f64,
+            used_px: atlas.used_px as f64,
+        },
+    );
 
     let retain = chunk_retention(kernel().sched.builder_run_sets());
     let census = kernel().sched.census;
-    let a = SUMMARY::retain::AT as usize;
-    out[a..a + 9].copy_from_slice(&[
-        retain.nodes as f64,
-        retain.run_sets as f64,
-        retain.run_set_mb as f64,
-        retain.tiers as f64,
-        retain.decor_steps as f64,
-        retain.decor_instances as f64,
-        census.retained_on,
-        census.retained_off,
-        RETAIN_BUDGET_BYTES(),
-    ]);
+    put(
+        out,
+        SUMMARY::retain::AT,
+        &RetainBlock {
+            nodes: retain.nodes as f64,
+            run_sets: retain.run_sets as f64,
+            run_set_mb: retain.run_set_mb as f64,
+            tiers: retain.tiers as f64,
+            decor_steps: retain.decor_steps as f64,
+            decor_instances: retain.decor_instances as f64,
+            on_bytes: census.retained_on,
+            off_bytes: census.retained_off,
+            budget_bytes: RETAIN_BUDGET_BYTES(),
+        },
+    );
 
     let counts = fetch_counts();
-    let a = SUMMARY::fetch::AT as usize;
-    out[a..a + 3].copy_from_slice(&[counts.queued as f64, counts.running as f64, fetch_credits() as f64]);
+    put(
+        out,
+        SUMMARY::fetch::AT,
+        &FetchBlock {
+            queued: counts.queued as f64,
+            running: counts.running as f64,
+            credits: fetch_credits() as f64,
+        },
+    );
 
-    // POI is off until its index lives with its pages (issue/BACKLOG.md), so
-    // these read zero rather than being left out: the report keeps their place.
     let (place, index) = (PoiPlaceStats::default(), PoiIndexStats::default());
-    let a = SUMMARY::poi::AT as usize;
-    out[a..a + 23].copy_from_slice(&[
-        0.0,
-        billboard_dropped() as f64,
-        place.ms,
-        place.hits as f64,
-        place.candidates as f64,
-        place.kept as f64,
-        place.absorbed as f64,
-        place.biggest as f64,
-        place.max_ms,
-        place.max_hits as f64,
-        place.wait_ms,
-        place.frames as f64,
-        place.max_wait_ms,
-        place.max_frames as f64,
-        place.sync_ms,
-        place.max_sync_ms,
-        index.indexed as f64,
-        index.sweeping as f64,
-        index.dropped as f64,
-        index.wait_ms,
-        index.frames as f64,
-        index.max_wait_ms,
-        index.max_frames as f64,
-    ]);
-
-    let a = SUMMARY::peak::AT as usize;
-    if !ledger_frames().is_empty() {
-        let p = ledger_frame_peak();
-        out[a..a + SUMMARY::peak::WORDS as usize].copy_from_slice(&[
-            1.0,
-            p.dt_ms,
-            p.sched_ms,
-            p.tick_ms,
-            p.gpu_ms,
-            p.fine_boxes,
-            p.coarse_boxes,
-            p.draw_calls,
-            p.triangles,
-            p.q_terrain,
-            p.q_poi,
-            p.chunks,
-            p.in_frustum,
-            p.pending,
-            p.settling,
-            p.blend_active,
-            p.pressure,
-            p.offscreen_pending,
-            p.oldest_release_ms,
-            p.oldest_visible_ms,
-        ]);
-    }
+    put(
+        out,
+        SUMMARY::poi::AT,
+        &PoiBlock {
+            badge_count: 0.0,
+            dropped: billboard_dropped() as f64,
+            place_ms: place.ms,
+            place_hits: place.hits as f64,
+            place_candidates: place.candidates as f64,
+            place_kept: place.kept as f64,
+            place_absorbed: place.absorbed as f64,
+            place_biggest: place.biggest as f64,
+            place_max_ms: place.max_ms,
+            place_max_hits: place.max_hits as f64,
+            place_wait_ms: place.wait_ms,
+            place_frames: place.frames as f64,
+            place_max_wait_ms: place.max_wait_ms,
+            place_max_frames: place.max_frames as f64,
+            place_sync_ms: place.sync_ms,
+            place_max_sync_ms: place.max_sync_ms,
+            index_indexed: index.indexed as f64,
+            index_sweeping: index.sweeping as f64,
+            index_dropped: index.dropped as f64,
+            index_wait_ms: index.wait_ms,
+            index_frames: index.frames as f64,
+            index_max_wait_ms: index.max_wait_ms,
+            index_max_frames: index.max_frames as f64,
+        },
+    );
 
     // Per step, so a phase that costs more than its steps should does not hide
     // which step is not yielding: a cooperative scheduler is only as
     // cooperative as its longest step.
-    let a = SUMMARY::steps::AT as usize;
-    let mut n = 0;
+    let mut steps = StepsBlock::default();
     for s in tick_step_stats().iter().filter(|s| s.count > 0).take(STEP_SLOTS) {
-        let w = a + SUMMARY::steps::slots as usize + n * STEP::WORDS as usize;
-        out[w + STEP::phase as usize] = s.phase as f64;
-        out[w + STEP::name as usize] = name_id(STEP_NAMES, s.name);
-        out[w + STEP::ms as usize] = s.ms;
-        out[w + STEP::count as usize] = s.count as f64;
-        out[w + STEP::max_ms as usize] = s.max_ms;
-        n += 1;
+        steps.slots[steps.count as usize] = StepBlock {
+            phase: s.phase as f64,
+            name: name_id(STEP_NAMES, s.name),
+            ms: s.ms,
+            count: s.count as f64,
+            max_ms: s.max_ms,
+        };
+        steps.count += 1.0;
     }
-    out[a + SUMMARY::steps::count as usize] = n as f64;
+    put(out, SUMMARY::steps::AT, &steps);
 }

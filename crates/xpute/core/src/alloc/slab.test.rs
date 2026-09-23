@@ -45,6 +45,7 @@ macro_rules! range {
 range!(Slots, SLOTS_AT);
 range!(Returned, RETURNED_AT);
 range!(Whole, WHOLE_AT);
+range!(Held, HELD_AT);
 
 fn small() -> Layout {
     Layout::from_size_align(24, 8).unwrap()
@@ -144,4 +145,64 @@ fn a_request_of_a_page_or_more_is_the_page_allocator_s_own() {
         unsafe { heap.dealloc(p, layout) };
         assert_eq!(heap.pages().live(), before, "it did not go back whole");
     }
+}
+
+/// What the two holdings say about each other, whatever the traffic: a slot
+/// is inside a run, a run is borrowed from the pages, and both come back to
+/// nothing. The numbers are the only reading of how much of the heap anything
+/// actually holds — the page level counts a carved run whole — so what is
+/// checked is the relation and not a value.
+#[test]
+fn what_is_out_in_slots_is_inside_the_runs_it_is_carved_from() {
+    let heap: SlabMalloc<Held> = SlabMalloc::new();
+    let sizes = [16usize, 24, 64, 300, 1000, PAGE, PAGE * 3];
+    let mut live: Vec<(*mut u8, Layout)> = Vec::new();
+
+    let check = |heap: &SlabMalloc<Held>| {
+        assert!(heap.slot_live() <= heap.run_live(), "slots out past the runs they are carved from");
+        assert!(heap.run_live() <= heap.pages().live(), "runs borrowed past what the pages handed out");
+        assert!(heap.pages().live() <= heap.range_bytes(), "the pages handed out past the range");
+    };
+
+    for round in 0..4 {
+        for (k, size) in sizes.iter().enumerate() {
+            let layout = Layout::from_size_align(*size, 8).unwrap();
+            // SAFETY: the range is the test's own, here and below.
+            let p = unsafe { heap.alloc(layout) };
+            assert!(!p.is_null(), "the range ran out at {size} on round {round}");
+            live.push((p, layout));
+            check(&heap);
+            // Every other one back at once, so runs are partly full rather
+            // than filled and emptied in step.
+            if k % 2 == 1 {
+                let (q, l) = live.remove(0);
+                unsafe { heap.dealloc(q, l) };
+                check(&heap);
+            }
+        }
+    }
+
+    for (p, l) in live.drain(..) {
+        unsafe { heap.dealloc(p, l) };
+        check(&heap);
+    }
+    assert_eq!(heap.slot_live(), 0, "a slot was left counted after its free");
+    assert_eq!(heap.run_live(), 0, "a run was left counted after it went back");
+    assert_eq!(heap.pages().live(), 0, "the pages were left holding something");
+}
+
+/// A request of a page or more is never carved, so it moves what the pages
+/// have handed out and neither of the slab's own holdings.
+#[test]
+fn a_whole_page_request_is_no_run_and_no_slot() {
+    let heap: SlabMalloc<Whole> = SlabMalloc::new();
+    let layout = Layout::from_size_align(PAGE * 2, 8).unwrap();
+    let (run, slot) = (heap.run_live(), heap.slot_live());
+    // SAFETY: the range is the test's own.
+    let p = unsafe { heap.alloc(layout) };
+    assert!(!p.is_null());
+    assert_eq!((heap.run_live(), heap.slot_live()), (run, slot), "a whole-page request was counted as carving");
+    assert!(heap.pages().live() >= run + PAGE * 2, "it did not come from the pages");
+    // SAFETY: the block this test was just given, at its own layout.
+    unsafe { heap.dealloc(p, layout) };
 }

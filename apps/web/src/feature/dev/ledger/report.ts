@@ -13,11 +13,10 @@
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
 
-import { fieldText, type Frame, GROUPS, groupText, n1, tris } from "./lane.ts";
+import { fieldText, type Frame, GROUPS, groupText, n1, pct, tris } from "./lane.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
 import type { LedgerReport, Spread, TaskRecord, TaskSummary } from "./view.ts";
 
-const share = (part: number, whole: number) => (whole > 0 ? round((part / whole) * 100) : 0);
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 const spread = (s: Spread) => `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 
@@ -84,7 +83,7 @@ export function frameLine(s: Frame, prev: Frame | null): string {
   const d = prev === null ? "" : `  Δbuf ${signed(s.buffers - prev.buffers)} Δbuf_mb ${signed(s.buffer_mb - prev.buffer_mb)} Δheap ${signed(s.heap_used_mb - prev.heap_used_mb)}MB`;
   return `[${n1(s.t).padStart(9)}] dt ${n1(s.dt_ms)} = task ${n1(s.task_ms)} + offthread ${n1(s.dt_ms - s.task_ms)}  gpu ${n1(s.gpu_ms)}  sched ${n1(s.sched_ms)}/${n1(s.budget_ms)}${
     s.settled ? " (still)" : ""
-  } (tick ${n1(s.tick_ms)})  draws ${s.draw_calls} tris ${
+  } (chunks ${n1(s.chunks_ms)})  draws ${s.draw_calls} tris ${
     tris(s.triangles)
   }  buf ${s.buffers}  heap ${s.heap_used_mb}MB  mount +${s.mounts_added}/-${s.mounts_removed} layouts ${s.mounts_layouts}${d}`;
 }
@@ -107,7 +106,7 @@ function windowSection(r: LedgerReport): string[] {
 
   return [
     `frames n=${f.n}  over ${n1(f.seconds)}s  moving ${f.moving}  still ${f.n - f.moving}   display ${n1(last.frame_ms)} ms`,
-    `  dt      ${spread(f.dt)} ms   missed ${f.missed} (${share(f.missed, f.moving)}% of moving frames)`,
+    `  dt      ${spread(f.dt)} ms   missed ${f.missed} (${pct(f.missed, f.moving)}% of moving frames)`,
     `  task    p50 ${n1(f.task.p50)}  p95 ${n1(f.task.p95)} ms   (the kernel's turn: tick, draw, submit)`,
     `  offthd  p50 ${n1(f.offthread.p50)}  p95 ${n1(f.offthread.p95)} ms   (vsync/compositor/GPU/GC and the shell's glue)`,
     `  gpu     ${spread(f.gpu)} ms${last.gpu_ms === 0 ? "   (no timestamps: no renderer yet, or the device keeps none)" : ""}`,
@@ -115,7 +114,7 @@ function windowSection(r: LedgerReport): string[] {
     `  sched   p95 ${n1(f.sched.p95)}  max ${n1(f.sched.max)} ms   overran ${f.overran}   budget ${n1(last.budget_ms)}${last.settled ? " (still)" : ""}   phase p95 ${
       f.phases.map((p) => `${p.name} ${n1(p.spread.p95)}`).join("  ")
     }`,
-    `  cpu     tick p95 ${n1(f.tick.p95)} ms   (the kernel's tick inside the visible phase)`,
+    `  cpu     chunks p95 ${n1(f.chunks.p95)} ms   (the chunk scheduler's pass inside the visible phase)`,
     // Per step, so a phase that costs more than its steps should does not hide
     // which step is not yielding: a cooperative scheduler is only as
     // cooperative as its longest step.
@@ -123,15 +122,23 @@ function windowSection(r: LedgerReport): string[] {
     `  by tag  ${f.census.map((t) => `${t.tag} ${round(t.draws)}/${tris(t.tris)}`).join("  ")}   (draws/tris a frame, mean)`,
     `  by lvl  ${levels || "-"}   (terrain tris a frame, mean)`,
     `  build   ${c.built_direct} direct  ${c.built_scans} scans  ${c.built_bakes} bakes  ${c.built_starved} refused a block${c.decor_dropped > 0 ? `   DECOR DROPPED ${c.decor_dropped}` : ""}`,
-    `  per     tick/bake ${f.tick_per_bake === null ? "-" : n1(f.tick_per_bake)}ms   (workload-normalised; comparable across sessions)`,
+    `  per     chunks/bake ${f.chunks_per_bake === null ? "-" : n1(f.chunks_per_bake)}ms   (workload-normalised; comparable across sessions)`,
     `  rate    ${n1(f.perS[1])} bakes/s  ${n1(f.perS[0])} scans/s   while backlog ${n1(f.backlogPerS[1])} bakes/s  ${n1(f.backlogPerS[0])} scans/s over ${n1(f.backlog_s)}s`,
-    `  faces   kept ${c.faces_kept} / ${c.faces_possible} (${share(c.faces_kept, c.faces_possible)}%)  runs culled ${c.runs_culled}/${c.runs_total}`,
-    `  coarse  boxes ${c.coarse_boxes}  low fill ${c.coarse_low_fill} (${share(c.coarse_low_fill, c.coarse_boxes)}%; a cull at this fill was measured and did not pay)`,
-    `  bands   reused ${c.bands_reused} / ${bands} (${share(c.bands_reused, bands)}%)  ~1.31MB each; a miss borrows from the heap`,
+    `  faces   kept ${c.faces_kept} / ${c.faces_possible} (${pct(c.faces_kept, c.faces_possible)}%)  runs culled ${c.runs_culled}/${c.runs_total}`,
+    `  coarse  boxes ${c.coarse_boxes}  low fill ${c.coarse_low_fill} (${pct(c.coarse_low_fill, c.coarse_boxes)}%; a cull at this fill was measured and did not pay)`,
+    `  bands   reused ${c.bands_reused} / ${bands} (${pct(c.bands_reused, bands)}%)  ~1.31MB each; a miss borrows from the heap`,
     `  mounts  window +${f.mounts[0]}/-${f.mounts[1]}   heap ${signed(f.used_delta_mb)}MB`,
     `  waits   releases ${last.lod_offscreen_pending} pending, oldest ${round(last.lod_oldest_release_ms)} ms${starved(last.lod_oldest_release_ms)}   on-screen oldest ${
       round(last.lod_oldest_visible_ms)
     } ms${starved(last.lod_oldest_visible_ms)}`,
+    // The lanes themselves are in the last-frame section; what is here is what
+    // no lane says. `live` counts a carved run whole, so it is what the heap
+    // has committed and not what anything holds — a run that cannot go back
+    // until its last slot is freed is the one way this fills with nothing in
+    // it.
+    `  heap    live ${pct(last.heap_live_mb, last.heap_range_mb)}% of the range   ${n1(last.heap_live_mb - last.heap_run_mb)}MB of it whole pages   runs hold ${
+      pct(last.heap_slot_mb, last.heap_run_mb)
+    }% of themselves, the other ${n1(last.heap_run_mb - last.heap_slot_mb)}MB what the carving costs`,
   ];
 }
 

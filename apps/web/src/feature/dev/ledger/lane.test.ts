@@ -22,7 +22,7 @@ Deno.test("frameAt - reads each lane at its word", () => {
   const words = Float64Array.from({ length: FRAME.WORDS }, (_, k) => k);
   const f = frameAt(words, 0);
   assertEquals(f.gpu_ms, FRAME.gpu_ms);
-  assertEquals(f.level_pages[2], FRAME.level_pages + 2);
+  assertEquals(f.pages_by_level[2], FRAME.pages_by_level + 2);
   assertEquals(f.census[1], [FRAME.census + 2, FRAME.census + 3]);
 });
 

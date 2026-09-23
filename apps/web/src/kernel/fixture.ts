@@ -14,7 +14,9 @@
  * loudly rather than silently passing on a fixture nobody reads.
  */
 
-import type { I16Array, U8Array } from "@xpute/core/abi/array.ts";
+import type { I16Array, U16Array, U8Array } from "@xpute/core/abi/array.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
+import { ground_pack } from "@/catalog/cell/cube_type.spec.ts";
 import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 
 /**
@@ -26,11 +28,24 @@ import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 export const PAGE_CELL_SPAN = 512;
 export const ELE_PADDED_SPAN = 36;
 
-/** `[ele, [land, water, transport, structure]]` — pxl-spec's GROUND_CH_KEYS order. */
-export function encode_terrain(ele: I16Array, ground: { land: U8Array; water: U8Array; structure: U8Array; transport: U8Array }): U8Array {
-  return encoder.encode(
-    new TreeView().branch((__) => __.i16_array(ele).branch((__) => __.u8_array(ground.land).u8_array(ground.water).u8_array(ground.transport).u8_array(ground.structure))),
-  );
+/** A cell's four channels in one word, as pxl-spec's bake/pack.rs reads it:
+ * each channel a dense index into its own table (`ground_pack`), which the
+ * catalog generates beside the numbers it maps. */
+export function pack_ground_cell(numbers: { land: u32; water: u32; structure: u32; transport: u32 }): u32 {
+  const { channels, index, bits, shift } = ground_pack;
+  let cell = 0;
+  for (let f = 0; f < channels.length; f++) {
+    const number = numbers[channels[f]];
+    const mask = (1 << bits[f]) - 1;
+    cell = (cell & ~(mask << shift[f])) | (index[f][number] << shift[f]);
+  }
+  return cell >>> 0;
+}
+
+/** `[ele, cells]` — the terrain page as the bake writes it and the client
+ * reads it, a word a cell. */
+export function encode_terrain(ele: I16Array, cells: U16Array): U8Array {
+  return encoder.encode(new TreeView().branch((__) => __.i16_array(ele).u16_array(cells)));
 }
 
 /**

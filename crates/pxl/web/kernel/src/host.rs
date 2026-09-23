@@ -120,88 +120,49 @@ pub fn wall_now() -> f64 {
     local_time().unix_ms
 }
 
-static HEAP_USED: Global<fn() -> usize> = Global::new();
-
-fn no_heap() -> usize {
-    0
+/// What the module's heap is, at one moment (xpute-core alloc/slab.rs).
+///
+/// One reading rather than a gauge apiece: they are one allocator's state and
+/// a caller comparing two of them is comparing one moment, not two. `live` is
+/// what the page level has handed out with a carved run counted whole, so it
+/// is what the heap has committed and not what anything holds — `slot` is
+/// that, and `run` less `slot` is what the carving costs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HeapStat {
+    /// The bytes of the range the heap was given.
+    pub range: usize,
+    /// The bytes it has ever reached into: a high-water mark, not a holding.
+    pub used: usize,
+    /// Bytes the page level has handed out and not taken back.
+    pub live: usize,
+    /// Of `live`, what was borrowed to be carved into slots.
+    pub run: usize,
+    /// Of `run`, what is out in slots, each at its class's size.
+    pub slot: usize,
+    /// The largest block on a free list. Past the tree's current root the
+    /// range is untouched rather than listed, so this is not the free space.
+    pub largest_free: usize,
+    /// Blocks taken back. It moves when, and only when, a request refused
+    /// before might now be served, which is what makes it a signal and not a
+    /// gauge.
+    pub releases: u32,
+    /// Requests answered with nothing: the one way this memory is full, since
+    /// the fixed ranges cannot be.
+    pub refusals: u32,
 }
 
-/// Installs the module's allocator's reading: the bytes its heap reaches to.
-pub fn set_heap_used(used: fn() -> usize) {
-    HEAP_USED.set(used);
+static HEAP: Global<fn() -> HeapStat> = Global::new();
+
+fn no_heap() -> HeapStat {
+    HeapStat::default()
 }
 
-/// The bytes the module's heap reaches to; 0 where there is none.
-pub fn heap_used() -> usize {
-    (HEAP_USED.get(|| no_heap))()
+/// Installs the module's allocator's reading.
+pub fn set_heap_stat(stat: fn() -> HeapStat) {
+    HEAP.set(stat);
 }
 
-static HEAP_RELEASES: Global<fn() -> u32> = Global::new();
-
-fn no_releases() -> u32 {
-    0
-}
-
-/// Installs the reading a build refused a block waits on: the count of blocks
-/// the heap has taken back. It moves when, and only when, a request refused
-/// before might now be served, which is what makes it a signal and not a
-/// gauge.
-pub fn set_heap_releases(releases: fn() -> u32) {
-    HEAP_RELEASES.set(releases);
-}
-
-/// Blocks the heap has taken back; 0 where there is no heap.
-pub fn heap_releases() -> u32 {
-    (HEAP_RELEASES.get(|| no_releases))()
-}
-
-static HEAP_LIVE: Global<fn() -> usize> = Global::new();
-
-/// Installs the reading a pressure test compares: the bytes handed out and not
-/// yet given back.
-pub fn set_heap_live(live: fn() -> usize) {
-    HEAP_LIVE.set(live);
-}
-
-/// The bytes the heap has handed out and not taken back; 0 where there is none.
-pub fn heap_live() -> usize {
-    (HEAP_LIVE.get(|| no_heap))()
-}
-
-static HEAP_BYTES: Global<fn() -> usize> = Global::new();
-
-/// Installs the size of the range the heap was given.
-pub fn set_heap_bytes(bytes: fn() -> usize) {
-    HEAP_BYTES.set(bytes);
-}
-
-/// The bytes of the range the heap was given; 0 where there is none.
-pub fn heap_bytes() -> usize {
-    (HEAP_BYTES.get(|| no_heap))()
-}
-
-static HEAP_REFUSALS: Global<fn() -> u32> = Global::new();
-
-/// Installs the count of requests the heap answered with nothing: the one
-/// way this memory is full, since the fixed ranges cannot be.
-pub fn set_heap_refusals(refusals: fn() -> u32) {
-    HEAP_REFUSALS.set(refusals);
-}
-
-/// Requests the heap refused since boot; 0 where there is no heap.
-pub fn heap_refusals() -> u32 {
-    (HEAP_REFUSALS.get(|| no_releases))()
-}
-
-static HEAP_LARGEST_FREE: Global<fn() -> usize> = Global::new();
-
-/// Installs the size of the largest block on the heap's free lists — how
-/// fragmented the reached part is, where live against used says how full.
-pub fn set_heap_largest_free(largest: fn() -> usize) {
-    HEAP_LARGEST_FREE.set(largest);
-}
-
-/// The largest block on the heap's free lists; 0 where there is none.
-pub fn heap_largest_free() -> usize {
-    (HEAP_LARGEST_FREE.get(|| no_heap))()
+/// The module's heap as it stands; every word 0 where there is none.
+pub fn heap_stat() -> HeapStat {
+    (HEAP.get(|| no_heap))()
 }

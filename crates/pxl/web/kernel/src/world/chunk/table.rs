@@ -160,7 +160,9 @@ pub struct Frame {
     pub viewport_h: f64,
     pub fov_deg: f64,
     pub delta_s: f64,
-    pub budget_ms: f64,
+    /// What is left of the turn's quota when the pass begins, which is not
+    /// the quota itself (`FrameSample::budget_ms`).
+    pub remaining_ms: f64,
     pub hard_slack_ms: f64,
     pub pixel_dither: bool,
     pub retain_budget_bytes: f64,
@@ -535,19 +537,18 @@ impl Slot {
 /// The census the ledger reads.
 #[derive(Clone, Copy, Default)]
 pub struct Census {
+    /// Chunks the table holds, which is the number MAX_CHUNKS bounds.
     pub chunks: u32,
     pub in_frustum: u32,
     pub settling: u32,
     pub blend_active: u32,
+    /// Chunks still pending once the frame is done. Not what the frame began
+    /// with less what it committed, which would also count the chunks a build
+    /// landed on this frame, pending or not when it began.
     pub pending: u32,
-    /// Chunks still pending once the frame is done: what the ledger shows.
-    /// Not `pending` less `committed`, which also counts the chunks a build
-    /// landed on this frame, pending or not when the frame began.
-    pub left: u32,
     pub offscreen_pending: u32,
     pub oldest_visible_ms: f64,
     pub oldest_release_ms: f64,
-    pub committed: u32,
     pub released: u32,
     pub retained_on: f64,
     pub retained_off: f64,
@@ -571,8 +572,8 @@ pub struct Census {
     pub cut: u32,
     /// The largest mesh handed over since the last census, in boxes, of a
     /// fine slot and of a coarse one.
-    pub fine_boxes: u32,
-    pub coarse_boxes: u32,
+    pub fine_peak: u32,
+    pub coarse_peak: u32,
     /// Stale chunks `retire` kept: what replaces them does not cover their
     /// ground yet; covers it but is not all laid out; and, of those, the
     /// ones where what is not laid out is a chunk waiting on a slot.
@@ -604,8 +605,8 @@ pub struct Meshes {
     pub cut: u32,
     /// The largest mesh handed to a slot of each kind, until a census takes
     /// them: what a slot's size is read against.
-    fine_boxes: u32,
-    coarse_boxes: u32,
+    fine_peak: u32,
+    coarse_peak: u32,
     /// Meshes thrown away for a slot still drawn from, since the census; the
     /// levels of the waiters and the holders as bits; and the first waiters,
     /// as many as `retire` needs to tell a stale chunk kept for one.
@@ -771,8 +772,8 @@ impl Scheduler {
                 holder: vec![0; OCCUPANCY],
                 epoch: arena_epoch(),
                 cut: 0,
-                fine_boxes: 0,
-                coarse_boxes: 0,
+                fine_peak: 0,
+                coarse_peak: 0,
                 waits: 0,
                 wait_levels: 0,
                 holder_levels: 0,
@@ -1054,7 +1055,7 @@ impl Scheduler {
             self.decor_scratch = DecorScratch::new();
             if self.decor_scratch.is_none() {
                 self.builder.stat.starved += 1;
-                self.slots[i].refused = Some(crate::host::heap_releases());
+                self.slots[i].refused = Some(crate::host::heap_stat().releases);
                 return false;
             }
         }
@@ -1119,7 +1120,7 @@ impl Scheduler {
             let bytes = built.bytes();
             let Some((at, bytes)) = alloc(bytes) else {
                 self.builder.stat.starved += 1;
-                self.slots[i].refused = Some(crate::host::heap_releases());
+                self.slots[i].refused = Some(crate::host::heap_stat().releases);
                 return false;
             };
             // SAFETY: a block of the bytes the build asked for, the chunk node's
@@ -1517,7 +1518,7 @@ impl Scheduler {
     /// frame's budget, and set what the build task takes. Whether the canvas has something new to draw.
     pub fn tick(&mut self, world: &mut World, frame: Frame, now: &impl Fn() -> f64, emit: &mut impl FnMut(Event)) -> bool {
         let t0 = now();
-        let deadline = t0 + frame.budget_ms;
+        let deadline = t0 + frame.remaining_ms;
         let hard = deadline + frame.hard_slack_ms;
         if !self.frame.is_some_and(|prev| same_view(&prev, &frame)) {
             self.view_dirty = true;
@@ -1632,12 +1633,13 @@ impl Scheduler {
         let animating = self.models.tick(world, &mut self.draw, frame.delta_s as f32) | self.markers.tick(&frame) | self.environment.tick(&frame);
         self.draw_frame(&frame, world_mem(world));
 
-        let mut c = Census { committed, ..Census::default() };
-        c.chunks = self.slots.len() as u32;
-        c.commit_left = commit_left;
-        c.mount_left = self.to_mount.len() as u32;
-        c.mount_full = self.census.mount_full;
-        c.pending = pending_total;
+        let mut c = Census {
+            chunks: self.slots.len() as u32,
+            commit_left,
+            mount_left: self.to_mount.len() as u32,
+            mount_full: self.census.mount_full,
+            ..Census::default()
+        };
         for s in &self.slots {
             if s.has(IN_FRUSTUM) {
                 c.in_frustum += 1;
@@ -1649,7 +1651,7 @@ impl Scheduler {
                 c.blend_active += 1;
             }
             if s.has(PENDING) {
-                c.left += 1;
+                c.pending += 1;
             }
             if s.has(STALE) {
                 c.stale += 1;
@@ -1673,8 +1675,8 @@ impl Scheduler {
         c.level_boxes = self.level_boxes;
         c.slot_waits = core::mem::take(&mut self.meshes.waits);
         c.cut = core::mem::take(&mut self.meshes.cut);
-        c.fine_boxes = core::mem::take(&mut self.meshes.fine_boxes);
-        c.coarse_boxes = core::mem::take(&mut self.meshes.coarse_boxes);
+        c.fine_peak = core::mem::take(&mut self.meshes.fine_peak);
+        c.coarse_peak = core::mem::take(&mut self.meshes.coarse_peak);
         c.wait_levels = core::mem::take(&mut self.meshes.wait_levels);
         c.holder_levels = core::mem::take(&mut self.meshes.holder_levels);
         (c.stale_uncovered, c.stale_unready, c.stale_on_waiter) = self.kept;
@@ -2103,7 +2105,7 @@ impl Scheduler {
             return true;
         }
         let (p, q) = s.desired;
-        if s.refused.is_some_and(|r| r == crate::host::heap_releases()) {
+        if s.refused.is_some_and(|r| r == crate::host::heap_stat().releases) {
             return false;
         }
         let asked = self.ask(world, i, p, q);
@@ -2218,7 +2220,8 @@ impl Scheduler {
 
 /// Whether the heap is live past HEAP_PRESSURE.
 fn heap_pressed(_world: &World) -> bool {
-    crate::host::heap_live() as f64 > crate::host::heap_bytes() as f64 * HEAP_PRESSURE
+    let h = crate::host::heap_stat();
+    h.live as f64 > h.range as f64 * HEAP_PRESSURE
 }
 
 /// Ids the scheduler gives the chunks it mounts.
@@ -2479,7 +2482,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
             }
             let boxes = box_cnt.min(slot.capacity);
             meshes.cut += box_cnt - boxes;
-            let asked = if slot.capacity == FINE_BOXES { &mut meshes.fine_boxes } else { &mut meshes.coarse_boxes };
+            let asked = if slot.capacity == FINE_BOXES { &mut meshes.fine_peak } else { &mut meshes.coarse_peak };
             *asked = (*asked).max(box_cnt);
             // SAFETY: the mesh's boxes, a least corner and a size in the
             // first six floats of each, in `.fixed.bake` where the bake

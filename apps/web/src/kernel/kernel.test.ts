@@ -15,7 +15,7 @@ import type { u32 } from "@xpute/core/abi/word.ts";
 import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { cube_types } from "@/catalog/cell/cube.ts";
 
-import { ELE_PADDED_SPAN, encode_empty_poi_page, encode_terrain, PAGE_CELL_SPAN } from "@/kernel/fixture.ts";
+import { ELE_PADDED_SPAN, encode_empty_poi_page, encode_terrain, pack_ground_cell, PAGE_CELL_SPAN } from "@/kernel/fixture.ts";
 
 import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
 import { CORE_KERNEL } from "@/kernel/mem.ts";
@@ -72,15 +72,17 @@ function terrain_body(seed: u32): U8Array {
   const cells = PAGE_CELL_SPAN * PAGE_CELL_SPAN;
   const ele = new Int16Array(ELE_PADDED_SPAN * ELE_PADDED_SPAN);
   for (let i = 0; i < ele.length; i++) ele[i] = 10 + (next() % 30);
-  const land = new Uint8Array(cells), water = new Uint8Array(cells), structure = new Uint8Array(cells), transport = new Uint8Array(cells);
+  const packed = new Uint16Array(cells);
   for (let i = 0; i < cells; i++) {
-    land[i] = next() % 3 === 0 ? cube_types.land.bare : cube_types.land.green_light;
     const r = next() % 50;
-    water[i] = r === 0 ? cube_types.water.river : 0;
-    structure[i] = r === 1 ? cube_types.structure.building : 0;
-    transport[i] = r === 2 ? cube_types.transport.road_motorway : 0;
+    packed[i] = pack_ground_cell({
+      land: next() % 3 === 0 ? cube_types.land.bare : cube_types.land.green_light,
+      water: r === 0 ? cube_types.water.river : cube_types.common.void,
+      structure: r === 1 ? cube_types.structure.building : cube_types.common.void,
+      transport: r === 2 ? cube_types.transport.road_motorway : cube_types.common.void,
+    });
   }
-  return encode_terrain(ele, { land, water, structure, transport });
+  return encode_terrain(ele, packed);
 }
 
 /** The heap's row (xpute's BuddyMalloc::stat): base, top reached, end and

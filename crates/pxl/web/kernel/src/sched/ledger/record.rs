@@ -29,7 +29,7 @@ use xpute_runtime::mem::heap::alloc;
 use crate::global::Global;
 use crate::host::now;
 use crate::io::demand::{DemandKey, Phases};
-use crate::sched::ledger::spec::{CATEGORY_NAMES, FRAME, GPU_SPAN_NAMES, LIMITS, OUTCOME_NAMES, PHASE_NAMES, TASK, TASK_PHASE_NAMES, WORST};
+use crate::sched::ledger::spec::{CATEGORY_NAMES, FRAME, GPU_SPAN_NAMES, LIMITS, OUTCOME_NAMES, PHASE_NAMES, SUMMARY, TASK, TASK_PHASE_NAMES, WORST};
 use crate::sched::tick::PHASES;
 
 pub use crate::sched::ledger::spec::CENSUS_TAGS;
@@ -239,7 +239,16 @@ pub struct PageSample {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct HeapSample {
     pub used_mb: f64,
+    /// What the page level has handed out, a carved run counted whole: what
+    /// the heap has committed, against `range_mb`.
     pub live_mb: f64,
+    /// Of `live_mb`, what was borrowed to be carved into slots, and of that
+    /// what is out in slots. `run_mb` less `slot_mb` is what the carving
+    /// costs — a run's header and every slot standing free in a run that
+    /// cannot go back until its last one does. `live_mb` less `run_mb` went
+    /// straight down as whole pages.
+    pub run_mb: f64,
+    pub slot_mb: f64,
     pub range_mb: f64,
     pub refusals: f64,
     pub largest_free_mb: f64,
@@ -261,11 +270,12 @@ pub struct WorkSample {
     pub scans: f64,
     pub bakes: f64,
     /// The largest mesh a bake handed over since the last frame, in boxes,
-    /// of each kind of slot: what the slots are sized against
+    /// of each kind of slot — a high-water mark where `scans` and `bakes`
+    /// beside it are counts. It is what the slots are sized against
     /// (world/chunk/mesh_slot.rs), since a mesh past its slot is cut and the
     /// ground it held is missing.
-    pub fine_boxes: f64,
-    pub coarse_boxes: f64,
+    pub fine_peak: f64,
+    pub coarse_peak: f64,
 }
 
 /// One rendered frame. Lean on purpose — latency percentiles, decode bandwidth
@@ -284,14 +294,18 @@ pub struct FrameSample {
     /// large, throughput budget: a long dt on such a frame was chosen, not
     /// suffered. 0 otherwise.
     pub settled: f64,
-    /// The whole tick, every phase.
+    /// From the turn's rising edge to the end of the tick, which is what
+    /// `budget_ms` is a quota on — so it holds the effects (`turn.effects_ms`)
+    /// and whatever passed before the frame task was polled, as well as every
+    /// phase. What `phases` sums to is the tick alone, and the difference
+    /// between the two is the region nothing else names.
     pub sched_ms: f64,
-    /// What the tick was allowed this frame — derived, so it moves.
+    /// What the turn was allowed — derived, so it moves.
     pub budget_ms: f64,
-    /// sched_ms broken down by phase, in the tick's own order, as PHASES names them.
+    /// The tick by phase, in its own order, as PHASES names them.
     pub phases: [f64; PHASES.len()],
-    /// The kernel's tick, inside the visible phase.
-    pub tick_ms: f64,
+    /// The chunk scheduler's own pass, inside the visible phase.
+    pub chunks_ms: f64,
     /// The kernel's whole turn: the strobe in, the tick, the draw and the
     /// submit. `dt_ms - task_ms` is then everything outside it — vsync wait,
     /// compositor, GPU, GC between frames, and the shell's own glue.
@@ -388,17 +402,41 @@ pub struct WorstFrame {
     pub prev: FrameSample,
 }
 
-/// Each named field at the word ledger.json gives it.
+/// A record laid out as a block of ledger.json: every word a plain f64 at the
+/// word that block gives it. It is what `put` may write, and the only way to
+/// implement it is `words!`, which is what checks the claim — so a block
+/// cannot be written by hand into an index, and a lane with no field, a field
+/// with no lane and a field at the wrong word are each a compile error.
+///
+/// # Safety
+/// The implementor is `#[repr(C)]` and every one of its words is an f64 (or
+/// another such record), with no padding.
+pub unsafe trait Words: Sized {}
+
+/// `block` of the summary written from `value`, by the layout both agree on.
+pub fn put<T: Words>(out: &mut [f64], block: u32, value: &T) {
+    // SAFETY: Words says the record is plain f64s laid end to end, and
+    // `words!` is what let it say so.
+    let words = unsafe { core::slice::from_raw_parts(value as *const T as *const f64, size_of::<T>() / 8) };
+    let at = block as usize;
+    out[at..at + words.len()].copy_from_slice(words);
+}
+
+/// Each named field at the word ledger.json gives it, and the record marked as
+/// a block's own layout.
 macro_rules! words {
     ($t:ty, $words:expr, $($($field:ident).+ => $at:expr),+ $(,)?) => {
         const _: () = assert!(size_of::<$t>() == $words as usize * 8, concat!(stringify!($t), " is not the size ledger.json lays out"));
         $(const _: () = assert!(offset_of!($t, $($field).+) == $at as usize * 8, concat!(stringify!($t), " puts ", stringify!($($field).+), " off the word ledger.json gives it"));)+
+        // SAFETY: the two assertions above are the claim.
+        unsafe impl Words for $t {}
     };
 }
+pub(crate) use words;
 
 words!(FrameSample, FRAME::WORDS,
     t => FRAME::t, dt_ms => FRAME::dt_ms, frame_ms => FRAME::frame_ms, settled => FRAME::settled,
-    sched_ms => FRAME::sched_ms, budget_ms => FRAME::budget_ms, phases => FRAME::phases, tick_ms => FRAME::tick_ms, task_ms => FRAME::task_ms,
+    sched_ms => FRAME::sched_ms, budget_ms => FRAME::budget_ms, phases => FRAME::phases, chunks_ms => FRAME::chunks_ms, task_ms => FRAME::task_ms,
     gpu.ms => FRAME::gpu_ms, gpu.spans => FRAME::gpu_spans, gpu.draw_calls => FRAME::draw_calls, gpu.triangles => FRAME::triangles,
     gpu.census => FRAME::census, gpu.level_tris => FRAME::level_tris, gpu.px => FRAME::px,
     device.buffers => FRAME::buffers, device.buffer_mb => FRAME::buffer_mb, device.arena_mb => FRAME::arena_mb,
@@ -407,11 +445,12 @@ words!(FrameSample, FRAME::WORDS,
     lod.blend_active => FRAME::lod_blend_active, lod.offscreen_pending => FRAME::lod_offscreen_pending,
     lod.oldest_release_ms => FRAME::lod_oldest_release_ms, lod.oldest_visible_ms => FRAME::lod_oldest_visible_ms, lod.pressure => FRAME::lod_pressure,
     mounts.added => FRAME::mounts_added, mounts.removed => FRAME::mounts_removed, mounts.layouts => FRAME::mounts_layouts,
-    pages.total => FRAME::pages, pages.by_level => FRAME::level_pages, pages.poi => FRAME::poi_count,
-    heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.range_mb => FRAME::heap_range_mb,
+    pages.total => FRAME::pages_total, pages.by_level => FRAME::pages_by_level, pages.poi => FRAME::pages_poi,
+    heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.run_mb => FRAME::heap_run_mb,
+    heap.slot_mb => FRAME::heap_slot_mb, heap.range_mb => FRAME::heap_range_mb,
     heap.refusals => FRAME::heap_refusals, heap.largest_free_mb => FRAME::heap_largest_free_mb,
     rings.cq_peak => FRAME::ring_cq_peak, rings.spill_peak => FRAME::ring_spill_peak,
-    work.scans => FRAME::work_scans, work.bakes => FRAME::work_bakes, work.fine_boxes => FRAME::work_fine_boxes, work.coarse_boxes => FRAME::work_coarse_boxes, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
+    work.scans => FRAME::work_scans, work.bakes => FRAME::work_bakes, work.fine_peak => FRAME::work_fine_peak, work.coarse_peak => FRAME::work_coarse_peak, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
     stale.chunks => FRAME::stale_chunks, stale.drawn => FRAME::stale_drawn, stale.levels => FRAME::stale_levels, stale.hidden => FRAME::stale_hidden,
     stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready, stale.on_waiter => FRAME::stale_on_waiter,
     stale.slot_waits => FRAME::slot_waits, stale.wait_levels => FRAME::slot_wait_levels, stale.holder_levels => FRAME::slot_holder_levels,
@@ -429,6 +468,17 @@ words!(TaskRow, TASK::WORDS,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
+
+words!(FramePeak, SUMMARY::peak::WORDS,
+    present => SUMMARY::peak::present, dt_ms => SUMMARY::peak::dt_ms, sched_ms => SUMMARY::peak::sched_ms,
+    chunks_ms => SUMMARY::peak::chunks_ms, gpu_ms => SUMMARY::peak::gpu_ms, draw_calls => SUMMARY::peak::draw_calls,
+    triangles => SUMMARY::peak::triangles, q_terrain => SUMMARY::peak::q_terrain, q_poi => SUMMARY::peak::q_poi,
+    chunks => SUMMARY::peak::chunks, in_frustum => SUMMARY::peak::in_frustum, pending => SUMMARY::peak::pending,
+    settling => SUMMARY::peak::settling, blend_active => SUMMARY::peak::blend_active, pressure => SUMMARY::peak::pressure,
+    offscreen_pending => SUMMARY::peak::offscreen_pending, oldest_release_ms => SUMMARY::peak::oldest_release_ms,
+    oldest_visible_ms => SUMMARY::peak::oldest_visible_ms, fine_peak => SUMMARY::peak::fine_peak,
+    coarse_peak => SUMMARY::peak::coarse_peak,
+);
 
 const _: () = assert!(PHASE_NAMES.len() == PHASES.len(), "ledger.json names the tick's phases");
 
@@ -525,13 +575,20 @@ pub struct LedgerSink {
 /// The worst-seen values since recording started, kept as frames land so the
 /// report never scans the ring for them — and past the minute the ring keeps,
 /// so a stall noticed late is still on record. Reset with the recording.
+///
+/// Laid out as the block it is written into, and held to it by `words!` the
+/// way a frame is. It used to be copied field by field into a hand-ordered
+/// slice, and two lanes appended to the block's end were inserted in the
+/// middle of that slice: every lane from the fifth on carried its
+/// neighbour's number, and nothing said so (2026-09-23).
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FramePeak {
+    /// 1 once a frame has landed: the block reads as absent until then.
+    pub present: f64,
     pub dt_ms: f64,
-    pub fine_boxes: f64,
-    pub coarse_boxes: f64,
     pub sched_ms: f64,
-    pub tick_ms: f64,
+    pub chunks_ms: f64,
     pub gpu_ms: f64,
     pub draw_calls: f64,
     pub triangles: f64,
@@ -540,12 +597,14 @@ pub struct FramePeak {
     pub chunks: f64,
     pub in_frustum: f64,
     pub pending: f64,
-    pub offscreen_pending: f64,
-    pub oldest_release_ms: f64,
-    pub oldest_visible_ms: f64,
     pub settling: f64,
     pub blend_active: f64,
     pub pressure: f64,
+    pub offscreen_pending: f64,
+    pub oldest_release_ms: f64,
+    pub oldest_visible_ms: f64,
+    pub fine_peak: f64,
+    pub coarse_peak: f64,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -713,12 +772,13 @@ pub fn ledger_record_frame(s: FrameSample) {
     }
 
     let p = &mut l.frame_peak;
+    p.present = 1.0;
     p.dt_ms = p.dt_ms.max(s.dt_ms);
     p.sched_ms = p.sched_ms.max(s.sched_ms);
-    p.tick_ms = p.tick_ms.max(s.tick_ms);
+    p.chunks_ms = p.chunks_ms.max(s.chunks_ms);
     p.gpu_ms = p.gpu_ms.max(s.gpu.ms);
-    p.fine_boxes = p.fine_boxes.max(s.work.fine_boxes);
-    p.coarse_boxes = p.coarse_boxes.max(s.work.coarse_boxes);
+    p.fine_peak = p.fine_peak.max(s.work.fine_peak);
+    p.coarse_peak = p.coarse_peak.max(s.work.coarse_peak);
     p.draw_calls = p.draw_calls.max(s.gpu.draw_calls);
     p.triangles = p.triangles.max(s.gpu.triangles);
     p.q_terrain = p.q_terrain.max(s.q_terrain);

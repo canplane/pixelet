@@ -6,30 +6,30 @@
  * it, and what its number reads as.
  *
  * The kernel names a lane and nothing more (ledger.json's FRAME), and the
- * name carries its unit — `_ms`, `_mb`, `_levels` — so a lane it adds is
- * read, grouped and printed here without a word written for it. Only a lane
- * that is a list of other names' values — phases, spans, pipelines, levels —
- * is spelled out, once, below.
+ * name carries its unit — `_ms`, `_mb`, `_levels`, `_name` — so a lane it
+ * adds is read, grouped and printed here without a word written for it. Only
+ * a lane that is a list of other names' values — phases, spans, pipelines,
+ * levels — is spelled out, once, below, as is the table a `_name` indexes.
  */
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
 
-import { CENSUS_TAGS, FRAME, FRAME_GROUPS, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES } from "./ledger.spec.ts";
+import { CENSUS_TAGS, EFFECT_NAMES, FRAME, FRAME_GROUPS, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES } from "./ledger.spec.ts";
 
 const MB = 1048576;
 
 // ---- the lanes ----
 
 /** The lanes that are lists, each of the names its words are in order of. */
-export type ListLane = "phases" | "gpu_spans" | "census" | "level_tris" | "level_pages";
+export type ListLane = "phases" | "gpu_spans" | "census" | "level_tris" | "pages_by_level";
 export type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
 export type ScalarLane = Exclude<FrameLane, ListLane>;
 
 /** A frame as the shell holds it once read: a number a lane, a list a list lane. */
 export type Frame =
   & { [K in ScalarLane]: f64 }
-  & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; level_tris: f64[]; level_pages: f64[] };
+  & { phases: f64[]; gpu_spans: f64[]; census: [f64, f64][]; level_tris: f64[]; pages_by_level: f64[] };
 
 /** What a list lane's words are named by, in order; a level is its number. */
 const LEVEL_NAMES = Array.from({ length: LIMITS.LEVELS }, (_, k) => `L${k}`);
@@ -38,7 +38,7 @@ export const LIST_NAMES: Record<ListLane, readonly string[]> = {
   gpu_spans: GPU_SPAN_NAMES,
   census: CENSUS_TAGS,
   level_tris: LEVEL_NAMES,
-  level_pages: LEVEL_NAMES,
+  pages_by_level: LEVEL_NAMES,
 };
 
 /** Every lane in the order it lies, with the words it spans. */
@@ -69,6 +69,9 @@ export const GROUPS = Object.keys(FRAME_GROUPS).filter((g) => !g.startsWith("$")
 
 export const n1 = (n: number) => (n ?? 0).toFixed(1);
 
+/** `part` of `whole` as a whole percent, 0 where there is no whole. */
+export const pct = (part: number, whole: number) => (whole > 0 ? round((part / whole) * 100) : 0);
+
 /** Triangles read as thousands past a thousand. */
 export const tris = (t: number) => (t >= 1000 ? `${round(t / 1000)}k` : String(round(t)));
 
@@ -79,8 +82,14 @@ export function levelsText(bits: f64): string {
   return out.length > 0 ? out.join(",") : "-";
 }
 
+/** Which name table a `_name` lane indexes. The kernel records the number and
+ * the words are the shell's, the way an errno's are libc's, so the table is
+ * named here rather than sent. */
+const NAME_TABLES: Record<string, readonly string[]> = { turn_step_name: EFFECT_NAMES };
+
 /** A number as a lane named `name` reads: its unit is its name's. */
 export function valueText(name: string, v: f64): string {
+  if (name.endsWith("_name")) return NAME_TABLES[name]?.[v] ?? "-";
   if (name.endsWith("_ms")) return `${n1(v)}ms`;
   if (name.endsWith("_mb")) return `${+v.toFixed(1)}MB`;
   if (name.endsWith("_bytes")) return `${+(v / MB).toFixed(1)}MB`;

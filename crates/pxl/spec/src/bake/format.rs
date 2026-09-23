@@ -22,18 +22,20 @@
 //!   base      = [[gers_id, source, subtype, class, geom_wkb], ...]  (source: land_use|water|land|infrastructure)
 //!   coasts    = [[id, geom_wkb, covers_page], ...]
 //!
-//! baked wire = [ele, ground]
-//!   ground = its planes in GROUND_CH_KEYS' order, each a dense u8 array
+//! baked wire = [ele, cells]
+//!   cells = one u16 a cell, the four ground channels packed into it
+//!           (bake/pack.rs), which is the shape the client holds too
 
 use std::hash::Hasher;
 
 use fnv::FnvHasher;
 use xpute_core::codec::json::{parse_str_map, stringify_str_map, StrMap};
+use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, BranchCursor, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use super::model::feature::Poi;
-use super::pack::{channel_of, pack, unpack, GroundCell};
+use super::pack::{channel_of, GroundCell};
 
 // ---- DB ----
 
@@ -146,8 +148,7 @@ pub(crate) const fn const_str_eq(a: &str, b: &str) -> bool {
 /// The one order the ground channels are in: the lanes of a baked page, the
 /// planes of `.fixed.terrain`, and the order a cell is painted in, a later
 /// channel's non-void type winning. Every consumer reads it through
-/// `Ground::planes`, `Ground::from_planes` and `ch_index`, so moving a channel
-/// is this line and a re-bake.
+/// `ch_index`, so moving a channel is this line and a re-bake.
 ///
 /// Structure paints last: a building that overlaps a road keeps its cells.
 /// The overlap is about one cell in a hundred in a dense page, and a road that
@@ -183,13 +184,11 @@ const _: () = {
 /// (`bake/pack.rs`). A decoded page owns its cells; a resident one reads the
 /// block it was written into.
 ///
-/// The wire is four planes and this is not, because the two are asked
-/// different questions. A plane of a category runs the same byte for hundreds
-/// of cells and compresses to nothing, while what the client holds is held
-/// for as long as the page is resident and is read a cell at a time
-/// (issue/20260923-a-ground-cell-is-fourteen-bits.md). `from_planes` and
-/// `planes` are where one becomes the other, and the codec is the only caller
-/// of either.
+/// This is the one shape ground has. The bake paints into it, the wire
+/// carries it, the client holds it and the fold reads and writes it, so
+/// nothing between a page being baked and the ground being drawn from it
+/// converts a representation
+/// (issue/20260923-a-ground-cell-is-fourteen-bits.md).
 #[derive(Clone, Debug)]
 pub struct Ground {
     pub cells: std::borrow::Cow<'static, [GroundCell]>,
@@ -207,25 +206,6 @@ impl Ground {
 
     pub fn is_empty(&self) -> bool {
         self.cells.is_empty()
-    }
-
-    /// The planes in `GROUND_CH_KEYS`' order, unpacked: what the wire carries.
-    pub fn planes(&self) -> [Vec<u8>; 4] {
-        let mut out = GROUND_CH_KEYS.map(|_| vec![0u8; self.cells.len()]);
-        for (i, cell) in self.cells.iter().enumerate() {
-            for (plane, number) in out.iter_mut().zip(unpack(*cell)) {
-                plane[i] = number;
-            }
-        }
-        out
-    }
-
-    /// A page's ground from planes in `GROUND_CH_KEYS`' order, packed.
-    pub fn from_planes(planes: [std::borrow::Cow<'static, [u8]>; 4]) -> Ground {
-        let cells = planes[0].len();
-        Ground {
-            cells: (0..cells).map(|i| pack(GROUND_CH_KEYS.map(|k| planes[ch_index(k)][i]))).collect::<Vec<_>>().into(),
-        }
     }
 }
 
@@ -253,36 +233,61 @@ pub struct Tile {
 
 // ---- DTO ----
 
-// { ele, ground } -> [ele, [ground planes in GROUND_CH_KEYS' order]]
+// { ele, ground } -> [ele, cells]
+//
+// The cells go out as the client holds them, packed. The bake does that work
+// once, offline, so a page arriving is a length check and a copy rather than
+// a walk over a quarter of a million cells between the bytes landing and the
+// ground being drawn from them.
 pub fn encode_terrain(ele: &[i16], ground: &Ground) -> Result<Vec<u8>, MarshalError> {
-    // Final baked terrain format:
-    // - baked = [ele, [land, water, transport, structure]]
-    // - each ground channel is an st.encode(...) result
-    // The cells are packed and the wire is planes, so they come apart here
-    // and live until the tree is encoded.
-    let planes = ground.planes();
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
-        b.i16_array(Some(ele)).branch(Some(&mut |g| {
-            for plane in &planes {
-                g.u8_array(Some(plane));
-            }
-        }));
+        b.i16_array(Some(ele)).u16_array(Some(&ground.cells));
     }));
     encoder().encode(&t, TreeEncoderOptions::default())
 }
 
-// [ele, [ground planes in GROUND_CH_KEYS' order]] -> { ele, ground }
+/// The room a page is written into, as the client holds it: the record's own
+/// lanes in `.fixed.terrain`.
+pub struct PageRoom<'a> {
+    pub cells: &'a mut [GroundCell],
+    pub ele: &'a mut [i16],
+}
+
+/// A fetched page straight into the room it will live in.
+///
+/// The wire carries what the client holds, so this is a length check and two
+/// copies out of the packet — no page is allocated, nothing is walked a cell
+/// at a time, and nothing stands between a page arriving and the ground
+/// being drawn from it. That is what packing at the bake buys.
+pub fn decode_terrain_into(pkt: &[u8], room: PageRoom) -> Result<(), MarshalError> {
+    let root = TreeReader::new(pkt)?.read_branch()?;
+    let ele = root.at(0)?.get_array::<i16>()?;
+    let cells = root.at(1)?.get_array::<GroundCell>()?;
+    let wrong = |what: &str| Err(MarshalError::new(Errno::EBADMSG, Some(&format!("a terrain page whose {what} is not the page's own size")), None));
+    if ele.len() != room.ele.len() {
+        return wrong("elevation");
+    }
+    if cells.len() != room.cells.len() {
+        return wrong("ground");
+    }
+    room.ele.copy_from_slice(ele);
+    room.cells.copy_from_slice(cells);
+    Ok(())
+}
+
+// [ele, cells] -> { ele, ground }
+//
+// For whoever needs a page in hand rather than in a record: the shared ocean
+// tile, the bake's own reads, the tests. Copied out, because a decoded page
+// outlives the packet it came from.
 pub fn decode_terrain(pkt: &[u8]) -> Result<Terrain, MarshalError> {
     let root = TreeReader::new(pkt)?.read_branch()?;
-    let ele = root.at(0)?.get_array::<i16>()?.to_vec().into();
-    let ground = root.at(1)?.as_branch()?;
-
-    // Copied out: a decoded page outlives the packet it came from.
-    let plane = |i: u32| -> Result<std::borrow::Cow<'static, [u8]>, MarshalError> { Ok(ground.at(i)?.get_array::<u8>()?.to_vec().into()) };
     Ok(Terrain {
-        ele,
-        ground: Ground::from_planes([plane(0)?, plane(1)?, plane(2)?, plane(3)?]),
+        ele: root.at(0)?.get_array::<i16>()?.to_vec().into(),
+        ground: Ground {
+            cells: root.at(1)?.get_array::<GroundCell>()?.to_vec().into(),
+        },
     })
 }
 

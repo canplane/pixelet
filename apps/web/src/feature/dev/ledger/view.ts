@@ -97,7 +97,7 @@ export interface FrameSummary {
   offthread: Spread;
   gpu: Spread;
   sched: Spread;
-  tick: Spread;
+  chunks: Spread;
   phases: { name: string; spread: Spread }[];
   /** A span's time over the frames that ran it. */
   gpu_spans: { name: string; spread: Spread }[];
@@ -105,7 +105,7 @@ export interface FrameSummary {
   perS: [f64, f64];
   backlog_s: f64;
   backlogPerS: [f64, f64];
-  tick_per_bake: f64 | null;
+  chunks_per_bake: f64 | null;
   mounts: [f64, f64];
   used_delta_mb: f64;
   census: { tag: string; draws: f64; tris: f64 }[];
@@ -173,14 +173,14 @@ function frameSummary(s: F64Array): FrameSummary | null {
     offthread: spreadAt(s, a + F.offthread),
     gpu: spreadAt(s, a + F.gpu),
     sched: spreadAt(s, a + F.sched),
-    tick: spreadAt(s, a + F.tick),
+    chunks: spreadAt(s, a + F.chunks),
     phases: PHASE_NAMES.map((name, k) => ({ name, spread: spreadAt(s, a + F.phases + k * SPREAD.WORDS) })),
     gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, spread: spreadAt(s, a + F.gpu_spans + k * SPREAD.WORDS) })),
     work: [s[a + F.work_scans], s[a + F.work_bakes]],
     perS: [s[a + F.per_s_scans], s[a + F.per_s_bakes]],
     backlog_s: s[a + F.backlog_s],
     backlogPerS: [s[a + F.backlog_per_s_scans], s[a + F.backlog_per_s_bakes]],
-    tick_per_bake: nanNull(s[a + F.tick_per_bake]),
+    chunks_per_bake: nanNull(s[a + F.chunks_per_bake]),
     mounts: [s[a + F.mounts_added], s[a + F.mounts_removed]],
     used_delta_mb: s[a + F.used_delta_mb],
     census: CENSUS_TAGS.map((tag, k) => ({ tag, draws: s[a + F.census + 2 * k], tris: s[a + F.census + 2 * k + 1] }))

@@ -987,12 +987,16 @@ fn install_host() {
     pxl_kernel::host::set_local_time(hook_local_time);
     pxl_kernel::host::set_measure_text(hook_measure_text);
     pxl_kernel::host::set_body_read(hook_body_read);
-    pxl_kernel::host::set_heap_used(|| ALLOC.used());
-    pxl_kernel::host::set_heap_releases(|| ALLOC.releases());
-    pxl_kernel::host::set_heap_live(|| ALLOC.live());
-    pxl_kernel::host::set_heap_bytes(|| ALLOC.range_bytes());
-    pxl_kernel::host::set_heap_refusals(|| ALLOC.refusals());
-    pxl_kernel::host::set_heap_largest_free(|| ALLOC.largest_free());
+    pxl_kernel::host::set_heap_stat(|| pxl_kernel::host::HeapStat {
+        range: ALLOC.range_bytes(),
+        used: ALLOC.used(),
+        live: ALLOC.live(),
+        run: ALLOC.run_live(),
+        slot: ALLOC.slot_live(),
+        largest_free: ALLOC.largest_free(),
+        releases: ALLOC.releases(),
+        refusals: ALLOC.refusals(),
+    });
     install_gpu();
 }
 

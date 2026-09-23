@@ -5,6 +5,7 @@
 //! reduced into a block the panel reads, and a live stream for what a panel
 //! cannot show — a stutter as it happens.
 
+pub mod block;
 pub mod log;
 pub mod record;
 #[path = "ledger/ledger.spec.rs"]

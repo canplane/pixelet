@@ -66,7 +66,7 @@ pub mod LIMITS {
     pub const KEYS: &[&str] = &["PHASES_MAX", "REASONS", "STEP_SLOTS", "LEVELS"];
 }
 
-/// One rendered frame (sched/ledger/record.rs FrameSample). `settled` is 0 or 1; `phases` is a lane of PHASE_NAMES' length, `gpu_spans` of GPU_SPAN_NAMES', `census` pairs of draws and triangles in CENSUS_TAGS' order, and `level_tris` and `level_pages` a word a level of the pyramid, LIMITS.LEVELS of them. A lane's name says its unit: `_ms`, `_mb`, and `_levels` for a set of levels as bits.
+/// One rendered frame (sched/ledger/record.rs FrameSample). `settled` is 0 or 1; `phases` is a lane of PHASE_NAMES' length, `gpu_spans` of GPU_SPAN_NAMES', `census` pairs of draws and triangles in CENSUS_TAGS' order, and `level_tris` and `pages_by_level` a word a level of the pyramid, LIMITS.LEVELS of them. A lane's name says its unit: `_ms`, `_mb`, and `_levels` for a set of levels as bits.
 pub mod FRAME {
     pub const t: u32 = 0;
     pub const dt_ms: u32 = 1;
@@ -75,7 +75,7 @@ pub mod FRAME {
     pub const sched_ms: u32 = 4;
     pub const budget_ms: u32 = 5;
     pub const phases: u32 = 6;
-    pub const tick_ms: u32 = 11;
+    pub const chunks_ms: u32 = 11;
     pub const task_ms: u32 = 12;
     pub const gpu_ms: u32 = 13;
     pub const gpu_spans: u32 = 14;
@@ -103,42 +103,44 @@ pub mod FRAME {
     pub const mounts_added: u32 = 71;
     pub const mounts_removed: u32 = 72;
     pub const mounts_layouts: u32 = 73;
-    pub const pages: u32 = 74;
-    pub const level_pages: u32 = 75;
-    pub const poi_count: u32 = 86;
+    pub const pages_total: u32 = 74;
+    pub const pages_by_level: u32 = 75;
+    pub const pages_poi: u32 = 86;
     pub const heap_used_mb: u32 = 87;
     pub const heap_live_mb: u32 = 88;
-    pub const heap_range_mb: u32 = 89;
-    pub const heap_refusals: u32 = 90;
-    pub const heap_largest_free_mb: u32 = 91;
-    pub const ring_cq_peak: u32 = 92;
-    pub const ring_spill_peak: u32 = 93;
-    pub const work_scans: u32 = 94;
-    pub const work_bakes: u32 = 95;
-    pub const work_fine_boxes: u32 = 96;
-    pub const work_coarse_boxes: u32 = 97;
-    pub const q_terrain: u32 = 98;
-    pub const q_poi: u32 = 99;
-    pub const stale_chunks: u32 = 100;
-    pub const stale_drawn: u32 = 101;
-    pub const stale_levels: u32 = 102;
-    pub const stale_hidden: u32 = 103;
-    pub const stale_uncovered: u32 = 104;
-    pub const stale_unready: u32 = 105;
-    pub const stale_on_waiter: u32 = 106;
-    pub const slot_waits: u32 = 107;
-    pub const slot_wait_levels: u32 = 108;
-    pub const slot_holder_levels: u32 = 109;
-    pub const slot_cut: u32 = 110;
-    pub const cap_commit_left: u32 = 111;
-    pub const cap_mount_left: u32 = 112;
-    pub const cap_mount_full: u32 = 113;
-    pub const cap_record_refused: u32 = 114;
-    pub const turn_effects_ms: u32 = 115;
-    pub const turn_stage_ms: u32 = 116;
-    pub const turn_step_ms: u32 = 117;
-    pub const turn_step_name: u32 = 118;
-    pub const WORDS: u32 = 119;
+    pub const heap_run_mb: u32 = 89;
+    pub const heap_slot_mb: u32 = 90;
+    pub const heap_range_mb: u32 = 91;
+    pub const heap_refusals: u32 = 92;
+    pub const heap_largest_free_mb: u32 = 93;
+    pub const ring_cq_peak: u32 = 94;
+    pub const ring_spill_peak: u32 = 95;
+    pub const work_scans: u32 = 96;
+    pub const work_bakes: u32 = 97;
+    pub const work_fine_peak: u32 = 98;
+    pub const work_coarse_peak: u32 = 99;
+    pub const q_terrain: u32 = 100;
+    pub const q_poi: u32 = 101;
+    pub const stale_chunks: u32 = 102;
+    pub const stale_drawn: u32 = 103;
+    pub const stale_levels: u32 = 104;
+    pub const stale_hidden: u32 = 105;
+    pub const stale_uncovered: u32 = 106;
+    pub const stale_unready: u32 = 107;
+    pub const stale_on_waiter: u32 = 108;
+    pub const slot_waits: u32 = 109;
+    pub const slot_wait_levels: u32 = 110;
+    pub const slot_holder_levels: u32 = 111;
+    pub const slot_cut: u32 = 112;
+    pub const cap_commit_left: u32 = 113;
+    pub const cap_mount_left: u32 = 114;
+    pub const cap_mount_full: u32 = 115;
+    pub const cap_record_refused: u32 = 116;
+    pub const turn_effects_ms: u32 = 117;
+    pub const turn_stage_ms: u32 = 118;
+    pub const turn_step_ms: u32 = 119;
+    pub const turn_step_name: u32 = 120;
+    pub const WORDS: u32 = 121;
     pub const KEYS: &[&str] = &[
         "t",
         "dt_ms",
@@ -147,7 +149,7 @@ pub mod FRAME {
         "sched_ms",
         "budget_ms",
         "phases",
-        "tick_ms",
+        "chunks_ms",
         "task_ms",
         "gpu_ms",
         "gpu_spans",
@@ -175,11 +177,13 @@ pub mod FRAME {
         "mounts_added",
         "mounts_removed",
         "mounts_layouts",
-        "pages",
-        "level_pages",
-        "poi_count",
+        "pages_total",
+        "pages_by_level",
+        "pages_poi",
         "heap_used_mb",
         "heap_live_mb",
+        "heap_run_mb",
+        "heap_slot_mb",
         "heap_range_mb",
         "heap_refusals",
         "heap_largest_free_mb",
@@ -187,8 +191,8 @@ pub mod FRAME {
         "ring_spill_peak",
         "work_scans",
         "work_bakes",
-        "work_fine_boxes",
-        "work_coarse_boxes",
+        "work_fine_peak",
+        "work_coarse_peak",
         "q_terrain",
         "q_poi",
         "stale_chunks",
@@ -214,11 +218,11 @@ pub mod FRAME {
     ];
 }
 
-/// What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (view.test.ts), so a lane the kernel adds is printed without a word written for it.
+/// What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (view.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what the chunk scheduler is doing, what it built and fetched, and what it all holds — and the report and the panel both follow it.
 pub mod FRAME_GROUPS {
-    pub const pace: &[&str] = &["t", "dt_ms", "frame_ms", "settled", "sched_ms", "budget_ms", "phases", "tick_ms", "task_ms"];
+    pub const pace: &[&str] = &["t", "dt_ms", "frame_ms", "settled", "sched_ms", "budget_ms", "phases", "chunks_ms", "task_ms"];
+    pub const turn: &[&str] = &["turn_effects_ms", "turn_stage_ms", "turn_step_ms", "turn_step_name"];
     pub const gpu: &[&str] = &["gpu_ms", "gpu_spans", "draw_calls", "triangles", "census", "level_tris", "px"];
-    pub const device: &[&str] = &["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_msaa_mb", "tex_shadow_mb", "tex_layers_mb"];
     pub const lod: &[&str] = &[
         "lod_chunks",
         "lod_in_frustum",
@@ -231,16 +235,16 @@ pub mod FRAME_GROUPS {
         "lod_pressure",
     ];
     pub const mounts: &[&str] = &["mounts_added", "mounts_removed", "mounts_layouts"];
-    pub const pages: &[&str] = &["pages", "level_pages", "poi_count"];
-    pub const heap: &[&str] = &["heap_used_mb", "heap_live_mb", "heap_range_mb", "heap_refusals", "heap_largest_free_mb"];
-    pub const ring: &[&str] = &["ring_cq_peak", "ring_spill_peak"];
-    pub const work: &[&str] = &["work_scans", "work_bakes", "work_fine_boxes", "work_coarse_boxes"];
-    pub const q: &[&str] = &["q_terrain", "q_poi"];
     pub const stale: &[&str] = &["stale_chunks", "stale_drawn", "stale_levels", "stale_hidden", "stale_uncovered", "stale_unready", "stale_on_waiter"];
     pub const slot: &[&str] = &["slot_waits", "slot_wait_levels", "slot_holder_levels", "slot_cut"];
     pub const cap: &[&str] = &["cap_commit_left", "cap_mount_left", "cap_mount_full", "cap_record_refused"];
-    pub const turn: &[&str] = &["turn_effects_ms", "turn_stage_ms", "turn_step_ms", "turn_step_name"];
-    pub const KEYS: &[&str] = &["pace", "gpu", "device", "lod", "mounts", "pages", "heap", "ring", "work", "q", "stale", "slot", "cap", "turn"];
+    pub const work: &[&str] = &["work_scans", "work_bakes", "work_fine_peak", "work_coarse_peak"];
+    pub const q: &[&str] = &["q_terrain", "q_poi"];
+    pub const pages: &[&str] = &["pages_total", "pages_by_level", "pages_poi"];
+    pub const device: &[&str] = &["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_msaa_mb", "tex_shadow_mb", "tex_layers_mb"];
+    pub const heap: &[&str] = &["heap_used_mb", "heap_live_mb", "heap_run_mb", "heap_slot_mb", "heap_range_mb", "heap_refusals", "heap_largest_free_mb"];
+    pub const ring: &[&str] = &["ring_cq_peak", "ring_spill_peak"];
+    pub const KEYS: &[&str] = &["pace", "turn", "gpu", "lod", "mounts", "stale", "slot", "cap", "work", "q", "pages", "device", "heap", "ring"];
 }
 
 /// One settled task (sched/ledger/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES.
@@ -280,9 +284,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 119;
-    pub const prev: u32 = 120;
-    pub const WORDS: u32 = 239;
+    pub const has_prev: u32 = 121;
+    pub const prev: u32 = 122;
+    pub const WORDS: u32 = 243;
     pub const KEYS: &[&str] = &["sample", "has_prev", "prev", "WORDS"];
 }
 
@@ -333,19 +337,19 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "recording", "elapsed_ms", "tasks", "frames", "truncated", "WORDS"];
     }
     pub mod frames {
-        pub const AT: u32 = 5;
         pub const present: u32 = 0;
         pub const n: u32 = 1;
         pub const seconds: u32 = 2;
         pub const moving: u32 = 3;
         pub const missed: u32 = 4;
+        pub const AT: u32 = 5;
         pub const overran: u32 = 5;
         pub const dt: u32 = 6;
         pub const task: u32 = 9;
         pub const offthread: u32 = 12;
         pub const gpu: u32 = 15;
         pub const sched: u32 = 18;
-        pub const tick: u32 = 21;
+        pub const chunks: u32 = 21;
         pub const phases: u32 = 24;
         pub const gpu_spans: u32 = 39;
         pub const work_scans: u32 = 60;
@@ -355,28 +359,28 @@ pub mod SUMMARY {
         pub const backlog_s: u32 = 64;
         pub const backlog_per_s_scans: u32 = 65;
         pub const backlog_per_s_bakes: u32 = 66;
-        pub const tick_per_bake: u32 = 67;
+        pub const chunks_per_bake: u32 = 67;
         pub const mounts_added: u32 = 68;
         pub const mounts_removed: u32 = 69;
         pub const used_delta_mb: u32 = 70;
         pub const census: u32 = 71;
         pub const level_tris: u32 = 91;
         pub const last: u32 = 102;
-        pub const WORDS: u32 = 221;
+        pub const WORDS: u32 = 223;
         pub const KEYS: &[&str] = &[
-            "AT",
             "present",
             "n",
             "seconds",
             "moving",
             "missed",
+            "AT",
             "overran",
             "dt",
             "task",
             "offthread",
             "gpu",
             "sched",
-            "tick",
+            "chunks",
             "phases",
             "gpu_spans",
             "work_scans",
@@ -386,7 +390,7 @@ pub mod SUMMARY {
             "backlog_s",
             "backlog_per_s_scans",
             "backlog_per_s_bakes",
-            "tick_per_bake",
+            "chunks_per_bake",
             "mounts_added",
             "mounts_removed",
             "used_delta_mb",
@@ -397,13 +401,13 @@ pub mod SUMMARY {
         ];
     }
     pub mod tasks {
-        pub const AT: u32 = 226;
+        pub const AT: u32 = 228;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 75;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 301;
+        pub const AT: u32 = 303;
         pub const faces_kept: u32 = 0;
         pub const faces_possible: u32 = 1;
         pub const runs_culled: u32 = 2;
@@ -451,7 +455,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod atlas {
-        pub const AT: u32 = 321;
+        pub const AT: u32 = 323;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -460,7 +464,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "WORDS"];
     }
     pub mod retain {
-        pub const AT: u32 = 325;
+        pub const AT: u32 = 327;
         pub const nodes: u32 = 0;
         pub const run_sets: u32 = 1;
         pub const run_set_mb: u32 = 2;
@@ -486,7 +490,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod fetch {
-        pub const AT: u32 = 334;
+        pub const AT: u32 = 336;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -494,7 +498,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod poi {
-        pub const AT: u32 = 337;
+        pub const AT: u32 = 339;
         pub const badge_count: u32 = 0;
         pub const dropped: u32 = 1;
         pub const place_ms: u32 = 2;
@@ -548,11 +552,11 @@ pub mod SUMMARY {
         ];
     }
     pub mod peak {
-        pub const AT: u32 = 360;
+        pub const AT: u32 = 362;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
-        pub const tick_ms: u32 = 3;
+        pub const chunks_ms: u32 = 3;
         pub const gpu_ms: u32 = 4;
         pub const draw_calls: u32 = 5;
         pub const triangles: u32 = 6;
@@ -567,15 +571,15 @@ pub mod SUMMARY {
         pub const offscreen_pending: u32 = 15;
         pub const oldest_release_ms: u32 = 16;
         pub const oldest_visible_ms: u32 = 17;
-        pub const fine_boxes: u32 = 18;
-        pub const coarse_boxes: u32 = 19;
+        pub const fine_peak: u32 = 18;
+        pub const coarse_peak: u32 = 19;
         pub const WORDS: u32 = 20;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
             "dt_ms",
             "sched_ms",
-            "tick_ms",
+            "chunks_ms",
             "gpu_ms",
             "draw_calls",
             "triangles",
@@ -590,19 +594,19 @@ pub mod SUMMARY {
             "offscreen_pending",
             "oldest_release_ms",
             "oldest_visible_ms",
-            "fine_boxes",
-            "coarse_boxes",
+            "fine_peak",
+            "coarse_peak",
             "WORDS",
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 380;
+        pub const AT: u32 = 382;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
-    pub const WORDS: u32 = 541;
+    pub const WORDS: u32 = 543;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "retain", "fetch", "poi", "peak", "steps", "WORDS"];
 }
 
