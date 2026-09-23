@@ -19,12 +19,21 @@
 //!   `range_anchor`, which is `map_center` on the ground — and `map_center`
 //!   is the target `lead_point` is built from, so the two are one point at
 //!   two resolutions.
-//! - **How far.** `in_own_sides`: the distance divided by the thing's own
-//!   side. A ring is the same shape at every level and a chunk is drawn
-//!   where its own cells are the right size, so a raw distance says which
-//!   octave a thing is in and not how near it is. Divided by its side, a
-//!   coarse thing far off ranks with a fine thing near, which is what lets
-//!   the fill spread outward instead of by octave.
+//! - **How far.** The distance from that ground, and the two schedulers
+//!   measure it in the units their own work comes in. A page scheduler asks
+//!   which ring a page is in, and a ring is the same shape at every level,
+//!   so the centre page of every level is ring 0 and they go together. A
+//!   chunk scheduler asks the plain distance, because a chunk is a piece of
+//!   the screen and the middle of the screen is what anyone is looking at.
+//!
+//!   It was `in_own_sides` — the distance over the thing's own side, which
+//!   is "the biggest on the screen first". The ladder puts a chunk where its
+//!   own cells are the right size, so that number is about the same for
+//!   every level: a coarse chunk at the horizon ranked with a fine one under
+//!   the camera and the screen filled everywhere at once. Everywhere at once
+//!   means the middle waits for all of it, and at the two hundred chunks a
+//!   second the builder manages when it is behind, all of it is eleven
+//!   seconds where the innermost ring is under three.
 //! - **How the terms combine.** Lexicographically: a hard class — is this
 //!   ground drawn at all — above the soft distance, never a weighted sum. A
 //!   sum has some range of inputs where the soft term crosses the hard one,
@@ -36,8 +45,8 @@
 //! | pass | file | terms |
 //! | --- | --- | --- |
 //! | fetch | layer/terrain/tile_fetcher.rs | class, ring, level, distance |
-//! | mount | world/chunk/table.rs `mount` | `in_own_sides` |
-//! | build | world/chunk/table.rs `priority` | holder, on screen, hole, `in_own_sides` |
+//! | mount | world/chunk/table.rs `mount` | distance from the centre |
+//! | build | world/chunk/table.rs `priority` | holder, on screen, hole, a generation behind, distance from the centre |
 //!
 //! Where a pass has a term the others do not, it sits under the shared ones
 //! and says why. The fetch has two: its ring is the page-space quantization
@@ -72,7 +81,9 @@ pub fn view_centre(camera: Point, lead: Point) -> Point {
 }
 
 /// How far something is in its own sides, squared: `d²` over its side
-/// squared. The one measure every order here is soft-sorted by.
+/// squared, which is how large it looks rather than how near it is. What a
+/// page's ring is in page units (terrain/level.rs's `centre_dist`); the
+/// chunks order by the plain distance instead, and why is above.
 pub fn in_own_sides(distance2: f64, span: f64) -> f64 {
     distance2 / (span * span)
 }

@@ -32,7 +32,7 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::heap::alloc;
 use xpute_runtime::sched::edge::Notify;
-use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts};
+use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
 use crate::global::Global;
 use crate::io::load::Models;
@@ -44,7 +44,7 @@ use crate::layer::marker::frame_gizmo::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
 use crate::layer::terrain::level::{centre_page, chunk_span_of, decor_reach, ring, LevelPage, DECOR_REACH, RENDER_AXIS, WINDOW_LEVELS};
-use crate::sched::priority::{in_own_sides, view_centre};
+use crate::sched::priority::view_centre;
 use crate::shell::setting::store::hidden_ground;
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
@@ -80,10 +80,23 @@ const MAX_RECLAIMS_WHEN_REFUSED: u32 = 64;
 const MAX_MOUNTS_PER_FRAME: u32 = 64;
 const _: () = assert!(MAX_MOUNTS_PER_FRAME == PAGE_CHUNK_AXIS * PAGE_CHUNK_AXIS, "a page mounts in the frame it arrives in");
 
-const _: () = assert!(
-    (RENDER_AXIS * RENDER_AXIS * WINDOW_LEVELS) as usize <= u64::BITS as usize,
-    "render: the mount key names every page a selection reads, one bit each"
-);
+/// Chunks a level's drawn ring holds.
+const RING_CHUNKS: u32 = RENDER_AXIS * RENDER_AXIS * PAGE_CHUNK_AXIS * PAGE_CHUNK_AXIS;
+
+/// The widest selection there is: the top ring, each of whose pages may be
+/// stood in for by its four children where it has not arrived (`roots`), and
+/// three quarters of a ring for every level under it — a level's ring is half
+/// the width of the one above, so a quarter of it splits and the rest stays
+/// (`splits`).
+///
+/// The point of writing it down is that it is under MAX_CHUNKS. The table is
+/// a hard budget, so what it can refuse matters: with the widest selection
+/// inside it, what a full table turns away is never the chunk the camera
+/// wants — there is always a stale one to give up instead (`give_room`), and
+/// the current view can always be represented whatever the last one left.
+const WIDEST_SELECTION: usize = (4 * RING_CHUNKS + RING_CHUNKS / 4 * 3 * (WINDOW_LEVELS - 1)) as usize;
+
+const _: () = assert!(WIDEST_SELECTION <= MAX_CHUNKS, "render: a view the chunk table cannot hold at once");
 /// The heap's live share past which off-screen chunks are reclaimed
 /// whatever the retain budget says.
 const HEAP_PRESSURE: f64 = 0.9;
@@ -378,13 +391,13 @@ fn roots(pages: &BTreeSet<LevelPage>, page: LevelPage, base: u32, out: &mut Vec<
     }
 }
 
-/// How near a chunk is to `(ax, ay)`, in the measure every order here shares
-/// (sched/priority.rs). The mounts take the anchor, which is the same ground
-/// the builds measure from at the resolution a page scheduler has.
+/// How far a chunk's centre is from `(ax, ay)`, squared: what the mounts are
+/// ordered by, as the builds are (`priority`). The anchor is the same ground
+/// the builds measure from, at the resolution a page scheduler has.
 fn chunk_near(k: ChunkKey, ax: f64, ay: f64) -> f64 {
     let (x0, y0, side) = k.rect();
     let (dx, dy) = (x0 + side / 2.0 - ax, y0 + side / 2.0 - ay);
-    in_own_sides(dx * dx + dy * dy, side)
+    dx * dx + dy * dy
 }
 
 /// Whether two squares, each a corner and a side, share any ground.
@@ -568,6 +581,15 @@ pub struct Census {
     pub stale_on_waiter: u32,
     /// The boxes the last draw listed, by the level of the chunk they are of.
     pub level_boxes: [u32; LEVELS],
+    /// What the frame's ceilings left behind, which is how anyone tells
+    /// whether a ceiling is the thing holding the screen back: chunks on
+    /// screen still wanting a layout that the commit pass did not reach,
+    /// chunks the selection wants that are not mounted, and whether the
+    /// mount pass stopped because the table is full rather than because the
+    /// frame's own cap was spent.
+    pub commit_left: u32,
+    pub mount_left: u32,
+    pub mount_full: u32,
 }
 
 /// The pyramid's levels, a chunk's being one of them.
@@ -684,11 +706,9 @@ pub struct Scheduler {
     /// frame's release cap.
     refused_seen: u32,
     refused_last: bool,
-    /// The chunks the build task advances, in order: the ones whose sources
-    /// changed first, then the visible pending, as the last tick left them.
+    /// The chunks the build task advances, in the one order, as the last
+    /// tick left them.
     builds: Vec<u32>,
-    /// Chunks whose sources changed, pending until their new layout is up.
-    urgent: Vec<u32>,
     landed: Vec<u32>,
     /// Chunks the build task committed since the last census.
     build_committed: u32,
@@ -727,15 +747,17 @@ pub fn builds() -> &'static mut Notify {
 
 /// xpute's pass over `items` against the tick's absolute deadlines: the first
 /// item always, then until `cap` items did something or the budget is spent,
-/// and never past the hard deadline once one was tried. How many did something.
-fn under_budget<T: Copy>(items: &[T], cap: u32, deadline: f64, hard: f64, now: &impl Fn() -> f64, step: impl FnMut(T) -> bool) -> u32 {
+/// and never past the hard deadline once one was tried. How many did
+/// something, and how many were reached at all — the second is what says
+/// whether a ceiling is what stopped it.
+fn under_budget<T: Copy>(items: &[T], cap: u32, deadline: f64, hard: f64, now: &impl Fn() -> f64, step: impl FnMut(T) -> bool) -> PassStats {
     let at = now();
     let opts = BudgetOpts {
         budget_ms: deadline - at,
         hard_budget_ms: Some(hard - at),
         max_steps: Some(cap),
     };
-    run_under_budget(items.iter().copied(), step, opts).ran
+    run_under_budget(items.iter().copied(), step, opts)
 }
 
 impl Scheduler {
@@ -791,7 +813,6 @@ impl Scheduler {
             scratch: Scratch::default(),
             refused_last: false,
             builds: Vec::new(),
-            urgent: Vec::new(),
             landed: Vec::new(),
             build_committed: 0,
             pressure_at: f64::NEG_INFINITY,
@@ -945,7 +966,8 @@ impl Scheduler {
     /// The chunk's sources changed. What it shows stays up: the tiers and the
     /// decor it holds are an older generation now, drawn until a layout of
     /// the new one is whole and then let go at once, so a change is never a
-    /// hole and never half of one. The chunk goes to the front of the builds.
+    /// hole and never half of one. Where it stands among the builds is the one
+    /// order's to say (`priority`'s `restale`), not this.
     pub fn source(&mut self, world: &mut World, id: u32, page: Option<PageLanes>, show_structures: bool) {
         let Some(&i) = self.index.get(&id) else { return };
         self.view_dirty = true;
@@ -959,12 +981,9 @@ impl Scheduler {
         if self.slots[i].layout_ready && self.slots[i].has(IN_FRUSTUM) {
             let (p, q) = self.slots[i].desired;
             self.set_pending(i, true, build_request(p, q), crate::host::now());
-            // Asked now rather than at the tick's commit pass, which a spent
-            // budget may not reach this chunk in.
+            // Asked now rather than waiting for the tick's commit pass, so
+            // the builder knows what it wants before the next one.
             self.ask(world, i, p, q);
-            if !self.urgent.contains(&id) {
-                self.urgent.push(id);
-            }
         }
     }
 
@@ -1238,13 +1257,45 @@ impl Scheduler {
     /// builds (`retire`). Rerun when the anchor crosses into another page
     /// at the window's base, the window slides or a page comes or goes
     /// (`MountKey`).
-    fn mount(&mut self, frame: &Frame, emit: &mut impl FnMut(Event)) {
+    /// Lets one stale chunk go so a wanted one can mount.
+    ///
+    /// The table is a hard budget and the widest selection fits inside it
+    /// (WIDEST_SELECTION), so a full table with something still wanted is a
+    /// table holding stale chunks — there is always one to give up, and the
+    /// view the camera has now is never the thing turned away. It used to be:
+    /// the pass stopped at the ceiling and tried again next frame, which left
+    /// the last epoch's chunks in place and the current one outside.
+    ///
+    /// The one showing least goes: not drawn before drawn, and the furthest
+    /// out among equals.
+    fn give_room(&mut self, world: &mut World, emit: &mut impl FnMut(Event)) -> bool {
+        let mut worst: Option<((bool, f64), ChunkKey, u32)> = None;
+        for (&k, &id) in self.mounted.iter() {
+            let Some(&i) = self.index.get(&id) else { continue };
+            let s = &self.slots[i];
+            if !s.has(STALE) {
+                continue;
+            }
+            let key = (!(s.has(IN_FRUSTUM) && s.layout_ready), s.centre_distance2);
+            if worst.as_ref().is_none_or(|(low, _, _)| key > *low) {
+                worst = Some((key, k, id));
+            }
+        }
+        let Some((_, k, id)) = worst else { return false };
+        self.mounted.remove(&k);
+        self.remove(world, id);
+        emit(Event::Unmount { id });
+        true
+    }
+
+    fn mount(&mut self, world: &mut World, frame: &Frame, emit: &mut impl FnMut(Event)) {
         let Some(anchor) = frame.anchor else { return };
         let anchor_i = ivec::gather(anchor[0] as i64, anchor[1] as i64, 0);
         let key = (centre_page(frame.window.0, anchor_i), frame.window, self.pages_revision);
         if self.selected_for == Some(key) && self.to_mount.is_empty() {
             return;
         }
+        self.census.mount_full = 0;
         self.drawn = Some(ring_rect(frame.window.1 - 1, anchor_i));
         if self.selected_for != Some(key) {
             let mut wanted = BTreeMap::new();
@@ -1294,11 +1345,16 @@ impl Scheduler {
 
         let mut mounts = 0;
         while let Some(&(k, root)) = self.to_mount.front() {
-            if mounts >= MAX_MOUNTS_PER_FRAME || self.slots.len() >= MAX_CHUNKS {
-                // The rest next frame, from where this one stopped. How many
-                // chunks a range holds is the viewport's and the anchor's,
-                // not a number the kernel hands itself, so at the ceiling
-                // the pass mounts no more rather than trapping.
+            // At the ceiling a stale chunk gives up its place; only when
+            // there is none does the pass stop, which is a table holding
+            // nothing but what the camera wants and still wanting more.
+            if self.slots.len() >= MAX_CHUNKS && !self.give_room(world, emit) {
+                self.census.mount_full = 1;
+                self.view_dirty = true;
+                return;
+            }
+            if mounts >= MAX_MOUNTS_PER_FRAME {
+                // The rest next frame, from where this one stopped.
                 self.view_dirty = true;
                 return;
             }
@@ -1422,7 +1478,23 @@ impl Scheduler {
             // ground it no longer describes, for as long as the view is there.
             let gone_from_view = self.drawn.is_none_or(|d| !overlaps(rect, d));
             let whole = covered >= self.drawn.map_or(0.0, |d| shared_area(rect, d));
-            if gone_from_view || (whole && ready) {
+            // A stale chunk is kept for what it is showing. One that never
+            // got a layout is showing nothing, so there is nothing to keep
+            // and no reason to wait on whatever covers it.
+            //
+            // A zoom that walks levels mounts a window it will leave before
+            // anything of it is laid out, and `recheck` stops the work of a
+            // chunk the moment it goes stale — so these never had a layout
+            // and never will. Held, they waited on the cover being ready,
+            // which is to say they left only once the current work was done,
+            // which is exactly when the table is fullest: measured through a
+            // tilted zoom out, 2,182 stale chunks of which 161 were drawing
+            // anything, and 4,054 chunks held against a table of 4,096. The
+            // population that is not on the screen is not a cache and not
+            // coverage; it is the last epoch's unfinished work outliving its
+            // authority.
+            let shows_nothing = !s.layout_ready;
+            if gone_from_view || shows_nothing || (whole && ready) {
                 self.gone.push((k, id));
             } else if !whole {
                 self.kept.0 += 1;
@@ -1466,7 +1538,7 @@ impl Scheduler {
 
         self.stop_evicted(world);
         self.lose_meshes(emit);
-        self.mount(&frame, emit);
+        self.mount(world, &frame, emit);
         self.refresh(&frame, emit);
         self.retire(world, emit);
         let mut sc = core::mem::take(&mut self.scratch);
@@ -1525,23 +1597,30 @@ impl Scheduler {
         // the heap is the same until reclaim, and the decor is scattered
         // before its block is asked for.
         let starved = self.builder.stat.starved;
-        let mut committed = under_budget(visible, MAX_COMMITS_PER_FRAME, deadline, hard, now, |i| {
+        let commits = under_budget(visible, MAX_COMMITS_PER_FRAME, deadline, hard, now, |i| {
             self.builder.stat.starved == starved && self.commit(world, i, emit)
         });
+        // What the pass never looked at, which is what a cap on how many may
+        // land costs when there are more of them than it lets through.
+        let commit_left = visible.len() as u32 - commits.visited;
+        let mut committed = commits.ran;
         let releases = if self.refused_last { MAX_RELEASES_WHEN_REFUSED } else { MAX_RELEASES_PER_FRAME };
-        committed += under_budget(offscreen, releases, deadline, hard, now, |i| self.commit(world, i, emit));
+        committed += under_budget(offscreen, releases, deadline, hard, now, |i| self.commit(world, i, emit)).ran;
 
         // The builds are the build task's (`build_step`), on the turn's quota:
-        // what they take is set here — the chunks whose sources changed first,
-        // while still pending, then the visible pending in order.
-        let (slots, index) = (&self.slots, &self.index);
-        let pending = |id: &u32| index.get(id).is_some_and(|&i| slots[i].has(PENDING));
-        self.urgent.retain(pending);
+        // the visible pending, in the one order.
+        //
+        // A chunk whose sources had changed used to be held in a list of its
+        // own and put at the front of this, which meant in the order its page
+        // arrived — so a page answering for ground at the horizon sent its
+        // sixty-four chunks ahead of everything under the camera, and what
+        // filled the screen was the order the network replied in. The class
+        // was real and is kept; it is a term of `priority` now (`restale`),
+        // under the holes and over the refinements, where the distance
+        // decides within it.
+        let slots = &self.slots;
         self.builds.clear();
-        self.builds.extend(self.urgent.iter().copied());
-        let urgent = &self.urgent;
-        self.builds
-            .extend(visible.iter().filter(|&&i| slots[i].has(PENDING)).map(|&i| slots[i].id).filter(|id| !urgent.contains(id)));
+        self.builds.extend(visible.iter().filter(|&&i| slots[i].has(PENDING)).map(|&i| slots[i].id));
         if !self.builds.is_empty() {
             builds().notify();
         }
@@ -1555,6 +1634,9 @@ impl Scheduler {
 
         let mut c = Census { committed, ..Census::default() };
         c.chunks = self.slots.len() as u32;
+        c.commit_left = commit_left;
+        c.mount_left = self.to_mount.len() as u32;
+        c.mount_full = self.census.mount_full;
         c.pending = pending_total;
         for s in &self.slots {
             if s.has(IN_FRUSTUM) {
@@ -1639,6 +1721,7 @@ impl Scheduler {
                 slots[i].set(COVERED, true);
             }
         }
+        let holder = &self.meshes.holder;
         for s in &self.slots {
             if !s.has(IN_FRUSTUM) || !s.layout_ready {
                 continue;
@@ -1654,6 +1737,16 @@ impl Scheduler {
                     continue;
                 }
                 let Some(t) = s.tier(step, s.layout_generation) else { continue };
+                // A chunk draws only from a slot it holds. The slot is room
+                // now and not an address (world/chunk/mesh_slot.rs), so it is
+                // handed from one chunk to another while the kernel runs —
+                // and a long-lived thing holding a recyclable address is how
+                // one chunk comes to draw another's ground. It cannot here:
+                // the only reference to a slot is the `Tier` inside the chunk
+                // that took it, taking the slot removes that tier in the same
+                // step, and this looks the tier up again every frame. The
+                // assert is what says so out loud, at an array index a draw.
+                assert_eq!(holder[t.slot.index], s.id, "a chunk drew from a slot another holds");
                 if t.box_cnt == 0 {
                     continue;
                 }
@@ -1726,8 +1819,8 @@ impl Scheduler {
                 holds: holders.contains(&Some(s.id)),
                 in_frustum: s.has(IN_FRUSTUM),
                 hole: s.has(EMPTY) && !s.has(COVERED),
+                restale: s.layout_ready && s.layout_generation != self.builder.generation_of(s.id).unwrap_or(0),
                 centre_distance2: s.centre_distance2,
-                span: s.span,
                 pending_since: s.pending_since,
             }
             .keyed(now)
@@ -2182,21 +2275,33 @@ pub struct Priority {
     pub holds: bool,
     pub in_frustum: bool,
     pub hole: bool,
+    /// Showing a generation older than its sources: the ground it draws is
+    /// not what the page under it now says. Worse than a chunk asking only
+    /// to be sharper, better than one showing nothing at all.
+    pub restale: bool,
     pub centre_distance2: f64,
-    /// The chunk's side in units: what its distance is measured in.
-    pub span: f64,
     pub pending_since: f64,
 }
 
 /// The order work is taken in: the slots' holders; then what is on screen,
-/// every hole before any chunk asking only to be sharper, as progressive
+/// every hole first, then every chunk showing a generation its sources have
+/// moved past, then the ones asking only to be sharper, as progressive
 /// refinement goes — a coarse chunk a zoom out has just brought covers ground
 /// nothing shows, a fine one ground a stale chunk still shows; within each,
-/// the chunk that looks largest from the ground the view is heading to look
-/// at, its distance in its own sides, so a coarse chunk far off goes with a
-/// fine one near; then what is off screen farthest first — a release takes
-/// memory from what is least likely to be wanted again. A wait halves the
-/// distance key every AGE_HALF_MS, within its class.
+/// the nearest the ground the view is heading to look at, which is the
+/// middle of the screen; then what is off screen farthest first — a release
+/// takes memory from what is least likely to be wanted again. A wait halves
+/// the distance key every AGE_HALF_MS, within its class.
+///
+/// A plain distance and not one in the chunk's own sides. That was "the
+/// biggest on the screen first", and it is the same thing for every level:
+/// the ladder puts a chunk where its own cells are the right size, so a
+/// coarse one at the horizon subtends about what a fine one under the camera
+/// does, and they came out equal. The screen then filled everywhere at once
+/// rather than from the middle — and everywhere at once means the middle
+/// waits for all of it. At the two hundred chunks a second the builder
+/// manages when it is behind, a five-level window's two thousand three
+/// hundred is eleven seconds; its innermost ring alone is under three.
 pub fn priority(a: &Priority, b: &Priority, now: f64) -> core::cmp::Ordering {
     priority_keyed(&a.keyed(now), &b.keyed(now))
 }
@@ -2210,11 +2315,7 @@ pub struct Keyed {
 
 impl Priority {
     pub fn keyed(self, now: f64) -> Keyed {
-        let d2 = if self.in_frustum {
-            self.centre_distance2 / (self.span * self.span)
-        } else {
-            self.centre_distance2
-        };
+        let d2 = self.centre_distance2;
         let key = if self.pending_since < 0.0 {
             d2
         } else {
@@ -2229,6 +2330,7 @@ fn priority_keyed(a: &Keyed, b: &Keyed) -> core::cmp::Ordering {
         .cmp(&a.p.holds)
         .then(b.p.in_frustum.cmp(&a.p.in_frustum))
         .then_with(|| if a.p.in_frustum { b.p.hole.cmp(&a.p.hole) } else { core::cmp::Ordering::Equal })
+        .then_with(|| if a.p.in_frustum { b.p.restale.cmp(&a.p.restale) } else { core::cmp::Ordering::Equal })
         .then_with(|| if a.p.in_frustum { a.key.total_cmp(&b.key) } else { b.key.total_cmp(&a.key) })
 }
 

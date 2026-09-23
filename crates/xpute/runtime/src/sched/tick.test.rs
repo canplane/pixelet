@@ -2,20 +2,27 @@
 //
 // A step is a plain fn, so what a step sees goes in the state it runs over.
 
-use std::sync::OnceLock;
-use std::time::Instant;
+use core::cell::Cell;
 
 use super::*;
 use crate::clock::set_clock;
 
-fn wall_clock() -> f64 {
-    static START: OnceLock<Instant> = OnceLock::new();
-    START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
+// A clock the test moves, as edge.test.rs has. It used to be the wall's,
+// and a step that said it cost 0.3ms cost whatever the machine gave it —
+// so "the phase stayed inside its budget plus one step" held or failed on
+// how busy the machine was, and said nothing either way. Here a step costs
+// what it says.
+thread_local! {
+    static CLOCK_MS: Cell<f64> = const { Cell::new(0.0) };
 }
 
+fn clock() -> f64 {
+    CLOCK_MS.with(|c| c.get())
+}
+
+/// A step that costs `ms`.
 fn burn(ms: f64) {
-    let end = now() + ms;
-    while now() < end {}
+    CLOCK_MS.with(|c| c.set(c.get() + ms));
 }
 
 #[derive(Default)]
@@ -35,7 +42,8 @@ const POLICY: TickPolicy = TickPolicy {
 const QUOTA_MS: f64 = 6.0;
 
 fn tick() -> Tick<Seen, 8> {
-    set_clock(wall_clock);
+    set_clock(clock);
+    CLOCK_MS.with(|c| c.set(0.0));
     Tick::new(POLICY)
 }
 
@@ -157,7 +165,8 @@ fn tick_the_report_phase_sees_every_phase_before_it() {
 
 #[test]
 fn frame_budget_run_forward_progress_survives_an_exhausted_pool() {
-    set_clock(wall_clock);
+    set_clock(clock);
+    CLOCK_MS.with(|c| c.set(0.0));
     let budget = FrameBudget::new(0.0, now(), POLICY.hard_slack_ms);
     burn(1.0);
     let stats = budget.run([1, 2, 3], |_| true, None);
@@ -192,7 +201,7 @@ fn tick_a_storm_of_steps_that_report_work_stays_within_the_budget_plus_one_step(
     assert!(s.runs >= 1, "forward progress");
     assert!(s.runs < 2000, "the storm was cut short");
     assert!(
-        report.phase_ms[VISIBLE] <= report.budget_ms + COST + 1.0,
+        report.phase_ms[VISIBLE] <= report.budget_ms + COST,
         "visible {} over budget {}",
         report.phase_ms[VISIBLE],
         report.budget_ms
@@ -219,7 +228,7 @@ fn tick_a_storm_of_steps_that_cost_time_and_report_none_stays_within_the_hard_ce
     let mut s = Seen::default();
     let report = t.run(&mut s, 0.016, QUOTA_MS, now());
     assert!(
-        report.phase_ms[VISIBLE] <= report.budget_ms + POLICY.hard_slack_ms + COST + 1.0,
+        report.phase_ms[VISIBLE] <= report.budget_ms + POLICY.hard_slack_ms + COST,
         "visible {} over budget {}",
         report.phase_ms[VISIBLE],
         report.budget_ms

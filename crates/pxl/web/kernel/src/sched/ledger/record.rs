@@ -308,6 +308,8 @@ pub struct FrameSample {
     pub q_terrain: f64,
     pub q_poi: f64,
     pub stale: StaleSample,
+    pub cap: CapSample,
+    pub turn: TurnSample,
 }
 
 /// The chunks a view has moved off and that are kept until what replaces
@@ -337,6 +339,42 @@ pub struct StaleSample {
     /// is simply missing, and the sign that a tier outgrew what its slot was
     /// measured for (world/chunk/mesh_slot.rs).
     pub cut: f64,
+}
+
+/// The turn, in parts that add up. `task_ms` is the whole of it, and the
+/// effects, the tick and the stage are what it is spent on — so what none of
+/// them accounts for is visible as the difference, and a region nobody
+/// measured cannot hide in it. The effects had no timing at all until a fold
+/// running there took seventy milliseconds of a turn whose tick was one and
+/// a half (2026-09-23).
+///
+/// `step_ms` is the longest single effect of the turn and `step_name` which
+/// one, since a turn is only as cooperative as its longest step and a total
+/// does not say where to look.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct TurnSample {
+    pub effects_ms: f64,
+    pub stage_ms: f64,
+    pub step_ms: f64,
+    pub step_name: f64,
+}
+
+/// What the frame's ceilings left behind. None of them is a number anyone
+/// derived, so none of them is changed on an argument: this is what says
+/// whether one is holding the screen back at all.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct CapSample {
+    /// Chunks on screen still wanting a layout that the commit pass did not
+    /// reach, and chunks the selection wants that are not mounted.
+    pub commit_left: f64,
+    pub mount_left: f64,
+    /// Whether the mount pass stopped because the table is full, rather than
+    /// because the frame's own cap was spent.
+    pub mount_full: f64,
+    /// Pages that arrived and found every record carrying one worth more.
+    pub record_refused: f64,
 }
 
 /// One of the window's worst frames by dt, kept whole with the frame before
@@ -378,6 +416,10 @@ words!(FrameSample, FRAME::WORDS,
     stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready, stale.on_waiter => FRAME::stale_on_waiter,
     stale.slot_waits => FRAME::slot_waits, stale.wait_levels => FRAME::slot_wait_levels, stale.holder_levels => FRAME::slot_holder_levels,
     stale.cut => FRAME::slot_cut,
+    cap.commit_left => FRAME::cap_commit_left, cap.mount_left => FRAME::cap_mount_left,
+    cap.mount_full => FRAME::cap_mount_full, cap.record_refused => FRAME::cap_record_refused,
+    turn.effects_ms => FRAME::turn_effects_ms, turn.stage_ms => FRAME::turn_stage_ms,
+    turn.step_ms => FRAME::turn_step_ms, turn.step_name => FRAME::turn_step_name,
 );
 
 words!(TaskRow, TASK::WORDS,

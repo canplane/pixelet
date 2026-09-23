@@ -20,6 +20,8 @@ export const TASK_PHASE_NAMES = ["net_ms", "bytes", "decode_ms", "adopt_ms"] as 
 
 export const STEP_NAMES = ["input", "camera", "environment", "view_rotation", "view_translation", "companion", "preview", "chunks", "debug_gizmos", "ledger"] as const;
 
+export const EFFECT_NAMES = ["navigation", "bootstrap", "shell", "geolocation", "orientation", "tiles", "follow", "theme", "decor", "chunk_nodes", "hover", "puck", "objects", "pump"] as const;
+
 export const GPU_SPAN_NAMES = ["air", "shadow", "prepass", "ao", "world", "badges", "cases"] as const;
 
 export const LIMITS = {
@@ -93,7 +95,15 @@ export const FRAME = {
   slot_wait_levels: 108 as number,
   slot_holder_levels: 109 as number,
   slot_cut: 110 as number,
-  WORDS: 111 as number,
+  cap_commit_left: 111 as number,
+  cap_mount_left: 112 as number,
+  cap_mount_full: 113 as number,
+  cap_record_refused: 114 as number,
+  turn_effects_ms: 115 as number,
+  turn_stage_ms: 116 as number,
+  turn_step_ms: 117 as number,
+  turn_step_name: 118 as number,
+  WORDS: 119 as number,
 } as const;
 
 /** What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (view.test.ts), so a lane the kernel adds is printed without a word written for it. */
@@ -110,6 +120,8 @@ export const FRAME_GROUPS = {
   q: ["q_terrain", "q_poi"],
   stale: ["stale_chunks", "stale_drawn", "stale_levels", "stale_hidden", "stale_uncovered", "stale_unready", "stale_on_waiter"],
   slot: ["slot_waits", "slot_wait_levels", "slot_holder_levels", "slot_cut"],
+  cap: ["cap_commit_left", "cap_mount_left", "cap_mount_full", "cap_record_refused"],
+  turn: ["turn_effects_ms", "turn_stage_ms", "turn_step_ms", "turn_step_name"],
 } as const;
 
 /** One settled task (sched/ledger/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. */
@@ -133,9 +145,9 @@ export const TASK = {
 /** One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0. */
 export const WORST = {
   sample: 0 as number,
-  has_prev: 111 as number,
-  prev: 112 as number,
-  WORDS: 223 as number,
+  has_prev: 119 as number,
+  prev: 120 as number,
+  WORDS: 239 as number,
 } as const;
 
 export const SPREAD = {
@@ -210,15 +222,15 @@ export const SUMMARY = {
     census: 71 as number,
     level_tris: 91 as number,
     last: 102 as number,
-    WORDS: 213 as number,
+    WORDS: 221 as number,
   },
   tasks: {
-    AT: 218 as number,
+    AT: 226 as number,
     slots: 0 as number,
     WORDS: 75 as number,
   },
   counters: {
-    AT: 293 as number,
+    AT: 301 as number,
     faces_kept: 0 as number,
     faces_possible: 1 as number,
     runs_culled: 2 as number,
@@ -242,7 +254,7 @@ export const SUMMARY = {
     WORDS: 20 as number,
   },
   atlas: {
-    AT: 313 as number,
+    AT: 321 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -250,7 +262,7 @@ export const SUMMARY = {
     WORDS: 4 as number,
   },
   retain: {
-    AT: 317 as number,
+    AT: 325 as number,
     nodes: 0 as number,
     run_sets: 1 as number,
     run_set_mb: 2 as number,
@@ -263,14 +275,14 @@ export const SUMMARY = {
     WORDS: 9 as number,
   },
   fetch: {
-    AT: 326 as number,
+    AT: 334 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   poi: {
-    AT: 329 as number,
+    AT: 337 as number,
     badge_count: 0 as number,
     dropped: 1 as number,
     place_ms: 2 as number,
@@ -297,7 +309,7 @@ export const SUMMARY = {
     WORDS: 23 as number,
   },
   peak: {
-    AT: 352 as number,
+    AT: 360 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -321,12 +333,12 @@ export const SUMMARY = {
     WORDS: 20 as number,
   },
   steps: {
-    AT: 372 as number,
+    AT: 380 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
-  WORDS: 533 as number,
+  WORDS: 541 as number,
 } as const;
 
 /** What `ledger_read` returns the address of: u32 words, each range's address in the module's memory and its record count. */
@@ -339,7 +351,7 @@ export const READ = {
   tasks_count: 5 as number,
   worst_at: 6 as number,
   worst_count: 7 as number,
-  WORDS: 8 as number,
+  WORDS: 16 as number,
 } as const;
 
 /** What `ledger_log` returns the address of: u32 words, the frames and tasks the stream has kept since `ledger_log_clear`. */
@@ -348,5 +360,5 @@ export const LOG = {
   frames_count: 1 as number,
   tasks_at: 2 as number,
   tasks_count: 3 as number,
-  WORDS: 4 as number,
+  WORDS: 12 as number,
 } as const;

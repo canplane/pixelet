@@ -19,9 +19,13 @@ use crate::kernel::{kernel, with_world};
 use crate::layer::environment::state::globe;
 use crate::layer::poi::fetcher;
 use crate::layer::terrain::level::window;
+use crate::layer::terrain::resident::take_record_refusals;
 use crate::layer::terrain::store::level_pages;
 use crate::layer::terrain::tile_fetcher;
-use crate::sched::ledger::record::{ledger_record_frame, ledger_take_rings, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, WorkSample, LEVELS};
+use crate::sched::ledger::record::{
+    ledger_record_frame, ledger_take_rings, name_id, CapSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample, LEVELS,
+};
+use crate::sched::ledger::spec::EFFECT_NAMES;
 use crate::sched::priority::lead_point;
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::shell::map_store::map_store;
@@ -84,6 +88,22 @@ pub fn set_host_task_ms(task_ms: f64) {
     if let Some(frame) = crate::sched::ledger::record::ledger_last_frame() {
         frame.task_ms = task_ms;
     }
+}
+
+/// The turn's parts, once the turn is over: what the effects took and what
+/// the stage took, written onto the frame already recorded the way
+/// `set_host_task_ms` is. With the tick's own numbers beside them,
+/// `task_ms` is accounted for — and what none of the three explains is the
+/// difference, where a region nobody measured would have to show itself.
+pub fn set_turn_timing(effects_ms: f64, stage_ms: f64) {
+    let Some(frame) = crate::sched::ledger::record::ledger_last_frame() else { return };
+    let (step_ms, step_name) = crate::sched::turn::worst_effect();
+    frame.turn = TurnSample {
+        effects_ms,
+        stage_ms,
+        step_ms,
+        step_name: name_id(EFFECT_NAMES, step_name),
+    };
 }
 
 /// Whether the last pass left something new to draw; reading clears it.
@@ -274,6 +294,13 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             uncovered: census.stale_uncovered as f64,
             unready: census.stale_unready as f64,
             on_waiter: census.stale_on_waiter as f64,
+        },
+        turn: TurnSample::default(),
+        cap: CapSample {
+            commit_left: census.commit_left as f64,
+            mount_left: census.mount_left as f64,
+            mount_full: census.mount_full as f64,
+            record_refused: take_record_refusals() as f64,
         },
     });
 }

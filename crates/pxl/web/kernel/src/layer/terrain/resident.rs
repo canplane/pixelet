@@ -16,10 +16,16 @@
 //! The range is the size it always was. What changed is that its occupancy
 //! follows the camera's *demand* rather than the camera's *arithmetic*: a
 //! view holding two levels leaves three levels' worth of records to whatever
-//! was resident before, where the residue left none. A view holding all
-//! WINDOW_LEVELS leaves none either way — the range has a record per page of
-//! the window's rings and not one more — so what survives a camera move is
-//! what the window has room for, and no promise is made past that.
+//! was resident before, where the residue left none.
+//!
+//! So the rule is not that a page the camera left is kept. It is that
+//! **leaving the camera is not itself a reason to let a page go** — only
+//! another page needing the room is, and the range is a hard budget of
+//! TERRAIN_SLOTS records that nothing may exceed. A view holding all
+//! WINDOW_LEVELS wants a page for every record and leaves nothing over, and
+//! then pages do go; `worth` says which, and the ledger's `cap … page` says
+//! how often it came to that, so whether the budget is the wrong size is a
+//! reading and not an argument.
 //!
 //! No quarantine is needed, and the reason is not the addressing. A record's
 //! bytes are read through the `Terrain` slices the store hands out, and none
@@ -73,6 +79,21 @@ pub fn put(p: LevelPage, record: u32) -> Option<LevelPage> {
 /// Whether `p` is resident in the range.
 pub fn holds_record(p: LevelPage) -> bool {
     record_of(p).is_some()
+}
+
+static REFUSED: Global<u32> = Global::new();
+
+/// A page arrived and every record carried one worth more, so it was
+/// dropped (tile_repository.rs's `record_for`). Counted rather than reasoned
+/// about: whether the range is under real pressure is the only thing that
+/// says whether its size is the problem.
+pub fn record_refused() {
+    *REFUSED.get(|| 0) += 1;
+}
+
+/// The refusals since the last take, for the ledger.
+pub fn take_record_refusals() -> u32 {
+    core::mem::take(REFUSED.get(|| 0))
 }
 
 /// Test-only: empties the range, so each test starts against records that

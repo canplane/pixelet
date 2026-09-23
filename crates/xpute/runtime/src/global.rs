@@ -33,6 +33,17 @@ impl<T> Global<T> {
     }
 }
 
+/// Serializes the native checks that touch a `Global`: the test harness runs
+/// them on several threads and a `Global` is for one, so two of them in one
+/// static at once is not a flake but the unsoundness the type is allowed on
+/// the promise of one thread. A check that names a `Global` takes this
+/// first.
+#[cfg(test)]
+pub fn serial() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 impl<T> Default for Global<T> {
     fn default() -> Self {
         Self::new()

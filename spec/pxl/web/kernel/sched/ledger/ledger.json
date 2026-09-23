@@ -53,6 +53,22 @@
     "debug_gizmos",
     "ledger"
   ],
+  "EFFECT_NAMES": [
+    "navigation",
+    "bootstrap",
+    "shell",
+    "geolocation",
+    "orientation",
+    "tiles",
+    "follow",
+    "theme",
+    "decor",
+    "chunk_nodes",
+    "hover",
+    "puck",
+    "objects",
+    "pump"
+  ],
   "GPU_SPAN_NAMES": [
     "air",
     "shadow",
@@ -136,7 +152,15 @@
     "slot_wait_levels": 108,
     "slot_holder_levels": 109,
     "slot_cut": 110,
-    "WORDS": 111
+    "cap_commit_left": 111,
+    "cap_mount_left": 112,
+    "cap_mount_full": 113,
+    "cap_record_refused": 114,
+    "turn_effects_ms": 115,
+    "turn_stage_ms": 116,
+    "turn_step_ms": 117,
+    "turn_step_name": 118,
+    "WORDS": 119
   },
   "FRAME_GROUPS": {
     "$doc": [
@@ -227,6 +251,18 @@
       "slot_wait_levels",
       "slot_holder_levels",
       "slot_cut"
+    ],
+    "cap": [
+      "cap_commit_left",
+      "cap_mount_left",
+      "cap_mount_full",
+      "cap_record_refused"
+    ],
+    "turn": [
+      "turn_effects_ms",
+      "turn_stage_ms",
+      "turn_step_ms",
+      "turn_step_name"
     ]
   },
   "TASK": {
@@ -255,9 +291,9 @@
       "One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0."
     ],
     "sample": 0,
-    "has_prev": 111,
-    "prev": 112,
-    "WORDS": 223
+    "has_prev": 119,
+    "prev": 120,
+    "WORDS": 239
   },
   "SPREAD": {
     "$type": "u32",
@@ -338,15 +374,15 @@
       "census": 71,
       "level_tris": 91,
       "last": 102,
-      "WORDS": 213
+      "WORDS": 221
     },
     "tasks": {
-      "AT": 218,
+      "AT": 226,
       "slots": 0,
       "WORDS": 75
     },
     "counters": {
-      "AT": 293,
+      "AT": 301,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -370,7 +406,7 @@
       "WORDS": 20
     },
     "atlas": {
-      "AT": 313,
+      "AT": 321,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -378,7 +414,7 @@
       "WORDS": 4
     },
     "retain": {
-      "AT": 317,
+      "AT": 325,
       "nodes": 0,
       "run_sets": 1,
       "run_set_mb": 2,
@@ -391,14 +427,14 @@
       "WORDS": 9
     },
     "fetch": {
-      "AT": 326,
+      "AT": 334,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "poi": {
-      "AT": 329,
+      "AT": 337,
       "badge_count": 0,
       "dropped": 1,
       "place_ms": 2,
@@ -425,7 +461,7 @@
       "WORDS": 23
     },
     "peak": {
-      "AT": 352,
+      "AT": 360,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -449,12 +485,12 @@
       "WORDS": 20
     },
     "steps": {
-      "AT": 372,
+      "AT": 380,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
-    "WORDS": 533
+    "WORDS": 541
   },
   "READ": {
     "$type": "u32",
@@ -469,7 +505,7 @@
     "tasks_count": 5,
     "worst_at": 6,
     "worst_count": 7,
-    "WORDS": 8
+    "WORDS": 16
   },
   "LOG": {
     "$type": "u32",
@@ -480,6 +516,6 @@
     "frames_count": 1,
     "tasks_at": 2,
     "tasks_count": 3,
-    "WORDS": 4
+    "WORDS": 12
   }
 }

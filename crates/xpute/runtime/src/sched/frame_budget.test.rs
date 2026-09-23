@@ -1,26 +1,35 @@
 // xpute-runtime/sched/frame_budget.test.rs
 
-use std::sync::OnceLock;
-use std::time::Instant;
+use core::cell::Cell;
 
 use super::*;
 use crate::clock::set_clock;
 
-/// The budget is measured with the host's clock, so a step has to actually
-/// take time for the deadline to mean anything: a real one for these tests.
-/// The clock is the thread's, so tests on other threads do not see it.
-fn wall_clock() -> f64 {
-    static START: OnceLock<Instant> = OnceLock::new();
-    START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
+// A clock the test moves, as edge.test.rs has. The budget is read off the
+// host's clock, and the pass cannot tell one from another — it reads
+// `now()` and nothing else — so a step costs exactly what it says here,
+// and what a pass does with a budget is a fact rather than a race with
+// whatever else the machine is doing. It was the wall's, and the
+// assertions had to be loose enough to survive a busy one: `seen.len() < 5`
+// where the answer is two.
+//
+// The clock is the thread's, so tests on other threads do not see it.
+thread_local! {
+    static CLOCK_MS: Cell<f64> = const { Cell::new(0.0) };
 }
 
+fn clock() -> f64 {
+    CLOCK_MS.with(|c| c.get())
+}
+
+/// A step that costs `ms`.
 fn burn(ms: f64) {
-    let end = now() + ms;
-    while now() < end {}
+    CLOCK_MS.with(|c| c.set(c.get() + ms));
 }
 
 fn opts(budget_ms: f64) -> BudgetOpts {
-    set_clock(wall_clock);
+    set_clock(clock);
+    CLOCK_MS.with(|c| c.set(0.0));
     BudgetOpts { budget_ms, ..Default::default() }
 }
 
@@ -41,7 +50,7 @@ fn run_under_budget_runs_everything_when_the_budget_is_ample() {
 }
 
 #[test]
-fn run_under_budget_stops_at_the_wall_time_budget() {
+fn run_under_budget_stops_once_the_time_budget_is_spent() {
     let mut seen = Vec::new();
     let stats = run_under_budget(
         [1, 2, 3, 4, 5],
@@ -52,8 +61,9 @@ fn run_under_budget_stops_at_the_wall_time_budget() {
         },
         opts(10.0),
     );
-    // one step fits inside 10ms, the second crosses it, the third is refused
-    assert!(seen.len() < 5);
+    // The first runs at 0 and the second at 6, both inside the ten; the
+    // third is refused at twelve.
+    assert_eq!(seen, [1, 2]);
     assert!(stats.stopped_early);
     assert_eq!(stats.ran as usize, seen.len());
 }
@@ -125,7 +135,10 @@ fn run_under_budget_hard_budget_ms_bounds_a_pass_of_expensive_no_ops() {
     );
     assert_eq!(stats.ran, 0);
     assert!(stats.stopped_early);
-    assert!(seen.len() < 40);
+    // Nothing reports work, so the budget never arms and only the ceiling
+    // stops it: four at three milliseconds each stand the clock at twelve,
+    // and the fifth is refused there.
+    assert_eq!(seen.len(), 4);
 }
 
 #[test]
