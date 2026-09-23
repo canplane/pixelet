@@ -272,6 +272,53 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P3
 
+- **The address label by the zoom.** Asked 2026-09-23, not now: it wants a
+  rebake. The label is one baked answer a leaf page
+  (`use-reverse-geocode.ts`, `geo-bake/geocode/provider/overture.rs`) — region,
+  county, the fine polygon and a nearby point — shown whole at every zoom, so
+  zoomed out to a province it still names a 동. The prior art is Nominatim's
+  reverse `zoom`, which the client used before the bake: 5 a state, 8 a
+  county, 10–13 a city or suburb, 14 on a neighbourhood. Here, with level `k`
+  at zoom 15 − k, something like the whole chain to level 2, region and county
+  to level 5, region alone above.
+  - Cut the leaf page's chain rather than bake one per level. A level page's
+    centre is not the map's: at level 4 a page is some 16 km, and its label
+    would name the next county over. The leaf page is about a kilometre, so
+    its chain is right and only needs shortening.
+  - Each part carries its `subtype`, which means rebaking the geocode set
+    and a new published version. Cutting by position is wrong where a level
+    is missing: Sejong has no county, so "the first two" is not "region and
+    county".
+  - The kernel sends the window's base level in the snapshot beside
+    `map.page` (`terrain/level.rs`'s `window()`); the client cuts the chain
+    it holds, so a zoom does not fetch again.
+  - Zoomed out, a pan crosses leaf pages faster and asks more often; the
+    500 ms debounce holds that to two a second, nothing against the Worker's
+    100k a day.
+
+- **What the sky left open.** Recorded 2026-09-22
+  ([the sky is the air](./20260922-the-sky-is-the-air.md)), each small and
+  none blocking:
+  - The terrain stands at its elevation and the planet's ground past it at sea
+    level, so from high up a far piece of terrain floats over it with its
+    chunk walls showing. Setting the ground at the map centre's height, or
+    skirting the coarse levels down to it, would close it.
+  - Clouds with a thickness: a slab a kilometre or two deep, sampled a few
+    times a pixel, for the volume a side view misses — as a quality setting,
+    since it is several times today's cost. Volumetric clouds proper are out
+    while the client draws at rest every two seconds.
+  - The Milky Way, which a naked-eye catalogue does not make (a low-resolution
+    all-sky texture, whose licences are attribution ones), and the bright
+    planets, which the sun's and the moon's low-precision formulas extend to.
+  - `look/lod.rs`'s note on which tier handoffs are dithered still reads
+    against a `RENDER_DIST` of 1,536 u, which the pyramid and the fog at
+    6,144 u have both moved.
+  - The themes' remaining fill — ambient, hemisphere, the floor — from the
+    sky's irradiance, the way the sunlight now comes from the air. The floor
+    is there for a phone's night and would resist it.
+  - Not yet seen on a screen: the clouds at sunset, and the moonlit sky
+    toward the moon itself.
+
 - **A changelog, when `xpute` is published and not before.** Asked 2026-09-19
   and answered no: a changelog's reader is someone deciding whether to move
   between versions, and its load-bearing lines are the ones that change what

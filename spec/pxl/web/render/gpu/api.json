@@ -10,14 +10,17 @@
       "A texture's format: the texture pack, skins and the badge sheet; depth; the",
       "canvas's own; then the screen-space occlusion's — a half-resolution depth and",
       "normal in four floats, the full-resolution occlusion in one byte, and the blue",
-      "noise it dithers with, four bytes read as they are."
+      "noise it dithers with, four bytes read as they are; then the atmosphere's",
+      "tables, radiance and transmittance in four half floats, filterable and",
+      "renderable on every WebGPU device."
     ],
     "RGBA8_SRGB": 0,
     "DEPTH32": 1,
     "CANVAS": 2,
     "RGBA32F": 3,
     "R8": 4,
-    "RGBA8": 5
+    "RGBA8": 5,
+    "RGBA16F": 6
   },
   "dimension": {
     "$type": "u32",
@@ -107,6 +110,7 @@
     "NO_DEPTH": 4,
     "OPAQUE": 0,
     "ALPHA": 1,
+    "ADD": 2,
     "FRAME_SAMPLES": 0,
     "ONE_SAMPLE": 1,
     "PER_VERTEX": 0,

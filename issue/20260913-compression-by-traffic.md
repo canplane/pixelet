@@ -205,6 +205,14 @@ makes while someone waits at zstd's default, 3. The two packings of one page
 unpack to the same packet — measured at levels 0 to 3 against v4 — so the
 dev server is checked against a bake by packet, not by object.
 
+Measured again on 2026-09-22, asked whether 3 would serve a view better for
+being faster: 500 v4 pages taken evenly across the bake, 502 MB unpacked,
+through `zstd -b`. Level 3 packs them to 4.57 MB at 3,147 MB/s and 19 to
+3.06 MB at 22 MB/s — a third smaller, about 45 ms a page against 0.3 — and
+19 unpacks faster, 8,942 MB/s against 6,866. The level costs the bake alone,
+once; the reader gets fewer bytes and a quicker decode. 19 stays, and 3
+stays where a page is packed while someone waits for it.
+
 **One label per object, and the bytes decide it.** An object's encoding is
 metadata its upload sets, so gzip and zstd versions can share the bucket and
 a prefix rewritten in place can hold both mid-sync. The upload therefore takes

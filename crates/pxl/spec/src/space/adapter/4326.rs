@@ -39,7 +39,7 @@ const LAT_MAX: f64 = 85.05112878;
 const LAT_MIN: f64 = -85.05112878;
 
 /// Earth radius used by EPSG:3857 (meters).
-const EARTH_RADIUS: f64 = 6378137.0;
+pub const EARTH_RADIUS: f64 = 6378137.0;
 
 const DEG_TO_RAD: f64 = core::f64::consts::PI / 180.0;
 const RAD_TO_DEG: f64 = 180.0 / core::f64::consts::PI;

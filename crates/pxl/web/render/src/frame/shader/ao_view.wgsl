@@ -36,7 +36,6 @@ const AO_DENOISE_SAMPLES: i32 = 4;
 // N8AO's denoiseRadius of 12 texels, halved as its half-resolution run
 // halves it.
 const AO_DENOISE_RADIUS: f32 = 6.0;
-const AO_PI: f32 = 3.14159265;
 // The blue-noise texture's side; a pixel reads it tiled.
 const AO_NOISE_MASK: i32 = 127;
 

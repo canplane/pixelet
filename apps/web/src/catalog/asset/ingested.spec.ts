@@ -139,6 +139,7 @@ export const INGESTED: Readonly<Record<string, IngestedAsset>> = {
   "decor/kenney_watercraft_pack/boat-sail-a.glb": { key: "asset/35c8e2adae1d3f0fe9d0e37c65422f1c6c6f1f10d818f9bde273a9da264eef4c", bytes: 35276, extent: [1.78, 3.77, 4.74] },
   "decor/kenney_watercraft_pack/boat-speed-a.glb": { key: "asset/d6d5605408e8be888551588b4c73d2953414250e2f29864ee133e9ba5ee2e8b2", bytes: 16520, extent: [1.78, 3.37, 1.5] },
   "decor/kenney_watercraft_pack/colormap.png": { key: "asset/311138350e74e35c5497a1bd8076a01740b7c302bed11027639fa553459a68de", bytes: 8814 },
+  "sky/moon.png": { key: "asset/e6977d49922c1676da63b5d6179388ba61f1ad7a9ae0b40408718b7cc7123881", bytes: 165698 },
 };
 
 /** The texture pack as one sheet: `columns` tiles of `cell` pixels per

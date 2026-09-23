@@ -76,15 +76,135 @@ fn frame_layout_matches_the_struct() {
     let (module, _) = compile(SHADER_CHUNK);
     let frame = module.types.iter().find(|(_, t)| t.name.as_deref() == Some("Frame")).expect("Frame").1;
     let TypeInner::Struct { members, span } = &frame.inner else { panic!("Frame is a struct") };
-    assert_eq!(*span, FRAME_FLOATS * 4);
-    let offsets: BTreeMap<&str, u32> = members.iter().map(|m| (m.name.as_deref().unwrap(), m.offset / 4)).collect();
+    assert_eq!(*span as usize, FRAME_FLOATS * 4);
+    let offsets: BTreeMap<&str, usize> = members.iter().map(|m| (m.name.as_deref().unwrap(), m.offset as usize / 4)).collect();
     for (name, at) in FRAME_FIELDS.iter().zip(FRAME_AT) {
         assert_eq!(offsets[name], at, "FRAME_AT for {name}");
     }
     // The environment's run is contiguous from sun_dir, as look/environment.rs
-    // writes it: 24 floats to the end of fog_color's padding.
-    assert_eq!(offsets["fog_color"], offsets["sun_dir"] + 20);
+    // writes it: 24 floats to the end of its padding.
+    assert_eq!(offsets["_p5"], offsets["sun_dir"] + 20);
     assert_eq!(offsets["other_color"], offsets["other_dir"] + 4);
+}
+
+/// A struct's span and its members' offsets, in floats, as `kind`'s shader
+/// lays it out.
+fn layout(kind: u32, name: &str) -> (usize, BTreeMap<String, usize>) {
+    let (module, _) = compile(kind);
+    let ty = module.types.iter().find(|(_, t)| t.name.as_deref() == Some(name)).unwrap_or_else(|| panic!("{name}")).1;
+    let TypeInner::Struct { members, span } = &ty.inner else { panic!("{name} is a struct") };
+    (*span as usize / 4, members.iter().map(|m| (m.name.clone().unwrap(), m.offset as usize / 4)).collect())
+}
+
+/// Each named field of `name` in `kind`'s shader sits where the Rust that
+/// writes it puts it, and the struct is as long as the Rust's words.
+fn holds(kind: u32, name: &str, floats: usize, fields: &[(&str, usize)]) {
+    let (span, offsets) = layout(kind, name);
+    assert_eq!(span, floats, "{name}'s length");
+    for (field, at) in fields {
+        assert_eq!(offsets[*field], *at, "{name}.{field}");
+    }
+}
+
+/// A module constant's value, as the literals it is built from.
+fn constant(kind: u32, name: &str) -> Vec<f64> {
+    let (module, _) = compile(kind);
+    let (_, c) = module.constants.iter().find(|(_, c)| c.name.as_deref() == Some(name)).unwrap_or_else(|| panic!("{name}"));
+    let literal = |e: &naga::Expression| match e {
+        naga::Expression::Literal(naga::Literal::F32(v)) => *v as f64,
+        naga::Expression::Literal(naga::Literal::U32(v)) => *v as f64,
+        other => panic!("{name} is literals, not {other:?}"),
+    };
+    match &module.global_expressions[c.init] {
+        naga::Expression::Compose { components, .. } => components.iter().map(|h| literal(&module.global_expressions[*h])).collect(),
+        other => vec![literal(other)],
+    }
+}
+
+/// The uniforms the sky's passes are laid out into, and the tables they
+/// read, are where the Rust that writes them puts them.
+#[test]
+fn the_skys_layouts_match_their_structs() {
+    use crate::gpu::{atmosphere as a, clouds as c, renderer as r, stars as s};
+    holds(
+        SHADER_SKY,
+        "Atmosphere",
+        a::ATMOS_FLOATS,
+        &[
+            ("rayleigh_scattering", a::RAYLEIGH_SCATTERING),
+            ("bottom_radius", a::BOTTOM_RADIUS),
+            ("ozone_absorption", a::OZONE_ABSORPTION),
+            ("top_radius", a::TOP_RADIUS),
+            ("white", a::WHITE),
+            ("rayleigh_scale_height", a::RAYLEIGH_SCALE_HEIGHT),
+            ("sun_dir", a::SUN_DIR),
+            ("mie_scattering", a::MIE_SCATTERING),
+            ("camera_altitude", a::CAMERA_ALTITUDE),
+            ("km_per_u", a::KM_PER_U),
+            ("mie_extinction", a::MIE_EXTINCTION),
+            ("mie_scale_height", a::MIE_SCALE_HEIGHT),
+            ("mie_g", a::MIE_G),
+            ("ozone_center", a::OZONE_CENTER),
+            ("ozone_half_width", a::OZONE_HALF_WIDTH),
+            ("ground_albedo", a::GROUND_ALBEDO),
+            ("sun_angular_radius", a::SUN_ANGULAR_RADIUS),
+            ("exposure", a::EXPOSURE),
+            ("max_adaptation", a::MAX_ADAPTATION),
+            ("adaptation", a::ADAPTATION),
+            ("moon_dir", a::MOON_DIR),
+            ("moon_light", a::MOON_LIGHT),
+            ("land", a::LAND),
+            ("sun_seen", a::SUN_SEEN),
+        ],
+    );
+    holds(SHADER_SKY, "Sky", r::SKY_FLOATS, &[("ray", 0), ("pole", r::SKY_POLE), ("mapped", r::SKY_MAPPED)]);
+    holds(
+        SHADER_CLOUDS,
+        "Clouds",
+        c::CLOUDS_FLOATS,
+        &[
+            ("ray", 0),
+            ("base", c::BASE),
+            ("frac", c::FRAC),
+            ("time", c::TIME),
+            ("count", c::COUNT),
+            ("altitude_km", c::ALTITUDE),
+            ("sun_at", c::SUN_AT),
+            ("moon_at", c::MOON_AT),
+        ],
+    );
+    holds(
+        SHADER_STARS,
+        "Stars",
+        s::STARS_FLOATS,
+        &[
+            ("view_proj", 0),
+            ("sky", s::SKY),
+            ("viewport", s::VIEWPORT),
+            ("intensity", s::INTENSITY),
+            ("depth", s::DEPTH),
+            ("density", s::DENSITY),
+        ],
+    );
+    for (name, k) in [("TRANSMITTANCE_SIZE", a::TRANSMITTANCE), ("MULTISCATTER_SIZE", a::MULTISCATTER), ("SKY_VIEW_SIZE", a::SKY_VIEW)] {
+        let (w, h) = a::SIZES[k];
+        assert_eq!(constant(SHADER_SKY, name), [w as f64, h as f64], "{name}");
+    }
+    assert_eq!(constant(SHADER_CLOUDS, "CLOUD_LATTICE_CELLS"), [(1u32 << c::LATTICE_SHAMT) as f64], "the clouds' lattice");
+    // The glare's halo, Spencer's photopic point-spread function without its
+    // core, over the sphere: the share of the light it carries, which the
+    // shader scales to a lens's.
+    let halo = |t: f64| 0.478 * 20.91 / (t + 0.02).powi(3) + 0.138 * 72.37 / (t + 0.02).powi(2);
+    let (n, lo, hi) = (200_000, 1e-5f64, 180.0f64);
+    let share: f64 = (0..n)
+        .map(|i| {
+            let (t0, t1) = (lo * (hi / lo).powf(i as f64 / n as f64), lo * (hi / lo).powf((i + 1) as f64 / n as f64));
+            halo((t0 + t1) / 2.0) * core::f64::consts::TAU * ((t0 + t1) / 2.0).to_radians().sin() * (t1 - t0).to_radians()
+        })
+        .sum();
+    assert!((constant(SHADER_SKY, "GLARE_HALO_SHARE")[0] - share).abs() < 1e-3, "the glare's halo carries {share}");
+    let luma: Vec<f32> = crate::look::environment::LUMA.iter().map(|&v| v as f32).collect();
+    assert_eq!(constant(SHADER_SKY, "LUMA").iter().map(|&v| v as f32).collect::<Vec<_>>(), luma, "the luminance weights");
 }
 
 /// The vertex format a location's argument type asks for.

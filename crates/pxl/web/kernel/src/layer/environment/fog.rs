@@ -1,7 +1,7 @@
 // pxl-kernel/layer/environment/fog.rs
 
-//! How far the view reaches, from how far the camera stands: the fog's band,
-//! the clip planes and the sky, each render_cfg's value times one scale.
+//! How far the view reaches, from how far the camera stands: the fog's band
+//! and the clip planes, each render_cfg's value times one scale.
 //!
 //! The scale is 1 while the camera is near, so a view looking down a street
 //! still has its horizon, and past the distance where FOG_PER_DIST overtakes
@@ -34,17 +34,6 @@ pub fn near_clip(dist: f64) -> f64 {
 
 pub fn far_clip(dist: f64) -> f64 {
     render_cfg::FAR_CLIP * view_scale(dist)
-}
-
-/// The sky is the inside of a sphere centred on the world origin, and must
-/// stay inside the far clip plane. The camera can stand as far from that
-/// origin as it stands from its pivot, and looking toward the far side of
-/// the sphere from an off-centre point adds that same distance again, so the
-/// sphere leaves it as margin; without it the sky clips exactly where a
-/// wide-shot camera is most likely to be looking. The camera distance the
-/// margin is taken at is the one the scale holds the far clip at.
-pub fn sky_radius(dist: f64) -> f64 {
-    (render_cfg::FAR_CLIP - render_cfg::FOG_FAR / render_cfg::FOG_PER_DIST) * 0.9 * view_scale(dist)
 }
 
 #[cfg(test)]

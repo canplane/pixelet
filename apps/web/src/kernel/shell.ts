@@ -33,7 +33,6 @@ export type UiSnapshot = {
   view: { azimuth: number };
   is_follow_mode: boolean;
   camera_busy: boolean;
-  fog: string;
   settings: Record<string, boolean | string | number>;
   scale_bar: { total_meters: number; bar_width_px: number; is_default_zoom: boolean };
   compass: { show: boolean };
@@ -48,7 +47,6 @@ const INITIAL: UiSnapshot = {
   view: { azimuth: 0 },
   is_follow_mode: false,
   camera_busy: false,
-  fog: "#000000",
   settings: {},
   scale_bar: { total_meters: 0, bar_width_px: 0, is_default_zoom: true },
   compass: { show: false },

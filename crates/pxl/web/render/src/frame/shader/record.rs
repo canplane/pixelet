@@ -33,49 +33,104 @@ pub const SHADER_AO_DOWNSAMPLE: u32 = 10;
 pub const SHADER_AO_SAMPLE: u32 = 11;
 pub const SHADER_AO_BLUR: u32 = 12;
 pub const SHADER_AO_UPSAMPLE: u32 = 13;
-pub const SHADERS: u32 = 14;
+pub const SHADER_ATMOS_TRANSMITTANCE: u32 = 14;
+pub const SHADER_ATMOS_MULTISCATTER: u32 = 15;
+pub const SHADER_ATMOS_SKY_VIEW: u32 = 16;
+pub const SHADER_ATMOS_EXPOSURE: u32 = 17;
+pub const SHADER_STARS: u32 = 18;
+pub const SHADER_CLOUDS: u32 = 19;
+pub const SHADERS: u32 = 20;
 
 /// A shader's pieces, as build.rs wrote them: the files beside this one with
 /// their comments and indentation off, since what ships is what the GPU
-/// compiles and the GPU does not read the prose.
+/// compiles and the GPU does not read the prose; constant.wgsl, which every
+/// shader shares, first.
 macro_rules! wgsl {
-    ($($name:literal),+) => { concat!($(include_str!(concat!(env!("OUT_DIR"), "/shader/", $name, ".wgsl")), "\n"),+) };
+    ($($name:literal),+) => { concat!(include_str!(concat!(env!("OUT_DIR"), "/shader/constant.wgsl")), "\n", $(include_str!(concat!(env!("OUT_DIR"), "/shader/", $name, ".wgsl")), "\n"),+) };
 }
 
 /// A shader's WGSL; empty for a kind that is not one.
 pub fn source(kind: u32) -> &'static str {
     match kind {
-        SHADER_CHUNK => wgsl!("frame", "grade", "shade", "shadow", "ao_map", "faces", "chunk"),
-        SHADER_DECOR => wgsl!("frame", "grade", "shade", "shadow", "ao_map", "place", "decor"),
-        SHADER_SKINNED => wgsl!("frame", "grade", "shade", "shadow", "ao_map", "place", "skinned"),
-        SHADER_PUCK_ZONE => wgsl!("frame", "grade", "shade", "puck", "puck_zone"),
-        SHADER_PUCK_BEACON => wgsl!("frame", "grade", "shade", "place", "puck", "puck_beacon"),
+        SHADER_CHUNK => wgsl!(
+            "frame",
+            "grade",
+            "atmos_medium",
+            "atmos_bind",
+            "atmos_lut",
+            "atmos_sky",
+            "atmos_view",
+            "shade",
+            "finish",
+            "shadow",
+            "ao_map",
+            "faces",
+            "chunk"
+        ),
+        SHADER_DECOR => wgsl!(
+            "frame",
+            "grade",
+            "atmos_medium",
+            "atmos_bind",
+            "atmos_lut",
+            "atmos_sky",
+            "atmos_view",
+            "shade",
+            "finish",
+            "shadow",
+            "ao_map",
+            "place",
+            "decor"
+        ),
+        SHADER_SKINNED => wgsl!(
+            "frame",
+            "grade",
+            "atmos_medium",
+            "atmos_bind",
+            "atmos_lut",
+            "atmos_sky",
+            "atmos_view",
+            "shade",
+            "finish",
+            "shadow",
+            "ao_map",
+            "place",
+            "skinned"
+        ),
+        SHADER_PUCK_ZONE => wgsl!("frame", "grade", "finish", "puck", "puck_zone"),
+        SHADER_PUCK_BEACON => wgsl!("frame", "grade", "finish", "place", "puck", "puck_beacon"),
         SHADER_BADGE => wgsl!("grade", "depth", "badge_depth", "badge"),
         SHADER_BADGE_MSAA => wgsl!("grade", "depth", "badge_depth_msaa", "badge"),
-        SHADER_SKY => wgsl!("frame", "grade", "shade", "sky"),
+        SHADER_SKY => wgsl!("frame", "grade", "finish", "dither", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_view", "sky"),
         SHADER_DEBUG => wgsl!("frame", "grade", "debug"),
         SHADER_MIPS => wgsl!("mips"),
         SHADER_AO_DOWNSAMPLE => wgsl!("ao_view", "ao_downsample"),
         SHADER_AO_SAMPLE => wgsl!("ao_view", "ao_sample"),
         SHADER_AO_BLUR => wgsl!("ao_view", "ao_blur"),
         SHADER_AO_UPSAMPLE => wgsl!("ao_view", "ao_upsample"),
+        SHADER_ATMOS_TRANSMITTANCE => wgsl!("atmos_medium", "atmos_pass", "atmos_transmittance"),
+        SHADER_ATMOS_MULTISCATTER => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_multiscatter"),
+        SHADER_ATMOS_SKY_VIEW => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_skyview"),
+        SHADER_ATMOS_EXPOSURE => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_pass", "atmos_exposure"),
+        SHADER_STARS => wgsl!("grade", "stars"),
+        SHADER_CLOUDS => wgsl!("frame", "grade", "finish", "noise", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_view", "clouds"),
         _ => "",
     }
 }
 
 /// Floats the frame uniform (frame.wgsl's Frame) holds.
-pub const FRAME_FLOATS: u32 = 76;
+pub const FRAME_FLOATS: usize = 84;
 /// Where each field of the frame uniform starts, in floats, in this order:
 /// view_proj, camera_pos, edge_strength, the environment's run (sun_dir
-/// through fog_color, look/environment.rs's output as it is), low_spec,
+/// through its padding, look/environment.rs's output as it is), low_spec,
 /// edge_width, rim_intensity, viewport, shadow_strength, shadow_texel,
 /// vignette, ao_strength, screen_ao, light_view_proj, the second light's run
-/// (other_dir through other_color, look/environment.rs's ENV_OTHER_LIGHT). The
-/// shell reads the table rather than counting; the test below holds it to
-/// the struct.
-pub const FRAME_AT: [u32; 15] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68];
+/// (other_dir through other_color, look/environment.rs's ENV_OTHER_LIGHT),
+/// and the planet and the globe. The renderer reads the table rather than
+/// counting; the test below holds it to the struct.
+pub const FRAME_AT: [usize; 17] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80];
 #[cfg(test)]
-const FRAME_FIELDS: [&str; 15] = [
+const FRAME_FIELDS: [&str; 17] = [
     "view_proj",
     "camera_pos",
     "edge_strength",
@@ -91,12 +146,16 @@ const FRAME_FIELDS: [&str; 15] = [
     "screen_ao",
     "light_view_proj",
     "other_dir",
+    "planet",
+    "globe",
 ];
 
 /// The pipelines, by id: draw.rs's ten, which a draw names, then the ones
 /// a frame runs on its own — the depth-only passes into the shadow map,
 /// the sky, the mip builder, the depth-only passes from the eye that the
-/// screen-space occlusion reads, and the occlusion's four (gpu/ao.rs).
+/// screen-space occlusion reads, the occlusion's four (gpu/ao.rs), and the
+/// atmosphere's three tables and its exposure (gpu/atmosphere.rs), the stars
+/// (gpu/stars.rs) and the clouds (gpu/clouds.rs).
 pub const PIPELINE_CHUNK_DEPTH: u32 = 10;
 pub const PIPELINE_DECOR_DEPTH: u32 = 11;
 pub const PIPELINE_SKINNED_DEPTH: u32 = 12;
@@ -109,7 +168,14 @@ pub const PIPELINE_AO_DOWNSAMPLE: u32 = 18;
 pub const PIPELINE_AO_SAMPLE: u32 = 19;
 pub const PIPELINE_AO_BLUR: u32 = 20;
 pub const PIPELINE_AO_UPSAMPLE: u32 = 21;
-pub const PIPELINES: u32 = 22;
+pub const PIPELINE_ATMOS_TRANSMITTANCE: u32 = 22;
+pub const PIPELINE_ATMOS_MULTISCATTER: u32 = 23;
+pub const PIPELINE_ATMOS_SKY_VIEW: u32 = 24;
+pub const PIPELINE_ATMOS_EXPOSURE: u32 = 25;
+pub const PIPELINE_STARS: u32 = 26;
+pub const PIPELINE_CLOUDS: u32 = 27;
+pub const PIPELINE_CLOUDS_ABOVE: u32 = 28;
+pub const PIPELINES: u32 = 29;
 
 // A pipeline record's words, in order: the shader for a frame at one
 // sample and the one for a multisampled frame; whether it has a fragment
@@ -260,9 +326,43 @@ fn record(h: Head, lanes: &[Vec<u32>], groups: &[Vec<u32>]) -> Vec<u32> {
     out
 }
 
+/// The atmosphere's uniform, its transmittance and sky-view tables, their
+/// sampler, the adapted exposure and the moonlit sky's table (atmos_bind.wgsl,
+/// atmos_sky.wgsl, atmos_view.wgsl), from 8: what a pass that shows the air
+/// reads it through, in its fragments.
+const AIR: [[u32; 3]; 6] = [
+    [8, FRAGMENT, UNIFORM],
+    [9, FRAGMENT, TEXTURE],
+    [10, FRAGMENT, TEXTURE],
+    [11, FRAGMENT, SAMPLER],
+    [13, FRAGMENT, TEXTURE],
+    [15, FRAGMENT, TEXTURE],
+];
+/// The same, read in the vertex stage: a lit surface takes the air in front
+/// of it at its vertices (atmos_view.wgsl's seen_from_eye).
+const AIR_AT_VERTICES: [[u32; 3]; 6] = [
+    [8, VERTEX, UNIFORM],
+    [9, VERTEX, TEXTURE],
+    [10, VERTEX, TEXTURE],
+    [11, VERTEX, SAMPLER],
+    [13, VERTEX, TEXTURE],
+    [15, VERTEX, TEXTURE],
+];
 /// The frame uniform, the shadow map and its sampler, and the screen-space
-/// occlusion map at 7, past the chunk's own: group 0 in every lit pass.
-const LIT_FRAME: [[u32; 3]; 4] = [[0, BOTH, UNIFORM], [1, FRAGMENT, DEPTH], [2, FRAGMENT, SAMPLER_COMPARISON], [7, FRAGMENT, TEXTURE]];
+/// occlusion map at 7, past the chunk's own, then the air: group 0 in every
+/// lit pass.
+const LIT_FRAME: [[u32; 3]; 10] = [
+    [0, BOTH, UNIFORM],
+    [1, FRAGMENT, DEPTH],
+    [2, FRAGMENT, SAMPLER_COMPARISON],
+    [7, FRAGMENT, TEXTURE],
+    AIR_AT_VERTICES[0],
+    AIR_AT_VERTICES[1],
+    AIR_AT_VERTICES[2],
+    AIR_AT_VERTICES[3],
+    AIR_AT_VERTICES[4],
+    AIR_AT_VERTICES[5],
+];
 /// A skin and its sampler.
 const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
 
@@ -358,16 +458,30 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         PIPELINE_CHUNK_PREPASS => record(prepass(SHADER_CHUNK, CULL_BACK), &chunk_lanes(), &chunk_groups()),
         PIPELINE_DECOR_PREPASS => record(prepass(SHADER_DECOR, CULL_NONE), &model_lanes(false), &model_groups()),
         PIPELINE_SKINNED_PREPASS => record(prepass(SHADER_SKINNED, CULL_BACK), &model_lanes(true), &model_groups()),
-        // The sky: one triangle over the screen, first, writing no depth;
-        // the frame beside its own uniform, for the vignette.
+        // The sky: one triangle over the screen at the far plane, after the
+        // opaque world and only where it left the far plane standing, so a
+        // pixel the ground covers never runs it; writing no depth; the frame
+        // beside its own uniform, for the vignette, the Moon's face and the
+        // air.
         PIPELINE_SKY => record(
             Head {
-                depth_compare: ALWAYS,
+                depth_compare: GREATER_EQUAL,
                 blend: OPAQUE,
                 ..blended(SHADER_SKY, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM]])],
+            &[group(&[
+                [0, FRAGMENT, UNIFORM],
+                [1, FRAGMENT, UNIFORM],
+                [2, FRAGMENT, TEXTURE_ARRAY],
+                [3, FRAGMENT, SAMPLER],
+                AIR[0],
+                AIR[1],
+                AIR[2],
+                AIR[3],
+                AIR[4],
+                AIR[5],
+            ])],
         ),
         // A mip level from the one above: no depth, one sample, into the
         // texture's own format.
@@ -404,6 +518,50 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 [3, FRAGMENT, TEXTURE],
                 [4, FRAGMENT, SAMPLER],
             ])],
+        ),
+        // The atmosphere's tables (gpu/atmosphere.rs), each a full-screen
+        // pass into its own: the transmittance from the uniform alone, the
+        // multiple scattering from that, the sky from both, and the exposure
+        // from the sky.
+        PIPELINE_ATMOS_TRANSMITTANCE => record(screen(SHADER_ATMOS_TRANSMITTANCE), &[], &[group(&[AIR[0]])]),
+        PIPELINE_ATMOS_MULTISCATTER => record(screen(SHADER_ATMOS_MULTISCATTER), &[], &[group(&[AIR[0], AIR[1], AIR[3]])]),
+        PIPELINE_ATMOS_SKY_VIEW => record(
+            screen(SHADER_ATMOS_SKY_VIEW),
+            &[],
+            &[group(&[AIR[0], AIR[1], AIR[3], [12, FRAGMENT, TEXTURE], [14, FRAGMENT, UNIFORM]])],
+        ),
+        PIPELINE_ATMOS_EXPOSURE => record(screen(SHADER_ATMOS_EXPOSURE), &[], &[group(&[AIR[0], AIR[1], AIR[2], AIR[3]])]),
+        // The stars: a strip of four corners a star, added over the sky and
+        // under everything drawn after it, no depth read or written.
+        PIPELINE_STARS => record(
+            Head {
+                topology: STRIP,
+                depth_compare: GREATER_EQUAL,
+                blend: ADD,
+                ..blended(SHADER_STARS, CULL_NONE, 0, 0.0)
+            },
+            &[],
+            &[group(&[[0, VERTEX, UNIFORM], [1, VERTEX, STORAGE]])],
+        ),
+        // The clouds: one triangle over the screen at the far plane after
+        // the opaque world, blended over it and writing no depth. From under
+        // the layer, only where the world left the far plane; from over it,
+        // everywhere. The frame beside their own uniform, and the air.
+        PIPELINE_CLOUDS => record(
+            Head {
+                depth_compare: GREATER_EQUAL,
+                ..blended(SHADER_CLOUDS, CULL_NONE, 0, 0.0)
+            },
+            &[],
+            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3], AIR[4], AIR[5]])],
+        ),
+        PIPELINE_CLOUDS_ABOVE => record(
+            Head {
+                depth_compare: ALWAYS,
+                ..blended(SHADER_CLOUDS, CULL_NONE, 0, 0.0)
+            },
+            &[],
+            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3], AIR[4], AIR[5]])],
         ),
         _ => Vec::new(),
     }

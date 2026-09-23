@@ -12,6 +12,8 @@ use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
 use pxl_render::look::lod::{fade_end_u, fade_start_u, LOD_CELL_PER_DISTANCE};
+use pxl_spec::asset::ingested::Asset;
+use pxl_spec::space::pvf3::ivec;
 use xpute_core::math::mat4::{mat4, mat4_mul};
 
 use crate::host::handheld;
@@ -22,7 +24,6 @@ use crate::layer::character::companion::companion_skins;
 use crate::layer::character::preview::preview_rows;
 use crate::layer::decor::asset_store::decor_bundle_assets;
 use crate::layer::environment::config::rim_cfg;
-use crate::layer::environment::fog::sky_radius;
 use crate::sched::ledger::record::{DrawCensus, TexturesMb, CENSUS_LEN};
 use crate::shell::setting::store::{settings_store, AoMode};
 use crate::world::change::request_world_tick;
@@ -39,10 +40,10 @@ pub fn stage_write() {
     s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].copy_from_slice(&m);
     s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
     s[STAGE_AT::LOCAL_VIEW_PROJ..STAGE_AT::LOCAL_VIEW_PROJ + 16].copy_from_slice(&v.local_view_proj);
-    s[STAGE_AT::VIEW_MATRIX..STAGE_AT::VIEW_MATRIX + 16].copy_from_slice(&v.view_matrix);
     s[STAGE_AT::EYE_LOCAL..STAGE_AT::EYE_LOCAL + 3].copy_from_slice(&[v.eye_local.x, v.eye_local.y, v.eye_local.z]);
-    s[STAGE_AT::EYE..STAGE_AT::EYE + 3].copy_from_slice(&[v.eye.x, v.eye.y, v.eye.z]);
     s[STAGE_AT::TRANSLATION..STAGE_AT::TRANSLATION + 3].copy_from_slice(&[v.tx, v.ty, v.tz]);
+    s[STAGE_AT::ORIGIN] = ivec::to_real(ivec::X(v.origin));
+    s[STAGE_AT::ORIGIN + 1] = ivec::to_real(ivec::Y(v.origin));
     s[STAGE_AT::VIEWPORT] = v.width;
     s[STAGE_AT::VIEWPORT + 1] = v.height;
     s[STAGE_AT::FOV] = v.fov;
@@ -58,7 +59,6 @@ pub fn stage_write() {
     s[STAGE_AT::EDGE_WIDTH] = EDGE_WIDTH;
     s[STAGE_AT::RIM_INTENSITY] = if settings.show_rim_light { rim_cfg::INTENSITY } else { 0.0 };
     s[STAGE_AT::SHADOWS] = if settings.show_shadow_map { 1.0 } else { 0.0 };
-    s[STAGE_AT::SKY_RADIUS] = sky_radius(v.dist);
     s[STAGE_AT::MSAA] = if settings.msaa { 1.0 } else { 0.0 };
 }
 
@@ -94,6 +94,7 @@ pub fn stage_render() {
         skins: &skins[..skin_cnt],
         cases: &cases[..case_cnt],
         sheet: || load_image(Load::Sheet),
+        moon: || load_image(Load::Asset(Asset::sky_moon_png)),
         atlas: billboard_sheet(),
         handheld: handheld(),
     });

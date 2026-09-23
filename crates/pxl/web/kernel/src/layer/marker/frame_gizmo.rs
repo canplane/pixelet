@@ -12,6 +12,7 @@
 
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_DEBUG};
+use pxl_render::gpu::api::word_bytes;
 use pxl_render::gpu::surface::DPR_MAX;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::indexer::{L1_IDX_IN_L4, L3_BASE, L3_CENTER};
@@ -414,7 +415,7 @@ impl DebugLines {
     /// # Safety
     /// `lane` addresses vertex_cnt * DEBUG_VERTEX_FLOATS f32s in the memory.
     pub unsafe fn set(&mut self, world: &mut World, draw: &mut DrawList, origin: V3, vertex_cnt: u32, lane: usize) {
-        let len = (vertex_cnt as usize * DEBUG_VERTEX_FLOATS * 4) as u32;
+        let len = word_bytes(vertex_cnt as usize * DEBUG_VERTEX_FLOATS);
         let written = self.held.write(draw, world.volumes.mem(), lane, len);
         self.vertex_cnt = if written { vertex_cnt } else { 0 };
         self.origin = origin;

@@ -17,6 +17,8 @@
 //! the eye, so the two cancel and the far terrain's coplanar faces stop
 //! fighting.
 
+use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::v3::{sub3, V3};
 use xpute_core::math::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
 use xpute_core::math::scalar::round;
 use xpute_core::math::vec3::Vec3;
@@ -31,40 +33,50 @@ use crate::frame::draw::{
 use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_SKY};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, texture_usage, GpuApi, NONE};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, texture_usage, word_bytes, GpuApi, NONE};
 use crate::gpu::api_spec::{dimension, format, load, resource};
+use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
+use crate::gpu::clouds::CloudPass;
 use crate::gpu::layers::{Layers, Mips, LAYER_TEX_SZ};
+use crate::gpu::moon::MoonMap;
 use crate::gpu::pass::badges::BadgePass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::puck::PuckPass;
 use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::shadow::Shadow;
+use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, ROLE_CASE, ROLE_WORLD, SETTLE_TURNS, SURFACES};
-use crate::look::environment::ENV_OTHER_LIGHT;
+use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_OTHER_LIGHT, ENV_STARS, ENV_SUN};
+use crate::look::globe::{Globe, MERCATOR_RADIUS_U};
 
 /// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
 pub const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
 
 /// The frame uniform's fields, in floats (shader.rs's FRAME_AT).
-const VIEW_PROJ: usize = FRAME_AT[0] as usize;
-const CAMERA_POS: usize = FRAME_AT[1] as usize;
-const EDGE_STRENGTH: usize = FRAME_AT[2] as usize;
-const ENV: usize = FRAME_AT[3] as usize;
-const LOW_SPEC: usize = FRAME_AT[4] as usize;
-const EDGE_WIDTH: usize = FRAME_AT[5] as usize;
-const RIM_INTENSITY: usize = FRAME_AT[6] as usize;
-const VIEWPORT: usize = FRAME_AT[7] as usize;
-const SHADOW_STRENGTH: usize = FRAME_AT[8] as usize;
-const SHADOW_TEXEL: usize = FRAME_AT[9] as usize;
-const VIGNETTE: usize = FRAME_AT[10] as usize;
-const AO_STRENGTH: usize = FRAME_AT[11] as usize;
-const SCREEN_AO: usize = FRAME_AT[12] as usize;
-const LIGHT_VIEW_PROJ: usize = FRAME_AT[13] as usize;
-const OTHER: usize = FRAME_AT[14] as usize;
+pub(crate) const VIEW_PROJ: usize = FRAME_AT[0];
+pub(crate) const CAMERA_POS: usize = FRAME_AT[1];
+const EDGE_STRENGTH: usize = FRAME_AT[2];
+const ENV: usize = FRAME_AT[3];
+const LOW_SPEC: usize = FRAME_AT[4];
+const EDGE_WIDTH: usize = FRAME_AT[5];
+const RIM_INTENSITY: usize = FRAME_AT[6];
+const VIEWPORT: usize = FRAME_AT[7];
+const SHADOW_STRENGTH: usize = FRAME_AT[8];
+const SHADOW_TEXEL: usize = FRAME_AT[9];
+const VIGNETTE: usize = FRAME_AT[10];
+const AO_STRENGTH: usize = FRAME_AT[11];
+const SCREEN_AO: usize = FRAME_AT[12];
+const LIGHT_VIEW_PROJ: usize = FRAME_AT[13];
+const OTHER: usize = FRAME_AT[14];
+pub(crate) const PLANET: usize = FRAME_AT[15];
+pub(crate) const GLOBE: usize = FRAME_AT[16];
 
-/// Floats the sky uniform holds (shader/sky.wgsl's Sky).
-const SKY_FLOATS: usize = 16 + 4 * 7;
+/// Floats the sky uniform holds (shader/sky.wgsl's Sky): the ray, the
+/// celestial pole, and whether the Moon's face has arrived.
+pub(crate) const SKY_FLOATS: usize = 16;
+pub(crate) const SKY_POLE: usize = 12;
+pub(crate) const SKY_MAPPED: usize = 15;
 /// The visibility lane past a chunk's vertex lanes, bytes a vertex, which the
 /// index lane follows.
 const VIS_BYTES_PER_VERTEX: u32 = 4;
@@ -72,7 +84,7 @@ const VIS_BYTES_PER_VERTEX: u32 = 4;
 const DRAWS_INITIAL: u32 = 256 * UNIFORM_FLOATS as u32;
 const MB: f64 = 1_048_576.0;
 
-pub type Frame = [f32; FRAME_FLOATS as usize];
+pub type Frame = [f32; FRAME_FLOATS];
 
 /// What the kernel hands a turn's draw: every input the frame's passes read
 /// that is not the renderer's own.
@@ -90,6 +102,8 @@ pub struct FrameInput<'a> {
     pub cases: &'a [(u32, u32, u32)],
     /// The texture pack's sheet as an image, asked for until it is drawn.
     pub sheet: fn() -> Option<u32>,
+    /// The Moon's face as an image, asked for until it is painted.
+    pub moon: fn() -> Option<u32>,
     /// The billboards' sheet, whose changes the badge texture mirrors.
     pub atlas: &'a mut BillboardAtlas,
     /// Whether the device is a phone's: the shadow map is made smaller.
@@ -138,13 +152,48 @@ fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
     }
 }
 
-/// A frame group: the frame uniform at 0 and a shadow map's two entries.
-pub fn frame_group(g: &GpuApi, layout: u32, frame: u32, shadow: [u32; 10], ao: [u32; 5]) -> u32 {
+/// A pixel's ray for a full-screen pass, as the three columns of a WGSL
+/// `mat3x3f` at `at`: the ray under NDC (x, y) runs along
+/// `x·col0 + y·col1 + col2`, in the frame `view_proj` takes to WebGPU clip,
+/// from the eye at `eye` in it.
+///
+/// Not the inverse matrix itself, un-projecting two points in the shader:
+/// those sit a near plane's tenth of a unit apart, hundreds of units from
+/// the frame's origin, and their f32 difference kept a direction to about a
+/// thousandth of a radian that changed its rounding with every move of the
+/// camera. A ray meeting the cloud layer at a grazing angle carries that
+/// error out by the secant — kilometres at the horizon — and the clouds
+/// there shook on their own. Taken in f64 here, the ray is exact to the f32
+/// it lands in.
+/// Points at one depth un-project onto a plane, so the ray is affine in
+/// (x, y) and three columns hold it.
+pub(crate) fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
+    let mut inv = mat4();
+    mat4_invert(&mut inv, view_proj);
+    let point = |x: f64, y: f64| -> V3 {
+        let clip = [x, y, 0.5, 1.0];
+        let row = |r: usize| (0..4).map(|c| inv[c * 4 + r] * clip[c]).sum::<f64>();
+        let w = row(3);
+        [row(0) / w, row(1) / w, row(2) / w]
+    };
+    let c = point(0.0, 0.0);
+    let mut column = [0.0; 3];
+    for (k, (to, from)) in [(point(1.0, 0.0), c), (point(0.0, 1.0), c), (c, *eye)].into_iter().enumerate() {
+        for (o, e) in out[at + 4 * k..at + 4 * k + 3].iter_mut().zip(sub3(&to, &from, &mut column).iter()) {
+            *o = *e as f32;
+        }
+    }
+}
+
+/// A frame group: the frame uniform at 0, a shadow map's two entries, the
+/// occlusion map and the air's five (gpu/atmosphere.rs).
+pub fn frame_group(g: &GpuApi, layout: u32, frame: u32, shadow: [u32; 10], ao: [u32; 5], air: [u32; AIR_WORDS]) -> u32 {
     let id = object();
-    let mut e = [0u32; 20];
+    let mut e = [0u32; 20 + AIR_WORDS];
     e[..5].copy_from_slice(&buffer_entry(0, frame));
     e[5..15].copy_from_slice(&shadow);
-    e[15..].copy_from_slice(&ao);
+    e[15..20].copy_from_slice(&ao);
+    e[20..].copy_from_slice(&air);
     (g.bind_group)(id, layout, &e);
     id
 }
@@ -236,7 +285,7 @@ fn memory(at: u32, n: u32) -> &'static [u8] {
 }
 
 fn fixed_lane() -> &'static mut [u32] {
-    let (at, _) = alloc((BLOCK_SLOTS * 4) as u32).expect("the heap has no room for the renderer's blocks");
+    let (at, _) = alloc(word_bytes(BLOCK_SLOTS)).expect("the heap has no room for the renderer's blocks");
     // SAFETY: a block never given back, BLOCK_SLOTS words.
     let lane = unsafe { core::slice::from_raw_parts_mut(at as *mut u32, BLOCK_SLOTS) };
     lane.fill(0);
@@ -507,13 +556,13 @@ const CASE_TARGET: Vec3 = Vec3 { x: 0.0, y: 0.0, z: 0.55 };
 const CASE_FOV_DEG: f64 = 35.0;
 
 impl Case {
-    fn new(g: &GpuApi, pipelines: &mut Pipelines, shadow: &Shadow, ao: &ScreenAo, align: u32) -> Case {
+    fn new(g: &GpuApi, pipelines: &mut Pipelines, shadow: &Shadow, ao: &ScreenAo, air: [u32; AIR_WORDS], align: u32) -> Case {
         let frame_buffer = object();
-        (g.buffer)(frame_buffer, FRAME_FLOATS * 4, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let skinned = SkinnedPass::new(g, pipelines, 1, frame_buffer, shadow.blank_entries(1), None, ao.blank_entry(7), align);
+        (g.buffer)(frame_buffer, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        let skinned = SkinnedPass::new(g, pipelines, 1, frame_buffer, shadow.blank_entries(1), None, ao.blank_entry(7), air, align);
         Case {
             frame_buffer,
-            frame: [0.0; FRAME_FLOATS as usize],
+            frame: [0.0; FRAME_FLOATS],
             skinned,
         }
     }
@@ -547,8 +596,12 @@ pub struct Renderer {
     shadows: bool,
     ao: ScreenAo,
     screen_ao: bool,
+    atmosphere: Atmosphere,
+    stars: StarPass,
+    clouds: CloudPass,
     mips: Mips,
     layers: Layers,
+    moon: MoonMap,
     decor: DecorPass,
     skinned: SkinnedPass,
     puck: PuckPass,
@@ -562,11 +615,15 @@ impl Renderer {
     fn new(g: &GpuApi, device: Device, samples: u32, handheld: bool) -> Renderer {
         let mut pipelines = Pipelines::new();
         let frame_buffer = object();
-        (g.buffer)(frame_buffer, FRAME_FLOATS * 4, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        (g.buffer)(frame_buffer, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let sky_buffer = object();
-        (g.buffer)(sky_buffer, (SKY_FLOATS * 4) as u32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        (g.buffer)(sky_buffer, word_bytes(SKY_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let shadow = Shadow::new(g, handheld);
         let ao = ScreenAo::new(g, &mut pipelines, device.align);
+        let atmosphere = Atmosphere::new(g, &mut pipelines);
+        let air = atmosphere.entries();
+        let stars = StarPass::new(g, &mut pipelines, samples);
+        let clouds = CloudPass::new(g, &mut pipelines, samples, frame_buffer, air);
         let mips = Mips::new(g, &mut pipelines);
         let mut fill = Scratch::default();
         let layers = Layers::new(g, &mips, fill.take(LAYER_TEX_SZ * LAYER_TEX_SZ * 4));
@@ -574,9 +631,13 @@ impl Renderer {
         let chunk = pipelines.build(g, PIPELINE_CHUNK, format::CANVAS, samples);
         let sky_built = pipelines.build(g, PIPELINE_SKY, format::CANVAS, samples);
         let sky_group = object();
-        let mut sky_entries = [0u32; 10];
+        let moon = MoonMap::new(g);
+        let mut sky_entries = [0u32; 20 + AIR_WORDS];
         sky_entries[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
-        sky_entries[5..].copy_from_slice(&buffer_entry(1, sky_buffer));
+        sky_entries[5..10].copy_from_slice(&buffer_entry(1, sky_buffer));
+        sky_entries[10..15].copy_from_slice(&[2, resource::VIEW, moon.view, 0, 0]);
+        sky_entries[15..20].copy_from_slice(&[3, resource::SAMPLER, moon.sampler, 0, 0]);
+        sky_entries[20..].copy_from_slice(&air);
         (g.bind_group)(sky_group, sky_built.layouts[0], &sky_entries);
         let draws_buffer = object();
         (g.buffer)(draws_buffer, DRAWS_INITIAL * 4, buffer_usage::STORAGE | buffer_usage::COPY_DST);
@@ -598,7 +659,7 @@ impl Renderer {
                 pipelines.build(g, PIPELINE_GHOST_BOX, format::CANVAS, samples),
                 pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples),
             ],
-            decor: DecorPass::new(g, &mut pipelines, samples, frame_buffer, &shadow, ao.blank_entry(7), device.align),
+            decor: DecorPass::new(g, &mut pipelines, samples, frame_buffer, &shadow, ao.blank_entry(7), air, device.align),
             skinned: SkinnedPass::new(
                 g,
                 &mut pipelines,
@@ -607,6 +668,7 @@ impl Renderer {
                 shadow.entries(1),
                 Some((shadow.light_frame, shadow.blank_entries(1))),
                 ao.blank_entry(7),
+                air,
                 device.align,
             ),
             puck: PuckPass::new(g, &mut pipelines, samples, frame_buffer),
@@ -614,7 +676,7 @@ impl Renderer {
             debug: DebugPass::new(g, &mut pipelines, samples, frame_buffer),
             pipelines,
             frame_buffer,
-            frame: [0.0; FRAME_FLOATS as usize],
+            frame: [0.0; FRAME_FLOATS],
             sky_buffer,
             sky: [0.0; SKY_FLOATS],
             sky_built,
@@ -627,8 +689,12 @@ impl Renderer {
             shadows: false,
             ao,
             screen_ao: false,
+            atmosphere,
+            stars,
+            clouds,
             mips,
             layers,
+            moon,
             cases: [const { None }; SURFACES],
             gpu_ms: 0.0,
         };
@@ -638,9 +704,10 @@ impl Renderer {
     }
 
     /// The chunk pass's group over `frame`: the frame, a shadow map, the draws,
-    /// the texture pack's two arrays and their sampler, the occlusion map.
+    /// the texture pack's two arrays and their sampler, the occlusion map, the
+    /// air.
     fn chunk_group(&self, g: &GpuApi, frame: u32, shadow: [u32; 10]) -> u32 {
-        let mut e = [0u32; 40];
+        let mut e = [0u32; 40 + AIR_WORDS];
         e[..5].copy_from_slice(&buffer_entry(0, frame));
         e[5..15].copy_from_slice(&shadow);
         e[15..20].copy_from_slice(&buffer_entry(3, self.draws_buffer));
@@ -648,6 +715,7 @@ impl Renderer {
         e[25..30].copy_from_slice(&[5, resource::VIEW, self.layers.side_view, 0, 0]);
         e[30..35].copy_from_slice(&[6, resource::SAMPLER, self.layers.sampler, 0, 0]);
         e[35..40].copy_from_slice(&self.ao.entry(7));
+        e[40..].copy_from_slice(&self.atmosphere.entries());
         let id = object();
         (g.bind_group)(id, self.chunk.layouts[0], &e);
         id
@@ -677,6 +745,8 @@ impl Renderer {
             p.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples),
         ];
         self.sky_built = p.build(g, PIPELINE_SKY, format::CANVAS, samples);
+        self.stars.set_samples(g, p, samples);
+        self.clouds.set_samples(g, p, samples);
         self.decor.set_samples(g, p, samples);
         self.skinned.set_samples(g, p, samples);
         self.puck.set_samples(g, p, samples);
@@ -708,6 +778,19 @@ impl Renderer {
         a.copy_from_slice(&s[STAGE_AT::LOCAL_VIEW_PROJ..STAGE_AT::LOCAL_VIEW_PROJ + 16]);
         mat4_mul(&mut m, &GL_TO_WGPU, &a);
         put_mat(u, VIEW_PROJ, &m);
+        // The sky, the stars and the clouds are drawn in the root frame, as
+        // the meshes are: each pixel's ray from the eye in it, the stars
+        // through the same matrix, and the cell the root frame's origin is
+        // on the map, which anchors the clouds to the ground.
+        let eye_local = [s[STAGE_AT::EYE_LOCAL], s[STAGE_AT::EYE_LOCAL + 1], s[STAGE_AT::EYE_LOCAL + 2]];
+        let origin = ivec::gather(ivec::from_real(s[STAGE_AT::ORIGIN]), ivec::from_real(s[STAGE_AT::ORIGIN + 1]), 0);
+        self.clouds.lay_out(g, &m, &eye_local, origin, env);
+        self.stars.lay_out(g, &m, env, width, height);
+        put_ray(&mut self.sky, 0, &m, &eye_local);
+        // The celestial pole in the root frame, the stars' frame's third
+        // column: which way the Moon's north is turned.
+        self.sky[SKY_POLE..SKY_POLE + 3].copy_from_slice(&env[ENV_STARS + 8..ENV_STARS + 11]);
+        self.sky[SKY_MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
         // The camera's position in the root's frame, where the meshes are.
         for i in 0..3 {
             u[CAMERA_POS + i] = s[STAGE_AT::EYE_LOCAL + i] as f32;
@@ -727,31 +810,38 @@ impl Renderer {
         if self.screen_ao {
             self.ao.lay_out(g, &proj, width, height, env[7], env[11]);
         }
-        // The sun's shadow, over the map centre — the root frame's origin undone
-        // — from the light the environment lit the terrain with.
+        // The map centre — the root frame's origin undone — which the sun's
+        // shadow is aimed at and the map is laid back on the planet about
+        // (look/globe.rs): its latitude's values and the planet's radius in
+        // the units the map has there.
+        let centre = Vec3 {
+            x: -s[STAGE_AT::TRANSLATION],
+            y: -s[STAGE_AT::TRANSLATION + 1],
+            z: -s[STAGE_AT::TRANSLATION + 2],
+        };
+        let sphere = Globe::at(env[ENV_AIR + 2] as f64);
+        let globe = [
+            centre.x as f32,
+            centre.y as f32,
+            sphere.radius_u() as f32,
+            centre.z as f32,
+            sphere.e0 as f32,
+            sphere.sin_lat as f32,
+            sphere.cos_lat as f32,
+            MERCATOR_RADIUS_U as f32,
+        ];
+        u[PLANET..PLANET + 4].copy_from_slice(&globe[..4]);
+        u[GLOBE..GLOBE + 4].copy_from_slice(&globe[4..]);
+        // The sun's shadow, from the light the environment lit the terrain with.
         self.shadows = s[STAGE_AT::SHADOWS] != 0.0;
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
         u[SHADOW_TEXEL] = self.shadow.texel as f32;
         if self.shadows {
-            let target = Vec3 {
-                x: -s[STAGE_AT::TRANSLATION],
-                y: -s[STAGE_AT::TRANSLATION + 1],
-                z: -s[STAGE_AT::TRANSLATION + 2],
-            };
-            self.shadow.aim(g, &env[0..3], target);
+            self.shadow.aim(g, &env[0..3], centre, globe);
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
         }
 
-        // The sky, in the view frame.
-        a.copy_from_slice(&s[STAGE_AT::VIEW_MATRIX..STAGE_AT::VIEW_MATRIX + 16]);
-        mat4_mul(&mut m, &proj, &a);
-        mat4_invert(&mut a, &m);
-        put_mat(&mut self.sky, 0, &a);
-        for i in 0..3 {
-            self.sky[16 + i] = s[STAGE_AT::EYE + i] as f32;
-        }
-        self.sky[19] = s[STAGE_AT::SKY_RADIUS] as f32;
-        self.sky[20..44].copy_from_slice(&env[24..48]);
+        self.atmosphere.lay_out(g, &env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4], env[ENV_AIR], env[ENV_AIR + 1]);
     }
 
     /// Every chunk-pipeline draw of pipeline `which`; with `own`, that pipeline
@@ -790,6 +880,7 @@ impl Renderer {
             self.skinned.set_skin(g, model, image);
         }
         self.layers.step(g, &self.mips, input.sheet);
+        self.moon.step(g, &self.mips, input.moon);
         self.badges.sync_sheet(g, &self.mips, input.atlas);
         let (draws, uniforms) = take_lists(Some(g), input.lists);
 
@@ -801,7 +892,7 @@ impl Renderer {
         }
         (g.write_buffer)(self.frame_buffer, 0, bytes(&self.frame));
         (g.write_buffer)(self.sky_buffer, 0, bytes(&self.sky));
-        let uniform_bytes = (uniforms.len() * 4) as u32;
+        let uniform_bytes = word_bytes(uniforms.len());
         if uniform_bytes > self.draws_bytes {
             release(self.bind_group);
             release(self.light_group);
@@ -821,6 +912,8 @@ impl Renderer {
         let b = blocks();
         let encoder = object();
         (g.encoder)(encoder);
+        // The air's tables, where any is due, before any pass reads them.
+        self.atmosphere.draw(g, encoder);
         // The sun's shadow map first, from the frame's lists, where it is on.
         if self.shadows {
             let pass = self.shadow.begin(g, encoder);
@@ -855,14 +948,22 @@ impl Renderer {
             encoder,
             &pass_desc(color, resolve, load::CLEAR, world.depth_view, load::CLEAR, 0.0, q, if q != 0 { 0 } else { NONE }, NONE),
         );
-        (g.set_pipeline)(pass, self.sky_built.pipeline);
-        (g.set_bind_group)(pass, 0, self.sky_group, &[]);
-        (g.draw)(pass, 3, 1, 0, 0);
         (g.set_pipeline)(pass, self.chunk.pipeline);
         (g.set_bind_group)(pass, 0, self.bind_group, &[]);
         self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, None);
         self.decor.draw(g, pass, draws, b);
         self.skinned.draw(g, pass, draws, b);
+        // The sky and the stars after the opaque world, at the far plane, so
+        // only a pixel it left empty runs the sky's shader: looking down at the
+        // map, none does.
+        (g.set_pipeline)(pass, self.sky_built.pipeline);
+        (g.set_bind_group)(pass, 0, self.sky_group, &[]);
+        (g.draw)(pass, 3, 1, 0, 0);
+        self.stars.draw(g, pass);
+        // The clouds over the opaque world and the sky: from under the layer
+        // where the world left the sky, from over it over everything
+        // (gpu/clouds.rs).
+        self.clouds.draw(g, pass);
         self.puck.draw_beacon(g, pass, draws, uniforms);
         self.puck.draw_zone(g, pass, draws, uniforms, b);
         // What is blended goes last, over everything opaque.
@@ -904,7 +1005,7 @@ impl Renderer {
             targets(g, s, 1);
             let slot = xpute_runtime::abi::handle::handle_slot(id) as usize;
             if self.cases[slot].is_none() {
-                self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.shadow, &self.ao, self.align));
+                self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.shadow, &self.ao, self.atmosphere.entries(), self.align));
             }
             let world_frame = self.frame;
             let case = self.cases[slot].as_mut().expect("just made");
@@ -935,6 +1036,8 @@ impl Renderer {
             u[SHADOW_STRENGTH] = 0.0;
             u[VIGNETTE] = 0.0;
             u[SCREEN_AO] = 0.0;
+            // No planet: the case is a room of its own.
+            u[PLANET + 2] = 0.0;
             (g.write_buffer)(case.frame_buffer, 0, bytes(&case.frame));
             case.skinned.prepare(g, own, uniforms);
             let view_id = object();

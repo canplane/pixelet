@@ -22,6 +22,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_CHUNK};
+use pxl_render::look::azimuth::turn;
+use pxl_render::look::globe::Globe;
 use pxl_render::look::lod::{Ladder, COARSEST};
 use pxl_render::mesh::paint::terrain::adapter::ChunkSample;
 use pxl_spec::bake::constant::CHUNK_CELL_SPAN;
@@ -134,6 +136,10 @@ pub struct Frame {
     /// The ground's height under the view, in units: what a chunk's distance
     /// is measured to before its own bounds are known.
     pub ground_z: f64,
+    /// The map centre's latitude's values, which the renderer lays the map
+    /// back on the planet about (pxl-render's look/globe.rs); none for a flat
+    /// world.
+    pub globe: Option<Globe>,
     /// The levels held, lowest first and one past the top (terrain/level.rs).
     pub window: (u32, u32),
     /// Whether procedural decor is scattered at all (the setting).
@@ -448,8 +454,8 @@ pub struct Scheduler {
     /// The pages with a terrain tile, which chunks are mounted from.
     pages: BTreeSet<LevelPage>,
     pages_revision: u32,
-    /// Pages whose records have gone since the last tick, whose chunks go
-    /// before anything else in the next.
+    /// Pages whose records have gone since the last tick, whose chunks stop
+    /// building before anything else in the next.
     evicted: Vec<LevelPage>,
     /// The chunks the module mounted, by page and page-local base.
     mounted: BTreeMap<ChunkKey, u32>,
@@ -905,11 +911,12 @@ impl Scheduler {
         })
     }
 
-    /// A page's terrain tile arrived, or left. A chunk lives no longer than
-    /// the record it is built from: once the record has gone — let go, or
-    /// taken by another page whose bytes now lie where this page's did — a
-    /// build of its chunk would read what is no longer its page, and a mesh
-    /// kept past it is memory the record's range no longer accounts for.
+    /// A page's terrain tile arrived, or left. Once a record has gone — let
+    /// go, or taken by another page whose bytes now lie where this page's
+    /// did — nothing may be built from it again: a build would read what is no
+    /// longer its page. What its chunks have built stays drawn, since the
+    /// ground they cover may have nothing else to draw it yet; they go stale
+    /// and leave as any stale chunk does, once covered (`retire`).
     pub fn page(&mut self, page: LevelPage, present: bool) {
         if !present {
             self.evicted.push(page);
@@ -1074,23 +1081,20 @@ impl Scheduler {
     /// outside what the window draws — the view has moved on — goes at once;
     /// one inside it that nothing covers yet is ground whose pages have not
     /// come, and it stays.
-    /// Lets go of every chunk of a page whose record has gone, stale or not,
-    /// before anything of the tick can build one: `page` says why.
-    fn drop_evicted(&mut self, world: &mut World, emit: &mut impl FnMut(Event)) {
+    /// Stops every chunk of a page whose record has gone, before anything of
+    /// the tick can build one: stale, its scan and bake given up, what it has
+    /// built still drawn (`page` says why).
+    fn stop_evicted(&mut self, world: &mut World) {
         if self.evicted.is_empty() {
             return;
         }
-        self.gone.clear();
-        for (&k, &id) in self.mounted.iter() {
+        for (k, &id) in self.mounted.iter() {
             if self.evicted.contains(&k.page) {
-                self.gone.push((k, id));
+                if let Some(&i) = self.index.get(&id) {
+                    self.slots[i].set(STALE, true);
+                    self.builder.want(world, id, [0, 0]);
+                }
             }
-        }
-        for g in 0..self.gone.len() {
-            let (k, id) = self.gone[g];
-            self.mounted.remove(&k);
-            self.remove(world, id, emit);
-            emit(Event::Unmount { id });
         }
         self.evicted.clear();
     }
@@ -1145,7 +1149,7 @@ impl Scheduler {
             self.recheck_elapsed = 0.0;
         }
 
-        self.drop_evicted(world, emit);
+        self.stop_evicted(world);
         self.mount(&frame, emit);
         self.refresh(&frame, emit);
         self.retire(world, emit);
@@ -1833,6 +1837,19 @@ fn priority_keyed(a: &Keyed, b: &Keyed) -> core::cmp::Ordering {
 /// squared distances.
 fn measure(frame: &Frame, s: &Slot) -> (bool, V3, f64, f64) {
     let [x, y, z] = frame.world_of([s.base_x + s.bc[0], s.base_y + s.bc[1], s.bc[2]]);
+    // Where the renderer draws it: laid back on the planet about the view
+    // centre, the world's origin here, in the map's own axes — the view's
+    // turned back by the azimuth and forward again. A far chunk culled where
+    // the flat world has it would leave a hole at the horizon. The root's
+    // first column is the azimuth's cosine and sine.
+    let [x, y, z] = match frame.globe {
+        Some(globe) => {
+            let (s, c) = (frame.root[1], frame.root[0]);
+            let (mut flat, mut placed) = ([0.0; 3], [0.0; 3]);
+            *turn(&globe.place(*turn(&[x, y, z], -s, c, &mut flat)), s, c, &mut placed)
+        }
+        None => [x, y, z],
+    };
     let c = frame.camera;
     let d2 = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2);
     let l = frame.lead;

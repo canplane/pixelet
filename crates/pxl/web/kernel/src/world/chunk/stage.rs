@@ -16,6 +16,7 @@ use crate::global::Global;
 use crate::host::now;
 use crate::io::scheduler::fetch_pending_count;
 use crate::kernel::{kernel, with_world};
+use crate::layer::environment::state::globe;
 use crate::layer::poi::fetcher;
 use crate::layer::terrain::level::window;
 use crate::layer::terrain::store::tile_pages;
@@ -166,6 +167,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
         retain_budget_bytes: RETAIN_BUDGET_BYTES(),
         anchor: range_anchor.map(|a| [ivec::to_real(ivec::X(a)), ivec::to_real(ivec::Y(a))]),
         ground_z: target.map_or(0.0, |t| ivec::to_real(ivec::Z(t.i)) + fvec::to_real(fvec::Z(t.f))),
+        globe: Some(globe()),
         window: {
             let w = window();
             (w.start, w.end)

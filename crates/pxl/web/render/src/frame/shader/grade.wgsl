@@ -7,7 +7,6 @@
 // would put its zero at linear 0.05 and crush every night colour below it
 // to black. The numbers are cosmetic dials.
 
-const PI: f32 = 3.14159265;
 const GRADE_BRIGHTNESS: f32 = -0.01;
 const GRADE_CONTRAST: f32 = 0.08;
 const GRADE_SATURATION: f32 = 0.18;

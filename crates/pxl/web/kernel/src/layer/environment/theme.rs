@@ -6,13 +6,6 @@ use crate::layer::environment::theme_spec::{daylight_split, themes as T, Theme};
 pub type WorldThemeKey = Theme;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct SkyColors {
-    pub top: u32,
-    pub middle: u32,
-    pub horizon: u32,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Light {
     pub color: u32,
     pub intensity: f64,
@@ -27,22 +20,13 @@ pub struct Hemisphere {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WorldTheme {
-    pub fog: u32,
-    pub sky: SkyColors,
     pub ambient: Light,
     pub hemisphere: Hemisphere,
-    pub directional: Light,
 }
 
 macro_rules! theme {
     ($k:ident) => {
         WorldTheme {
-            fog: T::$k::fog,
-            sky: SkyColors {
-                top: T::$k::sky::colors::top,
-                middle: T::$k::sky::colors::middle,
-                horizon: T::$k::sky::colors::horizon,
-            },
             ambient: Light {
                 color: T::$k::lighting::ambient::color,
                 intensity: T::$k::lighting::ambient::intensity,
@@ -51,10 +35,6 @@ macro_rules! theme {
                 sky: T::$k::lighting::hemisphere::sky,
                 ground: T::$k::lighting::hemisphere::ground,
                 intensity: T::$k::lighting::hemisphere::intensity,
-            },
-            directional: Light {
-                color: T::$k::lighting::directional::color,
-                intensity: T::$k::lighting::directional::intensity,
             },
         }
     };

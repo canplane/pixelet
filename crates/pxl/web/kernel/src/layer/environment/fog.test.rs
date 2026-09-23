@@ -17,5 +17,4 @@ fn the_view_holds_its_reach_near_and_scales_it_with_the_distance_past() {
     let far = MAX_DIST;
     assert_eq!(fog_far(far), render_cfg::FOG_PER_DIST * far);
     assert_eq!(far_clip(far) / near_clip(far), render_cfg::FAR_CLIP / camera_cfg::projection::NEAR);
-    assert!(sky_radius(far) + far < far_clip(far));
 }

@@ -9,7 +9,9 @@
 /** A texture's format: the texture pack, skins and the badge sheet; depth; the
  * canvas's own; then the screen-space occlusion's — a half-resolution depth and
  * normal in four floats, the full-resolution occlusion in one byte, and the blue
- * noise it dithers with, four bytes read as they are. */
+ * noise it dithers with, four bytes read as they are; then the atmosphere's
+ * tables, radiance and transmittance in four half floats, filterable and
+ * renderable on every WebGPU device. */
 export const format = {
   RGBA8_SRGB: 0 as number,
   DEPTH32: 1 as number,
@@ -17,6 +19,7 @@ export const format = {
   RGBA32F: 3 as number,
   R8: 4 as number,
   RGBA8: 5 as number,
+  RGBA16F: 6 as number,
 } as const;
 
 export const dimension = {
@@ -119,6 +122,7 @@ export const record = {
   NO_DEPTH: 4 as number,
   OPAQUE: 0 as number,
   ALPHA: 1 as number,
+  ADD: 2 as number,
   FRAME_SAMPLES: 0 as number,
   ONE_SAMPLE: 1 as number,
   PER_VERTEX: 0 as number,

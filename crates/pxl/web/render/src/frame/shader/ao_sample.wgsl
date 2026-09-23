@@ -50,7 +50,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   }
   let tangent = normalize(cross(helper, normal));
   let bitangent = cross(normal, tangent);
-  let tbn = mat3x3f(tangent, bitangent, normal) * rotation_z(noise.r * AO_PI * 2.0);
+  let tbn = mat3x3f(tangent, bitangent, normal) * rotation_z(noise.r * TAU);
   // N8AO scales the falloff by a fifth where the radius is in world
   // units, as it is here.
   let falloff = AO_RADIUS * AO_DISTANCE_FALLOFF * 0.2;

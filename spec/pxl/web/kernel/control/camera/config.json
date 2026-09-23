@@ -1,7 +1,7 @@
 {
   "$doc": ["Camera projection and interaction limits."],
   "VIEW_DIST": {
-    "$value": 4096,
+    "$value": 6144,
     "$doc": [
       "Control knob for global view-dependent distances.",
       "",
@@ -12,7 +12,8 @@
       "distance in the same units as the other two, so the chain can be read off.",
       "Only feeds render_cfg's FAR_CLIP (the camera's far-clip plane), sized past",
       "where ground geometry stops so the margin stays proportional rather than an",
-      "arbitrary leftover multiple. 2048 * 2."
+      "arbitrary leftover multiple. RENDER_DIST, which FAR_CLIP keeps half again",
+      "past."
     ]
   },
   "DEFAULT_TILT_DEG": { "$value": 30, "$doc": ["Default tilt angle in degrees from the ground plane."] },

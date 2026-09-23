@@ -19,9 +19,10 @@
 use xpute_core::math::mat4::{mat4, mat4_look_at, mat4_mul, Mat4};
 use xpute_core::math::vec3::Vec3;
 
-use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS};
-use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, GpuApi, NONE};
+use crate::frame::shader::record::FRAME_FLOATS;
+use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, word_bytes, GpuApi, NONE};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
+use crate::gpu::renderer::{CAMERA_POS, GLOBE, PLANET, VIEW_PROJ};
 
 const HALF_EXTENT: f64 = 200.0;
 const LIGHT_DISTANCE: f64 = 1200.0;
@@ -53,7 +54,7 @@ pub struct Shadow {
     blank_sampler: u32,
     /// The light's frame: the frame uniform with the light's view_proj.
     pub light_frame: u32,
-    light: [f32; FRAME_FLOATS as usize],
+    light: [f32; FRAME_FLOATS],
     pub light_view_proj: Mat4,
     /// One texel of the map, in units: the normal offset a fragment takes.
     pub texel: f64,
@@ -76,14 +77,14 @@ impl Shadow {
         let blank_sampler = object();
         (g.sampler)(blank_sampler, filter::NEAREST, filter::NEAREST, filter::NEAREST, address::CLAMP, compare::LESS_EQUAL, 1);
         let light_frame = object();
-        (g.buffer)(light_frame, FRAME_FLOATS * 4, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        (g.buffer)(light_frame, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         Shadow {
             map_view,
             sampler,
             blank_view,
             blank_sampler,
             light_frame,
-            light: [0.0; FRAME_FLOATS as usize],
+            light: [0.0; FRAME_FLOATS],
             light_view_proj: mat4(),
             texel: HALF_EXTENT * 2.0 / size as f64,
             bytes: size * size * 4,
@@ -101,8 +102,10 @@ impl Shadow {
     }
 
     /// Aims the light from `sun_dir` at `target`, both in the root frame, and
-    /// writes the light's frame.
-    pub fn aim(&mut self, g: &GpuApi, sun_dir: &[f32], target: Vec3) {
+    /// writes the light's frame, with the frame's curve and globe: the map
+    /// drawn into the shadow is the one the eye sees laid on the planet, or a
+    /// far caster would shade the ground it no longer stands over.
+    pub fn aim(&mut self, g: &GpuApi, sun_dir: &[f32], target: Vec3, globe: [f32; 8]) {
         let eye = Vec3 {
             x: target.x + sun_dir[0] as f64 * LIGHT_DISTANCE,
             y: target.y + sun_dir[1] as f64 * LIGHT_DISTANCE,
@@ -112,12 +115,12 @@ impl Shadow {
         mat4_look_at(&mut view, eye, target, Vec3 { x: 0.0, y: 0.0, z: 1.0 });
         ortho(&mut proj, HALF_EXTENT, 0.1, LIGHT_FAR);
         mat4_mul(&mut self.light_view_proj, &proj, &view);
-        let at = FRAME_AT[0] as usize;
         for (i, v) in self.light_view_proj.iter().enumerate() {
-            self.light[at + i] = *v as f32;
+            self.light[VIEW_PROJ + i] = *v as f32;
         }
-        let at = FRAME_AT[1] as usize;
-        self.light[at..at + 3].copy_from_slice(&[eye.x as f32, eye.y as f32, eye.z as f32]);
+        self.light[CAMERA_POS..CAMERA_POS + 3].copy_from_slice(&[eye.x as f32, eye.y as f32, eye.z as f32]);
+        self.light[PLANET..PLANET + 4].copy_from_slice(&globe[..4]);
+        self.light[GLOBE..GLOBE + 4].copy_from_slice(&globe[4..]);
         (g.write_buffer)(self.light_frame, 0, bytes(&self.light));
     }
 

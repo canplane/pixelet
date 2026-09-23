@@ -9,10 +9,14 @@ pub mod ao;
 pub mod api;
 #[path = "gpu/api.spec.rs"]
 pub mod api_spec;
+pub mod atmosphere;
+pub mod clouds;
 pub mod layers;
+pub mod moon;
 pub mod paint;
 pub mod pass;
 pub mod pipeline;
 pub mod renderer;
 pub mod shadow;
+pub mod stars;
 pub mod surface;

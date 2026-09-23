@@ -1,32 +1,62 @@
-// The sky: environment.tsx's dome shader (b9e31004),
-// drawn as one full-screen triangle behind everything. The dome was a
-// sphere of radius SKY_DOME_SCALE centred on the world origin, coloured by
-// the direction from the origin to the point a pixel's ray meets it; that
-// point is found here by intersecting the ray with the same sphere, so the
-// colours land where they did. The gradient, stars, clouds, sun and moon
-// are that shader's, line for line; the output is graded, vignetted and
-// encoded to sRGB, as the post stack did over the whole screen — the frame
-// uniform is bound for the vignette alone.
+// The sky: one triangle over the screen at the far plane, behind everything
+// and drawn after it, where nothing opaque stands (gpu/renderer.rs), each
+// pixel the light along its own ray (atmos_view.wgsl's beyond, over
+// the tables gpu/atmosphere.rs draws) — the air's, and the ground's past
+// the terrain's drawn edge. Over it the sun's disc and the moon's, each
+// seen through the air. The stars and the clouds are passes of their own over this
+// one (gpu/stars.rs, gpu/clouds.rs). The output is graded, vignetted and
+// encoded to sRGB as every pass's is — the frame uniform is bound for the
+// vignette.
 
 struct Sky {
-  inv_view_proj: mat4x4f,
-  camera_pos: vec3f,
-  radius: f32,
-  top: vec3f,
-  time: f32,
-  middle: vec3f,
-  star_intensity: f32,
-  horizon: vec3f,
-  az: f32,
-  sun_dir: vec3f,
-  _p0: f32,
-  sun_glow: vec3f,
-  _p1: f32,
-  moon_dir: vec3f,
-  _p2: f32,
+  // A pixel's ray in the root frame, affine in its NDC (gpu/renderer.rs's
+  // put_ray): the frame the air's sun and moon are in.
+  ray: mat3x3f,
+  // The celestial pole in the same frame, which the Moon's north is turned
+  // toward, and whether its face has arrived (gpu/moon.rs).
+  pole: vec3f,
+  mapped: f32,
 };
 
 @group(0) @binding(1) var<uniform> sky: Sky;
+@group(0) @binding(2) var moon_map: texture_2d_array<f32>;
+@group(0) @binding(3) var moon_sampler: sampler;
+
+// The sun's disc before the exposure: far past white once exposed, so it
+// is the air in front of it that colours it, as it reddens a low sun.
+const SUN_DISC: f32 = 4.0;
+// Limb darkening: the disc's edge is the sun's cooler outer layer, seen
+// through more of it.
+const SUN_LIMB: f32 = 0.6;
+// How much larger than they stand the Sun's and the Moon's discs are drawn.
+// At their true size each is eight pixels on a phone, smaller than the Sun
+// and the Moon anyone remembers seeing: the eye enlarges them — the moon
+// illusion near the horizon, the glare round a bright one. Four, a whole
+// multiple of the truth, taken by look between it and the dome shader's
+// eight-odd, which had no derivation. Only their size is not theirs; their
+// light, their faces and the Moon's phase are.
+const DISC_SCALE: f32 = 4.0;
+// The Moon's mean semi-diameter as seen from the Earth, and what its surface
+// sends back on average of the sunlight falling square on it.
+const MOON_ANGULAR_RADIUS: f32 = 0.004522;
+const MOON_ALBEDO: f32 = 0.12;
+// The face's map (gpu/moon.rs): texels across a radius, and its mean over the
+// disc as the Earth sees it, which asset/script/download_moon.rs prints — the
+// map is relative, and this is what scales it to MOON_ALBEDO.
+const MOON_MAP_RADIUS_TEXELS: f32 = 256.0;
+const MOON_MAP_MEAN: f32 = 0.2459;
+// How bright a full Moon's face is shown at most, on average: the eye looking
+// at the Moon adapts to it, and sees its seas and its highlands where the
+// sky's exposure would drown the disc white. By day the sky's exposure is
+// the lower, and the face shows at it, a pale disc about as bright as the
+// blue around it.
+const MOON_FACE_SHOWN: f32 = 0.6;
+// Earthshine: the Earth's sunlit face lighting the Moon's dark side, the
+// ashen light of a crescent. What it has is a ten-thousandth of the
+// sunlit side's, which no eight-bit screen holds beside it; what it is shown
+// at is how a crescent's dark side reads to the eye at night, and it goes as
+// the Earth's phase from the Moon, full when the Moon is new.
+const EARTHSHINE_SHOWN: f32 = 0.03;
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
@@ -37,97 +67,84 @@ struct VertexOut {
 fn vs(@builtin(vertex_index) i: u32) -> VertexOut {
   let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u)) * 2.0 - 1.0;
   var o: VertexOut;
-  o.clip = vec4f(p, 1.0, 1.0);
+  o.clip = vec4f(p, 0.0, 1.0);
   o.ndc = p;
   return o;
 }
 
-fn hash(q: vec2f) -> f32 {
-  var p = fract(q * vec2f(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
-}
-
-fn value_noise(p: vec2f) -> f32 {
-  let i = floor(p);
-  let f = fract(p);
-  let a = hash(i);
-  let b = hash(i + vec2f(1.0, 0.0));
-  let c = hash(i + vec2f(0.0, 1.0));
-  let d = hash(i + vec2f(1.0, 1.0));
-  let u = f * f * (3.0 - 2.0 * f);
-  return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
-}
-
-fn fbm(q: vec2f) -> f32 {
-  var p = q;
-  var sum = 0.0;
-  var amp = 0.5;
-  for (var i = 0; i < 4; i++) {
-    sum += amp * value_noise(p);
-    p *= 2.02;
-    amp *= 0.5;
+// The Sun's disc along `dir` from radius `r`, `a` the ray's offset from its
+// centre in disc radii and `w` how far `a` moves across a pixel: limb-
+// darkened, through the air in front of it, its edge a pixel soft. Nothing
+// where the planet stands in the way.
+fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
+  if (meets_ground(r, dir.z) || dot(dir, atmos.sun_dir) <= 0.0 || a >= 1.0 + w) {
+    return vec3f(0.0);
   }
-  return sum;
+  let inside = min(a, 1.0);
+  let limb = 1.0 - SUN_LIMB * (1.0 - sqrt(1.0 - inside * inside));
+  let edge = 1.0 - smoothstep(1.0 - w, 1.0 + w, a);
+  return transmittance_to_top(r, dir.z) * shown() * SUN_DISC * limb * edge;
+}
+
+// The Moon's face along `dir` from radius `r`: `across` is the ray's offset
+// from the disc's centre in disc radii and `a` its length, and `w` how far
+// `a` moves across a pixel, taken where every pixel of the pass takes it.
+// Each point of the face is the map's, the near side turned with its north
+// toward the celestial pole; it sends back the sunlight by the
+// Lommel–Seeliger law — which is why a full Moon is as bright at its limb as
+// at its centre, where a Lambertian ball would dim — so its phase is where
+// the Sun lights it, pixel by pixel. It is seen through the air as the Sun
+// is. Its limb is a pixel's soft edge. Nothing where the planet stands in
+// the way.
+fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
+  let axis = atmos.moon_dir;
+  if (meets_ground(r, dir.z) || dot(dir, axis) <= 0.0 || a >= 1.0 + w) {
+    return vec3f(0.0);
+  }
+  let edge = 1.0 - smoothstep(1.0 - w, 1.0 + w, a);
+  let on = across / max(a, 1.0);
+  let normal = on - axis * sqrt(max(1.0 - dot(on, on), 0.0));
+
+  // Selenographic: north toward the pole, east to the right as the Earth
+  // sees it, and the near side's centre toward the Earth.
+  let north = normalize(sky.pole - dot(sky.pole, axis) * axis);
+  let east = cross(axis, north);
+  let lon = atan2(dot(normal, east), -dot(normal, axis));
+  let lat = asin(clamp(dot(normal, north), -1.0, 1.0));
+  var face = MOON_MAP_MEAN;
+  if (sky.mapped > 0.5) {
+    let uv = vec2f(lon / PI + 0.5, 0.5 - lat / PI);
+    let lod = log2(max(MOON_MAP_RADIUS_TEXELS * w, 1e-6));
+    face = textureSampleLevel(moon_map, moon_sampler, uv, 0, lod).r;
+  }
+  let albedo = MOON_ALBEDO * face / MOON_MAP_MEAN;
+
+  let sun = atmos.sun_dir;
+  let lit = max(dot(normal, sun), 0.0);
+  let seen = max(-dot(normal, dir), 1e-4);
+  let radiance = albedo / PI * 2.0 * lit / (lit + seen);
+  let shown_at = atmos.white * min(exposure(), MOON_FACE_SHOWN * PI / MOON_ALBEDO);
+  var light = radiance * shown_at;
+  if (atmos.moon_light > 0.0) {
+    let earth = 0.5 * (1.0 + dot(sun, axis));
+    light += vec3f(EARTHSHINE_SHOWN * earth * face / MOON_MAP_MEAN);
+  }
+  return transmittance_to_top(r, dir.z) * light * edge;
 }
 
 @fragment
 fn fs(v: VertexOut) -> @location(0) vec4f {
-  // The pixel's ray, and where it meets the dome.
-  let far = sky.inv_view_proj * vec4f(v.ndc, 1.0, 1.0);
-  let ray = normalize(far.xyz / far.w - sky.camera_pos);
-  let b = dot(sky.camera_pos, ray);
-  let c = dot(sky.camera_pos, sky.camera_pos) - sky.radius * sky.radius;
-  let t = -b + sqrt(max(b * b - c, 0.0));
-  let dir = normalize(sky.camera_pos + ray * t);
-  let h = clamp(dir.z * 0.5 + 0.5, 0.0, 1.0);
-  let az = atan2(dir.y, dir.x) - sky.az;
-
-  var color = mix(sky.horizon, sky.middle, smoothstep(0.0, 0.4, h));
-  color = mix(color, sky.top, smoothstep(0.3, 1.0, h));
-
-  let horizon_glow = 1.0 - smoothstep(0.0, 0.22, abs(h - 0.08));
-  color += sky.horizon * horizon_glow * 0.06;
-
-  if (sky.star_intensity > 0.001) {
-    let star_uv = vec2f(az * 26.0, h * 90.0);
-    let star_seed = hash(floor(star_uv));
-    let twinkle = 0.55 + 0.45 * sin(sky.time * 2.2 + star_seed * 62.0);
-    let star = smoothstep(0.975, 0.995, star_seed) * twinkle;
-    color += vec3f(star) * smoothstep(0.04, 0.3, h) * sky.star_intensity;
-  }
-
-  let cloud_uv = vec2f(az * 2.4, h * 5.0) + vec2f(sky.time * 0.02, sky.time * 0.004);
-  let cloud_density = smoothstep(0.52, 0.82, fbm(cloud_uv * 1.6));
-  let cloud_mask = smoothstep(0.04, 0.28, h) * (1.0 - smoothstep(0.72, 1.0, h));
-  color = mix(color, mix(sky.horizon, vec3f(1.0), 0.55), cloud_density * cloud_mask * 0.5);
-
-  let sun_dot = max(dot(dir, normalize(sky.sun_dir)), 0.0);
-  color = mix(color, sky.sun_glow, pow(sun_dot, 6.0) * 0.35);
-  color = mix(color, vec3f(1.0, 0.98, 0.9), smoothstep(0.997, 0.9992, sun_dot));
-  let sun_rim = smoothstep(0.997, 0.9985, sun_dot) * (1.0 - smoothstep(0.9985, 0.9992, sun_dot));
-  color = mix(color, vec3f(1.0, 0.95, 0.85), sun_rim * 0.6);
-
-  let moon_axis = normalize(sky.moon_dir);
-  let moon_dot = max(dot(dir, moon_axis), 0.0);
-  color = mix(color, vec3f(0.85, 0.9, 1.0), pow(moon_dot, 20.0) * sky.star_intensity * 0.4);
-  let moon_disc_mask = smoothstep(0.998, 0.9993, moon_dot) * sky.star_intensity;
-  if (moon_disc_mask > 0.001) {
-    let ref_up = select(vec3f(1.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0), abs(moon_axis.z) < 0.99);
-    let m_right = normalize(cross(ref_up, moon_axis));
-    let m_up = cross(moon_axis, m_right);
-    let moon_angular_radius = 0.0374;
-    let local = dir - moon_dot * moon_axis;
-    let p = dot(local, m_right) / moon_angular_radius;
-    let q = dot(local, m_up) / moon_angular_radius;
-    let nz = sqrt(max(0.0, 1.0 - p * p - q * q));
-    let sun_n = normalize(sky.sun_dir);
-    let lit = p * dot(sun_n, m_right) + q * dot(sun_n, m_up) + nz * (-dot(sun_n, moon_axis));
-    let lit_mask = smoothstep(-0.05, 0.05, lit);
-    let strength = mix(0.06, 1.0, lit_mask);
-    color = mix(color, mix(vec3f(0.20, 0.21, 0.26), vec3f(0.92, 0.94, 0.98), lit_mask), moon_disc_mask * strength);
-  }
-
+  let dir = normalize(sky.ray * vec3f(v.ndc, 1.0));
+  let r = camera_r();
+  // The ray's place on each disc, in its radii, and how far that moves
+  // across a pixel: a derivative, so taken here, where every pixel takes it.
+  let sun_a = length(cross(dir, atmos.sun_dir)) / (atmos.sun_angular_radius * DISC_SCALE);
+  let sun_w = max(fwidth(sun_a), 1e-4);
+  let across = (dir - dot(dir, atmos.moon_dir) * atmos.moon_dir) / (MOON_ANGULAR_RADIUS * DISC_SCALE);
+  let moon_a = length(across);
+  let moon_w = max(fwidth(moon_a), 1e-4);
+  var color = beyond(air_along(dir)) + sun_disc(dir, r, sun_a, sun_w) + moon_disc(dir, r, across, moon_a, moon_w) + glare(dir);
+  color = shoulder(color);
   color += (hash(v.clip.xy) - 0.5) * (1.0 / 255.0);
   return vec4f(finish(color, v.clip.xy), 1.0);
 }

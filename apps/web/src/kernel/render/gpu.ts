@@ -117,6 +117,13 @@ const ALPHA_BLEND: GPUBlendState = {
   color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
   alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
 };
+/** Light added to what is drawn: the stars over the sky. */
+const ADD_BLEND: GPUBlendState = {
+  color: { srcFactor: "one", dstFactor: "one", operation: "add" },
+  alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" },
+};
+/** A record's blend code's state; none over what is opaque. */
+const BLEND: Record<number, GPUBlendState | undefined> = { [record.OPAQUE]: undefined, [record.ALPHA]: ALPHA_BLEND, [record.ADD]: ADD_BLEND };
 
 const word_f32 = new Float32Array(1);
 const word_u32 = new Uint32Array(word_f32.buffer);
@@ -139,6 +146,8 @@ function texture_format(code: u32): GPUTextureFormat {
       return "r8unorm";
     case format.RGBA8:
       return "rgba8unorm";
+    case format.RGBA16F:
+      return "rgba16float";
     default:
       return canvas_format;
   }
@@ -193,7 +202,7 @@ function pipeline_descriptor(words: U32Array, layouts: GPUBindGroupLayout[], mod
     primitive: { topology: TOPOLOGY[words[3]], cullMode: CULL[words[4]], frontFace: "ccw" },
     multisample: { count: samples },
   };
-  if (words[2] !== 0) descriptor.fragment = { module, entryPoint: "fs", targets: [{ format: target, blend: words[9] === record.ALPHA ? ALPHA_BLEND : undefined }] };
+  if (words[2] !== 0) descriptor.fragment = { module, entryPoint: "fs", targets: [{ format: target, blend: BLEND[words[9]] }] };
   if (words[6] !== record.NO_DEPTH) {
     descriptor.depthStencil = { format: "depth32float", depthWriteEnabled: words[5] !== 0, depthCompare: COMPARE[words[6]], depthBias: words[7] | 0, depthBiasSlopeScale: float(words[8]) };
   }

@@ -11,6 +11,7 @@
 //! placed against the frame's origin, in the order the sets draw in.
 
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_BADGE};
+use pxl_render::gpu::api::word_bytes;
 use pxl_spec::space::v3::V3;
 
 use crate::io::load::Models;
@@ -70,7 +71,7 @@ impl Billboards {
     /// `lane` addresses count * BILLBOARD_FLOATS f32s in the memory.
     pub unsafe fn write(&mut self, world: &mut World, draw: &mut DrawList, id: u32, count: u32, lane: usize) {
         let Some(Some(s)) = self.sets.get_mut(id as usize) else { return };
-        let len = (count as usize * BILLBOARD_FLOATS * 4) as u32;
+        let len = word_bytes(count as usize * BILLBOARD_FLOATS);
         let written = s.held.write(draw, world.volumes.mem(), lane, len);
         s.count = if written { count } else { 0 };
     }
