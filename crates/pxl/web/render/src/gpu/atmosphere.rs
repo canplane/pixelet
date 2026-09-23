@@ -39,7 +39,9 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::look::atmosphere as model;
 
 /// Floats the atmosphere uniform (atmos_medium.wgsl's Atmosphere) holds.
-pub const ATMOS_FLOATS: usize = 52;
+/// Two past the last field: the struct is laid out in 16-byte rows and the
+/// device rounds it up to one (record.test.rs holds this to naga).
+pub const ATMOS_FLOATS: usize = 56;
 /// Where each field sits in it, in floats (record.test.rs holds them to the
 /// struct). The frame's own are written every frame; the rest are the
 /// model's, laid out once.
@@ -77,6 +79,9 @@ pub(crate) const CLOUD_TIME: usize = 48;
 pub(crate) const CLOUD_COUNT: usize = 49;
 pub(crate) const CLOUD_ALTITUDE: usize = 50;
 pub(crate) const CLOUD_GONE: usize = 51;
+/// The surface haze (look/atmosphere.rs), read by the aerial perspective.
+pub(crate) const HAZE_EXTINCTION: usize = 52;
+pub(crate) const HAZE_SCALE_HEIGHT: usize = 53;
 
 /// The air's entries in a pass's group, 8 through 15, six of five words.
 pub const AIR_WORDS: usize = 30;
@@ -142,6 +147,8 @@ impl Atmosphere {
             (RAYLEIGH_SCALE_HEIGHT, model::RAYLEIGH_SCALE_HEIGHT_KM),
             (MIE_SCATTERING, model::MIE_SCATTERING),
             (MIE_EXTINCTION, model::MIE_EXTINCTION),
+            (HAZE_EXTINCTION, model::HAZE_EXTINCTION),
+            (HAZE_SCALE_HEIGHT, model::HAZE_SCALE_HEIGHT_KM),
             (MIE_SCALE_HEIGHT, model::MIE_SCALE_HEIGHT_KM),
             (MIE_G, model::MIE_G),
             (OZONE_CENTER, model::OZONE_CENTER_KM),

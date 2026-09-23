@@ -39,7 +39,8 @@ pub const SHADER_ATMOS_SKY_VIEW: u32 = 16;
 pub const SHADER_ATMOS_EXPOSURE: u32 = 17;
 pub const SHADER_STARS: u32 = 18;
 pub const SHADER_CLOUDS: u32 = 19;
-pub const SHADERS: u32 = 20;
+pub const SHADER_CLOUD_FIELD: u32 = 20;
+pub const SHADERS: u32 = 21;
 
 /// The shaders that place a point of the world, each of which lays it on the
 /// planet as the ground is (globe.wgsl's `on_globe_of`) before it projects
@@ -76,8 +77,6 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_lut",
             "atmos_sky",
             "atmos_view",
-            "noise",
-            "cloud_field",
             "shade",
             "finish",
             "shadow",
@@ -94,8 +93,6 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_lut",
             "atmos_sky",
             "atmos_view",
-            "noise",
-            "cloud_field",
             "shade",
             "finish",
             "shadow",
@@ -112,8 +109,6 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_lut",
             "atmos_sky",
             "atmos_view",
-            "noise",
-            "cloud_field",
             "shade",
             "finish",
             "shadow",
@@ -136,8 +131,6 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_lut",
             "atmos_sky",
             "atmos_view",
-            "noise",
-            "cloud_field",
             "sky"
         ),
         SHADER_DEBUG => wgsl!("frame", "globe", "grade", "debug"),
@@ -151,6 +144,7 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_ATMOS_SKY_VIEW => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_skyview"),
         SHADER_ATMOS_EXPOSURE => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_pass", "atmos_exposure"),
         SHADER_STARS => wgsl!("grade", "stars"),
+        SHADER_CLOUD_FIELD => wgsl!("noise", "cloud_tile", "atmos_pass", "cloud_bake"),
         SHADER_CLOUDS => wgsl!(
             "frame",
             "globe",
@@ -162,6 +156,7 @@ pub fn source(kind: u32) -> &'static str {
             "atmos_lut",
             "atmos_sky",
             "atmos_view",
+            "cloud_tile",
             "cloud_field",
             "clouds"
         ),
@@ -228,7 +223,8 @@ pub const PIPELINE_ATMOS_EXPOSURE: u32 = 25;
 pub const PIPELINE_STARS: u32 = 26;
 pub const PIPELINE_CLOUDS: u32 = 27;
 pub const PIPELINE_CLOUDS_ABOVE: u32 = 28;
-pub const PIPELINES: u32 = 29;
+pub const PIPELINE_CLOUD_FIELD: u32 = 29;
+pub const PIPELINES: u32 = 30;
 
 // A pipeline record's words, in order: the shader for a frame at one
 // sample and the one for a multisampled frame; whether it has a fragment
@@ -416,6 +412,20 @@ const LIT_FRAME: [[u32; 3]; 10] = [
     AIR_AT_VERTICES[4],
     AIR_AT_VERTICES[5],
 ];
+/// The clouds' group: the frame, their own uniform, the tile the shape is
+/// baked into and its sampler, and the air.
+const CLOUD_GROUP: [[u32; 3]; 10] = [
+    [0, FRAGMENT, UNIFORM],
+    [1, FRAGMENT, UNIFORM],
+    [2, FRAGMENT, TEXTURE],
+    [3, FRAGMENT, SAMPLER],
+    AIR[0],
+    AIR[1],
+    AIR[2],
+    AIR[3],
+    AIR[4],
+    AIR[5],
+];
 /// A skin and its sampler.
 const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
 
@@ -600,7 +610,7 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_CLOUDS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3], AIR[4], AIR[5]])],
+            &[group(&CLOUD_GROUP)],
         ),
         PIPELINE_CLOUDS_ABOVE => record(
             Head {
@@ -608,8 +618,11 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 ..blended(SHADER_CLOUDS, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, FRAGMENT, UNIFORM], [1, FRAGMENT, UNIFORM], AIR[0], AIR[1], AIR[2], AIR[3], AIR[4], AIR[5]])],
+            &[group(&CLOUD_GROUP)],
         ),
+        // The cloud tile (cloud_bake.wgsl): one triangle over a texture of
+        // its own, once for a device, reading nothing.
+        PIPELINE_CLOUD_FIELD => record(screen(SHADER_CLOUD_FIELD), &[], &[]),
         _ => Vec::new(),
     }
 }

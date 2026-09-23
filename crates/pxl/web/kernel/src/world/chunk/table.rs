@@ -767,7 +767,7 @@ impl Scheduler {
         if let Some(frame) = self.frame {
             let (visible, _, d2, _) = measure(&frame, &slot);
             if visible {
-                slot.layout_primary = relative(self.ladder.guide(d2.sqrt(), COARSEST).step, level);
+                slot.layout_primary = relative(self.ladder.guide(d2.sqrt(), COARSEST).step, level, self.outermost(level));
                 slot.desired = (slot.layout_primary, 0);
             }
         }
@@ -775,6 +775,12 @@ impl Scheduler {
         assert!(self.slots.len() < MAX_CHUNKS, "more than {MAX_CHUNKS} chunks held");
         self.slots.push(slot);
         self.view_dirty = true;
+    }
+
+    /// Whether `level` is the window's outermost ring: nothing coarser is
+    /// drawn, so its own tier is free to be as coarse as the ladder says.
+    fn outermost(&self, level: u32) -> bool {
+        self.frame.is_some_and(|f| level + 1 == f.window.1)
     }
 
     pub fn remove(&mut self, world: &mut World, id: u32) {
@@ -1592,12 +1598,13 @@ impl Scheduler {
         }
         let s = &self.slots[i];
         let level = s.level;
+        let outermost = self.outermost(level);
         let guide = self.ladder.guide(s.distance2.sqrt(), s.layout_primary << level);
         // The ladder speaks in world steps; a chunk builds in its own, and a
         // blend whose two ends are one step of the chunk's is no blend.
         let (primary, secondary) = match guide.blend {
-            Some((finer, coarser, _)) if relative(finer, level) != relative(coarser, level) => (relative(finer, level), relative(coarser, level)),
-            _ => (relative(guide.step, level), 0),
+            Some((finer, coarser, _)) if relative(finer, level, outermost) != relative(coarser, level, outermost) => (relative(finer, level, outermost), relative(coarser, level, outermost)),
+            _ => (relative(guide.step, level, outermost), 0),
         };
         self.slots[i].desired = (primary, secondary);
         let current = self.generation(i);
@@ -1616,7 +1623,7 @@ impl Scheduler {
             self.decide(i, 1.0, 0.0, emit);
             return;
         };
-        let finer_step = relative(finer_step, level);
+        let finer_step = relative(finer_step, level, outermost);
         if pending {
             self.decide(i, 1.0, 0.0, emit);
             return;
@@ -1638,16 +1645,28 @@ impl Scheduler {
     /// baked (node.rs), so a tier asked later would cost the runs again.
     fn ask(&mut self, world: &mut World, i: usize, primary: u32, secondary: u32) -> bool {
         let generation = self.generation(i);
+        let outermost = self.outermost(self.slots[i].level);
         let s = &self.slots[i];
         let lacks = |st: u32| st != 0 && s.tier(st, generation).is_none();
         if !lacks(primary) && !lacks(secondary) {
             self.builder.want(world, s.id, [0, 0]);
             return true;
         }
-        let tiers = if s.level == 0 { [1, 2] } else { [2, 0] };
+        // What a chunk keeps besides what it shows: a leaf its own cells and
+        // the step above, a level chunk the one step it is ever drawn at. The
+        // outermost ring is drawn coarser than that (`relative`), and a step
+        // finer than what it shows is a bake for nothing, so it keeps none.
+        let tiers = match (s.level, outermost) {
+            (0, _) => [1, 2],
+            (_, true) => [0, 0],
+            (_, false) => [2, 0],
+        };
         let mut want = [0; 2];
         let mut n = 0;
         for st in [primary, secondary].into_iter().chain(tiers) {
+            if n == want.len() {
+                break;
+            }
             if lacks(st) && !want.contains(&st) {
                 want[n] = st;
                 n += 1;
@@ -1927,8 +1946,15 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
 /// are drawn as they are too, their first tier, and blend between the two.
 /// Finer than that a chunk is not drawn — the split serves it — and coarser
 /// it is merged into its parent.
-fn relative(world_step: u32, level: u32) -> u32 {
-    (world_step >> level).clamp(if level == 0 { 1 } else { 2 }, 2)
+fn relative(world_step: u32, level: u32, outermost: bool) -> u32 {
+    // A level draws its own cells one step coarser than they are, and no
+    // coarser: step 4 of level k is the ground level k+1 draws at step 2, and
+    // that ring is the one holding it. The outermost ring has no level over
+    // it, so nothing else would draw that ground — there the ladder is
+    // followed as far as it goes, which is what makes a far ring cheap
+    // (issue/20260923-the-ground-runs-to-the-horizon.md).
+    let cap = if outermost { COARSEST } else { 2 };
+    (world_step >> level).clamp(if level == 0 { 1 } else { 2 }, cap)
 }
 
 /// Where a chunk sits in `[0, 1)`, from `<level>/<page index>:<base x>,<base y>`.
@@ -2021,6 +2047,21 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3, f64, f64) {
             if p[0] * x + p[1] * y + p[2] * z + p[3] < -s.radius {
                 visible = false;
                 break;
+            }
+        }
+        // Past the horizon the planet itself is in the way, and nothing draws
+        // it: ground there would come up under the horizon line with no
+        // occluder to hide it. A point of a sphere of radius `r` is over the
+        // eye's horizon while `E·P >= r²`, the eye and the point taken from
+        // the planet's centre — the virtual globe's own cull (Cozzi & Ring),
+        // widened by the chunk's radius so a chunk half over it stays.
+        if visible {
+            if let Some(globe) = frame.globe {
+                let r = globe.radius_u();
+                let (e, p) = ([c[0], c[1], c[2] + r], [x, y, z + r]);
+                let along = e[0] * p[0] + e[1] * p[1] + e[2] * p[2];
+                let eye = (e[0] * e[0] + e[1] * e[1] + e[2] * e[2]).sqrt();
+                visible = along + s.radius * eye >= r * r
             }
         }
     }

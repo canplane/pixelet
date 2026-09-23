@@ -185,6 +185,9 @@ fn the_skys_layouts_match_their_structs() {
         assert_eq!(constant(SHADER_SKY, name), [w as f64, h as f64], "{name}");
     }
     assert_eq!(constant(SHADER_CLOUDS, "CLOUD_LATTICE_CELLS"), [(1u32 << c::LATTICE_SHAMT) as f64], "the clouds' lattice");
+    for (name, v) in [("CLOUD_TILE_UNITS", c::TILE_UNITS), ("CLOUD_TILE_TEXELS", c::TILE_TEXELS)] {
+        assert_eq!(constant(SHADER_CLOUDS, name), [v as f64], "the clouds' tile, which the texture is made to");
+    }
     // The glare's halo, Spencer's photopic point-spread function without its
     // core, over the sphere: the share of the light it carries, which the
     // shader scales to a lens's.

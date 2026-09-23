@@ -63,6 +63,11 @@ struct Atmosphere {
   cloud_count: u32,
   cloud_altitude_km: f32,
   cloud_gone_km: f32,
+  // The aerosol near the ground (look/atmosphere.rs), which the tables do
+  // not carry: the aerial perspective's alone, so the sky keeps the medium's
+  // own colour while the far ground goes as Earth's does.
+  haze_extinction: f32,
+  haze_scale_height: f32,
 };
 
 // The camera's radius from the planet's centre: over the ground, and above

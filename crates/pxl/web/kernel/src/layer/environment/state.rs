@@ -19,9 +19,10 @@ use crate::host::{now, wall_now};
 use crate::kernel::kernel;
 use crate::layer::environment::celestial_position::{equatorial_to_local, moon_position, sun_position};
 use crate::layer::environment::config::light_cfg;
-use crate::layer::environment::fog::{fog_far, fog_near};
+use crate::layer::environment::fog::{band_at, camera_height};
 use crate::layer::environment::theme::{themes, WorldThemeKey};
 use crate::layer::environment::theme_clock::theme_key;
+use crate::layer::terrain::level::{drawn_from_eye, window};
 use crate::shell::map_store::map_store;
 use crate::world::change::{request_world_tick, wake_at};
 use crate::world::chunk::table::Frame;
@@ -288,6 +289,10 @@ impl EnvironmentDraw {
         let km_per_u = km_per_u();
         let r = Globe::at(self.lat.to_radians()).radius_u();
         let over = frame.camera[0].hypot(frame.camera[1]).hypot(frame.camera[2] + r) - r;
+        // Where the ground ends for the eye: the nearer of what the air and
+        // the planet leave (environment/fog.rs) and what the rings draw.
+        let v = view();
+        let band = band_at(camera_height(v.dist, v.polar), drawn_from_eye(v.dist, v.polar, window().end - 1));
         let light = Light {
             theme: self.current,
             sun: self.sun,
@@ -295,8 +300,8 @@ impl EnvironmentDraw {
             moon_intensity: self.moon_intensity,
             stars: self.stars,
             time: self.time,
-            fog_near: fog_near(view().dist),
-            fog_far: fog_far(view().dist),
+            fog_near: band.0,
+            fog_far: band.1,
             floor: light_cfg::FLOOR,
             altitude_km: (frame.centre_z + over) * km_per_u,
             km_per_u,

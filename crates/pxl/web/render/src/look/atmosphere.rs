@@ -27,6 +27,24 @@ pub const MIE_SCALE_HEIGHT_KM: f64 = 1.2;
 /// The Mie phase's asymmetry: how strongly haze throws light forward, which
 /// is the glow around the sun.
 pub const MIE_G: f64 = 0.8;
+/// How far the eye sees through the air near the ground, in kilometres:
+/// Koschmieder's visual range, `3.912/β`, which is 30 to 50 km on a clear
+/// day on Earth and under 10 in haze.
+///
+/// Bruneton's medium alone gives 179 km — cleaner than the clearest day
+/// anyone stands in — because it carries no aerosol in the boundary layer,
+/// only the stratospheric Mie the sky's colour wants. Without one the ground
+/// stays sharp to the horizon and something else has to hide where it ends
+/// (issue/20260923-the-ground-runs-to-the-horizon.md).
+pub const HAZE_VISUAL_RANGE_KM: f64 = 40.0;
+/// The aerosol the range asks for, over what the medium already extinguishes
+/// at green, where the eye's contrast is measured. Read by the aerial
+/// perspective alone: scaling the medium's own Mie this far would whiten the
+/// sky, which is why the haze is a layer of its own.
+pub const HAZE_EXTINCTION: f64 = 3.912 / HAZE_VISUAL_RANGE_KM - (RAYLEIGH_SCATTERING[1] + MIE_EXTINCTION);
+/// The layer it sits in: the boundary layer the aerosol is mixed through,
+/// so a view from above passes through less of it, as one on Earth does.
+pub const HAZE_SCALE_HEIGHT_KM: f64 = 1.0;
 pub const OZONE_ABSORPTION: [f64; 3] = [0.650e-3, 1.881e-3, 0.085e-3];
 pub const OZONE_CENTER_KM: f64 = 25.0;
 pub const OZONE_HALF_WIDTH_KM: f64 = 15.0;

@@ -11,8 +11,8 @@
 use crate::control::camera::config::camera_cfg::projection::FOV;
 use crate::control::camera::config::camera_cfg::view::{MAX_DIST, MAX_POLAR, MIN_DIST, MIN_POLAR};
 use crate::layer::environment::config::render_cfg;
-use crate::layer::environment::fog::fog_far;
-use crate::layer::terrain::level::{drawn_reach, window_for, WINDOW_LEVELS};
+use crate::layer::environment::fog::{band_at, reach_at};
+use crate::layer::terrain::level::{drawn_from_eye, drawn_reach, window_for, WINDOW_LEVELS};
 use xpute_core::math::scalar::round;
 
 /// How far the chunk-aligned anchor can sit from the true view centre.
@@ -21,9 +21,9 @@ fn anchor_quantization() -> f64 {
 }
 
 /// The farthest ground one view shows — the camera `dist` from a pivot
-/// `pivot_height` above the ground, at `polar` from straight down — nearer
-/// than fog, measured from the view centre.
-fn farthest_visible_ground(aspect: f64, pivot_height: f64, dist: f64, polar: f64, steps: i32) -> f64 {
+/// `pivot_height` above the ground, at `polar` from straight down — inside
+/// `far`, where the band has taken it, measured from the view centre.
+fn farthest_visible_ground(aspect: f64, pivot_height: f64, dist: f64, polar: f64, steps: i32, far: f64) -> f64 {
     let vh = FOV * core::f64::consts::PI / 360.0;
     let hh = (vh.tan() * aspect).atan();
     let mut worst: f64 = 0.0;
@@ -45,7 +45,7 @@ fn farthest_visible_ground(aspect: f64, pivot_height: f64, dist: f64, polar: f64
                 continue;
             }
             let t = height / -dz;
-            if t <= 0.0 || t > fog_far(dist) {
+            if t <= 0.0 || t > far {
                 continue;
             }
             let x = t * (d[0] / dl);
@@ -70,9 +70,14 @@ fn view_range_everything_the_camera_can_see_is_inside_what_the_rings_draw() {
                 let dist = MIN_DIST * (MAX_DIST / MIN_DIST).powf(di as f64 / DIST_STEPS as f64);
                 for pi in 0..=STEPS {
                     let polar = MIN_POLAR + (MAX_POLAR - MIN_POLAR) * pi as f64 / STEPS as f64;
-                    let reach = farthest_visible_ground(aspect, pivot_height, dist, polar, STEPS) + anchor_quantization();
                     let window = window_for(dist, polar, pivot_height, aspect);
                     let drawn = drawn_reach(window.end - 1);
+                    // What the eye is shown: the band ends the ground at the
+                    // nearer of the reach and what the rings draw, so a view
+                    // whose air and planet leave more than the window holds
+                    // is faded out rather than cut (environment/fog.rs).
+                    let far = band_at(pivot_height + dist * polar.cos(), drawn_from_eye(dist, polar, window.end - 1)).1;
+                    let reach = farthest_visible_ground(aspect, pivot_height, dist, polar, STEPS, far) + anchor_quantization();
                     assert!(
                         reach <= drawn,
                         "aspect {aspect}, pivot +{pivot_height}u, dist {dist}, polar {polar:.2}: visible ground reaches {}u, window {window:?} draws to {}u",
@@ -86,7 +91,12 @@ fn view_range_everything_the_camera_can_see_is_inside_what_the_rings_draw() {
 }
 
 #[test]
-fn view_range_fog_finishes_before_geometry_does_at_every_pivot_height() {
-    assert!(render_cfg::FOG_FAR <= drawn_reach(WINDOW_LEVELS - 1));
+fn the_band_fades_out_inside_the_reach_at_every_height_a_view_has() {
     const { assert!(render_cfg::FOG_NEAR < render_cfg::FOG_FAR) };
+    for height in [0.0, 1.0, 50.0, 400.0, 4_096.0, 262_144.0] {
+        let drawn = drawn_reach(WINDOW_LEVELS - 1);
+        let (near, far) = band_at(height, drawn);
+        assert!(near < far, "at {height}u the band has to fade before it ends");
+        assert!(far <= reach_at(height).min(drawn), "at {height}u the ground ends at the nearer of the reach and what is drawn");
+    }
 }

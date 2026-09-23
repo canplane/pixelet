@@ -651,7 +651,7 @@ impl Renderer {
         let air = atmosphere.entries();
         let stars = StarPass::new(g, &mut pipelines, samples);
         let clouds = CloudPass::new(g, &mut pipelines, samples, frame_buffer, air);
-        let mips = Mips::new(g, &mut pipelines);
+        let mips = Mips::new(g, &mut pipelines, format::RGBA8_SRGB);
         let mut fill = Scratch::default();
         let layers = Layers::new(g, &mips, fill.take(LAYER_TEX_SZ * LAYER_TEX_SZ * 4));
         fill.free();

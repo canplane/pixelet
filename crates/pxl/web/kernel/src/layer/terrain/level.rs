@@ -17,15 +17,12 @@
 use pxl_spec::bake::constant::{PAGE_CELL_SPAN, PAGE_TOP_LEVEL};
 use pxl_spec::space::indexer::{L3_IDX, L3_SHAMT, L4_RANGE};
 use pxl_spec::space::pvf3::core::IVEC_X_W;
-use pxl_spec::space::pvf3::fvec;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::store::camera_store;
-use crate::layer::environment::fog::fog_far;
-use crate::layer::terrain::elevation::get_ele;
-use crate::shell::map_store::map_store;
+use crate::layer::environment::fog::{pivot_height, reach_at};
 use crate::world::chunk::range::{CHUNK_WORLD_SPAN, PAGE_SPAN};
 
 pub use crate::layer::terrain::config::{HELD_AXIS, RENDER_AXIS, WINDOW_LEVELS};
@@ -170,14 +167,8 @@ fn level_at(dist: f64) -> u32 {
 /// span, which is what `.fixed` is sized for.
 pub fn window() -> std::ops::Range<u32> {
     let view = camera_store().view_state;
-    // The pivot is the map centre, which stands on whatever is under it: on
-    // a building the ground is that much further below the camera.
-    let pivot_height = map_store().map_center.map_or(0.0, |c| {
-        let z = ivec::to_real(ivec::Z(c.i)) + fvec::to_real(fvec::Z(c.f));
-        get_ele(&c).map_or(0.0, |ground| (z - ground).max(0.0))
-    });
     let v = crate::world::frame::view::view();
-    window_for(view.dist, view.polar, pivot_height, v.width / v.height)
+    window_for(view.dist, view.polar, pivot_height(), v.width / v.height)
 }
 
 /// `window` for a camera `dist` from its pivot at `polar` from straight down,
@@ -189,8 +180,10 @@ pub fn window_for(dist: f64, polar: f64, pivot_height: f64, aspect: f64) -> std:
     let height = pivot_height + dist * tilt.sin();
     let near = height / (tilt + half_fov).min(std::f64::consts::FRAC_PI_2).sin();
     let upper = tilt - half_fov;
-    let fog = fog_far(dist);
-    let far = if upper > 0.0 { (height / upper.sin()).min(fog) } else { fog };
+    // How far the ground is worth drawing from here: the haze near the
+    // ground, the planet's edge from high up (environment/fog.rs).
+    let reach = reach_at(height);
+    let far = if upper > 0.0 { (height / upper.sin()).min(reach) } else { reach };
     // Decoration is scattered from the leaves and reaches past step 1, so
     // the leaves are held while any ground it can reach is in view.
     let base = if near < DECOR_REACH { 0 } else { level_at(near).min(PAGE_TOP_LEVEL) };
@@ -198,8 +191,8 @@ pub fn window_for(dist: f64, polar: f64, pivot_height: f64, aspect: f64) -> std:
     // whose ring draws all the ground in view: the ring is measured from the
     // view centre rather than the eye, and a wide screen's upper corners see
     // further than its middle, so the ladder's level alone can fall short.
-    let reach = ground_reach(dist, polar, pivot_height, aspect) + ANCHOR_SLACK;
-    let covering = (reach / drawn_reach(0)).log2().ceil().max(0.0) as u32;
+    let seen = ground_reach(dist, polar, pivot_height, aspect, reach) + ANCHOR_SLACK;
+    let covering = (seen / drawn_reach(0)).log2().ceil().max(0.0) as u32;
     let top = level_at(far.max(near)).max(covering).clamp(base, (base + WINDOW_LEVELS - 1).min(PAGE_TOP_LEVEL));
     base..top + 1
 }
@@ -211,12 +204,12 @@ const ANCHOR_SLACK: f64 = CHUNK_WORLD_SPAN * std::f64::consts::SQRT_2;
 /// The farthest ground a view shows, from the view centre: the farthest of
 /// the frustum's corners on the ground, since a frustum meets a plane in a
 /// convex footprint and the farthest point of one is a corner. Where an
-/// upper corner meets no ground before fog, the footprint ends on fog's
-/// circle around the eye's foot instead, as far round it as that corner's
+/// upper corner meets no ground inside the reach, the footprint ends on the
+/// reach's circle around the eye's foot instead, as far round it as that corner's
 /// bearing: the view centre stands ahead of the eye, so the arc's far end is
 /// the circle's farthest visible point from it, and the part of the circle
 /// behind the eye is not in view at all.
-fn ground_reach(dist: f64, polar: f64, pivot_height: f64, aspect: f64) -> f64 {
+fn ground_reach(dist: f64, polar: f64, pivot_height: f64, aspect: f64, reach: f64) -> f64 {
     let half_v = camera_cfg::projection::FOV.to_radians() / 2.0;
     let (tan_v, tan_h) = (half_v.tan(), half_v.tan() * aspect);
     let horiz = dist * polar.sin();
@@ -225,22 +218,29 @@ fn ground_reach(dist: f64, polar: f64, pivot_height: f64, aspect: f64) -> f64 {
     // Forward, right and up, the eye `horiz` behind the pivot along -y.
     let f = [0.0, horiz / len, -dist * polar.cos() / len];
     let u = [0.0, -f[2], f[1]];
-    let fog_at = fog_far(dist);
-    let fog = (fog_at.powi(2) - height.powi(2)).max(0.0).sqrt();
+    let ground_reach = (reach.powi(2) - height.powi(2)).max(0.0).sqrt();
     let mut worst: f64 = 0.0;
     for (sx, sy) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
         let d = [sx * tan_h, f[1] + sy * tan_v * u[1], f[2] + sy * tan_v * u[2]];
         let dl = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
         let t = if d[2] < 0.0 { height * dl / -d[2] } else { f64::INFINITY };
-        let far = if t > fog_at {
+        let far = if t > reach {
             let cos = d[1] / d[0].hypot(d[1]).max(f64::MIN_POSITIVE);
-            (fog * fog + horiz * horiz - 2.0 * fog * horiz * cos).max(0.0).sqrt()
+            (ground_reach * ground_reach + horiz * horiz - 2.0 * ground_reach * horiz * cos).max(0.0).sqrt()
         } else {
             (t * d[0] / dl).hypot(-horiz + t * d[1] / dl)
         };
         worst = worst.max(far);
     }
     worst
+}
+
+/// How far from the eye the drawn ground runs, for a camera `dist` from its
+/// pivot at `polar`, its window topped at `top`: the top ring's reach, which
+/// is measured from the view centre, less how far behind that centre the eye
+/// stands and the slack the anchor's own quantization takes.
+pub fn drawn_from_eye(dist: f64, polar: f64, top: u32) -> f64 {
+    (drawn_reach(top) - dist * polar.sin() - ANCHOR_SLACK).max(0.0)
 }
 
 /// How far decoration can be drawn: what the leaves' ring draws to. A kind

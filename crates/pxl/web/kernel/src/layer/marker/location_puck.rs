@@ -16,7 +16,7 @@ use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::global::Global;
 use crate::kernel::kernel;
-use crate::layer::environment::fog::fog_far;
+use crate::layer::environment::fog::view_reach;
 use crate::layer::environment::theme::WorldThemeKey;
 use crate::layer::environment::theme_clock::theme_key;
 use crate::layer::terrain::elevation::get_ele;
@@ -24,7 +24,6 @@ use crate::layer::terrain::store::tile_pages;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::node::World;
 use crate::world::chunk::table::Frame;
-use crate::world::frame::view::view;
 
 // The numerator (4) is a world-space distance, not a cell count — it fixes the
 // zone's footprint size independent of U_PER_CELL. The .707 shave is a fixed
@@ -302,7 +301,7 @@ impl Markers {
         // hid itself past it: the beacon's place through the anchor root.
         let [x, y, z] = frame.world_of([p.centre[0] + shown[0], p.centre[1] + shown[1], p.centre[2] + BEACON_Z_BIAS]);
         let c = frame.camera;
-        p.visible = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2) < fog_far(view().dist).powi(2);
+        p.visible = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2) < view_reach().powi(2);
         p.visible
     }
 

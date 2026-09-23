@@ -31,7 +31,7 @@ fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, lit: f32, open: vec3f, seen:
   // hemisphere irradiance alike; the emissive floor is added as it is. The
   // two directional lights are summed as three summed them; the shadow is
   // the brighter's.
-  let sun = frame.sun_color * max(dot(n, frame.sun_dir), 0.0) * lit * seen.sunlit;
+  let sun = frame.sun_color * max(dot(n, frame.sun_dir), 0.0) * lit;
   let other = frame.other_color * max(dot(n, frame.other_dir), 0.0);
   // The hemisphere: the ground's bounce below, the sky's own light above
   // (atmos_view.wgsl's sky_fill, as the vertices took it).

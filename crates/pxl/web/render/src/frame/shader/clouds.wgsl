@@ -2,10 +2,10 @@
 // ALTITUDE_KM up and curved with it, drawn after the opaque world as one
 // triangle over the screen. Each pixel's ray meets the layer's sphere — from
 // below looking up, or from above looking down — and where it does, the
-// cloud there is value noise on the map's own lattice, anchored to the
-// ground and drifting with the wind, lit by the sun and the moon through the
-// air as they reach that height and by the sky above it, and seen through
-// the air between.
+// cloud there is what the field's tile holds over that point of the map's
+// own lattice (cloud_field.wgsl), anchored to the ground and drifting with
+// the wind, lit by the sun and the moon through the air as they reach that
+// height and by the sky above it, and seen through the air between.
 //
 // It writes no depth of its own, so the depth test runs before the shader:
 // the triangle lies at the far plane, and from below the layer it is drawn
@@ -95,18 +95,21 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   if (t <= 0.0 || t > reach) {
     discard;
   }
-  let depth = cloud_depth(p, footprint);
-  if (depth <= 0.001 * CLOUD_DEPTH) {
+  let opacity = cloud_opacity(p, footprint);
+  if (opacity <= 0.002) {
     discard;
   }
   // Thinned as the camera climbs over the layer (cloud_field.wgsl's
   // cloud_shown); past where it is gone the pass is not drawn at all.
-  let alpha = (1.0 - exp(-depth)) * (1.0 - smoothstep(0.6, 1.0, t / reach)) * cloud_shown();
+  let alpha = opacity * (1.0 - smoothstep(0.6, 1.0, t / reach)) * cloud_shown();
 
   // Lit from above: a cloud seen from below shows its underside, which the
   // cloud itself shades as it thickens; seen from above, its lit top.
   let below = r0 < shell;
-  let self_shade = select(1.0, mix(1.0, 0.3, 1.0 - exp(-depth * 0.5)), below);
+  // The shade is how much of the cloud's own thickness stands over the
+  // point the eye sees, at half the weight light through it carries: an
+  // opacity of 1 - exp(-depth) makes that 1 - sqrt(1 - opacity).
+  let self_shade = select(1.0, mix(1.0, 0.3, 1.0 - sqrt(1.0 - opacity)), below);
   var light = lit_by(atmos.sun_dir, dir, clouds.sun_at, shown());
   var sky = zenith_sky();
   if (atmos.moon_light > 0.0) {
