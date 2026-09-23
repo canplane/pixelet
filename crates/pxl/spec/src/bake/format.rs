@@ -33,6 +33,7 @@ use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, BranchCursor, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
 use super::model::feature::Poi;
+use super::pack::{channel_of, pack, unpack, GroundCell};
 
 // ---- DB ----
 
@@ -104,7 +105,9 @@ impl GroundChannelKey {
         None
     }
 
-    const fn name(self) -> &'static str {
+    /// The same, where a const is what the caller needs: `bake/cell.rs` finds
+    /// a channel's field by it.
+    pub const fn name(self) -> &'static str {
         match self {
             GroundChannelKey::LAND => "land",
             GroundChannelKey::WATER => "water",
@@ -125,7 +128,7 @@ impl GroundChannelKey {
     }
 }
 
-const fn const_str_eq(a: &str, b: &str) -> bool {
+pub(crate) const fn const_str_eq(a: &str, b: &str) -> bool {
     let (a, b) = (a.as_bytes(), b.as_bytes());
     if a.len() != b.len() {
         return false;
@@ -176,41 +179,52 @@ const _: () = {
     }
 };
 
-/// `Record<GroundChannelKey, bytes>`. A decoded page owns its channels; a
-/// resident one reads the blocks it was written into.
+/// A page's ground: one word a cell, the four channels packed into it
+/// (`bake/pack.rs`). A decoded page owns its cells; a resident one reads the
+/// block it was written into.
+///
+/// The wire is four planes and this is not, because the two are asked
+/// different questions. A plane of a category runs the same byte for hundreds
+/// of cells and compresses to nothing, while what the client holds is held
+/// for as long as the page is resident and is read a cell at a time
+/// (issue/20260923-a-ground-cell-is-fourteen-bits.md). `from_planes` and
+/// `planes` are where one becomes the other, and the codec is the only caller
+/// of either.
 #[derive(Clone, Debug)]
 pub struct Ground {
-    pub land: std::borrow::Cow<'static, [u8]>,
-    pub water: std::borrow::Cow<'static, [u8]>,
-    pub structure: std::borrow::Cow<'static, [u8]>,
-    pub transport: std::borrow::Cow<'static, [u8]>,
+    pub cells: std::borrow::Cow<'static, [GroundCell]>,
 }
 
 impl Ground {
-    /// `ground[key]`.
-    pub fn get(&self, key: GroundChannelKey) -> &[u8] {
-        match key {
-            GroundChannelKey::LAND => &self.land,
-            GroundChannelKey::WATER => &self.water,
-            GroundChannelKey::STRUCTURE => &self.structure,
-            GroundChannelKey::TRANSPORT => &self.transport,
+    /// The catalog number channel `key` holds at cell `i`, as a plane held it.
+    pub fn channel(&self, i: usize, key: GroundChannelKey) -> u8 {
+        channel_of(self.cells[i], key)
+    }
+
+    pub fn len(&self) -> usize {
+        self.cells.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.cells.is_empty()
+    }
+
+    /// The planes in `GROUND_CH_KEYS`' order, unpacked: what the wire carries.
+    pub fn planes(&self) -> [Vec<u8>; 4] {
+        let mut out = GROUND_CH_KEYS.map(|_| vec![0u8; self.cells.len()]);
+        for (i, cell) in self.cells.iter().enumerate() {
+            for (plane, number) in out.iter_mut().zip(unpack(*cell)) {
+                plane[i] = number;
+            }
         }
+        out
     }
 
-    /// The planes in `GROUND_CH_KEYS`' order.
-    pub fn planes(&self) -> [&[u8]; 4] {
-        GROUND_CH_KEYS.map(|k| self.get(k))
-    }
-
-    /// A page's ground from planes in `GROUND_CH_KEYS`' order.
+    /// A page's ground from planes in `GROUND_CH_KEYS`' order, packed.
     pub fn from_planes(planes: [std::borrow::Cow<'static, [u8]>; 4]) -> Ground {
-        let mut planes = planes.map(Some);
-        let mut take = |k| planes[ch_index(k)].take().expect("each channel once");
+        let cells = planes[0].len();
         Ground {
-            land: take(GroundChannelKey::LAND),
-            water: take(GroundChannelKey::WATER),
-            structure: take(GroundChannelKey::STRUCTURE),
-            transport: take(GroundChannelKey::TRANSPORT),
+            cells: (0..cells).map(|i| pack(GROUND_CH_KEYS.map(|k| planes[ch_index(k)][i]))).collect::<Vec<_>>().into(),
         }
     }
 }
@@ -244,10 +258,13 @@ pub fn encode_terrain(ele: &[i16], ground: &Ground) -> Result<Vec<u8>, MarshalEr
     // Final baked terrain format:
     // - baked = [ele, [land, water, transport, structure]]
     // - each ground channel is an st.encode(...) result
+    // The cells are packed and the wire is planes, so they come apart here
+    // and live until the tree is encoded.
+    let planes = ground.planes();
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
         b.i16_array(Some(ele)).branch(Some(&mut |g| {
-            for plane in ground.planes() {
+            for plane in &planes {
                 g.u8_array(Some(plane));
             }
         }));

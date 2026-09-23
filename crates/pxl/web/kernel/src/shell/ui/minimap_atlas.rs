@@ -122,7 +122,7 @@ pub fn minimap_atlas() -> Option<&'static MinimapAtlas> {
                 if let Some(tile) = tile_store().get_page(page) {
                     let off = (cy.rem_euclid(cells) * cells + cx.rem_euclid(cells)) as usize;
                     for (slot, ch) in GROUND_CH_KEYS.iter().enumerate() {
-                        let v = tile.terrain.ground.get(*ch)[off];
+                        let v = tile.terrain.ground.channel(off, *ch);
                         if let Some(c) = (v != 0).then(|| a.colors.by_channel[slot][v as usize]).flatten() {
                             color = c;
                         }

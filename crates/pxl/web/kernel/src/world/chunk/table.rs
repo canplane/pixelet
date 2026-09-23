@@ -46,14 +46,20 @@ use crate::layer::marker::location_puck::Markers;
 use crate::layer::terrain::level::{centre_page, chunk_span_of, decor_reach, ring, LevelPage, DECOR_REACH, RENDER_AXIS, WINDOW_LEVELS};
 use crate::sched::priority::{in_own_sides, view_centre};
 use crate::shell::setting::store::hidden_ground;
-use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, slot_of, MeshSlot, FINE_BOXES, OCCUPANCY};
+use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
 use crate::world::chunk::range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT};
 use pxl_spec::space::indexer::L2_IDX;
 
 /// The sphere a chunk nothing has measured is culled by.
 const APPROXIMATE_CHUNK_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
-/// How often every chunk is rechecked, whatever is moving.
+/// How long a settled view goes before every chunk is rechecked anyway.
+///
+/// Reconciliation and nothing else. What a chunk should be showing is a
+/// function of the view, so a view that moved is rechecked in the same
+/// frame it moved in (`view_dirty`); this is for what moves without the
+/// view — the ladder's pressure, a generation, a source told late — and for
+/// anything that sets the flag and is missed. A camera is not polled for.
 const RECHECK_INTERVAL_S: f64 = 0.15;
 /// Layouts applied per frame on screen, and releases off it — more of the
 /// latter after a frame that had a block refused: a release is cheap, and
@@ -97,21 +103,27 @@ const MAX_PRESSURE: u32 = 6;
 const PRESSURE_STEP_MS: f64 = 500.0;
 const PRESSURE_RELIEF_MS: f64 = 5000.0;
 
-pub const IN_FRUSTUM: u8 = 1;
-pub const EMPTY: u8 = 2;
+pub const IN_FRUSTUM: u16 = 1;
+pub const EMPTY: u16 = 2;
 /// Wanted, and under a stale chunk that is drawn: what it lacks is not a
 /// hole, since the stale chunk shows that ground until it is ready.
-pub const COVERED: u8 = 8;
+pub const COVERED: u16 = 8;
 /// Mounted and not yet rechecked: it has no layout, so it wants one, and its
 /// first recheck is taken whatever the frame's budget (`tick`).
-pub const FRESH: u8 = 128;
-pub const PENDING: u8 = 4;
-pub const BLEND_ACTIVE: u8 = 16;
-pub const SETTLING: u8 = 32;
+pub const FRESH: u16 = 128;
+pub const PENDING: u16 = 4;
+pub const BLEND_ACTIVE: u16 = 16;
+pub const SETTLING: u16 = 32;
 /// Mounted but no longer wanted: its ground is now some other chunk's — a
 /// parent it merged into, the children it split into — and it is drawn until
 /// every one of those is ready, then let go.
-pub const STALE: u8 = 64;
+pub const STALE: u16 = 64;
+/// Nothing coarser in the selection draws this chunk's ground, so the ladder
+/// is followed as far as it goes here rather than stopping one step past the
+/// chunk's own cells (`relative`). A root of the selection's traversal: the
+/// window's top ring, and — where a page of it is not resident — whichever
+/// pages under it are (`roots`).
+pub const OUTERMOST: u16 = 256;
 
 /// A release, as a request: off screen, nothing built.
 const RELEASE_REQUEST: i32 = -1;
@@ -239,14 +251,24 @@ pub enum Event {
 }
 
 /// What a mount pass selected for: the page the anchor stands in at the
-/// window's base, the window, and which of the pages the selection reads are
-/// resident. While it is the same the selection stands, and the pass is
-/// skipped once nothing of it is left to mount. That page and not the anchor: every ring the pass reads is a level
+/// window's base, the window and the page set. While it is the same the
+/// selection stands, and the pass is skipped once nothing of it is left to
+/// mount.
+///
+/// A counter for the page set, and not a mask of the pages the selection
+/// reads. It was a mask, on the ground that `select` reads only the drawn
+/// rings — true while the traversal could start nowhere but the window's
+/// top. It descends through a page it does not hold now (`roots`), so what
+/// it reads is any page over the top ring's ground at any level of the
+/// window, which no word names. A counter re-selects once a page arrives,
+/// which during a zoom is most frames; the pass keeps its selection across
+/// frames either way (`to_mount`), and whether the re-select itself is worth
+/// narrowing is a measurement nobody has taken. That page and not the anchor: every ring the pass reads is a level
 /// at or above the base, centred on the page over it (`ring`), so the anchor
 /// moving within its base page changes nothing the pass chooses — and a
 /// base page is as far on screen at every zoom, where a chunk of the leaves
 /// is less than a pixel at the farthest.
-type MountKey = (LevelPage, (u32, u32), u64);
+type MountKey = (LevelPage, (u32, u32), u32);
 
 /// A chunk by where it is: its page, and its corner in the page's cells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -314,6 +336,46 @@ fn ring_rect(level: u32, anchor: IVec) -> (f64, f64, f64) {
     let span = crate::layer::terrain::level::span_of(level);
     let r = (RENDER_AXIS / 2) as f64 * span;
     (ivec::X(centre.page) as f64 * span - r, ivec::Y(centre.page) as f64 * span - r, span * RENDER_AXIS as f64)
+}
+
+/// Where the selection starts over `page`'s ground: `page` if it is
+/// resident, else whichever pages under it are.
+///
+/// A page that is not resident is refined *through* rather than skipped.
+/// It used to be skipped, and that decided what could be drawn at all:
+/// the traversal began at the window's top ring and nowhere else, so a
+/// top page that had not arrived took its whole ground with it —
+/// including the finer pages under it the client was already holding. Of
+/// the nine pages a top ring has, four fold from what is held and five
+/// do not, and every one of those five has one or two of its four
+/// children resident (terrain/level.test.rs): nearly half of what showed
+/// as nothing was data in memory with no way to address it. Cesium calls
+/// the same thing `skipLevelOfDetail`, and its rule is this one — a node
+/// that is not loaded is stood in for by its nearest loaded ancestor,
+/// and where there is no ancestor, by its nearest loaded descendants.
+///
+/// One level, and not as far down as there is anything.
+///
+/// Two reasons, and they agree. Counted over every anchor position with the
+/// window a zoom out has just left resident: every root a deeper search
+/// finds is a child, none is a grandchild, and those children are 69% of the
+/// top ring's ground. There is nothing under them to find, because a page is
+/// only ever fetched into its own level's ring and a grandchild's ring is
+/// further from this ground than a child's.
+///
+/// And a chunk's mesh hangs a skirt one of its own cells deep, which is what
+/// hides the step where two chunks of different levels meet (pxl-render
+/// mesh/chunk_mesher.rs). The rings nest, so a chunk has only ever met one a
+/// single level from it; going two down would put a step under a skirt built
+/// for one. A root a level down sits outside its own level's ring and so
+/// touches only another such root or a page of the ring above it — a level
+/// apart at most, as before.
+fn roots(pages: &BTreeSet<LevelPage>, page: LevelPage, base: u32, out: &mut Vec<LevelPage>) {
+    if pages.contains(&page) {
+        out.push(page);
+    } else if page.level > base {
+        out.extend(page.children().into_iter().filter(|c| pages.contains(c)));
+    }
 }
 
 /// How near a chunk is to `(ax, ay)`, in the measure every order here shares
@@ -393,7 +455,7 @@ struct Slot {
     radius: f64,
     distance2: f64,
     centre_distance2: f64,
-    flags: u8,
+    flags: u16,
     pending_since: f64,
     request: i32,
     /// The tiers the chunk nodes hold, oldest built first. A source changed
@@ -430,11 +492,11 @@ impl Slot {
         self.radius = APPROXIMATE_CHUNK_RADIUS * (1u64 << self.level) as f64;
     }
 
-    fn has(&self, f: u8) -> bool {
+    fn has(&self, f: u16) -> bool {
         self.flags & f != 0
     }
 
-    fn set(&mut self, f: u8, on: bool) {
+    fn set(&mut self, f: u16, on: bool) {
         if on {
             self.flags |= f
         } else {
@@ -568,15 +630,18 @@ pub struct Scheduler {
     recheck_elapsed: f64,
     frame: Option<Frame>,
     /// Something changed that a recheck has not seen: the view moved, a
-    /// chunk came or went, a source was told. The canvas is asked for
-    /// frames until a full recheck has run over it, or the world stops at
-    /// whatever the last frame left — nothing else asks for a frame.
+    /// chunk came or went, a source was told. The next tick rechecks every
+    /// chunk, so what each should be showing is never older than the frame
+    /// that changed it. The canvas is asked for frames until that recheck
+    /// has run, or the world stops at whatever the last frame left —
+    /// nothing else asks for a frame.
     view_dirty: bool,
     retained_on: f64,
     retained_off: f64,
     pub census: Census,
     /// The pages with a terrain tile, which chunks are mounted from.
     pages: BTreeSet<LevelPage>,
+    pages_revision: u32,
     /// Pages whose records have gone since the last tick, whose chunks stop
     /// building before anything else in the next.
     evicted: Vec<LevelPage>,
@@ -601,7 +666,7 @@ pub struct Scheduler {
     /// two thousand chunks re-derived at a tilt wide enough to want five
     /// levels, against six hundred looking down. The work a zoom costs grew
     /// with the tilt for no reason but this.
-    to_mount: VecDeque<ChunkKey>,
+    to_mount: VecDeque<(ChunkKey, bool)>,
     /// The ground the window draws: the top level's drawn ring, as a corner
     /// and a side in units.
     drawn: Option<(f64, f64, f64)>,
@@ -711,6 +776,7 @@ impl Scheduler {
             retained_off: 0.0,
             census: Census::default(),
             pages: BTreeSet::new(),
+            pages_revision: 0,
             evicted: Vec::new(),
             mounted: BTreeMap::new(),
             gone: Vec::with_capacity(MAX_CHUNKS),
@@ -787,7 +853,7 @@ impl Scheduler {
     /// guessed from the last frame, so the first recheck's hysteresis starts
     /// from where the camera is.
     #[allow(clippy::too_many_arguments)]
-    fn add(&mut self, id: u32, level: u32, base: IVec, base_x: f64, base_y: f64, tx0: u32, ty0: u32, stable_hash: f64) {
+    fn add(&mut self, id: u32, level: u32, base: IVec, base_x: f64, base_y: f64, tx0: u32, ty0: u32, stable_hash: f64, root: bool) {
         self.builder.add(id, level, base, tx0, ty0);
         let span = chunk_span_of(level);
         let mut slot = Slot {
@@ -815,11 +881,12 @@ impl Scheduler {
             refused: None,
             cover: (0.0, true, false),
         };
+        slot.set(OUTERMOST, root);
         slot.unmeasured();
         if let Some(frame) = self.frame {
             let (visible, _, d2, _) = measure(&frame, &slot);
             if visible {
-                slot.layout_primary = relative(self.ladder.guide(d2.sqrt(), COARSEST).step, level, self.outermost(level));
+                slot.layout_primary = relative(self.ladder.guide(d2.sqrt(), COARSEST).step, level, root);
                 slot.desired = (slot.layout_primary, 0);
             }
         }
@@ -829,10 +896,19 @@ impl Scheduler {
         self.view_dirty = true;
     }
 
-    /// Whether `level` is the window's outermost ring: nothing coarser is
-    /// drawn, so its own tier is free to be as coarse as the ladder says.
-    fn outermost(&self, level: u32) -> bool {
-        self.frame.is_some_and(|f| level + 1 == f.window.1)
+    /// Whether nothing coarser in the selection draws this chunk's ground, so
+    /// its own tier is free to be as coarse as the ladder says.
+    ///
+    /// A root of the selection's traversal (`select`), which used to be the
+    /// same as being at the window's top ring and is not any more: a chunk
+    /// standing in for a page that has not arrived is a root at whatever
+    /// level it is, and capping it one step past its own cells would draw the
+    /// far ground at the fine step the level over it was supposed to spare
+    /// it. Cesium's is the same: a descendant rendering in place of an
+    /// unloaded ancestor is measured against the screen on its own, not
+    /// against the ancestor's.
+    fn outermost(&self, i: usize) -> bool {
+        self.slots[i].has(OUTERMOST)
     }
 
     pub fn remove(&mut self, world: &mut World, id: u32) {
@@ -1085,6 +1161,7 @@ impl Scheduler {
         }
         let changed = if present { self.pages.insert(page) } else { self.pages.remove(&page) };
         if changed {
+            self.pages_revision = self.pages_revision.wrapping_add(1);
             self.view_dirty = true;
         }
     }
@@ -1117,66 +1194,42 @@ impl Scheduler {
         inside && self.pages.contains(&key.children()[0].page)
     }
 
-    /// The chunks to draw: every chunk of the window's top ring, each drawn
-    /// whole or as its children, down to the window's base
-    /// (issue/20260921-level-step-and-zoom-are-one-number.md). A top page
-    /// not here yet is a hole until it comes, and it comes first.
-    fn select(&self, frame: &Frame, anchor: IVec, out: &mut BTreeSet<ChunkKey>) {
+    /// The chunks to draw and which of them are roots: every chunk of the
+    /// window's top ring — or of the pages standing in for one that has not
+    /// arrived — each drawn whole or as its children, down to the window's
+    /// base (issue/20260921-level-step-and-zoom-are-one-number.md).
+    ///
+    /// A root is a chunk nothing coarser draws over, which is what decides
+    /// how far it may follow the ladder (`relative`). Every other chunk came
+    /// from splitting one, and the one it split from covers its ground until
+    /// it is ready.
+    fn select(&self, frame: &Frame, anchor: IVec, out: &mut BTreeMap<ChunkKey, bool>) {
         let (base, end) = frame.window;
         let rings: Vec<(f64, f64, f64)> = (base..end).map(|level| ring_rect(level, anchor)).collect();
-        let mut stack: Vec<ChunkKey> = Vec::new();
+        let mut pages = Vec::new();
         for page in ring(end - 1, anchor, RENDER_AXIS) {
-            if !self.pages.contains(&page) {
-                continue;
-            }
+            roots(&self.pages, page, base, &mut pages);
+        }
+        let mut stack: Vec<(ChunkKey, bool)> = Vec::new();
+        for page in pages {
             for cy in 0..PAGE_CHUNK_AXIS {
                 for cx in 0..PAGE_CHUNK_AXIS {
-                    stack.push(ChunkKey {
+                    let key = ChunkKey {
                         page,
                         bx: cx * CHUNK_CELL_SPAN,
                         by: cy * CHUNK_CELL_SPAN,
-                    });
+                    };
+                    stack.push((key, true));
                 }
             }
         }
-        while let Some(key) = stack.pop() {
+        while let Some((key, root)) = stack.pop() {
             if self.splits(key, &rings, base) {
-                stack.extend(key.children());
+                stack.extend(key.children().map(|c| (c, false)));
             } else {
-                out.insert(key);
+                out.insert(key, root);
             }
         }
-    }
-
-    /// Which of the pages a selection reads are resident, a bit each.
-    ///
-    /// `select` reads `pages` in two places and both are a drawn ring: the
-    /// roots are the top level's, and a chunk splits only where it lies whole
-    /// inside the ring below and that ring's page under it is here. So a page
-    /// outside them — the rim a pan is bought against, which is sixteen of
-    /// every twenty-five a level fetches — cannot change what is selected,
-    /// and keying the pass on a counter that every arrival moved threw the
-    /// selection away for those sixteen as readily as for the nine. A zoom
-    /// fetches pages continuously, so that was a full walk of the window's
-    /// quadtree every frame it was loading.
-    fn drawn_pages(&self, frame: &Frame, anchor: IVec) -> u64 {
-        let (base, end) = frame.window;
-        let r = (RENDER_AXIS / 2) as i64;
-        let mut mask = 0u64;
-        let mut bit = 0;
-        for level in base..end {
-            // The ring's own pages, walked rather than built: this runs every
-            // tick, and `ring` sorts a Vec it allocates.
-            let centre = centre_page(level, anchor).page;
-            for dy in -r..=r {
-                for dx in -r..=r {
-                    let page = LevelPage::new(level, ivec::add(centre, ivec::gather(dx, dy, 0)));
-                    mask |= (self.pages.contains(&page) as u64) << bit;
-                    bit += 1;
-                }
-            }
-        }
-        mask
     }
 
     /// Which chunks exist: the ones `select` draws, mounted as they are
@@ -1188,19 +1241,25 @@ impl Scheduler {
     fn mount(&mut self, frame: &Frame, emit: &mut impl FnMut(Event)) {
         let Some(anchor) = frame.anchor else { return };
         let anchor_i = ivec::gather(anchor[0] as i64, anchor[1] as i64, 0);
-        let key = (centre_page(frame.window.0, anchor_i), frame.window, self.drawn_pages(frame, anchor_i));
+        let key = (centre_page(frame.window.0, anchor_i), frame.window, self.pages_revision);
         if self.selected_for == Some(key) && self.to_mount.is_empty() {
             return;
         }
         self.drawn = Some(ring_rect(frame.window.1 - 1, anchor_i));
         if self.selected_for != Some(key) {
-            let mut wanted = BTreeSet::new();
+            let mut wanted = BTreeMap::new();
             self.select(frame, anchor_i, &mut wanted);
 
-            // What is no longer wanted goes stale; what is again, fresh.
+            // What is no longer wanted goes stale; what is again, fresh. And
+            // whether a chunk is a root can change under it — a page
+            // arriving puts a level over ground that had none — so it is
+            // written here for every chunk the selection keeps.
             for (k, &id) in self.mounted.iter() {
                 if let Some(&i) = self.index.get(&id) {
-                    self.slots[i].set(STALE, !wanted.contains(k));
+                    self.slots[i].set(STALE, !wanted.contains_key(k));
+                    if let Some(&root) = wanted.get(k) {
+                        self.slots[i].set(OUTERMOST, root);
+                    }
                 }
             }
 
@@ -1222,15 +1281,19 @@ impl Scheduler {
             // and have a mesh to measure, while this has a key and runs
             // before anything is built.
             let (ax, ay) = (ivec::X(anchor_i) as f64, ivec::Y(anchor_i) as f64);
-            let mut near: Vec<(f64, ChunkKey)> = wanted.iter().filter(|k| !self.mounted.contains_key(k)).map(|&k| (chunk_near(k, ax, ay), k)).collect();
+            let mut near: Vec<(f64, ChunkKey, bool)> = wanted
+                .iter()
+                .filter(|(k, _)| !self.mounted.contains_key(k))
+                .map(|(&k, &root)| (chunk_near(k, ax, ay), k, root))
+                .collect();
             near.sort_by(|a, b| a.0.total_cmp(&b.0));
             self.to_mount.clear();
-            self.to_mount.extend(near.into_iter().map(|(_, k)| k));
+            self.to_mount.extend(near.into_iter().map(|(_, k, root)| (k, root)));
             self.selected_for = Some(key);
         }
 
         let mut mounts = 0;
-        while let Some(&k) = self.to_mount.front() {
+        while let Some(&(k, root)) = self.to_mount.front() {
             if mounts >= MAX_MOUNTS_PER_FRAME || self.slots.len() >= MAX_CHUNKS {
                 // The rest next frame, from where this one stopped. How many
                 // chunks a range holds is the viewport's and the anchor's,
@@ -1251,7 +1314,7 @@ impl Scheduler {
                 base_x: k.bx,
                 base_y: k.by,
             });
-            self.add(id, k.level(), base, x0, y0, k.bx, k.by, blend_point(k));
+            self.add(id, k.level(), base, x0, y0, k.bx, k.by, blend_point(k), root);
             self.mounted.insert(k, id);
         }
     }
@@ -1389,8 +1452,14 @@ impl Scheduler {
         }
         self.frame = Some(frame);
         self.ladder.set_projection(frame.viewport_h, frame.fov_deg);
+        // The view decides what every chunk should be showing, so a view
+        // that has moved is answered now and not on the next tick of a
+        // timer. `view_dirty` is that question outstanding — set by a frame
+        // that differs from the last, and by anything else a recheck has not
+        // seen — and the interval below is only what catches a change that
+        // set no flag.
         self.recheck_elapsed += frame.delta_s;
-        let full_recheck = self.recheck_elapsed >= RECHECK_INTERVAL_S;
+        let full_recheck = self.view_dirty || self.recheck_elapsed >= RECHECK_INTERVAL_S;
         if full_recheck {
             self.recheck_elapsed = 0.0;
         }
@@ -1735,7 +1804,7 @@ impl Scheduler {
         }
         let s = &self.slots[i];
         let level = s.level;
-        let outermost = self.outermost(level);
+        let outermost = self.outermost(i);
         let guide = self.ladder.guide(s.distance2.sqrt(), s.layout_primary << level);
         // The ladder speaks in world steps; a chunk builds in its own, and a
         // blend whose two ends are one step of the chunk's is no blend.
@@ -1782,7 +1851,7 @@ impl Scheduler {
     /// baked (node.rs), so a tier asked later would cost the runs again.
     fn ask(&mut self, world: &mut World, i: usize, primary: u32, secondary: u32) -> bool {
         let generation = self.generation(i);
-        let outermost = self.outermost(self.slots[i].level);
+        let outermost = self.outermost(i);
         let s = &self.slots[i];
         let lacks = |st: u32| st != 0 && s.tier(st, generation).is_none();
         if !lacks(primary) && !lacks(secondary) {
@@ -2213,6 +2282,39 @@ fn world_mem(world: &World) -> *const u8 {
     world.volumes.mem()
 }
 
+/// A slot for a tier of `step` on the chunk at `i`, and whoever it is taken
+/// from.
+///
+/// Free first, then one whose holder is not drawing from it — off screen,
+/// or laid out from other tiers than this one. A holder that is on screen
+/// and drawing from its slot is the one case nothing may take: its ground
+/// has nothing else covering it, and what would cover it is the mesh asking,
+/// which cannot land while the holder is drawn.
+///
+/// Scale used to decide this. It cannot any more and should never have: with
+/// a slot handed out rather than derived from a coordinate, two chunks
+/// meeting at one say nothing about each other's ground, and what matters is
+/// only whether the one holding it is showing it.
+fn claim(slots: &[Slot], index: &BTreeMap<u32, usize>, meshes: &Meshes, i: usize, step: u32) -> Option<(MeshSlot, Option<u32>)> {
+    let mut spare = None;
+    for at in pool(slots[i].level, step) {
+        let holder = meshes.holder[at];
+        if holder == 0 {
+            return Some((slot_at(at), None));
+        }
+        let Some(&j) = index.get(&holder) else {
+            // The chunk that held it is gone; so is its claim.
+            return Some((slot_at(at), None));
+        };
+        let s = &slots[j];
+        let showing = s.has(IN_FRUSTUM) && s.layout_ready && s.tiers.iter().any(|t| t.slot.index == at);
+        if !showing && spare.is_none() {
+            spare = Some((slot_at(at), Some(holder)));
+        }
+    }
+    spare
+}
+
 /// Records what a build handed over on the slot it belongs to, and passes
 /// it on.
 fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8, meshes: &mut Meshes, e: BuildEvent, emit: &mut impl FnMut(Event)) {
@@ -2231,44 +2333,20 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
                 return emit(Event::Build(e));
             }
             let s = &slots[i];
-            let slot = slot_of(s.level, (s.base_x / s.span).floor() as i64, (s.base_y / s.span).floor() as i64, step);
-            let holder = meshes.holder[slot.index];
-            if holder != 0 && holder != id {
-                if let Some(&j) = index.get(&holder) {
-                    // Whether the holder is a chunk of this one's own scale.
-                    //
-                    // A slot is shared only inside a group, and a group is
-                    // `level % WINDOW_LEVELS` (mesh_slot.rs), so two chunks
-                    // that meet at one are either of one level or of levels a
-                    // whole window apart. The window is that many consecutive
-                    // levels and no more, so two chunks the view wants are
-                    // never of the second kind: a holder of another scale is
-                    // one the window has left, kept for what it draws and
-                    // never built again.
-                    //
-                    // So the two cases are not alike. Of one scale, the two
-                    // lie a ring apart and hold different ground, and the
-                    // holder's is ground this one does not cover — it waits.
-                    // Of another, the holder is what this one is replacing,
-                    // and waiting on it is waiting on itself: it is drawn
-                    // because nothing covers its ground yet, and what would
-                    // cover it is this mesh, which cannot land while the
-                    // holder is drawn. The ledger has read twenty seconds of
-                    // that, and a chunk that never lands at all
-                    // (issue/20260923-what-is-heavy-and-what-gives-way.md).
-                    let one_scale = slots[i].level == slots[j].level;
-                    let other = &mut slots[j];
-                    // Of one scale and drawing from the slot: this mesh
-                    // waits, thrown away and asked for again, rather than take
-                    // ground this one does not cover from under it. Of
-                    // another, the holder's tier goes the way it goes for a
-                    // holder that is not drawn at all — this one is laid out
-                    // in the same step, so what the ground loses is the frame
-                    // between.
-                    if one_scale && other.has(IN_FRUSTUM) && other.layout_ready && other.tiers.iter().any(|t| t.slot.index == slot.index) {
+            // The slot this tier is rebuilt into, or one the pool can give
+            // it. A tier keeps the slot it took, so a rebuild writes over its
+            // own boxes and nothing else moves.
+            let (slot, turned_out) = match s.tiers.iter().find(|t| t.step == step).map(|t| t.slot) {
+                Some(slot) => (slot, None),
+                None => match claim(slots, index, meshes, i, step) {
+                    Some(claimed) => claimed,
+                    None => {
+                        // Every slot of the pool is held by a chunk drawing
+                        // from it. This mesh waits, thrown away and asked for
+                        // again, rather than take ground from under one that
+                        // has nothing else covering it.
                         meshes.waits += 1;
                         meshes.wait_levels |= 1 << slots[i].level;
-                        meshes.holder_levels |= 1 << slots[j].level;
                         let named = &meshes.waiters[..meshes.waiter_cnt];
                         if !named.contains(&id) && meshes.waiter_cnt < WAITERS {
                             meshes.waiters[meshes.waiter_cnt] = id;
@@ -2276,8 +2354,12 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
                         }
                         return;
                     }
-                    // Not drawn, or of another scale: its tier there goes,
-                    // and the nodes hear.
+                },
+            };
+            if let Some(holder) = turned_out {
+                if let Some(&j) = index.get(&holder) {
+                    meshes.holder_levels |= 1 << slots[j].level;
+                    let other = &mut slots[j];
                     let mut k = 0;
                     while k < other.tiers.len() {
                         if other.tiers[k].slot.index == slot.index {

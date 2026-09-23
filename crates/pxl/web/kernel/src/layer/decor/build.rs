@@ -23,7 +23,7 @@ use pxl_render::look::lod::{LodStep, TARGET_CELL_PX};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
-use pxl_spec::bake::format::{ch_index, GroundChannelKey};
+use pxl_spec::bake::pack::unpack;
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
 use pxl_spec::space::pvf3::ivec::{gather, IVec};
@@ -346,13 +346,14 @@ impl<'s> DecorBuild<'s> {
             let d = decor_density(kind.extent, step);
             if chunk.show_decor && d > 0.0 {
                 let kind_seed = derive_seed_u64(page_seed, kind.tag);
-                let g = &chunk.page.ground;
+                let cells = chunk.page.cells;
                 for dy in 0..CHUNK_CELL_SPAN {
                     let cell_y = chunk.ty0 + dy;
                     for dx in 0..CHUNK_CELL_SPAN {
                         let cell_x = chunk.tx0 + dx;
                         let idx = (cell_y * PAGE_CELL_SPAN + cell_x) as usize;
-                        if !(0..4).all(|c| kind.rules[c].allows(g[c][idx])) {
+                        let types = unpack(cells[idx]);
+                        if !(0..4).all(|c| kind.rules[c].allows(types[c])) {
                             continue;
                         }
                         let mut rng = Rng::new(derive_seed_u64(kind_seed, ((cell_x as u64) << 16) | cell_y as u64));
@@ -362,7 +363,7 @@ impl<'s> DecorBuild<'s> {
                         let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
                         let rotation = if kind.align_transport {
                             let flip = rng.unit() < 0.5;
-                            transport_aligned_rotation(g[ch_index(GroundChannelKey::TRANSPORT)], cell_x, cell_y, flip)
+                            transport_aligned_rotation(cells, cell_x, cell_y, flip)
                         } else {
                             rng.unit() * core::f64::consts::PI * 2.0
                         };

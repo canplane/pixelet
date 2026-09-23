@@ -2,33 +2,49 @@
 
 use super::*;
 
+/// Chunks a level's drawn ring holds: what one pool's slots are counted in.
+const RING_CHUNKS: u32 = RENDER_AXIS * RENDER_AXIS * PAGE_CHUNK_AXIS * PAGE_CHUNK_AXIS;
+
 #[test]
-fn a_slot_is_the_chunks_residue_and_slots_never_overlap() {
-    let a = AXIS as i64;
-    // A ring apart, one slot; one chunk apart, two.
-    assert_eq!(slot_of(3, 5, 7, 2), slot_of(3, 5 + a, 7 - a, 2));
-    assert_ne!(slot_of(3, 5, 7, 2), slot_of(3, 6, 7, 2));
-    // A window apart, one group; the leaves' own tier, a group of its own.
-    assert_eq!(slot_of(1, 0, 0, 2), slot_of(1 + WINDOW_LEVELS, 0, 0, 2));
-    assert_ne!(slot_of(0, 0, 0, 1).group, slot_of(0, 0, 0, 2).group);
-    assert_ne!(slot_of(0, 0, 0, 1).index, slot_of(0, 0, 0, 2).index);
-    // Every slot of a group lies inside it and apart from the others.
-    for group in 0..GROUPS {
-        let mut spans: Vec<(u32, u32)> = Vec::new();
-        for step in [1, 2] {
-            for y in 0..a {
-                for x in 0..a {
-                    let s = slot_of(if group == GROUPS - 1 { 0 } else { group }, x, y, step);
-                    if s.group != group {
-                        continue;
-                    }
-                    spans.push((s.first_box, s.first_box + s.capacity));
-                }
-            }
-        }
+fn the_two_pools_are_disjoint_and_cover_every_slot() {
+    let leaf = pool(0, 1);
+    let rest = pool(0, 2);
+    assert_eq!(rest, pool(3, 2), "every tier but a leaf's own shares one pool");
+    assert_eq!(rest, pool(3, 1), "a level chunk's step 1 is not a leaf's own tier");
+    assert!(rest.end <= leaf.start, "disjoint");
+    assert_eq!(leaf.end, OCCUPANCY, "and between them, every slot");
+    assert_eq!(leaf.len() as u32, RING_CHUNKS, "the leaves' own tier: a drawn ring of them");
+    assert_eq!(rest.len() as u32, WINDOW_LEVELS * RING_CHUNKS, "the rest: a ring for every level of the window");
+}
+
+#[test]
+fn a_slot_lies_inside_its_group_and_no_two_overlap() {
+    for p in [pool(0, 1), pool(0, 2)] {
+        let mut spans: Vec<(u32, u32, u32)> = p
+            .clone()
+            .map(|at| {
+                let s = slot_at(at);
+                assert_eq!(s.index, at, "an index names its own slot");
+                (s.group, s.first_box, s.first_box + s.capacity)
+            })
+            .collect();
         spans.sort_unstable();
-        spans.dedup();
-        assert!(spans.windows(2).all(|w| w[0].1 <= w[1].0), "group {group}");
-        assert!(spans.last().unwrap().1 <= group_boxes(group), "group {group}");
+        for w in spans.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            assert!(a.0 != b.0 || a.2 <= b.1, "{a:?} runs into {b:?}");
+        }
+        for (group, _, end) in spans {
+            assert!(end <= group_boxes(group), "group {group} overrun");
+        }
     }
+}
+
+#[test]
+fn a_leaf_s_own_tier_is_the_wider_box_and_every_other_the_narrower() {
+    let leaf = slot_at(pool(0, 1).start);
+    let rest = slot_at(pool(0, 2).start);
+    assert_eq!(leaf.capacity, FINE_BOXES);
+    assert_eq!(rest.capacity, COARSE_BOXES);
+    assert_eq!(group_box_words(leaf.group), FINE_BOX_WORDS);
+    assert_eq!(group_box_words(rest.group), COARSE_BOX_WORDS);
 }

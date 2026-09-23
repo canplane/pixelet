@@ -31,7 +31,7 @@ use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
 use super::color;
-pub use super::cube_type::cube_types;
+pub use super::cube_type::{cube_types, ground_pack};
 use super::r#type::{build_colors_from_json, ChannelColors, Channels, Colors, Swatch};
 
 // ============================================================================

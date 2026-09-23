@@ -45,7 +45,7 @@ pub fn get_ele(at: &Pvf3) -> Option<f64> {
 pub fn get_ground_type(at: &Pvf3, channel: GroundChannelKey) -> Option<u32> {
     let tile = tile_store().get_tile(L3_IDX(at.i))?;
     let (tx, ty) = page_cell(at);
-    Some(tile.terrain.ground.get(channel)[(ty * PAGE_CELL_SPAN + tx) as usize] as u32)
+    Some(tile.terrain.ground.channel((ty * PAGE_CELL_SPAN + tx) as usize, channel) as u32)
 }
 
 /// Fast path for hot per-step loops (e.g. raycasting): looks up elevation from

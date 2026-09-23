@@ -18,8 +18,9 @@
 //! same level.
 
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN};
-use pxl_spec::bake::format::{ch_index, GroundChannelKey, GROUND_CH_KEYS};
+use pxl_spec::bake::format::GROUND_CH_KEYS;
 use pxl_spec::bake::ground::{channel_bit, ChannelMask};
+use pxl_spec::bake::pack::{unpack, GroundCell};
 
 use crate::mesh::paint::terrain::elevation::{ground_ele, GroundLanes};
 use crate::mesh::volume::{Volumes, Voxel, NO_LAYER};
@@ -33,10 +34,6 @@ const COL_SPAN2: usize = (COL_SPAN * COL_SPAN) as usize;
 /// The channels, in `GROUND_CH_KEYS`' order, which is also the order they
 /// paint in: a later one's non-void type wins.
 pub const CHANNELS: usize = 4;
-const LAND: usize = ch_index(GroundChannelKey::LAND);
-const WATER: usize = ch_index(GroundChannelKey::WATER);
-const STRUCTURE: usize = ch_index(GroundChannelKey::STRUCTURE);
-const TRANSPORT: usize = ch_index(GroundChannelKey::TRANSPORT);
 
 const VOID: u8 = 0;
 
@@ -84,7 +81,9 @@ impl Default for Materials {
 
 /// One page's lanes, as the client keeps them in the core memory.
 pub struct PageView<'a> {
-    pub ground: [&'a [u8]; CHANNELS],
+    /// The page's ground, a word a cell, the four channels packed into it
+    /// (pxl-spec bake/pack.rs).
+    pub cells: &'a [GroundCell],
     pub ele: &'a [i16],
 }
 
@@ -134,7 +133,7 @@ impl ChunkSample {
                 // — and takes the base material, which nothing draws.
                 let on_page = (0..=last).contains(&tx) && (0..=last).contains(&ty);
                 let page_idx = (ty.clamp(0, last) * PAGE_CELL_SPAN as i32 + tx.clamp(0, last)) as usize;
-                let types = if on_page { page.ground.map(|plane| plane[page_idx]) } else { [VOID; 4] };
+                let types = if on_page { unpack(page.cells[page_idx]) } else { [VOID; 4] };
 
                 // The material: the base, then each channel in order.
                 let (mut rgb, mut class, mut layer) = (tables.base_rgb, tables.base_class, tables.base_layer);
@@ -156,12 +155,7 @@ impl ChunkSample {
                 // The height every consumer of this page takes, recess and
                 // all (elevation.rs's ground_ele). An apron cell off the page
                 // has no channels to judge by and takes the raw height.
-                let lanes = on_page.then(|| GroundLanes {
-                    land: page.ground[LAND],
-                    water: page.ground[WATER],
-                    structure: page.ground[STRUCTURE],
-                    transport: page.ground[TRANSPORT],
-                });
+                let lanes = on_page.then_some(GroundLanes { cells: page.cells });
                 let ele = ground_ele(page.ele, lanes, page_idx, tx, ty) as i32;
                 self.ele[i] = ele as i16;
                 // The floor is the chunk's own: an apron column is written

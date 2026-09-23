@@ -324,6 +324,94 @@ interface CubeSpec {
   channels: { name: string; note?: string[]; entries: CubeEntry[] }[];
 }
 
+/// The ground channels in the order their fields sit in a packed cell, which
+/// is the JSON's own order among them. `bake/format.rs` reads them through
+/// `GroundChannelKey`, and its `from_name` is what ties the two together.
+const GROUND_CHANNELS = ["land", "water", "structure", "transport"];
+
+/// A ground cell's four channels packed into one word, for Rust alone: the
+/// client and the bake both compile it, and the shell never decodes a page.
+///
+/// A channel's field is a dense index into its own table, not the catalog's
+/// number, because the catalog numbers an identity rather than a sequence —
+/// `land::sea` is 129 — and a placed cube already names one of them where a
+/// browser can see it. The table is what turns one back into the other, and
+/// the field's width comes out of the table's length, so a new type widens
+/// its own field and shifts the ones above it with nothing edited by hand
+/// (issue/20260923-a-ground-cell-is-fourteen-bits.md).
+function groundPack(spec: CubeSpec): string[] {
+  const tables = GROUND_CHANNELS.map((name) => {
+    const ch = spec.channels.find((c) => c.name === name);
+    if (!ch) throw new Error(`cube_type.json has no ${name} channel`);
+    const entries = ch.entries.filter((e): e is Extract<CubeEntry, { name: string }> => "name" in e);
+    // VOID first, so a cell of nothing is a word of zero, and UNKNOWN last,
+    // so it is where a byte the channel does not give out is sent.
+    return { name, values: ["common::void", ...entries.map((e) => `${name}::${e.name}`), "common::unknown"] };
+  });
+  const bits = tables.map((t) => Math.max(1, 32 - Math.clz32(t.values.length - 1)));
+  const shifts: number[] = [];
+  bits.reduce((at, b) => (shifts.push(at), at + b), 0);
+  const cellBits = bits.reduce((a, b) => a + b, 0);
+
+  const numberOf = new Map<string, number>();
+  for (const ch of spec.channels) {
+    for (const e of ch.entries) if ("name" in e) numberOf.set(`${ch.name}::${e.name}`, e.value);
+  }
+  const inverse = tables.map((t) => {
+    const row = new Array(256).fill(t.values.length - 1); // UNKNOWN
+    t.values.forEach((v, i) => {
+      const n = numberOf.get(v);
+      if (n === undefined) throw new Error(`no number for ${v}`);
+      row[n] = i;
+    });
+    return row;
+  });
+
+  const rows = (row: number[]) => {
+    const out: string[] = [];
+    for (let i = 0; i < 256; i += 32) out.push(`            ${row.slice(i, i + 32).join(", ")},`);
+    return out;
+  };
+
+  return [
+    "/// A ground cell's four channels in one word: each a dense index into its",
+    "/// own table, whose entries are the catalog's own numbers. VOID is index 0",
+    "/// and UNKNOWN the last, so a cell nothing painted is a word of zero and a",
+    "/// byte no channel gives out reads as UNKNOWN rather than as a type.",
+    "///",
+    "/// The widths are the tables' lengths and nothing else. Everything here is",
+    "/// walked through `bake/ground.rs`'s pack and unpack, which are the only",
+    "/// readers that know a field has a place.",
+    "pub mod ground_pack {",
+    "    use super::cube_types::*;",
+    "",
+    "    /// The channels a packed cell holds, in the order their fields sit in",
+    `    /// the word. \`bake/format.rs\` reads them by name.`,
+    `    pub const CHANNELS: [&str; ${tables.length}] = [${tables.map((t) => JSON.stringify(t.name)).join(", ")}];`,
+    "",
+    "    /// The catalog number each dense index names, a channel a row.",
+    `    pub const NUMBER: [&[u8]; ${tables.length}] = [`,
+    ...tables.map((t) => `        &[${t.values.join(", ")}],`),
+    "    ];",
+    "",
+    "    /// The dense index each catalog number takes, a channel a row: the",
+    "    /// reverse of NUMBER, and UNKNOWN's index where the channel gives the",
+    "    /// number out to nobody.",
+    `    pub const INDEX: [[u8; 256]; ${tables.length}] = [`,
+    ...inverse.flatMap((row) => ["        [", ...rows(row), "        ],"]),
+    "    ];",
+    "",
+    "    /// What it takes to name one of a channel's entries, and where that",
+    "    /// field starts in the word.",
+    `    pub const BITS: [u32; ${tables.length}] = [${bits.join(", ")}];`,
+    `    pub const SHIFT: [u32; ${tables.length}] = [${shifts.join(", ")}];`,
+    "",
+    "    /// The bits a ground cell takes, all four fields together.",
+    `    pub const CELL_BITS: u32 = ${cellBits};`,
+    "}",
+  ];
+}
+
 async function cubeTypeOutputs(): Promise<Output[]> {
   const spec = await readJson<CubeSpec>("spec/pxl/spec/cell/cube_type.json");
   const head = [
@@ -424,6 +512,7 @@ async function cubeTypeOutputs(): Promise<Output[]> {
     "    }",
   );
   rs.push(...enums, "}");
+  rs.push("", ...groundPack(spec));
   return [
     { path: "apps/web/src/catalog/cell/cube_type.spec.ts", text: ts.join("\n") + "\n" },
     { path: "crates/pxl/spec/src/cell/cube_type.spec.rs", text: rs.join("\n") + "\n" },

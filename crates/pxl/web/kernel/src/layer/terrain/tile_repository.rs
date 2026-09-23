@@ -18,6 +18,7 @@
 
 use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_spec::bake::format::{decode_terrain, Ground, Terrain, Tile};
+use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::mem::heap::alloc;
@@ -58,7 +59,8 @@ pub fn ocean_url() -> Joined<TileBase, &'static str> {
 /// PAGE_CELL_SPAN² bytes, and the padded elevation grid.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TerrainLanes {
-    pub ground: [usize; 4],
+    /// The page's ground cells, packed (pxl-spec bake/pack.rs).
+    pub cells: usize,
     pub ele: usize,
 }
 
@@ -71,9 +73,11 @@ pub unsafe fn open_terrain(lanes: TerrainLanes) -> Terrain {
     let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
     let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
     // SAFETY: the caller's contract.
-    let u8_lane = |at: usize| unsafe { core::slice::from_raw_parts(at as *const u8, cells) }.into();
     Terrain {
-        ground: Ground::from_planes(lanes.ground.map(u8_lane)),
+        // SAFETY: the caller's contract; a ground lane is one word a cell.
+        ground: Ground {
+            cells: unsafe { core::slice::from_raw_parts(lanes.cells as *const GroundCell, cells) }.into(),
+        },
         // SAFETY: the caller's contract; an i16 lane is 2 bytes a sample.
         ele: unsafe { core::slice::from_raw_parts(lanes.ele as *const i16, samples) }.into(),
     }
@@ -96,20 +100,23 @@ fn terrain_base() -> Option<usize> {
     mem::fixed::terrain_at().map(|at| at as usize)
 }
 
-/// A decoded page's lanes, as bytes to be written somewhere.
-fn sources(t: &Terrain) -> [&[u8]; 5] {
-    let g = &t.ground;
-    let ele = &t.ele;
-    // SAFETY: an i16 lane read as its bytes, where it lies.
-    let ele_bytes = unsafe { core::slice::from_raw_parts(ele.as_ptr() as *const u8, ele.len() * 2) };
-    let [a, b, c, d] = g.planes();
-    [a, b, c, d, ele_bytes]
+/// A decoded page's lanes, as bytes to be written somewhere: the cells and
+/// the elevation, each read where it lies.
+fn sources(t: &Terrain) -> [&[u8]; 2] {
+    let bytes = |p: *const u8, n: usize| {
+        // SAFETY: a lane read as its own bytes, where it lies.
+        unsafe { core::slice::from_raw_parts(p, n) }
+    };
+    let cells = &t.ground.cells;
+    [
+        bytes(cells.as_ptr() as *const u8, cells.len() * core::mem::size_of::<GroundCell>()),
+        bytes(t.ele.as_ptr() as *const u8, t.ele.len() * 2),
+    ]
 }
 
 /// Writes a decoded page into `lanes`, which must be the page's own room.
 fn write_lanes(t: &Terrain, lanes: TerrainLanes) {
-    let at = [lanes.ground[0], lanes.ground[1], lanes.ground[2], lanes.ground[3], lanes.ele];
-    for (src, &to) in sources(t).iter().zip(at.iter()) {
+    for (src, &to) in sources(t).iter().zip([lanes.cells, lanes.ele].iter()) {
         // SAFETY: `to` is the page's room in the range, the lane's own size, and
         // apart from `src`, which is the decoded body.
         unsafe { core::ptr::copy_nonoverlapping(src.as_ptr(), to as *mut u8, src.len()) };
@@ -165,7 +172,7 @@ fn worth(p: LevelPage, anchor: IVec, view: &std::ops::Range<u32>) -> Worth {
 fn lanes_of(slot: u32) -> Result<TerrainLanes, FetchFail> {
     let base = terrain_base().ok_or(FetchFail::NoRoom)?;
     Ok(TerrainLanes {
-        ground: [ground_at(base, slot, 0), ground_at(base, slot, 1), ground_at(base, slot, 2), ground_at(base, slot, 3)],
+        cells: ground_at(base, slot),
         ele: ele_at(base, slot),
     })
 }
@@ -243,7 +250,7 @@ pub fn adopt_ocean(pkt: &[u8]) -> Result<(), FetchFail> {
     let decoded = decode(pkt)?;
     let (at, _) = alloc(RECORD_BYTES).ok_or(FetchFail::NoRoom)?;
     let lanes = TerrainLanes {
-        ground: [record_ground_at(at, 0), record_ground_at(at, 1), record_ground_at(at, 2), record_ground_at(at, 3)],
+        cells: record_ground_at(at),
         ele: record_ele_at(at),
     };
     write_lanes(&decoded, lanes);

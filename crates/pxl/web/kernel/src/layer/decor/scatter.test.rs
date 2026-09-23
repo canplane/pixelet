@@ -4,6 +4,7 @@ use super::*;
 use crate::layer::decor::kind::car::CAR_RULES;
 use crate::layer::decor::kind::train::TRAIN_RULES;
 use crate::layer::decor::kind::tree::TREE_RULES;
+use pxl_spec::bake::pack::with_channel;
 
 // A whole page's lanes, because that is what a page is: PAGE_CELL_SPAN²
 // cells. A fixture of fewer rows lets an alignment vote near the last row
@@ -12,10 +13,10 @@ const SPAN: usize = PAGE_CELL_SPAN as usize;
 const PI: f64 = core::f64::consts::PI;
 const VOID: u32 = cube_types::common::void as u32;
 
-fn transport_page(cells: &[(usize, usize)], t: u8) -> Vec<u8> {
-    let mut lane = vec![cube_types::common::void; SPAN * SPAN];
+fn transport_page(cells: &[(usize, usize)], t: u8) -> Vec<GroundCell> {
+    let mut lane = vec![0 as GroundCell; SPAN * SPAN];
     for &(x, y) in cells {
-        lane[y * SPAN + x] = t;
+        lane[y * SPAN + x] = with_channel(0, GroundChannelKey::TRANSPORT, t);
     }
     lane
 }
