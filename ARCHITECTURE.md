@@ -102,7 +102,7 @@ Rasterizing is the bulk of it: polygons are filled even-odd with holes, lines ar
 
 Every land page is baked once into a versioned prefix. Open ocean is one shared page, since every one of them would be identical.
 
-Those pages are the leaves, level 0. A view from farther away wants fewer, coarser pages, so the bake stacks levels on them: a level-k page covers the 2 × 2 level-(k − 1) pages under it at half their resolution and is the same record as a leaf, stored under `<level>/<page_idx>`. It is folded from the level below with no database in the loop — each ground channel by a majority of the four cells under it, the elevation by an average that reads past the page's edge — and the fold is `pxl-spec`'s (`bake/fold.rs`), so the client can fold the pages it already holds by the same function instead of fetching. Open water folds to itself, which is what lets the one ocean page serve every level.
+Those pages are the leaves, level 0. A view from farther away wants fewer, coarser pages, so the bake stacks levels on them: a level-k page covers the 2 × 2 level-(k − 1) pages under it at half their resolution and is the same record as a leaf, named by the Web Mercator tile it stands on so that a page's name is one digit shorter than its children's and a prefix of them. It is folded from the level below with no database in the loop — each ground channel by a majority of the four cells under it, the elevation by an average that reads past the page's edge — and the fold is `pxl-spec`'s (`bake/fold.rs`), so the client can fold the pages it already holds by the same function instead of fetching. Open water folds to itself, which is what lets the one ocean page serve every level.
 
 ---
 

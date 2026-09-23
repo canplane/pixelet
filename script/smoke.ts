@@ -29,16 +29,21 @@ import { INGESTED } from "../apps/web/src/catalog/asset/ingested.spec.ts";
 // the root has no mapping into apps/web because nothing else here reaches in.
 import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT } from "../apps/web/src/config/route.spec.ts";
 
-/** A land page in Gangnam — the one infra/README's own procedure names, so a
- * check here and a check by hand are looking at the same object. */
-const PAGE = "12720250262323200";
+/** A land page in Bundang — the one infra/README's own procedure names, so a
+ * check here and a check by hand are looking at the same object. A baked page
+ * is named by its quadkey, so this is the zoom-15 tile the page stands on
+ * (pxl-spec bake/quadkey.rs). */
+const PAGE = "132110320312001";
 
-/** The reverse-geocode group PAGE falls in: its lanes four levels down
- * (pxl-spec bake/place_page.rs's `GROUP_SHAMT`), since a geocode object
- * covers 16 pages a side rather than one page. Written out rather than
- * computed, because computing it means the packed-lane arithmetic in
- * TypeScript that pxl-spec exists to be the only copy of. */
-const GEOCODE_GROUP = "794946921889792";
+/** The reverse-geocode group PAGE falls in: the same ground four levels up
+ * (pxl-spec bake/place_page.rs's `GROUP_SHAMT`), since a geocode object covers
+ * 16 pages a side rather than one page — so its name is PAGE's first eleven
+ * digits, which is the whole point of naming a page this way.
+ *
+ * Both are written out rather than computed. Computing either means the
+ * packed-lane arithmetic in TypeScript that pxl-spec exists to be the only
+ * copy of. */
+const GEOCODE_GROUP = "13211032031";
 
 /** Any content-addressed asset: the table's first entry, whatever it is. The
  * point is that the bucket answers the asset root, not which model does. */
@@ -60,9 +65,7 @@ const BROWSER_ENCODINGS = "gzip, deflate, br, zstd";
 
 function edgeChecks(): Check[] {
   const tile = (kind: keyof typeof PUBLISHED_VERSION) => `${TILE_ROOT}/${kind}/${PUBLISHED_VERSION[kind]}/${PAGE}`;
-  // A terrain page's key is within its level, and the level is the segment
-  // before it; a leaf is level 0.
-  const terrain = `${TILE_ROOT}/terrain/${PUBLISHED_VERSION.terrain}/0/${PAGE}`;
+  const terrain = tile("terrain");
   return [
     { path: "/", want: 200, why: "the app itself, from the Worker's static assets" },
     { path: `${SEARCH_URL}?q=${encodeURIComponent("강남")}`, want: 200, why: "pxl-geo, the one geo query with no page to bake" },
@@ -81,6 +84,10 @@ function edgeChecks(): Check[] {
     // The pre-09-18 shape. A 200 from any of these means a relay somewhere is
     // still claiming the old root.
     { path: `${API_ROOT}/tiles/terrain/${PUBLISHED_VERSION.terrain}/${PAGE}`, want: 404, why: "the old tile address, which must be gone" },
+    // The shape before 2026-09-24, when a page was a level and a decimal
+    // index. A 200 here means the bucket still holds a set in the old layout
+    // under a version the client asks for.
+    { path: `${TILE_ROOT}/terrain/${PUBLISHED_VERSION.terrain}/0/12720250262323200`, want: 404, why: "the old page name, which must be gone" },
     { path: `${API_ROOT}/search?q=x`, want: 404, why: "the old search address, which must be gone" },
   ];
 }

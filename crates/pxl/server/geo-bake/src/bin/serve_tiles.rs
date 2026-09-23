@@ -61,13 +61,12 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
 use postgres::{Client, NoTls};
-use pxl_spec::bake::constant::PAGE_TOP_LEVEL;
+use pxl_spec::bake::constant::{LEVEL0_ZOOM, PAGE_TOP_LEVEL};
 use pxl_spec::bake::format::{encode_poi_page, encode_terrain, Terrain};
 use pxl_spec::bake::place_page::{encode_place_group, DICT_OBJECT, GROUP_PAGES, GROUP_SHAMT};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
+use pxl_spec::bake::quadkey::index_of;
 use pxl_spec::route::{ASSET_ROOT, GEO_INTERNAL, TILE_ROOT};
-use pxl_spec::space::indexer::L3_SHAMT;
-use pxl_spec::space::pvf3::core::IVEC_WORD_MASK;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 
 use pxl_geo_bake::geocode::provider::overture::GeocodeProvider;
@@ -80,8 +79,6 @@ use pxl_geo_bake::terrain::source::SourceStats;
 use pxl_geo_bake::terrain::tile_set::{read_page, TileSet};
 use pxl_geo_bake::util::{pack, Level, CONTENT_ENCODING};
 use tokio::sync::OnceCell;
-
-const MAX_L3_IDX: IVec = IVEC_WORD_MASK >> L3_SHAMT;
 
 /// One worker: a connection and everything prepared against it. A page holds
 /// one for the length of its bake, which is what makes the worker count and
@@ -259,15 +256,16 @@ impl App {
     }
 }
 
-/// A page index is an unsigned L3 index. Rejecting the out-of-range ones here
-/// matters more than it looks: the page maths happily shifts and unprojects a
-/// nonsense value into a well-formed bbox with no error anywhere along the
-/// way, and that would reach the database as a garbage query.
-fn page_idx(raw: &str) -> Option<IVec> {
-    if raw.is_empty() || raw.len() > 20 || !raw.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    raw.parse::<IVec>().ok().filter(|idx| *idx <= MAX_L3_IDX)
+/// The page a name addresses, if it is a name of the length this route serves.
+///
+/// There is no range check left to make. A page index used to arrive as a
+/// decimal that had to be bounded before use — the page maths happily shifts
+/// and unprojects a nonsense value into a well-formed bbox with no error
+/// anywhere along the way, and that reached the database as a garbage query.
+/// A quadkey of a given length is a page and there are no others, so the
+/// length is the whole of the check (pxl-spec bake/quadkey.rs).
+fn page_at(raw: &str, zoom: u32) -> Option<IVec> {
+    index_of(raw).filter(|(z, _)| *z == zoom).map(|(_, idx)| idx)
 }
 
 fn octet_stream(bytes: Bytes) -> Response {
@@ -343,25 +341,25 @@ async fn settle(app: Arc<App>, pager: Arc<Pager>, level: u32, page: IVec) -> Set
 
 /// A page of any level, served as the bucket serves it: the stored object,
 /// packed, or a 404 the client reads as open water.
-async fn terrain(State(app): State<Arc<App>>, Path((level, raw)): Path<(String, String)>) -> Response {
-    let Some(level) = level.parse::<u32>().ok().filter(|l| *l <= PAGE_TOP_LEVEL) else {
-        return StatusCode::NOT_FOUND.into_response();
+async fn terrain(State(app): State<Arc<App>>, Path(raw): Path<String>) -> Response {
+    // The name's length is the level, so one parse answers both and a level
+    // past the pyramid's top is a name too short to be one.
+    let Some((zoom, idx)) = index_of(&raw).filter(|(z, _)| LEVEL0_ZOOM - *z <= PAGE_TOP_LEVEL) else {
+        return (StatusCode::BAD_REQUEST, "bad page name").into_response();
     };
-    let Some(idx) = page_idx(&raw) else {
-        return (StatusCode::BAD_REQUEST, "bad page_idx").into_response();
-    };
+    let level = LEVEL0_ZOOM - zoom;
     if let Some(baked) = &app.baked {
         return match tokio::fs::read(baked.tiles.path(level, idx)).await {
             Ok(packed) => {
-                println!("[tile/terrain] {level}/{raw} {} B, baked", packed.len());
+                println!("[tile/terrain] {raw} {} B, baked", packed.len());
                 baked.serve(Bytes::from(packed))
             }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                println!("[tile/terrain] {level}/{raw} none (404), baked");
+                println!("[tile/terrain] {raw} none (404), baked");
                 StatusCode::NOT_FOUND.into_response()
             }
             Err(err) => {
-                eprintln!("[tile/terrain/{level}/{raw}] {err}");
+                eprintln!("[tile/terrain/{raw}] {err}");
                 StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
         };
@@ -369,7 +367,7 @@ async fn terrain(State(app): State<Arc<App>>, Path((level, raw)): Path<(String, 
     // Not a 404, which reads as open water: the page exists, it is only not
     // made here. The client counts it a failure and asks again later.
     if level > app.top_level {
-        println!("[tile/terrain] {level}/{raw} past --top-level {} (503)", app.top_level);
+        println!("[tile/terrain] {raw} past --top-level {} (503)", app.top_level);
         return (StatusCode::SERVICE_UNAVAILABLE, "past --top-level: serve a finished bake with --baked").into_response();
     }
     let pager = app.terrain.lock().expect("pager").clone();
@@ -381,7 +379,7 @@ async fn terrain(State(app): State<Arc<App>>, Path((level, raw)): Path<(String, 
         } else {
             format!("made in {:.1}s", started.elapsed().as_secs_f64())
         };
-        println!("[tile/terrain] {level}/{raw} {what}, {how}");
+        println!("[tile/terrain] {raw} {what}, {how}");
     };
     match fault(app, pager.clone(), level, idx).await {
         Ok(true) => match tokio::fs::read(pager.tiles.path(level, idx)).await {
@@ -390,7 +388,7 @@ async fn terrain(State(app): State<Arc<App>>, Path((level, raw)): Path<(String, 
                 stored(Bytes::from(packed))
             }
             Err(err) => {
-                eprintln!("[tile/terrain/{level}/{raw}] {err}");
+                eprintln!("[tile/terrain/{raw}] {err}");
                 StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
         },
@@ -399,7 +397,7 @@ async fn terrain(State(app): State<Arc<App>>, Path((level, raw)): Path<(String, 
             StatusCode::NOT_FOUND.into_response()
         }
         Err(err) => {
-            eprintln!("[tile/terrain/{level}/{raw}] {err}");
+            eprintln!("[tile/terrain/{raw}] {err}");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
@@ -413,8 +411,9 @@ async fn ocean(State(app): State<Arc<App>>) -> Response {
 }
 
 async fn poi(State(app): State<Arc<App>>, Path(raw): Path<String>) -> Response {
-    let Some(idx) = page_idx(&raw) else {
-        return (StatusCode::BAD_REQUEST, "bad page_idx").into_response();
+    // POI is baked at the leaf and nowhere else.
+    let Some(idx) = page_at(&raw, LEVEL0_ZOOM) else {
+        return (StatusCode::BAD_REQUEST, "bad page name").into_response();
     };
 
     if let Some(Cached::Bytes(b)) = app.poi.lock().expect("cache").get(&idx).cloned() {
@@ -472,8 +471,10 @@ async fn geocode(State(app): State<Arc<App>>, Path(raw): Path<String>) -> Respon
         };
     }
 
-    let Some(idx) = page_idx(&raw) else {
-        return (StatusCode::BAD_REQUEST, "bad page_idx").into_response();
+    // A group covers GROUP_SHAMT levels of pages, so its name is that much
+    // shorter than a page's.
+    let Some(idx) = page_at(&raw, LEVEL0_ZOOM - GROUP_SHAMT) else {
+        return (StatusCode::BAD_REQUEST, "bad group name").into_response();
     };
 
     match app.geocode.lock().expect("cache").get(&idx).cloned() {
@@ -563,22 +564,24 @@ async fn invalidate(State(app): State<Arc<App>>, headers: HeaderMap, Path(kind):
             Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err).into_response(),
         };
     }
-    let cache = match kind.as_str() {
-        "poi" => &app.poi,
-        "geocode" => &app.geocode,
+    // Each bake names its objects at its own zoom, so which one is being
+    // invalidated says how long a name to expect.
+    let (cache, zoom) = match kind.as_str() {
+        "poi" => (&app.poi, LEVEL0_ZOOM),
+        "geocode" => (&app.geocode, LEVEL0_ZOOM - GROUP_SHAMT),
         _ => return (StatusCode::NOT_FOUND, "unknown cache").into_response(),
     };
 
     let one = serde_json::from_str::<serde_json::Value>(&body)
         .ok()
-        .and_then(|v| v.get("page_idx").and_then(|p| p.as_str().map(str::to_string)));
+        .and_then(|v| v.get("name").and_then(|p| p.as_str().map(str::to_string)));
     match one {
-        Some(raw) => match page_idx(&raw) {
+        Some(raw) => match page_at(&raw, zoom) {
             Some(idx) => {
                 cache.lock().expect("cache").remove(&idx);
                 (StatusCode::OK, format!("invalidated {raw}")).into_response()
             }
-            None => (StatusCode::BAD_REQUEST, "bad page_idx").into_response(),
+            None => (StatusCode::BAD_REQUEST, "bad page name").into_response(),
         },
         None => {
             if kind == "geocode" {
@@ -683,9 +686,9 @@ fn run() -> Result<(), String> {
     // relays' are; what each one carries past them is this server's.
     let router = Router::new()
         .route(&format!("{TILE_ROOT}/terrain/_ocean"), get(ocean))
-        .route(&format!("{TILE_ROOT}/terrain/{{level}}/{{page_idx}}"), get(terrain))
-        .route(&format!("{TILE_ROOT}/poi/{{page_idx}}"), get(poi))
-        .route(&format!("{TILE_ROOT}/geocode/{{page_idx}}"), get(geocode))
+        .route(&format!("{TILE_ROOT}/terrain/{{quadkey}}"), get(terrain))
+        .route(&format!("{TILE_ROOT}/poi/{{quadkey}}"), get(poi))
+        .route(&format!("{TILE_ROOT}/geocode/{{quadkey}}"), get(geocode))
         // Its own root: an asset is neither server's, and its URL is its bucket
         // key with a leading slash.
         .route(&format!("{ASSET_ROOT}/{{hash}}"), get(asset))

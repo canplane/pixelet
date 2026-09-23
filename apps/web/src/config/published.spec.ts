@@ -9,11 +9,15 @@
  * A published bake is immutable: re-baking bumps the version rather than
  * overwriting objects, which is what invalidates CDN edge and browser
  * caches. Bumping one here is the whole change.
+ *
+ * All three moved together at v6/v6/v4, which is the one time they have:
+ * that is the set baked before a page was named by its quadkey rather than
+ * by a level and a decimal index (pxl-spec bake/quadkey.rs).
  */
 export const PUBLISHED_VERSION = {
-  terrain: "v5",
-  poi: "v5",
-  geocode: "v3",
+  terrain: "v6",
+  poi: "v6",
+  geocode: "v4",
 } as const;
 
 export type BakeKind = keyof typeof PUBLISHED_VERSION;

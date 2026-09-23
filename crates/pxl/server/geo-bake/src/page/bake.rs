@@ -6,6 +6,7 @@
 //! The POI and reverse-geocode bakes differ in their provider, their encoding
 //! and the tables they read — this is everything else, which is most of both.
 
+use pxl_spec::bake::constant::LEVEL0_ZOOM;
 use std::path::PathBuf;
 
 use std::path::Path;
@@ -67,7 +68,7 @@ pub fn bake<T>(
         targets.truncate(n);
     }
 
-    let walked = walk::walk(&args, b.kind, b.every, &targets, connect, one)?;
+    let walked = walk::walk(&args, b.kind, LEVEL0_ZOOM - b.group_shamt, b.every, &targets, connect, one)?;
     let t = &walked.tally;
     println!("[bake/{}] {} items across {} non-empty pages, {}", b.kind, t.items, t.baked, fmt_bytes(t.bytes as f64));
 
