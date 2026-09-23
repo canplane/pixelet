@@ -11,10 +11,11 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::v3::V3;
 use xpute_core::math::mat4::Mat4;
 
-use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, word_bytes, GpuApi};
-use crate::gpu::api_spec::format;
+use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, Stamp};
+use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::atmosphere::AIR_WORDS;
+use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::put_ray;
 use crate::look::atmosphere::light_at;
@@ -22,13 +23,13 @@ use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SKY, ENV_SUN};
 
 /// Floats the Clouds uniform (clouds.wgsl's Clouds) holds: the ray, and the
 /// sun's and the moon's light at the layer. Where the layer is and what
-/// shapes it is the air's uniform's (`field`), which the lit passes read too,
-/// for the clouds' shadows.
+/// shapes it is the air's uniform's (`field`), beside the height of the
+/// camera it is shown from.
 pub(crate) const CLOUDS_FLOATS: usize = 12 + 8;
 pub(crate) const SUN_AT: usize = 12;
 pub(crate) const MOON_AT: usize = 16;
 /// Where the layer is and what shapes it, as the air's uniform carries it
-/// (atmos_medium.wgsl's `cloud_*`), for the clouds and their shadows alike.
+/// (atmos_medium.wgsl's `cloud_*`, frame/shader/cloud_field.wgsl).
 pub struct CloudField {
     /// The lattice index the root frame's origin lies in, and the fraction
     /// of a unit past it.
@@ -48,6 +49,15 @@ const ALTITUDE_KM: f64 = 1.5;
 /// the layer up: seen from above, flat noise over the ground reads as blots
 /// on it. Four times the layer's own height.
 const GONE_KM: f64 = 4.0 * ALTITUDE_KM;
+/// The tile the layer's shape is baked into once for a device
+/// (frame/shader/cloud_tile.wgsl): its lattice units across, and its texels.
+/// One fetch a pixel, and its mip chain is what a pixel too small for the
+/// finest octave reads, in place of the eight octaves of hashes the shape
+/// takes to make.
+pub(crate) const TILE_UNITS: u32 = 32;
+pub(crate) const TILE_TEXELS: u32 = 1024;
+// A unit is a whole number of texels, so a lattice unit's fraction is a texel
+// coordinate exactly and the tile meets itself without a seam.
 /// The cells a unit of the clouds' lattice spans, as a shift
 /// (clouds.wgsl's CLOUD_LATTICE_CELLS).
 pub(crate) const LATTICE_SHAMT: u32 = 12;
@@ -56,6 +66,9 @@ pub(crate) const LATTICE_SHAMT: u32 = 12;
 const LATTICE_COUNT: u32 = 1 << (IVEC_X_W - LATTICE_SHAMT);
 // Y's lane is as wide, so one count wraps both axes.
 const _: () = assert!(IVEC_X_W == IVEC_Y_W, "one lattice count for both axes");
+// The tile meets itself where the lattice wraps as well as where the tile
+// does, so the world is a whole number of tiles across.
+const _: () = assert!(LATTICE_COUNT.is_multiple_of(TILE_UNITS), "the world is whole tiles");
 
 pub struct CloudPass {
     /// From under the layer, drawn only where the world left the far plane;
@@ -74,15 +87,37 @@ impl CloudPass {
     pub fn new(g: &GpuApi, pipelines: &mut Pipelines, samples: u32, frame_buffer: u32, air: [u32; AIR_WORDS]) -> CloudPass {
         let below = pipelines.build(g, PIPELINE_CLOUDS, format::CANVAS, samples);
         let above = pipelines.build(g, PIPELINE_CLOUDS_ABOVE, format::CANVAS, samples);
+        let tile = object();
+        let tile_levels = mip_levels(TILE_TEXELS, TILE_TEXELS);
+        (g.texture)(
+            tile,
+            TILE_TEXELS,
+            TILE_TEXELS,
+            1,
+            format::R8,
+            tile_levels,
+            1,
+            texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT,
+        );
+        let tile_view = object();
+        (g.view)(tile_view, tile, dimension::D2, 0, tile_levels, 0, 1);
+        // Repeated, since the tile meets itself, and filtered between its
+        // levels as well as within one: a pixel reads the level its
+        // footprint asks for.
+        let tile_sampler = object();
+        (g.sampler)(tile_sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::REPEAT, compare::NONE, 1);
         let uniform = object();
         (g.buffer)(uniform, word_bytes(CLOUDS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let group = object();
-        let mut e = [0u32; 10 + AIR_WORDS];
+        let mut e = [0u32; 20 + AIR_WORDS];
         e[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
         e[5..10].copy_from_slice(&buffer_entry(1, uniform));
-        e[10..].copy_from_slice(&air);
+        e[10..15].copy_from_slice(&[2, resource::VIEW, tile_view, 0, 0]);
+        e[15..20].copy_from_slice(&[3, resource::SAMPLER, tile_sampler, 0, 0]);
+        e[20..].copy_from_slice(&air);
         // One layout serves both pipelines: their groups are the same.
         (g.bind_group)(group, below.layouts[0], &e);
+        bake(g, pipelines, tile, tile_levels);
         CloudPass {
             below,
             above,
@@ -158,4 +193,27 @@ pub fn field(origin: IVec, env: &[f32]) -> CloudField {
         altitude_km: ALTITUDE_KM as f32,
         gone_km: GONE_KM as f32,
     }
+}
+
+/// Draws the tile the shape is read from, with its mip chain: one field over
+/// the whole map, so it is made once for the device
+/// (frame/shader/cloud_bake.wgsl) and a pixel reads a texel of it in place of
+/// the eight octaves of hashes it takes to make.
+fn bake(g: &GpuApi, pipelines: &mut Pipelines, tile: u32, levels: u32) {
+    let built = pipelines.build(g, PIPELINE_CLOUD_FIELD, format::R8, 1);
+    let encoder = object();
+    (g.encoder)(encoder);
+    let level = object();
+    (g.view)(level, tile, dimension::D2, 0, 1, 0, 1);
+    let pass = object();
+    (g.pass)(pass, encoder, &pass_desc(level, 0, load::CLEAR, 0, load::CLEAR, 0.0, Stamp::UNTIMED));
+    (g.set_pipeline)(pass, built.pipeline);
+    (g.draw)(pass, 3, 1, 0, 0);
+    (g.end)(pass);
+    for id in [pass, level] {
+        release(id);
+    }
+    (g.submit)(encoder);
+    release(encoder);
+    Mips::new(g, pipelines, format::R8).build(g, tile, levels, 0, 1);
 }

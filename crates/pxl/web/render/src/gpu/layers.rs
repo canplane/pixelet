@@ -38,8 +38,10 @@ pub struct Mips {
 }
 
 impl Mips {
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines) -> Mips {
-        let built = pipelines.build(g, PIPELINE_MIPS, format::RGBA8_SRGB, 1);
+    /// The builder for textures of `format`: a pipeline draws into the
+    /// format it was built for, so a chain of another needs its own.
+    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, format: u32) -> Mips {
+        let built = pipelines.build(g, PIPELINE_MIPS, format, 1);
         let sampler = object();
         (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
         Mips {

@@ -14,15 +14,11 @@
 
 /// Control knob for global view-dependent distances.
 ///
-/// MAX_DIST, fog and the render range are one chain: the camera sits MAX_DIST
-/// from its pivot, fog has to reach past that or full zoom-out is a screen of
-/// solid fog, and geometry has to exist as far as fog can see. The third link
-/// is render_cfg.RENDER_DIST (world/environment/config.json), and it is a
-/// distance in the same units as the other two, so the chain can be read off.
-/// Only feeds render_cfg's FAR_CLIP (the camera's far-clip plane), sized past
-/// where ground geometry stops so the margin stays proportional rather than an
-/// arbitrary leftover multiple. RENDER_DIST, which FAR_CLIP keeps half again
-/// past.
+/// MAX_DIST is how far the camera can stand from its pivot; how far it then
+/// sees is not set here at all. The reach is the world's — the planet's
+/// horizon and the air's visual range, whichever is nearer
+/// (environment/fog.rs) — and the clip planes are shares of it, so a zoom
+/// out moves the camera and the reach follows on its own.
 pub const VIEW_DIST: f64 = 6144.0;
 
 /// Default tilt angle in degrees from the ground plane.
@@ -59,9 +55,10 @@ pub mod camera_cfg {
         /// As far out as the terrain goes: looking straight down from here the
         /// ground wants step 2^11, which level 10, the pyramid's top
         /// (PAGE_TOP_LEVEL), draws with its cells averaged 2×2 — about 24 km
-        /// on the scale bar. Past it no level is coarse enough. The fog and
-        /// the clip planes follow the distance (render_cfg's FOG_PER_DIST), so
-        /// every zoom out to here shows the same octaves of ground. 1024 * 2^8.
+        /// on the scale bar. Past it no level is coarse enough. The band and
+        /// the clip planes follow the reach from up here, which is the planet's
+        /// own edge, so every zoom out to here shows the same octaves of
+        /// ground. 1024 * 2^8.
         pub const MAX_DIST: f64 = 262144.0;
         pub const MIN_POLAR: f64 = 0.001;
         /// (90 - MIN_TILT_DEG) * PI / 180.

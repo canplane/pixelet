@@ -1,24 +1,26 @@
 {
   "render_cfg": {
     "$doc": [
-      "Fog and the far clip.",
+      "The band that hides where the ground ends, and the far clip, as shares",
+      "of the reach.",
       "",
-      "RENDER_DIST is how far the ground is seen, in world `u`: where fog",
-      "finishes hiding it, with the camera 4,096u from its pivot or nearer;",
-      "further out, it and every distance here grow with the camera's",
-      "(FOG_PER_DIST). It is as far as the window reaches with its base at the",
-      "leaves, which a street-level view holds for its decoration: five levels",
-      "put the top at level 4, which draws step 2^5, wanted out to 192 · 2^5 =",
-      "6,144u (terrain/level.rs's level_at). The haze in front of it is the",
-      "air's (look/atmosphere.rs, aerial perspective), so the fog is only the",
-      "edge, and a coarser ring past it costs a ring of pages and not memory:",
-      "the window's records are placed at boot. Where ground geometry exists is",
-      "no longer a distance",
-      "chosen beside it but the page pyramid's: a ring of pages at every level",
-      "of a window, drawn to the window's top level's ring (terrain/level.rs,",
-      "terrain/config.json), which at the finest window reaches 8192u. Fog",
-      "therefore hides ground that is there rather than the edge of where it",
-      "stops.",
+      "How far the ground is worth drawing is no longer a number here. It is",
+      "read off the world: the planet turns away at the horizon, and before",
+      "that the aerosol near the ground takes a surface's contrast over the",
+      "visual range, and the nearer of the two wins (environment/fog.rs,",
+      "issue/20260923-the-ground-runs-to-the-horizon.md). What the rings hold",
+      "is a second end — a window of levels sized for `.fixed` — and the band",
+      "ends the ground at whichever comes first, so ground fades out instead",
+      "of being cut off while it is still in view: into the sky's own light",
+      "along the same ray, which the sky pass draws past it (atmos_view.wgsl),",
+      "so the edge is no seam. The haze in front of the band is the air's",
+      "(look/atmosphere.rs, aerial perspective), not this band's.",
+      "",
+      "The three values below are what the band and the planes were tuned at,",
+      "kept as the ratios they always were: the fade is FOG_NEAR/FOG_FAR of",
+      "the reach, the far plane FAR_CLIP/FOG_FAR of it, and the near plane",
+      "opens out as the reach grows past FOG_FAR so a zoom out is a change of",
+      "scale and nothing else.",
       "",
       "Anchoring the rings at the view centre rather than the camera is what",
       "keeps residency invariant under rotation: at a wide zoom the camera sits",
@@ -27,47 +29,33 @@
       "it shows, are camera-relative — both measure against the camera — so",
       "ground standing above the terrain is ranked where it actually is. Over",
       "every zoom, tilt, aspect ratio and pivot height the camera allows, the",
-      "ground in view lies inside what the window's top ring draws",
-      "(world/chunk/view_range.test.rs)."
+      "ground the band leaves visible lies inside what the window's top ring",
+      "draws (world/chunk/view_range.test.rs)."
     ],
     "FAR_CLIP": {
       "$value": 9216,
       "$doc": [
-        "VIEW_DIST * 1.5. VIEW_DIST (camera/config.json) is sized past",
-        "where the ground is seen, so FAR_CLIP keeps margin over it rather than",
-        "being an arbitrary multiple. The fade is FOG_NEAR/FOG_FAR (a smoothstep",
-        "in shade.wgsl), and it is total well inside where the ground is drawn,",
-        "so ground always fades out instead of being cut off while still visible:",
-        "into the sky's own light along the same ray, which the sky pass draws",
-        "past it (atmos_view.wgsl), so the edge is not a seam. The haze nearer in",
-        "is the air's (aerial perspective), not this band's."
+        "1.5 × FOG_FAR: the far plane a reach of FOG_FAR asks for, so the band",
+        "completes inside the frustum rather than being cut by it. Read as that",
+        "ratio, not as a distance."
       ]
     },
     "FOG_NEAR": {
       "$value": 4608,
       "$doc": [
-        "RENDER_DIST * 0.75. The fade starts here and is total at RENDER_DIST, a",
-        "distance the ground is drawn past, so it completes instead of being",
-        "cut. Narrow, because it only hides where the ground ends: the depth in",
-        "front of it is the air's haze."
+        "0.75 × FOG_FAR: where the fade starts, as a share of wherever the",
+        "ground ends. Narrow, because it only hides the edge — the depth in",
+        "front of it is the air's own haze."
       ]
     },
-    "FOG_FAR": { "$value": 6144, "$doc": ["RENDER_DIST."] },
-    "FOG_PER_DIST": {
-      "$value": 1.5,
+    "FOG_FAR": {
+      "$value": 6144,
       "$doc": [
-        "Fog's far edge per unit of the camera's distance from its pivot, where",
-        "that is the further: FOG_FAR over the 1,024u the camera could stand at",
-        "when these were first tuned, kept as the fog was pushed out to the window.",
-        "Past the distance where it overtakes FOG_FAR, 4,096u, the fade",
-        "and the clip planes grow in proportion to the distance, so a",
-        "zoom out is a change of scale and nothing else: the screen spans the",
-        "same octaves of ground, which is what the window of levels is sized",
-        "for (environment/fog.rs). Nearer, they hold at their values here, so",
-        "a street-level view keeps its horizon."
+        "The reach the two above were tuned against, and what the near plane's",
+        "scale is measured in: five levels from the leaves draw step 2^5, which",
+        "the ladder wants out to 192 · 2^5 (terrain/level.rs's level_at)."
       ]
-    },
-    "RENDER_DIST": 6144
+    }
   },
   "light_cfg": {
     "$doc": [

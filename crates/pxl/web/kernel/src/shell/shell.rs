@@ -244,6 +244,13 @@ pub fn ui_action(text: &str) -> bool {
             crate::layer::character::chat_bubble::append_chat_line(&text);
         }
         "reset_dist" => camera_store().reset_dist(),
+        // Where the camera stands, set outright rather than driven: what the
+        // kernel's own test puts a view at (apps/web/src/kernel/kernel.test.ts),
+        // and what an A/B reads two builds at the same view with.
+        "set_view" => {
+            let (dist, polar) = (f64_of(&action, "dist"), f64_of(&action, "polar"));
+            camera_store().set_view_state(crate::control::camera::store::ViewPatch { dist, azimuth: None, polar });
+        }
         "compass_reset" => compass_reset(),
         "go_to" => {
             // A search result: its point, grounded the way every map_center

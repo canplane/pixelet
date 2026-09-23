@@ -37,7 +37,6 @@ struct VertexOut {
   @location(4) scattered: vec3f,
   @location(5) past: vec3f,
   @location(6) fill: vec3f,
-  @location(7) sunlit: f32,
 };
 
 @vertex
@@ -56,7 +55,6 @@ fn vs(v: VertexIn) -> VertexOut {
   o.scattered = seen.scattered;
   o.past = seen.past;
   o.fill = seen.fill;
-  o.sunlit = seen.sunlit;
   return o;
 }
 
@@ -64,6 +62,6 @@ fn vs(v: VertexIn) -> VertexOut {
 fn fs(i: VertexOut) -> @location(0) vec4f {
   let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
   let n = normalize(i.normal);
-  let color = screen_ao(shade(albedo, n, i.world_pos, sun_lit(i.world_pos, n), vec3f(1.0), Seen(i.through, i.scattered, i.past, i.fill, i.sunlit)), i.clip.xy);
+  let color = screen_ao(shade(albedo, n, i.world_pos, sun_lit(i.world_pos, n), vec3f(1.0), Seen(i.through, i.scattered, i.past, i.fill)), i.clip.xy);
   return vec4f(finish(color, i.clip.xy), draw.opacity);
 }
