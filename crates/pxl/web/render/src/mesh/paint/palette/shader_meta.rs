@@ -10,8 +10,11 @@
 
 use std::sync::LazyLock;
 
+use pxl_spec::asset::texture::{shipped_tile_mean, CubeFace};
 use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
-use pxl_spec::cell::object::{ground_channel_colors, ground_channel_types};
+use pxl_spec::cell::object::{block_cubes, ground_channel_colors, ground_channel_types, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
+
+use crate::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
 
 /// A coloured type of a channel, and the array layer it is.
 #[derive(Clone, Debug, PartialEq)]
@@ -59,6 +62,44 @@ pub fn rgb255(rgb: u32) -> [u8; 3] {
 /// Static — cube_colors/cube_types never change at runtime, so this is built
 /// once rather than per-chunk.
 pub static GROUND_LAYER_META: LazyLock<Vec<TerrainLayerMeta>> = LazyLock::new(layer_meta);
+
+/// What each array layer reads as once its tile is too small to see: the
+/// tile's own mean colour (asset/ingested.spec.rs's `means`), and the
+/// catalog's swatch for a type the pack has no tile for.
+///
+/// A summary of a patch of ground is drawn in this and not in the swatch.
+/// The swatch is the colour a type is filed under — the colour a legend
+/// would use — while the tile is what the ground actually shows, and the two
+/// part company wherever a tile is painted rather than flat.
+pub static LAYER_MEAN: LazyLock<Vec<[u8; 3]>> = LazyLock::new(layer_means);
+
+fn layer_means() -> Vec<[u8; 3]> {
+    let mut out: Vec<[u8; 3]> = Vec::new();
+    let mut put = |layer: u32, cube: Option<PlaceableCube>, rgb: u32| {
+        let mean = cube.and_then(|cube| shipped_tile_mean(cube, CubeFace::Top)).unwrap_or_else(|| rgb255(rgb));
+        let layer = layer as usize;
+        if out.len() <= layer {
+            out.resize(layer + 1, [0; 3]);
+        }
+        out[layer] = mean;
+    };
+    for m in GROUND_LAYER_META.iter() {
+        put(m.layer_index, terrain_style_cube_for(m.ch_key, m.type_id as u32), m.rgb);
+    }
+    for block in block_cubes() {
+        let cube = PlaceableCube::Block(block);
+        if let (Some(layer), Some(rgb)) = (OBJECT_LAYER_IDX(block), placeable_cube_rgb(cube)) {
+            put(layer, Some(cube), rgb);
+        }
+    }
+    out
+}
+
+/// The colour a run of layer `layer` is summarised in: the layer's mean where
+/// the pack has one, and `rgb` — the run's own — where it has none.
+pub fn layer_mean(layer: u32, rgb: [u8; 3]) -> [u8; 3] {
+    LAYER_MEAN.get(layer as usize).copied().unwrap_or(rgb)
+}
 
 /// A channel's colours by type, as flat u8-indexed arrays rather than a map:
 /// the per-cell decode was dominated by map lookups when it was one. `has` is

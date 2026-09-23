@@ -44,6 +44,20 @@ fn sky_fill() -> vec3f {
   return fill;
 }
 
+// What the ground under a point throws back up at it: the land's colour
+// against everything that falls on a face turned up — the sun and the second
+// light at their own heights, the themes' ambient, and the sky's own light as
+// the vertex took it — over pi, and the floor, which the ground takes as
+// every other face does. It is `beyond`'s ground under the same lights, so
+// the fill a face takes from below is the ground it would see if it looked,
+// and it goes orange into a sunset and blue into a moonlit night where a
+// theme's one colour could not.
+fn ground_bounce(fill: vec3f) -> vec3f {
+  let up = vec3f(0.0, 0.0, 1.0);
+  let lit = frame.sun_color * max(frame.sun_dir.z, 0.0) + frame.other_color * max(frame.other_dir.z, 0.0) + frame.ambient + fill;
+  return atmos.land * (lit / PI + frame.floor);
+}
+
 // The moonlit sky's table to the frame's: at the brightness a moonlit sky
 // reads at against the day's, which the eye's night adaptation sets and not
 // the moon's light (look/atmosphere.rs's MOONLIT_SKY).
@@ -93,10 +107,10 @@ fn air_along(dir: vec3f) -> Air {
     air.light += moon_view(dir) * moon_shown();
   }
   let mu = dot(dir, atmos.up);
-  air.ground = meets_ground(r, mu);
+  air.ground = meets_land(r, mu);
   air.normal = atmos.up;
   if (air.ground) {
-    let d = to_ground(r, mu);
+    let d = to_land(r, mu);
     air.ground_km = d;
     air.end = transmittance_along(r, mu, d, true);
     air.normal = normalize(atmos.up * r + dir * d);

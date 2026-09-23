@@ -152,6 +152,7 @@ fn run() -> Result<(), String> {
         cell: sheet::CELL,
         columns: sheet::COLUMNS,
         tiles: composed.tiles,
+        means: composed.means,
     };
 
     write_formatted(&root.join("apps/web/src/catalog/asset/ingested.spec.ts"), &table::render_ts(&rows, &sheet))?;

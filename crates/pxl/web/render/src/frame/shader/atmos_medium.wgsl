@@ -38,9 +38,14 @@ struct Atmosphere {
   moon_dir: vec3f,
   moon_light: f32,
   // The ground's colour past the terrain, in linear light
-  // (look/atmosphere.rs's `land`).
+  // (look/atmosphere.rs's `land`), and how high that ground stands over the
+  // datum the model's radii are measured from — the elevation under the map
+  // centre (kernel environment/fog.rs's `centre_ground`). The terrain is
+  // drawn at its own elevation, so a planet whose surface is the sea would
+  // leave it standing over the ground the sky draws past it, its chunk walls
+  // showing at the edge.
   land: vec3f,
-  _p0: f32,
+  land_altitude_km: f32,
   // What reaches the eye of the Sun's light, by channel, unexposed: the
   // same for every pixel of the frame, so the CPU takes it once
   // (look/atmosphere.rs's light_at). What the glare is of.
@@ -109,8 +114,19 @@ fn mie_phase(c: f32) -> f32 {
   return k * (1.0 + c * c) / pow(max(1.0 + g * g - 2.0 * g * c, 1e-4), 1.5);
 }
 
+// Where a ray from radius `r` at `mu` meets a sphere of `radius` about the
+// planet's centre, and whether it does at all.
+fn meets_sphere(r: f32, mu: f32, radius: f32) -> bool {
+  return mu < 0.0 && r * r * (mu * mu - 1.0) + radius * radius >= 0.0;
+}
+
+fn to_sphere(r: f32, mu: f32, radius: f32) -> f32 {
+  return max(-r * mu - sqrt(max(r * r * (mu * mu - 1.0) + radius * radius, 0.0)), 0.0);
+}
+
+// The model's own surface, which the tables are baked against.
 fn meets_ground(r: f32, mu: f32) -> bool {
-  return mu < 0.0 && r * r * (mu * mu - 1.0) + atmos.bottom_radius * atmos.bottom_radius >= 0.0;
+  return meets_sphere(r, mu, atmos.bottom_radius);
 }
 
 fn to_top(r: f32, mu: f32) -> f32 {
@@ -118,7 +134,23 @@ fn to_top(r: f32, mu: f32) -> f32 {
 }
 
 fn to_ground(r: f32, mu: f32) -> f32 {
-  return max(-r * mu - sqrt(max(r * r * (mu * mu - 1.0) + atmos.bottom_radius * atmos.bottom_radius, 0.0)), 0.0);
+  return to_sphere(r, mu, atmos.bottom_radius);
+}
+
+// The surface a view ray is drawn against: the model's raised to the ground
+// under the map centre. Only what is drawn moves — the tables keep the
+// radius they were baked at, and a metre of ground against a planet's radius
+// is nothing to the air along a ray.
+fn land_radius() -> f32 {
+  return atmos.bottom_radius + atmos.land_altitude_km;
+}
+
+fn meets_land(r: f32, mu: f32) -> bool {
+  return meets_sphere(r, mu, land_radius());
+}
+
+fn to_land(r: f32, mu: f32) -> f32 {
+  return to_sphere(r, mu, land_radius());
 }
 
 // A table's texel centres to [0, 1] and back: the ends of a range land on

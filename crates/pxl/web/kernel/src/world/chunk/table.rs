@@ -45,7 +45,7 @@ use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
 use crate::layer::terrain::level::{chunk_span_of, decor_reach, ring, LevelPage, DECOR_REACH, RENDER_AXIS};
 use crate::shell::setting::store::hidden_ground;
-use crate::world::chunk::mesh_slot::{group_bytes, slot_of, MeshSlot, OCCUPANCY};
+use crate::world::chunk::mesh_slot::{group_bytes, slot_of, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
 use crate::world::chunk::range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT};
 use pxl_spec::space::indexer::L2_IDX;
@@ -467,6 +467,12 @@ pub struct Census {
     pub slot_waits: u32,
     pub wait_levels: u32,
     pub holder_levels: u32,
+    /// Boxes cut from meshes past their slot since the last census.
+    pub cut: u32,
+    /// The largest mesh handed over since the last census, in boxes, of a
+    /// fine slot and of a coarse one.
+    pub fine_boxes: u32,
+    pub coarse_boxes: u32,
     /// Stale chunks `retire` kept: what replaces them does not cover their
     /// ground yet; covers it but is not all laid out; and, of those, the
     /// ones where what is not laid out is a chunk waiting on a slot.
@@ -485,8 +491,12 @@ pub const LEVELS: usize = PAGE_TOP_LEVEL as usize + 1;
 pub struct Meshes {
     holder: Vec<u32>,
     epoch: u32,
-    /// Boxes cut from meshes past their slot, since the kernel started.
+    /// Boxes cut from meshes past their slot, until a census takes them.
     pub cut: u32,
+    /// The largest mesh handed to a slot of each kind, until a census takes
+    /// them: what a slot's size is read against.
+    fine_boxes: u32,
+    coarse_boxes: u32,
     /// Meshes thrown away for a slot still drawn from, since the census; the
     /// levels of the waiters and the holders as bits; and the first waiters,
     /// as many as `retire` needs to tell a stale chunk kept for one.
@@ -634,6 +644,8 @@ impl Scheduler {
                 holder: vec![0; OCCUPANCY],
                 epoch: arena_epoch(),
                 cut: 0,
+                fine_boxes: 0,
+                coarse_boxes: 0,
                 waits: 0,
                 wait_levels: 0,
                 holder_levels: 0,
@@ -1399,6 +1411,9 @@ impl Scheduler {
         c.hidden = self.hidden;
         c.level_boxes = self.level_boxes;
         c.slot_waits = core::mem::take(&mut self.meshes.waits);
+        c.cut = core::mem::take(&mut self.meshes.cut);
+        c.fine_boxes = core::mem::take(&mut self.meshes.fine_boxes);
+        c.coarse_boxes = core::mem::take(&mut self.meshes.coarse_boxes);
         c.wait_levels = core::mem::take(&mut self.meshes.wait_levels);
         c.holder_levels = core::mem::take(&mut self.meshes.holder_levels);
         (c.stale_uncovered, c.stale_unready, c.stale_on_waiter) = self.kept;
@@ -2122,6 +2137,8 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
             }
             let boxes = box_cnt.min(slot.capacity);
             meshes.cut += box_cnt - boxes;
+            let asked = if slot.capacity == FINE_BOXES { &mut meshes.fine_boxes } else { &mut meshes.coarse_boxes };
+            *asked = (*asked).max(box_cnt);
             // SAFETY: the mesh's boxes, a least corner and a size in the
             // first six floats of each, in `.fixed.bake` where the bake
             // just wrote them.

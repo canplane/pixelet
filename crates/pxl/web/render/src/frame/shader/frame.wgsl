@@ -17,7 +17,7 @@ struct Frame {
   fog_far: f32,
   _p6: vec3f,
   floor: f32,
-  hemi_ground: vec3f,
+  _p7: vec3f,
   edge_width: f32,
   _p5: vec3f,
   rim_intensity: f32,

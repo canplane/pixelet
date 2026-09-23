@@ -323,6 +323,8 @@ fn side(out: &mut [f64]) {
             p.sched_ms,
             p.tick_ms,
             p.gpu_ms,
+            p.fine_boxes,
+            p.coarse_boxes,
             p.draw_calls,
             p.triangles,
             p.q_terrain,

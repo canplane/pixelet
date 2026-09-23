@@ -78,19 +78,22 @@ export const FRAME = {
   ring_spill_peak: 93 as number,
   work_scans: 94 as number,
   work_bakes: 95 as number,
-  q_terrain: 96 as number,
-  q_poi: 97 as number,
-  stale_chunks: 98 as number,
-  stale_drawn: 99 as number,
-  stale_levels: 100 as number,
-  stale_hidden: 101 as number,
-  stale_uncovered: 102 as number,
-  stale_unready: 103 as number,
-  stale_on_waiter: 104 as number,
-  slot_waits: 105 as number,
-  slot_wait_levels: 106 as number,
-  slot_holder_levels: 107 as number,
-  WORDS: 108 as number,
+  work_fine_boxes: 96 as number,
+  work_coarse_boxes: 97 as number,
+  q_terrain: 98 as number,
+  q_poi: 99 as number,
+  stale_chunks: 100 as number,
+  stale_drawn: 101 as number,
+  stale_levels: 102 as number,
+  stale_hidden: 103 as number,
+  stale_uncovered: 104 as number,
+  stale_unready: 105 as number,
+  stale_on_waiter: 106 as number,
+  slot_waits: 107 as number,
+  slot_wait_levels: 108 as number,
+  slot_holder_levels: 109 as number,
+  slot_cut: 110 as number,
+  WORDS: 111 as number,
 } as const;
 
 /** What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (view.test.ts), so a lane the kernel adds is printed without a word written for it. */
@@ -103,10 +106,10 @@ export const FRAME_GROUPS = {
   pages: ["pages", "level_pages", "poi_count"],
   heap: ["heap_used_mb", "heap_live_mb", "heap_range_mb", "heap_refusals", "heap_largest_free_mb"],
   ring: ["ring_cq_peak", "ring_spill_peak"],
-  work: ["work_scans", "work_bakes"],
+  work: ["work_scans", "work_bakes", "work_fine_boxes", "work_coarse_boxes"],
   q: ["q_terrain", "q_poi"],
   stale: ["stale_chunks", "stale_drawn", "stale_levels", "stale_hidden", "stale_uncovered", "stale_unready", "stale_on_waiter"],
-  slot: ["slot_waits", "slot_wait_levels", "slot_holder_levels"],
+  slot: ["slot_waits", "slot_wait_levels", "slot_holder_levels", "slot_cut"],
 } as const;
 
 /** One settled task (sched/ledger/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. */
@@ -130,9 +133,9 @@ export const TASK = {
 /** One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0. */
 export const WORST = {
   sample: 0 as number,
-  has_prev: 108 as number,
-  prev: 109 as number,
-  WORDS: 217 as number,
+  has_prev: 111 as number,
+  prev: 112 as number,
+  WORDS: 223 as number,
 } as const;
 
 export const SPREAD = {
@@ -207,15 +210,15 @@ export const SUMMARY = {
     census: 71 as number,
     level_tris: 91 as number,
     last: 102 as number,
-    WORDS: 210 as number,
+    WORDS: 213 as number,
   },
   tasks: {
-    AT: 215 as number,
+    AT: 218 as number,
     slots: 0 as number,
     WORDS: 75 as number,
   },
   counters: {
-    AT: 290 as number,
+    AT: 293 as number,
     faces_kept: 0 as number,
     faces_possible: 1 as number,
     runs_culled: 2 as number,
@@ -239,7 +242,7 @@ export const SUMMARY = {
     WORDS: 20 as number,
   },
   atlas: {
-    AT: 310 as number,
+    AT: 313 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -247,7 +250,7 @@ export const SUMMARY = {
     WORDS: 4 as number,
   },
   retain: {
-    AT: 314 as number,
+    AT: 317 as number,
     nodes: 0 as number,
     run_sets: 1 as number,
     run_set_mb: 2 as number,
@@ -260,14 +263,14 @@ export const SUMMARY = {
     WORDS: 9 as number,
   },
   fetch: {
-    AT: 323 as number,
+    AT: 326 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   poi: {
-    AT: 326 as number,
+    AT: 329 as number,
     badge_count: 0 as number,
     dropped: 1 as number,
     place_ms: 2 as number,
@@ -294,7 +297,7 @@ export const SUMMARY = {
     WORDS: 23 as number,
   },
   peak: {
-    AT: 349 as number,
+    AT: 352 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -313,15 +316,17 @@ export const SUMMARY = {
     offscreen_pending: 15 as number,
     oldest_release_ms: 16 as number,
     oldest_visible_ms: 17 as number,
-    WORDS: 18 as number,
+    fine_boxes: 18 as number,
+    coarse_boxes: 19 as number,
+    WORDS: 20 as number,
   },
   steps: {
-    AT: 367 as number,
+    AT: 372 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
-  WORDS: 528 as number,
+  WORDS: 533 as number,
 } as const;
 
 /** What `ledger_read` returns the address of: u32 words, each range's address in the module's memory and its record count. */

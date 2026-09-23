@@ -48,7 +48,7 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::shadow::Shadow;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, ROLE_CASE, ROLE_WORLD, SETTLE_TURNS, SURFACES};
-use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_OTHER_LIGHT, ENV_STARS, ENV_SUN};
+use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::look::globe::{Globe, MERCATOR_RADIUS_U};
 
 /// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
@@ -881,8 +881,7 @@ impl Renderer {
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
         }
 
-        self.atmosphere
-            .lay_out(g, &env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4], env[ENV_AIR], env[ENV_AIR + 1], &up);
+        self.atmosphere.lay_out(g, env, &up);
     }
 
     /// Every chunk-pipeline draw of pipeline `which`; with `own`, that pipeline

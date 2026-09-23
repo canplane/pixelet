@@ -29,7 +29,7 @@ use crate::shell::setting::store::settings_store;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::node::{run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES};
 use crate::world::chunk::range::range_anchor_of;
-use crate::world::chunk::table::{builds, Frame};
+use crate::world::chunk::table::{builds, Census, Frame};
 use crate::world::frame::view::{view, view_resize};
 
 const MB: f64 = 1_048_576.0;
@@ -93,12 +93,14 @@ pub fn take_draw() -> bool {
 
 /// The scheduler's builds since the last sample: scans (the direct path counted
 /// with them) and bakes.
-fn work_sample(c: &mut CoreTick) -> WorkSample {
+fn work_sample(c: &mut CoreTick, census: &Census) -> WorkSample {
     let st = kernel().sched.builder.stat;
     let scans = st.scans + st.direct;
     let sample = WorkSample {
         scans: scans.wrapping_sub(c.last_work.0) as f64,
         bakes: st.bakes.wrapping_sub(c.last_work.1) as f64,
+        fine_boxes: census.fine_boxes as f64,
+        coarse_boxes: census.coarse_boxes as f64,
     };
     c.last_work = (scans, st.bakes);
     sample
@@ -257,7 +259,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         pages,
         heap: heap_sample(),
         rings: ledger_take_rings(),
-        work: work_sample(c),
+        work: work_sample(c, &census),
         q_terrain: fetch_pending_count(tile_fetcher::CATEGORY) as f64,
         q_poi: fetch_pending_count(fetcher::CATEGORY) as f64,
         stale: StaleSample {
@@ -268,6 +270,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             slot_waits: census.slot_waits as f64,
             wait_levels: census.wait_levels as f64,
             holder_levels: census.holder_levels as f64,
+            cut: census.cut as f64,
             uncovered: census.stale_uncovered as f64,
             unready: census.stale_unready as f64,
             on_waiter: census.stale_on_waiter as f64,

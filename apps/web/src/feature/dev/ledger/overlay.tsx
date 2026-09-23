@@ -9,8 +9,11 @@
  * It also owns the dev lifecycle the ledger's surfaces share, which runs
  * whether or not the panel is showing: opening the kernel's recording window,
  * which is off until something asks for it; the long-frame observers, so the
- * ring is already warm when the panel is opened; and `__pxl_ledger_trace` on
- * `window`, so a trace can be taken from the console.
+ * ring is already warm when the panel is opened; and the handles on `window`
+ * an A/B is driven and read through from the console — `__pxl_ledger_trace`,
+ * `__pxl_action` and `__pxl_gauge`. Two builds are only comparable read at
+ * the same view, which is what an action puts the camera at (`set_view`),
+ * and the numbers are the panel's own.
  */
 
 import { useEffect, useState } from "react";
@@ -41,7 +44,11 @@ const POLL_MS = 500;
  * covers the whole window. */
 const LIVE_WINDOW_MS = 10_000;
 
-type LedgerGlobals = typeof globalThis & { __pxl_ledger_trace?: () => void };
+type LedgerGlobals = typeof globalThis & {
+  __pxl_ledger_trace?: () => void;
+  __pxl_action?: (action: Record<string, unknown>) => void;
+  __pxl_gauge?: (window_ms: number) => Gauge;
+};
 
 /** A fresh window on both sides: the kernel's rings and the shell's long frames. */
 function startWindow(): void {
@@ -87,8 +94,12 @@ export function LedgerOverlay() {
     installLongFrameObservers();
     const w = globalThis as LedgerGlobals;
     w.__pxl_ledger_trace = ledgerTraceDownload;
+    w.__pxl_action = (action) => kernel_action(action as never);
+    w.__pxl_gauge = (window_ms) => ledgerGaugeRead(window_ms);
     return () => {
       delete w.__pxl_ledger_trace;
+      delete w.__pxl_action;
+      delete w.__pxl_gauge;
     };
   }, []);
 

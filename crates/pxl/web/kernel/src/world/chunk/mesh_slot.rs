@@ -15,9 +15,15 @@
 //! drawn until something covers its ground — and there is nothing to free.
 //!
 //! A slot holds as many boxes as its tier has been measured to need, and a
-//! mesh past that is cut to it. Measured over dense city, mountain, plain and
-//! coast, through a zoom out and back and a pan (2026-09-22): a leaf's first
-//! tier reached 108 KB and every coarse tier 40 KB.
+//! mesh past that is cut to it — ground that is simply missing, which the
+//! ledger's `slot cut` says outright.
+//!
+//! Measured through a zoom out and back over Seoul (2026-09-23, the ledger's
+//! `work fine_boxes` and `coarse_boxes`), under the coarse rule where a cell
+//! is its fill on every axis: a leaf's own tier asked 1,729 boxes and a
+//! coarse tier 2,198. The coarse tier is the larger of the two because
+//! nothing of it merges — a box shrunk about its cell's centre touches
+//! nothing (issue/20260923-a-coarse-cell-is-isotropic.md).
 
 use pxl_render::mesh::chunk_mesher::BOX_WORDS;
 
@@ -29,8 +35,9 @@ pub const AXIS: u32 = RENDER_AXIS * PAGE_CHUNK_AXIS;
 const SLOTS: u32 = AXIS * AXIS;
 /// Boxes a leaf's first tier holds, the one tier drawn at a leaf's own cells.
 pub const FINE_BOXES: u32 = 3640;
-/// Boxes every other tier holds.
-pub const COARSE_BOXES: u32 = 1365;
+/// Boxes every other tier holds: what the measurement asked for and a
+/// quarter again.
+pub const COARSE_BOXES: u32 = 2730;
 const BOX_BYTES: u32 = BOX_WORDS * 4;
 /// The largest mesh one bake may write before it is cut to its slot: past
 /// every tier measured, so what a bake asks for always fits.

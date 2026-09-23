@@ -260,6 +260,12 @@ pub struct RingSample {
 pub struct WorkSample {
     pub scans: f64,
     pub bakes: f64,
+    /// The largest mesh a bake handed over since the last frame, in boxes,
+    /// of each kind of slot: what the slots are sized against
+    /// (world/chunk/mesh_slot.rs), since a mesh past its slot is cut and the
+    /// ground it held is missing.
+    pub fine_boxes: f64,
+    pub coarse_boxes: f64,
 }
 
 /// One rendered frame. Lean on purpose — latency percentiles, decode bandwidth
@@ -327,6 +333,10 @@ pub struct StaleSample {
     pub slot_waits: f64,
     pub wait_levels: f64,
     pub holder_levels: f64,
+    /// Boxes cut from meshes that ran past the slot they go to: ground that
+    /// is simply missing, and the sign that a tier outgrew what its slot was
+    /// measured for (world/chunk/mesh_slot.rs).
+    pub cut: f64,
 }
 
 /// One of the window's worst frames by dt, kept whole with the frame before
@@ -363,10 +373,11 @@ words!(FrameSample, FRAME::WORDS,
     heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.range_mb => FRAME::heap_range_mb,
     heap.refusals => FRAME::heap_refusals, heap.largest_free_mb => FRAME::heap_largest_free_mb,
     rings.cq_peak => FRAME::ring_cq_peak, rings.spill_peak => FRAME::ring_spill_peak,
-    work.scans => FRAME::work_scans, work.bakes => FRAME::work_bakes, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
+    work.scans => FRAME::work_scans, work.bakes => FRAME::work_bakes, work.fine_boxes => FRAME::work_fine_boxes, work.coarse_boxes => FRAME::work_coarse_boxes, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
     stale.chunks => FRAME::stale_chunks, stale.drawn => FRAME::stale_drawn, stale.levels => FRAME::stale_levels, stale.hidden => FRAME::stale_hidden,
     stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready, stale.on_waiter => FRAME::stale_on_waiter,
     stale.slot_waits => FRAME::slot_waits, stale.wait_levels => FRAME::slot_wait_levels, stale.holder_levels => FRAME::slot_holder_levels,
+    stale.cut => FRAME::slot_cut,
 );
 
 words!(TaskRow, TASK::WORDS,
@@ -475,6 +486,8 @@ pub struct LedgerSink {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FramePeak {
     pub dt_ms: f64,
+    pub fine_boxes: f64,
+    pub coarse_boxes: f64,
     pub sched_ms: f64,
     pub tick_ms: f64,
     pub gpu_ms: f64,
@@ -662,6 +675,8 @@ pub fn ledger_record_frame(s: FrameSample) {
     p.sched_ms = p.sched_ms.max(s.sched_ms);
     p.tick_ms = p.tick_ms.max(s.tick_ms);
     p.gpu_ms = p.gpu_ms.max(s.gpu.ms);
+    p.fine_boxes = p.fine_boxes.max(s.work.fine_boxes);
+    p.coarse_boxes = p.coarse_boxes.max(s.work.coarse_boxes);
     p.draw_calls = p.draw_calls.max(s.gpu.draw_calls);
     p.triangles = p.triangles.max(s.gpu.triangles);
     p.q_terrain = p.q_terrain.max(s.q_terrain);

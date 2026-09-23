@@ -11,8 +11,9 @@
 //! below the horizon. The sky is the air's too, by day and by night: the
 //! moon lights it as the sun does, from its own table, at the brightness a
 //! moonlit sky reads at, and with no moon up the night is dark but for the
-//! stars. What a theme still gives is the fill the terrain is lit by — its
-//! ambient and hemisphere light and the floor — and whether it is night.
+//! stars. The light from below is the air's too: the land under a face, lit
+//! by the same sky and sun (atmos_view.wgsl's ground_bounce). What a theme
+//! still gives is its ambient and whether it is night.
 //!
 //! Every direction here is in the map's own axes, X east, Y north, Z up —
 //! the root frame the meshes are placed in. The sky, the stars and the
@@ -24,23 +25,23 @@ use pxl_spec::space::v3::{dot3, norm3, V3};
 use crate::look::atmosphere::{moon_phase_light, sun_light, white, MOONLIT_SKY};
 
 /// Floats a theme takes, linear colours: ambient colour and intensity (4),
-/// the hemisphere's ground and intensity (4), night (1). What is eased
-/// between themes and nothing else: the fog's band and the lighting floor are
-/// the same under every theme, and come with the light; the hemisphere's sky
-/// is the air's own light (atmos_view.wgsl's sky_fill).
-pub const THEME_FLOATS: usize = 9;
+/// night (1). What is eased between themes and nothing else: the fog's band
+/// and the lighting floor are the same under every theme, and come with the
+/// light; the hemisphere is the air's at both ends now, its sky the sky's own
+/// light and its ground what that light and the sun leave on the land
+/// (atmos_view.wgsl's sky_fill and ground_bounce).
+pub const THEME_FLOATS: usize = 5;
 
 /// Where the colours of a theme sit in its floats.
 const AMBIENT: usize = 0;
-const HEMI_GROUND: usize = 4;
-const HEMI_INTENSITY: usize = 7;
-pub const NIGHT: usize = 8;
+pub const NIGHT: usize = 4;
 
 /// Floats the environment's lane takes: the frame uniform's lighting run
 /// (24), laid out as the frame uniform has it; the stars' fade and the sky's
 /// clock (4); the air's (4): the camera's altitude and a unit's length, in
-/// kilometres, and the map centre's latitude; the second light (8), the
-/// dimmer of the sun and the moon, its direction and its colour; the sun's
+/// kilometres, the map centre's latitude, and the ground's height under it;
+/// the second light (8), the dimmer of the sun and the moon, its direction
+/// and its colour; the sun's
 /// direction (4), which the air is lit from whichever light is the brighter;
 /// the stars' frame (12), the equatorial frame to the map's as three columns
 /// of four; and the moon's direction and how bright the sky it lights is
@@ -84,11 +85,15 @@ pub struct Light {
     /// The light every lit face takes whatever it faces, which keeps a
     /// phone's night from going black.
     pub floor: f64,
-    /// The camera's altitude above the sea, and a world unit's length, in
+    /// The camera's altitude above the datum, and a world unit's length, in
     /// kilometres; and the map centre's latitude, in radians.
     pub altitude_km: f64,
     pub km_per_u: f64,
     pub latitude: f64,
+    /// How high the ground under the map centre stands over that datum, in
+    /// kilometres: where the sky draws its own ground, so the terrain does
+    /// not stand over it (atmos_medium.wgsl's land_altitude_km).
+    pub ground_km: f64,
     /// The equatorial frame to the local one, X east, Y north, Z up, as rows
     /// (the kernel's celestial_position.rs).
     pub star_frame: [V3; 3],
@@ -125,9 +130,7 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     let ambient_i = c[AMBIENT + 3];
     put3(o, 8, [c[AMBIENT] * ambient_i, c[AMBIENT + 1] * ambient_i, c[AMBIENT + 2] * ambient_i]);
     o[11] = light.fog_far as f32;
-    let hemi_i = c[HEMI_INTENSITY];
     o[15] = light.floor as f32;
-    put3(o, 16, [c[HEMI_GROUND] * hemi_i, c[HEMI_GROUND + 1] * hemi_i, c[HEMI_GROUND + 2] * hemi_i]);
 
     o[ENV_SKY] = light.stars as f32;
     o[ENV_SKY + 1] = light.time as f32;
@@ -135,6 +138,7 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     o[ENV_AIR] = light.altitude_km as f32;
     o[ENV_AIR + 1] = light.km_per_u as f32;
     o[ENV_AIR + 2] = light.latitude as f32;
+    o[ENV_AIR + 3] = light.ground_km as f32;
     put3(o, ENV_SUN, f32s(&sun_dir));
 
     // The moonlit sky: the moon's phase, from the angle between it and the

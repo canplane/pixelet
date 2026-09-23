@@ -405,7 +405,11 @@ const LIT_FRAME: [[u32; 3]; 10] = [
     [1, FRAGMENT, DEPTH],
     [2, FRAGMENT, SAMPLER_COMPARISON],
     [7, FRAGMENT, TEXTURE],
-    AIR_AT_VERTICES[0],
+    // The air's uniform in both stages, its tables in the vertex alone: the
+    // vertices take the air in front of them, and a fragment reads the land's
+    // colour for the light a face takes from the ground under it
+    // (atmos_view.wgsl's ground_bounce).
+    [8, BOTH, UNIFORM],
     AIR_AT_VERTICES[1],
     AIR_AT_VERTICES[2],
     AIR_AT_VERTICES[3],

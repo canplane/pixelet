@@ -325,10 +325,13 @@ fn occlusion(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) -> f
 
 // Both arrays are sampled and one chosen: textureSample must sit in
 // uniform control flow, and which face this is, is not.
-fn sample_tap(layer: f32, is_side: bool, uv: vec2f, fallback: vec3f) -> vec3f {
+// The gradients are the caller's: a tap is read inside a branch — a box
+// with no layer skips the read altogether — and a sample that takes its own
+// gradients may only be called where every fragment of the quad takes it.
+fn sample_tap(layer: f32, is_side: bool, uv: vec2f, ddx: vec2f, ddy: vec2f, fallback: vec3f) -> vec3f {
   let l = i32(clamp(layer, 0.0, 255.0) + 0.5);
-  let top = textureSample(layers_top, layer_sampler, uv, l).rgb;
-  let side = textureSample(layers_side, layer_sampler, uv, l).rgb;
+  let top = textureSampleGrad(layers_top, layer_sampler, uv, l, ddx, ddy).rgb;
+  let side = textureSampleGrad(layers_side, layer_sampler, uv, l, ddx, ddy).rgb;
   let tex = select(top, side, is_side);
   return select(tex, fallback, layer > NO_LAYER - 0.5);
 }
@@ -336,11 +339,21 @@ fn sample_tap(layer: f32, is_side: bool, uv: vec2f, fallback: vec3f) -> vec3f {
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
   let d = draws[i.draw];
-  let is_side = abs(i.normal.z) < 0.5;
-  let taps = (sample_tap(i.layer_taps.x, is_side, i.box_uv, i.rgb)
-    + sample_tap(i.layer_taps.y, is_side, i.box_uv, i.rgb)
-    + sample_tap(i.layer_taps.z, is_side, i.box_uv, i.rgb)
-    + sample_tap(i.layer_taps.w, is_side, i.box_uv, i.rgb)) * 0.25;
+  // A box with no layer of its own is its colour and nothing else: that is
+  // every tier over a leaf's own cells, which are the only ones the texture
+  // pack is for (mesh/chunk_mesher.rs). The four samples are skipped with
+  // it, not taken and thrown away.
+  let textured = i.layer_taps.x < NO_LAYER - 0.5 && frame.low_spec < 0.5;
+  let ddx = dpdx(i.box_uv);
+  let ddy = dpdy(i.box_uv);
+  var taps = i.rgb;
+  if (textured) {
+    let is_side = abs(i.normal.z) < 0.5;
+    taps = (sample_tap(i.layer_taps.x, is_side, i.box_uv, ddx, ddy, i.rgb)
+      + sample_tap(i.layer_taps.y, is_side, i.box_uv, ddx, ddy, i.rgb)
+      + sample_tap(i.layer_taps.z, is_side, i.box_uv, ddx, ddy, i.rgb)
+      + sample_tap(i.layer_taps.w, is_side, i.box_uv, ddx, ddy, i.rgb)) * 0.25;
+  }
   // The blend: an amount, or 2 + amount for the complementary pattern.
   let inverted = d.visible > 1.5;
   let amount = select(d.visible, d.visible - 2.0, inverted);
@@ -348,10 +361,13 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   if (select(pattern >= amount, pattern < amount, inverted)) {
     discard;
   }
-  var base = select(taps, i.rgb, frame.low_spec > 0.5);
+  var base = taps;
   base = base * mix(1.0, 1.0 - frame.edge_strength, edge_factor(i.local_pos, i.box_scale, i.normal, i.faces));
 
-  let n = normalize(i.normal);
+  // A box the ground was shrunk into is lit under as it is lit over: what
+  // lies below it is the rest of that ground, not a hollow (faces.wgsl).
+  let under = i.normal.z < -0.5 && face_bit(i.faces, UNDER_AS_TOP);
+  let n = normalize(select(i.normal, vec3f(i.normal.xy, -i.normal.z), under));
   // Darkened by k, and warmed by the same k, so a fully open face is untouched.
   let k = frame.ao_strength * occlusion(i.local_pos, i.box_scale, i.normal, i.faces);
   let open = (1.0 - k) * mix(vec3f(1.0), AO_TINT, k);
