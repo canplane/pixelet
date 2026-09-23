@@ -267,9 +267,9 @@
   },
   "unsupported": {
     "title": "지원하지 않는 브라우저입니다",
-    "encoding": "지도 데이터는 zstd로 압축되어 있지만, 이 브라우저에서는 이를 해제할 수 없습니다. 최신 버전의 Chrome, Edge, Firefox 또는 Safari에서 열어 주세요.",
-    "webgpu": "이 브라우저는 지도를 그리는 데 필요한 WebGPU를 지원하지 않습니다. 최신 버전의 Chrome, Edge, Firefox 또는 Safari에서 열어 주세요.",
-    "gpu": "WebGPU를 지원하지만 그래픽 어댑터를 사용할 수 없습니다. GPU가 비활성화되었거나 차단되었을 수 있습니다. Chrome에서는 chrome://gpu에서 자세한 원인을 확인할 수 있습니다.",
-    "insecure": "WebGPU를 사용하려면 보안 연결이 필요하지만, 현재 페이지는 HTTP로 열려 있습니다. HTTPS 또는 localhost로 열어 주세요."
+    "webgpu": "이 브라우저에는 세계를 그리는 데 쓰는 WebGPU가 없습니다. 최신 버전의 Chrome, Edge, Firefox, Safari에서 열어 주세요.",
+    "insecure": "WebGPU는 HTTPS에서만 쓸 수 있습니다. https:// 주소로 열어 주세요.",
+    "gpu": "WebGPU는 있지만 그래픽 어댑터가 응답하지 않았습니다. 이 GPU에서 꺼져 있거나 차단되었을 수 있습니다.",
+    "encoding": "지도 데이터는 압축해서 보내는데, 이 브라우저는 그 압축을 읽지 못합니다. 최신 버전의 Chrome, Edge, Firefox, Safari에서 열어 주세요."
   }
 }

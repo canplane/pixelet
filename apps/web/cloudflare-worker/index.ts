@@ -112,24 +112,6 @@ const KEY_RE =
  * point: `content-encoding` is what makes it normalise an entry. */
 const STORED_ENCODING = "x-pxl-stored-encoding";
 
-/** Whether the client will take a body in this encoding: the first exact name
- * in `accept-encoding` decides, and `*` stands in for a name that is not
- * listed. A `q` of zero is a refusal, which is how a client spells "not that
- * one" without leaving the name out. */
-function accepts(request: Request, encoding: string): boolean {
-  let wildcard: number | null = null;
-  for (const part of (request.headers.get("accept-encoding") ?? "").split(",")) {
-    const [name, ...params] = part.trim().split(";");
-    const exact = name.toLowerCase() === encoding;
-    if (!exact && name !== "*") continue;
-    const q = params.map((p) => p.trim().toLowerCase()).find((p) => p.startsWith("q="));
-    const weight = q === undefined ? 1 : Number(q.slice(2));
-    if (exact) return weight > 0;
-    wildcard = Number.isNaN(weight) ? 0 : weight;
-  }
-  return wildcard !== null && wildcard > 0;
-}
-
 /** An entry on its way to the client: the encoding back where HTTP expects it,
  * and the body declared final so nothing encodes it a second time.
  *
@@ -141,26 +123,21 @@ function accepts(request: Request, encoding: string): boolean {
  * at all to one asking for identity. Either way decode_terrain() receives
  * compressed bytes and fails far from here.
  *
- * A client that did not offer the encoding is **refused, not accommodated**.
- * Left alone, the edge negotiates on this deployment's behalf and decodes the
- * body for such a client. Measured across the prefixes, zstd-accepting against
- * not, 2026-09-24: a terrain page 8,543 against 526,936, the shared ocean page
- * 101 against the same 526,936 — five thousand times the bytes for the object
- * the most requests are for — the geocode dictionary 90,141 against 619,224,
- * a geocode group 2,746 against 12,192. A terrain page is a fixed-size raster
- * and packs to almost nothing, so the emptier the page the worse the ratio.
- * That is on an account whose only spend control is that a request is small
- * and that Workers fails closed at the free plan's daily count
- * (issue/20260816-deployment-hosting.md), and the decoded copy is what the
- * edge then caches. Nothing here can teach a browser to read zstd, so the
- * answer is the one HTTP already has a status for: an object goes out in the
- * encoding it is stored in or not at all, and the client says so to whoever
- * is looking at it (kernel/io/fetch.ts). */
-function serve(request: Request, body: ReadableStream | null, from: Headers): Response {
+ * **A client that cannot read the encoding cannot be refused here, and this is
+ * where that was learned.** The edge decodes the body for a client that did not
+ * offer zstd, and the decoded copy is what the cache then holds: measured
+ * 2026-09-24, a terrain page 8,543 bytes against 526,936, the shared ocean page
+ * 101 against the same 526,936. Refusing such a client with 406 looks like the
+ * answer and cannot be written here — Cloudflare rewrites `accept-encoding` on
+ * the request a Worker is handed and negotiates with the real client itself on
+ * the way out, so what this code reads is the edge's own list and not the
+ * browser's. Every variant was refused when it was tried, `*` and `zstd`
+ * included. Whatever refuses a client for its encoding has to run where the
+ * client's own header is still intact, which is not here. */
+function serve(body: ReadableStream | null, from: Headers): Response {
   const headers = new Headers(from);
   const encoding = headers.get(STORED_ENCODING);
   if (encoding) {
-    if (!accepts(request, encoding)) return new Response(`stored as ${encoding}, which this client did not accept`, { status: 406 });
     headers.delete(STORED_ENCODING);
     headers.set("content-encoding", encoding);
   }
@@ -240,7 +217,7 @@ export default {
     // octets it is, and both paths out put it back on the way to the client.
     const cache = caches.default;
     const cached = await cache.match(request);
-    if (cached) return serve(request, cached.body, cached.headers);
+    if (cached) return serve(cached.body, cached.headers);
 
     const object = await env.TILES.get(key);
     if (object === null) return new Response("not found", { status: 404 });
@@ -269,6 +246,6 @@ export default {
     // and it would not survive `clone()` into the cache anyway.
     const stored = new Response(object.body, { headers });
     ctx.waitUntil(cache.put(request, stored.clone()));
-    return serve(request, stored.body, headers);
+    return serve(stored.body, headers);
   },
 };
