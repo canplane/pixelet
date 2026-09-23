@@ -1,13 +1,15 @@
 // pxl-kernel/world/chunk/table.test.rs
 
+use pxl_spec::space::pvf3::ivec;
+
 use super::*;
 
-fn p(in_frustum: bool, lead_distance2: f64) -> Priority {
+fn p(in_frustum: bool, centre_distance2: f64) -> Priority {
     Priority {
         holds: false,
         in_frustum,
         hole: false,
-        lead_distance2,
+        centre_distance2,
         span: 1.0,
         pending_since: -1.0,
     }
@@ -84,4 +86,35 @@ fn a_chunks_children_have_it_for_their_parent_and_its_ancestors_climb_to_the_top
             }
         }
     }
+}
+
+/// What the mount order has to agree with the build order about: a chunk is
+/// as near as its distance in its own sides, so the levels interleave. Left
+/// in the key's own order a `ChunkKey` sorts by level, and every chunk of the
+/// finest level was mounted before any of the next — which decided what the
+/// screen filled in, since a chunk cannot be built before it is mounted.
+#[test]
+fn mounts_are_ordered_as_the_builds_take_them_and_not_by_level() {
+    let chunk = |level: u32, px: i64, bx: u32| ChunkKey {
+        page: LevelPage::new(level, ivec::gather(px, 0, 0)),
+        bx,
+        by: 0,
+    };
+    // The anchor in the middle of page 0 at every level.
+    let (ax, ay) = (0.0, 0.0);
+    let near_coarse = chunk(4, 0, 0);
+    let far_fine = chunk(0, 8, 0);
+    assert!(
+        chunk_near(near_coarse, ax, ay) < chunk_near(far_fine, ax, ay),
+        "a coarse chunk on the anchor goes before a fine one eight pages out"
+    );
+    assert!(near_coarse > far_fine, "though the key would have put it last");
+
+    // Within one level it is plain distance.
+    assert!(chunk_near(chunk(2, 0, 0), ax, ay) < chunk_near(chunk(2, 1, 0), ax, ay));
+    // And a chunk of any level on the anchor's own ground ties with one of
+    // another: that is what lets the fill spread outward rather than by
+    // octave.
+    let mid = |level: u32| chunk_near(chunk(level, 0, 0), ax, ay);
+    assert!((mid(0) - mid(4)).abs() < 1e-9, "every level's first chunk is equally near");
 }

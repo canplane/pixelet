@@ -135,16 +135,35 @@ pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
 /// so they are read from the neighbours' own inner samples — never from a
 /// child's padding, which would read a copy of the same thing and take the
 /// fold's answer from how that copy was made.
-pub fn fold_ele(around: [&[i16]; 16], out: &mut [i16]) {
+///
+/// A ring page may be `None`, which is the client folding from what it holds
+/// rather than the bake folding a whole pyramid. Where one is, the block's
+/// own four answer instead: they pad two samples of their own, which *are*
+/// the neighbour's samples and reach half as far as the parent's skirt, and
+/// past that the block's edge is extended. Nothing inside the parent moves —
+/// every sample of it is read from the four — so a page folded without the
+/// ring differs from the baked one in its outermost padding sample alone,
+/// which is the fourth tap of a bicubic read at the page's own rim.
+pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
     let inner = PAGE_ELE_SPAN as i64;
     let (pad, padded) = (ELE_PAD as i64, ELE_PADDED_SPAN as usize);
+    let read = |qx: i64, qy: i64, mx: i64, my: i64| -> Option<i64> {
+        let grid = around[((qx + 1) + 4 * (qy + 1)) as usize]?;
+        let (ix, iy) = ((mx - qx * inner + pad) as usize, (my - qy * inner + pad) as usize);
+        Some(grid[iy * padded + ix] as i64)
+    };
+    // As far past the block as the four children's own padding reaches.
+    let of_block = |mx: i64, my: i64| -> Option<i64> {
+        let near = |m: i64| m.clamp(-pad, 2 * inner - 1 + pad);
+        let (mx, my) = (near(mx), near(my));
+        let q = |m: i64| m.div_euclid(inner).clamp(0, 1);
+        read(q(mx), q(my), mx, my)
+    };
     // One child sample in the parent's 2×2 block, by its index across the
     // block's two pages (−2·pad .. 2·inner + 2·pad).
     let sample = |mx: i64, my: i64| -> i64 {
         let (qx, qy) = (mx.div_euclid(inner), my.div_euclid(inner));
-        let grid = around[((qx + 1) + 4 * (qy + 1)) as usize];
-        let (ix, iy) = ((mx - qx * inner + pad) as usize, (my - qy * inner + pad) as usize);
-        grid[iy * padded + ix] as i64
+        read(qx, qy, mx, my).or_else(|| of_block(mx, my)).unwrap_or(0)
     };
     for sy in 0..padded {
         let iy = sy as i64 - pad;
@@ -161,10 +180,23 @@ pub fn fold_ele(around: [&[i16]; 16], out: &mut [i16]) {
 /// `fold_ele` takes them. Ground reads only the middle four; elevation reads
 /// all sixteen.
 pub fn fold_terrain(around: [&Terrain; 16], level: u32) -> Terrain {
-    let ground = fold_ground([&around[5].ground, &around[6].ground, &around[9].ground, &around[10].ground], level);
+    fold_terrain_held(around.map(Some), level).expect("every page of the block")
+}
+
+/// A parent page from whichever of those sixteen are held. The middle four —
+/// 5, 6, 9 and 10, the parent's own children — are what it is made of and
+/// None in any of them is None here; the ring is the skirt's and `fold_ele`
+/// says what its absence costs.
+///
+/// This is why a zoom out need not reach the network. The client holds the
+/// level it is leaving, and a level is folded from four pages of it, not
+/// from the sixteen a bake has lying around.
+pub fn fold_terrain_held(around: [Option<&Terrain>; 16], level: u32) -> Option<Terrain> {
+    let child = |k: usize| around[k].map(|t| &t.ground);
+    let ground = fold_ground([child(5)?, child(6)?, child(9)?, child(10)?], level);
     let mut ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
-    fold_ele(around.map(|t| &*t.ele), &mut ele);
-    Terrain { ground, ele: ele.into() }
+    fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
+    Some(Terrain { ground, ele: ele.into() })
 }
 
 #[cfg(test)]

@@ -40,3 +40,23 @@ fn lead_point_the_frame_s_rotation_carries_through_so_ahead_matches_the_screen()
     close(lead.x - CAMERA.x, 0.0);
     close(lead.y - CAMERA.y, 100.0);
 }
+
+#[test]
+fn the_centre_is_the_frame_origin_at_rest_and_the_travel_still_to_come_mid_pan() {
+    // A view along the ground: the eye is behind the ground it looks at and
+    // well above it, so the two are nowhere near each other and which one
+    // the order measures from decides whether the screen fills from the
+    // middle or from its bottom edge.
+    let eye = [0.0, -900.0, 400.0];
+    assert_eq!(view_centre(eye, eye), [0.0, 0.0, 0.0]);
+    assert_eq!(view_centre(eye, [0.0, -800.0, 400.0]), [0.0, 100.0, 0.0]);
+}
+
+#[test]
+fn in_own_sides_ranks_a_coarse_thing_far_off_with_a_fine_thing_near() {
+    // Sixteen times the side at sixteen times the distance is the same
+    // thing on the screen, and the ladder puts each where that is true. A
+    // raw distance would have said the coarse one is far.
+    close(in_own_sides(160.0 * 160.0, 16.0), in_own_sides(10.0 * 10.0, 1.0));
+    assert!(in_own_sides(10.0 * 10.0, 16.0) < in_own_sides(10.0 * 10.0, 1.0), "nearer in its own sides");
+}

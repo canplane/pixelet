@@ -256,11 +256,16 @@ pub fn decor_reach(extent: f64) -> f64 {
     STEP_1_REACH * extent / 2.0
 }
 
+/// The page the anchor stands in at `level`: what every ring is centred on.
+pub fn centre_page(level: u32, anchor: IVec) -> LevelPage {
+    LevelPage::over(level, TO_XY(L3_IDX(anchor)))
+}
+
 /// A level's ring around the page the anchor stands in at that level: every
 /// page within `axis / 2` of it in both axes, nearest first by Chebyshev
 /// ring, then by row.
 pub fn ring(level: u32, anchor: IVec, axis: u32) -> Vec<LevelPage> {
-    let center = LevelPage::over(level, TO_XY(L3_IDX(anchor)));
+    let center = centre_page(level, anchor);
     let r = (axis / 2) as i64;
     let mut out: Vec<(i64, LevelPage)> = Vec::with_capacity((axis * axis) as usize);
     for dy in -r..=r {
@@ -276,7 +281,7 @@ pub fn ring(level: u32, anchor: IVec, axis: u32) -> Vec<LevelPage> {
 /// How far `page` lies from the anchor's page at its level, in pages along
 /// the further axis: 0 for the anchor's own, 1 for the ring drawn from.
 pub fn ring_of(anchor: IVec, page: LevelPage) -> u32 {
-    let center = LevelPage::over(page.level, TO_XY(L3_IDX(anchor)));
+    let center = centre_page(page.level, anchor);
     let d = ivec::sub(page.page, center.page);
     ivec::X(d).unsigned_abs().max(ivec::Y(d).unsigned_abs()) as u32
 }
@@ -290,12 +295,14 @@ pub fn held(level: u32, anchor: IVec) -> Vec<LevelPage> {
     ring(level, anchor, HELD_AXIS)
 }
 
-/// How far the anchor stands from `p`'s centre, in `p`'s own spans: what
-/// orders the pages of one ring.
+/// How far the anchor stands from `p`'s centre, in `p`'s own spans: the
+/// measure every scheduler here orders by (sched/priority.rs), rooted, since
+/// what reads it packs it into a fraction under one.
 pub fn centre_dist(anchor: IVec, p: LevelPage) -> f64 {
-    let span = (PAGE_CELL_SPAN as i64) << p.level;
-    let at = |a: i64, page: i64| (a as f64 - (page as f64 + 0.5) * span as f64) / span as f64;
-    at(ivec::X(anchor), ivec::X(p.page)).hypot(at(ivec::Y(anchor), ivec::Y(p.page)))
+    let span = ((PAGE_CELL_SPAN as i64) << p.level) as f64;
+    let at = |a: i64, page: i64| a as f64 - (page as f64 + 0.5) * span;
+    let (dx, dy) = (at(ivec::X(anchor), ivec::X(p.page)), at(ivec::Y(anchor), ivec::Y(p.page)));
+    crate::sched::priority::in_own_sides(dx * dx + dy * dy, span).sqrt()
 }
 
 #[cfg(test)]

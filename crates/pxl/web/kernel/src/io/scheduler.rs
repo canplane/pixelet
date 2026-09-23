@@ -7,10 +7,11 @@
 //!
 //! The quota is the central scheduler's: it grants the credits each turn
 //! (`set_fetch_credits`), and the pump at the turn's end starts no more
-//! than that many at once. What the pump started and what yield aborted are
-//! the shell's to take (`fetch_take_started`, `fetch_take_aborts`); the shell
-//! runs each and settles it (`fetch_settle`). The scheduler never touches a
-//! store.
+//! than that many at once, and takes a credit back from a request nobody
+//! wants where a demand has none. What the pump started and what it told to
+//! stop are the shell's to take (`fetch_take_started`, `fetch_take_aborts`);
+//! the shell runs each and settles it (`fetch_settle`). The scheduler never
+//! touches a store.
 
 use pxl_spec::space::pvf3::ivec::IVec;
 pub use xpute_runtime::io::queue::IoCounts as FetchCounts;
@@ -21,19 +22,30 @@ use crate::io::demand::{Category, Demand, DemandKey, Phases};
 use crate::layer::terrain::level::{HELD_AXIS, WINDOW_LEVELS};
 use crate::sched::ledger::record::{ledger_record, Failure, Outcome, TaskRecord};
 
-/// Fetches in flight at most, whatever the host grants: what the rows keep
-/// beside the wishlists for requests still running after their page left
-/// one, or aborted and not yet settled.
+/// Fetches in flight at most, whatever the host grants.
 const MAX_CREDITS: u32 = 16;
 
-/// Demands held at once: every page of terrain's held rings, the ocean tile,
-/// and what is in flight past them. A wishlist is replaced whole and a
-/// demand past the rows is refused, so rows short of the rings leave the
-/// last pages of a window unasked until the view moves.
-const HELD: usize = (WINDOW_LEVELS * HELD_AXIS * HELD_AXIS) as usize + 1 + MAX_CREDITS as usize;
+/// Terrain's wishlist at its widest: every page of every level's held ring,
+/// and the device's own page when it falls outside them.
+const TERRAIN_WANTED: usize = (WINDOW_LEVELS * HELD_AXIS * HELD_AXIS) as usize + 1;
 
-/// Keys held at once: each one the queue holds, and each it aborted and has
-/// not handed out — at most one of each per slot.
+/// The shared open-ocean tile, which is a stream of one.
+const OCEAN_WANTED: usize = 1;
+
+/// Demands wanted at once, which is the *sum* of the wishlists and not the
+/// largest of them: each is replaced whole and they are replaced one at a
+/// time, so a category filling the queue would have the next one's demands
+/// refused — a current demand that cannot be represented, which is the one
+/// thing this number exists to make impossible. Wiring POI back adds its
+/// leaves' ring here (layer/poi/fetcher.rs).
+///
+/// Nothing is added for what is still in flight after its page left a
+/// wishlist. That is not wanted, so it is not here: what is on the wire is a
+/// set of its own and takes none of this room (xpute_runtime::io::queue).
+const HELD: usize = TERRAIN_WANTED + OCEAN_WANTED;
+
+/// Keys named at once: one per demand wanted, one per demand on the wire, and
+/// one per abort not yet handed out.
 const NAMES: usize = HELD * 2;
 
 /// Categories: a handful.
@@ -122,7 +134,7 @@ fn forget_names(s: &mut Scheduler) {
     let mut kept = 0;
     for i in 0..s.name_count {
         let (key, _) = s.names[i];
-        if s.queue.holds(key) || s.queue.aborted().contains(&key) {
+        if s.queue.knows(key) || s.queue.aborted().contains(&key) {
             s.names.swap(kept, i);
             kept += 1;
         }
@@ -206,10 +218,12 @@ pub fn fetch_take_aborts(mut each: impl FnMut(DemandKey)) {
 }
 
 /// Replaces one category's wishlist. Demands for other categories are
-/// untouched. New keys are queued, keys already queued pick up the new
-/// priority, keys in flight are left running; anything in the category that
-/// isn't in `wanted` is dropped or aborted. How many of `wanted` found no
-/// row: those are not asked for until the wishlist is given again.
+/// untouched. New keys are wanted, keys already wanted pick up the new
+/// priority, keys in flight are left running. Anything in the category that
+/// isn't in `wanted` stops being wanted here and now, and whether anything is
+/// told to stop is `fetch_pump`'s question, not this one. How many of
+/// `wanted` found no room: those are not asked for until the wishlist is
+/// given again.
 pub fn fetch_sync(category: Category, wanted: &[Demand]) -> u32 {
     let s = sched();
     let id = category_of(s, category);

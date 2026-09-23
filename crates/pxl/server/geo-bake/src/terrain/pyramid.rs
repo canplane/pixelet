@@ -77,7 +77,10 @@ pub fn fold_parent<'a>(parent: IVec, level: u32, ground: impl Fn(IVec) -> Option
         return None;
     }
     let mut out = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
-    fold_ele(around.map(|p| ele(p).unwrap_or(&*ocean.ele)), &mut out);
+    // Always Some here: the bake has every page of the pyramid, and a page it
+    // left as no object is open water and reads as `ocean`. What `fold_ele`
+    // takes a None for is the client folding from what it happens to hold.
+    fold_ele(around.map(|p| Some(ele(p).unwrap_or(&*ocean.ele))), &mut out);
     Some(Terrain {
         ground: fold_ground(own.map(|g| g.unwrap_or(&ocean.ground)), level),
         ele: out.into(),

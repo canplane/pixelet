@@ -201,6 +201,9 @@ impl Baked {
 struct App {
     /// Set when terrain is a finished bake rather than demand-paged.
     baked: Option<Baked>,
+    /// No database behind this process: a bake is being served and none was
+    /// there to take. What the database answers answers nothing.
+    no_geo: bool,
     /// The coarsest level demand paging makes.
     top_level: u32,
     workers: Mutex<Vec<Worker>>,
@@ -216,7 +219,14 @@ impl App {
     /// Takes a worker, runs `f` on it, and puts it back. Blocking by design:
     /// the whole bake is `Rc`-backed and synchronous, so it runs on a blocking
     /// thread and the async side only waits for it.
+    ///
+    /// None where there are no workers at all, which is a bake served with no
+    /// database behind it: the wait below is for one that is busy, and a wait
+    /// for one that does not exist is a thread that never comes back.
     fn with_worker<T>(&self, f: impl FnOnce(&mut Worker) -> T) -> Option<T> {
+        if self.no_geo {
+            return None;
+        }
         let mut worker = loop {
             if let Some(w) = self.workers.lock().expect("workers").pop() {
                 break w;
@@ -284,7 +294,9 @@ async fn settle(app: Arc<App>, pager: Arc<Pager>, level: u32, page: IVec) -> Set
                 }
                 Ok(true)
             })
-            .expect("a worker")
+            // No worker is no database, and a leaf is baked from one: there
+            // is nothing to bake and nothing was written.
+            .unwrap_or(Ok(false))
         })
         .await
         .map_err(|e| e.to_string())?;
@@ -394,7 +406,7 @@ async fn poi(State(app): State<Arc<App>>, Path(raw): Path<String>) -> Response {
             let page = encode_poi_page(&pois).map_err(|e| format!("{e:?}"))?;
             Ok::<Bytes, String>(Bytes::copy_from_slice(page.as_slice()))
         })
-        .expect("a worker")
+        .unwrap_or_else(|| Ok(Bytes::new()))
         .inspect(|bytes| {
             app.poi.lock().expect("cache").insert(idx, Cached::Bytes(bytes.clone()));
         })
@@ -426,7 +438,7 @@ async fn geocode(State(app): State<Arc<App>>, Path(raw): Path<String>) -> Respon
     }
 
     let resolved = tokio::task::spawn_blocking(move || {
-        app.with_worker(|w| w.geocode.reverse(&mut w.client, idx).map_err(|e| e.to_string())).expect("a worker").map(|result| {
+        app.with_worker(|w| w.geocode.reverse(&mut w.client, idx).map_err(|e| e.to_string())).unwrap_or(Ok(None)).map(|result| {
             let cached = match &result {
                 Some(r) => Cached::Json(Arc::from(serde_json::to_string(r).expect("geocode json").as_str())),
                 None => Cached::Absent,
@@ -560,13 +572,6 @@ fn run() -> Result<(), String> {
         std::fs::remove_dir_all(&cache).map_err(|e| format!("{}: {e}", cache.display()))?;
     }
 
-    let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
-    let mut pool = Vec::with_capacity(workers.max(1));
-    for _ in 0..workers.max(1) {
-        pool.push(Worker::connect(&url).map_err(|e| e.to_string())?);
-    }
-    println!("[tile] geo: ok ({} workers)", pool.len());
-
     let baked = if baked {
         let b = Baked::open(PathBuf::from(format!("./out/terrain/{}", PUBLISHED_VERSION.terrain)))?;
         println!("[tile] terrain: the finished bake at {}", b.tiles.root.display());
@@ -575,9 +580,39 @@ fn run() -> Result<(), String> {
         None
     };
 
+    // The database is what a leaf is baked from, so a bake it is serving
+    // instead does not need one — and saying so is the difference between a
+    // view's work needing Docker and a Postgres and needing neither. It is
+    // still taken where it is there, since poi and geocode are the
+    // database's whatever the terrain comes from; where it is not, those
+    // answer that they have nothing and the terrain is served as it was.
+    let url = std::env::var("DB_GEO_URL");
+    let pool = match (&url, baked.is_some()) {
+        (Err(_), false) => return Err("env:DB_GEO_URL:missing".into()),
+        (Err(_), true) => Vec::new(),
+        (Ok(url), served) => {
+            let mut pool = Vec::with_capacity(workers.max(1));
+            for _ in 0..workers.max(1) {
+                match Worker::connect(url) {
+                    Ok(w) => pool.push(w),
+                    Err(e) if served => {
+                        println!("[tile] geo: none ({e}); poi and geocode answer nothing");
+                        break;
+                    }
+                    Err(e) => return Err(e.to_string()),
+                }
+            }
+            pool
+        }
+    };
+    if !pool.is_empty() {
+        println!("[tile] geo: ok ({} workers)", pool.len());
+    }
+
     let app = Arc::new(App {
         baked,
         top_level,
+        no_geo: pool.is_empty(),
         workers: Mutex::new(pool),
         terrain: Mutex::new(Arc::new(Pager::open(&cache, 0, Coverage::of_source())?)),
         terrain_base: cache,

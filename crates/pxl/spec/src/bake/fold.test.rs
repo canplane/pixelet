@@ -91,11 +91,42 @@ fn grid(qx: i64, qy: i64, f: impl Fn(i64, i64) -> i64) -> Vec<i16> {
 }
 
 fn fold_grids(f: impl Fn(i64, i64) -> i64 + Copy) -> Vec<i16> {
+    fold_grids_held(f, |_| true)
+}
+
+/// The same fold with only the pages `held` says are held, as the client
+/// folds from what it has.
+fn fold_grids_held(f: impl Fn(i64, i64) -> i64 + Copy, held: impl Fn(usize) -> bool) -> Vec<i16> {
     let grids: Vec<Vec<i16>> = (0..16).map(|k| grid(k % 4 - 1, k / 4 - 1, f)).collect();
-    let refs: [&[i16]; 16] = std::array::from_fn(|k| grids[k].as_slice());
+    let refs: [Option<&[i16]>; 16] = std::array::from_fn(|k| held(k).then(|| grids[k].as_slice()));
     let mut out = vec![0; PADDED * PADDED];
     fold_ele(refs, &mut out);
     out
+}
+
+/// What the client loses by folding a page from the four under it rather
+/// than the sixteen a bake has: the page itself and the padding sample next
+/// to it are the bake's, to the bit, and the outermost padding sample — the
+/// fourth tap of a bicubic read at the page's own rim — is the block's edge
+/// extended instead of the neighbour's.
+#[test]
+fn elevation_folded_from_the_four_children_differs_only_in_its_outermost_padding() {
+    let f = |x: i64, y: i64| 7 * x - 3 * y + 11;
+    let whole = fold_grids(f);
+    let four = fold_grids_held(f, |k| [5, 6, 9, 10].contains(&k));
+    let rim = |s: usize| s < ELE_PAD as usize - 1 || s >= PADDED - (ELE_PAD as usize - 1);
+    let mut outer = 0;
+    for sy in 0..PADDED {
+        for sx in 0..PADDED {
+            let at = sy * PADDED + sx;
+            if rim(sx) || rim(sy) {
+                outer += (whole[at] != four[at]) as u32;
+            } else {
+                assert_eq!(whole[at], four[at], "({sx}, {sy}) is the bake's");
+            }
+        }
+    }
+    assert!(outer > 0, "a ramp does run off the block's edge");
 }
 
 #[test]

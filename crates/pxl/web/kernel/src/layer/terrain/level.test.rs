@@ -78,3 +78,44 @@ fn the_neighbourhood_is_the_one_the_bake_folds_from() {
     assert_eq!(ivec::X(west[5].page), -across / 2);
     assert_eq!(ivec::X(west[4].page), across / 2 - 1);
 }
+
+/// What the window's top level cannot get from what is already held, and so
+/// the one place a zoom out has to wait on the network before there is any
+/// ground at all.
+///
+/// A page is folded from the four under it, so folding a level's drawn ring —
+/// RENDER_AXIS pages across — wants 2·RENDER_AXIS consecutive pages of the
+/// level below. The held ring is HELD_AXIS across, and five is short of six:
+/// the centre folds and one neighbour per axis folds, four of nine.
+///
+/// Nothing stands in for the other five. The level below draws its own
+/// RENDER_AXIS ring, half as wide as the ring above it, so the outer half of
+/// a new top ring is ground nothing has ever drawn — and the top is the one
+/// level with no ancestor inside the window, so there is nothing coarser to
+/// fall back to either. Every reference clipmap keeps its coarsest level
+/// resident for exactly this reason; here the coarsest level moves with the
+/// camera, so it is the newest thing rather than the oldest.
+///
+/// Closing it costs records: HELD_AXIS 7 folds the whole ring, or a level
+/// held above the window's top arrives before the window reaches it.
+#[test]
+fn the_window_s_top_ring_is_half_a_ring_short_of_folding() {
+    use std::collections::BTreeSet;
+    const _: () = assert!(2 * RENDER_AXIS > HELD_AXIS, "a ring folds from twice its own width below");
+    for ax in 0..16i64 {
+        for ay in 0..16i64 {
+            // Swept across a page of the level below, so both parities of its
+            // centre page are covered.
+            let anchor = ivec::gather(3_000_000 + ax * 149, 2_000_000 + ay * 149, 0);
+            let held_below: BTreeSet<LevelPage> = held(3, anchor).into_iter().collect();
+            let drawn_below: BTreeSet<LevelPage> = ring(3, anchor, RENDER_AXIS).into_iter().collect();
+            let drawn = ring(4, anchor, RENDER_AXIS);
+            let folds = |p: &LevelPage| p.children().iter().all(|c| held_below.contains(c));
+            assert_eq!(drawn.iter().filter(|p| folds(p)).count(), 4, "of {}", drawn.len());
+            for p in drawn.iter().filter(|p| !folds(p)) {
+                let drawn_kids = p.children().iter().filter(|c| drawn_below.contains(c)).count();
+                assert_eq!(drawn_kids, 0, "nothing under {p:?} is drawn either");
+            }
+        }
+    }
+}
