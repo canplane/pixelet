@@ -59,19 +59,28 @@ const DEV_MARKERS = ["dev/test", "development"];
  * does.
  *
  * Which artifact is the point of the split. A path is a literal in whichever
- * of the two asks for it, and asking moves: the tiles branch was the shell's
- * until the kernel took over composing a page's URL, at which point the
- * shell's copy had no consumer, the bundler dropped it, and this failed a
- * deploy over a path that was present all along — in the other file
- * (2026-09-23). So the spec's `bundle` flag names the artifact rather than
- * asserting there is one, and script/spec.ts fails when either list here and
- * the flag disagree.
+ * of the two asks for it, and asking moves — it has moved twice. The tiles
+ * branch was the shell's until the kernel took over composing a page's URL, at
+ * which point the shell's copy had no consumer, the bundler dropped it, and
+ * this failed a deploy over a path that was present all along, in the other
+ * file (2026-09-23). It is the shell's again now that the kernel names an
+ * object and never an address (io/fetch.rs), and this failed a deploy the
+ * other way round (2026-09-24). So the spec's `bundle` flag names the artifact
+ * rather than asserting there is one, and script/spec.ts fails when either
+ * list here and the flag disagree.
+ *
+ * Neither failure was caught before the deploy, because this runs there and
+ * not in `deno task check`: it reads a built `dist/`, which the gate does not
+ * produce.
  *
  * KERNEL_SENTINELS is what no route names: the terrain's page names are the
  * kernel's own (layer/terrain/tile_repository.rs), so nothing generates them
  * and there is nothing to check them against. */
-const SENTINELS = ["/geo/search"];
-const KERNEL_ROUTE_SENTINELS = ["/geo/tiles"];
+const SENTINELS = ["/geo/search", "/geo/tiles"];
+// Empty, and kept rather than deleted: the generator's error when this list is
+// missing is what would catch a branch marked for the kernel with nothing here
+// to check it.
+const KERNEL_ROUTE_SENTINELS = [] as string[];
 const KERNEL_SENTINELS = ["_ocean"];
 
 function leaves(o: unknown, path = ""): [string, string][] {
