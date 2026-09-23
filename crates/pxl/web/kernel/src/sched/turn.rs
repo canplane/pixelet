@@ -13,8 +13,8 @@
 //! budget, then the draw. The rest wait on what they work on: arrivals, the
 //! chunk builds, the decor models, the save.
 
-use pxl_spec::space::indexer::{L1_IDX_IN_L4, L3_IDX};
-use pxl_spec::space::pvf3::projection;
+use pxl_spec::space::indexer::L3_IDX;
+use pxl_spec::space::pvf3::{ivec, projection};
 use pxl_spec::space::xy::TO_XY;
 use xpute_runtime::sched::edge::{notified, Notify};
 
@@ -45,7 +45,7 @@ use crate::shell::setting::store::settings_store;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::node::chunk_nodes_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, take_draw};
-use crate::world::frame::coord::get_local_world_origin;
+use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view_frame::{view_rotation_step, view_translation_step};
 
 /// What the platform offers the sensors, as the shell found it.
@@ -56,12 +56,12 @@ pub struct Platform {
 }
 
 /// The companion's place, from map_center in the local floating-origin frame —
-/// wherever the camera actually is, not the L4 tile's centre up to 2048u away.
+/// wherever the camera actually is, not the origin's cell's centre.
 fn companion_props() -> Option<CompanionProps> {
     let map_center = map_store().map_center?;
-    let map_origin = get_local_world_origin(Some(&map_center));
+    let map_origin = local_world_origin();
     let mut local = [0.0; 3];
-    projection::unproject(&mut local, L1_IDX_IN_L4(map_center.i), map_center.f);
+    projection::unproject(&mut local, ivec::sub(map_center.i, map_origin), map_center.f);
     Some(CompanionProps {
         origin_page_idx_xy: TO_XY(L3_IDX(map_origin)),
         map_origin,
@@ -78,7 +78,7 @@ fn companion_tick(ctx: &mut TickContext) {
 fn debug_gizmos_tick(_: &mut TickContext) {
     let map_center = map_store().map_center;
     let show = APP_ENV() != "production" && settings_store().show_debug_objects && map_center.is_some();
-    debug_gizmos_step(show, map_center, get_local_world_origin(map_center.as_ref()));
+    debug_gizmos_step(show, map_center, local_world_origin());
 }
 
 fn camera_input_tick(_: &mut TickContext) {
@@ -99,9 +99,11 @@ pub fn boot() {
 
     on_tick(INTERACTION, camera_input_tick, "input");
     on_tick(INTERACTION, camera_step, "camera");
-    on_tick(INTERACTION, environment_tick, "environment");
     on_tick(INTERACTION, view_rotation_step, "view_rotation");
     on_tick(INTERACTION, view_translation_step, "view_translation");
+    // After the view has moved: the environment observes the camera centre
+    // the view eased to this tick.
+    on_tick(INTERACTION, environment_tick, "environment");
     on_tick(INTERACTION, companion_tick, "companion");
     on_tick(INTERACTION, crate::layer::character::preview::preview_step, "preview");
     on_tick(VISIBLE, core_tick_visible_step, "chunks");

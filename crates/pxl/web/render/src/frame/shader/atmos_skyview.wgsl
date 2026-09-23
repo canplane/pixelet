@@ -39,7 +39,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   let dir = vec3f(s * light_cos, s * sqrt(max(1.0 - light_cos * light_cos, 0.0)), mu);
 
   let toward = select(atmos.sun_dir, atmos.moon_dir, light.x > 0.5);
-  let mu_s = clamp(toward.z, -1.0, 1.0);
+  let mu_s = clamp(dot(toward, atmos.up), -1.0, 1.0);
   let sun = vec3f(sqrt(max(1.0 - mu_s * mu_s, 0.0)), 0.0, mu_s);
   let c = dot(dir, sun);
   let phase_r = rayleigh_phase(c);

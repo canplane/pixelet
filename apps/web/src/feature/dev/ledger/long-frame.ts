@@ -17,7 +17,16 @@
 // this is wired from the ledger overlay rather than from boot.
 
 import type { f64 } from "@xpute/core/abi/word.ts";
-import type { LongFrame } from "./report.ts";
+
+/** One long animation frame (or long task, where LoAF is missing). */
+export interface LongFrame {
+  source: string;
+  t: f64;
+  durationMs: f64;
+  blockingMs: f64;
+  scriptMs: f64;
+  renderMs: f64;
+}
 
 interface LoafEntry extends PerformanceEntry {
   blockingDuration?: f64;

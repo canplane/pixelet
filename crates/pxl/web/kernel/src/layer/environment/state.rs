@@ -25,7 +25,7 @@ use crate::layer::environment::theme_clock::theme_key;
 use crate::shell::map_store::map_store;
 use crate::world::change::{request_world_tick, wake_at};
 use crate::world::chunk::table::Frame;
-use crate::world::frame::view::view;
+use crate::world::frame::view::{camera_centre, view};
 
 // The map's own fallback, so the first frames before map_center exists light
 // the world from a real place instead of computing sun and moon for (0, 0).
@@ -47,17 +47,14 @@ pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: WorldThemeKey) {
         }
     };
     rgb(lane, t.ambient.color);
-    // The rest, in order: the hemisphere's sky and ground and intensity, and
-    // the night flag.
+    // The rest, in order: the hemisphere's ground and intensity, and the
+    // night flag.
     let mut at = k;
     let mut put = |lane: &mut [f32; THEME_FLOATS], v: f64| {
         lane[at] = v as f32;
         at += 1;
     };
     put(lane, t.ambient.intensity);
-    for v in linear_rgb(t.hemisphere.sky) {
-        put(lane, v);
-    }
     for v in linear_rgb(t.hemisphere.ground) {
         put(lane, v);
     }
@@ -92,9 +89,9 @@ pub fn km_per_u() -> f64 {
     epsg3857::M_PER_U * environment().observed_lat.to_radians().cos() / 1000.0
 }
 
-/// The sphere about the map centre, which the flat map is laid back on
-/// (pxl-render's look/globe.rs), for the chunks' culling as the renderer
-/// takes it for its frame.
+/// The sphere about the camera centre (view.rs's camera_centre), which the
+/// flat map is laid back on (pxl-render's look/globe.rs), for the chunks'
+/// culling as the renderer takes it for its frame.
 pub fn globe() -> Globe {
     Globe::at(environment().observed_lat.to_radians())
 }
@@ -114,7 +111,9 @@ pub fn map_environment_step() {
         request_world_tick();
     }
 
-    let centre = map_store().map_center;
+    // Observed from the camera centre, the one the world is laid on the
+    // planet about, so the sphere's latitude and the sky over it are its.
+    let centre = map_store().map_center.map(|_| camera_centre());
     if centre != e.observed_centre {
         e.observed_centre = centre;
         if let Some(c) = centre {
@@ -282,10 +281,10 @@ impl EnvironmentDraw {
             self.current[k] += (self.target[k] - self.current[k]) * a as f32;
         }
         // The camera's height over the planet, measured from its centre,
-        // under the map centre's ground by the radius (look/globe.rs): the
-        // world is tangent to the planet at the map centre, and the planet
-        // falls away under a camera standing off it. Above the sea, it is
-        // that and the map centre's ground.
+        // under the camera centre by the radius (look/globe.rs): the world is
+        // tangent to the planet at the camera centre, and the planet falls
+        // away under a camera standing off it. Above the sea, it is that and
+        // the camera centre's height.
         let km_per_u = km_per_u();
         let r = Globe::at(self.lat.to_radians()).radius_u();
         let over = frame.camera[0].hypot(frame.camera[1]).hypot(frame.camera[2] + r) - r;
@@ -299,7 +298,7 @@ impl EnvironmentDraw {
             fog_near: fog_near(view().dist),
             fog_far: fog_far(view().dist),
             floor: light_cfg::FLOOR,
-            altitude_km: (frame.ground_z + over) * km_per_u,
+            altitude_km: (frame.centre_z + over) * km_per_u,
             km_per_u,
             latitude: self.lat.to_radians(),
             star_frame: equatorial_to_local(self.days, self.lat, self.lon),

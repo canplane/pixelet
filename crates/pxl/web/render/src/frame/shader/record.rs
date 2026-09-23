@@ -41,6 +41,21 @@ pub const SHADER_STARS: u32 = 18;
 pub const SHADER_CLOUDS: u32 = 19;
 pub const SHADERS: u32 = 20;
 
+/// The shaders that place a point of the world, each of which lays it on the
+/// planet as the ground is (globe.wgsl's `on_globe_of`) before it projects
+/// it: what is drawn over the map and not laid on it floats off the ground
+/// as the planet falls away. The rest draw the sky or work on the screen.
+pub const WORLD_SHADERS: [u32; 8] = [
+    SHADER_CHUNK,
+    SHADER_DECOR,
+    SHADER_SKINNED,
+    SHADER_PUCK_ZONE,
+    SHADER_PUCK_BEACON,
+    SHADER_BADGE,
+    SHADER_BADGE_MSAA,
+    SHADER_DEBUG,
+];
+
 /// A shader's pieces, as build.rs wrote them: the files beside this one with
 /// their comments and indentation off, since what ships is what the GPU
 /// compiles and the GPU does not read the prose; constant.wgsl, which every
@@ -54,12 +69,15 @@ pub fn source(kind: u32) -> &'static str {
     match kind {
         SHADER_CHUNK => wgsl!(
             "frame",
+            "globe",
             "grade",
             "atmos_medium",
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
             "atmos_view",
+            "noise",
+            "cloud_field",
             "shade",
             "finish",
             "shadow",
@@ -69,12 +87,15 @@ pub fn source(kind: u32) -> &'static str {
         ),
         SHADER_DECOR => wgsl!(
             "frame",
+            "globe",
             "grade",
             "atmos_medium",
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
             "atmos_view",
+            "noise",
+            "cloud_field",
             "shade",
             "finish",
             "shadow",
@@ -84,12 +105,15 @@ pub fn source(kind: u32) -> &'static str {
         ),
         SHADER_SKINNED => wgsl!(
             "frame",
+            "globe",
             "grade",
             "atmos_medium",
             "atmos_bind",
             "atmos_lut",
             "atmos_sky",
             "atmos_view",
+            "noise",
+            "cloud_field",
             "shade",
             "finish",
             "shadow",
@@ -97,12 +121,26 @@ pub fn source(kind: u32) -> &'static str {
             "place",
             "skinned"
         ),
-        SHADER_PUCK_ZONE => wgsl!("frame", "grade", "finish", "puck", "puck_zone"),
-        SHADER_PUCK_BEACON => wgsl!("frame", "grade", "finish", "place", "puck", "puck_beacon"),
-        SHADER_BADGE => wgsl!("grade", "depth", "badge_depth", "badge"),
-        SHADER_BADGE_MSAA => wgsl!("grade", "depth", "badge_depth_msaa", "badge"),
-        SHADER_SKY => wgsl!("frame", "grade", "finish", "dither", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_view", "sky"),
-        SHADER_DEBUG => wgsl!("frame", "grade", "debug"),
+        SHADER_PUCK_ZONE => wgsl!("frame", "globe", "grade", "finish", "puck", "puck_zone"),
+        SHADER_PUCK_BEACON => wgsl!("frame", "globe", "grade", "finish", "place", "puck", "puck_beacon"),
+        SHADER_BADGE => wgsl!("globe", "grade", "depth", "badge_depth", "badge"),
+        SHADER_BADGE_MSAA => wgsl!("globe", "grade", "depth", "badge_depth_msaa", "badge"),
+        SHADER_SKY => wgsl!(
+            "frame",
+            "globe",
+            "grade",
+            "finish",
+            "dither",
+            "atmos_medium",
+            "atmos_bind",
+            "atmos_lut",
+            "atmos_sky",
+            "atmos_view",
+            "noise",
+            "cloud_field",
+            "sky"
+        ),
+        SHADER_DEBUG => wgsl!("frame", "globe", "grade", "debug"),
         SHADER_MIPS => wgsl!("mips"),
         SHADER_AO_DOWNSAMPLE => wgsl!("ao_view", "ao_downsample"),
         SHADER_AO_SAMPLE => wgsl!("ao_view", "ao_sample"),
@@ -113,7 +151,20 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_ATMOS_SKY_VIEW => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_pass", "atmos_skyview"),
         SHADER_ATMOS_EXPOSURE => wgsl!("atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_pass", "atmos_exposure"),
         SHADER_STARS => wgsl!("grade", "stars"),
-        SHADER_CLOUDS => wgsl!("frame", "grade", "finish", "noise", "atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_view", "clouds"),
+        SHADER_CLOUDS => wgsl!(
+            "frame",
+            "globe",
+            "grade",
+            "finish",
+            "noise",
+            "atmos_medium",
+            "atmos_bind",
+            "atmos_lut",
+            "atmos_sky",
+            "atmos_view",
+            "cloud_field",
+            "clouds"
+        ),
         _ => "",
     }
 }
@@ -126,11 +177,12 @@ pub const FRAME_FLOATS: usize = 84;
 /// edge_width, rim_intensity, viewport, shadow_strength, shadow_texel,
 /// vignette, ao_strength, screen_ao, light_view_proj, the second light's run
 /// (other_dir through other_color, look/environment.rs's ENV_OTHER_LIGHT),
-/// and the planet and the globe. The renderer reads the table rather than
-/// counting; the test below holds it to the struct.
-pub const FRAME_AT: [usize; 17] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80];
+/// the planet and the globe; and whether the vertices take the air. The
+/// renderer reads the table rather than counting; the test below holds it to
+/// the struct.
+pub const FRAME_AT: [usize; 18] = [0, 16, 19, 20, 23, 39, 43, 44, 46, 47, 48, 49, 50, 52, 68, 76, 80, 51];
 #[cfg(test)]
-const FRAME_FIELDS: [&str; 17] = [
+const FRAME_FIELDS: [&str; 18] = [
     "view_proj",
     "camera_pos",
     "edge_strength",
@@ -148,6 +200,7 @@ const FRAME_FIELDS: [&str; 17] = [
     "other_dir",
     "planet",
     "globe",
+    "air_at_vertices",
 ];
 
 /// The pipelines, by id: draw.rs's ten, which a draw names, then the ones

@@ -46,6 +46,23 @@ struct Atmosphere {
   // (look/atmosphere.rs's light_at). What the glare is of.
   sun_seen: vec3f,
   _p1: f32,
+  // Straight up where the eye stands, in the root frame: away from the
+  // planet's centre, which lies under the camera centre and not under the
+  // eye (gpu/renderer.rs). Every height of a ray or a light the air is read
+  // with is measured from it.
+  up: vec3f,
+  _p2: f32,
+  // The cloud layer (cloud_field.wgsl, gpu/clouds.rs's `field`): the
+  // lattice index the root frame's origin lies in, exact, and the fraction
+  // of a unit past it; the sky's clock; the lattice's count across the
+  // world, where it wraps; the layer's height, and the camera's height past
+  // which it is gone.
+  cloud_base: vec2u,
+  cloud_frac: vec2f,
+  cloud_time: f32,
+  cloud_count: u32,
+  cloud_altitude_km: f32,
+  cloud_gone_km: f32,
 };
 
 // The camera's radius from the planet's centre: over the ground, and above

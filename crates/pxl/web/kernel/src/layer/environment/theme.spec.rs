@@ -43,7 +43,6 @@ pub mod themes {
                 pub const intensity: f64 = 0.62;
             }
             pub mod hemisphere {
-                pub const sky: u32 = 0xfff3df;
                 pub const ground: u32 = 0xd8b894;
                 pub const intensity: f64 = 0.78;
             }
@@ -56,7 +55,6 @@ pub mod themes {
                 pub const intensity: f64 = 0.68;
             }
             pub mod hemisphere {
-                pub const sky: u32 = 0xedf6ff;
                 pub const ground: u32 = 0xc2cbd3;
                 pub const intensity: f64 = 0.82;
             }
@@ -69,7 +67,6 @@ pub mod themes {
                 pub const intensity: f64 = 0.58;
             }
             pub mod hemisphere {
-                pub const sky: u32 = 0xffb874;
                 pub const ground: u32 = 0x6a3920;
                 pub const intensity: f64 = 0.82;
             }
@@ -82,7 +79,6 @@ pub mod themes {
                 pub const intensity: f64 = 0.4;
             }
             pub mod hemisphere {
-                pub const sky: u32 = 0x314764;
                 pub const ground: u32 = 0x0b1322;
                 pub const intensity: f64 = 0.68;
             }

@@ -14,9 +14,11 @@
 //!   moved: the sun crawls, and the camera's altitude changes while it
 //!   zooms and not while it pans or turns, since the table is kept relative
 //!   to the sun's azimuth.
-//! - The exposure, 1 x 1: what the eye has adapted the air's light to, from
-//!   the sky view and the sun (atmos_exposure.wgsl). Drawn after the sky
-//!   view, whenever that is; nothing reads it back.
+//! - The exposure, 2 x 1: what the eye has adapted the air's light to, from
+//!   the sky view and the sun, with the zenith's sky beside it; and the
+//!   sky's irradiance on a face turned up, the terrain's fill
+//!   (atmos_exposure.wgsl). Drawn after the sky view, whenever that is;
+//!   nothing reads it back.
 //! - The moonlit sky, 192 x 108: the sky view again, lit by the moon and
 //!   kept relative to its azimuth. Drawn only while the moon lights a sky
 //!   the frame shows, and again when its height or the camera's altitude
@@ -27,14 +29,17 @@
 //! it moves; and about 300 KB of textures, eight bytes a texel. The sky and
 //! every lit fragment then read the tables instead of marching.
 
+use pxl_spec::space::v3::V3;
+
 use crate::frame::shader::record::{PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, NONE};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
+use crate::gpu::clouds::CloudField;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::look::atmosphere as model;
 
 /// Floats the atmosphere uniform (atmos_medium.wgsl's Atmosphere) holds.
-pub const ATMOS_FLOATS: usize = 40;
+pub const ATMOS_FLOATS: usize = 52;
 /// Where each field sits in it, in floats (record.test.rs holds them to the
 /// struct). The frame's own are written every frame; the rest are the
 /// model's, laid out once.
@@ -62,6 +67,16 @@ pub(crate) const MOON_DIR: usize = 28;
 pub(crate) const MOON_LIGHT: usize = 31;
 pub(crate) const LAND: usize = 32;
 pub(crate) const SUN_SEEN: usize = 36;
+pub(crate) const UP: usize = 40;
+/// The cloud field (gpu/clouds.rs's `field`), in its order: the lattice
+/// index and fraction, the clock, the count, the layer's height and where
+/// it is gone.
+pub(crate) const CLOUD_BASE: usize = 44;
+pub(crate) const CLOUD_FRAC: usize = 46;
+pub(crate) const CLOUD_TIME: usize = 48;
+pub(crate) const CLOUD_COUNT: usize = 49;
+pub(crate) const CLOUD_ALTITUDE: usize = 50;
+pub(crate) const CLOUD_GONE: usize = 51;
 
 /// The air's entries in a pass's group, 8 through 15, six of five words.
 pub const AIR_WORDS: usize = 30;
@@ -69,7 +84,7 @@ pub const AIR_WORDS: usize = 30;
 /// The tables' sizes, as atmos_medium.wgsl's *_SIZE constants (record.test.rs
 /// holds them to it), the exposure's texel, and the moonlit sky's, the sky
 /// view's.
-pub(crate) const SIZES: [(u32, u32); 5] = [(256, 64), (32, 32), (192, 108), (1, 1), (192, 108)];
+pub(crate) const SIZES: [(u32, u32); 5] = [(256, 64), (32, 32), (192, 108), (2, 1), (192, 108)];
 pub(crate) const TRANSMITTANCE: usize = 0;
 pub(crate) const MULTISCATTER: usize = 1;
 pub(crate) const SKY_VIEW: usize = 2;
@@ -100,6 +115,9 @@ pub struct Atmosphere {
     /// The moon's cosine and the camera's altitude the moonlit sky was
     /// drawn for.
     moon_drawn_for: Option<(f32, f32)>,
+    /// The sun's and the moon's cosines from the zenith at the eye this frame.
+    sun_mu: f32,
+    moon_mu: f32,
 }
 
 impl Atmosphere {
@@ -188,6 +206,8 @@ impl Atmosphere {
             baked: false,
             drawn_for: None,
             moon_drawn_for: None,
+            sun_mu: 1.0,
+            moon_mu: 1.0,
         }
     }
 
@@ -207,47 +227,67 @@ impl Atmosphere {
 
     /// The frame's air: the sun's direction in the root frame, unturned; the
     /// moon's and how bright its sky is shown; the camera's altitude in
-    /// kilometres, and a unit's length in them.
-    pub fn lay_out(&mut self, g: &GpuApi, sun: &[f32], moon: &[f32], altitude_km: f32, km_per_u: f32) {
+    /// kilometres, and a unit's length in them; and straight up where the eye
+    /// stands, which every height of a light or a ray is measured from.
+    pub fn lay_out(&mut self, g: &GpuApi, sun: &[f32], moon: &[f32], altitude_km: f32, km_per_u: f32, up: &V3) {
         self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(&sun[..3]);
         self.words[MOON_DIR..MOON_DIR + 3].copy_from_slice(&moon[..3]);
         self.words[MOON_LIGHT] = moon[3];
         self.words[CAMERA_ALTITUDE] = altitude_km;
         self.words[KM_PER_U] = km_per_u;
-        for (w, v) in self.words[SUN_SEEN..SUN_SEEN + 3].iter_mut().zip(model::light_at(altitude_km as f64, sun[2] as f64)) {
+        for (w, v) in self.words[UP..UP + 3].iter_mut().zip(up) {
+            *w = *v as f32;
+        }
+        let height = |d: &[f32]| (d[0] as f64 * up[0] + d[1] as f64 * up[1] + d[2] as f64 * up[2]) as f32;
+        (self.sun_mu, self.moon_mu) = (height(sun), height(moon));
+        for (w, v) in self.words[SUN_SEEN..SUN_SEEN + 3].iter_mut().zip(model::light_at(altitude_km as f64, self.sun_mu as f64)) {
             *w = v as f32;
         }
         (g.write_buffer)(self.uniform, 0, bytes(&self.words));
     }
 
+    /// The cloud field for the frame (gpu/clouds.rs's `field`): written with
+    /// the rest by `lay_out`, which the renderer calls after it.
+    pub fn set_clouds(&mut self, field: &CloudField) {
+        let w = &mut self.words;
+        for k in 0..2 {
+            w[CLOUD_BASE + k] = f32::from_bits(field.base[k]);
+            w[CLOUD_FRAC + k] = field.frac[k];
+        }
+        w[CLOUD_TIME] = field.time;
+        w[CLOUD_COUNT] = f32::from_bits(field.count);
+        w[CLOUD_ALTITUDE] = field.altitude_km;
+        w[CLOUD_GONE] = field.gone_km;
+    }
+
     /// Draws what is due into `encoder`, ahead of every pass that reads the
     /// tables: the fixed two the first time, the sky view when the sun or the
-    /// camera has moved far enough to show.
-    pub fn draw(&mut self, g: &GpuApi, encoder: u32) {
+    /// camera has moved far enough to show; timed under `stamp`.
+    pub fn draw(&mut self, g: &GpuApi, encoder: u32, stamp: &mut Stamp) {
         if !self.baked {
-            self.table(g, encoder, TRANSMITTANCE);
-            self.table(g, encoder, MULTISCATTER);
+            self.table(g, encoder, TRANSMITTANCE, stamp);
+            self.table(g, encoder, MULTISCATTER, stamp);
             self.baked = true;
             self.drawn_for = None;
             self.moon_drawn_for = None;
         }
         let altitude = self.words[CAMERA_ALTITUDE];
-        let now = (self.words[SUN_DIR + 2], altitude);
+        let now = (self.sun_mu, altitude);
         if moved(self.drawn_for, now) {
-            self.table(g, encoder, SKY_VIEW);
-            self.table(g, encoder, EXPOSURE_TEXEL);
+            self.table(g, encoder, SKY_VIEW, stamp);
+            self.table(g, encoder, EXPOSURE_TEXEL, stamp);
             self.drawn_for = Some(now);
         }
-        let moon = (self.words[MOON_DIR + 2], altitude);
+        let moon = (self.moon_mu, altitude);
         if self.words[MOON_LIGHT] > 0.0 && moved(self.moon_drawn_for, moon) {
-            self.table(g, encoder, MOON_VIEW);
+            self.table(g, encoder, MOON_VIEW, stamp);
             self.moon_drawn_for = Some(moon);
         }
     }
 
-    fn table(&self, g: &GpuApi, encoder: u32, k: usize) {
+    fn table(&self, g: &GpuApi, encoder: u32, k: usize, stamp: &mut Stamp) {
         let pass = object();
-        (g.pass)(pass, encoder, &pass_desc(self.views[k], 0, load::CLEAR, 0, load::CLEAR, 0.0, 0, NONE, NONE));
+        (g.pass)(pass, encoder, &pass_desc(self.views[k], 0, load::CLEAR, 0, load::CLEAR, 0.0, stamp.pass()));
         (g.set_pipeline)(pass, self.passes[if k == MOON_VIEW { SKY_VIEW } else { k }].pipeline);
         (g.set_bind_group)(pass, 0, self.groups[k], &[]);
         (g.draw)(pass, 3, 1, 0, 0);

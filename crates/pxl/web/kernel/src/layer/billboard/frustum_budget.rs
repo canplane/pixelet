@@ -27,6 +27,7 @@ use xpute_core::math::vec3::Vec3;
 use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::distance_fade::distance_fade_far;
+use crate::layer::environment::state::globe;
 use crate::world::frame::view::{view, view_sees_sphere};
 
 /// Placed badges in screen pixels, so a candidate can find out whether its
@@ -97,11 +98,15 @@ pub fn select_begin(batch: &mut BillboardBatch, viewport_w: f64, viewport_h: f64
 
     let mut n = 0usize;
     let mut pos = Vec3::default();
+    let globe = globe();
     for i in 0..batch.count as usize {
-        // Through the root gives the point the frustum test needs, the point the
-        // distance is measured from, and the point the screen box is projected
-        // from — done once, and kept in the lanes.
+        // Through the root and onto the planet, as badge.wgsl places it,
+        // gives the point the frustum test needs, the point the distance is
+        // measured from, and the point the screen box is projected from —
+        // done once, and kept in the lanes.
         mat4_transform_point(&mut pos, &v.root, batch.local_x[i], batch.local_y[i], batch.local_z[i]);
+        let [x, y, z] = globe.place_turned([pos.x, pos.y, pos.z], v.root[1], v.root[0]);
+        let pos = Vec3 { x, y, z };
         let dist2 = (pos.x - eye.x).powi(2) + (pos.y - eye.y).powi(2) + (pos.z - eye.z).powi(2);
         if !view_sees_sphere(pos.x, pos.y, pos.z, dist2.sqrt() * ANCHOR_REACH) {
             continue;

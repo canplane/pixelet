@@ -44,7 +44,7 @@ use crate::sched::tick::{FrameBudget, TickContext};
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::{get_local_world_origin, local_world_to_canonical};
+use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
 use crate::world::frame::view::view;
 
 /// A rail, not the mechanism. What decides how many badges are drawn is how
@@ -258,18 +258,18 @@ fn poi_place_step(budget: &FrameBudget, t: f64, map_center: Option<Pvf3>, show_p
         }
         l.wanted = false;
         l.last_start = t;
-        let Some(center) = map_center.filter(|_| show_poi) else {
+        if map_center.is_none() || !show_poi {
             write_billboard_set(badge_set(), &[]);
             request_world_tick();
             return true;
-        };
+        }
         l.job = Some(PlaceJob {
             stage: Stage::Query,
             t0: t,
             wanted_at: l.wanted_at,
             frames: 0,
             rebuilds: 0,
-            map_origin: get_local_world_origin(Some(&center)),
+            map_origin: local_world_origin(),
             cx: 0.0,
             cy: 0.0,
             cz: 0.0,

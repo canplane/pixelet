@@ -879,9 +879,9 @@ extern "C" {
     #[link_name = "gpu_query_set"]
     fn host_gpu_query_set(id: u32, count: u32);
     #[link_name = "gpu_timestamps"]
-    fn host_gpu_timestamps(encoder: u32, query_set: u32);
+    fn host_gpu_timestamps(encoder: u32, query_set: u32, written: u32);
     #[link_name = "gpu_ms"]
-    fn host_gpu_ms() -> f64;
+    fn host_gpu_ms(span: u32) -> f64;
     #[link_name = "gpu_paint"]
     fn host_gpu_paint(ops: *const u32, words: usize);
     #[link_name = "gpu_paint_copy"]
@@ -922,8 +922,8 @@ fn install_gpu() {
         resize: |surface, width, height| unsafe { host_gpu_resize(surface, width, height) },
         current: |surface, view| unsafe { host_gpu_current(surface, view) },
         query_set: |id, count| unsafe { host_gpu_query_set(id, count) },
-        timestamps: |encoder, query_set| unsafe { host_gpu_timestamps(encoder, query_set) },
-        gpu_ms: || unsafe { host_gpu_ms() },
+        timestamps: |encoder, query_set, written| unsafe { host_gpu_timestamps(encoder, query_set, written) },
+        gpu_ms: |span| unsafe { host_gpu_ms(span) },
         paint: |ops| unsafe { host_gpu_paint(ops.as_ptr(), ops.len()) },
         paint_copy: |texture, x, y, layer, width, height| unsafe { host_gpu_paint_copy(texture, x, y, layer, width, height) },
     });

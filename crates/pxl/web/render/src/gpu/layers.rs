@@ -63,11 +63,7 @@ impl Mips {
                 let group = object();
                 (g.bind_group)(group, self.layout, &[0, resource::VIEW, above, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
                 let pass = object();
-                (g.pass)(
-                    pass,
-                    encoder,
-                    &crate::gpu::api::pass_desc(target, 0, load::CLEAR, 0, load::CLEAR, 0.0, 0, crate::gpu::api::NONE, crate::gpu::api::NONE),
-                );
+                (g.pass)(pass, encoder, &crate::gpu::api::pass_desc(target, 0, load::CLEAR, 0, load::CLEAR, 0.0, crate::gpu::api::Stamp::UNTIMED));
                 (g.set_pipeline)(pass, self.pipeline);
                 (g.set_bind_group)(pass, 0, group, &[]);
                 (g.draw)(pass, 3, 1, 0, 0);

@@ -84,6 +84,8 @@ struct VertexOut {
   @location(9) through: vec3f,
   @location(10) scattered: vec3f,
   @location(11) past: vec3f,
+  @location(12) fill: vec3f,
+  @location(13) sunlit: f32,
 };
 
 @vertex
@@ -113,10 +115,12 @@ fn vs(@builtin(vertex_index) vertex: u32, @builtin(instance_index) draw: u32) ->
   o.faces = b.faces;
   o.draw = draw;
   o.world_pos = world;
-  let seen = seen_from_eye(world);
+  let seen = seen_at_vertex(world);
   o.through = seen.through;
   o.scattered = seen.scattered;
   o.past = seen.past;
+  o.fill = seen.fill;
+  o.sunlit = seen.sunlit;
   // Real-size tile UV: a box's own [-0.5, 0.5] corner times its real size
   // per axis, so a box spanning many cells repeats the tile once a cell.
   // Side faces put height in v with the box's top at v = 0, the image's
@@ -353,6 +357,6 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   // Darkened by k, and warmed by the same k, so a fully open face is untouched.
   let k = frame.ao_strength * occlusion(i.local_pos, i.box_scale, i.normal, i.faces);
   let open = (1.0 - k) * mix(vec3f(1.0), AO_TINT, k);
-  let color = screen_ao(shade(base, n, i.world_pos, 1.0 / i.clip.w, sun_lit(i.world_pos, n), open, Seen(i.through, i.scattered, i.past)), i.clip.xy);
+  let color = screen_ao(shade(base, n, i.world_pos, sun_lit(i.world_pos, n), open, Seen(i.through, i.scattered, i.past, i.fill, i.sunlit)), i.clip.xy);
   return vec4f(finish(color, i.clip.xy), d.opacity);
 }

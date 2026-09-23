@@ -50,6 +50,12 @@ pub fn arena_configure(sizes: &[u32]) {
     a.sizes[..sizes.len()].copy_from_slice(sizes);
 }
 
+/// The bytes the arena holds on the device: every group's buffer made.
+pub fn arena_bytes() -> u64 {
+    let a = arena();
+    a.sizes.iter().zip(&a.buffers).filter(|(_, &b)| b != 0).map(|(&size, _)| size as u64).sum()
+}
+
 /// What changes whenever the arena's contents are lost: a mesh written under
 /// an older epoch is not there.
 pub fn arena_epoch() -> u32 {

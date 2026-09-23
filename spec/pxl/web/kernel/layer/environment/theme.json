@@ -10,28 +10,28 @@
       "$number": 0,
       "lighting": {
         "ambient": { "color": { "$value": "#fff2e3", "$type": "rgb" }, "intensity": 0.62 },
-        "hemisphere": { "sky": { "$value": "#fff3df", "$type": "rgb" }, "ground": { "$value": "#d8b894", "$type": "rgb" }, "intensity": 0.78 }
+        "hemisphere": { "ground": { "$value": "#d8b894", "$type": "rgb" }, "intensity": 0.78 }
       }
     },
     "day": {
       "$number": 1,
       "lighting": {
         "ambient": { "color": { "$value": "#f9fcff", "$type": "rgb" }, "intensity": 0.68 },
-        "hemisphere": { "sky": { "$value": "#edf6ff", "$type": "rgb" }, "ground": { "$value": "#c2cbd3", "$type": "rgb" }, "intensity": 0.82 }
+        "hemisphere": { "ground": { "$value": "#c2cbd3", "$type": "rgb" }, "intensity": 0.82 }
       }
     },
     "evening": {
       "$number": 2,
       "lighting": {
         "ambient": { "color": { "$value": "#ffe4cd", "$type": "rgb" }, "intensity": 0.58 },
-        "hemisphere": { "sky": { "$value": "#ffb874", "$type": "rgb" }, "ground": { "$value": "#6a3920", "$type": "rgb" }, "intensity": 0.82 }
+        "hemisphere": { "ground": { "$value": "#6a3920", "$type": "rgb" }, "intensity": 0.82 }
       }
     },
     "night": {
       "$number": 3,
       "lighting": {
         "ambient": { "color": { "$value": "#24304a", "$type": "rgb" }, "intensity": 0.4 },
-        "hemisphere": { "sky": { "$value": "#314764", "$type": "rgb" }, "ground": { "$value": "#0b1322", "$type": "rgb" }, "intensity": 0.68 }
+        "hemisphere": { "ground": { "$value": "#0b1322", "$type": "rgb" }, "intensity": 0.68 }
       }
     }
   },

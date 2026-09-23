@@ -16,6 +16,7 @@
 //! Held here the matrices are current the moment a step writes them.
 
 use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::math::mat4::{
     mat4, mat4_frustum_planes, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_rotation_z, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4,
 };
@@ -25,6 +26,7 @@ use crate::control::camera::config::camera_cfg;
 use crate::control::camera::orbit::orbit_local_offset;
 use crate::global::Global;
 use crate::layer::environment::fog::{far_clip, near_clip};
+use crate::world::frame::coord::local_world_to_canonical;
 
 const UP: Vec3 = Vec3 { x: 0.0, y: 0.0, z: 1.0 };
 const ORIGIN: Vec3 = Vec3 { x: 0.0, y: 0.0, z: 0.0 };
@@ -110,6 +112,19 @@ static VIEW: Global<View> = Global::new();
 /// `view`.
 pub fn view() -> &'static mut View {
     VIEW.get(View::new)
+}
+
+/// The camera centre: the point the orbit looks at, which the world is
+/// drawn about and laid on the planet about — the map centre as the view has
+/// eased toward it, not the control's target (map_store's map_center), which
+/// it trails while it moves. What takes the planet's frame takes it from
+/// here — its latitude, its units, the sun and the moon over it — so the
+/// sphere's centre and its latitude are one point in the same tick.
+pub fn camera_centre() -> Pvf3 {
+    let v = view();
+    let mut out = Pvf3::default();
+    local_world_to_canonical(&mut out, &[-v.tx, -v.ty, -v.tz], v.origin);
+    out
 }
 
 /// The viewport in CSS pixels; the projection follows it.

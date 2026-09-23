@@ -181,12 +181,12 @@ fn cleanup_far_tiles(anchor: IVec, pinned_page_idx: Option<IVec>) {
 }
 
 struct Fetcher {
-    last: Option<(IVec, Option<IVec>, (u32, u32))>,
+    last: Option<(LevelPage, Option<IVec>, (u32, u32))>,
     ocean_ask_at: f64,
     /// When a page that failed is asked for again. The wishlist is rebuilt
-    /// only when the anchor moves, and the scheduler drops a failed demand, so
-    /// a page whose fetch failed while the view stood still would stay a hole
-    /// until the next pan.
+    /// only when the anchor's page at the window's base changes, and the
+    /// scheduler drops a failed demand, so a page whose fetch failed while
+    /// the view stood still would stay a hole until the next pan.
     retry_at: Option<f64>,
 }
 
@@ -260,10 +260,15 @@ pub fn tile_fetcher_step() {
         Some(at) => wake_at(at),
         None => {}
     }
-    if f.last == Some((anchor, device_page_idx, levels)) {
+    // Keyed on the page the anchor stands in at the window's base, which
+    // every ring of the window is centred on (level.rs `ring`): within it the
+    // wishlist is the same pages, and its order is a nearest-first that a
+    // page's travel does not change enough to ask again for.
+    let base = ring(w.start, anchor, 1)[0];
+    if f.last == Some((base, device_page_idx, levels)) {
         return;
     }
-    f.last = Some((anchor, device_page_idx, levels));
+    f.last = Some((base, device_page_idx, levels));
     cleanup_far_tiles(anchor, device_page_idx);
     fold_held(anchor);
     // A demand the queue had no row for is asked for on the next turn: the

@@ -66,3 +66,22 @@ fn a_wait_overtakes_after_log2_of_how_much_farther_and_never_lifts_onto_the_scre
     let b = Priority { pending_since: 100.0, ..p(true, 4.0) };
     assert_eq!(ordered(&[("a", a), ("b", b)], 5000.0)[0], "b");
 }
+
+#[test]
+fn a_chunks_children_have_it_for_their_parent_and_its_ancestors_climb_to_the_top() {
+    for (x, y) in [(0, 0), (5, -3), (-1, -1), (123, 77)] {
+        for level in 1..=PAGE_TOP_LEVEL {
+            for (bx, by) in [(0, 0), (64, 448), (448, 64), (256, 192)] {
+                let k = ChunkKey {
+                    page: LevelPage::new(level, ivec::gather(x, y, 0)),
+                    bx,
+                    by,
+                };
+                for c in k.children() {
+                    assert_eq!(c.parent(), Some(k), "{k:?} → {c:?}");
+                }
+                assert_eq!(k.ancestors().count() as u32, PAGE_TOP_LEVEL - level);
+            }
+        }
+    }
+}

@@ -1,0 +1,36 @@
+// @pxl/web/feature/dev/ledger/lane.test.ts
+
+import { assertEquals } from "@std/assert";
+
+import { FRAME, FRAME_GROUPS } from "./ledger.spec.ts";
+import { frameAt, GROUPS, isList, label, LANES, LIST_NAMES, valueText } from "./lane.ts";
+
+Deno.test("FRAME_GROUPS - every lane is printed, in one group", () => {
+  const grouped = GROUPS.flatMap((g) => FRAME_GROUPS[g] as readonly string[]);
+  assertEquals([...grouped].sort(), LANES.map((l) => l.name as string).sort());
+});
+
+Deno.test("LANES - a list lane spans a word a name, a census entry two", () => {
+  for (const { name, width } of LANES) {
+    if (!isList(name)) assertEquals(width, 1, name);
+    else assertEquals(width, LIST_NAMES[name].length * (name === "census" ? 2 : 1), name);
+  }
+  assertEquals(LANES.reduce((n, l) => n + l.width, 0), FRAME.WORDS);
+});
+
+Deno.test("frameAt - reads each lane at its word", () => {
+  const words = Float64Array.from({ length: FRAME.WORDS }, (_, k) => k);
+  const f = frameAt(words, 0);
+  assertEquals(f.gpu_ms, FRAME.gpu_ms);
+  assertEquals(f.level_pages[2], FRAME.level_pages + 2);
+  assertEquals(f.census[1], [FRAME.census + 2, FRAME.census + 3]);
+});
+
+Deno.test("label and valueText - a lane's name says its unit", () => {
+  assertEquals(label("lod", "lod_oldest_release_ms"), "oldest_release");
+  assertEquals(label("heap", "heap_used_mb"), "used");
+  assertEquals(label("stale", "stale_levels"), "levels");
+  assertEquals(valueText("lod_oldest_release_ms", 12.34), "12.3ms");
+  assertEquals(valueText("stale_levels", 0b1001), "0,3");
+  assertEquals(valueText("triangles", 12_400), "12k");
+});

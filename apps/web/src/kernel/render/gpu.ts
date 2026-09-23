@@ -16,7 +16,7 @@
  */
 
 import type { U32Array } from "@xpute/core/abi/array.ts";
-import type { f32, u32 } from "@xpute/core/abi/word.ts";
+import type { f32, f64, u32 } from "@xpute/core/abi/word.ts";
 import { handle_slot } from "@xpute/runtime/abi/handle.ts";
 
 import { address, compare, dimension, filter, format, load, paint, record, resource } from "@/kernel/render/gpu/api.spec.ts";
@@ -246,30 +246,49 @@ function begin_pass(encoder: GPUCommandEncoder, w: U32Array): GPURenderPassEncod
 
 // ---- timestamps ----
 
-let stamps: { resolve: GPUBuffer; read: GPUBuffer[]; pending: Set<GPUBuffer> } | null = null;
-let last_gpu_ms = 0;
+let stamps: { count: u32; resolve: GPUBuffer; read: GPUBuffer[]; pending: Set<GPUBuffer> } | null = null;
+/** The last frame read: each span's time, then the frame's whole. */
+let last_gpu_ms: f64[] = [];
 
-/** Resolves the two timestamps an encoder's passes wrote and reads them once
- * the GPU has them, a few frames behind. */
-function read_timestamps(encoder: GPUCommandEncoder, set: GPUQuerySet): void {
+/** Resolves the timestamps an encoder's passes wrote into `set`, a begin and
+ * an end a span, and reads them once the GPU has them, a few frames behind.
+ * `written` says which spans' pairs this frame wrote: a query no pass wrote
+ * keeps what an earlier frame left in it, so the rest are not read. */
+function read_timestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: u32): void {
   const d = gpu();
-  stamps ??= {
-    resolve: d.createBuffer({ size: 16, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC }),
-    read: Array.from({ length: 3 }, () => d.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ })),
-    pending: new Set(),
-  };
+  const count = set.count;
+  if (stamps?.count !== count) {
+    const bytes = count * 8;
+    stamps = {
+      count,
+      resolve: d.createBuffer({ size: bytes, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC }),
+      read: Array.from({ length: 3 }, () => d.createBuffer({ size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ })),
+      pending: new Set(),
+    };
+  }
   const s = stamps;
   const read = s.read.find((b) => !s.pending.has(b));
   if (!read) return;
-  encoder.resolveQuerySet(set, 0, 2, s.resolve, 0);
-  encoder.copyBufferToBuffer(s.resolve, 0, read, 0, 16);
+  encoder.resolveQuerySet(set, 0, count, s.resolve, 0);
+  encoder.copyBufferToBuffer(s.resolve, 0, read, 0, count * 8);
   s.pending.add(read);
   // Mapped once the kernel's turn has submitted the encoder: the microtask
   // runs only after the call into the module returns.
   queueMicrotask(() =>
     read.mapAsync(GPUMapMode.READ).then(() => {
-      const [t0, t1] = new BigUint64Array(read.getMappedRange());
-      last_gpu_ms = Number(t1 - t0) / 1e6;
+      const t = new BigUint64Array(read.getMappedRange());
+      const spans: f64[] = [];
+      let [first, last] = [0n, 0n];
+      for (let k = 0; 2 * k < count; k++) {
+        const [b, e] = [t[2 * k], t[2 * k + 1]];
+        const ran = (written & (1 << k)) !== 0 && e >= b;
+        spans.push(ran ? Number(e - b) / 1e6 : 0);
+        if (!ran) continue;
+        if (first === 0n || b < first) first = b;
+        if (e > last) last = e;
+      }
+      spans.push(Number(last - first) / 1e6);
+      last_gpu_ms = spans;
       read.unmap();
       s.pending.delete(read);
     }, () => s.pending.delete(read))
@@ -501,8 +520,8 @@ export function gpu_imports(memory: WebAssembly.Memory): WebAssembly.ModuleImpor
       if (context) put(view, context.getCurrentTexture().createView());
     },
     gpu_query_set: (id: u32, count: u32) => put(id, gpu().createQuerySet({ type: "timestamp", count })),
-    gpu_timestamps: (encoder: u32, set: u32) => read_timestamps(get<GPUCommandEncoder>(encoder), get<GPUQuerySet>(set)),
-    gpu_ms: () => last_gpu_ms,
+    gpu_timestamps: (encoder: u32, set: u32, written: u32) => read_timestamps(get<GPUCommandEncoder>(encoder), get<GPUQuerySet>(set), written),
+    gpu_ms: (span: u32) => last_gpu_ms[span] ?? 0,
     gpu_paint: (at: u32, n: u32) => run_paint(words(at, n), memory),
     gpu_paint_copy: (texture: u32, x: u32, y: u32, layer: u32, width: u32, height: u32) =>
       gpu().queue.copyExternalImageToTexture({ source: scratch_canvas()[0] }, { texture: get<GPUTexture>(texture), origin: [x, y, layer] }, [width, height]),

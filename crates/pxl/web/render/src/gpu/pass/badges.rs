@@ -25,7 +25,7 @@ use core::f32::consts::TAU;
 
 use crate::asset::atlas::{BillboardAtlas, DrawSpec, PAD};
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_BADGE, UNIFORM_FLOATS};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, NONE};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::paint::Paint;
@@ -33,7 +33,7 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Blocks;
 
 /// Floats the badge uniform holds (shader/badge.wgsl's Badge).
-const BADGE_FLOATS: usize = 44;
+const BADGE_FLOATS: usize = 52;
 /// Sets drawn in one frame at most.
 const SETS: usize = 32;
 
@@ -200,6 +200,10 @@ pub struct BadgePass {
     pub near: f32,
     pub far: f32,
     pub cell: f32,
+    /// The planet the frame lays the map on, as the frame's uniform has it
+    /// (globe.wgsl's `curve` and `globe`): a badge is placed on it as the
+    /// ground under it is.
+    pub globe: [f32; 8],
 }
 
 impl BadgePass {
@@ -224,6 +228,7 @@ impl BadgePass {
             near: 0.1,
             far: 1000.0,
             cell: 0.01,
+            globe: [0.0; 8],
         }
     }
 
@@ -301,9 +306,10 @@ impl BadgePass {
 
     /// Every billboard set's draw, in the order listed, in one pass of their
     /// own over `color` (resolved into `resolve` where the colour is
-    /// multisampled) reading `depth`; how many instances it drew.
+    /// multisampled) reading `depth`, timed under `stamp`; how many instances
+    /// it drew.
     #[allow(clippy::too_many_arguments)]
-    pub fn draw(&mut self, g: &GpuApi, encoder: u32, color: u32, resolve: u32, depth: u32, viewport: [u32; 2], draws: &[u32], uniforms: &[f32], blocks: &Blocks) -> u32 {
+    pub fn draw(&mut self, g: &GpuApi, encoder: u32, color: u32, resolve: u32, depth: u32, viewport: [u32; 2], draws: &[u32], uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) -> u32 {
         if self.sheet_group == 0 {
             return 0;
         }
@@ -329,6 +335,7 @@ impl BadgePass {
             s[16..32].copy_from_slice(&self.proj);
             s[32..35].copy_from_slice(&uniforms[at..at + 3]);
             s[35..44].copy_from_slice(&[self.px_k, self.fade_start, self.fade_end, self.near, self.far, self.cell, 1.0, viewport[0] as f32, viewport[1] as f32]);
+            s[44..52].copy_from_slice(&self.globe);
             (g.write_buffer)(set.uniform, 0, bytes(s));
             if set.block != block || set.depth != depth || set.group == 0 {
                 release(set.group);
@@ -343,7 +350,7 @@ impl BadgePass {
             }
             if pass == 0 {
                 pass = object();
-                (g.pass)(pass, encoder, &pass_desc(color, resolve, load::LOAD, depth, load::READ_ONLY, 0.0, 0, NONE, NONE));
+                (g.pass)(pass, encoder, &pass_desc(color, resolve, load::LOAD, depth, load::READ_ONLY, 0.0, stamp.pass()));
                 (g.set_pipeline)(pass, self.built.pipeline);
                 (g.set_bind_group)(pass, 1, self.sheet_group, &[]);
             }

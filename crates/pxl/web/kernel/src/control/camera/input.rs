@@ -39,7 +39,7 @@ use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::raycast::WorldHit;
-use crate::world::frame::coord::get_local_world_origin;
+use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view::{view, view_ray_local};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -233,7 +233,7 @@ fn handle_tap(hovered: Pvf3) {
             // nothing.
             let hovered_object = camera_store().hovered_object_at.and_then(get_placed_object);
             let target = match hovered_object {
-                Some(o) => object_center(&o, get_local_world_origin(map_store().map_center.as_ref())),
+                Some(o) => object_center(&o, local_world_origin()),
                 None => ground_or_raw(&anchor_center(&hovered)),
             };
             map_store().map_center = Some(target);
@@ -260,7 +260,7 @@ fn handle_tap(hovered: Pvf3) {
         ActiveTool::Decor | ActiveTool::Object => {
             // Still guard against the candidate slot being occupied since the
             // last hover update.
-            let map_origin = get_local_world_origin(map_store().map_center.as_ref());
+            let map_origin = local_world_origin();
             if ui.active_tool == ActiveTool::Decor {
                 if !is_placement_blocked(PlacementTool::Decor, &hovered, object_size, map_origin) {
                     place_decor(&hovered, DECOR_SIZE, ui.decor_id);
@@ -560,7 +560,7 @@ fn update_hover(s: &Input) {
     view_ray_local(s.pointer_x, s.pointer_y, &mut origin, &mut direction);
 
     let ui = s.holding;
-    let map_origin = get_local_world_origin(Some(&map_center));
+    let map_origin = local_world_origin();
     // One unified raycast — terrain (top or a wall) and any placed object all
     // come back as the same WorldHit, all boxes in the same voxel field.
     let Some(pick) = ray_pick(origin, direction, Some(&map_center)) else {

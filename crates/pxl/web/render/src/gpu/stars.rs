@@ -17,6 +17,7 @@
 //! the vertex stage as too faint for the frame's eight bits, and none at all
 //! while the stars are faded out, which is every hour of daylight.
 
+use pxl_spec::space::v3::V3;
 use xpute_core::math::mat4::Mat4;
 
 use crate::frame::shader::record::PIPELINE_STARS;
@@ -35,12 +36,13 @@ const STAR_BYTES: usize = 8;
 const STAR_FLOATS: usize = 8;
 
 /// Floats the Stars uniform (stars.wgsl's Stars) holds.
-pub(crate) const STARS_FLOATS: usize = 16 + 16 + 4 + 4;
+pub(crate) const STARS_FLOATS: usize = 16 + 16 + 4 + 4 + 4;
 pub(crate) const SKY: usize = 16;
 pub(crate) const VIEWPORT: usize = 32;
 pub(crate) const INTENSITY: usize = 34;
 pub(crate) const DEPTH: usize = 36;
 pub(crate) const DENSITY: usize = 39;
+pub(crate) const UP: usize = 40;
 
 /// Below this the stars have faded out, and the pass draws nothing.
 const SHOWN: f32 = 0.001;
@@ -79,9 +81,11 @@ impl StarPass {
     }
 
     /// The frame's stars: `view_proj`, the root frame to WebGPU clip,
-    /// the environment's lane `env`, and the world surface's size in device
-    /// pixels. Nothing is written while they are faded out.
-    pub fn lay_out(&mut self, g: &GpuApi, view_proj: &Mat4, env: &[f32], width: u32, height: u32) {
+    /// the environment's lane `env`, the world surface's size in device
+    /// pixels, and straight up where the eye stands, which a star's height
+    /// and the air it is seen through are measured from. Nothing is written
+    /// while they are faded out.
+    pub fn lay_out(&mut self, g: &GpuApi, view_proj: &Mat4, env: &[f32], width: u32, height: u32, up: &V3) {
         let u = &mut self.words;
         u[INTENSITY] = env[ENV_SKY];
         if u[INTENSITY] <= SHOWN {
@@ -96,6 +100,9 @@ impl StarPass {
         u[VIEWPORT + 1] = height as f32;
         let css = stage_lane()[STAGE_AT::VIEWPORT];
         u[DENSITY] = if css > 0.0 { (width as f64 / css) as f32 } else { 1.0 };
+        for (w, v) in u[UP..UP + 3].iter_mut().zip(up) {
+            *w = *v as f32;
+        }
         // The air overhead from where the camera stands: from orbit a star
         // crosses none of it.
         let t = transmittance(env[ENV_AIR] as f64, 1.0);

@@ -12,15 +12,22 @@
 //! Mercator was drawn from further out — Mapbox's globe, which reprojects the
 //! same tiles in its vertex stage.
 //!
+//! The map centre here is the camera centre: the map centre as the view has
+//! eased toward it (the kernel's view.rs, `camera_centre`), which the
+//! placement's centre, its latitude and the sky over it are all taken from,
+//! in the same tick.
+//!
 //! The sphere is Web Mercator's own (pxl-spec's EPSG:4326 adapter), which is
 //! what makes the map centre's neighbourhood the identity; the atmosphere is
-//! drawn over the same one. frame.wgsl's `on_globe` is `Globe::place` in f32,
+//! drawn over the same one, from the eye's own up on it. globe.wgsl's `on_globe_of` is `Globe::place` in f32,
 //! written so that a point a unit from the centre keeps its unit: every
 //! difference of two near latitudes is taken as a half-angle sine or an
 //! expm1, never as a subtraction of two cosines.
 
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::v3::V3;
+
+use crate::look::azimuth::turn;
 
 /// Web Mercator's sphere.
 pub const MERCATOR_RADIUS_KM: f64 = epsg4326::EARTH_RADIUS / 1000.0;
@@ -77,6 +84,41 @@ impl Globe {
         let (shl, shp) = ((dl / 2.0).sin(), (dphi / 2.0).sin());
         let haversine = shp * shp + c * c0 * shl * shl;
         [rr * c * dl.sin(), rr * (dphi.sin() + 2.0 * c * s0 * shl * shl), h - 2.0 * rr * haversine]
+    }
+    /// Where on the flat map a point of the planet is: east and north of the
+    /// map centre in map units, for `p` in the centre's east-north-up frame and
+    /// units as `place` puts it. Its latitude and longitude are read off the
+    /// sphere — the point's bearing from the planet's centre, the radius below
+    /// the map centre — and taken to Mercator's ordinates, so a height does
+    /// not move it: what the clouds are anchored to the map by
+    /// (frame/shader/globe.wgsl's `off_globe_of`).
+    pub fn unplace(&self, p: V3) -> [f64; 2] {
+        let (s0, c0) = (self.sin_lat, self.cos_lat);
+        let v = [p[0], p[1], p[2] + self.radius_u()];
+        // Along the planet's axis, toward the equator in the centre's
+        // meridian, and east.
+        let axis = v[1] * c0 + v[2] * s0;
+        let meridian = -v[1] * s0 + v[2] * c0;
+        let east = v[0];
+        let across = east.hypot(meridian);
+        let length = across.hypot(axis);
+        // tan(π/4 + φ/2) = (1 + sin φ) / cos φ, against the centre's.
+        let e = (length + axis) / across;
+        [MERCATOR_RADIUS_U * east.atan2(meridian), MERCATOR_RADIUS_U * (e / self.e0).ln()]
+    }
+
+    /// A point of the view frame — the map centre at its origin, turned about
+    /// Z by the view's azimuth, whose sine and cosine are `s` and `c` (the
+    /// root frame's first column) — where the planet has it: turned back to
+    /// the map's own axes, placed, and turned forward again. What the module
+    /// measures of the world where it is drawn — a chunk's culling, a badge's
+    /// place on the screen — goes through this, as every shader that places
+    /// the world goes through globe.wgsl's `on_globe_of`. The pick ray is
+    /// walked in the flat map: it reaches some fifty units, where the planet
+    /// has parted from the plane by a thousandth of one.
+    pub fn place_turned(&self, p: V3, s: f64, c: f64) -> V3 {
+        let (mut flat, mut placed) = ([0.0; 3], [0.0; 3]);
+        *turn(&self.place(*turn(&p, -s, c, &mut flat)), s, c, &mut placed)
     }
 }
 

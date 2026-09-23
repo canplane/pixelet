@@ -77,13 +77,14 @@ fn vs(@builtin(vertex_index) i: u32) -> VertexOut {
 // darkened, through the air in front of it, its edge a pixel soft. Nothing
 // where the planet stands in the way.
 fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
-  if (meets_ground(r, dir.z) || dot(dir, atmos.sun_dir) <= 0.0 || a >= 1.0 + w) {
+  let mu = dot(dir, atmos.up);
+  if (meets_ground(r, mu) || dot(dir, atmos.sun_dir) <= 0.0 || a >= 1.0 + w) {
     return vec3f(0.0);
   }
   let inside = min(a, 1.0);
   let limb = 1.0 - SUN_LIMB * (1.0 - sqrt(1.0 - inside * inside));
   let edge = 1.0 - smoothstep(1.0 - w, 1.0 + w, a);
-  return transmittance_to_top(r, dir.z) * shown() * SUN_DISC * limb * edge;
+  return transmittance_to_top(r, mu) * shown() * SUN_DISC * limb * edge;
 }
 
 // The Moon's face along `dir` from radius `r`: `across` is the ray's offset
@@ -98,7 +99,8 @@ fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
 // the way.
 fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
   let axis = atmos.moon_dir;
-  if (meets_ground(r, dir.z) || dot(dir, axis) <= 0.0 || a >= 1.0 + w) {
+  let mu = dot(dir, atmos.up);
+  if (meets_ground(r, mu) || dot(dir, axis) <= 0.0 || a >= 1.0 + w) {
     return vec3f(0.0);
   }
   let edge = 1.0 - smoothstep(1.0 - w, 1.0 + w, a);
@@ -129,7 +131,7 @@ fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
     let earth = 0.5 * (1.0 + dot(sun, axis));
     light += vec3f(EARTHSHINE_SHOWN * earth * face / MOON_MAP_MEAN);
   }
-  return transmittance_to_top(r, dir.z) * light * edge;
+  return transmittance_to_top(r, mu) * light * edge;
 }
 
 @fragment

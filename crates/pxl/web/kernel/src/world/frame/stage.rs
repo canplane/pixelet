@@ -15,6 +15,7 @@ use pxl_render::look::lod::{fade_end_u, fade_start_u, LOD_CELL_PER_DISTANCE};
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::space::pvf3::ivec;
 use xpute_core::math::mat4::{mat4, mat4_mul};
+use xpute_core::math::scalar::round;
 
 use crate::host::handheld;
 use crate::io::load::{load_image, Load};
@@ -24,11 +25,13 @@ use crate::layer::character::companion::companion_skins;
 use crate::layer::character::preview::preview_rows;
 use crate::layer::decor::asset_store::decor_bundle_assets;
 use crate::layer::environment::config::rim_cfg;
-use crate::sched::ledger::record::{DrawCensus, TexturesMb, CENSUS_LEN};
+use crate::sched::ledger::record::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
 use crate::shell::setting::store::{settings_store, AoMode};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::stage::{set_host_frame_stat, HostFrameStat};
 use crate::world::frame::view::view;
+
+const MB: f64 = 1_048_576.0;
 
 /// Writes the frame's uniforms from the view and the settings as they stand.
 pub fn stage_write() {
@@ -106,18 +109,23 @@ pub fn stage_render() {
     census.copy_from_slice(&stat.census[..CENSUS_LEN]);
     set_host_frame_stat(HostFrameStat {
         task_ms: 0.0,
-        gpu_ms: stat.gpu_ms,
-        draw_calls: stat.draw_calls,
-        triangles: stat.triangles,
-        buffers: stat.buffers,
-        buffer_bytes: stat.buffer_bytes,
-        textures_mb: TexturesMb {
-            depth: stat.depth_mb,
-            msaa: stat.msaa_mb,
-            shadow: stat.shadow_mb,
-            layers: stat.layers_mb,
+        gpu: GpuSample {
+            ms: stat.gpu_ms,
+            spans: stat.gpu_spans,
+            draw_calls: stat.draw_calls,
+            triangles: stat.triangles,
+            census,
+            level_tris: Default::default(),
+            px: stat.px,
         },
-        census,
-        px: stat.px,
+        device: DeviceSample {
+            buffers: stat.buffers,
+            buffer_mb: round(stat.buffer_bytes / MB),
+            arena_mb: stat.arena_mb,
+            depth_mb: stat.depth_mb,
+            msaa_mb: stat.msaa_mb,
+            shadow_mb: stat.shadow_mb,
+            layers_mb: stat.layers_mb,
+        },
     });
 }

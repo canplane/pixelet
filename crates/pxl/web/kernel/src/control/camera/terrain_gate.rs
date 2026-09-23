@@ -19,7 +19,7 @@ use crate::control::camera::orbit::{orbit_local_offset, rotate2};
 use crate::layer::terrain::elevation::get_ele_at_local;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, CameraTerrain};
-use crate::world::frame::coord::{get_local_world_origin, local_world_to_canonical};
+use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
 
 /// One cell, so a bicubic elevation sample disagreeing slightly with the
 /// voxel it produced cannot put the eye inside a block.
@@ -59,7 +59,7 @@ pub struct ViewPose {
 pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
     let map_center = map_store().map_center?;
     let at = center.copied().unwrap_or(map_center);
-    let origin = get_local_world_origin(Some(&map_center));
+    let origin = local_world_origin();
     let local = Pvf3 { i: ivec::sub(at.i, origin), f: at.f };
     Some(ViewPose {
         origin_page: TO_XY(L3_IDX(origin)),
@@ -164,7 +164,7 @@ pub fn allowed_pan(view: ViewTriple, to_center: &Pvf3) -> Pvf3 {
     if reached == to_pose {
         return *to_center;
     }
-    let map_origin = get_local_world_origin(map_store().map_center.as_ref());
+    let map_origin = local_world_origin();
     let mut out = Pvf3::default();
     local_world_to_canonical(&mut out, &reached.target, map_origin);
     out

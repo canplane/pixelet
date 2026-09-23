@@ -15,7 +15,7 @@ use pxl_render::frame::draw::{DrawList, Held, PIPELINE_DEBUG};
 use pxl_render::gpu::api::word_bytes;
 use pxl_render::gpu::surface::DPR_MAX;
 use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::space::indexer::{L1_IDX_IN_L4, L3_BASE, L3_CENTER};
+use pxl_spec::space::indexer::{L3_BASE, L3_CENTER};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
@@ -219,14 +219,13 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     // raw_v: the map centre as placed, no elevation override. quant_v: the cell
     // it floors to, ground-snapped — a cell, so a box.
     let mut raw_v = [0.0; 3];
-    projection::unproject(&mut raw_v, L1_IDX_IN_L4(map_center.i), map_center.f);
+    projection::unproject(&mut raw_v, ivec::sub(map_center.i, map_origin), map_center.f);
     let gnd_v = [raw_v[0], raw_v[1], get_ele(map_center).unwrap_or(0.0)];
     let mut quant_v = [0.0; 3];
     floor3n(&gnd_v, U_PER_CELL, &mut quant_v);
 
     // The floating origin, grounded and floored: local (0, 0, ground).
     let mut anchor_base_gnd_v = [0.0; 3];
-    projection::unproject(&mut anchor_base_gnd_v, L1_IDX_IN_L4(map_origin), 0);
     anchor_base_gnd_v[2] = get_ele(&Pvf3 { i: map_origin, f: 0 }).unwrap_or(0.0);
     let mut anchor_base_quant_v = [0.0; 3];
     floor3n(&anchor_base_gnd_v, U_PER_CELL, &mut anchor_base_quant_v);
