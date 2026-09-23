@@ -1,7 +1,9 @@
 // pxl-geo-bake/page/walk.rs
 
 //! The walk the POI and reverse-geocode bakes share: terrain's own land-page
-//! list, one object per page, resumable.
+//! list, one object per target, resumable. A POI object covers one page; a
+//! reverse-geocode object covers a group of them, and the walk is over
+//! whatever the bake made of the land list rather than over the list itself.
 //!
 //! Reusing terrain's land/ocean split rather than a classification of their own
 //! is deliberate. "Does this bbox touch any land polygon" is a cheap, purely
@@ -21,6 +23,7 @@
 //! it classifies itself, it has the shared ocean tile, and it has no `.empty` —
 //! folding it in would bend all three.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
@@ -29,7 +32,7 @@ use std::time::Instant;
 use pxl_spec::space::indexer::L3_SHAMT;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 
-use crate::util::{fmt_bytes, fmt_dur, pack, refuse_mixed, write_atomic, Level};
+use crate::util::{fmt_bytes, fmt_dur, pack, write_atomic, Level};
 
 /// A local marker saying "already asked, nothing here". Never uploaded — the
 /// publish step excludes it.
@@ -76,11 +79,35 @@ impl Args {
     }
 }
 
-/// What one page came to. `items` is whatever the caller counts per object —
-/// places for POI, nothing for a label.
+/// What one target came to. `items` is whatever the caller counts per object —
+/// places for POI, labels for a geocode group.
 pub enum Page {
     Object { raw: Vec<u8>, items: u64 },
     Empty,
+}
+
+/// One object of the walk: the index it is named by, and the land pages it
+/// covers.
+pub struct Target {
+    pub idx: IVec,
+    pub leaves: Vec<IVec>,
+}
+
+/// The land pages gathered `shamt` levels up, first-seen order. A `shamt` of
+/// zero is one target a page, which is what a bake whose object is a page
+/// wants.
+pub fn targets_of(land: &[IVec], shamt: u32) -> Vec<Target> {
+    let mut out: Vec<Target> = Vec::new();
+    let mut at: HashMap<IVec, usize> = HashMap::new();
+    for &page in land {
+        let idx = ivec::sh(page, -(shamt as i32));
+        let i = *at.entry(idx).or_insert_with(|| {
+            out.push(Target { idx, leaves: Vec::new() });
+            out.len() - 1
+        });
+        out[i].leaves.push(page);
+    }
+    out
 }
 
 #[derive(Default)]
@@ -95,8 +122,6 @@ pub struct Tally {
 
 pub struct Walked {
     pub tally: Tally,
-    /// Every land page the cache named, not only the ones this run touched.
-    pub land: Vec<IVec>,
     pub elapsed_ms: f64,
 }
 
@@ -131,19 +156,14 @@ pub fn write_land_pages(path: &Path, land: &[IVec]) -> Result<(), String> {
 ///
 /// `connect` is called once per worker, so a worker owns its connection and its
 /// prepared statements for the whole run.
-pub fn walk<T>(args: &Args, tag: &str, every: u64, connect: impl Fn() -> Result<T, String> + Sync, one: impl Fn(&mut T, IVec) -> Result<Page, String> + Sync) -> Result<Walked, String> {
-    std::fs::create_dir_all(&args.out).map_err(|e| e.to_string())?;
-    if !args.force {
-        refuse_mixed(&args.out)?;
-    }
-    let land = land_pages(&args.land_cache)?;
-    println!("[bake/{tag}] {} land pages from {}", land.len(), args.land_cache.display());
-
-    let targets: &[IVec] = match args.limit {
-        Some(n) => &land[..n.min(land.len())],
-        None => &land,
-    };
-
+pub fn walk<T>(
+    args: &Args,
+    tag: &str,
+    every: u64,
+    targets: &[Target],
+    connect: impl Fn() -> Result<T, String> + Sync,
+    one: impl Fn(&mut T, &Target) -> Result<Page, String> + Sync,
+) -> Result<Walked, String> {
     let next = AtomicUsize::new(0);
     let totals = Mutex::new(Tally::default());
     let started = Instant::now();
@@ -158,7 +178,8 @@ pub fn walk<T>(args: &Args, tag: &str, every: u64, connect: impl Fn() -> Result<
 
                 loop {
                     let i = next.fetch_add(1, Ordering::Relaxed);
-                    let Some(&page_idx) = targets.get(i) else { break };
+                    let Some(target) = targets.get(i) else { break };
+                    let page_idx = target.idx;
                     let path = args.out.join(page_idx.to_string());
                     let marker = args.out.join(format!("{page_idx}{EMPTY_SUFFIX}"));
 
@@ -167,7 +188,7 @@ pub fn walk<T>(args: &Args, tag: &str, every: u64, connect: impl Fn() -> Result<
                         continue;
                     }
 
-                    let outcome = one(&mut worker, page_idx).and_then(|page| match page {
+                    let outcome = one(&mut worker, target).and_then(|page| match page {
                         Page::Empty => std::fs::write(&marker, "").map(|_| None).map_err(|e| e.to_string()),
                         Page::Object { raw, items } => {
                             let packed = pack(&raw, Level::Stored).map_err(|e| e.to_string())?;
@@ -228,5 +249,5 @@ pub fn walk<T>(args: &Args, tag: &str, every: u64, connect: impl Fn() -> Result<
         tally.failed
     );
 
-    Ok(Walked { tally, land, elapsed_ms })
+    Ok(Walked { tally, elapsed_ms })
 }

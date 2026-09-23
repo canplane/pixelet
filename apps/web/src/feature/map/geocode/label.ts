@@ -1,35 +1,39 @@
 // @pxl/web/feature/map/geocode/label.ts
 //
-// Shared with search_modal.tsx: a GeocodePart[] chain (this app's own
-// region/county/… division data) needs the same "pick a language, then
-// order broad-to-narrow or narrow-to-broad by convention" treatment
-// whether it came from reverse geocoding a page or from a search result's
-// own `context` — factored out of use-reverse-geocode.ts so both share one
-// answer instead of two copies drifting apart.
+// One place's name assembled into a line. Shared by the address pill, which
+// reads the place the map centre is in out of the kernel snapshot, and by
+// search-modal.tsx, which reads each result's own context off the search
+// API — the same shape from both, so the two cannot read it differently.
 
-import type { GeocodePart } from "./repository.ts";
+/** One part of a place's name, as the kernel's snapshot and the search API
+ * both give it (pxl-spec place.rs): `name` is the provider's own, in
+ * whatever language its rows are in, and `names` the same name by language
+ * tag wherever the provider had one. */
+export interface PlacePart {
+  name: string;
+  names?: Record<string, string>;
+}
 
 // Broad-to-narrow ("강남구 역삼1동") is a Korean/Japanese/Chinese address
 // convention, not a property of the place itself — the same pattern shows
 // up in how these languages write dates (year first). Every other
 // supported language reverses it ("Yeoksam 1-dong, Gangnam-gu"). Extend
-// this list, not the server, if a future UI language needs the same
-// convention — a GeocodePart[] chain itself never changes.
+// this list, not the kernel, if a future UI language needs the same
+// convention — the parts themselves never change.
 const BROAD_TO_NARROW_LANGS = new Set(["ko", "ja", "zh"]);
 
-// Overture's own names.primary is always the local-language (Korean) form
-// — for a `lang` UI can't find in `common` (ingest_divisions.ts's own
-// SUPPORTED_LANGS filter decides what's even possible here), falling back
-// to `name` means "show the Korean name" rather than an empty part.
-export function displayPartName(part: GeocodePart, lang: string): string {
-  return part.common?.[lang] ?? part.name;
+// The provider's own name is always some real language's — Overture's is
+// the local one — so falling back to it means "show the Korean name"
+// rather than an empty part.
+export function displayPartName(part: PlacePart, lang: string): string {
+  return part.names?.[lang] ?? part.name;
 }
 
-/** Joins a broad-to-narrow GeocodePart[] chain into one display string
- * against `language` (typically i18n.language) — the join order and
- * separator flip per BROAD_TO_NARROW_LANGS, the per-part name resolves
- * against `language` regardless. */
-export function assembleLabel(parts: GeocodePart[], language: string): string {
+/** Joins a broad-to-narrow chain into one display string against `language`
+ * (typically i18n.language) — the join order and separator flip per
+ * BROAD_TO_NARROW_LANGS, the per-part name resolves against `language`
+ * regardless. */
+export function assembleLabel(parts: PlacePart[], language: string): string {
   const lang = language.split("-")[0].toLowerCase();
   const names = parts.map((p) => displayPartName(p, lang));
   return BROAD_TO_NARROW_LANGS.has(lang) ? names.join(" ") : [...names].reverse().join(", ");

@@ -1,9 +1,10 @@
 // pxl-kernel/shell/ui/scale_bar.rs
 
-//! The scale bar's reading: how many metres a bar of at most
+//! What the view's scale reads as. The bar: how many metres a bar of at most
 //! SCALE_BAR_MAX_WIDTH_PX shows at the current distance and latitude, rounded to
-//! the 1/2/5 steps the convention uses, and how wide that is. The shell draws
-//! the bar and its label from this.
+//! the 1/2/5 steps the convention uses, and how wide that is — the shell draws
+//! the bar and its label from this. And the zoom the same resolution is, for
+//! whatever is scaled the way a tiled map is.
 
 use pxl_spec::space::adapter::epsg3857;
 
@@ -42,13 +43,29 @@ pub struct ScaleBar {
 }
 
 /// The scale bar for a viewport `screen_height` CSS pixels tall.
-pub fn scale_bar(screen_height: f64) -> ScaleBar {
+/// The Web Mercator metres one pixel covers: the projection's own units,
+/// before the latitude a real distance needs.
+fn planar_m_per_px(screen_height: f64) -> f64 {
     let dist = camera_store().view_state.dist;
     let fov_rad = camera_cfg::projection::FOV.to_radians();
     let visible_u = 2.0 * (fov_rad / 2.0).tan() * dist;
     // `dist` is in canonical "u" units, not meters — the conversion is required.
-    let visible_planar_m = visible_u / epsg3857::U_PER_M;
-    let planar_m_per_px = visible_planar_m / screen_height;
+    visible_u / epsg3857::U_PER_M / screen_height
+}
+
+/// The Web Mercator zoom the view is at. A tile pyramid's level z has
+/// `EQUATOR_M / (TILE_PX * 2^z)` planar metres a pixel, so the zoom is what
+/// the view's own planar resolution reads as on that ladder — which is what
+/// makes a convention written against tile zooms, like Nominatim's address
+/// depth (pxl-spec place.rs), apply to a view that has no tiles.
+pub fn mercator_zoom(screen_height: f64) -> f64 {
+    const TILE_PX: f64 = 256.0;
+    libm::log2(epsg3857::WORLD_WIDTH_3857 / TILE_PX / planar_m_per_px(screen_height))
+}
+
+pub fn scale_bar(screen_height: f64) -> ScaleBar {
+    let dist = camera_store().view_state.dist;
+    let planar_m_per_px = planar_m_per_px(screen_height);
     let mercator_scale = match map_store().map_center {
         Some(c) => {
             let mut g = [0.0; 3];

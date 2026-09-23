@@ -63,13 +63,15 @@ use axum::Router;
 use postgres::{Client, NoTls};
 use pxl_spec::bake::constant::PAGE_TOP_LEVEL;
 use pxl_spec::bake::format::{encode_poi_page, encode_terrain, Terrain};
+use pxl_spec::bake::place_page::{encode_place_group, DICT_OBJECT, GROUP_PAGES, GROUP_SHAMT};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::route::{ASSET_ROOT, GEO_INTERNAL, TILE_ROOT};
 use pxl_spec::space::indexer::L3_SHAMT;
 use pxl_spec::space::pvf3::core::IVEC_WORD_MASK;
-use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pvf3::ivec::{self, IVec};
 
 use pxl_geo_bake::geocode::provider::overture::GeocodeProvider;
+use pxl_geo_bake::geocode::PlaceDict;
 use pxl_geo_bake::poi::provider::overture::PoiProvider;
 use pxl_geo_bake::terrain::leaf::{bake_leaf, bake_ocean, has_land, ocean_samples, Coverage};
 use pxl_geo_bake::terrain::pyramid::{fold_stored, neighbourhood};
@@ -112,7 +114,6 @@ impl Worker {
 #[derive(Clone)]
 enum Cached {
     Bytes(Bytes),
-    Json(Arc<str>),
     Absent,
 }
 
@@ -210,7 +211,12 @@ struct App {
     terrain_base: PathBuf,
     terrain: Mutex<Arc<Pager>>,
     poi: Mutex<HashMap<IVec, Cached>>,
+    /// Keyed by group, which is what a reverse-geocode object is.
     geocode: Mutex<HashMap<IVec, Cached>>,
+    /// The dictionary, read on the first ask and held. A group's numbers are
+    /// places in it, so the one this process answers `_dict` with has to be
+    /// the one it numbered its groups against.
+    place_dict: Mutex<Option<Arc<PlaceDict>>>,
     asset_dir: PathBuf,
     admin_token: Option<String>,
 }
@@ -223,6 +229,20 @@ impl App {
     /// None where there are no workers at all, which is a bake served with no
     /// database behind it: the wait below is for one that is busy, and a wait
     /// for one that does not exist is a thread that never comes back.
+    /// The dictionary, read once. None when there is no database to read it
+    /// from, which is what "geocode answers nothing" means here.
+    fn place_dict(&self) -> Option<Result<Arc<PlaceDict>, String>> {
+        if let Some(dict) = self.place_dict.lock().expect("dict").clone() {
+            return Some(Ok(dict));
+        }
+        let read = self.with_worker(|w| w.geocode.divisions(&mut w.client).map_err(|e| e.to_string()))?;
+        Some(read.map(|rows| {
+            let dict = Arc::new(PlaceDict::of(rows));
+            *self.place_dict.lock().expect("dict") = Some(dict.clone());
+            dict
+        }))
+    }
+
     fn with_worker<T>(&self, f: impl FnOnce(&mut Worker) -> T) -> Option<T> {
         if self.no_geo {
             return None;
@@ -423,36 +443,66 @@ async fn poi(State(app): State<Arc<App>>, Path(raw): Path<String>) -> Response {
     }
 }
 
+/// Every page under a group, in slot order. The bake asks only about the land
+/// ones, from terrain's list; this has no such list and asks about all of
+/// them, which costs a query a page on the first request for a group and
+/// nothing after it.
+fn group_leaves(group: IVec) -> Vec<IVec> {
+    let base = ivec::sh(group, GROUP_SHAMT as i32);
+    let side = 1i64 << GROUP_SHAMT;
+    (0..GROUP_PAGES as i64).map(|k| ivec::add(base, ivec::gather(k % side, k / side, 0))).collect()
+}
+
 async fn geocode(State(app): State<Arc<App>>, Path(raw): Path<String>) -> Response {
+    if raw == DICT_OBJECT {
+        let read = tokio::task::spawn_blocking(move || app.place_dict()).await.expect("geocode dict task");
+        return match read {
+            None => (StatusCode::NOT_FOUND, "not found").into_response(),
+            Some(Ok(dict)) => match dict.packet() {
+                Ok(pkt) => octet_stream(Bytes::from(pkt)),
+                Err(err) => {
+                    eprintln!("[tile/geocode/_dict] {err:?}");
+                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                }
+            },
+            Some(Err(err)) => {
+                eprintln!("[tile/geocode/_dict] {err}");
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            }
+        };
+    }
+
     let Some(idx) = page_idx(&raw) else {
         return (StatusCode::BAD_REQUEST, "bad page_idx").into_response();
     };
 
-    let json = |body: Arc<str>| ([(header::CONTENT_TYPE, "application/json")], body.to_string()).into_response();
     match app.geocode.lock().expect("cache").get(&idx).cloned() {
-        Some(Cached::Json(body)) => return json(body),
-        // A page outside Overture's Divisions coverage has no label, and the
+        Some(Cached::Bytes(b)) => return octet_stream(b),
+        // A group no page of which is in any place has no object, and the
         // client reads the 404 as "no label" rather than as an error.
-        Some(Cached::Absent) => return (StatusCode::NOT_FOUND, [(header::CONTENT_TYPE, "application/json")], "null").into_response(),
+        Some(Cached::Absent) => return (StatusCode::NOT_FOUND, "not found").into_response(),
         _ => {}
     }
 
-    let resolved = tokio::task::spawn_blocking(move || {
-        app.with_worker(|w| w.geocode.reverse(&mut w.client, idx).map_err(|e| e.to_string())).unwrap_or(Ok(None)).map(|result| {
-            let cached = match &result {
-                Some(r) => Cached::Json(Arc::from(serde_json::to_string(r).expect("geocode json").as_str())),
-                None => Cached::Absent,
-            };
-            app.geocode.lock().expect("cache").insert(idx, cached.clone());
-            cached
-        })
+    let made = tokio::task::spawn_blocking(move || {
+        let dict = match app.place_dict() {
+            None => return Ok(Cached::Absent),
+            Some(read) => read?,
+        };
+        let group = app.with_worker(|w| w.geocode.group(&mut w.client, &dict, &group_leaves(idx))).unwrap_or(Ok(None))?;
+        let cached = match group {
+            Some(group) => Cached::Bytes(Bytes::from(encode_place_group(&group).map_err(|e| format!("{e:?}"))?)),
+            None => Cached::Absent,
+        };
+        app.geocode.lock().expect("cache").insert(idx, cached.clone());
+        Ok::<Cached, String>(cached)
     })
     .await
     .expect("geocode task");
 
-    match resolved {
-        Ok(Cached::Json(body)) => json(body),
-        Ok(_) => (StatusCode::NOT_FOUND, [(header::CONTENT_TYPE, "application/json")], "null").into_response(),
+    match made {
+        Ok(Cached::Bytes(b)) => octet_stream(b),
+        Ok(_) => (StatusCode::NOT_FOUND, "not found").into_response(),
         Err(err) => {
             eprintln!("[tile/geocode/{raw}] {err}");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -531,6 +581,9 @@ async fn invalidate(State(app): State<Arc<App>>, headers: HeaderMap, Path(kind):
             None => (StatusCode::BAD_REQUEST, "bad page_idx").into_response(),
         },
         None => {
+            if kind == "geocode" {
+                *app.place_dict.lock().expect("dict") = None;
+            }
             cache.lock().expect("cache").clear();
             (StatusCode::OK, "invalidated all").into_response()
         }
@@ -618,6 +671,7 @@ fn run() -> Result<(), String> {
         terrain_base: cache,
         poi: Mutex::new(HashMap::new()),
         geocode: Mutex::new(HashMap::new()),
+        place_dict: Mutex::new(None),
         asset_dir,
         // Absent in a dev process is not a hole: nothing outside the machine
         // reaches it, and requiring a token to clear a cache would only make

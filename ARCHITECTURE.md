@@ -242,20 +242,20 @@ address        bytes                    range                  placed by
 0              1 MiB                    .stack                 rustc (-z stack-size, --stack-first)
 1 MiB          36 KiB × 3               .ring.desc             build.rs
 2 MiB          8 MiB × 3                .ring.slot             build.rs
-32 MiB         ~0.5 MiB                 .rodata .data .bss     wasm-ld (--global-base)
+32 MiB         ~0.7 MiB                 .rodata .data .bss     wasm-ld (--global-base)
                ↑ __data_end, rounded up to 64 KiB
-~32.5 MiB      125.31 MiB               .fixed.terrain         the kernel (mem/fixed.rs)
-~158 MiB       1 MiB                    .fixed.bake            the kernel (mem/fixed.rs)
-~159 MiB       1 MiB × 2                .fixed.runs            the kernel (mem/fixed.rs)
-~161 MiB       351 MiB  (phone)         .heap                  the allocator
-               863 MiB  (desktop)
+~32.7 MiB      62.81 MiB                .fixed.terrain         the kernel (mem/fixed.rs)
+~95.5 MiB      1 MiB                    .fixed.bake            the kernel (mem/fixed.rs)
+~96.5 MiB      1 MiB × 2                .fixed.runs            the kernel (mem/fixed.rs)
+~98.5 MiB      413 MiB  (phone)         .heap                  the allocator
+               925 MiB  (desktop)
 512 MiB / 1 GiB                         end
 ──────────────────────────────────────────────────────────────────────────────────────
 ```
 
 The map is `pxl-kernel mem/section.rs`'s, over xpute's sections. The stack is first so that an overflow wraps below zero and traps — there is no MMU, so the wraparound is the only guard — and the kernel asserts at boot that the linker's `__stack_high` is where `mem.json` says. The rings sit at fixed addresses and `build.rs` emits `--global-base` from the same numbers, so the linker cannot place `.data` over them.
 
-`.fixed` is what the kernel places once, sizes at compile time and never frees. Today it is the resident terrain (`layer/terrain/fixed.rs`): one plane per ground channel plus an elevation plane, indexed by a page's coordinate at its level modulo the ring's axis, like a clipmap — a ring over a coordinate — within a group of records for its level modulo the window's width. Five groups of 5 × 5 are 125 records. A page that arrives overwrites the one the view has left, and a level that enters the window overwrites the one that left it, so there is no eviction list and no page is refused. Beside it are the one mesh a chunk bake has open (`.fixed.bake`, 1 MiB), sent to the device the moment it is done, and two run sets (`.fixed.runs`), one filled while the other is baked from.
+`.fixed` is what the kernel places once, sizes at compile time and never frees. The largest of it is the resident terrain (`layer/terrain/fixed.rs`): a lane of ground, one packed word a cell, and an elevation plane past it, indexed by a page's coordinate at its level modulo the ring's axis, like a clipmap — a ring over a coordinate — within a group of records for its level modulo the window's width. Five groups of 5 × 5 are 125 records. A page that arrives overwrites the one the view has left, and a level that enters the window overwrites the one that left it, so there is no eviction list and no page is refused. Beside it are the one mesh a chunk bake has open (`.fixed.bake`, 1 MiB), sent to the device the moment it is done, and two run sets (`.fixed.runs`), one filled while the other is baked from.
 
 `.heap` is everything else, under xpute's slab over buddy. A `String`, a band's voxels and a fetch body all come from here. A refused request is a wait, not a failure: the build keeps its place and asks again after a release, and the LOD ladder gets coarser.
 

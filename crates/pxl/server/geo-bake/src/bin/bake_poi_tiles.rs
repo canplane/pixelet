@@ -42,18 +42,20 @@ fn run() -> Result<(), String> {
         &Bake {
             kind: "poi",
             out: PathBuf::from(format!("./out/poi/{}", PUBLISHED_VERSION.poi)),
+            group_shamt: 0,
             every: 500,
             content_type: "application/octet-stream",
             format: Some("xtp poi page (encode_poi_page)"),
             sources: &[table::PLACES],
         },
+        |_| Ok(()),
         || {
             let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
             let provider = PoiProvider::prepare(&mut client).map_err(|e| e.to_string())?;
             Ok(Worker { client, provider })
         },
-        |w, page_idx| {
-            let pois = w.provider.fetch_pois(&mut w.client, page_idx).map_err(|e| e.to_string())?;
+        |w, target| {
+            let pois = w.provider.fetch_pois(&mut w.client, target.idx).map_err(|e| e.to_string())?;
             if pois.is_empty() {
                 return Ok(Page::Empty);
             }

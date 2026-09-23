@@ -1073,6 +1073,7 @@ dependencies = [
 name = "pxl-geo-spec"
 version = "0.0.0"
 dependencies = [
+ "pxl-spec",
  "serde_json",
 ]
 
@@ -1117,6 +1118,8 @@ dependencies = [
  "fnv",
  "hex",
  "libm",
+ "serde",
+ "serde_json",
  "xpute-core",
 ]
 

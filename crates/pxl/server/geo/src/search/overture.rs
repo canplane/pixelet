@@ -17,7 +17,9 @@ use serde::Serialize;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::Row;
 
-use crate::geocode::{self, GeocodePart};
+use pxl_spec::place::PlacePart;
+
+use crate::geocode;
 use crate::search::endpoint::Near;
 use pxl_server::db::DbError;
 
@@ -125,7 +127,7 @@ pub struct SearchResult {
     pub common: Option<serde_json::Value>,
     /// The divisions containing this result's point, broad to fine. It answers
     /// "which of these is this one", for both kinds.
-    pub context: Vec<GeocodePart>,
+    pub context: Vec<PlacePart>,
     pub lon: f64,
     pub lat: f64,
 }

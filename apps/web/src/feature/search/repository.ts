@@ -2,7 +2,7 @@
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { SEARCH_URL } from "@/config/route.ts";
-import type { GeocodePart } from "@/feature/map/geocode/repository.ts";
+import type { PlacePart } from "@/feature/map/geocode/label.ts";
 
 /**
  * One matched place, WGS84 lon/lat — mirrors the API's own SearchResult
@@ -13,15 +13,16 @@ export interface SearchResult {
   kind: "poi" | "division";
   name: string;
   category: string;
-  /** Mirrors GeocodePart's own `common` (world/geocode/repository.ts) —
-   * populated for `kind: "division"`, always `null` for `kind: "poi"`. */
+  /** The result's own name by language tag, the same shape a PlacePart's
+   * `names` is — populated for `kind: "division"`, always `null` for
+   * `kind: "poi"`. */
   common: Record<string, string> | null;
   /** The broader divisions (region/county) containing this result's own
-   * point — assemble via world/geocode/label.ts's own assembleLabel(),
-   * same as the current-address overlay. Populated for both kinds: it is
-   * what tells two same-named results apart, and it replaced a raw address
-   * field that could name a different city than its own coordinates. */
-  context: GeocodePart[];
+   * point — assemble via map/geocode/label.ts's own assembleLabel(), same
+   * as the current-address overlay. Populated for both kinds: it is what
+   * tells two same-named results apart, and it replaced a raw address field
+   * that could name a different city than its own coordinates. */
+  context: PlacePart[];
   lon: f64;
   lat: f64;
 }

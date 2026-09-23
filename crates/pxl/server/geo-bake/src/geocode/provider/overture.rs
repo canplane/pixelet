@@ -21,11 +21,13 @@
 //! switch did.
 
 use postgres::{Client, Row, Statement};
-use pxl_geo_spec::overture::division::{broad_rank, FINE_SUBTYPE_PRIORITY};
-
-use crate::geocode::result::{GeocodePart, GeocodeResult};
+use pxl_geo_spec::overture::division::{broad_rank, rank_of, FINE_SUBTYPE_PRIORITY};
+use pxl_spec::bake::place_page::{leaf_slot, Division, PlaceGroup, APPROX, GROUP_PAGES, NO_LABEL};
+use pxl_spec::place::PlaceRank;
 use pxl_spec::space::adapter::epsg3857;
-use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pvf3::ivec::{self, IVec};
+
+use crate::geocode::{names_of, PartSource, PlaceDict};
 
 /// How far to look for a fallback `division` point when nothing narrower is
 /// available any other way — the true edge of Overture's Divisions coverage,
@@ -37,7 +39,14 @@ use pxl_spec::space::pvf3::ivec::IVec;
 /// boundary.
 const FINE_POINT_RADIUS_M: f64 = 2000.0;
 
-const CONTAINING_DIVISIONS_SQL: &str = "SELECT gers_id, subtype, name, names_common
+/// Every division, in the one order that does not depend on when it is read.
+/// The dictionary is written once from this and a label names a place by its
+/// place in it, so a resumed bake has to number them the same way twice.
+const ALL_DIVISIONS_SQL: &str = "SELECT gers_id, subtype, name, names_common
+FROM overture_divisions
+ORDER BY gers_id";
+
+const CONTAINING_DIVISIONS_SQL: &str = "SELECT gers_id, subtype, name
 FROM overture_divisions
 WHERE ST_Contains(geom, ST_SetSRID(ST_MakePoint($1, $2), 3857))";
 
@@ -64,11 +73,13 @@ LIMIT 1";
 struct Area {
     gers_id: String,
     subtype: String,
+    /// Only to tell two matches apart: what it is called for a reader comes
+    /// from the dictionary, which is read once rather than a page.
     name: String,
-    common: Option<serde_json::Value>,
 }
 
 struct Point {
+    subtype: String,
     name: String,
     common: Option<serde_json::Value>,
 }
@@ -88,7 +99,28 @@ impl GeocodeProvider {
         })
     }
 
-    pub fn reverse(&self, client: &mut Client, page_idx: IVec) -> Result<Option<GeocodeResult>, postgres::Error> {
+    /// Every place a polygon names, paired with the id a label refers to it
+    /// by. A subtype on no rung of the ladder is not one of them — nothing can
+    /// refer to it, because `reverse` will not return it.
+    pub fn divisions(&self, client: &mut Client) -> Result<Vec<(String, Division)>, postgres::Error> {
+        Ok(client
+            .query(ALL_DIVISIONS_SQL, &[])?
+            .iter()
+            .filter_map(|r: &Row| {
+                let rank = rank_of(r.get("subtype"))?;
+                Some((
+                    r.get("gers_id"),
+                    Division {
+                        rank,
+                        name: r.get("name"),
+                        names: names_of(&r.get("names_common")).into_iter().collect(),
+                    },
+                ))
+            })
+            .collect())
+    }
+
+    pub fn reverse(&self, client: &mut Client, page_idx: IVec) -> Result<Option<Vec<PartSource>>, postgres::Error> {
         let bb = epsg3857::get_page_bbox(page_idx);
         let cx = (bb[0][0] + bb[1][0]) / 2.0;
         let cy = (bb[0][1] + bb[1][1]) / 2.0;
@@ -100,7 +132,6 @@ impl GeocodeProvider {
                 gers_id: r.get("gers_id"),
                 subtype: r.get("subtype"),
                 name: r.get("name"),
-                common: r.get("names_common"),
             })
             .collect();
 
@@ -120,6 +151,7 @@ impl GeocodeProvider {
             None => client.query(&self.in_radius, &[&cx, &cy, &FINE_POINT_RADIUS_M])?,
         };
         let fine_point = near.first().map(|r| Point {
+            subtype: r.get("subtype"),
             name: r.get("name"),
             common: r.get("names_common"),
         });
@@ -136,18 +168,18 @@ impl GeocodeProvider {
         broad.sort_by_key(|a| broad_rank(&a.subtype));
 
         let mut seen: Vec<&str> = Vec::new();
-        let mut parts: Vec<GeocodePart> = Vec::new();
+        let mut parts: Vec<PartSource> = Vec::new();
         for a in broad {
-            if seen.contains(&a.name.as_str()) {
+            if seen.contains(&a.name.as_str()) || rank_of(&a.subtype).is_none() {
                 continue;
             }
             seen.push(&a.name);
-            parts.push(GeocodePart::new(a.name.clone(), a.common.clone()));
+            parts.push(PartSource::Division(a.gers_id.clone()));
         }
         if let Some(fine) = fine_from_polygon {
-            if !seen.contains(&fine.name.as_str()) {
+            if !seen.contains(&fine.name.as_str()) && rank_of(&fine.subtype).is_some() {
                 seen.push(&fine.name);
-                parts.push(GeocodePart::new(fine.name.clone(), fine.common.clone()));
+                parts.push(PartSource::Division(fine.gers_id.clone()));
             }
         }
         // Appended, not substituted: a real polygon match and a nested
@@ -156,10 +188,57 @@ impl GeocodeProvider {
         // fine-subtype slot could not represent.
         if let Some(point) = &fine_point {
             if !seen.contains(&point.name.as_str()) {
-                parts.push(GeocodePart::new(point.name.clone(), point.common.clone()).approx());
+                // A point carries a subtype like a polygon does, and it is the
+                // rung the part sits on. A subtype the ladder has no rung for
+                // is still the finest thing this page has a name from.
+                parts.push(PartSource::Near(Division {
+                    rank: rank_of(&point.subtype).unwrap_or(PlaceRank::Neighbourhood),
+                    name: point.name.clone(),
+                    names: names_of(&point.common).into_iter().collect(),
+                }));
             }
         }
 
-        Ok((!parts.is_empty()).then_some(GeocodeResult { parts }))
+        Ok((!parts.is_empty()).then_some(parts))
+    }
+}
+
+impl GeocodeProvider {
+    /// One group: the label each of `leaves` takes, against `dict`.
+    ///
+    /// The caller passes the pages worth asking about — terrain's land list
+    /// for the bake, every page of the group for a dev server with no such
+    /// list — and a group none of them is in any place is nothing.
+    pub fn group(&self, client: &mut Client, dict: &PlaceDict, leaves: &[IVec]) -> Result<Option<PlaceGroup>, String> {
+        let mut group = PlaceGroup {
+            labels: Vec::new(),
+            pages: vec![NO_LABEL; GROUP_PAGES],
+            locals: Vec::new(),
+        };
+        for &leaf in leaves {
+            let Some(parts) = self.reverse(client, leaf).map_err(|e| e.to_string())? else { continue };
+            let mut numbers: Vec<u32> = Vec::with_capacity(parts.len());
+            for part in parts {
+                numbers.push(match part {
+                    PartSource::Division(id) => dict.number(&id).ok_or_else(|| format!("a label names a division the dictionary has not: {id}"))?,
+                    PartSource::Near(place) => {
+                        let i = group.locals.iter().position(|l| *l == place).unwrap_or_else(|| {
+                            group.locals.push(place);
+                            group.locals.len() - 1
+                        });
+                        i as u32 | APPROX
+                    }
+                });
+            }
+            // Every page of a district takes the same numbers, which is the
+            // whole reason the group is the object: they are stored once and
+            // each of its pages points at them.
+            let label = group.labels.iter().position(|l| *l == numbers).unwrap_or_else(|| {
+                group.labels.push(numbers);
+                group.labels.len() - 1
+            });
+            group.pages[leaf_slot(ivec::X(leaf), ivec::Y(leaf))] = label as u16;
+        }
+        Ok((!group.labels.is_empty()).then_some(group))
     }
 }

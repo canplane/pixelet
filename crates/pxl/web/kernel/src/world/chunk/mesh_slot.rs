@@ -42,12 +42,14 @@
 //! is what every measurement below is multiplied by. A group is one format
 //! throughout, which is what lets a slot be `residue × capacity`.
 //!
-//! Measured through a zoom out and back over Seoul (2026-09-23, the ledger's
-//! `work fine_peak` and `coarse_peak`), under the coarse rule where a cell
-//! is its fill on every axis: a leaf's own tier asked 1,729 boxes and a
-//! coarse tier 2,198. The coarse tier is the larger of the two because
-//! nothing of it merges — a box shrunk about its cell's centre touches
-//! nothing (issue/20260923-a-coarse-cell-is-isotropic.md).
+//! What each tier was measured to ask for is on the constant sized against
+//! it, and nowhere else — two copies of one measurement is how this file came
+//! to carry two different pairs of numbers for it (2026-09-23). What the
+//! measurement showed, and the constants cannot say, is that the coarse tier
+//! asks for *more* than the leaf's own: nothing of it merges, since a box
+//! shrunk about its cell's centre touches nothing
+//! (issue/20260923-a-coarse-cell-is-isotropic.md). Either is read live as the
+//! ledger's `work fine_peak` and `coarse_peak`, through a zoom out and back.
 
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 

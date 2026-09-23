@@ -15,6 +15,7 @@ import { useSyncExternalStore } from "react";
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { Command } from "@/kernel/abi/cmd.spec.ts";
+import type { PlacePart } from "@/feature/map/geocode/label.ts";
 import type { Message } from "@/kernel/abi/message.ts";
 import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
 import { orientation_permit } from "@/kernel/control/sensor.ts";
@@ -23,9 +24,9 @@ import { request_frame, strobe } from "@/kernel/sched.ts";
 export type PoseStatus = "idle" | "loading" | "ready" | "error";
 export type UiSnapshot = {
   /** `center` is the map centre as [lon, lat]; `page` is the L3 page it falls
-   * in, as the decimal string a bucket key and a page URL both are. The kernel
-   * sends both because it has both — recomputing the page here would mean a
-   * second implementation of the space in TypeScript. */
+   * in, as a decimal string because a page index is 64-bit. The kernel sends
+   * both because it has both — recomputing the page here would mean a second
+   * implementation of the space in TypeScript. */
   map: { status: "idle" | "loading" | "success" | "error"; is_off_center: boolean; center: [number, number] | null; page: string | null };
   location: { status: PoseStatus; has_location: boolean; error: Message | null };
   companion: { person_ready: boolean; pet_ready: boolean };
@@ -35,6 +36,10 @@ export type UiSnapshot = {
   camera_busy: boolean;
   settings: Record<string, boolean | string | number>;
   scale_bar: { total_meters: number; bar_width_px: number; is_default_zoom: boolean };
+  /** The place the map centre is in, broad to narrow, already cut at the
+   * rung the current zoom asks for; empty where the centre is in none or the
+   * packets it is read out of have not arrived. */
+  place: PlacePart[];
   compass: { show: boolean };
   object_storage_version: number;
 };
@@ -49,6 +54,7 @@ const INITIAL: UiSnapshot = {
   camera_busy: false,
   settings: {},
   scale_bar: { total_meters: 0, bar_width_px: 0, is_default_zoom: true },
+  place: [],
   compass: { show: false },
   object_storage_version: 0,
 };

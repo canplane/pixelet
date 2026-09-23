@@ -85,6 +85,12 @@ fn priority(anchor: IVec, p: LevelPage, want: Want) -> f64 {
     2.0 * want as u32 as f64 + d / (d + 1.0)
 }
 
+/// Past every priority `priority` produces: its top term is the class
+/// doubled and the distance under it never reaches one, so a step past the
+/// last class is past all of them. What fetches beside the ground but must
+/// never take a credit from it.
+pub const BEHIND_TERRAIN: f64 = 2.0 * (Want::Prefetch as u32 + 1) as f64;
+
 /// Where a leaf stands in terrain's order, for what fetches beside it.
 pub fn leaf_priority(anchor: IVec, page_idx: IVec) -> f64 {
     priority(anchor, LevelPage::new(0, page_idx), Want::Coverage)

@@ -15,7 +15,7 @@ path = "src/main.rs"
 axum = "0.8"
 deadpool-postgres = "0.14"
 pxl-server = { path = ".." }
-pxl-spec = { path = "../../spec" }
+pxl-spec = { path = "../../spec", features = ["serde"] }
 pxl-geo-spec = { path = "../geo-spec" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

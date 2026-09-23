@@ -33,6 +33,13 @@ import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT }
  * check here and a check by hand are looking at the same object. */
 const PAGE = "12720250262323200";
 
+/** The reverse-geocode group PAGE falls in: its lanes four levels down
+ * (pxl-spec bake/place_page.rs's `GROUP_SHAMT`), since a geocode object
+ * covers 16 pages a side rather than one page. Written out rather than
+ * computed, because computing it means the packed-lane arithmetic in
+ * TypeScript that pxl-spec exists to be the only copy of. */
+const GEOCODE_GROUP = "794946921889792";
+
 /** Any content-addressed asset: the table's first entry, whatever it is. The
  * point is that the bucket answers the asset root, not which model does. */
 const ASSET_KEY = Object.values(INGESTED)[0].key;
@@ -54,7 +61,8 @@ function edgeChecks(): Check[] {
     { path: terrain, want: 200, why: "a terrain page, out of the bucket" },
     { path: `${TILE_ROOT}/terrain/${PUBLISHED_VERSION.terrain}/_ocean`, want: 200, why: "the shared ocean page every water tile falls back to" },
     { path: tile("poi"), want: 200, why: "a POI page" },
-    { path: tile("geocode"), want: 200, why: "a reverse-geocode page" },
+    { path: `${TILE_ROOT}/geocode/${PUBLISHED_VERSION.geocode}/${GEOCODE_GROUP}`, want: 200, why: "a reverse-geocode group" },
+    { path: `${TILE_ROOT}/geocode/${PUBLISHED_VERSION.geocode}/_dict`, want: 200, why: "the dictionary every group's numbers are read against" },
     { path: `/${ASSET_KEY}`, want: 200, why: "a content-addressed asset, its own root" },
     ...commonChecks(),
     // The pre-09-18 shape. A 200 from any of these means a relay somewhere is
