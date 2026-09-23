@@ -58,7 +58,7 @@ Above the dashed line is served as files; below it runs in the tab, on the turn'
 
 The kernel decides what exists, what is on screen, at what detail, and what to draw. The shell forwards events, does the I/O the kernel names, renders the UI, and turns the renderer's calls into WebGPU. What it renders from is the kernel's snapshot: one JSON document of UI state, written after a turn that changed it. What each frame and task cost goes to a read-only ledger, which nothing that schedules is allowed to read.
 
-Almost nothing is computed at request time. Pages and assets are baked ahead and served from the bucket by version; the one exception is forward search, which queries a database when asked.
+Almost nothing is computed at request time. Pages and assets are baked ahead and served from the bucket under names that cannot come to mean something else — a page under its bake's version, an asset under a hash of its own bytes; the one exception is forward search, which queries a database when asked.
 
 [ARCHITECTURE.md](./ARCHITECTURE.md) is how the application is built, in three parts: the world it addresses — the levels, the coordinate, where the ground comes from — then the client that holds it, then the engine that computes with it.
 
@@ -138,7 +138,7 @@ To measure the client, use `preview` (`localhost:4173`). It is the bundle as the
 ▼   answered here                       ▼   relayed to the VM
 the client                              /geo/search ─▶ pxl-geo ─▶ db-geo
 /geo/tiles   R2, by version                                     (PostGIS)
-/asset       R2, by hash                /api        ─▶ pxl-api ─▶ db-main
+/asset       R2, by hashed path         /api        ─▶ pxl-api ─▶ db-main
 filled by the bakes, offline
 ```
 
