@@ -17,7 +17,7 @@
 //! is not kept: while pages wait, it is asked for again (tile_fetcher.rs).
 
 use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
-use pxl_spec::bake::format::{decode_terrain, Ground, Terrain, Tile};
+use pxl_spec::bake::format::{decode_terrain, decode_terrain_into, Ground, PageRoom, Terrain, Tile};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_runtime::abi::fetch::FetchFail;
@@ -83,16 +83,37 @@ pub unsafe fn open_terrain(lanes: TerrainLanes) -> Terrain {
     }
 }
 
-/// A body decoded, refused unless every lane is the page's size.
+/// A body decoded, refused unless every lane is the page's size. For the
+/// paths that need a page in hand — the shared ocean tile, which is held
+/// rather than recorded. A fetched page never takes it: it goes straight
+/// into its record (`decode_into`).
 fn decode(pkt: &[u8]) -> Result<Terrain, FetchFail> {
     let t = decode_terrain(pkt).map_err(|_| FetchFail::Decode)?;
     let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
     let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
-    let g = &t.ground;
-    if g.planes().iter().any(|l| l.len() != cells) || t.ele.len() != samples {
+    if t.ground.len() != cells || t.ele.len() != samples {
         return Err(FetchFail::Decode);
     }
     Ok(t)
+}
+
+/// A fetched page written into `lanes`, the record's own room, in one pass
+/// from the packet: `decode_terrain_into` reads the wire's planes where they
+/// lie and packs a cell at a time, so nothing page-sized stands between the
+/// page arriving and the ground being drawn from it.
+///
+/// # Safety
+/// `lanes` is a record of the range, at the page's lane sizes, and nothing
+/// else is reading it.
+unsafe fn decode_into(pkt: &[u8], lanes: TerrainLanes) -> Result<(), FetchFail> {
+    let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
+    let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
+    let room = PageRoom {
+        // SAFETY: the caller's contract.
+        cells: unsafe { core::slice::from_raw_parts_mut(lanes.cells as *mut GroundCell, cells) },
+        ele: unsafe { core::slice::from_raw_parts_mut(lanes.ele as *mut i16, samples) },
+    };
+    decode_terrain_into(pkt, room).map_err(|_| FetchFail::Decode)
 }
 
 /// The range's base. None under a native test, which lays no memory out.
@@ -181,29 +202,35 @@ fn lanes_of(slot: u32) -> Result<TerrainLanes, FetchFail> {
 /// page until release_terrain.
 pub fn adopt_terrain(p: LevelPage, pkt: &[u8], phases: &mut Phases) -> Result<(), FetchFail> {
     let t0 = now();
-    let decoded = decode(pkt)?;
-    let t1 = now();
-    adopt(p, &decoded)?;
-    phases.push("decode_ms", t1 - t0);
-    phases.push("adopt_ms", now() - t1);
-    Ok(())
-}
-
-/// A page the client folded itself from the pages under it that it holds
-/// (tile_fetcher.rs), made resident as a fetched one is.
-pub fn adopt_folded(p: LevelPage, t: &Terrain) -> Result<(), FetchFail> {
-    adopt(p, t)
-}
-
-fn adopt(p: LevelPage, decoded: &Terrain) -> Result<(), FetchFail> {
     // An arrival the camera has moved past keeps its body only where the
     // range has room to spare, which is `record_for`'s answer; there is
     // nothing to report when it has not, since the request it answers was
     // withdrawn a turn or more ago.
     let Some(record) = record_for(p) else { return Ok(()) };
     let lanes = lanes_of(record)?;
-    write_lanes(decoded, lanes);
-    // Whatever the record carried has just had its bytes written over.
+    // SAFETY: `record_for` gave this record to this page, and nothing reads a
+    // record between here and the store being told below.
+    unsafe { decode_into(pkt, lanes)? };
+    phases.push("decode_ms", now() - t0);
+    take_record(p, record, lanes);
+    Ok(())
+}
+
+/// A page the client folded itself from the pages under it that it holds
+/// (tile_fetcher.rs), made resident as a fetched one is.
+pub fn adopt_folded(p: LevelPage, t: &Terrain) -> Result<(), FetchFail> {
+    // A folded page is already packed — the client made it from pages it
+    // holds — so its cells go over as they are.
+    let Some(record) = record_for(p) else { return Ok(()) };
+    let lanes = lanes_of(record)?;
+    write_lanes(t, lanes);
+    take_record(p, record, lanes);
+    Ok(())
+}
+
+/// The record is this page's from here: whatever it carried is gone, and the
+/// store reads the page out of it.
+fn take_record(p: LevelPage, record: u32, lanes: TerrainLanes) {
     if let Some(gone) = put(p, record) {
         tile_store().clear_page(gone);
     }
@@ -211,7 +238,6 @@ fn adopt(p: LevelPage, decoded: &Terrain) -> Result<(), FetchFail> {
     // sizes, until another page's coordinate names the same record.
     let terrain = unsafe { open_terrain(lanes) };
     tile_store().set_page(p, Tile { terrain });
-    Ok(())
 }
 
 struct Ocean {

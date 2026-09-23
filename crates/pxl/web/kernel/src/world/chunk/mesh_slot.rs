@@ -43,7 +43,7 @@
 //! throughout, which is what lets a slot be `residue × capacity`.
 //!
 //! Measured through a zoom out and back over Seoul (2026-09-23, the ledger's
-//! `work fine_boxes` and `coarse_boxes`), under the coarse rule where a cell
+//! `work fine_peak` and `coarse_peak`), under the coarse rule where a cell
 //! is its fill on every axis: a leaf's own tier asked 1,729 boxes and a
 //! coarse tier 2,198. The coarse tier is the larger of the two because
 //! nothing of it merges — a box shrunk about its cell's centre touches

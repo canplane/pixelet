@@ -88,7 +88,7 @@
   "FRAME": {
     "$type": "u32",
     "$doc": [
-      "One rendered frame (sched/ledger/record.rs FrameSample). `settled` is 0 or 1; `phases` is a lane of PHASE_NAMES' length, `gpu_spans` of GPU_SPAN_NAMES', `census` pairs of draws and triangles in CENSUS_TAGS' order, and `level_tris` and `level_pages` a word a level of the pyramid, LIMITS.LEVELS of them. A lane's name says its unit: `_ms`, `_mb`, and `_levels` for a set of levels as bits."
+      "One rendered frame (sched/ledger/record.rs FrameSample). `settled` is 0 or 1; `phases` is a lane of PHASE_NAMES' length, `gpu_spans` of GPU_SPAN_NAMES', `census` pairs of draws and triangles in CENSUS_TAGS' order, and `level_tris` and `pages_by_level` a word a level of the pyramid, LIMITS.LEVELS of them. A lane's name says its unit: `_ms`, `_mb`, and `_levels` for a set of levels as bits."
     ],
     "t": 0,
     "dt_ms": 1,
@@ -97,7 +97,7 @@
     "sched_ms": 4,
     "budget_ms": 5,
     "phases": 6,
-    "tick_ms": 11,
+    "chunks_ms": 11,
     "task_ms": 12,
     "gpu_ms": 13,
     "gpu_spans": 14,
@@ -125,46 +125,48 @@
     "mounts_added": 71,
     "mounts_removed": 72,
     "mounts_layouts": 73,
-    "pages": 74,
-    "level_pages": 75,
-    "poi_count": 86,
+    "pages_total": 74,
+    "pages_by_level": 75,
+    "pages_poi": 86,
     "heap_used_mb": 87,
     "heap_live_mb": 88,
-    "heap_range_mb": 89,
-    "heap_refusals": 90,
-    "heap_largest_free_mb": 91,
-    "ring_cq_peak": 92,
-    "ring_spill_peak": 93,
-    "work_scans": 94,
-    "work_bakes": 95,
-    "work_fine_boxes": 96,
-    "work_coarse_boxes": 97,
-    "q_terrain": 98,
-    "q_poi": 99,
-    "stale_chunks": 100,
-    "stale_drawn": 101,
-    "stale_levels": 102,
-    "stale_hidden": 103,
-    "stale_uncovered": 104,
-    "stale_unready": 105,
-    "stale_on_waiter": 106,
-    "slot_waits": 107,
-    "slot_wait_levels": 108,
-    "slot_holder_levels": 109,
-    "slot_cut": 110,
-    "cap_commit_left": 111,
-    "cap_mount_left": 112,
-    "cap_mount_full": 113,
-    "cap_record_refused": 114,
-    "turn_effects_ms": 115,
-    "turn_stage_ms": 116,
-    "turn_step_ms": 117,
-    "turn_step_name": 118,
-    "WORDS": 119
+    "heap_run_mb": 89,
+    "heap_slot_mb": 90,
+    "heap_range_mb": 91,
+    "heap_refusals": 92,
+    "heap_largest_free_mb": 93,
+    "ring_cq_peak": 94,
+    "ring_spill_peak": 95,
+    "work_scans": 96,
+    "work_bakes": 97,
+    "work_fine_peak": 98,
+    "work_coarse_peak": 99,
+    "q_terrain": 100,
+    "q_poi": 101,
+    "stale_chunks": 102,
+    "stale_drawn": 103,
+    "stale_levels": 104,
+    "stale_hidden": 105,
+    "stale_uncovered": 106,
+    "stale_unready": 107,
+    "stale_on_waiter": 108,
+    "slot_waits": 109,
+    "slot_wait_levels": 110,
+    "slot_holder_levels": 111,
+    "slot_cut": 112,
+    "cap_commit_left": 113,
+    "cap_mount_left": 114,
+    "cap_mount_full": 115,
+    "cap_record_refused": 116,
+    "turn_effects_ms": 117,
+    "turn_stage_ms": 118,
+    "turn_step_ms": 119,
+    "turn_step_name": 120,
+    "WORDS": 121
   },
   "FRAME_GROUPS": {
     "$doc": [
-      "What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (view.test.ts), so a lane the kernel adds is printed without a word written for it."
+      "What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (view.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what the chunk scheduler is doing, what it built and fetched, and what it all holds — and the report and the panel both follow it."
     ],
     "pace": [
       "t",
@@ -174,8 +176,14 @@
       "sched_ms",
       "budget_ms",
       "phases",
-      "tick_ms",
+      "chunks_ms",
       "task_ms"
+    ],
+    "turn": [
+      "turn_effects_ms",
+      "turn_stage_ms",
+      "turn_step_ms",
+      "turn_step_name"
     ],
     "gpu": [
       "gpu_ms",
@@ -185,15 +193,6 @@
       "census",
       "level_tris",
       "px"
-    ],
-    "device": [
-      "buffers",
-      "buffer_mb",
-      "arena_mb",
-      "tex_depth_mb",
-      "tex_msaa_mb",
-      "tex_shadow_mb",
-      "tex_layers_mb"
     ],
     "lod": [
       "lod_chunks",
@@ -210,32 +209,6 @@
       "mounts_added",
       "mounts_removed",
       "mounts_layouts"
-    ],
-    "pages": [
-      "pages",
-      "level_pages",
-      "poi_count"
-    ],
-    "heap": [
-      "heap_used_mb",
-      "heap_live_mb",
-      "heap_range_mb",
-      "heap_refusals",
-      "heap_largest_free_mb"
-    ],
-    "ring": [
-      "ring_cq_peak",
-      "ring_spill_peak"
-    ],
-    "work": [
-      "work_scans",
-      "work_bakes",
-      "work_fine_boxes",
-      "work_coarse_boxes"
-    ],
-    "q": [
-      "q_terrain",
-      "q_poi"
     ],
     "stale": [
       "stale_chunks",
@@ -258,11 +231,42 @@
       "cap_mount_full",
       "cap_record_refused"
     ],
-    "turn": [
-      "turn_effects_ms",
-      "turn_stage_ms",
-      "turn_step_ms",
-      "turn_step_name"
+    "work": [
+      "work_scans",
+      "work_bakes",
+      "work_fine_peak",
+      "work_coarse_peak"
+    ],
+    "q": [
+      "q_terrain",
+      "q_poi"
+    ],
+    "pages": [
+      "pages_total",
+      "pages_by_level",
+      "pages_poi"
+    ],
+    "device": [
+      "buffers",
+      "buffer_mb",
+      "arena_mb",
+      "tex_depth_mb",
+      "tex_msaa_mb",
+      "tex_shadow_mb",
+      "tex_layers_mb"
+    ],
+    "heap": [
+      "heap_used_mb",
+      "heap_live_mb",
+      "heap_run_mb",
+      "heap_slot_mb",
+      "heap_range_mb",
+      "heap_refusals",
+      "heap_largest_free_mb"
+    ],
+    "ring": [
+      "ring_cq_peak",
+      "ring_spill_peak"
     ]
   },
   "TASK": {
@@ -291,9 +295,9 @@
       "One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0."
     ],
     "sample": 0,
-    "has_prev": 119,
-    "prev": 120,
-    "WORDS": 239
+    "has_prev": 121,
+    "prev": 122,
+    "WORDS": 243
   },
   "SPREAD": {
     "$type": "u32",
@@ -345,19 +349,19 @@
       "WORDS": 5
     },
     "frames": {
-      "AT": 5,
       "present": 0,
       "n": 1,
       "seconds": 2,
       "moving": 3,
       "missed": 4,
+      "AT": 5,
       "overran": 5,
       "dt": 6,
       "task": 9,
       "offthread": 12,
       "gpu": 15,
       "sched": 18,
-      "tick": 21,
+      "chunks": 21,
       "phases": 24,
       "gpu_spans": 39,
       "work_scans": 60,
@@ -367,22 +371,22 @@
       "backlog_s": 64,
       "backlog_per_s_scans": 65,
       "backlog_per_s_bakes": 66,
-      "tick_per_bake": 67,
+      "chunks_per_bake": 67,
       "mounts_added": 68,
       "mounts_removed": 69,
       "used_delta_mb": 70,
       "census": 71,
       "level_tris": 91,
       "last": 102,
-      "WORDS": 221
+      "WORDS": 223
     },
     "tasks": {
-      "AT": 226,
+      "AT": 228,
       "slots": 0,
       "WORDS": 75
     },
     "counters": {
-      "AT": 301,
+      "AT": 303,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -406,7 +410,7 @@
       "WORDS": 20
     },
     "atlas": {
-      "AT": 321,
+      "AT": 323,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -414,7 +418,7 @@
       "WORDS": 4
     },
     "retain": {
-      "AT": 325,
+      "AT": 327,
       "nodes": 0,
       "run_sets": 1,
       "run_set_mb": 2,
@@ -427,14 +431,14 @@
       "WORDS": 9
     },
     "fetch": {
-      "AT": 334,
+      "AT": 336,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "poi": {
-      "AT": 337,
+      "AT": 339,
       "badge_count": 0,
       "dropped": 1,
       "place_ms": 2,
@@ -461,11 +465,11 @@
       "WORDS": 23
     },
     "peak": {
-      "AT": 360,
+      "AT": 362,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
-      "tick_ms": 3,
+      "chunks_ms": 3,
       "gpu_ms": 4,
       "draw_calls": 5,
       "triangles": 6,
@@ -480,17 +484,17 @@
       "offscreen_pending": 15,
       "oldest_release_ms": 16,
       "oldest_visible_ms": 17,
-      "fine_boxes": 18,
-      "coarse_boxes": 19,
+      "fine_peak": 18,
+      "coarse_peak": 19,
       "WORDS": 20
     },
     "steps": {
-      "AT": 380,
+      "AT": 382,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
-    "WORDS": 541
+    "WORDS": 543
   },
   "READ": {
     "$type": "u32",

@@ -339,7 +339,7 @@ const GROUND_CHANNELS = ["land", "water", "structure", "transport"];
 /// the field's width comes out of the table's length, so a new type widens
 /// its own field and shifts the ones above it with nothing edited by hand
 /// (issue/20260923-a-ground-cell-is-fourteen-bits.md).
-function groundPack(spec: CubeSpec): string[] {
+function groundPack(spec: CubeSpec): { rs: string[]; ts: string[] } {
   const tables = GROUND_CHANNELS.map((name) => {
     const ch = spec.channels.find((c) => c.name === name);
     if (!ch) throw new Error(`cube_type.json has no ${name} channel`);
@@ -373,7 +373,22 @@ function groundPack(spec: CubeSpec): string[] {
     return out;
   };
 
-  return [
+  const ts = [
+    "/** A ground cell's four channels in one word: each a dense index into its",
+    " * own table, whose entries are the catalog's own numbers. VOID is index 0",
+    " * and UNKNOWN the last. The widths are the tables' lengths and nothing",
+    " * else; pxl-spec's bake/pack.rs is the reader that knows a field has a",
+    " * place, and this is here for whoever writes a page the kernel will read. */",
+    "export const ground_pack = {",
+    `  channels: [${tables.map((t) => JSON.stringify(t.name)).join(", ")}],`,
+    `  number: [${tables.map((t) => `[${t.values.map((v) => numberOf.get(v)).join(", ")}]`).join(", ")}],`,
+    `  index: [${inverse.map((row) => `[${row.join(", ")}]`).join(", ")}],`,
+    `  bits: [${bits.join(", ")}],`,
+    `  shift: [${shifts.join(", ")}],`,
+    `  cell_bits: ${cellBits},`,
+    "} as const;",
+  ];
+  const rs = [
     "/// A ground cell's four channels in one word: each a dense index into its",
     "/// own table, whose entries are the catalog's own numbers. VOID is index 0",
     "/// and UNKNOWN the last, so a cell nothing painted is a word of zero and a",
@@ -410,6 +425,7 @@ function groundPack(spec: CubeSpec): string[] {
     `    pub const CELL_BITS: u32 = ${cellBits};`,
     "}",
   ];
+  return { rs, ts };
 }
 
 async function cubeTypeOutputs(): Promise<Output[]> {
@@ -512,7 +528,9 @@ async function cubeTypeOutputs(): Promise<Output[]> {
     "    }",
   );
   rs.push(...enums, "}");
-  rs.push("", ...groundPack(spec));
+  const pack = groundPack(spec);
+  rs.push("", ...pack.rs);
+  ts.push("", ...pack.ts);
   return [
     { path: "apps/web/src/catalog/cell/cube_type.spec.ts", text: ts.join("\n") + "\n" },
     { path: "crates/pxl/spec/src/cell/cube_type.spec.rs", text: rs.join("\n") + "\n" },

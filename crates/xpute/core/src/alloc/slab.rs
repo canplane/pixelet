@@ -97,6 +97,14 @@ pub struct SlabMalloc<R: Range> {
     allocs: UnsafeCell<u32>,
     /// Requests answered with null, both paths: the one way the heap is full.
     refusals: UnsafeCell<u32>,
+    /// Bytes borrowed from the buddy as runs, and of those the bytes out in
+    /// slots, each at its class's size. The buddy counts a run whole the
+    /// moment it is borrowed, so its `live` cannot say how much of the heap
+    /// anything actually holds; the difference between these two is what the
+    /// carving costs — a run's header slots and every slot standing free in a
+    /// run that cannot go back until its last one does.
+    run_live: UnsafeCell<usize>,
+    slot_live: UnsafeCell<usize>,
 }
 
 // SAFETY: one thread — a module instantiated once per memory, which is what
@@ -171,6 +179,8 @@ impl<R: Range> SlabMalloc<R> {
             partial: UnsafeCell::new([ptr::null_mut(); MAX_CLASSES]),
             allocs: UnsafeCell::new(0),
             refusals: UnsafeCell::new(0),
+            run_live: UnsafeCell::new(0),
+            slot_live: UnsafeCell::new(0),
         }
     }
 
@@ -220,6 +230,21 @@ impl<R: Range> SlabMalloc<R> {
     /// The largest block on the page level's free lists.
     pub fn largest_free(&self) -> usize {
         self.buddy.largest_free()
+    }
+
+    /// Bytes borrowed from the range as runs to be carved into slots. What
+    /// `live` holds besides this went straight down as whole pages.
+    pub fn run_live(&self) -> usize {
+        // SAFETY: single-threaded; see the Sync impl.
+        unsafe { *self.run_live.get() }
+    }
+
+    /// Bytes out in slots, each at its class's size: what callers of a
+    /// sub-page request actually hold. `run_live` less this is what the
+    /// carving costs.
+    pub fn slot_live(&self) -> usize {
+        // SAFETY: single-threaded; see the Sync impl.
+        unsafe { *self.slot_live.get() }
     }
 
     /// Where the page level's row lies, for a host to read in place.
@@ -277,6 +302,8 @@ impl<R: Range> SlabMalloc<R> {
             unsafe { *(slot as *mut *mut u8) = next };
             next = slot;
         }
+        // SAFETY: single-threaded; see the Sync impl.
+        unsafe { *self.run_live.get() += run_bytes };
         let run = at as *mut Run;
         // SAFETY: the run's leading slots, which head_slots keeps for this.
         unsafe {
@@ -369,6 +396,7 @@ unsafe impl<R: Range> GlobalAlloc for SlabMalloc<R> {
             if (*run).free.is_null() {
                 self.drop_partial(c, run);
             }
+            *self.slot_live.get() += 1usize << class_log2(c);
             *allocs = allocs.wrapping_add(1);
             slot
         }
@@ -390,6 +418,7 @@ unsafe impl<R: Range> GlobalAlloc for SlabMalloc<R> {
             *(ptr as *mut *mut u8) = (*run).free;
             (*run).free = ptr;
             (*run).inuse -= 1;
+            *self.slot_live.get() -= 1usize << class_log2(c);
 
             if (*run).inuse == 0 {
                 // The last slot: the run goes back, and every class gets the
@@ -397,6 +426,7 @@ unsafe impl<R: Range> GlobalAlloc for SlabMalloc<R> {
                 if !was_full {
                     self.drop_partial(c, run);
                 }
+                *self.run_live.get() -= run_bytes;
                 self.buddy.free(run as *mut u8, run_bytes);
             } else if was_full {
                 self.push_partial(c, run);

@@ -36,7 +36,8 @@
 use xpute_core::math::scalar::round;
 
 use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN};
-use super::format::{ch_index, Ground, Terrain, GROUND_CH_KEYS};
+use super::format::{Ground, Terrain, GROUND_CH_KEYS};
+use super::pack::{channel_of, with_channel, GroundCell};
 
 /// Which child of the 2×2 a tie takes when folding into `level`.
 ///
@@ -92,36 +93,33 @@ pub fn majority8(v: [u32; 8], level: i32) -> u32 {
     half.unwrap_or(tie)
 }
 
-/// One plane folded: `children[dx + 2·dy]` is the child at (dx, dy) of the
-/// parent, each `PAGE_CELL_SPAN²` cells, and `out` the parent's plane.
-pub fn fold_plane(children: [&[u8]; 4], level: u32, out: &mut [u8]) {
+/// Every ground channel folded the same way, each on its own: a channel votes
+/// among its children's values for that channel and no other's, which is what
+/// keeps a road from taking the land's vote under it.
+///
+/// Read straight out of the packed cells and written straight back, a field
+/// at a time. A page is one array and there are no planes to take apart.
+pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
     let span = PAGE_CELL_SPAN as usize;
     let half = span / 2;
     let tie = tie_child(level);
+    let mut out = vec![0 as GroundCell; span * span];
     for py in 0..span {
         let (dy, cy) = (py / half, (2 * py) % span);
         for px in 0..span {
             let (dx, cx) = (px / half, (2 * px) % span);
-            let c = children[dx + 2 * dy];
+            let c = &children[dx + 2 * dy].cells;
             let at = cy * span + cx;
-            let v = [c[at], c[at + 1], c[at + span], c[at + span + 1]];
-            out[py * span + px] = majority(v, v[tie]);
+            let four = [c[at], c[at + 1], c[at + span], c[at + span + 1]];
+            let mut cell = 0;
+            for key in GROUND_CH_KEYS {
+                let v = four.map(|f| channel_of(f, key));
+                cell = with_channel(cell, key, majority(v, v[tie]));
+            }
+            out[py * span + px] = cell;
         }
     }
-}
-
-/// Every ground channel folded the same way, each on its own: a channel votes
-/// among its children's values for that channel and no other's, which is what
-/// keeps a road from taking the land's vote under it. The cells are packed, so
-/// the planes come out, fold, and go back in.
-pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
-    let planes = children.map(|g| g.planes());
-    let folded = GROUND_CH_KEYS.map(|k| {
-        let mut out = vec![0u8; (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize];
-        fold_plane(core::array::from_fn(|c| &planes[c][ch_index(k)][..]), level, &mut out);
-        std::borrow::Cow::from(out)
-    });
-    Ground::from_planes(folded)
+    Ground { cells: out.into() }
 }
 
 /// The elevation folded: `around[(qx + 1) + 4·(qy + 1)]` is the padded grid of

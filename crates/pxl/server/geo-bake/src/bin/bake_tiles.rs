@@ -392,7 +392,7 @@ fn run() -> Result<(), String> {
     // Every level reads the one ocean page for its open water, which holds
     // only if a parent of four ocean pages is the ocean page.
     let folded_ocean = fold_parent(0, 1, |_| Some(&ocean.ground), |_| Some(&*ocean.ele), &ocean).ok_or("[bake/pyramid] no parent over four children")?;
-    if folded_ocean.ele != ocean.ele || folded_ocean.ground.planes() != ocean.ground.planes() {
+    if folded_ocean.ele != ocean.ele || folded_ocean.ground.cells != ocean.ground.cells {
         return Err("[bake/pyramid] the ocean page does not fold to itself: one ocean cannot serve every level".to_string());
     }
     let mut top = 0;

@@ -119,24 +119,29 @@ fn work_sample(c: &mut CoreTick, census: &Census) -> WorkSample {
     let sample = WorkSample {
         scans: scans.wrapping_sub(c.last_work.0) as f64,
         bakes: st.bakes.wrapping_sub(c.last_work.1) as f64,
-        fine_boxes: census.fine_boxes as f64,
-        coarse_boxes: census.coarse_boxes as f64,
+        fine_peak: census.fine_peak as f64,
+        coarse_peak: census.coarse_peak as f64,
     };
     c.last_work = (scans, st.bakes);
     sample
 }
 
-/// The heap's gauges, straight off the allocator's seam (host.rs). `used` is a
+/// The heap as the allocator's seam reads it (host.rs), in MiB. `used` is a
 /// high-water mark (`max_ptr - base_ptr`) while `live` is what is out on loan,
 /// so the two are not each other's complement; a request is served or it is
-/// refused, and `refusals` counts the second.
+/// refused, and `refusals` counts the second. `run` and `slot` are not
+/// rounded, because what the carving costs is their difference and it is
+/// smaller than what rounding would hide.
 fn heap_sample() -> HeapSample {
+    let h = crate::host::heap_stat();
     HeapSample {
-        used_mb: round(crate::host::heap_used() as f64 / MB),
-        live_mb: round(crate::host::heap_live() as f64 / MB),
-        range_mb: round(crate::host::heap_bytes() as f64 / MB),
-        refusals: crate::host::heap_refusals() as f64,
-        largest_free_mb: crate::host::heap_largest_free() as f64 / MB,
+        used_mb: round(h.used as f64 / MB),
+        live_mb: round(h.live as f64 / MB),
+        run_mb: h.run as f64 / MB,
+        slot_mb: h.slot as f64 / MB,
+        range_mb: round(h.range as f64 / MB),
+        refusals: h.refusals as f64,
+        largest_free_mb: h.largest_free as f64 / MB,
     }
 }
 
@@ -183,7 +188,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
         viewport_h: v.height,
         fov_deg: v.fov,
         delta_s: ctx.delta,
-        budget_ms: ctx.budget.remaining(),
+        remaining_ms: ctx.budget.remaining(),
         hard_slack_ms: HARD_SLACK_MS,
         pixel_dither: settings.pixel_dither,
         retain_budget_bytes: RETAIN_BUDGET_BYTES(),
@@ -230,11 +235,11 @@ pub async fn build_task() {
 }
 
 /// The report phase's step: the frame's numbers, after every other phase has
-/// run, so `sched_ms` is the whole tick.
+/// run, so `sched_ms` covers every phase.
 pub fn core_tick_report_step(ctx: &mut TickContext) {
     let c = core_tick();
     // No chunks this frame — a search jump empties the stage for a moment.
-    let Some(tick_ms) = c.visible_pass else { return };
+    let Some(chunks_ms) = c.visible_pass else { return };
     let frame_t0 = ctx.budget.t0;
     let census = kernel().sched.census;
     let node_work = take_node_counts();
@@ -256,7 +261,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         sched_ms: now() - frame_t0,
         budget_ms: ctx.budget.total_ms,
         phases: ctx.phase_ms,
-        tick_ms,
+        chunks_ms,
         task_ms: host.task_ms,
         gpu,
         device: host.device,
@@ -266,8 +271,8 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             layouts: node_work.layouts as f64,
         },
         lod: LodSample {
-            chunks: crate::world::chunk::node::chunk_nodes().len() as f64,
-            pending: census.left as f64,
+            chunks: census.chunks as f64,
+            pending: census.pending as f64,
             in_frustum: census.in_frustum as f64,
             settling: census.settling as f64,
             blend_active: census.blend_active as f64,

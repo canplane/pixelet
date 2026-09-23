@@ -1,15 +1,15 @@
 // pxl-geo-bake/terrain/pipeline/ground.rs
 
-//! Rasterize normalized features into the four ground channels of the current
-//! tile.
+//! Rasterize normalized features into the ground cells of the current tile.
 //!
 //! - input features are interpreted relative to the current L3 page base
 //! - raster rows follow south-to-north world ordering
 //! - the raster contract is driven by the baked ground constants
 //!
-//! The channels are built as plain `Vec<u8>` and handed to `Ground` at the
-//! end: the buffer is reference-counted, and this is the one place that
-//! touches every cell of a page.
+//! A page is one array of packed cells and a feature paints one channel's
+//! field of it (pxl-spec bake/pack.rs), so nothing here holds a plane: the
+//! page leaves this function in the shape the wire carries and the client
+//! holds. This is the one place that touches every cell of a page.
 //!
 //! Row and column bounds are computed in `f64` and carried as `i64`, not as
 //! the unsigned indices they end up being: a bound below zero or past the
@@ -17,8 +17,9 @@
 //! `u32` would wrap into a very long one.
 
 use pxl_spec::bake::constant::PAGE_CELL_SPAN;
-use pxl_spec::bake::format::{ch_index, Ground, GroundChannelKey, GROUND_CH_KEYS};
+use pxl_spec::bake::format::{Ground, GroundChannelKey};
 use pxl_spec::bake::model::feature::Feature;
+use pxl_spec::bake::pack::{channel_of, with_channel, GroundCell};
 use pxl_spec::cell::cube::cube_types;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::round;
@@ -41,33 +42,34 @@ fn cell_idx(x: i64, y: i64) -> usize {
     (y * SPAN + x) as usize
 }
 
-/// How a pass reads the sea mask. Water and land overlays must not paint over
-/// true sea cells, and the land channel is the mask for both — which for a
-/// land feature means the mask is the buffer being written, read as it is
-/// written.
-#[derive(Clone, Copy)]
-enum Mask<'a> {
+/// Whether a pass stops at sea. Water and land overlays must not paint over
+/// true sea cells, and the land channel is the mask for both — including for
+/// a land feature, which reads the field it is writing as it writes it.
+#[derive(Clone, Copy, PartialEq)]
+enum Mask {
     None,
-    Itself,
-    Channel(&'a [u8]),
+    Sea,
 }
 
-impl Mask<'_> {
+impl Mask {
     #[inline]
-    fn blocks(&self, target: &[u8], at: usize) -> bool {
-        match self {
-            Mask::None => false,
-            Mask::Itself => target[at] == cube_types::land::sea,
-            Mask::Channel(mask) => mask[at] == cube_types::land::sea,
-        }
+    fn blocks(&self, cells: &[GroundCell], at: usize) -> bool {
+        *self == Mask::Sea && channel_of(cells[at], GroundChannelKey::LAND) == cube_types::land::sea
     }
 }
 
+/// A channel of the page being painted: the cells, and which field of them
+/// this pass writes.
+struct Target<'a> {
+    cells: &'a mut [GroundCell],
+    key: GroundChannelKey,
+}
+
 pub fn bake_ground(elements: &[Feature], has_coast_row: bool) -> Ground {
-    let mut land = vec![0u8; PAGE_CELL_SPAN2];
-    let mut water = vec![0u8; PAGE_CELL_SPAN2];
-    let mut structure = vec![0u8; PAGE_CELL_SPAN2];
-    let mut transport = vec![0u8; PAGE_CELL_SPAN2];
+    let mut cells = vec![0 as GroundCell; PAGE_CELL_SPAN2];
+    // The land field of every cell, the others untouched: nothing has been
+    // painted yet, so the rest of the word is void.
+    let fill_land = |cells: &mut Vec<GroundCell>, t: u8| cells.fill(with_channel(0, GroundChannelKey::LAND, t));
 
     let sea_feats: Vec<&Feature> = elements.iter().filter(|f| f.extra.is_ocean).collect();
     let mut other_feats: Vec<&Feature> = elements.iter().filter(|f| !f.extra.is_ocean).collect();
@@ -78,7 +80,11 @@ pub fn bake_ground(elements: &[Feature], has_coast_row: bool) -> Ground {
 
     // Inverse sea pass: initialize the land channel with the sea/land base first.
     if has_sea {
-        land.fill(cube_types::land::sea);
+        fill_land(&mut cells, cube_types::land::sea);
+        let mut land = Target {
+            cells: &mut cells,
+            key: GroundChannelKey::LAND,
+        };
         for f in &sea_feats {
             // Only closed polygons carve land out of the sea base.
             if f.shape.is_closed {
@@ -91,13 +97,13 @@ pub fn bake_ground(elements: &[Feature], has_coast_row: bool) -> Ground {
         // a single land polygon covers the page's full envelope, so painting
         // bare directly is equivalent to carving it, without paying for the
         // scanline rasterization.
-        land.fill(cube_types::land::bare);
+        fill_land(&mut cells, cube_types::land::bare);
     } else {
         // No coastline row touched this page's envelope at all — there is no
         // land anywhere nearby, so this is open ocean, not "no data yet".
         // Before this branch existed, this case fell through to the bare
         // default above and every open-ocean page baked as flat dry land.
-        land.fill(cube_types::land::sea);
+        fill_land(&mut cells, cube_types::land::sea);
     }
 
     // Render categorized ground features.
@@ -107,33 +113,18 @@ pub fn bake_ground(elements: &[Feature], has_coast_row: bool) -> Ground {
         }
         let Some(cfg) = feat.cell_cfg else { continue };
 
-        match cfg.ch_key {
-            GroundChannelKey::LAND => paint(feat, cfg.cell_type, &mut land, if has_sea { Mask::Itself } else { Mask::None }),
-            GroundChannelKey::WATER => {
-                let mask = if has_sea { Mask::Channel(&land) } else { Mask::None };
-                paint(feat, cfg.cell_type, &mut water, mask)
-            }
-            GroundChannelKey::STRUCTURE => paint(feat, cfg.cell_type, &mut structure, Mask::None),
-            GroundChannelKey::TRANSPORT => paint(feat, cfg.cell_type, &mut transport, Mask::None),
-        }
+        // Land and water stop at sea; a structure or a road does not.
+        let mask = match cfg.ch_key {
+            GroundChannelKey::LAND | GroundChannelKey::WATER if has_sea => Mask::Sea,
+            _ => Mask::None,
+        };
+        paint(feat, cfg.cell_type, &mut Target { cells: &mut cells, key: cfg.ch_key }, mask);
     }
 
-    // The wire's order, which is the order `from_planes` reads them in.
-    let mut painted = [Some(land), Some(water), Some(structure), Some(transport)];
-    let by_key = |k: GroundChannelKey| match k {
-        GroundChannelKey::LAND => 0,
-        GroundChannelKey::WATER => 1,
-        GroundChannelKey::STRUCTURE => 2,
-        GroundChannelKey::TRANSPORT => 3,
-    };
-    let mut planes = [const { std::borrow::Cow::Owned(Vec::new()) }; 4];
-    for k in GROUND_CH_KEYS {
-        planes[ch_index(k)] = painted[by_key(k)].take().expect("each channel once").into();
-    }
-    Ground::from_planes(planes)
+    Ground { cells: cells.into() }
 }
 
-fn paint(feat: &Feature, value: u8, target: &mut [u8], mask: Mask) {
+fn paint(feat: &Feature, value: u8, target: &mut Target, mask: Mask) {
     if feat.shape.is_closed {
         render_polygon(&feat.shape.points, value, target, feat.shape.holes.as_deref(), mask);
     } else {
@@ -144,15 +135,15 @@ fn paint(feat: &Feature, value: u8, target: &mut [u8], mask: Mask) {
 // ---- Rasterizer core ----
 
 #[inline]
-fn put(target: &mut [u8], mask: Mask, at: usize, value: u8) {
-    if mask.blocks(target, at) {
+fn put(target: &mut Target, mask: Mask, at: usize, value: u8) {
+    if mask.blocks(target.cells, at) {
         return;
     }
-    target[at] = value;
+    target.cells[at] = with_channel(target.cells[at], target.key, value);
 }
 
 /// Rasterize a polygon ring set with optional hole rings.
-fn render_polygon(points: &[V3], value: u8, target: &mut [u8], holes: Option<&[Vec<V3>]>, mask: Mask) {
+fn render_polygon(points: &[V3], value: u8, target: &mut Target, holes: Option<&[Vec<V3>]>, mask: Mask) {
     if points.len() < 3 {
         return;
     }
@@ -217,14 +208,14 @@ fn render_polygon(points: &[V3], value: u8, target: &mut [u8], holes: Option<&[V
 }
 
 #[inline]
-fn set_pixel(target: &mut [u8], mask: Mask, px: i64, py: i64, value: u8) {
+fn set_pixel(target: &mut Target, mask: Mask, px: i64, py: i64, value: u8) {
     if !(0..SPAN).contains(&px) || !(0..SPAN).contains(&py) {
         return;
     }
     put(target, mask, cell_idx(px, py), value);
 }
 
-fn draw_circle(target: &mut [u8], mask: Mask, cx: i64, cy: i64, r: i64, value: u8) {
+fn draw_circle(target: &mut Target, mask: Mask, cx: i64, cy: i64, r: i64, value: u8) {
     let r2 = r * r;
     for bx in -r..=r {
         for by in -r..=r {
@@ -236,7 +227,7 @@ fn draw_circle(target: &mut [u8], mask: Mask, cx: i64, cy: i64, r: i64, value: u
 }
 
 /// Rasterize an open polyline with a simple thickness kernel.
-fn render_linear_feat(points: &[V3], value: u8, target: &mut [u8], width_cell: f64, mask: Mask) {
+fn render_linear_feat(points: &[V3], value: u8, target: &mut Target, width_cell: f64, mask: Mask) {
     if points.len() < 2 {
         return;
     }

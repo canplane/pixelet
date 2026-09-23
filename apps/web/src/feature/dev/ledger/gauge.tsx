@@ -9,17 +9,20 @@
  * What the report has and this does not is detail, not kind: per-unit costs,
  * retention counts, band reuse, mounts and the window peak stay in the report.
  * Everything here comes from the kernel's summary block, read in place
- * (view.ts) — the same block the report is built from: pacing against
- * the display's measured frame, the tick and its budget, throughput, LOD
- * waits, the GPU's time and what it drew, the device's and the heap's
- * footprint, queue pressure, task latency with its commonest failure, and the
- * LoAF CPU-vs-render split. A value reads as lane.ts says a lane does.
+ * (view.ts) — the same block the report is built from. It is grouped the way
+ * the report's lanes are (ledger.json FRAME_GROUPS), in the order a reader
+ * asks: **pace**, where the turn's time went against the display's measured
+ * frame; **ground**, what the chunk scheduler is holding and what its
+ * ceilings left behind; **draw**, the GPU's time and what it drew; **work**,
+ * what is being built and fetched; **memory**, what all of it holds. Task
+ * latency with its commonest failure and the LoAF CPU-vs-render split follow.
+ * A value reads as lane.ts says a lane does.
  */
 
 import { round } from "@xpute/core/math/scalar.ts";
 
 import { EFFECT_NAMES } from "./ledger.spec.ts";
-import { n1, tris, valueText } from "./lane.ts";
+import { n1, pct, tris, valueText } from "./lane.ts";
 import { BOUND, failText } from "./report.ts";
 import type { FrameSummary, Gauge, Spread } from "./view.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
@@ -67,6 +70,16 @@ function Row(props: { k: string; v: string; warn?: boolean }) {
 
 const Rule = () => <div className="my-1 border-t border-white/10" />;
 
+/** A section's start: the rule that separated one from the next, with the word
+ * it separates on it. The panel runs to forty rows and a reader is looking for
+ * one of them; a bare rule says where a group ends and never what it is. */
+const Head = ({ children }: { children: string }) => (
+  <div className="mt-2 mb-0.5 flex items-center gap-2">
+    <span className="text-[0.7em] uppercase tracking-wider text-white/30">{children}</span>
+    <div className="flex-1 border-t border-white/10" />
+  </div>
+);
+
 const phase = (f: FrameSummary, name: string): Spread => f.phases.find((p) => p.name === name)?.spread ?? { p50: 0, p95: 0, max: 0 };
 
 /** The panel over one read of the window; the overlay polls and hands it down,
@@ -87,45 +100,23 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
         v={`${(rec.elapsed_ms / 1000).toFixed(1)}s ${rec.frames}f/${rec.tasks}t${rec.truncated ? " TRUNC" : ""}`}
         warn={rec.recording || rec.truncated}
       />
-      <Rule />
 
       {f === null && <div className="text-white/45">no frames sampled yet</div>}
       {f !== null && (
         <>
+          <Head>pace</Head>
           <Row k="dt p50/p95 moving" v={`${n1(f.dt.p50)}/${n1(f.dt.p95)}ms`} warn={f.missed > f.moving * MISSED_WARN_SHARE} />
           <Row k="dt max" v={`${n1(f.dt.max)}ms`} warn={f.dt.max > LONG_FRAME_MS} />
           <Row k="missed/moving" v={`${f.missed}/${f.moving}`} warn={f.missed > f.moving * MISSED_WARN_SHARE} />
           <Row k="task/offthd p95" v={`${n1(f.task.p95)}/${n1(f.offthread.p95)}ms`} warn={f.offthread.p95 > f.last.frame_ms} />
-          <Row k="gpu p95" v={f.gpu.p95 > 0 ? `${n1(f.gpu.p95)}ms` : "n/a"} warn={f.gpu.p95 > f.last.frame_ms} />
-          {heaviest(f.gpu_spans, (s) => s.spread.p95, SPAN_ROWS).map((s) => <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.spread.p95)}ms`} />)}
           <Row k="sched p95/max" v={`${n1(f.sched.p95)}/${n1(f.sched.max)}ms`} warn={f.overran > 0} />
           <Row k="budget/frame" v={`${n1(f.last.budget_ms)}/${n1(f.last.frame_ms)}ms${f.last.settled ? " still" : ""}`} />
-          <Row k="tick p95" v={n1(f.tick.p95)} />
           <Row
-            k="phase p95 i/v/c/s"
+            k="phase i/v/c/s"
             v={`${n1(phase(f, "interaction").p95)}/${n1(phase(f, "visible").p95)}/${n1(phase(f, "content").p95)}/${n1(phase(f, "cosmetic").p95)}`}
             warn={phase(f, "interaction").p95 > INTERACTION_WARN_MS}
           />
-          <Row k="bake/scan per s busy" v={`${round(f.backlogPerS[1])}/${round(f.backlogPerS[0])}`} />
-          <Rule />
-          <Row k="lod c/f/p" v={`${f.last.lod_chunks}/${f.last.lod_in_frustum}/${f.last.lod_pending}`} warn={f.last.lod_pending > 32} />
-          <Row
-            k="wait rel/vis"
-            v={`${f.last.lod_offscreen_pending} ${round(f.last.lod_oldest_release_ms)}/${round(f.last.lod_oldest_visible_ms)}ms`}
-            warn={Math.max(f.last.lod_oldest_release_ms, f.last.lod_oldest_visible_ms) > STARVED_MS}
-          />
-          {
-            /* A finished mesh thrown away because a drawn chunk holds the slot
-              its residue names, and the boxes cut from one past its slot: the
-              levels are the waiters' and the holders' (world/chunk/mesh_slot.rs).
-              Two levels share a group when they lie a window apart, which a
-              zoom that skips the levels between puts on screen at once. */
-          }
-          <Row
-            k="slot wait/cut"
-            v={`${round(f.last.slot_waits)}/${round(f.last.slot_cut)} L${levelBits(f.last.slot_wait_levels)} on ${levelBits(f.last.slot_holder_levels)}`}
-            warn={f.last.slot_waits > 0 || f.last.slot_cut > 0}
-          />
+          <Row k="chunks p95" v={n1(f.chunks.p95)} />
           {
             /* The turn in parts: the effects, the stage, and the longest
               single effect with its name. The tick's own numbers are above,
@@ -135,10 +126,15 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
               Nothing in the effects may be work; they decide what is wanted
               and are not budgeted. */
           }
+          <Row k="turn eff/stage" v={`${n1(f.last.turn_effects_ms)}/${n1(f.last.turn_stage_ms)}ms`} warn={f.last.turn_effects_ms > 4} />
+          <Row k="  worst effect" v={`${n1(f.last.turn_step_ms)}ms ${EFFECT_NAMES[f.last.turn_step_name] ?? "-"}`} warn={f.last.turn_step_ms > 4} />
+
+          <Head>ground</Head>
+          <Row k="lod c/f/p" v={`${f.last.lod_chunks}/${f.last.lod_in_frustum}/${f.last.lod_pending}`} warn={f.last.lod_pending > 32} />
           <Row
-            k="turn eff/stage/worst"
-            v={`${n1(f.last.turn_effects_ms)}/${n1(f.last.turn_stage_ms)}/${n1(f.last.turn_step_ms)}ms ${EFFECT_NAMES[f.last.turn_step_name] ?? "-"}`}
-            warn={f.last.turn_effects_ms > 4}
+            k="wait rel/vis"
+            v={`${f.last.lod_offscreen_pending} ${round(f.last.lod_oldest_release_ms)}/${round(f.last.lod_oldest_visible_ms)}ms`}
+            warn={Math.max(f.last.lod_oldest_release_ms, f.last.lod_oldest_visible_ms) > STARVED_MS}
           />
           {
             /* The stale population, and how much of it is doing anything: one
@@ -161,6 +157,18 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
             warn={f.last.stale_on_waiter > 0}
           />
           {
+            /* A finished mesh thrown away because a drawn chunk holds the slot
+              its residue names, and the boxes cut from one past its slot: the
+              levels are the waiters' and the holders' (world/chunk/mesh_slot.rs).
+              Two levels share a group when they lie a window apart, which a
+              zoom that skips the levels between puts on screen at once. */
+          }
+          <Row
+            k="slot wait/cut"
+            v={`${round(f.last.slot_waits)}/${round(f.last.slot_cut)} L${levelBits(f.last.slot_wait_levels)} on ${levelBits(f.last.slot_holder_levels)}`}
+            warn={f.last.slot_waits > 0 || f.last.slot_cut > 0}
+          />
+          {
             /* What the frame's ceilings left behind: chunks on screen wanting a
               layout the commit pass did not reach, chunks the selection wants
               that are not mounted, and pages that found every record carrying
@@ -175,41 +183,66 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
             v={`${round(f.last.cap_commit_left)}/${round(f.last.cap_mount_left)}${f.last.cap_mount_full ? " full" : ""}/${round(f.last.cap_record_refused)}`}
             warn={f.last.cap_mount_full > 0 || f.last.cap_record_refused > 0}
           />
-          <Rule />
+
+          <Head>draw</Head>
+          <Row k="gpu p95" v={f.gpu.p95 > 0 ? `${n1(f.gpu.p95)}ms` : "n/a"} warn={f.gpu.p95 > f.last.frame_ms} />
+          {heaviest(f.gpu_spans, (s) => s.spread.p95, SPAN_ROWS).map((s) => <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.spread.p95)}ms`} />)}
           <Row k="draws" v={String(f.last.draw_calls)} />
           <Row k="tris" v={tris(f.last.triangles)} />
           {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`  ${r.tag} d/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}
           {heaviest(f.level_tris.map((t, k) => ({ k, t })), (r) => r.t, LEVEL_ROWS).map((r) => <Row key={r.k} k={`  L${r.k} tris`} v={tris(r.t)} />)}
-          <Row k="buffers / arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)} / ${valueText("_mb", f.last.arena_mb)}`} />
           <Row k="fill Mpx" v={(f.last.px / 1e6).toFixed(1)} warn={f.last.px / 1e6 > 12} />
-          <Row k="targets MB" v={`d${f.last.tex_depth_mb} m${f.last.tex_msaa_mb} s${f.last.tex_shadow_mb} l${f.last.tex_layers_mb}`} />
-          <Rule />
+
+          <Head>work</Head>
+          <Row k="bake/scan per s busy" v={`${round(f.backlogPerS[1])}/${round(f.backlogPerS[0])}`} />
+          <Row k="faces kept" v={`${possible > 0 ? round((kept / possible) * 100) : 0}%`} />
+          <Row k="queue t/p" v={`${f.last.q_terrain}/${f.last.q_poi}`} warn={f.last.q_terrain + f.last.q_poi > 12} />
+          <Row k="rings cq/spill" v={`${f.last.ring_cq_peak}/${f.last.ring_spill_peak}`} warn={f.last.ring_spill_peak > 0} />
+
+          <Head>memory</Head>
           <Row k="heap Δ" v={`${f.used_delta_mb >= 0 ? "+" : ""}${f.used_delta_mb}MB`} />
           {
-            /* Facts and no derived word: how far the allocator has ever reached
-              into its range, what is on loan now, the range, what it refused
-              and the largest block it has free. All come from the kernel's own
-              seam to it (host.rs) — the shell never decodes the allocator's
-              bytes, which is what let the last probe read a deleted
-              structure's row for two commits without saying so. */
+            /* How far the allocator has ever reached into its range, what is
+              on loan now, the range, what a run holds against what is out in
+              slots of it, what it refused and the largest block it has free.
+              All come from the kernel's own seam to it (host.rs) — the shell
+              never decodes the allocator's bytes, which is what let the last
+              probe read a deleted structure's row for two commits without
+              saying so. The two shares are the reader's arithmetic on lanes
+              beside them and not lanes of their own: a lane that restates
+              two others is the one that goes stale unnoticed. `live` counts a
+              carved run whole, so it is what the heap has committed; `slot`
+              is what anything actually holds, and the gap between the two is
+              what the carving costs. */
           }
-          <Row k="  used/live of" v={`${f.last.heap_used_mb}/${f.last.heap_live_mb} of ${f.last.heap_range_mb}MB`} warn={f.last.heap_used_mb >= f.last.heap_range_mb} />
+          <Row
+            k="  used/live of"
+            v={`${f.last.heap_used_mb}/${f.last.heap_live_mb} of ${f.last.heap_range_mb}MB ${pct(f.last.heap_live_mb, f.last.heap_range_mb)}%`}
+            warn={f.last.heap_live_mb >= f.last.heap_range_mb * 0.8}
+          />
+          <Row
+            k="  slab run/slot"
+            v={`${n1(f.last.heap_run_mb)}/${n1(f.last.heap_slot_mb)}MB ${pct(f.last.heap_slot_mb, f.last.heap_run_mb)}%`}
+            warn={f.last.heap_run_mb > 1 && f.last.heap_slot_mb < f.last.heap_run_mb / 2}
+          />
           <Row k="  refused / free" v={`${f.last.heap_refusals} / ${n1(f.last.heap_largest_free_mb)}MB`} warn={f.last.heap_refusals > 0} />
-          <Row k="rings cq/spill" v={`${f.last.ring_cq_peak}/${f.last.ring_spill_peak}`} warn={f.last.ring_spill_peak > 0} />
           {
             /* Pages are records in `.fixed`, a fixed number of them a level,
               so the count is what the window holds and not a cost in bytes. */
           }
-          <Row k="pages" v={`${f.last.pages}${f.last.pages > 0 ? ` in L${f.last.level_pages.findIndex((n) => n > 0)}..L${f.last.level_pages.findLastIndex((n) => n > 0)}` : ""}`} />
+          <Row
+            k="pages"
+            v={`${f.last.pages_total}${f.last.pages_total > 0 ? ` in L${f.last.pages_by_level.findIndex((n) => n > 0)}..L${f.last.pages_by_level.findLastIndex((n) => n > 0)}` : ""}`}
+          />
           {
             /* The shell's own number: the reservation is the central scheduler's,
               and the kernel is handed a range rather than told how big the page
               thinks it is. */
           }
           <Row k="  core MB" v={`${round(CORE_MEMORY.buffer.byteLength / 1048576)}MB`} />
-          <Row k="faces kept" v={`${possible > 0 ? round((kept / possible) * 100) : 0}%`} />
+          <Row k="buffers / arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)} / ${valueText("_mb", f.last.arena_mb)}`} />
+          <Row k="targets MB" v={`d${f.last.tex_depth_mb} m${f.last.tex_msaa_mb} s${f.last.tex_shadow_mb} l${f.last.tex_layers_mb}`} />
           {g.atlas.entries > 0 && <Row k="atlas" v={`${g.atlas.size}px ${g.atlas.entries} ${atlasPct}%`} warn={g.atlas.size > ATLAS_INITIAL && atlasPct < ATLAS_SPARSE_PCT} />}
-          <Row k="queue t/p" v={`${f.last.q_terrain}/${f.last.q_poi}`} warn={f.last.q_terrain + f.last.q_poi > 12} />
         </>
       )}
 
