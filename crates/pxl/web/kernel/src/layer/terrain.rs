@@ -13,6 +13,7 @@ pub mod fixed;
 pub mod ground_snap;
 pub mod level;
 pub mod resident;
+pub mod resolve;
 pub mod store;
 pub mod teach;
 pub mod tile_fetcher;

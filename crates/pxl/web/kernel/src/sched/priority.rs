@@ -1,28 +1,81 @@
 // pxl-kernel/sched/priority.rs
 
-//! What goes first: one ordering, shared by everything the tick schedules.
+//! What goes first: one ordering, and the three things every scheduler in the
+//! tick has to agree on to be that one ordering.
 //!
-//! The rule is distance from **where the camera is going**, not from where it
-//! is. Terrain fetch and the POI index already worked that way — both key on
-//! `map_center`, which is the target the view is heading to. Chunks were the
-//! one scheduler measuring from the camera as drawn, which lags that target by
-//! the frame's damping (frame/view_frame.rs), so during a pan they filled
-//! in behind the view rather than ahead of it, and during a search jump they
-//! kept polishing the place being left.
+//! Getting a page on the screen is three passes, in series, in three
+//! different files: a page is fetched, a chunk is mounted over it, and the
+//! chunk is built and drawn. Nothing arrives sooner than the slowest of the
+//! three, so an order is only as good as the worst of them — and each had
+//! invented its own answer, and all three were different.
+//!
+//! - **Where from.** The ground the view is heading to look at, and not the
+//!   camera. A view along the ground has its eye at the bottom edge of what
+//!   it shows, so camera distance fills the screen from the bottom up and
+//!   leaves the middle, which is the whole of what a tilted view is for,
+//!   until last. `lead_point` gives the eye plus the target's offset and
+//!   `view_centre` takes the offset back out; at rest it is the frame's
+//!   origin. The page schedulers reach the same point by another road —
+//!   `range_anchor`, which is `map_center` on the ground — and `map_center`
+//!   is the target `lead_point` is built from, so the two are one point at
+//!   two resolutions.
+//! - **How far.** `in_own_sides`: the distance divided by the thing's own
+//!   side. A ring is the same shape at every level and a chunk is drawn
+//!   where its own cells are the right size, so a raw distance says which
+//!   octave a thing is in and not how near it is. Divided by its side, a
+//!   coarse thing far off ranks with a fine thing near, which is what lets
+//!   the fill spread outward instead of by octave.
+//! - **How the terms combine.** Lexicographically: a hard class — is this
+//!   ground drawn at all — above the soft distance, never a weighted sum. A
+//!   sum has some range of inputs where the soft term crosses the hard one,
+//!   and a term that is not meant to order at all (a level, a page
+//!   coordinate) is the same fault written differently.
+//!
+//! The three, as they stand:
+//!
+//! | pass | file | terms |
+//! | --- | --- | --- |
+//! | fetch | layer/terrain/tile_fetcher.rs | class, ring, level, distance |
+//! | mount | world/chunk/table.rs `mount` | `in_own_sides` |
+//! | build | world/chunk/table.rs `priority` | holder, on screen, hole, `in_own_sides` |
+//!
+//! Where a pass has a term the others do not, it sits under the shared ones
+//! and says why. The fetch has two: its ring is the page-space quantization
+//! of the distance, since a demand's priority is one f64 the queue sorts by
+//! and a continuous term cannot have anything under it; and its level is
+//! there because up to WINDOW_LEVELS pages are resident over one patch of
+//! ground where exactly one chunk is drawn over it, so the page order has a
+//! dimension the chunk order does not.
 //!
 //! The lag is the lookahead, and it needs no tuning: the shown frame chases the
 //! target with a critically damped step, so the gap between them is the travel
 //! still to come — about a tenth of a second of motion on a steady drag
-//! (POS_DAMP = 10), and the whole distance on a jump. At rest the two coincide
-//! and this orders exactly as plain camera distance did.
+//! (POS_DAMP = 10), and the whole distance on a jump. At rest the two coincide.
 //!
-//! Only the order changes. Which LOD tier a chunk shows is still decided by its
-//! distance from the camera as drawn, because that is what is on screen. The
-//! order itself is the scheduler's (crates/pxl/web/kernel/src/world/chunk/table.rs); the
-//! lead point it orders by is worked out here.
+//! Only the order is decided here. Which LOD tier a chunk shows is still its
+//! distance from the camera as drawn, because that is what is on screen.
 
 use xpute_core::math::mat4::Mat4;
 use xpute_core::math::vec3::Vec3;
+
+/// A point in the view frame, as the chunk passes hold one.
+pub type Point = [f64; 3];
+
+/// The ground the view is heading to look at, in the view frame's own
+/// coordinates: what every order here measures from.
+///
+/// `lead_point` returns the eye plus the target's offset, so the offset alone
+/// is that ground. At rest the two coincide and it is the frame's origin, the
+/// middle of the screen.
+pub fn view_centre(camera: Point, lead: Point) -> Point {
+    [lead[0] - camera[0], lead[1] - camera[1], lead[2] - camera[2]]
+}
+
+/// How far something is in its own sides, squared: `d²` over its side
+/// squared. The one measure every order here is soft-sorted by.
+pub fn in_own_sides(distance2: f64, span: f64) -> f64 {
+    distance2 / (span * span)
+}
 
 /// The camera position the view is heading to, in the view frame.
 ///

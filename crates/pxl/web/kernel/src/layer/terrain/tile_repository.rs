@@ -26,12 +26,14 @@ use crate::global::Global;
 use crate::host::now;
 use crate::io::demand::{Category, Phases};
 use crate::layer::terrain::fixed::{ele_at, ground_at, record_ele_at, record_ground_at, RECORD_BYTES};
-use crate::layer::terrain::level::{window, LevelPage};
-use crate::layer::terrain::resident::{holder, take_slot};
+use crate::layer::terrain::level::{ring_of, window, LevelPage, HELD_AXIS};
+use crate::layer::terrain::resident::{free_record, page_in, put, record_of, RECORDS};
+use crate::layer::terrain::resolve::covered;
 use crate::layer::terrain::store::tile_store;
 use crate::mem;
 use crate::shell::config::env::TILE_BASE_URL;
 use crate::shell::config::route::{Joined, TileBase};
+use crate::world::frame::range_anchor::range_anchor;
 
 /// Object key of the single shared open-ocean tile in the static bucket.
 pub const OCEAN_KEY: &str = "_ocean";
@@ -114,11 +116,54 @@ fn write_lanes(t: &Terrain, lanes: TerrainLanes) {
     }
 }
 
-/// Where a page lies in the range. Its record is its own coordinate reduced
-/// modulo the range's axis, so this asks for nothing and cannot be refused.
-fn lanes_of(p: LevelPage) -> Result<TerrainLanes, FetchFail> {
+/// The record `p` should be written into: its own where it is already
+/// resident, else a free one, else the page worth least of those resident.
+///
+/// None where every record carries a page worth more than `p`, which is what
+/// an arrival nobody wants any more meets when the camera's own pages fill
+/// the range. It is dropped then rather than turning out a page that is
+/// wanted — the request it came from was withdrawn, and this is the same
+/// answer arriving late.
+fn record_for(p: LevelPage) -> Option<u32> {
+    if let Some(record) = record_of(p) {
+        return Some(record);
+    }
+    if let Some(record) = free_record() {
+        return Some(record);
+    }
+    let anchor = range_anchor()?;
+    let view = window();
+    let mine = worth(p, anchor, &view);
+    let mut worst: Option<(Worth, u32)> = None;
+    for record in 0..RECORDS {
+        let Some(held) = page_in(record) else { continue };
+        let w = worth(held, anchor, &view);
+        if worst.is_none_or(|(low, _)| w > low) {
+            worst = Some((w, record));
+        }
+    }
+    worst.filter(|(w, _)| *w > mine).map(|(_, record)| record)
+}
+
+/// How readily a resident page gives up its record, highest first. A page
+/// the camera does not want goes before one it does; among those, one whose
+/// ground something else already draws goes before one nothing covers, since
+/// letting that one go opens a hole; and among equals the one furthest out,
+/// the rim being margin.
+///
+/// Ordered by comparison rather than by a score so that no two of these
+/// trade against each other: a page the camera wants is never given up for
+/// one it does not, whatever the distance.
+type Worth = (bool, bool, u32);
+
+fn worth(p: LevelPage, anchor: IVec, view: &std::ops::Range<u32>) -> Worth {
+    let wanted = view.contains(&p.level) && ring_of(anchor, p) <= HELD_AXIS / 2;
+    (!wanted, covered(p, view), ring_of(anchor, p))
+}
+
+/// Where a record's lanes are.
+fn lanes_of(slot: u32) -> Result<TerrainLanes, FetchFail> {
     let base = terrain_base().ok_or(FetchFail::NoRoom)?;
-    let slot = crate::layer::terrain::fixed::slot_of(p);
     Ok(TerrainLanes {
         ground: [ground_at(base, slot, 0), ground_at(base, slot, 1), ground_at(base, slot, 2), ground_at(base, slot, 3)],
         ele: ele_at(base, slot),
@@ -128,14 +173,6 @@ fn lanes_of(p: LevelPage) -> Result<TerrainLanes, FetchFail> {
 /// A page's fetched body, decoded and made resident: its lanes owned by the
 /// page until release_terrain.
 pub fn adopt_terrain(p: LevelPage, pkt: &[u8], phases: &mut Phases) -> Result<(), FetchFail> {
-    // A page of a level the window has left arrives from a request kept
-    // running past the move (tile_fetcher.rs). Its record is its level's
-    // group, which a level in the window may share: it lands only where no
-    // page of the window holds the record, and is dropped otherwise, as a
-    // withdrawn request would have been.
-    if !window().contains(&p.level) && holder(p).is_some_and(|q| window().contains(&q.level)) {
-        return Ok(());
-    }
     let t0 = now();
     let decoded = decode(pkt)?;
     let t1 = now();
@@ -152,11 +189,15 @@ pub fn adopt_folded(p: LevelPage, t: &Terrain) -> Result<(), FetchFail> {
 }
 
 fn adopt(p: LevelPage, decoded: &Terrain) -> Result<(), FetchFail> {
-    let lanes = lanes_of(p)?;
+    // An arrival the camera has moved past keeps its body only where the
+    // range has room to spare, which is `record_for`'s answer; there is
+    // nothing to report when it has not, since the request it answers was
+    // withdrawn a turn or more ago.
+    let Some(record) = record_for(p) else { return Ok(()) };
+    let lanes = lanes_of(record)?;
     write_lanes(decoded, lanes);
-    // The record carried a page whose bytes this one has just written over:
-    // one the view has left, or a level the window has.
-    if let Some(gone) = take_slot(p) {
+    // Whatever the record carried has just had its bytes written over.
+    if let Some(gone) = put(p, record) {
         tile_store().clear_page(gone);
     }
     // SAFETY: the lanes are this page's record in the range, at the page's lane

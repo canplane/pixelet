@@ -162,6 +162,15 @@ pub fn world_turn() {
 }
 
 static TICK_STATE: Global<TickState> = Global::new();
+
+/// Whether the host ran the last turn as interactive — the view is being
+/// moved rather than looked at. Read by a turn's own steps, which run before
+/// the tick sets it, so it is the turn before's answer; what reads it is
+/// deciding whether to act now or wait for the view to settle, and one turn
+/// of lag there is nothing.
+pub fn interactive() -> bool {
+    TICK_STATE.get(TickState::default).interactive
+}
 static PLATFORM: Global<Option<Platform>> = Global::new();
 
 /// Tells the kernel the platform, once, at boot: what a device offers does not

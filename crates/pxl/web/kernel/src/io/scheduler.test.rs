@@ -70,15 +70,19 @@ fn scheduler_starts_no_more_than_the_credits_the_central_scheduler_granted() {
 #[test]
 fn scheduler_an_aborted_demand_goes_out_under_its_key_and_settles_under_it() {
     let _g = fresh();
+    // One credit, so the demand that replaces it has to take it.
+    set_fetch_credits(1);
     let (keep, drop) = (d(Category::Terrain, 11, 0.0), d(Category::Terrain, 22, 1.0));
-    fetch_sync(Category::Terrain, &[keep, drop]);
-    assert_eq!(started().len(), 2);
+    fetch_sync(Category::Terrain, std::slice::from_ref(&drop));
+    assert_eq!(started(), [drop.key]);
     fetch_sync(Category::Terrain, std::slice::from_ref(&keep));
+    assert!(started().is_empty(), "the one credit is still out");
     assert_eq!(aborts(), vec![drop.key]);
-    assert!(fetch_running(drop.key));
+    assert!(fetch_running(drop.key), "told to stop is not over");
     fetch_settle(drop.key, Outcome::Aborted, None, Failure::default());
     assert!(!fetch_running(drop.key));
     assert_eq!(fetch_pending_count(Category::Terrain), 1);
+    assert_eq!(started(), [keep.key], "the credit it gave up");
 }
 
 #[test]
@@ -86,14 +90,20 @@ fn scheduler_ledger_records_outcome_for_completed_and_aborted_demands() {
     let _g = fresh();
     ledger_recording_start();
     let cat = Category::Poi;
-    let (done, killed) = (d(cat, 1, 0.0), d(cat, 2, 1.0));
+    // One credit, so dropping `killed` from the wishlist is what takes it
+    // back for `done` — an abort happens where a demand is short, and only
+    // there.
+    set_fetch_credits(1);
+    let (done, killed) = (d(cat, 1, 1.0), d(cat, 2, 0.0));
     fetch_sync(cat, &[done, killed]);
-    started();
-    fetch_settle(done.key, Outcome::Ok, None, Failure::default());
+    assert_eq!(started(), [killed.key]);
     fetch_sync(cat, std::slice::from_ref(&done)); // drops `killed`
+    started();
     for key in aborts() {
         fetch_settle(key, Outcome::Aborted, None, Failure::default());
     }
+    started();
+    fetch_settle(done.key, Outcome::Ok, None, Failure::default());
     let c = name_id(CATEGORY_NAMES, cat.as_str());
     let mine: Vec<&TaskRow> = ledger_tasks().iter().filter(|r| r.category == c).collect();
     let outcome = |subject: u64| mine.iter().find(|r| r.subject == subject).map(|r| r.outcome);
@@ -145,6 +155,24 @@ fn scheduler_holds_a_whole_window_of_rings_beside_what_a_zoom_left_in_flight() {
     assert_eq!(started().len(), MAX_CREDITS as usize);
     let after: Vec<Demand> = (0..rings).map(|i| d(Category::Terrain, 2 << 40 | i, i as f64)).collect();
     assert_eq!(fetch_sync(Category::Terrain, &after), 0, "a ring's page left unasked");
-    assert_eq!(aborts().len(), MAX_CREDITS as usize);
+    assert!(started().is_empty(), "every credit is out on the window that left");
+    assert_eq!(aborts().len(), MAX_CREDITS as usize, "and every one is taken back for the window that came");
     assert_eq!(fetch_sync(Category::Ocean, &[d(Category::Ocean, 0, 0.0)]), 0);
+}
+
+/// Invariant A at this layer: a wishlist is never turned away because
+/// another category's is already held, and never because of anything on the
+/// wire. Terrain's widest and the ocean tile are both asked for in one turn,
+/// with every credit already spent on a window that has gone.
+#[test]
+fn scheduler_every_category_can_state_its_whole_wishlist_at_once() {
+    let _g = fresh();
+    set_fetch_credits(MAX_CREDITS);
+    let rings = TERRAIN_WANTED as u64;
+    let gone: Vec<Demand> = (0..rings).map(|i| d(Category::Terrain, 3 << 40 | i, i as f64)).collect();
+    fetch_sync(Category::Terrain, &gone);
+    assert_eq!(started().len(), MAX_CREDITS as usize);
+    let now: Vec<Demand> = (0..rings).map(|i| d(Category::Terrain, 4 << 40 | i, i as f64)).collect();
+    assert_eq!(fetch_sync(Category::Terrain, &now), 0, "terrain's whole wishlist");
+    assert_eq!(fetch_sync(Category::Ocean, &[d(Category::Ocean, 0, 0.0)]), 0, "and the ocean tile beside it");
 }

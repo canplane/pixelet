@@ -19,7 +19,7 @@
 //! tiers of a blend are weighted, a tier's mesh handed over and a tier to let
 //! go. The nodes hold the meshes; this holds every decision about them.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
@@ -43,7 +43,8 @@ use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::frame_gizmo::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
-use crate::layer::terrain::level::{chunk_span_of, decor_reach, ring, LevelPage, DECOR_REACH, RENDER_AXIS};
+use crate::layer::terrain::level::{centre_page, chunk_span_of, decor_reach, ring, LevelPage, DECOR_REACH, RENDER_AXIS, WINDOW_LEVELS};
+use crate::sched::priority::{in_own_sides, view_centre};
 use crate::shell::setting::store::hidden_ground;
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, slot_of, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
@@ -72,6 +73,11 @@ const MAX_RECLAIMS_WHEN_REFUSED: u32 = 64;
 /// page is mounted in the frame it arrives in.
 const MAX_MOUNTS_PER_FRAME: u32 = 64;
 const _: () = assert!(MAX_MOUNTS_PER_FRAME == PAGE_CHUNK_AXIS * PAGE_CHUNK_AXIS, "a page mounts in the frame it arrives in");
+
+const _: () = assert!(
+    (RENDER_AXIS * RENDER_AXIS * WINDOW_LEVELS) as usize <= u64::BITS as usize,
+    "render: the mount key names every page a selection reads, one bit each"
+);
 /// The heap's live share past which off-screen chunks are reclaimed
 /// whatever the retain budget says.
 const HEAP_PRESSURE: f64 = 0.9;
@@ -232,14 +238,15 @@ pub enum Event {
     },
 }
 
-/// What a mount pass ran for: the page the anchor stands in at the window's
-/// base, the window and the page set. The pass is skipped while it is the
-/// same. That page and not the anchor: every ring the pass reads is a level
+/// What a mount pass selected for: the page the anchor stands in at the
+/// window's base, the window, and which of the pages the selection reads are
+/// resident. While it is the same the selection stands, and the pass is
+/// skipped once nothing of it is left to mount. That page and not the anchor: every ring the pass reads is a level
 /// at or above the base, centred on the page over it (`ring`), so the anchor
 /// moving within its base page changes nothing the pass chooses — and a
 /// base page is as far on screen at every zoom, where a chunk of the leaves
 /// is less than a pixel at the farthest.
-type MountKey = (LevelPage, (u32, u32), u32);
+type MountKey = (LevelPage, (u32, u32), u64);
 
 /// A chunk by where it is: its page, and its corner in the page's cells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -303,15 +310,31 @@ impl ChunkKey {
 /// The ground a level's drawn ring covers around the anchor's page, as a
 /// corner and a side.
 fn ring_rect(level: u32, anchor: IVec) -> (f64, f64, f64) {
-    let centre = ring(level, anchor, 1)[0];
+    let centre = centre_page(level, anchor);
     let span = crate::layer::terrain::level::span_of(level);
     let r = (RENDER_AXIS / 2) as f64 * span;
     (ivec::X(centre.page) as f64 * span - r, ivec::Y(centre.page) as f64 * span - r, span * RENDER_AXIS as f64)
 }
 
+/// How near a chunk is to `(ax, ay)`, in the measure every order here shares
+/// (sched/priority.rs). The mounts take the anchor, which is the same ground
+/// the builds measure from at the resolution a page scheduler has.
+fn chunk_near(k: ChunkKey, ax: f64, ay: f64) -> f64 {
+    let (x0, y0, side) = k.rect();
+    let (dx, dy) = (x0 + side / 2.0 - ax, y0 + side / 2.0 - ay);
+    in_own_sides(dx * dx + dy * dy, side)
+}
+
 /// Whether two squares, each a corner and a side, share any ground.
 fn overlaps(a: (f64, f64, f64), b: (f64, f64, f64)) -> bool {
     a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.2 && b.1 < a.1 + a.2
+}
+
+/// The ground two such squares share.
+fn shared_area(a: (f64, f64, f64), b: (f64, f64, f64)) -> f64 {
+    let w = (a.0 + a.2).min(b.0 + b.2) - a.0.max(b.0);
+    let h = (a.1 + a.2).min(b.1 + b.2) - a.1.max(b.1);
+    w.max(0.0) * h.max(0.0)
 }
 
 #[derive(Clone, Copy, Default)]
@@ -369,7 +392,7 @@ struct Slot {
     bc: V3,
     radius: f64,
     distance2: f64,
-    lead_distance2: f64,
+    centre_distance2: f64,
     flags: u8,
     pending_since: f64,
     request: i32,
@@ -554,7 +577,6 @@ pub struct Scheduler {
     pub census: Census,
     /// The pages with a terrain tile, which chunks are mounted from.
     pages: BTreeSet<LevelPage>,
-    pages_revision: u32,
     /// Pages whose records have gone since the last tick, whose chunks stop
     /// building before anything else in the next.
     evicted: Vec<LevelPage>,
@@ -563,7 +585,23 @@ pub struct Scheduler {
     /// The mounted chunks a pass finds leaving, before they are let go.
     gone: Vec<(ChunkKey, u32)>,
     next_mount_id: u32,
-    mounted_for: Option<MountKey>,
+    /// What the selection standing in `to_mount` was made for, and what of it
+    /// is still to be mounted. The pass is done when the key matches and
+    /// nothing is left.
+    selected_for: Option<MountKey>,
+    /// The chunks that selection wants and the module has not mounted, in
+    /// the order the builds will take them: nearest first, a distance in the
+    /// chunk's own sides.
+    ///
+    /// Held across frames because the selection is expensive and the frames
+    /// that cannot finish mounting are exactly the frames that are already
+    /// late. A pass mounts MAX_MOUNTS_PER_FRAME of them, so a window that
+    /// slides by one level leaves some six hundred over, nine frames' worth
+    /// — and walking the window's quadtree again for each of those nine is
+    /// two thousand chunks re-derived at a tilt wide enough to want five
+    /// levels, against six hundred looking down. The work a zoom costs grew
+    /// with the tilt for no reason but this.
+    to_mount: VecDeque<ChunkKey>,
     /// The ground the window draws: the top level's drawn ring, as a corner
     /// and a side in units.
     drawn: Option<(f64, f64, f64)>,
@@ -673,12 +711,12 @@ impl Scheduler {
             retained_off: 0.0,
             census: Census::default(),
             pages: BTreeSet::new(),
-            pages_revision: 0,
             evicted: Vec::new(),
             mounted: BTreeMap::new(),
             gone: Vec::with_capacity(MAX_CHUNKS),
             next_mount_id: MOUNT_ID_BASE,
-            mounted_for: None,
+            selected_for: None,
+            to_mount: VecDeque::new(),
             drawn: None,
             decor_kinds: Vec::new(),
             decor_samples: Vec::new(),
@@ -762,7 +800,7 @@ impl Scheduler {
             bc: [0.0; 3],
             radius: 0.0,
             distance2: f64::INFINITY,
-            lead_distance2: f64::INFINITY,
+            centre_distance2: f64::INFINITY,
             flags: EMPTY | FRESH,
             pending_since: -1.0,
             request: 0,
@@ -1047,7 +1085,6 @@ impl Scheduler {
         }
         let changed = if present { self.pages.insert(page) } else { self.pages.remove(&page) };
         if changed {
-            self.pages_revision = self.pages_revision.wrapping_add(1);
             self.view_dirty = true;
         }
     }
@@ -1111,6 +1148,37 @@ impl Scheduler {
         }
     }
 
+    /// Which of the pages a selection reads are resident, a bit each.
+    ///
+    /// `select` reads `pages` in two places and both are a drawn ring: the
+    /// roots are the top level's, and a chunk splits only where it lies whole
+    /// inside the ring below and that ring's page under it is here. So a page
+    /// outside them — the rim a pan is bought against, which is sixteen of
+    /// every twenty-five a level fetches — cannot change what is selected,
+    /// and keying the pass on a counter that every arrival moved threw the
+    /// selection away for those sixteen as readily as for the nine. A zoom
+    /// fetches pages continuously, so that was a full walk of the window's
+    /// quadtree every frame it was loading.
+    fn drawn_pages(&self, frame: &Frame, anchor: IVec) -> u64 {
+        let (base, end) = frame.window;
+        let r = (RENDER_AXIS / 2) as i64;
+        let mut mask = 0u64;
+        let mut bit = 0;
+        for level in base..end {
+            // The ring's own pages, walked rather than built: this runs every
+            // tick, and `ring` sorts a Vec it allocates.
+            let centre = centre_page(level, anchor).page;
+            for dy in -r..=r {
+                for dx in -r..=r {
+                    let page = LevelPage::new(level, ivec::add(centre, ivec::gather(dx, dy, 0)));
+                    mask |= (self.pages.contains(&page) as u64) << bit;
+                    bit += 1;
+                }
+            }
+        }
+        mask
+    }
+
     /// Which chunks exist: the ones `select` draws, mounted as they are
     /// wanted, and the ones it no longer draws marked stale rather than let
     /// go, so the ground they cover is never a hole while what replaces them
@@ -1120,34 +1188,58 @@ impl Scheduler {
     fn mount(&mut self, frame: &Frame, emit: &mut impl FnMut(Event)) {
         let Some(anchor) = frame.anchor else { return };
         let anchor_i = ivec::gather(anchor[0] as i64, anchor[1] as i64, 0);
-        let key = (ring(frame.window.0, anchor_i, 1)[0], frame.window, self.pages_revision);
-        if self.mounted_for == Some(key) {
+        let key = (centre_page(frame.window.0, anchor_i), frame.window, self.drawn_pages(frame, anchor_i));
+        if self.selected_for == Some(key) && self.to_mount.is_empty() {
             return;
         }
         self.drawn = Some(ring_rect(frame.window.1 - 1, anchor_i));
-        let mut wanted = BTreeSet::new();
-        self.select(frame, anchor_i, &mut wanted);
+        if self.selected_for != Some(key) {
+            let mut wanted = BTreeSet::new();
+            self.select(frame, anchor_i, &mut wanted);
 
-        // What is no longer wanted goes stale; what is again, fresh.
-        for (k, &id) in self.mounted.iter() {
-            if let Some(&i) = self.index.get(&id) {
-                self.slots[i].set(STALE, !wanted.contains(k));
+            // What is no longer wanted goes stale; what is again, fresh.
+            for (k, &id) in self.mounted.iter() {
+                if let Some(&i) = self.index.get(&id) {
+                    self.slots[i].set(STALE, !wanted.contains(k));
+                }
             }
+
+            // In the order the builds will take them, which is a distance in
+            // the chunk's own sides (`priority`), so a coarse chunk far off
+            // goes with a fine one near. Left in the key's own order — a
+            // `ChunkKey` sorts by its page and a `LevelPage` by its level —
+            // the pass mounted every chunk of the finest level before any of
+            // the next, and within a level in raw coordinate order rather
+            // than by distance. A chunk cannot be built before it is mounted,
+            // so that order, and not the build order, decided what the screen
+            // filled in: at a tilt wanting five levels the top level's four
+            // hundred chunks were the last seven frames of thirty-six, and
+            // the ground at the horizon appeared last however badly the
+            // builds wanted it.
+            //
+            // From the anchor, the view centre on the ground, and not from
+            // the camera: the builds measure from where the camera is heading
+            // and have a mesh to measure, while this has a key and runs
+            // before anything is built.
+            let (ax, ay) = (ivec::X(anchor_i) as f64, ivec::Y(anchor_i) as f64);
+            let mut near: Vec<(f64, ChunkKey)> = wanted.iter().filter(|k| !self.mounted.contains_key(k)).map(|&k| (chunk_near(k, ax, ay), k)).collect();
+            near.sort_by(|a, b| a.0.total_cmp(&b.0));
+            self.to_mount.clear();
+            self.to_mount.extend(near.into_iter().map(|(_, k)| k));
+            self.selected_for = Some(key);
         }
 
         let mut mounts = 0;
-        for &k in &wanted {
-            if self.mounted.contains_key(&k) {
-                continue;
-            }
+        while let Some(&k) = self.to_mount.front() {
             if mounts >= MAX_MOUNTS_PER_FRAME || self.slots.len() >= MAX_CHUNKS {
-                // The rest next frame: the key stays unrecorded. How many
+                // The rest next frame, from where this one stopped. How many
                 // chunks a range holds is the viewport's and the anchor's,
                 // not a number the kernel hands itself, so at the ceiling
                 // the pass mounts no more rather than trapping.
                 self.view_dirty = true;
                 return;
             }
+            self.to_mount.pop_front();
             mounts += 1;
             let id = self.next_mount_id;
             self.next_mount_id = self.next_mount_id.wrapping_add(1).max(MOUNT_ID_BASE);
@@ -1162,7 +1254,6 @@ impl Scheduler {
             self.add(id, k.level(), base, x0, y0, k.bx, k.by, blend_point(k));
             self.mounted.insert(k, id);
         }
-        self.mounted_for = Some(key);
     }
 
     /// Lets go of the stale chunks whose ground is ready to be drawn by what
@@ -1256,8 +1347,18 @@ impl Scheduler {
             }
             let rect = k.rect();
             let (covered, ready, on_waiter) = s.cover;
-            let whole = covered >= rect.2 * rect.2;
+            // What has to be covered is the ground this chunk still shows —
+            // its own against what the rings draw — and not its whole extent.
+            // A zoom in of several levels leaves a stale chunk far wider than
+            // the window that replaced it: the wanted chunks cover the little
+            // the view has, which is all of it that is seen, while the rest of
+            // its extent has no chunks at all and never will. Measured against
+            // the whole, that never comes to its area, and neither does the
+            // other way out — the view lies inside it, so it never leaves the
+            // drawn rect either. Both doors shut, and it stays drawn over
+            // ground it no longer describes, for as long as the view is there.
             let gone_from_view = self.drawn.is_none_or(|d| !overlaps(rect, d));
+            let whole = covered >= self.drawn.map_or(0.0, |d| shared_area(rect, d));
             if gone_from_view || (whole && ready) {
                 self.gone.push((k, id));
             } else if !whole {
@@ -1320,25 +1421,32 @@ impl Scheduler {
             }
         }
 
-        // A chunk just mounted has no layout, so it wants one, and is
-        // rechecked whatever the budget: under a budget a tick has already
-        // spent, the budgeted pass reaches the order's head and no further,
-        // and a chunk under a stale one is not a hole and sorts late — never
-        // asked for, it never replaces the stale one, which waits on it. The
-        // mounts a frame takes bound it.
-        for &i in order.iter() {
-            if self.slots[i].has(FRESH) {
-                self.recheck(world, i, t0, &frame, emit);
-            }
-        }
-
+        // What each chunk should be showing, for every chunk that could have
+        // changed: freshly mounted, mid-blend, or settling — and all of them
+        // on the interval.
+        //
+        // Not under the budget, and that is the point. This decides what is
+        // *wanted*; the budget is for the work that follows, and a pass that
+        // states a demand cannot be cut without some chunks' demand going
+        // unstated. Cut, it stopped at the order's head, and a chunk drawing
+        // a coarse tier is not a hole — it shows something — so it sorts
+        // behind every hole and was never reached: never told it wanted a
+        // finer tier, so never pending, so never built. A zoom in along the
+        // ground is the worst of it, since a window that wants five levels
+        // has four times the chunks and its far half is holes, and the
+        // coarse boxes under the camera sat there while the budget went on
+        // the horizon.
+        //
+        // It costs a ladder lookup and a few flags a chunk, MAX_CHUNKS of
+        // them at the worst, and only on the interval. The FRESH case was
+        // already exempted for this exact reason; it is the whole pass that
+        // needed to be.
         eligible.clear();
-        eligible.extend(order.iter().copied().filter(|&i| full_recheck || self.slots[i].flags & (BLEND_ACTIVE | SETTLING) != 0));
-        let rechecked = under_budget(eligible, u32::MAX, deadline, hard, now, |i| {
+        eligible.extend(order.iter().copied().filter(|&i| full_recheck || self.slots[i].flags & (FRESH | BLEND_ACTIVE | SETTLING) != 0));
+        for &i in eligible.iter() {
             self.recheck(world, i, t0, &frame, emit);
-            true
-        });
-        if full_recheck && rechecked as usize == eligible.len() {
+        }
+        if full_recheck {
             self.view_dirty = false;
         }
 
@@ -1520,7 +1628,7 @@ impl Scheduler {
             let (visible, _, d2, ld2) = measure(frame, &self.slots[i]);
             let s = &mut self.slots[i];
             s.distance2 = d2;
-            s.lead_distance2 = ld2;
+            s.centre_distance2 = ld2;
             let was = s.has(IN_FRUSTUM);
             if visible != was {
                 let bytes = s.retained();
@@ -1549,7 +1657,7 @@ impl Scheduler {
                 holds: holders.contains(&Some(s.id)),
                 in_frustum: s.has(IN_FRUSTUM),
                 hole: s.has(EMPTY) && !s.has(COVERED),
-                lead_distance2: s.lead_distance2,
+                centre_distance2: s.centre_distance2,
                 span: s.span,
                 pending_since: s.pending_since,
             }
@@ -2005,7 +2113,7 @@ pub struct Priority {
     pub holds: bool,
     pub in_frustum: bool,
     pub hole: bool,
-    pub lead_distance2: f64,
+    pub centre_distance2: f64,
     /// The chunk's side in units: what its distance is measured in.
     pub span: f64,
     pub pending_since: f64,
@@ -2015,11 +2123,11 @@ pub struct Priority {
 /// every hole before any chunk asking only to be sharper, as progressive
 /// refinement goes — a coarse chunk a zoom out has just brought covers ground
 /// nothing shows, a fine one ground a stale chunk still shows; within each,
-/// the chunk that looks largest from where the camera is heading, its
-/// distance in its own sides, so a coarse chunk far off goes with a fine one
-/// near; then what is off screen farthest first — a release takes memory from
-/// what is least likely to be wanted again. A wait halves the distance key
-/// every AGE_HALF_MS, within its class.
+/// the chunk that looks largest from the ground the view is heading to look
+/// at, its distance in its own sides, so a coarse chunk far off goes with a
+/// fine one near; then what is off screen farthest first — a release takes
+/// memory from what is least likely to be wanted again. A wait halves the
+/// distance key every AGE_HALF_MS, within its class.
 pub fn priority(a: &Priority, b: &Priority, now: f64) -> core::cmp::Ordering {
     priority_keyed(&a.keyed(now), &b.keyed(now))
 }
@@ -2033,7 +2141,11 @@ pub struct Keyed {
 
 impl Priority {
     pub fn keyed(self, now: f64) -> Keyed {
-        let d2 = if self.in_frustum { self.lead_distance2 / (self.span * self.span) } else { self.lead_distance2 };
+        let d2 = if self.in_frustum {
+            self.centre_distance2 / (self.span * self.span)
+        } else {
+            self.centre_distance2
+        };
         let key = if self.pending_since < 0.0 {
             d2
         } else {
@@ -2066,8 +2178,8 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3, f64, f64) {
     };
     let c = frame.camera;
     let d2 = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2);
-    let l = frame.lead;
-    let ld2 = (x - l[0]).powi(2) + (y - l[1]).powi(2) + (z - l[2]).powi(2);
+    let t = view_centre(c, frame.lead);
+    let ld2 = (x - t[0]).powi(2) + (y - t[1]).powi(2) + (z - t[2]).powi(2);
     let half = s.span * 0.5;
     let mut visible = (c[0] - x).abs() <= half && (c[1] - y).abs() <= half;
     if !visible {
@@ -2123,12 +2235,37 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
             let holder = meshes.holder[slot.index];
             if holder != 0 && holder != id {
                 if let Some(&j) = index.get(&holder) {
+                    // Whether the holder is a chunk of this one's own scale.
+                    //
+                    // A slot is shared only inside a group, and a group is
+                    // `level % WINDOW_LEVELS` (mesh_slot.rs), so two chunks
+                    // that meet at one are either of one level or of levels a
+                    // whole window apart. The window is that many consecutive
+                    // levels and no more, so two chunks the view wants are
+                    // never of the second kind: a holder of another scale is
+                    // one the window has left, kept for what it draws and
+                    // never built again.
+                    //
+                    // So the two cases are not alike. Of one scale, the two
+                    // lie a ring apart and hold different ground, and the
+                    // holder's is ground this one does not cover — it waits.
+                    // Of another, the holder is what this one is replacing,
+                    // and waiting on it is waiting on itself: it is drawn
+                    // because nothing covers its ground yet, and what would
+                    // cover it is this mesh, which cannot land while the
+                    // holder is drawn. The ledger has read twenty seconds of
+                    // that, and a chunk that never lands at all
+                    // (issue/20260923-what-is-heavy-and-what-gives-way.md).
+                    let one_scale = slots[i].level == slots[j].level;
                     let other = &mut slots[j];
-                    // The chunk that holds the slot is drawing from it: this
-                    // mesh waits, thrown away and asked for again, rather than
-                    // take the other's ground from under it. Two chunks of one
-                    // residue lie a ring apart, so this one does not cover it.
-                    if other.has(IN_FRUSTUM) && other.layout_ready && other.tiers.iter().any(|t| t.slot.index == slot.index) {
+                    // Of one scale and drawing from the slot: this mesh
+                    // waits, thrown away and asked for again, rather than take
+                    // ground this one does not cover from under it. Of
+                    // another, the holder's tier goes the way it goes for a
+                    // holder that is not drawn at all — this one is laid out
+                    // in the same step, so what the ground loses is the frame
+                    // between.
+                    if one_scale && other.has(IN_FRUSTUM) && other.layout_ready && other.tiers.iter().any(|t| t.slot.index == slot.index) {
                         meshes.waits += 1;
                         meshes.wait_levels |= 1 << slots[i].level;
                         meshes.holder_levels |= 1 << slots[j].level;
@@ -2139,7 +2276,8 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
                         }
                         return;
                     }
-                    // Not drawn: its tier there goes, and the nodes hear.
+                    // Not drawn, or of another scale: its tier there goes,
+                    // and the nodes hear.
                     let mut k = 0;
                     while k < other.tiers.len() {
                         if other.tiers[k].slot.index == slot.index {

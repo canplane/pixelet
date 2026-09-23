@@ -1,14 +1,13 @@
 // pxl-kernel/layer/terrain/resident.test.rs
 //
-// What a record carries. The copy itself has no test here: a page's bytes go
-// to an address its own coordinate names, so there is nothing to arrange and
-// nothing that can be refused.
+// What a record carries. The copy itself has no test here: the caller is
+// handed a record and writes the page's lanes into it, and there is nothing
+// in that which can be refused.
 
 use pxl_spec::space::pvf3::ivec;
 
 use super::*;
 use crate::global::serial;
-use crate::layer::terrain::fixed::slot_of;
 use crate::layer::terrain::level::{HELD_AXIS, WINDOW_LEVELS};
 
 fn page(level: u32, x: i64, y: i64) -> LevelPage {
@@ -16,47 +15,47 @@ fn page(level: u32, x: i64, y: i64) -> LevelPage {
 }
 
 #[test]
-fn a_page_takes_the_record_its_coordinate_names() {
+fn a_record_carries_the_page_it_was_given_and_says_who_it_was_taken_from() {
     let _g = serial();
-    let p = page(0, 11, 12);
-    free_slot(p);
-    assert!(!holds_slot(p));
-    assert_eq!(take_slot(p), None, "an empty record turns no one out");
-    assert!(holds_slot(p));
-    free_slot(p);
+    forget_all();
+    let (p, q) = (page(0, 11, 12), page(3, -4, 9));
+    let record = free_record().expect("an empty range");
+    assert_eq!(put(p, record), None, "a record carrying nothing turns no one out");
+    assert_eq!(record_of(p), Some(record));
+    assert!(holds_record(p));
+    assert_eq!(put(p, record), None, "the page it already carries is not turned out");
+    assert_eq!(put(q, record), Some(p));
+    assert!(holds_record(q) && !holds_record(p));
 }
 
 #[test]
-fn a_page_an_axis_away_takes_the_record_and_names_who_held_it() {
+fn any_page_fits_any_record() {
     let _g = serial();
-    let p = page(2, 3, 4);
+    forget_all();
+    // An axis apart at one level, and a window apart in level: what the old
+    // addressing made collide, and what a fold and a pan back are made of.
+    let near = page(2, 3, 4);
     let far = page(2, 3 + HELD_AXIS as i64, 4);
-    free_slot(p);
-    take_slot(p);
-    assert_eq!(slot_of(far), slot_of(p), "an axis apart is one record");
-    assert_eq!(take_slot(far), Some(p));
-    assert!(holds_slot(far) && !holds_slot(p));
-    free_slot(far);
-}
-
-#[test]
-fn levels_a_window_apart_share_a_group_and_levels_inside_it_do_not() {
-    let _g = serial();
-    assert_eq!(slot_of(page(1, 3, 4)), slot_of(page(1 + WINDOW_LEVELS, 3, 4)));
-    for level in 1..WINDOW_LEVELS {
-        assert_ne!(slot_of(page(0, 3, 4)), slot_of(page(level, 3, 4)));
+    let over = page(2 + WINDOW_LEVELS, 3, 4);
+    for p in [near, far, over] {
+        let record = free_record().expect("an empty range");
+        assert_eq!(put(p, record), None);
     }
+    assert!(holds_record(near) && holds_record(far) && holds_record(over));
+    assert_ne!(record_of(near), record_of(far));
+    assert_ne!(record_of(near), record_of(over));
 }
 
 #[test]
-fn a_page_forgets_only_the_record_it_still_holds() {
+fn a_full_range_has_no_free_record_and_an_empty_one_is_all_free() {
     let _g = serial();
-    let p = page(0, 7, 8);
-    let far = page(0, 7, 8 + HELD_AXIS as i64);
-    free_slot(p);
-    take_slot(p);
-    take_slot(far);
-    free_slot(p);
-    assert!(holds_slot(far), "the page it turned out cannot forget it");
-    free_slot(far);
+    forget_all();
+    assert_eq!(free_record(), Some(0));
+    for k in 0..RECORDS {
+        let record = free_record().expect("a record while any is empty");
+        put(page(0, k as i64, 0), record);
+    }
+    assert_eq!(free_record(), None, "every record carries a page");
+    assert_eq!(page_in(0), Some(page(0, 0, 0)));
+    forget_all();
 }

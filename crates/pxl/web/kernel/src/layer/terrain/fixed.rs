@@ -1,25 +1,17 @@
 // pxl-kernel/layer/terrain/fixed.rs
 
-//! `.fixed.terrain`: where a resident terrain page lies, decided by its own
-//! coordinate and not by an allocator.
+//! `.fixed.terrain`: the room every resident terrain page lies in — how many
+//! records there are, and where a record's bytes are.
 //!
 //! The first and so far only range of the kernel's `.fixed` section
 //! (mem/fixed.rs), which is what the name says — placed once when the
 //! module boots, never freed, and of a size settled at compile time.
 //!
-//! Two stages, and they know nothing of each other.
-//!
-//! The index is the page's coordinate at its level reduced modulo the ring's
-//! axis, the way a clipmap addresses its ring, within a group of records for
-//! its level reduced modulo the window's width (level.rs). Two pages of one
-//! level share a record only when they lie a whole axis apart, further than a
-//! ring reaches; two levels share a group only when they lie a whole window
-//! apart, further than the window reaches. A page arriving therefore
-//! overwrites one that has already left: eviction needs no list, no
-//! quarantine and no spare room, and the range is exactly as large as the set
-//! it holds. When the window slides, the level it leaves and the level it
-//! takes share a group, so the level that leaves goes as the one that enters
-//! arrives.
+//! How many records there are is here; which page is in which is
+//! resident.rs's, and it is a policy rather than arithmetic. The count is the
+//! window's rings — a record per page the camera can want at once — so a
+//! wanted page always has room, and what is left over is room for pages the
+//! camera has left. A wider view wants more of them and leaves less over.
 //!
 //! The routing turns a record and a channel into an address, and it is the only
 //! thing here that knows how the bytes are ordered. The ground is held channel
@@ -32,27 +24,17 @@
 
 use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_spec::bake::format::GROUND_CH_KEYS;
-use pxl_spec::space::pvf3::ivec;
 
-use crate::layer::terrain::level::{LevelPage, HELD_AXIS, WINDOW_LEVELS};
+use crate::layer::terrain::level::{HELD_AXIS, WINDOW_LEVELS};
 
-// ---- The index ----
+// ---- The count ----
 
 /// Records a level's ring takes: one group.
 const GROUP_SLOTS: u32 = HELD_AXIS * HELD_AXIS;
 
-/// Records in the range: a ring for every level of the window, and exactly
-/// the pages it holds.
+/// Records in the range: a ring for every level of the window, so every page
+/// the widest camera wants at once has room.
 pub const TERRAIN_SLOTS: u32 = WINDOW_LEVELS * GROUP_SLOTS;
-
-/// The record a page lies in. Every page has one; whether the page is there
-/// is the record's own key to say.
-pub fn slot_of(p: LevelPage) -> u32 {
-    let axis = HELD_AXIS as i64;
-    let x = ivec::X(p.page).rem_euclid(axis) as u32;
-    let y = ivec::Y(p.page).rem_euclid(axis) as u32;
-    (p.level % WINDOW_LEVELS) * GROUP_SLOTS + y * HELD_AXIS + x
-}
 
 // ---- The routing ----
 
