@@ -20,7 +20,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 use pxl_render::look::lod::LodStep;
-use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Step};
+use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::level::write_level_runs;
 use pxl_render::mesh::paint::object::adapter::{Carve, Painted, Painter};
 use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
@@ -48,9 +48,11 @@ use crate::world::chunk::table::Event;
 
 /// A tier as the node holds it: its boxes, which lie on the device in the
 /// chunk's slot (mesh_slot.rs) and nowhere in the memory.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MeshBlock {
     pub box_cnt: u32,
+    /// What its boxes' heights are held in (pxl-render mesh/chunk_mesher.rs).
+    pub heights: Heights,
 }
 
 /// A chunk's decor at one tier: one heap block holding every
@@ -354,9 +356,16 @@ fn dispatch(e: Event) {
                 node_counts().removed += 1;
             }
         }
-        Event::Build(BuildEvent::Tier { id, generation, step, box_cnt, .. }) => {
+        Event::Build(BuildEvent::Tier {
+            id,
+            generation,
+            step,
+            box_cnt,
+            heights,
+            ..
+        }) => {
             if let Some(node) = n.nodes.get_mut(&id) {
-                node.on_tier(generation, step, MeshBlock { box_cnt });
+                node.on_tier(generation, step, MeshBlock { box_cnt, heights });
             }
         }
         Event::Decor { id, step, generation, at, bytes } => match n.nodes.get_mut(&id) {
@@ -465,12 +474,21 @@ pub const RUN_SET_BYTES: u32 = 1 << 20;
 pub const MAX_CHUNKS: usize = 4096;
 
 /// What the chunk nodes are told.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BuildEvent {
     /// Tier `step` of chunk `id`, built from its sources as of `generation`:
     /// the mesh is `bytes` bytes at `at` in `.fixed.bake`, until it is sent
-    /// to its slot on the device.
-    Tier { id: u32, generation: u32, step: u32, at: u32, bytes: u32, box_cnt: u32 },
+    /// to its slot on the device, and its boxes' heights are held in
+    /// `heights` (pxl-render mesh/chunk_mesher.rs).
+    Tier {
+        id: u32,
+        generation: u32,
+        step: u32,
+        at: u32,
+        bytes: u32,
+        box_cnt: u32,
+        heights: Heights,
+    },
 }
 
 /// A leaf column, as a decor build reads it (Builder::leaf_source).
@@ -1208,7 +1226,7 @@ impl Builder {
                 let job = self.bake_job.as_ref().unwrap();
                 // A mesh of nothing never asked for a block, and is handed
                 // over as none: zero bytes at zero.
-                debug_assert!(job.mesh.is_some() || mesh_words(0) == 0);
+                debug_assert!(job.mesh.is_some() || mesh_words(0, FINE_BOX_WORDS) == 0);
                 let (at, bytes) = job.mesh.unwrap_or((0, 0));
                 let mesh = self.bake.finish();
                 let job = self.bake_job.take().unwrap();
@@ -1229,6 +1247,7 @@ impl Builder {
                     at: at as u32,
                     bytes,
                     box_cnt: mesh.box_cnt,
+                    heights: mesh.heights,
                 });
                 Progress::Busy
             }

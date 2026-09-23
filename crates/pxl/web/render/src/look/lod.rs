@@ -74,12 +74,15 @@ pub static TARGET_CELL_PX: LazyLock<f64> = LazyLock::new(|| px_per_unit(REFERENC
 /// genuinely near one threshold ever blend.
 const BLEND_BAND_FRACTION: f64 = 0.05;
 
-/// Only thresholds inside the current visible range get dither-blended. At the
-/// reference projection the third handoff (768u) is the last one comfortably
-/// inside render_cfg.RENDER_DIST, so including it removes its hard pop. The handoff that lands at the
-/// range's own edge, and everything past it, stay hard transitions: geometry
-/// ends there and fog is already opaque, so a second mesh would be retained
-/// for nothing.
+/// Only thresholds inside the current visible range get dither-blended. At
+/// the reference projection the third handoff is 768u, and the ground is
+/// never drawn to less than NEAREST_REACH, 1,024 u
+/// (kernel layer/environment/fog.rs): the reach moves with the height, but
+/// it cannot fall under that, so this handoff is inside it wherever the
+/// camera is and including it removes its hard pop. The handoff that lands
+/// at the reach's own edge, and everything past it, stay hard transitions:
+/// geometry ends there and the band is already opaque, so a second mesh
+/// would be retained for nothing.
 const BLEND_ELIGIBLE_THRESHOLDS: usize = 3;
 
 /// What a thing at a distance shows.
