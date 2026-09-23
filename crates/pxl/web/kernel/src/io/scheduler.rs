@@ -18,11 +18,19 @@ use xpute_runtime::io::queue::{Demand as Queued, IoQueue};
 
 use crate::global::Global;
 use crate::io::demand::{Category, Demand, DemandKey, Phases};
+use crate::layer::terrain::level::{HELD_AXIS, WINDOW_LEVELS};
 use crate::sched::ledger::record::{ledger_record, Failure, Outcome, TaskRecord};
 
-/// Demands held at once: the pages near the view in each category, and a
-/// search. Past it a demand is refused and asked for again.
-const HELD: usize = 128;
+/// Fetches in flight at most, whatever the host grants: what the rows keep
+/// beside the wishlists for requests still running after their page left
+/// one, or aborted and not yet settled.
+const MAX_CREDITS: u32 = 16;
+
+/// Demands held at once: every page of terrain's held rings, the ocean tile,
+/// and what is in flight past them. A wishlist is replaced whole and a
+/// demand past the rows is refused, so rows short of the rings leave the
+/// last pages of a window unasked until the view moves.
+const HELD: usize = (WINDOW_LEVELS * HELD_AXIS * HELD_AXIS) as usize + 1 + MAX_CREDITS as usize;
 
 /// Keys held at once: each one the queue holds, and each it aborted and has
 /// not handed out — at most one of each per slot.
@@ -122,9 +130,10 @@ fn forget_names(s: &mut Scheduler) {
     s.name_count = kept;
 }
 
-/// How many fetches may be in flight at once, as the central scheduler grants.
+/// How many fetches may be in flight at once, as the central scheduler
+/// grants, up to what the rows keep room for.
 pub fn set_fetch_credits(credits: u32) {
-    sched().credits = credits;
+    sched().credits = credits.min(MAX_CREDITS);
 }
 
 pub fn fetch_credits() -> u32 {
@@ -199,8 +208,9 @@ pub fn fetch_take_aborts(mut each: impl FnMut(DemandKey)) {
 /// Replaces one category's wishlist. Demands for other categories are
 /// untouched. New keys are queued, keys already queued pick up the new
 /// priority, keys in flight are left running; anything in the category that
-/// isn't in `wanted` is dropped or aborted.
-pub fn fetch_sync(category: Category, wanted: &[Demand]) {
+/// isn't in `wanted` is dropped or aborted. How many of `wanted` found no
+/// row: those are not asked for until the wishlist is given again.
+pub fn fetch_sync(category: Category, wanted: &[Demand]) -> u32 {
     let s = sched();
     let id = category_of(s, category);
     let mut queued = [Queued::default(); HELD];
@@ -214,8 +224,9 @@ pub fn fetch_sync(category: Category, wanted: &[Demand]) {
         };
         n += 1;
     }
-    s.queue.sync(id, &queued[..n]);
+    let refused = s.queue.sync(id, &queued[..n]) + (wanted.len() - n) as u32;
     forget_names(s);
+    refused
 }
 
 /// Whether a demand with this key is in flight right now. Read-only, for a

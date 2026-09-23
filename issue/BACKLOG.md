@@ -319,6 +319,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   - Not yet seen on a screen: the clouds at sunset, and the moonlit sky
     toward the moon itself.
 
+- **The ledger report's text, gathered in one place.** Its lines are
+  template strings spread through `report.ts`, `gauge.tsx` and `trace.ts`,
+  each spelling a lane's name and unit again, so a lane added on the kernel
+  side (the `stale` and `slots` lines, 2026-09-22) is printed by hand in
+  each. The words belong beside the lanes in `ledger.json`, the formatting in
+  one table the three read; worth doing when the report is next reworked, not
+  on its own.
+
 - **A changelog, when `xpute` is published and not before.** Asked 2026-09-19
   and answered no: a changelog's reader is someone deciding whether to move
   between versions, and its load-bearing lines are the ones that change what

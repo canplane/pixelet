@@ -11,6 +11,11 @@
 //! fetch, and any POI request still in flight is aborted by the scheduler's
 //! own yield. Cached pages are left as-is so toggling back on feels instant for
 //! whatever's still in range.
+//!
+//! Not wired: nothing calls `poi_fetcher_step`, so no POI page is requested
+//! and the fetch queue's rows are terrain's (io/scheduler.rs sizes them so).
+//! Kept whole for when POI comes back; wiring it back means the queue holds
+//! its leaves' ring too.
 
 use pxl_spec::space::pvf3::ivec::IVec;
 

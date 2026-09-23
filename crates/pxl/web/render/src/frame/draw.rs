@@ -36,6 +36,10 @@ pub const UNIFORM_FLOATS: usize = 8;
 /// the instance count, uniform, pipeline), its uniform carrying the group's
 /// first lane word in place of the visibility.
 pub const PIPELINE_CHUNK: u32 = 0;
+/// A chunk draw's handle with this bit is an arena group (gpu/arena.rs), not
+/// a block: its words are (ARENA_DRAW | group, box count, first box,
+/// uniform, pipeline).
+pub const ARENA_DRAW: u32 = 1 << 31;
 pub const PIPELINE_DECOR: u32 = 1;
 /// The hover ghost: a box through the chunk shader, or one decor instance
 /// through decor's, half transparent; the box biased toward the eye, more so
@@ -157,6 +161,11 @@ impl DrawList {
         let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
         self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], fourth, opacity, 0.0, 0.0, 0.0]);
         self.draws.extend_from_slice(&[handle, a, b, uniform, pipeline]);
+    }
+
+    /// A chunk mesh in arena group `group`, `box_cnt` boxes from `first_box`.
+    pub fn draw_arena(&mut self, group: u32, first_box: u32, box_cnt: u32, translation: [f32; 3], visible: f32) {
+        self.draw(PIPELINE_CHUNK, ARENA_DRAW | group, box_cnt, first_box, translation, visible, 1.0);
     }
 
     #[allow(clippy::too_many_arguments)]

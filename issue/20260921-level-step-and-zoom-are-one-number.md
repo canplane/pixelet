@@ -215,13 +215,13 @@ arbitrary: at `MAX_DIST` one terrain cell covers 1.13 pixels, so zooming out
 sits exactly where the data runs out of resolution, which is the condition a
 coarser level answers.
 
-Above the innermost level a ring needs only its rim. What a ring covers inside
-the next finer one's reach is drawn from that finer level, so the middle of
-each outer ring is never read — the hollow ring geometry clipmaps render is the
-same observation. A page is left out only where the ring below holds all four
-pages under it, and where the view stands in its page decides whether that is
-one page of the twenty-five or four. A chunk over a page its level does not
-hold is drawn as the chunks under it.
+Every level holds its ring whole, the middle the ring below covers
+included. A clipmap renders hollow rings but keeps every level's data whole,
+and for the reason that holds here: the middle is what is drawn where the
+finer page under it has not come, so the ground coarsens there rather than
+opening. Leaving it out saves one page of the twenty-five or four, as where
+the view stands in its page decides, and `.fixed` has a record for each
+anyway.
 
 Three rules fall out for the stream:
 
@@ -677,17 +677,18 @@ Updated 2026-09-22. Built:
   what it serves unpacks to what the bake writes, at every level.
 - **The rings and the window.** The client holds a 5 × 5 ring of every level
   of its window and draws from the inner 3 × 3, fetched and kept by the three
-  rules above; above the window's base a level holds only the rim of its
-  ring. `.fixed` is 125 records, a group a level, addressed by level modulo
+  rules above. `.fixed` is 125 records, a group a level, addressed by level modulo
   five. The window runs one level finer than the steps the ground in view
   wants, its top at least the level whose ring covers that ground and its
   base at 0 while decoration can reach any of it: looking down at a street it
   is the leaves alone, and five is only its widest.
 - **Level chunks.** A chunk is 64 cells of its level. The mount pass walks
   from the top level's drawn ring down, drawing a chunk whole or as its four
-  children where the ladder wants a finer step there and the finer pages
-  can be drawn — resident, or drawn from their own children in turn, which
-  is how a page a level holds none of is drawn. A level chunk's runs are
+  children where it lies whole inside the ring the level below draws and
+  the page under it has come. The rings nest as a clipmap's do, so a level's
+  chunks lie inside its own drawn ring and nowhere else, whatever the eye
+  does. A top page not yet here is a hole until it comes, and it comes
+  first. A level chunk's runs are
   its page's columns, 2^k units across and as tall as the elevation in
   units, and the objects folded to its level over them, which its coarse
   tier then averages 2×2
@@ -700,9 +701,28 @@ Decided while building, on top of the above:
 
 - **Only the leaves have two tiers.** A level-0 chunk builds step 1 and step
   2, and the existing dither blends between them; a chunk above builds only
-  its coarse tier. Short of it a chunk splits and past it it merges, with a
-  tenth of hysteresis either way, so every handoff above step 2 is a split or
-  a merge.
+  its coarse tier, so every handoff above step 2 is a split or a merge, and
+  it falls at the edge of a ring rather than at a distance from the eye.
+  Level k starts at least a page of level k−1 past the anchor's page,
+  256·2^k units, where the ladder would have handed off at 192·2^k: the
+  ground is never coarser than the ladder asks. A split by the eye's
+  distance put a level's chunks wherever the eye's reach did, past its ring,
+  and the mesh slots below need them inside it.
+- **A mesh lives on the device, in a slot of its own.** The renderer keeps a
+  fixed storage buffer a level group, and a chunk's tier is a slot in it by
+  the chunk's coordinate modulo its drawn ring's 24 chunks, a group by its
+  level modulo five — `.fixed.terrain`'s addressing, one level down. A bake
+  writes into `.fixed.bake`, 1 MiB, and is sent to its slot when it is done,
+  cut to the slot's measured capacity (3,640 boxes for a leaf's first tier,
+  1,365 for every other). A slot is taken over only once the chunk holding it
+  is no longer drawn, so a mesh outlives its page's record and there is
+  nothing to free. About 207 MiB of the device for five levels, and no mesh
+  in the module's memory.
+- **A chunk's runs last as long as its bakes.** They are one of two sets of
+  `.fixed.runs`, 1 MiB each, one filled while the other is baked from; every
+  tier the chunk has is baked while its set is there, then the set is let
+  go. With the tiers kept on the device, runs kept for a tier asked later
+  were a cache of a cache, and the heap's largest tenant.
 - **Nothing is built from a record that has gone.** When a record goes —
   let go by the eviction above, or taken by another page arriving at its
   residue — every chunk of that page goes stale at the start of the next

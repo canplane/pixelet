@@ -369,23 +369,17 @@ const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
 /// The chunk's lanes as the mesher lays them out (chunk_mesher.rs): position,
 /// normal, local_pos, box_scale, rgb, layer_taps, faces — a vertex slot a
 /// lane, at the lane's offset from the vertex count.
+/// A chunk's mesh has no vertex lanes: the vertex shader reads its boxes.
 fn chunk_lanes() -> Vec<Vec<u32>> {
-    vec![
-        lane(12, 0, F32X3),
-        lane(12, 1, F32X3),
-        lane(12, 2, F32X3),
-        lane(12, 3, F32X3),
-        lane(12, 4, F32X3),
-        lane(16, 5, F32X4),
-        lane(4, 6, U32),
-    ]
+    Vec::new()
 }
-/// The chunk's one group: the lit frame, the draws, the texture pack's two
-/// arrays and their sampler.
+/// The chunk's groups: the lit frame, the draws, the texture pack's two
+/// arrays and their sampler; then the block of the mesh it draws, whose boxes
+/// the vertex shader unfolds.
 fn chunk_groups() -> Vec<Vec<u32>> {
     let mut g0 = LIT_FRAME.to_vec();
     g0.extend([[3, BOTH, STORAGE], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, TEXTURE_ARRAY], [6, FRAGMENT, SAMPLER]]);
-    vec![group(&g0)]
+    vec![group(&g0), group(&[[0, VERTEX, STORAGE]])]
 }
 /// A model's lanes (model.rs): position, normal, uv; then, skinned, the
 /// joints and the weights.

@@ -71,7 +71,7 @@ fn fold_held(anchor: IVec) {
     let store = tile_store();
     let w = window();
     for level in w.clone().filter(|&l| l > 0) {
-        for p in held(level, anchor, w.start) {
+        for p in held(level, anchor) {
             if store.get_page(p).is_some() {
                 continue;
             }
@@ -105,7 +105,7 @@ fn terrain_demands(anchor: IVec, pinned_page_idx: Option<IVec>) -> Vec<Demand> {
         }
     };
     for level in w.clone().rev() {
-        let wanted = held(level, anchor, w.start);
+        let wanted = held(level, anchor);
         for &p in &wanted {
             add(p);
         }
@@ -164,7 +164,7 @@ fn covered(p: LevelPage) -> bool {
 fn cleanup_far_tiles(anchor: IVec, pinned_page_idx: Option<IVec>) {
     let pinned = pinned_page_idx.map(|p| LevelPage::new(0, p));
     let w = window();
-    let wanted: Vec<LevelPage> = w.clone().flat_map(|level| held(level, anchor, w.start)).collect();
+    let wanted: Vec<LevelPage> = w.clone().flat_map(|level| held(level, anchor)).collect();
     ocean_retain(|p| Some(p) == pinned || wanted.contains(&p));
     for level in w {
         // Collected first: clearing moves the table's last page into the hole.
@@ -266,5 +266,10 @@ pub fn tile_fetcher_step() {
     f.last = Some((anchor, device_page_idx, levels));
     cleanup_far_tiles(anchor, device_page_idx);
     fold_held(anchor);
-    fetch_sync(CATEGORY, &terrain_demands(anchor, device_page_idx));
+    // A demand the queue had no row for is asked for on the next turn: the
+    // wishlist is otherwise given only when the view moves, and a view at
+    // rest would keep the hole.
+    if fetch_sync(CATEGORY, &terrain_demands(anchor, device_page_idx)) > 0 {
+        f.last = None;
+    }
 }

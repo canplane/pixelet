@@ -28,23 +28,6 @@ const LOW_FILL_THRESHOLD: f64 = 0.25;
 const FULL_FACE_CNT: u32 = 6;
 const OPEN_BOTTOM_FACE_CNT: u32 = FULL_FACE_CNT - 1;
 
-#[rustfmt::skip]
-const FACE_NORMAL: [f64; 18] = [
-    1.0, 0.0, 0.0,  -1.0, 0.0, 0.0,
-    0.0, 1.0, 0.0,   0.0, -1.0, 0.0,
-    0.0, 0.0, 1.0,   0.0, 0.0, -1.0,
-];
-
-#[rustfmt::skip]
-const FACE_CORNER: [f64; 72] = [
-     0.5, -0.5, -0.5,   0.5,  0.5, -0.5,   0.5,  0.5,  0.5,   0.5, -0.5,  0.5,
-    -0.5, -0.5, -0.5,  -0.5, -0.5,  0.5,  -0.5,  0.5,  0.5,  -0.5,  0.5, -0.5,
-    -0.5,  0.5, -0.5,  -0.5,  0.5,  0.5,   0.5,  0.5,  0.5,   0.5,  0.5, -0.5,
-    -0.5, -0.5, -0.5,   0.5, -0.5, -0.5,   0.5, -0.5,  0.5,  -0.5, -0.5,  0.5,
-    -0.5, -0.5,  0.5,   0.5, -0.5,  0.5,   0.5,  0.5,  0.5,  -0.5,  0.5,  0.5,
-    -0.5, -0.5, -0.5,  -0.5,  0.5, -0.5,   0.5,  0.5, -0.5,   0.5, -0.5, -0.5,
-];
-
 pub const FACE_PX: u32 = 1 << 0;
 pub const FACE_NX: u32 = 1 << 1;
 pub const FACE_PY: u32 = 1 << 2;
@@ -96,20 +79,26 @@ const ALL_RELATIONS: u32 = HIDES_SIDE | ABUTS_SIDE | RISES_ABOVE | DIPS_BELOW;
 const BAKE_ROWS_PER_STEP: u32 = 8;
 const BAKE_BOXES_PER_STEP: usize = 512;
 
-/// f32 words a vertex carries — position, normal, local position, box scale,
-/// rgb, four layer taps, the face mask — and the visibility word after them.
-pub const F32_PER_VERTEX: u32 = 3 + 3 + 3 + 3 + 3 + 4 + 1;
-pub const VIS_F32_PER_VERTEX: u32 = 1;
-
-/// Words a mesh of `vertex_cnt` vertices and `index_cnt` indices takes: the
-/// vertices' floats and their visibility float, then the indices.
+/// Words a box takes in a mesh: its least corner and its size, three f32
+/// each; its colour, sRGB bytes; its four layer taps, a byte each; its face
+/// mask. chunk.wgsl's `Box`, read by the vertex shader, which unfolds a cube
+/// from it: a mesh is its boxes and nothing per vertex.
 ///
-/// One block for every lane: they share a lifetime exactly (the whole mesh
-/// dies at once, when its owner does), so one allocation rather than eight —
-/// measured: a zoom-out that rebuilds ~2000 chunks moved +344MB in a single
-/// frame, 8.4s of it off-thread, when each lane was its own.
-pub fn mesh_words(vertex_cnt: u32, index_cnt: u32) -> u32 {
-    vertex_cnt * (F32_PER_VERTEX + VIS_F32_PER_VERTEX) + index_cnt
+/// A box as vertices was a face's four corners each carrying position,
+/// normal, local position, the box's scale, colour, taps and the mask, 84
+/// bytes a vertex and an index list besides — over a kilobyte for a box of
+/// three faces, where this is 36 bytes. Every one of those numbers was the
+/// box's, repeated.
+pub const BOX_WORDS: u32 = 9;
+
+/// Words a mesh of `box_cnt` boxes takes.
+///
+/// One block for the whole mesh: it has one lifetime (the whole mesh dies at
+/// once, when its owner does), so one allocation — measured: a zoom-out that
+/// rebuilds ~2000 chunks moved +344MB in a single frame, 8.4s of it
+/// off-thread, when each lane of the old vertices was its own.
+pub fn mesh_words(box_cnt: u32) -> u32 {
+    box_cnt * BOX_WORDS
 }
 
 /// What bakes have counted, for the ledger. Cumulative.
@@ -126,8 +115,7 @@ pub struct Counters {
 /// A finished mesh: its counts, in the words the caller provided.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Mesh {
-    pub vertex_cnt: u32,
-    pub index_cnt: u32,
+    pub box_cnt: u32,
 }
 
 /// Where a bake stands after a step.
@@ -180,8 +168,6 @@ struct FineBake {
     phase: u8,
     row: u32,
     emit_at: usize,
-    vertex_total: u32,
-    index_total: u32,
 }
 
 struct CoarseBake {
@@ -214,8 +200,8 @@ pub struct BakeContext {
     mesh: Option<MeshTarget>,
     /// Words the open bake's mesh takes, once its size is known.
     mesh_words: u32,
-    v_cnt: u32,
-    i_cnt: u32,
+    /// Boxes written so far.
+    box_cnt: u32,
     open: Option<Open>,
     done: bool,
     pub counters: Counters,
@@ -237,8 +223,7 @@ impl BakeContext {
             coarse: OwnedRunSet::default(),
             mesh: None,
             mesh_words: 0,
-            v_cnt: 0,
-            i_cnt: 0,
+            box_cnt: 0,
             open: None,
             done: false,
             counters: Counters::default(),
@@ -260,8 +245,7 @@ impl BakeContext {
         self.done = false;
         self.mesh = None;
         self.mesh_words = 0;
-        self.v_cnt = 0;
-        self.i_cnt = 0;
+        self.box_cnt = 0;
         self.open = Some(if lod_step == 1 {
             Open::Fine(self.begin_fine(set.span, set.apron, scale, 1))
         } else {
@@ -322,10 +306,7 @@ impl BakeContext {
         self.open = None;
         self.mesh = None;
         self.surviving.clear();
-        Mesh {
-            vertex_cnt: self.v_cnt,
-            index_cnt: self.i_cnt,
-        }
+        Mesh { box_cnt: self.box_cnt }
     }
 
     pub fn abort(&mut self) {
@@ -347,8 +328,6 @@ impl BakeContext {
             phase: 0,
             row: apron,
             emit_at: 0,
-            vertex_total: 0,
-            index_total: 0,
         }
     }
 
@@ -452,18 +431,14 @@ impl BakeContext {
             if row_end < hi {
                 return false;
             }
-            let (mut vertex_total, mut index_total) = (0u32, 0u32);
+            let mut box_total = 0u32;
             for boxed in self.surviving.as_chunks::<6>().0 {
                 let faces = (boxed[3] & ALL_FACES).count_ones();
                 self.counters.faces_kept += faces;
-                vertex_total += faces * 4;
-                index_total += faces * 6;
+                box_total += (faces > 0) as u32;
             }
-            b.vertex_total = vertex_total;
-            b.index_total = index_total;
-            self.mesh_words = mesh_words(vertex_total, index_total);
-            self.v_cnt = 0;
-            self.i_cnt = 0;
+            self.mesh_words = mesh_words(box_total);
+            self.box_cnt = 0;
             b.phase = 2;
             b.emit_at = 0;
             return false;
@@ -497,10 +472,9 @@ impl BakeContext {
                 size_y = unpack_sub_cell_size(set.sub_sy[i]) * unit;
                 size_z = unpack_sub_cell_size(sub_sz) * depth;
             }
-            let taps = set.layer_taps[i];
-            let color = [SRGB_TO_LINEAR[set.r[i] as usize], SRGB_TO_LINEAR[set.g[i] as usize], SRGB_TO_LINEAR[set.b[i] as usize]];
-            let tap_bytes = [taps & 255, (taps >> 8) & 255, (taps >> 16) & 255, (taps >> 24) & 255];
-            self.emit_box(b.vertex_total, [min_x, min_y, min_z], [size_x, size_y, size_z], color, tap_bytes, mask);
+            if mask & ALL_FACES != 0 {
+                self.emit_box([min_x, min_y, min_z], [size_x, size_y, size_z], [set.r[i], set.g[i], set.b[i]], set.layer_taps[i], mask);
+            }
             s_i += 6;
         }
         b.emit_at = emit_end;
@@ -523,12 +497,14 @@ impl BakeContext {
     }
 
     /// Writes one box's faces into the bake's mesh.
-    fn emit_box(&mut self, vertex_total: u32, min: V3, size: [f64; 3], rgb: [f64; 3], taps: [u32; 4], faces: u32) {
+    fn emit_box(&mut self, min: V3, size: [f64; 3], rgb: [u8; 3], taps: u32, faces: u32) {
         let target = self.mesh.expect("emit with no mesh provided");
         // SAFETY: provide_mesh's contract — the range is the caller's, valid
         // and untouched until the bake closes.
         let m = unsafe { core::slice::from_raw_parts_mut(target.ptr, target.words) };
-        write_box(m, vertex_total, &mut self.v_cnt, &mut self.i_cnt, min, size, rgb, taps, faces);
+        let at = (self.box_cnt * BOX_WORDS) as usize;
+        write_box(&mut m[at..at + BOX_WORDS as usize], min, size, rgb, taps, faces);
+        self.box_cnt += 1;
     }
 
     fn step_coarse(&mut self, b: &mut CoarseBake, set: &RunSet) -> bool {
@@ -734,60 +710,24 @@ impl BakeContext {
 /// Faces and edges of a box standing alone: every face, and every lateral
 /// edge a crease (the CREASE bits), so each edge shades as a silhouette.
 pub const LONE_BOX_FACES: u32 = 0b11_1111 | (0b1111 << 18);
-/// A lone box's vertex and index counts.
-pub const LONE_BOX_VERTICES: u32 = 24;
-pub const LONE_BOX_INDICES: u32 = 36;
-
 /// Writes one box with nothing around it into a mesh block of
-/// mesh_words(LONE_BOX_VERTICES, LONE_BOX_INDICES) words, in the layout a
-/// bake writes: what the hover ghost is drawn from, so it is lit, textured
-/// and edge-shaded as a placed cube is. `rgb` is sRGB bytes.
+/// `mesh_words(1)` words, as a bake writes a box: what the hover ghost is
+/// drawn from, so it is lit, textured and edge-shaded as a placed cube is.
+/// `rgb` is sRGB bytes.
 pub fn write_lone_box(m: &mut [u32], size: f64, rgb: [u8; 3], layer: u8) {
-    let linear = [SRGB_TO_LINEAR[rgb[0] as usize], SRGB_TO_LINEAR[rgb[1] as usize], SRGB_TO_LINEAR[rgb[2] as usize]];
-    let (mut v, mut i) = (0, 0);
-    write_box(m, LONE_BOX_VERTICES, &mut v, &mut i, [0.0; 3], [size; 3], linear, [layer as u32; 4], LONE_BOX_FACES);
+    write_box(m, [0.0; 3], [size; 3], rgb, layer as u32 * 0x0101_0101, LONE_BOX_FACES);
 }
 
-/// Writes the faces in `faces` of one box into mesh `m` laid out for
-/// `vertex_total` vertices, at the vertex and index counts given, which it
-/// advances. Positions are summed in f64 and narrowed once, as a
-/// Float32Array store narrows them.
-#[allow(clippy::too_many_arguments)]
-fn write_box(m: &mut [u32], vertex_total: u32, v_cnt: &mut u32, i_cnt: &mut u32, min: V3, size: [f64; 3], rgb: [f64; 3], taps: [u32; 4], faces: u32) {
-    let vt = vertex_total as usize;
-    let lane = |k: usize| k * vt;
-    let (position, normal, local_pos, box_scale, color, layer_taps, face_lane) = (lane(0), lane(3), lane(6), lane(9), lane(12), lane(15), lane(19));
-    let index = lane((F32_PER_VERTEX + VIS_F32_PER_VERTEX) as usize);
-    let centre = [min[0] + size[0] * 0.5, min[1] + size[1] * 0.5, min[2] + size[2] * 0.5];
-    for f in 0..FULL_FACE_CNT as usize {
-        if faces & (1 << f) == 0 {
-            continue;
-        }
-        let n = &FACE_NORMAL[f * 3..f * 3 + 3];
-        let base_v = *v_cnt;
-        for c in 0..4 {
-            let k = (f * 4 + c) * 3;
-            let l = &FACE_CORNER[k..k + 3];
-            let vi = *v_cnt as usize;
-            *v_cnt += 1;
-            let (po, lo) = (vi * 3, vi * 4);
-            for a in 0..3 {
-                m[position + po + a] = f32_word(centre[a] + l[a] * size[a]);
-                m[normal + po + a] = f32_word(n[a]);
-                m[local_pos + po + a] = f32_word(l[a]);
-                m[box_scale + po + a] = f32_word(size[a]);
-                m[color + po + a] = f32_word(rgb[a]);
-            }
-            for (t, tap) in taps.iter().enumerate() {
-                m[layer_taps + lo + t] = f32_word(*tap as f64);
-            }
-            m[face_lane + vi] = faces;
-        }
-        for d in [0, 1, 2, 0, 2, 3] {
-            m[index + *i_cnt as usize] = base_v + d;
-            *i_cnt += 1;
-        }
+/// One box's words (`BOX_WORDS`). Its corner and size are summed in f64 and
+/// narrowed once.
+fn write_box(m: &mut [u32], min: V3, size: [f64; 3], rgb: [u8; 3], taps: u32, faces: u32) {
+    for a in 0..3 {
+        m[a] = f32_word(min[a]);
+        m[3 + a] = f32_word(size[a]);
     }
+    m[6] = u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 0]);
+    m[7] = taps;
+    m[8] = faces;
 }
 
 fn f32_word(v: f64) -> u32 {
@@ -1082,82 +1022,3 @@ fn pack_inset(linear: f64) -> (u8, u8) {
 fn coarse_rows_per_step(lod_step: u32) -> u32 {
     (BAKE_ROWS_PER_STEP / lod_step).max(1)
 }
-
-// ---- sRGB to linear ----
-//
-// sRGB byte to linear, as a table of 256 values.
-//
-// Written out rather than computed: `pow` is a transcendental function and
-// two libms may disagree in the last bit, which would break the determinism
-// a mesh is pinned to across toolchains. Generated once from
-// the sRGB transfer, c / 12.92 below 0.04045 and ((c + 0.055) / 1.055)^2.4
-// above, each
-// written to 17 digits so it parses back to the same bits.
-
-#[rustfmt::skip]
-#[allow(clippy::excessive_precision)]
-pub const SRGB_TO_LINEAR: [f64; 256] = [
-    0.0000000000000000, 0.00030352698354883752, 0.00060705396709767503, 0.00091058095064651249,
-    0.0012141079341953501, 0.0015176349177441874, 0.0018211619012930250, 0.0021246888848418626,
-    0.0024282158683907001, 0.0027317428519395373, 0.0030352698354883748, 0.0033465357638991608,
-    0.0036765073240474359, 0.0040247170184963066, 0.0043914420374102934, 0.0047769534806937292,
-    0.0051815167023383860, 0.0056053916242027229, 0.0060488330228570539, 0.0065120907925944752,
-    0.0069954101872653869, 0.0074990320432261753, 0.0080231929853849943, 0.0085681256180693069,
-    0.0091340587022207872, 0.0097212173202378491, 0.010329823029626936, 0.010960094006488246,
-    0.011612245179743885, 0.012286488356915872, 0.012983032342173012, 0.013702083047289686,
-    0.014443843596092545, 0.015208514422912709, 0.015996293365509631, 0.016807375752887384,
-    0.017641954488384078, 0.018500220128379697, 0.019382360956935723, 0.020288563056652401,
-    0.021219010376003555, 0.022173884793387381, 0.023153366178110410, 0.024157632448504756,
-    0.025186859627361630, 0.026241221894849898, 0.027320891639074894, 0.028426039504420793,
-    0.029556834437808800, 0.030713443732993635, 0.031896033073011532, 0.033104766570885055,
-    0.034339806808682170, 0.035601314875020343, 0.036889450401100039, 0.038204371595346502,
-    0.039546235276732837, 0.040915196906853191, 0.042311410620809675, 0.043735029256973465,
-    0.045186204385675541, 0.046665086336880095, 0.048171824226889419, 0.049706565984127232,
-    0.051269458374043238, 0.052860647023180246, 0.054480276442442369, 0.056128490049600091,
-    0.057805430191067229, 0.059511238162981199, 0.061246054231617608, 0.063010017653167674,
-    0.064803266692905773, 0.066625938643772892, 0.068478169844400166, 0.070360095696595876,
-    0.072271850682317479, 0.074213568380149628, 0.076185381481307851, 0.078187421805186327,
-    0.080219820314468324, 0.082282707129814794, 0.084376211544148816, 0.086500462036549763,
-    0.088655586285772942, 0.090841711183407683, 0.093058962846687451, 0.095307466630964705,
-    0.097587347141862457, 0.099898728247113891, 0.10224173308810132, 0.10461648409110419,
-    0.10702310297826761, 0.10946171077829933, 0.11193242783690560, 0.11443537382697373,
-    0.11697066775851084, 0.11953842798834562, 0.12213877222960187, 0.12477181756095049,
-    0.12743768043564743, 0.13013647669036429, 0.13286832155381798, 0.13563332965520566,
-    0.13843161503245183, 0.14126329114027164, 0.14412847085805777, 0.14702726649759498,
-    0.14995978981060856, 0.15292615199615017, 0.15592646370782740, 0.15896083506088041,
-    0.16202937563911099, 0.16513219450166761, 0.16826940018969075, 0.17144110073282259,
-    0.17464740365558504, 0.17788841598362912, 0.18116424424986022, 0.18447499450044100,
-    0.18782077230067787, 0.19120168274079138, 0.19461783044157580, 0.19806931955994886,
-    0.20155625379439707, 0.20507873639031693, 0.20863687014525575, 0.21223075741405523,
-    0.21586050011389926, 0.21952619972926921, 0.22322795731680850, 0.22696587351009836,
-    0.23074004852434915, 0.23455058216100522, 0.23839757381227100, 0.24228112246555486,
-    0.24620132670783548, 0.25015828472995344, 0.25415209433082675, 0.25818285292159582,
-    0.26225065752969623, 0.26635560480286247, 0.27049779101306581, 0.27467731206038465,
-    0.27889426347681040, 0.28314874042999211, 0.28744083772691748, 0.29177064981753587,
-    0.29613827079832111, 0.30054379441577650, 0.30498731406988627, 0.30946892281750854,
-    0.31398871337571754, 0.31854677812509186, 0.32314320911295075, 0.32777809805654218,
-    0.33245153634617935, 0.33716361504833037, 0.34191442490866092, 0.34670405635502960,
-    0.35153259950043936, 0.35640014414594351, 0.36130677978350950, 0.36625259559883949,
-    0.37123768047414912, 0.37626212299090650, 0.38132601143253014, 0.38642943378704903,
-    0.39157247774972326, 0.39675523072562685, 0.40197777983219579, 0.40724021190173670,
-    0.41254261348390375, 0.41788507084813747, 0.42326766998607168, 0.42869049661390662,
-    0.43415363617474895, 0.43965717384091879, 0.44520119451622786, 0.45078578283822346,
-    0.45641102318040466, 0.46207699965440707, 0.46778379611215898, 0.47353149614800955,
-    0.47932018310082680, 0.48514994005607037, 0.49102084984783562, 0.49693299506087041,
-    0.50288645803256871, 0.50888132085493376, 0.51491766537652139, 0.52099557320435430,
-    0.52711512570581309, 0.53327640401050524, 0.53947948901210718, 0.54572446137018660,
-    0.55201140151200012, 0.55834038963426791, 0.56471150570492923, 0.57112482946487308,
-    0.57758044042965062, 0.58407841789116410, 0.59061884091933692, 0.59720178836376336,
-    0.60382733885533779, 0.61049557080786476, 0.61720656241965111, 0.62396039167507611,
-    0.63075713634614683, 0.63759687399403264, 0.64447968197058214, 0.65140563741982416,
-    0.65837481727944847, 0.66538729828227205, 0.67244315695768753, 0.67954246963309384,
-    0.68668531243531350, 0.69387176129198991, 0.70110189193297312, 0.70837577989168676,
-    0.71569350050648073, 0.72305512892196933, 0.73046074009035367, 0.73791040877273084,
-    0.74540420954038744, 0.75294221677607787, 0.76052450467529242, 0.76815114724750699,
-    0.77582221831742360, 0.78353779152619352, 0.79129794033263023, 0.79910273801440901,
-    0.80695225766925160, 0.81484657221610124, 0.82278575439628354, 0.83076987677465464,
-    0.83879901174074001, 0.84687323150985805, 0.85499260812423383, 0.86315721345410235,
-    0.87136711919879717, 0.87962239688783173, 0.88792311788196632, 0.89626935337426639,
-    0.90466117439114957, 0.91309865179341920, 0.92158185627729461, 0.93011085837542373,
-    0.93868572845788800, 0.94730653673319987, 0.95597335324928612, 0.96468624789446511,
-    0.97344529039841254, 0.98225055033311715, 0.99110209711382979, 1.0000000000000000,];

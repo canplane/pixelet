@@ -35,6 +35,13 @@ const spread = (s: Spread) => `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.ma
 /** A wait long enough to be starvation rather than queueing. The kernel's own
  * threshold rides in the report; this only says so. */
 const STARVED_MS = 2000;
+
+/** The levels a bit set names, as `0,3,5`, or `-` for none. */
+function levelsText(bits: f64): string {
+  const out: u32[] = [];
+  for (let k = 0; k < 32; k++) if (bits & (1 << k)) out.push(k);
+  return out.length > 0 ? out.join(",") : "-";
+}
 const starved = (ms: number) => (ms >= STARVED_MS ? "  STARVED" : "");
 
 // ---- what the ledger holds, as view.ts reads it ----
@@ -83,6 +90,18 @@ export type Frame = {
   lod: Record<string, f64>;
   q_terrain: f64;
   q_poi: f64;
+  stale: {
+    chunks: f64;
+    drawn: f64;
+    levels: f64;
+    hidden: f64;
+    slot_waits: f64;
+    wait_levels: f64;
+    holder_levels: f64;
+    uncovered: f64;
+    unready: f64;
+    on_waiter: f64;
+  };
 };
 
 export interface FrameSummary {
@@ -297,6 +316,10 @@ function framesSection(r: LedgerReport): string[] {
     } ms${starved(last.lod.oldest_visible_ms)}`,
     `  mounts  this frame +${last.mounts.added}/-${last.mounts.removed} layouts ${last.mounts.layouts}   window total +${f.mounts[0]}/-${f.mounts[1]}`,
     `  queue   terrain ${last.q_terrain}  poi ${last.q_poi}`,
+    `  stale   ${last.stale.chunks} kept, ${last.stale.drawn} drawn at levels ${
+      levelsText(last.stale.levels)
+    }, hiding ${last.stale.hidden}   kept for: uncovered ${last.stale.uncovered}, not laid out ${last.stale.unready} (${last.stale.on_waiter} on a slot waiter)`,
+    `  slots   ${last.stale.slot_waits} meshes waited, levels ${levelsText(last.stale.wait_levels)} on slots held by levels ${levelsText(last.stale.holder_levels)}`,
   ];
 }
 

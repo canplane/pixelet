@@ -40,25 +40,6 @@ fn a_ring_is_the_axis_squared_centred_on_the_anchors_page_nearest_first() {
 }
 
 #[test]
-fn above_the_base_a_level_holds_what_the_level_below_does_not_whole() {
-    for (x, y) in [(40, 20), (41, 21), (40, 21), (-7, 3)] {
-        let anchor = FROM_L3_IDX(leaf(x, y));
-        assert_eq!(held(1, anchor, 1).len(), (HELD_AXIS * HELD_AXIS) as usize);
-        for level in 1..5 {
-            let below = ring(level - 1, anchor, HELD_AXIS);
-            let rim = held(level, anchor, 0);
-            // Where the anchor stands in its page decides how many of the
-            // level's pages the level below covers whole: one or four.
-            assert!([1, 4].contains(&(ring(level, anchor, HELD_AXIS).len() - rim.len())), "{x},{y} level {level}");
-            for p in ring(level, anchor, HELD_AXIS) {
-                let whole = p.children().iter().all(|c| below.contains(c));
-                assert_eq!(rim.contains(&p), !whole, "{x},{y} {p:?}");
-            }
-        }
-    }
-}
-
-#[test]
 fn a_levels_span_doubles_with_the_level() {
     assert_eq!(span_of(0), PAGE_SPAN);
     assert_eq!(span_of(4), 16.0 * PAGE_SPAN);

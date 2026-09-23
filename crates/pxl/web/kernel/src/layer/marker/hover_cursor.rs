@@ -7,7 +7,7 @@
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR};
 use pxl_render::look::style::marker_colors;
-use pxl_render::mesh::chunk_mesher::{mesh_words, write_lone_box, LONE_BOX_INDICES, LONE_BOX_VERTICES};
+use pxl_render::mesh::chunk_mesher::{mesh_words, write_lone_box};
 use pxl_render::mesh::volume::NO_LAYER;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::ground::shown_ground;
@@ -286,12 +286,12 @@ impl GhostDraw {
         if self.held.as_ref().is_some_and(|h| h.shape == shape) {
             return;
         }
-        let bytes = mesh_words(LONE_BOX_VERTICES, LONE_BOX_INDICES) * 4;
+        let bytes = mesh_words(1) * 4;
         let Some(block) = self.replace(draw, shape, bytes) else { return };
         // SAFETY: a block of the words asked for, this ghost's until replaced.
         let m = unsafe { core::slice::from_raw_parts_mut(world.volumes.mem().add(block) as *mut u32, bytes as usize / 4) };
         write_lone_box(m, size, rgb, layer);
-        self.upload(draw, LONE_BOX_VERTICES, LONE_BOX_INDICES);
+        self.upload(draw, 1, 0);
     }
 
     /// One instance of decor group `group`, turned `rotation` about Z, at `at`.
@@ -340,7 +340,7 @@ impl GhostDraw {
         match h.shape {
             Shape::Box { coplanar, .. } => {
                 let pipeline = if coplanar { PIPELINE_GHOST_BOX_COPLANAR } else { PIPELINE_GHOST_BOX };
-                draw.draw_as(pipeline, h.handle, LONE_BOX_VERTICES, LONE_BOX_INDICES, t, 1.0, GHOST_OPACITY);
+                draw.draw_as(pipeline, h.handle, 1, 0, t, 1.0, GHOST_OPACITY);
             }
             Shape::Decor { group, .. } => draw.draw_as(PIPELINE_GHOST_DECOR, h.handle, group, 1, t, 0.0, GHOST_OPACITY),
         }

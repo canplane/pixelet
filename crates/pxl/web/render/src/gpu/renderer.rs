@@ -27,14 +27,15 @@ use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::asset::atlas::BillboardAtlas;
 use crate::frame::draw::{
-    DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE,
-    PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
+    ARENA_DRAW, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR, PIPELINE_PUCK_BEACON,
+    PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
 use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_SKY};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, texture_usage, word_bytes, GpuApi, NONE};
 use crate::gpu::api_spec::{dimension, format, load, resource};
+use crate::gpu::arena::{arena_group, arena_lose};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
 use crate::gpu::clouds::CloudPass;
 use crate::gpu::layers::{Layers, Mips, LAYER_TEX_SZ};
@@ -77,9 +78,8 @@ pub(crate) const GLOBE: usize = FRAME_AT[16];
 pub(crate) const SKY_FLOATS: usize = 16;
 pub(crate) const SKY_POLE: usize = 12;
 pub(crate) const SKY_MAPPED: usize = 15;
-/// The visibility lane past a chunk's vertex lanes, bytes a vertex, which the
-/// index lane follows.
-const VIS_BYTES_PER_VERTEX: u32 = 4;
+/// Vertices a chunk mesh's box is drawn with: chunk.wgsl's BOX_VERTICES.
+const BOX_VERTICES: u32 = 36;
 /// Floats of the frame's draws storage made before the first frame needs more.
 const DRAWS_INITIAL: u32 = 256 * UNIFORM_FLOATS as u32;
 const MB: f64 = 1_048_576.0;
@@ -476,12 +476,18 @@ pub fn gpu_created(align: u32, timestamps: bool) {
     DEVICE.set(Some(Device { align, timestamps }));
 }
 
+/// Whether a device answered and has not gone.
+pub fn device_ready() -> bool {
+    DEVICE.get(|| None).is_some()
+}
+
 /// The host's report that the device went away, and everything on it.
 pub fn gpu_lost() {
     DEVICE.set(None);
     RENDERER.set(None);
     forget_objects();
     blocks().lose();
+    arena_lose();
     surfaces_lost();
 }
 
@@ -846,28 +852,31 @@ impl Renderer {
 
     /// Every chunk-pipeline draw of pipeline `which`; with `own`, that pipeline
     /// set before the first. Whether any was drawn.
+    /// A mesh is its boxes, read by the vertex shader from the buffer at
+    /// group 1, a cube's worth of vertices each (chunk.wgsl): a chunk's in its
+    /// arena group from its first box, the hover ghost's in a block of its own.
     fn draw_meshes(&self, g: &GpuApi, pass: u32, draws: &[u32], which: u32, own: Option<u32>) -> bool {
         let b = blocks();
-        let vertex_bytes = self.chunk.vertex_bytes() + VIS_BYTES_PER_VERTEX;
+        let layout = self.chunk.layouts[1];
         let mut any = false;
         for d in draws.as_chunks::<DRAW_WORDS>().0 {
-            let (handle, vertex_cnt, index_cnt, uniform, pipeline) = (d[0], d[1], d[2], d[3], d[4]);
+            let (handle, box_cnt, first_box, uniform, pipeline) = (d[0], d[1], d[2], d[3], d[4]);
             if pipeline != which {
                 continue;
             }
-            let Some((buffer, _, _)) = b.get(handle) else { continue };
+            let buffer = if handle & ARENA_DRAW != 0 {
+                arena_group((handle & !ARENA_DRAW) as usize, layout)
+            } else {
+                b.group(g, handle, layout)
+            };
+            let Some(buffer) = buffer else { continue };
             if let (Some(p), false) = (own, any) {
                 (g.set_pipeline)(pass, p);
                 (g.set_bind_group)(pass, 0, self.bind_group, &[]);
             }
             any = true;
-            let mut offset = 0;
-            for lane in 0..self.chunk.lanes {
-                (g.set_vertex_buffer)(pass, lane as u32, buffer, offset, 0);
-                offset += vertex_cnt * self.chunk.strides[lane];
-            }
-            (g.set_index_buffer)(pass, buffer, vertex_cnt * vertex_bytes, index_cnt * 4);
-            (g.draw_indexed)(pass, index_cnt, 1, 0, uniform);
+            (g.set_bind_group)(pass, 1, buffer, &[]);
+            (g.draw)(pass, box_cnt * BOX_VERTICES, 1, first_box * BOX_VERTICES, uniform);
         }
         any
     }
@@ -1057,7 +1066,7 @@ impl Renderer {
         let mut census = [[0.0; 2]; PIPELINES as usize];
         for d in draws.as_chunks::<DRAW_WORDS>().0 {
             let tris = match d[4] {
-                PIPELINE_CHUNK | PIPELINE_GHOST_BOX | PIPELINE_GHOST_BOX_COPLANAR => d[2] / 3,
+                PIPELINE_CHUNK | PIPELINE_GHOST_BOX | PIPELINE_GHOST_BOX_COPLANAR => d[1] * 12,
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR => self.decor.triangles_of(d[1], b) * d[2],
                 PIPELINE_SKINNED => b.get(d[0]).map_or(0, |(_, _, index_cnt)| index_cnt / 3),
                 PIPELINE_PUCK_ZONE => 12 * d[1],

@@ -2,6 +2,8 @@
 
 use super::*;
 use crate::layer::terrain::fixed::TERRAIN_BYTES;
+use crate::world::chunk::mesh_slot::BAKE_BYTES;
+use crate::world::chunk::node::{RUN_SETS, RUN_SET_BYTES};
 
 /// What a linker might leave behind it. The map is a function of this. A page
 /// boundary already, so `page_up` does nothing to it.
@@ -22,7 +24,7 @@ fn the_fixed_ranges_are_what_they_hold_and_nothing_more() {
     for n in MIN_REGIONS..=16 {
         let m = lay_out(n * REGION_BYTES, DATA_END);
         assert_eq!(m.fixed.bytes, FIXED_BYTES, "{n} regions");
-        assert!(m.fixed.bytes - TERRAIN_BYTES < PAGE_BYTES, "{n} regions: rounding only");
+        assert!(m.fixed.bytes - TERRAIN_BYTES - BAKE_BYTES - RUN_SETS as u32 * RUN_SET_BYTES < PAGE_BYTES, "{n} regions: rounding only");
     }
 }
 
@@ -76,6 +78,9 @@ fn every_section_begins_on_a_page_so_every_block_in_it_does() {
 fn no_section_leaves_more_than_a_page_behind_it() {
     for n in MIN_REGIONS..=16 {
         let m = lay_out(n * REGION_BYTES, DATA_END);
-        assert!(m.heap.offset - (m.fixed.offset + TERRAIN_BYTES) < PAGE_BYTES, "{n} regions");
+        assert!(
+            m.heap.offset - (m.fixed.offset + TERRAIN_BYTES + BAKE_BYTES + RUN_SETS as u32 * RUN_SET_BYTES) < PAGE_BYTES,
+            "{n} regions"
+        );
     }
 }

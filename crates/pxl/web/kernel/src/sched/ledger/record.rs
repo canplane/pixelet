@@ -283,6 +283,32 @@ pub struct FrameSample {
     // network pressure — io/scheduler queued + in-flight, per category
     pub q_terrain: f64,
     pub q_poi: f64,
+    pub stale: StaleSample,
+}
+
+/// The chunks a view has moved off and that are kept until what replaces
+/// them is whole (world/chunk/table.rs `retire`): where they outstay it, they
+/// hide the ground that replaced them.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct StaleSample {
+    pub chunks: f64,
+    /// Of those, the ones drawn, and their levels as bits.
+    pub drawn: f64,
+    pub levels: f64,
+    /// Wanted chunks with a layout that a drawn stale chunk hides.
+    pub hidden: f64,
+    /// Meshes thrown away because their slot is still drawn from, and the
+    /// levels of the chunks that waited and that held the slots, as bits.
+    pub slot_waits: f64,
+    pub wait_levels: f64,
+    pub holder_levels: f64,
+    /// Why the stale chunks stay: what replaces them does not cover them;
+    /// covers them but is not laid out; and of those, where what is not laid
+    /// out is waiting on a slot.
+    pub uncovered: f64,
+    pub unready: f64,
+    pub on_waiter: f64,
 }
 
 /// One of the window's worst frames by dt, kept whole with the frame before
@@ -320,6 +346,10 @@ words!(FrameSample, FRAME::WORDS,
     heap.refusals => FRAME::heap_refusals, heap.largest_free_mb => FRAME::heap_largest_free_mb,
     rings.cq_peak => FRAME::ring_cq_peak, rings.spill_peak => FRAME::ring_spill_peak,
     work.scans => FRAME::work_scans, work.bakes => FRAME::work_bakes, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
+    stale.chunks => FRAME::stale_chunks, stale.drawn => FRAME::stale_drawn, stale.levels => FRAME::stale_levels,
+    stale.hidden => FRAME::stale_hidden, stale.slot_waits => FRAME::slot_waits,
+    stale.wait_levels => FRAME::slot_wait_levels, stale.holder_levels => FRAME::slot_holder_levels,
+    stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready, stale.on_waiter => FRAME::stale_on_waiter,
 );
 
 words!(TaskRow, TASK::WORDS,

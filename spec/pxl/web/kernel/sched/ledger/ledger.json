@@ -109,7 +109,17 @@
     "work_bakes": 65,
     "q_terrain": 66,
     "q_poi": 67,
-    "WORDS": 68
+    "stale_chunks": 68,
+    "stale_drawn": 69,
+    "stale_levels": 70,
+    "stale_hidden": 71,
+    "slot_waits": 72,
+    "slot_wait_levels": 73,
+    "slot_holder_levels": 74,
+    "stale_uncovered": 75,
+    "stale_unready": 76,
+    "stale_on_waiter": 77,
+    "WORDS": 78
   },
   "TASK": {
     "$type": "u32",
@@ -137,9 +147,9 @@
       "One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0."
     ],
     "sample": 0,
-    "has_prev": 68,
-    "prev": 69,
-    "WORDS": 137
+    "has_prev": 78,
+    "prev": 79,
+    "WORDS": 157
   },
   "SPREAD": {
     "$type": "u32",
@@ -218,15 +228,15 @@
       "used_delta_mb": 49,
       "census": 50,
       "last": 70,
-      "WORDS": 138
+      "WORDS": 148
     },
     "tasks": {
-      "AT": 143,
+      "AT": 153,
       "slots": 0,
       "WORDS": 75
     },
     "counters": {
-      "AT": 218,
+      "AT": 228,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -250,7 +260,7 @@
       "WORDS": 20
     },
     "atlas": {
-      "AT": 238,
+      "AT": 248,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -258,7 +268,7 @@
       "WORDS": 4
     },
     "retain": {
-      "AT": 242,
+      "AT": 252,
       "nodes": 0,
       "run_sets": 1,
       "run_set_mb": 2,
@@ -271,14 +281,14 @@
       "WORDS": 9
     },
     "fetch": {
-      "AT": 251,
+      "AT": 261,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "poi": {
-      "AT": 254,
+      "AT": 264,
       "badge_count": 0,
       "dropped": 1,
       "place_ms": 2,
@@ -305,7 +315,7 @@
       "WORDS": 23
     },
     "peak": {
-      "AT": 277,
+      "AT": 287,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -326,12 +336,12 @@
       "WORDS": 17
     },
     "steps": {
-      "AT": 294,
+      "AT": 304,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
-    "WORDS": 455
+    "WORDS": 465
   },
   "READ": {
     "$type": "u32",

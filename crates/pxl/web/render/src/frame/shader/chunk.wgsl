@@ -1,5 +1,6 @@
-// The chunk mesh: the mesher's lanes as they lie in a block, one vertex
-// slot a lane. Every rule here was chunk_material.ts's injected GLSL over
+// The chunk mesh: the mesher's boxes as they lie in a block, each unfolded
+// here into a cube's six faces, a face whose bit the mask lacks collapsed to
+// nothing (chunk_mesher.rs's BOX_WORDS). Every rule here was chunk_material.ts's injected GLSL over
 // three's standard material (b9e31004) — the
 // real-size tile UV from a box's own corner and scale, the edge shading
 // from the mesher's face bits, the screen-space dither a blend is punched
@@ -24,16 +25,49 @@ struct Draw {
 // volume.rs's NO_LAYER: a tap past the last layer means the vertex colour.
 const NO_LAYER: f32 = 255.0;
 
-struct VertexIn {
-  @builtin(instance_index) draw: u32,
-  @location(0) position: vec3f,
-  @location(1) normal: vec3f,
-  @location(2) local_pos: vec3f,
-  @location(3) box_scale: vec3f,
-  @location(4) rgb: vec3f,
-  @location(5) layer_taps: vec4f,
-  @location(6) faces: u32,
+// One box of the mesh: its least corner, its size, sRGB colour bytes, four
+// layer taps a byte each, the face mask.
+struct Box {
+  min_x: f32,
+  min_y: f32,
+  min_z: f32,
+  size_x: f32,
+  size_y: f32,
+  size_z: f32,
+  rgb: u32,
+  taps: u32,
+  faces: u32,
 };
+
+@group(1) @binding(0) var<storage, read> boxes: array<Box>;
+
+// A face's outward normal and its four corners in the box's [-0.5, 0.5]
+// cube, wound counter-clockwise from outside: +x, -x, +y, -y, +z, -z, the
+// order of the mask's face bits.
+const FACE_NORMAL = array<vec3f, 6>(
+  vec3f(1.0, 0.0, 0.0), vec3f(-1.0, 0.0, 0.0),
+  vec3f(0.0, 1.0, 0.0), vec3f(0.0, -1.0, 0.0),
+  vec3f(0.0, 0.0, 1.0), vec3f(0.0, 0.0, -1.0),
+);
+const FACE_CORNER = array<vec3f, 24>(
+  vec3f(0.5, -0.5, -0.5), vec3f(0.5, 0.5, -0.5), vec3f(0.5, 0.5, 0.5), vec3f(0.5, -0.5, 0.5),
+  vec3f(-0.5, -0.5, -0.5), vec3f(-0.5, -0.5, 0.5), vec3f(-0.5, 0.5, 0.5), vec3f(-0.5, 0.5, -0.5),
+  vec3f(-0.5, 0.5, -0.5), vec3f(-0.5, 0.5, 0.5), vec3f(0.5, 0.5, 0.5), vec3f(0.5, 0.5, -0.5),
+  vec3f(-0.5, -0.5, -0.5), vec3f(0.5, -0.5, -0.5), vec3f(0.5, -0.5, 0.5), vec3f(-0.5, -0.5, 0.5),
+  vec3f(-0.5, -0.5, 0.5), vec3f(0.5, -0.5, 0.5), vec3f(0.5, 0.5, 0.5), vec3f(-0.5, 0.5, 0.5),
+  vec3f(-0.5, -0.5, -0.5), vec3f(-0.5, 0.5, -0.5), vec3f(0.5, 0.5, -0.5), vec3f(0.5, -0.5, -0.5),
+);
+// A face's two triangles over its four corners.
+const FACE_TRIANGLES = array<u32, 6>(0u, 1u, 2u, 0u, 2u, 3u);
+// Vertices a box is drawn with: six faces of two triangles.
+const BOX_VERTICES: u32 = 36u;
+
+// The sRGB transfer undone, per channel.
+fn srgb_to_linear(c: vec3f) -> vec3f {
+  let low = c / 12.92;
+  let high = pow((c + 0.055) / 1.055, vec3f(2.4));
+  return select(high, low, c <= vec3f(0.04045));
+}
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
@@ -53,18 +87,31 @@ struct VertexOut {
 };
 
 @vertex
-fn vs(v: VertexIn) -> VertexOut {
-  let d = draws[v.draw];
-  let world = on_globe(v.position + d.translation);
+fn vs(@builtin(vertex_index) vertex: u32, @builtin(instance_index) draw: u32) -> VertexOut {
+  let b = boxes[vertex / BOX_VERTICES];
+  let k = vertex % BOX_VERTICES;
+  let face = k / 6u;
   var o: VertexOut;
+  // A face the mask leaves out: every vertex of it at one point, a triangle
+  // of no area, which the rasterizer drops.
+  if ((b.faces & (1u << face)) == 0u) {
+    o.clip = vec4f(0.0, 0.0, 0.0, 1.0);
+    return o;
+  }
+  let local = FACE_CORNER[face * 4u + FACE_TRIANGLES[k % 6u]];
+  let size = vec3f(b.size_x, b.size_y, b.size_z);
+  let position = vec3f(b.min_x, b.min_y, b.min_z) + size * 0.5 + local * size;
+  let normal = FACE_NORMAL[face];
+  let d = draws[draw];
+  let world = on_globe(position + d.translation);
   o.clip = frame.view_proj * vec4f(world, 1.0);
-  o.rgb = v.rgb;
-  o.layer_taps = v.layer_taps;
-  o.local_pos = v.local_pos;
-  o.box_scale = v.box_scale;
-  o.normal = v.normal;
-  o.faces = v.faces;
-  o.draw = v.draw;
+  o.rgb = srgb_to_linear(unpack4x8unorm(b.rgb).xyz);
+  o.layer_taps = unpack4x8unorm(b.taps) * 255.0;
+  o.local_pos = local;
+  o.box_scale = size;
+  o.normal = normal;
+  o.faces = b.faces;
+  o.draw = draw;
   o.world_pos = world;
   let seen = seen_from_eye(world);
   o.through = seen.through;
@@ -74,15 +121,15 @@ fn vs(v: VertexIn) -> VertexOut {
   // per axis, so a box spanning many cells repeats the tile once a cell.
   // Side faces put height in v with the box's top at v = 0, the image's
   // top row; the array is sampled unflipped.
-  let is_side = abs(v.normal.z) < 0.5;
+  let is_side = abs(normal.z) < 0.5;
   if (is_side) {
-    if (abs(v.normal.x) > 0.5) {
-      o.box_uv = vec2f((v.local_pos.y + 0.5) * v.box_scale.y, (0.5 - v.local_pos.z) * v.box_scale.z);
+    if (abs(normal.x) > 0.5) {
+      o.box_uv = vec2f((local.y + 0.5) * size.y, (0.5 - local.z) * size.z);
     } else {
-      o.box_uv = vec2f((v.local_pos.x + 0.5) * v.box_scale.x, (0.5 - v.local_pos.z) * v.box_scale.z);
+      o.box_uv = vec2f((local.x + 0.5) * size.x, (0.5 - local.z) * size.z);
     }
   } else {
-    o.box_uv = vec2f((v.local_pos.x + 0.5) * v.box_scale.x, (v.local_pos.y + 0.5) * v.box_scale.y);
+    o.box_uv = vec2f((local.x + 0.5) * size.x, (local.y + 0.5) * size.y);
   }
   return o;
 }

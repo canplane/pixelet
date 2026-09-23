@@ -73,7 +73,17 @@ export const FRAME = {
   work_bakes: 65 as number,
   q_terrain: 66 as number,
   q_poi: 67 as number,
-  WORDS: 68 as number,
+  stale_chunks: 68 as number,
+  stale_drawn: 69 as number,
+  stale_levels: 70 as number,
+  stale_hidden: 71 as number,
+  slot_waits: 72 as number,
+  slot_wait_levels: 73 as number,
+  slot_holder_levels: 74 as number,
+  stale_uncovered: 75 as number,
+  stale_unready: 76 as number,
+  stale_on_waiter: 77 as number,
+  WORDS: 78 as number,
 } as const;
 
 /** One settled task (sched/ledger/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. */
@@ -97,9 +107,9 @@ export const TASK = {
 /** One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0. */
 export const WORST = {
   sample: 0 as number,
-  has_prev: 68 as number,
-  prev: 69 as number,
-  WORDS: 137 as number,
+  has_prev: 78 as number,
+  prev: 79 as number,
+  WORDS: 157 as number,
 } as const;
 
 export const SPREAD = {
@@ -172,15 +182,15 @@ export const SUMMARY = {
     used_delta_mb: 49 as number,
     census: 50 as number,
     last: 70 as number,
-    WORDS: 138 as number,
+    WORDS: 148 as number,
   },
   tasks: {
-    AT: 143 as number,
+    AT: 153 as number,
     slots: 0 as number,
     WORDS: 75 as number,
   },
   counters: {
-    AT: 218 as number,
+    AT: 228 as number,
     faces_kept: 0 as number,
     faces_possible: 1 as number,
     runs_culled: 2 as number,
@@ -204,7 +214,7 @@ export const SUMMARY = {
     WORDS: 20 as number,
   },
   atlas: {
-    AT: 238 as number,
+    AT: 248 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -212,7 +222,7 @@ export const SUMMARY = {
     WORDS: 4 as number,
   },
   retain: {
-    AT: 242 as number,
+    AT: 252 as number,
     nodes: 0 as number,
     run_sets: 1 as number,
     run_set_mb: 2 as number,
@@ -225,14 +235,14 @@ export const SUMMARY = {
     WORDS: 9 as number,
   },
   fetch: {
-    AT: 251 as number,
+    AT: 261 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   poi: {
-    AT: 254 as number,
+    AT: 264 as number,
     badge_count: 0 as number,
     dropped: 1 as number,
     place_ms: 2 as number,
@@ -259,7 +269,7 @@ export const SUMMARY = {
     WORDS: 23 as number,
   },
   peak: {
-    AT: 277 as number,
+    AT: 287 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -280,12 +290,12 @@ export const SUMMARY = {
     WORDS: 17 as number,
   },
   steps: {
-    AT: 294 as number,
+    AT: 304 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
-  WORDS: 455 as number,
+  WORDS: 465 as number,
 } as const;
 
 /** What `ledger_read` returns the address of: u32 words, each range's address in the module's memory and its record count. */
