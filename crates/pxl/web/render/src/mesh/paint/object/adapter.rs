@@ -124,6 +124,12 @@ impl Painter {
         }
     }
 
+    /// Whether `state` is a voxel — a solid or air — rather than an instance
+    /// or nothing.
+    pub fn is_voxel(&self, state: u32) -> bool {
+        matches!(self.kind(state), Kind::Solid | Kind::Air)
+    }
+
     fn kind(&self, state: u32) -> Kind {
         self.kinds.get(state as usize).copied().unwrap_or(Kind::Untaught)
     }

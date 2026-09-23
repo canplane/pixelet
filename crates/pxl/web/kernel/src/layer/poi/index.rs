@@ -47,8 +47,9 @@ use crate::sched::tick::FrameBudget;
 /// about the data. A query is valid as long as everything within the reach of
 /// the camera is present, so a disc of the residency around the point it was
 /// built at stays valid until the camera moves the margin — which is where the
-/// rebuild trigger below comes from. One and a half rather than two: with the
-/// reach at 640u the disc is 960u, still inside a page.
+/// rebuild trigger below comes from. One and a half rather than two because a
+/// rebuild sweeps every page the disc touches: 960u of disc is a 5×5 sweep of
+/// pages, and two times the reach would be 7×7 for the same queries.
 const RESIDENCY_OVER_REACH: f64 = 1.5;
 
 fn residency() -> f64 {
@@ -67,8 +68,9 @@ fn page_radius() -> i64 {
 /// Capacity is the design, not a guess at the data: a fixed ceiling is what
 /// keeps the live object count independent of how much world has been
 /// visited. Overflow is reported through `stats()` rather than absorbed. The
-/// densest page in the current bake is 12544 POI in one 1024u page, which puts
-/// a 960u disc at 35k; this is the next power of two above that.
+/// densest ground in the current bake holds 12,544 POI in a square 1024u on a
+/// side, which puts a 960u disc at 35k; this is the next power of two above
+/// that. It is density that sets it, so the page's own size does not.
 const CAPACITY: u32 = 65536;
 
 /// A prime above CAPACITY, 2^17 - 1.

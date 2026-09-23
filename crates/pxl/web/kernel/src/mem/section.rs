@@ -28,21 +28,21 @@
 //!
 //! **The fixed ranges are not `.bss`, and the difference is deliberate.** Both
 //! are a size known at compile time, zeroed, never freed, reached by index
-//! arithmetic; a 196 MiB `static [u8; N]` would land in the same place and
+//! arithmetic; a 125 MiB `static [u8; N]` would land in the same place and
 //! work. What it would lose is that the size is *decided* here. `.bss` is what
 //! the compiler happens to put there, and a range this large is a choice about
 //! how much world is resident — it should not read as compiler output, and the
 //! reasoning for it should not have to be recovered from a linker map.
 //!
 //! Where each lands, at the two memories the shell reserves. Everything but
-//! the heap is the same on both: the terrain is what a load radius reaches,
+//! the heap is the same on both: the terrain is what the level rings hold,
 //! not a share of what the device happens to have.
 //!
 //! ```text
 //!              offset         end            phone        desktop
 //!   module     0              ~32.5 MiB      the linker's
-//!   .fixed     ~32.5 MiB      ~228.9 MiB     196.43 MiB   196.43 MiB
-//!   heap       ~228.9 MiB     —              283.08 MiB   795.08 MiB
+//!   .fixed     ~32.5 MiB      ~157.8 MiB     125.31 MiB   125.31 MiB
+//!   heap       ~157.8 MiB     —              354.21 MiB   866.21 MiB
 //! ```
 //!
 //! What everything in front of the heap is checked against is MIN_HEAP_BYTES —

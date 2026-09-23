@@ -31,7 +31,7 @@ import { API_INTERNAL, API_ROOT, GEO_INTERNAL, GEO_ROOT, SEARCH_URL, TILE_ROOT }
 
 /** A land page in Gangnam — the one infra/README's own procedure names, so a
  * check here and a check by hand are looking at the same object. */
-const PAGE = "6359575375314944";
+const PAGE = "12720250262323200";
 
 /** Any content-addressed asset: the table's first entry, whatever it is. The
  * point is that the bucket answers the asset root, not which model does. */
@@ -45,10 +45,13 @@ interface Check {
 
 function edgeChecks(): Check[] {
   const tile = (kind: keyof typeof PUBLISHED_VERSION) => `${TILE_ROOT}/${kind}/${PUBLISHED_VERSION[kind]}/${PAGE}`;
+  // A terrain page's key is within its level, and the level is the segment
+  // before it; a leaf is level 0.
+  const terrain = `${TILE_ROOT}/terrain/${PUBLISHED_VERSION.terrain}/0/${PAGE}`;
   return [
     { path: "/", want: 200, why: "the app itself, from the Worker's static assets" },
     { path: `${SEARCH_URL}?q=${encodeURIComponent("강남")}`, want: 200, why: "pxl-geo, the one geo query with no page to bake" },
-    { path: tile("terrain"), want: 200, why: "a terrain page, out of the bucket" },
+    { path: terrain, want: 200, why: "a terrain page, out of the bucket" },
     { path: `${TILE_ROOT}/terrain/${PUBLISHED_VERSION.terrain}/_ocean`, want: 200, why: "the shared ocean page every water tile falls back to" },
     { path: tile("poi"), want: 200, why: "a POI page" },
     { path: tile("geocode"), want: 200, why: "a reverse-geocode page" },

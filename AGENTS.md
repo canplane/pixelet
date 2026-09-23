@@ -36,8 +36,10 @@ through its tasks, from the root:
 | `deno task fmt` / `lint` | format / lint                                               |
 
 **`deno task check` is the gate.** Do not report work as done without it
-passing. `check`, `test` and `lint` are what CI runs on every push; a green
-push to main takes a build number and deploys whichever half its files reached
+passing. CI does not run on main, which is pushed to carry work between
+machines, compiling or not. Publishing is `git push origin main:deploy`: CI
+runs `check`, `test` and `lint` on it, and a green push takes a build number
+and deploys whichever half its files reached
 (`.github/workflows/check-and-deploy.yml`), so a red gate is a deploy that does
 not happen.
 

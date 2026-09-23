@@ -168,7 +168,7 @@ bucket answers those two prefixes.
 
 ### Deploying the client
 
-**A green push to main publishes it** — see §5. What follows is the same thing
+**A green push to `deploy` publishes it** — see §5. What follows is the same thing
 by hand, which is the fallback when CI is unavailable and what CI itself runs.
 
 One Worker serves the built app, the R2 tiles, and the relay to the API, so
@@ -212,17 +212,21 @@ no `content-encoding`.
 
 ## 5. CI/CD
 
-`.github/workflows/check-and-deploy.yml` runs on every push to main and every
-pull request. One workflow, five jobs, because a deploy must not be able to
+`.github/workflows/check-and-deploy.yml` runs on every push to `deploy` and
+every pull request, and not on main: main is pushed to carry work between
+machines, compiling or not, and a push there is not a request to build it.
+Publishing is `git push origin main:deploy`, with `--force` once main has been
+rewritten; a check without a deploy is `gh workflow run check-and-deploy.yml
+--ref main`. One workflow, five jobs, because a deploy must not be able to
 start against a commit the gate never saw:
 
-| Job             | When                                                                 | What                                                                                                                    |
-| :-------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------- |
-| `gate`          | always; takes a build number on main                                 | `deno task check`, `test`, `lint`, then `./script/build-counter.ts`                                                     |
-| `deploy-web`    | main, gate green, and `apps/`/`crates/`/`packages/`/`spec/` changed  | `deno task deploy` under that number                                                                                    |
-| `deploy-server` | main, gate green, and `crates/`/`infra/prod/`/the Dockerfile changed | ssh, `git reset --hard` to the run's own commit, `docker compose up -d --build --force-recreate`, then the origin smoke |
-| `smoke`         | after both, if either of them deployed                               | `deno task smoke https://plei.me`                                                                                       |
-| `record`        | after both, if either of them deployed                               | `./script/build-log.ts --record`, appending what this build carried                                                     |
+| Job             | When                                                                   | What                                                                                                                    |
+| :-------------- | :--------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------- |
+| `gate`          | always; takes a build number on deploy                                 | `deno task check`, `test`, `lint`, then `./script/build-counter.ts`                                                     |
+| `deploy-web`    | deploy, gate green, and `apps/`/`crates/`/`packages/`/`spec/` changed  | `deno task deploy` under that number                                                                                    |
+| `deploy-server` | deploy, gate green, and `crates/`/`infra/prod/`/the Dockerfile changed | ssh, `git reset --hard` to the run's own commit, `docker compose up -d --build --force-recreate`, then the origin smoke |
+| `smoke`         | after both, if either of them deployed                                 | `deno task smoke https://plei.me`                                                                                       |
+| `record`        | after both, if either of them deployed                                 | `./script/build-log.ts --record`, appending what this build carried                                                     |
 
 **The servers go first, then the client.** A new client against an old server
 is the direction that breaks; an old client against a new one is not, so long
@@ -250,11 +254,11 @@ ships nothing is the one that keeps growing, and a root forgotten from a skip
 list is a deploy nobody asked for. Where a push has no usable base — a
 force-push, a `workflow_dispatch` — both deploy: a republish costs a cached
 build, and a skip that should not have happened leaves production behind
-main.
+`deploy`.
 
 Both halves of a build are the same commit. Every checkout pins
 `ref: github.sha`, and the VM resets to that commit rather than to whatever
-`origin/main` has reached by the time the ssh lands — otherwise a push during a
+`origin/deploy` has reached by the time the ssh lands — otherwise a push during a
 run, or a rewritten history, would have the edge serving one commit and the VM
 running another under one build number. A rewrite can leave that commit
 unreachable on the VM; rather than refuse the deploy and leave production on
@@ -267,12 +271,12 @@ the wrong process rather than like a failure.
 
 `gate` and `deploy-web` share `concurrency: build-counter` across every ref,
 because the count is one object in the bucket and the take is read-add-write:
-two runs holding it together would take the same number. A main push therefore
+two runs holding it together would take the same number. A deploy push therefore
 queues behind the one in front of it. A hand `deno task deploy` is outside
 the group and takes no number at all — it publishes an unnumbered build, which
 is the fallback rather than a second deployer.
 
-**Every build of main is numbered, and only some are published.** That is a
+**Every build of `deploy` is numbered, and only some are published.** That is a
 build lab's count: the gate takes a number once it is green, `deploy-web`
 publishes under it when the client's own tree changed, and a number nobody
 published is simply never seen. The counter is never reset — not from git,

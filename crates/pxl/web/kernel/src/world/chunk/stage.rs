@@ -16,8 +16,8 @@ use crate::global::Global;
 use crate::host::now;
 use crate::io::scheduler::fetch_pending_count;
 use crate::kernel::{kernel, with_world};
-use crate::layer::environment::config::render_cfg;
 use crate::layer::poi::fetcher;
+use crate::layer::terrain::level::window;
 use crate::layer::terrain::store::tile_pages;
 use crate::layer::terrain::tile_fetcher;
 use crate::sched::ledger::record::{ledger_record_frame, ledger_take_rings, CpuSample, DrawCensus, FrameSample, HeapSample, LodSample, MountSample, TexturesMb, WorkSample};
@@ -27,7 +27,7 @@ use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::node::{run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES};
-use crate::world::chunk::range::{range_anchor_of, RANGE_HYSTERESIS};
+use crate::world::chunk::range::range_anchor_of;
 use crate::world::chunk::table::{builds, Frame};
 use crate::world::frame::view::{view, view_resize};
 
@@ -165,8 +165,11 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
         pixel_dither: settings.pixel_dither,
         retain_budget_bytes: RETAIN_BUDGET_BYTES(),
         anchor: range_anchor.map(|a| [ivec::to_real(ivec::X(a)), ivec::to_real(ivec::Y(a))]),
-        render_dist: render_cfg::CHUNK_RENDER_DIST,
-        range_hysteresis: RANGE_HYSTERESIS,
+        ground_z: target.map_or(0.0, |t| ivec::to_real(ivec::Z(t.i)) + fvec::to_real(fvec::Z(t.f))),
+        window: {
+            let w = window();
+            (w.start, w.end)
+        },
         show_decor: settings.show_decor,
     };
 

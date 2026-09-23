@@ -30,7 +30,7 @@ use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{clear_virtual_carve_preview, get_placed_object, set_virtual_carve_preview, set_virtual_hide, EntryAt, EntryKind};
 use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::map_store::map_store;
-use crate::shell::setting::store::settings_store;
+use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::node::World;
 use crate::world::frame::coord::get_local_world_origin;
@@ -142,7 +142,7 @@ pub fn hover_cursor_step() {
     // that looks like one: its terrain-styled id.
     let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
-            let shown = shown_ground(|ch| get_ground_type(h, ch).unwrap_or(0), show_structures);
+            let shown = shown_ground(|ch| get_ground_type(h, ch).unwrap_or(0), hidden_ground(show_structures));
             terrain_style_cube_for(shown.channel, shown.type_id)
         }
         _ => None,

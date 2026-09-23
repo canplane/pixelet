@@ -19,7 +19,7 @@
 //! tiers of a blend are weighted, a tier's mesh handed over and a tier to let
 //! go. The nodes hold the meshes; this holds every decision about them.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_CHUNK};
 use pxl_render::look::lod::{Ladder, COARSEST};
@@ -40,8 +40,11 @@ use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::frame_gizmo::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
+use crate::layer::terrain::level::{decor_reach, ring, LevelPage, DECOR_REACH, RENDER_AXIS};
+use crate::shell::setting::store::hidden_ground;
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
-use crate::world::chunk::range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT, PAGE_SPAN};
+use crate::world::chunk::range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT};
+use pxl_spec::space::indexer::L2_IDX;
 
 /// The sphere a chunk nothing has measured is culled by.
 const APPROXIMATE_CHUNK_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
@@ -60,9 +63,11 @@ const MAX_RELEASES_WHEN_REFUSED: u32 = 64;
 /// on screen going nowhere, and the heap has no spill to fall back on.
 const MAX_RECLAIMS_PER_FRAME: u32 = 16;
 const MAX_RECLAIMS_WHEN_REFUSED: u32 = 64;
-/// Chunks mounted in one frame: a page comes into range as 256, and the
-/// chunk nodes make a node for each, which is a frame's worth of work.
+/// Chunks mounted in one frame, which is a frame's worth of work: the chunk
+/// nodes make a node for each. A page comes into range as 64 of them, so one
+/// page is mounted in the frame it arrives in.
 const MAX_MOUNTS_PER_FRAME: u32 = 64;
+const _: () = assert!(MAX_MOUNTS_PER_FRAME == PAGE_CHUNK_AXIS * PAGE_CHUNK_AXIS, "a page mounts in the frame it arrives in");
 /// The heap's live share past which off-screen chunks are reclaimed
 /// whatever the retain budget says.
 const HEAP_PRESSURE: f64 = 0.9;
@@ -87,6 +92,15 @@ pub const EMPTY: u8 = 2;
 pub const PENDING: u8 = 4;
 pub const BLEND_ACTIVE: u8 = 16;
 pub const SETTLING: u8 = 32;
+/// Mounted but no longer wanted: its ground is now some other chunk's — a
+/// parent it merged into, the children it split into — and it is drawn until
+/// every one of those is ready, then let go.
+pub const STALE: u8 = 64;
+
+/// How far past a split's threshold a split chunk stays split, and short of
+/// it a whole one splits: the band a view can breathe in without a chunk
+/// splitting and merging back.
+const SPLIT_HYSTERESIS: f64 = 0.1;
 
 /// A release, as a request: off screen, nothing built.
 const RELEASE_REQUEST: i32 = -1;
@@ -115,16 +129,31 @@ pub struct Frame {
     pub pixel_dither: bool,
     pub retain_budget_bytes: f64,
     /// The range anchor — the map centre's chunk, in units — when there is
-    /// one, the radius chunks are mounted within, and how much further out a
-    /// mounted chunk is kept.
+    /// one: what each level's ring is centred on.
     pub anchor: Option<[f64; 2]>,
-    pub render_dist: f64,
-    pub range_hysteresis: f64,
+    /// The ground's height under the view, in units: what a chunk's distance
+    /// is measured to before its own bounds are known.
+    pub ground_z: f64,
+    /// The levels held, lowest first and one past the top (terrain/level.rs).
+    pub window: (u32, u32),
     /// Whether procedural decor is scattered at all (the setting).
     pub show_decor: bool,
 }
 
 impl Frame {
+    /// Where `at`, in the world the camera is written in, is in the map's
+    /// units: the anchor root undone — a rotation and a translation, so its
+    /// inverse is its rotation transposed — then the origin put back.
+    pub fn map_of(&self, at: V3) -> V3 {
+        let m = &self.root;
+        let (x, y, z) = (at[0] - m[12], at[1] - m[13], at[2] - m[14]);
+        [
+            m[0] * x + m[1] * y + m[2] * z + self.origin[0],
+            m[4] * x + m[5] * y + m[6] * z + self.origin[1],
+            m[8] * x + m[9] * y + m[10] * z + self.origin[2],
+        ]
+    }
+
     /// Where `at`, in the map's units, is in the world the camera is
     /// written in: against the origin, then through the anchor root.
     pub fn world_of(&self, at: V3) -> V3 {
@@ -142,10 +171,11 @@ impl Frame {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Event {
     Build(BuildEvent),
-    /// A chunk came into range: its page and its page-local base, in units.
+    /// A chunk came into range: its page and its page-local base, in the
+    /// page's cells.
     Mount {
         id: u32,
-        page_idx: IVec,
+        page: LevelPage,
         base_x: u32,
         base_y: u32,
     },
@@ -193,8 +223,60 @@ pub enum Event {
     },
 }
 
-/// Pages with a terrain tile at once: the resident pages, and room past them.
-const MAX_PAGES: usize = 1024;
+/// What a mount pass ran for: the anchor, the eye's chunk, the window, the
+/// page set and the ladder's pressure. The pass is skipped while it is the same.
+type MountKey = ([f64; 2], [i64; 3], (u32, u32), u32, u32);
+
+/// A chunk by where it is: its page, and its corner in the page's cells.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct ChunkKey {
+    page: LevelPage,
+    bx: u32,
+    by: u32,
+}
+
+impl ChunkKey {
+    fn level(self) -> u32 {
+        self.page.level
+    }
+
+    /// The chunk's corner and side, in units.
+    fn rect(self) -> (f64, f64, f64) {
+        let l = self.page.level;
+        let x = ((ivec::X(self.page.page) << PAGE_SHAMT) + self.bx as i64) << l;
+        let y = ((ivec::Y(self.page.page) << PAGE_SHAMT) + self.by as i64) << l;
+        (x as f64, y as f64, CHUNK_WORLD_SPAN * (1u64 << l) as f64)
+    }
+
+    /// The four chunks a level down that cover it: a chunk is 64 cells of
+    /// its level, which are 128 of the next, in one page of it.
+    fn children(self) -> [ChunkKey; 4] {
+        let (x, y) = (self.bx * 2, self.by * 2);
+        let span = pxl_spec::bake::constant::PAGE_CELL_SPAN;
+        let page = LevelPage::new(
+            self.page.level - 1,
+            ivec::gather(ivec::X(self.page.page) * 2 + (x / span) as i64, ivec::Y(self.page.page) * 2 + (y / span) as i64, 0),
+        );
+        let (x, y) = (x % span, y % span);
+        [(0, 0), (1, 0), (0, 1), (1, 1)].map(|(dx, dy)| ChunkKey {
+            page,
+            bx: x + dx * CHUNK_CELL_SPAN,
+            by: y + dy * CHUNK_CELL_SPAN,
+        })
+    }
+}
+
+/// Whether two squares, each a corner and a side, share any ground.
+fn overlaps(a: (f64, f64, f64), b: (f64, f64, f64)) -> bool {
+    a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.2 && b.1 < a.1 + a.2
+}
+
+/// How much ground two squares share.
+fn overlap_area(a: (f64, f64, f64), b: (f64, f64, f64)) -> f64 {
+    let w = (a.0 + a.2).min(b.0 + b.2) - a.0.max(b.0);
+    let h = (a.1 + a.2).min(b.1 + b.2) - a.1.max(b.1);
+    w.max(0.0) * h.max(0.0)
+}
 
 #[derive(Clone, Copy, Default)]
 struct Bounds {
@@ -242,6 +324,9 @@ impl Decor {
 #[derive(Clone)]
 struct Slot {
     id: u32,
+    /// The level it is drawn from, and its side in units: 64 cells of 2^level.
+    level: u32,
+    span: f64,
     base_x: f64,
     base_y: f64,
     stable_hash: f64,
@@ -274,6 +359,16 @@ struct Slot {
 }
 
 impl Slot {
+    /// The sphere the chunk is culled by until its mesh has measured it: the
+    /// whole of its ground, which is `span` wide at its level. A leaf's
+    /// sphere at a coarse chunk's corner culls the chunk from any view that
+    /// misses the corner, and a chunk never in view is never built, so it is
+    /// never measured and stays culled.
+    fn unmeasured(&mut self) {
+        self.bc = [self.span * 0.5, self.span * 0.5, 0.0];
+        self.radius = APPROXIMATE_CHUNK_RADIUS * (1u64 << self.level) as f64;
+    }
+
     fn has(&self, f: u8) -> bool {
         self.flags & f != 0
     }
@@ -339,8 +434,6 @@ pub struct Scheduler {
     pub debug: DebugLines,
     slots: Vec<Slot>,
     index: BTreeMap<u32, usize>,
-    /// The chunk at a base, in units, for the raycast's walk.
-    by_base: BTreeMap<(i64, i64), u32>,
     ladder: Ladder,
     recheck_elapsed: f64,
     frame: Option<Frame>,
@@ -352,20 +445,27 @@ pub struct Scheduler {
     retained_on: f64,
     retained_off: f64,
     pub census: Census,
-    /// The pages with a terrain tile, which chunks are mounted from. In
-    /// ascending order, which is the order chunks are mounted in.
-    page_idxs: Vec<IVec>,
-    page_idxs_revision: u32,
+    /// The pages with a terrain tile, which chunks are mounted from.
+    pages: BTreeSet<LevelPage>,
+    pages_revision: u32,
+    /// Pages whose records have gone since the last tick, whose chunks go
+    /// before anything else in the next.
+    evicted: Vec<LevelPage>,
     /// The chunks the module mounted, by page and page-local base.
-    mounted: BTreeMap<(IVec, u32, u32), u32>,
+    mounted: BTreeMap<ChunkKey, u32>,
     /// The mounted chunks a pass finds leaving, before they are let go.
-    gone: Vec<((IVec, u32, u32), u32)>,
+    gone: Vec<(ChunkKey, u32)>,
     next_mount_id: u32,
-    mounted_for: Option<([f64; 2], f64, f64, u32)>,
+    mounted_for: Option<MountKey>,
+    /// The ground the window draws: the top level's drawn ring, as a corner
+    /// and a side in units.
+    drawn: Option<(f64, f64, f64)>,
     /// The decor kinds, in the order decor/build.rs taught them — the order of
     /// the groups in every decor block.
     decor_kinds: Vec<DecorKind>,
-    decor_sample: ChunkSample,
+    /// A decor build's leaf columns' samples, one a column, kept for their
+    /// capacity.
+    decor_samples: Vec<ChunkSample>,
     /// Where a decor build gathers its instances, made at the first build:
     /// the scheduler is made before the sections are.
     decor_scratch: Option<DecorScratch>,
@@ -442,7 +542,6 @@ impl Scheduler {
             debug: DebugLines::default(),
             slots: Vec::with_capacity(MAX_CHUNKS),
             index: BTreeMap::new(),
-            by_base: BTreeMap::new(),
             ladder: Ladder::default(),
             recheck_elapsed: RECHECK_INTERVAL_S,
             frame: None,
@@ -450,14 +549,16 @@ impl Scheduler {
             retained_on: 0.0,
             retained_off: 0.0,
             census: Census::default(),
-            page_idxs: Vec::with_capacity(MAX_PAGES),
-            page_idxs_revision: 0,
+            pages: BTreeSet::new(),
+            pages_revision: 0,
+            evicted: Vec::new(),
             mounted: BTreeMap::new(),
             gone: Vec::with_capacity(MAX_CHUNKS),
             next_mount_id: MOUNT_ID_BASE,
             mounted_for: None,
+            drawn: None,
             decor_kinds: Vec::new(),
-            decor_sample: ChunkSample::default(),
+            decor_samples: Vec::new(),
             decor_scratch: None,
             refused_seen: 0,
             scratch: Scratch::default(),
@@ -474,6 +575,15 @@ impl Scheduler {
     /// Teaches a decor kind; its index. Its rules start as `Any` on every
     /// channel, and `decor_rule` sets them.
     pub fn decor_kind(&mut self, kind: DecorKind) -> u32 {
+        // Decoration is scattered from the leaves alone, which is sound only
+        // while no kind is drawn further than the leaves are.
+        assert!(
+            decor_reach(kind.extent) <= DECOR_REACH,
+            "a decor kind of extent {} is drawn to {}u, past the {}u the leaves reach",
+            kind.extent,
+            decor_reach(kind.extent),
+            DECOR_REACH
+        );
         self.decor_kinds.push(kind);
         (self.decor_kinds.len() - 1) as u32
     }
@@ -516,15 +626,18 @@ impl Scheduler {
     /// guessed from the last frame, so the first recheck's hysteresis starts
     /// from where the camera is.
     #[allow(clippy::too_many_arguments)]
-    fn add(&mut self, id: u32, base: IVec, base_x: f64, base_y: f64, tx0: u32, ty0: u32, stable_hash: f64) {
-        self.builder.add(id, base, tx0, ty0);
+    fn add(&mut self, id: u32, level: u32, base: IVec, base_x: f64, base_y: f64, tx0: u32, ty0: u32, stable_hash: f64) {
+        self.builder.add(id, level, base, tx0, ty0);
+        let span = CHUNK_WORLD_SPAN * (1u64 << level) as f64;
         let mut slot = Slot {
             id,
+            level,
+            span,
             base_x,
             base_y,
             stable_hash,
-            bc: [CHUNK_WORLD_SPAN * 0.5, CHUNK_WORLD_SPAN * 0.5, 0.0],
-            radius: APPROXIMATE_CHUNK_RADIUS,
+            bc: [0.0; 3],
+            radius: 0.0,
             distance2: f64::INFINITY,
             lead_distance2: f64::INFINITY,
             flags: EMPTY,
@@ -541,29 +654,23 @@ impl Scheduler {
             told: None,
             refused: None,
         };
+        slot.unmeasured();
         if let Some(frame) = self.frame {
             let (visible, _, d2, _) = measure(&frame, &slot);
             if visible {
-                slot.layout_primary = self.ladder.guide(d2.sqrt(), COARSEST).step;
+                slot.layout_primary = relative(self.ladder.guide(d2.sqrt(), COARSEST).step, level);
                 slot.desired = (slot.layout_primary, 0);
             }
         }
         self.index.insert(id, self.slots.len());
-        self.by_base.insert((base_x as i64, base_y as i64), id);
         assert!(self.slots.len() < MAX_CHUNKS, "more than {MAX_CHUNKS} chunks held");
         self.slots.push(slot);
         self.view_dirty = true;
     }
 
-    /// The chunk whose base is (x, y), in units.
-    pub fn chunk_at(&self, x: i64, y: i64) -> Option<u32> {
-        self.by_base.get(&(x, y)).copied()
-    }
-
     pub fn remove(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(Event)) {
         let Some(i) = self.index.remove(&id) else { return };
         self.view_dirty = true;
-        self.by_base.remove(&(self.slots[i].base_x as i64, self.slots[i].base_y as i64));
         self.builder.remove(world, id, &mut |e| emit(Event::Build(e)));
         let before = self.slots[i].retained();
         if self.slots[i].has(IN_FRUSTUM) {
@@ -601,8 +708,7 @@ impl Scheduler {
         let s = &mut self.slots[i];
         s.runs_bytes = 0;
         if !s.layout_ready {
-            s.bc = [CHUNK_WORLD_SPAN * 0.5, CHUNK_WORLD_SPAN * 0.5, 0.0];
-            s.radius = APPROXIMATE_CHUNK_RADIUS;
+            s.unmeasured();
         }
         self.account(i, before);
         if self.slots[i].layout_ready && self.slots[i].has(IN_FRUSTUM) {
@@ -676,14 +782,11 @@ impl Scheduler {
     /// `generation`, building and handing over what it lacks: false when the
     /// heap refused a block. A chunk with no page has no decor to build.
     fn ensure_decor(&mut self, world: &mut World, i: usize, steps: [u32; 2], generation: u32, emit: &mut impl FnMut(Event)) -> bool {
-        let id = self.slots[i].id;
-        let Some((base, col_idx, tx0, ty0, page, show_structures)) = self.builder.source_of(id) else {
-            return true;
+        let (id, level, x0, y0) = {
+            let s = &self.slots[i];
+            (s.id, s.level, s.base_x as i64, s.base_y as i64)
         };
         let show_decor = self.frame.is_some_and(|f| f.show_decor);
-        let (col_x, col_y) = (ivec::X(base), ivec::Y(base));
-        let page_idx = ivec::gather(col_x >> PAGE_SHAMT, col_y >> PAGE_SHAMT, 0);
-        let mut sampled = false;
         if self.decor_scratch.is_none() {
             self.decor_scratch = DecorScratch::new();
             if self.decor_scratch.is_none() {
@@ -696,30 +799,60 @@ impl Scheduler {
             if step == 0 || self.slots[i].decor_of(step, generation).is_some() {
                 continue;
             }
-            // SAFETY: the chunk's page, as its source named it, resident
-            // while the chunk is.
-            let view = unsafe { Builder::page_view(world, page) };
-            // The elevations are the scatter's; a tier no kind is drawn on,
-            // or decor switched off, stands only the placed entries, which
-            // carry their own height.
-            let scatters = show_decor && self.decor_kinds.iter().any(|k| k.density > 0.0 && decor_density(k.extent, step) > 0.0);
-            if scatters && !sampled {
-                self.decor_sample.read(&view, world.materials, tx0, ty0, show_structures);
-                sampled = true;
+            // Decor is scattered from the leaves whatever level draws the
+            // ground: the leaf columns this chunk covers, at the world step
+            // it is drawn at. A level whose step no kind is drawn at has none,
+            // and past that nothing is built for it.
+            let world_step = step << level;
+            let scatters = show_decor && self.decor_kinds.iter().any(|k| k.density > 0.0 && decor_density(k.extent, world_step) > 0.0);
+            if level > 0 && !scatters {
+                continue;
             }
-            let chunk = DecorChunk {
-                page: &view,
-                page_idx,
-                col_idx,
-                col_x,
-                col_y,
-                tx0,
-                ty0,
-                show_decor,
-                hide: self.builder.hide_in(col_idx),
-            };
+            let n = 1i64 << level;
+            let mut sources = Vec::with_capacity((n * n) as usize);
+            for cy in 0..n {
+                for cx in 0..n {
+                    let base = ivec::gather(x0 + cx * CHUNK_CELL_SPAN as i64, y0 + cy * CHUNK_CELL_SPAN as i64, 0);
+                    if let Some(source) = self.builder.leaf_source(base) {
+                        sources.push((base, source, ((cx * CHUNK_CELL_SPAN as i64) as f64, (cy * CHUNK_CELL_SPAN as i64) as f64)));
+                    }
+                }
+            }
+            if self.decor_samples.len() < sources.len() {
+                self.decor_samples.resize_with(sources.len(), ChunkSample::default);
+            }
+            // SAFETY: each a resident leaf page, read within the command.
+            let views: Vec<_> = sources.iter().map(|(_, src, _)| unsafe { Builder::page_view(world, src.page) }).collect();
+            if scatters {
+                for (k, (_, src, _)) in sources.iter().enumerate() {
+                    self.decor_samples[k].read(&views[k], world.materials, src.tx0, src.ty0, hidden_ground(src.show_structures));
+                }
+            }
+            let columns: Vec<(DecorChunk, &ChunkSample)> = sources
+                .iter()
+                .enumerate()
+                .map(|(k, (base, src, (ox, oy)))| {
+                    let col_idx = L2_IDX(*base);
+                    let (col_x, col_y) = (ivec::X(*base), ivec::Y(*base));
+                    let chunk = DecorChunk {
+                        page: &views[k],
+                        page_idx: ivec::gather(col_x >> PAGE_SHAMT, col_y >> PAGE_SHAMT, 0),
+                        col_idx,
+                        col_x,
+                        col_y,
+                        tx0: src.tx0,
+                        ty0: src.ty0,
+                        show_decor,
+                        hide: self.builder.hide_in(col_idx),
+                        ox: *ox,
+                        oy: *oy,
+                        hittable: level == 0,
+                    };
+                    (chunk, &self.decor_samples[k])
+                })
+                .collect();
             let Some(scratch) = self.decor_scratch.as_mut() else { return false };
-            let built = DecorBuild::build(scratch, &self.decor_kinds, &chunk, &self.decor_sample, world.store, step);
+            let built = DecorBuild::build(scratch, &self.decor_kinds, &columns, world.store, world_step);
             let bytes = built.bytes();
             let Some((at, bytes)) = alloc(bytes) else {
                 self.builder.stat.starved += 1;
@@ -772,22 +905,18 @@ impl Scheduler {
         })
     }
 
-    /// A page's terrain tile arrived, or left.
-    pub fn page(&mut self, page_idx: IVec, present: bool) {
-        let changed = match (self.page_idxs.binary_search(&page_idx), present) {
-            (Err(at), true) => {
-                assert!(self.page_idxs.len() < MAX_PAGES, "more than {MAX_PAGES} pages with a tile");
-                self.page_idxs.insert(at, page_idx);
-                true
-            }
-            (Ok(at), false) => {
-                self.page_idxs.remove(at);
-                true
-            }
-            _ => false,
-        };
+    /// A page's terrain tile arrived, or left. A chunk lives no longer than
+    /// the record it is built from: once the record has gone — let go, or
+    /// taken by another page whose bytes now lie where this page's did — a
+    /// build of its chunk would read what is no longer its page, and a mesh
+    /// kept past it is memory the record's range no longer accounts for.
+    pub fn page(&mut self, page: LevelPage, present: bool) {
+        if !present {
+            self.evicted.push(page);
+        }
+        let changed = if present { self.pages.insert(page) } else { self.pages.remove(&page) };
         if changed {
-            self.page_idxs_revision = self.page_idxs_revision.wrapping_add(1);
+            self.pages_revision = self.pages_revision.wrapping_add(1);
             self.view_dirty = true;
         }
     }
@@ -798,57 +927,163 @@ impl Scheduler {
         self.decor_scratch.as_ref().map_or(0, |s| s.dropped)
     }
 
-    /// Whether a chunk of `page_idx` is still mounted: what reads its lanes.
-    pub fn page_mounted(&self, page_idx: IVec) -> bool {
-        self.mounted.range((page_idx, 0, 0)..=(page_idx, u32::MAX, u32::MAX)).next().is_some()
+    /// How far step 2^`level` is wanted: the ladder's threshold, carried
+    /// past its last by the doubling every threshold is.
+    fn reach(&self, level: u32) -> f64 {
+        let last = self.ladder.threshold_count() as u32 - 1;
+        self.ladder.threshold(level.min(last) as usize) * (1u64 << level.saturating_sub(last)) as f64
     }
 
-    /// Which chunks exist, a page and a chunk at a time: one whose square is
-    /// within `render_dist` of the anchor is mounted, and one already mounted
-    /// is kept until it is past `render_dist + range_hysteresis` — the two
-    /// radii are what stops a chunk on the edge mounting and unmounting as
-    /// the view breathes. A page with no tile, or out past both, mounts
-    /// nothing. The whole pass is skipped while the anchor, the two radii and
-    /// the page set are the ones it last ran for.
-    fn mount(&mut self, world: &mut World, frame: &Frame, emit: &mut impl FnMut(Event)) {
+    /// Whether `page` can be drawn: it is resident, or it is above the
+    /// window's base and all four pages under it can be. A level holds no
+    /// page whose ground the level below holds whole (level.rs `held`), so a
+    /// chunk over such a page is drawn only as the chunks under it.
+    fn drawable(&self, page: LevelPage, base: u32) -> bool {
+        self.pages.contains(&page) || (page.level > base && page.children().iter().all(|&c| self.drawable(c, base)))
+    }
+
+    /// Whether `key` is to be drawn as its four children rather than itself:
+    /// its page is not resident, so only the pages under it can draw its
+    /// ground, or some of its ground wants a step finer than the one it draws
+    /// (`relative`), 2^(level + 1), and the pages under it can. A chunk drawn as its children stays so a band
+    /// further out than a whole one splits at.
+    fn splits(&self, key: ChunkKey, eye: V3, ground_z: f64, base: u32) -> bool {
+        if key.level() <= base {
+            return false;
+        }
+        if !self.pages.contains(&key.page) {
+            return true;
+        }
+        let children = key.children();
+        let (x0, y0, span) = key.rect();
+        let dx = (x0 - eye[0]).max(0.0).max(eye[0] - (x0 + span));
+        let dy = (y0 - eye[1]).max(0.0).max(eye[1] - (y0 + span));
+        let d = (dx * dx + dy * dy + (eye[2] - ground_z).powi(2)).sqrt();
+        let split = children.iter().any(|c| self.mounted.contains_key(c));
+        let band = if split { 1.0 + SPLIT_HYSTERESIS } else { 1.0 - SPLIT_HYSTERESIS };
+        d < self.reach(key.level()) * band && self.drawable(children[0].page, base)
+    }
+
+    /// The chunks to draw: from every chunk of the window's top level the view's
+    /// ring draws from, each drawn whole or as its children, down to the
+    /// window's base (issue/20260921-level-step-and-zoom-are-one-number.md).
+    fn select(&self, frame: &Frame, anchor: IVec, eye: V3, out: &mut BTreeSet<ChunkKey>) {
+        let (base, end) = frame.window;
+        let mut stack: Vec<ChunkKey> = Vec::new();
+        // A page that cannot be drawn yet is drawn from the finer pages under
+        // it that can: a window that slides up asks for coarse pages it
+        // lacks, and what it already holds below them is the ground until
+        // they come.
+        let mut pages: Vec<LevelPage> = ring(end - 1, anchor, RENDER_AXIS);
+        while let Some(page) = pages.pop() {
+            if !self.drawable(page, base) {
+                if page.level > base {
+                    pages.extend(page.children());
+                }
+                continue;
+            }
+            for cy in 0..PAGE_CHUNK_AXIS {
+                for cx in 0..PAGE_CHUNK_AXIS {
+                    stack.push(ChunkKey {
+                        page,
+                        bx: cx * CHUNK_CELL_SPAN,
+                        by: cy * CHUNK_CELL_SPAN,
+                    });
+                }
+            }
+        }
+        while let Some(key) = stack.pop() {
+            if self.splits(key, eye, frame.ground_z, base) {
+                stack.extend(key.children());
+            } else {
+                out.insert(key);
+            }
+        }
+    }
+
+    /// Which chunks exist: the ones `select` draws, mounted as they are
+    /// wanted, and the ones it no longer draws marked stale rather than let
+    /// go, so the ground they cover is never a hole while what replaces them
+    /// builds (`retire`). Rerun when the anchor moves, the eye crosses a chunk,
+    /// the window slides or a page comes or goes.
+    fn mount(&mut self, frame: &Frame, emit: &mut impl FnMut(Event)) {
         let Some(anchor) = frame.anchor else { return };
-        let key = (anchor, frame.render_dist, frame.range_hysteresis, self.page_idxs_revision);
+        let eye = frame.map_of(frame.camera);
+        let cell = |v: f64| (v / CHUNK_WORLD_SPAN).floor() as i64;
+        let key = (
+            anchor,
+            [cell(eye[0]), cell(eye[1]), cell(eye[2] - frame.ground_z)],
+            frame.window,
+            self.pages_revision,
+            self.ladder.pressure(),
+        );
         if self.mounted_for == Some(key) {
             return;
         }
-        let mut mounts = 0;
-        let (r2, keep2) = (frame.render_dist.powi(2), (frame.render_dist + frame.range_hysteresis).powi(2));
-        let rect = |x0: f64, y0: f64, span: f64| {
-            let dx = if 0.0 < x0 {
-                x0
-            } else if 0.0 > x0 + span {
-                -(x0 + span)
-            } else {
-                0.0
-            };
-            let dy = if 0.0 < y0 {
-                y0
-            } else if 0.0 > y0 + span {
-                -(y0 + span)
-            } else {
-                0.0
-            };
-            dx * dx + dy * dy
-        };
-        let page_origin = |page_idx: IVec| {
-            let (px, py) = (ivec::X(page_idx), ivec::Y(page_idx));
-            ((px << PAGE_SHAMT) as f64 - anchor[0], (py << PAGE_SHAMT) as f64 - anchor[1])
-        };
+        let anchor_i = ivec::gather(anchor[0] as i64, anchor[1] as i64, 0);
+        let top = frame.window.1 - 1;
+        let first = ring(top, anchor_i, 1)[0];
+        let span = crate::layer::terrain::level::span_of(top);
+        let r = (RENDER_AXIS / 2) as f64 * span;
+        let x0 = ivec::X(first.page) as f64 * span - r;
+        let y0 = ivec::Y(first.page) as f64 * span - r;
+        self.drawn = Some((x0, y0, span * RENDER_AXIS as f64));
+        let mut wanted = BTreeSet::new();
+        self.select(frame, anchor_i, eye, &mut wanted);
 
-        // Leave: every mounted chunk past the keep radius or on a page_idx that left.
+        // What is no longer wanted goes stale; what is again, fresh.
+        for (k, &id) in self.mounted.iter() {
+            if let Some(&i) = self.index.get(&id) {
+                self.slots[i].set(STALE, !wanted.contains(k));
+            }
+        }
+
+        let mut mounts = 0;
+        for &k in &wanted {
+            if self.mounted.contains_key(&k) {
+                continue;
+            }
+            if mounts >= MAX_MOUNTS_PER_FRAME || self.slots.len() >= MAX_CHUNKS {
+                // The rest next frame: the key stays unrecorded. How many
+                // chunks a range holds is the viewport's and the anchor's,
+                // not a number the kernel hands itself, so at the ceiling
+                // the pass mounts no more rather than trapping.
+                self.view_dirty = true;
+                return;
+            }
+            mounts += 1;
+            let id = self.next_mount_id;
+            self.next_mount_id = self.next_mount_id.wrapping_add(1).max(MOUNT_ID_BASE);
+            let (x0, y0, _) = k.rect();
+            let base = ivec::gather(x0 as i64, y0 as i64, 0);
+            emit(Event::Mount {
+                id,
+                page: k.page,
+                base_x: k.bx,
+                base_y: k.by,
+            });
+            self.add(id, k.level(), base, x0, y0, k.bx, k.by, blend_point(k));
+            self.mounted.insert(k, id);
+        }
+        self.mounted_for = Some(key);
+    }
+
+    /// Lets go of the stale chunks whose ground is ready to be drawn by what
+    /// replaced them: wanted chunks cover all of it, and every one of them
+    /// has a layout or is off screen and never will. A stale chunk wholly
+    /// outside what the window draws — the view has moved on — goes at once;
+    /// one inside it that nothing covers yet is ground whose pages have not
+    /// come, and it stays.
+    /// Lets go of every chunk of a page whose record has gone, stale or not,
+    /// before anything of the tick can build one: `page` says why.
+    fn drop_evicted(&mut self, world: &mut World, emit: &mut impl FnMut(Event)) {
+        if self.evicted.is_empty() {
+            return;
+        }
         self.gone.clear();
-        for (&(page_idx, bx, by), &id) in self.mounted.iter() {
-            let leaving = self.page_idxs.binary_search(&page_idx).is_err() || {
-                let (x0, y0) = page_origin(page_idx);
-                rect(x0 + bx as f64, y0 + by as f64, CHUNK_WORLD_SPAN) > keep2
-            };
-            if leaving {
-                self.gone.push(((page_idx, bx, by), id));
+        for (&k, &id) in self.mounted.iter() {
+            if self.evicted.contains(&k.page) {
+                self.gone.push((k, id));
             }
         }
         for g in 0..self.gone.len() {
@@ -857,46 +1092,38 @@ impl Scheduler {
             self.remove(world, id, emit);
             emit(Event::Unmount { id });
         }
+        self.evicted.clear();
+    }
 
-        // Enter: every chunk within the radius on a page_idx with a tile.
-        for p in 0..self.page_idxs.len() {
-            let page_idx = self.page_idxs[p];
-            let (x0, y0) = page_origin(page_idx);
-            if rect(x0, y0, PAGE_SPAN) > keep2 {
+    fn retire(&mut self, world: &mut World, emit: &mut impl FnMut(Event)) {
+        self.gone.clear();
+        for (&k, &id) in self.mounted.iter() {
+            let Some(&i) = self.index.get(&id) else { continue };
+            if !self.slots[i].has(STALE) {
                 continue;
             }
-            for cy in 0..PAGE_CHUNK_AXIS {
-                for cx in 0..PAGE_CHUNK_AXIS {
-                    let (bx, by) = (cx * CHUNK_CELL_SPAN, cy * CHUNK_CELL_SPAN);
-                    if self.mounted.contains_key(&(page_idx, bx, by)) || rect(x0 + bx as f64, y0 + by as f64, CHUNK_WORLD_SPAN) > r2 {
-                        continue;
-                    }
-                    if mounts >= MAX_MOUNTS_PER_FRAME {
-                        // The rest next frame: the key stays unrecorded.
-                        return;
-                    }
-                    if self.slots.len() >= MAX_CHUNKS {
-                        // How many chunks a range holds is the viewport's and the
-                        // anchor's, not a number the kernel hands itself: at the
-                        // ceiling the pass mounts no more and leaves the key
-                        // unrecorded, as it does for the frame's mount budget, so
-                        // the next pass tries again. A trap here would take the
-                        // world down over a tall window.
-                        return;
-                    }
-                    mounts += 1;
-                    let id = self.next_mount_id;
-                    self.next_mount_id = self.next_mount_id.wrapping_add(1).max(MOUNT_ID_BASE);
-                    let (px, py) = (ivec::X(page_idx), ivec::Y(page_idx));
-                    let (wx, wy) = ((px << PAGE_SHAMT) + bx as i64, (py << PAGE_SHAMT) + by as i64);
-                    let base = ivec::gather(wx, wy, 0);
-                    emit(Event::Mount { id, page_idx, base_x: bx, base_y: by });
-                    self.add(id, base, wx as f64, wy as f64, bx, by, blend_point(page_idx, bx, by));
-                    self.mounted.insert((page_idx, bx, by), id);
+            let rect = k.rect();
+            let mut covered = 0.0;
+            let mut ready = true;
+            for w in self.slots.iter().filter(|w| !w.has(STALE)) {
+                let area = overlap_area(rect, (w.base_x, w.base_y, w.span));
+                if area > 0.0 {
+                    covered += area;
+                    ready &= w.layout_ready || !w.has(IN_FRUSTUM);
                 }
             }
+            let whole = covered >= rect.2 * rect.2;
+            let gone_from_view = self.drawn.is_none_or(|d| !overlaps(rect, d));
+            if gone_from_view || (whole && ready) {
+                self.gone.push((k, id));
+            }
         }
-        self.mounted_for = Some(key);
+        for g in 0..self.gone.len() {
+            let (k, id) = self.gone[g];
+            self.mounted.remove(&k);
+            self.remove(world, id, emit);
+            emit(Event::Unmount { id });
+        }
     }
 
     // ---- the tick ----
@@ -918,8 +1145,10 @@ impl Scheduler {
             self.recheck_elapsed = 0.0;
         }
 
-        self.mount(world, &frame, emit);
+        self.drop_evicted(world, emit);
+        self.mount(&frame, emit);
         self.refresh(&frame, emit);
+        self.retire(world, emit);
         let mut sc = core::mem::take(&mut self.scratch);
         self.order(t0, &mut sc.order, &mut sc.keys);
         let Scratch {
@@ -1027,8 +1256,19 @@ impl Scheduler {
         self.markers.draw(&mut self.draw, frame.origin);
         self.billboards.draw(&mut self.draw, &self.models, frame.origin);
         self.debug.draw(&mut self.draw, frame.origin);
+        // A stale chunk is drawn until what replaced it is whole, and what
+        // replaced it waits under it: never both on one piece of ground.
+        let covering: Vec<(f64, f64, f64)> = self
+            .slots
+            .iter()
+            .filter(|s| s.has(STALE) && s.has(IN_FRUSTUM) && s.layout_ready)
+            .map(|s| (s.base_x, s.base_y, s.span))
+            .collect();
         for s in &self.slots {
             if !s.has(IN_FRUSTUM) || !s.layout_ready {
+                continue;
+            }
+            if !s.has(STALE) && covering.iter().any(|&c| overlaps(c, (s.base_x, s.base_y, s.span))) {
                 continue;
             }
             let (wp, ws) = s.told.map_or((1.0, 0.0), |t| (t.0, t.1));
@@ -1151,6 +1391,13 @@ impl Scheduler {
     /// SETTLING is pending with a layout already up, so a frame can tell a
     /// chunk that is changing tier from one that has nothing to show yet.
     fn recheck(&mut self, world: &mut World, i: usize, now: f64, frame: &Frame, emit: &mut impl FnMut(Event)) {
+        // A stale chunk shows what it shows until it is let go: nothing
+        // more is built for it.
+        if self.slots[i].has(STALE) {
+            self.set_pending(i, false, 0, now);
+            self.stop_work(world, i);
+            return;
+        }
         if !self.slots[i].has(IN_FRUSTUM) {
             self.slots[i].desired = (COARSEST, 0);
             let ready = self.slots[i].layout_ready;
@@ -1165,10 +1412,13 @@ impl Scheduler {
             return;
         }
         let s = &self.slots[i];
-        let guide = self.ladder.guide(s.distance2.sqrt(), s.layout_primary);
+        let level = s.level;
+        let guide = self.ladder.guide(s.distance2.sqrt(), s.layout_primary << level);
+        // The ladder speaks in world steps; a chunk builds in its own, and a
+        // blend whose two ends are one step of the chunk's is no blend.
         let (primary, secondary) = match guide.blend {
-            Some((finer, coarser, _)) => (finer, coarser),
-            None => (guide.step, 0),
+            Some((finer, coarser, _)) if relative(finer, level) != relative(coarser, level) => (relative(finer, level), relative(coarser, level)),
+            _ => (relative(guide.step, level), 0),
         };
         self.slots[i].desired = (primary, secondary);
         let current = self.generation(i);
@@ -1183,10 +1433,11 @@ impl Scheduler {
         if !pending {
             self.stop_work(world, i);
         }
-        let Some((finer_step, _, f)) = guide.blend else {
+        let Some((finer_step, _, f)) = guide.blend.filter(|_| secondary != 0) else {
             self.decide(i, 1.0, 0.0, emit);
             return;
         };
+        let finer_step = relative(finer_step, level);
         if pending {
             self.decide(i, 1.0, 0.0, emit);
             return;
@@ -1253,10 +1504,7 @@ impl Scheduler {
                     s.bc = [(b.min[0] + b.max[0]) as f64 * 0.5, (b.min[1] + b.max[1]) as f64 * 0.5, (b.min[2] + b.max[2]) as f64 * 0.5];
                     s.radius = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt() * 0.5;
                 }
-                None => {
-                    s.bc = [CHUNK_WORLD_SPAN * 0.5, CHUNK_WORLD_SPAN * 0.5, 0.0];
-                    s.radius = APPROXIMATE_CHUNK_RADIUS;
-                }
+                None => s.unmeasured(),
             }
         }
         emit(Event::Layout {
@@ -1510,19 +1758,29 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
         && a.fov_deg == b.fov_deg
         && a.pixel_dither == b.pixel_dither
         && a.anchor == b.anchor
-        && a.render_dist == b.render_dist
+        && a.window == b.window
         && a.show_decor == b.show_decor
 }
 
-/// Where a chunk sits in `[0, 1)`, from `<page index>:<base x>,<base y>`.
+/// A world step as a chunk of `level` builds it: its own cells are 2^level,
+/// and it draws them averaged 2×2, its second tier, the step the level above
+/// would otherwise draw as its vote (level.rs `level_at`). The leaves alone
+/// are drawn as they are too, their first tier, and blend between the two.
+/// Finer than that a chunk is not drawn — the split serves it — and coarser
+/// it is merged into its parent.
+fn relative(world_step: u32, level: u32) -> u32 {
+    (world_step >> level).clamp(if level == 0 { 1 } else { 2 }, 2)
+}
+
+/// Where a chunk sits in `[0, 1)`, from `<level>/<page index>:<base x>,<base y>`.
 ///
 /// `recheck` compares this against the blend's weight, so neighbouring chunks
 /// cross a tier boundary at different moments instead of the whole ring
 /// switching at once. It only has to be spread and to be the same for a chunk
 /// every time it is mounted; nothing reads the number itself.
-fn blend_point(page_idx: IVec, bx: u32, by: u32) -> f64 {
+fn blend_point(k: ChunkKey) -> f64 {
     let mut h = fnv::FnvHasher::default();
-    std::hash::Hasher::write(&mut h, format!("{page_idx}:{bx},{by}").as_bytes());
+    std::hash::Hasher::write(&mut h, format!("{}/{}:{},{}", k.page.level, k.page.page, k.bx, k.by).as_bytes());
     std::hash::Hasher::finish(&h) as f64 / 2f64.powi(64)
 }
 
@@ -1579,7 +1837,7 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3, f64, f64) {
     let d2 = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2);
     let l = frame.lead;
     let ld2 = (x - l[0]).powi(2) + (y - l[1]).powi(2) + (z - l[2]).powi(2);
-    let half = CHUNK_WORLD_SPAN * 0.5;
+    let half = s.span * 0.5;
     let mut visible = (c[0] - x).abs() <= half && (c[1] - y).abs() <= half;
     if !visible {
         visible = true;

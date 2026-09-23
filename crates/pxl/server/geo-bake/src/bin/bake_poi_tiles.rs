@@ -1,7 +1,7 @@
 // pxl-geo-bake/bin/bake_poi_tiles.rs
 
 //! Offline pre-bake pass for POI: for every land page, the places the provider
-//! finds there, encoded as the client's packet and gzipped. A page with none
+//! finds there, encoded as the client's packet and packed (util.rs). A page with none
 //! writes an `.empty` marker instead of an object so a resumed run skips it
 //! without asking the database again.
 //!
@@ -58,7 +58,7 @@ fn run() -> Result<(), String> {
                 return Ok(Page::Empty);
             }
             // The page as the client's own packet — lanes it views in place,
-            // strings it reads one at a time — gzipped like terrain.
+            // strings it reads one at a time — packed like terrain.
             let raw = encode_poi_page(&pois).map_err(|e| format!("{e:?}"))?;
             Ok(Page::Object {
                 raw: raw.as_slice().to_vec(),

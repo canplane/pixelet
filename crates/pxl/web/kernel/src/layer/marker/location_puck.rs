@@ -15,7 +15,7 @@ use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::global::Global;
 use crate::kernel::kernel;
-use crate::layer::environment::config::render_cfg::FOG_FAR;
+use crate::layer::environment::fog::fog_far;
 use crate::layer::environment::theme::WorldThemeKey;
 use crate::layer::environment::theme_clock::theme_key;
 use crate::layer::terrain::elevation::get_ele;
@@ -23,6 +23,7 @@ use crate::layer::terrain::store::tile_pages;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::node::World;
 use crate::world::chunk::table::Frame;
+use crate::world::frame::view::view;
 
 // The numerator (4) is a world-space distance, not a cell count — it fixes the
 // zone's footprint size independent of U_PER_CELL. The .707 shave is a fixed
@@ -155,11 +156,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
         let count = p.samples.len() as u32;
         world_of(|world, sched| {
             // SAFETY: the zone's floats are in the kernel's memory, read before this returns.
-            unsafe {
-                sched
-                    .markers
-                    .set_zone(world, &mut sched.draw, center_pos, count, lane.as_ptr() as usize, ZONE_RADIUS_CELL * U_PER_CELL, FOG_FAR)
-            };
+            unsafe { sched.markers.set_zone(world, &mut sched.draw, center_pos, count, lane.as_ptr() as usize, ZONE_RADIUS_CELL * U_PER_CELL) };
         });
         p.shown = true;
         request_world_tick();
@@ -214,7 +211,6 @@ pub struct PuckDraw {
     target: [f64; 2],
     shown: Option<[f64; 2]>,
     snap_dist2: f64,
-    fog_far: f64,
     night: bool,
     time: f64,
     visible: bool,
@@ -232,7 +228,7 @@ impl Markers {
     /// # Safety
     /// `lane` addresses count * ZONE_INSTANCE_FLOATS f32s in the memory.
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn set_zone(&mut self, world: &mut World, draw: &mut DrawList, centre: V3, count: u32, lane: usize, snap_dist: f64, fog_far: f64) {
+    pub unsafe fn set_zone(&mut self, world: &mut World, draw: &mut DrawList, centre: V3, count: u32, lane: usize, snap_dist: f64) {
         let bytes = (count as usize * ZONE_INSTANCE_FLOATS * 4).max(4) as u32;
         let keep = self.puck.as_ref().is_some_and(|p| p.bytes == bytes);
         if !keep {
@@ -247,7 +243,6 @@ impl Markers {
                 target: [0.0; 2],
                 shown: None,
                 snap_dist2: snap_dist * snap_dist,
-                fog_far,
                 night: false,
                 time: 0.0,
                 visible: false,
@@ -306,7 +301,7 @@ impl Markers {
         // hid itself past it: the beacon's place through the anchor root.
         let [x, y, z] = frame.world_of([p.centre[0] + shown[0], p.centre[1] + shown[1], p.centre[2] + BEACON_Z_BIAS]);
         let c = frame.camera;
-        p.visible = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2) < p.fog_far * p.fog_far;
+        p.visible = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2) < fog_far(view().dist).powi(2);
         p.visible
     }
 

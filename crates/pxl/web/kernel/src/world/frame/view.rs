@@ -24,7 +24,7 @@ use xpute_core::math::vec3::Vec3;
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::orbit::orbit_local_offset;
 use crate::global::Global;
-use crate::layer::environment::config::render_cfg;
+use crate::layer::environment::fog::{far_clip, near_clip};
 
 const UP: Vec3 = Vec3 { x: 0.0, y: 0.0, z: 1.0 };
 const ORIGIN: Vec3 = Vec3 { x: 0.0, y: 0.0, z: 0.0 };
@@ -78,7 +78,7 @@ pub struct View {
 impl View {
     fn new() -> View {
         View {
-            dist: camera_cfg::view::MAX_DIST,
+            dist: camera_cfg::view::DEFAULT_DIST,
             polar: 0.0,
             azimuth: 0.0,
             tx: 0.0,
@@ -88,8 +88,8 @@ impl View {
             width: 1.0,
             height: 1.0,
             fov: camera_cfg::projection::FOV,
-            near: camera_cfg::projection::NEAR,
-            far: render_cfg::FAR_CLIP,
+            near: near_clip(camera_cfg::view::DEFAULT_DIST),
+            far: far_clip(camera_cfg::view::DEFAULT_DIST),
             eye: Vec3 { x: 0.0, y: 0.0, z: 1.0 },
             eye_local: Vec3 { x: 0.0, y: 0.0, z: 1.0 },
             view_matrix: mat4(),
@@ -135,6 +135,8 @@ pub fn view_compose() {
     mat4_look_at(&mut v.view_matrix, v.eye, ORIGIN, UP);
     let vm = v.view_matrix;
     mat4_invert(&mut v.inv_view_matrix, &vm);
+    v.near = near_clip(v.dist);
+    v.far = far_clip(v.dist);
     mat4_perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, v.near, v.far);
     let proj = v.proj;
     mat4_mul(&mut v.view_proj, &proj, &vm);

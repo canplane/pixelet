@@ -95,8 +95,8 @@ pub struct Demand {
     /// same work: re-submitting one that is already queued updates its
     /// priority, one already in flight is left alone.
     pub key: DemandKey,
-    /// Lower runs sooner. Convention: the page's Euclidean distance from the
-    /// view anchor in whole pages (world/chunk/range.rs's page_priority), so the nearest
-    /// page loads first.
+    /// Lower runs sooner. A page's is how far it sits from the view in its
+    /// category's own order (terrain/tile_fetcher.rs's), doubled so a second
+    /// category can interleave at the odd numbers.
     pub priority: f64,
 }

@@ -41,13 +41,24 @@
         "$doc": [
           "Picked against the scale bar's own reading, not as a raw distance",
           "number with no felt meaning: at a 1080px viewport and Seoul's",
-          "latitude, total_meters ≈ 0.21 * dist (see scale_bar.tsx), giving",
-          "MIN_DIST ≈ 0.25m, MAX_DIST ≈ 200m — a felt-right target, not an exact",
-          "contract (both constants shift with real screen size/latitude, same",
-          "as the scale bar's own reading). 1 * 2."
+          "latitude, a bar of at most 56px reads total_meters ≈ 0.092 * dist",
+          "before its 1/2/5 rounding (see shell/ui/scale_bar.rs), giving",
+          "MIN_DIST ≈ 0.18m — a felt-right target, not an exact contract (it",
+          "shifts with real screen size and latitude, as the scale bar's own",
+          "reading does). 1 * 2."
         ]
       },
-      "MAX_DIST": { "$value": 1024, "$doc": ["512 * 2; see MIN_DIST."] },
+      "MAX_DIST": {
+        "$value": 262144,
+        "$doc": [
+          "As far out as the terrain goes: looking straight down from here the",
+          "ground wants step 2^11, which level 10, the pyramid's top",
+          "(PAGE_TOP_LEVEL), draws with its cells averaged 2×2 — about 24 km",
+          "on the scale bar. Past it no level is coarse enough. The fog and",
+          "the clip planes follow the distance (render_cfg's FOG_PER_DIST), so",
+          "every zoom out to here shows the same octaves of ground. 1024 * 2^8."
+        ]
+      },
       "MIN_POLAR": 0.001,
       "MAX_POLAR": { "$value": 1.4835298641951802, "$doc": ["(90 - MIN_TILT_DEG) * PI / 180."] }
     },

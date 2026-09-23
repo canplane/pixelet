@@ -23,13 +23,13 @@ import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
  * cells of padding on each side, which is what gives a bicubic sample a 4×4
  * kernel at every edge texel (pxl-spec/bake/constant.rs).
  */
-export const PAGE_CELL_SPAN = 1024;
-export const ELE_PADDED_SPAN = 68;
+export const PAGE_CELL_SPAN = 512;
+export const ELE_PADDED_SPAN = 36;
 
-/** `[ele, [land, water, structure, transport]]`. */
+/** `[ele, [land, water, transport, structure]]` — pxl-spec's GROUND_CH_KEYS order. */
 export function encode_terrain(ele: I16Array, ground: { land: U8Array; water: U8Array; structure: U8Array; transport: U8Array }): U8Array {
   return encoder.encode(
-    new TreeView().branch((__) => __.i16_array(ele).branch((__) => __.u8_array(ground.land).u8_array(ground.water).u8_array(ground.structure).u8_array(ground.transport))),
+    new TreeView().branch((__) => __.i16_array(ele).branch((__) => __.u8_array(ground.land).u8_array(ground.water).u8_array(ground.transport).u8_array(ground.structure))),
   );
 }
 

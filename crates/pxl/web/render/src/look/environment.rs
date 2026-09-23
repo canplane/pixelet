@@ -60,6 +60,8 @@ pub struct Light {
     pub time: f64,
     /// The map's azimuth: the root frame's turn about Z.
     pub azimuth: f64,
+    /// What the theme's fog band is scaled by for how far the view reaches.
+    pub fog_scale: f64,
 }
 
 /// The lane `light` lights a frame with.
@@ -79,10 +81,10 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
         put3(o, at, [d[0] as f32, d[1] as f32, d[2] as f32]);
         put3(o, at + 4, [color[0] * intensity as f32, color[1] * intensity as f32, color[2] * intensity as f32]);
     }
-    o[7] = c[FOG_NEAR];
+    o[7] = c[FOG_NEAR] * light.fog_scale as f32;
     let ambient_i = c[AMBIENT + 3];
     put3(o, 8, [c[AMBIENT] * ambient_i, c[AMBIENT + 1] * ambient_i, c[AMBIENT + 2] * ambient_i]);
-    o[11] = c[FOG_FAR];
+    o[11] = c[FOG_FAR] * light.fog_scale as f32;
     let hemi_i = c[HEMI_INTENSITY];
     put3(o, 12, [c[HEMI_SKY] * hemi_i, c[HEMI_SKY + 1] * hemi_i, c[HEMI_SKY + 2] * hemi_i]);
     o[15] = c[FLOOR];

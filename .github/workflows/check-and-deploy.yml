@@ -1,4 +1,4 @@
-# The gate every push runs, and what a push to main publishes once it passes.
+# The gate a push to deploy runs, and what it publishes once it passes.
 #
 # One workflow rather than two, so that a deploy cannot start against a commit
 # the gate never saw: `deploy-web` and `deploy-server` are jobs that need
@@ -8,7 +8,7 @@
 #
 # The two deploys differ in what they cost to get wrong, and are gated
 # accordingly. They also run in order, the servers first; see deploy-web. Publishing to the edge is idempotent and reversible from the
-# Cloudflare dashboard, so it runs on every green push to main. Reaching into
+# Cloudflare dashboard, so it runs on every green push to deploy. Reaching into
 # the production VM over SSH is neither, so it runs only when something it
 # could possibly change did change.
 #
@@ -31,9 +31,15 @@
 
 name: Check and deploy
 
-# main and pull requests, not every branch: a push to a branch with a pull
+# deploy and pull requests, not every branch: a push to a branch with a pull
 # request open would otherwise run this twice for the one commit, and a Rust
 # build is not cheap enough to do twice for nothing.
+#
+# Not main. main is pushed to carry work between machines, compiling or not,
+# and a push there is not a request to build it; publishing is a separate act,
+# `git push origin main:deploy` (forced after main is rewritten). A check
+# without a deploy is `gh workflow run` against main, which the counter and
+# both deploys decline for any ref but deploy.
 #
 # Prose does not build. A push that touches only markdown cannot fail a gate
 # that type-checks, lints and tests code, and it cannot change what the
@@ -47,18 +53,18 @@ name: Check and deploy
 # moved.
 #
 # What this gives up is a build number for such a push. The counter now
-# counts builds of code rather than pushes to main, which is the honest
+# counts builds of code rather than pushes to deploy, which is the honest
 # reading of a count that nothing was ever built for.
 on:
   push:
-    branches: [main]
+    branches: [deploy]
     paths-ignore: ["**.md"]
   pull_request:
     paths-ignore: ["**.md"]
   workflow_dispatch: {}
 
 # A pull request's run is superseded by its next commit and may be cancelled.
-# A run on main may not: the gate takes a build number, and one killed between
+# A run on deploy may not: the gate takes a build number, and one killed between
 # taking it and publishing would burn it.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -82,7 +88,7 @@ jobs:
     runs-on: ubuntu-latest
     # One holder of the counter at a time, across every ref and trigger: the
     # take is read-add-write and two runs holding it together would take the
-    # same number. deploy-web is in the same group, so a main push queues
+    # same number. deploy-web is in the same group, so a deploy push queues
     # behind the one in front of it.
     concurrency:
       group: build-counter
@@ -140,7 +146,7 @@ jobs:
       - run: deno task test
       - run: deno task lint
 
-      # Every build of main is numbered, shipped or not — a build lab's count.
+      # Every build of deploy is numbered, shipped or not — a build lab's count.
       # A push of prose alone never reaches here and takes no number (see the
       # trigger), so the count is of builds and not of pushes. After the gate
       # rather than before it, so that a push that never compiled does not
@@ -148,7 +154,7 @@ jobs:
       # that number is simply never published.
       - name: Take the next build number
         id: number
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/deploy'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -166,7 +172,7 @@ jobs:
     # A failed server deploy now keeps the client back too, which is the
     # failure worth having: nothing goes out ahead of what it talks to.
     needs: [gate, deploy-server]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/deploy'
     runs-on: ubuntu-latest
     # What landed, not what was decided: the scope step says whether to try and
     # the last step says whether it worked, because a job that fails still
@@ -203,7 +209,7 @@ jobs:
         run: |
           # No usable base — a first push, a force-push, workflow_dispatch —
           # deploys: a republish costs a cached build, a skip that should not
-          # have happened leaves plei.me behind main.
+          # have happened leaves plei.me behind deploy.
           if [ -n "${BASE:-}" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
             changed=$(git diff --name-only "$BASE" HEAD)
           else
@@ -278,7 +284,7 @@ jobs:
   deploy-server:
     name: rebuild the servers on the VM
     needs: gate
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/deploy'
     runs-on: ubuntu-latest
     # As deploy-web: what landed, not what was decided.
     outputs:
@@ -305,7 +311,7 @@ jobs:
           # A branch's first push, a force-push and workflow_dispatch all leave
           # no usable base. Deploying then is the safe direction: a rebuild
           # that changed nothing costs a cached build, a skipped one that
-          # should have run leaves production behind main.
+          # should have run leaves production behind deploy.
           if [ -n "${BASE:-}" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
             changed=$(git diff --name-only "$BASE" HEAD)
           else
@@ -349,9 +355,11 @@ jobs:
             cd /opt/pixelet
             # reset rather than pull: the VM is a deploy target and nothing is
             # authored on it. infra/prod/.env is gitignored and survives this.
-            git fetch --prune origin main
+            # The refspec spelled out: a clone made before deploy existed, or
+            # made single-branch, has no remote-tracking ref for it to update.
+            git fetch --prune origin +refs/heads/deploy:refs/remotes/origin/deploy
             # The commit this run was started for, so the VM's half of a build
-            # is the half the runner published rather than whatever main has
+            # is the half the runner published rather than whatever deploy has
             # reached by the time the ssh lands. A rewritten history can leave
             # that commit unreachable here, and a deploy that refused over it
             # would leave production on the old code for something this project
@@ -360,8 +368,8 @@ jobs:
             if git cat-file -e "${sha}^{commit}" 2>/dev/null; then
               git reset --hard "$sha"
             else
-              echo "::warning::$sha is unreachable on the VM; the servers are built from origin/main instead"
-              git reset --hard origin/main
+              echo "::warning::$sha is unreachable on the VM; the servers are built from origin/deploy instead"
+              git reset --hard origin/deploy
             fi
             cd infra/prod
             docker compose up -d --build --force-recreate

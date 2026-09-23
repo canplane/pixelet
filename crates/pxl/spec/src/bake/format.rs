@@ -23,9 +23,7 @@
 //!   coasts    = [[id, geom_wkb, covers_page], ...]
 //!
 //! baked wire = [ele, ground]
-//!   ground = [land, water, structure, transport]
-//!
-//! each ground channel a sparse tree, encoded as words
+//!   ground = its planes in GROUND_CH_KEYS' order, each a dense u8 array
 
 use std::hash::Hasher;
 
@@ -75,17 +73,38 @@ pub struct CoastRow {
 
 // ---- Ground ----
 
+/// A ground channel. The discriminant is its identity — the number a stored
+/// value names it by, such as a terrain-styled cube's — and is not its place
+/// in any order: moving a channel in `GROUND_CH_KEYS` must not renumber what
+/// the object store already holds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum GroundChannelKey {
-    LAND,
-    WATER,
-    STRUCTURE,
-    TRANSPORT,
+    LAND = 0,
+    WATER = 1,
+    STRUCTURE = 2,
+    TRANSPORT = 3,
 }
 
 impl GroundChannelKey {
     /// The key's string on the wire.
     pub fn as_str(self) -> &'static str {
+        self.name()
+    }
+
+    /// The channel the catalog names `name`, the reverse of `as_str`.
+    pub const fn from_name(name: &str) -> Option<GroundChannelKey> {
+        let mut id = 0;
+        while let Some(key) = GroundChannelKey::from_id(id) {
+            if const_str_eq(key.name(), name) {
+                return Some(key);
+            }
+            id += 1;
+        }
+        None
+    }
+
+    const fn name(self) -> &'static str {
         match self {
             GroundChannelKey::LAND => "land",
             GroundChannelKey::WATER => "water",
@@ -93,9 +112,69 @@ impl GroundChannelKey {
             GroundChannelKey::TRANSPORT => "transport",
         }
     }
+
+    /// The channel a stored identity names, the reverse of `self as u8`.
+    pub const fn from_id(id: u32) -> Option<GroundChannelKey> {
+        match id {
+            0 => Some(GroundChannelKey::LAND),
+            1 => Some(GroundChannelKey::WATER),
+            2 => Some(GroundChannelKey::STRUCTURE),
+            3 => Some(GroundChannelKey::TRANSPORT),
+            _ => None,
+        }
+    }
 }
 
-pub const GROUND_CH_KEYS: [GroundChannelKey; 4] = [GroundChannelKey::LAND, GroundChannelKey::WATER, GroundChannelKey::STRUCTURE, GroundChannelKey::TRANSPORT];
+const fn const_str_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != b[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// The one order the ground channels are in: the lanes of a baked page, the
+/// planes of `.fixed.terrain`, and the order a cell is painted in, a later
+/// channel's non-void type winning. Every consumer reads it through
+/// `Ground::planes`, `Ground::from_planes` and `ch_index`, so moving a channel
+/// is this line and a re-bake.
+///
+/// Structure paints last: a building that overlaps a road keeps its cells.
+/// The overlap is about one cell in a hundred in a dense page, and a road that
+/// loses its rim is still a line, while a small building that loses its
+/// street-facing cells can stop existing
+/// (issue/20260921-level-step-and-zoom-are-one-number.md).
+pub const GROUND_CH_KEYS: [GroundChannelKey; 4] = [GroundChannelKey::LAND, GroundChannelKey::WATER, GroundChannelKey::TRANSPORT, GroundChannelKey::STRUCTURE];
+
+/// Where `key` sits in `GROUND_CH_KEYS`.
+pub const fn ch_index(key: GroundChannelKey) -> usize {
+    let mut i = 0;
+    while i < GROUND_CH_KEYS.len() {
+        if GROUND_CH_KEYS[i] as u8 == key as u8 {
+            return i;
+        }
+        i += 1;
+    }
+    panic!("a ground channel missing from GROUND_CH_KEYS")
+}
+
+const _: () = {
+    let mut id = 0;
+    while id < GROUND_CH_KEYS.len() as u32 {
+        match GroundChannelKey::from_id(id) {
+            Some(k) => assert!(GROUND_CH_KEYS[ch_index(k)] as u8 == k as u8),
+            None => panic!("an identity with no channel"),
+        }
+        id += 1;
+    }
+};
 
 /// `Record<GroundChannelKey, bytes>`. A decoded page owns its channels; a
 /// resident one reads the blocks it was written into.
@@ -115,6 +194,23 @@ impl Ground {
             GroundChannelKey::WATER => &self.water,
             GroundChannelKey::STRUCTURE => &self.structure,
             GroundChannelKey::TRANSPORT => &self.transport,
+        }
+    }
+
+    /// The planes in `GROUND_CH_KEYS`' order.
+    pub fn planes(&self) -> [&[u8]; 4] {
+        GROUND_CH_KEYS.map(|k| self.get(k))
+    }
+
+    /// A page's ground from planes in `GROUND_CH_KEYS`' order.
+    pub fn from_planes(planes: [std::borrow::Cow<'static, [u8]>; 4]) -> Ground {
+        let mut planes = planes.map(Some);
+        let mut take = |k| planes[ch_index(k)].take().expect("each channel once");
+        Ground {
+            land: take(GroundChannelKey::LAND),
+            water: take(GroundChannelKey::WATER),
+            structure: take(GroundChannelKey::STRUCTURE),
+            transport: take(GroundChannelKey::TRANSPORT),
         }
     }
 }
@@ -143,38 +239,33 @@ pub struct Tile {
 
 // ---- DTO ----
 
-// { ele, ground } -> [ele, [land, water, structure, transport]]
+// { ele, ground } -> [ele, [ground planes in GROUND_CH_KEYS' order]]
 pub fn encode_terrain(ele: &[i16], ground: &Ground) -> Result<Vec<u8>, MarshalError> {
     // Final baked terrain format:
-    // - baked = [ele, [land, water, structure, transport]]
+    // - baked = [ele, [land, water, transport, structure]]
     // - each ground channel is an st.encode(...) result
     let mut t: TreeView<'_> = TreeView::new();
     t.branch(Some(&mut |b| {
         b.i16_array(Some(ele)).branch(Some(&mut |g| {
-            g.u8_array(Some(&ground.land))
-                .u8_array(Some(&ground.water))
-                .u8_array(Some(&ground.structure))
-                .u8_array(Some(&ground.transport));
+            for plane in ground.planes() {
+                g.u8_array(Some(plane));
+            }
         }));
     }));
     encoder().encode(&t, TreeEncoderOptions::default())
 }
 
-// [ele, [land, water, structure, transport]] -> { ele, ground }
+// [ele, [ground planes in GROUND_CH_KEYS' order]] -> { ele, ground }
 pub fn decode_terrain(pkt: &[u8]) -> Result<Terrain, MarshalError> {
     let root = TreeReader::new(pkt)?.read_branch()?;
     let ele = root.at(0)?.get_array::<i16>()?.to_vec().into();
     let ground = root.at(1)?.as_branch()?;
 
     // Copied out: a decoded page outlives the packet it came from.
+    let plane = |i: u32| -> Result<std::borrow::Cow<'static, [u8]>, MarshalError> { Ok(ground.at(i)?.get_array::<u8>()?.to_vec().into()) };
     Ok(Terrain {
         ele,
-        ground: Ground {
-            land: ground.at(0)?.get_array::<u8>()?.to_vec().into(),
-            water: ground.at(1)?.get_array::<u8>()?.to_vec().into(),
-            structure: ground.at(2)?.get_array::<u8>()?.to_vec().into(),
-            transport: ground.at(3)?.get_array::<u8>()?.to_vec().into(),
-        },
+        ground: Ground::from_planes([plane(0)?, plane(1)?, plane(2)?, plane(3)?]),
     })
 }
 

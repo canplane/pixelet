@@ -40,6 +40,7 @@ use crate::global::Global;
 use crate::host::{now, storage_get, storage_set};
 use crate::kernel::{kernel, reindex_object};
 use crate::layer::terrain::elevation::get_ground_type;
+use crate::shell::setting::store::hidden_ground;
 use crate::world::change::{bump_world, request_world_tick, wake_at, world_changes, world_edge, DECOR_COLUMN, OBJECT_COLUMN};
 use crate::world::chunk::node::chunk_sources_changed;
 use crate::world::frame::coord::local_world_to_canonical;
@@ -90,7 +91,7 @@ pub type OccupiedEntry = ObjectLayerEntry;
 // (the persistence section below). A blob of an older version is not read. Bump this again whenever a future change makes an older
 // entry's encoding mean something different from what it meant when it was
 // written.
-pub const OBJECT_STORAGE_VERSION: u32 = 9;
+pub const OBJECT_STORAGE_VERSION: u32 = 10;
 
 fn storage_key() -> String {
     format!("pxl:object:v{OBJECT_STORAGE_VERSION}")
@@ -679,7 +680,7 @@ pub fn decor_col_revision(col_idx: IVec) -> u32 {
 // key; a blob from another layout is under another key and is never read.
 //
 // Positions round-trip exactly: the store's steps are binary fractions of a
-// cell, and a page-local f32 holds any such value under 1024.
+// cell, and a page-local f32 holds any such value across a page.
 
 /// The columns holding objects, in the kernel's order — for a walk over
 /// everything placed, which is what a save is.
@@ -938,7 +939,7 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube, show_stru
         return false;
     }
     let Some(source) = terrain_style_cube_source(cube) else { return false };
-    let shown = shown_ground(|ch| get_ground_type(at, ch).unwrap_or(0), show_structures);
+    let shown = shown_ground(|ch| get_ground_type(at, ch).unwrap_or(0), hidden_ground(show_structures));
     if shown.channel != source.channel || shown.type_id != source.terrain_num_id {
         return false;
     }

@@ -49,13 +49,19 @@ pub mod camera_cfg {
         pub const DEFAULT_POLAR: f64 = 1.0471975511965976;
         /// Picked against the scale bar's own reading, not as a raw distance
         /// number with no felt meaning: at a 1080px viewport and Seoul's
-        /// latitude, total_meters ≈ 0.21 * dist (see scale_bar.tsx), giving
-        /// MIN_DIST ≈ 0.25m, MAX_DIST ≈ 200m — a felt-right target, not an exact
-        /// contract (both constants shift with real screen size/latitude, same
-        /// as the scale bar's own reading). 1 * 2.
+        /// latitude, a bar of at most 56px reads total_meters ≈ 0.092 * dist
+        /// before its 1/2/5 rounding (see shell/ui/scale_bar.rs), giving
+        /// MIN_DIST ≈ 0.18m — a felt-right target, not an exact contract (it
+        /// shifts with real screen size and latitude, as the scale bar's own
+        /// reading does). 1 * 2.
         pub const MIN_DIST: f64 = 2.0;
-        /// 512 * 2; see MIN_DIST.
-        pub const MAX_DIST: f64 = 1024.0;
+        /// As far out as the terrain goes: looking straight down from here the
+        /// ground wants step 2^11, which level 10, the pyramid's top
+        /// (PAGE_TOP_LEVEL), draws with its cells averaged 2×2 — about 24 km
+        /// on the scale bar. Past it no level is coarse enough. The fog and
+        /// the clip planes follow the distance (render_cfg's FOG_PER_DIST), so
+        /// every zoom out to here shows the same octaves of ground. 1024 * 2^8.
+        pub const MAX_DIST: f64 = 262144.0;
         pub const MIN_POLAR: f64 = 0.001;
         /// (90 - MIN_TILT_DEG) * PI / 180.
         pub const MAX_POLAR: f64 = 1.4835298641951802;

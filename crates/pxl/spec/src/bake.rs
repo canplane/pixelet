@@ -9,6 +9,7 @@
 #[path = "bake/cell.spec.rs"]
 pub mod cell_spec;
 pub mod constant;
+pub mod fold;
 pub mod format;
 pub mod ground;
 pub mod model;

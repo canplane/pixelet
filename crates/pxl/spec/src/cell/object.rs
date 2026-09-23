@@ -203,11 +203,11 @@ static TERRAIN_STYLE: LazyLock<Vec<PlaceableCube>> = LazyLock::new(|| {
     cubes
 });
 
-/// The slot a ground channel is, which is the enum's own order — a bake's
-/// lanes are in it already, so it is a number the format has fixed rather than
-/// one chosen here.
+/// The slot a ground channel is: its identity, not its place in
+/// `GROUND_CH_KEYS`. A stored placement names a terrain-styled cube by this
+/// number, so reordering the channels for painting must leave it alone.
 fn channel_slot(channel: GroundChannelKey) -> u32 {
-    GROUND_CH_KEYS.iter().position(|k| *k == channel).expect("a ground channel") as u32
+    channel as u32
 }
 
 const _: () = assert!(
@@ -311,7 +311,7 @@ pub fn placeable_cube_num_id(cube: PlaceableCube) -> u32 {
 pub fn placeable_cube_of(num_id: u32) -> Option<PlaceableCube> {
     if num_id >= TERRAIN_STYLE_BASE {
         let slot = num_id / TERRAIN_STYLE_BASE - 1;
-        let channel = *GROUND_CH_KEYS.get(slot as usize)?;
+        let channel = GroundChannelKey::from_id(slot)?;
         return cube_of_source(TerrainStyleSource {
             channel,
             terrain_num_id: num_id % TERRAIN_STYLE_BASE,

@@ -12,7 +12,7 @@ use pxl_spec::space::pvf3::ivec::IVec;
 
 use crate::page::catalog;
 use crate::page::walk::{self, Args, Page};
-use crate::util::{fmt_bytes, git_sha, measure_output, now_iso8601};
+use crate::util::{fmt_bytes, git_sha, measure_output, now_iso8601, CONTENT_ENCODING};
 
 /// What a page bake is, apart from the pages it writes: where they go, how
 /// they are served, and which tables they were read from.
@@ -48,11 +48,11 @@ pub fn bake<T>(b: &Bake, connect: impl Fn() -> Result<T, String> + Sync, one: im
 
     let walked = walk::walk(&args, b.kind, b.every, connect, one)?;
     let t = &walked.tally;
-    println!("[bake/{}] {} items across {} non-empty pages, gz={}", b.kind, t.items, t.baked, fmt_bytes(t.gz as f64));
+    println!("[bake/{}] {} items across {} non-empty pages, {}", b.kind, t.items, t.baked, fmt_bytes(t.bytes as f64));
 
     let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
     let mut client = postgres::Client::connect(&url, postgres::NoTls).map_err(|e| e.to_string())?;
-    let (objects, gz_bytes) = measure_output(&args.out).map_err(|e| e.to_string())?;
+    let (objects, bytes) = measure_output(&args.out).map_err(|e| e.to_string())?;
     let mut manifest = serde_json::json!({
         "version": args.out.file_name().map(|n| n.to_string_lossy().to_string()),
         "updated_at": now_iso8601(),
@@ -60,14 +60,14 @@ pub fn bake<T>(b: &Bake, connect: impl Fn() -> Result<T, String> + Sync, one: im
         "land_pages": walked.land.len(),
 
         "objects": objects,
-        "gz_bytes": gz_bytes,
+        "bytes": bytes,
 
         // This invocation only — a resumed run reports what it re-did, so a
         // zero here means "nothing to do" rather than "nothing wrong".
-        "run": { "baked": t.baked, "empty": t.empty, "skipped": t.skipped, "failed": t.failed, "items": t.items, "gz_bytes": t.gz },
+        "run": { "baked": t.baked, "empty": t.empty, "skipped": t.skipped, "failed": t.failed, "items": t.items, "bytes": t.bytes },
 
         "content_type": b.content_type,
-        "content_encoding": "gzip",
+        "content_encoding": CONTENT_ENCODING,
 
         "source": catalog::sources(&mut client, b.sources),
     });

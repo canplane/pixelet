@@ -18,27 +18,27 @@ fn indexer_l2_is_a_signed_64_cubed_render_chunk() {
 }
 
 #[test]
-fn indexer_l3_is_a_signed_1024_cubed_addressing_level_same_shape_as_l2() {
-    // Z=1801 (not just <1024, like L2's own test addr) so a nonzero Z
-    // BASE/CENTER/LIMIT actually proves Z participates, instead of a Z<1024
-    // value that floors to 0 either way and would silently pass even with the
-    // old XY-only behavior.
+fn indexer_l3_is_a_signed_512_cubed_addressing_level_same_shape_as_l2() {
+    // Z=1801, past a whole span, so a nonzero Z BASE/CENTER/LIMIT actually
+    // proves Z participates, instead of a Z inside the first span that floors
+    // to 0 either way and would silently pass even with the old XY-only
+    // behavior.
     let addr = ivec::gather(-1, 2049, 1801);
-    assert_eq!(L3_RANGE, 1024);
-    assert_eq!(L2_SPAN_IN_L3, 16);
+    assert_eq!(L3_RANGE, 512);
+    assert_eq!(L2_SPAN_IN_L3, 8);
     // Z participates like X/Y — no XY-only narrowing at this level, which is
     // the terrain page's own policy and tested with it.
-    assert_eq!(ivec::repr(L3_BASE(addr)), "-1024:2048:1024");
-    assert_eq!(ivec::repr(L3_CENTER(addr)), "-512:2560:1536");
-    assert_eq!(ivec::repr(L3_LIMIT(addr)), "0:3072:2048");
+    assert_eq!(ivec::repr(L3_BASE(addr)), "-512:2048:1536");
+    assert_eq!(ivec::repr(L3_CENTER(addr)), "-256:2304:1792");
+    assert_eq!(ivec::repr(L3_LIMIT(addr)), "0:2560:2048");
 }
 
 #[test]
 fn indexer_l3_idx_from_l3_idx_round_trip_on_all_three_axes() {
     let addr = ivec::gather(-1, 2049, 1801);
     let idx = L3_IDX(addr);
-    assert_eq!(ivec::repr(idx), "-1:2:1");
-    assert_eq!(ivec::repr(FROM_L3_IDX(idx)), "-1024:2048:1024");
+    assert_eq!(ivec::repr(idx), "-1:4:3");
+    assert_eq!(ivec::repr(FROM_L3_IDX(idx)), "-512:2048:1536");
 }
 
 /// The half has to track the span. A marker that snaps to a cell centre with

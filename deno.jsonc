@@ -31,6 +31,10 @@
     "dev": { "command": "deno task --cwd apps/web dev", "dependencies": ["sync:build-number"] },
     // The whole stack on this machine instead.
     "dev:local": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles) & (deno task dev:web) & wait\"",
+    // The same, with terrain served out of the finished bake in ./out/terrain
+    // rather than baked page by page: every level there at once, for work on
+    // the view — a far zoom asks for pages no request could wait to fold.
+    "dev:baked": "sh -c \"(deno task dev:geo) & (deno task dev:api) & (deno task dev:tiles --baked) & (deno task dev:web) & wait\"",
     "dev:geo": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-geo -- \"$@\"' --",
     "dev:api": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server -p pxl-api -- \"$@\"' --",
     "dev:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --features serve --bin serve_tiles -- \"$@\"' --",

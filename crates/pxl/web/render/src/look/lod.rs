@@ -151,6 +151,15 @@ impl Ladder {
     /// distance in world units — 192u at the reference viewport and field of
     /// view, more on a taller screen, less on a shorter one. Everything that
     /// should keep step with the terrain's tiers is a multiple of it.
+    /// How far step 2^`i` is wanted, pressure and projection applied.
+    pub fn threshold(&self, i: usize) -> f64 {
+        self.thresholds[i]
+    }
+
+    pub fn threshold_count(&self) -> usize {
+        self.thresholds.len()
+    }
+
     pub fn threshold_0(&self) -> f64 {
         self.thresholds[0]
     }

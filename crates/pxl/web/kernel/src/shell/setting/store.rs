@@ -21,6 +21,7 @@
 //! Stored as `{"state":{"overrides":{…}},"version":0}`, the shape settings
 //! already sit in in a browser's storage.
 
+use pxl_spec::bake::ground::{channel_bit, ChannelMask, GroundChannelKey};
 use xpute_core::codec::json::{read_json, Quoted};
 
 use crate::global::Global;
@@ -98,6 +99,16 @@ impl AoMode {
             AoMode::Corner => "corner",
             AoMode::Screen => "screen",
         }
+    }
+}
+
+/// The ground channels the settings hide, as the paint and `shown_ground`
+/// take them: `show_structures` off hides the structure channel.
+pub fn hidden_ground(show_structures: bool) -> ChannelMask {
+    if show_structures {
+        0
+    } else {
+        channel_bit(GroundChannelKey::STRUCTURE)
     }
 }
 

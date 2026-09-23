@@ -34,6 +34,10 @@ pub mod cube_types {
         pub const unknown: u8 = 0xff;
 
         pub const ENTRIES: &[(&str, u8)] = &[("void", void), ("air", air), ("unknown", unknown)];
+
+        /// How far below its sampled height a cell showing the type sits, in
+        /// units; a type not listed sits at it.
+        pub const RECESS: &[(u8, i16)] = &[];
     }
 
     pub mod land {
@@ -91,6 +95,10 @@ pub mod cube_types {
             ("apron", apron),
             ("helipad", helipad),
         ];
+
+        /// How far below its sampled height a cell showing the type sits, in
+        /// units; a type not listed sits at it.
+        pub const RECESS: &[(u8, i16)] = &[(sea, 1)];
     }
 
     pub mod water {
@@ -102,6 +110,10 @@ pub mod cube_types {
         pub const wetland: u8 = 3;
 
         pub const ENTRIES: &[(&str, u8)] = &[("river", river), ("lake", lake), ("wetland", wetland)];
+
+        /// How far below its sampled height a cell showing the type sits, in
+        /// units; a type not listed sits at it.
+        pub const RECESS: &[(u8, i16)] = &[(river, 1), (lake, 1), (wetland, 1)];
     }
 
     pub mod structure {
@@ -125,6 +137,10 @@ pub mod cube_types {
             ("building_medical", building_medical),
             ("building_public", building_public),
         ];
+
+        /// How far below its sampled height a cell showing the type sits, in
+        /// units; a type not listed sits at it.
+        pub const RECESS: &[(u8, i16)] = &[];
     }
 
     pub mod transport {
@@ -169,6 +185,10 @@ pub mod cube_types {
             ("runway", runway),
             ("taxiway", taxiway),
         ];
+
+        /// How far below its sampled height a cell showing the type sits, in
+        /// units; a type not listed sits at it.
+        pub const RECESS: &[(u8, i16)] = &[];
     }
 
     // Flat user-painted colors only — no sentinels of its own.
@@ -209,6 +229,10 @@ pub mod cube_types {
             ("magenta", magenta),
             ("pink", pink),
         ];
+
+        /// How far below its sampled height a cell showing the type sits, in
+        /// units; a type not listed sits at it.
+        pub const RECESS: &[(u8, i16)] = &[];
     }
 
     pub const CHANNELS: &super::Channels = &[
@@ -219,6 +243,13 @@ pub mod cube_types {
         ("transport", transport::ENTRIES),
         ("block", block::ENTRIES),
     ];
+
+    /// What a cell shows when no ground channel has painted it: a cell with
+    /// nothing on it is still ground, not nothing.
+    pub mod base {
+        pub const CHANNEL: &str = "land";
+        pub const TYPE: u8 = super::land::bare;
+    }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     #[repr(u8)]

@@ -1,11 +1,12 @@
 #!/usr/bin/env -S deno run -A
 // A baked terrain page, read back the way the kernel reads it.
 //
-//   deno run -A script/decode-tile.ts 6235330563538944            # one page: summary + PNGs
-//   deno run -A script/decode-tile.ts 6235330563538944 --out /tmp/page
-//   deno run -A script/decode-tile.ts out/terrain/v3/_ocean       # a path works too
-//   deno run -A script/decode-tile.ts --all                       # every page under out/terrain/<version>, checked
-//   deno run -A script/decode-tile.ts --all --version v3
+//   deno run -A script/decode-tile.ts 12720250262323200            # one leaf: summary + PNGs
+//   deno run -A script/decode-tile.ts 3179787687624704 --level 2   # a page of a level above
+//   deno run -A script/decode-tile.ts 12720250262323200 --out /tmp/page
+//   deno run -A script/decode-tile.ts out/terrain/v4/_ocean        # a path works too
+//   deno run -A script/decode-tile.ts --all                        # every page of every level, checked
+//   deno run -A script/decode-tile.ts --all --version v4
 //
 // A page is `[ele, [land, water, structure, transport]]` in XTP
 // (crates/pxl/spec/src/bake/format.rs writes it, `decode_terrain` reads it),
@@ -31,16 +32,20 @@ import { round } from "@xpute/core/math/scalar.ts";
 import { SequenceType, SpecialType, TreeReader } from "@xpute/core/wire/xtp/mod.ts";
 
 import { cube_types } from "../apps/web/src/catalog/cell/cube_type.spec.ts";
+import { PUBLISHED_VERSION } from "../apps/web/src/config/published.spec.ts";
 import color from "../apps/web/src/catalog/cell/color.spec.ts";
 
 const root = new URL("..", import.meta.url).pathname;
 
 // pxl-spec/bake/constant.rs. The Rust is the one place these are decided;
 // this reads the numbers from the page and says which one it expected.
-const PAGE_CELL_SPAN = 1024;
-const ELE_PADDED_SPAN = 68;
+const PAGE_CELL_SPAN = 512;
+const ELE_PADDED_SPAN = 36;
 
-const CHANNELS = ["land", "water", "structure", "transport"] as const;
+// pxl-spec/bake/format.rs's GROUND_CH_KEYS: the lanes' order and the paint
+// order, one array. This reads the page, so it follows the Rust rather than
+// deciding anything.
+const CHANNELS = ["land", "water", "transport", "structure"] as const;
 type Channel = (typeof CHANNELS)[number];
 
 // ---- arguments ----
@@ -52,7 +57,8 @@ function flag(name: string): string | undefined {
   const [, value] = args.splice(i, 2);
   return value;
 }
-const version = flag("--version") ?? "v3";
+const version = flag("--version") ?? PUBLISHED_VERSION.terrain;
+const level = flag("--level") ?? "0";
 const outDir = flag("--out");
 const all = args.includes("--all");
 if (all) args.splice(args.indexOf("--all"), 1);
@@ -64,8 +70,15 @@ const pages = join(root, "out/terrain", version);
 
 async function readPage(path: string): Promise<U8Array> {
   const raw = await Deno.readFile(path);
-  // The bake stores a page gzipped (manifest.json's `content_encoding`), and
-  // a page fetched from a deployment arrives inflated; both are accepted.
+  // The bake stores a page packed (manifest.json's `content_encoding`), zstd
+  // now and gzip in the tile sets baked before it, and a page fetched from a
+  // deployment arrives decoded; all three are accepted, told apart by their
+  // first bytes. Deno's DecompressionStream has no zstd, so the CLI does it.
+  if (raw.length >= 4 && raw[0] === 0x28 && raw[1] === 0xb5 && raw[2] === 0x2f && raw[3] === 0xfd) {
+    const out = await new Deno.Command("zstd", { args: ["-dcq", path], stdout: "piped" }).output();
+    if (!out.success) throw new Error(`zstd could not decode ${path}`);
+    return out.stdout;
+  }
   if (raw.length >= 2 && raw[0] === 0x1f && raw[1] === 0x8b) {
     const inflated = new Blob([raw]).stream().pipeThrough(new DecompressionStream("gzip"));
     return new Uint8Array(await new Response(inflated).arrayBuffer());
@@ -238,18 +251,26 @@ function planePng(ch: Channel, plane: U8Array): Promise<U8Array> {
 
 // ---- driver ----
 
+/** Every stored page under a tile set: the ocean page, and each level's. */
+async function* storedPages(dir: string, name = ""): AsyncGenerator<[string, string]> {
+  for await (const entry of Deno.readDir(dir)) {
+    const path = join(dir, entry.name);
+    const at = name === "" ? entry.name : `${name}/${entry.name}`;
+    if (entry.isDirectory) yield* storedPages(path, at);
+    else if (entry.isFile && !/\.(part|empty)$/.test(entry.name)) yield [at, path];
+  }
+}
+
 if (all) {
   let count = 0;
   const bad: string[] = [];
-  for await (const entry of Deno.readDir(pages)) {
-    if (!entry.isFile) continue;
+  for await (const [name, path] of storedPages(pages)) {
     count++;
-    const path = join(pages, entry.name);
     try {
       const f = faults(summarize(decode(await readPage(path))));
-      if (f.length > 0) bad.push(`${entry.name}: ${f.join("; ")}`);
+      if (f.length > 0) bad.push(`${name}: ${f.join("; ")}`);
     } catch (e) {
-      bad.push(`${entry.name}: ${e instanceof Error ? e.message : String(e)}`);
+      bad.push(`${name}: ${e instanceof Error ? e.message : String(e)}`);
     }
     if (count % 1000 === 0) console.error(`[decode-tile] ${count} pages read, ${bad.length} at fault`);
   }
@@ -265,10 +286,10 @@ if (all) {
   console.log(`[decode-tile] ok — ${count} page(s) under ${pages} read as the kernel reads them`);
 } else {
   if (target === undefined) {
-    console.error("usage: decode-tile.ts <key | path> [--version v3] [--out dir] | --all [--version v3]");
+    console.error("usage: decode-tile.ts <key | path> [--level n] [--version v4] [--out dir] | --all [--version v4]");
     Deno.exit(2);
   }
-  const path = /^[0-9]+$/.test(target) ? join(pages, target) : target;
+  const path = /^[0-9]+$/.test(target) ? join(pages, level, target) : target;
   const page = decode(await readPage(path));
   const s = summarize(page);
   console.log(JSON.stringify({ page: basename(path), ...s }, null, 2));

@@ -22,6 +22,7 @@ use pxl_render::look::lod::{LodStep, TARGET_CELL_PX};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
+use pxl_spec::bake::format::{ch_index, GroundChannelKey};
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
 use pxl_spec::space::pvf3::ivec::{gather, IVec};
@@ -247,17 +248,28 @@ pub struct Chunk<'a> {
     pub show_decor: bool,
     /// The hidden entry's band and packed position in this column.
     pub hide: Option<(i32, u32)>,
+    /// Where the column's corner is from the corner of the chunk drawing it,
+    /// in units: zero for a leaf chunk, its place among the columns under it
+    /// for a level chunk.
+    pub ox: f64,
+    pub oy: f64,
+    /// Whether a placed instance keeps the entry it came from, for the
+    /// eraser's hit. A level chunk draws several columns' decor and names
+    /// none of their entries: what is erased is erased from close by.
+    pub hittable: bool,
 }
 
 impl<'s> DecorBuild<'s> {
-    /// Builds every kind's instances for a chunk at `step` into `scratch`,
-    /// the sample already read for it (its elevations).
-    pub fn build(scratch: &'s mut DecorScratch, kinds: &[Kind], chunk: &Chunk, sample: &ChunkSample, store: &Store, step: u32) -> DecorBuild<'s> {
+    /// Builds every kind's instances at world step `step` into `scratch`,
+    /// from `columns` — the leaf columns a chunk covers, each with the sample
+    /// already read for it (its elevations). Decoration is scattered from the
+    /// leaves alone, whatever level draws the ground under it
+    /// (issue/20260921-level-step-and-zoom-are-one-number.md): a column's page
+    /// comes from the chunk builder's `leaf_source`, which reads the leaves'
+    /// table and no other, and every level's page is the same shape, so it is
+    /// that and not a size that holds it.
+    pub fn build(scratch: &'s mut DecorScratch, kinds: &[Kind], columns: &[(Chunk, &ChunkSample)], store: &Store, step: u32) -> DecorBuild<'s> {
         scratch.clear();
-        let page_seed = derive_seed_u64(DECOR_MASTER_SEED, chunk.page_idx);
-        let lanes = store.chunk_lanes(chunk.col_idx);
-        // A chunk with no entry has no cell to look up: most chunks.
-        let has_entries = lanes.as_ref().is_some_and(|l| l.count > 0);
         for kind in kinds {
             // A kind with no variant has no group to fill and no variant to
             // pick below; the groups are the kinds' variants in order.
@@ -271,7 +283,20 @@ impl<'s> DecorBuild<'s> {
                 break;
             }
             scratch.group_count += kind.variant_count as usize;
+            for (chunk, sample) in columns {
+                Self::column(scratch, kind, first, chunk, sample, store, step);
+            }
+        }
+        DecorBuild { scratch }
+    }
 
+    /// One column's instances of `kind`, into its groups from `first`.
+    fn column(scratch: &mut DecorScratch, kind: &Kind, first: usize, chunk: &Chunk, sample: &ChunkSample, store: &Store, step: u32) {
+        let page_seed = derive_seed_u64(DECOR_MASTER_SEED, chunk.page_idx);
+        let lanes = store.chunk_lanes(chunk.col_idx);
+        // A chunk with no entry has no cell to look up: most chunks.
+        let has_entries = lanes.as_ref().is_some_and(|l| l.count > 0);
+        {
             // Placed instances first, in the store's entry order.
             if let (Some(value), Some(l)) = (kind.decor_value, &lanes) {
                 // SAFETY: the column's lanes, read before anything writes the store.
@@ -303,13 +328,13 @@ impl<'s> DecorBuild<'s> {
                     scratch.push(
                         first + variant as usize,
                         Instance {
-                            x: (x as f64 * STEP_UNITS + h) as f32,
-                            y: (y as f64 * STEP_UNITS + h) as f32,
+                            x: (chunk.ox + x as f64 * STEP_UNITS + h) as f32,
+                            y: (chunk.oy + y as f64 * STEP_UNITS + h) as f32,
                             z: (bands[k] as f64 * BAND_CELLS as f64 + z as f64 * STEP_UNITS) as f32,
                             rotation: rotation as f32,
                             scale: 1.0,
                             flags: if hidden { HIDDEN_FLAG } else { 0 },
-                            band: bands[k] as u32,
+                            band: if chunk.hittable { bands[k] as u32 } else { NO_ENTRY },
                             pos,
                         },
                     );
@@ -336,7 +361,7 @@ impl<'s> DecorBuild<'s> {
                         let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
                         let rotation = if kind.align_transport {
                             let flip = rng.unit() < 0.5;
-                            transport_aligned_rotation(g[3], cell_x, cell_y, flip)
+                            transport_aligned_rotation(g[ch_index(GroundChannelKey::TRANSPORT)], cell_x, cell_y, flip)
                         } else {
                             rng.unit() * core::f64::consts::PI * 2.0
                         };
@@ -348,8 +373,8 @@ impl<'s> DecorBuild<'s> {
                         scratch.push(
                             first + variant as usize,
                             Instance {
-                                x: (dx as f64 + 0.5) as f32,
-                                y: (dy as f64 + 0.5) as f32,
+                                x: (chunk.ox + dx as f64 + 0.5) as f32,
+                                y: (chunk.oy + dy as f64 + 0.5) as f32,
                                 z: ele as f32,
                                 rotation: rotation as f32,
                                 scale: scale as f32,
@@ -362,7 +387,6 @@ impl<'s> DecorBuild<'s> {
                 }
             }
         }
-        DecorBuild { scratch }
     }
 
     /// The block's size in bytes: a word of group count, a word of count a

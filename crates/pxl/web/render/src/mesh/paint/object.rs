@@ -4,3 +4,4 @@
 //! becomes before the mesher ever sees it.
 
 pub mod adapter;
+pub mod fold;

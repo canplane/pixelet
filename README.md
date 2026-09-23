@@ -12,7 +12,7 @@ _Started on December 15, 2025._
 
 The client is a small operating system in a browser tab. A Rust **kernel**, compiled to one WebAssembly module, holds the world, schedules its own work and draws through WebGPU; a TypeScript **shell** drives it the way a driver drives a device, and decides nothing about the world. The arrangement they run in — one fixed memory, ring buffers, a turn on a doorbell — is [xpute](./ARCHITECTURE.xpute.md), which is generic and knows nothing of any of this. What follows is pixelet's own.
 
-- **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into pages of 1024² blocks, four channels of ground type and one elevation raster each. A page is fetched, read where it lands in memory, and kept only while the view is near it.
+- **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into pages of 512² blocks, four channels of ground type and one elevation raster each. A page is fetched, read where it lands in memory, and kept only while the view is near it.
 - **One coordinate, 96 bits of fixed point.** A position is two packed words — three integer fields for which block, three 8-bit fractions for where inside it — so it resolves to 1/256 of a block. The arithmetic is integer, so it is the same bits on every machine, and the X field is cyclic, so the world wraps at the longitude seam.
 - **Terrain and what you build meet only when a chunk is built.** The chunk is Minecraft's, at 64 blocks. The ground is a dense raster for a whole page; placed objects are a sparse tree per 64³ band. They converge in one pipeline, and the mesher and the pointer's ray read the same spans out of it — so what is drawn is what is hit.
 - **Running short of memory costs detail, not the frame.** Work off screen is reclaimed first, and if that is not enough the LOD ladder steps one tier coarser and climbs back when the pressure passes. The view gets blockier; the tab does not die.
@@ -31,7 +31,7 @@ A block on screen has come a long way: a provider's geometry, a bake, a fetch, a
               db-geo (PostGIS) ──▶ pxl-geo-bake
                               │
                               ▼
-                   a page of 1024² blocks:
+                   a page of 512² blocks:
              four ground channels and elevation
 ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┼ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
                               ▼             fetched by version, read in place
@@ -89,10 +89,11 @@ deno task dev:local
 | ------------------------------------ | --------------------------------------------------------------------- |
 | `deno task dev`                      | The client alone, every route served by the live deployment           |
 | `deno task dev:local`                | The client and the three servers it talks to, on this machine         |
+| `deno task dev:baked`                | The same, terrain served from the finished bake in `./out/terrain`    |
 | `deno task dev:web`                  | The client alone, against those servers                               |
 | `deno task dev:geo`                  | pxl-geo only (`/geo`)                                                 |
 | `deno task dev:api`                  | pxl-api only (`/api`)                                                 |
-| `deno task dev:tiles`                | The dev tile server, baking each page on demand                       |
+| `deno task dev:tiles`                | The dev tile server, demand-paging each page out of the bake          |
 | `deno task preview`                  | The production bundle, served locally, data from the live deployment  |
 | `deno task build:web`                | Build the client                                                      |
 | `deno task build:wasm`               | Build the kernel module into `apps/web/src/kernel/kernel.wasm`        |
@@ -141,7 +142,7 @@ the client                              /geo/search ─▶ pxl-geo ─▶ db-geo
 filled by the bakes, offline
 ```
 
-The three roots are written in one file, `spec/pxl/spec/route.json`, and every relay reads them from there. A green push to main takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
+The three roots are written in one file, `spec/pxl/spec/route.json`, and every relay reads them from there. A green push to the `deploy` branch takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
 
 Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and **XTP**, a relocatable binary tree read without copying. One piece of the kernel is a port rather than a dependency: evanw/buddy-malloc, under the heap, and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) carries what its licence asks.
 
