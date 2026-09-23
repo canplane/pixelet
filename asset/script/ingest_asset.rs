@@ -1,12 +1,18 @@
 //! Every shipped asset into the form the bucket holds and the catalogs name:
-//! one object per file, keyed by the SHA-256 of its bytes, with a model's
-//! bounds measured here rather than typed in.
+//! one object per file, named by its own path with a hash of its bytes in the
+//! stem, with a model's bounds measured here rather than typed in.
 //!
-//! Two outputs. `./out/asset/{glb,png,webp}/<sha256>` is a copy of every file
-//! under its key, split by type so that `aws s3 sync` can set one content-type
-//! per directory — the object name carries no extension, so the type has to be
-//! stored with it. And the two generated tables, written from the same rows so
-//! that the shell's and the kernel's cannot drift.
+//! The hash is what makes the name immutable, and it is the whole reason an
+//! asset is not named by its path alone: an asset goes out under a year's
+//! `max-age`, so a changed file that kept its name would be served stale by
+//! every edge and every browser for that year, with no purge to call. A
+//! changed file is a new name instead. The path is there because a bucket
+//! nobody can read is one nobody can check, and because the type stays in the
+//! extension where the upload can see it.
+//!
+//! Two outputs. `./out/asset/` is a copy of every file under its key, the tree
+//! mirroring the bucket's exactly. And the two generated tables, written from
+//! the same rows so that the shell's and the kernel's cannot drift.
 //!
 //! The texture pack is also ingested as one object: every image under
 //! `asset/cube/{terrain,block}` composed into a sheet and encoded once
@@ -25,10 +31,17 @@ use sha2::{Digest, Sha256};
 
 use crate::table::{Row, Sheet};
 
-/// What the bucket prefix for content-addressed objects is; a key is this over
-/// the sha256 hex. Mirrored by the Worker's `KEY_RE` and by the shell's
-/// `asset_url`.
+/// What the bucket prefix for an asset is; a key is this over the asset's own
+/// path. Mirrored by the Worker's `KEY_RE` and by the shell's `asset_url`.
 const KEY_PREFIX: &str = "asset/";
+
+/// Hex digits of the SHA-256 kept in a name. Twelve is 48 bits, which is the
+/// entropy Vite gives a bundle chunk for the same job, and short enough that
+/// the name is still the file's. A collision between two assets is not
+/// possible whatever this is — their paths differ, and the path is in the name
+/// — so what it buys is only that one file's next version cannot land on the
+/// name its last one had.
+const KEY_HEX: usize = 12;
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap_or_else(|_| PathBuf::from("."))
@@ -59,7 +72,16 @@ fn walk(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) -> Result<(),
 fn hex(bytes: &[u8]) -> String {
     let mut h = Sha256::new();
     h.update(bytes);
-    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+    h.finalize().iter().map(|b| format!("{b:02x}")).collect::<String>()[..KEY_HEX].to_string()
+}
+
+/// A file's name in the bucket: its own path with the hash in the stem, the
+/// way a bundler names a chunk (`beaver-20f91809e69c.glb`).
+fn named(rel: &str, hex: &str) -> String {
+    match rel.rsplit_once('.') {
+        Some((stem, ext)) => format!("{stem}-{hex}.{ext}"),
+        None => format!("{rel}-{hex}"),
+    }
 }
 
 /// Through the formatter the tree is checked with, so that writing a table and
@@ -116,18 +138,18 @@ fn run() -> Result<(), String> {
     let mut total: u64 = 0;
     for (rel, path) in &files {
         let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let kind = if rel.ends_with(".glb") { "glb" } else { "png" };
-        let key_hex = hex(&bytes);
-        let extent = if kind == "glb" { Some(glb::extent(&bytes).map_err(|e| format!("{rel}: {e}"))?) } else { None };
+        let is_model = rel.ends_with(".glb");
+        let name = named(rel, &hex(&bytes));
+        let extent = if is_model { Some(glb::extent(&bytes).map_err(|e| format!("{rel}: {e}"))?) } else { None };
 
-        let dir = out_dir.join(kind);
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        std::fs::write(dir.join(&key_hex), &bytes).map_err(|e| e.to_string())?;
+        let at = out_dir.join(&name);
+        std::fs::create_dir_all(at.parent().ok_or("an asset has a parent")?).map_err(|e| e.to_string())?;
+        std::fs::write(&at, &bytes).map_err(|e| e.to_string())?;
 
         total += bytes.len() as u64;
         rows.push(Row {
             path: rel.clone(),
-            key: format!("{KEY_PREFIX}{key_hex}"),
+            key: format!("{KEY_PREFIX}{name}"),
             bytes: bytes.len() as u64,
             extent,
         });
@@ -141,13 +163,15 @@ fn run() -> Result<(), String> {
         .map(|r| r.path.clone())
         .collect();
     let composed = sheet::compose(&asset_dir, &tiles)?;
-    let sheet_hex = hex(&composed.bytes);
-    let webp_dir = out_dir.join("webp");
-    std::fs::create_dir_all(&webp_dir).map_err(|e| e.to_string())?;
-    std::fs::write(webp_dir.join(&sheet_hex), &composed.bytes).map_err(|e| e.to_string())?;
+    // The one object with no source file of its own: it is composed from every
+    // tile under `cube/`, so it is named there.
+    let sheet_name = named("cube/pack.webp", &hex(&composed.bytes));
+    let at = out_dir.join(&sheet_name);
+    std::fs::create_dir_all(at.parent().ok_or("the pack has a parent")?).map_err(|e| e.to_string())?;
+    std::fs::write(&at, &composed.bytes).map_err(|e| e.to_string())?;
 
     let sheet = Sheet {
-        key: format!("{KEY_PREFIX}{sheet_hex}"),
+        key: format!("{KEY_PREFIX}{sheet_name}"),
         bytes: composed.bytes.len() as u64,
         cell: sheet::CELL,
         columns: sheet::COLUMNS,

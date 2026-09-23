@@ -1,7 +1,7 @@
 {
   "settings": {
     "title": "Settings",
-    "description": "Adjust language, rendering, and quality options.",
+    "description": "Adjust language, graphics, and quality settings.",
     "trigger_aria_label": "Settings",
     "close": "Close",
     "tabs": {
@@ -13,76 +13,76 @@
       "korean": "한국어",
       "english": "English"
     },
-    "cost_legend": "LOW / MED / HIGH indicators represent performance impact. If you experience lag or frame drops, try disabling HIGH items first.",
+    "cost_legend": "LOW / MED / HIGH indicates the performance impact of each option. If you experience frame drops, try disabling HIGH-impact options first.",
     "display": {
       "section_title": "Display",
-      "section_caption": "What the world shows",
+      "section_caption": "Choose what appears in the world",
       "show_decor": {
         "label": "Decor",
-        "description": "Draws the trees and vehicles scattered procedurally over the terrain. Anything you placed yourself stays either way."
+        "description": "Shows procedurally placed trees, vehicles, and other decor. Objects you place yourself are always shown."
       },
       "show_structures": {
         "label": "Buildings",
-        "description": "Toggles whether buildings are rendered on top of the terrain."
+        "description": "Shows or hides buildings on the terrain."
       },
       "texture_pack": {
         "label": "Textures",
-        "description": "Applies detailed pixel-art textures to block and object surfaces instead of flat colors."
+        "description": "Applies detailed pixel-art textures to blocks and objects instead of flat colors."
       }
     },
     "camera": {
       "section_title": "Camera",
-      "section_caption": "How the view moves",
+      "section_caption": "Adjust how the camera moves",
       "lock_camera_tilt": {
-        "label": "Camera Tilt Lock",
-        "description": "Locks vertical camera rotation while horizontal rotation stays free."
+        "label": "Lock Camera Tilt",
+        "description": "Locks vertical camera rotation while leaving horizontal rotation free."
       }
     },
     "lighting": {
       "section_title": "Lighting & Shadows",
-      "section_caption": "Effects that make shape and edges readable",
+      "section_caption": "Enhance shapes, edges, and depth",
       "show_edge_shade": {
-        "label": "Cube outlines",
-        "description": "Darkens only edges that border open air, so flat ground stays seamless and height changes read as a line."
+        "label": "Cube Outlines",
+        "description": "Darkens only edges exposed to open air, keeping flat ground seamless while outlining changes in height."
       },
       "ao": {
         "label": "Shading",
         "off": {
           "label": "Off",
-          "description": "Every surface gets the full ambient light."
+          "description": "Applies uniform ambient lighting to all surfaces."
         },
         "corner": {
-          "label": "Corner (geometry)",
-          "description": "Darkens the floor along a cube and the inside of a corner, so blocks sit on the ground instead of floating over it. A few ops per pixel."
+          "label": "Corner (Geometry)",
+          "description": "Darkens contact areas and inside corners so blocks look grounded instead of floating. Requires only a few operations per pixel."
         },
         "screen": {
           "label": "Detailed (SSAO)",
-          "description": "Enhances depth by adding detailed contact shadows in crevices and corners. Recomputed over the whole screen, so it is the heaviest."
+          "description": "Adds detailed contact shadows to corners and crevices for greater depth. This is the most demanding option because it processes the entire screen."
         }
       },
       "show_rim_light": {
         "label": "Rim Light",
-        "description": "Adds a subtle highlight along object silhouettes to separate them from the background."
+        "description": "Adds a subtle highlight around object silhouettes to make them stand out from the background."
       }
     },
     "quality": {
       "section_title": "Graphics Quality",
-      "section_caption": "Adjust screen clarity and detail settings"
+      "section_caption": "Adjust visual clarity and detail"
     },
     "disclaimer": {
-      "section_title": "Disclaimer",
-      "demo_notice": "This service is a demo, and data may disappear or it may be discontinued without notice.",
-      "coverage_notice": "Currently, only regions in South Korea are supported; all other areas are displayed as ocean.",
-      "storage_notice": "Objects you place are not saved to the server, and are stored only on this device.",
-      "location_notice": "Your location data is neither collected nor saved.",
-      "character_notice": "The CC0-licensed <kenney>Kenney</kenney> asset pack is applied to characters and decor."
+      "section_title": "Notice",
+      "demo_notice": "This service is a demo. Data may be lost or the service may be discontinued without notice.",
+      "coverage_notice": "Currently, only South Korea is supported. All other regions are displayed as ocean.",
+      "storage_notice": "Objects you place are stored only on this device and are not saved to the server.",
+      "location_notice": "Your location data is neither collected nor stored.",
+      "character_notice": "Characters and decor use the CC0-licensed Kenney asset pack."
     },
     "attribution": {
       "section_title": "Attribution"
     },
     "about": {
       "section_title": "About",
-      "tagline": "Find a real place and stack blocks on it."
+      "tagline": "Turn the real world into a canvas and build with blocks."
     }
   },
   "cubes": {
@@ -109,13 +109,13 @@
       "green_deep": "Forest",
       "green_light": "Grass",
       "sand": "Sand",
-      "residential": "Residential Area",
-      "commercial": "Commercial Area",
-      "industrial": "Industrial Area",
-      "sports": "Sports Area",
-      "education": "Education Area",
-      "medical": "Medical Area",
-      "public": "Public Area",
+      "residential": "Residential",
+      "commercial": "Commercial",
+      "industrial": "Industrial",
+      "sports": "Sports",
+      "education": "Education",
+      "medical": "Medical",
+      "public": "Public",
       "apron": "Apron",
       "helipad": "Helipad"
     },
@@ -127,8 +127,8 @@
     "structure": {
       "building": "Building",
       "building_station": "Station",
-      "building_education": "School Building",
-      "building_medical": "Medical Building",
+      "building_education": "School",
+      "building_medical": "Medical Facility",
       "building_public": "Public Building"
     },
     "transport": {
@@ -149,7 +149,7 @@
   },
   "drawer_modal": {
     "title": "Drawer",
-    "description": "Every placeable cube color and decor kind, plus your companion's appearance.",
+    "description": "Browse all available cube colors, decor, and characters.",
     "close": "Close",
     "tabs": {
       "cube": "Cube",
@@ -160,7 +160,7 @@
       "block": "Colors",
       "land": "Land",
       "water": "Water",
-      "structure": "Structure",
+      "structure": "Buildings",
       "transport": "Transport"
     },
     "character": {
@@ -197,7 +197,7 @@
         "fish": "Fish",
         "fox": "Fox",
         "giraffe": "Giraffe",
-        "hog": "Hog",
+        "hog": "Wild Boar",
         "koala": "Koala",
         "lion": "Lion",
         "monkey": "Monkey",
@@ -212,61 +212,64 @@
   },
   "device": {
     "orientation": {
-      "unsupported": "This environment doesn't support the orientation sensor.",
-      "permission_denied": "Orientation sensor permission was denied.",
-      "permission_error": "An error occurred while requesting orientation sensor permission.",
+      "unsupported": "Orientation sensors aren’t supported in this environment.",
+      "permission_denied": "Orientation sensor access was denied.",
+      "permission_error": "Something went wrong while requesting orientation sensor access.",
       "signal_lost": "Orientation sensor signal lost."
     },
     "geolocation": {
-      "unsupported": "This environment doesn't support location services.",
-      "generic_error": "Couldn't get your location.",
+      "unsupported": "Location services aren’t supported in this environment.",
+      "generic_error": "Couldn’t get your location.",
       "permission_denied": "Please allow location access.",
-      "position_unavailable": "Couldn't acquire a location signal.",
+      "position_unavailable": "Couldn’t determine your location.",
       "timeout": "Location request timed out."
     }
   },
   "toast": {
     "location_weak_signal": "Location signal is weak.",
     "location_checking": "Checking your location…",
-    "map_load_error": "Couldn't load the area.",
+    "map_load_error": "Couldn’t load the area.",
     "world_ready": "Area loaded.",
     "map_loading": "Loading area…",
-    "companion_loading": "Preparing your companions…"
+    "companion_loading": "Preparing your companion…"
   },
   "map": {
     "scale_bar": {
-      "reset_zoom": "Reset zoom"
+      "reset_zoom": "Reset Zoom"
     },
     "mode_bar": {
       "palette_tooltip": "Palette",
       "pointer": "Pointer",
       "eraser": "Eraser",
-      "message_placeholder": "Type a message...",
+      "message_placeholder": "Type a message…",
       "message_tooltip": "Message",
       "send": "Send",
-      "catalog_tooltip": "Open full catalog"
+      "catalog_tooltip": "Open Full Catalog"
     },
     "controls": {
-      "reset_orientation": "Align north",
-      "move_to_location": "Move to my location",
-      "start_compass_mode": "Start compass mode",
-      "exit_compass_mode": "Exit compass mode"
+      "reset_orientation": "Face North",
+      "move_to_location": "Go to My Location",
+      "start_compass_mode": "Start Compass Mode",
+      "exit_compass_mode": "Exit Compass Mode"
     },
     "sensors": {
-      "enable": "Enable location and orientation sensors"
+      "enable": "Enable Location & Orientation"
     },
     "search": {
       "trigger_aria_label": "Search places",
-      "placeholder": "Search places...",
+      "placeholder": "Search places…",
       "clear_aria_label": "Clear search",
-      "loading": "Searching...",
-      "no_results": "No results",
+      "loading": "Searching…",
+      "no_results": "No results found",
       "section_areas": "Areas",
       "section_places": "Places"
     }
   },
   "unsupported": {
     "title": "This browser isn't supported",
-    "encoding": "The map data is sent compressed with zstd, and this browser can't read it. Open the page in a recent Chrome, Edge, Firefox or Safari."
+    "webgpu": "This browser has no WebGPU, which is what the world is drawn with. Open the page in a recent Chrome, Edge, Firefox or Safari.",
+    "insecure": "WebGPU is only available over HTTPS. Open the page at its https:// address.",
+    "gpu": "WebGPU is here but no graphics adapter answered. It may be disabled or blocked for this GPU.",
+    "encoding": "The map data is sent compressed, and this browser can't read that compression. Open the page in a recent Chrome, Edge, Firefox or Safari."
   }
 }

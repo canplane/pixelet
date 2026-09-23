@@ -9,8 +9,7 @@
 //! the guest spends it on its own tasks cooperatively (sched/tick.rs,
 //! sched/edge.rs) and, on the falling edge, hands the turn back with when it
 //! wants the next one. The host knows nothing of what runs inside. Memory is
-//! granted once (mem.rs) and I/O by credits (io/queue.rs), on the same
-//! footing.
+//! granted once (mem.rs) and I/O by credits (io.rs), on the same footing.
 //!
 //! Sizing that quota is the host's alone (sched/quantum.ts): the frame interval
 //! it measures rather than assumes, the overrun a turn carries into its own

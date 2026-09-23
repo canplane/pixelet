@@ -138,11 +138,11 @@ docker compose up -d --build
 Three roots, decided in `spec/pxl/spec/route.json` and written from there into every
 place that builds a URL or reads one:
 
-| Root      | What it is                                        | Who answers it                            |
-| :-------- | :------------------------------------------------ | :---------------------------------------- |
-| `/geo/`   | the world's data                                  | R2 under `/geo/tiles/`, pxl-geo otherwise |
-| `/api/`   | the application                                   | pxl-api                                   |
-| `/asset/` | models and textures, by the sha256 of their bytes | R2                                        |
+| Root      | What it is                                           | Who answers it                            |
+| :-------- | :--------------------------------------------------- | :---------------------------------------- |
+| `/geo/`   | the world's data                                     | R2 under `/geo/tiles/`, pxl-geo otherwise |
+| `/api/`   | the application                                      | pxl-api                                   |
+| `/asset/` | models and textures, by path with a hash in the stem | R2                                        |
 
 The Worker claims all three (`wrangler.jsonc`'s `run_worker_first`) and splits
 them: `/geo/tiles/*` and `/asset/*` come straight out of the bucket, and the

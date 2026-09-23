@@ -8,27 +8,31 @@
  * and reading what the protocol says are all this side's: a kernel names what
  * it wants and a driver knows the bus.
  *
+ * The other thing only this side can see is a body the transport did not
+ * decode. A page is served in the encoding it was stored in, and a browser
+ * that does not know that encoding is handed the bytes undecoded rather than
+ * told anything — so what says the browser cannot read this deployment is the
+ * first two bytes of a body that should already be a packet. The Worker cannot
+ * say it: Cloudflare rewrites `accept-encoding` on the request a Worker is
+ * handed and negotiates with the real client itself, so a refusal written
+ * there refuses everyone (2026-09-24).
+ *
  * Four outcomes go back, and only four. **404 is not one of them**: it is how
  * HTTP spells "there is no such object", so it is translated here into the
  * outcome that says so, and the kernel decides what an absent object means
  * for its category without ever learning the number. The body is held where
  * the kernel reads it in its own turn, and a stop is the scheduler's own
  * doing — it carries no reason, where everything else does.
- *
- * 406 is not one of them either, and unlike 404 it is not about the object.
- * The deployment serves an object in the encoding it was stored in or not at
- * all (cloudflare-worker/index.ts), so 406 says this browser cannot read
- * anything here — a fact about the browser, which is this side's to act on
- * and nothing the kernel could schedule around.
  */
 
+import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { u64 } from "@xpute/core/abi/word.ts";
 import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
+import { declareUnsupported, isUnsupported } from "@/app/store/unsupported-store.ts";
 import { PUBLISHED_TILES } from "@/config/deploy.ts";
 import { tile_url, type TileKind } from "@/config/route.ts";
 import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
-import { declareUnsupported, isUnsupported } from "@/app/store/unsupported-store.ts";
 import { hold_body } from "@/kernel/module.ts";
 import { request_frame } from "@/kernel/sched.ts";
 
@@ -44,6 +48,13 @@ const BAKE: readonly TileKind[] = ["terrain", "poi", "geocode"];
  * so which kind of read it was is not this side's question (load.ts). */
 export const running = new Map<bigint, AbortController>();
 
+/** Whether a body is still in the encoding it was stored in — which, on this
+ * side of the wire, means the transport did not decode it. The same judgement
+ * the bake makes on the other side (pxl-geo-bake util.rs's `encoding_of`). */
+function packed(body: U8Array): boolean {
+  return (body[0] === 0x28 && body[1] === 0xb5) || (body[0] === 0x1f && body[1] === 0x8b);
+}
+
 /** Tells the kernel what became of the read it started under `key`. */
 function settle(key: u64, outcome: number, held: number, bytes: number, fail: FetchFail, detail: number, net_ms: number): void {
   CORE_BUILD.send(0, Command.FETCH_UPDATE, packet((b) => b.u64(key).u32(outcome).u32(held).u32(bytes).u32(fail).u32(detail).f64(net_ms)));
@@ -53,12 +64,11 @@ function settle(key: u64, outcome: number, held: number, bytes: number, fail: Fe
 /** Reads one object the kernel named: its bytes written into the room the
  * kernel gives them, and what became of the read reported back. */
 export async function run_fetch(key: u64, bake: number, name: string): Promise<void> {
-  // Settled without being made, once 406 has told us how this ends. The
-  // kernel keeps its demand and keeps asking, which is right — the demand is
-  // real and nothing about it failed — but every attempt would cost a bucket
-  // read to be refused again, and the reader is looking at the notice rather
-  // than at the map.
-  if (isUnsupported()) return settle(key, FAILED, 0, 0, FetchFail.Refused, 406, 0);
+  // Settled without being made, once a body has shown that nothing here can be
+  // read. The kernel keeps its demand and keeps asking, which is right — the
+  // demand is real and nothing about it failed — but the answer would be the
+  // same bytes again, and the reader is looking at the notice.
+  if (isUnsupported()) return settle(key, FAILED, 0, 0, FetchFail.Shell, 0, 0);
   const controller = new AbortController();
   running.set(key, controller);
   const signal = controller.signal;
@@ -79,7 +89,12 @@ export async function run_fetch(key: u64, bake: number, name: string): Promise<v
       outcome = FAILED;
       fail = FetchFail.Refused;
       detail = res.status;
-      if (res.status === 406) declareUnsupported("encoding");
+    } else if (body.byteLength > 0 && packed(body)) {
+      // Handing these on would spend a heap block and fail in the kernel's
+      // decoder, far from the one thing that is actually wrong.
+      declareUnsupported("encoding");
+      outcome = FAILED;
+      fail = FetchFail.Shell;
     } else if (body.byteLength > 0) {
       held = hold_body(body);
       bytes = body.byteLength;

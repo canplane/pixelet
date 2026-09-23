@@ -54,7 +54,7 @@
     "TILE_ROOT": {
       "under": "GEO_ROOT",
       "name": "tiles",
-      "bundle": "kernel",
+      "bundle": "shell",
       "$doc": [
         "Bucket-served bakes: terrain, POI and reverse-geocode pages. One prefix,",
         "so the edge sends this branch to the bucket and the rest of the geo root",

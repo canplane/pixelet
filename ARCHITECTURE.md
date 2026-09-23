@@ -200,7 +200,7 @@ The turn is xpute's, and so are the quota and the credits: the host rings once, 
                           the falling edge  ──▶  wake_ms
 ```
 
-The host submits one `WORLD_UPDATE` before it rings — the viewport, the gap since the last turn, and this turn's credits by category — and reads the completion ring after. Everything else here is the kernel's.
+The host submits one `WORLD_UPDATE` before it rings — the viewport, the gap since the last turn, and how many reads this turn's credits allow to be out — and reads the completion ring after. Everything else here is the kernel's.
 
 **The quota's policy** is the kernel's (`sched/tick.rs`, `QUANTUM`). It reaches the host in the boot block, the words `boot` writes at the front of the memory for the shell to read once.
 
@@ -218,7 +218,7 @@ What the policy says: the frame is the 25th percentile of recent gaps between fr
 
 **The tasks** run on `embassy-executor`'s raw executor, which the module installs. The frame is a task rather than a function so that the order above is its own, and no task depends on the order the executor happens to poll them in.
 
-**The credits** are spent by category — terrain pages, the one shared ocean page, POI pages — each syncing its whole wishlist once a turn; what is no longer wanted is dropped or aborted, and the fetch pump starts what remains in priority order.
+**The credits** bound what is out, and one place spends them (`io/sched.rs`). A producer says only what it wants — the subjects it wants read, each with a rank, replacing whatever it said last turn — and never that an attempt should start, stop or be retried. What is wanted, what is running and what has just failed are three tables, so an attempt ending answers nothing about the demand that outlived it, a failure waits rather than asking straight back, and the demand of a camera that has just moved is representable however much old work is still draining. A rank is a class and a distance; the numbers behind both are in one module (`io/policy.rs`) rather than one per layer, and a model or a texture is a read like any other, spending the same credits as a page rather than bidding against it from a second scheduler.
 
 **The ledger** (`sched/ledger`, laid out by `spec/pxl/web/kernel/sched/ledger/ledger.json`) records what each frame and each task cost — pacing, per-phase time, GPU ask, heap gauges, LOD pressure, draw census, per-job waits — into rings the shell reads in place (`ledger_read`, `ledger_log`) and prints as a report or exports as a Chrome trace. The scheduler never reads them.
 
@@ -357,5 +357,5 @@ Everything a build ships is decided at build time, as JSON under `spec/` grouped
 A catalog is never sent. Both sides compile it, so a message carrying it would be a program telling itself what it already knows. Where bytes do cross — a published page, a saved blob — the layout is the model's and the version is in the envelope: the path, or the storage key.
 
 - **Cubes and decor kinds** are numbers in `spec/pxl/spec/cell/` (`cube_type.json`, `color.json`, `decor.json`), and the number is what the object store writes.
-- **Models** are named by path under `asset/` in the catalog that uses them — each decor kind's `models` and `skins` (`spec/pxl/web/kernel/layer/decor/kind/kind.json`), each character group's `keys`, `models`, `skin` and `size` (`spec/pxl/web/kernel/layer/character/variant.json`). A path resolves to a bucket key and a measured extent through the asset table `ingest-asset` writes (`pxl-spec asset/ingested.spec.rs`, `apps/web/src/catalog/asset/ingested.spec.ts`), hashing every model, skin and texture to `asset/<sha256>` and measuring each glb's bounds. Nothing imports a model or an image; the client fetches a key, the same key from `./out/asset` in development and from R2 in production.
+- **Models** are named by path under `asset/` in the catalog that uses them — each decor kind's `models` and `skins` (`spec/pxl/web/kernel/layer/decor/kind/kind.json`), each character group's `keys`, `models`, `skin` and `size` (`spec/pxl/web/kernel/layer/character/variant.json`). A path resolves to a bucket key and a measured extent through the asset table `ingest-asset` writes (`pxl-spec asset/ingested.spec.rs`, `apps/web/src/catalog/asset/ingested.spec.ts`), naming every model, skin and texture by its own path with a hash of its bytes in the stem — `asset/actor/kenney_cube_pets/beaver-20f91809e69c.glb`, the way a bundler names a chunk — and measuring each glb's bounds. Nothing imports a model or an image; the client fetches a key, the same key from `./out/asset` in development and from R2 in production.
 - **The texture pack** is one table (`pxl-spec asset/texture.rs`: which image a cube type wears on which face) and one WebP sheet in the bucket, from which the client fills its layer array one layer at a time. A cube's colour is `color.json`'s, what the minimap and the coarse tiers draw; a pack decorates it.

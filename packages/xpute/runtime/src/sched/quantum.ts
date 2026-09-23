@@ -10,7 +10,8 @@
  * may take; the guest runs its own tasks cooperatively (sched/tick.ts) and,
  * on the falling edge, hands the turn back with when it wants the next one.
  * The host knows nothing of what runs inside. Memory is granted once
- * (mem/section.ts, mem/transfer.ts), and I/O by credits (sched/io.ts).
+ * (mem/section.ts, mem/transfer.ts), and I/O by credits — how many reads may
+ * be out this turn, the guest saying which.
  *
  * **One quota, sized from what the host sees.** Nothing is preempted, so a
  * turn may run past its quota by the step that noticed; what it overran

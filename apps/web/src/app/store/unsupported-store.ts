@@ -13,8 +13,13 @@ import { create } from "zustand";
  * Only the first reason is kept. A browser found missing one of these is about
  * to be found missing the others, and the second sentence would only replace
  * the one the reader is already reading.
+ *
+ * They are four reasons and not one sentence with four causes: what is missing
+ * is put right in a different place each time — a newer browser, the machine's
+ * own graphics, the address the page was opened at — and a reader sent to the
+ * wrong one is worse off than a reader told nothing.
  */
-export type UnsupportedReason = "encoding";
+export type UnsupportedReason = "encoding" | "webgpu" | "gpu" | "insecure";
 
 interface UnsupportedState {
   reason: UnsupportedReason | null;

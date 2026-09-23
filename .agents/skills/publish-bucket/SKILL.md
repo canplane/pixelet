@@ -15,14 +15,14 @@ how it gets there and how you know it arrived.
 
 ## What the bucket holds
 
-| Prefix                  | Object                      | Named by            | Policy                                                        |
-| ----------------------- | --------------------------- | ------------------- | ------------------------------------------------------------- |
-| `terrain/<version>/`    | packed XTP page, `_ocean`   | quadkey, 5–15       | immutable; a re-bake is a new version                         |
-| `poi/<version>/`        | packed XTP page             | quadkey, 15         | version = format; content rewritten in place monthly          |
-| `geocode/<version>/`    | packed JSON page, `_dict`   | quadkey, 11         | same as poi                                                   |
-| `asset/`                | glb, png, webp — not packed | sha256 of the bytes | immutable by construction; unreferenced keys deleted whenever |
-| `_meta/land_pages.json` | terrain's land/ocean list   | fixed name          | mutable; rewritten with a terrain re-bake                     |
-| `_meta/build-counter`   | the official build count    | fixed name          | mutable; taken and written by CI's gate, never by hand        |
+| Prefix                  | Object                      | Named by               | Policy                                                        |
+| ----------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------- |
+| `terrain/<version>/`    | packed XTP page, `_ocean`   | quadkey, 5–15          | immutable; a re-bake is a new version                         |
+| `poi/<version>/`        | packed XTP page             | quadkey, 15            | version = format; content rewritten in place monthly          |
+| `geocode/<version>/`    | packed JSON page, `_dict`   | quadkey, 11            | same as poi                                                   |
+| `asset/`                | glb, png, webp — not packed | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever |
+| `_meta/land_pages.json` | terrain's land/ocean list   | fixed name             | mutable; rewritten with a terrain re-bake                     |
+| `_meta/build-counter`   | the official build count    | fixed name             | mutable; taken and written by CI's gate, never by hand        |
 
 A page is named by its **quadkey**: the Web Mercator tile key at the zoom the
 page is held at, one base-4 digit a zoom, coarsest first (pxl-spec
@@ -141,20 +141,23 @@ the two in step.
 
 ```bash
 cargo run --manifest-path asset/script/Cargo.toml
-# -> ./out/asset/{glb,png,webp}/<sha256>, and regenerates
-#    crates/pxl/spec/src/asset/ingested.spec.rs and
+# -> ./out/asset/<path>/<stem>-<12 hex>.<ext>, the tree the bucket holds, and
+#    regenerates crates/pxl/spec/src/asset/ingested.spec.rs and
 #    apps/web/src/catalog/asset/ingested.spec.ts
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
-  aws s3 sync ./out/asset/${t%%:*} s3://pixelet-tiles/asset \
+  aws s3 sync ./out/asset s3://pixelet-tiles/asset \
     --profile r2 --endpoint-url $R2 \
+    --exclude "*" --include "*.${t%%:*}" \
     --content-type ${t#*:} --cache-control "public, max-age=31536000, immutable"
 done
 ```
 
-One sync per type so the content-type is stored with the object. Not
-gzipped — glb, png and webp are already compressed — so no
-`Content-Encoding`. A re-run uploads only new hashes.
+One sync per type so the content-type is stored with the object, selected by
+extension now that the tree mirrors `asset/` rather than being split by type.
+Not gzipped — glb, png and webp are already compressed — so no
+`Content-Encoding`. A re-run uploads only what changed, since a changed file
+has a new name.
 
 **Commit both regenerated tables with the asset change, and upload
 before deploying**: the shipped palette reads that table, and a key it
@@ -188,8 +191,39 @@ for pair in terrain/v5:terrain/v6 poi/v5:poi/v6 geocode/v3:geocode/v4; do
 done
 ```
 
-A copy carries the source's metadata, so the content-type, content-encoding
-and cache-control come across with it and none of the upload flags apply.
+**A copy does not carry the source's metadata, whatever it looks like.** s5cmd
+dropped `content-encoding` and `cache-control` on all 274,556 objects and
+rewrote `content-type` from what the bake stored to what it guessed from the
+bytes (`application/zstd`, `application/gzip`). The pages then went out as
+packed bytes with nothing saying so, which no browser decodes and which looks
+from the client like a corrupt page. That is what the flags below are for, and
+they have to be given per prefix because the prefixes do not agree: terrain and
+geocode are zstd, **POI v5 and the v6 renamed from it are gzip**
+(issue/20260913-compression-by-traffic.md — the sets baked before the switch
+stayed as they were).
+
+```bash
+# prefix : content-encoding : content-type : cache-control
+for row in \
+  "terrain/v6|zstd|application/octet-stream|public, max-age=31536000, immutable" \
+  "poi/v6|gzip|application/octet-stream|public, max-age=86400" \
+  "geocode/v4|zstd|application/json|public, max-age=86400"; do
+  IFS='|' read -r p enc ct cc <<<"$row"
+  s5cmd --endpoint-url $R2 ls "s3://pixelet-tiles/$p/*" | awk '{print $NF}' | sed "s|^|$p/|" \
+    | awk -v enc="$enc" -v ct="$ct" -v cc="$cc" '{printf "cp --metadata-directive REPLACE --content-type %s --content-encoding %s --cache-control \"%s\" s3://pixelet-tiles/%s s3://pixelet-tiles/%s\n", ct, enc, cc, $0, $0}'
+done > /tmp/rekey-meta.txt
+s5cmd --endpoint-url $R2 run /tmp/rekey-meta.txt
+```
+
+**Check one object of each prefix on the wire before running the rest**, and
+check that it decodes rather than that a header is present:
+
+```bash
+curl -s --compressed "https://plei.me/geo/tiles/poi/<v>/<quadkey>" | head -c 2 | xxd -p          # 5854
+curl -s -H "Accept-Encoding: zstd" "https://plei.me/geo/tiles/terrain/<v>/<quadkey>" \
+  | zstd -dcq | head -c 2 | xxd -p                                                              # 5854
+```
+
 Count both prefixes afterwards and only then delete the old ones — an object
 the rename skipped is one the new prefix does not have, and nothing else would
 say so.

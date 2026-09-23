@@ -75,11 +75,6 @@ function edgeChecks(): Check[] {
     { path: `${TILE_ROOT}/geocode/${PUBLISHED_VERSION.geocode}/${GEOCODE_GROUP}`, want: 200, why: "a reverse-geocode group" },
     { path: `${TILE_ROOT}/geocode/${PUBLISHED_VERSION.geocode}/_dict`, want: 200, why: "the dictionary every group's numbers are read against" },
     { path: `/${ASSET_KEY}`, want: 200, why: "a content-addressed asset, its own root" },
-    // The other half of the rule above: what makes the packed bytes the only
-    // thing the edge ever holds is that there is no decoded copy to hold. A
-    // 200 here is the edge negotiating on the deployment's behalf again —
-    // 526,936 bytes where the packed page is 8,543 (cloudflare-worker/index.ts).
-    { path: terrain, want: 406, why: "a client offering no zstd is refused rather than handed a decoded copy", encoding: "gzip, deflate, br" },
     ...commonChecks(),
     // The pre-09-18 shape. A 200 from any of these means a relay somewhere is
     // still claiming the old root.

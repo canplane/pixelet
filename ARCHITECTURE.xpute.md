@@ -146,9 +146,11 @@ On the host side, something has to decide when to ring at all. That is the **str
 
 ## I/O by credits
 
-The guest cannot do I/O, because it does not own the connections; the host does, the way an operating system owns its devices. What the guest can do is say what it wants and in what order. It keeps a queue of requests (`io/queue.rs`), and the host starts what is at the front of that queue — as far as the credits it granted for this turn will reach.
+The guest cannot do I/O, because it does not own the connections; the host does, the way an operating system owns its devices. What the host grants it instead is a number: this turn's **credits**, how many reads may be out at once. Which reads those are is the guest's to say.
 
-That leaves two budgets, and they never touch. A tick spends a quota of time on the guest's own work. The queue spends a grant of credits on work the host does for the guest.
+That the guest says which is the whole of the split. Ordering one demand against another needs to know what the program is for — what is on screen, what the camera is about to want, what a failure means — and none of that is a runtime's to hold. A queue for it ran here once and went for that reason (`io.rs`).
+
+That leaves two budgets, and they never touch. A tick spends a quota of time on the guest's own work. The credits spend a grant of concurrency on work the host does for the guest.
 
 ---
 
