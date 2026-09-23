@@ -7,6 +7,7 @@ import { AppContext } from "./provider/context.ts";
 import { useAppInit } from "./hook/use-init.ts";
 import { useUiController } from "./hook/use-ui-controller.ts";
 import { ModalManager } from "./provider/modal-manager.tsx";
+import { UnsupportedNotice } from "./unsupported.tsx";
 import { Toaster } from "@/shared/ui/toast/toaster.tsx";
 import { BOTTOM_OFFSET_PX } from "@/feature/map/ui/overlay/bottom-overlays.tsx";
 import { MODE_BAR_HEIGHT_PX } from "@/feature/map/ui/overlay/mode-bar.tsx";
@@ -52,6 +53,12 @@ export function AppLayout(props: AppLayoutProps) {
 
       {/* Global modal host */}
       <ModalManager mergeUiController={mergeUiController} />
+
+      {
+        /* Last, and over all of it: nothing below this is worth reading once
+          it renders. */
+      }
+      <UnsupportedNotice />
     </AppContext.Provider>
   );
 }

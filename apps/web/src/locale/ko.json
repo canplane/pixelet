@@ -264,5 +264,9 @@
       "section_areas": "지역",
       "section_places": "장소"
     }
+  },
+  "unsupported": {
+    "title": "지원하지 않는 브라우저입니다",
+    "encoding": "지도 데이터는 zstd로 압축해 보내는데, 이 브라우저는 이를 읽지 못합니다. 최신 버전의 Chrome, Edge, Firefox, Safari에서 열어 주세요."
   }
 }

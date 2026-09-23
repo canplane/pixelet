@@ -4,10 +4,10 @@
 yes, and by a margin; but the tiles are one kind of traffic among several,
 and the codec that suits a page baked once is the wrong one for a small
 message sent a hundred times a second. This records what was measured, what
-each kind of traffic wants, and the order it is worth doing in. Not
-scheduled: it is later work, and nothing here is built. Measured again on
-2026-09-22 at the 512-cell page, with a different answer on the codec and an
-open question on where it is decoded — see the last two sections.
+each kind of traffic wants, and the order it is worth doing in. Measured
+again on 2026-09-22 at the 512-cell page, with a different answer on the
+codec and an open question on where it is decoded. The baked pages were
+built on 2026-09-24 and are zstd; every other row here is still later work.
 
 ## Measured on our own pages
 
@@ -220,3 +220,65 @@ the encoding from the bake's manifest (`content_encoding`), never from a
 constant, and a bake refuses to resume into a directory whose objects are in
 the other encoding. Readers inside the bake — the pyramid reading the level
 below, `decode-tile.ts` — tell the two apart by their first bytes.
+
+## 2026-09-24: what the gap costs, and the codec asked again
+
+The section above priced the zstd gap as something the excluded browsers pay:
+"they are pointed at another browser rather than served a second copy". They
+do not pay it alone. Left to itself the edge does serve the second copy — it
+decodes the body for any client that did not offer zstd — and the decoded copy
+is what the cache then holds.
+
+Measured against the deployment, one object each, a zstd-accepting client
+against one without:
+
+| object                 | zstd   | without |
+| ---------------------- | ------ | ------- |
+| a terrain page         | 8,543  | 526,936 |
+| the shared ocean page  | 101    | 526,936 |
+| the geocode dictionary | 90,141 | 619,224 |
+| a geocode group        | 2,746  | 12,192  |
+
+A terrain page is a fixed-size raster, so the emptier it is the worse the
+ratio — and the worst of them is the object the most requests are for, the
+ocean page every water tile falls back to, at five thousand times its packed
+size. Nothing failed, because a client is happy either way. It only cost.
+
+The bill is not what it cost. R2 charges for requests and storage rather than
+egress, and the Workers plan that fails closed counts requests
+([20260816-deployment-hosting.md](./20260816-deployment-hosting.md)), so a
+copy sixty-two times the size is billed the same. What it spends is the
+reader's transfer and the room in the cache.
+
+**An object goes out in the encoding it is stored in or not at all.** The
+Worker reads the client's `accept-encoding` and answers 406 before it makes a
+body, so the decoded copy is never produced and never cached. The cache hit
+and the bucket read leave through one function, so one rule holds both, and
+the encoding stays parked on a header the cache has no meaning for while the
+entry is stored — an encoding a cache can read is one it normalises, and it
+stores the decoded body.
+
+**406 is a fact about the browser, not about the object.** That is why it is
+not one of the four outcomes a read reports: the shell says it once, covers
+the map with it, and settles every later read without making it, since each
+one would cost a bucket read to be refused again.
+
+**What is not a browser is refused too.** Deno's `fetch` and curl's default
+offer no zstd, so the smoke script sends a browser's list and checks the
+refusal as a line of its own. The dev tile server negotiates nothing — it
+sets the encoding unconditionally — so a browser that cannot decode fails
+there without the notice.
+
+**The codec, asked again now that the gap has a price.** The 09-22 table puts
+brotli q11 at 4.2 KB against zstd -22's 4.3, so the gap buys nothing in size;
+what it buys is decode, 0.34 ms a page against 0.69. Nothing in this tree
+decodes, though — the transport does, in the browser's own network stack, off
+the main thread, and at most sixteen reads are out at once (`io/sched.rs`'s
+`MAX_CREDITS`). The difference lands outside the kernel's quota and outside
+the bill alike.
+
+What keeps zstd is the host after this one. OkHttp takes gzip and nothing
+else, so brotli moves the gap to the React Native client rather than closing
+it. Only a gzip closes it everywhere — zopfli's 5.6 KB is a gzip stream and
+every stack reads one — and that is 30% more bytes than zstd -22, paid by the
+reader, since the bill does not count them. zstd stays.
