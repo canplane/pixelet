@@ -24,17 +24,17 @@ use pxl_spec::space::v3::{dot3, norm3, V3};
 use crate::look::atmosphere::{moon_phase_light, sun_light, white, MOONLIT_SKY};
 
 /// Floats a theme takes, linear colours: ambient colour and intensity (4),
-/// hemisphere sky and ground and intensity (7), night (1). What is eased
+/// the hemisphere's ground and intensity (4), night (1). What is eased
 /// between themes and nothing else: the fog's band and the lighting floor are
-/// the same under every theme, and come with the light.
-pub const THEME_FLOATS: usize = 12;
+/// the same under every theme, and come with the light; the hemisphere's sky
+/// is the air's own light (atmos_view.wgsl's sky_fill).
+pub const THEME_FLOATS: usize = 9;
 
 /// Where the colours of a theme sit in its floats.
 const AMBIENT: usize = 0;
-const HEMI_SKY: usize = 4;
-const HEMI_GROUND: usize = 7;
-const HEMI_INTENSITY: usize = 10;
-pub const NIGHT: usize = 11;
+const HEMI_GROUND: usize = 4;
+const HEMI_INTENSITY: usize = 7;
+pub const NIGHT: usize = 8;
 
 /// Floats the environment's lane takes: the frame uniform's lighting run
 /// (24), laid out as the frame uniform has it; the stars' fade and the sky's
@@ -126,7 +126,6 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     put3(o, 8, [c[AMBIENT] * ambient_i, c[AMBIENT + 1] * ambient_i, c[AMBIENT + 2] * ambient_i]);
     o[11] = light.fog_far as f32;
     let hemi_i = c[HEMI_INTENSITY];
-    put3(o, 12, [c[HEMI_SKY] * hemi_i, c[HEMI_SKY + 1] * hemi_i, c[HEMI_SKY + 2] * hemi_i]);
     o[15] = light.floor as f32;
     put3(o, 16, [c[HEMI_GROUND] * hemi_i, c[HEMI_GROUND + 1] * hemi_i, c[HEMI_GROUND + 2] * hemi_i]);
 

@@ -19,9 +19,9 @@ use crate::kernel::{kernel, with_world};
 use crate::layer::environment::state::globe;
 use crate::layer::poi::fetcher;
 use crate::layer::terrain::level::window;
-use crate::layer::terrain::store::tile_pages;
+use crate::layer::terrain::store::level_pages;
 use crate::layer::terrain::tile_fetcher;
-use crate::sched::ledger::record::{ledger_record_frame, ledger_take_rings, CpuSample, DrawCensus, FrameSample, HeapSample, LodSample, MountSample, StaleSample, TexturesMb, WorkSample};
+use crate::sched::ledger::record::{ledger_record_frame, ledger_take_rings, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, WorkSample, LEVELS};
 use crate::sched::priority::lead_point;
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::shell::map_store::map_store;
@@ -34,19 +34,19 @@ use crate::world::frame::view::{view, view_resize};
 
 const MB: f64 = 1_048_576.0;
 
+/// A box drawn is a cube, twelve triangles, whatever its faces show (the
+/// renderer's census counts them the same way).
+const BOX_TRIANGLES: f64 = 12.0;
+const _: () = assert!(LEVELS == crate::world::chunk::table::LEVELS, "a lane a level for every level the census counts");
+
 /// What the turn measured of the frame outside the tick: the renderer's
-/// numbers and the turn's own time.
+/// numbers and the turn's own time. The terrain's triangles by level are the
+/// kernel's, from what it listed, and left for the report step.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HostFrameStat {
     pub task_ms: f64,
-    pub gpu_ms: f64,
-    pub draw_calls: f64,
-    pub triangles: f64,
-    pub buffers: f64,
-    pub buffer_bytes: f64,
-    pub textures_mb: TexturesMb,
-    pub census: DrawCensus,
-    pub px: f64,
+    pub gpu: GpuSample,
+    pub device: DeviceSample,
 }
 
 struct CoreTick {
@@ -166,7 +166,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
         pixel_dither: settings.pixel_dither,
         retain_budget_bytes: RETAIN_BUDGET_BYTES(),
         anchor: range_anchor.map(|a| [ivec::to_real(ivec::X(a)), ivec::to_real(ivec::Y(a))]),
-        ground_z: target.map_or(0.0, |t| ivec::to_real(ivec::Z(t.i)) + fvec::to_real(fvec::Z(t.f))),
+        centre_z: ivec::to_real(ivec::Z(v.origin)) - v.tz,
         globe: Some(globe()),
         window: {
             let w = window();
@@ -216,8 +216,16 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let frame_t0 = ctx.budget.t0;
     let census = kernel().sched.census;
     let node_work = take_node_counts();
-    let poi_count: f64 = 0.0;
     let host = c.host.clone();
+    let mut pages = PageSample::default();
+    for (level, n) in pages.by_level.iter_mut().enumerate() {
+        *n = level_pages(level as u32).keys().count() as f64;
+    }
+    pages.total = pages.by_level.iter().sum();
+    let mut gpu = host.gpu;
+    for (tris, boxes) in gpu.level_tris.iter_mut().zip(census.level_boxes) {
+        *tris = boxes as f64 * BOX_TRIANGLES;
+    }
     ledger_record_frame(FrameSample {
         t: now(),
         dt_ms: ctx.delta * 1000.0,
@@ -226,16 +234,10 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         sched_ms: now() - frame_t0,
         budget_ms: ctx.budget.total_ms,
         phases: ctx.phase_ms,
-        cpu: CpuSample { tick_ms },
+        tick_ms,
         task_ms: host.task_ms,
-        gpu_ms: host.gpu_ms,
-        draw_calls: host.draw_calls,
-        triangles: host.triangles,
-        buffers: host.buffers,
-        buffer_mb: round(host.buffer_bytes / MB),
-        textures_mb: host.textures_mb,
-        census: host.census,
-        px: host.px,
+        gpu,
+        device: host.device,
         mounts: MountSample {
             added: node_work.added as f64,
             removed: node_work.removed as f64,
@@ -252,8 +254,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             oldest_visible_ms: census.oldest_visible_ms,
             pressure: census.pressure as f64,
         },
-        tile_pages: tile_pages().keys().count() as f64,
-        poi_count,
+        pages,
         heap: heap_sample(),
         rings: ledger_take_rings(),
         work: work_sample(c),

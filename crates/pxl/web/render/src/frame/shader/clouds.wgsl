@@ -20,18 +20,6 @@ struct Clouds {
   // A pixel's ray in the root frame, affine in its NDC (gpu/renderer.rs's
   // put_ray).
   ray: mat3x3f,
-  // Where the root frame's origin is on the map's lattice, which the clouds
-  // are anchored to: the lattice index, exact, and the fraction of a unit
-  // past it (gpu/clouds.rs).
-  base: vec2u,
-  frac: vec2f,
-  time: f32,
-  // The lattice's count across the world, where it wraps.
-  count: u32,
-  // The layer's height, a fair-weather cumulus base (gpu/clouds.rs's
-  // ALTITUDE_KM).
-  altitude_km: f32,
-  _p0: f32,
   // What reaches the layer's height of the sun's light and of the moon's,
   // by channel, unexposed: the same for every point of it the frame shows,
   // so the CPU takes it once (look/atmosphere.rs's light_at).
@@ -43,24 +31,11 @@ struct Clouds {
 
 @group(0) @binding(1) var<uniform> clouds: Clouds;
 
-// How much of the sky the layer covers.
-const CLOUD_COVER: f32 = 0.42;
-// The size of the largest cloud shapes: the lattice the noise is drawn on,
-// 2^12 cells, some eight kilometres in the middle latitudes. A power of two,
-// so it divides the world and the clouds wrap with the map (gpu/clouds.rs's
-// LATTICE_SHAMT).
-const CLOUD_LATTICE_CELLS: u32 = 4096u;
-// The wind that carries them, in cells a second: about eight metres a
-// second, at the cell's size in the middle latitudes.
-const CLOUD_WIND: vec2f = vec2f(3.0, 1.25);
-// How thick a full cloud is to light, as optical depth: past a few, its
-// underside is in its own shadow and grey, and its edges, thin, are bright.
-const CLOUD_DEPTH: f32 = 6.0;
 const CLOUD_ALBEDO: f32 = 0.9;
 // Past this, from under the layer or close over it, the layer is too thin a
 // sliver of the view to be worth the noise, and fades into the haze it is
-// already mostly behind. From higher up the reach grows with the height
-// over the layer, so a view from orbit still sees the clouds below it.
+// already mostly behind. Over the layer the reach grows with the height
+// over it, so the layer still reaches the horizon while it fades out.
 const CLOUD_REACH_KM: f32 = 120.0;
 
 struct CloudOut {
@@ -101,34 +76,32 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   // The layer's sphere from the camera's: the near crossing from above, the
   // way out from below.
   let r0 = camera_r();
-  let shell = atmos.bottom_radius + clouds.altitude_km;
-  let disc = r0 * r0 * (dir.z * dir.z - 1.0) + shell * shell;
+  let shell = atmos.bottom_radius + atmos.cloud_altitude_km;
+  let mu = dot(dir, atmos.up);
+  let disc = r0 * r0 * (mu * mu - 1.0) + shell * shell;
   var t = -1.0;
   if (disc >= 0.0) {
     let root = sqrt(disc);
-    t = select(-r0 * dir.z + root, -r0 * dir.z - root, r0 > shell);
+    t = select(-r0 * mu + root, -r0 * mu - root, r0 > shell);
   }
-  let reach = CLOUD_REACH_KM + 3.0 * max(atmos.camera_altitude - clouds.altitude_km, 0.0);
+  let reach = CLOUD_REACH_KM + 3.0 * max(atmos.camera_altitude - atmos.cloud_altitude_km, 0.0);
 
-  // Where the ray meets the layer, in cells from the root frame's origin —
-  // the kilometres along the layer taken back to the map's units at its
-  // centre — and so in lattice units past the origin's lattice point; and
-  // how many of those a pixel spans, a derivative, so taken before any
-  // pixel is discarded.
+  // Where the ray meets the layer on the cloud field's lattice
+  // (cloud_field.wgsl), and how many lattice units a pixel spans: a
+  // derivative, so taken before any pixel is discarded.
   let du = t / atmos.km_per_u;
-  let cells = frame.camera_pos.xy + dir.xy * du + clouds.time * CLOUD_WIND;
-  let p = clouds.frac + cells / f32(CLOUD_LATTICE_CELLS);
+  let p = cloud_lattice(frame.camera_pos + dir * du);
   let footprint = max(length(fwidth(p)), 1e-6);
   if (t <= 0.0 || t > reach) {
     discard;
   }
-  let shape = lattice_fbm(clouds.base, p, clouds.count, 0u, 0u, footprint) * 0.75 + lattice_fbm(clouds.base, p, clouds.count, 2u, 16u, footprint) * 0.25;
-  let density = smoothstep(1.0 - CLOUD_COVER - 0.12, 1.0 - CLOUD_COVER + 0.18, shape);
-  if (density <= 0.001) {
+  let depth = cloud_depth(p, footprint);
+  if (depth <= 0.001 * CLOUD_DEPTH) {
     discard;
   }
-  let depth = density * CLOUD_DEPTH;
-  let alpha = (1.0 - exp(-depth)) * (1.0 - smoothstep(0.6, 1.0, t / reach));
+  // Thinned as the camera climbs over the layer (cloud_field.wgsl's
+  // cloud_shown); past where it is gone the pass is not drawn at all.
+  let alpha = (1.0 - exp(-depth)) * (1.0 - smoothstep(0.6, 1.0, t / reach)) * cloud_shown();
 
   // Lit from above: a cloud seen from below shows its underside, which the
   // cloud itself shades as it thickens; seen from above, its lit top.
@@ -138,12 +111,18 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   var sky = zenith_sky();
   if (atmos.moon_light > 0.0) {
     light += lit_by(atmos.moon_dir, dir, clouds.moon_at, moon_shown());
-    sky += moon_view(vec3f(0.0, 0.0, 1.0)) * moon_shown();
+    sky += moon_view(atmos.up) * moon_shown();
   }
   light *= self_shade;
   // The sky above lights the layer as well: its zenith, half of it thrown
-  // back out the side the eye sees.
-  var color = CLOUD_ALBEDO * (light + sky * 0.5);
+  // back out the side the eye sees. And the fill the terrain is lit by —
+  // the themes' ambient and sky light and the floor, as shade.wgsl takes
+  // them for a face turned up — so a cloud is never darker than the ground
+  // it lies over: at night the air's light is all but gone, the ground is
+  // lit by the fill, and a cloud without it read as a black blot on it. By
+  // day the sun has already taken the layer past white.
+  let fill = (frame.ambient + sky_fill()) / PI + frame.floor;
+  var color = CLOUD_ALBEDO * (light + sky * 0.5 + fill);
 
   // Where the layer lies in the root frame, for the air in front of it.
   let world = frame.camera_pos + dir * du;

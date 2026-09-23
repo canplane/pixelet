@@ -21,6 +21,10 @@ struct Stars {
   // Device pixels to a CSS pixel: a star's size is the page's, so a dense
   // screen does not shrink it to a fraction of what the eye is shown.
   density: f32,
+  // Straight up where the eye stands (atmos_medium.wgsl's `up`): a star's
+  // height, and the air it is seen through, are measured from it.
+  up: vec3f,
+  _p1: f32,
 };
 
 @group(0) @binding(0) var<uniform> stars: Stars;
@@ -71,9 +75,10 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> StarOut
   // No scintillation: a twinkle is motion, and the frame is drawn only when
   // something moves — at rest every two seconds, which turns a twinkle into
   // a blink — and drawing every frame for it is the device's to pay.
-  let light = colour * flux * STAR_GAIN * exp(-stars.depth * airmass(dir.z)) * stars.intensity;
+  let height = dot(dir, stars.up);
+  let light = colour * flux * STAR_GAIN * exp(-stars.depth * airmass(height)) * stars.intensity;
   var clip = stars.view_proj * vec4f(dir, 0.0);
-  if (dir.z < -0.02 || clip.w <= 0.0 || max(light.r, max(light.g, light.b)) < STAR_FLOOR) {
+  if (height < -0.02 || clip.w <= 0.0 || max(light.r, max(light.g, light.b)) < STAR_FLOOR) {
     o.clip = vec4f(0.0, 0.0, 2.0, 1.0);
     return o;
   }

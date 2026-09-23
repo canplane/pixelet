@@ -82,10 +82,13 @@ pub struct GpuApi {
     /// A view of the surface's texture for this frame.
     pub current: fn(surface: u32, view: u32),
     pub query_set: fn(id: u32, count: u32),
-    /// Reads the two timestamps an encoder's passes wrote, once the GPU has them.
-    pub timestamps: fn(encoder: u32, query_set: u32),
-    /// The GPU's time over the last frame read, in milliseconds.
-    pub gpu_ms: fn() -> f64,
+    /// Reads the timestamps an encoder's passes wrote into the set, once the
+    /// GPU has them: the pair of each span set in `written`.
+    pub timestamps: fn(encoder: u32, query_set: u32, written: u32),
+    /// The GPU's time in the last frame read, in milliseconds: span `span`'s
+    /// (a Stamp's pair), 0 for one no pass wrote; past the last span, the
+    /// frame's whole, from the first written begin to the last written end.
+    pub gpu_ms: fn(span: u32) -> f64,
     /// Runs a 2D paint stream (api.json's `paint`) over the host's scratch.
     pub paint: fn(ops: &[u32]),
     /// Copies the scratch's corner into a texture's layer at (x, y).
@@ -153,8 +156,47 @@ pub fn buffer_entry(binding: u32, buffer: u32) -> [u32; 5] {
 
 /// A render pass's description: colour (and its resolve), cleared to
 /// transparent or loaded; depth cleared to `depth_clear`, loaded or read only;
-/// and the timestamps written at its begin and end, where a query set is given.
-#[allow(clippy::too_many_arguments)]
-pub fn pass_desc(color: u32, resolve: u32, color_load: u32, depth: u32, depth_load: u32, depth_clear: f32, query_set: u32, begin: u32, end: u32) -> [u32; 13] {
-    [color, resolve, color_load, 0, 0, 0, 0, depth, depth_load, depth_clear.to_bits(), query_set, begin, end]
+/// and the timestamps the pass writes, as its span's `Stamp::pass` gives them.
+pub fn pass_desc(color: u32, resolve: u32, color_load: u32, depth: u32, depth_load: u32, depth_clear: f32, stamp: [u32; 3]) -> [u32; 13] {
+    [color, resolve, color_load, 0, 0, 0, 0, depth, depth_load, depth_clear.to_bits(), stamp[0], stamp[1], stamp[2]]
+}
+
+/// Where a span of passes writes its GPU time: a pair of queries in the
+/// frame's set, the first pass of the span writing the begin and every pass
+/// the end, so the last one's stands. A span is one thing the frame does —
+/// the air's tables, the shadow map, the world — however many passes it
+/// takes, and the one that took none this frame reads 0.
+#[derive(Clone, Copy)]
+pub struct Stamp {
+    set: u32,
+    begin: u32,
+    end: u32,
+}
+
+impl Stamp {
+    /// Writes nothing: no query set, or a pass the frame's time is not about.
+    pub const NONE: Stamp = Stamp { set: 0, begin: NONE, end: NONE };
+    /// A pass's words where it is timed under no span.
+    pub const UNTIMED: [u32; 3] = [0, NONE, NONE];
+
+    /// Span `span`'s pair in `set`; nothing where there is no set.
+    pub fn of(set: u32, span: usize) -> Stamp {
+        if set == 0 {
+            return Stamp::NONE;
+        }
+        let begin = 2 * span as u32;
+        Stamp { set, begin, end: begin + 1 }
+    }
+
+    /// Whether a pass of the span wrote its pair.
+    pub fn written(&self) -> bool {
+        self.set != 0 && self.begin == NONE
+    }
+
+    /// The next pass's words: the begin for the first, the end for each.
+    pub fn pass(&mut self) -> [u32; 3] {
+        let words = [self.set, self.begin, self.end];
+        self.begin = NONE;
+        words
+    }
 }

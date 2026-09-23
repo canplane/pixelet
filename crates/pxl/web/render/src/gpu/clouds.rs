@@ -20,17 +20,34 @@ use crate::gpu::renderer::put_ray;
 use crate::look::atmosphere::light_at;
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SKY, ENV_SUN};
 
-/// Floats the Clouds uniform (clouds.wgsl's Clouds) holds.
-pub(crate) const CLOUDS_FLOATS: usize = 12 + 8 + 8;
-pub(crate) const BASE: usize = 12;
-pub(crate) const FRAC: usize = 14;
-pub(crate) const TIME: usize = 16;
-pub(crate) const COUNT: usize = 17;
-pub(crate) const ALTITUDE: usize = 18;
-pub(crate) const SUN_AT: usize = 20;
-pub(crate) const MOON_AT: usize = 24;
+/// Floats the Clouds uniform (clouds.wgsl's Clouds) holds: the ray, and the
+/// sun's and the moon's light at the layer. Where the layer is and what
+/// shapes it is the air's uniform's (`field`), which the lit passes read too,
+/// for the clouds' shadows.
+pub(crate) const CLOUDS_FLOATS: usize = 12 + 8;
+pub(crate) const SUN_AT: usize = 12;
+pub(crate) const MOON_AT: usize = 16;
+/// Where the layer is and what shapes it, as the air's uniform carries it
+/// (atmos_medium.wgsl's `cloud_*`), for the clouds and their shadows alike.
+pub struct CloudField {
+    /// The lattice index the root frame's origin lies in, and the fraction
+    /// of a unit past it.
+    pub base: [u32; 2],
+    pub frac: [f32; 2],
+    /// The sky's clock, in seconds: the wind carries the layer by it.
+    pub time: f32,
+    /// The lattice's count across the world, where it wraps.
+    pub count: u32,
+    /// The layer's height, and the camera's height past which it is gone.
+    pub altitude_km: f32,
+    pub gone_km: f32,
+}
 /// The layer's height: a fair-weather cumulus base.
 const ALTITUDE_KM: f64 = 1.5;
+/// The camera's height past which the layer is not drawn, faded out from
+/// the layer up: seen from above, flat noise over the ground reads as blots
+/// on it. Four times the layer's own height.
+const GONE_KM: f64 = 4.0 * ALTITUDE_KM;
 /// The cells a unit of the clouds' lattice spans, as a shift
 /// (clouds.wgsl's CLOUD_LATTICE_CELLS).
 pub(crate) const LATTICE_SHAMT: u32 = 12;
@@ -45,8 +62,9 @@ pub struct CloudPass {
     /// from over it, over everything (frame/shader/clouds.wgsl).
     below: Built,
     above: Built,
-    /// The camera over the layer this frame.
+    /// The camera over the layer this frame, and past where it is gone.
     over: bool,
+    gone: bool,
     uniform: u32,
     group: u32,
     words: [f32; CLOUDS_FLOATS],
@@ -69,6 +87,7 @@ impl CloudPass {
             below,
             above,
             over: false,
+            gone: false,
             uniform,
             group,
             words: [0.0; CLOUDS_FLOATS],
@@ -81,33 +100,17 @@ impl CloudPass {
     }
 
     /// The frame's clouds: `view_proj`, the root frame to WebGPU clip, and
-    /// the eye in it; the cell the root frame's origin is on the map, as the
-    /// integer lanes of its PVF3; and the environment's lane `env`, for the
-    /// sky's clock and the sun's and the moon's directions, whose light
-    /// reaches the layer through the air.
-    ///
-    /// The origin is split on the lattice here, in its own lanes, so the
-    /// shader never holds a coordinate the size of the world: it gets the
-    /// lattice index, the lane shifted down, and the fraction of a unit past
-    /// it, the lane's low bits, and adds only the few thousand cells between
-    /// the origin and the layer. A shift and a mask on two's complement lanes
-    /// are a floor and a remainder, so a cell west of the origin's zero lands
-    /// in the lattice unit it is in, and the index masked to the count is the
-    /// same unit wherever the lane wrapped.
-    pub fn lay_out(&mut self, g: &GpuApi, view_proj: &Mat4, eye: &V3, origin: IVec, env: &[f32]) {
+    /// the eye in it; the environment's lane `env`, for the sun's and the
+    /// moon's directions, whose light reaches the layer through the air; and
+    /// straight up where the eye stands, which their heights are measured
+    /// from.
+    pub fn lay_out(&mut self, g: &GpuApi, view_proj: &Mat4, eye: &V3, env: &[f32], up: &V3) {
         put_ray(&mut self.words, 0, view_proj, eye);
-        let unit = ivec::sh(origin, -(LATTICE_SHAMT as i32));
-        let within = ivec::and(origin, ivec::fill((1 << LATTICE_SHAMT) - 1));
-        for (k, lane) in [ivec::X, ivec::Y].into_iter().enumerate() {
-            self.words[BASE + k] = f32::from_bits(lane(unit) as u32 & (LATTICE_COUNT - 1));
-            self.words[FRAC + k] = lane(within) as f32 / (1u32 << LATTICE_SHAMT) as f32;
-        }
-        self.words[TIME] = env[ENV_SKY + 1];
-        self.words[COUNT] = f32::from_bits(LATTICE_COUNT);
-        self.words[ALTITUDE] = ALTITUDE_KM as f32;
         self.over = env[ENV_AIR] as f64 > ALTITUDE_KM;
+        self.gone = env[ENV_AIR] as f64 >= GONE_KM;
         for (at, toward) in [(SUN_AT, ENV_SUN), (MOON_AT, ENV_MOON)] {
-            for (w, v) in self.words[at..at + 3].iter_mut().zip(light_at(ALTITUDE_KM, env[toward + 2] as f64)) {
+            let mu = (0..3).map(|k| env[toward + k] as f64 * up[k]).sum();
+            for (w, v) in self.words[at..at + 3].iter_mut().zip(light_at(ALTITUDE_KM, mu)) {
                 *w = v as f32;
             }
         }
@@ -116,8 +119,43 @@ impl CloudPass {
 
     /// The layer into the open pass, over what is drawn opaque.
     pub fn draw(&self, g: &GpuApi, pass: u32) {
+        if self.gone {
+            return;
+        }
         (g.set_pipeline)(pass, if self.over { self.above.pipeline } else { self.below.pipeline });
         (g.set_bind_group)(pass, 0, self.group, &[]);
         (g.draw)(pass, 3, 1, 0, 0);
+    }
+}
+
+/// Where the layer is and what shapes it, for the air's uniform
+/// (gpu/atmosphere.rs's CLOUD_BASE on): the lattice index the root frame's
+/// origin — the cell it is on the map, as the integer lanes of its PVF3 —
+/// lies in and the fraction of a unit past it; the sky's clock, from the
+/// environment's lane `env`; the lattice's count across the world; the
+/// layer's height; and the camera's height past which it is gone.
+///
+/// The origin is split on the lattice here, in its own lanes, so the
+/// shader never holds a coordinate the size of the world: it gets the
+/// lattice index, the lane shifted down, and the fraction of a unit past
+/// it, the lane's low bits, and adds only the few thousand cells between
+/// the origin and the layer. A shift and a mask on two's complement lanes
+/// are a floor and a remainder, so a cell west of the origin's zero lands
+/// in the lattice unit it is in, and the index masked to the count is the
+/// same unit wherever the lane wrapped.
+pub fn field(origin: IVec, env: &[f32]) -> CloudField {
+    let unit = ivec::sh(origin, -(LATTICE_SHAMT as i32));
+    let within = ivec::and(origin, ivec::fill((1 << LATTICE_SHAMT) - 1));
+    let (base, frac) = (
+        [ivec::X, ivec::Y].map(|lane| lane(unit) as u32 & (LATTICE_COUNT - 1)),
+        [ivec::X, ivec::Y].map(|lane| lane(within) as f32 / (1u32 << LATTICE_SHAMT) as f32),
+    );
+    CloudField {
+        base,
+        frac,
+        time: env[ENV_SKY + 1],
+        count: LATTICE_COUNT,
+        altitude_km: ALTITUDE_KM as f32,
+        gone_km: GONE_KM as f32,
     }
 }

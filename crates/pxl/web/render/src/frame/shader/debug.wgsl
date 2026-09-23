@@ -17,7 +17,7 @@ struct VertexOut {
 @vertex
 fn vs(@location(0) position: vec3f, @location(1) color: vec3f) -> VertexOut {
   var o: VertexOut;
-  o.clip = frame.view_proj * vec4f(position + draw.translation, 1.0);
+  o.clip = frame.view_proj * vec4f(on_globe(position + draw.translation), 1.0);
   o.color = color;
   return o;
 }

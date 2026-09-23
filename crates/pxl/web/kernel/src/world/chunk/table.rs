@@ -23,12 +23,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
-use pxl_render::look::azimuth::turn;
 use pxl_render::look::globe::Globe;
 use pxl_render::look::lod::{Ladder, COARSEST};
 use pxl_render::mesh::chunk_mesher::BOX_WORDS;
 use pxl_render::mesh::paint::terrain::adapter::ChunkSample;
-use pxl_spec::bake::constant::CHUNK_CELL_SPAN;
+use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, PAGE_TOP_LEVEL};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::heap::alloc;
@@ -44,7 +43,7 @@ use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::frame_gizmo::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
-use crate::layer::terrain::level::{decor_reach, ring, LevelPage, DECOR_REACH, RENDER_AXIS};
+use crate::layer::terrain::level::{chunk_span_of, decor_reach, ring, LevelPage, DECOR_REACH, RENDER_AXIS};
 use crate::shell::setting::store::hidden_ground;
 use crate::world::chunk::mesh_slot::{group_bytes, slot_of, MeshSlot, OCCUPANCY};
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
@@ -97,6 +96,9 @@ pub const EMPTY: u8 = 2;
 /// Wanted, and under a stale chunk that is drawn: what it lacks is not a
 /// hole, since the stale chunk shows that ground until it is ready.
 pub const COVERED: u8 = 8;
+/// Mounted and not yet rechecked: it has no layout, so it wants one, and its
+/// first recheck is taken whatever the frame's budget (`tick`).
+pub const FRESH: u8 = 128;
 pub const PENDING: u8 = 4;
 pub const BLEND_ACTIVE: u8 = 16;
 pub const SETTLING: u8 = 32;
@@ -134,9 +136,9 @@ pub struct Frame {
     /// The range anchor — the map centre's chunk, in units — when there is
     /// one: what each level's ring is centred on.
     pub anchor: Option<[f64; 2]>,
-    /// The ground's height under the view, in units: what a chunk's distance
-    /// is measured to before its own bounds are known.
-    pub ground_z: f64,
+    /// The camera centre's height (view.rs's camera_centre), in units: what
+    /// the camera's height over the sea is measured up from.
+    pub centre_z: f64,
     /// The map centre's latitude's values, which the renderer lays the map
     /// back on the planet about (pxl-render's look/globe.rs); none for a flat
     /// world.
@@ -230,9 +232,14 @@ pub enum Event {
     },
 }
 
-/// What a mount pass ran for: the anchor, the window and the page set. The
-/// pass is skipped while it is the same.
-type MountKey = ([f64; 2], (u32, u32), u32);
+/// What a mount pass ran for: the page the anchor stands in at the window's
+/// base, the window and the page set. The pass is skipped while it is the
+/// same. That page and not the anchor: every ring the pass reads is a level
+/// at or above the base, centred on the page over it (`ring`), so the anchor
+/// moving within its base page changes nothing the pass chooses — and a
+/// base page is as far on screen at every zoom, where a chunk of the leaves
+/// is less than a pixel at the farthest.
+type MountKey = (LevelPage, (u32, u32), u32);
 
 /// A chunk by where it is: its page, and its corner in the page's cells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -252,7 +259,27 @@ impl ChunkKey {
         let l = self.page.level;
         let x = ((ivec::X(self.page.page) << PAGE_SHAMT) + self.bx as i64) << l;
         let y = ((ivec::Y(self.page.page) << PAGE_SHAMT) + self.by as i64) << l;
-        (x as f64, y as f64, CHUNK_WORLD_SPAN * (1u64 << l) as f64)
+        (x as f64, y as f64, chunk_span_of(l))
+    }
+
+    /// The chunk a level up that covers it, none at the pyramid's top.
+    fn parent(self) -> Option<ChunkKey> {
+        if self.page.level >= PAGE_TOP_LEVEL {
+            return None;
+        }
+        let up = self.page.parent();
+        let span = pxl_spec::bake::constant::PAGE_CELL_SPAN as i64;
+        let cell = |page: i64, b: u32, parent: i64| ((page * span + b as i64).div_euclid(2) - parent * span) as u32 & !(CHUNK_CELL_SPAN - 1);
+        Some(ChunkKey {
+            page: up,
+            bx: cell(ivec::X(self.page.page), self.bx, ivec::X(up.page)),
+            by: cell(ivec::Y(self.page.page), self.by, ivec::Y(up.page)),
+        })
+    }
+
+    /// Every chunk above it, nearest first.
+    fn ancestors(self) -> impl Iterator<Item = ChunkKey> {
+        std::iter::successors(self.parent(), |k| k.parent())
     }
 
     /// The four chunks a level down that cover it: a chunk is 64 cells of
@@ -285,13 +312,6 @@ fn ring_rect(level: u32, anchor: IVec) -> (f64, f64, f64) {
 /// Whether two squares, each a corner and a side, share any ground.
 fn overlaps(a: (f64, f64, f64), b: (f64, f64, f64)) -> bool {
     a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.2 && b.1 < a.1 + a.2
-}
-
-/// How much ground two squares share.
-fn overlap_area(a: (f64, f64, f64), b: (f64, f64, f64)) -> f64 {
-    let w = (a.0 + a.2).min(b.0 + b.2) - a.0.max(b.0);
-    let h = (a.1 + a.2).min(b.1 + b.2) - a.1.max(b.1);
-    w.max(0.0) * h.max(0.0)
 }
 
 #[derive(Clone, Copy, Default)]
@@ -368,6 +388,10 @@ struct Slot {
     /// The heap's release count when its decor was last refused a
     /// block: not committed again until a block is given back.
     refused: Option<u32>,
+    /// A stale chunk's ground as `retire` last found it covered: the area
+    /// wanted chunks cover, whether every one of them is laid out, and
+    /// whether one that is not is waiting on a mesh slot.
+    cover: (f64, bool, bool),
 }
 
 impl Slot {
@@ -449,7 +473,12 @@ pub struct Census {
     pub stale_uncovered: u32,
     pub stale_unready: u32,
     pub stale_on_waiter: u32,
+    /// The boxes the last draw listed, by the level of the chunk they are of.
+    pub level_boxes: [u32; LEVELS],
 }
+
+/// The pyramid's levels, a chunk's being one of them.
+pub const LEVELS: usize = PAGE_TOP_LEVEL as usize + 1;
 
 /// Who holds each mesh slot (mesh_slot.rs), by chunk id, 0 for none; and the
 /// arena epoch the tiers were written under.
@@ -476,6 +505,8 @@ pub struct Scheduler {
     pub meshes: Meshes,
     /// Wanted chunks the last draw left under a stale one (`Census::hidden`).
     hidden: u32,
+    /// The boxes the last draw listed by level (`Census::level_boxes`).
+    level_boxes: [u32; LEVELS],
     /// Why `retire` last kept its stale chunks (`Census::stale_uncovered`).
     kept: (u32, u32, u32),
     pub builder: Builder,
@@ -597,6 +628,7 @@ impl Scheduler {
         arena_configure(&group_bytes());
         Scheduler {
             hidden: 0,
+            level_boxes: [0; LEVELS],
             kept: (0, 0, 0),
             meshes: Meshes {
                 holder: vec![0; OCCUPANCY],
@@ -705,7 +737,7 @@ impl Scheduler {
     #[allow(clippy::too_many_arguments)]
     fn add(&mut self, id: u32, level: u32, base: IVec, base_x: f64, base_y: f64, tx0: u32, ty0: u32, stable_hash: f64) {
         self.builder.add(id, level, base, tx0, ty0);
-        let span = CHUNK_WORLD_SPAN * (1u64 << level) as f64;
+        let span = chunk_span_of(level);
         let mut slot = Slot {
             id,
             level,
@@ -717,7 +749,7 @@ impl Scheduler {
             radius: 0.0,
             distance2: f64::INFINITY,
             lead_distance2: f64::INFINITY,
-            flags: EMPTY,
+            flags: EMPTY | FRESH,
             pending_since: -1.0,
             request: 0,
             tiers: Vec::new(),
@@ -729,6 +761,7 @@ impl Scheduler {
             desired: (COARSEST, 0),
             told: None,
             refused: None,
+            cover: (0.0, true, false),
         };
         slot.unmeasured();
         if let Some(frame) = self.frame {
@@ -1061,15 +1094,16 @@ impl Scheduler {
     /// Which chunks exist: the ones `select` draws, mounted as they are
     /// wanted, and the ones it no longer draws marked stale rather than let
     /// go, so the ground they cover is never a hole while what replaces them
-    /// builds (`retire`). Rerun when the anchor moves, the eye crosses a chunk,
-    /// the window slides or a page comes or goes.
+    /// builds (`retire`). Rerun when the anchor crosses into another page
+    /// at the window's base, the window slides or a page comes or goes
+    /// (`MountKey`).
     fn mount(&mut self, frame: &Frame, emit: &mut impl FnMut(Event)) {
         let Some(anchor) = frame.anchor else { return };
-        let key = (anchor, frame.window, self.pages_revision);
+        let anchor_i = ivec::gather(anchor[0] as i64, anchor[1] as i64, 0);
+        let key = (ring(frame.window.0, anchor_i, 1)[0], frame.window, self.pages_revision);
         if self.mounted_for == Some(key) {
             return;
         }
-        let anchor_i = ivec::gather(anchor[0] as i64, anchor[1] as i64, 0);
         self.drawn = Some(ring_rect(frame.window.1 - 1, anchor_i));
         let mut wanted = BTreeSet::new();
         self.select(frame, anchor_i, &mut wanted);
@@ -1161,24 +1195,47 @@ impl Scheduler {
         self.kept = (0, 0, 0);
         let waiters = self.meshes.waiters;
         let waiters = &waiters[..core::mem::take(&mut self.meshes.waiter_cnt)];
+        // What covers each stale chunk, from the chunk tree rather than every
+        // pair: the wanted chunks are a cut through it, so what covers a
+        // stale chunk's ground is a wanted chunk above it, whole, or the
+        // wanted chunks below it, each its own area. Each chunk walks up its
+        // ancestors once — ten at most — and meets the other kind there.
+        for s in self.slots.iter_mut().filter(|s| s.has(STALE)) {
+            s.cover = (0.0, true, false);
+        }
+        let (slots, index, mounted) = (&mut self.slots, &self.index, &self.mounted);
+        let at = |k: &ChunkKey| mounted.get(k).and_then(|id| index.get(id)).copied();
+        for (&k, &id) in mounted.iter() {
+            let Some(&i) = index.get(&id) else { continue };
+            let s = &slots[i];
+            let laid = s.layout_ready || !s.has(IN_FRUSTUM);
+            let waiting = !laid && waiters.contains(&id);
+            if s.has(STALE) {
+                // A wanted chunk above covers it whole.
+                if let Some(j) = k.ancestors().filter_map(|a| at(&a)).find(|&j| !slots[j].has(STALE)) {
+                    let w = &slots[j];
+                    let laid = w.layout_ready || !w.has(IN_FRUSTUM);
+                    slots[i].cover = (f64::INFINITY, laid, !laid && waiters.contains(&w.id));
+                }
+                continue;
+            }
+            let area = s.span * s.span;
+            // Its area to every stale chunk above it: one it covers part of.
+            for j in k.ancestors().filter_map(|a| at(&a)) {
+                let w = &mut slots[j];
+                if w.has(STALE) && w.cover.0.is_finite() {
+                    w.cover = (w.cover.0 + area, w.cover.1 && laid, w.cover.2 || waiting);
+                }
+            }
+        }
         for (&k, &id) in self.mounted.iter() {
             let Some(&i) = self.index.get(&id) else { continue };
-            if !self.slots[i].has(STALE) {
+            let s = &self.slots[i];
+            if !s.has(STALE) {
                 continue;
             }
             let rect = k.rect();
-            let mut covered = 0.0;
-            let mut ready = true;
-            let mut on_waiter = false;
-            for w in self.slots.iter().filter(|w| !w.has(STALE)) {
-                let area = overlap_area(rect, (w.base_x, w.base_y, w.span));
-                if area > 0.0 {
-                    covered += area;
-                    let laid = w.layout_ready || !w.has(IN_FRUSTUM);
-                    ready &= laid;
-                    on_waiter |= !laid && waiters.contains(&w.id);
-                }
-            }
+            let (covered, ready, on_waiter) = s.cover;
             let whole = covered >= rect.2 * rect.2;
             let gone_from_view = self.drawn.is_none_or(|d| !overlaps(rect, d));
             if gone_from_view || (whole && ready) {
@@ -1240,6 +1297,18 @@ impl Scheduler {
                 } else {
                     offscreen.push(i);
                 }
+            }
+        }
+
+        // A chunk just mounted has no layout, so it wants one, and is
+        // rechecked whatever the budget: under a budget a tick has already
+        // spent, the budgeted pass reaches the order's head and no further,
+        // and a chunk under a stale one is not a hole and sorts late — never
+        // asked for, it never replaces the stale one, which waits on it. The
+        // mounts a frame takes bound it.
+        for &i in order.iter() {
+            if self.slots[i].has(FRESH) {
+                self.recheck(world, i, t0, &frame, emit);
             }
         }
 
@@ -1322,6 +1391,7 @@ impl Scheduler {
         }
         c.released = self.census.released;
         c.hidden = self.hidden;
+        c.level_boxes = self.level_boxes;
         c.slot_waits = core::mem::take(&mut self.meshes.waits);
         c.wait_levels = core::mem::take(&mut self.meshes.wait_levels);
         c.holder_levels = core::mem::take(&mut self.meshes.holder_levels);
@@ -1340,22 +1410,34 @@ impl Scheduler {
     fn draw_frame(&mut self, frame: &Frame, mem: *const u8) {
         self.draw.begin_frame();
         self.hidden = 0;
+        self.level_boxes = [0; LEVELS];
         self.ghost.draw(&mut self.draw, frame.origin);
         self.models.draw(&mut self.draw, frame.origin);
         self.markers.draw(&mut self.draw, frame.origin);
         self.billboards.draw(&mut self.draw, &self.models, frame.origin);
         self.debug.draw(&mut self.draw, frame.origin);
         // A stale chunk is drawn until what replaced it is whole, and what
-        // replaced it waits under it: never both on one piece of ground.
-        let covering: Vec<(f64, f64, f64)> = self
-            .slots
-            .iter()
-            .filter(|s| s.has(STALE) && s.has(IN_FRUSTUM) && s.layout_ready)
-            .map(|s| (s.base_x, s.base_y, s.span))
-            .collect();
+        // replaced it waits under it: never both on one piece of ground. What
+        // shares ground with a chunk is above or below it in the chunk tree,
+        // so each chunk walks up once and marks the wanted chunk it meets
+        // over a drawn stale one, or itself under one.
         for s in self.slots.iter_mut() {
-            let covered = !s.has(STALE) && s.has(IN_FRUSTUM) && covering.iter().any(|&c| overlaps(c, (s.base_x, s.base_y, s.span)));
-            s.set(COVERED, covered);
+            s.set(COVERED, false);
+        }
+        let (slots, index, mounted) = (&mut self.slots, &self.index, &self.mounted);
+        let at = |k: &ChunkKey| mounted.get(k).and_then(|id| index.get(id)).copied();
+        let drawn = |s: &Slot| s.has(STALE) && s.has(IN_FRUSTUM) && s.layout_ready;
+        for (&k, &id) in mounted.iter() {
+            let Some(&i) = index.get(&id) else { continue };
+            if drawn(&slots[i]) {
+                for j in k.ancestors().filter_map(|a| at(&a)) {
+                    if !slots[j].has(STALE) {
+                        slots[j].set(COVERED, true);
+                    }
+                }
+            } else if !slots[i].has(STALE) && k.ancestors().filter_map(|a| at(&a)).any(|j| drawn(&slots[j])) {
+                slots[i].set(COVERED, true);
+            }
         }
         for s in &self.slots {
             if !s.has(IN_FRUSTUM) || !s.layout_ready {
@@ -1376,6 +1458,7 @@ impl Scheduler {
                     continue;
                 }
                 self.draw.draw_arena(t.slot.group, t.slot.first_box, t.box_cnt, translation, visible);
+                self.level_boxes[s.level as usize] += t.box_cnt;
             }
             // Decor takes whichever tier the blend says the chunk is mostly
             // on: an instance is drawn or it is not.
@@ -1486,6 +1569,7 @@ impl Scheduler {
     /// SETTLING is pending with a layout already up, so a frame can tell a
     /// chunk that is changing tier from one that has nothing to show yet.
     fn recheck(&mut self, world: &mut World, i: usize, now: f64, frame: &Frame, emit: &mut impl FnMut(Event)) {
+        self.slots[i].set(FRESH, false);
         // A stale chunk shows what it shows until it is let go: nothing
         // more is built for it.
         if self.slots[i].has(STALE) {
@@ -1922,11 +2006,7 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3, f64, f64) {
     // the flat world has it would leave a hole at the horizon. The root's
     // first column is the azimuth's cosine and sine.
     let [x, y, z] = match frame.globe {
-        Some(globe) => {
-            let (s, c) = (frame.root[1], frame.root[0]);
-            let (mut flat, mut placed) = ([0.0; 3], [0.0; 3]);
-            *turn(&globe.place(*turn(&[x, y, z], -s, c, &mut flat)), s, c, &mut placed)
-        }
+        Some(globe) => globe.place_turned([x, y, z], frame.root[1], frame.root[0]),
         None => [x, y, z],
     };
     let c = frame.camera;

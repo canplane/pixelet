@@ -18,7 +18,7 @@ use crate::layer::poi::index::PoiIndexStats;
 use crate::layer::poi::placement::PoiPlaceStats;
 use crate::sched::ledger::log::window_counters;
 use crate::sched::ledger::record::{
-    fixed_lane, ledger_frame_peak, ledger_frames, ledger_frames_since, ledger_recording_state, ledger_tasks_since, FrameSample, TaskRow, CENSUS_LEN, FRAME_LIMIT, TASK_LIMIT,
+    fixed_lane, ledger_frame_peak, ledger_frames, ledger_frames_since, ledger_recording_state, ledger_tasks_since, FrameSample, TaskRow, CENSUS_LEN, FRAME_LIMIT, GPU_SPANS, LEVELS, TASK_LIMIT,
 };
 use crate::sched::ledger::spec::{CATEGORY_NAMES, LIMITS, OUTCOME_NAMES, PHASE_NAMES, SPREAD, STEP, STEP_NAMES, SUMMARY, TASK_PHASE_NAMES, TASK_SUMMARY};
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
@@ -120,7 +120,7 @@ fn frames(out: &mut [f64], scratch: &mut [f64], frames: &[FrameSample]) {
     let work = (sum(&|f| f.work.scans), sum(&|f| f.work.bakes));
     let backlog = || frames.iter().filter(|f| f.lod.pending > 0.0);
     let backlog_s = (backlog().map(|f| f.dt_ms).sum::<f64>() / 1000.0).max(1e-3);
-    let tick_ms = sum(&|f| f.cpu.tick_ms);
+    let tick_ms = sum(&|f| f.tick_ms);
 
     out[at(a, F::present)] = 1.0;
     out[at(a, F::n)] = frames.len() as f64;
@@ -131,11 +131,21 @@ fn frames(out: &mut [f64], scratch: &mut [f64], frames: &[FrameSample]) {
     spread(out, scratch, at(a, F::dt), moving().map(|f| f.dt_ms));
     spread(out, scratch, at(a, F::task), frames.iter().map(|f| f.task_ms));
     spread(out, scratch, at(a, F::offthread), frames.iter().map(|f| (f.dt_ms - f.task_ms).max(0.0)));
-    spread(out, scratch, at(a, F::gpu), frames.iter().map(|f| f.gpu_ms));
+    spread(out, scratch, at(a, F::gpu), frames.iter().map(|f| f.gpu.ms));
     spread(out, scratch, at(a, F::sched), frames.iter().map(|f| f.sched_ms));
-    spread(out, scratch, at(a, F::tick), frames.iter().map(|f| f.cpu.tick_ms));
+    spread(out, scratch, at(a, F::tick), frames.iter().map(|f| f.tick_ms));
     for k in 0..PHASE_NAMES.len() {
         spread(out, scratch, at(a, F::phases) + k * SPREAD::WORDS as usize, frames.iter().map(|f| f.phases[k]));
+    }
+    // A span the frame did not run reads 0 and is left out, so the air's
+    // tables, drawn when the sun has moved, are what they cost when they are.
+    for k in 0..GPU_SPANS {
+        spread(
+            out,
+            scratch,
+            at(a, F::gpu_spans) + k * SPREAD::WORDS as usize,
+            frames.iter().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0),
+        );
     }
     out[at(a, F::work_scans)] = work.0;
     out[at(a, F::work_bakes)] = work.1;
@@ -150,8 +160,11 @@ fn frames(out: &mut [f64], scratch: &mut [f64], frames: &[FrameSample]) {
     out[at(a, F::used_delta_mb)] = last.heap.used_mb - first.heap.used_mb;
     let n = frames.len() as f64;
     for k in 0..CENSUS_LEN {
-        out[at(a, F::census) + 2 * k] = sum(&|f| f.census[k][0]) / n;
-        out[at(a, F::census) + 2 * k + 1] = sum(&|f| f.census[k][1]) / n;
+        out[at(a, F::census) + 2 * k] = sum(&|f| f.gpu.census[k][0]) / n;
+        out[at(a, F::census) + 2 * k + 1] = sum(&|f| f.gpu.census[k][1]) / n;
+    }
+    for k in 0..LEVELS {
+        out[at(a, F::level_tris) + k] = sum(&|f| f.gpu.level_tris[k]) / n;
     }
     const _: () = assert!(F::last + FRAME::WORDS <= F::WORDS, "the last frame runs past the summary's frames block");
     // SAFETY: a FrameSample is FRAME::WORDS plain f64s laid end to end
@@ -304,11 +317,12 @@ fn side(out: &mut [f64]) {
     let a = SUMMARY::peak::AT as usize;
     if !ledger_frames().is_empty() {
         let p = ledger_frame_peak();
-        out[a..a + 17].copy_from_slice(&[
+        out[a..a + SUMMARY::peak::WORDS as usize].copy_from_slice(&[
             1.0,
             p.dt_ms,
             p.sched_ms,
             p.tick_ms,
+            p.gpu_ms,
             p.draw_calls,
             p.triangles,
             p.q_terrain,

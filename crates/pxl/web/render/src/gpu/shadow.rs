@@ -20,9 +20,9 @@ use xpute_core::math::mat4::{mat4, mat4_look_at, mat4_mul, Mat4};
 use xpute_core::math::vec3::Vec3;
 
 use crate::frame::shader::record::FRAME_FLOATS;
-use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, word_bytes, GpuApi, NONE};
+use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, word_bytes, GpuApi, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
-use crate::gpu::renderer::{CAMERA_POS, GLOBE, PLANET, VIEW_PROJ};
+use crate::gpu::renderer::{AIR_AT_VERTICES, CAMERA_POS, GLOBE, PLANET, VIEW_PROJ};
 
 const HALF_EXTENT: f64 = 200.0;
 const LIGHT_DISTANCE: f64 = 1200.0;
@@ -121,13 +121,17 @@ impl Shadow {
         self.light[CAMERA_POS..CAMERA_POS + 3].copy_from_slice(&[eye.x as f32, eye.y as f32, eye.z as f32]);
         self.light[PLANET..PLANET + 4].copy_from_slice(&globe[..4]);
         self.light[GLOBE..GLOBE + 4].copy_from_slice(&globe[4..]);
+        // Depth and nothing else: no vertex takes the air (frame.wgsl's
+        // air_at_vertices).
+        self.light[AIR_AT_VERTICES] = 0.0;
         (g.write_buffer)(self.light_frame, 0, bytes(&self.light));
     }
 
-    /// Opens the depth pass over the map; the caller draws into it and ends it.
-    pub fn begin(&self, g: &GpuApi, encoder: u32) -> u32 {
+    /// Opens the depth pass over the map, timed under `stamp`; the caller
+    /// draws into it and ends it.
+    pub fn begin(&self, g: &GpuApi, encoder: u32, stamp: &mut Stamp) -> u32 {
         let pass = object();
-        (g.pass)(pass, encoder, &pass_desc(0, 0, load::CLEAR, self.map_view, load::CLEAR, 1.0, 0, NONE, NONE));
+        (g.pass)(pass, encoder, &pass_desc(0, 0, load::CLEAR, self.map_view, load::CLEAR, 1.0, stamp.pass()));
         pass
     }
 }

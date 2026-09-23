@@ -21,8 +21,8 @@ import { round } from "@xpute/core/math/scalar.ts";
 
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 
-import { failText, type Frame } from "./report.ts";
-import { CENSUS_TAGS, PHASE_NAMES } from "./ledger.spec.ts";
+import { type Frame, isList, LANES, LIST_NAMES } from "./lane.ts";
+import { failText } from "./report.ts";
 import { ledgerRingsRead } from "./view.ts";
 import { longFramesSince } from "./long-frame.ts";
 
@@ -55,51 +55,23 @@ function event(name: string, cat: string, ph: string, ts: f64, dur: f64 | null, 
 const thread_name = (tid: u32, name: string) => event("thread_name", "__metadata", "M", 0, null, tid, { name });
 
 /** One frame's numbers as trace args — the counter track and the worst-frame
- * spans both carry them, so the two never disagree on what a frame was. */
+ * spans both carry them, so the two never disagree on what a frame was. Every
+ * lane, by its own name, and a list lane's words by the lane's and theirs:
+ * what the kernel adds is on the timeline without a line written here. */
 function frameArgs(f: Frame): Args {
-  const args: Args = {
-    dt_ms: fixed(f.dt_ms, 2),
-    task_ms: fixed(f.task_ms, 2),
-    // Everything the kernel's turn did not account for: vsync wait,
-    // compositor, GPU, GC between frames, the shell's glue.
-    offthreadMs: fixed(Math.max(0, f.dt_ms - f.task_ms), 2),
-    gpu_ms: fixed(f.gpu_ms, 2),
-    sched_ms: fixed(f.sched_ms, 2),
-    budget_ms: fixed(f.budget_ms, 2),
-    frame_ms: fixed(f.frame_ms, 2),
-    settled: f.settled ? 1 : 0,
-  };
-  PHASE_NAMES.forEach((k, i) => (args[`phase_${k}_ms`] = fixed(f.phases[i], 2)));
-  args.tick_ms = fixed(f.tick_ms, 2);
-  args.triangles = f.triangles;
-  CENSUS_TAGS.forEach((tag, i) => (args[`tris_${tag}`] = f.census[i][1]));
-  const t = f.textures_mb;
-  Object.assign(args, {
-    buffers: f.buffers,
-    buffer_mb: f.buffer_mb,
-    targetsMb: fixed(t.depth + t.msaa + t.shadow + t.layers, 1),
-    mounted: f.mounts.added,
-    unmounted: f.mounts.removed,
-    layouts: f.mounts.layouts,
-    heap_used_mb: f.heap.used_mb,
-    heap_live_mb: f.heap.live_mb,
-    heap_range_mb: f.heap.range_mb,
-    heap_refusals: f.heap.refusals,
-    heap_largest_free_mb: fixed(f.heap.largest_free_mb, 2),
-    ring_cq_peak: f.rings.cq_peak,
-    ring_spill_peak: f.rings.spill_peak,
-    tile_pages: f.tile_pages,
-    poi_count: f.poi_count,
-    lod_pending: f.lod.pending,
-    lod_in_frustum: f.lod.in_frustum,
-    lod_offscreen_pending: f.lod.offscreen_pending,
-    lod_oldest_release_ms: round(f.lod.oldest_release_ms),
-    lod_oldest_visible_ms: round(f.lod.oldest_visible_ms),
-    draw_calls: f.draw_calls,
-    fillMpx: fixed(f.px / 1e6, 2),
-    q_terrain: f.q_terrain,
-    q_poi: f.q_poi,
-  });
+  const args: Args = {};
+  for (const { name } of LANES) {
+    if (!isList(name)) {
+      args[name] = fixed(f[name], 2);
+      continue;
+    }
+    const names = LIST_NAMES[name];
+    if (name === "census") f.census.forEach(([, t], i) => (args[`census_${names[i]}_tris`] = t));
+    else f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixed(v, 2)));
+  }
+  // Everything the kernel's turn did not account for: vsync wait,
+  // compositor, GPU, GC between frames, the shell's glue.
+  args.offthread_ms = fixed(Math.max(0, f.dt_ms - f.task_ms), 2);
   return args;
 }
 
@@ -154,7 +126,7 @@ export function ledgerTraceJson(): string {
       const f = w.sample;
       const args = frameArgs(f);
       args.d_buffers = w.prev === null ? null : f.buffers - w.prev.buffers;
-      args.d_heap_used_mb = w.prev === null ? null : f.heap.used_mb - w.prev.heap.used_mb;
+      args.d_heap_used_mb = w.prev === null ? null : f.heap_used_mb - w.prev.heap_used_mb;
       events.push(event(`stall ${f.dt_ms.toFixed(0)}ms`, "worst", "X", us(f.t - f.dt_ms), us(f.dt_ms), TID_WORST, args));
     }
   }

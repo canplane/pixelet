@@ -31,6 +31,9 @@ struct Badge {
   cell: f32,
   vignette: f32,
   viewport: vec2f,
+  // The frame's planet (globe.wgsl), so a badge stands where its ground is.
+  planet: vec4f,
+  globe: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> badge: Badge;
@@ -75,7 +78,7 @@ fn behind_world(clip: vec4f) -> bool {
 @vertex
 fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
   let k = ii * 10u;
-  let anchor = vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + badge.translation;
+  let anchor = on_globe_of(vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + badge.translation, badge.planet, badge.globe);
   let size_px = vec2f(instances[k + 3u], instances[k + 4u]);
   let rect = vec4f(instances[k + 5u], instances[k + 6u], instances[k + 7u], instances[k + 8u]);
   let frac = instances[k + 9u];

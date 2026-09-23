@@ -20,6 +20,7 @@ import { ELE_PADDED_SPAN, encode_empty_poi_page, encode_terrain, PAGE_CELL_SPAN 
 import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
 import { CORE_KERNEL } from "@/kernel/mem.ts";
 import { BOOT, boot_block, hold_body, text_at } from "@/kernel/module.ts";
+import { acquire_device } from "@/kernel/render/gpu.ts";
 
 function rng(seed: u32): () => u32 {
   let s = seed >>> 0 || 1;
@@ -138,6 +139,34 @@ CORE_BUILD.call(
   (r) => r,
 );
 console.log(`heap: boot and world create ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);
+
+/** A device that takes every call and holds nothing: whatever is asked of
+ * it, or of what it hands back, is another of the same. A chunk is drawn from
+ * meshes on the device, so without one the world lists nothing to draw; the
+ * shell reaches it through acquire_device, and so does this. */
+function inert(): unknown {
+  return new Proxy(() => {}, {
+    get: (_, key) => {
+      if (key === "then") return undefined;
+      if (key === "lost") return new Promise(() => {});
+      if (key === "limits") return { minUniformBufferOffsetAlignment: 256 };
+      return inert();
+    },
+    apply: () => inert(),
+    set: () => true,
+  });
+}
+Object.defineProperty(navigator, "gpu", {
+  configurable: true,
+  value: {
+    requestAdapter: () => Promise.resolve({ features: new Set(), requestDevice: () => Promise.resolve(inert()) }),
+    getPreferredCanvasFormat: () => "bgra8unorm",
+  },
+});
+const device = await acquire_device(() => {});
+assert("align" in device, "the stand-in device answered");
+CORE_BUILD.send(0, Command.GPU_CREATE, packet((b) => b.u32(device.align).bool(device.timestamps)));
+CORE_BUILD.ring(0);
 turn();
 console.log(`heap: through the first turn ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);
 

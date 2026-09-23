@@ -26,6 +26,20 @@ fn zenith_sky() -> vec3f {
   return t.gba * atmos.white * t.r;
 }
 
+// The sky's light on a face turned up, shown on the terrain's scale — the
+// scale EXPOSURE puts the air on: the sun's sky, from the exposure pass's
+// second texel, and while the moon lights one, the moon's, as its zenith
+// over the hemisphere. It is the sky's half of the fill the terrain is lit
+// by (shade.wgsl), in place of a colour a theme chose: a sunset's orange, a
+// moonlit night's blue, and what little a moonless night leaves.
+fn sky_fill() -> vec3f {
+  var fill = textureLoad(exposure_texel, vec2i(1, 0), 0).rgb * shown();
+  if (atmos.moon_light > 0.0) {
+    fill += moon_view(atmos.up) * moon_shown() * PI;
+  }
+  return fill;
+}
+
 // The moonlit sky's table to the frame's: at the brightness a moonlit sky
 // reads at against the day's, which the eye's night adaptation sets and not
 // the moon's light (look/atmosphere.rs's MOONLIT_SKY).
@@ -60,6 +74,9 @@ struct Air {
   light: vec3f,
   end: vec3f,
   ground: bool,
+  // Where the ray meets the planet, which way is up there: the ground past
+  // the terrain is lit on its own slope of the sphere.
+  normal: vec3f,
 };
 
 fn air_along(dir: vec3f) -> Air {
@@ -69,11 +86,15 @@ fn air_along(dir: vec3f) -> Air {
   if (atmos.moon_light > 0.0) {
     air.light += moon_view(dir) * moon_shown();
   }
-  air.ground = meets_ground(r, dir.z);
+  let mu = dot(dir, atmos.up);
+  air.ground = meets_ground(r, mu);
+  air.normal = atmos.up;
   if (air.ground) {
-    air.end = transmittance_along(r, dir.z, to_ground(r, dir.z), true);
+    let d = to_ground(r, mu);
+    air.end = transmittance_along(r, mu, d, true);
+    air.normal = normalize(atmos.up * r + dir * d);
   } else {
-    air.end = transmittance_to_top(r, dir.z);
+    air.end = transmittance_to_top(r, mu);
   }
   return air;
 }
@@ -87,7 +108,8 @@ fn air_along(dir: vec3f) -> Air {
 fn beyond(air: Air) -> vec3f {
   var light = air.light;
   if (air.ground) {
-    let lit = frame.sun_color * max(frame.sun_dir.z, 0.0) + frame.other_color * max(frame.other_dir.z, 0.0) + frame.ambient + frame.hemi_sky;
+    let n = air.normal;
+    let lit = frame.sun_color * max(dot(frame.sun_dir, n), 0.0) + frame.other_color * max(dot(frame.other_dir, n), 0.0) + frame.ambient + sky_fill();
     light += air.end * atmos.land * (lit / PI + frame.floor);
   }
   return light;
@@ -156,7 +178,53 @@ struct Seen {
   through: vec3f,
   scattered: vec3f,
   past: vec3f,
+  // The sky's fill (sky_fill), the same at every vertex of a frame and
+  // carried beside the rest, since the lit passes read the air only here.
+  fill: vec3f,
+  // How much of the direct light the cloud layer over the point leaves
+  // (cloud_sunlit).
+  sunlit: f32,
 };
+
+// Octaves finer than this, in lattice units, a cloud's shadow does not
+// carry: the light the layer lets through is soft-edged at the ground, and a
+// vertex is the only place it is read.
+const CLOUD_SHADOW_FOOTPRINT: f32 = 0.1;
+
+// How much of the direct light reaches `world_pos` past the cloud layer:
+// along the light the shadow map is cast from (the brighter of the sun and
+// the moon), to where it crosses the layer, and what the layer's depth
+// there leaves of it — none of it under a full cloud, which is how dark a
+// cloud's shadow is where the fill is all that lights the ground. Nothing
+// from a point over the layer or a light at the horizon, and the shadows
+// thin with the clouds as the camera climbs over them (cloud_shown).
+fn cloud_sunlit(world_pos: vec3f) -> f32 {
+  let shown_now = cloud_shown();
+  if (shown_now <= 0.0) {
+    return 1.0;
+  }
+  let centre = vec3f(frame.planet.xy, frame.planet.w - frame.planet.z);
+  let up = normalize(world_pos - centre);
+  let mu = dot(frame.sun_dir, up);
+  let height = atmos.camera_altitude + (length(world_pos - centre) - length(frame.camera_pos - centre)) * atmos.km_per_u;
+  if (mu <= 0.02 || height >= atmos.cloud_altitude_km) {
+    return 1.0;
+  }
+  let reach_u = (atmos.cloud_altitude_km - height) / mu / atmos.km_per_u;
+  let p = cloud_lattice(world_pos + frame.sun_dir * reach_u);
+  return mix(1.0, exp(-cloud_depth(p, CLOUD_SHADOW_FOOTPRINT)), shown_now);
+}
+
+// `seen_from_eye` where the frame asks for it, and the air left out where
+// it does not: the shadow map's passes write depth alone, and a vertex there
+// would pay for the air, the sky's fill and a cloud's shadow for nothing. A
+// branch on a uniform, which every vertex of the draw takes the same way.
+fn seen_at_vertex(world_pos: vec3f) -> Seen {
+  if (frame.air_at_vertices > 0.5) {
+    return seen_from_eye(world_pos);
+  }
+  return Seen(vec3f(1.0), vec3f(0.0), vec3f(0.0), vec3f(0.0), 1.0);
+}
 
 fn seen_from_eye(world_pos: vec3f) -> Seen {
   let air = air_along(normalize(world_pos - frame.camera_pos));
@@ -165,6 +233,8 @@ fn seen_from_eye(world_pos: vec3f) -> Seen {
   s.through = v.through;
   s.scattered = v.scattered;
   s.past = shoulder(beyond(air));
+  s.fill = sky_fill();
+  s.sunlit = cloud_sunlit(world_pos);
   return s;
 }
 

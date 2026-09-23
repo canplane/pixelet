@@ -22,9 +22,8 @@ use crate::kernel::{kernel, with_world};
 use crate::layer::character::variant::{character_variant, CharacterGroup, CharacterVariant};
 use crate::layer::character::variant_spec::IDLE_CLIP;
 use crate::sched::tick::TickContext;
-use crate::shell::map_store::map_store;
 use crate::world::change::request_world_tick;
-use crate::world::frame::coord::get_local_world_origin;
+use crate::world::frame::coord::local_world_origin;
 
 const SPIN_RATE_RAD_S: f64 = 0.6;
 /// How far below the map origin a case's actor stands: past any terrain, and
@@ -94,7 +93,7 @@ pub fn preview_step(ctx: &mut TickContext) {
     // the actor's place back out either way, but it reads that place from the
     // draw's f32 uniform, and the absolute origin can be millions of units from
     // the render frame's, where a float cannot resolve a model a unit tall.
-    let origin = get_local_world_origin(map_store().map_center.as_ref());
+    let origin = local_world_origin();
     let at = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin)) - CASE_DEPTH_U];
     for case in &mut c.cases {
         if case.model.is_none() {

@@ -15,7 +15,7 @@
 //! (config.json says why each is what it is).
 
 use pxl_spec::bake::constant::{PAGE_CELL_SPAN, PAGE_TOP_LEVEL};
-use pxl_spec::space::indexer::{L3_IDX, L3_SHAMT};
+use pxl_spec::space::indexer::{L3_IDX, L3_SHAMT, L4_RANGE};
 use pxl_spec::space::pvf3::core::IVEC_X_W;
 use pxl_spec::space::pvf3::fvec;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -108,9 +108,29 @@ pub fn neighbourhood(p: LevelPage) -> [LevelPage; 16] {
     })
 }
 
+// ---- Spans by level ----
+//
+// The space hierarchy's extents (pxl-spec space/indexer.rs) are a leaf's: a
+// chunk is 64 leaf blocks, a page 512, an anchor 4096. A level is the same
+// hierarchy over its own blocks, 2^level units each, so every extent a view
+// is measured in scales with the level it is measured at, and a thing sized
+// by a leaf's extent at a far zoom is a pixel wide. What is sized by the
+// hierarchy takes its extent from here.
+
+/// A level-`level` chunk's side in world units.
+pub fn chunk_span_of(level: u32) -> f64 {
+    CHUNK_WORLD_SPAN * (1u64 << level) as f64
+}
+
 /// A level-`level` page's side in world units.
 pub fn span_of(level: u32) -> f64 {
     PAGE_SPAN * (1u64 << level) as f64
+}
+
+/// A level-`level` anchor's side in world units: the floating origin's cell
+/// when the window's finest level is `level` (world/frame/coord.rs).
+pub fn anchor_span_of(level: u32) -> i64 {
+    (L4_RANGE as i64) << level
 }
 
 /// How far a level's drawn ring reaches past the page the anchor stands in,

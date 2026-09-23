@@ -24,7 +24,7 @@
 use xpute_core::math::mat4::{mat4_invert, Mat4};
 
 use crate::frame::shader::record::{PIPELINE_AO_BLUR, PIPELINE_AO_DOWNSAMPLE, PIPELINE_AO_SAMPLE, PIPELINE_AO_UPSAMPLE};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, NONE};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::pipeline::{Built, Pipelines};
 
@@ -244,17 +244,18 @@ impl ScreenAo {
 
     /// Opens the depth pass from the eye; the caller draws the world into
     /// it with the prepass pipelines under the frame's group, and ends it.
-    pub fn begin_prepass(&self, g: &GpuApi, encoder: u32) -> u32 {
+    /// Timed under `stamp`.
+    pub fn begin_prepass(&self, g: &GpuApi, encoder: u32, stamp: &mut Stamp) -> u32 {
         let pass = object();
-        (g.pass)(pass, encoder, &pass_desc(0, 0, load::CLEAR, self.depth_view, load::CLEAR, 0.0, 0, NONE, NONE));
+        (g.pass)(pass, encoder, &pass_desc(0, 0, load::CLEAR, self.depth_view, load::CLEAR, 0.0, stamp.pass()));
         pass
     }
 
     /// The four full-screen passes, from the depth the prepass drew to the
     /// map: the downsample into the half-resolution depth, the occlusion
     /// into ping[0], the denoise into ping[1] and back into ping[0], the
-    /// upsample into the map.
-    pub fn run(&self, g: &GpuApi, encoder: u32) {
+    /// upsample into the map. Timed under `stamp`, the five as one.
+    pub fn run(&self, g: &GpuApi, encoder: u32, stamp: &mut Stamp) {
         let steps: [(u32, u32, u32, u32); 5] = [
             (self.downsample.pipeline, self.groups[0], self.half_view, 0),
             (self.sample.pipeline, self.groups[1], self.ping_view[0], 0),
@@ -264,7 +265,7 @@ impl ScreenAo {
         ];
         for (k, &(pipeline, group, target, offset)) in steps.iter().enumerate() {
             let pass = object();
-            (g.pass)(pass, encoder, &pass_desc(target, 0, load::CLEAR, 0, load::CLEAR, 0.0, 0, NONE, NONE));
+            (g.pass)(pass, encoder, &pass_desc(target, 0, load::CLEAR, 0, load::CLEAR, 0.0, stamp.pass()));
             (g.set_pipeline)(pass, pipeline);
             if k == 2 || k == 3 {
                 (g.set_bind_group)(pass, 0, group, &[offset]);

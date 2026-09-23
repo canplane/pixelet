@@ -29,11 +29,10 @@ use crate::layer::object::collision::{is_placement_blocked, PlacementTool};
 use crate::layer::object::size::DECOR_SIZE;
 use crate::layer::object::store::{clear_virtual_carve_preview, get_placed_object, set_virtual_carve_preview, set_virtual_hide, EntryAt, EntryKind};
 use crate::layer::terrain::elevation::get_ground_type;
-use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::node::World;
-use crate::world::frame::coord::get_local_world_origin;
+use crate::world::frame::coord::local_world_origin;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Ghost {
@@ -67,7 +66,6 @@ pub fn hover_cursor_step() {
     let settings = settings_store();
     let hovered = camera.hovered_coord;
     let active_tool = ui.active_tool;
-    let map_center = map_store().map_center;
     let enable_terrain_carving = settings.enable_terrain_carving;
 
     let hovered_object = camera.hovered_object_at.and_then(get_placed_object);
@@ -103,7 +101,7 @@ pub fn hover_cursor_step() {
     let blocked = match (&hovered, active_tool) {
         (None, _) => false,
         (Some(h), ActiveTool::Object | ActiveTool::Decor) => {
-            let map_origin = get_local_world_origin(map_center.as_ref());
+            let map_origin = local_world_origin();
             let tool = if active_tool == ActiveTool::Object { PlacementTool::Object } else { PlacementTool::Decor };
             is_placement_blocked(tool, h, ui.object_size, map_origin)
         }

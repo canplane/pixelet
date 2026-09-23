@@ -18,7 +18,7 @@
 //! fighting.
 
 use pxl_spec::space::pvf3::ivec;
-use pxl_spec::space::v3::{sub3, V3};
+use pxl_spec::space::v3::{norm3, sub3, V3};
 use xpute_core::math::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
 use xpute_core::math::scalar::round;
 use xpute_core::math::vec3::Vec3;
@@ -33,11 +33,11 @@ use crate::frame::draw::{
 use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_SKY};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, texture_usage, word_bytes, GpuApi, NONE};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, texture_usage, word_bytes, GpuApi, Stamp};
 use crate::gpu::api_spec::{dimension, format, load, resource};
 use crate::gpu::arena::{arena_group, arena_lose};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
-use crate::gpu::clouds::CloudPass;
+use crate::gpu::clouds::{self, CloudPass};
 use crate::gpu::layers::{Layers, Mips, LAYER_TEX_SZ};
 use crate::gpu::moon::MoonMap;
 use crate::gpu::pass::badges::BadgePass;
@@ -72,6 +72,7 @@ const LIGHT_VIEW_PROJ: usize = FRAME_AT[13];
 const OTHER: usize = FRAME_AT[14];
 pub(crate) const PLANET: usize = FRAME_AT[15];
 pub(crate) const GLOBE: usize = FRAME_AT[16];
+pub(crate) const AIR_AT_VERTICES: usize = FRAME_AT[17];
 
 /// Floats the sky uniform holds (shader/sky.wgsl's Sky): the ray, the
 /// celestial pole, and whether the Moon's face has arrived.
@@ -83,6 +84,21 @@ const BOX_VERTICES: u32 = 36;
 /// Floats of the frame's draws storage made before the first frame needs more.
 const DRAWS_INITIAL: u32 = 256 * UNIFORM_FLOATS as u32;
 const MB: f64 = 1_048_576.0;
+
+/// What a frame's GPU time is taken apart into, in the order the frame
+/// encodes them: the air's tables, the sun's shadow map, the depth prepass,
+/// the screen-space occlusion from it, the world's own pass, the billboards'
+/// and the cases'. The ledger names them in the same order (ledger.json's
+/// GPU_SPAN_NAMES), and a pair of queries a span is the frame's set.
+pub const GPU_SPANS: [&str; 7] = ["air", "shadow", "prepass", "ao", "world", "badges", "cases"];
+const _: () = assert!(GPU_SPANS.len() <= 32, "a span a bit of the mask the host is told");
+const SPAN_AIR: usize = 0;
+const SPAN_SHADOW: usize = 1;
+const SPAN_PREPASS: usize = 2;
+const SPAN_AO: usize = 3;
+const SPAN_WORLD: usize = 4;
+const SPAN_BADGES: usize = 5;
+const SPAN_CASES: usize = 6;
 
 pub type Frame = [f32; FRAME_FLOATS];
 
@@ -136,6 +152,10 @@ pub struct FrameStat {
     pub px: f64,
     /// Draws and triangles, by pipeline.
     pub census: [[f64; 2]; PIPELINES as usize],
+    /// The GPU's time by span, GPU_SPANS' order; `gpu_ms` is theirs end to end.
+    pub gpu_spans: [f64; GPU_SPANS.len()],
+    /// What the mesh arena holds on the device, which is no block's.
+    pub arena_mb: f64,
 }
 
 pub fn put_f32(buf: &mut [u8], at: usize, v: f32) {
@@ -615,6 +635,7 @@ pub struct Renderer {
     debug: DebugPass,
     cases: [Option<Case>; SURFACES],
     gpu_ms: f64,
+    gpu_spans: [f64; GPU_SPANS.len()],
 }
 
 impl Renderer {
@@ -649,7 +670,7 @@ impl Renderer {
         (g.buffer)(draws_buffer, DRAWS_INITIAL * 4, buffer_usage::STORAGE | buffer_usage::COPY_DST);
         let query_set = if device.timestamps {
             let q = object();
-            (g.query_set)(q, 2);
+            (g.query_set)(q, 2 * GPU_SPANS.len() as u32);
             q
         } else {
             0
@@ -703,6 +724,7 @@ impl Renderer {
             moon,
             cases: [const { None }; SURFACES],
             gpu_ms: 0.0,
+            gpu_spans: [0.0; GPU_SPANS.len()],
         };
         r.bind_group = r.chunk_group(g, r.frame_buffer, r.shadow.entries(1));
         r.light_group = r.chunk_group(g, r.shadow.light_frame, r.shadow.blank_entries(1));
@@ -790,8 +812,28 @@ impl Renderer {
         // on the map, which anchors the clouds to the ground.
         let eye_local = [s[STAGE_AT::EYE_LOCAL], s[STAGE_AT::EYE_LOCAL + 1], s[STAGE_AT::EYE_LOCAL + 2]];
         let origin = ivec::gather(ivec::from_real(s[STAGE_AT::ORIGIN]), ivec::from_real(s[STAGE_AT::ORIGIN + 1]), 0);
-        self.clouds.lay_out(g, &m, &eye_local, origin, env);
-        self.stars.lay_out(g, &m, env, width, height);
+        // The camera centre — the root frame's origin undone — which the
+        // sun's shadow is aimed at and the map is laid back on the planet
+        // about (look/globe.rs): its latitude's values and the planet's
+        // radius in the units the map has there.
+        let centre = Vec3 {
+            x: -s[STAGE_AT::TRANSLATION],
+            y: -s[STAGE_AT::TRANSLATION + 1],
+            z: -s[STAGE_AT::TRANSLATION + 2],
+        };
+        let sphere = Globe::at(env[ENV_AIR + 2] as f64);
+        // Straight up where the eye stands: away from the planet's centre,
+        // the radius below the camera centre. The eye stands off the camera
+        // centre by the orbit, so its up leans from the root frame's Z by that
+        // over the radius — nothing at a street, degrees from orbit — and the
+        // air, the clouds and the stars are measured from it, on the sphere
+        // the world is laid on.
+        let planet_centre = [centre.x, centre.y, centre.z - sphere.radius_u()];
+        let mut up = [0.0; 3];
+        norm3(sub3(&eye_local, &planet_centre, &mut [0.0; 3]), &mut up);
+        self.clouds.lay_out(g, &m, &eye_local, env, &up);
+        self.atmosphere.set_clouds(&clouds::field(origin, env));
+        self.stars.lay_out(g, &m, env, width, height, &up);
         put_ray(&mut self.sky, 0, &m, &eye_local);
         // The celestial pole in the root frame, the stars' frame's third
         // column: which way the Moon's north is turned.
@@ -810,22 +852,13 @@ impl Renderer {
         u[VIEWPORT] = width as f32;
         u[VIEWPORT + 1] = height as f32;
         u[VIGNETTE] = 1.0;
+        u[AIR_AT_VERTICES] = 1.0;
         u[AO_STRENGTH] = s[STAGE_AT::AO_STRENGTH] as f32;
         self.screen_ao = s[STAGE_AT::SCREEN_AO] != 0.0;
         u[SCREEN_AO] = if self.screen_ao { 1.0 } else { 0.0 };
         if self.screen_ao {
             self.ao.lay_out(g, &proj, width, height, env[7], env[11]);
         }
-        // The map centre — the root frame's origin undone — which the sun's
-        // shadow is aimed at and the map is laid back on the planet about
-        // (look/globe.rs): its latitude's values and the planet's radius in
-        // the units the map has there.
-        let centre = Vec3 {
-            x: -s[STAGE_AT::TRANSLATION],
-            y: -s[STAGE_AT::TRANSLATION + 1],
-            z: -s[STAGE_AT::TRANSLATION + 2],
-        };
-        let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         let globe = [
             centre.x as f32,
             centre.y as f32,
@@ -838,6 +871,7 @@ impl Renderer {
         ];
         u[PLANET..PLANET + 4].copy_from_slice(&globe[..4]);
         u[GLOBE..GLOBE + 4].copy_from_slice(&globe[4..]);
+        self.badges.globe = globe;
         // The sun's shadow, from the light the environment lit the terrain with.
         self.shadows = s[STAGE_AT::SHADOWS] != 0.0;
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
@@ -847,7 +881,8 @@ impl Renderer {
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
         }
 
-        self.atmosphere.lay_out(g, &env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4], env[ENV_AIR], env[ENV_AIR + 1]);
+        self.atmosphere
+            .lay_out(g, &env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4], env[ENV_AIR], env[ENV_AIR + 1], &up);
     }
 
     /// Every chunk-pipeline draw of pipeline `which`; with `own`, that pipeline
@@ -921,11 +956,16 @@ impl Renderer {
         let b = blocks();
         let encoder = object();
         (g.encoder)(encoder);
+        let q = self.query_set;
         // The air's tables, where any is due, before any pass reads them.
-        self.atmosphere.draw(g, encoder);
+        // A span a pair of queries, each written only by the passes the frame
+        // ran: which were is told with the set, since a query no pass wrote
+        // holds whatever an earlier frame left in it.
+        let mut stamps: [Stamp; GPU_SPANS.len()] = core::array::from_fn(|span| Stamp::of(q, span));
+        self.atmosphere.draw(g, encoder, &mut stamps[SPAN_AIR]);
         // The sun's shadow map first, from the frame's lists, where it is on.
         if self.shadows {
-            let pass = self.shadow.begin(g, encoder);
+            let pass = self.shadow.begin(g, encoder, &mut stamps[SPAN_SHADOW]);
             (g.set_pipeline)(pass, self.chunk_depth.pipeline);
             (g.set_bind_group)(pass, 0, self.light_group, &[]);
             self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, None);
@@ -937,7 +977,7 @@ impl Renderer {
         // The world's depth from the eye, and the screen-space occlusion
         // from it, where that mode is on: the lit passes read the map.
         if self.screen_ao {
-            let pass = self.ao.begin_prepass(g, encoder);
+            let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
             (g.set_pipeline)(pass, self.chunk_prepass.pipeline);
             (g.set_bind_group)(pass, 0, self.bind_group, &[]);
             self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, None);
@@ -945,18 +985,13 @@ impl Renderer {
             self.skinned.draw_prepass(g, pass, draws, b);
             (g.end)(pass);
             release(pass);
-            self.ao.run(g, encoder);
+            self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
         }
         let canvas_view = object();
         (g.current)(world.handle, canvas_view);
         let (color, resolve) = if world.msaa_view != 0 { (world.msaa_view, canvas_view) } else { (canvas_view, 0) };
-        let q = self.query_set;
         let pass = object();
-        (g.pass)(
-            pass,
-            encoder,
-            &pass_desc(color, resolve, load::CLEAR, world.depth_view, load::CLEAR, 0.0, q, if q != 0 { 0 } else { NONE }, NONE),
-        );
+        (g.pass)(pass, encoder, &pass_desc(color, resolve, load::CLEAR, world.depth_view, load::CLEAR, 0.0, stamps[SPAN_WORLD].pass()));
         (g.set_pipeline)(pass, self.chunk.pipeline);
         (g.set_bind_group)(pass, 0, self.bind_group, &[]);
         self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, None);
@@ -982,17 +1017,17 @@ impl Renderer {
         self.debug.draw(g, pass, draws, uniforms, b);
         (g.end)(pass);
         release(pass);
-        let badges = self.badges.draw(g, encoder, color, resolve, world.depth_view, [world.width, world.height], draws, uniforms, b);
-        self.draw_cases(g, encoder, draws, uniforms, input.cases);
+        let badges = self
+            .badges
+            .draw(g, encoder, color, resolve, world.depth_view, [world.width, world.height], draws, uniforms, b, &mut stamps[SPAN_BADGES]);
+        self.draw_cases(g, encoder, draws, uniforms, input.cases, &mut stamps[SPAN_CASES]);
         if q != 0 {
-            // The frame's end, on a pass of its own that draws nothing, so the
-            // two timestamps bracket every pass of the frame.
-            let end = object();
-            (g.pass)(end, encoder, &pass_desc(color, resolve, load::LOAD, 0, load::CLEAR, 0.0, q, NONE, 1));
-            (g.end)(end);
-            release(end);
-            (g.timestamps)(encoder, q);
-            self.gpu_ms = (g.gpu_ms)();
+            let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
+            (g.timestamps)(encoder, q, written);
+            for (k, ms) in self.gpu_spans.iter_mut().enumerate() {
+                *ms = (g.gpu_ms)(k as u32);
+            }
+            self.gpu_ms = (g.gpu_ms)(GPU_SPANS.len() as u32);
         }
         (g.submit)(encoder);
         release(encoder);
@@ -1000,7 +1035,7 @@ impl Renderer {
         self.stat(draws, world, badges)
     }
 
-    fn draw_cases(&mut self, g: &GpuApi, encoder: u32, draws: &[u32], uniforms: &[f32], cases: &[(u32, u32, u32)]) {
+    fn draw_cases(&mut self, g: &GpuApi, encoder: u32, draws: &[u32], uniforms: &[f32], cases: &[(u32, u32, u32)], stamp: &mut Stamp) {
         for &(id, model, image) in cases {
             let Some(s) = surface(id) else { continue };
             if s.role != ROLE_CASE {
@@ -1052,7 +1087,7 @@ impl Renderer {
             let view_id = object();
             (g.current)(s.handle, view_id);
             let pass = object();
-            (g.pass)(pass, encoder, &pass_desc(view_id, 0, load::CLEAR, s.depth_view, load::CLEAR, 0.0, 0, NONE, NONE));
+            (g.pass)(pass, encoder, &pass_desc(view_id, 0, load::CLEAR, s.depth_view, load::CLEAR, 0.0, stamp.pass()));
             case.skinned.draw(g, pass, own, blocks());
             (g.end)(pass);
             release(pass);
@@ -1094,6 +1129,8 @@ impl Renderer {
             layers_mb: round(self.layers.bytes as f64 / MB),
             px,
             census,
+            gpu_spans: self.gpu_spans,
+            arena_mb: round(crate::gpu::arena::arena_bytes() as f64 / MB),
         }
     }
 }

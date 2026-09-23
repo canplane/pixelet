@@ -18,9 +18,26 @@ import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { CORE_KERNEL } from "@/kernel/mem.ts";
 
-import type { Frame, FrameSummary, LedgerReport, LongFrame, Spread, TaskRecord, TaskSummary } from "./report.ts";
-import { CATEGORY_NAMES, CENSUS_TAGS, FRAME, LOG, OUTCOME_NAMES, PHASE_NAMES, READ, SPREAD, STEP, STEP_NAMES, SUMMARY, TASK, TASK_PHASE_NAMES, TASK_SUMMARY, WORST } from "./ledger.spec.ts";
-import { longFramesSince } from "./long-frame.ts";
+import {
+  CATEGORY_NAMES,
+  CENSUS_TAGS,
+  FRAME,
+  GPU_SPAN_NAMES,
+  LOG,
+  OUTCOME_NAMES,
+  PHASE_NAMES,
+  READ,
+  SPREAD,
+  STEP,
+  STEP_NAMES,
+  SUMMARY,
+  TASK,
+  TASK_PHASE_NAMES,
+  TASK_SUMMARY,
+  WORST,
+} from "./ledger.spec.ts";
+import { type Frame, frameAt } from "./lane.ts";
+import { type LongFrame, longFramesSince } from "./long-frame.ts";
 
 const WORD = 8;
 /** The tail of the task ring the report carries whole, newest last. */
@@ -28,66 +45,6 @@ const RECENT_TASKS = 20;
 
 const words = (at: u32, n: u32) => new Float64Array(CORE_KERNEL.memory.buffer, at, n);
 const u32s = (at: u32, n: u32) => new Uint32Array(CORE_KERNEL.memory.buffer, at, n);
-
-function frameAt(w: F64Array, o: u32): Frame {
-  const at = (k: u32) => w[o + k];
-  const lod: Record<string, f64> = {
-    chunks: at(FRAME.lod_chunks),
-    in_frustum: at(FRAME.lod_in_frustum),
-    pending: at(FRAME.lod_pending),
-    settling: at(FRAME.lod_settling),
-    blend_active: at(FRAME.lod_blend_active),
-    offscreen_pending: at(FRAME.lod_offscreen_pending),
-    oldest_release_ms: at(FRAME.lod_oldest_release_ms),
-    oldest_visible_ms: at(FRAME.lod_oldest_visible_ms),
-    pressure: at(FRAME.lod_pressure),
-  };
-  return {
-    t: at(FRAME.t),
-    dt_ms: at(FRAME.dt_ms),
-    frame_ms: at(FRAME.frame_ms),
-    settled: at(FRAME.settled) !== 0,
-    sched_ms: at(FRAME.sched_ms),
-    budget_ms: at(FRAME.budget_ms),
-    task_ms: at(FRAME.task_ms),
-    gpu_ms: at(FRAME.gpu_ms),
-    tick_ms: at(FRAME.tick_ms),
-    phases: PHASE_NAMES.map((_, k) => at(FRAME.phases + k)),
-    draw_calls: at(FRAME.draw_calls),
-    triangles: at(FRAME.triangles),
-    buffers: at(FRAME.buffers),
-    buffer_mb: at(FRAME.buffer_mb),
-    px: at(FRAME.px),
-    tile_pages: at(FRAME.tile_pages),
-    poi_count: at(FRAME.poi_count),
-    textures_mb: { depth: at(FRAME.tex_depth), msaa: at(FRAME.tex_msaa), shadow: at(FRAME.tex_shadow), layers: at(FRAME.tex_layers) },
-    census: CENSUS_TAGS.map((_, k) => [at(FRAME.census + 2 * k), at(FRAME.census + 2 * k + 1)] as [f64, f64]),
-    heap: {
-      used_mb: at(FRAME.heap_used_mb),
-      live_mb: at(FRAME.heap_live_mb),
-      range_mb: at(FRAME.heap_range_mb),
-      refusals: at(FRAME.heap_refusals),
-      largest_free_mb: at(FRAME.heap_largest_free_mb),
-    },
-    rings: { cq_peak: at(FRAME.ring_cq_peak), spill_peak: at(FRAME.ring_spill_peak) },
-    mounts: { added: at(FRAME.mounts_added), removed: at(FRAME.mounts_removed), layouts: at(FRAME.mounts_layouts) },
-    lod,
-    q_terrain: at(FRAME.q_terrain),
-    q_poi: at(FRAME.q_poi),
-    stale: {
-      chunks: at(FRAME.stale_chunks),
-      drawn: at(FRAME.stale_drawn),
-      levels: at(FRAME.stale_levels),
-      hidden: at(FRAME.stale_hidden),
-      slot_waits: at(FRAME.slot_waits),
-      wait_levels: at(FRAME.slot_wait_levels),
-      holder_levels: at(FRAME.slot_holder_levels),
-      uncovered: at(FRAME.stale_uncovered),
-      unready: at(FRAME.stale_unready),
-      on_waiter: at(FRAME.stale_on_waiter),
-    },
-  };
-}
 
 function frames_at(at: u32, count: u32): Frame[] {
   const w = words(at, count * FRAME.WORDS);
@@ -121,6 +78,83 @@ function tasks_at(at: u32, count: u32): TaskRecord[] {
   });
 }
 
+// ---- what the ledger holds, as it is read ----
+
+export interface Spread {
+  p50: f64;
+  p95: f64;
+  max: f64;
+}
+
+export interface FrameSummary {
+  n: u32;
+  seconds: f64;
+  moving: f64;
+  missed: f64;
+  overran: f64;
+  dt: Spread;
+  task: Spread;
+  offthread: Spread;
+  gpu: Spread;
+  sched: Spread;
+  tick: Spread;
+  phases: { name: string; spread: Spread }[];
+  /** A span's time over the frames that ran it. */
+  gpu_spans: { name: string; spread: Spread }[];
+  work: [f64, f64];
+  perS: [f64, f64];
+  backlog_s: f64;
+  backlogPerS: [f64, f64];
+  tick_per_bake: f64 | null;
+  mounts: [f64, f64];
+  used_delta_mb: f64;
+  census: { tag: string; draws: f64; tris: f64 }[];
+  /** The terrain's triangles a frame, by level. */
+  level_tris: f64[];
+  last: Frame;
+}
+
+export interface TaskRecord {
+  category: string;
+  /** A u64, as its decimal digits. */
+  subject: string;
+  priority: f64;
+  enqueue_ms: f64;
+  start_ms: f64 | null;
+  end_ms: f64;
+  transport_ms: f64;
+  outcome: string;
+  fail: u32;
+  status: u32;
+  phases: [string, f64][];
+}
+
+export interface TaskSummary {
+  category: string;
+  n: u32;
+  ok: u32;
+  aborted: u32;
+  error: u32;
+  lat: Spread;
+  reasons: { fail: u32; status: u32; n: u32 }[];
+  phase_mean: [string, f64][] | null;
+}
+
+export interface LedgerReport {
+  t: f64;
+  build: { number: string; id: string; time: string };
+  frames: FrameSummary | null;
+  /** The summary's side sections, a field a number, as ledger.json names them. */
+  sections: Record<"counters" | "atlas" | "retain" | "fetch" | "poi", Record<string, f64>>;
+  steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
+  peak: Record<string, f64> | null;
+  taskN: u32;
+  tasks: TaskSummary[];
+  recent: TaskRecord[];
+  worst: { sample: Frame; prev: Frame | null }[];
+  longs: LongFrame[];
+}
+
 const spreadAt = (s: F64Array, at: u32): Spread => ({ p50: s[at + SPREAD.p50], p95: s[at + SPREAD.p95], max: s[at + SPREAD.max] });
 
 function frameSummary(s: F64Array): FrameSummary | null {
@@ -141,6 +175,7 @@ function frameSummary(s: F64Array): FrameSummary | null {
     sched: spreadAt(s, a + F.sched),
     tick: spreadAt(s, a + F.tick),
     phases: PHASE_NAMES.map((name, k) => ({ name, spread: spreadAt(s, a + F.phases + k * SPREAD.WORDS) })),
+    gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({ name, spread: spreadAt(s, a + F.gpu_spans + k * SPREAD.WORDS) })),
     work: [s[a + F.work_scans], s[a + F.work_bakes]],
     perS: [s[a + F.per_s_scans], s[a + F.per_s_bakes]],
     backlog_s: s[a + F.backlog_s],
@@ -151,6 +186,7 @@ function frameSummary(s: F64Array): FrameSummary | null {
     census: CENSUS_TAGS.map((tag, k) => ({ tag, draws: s[a + F.census + 2 * k], tris: s[a + F.census + 2 * k + 1] }))
       .filter((r) => r.draws > 0)
       .sort((x, y) => y.tris - x.tris),
+    level_tris: Array.from({ length: F.last - F.level_tris }, (_, k) => s[a + F.level_tris + k]),
     last: frameAt(s, a + F.last),
   };
 }
@@ -205,15 +241,14 @@ function read(window_ms: f64): Read {
   };
 }
 
-export type Gauge = {
+export interface Gauge {
   rec: { recording: boolean; elapsed_ms: f64; tasks: u32; frames: u32; truncated: boolean };
   frames: FrameSummary | null;
   tasks: TaskSummary[];
-  faces: [f64, f64];
+  counters: Record<string, f64>;
   atlas: { size: u32; entries: u32; shelves: u32; used_px: u32 };
-  poi: { ms: f64; frames: u32; max_frames: u32; hits: u32; candidates: u32; kept: u32; indexed: u32; dropped: u32 };
   longs: LongFrame[];
-};
+}
 
 function recOf(s: F64Array): Gauge["rec"] {
   const r = section(s, SUMMARY.rec);
@@ -225,24 +260,12 @@ const atlasOf = (s: F64Array) => section(s, SUMMARY.atlas) as Gauge["atlas"];
 /** What the panel draws: the summary over the last `window_ms`. */
 export function ledgerGaugeRead(window_ms: f64): Gauge {
   const { summary: s } = read(window_ms);
-  const c = section(s, SUMMARY.counters);
-  const poi = section(s, SUMMARY.poi);
   return {
     rec: recOf(s),
     frames: frameSummary(s),
     tasks: taskSummaries(s),
-    faces: [c.faces_kept, c.faces_possible],
+    counters: section(s, SUMMARY.counters),
     atlas: atlasOf(s),
-    poi: {
-      ms: poi.place_ms,
-      frames: poi.place_frames,
-      max_frames: poi.place_max_frames,
-      hits: poi.place_hits,
-      candidates: poi.place_candidates,
-      kept: poi.place_kept,
-      indexed: poi.index_indexed,
-      dropped: poi.index_dropped,
-    },
     longs: longFramesSince(performance.now() - window_ms),
   };
 }
@@ -250,7 +273,6 @@ export function ledgerGaugeRead(window_ms: f64): Gauge {
 /** The whole recording, as the report prints it. */
 export function ledgerReportRead(): LedgerReport {
   const { summary: s, tasks, worst } = read(Infinity);
-  const poi = section(s, SUMMARY.poi);
   const peak = section(s, SUMMARY.peak);
   const stepsAt = SUMMARY.steps.AT;
   const steps = Array.from({ length: s[stepsAt + SUMMARY.steps.count] }, (_, i) => {
@@ -270,18 +292,15 @@ export function ledgerReportRead(): LedgerReport {
     t: performance.now(),
     build: { number: BUILD_NUMBER, id: BUILD_ID, time: BUILD_TIME },
     frames: frameSummary(s),
-    counters: section(s, SUMMARY.counters),
-    atlas: atlasOf(s),
-    retain: section(s, SUMMARY.retain),
-    fetch: section(s, SUMMARY.fetch) as LedgerReport["fetch"],
-    poi: {
-      badge_count: poi.badge_count,
-      dropped: poi.dropped,
-      place: Object.fromEntries(Object.entries(poi).filter(([k]) => k.startsWith("place_")).map(([k, v]) => [k.slice(6), v])),
-      index: Object.fromEntries(Object.entries(poi).filter(([k]) => k.startsWith("index_")).map(([k, v]) => [k.slice(6), v])),
+    sections: {
+      counters: section(s, SUMMARY.counters),
+      atlas: section(s, SUMMARY.atlas),
+      retain: section(s, SUMMARY.retain),
+      fetch: section(s, SUMMARY.fetch),
+      poi: section(s, SUMMARY.poi),
     },
     steps,
-    peak: peak.present === 0 ? null : peak,
+    peak: peak.present === 0 ? null : Object.fromEntries(Object.entries(peak).filter(([k]) => k !== "present")),
     taskN: taskSummary.reduce((n, t) => n + t.n, 0),
     tasks: taskSummary,
     recent: tasks_at(tasks[0] + recentFrom * TASK.WORDS * WORD, tasks[1] - recentFrom),

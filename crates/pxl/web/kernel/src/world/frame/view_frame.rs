@@ -2,20 +2,22 @@
 
 //! The root frame's two damped halves (world/frame/view.rs): its turn
 //! about Z toward the controls' azimuth, and its translation toward putting
-//! the map centre at the origin — the view's origin rebased in the same step
-//! the translation snaps, so nothing reads the two apart for a tick.
+//! the map centre at the origin. The floating origin is decided here, once a
+//! tick, and rebased in the same step the translation is rewritten in it, so
+//! nothing reads the two apart (coord.rs `local_world_origin`).
 
 use pxl_spec::space::pvf3::fvec;
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::ivec;
 use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::config::camera_cfg::smooth::{POS_DAMP, ROT_DAMP};
 use crate::control::camera::orbit::damp_alpha;
 use crate::control::camera::store::camera_store;
 use crate::global::Global;
+use crate::layer::terrain::level::window;
 use crate::sched::tick::TickContext;
 use crate::shell::map_store::map_store;
-use crate::world::frame::coord::get_local_world_origin;
+use crate::world::frame::coord::origin_for;
 use crate::world::frame::view::{view, view_compose};
 
 // see damping.rs's DIST_EPS/POLAR_EPS comment — the same reasoning about
@@ -23,10 +25,16 @@ use crate::world::frame::view::{view, view_compose};
 const AZIMUTH_EPS: f64 = 0.0001;
 const POS_EPS: f64 = 0.0005;
 
+/// How far, in camera distances, the map centre may stand from where the view
+/// is for the view to glide there; past it the move is a jump — a search, a
+/// locate — and the view is put there at once. A drag's lag is the damping's
+/// tenth of a second of travel, a fraction of a screen, and a screen is about
+/// a camera distance across.
+const JUMP_DISTANCES: f64 = 1.0;
+
 struct FrameSteps {
     rotation_init: bool,
     translation_init: bool,
-    prev_map_origin: Option<IVec>,
 }
 
 static STEPS: Global<FrameSteps> = Global::new();
@@ -35,7 +43,6 @@ fn steps() -> &'static mut FrameSteps {
     STEPS.get(|| FrameSteps {
         rotation_init: false,
         translation_init: false,
-        prev_map_origin: None,
     })
 }
 
@@ -68,16 +75,9 @@ pub fn view_rotation_step(ctx: &mut TickContext) {
 /// centre, in the floating origin taken from it.
 pub fn view_translation_step(ctx: &mut TickContext) {
     let Some(map_center) = map_store().map_center else { return };
-    let map_origin = get_local_world_origin(Some(&map_center));
+    let map_origin = origin_for(map_center.i, window().start);
     let s = steps();
     let v = view();
-
-    let did_rebase = s.prev_map_origin != Some(map_origin);
-    s.prev_map_origin = Some(map_origin);
-
-    if did_rebase {
-        v.origin = map_origin;
-    }
 
     let local_i = ivec::sub(map_center.i, map_origin);
 
@@ -85,9 +85,18 @@ pub fn view_translation_step(ctx: &mut TickContext) {
     let ty = -(ivec::to_real(ivec::Y(local_i)) + fvec::to_real(fvec::Y(map_center.f)));
     let tz = -(ivec::to_real(ivec::Z(local_i)) + fvec::to_real(fvec::Z(map_center.f)));
 
-    if !s.translation_init || did_rebase {
-        s.translation_init = true;
+    // Where the view is, written against the origin decided now: the
+    // damping carries on through a rebase rather than jumping to its target.
+    if v.origin != map_origin {
+        let d = ivec::sub(map_origin, v.origin);
         v.origin = map_origin;
+        v.tx += ivec::to_real(ivec::X(d));
+        v.ty += ivec::to_real(ivec::Y(d));
+        v.tz += ivec::to_real(ivec::Z(d));
+    }
+    let gap = (tx - v.tx).hypot(ty - v.ty).hypot(tz - v.tz);
+    if !s.translation_init || gap > camera_store().view_state.dist * JUMP_DISTANCES {
+        s.translation_init = true;
         v.tx = tx;
         v.ty = ty;
         v.tz = tz;

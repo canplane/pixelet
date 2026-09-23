@@ -48,3 +48,15 @@ fn every_point_lies_on_the_sphere_at_its_height() {
         assert!((from_centre - want).abs() < 1e-3, "{d:?}: {from_centre} vs {want}");
     }
 }
+
+#[test]
+fn unplace_takes_a_placed_point_back_to_the_map() {
+    // Out to the window's reach and beyond, at heights from the ground to a
+    // cloud's: back to where it was on the flat map, to a hundredth of a
+    // unit, whatever its height.
+    let globe = Globe::at(SEOUL);
+    for d in [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0], [3e4, -2e4, 700.0], [-4e5, 3e5, 0.0], [2e5, 1e5, 2000.0]] {
+        let back = globe.unplace(globe.place(d));
+        assert!((back[0] - d[0]).abs() < 1e-2 && (back[1] - d[1]).abs() < 1e-2, "{d:?} came back as {back:?}");
+    }
+}

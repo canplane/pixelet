@@ -29,7 +29,7 @@ use xpute_runtime::mem::heap::alloc;
 use crate::global::Global;
 use crate::host::now;
 use crate::io::demand::{DemandKey, Phases};
-use crate::sched::ledger::spec::{CATEGORY_NAMES, FRAME, LIMITS, OUTCOME_NAMES, PHASE_NAMES, TASK, TASK_PHASE_NAMES, WORST};
+use crate::sched::ledger::spec::{CATEGORY_NAMES, FRAME, GPU_SPAN_NAMES, LIMITS, OUTCOME_NAMES, PHASE_NAMES, TASK, TASK_PHASE_NAMES, WORST};
 use crate::sched::tick::PHASES;
 
 pub use crate::sched::ledger::spec::CENSUS_TAGS;
@@ -156,20 +156,40 @@ pub const CENSUS_LEN: usize = CENSUS_TAGS.len();
 /// frame's render, in CENSUS_TAGS' order.
 pub type DrawCensus = [[f64; 2]; CENSUS_LEN];
 
+/// The GPU's side of a frame: its time, in all and by span; what it drew, by
+/// pipeline and, of the terrain, by level; and the pixels it filled.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct CpuSample {
-    /// The kernel's tick, inside the visible phase.
-    pub tick_ms: f64,
+pub struct GpuSample {
+    /// From the frame's first pass to its last, as the queue reports it once
+    /// done: lags a frame or two, and 0 before the renderer exists or where
+    /// the device keeps no time.
+    pub ms: f64,
+    /// That time by span, GPU_SPAN_NAMES' order (pxl-render's GPU_SPANS).
+    pub spans: [f64; GPU_SPANS],
+    pub draw_calls: f64,
+    pub triangles: f64,
+    pub census: DrawCensus,
+    /// The terrain's triangles by the level its chunks are of.
+    pub level_tris: [f64; LEVELS],
+    /// The canvas's width*height — the raw fill-rate primitive.
+    pub px: f64,
 }
 
+/// What the device holds for the frame: its buffers — the blocks, and the
+/// mesh arena, which is no block's — and its targets and textures.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct TexturesMb {
-    pub depth: f64,
-    pub msaa: f64,
-    pub shadow: f64,
-    pub layers: f64,
+pub struct DeviceSample {
+    /// Blocks held, and what they hold in MiB — their deltas across frames
+    /// are the upload churn.
+    pub buffers: f64,
+    pub buffer_mb: f64,
+    pub arena_mb: f64,
+    pub depth_mb: f64,
+    pub msaa_mb: f64,
+    pub shadow_mb: f64,
+    pub layers_mb: f64,
 }
 
 #[repr(C)]
@@ -199,6 +219,15 @@ pub struct MountSample {
     pub added: f64,
     pub removed: f64,
     pub layouts: f64,
+}
+
+/// The pages resident, every level's, and a level's own count.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PageSample {
+    pub total: f64,
+    pub by_level: [f64; LEVELS],
+    pub poi: f64,
 }
 
 /// The heap as facts rather than one derived word: how far the allocator has
@@ -255,28 +284,17 @@ pub struct FrameSample {
     pub budget_ms: f64,
     /// sched_ms broken down by phase, in the tick's own order, as PHASES names them.
     pub phases: [f64; PHASES.len()],
-    pub cpu: CpuSample,
+    /// The kernel's tick, inside the visible phase.
+    pub tick_ms: f64,
     /// The kernel's whole turn: the strobe in, the tick, the draw and the
     /// submit. `dt_ms - task_ms` is then everything outside it — vsync wait,
     /// compositor, GPU, GC between frames, and the shell's own glue.
     pub task_ms: f64,
-    /// From a submit to the queue reporting the work done: lags a frame or two.
-    /// 0 before the renderer exists.
-    pub gpu_ms: f64,
-    pub draw_calls: f64,
-    pub triangles: f64,
-    /// GPU buffers held, and what they hold in MiB — their deltas across frames
-    /// are the upload churn.
-    pub buffers: f64,
-    pub buffer_mb: f64,
-    pub textures_mb: TexturesMb,
-    pub census: DrawCensus,
-    /// The canvas's width*height — the raw fill-rate primitive.
-    pub px: f64,
+    pub gpu: GpuSample,
+    pub device: DeviceSample,
     pub lod: LodSample,
     pub mounts: MountSample,
-    pub tile_pages: f64,
-    pub poi_count: f64,
+    pub pages: PageSample,
     pub heap: HeapSample,
     pub rings: RingSample,
     pub work: WorkSample,
@@ -298,17 +316,17 @@ pub struct StaleSample {
     pub levels: f64,
     /// Wanted chunks with a layout that a drawn stale chunk hides.
     pub hidden: f64,
-    /// Meshes thrown away because their slot is still drawn from, and the
-    /// levels of the chunks that waited and that held the slots, as bits.
-    pub slot_waits: f64,
-    pub wait_levels: f64,
-    pub holder_levels: f64,
     /// Why the stale chunks stay: what replaces them does not cover them;
     /// covers them but is not laid out; and of those, where what is not laid
     /// out is waiting on a slot.
     pub uncovered: f64,
     pub unready: f64,
     pub on_waiter: f64,
+    /// Meshes thrown away because their slot is still drawn from, and the
+    /// levels of the chunks that waited and that held the slots, as bits.
+    pub slot_waits: f64,
+    pub wait_levels: f64,
+    pub holder_levels: f64,
 }
 
 /// One of the window's worst frames by dt, kept whole with the frame before
@@ -332,24 +350,23 @@ macro_rules! words {
 
 words!(FrameSample, FRAME::WORDS,
     t => FRAME::t, dt_ms => FRAME::dt_ms, frame_ms => FRAME::frame_ms, settled => FRAME::settled,
-    sched_ms => FRAME::sched_ms, budget_ms => FRAME::budget_ms, phases => FRAME::phases, cpu.tick_ms => FRAME::tick_ms,
-    task_ms => FRAME::task_ms, gpu_ms => FRAME::gpu_ms, draw_calls => FRAME::draw_calls, triangles => FRAME::triangles,
-    buffers => FRAME::buffers, buffer_mb => FRAME::buffer_mb,
-    textures_mb.depth => FRAME::tex_depth, textures_mb.msaa => FRAME::tex_msaa, textures_mb.shadow => FRAME::tex_shadow, textures_mb.layers => FRAME::tex_layers,
-    census => FRAME::census, px => FRAME::px,
+    sched_ms => FRAME::sched_ms, budget_ms => FRAME::budget_ms, phases => FRAME::phases, tick_ms => FRAME::tick_ms, task_ms => FRAME::task_ms,
+    gpu.ms => FRAME::gpu_ms, gpu.spans => FRAME::gpu_spans, gpu.draw_calls => FRAME::draw_calls, gpu.triangles => FRAME::triangles,
+    gpu.census => FRAME::census, gpu.level_tris => FRAME::level_tris, gpu.px => FRAME::px,
+    device.buffers => FRAME::buffers, device.buffer_mb => FRAME::buffer_mb, device.arena_mb => FRAME::arena_mb,
+    device.depth_mb => FRAME::tex_depth_mb, device.msaa_mb => FRAME::tex_msaa_mb, device.shadow_mb => FRAME::tex_shadow_mb, device.layers_mb => FRAME::tex_layers_mb,
     lod.chunks => FRAME::lod_chunks, lod.in_frustum => FRAME::lod_in_frustum, lod.pending => FRAME::lod_pending, lod.settling => FRAME::lod_settling,
     lod.blend_active => FRAME::lod_blend_active, lod.offscreen_pending => FRAME::lod_offscreen_pending,
     lod.oldest_release_ms => FRAME::lod_oldest_release_ms, lod.oldest_visible_ms => FRAME::lod_oldest_visible_ms, lod.pressure => FRAME::lod_pressure,
     mounts.added => FRAME::mounts_added, mounts.removed => FRAME::mounts_removed, mounts.layouts => FRAME::mounts_layouts,
-    tile_pages => FRAME::tile_pages, poi_count => FRAME::poi_count,
+    pages.total => FRAME::pages, pages.by_level => FRAME::level_pages, pages.poi => FRAME::poi_count,
     heap.used_mb => FRAME::heap_used_mb, heap.live_mb => FRAME::heap_live_mb, heap.range_mb => FRAME::heap_range_mb,
     heap.refusals => FRAME::heap_refusals, heap.largest_free_mb => FRAME::heap_largest_free_mb,
     rings.cq_peak => FRAME::ring_cq_peak, rings.spill_peak => FRAME::ring_spill_peak,
     work.scans => FRAME::work_scans, work.bakes => FRAME::work_bakes, q_terrain => FRAME::q_terrain, q_poi => FRAME::q_poi,
-    stale.chunks => FRAME::stale_chunks, stale.drawn => FRAME::stale_drawn, stale.levels => FRAME::stale_levels,
-    stale.hidden => FRAME::stale_hidden, stale.slot_waits => FRAME::slot_waits,
-    stale.wait_levels => FRAME::slot_wait_levels, stale.holder_levels => FRAME::slot_holder_levels,
+    stale.chunks => FRAME::stale_chunks, stale.drawn => FRAME::stale_drawn, stale.levels => FRAME::stale_levels, stale.hidden => FRAME::stale_hidden,
     stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready, stale.on_waiter => FRAME::stale_on_waiter,
+    stale.slot_waits => FRAME::slot_waits, stale.wait_levels => FRAME::slot_wait_levels, stale.holder_levels => FRAME::slot_holder_levels,
 );
 
 words!(TaskRow, TASK::WORDS,
@@ -361,6 +378,16 @@ words!(TaskRow, TASK::WORDS,
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);
 
 const _: () = assert!(PHASE_NAMES.len() == PHASES.len(), "ledger.json names the tick's phases");
+
+/// The GPU's spans and the pyramid's levels, a lane of each.
+pub const GPU_SPANS: usize = GPU_SPAN_NAMES.len();
+pub const LEVELS: usize = LIMITS::LEVELS as usize;
+const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "ledger.json names the renderer's spans");
+
+#[cfg(test)]
+#[path = "record.test.rs"]
+mod test;
+const _: () = assert!(LEVELS == pxl_spec::bake::constant::PAGE_TOP_LEVEL as usize + 1, "a lane a level holds every level of the pyramid");
 
 /// The rings keep the last minute: a record older than WINDOW_MS is dropped as
 /// a new one lands, so what the ledger holds is bounded by the display's rate,
@@ -450,6 +477,7 @@ pub struct FramePeak {
     pub dt_ms: f64,
     pub sched_ms: f64,
     pub tick_ms: f64,
+    pub gpu_ms: f64,
     pub draw_calls: f64,
     pub triangles: f64,
     pub q_terrain: f64,
@@ -632,9 +660,10 @@ pub fn ledger_record_frame(s: FrameSample) {
     let p = &mut l.frame_peak;
     p.dt_ms = p.dt_ms.max(s.dt_ms);
     p.sched_ms = p.sched_ms.max(s.sched_ms);
-    p.tick_ms = p.tick_ms.max(s.cpu.tick_ms);
-    p.draw_calls = p.draw_calls.max(s.draw_calls);
-    p.triangles = p.triangles.max(s.triangles);
+    p.tick_ms = p.tick_ms.max(s.tick_ms);
+    p.gpu_ms = p.gpu_ms.max(s.gpu.ms);
+    p.draw_calls = p.draw_calls.max(s.gpu.draw_calls);
+    p.triangles = p.triangles.max(s.gpu.triangles);
     p.q_terrain = p.q_terrain.max(s.q_terrain);
     p.q_poi = p.q_poi.max(s.q_poi);
     p.chunks = p.chunks.max(s.lod.chunks);

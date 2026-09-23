@@ -25,7 +25,7 @@ use crate::layer::object::geometry::{aabb_overlap, object_aabb, Aabb};
 use crate::layer::object::store::{get_objects_near, OccupiedEntry};
 use crate::layer::terrain::elevation::with_ele;
 use crate::world::chunk::raycast::{ray_hit_world, RayLike, WorldHit};
-use crate::world::frame::coord::{get_local_world_origin, local_world_to_canonical};
+use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
 
 const INTERACT_RADIUS_CELL: f64 = 32.0 / U_PER_CELL - 0.707;
 const INTERACT_RADIUS_U: f64 = INTERACT_RADIUS_CELL * U_PER_CELL;
@@ -228,7 +228,7 @@ pub struct PickResult {
 /// in the root frame.
 pub fn ray_pick(origin: Vec3, direction: Vec3, map_center: Option<&Pvf3>) -> Option<PickResult> {
     let map_center = map_center?;
-    let map_origin = get_local_world_origin(Some(map_center));
+    let map_origin = local_world_origin();
 
     let hit = ray_hit_world(&RayLike { origin, direction }, map_origin, INTERACT_RADIUS_U * 1.5)?;
 

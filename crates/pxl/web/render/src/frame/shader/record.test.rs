@@ -155,24 +155,17 @@ fn the_skys_layouts_match_their_structs() {
             ("moon_light", a::MOON_LIGHT),
             ("land", a::LAND),
             ("sun_seen", a::SUN_SEEN),
+            ("up", a::UP),
+            ("cloud_base", a::CLOUD_BASE),
+            ("cloud_frac", a::CLOUD_FRAC),
+            ("cloud_time", a::CLOUD_TIME),
+            ("cloud_count", a::CLOUD_COUNT),
+            ("cloud_altitude_km", a::CLOUD_ALTITUDE),
+            ("cloud_gone_km", a::CLOUD_GONE),
         ],
     );
     holds(SHADER_SKY, "Sky", r::SKY_FLOATS, &[("ray", 0), ("pole", r::SKY_POLE), ("mapped", r::SKY_MAPPED)]);
-    holds(
-        SHADER_CLOUDS,
-        "Clouds",
-        c::CLOUDS_FLOATS,
-        &[
-            ("ray", 0),
-            ("base", c::BASE),
-            ("frac", c::FRAC),
-            ("time", c::TIME),
-            ("count", c::COUNT),
-            ("altitude_km", c::ALTITUDE),
-            ("sun_at", c::SUN_AT),
-            ("moon_at", c::MOON_AT),
-        ],
-    );
+    holds(SHADER_CLOUDS, "Clouds", c::CLOUDS_FLOATS, &[("ray", 0), ("sun_at", c::SUN_AT), ("moon_at", c::MOON_AT)]);
     holds(
         SHADER_STARS,
         "Stars",
@@ -184,6 +177,7 @@ fn the_skys_layouts_match_their_structs() {
             ("intensity", s::INTENSITY),
             ("depth", s::DEPTH),
             ("density", s::DENSITY),
+            ("up", s::UP),
         ],
     );
     for (name, k) in [("TRANSMITTANCE_SIZE", a::TRANSMITTANCE), ("MULTISCATTER_SIZE", a::MULTISCATTER), ("SKY_VIEW_SIZE", a::SKY_VIEW)] {
@@ -338,5 +332,36 @@ fn every_pipeline_matches_its_shader() {
                 );
             }
         }
+    }
+}
+
+/// Whether `f` calls a function named `name`, or calls one that does.
+fn reaches(module: &Module, f: &naga::Function, name: &str) -> bool {
+    fn block(module: &Module, b: &naga::Block, name: &str) -> bool {
+        b.iter().any(|st| match st {
+            naga::Statement::Call { function, .. } => {
+                let callee = &module.functions[*function];
+                callee.name.as_deref() == Some(name) || reaches(module, callee, name)
+            }
+            naga::Statement::Block(inner) => block(module, inner, name),
+            naga::Statement::If { accept, reject, .. } => block(module, accept, name) || block(module, reject, name),
+            naga::Statement::Loop { body, continuing, .. } => block(module, body, name) || block(module, continuing, name),
+            naga::Statement::Switch { cases, .. } => cases.iter().any(|c| block(module, &c.body, name)),
+            _ => false,
+        })
+    }
+    block(module, &f.body, name)
+}
+
+#[test]
+fn every_shader_that_places_the_world_lays_it_on_the_planet() {
+    for kind in WORLD_SHADERS {
+        let (module, _) = compile(kind);
+        let vs = module
+            .entry_points
+            .iter()
+            .find(|e| e.stage == ShaderStage::Vertex)
+            .unwrap_or_else(|| panic!("shader {kind} has a vertex stage"));
+        assert!(reaches(&module, &vs.function, "on_globe_of"), "shader {kind} places the world off the planet");
     }
 }
