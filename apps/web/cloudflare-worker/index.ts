@@ -78,10 +78,11 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  *   a group names the places its pages are in by number into it. A missing
  *   group means "no page under it is in any place", which the kernel's
  *   layer/geocode/ reads as no label.
- * - `asset/<sha256>` — a model or an image, named by its content;
- *   pxl-asset-bake's ingest_asset writes them and the catalogs name them by
- *   path. No version segment: a changed file is a new key, which is what makes
- *   `immutable` true of it.
+ * - `asset/<path>/<stem>-<12 hex>.<ext>` — a model or an image under the tree
+ *   it lives in, with a hash of its bytes in the stem, the way a bundler names
+ *   a chunk. pxl-asset-bake's ingest_asset writes them and the catalogs name
+ *   them by path. No version segment and none wanted: a changed file is a new
+ *   name, which is what makes `immutable` true of it.
  *
  * The version is `v` and a number, and this pattern does not read which one:
  * the client asks for whatever `published.json` says, so a bump is a client
@@ -99,9 +100,12 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * key space was some 10^20 strings a level and all but a handful named
  * nothing. A quadkey of a given length is a page and there are no others, so
  * the key space here *is* the address space and this pattern turns away only
- * what was never an address.
+ * what was never an address. An asset is the one key nothing computes — the
+ * shell looks it up in a table it ships — so its shape is all there is to
+ * match, and the hash in the stem is what makes that shape worth matching.
  */
-const KEY_RE = /^(?:terrain\/v\d{1,3}\/(?:_ocean|[0-3]{5,15})|poi\/v\d{1,3}\/[0-3]{15}|geocode\/v\d{1,3}\/(?:_dict|[0-3]{11})|asset\/[0-9a-f]{64})$/;
+const KEY_RE =
+  /^(?:terrain\/v\d{1,3}\/(?:_ocean|[0-3]{5,15})|poi\/v\d{1,3}\/[0-3]{15}|geocode\/v\d{1,3}\/(?:_dict|[0-3]{11})|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$/;
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the
  * cache has no meaning for is a header it leaves alone, which is the whole

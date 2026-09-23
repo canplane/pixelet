@@ -15,14 +15,14 @@ how it gets there and how you know it arrived.
 
 ## What the bucket holds
 
-| Prefix                  | Object                      | Named by            | Policy                                                        |
-| ----------------------- | --------------------------- | ------------------- | ------------------------------------------------------------- |
-| `terrain/<version>/`    | packed XTP page, `_ocean`   | quadkey, 5–15       | immutable; a re-bake is a new version                         |
-| `poi/<version>/`        | packed XTP page             | quadkey, 15         | version = format; content rewritten in place monthly          |
-| `geocode/<version>/`    | packed JSON page, `_dict`   | quadkey, 11         | same as poi                                                   |
-| `asset/`                | glb, png, webp — not packed | sha256 of the bytes | immutable by construction; unreferenced keys deleted whenever |
-| `_meta/land_pages.json` | terrain's land/ocean list   | fixed name          | mutable; rewritten with a terrain re-bake                     |
-| `_meta/build-counter`   | the official build count    | fixed name          | mutable; taken and written by CI's gate, never by hand        |
+| Prefix                  | Object                      | Named by               | Policy                                                        |
+| ----------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------- |
+| `terrain/<version>/`    | packed XTP page, `_ocean`   | quadkey, 5–15          | immutable; a re-bake is a new version                         |
+| `poi/<version>/`        | packed XTP page             | quadkey, 15            | version = format; content rewritten in place monthly          |
+| `geocode/<version>/`    | packed JSON page, `_dict`   | quadkey, 11            | same as poi                                                   |
+| `asset/`                | glb, png, webp — not packed | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever |
+| `_meta/land_pages.json` | terrain's land/ocean list   | fixed name             | mutable; rewritten with a terrain re-bake                     |
+| `_meta/build-counter`   | the official build count    | fixed name             | mutable; taken and written by CI's gate, never by hand        |
 
 A page is named by its **quadkey**: the Web Mercator tile key at the zoom the
 page is held at, one base-4 digit a zoom, coarsest first (pxl-spec
@@ -141,20 +141,23 @@ the two in step.
 
 ```bash
 cargo run --manifest-path asset/script/Cargo.toml
-# -> ./out/asset/{glb,png,webp}/<sha256>, and regenerates
-#    crates/pxl/spec/src/asset/ingested.spec.rs and
+# -> ./out/asset/<path>/<stem>-<12 hex>.<ext>, the tree the bucket holds, and
+#    regenerates crates/pxl/spec/src/asset/ingested.spec.rs and
 #    apps/web/src/catalog/asset/ingested.spec.ts
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
-  aws s3 sync ./out/asset/${t%%:*} s3://pixelet-tiles/asset \
+  aws s3 sync ./out/asset s3://pixelet-tiles/asset \
     --profile r2 --endpoint-url $R2 \
+    --exclude "*" --include "*.${t%%:*}" \
     --content-type ${t#*:} --cache-control "public, max-age=31536000, immutable"
 done
 ```
 
-One sync per type so the content-type is stored with the object. Not
-gzipped — glb, png and webp are already compressed — so no
-`Content-Encoding`. A re-run uploads only new hashes.
+One sync per type so the content-type is stored with the object, selected by
+extension now that the tree mirrors `asset/` rather than being split by type.
+Not gzipped — glb, png and webp are already compressed — so no
+`Content-Encoding`. A re-run uploads only what changed, since a changed file
+has a new name.
 
 **Commit both regenerated tables with the asset change, and upload
 before deploying**: the shipped palette reads that table, and a key it

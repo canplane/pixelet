@@ -440,22 +440,28 @@ async fn geocode(State(app): State<Arc<App>>, Path(raw): Path<String>) -> Respon
 
 /// A key is the sha256 of the object's bytes; the ingest writes each under its
 /// type, so the content type is known without an extension.
+/// What an asset's extension says it is. The bucket stores the type with the
+/// object; here it is read off the name, which is the same fact either way.
 const ASSET_TYPES: [(&str, &str); 3] = [("glb", "model/gltf-binary"), ("png", "image/png"), ("webp", "image/webp")];
 
-async fn asset(State(app): State<Arc<App>>, Path(hash): Path<String>) -> Response {
-    if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) {
+async fn asset(State(app): State<Arc<App>>, Path(name): Path<String>) -> Response {
+    // An asset's name is its own path, so a request could otherwise ask for a
+    // path out of the ingest's tree.
+    if name.split('/').any(|seg| seg.is_empty() || seg == "." || seg == "..") {
         return (StatusCode::NOT_FOUND, "not found").into_response();
     }
-    for (dir, content_type) in ASSET_TYPES {
-        let path = app.asset_dir.join(dir).join(&hash);
-        if let Ok(bytes) = tokio::fs::read(&path).await {
+    let Some(content_type) = name.rsplit_once('.').and_then(|(_, ext)| ASSET_TYPES.iter().find(|(e, _)| *e == ext)).map(|(_, t)| *t) else {
+        return (StatusCode::NOT_FOUND, "not found").into_response();
+    };
+    match tokio::fs::read(app.asset_dir.join(&name)).await {
+        Ok(bytes) => {
             let mut headers = HeaderMap::new();
             headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
             headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable"));
-            return (headers, bytes).into_response();
+            (headers, bytes).into_response()
         }
+        Err(_) => (StatusCode::NOT_FOUND, "not found — run the asset ingest").into_response(),
     }
-    (StatusCode::NOT_FOUND, "not found — run the asset ingest").into_response()
 }
 
 /// Drops what a re-ingest made stale. A page is a pure function of source data
@@ -583,7 +589,7 @@ fn run() -> Result<(), String> {
         .route(&format!("{TILE_ROOT}/geocode/{{quadkey}}"), get(geocode))
         // Its own root: an asset is neither server's, and its URL is its bucket
         // key with a leading slash.
-        .route(&format!("{ASSET_ROOT}/{{hash}}"), get(asset))
+        .route(&format!("{ASSET_ROOT}/{{*name}}"), get(asset))
         .route(&format!("{GEO_INTERNAL}/world/{{kind}}/cache/invalidate"), post(invalidate))
         .with_state(app.clone());
 
