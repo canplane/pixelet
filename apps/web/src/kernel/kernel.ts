@@ -21,6 +21,7 @@ import { load_image, load_model } from "@/kernel/io/load.ts";
 import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
 import { CORE_KERNEL } from "@/kernel/mem.ts";
 import { text_at } from "@/kernel/module.ts";
+import { declareUnsupported } from "@/app/store/unsupported-store.ts";
 import { acquire_device } from "@/kernel/render/gpu.ts";
 import { request_frame } from "@/kernel/sched.ts";
 import { set_snapshot } from "@/kernel/shell.ts";
@@ -74,7 +75,12 @@ function gpu_boot(): void {
   };
   void acquire_device(lost).then((info) => {
     if ("reason" in info) {
-      console.error(`[gpu] ${info.reason}; nothing can be drawn`);
+      // The same end as a browser that cannot read the wire: nothing here is a
+      // moment to recover from, so it is said once, in front of everything,
+      // rather than left to a console nobody on that browser will open
+      // (app/unsupported.tsx).
+      console.error(`[gpu] ${info.detail}; nothing can be drawn`);
+      declareUnsupported(info.reason);
       return;
     }
     CORE_BUILD.send(0, Command.GPU_CREATE, packet((b) => b.u32(info.align).bool(info.timestamps)));

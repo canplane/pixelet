@@ -19,6 +19,7 @@ import type { U32Array } from "@xpute/core/abi/array.ts";
 import type { f32, f64, u32 } from "@xpute/core/abi/word.ts";
 import { handle_slot } from "@xpute/runtime/abi/handle.ts";
 
+import type { UnsupportedReason } from "@/app/store/unsupported-store.ts";
 import { address, compare, dimension, filter, format, load, paint, record, resource } from "@/kernel/render/gpu/api.spec.ts";
 
 type GpuObject =
@@ -52,11 +53,26 @@ export interface DeviceInfo {
   align: u32;
   timestamps: boolean;
 }
-/** Why the browser answered with no device, in the words of whoever has to
- * act on it: the ways WebGPU goes missing are fixed in different places and
- * one sentence for all of them sends the reader to the wrong one. */
+/** Why the browser answered with no device. The ways WebGPU goes missing are
+ * fixed in different places, so `reason` picks the sentence the reader is
+ * shown (app/store/unsupported-store.ts) rather than being one; `detail` is
+ * the same fact for whoever is reading a console, which names what a sentence
+ * for a reader should not. */
 export interface NoDevice {
-  reason: string;
+  reason: UnsupportedReason;
+  detail: string;
+}
+
+/** What the browser is missing, where that is knowable without asking it for
+ * anything — no adapter request, no module, no kernel. A browser with no
+ * WebGPU has no use for any of those, so the page becomes the notice rather
+ * than being covered by it (app/bootstrap.ts).
+ *
+ * Whether an adapter answers is not knowable here: it is a question for the
+ * device request, and by then the module is loaded either way. */
+export function missing_before_boot(): UnsupportedReason | null {
+  if ("gpu" in navigator) return null;
+  return isSecureContext ? "webgpu" : "insecure";
 }
 
 /** The device, once the browser answers, or why there is none. `lost` hears
@@ -66,10 +82,12 @@ export async function acquire_device(lost: () => void): Promise<DeviceInfo | NoD
   // same browser on the same machine has WebGPU at localhost and none at the
   // dev server's LAN address over http.
   if (!("gpu" in navigator)) {
-    return { reason: isSecureContext ? "this browser has no navigator.gpu" : `${location.origin} is not a secure context, which is the only place navigator.gpu is exposed` };
+    return isSecureContext
+      ? { reason: "webgpu", detail: "this browser has no navigator.gpu" }
+      : { reason: "insecure", detail: `${location.origin} is not a secure context, which is the only place navigator.gpu is exposed` };
   }
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-  if (!adapter) return { reason: "navigator.gpu is here but no adapter answered — the GPU is unavailable or blocklisted (chrome://gpu)" };
+  if (!adapter) return { reason: "gpu", detail: "navigator.gpu is here but no adapter answered — the GPU is unavailable or blocklisted (chrome://gpu)" };
   const timestamps = adapter.features.has("timestamp-query");
   const d = await adapter.requestDevice({ requiredFeatures: timestamps ? ["timestamp-query"] : [] });
   // What the adapter says it can do, on a device nobody can attach a debugger

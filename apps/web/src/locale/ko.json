@@ -1,7 +1,7 @@
 {
   "settings": {
     "title": "설정",
-    "description": "언어, 렌더링, 품질 옵션을 조정합니다",
+    "description": "언어, 그래픽, 품질 옵션을 조정합니다",
     "trigger_aria_label": "설정",
     "close": "닫기",
     "tabs": {
@@ -13,17 +13,17 @@
       "korean": "한국어",
       "english": "English"
     },
-    "cost_legend": "LOW / MED / HIGH는 하드웨어 성능 부담을 뜻합니다. 프레임 드랍이 발생하면 HIGH 항목부터 해제해 주세요.",
+    "cost_legend": "LOW / MED / HIGH는 각 옵션이 성능에 미치는 영향을 나타냅니다. 프레임 드랍이 발생하면 HIGH 항목부터 꺼 보세요.",
     "display": {
       "section_title": "표시",
-      "section_caption": "월드에 무엇을 보여줄지 설정합니다",
+      "section_caption": "월드에 표시할 요소를 설정합니다",
       "show_decor": {
         "label": "데코",
-        "description": "지형에 절차적으로 흩뿌려진 나무와 차량 등을 그립니다. 직접 놓은 것은 이 설정과 관계없이 남습니다."
+        "description": "지형에 자동으로 배치된 나무와 차량 등의 데코를 표시합니다. 직접 배치한 오브젝트는 이 설정과 관계없이 표시됩니다."
       },
       "show_structures": {
         "label": "건물",
-        "description": "지형 위에 건물을 그릴지 설정합니다."
+        "description": "지형 위의 건물을 표시하거나 숨깁니다."
       },
       "texture_pack": {
         "label": "텍스처",
@@ -32,37 +32,37 @@
     },
     "camera": {
       "section_title": "카메라",
-      "section_caption": "시점을 움직이는 방식을 설정합니다",
+      "section_caption": "카메라가 움직이는 방식을 설정합니다",
       "lock_camera_tilt": {
         "label": "카메라 기울기 고정",
-        "description": "카메라의 수직 회전은 고정하고 수평 회전은 유지합니다."
+        "description": "카메라의 수직 회전을 고정하고 수평 회전만 허용합니다."
       }
     },
     "lighting": {
       "section_title": "조명 & 그림자",
-      "section_caption": "형태와 경계를 또렷하게 보여주는 효과",
+      "section_caption": "형태와 경계, 깊이감을 강조합니다",
       "show_edge_shade": {
         "label": "큐브 외곽선",
-        "description": "허공과 맞닿은 모서리만 어둡게 합니다. 평지는 이음매 없이 이어지고, 높낮이가 바뀌는 곳만 선으로 드러납니다."
+        "description": "허공과 맞닿은 모서리만 어둡게 하여 평지는 매끄럽게 이어지고, 높낮이가 바뀌는 곳만 선으로 드러나게 합니다."
       },
       "ao": {
         "label": "음영",
         "off": {
           "label": "없음",
-          "description": "모든 면이 주변광을 그대로 받습니다."
+          "description": "모든 면에 동일한 주변광을 적용합니다."
         },
         "corner": {
           "label": "모서리 (기하)",
-          "description": "큐브가 닿은 바닥과 안쪽 모서리를 어둡게 해, 블록이 바닥 위에 떠 있지 않고 놓여 있는 것처럼 보이게 합니다. 픽셀당 연산 몇 개."
+          "description": "큐브가 바닥과 맞닿는 부분과 안쪽 모서리를 어둡게 하여 블록이 떠 있지 않고 바닥에 놓인 것처럼 보이게 합니다. 픽셀당 몇 번의 연산만 필요합니다."
         },
         "screen": {
           "label": "정밀 (SSAO)",
-          "description": "오브젝트가 맞닿는 구석이나 틈새에 세밀한 음영을 표현하여 입체감을 높입니다. 화면 전체를 다시 계산하므로 가장 무겁습니다."
+          "description": "오브젝트가 맞닿는 부분과 구석, 틈새에 세밀한 음영을 더해 입체감을 높입니다. 화면 전체를 처리하므로 가장 많은 성능을 사용합니다."
         }
       },
       "show_rim_light": {
         "label": "림 라이트",
-        "description": "오브젝트 실루엣에 얇은 하이라이트를 추가하여 배경과 선명하게 분리합니다."
+        "description": "오브젝트의 실루엣에 은은한 하이라이트를 더해 배경과 선명하게 구분합니다."
       }
     },
     "quality": {
@@ -71,11 +71,11 @@
     },
     "disclaimer": {
       "section_title": "유의사항",
-      "demo_notice": "본 서비스는 데모로, 예고 없이 데이터가 사라지거나 제공이 중단될 수 있습니다.",
+      "demo_notice": "본 서비스는 데모로 제공되며, 예고 없이 데이터가 삭제되거나 서비스가 중단될 수 있습니다.",
       "coverage_notice": "현재 대한민국 지역만 지원하며, 그 외 지역은 바다로 표시됩니다.",
-      "storage_notice": "배치한 오브젝트는 서버에 저장되지 않으며, 현재 기기에만 보관됩니다.",
+      "storage_notice": "직접 배치한 오브젝트는 서버에 저장되지 않으며, 현재 기기에만 보관됩니다.",
       "location_notice": "사용자의 위치 정보는 수집하거나 저장하지 않습니다.",
-      "character_notice": "캐릭터와 데코는 CC0 라이선스의 <kenney>Kenney</kenney> 에셋 팩이 적용됩니다."
+      "character_notice": "캐릭터와 데코에는 CC0 라이선스의 Kenney 에셋 팩을 사용합니다."
     },
     "attribution": {
       "section_title": "출처"
@@ -149,7 +149,7 @@
   },
   "drawer_modal": {
     "title": "서랍",
-    "description": "배치할 수 있는 모든 큐브 색상과 데코 종류, 그리고 동행의 외형입니다.",
+    "description": "배치할 수 있는 모든 큐브와 데코, 캐릭터를 둘러봅니다.",
     "close": "닫기",
     "tabs": {
       "cube": "큐브",
@@ -212,36 +212,36 @@
   },
   "device": {
     "orientation": {
-      "unsupported": "이 환경에서는 방향 센서를 지원하지 않습니다.",
+      "unsupported": "이 환경에서는 방향 센서를 사용할 수 없습니다.",
       "permission_denied": "방향 센서 권한이 거부되었습니다.",
-      "permission_error": "방향 센서 권한 요청 중 오류가 발생했습니다.",
+      "permission_error": "방향 센서 권한을 요청하는 중 오류가 발생했습니다.",
       "signal_lost": "방향 센서 신호가 끊겼습니다."
     },
     "geolocation": {
-      "unsupported": "이 환경에서는 위치 정보를 지원하지 않습니다.",
-      "generic_error": "위치 정보를 가져올 수 없습니다.",
-      "permission_denied": "위치 권한을 허용해주세요.",
-      "position_unavailable": "위치 신호를 잡을 수 없습니다.",
-      "timeout": "수신 시간이 초과되었습니다."
+      "unsupported": "이 환경에서는 위치 정보를 사용할 수 없습니다.",
+      "generic_error": "현재 위치를 확인할 수 없습니다.",
+      "permission_denied": "위치 권한을 허용해 주세요.",
+      "position_unavailable": "현재 위치를 확인할 수 없습니다.",
+      "timeout": "위치 정보를 가져오는 데 시간이 초과되었습니다."
     }
   },
   "toast": {
     "location_weak_signal": "위치 신호가 약합니다.",
-    "location_checking": "위치를 확인하고 있습니다.",
+    "location_checking": "현재 위치를 확인하고 있습니다.",
     "map_load_error": "공간을 불러올 수 없습니다.",
     "world_ready": "공간을 불러왔습니다.",
     "map_loading": "공간을 불러오고 있습니다.",
-    "companion_loading": "동행을 준비하는 중입니다."
+    "companion_loading": "동행을 준비하고 있습니다."
   },
   "map": {
     "scale_bar": {
-      "reset_zoom": "줌 리셋"
+      "reset_zoom": "줌 초기화"
     },
     "mode_bar": {
       "palette_tooltip": "팔레트",
       "pointer": "포인터",
       "eraser": "지우개",
-      "message_placeholder": "메시지 입력...",
+      "message_placeholder": "메시지 입력…",
       "message_tooltip": "메시지",
       "send": "전송",
       "catalog_tooltip": "전체 카탈로그 열기"
@@ -253,20 +253,23 @@
       "exit_compass_mode": "나침반 모드 종료"
     },
     "sensors": {
-      "enable": "위치·방향 센서 권한 요청"
+      "enable": "위치·방향 센서 사용"
     },
     "search": {
       "trigger_aria_label": "장소 검색",
-      "placeholder": "장소 검색...",
+      "placeholder": "장소 검색…",
       "clear_aria_label": "검색어 지우기",
-      "loading": "검색 중...",
-      "no_results": "검색 결과 없음",
+      "loading": "검색 중…",
+      "no_results": "검색 결과가 없습니다",
       "section_areas": "지역",
       "section_places": "장소"
     }
   },
   "unsupported": {
     "title": "지원하지 않는 브라우저입니다",
-    "encoding": "지도 데이터는 zstd로 압축해 보내는데, 이 브라우저는 이를 읽지 못합니다. 최신 버전의 Chrome, Edge, Firefox, Safari에서 열어 주세요."
+    "encoding": "지도 데이터는 zstd로 압축되어 있지만, 이 브라우저에서는 이를 해제할 수 없습니다. 최신 버전의 Chrome, Edge, Firefox 또는 Safari에서 열어 주세요.",
+    "webgpu": "이 브라우저는 지도를 그리는 데 필요한 WebGPU를 지원하지 않습니다. 최신 버전의 Chrome, Edge, Firefox 또는 Safari에서 열어 주세요.",
+    "gpu": "WebGPU를 지원하지만 그래픽 어댑터를 사용할 수 없습니다. GPU가 비활성화되었거나 차단되었을 수 있습니다. Chrome에서는 chrome://gpu에서 자세한 원인을 확인할 수 있습니다.",
+    "insecure": "WebGPU를 사용하려면 보안 연결이 필요하지만, 현재 페이지는 HTTP로 열려 있습니다. HTTPS 또는 localhost로 열어 주세요."
   }
 }

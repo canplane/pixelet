@@ -8,7 +8,6 @@ import { useTranslation } from "react-i18next";
 import { isDevSection, type SettingKey, SETTINGS, type SettingSection, settingsIn, type ToggleKey } from "@/feature/setting/schema.ts";
 import { SectionTitle, SettingGroup, SettingRadioRow, SettingRow } from "./row.tsx";
 import { kernel_action, useKernel } from "@/kernel/shell.ts";
-import { Separator } from "@/shared/ui/shadcn/separator.tsx";
 
 const SECTION_ICONS: Partial<Record<SettingSection, LucideIcon>> = {
   display: Eye,
@@ -39,8 +38,6 @@ export function SettingsSection(props: { section: SettingSection; children?: Rea
 
   return (
     <div className="flex flex-col gap-1">
-      {/* A dev section is set apart from the rest of the sheet, not just labelled. */}
-      {dev && <Separator />}
       <SectionTitle icon={SECTION_ICONS[section]} caption={t(`settings.${section}.section_caption`)} dev={dev}>
         {t(`settings.${section}.section_title`)}
       </SectionTitle>
