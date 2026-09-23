@@ -14,8 +14,9 @@
 // written from it, and the generator fails when the Worker's own literals or
 // the deploy guard's sentinels drift from it.
 //
-// `bundle` marks a branch the client requests whole, so its path survives
-// minification as one literal and the deploy guard can look for it. A root
+// `bundle` names the artifact that carries a branch the client requests
+// whole — the shell's bundle or the kernel's module — so its path survives
+// as one literal and the deploy guard knows which file to look in. A root
 // never does: a branch is folded into a single constant here, and nothing in
 // the client spells a root on its own.
 

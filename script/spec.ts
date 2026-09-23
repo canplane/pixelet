@@ -1291,7 +1291,7 @@ async function categoryOutputs(): Promise<Output[]> {
 interface RouteSpec {
   $doc: string[];
   roots: Record<string, { path: string; $doc?: string[] }>;
-  branches: Record<string, { under: string; name: string; bundle?: boolean; $doc?: string[] }>;
+  branches: Record<string, { under: string; name: string; bundle?: "shell" | "kernel"; $doc?: string[] }>;
 }
 
 async function routeOutputs(): Promise<Output[]> {
@@ -1327,22 +1327,26 @@ async function routeOutputs(): Promise<Output[]> {
     );
   }
 
-  // A root never reaches the bundle as its own literal — a branch is folded
+  // A root never reaches an artifact as its own literal — a branch is folded
   // into one constant here, so the client carries `/geo/tiles` and nothing
   // spelling `/geo` alone — and a guard that looked for one would fail every
   // build. What it can look for is the branches the client requests whole,
-  // which is what `bundle` marks.
+  // which is what `bundle` marks, in the artifact `bundle` names. Both lists
+  // are checked, because a path that moves between the two looks exactly like
+  // a path that has gone missing (2026-09-23).
   const guard = await Deno.readTextFile(join(root, "apps/web/script/check-bundle.ts"));
-  const sentinels = guard.match(/const SENTINELS = \[([^\]]*)\]/);
-  if (!sentinels) throw new Error("apps/web/script/check-bundle.ts: no SENTINELS to check against spec/pxl/spec/route.json");
-  const listedSentinels = [...sentinels[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
-  const wantSentinels = Object.entries(spec.branches).filter(([, b]) => b.bundle).map(([n]) => paths.get(n)!).sort();
-  if (JSON.stringify(listedSentinels) !== JSON.stringify(wantSentinels)) {
-    throw new Error(
-      `apps/web/script/check-bundle.ts's SENTINELS is ${JSON.stringify(listedSentinels)} where spec/pxl/spec/route.json marks ` +
-        `${JSON.stringify(wantSentinels)} as reaching the bundle. A sentinel the build never emits fails every deploy; ` +
-        `one the build dropped passes a guard that is checking nothing.`,
-    );
+  for (const [list, where] of [["SENTINELS", "shell"], ["KERNEL_ROUTE_SENTINELS", "kernel"]] as const) {
+    const found = guard.match(new RegExp(`const ${list} = \\[([^\\]]*)\\]`));
+    if (!found) throw new Error(`apps/web/script/check-bundle.ts: no ${list} to check against spec/pxl/spec/route.json`);
+    const listed = [...found[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
+    const want = Object.entries(spec.branches).filter(([, b]) => b.bundle === where).map(([n]) => paths.get(n)!).sort();
+    if (JSON.stringify(listed) !== JSON.stringify(want)) {
+      throw new Error(
+        `apps/web/script/check-bundle.ts's ${list} is ${JSON.stringify(listed)} where spec/pxl/spec/route.json marks ` +
+          `${JSON.stringify(want)} as reaching the ${where}. A sentinel the build never emits fails every deploy; ` +
+          `one the build dropped passes a guard that is checking nothing.`,
+      );
+    }
   }
 
   const named = (name: string, value: string) => ({ name, value });

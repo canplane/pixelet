@@ -55,12 +55,23 @@ const DEV_MARKERS = ["dev/test", "development"];
  * These have to be literals that survive minification, not paths the app
  * composes at runtime, and what survives is the whole branch the client
  * requests rather than the root it hangs off: spec/pxl/spec/route.json folds a branch
- * into one constant, so `"/geo/tiles"` reaches the bundle and `"/geo"` never
- * does. Which branches those are is the spec's own `bundle` flag, and
- * script/spec.ts fails when this list and the flag disagree. The shell's
- * sentinel is looked for in the JavaScript, the kernel's in its module: the
- * terrain's page names are the kernel's (layer/terrain/tile_repository.rs). */
-const SENTINELS = ["/geo/tiles", "/geo/search"];
+ * into one constant, so `"/geo/tiles"` reaches an artifact and `"/geo"` never
+ * does.
+ *
+ * Which artifact is the point of the split. A path is a literal in whichever
+ * of the two asks for it, and asking moves: the tiles branch was the shell's
+ * until the kernel took over composing a page's URL, at which point the
+ * shell's copy had no consumer, the bundler dropped it, and this failed a
+ * deploy over a path that was present all along — in the other file
+ * (2026-09-23). So the spec's `bundle` flag names the artifact rather than
+ * asserting there is one, and script/spec.ts fails when either list here and
+ * the flag disagree.
+ *
+ * KERNEL_SENTINELS is what no route names: the terrain's page names are the
+ * kernel's own (layer/terrain/tile_repository.rs), so nothing generates them
+ * and there is nothing to check them against. */
+const SENTINELS = ["/geo/search"];
+const KERNEL_ROUTE_SENTINELS = ["/geo/tiles"];
 const KERNEL_SENTINELS = ["_ocean"];
 
 function leaves(o: unknown, path = ""): [string, string][] {
@@ -115,7 +126,7 @@ for (const s of SENTINELS) {
   }
 }
 // Raw bytes, not a literal in source: the kernel's strings lie in its data.
-for (const s of KERNEL_SENTINELS) {
+for (const s of [...KERNEL_ROUTE_SENTINELS, ...KERNEL_SENTINELS]) {
   if (!kernel.includes(s)) {
     console.error(`[check-bundle] sentinel ${JSON.stringify(s)} missing from the kernel — the build is not what this expects, so a pass would mean nothing`);
     Deno.exit(1);
