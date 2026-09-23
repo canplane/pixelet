@@ -207,3 +207,6 @@ out/overture/
 # A bake set kept beside the current one while the new one is made: `out` is
 # already ignored, and this is the same thing with a number on it.
 out[0-9]*/
+
+# wrangler's local scratch: its simulated R2/KV, build state and temporaries.
+apps/web/.wrangler/

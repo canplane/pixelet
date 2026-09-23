@@ -99,6 +99,31 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
 const KEY_RE =
   /^(?:poi\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/-?\d{1,20}|geocode\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_dict|-?\d{1,20})|terrain\/[A-Za-z0-9][A-Za-z0-9._-]{0,31}\/(?:_ocean|\d{1,2}\/-?\d{1,20})|asset\/[0-9a-f]{64})$/;
 
+/** Where a stored entry keeps the encoding its bytes are in. A header the
+ * cache has no meaning for is a header it leaves alone, which is the whole
+ * point: `content-encoding` is what makes it normalise an entry. */
+const STORED_ENCODING = "x-pxl-stored-encoding";
+
+/** An entry on its way to the client: the encoding back where HTTP expects it,
+ * and the body declared final so nothing encodes it a second time.
+ *
+ * `encodeBody: "manual"` is load-bearing here and its absence fails quietly.
+ * By default the runtime assumes a Response body is *not* encoded and applies
+ * its own compression, so an already-packed object goes out packed twice —
+ * measured on gzip: a stored 8,653-byte tile served as 4,343 bytes to a
+ * gzip-accepting client, and as raw gzip bytes with no content-encoding header
+ * at all to one asking for identity. Either way decode_terrain() receives
+ * compressed bytes and fails far from here. */
+function serve(body: ReadableStream | null, from: Headers): Response {
+  const headers = new Headers(from);
+  const encoding = headers.get(STORED_ENCODING);
+  if (encoding) {
+    headers.delete(STORED_ENCODING);
+    headers.set("content-encoding", encoding);
+  }
+  return new Response(body, { headers, encodeBody: "manual" });
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -154,14 +179,25 @@ export default {
     // max-age the cache honours. This is also the only real cost control: R2 has no
     // spend limit, and class-B reads are the one meter that scales with
     // traffic, so every edge hit is a read that never happens.
+    //
+    // What is cached is the packed bytes, and the client is what unpacks them.
+    // That is not what caching the response as it stands does: an entry whose
+    // `content-encoding` the cache can read is one the cache normalises, and
+    // it stores the *decoded* body, marks the entry `vary: accept-encoding`
+    // and then declines to compress it again, because `application/octet-stream`
+    // is not one of the types Cloudflare compresses. Measured on one URL,
+    // miss then hit, seconds apart: 8,543 zstd bytes out of R2, and 526,936
+    // raw bytes back off the hit with no encoding header at all — a hit
+    // carrying sixty-two times the bytes of the miss it was meant to save
+    // (2026-09-23). Nothing failed, because the client is happy either way;
+    // it only cost.
+    //
+    // So the encoding is kept where the cache cannot read it. `STORED_ENCODING`
+    // holds it while the entry is stored, the body goes in as the opaque
+    // octets it is, and both paths out put it back on the way to the client.
     const cache = caches.default;
     const cached = await cache.match(request);
-    if (cached) {
-      // `encodeBody: "manual"` does not survive the cache round trip: the
-      // entry comes back as an ordinary Response, and the runtime re-encodes
-      // an already-encoded body on the way out. Re-assert it here.
-      return new Response(cached.body, { headers: cached.headers, encodeBody: "manual" });
-    }
+    if (cached) return serve(cached.body, cached.headers);
 
     const object = await env.TILES.get(key);
     if (object === null) return new Response("not found", { status: 404 });
@@ -174,24 +210,22 @@ export default {
     object.writeHttpMetadata(headers);
     headers.set("etag", object.httpEtag);
 
-    // `encodeBody: "manual"` is load-bearing, and its absence fails quietly.
-    // By default the runtime assumes a Response body is *not* encoded and
-    // applies its own compression, so an already-packed R2 object goes out
-    // packed twice — measured on gzip: a stored 8,653-byte tile served as
-    // 4,343 bytes to a gzip-accepting client, and as raw gzip bytes with no
-    // content-encoding header at all to one asking for identity. Either way
-    // decode_terrain() receives compressed bytes and fails far from here.
-    // "manual" tells the runtime the body is already in its final encoding.
-    //
-    // `no-transform` is added on the way into the cache: without it the edge
-    // is free to re-encode a stored response, which would reintroduce exactly
-    // the double-compression this flag exists to prevent — just one layer
-    // further away, and only on cache hits.
+    // `no-transform` so that nothing re-encodes what is already in its final
+    // encoding, on the way out or out of the cache.
     const cc = headers.get("cache-control");
     if (cc && !cc.includes("no-transform")) headers.set("cache-control", `${cc}, no-transform`);
 
-    const response = new Response(object.body, { headers, encodeBody: "manual" });
-    ctx.waitUntil(cache.put(request, response.clone()));
-    return response;
+    const encoding = headers.get("content-encoding");
+    if (encoding) {
+      headers.delete("content-encoding");
+      headers.set(STORED_ENCODING, encoding);
+    }
+
+    // The body is stored as it lies. `encodeBody: "manual"` is not needed on
+    // this one — there is no `content-encoding` for the runtime to act on —
+    // and it would not survive `clone()` into the cache anyway.
+    const stored = new Response(object.body, { headers });
+    ctx.waitUntil(cache.put(request, stored.clone()));
+    return serve(stored.body, headers);
   },
 };
