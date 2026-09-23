@@ -1,26 +1,31 @@
 // pxl-render/gpu/layers.rs
 
-//! The texture pack as two 2D array textures on the device — a top and a side
-//! face per layer, one layer per ground type and cube colour, indexed by the
-//! layer indices the mesher bakes into a vertex's taps (mesh/paint/palette/shader_meta.rs). Every
-//! layer starts as its flat colour, and the pack's sheet replaces them tile by
-//! tile once it arrives; a side with no tile of its own wears the top's, the
-//! rule the shader assumes.
+//! The texture pack as one 2D array texture on the device, and the table a
+//! layer's two faces are found in it through.
 //!
-//! Each array keeps its mip chain: a tile a cell minifies to a few texels at
+//! A slot of the array is a distinct tile of the pack, not a layer: a side
+//! with no tile of its own wears the top's and shares its slot, and a layer
+//! the pack ships nothing for takes none at all — it reads as the box's own
+//! colour, which the shader already has. The table turns the layer index the
+//! mesher bakes into a box's taps (mesh/paint/palette/shader_meta.rs) into
+//! the slot its top and its side are in. Two arrays of a layer each, one the
+//! copy of the other for most of them, was half again the memory and twice
+//! the samples a fragment took.
+//!
+//! The array keeps its mip chain: a tile a cell minifies to a few texels at
 //! the far tiers, and without the chain every camera movement resamples a
 //! different texel and the ground crawls. WebGPU has no generateMipmap, so the
 //! chain is drawn on the device, a level from the one above (Mips).
 
-use pxl_spec::asset::texture::{shipped_texture_tile, CubeFace, SHIPPED_SHEET};
+use pxl_spec::asset::texture::{shipped_texture_tile, CubeFace, TileOrigin, SHIPPED_SHEET};
 use pxl_spec::cell::object::{block_cubes, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 
 use crate::frame::shader::record::PIPELINE_MIPS;
-use crate::gpu::api::{object, texture_usage, GpuApi};
+use crate::gpu::api::{buffer_usage, bytes, object, texture_usage, GpuApi};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::paint::Paint;
 use crate::gpu::pipeline::Pipelines;
-use crate::mesh::paint::palette::shader_meta::{rgb255, GROUND_LAYER_META};
+use crate::mesh::paint::palette::shader_meta::GROUND_LAYER_META;
 use crate::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
 
 /// The tile edge in texels (pxl-asset-bake/pack.rs's TILE_SIZE).
@@ -96,86 +101,125 @@ fn each_layer(mut f: impl FnMut(Option<PlaceableCube>, u32, u32)) {
     }
 }
 
+/// A face with no tile of its own in the pack: the box's own colour is what
+/// it reads as, and no slot of the array is spent waiting for one.
+const NO_SLOT: u32 = 0xffff;
+
+/// Where a layer's two faces are drawn in the array, packed as the shader
+/// reads them: the top in the low half, the side in the high.
+fn slot_word(top: u32, side: u32) -> u32 {
+    top | (side << 16)
+}
+
+/// The array the pack needs, and the table that finds a face in it: one slot
+/// a distinct tile, so a side that wears the top's shares its slot and a
+/// layer the pack ships nothing for takes none at all.
+fn plan() -> (Vec<TileOrigin>, Vec<u32>) {
+    fn slot_of(slots: &mut Vec<TileOrigin>, tile: Option<TileOrigin>) -> u32 {
+        let Some(tile) = tile else { return NO_SLOT };
+        match slots.iter().position(|s| *s == tile) {
+            Some(i) => i as u32,
+            None => {
+                slots.push(tile);
+                (slots.len() - 1) as u32
+            }
+        }
+    }
+    let mut slots: Vec<TileOrigin> = Vec::new();
+    let mut table: Vec<u32> = Vec::new();
+    each_layer(|cube, layer, _| {
+        let top = cube.and_then(|cube| shipped_texture_tile(cube, CubeFace::Top));
+        // A side with no tile of its own wears the top's, which is the same
+        // tile and so the same slot.
+        let side = cube.and_then(|cube| shipped_texture_tile(cube, CubeFace::Side)).or(top);
+        let word = slot_word(slot_of(&mut slots, top), slot_of(&mut slots, side));
+        if table.len() <= layer as usize {
+            table.resize(layer as usize + 1, slot_word(NO_SLOT, NO_SLOT));
+        }
+        table[layer as usize] = word;
+    });
+    (slots, table)
+}
+
 pub struct Layers {
-    top: u32,
-    side: u32,
-    pub top_view: u32,
-    pub side_view: u32,
+    tex: u32,
+    pub view: u32,
+    /// Where each layer's faces are in the array, as the shader reads it.
+    pub table: u32,
     pub sampler: u32,
     pub bytes: u32,
-    count: u32,
+    slots: u32,
     levels: u32,
-    /// The pack's sheet drawn into both arrays.
+    /// The pack's sheet drawn into the array.
     loaded: bool,
 }
 
 impl Layers {
-    /// Both arrays, each layer its flat colour — laid out in `fill`, a tile's
-    /// texels — with their mip chains.
-    pub fn new(g: &GpuApi, mips: &Mips, fill: &mut [u8]) -> Layers {
-        let count = (GROUND_LAYER_META.len() + block_cubes().len()) as u32;
+    /// The array the pack's tiles go in, and the table that finds them.
+    ///
+    /// Nothing is drawn into either until the sheet arrives: a layer's flat
+    /// colour is the box's own colour, which the shader already has, so a
+    /// slot filled with it would be a mip chain built to say what the vertex
+    /// says. Until then the table sends every face to NO_SLOT.
+    pub fn new(g: &GpuApi) -> Layers {
+        let (tiles, _) = plan();
+        let slots = tiles.len() as u32;
         let levels = mip_levels(LAYER_TEX_SZ, LAYER_TEX_SZ);
         let usage = texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT;
-        let make = || {
-            let tex = object();
-            (g.texture)(tex, LAYER_TEX_SZ, LAYER_TEX_SZ, count, format::RGBA8_SRGB, levels, 1, usage);
-            let view = object();
-            (g.view)(view, tex, dimension::D2_ARRAY, 0, levels, 0, count);
-            (tex, view)
-        };
-        let ((top, top_view), (side, side_view)) = (make(), make());
-        each_layer(|_, layer, rgb| {
-            let [r, gr, b] = rgb255(rgb);
-            for px in fill.as_chunks_mut::<4>().0 {
-                px.copy_from_slice(&[r, gr, b, 255]);
-            }
-            for tex in [top, side] {
-                (g.write_texture)(tex, layer, LAYER_TEX_SZ, LAYER_TEX_SZ, fill);
-            }
-        });
-        mips.build(g, top, levels, 0, count);
-        mips.build(g, side, levels, 0, count);
+        let tex = object();
+        (g.texture)(tex, LAYER_TEX_SZ, LAYER_TEX_SZ, slots, format::RGBA8_SRGB, levels, 1, usage);
+        let view = object();
+        (g.view)(view, tex, dimension::D2_ARRAY, 0, levels, 0, slots);
         // Anisotropic at the four three's arrays were filtered at: the ground
         // is mostly seen at a grazing angle, where an isotropic mip blurs the
         // tile along the view.
         let sampler = object();
         (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::REPEAT, compare::NONE, 4);
+        let table = object();
+        let blank: Vec<u32> = vec![slot_word(NO_SLOT, NO_SLOT); table_len()];
+        (g.buffer)(table, (blank.len() * 4) as u32, buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        (g.write_buffer)(table, 0, bytes(&blank));
         // A chain is the sum of its levels' texels: under four thirds of the first.
-        let bytes = (0..levels).map(|level| (LAYER_TEX_SZ >> level).pow(2) * 4 * count * 2).sum();
+        let bytes = (0..levels).map(|level| (LAYER_TEX_SZ >> level).pow(2) * 4 * slots).sum();
         Layers {
-            top,
-            side,
-            top_view,
-            side_view,
+            tex,
+            view,
+            table,
             sampler,
             bytes,
-            count,
+            slots,
             levels,
             loaded: false,
         }
     }
 
-    /// Draws the pack's sheet into both arrays once it has arrived: `sheet`
-    /// asks for its image, until it has been drawn.
+    /// Draws the pack's sheet into the array once it has arrived, and opens
+    /// the table onto it: `sheet` asks for its image, until it is drawn.
     pub fn step(&mut self, g: &GpuApi, mips: &Mips, sheet: fn() -> Option<u32>) {
         if self.loaded {
             return;
         }
         let Some(image) = sheet() else { return };
+        let (tiles, table) = plan();
         let (cell, size) = (SHIPPED_SHEET.cell as f32, LAYER_TEX_SZ as f32);
-        for (tex, face) in [(self.top, CubeFace::Top), (self.side, CubeFace::Side)] {
-            each_layer(|cube, layer, _| {
-                let Some(tile) = cube.and_then(|cube| shipped_texture_tile(cube, face).or_else(|| shipped_texture_tile(cube, CubeFace::Top))) else {
-                    return;
-                };
-                let mut p = Paint::new();
-                p.size(LAYER_TEX_SZ, LAYER_TEX_SZ);
-                p.image(image, tile.x as f32, tile.y as f32, cell, cell, 0.0, 0.0, size, size);
-                p.run(g);
-                (g.paint_copy)(tex, 0, 0, layer, LAYER_TEX_SZ, LAYER_TEX_SZ);
-            });
-            mips.build(g, tex, self.levels, 0, self.count);
+        for (slot, tile) in tiles.iter().enumerate() {
+            let mut p = Paint::new();
+            p.size(LAYER_TEX_SZ, LAYER_TEX_SZ);
+            p.image(image, tile.x as f32, tile.y as f32, cell, cell, 0.0, 0.0, size, size);
+            p.run(g);
+            (g.paint_copy)(self.tex, 0, 0, slot as u32, LAYER_TEX_SZ, LAYER_TEX_SZ);
         }
+        mips.build(g, self.tex, self.levels, 0, self.slots);
+        (g.write_buffer)(self.table, 0, bytes(&table));
         self.loaded = true;
     }
 }
+
+/// Layers the table holds a word for: every one a tap can name.
+fn table_len() -> usize {
+    GROUND_LAYER_META.len() + block_cubes().len()
+}
+
+#[cfg(test)]
+#[path = "layers.test.rs"]
+mod test;

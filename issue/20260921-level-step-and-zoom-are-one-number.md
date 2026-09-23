@@ -709,15 +709,25 @@ Decided while building, on top of the above:
   distance put a level's chunks wherever the eye's reach did, past its ring,
   and the mesh slots below need them inside it.
 - **A mesh lives on the device, in a slot of its own.** The renderer keeps a
-  fixed storage buffer a level group, and a chunk's tier is a slot in it by
-  the chunk's coordinate modulo its drawn ring's 24 chunks, a group by its
-  level modulo five — `.fixed.terrain`'s addressing, one level down. A bake
-  writes into `.fixed.bake`, 1 MiB, and is sent to its slot when it is done,
-  cut to the slot's measured capacity (3,640 boxes for a leaf's first tier,
-  1,365 for every other). A slot is taken over only once the chunk holding it
-  is no longer drawn, so a mesh outlives its page's record and there is
-  nothing to free. About 207 MiB of the device for five levels, and no mesh
-  in the module's memory.
+  fixed storage buffer a group, and a chunk's tier is a slot in it by the
+  chunk's coordinate modulo its drawn ring's 24 chunks — `.fixed.terrain`'s
+  addressing, one level down. A bake writes into `.fixed.bake`, 1 MiB, and is
+  sent to its slot when it is done, cut to the slot's capacity. A slot is
+  taken over only once the chunk holding it is no longer drawn, so a mesh
+  outlives its page's record and there is nothing to free, and no mesh is in
+  the module's memory.
+
+  The numbers moved twice after this was written, both under
+  [a coarse cell is isotropic](./20260923-a-coarse-cell-is-isotropic.md).
+  There are six groups, not five: a group is a level of the window modulo
+  five, and the leaves' own tier has one to itself, because a group is one
+  storage binding and with both in one what either could hold was what the
+  other left. Measured under the isotropic rule, a slot holds 2,730 boxes
+  for a leaf's own tier and 4,551 for every other. And a box is not one
+  size: a leaf's is six words and every other four, since a box that merges
+  cells carries no texture taps and is never drawn near enough to need a
+  leaf's resolution across a cell. 236 MiB of the device, where the same
+  slots at one 36-byte box would be 529.
 - **A chunk's runs last as long as its bakes.** They are one of two sets of
   `.fixed.runs`, 1 MiB each, one filled while the other is baked from; every
   tier the chunk has is baked while its set is there, then the set is let
@@ -752,12 +762,15 @@ Decided while building, on top of the above:
   to make it — a level-k page stands for 4^k leaves. The pages it makes are
   the bake's byte for byte: 606 parents across levels 1 to 4 of terrain v4,
   150 of them beside ocean, folded from their sixteen as the client reads them.
-- **Fog follows the zoom.** The fog's band, the clip planes and the sky are
-  render_cfg's values with the camera within 1,024 u of its pivot, and past
-  that grow with its distance, `FOG_PER_DIST` = 1.5 of it
-  (`layer/environment/fog.rs`). Held near, a street-level view keeps its
-  horizon; proportional far, a zoom out is a change of scale, and the window
-  and the rings follow the fog without being told.
+- **Fog follows the zoom.** The band, the clip planes and the sky grew with
+  the camera's distance past 1,024 u of its pivot, `FOG_PER_DIST` = 1.5 of
+  it. Superseded the same week by
+  [the ground runs to the horizon](./20260923-the-ground-runs-to-the-horizon.md):
+  the reach is no longer a number tuned against the zoom but the nearer of
+  the planet's own horizon and the distance the haze takes the ground, both
+  read off the camera's height, and the band and the planes are read off
+  that. What is unchanged is the consequence — the window and the rings
+  follow the reach without being told.
 - **The zoom reaches the pyramid's top.** `MAX_DIST` is 2^18 u, where a view
   straight down wants step 2^11, which level 10 draws. The on-demand dev tile
   server makes nothing past `--top-level` (3 unless told), answering 503

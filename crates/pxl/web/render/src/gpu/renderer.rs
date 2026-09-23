@@ -38,7 +38,7 @@ use crate::gpu::api_spec::{dimension, format, load, resource};
 use crate::gpu::arena::{arena_group, arena_lose};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
 use crate::gpu::clouds::{self, CloudPass};
-use crate::gpu::layers::{Layers, Mips, LAYER_TEX_SZ};
+use crate::gpu::layers::{Layers, Mips};
 use crate::gpu::moon::MoonMap;
 use crate::gpu::pass::badges::BadgePass;
 use crate::gpu::pass::decor::DecorPass;
@@ -652,9 +652,7 @@ impl Renderer {
         let stars = StarPass::new(g, &mut pipelines, samples);
         let clouds = CloudPass::new(g, &mut pipelines, samples, frame_buffer, air);
         let mips = Mips::new(g, &mut pipelines, format::RGBA8_SRGB);
-        let mut fill = Scratch::default();
-        let layers = Layers::new(g, &mips, fill.take(LAYER_TEX_SZ * LAYER_TEX_SZ * 4));
-        fill.free();
+        let layers = Layers::new(g);
         let chunk = pipelines.build(g, PIPELINE_CHUNK, format::CANVAS, samples);
         let sky_built = pipelines.build(g, PIPELINE_SKY, format::CANVAS, samples);
         let sky_group = object();
@@ -732,15 +730,15 @@ impl Renderer {
     }
 
     /// The chunk pass's group over `frame`: the frame, a shadow map, the draws,
-    /// the texture pack's two arrays and their sampler, the occlusion map, the
-    /// air.
+    /// the texture pack's array, the table its faces are found through and
+    /// their sampler, the occlusion map, the air.
     fn chunk_group(&self, g: &GpuApi, frame: u32, shadow: [u32; 10]) -> u32 {
         let mut e = [0u32; 40 + AIR_WORDS];
         e[..5].copy_from_slice(&buffer_entry(0, frame));
         e[5..15].copy_from_slice(&shadow);
         e[15..20].copy_from_slice(&buffer_entry(3, self.draws_buffer));
-        e[20..25].copy_from_slice(&[4, resource::VIEW, self.layers.top_view, 0, 0]);
-        e[25..30].copy_from_slice(&[5, resource::VIEW, self.layers.side_view, 0, 0]);
+        e[20..25].copy_from_slice(&[4, resource::VIEW, self.layers.view, 0, 0]);
+        e[25..30].copy_from_slice(&buffer_entry(5, self.layers.table));
         e[30..35].copy_from_slice(&[6, resource::SAMPLER, self.layers.sampler, 0, 0]);
         e[35..40].copy_from_slice(&self.ao.entry(7));
         e[40..].copy_from_slice(&self.atmosphere.entries());
@@ -893,6 +891,8 @@ impl Renderer {
         let b = blocks();
         let layout = self.chunk.layouts[1];
         let mut any = false;
+        // The group bound now; no object is 0, so nothing is bound to start.
+        let mut bound = 0u32;
         for d in draws.as_chunks::<DRAW_WORDS>().0 {
             let (handle, box_cnt, first_box, uniform, pipeline) = (d[0], d[1], d[2], d[3], d[4]);
             if pipeline != which {
@@ -909,7 +909,14 @@ impl Renderer {
                 (g.set_bind_group)(pass, 0, self.bind_group, &[]);
             }
             any = true;
-            (g.set_bind_group)(pass, 1, buffer, &[]);
+            // The buffer is one of the arena's groups, of which there are six,
+            // against the draws a frame issues, of which there are a thousand:
+            // a call out of the module for every one of them where the group
+            // has not changed is the cost of the draw twice over.
+            if buffer != bound {
+                (g.set_bind_group)(pass, 1, buffer, &[]);
+                bound = buffer;
+            }
             (g.draw)(pass, box_cnt * BOX_VERTICES, 1, first_box * BOX_VERTICES, uniform);
         }
         any

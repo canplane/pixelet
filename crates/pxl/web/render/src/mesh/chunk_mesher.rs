@@ -85,17 +85,102 @@ const ALL_RELATIONS: u32 = HIDES_SIDE | ABUTS_SIDE | RISES_ABOVE | DIPS_BELOW;
 const BAKE_ROWS_PER_STEP: u32 = 8;
 const BAKE_BOXES_PER_STEP: usize = 512;
 
-/// Words a box takes in a mesh: its least corner and its size, three f32
-/// each; its colour, sRGB bytes; its four layer taps, a byte each; its face
-/// mask. chunk.wgsl's `Box`, read by the vertex shader, which unfolds a cube
-/// from it: a mesh is its boxes and nothing per vertex.
+/// Words a box takes in a mesh, of the two formats a box has: chunk.wgsl
+/// reads whichever the draw names, and unfolds a cube from it — a mesh is its
+/// boxes and nothing per vertex.
 ///
-/// A box as vertices was a face's four corners each carrying position,
-/// normal, local position, the box's scale, colour, taps and the mask, 84
-/// bytes a vertex and an index list besides — over a kilobyte for a box of
-/// three faces, where this is 36 bytes. Every one of those numbers was the
-/// box's, repeated.
-pub const BOX_WORDS: u32 = 9;
+/// **A leaf's own tier (`FINE_BOX_WORDS`)** holds its corner and its width
+/// across x and y, a u16 each in steps of its cell (XY_STEPS); its floor and
+/// its height, a u16 each in the mesh's own steps (Heights); its colour, sRGB
+/// bytes; its four layer taps, a byte each; its face mask.
+///
+/// **Every tier over it (`COARSE_BOX_WORDS`)** drops two of those six. The
+/// taps go because a box that merges cells is its colour alone — the texture
+/// pack is for a leaf's cells, where a top and a side mean something. The
+/// corner and the width shrink to a byte an axis because of how the ladder
+/// draws: a level-`k` chunk is never drawn nearer than `192·2^k`
+/// (pxl-render look/lod.rs, kernel layer/terrain/level.rs), where a finer
+/// ring covers it, so its cell is between one and two TARGET_CELL_PX however
+/// the camera moves. An eighth of that cell is at most one and a half pixels
+/// and its mesh is at most 32 cells across, so a cell index and an eighth
+/// land in a byte exactly. The leaf's tier keeps the whole u16, because it
+/// is drawn from arm's length, where its cell is hundreds of pixels.
+///
+/// A box as six f32 was 36 bytes; the leaf's is 24 and every other 16.
+/// Before that a box was vertices — a face's four corners each carrying
+/// position, normal, local position, the box's scale, colour, taps and the
+/// mask, 84 bytes a vertex and an index list besides, over a kilobyte for a
+/// box of three faces. Every one of those numbers was the box's, repeated.
+pub const FINE_BOX_WORDS: u32 = 6;
+pub const COARSE_BOX_WORDS: u32 = 4;
+
+/// The words of the format a bake of `lod_step` writes.
+pub const fn box_words(lod_step: u32) -> u32 {
+    if lod_step == 1 {
+        FINE_BOX_WORDS
+    } else {
+        COARSE_BOX_WORDS
+    }
+}
+
+/// Steps a box's own cell is cut into across x and y, which is what its
+/// corner and its width are held in: a mesh is the arena's largest tenant by
+/// far (world/chunk/mesh_slot.rs), and a box that held six floats spent
+/// twenty-four bytes saying what sixteen bits an axis say exactly. The
+/// mesher's own resolution across a cell is the sub-cell fraction's 1/255
+/// (mesh/volume.rs), so nothing is lost; a chunk is 64 cells, which is
+/// 16,384 steps, and that is the whole u16.
+///
+/// Height is held the same way but against the mesh itself. A chunk is not
+/// divided in z — its key is `(page, bx, by)` — so a run's z is the world's,
+/// in units, and what a mesh spans there is whatever relief its columns
+/// have. Each mesh therefore carries its own floor and its own step, and a
+/// box's height is in those: the floor rides on the draw's translation,
+/// which had nothing in z, and the step beside it.
+const XY_STEPS: f64 = 256.0;
+/// The same for a box that merges cells, where a byte holds the cell and the
+/// step together (COARSE_BOX_WORDS).
+const COARSE_XY_STEPS: f64 = 8.0;
+/// Cells a coarse mesh is across at its widest: a chunk's 64 over the
+/// smallest step that merges them.
+const COARSE_RES_MAX: u32 = 64 / 2;
+const _: () = assert!(COARSE_RES_MAX * (COARSE_XY_STEPS as u32) <= 256, "a coarse box's corner and width live in a byte each");
+/// Steps a mesh's own height is cut into: the whole u16.
+const Z_STEPS: f64 = 65535.0;
+
+/// The floor and the step a mesh's heights are held in: what `Mesh` carries
+/// and a draw is given.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Heights {
+    pub floor: f64,
+    pub step: f64,
+}
+
+impl Default for Heights {
+    fn default() -> Self {
+        Heights { floor: 0.0, step: 1.0 }
+    }
+}
+
+impl Heights {
+    /// The heights a set spans, in units: its lowest run's floor, and the
+    /// step that puts its whole span in a u16.
+    fn of(set: &RunSet, z_scale: f64) -> Heights {
+        let (mut lo, mut hi) = (i32::MAX, i32::MIN);
+        for i in 0..set.count as usize {
+            lo = lo.min(set.z0[i]);
+            hi = hi.max(set.z1[i] + 1);
+        }
+        if lo > hi {
+            return Heights::default();
+        }
+        let span = (hi - lo) as f64 * z_scale;
+        Heights {
+            floor: lo as f64 * z_scale,
+            step: (span / Z_STEPS).max(f64::MIN_POSITIVE),
+        }
+    }
+}
 
 /// Words a mesh of `box_cnt` boxes takes.
 ///
@@ -103,8 +188,8 @@ pub const BOX_WORDS: u32 = 9;
 /// once, when its owner does), so one allocation — measured: a zoom-out that
 /// rebuilds ~2000 chunks moved +344MB in a single frame, 8.4s of it
 /// off-thread, when each lane of the old vertices was its own.
-pub fn mesh_words(box_cnt: u32) -> u32 {
-    box_cnt * BOX_WORDS
+pub fn mesh_words(box_cnt: u32, words: u32) -> u32 {
+    box_cnt * words
 }
 
 /// What bakes have counted, for the ledger. Cumulative.
@@ -119,9 +204,13 @@ pub struct Counters {
 }
 
 /// A finished mesh: its counts, in the words the caller provided.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Mesh {
     pub box_cnt: u32,
+    /// What its boxes' heights are held in (Heights).
+    pub heights: Heights,
+    /// Words a box of it takes (FINE_BOX_WORDS).
+    pub box_words: u32,
 }
 
 /// Where a bake stands after a step.
@@ -237,6 +326,9 @@ pub struct BakeContext {
     /// except the visibility lane, which the renderer owns — so the target
     /// is never cleared, which for a large mesh would write it twice.
     mesh: Option<MeshTarget>,
+    /// What the open bake's heights are held in, from the set it reads.
+    heights: Heights,
+    box_words: u32,
     /// Words the open bake's mesh takes, once its size is known.
     mesh_words: u32,
     /// Boxes written so far.
@@ -261,6 +353,8 @@ impl BakeContext {
             buckets: Vec::with_capacity(1 << 12),
             coarse: OwnedRunSet::default(),
             mesh: None,
+            heights: Heights::default(),
+            box_words: FINE_BOX_WORDS,
             mesh_words: 0,
             box_cnt: 0,
             open: None,
@@ -285,6 +379,10 @@ impl BakeContext {
         self.mesh = None;
         self.mesh_words = 0;
         self.box_cnt = 0;
+        // A coarse bake summarises the set into one of its own and takes its
+        // heights from that, once it is packed (step_coarse).
+        self.heights = if lod_step == 1 { Heights::of(set, 1.0) } else { Heights::default() };
+        self.box_words = box_words(lod_step);
         self.open = Some(if lod_step == 1 {
             Open::Fine(self.begin_fine(set.span, set.apron, scale, 1))
         } else {
@@ -345,7 +443,11 @@ impl BakeContext {
         self.open = None;
         self.mesh = None;
         self.surviving.clear();
-        Mesh { box_cnt: self.box_cnt }
+        Mesh {
+            box_cnt: self.box_cnt,
+            heights: self.heights,
+            box_words: self.box_words,
+        }
     }
 
     pub fn abort(&mut self) {
@@ -476,7 +578,7 @@ impl BakeContext {
                 self.counters.faces_kept += faces;
                 box_total += (faces > 0) as u32;
             }
-            self.mesh_words = mesh_words(box_total);
+            self.mesh_words = mesh_words(box_total, self.box_words);
             self.box_cnt = 0;
             b.phase = 2;
             b.emit_at = 0;
@@ -512,7 +614,7 @@ impl BakeContext {
                 size_z = unpack_sub_cell_size(sub_sz) * depth;
             }
             if mask & ALL_FACES != 0 {
-                self.emit_box([min_x, min_y, min_z], [size_x, size_y, size_z], [set.r[i], set.g[i], set.b[i]], set.layer_taps[i], mask);
+                self.emit_box([min_x, min_y, min_z], [size_x, size_y, size_z], [set.r[i], set.g[i], set.b[i]], set.layer_taps[i], mask, unit);
             }
             s_i += 6;
         }
@@ -535,14 +637,18 @@ impl BakeContext {
         (near & !FROM_FAR_BITS) | (far_x & (X_SEAM_BITS | DIAG_PN | DIAG_RISES_PN)) | (far_y & (Y_SEAM_BITS | DIAG_NP | DIAG_RISES_NP)) | (far_xy & (DIAG_PP | DIAG_RISES_PP))
     }
 
-    /// Writes one box's faces into the bake's mesh.
-    fn emit_box(&mut self, min: V3, size: [f64; 3], rgb: [u8; 3], taps: u32, faces: u32) {
+    /// Writes one box's faces into the bake's mesh. `unit` is the box grid's
+    /// own cell in units, which its corner and width are measured in.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_box(&mut self, min: V3, size: [f64; 3], rgb: [u8; 3], taps: u32, faces: u32, unit: f64) {
         let target = self.mesh.expect("emit with no mesh provided");
         // SAFETY: provide_mesh's contract — the range is the caller's, valid
         // and untouched until the bake closes.
         let m = unsafe { core::slice::from_raw_parts_mut(target.ptr, target.words) };
-        let at = (self.box_cnt * BOX_WORDS) as usize;
-        write_box(&mut m[at..at + BOX_WORDS as usize], min, size, rgb, taps, faces);
+        let words = self.box_words as usize;
+        let at = self.box_cnt as usize * words;
+        let heights = self.heights;
+        write_box(&mut m[at..at + words], min, size, rgb, taps, faces, unit, heights);
         self.box_cnt += 1;
     }
 
@@ -592,6 +698,7 @@ impl BakeContext {
                 return false;
             }
             self.coarse.start.push(self.coarse.z0.len() as u32);
+            self.heights = Heights::of(&self.coarse.view(), 1.0);
             b.fine = Some(self.begin_fine(res, 0, lod_step * scale, 1));
             b.phase = 2;
             return false;
@@ -749,24 +856,58 @@ pub const LONE_BOX_FACES: u32 = 0b11_1111 | (0b1111 << 18);
 /// `mesh_words(1)` words, as a bake writes a box: what the hover ghost is
 /// drawn from, so it is lit, textured and edge-shaded as a placed cube is.
 /// `rgb` is sRGB bytes.
-pub fn write_lone_box(m: &mut [u32], size: f64, rgb: [u8; 3], layer: u8) {
-    write_box(m, [0.0; 3], [size; 3], rgb, layer as u32 * 0x0101_0101, LONE_BOX_FACES);
+pub fn write_lone_box(m: &mut [u32], size: f64, rgb: [u8; 3], layer: u8) -> Heights {
+    assert!(m.len() == FINE_BOX_WORDS as usize, "the ghost is a leaf's own box");
+    let heights = Heights { floor: 0.0, step: size / Z_STEPS };
+    write_box(m, [0.0; 3], [size; 3], rgb, layer as u32 * 0x0101_0101, LONE_BOX_FACES, size, heights);
+    heights
 }
 
-/// One box's words (`BOX_WORDS`). Its corner and size are summed in f64 and
-/// narrowed once.
-fn write_box(m: &mut [u32], min: V3, size: [f64; 3], rgb: [u8; 3], taps: u32, faces: u32) {
-    for a in 0..3 {
-        m[a] = f32_word(min[a]);
-        m[3 + a] = f32_word(size[a]);
+/// One box's words, a cell of `unit` units across, in the format `m` is long
+/// for (FINE_BOX_WORDS): its corner and width across x and y in steps of its
+/// cell, and its floor and height in the mesh's own (Heights).
+#[allow(clippy::too_many_arguments)]
+fn write_box(m: &mut [u32], min: V3, size: [f64; 3], rgb: [u8; 3], taps: u32, faces: u32, unit: f64, heights: Heights) {
+    let z = steps(min[2] - heights.floor, heights.step) | (steps(size[2], heights.step) << 16);
+    if m.len() == COARSE_BOX_WORDS as usize {
+        let xy = unit / COARSE_XY_STEPS;
+        // A width of zero would be a box of nothing, so one step is the
+        // least: the byte holds `width − 1`, and a whole mesh across fits.
+        let wide = |v: f64| steps(v, xy).clamp(1, 256) - 1;
+        m[0] = faces;
+        m[1] = u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 0]);
+        m[2] = z;
+        m[3] = steps(min[0], xy).min(255) | (steps(min[1], xy).min(255) << 8) | (wide(size[0]) << 16) | (wide(size[1]) << 24);
+        return;
     }
-    m[6] = u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 0]);
-    m[7] = taps;
-    m[8] = faces;
+    let xy = unit / XY_STEPS;
+    m[0] = steps(min[0], xy) | (steps(min[1], xy) << 16);
+    m[1] = steps(size[0], xy) | (steps(size[1], xy) << 16);
+    m[2] = z;
+    m[3] = u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 0]);
+    m[4] = taps;
+    m[5] = faces;
 }
 
-fn f32_word(v: f64) -> u32 {
-    (v as f32).to_bits()
+fn steps(v: f64, step: f64) -> u32 {
+    round(v / step).clamp(0.0, u16::MAX as f64) as u32
+}
+
+/// A box's corner and size in units, as the renderer unfolds them — its
+/// height from the mesh's floor — for whoever reads a mesh back rather than
+/// drawing it (the chunk scheduler's bounds). `m` is one box, and its length
+/// says which format.
+pub fn box_bounds(m: &[u32], unit: f64, heights: Heights) -> (V3, [f64; 3]) {
+    let z0 = heights.floor + (m[2] & 0xffff) as f64 * heights.step;
+    let dz = (m[2] >> 16) as f64 * heights.step;
+    if m.len() == COARSE_BOX_WORDS as usize {
+        let xy = unit / COARSE_XY_STEPS;
+        let byte = |k: u32| ((m[3] >> k) & 0xff) as f64;
+        return ([byte(0) * xy, byte(8) * xy, z0], [(byte(16) + 1.0) * xy, (byte(24) + 1.0) * xy, dz]);
+    }
+    let xy = unit / XY_STEPS;
+    let half = |w: u32, high: bool| (if high { w >> 16 } else { w & 0xffff }) as f64 * xy;
+    ([half(m[0], false), half(m[0], true), z0], [half(m[1], false), half(m[1], true), dz])
 }
 
 /// Whether one whole-cell run of column `col` spans all of z0..=z1.

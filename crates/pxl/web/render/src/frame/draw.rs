@@ -164,14 +164,28 @@ impl DrawList {
     }
 
     /// A chunk mesh in arena group `group`, `box_cnt` boxes from `first_box`.
-    pub fn draw_arena(&mut self, group: u32, first_box: u32, box_cnt: u32, translation: [f32; 3], visible: f32) {
-        self.draw(PIPELINE_CHUNK, ARENA_DRAW | group, box_cnt, first_box, translation, visible, 1.0);
+    /// `unit`: the cell a box of this mesh is measured in, in units, `z_step`
+    /// what one step of its height is, and `box_words` which of the two box
+    /// formats the group holds (chunk.wgsl's Draw). The mesh's own floor is
+    /// in `translation`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_arena(&mut self, group: u32, first_box: u32, box_cnt: u32, translation: [f32; 3], visible: f32, unit: f32, z_step: f32, box_words: f32) {
+        self.draw_in(PIPELINE_CHUNK, ARENA_DRAW | group, box_cnt, first_box, translation, visible, 1.0, unit, z_step, box_words);
     }
 
     #[allow(clippy::too_many_arguments)]
     pub fn draw(&mut self, pipeline: u32, handle: u32, vertex_cnt: u32, index_cnt: u32, translation: [f32; 3], visible: f32, opacity: f32) {
+        self.draw_in(pipeline, handle, vertex_cnt, index_cnt, translation, visible, opacity, 1.0, 1.0, 0.0);
+    }
+
+    /// A draw whose boxes are measured in cells of `unit` units, their
+    /// heights in steps of `z_step` from the floor in `translation`, `words`
+    /// to a box.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_in(&mut self, pipeline: u32, handle: u32, vertex_cnt: u32, index_cnt: u32, translation: [f32; 3], visible: f32, opacity: f32, unit: f32, z_step: f32, words: f32) {
         let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
-        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], visible, opacity, 0.0, 0.0, 0.0]);
+        self.uniforms
+            .extend_from_slice(&[translation[0], translation[1], translation[2], visible, opacity, unit, z_step, words]);
         self.draws.extend_from_slice(&[handle, vertex_cnt, index_cnt, uniform, pipeline]);
     }
 

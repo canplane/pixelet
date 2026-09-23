@@ -95,9 +95,33 @@ fn a_full_cell_is_a_whole_box_and_a_sparse_one_is_the_cube_root_of_its_fill() {
     assert!(unpack_sub_cell_size(offset) > 0.24 && unpack_sub_cell_size(offset) < 0.26, "centred in its cell");
 }
 
-/// Bakes `set` at `lod_step`, its columns `scale` units across, and gives
-/// back each box's words.
-fn bake(set: &OwnedRunSet, lod_step: u32, scale: u32) -> Vec<[u32; BOX_WORDS as usize]> {
+/// A bake's boxes, with what their packed words are read back against.
+struct Baked {
+    /// Every box's words, laid end to end in the mesh's own format.
+    words: Vec<u32>,
+    box_words: usize,
+    unit: f64,
+    heights: Heights,
+}
+
+impl Baked {
+    fn boxes(&self) -> impl Iterator<Item = &[u32]> {
+        self.words.chunks_exact(self.box_words)
+    }
+
+    /// A box's corner and size in units.
+    fn at(&self, b: &[u32]) -> (V3, [f64; 3]) {
+        box_bounds(b, self.unit, self.heights)
+    }
+
+    /// The boxes that span a whole cell of `cell` units: the floors.
+    fn floors(&self, cell: f64) -> usize {
+        self.boxes().filter(|b| self.at(b).1[0] >= cell && self.at(b).1[1] >= cell).count()
+    }
+}
+
+/// Bakes `set` at `lod_step`, its columns `scale` units across.
+fn bake(set: &OwnedRunSet, lod_step: u32, scale: u32) -> Baked {
     let mut ctx = BakeContext::new();
     assert!(ctx.begin(&set.view(), lod_step, scale));
     let mut words: Vec<u32> = Vec::new();
@@ -114,7 +138,14 @@ fn bake(set: &OwnedRunSet, lod_step: u32, scale: u32) -> Vec<[u32; BOX_WORDS as 
         }
     }
     let mesh = ctx.finish();
-    words.as_chunks::<{ BOX_WORDS as usize }>().0[..mesh.box_cnt as usize].to_vec()
+    let box_words = mesh.box_words as usize;
+    words.truncate(mesh.box_cnt as usize * box_words);
+    Baked {
+        words,
+        box_words,
+        unit: (lod_step * scale) as f64,
+        heights: mesh.heights,
+    }
 }
 
 #[test]
@@ -123,31 +154,14 @@ fn a_coarse_cells_box_shows_its_underside_and_is_lit_there_as_it_is_on_top() {
     // fill is a quarter, so the box is inset and hangs over its floor.
     let columns: Vec<Vec<Run>> = (0..16).map(|_| ground(0)).collect();
     let set = set_of(4, &columns);
-    let boxes = bake(&set, 2, 1);
-    let hanging: Vec<_> = boxes.iter().filter(|b| box_of(b).1[0] < 2.0).collect();
+    let baked = bake(&set, 2, 1);
+    let hanging: Vec<_> = baked.boxes().filter(|b| baked.at(b).1[0] < 2.0).collect();
     assert!(!hanging.is_empty(), "the coarse tier drew an inset box");
     for b in hanging {
-        let faces = b[8];
+        let faces = b[0];
         assert!(faces & FACE_NZ != 0, "the box's underside is drawn");
         assert!(faces & UNDER_AS_TOP != 0, "and is lit as its top is");
     }
-}
-
-/// A box's corner and size in units, from its words.
-fn box_of(b: &[u32; BOX_WORDS as usize]) -> ([f32; 3], [f32; 3]) {
-    let at = |k: usize| f32::from_bits(b[k]);
-    ([at(0), at(1), at(2)], [at(3), at(4), at(5)])
-}
-
-/// The boxes of a bake that span a whole cell of `cell` units: the floors.
-fn floors(boxes: &[[u32; BOX_WORDS as usize]], cell: f32) -> usize {
-    boxes
-        .iter()
-        .filter(|b| {
-            let (_, size) = box_of(b);
-            size[0] >= cell && size[1] >= cell
-        })
-        .count()
 }
 
 #[test]
@@ -156,8 +170,8 @@ fn the_cells_ground_is_carried_by_a_floor_that_spans_it() {
     // box is inset, and a floor spanning the cell is written under it.
     let columns: Vec<Vec<Run>> = (0..36).map(|_| ground(0)).collect();
     let set = set_of(6, &columns);
-    let boxes = bake(&set, 4, 1);
-    assert!(floors(&boxes, 4.0) > 0, "the cell's floor is drawn: {boxes:?}");
+    let baked = bake(&set, 4, 1);
+    assert!(baked.floors(4.0) > 0, "the cell's floor is drawn: {:?}", baked.words);
 }
 
 #[test]
@@ -181,10 +195,10 @@ fn a_bucket_over_another_lays_its_own_floor_too() {
         })
         .collect();
     let set = set_of(6, &columns);
-    let boxes = bake(&set, 4, 1);
-    let deck: Vec<_> = boxes.iter().filter(|b| box_of(b).0[2] >= 3.5).collect();
-    assert!(deck.iter().any(|b| box_of(b).1[0] < 4.0), "the deck's own box is inset");
-    assert!(deck.iter().any(|b| box_of(b).1[0] >= 4.0), "and a floor of the deck's colour spans the cell under it: {deck:?}");
+    let baked = bake(&set, 4, 1);
+    let deck: Vec<_> = baked.boxes().filter(|b| baked.at(b).0[2] >= 3.5).collect();
+    assert!(deck.iter().any(|b| baked.at(b).1[0] < 4.0), "the deck's own box is inset");
+    assert!(deck.iter().any(|b| baked.at(b).1[0] >= 4.0), "and a floor of the deck's colour spans the cell under it: {deck:?}");
 }
 
 #[test]
@@ -193,7 +207,6 @@ fn a_box_that_merges_cells_carries_no_layer_of_its_own() {
     // texture pack is for the cells, where a top and a side mean something.
     let columns: Vec<Vec<Run>> = (0..16).map(|_| ground(0)).collect();
     let set = set_of(4, &columns);
-    for b in bake(&set, 2, 1) {
-        assert_eq!(b[7], NO_LAYER * 0x0101_0101, "a coarse box has no layer");
-    }
+    let baked = bake(&set, 2, 1);
+    assert_eq!(baked.box_words, COARSE_BOX_WORDS as usize, "a coarse box carries no taps at all");
 }

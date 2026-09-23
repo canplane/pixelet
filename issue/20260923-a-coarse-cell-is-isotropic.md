@@ -1,6 +1,6 @@
 # A coarse cell is isotropic
 
-**Decided 09-23, not built.** A coarse cell is one rule for the ground and
+**Decided 09-23 and built, but for the escape hatch below.** A coarse cell is one rule for the ground and
 for objects alike: its size is the share of it that is not air, taken on
 every axis, and its colour is what faces the air, weighted by how much of it
 does. It undoes one decision of 09-22 and replaces one of 09-09, and is
@@ -80,9 +80,42 @@ this rule and sized to it.
   its volume is the fraction cubed.
 - A bucket none of whose voxels faces the air still shows once its neighbours
   shrink; its colour falls back to the volume's mean.
-- Where the cost bites, the rule is not what gives: a box whose `f` is small
-  enough to be under a pixel wherever its level is drawn can be dropped, as
-  `level.rs` once dropped a fill under 1/64.
+- **Tried and reverted, 09-23.** Where the cost bites, the rule was not what
+  would give: a box too small to stand over its own floor would not be
+  written and its floor would rise to where its top was — the cell keeping
+  its height and its colour and losing only the inset, one run rather than
+  two.
+
+  What such a drop costs is the notch it leaves at the cell's rim, `∛f` of
+  the cell. A drawn cell is between one and two `TARGET_CELL_PX` on screen
+  (`pxl-render look/lod.rs`): the ladder hands a tier off when its cell falls
+  to one, so it is never drawn under that and never over twice it. At
+  `∛f = 1/4` the notch is one and a half to three pixels, a quarter of the
+  detail the ladder had already spent choosing this tier, and the pixels
+  cancel — the threshold is a pure `f < 1/64` at every level, which is also
+  the fill `level.rs` once dropped at.
+
+  **It does not pay.** Measured over a zoom out and back over Seoul, 150u to
+  19,200u and back, reading the ledger's `work coarse_boxes` — the largest a
+  coarse tier asked its slot for:
+
+  | fill dropped | cells dropped | coarse tier's largest ask |
+  | ------------ | ------------- | ------------------------- |
+  | none         | —             | 3,478                     |
+  | 1/64         | 0.36%         | 3,436 and 3,547, twice    |
+  | 1/8          | 2.9%          | 3,287                     |
+
+  At 1/64 the cull off (3,478) falls between the two readings with it on: it
+  is noise. At 1/8 — the ladder's whole budget, a three to six pixel notch —
+  it is 5%, which that notch does not buy.
+
+  The measurement says why. A coarse tier is about 3.4 runs to a cell: the
+  full buckets under the surface, merged into one; the floor that fills the
+  gap under the top bucket's box; and that box. A column's ground run is
+  thick, so its top bucket's fill is rarely near 1/64, and only the buckets
+  that barely reach into their cell are ever caught. No threshold moves the
+  3.4.
+
 - [Level, step and zoom](./20260921-level-step-and-zoom-are-one-number.md)'s
   paragraph on the elevation lane and its "one thing does not merge" in
   _Objects fold too_ describe the 09-22 height field, and are rewritten when

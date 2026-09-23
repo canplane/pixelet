@@ -310,9 +310,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   - The Milky Way, which a naked-eye catalogue does not make (a low-resolution
     all-sky texture, whose licences are attribution ones), and the bright
     planets, which the sun's and the moon's low-precision formulas extend to.
-  - `look/lod.rs`'s note on which tier handoffs are dithered still reads
-    against a `RENDER_DIST` of 1,536 u, which the pyramid and the fog at
-    6,144 u have both moved.
   - The themes' remaining fill — ambient, hemisphere, the floor — from the
     sky's irradiance, the way the sunlight now comes from the air. The floor
     is there for a phone's night and would resist it.

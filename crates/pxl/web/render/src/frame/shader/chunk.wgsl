@@ -12,34 +12,84 @@ struct Draw {
   translation: vec3f,
   visible: f32,
   opacity: f32,
-  _p0: f32,
-  _p1: f32,
-  _p2: f32,
+  // The cell a box of this draw is measured in, in units: a leaf's own cell
+  // is one, a tier's is its step, and a level's is that shifted by the
+  // level. A box holds its corner and width in steps of it (Box), and its
+  // floor and height in steps of `z_step`, from the mesh's own floor, which
+  // is in the translation.
+  unit: f32,
+  z_step: f32,
+  // Which of the two box formats this draw's group holds, in words
+  // (chunk_mesher.rs's FINE_BOX_WORDS): a group is one format throughout.
+  box_words: f32,
 };
 
 @group(0) @binding(3) var<storage, read> draws: array<Draw>;
-@group(0) @binding(4) var layers_top: texture_2d_array<f32>;
-@group(0) @binding(5) var layers_side: texture_2d_array<f32>;
+@group(0) @binding(4) var layers: texture_2d_array<f32>;
+// Where each layer's two faces are in the array: the top's slot in the low
+// half of its word, the side's in the high (gpu/layers.rs). NO_SLOT for a
+// face the pack ships no tile for, and for every face until it arrives.
+@group(0) @binding(5) var<storage, read> layer_slot: array<u32>;
 @group(0) @binding(6) var layer_sampler: sampler;
 
 // volume.rs's NO_LAYER: a tap past the last layer means the vertex colour.
 const NO_LAYER: f32 = 255.0;
+// gpu/layers.rs's NO_SLOT.
+const NO_SLOT: u32 = 0xffffu;
 
-// One box of the mesh: its least corner, its size, sRGB colour bytes, four
-// layer taps a byte each, the face mask.
+// One box of the mesh, unfolded from the words the mesher packed
+// (mesh/chunk_mesher.rs). Its corner and width across x and y are steps of
+// its own cell, which the draw says the size of; its floor and height are
+// steps of the mesh's own, because a chunk is not divided in z, so what a
+// mesh spans there is its own and the draw says what one step of it is.
 struct Box {
-  min_x: f32,
-  min_y: f32,
-  min_z: f32,
-  size_x: f32,
-  size_y: f32,
-  size_z: f32,
+  min_xy: vec2f,
+  size_xy: vec2f,
+  z: vec2f,
   rgb: u32,
   taps: u32,
   faces: u32,
 };
 
-@group(1) @binding(0) var<storage, read> boxes: array<Box>;
+// The steps a cell is cut into across x and y: chunk_mesher.rs's XY_STEPS
+// for a leaf's own box, COARSE_XY_STEPS for one that merges cells.
+const XY_STEPS: f32 = 256.0;
+const COARSE_XY_STEPS: f32 = 8.0;
+// NO_LAYER in all four taps: what a box that merges cells wears, and the
+// reason it need not carry them.
+const NO_TAPS: u32 = 0xffffffffu;
+
+@group(1) @binding(0) var<storage, read> boxes: array<u32>;
+
+fn box_pair(word: u32, step: f32) -> vec2f {
+  return vec2f(f32(word & 0xffffu), f32(word >> 16u)) * step;
+}
+
+// Box `i` of the group this draw reads, in the draw's own format. The floor
+// and the height sit in the same word in both.
+fn box_at(i: u32, d: Draw) -> Box {
+  var b: Box;
+  let base = i * u32(d.box_words);
+  b.z = box_pair(boxes[base + 2u], d.z_step);
+  if (d.box_words > 5.0) {
+    let step = d.unit / XY_STEPS;
+    b.min_xy = box_pair(boxes[base], step);
+    b.size_xy = box_pair(boxes[base + 1u], step);
+    b.rgb = boxes[base + 3u];
+    b.taps = boxes[base + 4u];
+    b.faces = boxes[base + 5u];
+    return b;
+  }
+  let step = d.unit / COARSE_XY_STEPS;
+  b.faces = boxes[base];
+  b.rgb = boxes[base + 1u];
+  let w = boxes[base + 3u];
+  b.min_xy = vec2f(f32(w & 0xffu), f32((w >> 8u) & 0xffu)) * step;
+  // A width is held one short, so a whole mesh across fits in a byte.
+  b.size_xy = (vec2f(f32((w >> 16u) & 0xffu), f32((w >> 24u) & 0xffu)) + 1.0) * step;
+  b.taps = NO_TAPS;
+  return b;
+}
 
 // A face's outward normal and its four corners in the box's [-0.5, 0.5]
 // cube, wound counter-clockwise from outside: +x, -x, +y, -y, +z, -z, the
@@ -89,7 +139,8 @@ struct VertexOut {
 
 @vertex
 fn vs(@builtin(vertex_index) vertex: u32, @builtin(instance_index) draw: u32) -> VertexOut {
-  let b = boxes[vertex / BOX_VERTICES];
+  let d = draws[draw];
+  let b = box_at(vertex / BOX_VERTICES, d);
   let k = vertex % BOX_VERTICES;
   let face = k / 6u;
   var o: VertexOut;
@@ -100,10 +151,9 @@ fn vs(@builtin(vertex_index) vertex: u32, @builtin(instance_index) draw: u32) ->
     return o;
   }
   let local = FACE_CORNER[face * 4u + FACE_TRIANGLES[k % 6u]];
-  let size = vec3f(b.size_x, b.size_y, b.size_z);
-  let position = vec3f(b.min_x, b.min_y, b.min_z) + size * 0.5 + local * size;
+  let size = vec3f(b.size_xy, b.z.y);
+  let position = vec3f(b.min_xy, b.z.x) + size * 0.5 + local * size;
   let normal = FACE_NORMAL[face];
-  let d = draws[draw];
   let world = on_globe(position + d.translation);
   o.clip = frame.view_proj * vec4f(world, 1.0);
   o.rgb = srgb_to_linear(unpack4x8unorm(b.rgb).xyz);
@@ -323,17 +373,20 @@ fn occlusion(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) -> f
   return 1.0 - open;
 }
 
-// Both arrays are sampled and one chosen: textureSample must sit in
-// uniform control flow, and which face this is, is not.
 // The gradients are the caller's: a tap is read inside a branch — a box
 // with no layer skips the read altogether — and a sample that takes its own
 // gradients may only be called where every fragment of the quad takes it.
 fn sample_tap(layer: f32, is_side: bool, uv: vec2f, ddx: vec2f, ddy: vec2f, fallback: vec3f) -> vec3f {
-  let l = i32(clamp(layer, 0.0, 255.0) + 0.5);
-  let top = textureSampleGrad(layers_top, layer_sampler, uv, l, ddx, ddy).rgb;
-  let side = textureSampleGrad(layers_side, layer_sampler, uv, l, ddx, ddy).rgb;
-  let tex = select(top, side, is_side);
-  return select(tex, fallback, layer > NO_LAYER - 0.5);
+  let l = u32(clamp(layer, 0.0, 255.0) + 0.5);
+  if (l >= arrayLength(&layer_slot)) {
+    return fallback;
+  }
+  let word = layer_slot[l];
+  let slot = select(word & 0xffffu, word >> 16u, is_side);
+  if (slot == NO_SLOT) {
+    return fallback;
+  }
+  return textureSampleGrad(layers, layer_sampler, uv, i32(slot), ddx, ddy).rgb;
 }
 
 @fragment

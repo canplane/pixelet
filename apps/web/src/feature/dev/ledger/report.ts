@@ -126,7 +126,7 @@ function windowSection(r: LedgerReport): string[] {
     `  per     tick/bake ${f.tick_per_bake === null ? "-" : n1(f.tick_per_bake)}ms   (workload-normalised; comparable across sessions)`,
     `  rate    ${n1(f.perS[1])} bakes/s  ${n1(f.perS[0])} scans/s   while backlog ${n1(f.backlogPerS[1])} bakes/s  ${n1(f.backlogPerS[0])} scans/s over ${n1(f.backlog_s)}s`,
     `  faces   kept ${c.faces_kept} / ${c.faces_possible} (${share(c.faces_kept, c.faces_possible)}%)  runs culled ${c.runs_culled}/${c.runs_total}`,
-    `  coarse  boxes ${c.coarse_boxes}  low fill ${c.coarse_low_fill} (${share(c.coarse_low_fill, c.coarse_boxes)}%; a threshold cull would have skipped these)`,
+    `  coarse  boxes ${c.coarse_boxes}  low fill ${c.coarse_low_fill} (${share(c.coarse_low_fill, c.coarse_boxes)}%; a cull at this fill was measured and did not pay)`,
     `  bands   reused ${c.bands_reused} / ${bands} (${share(c.bands_reused, bands)}%)  ~1.31MB each; a miss borrows from the heap`,
     `  mounts  window +${f.mounts[0]}/-${f.mounts[1]}   heap ${signed(f.used_delta_mb)}MB`,
     `  waits   releases ${last.lod_offscreen_pending} pending, oldest ${round(last.lod_oldest_release_ms)} ms${starved(last.lod_oldest_release_ms)}   on-screen oldest ${

@@ -25,7 +25,7 @@ use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
 use pxl_render::look::globe::Globe;
 use pxl_render::look::lod::{Ladder, COARSEST};
-use pxl_render::mesh::chunk_mesher::BOX_WORDS;
+use pxl_render::mesh::chunk_mesher::{box_bounds, Heights};
 use pxl_render::mesh::paint::terrain::adapter::ChunkSample;
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, PAGE_TOP_LEVEL};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -45,7 +45,7 @@ use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
 use crate::layer::terrain::level::{chunk_span_of, decor_reach, ring, LevelPage, DECOR_REACH, RENDER_AXIS};
 use crate::shell::setting::store::hidden_ground;
-use crate::world::chunk::mesh_slot::{group_bytes, slot_of, MeshSlot, FINE_BOXES, OCCUPANCY};
+use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, slot_of, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
 use crate::world::chunk::range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT};
 use pxl_spec::space::indexer::L2_IDX;
@@ -329,6 +329,8 @@ struct Tier {
     /// Where its boxes lie on the device, and how many.
     slot: MeshSlot,
     box_cnt: u32,
+    /// What its boxes' heights are held in (pxl-render chunk_mesher.rs).
+    heights: Heights,
 }
 
 /// A decor block the chunk nodes hold: its step and bytes, and the renderer's
@@ -1478,7 +1480,19 @@ impl Scheduler {
                 if t.box_cnt == 0 {
                     continue;
                 }
-                self.draw.draw_arena(t.slot.group, t.slot.first_box, t.box_cnt, translation, visible);
+                // A mesh's heights are steps from its own floor, so the
+                // floor rides in the translation with the chunk's corner.
+                let at = [translation[0], translation[1], translation[2] + t.heights.floor as f32];
+                self.draw.draw_arena(
+                    t.slot.group,
+                    t.slot.first_box,
+                    t.box_cnt,
+                    at,
+                    visible,
+                    (step << s.level) as f32,
+                    t.heights.step as f32,
+                    group_box_words(t.slot.group) as f32,
+                );
                 self.level_boxes[s.level as usize] += t.box_cnt;
             }
             // Decor takes whichever tier the blend says the chunk is mostly
@@ -2092,7 +2106,13 @@ fn world_mem(world: &World) -> *const u8 {
 fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8, meshes: &mut Meshes, e: BuildEvent, emit: &mut impl FnMut(Event)) {
     match e {
         BuildEvent::Tier {
-            id, generation, step, at, box_cnt, ..
+            id,
+            generation,
+            step,
+            at,
+            box_cnt,
+            heights,
+            ..
         } => {
             let Some(&i) = index.get(&id) else { return emit(Event::Build(e)) };
             if slots[i].tier(step, generation).is_some() {
@@ -2142,15 +2162,20 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
             // SAFETY: the mesh's boxes, a least corner and a size in the
             // first six floats of each, in `.fixed.bake` where the bake
             // just wrote them.
-            let words = unsafe { core::slice::from_raw_parts(mem.add(at as usize) as *const u32, (boxes * BOX_WORDS) as usize) };
+            // The format is the group's, not the mesh's: a slot is a
+            // stride into its group's arena (mesh_slot.rs).
+            let box_words = group_box_words(slot.group);
+            let words = unsafe { core::slice::from_raw_parts(mem.add(at as usize) as *const u32, (boxes * box_words) as usize) };
             let bounds = (boxes > 0).then(|| {
                 let mut b = Bounds {
                     min: [f32::INFINITY; 3],
                     max: [f32::NEG_INFINITY; 3],
                 };
-                for r in words.as_chunks::<{ BOX_WORDS as usize }>().0 {
+                let unit = (step << slots[i].level) as f64;
+                for r in words.chunks_exact(box_words as usize) {
+                    let (min, size) = box_bounds(r, unit, heights);
                     for a in 0..3 {
-                        let (lo, size) = (f32::from_bits(r[a]), f32::from_bits(r[3 + a]));
+                        let (lo, size) = (min[a] as f32, size[a] as f32);
                         b.min[a] = b.min[a].min(lo);
                         b.max[a] = b.max[a].max(lo + size);
                     }
@@ -2162,7 +2187,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
                 // SAFETY: the same words, as bytes.
                 let bytes = unsafe { core::slice::from_raw_parts(words.as_ptr() as *const u8, words.len() * 4) };
                 // No device to write to: asked for again once there is one.
-                if !arena_write(slot.group as usize, slot.first_box * BOX_WORDS * 4, bytes) {
+                if !arena_write(slot.group as usize, slot.first_box * box_words * 4, bytes) {
                     return;
                 }
                 // The write that made the arena lost nothing written before it.
@@ -2177,6 +2202,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
             for t in s.tiers.iter_mut().filter(|t| t.slot.index == slot.index) {
                 t.box_cnt = boxes;
                 t.bounds = bounds;
+                t.heights = heights;
             }
             s.tiers.push(Tier {
                 step,
@@ -2184,6 +2210,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
                 bounds,
                 slot,
                 box_cnt: boxes,
+                heights,
             });
         }
     }

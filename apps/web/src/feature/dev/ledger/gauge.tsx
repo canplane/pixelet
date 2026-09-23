@@ -43,6 +43,13 @@ const INTERACTION_WARN_MS = 2;
  * below the sixteen-second wait that ageing exists to prevent: past it, ageing
  * is not doing its job. */
 const STARVED_MS = 10_000;
+
+/** The levels a bitmask names, as the census packs them (world/chunk/table.rs). */
+function levelBits(mask: number): string {
+  const out: number[] = [];
+  for (let k = 0; mask >>> k; k++) if (mask & (1 << k)) out.push(k);
+  return out.length ? out.join("\u00b7") : "-";
+}
 /** A sheet larger than it starts, and this sparse, is one compaction should
  * already have halved. */
 const ATLAS_INITIAL = 1024;
@@ -105,6 +112,28 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
             k="wait rel/vis"
             v={`${f.last.lod_offscreen_pending} ${round(f.last.lod_oldest_release_ms)}/${round(f.last.lod_oldest_visible_ms)}ms`}
             warn={Math.max(f.last.lod_oldest_release_ms, f.last.lod_oldest_visible_ms) > STARVED_MS}
+          />
+          {
+            /* A finished mesh thrown away because a drawn chunk holds the slot
+              its residue names, and the boxes cut from one past its slot: the
+              levels are the waiters' and the holders' (world/chunk/mesh_slot.rs).
+              Two levels share a group when they lie a window apart, which a
+              zoom that skips the levels between puts on screen at once. */
+          }
+          <Row
+            k="slot wait/cut"
+            v={`${round(f.last.slot_waits)}/${round(f.last.slot_cut)} L${levelBits(f.last.slot_wait_levels)} on ${levelBits(f.last.slot_holder_levels)}`}
+            warn={f.last.slot_waits > 0 || f.last.slot_cut > 0}
+          />
+          {
+            /* Stale ground kept because nothing covers it yet, and of those the
+              ones whose cover is itself waiting on a slot — a wait that closes
+              on itself. */
+          }
+          <Row
+            k="stale unc/unrdy/wait"
+            v={`${round(f.last.stale_uncovered)}/${round(f.last.stale_unready)}/${round(f.last.stale_on_waiter)}`}
+            warn={f.last.stale_on_waiter > 0}
           />
           <Rule />
           <Row k="draws" v={String(f.last.draw_calls)} />

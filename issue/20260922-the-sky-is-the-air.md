@@ -190,17 +190,25 @@ rather than a grey.
 Not yet seen on a screen: the clouds at sunset, and the moonlit sky toward
 the moon itself — the page reloaded or the camera would not turn each time.
 
+Closed since:
+
+- The terrain stood at its elevation and the planet's ground at sea level, so
+  from high up a far piece of terrain floated a little over it, its chunk
+  walls showing. The ground the sky draws now stands at the elevation under
+  the map centre (`layer/environment/fog.rs`'s `centre_ground`, into
+  `atmos_medium.wgsl`'s `land_altitude_km`).
+- `look/lod.rs`'s note on which tier handoffs are dithered read against a
+  `RENDER_DIST` of 1,536 u, a constant that then went; it reads against
+  `NEAREST_REACH` now, which is the floor under the reach rather than a
+  render distance
+  ([the ground runs to the horizon](./20260923-the-ground-runs-to-the-horizon.md)).
+
 Open, and queued in [BACKLOG.md](./BACKLOG.md):
 
-- The terrain stands at its elevation and the planet's ground at sea level,
-  so from high up a far piece of terrain floats a little over it, its chunk
-  walls showing.
 - Clouds with a thickness, the slab above, as a quality setting.
 - The Milky Way, which a catalogue of six thousand naked-eye stars does not
   make, and the bright planets, which the sun's and the moon's formulas
   extend to.
-- `look/lod.rs`'s note on which tier handoffs are dithered still reads
-  against a `RENDER_DIST` of 1,536 u.
 - The themes' remaining fill — ambient, hemisphere and the floor — could come
   from the sky's irradiance the way the sunlight now comes from the air;
   the floor exists for a phone's night and is the one number that would

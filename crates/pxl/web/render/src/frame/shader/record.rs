@@ -440,12 +440,12 @@ const SKIN: [[u32; 3]; 2] = [[0, FRAGMENT, TEXTURE], [1, FRAGMENT, SAMPLER]];
 fn chunk_lanes() -> Vec<Vec<u32>> {
     Vec::new()
 }
-/// The chunk's groups: the lit frame, the draws, the texture pack's two
-/// arrays and their sampler; then the block of the mesh it draws, whose boxes
-/// the vertex shader unfolds.
+/// The chunk's groups: the lit frame, the draws, the texture pack's array,
+/// the table its faces are found through and their sampler; then the block of
+/// the mesh it draws, whose boxes the vertex shader unfolds.
 fn chunk_groups() -> Vec<Vec<u32>> {
     let mut g0 = LIT_FRAME.to_vec();
-    g0.extend([[3, BOTH, STORAGE], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, TEXTURE_ARRAY], [6, FRAGMENT, SAMPLER]]);
+    g0.extend([[3, BOTH, STORAGE], [4, FRAGMENT, TEXTURE_ARRAY], [5, FRAGMENT, STORAGE], [6, FRAGMENT, SAMPLER]]);
     vec![group(&g0), group(&[[0, VERTEX, STORAGE]])]
 }
 /// A model's lanes (model.rs): position, normal, uv; then, skinned, the
