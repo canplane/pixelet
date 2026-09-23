@@ -329,6 +329,13 @@ pub struct BakeContext {
     /// What the open bake's heights are held in, from the set it reads.
     heights: Heights,
     box_words: u32,
+    /// Whether the pack is drawn, which decides what a summary is drawn in:
+    /// the tile's own mean where it is, the catalog's swatch where it is not,
+    /// so a coarse tier matches the leaves under it either way. A box carries
+    /// one colour and the bake picks it, rather than carrying both for the
+    /// frame to pick — a coarse box has no room for a second and the setting
+    /// re-sources every chunk when it changes (shell/setting/store.rs).
+    textured: bool,
     /// Words the open bake's mesh takes, once its size is known.
     mesh_words: u32,
     /// Boxes written so far.
@@ -355,6 +362,7 @@ impl BakeContext {
             mesh: None,
             heights: Heights::default(),
             box_words: FINE_BOX_WORDS,
+            textured: true,
             mesh_words: 0,
             box_cnt: 0,
             open: None,
@@ -365,11 +373,13 @@ impl BakeContext {
 
     /// Opens a bake of `set` at `lod_step`, the set's columns `scale` units
     /// across: 1 for a leaf chunk, 2^k for a level-k one. Heights are units at
-    /// every level. False when one is already open.
-    pub fn begin(&mut self, set: &RunSet, lod_step: u32, scale: u32) -> bool {
+    /// every level. `textured` is whether the pack is drawn. False when one is
+    /// already open.
+    pub fn begin(&mut self, set: &RunSet, lod_step: u32, scale: u32, textured: bool) -> bool {
         if self.open.is_some() {
             return false;
         }
+        self.textured = textured;
         assert!(set.span as usize <= MAX_BAKE_SPAN, "bake span {} past {}", set.span, MAX_BAKE_SPAN);
         // Every surviving box is at most one run, so the boxes fit this
         // many words: reserved up front rather than grown by doubling, which
@@ -730,11 +740,14 @@ impl BakeContext {
     #[allow(clippy::too_many_arguments)]
     fn accumulate_run(&mut self, start: u32, mut cnt: u32, bucket: i32, cell: u32, set: &RunSet, i: usize, col: u32) -> u32 {
         let (run_z0, run_z1) = (set.z0[i], set.z1[i]);
-        // What the run reads as from here: its layer's own mean colour,
-        // which is what a patch of that material shows once the tile is too
-        // small to see. The catalog's swatch is what a type is filed under
-        // and is only the fallback, for a type the pack has no tile for.
-        let mean = layer_mean(set.layer_taps[i] & 255, [set.r[i], set.g[i], set.b[i]]);
+        // What the run reads as from here. With the pack drawn, a patch of
+        // this material shows its layer's own mean colour once the tile is
+        // too small to see, and the catalog's swatch is only the fallback for
+        // a type the pack has no tile for. With the pack off there is no tile
+        // to average, and the leaves under this tier show the swatch, so the
+        // summary shows it too.
+        let swatch = [set.r[i], set.g[i], set.b[i]];
+        let mean = if self.textured { layer_mean(set.layer_taps[i] & 255, swatch) } else { swatch };
         let rgb = linear_of(mean[0], mean[1], mean[2]);
         if set.sub_sz[i] != SUB_CELL_NONE {
             let frac = unpack_sub_cell_size(set.sub_sz[i]);

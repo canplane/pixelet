@@ -263,7 +263,11 @@ impl SettingsStore {
         if value != default {
             self.overrides.push((key, value.clone()));
         }
-        if key == "show_structures" || key == "show_decor" {
+        // `texture_pack` is the shader's for a leaf, which carries its layer
+        // and samples or does not — but a tier over it carries one colour and
+        // no layer to sample, so which colour that is was baked in
+        // (mesh/chunk_mesher.rs). Nothing else re-sources on this.
+        if key == "show_structures" || key == "show_decor" || key == "texture_pack" {
             chunk_sources_changed();
         }
         self.write(key, value);
