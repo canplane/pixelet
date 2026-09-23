@@ -16,7 +16,7 @@
 
 use crate::global::Global;
 use crate::host::now;
-use crate::io::scheduler::{fetch_counts, fetch_credits};
+use crate::io::sched::{counts, credits};
 use crate::kernel::kernel;
 use crate::layer::billboard::frustum_budget::billboard_dropped;
 use crate::layer::poi::badge::badge_atlas;
@@ -176,10 +176,10 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
         let mut counted = [(0.0f64, 0.0f64, 0.0f64); 16];
         let mut kinds = 0;
         for r in mine().filter(|r| r.outcome == error) {
-            match counted[..kinds].iter().position(|x| x.0 == r.fail && x.1 == r.status) {
+            match counted[..kinds].iter().position(|x| x.0 == r.fail && x.1 == r.detail) {
                 Some(i) => counted[i].2 += 1.0,
                 None if kinds < counted.len() => {
-                    counted[kinds] = (r.fail, r.status, 1.0);
+                    counted[kinds] = (r.fail, r.detail, 1.0);
                     kinds += 1;
                 }
                 None => {}
@@ -278,14 +278,14 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let counts = fetch_counts();
+    let (queued, running) = counts();
     put(
         out,
         SUMMARY::fetch::AT,
         &FetchBlock {
-            queued: counts.queued as f64,
-            running: counts.running as f64,
-            credits: fetch_credits() as f64,
+            queued: queued as f64,
+            running: running as f64,
+            credits: credits() as f64,
         },
     );
 

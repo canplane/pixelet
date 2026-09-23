@@ -37,21 +37,27 @@ type Snapshot = {
   settings: Record<string, boolean | string | number>;
 };
 
-/** A started fetch: the key the kernel hands out and takes back, its URL,
- * and the stream the URL says it belongs to. */
-type Fetched = { key: bigint; url: string; category: string };
+/** A started read: the key the kernel hands out and takes back, the object it
+ * named — which bake, and the name inside it — and the stream that names.
+ * There is no URL here, and that is the point: the kernel does not send one. */
+type Fetched = { key: bigint; bake: number; name: string; category: string };
 
-/** The stream a fetch's URL is for (crates/pxl/web/kernel/src/shell/config/route.rs). */
-function category_of(url: string): string {
-  if (url.endsWith("/_ocean")) return "ocean";
-  return url.split("/")[3];
+/** The bakes, as `BakeKind` numbers them. */
+const BAKE = ["terrain", "poi", "geocode"];
+
+/** The stream an object belongs to. The two shared objects are named rather
+ * than keyed, which is what tells them from the pages of their own bake. */
+function category_of(bake: number, name: string): string {
+  if (name === "_ocean") return "ocean";
+  if (name === "_dict") return "geocode_dict";
+  return BAKE[bake];
 }
 
 type Turn = { snapshot: Snapshot; fetched: Fetched[]; draws: number };
 
 let snapshot: Snapshot | null = null;
 let fetched: Fetched[] = [];
-let loads: number[] = [];
+let loads: bigint[] = [];
 let draws = 0;
 
 CORE_BUILD.signal = (_tag, cmd, f) => {
@@ -60,9 +66,9 @@ CORE_BUILD.signal = (_tag, cmd, f) => {
     snapshot = JSON.parse(text_at(CORE_KERNEL.memory, at >>> 0, len >>> 0)) as Snapshot;
   } else if (cmd === Command.WORLD_UPDATE) draws = f!.at(0).get<number>();
   else if (cmd === Command.FETCH_CREATE) {
-    const [key, url] = f!.get<[bigint, string]>();
-    fetched.push({ key, url, category: category_of(url) });
-  } else if (cmd === Command.LOAD_CREATE) loads.push(f!.at(1).get<number>());
+    const [key, bake, name] = f!.get<[bigint, number, string]>();
+    fetched.push({ key, bake, name, category: category_of(bake, name) });
+  } else if (cmd === Command.LOAD_CREATE) loads.push(f!.at(0).get<bigint>());
 };
 
 /** A page's body as the bake encodes it: a rolling elevation raster and
@@ -94,12 +100,12 @@ let strobe_requests = 0;
 const answer_requests: Record<string, number> = {};
 
 /** A response as the driver reports one: the body held for the kernel. */
-function answer(f: Fetched, status: number, body: U8Array | null): void {
+function answer(f: Fetched, outcome: number, body: U8Array | null): void {
   const requests = heap_row[HEAP_REQUESTS];
   try {
     const bytes = body?.byteLength ?? 0;
     const held = body !== null && bytes > 0 ? hold_body(body) : 0;
-    CORE_BUILD.send(0, Command.FETCH_UPDATE, packet((b) => b.u64(f.key).u32(0).u32(status).u32(held).u32(bytes).u32(0).f64(0)));
+    CORE_BUILD.send(0, Command.FETCH_UPDATE, packet((b) => b.u64(f.key).u32(outcome).u32(held).u32(bytes).u32(0).u32(0).f64(0)));
     CORE_BUILD.ring(0);
   } finally {
     answer_requests[f.category] = (answer_requests[f.category] ?? 0) + heap_row[HEAP_REQUESTS] - requests;
@@ -121,11 +127,13 @@ function turn(delta = 1 / 60): Turn {
   strobe_requests += heap_row[HEAP_REQUESTS] - requests;
   const started = fetched;
   for (const f of started) {
-    if (f.category === "terrain") answer(f, 200, terrain_body(Number(BigInt(f.url.slice(f.url.lastIndexOf("/") + 1)) & 0xffffn)));
-    else if (f.category === "poi") answer(f, 200, encode_empty_poi_page());
+    if (f.category === "terrain") answer(f, 0, terrain_body(Number(BigInt(f.name.slice(f.name.indexOf("/") + 1)) & 0xffffn)));
+    else if (f.category === "poi") answer(f, 0, encode_empty_poi_page());
     else fail(f);
   }
-  for (const load of loads) CORE_BUILD.send(0, Command.LOAD_DELETE, packet((b) => b.u32(load)));
+  // An asset's read is a read: it is settled by the key it was started with,
+  // and the kernel asks again in its own time.
+  for (const key of loads) CORE_BUILD.send(0, Command.LOAD_DELETE, packet((b) => b.u64(key)));
   assert(snapshot !== null, "the kernel posted its snapshot");
   return { snapshot, fetched: started, draws };
 }
@@ -182,13 +190,13 @@ Deno.test("kernel - a map centre fetches its terrain and draws it, and the map s
   assert(page !== null && /^\d+$/.test(page), `the centre's page is a decimal index: ${page}`);
   const statuses = new Set<string>([first.snapshot.map.status]);
   const categories = new Set(first.fetched.map((f) => f.category));
-  let terrain_urls = first.fetched.filter((f) => f.category === "terrain").map((f) => f.url);
+  let terrain_names = first.fetched.filter((f) => f.category === "terrain").map((f) => f.name);
   let max_draws = first.draws;
   for (let i = 0; i < 400; i++) {
     const t = turn();
     statuses.add(t.snapshot.map.status);
     for (const f of t.fetched) categories.add(f.category);
-    terrain_urls = terrain_urls.concat(t.fetched.filter((f) => f.category === "terrain").map((f) => f.url));
+    terrain_names = terrain_names.concat(t.fetched.filter((f) => f.category === "terrain").map((f) => f.name));
     max_draws = Math.max(max_draws, t.draws);
     first = t;
   }
@@ -196,8 +204,8 @@ Deno.test("kernel - a map centre fetches its terrain and draws it, and the map s
   // The centre's own page is among the pages the kernel fetched terrain for,
   // which is what says `map.page` is that centre's page and not merely a
   // well-shaped number.
-  assert(terrain_urls.some((u) => u.endsWith(`/${page}`)), `the centre's page ${page} was fetched`);
-  assert(terrain_urls.every((u) => /\/\d+$/.test(u)), `terrain URLs end in a page: ${terrain_urls.slice(0, 3)}`);
+  assert(terrain_names.some((n) => n.endsWith(`/${page}`)), `the centre's page ${page} was fetched`);
+  assert(terrain_names.every((n) => /^\d+\/-?\d+$/.test(n)), `a terrain name is a level and a page: ${terrain_names.slice(0, 3)}`);
   assert(max_draws > 0, "something was drawn");
   assert(statuses.has("loading"), `the map loaded: ${[...statuses]}`);
   assertEquals(first.snapshot.map.status, "success");

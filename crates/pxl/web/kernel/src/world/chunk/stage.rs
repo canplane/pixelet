@@ -14,7 +14,7 @@ use xpute_runtime::sched::edge::{notified, yield_if_spent};
 
 use crate::global::Global;
 use crate::host::now;
-use crate::io::scheduler::fetch_pending_count;
+use crate::io::sched::pending_count;
 use crate::kernel::{kernel, with_world};
 use crate::layer::environment::state::globe;
 use crate::layer::poi::fetcher;
@@ -285,8 +285,8 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         heap: heap_sample(),
         rings: ledger_take_rings(),
         work: work_sample(c, &census),
-        q_terrain: fetch_pending_count(tile_fetcher::CATEGORY) as f64,
-        q_poi: fetch_pending_count(fetcher::CATEGORY) as f64,
+        q_terrain: pending_count(tile_fetcher::CATEGORY) as f64,
+        q_poi: pending_count(fetcher::CATEGORY) as f64,
         stale: StaleSample {
             chunks: census.stale as f64,
             drawn: census.stale_drawn as f64,

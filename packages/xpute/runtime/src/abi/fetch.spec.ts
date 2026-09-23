@@ -11,9 +11,9 @@
  * do with it that it cannot do with this — it neither retries on it nor
  * routes by it, it only tells one failure from another, which a number does.
  *
- * An HTTP refusal keeps its status beside this rather than inside it: the
- * status is already a number the host sends, and folding it in would make
- * one reason per code.
+ * A refusal keeps the host's own number beside this rather than inside it:
+ * folding it in would make one reason per code, and the guest routes by
+ * neither.
  *
  * The number is the name: an old host reads a number a new guest sends, so
  * a number that has meant something must never come to mean another thing.
@@ -31,8 +31,9 @@ export const enum FetchFail {
   Shell = 0x0102,
 
   // ---- 0x02 a response arrived and was not usable ----
-  /** A status the reader would not take. `status` says which. */
-  Status = 0x0201,
+  /** The host answered, and not with the object. `detail` carries whatever
+   * number it refused with, which for HTTP is the status. */
+  Refused = 0x0201,
   /** The guest had no room for the body it was offered. */
   NoRoom = 0x0202,
 

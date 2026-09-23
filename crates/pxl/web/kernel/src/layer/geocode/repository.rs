@@ -15,16 +15,14 @@ use pxl_spec::space::pvf3::ivec::IVec;
 use xpute_core::status::error::MarshalError;
 use xpute_runtime::mem::heap::{free, Block};
 
-use crate::shell::config::env::GEOCODE_TILE_BASE_URL;
-use crate::shell::config::route::{Joined, TileBase};
-
 /// The dictionary, which the set has one of at the name the bake gives it.
-pub fn dict_url() -> Joined<TileBase, &'static str> {
-    Joined(GEOCODE_TILE_BASE_URL(), DICT_OBJECT)
+pub fn dict_name() -> &'static str {
+    DICT_OBJECT
 }
 
-pub fn group_url(group_idx: IVec) -> Joined<TileBase, IVec> {
-    Joined(GEOCODE_TILE_BASE_URL(), group_idx)
+/// A group's name in its bake: the group's own key.
+pub fn group_name(group_idx: IVec) -> IVec {
+    group_idx
 }
 
 /// Every place a polygon names, held for the session: a group's numbers are

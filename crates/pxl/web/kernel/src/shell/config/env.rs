@@ -5,7 +5,6 @@
 //! `__PUBLISHED_TILES__`), and the shell hands them over once at boot.
 
 use crate::global::Global;
-use crate::shell::config::route::{tile_base, TileBase, TileKind};
 
 #[derive(Clone, Debug, Default)]
 pub struct BuildInfo {
@@ -61,19 +60,4 @@ pub fn BUILD_NUMBER() -> &'static str {
 #[allow(non_snake_case)]
 pub fn PUBLISHED_TILES() -> bool {
     build().published_tiles
-}
-
-#[allow(non_snake_case)]
-pub fn TILE_BASE_URL() -> TileBase {
-    tile_base(TileKind::terrain, PUBLISHED_TILES())
-}
-
-#[allow(non_snake_case)]
-pub fn POI_TILE_BASE_URL() -> TileBase {
-    tile_base(TileKind::poi, PUBLISHED_TILES())
-}
-
-#[allow(non_snake_case)]
-pub fn GEOCODE_TILE_BASE_URL() -> TileBase {
-    tile_base(TileKind::geocode, PUBLISHED_TILES())
 }

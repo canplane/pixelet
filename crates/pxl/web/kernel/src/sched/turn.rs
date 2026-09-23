@@ -27,7 +27,7 @@ use crate::control::sensor::device_orientation::{orientation_watchdog_step, Orie
 use crate::control::sensor::geolocation::geolocation_step;
 use crate::global::Global;
 use crate::host::now;
-use crate::io::scheduler::{fetch_pump, set_fetch_credits};
+use crate::io::sched::{pump, set_credits};
 use crate::layer::character::companion::{companion_step, CompanionProps};
 use crate::layer::decor::asset_store::decor_assets_wanted;
 use crate::layer::environment::state::map_environment_step;
@@ -188,7 +188,10 @@ pub fn world_turn() -> f64 {
     // holds its own last-known coordinate across a transient none.
     effect!(worst, "puck", location_puck_step(map_navigation().device_coord));
     effect!(worst, "objects", crate::layer::object::store::flush_save_if_due());
-    effect!(worst, "pump", fetch_pump());
+    // After every producer has spoken, including whatever asked for an
+    // asset while the turn ran.
+    effect!(worst, "assets", crate::io::sched::declare(crate::io::demand::Category::Asset, &crate::io::load::load_wants()));
+    effect!(worst, "pump", pump());
     *WORST_EFFECT.get(|| (0.0, "")) = worst;
     now() - at
 }
@@ -297,7 +300,7 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
         credits,
     } = host;
     let t0 = now();
-    set_fetch_credits(credits);
+    set_credits(credits);
     let effects_ms = world_turn();
     let state = TICK_STATE.get(TickState::default);
     state.width = width;
@@ -316,7 +319,7 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     state.interactive = interactive;
     let report = run_tick(state, step, quota_ms, edge_at);
     let after_tick = now();
-    fetch_pump();
+    pump();
     crate::world::frame::stage::stage_write();
     crate::world::frame::stage::stage_render();
     let done = now();

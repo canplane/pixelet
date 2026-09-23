@@ -7,12 +7,24 @@
 // proxy's routes and its own bundler knows no aliases — under `@/` the
 // import went unresolved and was left external, and Deno's import map is
 // what quietly made it work.
-import { PUBLISHED_VERSION } from "./published.spec.ts";
+import { type BakeKind, PUBLISHED_VERSION } from "./published.spec.ts";
 
-import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.ts";
+import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
 
 export { PUBLISHED_VERSION };
 export { API_PREFIX, API_ROOT, ASSET_PREFIX, ASSET_ROOT, GEO_PREFIX, GEO_ROOT, SEARCH_URL, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
+export type TileKind = BakeKind;
+
+/** Where a baked object lives: `<tiles>/<kind>[/<version>]/<name>`.
+ *
+ * The kernel names the object — which bake it belongs to, and its name inside
+ * that bake — and this is the half it does not know. The version segment is a
+ * deployment fact and belongs on this side with the rest of them: a dev server
+ * bakes on demand and has no versions, a published one requests the prefix
+ * `PUBLISHED_VERSION` names. */
+export function tile_url(kind: TileKind, name: string, published: boolean): string {
+  return published ? `${TILE_ROOT}/${kind}/${PUBLISHED_VERSION[kind]}/${name}` : `${TILE_ROOT}/${kind}/${name}`;
+}
 
 /** A content-addressed asset — a model, a texture — by its bucket key
  * (`asset/<sha256>`, what the ingest gave its bytes). The root and the bucket's

@@ -283,7 +283,7 @@
     "transport_ms": 6,
     "outcome": 7,
     "fail": 8,
-    "status": 9,
+    "detail": 9,
     "phase_count": 10,
     "phase_ids": 11,
     "phase_values": 17,
@@ -309,7 +309,7 @@
   "TASK_SUMMARY": {
     "$type": "u32",
     "$doc": [
-      "One category's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, status, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes."
+      "One category's tasks in the window, at SUMMARY.tasks + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. `tick_per_bake` elsewhere is NaN where there were no bakes."
     ],
     "n": 0,
     "ok": 1,
