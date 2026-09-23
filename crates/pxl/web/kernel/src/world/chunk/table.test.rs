@@ -9,8 +9,8 @@ fn p(in_frustum: bool, centre_distance2: f64) -> Priority {
         holds: false,
         in_frustum,
         hole: false,
+        restale: false,
         centre_distance2,
-        span: 1.0,
         pending_since: -1.0,
     }
 }
@@ -22,27 +22,44 @@ fn ordered(items: &[(&'static str, Priority)], now: f64) -> Vec<&'static str> {
 }
 
 #[test]
-fn slot_holders_then_holes_on_screen_then_sharper_then_off_screen() {
+fn slot_holders_then_holes_then_a_generation_behind_then_sharper_then_off_screen() {
     let items = [
         ("far refine", p(true, 900.0)),
         ("near hidden", Priority { hole: true, ..p(false, 1.0) }),
         ("holder", Priority { holds: true, ..p(false, 5000.0) }),
         ("near refine", p(true, 4.0)),
         ("far hole", Priority { hole: true, ..p(true, 2500.0) }),
+        // Its page has moved past what it draws: worse than coarse, better
+        // than nothing, and far does not save it from the class above.
+        ("far restale", Priority { restale: true, ..p(true, 3600.0) }),
     ];
-    assert_eq!(ordered(&items, 0.0), ["holder", "far hole", "near refine", "far refine", "near hidden"]);
+    assert_eq!(ordered(&items, 0.0), ["holder", "far hole", "far restale", "near refine", "far refine", "near hidden"]);
 }
 
+/// What the class used to lose by being a list of its own: a page arriving
+/// for the horizon sent its chunks ahead of the ones under the camera, in
+/// the order the network answered. Inside the class the distance decides.
 #[test]
-fn on_screen_a_chunk_is_as_near_as_its_distance_in_its_own_sides() {
-    // A coarse chunk sixteen times as wide and eight times as far looks
-    // larger than a fine one near, and goes first.
-    let coarse = Priority { span: 16.0, ..p(true, 80.0 * 80.0) };
-    let fine = p(true, 10.0 * 10.0);
-    assert_eq!(ordered(&[("fine", fine), ("coarse", coarse)], 0.0), ["coarse", "fine"]);
-    // Off screen the release order is plain distance, farthest first.
-    let coarse_off = Priority { span: 16.0, ..p(false, 80.0 * 80.0) };
-    assert_eq!(ordered(&[("coarse", coarse_off), ("fine", p(false, 10.0 * 10.0))], 0.0), ["coarse", "fine"]);
+fn a_generation_behind_is_still_ordered_nearest_first() {
+    let items = [("far", Priority { restale: true, ..p(true, 9000.0) }), ("near", Priority { restale: true, ..p(true, 9.0) })];
+    assert_eq!(ordered(&items, 0.0), ["near", "far"]);
+}
+
+/// On screen the nearest the view centre goes first, whatever its level.
+///
+/// It used to be the distance in the chunk's own sides — "the biggest on the
+/// screen first" — and the ladder makes that the same for every level, so a
+/// coarse chunk at the horizon went with a fine one under the camera and the
+/// screen filled everywhere at once. Everywhere at once means the middle
+/// waits for all of it.
+#[test]
+fn on_screen_the_nearest_the_middle_goes_first_whatever_its_level() {
+    let far_coarse = p(true, 80.0 * 80.0);
+    let near_fine = p(true, 10.0 * 10.0);
+    assert_eq!(ordered(&[("far", far_coarse), ("near", near_fine)], 0.0), ["near", "far"]);
+    // Off screen the release order is the same distance, farthest first: a
+    // release takes memory from what is least likely to be wanted again.
+    assert_eq!(ordered(&[("far", p(false, 80.0 * 80.0)), ("near", p(false, 10.0 * 10.0))], 0.0), ["far", "near"]);
 }
 
 #[test]
@@ -109,14 +126,12 @@ fn mounts_are_ordered_as_the_builds_take_them_and_not_by_level() {
         "a coarse chunk on the anchor goes before a fine one eight pages out"
     );
     assert!(near_coarse > far_fine, "though the key would have put it last");
-
-    // Within one level it is plain distance.
+    // Within one level it is plain distance, as it is across them.
     assert!(chunk_near(chunk(2, 0, 0), ax, ay) < chunk_near(chunk(2, 1, 0), ax, ay));
-    // And a chunk of any level on the anchor's own ground ties with one of
-    // another: that is what lets the fill spread outward rather than by
-    // octave.
-    let mid = |level: u32| chunk_near(chunk(level, 0, 0), ax, ay);
-    assert!((mid(0) - mid(4)).abs() < 1e-9, "every level's first chunk is equally near");
+    // A coarse chunk is wider, so its centre is further from the anchor even
+    // when it starts there: the middle of the screen is drawn by the finest
+    // level, and that is what goes first.
+    assert!(chunk_near(chunk(0, 0, 0), ax, ay) < chunk_near(chunk(4, 0, 0), ax, ay));
 }
 
 /// Where the selection starts when a page of the top ring has not arrived.

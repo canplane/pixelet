@@ -44,7 +44,7 @@ use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::node::chunk_nodes_step;
-use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, take_draw};
+use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
 use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view_frame::{view_rotation_step, view_translation_step};
 
@@ -132,6 +132,7 @@ fn world_tasks() {
     let spawned = spawn(frame_task(), Frame as u8)
         && spawn(crate::io::fetch::fetch_task(), Arrival as u8)
         && spawn(crate::io::load::gltf_task(), Arrival as u8)
+        && spawn(crate::layer::terrain::tile_fetcher::fold_task(), Arrival as u8)
         && spawn(crate::world::chunk::stage::build_task(), Build as u8)
         && spawn(crate::layer::decor::asset_store::decor_asset_task(), Background as u8)
         && spawn(crate::layer::object::store::save_task(), Background as u8);
@@ -140,25 +141,54 @@ fn world_tasks() {
     }
 }
 
-/// The effects' turn, before the tick.
-pub fn world_turn() {
+/// The longest effect of the last turn, and which it was: a turn is only as
+/// cooperative as its longest step, and a total does not say where to look.
+/// Named as EFFECT_NAMES spells it (sched/ledger/ledger.json).
+static WORST_EFFECT: Global<(f64, &'static str)> = Global::new();
+
+pub fn worst_effect() -> (f64, &'static str) {
+    *WORST_EFFECT.get(|| (0.0, ""))
+}
+
+/// One effect, timed. The effects are where the turn decides what is wanted,
+/// and they are not budgeted — nothing here may be work. What kept that
+/// honest was nothing at all until a fold running here took seventy
+/// milliseconds of a turn whose tick was one and a half, and no number in
+/// the ledger named the region it was in (2026-09-23).
+macro_rules! effect {
+    ($worst:ident, $name:literal, $step:expr) => {{
+        let at = now();
+        $step;
+        let ms = now() - at;
+        if ms > $worst.0 {
+            $worst = (ms, $name);
+        }
+    }};
+}
+
+/// The effects' turn, before the tick. How long it took.
+pub fn world_turn() -> f64 {
+    let at = now();
     let platform = world_platform();
-    map_navigation_step();
-    map_bootstrap_step();
-    crate::shell::shell::shell_step();
-    geolocation_step(platform.geolocation);
-    orientation_watchdog_step(platform.orientation);
-    tile_fetcher_step();
-    follow_mode_step();
-    theme_clock_step();
-    decor_assets_wanted();
-    chunk_nodes_step();
-    hover_cursor_step();
+    let mut worst = (0.0f64, "");
+    effect!(worst, "navigation", map_navigation_step());
+    effect!(worst, "bootstrap", map_bootstrap_step());
+    effect!(worst, "shell", crate::shell::shell::shell_step());
+    effect!(worst, "geolocation", geolocation_step(platform.geolocation));
+    effect!(worst, "orientation", orientation_watchdog_step(platform.orientation));
+    effect!(worst, "tiles", tile_fetcher_step());
+    effect!(worst, "follow", follow_mode_step());
+    effect!(worst, "theme", theme_clock_step());
+    effect!(worst, "decor", decor_assets_wanted());
+    effect!(worst, "chunk_nodes", chunk_nodes_step());
+    effect!(worst, "hover", hover_cursor_step());
     // device_coord is deliberately not gated the way map_center is — the puck
     // holds its own last-known coordinate across a transient none.
-    location_puck_step(map_navigation().device_coord);
-    crate::layer::object::store::flush_save_if_due();
-    fetch_pump();
+    effect!(worst, "puck", location_puck_step(map_navigation().device_coord));
+    effect!(worst, "objects", crate::layer::object::store::flush_save_if_due());
+    effect!(worst, "pump", fetch_pump());
+    *WORST_EFFECT.get(|| (0.0, "")) = worst;
+    now() - at
 }
 
 static TICK_STATE: Global<TickState> = Global::new();
@@ -261,7 +291,7 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     } = host;
     let t0 = now();
     set_fetch_credits(credits);
-    world_turn();
+    let effects_ms = world_turn();
     let state = TICK_STATE.get(TickState::default);
     state.width = width;
     state.height = height;
@@ -270,10 +300,13 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     state.frame_ms = frame_ms;
     state.interactive = interactive;
     let report = run_tick(state, delta, quota_ms, edge_at);
+    let after_tick = now();
     fetch_pump();
     crate::world::frame::stage::stage_write();
     crate::world::frame::stage::stage_render();
-    set_host_task_ms(now() - t0);
+    let done = now();
+    set_turn_timing(effects_ms, done - after_tick);
+    set_host_task_ms(done - t0);
     if report.invalidated || take_draw() {
         request_world_tick();
     }

@@ -18,6 +18,7 @@
 
 import { round } from "@xpute/core/math/scalar.ts";
 
+import { EFFECT_NAMES } from "./ledger.spec.ts";
 import { n1, tris, valueText } from "./lane.ts";
 import { BOUND, failText } from "./report.ts";
 import type { FrameSummary, Gauge, Spread } from "./view.ts";
@@ -126,6 +127,30 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
             warn={f.last.slot_waits > 0 || f.last.slot_cut > 0}
           />
           {
+            /* The turn in parts: the effects, the stage, and the longest
+              single effect with its name. The tick's own numbers are above,
+              so what none of the three accounts for is `task` less them —
+              the region nobody has measured, which is where a fold once took
+              seventy milliseconds of a turn whose tick was one and a half.
+              Nothing in the effects may be work; they decide what is wanted
+              and are not budgeted. */
+          }
+          <Row
+            k="turn eff/stage/worst"
+            v={`${n1(f.last.turn_effects_ms)}/${n1(f.last.turn_stage_ms)}/${n1(f.last.turn_step_ms)}ms ${EFFECT_NAMES[f.last.turn_step_name] ?? "-"}`}
+            warn={f.last.turn_effects_ms > 4}
+          />
+          {
+            /* The stale population, and how much of it is doing anything: one
+              that is on screen with a layout is holding ground up, one that is
+              not is only waiting to be let go. `hid` is the wanted chunks that
+              have a layout a drawn stale chunk is standing over. */
+          }
+          <Row
+            k="stale n/drawn/hid"
+            v={`${round(f.last.stale_chunks)}/${round(f.last.stale_drawn)}/${round(f.last.stale_hidden)}`}
+          />
+          {
             /* Stale ground kept because nothing covers it yet, and of those the
               ones whose cover is itself waiting on a slot — a wait that closes
               on itself. */
@@ -134,6 +159,21 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
             k="stale unc/unrdy/wait"
             v={`${round(f.last.stale_uncovered)}/${round(f.last.stale_unready)}/${round(f.last.stale_on_waiter)}`}
             warn={f.last.stale_on_waiter > 0}
+          />
+          {
+            /* What the frame's ceilings left behind: chunks on screen wanting a
+              layout the commit pass did not reach, chunks the selection wants
+              that are not mounted, and pages that found every record carrying
+              one worth more. `full` where the mount pass stopped because the
+              table is full rather than because its own cap was spent — the one
+              of the three that says a number is too small rather than that a
+              frame was short. None of those numbers was derived; this is what
+              says whether one of them is holding the screen back. */
+          }
+          <Row
+            k="cap commit/mount/page"
+            v={`${round(f.last.cap_commit_left)}/${round(f.last.cap_mount_left)}${f.last.cap_mount_full ? " full" : ""}/${round(f.last.cap_record_refused)}`}
+            warn={f.last.cap_mount_full > 0 || f.last.cap_record_refused > 0}
           />
           <Rule />
           <Row k="draws" v={String(f.last.draw_calls)} />

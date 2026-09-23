@@ -16,14 +16,15 @@ use crate::global::Global;
 use crate::host::now;
 use crate::io::demand::{Category, Demand, DemandKey};
 use crate::io::scheduler::{fetch_pending_count, fetch_sync};
+use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
-use crate::layer::terrain::level::{centre_dist, centre_page, held, neighbourhood, ring_of, window, LevelPage, HELD_AXIS, RENDER_AXIS, WINDOW_LEVELS};
+use crate::layer::terrain::level::{centre_dist, centre_page, held, neighbourhood, ring_of, window, LevelPage, RENDER_AXIS};
 use crate::layer::terrain::resident::holds_record;
 use crate::layer::terrain::resolve::{resolve, Resolved};
 use crate::layer::terrain::store::{level_pages, tile_store};
 use crate::layer::terrain::tile_repository::{adopt_folded, ocean_retain, ocean_wanted, OCEAN_CATEGORY};
 use crate::shell::map_store::{map_store, MapStatus};
-use crate::world::change::wake_at;
+use crate::world::change::{wake_at, world_edge};
 use crate::world::frame::range_anchor::range_anchor;
 
 pub const CATEGORY: Category = Category::Terrain;
@@ -57,50 +58,42 @@ enum Want {
     Prefetch,
 }
 
-/// Rings a page can be in: the held ring's radius, and its centre.
-const RINGS: u32 = HELD_AXIS / 2 + 1;
-
-/// Fetch order, in four terms that cannot trade against each other: the
-/// class, then the ring, then the coarsest level, then the nearest. Why it
-/// is those, and why the ring has to sit above the level, is the one order
-/// every scheduler in the tick keeps (sched/priority.rs).
+/// Fetch order: the class, then the nearest the ground the view is looking
+/// at. Why those and no others is the one order every scheduler in the tick
+/// keeps (sched/priority.rs).
 ///
-/// Two of the four are this pass's own. The **ring** is `centre_dist`
-/// quantized into the pages of a ring: a demand's priority is one f64 the
-/// queue sorts by, so the soft distance has to be the last term and anything
-/// that must sit under it has to be discrete. The **level** is under it
-/// because up to WINDOW_LEVELS pages are resident over one patch of ground
-/// where exactly one chunk is drawn over it — a coarse page is the fallback
-/// a fine one refines, and small against the ground it covers, so within one
-/// ring it is worth having first.
+/// The distance is in world units, not in the page's own spans. In its own
+/// spans it says how large the page is on the screen, which the ladder makes
+/// about the same for every level — so a page at the horizon ranked with the
+/// one under the camera, and the ring that quantized it carried the same
+/// fault a ring at a time. Asking from the middle out is what puts the
+/// ground anyone is looking at on the screen first, and the request order is
+/// upstream of every other: a chunk cannot be mounted over a page that has
+/// not come, and cannot be built before it is mounted.
 ///
-/// Doubled, so POI can interleave at the odd numbers, and the distance kept
-/// under one so it never reaches them. Each term's span is the one below it,
-/// which is what makes this lexicographic rather than a weighted sum that
-/// some range of inputs can invert; the clamps are what hold that when a
-/// caller passes a level from outside the window (`leaf_priority`).
-fn priority(anchor: IVec, p: LevelPage, top: u32, want: Want) -> f64 {
-    let ring = ring_of(anchor, p).min(RINGS - 1);
-    let level = top.saturating_sub(p.level).min(WINDOW_LEVELS - 1);
-    let d = centre_dist(anchor, p);
-    2.0 * ((want as u32 * RINGS + ring) * WINDOW_LEVELS + level) as f64 + d / (d + 1.0)
+/// Nothing under the distance, so nothing has to be discrete. The level term
+/// is gone with the ring: it said a coarse page is the fallback a fine one
+/// refines, which is true and is what the *class* says — a page with nothing
+/// over it is Coverage and goes first whatever its level.
+///
+/// Doubled, so POI can interleave at the odd numbers, and the distance
+/// squashed under one so it never reaches them. `d/(d + 1)` is monotone in
+/// `d` and a double has the digits to keep pages apart at the far end, where
+/// the ring's outermost is some tens of thousands of units out.
+fn priority(anchor: IVec, p: LevelPage, want: Want) -> f64 {
+    let d = centre_dist(anchor, p) * p.span();
+    2.0 * want as u32 as f64 + d / (d + 1.0)
 }
 
 /// Where a leaf stands in terrain's order, for what fetches beside it.
-///
-/// A leaf whatever the window holds, since what asks is POI and a place is
-/// grounded against a leaf. So `top - p.level` is the window's whole height
-/// above the leaves and not a step inside it, which is the one caller the
-/// clamp in `priority` is there for: unclamped it reaches PAGE_TOP_LEVEL and
-/// lands past every band terrain has, behind even the rim.
 pub fn leaf_priority(anchor: IVec, page_idx: IVec) -> f64 {
-    priority(anchor, LevelPage::new(0, page_idx), window().end - 1, Want::Coverage)
+    priority(anchor, LevelPage::new(0, page_idx), Want::Coverage)
 }
 
-/// Makes every page of the window's rings the client can make from what it
-/// holds, rather than asking for it: a page whose four pages a level down are
-/// resident is folded here by the fold the bake runs (pxl-spec bake/fold.rs).
-/// A level at a time from the finest, so what one level folds feeds the next;
+/// Stands one page up from the four under it, if any of the window's wants
+/// can be (pxl-spec bake/fold.rs). Whether it found one.
+///
+/// A level at a time from the finest, so what one fold makes feeds the next;
 /// and the pages a zoom out has just left the window with are still resident,
 /// which is what the first level up is made of.
 ///
@@ -113,7 +106,7 @@ pub fn leaf_priority(anchor: IVec, page_idx: IVec) -> f64 {
 /// `[2X−1, 2X+2]`, and a ring HELD_AXIS wide has that for its centre page
 /// alone, so a zoom out fetched twenty-four pages in twenty-five it was
 /// already holding the ground for.
-fn fold_held(anchor: IVec) {
+fn fold_one(anchor: IVec) -> bool {
     let store = tile_store();
     let w = window();
     for level in w.clone().filter(|&l| l > 0) {
@@ -123,8 +116,40 @@ fn fold_held(anchor: IVec) {
             }
             let around = neighbourhood(p).map(|q| store.get_page(q).map(|t| &t.terrain));
             let Some(folded) = fold_terrain_held(around, level) else { continue };
-            if adopt_folded(p, &folded).is_err() {
-                return;
+            return adopt_folded(p, &folded).is_ok();
+        }
+    }
+    false
+}
+
+static FOLDS: Global<Notify> = Global::new();
+
+fn folds() -> &'static mut Notify {
+    FOLDS.get(Notify::new)
+}
+
+/// The folds' task: one page a step, on what the turn's quota leaves after
+/// the tick, for as long as there is one to make.
+///
+/// A fold is work — a page of ground voted cell by cell — and work goes on
+/// the budgeted path. It used to run in the fetcher's turn, which is where
+/// the wishlist is decided and nothing is budgeted, and a zoom out that made
+/// a dozen pages foldable at once spent seventy milliseconds there in one
+/// frame with the tick at one and a half (measured 2026-09-23, by removal).
+/// The fetcher says what is wanted; what is done about it is paced like
+/// everything else the kernel does.
+///
+/// Nothing waits on it. `resolve` calls a page whose four children are held
+/// `Foldable` and the wishlist skips it either way, so a fold landing later
+/// costs a page nothing but the moment it is drawn coarse.
+pub async fn fold_task() {
+    loop {
+        notified(folds).await;
+        loop {
+            yield_if_spent(world_edge).await;
+            let Some(anchor) = range_anchor() else { break };
+            if !fold_one(anchor) {
+                break;
             }
         }
     }
@@ -149,7 +174,6 @@ fn fold_held(anchor: IVec) {
 /// levels it is passing through.
 fn terrain_demands(anchor: IVec, pinned_page_idx: Option<IVec>, moving: bool) -> Vec<Demand> {
     let w = window();
-    let top = w.end - 1;
     let mut demands = Vec::new();
     let mut add = |p: LevelPage| {
         let want = match resolve(p, &w) {
@@ -163,7 +187,7 @@ fn terrain_demands(anchor: IVec, pinned_page_idx: Option<IVec>, moving: bool) ->
         }
         demands.push(Demand {
             key: page_key(p),
-            priority: priority(anchor, p, top, want),
+            priority: priority(anchor, p, want),
         });
     };
     for level in w.clone().rev() {
@@ -306,19 +330,28 @@ pub fn tile_fetcher_step() {
     // enough to ask again for.
     let base = centre_page(w.start, anchor);
     let moving = crate::sched::turn::interactive();
+
+    // The wishlist every turn, and not only when the camera has moved.
+    //
+    // What a page needs from the network is what the resident pages could
+    // not answer (resolve.rs), so a page arriving changes the answer for its
+    // parent and its four children — one stops being wanted, the others stop
+    // being what nothing draws and become what is merely coarse. Given only
+    // when the camera moved, those kept the class they were asked under
+    // until it did: work that had lost its reason to be first stayed first.
+    // It is a hundred and twenty-five resolves, and the queue takes the list
+    // as the whole truth either way.
+    fetch_sync(CATEGORY, &terrain_demands(anchor, device_page_idx, moving));
+
+    // The rest is a function of the camera alone, and costs a walk of the
+    // page tables and a fold apiece.
     let wish = (base, device_page_idx, levels, moving);
     if f.last == Some(wish) {
         return;
     }
     f.last = Some(wish);
     drop_aliases(anchor, device_page_idx);
-    fold_held(anchor);
-    // A demand the queue had no room for is asked for on the next turn: the
-    // wishlist is otherwise given only when what it is a function of changes,
-    // and a view at rest would keep the hole.
-    if fetch_sync(CATEGORY, &terrain_demands(anchor, device_page_idx, moving)) > 0 {
-        f.last = None;
-    }
+    folds().notify();
 }
 
 #[cfg(test)]

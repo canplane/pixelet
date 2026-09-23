@@ -39,6 +39,23 @@ pub const STEP_NAMES: &[&str] = &[
     "ledger",
 ];
 
+pub const EFFECT_NAMES: &[&str] = &[
+    "navigation",
+    "bootstrap",
+    "shell",
+    "geolocation",
+    "orientation",
+    "tiles",
+    "follow",
+    "theme",
+    "decor",
+    "chunk_nodes",
+    "hover",
+    "puck",
+    "objects",
+    "pump",
+];
+
 pub const GPU_SPAN_NAMES: &[&str] = &["air", "shadow", "prepass", "ao", "world", "badges", "cases"];
 
 pub mod LIMITS {
@@ -113,7 +130,15 @@ pub mod FRAME {
     pub const slot_wait_levels: u32 = 108;
     pub const slot_holder_levels: u32 = 109;
     pub const slot_cut: u32 = 110;
-    pub const WORDS: u32 = 111;
+    pub const cap_commit_left: u32 = 111;
+    pub const cap_mount_left: u32 = 112;
+    pub const cap_mount_full: u32 = 113;
+    pub const cap_record_refused: u32 = 114;
+    pub const turn_effects_ms: u32 = 115;
+    pub const turn_stage_ms: u32 = 116;
+    pub const turn_step_ms: u32 = 117;
+    pub const turn_step_name: u32 = 118;
+    pub const WORDS: u32 = 119;
     pub const KEYS: &[&str] = &[
         "t",
         "dt_ms",
@@ -177,6 +202,14 @@ pub mod FRAME {
         "slot_wait_levels",
         "slot_holder_levels",
         "slot_cut",
+        "cap_commit_left",
+        "cap_mount_left",
+        "cap_mount_full",
+        "cap_record_refused",
+        "turn_effects_ms",
+        "turn_stage_ms",
+        "turn_step_ms",
+        "turn_step_name",
         "WORDS",
     ];
 }
@@ -205,7 +238,9 @@ pub mod FRAME_GROUPS {
     pub const q: &[&str] = &["q_terrain", "q_poi"];
     pub const stale: &[&str] = &["stale_chunks", "stale_drawn", "stale_levels", "stale_hidden", "stale_uncovered", "stale_unready", "stale_on_waiter"];
     pub const slot: &[&str] = &["slot_waits", "slot_wait_levels", "slot_holder_levels", "slot_cut"];
-    pub const KEYS: &[&str] = &["pace", "gpu", "device", "lod", "mounts", "pages", "heap", "ring", "work", "q", "stale", "slot"];
+    pub const cap: &[&str] = &["cap_commit_left", "cap_mount_left", "cap_mount_full", "cap_record_refused"];
+    pub const turn: &[&str] = &["turn_effects_ms", "turn_stage_ms", "turn_step_ms", "turn_step_name"];
+    pub const KEYS: &[&str] = &["pace", "gpu", "device", "lod", "mounts", "pages", "heap", "ring", "work", "q", "stale", "slot", "cap", "turn"];
 }
 
 /// One settled task (sched/ledger/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES.
@@ -245,9 +280,9 @@ pub mod TASK {
 /// One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0.
 pub mod WORST {
     pub const sample: u32 = 0;
-    pub const has_prev: u32 = 111;
-    pub const prev: u32 = 112;
-    pub const WORDS: u32 = 223;
+    pub const has_prev: u32 = 119;
+    pub const prev: u32 = 120;
+    pub const WORDS: u32 = 239;
     pub const KEYS: &[&str] = &["sample", "has_prev", "prev", "WORDS"];
 }
 
@@ -327,7 +362,7 @@ pub mod SUMMARY {
         pub const census: u32 = 71;
         pub const level_tris: u32 = 91;
         pub const last: u32 = 102;
-        pub const WORDS: u32 = 213;
+        pub const WORDS: u32 = 221;
         pub const KEYS: &[&str] = &[
             "AT",
             "present",
@@ -362,13 +397,13 @@ pub mod SUMMARY {
         ];
     }
     pub mod tasks {
-        pub const AT: u32 = 218;
+        pub const AT: u32 = 226;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 75;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 293;
+        pub const AT: u32 = 301;
         pub const faces_kept: u32 = 0;
         pub const faces_possible: u32 = 1;
         pub const runs_culled: u32 = 2;
@@ -416,7 +451,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod atlas {
-        pub const AT: u32 = 313;
+        pub const AT: u32 = 321;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -425,7 +460,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "WORDS"];
     }
     pub mod retain {
-        pub const AT: u32 = 317;
+        pub const AT: u32 = 325;
         pub const nodes: u32 = 0;
         pub const run_sets: u32 = 1;
         pub const run_set_mb: u32 = 2;
@@ -451,7 +486,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod fetch {
-        pub const AT: u32 = 326;
+        pub const AT: u32 = 334;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -459,7 +494,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod poi {
-        pub const AT: u32 = 329;
+        pub const AT: u32 = 337;
         pub const badge_count: u32 = 0;
         pub const dropped: u32 = 1;
         pub const place_ms: u32 = 2;
@@ -513,7 +548,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod peak {
-        pub const AT: u32 = 352;
+        pub const AT: u32 = 360;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -561,13 +596,13 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 372;
+        pub const AT: u32 = 380;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
-    pub const WORDS: u32 = 533;
+    pub const WORDS: u32 = 541;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "retain", "fetch", "poi", "peak", "steps", "WORDS"];
 }
 
@@ -581,7 +616,7 @@ pub mod READ {
     pub const tasks_count: u32 = 5;
     pub const worst_at: u32 = 6;
     pub const worst_count: u32 = 7;
-    pub const WORDS: u32 = 8;
+    pub const WORDS: u32 = 16;
     pub const KEYS: &[&str] = &[
         "summary_at",
         "summary_words",
@@ -601,6 +636,6 @@ pub mod LOG {
     pub const frames_count: u32 = 1;
     pub const tasks_at: u32 = 2;
     pub const tasks_count: u32 = 3;
-    pub const WORDS: u32 = 4;
+    pub const WORDS: u32 = 12;
     pub const KEYS: &[&str] = &["frames_at", "frames_count", "tasks_at", "tasks_count", "WORDS"];
 }
