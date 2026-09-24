@@ -28,7 +28,11 @@
   "CATEGORY_NAMES": [
     "terrain",
     "ocean",
-    "poi"
+    "poi",
+    "geocode",
+    "geocode_dict",
+    "asset",
+    "poi_detail"
   ],
   "OUTCOME_NAMES": [
     "ok",
@@ -60,6 +64,7 @@
     "geolocation",
     "orientation",
     "tiles",
+    "geocode",
     "follow",
     "theme",
     "decor",
@@ -67,6 +72,7 @@
     "hover",
     "puck",
     "objects",
+    "assets",
     "pump"
   ],
   "GPU_SPAN_NAMES": [
@@ -383,10 +389,10 @@
     "tasks": {
       "AT": 228,
       "slots": 0,
-      "WORDS": 75
+      "WORDS": 175
     },
     "counters": {
-      "AT": 303,
+      "AT": 403,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -400,17 +406,12 @@
       "built_bakes": 10,
       "built_starved": 11,
       "decor_dropped": 12,
-      "badge_metrics": 13,
-      "badge_builds": 14,
-      "badge_ms": 15,
-      "place_runs": 16,
-      "atlas_repacks": 17,
-      "atlas_uploads": 18,
-      "index_rebuilds": 19,
-      "WORDS": 20
+      "atlas_repacks": 13,
+      "atlas_uploads": 14,
+      "WORDS": 15
     },
     "atlas": {
-      "AT": 323,
+      "AT": 418,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -418,7 +419,7 @@
       "WORDS": 4
     },
     "retain": {
-      "AT": 327,
+      "AT": 422,
       "nodes": 0,
       "run_sets": 1,
       "run_set_mb": 2,
@@ -431,41 +432,24 @@
       "WORDS": 9
     },
     "fetch": {
-      "AT": 336,
+      "AT": 431,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "poi": {
-      "AT": 339,
-      "badge_count": 0,
-      "dropped": 1,
-      "place_ms": 2,
-      "place_hits": 3,
-      "place_candidates": 4,
-      "place_kept": 5,
-      "place_absorbed": 6,
-      "place_biggest": 7,
-      "place_max_ms": 8,
-      "place_max_hits": 9,
-      "place_wait_ms": 10,
-      "place_frames": 11,
-      "place_max_wait_ms": 12,
-      "place_max_frames": 13,
-      "place_sync_ms": 14,
-      "place_max_sync_ms": 15,
-      "index_indexed": 16,
-      "index_sweeping": 17,
-      "index_dropped": 18,
-      "index_wait_ms": 19,
-      "index_frames": 20,
-      "index_max_wait_ms": 21,
-      "index_max_frames": 22,
-      "WORDS": 23
+      "AT": 434,
+      "resident_nodes": 0,
+      "resident_bytes": 1,
+      "candidates": 2,
+      "visible": 3,
+      "pending": 4,
+      "hidden": 5,
+      "WORDS": 6
     },
     "peak": {
-      "AT": 362,
+      "AT": 440,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -489,12 +473,12 @@
       "WORDS": 20
     },
     "steps": {
-      "AT": 382,
+      "AT": 460,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
-    "WORDS": 543
+    "WORDS": 621
   },
   "READ": {
     "$type": "u32",

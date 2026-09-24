@@ -25,10 +25,8 @@ pub const DECOR_COLUMN: Topic = 1;
 pub const OBJECT_CELL: Topic = 2;
 /// A resident terrain page arrived or left, keyed by page index.
 pub const TERRAIN_PAGE: Topic = 3;
-/// A resident POI page arrived or left, keyed by page index.
-pub const POI_PAGE: Topic = 4;
 /// A decor model or skin finished loading, keyed by its URL's FNV-1a hash.
-pub const DECOR_ASSET: Topic = 5;
+pub const DECOR_ASSET: Topic = 4;
 
 /// `WorldTopic`.
 pub type WorldTopic = Topic;

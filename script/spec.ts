@@ -915,7 +915,7 @@ const DATA_SPECS: { json: string; ts?: string; rs?: string; mod?: string; enums?
     mod: "schema_spec",
     devKey: "dev",
   },
-  { json: "spec/pxl/web/kernel/layer/poi/theme.json", ts: "apps/web/src/feature/search/poi_theme.spec.ts", rs: "crates/pxl/web/kernel/src/layer/poi/theme.spec.rs", mod: "theme_spec" },
+  { json: "spec/pxl/web/kernel/layer/poi/theme.json", ts: "apps/web/src/feature/search/poi_theme.spec.ts" },
   {
     json: "spec/pxl/web/kernel/layer/character/variant.json",
     ts: "apps/web/src/feature/character/variant.spec.ts",

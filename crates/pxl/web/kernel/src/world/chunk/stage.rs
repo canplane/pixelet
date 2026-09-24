@@ -17,15 +17,13 @@ use crate::host::now;
 use crate::io::sched::pending_count;
 use crate::kernel::{kernel, with_world};
 use crate::layer::environment::state::globe;
-use crate::layer::poi::fetcher;
 use crate::layer::terrain::level::window;
 use crate::layer::terrain::resident::take_record_refusals;
 use crate::layer::terrain::store::level_pages;
 use crate::layer::terrain::tile_fetcher;
 use crate::sched::ledger::record::{
-    ledger_record_frame, ledger_take_rings, name_id, CapSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample, LEVELS,
+    ledger_record_frame, ledger_take_rings, CapSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample, LEVELS,
 };
-use crate::sched::ledger::spec::EFFECT_NAMES;
 use crate::sched::priority::lead_point;
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::shell::map_store::map_store;
@@ -102,7 +100,7 @@ pub fn set_turn_timing(effects_ms: f64, stage_ms: f64) {
         effects_ms,
         stage_ms,
         step_ms,
-        step_name: name_id(EFFECT_NAMES, step_name),
+        step_name: step_name.map_or(-1.0, f64::from),
     };
 }
 
@@ -206,6 +204,9 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     let mut events = Vec::new();
     let draw = with_world(|world, sched| sched.tick(world, frame, &now, &mut |e| events.push(e))).unwrap_or(false);
     run_chunk_events(events);
+    crate::layer::poi::placement::step(ctx);
+    let sched = &mut kernel().sched;
+    sched.billboards.draw(&mut sched.draw, &sched.models, frame.origin);
     if draw {
         c.draw = true;
         ctx.invalidate();
@@ -286,7 +287,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         rings: ledger_take_rings(),
         work: work_sample(c, &census),
         q_terrain: pending_count(tile_fetcher::CATEGORY) as f64,
-        q_poi: pending_count(fetcher::CATEGORY) as f64,
+        q_poi: (pending_count(crate::io::demand::Category::Poi) + pending_count(crate::io::demand::Category::PoiDetail)) as f64,
         stale: StaleSample {
             chunks: census.stale as f64,
             drawn: census.stale_drawn as f64,

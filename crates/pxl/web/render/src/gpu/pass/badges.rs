@@ -46,19 +46,15 @@ macro_rules! font_family {
 // ---- a place and a cluster (crates/pxl/web/kernel/src/layer/poi/badge.rs) ----
 
 const BADGE_FONT: &str = concat!("400 12px ", font_family!());
-const ICON_FONT: &str = "14px sans-serif";
 const ICON_SIZE: f32 = 20.0;
-const GAP: f32 = 8.0;
 const PAD_Y: f32 = 7.0;
 const DOT_DIAM: f32 = 6.0;
 const DOT_GAP: f32 = 4.0;
 const DOT_BORDER: f32 = 1.0;
 const PILL_H: f32 = ICON_SIZE + PAD_Y;
 const PILL_R: f32 = PILL_H / 2.0;
-const TEXT_X: f32 = PILL_R + ICON_SIZE / 2.0 + GAP;
 const DOT_CY: f32 = PILL_H + DOT_GAP + DOT_DIAM / 2.0;
 
-const LEFT: u32 = 0;
 const CENTER: u32 = 1;
 const MIDDLE: u32 = 0;
 
@@ -79,25 +75,6 @@ fn anchor_dot(p: &mut Paint, logical_w: f32) {
     p.stroke_style("rgba(255,255,255,0.25)");
     p.line_width(DOT_BORDER);
     p.stroke();
-}
-
-fn place<'a>(p: &mut Paint<'a>, icon: &'a str, color: &'a str, name: &'a str, logical_w: f32) {
-    pill(p, logical_w);
-    // The icon circle is concentric with the pill's rounded left cap.
-    let (cx, cy) = (PILL_R, PILL_H / 2.0);
-    p.fill_style(color);
-    p.begin_path();
-    p.arc(cx, cy, ICON_SIZE / 2.0, 0.0, TAU);
-    p.fill();
-    p.font(ICON_FONT);
-    p.text_align(CENTER);
-    p.text_baseline(MIDDLE);
-    p.fill_text(icon, cx, cy + 1.0);
-    p.font(BADGE_FONT);
-    p.text_align(LEFT);
-    p.fill_style("#fff");
-    p.fill_text(name, TEXT_X, PILL_H / 2.0 + 1.0);
-    anchor_dot(p, logical_w);
 }
 
 fn cluster<'a>(p: &mut Paint<'a>, label: &'a str, logical_w: f32) {
@@ -292,7 +269,6 @@ impl BadgePass {
             p.smoothing(false);
             p.scale(DPR_MAX as f32, DPR_MAX as f32);
             match spec {
-                DrawSpec::PoiBadge { icon, color, name, logical_w } => place(&mut p, icon, color, name, *logical_w as f32),
                 DrawSpec::Cluster { label, logical_w } => cluster(&mut p, label, *logical_w as f32),
                 DrawSpec::Bubble { lines, box_w, box_h } => bubble(&mut p, lines, *box_w as f32, *box_h as f32),
                 DrawSpec::Text { text, logical_w } => label(&mut p, text, *logical_w as f32),

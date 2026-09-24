@@ -12,7 +12,7 @@ export const CENSUS_TAGS = ["chunk", "decor", "ghost_box", "ghost_coplanar", "gh
 
 export const PHASE_NAMES = ["interaction", "visible", "content", "cosmetic", "report"] as const;
 
-export const CATEGORY_NAMES = ["terrain", "ocean", "poi"] as const;
+export const CATEGORY_NAMES = ["terrain", "ocean", "poi", "geocode", "geocode_dict", "asset", "poi_detail"] as const;
 
 export const OUTCOME_NAMES = ["ok", "aborted", "error"] as const;
 
@@ -20,7 +20,24 @@ export const TASK_PHASE_NAMES = ["net_ms", "bytes", "decode_ms", "adopt_ms"] as 
 
 export const STEP_NAMES = ["input", "camera", "environment", "view_rotation", "view_translation", "companion", "preview", "chunks", "debug_gizmos", "ledger"] as const;
 
-export const EFFECT_NAMES = ["navigation", "bootstrap", "shell", "geolocation", "orientation", "tiles", "follow", "theme", "decor", "chunk_nodes", "hover", "puck", "objects", "pump"] as const;
+export const EFFECT_NAMES = [
+  "navigation",
+  "bootstrap",
+  "shell",
+  "geolocation",
+  "orientation",
+  "tiles",
+  "geocode",
+  "follow",
+  "theme",
+  "decor",
+  "chunk_nodes",
+  "hover",
+  "puck",
+  "objects",
+  "assets",
+  "pump",
+] as const;
 
 export const GPU_SPAN_NAMES = ["air", "shadow", "prepass", "ao", "world", "badges", "cases"] as const;
 
@@ -229,10 +246,10 @@ export const SUMMARY = {
   tasks: {
     AT: 228 as number,
     slots: 0 as number,
-    WORDS: 75 as number,
+    WORDS: 175 as number,
   },
   counters: {
-    AT: 303 as number,
+    AT: 403 as number,
     faces_kept: 0 as number,
     faces_possible: 1 as number,
     runs_culled: 2 as number,
@@ -246,17 +263,12 @@ export const SUMMARY = {
     built_bakes: 10 as number,
     built_starved: 11 as number,
     decor_dropped: 12 as number,
-    badge_metrics: 13 as number,
-    badge_builds: 14 as number,
-    badge_ms: 15 as number,
-    place_runs: 16 as number,
-    atlas_repacks: 17 as number,
-    atlas_uploads: 18 as number,
-    index_rebuilds: 19 as number,
-    WORDS: 20 as number,
+    atlas_repacks: 13 as number,
+    atlas_uploads: 14 as number,
+    WORDS: 15 as number,
   },
   atlas: {
-    AT: 323 as number,
+    AT: 418 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -264,7 +276,7 @@ export const SUMMARY = {
     WORDS: 4 as number,
   },
   retain: {
-    AT: 327 as number,
+    AT: 422 as number,
     nodes: 0 as number,
     run_sets: 1 as number,
     run_set_mb: 2 as number,
@@ -277,41 +289,24 @@ export const SUMMARY = {
     WORDS: 9 as number,
   },
   fetch: {
-    AT: 336 as number,
+    AT: 431 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   poi: {
-    AT: 339 as number,
-    badge_count: 0 as number,
-    dropped: 1 as number,
-    place_ms: 2 as number,
-    place_hits: 3 as number,
-    place_candidates: 4 as number,
-    place_kept: 5 as number,
-    place_absorbed: 6 as number,
-    place_biggest: 7 as number,
-    place_max_ms: 8 as number,
-    place_max_hits: 9 as number,
-    place_wait_ms: 10 as number,
-    place_frames: 11 as number,
-    place_max_wait_ms: 12 as number,
-    place_max_frames: 13 as number,
-    place_sync_ms: 14 as number,
-    place_max_sync_ms: 15 as number,
-    index_indexed: 16 as number,
-    index_sweeping: 17 as number,
-    index_dropped: 18 as number,
-    index_wait_ms: 19 as number,
-    index_frames: 20 as number,
-    index_max_wait_ms: 21 as number,
-    index_max_frames: 22 as number,
-    WORDS: 23 as number,
+    AT: 434 as number,
+    resident_nodes: 0 as number,
+    resident_bytes: 1 as number,
+    candidates: 2 as number,
+    visible: 3 as number,
+    pending: 4 as number,
+    hidden: 5 as number,
+    WORDS: 6 as number,
   },
   peak: {
-    AT: 362 as number,
+    AT: 440 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -335,12 +330,12 @@ export const SUMMARY = {
     WORDS: 20 as number,
   },
   steps: {
-    AT: 382 as number,
+    AT: 460 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
-  WORDS: 543 as number,
+  WORDS: 621 as number,
 } as const;
 
 /** What `ledger_read` returns the address of: u32 words, each range's address in the module's memory and its record count. */

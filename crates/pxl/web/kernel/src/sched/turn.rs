@@ -39,6 +39,8 @@ use crate::layer::marker::location_puck::location_puck_step;
 use crate::layer::object::teach::teach_objects;
 use crate::layer::terrain::teach::teach_terrain;
 use crate::layer::terrain::tile_fetcher::tile_fetcher_step;
+use crate::sched::ledger::record::name_index;
+use crate::sched::ledger::spec::EFFECT_NAMES;
 use crate::sched::tick::{on_tick, run_tick, TickContext, TickReport, TickState, COSMETIC, INTERACTION, REPORT, VISIBLE};
 use crate::shell::config::env::APP_ENV;
 use crate::shell::map_store::map_store;
@@ -144,11 +146,12 @@ fn world_tasks() {
 
 /// The longest effect of the last turn, and which it was: a turn is only as
 /// cooperative as its longest step, and a total does not say where to look.
-/// Named as EFFECT_NAMES spells it (sched/ledger/ledger.json).
-static WORST_EFFECT: Global<(f64, &'static str)> = Global::new();
+/// Its index in EFFECT_NAMES (sched/ledger/ledger.json); none where no effect
+/// took measurable time.
+static WORST_EFFECT: Global<(f64, Option<u32>)> = Global::new();
 
-pub fn worst_effect() -> (f64, &'static str) {
-    *WORST_EFFECT.get(|| (0.0, ""))
+pub fn worst_effect() -> (f64, Option<u32>) {
+    *WORST_EFFECT.get(|| (0.0, None))
 }
 
 /// One effect, timed. The effects are where the turn decides what is wanted,
@@ -158,11 +161,16 @@ pub fn worst_effect() -> (f64, &'static str) {
 /// the ledger named the region it was in (2026-09-23).
 macro_rules! effect {
     ($worst:ident, $name:literal, $step:expr) => {{
+        // An item and not an inline `const {}`: in a function that is not
+        // `const` the block is evaluated only when the function is built,
+        // which `deno task check` never does, and the gate would pass a name
+        // EFFECT_NAMES lacks.
+        const EFFECT: u32 = name_index(EFFECT_NAMES, $name);
         let at = now();
         $step;
         let ms = now() - at;
         if ms > $worst.0 {
-            $worst = (ms, $name);
+            $worst = (ms, Some(EFFECT));
         }
     }};
 }
@@ -171,7 +179,7 @@ macro_rules! effect {
 pub fn world_turn() -> f64 {
     let at = now();
     let platform = world_platform();
-    let mut worst = (0.0f64, "");
+    let mut worst = (0.0f64, None);
     effect!(worst, "navigation", map_navigation_step());
     effect!(worst, "bootstrap", map_bootstrap_step());
     effect!(worst, "shell", crate::shell::shell::shell_step());
@@ -192,7 +200,7 @@ pub fn world_turn() -> f64 {
     // asset while the turn ran.
     effect!(worst, "assets", crate::io::sched::declare(crate::io::demand::Category::Asset, &crate::io::load::load_wants()));
     effect!(worst, "pump", pump());
-    *WORST_EFFECT.get(|| (0.0, "")) = worst;
+    *WORST_EFFECT.get(|| (0.0, None)) = worst;
     now() - at
 }
 

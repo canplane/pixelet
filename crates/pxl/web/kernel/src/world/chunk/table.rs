@@ -600,6 +600,7 @@ pub const LEVELS: usize = PAGE_TOP_LEVEL as usize + 1;
 /// arena epoch the tiers were written under.
 pub struct Meshes {
     holder: Vec<u32>,
+    surface: Vec<Box<[u32]>>,
     epoch: u32,
     /// Boxes cut from meshes past their slot, until a census takes them.
     pub cut: u32,
@@ -770,6 +771,7 @@ impl Scheduler {
             kept: (0, 0, 0),
             meshes: Meshes {
                 holder: vec![0; OCCUPANCY],
+                surface: (0..OCCUPANCY).map(|_| Box::default()).collect(),
                 epoch: arena_epoch(),
                 cut: 0,
                 fine_peak: 0,
@@ -1698,7 +1700,6 @@ impl Scheduler {
         self.ghost.draw(&mut self.draw, frame.origin);
         self.models.draw(&mut self.draw, frame.origin);
         self.markers.draw(&mut self.draw, frame.origin);
-        self.billboards.draw(&mut self.draw, &self.models, frame.origin);
         self.debug.draw(&mut self.draw, frame.origin);
         // A stale chunk is drawn until what replaced it is whole, and what
         // replaced it waits under it: never both on one piece of ground. What
@@ -1781,6 +1782,57 @@ impl Scheduler {
                 }
             }
         }
+    }
+
+    /// Displayed tier envelopes used by ground-attached presentation culling.
+    pub fn surface_envelopes(&self) -> Vec<[f64; 7]> {
+        self.slots
+            .iter()
+            .filter_map(|s| {
+                if !s.has(IN_FRUSTUM) || s.has(COVERED) || !s.layout_ready {
+                    return None;
+                }
+                let step = match s.told {
+                    Some((_, _, true)) if s.layout_secondary != 0 => s.layout_secondary,
+                    _ => s.layout_primary,
+                };
+                let t = s.tier(step, s.layout_generation)?;
+                let span = (CHUNK_CELL_SPAN << s.level) as f64;
+                Some([
+                    s.base_x,
+                    s.base_y,
+                    s.base_x + span,
+                    s.base_y + span,
+                    t.heights.floor,
+                    t.heights.floor + u16::MAX as f64 * t.heights.step,
+                    (step << s.level) as f64 * 0.5,
+                ])
+            })
+            .collect()
+    }
+
+    /// The top face at the centre of the cell actually drawn here. Surface
+    /// samples share the GPU mesh slot's lifetime, including stale holders.
+    pub fn surface_anchor(&self, x: f64, y: f64) -> Option<[f64; 3]> {
+        for s in &self.slots {
+            let span = (CHUNK_CELL_SPAN << s.level) as f64;
+            if !s.has(IN_FRUSTUM) || s.has(COVERED) || !s.layout_ready || x < s.base_x || y < s.base_y || x >= s.base_x + span || y >= s.base_y + span {
+                continue;
+            }
+            let step = match s.told {
+                Some((_, _, true)) if s.layout_secondary != 0 => s.layout_secondary,
+                _ => s.layout_primary,
+            };
+            let t = s.tier(step, s.layout_generation)?;
+            let unit = (step << s.level) as f64;
+            let axis = (CHUNK_CELL_SPAN / step) as usize;
+            let ix = ((x - s.base_x) / unit).floor() as usize;
+            let iy = ((y - s.base_y) / unit).floor() as usize;
+            let top = *self.meshes.surface[t.slot.index].get(iy * axis + ix)?;
+            let top = top.checked_sub(1)?;
+            return Some([s.base_x + (ix as f64 + 0.5) * unit, s.base_y + (iy as f64 + 0.5) * unit, t.heights.floor + top as f64 * t.heights.step]);
+        }
+        None
     }
 
     /// Where every chunk is and whether it is on screen, measured against the
@@ -2520,6 +2572,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
                     meshes.epoch = arena_epoch();
                 }
             }
+            meshes.surface[slot.index] = surface_centres(words, box_words as usize, step, slots[i].level, heights);
             meshes.holder[slot.index] = id;
             let s = &mut slots[i];
             // A tier of an older generation in the same slot shows these boxes
@@ -2540,6 +2593,30 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
         }
     }
     emit(Event::Build(e));
+}
+
+/// A cell-centre height query needs no CPU copy of the mesh. Quantized tops
+/// use the mesh's own height scale, with zero reserved for an empty centre.
+/// Allocation is bounded by mesh slots: 64² words for fine, at most 32²
+/// for coarse, independent of source or POI cardinality.
+fn surface_centres(words: &[u32], stride: usize, step: u32, level: u32, heights: Heights) -> Box<[u32]> {
+    let axis = (CHUNK_CELL_SPAN / step) as usize;
+    let unit = (step << level) as f64;
+    let mut tops = vec![0; axis * axis];
+    for r in words.chunks_exact(stride) {
+        let (min, size) = box_bounds(r, unit, heights);
+        let x0 = ((min[0] / unit - 0.5).ceil().max(0.0) as usize).min(axis);
+        let y0 = ((min[1] / unit - 0.5).ceil().max(0.0) as usize).min(axis);
+        let x1 = (((min[0] + size[0]) / unit - 0.5).ceil().max(0.0) as usize).min(axis);
+        let y1 = (((min[1] + size[1]) / unit - 0.5).ceil().max(0.0) as usize).min(axis);
+        let top = (r[2] & 0xffff) + (r[2] >> 16) + 1;
+        for y in y0..y1 {
+            for x in x0..x1 {
+                tops[y * axis + x] = tops[y * axis + x].max(top);
+            }
+        }
+    }
+    tops.into_boxed_slice()
 }
 
 #[cfg(test)]

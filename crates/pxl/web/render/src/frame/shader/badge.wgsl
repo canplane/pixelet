@@ -1,3 +1,5 @@
+// pxl-render/frame/shader/badge.wgsl
+
 // The billboards — the POI badges and the chat bubble: an instanced quad
 // over the module's billboard sets (billboard.rs), one draw a set, drawn
 // after the world with the world's depth attached read-only and bound as
@@ -91,7 +93,8 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   let fade = 1.0 - smoothstep(badge.fade_start, badge.fade_end, dist);
   let size = size_px * depth / badge.px_k * fade;
   let drop = size.y * (frac - 0.5);
-  let centre_view = (badge.view * vec4f(anchor + vec3f(0.0, 0.0, drop), 1.0)).xyz;
+  // The sprite anchor is a screen offset, independent of camera tilt.
+  let centre_view = anchor_view + vec3f(0.0, drop, 0.0);
   let corner = q * size;
 
   var o: VertexOut;

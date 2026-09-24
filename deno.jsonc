@@ -51,7 +51,7 @@
     "preview": "deno task --cwd apps/web preview",
 
     // ── Fill the bucket ──
-    // Resumable: an interrupted run picks up where it stopped.
+    // Terrain and geocode resume; POI writes one immutable summary snapshot.
     "bake:tiles": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_tiles -- \"$@\"' --",
     "bake:poi": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_poi_tiles -- \"$@\"' --",
     "bake:geocode": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_geocode_tiles -- \"$@\"' --",
@@ -88,7 +88,7 @@
     "test": "deno task test:web && deno task test:xpute && deno task test:rust && deno task test:asset",
     "test:web": "deno task --cwd apps/web test",
     "test:xpute": "deno test -A packages/xpute/core/src && deno test -A packages/xpute/runtime/src",
-    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api && cargo test --manifest-path crates/Cargo.toml -p pxl-kernel --no-default-features",
+    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api && cargo test --manifest-path crates/Cargo.toml -p pxl-kernel --no-default-features && cargo test --manifest-path crates/Cargo.toml -p pxl-geo-bake --features serve",
     // Every shipped model measured from its file and held against the table the
     // ingest wrote. The table is committed, and it has been wrong by hand before.
     "test:asset": "cargo test --manifest-path asset/script/Cargo.toml",

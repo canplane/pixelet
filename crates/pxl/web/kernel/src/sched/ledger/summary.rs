@@ -19,9 +19,7 @@ use crate::host::now;
 use crate::io::sched::{counts, credits};
 use crate::kernel::kernel;
 use crate::layer::billboard::frustum_budget::billboard_dropped;
-use crate::layer::poi::badge::badge_atlas;
-use crate::layer::poi::index::PoiIndexStats;
-use crate::layer::poi::placement::PoiPlaceStats;
+use crate::layer::billboard::sheet::billboard_sheet;
 use crate::sched::ledger::block::{AtlasBlock, CountersBlock, FetchBlock, FramesBlock, PoiBlock, RecBlock, RetainBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
 use crate::sched::ledger::log::window_counters;
 use crate::sched::ledger::record::{fixed_lane, ledger_frame_peak, ledger_frames_since, ledger_recording_state, ledger_tasks_since, name_id, put, FrameSample, TaskRow, FRAME_LIMIT, TASK_LIMIT};
@@ -238,17 +236,12 @@ fn side(out: &mut [f64]) {
             built_bakes: c.built_bakes,
             built_starved: c.built_starved,
             decor_dropped: c.decor_dropped,
-            badge_metrics: c.badge_metrics,
-            badge_builds: c.badge_builds,
-            badge_ms: c.badge_ms,
-            place_runs: c.place_runs,
             atlas_repacks: c.atlas_repacks,
             atlas_uploads: c.atlas_uploads,
-            index_rebuilds: c.index_rebuilds,
         },
     );
 
-    let atlas = badge_atlas().stats();
+    let atlas = billboard_sheet().stats();
     put(
         out,
         SUMMARY::atlas::AT,
@@ -289,34 +282,17 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let (place, index) = (PoiPlaceStats::default(), PoiIndexStats::default());
+    let poi = crate::layer::poi::store::store();
     put(
         out,
         SUMMARY::poi::AT,
         &PoiBlock {
-            badge_count: 0.0,
-            dropped: billboard_dropped() as f64,
-            place_ms: place.ms,
-            place_hits: place.hits as f64,
-            place_candidates: place.candidates as f64,
-            place_kept: place.kept as f64,
-            place_absorbed: place.absorbed as f64,
-            place_biggest: place.biggest as f64,
-            place_max_ms: place.max_ms,
-            place_max_hits: place.max_hits as f64,
-            place_wait_ms: place.wait_ms,
-            place_frames: place.frames as f64,
-            place_max_wait_ms: place.max_wait_ms,
-            place_max_frames: place.max_frames as f64,
-            place_sync_ms: place.sync_ms,
-            place_max_sync_ms: place.max_sync_ms,
-            index_indexed: index.indexed as f64,
-            index_sweeping: index.sweeping as f64,
-            index_dropped: index.dropped as f64,
-            index_wait_ms: index.wait_ms,
-            index_frames: index.frames as f64,
-            index_max_wait_ms: index.max_wait_ms,
-            index_max_frames: index.max_frames as f64,
+            resident_nodes: poi.node_count() as f64,
+            resident_bytes: poi.bytes() as f64,
+            candidates: poi.cut.len() as f64,
+            visible: crate::layer::poi::placement::visible() as f64,
+            pending: poi.pending_count() as f64,
+            hidden: billboard_dropped() as f64,
         },
     );
 

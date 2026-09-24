@@ -47,25 +47,3 @@ export function pack_ground_cell(numbers: { land: u32; water: u32; structure: u3
 export function encode_terrain(ele: I16Array, cells: U16Array): U8Array {
   return encoder.encode(new TreeView().branch((__) => __.i16_array(ele).u16_array(cells)));
 }
-
-/**
- * A page the bake found nothing on: six lanes of length zero, then the four
- * string branches empty. What a client holds for a page with no POI, which is
- * every page this test asks for.
- */
-export function encode_empty_poi_page(): U8Array {
-  return encoder.encode(
-    new TreeView().branch((__) =>
-      __.f64_array(new Float64Array(0))
-        .f64_array(new Float64Array(0))
-        .f64_array(new Float64Array(0))
-        .u16_array(new Uint16Array(0))
-        .u16_array(new Uint16Array(0))
-        .u64_array(new BigUint64Array(0))
-        .branch(() => {})
-        .branch(() => {})
-        .branch(() => {})
-        .branch(() => {})
-    ),
-  );
-}

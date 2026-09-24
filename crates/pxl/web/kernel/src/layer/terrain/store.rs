@@ -22,8 +22,6 @@ use pxl_spec::bake::format::Tile;
 use pxl_spec::space::pvf3::ivec::IVec;
 
 use crate::global::Global;
-use crate::layer::poi::index::invalidate_poi_index;
-use crate::layer::poi::placement::poi_place_request;
 use crate::layer::terrain::ground_snap::reground_map_center;
 use crate::layer::terrain::level::LevelPage;
 use crate::world::change::TERRAIN_PAGE;
@@ -68,8 +66,6 @@ impl TileStore {
         chunk_page(p, true);
         if p.level == 0 {
             chunk_sources_changed();
-            invalidate_poi_index();
-            poi_place_request();
             reground_map_center();
         }
     }
@@ -79,8 +75,6 @@ impl TileStore {
         chunk_page(p, false);
         if p.level == 0 {
             chunk_sources_changed();
-            invalidate_poi_index();
-            poi_place_request();
         }
         Some(held)
     }

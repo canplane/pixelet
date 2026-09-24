@@ -101,11 +101,10 @@ pub mod SETTINGS {
         pub const cost: &str = "med";
         pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
     }
-    /// The index sweep, the badge draws and the atlas: a couple of ms a
-    /// frame while places are being placed, nothing once they are.
+    /// Opt-in bounded POI summary snapshot for the local vertical slice.
     pub mod show_poi {
         pub const kind: &str = "toggle";
-        pub const default: bool = true;
+        pub const default: bool = false;
         pub const section: &str = "display";
         pub const cost: &str = "low";
         pub const dev: bool = true;

@@ -22,3 +22,6 @@ pub mod poi;
 pub mod terrain;
 pub mod util;
 pub mod wkb;
+
+#[cfg(feature = "serve")]
+pub mod demand;

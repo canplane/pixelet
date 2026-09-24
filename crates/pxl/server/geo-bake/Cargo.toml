@@ -49,7 +49,7 @@ serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 # and `bake_tiles` links none of it — the linker already leaves it out, so what
 # a feature saves here is compile time rather than bytes.
 axum = { version = "0.8", optional = true }
-tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread", "sync"], optional = true }
+tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread", "sync", "process", "time"], optional = true }
 
 # Cargo finds the other three in src/bin/. This one is declared because a
 # feature gates it: the dev tile server is 51 of this crate's 101 packages, and

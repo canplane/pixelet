@@ -194,3 +194,63 @@ mod selection_roots {
         assert!(roots_of(&held(&[]), page(4, 3, 5), 0).is_empty());
     }
 }
+
+#[test]
+fn surface_centres_use_drawn_box_tops_and_leave_empty_centres_empty() {
+    let heights = Heights { floor: -20.0, step: 0.25 };
+    // Two fine boxes occupying the first two cells, at different top heights.
+    let words = [0, 256 | (256 << 16), 20 << 16, 0, 0, 0, 256, 256 | (256 << 16), 4 | (24 << 16), 0, 0, 0];
+    let tops = surface_centres(&words, 6, 1, 0, heights);
+    assert_eq!(&tops[..3], &[21, 29, 0]);
+    assert_eq!(heights.floor + (tops[1] - 1) as f64 * heights.step, -13.0);
+    // A coarse box shrunk about its cell's centre still grounds that cell.
+    let coarse = [0, 0, 40 << 16, 2 | (2 << 8) | (3 << 16) | (3 << 24)];
+    let tops = surface_centres(&coarse, 4, 2, 3, heights);
+    assert_eq!(tops[0], 41);
+    assert_eq!(tops[1], 0);
+    assert_eq!(tops.len(), 32 * 32);
+}
+
+#[test]
+fn presentation_snaps_to_the_committed_tier_and_waits_for_a_drawn_surface() {
+    let mut s = Scheduler::new();
+    s.add(1, 0, 0, -64.0, 128.0, 0, 0, 0.0, true);
+    assert_eq!(s.surface_anchor(-60.1, 130.9), None);
+    let mesh = slot_at(pool(0, 1).start);
+    s.meshes.surface[mesh.index] = vec![11; 64 * 64].into_boxed_slice();
+    let chunk = &mut s.slots[0];
+    chunk.layout_primary = 1;
+    chunk.layout_ready = true;
+    chunk.set(IN_FRUSTUM, true);
+    chunk.tiers.push(Tier {
+        step: 1,
+        generation: 0,
+        bounds: None,
+        slot: mesh,
+        box_cnt: 1,
+        heights: Heights { floor: 0.0, step: 1.0 },
+    });
+    assert_eq!(s.surface_anchor(-60.1, 130.9), Some([-60.5, 130.5, 10.0]));
+    let coarse = slot_at(pool(0, 2).start);
+    s.meshes.surface[coarse.index] = vec![15; 32 * 32].into_boxed_slice();
+    s.slots[0].tiers.push(Tier {
+        step: 2,
+        generation: 0,
+        bounds: None,
+        slot: coarse,
+        box_cnt: 1,
+        heights: Heights { floor: 0.0, step: 1.0 },
+    });
+    s.slots[0].layout_secondary = 2;
+    s.slots[0].told = Some((0.4, 0.6, true));
+    assert_eq!(s.surface_anchor(-60.1, 130.9), Some([-61.0, 131.0, 14.0]));
+    let canonical = [-60.1, 130.9, -100.0, -60.1, 130.9, -100.0];
+    let envelope = s.surface_envelopes()[0];
+    let anchor = s.surface_anchor(-60.1, 130.9).unwrap();
+    assert!(envelope[0] <= anchor[0] && envelope[2] >= anchor[0]);
+    assert!(envelope[1] <= anchor[1] && envelope[3] >= anchor[1]);
+    assert!(envelope[4] <= anchor[2] && envelope[5] >= anchor[2]);
+    assert_eq!(canonical[2], -100.0);
+    s.slots[0].set(COVERED, true);
+    assert_eq!(s.surface_anchor(-60.1, 130.9), None);
+}

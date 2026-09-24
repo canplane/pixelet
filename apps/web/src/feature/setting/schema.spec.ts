@@ -90,11 +90,10 @@ export const SETTINGS = {
     section: "display",
     cost: "med",
   },
-  /** The index sweep, the badge draws and the atlas: a couple of ms a
-   * frame while places are being placed, nothing once they are. */
+  /** Opt-in bounded POI summary snapshot for the local vertical slice. */
   show_poi: {
     kind: "toggle",
-    default: true,
+    default: false,
     section: "display",
     cost: "low",
     dev: true,

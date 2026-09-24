@@ -1,9 +1,6 @@
-# Monthly refresh of the Overture-baked POI and reverse-geocode static
-# sets — see issue/20260908-overture-poi-adoption.md for why this
-# exists and how it's designed (short-cache-control stable prefixes,
-# overwritten in place, rather than terrain's own immutable-versioned
-# convention: POI/geocode staleness is cheap, a monthly redeploy to bump a
-# version prefix every time would not be).
+# Monthly refresh of Overture Places for search and Divisions for the
+# reverse-geocode static set. POI summary snapshots are immutable and are
+# baked and published separately.
 #
 # Deliberately needs no terrain infrastructure in CI: the only thing this
 # reuses from that pipeline is land_pages.json (which page_idx values are
@@ -89,19 +86,8 @@ jobs:
           ./infra/geo/overture/script/ingest_places.rs
           ./infra/geo/overture/script/ingest_divisions.rs
 
-      # The POI page is an XTP packet (crates/pxl/spec/src/bake/format.rs,
-      # encode_poi_page). Each bake writes to out/<kind>/<PUBLISHED_VERSION>
-      # by default (spec/pxl/spec/bake/published.json), which is the prefix
-      # the client reads, so the version is named nowhere here.
-      #
-      # The `server` profile rather than release: a profile belongs to the
-      # workspace root and release is the module's, which aborts on panic — one
-      # bad page would end the whole bake with nothing written
-      # (crates/Cargo.toml). --force because a monthly refresh is a full
-      # rewrite, not a resume.
-      - name: Bake POI
-        run: deno task bake:poi --force
-
+      # POI summaries are immutable, explicitly scoped snapshots. Their
+      # publication is separate from this in-place geocode refresh.
       - name: Bake reverse geocode
         run: deno task bake:geocode --force
 
@@ -111,7 +97,7 @@ jobs:
       # object wrongly, and the client decodes none of them.
       - name: Publish to R2
         run: |
-          for kind in poi geocode; do
+          for kind in geocode; do
             version=$(jq -r ".PUBLISHED_VERSION.$kind" spec/pxl/spec/bake/published.json)
             manifest=out/$kind/manifest.json
             aws s3 sync "./out/$kind/$version" "s3://pixelet-tiles/$kind/$version" \

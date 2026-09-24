@@ -54,6 +54,7 @@ pub enum Category {
     /// The one tile every open-water page shares.
     Ocean,
     Poi,
+    PoiDetail,
     /// One group of pages of the reverse-geocode bake.
     Geocode,
     /// Its dictionary, which is a stream of one.
@@ -75,18 +76,19 @@ impl Category {
     pub fn bake(self) -> Option<BakeKind> {
         match self {
             Category::Terrain | Category::Ocean => Some(BakeKind::terrain),
-            Category::Poi => Some(BakeKind::poi),
+            Category::Poi | Category::PoiDetail => Some(BakeKind::poi),
             Category::Geocode | Category::GeocodeDict => Some(BakeKind::geocode),
             Category::Asset => None,
         }
     }
 
     /// A short name for a report to print, as `Outcome::as_str` is.
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Category::Terrain => "terrain",
             Category::Ocean => "ocean",
             Category::Poi => "poi",
+            Category::PoiDetail => "poi_detail",
             Category::Geocode => "geocode",
             Category::GeocodeDict => "geocode_dict",
             Category::Asset => "asset",

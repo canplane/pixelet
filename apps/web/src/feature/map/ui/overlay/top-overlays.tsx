@@ -1,5 +1,6 @@
 // @pxl/web/feature/map/ui/overlay/top-overlays.tsx
 
+import { PoiDetails } from "./poi-details.tsx";
 import { Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -29,6 +30,7 @@ export function TopOverlays() {
           <SettingsTriggerButton />
         </div>
         {__IS_DEV__ && <DummyChatText />}
+        <PoiDetails />
       </div>
 
       <div

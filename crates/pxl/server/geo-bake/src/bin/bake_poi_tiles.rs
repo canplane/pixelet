@@ -1,81 +1,57 @@
 // pxl-geo-bake/bin/bake_poi_tiles.rs
 
-//! Offline pre-bake pass for POI: for every land page, the places the provider
-//! finds there, encoded as the client's packet and packed (util.rs). A page with none
-//! writes an `.empty` marker instead of an object so a resumed run skips it
-//! without asking the database again.
-//!
-//! The walk, the resume, the marker and the manifest are walk.rs's, which
-//! reverse geocoding goes through too — what is here is the provider and the
-//! encoding, which is all the two differ in.
-//!
-//! Usage (from the repo root):
-//!   cargo run --profile server -p pxl-geo-bake --bin bake_poi_tiles -- [flags]
-//!
-//! Flags:
-//!   --out <dir>          output directory (default ./out/poi/<published version>)
-//!   --land-cache <path>  terrain's own land_pages.json (default ./out/terrain/land_pages.json)
-//!   --concurrency <n>    parallel fetches, one connection each (default 8)
-//!   --limit <n>          stop after n land pages (smoke test)
-//!   --force              re-fetch pages that already have an object or a marker
+//! One immutable POI summary snapshot. --root is a 15-digit XY region;
+//! --revision names the snapshot. --input reads canonical JSONL sorted by ID
+//! for offline verification; otherwise the source is the geo database.
 
-use std::path::PathBuf;
-use std::process::ExitCode;
-
-use postgres::{Client, NoTls};
-use pxl_spec::bake::format::encode_poi_page;
+use pxl_geo_bake::poi::{provider::overture, snapshot};
+use pxl_geo_bake::util::Level;
 use pxl_spec::bake::published::PUBLISHED_VERSION;
-
-use pxl_geo_bake::page::bake::{self, Bake};
-use pxl_geo_bake::page::walk::Page;
-use pxl_geo_bake::poi::provider::overture::PoiProvider;
-use pxl_geo_spec::table;
-
-struct Worker {
-    client: Client,
-    provider: PoiProvider,
-}
+use pxl_spec::poi::{xy, Entity};
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 
 fn run() -> Result<(), String> {
-    let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
-    bake::bake(
-        &Bake {
-            kind: "poi",
-            out: PathBuf::from(format!("./out/poi/{}", PUBLISHED_VERSION.poi)),
-            group_shamt: 0,
-            every: 500,
-            content_type: "application/octet-stream",
-            format: Some("xtp poi page (encode_poi_page)"),
-            sources: &[table::PLACES],
-        },
-        |_| Ok(()),
-        || {
-            let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
-            let provider = PoiProvider::prepare(&mut client).map_err(|e| e.to_string())?;
-            Ok(Worker { client, provider })
-        },
-        |w, target| {
-            let pois = w.provider.fetch_pois(&mut w.client, target.idx).map_err(|e| e.to_string())?;
-            if pois.is_empty() {
-                return Ok(Page::Empty);
+    let mut root = None;
+    let mut revision = None;
+    let mut input = None;
+    let mut out = PathBuf::from(format!("out/poi/{}", PUBLISHED_VERSION.poi));
+    let mut args = std::env::args().skip(1);
+    while let Some(flag) = args.next() {
+        let value = args.next().ok_or("missing flag value")?;
+        match flag.as_str() {
+            "--root" => root = xy::parse(&value),
+            "--revision" => revision = Some(value.parse::<u64>().map_err(|e| e.to_string())?),
+            "--input" => input = Some(PathBuf::from(value)),
+            "--out" => out = PathBuf::from(value),
+            _ => return Err(format!("unknown flag {flag}")),
+        }
+    }
+    let root = root.ok_or("--root <15-digit quadkey> required")?;
+    let revision = revision.ok_or("--revision <nonzero snapshot id> required")?;
+    snapshot::write(&out, root, revision, if input.is_some() { "canonical-input" } else { "overture" }, Level::Stored, |accept| {
+        if let Some(path) = &input {
+            for line in BufReader::new(File::open(path).map_err(|e| e.to_string())?).lines() {
+                let entity: Entity = serde_json::from_str(&line.map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+                accept(entity, "")?;
             }
-            // The page as the client's own packet — lanes it views in place,
-            // strings it reads one at a time — packed like terrain.
-            let raw = encode_poi_page(&pois).map_err(|e| format!("{e:?}"))?;
-            Ok(Page::Object {
-                raw: raw.as_slice().to_vec(),
-                items: pois.len() as u64,
-            })
-        },
-    )
+        } else {
+            let url = std::env::var("DB_GEO_URL").map_err(|_| "DB_GEO_URL required")?;
+            let mut client = postgres::Client::connect(&url, postgres::NoTls).map_err(|e| e.to_string())?;
+            overture::visit(&mut client, root, accept)?;
+        }
+        Ok(())
+    })?;
+    println!("[bake/poi] complete: {}", out.display());
+    Ok(())
 }
-
-fn main() -> ExitCode {
+fn main() -> std::process::ExitCode {
     match run() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(err) => {
-            eprintln!("[bake/poi] {err}");
-            ExitCode::FAILURE
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("[bake/poi] {e}");
+            std::process::ExitCode::FAILURE
         }
     }
 }

@@ -234,6 +234,7 @@
     "companion_loading": "동행을 준비하고 있습니다."
   },
   "map": {
+    "poi": { "places": "화면의 장소", "count": "장소 {{total}}개", "loading": "불러오는 중…", "first": "처음", "next": "다음" },
     "scale_bar": {
       "reset_zoom": "줌 초기화"
     },
