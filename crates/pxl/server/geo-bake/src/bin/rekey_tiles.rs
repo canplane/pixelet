@@ -11,14 +11,14 @@
 //!     | rekey_tiles emit --bucket pixelet-tiles --from terrain/v5 --to terrain/v6 \
 //!     | s5cmd --endpoint-url $R2 run
 //!
-//! **A fresh terrain bake**, whose disk keeps `<level>/<page index>` because
-//! the bake redoes and resumes a level by its directory. The tree to upload is
-//! hard links, so it costs no bytes:
+//! **A fresh pyramid bake**, terrain or POI, whose disk keeps
+//! `<level>/<page index>` because the bake redoes and resumes a level by its
+//! directory. The tree to upload is hard links, so it costs no bytes:
 //!
 //!   rekey_tiles link --bake terrain --from ./out/terrain/v6 --to ./out/terrain/v6.bucket
 //!
-//! POI and geocode need neither: they keep no level directories, so the bake
-//! writes the bucket's name directly.
+//! Geocode needs neither: it keeps no level directories, so its bake writes
+//! the bucket's name directly.
 
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};

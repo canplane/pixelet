@@ -1,10 +1,7 @@
 // pxl-geo-bake/page/bake.rs
 
-//! The rest of a page bake: the walk, then the manifest beside the version
-//! directory.
-//!
-//! The POI and reverse-geocode bakes differ in their provider, their encoding
-//! and the tables they read — this is everything else, which is most of both.
+//! The reverse-geocode bake apart from its provider: the walk over the land
+//! pages, then the manifest beside the version directory.
 
 use pxl_spec::space::pyramid::LEVEL0_ZOOM;
 use std::path::PathBuf;
@@ -20,8 +17,7 @@ use crate::util::{fmt_bytes, git_sha, measure_output, now_iso8601, refuse_mixed,
 pub struct Bake<'a> {
     pub kind: &'a str,
     pub out: PathBuf,
-    /// How often the walk reports progress, in pages. A POI page is a packet
-    /// and a geocode page is one label, so they are not the same cost.
+    /// How often the walk reports progress, in pages.
     pub every: u64,
     /// How many levels above a page one object of this bake covers. Zero is
     /// one object a page.
@@ -35,9 +31,6 @@ pub struct Bake<'a> {
 
 /// Walks the land pages, writes the objects, then writes the manifest beside
 /// the version directory.
-///
-/// The two page bakes differ in their provider, their encoding and their
-/// tables, and in nothing else — this is the rest of both.
 pub fn bake<T>(
     b: &Bake,
     prelude: impl FnOnce(&Path) -> Result<(), String>,

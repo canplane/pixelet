@@ -17,22 +17,22 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 
 ## The three bakes
 
-| Kind    | Tool                     | Reads                                           | Output                                   | Empty page               |
-| ------- | ------------------------ | ----------------------------------------------- | ---------------------------------------- | ------------------------ |
-| terrain | `deno task bake:tiles`   | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land page            | shared `_ocean`          |
-| poi     | `deno task bake:poi`     | Overture places + elevation, or canonical JSONL | bounded PXS1 summaries for one XY region | explicit zero-count root |
-| geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | packed JSON, one per page with a label   | no object                |
+| Kind    | Tool                     | Reads                                           | Output                                    | Empty page      |
+| ------- | ------------------------ | ----------------------------------------------- | ----------------------------------------- | --------------- |
+| terrain | `deno task bake:tiles`   | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land page             | shared `_ocean` |
+| poi     | `deno task bake:poi`     | Overture places                                 | packed PXP1 counts, one per page with one | no object       |
+| geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | packed JSON, one per page with a label    | no object       |
 
 Every tool writes to `./out/<kind>/<version>`, where the version defaults to
 `PUBLISHED_VERSION.<kind>` in `spec/pxl/spec/bake/published.json`
 and the last path segment of `--out` overrides it.
 
 The bucket names a page by its **quadkey** and nothing else (publish-bucket).
-POI (inside each snapshot’s `tile/`) and geocode write that name straight out, so for them the filename _is_
-the object key. Terrain does not: it writes `<level>/<page index>`, because it
-clears a level's directory to redo it and to drop the levels a run did not
-fold. Its names are translated at publish, by hard links, which is the one
-step POI and geocode skip.
+Geocode writes that name straight out, so for it the filename _is_ the object
+key. Terrain and POI, the two pyramids, do not: they write
+`<level>/<page index>`, because the fold clears a level's directory to redo it
+and drops the levels a run did not reach. Their names are translated at
+publish, by hard links, which is the one step geocode skips.
 
 Terrain goes first for geocode: it does not classify land itself, it
 read the `land_pages.json` terrain leaves next to its output directory
@@ -63,7 +63,7 @@ docker compose -f infra/local/docker-compose.yml --env-file .env up -d
 
 Terrain needs `overture_buildings`, `overture_transportation`,
 `overture_base_{land,land_use,water,infrastructure}` and `elevation_raster`;
-POI needs `overture_places` and `elevation_raster`; geocode needs `overture_divisions` and
+POI needs `overture_places`; geocode needs `overture_divisions` and
 `overture_division_points`. If a table is missing, that is an ingestion
 job, not a bake job — [infra/geo/README.md](../../../infra/geo/README.md).
 Never `down -v` to "reset" the database; the volume is several gigabytes of
@@ -125,7 +125,7 @@ and reused unless `--reclassify` is passed.
    discussion doc rather than working around it.
 4. **Spot-check pages against the dev tile server, at more than one level.**
    The dev server demand-pages terrain out of the same functions this tool
-   runs (`terrain/leaf.rs` for a leaf, `terrain/pyramid.rs` for a level above),
+   runs (`terrain/leaf.rs` for a leaf, `pyramid.rs` for a level above),
    so a page it serves holds the packet this tool wrote. It packs at zstd's
    quick level where the bake packs at its stored one, so compare the packets,
    not the objects. With `deno task dev:tiles` up — not `dev`, which proxies
@@ -145,43 +145,21 @@ and reused unless `--reclassify` is passed.
 
 ## POI
 
-The development slice bakes one 15-digit XY region down to the transport's
-64-bit address capacity (31 digits), stopping as soon as XY cannot distinguish members. This is a transport limit, not a target zoom.
-Raw membership does not enlarge a packet. A terminal summary is still a
-count and bounds, not a bounded list of entities.
+POI is a second layer of terrain's pyramid: the same pages, levels and names,
+holding a count of places per cell (`pxl-spec bake/poi_page.rs`, magic
+`PXP1`). The leaves are counted from `overture_places`, the levels above are
+folded by adding, with the same fold driver terrain uses
+(`geo-bake/src/pyramid.rs`), and a page with no places is no object.
 
 ```bash
-deno task bake:poi --root <15-digit-quadkey> --revision <nonzero-u64> --out ./out/poi/<snapshot>
-# To verify without a database:
-deno task bake:poi --root <15-digit-quadkey> --revision <nonzero-u64> --input /tmp/canonical.jsonl --out ./out/poi/<snapshot>
+deno task bake:poi --out ./out/poi/<version> --concurrency 8
 ```
 
-Canonical input is JSONL sorted by `id`, with `id`, `position: [x,y,z]`
-and `text`. XYZ uses absolute canonical units. Exact duplicate identities
-count once; conflicting identities, missing elevation and out-of-region
-records fail the bake. Overture acquisition streams a repeatable-read
-transaction and resolves elevation before normalization.
-
-The snapshot's `tile/` directory holds zstd-compressed nodes named by quadkey,
-including the 15-digit region root. Each decoded summary packet is at most 341 bytes.
-Separate PXD1 detail pages are named `d<terminal-quadkey>-<offset>`, with at
-most 16 records and 64 KiB per decoded page. They preserve original text and
-XYZ; an oversized individual record fails the bake rather than being truncated.
-`canonical.jsonl`, `source.jsonl` and `manifest.json` beside `tile/` hold private
-backing, provenance and completion metadata. Only `tile/` is publishable.
-The whole snapshot is staged and renamed together. Existing output or staging
-files are refused; inspect an interrupted run and choose a fresh output name.
-
-Verify the manifest's root, revision and count. Decompress `tile/<root>`:
-its first four bytes must be `PXS1`. In `dev:local`, the tile server creates
-requested regions from the DB through the same snapshot writer. No snapshot
-path override is needed. Enable `show_poi` in development settings; it defaults
-off and is unavailable in production. The kernel discovers a bounded number
-of nearby visible region addresses and requests their summaries. Offscreen
-branches take no candidate slots; residency has its own byte budget. Parents
-remain until a complete relevant child cut is usable and fits. A missing
-response is not an empty region; empty regions have zero-count root packets.
-The production smoke check does not require this development snapshot.
+It is not resumable: a run clears the version directory and bakes it whole,
+which takes the one pass over the table the leaves need. Verify that the
+manifest's `levels` reach level 10 and that a leaf decompresses to `PXP1`.
+The client shows it only outside production, behind `show_poi` in the
+development settings, until a nationwide version is published.
 
 ## Geocode
 
@@ -196,7 +174,7 @@ terrain's `land_pages.json`, not its tables.
 Verify `failed=` is zero and decompress a page to check its JSON. A group's
 name is a page's first eleven digits. The monthly workflow ingests Places
 for forward search and Divisions for geocode, then refreshes geocode only.
-POI snapshots are baked separately and remain immutable.
+POI is baked separately and is immutable.
 
 ## Versions, and when the bake logic changes
 
@@ -215,8 +193,9 @@ monthly refresh rewrites the same prefix with newer Overture content. A
 format change (a new field, a new encoding) is a new version and a re-bake; a
 data refresh is not.
 
-POI snapshots require a new published version prefix even for a data refresh,
-so root and refinement packets cannot mix snapshots.
+A published **POI** version is immutable too, a data refresh included: a
+coarse page counts the leaves under it, so a partial refresh would leave the
+levels disagreeing with each other.
 
 The local tile server shares one demand path across terrain, POI and geocode
 (`geo-bake/src/demand/`). `--cache` is the parent directory, default `out/dev`;
@@ -234,11 +213,12 @@ finish. Only then can a failed job be admitted again. Successful processes
 publish through the common staging owner: one packet move or one directory
 rename. Dictionary backing and its packet are published together. Staging
 stays private until success. A deadline or admission refusal is retryable,
-never an empty page or partial POI count. These are execution/time budgets,
+never an empty page. These are execution/time budgets,
 not a cap on process memory or total cached disk bytes.
 
-`--top-level` (default 3) remains terrain's additional bound on recursive
-spatial expansion; geocode groups and POI regions have fixed bake footprints.
+`--top-level` (default 3) bounds the pyramid layers, terrain and POI alike: a
+page above it is answered 503, since each one folds the whole level under it
+on first request. Geocode groups have a fixed bake footprint.
 The common job limits apply to all of them and survive cache invalidation.
 Source data must stay unchanged within a running generation. After re-ingest
 or a bake change, restart or invalidate the affected kind as a whole:
@@ -252,5 +232,4 @@ curl -X POST localhost:3001/geo/internal/world/terrain/cache/invalidate -H "x-ad
 Invalidation swaps the generation. Old requests can finish against their old
 directory but cannot publish into the new one; the old directory is removed
 when its last job finishes. Geocode's dictionary and groups share a generation;
-a POI region's backing and descendants share a completed snapshot. A client
-that encounters a new POI revision resolves that region again.
+a pyramid layer's pages share one.

@@ -12,16 +12,17 @@ const GROUP_QUADKEY: &str = "13211032031";
 
 #[test]
 fn a_leaf_and_a_level_above_it_land_on_their_tiles() {
-    let terrain = Bake::of("terrain/v5").expect("terrain");
-    assert_eq!(terrain.rename(&format!("0/{PAGE}")), Ok(PAGE_QUADKEY.to_string()));
-    // The same ground four levels up is the leaf's name, four digits shorter.
-    assert_eq!(terrain.rename(&format!("4/{GROUP}")), Ok(GROUP_QUADKEY.to_string()));
+    for prefix in ["terrain/v6", "poi/v8"] {
+        let pyramid = Bake::of(prefix).expect(prefix);
+        assert_eq!(pyramid.rename(&format!("0/{PAGE}")), Ok(PAGE_QUADKEY.to_string()));
+        // The same ground four levels up is the leaf's name, four digits shorter.
+        assert_eq!(pyramid.rename(&format!("4/{GROUP}")), Ok(GROUP_QUADKEY.to_string()));
+    }
     assert!(PAGE_QUADKEY.starts_with(GROUP_QUADKEY));
 }
 
 #[test]
 fn a_bake_with_no_levels_is_named_at_its_own_zoom() {
-    assert_eq!(Bake::of("poi/v5").expect("poi").rename(PAGE), Ok(PAGE_QUADKEY.to_string()));
     assert_eq!(Bake::of("geocode/v3").expect("geocode").rename(GROUP), Ok(GROUP_QUADKEY.to_string()));
 }
 

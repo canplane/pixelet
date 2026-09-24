@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::{neighbourhood, Folds, LevelPage, CHILDREN, TOP_LEVEL};
 
-use crate::util::{pack, unpack, write_atomic, Level};
+use crate::util::{git_sha, measure_output, now_iso8601, pack, unpack, write_atomic, Level, CONTENT_ENCODING};
 
 /// A layer the bake holds as a pyramid: its page, folded by `Folds`, and the
 /// bytes a page is stored as.
@@ -162,6 +162,44 @@ pub fn build<L: Layer>(set: &PageSet, absent: &L, workers: usize) -> Result<u32,
         fs::remove_dir_all(&stale).map_err(|e| format!("{}: {e}", stale.display()))?;
     }
     Ok(top)
+}
+
+/// Writes the manifest beside a version: what the set holds, level by level,
+/// how its objects are served, and what the layer says it was made from.
+///
+/// Measured from disk rather than counted by the run: a bake resumes, and a
+/// re-run that skips everything would otherwise describe an empty set.
+pub fn write_manifest(set: &PageSet, top: u32, layer: serde_json::Value) -> Result<(), String> {
+    let (mut objects, mut bytes) = measure_output(&set.root).map_err(|e| e.to_string())?;
+    let mut levels = Vec::new();
+    for l in 0..=top {
+        let (n, b) = measure_output(&set.level_dir(l)).map_err(|e| e.to_string())?;
+        levels.push(serde_json::json!({ "level": l, "objects": n, "bytes": b }));
+        objects += n;
+        bytes += b;
+    }
+    let mut manifest = serde_json::json!({
+        "version": set.root.file_name().map(|n| n.to_string_lossy().to_string()),
+        "updated_at": now_iso8601(),
+        // The layer's source says which *data* this was baked from; this says
+        // which *code* did the baking.
+        "git_sha": git_sha(),
+        "objects": objects,
+        "bytes": bytes,
+        "levels": levels,
+        // Every object is stored packed: upload with this content-type and
+        // this content-encoding, so whatever fetches it decodes it
+        // transparently. The upload takes them from here, not from memory.
+        "content_type": "application/octet-stream",
+        "content_encoding": CONTENT_ENCODING,
+    });
+    if let (Some(out), serde_json::Value::Object(extra)) = (manifest.as_object_mut(), layer) {
+        out.extend(extra);
+    }
+    let path = set.root.join("../manifest.json");
+    fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    println!("[bake/pyramid] manifest -> {}", path.display());
+    Ok(())
 }
 
 /// Folds `level` from `children` and returns how many pages it wrote.

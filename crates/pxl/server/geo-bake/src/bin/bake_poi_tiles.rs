@@ -10,9 +10,11 @@
 use std::fs;
 use std::path::PathBuf;
 
+use pxl_geo_bake::page::catalog;
 use pxl_geo_bake::poi::leaves;
-use pxl_geo_bake::pyramid::{build, Layer, PageSet};
+use pxl_geo_bake::pyramid::{build, write_manifest, Layer, PageSet};
 use pxl_geo_bake::util::{pack, refuse_mixed, Level};
+use pxl_geo_spec::table::PLACES;
 use pxl_spec::bake::poi_page::PoiPage;
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::space::pyramid::LevelPage;
@@ -42,6 +44,7 @@ fn run() -> Result<(), String> {
     }
     println!("[bake/poi] level 0: {} pages", pages.len());
     let top = build(&set, &PoiPage::default(), concurrency)?;
+    write_manifest(&set, top, serde_json::json!({ "source": catalog::sources(&mut client, &[PLACES]) }))?;
     println!("[bake/poi] complete to level {top}: {}", out.display());
     Ok(())
 }

@@ -15,7 +15,7 @@
 //! uses, so a bucket tile and a locally served one are identical byte for byte.
 //!
 //! Those are the leaves, level 0, under `<out>/0/`. Every level above is folded
-//! from the one below it on disk (terrain/pyramid.rs) into `<out>/<level>/`,
+//! from the one below it on disk (pyramid.rs) into `<out>/<level>/`,
 //! with no database in the loop, up to TOP_LEVEL. The levels are
 //! always refolded whole: they are a function of the leaves, so a resumed or
 //! partial leaf bake is never left under a stale pyramid.
@@ -44,11 +44,11 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::LevelPage;
 
 use pxl_geo_bake::page::walk::{land_pages, write_land_pages};
-use pxl_geo_bake::pyramid::{build, Layer, PageSet};
+use pxl_geo_bake::pyramid::{build, write_manifest, Layer, PageSet};
 use pxl_geo_bake::terrain::leaf::{bake_leaf, bake_ocean, has_land, ocean_samples, Coverage, NE, OCEAN_KEY, SW};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_geo_bake::terrain::source::SourceStats;
-use pxl_geo_bake::util::{fmt_bytes, fmt_dur, git_sha, measure_output, now_iso8601, pack, refuse_mixed, Level, CONTENT_ENCODING};
+use pxl_geo_bake::util::{fmt_bytes, fmt_dur, pack, refuse_mixed, Level};
 
 const CLASSIFY_BATCH: usize = 2000;
 
@@ -328,59 +328,28 @@ fn run() -> Result<(), String> {
     let ocean = Terrain::decode(&pxl_geo_bake::util::unpack(&fs::read(&ocean_path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?)?;
     let top = build(&tiles, &ocean, args.concurrency)?;
 
-    // The run counters above describe one invocation, and this tool resumes —
-    // a re-run that skips everything would otherwise write a manifest claiming
-    // the tile set is empty. Measure what is actually on disk instead, so the
-    // manifest describes the artifact rather than the invocation that last
-    // touched it.
-    let (mut objects, mut bytes) = measure_output(&args.out).map_err(|e| e.to_string())?;
-    let mut levels = Vec::new();
-    for l in 0..=top {
-        let (n, b) = measure_output(&tiles.level_dir(l)).map_err(|e| e.to_string())?;
-        levels.push(serde_json::json!({ "level": l, "objects": n, "bytes": b }));
-        objects += n;
-        bytes += b;
-    }
-
-    let manifest = serde_json::json!({
-        "version": args.out.file_name().map(|n| n.to_string_lossy().to_string()),
-        "updated_at": now_iso8601(),
-        // The catalog below says which *data* this was baked from; this says
-        // which *code* did the baking.
-        "git_sha": git_sha(),
-        "bbox_4326": { "sw": SW, "ne": NE },
-
-        // The published tile set, measured from disk.
-        "objects": objects,
-        "bytes": bytes,
-        "levels": levels,
-        "candidate_pages": candidates.len(),
-        "land_pages": land.len(),
-        "ocean_pages": candidates.len() - land.len(),
-        "ocean_key": OCEAN_KEY,
-
-        // Every object is stored packed: upload with this content-type and
-        // this content-encoding, so whatever fetches it decodes it
-        // transparently. The upload takes them from here, not from memory.
-        "content_type": "application/octet-stream",
-        "content_encoding": CONTENT_ENCODING,
-
-        // This invocation only — a resumed run reports only what it re-baked,
-        // so a zero here means "nothing to do", not "nothing wrong".
-        "run": {
-            "baked": t.baked,
-            "skipped": t.skipped,
-            "failed": t.failed,
-            "bytes": t.bytes,
-            "flat_elevation_tiles": t.invalid_ele_shape,
-        },
-
-        "source": read_source_catalogs(&mut client),
-    });
-
-    let manifest_path = args.out.join("../manifest.json");
-    fs::write(&manifest_path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-    println!("[bake] manifest -> {}", manifest_path.display());
+    write_manifest(
+        &tiles,
+        top,
+        serde_json::json!({
+            "bbox_4326": { "sw": SW, "ne": NE },
+            "candidate_pages": candidates.len(),
+            "land_pages": land.len(),
+            "ocean_pages": candidates.len() - land.len(),
+            "ocean_key": OCEAN_KEY,
+            // This invocation only — a resumed run reports only what it
+            // re-baked, so a zero here means "nothing to do", not "nothing
+            // wrong".
+            "run": {
+                "baked": t.baked,
+                "skipped": t.skipped,
+                "failed": t.failed,
+                "bytes": t.bytes,
+                "flat_elevation_tiles": t.invalid_ele_shape,
+            },
+            "source": read_source_catalogs(&mut client),
+        }),
+    )?;
 
     Ok(())
 }
