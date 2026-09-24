@@ -191,7 +191,7 @@ export async function instantiate_kernel(memory: WebAssembly.Memory): Promise<Ke
 
 // Binaryen minifies the names the two sides call each other by, down to a
 // letter apiece (script/build-wasm.ts), and writes the mapping it chose into
-// kernel/abi.ts. Neither side spells a letter: the build decides them, both
+// kernel/abi/symbol.ts. Neither side spells a letter: the build decides them, both
 // read them, and a module that renamed cannot leave the shell behind.
 
 /** What the host offers, under the names the module imports them by. */

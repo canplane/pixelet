@@ -5,17 +5,19 @@ use super::*;
 use crate::bake::format::GroundChannelKey;
 use crate::cell::cube::cube_types;
 
-const SPAN: usize = PAGE_CELL_SPAN as usize;
+const SPAN: usize = PAGE_CELLS as usize;
 const PADDED: usize = ELE_PADDED_SPAN as usize;
 
 #[test]
-fn majority_takes_half_and_ties_take_the_given_child() {
-    assert_eq!(majority([7, 7, 7, 7], 0), 7);
+fn an_area_keeps_what_fills_half_its_four_and_ties_alternate_corners() {
     assert_eq!(majority([7, 7, 7, 1], 0), 7);
     assert_eq!(majority([7, 7, 1, 2], 0), 7);
-    assert_eq!(majority([7, 1, 7, 2], 0), 7);
-    assert_eq!(majority([7, 7, 1, 1], 9), 9);
-    assert_eq!(majority([7, 1, 2, 3], 9), 9);
+    assert_eq!(majority([1, 7, 2, 7], 1), 7);
+    // No half, or two halves: the tie child, the first at an odd level and
+    // the last at an even one.
+    assert_eq!(majority([7, 1, 2, 3], 1), 7);
+    assert_eq!(majority([7, 1, 2, 3], 2), 3);
+    assert_eq!(majority([7, 7, 1, 1], 2), 1);
 }
 
 /// A page whose transport channel is `f` of the cell, every other channel
@@ -178,14 +180,14 @@ fn elevation_rounds_its_halves_to_even() {
 fn a_volume_keeps_what_fills_half_its_eight_and_loses_what_fills_less() {
     let (a, b, empty) = (5, 9, 0);
     // A lone cube is an eighth: it goes.
-    assert_eq!(majority8([a, empty, empty, empty, empty, empty, empty, empty], 1), empty);
+    assert_eq!(majority([a, empty, empty, empty, empty, empty, empty, empty], 1), empty);
     // A slab — the lower four — is half: it stays.
-    assert_eq!(majority8([a, a, a, a, empty, empty, empty, empty], 1), a);
+    assert_eq!(majority([a, a, a, a, empty, empty, empty, empty], 1), a);
     // Five of eight win whatever the tie child holds.
-    assert_eq!(majority8([empty, a, a, a, a, a, empty, empty], 2), a);
+    assert_eq!(majority([empty, a, a, a, a, a, empty, empty], 2), a);
     // Two halves tie, and the tie alternates by level between the diagonal's ends.
     let halves = [a, b, a, b, b, a, b, a];
-    assert_eq!(majority8(halves, 1), halves[0]);
-    assert_eq!(majority8(halves, 2), halves[7]);
-    assert_eq!(majority8(halves, -1), halves[0], "a level below the cell alternates the same way");
+    assert_eq!(majority(halves, 1), halves[0]);
+    assert_eq!(majority(halves, 2), halves[7]);
+    assert_eq!(majority(halves, -1), halves[0], "a level below the cell alternates the same way");
 }

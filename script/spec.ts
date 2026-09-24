@@ -612,7 +612,7 @@ async function fetchOutputs(): Promise<Output[]> {
 // The numbers cross the ring, so both sides have to agree on all fifty-nine;
 // they were two hand-kept tables and nothing checked them against each other.
 // The name stays out of this: it is the identifier, and `errname()`-shaped
-// output derives it from the symbol rather than from a table (sys/error.rs's
+// output derives it from the symbol rather than from a table (status/error.rs's
 // own `stringify!`), so there is nothing here for a reader to drift from.
 
 interface ErrnoEntry {
@@ -923,7 +923,7 @@ const DATA_SPECS: { json: string; ts?: string; rs?: string; mod?: string; enums?
     mod: "variant_spec",
     enums: true,
   },
-  { json: "spec/pxl/web/kernel/layer/terrain/config.json", rs: "crates/pxl/web/kernel/src/layer/terrain/config.spec.rs", mod: "config_spec" },
+  { json: "spec/pxl/web/kernel/world/pyramid/window.json", rs: "crates/pxl/web/kernel/src/world/pyramid/window.spec.rs", mod: "window_spec" },
   { json: "spec/pxl/web/render/gpu/api.json", ts: "apps/web/src/kernel/render/gpu/api.spec.ts", rs: "crates/pxl/web/render/src/gpu/api.spec.rs", mod: "api_spec" },
   { json: "spec/pxl/web/kernel/sched/ledger/ledger.json", ts: "apps/web/src/feature/dev/ledger/ledger.spec.ts", rs: "crates/pxl/web/kernel/src/sched/ledger/ledger.spec.rs", mod: "spec" },
   { json: "spec/pxl/web/kernel/mem/mem.json", ts: "apps/web/src/kernel/mem/mem.spec.ts", rs: "crates/pxl/web/kernel/src/mem/mem.spec.rs", mod: "spec" },
@@ -1158,7 +1158,7 @@ async function dataOutputs(): Promise<Output[]> {
         } else {
           body.push(`export const ${name} = ${tsLiteral(n, "f64", "")} as const;`);
           // A set numbered by its entries' `$number`, as the Rust enum is:
-          // its members' numbers, the way decor.ts lists decor_types.
+          // its members' numbers, the way decor.spec.ts lists decor_types.
           const entries = typeof n === "object" && !Array.isArray(n) ? Object.entries(n).filter(([k]) => !k.startsWith("$")) : [];
           if (d.enums && entries.length > 0 && entries.every(([, v]) => typeof v === "object" && !Array.isArray(v) && typeof (v as Record<string, DataNode>).$number === "number")) {
             body.push("", `export const ${enumName(name)} = {`, ...entries.map(([k, v]) => `  ${k}: ${(v as Record<string, DataNode>).$number},`), "} as const;");

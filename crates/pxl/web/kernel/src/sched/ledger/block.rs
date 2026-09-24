@@ -229,27 +229,6 @@ words!(FetchBlock, SUMMARY::fetch::WORDS,
     queued => SUMMARY::fetch::queued, running => SUMMARY::fetch::running, credits => SUMMARY::fetch::credits,
 );
 
-/// Bounded summary residency and screen visibility.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct PoiBlock {
-    pub resident_nodes: f64,
-    pub resident_bytes: f64,
-    pub candidates: f64,
-    pub visible: f64,
-    pub pending: f64,
-    pub hidden: f64,
-}
-
-words!(PoiBlock, SUMMARY::poi::WORDS,
-    resident_nodes => SUMMARY::poi::resident_nodes,
-    resident_bytes => SUMMARY::poi::resident_bytes,
-    candidates => SUMMARY::poi::candidates,
-    visible => SUMMARY::poi::visible,
-    pending => SUMMARY::poi::pending,
-    hidden => SUMMARY::poi::hidden,
-);
-
 /// One step of the tick, as the window saw it.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

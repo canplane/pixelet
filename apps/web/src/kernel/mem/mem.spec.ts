@@ -73,7 +73,7 @@ export const GLOBAL_BASE: u32 = 33554432 as number;
  * constants), so a terrain grown past a phone fails to build; and at boot
  * against where it actually started and what the device actually gave.
  *
- * 256 MiB with the terrain at 62.81 leaves the phone 413.46 in practice, so
+ * 256 MiB with the terrain at 63.31 leaves the phone 412.96 in practice, so
  * there are 157 MiB of headroom over the guarantee. */
 export const MIN_HEAP_BYTES: u32 = 268435456 as number;
 

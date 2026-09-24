@@ -31,7 +31,7 @@ export { REGION_BYTES };
  * module's linker flags read, so there is no second place to keep them true.
  *
  * There is no smaller reservation to fall back to. The terrain the level rings
- * hold is a fixed 62.81 MiB and the kernel lays its map out around it, so
+ * hold is a fixed 63.31 MiB and the kernel lays its map out around it, so
  * a device that will not reserve this much cannot run the world at all — and
  * failing here says that, where failing in the map would say the map was
  * wrong. The module declares PHONE_BYTES as the floor it needs

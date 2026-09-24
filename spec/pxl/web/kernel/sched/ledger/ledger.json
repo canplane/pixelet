@@ -31,8 +31,7 @@
     "poi",
     "geocode",
     "geocode_dict",
-    "asset",
-    "poi_detail"
+    "asset"
   ],
   "OUTCOME_NAMES": [
     "ok",
@@ -64,6 +63,7 @@
     "geolocation",
     "orientation",
     "tiles",
+    "poi",
     "geocode",
     "follow",
     "theme",
@@ -172,7 +172,7 @@
   },
   "FRAME_GROUPS": {
     "$doc": [
-      "What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (view.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what the chunk scheduler is doing, what it built and fetched, and what it all holds — and the report and the panel both follow it."
+      "What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what the chunk scheduler is doing, what it built and fetched, and what it all holds — and the report and the panel both follow it."
     ],
     "pace": [
       "t",
@@ -389,10 +389,10 @@
     "tasks": {
       "AT": 228,
       "slots": 0,
-      "WORDS": 175
+      "WORDS": 150
     },
     "counters": {
-      "AT": 403,
+      "AT": 378,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -411,7 +411,7 @@
       "WORDS": 15
     },
     "atlas": {
-      "AT": 418,
+      "AT": 393,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -419,7 +419,7 @@
       "WORDS": 4
     },
     "retain": {
-      "AT": 422,
+      "AT": 397,
       "nodes": 0,
       "run_sets": 1,
       "run_set_mb": 2,
@@ -432,24 +432,14 @@
       "WORDS": 9
     },
     "fetch": {
-      "AT": 431,
+      "AT": 406,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
-    "poi": {
-      "AT": 434,
-      "resident_nodes": 0,
-      "resident_bytes": 1,
-      "candidates": 2,
-      "visible": 3,
-      "pending": 4,
-      "hidden": 5,
-      "WORDS": 6
-    },
     "peak": {
-      "AT": 440,
+      "AT": 409,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -473,12 +463,12 @@
       "WORDS": 20
     },
     "steps": {
-      "AT": 460,
+      "AT": 429,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
-    "WORDS": 621
+    "WORDS": 590
   },
   "READ": {
     "$type": "u32",

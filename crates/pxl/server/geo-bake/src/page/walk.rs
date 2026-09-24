@@ -1,27 +1,26 @@
 // pxl-geo-bake/page/walk.rs
 
-//! The walk the POI and reverse-geocode bakes share: terrain's own land-page
-//! list, one object per target, resumable. A POI object covers one page; a
-//! reverse-geocode object covers a group of them, and the walk is over
-//! whatever the bake made of the land list rather than over the list itself.
+//! The reverse-geocode bake's walk: terrain's own land-page list, one object
+//! per group of pages, resumable. The walk is over whatever the bake made of
+//! the land list rather than over the list itself.
 //!
-//! Reusing terrain's land/ocean split rather than a classification of their own
+//! Reusing terrain's land/ocean split rather than a classification of its own
 //! is deliberate. "Does this bbox touch any land polygon" is a cheap, purely
-//! geometric pre-filter that already rules out every page these could never
-//! produce anything for; a real "does this page have a POI-taggable feature"
-//! pass would cost about what fetching costs, so there is nothing cheaper to
-//! filter on than what terrain already computed. A land page with nothing on it
-//! still costs one round trip — the `.empty` marker's job is to make that a
-//! one-time cost, not to remove it.
+//! geometric pre-filter that already rules out every page a label could never
+//! fall on; a real "does this group have a named division" pass would cost
+//! about what fetching costs, so there is nothing cheaper to filter on than
+//! what terrain already computed. A land group with nothing on it still costs
+//! one round trip — the `.empty` marker's job is to make that a one-time cost,
+//! not to remove it.
 //!
-//! Neither bake has a shared fallback the way terrain's `_ocean` does: "nothing
-//! here" is an empty result rather than a payload some other page's bytes could
-//! stand in for, so a missing key is enough on its own and the client reads a
-//! 404 as empty directly.
+//! There is no shared fallback the way terrain's `_ocean` is one: "nothing
+//! here" is an empty result rather than a payload some other page's bytes
+//! could stand in for, so a missing key is enough on its own and the client
+//! reads a 404 as empty directly.
 //!
-//! The terrain bake does not go through this. Its walk is over a candidate grid
-//! it classifies itself, it has the shared ocean tile, and it has no `.empty` —
-//! folding it in would bend all three.
+//! The pyramid bakes do not go through this. Terrain's walk is over a
+//! candidate grid it classifies itself, and POI's leaves are wherever a place
+//! is; both then fold (pyramid.rs), which a flat group set has no use for.
 
 use pxl_spec::bake::quadkey::quadkey_of;
 use std::collections::HashMap;
@@ -80,8 +79,7 @@ impl Args {
     }
 }
 
-/// What one target came to. `items` is whatever the caller counts per object —
-/// places for POI, labels for a geocode group.
+/// What one target came to, and how many labels it holds.
 pub enum Page {
     Object { raw: Vec<u8>, items: u64 },
     Empty,
@@ -94,9 +92,7 @@ pub struct Target {
     pub leaves: Vec<IVec>,
 }
 
-/// The land pages gathered `shamt` levels up, first-seen order. A `shamt` of
-/// zero is one target a page, which is what a bake whose object is a page
-/// wants.
+/// The land pages gathered `shamt` levels up, first-seen order.
 pub fn targets_of(land: &[IVec], shamt: u32) -> Vec<Target> {
     let mut out: Vec<Target> = Vec::new();
     let mut at: HashMap<IVec, usize> = HashMap::new();

@@ -206,7 +206,7 @@ fn state() -> &'static mut State {
 
 // ---- Rings ----
 //
-// Commands and their effects cross in rings (crates/xpute/core/src/ipc/ring.rs):
+// Commands and their effects cross in rings (crates/xpute/runtime/src/ipc/ring.rs):
 // a message names a command (pxl_spec::abi::cmd) and an XTP packet in the
 // ring's slot, which the kernel reads where it lies. The shell assembles
 // what it submits and takes apart what completes; nothing here is shaped
@@ -811,7 +811,7 @@ extern "C" {
     fn host_body_read(body: u32, dst: *mut u8, len: usize);
 }
 
-// ---- The host's WebGPU (pxl_render::gpu::api, apps/web/src/device/gpu.ts) ----
+// ---- The host's WebGPU (pxl_render::gpu::api, apps/web/src/kernel/render/gpu.ts) ----
 
 #[link(wasm_import_module = "env")]
 extern "C" {

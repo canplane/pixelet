@@ -9,20 +9,21 @@
 //! `pxl-spec` rather than in a script that would be a second copy of the
 //! packed-lane maths.
 
-use pxl_spec::bake::constant::{zoom_of_level, LEVEL0_ZOOM, PAGE_TOP_LEVEL};
 use pxl_spec::bake::place_page::{DICT_OBJECT, GROUP_SHAMT};
 use pxl_spec::bake::quadkey::quadkey_of;
 use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pyramid::{zoom_of_level, LEVEL0_ZOOM, TOP_LEVEL};
 
 /// The objects a bake keeps beside its pages, which are named rather than
 /// keyed and so are carried across unchanged.
 const SHARED: [&str; 2] = ["_ocean", DICT_OBJECT];
 
-/// What the name after a bake's prefix is made of. The three bakes differ only
-/// in the zoom they hold a page at, and terrain in that the zoom is per page.
+/// What the name after a bake's prefix is made of. A layer held as a pyramid
+/// writes a page at every level, the level before it; geocode holds a page at
+/// one zoom.
 pub enum Bake {
     /// A page at every level of the pyramid, the level written before it.
-    Terrain,
+    Pyramid,
     /// A page at one zoom, and nothing before it.
     Flat(u32),
 }
@@ -32,8 +33,7 @@ impl Bake {
     /// named by their content and there is nothing to rename.
     pub fn of(prefix: &str) -> Result<Self, String> {
         match prefix.split('/').next().unwrap_or_default() {
-            "terrain" => Ok(Bake::Terrain),
-            "poi" => Ok(Bake::Flat(LEVEL0_ZOOM)),
+            "terrain" | "poi" => Ok(Bake::Pyramid),
             "geocode" => Ok(Bake::Flat(LEVEL0_ZOOM - GROUP_SHAMT)),
             other => Err(format!("{other}: not a bake this renames")),
         }
@@ -50,10 +50,10 @@ impl Bake {
         }
         let (zoom, raw) = match self {
             Bake::Flat(zoom) => (*zoom, rest),
-            Bake::Terrain => {
-                let (level, page) = rest.split_once('/').ok_or("a terrain page is a level and a page")?;
+            Bake::Pyramid => {
+                let (level, page) = rest.split_once('/').ok_or("a pyramid page is a level and a page")?;
                 let level = level.parse::<u32>().map_err(|e| format!("{level}: {e}"))?;
-                if level > PAGE_TOP_LEVEL {
+                if level > TOP_LEVEL {
                     return Err(format!("level {level} is past the pyramid's top"));
                 }
                 (zoom_of_level(level), page)

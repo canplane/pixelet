@@ -1,5 +1,4 @@
 // pxl-geo-spec/overture/category.test.rs
-// (no pair: category_map.ts has no test file)
 
 use super::*;
 

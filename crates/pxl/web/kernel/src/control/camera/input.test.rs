@@ -6,7 +6,7 @@
 // The size tier is a live, user-changed selection, and a carve is the one edit
 // it must not reach: the leaf a carve writes is AIR, and a zero material is a
 // voxel the scan emits nothing for whatever its sub-cell bytes say
-// (render/mesh/voxel_scan.rs), so a smaller leaf takes the cell whole anyway
+// (pxl-render mesh/voxel_scan.rs), so a smaller leaf takes the cell whole anyway
 // and records a bite nobody took. The store is saved, so that number would
 // outlive the session.
 

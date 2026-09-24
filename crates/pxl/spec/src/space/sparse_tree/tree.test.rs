@@ -24,7 +24,7 @@ fn sparse_tree_retype_widening_the_leaf_lane_carries_every_value_across() {
 }
 
 /// What the TypeScript computed, recorded: the generator that wrote it
-/// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
+/// is gone and the vector stands as it is (xpute-core/golden.rs).
 const GOLDEN: &str = include_str!("../../../golden/spec/space/sparse_tree/tree.tsv");
 
 #[test]

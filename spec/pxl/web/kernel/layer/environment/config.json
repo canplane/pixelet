@@ -53,7 +53,7 @@
       "$doc": [
         "The reach the two above were tuned against, and what the near plane's",
         "scale is measured in: five levels from the leaves draw step 2^5, which",
-        "the ladder wants out to 192 · 2^5 (terrain/level.rs's level_at)."
+        "the ladder wants out to 192 · 2^5 (world/pyramid/window.rs's level_at)."
       ]
     }
   },

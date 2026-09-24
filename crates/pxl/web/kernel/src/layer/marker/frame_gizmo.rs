@@ -28,12 +28,14 @@ use crate::global::Global;
 use crate::host::measure_text;
 use crate::kernel::kernel;
 use crate::layer::billboard::canvas::scale::{FONT_FAMILY, FONT_WEIGHT_REGULAR};
+use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
 use crate::layer::terrain::elevation::{get_ele, with_ele};
-use crate::layer::terrain::store::tile_pages;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::node::World;
 use crate::world::frame::view::view;
+use crate::world::pyramid::Layer as _;
+use pxl_spec::bake::format::Terrain;
 
 const COLOR: V3 = [0.0, 0.0, 0.0];
 const DASH: f64 = 0.3;
@@ -316,7 +318,7 @@ fn write_labels(g: &mut Gizmos) {
         return;
     }
     g.written = Some(generation);
-    let mut lane: Vec<f32> = Vec::with_capacity(g.slots.len() * 10);
+    let mut lane: Vec<f32> = Vec::with_capacity(g.slots.len() * BILLBOARD_FLOATS);
     for (label, &(slot, logical_w)) in g.drawn.labels.iter().zip(&g.slots) {
         if slot == NO_SLOT {
             continue;
@@ -333,6 +335,7 @@ fn write_labels(g: &mut Gizmos) {
             sheet.u1(s) as f32,
             sheet.v1(s) as f32,
             0.5,
+            1.0,
         ]);
     }
     write_billboard_set(set, &lane);
@@ -367,7 +370,7 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
         return;
     };
     let v = view();
-    let key = (center, map_origin, tile_pages().revision(), [v.azimuth, v.tx, v.ty, v.tz]);
+    let key = (center, map_origin, Terrain::pyramid().level(0).revision(), [v.azimuth, v.tx, v.ty, v.tz]);
     if g.built_for == Some(key) {
         write_labels(g);
         return;

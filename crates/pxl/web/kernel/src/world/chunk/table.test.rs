@@ -89,9 +89,9 @@ fn a_wait_overtakes_after_log2_of_how_much_farther_and_never_lifts_onto_the_scre
 #[test]
 fn a_chunks_children_have_it_for_their_parent_and_its_ancestors_climb_to_the_top() {
     for (x, y) in [(0, 0), (5, -3), (-1, -1), (123, 77)] {
-        for level in 1..=PAGE_TOP_LEVEL {
+        for level in 1..=TOP_LEVEL {
             for (bx, by) in [(0, 0), (64, 448), (448, 64), (256, 192)] {
-                let k = ChunkKey {
+                let k = Chunk {
                     page: LevelPage::new(level, ivec::gather(x, y, 0)),
                     bx,
                     by,
@@ -99,7 +99,7 @@ fn a_chunks_children_have_it_for_their_parent_and_its_ancestors_climb_to_the_top
                 for c in k.children() {
                     assert_eq!(c.parent(), Some(k), "{k:?} → {c:?}");
                 }
-                assert_eq!(k.ancestors().count() as u32, PAGE_TOP_LEVEL - level);
+                assert_eq!(k.ancestors().count() as u32, TOP_LEVEL - level);
             }
         }
     }
@@ -107,12 +107,12 @@ fn a_chunks_children_have_it_for_their_parent_and_its_ancestors_climb_to_the_top
 
 /// What the mount order has to agree with the build order about: a chunk is
 /// as near as its distance in its own sides, so the levels interleave. Left
-/// in the key's own order a `ChunkKey` sorts by level, and every chunk of the
+/// in the key's own order a `Chunk` sorts by level, and every chunk of the
 /// finest level was mounted before any of the next — which decided what the
 /// screen filled in, since a chunk cannot be built before it is mounted.
 #[test]
 fn mounts_are_ordered_as_the_builds_take_them_and_not_by_level() {
-    let chunk = |level: u32, px: i64, bx: u32| ChunkKey {
+    let chunk = |level: u32, px: i64, bx: u32| Chunk {
         page: LevelPage::new(level, ivec::gather(px, 0, 0)),
         bx,
         by: 0,
@@ -134,67 +134,6 @@ fn mounts_are_ordered_as_the_builds_take_them_and_not_by_level() {
     assert!(chunk_near(chunk(0, 0, 0), ax, ay) < chunk_near(chunk(4, 0, 0), ax, ay));
 }
 
-/// Where the selection starts when a page of the top ring has not arrived.
-/// The adversarial cases of a zoom out, which is when a top ring is new.
-mod selection_roots {
-    use super::*;
-
-    fn page(level: u32, x: i64, y: i64) -> LevelPage {
-        LevelPage::new(level, ivec::gather(x, y, 0))
-    }
-
-    fn held(of: &[LevelPage]) -> BTreeSet<LevelPage> {
-        of.iter().copied().collect()
-    }
-
-    fn roots_of(pages: &BTreeSet<LevelPage>, top: LevelPage, base: u32) -> Vec<LevelPage> {
-        let mut out = Vec::new();
-        roots(pages, top, base, &mut out);
-        out.sort_unstable();
-        out
-    }
-
-    #[test]
-    fn a_resident_page_is_the_root_and_its_children_are_left_to_the_split() {
-        let top = page(4, 3, 5);
-        let mut pages = held(&[top]);
-        pages.extend(top.children());
-        // Both resident: the page itself roots, and whether the finer ones
-        // are drawn is the ladder's question (`splits`), not this one.
-        assert_eq!(roots_of(&pages, top, 0), [top]);
-    }
-
-    #[test]
-    fn a_missing_page_is_stood_in_for_by_every_child_that_is_resident() {
-        let top = page(4, 3, 5);
-        let kids = top.children();
-        // All four: the whole of its ground is drawn, a level finer.
-        let all = held(&kids);
-        assert_eq!(roots_of(&all, top, 0).len(), 4);
-        // Two of four, which is what a held ring actually leaves
-        // (terrain/level.test.rs): half the ground rather than none of it.
-        let some = held(&kids[..2]);
-        assert_eq!(roots_of(&some, top, 0), {
-            let mut v = kids[..2].to_vec();
-            v.sort_unstable();
-            v
-        });
-    }
-
-    #[test]
-    fn it_goes_one_level_and_no_further_so_a_seam_is_never_more_than_one_apart() {
-        let top = page(4, 0, 0);
-        let deep = top.children()[0].children()[0];
-        assert!(roots_of(&held(&[deep]), top, 0).is_empty(), "a grandchild is not stood in for");
-        assert!(roots_of(&held(&top.children()), top, top.level).is_empty(), "not past the base");
-    }
-
-    #[test]
-    fn nothing_resident_under_it_is_nothing_drawn_and_not_a_guess() {
-        assert!(roots_of(&held(&[]), page(4, 3, 5), 0).is_empty());
-    }
-}
-
 #[test]
 fn surface_centres_use_drawn_box_tops_and_leave_empty_centres_empty() {
     let heights = Heights { floor: -20.0, step: 0.25 };
@@ -209,48 +148,4 @@ fn surface_centres_use_drawn_box_tops_and_leave_empty_centres_empty() {
     assert_eq!(tops[0], 41);
     assert_eq!(tops[1], 0);
     assert_eq!(tops.len(), 32 * 32);
-}
-
-#[test]
-fn presentation_snaps_to_the_committed_tier_and_waits_for_a_drawn_surface() {
-    let mut s = Scheduler::new();
-    s.add(1, 0, 0, -64.0, 128.0, 0, 0, 0.0, true);
-    assert_eq!(s.surface_anchor(-60.1, 130.9), None);
-    let mesh = slot_at(pool(0, 1).start);
-    s.meshes.surface[mesh.index] = vec![11; 64 * 64].into_boxed_slice();
-    let chunk = &mut s.slots[0];
-    chunk.layout_primary = 1;
-    chunk.layout_ready = true;
-    chunk.set(IN_FRUSTUM, true);
-    chunk.tiers.push(Tier {
-        step: 1,
-        generation: 0,
-        bounds: None,
-        slot: mesh,
-        box_cnt: 1,
-        heights: Heights { floor: 0.0, step: 1.0 },
-    });
-    assert_eq!(s.surface_anchor(-60.1, 130.9), Some([-60.5, 130.5, 10.0]));
-    let coarse = slot_at(pool(0, 2).start);
-    s.meshes.surface[coarse.index] = vec![15; 32 * 32].into_boxed_slice();
-    s.slots[0].tiers.push(Tier {
-        step: 2,
-        generation: 0,
-        bounds: None,
-        slot: coarse,
-        box_cnt: 1,
-        heights: Heights { floor: 0.0, step: 1.0 },
-    });
-    s.slots[0].layout_secondary = 2;
-    s.slots[0].told = Some((0.4, 0.6, true));
-    assert_eq!(s.surface_anchor(-60.1, 130.9), Some([-61.0, 131.0, 14.0]));
-    let canonical = [-60.1, 130.9, -100.0, -60.1, 130.9, -100.0];
-    let envelope = s.surface_envelopes()[0];
-    let anchor = s.surface_anchor(-60.1, 130.9).unwrap();
-    assert!(envelope[0] <= anchor[0] && envelope[2] >= anchor[0]);
-    assert!(envelope[1] <= anchor[1] && envelope[3] >= anchor[1]);
-    assert!(envelope[4] <= anchor[2] && envelope[5] >= anchor[2]);
-    assert_eq!(canonical[2], -100.0);
-    s.slots[0].set(COVERED, true);
-    assert_eq!(s.surface_anchor(-60.1, 130.9), None);
 }

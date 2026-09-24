@@ -14,11 +14,11 @@ use crate::control::camera::config::camera_cfg::smooth::{POS_DAMP, ROT_DAMP};
 use crate::control::camera::orbit::damp_alpha;
 use crate::control::camera::store::camera_store;
 use crate::global::Global;
-use crate::layer::terrain::level::window;
 use crate::sched::tick::TickContext;
 use crate::shell::map_store::map_store;
 use crate::world::frame::coord::origin_for;
 use crate::world::frame::view::{view, view_compose};
+use crate::world::pyramid::window::window;
 
 // see damping.rs's DIST_EPS/POLAR_EPS comment — the same reasoning about
 // asking for frames.

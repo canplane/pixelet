@@ -66,11 +66,11 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * in how long a name they have and which shared object they keep beside it:
  *
  * - `terrain/<version>/<quadkey>`, 5 to 15 digits, a page at every level of
- *   the pyramid from the leaf up to `PAGE_TOP_LEVEL`. Plus the shared
+ *   the pyramid from the leaf up to `TOP_LEVEL`. Plus the shared
  *   `_ocean` page every level's open water reads.
- * - `poi/<version>/` and 15–31 digit quadkeys, plus d<quadkey>-<offset> detail pages: a summary
- *   snapshot for one XY region. A missing node is an unavailable refinement,
- *   never an empty population.
+ * - `poi/<version>/<quadkey>`, 5 to 15 digits, a page at every level of the
+ *   pyramid as terrain's are: how many places stand in each of its cells. A
+ *   page with none is no object.
  * - `geocode/<version>/<quadkey>`, 11 digits, because a reverse-geocode object
  *   covers a group of 16 pages a side (pxl-spec bake/place_page.rs's
  *   `GROUP_SHAMT`). Plus the one `_dict` the whole set is read against, since
@@ -79,7 +79,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  *   layer/geocode/ reads as no label.
  * - `asset/<path>/<stem>-<12 hex>.<ext>` — a model or an image under the tree
  *   it lives in, with a hash of its bytes in the stem, the way a bundler names
- *   a chunk. pxl-asset-bake's ingest_asset writes them and the catalogs name
+ *   a chunk. ingest-asset writes them and the catalogs name
  *   them by path. No version segment and none wanted: a changed file is a new
  *   name, which is what makes `immutable` true of it.
  *
@@ -104,7 +104,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * match, and the hash in the stem is what makes that shape worth matching.
  */
 const KEY_RE =
-  /^(?:terrain\/v\d{1,3}\/(?:_ocean|[0-3]{5,15})|poi\/v\d{1,3}\/(?:[0-3]{15,31}|d[0-3]{15,31}-[0-9]{1,20})|geocode\/v\d{1,3}\/(?:_dict|[0-3]{11})|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$/;
+  /^(?:terrain\/v\d{1,3}\/(?:_ocean|[0-3]{5,15})|poi\/v\d{1,3}\/[0-3]{5,15}|geocode\/v\d{1,3}\/(?:_dict|[0-3]{11})|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$/;
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the
  * cache has no meaning for is a header it leaves alone, which is the whole
@@ -175,13 +175,13 @@ export default {
     // Rejected before R2 is touched — see KEY_RE. Same 404 a real miss
     // returns, deliberately: a distinct status would tell a prober which of
     // its guesses were the right shape, and the client cannot act on the
-    // difference anyway (tile_repository.ts turns any 404 into the ocean
-    // tile).
+    // difference anyway (the kernel's layer/terrain/page.rs turns any 404
+    // into the ocean tile, and layer/poi.rs into an empty page).
     if (!KEY_RE.test(key)) return new Response("not found", { status: 404 });
 
     // A missing object is not an error here: open-ocean pages are never
     // baked, and the client turns this 404 into its shared `_ocean` tile.
-    // See tile_repository.ts.
+    // See the kernel's layer/terrain/page.rs.
     if (request.method === "HEAD") {
       const meta = await env.TILES.head(key);
       if (meta === null) return new Response(null, { status: 404 });

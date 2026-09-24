@@ -12,7 +12,6 @@ pub mod asset;
 pub mod bake;
 pub mod cell;
 pub mod place;
-pub mod poi;
 #[path = "route.spec.rs"]
 pub mod route;
 pub mod space;

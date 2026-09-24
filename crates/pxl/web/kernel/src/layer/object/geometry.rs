@@ -23,7 +23,7 @@ use crate::layer::object::store::OccupiedEntry;
 /// model. object_center below is the placed-cube counterpart: the exact same
 /// shape, since a cube's anchor is a true min corner too.
 ///
-/// decor/decor_kinds.rs centers user-placed decor the same way on X/Y but
+/// User-placed decor is centred the same way on X/Y but
 /// keeps Z on the slot (a decor model's origin sits at its base, not its
 /// middle) — the X/Y half of this, not the whole thing.
 pub fn anchor_center(anchor: &Pvf3) -> Pvf3 {

@@ -99,7 +99,7 @@ function PetPicker(props: PetPickerProps) {
 }
 
 /** drawer-modal.tsx's Character tab content — equips the single always-on
- * companion (world.tsx's own one `<Companion>` instance), never a
+ * companion (the one the kernel's layer/character/ draws), never a
  * placed-into-the-world pick the way Cube/Decor are; selecting a chip here
  * takes effect immediately and the sheet stays open (unlike CubeSwatchButton/
  * DecorGridButton, which close it) since browsing/comparing several variants

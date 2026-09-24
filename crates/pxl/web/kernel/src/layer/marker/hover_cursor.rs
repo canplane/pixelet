@@ -82,7 +82,7 @@ pub fn hover_cursor_step() {
     // Eraser sizes to whatever's actually hovered when there's a real object
     // under the cursor, and to the cell when it is carving terrain: a carve
     // writes AIR, and a zero material is a voxel the scan emits nothing for
-    // whatever its sub-cell bytes say (render/mesh/voxel_scan.rs), so the cell
+    // whatever its sub-cell bytes say (pxl-render mesh/voxel_scan.rs), so the cell
     // goes whole however small the tier is set. Everything else takes the tier
     // picker object placement uses.
     let preview_size = match (&hovered_object, active_tool) {

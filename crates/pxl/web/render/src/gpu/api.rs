@@ -5,7 +5,7 @@
 //! out and the host keeps at that handle's slot. Which object, made from what,
 //! drawn when, is the renderer's; the host translates each call and makes it.
 //! On the web the table is the module's imports (pxl-wasm,
-//! apps/web/src/device/gpu.ts), since a WebAssembly module reaches WebGPU no
+//! apps/web/src/kernel/render/gpu.ts), since a WebAssembly module reaches WebGPU no
 //! other way; a native host would put wgpu behind the same table.
 //!
 //! A pass's description, a bind group's entries and a sampler's filters are

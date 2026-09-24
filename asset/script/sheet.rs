@@ -1,3 +1,5 @@
+// ingest-asset/sheet.rs
+
 //! The texture pack as one image.
 //!
 //! The client's layer array is filled from a single download rather than from

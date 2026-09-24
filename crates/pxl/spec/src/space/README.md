@@ -131,8 +131,8 @@ level 0        level 1
 A level-k page holds the same record a leaf does — 512 cells a side — over
 2^k leaves a side, so its cells are 2^k units. Its key is a leaf key shifted
 down k, and a key alone does not say by how much, so a page above level 0 is
-named by a level and a key together (`LevelPage`, in the kernel's
-`layer/terrain/level.rs`). `L3_IDX` always answers the leaf question: which
+named by a level and a key together (`LevelPage`, `pxl-spec
+space/pyramid.rs`). `L3_IDX` always answers the leaf question: which
 512u square.
 
 The two ladders meet at one number. A level-k page is zoom `15 − k`, and the

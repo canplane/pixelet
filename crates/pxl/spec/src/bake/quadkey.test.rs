@@ -1,7 +1,7 @@
 // pxl-spec/bake/quadkey.test.rs
 
 use super::*;
-use crate::bake::constant::{zoom_of_level, PAGE_TOP_LEVEL};
+use crate::space::pyramid::{zoom_of_level, TOP_LEVEL};
 
 /// The page `script/smoke.ts` names and `space/xy.rs` measured in Bundang: its
 /// lanes are (11569, 3671), which is 127.10°E 37.35°N, and the zoom-15 tile
@@ -24,7 +24,7 @@ fn the_known_page_is_the_tile_it_stands_on() {
 #[test]
 fn a_coarser_page_is_named_by_a_prefix_of_the_leaf_over_it() {
     let leaf = quadkey_of(LEVEL0_ZOOM, BUNDANG).to_string();
-    for level in 1..=PAGE_TOP_LEVEL {
+    for level in 1..=TOP_LEVEL {
         let coarse = quadkey_of(zoom_of_level(level), ivec::sh(BUNDANG, -(level as i32))).to_string();
         assert_eq!(coarse.len(), (LEVEL0_ZOOM - level) as usize, "a level is its length");
         assert!(leaf.starts_with(&coarse), "level {level} {coarse} is not a prefix of {leaf}");
@@ -36,7 +36,7 @@ fn every_page_survives_the_round_trip_at_every_zoom() {
     let n = 1i64 << LEVEL0_ZOOM;
     for x in [-n / 2, -12345, -1, 0, 1, 11569, n / 2 - 1] {
         for y in [-n / 2, -7777, -1, 0, 1, 3671, n / 2 - 1] {
-            for level in 0..=PAGE_TOP_LEVEL {
+            for level in 0..=TOP_LEVEL {
                 let zoom = zoom_of_level(level);
                 let idx = ivec::sh(ivec::gather(x, y, 0), -(level as i32));
                 let key = quadkey_of(zoom, idx).to_string();

@@ -6,7 +6,7 @@
 //! (issue/20260909-cooperative-scheduler-and-task-ledger.md).
 //!
 //! Two record types, one instrument:
-//! - TaskRow — one finished unit of deferred work (a scheduler.rs
+//! - TaskRow — one finished unit of deferred work (an io/sched.rs
 //!   demand today; a CPU task later), as the TaskRecord a scheduler settles
 //!   reduced to numbers.
 //! - FrameSample — one rendered frame's gauges (pacing, GPU ask, memory, queue
@@ -137,7 +137,6 @@ const fn category_id(c: Category) -> u32 {
         Category::Terrain => const { name_index(CATEGORY_NAMES, Category::Terrain.as_str()) },
         Category::Ocean => const { name_index(CATEGORY_NAMES, Category::Ocean.as_str()) },
         Category::Poi => const { name_index(CATEGORY_NAMES, Category::Poi.as_str()) },
-        Category::PoiDetail => const { name_index(CATEGORY_NAMES, Category::PoiDetail.as_str()) },
         Category::Geocode => const { name_index(CATEGORY_NAMES, Category::Geocode.as_str()) },
         Category::GeocodeDict => const { name_index(CATEGORY_NAMES, Category::GeocodeDict.as_str()) },
         Category::Asset => const { name_index(CATEGORY_NAMES, Category::Asset.as_str()) },
@@ -198,7 +197,7 @@ impl TaskRow {
 
 pub const CENSUS_LEN: usize = CENSUS_TAGS.len();
 
-/// (draws, triangles) by the pipeline a draw names (crates/pxl/web/render/src/draw.rs), for one
+/// (draws, triangles) by the pipeline a draw names (crates/pxl/web/render/src/frame/draw.rs), for one
 /// frame's render, in CENSUS_TAGS' order.
 pub type DrawCensus = [[f64; 2]; CENSUS_LEN];
 
@@ -538,7 +537,7 @@ const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "
 #[cfg(test)]
 #[path = "record.test.rs"]
 mod test;
-const _: () = assert!(LEVELS == pxl_spec::bake::constant::PAGE_TOP_LEVEL as usize + 1, "a lane a level holds every level of the pyramid");
+const _: () = assert!(LEVELS == pxl_spec::space::pyramid::TOP_LEVEL as usize + 1, "a lane a level holds every level of the pyramid");
 
 /// The rings keep the last minute: a record older than WINDOW_MS is dropped as
 /// a new one lands, so what the ledger holds is bounded by the display's rate,

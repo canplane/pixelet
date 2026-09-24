@@ -16,6 +16,7 @@ pub mod ground;
 pub mod model;
 pub mod pack;
 pub mod place_page;
+pub mod poi_page;
 #[path = "bake/published.spec.rs"]
 pub mod published;
 pub mod quadkey;

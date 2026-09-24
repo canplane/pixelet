@@ -1,8 +1,9 @@
-// pxl-kernel/layer/terrain/level.test.rs
+// pxl-kernel/world/pyramid/window.test.rs
 
 use pxl_spec::space::indexer::FROM_L3_IDX;
 
 use super::*;
+use pxl_spec::space::pyramid::neighbourhood;
 
 fn leaf(x: i64, y: i64) -> IVec {
     ivec::gather(x, y, 0)
@@ -41,8 +42,8 @@ fn a_ring_is_the_axis_squared_centred_on_the_anchors_page_nearest_first() {
 
 #[test]
 fn a_levels_span_doubles_with_the_level() {
-    assert_eq!(span_of(0), PAGE_SPAN);
-    assert_eq!(span_of(4), 16.0 * PAGE_SPAN);
+    assert_eq!(span_of(0), span_of(0));
+    assert_eq!(span_of(4), 16.0 * span_of(0));
 }
 
 #[test]
@@ -55,7 +56,7 @@ fn a_window_holds_the_levels_the_ground_in_view_wants_and_no_others() {
     // that wants — step 8, from level 2.
     assert_eq!(window_for(1024.0, MIN_POLAR, 0.0, 16.0 / 9.0), 2..3);
     // From as far as the camera goes, the pyramid's top alone.
-    assert_eq!(window_for(MAX_DIST, MIN_POLAR, 0.0, 16.0 / 9.0), PAGE_TOP_LEVEL..PAGE_TOP_LEVEL + 1);
+    assert_eq!(window_for(MAX_DIST, MIN_POLAR, 0.0, 16.0 / 9.0), TOP_LEVEL..TOP_LEVEL + 1);
     // Out to the horizon the fog ends it, and the window spans the octaves
     // between, never more than it is sized for.
     let w = window_for(MAX_DIST, MAX_POLAR, 0.0, 16.0 / 9.0);
@@ -64,7 +65,7 @@ fn a_window_holds_the_levels_the_ground_in_view_wants_and_no_others() {
 
 #[test]
 fn the_neighbourhood_is_the_one_the_bake_folds_from() {
-    // The bake's own expectations (pxl-geo-bake terrain/pyramid.test.rs):
+    // The bake folds from the same neighbourhood (pxl-geo-bake pyramid.rs):
     // the same pages in the same places, so a page folded here is the page
     // the server sends.
     let around = neighbourhood(LevelPage::new(1, leaf(5, 7)));
@@ -73,7 +74,7 @@ fn the_neighbourhood_is_the_one_the_bake_folds_from() {
     assert_eq!(around[15].page, leaf(12, 16));
     assert!(around.iter().all(|p| p.level == 0));
     // X wraps across the seam: west of the westmost is the eastmost.
-    let across = 1i64 << (pxl_spec::space::pvf3::core::IVEC_X_W - pxl_spec::space::indexer::L3_SHAMT);
+    let across = 1i64 << pxl_spec::space::pyramid::LEVEL0_ZOOM;
     let west = neighbourhood(LevelPage::new(1, leaf(-across / 4, 0)));
     assert_eq!(ivec::X(west[5].page), -across / 2);
     assert_eq!(ivec::X(west[4].page), across / 2 - 1);

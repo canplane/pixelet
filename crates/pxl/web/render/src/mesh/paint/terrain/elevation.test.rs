@@ -2,6 +2,7 @@
 
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::cell::cube_types;
+use pxl_spec::space::pyramid::PAGE_CELLS;
 
 use super::*;
 use pxl_spec::bake::format::GROUND_CH_KEYS;
@@ -90,7 +91,7 @@ fn dense_ele_region_plain_land_is_not_recessed() {
 /// (mesh/chunk_mesher.rs).
 #[test]
 fn a_page_folded_without_its_ring_seams_under_a_cell() {
-    use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN};
+    use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
     use pxl_spec::bake::fold::fold_ele;
 
     let padded = ELE_PADDED_SPAN as usize;
@@ -121,7 +122,7 @@ fn a_page_folded_without_its_ring_seams_under_a_cell() {
     // falls inside the first sample, which is the cells within half a sample
     // of the page's edge.
     let rim = (ELE_CELL_STEP / 2.0) as i32;
-    let span = PAGE_CELL_SPAN as i32;
+    let span = PAGE_CELLS as i32;
     let (mut worst_rim, mut worst_inside) = (0i32, 0i32);
     for ty in 0..span {
         for tx in 0..span {

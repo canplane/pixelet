@@ -250,7 +250,7 @@ fn handle_tap(hovered: Pvf3) {
                 //
                 // A cell, never the size tier. A zero material is a voxel the
                 // scan emits nothing for whatever its sub-cell bytes say
-                // (render/mesh/voxel_scan.rs), so a smaller leaf would still
+                // (pxl-render mesh/voxel_scan.rs), so a smaller leaf would still
                 // take the cell whole while recording a bite nobody took — and
                 // the store is saved, so that number outlives the session.
                 None if settings_store().enable_terrain_carving => place_air(&hovered, U_PER_CELL),

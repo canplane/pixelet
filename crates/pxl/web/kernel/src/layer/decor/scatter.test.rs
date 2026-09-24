@@ -9,7 +9,7 @@ use pxl_spec::bake::pack::with_channel;
 // A whole page's lanes, because that is what a page is: PAGE_CELL_SPAN²
 // cells. A fixture of fewer rows lets an alignment vote near the last row
 // read past the lane.
-const SPAN: usize = PAGE_CELL_SPAN as usize;
+const SPAN: usize = PAGE_CELLS as usize;
 const PI: f64 = core::f64::consts::PI;
 const VOID: u32 = cube_types::common::void as u32;
 

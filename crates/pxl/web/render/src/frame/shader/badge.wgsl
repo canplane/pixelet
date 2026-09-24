@@ -3,15 +3,15 @@
 // The billboards — the POI badges and the chat bubble: an instanced quad
 // over the module's billboard sets (billboard.rs), one draw a set, drawn
 // after the world with the world's depth attached read-only and bound as
-// a texture at once, so both of anchor_occlusion.ts's questions
-// (b9e31004) are asked of this frame's depth.
+// a texture at once, so both occlusion questions are asked of this
+// frame's depth.
 // Whether the labelled point is visible is asked in the vertex shader, at
 // five points up the badge from just above the anchor, and answered for
 // the whole badge; whether something stands between the camera and the
 // badge itself is the depth test's, against the depth of an upright twin
 // of the quad written as the fragment's.
 
-// anchor_occlusion.ts's tolerances and sampling: a unit of slack plus a
+// The tolerances and sampling: a unit of slack plus a
 // cell and a half of the tier's cell at the badge's distance, five samples
 // up the badge from two units above the anchor, hidden when three are
 // behind the world.
@@ -79,18 +79,22 @@ fn behind_world(clip: vec4f) -> bool {
 
 @vertex
 fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
-  let k = ii * 10u;
+  // BILLBOARD_FLOATS (kernel billboard/field.rs) floats an instance.
+  let k = ii * 11u;
   let anchor = on_globe_of(vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + badge.translation, badge.planet, badge.globe);
   let size_px = vec2f(instances[k + 3u], instances[k + 4u]);
   let rect = vec4f(instances[k + 5u], instances[k + 6u], instances[k + 7u], instances[k + 8u]);
   let frac = instances[k + 9u];
+  // The block the badge marks, in level-0 cells: its fade reaches as far as
+  // the level that block is drawn at (billboard/distance_fade.rs).
+  let unit = instances[k + 10u];
   let corners = array<vec2f, 4>(vec2f(-0.5, -0.5), vec2f(0.5, -0.5), vec2f(-0.5, 0.5), vec2f(0.5, 0.5));
   let q = corners[vi];
 
   let anchor_view = (badge.view * vec4f(anchor, 1.0)).xyz;
   let dist = length(anchor_view);
   let depth = max(-anchor_view.z, 1e-3);
-  let fade = 1.0 - smoothstep(badge.fade_start, badge.fade_end, dist);
+  let fade = 1.0 - smoothstep(badge.fade_start * unit, badge.fade_end * unit, dist);
   let size = size_px * depth / badge.px_k * fade;
   let drop = size.y * (frac - 0.5);
   // The sprite anchor is a screen offset, independent of camera tilt.

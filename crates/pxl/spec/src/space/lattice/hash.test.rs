@@ -1,6 +1,7 @@
 // pxl-spec/space/lattice/hash.test.rs
-// (no pair: the hashes are tested beside the spatial hash, and this holds
-// them to the TypeScript over signed addresses)
+
+// The hashes are tested beside the spatial hash; this holds them to the
+// TypeScript's records over signed addresses.
 
 use super::*;
 use xpute_core::golden::Golden;

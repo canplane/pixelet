@@ -13,8 +13,9 @@
 
 use pxl_render::mesh::volume::{unpack_sub_cell_fraction, MaterialClass, SUB_CELL_NONE};
 use pxl_render::mesh::voxel_scan::{BandView, ColumnRuns};
-use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, U_PER_CELL};
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pyramid::CHUNK_CELLS;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::vec3::Vec3;
 
@@ -23,7 +24,7 @@ use crate::world::chunk::node::World;
 use crate::world::chunk::table::Scheduler;
 
 /// A chunk's side, in units.
-const CHUNK_W: f64 = CHUNK_CELL_SPAN as f64 * U_PER_CELL;
+const CHUNK_W: f64 = CHUNK_CELLS as f64 * U_PER_CELL;
 /// A hover ray crosses at most a few chunks at the interact radius.
 const MAX_ENTRIES: usize = 4;
 /// Hard budget: at 1.25 MiB each, eight direct bands are about 10 MiB.
@@ -268,7 +269,7 @@ impl Raycast {
         let (bands, column) = (&self.bands, &mut self.column);
         let (ox, oy) = (o[0] - chunk_ox, o[1] - chunk_oy);
         let (dx, dy) = (d[0], d[1]);
-        let span = CHUNK_CELL_SPAN as f64;
+        let span = CHUNK_CELLS as f64;
 
         let test_cell = |column: &mut ColumnRuns, cx: u32, cy: u32| -> Option<Hit> {
             let n = column.walk(bands, cx, cy);

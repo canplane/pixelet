@@ -16,15 +16,16 @@
 //! - 1 [cell] = 1 [texel]
 //! - Elevation stored in the i16 lane is in [cell] units.
 
-use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN};
+use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use pxl_spec::bake::format::{Ground, GroundChannelKey};
 use pxl_spec::bake::ground::{recess, shown_ground};
 use pxl_spec::bake::pack::{channel_of, GroundCell};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, PAGE_CELLS};
 use xpute_core::math::scalar::lerp;
 
 use xpute_core::math::scalar::round;
 
-const ELE_CELL_STEP: f64 = PAGE_CELL_SPAN as f64 / PAGE_ELE_SPAN as f64;
+const ELE_CELL_STEP: f64 = PAGE_CELLS as f64 / PAGE_ELE_SPAN as f64;
 
 /// Bilinear elevation sample from the padded elevation tile raster.
 ///
@@ -161,12 +162,12 @@ pub fn ground_ele(page_ele: &[i16], ground: Option<GroundLanes>, idx: usize, tx:
     ground.map_or(ele, |g| ele - g.recess(idx))
 }
 
-/// Unpacks a dense (CHUNK_CELL_SPAN x CHUNK_CELL_SPAN) elevation chunk from
+/// Unpacks a dense (CHUNK_CELLS x CHUNK_CELLS) elevation chunk from
 /// the coarse heightmap. Samples are taken at cell centers (0.5 offset) to
 /// match DB-side resampling.
 pub fn dense_ele(page_ele: &[i16], tx0: u32, ty0: u32, ground: Option<&Ground>) -> Vec<i16> {
-    let mut out = vec![0; (CHUNK_CELL_SPAN * CHUNK_CELL_SPAN) as usize];
-    dense_ele_region(page_ele, tx0, ty0, CHUNK_CELL_SPAN, ground, &mut out);
+    let mut out = vec![0; (CHUNK_CELLS * CHUNK_CELLS) as usize];
+    dense_ele_region(page_ele, tx0, ty0, CHUNK_CELLS, ground, &mut out);
     out
 }
 

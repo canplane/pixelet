@@ -348,7 +348,7 @@ export default defineConfig(({ mode }) => {
   const remote = env.VITE_DEV_SOURCE !== "local";
 
   // Injected as __PUBLISHED_TILES__: route.ts builds every tile path from
-  // it, config.ts reads it for what a 404 means.
+  // it, config/deploy.ts reads it for what a 404 means.
   const published = mode === "production" || remote;
 
   const remoteOrigin = remote ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault) : "";

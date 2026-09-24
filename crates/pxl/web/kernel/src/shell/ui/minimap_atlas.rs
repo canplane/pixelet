@@ -9,7 +9,8 @@
 //! crosses a page, not on every pan tick — the pan is `minimap_pan_px`'s.
 
 use pxl_render::mesh::paint::palette::shader_meta::rgb255;
-use pxl_spec::bake::constant::PAGE_CELL_SPAN;
+use pxl_spec::space::pyramid::PAGE_CELLS;
+
 use pxl_spec::bake::format::GROUND_CH_KEYS;
 use pxl_spec::cell::{cube_colors, cube_types};
 use pxl_spec::space::indexer::{L3_CENTER, L3_IDX, L3_RANGE};
@@ -19,9 +20,10 @@ use xpute_core::math::scalar::clamp;
 
 use crate::control::camera::config::camera_cfg::view::DEFAULT_DIST;
 use crate::global::Global;
-use crate::layer::terrain::level::LevelPage;
-use crate::layer::terrain::store::{level_pages, tile_store};
 use crate::shell::map_store::map_store;
+use crate::world::pyramid::Layer as _;
+use pxl_spec::bake::format::Terrain;
+use pxl_spec::space::pyramid::LevelPage;
 
 /// The minimap's scale and reach, in units: properties of the minimap, not of
 /// how wide a page is. The atlas is a whole number of leaf pages around the
@@ -102,14 +104,14 @@ pub fn minimap_atlas() -> Option<&'static MinimapAtlas> {
         baked_for: None,
     });
     let map_center = map_store().map_center?;
-    let key = (level_pages(ATLAS_LEVEL).revision(), L3_IDX(map_center.i));
+    let key = (Terrain::pyramid().level(ATLAS_LEVEL).revision(), L3_IDX(map_center.i));
     if a.baked_for != Some(key) {
         a.baked_for = Some(key);
         let origin = Pvf3 { i: L3_CENTER(map_center.i), f: 0 };
         let mut pixels = vec![0u8; (ATLAS_PX * ATLAS_PX * 4) as usize];
         let (ox, oy) = (ivec::X(origin.i), ivec::Y(origin.i));
         let half = ATLAS_PX as i64 / 2;
-        let cells = PAGE_CELL_SPAN as i64;
+        let cells = PAGE_CELLS as i64;
         let shift = U_PER_MINIMAP_PX.trailing_zeros();
         for py in 0..ATLAS_PX as i64 {
             // Atlas rows run down for a north-up image, and world Y runs up:
@@ -119,10 +121,10 @@ pub fn minimap_atlas() -> Option<&'static MinimapAtlas> {
                 let cx = (ox >> shift) + (px - half);
                 let page = LevelPage::new(ATLAS_LEVEL, ivec::gather(cx.div_euclid(cells), cy.div_euclid(cells), 0));
                 let mut color = a.colors.base;
-                if let Some(tile) = tile_store().get_page(page) {
+                if let Some(tile) = Terrain::pyramid().get(page) {
                     let off = (cy.rem_euclid(cells) * cells + cx.rem_euclid(cells)) as usize;
                     for (slot, ch) in GROUND_CH_KEYS.iter().enumerate() {
-                        let v = tile.terrain.ground.channel(off, *ch);
+                        let v = tile.ground.channel(off, *ch);
                         if let Some(c) = (v != 0).then(|| a.colors.by_channel[slot][v as usize]).flatten() {
                             color = c;
                         }

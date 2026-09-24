@@ -33,60 +33,36 @@
 //! The value stays in units at every level: in the level's own cells the
 //! rounding would eat that fraction.
 
+use crate::space::pyramid::PAGE_CELLS;
 use xpute_core::math::scalar::round;
 
-use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN};
+use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::format::{Ground, Terrain, GROUND_CH_KEYS};
 use super::pack::{channel_of, with_channel, GroundCell};
+use crate::space::pyramid::{child_block, neighbourhood, Folds, LevelPage, CHILDREN};
 
-/// Which child of the 2×2 a tie takes when folding into `level`.
+/// The value that fills more than half of a 2×2 block, or of a 2×2×2 one,
+/// folding into `level`; when none does, or two fill half each, the tie
+/// child's. Empty is a value like any other, so a cube filling an eighth of
+/// its parent goes at the first fold and a wall keeps whole cells. `v[dx +
+/// 2·dy + 4·dz]` is the child at (dx, dy, dz), and `level` is the parent's,
+/// which may be below the cell: an object's finest entries are an eighth of
+/// one.
 ///
-/// Always the same child would put every tie's sample at the block's south-west
-/// corner, which shifts the whole map half a coarse cell toward the origin and
-/// accumulates level by level. Alternating the corner keeps the drift bounded
-/// by a sixth of a cell.
-fn tie_child(level: u32) -> usize {
-    if level % 2 == 1 {
-        0
-    } else {
-        3
-    }
-}
-
-/// The type that fills at least half of four, or `tie` when none does or two
-/// fill half each.
-fn majority(v: [u8; 4], tie: u8) -> u8 {
-    let count = |x: u8| v.iter().filter(|&&y| y == x).count();
+/// Always the same tie child would put every tie's sample at the block's
+/// south-west(-lowest) corner, which shifts the whole map half a coarse cell
+/// toward the origin and accumulates level by level. Alternating it with the
+/// opposite corner keeps the drift bounded by a sixth of a cell on every
+/// axis.
+pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], level: i32) -> T {
+    let tie = v[if level.rem_euclid(2) == 1 { 0 } else { N - 1 }];
+    let count = |x: T| v.iter().filter(|&&y| y == x).count();
     let mut half = None;
     for &x in &v {
         match count(x) {
-            n if n >= 3 => return x,
-            2 if half.is_some_and(|h| h != x) => return tie,
-            2 => half = Some(x),
-            _ => {}
-        }
-    }
-    half.unwrap_or(tie)
-}
-
-/// The same rule one dimension up, for what is a volume rather than a height
-/// field: the value that fills at least half of eight, or the tie child's
-/// when none does or two fill half each. Empty is a value like any other, so
-/// a cube filling an eighth of its parent goes at the first fold and a wall
-/// keeps whole cells. `level` is the parent's, and may be below the cell: an
-/// object's finest entries are an eighth of one. `v[dx + 2·dy + 4·dz]` is the
-/// child at (dx, dy, dz).
-pub fn majority8(v: [u32; 8], level: i32) -> u32 {
-    // The 2×2 alternation, on the diagonal a level up: the south-west-lowest
-    // corner and its opposite, so the drift stays bounded on every axis.
-    let tie = v[if level.rem_euclid(2) == 1 { 0 } else { 7 }];
-    let count = |x: u32| v.iter().filter(|&&y| y == x).count();
-    let mut half = None;
-    for &x in &v {
-        match count(x) {
-            n if n >= 5 => return x,
-            4 if half.is_some_and(|h| h != x) => return tie,
-            4 => half = Some(x),
+            n if 2 * n > N => return x,
+            n if 2 * n == N && half.is_some_and(|h| h != x) => return tie,
+            n if 2 * n == N => half = Some(x),
             _ => {}
         }
     }
@@ -100,25 +76,20 @@ pub fn majority8(v: [u32; 8], level: i32) -> u32 {
 /// Read straight out of the packed cells and written straight back, a field
 /// at a time. A page is one array and there are no planes to take apart.
 pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
-    let span = PAGE_CELL_SPAN as usize;
-    let half = span / 2;
-    let tie = tie_child(level);
-    let mut out = vec![0 as GroundCell; span * span];
-    for py in 0..span {
-        let (dy, cy) = (py / half, (2 * py) % span);
-        for px in 0..span {
-            let (dx, cx) = (px / half, (2 * px) % span);
-            let c = &children[dx + 2 * dy].cells;
-            let at = cy * span + cx;
+    let span = PAGE_CELLS as usize;
+    let out = (0..(span * span) as u32)
+        .map(|index| {
+            let (q, first) = child_block(index);
+            let (c, at) = (&children[q].cells, first as usize);
             let four = [c[at], c[at + 1], c[at + span], c[at + span + 1]];
-            let mut cell = 0;
+            let mut cell = 0 as GroundCell;
             for key in GROUND_CH_KEYS {
                 let v = four.map(|f| channel_of(f, key));
-                cell = with_channel(cell, key, majority(v, v[tie]));
+                cell = with_channel(cell, key, majority(v, level as i32));
             }
-            out[py * span + px] = cell;
-        }
-    }
+            cell
+        })
+        .collect::<Vec<_>>();
     Ground { cells: out.into() }
 }
 
@@ -173,6 +144,19 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
     }
 }
 
+/// Terrain reads the ring around the four children as well: a parent's
+/// elevation pads two samples past its rim, which lie in its children's
+/// neighbours (`fold_ele`).
+impl Folds for Terrain {
+    fn sources(p: LevelPage) -> Vec<LevelPage> {
+        neighbourhood(p).to_vec()
+    }
+
+    fn fold_page<'a>(p: LevelPage, held: impl Fn(LevelPage) -> Option<&'a Self>) -> Option<Self> {
+        fold_terrain_held(neighbourhood(p).map(held), p.level)
+    }
+}
+
 /// A parent page from the 4×4 pages around its four children, indexed as
 /// `fold_ele` takes them. Ground reads only the middle four; elevation reads
 /// all sixteen.
@@ -189,8 +173,8 @@ pub fn fold_terrain(around: [&Terrain; 16], level: u32) -> Terrain {
 /// level it is leaving, and a level is folded from four pages of it, not
 /// from the sixteen a bake has lying around.
 pub fn fold_terrain_held(around: [Option<&Terrain>; 16], level: u32) -> Option<Terrain> {
-    let child = |k: usize| around[k].map(|t| &t.ground);
-    let ground = fold_ground([child(5)?, child(6)?, child(9)?, child(10)?], level);
+    let child = |q: usize| around[CHILDREN[q]].map(|t| &t.ground);
+    let ground = fold_ground([child(0)?, child(1)?, child(2)?, child(3)?], level);
     let mut ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
     Some(Terrain { ground, ele: ele.into() })

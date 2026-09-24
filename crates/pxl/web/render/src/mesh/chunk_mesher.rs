@@ -99,7 +99,7 @@ const BAKE_BOXES_PER_STEP: usize = 512;
 /// pack is for a leaf's cells, where a top and a side mean something. The
 /// corner and the width shrink to a byte an axis because of how the ladder
 /// draws: a level-`k` chunk is never drawn nearer than `192·2^k`
-/// (pxl-render look/lod.rs, kernel layer/terrain/level.rs), where a finer
+/// (pxl-render look/lod.rs, kernel world/pyramid/window.rs), where a finer
 /// ring covers it, so its cell is between one and two TARGET_CELL_PX however
 /// the camera moves. An eighth of that cell is at most one and a half pixels
 /// and its mesh is at most 32 cells across, so a cell index and an eighth

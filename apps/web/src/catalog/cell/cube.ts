@@ -24,7 +24,7 @@
 import { buildColorsFromJson, type Swatch } from "./type.ts";
 
 // One shared palette module for every channel below (2026-09-06) — mirrors
-// cube_types' own merge of terrain.ts + objects.ts into one file. A plain
+// cube_types' own merge of the terrain and object types into one file. A plain
 // .ts export, not a real .json file imported via `with { type: "json" }`:
 // see that module's own top comment for why (a real, reproduced
 // @deno/vite-plugin limitation, not a style preference).
@@ -35,7 +35,7 @@ import { cube_types } from "./cube_type.spec.ts";
 export { cube_types };
 
 // ============================================================================
-// Color Definitions — the palette's colour column (see ./color.ts)
+// Color Definitions — the palette's colour column (see ./color.spec.ts)
 // ============================================================================
 
 /** VOID/UNKNOWN's own shared colors, seeded into every raster channel below

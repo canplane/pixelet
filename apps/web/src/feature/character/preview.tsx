@@ -5,8 +5,8 @@
  * clip while slowly spinning in place, so a pick can actually be seen before
  * committing to it. The canvas is handed to the kernel as a case; the actor,
  * its model, its spin and the drawing are the kernel's
- * (crates/pxl/kernel/src/layer/character/preview.rs,
- * crates/pxl/render/src/gpu/renderer.rs).
+ * (crates/pxl/web/kernel/src/layer/character/preview.rs,
+ * crates/pxl/web/render/src/gpu/renderer.rs).
  */
 
 import { useEffect, useRef } from "react";

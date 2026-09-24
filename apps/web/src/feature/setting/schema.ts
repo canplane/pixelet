@@ -51,7 +51,7 @@ export type ChoiceSetting<T extends string = string> = Common & { kind: "choice"
 export type TextSetting = Common & { kind: "text"; default: string };
 export type Setting = ToggleSetting | ChoiceSetting | TextSetting;
 
-/** What terrain does to the camera (camera/terrain_gate.ts); schema.json says each. */
+/** What terrain does to the camera (camera/terrain_gate.rs); schema.json says each. */
 export const CAMERA_TERRAIN_MODES = MODES;
 export type CameraTerrainMode = (typeof CAMERA_TERRAIN_MODES)[number];
 

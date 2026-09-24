@@ -2,7 +2,7 @@
 
 //! The object layer a level up: a coarse cell from the 2×2×2 under it, by
 //! the rule the terrain folds by one dimension down (pxl-spec bake/fold.rs's
-//! `majority8`) — the state that fills at least half of eight, empty counted
+//! `majority`) — the state that fills at least half of eight, empty counted
 //! as a state, so a lone cube goes at the first fold and a wall keeps whole
 //! cells. A store's entries are cubes from an eighth of a cell up, each at
 //! its own level, and they are folded from the finest up one level at a
@@ -16,7 +16,8 @@
 use std::collections::HashMap;
 
 use pxl_spec::bake::constant::{BAND_CELLS, CELL_STEPS, MIN_LEVEL, POS_BITS, POS_MASK};
-use pxl_spec::bake::fold::majority8;
+use pxl_spec::bake::fold::majority;
+use pxl_spec::space::pyramid::{parent_of, slot_of};
 
 use super::adapter::{Entries, Painter};
 
@@ -76,12 +77,10 @@ pub fn fold_columns(painter: &Painter, columns: &[Column], level: u32, hide: Opt
         }
         let mut parents: HashMap<[i64; 3], [u32; 8]> = HashMap::with_capacity(cur.len());
         for (c, state) in cur.drain() {
-            let p = c.map(|v| v.div_euclid(2));
-            let child = (c[0].rem_euclid(2) + 2 * c[1].rem_euclid(2) + 4 * c[2].rem_euclid(2)) as usize;
-            parents.entry(p).or_insert([0; 8])[child] = state;
+            parents.entry(parent_of(c)).or_insert([0; 8])[slot_of(c)] = state;
         }
         cur.extend(parents.into_iter().filter_map(|(p, v)| {
-            let m = majority8(v, lv + 1);
+            let m = majority(v, lv + 1);
             (m != 0).then_some((p, m))
         }));
     }

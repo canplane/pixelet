@@ -102,7 +102,7 @@ impl GroundChannelKey {
         None
     }
 
-    /// The same, where a const is what the caller needs: `bake/cell.rs` finds
+    /// The same, where a const is what the caller needs: `bake/pack.rs` finds
     /// a channel's field by it.
     pub const fn name(self) -> &'static str {
         match self {
@@ -184,7 +184,7 @@ const _: () = {
 /// nothing between a page being baked and the ground being drawn from it
 /// converts a representation
 /// (issue/20260923-a-ground-cell-is-fourteen-bits.md).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Ground {
     pub cells: std::borrow::Cow<'static, [GroundCell]>,
 }
@@ -214,7 +214,7 @@ pub struct CellConfig {
 // ---- Page ----
 
 /// Static terrain payload carried by one L3 page.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Terrain {
     pub ground: Ground,
     pub ele: std::borrow::Cow<'static, [i16]>,

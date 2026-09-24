@@ -11,16 +11,16 @@
 //! writes as one run a column without a volume.
 //!
 //! The floor is rounded down to a whole band (`min_ele - TERRAIN_Z_MARGIN`,
-//! floored to CHUNK_CELL_SPAN) because a volume allocates in whole bands: a floor
+//! floored to CHUNK_CELLS) because a volume allocates in whole bands: a floor
 //! anywhere inside one would open a band below it for the few voxels that
 //! cross. A cell sits its type's recess below its sampled height, so a
 //! shoreline reads as water meeting land rather than as two surfaces at the
 //! same level.
 
-use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN};
 use pxl_spec::bake::format::GROUND_CH_KEYS;
 use pxl_spec::bake::ground::{channel_bit, ChannelMask};
 use pxl_spec::bake::pack::{unpack, GroundCell};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, PAGE_CELLS};
 
 use crate::mesh::paint::terrain::elevation::{ground_ele, GroundLanes};
 use crate::mesh::volume::{Volumes, Voxel, NO_LAYER};
@@ -120,7 +120,7 @@ impl ChunkSample {
     pub fn read(&mut self, page: &PageView, tables: &Materials, tx0: u32, ty0: u32, hidden: ChannelMask) {
         let skip = GROUND_CH_KEYS.map(|k| hidden & channel_bit(k) != 0);
         let mut min_ele = i32::MAX;
-        let last = PAGE_CELL_SPAN as i32 - 1;
+        let last = PAGE_CELLS as i32 - 1;
         for py in 0..COL_SPAN {
             for px in 0..COL_SPAN {
                 let i = (py * COL_SPAN + px) as usize;
@@ -132,7 +132,7 @@ impl ChunkSample {
                 // page keeps the height — which is all the face mask reads
                 // — and takes the base material, which nothing draws.
                 let on_page = (0..=last).contains(&tx) && (0..=last).contains(&ty);
-                let page_idx = (ty.clamp(0, last) * PAGE_CELL_SPAN as i32 + tx.clamp(0, last)) as usize;
+                let page_idx = (ty.clamp(0, last) * PAGE_CELLS as i32 + tx.clamp(0, last)) as usize;
                 let types = if on_page { unpack(page.cells[page_idx]) } else { [VOID; 4] };
 
                 // The material: the base, then each channel in order.
@@ -166,15 +166,15 @@ impl ChunkSample {
             }
         }
         // One band-aligned floor shared by the whole chunk, under every peak.
-        self.floor = (min_ele - TERRAIN_Z_MARGIN).div_euclid(CHUNK_CELL_SPAN as i32) * CHUNK_CELL_SPAN as i32;
+        self.floor = (min_ele - TERRAIN_Z_MARGIN).div_euclid(CHUNK_CELLS as i32) * CHUNK_CELLS as i32;
     }
 
     /// Paints the chunk's own columns into `volume`, floor to top. The
     /// apron's are not painted: the volume is the chunk's, and they exist
     /// only as columns of the run set.
     pub fn paint(&self, volumes: &mut Volumes, volume: usize) -> bool {
-        for cy in 0..CHUNK_CELL_SPAN {
-            for cx in 0..CHUNK_CELL_SPAN {
+        for cy in 0..CHUNK_CELLS {
+            for cx in 0..CHUNK_CELLS {
                 let i = apron_col(cx, cy) as usize;
                 let v = Voxel {
                     material: self.material[i],

@@ -145,7 +145,7 @@ export interface LedgerReport {
   build: { number: string; id: string; time: string };
   frames: FrameSummary | null;
   /** The summary's side sections, a field a number, as ledger.json names them. */
-  sections: Record<"counters" | "atlas" | "retain" | "fetch" | "poi", Record<string, f64>>;
+  sections: Record<"counters" | "atlas" | "retain" | "fetch", Record<string, f64>>;
   steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
   peak: Record<string, f64> | null;
   taskN: u32;
@@ -297,7 +297,6 @@ export function ledgerReportRead(): LedgerReport {
       atlas: section(s, SUMMARY.atlas),
       retain: section(s, SUMMARY.retain),
       fetch: section(s, SUMMARY.fetch),
-      poi: section(s, SUMMARY.poi),
     },
     steps,
     peak: peak.present === 0 ? null : Object.fromEntries(Object.entries(peak).filter(([k]) => k !== "present")),

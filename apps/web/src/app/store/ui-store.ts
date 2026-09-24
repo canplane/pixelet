@@ -13,8 +13,8 @@ export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
 
 // ts (Date.now() at append) lets ChatBubble derive its own remaining show
 // time from wall-clock, not from when its own component happened to mount —
-// without it, a character swap (Walker remounts under a new variant.key,
-// see companion.tsx) resets ChatBubble's local state and it has no way to
+// without it, a character swap (Walker remounts under a new variant.key)
+// resets ChatBubble's local state and it has no way to
 // tell an old, already-dismissed line apart from a brand new one.
 export interface ChatLine {
   id: number;

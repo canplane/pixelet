@@ -18,9 +18,8 @@ use crate::global::Global;
 use crate::host::now;
 use crate::io::sched::{counts, credits};
 use crate::kernel::kernel;
-use crate::layer::billboard::frustum_budget::billboard_dropped;
 use crate::layer::billboard::sheet::billboard_sheet;
-use crate::sched::ledger::block::{AtlasBlock, CountersBlock, FetchBlock, FramesBlock, PoiBlock, RecBlock, RetainBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
+use crate::sched::ledger::block::{AtlasBlock, CountersBlock, FetchBlock, FramesBlock, RecBlock, RetainBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
 use crate::sched::ledger::log::window_counters;
 use crate::sched::ledger::record::{fixed_lane, ledger_frame_peak, ledger_frames_since, ledger_recording_state, ledger_tasks_since, name_id, put, FrameSample, TaskRow, FRAME_LIMIT, TASK_LIMIT};
 use crate::sched::ledger::spec::{LIMITS, OUTCOME_NAMES, STEP_NAMES, SUMMARY, TASK_PHASE_NAMES};
@@ -279,20 +278,6 @@ fn side(out: &mut [f64]) {
             queued: queued as f64,
             running: running as f64,
             credits: credits() as f64,
-        },
-    );
-
-    let poi = crate::layer::poi::store::store();
-    put(
-        out,
-        SUMMARY::poi::AT,
-        &PoiBlock {
-            resident_nodes: poi.node_count() as f64,
-            resident_bytes: poi.bytes() as f64,
-            candidates: poi.cut.len() as f64,
-            visible: crate::layer::poi::placement::visible() as f64,
-            pending: poi.pending_count() as f64,
-            hidden: billboard_dropped() as f64,
         },
     );
 

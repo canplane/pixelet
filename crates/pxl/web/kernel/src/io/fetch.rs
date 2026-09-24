@@ -32,11 +32,13 @@ use crate::io::demand::{Category, Phases};
 use crate::io::policy;
 use crate::io::sched::{attempt_of, settle};
 use crate::layer::geocode::{repository as geocode_repository, store as geocode_store};
-use crate::layer::poi::store as poi_store;
-use crate::layer::terrain::level::LevelPage;
-use crate::layer::terrain::tile_repository;
+use crate::layer::terrain::page::{adopt_ocean, OCEAN_KEY};
 use crate::sched::ledger::record::{Failure, Outcome};
 use crate::world::change::world_edge;
+use crate::world::pyramid::{Layer, PageName};
+use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::poi_page::PoiPage;
+use pxl_spec::space::pyramid::LevelPage;
 
 /// A started attempt's object, named inside its bake — what is written where
 /// the read is asked for. Which bake is `Category::bake`, and the two
@@ -47,11 +49,10 @@ impl fmt::Display for DemandName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let key = self;
         match key.0 {
-            Category::Terrain => write!(f, "{}", tile_repository::TileName(LevelPage::of_subject(key.1))),
+            Category::Terrain => write!(f, "{}", PageName(LevelPage::of_subject(key.1))),
             // The one tile the stream has, at the name the bake gives it.
-            Category::Ocean => write!(f, "{}", tile_repository::OCEAN_KEY),
-            Category::PoiDetail => f.write_str(&crate::layer::poi::detail::name(key.1)),
-            Category::Poi => f.write_str(&pxl_spec::poi::xy::name(key.1)),
+            Category::Ocean => f.write_str(OCEAN_KEY),
+            Category::Poi => write!(f, "{}", PageName(LevelPage::of_subject(key.1))),
             Category::Geocode => write!(f, "{}", geocode_repository::group_name(key.1)),
             // The one packet the stream has, at the name the bake gives it.
             Category::GeocodeDict => write!(f, "{}", geocode_repository::dict_name()),
@@ -145,15 +146,6 @@ pub async fn fetch_task() {
 }
 
 fn fetch_arrived(key: u64, outcome: u32, body: (u32, u32), fail: u32, detail: u32, net_ms: f64) {
-    if attempt_of(key).is_some_and(|(c, _)| match c {
-        Category::Poi => body.1 as usize > pxl_spec::poi::wire::MAX_PACKET_BYTES,
-        Category::PoiDetail => body.1 as usize > pxl_spec::poi::detail::MAX_PACKET_BYTES,
-        _ => false,
-    }) {
-        body_read(body.0, &mut []);
-        settle(key, Outcome::Error, None, Failure { fail: FetchFail::Decode, detail: 0 }, policy::retry_after(Outcome::Error));
-        return;
-    }
     let (outcome, fail, block) = match receive(body) {
         Ok(block) => (outcome, fail, block),
         Err(no_room) => (2, no_room as u32, None),
@@ -212,8 +204,8 @@ fn fetch_fail_of(fail: u32) -> FetchFail {
 /// their absence is a fault.
 fn absent(category: Category, subject: u64) -> Result<(), FetchFail> {
     match category {
-        Category::Terrain => tile_repository::ocean_page(LevelPage::of_subject(subject)),
-        Category::Poi | Category::PoiDetail => return Err(FetchFail::Refused),
+        Category::Terrain => Terrain::absent(LevelPage::of_subject(subject)),
+        Category::Poi => PoiPage::absent(LevelPage::of_subject(subject)),
         Category::Geocode => geocode_store::set_group(subject, None),
         // A bake with no dictionary is one whose groups name nothing: an
         // answer, so the demand is not made again.
@@ -233,25 +225,20 @@ fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Ph
     let Some(b) = block else { return Err(FetchFail::Decode) };
     match category {
         Category::Terrain => {
-            let result = tile_repository::adopt_terrain(LevelPage::of_subject(subject), view(b), phases);
+            let result = Terrain::pyramid().adopt(LevelPage::of_subject(subject), view(b), phases);
             release(block);
             result
         }
         Category::Ocean => {
-            let result = tile_repository::adopt_ocean(view(b));
+            let result = adopt_ocean(view(b));
             release(block);
             result
         }
         // SAFETY of each `open_*` below: the block is the heap's, given for
         // this body alone; the page or packet keeps it and the store releases
         // it with them.
-        Category::PoiDetail => {
-            let result = crate::layer::poi::detail::adopt(subject, view(b)).map_err(|_| FetchFail::Decode);
-            release(block);
-            result
-        }
         Category::Poi => {
-            let result = poi_store::adopt(subject, view(b)).map_err(|_| FetchFail::Decode);
+            let result = PoiPage::pyramid().adopt(LevelPage::of_subject(subject), view(b), phases);
             release(block);
             result
         }

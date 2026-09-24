@@ -47,9 +47,9 @@ export const cellColors = {
 } as const;
 
 // =============================================================================
-// Object-layer codec — cube.ts/decor.ts are pure data (their own top doc
+// Object-layer codec — cube.ts and decor.spec.ts are pure data (their own top doc
 // comments); the actual encode/decode logic for their shared sparse-tree
-// storage (object/store.ts, apps/web) lives here instead, the one place
+// storage (pxl-kernel layer/object/store.rs) lives here instead, the one place
 // that already aggregates every cell-definition module together.
 // =============================================================================
 

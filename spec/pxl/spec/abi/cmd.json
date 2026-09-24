@@ -1,6 +1,6 @@
 {
   "doc": [
-    "The shell's and the kernel's commands, by number (@xpute/core/abi/cmd.spec.ts:",
+    "The shell's and the kernel's commands, by number (@xpute/core/abi/cmd.ts:",
     "`major << 8 | minor`), and the packet each carries — an XTP branch whose",
     "children are listed in order. A command with no children carries no packet.",
     "",
@@ -167,7 +167,7 @@
           "name": "WORLD_ACTION",
           "value": 6929,
           "doc": [
-            "[action str (JSON, app/shell.rs)] — the UI's action; the host rings the doorbell for it at once,",
+            "[action str (JSON, shell/shell.rs)] — the UI's action; the host rings the doorbell for it at once,",
             "so what it asks of the host is heard before the call returns"
           ]
         },
@@ -327,7 +327,7 @@
           "name": "WORLD_SNAPSHOT",
           "value": 6933,
           "doc": [
-            "[at u32, len u32] — app/shell.rs's snapshot, when it changed: UTF-8",
+            "[at u32, len u32] — shell/shell.rs's snapshot, when it changed: UTF-8",
             "past a ring frame, so it is a block the kernel holds, valid until the",
             "next snapshot"
           ]

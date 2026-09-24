@@ -23,7 +23,7 @@ use pxl_spec::bake::constant::{OBJECT_LAYOUT, U_PER_CELL};
 use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
-use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L2_SHAMT, L3_IDX};
+use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3_IDX};
 use pxl_spec::space::pvf3::fvec::{self, FVec};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
@@ -83,7 +83,7 @@ pub type ObjectAir = ObjectLayerEntry;
 /// Anything a placement/erase/selection query should actually treat as "a
 /// real thing occupying this slot" — a solid color cube or a decor object
 /// alike, just never `EntryKind::Air` (that's a virtual erase-marker, not a
-/// placed thing). collision.rs/geometry.rs/camera/ray.rs only ever touch the
+/// placed thing). collision.rs, geometry.rs and camera/ray.rs only ever touch the
 /// shared fields (i/f/size/at).
 pub type OccupiedEntry = ObjectLayerEntry;
 
@@ -108,7 +108,7 @@ fn storage_key() -> String {
 // coordinate shifted to the finest level — and read its lanes back.
 
 /// Cells along one side of a chunk, and of a band.
-const CHUNK_CELLS: i64 = 1 << L2_SHAMT;
+const CHUNK_CELLS: i64 = pxl_spec::space::pyramid::CHUNK_CELLS as i64;
 const BAND_STEP_MASK: i64 = CELL_STEPS as i64 * CHUNK_CELLS - 1;
 
 fn cell_size_fp() -> i64 {
@@ -162,7 +162,7 @@ pub fn object_col_idx_of(page_idx: IVec, page_off: IVec) -> IVec {
 }
 
 fn band_z_of(iz: i64) -> i32 {
-    floor_div(iz, CHUNK_CELLS) as i32
+    floor_div(iz, BAND_CELLS as i64) as i32
 }
 
 /// A coordinate as the kernel keys it: its column, band, and position within
@@ -238,15 +238,6 @@ fn local_offset(x: u32, y: u32, z: u32) -> Pvf3 {
 // `pos` packs the leaf's band-local position in finest-tier steps and its
 // level above the finest; the kernel's `unpack_pos` reads it back.
 
-/// One finest-tier step, and one band's height, in world units.
-fn step_units() -> f64 {
-    2f64.powi(OBJECT_LAYOUT.min)
-}
-
-fn band_units() -> f64 {
-    CHUNK_CELLS as f64 * 2f64.powi(OBJECT_LAYOUT.max)
-}
-
 /// The one entry that is not stored — the eraser's carve preview.
 #[derive(Clone, Debug)]
 struct Fixed {
@@ -293,9 +284,9 @@ impl EntryCursor {
         self.band_idx = band_idx;
         self.pos = pos;
         (self.x, self.y, self.z, self.level) = unpack_pos(pos);
-        self.lx = self.x as f64 * step_units();
-        self.ly = self.y as f64 * step_units();
-        self.lz = band_idx as f64 * band_units() + self.z as f64 * step_units();
+        self.lx = self.x as f64 * STEP_UNITS;
+        self.ly = self.y as f64 * STEP_UNITS;
+        self.lz = band_idx as f64 * BAND_UNITS + self.z as f64 * STEP_UNITS;
         self.size = 2f64.powi(self.level);
         self.state = state;
     }
@@ -318,7 +309,7 @@ impl EntryCursor {
         [
             self.cx0 + (self.x / steps) as i64,
             self.cy0 + (self.y / steps) as i64,
-            self.band_idx as i64 * CHUNK_CELLS + (self.z / steps) as i64,
+            self.band_idx as i64 * BAND_CELLS as i64 + (self.z / steps) as i64,
         ]
     }
 
@@ -328,7 +319,11 @@ impl EntryCursor {
             return Pvf3 { i: fixed.i, f: fixed.f };
         }
         let mut out = Pvf3::default();
-        pvf3::add(&mut out, &cell_corner(self.cx0, self.cy0, self.band_idx as i64 * CHUNK_CELLS), &local_offset(self.x, self.y, self.z));
+        pvf3::add(
+            &mut out,
+            &cell_corner(self.cx0, self.cy0, self.band_idx as i64 * BAND_CELLS as i64),
+            &local_offset(self.x, self.y, self.z),
+        );
         out
     }
 

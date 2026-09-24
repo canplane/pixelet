@@ -1,102 +1,119 @@
 // pxl-kernel/layer/poi/placement.rs
 
+//! Where the counts are drawn. What the POI pages draw of the view is the
+//! layer's own cover (world/pyramid.rs `Cover`): pieces of the ground in
+//! view, none over another, so every place under them is counted once. Each
+//! of their cells — cells of the POI lattice (pxl-spec bake/poi_page.rs
+//! `POI_LATTICE`) — is counted into itself, or into the cell over it as
+//! large as the ground is drawn there where that is coarser, and the badge
+//! stands at that cell's centre in all three axes, on the surface drawn
+//! there (pxl-spec space/pyramid.rs `Cell::centre`, chunk/table.rs
+//! `surface_at`). Two lattices' cells are compared by their side against the
+//! unit, not by their level, since the same level is a different size in
+//! each.
+
 use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
-use crate::layer::billboard::frustum_budget::select_visible_billboards;
+use crate::layer::billboard::field::BILLBOARD_FLOATS;
+use crate::layer::billboard::selection::select_visible_billboards;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
-use crate::layer::poi::{
-    badge,
-    store::{self, LIMITS},
-};
+use crate::layer::poi::badge::{self, Label};
+use crate::layer::poi::enabled;
 use crate::sched::tick::TickContext;
 use crate::shell::map_store::map_store;
 use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view::view;
+use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
-use pxl_spec::poi::Summary;
-use pxl_spec::space::pvf3::{ivec, projection, Pvf3};
 
-const VISIBLE: usize = 4;
-// Discovery leaves candidate room for refinement within nearby regions.
-const ROOT_REGIONS: usize = 4;
+use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
+use pxl_spec::space::pvf3::{ivec, projection};
+use pxl_spec::space::pyramid::{cell_base, cell_shamt, Cell, LevelPage, TOP_LEVEL};
+use std::collections::{BTreeMap, HashSet};
 
 #[derive(Default)]
 struct Placement {
     batch: BillboardBatch,
+    kept: Vec<u32>,
     set: Option<u32>,
-    visible: u32,
-    view: Option<super::view::SelectionView>,
+    /// The badges shown, nearest what the view looks at first: what the
+    /// shell lists beside the map (`snapshot`).
+    shown: Vec<(Cell, Label, u32)>,
 }
 static PLACEMENT: Global<Placement> = Global::new();
 
-/// A summary's midpoint snapped to the displayed terrain cell and surface.
-/// This presentation position never enters canonical storage or node packets.
-pub fn anchor(summary: &Summary) -> Option<[f64; 3]> {
-    let b = summary.bounds;
-    crate::kernel::kernel().sched.surface_anchor((b[0] + b[3]) * 0.5, (b[1] + b[4]) * 0.5)
-}
-
-pub fn visible() -> u32 {
-    PLACEMENT.get(Placement::default).visible
+/// How many places a badge's cell holds, and the one place's name where it
+/// holds one: the name's page and pool index, read only once the count is
+/// known to be one.
+#[derive(Clone, Copy, Default)]
+struct Tally {
+    count: u32,
+    name: Option<(LevelPage, u32)>,
 }
 
 pub fn step(ctx: &mut TickContext) {
     let p = PLACEMENT.get(Placement::default);
-    if !store::enabled() || map_store().map_center.is_none() {
+    if !enabled() || map_store().map_center.is_none() {
         if let Some(set) = p.set.take() {
             remove_billboard_set(set);
             ctx.invalidate();
         }
-        p.visible = 0;
-        p.view = None;
-        badge::retain(&[]);
-        super::detail::select(&[]);
-        *store::store() = store::Store::default();
-        store::demand();
+        p.shown.clear();
+        badge::retain(&HashSet::new());
         return;
     }
     let origin = local_world_origin();
     let base = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))];
-    let v = view();
-    let globe = crate::layer::environment::state::globe();
-    let s = store::store();
-    let roots = super::view::roots(base, v, globe, LIMITS.candidates.min(ROOT_REGIONS));
-    let selection_view = super::view::SelectionView::new(base, v, globe, crate::kernel::kernel().sched.surface_envelopes());
-    let changed = p.view.as_ref() != Some(&selection_view);
-    s.select(
-        changed,
-        &roots,
-        |_, bounds| super::view::assess_bounds(super::view::surface_envelope(bounds, &selection_view.ground), base, v, globe),
-        LIMITS,
-    );
-    p.view = Some(selection_view);
-    store::demand();
-    let cut = s.cut.clone();
-    super::detail::select(&cut);
-    let labels: Vec<_> = cut.iter().map(super::detail::label).collect();
-    badge::retain(&labels);
-    p.batch.reset();
-    let mut grounded = Vec::new();
-    for (summary, label) in cut.iter().zip(&labels) {
-        let Some(a) = anchor(summary) else { continue };
-        grounded.push(label);
-        let mut absolute = Pvf3::default();
-        projection::project(&mut absolute, a[0], a[1], a[2]);
-        let mut local = [0.0; 3];
-        projection::unproject(&mut local, ivec::sub(absolute.i, origin), absolute.f);
-        p.batch.push(local[0], local[1], local[2], badge::width(label), badge::COLLIDE, badge::ANCHOR, summary.key as f64);
+    let pages = PoiPage::pyramid();
+    let sched = &crate::kernel::kernel().sched;
+    let mut cells: BTreeMap<Cell, Tally> = BTreeMap::new();
+    let (n, across) = (POI_LATTICE.chunk_cells(), POI_LATTICE.page_cells());
+    for &chunk in &pages.cover().0.drawn {
+        let Some(poi) = pages.get(chunk.page) else { continue };
+        // The chunk's ground, in the POI lattice's cells of its level.
+        let first = POI_LATTICE.cell_of(chunk.level(), &cell_base(chunk.page, chunk.bx, chunk.by)).index();
+        let (x0, y0) = (first % across, first / across);
+        for ty in y0..y0 + n {
+            let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + n, ty));
+            let from = poi.cells.partition_point(|c| c.cell < lo);
+            for c in poi.cells[from..].iter().take_while(|c| c.cell < hi) {
+                let cell = POI_LATTICE.cell_at(chunk.page, c.cell);
+                // Where no ground is drawn under it, it is not drawn either.
+                let Some((drawn, _)) = sched.surface_at(&cell.mid()) else { continue };
+                let coarser = (cell_shamt(drawn) - cell.shamt()).max(0) as u32;
+                let t = cells.entry(cell.up(coarser)).or_default();
+                t.count += c.count;
+                t.name = poi.name(c).map(|_| (chunk.page, c.name));
+            }
+        }
     }
-    let mut kept = [0u32; VISIBLE];
-    let n = select_visible_billboards(&mut p.batch, VISIBLE as u32, v.width, v.height, &mut kept);
-    let mut instances = Vec::with_capacity(LIMITS.candidates * 10);
-    for &i in &kept[..n as usize] {
+    p.batch.reset();
+    let mut labelled = Vec::new();
+    for (cell, t) in cells {
+        let Some((_, top)) = sched.surface_at(&cell.mid()) else { continue };
+        let label = match t.name {
+            Some((page, name)) if t.count == 1 => Label::Place { page, name },
+            _ => Label::Count(t.count),
+        };
+        let centre = cell.centre(top);
+        let mut local = [0.0; 3];
+        projection::unproject(&mut local, ivec::sub(centre.i, origin), centre.f);
+        p.batch.push(local[0], local[1], local[2], badge::width(label), badge::ANCHOR, cell.side(), labelled.len() as f64);
+        labelled.push((cell, label, t.count));
+    }
+    badge::retain(&labelled.iter().map(|l| l.1).collect());
+    let v = view();
+    select_visible_billboards(&mut p.batch, v.width, v.height, &mut p.kept);
+    let mut instances = Vec::with_capacity(p.kept.len() * BILLBOARD_FLOATS);
+    p.shown.clear();
+    for &i in &p.kept {
         let i = i as usize;
-        let slot = badge::slot(grounded[i]);
+        let slot = badge::slot(labelled[i].1);
         if slot == NO_SLOT {
             continue;
         }
-        let sheet = billboard_sheet();
-        let slot = slot as u32;
+        p.shown.push(labelled[i]);
+        let (sheet, slot) = (billboard_sheet(), slot as u32);
         instances.extend_from_slice(&[
             p.batch.local_x[i] as f32,
             p.batch.local_y[i] as f32,
@@ -108,9 +125,9 @@ pub fn step(ctx: &mut TickContext) {
             sheet.u1(slot) as f32,
             sheet.v1(slot) as f32,
             (badge::ANCHOR / badge::HEIGHT) as f32,
+            p.batch.unit[i] as f32,
         ]);
     }
-    p.visible = (instances.len() / 10) as u32;
     if p.set.is_none() && instances.is_empty() {
         return;
     }
@@ -118,4 +135,45 @@ pub fn step(ctx: &mut TickContext) {
     place_billboard_set(set, base);
     write_billboard_set(set, &instances);
     ctx.invalidate();
+}
+
+/// The badges shown, as the shell lists them: nearest what the view looks at
+/// first, each by its cell — which the shell hands back to go there
+/// (`focus`) — its count, and the name where it is one place.
+pub fn snapshot<W: std::fmt::Write>(out: &mut W) -> std::fmt::Result {
+    use xpute_core::codec::json::Quoted;
+    out.write_char('[')?;
+    for (i, &(cell, label, count)) in PLACEMENT.get(Placement::default).shown.iter().enumerate() {
+        if i > 0 {
+            out.write_char(',')?;
+        }
+        write!(out, "{{\"id\":{},\"count\":{count},\"name\":", Quoted(format!("{}:{}", cell.page().subject(), cell.index())))?;
+        match label {
+            Label::Place { .. } => write!(out, "{}}}", Quoted(label.text()))?,
+            Label::Count(_) => out.write_str("null}")?,
+        }
+    }
+    out.write_char(']')
+}
+
+/// Goes to the cell a badge stands for, by the id `snapshot` gave it: its
+/// middle, a level closer, where the ladder draws that ground a level finer
+/// and the cell comes apart into the places under it. Whether the id named
+/// a cell.
+pub fn focus(id: &str) -> bool {
+    let Some((subject, index)) = id.split_once(':') else { return false };
+    let (Ok(subject), Ok(index)) = (subject.parse::<u64>(), index.parse::<u32>()) else { return false };
+    // An id from outside: a level past the pyramid, a subject that does not
+    // give itself back, or an index past the page is no cell.
+    let page = LevelPage::of_subject(subject);
+    let across = POI_LATTICE.page_cells();
+    if page.level > TOP_LEVEL || page.subject() != subject || index >= across * across {
+        return false;
+    }
+    let cell = POI_LATTICE.cell_at(page, index);
+    crate::shell::shell::go_to(cell.mid());
+    let camera = crate::control::camera::store::camera_store();
+    let dist = Some(camera.view_state.dist / 2.0);
+    camera.set_view_state(crate::control::camera::store::ViewPatch { dist, azimuth: None, polar: None });
+    true
 }

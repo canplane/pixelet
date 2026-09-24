@@ -5,20 +5,20 @@
  * each face, by bucket key.
  *
  * A pack decorates the cube catalog; it does not define it. A cube's identity
- * and colour are spec/cell's (spec/cell/color.ts), and the pack is
+ * and colour are spec/cell's (catalog/cell/color.spec.ts), and the pack is
  * one image per type and face on top of that, so a type with no image
  * here still draws — as its colour — and a pack can be swapped without
  * touching an id. Which image is which is the file's name under
  * asset/cube: `<channel>_<type>.png` for a top, `side_<type>.png` for a
  * land side, `block_<colour>.png` for a placed block; the bytes and keys
- * come from ingested.ts.
+ * come from ingested.spec.ts.
  */
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { INGESTED, SHEET } from "./ingested.spec.ts";
 
 /** Which of a box's images this is. The split is the renderer's own:
- * chunk_material.ts calls a face lateral at `abs(normal.z) < 0.5`, so a
+ * chunk.wgsl calls a face lateral at `abs(normal.z) < 0.5`, so a
  * bottom face wears the top image just as the top face does. */
 export type CubeFace = "top" | "side";
 

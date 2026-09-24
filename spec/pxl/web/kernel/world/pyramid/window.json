@@ -1,12 +1,12 @@
 {
   "$doc": [
-    "Tile streaming, in pages of the pyramid.",
+    "The window a view holds of the pyramid, for every layer on it.",
     "",
     "The page stays the unit of transfer and storage: one object, one decode,",
     "one key, one eviction, the same record at every level. What is derived",
     "rather than chosen is *which* pages: a ring around the view at every level",
     "of a window, which is at once what gets fetched, what stays decoded, and",
-    "what `.fixed.terrain` has a record for (terrain/fixed.rs). One set, so a",
+    "what each layer has a record for (world/pyramid.rs). One set, so a",
     "page can never be requested and then dropped from under its own in-flight",
     "request (issue/20260921-level-step-and-zoom-are-one-number.md)."
   ],
@@ -15,7 +15,7 @@
     "$type": "u32",
     "$doc": [
       "The most levels held at once: a window holds the levels the ground in",
-      "view wants and no others (terrain/level.rs), and this is the widest that",
+      "view wants and no others (world/pyramid/window.rs), and this is the widest that",
       "can be, which `.fixed` is sized for. What a 50° field of view shows spans",
       "log2(sin(θ + 25°) / sin(θ − 25°)) octaves of distance at a tilt θ above",
       "the horizon: under one looking down, 3.2 at 30°, 4.5 at 27°. Five cover",
@@ -44,7 +44,7 @@
       "units, against the 384·2^k the ladder wants step 2^(k+1) to, which is",
       "the step level k draws: the level a chunk wants is resident, with a",
       "third of slack at every level. Where a wide screen's corners see past",
-      "that, the window's top is a coarser level (terrain/level.rs)."
+      "that, the window's top is a coarser level (world/pyramid/window.rs)."
     ]
   }
 }

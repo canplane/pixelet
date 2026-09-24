@@ -15,8 +15,8 @@ use super::pvf3::{ivec, IVec};
 /// **This is a recurring source of wrong hypotheses — read before theorising
 /// about a Z mismatch.** Tiles are 2D: a baked page covers an X/Y footprint
 /// and carries elevation as *data* (`Terrain.ele`), never as a third page
-/// axis. So every page-keyed map — terrain/store.ts's `tile_map`, poi/store.ts's
-/// `poi_map`, the fetch scheduler's demand keys — normalizes through TO_XY,
+/// axis. So every page-keyed map — every layer's pyramid tables, the fetch scheduler's
+/// demand keys — normalizes through TO_XY,
 /// and `L3_IDX(map_center.i)` must be TO_XY'd before it is compared against
 /// one of those keys.
 ///

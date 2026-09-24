@@ -17,6 +17,7 @@
 //! lists, so nothing here decides what is shown, and a block never has to
 //! outlive the scheduler's naming of it.
 
+use pxl_spec::space::pyramid::{chunk_span_of, Cell, CHUNK_CELLS, PAGE_CELLS};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 use pxl_render::look::lod::LodStep;
@@ -27,25 +28,24 @@ use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
-use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
-use pxl_spec::bake::format::Tile;
+use pxl_spec::bake::constant::{ELE_PADDED_SPAN, U_PER_CELL};
 use pxl_spec::bake::pack::GroundCell;
-use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3_IDX};
+use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::xy::TO_XY;
 use xpute_core::math::scalar::round;
 use xpute_runtime::mem::heap::{free, Block};
 
 use crate::global::Global;
 use crate::kernel::{kernel, with_world};
 use crate::layer::object::store::{decor_col_revision, object_col_revision, object_cols, Store, BAND_CELLS};
-use crate::layer::terrain::level::LevelPage;
-use crate::layer::terrain::store::tile_store;
 use crate::mem::fixed::{bake_at, run_set_at};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::mesh_slot::BAKE_BYTES;
-use crate::world::chunk::range::PAGE_SHAMT;
+
 use crate::world::chunk::table::Event;
+use crate::world::pyramid::Layer as _;
+use pxl_spec::bake::format::Terrain;
+use pxl_spec::space::pyramid::LevelPage;
 
 /// A tier as the node holds it: its boxes, which lie on the device in the
 /// chunk's slot (mesh_slot.rs) and nowhere in the memory.
@@ -198,10 +198,10 @@ pub struct ChunkNode {
 
 type Queue = VecDeque<Event>;
 
-fn page_lanes(tile: &Tile) -> PageLanes {
+fn page_lanes(tile: &Terrain) -> PageLanes {
     PageLanes {
-        cells: tile.terrain.ground.cells.as_ptr() as usize,
-        ele: tile.terrain.ele.as_ptr() as usize,
+        cells: tile.ground.cells.as_ptr() as usize,
+        ele: tile.ele.as_ptr() as usize,
     }
 }
 
@@ -238,7 +238,7 @@ impl ChunkNode {
 
     /// Tells the scheduler what this chunk is made of now.
     fn tell_source(&mut self) {
-        let page = tile_store().get_page(self.page).map(page_lanes);
+        let page = Terrain::pyramid().get(self.page).map(page_lanes);
         let (id, show) = (self.id, self.show_structures);
         with_world(|world, sched| sched.source(world, id, page, show));
         self.generation += 1;
@@ -437,14 +437,21 @@ fn objects_revision_of(level: u32, base: IVec) -> u32 {
     if level == 0 {
         return object_col_revision(L2_IDX(base));
     }
-    let (s, span) = (1i64 << level, (CHUNK_CELL_SPAN as i64) << level);
-    let (x0, y0) = (ivec::X(base), ivec::Y(base));
-    let meets = |col: IVec| {
-        let o = FROM_L2_IDX(col);
-        let (ox, oy, w) = (ivec::X(o), ivec::Y(o), CHUNK_CELL_SPAN as i64);
-        ox + w > x0 - s && ox < x0 + span + s && oy + w > y0 - s && oy < y0 + span + s
-    };
-    object_cols().into_iter().filter(|&c| meets(c)).fold(0u32, |acc, c| acc.wrapping_add(object_col_revision(c)))
+    object_cols()
+        .into_iter()
+        .filter(|&c| folds_into(level, base, c))
+        .fold(0u32, |acc, c| acc.wrapping_add(object_col_revision(c)))
+}
+
+/// Whether the objects of column `col` fold into the level-`level` chunk at
+/// `base`: its own cells, and the one-cell apron around them a fold reads.
+fn folds_into(level: u32, base: IVec, col: IVec) -> bool {
+    // In units: a cell of the level, the chunk, and a column, which is a
+    // leaf chunk.
+    let (s, span, w) = (U_PER_CELL * f64::from(1u32 << level), chunk_span_of(level), chunk_span_of(0));
+    let (o, x0, y0) = (FROM_L2_IDX(col), ivec::X(base) as f64, ivec::Y(base) as f64);
+    let (ox, oy) = (ivec::X(o) as f64, ivec::Y(o) as f64);
+    ox + w > x0 - s && ox < x0 + span + s && oy + w > y0 - s && oy < y0 + span + s
 }
 
 // ---- the build as the kernel runs it ----
@@ -680,12 +687,13 @@ impl Builder {
     /// its page's lanes and where it starts in them, and the structure
     /// setting. Resident or not, whichever level draws the ground there.
     pub fn leaf_source(&self, base: IVec) -> Option<LeafSource> {
-        let page_idx = TO_XY(L3_IDX(base));
-        let page = tile_store().get_tile(page_idx).map(page_lanes)?;
+        let cell = Cell::of(0, &pxl_spec::space::pvf3::Pvf3 { i: base, ..Default::default() });
+        let (leaf, first) = (cell.page(), cell.index());
+        let page = Terrain::pyramid().get(leaf).map(page_lanes)?;
         Some(LeafSource {
             page,
-            tx0: (ivec::X(base) - (ivec::X(page_idx) << PAGE_SHAMT)) as u32,
-            ty0: (ivec::Y(base) - (ivec::Y(page_idx) << PAGE_SHAMT)) as u32,
+            tx0: first % PAGE_CELLS,
+            ty0: first / PAGE_CELLS,
             show_structures: settings_store().show_structures,
         })
     }
@@ -711,10 +719,10 @@ impl Builder {
     /// whichever level it is drawn at. With what it is valid for, which a
     /// cached composite is compared by.
     pub fn compose_leaf(&mut self, world: &mut World, base: IVec) -> Option<(usize, u32)> {
-        let page_idx = TO_XY(L3_IDX(base));
-        let page = tile_store().get_tile(page_idx).map(page_lanes)?;
-        let tx0 = (ivec::X(base) - (ivec::X(page_idx) << PAGE_SHAMT)) as u32;
-        let ty0 = (ivec::Y(base) - (ivec::Y(page_idx) << PAGE_SHAMT)) as u32;
+        let cell = Cell::of(0, &pxl_spec::space::pvf3::Pvf3 { i: base, ..Default::default() });
+        let (leaf, first) = (cell.page(), cell.index());
+        let page = Terrain::pyramid().get(leaf).map(page_lanes)?;
+        let (tx0, ty0) = (first % PAGE_CELLS, first / PAGE_CELLS);
         let show = settings_store().show_structures;
         let col_idx = L2_IDX(base);
         let valid = self.leaf_valid(base);
@@ -748,7 +756,7 @@ impl Builder {
     // ---- commands ----
 
     pub fn add(&mut self, id: u32, level: u32, base: IVec, tx0: u32, ty0: u32) {
-        assert!(tx0 + CHUNK_CELL_SPAN <= PAGE_CELL_SPAN && ty0 + CHUNK_CELL_SPAN <= PAGE_CELL_SPAN, "a chunk past its page");
+        assert!(tx0 + CHUNK_CELLS <= PAGE_CELLS && ty0 + CHUNK_CELLS <= PAGE_CELLS, "a chunk past its page");
         self.chunks.insert(
             id,
             Chunk {
@@ -1023,7 +1031,7 @@ impl Builder {
     /// when it tells a chunk its source.
     pub unsafe fn page_view(world: &World, page: PageLanes) -> PageView<'static> {
         let mem = world.volumes.mem();
-        let cells = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
+        let cells = (PAGE_CELLS * PAGE_CELLS) as usize;
         let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
         PageView {
             cells: core::slice::from_raw_parts(mem.add(page.cells) as *const GroundCell, cells),
@@ -1138,17 +1146,16 @@ impl Builder {
         let view = unsafe { Self::page_view(world, page) };
         self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
         let scale = 1u32 << level;
-        let (s, span) = (scale as i64, (CHUNK_CELL_SPAN as i64) << level);
+        let s = i64::from(scale);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
-        // Every column whose objects fold into the chunk or its apron.
         let mut columns = Vec::new();
         for i in 0..world.store.chunk_count() {
             let key = world.store.chunk_key(i);
-            let o = FROM_L2_IDX(key);
-            let (ox, oy, w) = (ivec::X(o), ivec::Y(o), CHUNK_CELL_SPAN as i64);
-            if ox + w <= x0 - s || ox >= x0 + span + s || oy + w <= y0 - s || oy >= y0 + span + s {
+            if !folds_into(level, base, key) {
                 continue;
             }
+            let o = FROM_L2_IDX(key);
+            let (ox, oy) = (ivec::X(o), ivec::Y(o));
             if let Some(entries) = world.store.entries(key) {
                 columns.push(Column { cx0: ox, cy0: oy, entries });
             }

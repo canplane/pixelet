@@ -18,7 +18,7 @@
 //! a page it did not hold, because the chunks under it lie outside the ring
 //! below and two of them would land in one slot. Of the nine pages a top
 //! ring has, four fold from what is held and five do not — and every one of
-//! those five has one or two of its four children resident (level.test.rs).
+//! those five has one or two of its four children resident (world/pyramid/window.test.rs).
 //! Nearly half the ground that showed as nothing was data the client already
 //! had and could not address. Cesium's answer to the same thing is
 //! `skipLevelOfDetail`: a tile whose content is missing is refined through
@@ -52,12 +52,12 @@
 //! ledger's `work fine_peak` and `coarse_peak`, through a zoom out and back.
 
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
+use pxl_spec::space::pyramid::PAGE_CHUNKS;
 
-use crate::layer::terrain::level::{RENDER_AXIS, WINDOW_LEVELS};
-use crate::world::chunk::range::PAGE_CHUNK_AXIS;
+use crate::world::pyramid::window_spec::{RENDER_AXIS, WINDOW_LEVELS};
 
 /// Chunks along a level's drawn ring, the axis a slot is reduced modulo.
-pub const AXIS: u32 = RENDER_AXIS * PAGE_CHUNK_AXIS;
+pub const AXIS: u32 = RENDER_AXIS * PAGE_CHUNKS;
 const SLOTS: u32 = AXIS * AXIS;
 /// Boxes a leaf's first tier holds, the one tier drawn at a leaf's own cells:
 /// the 2,294 the measurement asked for and a fifth again.

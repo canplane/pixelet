@@ -10,10 +10,10 @@
 //! object for answers 404, which is "no page under it is in any place"
 //! rather than a failure.
 
-use pxl_spec::bake::constant::LEVEL0_ZOOM;
 use pxl_spec::bake::place_page::{open_place_dict, open_place_group, PlaceGroupView, PlacesView, DICT_OBJECT, GROUP_SHAMT};
 use pxl_spec::bake::quadkey::{quadkey_of, Quadkey};
 use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pyramid::LEVEL0_ZOOM;
 use xpute_core::status::error::MarshalError;
 use xpute_runtime::mem::heap::{free, Block};
 
@@ -33,7 +33,7 @@ pub fn group_name(group_idx: IVec) -> Quadkey {
 /// places in it, so it outlives every group.
 ///
 /// The block goes back when the packet does. A `'static` view over a block
-/// is the shape a resident page has here (layer/poi/repository.rs) and the
+/// is the shape a resident page has here (layer/terrain/page.rs) and the
 /// lifetime is a claim the type cannot keep — what it is really good for is
 /// the block's own life, which is why giving the block back is the packet's
 /// own business and not a caller's to remember.

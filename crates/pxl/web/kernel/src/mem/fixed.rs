@@ -14,10 +14,10 @@
 //!
 //! Ranges, in the order they are laid:
 //!
-//!   .fixed.terrain   the resident terrain, one record a page, addressed by
-//!                    the page's own coordinate reduced modulo the set's axis
-//!                    (layer/terrain/fixed.rs), so nothing in it is
-//!                    allocated, asked for or refused.
+//!   .fixed.terrain   the resident terrain, one record a page, every record
+//!                    the same size (layer/terrain/fixed.rs). Which page lies
+//!                    in which record is the pyramid's (world/pyramid.rs), so
+//!                    the range is laid out once and its records change hands.
 //!   .fixed.bake      the one mesh a chunk bake has open, written there and
 //!                    sent to its slot on the device the moment it is done
 //!                    (world/chunk/mesh_slot.rs): a mesh has no home in the

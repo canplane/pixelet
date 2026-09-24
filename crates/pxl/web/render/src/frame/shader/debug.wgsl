@@ -1,4 +1,4 @@
-// The dev gizmos: the module's line segments (debug.rs) drawn as one line
+// The dev gizmos: the module's line segments (frame/draw.rs) drawn as one line
 // list over everything, with no depth test — a gizmo marks a place whether
 // or not the ground is in front of it. A pixel wide, which is what a line
 // list is; the labels are the glue's DOM.

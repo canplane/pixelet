@@ -18,7 +18,7 @@ how it gets there and how you know it arrived.
 | Prefix                  | Object                      | Named by               | Policy                                                        |
 | ----------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------- |
 | `terrain/<version>/`    | packed XTP page, `_ocean`   | quadkey, 5–15          | immutable; a re-bake is a new version                         |
-| `poi/<version>/`        | packed PXS1 summary         | quadkey, 15–23         | immutable snapshot; data refresh needs a new version          |
+| `poi/<version>/`        | packed PXP3 count page      | quadkey, 5–15          | immutable; a re-bake is a new version                         |
 | `geocode/<version>/`    | packed JSON page, `_dict`   | quadkey, 11            | version = format; monthly in-place refresh                    |
 | `asset/`                | glb, png, webp — not packed | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever |
 | `_meta/land_pages.json` | terrain's land/ocean list   | fixed name             | mutable; rewritten with a terrain re-bake                     |
@@ -27,9 +27,9 @@ how it gets there and how you know it arrived.
 A page is named by its **quadkey**: the Web Mercator tile key at the zoom the
 page is held at, one base-4 digit a zoom, coarsest first (pxl-spec
 bake/quadkey.rs). The length is the level, so nothing writes a level down, and
-the three bakes differ only in how long a name they have — terrain 5 to 15
-digits for its pyramid, POI 15–23 for the bounded development snapshot, geocode
-11 because a group covers 16 pages a side. They land in one space, so
+the three bakes differ only in how long a name they have — terrain and POI 5
+to 15 digits for the pyramid they share, geocode 11 because a group covers 16
+pages a side. They land in one space, so
 `terrain/<v>/13211032`, `poi/<v>/13211032` and `geocode/<v>/13211032` are the
 same ground, and **one prefix is one region across all three at every level**.
 That is what a later split of the bucket would be: a prefix match, not a
@@ -75,8 +75,8 @@ checksums (v2 sends `x-amz-checksum-*` headers R2 refuses), set
 
 ### Terrain
 
-Terrain is the one bake whose disk layout is not the bucket's. It keeps
-`<level>/<page index>` because `bake_tiles.rs` clears a level's directory so
+Terrain and POI are the bakes whose disk layout is not the bucket's. They keep
+`<level>/<page index>` because the pyramid's fold (`geo-bake/src/pyramid.rs`) clears a level's directory so
 that a parent cannot outlive a child it no longer has, and clears the levels
 past the top so that a level a run did not fold is not part of the set — both
 invariants a flat tree would have to restate as a rule about name lengths. So
@@ -101,8 +101,8 @@ aws s3 cp ./out/terrain/land_pages.json s3://pixelet-tiles/_meta/land_pages.json
 
 **Never overwrite an existing terrain version in place** — publish a new
 prefix and point the app at it. The second command matters when the
-land/ocean classification was rebuilt: the monthly workflow bakes POI and
-geocode against this object, not against a local terrain bake.
+land/ocean classification was rebuilt: the monthly workflow bakes geocode
+against this object, not against a local terrain bake.
 
 **Objects are stored already packed, so the upload must set the
 `Content-Encoding` they were packed in** — the manifest's `content_encoding`,
@@ -117,14 +117,23 @@ so one version holds one encoding.
 
 ### POI
 
-The current POI path is opt-in development work. Do not publish its fixture
-snapshot as global coverage. When a complete snapshot is explicitly chosen
-for publication, use a fresh version prefix and verify
-`out/poi/<snapshot>/manifest.json` first. Sync only the completed snapshot’s
-`tile/` directory: canonical and provenance backing must stay outside the bucket.
-Use the manifest's content type and encoding and immutable cache control,
-then verify the named 15-digit root and each referenced refinement before changing the client
-version. A missing node must never be replaced with an empty population.
+The same two steps as terrain, from `poi/` and with no `land_pages.json`:
+
+```bash
+version=$(jq -r .PUBLISHED_VERSION.poi spec/pxl/spec/bake/published.json)
+cargo run --release --manifest-path crates/Cargo.toml --bin rekey_tiles -- link \
+  --bake poi --from "./out/poi/$version" --to "./out/poi/$version.bucket"
+
+aws s3 sync ./out/poi/<version>.bucket s3://pixelet-tiles/poi/<version> \
+  --profile r2 --endpoint-url $R2 \
+  --content-type application/octet-stream \
+  --content-encoding "$(jq -r .content_encoding out/poi/manifest.json)" \
+  --cache-control "public, max-age=31536000, immutable"
+```
+
+A page with no places is no object and reads as empty, so a missing page is
+never an error to repair. The client shows POI only outside production until
+the layer is switched on there.
 
 ### Geocode
 
@@ -223,7 +232,7 @@ s5cmd --endpoint-url $R2 run /tmp/rekey-meta.txt
 check that it decodes rather than that a header is present:
 
 ```bash
-curl -s --compressed "https://plei.me/geo/tiles/poi/<v>/<15-digit-root>" | head -c 4                     # PXS1 (v7+)
+curl -s --compressed "https://plei.me/geo/tiles/poi/<v>/<quadkey>" | head -c 4                           # PXP3 (v8+)
 curl -s -H "Accept-Encoding: zstd" "https://plei.me/geo/tiles/terrain/<v>/<quadkey>" \
   | zstd -dcq | head -c 2 | xxd -p                                                              # 5854
 ```

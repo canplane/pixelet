@@ -16,7 +16,7 @@
  */
 export const PUBLISHED_VERSION = {
   terrain: "v6",
-  poi: "v7",
+  poi: "v8",
   geocode: "v4",
 } as const;
 

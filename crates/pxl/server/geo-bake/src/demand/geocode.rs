@@ -4,12 +4,12 @@ use super::job::{self, Job, Publication, Runner};
 use super::{Dataset, Failure};
 use crate::geocode::{provider::overture::GeocodeProvider, PlaceDict};
 use crate::util::{pack, Level};
-use pxl_spec::bake::constant::LEVEL0_ZOOM;
 use pxl_spec::bake::place_page::{encode_place_group, Division, GROUP_PAGES};
 use pxl_spec::bake::place_page::{DICT_OBJECT, GROUP_SHAMT};
 use pxl_spec::bake::quadkey::index_of;
 use pxl_spec::place::PlaceRank;
 use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::pyramid::LEVEL0_ZOOM;
 use std::path::Path;
 use std::sync::Arc;
 

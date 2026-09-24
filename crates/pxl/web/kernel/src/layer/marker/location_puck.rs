@@ -20,10 +20,11 @@ use crate::layer::environment::fog::view_reach;
 use crate::layer::environment::theme::WorldThemeKey;
 use crate::layer::environment::theme_clock::theme_key;
 use crate::layer::terrain::elevation::get_ele;
-use crate::layer::terrain::store::tile_pages;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::node::World;
 use crate::world::chunk::table::Frame;
+use crate::world::pyramid::Layer as _;
+use pxl_spec::bake::format::Terrain;
 
 // The numerator (4) is a world-space distance, not a cell count — it fixes the
 // zone's footprint size independent of U_PER_CELL. The .707 shave is a fixed
@@ -128,7 +129,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
     let mut center_pos = [0.0; 3];
     floor3n(&raw, U_PER_CELL, &mut center_pos);
 
-    let tiles = tile_pages().revision();
+    let tiles = Terrain::pyramid().level(0).revision();
     if p.zone_for != Some((center_pos, tiles)) {
         p.zone_for = Some((center_pos, tiles));
         let mut lane: Vec<f32> = Vec::with_capacity(p.samples.len() * 7);

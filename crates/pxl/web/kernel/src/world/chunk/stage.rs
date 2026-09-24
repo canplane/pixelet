@@ -17,10 +17,6 @@ use crate::host::now;
 use crate::io::sched::pending_count;
 use crate::kernel::{kernel, with_world};
 use crate::layer::environment::state::globe;
-use crate::layer::terrain::level::window;
-use crate::layer::terrain::resident::take_record_refusals;
-use crate::layer::terrain::store::level_pages;
-use crate::layer::terrain::tile_fetcher;
 use crate::sched::ledger::record::{
     ledger_record_frame, ledger_take_rings, CapSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample, LEVELS,
 };
@@ -33,6 +29,11 @@ use crate::world::chunk::node::{run_chunk_events, take_node_counts, RETAIN_BUDGE
 use crate::world::chunk::range::range_anchor_of;
 use crate::world::chunk::table::{builds, Census, Frame};
 use crate::world::frame::view::{view, view_resize};
+use crate::world::pyramid::window::window;
+use crate::world::pyramid::Layer;
+use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::poi_page::PoiPage;
+use pxl_spec::space::pyramid::TOP_LEVEL;
 
 const MB: f64 = 1_048_576.0;
 
@@ -149,7 +150,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     let c = core_tick();
     c.visible_pass = None;
     view_resize(ctx.state.width, ctx.state.height);
-    // The tier criterion is a screen-space one (crates/pxl/web/render/src/lod.rs), and the
+    // The tier criterion is a screen-space one (crates/pxl/web/render/src/look/lod.rs), and the
     // other layers that read it read it from here; the scheduler takes the same
     // projection through the frame, and its pressure — the byte budget paid in
     // LOD — comes back through the census.
@@ -247,9 +248,10 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let host = c.host.clone();
     let mut pages = PageSample::default();
     for (level, n) in pages.by_level.iter_mut().enumerate() {
-        *n = level_pages(level as u32).keys().count() as f64;
+        *n = Terrain::pyramid().level(level as u32).keys().count() as f64;
     }
     pages.total = pages.by_level.iter().sum();
+    pages.poi = (0..=TOP_LEVEL).map(|level| PoiPage::pyramid().level(level).size() as f64).sum();
     let mut gpu = host.gpu;
     for (tris, boxes) in gpu.level_tris.iter_mut().zip(census.level_boxes) {
         *tris = boxes as f64 * BOX_TRIANGLES;
@@ -286,8 +288,8 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         heap: heap_sample(),
         rings: ledger_take_rings(),
         work: work_sample(c, &census),
-        q_terrain: pending_count(tile_fetcher::CATEGORY) as f64,
-        q_poi: (pending_count(crate::io::demand::Category::Poi) + pending_count(crate::io::demand::Category::PoiDetail)) as f64,
+        q_terrain: pending_count(Terrain::CATEGORY) as f64,
+        q_poi: pending_count(PoiPage::CATEGORY) as f64,
         stale: StaleSample {
             chunks: census.stale as f64,
             drawn: census.stale_drawn as f64,
@@ -306,7 +308,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             commit_left: census.commit_left as f64,
             mount_left: census.mount_left as f64,
             mount_full: census.mount_full as f64,
-            record_refused: take_record_refusals() as f64,
+            record_refused: Terrain::pyramid().take_refusals() as f64,
         },
     });
 }

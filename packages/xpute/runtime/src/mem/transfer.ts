@@ -11,7 +11,7 @@
  * backpressure.
  *
  * Nothing borrows one yet: no worker exists. When one does, a job is a guest's
- * I/O demand (sched/io.rs), so a buffer is owned by that demand's key, and the
+ * I/O demand (xpute-runtime io.rs), so a buffer is owned by that demand's key, and the
  * buffers not away are the worker credits the central scheduler grants.
  */
 
@@ -26,7 +26,7 @@ const LANE = { init_cap: 8 } as const;
 
 export class TransferPool {
   private readonly state = new Vector(Uint8Array, LANE);
-  /** The demand holding the buffer (sched/io.rs's key), while AWAY. */
+  /** The demand holding the buffer (xpute-runtime io.rs's key), while AWAY. */
   private readonly owner = new Vector(BigUint64Array, LANE);
   /** When the buffer came home, for the idle release. */
   private readonly home_since = new Vector(Float64Array, LANE);

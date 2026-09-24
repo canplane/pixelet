@@ -1,6 +1,6 @@
 // pxl-kernel/io/demand.rs
 
-//! One unit of deferrable I/O handed to scheduler.rs.
+//! One unit of deferrable I/O handed to io/sched.rs.
 //!
 //! The scheduler owns ordering, the concurrency quota, and cancellation of
 //! demands that stop being wanted; the shell owns the actual transport — the
@@ -54,7 +54,6 @@ pub enum Category {
     /// The one tile every open-water page shares.
     Ocean,
     Poi,
-    PoiDetail,
     /// One group of pages of the reverse-geocode bake.
     Geocode,
     /// Its dictionary, which is a stream of one.
@@ -76,7 +75,7 @@ impl Category {
     pub fn bake(self) -> Option<BakeKind> {
         match self {
             Category::Terrain | Category::Ocean => Some(BakeKind::terrain),
-            Category::Poi | Category::PoiDetail => Some(BakeKind::poi),
+            Category::Poi => Some(BakeKind::poi),
             Category::Geocode | Category::GeocodeDict => Some(BakeKind::geocode),
             Category::Asset => None,
         }
@@ -88,7 +87,6 @@ impl Category {
             Category::Terrain => "terrain",
             Category::Ocean => "ocean",
             Category::Poi => "poi",
-            Category::PoiDetail => "poi_detail",
             Category::Geocode => "geocode",
             Category::GeocodeDict => "geocode_dict",
             Category::Asset => "asset",
@@ -127,7 +125,7 @@ pub struct Demand {
     /// priority, one already in flight is left alone.
     pub key: DemandKey,
     /// Lower runs sooner. A page's is how far it sits from the view in its
-    /// category's own order (terrain/tile_fetcher.rs's), doubled so a second
+    /// category's own order (world/pyramid.rs's), doubled so a second
     /// category can interleave at the odd numbers.
     pub priority: f64,
 }
