@@ -28,6 +28,7 @@ use crate::global::Global;
 use crate::host::measure_text;
 use crate::kernel::kernel;
 use crate::layer::billboard::canvas::scale::{FONT_FAMILY, FONT_WEIGHT_REGULAR};
+use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
 use crate::layer::terrain::elevation::{get_ele, with_ele};
 use crate::world::change::request_world_tick;
@@ -317,7 +318,7 @@ fn write_labels(g: &mut Gizmos) {
         return;
     }
     g.written = Some(generation);
-    let mut lane: Vec<f32> = Vec::with_capacity(g.slots.len() * 10);
+    let mut lane: Vec<f32> = Vec::with_capacity(g.slots.len() * BILLBOARD_FLOATS);
     for (label, &(slot, logical_w)) in g.drawn.labels.iter().zip(&g.slots) {
         if slot == NO_SLOT {
             continue;
@@ -334,6 +335,7 @@ fn write_labels(g: &mut Gizmos) {
             sheet.u1(s) as f32,
             sheet.v1(s) as f32,
             0.5,
+            1.0,
         ]);
     }
     write_billboard_set(set, &lane);

@@ -94,12 +94,20 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, max_count: u32, vie
         n += 1;
     }
 
-    // Squared distance: only the order matters. The tiebreak decides nothing on
-    // its own — it keeps two candidates at equal distance from swapping places
-    // frame to frame. Distance stays the ordering because it is what makes
-    // widening the view append rather than reshuffle.
-    let (d2, tiebreak) = (&batch.d2, &batch.tiebreak);
-    batch.order[..n].sort_by(|&a, &b| d2[a as usize].total_cmp(&d2[b as usize]).then(tiebreak[a as usize].total_cmp(&tiebreak[b as usize])));
+    // Offered nearest what the view looks at first, which is how the pyramid
+    // orders what it asks for too (world/pyramid.rs): nearest the eye would
+    // spend the budget on the screen's lower edge whenever the view is tilted.
+    // Squared, since only the order matters; the tiebreak decides nothing on
+    // its own and only keeps two at equal distance from swapping frame to
+    // frame. A distance stays the ordering because it is what makes widening
+    // the view append rather than reshuffle.
+    let focus = [-v.tx, -v.ty, -v.tz];
+    let at = |i: u32| {
+        let i = i as usize;
+        (batch.local_x[i] - focus[0]).powi(2) + (batch.local_y[i] - focus[1]).powi(2) + (batch.local_z[i] - focus[2]).powi(2)
+    };
+    let tiebreak = &batch.tiebreak;
+    batch.order[..n].sort_by(|&a, &b| at(a).total_cmp(&at(b)).then(tiebreak[a as usize].total_cmp(&tiebreak[b as usize])));
 
     // Rectangles outside this grid share its edge cells; their actual screen
     // bounds still decide collision. This keeps unusually wide displays safe.
@@ -110,7 +118,7 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, max_count: u32, vie
     for k in 0..n {
         let i = batch.order[k] as usize;
 
-        let far = distance_fade_far(batch.d2[i].sqrt());
+        let far = distance_fade_far(batch.d2[i].sqrt(), batch.unit[i]);
         // Not `far <= 0`. The last stretch before the fade's end is ten pixels by
         // three at a tenth opacity — invisible, and small enough that hundreds
         // of them fit without ever colliding. This is the difference between a
@@ -131,6 +139,13 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, max_count: u32, vie
         let x0 = sx - w / 2.0;
         let y0 = sy - batch.anchor_px[i] as f64 * far;
         let (x1, y1) = (x0 + w, y0 + batch.collide_px[i] as f64 * far);
+        // The frustum test keeps an anchor a margin past the screen's edge,
+        // since its sprite can reach in. One whose box does not reach the
+        // viewport at all is not shown, and must not spend the budget of one
+        // that is.
+        if x1 < 0.0 || y1 < 0.0 || x0 > viewport_w || y0 > viewport_h {
+            continue;
+        }
 
         let room = kept < max_count && (kept as usize) < out.len();
         let blocker = if room { sel.screen.place(x0, y0, x1, y1) } else { sel.screen.first_hit(x0, y0, x1, y1) };

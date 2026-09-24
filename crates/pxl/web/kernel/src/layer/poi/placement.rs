@@ -82,7 +82,16 @@ pub fn step(ctx: &mut TickContext) {
             projection::project(&mut absolute, at[0], at[1], z);
             let mut local = [0.0; 3];
             projection::unproject(&mut local, ivec::sub(absolute.i, origin), absolute.f);
-            p.batch.push(local[0], local[1], local[2], badge::width(n), badge::COLLIDE, badge::ANCHOR, counts.len() as f64);
+            p.batch.push(
+                local[0],
+                local[1],
+                local[2],
+                badge::width(n),
+                badge::COLLIDE,
+                badge::ANCHOR,
+                f64::from(d.step << d.level),
+                counts.len() as f64,
+            );
             counts.push(n);
         }
     }
@@ -109,6 +118,7 @@ pub fn step(ctx: &mut TickContext) {
             sheet.u1(slot) as f32,
             sheet.v1(slot) as f32,
             (badge::ANCHOR / badge::HEIGHT) as f32,
+            p.batch.unit[i] as f32,
         ]);
     }
     p.visible = (instances.len() / BILLBOARD_FLOATS) as u32;

@@ -20,6 +20,9 @@ pub struct BillboardBatch {
     pub collide_px: Vec<f32>,
     /// Canvas-space Y of the anchor, in the same units as `collide_px`.
     pub anchor_px: Vec<f32>,
+    /// The side in level-0 cells of what the candidate marks, which its
+    /// distance fade is scaled by.
+    pub unit: Vec<f64>,
 
     /// Stable per candidate, used only to keep two at equal distance from
     /// swapping places between frames.
@@ -49,7 +52,7 @@ impl BillboardBatch {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn push(&mut self, local_x: f64, local_y: f64, local_z: f64, w_px: f64, collide_px: f64, anchor_px: f64, tiebreak: f64) {
+    pub fn push(&mut self, local_x: f64, local_y: f64, local_z: f64, w_px: f64, collide_px: f64, anchor_px: f64, unit: f64, tiebreak: f64) {
         let i = self.count as usize;
         self.count += 1;
         if i >= self.cap() {
@@ -61,6 +64,7 @@ impl BillboardBatch {
         self.w_px[i] = w_px as f32;
         self.collide_px[i] = collide_px as f32;
         self.anchor_px[i] = anchor_px as f32;
+        self.unit[i] = unit;
         self.tiebreak[i] = tiebreak;
     }
 
@@ -71,6 +75,7 @@ impl BillboardBatch {
         self.w_px.resize(n, 0.0);
         self.collide_px.resize(n, 0.0);
         self.anchor_px.resize(n, 0.0);
+        self.unit.resize(n, 1.0);
         self.tiebreak.resize(n, 0.0);
         self.world_x.resize(n, 0.0);
         self.world_y.resize(n, 0.0);

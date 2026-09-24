@@ -11,8 +11,13 @@
 /// (crates/pxl/web/render/src/lod.rs), so they move with the projection as the tiers do.
 pub use pxl_render::look::lod::{fade_end_u, fade_start_u};
 
-pub fn distance_fade_far(dist: f64) -> f64 {
-    let (start, end) = (fade_start_u(), fade_end_u());
+///
+/// Both scale with `unit`, the side in level-0 cells of what the billboard
+/// marks: a mark standing for a block the ground draws at a coarser level is
+/// shown out to where that level is drawn, as the ladder draws step 2^j out to
+/// 2^j times step 1's reach (world/pyramid/window.rs).
+pub fn distance_fade_far(dist: f64, unit: f64) -> f64 {
+    let (start, end) = (fade_start_u() * unit, fade_end_u() * unit);
     if dist <= start {
         return 1.0;
     }
