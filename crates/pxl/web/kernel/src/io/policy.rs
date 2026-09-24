@@ -29,12 +29,6 @@
 //! here, and `io/sched.rs` breaks the tie by category and subject: an order
 //! that means nothing and is the same every run.
 //!
-//! One grounded relation is deliberately **not** encoded. A POI badge is
-//! grounded against its own page's terrain, so a POI page is worth having
-//! after that page — a relation per page, not a band over all of terrain,
-//! which is what `leaf_priority + PRIORITY_BIAS` made it. Nothing calls
-//! `poi_fetcher_step`, so the relation has never run; encoding it means
-//! asking terrain for that page's class, and that is worth doing when POI is.
 
 use crate::io::sched::Rank;
 use crate::layer::terrain::resolve::Resolved;
@@ -80,8 +74,8 @@ pub fn geocode() -> Rank {
     Rank { class: ASIDE, distance: 0.0 }
 }
 
-/// A POI page. `distance` is carried so the tie among POI pages is the near
-/// one first, which is the only part of POI's order anything argues for.
+/// POI demand has already passed view relevance. Proximity orders only
+/// those summaries whose refinement the current view needs.
 pub fn poi(distance: f64) -> Rank {
     Rank { class: ASIDE, distance }
 }

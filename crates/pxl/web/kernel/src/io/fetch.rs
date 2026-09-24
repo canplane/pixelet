@@ -50,13 +50,7 @@ impl fmt::Display for DemandName {
             Category::Terrain => write!(f, "{}", tile_repository::TileName(LevelPage::of_subject(key.1))),
             // The one tile the stream has, at the name the bake gives it.
             Category::Ocean => write!(f, "{}", tile_repository::OCEAN_KEY),
-            Category::Poi => {
-                if key.1 == 0 {
-                    f.write_str("_root")
-                } else {
-                    f.write_str(&pxl_spec::poi::xy::name(key.1))
-                }
-            }
+            Category::Poi => f.write_str(&pxl_spec::poi::xy::name(key.1)),
             Category::Geocode => write!(f, "{}", geocode_repository::group_name(key.1)),
             // The one packet the stream has, at the name the bake gives it.
             Category::GeocodeDict => write!(f, "{}", geocode_repository::dict_name()),

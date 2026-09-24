@@ -5,16 +5,36 @@ use crate::io::{demand::Category, policy, sched::declare};
 use crate::shell::config::env::APP_ENV;
 use crate::shell::setting::store::settings_store;
 use crate::world::change::request_world_tick;
-use pxl_spec::poi::{wire, Node, Summary};
+use pxl_spec::poi::{wire, xy, Node, Summary};
 
-pub const CANDIDATES: usize = 8;
-pub const RESIDENT_BYTES: usize = 4096;
+#[derive(Clone, Copy)]
+pub struct Limits {
+    pub candidates: usize,
+    pub resident_bytes: usize,
+}
+
+pub const LIMITS: Limits = Limits { candidates: 8, resident_bytes: 4096 };
+// The decoder bounds the allocation even before a requested packet arrives.
+const NODE_RESERVATION: usize = std::mem::size_of::<Node>() + xy::CHILDREN * std::mem::size_of::<Summary>();
+
+pub struct Relevance {
+    pub distance: f64,
+    pub refine: bool,
+}
+
+struct Request {
+    subject: u64,
+    expected: Option<Summary>,
+    distance: f64,
+    revision: Option<u64>,
+}
 
 #[derive(Default)]
 pub struct Store {
+    // Oldest to most recently used; only this view's traversal is pinned.
     nodes: Vec<Node>,
     pub cut: Vec<Summary>,
-    wanted: Vec<u64>,
+    wanted: Vec<Request>,
 }
 
 impl Store {
@@ -22,25 +42,34 @@ impl Store {
         self.nodes.capacity() * std::mem::size_of::<Node>() + self.nodes.iter().map(|n| n.children.capacity() * std::mem::size_of::<Summary>()).sum::<usize>()
     }
 
+    pub fn pending_count(&self) -> usize {
+        self.wanted.len()
+    }
+
     pub fn node_count(&self) -> usize {
         self.nodes.len()
     }
 
     pub fn adopt(&mut self, subject: u64, node: Node, budget: usize) -> Result<(), &'static str> {
-        wire::validate(&node)?;
-        if !self.wanted.contains(&subject) {
+        let Some(request) = self.wanted.iter().find(|r| r.subject == subject) else {
             return Ok(());
+        };
+        wire::validate(&node)?;
+        if node.summary.key != subject {
+            return Err("summary address mismatch");
         }
-        if subject == 0 {
-            if !self.nodes.is_empty() {
-                return Err("root already resident");
+        if let Some(revision) = request.revision {
+            if node.revision != revision {
+                let root = subject >> (2 * (xy::depth(subject).unwrap() - xy::ROOT_DEPTH));
+                self.nodes.retain(|n| !xy::contains(root, n.summary.key));
+                self.nodes.shrink_to_fit();
+                self.wanted.retain(|r| !xy::contains(root, r.subject));
+                self.cut.retain(|s| !xy::contains(root, s.key));
+                return Err("refinement snapshot changed; resolve region again");
             }
-        } else {
-            let root = self.nodes.first().ok_or("root missing")?;
-            let expected = self.nodes.iter().flat_map(|n| &n.children).find(|s| s.key == subject).ok_or("unrequested refinement")?;
-            if node.revision != root.revision || node.summary != *expected {
-                return Err("refinement snapshot mismatch");
-            }
+        }
+        if request.expected.is_some_and(|expected| node.summary != expected) {
+            return Err("refinement coverage mismatch");
         }
         let slot = usize::from(self.nodes.len() == self.nodes.capacity()) * std::mem::size_of::<Node>();
         let bytes = slot + node.children.capacity() * std::mem::size_of::<Summary>();
@@ -49,59 +78,91 @@ impl Store {
         }
         self.nodes.reserve_exact(1);
         self.nodes.push(node);
-        self.wanted.retain(|&key| key != subject);
+        self.wanted.retain(|r| r.subject != subject);
         Ok(())
     }
 
-    /// A cut is a partition of the root's membership. A refinement replaces
-    /// one summary only when its entire set of children fits. Missing data or
-    /// memory leaves that summary in the cut; neither can erase its members.
-    pub fn select(&mut self, eye: [f64; 3], max_candidates: usize, budget: usize) {
-        self.cut.clear();
-        self.wanted.clear();
-        let Some(root) = self.nodes.first() else {
-            self.wanted.push(0);
-            return;
-        };
-        let mut keep = vec![root.summary.key];
-        if root.summary.count == 0 {
-            return;
+    fn make_room(&mut self, extra: usize, budget: usize, pinned: &[u64]) -> bool {
+        while self.bytes() + extra > budget {
+            let Some(i) = self.nodes.iter().position(|n| !pinned.contains(&n.summary.key)) else {
+                return false;
+            };
+            self.nodes.remove(i);
+            self.nodes.shrink_to_fit();
         }
-        self.cut.push(root.summary);
-        let mut i = 0;
-        while i < self.cut.len() {
-            let s = self.cut[i];
-            let span = (s.bounds[3] - s.bounds[0]).max(s.bounds[4] - s.bounds[1]);
-            let distance = (0..3).map(|a| (eye[a] - eye[a].clamp(s.bounds[a], s.bounds[a + 3])).powi(2)).sum::<f64>().sqrt();
-            // The threshold is a presentation resolution, not a population
-            // limit. Coincident entities remain a summary even at the leaf.
-            if !s.refinable || distance > span.max(64.0) * 3.0 {
-                i += 1;
-                continue;
-            }
-            if let Some(node) = self.nodes.iter().find(|n| n.summary.key == s.key) {
-                if self.cut.len() - 1 + node.children.len() <= max_candidates.max(1) {
-                    keep.push(s.key);
-                    self.cut.splice(i..=i, node.children.iter().copied());
-                    continue;
-                }
-            } else {
-                // Reserve for the largest response before requesting it, so
-                // simultaneous arrivals cannot consume one another's room.
-                let reservation = std::mem::size_of::<Node>() + pxl_spec::poi::xy::CHILDREN * std::mem::size_of::<Summary>();
-                if self.bytes() + (self.wanted.len() + 1) * reservation <= budget {
-                    self.wanted.push(s.key);
-                }
-            }
-            i += 1;
-        }
-        // Nodes contain immutable child summaries. Keeping the traversed
-        // parents preserves a coarse fallback without retaining raw detail.
-        self.nodes.retain(|n| keep.contains(&n.summary.key) || self.cut.iter().any(|s| s.key == n.summary.key));
+        true
     }
 
-    pub fn wanted(&self) -> &[u64] {
-        &self.wanted
+    /// The cut covers only the current view. Each replacement uses every
+    /// relevant child of a validated node, or leaves the parent intact. Screen
+    /// collisions never participate in this choice or change a summary's count.
+    pub fn select(&mut self, roots: &[(u64, f64)], assess: impl Fn(&Summary) -> Option<Relevance>, limits: Limits) {
+        self.cut.clear();
+        self.wanted.clear();
+        let roots = &roots[..roots.len().min(limits.candidates)];
+        let mut pinned: Vec<_> = roots.iter().map(|r| r.0).collect();
+        if !self.make_room(0, limits.resident_bytes, &pinned) {
+            self.nodes.clear();
+            self.nodes.shrink_to_fit();
+        }
+        for &(key, distance) in roots {
+            if let Some(root) = self.nodes.iter().find(|n| n.summary.key == key) {
+                if root.summary.count != 0 && assess(&root.summary).is_some() {
+                    self.cut.push(root.summary);
+                }
+            } else if self.make_room((self.wanted.len() + 1) * NODE_RESERVATION, limits.resident_bytes, &pinned) {
+                self.wanted.push(Request {
+                    subject: key,
+                    expected: None,
+                    distance,
+                    revision: None,
+                });
+            }
+        }
+        let mut requested = Vec::new();
+        loop {
+            let next = self
+                .cut
+                .iter()
+                .enumerate()
+                .filter_map(|(i, s)| {
+                    if !s.refinable || requested.contains(&s.key) {
+                        return None;
+                    }
+                    if let Some(node) = self.nodes.iter().find(|n| n.summary.key == s.key) {
+                        let count = node.children.iter().filter(|c| assess(c).is_some()).count();
+                        if self.cut.len() - 1 + count > limits.candidates {
+                            return None;
+                        }
+                    }
+                    let r = assess(s)?;
+                    r.refine.then_some((i, r.distance, s.key))
+                })
+                .min_by(|a, b| a.1.total_cmp(&b.1).then(a.2.cmp(&b.2)));
+            let Some((i, distance, key)) = next else { break };
+            if let Some(at) = self.nodes.iter().position(|n| n.summary.key == key) {
+                let children: Vec<_> = self.nodes[at].children.iter().filter(|s| assess(s).is_some()).copied().collect();
+                pinned.push(key);
+                self.cut.splice(i..=i, children);
+                if at != 0 {
+                    let used = self.nodes.remove(at);
+                    self.nodes.push(used);
+                }
+            } else {
+                requested.push(key);
+                // Current traversal ancestors stay usable. Cached branches
+                // outside that path yield their bytes to today's demand.
+                let reservation = (self.wanted.len() + 1) * NODE_RESERVATION;
+                if self.make_room(reservation, limits.resident_bytes, &pinned) {
+                    self.wanted.push(Request {
+                        subject: key,
+                        expected: Some(self.cut[i]),
+                        distance,
+                        revision: self.nodes.iter().find(|n| xy::contains(n.summary.key, key)).map(|n| n.revision),
+                    });
+                }
+            }
+        }
     }
 }
 
@@ -115,16 +176,16 @@ pub fn enabled() -> bool {
 }
 
 pub fn demand() {
-    let wants: Vec<_> = store().wanted().iter().map(|&key| (key, policy::poi(0.0))).collect();
+    let wants: Vec<_> = store().wanted.iter().map(|r| (r.subject, policy::poi(r.distance))).collect();
     declare(Category::Poi, &wants);
 }
 
 pub fn adopt(subject: u64, bytes: &[u8]) -> Result<(), &'static str> {
     let node = wire::decode(bytes)?;
-    store().adopt(subject, node, RESIDENT_BYTES)?;
+    let result = store().adopt(subject, node, LIMITS.resident_bytes);
     demand();
     request_world_tick();
-    Ok(())
+    result
 }
 
 #[cfg(test)]

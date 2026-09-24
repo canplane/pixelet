@@ -18,7 +18,8 @@ fn coincident_population_is_preserved_with_constant_hierarchy_size() {
         assert!(!tree.add(entity).unwrap());
     }
     let nodes = tree.finish();
-    assert_eq!(nodes.len(), 3);
+    assert_eq!(nodes.len(), 1);
+    assert!(!nodes[0].summary.refinable);
     for n in &nodes {
         assert_eq!(n.summary.count, 100_000);
         assert_eq!(wire::decode(&wire::encode(n).unwrap()).unwrap(), *n);
@@ -69,4 +70,49 @@ fn conflicting_identity_and_unresolved_position_refuse_publication() {
             text: String::new()
         })
         .is_err());
+}
+
+#[test]
+fn spatial_resolution_reaches_beyond_two_levels_without_detail_expansion() {
+    let root = xy::parse("132110320000000").unwrap();
+    let b = xy::bounds(root);
+    let mut tree = Hierarchy::new(root, 1).unwrap();
+    for (i, x) in [0.25, 0.5, 2.25].into_iter().enumerate() {
+        tree.add(Entity {
+            id: i.to_string(),
+            position: [b[0] + x, b[1] + 0.25, 50.0],
+            text: String::new(),
+        })
+        .unwrap();
+    }
+    let nodes = tree.finish();
+    assert!(nodes.iter().any(|n| xy::depth(n.summary.key) == Some(xy::MAX_DEPTH)));
+    let terminals: Vec<_> = nodes.iter().filter(|n| !n.summary.refinable).collect();
+    assert_eq!(terminals.iter().map(|n| n.summary.count).sum::<u64>(), 3);
+    assert!(terminals.iter().any(|n| n.summary.count == 2), "transport resolution does not bound population");
+    for n in &nodes {
+        wire::validate(n).unwrap();
+        assert!(wire::encode(n).unwrap().len() <= wire::MAX_PACKET_BYTES);
+    }
+}
+
+#[test]
+fn a_vertical_stack_keeps_its_full_count_and_xyz_bounds() {
+    let root = xy::parse("132110320000000").unwrap();
+    let b = xy::bounds(root);
+    let mut tree = Hierarchy::new(root, 1).unwrap();
+    for (i, z) in [-500.0, 0.0, 500.0].into_iter().enumerate() {
+        tree.add(Entity {
+            id: i.to_string(),
+            position: [b[0], b[1], z],
+            text: String::new(),
+        })
+        .unwrap();
+    }
+    let nodes = tree.finish();
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].summary.count, 3);
+    assert_eq!(nodes[0].summary.bounds, [b[0], b[1], -500.0, b[0], b[1], 500.0]);
+    assert!(!nodes[0].summary.refinable);
+    wire::validate(&nodes[0]).unwrap();
 }

@@ -314,16 +314,47 @@ Deno.test("kernel - baked summaries refine within bounds and disabling drops res
       stderr: "piped",
     }).output();
     assert(bake.success, new TextDecoder().decode(bake.stderr));
-    const manifest = JSON.parse(await Deno.readTextFile(`${temp}/snapshot.manifest.json`));
+    const manifest = JSON.parse(await Deno.readTextFile(`${temp}/snapshot/manifest.json`));
     assertEquals(manifest.count, 1600);
     assertEquals(manifest.nodes, 21);
-    assertEquals((await Deno.readTextFile(`${temp}/snapshot.canonical.jsonl`)).trim().split("\n").map((s) => JSON.parse(s)), records);
+    assertEquals((await Deno.readTextFile(`${temp}/snapshot/canonical.jsonl`)).trim().split("\n").map((s) => JSON.parse(s)), records);
     const packets = new Map<string, U8Array>();
-    for await (const entry of Deno.readDir(`${temp}/snapshot`)) {
-      const raw = new Uint8Array(zstdDecompressSync(await Deno.readFile(`${temp}/snapshot/${entry.name}`)));
+    for await (const entry of Deno.readDir(`${temp}/snapshot/tile`)) {
+      const raw = new Uint8Array(zstdDecompressSync(await Deno.readFile(`${temp}/snapshot/tile/${entry.name}`)));
       assert(raw.length <= 341, "raw population cannot enlarge a summary packet");
       packets.set(entry.name, raw);
     }
+    await Deno.writeTextFile(`${temp}/empty.jsonl`, "");
+    const respond = async (f: Fetched) => {
+      if (!packets.has(f.name)) {
+        assertEquals(f.name.length, 15, "unknown coverage starts with a region request");
+        const empty = await new Deno.Command("cargo", {
+          cwd: new URL("../../../../", import.meta.url),
+          args: [
+            "run",
+            "--quiet",
+            "--manifest-path",
+            "crates/Cargo.toml",
+            "--bin",
+            "bake_poi_tiles",
+            "--",
+            "--root",
+            f.name,
+            "--revision",
+            "7",
+            "--input",
+            `${temp}/empty.jsonl`,
+            "--out",
+            `${temp}/${f.name}`,
+          ],
+          stdout: "piped",
+          stderr: "piped",
+        }).output();
+        assert(empty.success, new TextDecoder().decode(empty.stderr));
+        packets.set(f.name, new Uint8Array(zstdDecompressSync(await Deno.readFile(`${temp}/${f.name}/tile/${f.name}`))));
+      }
+      answer(f, 0, packets.get(f.name)!);
+    };
     const painted: string[] = [];
     const context = new Proxy({}, {
       get: (_, key) => key === "measureText" ? (s: string) => ({ width: s.length * 7 }) : key === "fillText" ? (s: string) => painted.push(s) : () => {},
@@ -354,26 +385,44 @@ Deno.test("kernel - baked summaries refine within bounds and disabling drops res
     pending_poi = [];
     action({ type: "set_setting", key: "show_poi", value: true });
     for (let i = 0; i < 30 && pending_poi.length === 0; i++) turn();
-    assertEquals(pending_poi.length, 1);
-    const root = pending_poi.shift()!;
-    assertEquals(root.name, "_root");
-    answer(root, 0, packets.get(root.name)!);
+    assert(pending_poi.length > 0 && pending_poi.length <= 4);
+    for (const root of pending_poi.splice(0)) {
+      assertEquals(root.name.length, 15);
+      await respond(root);
+    }
     for (let i = 0; i < 30; i++) turn();
-    assertEquals(poi()[SUMMARY.poi.candidates], 4, "delayed descendants retain parent candidates");
+    assert(poi()[SUMMARY.poi.candidates] > 0 && poi()[SUMMARY.poi.candidates] <= 4, "delayed descendants retain relevant parent candidates");
     assert(pending_poi.length > 0);
     const child = pending_poi.shift()!;
-    answer(child, 0, packets.get(child.name)!);
+    await respond(child);
     for (let i = 0; i < 30; i++) turn();
     const refined = poi();
-    assertEquals(refined[SUMMARY.poi.candidates], 7);
+    assert(refined[SUMMARY.poi.candidates] > 0 && refined[SUMMARY.poi.candidates] <= 8);
     assert(refined[SUMMARY.poi.resident_bytes] <= 4096);
     assert(refined[SUMMARY.poi.visible] > 0 && refined[SUMMARY.poi.visible] <= 8);
-    assert(painted.some((s) => s === "100" || s === "400"), "count badges reached the renderer's canvas paint stream");
+    for (let i = 0; i < 60; i++) {
+      for (const f of pending_poi.splice(0)) await respond(f);
+      turn();
+      assert(poi()[SUMMARY.poi.candidates] <= 8);
+      assert(poi()[SUMMARY.poi.resident_bytes] <= 4096);
+    }
+    assert(painted.includes("100"), "refined count badges reached the renderer's canvas paint stream");
+    action({ type: "set_view", dist: 10_000, polar: 0.1 });
+    for (let i = 0; i < 90; i++) turn();
+    assertEquals(poi()[SUMMARY.poi.candidates], 1, "zooming out selects the resident coarse summary");
+    action({ type: "go_to", lon: 0, lat: 0 });
+    for (let i = 0; i < 90; i++) {
+      for (const f of pending_poi.splice(0)) await respond(f);
+      turn();
+    }
+    assertEquals(poi()[SUMMARY.poi.candidates], 0, "offscreen population occupies no candidate slots");
+    assertEquals(poi()[SUMMARY.poi.pending], 0, "offscreen branches do not refine");
+    assert(poi()[SUMMARY.poi.resident_nodes] > 0, "residency is independent of the visible cut");
     action({ type: "set_setting", key: "show_poi", value: false });
     turn();
     assertEquals(poi()[SUMMARY.poi.resident_nodes], 0);
     assertEquals(poi()[SUMMARY.poi.visible], 0);
-    for (const late of pending_poi) answer(late, 0, packets.get(late.name)!);
+    for (const late of pending_poi) await respond(late);
     turn();
     assertEquals(poi()[SUMMARY.poi.resident_nodes], 0, "late responses cannot revive disabled POI");
     CORE_BUILD.call(Command.SURFACE_DELETE, packet((b) => b.u32(surface)), (r) => r);

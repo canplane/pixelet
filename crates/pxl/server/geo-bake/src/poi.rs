@@ -2,3 +2,4 @@
 
 pub mod bake;
 pub mod provider;
+pub mod snapshot;

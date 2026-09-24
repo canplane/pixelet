@@ -15,20 +15,20 @@ how it gets there and how you know it arrived.
 
 ## What the bucket holds
 
-| Prefix                  | Object                       | Named by               | Policy                                                        |
-| ----------------------- | ---------------------------- | ---------------------- | ------------------------------------------------------------- |
-| `terrain/<version>/`    | packed XTP page, `_ocean`    | quadkey, 5–15          | immutable; a re-bake is a new version                         |
-| `poi/<version>/`        | packed PXS1 summary, `_root` | quadkey, 15–17         | immutable snapshot; data refresh needs a new version          |
-| `geocode/<version>/`    | packed JSON page, `_dict`    | quadkey, 11            | version = format; monthly in-place refresh                    |
-| `asset/`                | glb, png, webp — not packed  | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever |
-| `_meta/land_pages.json` | terrain's land/ocean list    | fixed name             | mutable; rewritten with a terrain re-bake                     |
-| `_meta/build-counter`   | the official build count     | fixed name             | mutable; taken and written by CI's gate, never by hand        |
+| Prefix                  | Object                      | Named by               | Policy                                                        |
+| ----------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------- |
+| `terrain/<version>/`    | packed XTP page, `_ocean`   | quadkey, 5–15          | immutable; a re-bake is a new version                         |
+| `poi/<version>/`        | packed PXS1 summary         | quadkey, 15–23         | immutable snapshot; data refresh needs a new version          |
+| `geocode/<version>/`    | packed JSON page, `_dict`   | quadkey, 11            | version = format; monthly in-place refresh                    |
+| `asset/`                | glb, png, webp — not packed | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever |
+| `_meta/land_pages.json` | terrain's land/ocean list   | fixed name             | mutable; rewritten with a terrain re-bake                     |
+| `_meta/build-counter`   | the official build count    | fixed name             | mutable; taken and written by CI's gate, never by hand        |
 
 A page is named by its **quadkey**: the Web Mercator tile key at the zoom the
 page is held at, one base-4 digit a zoom, coarsest first (pxl-spec
 bake/quadkey.rs). The length is the level, so nothing writes a level down, and
 the three bakes differ only in how long a name they have — terrain 5 to 15
-digits for its pyramid, POI 15–17 for the bounded development snapshot, geocode
+digits for its pyramid, POI 15–23 for the bounded development snapshot, geocode
 11 because a group covers 16 pages a side. They land in one space, so
 `terrain/<v>/13211032`, `poi/<v>/13211032` and `geocode/<v>/13211032` are the
 same ground, and **one prefix is one region across all three at every level**.
@@ -119,11 +119,11 @@ so one version holds one encoding.
 
 The current POI path is opt-in development work. Do not publish its fixture
 snapshot as global coverage. When a complete snapshot is explicitly chosen
-for publication, use a fresh version prefix and verify its sibling
-`out/poi/<version>.manifest.json` first. Sync only the completed version
-directory: canonical and provenance sidecars must stay outside the bucket.
+for publication, use a fresh version prefix and verify
+`out/poi/<snapshot>/manifest.json` first. Sync only the completed snapshot’s
+`tile/` directory: canonical and provenance backing must stay outside the bucket.
 Use the manifest's content type and encoding and immutable cache control,
-then verify `_root` and each referenced refinement before changing the client
+then verify the named 15-digit root and each referenced refinement before changing the client
 version. A missing node must never be replaced with an empty population.
 
 ### Geocode
@@ -223,7 +223,7 @@ s5cmd --endpoint-url $R2 run /tmp/rekey-meta.txt
 check that it decodes rather than that a header is present:
 
 ```bash
-curl -s --compressed "https://plei.me/geo/tiles/poi/<v>/_root" | head -c 4                     # PXS1 (v7+)
+curl -s --compressed "https://plei.me/geo/tiles/poi/<v>/<15-digit-root>" | head -c 4                     # PXS1 (v7+)
 curl -s -H "Accept-Encoding: zstd" "https://plei.me/geo/tiles/terrain/<v>/<quadkey>" \
   | zstd -dcq | head -c 2 | xxd -p                                                              # 5854
 ```

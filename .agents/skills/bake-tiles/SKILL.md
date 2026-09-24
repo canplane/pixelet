@@ -28,7 +28,7 @@ Every tool writes to `./out/<kind>/<version>`, where the version defaults to
 and the last path segment of `--out` overrides it.
 
 The bucket names a page by its **quadkey** and nothing else (publish-bucket).
-POI and geocode write that name straight out, so for them the filename _is_
+POI (inside each snapshot’s `tile/`) and geocode write that name straight out, so for them the filename _is_
 the object key. Terrain does not: it writes `<level>/<page index>`, because it
 clears a level's directory to redo it and to drop the levels a run did not
 fold. Its names are translated at publish, by hard links, which is the one
@@ -145,9 +145,10 @@ and reused unless `--reclassify` is passed.
 
 ## POI
 
-The development slice bakes one 15-digit XY region and two refinement
-levels. Raw membership does not enlarge a packet. A terminal summary is
-still a count and bounds, not a bounded list of entities.
+The development slice bakes one 15-digit XY region down to the transport's
+23-digit resolution, stopping earlier where XY cannot distinguish members.
+Raw membership does not enlarge a packet. A terminal summary is still a
+count and bounds, not a bounded list of entities.
 
 ```bash
 deno task bake:poi --root <15-digit-quadkey> --revision <nonzero-u64> --out ./out/poi/<snapshot>
@@ -161,20 +162,22 @@ count once; conflicting identities, missing elevation and out-of-region
 records fail the bake. Overture acquisition streams a repeatable-read
 transaction and resolves elevation before normalization.
 
-The directory holds zstd-compressed summary nodes named by quadkey and
-`_root`. Each decoded packet is at most 341 bytes. Sibling files
-`.canonical.jsonl`, `.source.jsonl` and `.manifest.json` hold canonical
-backing, provenance and completion metadata; they are not tile objects.
-The directory is staged and renamed after all nodes are written. Existing
-output or staging files are refused. Inspect an interrupted run, then choose
-a fresh output name; there is no in-place refresh or resume.
+The snapshot's `tile/` directory holds zstd-compressed nodes named by quadkey,
+including the 15-digit region root. Each decoded packet is at most 341 bytes.
+`canonical.jsonl`, `source.jsonl` and `manifest.json` beside `tile/` hold private
+backing, provenance and completion metadata. Only `tile/` is publishable.
+The whole snapshot is staged and renamed together. Existing output or staging
+files are refused; inspect an interrupted run and choose a fresh output name.
 
-Verify the manifest's root, revision and count. Decompress `_root`: its
-first four bytes must be `PXS1`. Set `POI_SNAPSHOT_DIR` to the completed
-directory before starting `dev:tiles`, and enable `show_poi` in development
-settings. It defaults off and is unavailable in production. The kernel
-requests only summaries, keeps at most eight candidates and retains parents
-when refinement is unavailable. A missing response is not an empty region.
+Verify the manifest's root, revision and count. Decompress `tile/<root>`:
+its first four bytes must be `PXS1`. In `dev:local`, the tile server creates
+requested regions from the DB through the same snapshot writer. No snapshot
+path override is needed. Enable `show_poi` in development settings; it defaults
+off and is unavailable in production. The kernel discovers a bounded number
+of nearby visible region addresses and requests their summaries. Offscreen
+branches take no candidate slots; residency has its own byte budget. Parents
+remain until a complete relevant child cut is usable and fits. A missing
+response is not an empty region; empty regions have zero-count root packets.
 The production smoke check does not require this development snapshot.
 
 ## Geocode
@@ -212,13 +215,21 @@ data refresh is not.
 POI snapshots require a new published version prefix even for a data refresh,
 so root and refinement packets cannot mix snapshots.
 
-The dev tile server caches geocode pages in memory, so during development a
-bake change also needs its cache dropped — or the server restarted, the
-cache is purely in-process. The route is the geo root's internal branch
-(`route.json`), on the tile server rather than on either API:
+The local tile server shares one demand path across terrain, POI and geocode
+(`geo-bake/src/demand/`). `--cache` is the parent directory, default `out/dev`;
+each kind owns a private generation beneath it. Concurrent requests join the
+same job, packets are written atomically, and responses carry zstd encoding.
+Source data must stay unchanged within a running generation. After re-ingest
+or a bake change, restart or invalidate the affected kind as a whole:
 
 ```bash
 curl -X POST localhost:3001/geo/internal/world/terrain/cache/invalidate -H "x-admin-token: $ADMIN_TOKEN"
-# likewise .../world/geocode/...; the header is only
-# checked when ADMIN_TOKEN is set
+# Likewise .../world/poi/... and .../world/geocode/...; send no body.
+# The header is checked only when ADMIN_TOKEN is set.
 ```
+
+Invalidation swaps the generation. Old requests can finish against their old
+directory but cannot publish into the new one; the old directory is removed
+when its last job finishes. Geocode's dictionary and groups share a generation;
+a POI region's backing and descendants share a completed snapshot. A client
+that encounters a new POI revision resolves that region again.

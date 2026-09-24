@@ -7,7 +7,6 @@ use std::collections::BTreeMap;
 /// never the number of entries or the size of a published node.
 pub struct Hierarchy {
     root: u64,
-    leaf_depth: u32,
     revision: u64,
     summaries: BTreeMap<u64, Summary>,
     last: Option<Entity>,
@@ -16,14 +15,11 @@ pub struct Hierarchy {
 impl Hierarchy {
     pub fn new(root: u64, revision: u64) -> Result<Self, &'static str> {
         let depth = xy::depth(root).ok_or("invalid root")?;
-        // This slice covers one terrain-sized region and two refinements.
-        // It does not claim that terminal regions have bounded membership.
-        if depth != 15 || revision == 0 {
+        if depth != xy::ROOT_DEPTH || revision == 0 {
             return Err("root must have 15 digits and revision must be nonzero");
         }
         Ok(Self {
             root,
-            leaf_depth: depth + 2,
             revision,
             summaries: BTreeMap::new(),
             last: None,
@@ -42,7 +38,7 @@ impl Hierarchy {
                 return if entity == *last { Ok(false) } else { Err("conflicting entity identity") };
             }
         }
-        let mut key = xy::key_at(entity.position, self.leaf_depth).ok_or("invalid canonical XYZ")?;
+        let mut key = xy::key_at(entity.position, xy::MAX_DEPTH).ok_or("invalid canonical XYZ")?;
         if entity.id.is_empty() || !xy::contains(self.root, key) {
             return Err("entity outside coverage or without identity");
         }
@@ -51,7 +47,7 @@ impl Hierarchy {
                 key,
                 count: 0,
                 bounds: [entity.position[0], entity.position[1], entity.position[2], entity.position[0], entity.position[1], entity.position[2]],
-                refinable: xy::depth(key).unwrap() < self.leaf_depth,
+                refinable: xy::depth(key).unwrap() < xy::MAX_DEPTH,
             });
             s.count = s.count.checked_add(1).ok_or("count overflow")?;
             for i in 0..3 {
@@ -80,14 +76,36 @@ impl Hierarchy {
                 },
             );
         }
-        self.summaries
-            .values()
-            .map(|&summary| Node {
-                revision: self.revision,
-                summary,
-                children: xy::children(summary.key).iter().filter_map(|key| self.summaries.get(key).copied()).collect(),
-            })
-            .collect()
+        let mut nodes = Vec::new();
+        self.emit(self.root, &mut nodes);
+        nodes
+    }
+
+    fn summary(&self, key: u64) -> Option<Summary> {
+        self.summaries.get(&key).map(|s| Summary {
+            // XY transport cannot separate a vertical stack. Its full XYZ
+            // bounds and count survive; entity access belongs to detail.
+            refinable: s.refinable && (s.bounds[0] < s.bounds[3] || s.bounds[1] < s.bounds[4]),
+            ..*s
+        })
+    }
+
+    fn emit(&self, key: u64, nodes: &mut Vec<Node>) {
+        let summary = self.summary(key).unwrap();
+        let children: Vec<_> = if summary.refinable {
+            xy::children(key).into_iter().filter_map(|c| self.summary(c)).collect()
+        } else {
+            Vec::new()
+        };
+        let descendants: Vec<_> = children.iter().map(|c| c.key).collect();
+        nodes.push(Node {
+            revision: self.revision,
+            summary,
+            children,
+        });
+        for child in descendants {
+            self.emit(child, nodes);
+        }
     }
 }
 

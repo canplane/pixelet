@@ -6,7 +6,7 @@ use crate::layer::billboard::frustum_budget::select_visible_billboards;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
 use crate::layer::poi::{
     badge,
-    store::{self, CANDIDATES, RESIDENT_BYTES},
+    store::{self, LIMITS},
 };
 use crate::sched::tick::TickContext;
 use crate::shell::map_store::map_store;
@@ -17,6 +17,8 @@ use pxl_spec::poi::Summary;
 use pxl_spec::space::pvf3::{ivec, projection, Pvf3};
 
 const VISIBLE: usize = 4;
+// Discovery leaves candidate room for refinement within nearby regions.
+const ROOT_REGIONS: usize = 4;
 
 #[derive(Default)]
 struct Placement {
@@ -53,9 +55,10 @@ pub fn step(ctx: &mut TickContext) {
     let origin = local_world_origin();
     let base = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))];
     let v = view();
-    let eye = [base[0] + v.eye_local.x, base[1] + v.eye_local.y, base[2] + v.eye_local.z];
+    let globe = crate::layer::environment::state::globe();
     let s = store::store();
-    s.select(eye, CANDIDATES, RESIDENT_BYTES);
+    let roots = super::view::roots(base, v, globe, LIMITS.candidates.min(ROOT_REGIONS));
+    s.select(&roots, |summary| super::view::assess(summary, base, v, globe), LIMITS);
     store::demand();
     let cut = &s.cut;
     badge::retain(&cut.iter().map(|s| s.count).collect::<Vec<_>>());
@@ -73,7 +76,7 @@ pub fn step(ctx: &mut TickContext) {
     }
     let mut kept = [0u32; VISIBLE];
     let n = select_visible_billboards(&mut p.batch, VISIBLE as u32, v.width, v.height, &mut kept);
-    let mut instances = Vec::with_capacity(CANDIDATES * 10);
+    let mut instances = Vec::with_capacity(LIMITS.candidates * 10);
     for &i in &kept[..n as usize] {
         let i = i as usize;
         let slot = badge::slot(grounded[i].count);

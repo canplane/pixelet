@@ -3,3 +3,4 @@
 pub mod badge;
 pub mod placement;
 pub mod store;
+mod view;

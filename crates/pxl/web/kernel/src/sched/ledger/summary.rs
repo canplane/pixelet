@@ -291,7 +291,7 @@ fn side(out: &mut [f64]) {
             resident_bytes: poi.bytes() as f64,
             candidates: poi.cut.len() as f64,
             visible: crate::layer::poi::placement::visible() as f64,
-            pending: poi.wanted().len() as f64,
+            pending: poi.pending_count() as f64,
             hidden: billboard_dropped() as f64,
         },
     );

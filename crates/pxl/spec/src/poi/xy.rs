@@ -3,6 +3,7 @@
 //! The current transport's XY quadtree. Branching belongs to this address
 //! scheme, not to the meaning of a POI summary or entity.
 
+pub const ROOT_DEPTH: u32 = 15;
 pub const MAX_DEPTH: u32 = 23;
 pub const CHILDREN: usize = 4;
 const HALF_WORLD: f64 = 8_388_608.0;
