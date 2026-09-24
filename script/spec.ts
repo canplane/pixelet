@@ -827,19 +827,23 @@ type DataNode = number | string | boolean | DataNode[] | { [key: string]: DataNo
 type DataSpec = { $doc?: string[]; $ts?: string; $rs?: string; $tsHeader?: string; $rsHeader?: string } & Record<string, DataNode>;
 
 /** `enums`: the spec's closed sets are also written as Rust enums (see rsItems). */
+/** `tsNames`: the top-level names the TypeScript reads; the rest of the table
+ * is the Rust's alone and is not written into the shell. Absent where the
+ * TypeScript reads all of it. */
 /** `mod` is the Rust module the router declares for the file, where it is not the file's stem. */
 /** `devKey`: the key an entry of a top-level table is marked development-only
  * by. The TypeScript then also gets `<NAME>_SHIPPED`, the table without those
  * entries, for a production bundle to carry in the table's place: a filter
  * on the whole table at run time leaves every name in the artifact, and a
  * literal the build does not read is one the bundler drops. */
-const DATA_SPECS: { json: string; ts?: string; rs?: string; mod?: string; enums?: true; devKey?: string }[] = [
+const DATA_SPECS: { json: string; ts?: string; rs?: string; mod?: string; enums?: true; devKey?: string; tsNames?: string[] }[] = [
   {
     json: "spec/pxl/web/kernel/shell/setting/schema.json",
     ts: "apps/web/src/feature/setting/schema.spec.ts",
     rs: "crates/pxl/web/kernel/src/shell/setting/schema.spec.rs",
     mod: "schema_spec",
     devKey: "dev",
+    tsNames: ["SETTINGS", "DEV_SECTIONS", "CAMERA_TERRAIN_MODES"],
   },
   { json: "spec/pxl/web/kernel/layer/poi/theme.json", ts: "apps/web/src/feature/search/poi_theme.spec.ts" },
   {
@@ -848,10 +852,17 @@ const DATA_SPECS: { json: string; ts?: string; rs?: string; mod?: string; enums?
     rs: "crates/pxl/web/kernel/src/layer/character/variant.spec.rs",
     mod: "variant_spec",
     enums: true,
+    tsNames: ["groups", "DEFAULT_PERSON_VARIANT_KEY", "DEFAULT_PET_VARIANT_KEY", "PERSON_GENDER_PREFIXES"],
   },
   { json: "spec/pxl/web/render/gpu/api.json", ts: "apps/web/src/kernel/render/gpu/api.spec.ts", rs: "crates/pxl/web/render/src/gpu/api.spec.rs", mod: "api_spec" },
   { json: "spec/pxl/web/kernel/sched/ledger/ledger.json", ts: "apps/web/src/feature/dev/ledger/ledger.spec.ts", rs: "crates/pxl/web/kernel/src/sched/ledger/ledger.spec.rs", mod: "spec" },
-  { json: "spec/pxl/web/kernel/mem/mem.json", ts: "apps/web/src/kernel/mem/mem.spec.ts", rs: "crates/pxl/web/kernel/src/mem/mem.spec.rs", mod: "spec" },
+  {
+    json: "spec/pxl/web/kernel/mem/mem.json",
+    ts: "apps/web/src/kernel/mem/mem.spec.ts",
+    rs: "crates/pxl/web/kernel/src/mem/mem.spec.rs",
+    mod: "spec",
+    tsNames: ["DESKTOP_BYTES", "PHONE_BYTES", "REGION_BYTES", "RING_CAPACITY"],
+  },
 ];
 
 function isLeafWrapper(n: DataNode): n is { $value: DataNode; $doc?: string[]; $type?: string } {
@@ -1070,7 +1081,9 @@ async function dataOutputs(): Promise<Output[]> {
       if (spec.$doc) ts.push("//", ...spec.$doc.map((l) => (l === "" ? "//" : `// ${l}`)));
       const body: string[] = [];
       let usesWord = new Set<string>();
-      for (const name of names) {
+      const unknown = (d.tsNames ?? []).filter((n) => !names.includes(n));
+      if (unknown.length > 0) throw new Error(`${d.json}: tsNames lists ${unknown.join(", ")}, which the table does not have`);
+      for (const name of d.tsNames ? names.filter((n) => d.tsNames!.includes(n)) : names) {
         const n = spec[name];
         body.push("");
         const doc = typeof n === "object" && !Array.isArray(n) ? (n as { $doc?: string[] }).$doc : undefined;
@@ -1230,18 +1243,16 @@ async function routeOutputs(): Promise<Output[]> {
   const ts = [
     ...head("@pxl/web/config/route.spec.ts", "spec/pxl/spec/route.json"),
     ...all.flatMap(({ name, value }) => [...tsDoc(docs.get(name) ?? [], ""), `export const ${name} = ${JSON.stringify(value)};`, ""]),
-    "/** Every root, as the edge claims them. */",
-    `export const WORKER_FIRST = [${workerFirst.map((w) => JSON.stringify(w)).join(", ")}] as const;`,
-    "",
   ].join("\n");
 
   const worker = [
     ...head("@pxl/web/cloudflare-worker/route.spec.ts", "spec/pxl/spec/route.json"),
     "// The Worker is bundled for the Workers runtime rather than from src/, so it",
     "// cannot import the shell's copy — but it can import this one, which sits",
-    "// beside it and is written from the same JSON.",
+    "// beside it and is written from the same JSON. It relays by prefix, so the",
+    "// prefixes are all it is given.",
     "",
-    ...all.flatMap(({ name, value }) => [`export const ${name} = ${JSON.stringify(value)};`]),
+    ...all.filter(({ name }) => name.endsWith("_PREFIX")).map(({ name, value }) => `export const ${name} = ${JSON.stringify(value)};`),
     "",
   ].join("\n");
 

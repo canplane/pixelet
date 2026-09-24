@@ -14,11 +14,6 @@
 // development one; the shell's production bundle carries SETTINGS_SHIPPED,
 // the table without them, in SETTINGS' place.
 
-/** The sheet's sections, in the order they are shown. `character` is not a
- * section of the sheet at all — its two settings are picked from the
- * drawer's Character tab (feature/character/picker.tsx). */
-export const SETTING_SECTIONS = ["display", "camera", "editing", "lighting", "quality", "debug", "character"] as const;
-
 /** The sections that are a development build's as a whole. One of these is
  * shown under `__IS_DEV__` only and carries the badge on its heading, so
  * its rows do not repeat it; a `dev` row in any other section carries its
@@ -36,21 +31,6 @@ export const DEV_SECTIONS = ["debug"] as const;
  *             as far as straight down, so every zoom level stays
  *             reachable at the cost of an angle nobody asked for. */
 export const CAMERA_TERRAIN_MODES = ["through", "stop", "climb"] as const;
-
-/** Where the ambient occlusion comes from.
- *
- *   off    — none.
- *   corner — a chunk shades its own corners from the face bits the edge
- *            shading reads (crates/pxl/web/render/src/frame/shader/chunk.wgsl):
- *            the floor along a cube and the inside of a corner, over about
- *            half a cell, scaling the ambient and hemisphere light only.
- *            A few fragment ops behind a uniform.
- *   screen — N8AO as the three.js build ran it until 2026-09-14
- *            (crates/pxl/web/render/src/gpu/ao.rs): the world's depth drawn
- *            once more, the occlusion sampled from it at half resolution,
- *            denoised, and applied to every lit surface as a warm dark
- *            tint. Five passes and 11 bytes a pixel. */
-export const AO_MODES = ["off", "corner", "screen"] as const;
 
 export const SETTINGS = {
   /** Ground colour from the art pack (four sampler2DArray taps per fragment)

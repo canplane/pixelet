@@ -22,15 +22,9 @@
 
 // The Worker is bundled for the Workers runtime rather than from src/, so it
 // cannot import the shell's copy — but it can import this one, which sits
-// beside it and is written from the same JSON.
+// beside it and is written from the same JSON. It relays by prefix, so the
+// prefixes are all it is given.
 
-export const GEO_ROOT = "/geo";
-export const API_ROOT = "/api";
-export const ASSET_ROOT = "/asset";
-export const TILE_ROOT = "/geo/tiles";
-export const SEARCH_URL = "/geo/search";
-export const GEO_INTERNAL = "/geo/internal";
-export const API_INTERNAL = "/api/internal";
 export const GEO_PREFIX = "/geo/";
 export const API_PREFIX = "/api/";
 export const ASSET_PREFIX = "/asset/";
