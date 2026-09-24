@@ -75,7 +75,7 @@ pub fn step(ctx: &mut TickContext) {
             for c in poi.cells[from..].iter().take_while(|c| c.cell < hi) {
                 let cell = Cell::at(chunk.page, c.cell);
                 // Where no ground is drawn under it, it is not drawn either.
-                let Some((drawn, _)) = sched.surface_at(cell.mid()) else { continue };
+                let Some((drawn, _)) = sched.surface_at(&cell.mid()) else { continue };
                 let t = cells.entry(cell.up(drawn.saturating_sub(cell.level()))).or_default();
                 t.count += c.count;
                 t.name = poi.name(c).map(|_| (chunk.page, c.name));
@@ -85,7 +85,7 @@ pub fn step(ctx: &mut TickContext) {
     p.batch.reset();
     let mut labelled = Vec::new();
     for (cell, t) in cells {
-        let Some((_, top)) = sched.surface_at(cell.mid()) else { continue };
+        let Some((_, top)) = sched.surface_at(&cell.mid()) else { continue };
         let label = match t.name {
             Some((page, name)) if t.count == 1 => Label::Place { page, name },
             _ => Label::Count(t.count),
@@ -162,7 +162,7 @@ pub fn focus(id: &str) -> bool {
         return false;
     }
     let cell = Cell::at(LevelPage::of_subject(subject), index);
-    crate::shell::shell::go_to(pxl_spec::space::pvf3::Pvf3 { i: cell.mid(), ..Default::default() });
+    crate::shell::shell::go_to(cell.mid());
     let camera = crate::control::camera::store::camera_store();
     let dist = Some(camera.view_state.dist / 2.0);
     camera.set_view_state(crate::control::camera::store::ViewPatch { dist, azimuth: None, polar: None });

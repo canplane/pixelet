@@ -14,7 +14,7 @@ use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_DEBUG};
 use pxl_render::gpu::api::word_bytes;
 use pxl_render::gpu::surface::DPR_MAX;
-
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::indexer::{L3_BASE, L3_CENTER};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::projection;
@@ -224,15 +224,15 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     projection::unproject(&mut raw_v, ivec::sub(map_center.i, map_origin), map_center.f);
     let gnd_v = [raw_v[0], raw_v[1], get_ele(map_center).unwrap_or(0.0)];
     let mut quant_v = [0.0; 3];
-    floor3n(&gnd_v, 1.0, &mut quant_v);
+    floor3n(&gnd_v, U_PER_CELL, &mut quant_v);
 
     // The floating origin, grounded and floored: local (0, 0, ground).
     let mut anchor_base_gnd_v = [0.0; 3];
     anchor_base_gnd_v[2] = get_ele(&Pvf3 { i: map_origin, f: 0 }).unwrap_or(0.0);
     let mut anchor_base_quant_v = [0.0; 3];
-    floor3n(&anchor_base_gnd_v, 1.0, &mut anchor_base_quant_v);
+    floor3n(&anchor_base_gnd_v, U_PER_CELL, &mut anchor_base_quant_v);
 
-    s.r#box(quant_v, 1.0, Some("floor(map_center)"));
+    s.r#box(quant_v, U_PER_CELL, Some("floor(map_center)"));
     s.point(anchor_base_quant_v, Some("anchor_base (map_origin)"));
     s.labelled_line(quant_v, raw_v, None, false);
     s.labelled_line(quant_v, anchor_base_quant_v, Some("floor(map_center) <-> anchor_base (map_origin)"), true);

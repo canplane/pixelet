@@ -2,7 +2,7 @@
 
 use super::*;
 use pxl_spec::bake::poi_page::PoiPage;
-use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::pvf3::{ivec, Pvf3};
 use pxl_spec::space::pyramid::{cell_index, span_of, Cell, CHUNK_CELLS};
 use window::ring_rect;
 
@@ -52,7 +52,11 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
         for y in y0..y0 + n {
             for x in x0..x0 + n {
                 let p = LevelPage::new(level, ivec::gather(x, y, 0));
-                let cells = at.iter().map(|&a| Cell::of(level, a)).filter(|c| c.page() == p).map(|c| (c.index(), ""));
+                let cells = at
+                    .iter()
+                    .map(|&a| Cell::of(level, &Pvf3 { i: a, ..Default::default() }))
+                    .filter(|c| c.page() == p)
+                    .map(|c| (c.index(), ""));
                 pages.push((p, PoiPage::of_places(cells)));
             }
         }

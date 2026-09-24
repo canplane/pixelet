@@ -9,7 +9,7 @@ use pxl_render::frame::draw::{DrawList, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_C
 use pxl_render::look::style::marker_colors;
 use pxl_render::mesh::chunk_mesher::{mesh_words, write_lone_box, Heights, FINE_BOX_WORDS};
 use pxl_render::mesh::volume::NO_LAYER;
-
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
@@ -88,13 +88,13 @@ pub fn hover_cursor_step() {
     let preview_size = match (&hovered_object, active_tool) {
         (Some(o), ActiveTool::Eraser | ActiveTool::Pointer) => o.size,
         (_, ActiveTool::Decor) => DECOR_SIZE,
-        _ if digging_terrain => 1.0,
+        _ if digging_terrain => U_PER_CELL,
         _ => ui.object_size,
     };
 
     // The ghost box fills [anchor, anchor + current_scale] on every axis — every
     // anchor this file sees is a min corner.
-    let current_scale = if use_object_style { preview_size } else { 1.0 };
+    let current_scale = if use_object_style { preview_size } else { U_PER_CELL };
     // object/collision.rs's is_placement_blocked is the one shared place that
     // decides what counts as blocked, so the preview here and the real commit
     // can't silently disagree.

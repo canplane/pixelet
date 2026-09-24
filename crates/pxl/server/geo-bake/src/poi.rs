@@ -46,7 +46,7 @@ pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec
     for row in rows {
         let mut at = Pvf3::default();
         epsg3857::project(&mut at, row.get(0), row.get(1), 0.0);
-        let cell = Cell::of(0, at.i);
+        let cell = Cell::of(0, &at);
         let leaf = cell.page();
         // The envelope is an index's bound, closed on its far edges; the
         // page a place belongs to is the lattice's.

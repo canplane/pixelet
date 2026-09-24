@@ -13,9 +13,9 @@
 
 use pxl_render::mesh::volume::{unpack_sub_cell_fraction, MaterialClass, SUB_CELL_NONE};
 use pxl_render::mesh::voxel_scan::{BandView, ColumnRuns};
-use pxl_spec::space::pyramid::CHUNK_CELLS;
-
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pyramid::CHUNK_CELLS;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::vec3::Vec3;
 
@@ -24,7 +24,7 @@ use crate::world::chunk::node::World;
 use crate::world::chunk::table::Scheduler;
 
 /// A chunk's side, in units.
-const CHUNK_W: f64 = CHUNK_CELLS as f64;
+const CHUNK_W: f64 = CHUNK_CELLS as f64 * U_PER_CELL;
 /// A hover ray crosses at most a few chunks at the interact radius.
 const MAX_ENTRIES: usize = 4;
 /// Hard budget: at 1.25 MiB each, eight direct bands are about 10 MiB.
@@ -110,15 +110,15 @@ fn run_box(cx: u32, cy: u32, runs: &ColumnRuns, i: usize) -> (V3, V3) {
     let sub = runs.sub[i];
     let sub_sz = (sub >> 24) as u8;
     if sub_sz == SUB_CELL_NONE {
-        let min = [cx as f64, cy as f64, runs.z0[i] as f64];
-        let max = [(cx + 1) as f64, (cy + 1) as f64, (runs.z1[i] + 1) as f64];
+        let min = [cx as f64 * U_PER_CELL, cy as f64 * U_PER_CELL, runs.z0[i] as f64 * U_PER_CELL];
+        let max = [(cx + 1) as f64 * U_PER_CELL, (cy + 1) as f64 * U_PER_CELL, (runs.z1[i] + 1) as f64 * U_PER_CELL];
         return (min, max);
     }
-    let sz = unpack_sub_cell_fraction(sub_sz);
+    let sz = unpack_sub_cell_fraction(sub_sz) * U_PER_CELL;
     let min = [
-        (cx as f64 + unpack_sub_cell_fraction((sub & 255) as u8)),
-        (cy as f64 + unpack_sub_cell_fraction(((sub >> 8) & 255) as u8)),
-        (runs.z0[i] as f64 + unpack_sub_cell_fraction(((sub >> 16) & 255) as u8)),
+        (cx as f64 + unpack_sub_cell_fraction((sub & 255) as u8)) * U_PER_CELL,
+        (cy as f64 + unpack_sub_cell_fraction(((sub >> 8) & 255) as u8)) * U_PER_CELL,
+        (runs.z0[i] as f64 + unpack_sub_cell_fraction(((sub >> 16) & 255) as u8)) * U_PER_CELL,
     ];
     (min, [min[0] + sz, min[1] + sz, min[2] + sz])
 }
@@ -304,16 +304,16 @@ impl Raycast {
         };
 
         if dx.abs() < 1e-9 && dy.abs() < 1e-9 {
-            let cx = (ox).floor();
-            let cy = (oy).floor();
+            let cx = (ox / U_PER_CELL).floor();
+            let cy = (oy / U_PER_CELL).floor();
             if cx < 0.0 || cx >= span || cy < 0.0 || cy >= span {
                 return None;
             }
             return test_cell(column, cx as u32, cy as u32);
         }
 
-        let mut walk = GridWalk::new(ox, oy, dx, dy, 1.0);
-        let max_cells = (max_dist.min(CHUNK_W * 1.5)).ceil() as usize + 2;
+        let mut walk = GridWalk::new(ox, oy, dx, dy, U_PER_CELL);
+        let max_cells = (max_dist.min(CHUNK_W * 1.5) / U_PER_CELL).ceil() as usize + 2;
         for _ in 0..max_cells {
             let (cell_x, cell_y) = (walk.x, walk.y);
             if cell_x >= 0.0 && cell_x < span && cell_y >= 0.0 && cell_y < span {

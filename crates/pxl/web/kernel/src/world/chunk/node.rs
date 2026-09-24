@@ -28,7 +28,7 @@ use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
-use pxl_spec::bake::constant::ELE_PADDED_SPAN;
+use pxl_spec::bake::constant::{ELE_PADDED_SPAN, U_PER_CELL};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -446,9 +446,11 @@ fn objects_revision_of(level: u32, base: IVec) -> u32 {
 /// Whether the objects of column `col` fold into the level-`level` chunk at
 /// `base`: its own cells, and the one-cell apron around them a fold reads.
 fn folds_into(level: u32, base: IVec, col: IVec) -> bool {
-    let (s, span, w) = (1i64 << level, chunk_span_of(level) as i64, CHUNK_CELLS as i64);
-    let (o, x0, y0) = (FROM_L2_IDX(col), ivec::X(base), ivec::Y(base));
-    let (ox, oy) = (ivec::X(o), ivec::Y(o));
+    // In units: a cell of the level, the chunk, and a column, which is a
+    // leaf chunk.
+    let (s, span, w) = (U_PER_CELL * f64::from(1u32 << level), chunk_span_of(level), chunk_span_of(0));
+    let (o, x0, y0) = (FROM_L2_IDX(col), ivec::X(base) as f64, ivec::Y(base) as f64);
+    let (ox, oy) = (ivec::X(o) as f64, ivec::Y(o) as f64);
     ox + w > x0 - s && ox < x0 + span + s && oy + w > y0 - s && oy < y0 + span + s
 }
 
@@ -685,7 +687,7 @@ impl Builder {
     /// its page's lanes and where it starts in them, and the structure
     /// setting. Resident or not, whichever level draws the ground there.
     pub fn leaf_source(&self, base: IVec) -> Option<LeafSource> {
-        let cell = Cell::of(0, base);
+        let cell = Cell::of(0, &pxl_spec::space::pvf3::Pvf3 { i: base, ..Default::default() });
         let (leaf, first) = (cell.page(), cell.index());
         let page = Terrain::pyramid().get(leaf).map(page_lanes)?;
         Some(LeafSource {
@@ -717,7 +719,7 @@ impl Builder {
     /// whichever level it is drawn at. With what it is valid for, which a
     /// cached composite is compared by.
     pub fn compose_leaf(&mut self, world: &mut World, base: IVec) -> Option<(usize, u32)> {
-        let cell = Cell::of(0, base);
+        let cell = Cell::of(0, &pxl_spec::space::pvf3::Pvf3 { i: base, ..Default::default() });
         let (leaf, first) = (cell.page(), cell.index());
         let page = Terrain::pyramid().get(leaf).map(page_lanes)?;
         let (tx0, ty0) = (first % PAGE_CELLS, first / PAGE_CELLS);

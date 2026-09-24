@@ -3,9 +3,11 @@
 //! What a view is measured from.
 
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::CHUNK_CELLS;
+use pxl_spec::space::pyramid::chunk_span_of;
 
-const CHUNK_ALIGN: i64 = !(CHUNK_CELLS as i64 - 1);
+/// A leaf chunk's side in units, as a mask: a chunk is a whole number of
+/// units whatever a cell is.
+const CHUNK_ALIGN: i64 = !(chunk_span_of(0) as i64 - 1);
 
 /// The position a view's ranges are measured from: the view centre, snapped
 /// down to a chunk.

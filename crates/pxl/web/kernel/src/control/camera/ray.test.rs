@@ -9,7 +9,7 @@
 // saved, so that number outlives the session.
 
 use pxl_spec::bake::cell_spec::OBJECT_SIZES;
-
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::{fvec, ivec};
 
 use super::*;
@@ -45,7 +45,7 @@ fn lattice(p: &Pvf3) -> (i64, i64, i64) {
 #[test]
 fn world_struck_corner_at_cell_size_lands_on_the_struck_cell_with_no_sub_cell_residue() {
     for (name, hit) in cases() {
-        let p = world_struck_corner(&hit, 1.0, 0);
+        let p = world_struck_corner(&hit, U_PER_CELL, 0);
         assert_eq!(lattice(&p), (3, 5, 2), "{name}");
         assert_eq!((fvec::X(p.f), fvec::Y(p.f), fvec::Z(p.f)), (0, 0, 0), "{name}");
     }
@@ -58,7 +58,7 @@ fn world_struck_corner_at_cell_size_lands_on_the_struck_cell_with_no_sub_cell_re
 #[test]
 fn world_struck_corner_at_cell_size_names_the_cell_every_tier_lands_inside() {
     for (name, hit) in cases() {
-        let cell = lattice(&world_struck_corner(&hit, 1.0, 0));
+        let cell = lattice(&world_struck_corner(&hit, U_PER_CELL, 0));
         for size in OBJECT_SIZES {
             assert_eq!(lattice(&world_struck_corner(&hit, size, 0)), cell, "{name} at tier {size}");
         }

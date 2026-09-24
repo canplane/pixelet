@@ -6,7 +6,8 @@
 //! at a resolution of its own, since the rings of neighbouring levels meet
 //! at chunk edges and not at page edges (window.rs).
 
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::ivec;
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pyramid::{cell_base, child_of, chunk_span_of, parent_of, span_of, Cell, LevelPage, CHUNK_CELLS, PAGE_CELLS, PAGE_CHUNKS, TOP_LEVEL};
 
 /// A chunk by where it is: its page, and its corner in the page's cells.
@@ -18,9 +19,9 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    /// The level-`level` chunk a unit address stands in.
-    pub fn of(level: u32, addr: IVec) -> Chunk {
-        let cell = Cell::of(level, addr);
+    /// The level-`level` chunk a point stands in.
+    pub fn of(level: u32, at: &Pvf3) -> Chunk {
+        let cell = Cell::of(level, at);
         let (tx, ty) = (cell.index() % PAGE_CELLS, cell.index() / PAGE_CELLS);
         Chunk {
             page: cell.page(),
@@ -31,9 +32,8 @@ impl Chunk {
 
     /// The chunk of its level `dx` and `dy` chunks along from it.
     pub fn beside(self, dx: i64, dy: i64) -> Chunk {
-        let base = cell_base(self.page, self.bx, self.by);
-        let side = chunk_span_of(self.page.level) as i64;
-        Chunk::of(self.page.level, ivec::gather(ivec::X(base) + dx * side, ivec::Y(base) + dy * side, 0))
+        let [x, y] = self.at();
+        Chunk::from_at(self.page.level, [x + dx, y + dy])
     }
 
     pub fn level(self) -> u32 {
@@ -43,7 +43,7 @@ impl Chunk {
     /// The chunk's corner and side, in units.
     pub fn rect(self) -> (f64, f64, f64) {
         let base = cell_base(self.page, self.bx, self.by);
-        (ivec::X(base) as f64, ivec::Y(base) as f64, chunk_span_of(self.page.level))
+        (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)), chunk_span_of(self.page.level))
     }
 
     /// The chunk's coordinate among its level's chunks.

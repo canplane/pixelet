@@ -9,10 +9,10 @@
 //! A projected vector is a `V3`, `[f64; 3]` by value, and a page's burst of
 //! them is one `Vec`.
 
+use pxl_spec::bake::constant::{XY_CELL_PER_M, Z_CELL_PER_M};
 use pxl_spec::bake::format::CellConfig;
 use pxl_spec::bake::model::feature::{Feature, FeatureComputed, FeatureExtra, FeatureShape};
 use pxl_spec::space::adapter::epsg3857::G3857;
-use pxl_spec::space::adapter::epsg3857::U_PER_M;
 use pxl_spec::space::v3::V3;
 
 /// A raw feature shape any policy can normalize — a coastline row and each
@@ -39,14 +39,14 @@ pub trait NormalizePolicy<F: RawFeature> {
 
 /// Projects a 3857 point into page-local cell coordinates.
 fn project_to_local_cell(src: G3857, page_min: G3857) -> V3 {
-    [(src[0] - page_min[0]) * U_PER_M, (src[1] - page_min[1]) * U_PER_M, 0.0]
+    [(src[0] - page_min[0]) * XY_CELL_PER_M, (src[1] - page_min[1]) * XY_CELL_PER_M, 0.0]
 }
 
 /// Converts a raw 3857-space feature into the final local normalized feature.
 ///
 /// `None` for a feature with no points at all; the caller drops that one
 /// feature and keeps the page.
-pub fn normalize<F: RawFeature, P: NormalizePolicy<F>>(raw_feat: &F, page_min: G3857, page_z_scale: f64, policy: &P) -> Option<Feature> {
+pub fn normalize<F: RawFeature, P: NormalizePolicy<F>>(raw_feat: &F, page_min: G3857, policy: &P) -> Option<Feature> {
     let points = raw_feat.points();
     let holes = raw_feat.holes();
     let id = policy.get_id(raw_feat);
@@ -76,8 +76,8 @@ pub fn normalize<F: RawFeature, P: NormalizePolicy<F>>(raw_feat: &F, page_min: G
 
     // 7. Meter -> cell scaling
     let computed = FeatureComputed {
-        height: metrics_m.height * U_PER_M * page_z_scale,
-        width: metrics_m.width * U_PER_M,
+        height: metrics_m.height * Z_CELL_PER_M(page_min[1]),
+        width: metrics_m.width * XY_CELL_PER_M,
         layer: metrics_m.layer,
     };
 

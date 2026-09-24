@@ -94,7 +94,6 @@ fn coast_row(row: &BranchCursor<'_>) -> Result<CoastRow, MarshalError> {
 pub fn bake_terrain(page_idx: IVec, pkt: &[u8]) -> Result<Vec<u8>, MarshalError> {
     let page_bbox = epsg3857::get_page_bbox(page_idx);
     let page_min = page_bbox[0];
-    let page_z_scale = epsg3857::Z_SCALE(page_bbox[0][1]);
 
     let root = TreeReader::new(pkt)?.read_branch()?;
 
@@ -108,22 +107,22 @@ pub fn bake_terrain(page_idx: IVec, pkt: &[u8]) -> Result<Vec<u8>, MarshalError>
 
     for i in 0..buildings.len {
         for raw in from_building_row(&building_row(&buildings.at_branch(i)?)?) {
-            feats.extend(normalize(&raw, page_min, page_z_scale, &OverturePolicy));
+            feats.extend(normalize(&raw, page_min, &OverturePolicy));
         }
     }
     for i in 0..segments.len {
         for raw in from_segment_row(&segment_row(&segments.at_branch(i)?)?) {
-            feats.extend(normalize(&raw, page_min, page_z_scale, &OverturePolicy));
+            feats.extend(normalize(&raw, page_min, &OverturePolicy));
         }
     }
     for i in 0..base.len {
         for raw in from_base_row(&base_row(&base.at_branch(i)?)?) {
-            feats.extend(normalize(&raw, page_min, page_z_scale, &OverturePolicy));
+            feats.extend(normalize(&raw, page_min, &OverturePolicy));
         }
     }
     for i in 0..coasts.len {
         for raw in from_coast_row(&coast_row(&coasts.at_branch(i)?)?) {
-            feats.extend(normalize(&raw, page_min, page_z_scale, &CoastPolicy));
+            feats.extend(normalize(&raw, page_min, &CoastPolicy));
         }
     }
 

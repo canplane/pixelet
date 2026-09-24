@@ -1,7 +1,51 @@
 // pxl-spec/bake/constant.rs
 
-use crate::space::indexer::L3_SHAMT;
+use crate::space::adapter::epsg3857::{U_PER_M, Z_SCALE};
+use crate::space::indexer::{L2_SHAMT, L3_SHAMT};
 use crate::space::sparse_tree::mem::SparseTreeLayout;
+
+// ---- Unit System ----
+
+/// UNIT DEFINITIONS:
+/// - [u]    : Canonical world unit.
+/// - [cell] : Discrete raster unit.
+/// - [m]    : Physical meters (EPSG:3857 based).
+///
+/// SCALE HIERARCHY:
+/// - CELL_SHAMT defines the cell<->u relation (cell.spec.rs, from cell.json).
+/// - when CELL_SHAMT = -1, 1u = 2cell.
+pub use super::cell_spec::{CELL_SHAMT, U_PER_CELL};
+
+// Valid when CELL_SHAMT <= 0.
+const CELL_PER_U: u32 = 1 << -CELL_SHAMT;
+
+pub const XY_CELL_PER_M: f64 = CELL_PER_U as f64 * U_PER_M;
+
+/// Vertical [cell] units per physical meter at the owning L3 page.
+///
+/// Semantics:
+/// - Input `y_m` is EPSG:3857 planar Y in meters.
+/// - Mercator vertical scale is snapped to the owning L3 page base via `Z_SCALE(y_m)`.
+/// - All points within the same L3 page therefore share the same Z quantization factor.
+///
+/// Used for DB/bake-side elevation and feature height quantization so that
+/// terrain/object Z contracts match the shared page-constant Mercator rule.
+#[allow(non_snake_case)]
+pub fn Z_CELL_PER_M(y_m: f64) -> f64 {
+    XY_CELL_PER_M * Z_SCALE(y_m)
+}
+
+// ---- Grid Layout (Horizontal) ----
+
+/// One L3 page span in raster cells.
+pub const PAGE_CELL_SPAN: u32 = 1 << (L3_SHAMT as i32 - CELL_SHAMT);
+
+/// One L2 chunk span in raster cells.
+pub const CHUNK_CELL_SPAN: u32 = 1 << (L2_SHAMT as i32 - CELL_SHAMT);
+
+// A baked cell is the pyramid's level-0 cell, so a page's raster is the
+// pyramid's page of cells.
+const _: () = assert!(PAGE_CELL_SPAN == crate::space::pyramid::PAGE_CELLS, "a page's raster is the pyramid's page");
 
 // ---- Elevation (Sampling Contract) ----
 
@@ -13,12 +57,12 @@ use crate::space::sparse_tree::mem::SparseTreeLayout;
 //
 // 2. INTERPOLATION MAPPING:
 //    Source grid coordinates [sx, sy] are derived from texel [tx, ty] via:
-//    step = PAGE_CELLS / PAGE_ELE_SPAN (512 / 32 = 16 cells a sample)
+//    step = PAGE_CELL_SPAN / PAGE_ELE_SPAN (512 / 32 = 16 cells a sample)
 //    sx = tx / step + pad - 0.5
 //
 // 3. QUANTIZATION:
 //    Elevation is stored as I16 [cell] units.
-//    Renderer must multiply by 1.0 to restore world [u] units.
+//    Renderer must multiply by U_PER_CELL to restore world [u] units.
 
 /// Inner elevation sample count across one L3 page.
 ///
@@ -46,7 +90,7 @@ pub const PAGE_ELE_SPAN: u32 = 1 << (L3_SHAMT + 1 - 5);
 ///
 /// The pad buys a second thing, and that is why it is a property of the
 /// format rather than of the interpolator that reads it: the padded raster
-/// reaches ELE_PAD samples — 2 * (PAGE_CELLS / PAGE_ELE_SPAN) = 32 cells
+/// reaches ELE_PAD samples — 2 * (PAGE_CELL_SPAN / PAGE_ELE_SPAN) = 32 cells
 /// — past the page's own span, so the ground height of a cell outside the
 /// page is readable from inside it. Whatever has to know what the ground
 /// beyond its own span does can ask without the neighbouring page being
@@ -60,15 +104,20 @@ pub const ELE_PADDED_SPAN: u32 = PAGE_ELE_SPAN + 2 * ELE_PAD;
 /// Object sub-block (SVO) octree layout — one instance per occupied L1
 /// cell, not one global tree (`resolve`/`set` only ever consume the low
 /// `max-min` bits of the key, so a tree only distinguishes position within
-/// one `2^(max-min)`-wide span).
+/// one `2^(max-min)`-wide span). min/max track CELL_SHAMT so this rescales
+/// automatically the same way object/size.ts's OBJECT_SIZES already does.
 ///
-/// dep = max - min = 3 matches OBJECT_SIZES exactly (4 tiers: the unit plus
-/// 3 halving steps down to an eighth of it). max = 0 (not L3_SHAMT)
+/// dep = max - min = 3 matches OBJECT_SIZES exactly (4 tiers: the root plus
+/// 3 halving steps down to U_PER_CELL/8). max = CELL_SHAMT (not L3_SHAMT)
 /// because objects never merge past
 /// one cell — sparse_tree's own set()/compact() enforce that ceiling
 /// structurally, since there's no coarser level for a tree this shallow to
 /// ever report.
-pub const OBJECT_LAYOUT: SparseTreeLayout = SparseTreeLayout { dim: 3, min: -3, max: 0 };
+pub const OBJECT_LAYOUT: SparseTreeLayout = SparseTreeLayout {
+    dim: 3,
+    min: CELL_SHAMT - 3,
+    max: CELL_SHAMT,
+};
 
 // ---- An object entry, as a column's lanes hold it ----
 

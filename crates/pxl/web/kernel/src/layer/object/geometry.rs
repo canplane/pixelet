@@ -1,5 +1,6 @@
 // pxl-kernel/layer/object/geometry.rs
 
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::fvec::FVec;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
@@ -26,7 +27,7 @@ use crate::layer::object::store::OccupiedEntry;
 /// keeps Z on the slot (a decor model's origin sits at its base, not its
 /// middle) — the X/Y half of this, not the whole thing.
 pub fn anchor_center(anchor: &Pvf3) -> Pvf3 {
-    let half = pvf3::from_real(0.5);
+    let half = pvf3::from_real(U_PER_CELL / 2.0);
     let mut out = Pvf3::default();
     pvf3::gather(&mut out, pvf3::X(anchor) + half, pvf3::Y(anchor) + half, pvf3::Z(anchor) + half);
     out
@@ -69,7 +70,7 @@ pub fn corner_aabb(i: IVec, f: FVec, size: f64, map_origin: IVec) -> Aabb {
 // to "blocked" (or the reverse). Comfortably bigger than realistic float64
 // noise over a handful of chained conversions, comfortably smaller than the
 // smallest real gap two placements could ever legitimately have (any
-// OBJECT_SIZES tier, 1.0/8 at minimum).
+// OBJECT_SIZES tier, U_PER_CELL/8 at minimum).
 const OVERLAP_EPS: f64 = 1e-6;
 
 pub fn aabb_overlap(a: &Aabb, b: &Aabb) -> bool {

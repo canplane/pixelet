@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 
-use pxl_spec::bake::constant::{BandZ, CellZ, BAND_CELLS, BAND_UNITS, MIN_LEVEL, POS_BITS, POS_MASK, STEP_UNITS};
+use pxl_spec::bake::constant::{BandZ, CellZ, BAND_CELLS, BAND_UNITS, MIN_LEVEL, POS_BITS, POS_MASK, STEP_UNITS, U_PER_CELL};
 use pxl_spec::cell::cube_types;
 use xpute_core::math::scalar::round;
 
@@ -210,15 +210,15 @@ impl Painter {
         if kind == Kind::Decor || kind == Kind::Untaught {
             return Some(0);
         }
-        let is_sub_cell = size < 1.0;
-        let cell_of = |v: f64| if is_sub_cell { (v).floor() } else { round(v) };
+        let is_sub_cell = size < U_PER_CELL;
+        let cell_of = |v: f64| if is_sub_cell { (v / U_PER_CELL).floor() } else { round(v / U_PER_CELL) };
         let cx0 = cell_of(lx).max(0.0) as u32;
         let cy0 = cell_of(ly).max(0.0) as u32;
         let z = cell_of(lz) as i32;
         if cx0 >= BAND_CELLS || cy0 >= BAND_CELLS {
             return Some(0);
         }
-        let sz_cells = (round(size) as u32).max(1);
+        let sz_cells = (round(size / U_PER_CELL) as u32).max(1);
         let cx1 = (cx0 + sz_cells).min(BAND_CELLS);
         let cy1 = (cy0 + sz_cells).min(BAND_CELLS);
         let is_air = kind == Kind::Air;
@@ -229,10 +229,10 @@ impl Painter {
         };
 
         let fraction = |v: f64| if is_sub_cell { pack_sub_cell_fraction(v) } else { 0 };
-        let sub_sz = if is_sub_cell { pack_sub_cell_fraction(size) } else { SUB_CELL_NONE as u32 };
-        let sub_ox = fraction(lx - cx0 as f64);
-        let sub_oy = fraction(ly - cy0 as f64);
-        let sub_oz = fraction(lz - z as f64);
+        let sub_sz = if is_sub_cell { pack_sub_cell_fraction(size / U_PER_CELL) } else { SUB_CELL_NONE as u32 };
+        let sub_ox = fraction((lx - cx0 as f64 * U_PER_CELL) / U_PER_CELL);
+        let sub_oy = fraction((ly - cy0 as f64 * U_PER_CELL) / U_PER_CELL);
+        let sub_oz = fraction((lz - z as f64 * U_PER_CELL) / U_PER_CELL);
         let sub = sub_ox | (sub_oy << 8) | (sub_oz << 16) | (sub_sz << 24);
         let v = Voxel { material, layer_idx, sub };
 

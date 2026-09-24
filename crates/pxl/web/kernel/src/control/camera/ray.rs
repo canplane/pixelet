@@ -14,7 +14,7 @@
 //! (world/frame/view.rs), in the root frame the chunks are placed in.
 
 use pxl_render::mesh::volume::MaterialClasses;
-
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
@@ -27,8 +27,8 @@ use crate::layer::terrain::elevation::with_ele;
 use crate::world::chunk::raycast::{ray_hit_world, RayLike, WorldHit};
 use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
 
-const INTERACT_RADIUS_CELL: f64 = 32.0 - 0.707;
-const INTERACT_RADIUS_U: f64 = INTERACT_RADIUS_CELL;
+const INTERACT_RADIUS_CELL: f64 = 32.0 / U_PER_CELL - 0.707;
+const INTERACT_RADIUS_U: f64 = INTERACT_RADIUS_CELL * U_PER_CELL;
 const INTERACT_RADIUS2_U: f64 = INTERACT_RADIUS_U * INTERACT_RADIUS_U;
 
 pub fn in_interact_radius(a: &Pvf3, b: &Pvf3) -> bool {
@@ -47,11 +47,11 @@ pub fn in_interact_radius(a: &Pvf3, b: &Pvf3) -> bool {
 /// lets the ghost and the recenter both apply a symmetric + half a cell on all
 /// three axes. Objects don't go through this — see resolve_hit_object.
 pub fn world_hover_pvf3(hit: &WorldHit, map_origin: IVec) -> Option<Pvf3> {
-    // -1.0, not 0: with_ele adds the real surface height onto this Z, so
+    // -U_PER_CELL, not 0: with_ele adds the real surface height onto this Z, so
     // starting one cell low lands the result on the struck top voxel's floor
     // (min-z corner) instead of its top face.
     let mut p = Pvf3::default();
-    projection::project(&mut p, hit.box_min[0], hit.box_min[1], -1.0);
+    projection::project(&mut p, hit.box_min[0], hit.box_min[1], -U_PER_CELL);
     p.i = ivec::add(p.i, map_origin);
     let (i, f) = (p.i, p.f);
     with_ele(&mut p, &Pvf3 { i, f })
@@ -59,9 +59,9 @@ pub fn world_hover_pvf3(hit: &WorldHit, map_origin: IVec) -> Option<Pvf3> {
 
 // Tolerance for "same nominal size"/"integer-aligned" comparisons below —
 // bigger than the sub_cell 1/256-grid round trip's own worst-case error
-// (±1.0/512, volume.rs's pack/unpack pair), smaller than the gap
-// between any two OBJECT_SIZES tiers (smallest 1.0/8).
-const SAME_EXTENT_EPS: f64 = 1.0 / 128.0;
+// (±U_PER_CELL/512, volume.rs's pack/unpack pair), smaller than the gap
+// between any two OBJECT_SIZES tiers (smallest U_PER_CELL/8).
+const SAME_EXTENT_EPS: f64 = U_PER_CELL / 128.0;
 
 /// Smallest multiple of `size` that is >= v (epsilon-fuzzed so a v already ON
 /// the grid stays put instead of bumping to the next line on float noise) —
@@ -130,14 +130,14 @@ pub fn world_adjacent_corner(hit: &WorldHit, new_size: f64, map_origin: IVec, pr
 
     // Whole-cell(-or-larger) snap to a real cell boundary — see this
     // function's own doc comment.
-    if new_size >= 1.0 - SAME_EXTENT_EPS {
+    if new_size >= U_PER_CELL - SAME_EXTENT_EPS {
         for v in out.iter_mut() {
-            let cells = *v;
+            let cells = *v / U_PER_CELL;
             let frac = cells - cells.floor();
             if !(SAME_EXTENT_EPS..=1.0 - SAME_EXTENT_EPS).contains(&frac) {
                 continue; // already (near-)integer.
             }
-            *v = cells.ceil();
+            *v = cells.ceil() * U_PER_CELL;
         }
     }
 
@@ -202,7 +202,7 @@ pub fn resolve_hit_object(hit: &WorldHit, map_origin: IVec) -> Option<OccupiedEn
     // ray landed resolves that correctly.
     let mut best = None;
     let mut best_dist2 = f64::INFINITY;
-    for o in get_objects_near(&hit_point_abs, 1.0) {
+    for o in get_objects_near(&hit_point_abs, U_PER_CELL) {
         let aabb = object_aabb(&o, map_origin);
         if !aabb_overlap(&aabb, &hit_aabb) {
             continue;

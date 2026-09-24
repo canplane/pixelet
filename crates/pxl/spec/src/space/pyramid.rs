@@ -11,12 +11,14 @@
 //! stands are decided here and nowhere else; a layer owns only what a cell
 //! carries and how a parent's cell is made from its children's (`Folds`).
 
-use super::indexer::{L2_SHAMT, L3_IDX, L3_SHAMT, L4_RANGE, SPAN_CENTER};
+use super::indexer::{L2_SHAMT, L3_IDX, L3_SHAMT, L4_RANGE};
+use super::pvf3::core::FRAC_W;
 use super::pvf3::core::IVEC_X_W;
 use super::pvf3::ivec::{self, IVec};
 use super::pvf3::projection;
-use super::pvf3::pvf3::Pvf3;
+use super::pvf3::pvf3::{self, Pvf3};
 use super::xy::TO_XY;
+use crate::bake::cell_spec::{CELL_SHAMT, U_PER_CELL};
 
 /// The coarsest level the pyramid is folded to. At level 10 — zoom 5 — a
 /// page spans about 9° of latitude, across which the page-constant vertical
@@ -33,12 +35,28 @@ pub const TOP_LEVEL: u32 = 10;
 /// exactly.
 pub const LEVEL0_ZOOM: u32 = IVEC_X_W - L3_SHAMT;
 
-/// Cells on a page's side, at every level. A level-0 cell is the unit, so
-/// at level 0 this is the L3 page's side in units.
-pub const PAGE_CELLS: u32 = 1 << L3_SHAMT;
+// ---- the lattice's scale ----
+//
+// A cell is not a unit. A level-0 cell is 2^CELL_SHAMT units (bake/cell.json),
+// and a level-k cell 2^(CELL_SHAMT + k): the lattice is shifts against the
+// unit, as sparse_tree's layout is. A page and a chunk are fixed in units —
+// the L3 and L2 blocks — so how many cells stand across one is what the scale
+// decides.
+
+/// A level-`level` cell's side, as a shift of the unit: negative where a
+/// cell is finer than one.
+pub const fn cell_shamt(level: u32) -> i32 {
+    CELL_SHAMT + level as i32
+}
+
+/// Cells on a page's side, at every level, as a shift.
+pub const PAGE_CELL_SHAMT: u32 = (L3_SHAMT as i32 - CELL_SHAMT) as u32;
+
+/// Cells on a page's side, at every level.
+pub const PAGE_CELLS: u32 = 1 << PAGE_CELL_SHAMT;
 
 /// Cells on a chunk's side, at every level: the L2 block's.
-pub const CHUNK_CELLS: u32 = 1 << L2_SHAMT;
+pub const CHUNK_CELLS: u32 = 1 << (L2_SHAMT as i32 - CELL_SHAMT);
 
 /// Chunks on a page's side.
 pub const PAGE_CHUNKS: u32 = PAGE_CELLS / CHUNK_CELLS;
@@ -48,11 +66,13 @@ pub const fn zoom_of_level(level: u32) -> u32 {
 }
 
 // The identity holds by constants agreeing, not by one deriving the rest: the
-// X lane is one Mercator world (space/adapter/3857.rs), a level-0 cell is one
-// unit, and a page is 512 cells. Any of them moving breaks the tiling's match
-// with the web map convention.
+// X lane is one Mercator world (space/adapter/3857.rs), and a page is 512
+// units. Any of them moving breaks the tiling's match with the web map
+// convention. How many cells a page is cut into is the scale's, and moves
+// nothing here.
 const _: () = {
-    assert!(PAGE_CELLS == 512, "a page is one 512-pixel tile");
+    assert!(1u32 << L3_SHAMT == 512, "a page is one 512-pixel tile");
+    assert!(CELL_SHAMT + FRAC_W as i32 >= 0, "a cell no finer than the fixed point's fraction");
     assert!(LEVEL0_ZOOM == 15, "level 0 is zoom 15 at 512 pixels, z16 at 256");
     assert!(TOP_LEVEL <= LEVEL0_ZOOM, "no level coarser than one page across the world");
 };
@@ -145,18 +165,18 @@ impl LevelPage {
 }
 
 // The space hierarchy's extents (indexer.rs) are a leaf's: a chunk is 64
-// leaf blocks, a page 512, an anchor 4096. A level is the same hierarchy over
-// its own blocks, 2^level units each, so every extent a view is measured in
-// scales with the level it is measured at.
+// units, a page 512, an anchor 4096. A level is the same hierarchy doubled
+// once per level, so every extent a view is measured in scales with the
+// level it is measured at.
 
 /// A level-`level` page's side in units.
 pub const fn span_of(level: u32) -> f64 {
-    ((PAGE_CELLS as u64) << level) as f64
+    ((1u64 << L3_SHAMT) << level) as f64
 }
 
 /// A level-`level` chunk's side in units.
 pub const fn chunk_span_of(level: u32) -> f64 {
-    ((CHUNK_CELLS as u64) << level) as f64
+    ((1u64 << L2_SHAMT) << level) as f64
 }
 
 /// A level-`level` anchor's side in units: the floating origin's cell when
@@ -203,13 +223,17 @@ pub struct Cell {
 }
 
 impl Cell {
-    /// The level-`level` cell a unit address stands in.
-    pub fn of(level: u32, addr: IVec) -> Cell {
-        let page = LevelPage::over(level, L3_IDX(addr));
-        let at = |lane: i64, page_lane: i64| (lane.div_euclid(1 << level) - (page_lane << L3_SHAMT)) as u32;
+    /// The level-`level` cell a point stands in. A point and not a unit
+    /// address, since a cell may be finer than a unit.
+    pub fn of(level: u32, at: &Pvf3) -> Cell {
+        let page = LevelPage::over(level, L3_IDX(at.i));
+        // The fixed point's lanes, in cells of this level: a floor on the
+        // signed lanes, and exact while a cell is no finer than the fraction.
+        let shift = FRAC_W as i32 + cell_shamt(level);
+        let cell = |fixed: i64, page_lane: i64| (fixed >> shift) - (page_lane << PAGE_CELL_SHAMT);
         Cell {
             page,
-            index: cell_index(at(ivec::X(addr), ivec::X(page.page)), at(ivec::Y(addr), ivec::Y(page.page))),
+            index: cell_index(cell(pvf3::X(at), ivec::X(page.page)) as u32, cell(pvf3::Y(at), ivec::Y(page.page)) as u32),
         }
     }
 
@@ -231,28 +255,28 @@ impl Cell {
         self.page.level
     }
 
-    /// The unit address of the cell's south-west corner.
-    pub fn base(self) -> IVec {
+    /// The point at the cell's south-west corner.
+    pub fn base(self) -> Pvf3 {
         cell_base(self.page, self.index % PAGE_CELLS, self.index / PAGE_CELLS)
     }
 
-    /// The unit address at the cell's middle: its corner and half its side
-    /// on the ground plane, the corner itself for a level-0 cell, whose side
-    /// is one unit.
-    pub fn mid(self) -> IVec {
+    /// The point at the cell's middle on the ground plane.
+    pub fn mid(self) -> Pvf3 {
         let base = self.base();
-        let half = (1i64 << self.page.level) / 2;
-        ivec::gather(ivec::X(base) + half, ivec::Y(base) + half, 0)
+        let half = 1i64 << (FRAC_W as i32 + cell_shamt(self.page.level) - 1);
+        let mut out = Pvf3::default();
+        pvf3::gather(&mut out, pvf3::X(&base) + half, pvf3::Y(&base) + half, 0);
+        out
     }
 
     /// The cell's side in units.
     pub fn side(self) -> f64 {
-        f64::from(1u32 << self.page.level)
+        U_PER_CELL * f64::from(1u32 << self.page.level)
     }
 
     /// The cell `levels` above that this one lies in.
     pub fn up(self, levels: u32) -> Cell {
-        Cell::of(self.page.level + levels, self.base())
+        Cell::of(self.page.level + levels, &self.base())
     }
 
     /// The centre of the cell as a thing standing on `ground` occupies it:
@@ -260,8 +284,7 @@ impl Cell {
     /// cells are as tall as they are wide. The one point every layer at this
     /// level stands a thing at.
     pub fn centre(self, ground: f64) -> Pvf3 {
-        let mut flat = Pvf3::default();
-        SPAN_CENTER(&mut flat, self.base(), self.page.level);
+        let flat = self.mid();
         let mut at = [0.0; 3];
         projection::unproject(&mut at, flat.i, flat.f);
         let mut out = Pvf3::default();
@@ -270,11 +293,13 @@ impl Cell {
     }
 }
 
-/// The unit address of the south-west corner of the cell at (tx, ty) in
-/// `page`.
-pub fn cell_base(page: LevelPage, tx: u32, ty: u32) -> IVec {
-    let first = |p: i64, t: u32| ((p << L3_SHAMT) + i64::from(t)) << page.level;
-    ivec::gather(first(ivec::X(page.page), tx), first(ivec::Y(page.page), ty), 0)
+/// The point at the south-west corner of the cell at (tx, ty) in `page`.
+pub fn cell_base(page: LevelPage, tx: u32, ty: u32) -> Pvf3 {
+    let shift = FRAC_W as i32 + cell_shamt(page.level);
+    let first = |p: i64, t: u32| ((p << PAGE_CELL_SHAMT) + i64::from(t)) << shift;
+    let mut out = Pvf3::default();
+    pvf3::gather(&mut out, first(ivec::X(page.page), tx), first(ivec::Y(page.page), ty), 0);
+    out
 }
 
 /// The parent cell a child's cell folds into, the child at quadrant `q`.

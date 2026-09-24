@@ -123,8 +123,7 @@ pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u
 /// The page's source, assembled straight out of the database.
 pub fn fetch_terrain_source(repo: &TerrainRepository, client: &mut Client, page_idx: IVec, stats: &mut SourceStats) -> Result<Vec<u8>, BakeError> {
     let page_bbox = epsg3857::get_page_bbox(page_idx);
-    let page_z_scale = epsg3857::Z_SCALE(page_bbox[0][1]);
-    let source = repo.fetch_page_source(client, page_bbox, page_z_scale)?;
+    let source = repo.fetch_page_source(client, page_bbox)?;
     Ok(pack_source(&source, stats)?)
 }
 

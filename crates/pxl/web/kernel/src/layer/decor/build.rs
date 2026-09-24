@@ -22,12 +22,12 @@ use pxl_render::gpu::api::word_bytes;
 use pxl_render::look::lod::{LodStep, TARGET_CELL_PX};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
-use pxl_spec::space::pyramid::{CHUNK_CELLS, PAGE_CELLS};
-
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::pack::unpack;
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
 use pxl_spec::space::pvf3::ivec::{gather, IVec};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, PAGE_CELLS};
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use crate::kernel::kernel;
@@ -68,7 +68,7 @@ fn decor_gone_px() -> f64 {
 /// The density a kind is scattered at on a tier: 1, or 0 when it is not drawn
 /// there.
 pub fn decor_density(extent_u: f64, lod_step: LodStep) -> f64 {
-    let projected_px = (extent_u) * *TARGET_CELL_PX / lod_step as f64;
+    let projected_px = (extent_u / U_PER_CELL) * *TARGET_CELL_PX / lod_step as f64;
     if projected_px < decor_gone_px() {
         0.0
     } else {

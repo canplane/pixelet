@@ -13,6 +13,7 @@
 //! knows the mesh's size (`Step::NeedMesh`), and the bake waits at that step
 //! for as long as the answer is that there is no room.
 
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::round;
 
@@ -594,8 +595,8 @@ impl BakeContext {
             return false;
         }
 
-        let unit = b.xy_scale as f64;
-        let z_unit = b.z_scale as f64;
+        let unit = b.xy_scale as f64 * U_PER_CELL;
+        let z_unit = b.z_scale as f64 * U_PER_CELL;
         // A box is placed by the chunk's own grid; the columns were walked
         // in the padded one.
         let apron = b.apron as f64;

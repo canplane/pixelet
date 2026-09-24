@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use base64::Engine;
 use pxl_render::mesh::paint::object::adapter::{Carve, Entries};
-use pxl_spec::bake::constant::OBJECT_LAYOUT;
+use pxl_spec::bake::constant::{OBJECT_LAYOUT, U_PER_CELL};
 use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
@@ -107,10 +107,12 @@ fn storage_key() -> String {
 // the band in finest-tier steps, which is the low bits of each lane of the
 // coordinate shifted to the finest level — and read its lanes back.
 
-const BAND_STEP_MASK: i64 = CELL_STEPS as i64 * BAND_CELLS as i64 - 1;
+/// Cells along one side of a chunk, and of a band.
+const CHUNK_CELLS: i64 = pxl_spec::space::pyramid::CHUNK_CELLS as i64;
+const BAND_STEP_MASK: i64 = CELL_STEPS as i64 * CHUNK_CELLS - 1;
 
 fn cell_size_fp() -> i64 {
-    pvf3::from_real(1.0)
+    pvf3::from_real(U_PER_CELL)
 }
 
 /// Floor division: the X axis is signed/cyclic (indexer.rs), and the divisor
@@ -928,7 +930,7 @@ fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
 /// above the surface, so without this every cube stacked on matching ground
 /// read as redundant and was silently dropped.
 fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube, show_structures: bool) -> bool {
-    if size < 1.0 {
+    if size < U_PER_CELL {
         return false;
     }
     let Some(source) = terrain_style_cube_source(cube) else { return false };

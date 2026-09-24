@@ -11,7 +11,7 @@ use crate::layer::object::store::place;
 // place()/get_objects_near() are kernel-global state (object/store.rs), not
 // scoped per-test — every test below uses its own well-separated local X so
 // its own placed objects never land in another test's ±1-cell query
-// neighborhood (1.0 is 1, so 10 units apart is comfortably clear).
+// neighborhood (U_PER_CELL is 1, so 10 units apart is comfortably clear).
 const MAP_ORIGIN: IVec = 0;
 
 fn put_block(x: f64, y: f64, z: f64) {

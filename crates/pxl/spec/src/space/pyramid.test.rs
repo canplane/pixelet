@@ -22,18 +22,22 @@ fn a_child_is_its_parent_and_slot_in_two_and_three_dimensions() {
 /// XY the middle of its span and its Z half its side above the ground.
 #[test]
 fn a_cells_centre_is_its_middle_and_half_its_side_above_the_ground() {
-    let addr = ivec::gather(-1234, 5678, 0);
+    let point = Pvf3 {
+        i: ivec::gather(-1234, 5678, 0),
+        ..Default::default()
+    };
     for level in [0, 3, 7] {
-        let cell = Cell::of(level, addr);
+        let cell = Cell::of(level, &point);
         assert_eq!(cell.level(), level);
-        assert_eq!(Cell::of(level, cell.base()), cell, "a cell is found from its own corner");
-        assert_eq!(cell.up(2), Cell::of(level + 2, addr), "a block is the cell over it");
+        assert_eq!(Cell::of(level, &cell.base()), cell, "a cell is found from its own corner");
+        assert_eq!(cell.up(2), Cell::of(level + 2, &point), "a block is the cell over it");
         let side = cell.side();
         let mut at = [0.0; 3];
         let c = cell.centre(10.0);
         projection::unproject(&mut at, c.i, c.f);
+        let base = cell.base();
         assert_eq!(at[2], 10.0 + side / 2.0);
-        assert_eq!(at[0], ivec::X(cell.base()) as f64 + side / 2.0);
-        assert_eq!(at[1], ivec::Y(cell.base()) as f64 + side / 2.0);
+        assert_eq!(at[0], pvf3::to_real(pvf3::X(&base)) + side / 2.0);
+        assert_eq!(at[1], pvf3::to_real(pvf3::Y(&base)) + side / 2.0);
     }
 }

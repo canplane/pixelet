@@ -30,7 +30,9 @@ use pxl_render::look::lod::{Ladder, COARSEST};
 use pxl_render::mesh::chunk_mesher::{box_bounds, Heights};
 use pxl_render::mesh::paint::terrain::adapter::ChunkSample;
 
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::Pvf3;
 use pxl_spec::space::pyramid::TOP_LEVEL;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::heap::alloc;
@@ -961,9 +963,10 @@ impl Scheduler {
             let mut sources = Vec::with_capacity((n * n) as usize);
             for cy in 0..n {
                 for cx in 0..n {
-                    let base = ivec::gather(x0 + cx * CHUNK_CELLS as i64, y0 + cy * CHUNK_CELLS as i64, 0);
+                    let leaf = chunk_span_of(0) as i64;
+                    let base = ivec::gather(x0 + cx * leaf, y0 + cy * leaf, 0);
                     if let Some(source) = self.builder.leaf_source(base) {
-                        sources.push((base, source, ((cx * CHUNK_CELLS as i64) as f64, (cy * CHUNK_CELLS as i64) as f64)));
+                        sources.push((base, source, ((cx * leaf) as f64, (cy * leaf) as f64)));
                     }
                 }
             }
@@ -1647,12 +1650,12 @@ impl Scheduler {
     /// chunk `drawn` gives for that ground, so it is the surface on the
     /// screen — the tier a crossfade shows more of, a stale chunk while its
     /// replacement builds — and none where nothing drawn stands there.
-    pub fn surface_at(&self, addr: IVec) -> Option<(u32, f64)> {
+    pub fn surface_at(&self, at: &Pvf3) -> Option<(u32, f64)> {
         (0..=TOP_LEVEL).find_map(|level| {
-            let id = self.mounted.get(&Chunk::of(level, addr))?;
+            let id = self.mounted.get(&Chunk::of(level, at))?;
             let d = self.drawn_of(&self.slots[*self.index.get(id)?])?;
-            let cell = Cell::of(d.cell_level(), addr);
-            let first = Cell::of(d.cell_level(), d.base);
+            let cell = Cell::of(d.cell_level(), at);
+            let first = Cell::of(d.cell_level(), &Pvf3 { i: d.base, ..Default::default() });
             let at = |i: u32| i % PAGE_CELLS;
             let (bx, by) = (at(cell.index()).wrapping_sub(at(first.index())), (cell.index() / PAGE_CELLS).wrapping_sub(first.index() / PAGE_CELLS));
             Some((d.cell_level(), d.top(bx, by)?))
@@ -2425,7 +2428,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
 /// for coarse, independent of source or POI cardinality.
 fn surface_centres(words: &[u32], stride: usize, step: u32, level: u32, heights: Heights) -> Box<[u32]> {
     let axis = (CHUNK_CELLS / step) as usize;
-    let unit = (step << level) as f64;
+    let unit = (step << level) as f64 * U_PER_CELL;
     let mut tops = vec![0; axis * axis];
     for r in words.chunks_exact(stride) {
         let (min, size) = box_bounds(r, unit, heights);

@@ -8,7 +8,7 @@
 
 use pxl_render::frame::draw::{DrawList, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE};
 use pxl_render::gpu::api::word_bytes;
-
+use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{add3, center3n, floor3n, V3};
@@ -27,9 +27,9 @@ use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 
 // The numerator (4) is a world-space distance, not a cell count — it fixes the
-// zone's footprint size independent of 1.0. The .707 shave is a fixed
+// zone's footprint size independent of U_PER_CELL. The .707 shave is a fixed
 // one-cell diagonal correction in cell units, so it does not scale either.
-const ZONE_RADIUS_CELL: f64 = 4.0 - 0.707;
+const ZONE_RADIUS_CELL: f64 = 4.0 / U_PER_CELL - 0.707;
 const ZONE_RADIUS2_CELL: f64 = ZONE_RADIUS_CELL * ZONE_RADIUS_CELL;
 
 /// A zone cell: its offset from the centre, and which of its sides (top,
@@ -55,7 +55,7 @@ fn zone_samples() -> Vec<ZoneSample> {
             let d_right = (dx + 1.0) * (dx + 1.0) + dy2;
             let d_left = (dx - 1.0) * (dx - 1.0) + dy2;
             out.push(ZoneSample {
-                off: [dx, dy, -1.0],
+                off: [dx * U_PER_CELL, dy * U_PER_CELL, -U_PER_CELL],
                 borders: [
                     flag(d_top > ZONE_RADIUS2_CELL),
                     flag(d_bottom > ZONE_RADIUS2_CELL),
@@ -127,7 +127,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
     };
     let raw = [pos[0], pos[1], center_z];
     let mut center_pos = [0.0; 3];
-    floor3n(&raw, 1.0, &mut center_pos);
+    floor3n(&raw, U_PER_CELL, &mut center_pos);
 
     let tiles = Terrain::pyramid().level(0).revision();
     if p.zone_for != Some((center_pos, tiles)) {
@@ -143,7 +143,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
             // launch that instance away from the rest of the zone.
             let delta_ele = get_ele(&coord).unwrap_or(center_pos[2]) - center_pos[2];
             let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
-            center3n(&lifted, 1.0, &mut v);
+            center3n(&lifted, U_PER_CELL, &mut v);
             lane.extend([
                 v[0] as f32,
                 v[1] as f32,
@@ -157,7 +157,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
         let count = p.samples.len() as u32;
         world_of(|world, sched| {
             // SAFETY: the zone's floats are in the kernel's memory, read before this returns.
-            unsafe { sched.markers.set_zone(world, &mut sched.draw, center_pos, count, lane.as_ptr() as usize, ZONE_RADIUS_CELL) };
+            unsafe { sched.markers.set_zone(world, &mut sched.draw, center_pos, count, lane.as_ptr() as usize, ZONE_RADIUS_CELL * U_PER_CELL) };
         });
         p.shown = true;
         request_world_tick();
