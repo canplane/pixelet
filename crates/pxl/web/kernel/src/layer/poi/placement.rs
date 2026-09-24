@@ -59,7 +59,7 @@ pub fn step(ctx: &mut TickContext) {
     let pages = PoiPage::pyramid();
     let sched = &crate::kernel::kernel().sched;
     let mut cells: BTreeMap<Cell, u32> = BTreeMap::new();
-    for &(chunk, _) in &pages.cover().drawn {
+    for &chunk in &pages.cover().0.drawn {
         let Some(poi) = pages.get(chunk.page) else { continue };
         for ty in chunk.by..chunk.by + CHUNK_CELLS {
             let (lo, hi) = (cell_index(chunk.bx, ty), cell_index(chunk.bx + CHUNK_CELLS, ty));

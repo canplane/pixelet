@@ -258,11 +258,18 @@ impl Domain {
         x0 >= rx && y0 >= ry && x0 + side <= rx + rside && y0 + side <= ry + rside
     }
 
-    /// Whether `c`'s ground is any of what the view wants.
-    pub fn contains(&self, c: Chunk) -> bool {
-        let (x0, y0, side) = c.rect();
-        let (rx, ry, rside) = self.rings[self.rings.len() - 1];
-        x0 < rx + rside && rx < x0 + side && y0 < ry + rside && ry < y0 + side
+    /// Whether the view wants `c`'s ground at the window's top: no ring is
+    /// over it, so nothing coarser would draw that ground's far steps.
+    pub fn outermost(&self, c: Chunk) -> bool {
+        let top = std::iter::once(c).chain(c.ancestors()).find(|a| a.level() + 1 == self.window.end);
+        top.is_some_and(|t| !self.splits(t))
+    }
+
+    /// The chunk over `c`'s ground at the level the view wants that ground
+    /// at: `c` itself where the view wants it at `c`'s level or finer.
+    pub fn wanted_over(&self, c: Chunk) -> Chunk {
+        let chain: Vec<Chunk> = std::iter::once(c).chain(c.ancestors().take_while(|a| a.level() < self.window.end)).collect();
+        chain.into_iter().rev().find(|&k| !self.splits(k)).unwrap_or(c)
     }
 }
 

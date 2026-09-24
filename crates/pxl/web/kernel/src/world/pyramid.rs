@@ -22,7 +22,8 @@ use core::fmt;
 
 use pxl_spec::bake::quadkey::quadkey_of;
 use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pyramid::{neighbourhood, zoom_of_level, Folds, LevelPage, TOP_LEVEL};
+use pxl_spec::space::pyramid::{zoom_of_level, Folds, LevelPage, TOP_LEVEL};
+use std::collections::HashSet;
 use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
@@ -33,7 +34,8 @@ use crate::world::change::{world_edge, WorldTopic};
 use crate::world::frame::range_anchor::range_anchor;
 use crate::world::page_table::PageTable;
 use chunk::Chunk;
-use window::{centre_dist, centre_page, domain, held, ring_of, window, Domain};
+pub use window::Domain;
+use window::{centre_dist, centre_page, domain, held, ring_of, window};
 use window_spec::{HELD_AXIS, RENDER_AXIS, WINDOW_LEVELS};
 
 /// A layer the pyramid holds: its page is itself, folded by `Folds`.
@@ -58,6 +60,15 @@ pub trait Layer: Folds + Clone + 'static {
 
     /// A page came or went; whoever reads this layer's pages is told.
     fn changed(_p: LevelPage, _present: bool) {}
+
+    /// What the layer draws of its cover. A layer whose drawing has limits
+    /// of its own — the terrain's mesh cannot meet a chunk two levels from
+    /// it, and its chunk table holds so many — turns what it cannot draw into
+    /// gaps here; a gap is what the wishlist fetches, so what is on the
+    /// screen and what is asked for are one cover.
+    fn present(cover: Cover, _d: &Domain, _pyramid: &Pyramid<Self>) -> Cover {
+        cover
+    }
 }
 
 /// A page's name in a bake: the quadkey of the tile it stands on, at the zoom
@@ -111,23 +122,13 @@ pub const RECORDS: u32 = WINDOW_LEVELS * HELD_AXIS * HELD_AXIS + PINNED;
 /// resident and its finer pieces are not: a coarse page with one fine page
 /// under it shows the coarse one, never both, so whatever is counted over
 /// the cover is counted once. Where a wanted chunk is not resident, the
-/// nearest resident chunk over it in the window draws its ground.
-///
-/// Only the window's top level has nothing over it, and only there do the
-/// pages a level finer stand in (Cesium's `skipLevelOfDetail`, which stands
-/// a node in by its loaded descendants where no ancestor is loaded). One
-/// level and no further, and nowhere else, because a stand-in draws its
-/// ground with four times the chunks: the chunk table is sized for the top
-/// ring four times over and the rest of the domain once (chunk/table.rs
-/// `WIDEST_SELECTION`), and a stand-in anywhere or deeper would put the
-/// view past what the table can hold. What neither covers is a gap, which
-/// is what the wishlist fetches first.
+/// nearest resident chunk over it in the window draws its ground; where
+/// none is, the resident pages under it stand in, as far down as there are
+/// any (Cesium's `skipLevelOfDetail`, which stands a node in by its loaded
+/// descendants where no ancestor is loaded), with gaps where there are none.
 #[derive(Default)]
 pub struct Cover {
-    /// Each drawn piece, and whether it is a root: nothing coarser in the
-    /// window is resident over it, so no coarser piece drew its ground
-    /// before it and none will while it builds.
-    pub drawn: Vec<(Chunk, bool)>,
+    pub drawn: Vec<Chunk>,
     pub gaps: Vec<Chunk>,
 }
 
@@ -149,7 +150,11 @@ pub struct Pyramid<L: Layer> {
     /// makes an arrival, a fold or an eviction reach both.
     revision: u32,
     pinned: Option<LevelPage>,
+    /// The view the layer last drew, what it draws of it, and which making
+    /// of it this is: whoever draws it re-reads it when the number moves.
+    domain: Option<Domain>,
     cover: Cover,
+    covers: u32,
     last: Option<Wish>,
     folds: Notify,
 }
@@ -162,7 +167,9 @@ impl<L: Layer> Default for Pyramid<L> {
             refused: 0,
             revision: 0,
             pinned: None,
+            domain: None,
             cover: Cover::default(),
+            covers: 0,
             last: None,
             folds: Notify::new(),
         }
@@ -237,9 +244,21 @@ impl<L: Layer> Pyramid<L> {
 
     /// What the resident pages draw of `d` (`Cover`).
     pub fn cover_of(&self, d: &Domain) -> Cover {
+        // The pages that are resident or have one under them, which is how
+        // far down a stand-in is looked for without walking ground that has
+        // nothing.
+        let mut below: HashSet<LevelPage> = HashSet::new();
+        for level in 0..=TOP_LEVEL {
+            for page in self.tables[level as usize].keys() {
+                let mut p = LevelPage::new(level, page);
+                while below.insert(p) && p.level < TOP_LEVEL {
+                    p = p.parent();
+                }
+            }
+        }
         let mut out = Cover::default();
         for c in d.roots() {
-            self.wanted(d, c, false, &mut out);
+            self.wanted(d, &below, c, false, &mut out);
         }
         out
     }
@@ -247,43 +266,59 @@ impl<L: Layer> Pyramid<L> {
     /// `c` as the domain wants it, into `out`, `above` saying whether a
     /// resident chunk over it in the window draws its ground should `c` not
     /// be drawn whole. Whether it is.
-    fn wanted(&self, d: &Domain, c: Chunk, above: bool, out: &mut Cover) -> bool {
+    fn wanted(&self, d: &Domain, below: &HashSet<LevelPage>, c: Chunk, above: bool, out: &mut Cover) -> bool {
         let here = self.get(c.page).is_some();
         if d.splits(c) {
             let mut finer = Cover::default();
             let mut whole = true;
             for k in c.children() {
-                whole &= self.wanted(d, k, above || here, &mut finer);
+                whole &= self.wanted(d, below, k, above || here, &mut finer);
             }
             if here && !whole {
-                out.drawn.push((c, !above));
+                out.drawn.push(c);
                 return true;
             }
             out.drawn.append(&mut finer.drawn);
             out.gaps.append(&mut finer.gaps);
             return whole;
         }
-        if here {
-            out.drawn.push((c, !above));
-            return true;
-        }
-        // The window's top level has nothing coarser in the window to fall
-        // back to, so there the four chunks under it stand in; its children
-        // lie in one page, so they are all there or none is.
-        if !above && c.level() > 0 && c.level() + 1 == d.window().end {
-            let under = c.children();
-            if self.get(under[0].page).is_some() {
-                out.drawn.extend(under.map(|k| (k, true)));
-                return true;
+        if here || above {
+            if here {
+                out.drawn.push(c);
+            } else {
+                out.gaps.push(c);
             }
+            return here;
         }
-        out.gaps.push(c);
-        false
+        self.stand_in(below, c, out)
     }
 
-    /// What the cover last made of the view.
-    pub fn cover(&self) -> &Cover {
-        &self.cover
+    /// `c` from the resident pages under it, where nothing over it is;
+    /// whether it is drawn whole.
+    fn stand_in(&self, below: &HashSet<LevelPage>, c: Chunk, out: &mut Cover) -> bool {
+        if self.get(c.page).is_some() {
+            out.drawn.push(c);
+            return true;
+        }
+        if c.level() == 0 || !below.contains(&c.children()[0].page) {
+            out.gaps.push(c);
+            return false;
+        }
+        let mut whole = true;
+        for k in c.children() {
+            whole &= self.stand_in(below, k, out);
+        }
+        whole
+    }
+
+    /// What the layer draws of the view, and which making of it this is.
+    pub fn cover(&self) -> (&Cover, u32) {
+        (&self.cover, self.covers)
+    }
+
+    /// The view the cover was made for.
+    pub fn domain(&self) -> Option<&Domain> {
+        self.domain.as_ref()
     }
 
     /// What the resident pages can do for `p`, by what the cover made of its
@@ -322,21 +357,20 @@ impl<L: Layer> Pyramid<L> {
     /// which is an arrival the camera has moved past: dropped rather than
     /// turning out a page that is wanted, and counted, since whether the
     /// range is the wrong size is a reading and not an argument.
-    fn record_for(&mut self, p: LevelPage) -> Option<u32> {
+    fn record_for(&mut self, p: LevelPage, anchor: Option<IVec>, view: &std::ops::Range<u32>) -> Option<u32> {
         if let Some(record) = self.record_of(p) {
             return Some(record);
         }
         if let Some(free) = self.records.iter().position(Option::is_none) {
             return Some(free as u32);
         }
-        let anchor = range_anchor()?;
-        let view = window();
-        let mine = self.worth(p, anchor, &view);
+        let anchor = anchor?;
+        let mine = self.worth(p, anchor, view);
         // The pinned page is never the one to go, whatever it is weighed at.
         let worst = (0..RECORDS)
             .filter_map(|r| {
                 let held = self.records[r as usize].filter(|held| Some(*held) != self.pinned)?;
-                Some((self.worth(held, anchor, &view), r))
+                Some((self.worth(held, anchor, view), r))
             })
             .max_by(|a, b| a.0.cmp(&b.0));
         let taken = worst.filter(|(w, _)| *w > mine).map(|(_, r)| r);
@@ -364,7 +398,7 @@ impl<L: Layer> Pyramid<L> {
 
     /// A page's fetched body, made resident.
     pub fn adopt(&mut self, p: LevelPage, pkt: &[u8], phases: &mut Phases) -> Result<(), FetchFail> {
-        let Some(record) = self.record_for(p) else { return Ok(()) };
+        let Some(record) = self.record_for(p, range_anchor(), &window()) else { return Ok(()) };
         let page = L::receive(record, pkt, phases)?;
         self.take(p, record, page);
         Ok(())
@@ -383,8 +417,8 @@ impl<L: Layer> Pyramid<L> {
                 if self.get(p).is_some() {
                     continue;
                 }
-                let Some(folded) = L::fold_held(neighbourhood(p).map(|q| self.get(q)), level) else { continue };
-                let Some(record) = self.record_for(p) else { return false };
+                let Some(folded) = L::fold_page(p, |q| self.get(q)) else { continue };
+                let Some(record) = self.record_for(p, Some(anchor), &window()) else { return false };
                 return match L::keep(record, &folded) {
                     Ok(page) => {
                         self.take(p, record, page);
@@ -454,7 +488,10 @@ impl<L: Layer> Pyramid<L> {
         let wish = (centre_page(w.start, anchor), (w.start, w.end), crate::sched::turn::interactive(), self.revision, self.pinned);
         if self.last != Some(wish) {
             self.drop_unrecorded(anchor);
-            self.cover = self.cover_of(&domain(anchor, w));
+            let d = domain(anchor, w.clone());
+            self.cover = L::present(self.cover_of(&d), &d, self);
+            self.domain = Some(d);
+            self.covers = self.covers.wrapping_add(1);
             // Letting a page go moves the revision; the wish is the resident
             // set the cover was made from.
             self.last = Some((wish.0, wish.1, wish.2, self.revision, wish.4));

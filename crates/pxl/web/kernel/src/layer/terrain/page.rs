@@ -36,7 +36,7 @@ use crate::world::chunk::node::{chunk_page, chunk_sources_changed};
 use crate::world::frame::range_anchor::range_anchor;
 use crate::world::pyramid::window::{ring_of, window};
 use crate::world::pyramid::window_spec::HELD_AXIS;
-use crate::world::pyramid::{Layer, Pyramid};
+use crate::world::pyramid::{Cover, Domain, Layer, Pyramid};
 
 /// Object key of the single shared open-ocean tile in the static bucket.
 pub const OCEAN_KEY: &str = "_ocean";
@@ -92,6 +92,11 @@ impl Layer for Terrain {
             None if !o.waiting.contains(&p) => o.waiting.push(p),
             None => {}
         }
+    }
+
+    /// What the mesh can draw of the cover (present.rs).
+    fn present(cover: Cover, d: &Domain, pyramid: &Pyramid<Terrain>) -> Cover {
+        crate::layer::terrain::present::mesh(cover, d, |c| pyramid.get(c.page).is_some())
     }
 
     /// A leaf is what the scheduler mounts from, and what a map centre that

@@ -52,7 +52,7 @@ use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
 
 use crate::world::pyramid::chunk::Chunk;
-use crate::world::pyramid::window::{centre_page, decor_reach, domain, ring_rect, Domain, DECOR_REACH};
+use crate::world::pyramid::window::{decor_reach, ring_rect, DECOR_REACH};
 use crate::world::pyramid::window_spec::{RENDER_AXIS, WINDOW_LEVELS};
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
@@ -95,10 +95,10 @@ const RING_CHUNKS: u32 = RENDER_AXIS * RENDER_AXIS * PAGE_CHUNKS * PAGE_CHUNKS;
 /// stood in for by its four children where it has not arrived, and three
 /// quarters of a ring for every level under it — a level's ring is half the
 /// width of the one above, so a quarter of it is wanted finer and the rest
-/// stays (world/pyramid.rs `Cover`, window.rs `Domain`). The balance a mesh
-/// needs only ever refines where a finer page stands in for a coarser one
-/// that a neighbour draws, which puts no more chunks over a piece of ground
-/// than the top ring's stand-in does.
+/// stays (window.rs `Domain`). The terrain draws no more than that
+/// (layer/terrain/present.rs): a finer page stands in only at the top, a
+/// level finer, and the balance a mesh needs only refines toward what the
+/// view wants.
 ///
 /// The point of writing it down is that it is under MAX_CHUNKS. The table is
 /// a hard budget, so what it can refuse matters: with the widest selection
@@ -144,8 +144,8 @@ pub const SETTLING: u16 = 32;
 pub const STALE: u16 = 64;
 /// Nothing coarser in the selection draws this chunk's ground, so the ladder
 /// is followed as far as it goes here rather than stopping one step past the
-/// chunk's own cells (`relative`). A root of the cover: nothing coarser in
-/// the window is resident over it (world/pyramid.rs `Cover`).
+/// chunk's own cells (`relative`): the view wants its ground at the
+/// window's top, which has no ring over it (window.rs `Domain::outermost`).
 pub const OUTERMOST: u16 = 256;
 
 /// A release, as a request: off screen, nothing built.
@@ -275,90 +275,11 @@ pub enum Event {
     },
 }
 
-/// What a mount pass selected for: the page the anchor stands in at the
-/// window's base, the window and the terrain's resident set (world/pyramid.rs
-/// `revision`). While it is the same the selection stands, and the pass is
-/// skipped once nothing of it is left to mount.
-///
-/// That page and not the anchor: every ring the pass reads is a level at or
-/// above the base, centred on the page over it, so the anchor moving within
-/// its base page changes nothing the pass chooses — and a base page is as
-/// far on screen at every zoom, where a chunk of the leaves is less than a
-/// pixel at the farthest.
-type MountKey = (LevelPage, (u32, u32), u32);
-
-/// Makes the terrain's cover a mesh can draw: no two chunks that meet more
-/// than a level apart. A chunk's mesh hangs a skirt one of its own cells
-/// deep, which hides the step where it meets a chunk a level from it
-/// (pxl-render mesh/chunk_mesher.rs) and not one two levels from it. The
-/// cover a layer holds has no such limit — a count has no seams — so this
-/// is the terrain's presentation and nothing else's.
-///
-/// First every chunk too coarse for a neighbour is refined, where the view
-/// wants it finer and the page under it is resident: its four children in
-/// its place, a level finer and never finer than the view wants, so this
-/// draws no more chunks than the view does. Then what is still too fine for
-/// a coarse neighbour is coarsened: its sibling group, and anything under
-/// it, becomes its parent where that page is resident, and a gap where it
-/// is not — a gap is drawn by whatever stale chunk still covers it, and is
-/// fetched as any other ground is; a crack is neither. The refining pass
-/// only makes chunks finer and stops at what the view wants; the
-/// coarsening pass only removes chunks or makes them coarser, and stops at
-/// the window's top. Neither undoes the other, so both end.
-fn balance(drawn: &mut BTreeMap<Chunk, bool>, d: &Domain, resident: impl Fn(Chunk) -> bool) {
-    loop {
-        let mut refined = false;
-        for (_, coarse) in unbalanced(drawn) {
-            let under = coarse.children();
-            if drawn.contains_key(&coarse) && d.splits(coarse) && resident(under[0]) {
-                drawn.remove(&coarse);
-                drawn.extend(under.map(|k| (k, false)));
-                refined = true;
-            }
-        }
-        if !refined {
-            break;
-        }
-    }
-    loop {
-        let pairs = unbalanced(drawn);
-        if pairs.is_empty() {
-            break;
-        }
-        for (fine, _) in pairs {
-            if !drawn.contains_key(&fine) {
-                continue;
-            }
-            let Some(up) = fine.parent() else {
-                drawn.remove(&fine);
-                continue;
-            };
-            drawn.retain(|k, _| k.level() >= up.level() || !k.ancestors().any(|a| a == up));
-            if resident(up) {
-                let root = up.parent().is_none_or(|a| !resident(a));
-                drawn.insert(up, root);
-            }
-        }
-    }
-}
-
-/// Every pair of drawn chunks that meet more than a level apart, the finer
-/// first.
-fn unbalanced(drawn: &BTreeMap<Chunk, bool>) -> Vec<(Chunk, Chunk)> {
-    let set: std::collections::HashSet<Chunk> = drawn.keys().copied().collect();
-    let mut out = Vec::new();
-    for &fine in drawn.keys() {
-        for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
-            let next = fine.beside(dx, dy);
-            if let Some(coarse) = std::iter::once(next).chain(next.ancestors()).find(|a| set.contains(a)) {
-                if coarse.level() >= fine.level() + 2 {
-                    out.push((fine, coarse));
-                }
-            }
-        }
-    }
-    out
-}
+/// What a mount pass selected for: which making of the terrain's cover
+/// (world/pyramid.rs `Pyramid::cover`), which is made again whenever the
+/// view or the resident pages change. While it is the same the selection
+/// stands, and the pass is skipped once nothing of it is left to mount.
+type MountKey = u32;
 
 /// How far a chunk's centre is from `(ax, ay)`, squared: what the mounts are
 /// ordered by, as the builds are (`priority`). The anchor is the same ground
@@ -1157,15 +1078,12 @@ impl Scheduler {
         self.decor_scratch.as_ref().map_or(0, |s| s.dropped)
     }
 
-    /// The chunks to draw and which of them are roots: the terrain's cover
-    /// of what the view wants (world/pyramid.rs `Cover`), balanced so that no
-    /// two chunks that meet are more than a level apart (`balance`).
-    fn select(&self, frame: &Frame, anchor: IVec, out: &mut BTreeMap<Chunk, bool>) {
-        let (base, end) = frame.window;
+    /// The chunks to draw and which of them are roots: what the terrain
+    /// draws of the view (world/pyramid.rs `Cover`, layer/terrain/present.rs).
+    fn select(&self, out: &mut BTreeMap<Chunk, bool>) {
         let terrain = Terrain::pyramid();
-        let d = domain(anchor, base..end);
-        out.extend(terrain.cover_of(&d).drawn);
-        balance(out, &d, |c| terrain.get(c.page).is_some());
+        let Some(d) = terrain.domain() else { return };
+        out.extend(terrain.cover().0.drawn.iter().map(|&c| (c, d.outermost(c))));
     }
 
     /// Which chunks exist: the ones `select` draws, mounted as they are
@@ -1208,7 +1126,7 @@ impl Scheduler {
     fn mount(&mut self, world: &mut World, frame: &Frame, emit: &mut impl FnMut(Event)) {
         let Some(anchor) = frame.anchor else { return };
         let anchor_i = ivec::gather(anchor[0] as i64, anchor[1] as i64, 0);
-        let key = (centre_page(frame.window.0, anchor_i), frame.window, Terrain::pyramid().revision());
+        let key = Terrain::pyramid().cover().1;
         if self.selected_for == Some(key) && self.to_mount.is_empty() {
             return;
         }
@@ -1216,7 +1134,7 @@ impl Scheduler {
         self.drawn = Some(ring_rect(frame.window.1 - 1, anchor_i));
         if self.selected_for != Some(key) {
             let mut wanted = BTreeMap::new();
-            self.select(frame, anchor_i, &mut wanted);
+            self.select(&mut wanted);
 
             // What is no longer wanted goes stale; what is again, fresh. And
             // whether a chunk is a root can change under it — a page
