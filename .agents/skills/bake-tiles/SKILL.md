@@ -146,7 +146,7 @@ and reused unless `--reclassify` is passed.
 ## POI
 
 The development slice bakes one 15-digit XY region down to the transport's
-23-digit resolution, stopping earlier where XY cannot distinguish members.
+64-bit address capacity (31 digits), stopping as soon as XY cannot distinguish members. This is a transport limit, not a target zoom.
 Raw membership does not enlarge a packet. A terminal summary is still a
 count and bounds, not a bounded list of entities.
 
@@ -163,7 +163,10 @@ records fail the bake. Overture acquisition streams a repeatable-read
 transaction and resolves elevation before normalization.
 
 The snapshot's `tile/` directory holds zstd-compressed nodes named by quadkey,
-including the 15-digit region root. Each decoded packet is at most 341 bytes.
+including the 15-digit region root. Each decoded summary packet is at most 341 bytes.
+Separate PXD1 detail pages are named `d<terminal-quadkey>-<offset>`, with at
+most 16 records and 64 KiB per decoded page. They preserve original text and
+XYZ; an oversized individual record fails the bake rather than being truncated.
 `canonical.jsonl`, `source.jsonl` and `manifest.json` beside `tile/` hold private
 backing, provenance and completion metadata. Only `tile/` is publishable.
 The whole snapshot is staged and renamed together. Existing output or staging

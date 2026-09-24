@@ -1,6 +1,11 @@
 // pxl-kernel/layer/poi/view.test.rs
 
 use super::*;
+use pxl_spec::poi::Summary;
+
+fn assess(summary: &Summary, base: [f64; 3], view: &View, globe: Globe) -> Option<Relevance> {
+    assess_bounds(summary.bounds, base, view, globe)
+}
 use xpute_core::math::mat4::{mat4, mat4_frustum_planes, mat4_look_at, mat4_mul, mat4_perspective};
 
 fn camera(height: f64) -> View {
@@ -72,11 +77,11 @@ fn projected_resolution_changes_with_zoom_but_not_population() {
 }
 
 #[test]
-fn overlapping_extents_still_have_a_camera_proximity_order() {
+fn proximity_measures_the_nearest_population_extent_not_its_midpoint() {
     let v = camera(100.0);
     let globe = Globe::at(0.0);
     let a = assess(&summary([-200.0, -200.0, 0.0, 200.0, 200.0, 0.0]), [0.0; 3], &v, globe).unwrap();
-    let b = assess(&summary([-180.0, -200.0, 0.0, 220.0, 200.0, 0.0]), [0.0; 3], &v, globe).unwrap();
+    let b = assess(&summary([10.0, -200.0, 0.0, 410.0, 200.0, 0.0]), [0.0; 3], &v, globe).unwrap();
     assert!(a.distance < b.distance);
 }
 
@@ -99,4 +104,56 @@ fn discovery_follows_the_view_across_regions_with_bounded_disjoint_addresses() {
     assert!(a.iter().all(|(k, _)| xy::depth(*k) == Some(xy::ROOT_DEPTH)));
     assert!(a.iter().all(|(k, _)| !b.iter().any(|(other, _)| other == k)));
     assert!(roots([0.0; 3], &v, globe, 0).is_empty());
+}
+
+#[test]
+fn the_real_frustum_can_reach_four_deep_regions_with_the_existing_residency_budget() {
+    use super::super::store::{Store, LIMITS};
+    use pxl_spec::poi::{xy, Node};
+    fn summary(key: u64) -> Summary {
+        let b = xy::bounds(key);
+        let depth = xy::depth(key).unwrap();
+        Summary {
+            key,
+            count: 4u64.pow(xy::MAX_DEPTH - depth),
+            bounds: [b[0], b[1], 0.0, b[2] - 0.000001, b[3] - 0.000001, 0.0],
+            refinable: depth < xy::MAX_DEPTH,
+        }
+    }
+    fn node(key: u64) -> Node {
+        Node {
+            revision: 1,
+            summary: summary(key),
+            children: xy::children(key).into_iter().map(summary).collect(),
+        }
+    }
+    let root = xy::parse("132110320000000").unwrap();
+    let b = xy::bounds(root);
+    let base = [b[2], b[1], 0.0];
+    let roots: Vec<_> = (0..4).map(|i| (root + i, i as f64)).collect();
+    let view = camera(0.2);
+    let assess = |_, bounds| assess_bounds(bounds, base, &view, Globe::at(0.0));
+    let mut store = Store::default();
+    store.select(true, &roots, assess, LIMITS);
+    for &(key, _) in &roots {
+        store.adopt(key, node(key), LIMITS.resident_bytes).unwrap();
+    }
+    for _ in 0..64 {
+        store.select(false, &roots, assess, LIMITS);
+        assert!(store.bytes() <= LIMITS.resident_bytes);
+        let keys: Vec<_> = store.cut.iter().filter(|s| s.refinable).map(|s| s.key).collect();
+        if keys.is_empty() {
+            break;
+        }
+        for key in keys {
+            store.adopt(key, node(key), LIMITS.resident_bytes).unwrap();
+        }
+    }
+    assert!(!store.cut.is_empty());
+    assert!(store.cut.iter().any(|s| xy::depth(s.key).unwrap() > 23));
+    assert!(store.cut.len() <= LIMITS.candidates);
+    for _ in 0..10 {
+        store.select(false, &roots, assess, LIMITS);
+        assert_eq!(store.pending_count(), 0, "a stable view must not re-fetch evicted ancestors or budget-blocked branches");
+    }
 }

@@ -1,5 +1,6 @@
 // pxl-spec/poi.rs
 
+pub mod detail;
 pub mod wire;
 pub mod xy;
 

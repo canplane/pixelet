@@ -47,6 +47,7 @@ pub fn write(out: &Path, root: u64, revision: u64, provider: &str, packing: Leve
         let packed = pack(&raw, packing).map_err(|e| e.to_string())?;
         write_atomic(&tiles.join(xy::name(node.summary.key)), &packed).map_err(|e| e.to_string())?;
     }
+    super::detail::write(&backing, &tiles, &nodes, packing)?;
     let manifest = serde_json::json!({"revision":revision,"root":xy::name(root),"nodes":nodes.len(),"count":nodes[0].summary.count,"complete":true,"content_encoding":CONTENT_ENCODING,"content_type":"application/octet-stream","format":"PXS1 summary hierarchy"});
     fs::write(stage.join("manifest.json"), serde_json::to_vec_pretty(&manifest).unwrap()).map_err(|e| e.to_string())?;
     fs::rename(stage, out).map_err(|e| e.to_string())?;

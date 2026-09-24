@@ -244,6 +244,13 @@ fn presentation_snaps_to_the_committed_tier_and_waits_for_a_drawn_surface() {
     s.slots[0].layout_secondary = 2;
     s.slots[0].told = Some((0.4, 0.6, true));
     assert_eq!(s.surface_anchor(-60.1, 130.9), Some([-61.0, 131.0, 14.0]));
+    let canonical = [-60.1, 130.9, -100.0, -60.1, 130.9, -100.0];
+    let envelope = s.surface_envelopes()[0];
+    let anchor = s.surface_anchor(-60.1, 130.9).unwrap();
+    assert!(envelope[0] <= anchor[0] && envelope[2] >= anchor[0]);
+    assert!(envelope[1] <= anchor[1] && envelope[3] >= anchor[1]);
+    assert!(envelope[4] <= anchor[2] && envelope[5] >= anchor[2]);
+    assert_eq!(canonical[2], -100.0);
     s.slots[0].set(COVERED, true);
     assert_eq!(s.surface_anchor(-60.1, 130.9), None);
 }

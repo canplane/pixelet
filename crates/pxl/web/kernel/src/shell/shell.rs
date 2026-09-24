@@ -201,7 +201,9 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
         Num(bar.bar_width_px),
         bar.is_default_zoom
     )?;
-    out.write_str("\"place\":")?;
+    out.write_str("\"poi\":")?;
+    crate::layer::poi::detail::snapshot(out)?;
+    out.write_str(",\"place\":")?;
     place_json(out, page, mercator_zoom(view().height.max(1.0)))?;
     write!(out, ",\"compass\":{{\"show\":{}}},", show_compass())?;
     write!(out, "\"camera_busy\":{},", camera.camera_status != CameraStatus::Idle)?;
@@ -268,6 +270,10 @@ pub fn ui_action(text: &str) -> bool {
     let Some(action) = read_json(text) else { return false };
     let Some(kind) = text_of(&action, "type") else { return false };
     match kind.as_str() {
+        "poi_page" => {
+            let Some(key) = text_of(&action, "key").and_then(|s| s.parse().ok()) else { return false };
+            crate::layer::poi::detail::page(key, action.get("next").and_then(|v| v.as_bool()).unwrap_or(false));
+        }
         "set_setting" => {
             let (Some(key), Some(value)) = (text_of(&action, "key"), action.get("value")) else { return false };
             let value = match (value.as_bool(), value.as_str(), value.as_f64()) {

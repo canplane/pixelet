@@ -77,7 +77,7 @@ fn spatial_resolution_reaches_beyond_two_levels_without_detail_expansion() {
     let root = xy::parse("132110320000000").unwrap();
     let b = xy::bounds(root);
     let mut tree = Hierarchy::new(root, 1).unwrap();
-    for (i, x) in [0.25, 0.5, 2.25].into_iter().enumerate() {
+    for (i, x) in [0.25, 0.251, 2.25].into_iter().enumerate() {
         tree.add(Entity {
             id: i.to_string(),
             position: [b[0] + x, b[1] + 0.25, 50.0],

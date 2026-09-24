@@ -35,6 +35,7 @@ function rng(seed: u32): () => u32 {
 }
 
 type Snapshot = {
+  poi: import("./shell.ts").PoiPage[];
   map: { status: string; is_off_center: boolean; center: [number, number] | null; page: string | null };
   settings: Record<string, boolean | string | number>;
 };
@@ -283,13 +284,13 @@ Deno.test("kernel - a view from high up draws its outermost ring, which is coars
 Deno.test("kernel - baked summaries refine within bounds and disabling drops residency", async () => {
   const temp = await Deno.makeTempDir({ prefix: "pxl-poi-" });
   try {
-    // Sixteen occupied terminal regions, each with one hundred coincident
-    // entities. The bake, not a shell encoder, defines the wire bytes.
+    // Sixteen occupied terminal regions, one singleton and fifteen groups
+    // of one hundred coincident entities. The bake, not a shell encoder, defines the wire bytes.
     const records = Array.from({ length: 1600 }, (_, i) => ({
       id: String(i).padStart(4, "0"),
       position: [5917184 + (Math.floor(i / 100) % 4) * 128 + 64, 1891328 + Math.floor(i / 400) * 128 + 64, 25],
       text: "원문 annotation 🗺️",
-    }));
+    })).filter((_, i) => i <= 1100 || i >= 1200);
     await Deno.writeTextFile(`${temp}/input.jsonl`, records.map((r) => JSON.stringify(r)).join("\n"));
     const bake = await new Deno.Command("cargo", {
       cwd: new URL("../../../../", import.meta.url),
@@ -315,13 +316,13 @@ Deno.test("kernel - baked summaries refine within bounds and disabling drops res
     }).output();
     assert(bake.success, new TextDecoder().decode(bake.stderr));
     const manifest = JSON.parse(await Deno.readTextFile(`${temp}/snapshot/manifest.json`));
-    assertEquals(manifest.count, 1600);
+    assertEquals(manifest.count, 1501);
     assertEquals(manifest.nodes, 21);
     assertEquals((await Deno.readTextFile(`${temp}/snapshot/canonical.jsonl`)).trim().split("\n").map((s) => JSON.parse(s)), records);
     const packets = new Map<string, U8Array>();
     for await (const entry of Deno.readDir(`${temp}/snapshot/tile`)) {
       const raw = new Uint8Array(zstdDecompressSync(await Deno.readFile(`${temp}/snapshot/tile/${entry.name}`)));
-      assert(raw.length <= 341, "raw population cannot enlarge a summary packet");
+      assert(raw.length <= (entry.name.startsWith("d") ? 65536 : 341), "packets stay bounded independently of raw population");
       packets.set(entry.name, raw);
     }
     await Deno.writeTextFile(`${temp}/empty.jsonl`, "");
@@ -407,6 +408,28 @@ Deno.test("kernel - baked summaries refine within bounds and disabling drops res
       assert(poi()[SUMMARY.poi.resident_bytes] <= 4096);
     }
     assert(painted.includes("100"), "refined count badges reached the renderer's canvas paint stream");
+    const detail = turn().snapshot.poi.find((p) => p.next && p.records.length);
+    assert(detail, "terminal details reached the DOM snapshot");
+    assertEquals(detail.count, "100");
+    assertEquals(detail.records.length, 16);
+    assertEquals(detail.records[0].text, "원문 annotation 🗺️");
+    action({ type: "poi_page", key: detail.key, next: true });
+    for (let i = 0; i < 30; i++) {
+      for (const f of pending_poi.splice(0)) await respond(f);
+      turn();
+    }
+    const next = turn().snapshot.poi.find((p) => p.key === detail.key)!;
+    assertEquals(next.offset, "16");
+    assertEquals(next.count, "100");
+    assert(!next.records.some((r) => detail.records.some((old) => old.id === r.id)));
+
+    action({ type: "go_to", lon: 5917632 / 8388608 * 180, lat: Math.atan(Math.sinh(1891648 / 8388608 * Math.PI)) * 180 / Math.PI });
+    action({ type: "set_view", dist: 100, polar: 0.1 });
+    for (let i = 0; i < 90; i++) {
+      for (const f of pending_poi.splice(0)) await respond(f);
+      turn();
+    }
+    assert(painted.includes("원문 annotation 🗺️"), "singleton original text reached Canvas shaping and the atlas");
     action({ type: "set_view", dist: 10_000, polar: 0.1 });
     for (let i = 0; i < 90; i++) turn();
     assertEquals(poi()[SUMMARY.poi.candidates], 1, "zooming out selects the resident coarse summary");

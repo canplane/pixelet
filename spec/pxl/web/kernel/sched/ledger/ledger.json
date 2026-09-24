@@ -31,7 +31,8 @@
     "poi",
     "geocode",
     "geocode_dict",
-    "asset"
+    "asset",
+    "poi_detail"
   ],
   "OUTCOME_NAMES": [
     "ok",
@@ -388,10 +389,10 @@
     "tasks": {
       "AT": 228,
       "slots": 0,
-      "WORDS": 150
+      "WORDS": 175
     },
     "counters": {
-      "AT": 378,
+      "AT": 403,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -410,7 +411,7 @@
       "WORDS": 15
     },
     "atlas": {
-      "AT": 393,
+      "AT": 418,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -418,7 +419,7 @@
       "WORDS": 4
     },
     "retain": {
-      "AT": 397,
+      "AT": 422,
       "nodes": 0,
       "run_sets": 1,
       "run_set_mb": 2,
@@ -431,14 +432,14 @@
       "WORDS": 9
     },
     "fetch": {
-      "AT": 406,
+      "AT": 431,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "poi": {
-      "AT": 409,
+      "AT": 434,
       "resident_nodes": 0,
       "resident_bytes": 1,
       "candidates": 2,
@@ -448,7 +449,7 @@
       "WORDS": 6
     },
     "peak": {
-      "AT": 415,
+      "AT": 440,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -472,12 +473,12 @@
       "WORDS": 20
     },
     "steps": {
-      "AT": 435,
+      "AT": 460,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
-    "WORDS": 596
+    "WORDS": 621
   },
   "READ": {
     "$type": "u32",

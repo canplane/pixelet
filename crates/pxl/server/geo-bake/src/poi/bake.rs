@@ -38,29 +38,51 @@ impl Hierarchy {
                 return if entity == *last { Ok(false) } else { Err("conflicting entity identity") };
             }
         }
-        let mut key = xy::key_at(entity.position, xy::MAX_DEPTH).ok_or("invalid canonical XYZ")?;
+        let key = xy::key_at(entity.position, xy::MAX_DEPTH).ok_or("invalid canonical XYZ")?;
         if entity.id.is_empty() || !xy::contains(self.root, key) {
             return Err("entity outside coverage or without identity");
         }
-        loop {
-            let s = self.summaries.entry(key).or_insert(Summary {
-                key,
-                count: 0,
-                bounds: [entity.position[0], entity.position[1], entity.position[2], entity.position[0], entity.position[1], entity.position[2]],
-                refinable: xy::depth(key).unwrap() < xy::MAX_DEPTH,
-            });
-            s.count = s.count.checked_add(1).ok_or("count overflow")?;
-            for i in 0..3 {
-                s.bounds[i] = s.bounds[i].min(entity.position[i]);
-                s.bounds[i + 3] = s.bounds[i + 3].max(entity.position[i]);
-            }
-            if key == self.root {
-                break;
-            }
-            key /= 4;
+        if self.summaries.get(&self.root).is_some_and(|s| s.count == u64::MAX) {
+            return Err("count overflow");
         }
+        self.add_at(self.root, &entity);
         self.last = Some(entity);
         Ok(true)
+    }
+
+    fn add_at(&mut self, key: u64, entity: &Entity) {
+        let Some(old) = self.summaries.get(&key).copied() else {
+            let [x, y, z] = entity.position;
+            self.summaries.insert(
+                key,
+                Summary {
+                    key,
+                    count: 1,
+                    bounds: [x, y, z, x, y, z],
+                    refinable: false,
+                },
+            );
+            return;
+        };
+        let depth = xy::depth(key).unwrap();
+        let split = depth < xy::MAX_DEPTH && (old.refinable || old.bounds[0] != entity.position[0] || old.bounds[1] != entity.position[1]);
+        let current = self.summaries.get_mut(&key).unwrap();
+        current.count += 1;
+        current.refinable = split;
+        for i in 0..3 {
+            current.bounds[i] = current.bounds[i].min(entity.position[i]);
+            current.bounds[i + 3] = current.bounds[i + 3].max(entity.position[i]);
+        }
+        if split {
+            if !old.refinable {
+                // Until this split the whole prior population shared XY.
+                // Move its aggregate, not its raw entities, into the child.
+                let child = xy::key_at([old.bounds[0], old.bounds[1], old.bounds[2]], depth + 1).unwrap();
+                self.summaries.insert(child, Summary { key: child, ..old });
+            }
+            let child = xy::key_at(entity.position, depth + 1).unwrap();
+            self.add_at(child, entity);
+        }
     }
 
     pub fn finish(mut self) -> Vec<Node> {

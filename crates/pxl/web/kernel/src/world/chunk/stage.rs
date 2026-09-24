@@ -287,7 +287,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         rings: ledger_take_rings(),
         work: work_sample(c, &census),
         q_terrain: pending_count(tile_fetcher::CATEGORY) as f64,
-        q_poi: pending_count(crate::io::demand::Category::Poi) as f64,
+        q_poi: (pending_count(crate::io::demand::Category::Poi) + pending_count(crate::io::demand::Category::PoiDetail)) as f64,
         stale: StaleSample {
             chunks: census.stale as f64,
             drawn: census.stale_drawn as f64,

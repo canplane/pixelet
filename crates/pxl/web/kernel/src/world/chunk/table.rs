@@ -1786,6 +1786,33 @@ impl Scheduler {
 
     /// The top face at the centre of the cell actually drawn here. Surface
     /// samples share the GPU mesh slot's lifetime, including stale holders.
+    /// Displayed tier envelopes used by ground-attached presentation culling.
+    pub fn surface_envelopes(&self) -> Vec<[f64; 7]> {
+        self.slots
+            .iter()
+            .filter_map(|s| {
+                if !s.has(IN_FRUSTUM) || s.has(COVERED) || !s.layout_ready {
+                    return None;
+                }
+                let step = match s.told {
+                    Some((_, _, true)) if s.layout_secondary != 0 => s.layout_secondary,
+                    _ => s.layout_primary,
+                };
+                let t = s.tier(step, s.layout_generation)?;
+                let span = (CHUNK_CELL_SPAN << s.level) as f64;
+                Some([
+                    s.base_x,
+                    s.base_y,
+                    s.base_x + span,
+                    s.base_y + span,
+                    t.heights.floor,
+                    t.heights.floor + u16::MAX as f64 * t.heights.step,
+                    (step << s.level) as f64 * 0.5,
+                ])
+            })
+            .collect()
+    }
+
     pub fn surface_anchor(&self, x: f64, y: f64) -> Option<[f64; 3]> {
         for s in &self.slots {
             let span = (CHUNK_CELL_SPAN << s.level) as f64;

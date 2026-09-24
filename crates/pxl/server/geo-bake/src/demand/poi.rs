@@ -6,7 +6,10 @@ use pxl_spec::poi::xy;
 use std::sync::Arc;
 
 pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, name: &str) -> Result<String, Failure> {
-    let key = xy::parse(name).filter(|k| xy::depth(*k).is_some_and(|d| d >= xy::ROOT_DEPTH)).ok_or(Failure::BadName)?;
+    let key = xy::parse(name)
+        .or_else(|| pxl_spec::poi::detail::parse(name).map(|p| p.0))
+        .filter(|k| xy::depth(*k).is_some_and(|d| d >= xy::ROOT_DEPTH))
+        .ok_or(Failure::BadName)?;
     let root = key >> (2 * (xy::depth(key).unwrap() - xy::ROOT_DEPTH));
     let region = xy::name(root);
     let d = data.clone();

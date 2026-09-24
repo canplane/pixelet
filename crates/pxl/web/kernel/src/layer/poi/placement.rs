@@ -25,6 +25,7 @@ struct Placement {
     batch: BillboardBatch,
     set: Option<u32>,
     visible: u32,
+    view: Option<super::view::SelectionView>,
 }
 static PLACEMENT: Global<Placement> = Global::new();
 
@@ -47,7 +48,9 @@ pub fn step(ctx: &mut TickContext) {
             ctx.invalidate();
         }
         p.visible = 0;
+        p.view = None;
         badge::retain(&[]);
+        super::detail::select(&[]);
         *store::store() = store::Store::default();
         store::demand();
         return;
@@ -58,28 +61,37 @@ pub fn step(ctx: &mut TickContext) {
     let globe = crate::layer::environment::state::globe();
     let s = store::store();
     let roots = super::view::roots(base, v, globe, LIMITS.candidates.min(ROOT_REGIONS));
-    s.select(&roots, |summary| super::view::assess(summary, base, v, globe), LIMITS);
+    let selection_view = super::view::SelectionView::new(base, v, globe, crate::kernel::kernel().sched.surface_envelopes());
+    let changed = p.view.as_ref() != Some(&selection_view);
+    s.select(
+        changed,
+        &roots,
+        |_, bounds| super::view::assess_bounds(super::view::surface_envelope(bounds, &selection_view.ground), base, v, globe),
+        LIMITS,
+    );
+    p.view = Some(selection_view);
     store::demand();
-    let cut = &s.cut;
-    badge::retain(&cut.iter().map(|s| s.count).collect::<Vec<_>>());
+    let cut = s.cut.clone();
+    super::detail::select(&cut);
+    let labels: Vec<_> = cut.iter().map(super::detail::label).collect();
+    badge::retain(&labels);
     p.batch.reset();
     let mut grounded = Vec::new();
-    for summary in cut {
+    for (summary, label) in cut.iter().zip(&labels) {
         let Some(a) = anchor(summary) else { continue };
-        grounded.push(summary);
+        grounded.push(label);
         let mut absolute = Pvf3::default();
         projection::project(&mut absolute, a[0], a[1], a[2]);
         let mut local = [0.0; 3];
         projection::unproject(&mut local, ivec::sub(absolute.i, origin), absolute.f);
-        p.batch
-            .push(local[0], local[1], local[2], badge::width(summary.count), badge::COLLIDE, badge::ANCHOR, summary.key as f64);
+        p.batch.push(local[0], local[1], local[2], badge::width(label), badge::COLLIDE, badge::ANCHOR, summary.key as f64);
     }
     let mut kept = [0u32; VISIBLE];
     let n = select_visible_billboards(&mut p.batch, VISIBLE as u32, v.width, v.height, &mut kept);
     let mut instances = Vec::with_capacity(LIMITS.candidates * 10);
     for &i in &kept[..n as usize] {
         let i = i as usize;
-        let slot = badge::slot(grounded[i].count);
+        let slot = badge::slot(grounded[i]);
         if slot == NO_SLOT {
             continue;
         }

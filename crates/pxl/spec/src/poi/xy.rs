@@ -4,7 +4,9 @@
 //! scheme, not to the meaning of a POI summary or entity.
 
 pub const ROOT_DEPTH: u32 = 15;
-pub const MAX_DEPTH: u32 = 23;
+// One sentinel bit and two bits per XY level in the transport address.
+// This is an address width, not a presentation zoom or a population bound.
+pub const MAX_DEPTH: u32 = (u64::BITS - 1) / 2;
 pub const CHILDREN: usize = 4;
 const HALF_WORLD: f64 = 8_388_608.0;
 

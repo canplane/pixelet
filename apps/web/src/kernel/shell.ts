@@ -22,7 +22,16 @@ import { orientation_permit } from "@/kernel/control/sensor.ts";
 import { request_frame, strobe } from "@/kernel/sched.ts";
 
 export type PoseStatus = "idle" | "loading" | "ready" | "error";
+export interface PoiPage {
+  key: string;
+  count: string;
+  offset: string;
+  next: boolean;
+  records: { id: string; text: string }[];
+}
+
 export type UiSnapshot = {
+  poi: PoiPage[];
   /** `center` is the map centre as [lon, lat]; `page` is the L3 page it falls
    * in, as a decimal string because a page index is 64-bit. The kernel sends
    * both because it has both — recomputing the page here would mean a second
@@ -45,6 +54,7 @@ export type UiSnapshot = {
 };
 
 const INITIAL: UiSnapshot = {
+  poi: [],
   map: { status: "idle", is_off_center: false, center: null, page: null },
   location: { status: "idle", has_location: false, error: null },
   companion: { person_ready: false, pet_ready: false },
