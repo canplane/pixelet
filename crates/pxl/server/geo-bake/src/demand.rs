@@ -83,6 +83,16 @@ impl Source {
         }
     }
 
+    /// The pages of the level below a page is folded from, as its layer
+    /// reads them (pxl-spec space/pyramid.rs `Folds::sources`).
+    fn sources(&self, p: pxl_spec::space::pyramid::LevelPage) -> Vec<pxl_spec::space::pyramid::LevelPage> {
+        use pxl_spec::space::pyramid::Folds;
+        match self {
+            Source::Terrain(_) => pxl_spec::bake::format::Terrain::sources(p),
+            _ => pxl_spec::bake::poi_page::PoiPage::sources(p),
+        }
+    }
+
     /// The object a fold reads for a page the source left as no object,
     /// where that is not simply an empty page.
     fn absent(&self) -> Option<(&'static str, &[u8])> {

@@ -2,8 +2,8 @@
 
 //! A layer the dev server holds as a pyramid, a page at a time as pages are
 //! wanted. A name is a page; a leaf is baked from the layer's source, and a
-//! page above it is folded from the sixteen pages of the level below, which
-//! are faulted in first — one at a time, so a coarse request cannot fan out a
+//! page above it is folded from the pages of the level below its layer reads,
+//! which are faulted in first — one at a time, so a coarse request cannot fan out a
 //! task tree — exactly as the offline bake would have made it
 //! (pxl-geo-bake pyramid.rs). Past `top` nothing is answered, which is the
 //! guard every layer shares.
@@ -13,7 +13,7 @@ use super::{Dataset, Failure, Kind};
 use crate::pyramid::{fold_stored, Layer, PageSet};
 use crate::util::{pack, Level};
 use pxl_spec::bake::quadkey::index_of;
-use pxl_spec::space::pyramid::{neighbourhood, LevelPage, LEVEL0_ZOOM, TOP_LEVEL};
+use pxl_spec::space::pyramid::{LevelPage, LEVEL0_ZOOM, TOP_LEVEL};
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
@@ -54,7 +54,7 @@ fn fault(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind, p: LevelPage) -> P
                     return d.cache.publish(&key(p), None).map_err(Failure::from);
                 }
                 if p.level > 0 {
-                    for below in neighbourhood(p) {
+                    for below in d.source.sources(p) {
                         tokio::time::timeout_at(deadline, fault(d.clone(), runner.clone(), kind, below))
                             .await
                             .map_err(|_| Failure::Limited("demand dependency deadline"))??;

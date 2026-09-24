@@ -297,10 +297,21 @@ pub fn child_block(index: u32) -> (usize, u32) {
 /// pyramid and the client runs to stand a coarse page up from the fine ones
 /// it holds; what the function does with a cell is the layer's own.
 ///
-/// `around` is `neighbourhood`'s block; a layer that needs no ring reads
-/// `CHILDREN` alone. None where a page the layer needs is not held.
+/// A parent is made from its four children. A layer whose samples reach past
+/// a page — terrain's elevation, padded for the bicubic read at its rim —
+/// reads the pages around them too, and says so (`sources`); nothing else
+/// asks for more than the four.
 pub trait Folds: Sized {
-    fn fold_held(around: [Option<&Self>; 16], level: u32) -> Option<Self>;
+    /// The pages of the level below that `p` is folded from.
+    fn sources(p: LevelPage) -> Vec<LevelPage> {
+        p.children().to_vec()
+    }
+
+    /// `p` from its `sources`, as `held` answers for them; None where one it
+    /// cannot do without is not held.
+    fn fold_page<'a>(p: LevelPage, held: impl Fn(LevelPage) -> Option<&'a Self>) -> Option<Self>
+    where
+        Self: 'a;
 }
 
 #[cfg(test)]

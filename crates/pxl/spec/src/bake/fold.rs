@@ -39,7 +39,7 @@ use xpute_core::math::scalar::round;
 use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::format::{Ground, Terrain, GROUND_CH_KEYS};
 use super::pack::{channel_of, with_channel, GroundCell};
-use crate::space::pyramid::{child_block, Folds, CHILDREN};
+use crate::space::pyramid::{child_block, neighbourhood, Folds, LevelPage, CHILDREN};
 
 /// The value that fills more than half of a 2×2 block, or of a 2×2×2 one,
 /// folding into `level`; when none does, or two fill half each, the tie
@@ -144,9 +144,16 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
     }
 }
 
+/// Terrain reads the ring around the four children as well: a parent's
+/// elevation pads two samples past its rim, which lie in its children's
+/// neighbours (`fold_ele`).
 impl Folds for Terrain {
-    fn fold_held(around: [Option<&Self>; 16], level: u32) -> Option<Self> {
-        fold_terrain_held(around, level)
+    fn sources(p: LevelPage) -> Vec<LevelPage> {
+        neighbourhood(p).to_vec()
+    }
+
+    fn fold_page<'a>(p: LevelPage, held: impl Fn(LevelPage) -> Option<&'a Self>) -> Option<Self> {
+        fold_terrain_held(neighbourhood(p).map(held), p.level)
     }
 }
 

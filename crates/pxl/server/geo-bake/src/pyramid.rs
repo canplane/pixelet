@@ -17,7 +17,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{neighbourhood, Folds, LevelPage, CHILDREN, TOP_LEVEL};
+use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 
 use crate::util::{git_sha, measure_output, now_iso8601, pack, unpack, write_atomic, Level, CONTENT_ENCODING};
 
@@ -118,17 +118,16 @@ pub fn parents(children: &[LevelPage]) -> Vec<LevelPage> {
 /// rule `parents` walks by and the dev server faults by. `read` answers for
 /// a page of the level below; one it has no page for reads as `absent`.
 pub fn fold_parent<'a, L: Layer>(parent: LevelPage, read: impl Fn(LevelPage) -> Option<&'a L>, absent: &'a L) -> Option<L> {
-    let around = neighbourhood(parent).map(read);
-    if CHILDREN.iter().all(|&k| around[k].is_none()) {
+    if parent.children().iter().all(|&k| read(k).is_none()) {
         return None;
     }
-    L::fold_held(around.map(|p| Some(p.unwrap_or(absent))), parent.level)
+    L::fold_page(parent, |p| Some(read(p).unwrap_or(absent)))
 }
 
 /// A parent folded from the level under it as a page set holds it.
 pub fn fold_stored<L: Layer>(set: &PageSet, parent: LevelPage, absent: &L) -> Result<Option<L>, String> {
     let mut read = HashMap::new();
-    for p in neighbourhood(parent) {
+    for p in L::sources(parent) {
         if let Some(page) = set.read::<L>(p)? {
             read.insert(p, page);
         }
@@ -143,7 +142,7 @@ pub fn fold_stored<L: Layer>(set: &PageSet, parent: LevelPage, absent: &L) -> Re
 /// Every level reads the one absent page for what it left as no object,
 /// which holds only if a parent of four absent pages is the absent page.
 pub fn build<L: Layer>(set: &PageSet, absent: &L, workers: usize) -> Result<u32, String> {
-    let fixed = L::fold_held([Some(absent); 16], 1).ok_or("no parent over four absent children")?;
+    let fixed = L::fold_page(LevelPage::new(1, 0), |_| Some(absent)).ok_or("no parent over four absent children")?;
     if fixed != *absent {
         return Err("the absent page does not fold to itself: one page cannot stand for every level's absence".into());
     }
@@ -238,7 +237,7 @@ fn fold_band<L: Layer>(set: &PageSet, rows: &[Vec<LevelPage>], absent: &L) -> Re
         let y = ivec::Y(row[0].page);
         held.retain(|p, _| ivec::Y(p.page) >= 2 * y - 1);
         for &parent in row {
-            for p in neighbourhood(parent) {
+            for p in L::sources(parent) {
                 if let std::collections::hash_map::Entry::Vacant(e) = held.entry(p) {
                     e.insert(set.read::<L>(p)?);
                 }

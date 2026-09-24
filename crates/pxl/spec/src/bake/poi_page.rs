@@ -9,7 +9,7 @@
 //! needs no ring and loses nothing: every level counts exactly the places
 //! under it, so a count read at any level agrees with the leaves.
 
-use crate::space::pyramid::{parent_cell, Folds, CHILDREN, PAGE_CELLS};
+use crate::space::pyramid::{parent_cell, Folds, LevelPage, PAGE_CELLS};
 
 const MAGIC: &[u8; 4] = b"PXP1";
 const CELLS: u32 = PAGE_CELLS * PAGE_CELLS;
@@ -28,18 +28,13 @@ impl PoiPage {
             cells: counted(places.into_iter().map(|cell| (cell, 1)).collect()),
         }
     }
-
-    /// The places in `cell`, 0 where it holds none.
-    pub fn count(&self, cell: u32) -> u32 {
-        self.cells.binary_search_by_key(&cell, |c| c.0).map_or(0, |i| self.cells[i].1)
-    }
 }
 
 impl Folds for PoiPage {
-    fn fold_held(around: [Option<&Self>; 16], _level: u32) -> Option<Self> {
+    fn fold_page<'a>(p: LevelPage, held: impl Fn(LevelPage) -> Option<&'a Self>) -> Option<Self> {
         let mut cells = Vec::new();
-        for (q, &k) in CHILDREN.iter().enumerate() {
-            cells.extend(around[k]?.cells.iter().map(|&(cell, n)| (parent_cell(q, cell), n)));
+        for (q, k) in p.children().into_iter().enumerate() {
+            cells.extend(held(k)?.cells.iter().map(|&(cell, n)| (parent_cell(q, cell), n)));
         }
         Some(PoiPage { cells: counted(cells) })
     }
