@@ -72,7 +72,10 @@ async fn disconnected_request_does_not_cancel_publication_and_old_generation_can
 async fn kinds_and_generations_share_admission_but_hits_and_joiners_need_no_new_slot() {
     let a = cache();
     let b = Cache::with_admission(a.root.with_extension("other"), a.admission.clone(), a.deadline).unwrap();
-    a.once("cached".into(), |_deadline| async { Ok(()) }).await.unwrap();
+    let producer = a.clone();
+    a.once("cached".into(), move |_deadline| async move { producer.publish("cached", Some(b"packet")).map_err(Failure::from) })
+        .await
+        .unwrap();
     let held = a.admission.clone().acquire_many_owned(32).await.unwrap();
     a.once("cached".into(), |_deadline| async { panic!("must be cached") }).await.unwrap();
     assert!(matches!(b.once("new".into(), |_deadline| async { panic!("must not start") }).await, Err(Failure::Limited(_))));
@@ -114,4 +117,17 @@ async fn expired_work_stays_joinable_and_admitted_until_its_cleanup_finishes() {
     assert!(matches!(joined.await, Err(Failure::Limited(_))));
     assert_eq!(c.admission.available_permits(), 1);
     c.once("page".into(), |_| async { Ok(()) }).await.unwrap();
+}
+
+#[tokio::test]
+async fn a_published_key_answers_from_the_disk_and_holds_no_flight() {
+    let c = cache();
+    let producer = c.clone();
+    c.once("page".into(), move |_deadline| async move { producer.publish("page", None).map_err(Failure::from) })
+        .await
+        .unwrap();
+    assert!(c.flights.lock().unwrap().is_empty(), "a published result is the disk's, not the map's");
+    c.once("page".into(), |_deadline| async { panic!("published work must not run again") }).await.unwrap();
+    assert!(c.once("unpublished".into(), |_deadline| async { Err(Failure::Bake("source failed".into())) }).await.is_err());
+    assert_eq!(c.flights.lock().unwrap().len(), 1, "a source failure is remembered for the generation");
 }

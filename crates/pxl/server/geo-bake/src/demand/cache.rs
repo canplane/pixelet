@@ -38,8 +38,10 @@ impl Cache {
     }
 
     /// The job owns its lifetime, not the HTTP connection that first asks.
-    /// Source failures stay failed within the generation; resource refusals
-    /// leave no cached result and may be admitted by a later request.
+    /// A key is the path its job publishes, so what is published answers
+    /// from the disk, and a flight is held only while the work runs or after
+    /// the source failed: failures stay failed within the generation, and
+    /// resource refusals leave nothing and may be admitted by a later request.
     /// The owner passes one deadline through dependencies and execution. It
     /// awaits process reaping and publication before settling the flight;
     /// timing out this future would release identity before its work stopped.
@@ -52,6 +54,11 @@ impl Cache {
             match jobs.entry(key.clone()) {
                 std::collections::hash_map::Entry::Occupied(e) => (e.get().clone(), None),
                 std::collections::hash_map::Entry::Vacant(e) => {
+                    // Under the lock: a finished job leaves the map only after
+                    // it has published, so a vacancy here cannot miss one.
+                    if self.published(&key) {
+                        return Ok(());
+                    }
                     let permit = self.admission.clone().try_acquire_owned().map_err(|_| Failure::Limited("demand queue full"))?;
                     (e.insert(Arc::default()).clone(), Some(permit))
                 }
@@ -64,7 +71,7 @@ impl Cache {
             tokio::spawn(async move {
                 let job = async move { make(deadline).await };
                 let result = tokio::spawn(job).await.map_err(|e| Failure::Bake(e.to_string())).and_then(|r| r);
-                if matches!(result, Err(Failure::Limited(_))) {
+                if matches!(result, Ok(()) | Err(Failure::Limited(_))) {
                     jobs.lock().expect("flights").remove(&key);
                 }
                 let _ = task.result.set(result);
@@ -81,6 +88,11 @@ impl Cache {
             }
             ready.await;
         }
+    }
+
+    fn published(&self, name: &str) -> bool {
+        let path = self.root.join(name);
+        path.exists() || path.with_extension("empty").is_file()
     }
 
     pub fn publish(&self, name: &str, raw: Option<&[u8]>) -> Result<(), String> {
