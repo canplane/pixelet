@@ -24,7 +24,7 @@ use crate::layer::decor::build::DecorKindBundle;
 use crate::layer::decor::registry::DECOR_BUNDLES;
 use crate::world::change::{bump_world, world_edge, DECOR_ASSET};
 
-/// Variants a kind has room for; kind.json's largest kind has nine.
+/// Variants a kind has room for; kind.rs's largest kind has nine.
 const VARIANTS: usize = 16;
 
 #[derive(Clone)]

@@ -54,7 +54,7 @@
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_spec::space::pyramid::PAGE_CHUNKS;
 
-use crate::world::pyramid::window_spec::{RENDER_AXIS, WINDOW_LEVELS};
+use crate::world::pyramid::window::{RENDER_AXIS, WINDOW_LEVELS};
 
 /// Chunks along a level's drawn ring, the axis a slot is reduced modulo.
 pub const AXIS: u32 = RENDER_AXIS * PAGE_CHUNKS;

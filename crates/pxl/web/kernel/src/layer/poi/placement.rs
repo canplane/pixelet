@@ -16,7 +16,7 @@ use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::selection::select_visible_billboards;
-use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
+use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::poi::badge::{self, Label};
 use crate::layer::poi::enabled;
 use crate::sched::tick::TickContext;
@@ -131,7 +131,7 @@ pub fn step(ctx: &mut TickContext) {
     if p.set.is_none() && instances.is_empty() {
         return;
     }
-    let set = *p.set.get_or_insert_with(|| new_billboard_set(BILLBOARD_ORDER::poi));
+    let set = *p.set.get_or_insert_with(|| new_billboard_set(BillboardOrder::Poi));
     place_billboard_set(set, base);
     write_billboard_set(set, &instances);
     ctx.invalidate();

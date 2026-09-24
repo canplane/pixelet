@@ -1,16 +1,91 @@
 // pxl-geo-spec/overture/category.rs
 
-use crate::overture::category_spec::OVERTURE_CATEGORY_MAP;
-
 /// Overture's `categories.primary` translated into the vocabulary the POI
 /// badge's theme keys off, or none when the table has no entry for it.
-///
-/// The table itself is generated from spec/pxl/server/overture/category.json,
-/// as is the shell's copy, and the generator fails if either drifts from the
-/// theme they both have to land in.
 pub fn map(primary: &str) -> Option<&'static str> {
     OVERTURE_CATEGORY_MAP.binary_search_by_key(&primary, |(key, _)| *key).ok().map(|at| OVERTURE_CATEGORY_MAP[at].1)
 }
+
+// Overture's Places taxonomy (docs.overturemaps.org/schema/reference/places/)
+// has thousands of `categories.primary` values — this maps the common ones to
+// the vocabulary the POI badge's theme keys off, so that table does not need to
+// know which provider is behind a given POI. An Overture category with no entry
+// here passes through unmapped and resolves to the theme's default.
+//
+// Deliberately a starting set (the categories Gangnam/Suwon spot-checks actually
+// turned up plus the obvious common ones), not an attempt to cover Overture's
+// full taxonomy — extend as real gaps show up rather than front-loading a guess
+// at every possible value.
+//
+// Every value here has to be a key of spec/pxl/web/kernel/layer/poi/theme.json, and every
+// key of that theme has to be produced by at least one entry here; the tests
+// fail otherwise. A target the theme does not know draws the default badge and
+// says nothing about it, which is the failure this is written down to prevent.
+/// Overture's `categories.primary` to the POI theme's own key, sorted by the
+/// Overture name so that a lookup is a binary search.
+pub static OVERTURE_CATEGORY_MAP: [(&str, &str); 61] = [
+    ("atm", "atm"),
+    ("bank", "bank"),
+    ("bar", "bar"),
+    ("bed_and_breakfast", "guest_house"),
+    ("brewery", "bar"),
+    ("bus_station", "bus_station"),
+    ("bus_stop", "bus_station"),
+    ("cafe", "cafe"),
+    ("chicken_restaurant", "fast_food"),
+    ("church_cathedral", "place_of_worship"),
+    ("city_hall", "townhall"),
+    ("clinic", "clinic"),
+    ("clothing_store", "clothes"),
+    ("coffee_shop", "cafe"),
+    ("college", "college"),
+    ("convenience_store", "convenience"),
+    ("dentist", "dentist"),
+    ("department_store", "department_store"),
+    ("doctor", "clinic"),
+    ("elementary_school", "school"),
+    ("fast_food_restaurant", "fast_food"),
+    ("fire_station", "fire_station"),
+    ("fuel_station", "fuel"),
+    ("gas_station", "fuel"),
+    ("government_office", "townhall"),
+    ("grocery_store", "supermarket"),
+    ("guest_house", "guest_house"),
+    ("high_school", "school"),
+    ("hospital", "hospital"),
+    ("hotel", "hotel"),
+    ("kindergarten", "kindergarten"),
+    ("korean_restaurant", "restaurant"),
+    ("landmark_and_historical_building", "attraction"),
+    ("library", "library"),
+    ("medical_center", "hospital"),
+    ("metro_station", "subway"),
+    ("middle_school", "school"),
+    ("mosque", "place_of_worship"),
+    ("motel", "hotel"),
+    ("museum", "museum"),
+    ("national_park", "park"),
+    ("park", "park"),
+    ("parking", "parking"),
+    ("parking_garage", "parking"),
+    ("pharmacy", "pharmacy"),
+    ("place_of_worship", "place_of_worship"),
+    ("police_station", "police"),
+    ("post_office", "post_office"),
+    ("preschool", "kindergarten"),
+    ("pub", "pub"),
+    ("restaurant", "restaurant"),
+    ("sandwich_shop", "restaurant"),
+    ("school", "school"),
+    ("shopping_mall", "mall"),
+    ("subway_station", "subway"),
+    ("supermarket", "supermarket"),
+    ("synagogue", "place_of_worship"),
+    ("temple", "place_of_worship"),
+    ("tourist_attraction", "attraction"),
+    ("train_station", "station"),
+    ("university", "university"),
+];
 
 #[cfg(test)]
 #[path = "category.test.rs"]

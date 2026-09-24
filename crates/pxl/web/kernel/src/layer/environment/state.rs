@@ -20,7 +20,7 @@ use crate::kernel::kernel;
 use crate::layer::environment::celestial_position::{equatorial_to_local, moon_position, sun_position};
 use crate::layer::environment::config::light_cfg;
 use crate::layer::environment::fog::{band_at, camera_height, centre_ground};
-use crate::layer::environment::theme::{themes, WorldThemeKey};
+use crate::layer::environment::theme::{themes, Theme};
 use crate::layer::environment::theme_clock::theme_key;
 use crate::shell::map_store::map_store;
 use crate::world::change::{request_world_tick, wake_at};
@@ -38,7 +38,7 @@ use crate::world::pyramid::window::{drawn_from_eye, window};
 const ENV_CLOCK_FRAME_MS: f64 = 2000.0;
 
 /// The theme as the environment takes it: colours in linear light.
-pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: WorldThemeKey) {
+pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: Theme) {
     let t = themes(key);
     let mut k = 0;
     let mut rgb = |lane: &mut [f32; THEME_FLOATS], packed: u32| {
@@ -50,11 +50,11 @@ pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: WorldThemeKey) {
     rgb(lane, t.ambient.color);
     // The rest, in order: the ambient's intensity and the night flag.
     lane[k] = t.ambient.intensity as f32;
-    lane[k + 1] = if key == WorldThemeKey::night { 1.0 } else { 0.0 };
+    lane[k + 1] = if key == Theme::Night { 1.0 } else { 0.0 };
 }
 
 struct Environment {
-    theme_key: Option<WorldThemeKey>,
+    theme_key: Option<Theme>,
     observed_centre: Option<Pvf3>,
     observed_lat: f64,
     observed_lon: f64,

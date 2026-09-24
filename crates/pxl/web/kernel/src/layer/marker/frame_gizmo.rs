@@ -29,7 +29,7 @@ use crate::host::measure_text;
 use crate::kernel::kernel;
 use crate::layer::billboard::canvas::scale::{FONT_FAMILY, FONT_WEIGHT_REGULAR};
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
-use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
+use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::terrain::elevation::{get_ele, with_ele};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::node::World;
@@ -303,7 +303,7 @@ fn make_labels(g: &mut Gizmos, origin: V3) {
         let slot = sheet.add(logical_w * DPR_MAX, LABEL_H * DPR_MAX, DrawSpec::Text { text: label.text.clone(), logical_w });
         g.slots.push((slot, logical_w));
     }
-    let set = new_billboard_set(BILLBOARD_ORDER::debug);
+    let set = new_billboard_set(BillboardOrder::Debug);
     place_billboard_set(set, origin);
     g.set = Some(set);
 }

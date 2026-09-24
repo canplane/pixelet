@@ -34,8 +34,8 @@ use crate::shell::map_store::{map_store, MapStatus};
 use crate::world::change::TERRAIN_PAGE;
 use crate::world::chunk::node::{chunk_page, chunk_sources_changed};
 use crate::world::frame::range_anchor::range_anchor;
+use crate::world::pyramid::window::HELD_AXIS;
 use crate::world::pyramid::window::{ring_of, window};
-use crate::world::pyramid::window_spec::HELD_AXIS;
 use crate::world::pyramid::{Cover, Domain, Layer, Pyramid};
 
 /// Object key of the single shared open-ocean tile in the static bucket.

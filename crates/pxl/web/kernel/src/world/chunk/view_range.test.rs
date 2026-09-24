@@ -12,8 +12,8 @@ use crate::control::camera::config::camera_cfg::projection::FOV;
 use crate::control::camera::config::camera_cfg::view::{MAX_DIST, MAX_POLAR, MIN_DIST, MIN_POLAR};
 use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::fog::{band_at, reach_at};
+use crate::world::pyramid::window::WINDOW_LEVELS;
 use crate::world::pyramid::window::{drawn_from_eye, drawn_reach, window_for};
-use crate::world::pyramid::window_spec::WINDOW_LEVELS;
 use xpute_core::math::scalar::round;
 
 /// How far the chunk-aligned anchor can sit from the true view centre.

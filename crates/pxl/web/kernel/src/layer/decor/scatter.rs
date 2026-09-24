@@ -58,7 +58,7 @@ fn rule_allows(rule: &DecorChannelRule, t: u32) -> bool {
     }
 }
 
-/// A kind's rules as kind.json writes them, in the numbers a cell's channels
+/// A kind's rules as kind.rs writes them, in the numbers a cell's channels
 /// hold: each channel's types where it lists them, nothing painted for the
 /// channels its `void` names, and anything else.
 pub fn rules_of(void: &[GroundChannelKey], land: &[u32], water: &[u32], structure: &[u32], transport: &[u32]) -> DecorRules {

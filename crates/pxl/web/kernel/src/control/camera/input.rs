@@ -51,7 +51,7 @@ enum DragMode {
 }
 
 /// Which single axis a rotate-drag has committed to — see
-/// AXIS_LOCK_THRESHOLD_PX's doc comment in config.json for why this exists.
+/// AXIS_LOCK_THRESHOLD_PX's doc comment in config.rs for why this exists.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RotateAxisLock {
     None,

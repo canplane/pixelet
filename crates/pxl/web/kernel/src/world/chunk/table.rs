@@ -55,7 +55,7 @@ use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNK
 
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::window::{decor_reach, ring_rect, DECOR_REACH};
-use crate::world::pyramid::window_spec::{RENDER_AXIS, WINDOW_LEVELS};
+use crate::world::pyramid::window::{RENDER_AXIS, WINDOW_LEVELS};
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::indexer::L2_IDX;

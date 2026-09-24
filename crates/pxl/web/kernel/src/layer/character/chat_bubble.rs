@@ -15,7 +15,7 @@ use crate::global::Global;
 use crate::host::{measure_text, wall_now};
 use crate::layer::billboard::canvas::scale::{FONT_FAMILY, FONT_WEIGHT_BOLD};
 use crate::layer::billboard::canvas::text::wrap_text;
-use crate::layer::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
+use crate::layer::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 
 // ts (wall clock at append) lets the bubble derive its own remaining show
 // time from wall-clock, not from when it happened to start showing — without
@@ -136,7 +136,7 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
             );
             if slot != NO_SLOT {
                 b.held = Some(Held {
-                    set: new_billboard_set(BILLBOARD_ORDER::chat),
+                    set: new_billboard_set(BillboardOrder::Chat),
                     slot: slot as u32,
                     layout,
                 });

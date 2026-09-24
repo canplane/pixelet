@@ -15,8 +15,6 @@
 
 pub mod chunk;
 pub mod window;
-#[path = "pyramid/window.spec.rs"]
-pub mod window_spec;
 
 use core::fmt;
 
@@ -36,7 +34,7 @@ use crate::world::page_table::PageTable;
 use chunk::Chunk;
 pub use window::Domain;
 use window::{centre_dist, centre_page, domain, held, ring_of, window};
-use window_spec::{HELD_AXIS, RENDER_AXIS, WINDOW_LEVELS};
+use window::{HELD_AXIS, RENDER_AXIS, WINDOW_LEVELS};
 
 /// A layer the pyramid holds: its page is itself, folded by `Folds`.
 pub trait Layer: Folds + Clone + 'static {

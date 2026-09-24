@@ -32,7 +32,7 @@ use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use crate::kernel::kernel;
 use crate::layer::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
-use crate::layer::decor::kind::spec::DecorKind;
+use crate::layer::decor::kind::DecorKind;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::layer::decor::scatter::{DecorChannelRule, DecorKindSeed, DecorOrientationMode, DecorRules};
 use crate::layer::object::store::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
@@ -87,12 +87,12 @@ pub struct DecorVariantAsset {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DecorKindBundle {
-    /// The kind: kind.json's entry, and the draw census's tag.
+    /// The kind: kind.rs's entry, and the draw census's tag.
     pub kind: DecorKind,
     pub seed: DecorKindSeed,
     /// Where the kind stands, as the scheduler is taught it.
     pub rules: DecorRules,
-    /// One entry per model kind.json lists for this kind, in its order —
+    /// One entry per model kind.rs lists for this kind, in its order —
     /// each variant carries its own skin: a kind's variants can (and for trees,
     /// do) span more than one pack, each with its own colormap atlas.
     pub variants: Vec<DecorVariantAsset>,
@@ -105,22 +105,19 @@ pub struct DecorKindBundle {
     pub extent: f64,
 }
 
-/// Binds a kind's seed and rules to its models: each variant a model and a
-/// skin, `models` and `skins` row for row as kind.json lists them, and the
-/// kind's extent measured over all of them.
-pub fn bind_models(kind: DecorKind, seed: DecorKindSeed, rules: DecorRules, models: &[Asset], skins: &[Asset], decor_id: Option<DecorId>) -> DecorKindBundle {
-    assert_eq!(models.len(), skins.len(), "decor: kind.json lists {} models for {kind:?} and {} skins", models.len(), skins.len());
-    let variants = models.iter().zip(skins).map(|(&model, &skin)| DecorVariantAsset { model, skin }).collect();
+/// Binds a kind's seed and rules to its variants, and measures the kind's
+/// extent over all of them.
+pub fn bind_models(kind: DecorKind, seed: DecorKindSeed, rules: DecorRules, variants: &[DecorVariantAsset], decor_id: Option<DecorId>) -> DecorKindBundle {
     // A NaN extent stays NaN rather than being dropped.
-    let extent = models
+    let extent = variants
         .iter()
-        .flat_map(|m| m.ingested().extent.unwrap_or([0.0; 3]))
+        .flat_map(|v| v.model.ingested().extent.unwrap_or([0.0; 3]))
         .fold(0.0, |a: f64, b| if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) });
     DecorKindBundle {
         kind,
         seed,
         rules,
-        variants,
+        variants: variants.to_vec(),
         decor_id,
         extent,
     }
