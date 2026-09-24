@@ -33,61 +33,36 @@
 //! The value stays in units at every level: in the level's own cells the
 //! rounding would eat that fraction.
 
+use crate::space::pyramid::PAGE_CELLS;
 use xpute_core::math::scalar::round;
 
-use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN};
+use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::format::{Ground, Terrain, GROUND_CH_KEYS};
 use super::pack::{channel_of, with_channel, GroundCell};
 use crate::space::pyramid::{child_block, Folds, CHILDREN};
 
-/// Which child of the 2×2 a tie takes when folding into `level`.
+/// The value that fills more than half of a 2×2 block, or of a 2×2×2 one,
+/// folding into `level`; when none does, or two fill half each, the tie
+/// child's. Empty is a value like any other, so a cube filling an eighth of
+/// its parent goes at the first fold and a wall keeps whole cells. `v[dx +
+/// 2·dy + 4·dz]` is the child at (dx, dy, dz), and `level` is the parent's,
+/// which may be below the cell: an object's finest entries are an eighth of
+/// one.
 ///
-/// Always the same child would put every tie's sample at the block's south-west
-/// corner, which shifts the whole map half a coarse cell toward the origin and
-/// accumulates level by level. Alternating the corner keeps the drift bounded
-/// by a sixth of a cell.
-fn tie_child(level: u32) -> usize {
-    if level % 2 == 1 {
-        0
-    } else {
-        3
-    }
-}
-
-/// The type that fills at least half of four, or `tie` when none does or two
-/// fill half each.
-fn majority(v: [u8; 4], tie: u8) -> u8 {
-    let count = |x: u8| v.iter().filter(|&&y| y == x).count();
+/// Always the same tie child would put every tie's sample at the block's
+/// south-west(-lowest) corner, which shifts the whole map half a coarse cell
+/// toward the origin and accumulates level by level. Alternating it with the
+/// opposite corner keeps the drift bounded by a sixth of a cell on every
+/// axis.
+pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], level: i32) -> T {
+    let tie = v[if level.rem_euclid(2) == 1 { 0 } else { N - 1 }];
+    let count = |x: T| v.iter().filter(|&&y| y == x).count();
     let mut half = None;
     for &x in &v {
         match count(x) {
-            n if n >= 3 => return x,
-            2 if half.is_some_and(|h| h != x) => return tie,
-            2 => half = Some(x),
-            _ => {}
-        }
-    }
-    half.unwrap_or(tie)
-}
-
-/// The same rule one dimension up, for what is a volume rather than a height
-/// field: the value that fills at least half of eight, or the tie child's
-/// when none does or two fill half each. Empty is a value like any other, so
-/// a cube filling an eighth of its parent goes at the first fold and a wall
-/// keeps whole cells. `level` is the parent's, and may be below the cell: an
-/// object's finest entries are an eighth of one. `v[dx + 2·dy + 4·dz]` is the
-/// child at (dx, dy, dz).
-pub fn majority8(v: [u32; 8], level: i32) -> u32 {
-    // The 2×2 alternation, on the diagonal a level up: the south-west-lowest
-    // corner and its opposite, so the drift stays bounded on every axis.
-    let tie = v[if level.rem_euclid(2) == 1 { 0 } else { 7 }];
-    let count = |x: u32| v.iter().filter(|&&y| y == x).count();
-    let mut half = None;
-    for &x in &v {
-        match count(x) {
-            n if n >= 5 => return x,
-            4 if half.is_some_and(|h| h != x) => return tie,
-            4 => half = Some(x),
+            n if 2 * n > N => return x,
+            n if 2 * n == N && half.is_some_and(|h| h != x) => return tie,
+            n if 2 * n == N => half = Some(x),
             _ => {}
         }
     }
@@ -101,8 +76,7 @@ pub fn majority8(v: [u32; 8], level: i32) -> u32 {
 /// Read straight out of the packed cells and written straight back, a field
 /// at a time. A page is one array and there are no planes to take apart.
 pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
-    let span = PAGE_CELL_SPAN as usize;
-    let tie = tie_child(level);
+    let span = PAGE_CELLS as usize;
     let out = (0..(span * span) as u32)
         .map(|index| {
             let (q, first) = child_block(index);
@@ -111,7 +85,7 @@ pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
             let mut cell = 0 as GroundCell;
             for key in GROUND_CH_KEYS {
                 let v = four.map(|f| channel_of(f, key));
-                cell = with_channel(cell, key, majority(v, v[tie]));
+                cell = with_channel(cell, key, majority(v, level as i32));
             }
             cell
         })
