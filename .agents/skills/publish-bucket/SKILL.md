@@ -18,7 +18,7 @@ how it gets there and how you know it arrived.
 | Prefix                  | Object                      | Named by               | Policy                                                        |
 | ----------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------- |
 | `terrain/<version>/`    | packed XTP page, `_ocean`   | quadkey, 5–15          | immutable; a re-bake is a new version                         |
-| `poi/<version>/`        | packed PXP2 count page      | quadkey, 5–15          | immutable; a re-bake is a new version                         |
+| `poi/<version>/`        | packed PXP3 count page      | quadkey, 5–15          | immutable; a re-bake is a new version                         |
 | `geocode/<version>/`    | packed JSON page, `_dict`   | quadkey, 11            | version = format; monthly in-place refresh                    |
 | `asset/`                | glb, png, webp — not packed | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever |
 | `_meta/land_pages.json` | terrain's land/ocean list   | fixed name             | mutable; rewritten with a terrain re-bake                     |
@@ -232,7 +232,7 @@ s5cmd --endpoint-url $R2 run /tmp/rekey-meta.txt
 check that it decodes rather than that a header is present:
 
 ```bash
-curl -s --compressed "https://plei.me/geo/tiles/poi/<v>/<quadkey>" | head -c 4                           # PXP2 (v8+)
+curl -s --compressed "https://plei.me/geo/tiles/poi/<v>/<quadkey>" | head -c 4                           # PXP3 (v8+)
 curl -s -H "Accept-Encoding: zstd" "https://plei.me/geo/tiles/terrain/<v>/<quadkey>" \
   | zstd -dcq | head -c 2 | xxd -p                                                              # 5854
 ```

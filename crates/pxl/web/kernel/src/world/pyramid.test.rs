@@ -1,9 +1,9 @@
 // pxl-kernel/world/pyramid.test.rs
 
 use super::*;
-use pxl_spec::bake::poi_page::PoiPage;
+use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::{ivec, Pvf3};
-use pxl_spec::space::pyramid::{cell_index, span_of, Cell, CHUNK_CELLS};
+use pxl_spec::space::pyramid::{cell_base, span_of};
 use window::ring_rect;
 
 const WINDOW: std::ops::Range<u32> = 2..5;
@@ -54,7 +54,7 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
                 let p = LevelPage::new(level, ivec::gather(x, y, 0));
                 let cells = at
                     .iter()
-                    .map(|&a| Cell::of(level, &Pvf3 { i: a, ..Default::default() }))
+                    .map(|&a| POI_LATTICE.cell_of(level, &Pvf3 { i: a, ..Default::default() }))
                     .filter(|c| c.page() == p)
                     .map(|c| (c.index(), ""));
                 pages.push((p, PoiPage::of_places(cells)));
@@ -66,9 +66,13 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
 
 fn count(pyramid: &Pyramid<PoiPage>, c: Chunk) -> u32 {
     let page = pyramid.get(c.page).expect("a drawn chunk's page is resident");
-    (c.by..c.by + CHUNK_CELLS)
+    // The chunk's ground in the POI lattice's cells of its level.
+    let (n, across) = (POI_LATTICE.chunk_cells(), POI_LATTICE.page_cells());
+    let first = POI_LATTICE.cell_of(c.level(), &cell_base(c.page, c.bx, c.by)).index();
+    let (x0, y0) = (first % across, first / across);
+    (y0..y0 + n)
         .map(|ty| {
-            let (lo, hi) = (cell_index(c.bx, ty), cell_index(c.bx + CHUNK_CELLS, ty));
+            let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + n, ty));
             page.cells.iter().filter(|c| c.cell >= lo && c.cell < hi).map(|c| c.count).sum::<u32>()
         })
         .sum()

@@ -3,14 +3,14 @@
 //! Where the counts are drawn. What the POI pages draw of the view is the
 //! layer's own cover (world/pyramid.rs `Cover`): pieces of the ground in
 //! view, none over another, so every place under them is counted once. Each
-//! of their cells is counted into the cell the ground is drawn in there — a
-//! cell of the level the terrain's chunk draws blocks at, or the POI cell
-//! itself where that is coarser — and the badge stands at that cell's centre
-//! in all three axes, on the surface drawn there (pxl-spec
-//! space/pyramid.rs `Cell::centre`, chunk/table.rs `surface_at`). Nothing
-//! here decides a level or a resolution of its own: a place is shown as
-//! coarsely as the ground under it is, or as its own page is where that is
-//! all that has come.
+//! of their cells — cells of the POI lattice (pxl-spec bake/poi_page.rs
+//! `POI_LATTICE`) — is counted into itself, or into the cell over it as
+//! large as the ground is drawn there where that is coarser, and the badge
+//! stands at that cell's centre in all three axes, on the surface drawn
+//! there (pxl-spec space/pyramid.rs `Cell::centre`, chunk/table.rs
+//! `surface_at`). Two lattices' cells are compared by their side against the
+//! unit, not by their level, since the same level is a different size in
+//! each.
 
 use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
@@ -26,9 +26,9 @@ use crate::world::frame::view::view;
 use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
 
-use pxl_spec::bake::poi_page::PoiPage;
+use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::{ivec, projection};
-use pxl_spec::space::pyramid::{cell_index, Cell, LevelPage, CHUNK_CELLS};
+use pxl_spec::space::pyramid::{cell_base, cell_shamt, Cell, LevelPage, TOP_LEVEL};
 use std::collections::{BTreeMap, HashSet};
 
 #[derive(Default)]
@@ -67,16 +67,21 @@ pub fn step(ctx: &mut TickContext) {
     let pages = PoiPage::pyramid();
     let sched = &crate::kernel::kernel().sched;
     let mut cells: BTreeMap<Cell, Tally> = BTreeMap::new();
+    let (n, across) = (POI_LATTICE.chunk_cells(), POI_LATTICE.page_cells());
     for &chunk in &pages.cover().0.drawn {
         let Some(poi) = pages.get(chunk.page) else { continue };
-        for ty in chunk.by..chunk.by + CHUNK_CELLS {
-            let (lo, hi) = (cell_index(chunk.bx, ty), cell_index(chunk.bx + CHUNK_CELLS, ty));
+        // The chunk's ground, in the POI lattice's cells of its level.
+        let first = POI_LATTICE.cell_of(chunk.level(), &cell_base(chunk.page, chunk.bx, chunk.by)).index();
+        let (x0, y0) = (first % across, first / across);
+        for ty in y0..y0 + n {
+            let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + n, ty));
             let from = poi.cells.partition_point(|c| c.cell < lo);
             for c in poi.cells[from..].iter().take_while(|c| c.cell < hi) {
-                let cell = Cell::at(chunk.page, c.cell);
+                let cell = POI_LATTICE.cell_at(chunk.page, c.cell);
                 // Where no ground is drawn under it, it is not drawn either.
                 let Some((drawn, _)) = sched.surface_at(&cell.mid()) else { continue };
-                let t = cells.entry(cell.up(drawn.saturating_sub(cell.level()))).or_default();
+                let coarser = (cell_shamt(drawn) - cell.shamt()).max(0) as u32;
+                let t = cells.entry(cell.up(coarser)).or_default();
                 t.count += c.count;
                 t.name = poi.name(c).map(|_| (chunk.page, c.name));
             }
@@ -158,10 +163,14 @@ pub fn snapshot<W: std::fmt::Write>(out: &mut W) -> std::fmt::Result {
 pub fn focus(id: &str) -> bool {
     let Some((subject, index)) = id.split_once(':') else { return false };
     let (Ok(subject), Ok(index)) = (subject.parse::<u64>(), index.parse::<u32>()) else { return false };
-    if index >= pxl_spec::space::pyramid::PAGE_CELLS * pxl_spec::space::pyramid::PAGE_CELLS {
+    // An id from outside: a level past the pyramid, a subject that does not
+    // give itself back, or an index past the page is no cell.
+    let page = LevelPage::of_subject(subject);
+    let across = POI_LATTICE.page_cells();
+    if page.level > TOP_LEVEL || page.subject() != subject || index >= across * across {
         return false;
     }
-    let cell = Cell::at(LevelPage::of_subject(subject), index);
+    let cell = POI_LATTICE.cell_at(page, index);
     crate::shell::shell::go_to(cell.mid());
     let camera = crate::control::camera::store::camera_store();
     let dist = Some(camera.view_state.dist / 2.0);

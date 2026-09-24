@@ -1,9 +1,9 @@
 // pxl-spec/bake/poi_page.rs
 
-//! The POI layer's page. A place is 2.5D: it belongs to the ground cell it
-//! stands in and is drawn at that cell's centre, at whatever level the ground
-//! under it is drawn. So a page holds, for each occupied cell, how many places
-//! stand in it — and, where that is one, which place it is.
+//! The POI layer's page. A place is 2.5D: it belongs to the cell of the POI
+//! lattice it stands in (`POI_LATTICE`) and is drawn at that cell's centre.
+//! So a page holds, for each occupied cell, how many places stand in it —
+//! and, where that is one, which place it is.
 //!
 //! Folding is counting. A parent cell holds what its 2×2 children hold, which
 //! needs no ring and loses nothing: every level counts exactly the places
@@ -18,10 +18,19 @@
 
 use std::collections::HashMap;
 
-use crate::space::pyramid::{parent_cell, Folds, LevelPage, PAGE_CELLS};
+use crate::bake::cell_spec::CELL_SHAMT;
+use crate::space::pyramid::{Folds, Lattice, LevelPage};
 
-const MAGIC: &[u8; 4] = b"PXP2";
-const CELLS: u32 = PAGE_CELLS * PAGE_CELLS;
+const MAGIC: &[u8; 4] = b"PXP3";
+
+/// The lattice places are counted in: a cell four times the ground's on a
+/// side, sharing the ground's pages, levels and names. A badge stands for
+/// its cell, and a cell the ground's size is a few pixels on the screen at
+/// every distance (pxl-render look/lod.rs), far under a badge. Four times is
+/// a product choice, not a derivation: the scale places merge at.
+pub const POI_LATTICE: Lattice = Lattice::new(CELL_SHAMT + 2);
+
+const CELLS: u32 = POI_LATTICE.page_cells() * POI_LATTICE.page_cells();
 
 /// A cell with no name: it holds more than one place, or its one place has
 /// none.
@@ -105,7 +114,7 @@ impl Folds for PoiPage {
         let mut cells = Vec::new();
         for (q, k) in p.children().into_iter().enumerate() {
             let child = held(k)?;
-            cells.extend(child.cells.iter().map(|c| (parent_cell(q, c.cell), c.count, child.name(c).unwrap_or(""))));
+            cells.extend(child.cells.iter().map(|c| (POI_LATTICE.parent_cell(q, c.cell), c.count, child.name(c).unwrap_or(""))));
         }
         Some(gathered(cells))
     }

@@ -41,3 +41,23 @@ fn a_cells_centre_is_its_middle_and_half_its_side_above_the_ground() {
         assert_eq!(at[1], pvf3::to_real(pvf3::Y(&base)) + side / 2.0);
     }
 }
+
+/// A lattice is shifts against the unit, so two lattices whose cells are the
+/// same size cut the same ground: a lattice two shifts coarser than the
+/// ground has at level 0 the ground's level-2 cell, held in a level-0 page
+/// rather than a level-2 one.
+#[test]
+fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_levels_up() {
+    let coarse = Lattice::new(GROUND.cell_shamt(0) + 2);
+    let point = Pvf3 {
+        i: ivec::gather(-1234, 5678, 0),
+        ..Default::default()
+    };
+    for level in [0, 3] {
+        let (a, b) = (coarse.cell_of(level, &point), GROUND.cell_of(level + 2, &point));
+        assert_eq!(a.side(), b.side());
+        assert_eq!(a.base(), b.base());
+        assert_eq!(a.page().level + 2, b.page().level);
+        assert_eq!(coarse.page_cells() * 4, GROUND.page_cells());
+    }
+}
