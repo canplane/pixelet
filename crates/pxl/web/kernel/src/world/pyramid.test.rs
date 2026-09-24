@@ -52,7 +52,7 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
         for y in y0..y0 + n {
             for x in x0..x0 + n {
                 let p = LevelPage::new(level, ivec::gather(x, y, 0));
-                let cells = at.iter().map(|&a| Cell::of(level, a)).filter(|c| c.page() == p).map(|c| c.index());
+                let cells = at.iter().map(|&a| Cell::of(level, a)).filter(|c| c.page() == p).map(|c| (c.index(), ""));
                 pages.push((p, PoiPage::of_places(cells)));
             }
         }
@@ -65,7 +65,7 @@ fn count(pyramid: &Pyramid<PoiPage>, c: Chunk) -> u32 {
     (c.by..c.by + CHUNK_CELLS)
         .map(|ty| {
             let (lo, hi) = (cell_index(c.bx, ty), cell_index(c.bx + CHUNK_CELLS, ty));
-            page.cells.iter().filter(|&&(i, _)| i >= lo && i < hi).map(|&(_, n)| n).sum::<u32>()
+            page.cells.iter().filter(|c| c.cell >= lo && c.cell < hi).map(|c| c.count).sum::<u32>()
         })
         .sum()
 }
@@ -247,9 +247,9 @@ fn only_ground_wanted_at_the_top_is_outermost() {
 fn a_count_folds_from_its_four_children_alone() {
     let p = LevelPage::new(3, ivec::gather(5, -2, 0));
     assert_eq!(PoiPage::sources(p), p.children().to_vec());
-    let child = PoiPage::of_places([0, 1]);
+    let child = PoiPage::of_places([(0, ""), (1, "")]);
     let folded = PoiPage::fold_page(p, |q| p.children().contains(&q).then_some(&child)).expect("the four are enough");
-    assert_eq!(folded.cells.iter().map(|c| c.1).sum::<u32>(), 8);
+    assert_eq!(folded.cells.iter().map(|c| c.count).sum::<u32>(), 8);
 }
 
 /// A stand-in too deep for the terrain opens its own branch a level under

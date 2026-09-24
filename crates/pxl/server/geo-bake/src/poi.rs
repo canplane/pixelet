@@ -26,7 +26,8 @@ impl crate::pyramid::Layer for PoiPage {
 }
 
 /// The leaf pages Overture's places fill, only the leaf `within` where it is
-/// given and everywhere otherwise, each counting the places in its cells. A place
+/// given and everywhere otherwise, each counting the places in its cells and
+/// naming the one place a cell holds alone (pxl-spec bake/poi_page.rs). A place
 /// belongs to the cell its projected position floors into, which is the rule
 /// every layer's cell is found by (pxl-spec space/pyramid.rs `Cell::of`).
 pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec, PoiPage>, String> {
@@ -34,14 +35,14 @@ pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec
         Some(p) => {
             let [[x0, y0, _], [x1, y1, _]] = epsg3857::get_page_bbox(p);
             client.query(
-                "SELECT ST_X(geom), ST_Y(geom) FROM overture_places WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)",
+                "SELECT ST_X(geom), ST_Y(geom), name FROM overture_places WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)",
                 &[&x0, &y0, &x1, &y1],
             )
         }
-        None => client.query("SELECT ST_X(geom), ST_Y(geom) FROM overture_places", &[]),
+        None => client.query("SELECT ST_X(geom), ST_Y(geom), name FROM overture_places", &[]),
     }
     .map_err(|e| e.to_string())?;
-    let mut cells: BTreeMap<IVec, Vec<u32>> = BTreeMap::new();
+    let mut cells: BTreeMap<IVec, Vec<(u32, String)>> = BTreeMap::new();
     for row in rows {
         let mut at = Pvf3::default();
         epsg3857::project(&mut at, row.get(0), row.get(1), 0.0);
@@ -52,7 +53,7 @@ pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec
         if within.is_some_and(|w| leaf.page != w) {
             continue;
         }
-        cells.entry(leaf.page).or_default().push(cell.index());
+        cells.entry(leaf.page).or_default().push((cell.index(), row.get(2)));
     }
-    Ok(cells.into_iter().map(|(page, c)| (page, PoiPage::of_places(c))).collect())
+    Ok(cells.into_iter().map(|(page, c)| (page, PoiPage::of_places(c.iter().map(|(i, name)| (*i, name.as_str()))))).collect())
 }
