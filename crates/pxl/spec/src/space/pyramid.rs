@@ -14,7 +14,8 @@
 use super::indexer::{L2_SHAMT, L3_IDX, L3_SHAMT, L4_RANGE, SPAN_CENTER};
 use super::pvf3::core::IVEC_X_W;
 use super::pvf3::ivec::{self, IVec};
-use super::pvf3::pvf3::{self, Pvf3};
+use super::pvf3::projection;
+use super::pvf3::pvf3::Pvf3;
 use super::xy::TO_XY;
 
 /// The coarsest level the pyramid is folded to. At level 10 — zoom 5 — a
@@ -56,6 +57,33 @@ const _: () = {
     assert!(TOP_LEVEL <= LEVEL0_ZOOM, "no level coarser than one page across the world");
 };
 
+// ---- the hierarchy, in any number of dimensions ----
+//
+// What a level is to the one under it does not depend on how many axes
+// there are: a node's parent is its coordinate halved, and it is one of its
+// parent's 2^D children, told apart by the low bit of each axis. The ground's
+// pages and cells are this in two (`LevelPage`, `Cell`), an object's cells
+// in three (pxl-render mesh/paint/object/fold.rs), and a fold reads the
+// children in this order whichever it is (bake/fold.rs `majority`).
+
+/// The node a level up that `at` folds into: every axis halved, a floor on
+/// the signed lanes.
+pub fn parent_of<const D: usize>(at: [i64; D]) -> [i64; D] {
+    at.map(|v| v.div_euclid(2))
+}
+
+/// Which of its parent's 2^D children `at` is: axis i's low bit at bit i,
+/// `x + 2y` in two dimensions and `x + 2y + 4z` in three.
+pub fn slot_of<const D: usize>(at: [i64; D]) -> usize {
+    (0..D).map(|i| (at[i].rem_euclid(2) as usize) << i).sum()
+}
+
+/// The child in `slot` of the node at `at`: `parent_of` and `slot_of`'s
+/// inverse.
+pub fn child_of<const D: usize>(at: [i64; D], slot: usize) -> [i64; D] {
+    std::array::from_fn(|i| 2 * at[i] + ((slot >> i) & 1) as i64)
+}
+
 /// A page of the pyramid.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LevelPage {
@@ -76,19 +104,23 @@ impl LevelPage {
         LevelPage::new(level, ivec::gather(ivec::X(leaf).div_euclid(s), ivec::Y(leaf).div_euclid(s), 0))
     }
 
-    /// The page this one folds into a level up.
-    pub fn parent(self) -> LevelPage {
-        LevelPage {
-            level: self.level + 1,
-            ..LevelPage::over(1, self.page)
-        }
+    fn at(self) -> [i64; 2] {
+        [ivec::X(self.page), ivec::Y(self.page)]
     }
 
-    /// The four pages a level down that fold into this one, in `CHILDREN`'s
-    /// quadrant order.
+    /// The page this one folds into a level up.
+    pub fn parent(self) -> LevelPage {
+        let [x, y] = parent_of(self.at());
+        LevelPage::new(self.level + 1, ivec::gather(x, y, 0))
+    }
+
+    /// The four pages a level down that fold into this one, in `slot_of`'s
+    /// order.
     pub fn children(self) -> [LevelPage; 4] {
-        let (x, y) = (ivec::X(self.page) * 2, ivec::Y(self.page) * 2);
-        [(0, 0), (1, 0), (0, 1), (1, 1)].map(|(dx, dy)| LevelPage::new(self.level - 1, ivec::gather(x + dx, y + dy, 0)))
+        std::array::from_fn(|slot| {
+            let [x, y] = child_of(self.at(), slot);
+            LevelPage::new(self.level - 1, ivec::gather(x, y, 0))
+        })
     }
 
     /// The leaf page at this page's south-west corner.
@@ -157,30 +189,92 @@ pub fn cell_index(tx: u32, ty: u32) -> u32 {
     ty * PAGE_CELLS + tx
 }
 
-/// The level-`level` cell a unit address stands in: its page, and its index
-/// in that page.
-pub fn cell_of(level: u32, addr: IVec) -> (LevelPage, u32) {
-    let page = LevelPage::over(level, L3_IDX(addr));
-    let at = |lane: i64, page_lane: i64| (lane.div_euclid(1 << level) - (page_lane << L3_SHAMT)) as u32;
-    (page, cell_index(at(ivec::X(addr), ivec::X(page.page)), at(ivec::Y(addr), ivec::Y(page.page))))
+/// A cell of the pyramid: the page it lies in and its index there. Made from
+/// an address (`Cell::of`) or a page's own index (`Cell::at`), so a level
+/// and an index that do not belong together cannot be held.
+///
+/// A block of 2^s × 2^s cells of one level is a cell of the level s above,
+/// which is how a block is named here: there is no step beside a level, and
+/// so no step that is not a power of two.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Cell {
+    page: LevelPage,
+    index: u32,
+}
+
+impl Cell {
+    /// The level-`level` cell a unit address stands in.
+    pub fn of(level: u32, addr: IVec) -> Cell {
+        let page = LevelPage::over(level, L3_IDX(addr));
+        let at = |lane: i64, page_lane: i64| (lane.div_euclid(1 << level) - (page_lane << L3_SHAMT)) as u32;
+        Cell {
+            page,
+            index: cell_index(at(ivec::X(addr), ivec::X(page.page)), at(ivec::Y(addr), ivec::Y(page.page))),
+        }
+    }
+
+    /// The cell at `index` of `page`.
+    pub fn at(page: LevelPage, index: u32) -> Cell {
+        assert!(index < PAGE_CELLS * PAGE_CELLS, "a cell index is inside its page");
+        Cell { page, index }
+    }
+
+    pub fn page(self) -> LevelPage {
+        self.page
+    }
+
+    pub fn index(self) -> u32 {
+        self.index
+    }
+
+    pub fn level(self) -> u32 {
+        self.page.level
+    }
+
+    /// The unit address of the cell's south-west corner.
+    pub fn base(self) -> IVec {
+        cell_base(self.page, self.index % PAGE_CELLS, self.index / PAGE_CELLS)
+    }
+
+    /// The unit address at the cell's middle: its corner and half its side
+    /// on the ground plane, the corner itself for a level-0 cell, whose side
+    /// is one unit.
+    pub fn mid(self) -> IVec {
+        let base = self.base();
+        let half = (1i64 << self.page.level) / 2;
+        ivec::gather(ivec::X(base) + half, ivec::Y(base) + half, 0)
+    }
+
+    /// The cell's side in units.
+    pub fn side(self) -> f64 {
+        f64::from(1u32 << self.page.level)
+    }
+
+    /// The cell `levels` above that this one lies in.
+    pub fn up(self, levels: u32) -> Cell {
+        Cell::of(self.page.level + levels, self.base())
+    }
+
+    /// The centre of the cell as a thing standing on `ground` occupies it:
+    /// its XY centre, and half its side above the ground, since a level's
+    /// cells are as tall as they are wide. The one point every layer at this
+    /// level stands a thing at.
+    pub fn centre(self, ground: f64) -> Pvf3 {
+        let mut flat = Pvf3::default();
+        SPAN_CENTER(&mut flat, self.base(), self.page.level);
+        let mut at = [0.0; 3];
+        projection::unproject(&mut at, flat.i, flat.f);
+        let mut out = Pvf3::default();
+        projection::project(&mut out, at[0], at[1], ground + self.side() / 2.0);
+        out
+    }
 }
 
 /// The unit address of the south-west corner of the cell at (tx, ty) in
-/// `page`: `cell_of`'s inverse.
+/// `page`.
 pub fn cell_base(page: LevelPage, tx: u32, ty: u32) -> IVec {
     let first = |p: i64, t: u32| ((p << L3_SHAMT) + i64::from(t)) << page.level;
     ivec::gather(first(ivec::X(page.page), tx), first(ivec::Y(page.page), ty), 0)
-}
-
-/// The centre of the block of `step` × `step` cells a cell stands in, on
-/// the ground plane: the one XY every layer at this level stands a thing at.
-/// Z is the layer's to find.
-pub fn cell_centre(page: LevelPage, index: u32, step: u32) -> Pvf3 {
-    let mut out = Pvf3::default();
-    SPAN_CENTER(&mut out, cell_base(page, index % PAGE_CELLS, index / PAGE_CELLS), page.level + step.trailing_zeros());
-    let (x, y) = (pvf3::X(&out), pvf3::Y(&out));
-    pvf3::gather(&mut out, x, y, 0);
-    out
 }
 
 /// The parent cell a child's cell folds into, the child at quadrant `q`.
@@ -208,3 +302,7 @@ pub fn child_block(index: u32) -> (usize, u32) {
 pub trait Folds: Sized {
     fn fold_held(around: [Option<&Self>; 16], level: u32) -> Option<Self>;
 }
+
+#[cfg(test)]
+#[path = "pyramid.test.rs"]
+mod test;

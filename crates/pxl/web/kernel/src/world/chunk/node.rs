@@ -17,7 +17,7 @@
 //! lists, so nothing here decides what is shown, and a block never has to
 //! outlive the scheduler's naming of it.
 
-use pxl_spec::space::pyramid::{cell_of, chunk_span_of, CHUNK_CELLS, PAGE_CELLS};
+use pxl_spec::space::pyramid::{chunk_span_of, Cell, CHUNK_CELLS, PAGE_CELLS};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 use pxl_render::look::lod::LodStep;
@@ -685,7 +685,8 @@ impl Builder {
     /// its page's lanes and where it starts in them, and the structure
     /// setting. Resident or not, whichever level draws the ground there.
     pub fn leaf_source(&self, base: IVec) -> Option<LeafSource> {
-        let (leaf, first) = cell_of(0, base);
+        let cell = Cell::of(0, base);
+        let (leaf, first) = (cell.page(), cell.index());
         let page = Terrain::pyramid().get(leaf).map(page_lanes)?;
         Some(LeafSource {
             page,
@@ -716,7 +717,8 @@ impl Builder {
     /// whichever level it is drawn at. With what it is valid for, which a
     /// cached composite is compared by.
     pub fn compose_leaf(&mut self, world: &mut World, base: IVec) -> Option<(usize, u32)> {
-        let (leaf, first) = cell_of(0, base);
+        let cell = Cell::of(0, base);
+        let (leaf, first) = (cell.page(), cell.index());
         let page = Terrain::pyramid().get(leaf).map(page_lanes)?;
         let (tx0, ty0) = (first % PAGE_CELLS, first / PAGE_CELLS);
         let show = settings_store().show_structures;

@@ -11,7 +11,7 @@ use pxl_spec::bake::poi_page::{self, PoiPage};
 use pxl_spec::space::adapter::epsg3857;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::cell_of;
+use pxl_spec::space::pyramid::Cell;
 
 /// POI as the pyramid holds it: a count a cell, folded by adding. A page it
 /// left as no object holds no places.
@@ -28,7 +28,7 @@ impl crate::pyramid::Layer for PoiPage {
 /// The leaf pages Overture's places fill, only the leaf `within` where it is
 /// given and everywhere otherwise, each counting the places in its cells. A place
 /// belongs to the cell its projected position floors into, which is the rule
-/// every layer's cell is found by (pxl-spec space/pyramid.rs `cell_of`).
+/// every layer's cell is found by (pxl-spec space/pyramid.rs `Cell::of`).
 pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec, PoiPage>, String> {
     let rows = match within {
         Some(p) => {
@@ -45,13 +45,14 @@ pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec
     for row in rows {
         let mut at = Pvf3::default();
         epsg3857::project(&mut at, row.get(0), row.get(1), 0.0);
-        let (leaf, cell) = cell_of(0, at.i);
+        let cell = Cell::of(0, at.i);
+        let leaf = cell.page();
         // The envelope is an index's bound, closed on its far edges; the
         // page a place belongs to is the lattice's.
         if within.is_some_and(|w| leaf.page != w) {
             continue;
         }
-        cells.entry(leaf.page).or_default().push(cell);
+        cells.entry(leaf.page).or_default().push(cell.index());
     }
     Ok(cells.into_iter().map(|(page, c)| (page, PoiPage::of_places(c))).collect())
 }

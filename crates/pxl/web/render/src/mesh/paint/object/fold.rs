@@ -17,6 +17,7 @@ use std::collections::HashMap;
 
 use pxl_spec::bake::constant::{BAND_CELLS, CELL_STEPS, MIN_LEVEL, POS_BITS, POS_MASK};
 use pxl_spec::bake::fold::majority;
+use pxl_spec::space::pyramid::{parent_of, slot_of};
 
 use super::adapter::{Entries, Painter};
 
@@ -76,9 +77,7 @@ pub fn fold_columns(painter: &Painter, columns: &[Column], level: u32, hide: Opt
         }
         let mut parents: HashMap<[i64; 3], [u32; 8]> = HashMap::with_capacity(cur.len());
         for (c, state) in cur.drain() {
-            let p = c.map(|v| v.div_euclid(2));
-            let child = (c[0].rem_euclid(2) + 2 * c[1].rem_euclid(2) + 4 * c[2].rem_euclid(2)) as usize;
-            parents.entry(p).or_insert([0; 8])[child] = state;
+            parents.entry(parent_of(c)).or_insert([0; 8])[slot_of(c)] = state;
         }
         cur.extend(parents.into_iter().filter_map(|(p, v)| {
             let m = majority(v, lv + 1);
