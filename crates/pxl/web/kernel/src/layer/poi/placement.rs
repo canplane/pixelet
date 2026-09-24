@@ -10,7 +10,7 @@
 use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
-use crate::layer::billboard::frustum_budget::select_visible_billboards;
+use crate::layer::billboard::selection::select_visible_billboards;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
 use crate::layer::poi::{badge, enabled};
 use crate::sched::tick::TickContext;
@@ -19,17 +19,16 @@ use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view::view;
 use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
-use pxl_spec::bake::constant::CHUNK_CELL_SPAN;
+use pxl_spec::space::pyramid::CHUNK_CELLS;
+
 use pxl_spec::bake::poi_page::PoiPage;
 use pxl_spec::space::pvf3::{ivec, projection, Pvf3};
 use pxl_spec::space::pyramid::{cell_centre, cell_index, cell_of, PAGE_CELLS};
 
-/// Badges drawn at once, after collision.
-const VISIBLE: usize = 4;
-
 #[derive(Default)]
 struct Placement {
     batch: BillboardBatch,
+    kept: Vec<u32>,
     set: Option<u32>,
     visible: u32,
 }
@@ -59,10 +58,10 @@ pub fn step(ctx: &mut TickContext) {
         let (page, first) = cell_of(d.level, d.base);
         let Some(poi) = pages.get(page) else { continue };
         let (x0, y0) = (first % PAGE_CELLS, first / PAGE_CELLS);
-        let axis = CHUNK_CELL_SPAN / d.step;
+        let axis = CHUNK_CELLS / d.step;
         let mut blocks: Vec<(u32, u32)> = Vec::new();
-        for ty in y0..y0 + CHUNK_CELL_SPAN {
-            let (lo, hi) = (cell_index(x0, ty), cell_index(x0 + CHUNK_CELL_SPAN, ty));
+        for ty in y0..y0 + CHUNK_CELLS {
+            let (lo, hi) = (cell_index(x0, ty), cell_index(x0 + CHUNK_CELLS, ty));
             let from = poi.cells.partition_point(|c| c.0 < lo);
             for &(cell, n) in poi.cells[from..].iter().take_while(|c| c.0 < hi) {
                 let block = ((ty - y0) / d.step) * axis + (cell % PAGE_CELLS - x0) / d.step;
@@ -97,10 +96,9 @@ pub fn step(ctx: &mut TickContext) {
     }
     badge::retain(&counts);
     let v = view();
-    let mut kept = [0u32; VISIBLE];
-    let shown = select_visible_billboards(&mut p.batch, VISIBLE as u32, v.width, v.height, &mut kept);
-    let mut instances = Vec::with_capacity(VISIBLE * BILLBOARD_FLOATS);
-    for &i in &kept[..shown as usize] {
+    select_visible_billboards(&mut p.batch, v.width, v.height, &mut p.kept);
+    let mut instances = Vec::with_capacity(p.kept.len() * BILLBOARD_FLOATS);
+    for &i in &p.kept {
         let i = i as usize;
         let slot = badge::slot(counts[i]);
         if slot == NO_SLOT {

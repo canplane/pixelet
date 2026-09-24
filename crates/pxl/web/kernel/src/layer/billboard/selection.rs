@@ -1,8 +1,8 @@
-// pxl-kernel/layer/billboard/frustum_budget.rs
+// pxl-kernel/layer/billboard/selection.rs
 
-//! Shared visibility budget for world-anchored billboards (tier 3 — see
+//! Shared visibility selection for world-anchored billboards (tier 3 — see
 //! issue/20260907-world-rendering-tiers.md). A consumer with more candidates
-//! than it can afford to draw (POI today; a future chat-bubble-per-character
+//! than the screen has room for (POI today; a future chat-bubble-per-character
 //! feature would hit the same shape) calls the selection once per placement:
 //!
 //! 1. Real camera-frustum membership, tested against a sphere around the
@@ -12,12 +12,15 @@
 //!    full view — and at an oblique polar the bottom edge is where the
 //!    *nearest* anchors are. Point membership therefore deleted the closest
 //!    badges first while distant ones near the horizon stayed.
-//! 2. If still over max_count: nearest first, with a stable hash of each
-//!    candidate's own id breaking ties.
+//! 2. Nearest what the view looks at first, with a stable hash of each
+//!    candidate's own id breaking ties, each kept where its box collides with
+//!    none kept before it. The screen is the only budget: boxes that do not
+//!    overlap are bounded by the pixels they cover, so a count on top would be
+//!    a second limit derived from nothing.
 //!
 //! Distance restores monotonicity: widening the view can only append farther
-//! candidates, so the ones already on screen keep their slots and what falls
-//! off the end is the farthest — which is also the smallest and the least
+//! candidates, so the ones already on screen keep their room and what loses
+//! a collision is the farther — which is also the smaller and the less
 //! legible.
 
 use pxl_spec::space::lattice::grid_index::{GridIndex, Placement, DEFAULT_CELL_PX};
@@ -29,11 +32,6 @@ use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::distance_fade::distance_fade_far;
 use crate::layer::environment::state::globe;
 use crate::world::frame::view::{view, view_sees_sphere};
-
-/// Placed badges in screen pixels, so a candidate can find out whether its
-/// pixels are already taken. Sized once for a viewport larger than anything
-/// this will meet; `begin` takes the live size, so a resize costs nothing.
-const MAX_VIEWPORT_PX: u32 = 4096;
 
 /// How far around its anchor a billboard can reach, as a fraction of its own
 /// distance from the camera. A fraction rather than a world length because the
@@ -58,15 +56,15 @@ static SELECTION: Global<Selection> = Global::new();
 
 fn selection() -> &'static mut Selection {
     SELECTION.get(|| Selection {
-        screen: GridIndex::new(MAX_VIEWPORT_PX, MAX_VIEWPORT_PX, 512, DEFAULT_CELL_PX, 8),
+        screen: GridIndex::new(DEFAULT_CELL_PX),
     })
 }
 
-/// The candidates that survive the frustum, the budget and the collision pass,
-/// as indices into `batch` written to `out`. Indices rather than items: this
+/// The candidates that survive the frustum, the viewport, the fade and the
+/// collision pass, as indices into `batch` written to `out`. Indices rather than items: this
 /// pass never learns what a candidate *is*. The batch's coordinates are in the
 /// root frame (world/frame/view.rs).
-pub fn select_visible_billboards(batch: &mut BillboardBatch, max_count: u32, viewport_w: f64, viewport_h: f64, out: &mut [u32]) -> u32 {
+pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, viewport_h: f64, out: &mut Vec<u32>) {
     let sel = selection();
     let v = view();
     let eye = v.eye;
@@ -96,7 +94,7 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, max_count: u32, vie
 
     // Offered nearest what the view looks at first, which is how the pyramid
     // orders what it asks for too (world/pyramid.rs): nearest the eye would
-    // spend the budget on the screen's lower edge whenever the view is tilted.
+    // let the screen's lower edge win every collision whenever the view is tilted.
     // Squared, since only the order matters; the tiebreak decides nothing on
     // its own and only keeps two at equal distance from swapping frame to
     // frame. A distance stays the ordering because it is what makes widening
@@ -109,10 +107,8 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, max_count: u32, vie
     let tiebreak = &batch.tiebreak;
     batch.order[..n].sort_by(|&a, &b| at(a).total_cmp(&at(b)).then(tiebreak[a as usize].total_cmp(&tiebreak[b as usize])));
 
-    // Rectangles outside this grid share its edge cells; their actual screen
-    // bounds still decide collision. This keeps unusually wide displays safe.
-    sel.screen.begin(viewport_w.min(MAX_VIEWPORT_PX as f64), viewport_h.min(MAX_VIEWPORT_PX as f64));
-    let mut kept = 0;
+    sel.screen.begin(viewport_w, viewport_h);
+    out.clear();
     let mut ndc = Vec3::default();
 
     for k in 0..n {
@@ -122,7 +118,7 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, max_count: u32, vie
         // Not `far <= 0`. The last stretch before the fade's end is ten pixels by
         // three at a tenth opacity — invisible, and small enough that hundreds
         // of them fit without ever colliding. This is the difference between a
-        // budget bounded by what the screen can show and one bounded by how much
+        // count bounded by what the screen can show and one bounded by how much
         // world is in reach.
         if far < MIN_LEGIBLE_FAR {
             continue;
@@ -141,19 +137,14 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, max_count: u32, vie
         let (x1, y1) = (x0 + w, y0 + batch.collide_px[i] as f64 * far);
         // The frustum test keeps an anchor a margin past the screen's edge,
         // since its sprite can reach in. One whose box does not reach the
-        // viewport at all is not shown, and must not spend the budget of one
+        // viewport at all is not shown, and must not take the room of one
         // that is.
         if x1 < 0.0 || y1 < 0.0 || x0 > viewport_w || y0 > viewport_h {
             continue;
         }
 
-        let room = kept < max_count && (kept as usize) < out.len();
-        let blocker = if room { sel.screen.place(x0, y0, x1, y1) } else { sel.screen.first_hit(x0, y0, x1, y1) };
-
-        if room && matches!(blocker, Placement::Placed) {
-            out[kept as usize] = i as u32;
-            kept += 1;
+        if sel.screen.place(x0, y0, x1, y1) == Placement::Placed {
+            out.push(i as u32);
         }
     }
-    kept
 }
