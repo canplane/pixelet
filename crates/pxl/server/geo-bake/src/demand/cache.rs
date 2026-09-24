@@ -1,47 +1,74 @@
 // pxl-geo-bake/demand/cache.rs
 
+use super::Failure;
 use crate::util::{pack, write_atomic, Level};
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
-use tokio::sync::Notify;
+use tokio::sync::{Notify, Semaphore};
 
 #[derive(Default)]
 struct Flight {
-    result: OnceLock<Result<(), String>>,
+    result: OnceLock<Result<(), Failure>>,
     done: Notify,
 }
 
 pub struct Cache {
     pub root: PathBuf,
-    flights: Mutex<HashMap<String, Arc<Flight>>>,
+    flights: Arc<Mutex<HashMap<String, Arc<Flight>>>>,
+    admission: Arc<Semaphore>,
+    deadline: std::time::Duration,
 }
 
 impl Cache {
+    #[cfg(test)]
     pub fn new(root: PathBuf) -> Result<Self, String> {
+        Self::with_admission(root, Arc::new(Semaphore::new(32)), std::time::Duration::from_secs(30))
+    }
+
+    pub fn with_admission(root: PathBuf, admission: Arc<Semaphore>, deadline: std::time::Duration) -> Result<Self, String> {
         std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
         Ok(Self {
             root,
-            flights: Mutex::new(HashMap::new()),
+            flights: Arc::new(Mutex::new(HashMap::new())),
+            admission,
+            deadline,
         })
     }
 
     /// The job owns its lifetime, not the HTTP connection that first asks.
-    /// Failures stay failures until the dataset's generation is replaced.
-    pub async fn once(&self, key: String, make: impl Future<Output = Result<(), String>> + Send + 'static) -> Result<(), String> {
-        let (flight, start) = {
+    /// Source failures stay failed within the generation; resource refusals
+    /// leave no cached result and may be admitted by a later request.
+    /// The owner passes one deadline through dependencies and execution. It
+    /// awaits process reaping and publication before settling the flight;
+    /// timing out this future would release identity before its work stopped.
+    pub async fn once<F>(&self, key: String, make: impl FnOnce(tokio::time::Instant) -> F + Send + 'static) -> Result<(), Failure>
+    where
+        F: Future<Output = Result<(), Failure>> + Send + 'static,
+    {
+        let (flight, permit) = {
             let mut jobs = self.flights.lock().expect("flights");
-            match jobs.entry(key) {
-                std::collections::hash_map::Entry::Occupied(e) => (e.get().clone(), false),
-                std::collections::hash_map::Entry::Vacant(e) => (e.insert(Arc::default()).clone(), true),
+            match jobs.entry(key.clone()) {
+                std::collections::hash_map::Entry::Occupied(e) => (e.get().clone(), None),
+                std::collections::hash_map::Entry::Vacant(e) => {
+                    let permit = self.admission.clone().try_acquire_owned().map_err(|_| Failure::Limited("demand queue full"))?;
+                    (e.insert(Arc::default()).clone(), Some(permit))
+                }
             }
         };
-        if start {
+        if let Some(permit) = permit {
             let task = flight.clone();
+            let jobs = self.flights.clone();
+            let deadline = tokio::time::Instant::now() + self.deadline;
             tokio::spawn(async move {
-                let result = tokio::spawn(make).await.map_err(|e| e.to_string()).and_then(|r| r);
+                let job = async move { make(deadline).await };
+                let result = tokio::spawn(job).await.map_err(|e| Failure::Bake(e.to_string())).and_then(|r| r);
+                if matches!(result, Err(Failure::Limited(_))) {
+                    jobs.lock().expect("flights").remove(&key);
+                }
                 let _ = task.result.set(result);
+                drop(permit);
                 task.done.notify_waiters();
             });
         }

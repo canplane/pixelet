@@ -219,6 +219,24 @@ The local tile server shares one demand path across terrain, POI and geocode
 (`geo-bake/src/demand/`). `--cache` is the parent directory, default `out/dev`;
 each kind owns a private generation beneath it. Concurrent requests join the
 same job, packets are written atomically, and responses carry zstd encoding.
+All three kinds share the server's `--workers` execution slots (default 4)
+and `--queue` additional admitted-job slots (default 64). Dependencies count
+against admission too; terrain resolves them sequentially, without a task
+fan-out. A new job over the limit gets 503; a cached result or an existing
+job needs no new slot. `--job-seconds` (default 30) bounds each generation
+job, including its dependency and execution-slot waits. One absolute deadline
+is assigned on admission; starting the bake does not reset it. The job remains
+joinable and keeps its admission slot until process termination and reaping
+finish. Only then can a failed job be admitted again. Successful processes
+publish through the common staging owner: one packet move or one directory
+rename. Dictionary backing and its packet are published together. Staging
+stays private until success. A deadline or admission refusal is retryable,
+never an empty page or partial POI count. These are execution/time budgets,
+not a cap on process memory or total cached disk bytes.
+
+`--top-level` (default 3) remains terrain's additional bound on recursive
+spatial expansion; geocode groups and POI regions have fixed bake footprints.
+The common job limits apply to all of them and survive cache invalidation.
 Source data must stay unchanged within a running generation. After re-ingest
 or a bake change, restart or invalidate the affected kind as a whole:
 

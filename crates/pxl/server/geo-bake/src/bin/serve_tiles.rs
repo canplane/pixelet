@@ -10,7 +10,10 @@ use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
-use pxl_geo_bake::demand::{Failure, Kind, Server};
+use pxl_geo_bake::demand::{
+    job::{self, Limits},
+    Failure, Kind, Server,
+};
 use pxl_geo_bake::util::CONTENT_ENCODING;
 use pxl_spec::route::{ASSET_ROOT, GEO_INTERNAL, TILE_ROOT};
 use std::path::PathBuf;
@@ -38,6 +41,7 @@ async fn tile(State(app): State<Arc<App>>, Path((kind, name)): Path<(String, Str
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(Failure::BadName) => (StatusCode::BAD_REQUEST, "bad tile name").into_response(),
         Err(Failure::Unavailable) => (StatusCode::SERVICE_UNAVAILABLE, "past --top-level").into_response(),
+        Err(Failure::Limited(reason)) => (StatusCode::SERVICE_UNAVAILABLE, reason).into_response(),
         Err(Failure::Bake(e)) => {
             eprintln!("[tile/{name}] {e}");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -89,6 +93,15 @@ async fn asset(State(app): State<Arc<App>>, Path(name): Path<String>) -> Respons
 
 fn run() -> Result<(), String> {
     let argv: Vec<String> = std::env::args().skip(1).collect();
+    if argv.first().is_some_and(|a| a == "--demand-job") {
+        if argv.len() != 4 {
+            return Err("invalid private demand job".into());
+        }
+        let job = serde_json::from_str(&argv[1]).map_err(|e| e.to_string())?;
+        let seconds = argv[3].parse().map_err(|_| "invalid job deadline")?;
+        return job::execute(job, std::path::Path::new(&argv[2]), seconds);
+    }
+    let mut limits = Limits::default();
     let mut port: u16 = 3001;
     let mut host = "127.0.0.1".to_string();
     let mut asset_dir = PathBuf::from("./out/asset");
@@ -106,6 +119,8 @@ fn run() -> Result<(), String> {
             "--port" => port = next(&mut i)?.parse().map_err(|_| "bad --port")?,
             "--host" => host = next(&mut i)?,
             "--asset" => asset_dir = PathBuf::from(next(&mut i)?),
+            "--queue" => limits.queued = next(&mut i)?.parse().map_err(|_| "bad --queue")?,
+            "--job-seconds" => limits.seconds = next(&mut i)?.parse().map_err(|_| "bad --job-seconds")?,
             "--workers" => workers = next(&mut i)?.parse().map_err(|_| "bad --workers")?,
             "--cache" => cache = PathBuf::from(next(&mut i)?),
             "--top-level" => top_level = next(&mut i)?.parse().map_err(|_| "bad --top-level")?,
@@ -116,7 +131,7 @@ fn run() -> Result<(), String> {
 
     let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
     let app = Arc::new(App {
-        demand: Server::open(&url, workers, cache, top_level)?,
+        demand: Server::open(&url, workers, cache, top_level, limits)?,
         asset_dir,
         admin_token: std::env::var("ADMIN_TOKEN").ok().filter(|t| !t.is_empty()),
     });
@@ -131,11 +146,6 @@ fn run() -> Result<(), String> {
         .route(&format!("{GEO_INTERNAL}/world/{{kind}}/cache/invalidate"), post(invalidate))
         .with_state(app.clone());
 
-    // The workers' connections are the blocking client's, which drives a
-    // runtime of its own when it is dropped, and dropping one inside this
-    // runtime panics — mid-unwind, an abort that buries the error that ended
-    // the server, a port already taken, under a stack of the drop's. So the
-    // last hold on them is kept out here and let go once the runtime is gone.
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(|e| e.to_string())?;
     let served = runtime.block_on(async move {
         let listener = tokio::net::TcpListener::bind((host.as_str(), port)).await.map_err(|e| format!("{host}:{port}: {e}"))?;
