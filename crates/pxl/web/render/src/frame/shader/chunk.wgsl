@@ -1,7 +1,7 @@
 // The chunk mesh: the mesher's boxes as they lie in a block, each unfolded
 // here into a cube's six faces, a face whose bit the mask lacks collapsed to
-// nothing (chunk_mesher.rs's BOX_WORDS). Every rule here was chunk_material.ts's injected GLSL over
-// three's standard material (b9e31004) — the
+// nothing (chunk_mesher.rs's BOX_WORDS). Every rule here was GLSL injected into three's
+// standard material (b9e31004) — the
 // real-size tile UV from a box's own corner and scale, the edge shading
 // from the mesher's face bits, the screen-space dither a blend is punched
 // with — with the lighting three did for us written out in shade.wgsl. No

@@ -133,7 +133,7 @@ fn epsg3857_z_scale_constant_within_one_l3_page_the_documented_coarse_scale_cont
 }
 
 /// What the TypeScript computed, recorded: the generator that wrote it
-/// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
+/// is gone and the vector stands as it is (xpute-core/golden.rs).
 const GOLDEN: &str = include_str!("../../../golden/spec/space/adapter/3857.tsv");
 
 #[test]

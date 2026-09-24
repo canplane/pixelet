@@ -9,8 +9,6 @@
  */
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
-import { zstdDecompressSync } from "node:zlib";
-import { READ, SUMMARY } from "@/feature/dev/ledger/ledger.spec.ts";
 import { assert, assertEquals } from "@std/assert";
 
 import type { u32 } from "@xpute/core/abi/word.ts";
@@ -22,7 +20,7 @@ import { ELE_PADDED_SPAN, encode_terrain, pack_ground_cell, PAGE_CELL_SPAN } fro
 import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
 import { CORE_KERNEL } from "@/kernel/mem.ts";
 import { BOOT, boot_block, hold_body, text_at } from "@/kernel/module.ts";
-import { acquire_device, bind_surface, unbind_surface } from "@/kernel/render/gpu.ts";
+import { acquire_device } from "@/kernel/render/gpu.ts";
 
 function rng(seed: u32): () => u32 {
   let s = seed >>> 0 || 1;

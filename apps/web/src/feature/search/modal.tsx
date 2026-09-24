@@ -282,9 +282,7 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
 
           {poiResults.length > 0 && <SectionHeader label={t("map.search.section_places")} />}
           {poiResults.map((r) => {
-            // Same emoji/color table poi_layer.tsx's own map badge uses
-            // (catalog/poi/theme.ts's own doc comment on why emoji beats a Lucide
-            // glyph at this size).
+            // poi-theme.ts says why an emoji beats a Lucide glyph at this size.
             const theme = resolvePoiTheme(r.category);
             return (
               <button

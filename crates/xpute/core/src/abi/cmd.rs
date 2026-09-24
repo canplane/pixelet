@@ -1,4 +1,4 @@
-// xpute-core/abi/cmd.spec.rs
+// xpute-core/abi/cmd.rs
 
 //! A command's number: a major that names what it is about, and a minor that
 //! names what is done to it — `major << 8 | minor` in the 16 bits a message

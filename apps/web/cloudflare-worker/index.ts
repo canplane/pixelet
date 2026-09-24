@@ -79,7 +79,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  *   layer/geocode/ reads as no label.
  * - `asset/<path>/<stem>-<12 hex>.<ext>` — a model or an image under the tree
  *   it lives in, with a hash of its bytes in the stem, the way a bundler names
- *   a chunk. pxl-asset-bake's ingest_asset writes them and the catalogs name
+ *   a chunk. ingest-asset writes them and the catalogs name
  *   them by path. No version segment and none wanted: a changed file is a new
  *   name, which is what makes `immutable` true of it.
  *
@@ -175,13 +175,13 @@ export default {
     // Rejected before R2 is touched — see KEY_RE. Same 404 a real miss
     // returns, deliberately: a distinct status would tell a prober which of
     // its guesses were the right shape, and the client cannot act on the
-    // difference anyway (tile_repository.ts turns any 404 into the ocean
-    // tile).
+    // difference anyway (the kernel's layer/terrain/page.rs turns any 404
+    // into the ocean tile, and layer/poi.rs into an empty page).
     if (!KEY_RE.test(key)) return new Response("not found", { status: 404 });
 
     // A missing object is not an error here: open-ocean pages are never
     // baked, and the client turns this 404 into its shared `_ocean` tile.
-    // See tile_repository.ts.
+    // See the kernel's layer/terrain/page.rs.
     if (request.method === "HEAD") {
       const meta = await env.TILES.head(key);
       if (meta === null) return new Response(null, { status: 404 });

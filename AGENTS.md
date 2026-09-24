@@ -73,6 +73,47 @@ servers and the bakes compile the model, so they are crates; an ingest that
 moves a provider's columns into Postgres shares nothing, so it is a script;
 `apps/web` is the shell and stays TypeScript.
 
+## One spatial model
+
+Everything placed on the map sits in one hierarchy, the **pyramid**: level k
+is the leaf lattice with cells 2^k units wide, levels 0 to 10, a page 512
+cells a side at every level and named by the Web Mercator tile it stands on.
+The rules below keep it one thing. They come from finding it several.
+
+- **The lattice has one owner.** Level and span, a cell's base and centre,
+  parent and children, the 4 × 4 neighbourhood a fold reads, and a page's
+  name are `pxl-spec space/pyramid.rs`'s. A layer that shifts the hierarchy's
+  constants by a level itself is a second owner, and `check:rules` refuses
+  it outside `space/`.
+- **A layer is a payload and a one-level fold, and nothing else.** No key,
+  hierarchy, bounds, window, schedule or residency of its own: which pages
+  are wanted, held, fetched and folded is the kernel's `Pyramid<L>`, in the
+  one window (`world/pyramid.rs`), and the bake's `build`
+  (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not data — terrain
+  folds by majority and average, POI by sum.
+- **2.5D is paged; 3D is not.** Terrain and POI are pages of the pyramid.
+  Placed objects are all resident, so they have no lifecycle to share; they
+  share the lattice and the fold rule (`majority`, `pxl-spec bake/fold.rs`)
+  and are folded when a chunk is built.
+- **A mark stands at a cell's centre** (`cell_centre`), at the height of the
+  surface drawn there, never at a centre derived from its data's bounds.
+  Nothing goes below level 0 unless a common L0 is defined first; an
+  object's sub-cell tree is its payload, not a level.
+- **A number is derived or said aloud.** A capacity or a count that bounds
+  what something else already bounds is a second limit derived from nothing
+  (a badge count once capped what screen collision already did). A product
+  number is raised in the conversation, not buried in a constant.
+- **Dev is guarded like terrain.** The tile server answers no page above
+  `--top-level`, and that is the whole guard for every pyramid layer; no
+  feature carries a dev exception of its own.
+- **No test-only API, no generality one caller does not use, no adapter
+  kept past the change that needed it.** Tests keep the shared algebraic
+  laws (a fold's fixed point, the lattice), the wire and storage contracts,
+  and stated invariants; one that restates an implementation goes with it.
+- **Before calling it done, audit the symmetry of the whole tree**: terrain,
+  POI and objects side by side, for anything one does its own way. An
+  asymmetry is removed or explained.
+
 ## Scope and maturity
 
 The MVP is a concept demo — real-world location (Pokémon GO), block building
@@ -176,7 +217,8 @@ a comment is hyphenated; only a `::` path keeps the underscore. New files get
 one too, tests included. The one exception is `shared/ui/shadcn/`, uniformly
 header-less as a flat shadcn tree; its notice is in
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md). Don't add headers there,
-and don't drop them elsewhere.
+and don't drop them elsewhere. An executable script opens on its interpreter
+instead. `check:rules` holds every other file to it.
 
 **A name's case follows the side it is on.** `PascalCase` for types,
 `SCREAMING_SNAKE_CASE` for module constants. Functions and locals are
@@ -196,15 +238,16 @@ generated from `spec/` is Rust's shadow: its stem is the JSON's,
 (`cube_type.spec.rs`, `cube_type.spec.ts`, `mem/mem.spec.rs` for
 `mem/mem.json`), the way a test carries `.test.`; a Rust module reaches it
 through `#[path]`, as `.test.rs` is reached, and keeps its module name.
-Every identifier in it is `snake_case`.
+A generated test is a test first and carries `.test.` alone
+(`abi/cmd.test.rs`). Every identifier in it is `snake_case`.
 
 **Directories are singular** — named for the concept they hold (`object/`,
 `marker/`, `issue/`), never for their count. The exceptions are names an
 ecosystem already expects: ones its tooling fixes (`node_modules/`,
 `@types/`, `.github/workflows/`) and ones its people reach for (`apps/`,
-`packages/`, `crates/`, `.agents/skills/`). A module too (`constant.ts`,
+`packages/`, `crates/`, `.agents/skills/`). A module too (`constant.rs`,
 `route.ts`), and a file inside a directory that names the concept does not
-repeat it (`setting/store.ts`).
+repeat it (`toast/store.ts`).
 
 **A name Rust would case differently carries an `allow` and a reason.** Two
 shapes earn one: a constant that cannot be a `const` — it reads what the shell
@@ -250,7 +293,9 @@ or visual code gets none unless the choice rests on profiling or a derivation.
 **Comments are working notes, not a contract.** Never cite an in-repo comment
 as evidence; verify against the code, its behaviour or git history. When the
 author contradicts a comment — even one written this session — defer. Keep
-comments accurate; don't treat them as authority.
+comments accurate; don't treat them as authority. A source path a comment or a
+document names must exist, and `check:rules` says where one does not; a
+decision record in `issue/` names the files of its day and is exempt.
 
 ## Architecture first
 

@@ -1,3 +1,5 @@
+// pxl-render/build.rs
+
 // The WGSL the module ships is the shader files with their prose taken off.
 //
 // WebGPU compiles a shader from its source text — there is no bytecode form

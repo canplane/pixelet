@@ -172,7 +172,7 @@ mod selection_roots {
         let all = held(&kids);
         assert_eq!(roots_of(&all, top, 0).len(), 4);
         // Two of four, which is what a held ring actually leaves
-        // (terrain/level.test.rs): half the ground rather than none of it.
+        // (world/pyramid/window.test.rs): half the ground rather than none of it.
         let some = held(&kids[..2]);
         assert_eq!(roots_of(&some, top, 0), {
             let mut v = kids[..2].to_vec();

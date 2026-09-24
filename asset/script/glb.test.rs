@@ -1,3 +1,5 @@
+// ingest-asset/glb.test.rs
+
 use std::path::{Path, PathBuf};
 
 use pxl_spec::asset::ingested::INGESTED;

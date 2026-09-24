@@ -110,7 +110,7 @@ fn scale(reach: f64) -> f64 {
 ///
 /// The ground ends at whichever comes first, the air and the planet or the
 /// rings themselves. The window holds the levels `.fixed` is sized for and
-/// no more (terrain/level.rs), so from a few hundred metres up the data runs
+/// no more (world/pyramid/window.rs), so from a few hundred metres up the data runs
 /// out before the air does, and the band is then a crossfade over the edge
 /// of what is drawn rather than over the reach.
 pub fn band_at(height: f64, drawn: f64) -> (f64, f64) {

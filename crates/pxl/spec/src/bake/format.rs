@@ -102,7 +102,7 @@ impl GroundChannelKey {
         None
     }
 
-    /// The same, where a const is what the caller needs: `bake/cell.rs` finds
+    /// The same, where a const is what the caller needs: `bake/pack.rs` finds
     /// a channel's field by it.
     pub const fn name(self) -> &'static str {
         match self {

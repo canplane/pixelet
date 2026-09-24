@@ -1,5 +1,4 @@
 // pxl-geo/main.test.rs
-// (no pair: the TypeScript's own wiring had no test file)
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -22,7 +21,7 @@ fn cfg() -> config::Config {
     }
 }
 
-/// See search.test.rs: deadpool connects lazily, and no path exercised here
+/// See search/endpoint.test.rs: deadpool connects lazily, and no path exercised here
 /// reaches the database.
 fn unreachable_pool() -> Pool {
     let pg: tokio_postgres::Config = "postgresql://nobody@127.0.0.1:1/nothing".parse().unwrap();

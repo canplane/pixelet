@@ -1,6 +1,6 @@
 // pxl-kernel/io/demand.rs
 
-//! One unit of deferrable I/O handed to scheduler.rs.
+//! One unit of deferrable I/O handed to io/sched.rs.
 //!
 //! The scheduler owns ordering, the concurrency quota, and cancellation of
 //! demands that stop being wanted; the shell owns the actual transport — the
@@ -125,7 +125,7 @@ pub struct Demand {
     /// priority, one already in flight is left alone.
     pub key: DemandKey,
     /// Lower runs sooner. A page's is how far it sits from the view in its
-    /// category's own order (terrain/tile_fetcher.rs's), doubled so a second
+    /// category's own order (world/pyramid.rs's), doubled so a second
     /// category can interleave at the odd numbers.
     pub priority: f64,
 }

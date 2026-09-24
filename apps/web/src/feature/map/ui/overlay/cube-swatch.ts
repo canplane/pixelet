@@ -12,7 +12,7 @@ function placeableCubeTextureUrl(cube: PlaceableCube): string | null {
 
 /** Style for a cube swatch — the real texture-pack top image when one
  * exists, falling back to a flat color swatch otherwise (the same fallback
- * hover_cursor.tsx's own ghost preview already relies on for
+ * hover_cursor.rs's own ghost preview already relies on for
  * object/tex.ts's own get_object_texture). Shared by drawer-modal.tsx and
  * mode-bar.tsx so their swatches never drift apart. */
 export function cubeSwatchStyle(cube: PlaceableCube): CSSProperties {

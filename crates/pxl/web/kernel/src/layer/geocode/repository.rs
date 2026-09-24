@@ -33,7 +33,7 @@ pub fn group_name(group_idx: IVec) -> Quadkey {
 /// places in it, so it outlives every group.
 ///
 /// The block goes back when the packet does. A `'static` view over a block
-/// is the shape a resident page has here (layer/poi/repository.rs) and the
+/// is the shape a resident page has here (layer/terrain/page.rs) and the
 /// lifetime is a claim the type cannot keep — what it is really good for is
 /// the block's own life, which is why giving the block back is the packet's
 /// own business and not a caller's to remember.

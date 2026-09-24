@@ -221,7 +221,7 @@ pub mod FRAME {
     ];
 }
 
-/// What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (view.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what the chunk scheduler is doing, what it built and fetched, and what it all holds — and the report and the panel both follow it.
+/// What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what the chunk scheduler is doing, what it built and fetched, and what it all holds — and the report and the panel both follow it.
 pub mod FRAME_GROUPS {
     pub const pace: &[&str] = &["t", "dt_ms", "frame_ms", "settled", "sched_ms", "budget_ms", "phases", "chunks_ms", "task_ms"];
     pub const turn: &[&str] = &["turn_effects_ms", "turn_stage_ms", "turn_step_ms", "turn_step_name"];

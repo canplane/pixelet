@@ -1,5 +1,4 @@
 // pxl-geo/search/endpoint.test.rs
-// (no pair: the TypeScript service had no test file)
 
 //! What the endpoint decides before it reaches the database.
 //!

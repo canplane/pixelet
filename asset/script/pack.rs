@@ -1,3 +1,5 @@
+// ingest-asset/pack.rs
+
 //! The texture pack's manifest, and what one entry becomes on disk.
 //!
 //! `asset/cube/manifest.json` names a source URL per cube type. The originals

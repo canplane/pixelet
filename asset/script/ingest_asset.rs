@@ -1,3 +1,5 @@
+// ingest-asset/ingest_asset.rs
+
 //! Every shipped asset into the form the bucket holds and the catalogs name:
 //! one object per file, named by its own path with a hash of its bytes in the
 //! stem, with a model's bounds measured here rather than typed in.
@@ -18,7 +20,7 @@
 //! `asset/cube/{terrain,block}` composed into a sheet and encoded once
 //! (sheet.rs).
 //!
-//!   deno task ingest:asset
+//!   cargo run --manifest-path asset/script/Cargo.toml
 
 mod glb;
 mod sheet;

@@ -16,7 +16,7 @@
 
 /** The sheet's sections, in the order they are shown. `character` is not a
  * section of the sheet at all — its two settings are picked from the
- * drawer's Character tab (ui/character/picker.tsx). */
+ * drawer's Character tab (feature/character/picker.tsx). */
 export const SETTING_SECTIONS = ["display", "camera", "editing", "lighting", "quality", "debug", "character"] as const;
 
 /** The sections that are a development build's as a whole. One of these is

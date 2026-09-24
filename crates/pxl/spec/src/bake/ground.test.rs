@@ -1,5 +1,4 @@
 // pxl-spec/bake/ground.test.rs
-// (no pair: ground.ts has no test file)
 
 use xpute_core::golden::Golden;
 

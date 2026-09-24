@@ -138,7 +138,7 @@ export function ToastController() {
     // A page already announced is one the user has been told about, and what
     // reaches the terrain queue for it afterwards is the fetcher asking again
     // for a tile that did not arrive — every OCEAN_RETRY_MS, for as long as it
-    // keeps not arriving (terrain/tile_fetcher.rs). The queue filling and
+    // keeps not arriving (world/pyramid.rs). The queue filling and
     // draining on that beat is not the world loading and becoming ready, and
     // announcing it as such replayed this toast every two seconds forever.
     // An error still speaks, since that is news whatever page it is on.

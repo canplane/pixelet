@@ -93,7 +93,7 @@ fn indexer_every_point_in_a_cell_resolves_to_the_same_centre() {
 }
 
 /// What the TypeScript computed, recorded: the generator that wrote it
-/// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
+/// is gone and the vector stands as it is (xpute-core/golden.rs).
 const GOLDEN: &str = include_str!("../../golden/spec/space/indexer.tsv");
 
 #[test]

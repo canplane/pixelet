@@ -74,7 +74,7 @@ const DEV_MARKERS = ["dev/test", "development"];
  * produce.
  *
  * KERNEL_SENTINELS is what no route names: the terrain's page names are the
- * kernel's own (layer/terrain/tile_repository.rs), so nothing generates them
+ * kernel's own (world/pyramid.rs), so nothing generates them
  * and there is nothing to check them against. */
 const SENTINELS = ["/geo/search", "/geo/tiles"];
 // Empty, and kept rather than deleted: the generator's error when this list is

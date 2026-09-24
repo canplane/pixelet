@@ -15,7 +15,7 @@ import { set_clock } from "../clock.ts";
  * already reads time through clock.ts, so the tests move it by hand and the
  * arithmetic is exact rather than nearly.
  *
- * Installed per test and put back after, because io.ts reads the same clock
+ * Installed per test and put back after, because frame_budget.ts reads the same clock
  * and its own tests want the real one.
  */
 function test_on_a_held_clock(name: string, body: (clock: { now: () => number; burn: (ms: number) => void }) => void): void {

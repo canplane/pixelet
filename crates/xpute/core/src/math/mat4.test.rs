@@ -54,7 +54,7 @@ fn mat4_the_frustum_s_planes_hold_the_target_and_reject_what_is_behind_the_eye()
 }
 
 /// What the TypeScript computed, recorded: the generator that wrote it
-/// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
+/// is gone and the vector stands as it is (xpute-core/golden.rs).
 const GOLDEN: &str = include_str!("../../golden/math/mat4.tsv");
 
 #[test]

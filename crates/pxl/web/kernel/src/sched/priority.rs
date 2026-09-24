@@ -44,7 +44,7 @@
 //!
 //! | pass | file | terms |
 //! | --- | --- | --- |
-//! | fetch | layer/terrain/tile_fetcher.rs | class, ring, level, distance |
+//! | fetch | world/pyramid.rs              | class, ring, level, distance |
 //! | mount | world/chunk/table.rs `mount` | distance from the centre |
 //! | build | world/chunk/table.rs `priority` | holder, on screen, hole, a generation behind, distance from the centre |
 //!
@@ -82,7 +82,7 @@ pub fn view_centre(camera: Point, lead: Point) -> Point {
 
 /// How far something is in its own sides, squared: `d²` over its side
 /// squared, which is how large it looks rather than how near it is. What a
-/// page's ring is in page units (terrain/level.rs's `centre_dist`); the
+/// page's ring is in page units (world/pyramid/window.rs's `centre_dist`); the
 /// chunks order by the plain distance instead, and why is above.
 pub fn in_own_sides(distance2: f64, span: f64) -> f64 {
     distance2 / (span * span)

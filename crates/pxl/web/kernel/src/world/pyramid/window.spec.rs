@@ -21,7 +21,7 @@
 #![allow(non_upper_case_globals, non_snake_case, dead_code)]
 
 /// The most levels held at once: a window holds the levels the ground in
-/// view wants and no others (terrain/level.rs), and this is the widest that
+/// view wants and no others (world/pyramid/window.rs), and this is the widest that
 /// can be, which `.fixed` is sized for. What a 50° field of view shows spans
 /// log2(sin(θ + 25°) / sin(θ − 25°)) octaves of distance at a tilt θ above
 /// the horizon: under one looking down, 3.2 at 30°, 4.5 at 27°. Five cover
@@ -42,5 +42,5 @@ pub const HELD_AXIS: u32 = 5;
 /// units, against the 384·2^k the ladder wants step 2^(k+1) to, which is
 /// the step level k draws: the level a chunk wants is resident, with a
 /// third of slack at every level. Where a wide screen's corners see past
-/// that, the window's top is a coarser level (terrain/level.rs).
+/// that, the window's top is a coarser level (world/pyramid/window.rs).
 pub const RENDER_AXIS: u32 = 3;

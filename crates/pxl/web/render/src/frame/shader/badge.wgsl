@@ -3,15 +3,15 @@
 // The billboards — the POI badges and the chat bubble: an instanced quad
 // over the module's billboard sets (billboard.rs), one draw a set, drawn
 // after the world with the world's depth attached read-only and bound as
-// a texture at once, so both of anchor_occlusion.ts's questions
-// (b9e31004) are asked of this frame's depth.
+// a texture at once, so both occlusion questions are asked of this
+// frame's depth.
 // Whether the labelled point is visible is asked in the vertex shader, at
 // five points up the badge from just above the anchor, and answered for
 // the whole badge; whether something stands between the camera and the
 // badge itself is the depth test's, against the depth of an upright twin
 // of the quad written as the fragment's.
 
-// anchor_occlusion.ts's tolerances and sampling: a unit of slack plus a
+// The tolerances and sampling: a unit of slack plus a
 // cell and a half of the tier's cell at the badge's distance, five samples
 // up the badge from two units above the anchor, hidden when three are
 // behind the world.

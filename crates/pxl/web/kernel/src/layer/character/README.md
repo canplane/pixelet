@@ -12,7 +12,7 @@ read as a different thing from that settings surface when it's the same one.
 kernel's actors (`/crates/pxl/web/kernel/src/io/load.rs`) — a model played by
 its own clips, its joint palette written each tick — rather than an instance
 of a static model the way decor's population is, with position and animation
-driven in a step of the frame's tick (`../sched/tick.rs`, the interaction
+driven in a step of the frame's tick (`../../sched/tick.rs`, the interaction
 phase) rather than by anything the shell holds, at "a few, individually
 distinct" instance count. `companion.rs`'s `Walker` (person + pet) is the
 only instance today.

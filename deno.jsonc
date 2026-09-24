@@ -65,7 +65,7 @@
     "smoke": "./script/smoke.ts",
 
     // ── The gate ──
-    "check": "deno task check:fmt && deno task check:toolchain && deno task check:web && deno task check:xpute && deno task check:rust && deno task check:spec",
+    "check": "deno task check:fmt && deno task check:toolchain && deno task check:rules && deno task check:web && deno task check:xpute && deno task check:rust && deno task check:spec",
     // What check:rust's own `cargo fmt --check` does for the Rust: everything
     // Deno formats — TypeScript, JSON, JSONC, Markdown — held to one shape.
     // Without it the two languages were gated unevenly, and the half nothing
@@ -81,6 +81,9 @@
     // Before anything compiles: a Rust version written twice is a binary
     // built on a compiler the gate never ran.
     "check:toolchain": "./script/check-toolchain.ts",
+    // The rules of AGENTS.md a machine can decide: file headers, the paths a
+    // comment names, and who shifts the lattice.
+    "check:rules": "./script/check-rules.ts",
     "check:spec": "./script/spec.ts",
     // The write half of it: the same generator, allowed to touch the tree.
     "spec": "./script/spec.ts --write",

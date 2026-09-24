@@ -150,7 +150,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     let c = core_tick();
     c.visible_pass = None;
     view_resize(ctx.state.width, ctx.state.height);
-    // The tier criterion is a screen-space one (crates/pxl/web/render/src/lod.rs), and the
+    // The tier criterion is a screen-space one (crates/pxl/web/render/src/look/lod.rs), and the
     // other layers that read it read it from here; the scheduler takes the same
     // projection through the frame, and its pressure — the byte budget paid in
     // LOD — comes back through the census.

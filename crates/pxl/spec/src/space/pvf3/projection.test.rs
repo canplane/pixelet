@@ -1,5 +1,4 @@
 // pxl-spec/space/pvf3/projection.test.rs
-// (no pair: projection.ts has no test file)
 
 use xpute_core::golden::Golden;
 

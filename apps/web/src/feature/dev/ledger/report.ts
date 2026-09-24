@@ -26,7 +26,7 @@ const starved = (ms: number) => (ms >= STARVED_MS ? "  STARVED" : "");
 
 // ---- the words ----
 
-/** Why a read failed, as `spec/fetch.ts` numbers it. A refusal says the
+/** Why a read failed, as `abi/fetch.spec.rs` numbers it. A refusal says the
  * number the host refused with instead, which is the part that tells one from
  * another; what that number means is the host's, and nothing reads it. */
 export function failText(fail: u32, detail: u32): string {

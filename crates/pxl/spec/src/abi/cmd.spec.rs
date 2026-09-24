@@ -80,7 +80,7 @@ pub enum Command {
     /// leaves its signals on the completion ring, drawn by the kernel, and last this
     /// command's own as a signal: [draws u32]
     WORLD_UPDATE = 0x1b03,
-    /// [action str (JSON, app/shell.rs)] — the UI's action; the host rings the doorbell for it at once,
+    /// [action str (JSON, shell/shell.rs)] — the UI's action; the host rings the doorbell for it at once,
     /// so what it asks of the host is heard before the call returns
     WORLD_ACTION = 0x1b11,
     /// [left f64, top f64, width f64, height f64] — the canvas's client rect
@@ -144,7 +144,7 @@ pub enum Command {
     SURFACE_DELETE = 0x2104,
 
     // ---- the turn's signals: kernel → shell, left on the completion ring by a strobe or an action ----
-    /// [at u32, len u32] — app/shell.rs's snapshot, when it changed: UTF-8
+    /// [at u32, len u32] — shell/shell.rs's snapshot, when it changed: UTF-8
     /// past a ring frame, so it is a block the kernel holds, valid until the
     /// next snapshot
     WORLD_SNAPSHOT = 0x1b15,

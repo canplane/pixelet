@@ -4,7 +4,7 @@
 //! it changes, and each tick where the map is and what the wall clock says. The
 //! second places the sun and the moon (celestial_position.rs) and eases the
 //! light, the fog and the sky toward the theme; the view composes the lane the
-//! frame is lit with from that (crates/pxl/web/render/src/environment.rs).
+//! frame is lit with from that (crates/pxl/web/render/src/look/environment.rs).
 
 use pxl_render::look::color::linear_rgb;
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS, NIGHT, THEME_FLOATS};
@@ -130,7 +130,7 @@ pub fn map_environment_step() {
 // theme's colours when the theme changes, and each tick the observer's
 // latitude and longitude and the wall clock; this places the sun and the moon
 // from the clock and eases everything toward its target. What the frame is lit
-// with is composed from that by the view (crates/pxl/web/render/src/environment.rs).
+// with is composed from that by the view (crates/pxl/web/render/src/look/environment.rs).
 
 /// The moon's intensity at night, and where it starts on a first night.
 const MOON_NIGHT_INTENSITY: f64 = 0.18;

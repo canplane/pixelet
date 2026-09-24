@@ -6,7 +6,7 @@
 //! (issue/20260909-cooperative-scheduler-and-task-ledger.md).
 //!
 //! Two record types, one instrument:
-//! - TaskRow — one finished unit of deferred work (a scheduler.rs
+//! - TaskRow — one finished unit of deferred work (an io/sched.rs
 //!   demand today; a CPU task later), as the TaskRecord a scheduler settles
 //!   reduced to numbers.
 //! - FrameSample — one rendered frame's gauges (pacing, GPU ask, memory, queue
@@ -197,7 +197,7 @@ impl TaskRow {
 
 pub const CENSUS_LEN: usize = CENSUS_TAGS.len();
 
-/// (draws, triangles) by the pipeline a draw names (crates/pxl/web/render/src/draw.rs), for one
+/// (draws, triangles) by the pipeline a draw names (crates/pxl/web/render/src/frame/draw.rs), for one
 /// frame's render, in CENSUS_TAGS' order.
 pub type DrawCensus = [[f64; 2]; CENSUS_LEN];
 

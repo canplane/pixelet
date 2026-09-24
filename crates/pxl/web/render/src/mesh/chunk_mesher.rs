@@ -13,7 +13,6 @@
 //! knows the mesh's size (`Step::NeedMesh`), and the bake waits at that step
 //! for as long as the answer is that there is no room.
 
-use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::round;
 
@@ -99,7 +98,7 @@ const BAKE_BOXES_PER_STEP: usize = 512;
 /// pack is for a leaf's cells, where a top and a side mean something. The
 /// corner and the width shrink to a byte an axis because of how the ladder
 /// draws: a level-`k` chunk is never drawn nearer than `192·2^k`
-/// (pxl-render look/lod.rs, kernel layer/terrain/level.rs), where a finer
+/// (pxl-render look/lod.rs, kernel world/pyramid/window.rs), where a finer
 /// ring covers it, so its cell is between one and two TARGET_CELL_PX however
 /// the camera moves. An eighth of that cell is at most one and a half pixels
 /// and its mesh is at most 32 cells across, so a cell index and an eighth
@@ -595,8 +594,8 @@ impl BakeContext {
             return false;
         }
 
-        let unit = b.xy_scale as f64 * U_PER_CELL;
-        let z_unit = b.z_scale as f64 * U_PER_CELL;
+        let unit = b.xy_scale as f64;
+        let z_unit = b.z_scale as f64;
         // A box is placed by the chunk's own grid; the columns were walked
         // in the padded one.
         let apron = b.apron as f64;

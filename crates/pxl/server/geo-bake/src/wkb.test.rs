@@ -1,5 +1,4 @@
 // pxl-geo-bake/wkb.test.rs
-// (no pair: wkb.ts has no test file)
 
 use super::*;
 

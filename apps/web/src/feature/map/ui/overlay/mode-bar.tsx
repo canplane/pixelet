@@ -250,7 +250,7 @@ function DecorIconButton({ id }: { id: DecorId }) {
 }
 
 // Icon per decor id — TypeScript enforces one entry per DecorId, so
-// adding a new decor kind (decor.ts's own decor_types) can't silently ship
+// adding a new decor kind (decor.spec.ts's own decor_types) can't silently ship
 // without a button icon for it. Lives here (this file's own DecorIconButton
 // is one consumer) and is also imported by drawer-modal.tsx's own
 // DecorGridButton, so a new decor kind's icon shows up in both the hotbar

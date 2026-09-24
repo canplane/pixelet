@@ -12,10 +12,10 @@
 //! four, and they are all terrain's or terrain's dependency's:
 //!
 //! 1. The shared ocean tile before a page that is not drawn. One arrival sets
-//!    every page waiting on it (`tile_repository.rs`'s `adopt_ocean` drains
+//!    every page waiting on it (`layer/terrain/page.rs`'s `adopt_ocean` drains
 //!    `waiting`); a page's own arrival sets one.
 //! 2. A page nothing draws before a page drawn coarsely. The first is a hole
-//!    on the screen and the second is already there (`resolve.rs`).
+//!    on the screen and the second is already there (`world/pyramid.rs`'s `resolve`).
 //! 3. A page the view draws before one outside the ring it draws. The second
 //!    is margin against a move that has not happened.
 //! 4. Nearer before further, within any of those.

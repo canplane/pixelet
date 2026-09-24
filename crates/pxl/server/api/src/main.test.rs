@@ -1,5 +1,4 @@
 // pxl-api/main.test.rs
-// (no pair: the TypeScript's own wiring had no test file)
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};

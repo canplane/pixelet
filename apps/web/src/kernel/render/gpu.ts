@@ -232,7 +232,7 @@ function layout_entries(words: U32Array, samples: u32): GPUBindGroupLayoutEntry[
 /** The vertex entry points a pipeline record can name, by record.VS and kin. */
 const VERTEX_ENTRY = ["vs", "vs_coarse"];
 
-/** A pipeline record's words (crates/pxl/web/render/src/shader.rs) as WebGPU's descriptor. */
+/** A pipeline record's words (crates/pxl/web/render/src/frame/shader.rs) as WebGPU's descriptor. */
 function pipeline_descriptor(words: U32Array, layouts: GPUBindGroupLayout[], module: GPUShaderModule, target: GPUTextureFormat, samples: u32): GPURenderPipelineDescriptor {
   let at = record.HEAD;
   const next = () => words[at++];

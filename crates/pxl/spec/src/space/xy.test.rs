@@ -1,5 +1,4 @@
 // pxl-spec/space/xy.test.rs
-// (no pair: xy.ts has no test file)
 
 use xpute_core::golden::Golden;
 

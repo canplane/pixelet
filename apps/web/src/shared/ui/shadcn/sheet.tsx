@@ -3,7 +3,7 @@
 import * as React from "react";
 
 // z-[70] rather than stock shadcn's z-50: has to sit above the toaster
-// (z-60, kit/ui/toast/toaster.tsx), which sits above the map overlay
+// (z-60, shared/ui/toast/toaster.tsx), which sits above the map overlay
 // chrome (z-40/z-50) — keep these three in that order.
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { cva, type VariantProps } from "class-variance-authority";

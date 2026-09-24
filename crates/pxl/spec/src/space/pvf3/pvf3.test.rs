@@ -1,6 +1,7 @@
 // pxl-spec/space/pvf3/pvf3.test.rs
-// (no pair: pvf3.ts has no test file; the vector holds ivec, fvec and pvf3
-// to the TypeScript bit for bit)
+
+// The vector holds ivec, fvec and pvf3 to the TypeScript's records bit for
+// bit.
 
 use xpute_core::golden::{caught, Golden};
 
@@ -8,7 +9,7 @@ use super::*;
 use crate::space::pvf3::{fvec, ivec};
 
 /// What the TypeScript computed, recorded: the generator that wrote it
-/// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
+/// is gone and the vector stands as it is (xpute-core/golden.rs).
 const GOLDEN: &str = include_str!("../../../golden/spec/space/pvf3/pvf3.tsv");
 
 fn tuple(v: &Golden, k: &str) -> Pvf3 {

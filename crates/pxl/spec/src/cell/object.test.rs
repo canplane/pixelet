@@ -97,7 +97,7 @@ fn placeable_cube_num_id_a_terrain_styled_cube_never_collides_with_a_flat_color_
 }
 
 /// What the TypeScript computed, recorded: the generator that wrote it
-/// is gone and the vector stands as it is (xpute-core/sys/vector.rs).
+/// is gone and the vector stands as it is (xpute-core/golden.rs).
 const GOLDEN: &str = include_str!("../../golden/spec/cell/object.tsv");
 
 fn list(v: &xpute_core::golden::Golden, base: &str) -> Vec<&'static str> {

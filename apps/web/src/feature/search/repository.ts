@@ -29,9 +29,9 @@ export interface SearchResult {
 
 /**
  * Forward search's own transport — always the live API, never a static
- * bake: unlike POI/geocode/repository.ts, there is no PUBLISHED_TILES branch
+ * bake: unlike the POI and geocode pages, there is no PUBLISHED_TILES branch
  * here, because free-text search has no finite L3-page key to bake ahead
- * of time (see the API's own search/service.ts top comment). This is the
+ * of time (see pxl-geo search/endpoint.rs's top comment). This is the
  * one world/ feature that genuinely requires a reachable server at request
  * time, not just at ingest/bake time.
  */

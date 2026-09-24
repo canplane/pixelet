@@ -1,3 +1,5 @@
+// ingest-asset/glb.rs
+
 //! A model's size, measured from the file rather than typed into a catalog.
 //!
 //! The extent is the axis-aligned bounds over every node of every scene, node

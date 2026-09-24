@@ -8,7 +8,7 @@
 
 /// Full opacity/size at or inside fade_start_u(), smoothstepped to gone by
 /// fade_end_u() — both a fixed number of the terrain's first tier handoff
-/// (crates/pxl/web/render/src/lod.rs), so they move with the projection as the tiers do.
+/// (crates/pxl/web/render/src/look/lod.rs), so they move with the projection as the tiers do.
 pub use pxl_render::look::lod::{fade_end_u, fade_start_u};
 
 ///
