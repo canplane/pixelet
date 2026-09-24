@@ -205,6 +205,9 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     let mut events = Vec::new();
     let draw = with_world(|world, sched| sched.tick(world, frame, &now, &mut |e| events.push(e))).unwrap_or(false);
     run_chunk_events(events);
+    crate::layer::poi::placement::step(ctx);
+    let sched = &mut kernel().sched;
+    sched.billboards.draw(&mut sched.draw, &sched.models, frame.origin);
     if draw {
         c.draw = true;
         ctx.invalidate();

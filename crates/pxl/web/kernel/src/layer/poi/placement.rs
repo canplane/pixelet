@@ -26,22 +26,23 @@ struct Placement {
 }
 static PLACEMENT: Global<Placement> = Global::new();
 
-/// A display anchor derived from a summary's extent. It does not stand for
-/// an entity position, and never enters canonical storage or node packets.
-pub fn anchor(summary: &Summary) -> [f64; 3] {
+/// A summary's midpoint snapped to the displayed terrain cell and surface.
+/// This presentation position never enters canonical storage or node packets.
+pub fn anchor(summary: &Summary) -> Option<[f64; 3]> {
     let b = summary.bounds;
-    [(b[0] + b[3]) * 0.5, (b[1] + b[4]) * 0.5, b[5] + 1.0]
+    crate::kernel::kernel().sched.surface_anchor((b[0] + b[3]) * 0.5, (b[1] + b[4]) * 0.5)
 }
 
 pub fn visible() -> u32 {
     PLACEMENT.get(Placement::default).visible
 }
 
-pub fn step(_: &mut TickContext) {
+pub fn step(ctx: &mut TickContext) {
     let p = PLACEMENT.get(Placement::default);
     if !store::enabled() || map_store().map_center.is_none() {
         if let Some(set) = p.set.take() {
             remove_billboard_set(set);
+            ctx.invalidate();
         }
         p.visible = 0;
         badge::retain(&[]);
@@ -59,8 +60,10 @@ pub fn step(_: &mut TickContext) {
     let cut = &s.cut;
     badge::retain(&cut.iter().map(|s| s.count).collect::<Vec<_>>());
     p.batch.reset();
+    let mut grounded = Vec::new();
     for summary in cut {
-        let a = anchor(summary);
+        let Some(a) = anchor(summary) else { continue };
+        grounded.push(summary);
         let mut absolute = Pvf3::default();
         projection::project(&mut absolute, a[0], a[1], a[2]);
         let mut local = [0.0; 3];
@@ -73,7 +76,7 @@ pub fn step(_: &mut TickContext) {
     let mut instances = Vec::with_capacity(CANDIDATES * 10);
     for &i in &kept[..n as usize] {
         let i = i as usize;
-        let slot = badge::slot(cut[i].count);
+        let slot = badge::slot(grounded[i].count);
         if slot == NO_SLOT {
             continue;
         }
@@ -99,4 +102,5 @@ pub fn step(_: &mut TickContext) {
     let set = *p.set.get_or_insert_with(|| new_billboard_set(BILLBOARD_ORDER::poi));
     place_billboard_set(set, base);
     write_billboard_set(set, &instances);
+    ctx.invalidate();
 }
