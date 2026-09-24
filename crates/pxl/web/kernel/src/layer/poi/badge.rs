@@ -15,7 +15,6 @@ use pxl_render::gpu::surface::DPR_MAX;
 use crate::world::pyramid::Layer;
 
 pub const HEIGHT: f64 = 37.0;
-pub const COLLIDE: f64 = 27.0;
 pub const ANCHOR: f64 = 34.0;
 
 /// What a badge says, by what it is rather than by its text: a count, or the

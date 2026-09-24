@@ -1,9 +1,9 @@
 // pxl-kernel/layer/billboard/selection.rs
 
 //! Shared visibility selection for world-anchored billboards (tier 3 — see
-//! issue/20260907-world-rendering-tiers.md). A consumer with more candidates
-//! than the screen has room for (POI today; a future chat-bubble-per-character
-//! feature would hit the same shape) calls the selection once per placement:
+//! issue/20260907-world-rendering-tiers.md). A consumer (POI today; a future
+//! chat-bubble-per-character feature would hit the same shape) calls the
+//! selection once per placement:
 //!
 //! 1. Real camera-frustum membership, tested against a sphere around the
 //!    anchor rather than the bare anchor point. The sphere matters at an
@@ -12,22 +12,18 @@
 //!    full view — and at an oblique polar the bottom edge is where the
 //!    *nearest* anchors are. Point membership therefore deleted the closest
 //!    badges first while distant ones near the horizon stayed.
-//! 2. Nearest what the view looks at first, with a stable hash of each
-//!    candidate's own id breaking ties, each kept where its box collides with
-//!    none kept before it. The screen is the only budget: boxes that do not
-//!    overlap are bounded by the pixels they cover, so a count on top would be
-//!    a second limit derived from nothing.
+//! 2. The fade and the viewport: what has faded past legibility, or whose box
+//!    does not reach the screen, is not drawn.
 //!
-//! Distance restores monotonicity: widening the view can only append farther
-//! candidates, so the ones already on screen keep their room and what loses
-//! a collision is the farther — which is also the smaller and the less
-//! legible.
+//! What survives is every candidate, overlapping or not: a badge stands for
+//! the places under its cell, and hiding one behind another would drop them
+//! from what the screen counts. They are listed nearest what the view looks
+//! at first, a stable hash of each candidate's own id breaking ties, which is
+//! the order a list of them is read in.
 
-use pxl_spec::space::lattice::grid_index::{GridIndex, Placement, DEFAULT_CELL_PX};
 use xpute_core::math::mat4::mat4_transform_point;
 use xpute_core::math::vec3::Vec3;
 
-use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::distance_fade::distance_fade_far;
 use crate::layer::environment::state::globe;
@@ -48,24 +44,11 @@ const ANCHOR_REACH: f64 = 0.08;
 /// can see.
 const MIN_LEGIBLE_FAR: f64 = 0.12;
 
-struct Selection {
-    screen: GridIndex,
-}
-
-static SELECTION: Global<Selection> = Global::new();
-
-fn selection() -> &'static mut Selection {
-    SELECTION.get(|| Selection {
-        screen: GridIndex::new(DEFAULT_CELL_PX),
-    })
-}
-
-/// The candidates that survive the frustum, the viewport, the fade and the
-/// collision pass, as indices into `batch` written to `out`. Indices rather than items: this
+/// The candidates that survive the frustum, the viewport and the fade, as
+/// indices into `batch` written to `out`. Indices rather than items: this
 /// pass never learns what a candidate *is*. The batch's coordinates are in the
 /// root frame (world/frame/view.rs).
 pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, viewport_h: f64, out: &mut Vec<u32>) {
-    let sel = selection();
     let v = view();
     let eye = v.eye;
 
@@ -92,13 +75,10 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
         n += 1;
     }
 
-    // Offered nearest what the view looks at first, which is how the pyramid
-    // orders what it asks for too (world/pyramid.rs): nearest the eye would
-    // let the screen's lower edge win every collision whenever the view is tilted.
-    // Squared, since only the order matters; the tiebreak decides nothing on
-    // its own and only keeps two at equal distance from swapping frame to
-    // frame. A distance stays the ordering because it is what makes widening
-    // the view append rather than reshuffle.
+    // Nearest what the view looks at first, which is how the pyramid orders
+    // what it asks for too (world/pyramid.rs). Squared, since only the order
+    // matters; the tiebreak decides nothing on its own and only keeps two at
+    // equal distance from swapping frame to frame.
     let focus = [-v.tx, -v.ty, -v.tz];
     let at = |i: u32| {
         let i = i as usize;
@@ -107,7 +87,6 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
     let tiebreak = &batch.tiebreak;
     batch.order[..n].sort_by(|&a, &b| at(a).total_cmp(&at(b)).then(tiebreak[a as usize].total_cmp(&tiebreak[b as usize])));
 
-    sel.screen.begin(viewport_w, viewport_h);
     out.clear();
     let mut ndc = Vec3::default();
 
@@ -116,10 +95,7 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
 
         let far = distance_fade_far(batch.d2[i].sqrt(), batch.unit[i]);
         // Not `far <= 0`. The last stretch before the fade's end is ten pixels by
-        // three at a tenth opacity — invisible, and small enough that hundreds
-        // of them fit without ever colliding. This is the difference between a
-        // count bounded by what the screen can show and one bounded by how much
-        // world is in reach.
+        // three at a tenth opacity — invisible, and not worth a draw.
         if far < MIN_LEGIBLE_FAR {
             continue;
         }
@@ -129,22 +105,18 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
         let sy = (-ndc.y * 0.5 + 0.5) * viewport_h;
 
         // Canvas Y and screen Y both grow downward, so the anchor's canvas offset
-        // reads straight across: the box's top sits that far above the projected
-        // anchor, and it is `collide_px` tall rather than the full drawn height.
+        // reads straight across: the box's top sits that far above the
+        // projected anchor, and its bottom is the anchor.
         let w = batch.w_px[i] as f64 * far;
         let x0 = sx - w / 2.0;
         let y0 = sy - batch.anchor_px[i] as f64 * far;
-        let (x1, y1) = (x0 + w, y0 + batch.collide_px[i] as f64 * far);
+        let (x1, y1) = (x0 + w, sy);
         // The frustum test keeps an anchor a margin past the screen's edge,
         // since its sprite can reach in. One whose box does not reach the
-        // viewport at all is not shown, and must not take the room of one
-        // that is.
+        // viewport at all is not shown.
         if x1 < 0.0 || y1 < 0.0 || x0 > viewport_w || y0 > viewport_h {
             continue;
         }
-
-        if sel.screen.place(x0, y0, x1, y1) == Placement::Placed {
-            out.push(i as u32);
-        }
+        out.push(i as u32);
     }
 }

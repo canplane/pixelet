@@ -16,9 +16,7 @@ pub struct BillboardBatch {
 
     /// Full-strength drawn width in CSS pixels, before the distance fade.
     pub w_px: Vec<f32>,
-    /// Height that must not be overlapped, which is not the drawn height.
-    pub collide_px: Vec<f32>,
-    /// Canvas-space Y of the anchor, in the same units as `collide_px`.
+    /// Canvas-space Y of the anchor, in CSS pixels before the fade.
     pub anchor_px: Vec<f32>,
     /// The side in level-0 cells of what the candidate marks, which its
     /// distance fade is scaled by.
@@ -52,7 +50,7 @@ impl BillboardBatch {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn push(&mut self, local_x: f64, local_y: f64, local_z: f64, w_px: f64, collide_px: f64, anchor_px: f64, unit: f64, tiebreak: f64) {
+    pub fn push(&mut self, local_x: f64, local_y: f64, local_z: f64, w_px: f64, anchor_px: f64, unit: f64, tiebreak: f64) {
         let i = self.count as usize;
         self.count += 1;
         if i >= self.cap() {
@@ -62,7 +60,6 @@ impl BillboardBatch {
         self.local_y[i] = local_y;
         self.local_z[i] = local_z;
         self.w_px[i] = w_px as f32;
-        self.collide_px[i] = collide_px as f32;
         self.anchor_px[i] = anchor_px as f32;
         self.unit[i] = unit;
         self.tiebreak[i] = tiebreak;
@@ -73,7 +70,6 @@ impl BillboardBatch {
         self.local_y.resize(n, 0.0);
         self.local_z.resize(n, 0.0);
         self.w_px.resize(n, 0.0);
-        self.collide_px.resize(n, 0.0);
         self.anchor_px.resize(n, 0.0);
         self.unit.resize(n, 1.0);
         self.tiebreak.resize(n, 0.0);

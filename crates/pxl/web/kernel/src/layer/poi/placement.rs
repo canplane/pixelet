@@ -93,8 +93,7 @@ pub fn step(ctx: &mut TickContext) {
         let centre = cell.centre(top);
         let mut local = [0.0; 3];
         projection::unproject(&mut local, ivec::sub(centre.i, origin), centre.f);
-        p.batch
-            .push(local[0], local[1], local[2], badge::width(label), badge::COLLIDE, badge::ANCHOR, cell.side(), labelled.len() as f64);
+        p.batch.push(local[0], local[1], local[2], badge::width(label), badge::ANCHOR, cell.side(), labelled.len() as f64);
         labelled.push((cell, label, t.count));
     }
     badge::retain(&labelled.iter().map(|l| l.1).collect());
