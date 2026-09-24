@@ -161,13 +161,8 @@ pub struct CountersBlock {
     pub built_bakes: f64,
     pub built_starved: f64,
     pub decor_dropped: f64,
-    pub badge_metrics: f64,
-    pub badge_builds: f64,
-    pub badge_ms: f64,
-    pub place_runs: f64,
     pub atlas_repacks: f64,
     pub atlas_uploads: f64,
-    pub index_rebuilds: f64,
 }
 
 words!(CountersBlock, SUMMARY::counters::WORDS,
@@ -177,10 +172,8 @@ words!(CountersBlock, SUMMARY::counters::WORDS,
     bands_reused => SUMMARY::counters::bands_reused, bands_allocated => SUMMARY::counters::bands_allocated,
     built_direct => SUMMARY::counters::built_direct, built_scans => SUMMARY::counters::built_scans,
     built_bakes => SUMMARY::counters::built_bakes, built_starved => SUMMARY::counters::built_starved,
-    decor_dropped => SUMMARY::counters::decor_dropped, badge_metrics => SUMMARY::counters::badge_metrics,
-    badge_builds => SUMMARY::counters::badge_builds, badge_ms => SUMMARY::counters::badge_ms,
-    place_runs => SUMMARY::counters::place_runs, atlas_repacks => SUMMARY::counters::atlas_repacks,
-    atlas_uploads => SUMMARY::counters::atlas_uploads, index_rebuilds => SUMMARY::counters::index_rebuilds,
+    decor_dropped => SUMMARY::counters::decor_dropped, atlas_repacks => SUMMARY::counters::atlas_repacks,
+    atlas_uploads => SUMMARY::counters::atlas_uploads,
 );
 
 /// The badge sheet.
@@ -236,49 +229,25 @@ words!(FetchBlock, SUMMARY::fetch::WORDS,
     queued => SUMMARY::fetch::queued, running => SUMMARY::fetch::running, credits => SUMMARY::fetch::credits,
 );
 
-/// The POI placement and its index. Off until the index lives with its pages
-/// (issue/BACKLOG.md), and the block keeps its place rather than being left
-/// out, so the report's shape does not move when it comes back.
+/// Bounded summary residency and screen visibility.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PoiBlock {
-    pub badge_count: f64,
-    pub dropped: f64,
-    pub place_ms: f64,
-    pub place_hits: f64,
-    pub place_candidates: f64,
-    pub place_kept: f64,
-    pub place_absorbed: f64,
-    pub place_biggest: f64,
-    pub place_max_ms: f64,
-    pub place_max_hits: f64,
-    pub place_wait_ms: f64,
-    pub place_frames: f64,
-    pub place_max_wait_ms: f64,
-    pub place_max_frames: f64,
-    pub place_sync_ms: f64,
-    pub place_max_sync_ms: f64,
-    pub index_indexed: f64,
-    pub index_sweeping: f64,
-    pub index_dropped: f64,
-    pub index_wait_ms: f64,
-    pub index_frames: f64,
-    pub index_max_wait_ms: f64,
-    pub index_max_frames: f64,
+    pub resident_nodes: f64,
+    pub resident_bytes: f64,
+    pub candidates: f64,
+    pub visible: f64,
+    pub pending: f64,
+    pub hidden: f64,
 }
 
 words!(PoiBlock, SUMMARY::poi::WORDS,
-    badge_count => SUMMARY::poi::badge_count, dropped => SUMMARY::poi::dropped, place_ms => SUMMARY::poi::place_ms,
-    place_hits => SUMMARY::poi::place_hits, place_candidates => SUMMARY::poi::place_candidates,
-    place_kept => SUMMARY::poi::place_kept, place_absorbed => SUMMARY::poi::place_absorbed,
-    place_biggest => SUMMARY::poi::place_biggest, place_max_ms => SUMMARY::poi::place_max_ms,
-    place_max_hits => SUMMARY::poi::place_max_hits, place_wait_ms => SUMMARY::poi::place_wait_ms,
-    place_frames => SUMMARY::poi::place_frames, place_max_wait_ms => SUMMARY::poi::place_max_wait_ms,
-    place_max_frames => SUMMARY::poi::place_max_frames, place_sync_ms => SUMMARY::poi::place_sync_ms,
-    place_max_sync_ms => SUMMARY::poi::place_max_sync_ms, index_indexed => SUMMARY::poi::index_indexed,
-    index_sweeping => SUMMARY::poi::index_sweeping, index_dropped => SUMMARY::poi::index_dropped,
-    index_wait_ms => SUMMARY::poi::index_wait_ms, index_frames => SUMMARY::poi::index_frames,
-    index_max_wait_ms => SUMMARY::poi::index_max_wait_ms, index_max_frames => SUMMARY::poi::index_max_frames,
+    resident_nodes => SUMMARY::poi::resident_nodes,
+    resident_bytes => SUMMARY::poi::resident_bytes,
+    candidates => SUMMARY::poi::candidates,
+    visible => SUMMARY::poi::visible,
+    pending => SUMMARY::poi::pending,
+    hidden => SUMMARY::poi::hidden,
 );
 
 /// One step of the tick, as the window saw it.

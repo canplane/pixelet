@@ -15,20 +15,20 @@ how it gets there and how you know it arrived.
 
 ## What the bucket holds
 
-| Prefix                  | Object                      | Named by               | Policy                                                        |
-| ----------------------- | --------------------------- | ---------------------- | ------------------------------------------------------------- |
-| `terrain/<version>/`    | packed XTP page, `_ocean`   | quadkey, 5–15          | immutable; a re-bake is a new version                         |
-| `poi/<version>/`        | packed XTP page             | quadkey, 15            | version = format; content rewritten in place monthly          |
-| `geocode/<version>/`    | packed JSON page, `_dict`   | quadkey, 11            | same as poi                                                   |
-| `asset/`                | glb, png, webp — not packed | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever |
-| `_meta/land_pages.json` | terrain's land/ocean list   | fixed name             | mutable; rewritten with a terrain re-bake                     |
-| `_meta/build-counter`   | the official build count    | fixed name             | mutable; taken and written by CI's gate, never by hand        |
+| Prefix                  | Object                       | Named by               | Policy                                                        |
+| ----------------------- | ---------------------------- | ---------------------- | ------------------------------------------------------------- |
+| `terrain/<version>/`    | packed XTP page, `_ocean`    | quadkey, 5–15          | immutable; a re-bake is a new version                         |
+| `poi/<version>/`        | packed PXS1 summary, `_root` | quadkey, 15–17         | immutable snapshot; data refresh needs a new version          |
+| `geocode/<version>/`    | packed JSON page, `_dict`    | quadkey, 11            | version = format; monthly in-place refresh                    |
+| `asset/`                | glb, png, webp — not packed  | its path, hash in stem | immutable by construction; unreferenced keys deleted whenever |
+| `_meta/land_pages.json` | terrain's land/ocean list    | fixed name             | mutable; rewritten with a terrain re-bake                     |
+| `_meta/build-counter`   | the official build count     | fixed name             | mutable; taken and written by CI's gate, never by hand        |
 
 A page is named by its **quadkey**: the Web Mercator tile key at the zoom the
 page is held at, one base-4 digit a zoom, coarsest first (pxl-spec
 bake/quadkey.rs). The length is the level, so nothing writes a level down, and
 the three bakes differ only in how long a name they have — terrain 5 to 15
-digits for its pyramid, POI 15 because it is baked at the leaf alone, geocode
+digits for its pyramid, POI 15–17 for the bounded development snapshot, geocode
 11 because a group covers 16 pages a side. They land in one space, so
 `terrain/<v>/13211032`, `poi/<v>/13211032` and `geocode/<v>/13211032` are the
 same ground, and **one prefix is one region across all three at every level**.
@@ -115,27 +115,31 @@ easiest step to get wrong, and it fails as a decode error far from its
 cause. A bake refuses to add objects to a directory of the other encoding,
 so one version holds one encoding.
 
-### POI and geocode
+### POI
 
-Neither needs the step above: they keep no level directories, so nothing on
-disk wanted the page index as a name and the bake writes the bucket's straight
-out. A sync is a sync.
+The current POI path is opt-in development work. Do not publish its fixture
+snapshot as global coverage. When a complete snapshot is explicitly chosen
+for publication, use a fresh version prefix and verify its sibling
+`out/poi/<version>.manifest.json` first. Sync only the completed version
+directory: canonical and provenance sidecars must stay outside the bucket.
+Use the manifest's content type and encoding and immutable cache control,
+then verify `_root` and each referenced refinement before changing the client
+version. A missing node must never be replaced with an empty population.
+
+### Geocode
+
+Geocode writes bucket names directly, without terrain's level directories.
 
 ```bash
-for kind in poi geocode; do
-  aws s3 sync ./out/$kind/<version> s3://pixelet-tiles/$kind/<version> \
-    --profile r2 --endpoint-url $R2 --exclude "*.empty" --exclude "*.part" \
-    --content-type "$(jq -r .content_type out/$kind/manifest.json)" \
-    --content-encoding "$(jq -r .content_encoding out/$kind/manifest.json)" \
-    --cache-control "public, max-age=86400" --delete
-done
+aws s3 sync ./out/geocode/<version> s3://pixelet-tiles/geocode/<version> \
+  --profile r2 --endpoint-url $R2 --exclude "*.empty" --exclude "*.part" \
+  --content-type "$(jq -r .content_type out/geocode/manifest.json)" \
+  --content-encoding "$(jq -r .content_encoding out/geocode/manifest.json)" \
+  --cache-control "public, max-age=86400" --delete
 ```
 
-`--exclude "*.empty"` because the bake leaves a local marker per empty page
-that must not become an object; `--delete` because a refresh can remove a
-page's POI and the stale object would otherwise outlive it. These are the
-exact commands `.github/workflows/overture-monthly-refresh.yml` runs — keep
-the two in step.
+Empty markers are local. Deletion removes pages absent from the refreshed
+set. The monthly workflow runs this refresh; it does not publish POI.
 
 ### Assets
 
@@ -219,7 +223,7 @@ s5cmd --endpoint-url $R2 run /tmp/rekey-meta.txt
 check that it decodes rather than that a header is present:
 
 ```bash
-curl -s --compressed "https://plei.me/geo/tiles/poi/<v>/<quadkey>" | head -c 2 | xxd -p          # 5854
+curl -s --compressed "https://plei.me/geo/tiles/poi/<v>/_root" | head -c 4                     # PXS1 (v7+)
 curl -s -H "Accept-Encoding: zstd" "https://plei.me/geo/tiles/terrain/<v>/<quadkey>" \
   | zstd -dcq | head -c 2 | xxd -p                                                              # 5854
 ```
@@ -289,8 +293,8 @@ client would try to decode the HTML as terrain. An asset answers
 ## Purging the edge cache
 
 The Worker caches every tile it serves in `caches.default`, the zone's edge
-cache, and by design never needs to purge: a terrain or asset URL never
-changes meaning, and a POI/geocode entry expires within its one-day
+cache, and by design never needs to purge: terrain, POI and asset URLs never
+change meaning, and a geocode entry expires within its one-day
 `max-age`. Purge only to see an in-place refresh immediately, or after
 fixing a serving bug whose wrong bytes are already cached.
 

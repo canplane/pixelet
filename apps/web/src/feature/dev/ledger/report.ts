@@ -54,10 +54,6 @@ export const BOUND: Record<string, { bound: string; note: string }> = {
     bound: "network",
     note: "Measured 2026-09-09: 4.2MB/page, mean net 322.5ms vs decode 0.6ms — decode_terrain is an XTP cursor read and is free. The demand is network-bound end to end.",
   },
-  poi: {
-    bound: "network",
-    note: "Measured 2026-09-09: mean net 269.3ms vs JSON.parse 2.2ms on ~114KB pages (295KB worst). Latency-bound; lever is priority order, not parallelism.",
-  },
   geocode: {
     bound: "network",
     note: "single-slot latest-wins; one small page lookup, pure RTT. Already debounced upstream, so the lever left is queue priority.",

@@ -109,6 +109,7 @@ pub fn boot() {
     on_tick(INTERACTION, crate::layer::character::preview::preview_step, "preview");
     on_tick(VISIBLE, core_tick_visible_step, "chunks");
     on_tick(COSMETIC, debug_gizmos_tick, "debug_gizmos");
+    on_tick(COSMETIC, crate::layer::poi::placement::step, "poi");
     on_tick(REPORT, core_tick_report_step, "ledger");
     world_tasks();
 }

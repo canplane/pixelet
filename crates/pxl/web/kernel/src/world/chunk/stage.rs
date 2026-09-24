@@ -17,7 +17,6 @@ use crate::host::now;
 use crate::io::sched::pending_count;
 use crate::kernel::{kernel, with_world};
 use crate::layer::environment::state::globe;
-use crate::layer::poi::fetcher;
 use crate::layer::terrain::level::window;
 use crate::layer::terrain::resident::take_record_refusals;
 use crate::layer::terrain::store::level_pages;
@@ -286,7 +285,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         rings: ledger_take_rings(),
         work: work_sample(c, &census),
         q_terrain: pending_count(tile_fetcher::CATEGORY) as f64,
-        q_poi: pending_count(fetcher::CATEGORY) as f64,
+        q_poi: pending_count(crate::io::demand::Category::Poi) as f64,
         stale: StaleSample {
             chunks: census.stale as f64,
             drawn: census.stale_drawn as f64,

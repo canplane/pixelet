@@ -68,10 +68,9 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * - `terrain/<version>/<quadkey>`, 5 to 15 digits, a page at every level of
  *   the pyramid from the leaf up to `PAGE_TOP_LEVEL`. Plus the shared
  *   `_ocean` page every level's open water reads.
- * - `poi/<version>/<quadkey>`, 15 digits, because POI is baked at the leaf and
- *   nowhere else. No `_ocean`-equivalent: a missing POI object means "no POI
- *   on this page", which the kernel resolves to the empty page directly, not a
- *   shared fallback this Worker would need to know about.
+ * - `poi/<version>/_root` and 15–17 digit quadkeys: an immutable summary
+ *   snapshot for one XY region. A missing node is an unavailable refinement,
+ *   never an empty population.
  * - `geocode/<version>/<quadkey>`, 11 digits, because a reverse-geocode object
  *   covers a group of 16 pages a side (pxl-spec bake/place_page.rs's
  *   `GROUP_SHAMT`). Plus the one `_dict` the whole set is read against, since
@@ -105,7 +104,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * match, and the hash in the stem is what makes that shape worth matching.
  */
 const KEY_RE =
-  /^(?:terrain\/v\d{1,3}\/(?:_ocean|[0-3]{5,15})|poi\/v\d{1,3}\/[0-3]{15}|geocode\/v\d{1,3}\/(?:_dict|[0-3]{11})|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$/;
+  /^(?:terrain\/v\d{1,3}\/(?:_ocean|[0-3]{5,15})|poi\/v\d{1,3}\/(?:_root|[0-3]{15,17})|geocode\/v\d{1,3}\/(?:_dict|[0-3]{11})|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$/;
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the
  * cache has no meaning for is a header it leaves alone, which is the whole
@@ -193,8 +192,8 @@ export default {
     }
 
     // Edge cache in front of R2. Sound without any invalidation story because
-    // terrain and assets are immutable and versioned by URL — a re-bake
-    // publishes a new prefix rather than replacing bytes — and the POI and
+    // terrain, POI and assets are immutable and versioned by URL — a re-bake
+    // publishes a new prefix rather than replacing bytes — and the
     // geocode prefixes, which are rewritten in place monthly, carry a one-day
     // max-age the cache honours. This is also the only real cost control: R2 has no
     // spend limit, and class-B reads are the one meter that scales with

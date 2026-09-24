@@ -71,7 +71,6 @@ function edgeChecks(): Check[] {
     { path: `${SEARCH_URL}?q=${encodeURIComponent("강남")}`, want: 200, why: "pxl-geo, the one geo query with no page to bake" },
     { path: terrain, want: 200, why: "a terrain page, out of the bucket" },
     { path: `${TILE_ROOT}/terrain/${PUBLISHED_VERSION.terrain}/_ocean`, want: 200, why: "the shared ocean page every water tile falls back to" },
-    { path: tile("poi"), want: 200, why: "a POI page" },
     { path: `${TILE_ROOT}/geocode/${PUBLISHED_VERSION.geocode}/${GEOCODE_GROUP}`, want: 200, why: "a reverse-geocode group" },
     { path: `${TILE_ROOT}/geocode/${PUBLISHED_VERSION.geocode}/_dict`, want: 200, why: "the dictionary every group's numbers are read against" },
     { path: `/${ASSET_KEY}`, want: 200, why: "a content-addressed asset, its own root" },

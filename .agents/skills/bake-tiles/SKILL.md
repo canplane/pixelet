@@ -6,7 +6,7 @@ description: Bake terrain, POI and reverse-geocode pages from the geo DB into ou
 # Baking tiles
 
 The deployed API answers forward search only. Terrain, POI and reverse
-geocode are static objects in the bucket, one per L3 page, produced offline
+geocode are static objects in the bucket, produced offline
 by the tools in `crates/pxl/server/geo-bake` from the local geo database. This is
 how each set gets built and checked; getting it into the bucket is
 [publish-bucket](../publish-bucket/SKILL.md).
@@ -17,11 +17,11 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 
 ## The three bakes
 
-| Kind    | Tool                     | Reads                                           | Output                                 | Empty page             |
-| ------- | ------------------------ | ----------------------------------------------- | -------------------------------------- | ---------------------- |
-| terrain | `deno task bake:tiles`   | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land page          | shared `_ocean`        |
-| poi     | `deno task bake:poi`     | Overture places, terrain's `land_pages.json`    | packed XTP, one per page with POI      | no object (404 → `[]`) |
-| geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | packed JSON, one per page with a label | no object              |
+| Kind    | Tool                     | Reads                                           | Output                                   | Empty page               |
+| ------- | ------------------------ | ----------------------------------------------- | ---------------------------------------- | ------------------------ |
+| terrain | `deno task bake:tiles`   | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land page            | shared `_ocean`          |
+| poi     | `deno task bake:poi`     | Overture places + elevation, or canonical JSONL | bounded PXS1 summaries for one XY region | explicit zero-count root |
+| geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | packed JSON, one per page with a label   | no object                |
 
 Every tool writes to `./out/<kind>/<version>`, where the version defaults to
 `PUBLISHED_VERSION.<kind>` in `spec/pxl/spec/bake/published.json`
@@ -34,7 +34,7 @@ clears a level's directory to redo it and to drop the levels a run did not
 fold. Its names are translated at publish, by hard links, which is the one
 step POI and geocode skip.
 
-Terrain goes first: POI and geocode do not classify land themselves, they
+Terrain goes first for geocode: it does not classify land itself, it
 read the `land_pages.json` terrain leaves next to its output directory
 (`--land-cache`, default `./out/terrain/land_pages.json`). Without a
 terrain bake on this machine, fetch the published copy from
@@ -47,9 +47,9 @@ upload labels the objects with. A version baked before zstd (terrain v4,
 POI v5, geocode v2) is gzip, and a bake refuses to resume into it: one
 version holds one encoding.
 
-All three are **resumable**: an object is written to `.part` and renamed,
+Terrain and geocode are **resumable**: an object is written to `.part` and renamed,
 so an interrupted run leaves no truncated file, and a re-run skips what
-already exists. POI and geocode also leave a local `.empty` marker for a
+already exists. Geocode also leaves a local `.empty` marker for a
 page that produced nothing, so a resumed run does not re-query it; the
 marker is never uploaded.
 
@@ -63,7 +63,7 @@ docker compose -f infra/local/docker-compose.yml --env-file .env up -d
 
 Terrain needs `overture_buildings`, `overture_transportation`,
 `overture_base_{land,land_use,water,infrastructure}` and `elevation_raster`;
-POI needs `overture_places`; geocode needs `overture_divisions` and
+POI needs `overture_places` and `elevation_raster`; geocode needs `overture_divisions` and
 `overture_division_points`. If a table is missing, that is an ingestion
 job, not a bake job — [infra/geo/README.md](../../../infra/geo/README.md).
 Never `down -v` to "reset" the database; the volume is several gigabytes of
@@ -143,33 +143,54 @@ and reused unless `--reclassify` is passed.
    first ask above level 3 takes seconds to a minute. A mismatch means the two
    paths have drifted — investigate before publishing.
 
-## POI and geocode
+## POI
+
+The development slice bakes one 15-digit XY region and two refinement
+levels. Raw membership does not enlarge a packet. A terminal summary is
+still a count and bounds, not a bounded list of entities.
 
 ```bash
-deno task bake:poi --out ./out/poi/<version>
+deno task bake:poi --root <15-digit-quadkey> --revision <nonzero-u64> --out ./out/poi/<snapshot>
+# To verify without a database:
+deno task bake:poi --root <15-digit-quadkey> --revision <nonzero-u64> --input /tmp/canonical.jsonl --out ./out/poi/<snapshot>
+```
+
+Canonical input is JSONL sorted by `id`, with `id`, `position: [x,y,z]`
+and `text`. XYZ uses absolute canonical units. Exact duplicate identities
+count once; conflicting identities, missing elevation and out-of-region
+records fail the bake. Overture acquisition streams a repeatable-read
+transaction and resolves elevation before normalization.
+
+The directory holds zstd-compressed summary nodes named by quadkey and
+`_root`. Each decoded packet is at most 341 bytes. Sibling files
+`.canonical.jsonl`, `.source.jsonl` and `.manifest.json` hold canonical
+backing, provenance and completion metadata; they are not tile objects.
+The directory is staged and renamed after all nodes are written. Existing
+output or staging files are refused. Inspect an interrupted run, then choose
+a fresh output name; there is no in-place refresh or resume.
+
+Verify the manifest's root, revision and count. Decompress `_root`: its
+first four bytes must be `PXS1`. Set `POI_SNAPSHOT_DIR` to the completed
+directory before starting `dev:tiles`, and enable `show_poi` in development
+settings. It defaults off and is unavailable in production. The kernel
+requests only summaries, keeps at most eight candidates and retains parents
+when refinement is unavailable. A missing response is not an empty region.
+The production smoke check does not require this development snapshot.
+
+## Geocode
+
+```bash
 deno task bake:geocode --out ./out/geocode/<version>
 ```
 
-Both take `--out`, `--land-cache <path>`, `--concurrency <n>`, `--limit <n>`
-and `--force` (re-fetch pages that already have an object or `.empty`
-marker). Neither needs terrain's tables, only its `land_pages.json`.
+It takes `--out`, `--land-cache <path>`, `--concurrency <n>`, `--limit <n>`
+and `--force` (re-fetch existing pages and `.empty` markers). It needs
+terrain's `land_pages.json`, not its tables.
 
-Verify the same way: `failed=` at zero, and one page opened by hand —
-`zstd -dcq ./out/poi/<version>/<quadkey> | head -c 2 | xxd -p` is `5854`
-(XTP), a geocode page is JSON. A geocode group's name is a page's first eleven
-digits, so the group a page falls in is that page's name cut short.
-
-A POI format change that does not touch the data used to be a **repack** —
-re-encoding what is on disk without the database. That tool was v1/v2 JSON to
-v3 XTP and went with the TypeScript; a format change now is a re-bake, which is
-no longer the cost it was when the shortcut was written.
-
-These two are also refreshed monthly without a human:
-`.github/workflows/overture-monthly-refresh.yml` ingests Overture Places
-and Divisions into a throwaway PostGIS, bakes both with `--force`, and
-syncs the published version prefixes in place. It runs the same tasks this
-file does, so a flag that works here works there; it carries both toolchains,
-since the ingests are Deno and the bakes are Rust.
+Verify `failed=` is zero and decompress a page to check its JSON. A group's
+name is a page's first eleven digits. The monthly workflow ingests Places
+for forward search and Divisions for geocode, then refreshes geocode only.
+POI snapshots are baked separately and remain immutable.
 
 ## Versions, and when the bake logic changes
 
@@ -183,18 +204,21 @@ and means a full re-bake into a **new** version — not a partial one, because
 a mixed bucket serves tiles from two pipelines with no way to tell them
 apart.
 
-A **POI or geocode** version names the page _format_, not the data: the
+A **geocode** version names the page _format_, not the data: the
 monthly refresh rewrites the same prefix with newer Overture content. A
 format change (a new field, a new encoding) is a new version and a re-bake; a
 data refresh is not.
 
-The dev tile server caches baked pages in memory, so during development a
+POI snapshots require a new published version prefix even for a data refresh,
+so root and refinement packets cannot mix snapshots.
+
+The dev tile server caches geocode pages in memory, so during development a
 bake change also needs its cache dropped — or the server restarted, the
 cache is purely in-process. The route is the geo root's internal branch
 (`route.json`), on the tile server rather than on either API:
 
 ```bash
 curl -X POST localhost:3001/geo/internal/world/terrain/cache/invalidate -H "x-admin-token: $ADMIN_TOKEN"
-# likewise .../world/poi/... and .../world/geocode/...; the header is only
+# likewise .../world/geocode/...; the header is only
 # checked when ADMIN_TOKEN is set
 ```

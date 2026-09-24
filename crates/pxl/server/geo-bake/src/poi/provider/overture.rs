@@ -1,76 +1,57 @@
 // pxl-geo-bake/poi/provider/overture.rs
 
-//! Overture's Places theme (docs.overturemaps.org/guides/places): licensed
-//! CDLA-Permissive-2.0, sourced from Meta/Microsoft/Foursquare/PinMeTo, with
-//! none of the display or caching restrictions Google/Naver/Kakao carry. Reads
-//! `overture_places` — a Korea-bbox extract pulled from Overture's public S3
-//! release and refreshed on whatever cadence `ingest_places.rs` is re-run at,
-//! not a live per-request call.
-//!
-//! Deliberately its own table, kept structurally independent of the terrain
-//! pipeline: Overture's per-place shape is a rich nested JSON object with no
-//! flat-tag equivalent terrain's own tables use.
-//!
-//! `rank` has no policy-assigned equivalent here — Overture's own
-//! `properties.confidence` is a source-conflation quality score rather than a
-//! notability one, and is the closest available signal, scaled to a plain
-//! integer. The client ranks by distance to the map centre regardless, so this
-//! only matters if a future consumer wants an actual notability cut.
-
-use postgres::Client;
-use pxl_geo_spec::overture::properties::{category_of, confidence, name_of, overture_category};
-use pxl_spec::bake::constant::XY_CELL_PER_M;
-use pxl_spec::bake::model::feature::Poi;
+use postgres::{Client, IsolationLevel};
+use pxl_spec::poi::{xy, Entity};
 use pxl_spec::space::adapter::epsg3857;
-use pxl_spec::space::pvf3::ivec::IVec;
-use xpute_core::math::scalar::round;
+use pxl_spec::space::pvf3::{projection, Pvf3};
 
-/// Every place whose point falls in the page envelope.
-const OVERTURE_PLACES_SQL: &str = "WITH env AS (
-  SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
-)
-SELECT
-  gers_id,
-  properties,
-  ST_X(geom) AS x, ST_Y(geom) AS y
-FROM overture_places, env
-WHERE geom && env.e";
-
-pub struct PoiProvider {
-    places: postgres::Statement,
-}
-
-impl PoiProvider {
-    pub fn prepare(client: &mut Client) -> Result<PoiProvider, postgres::Error> {
-        Ok(PoiProvider {
-            places: client.prepare(OVERTURE_PLACES_SQL)?,
-        })
-    }
-
-    pub fn fetch_pois(&self, client: &mut Client, page_idx: IVec) -> Result<Vec<Poi>, postgres::Error> {
-        let page_bbox = epsg3857::get_page_bbox(page_idx);
-        let page_min = page_bbox[0];
-        let rows = client.query(&self.places, &[&page_bbox[0][0], &page_bbox[0][1], &page_bbox[1][0], &page_bbox[1][1]])?;
-
-        let mut pois = Vec::with_capacity(rows.len());
-        for row in &rows {
-            let properties: serde_json::Value = row.get("properties");
-            let name = name_of(&properties);
-            if name.is_empty() {
-                // An unnamed place is not worth a badge.
-                continue;
-            }
-            let (x, y): (f64, f64) = (row.get("x"), row.get("y"));
-            pois.push(Poi {
-                id: row.get("gers_id"),
-                r#type: "poi",
-                category: category_of(&properties),
-                name: name.to_string(),
-                center: [(x - page_min[0]) * XY_CELL_PER_M, (y - page_min[1]) * XY_CELL_PER_M, 0.0],
-                tags: vec![("category".to_string(), overture_category(&properties).map(str::to_string))],
-                rank: round(confidence(&properties) * 1000.0) as u32,
-            });
+/// The source owns its GERS identity and observations. The canonical ID is
+/// opaque outside adoption; no spatial or presentation code parses it.
+/// The primary key and C ordering make exact identity dedup deterministic.
+pub fn visit(client: &mut Client, root: u64, mut accept: impl FnMut(Entity, &str) -> Result<(), String>) -> Result<(), String> {
+    let b = xy::bounds(root).map(|v| v * epsg3857::M_PER_U);
+    let mut tx = client
+        .build_transaction()
+        .isolation_level(IsolationLevel::RepeatableRead)
+        .read_only(true)
+        .start()
+        .map_err(|e| e.to_string())?;
+    let query = r#"SELECT p.gers_id, p.name, ST_X(p.geom), ST_Y(p.geom), h.z
+FROM overture_places p
+LEFT JOIN LATERAL (
+  SELECT ST_Value(r.rast, 1, p.geom) AS z FROM elevation_raster r
+  WHERE r.rast && p.geom AND ST_Intersects(r.rast, p.geom)
+    AND ST_Value(r.rast, 1, p.geom) IS NOT NULL
+  ORDER BY r.rid LIMIT 1
+) h ON true
+WHERE p.geom && ST_MakeEnvelope($1,$2,$3,$4,3857)
+  AND ST_X(p.geom) >= $1 AND ST_Y(p.geom) >= $2
+  AND ST_X(p.geom) < $3 AND ST_Y(p.geom) < $4
+ORDER BY p.gers_id COLLATE "C""#;
+    let statement = tx.prepare(query).map_err(|e| e.to_string())?;
+    let portal = tx.bind(&statement, &[&b[0], &b[1], &b[2], &b[3]]).map_err(|e| e.to_string())?;
+    loop {
+        let rows = tx.query_portal(&portal, 256).map_err(|e| e.to_string())?;
+        if rows.is_empty() {
+            break;
         }
-        Ok(pois)
+        for row in rows {
+            let id: String = row.get(0);
+            let z: Option<f64> = row.get(4);
+            let z = z.ok_or_else(|| format!("unresolved elevation for {id}; no complete snapshot published"))?;
+            let mut p = Pvf3::default();
+            epsg3857::project(&mut p, row.get(2), row.get(3), z);
+            let mut position = [0.0; 3];
+            projection::unproject(&mut position, p.i, p.f);
+            accept(
+                Entity {
+                    id: id.clone(),
+                    position,
+                    text: row.get(1),
+                },
+                &id,
+            )?;
+        }
     }
+    tx.commit().map_err(|e| e.to_string())
 }

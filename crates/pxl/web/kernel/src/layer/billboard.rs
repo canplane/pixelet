@@ -8,7 +8,6 @@
 
 pub mod batch;
 pub mod canvas;
-pub mod cell_node;
 pub mod distance_fade;
 pub mod field;
 pub mod frustum_budget;

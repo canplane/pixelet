@@ -9,18 +9,20 @@
  */
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
+import { zstdDecompressSync } from "node:zlib";
+import { READ, SUMMARY } from "@/feature/dev/ledger/ledger.spec.ts";
 import { assert, assertEquals } from "@std/assert";
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { cube_types } from "@/catalog/cell/cube.ts";
 
-import { ELE_PADDED_SPAN, encode_empty_poi_page, encode_terrain, pack_ground_cell, PAGE_CELL_SPAN } from "@/kernel/fixture.ts";
+import { ELE_PADDED_SPAN, encode_terrain, pack_ground_cell, PAGE_CELL_SPAN } from "@/kernel/fixture.ts";
 
 import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
 import { CORE_KERNEL } from "@/kernel/mem.ts";
 import { BOOT, boot_block, hold_body, text_at } from "@/kernel/module.ts";
-import { acquire_device } from "@/kernel/render/gpu.ts";
+import { acquire_device, bind_surface, unbind_surface } from "@/kernel/render/gpu.ts";
 
 function rng(seed: u32): () => u32 {
   let s = seed >>> 0 || 1;
@@ -59,6 +61,7 @@ let snapshot: Snapshot | null = null;
 let fetched: Fetched[] = [];
 let loads: bigint[] = [];
 let draws = 0;
+let pending_poi: Fetched[] | null = null;
 
 CORE_BUILD.signal = (_tag, cmd, f) => {
   if (cmd === Command.WORLD_SNAPSHOT) {
@@ -128,7 +131,7 @@ function turn(delta = 1 / 60): Turn {
   const started = fetched;
   for (const f of started) {
     if (f.category === "terrain") answer(f, 0, terrain_body(Number(BigInt(f.name.slice(f.name.indexOf("/") + 1)) & 0xffffn)));
-    else if (f.category === "poi") answer(f, 0, encode_empty_poi_page());
+    else if (f.category === "poi" && pending_poi !== null) pending_poi.push(f);
     else fail(f);
   }
   // An asset's read is a read: it is settled by the key it was started with,
@@ -275,4 +278,108 @@ Deno.test("kernel - a view from high up draws its outermost ring, which is coars
   let drawn = 0;
   for (let k = 0; k < 200; k++) drawn = Math.max(drawn, turn().draws);
   assert(drawn > 0, "the far view drew something");
+});
+
+Deno.test("kernel - baked summaries refine within bounds and disabling drops residency", async () => {
+  const temp = await Deno.makeTempDir({ prefix: "pxl-poi-" });
+  try {
+    // Sixteen occupied terminal regions, each with one hundred coincident
+    // entities. The bake, not a shell encoder, defines the wire bytes.
+    const records = Array.from({ length: 1600 }, (_, i) => ({
+      id: String(i).padStart(4, "0"),
+      position: [5917184 + (Math.floor(i / 100) % 4) * 128 + 64, 1891328 + Math.floor(i / 400) * 128 + 64, 25],
+      text: "원문 annotation 🗺️",
+    }));
+    await Deno.writeTextFile(`${temp}/input.jsonl`, records.map((r) => JSON.stringify(r)).join("\n"));
+    const bake = await new Deno.Command("cargo", {
+      cwd: new URL("../../../../", import.meta.url),
+      args: [
+        "run",
+        "--quiet",
+        "--manifest-path",
+        "crates/Cargo.toml",
+        "--bin",
+        "bake_poi_tiles",
+        "--",
+        "--root",
+        "132110320120103",
+        "--revision",
+        "7",
+        "--input",
+        `${temp}/input.jsonl`,
+        "--out",
+        `${temp}/snapshot`,
+      ],
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    assert(bake.success, new TextDecoder().decode(bake.stderr));
+    const manifest = JSON.parse(await Deno.readTextFile(`${temp}/snapshot.manifest.json`));
+    assertEquals(manifest.count, 1600);
+    assertEquals(manifest.nodes, 21);
+    assertEquals((await Deno.readTextFile(`${temp}/snapshot.canonical.jsonl`)).trim().split("\n").map((s) => JSON.parse(s)), records);
+    const packets = new Map<string, U8Array>();
+    for await (const entry of Deno.readDir(`${temp}/snapshot`)) {
+      const raw = new Uint8Array(zstdDecompressSync(await Deno.readFile(`${temp}/snapshot/${entry.name}`)));
+      assert(raw.length <= 341, "raw population cannot enlarge a summary packet");
+      packets.set(entry.name, raw);
+    }
+    const painted: string[] = [];
+    const context = new Proxy({}, {
+      get: (_, key) => key === "measureText" ? (s: string) => ({ width: s.length * 7 }) : key === "fillText" ? (s: string) => painted.push(s) : () => {},
+      set: () => true,
+    });
+    Object.defineProperty(globalThis, "OffscreenCanvas", {
+      configurable: true,
+      value: class {
+        constructor(public width: number, public height: number) {}
+        getContext() {
+          return context;
+        }
+      },
+    });
+    const surface = CORE_BUILD.call(Command.SURFACE_CREATE, packet((b) => b.u32(0)), (r) => r >>> 0);
+    bind_surface(surface, { transferControlToOffscreen: () => ({ width: 1280, height: 720, getContext: () => inert() }) } as unknown as HTMLCanvasElement);
+    CORE_BUILD.send(0, Command.SURFACE_UPDATE, packet((b) => b.u32(surface).u32(1280).u32(720).f64(1)));
+    CORE_BUILD.call(Command.WORLD_CREATE, packet((b) => b.str("development").str("").str("poi-test").str("b?").bool(false).bool(false).bool(false).bool(false).bool(false)), (r) => r);
+    action({ type: "go_to", lon: 126.978, lat: 37.5665 });
+    action({ type: "set_view", dist: 180, polar: Math.PI / 4 });
+    const poi = () => {
+      const read = new Uint32Array(CORE_KERNEL.memory.buffer, CORE_KERNEL.ledger_read(Infinity), READ.WORDS);
+      const words = new Float64Array(CORE_KERNEL.memory.buffer, read[READ.summary_at], read[READ.summary_words]);
+      return Array.from(words.subarray(SUMMARY.poi.AT, SUMMARY.poi.AT + SUMMARY.poi.WORDS));
+    };
+    for (let i = 0; i < 30; i++) assert(!turn().fetched.some((f) => f.category === "poi"));
+    assertEquals(poi()[SUMMARY.poi.resident_nodes], 0);
+    pending_poi = [];
+    action({ type: "set_setting", key: "show_poi", value: true });
+    for (let i = 0; i < 30 && pending_poi.length === 0; i++) turn();
+    assertEquals(pending_poi.length, 1);
+    const root = pending_poi.shift()!;
+    assertEquals(root.name, "_root");
+    answer(root, 0, packets.get(root.name)!);
+    for (let i = 0; i < 30; i++) turn();
+    assertEquals(poi()[SUMMARY.poi.candidates], 4, "delayed descendants retain parent candidates");
+    assert(pending_poi.length > 0);
+    const child = pending_poi.shift()!;
+    answer(child, 0, packets.get(child.name)!);
+    for (let i = 0; i < 30; i++) turn();
+    const refined = poi();
+    assertEquals(refined[SUMMARY.poi.candidates], 7);
+    assert(refined[SUMMARY.poi.resident_bytes] <= 4096);
+    assert(refined[SUMMARY.poi.visible] > 0 && refined[SUMMARY.poi.visible] <= 8);
+    assert(painted.some((s) => s === "100" || s === "400"), "count badges reached the renderer's canvas paint stream");
+    action({ type: "set_setting", key: "show_poi", value: false });
+    turn();
+    assertEquals(poi()[SUMMARY.poi.resident_nodes], 0);
+    assertEquals(poi()[SUMMARY.poi.visible], 0);
+    for (const late of pending_poi) answer(late, 0, packets.get(late.name)!);
+    turn();
+    assertEquals(poi()[SUMMARY.poi.resident_nodes], 0, "late responses cannot revive disabled POI");
+    CORE_BUILD.call(Command.SURFACE_DELETE, packet((b) => b.u32(surface)), (r) => r);
+    unbind_surface(surface);
+  } finally {
+    pending_poi = null;
+    await Deno.remove(temp, { recursive: true });
+  }
 });

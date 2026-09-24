@@ -63,7 +63,6 @@ pub const NO_SLOT: i32 = -1;
 #[derive(Clone, Debug, PartialEq)]
 pub enum DrawSpec {
     /// A place: the themed icon circle, the name, the pill and its anchor dot.
-    PoiBadge { icon: &'static str, color: &'static str, name: String, logical_w: f64 },
     /// A count where a name would be, on the same pill.
     Cluster { label: String, logical_w: f64 },
     /// The notched speech bubble and its wrapped lines.

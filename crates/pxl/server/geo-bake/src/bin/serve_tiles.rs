@@ -54,7 +54,7 @@ use axum::routing::{get, post};
 use axum::Router;
 use postgres::{Client, NoTls};
 use pxl_spec::bake::constant::{LEVEL0_ZOOM, PAGE_TOP_LEVEL};
-use pxl_spec::bake::format::{encode_poi_page, encode_terrain, Terrain};
+use pxl_spec::bake::format::{encode_terrain, Terrain};
 use pxl_spec::bake::place_page::{encode_place_group, DICT_OBJECT, GROUP_PAGES, GROUP_SHAMT};
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::bake::quadkey::index_of;
@@ -63,7 +63,6 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 
 use pxl_geo_bake::geocode::provider::overture::GeocodeProvider;
 use pxl_geo_bake::geocode::PlaceDict;
-use pxl_geo_bake::poi::provider::overture::PoiProvider;
 use pxl_geo_bake::terrain::leaf::{bake_leaf, bake_ocean, has_land, ocean_samples, Coverage};
 use pxl_geo_bake::terrain::pyramid::{fold_stored, neighbourhood};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
@@ -78,7 +77,6 @@ use tokio::sync::OnceCell;
 struct Worker {
     client: Client,
     terrain: TerrainRepository,
-    poi: PoiProvider,
     geocode: GeocodeProvider,
     stats: SourceStats,
 }
@@ -88,7 +86,6 @@ impl Worker {
         let mut client = Client::connect(url, NoTls)?;
         Ok(Worker {
             terrain: TerrainRepository::prepare(&mut client)?,
-            poi: PoiProvider::prepare(&mut client)?,
             geocode: GeocodeProvider::prepare(&mut client)?,
             client,
             stats: SourceStats::default(),
@@ -156,7 +153,6 @@ struct App {
     workers: Mutex<Vec<Worker>>,
     terrain_base: PathBuf,
     terrain: Mutex<Arc<Pager>>,
-    poi: Mutex<HashMap<IVec, Cached>>,
     /// Keyed by group, which is what a reverse-geocode object is.
     geocode: Mutex<HashMap<IVec, Cached>>,
     /// The dictionary, read on the first ask and held. A group's numbers are
@@ -337,35 +333,16 @@ async fn ocean(State(app): State<Arc<App>>) -> Response {
     stored(app.terrain.lock().expect("pager").ocean_packed.clone())
 }
 
-async fn poi(State(app): State<Arc<App>>, Path(raw): Path<String>) -> Response {
-    // POI is baked at the leaf and nowhere else.
-    let Some(idx) = page_at(&raw, LEVEL0_ZOOM) else {
-        return (StatusCode::BAD_REQUEST, "bad page name").into_response();
-    };
-
-    if let Some(Cached::Bytes(b)) = app.poi.lock().expect("cache").get(&idx).cloned() {
-        return octet_stream(b);
+async fn poi(Path(raw): Path<String>) -> Response {
+    use pxl_spec::poi::xy;
+    if raw != "_root" && xy::parse(&raw).is_none() {
+        return (StatusCode::BAD_REQUEST, "bad summary name").into_response();
     }
-    let baked = tokio::task::spawn_blocking(move || {
-        app.with_worker(|w| {
-            let pois = w.poi.fetch_pois(&mut w.client, idx).map_err(|e| e.to_string())?;
-            let page = encode_poi_page(&pois).map_err(|e| format!("{e:?}"))?;
-            Ok::<Bytes, String>(Bytes::copy_from_slice(page.as_slice()))
-        })
-        .unwrap_or_else(|| Ok(Bytes::new()))
-        .inspect(|bytes| {
-            app.poi.lock().expect("cache").insert(idx, Cached::Bytes(bytes.clone()));
-        })
-    })
-    .await
-    .expect("poi task");
-
-    match baked {
-        Ok(bytes) => octet_stream(bytes),
-        Err(err) => {
-            eprintln!("[tile/poi/{raw}] {err}");
-            StatusCode::INTERNAL_SERVER_ERROR.into_response()
-        }
+    let root = std::env::var("POI_SNAPSHOT_DIR").unwrap_or_else(|_| format!("out/poi/{}", pxl_spec::bake::published::PUBLISHED_VERSION.poi));
+    match tokio::fs::read(std::path::Path::new(&root).join(raw)).await {
+        Ok(bytes) => stored(Bytes::from(bytes)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => StatusCode::NOT_FOUND.into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
 
@@ -497,7 +474,6 @@ async fn invalidate(State(app): State<Arc<App>>, headers: HeaderMap, Path(kind):
     // Each bake names its objects at its own zoom, so which one is being
     // invalidated says how long a name to expect.
     let (cache, zoom) = match kind.as_str() {
-        "poi" => (&app.poi, LEVEL0_ZOOM),
         "geocode" => (&app.geocode, LEVEL0_ZOOM - GROUP_SHAMT),
         _ => return (StatusCode::NOT_FOUND, "unknown cache").into_response(),
     };
@@ -570,7 +546,6 @@ fn run() -> Result<(), String> {
         workers: Mutex::new(pool),
         terrain: Mutex::new(Arc::new(Pager::open(&cache, 0, Coverage::of_source())?)),
         terrain_base: cache,
-        poi: Mutex::new(HashMap::new()),
         geocode: Mutex::new(HashMap::new()),
         place_dict: Mutex::new(None),
         asset_dir,

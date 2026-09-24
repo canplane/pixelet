@@ -38,8 +38,8 @@ fn a_development_build_offers_its_dev_settings() {
     let _g = serial();
     let mut s = store_under("development");
     s.toggle_setting("show_poi");
-    assert!(!s.show_poi);
-    assert_eq!(s.overrides, vec![("show_poi", SettingValue::Toggle(false))]);
+    assert!(s.show_poi);
+    assert_eq!(s.overrides, vec![("show_poi", SettingValue::Toggle(true))]);
 }
 
 /// Built without the feature, the table has no dev setting at all — not
@@ -52,11 +52,11 @@ fn a_module_without_the_feature_has_no_dev_setting_in_its_table() {
     let mut s = store_under("development");
     assert_eq!(s.get("show_poi"), None);
     s.set_setting("show_poi", SettingValue::Toggle(false));
-    assert!(s.show_poi);
+    assert!(!s.show_poi);
 }
 
 /// What a dev setting does, every build does at its default: the POI layer
-/// is on in a production build though nothing there can turn it off.
+/// retains its default even when omitted from the settings table.
 #[test]
 fn a_dev_setting_runs_at_its_default_whether_or_not_it_is_in_the_table() {
     let _g = serial();

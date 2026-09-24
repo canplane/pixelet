@@ -104,9 +104,9 @@
       "cost": "med"
     },
     "show_poi": {
-      "$doc": ["The index sweep, the badge draws and the atlas: a couple of ms a", "frame while places are being placed, nothing once they are."],
+      "$doc": ["Opt-in bounded POI summary snapshot for the local vertical slice."],
       "kind": "toggle",
-      "default": true,
+      "default": false,
       "section": "display",
       "cost": "low",
       "dev": true

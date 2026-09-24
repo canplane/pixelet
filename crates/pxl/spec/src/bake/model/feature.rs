@@ -93,19 +93,3 @@ pub struct FeatureComputed {
     /// Layer used for vertical ordering and offset policy.
     pub layer: i32,
 }
-
-// ---- Derived object models ----
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Poi {
-    pub id: String,
-    /// Always "poi".
-    pub r#type: &'static str,
-    pub category: String,
-    pub name: String,
-    pub center: V3,
-    pub tags: StrMap,
-
-    /// Final importance rank assigned by policy.
-    pub rank: u32,
-}

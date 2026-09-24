@@ -29,7 +29,7 @@
 
 use crate::global::Global;
 use crate::kernel::kernel;
-use crate::layer::poi::badge::badge_atlas;
+use crate::layer::billboard::sheet::billboard_sheet;
 use crate::sched::ledger::record::{drop_front, fixed_lane, ledger_recording_start, ledger_recording_stop, ledger_set_sink, FrameSample, LedgerSink, TaskRow};
 use crate::sched::ledger::summary::{missed, overran};
 use crate::sched::tick::{set_step_timing, tick_step_stats_reset};
@@ -50,13 +50,8 @@ pub struct Counters {
     pub built_bakes: f64,
     pub built_starved: f64,
     pub decor_dropped: f64,
-    pub badge_metrics: f64,
-    pub badge_builds: f64,
-    pub badge_ms: f64,
-    pub place_runs: f64,
     pub atlas_repacks: f64,
     pub atlas_uploads: f64,
-    pub index_rebuilds: f64,
 }
 
 impl Counters {
@@ -75,13 +70,8 @@ impl Counters {
             built_bakes: self.built_bakes - b.built_bakes,
             built_starved: self.built_starved - b.built_starved,
             decor_dropped: self.decor_dropped - b.decor_dropped,
-            badge_metrics: self.badge_metrics - b.badge_metrics,
-            badge_builds: self.badge_builds - b.badge_builds,
-            badge_ms: self.badge_ms - b.badge_ms,
-            place_runs: self.place_runs - b.place_runs,
             atlas_repacks: self.atlas_repacks - b.atlas_repacks,
             atlas_uploads: self.atlas_uploads - b.atlas_uploads,
-            index_rebuilds: self.index_rebuilds - b.index_rebuilds,
         }
     }
 }
@@ -91,7 +81,7 @@ fn counters() -> Counters {
     let st = k.sched.builder.stat;
     let c = k.sched.builder.bake_context().counters;
     let bands = k.volumes.as_ref().map_or([0; 2], |v| [v.stat.allocated, v.stat.reused]);
-    let atlas = badge_atlas().stats();
+    let atlas = billboard_sheet().stats();
     Counters {
         faces_kept: c.faces_kept as f64,
         faces_possible: c.faces_possible as f64,
@@ -106,13 +96,8 @@ fn counters() -> Counters {
         built_bakes: st.bakes as f64,
         built_starved: st.starved as f64,
         decor_dropped: k.sched.decor_dropped() as f64,
-        badge_metrics: 0.0,
-        badge_builds: 0.0,
-        badge_ms: 0.0,
-        place_runs: 0.0,
         atlas_repacks: atlas.repacks as f64,
         atlas_uploads: atlas.uploads as f64,
-        index_rebuilds: 0.0,
     }
 }
 

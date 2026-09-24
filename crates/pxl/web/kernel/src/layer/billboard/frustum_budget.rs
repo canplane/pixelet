@@ -52,14 +52,7 @@ const MIN_LEGIBLE_FAR: f64 = 0.12;
 
 struct Selection {
     screen: GridIndex,
-    /// How many survived the frustum, how far the placement has got, how many
-    /// it has kept. One selection at a time.
-    n: u32,
-    k: u32,
-    kept: u32,
-    /// Candidates the last pass could neither draw nor attribute to something
-    /// drawn — the budget or the grid ran out. Nonzero means the map is quietly
-    /// short of places, which is what absorption exists to prevent.
+    /// Candidates hidden by the screen budget or collision.
     dropped: u32,
 }
 
@@ -68,9 +61,6 @@ static SELECTION: Global<Selection> = Global::new();
 fn selection() -> &'static mut Selection {
     SELECTION.get(|| Selection {
         screen: GridIndex::new(MAX_VIEWPORT_PX, MAX_VIEWPORT_PX, 512, DEFAULT_CELL_PX, 8),
-        n: 0,
-        k: 0,
-        kept: 0,
         dropped: 0,
     })
 }
@@ -84,13 +74,6 @@ pub fn billboard_dropped() -> u32 {
 /// pass never learns what a candidate *is*. The batch's coordinates are in the
 /// root frame (world/frame/view.rs).
 pub fn select_visible_billboards(batch: &mut BillboardBatch, max_count: u32, viewport_w: f64, viewport_h: f64, out: &mut [u32]) -> u32 {
-    let n = select_begin(batch, viewport_w, viewport_h);
-    select_place(batch, max_count, viewport_w, viewport_h, out, n)
-}
-
-/// The frustum pass and the sort — one unit. Returns how many candidates
-/// survived, which is what `select_place` walks.
-pub fn select_begin(batch: &mut BillboardBatch, viewport_w: f64, viewport_h: f64) -> u32 {
     let sel = selection();
     sel.dropped = 0;
     let v = view();
@@ -115,7 +98,6 @@ pub fn select_begin(batch: &mut BillboardBatch, viewport_w: f64, viewport_h: f64
         batch.world_y[i] = pos.y;
         batch.world_z[i] = pos.z;
         batch.d2[i] = dist2;
-        batch.absorbed[i] = 0;
         batch.order[n] = i as u32;
         n += 1;
     }
@@ -127,39 +109,21 @@ pub fn select_begin(batch: &mut BillboardBatch, viewport_w: f64, viewport_h: f64
     let (d2, tiebreak) = (&batch.d2, &batch.tiebreak);
     batch.order[..n].sort_by(|&a, &b| d2[a as usize].total_cmp(&d2[b as usize]).then(tiebreak[a as usize].total_cmp(&tiebreak[b as usize])));
 
-    sel.screen.begin(viewport_w, viewport_h);
-    sel.n = n as u32;
-    sel.k = 0;
-    sel.kept = 0;
-    n as u32
-}
-
-/// Greedy placement in distance order, which is Mapbox GL's shape: compute the
-/// screen box, take the space if it is free, otherwise this candidate does not
-/// draw. Without it the budget was a distance cut that let two badges sit on
-/// top of each other and dropped a third that had room.
-///
-/// Runs candidates up to `k_end` of the order `select_begin` sorted and returns
-/// how many are kept so far; call again with a larger `k_end` to continue. A
-/// projection per candidate — forty milliseconds for the two and a half
-/// thousand a dense area offers, on a phone — is why this is resumable.
-pub fn select_place(batch: &mut BillboardBatch, max_count: u32, viewport_w: f64, viewport_h: f64, out: &mut [u32], k_end: u32) -> u32 {
-    let sel = selection();
-    let v = view();
-    let mut kept = sel.kept;
-    let end = k_end.min(sel.n);
+    // Rectangles outside this grid share its edge cells; their actual screen
+    // bounds still decide collision. This keeps unusually wide displays safe.
+    sel.screen.begin(viewport_w.min(MAX_VIEWPORT_PX as f64), viewport_h.min(MAX_VIEWPORT_PX as f64));
+    let mut kept = 0;
     let mut ndc = Vec3::default();
 
-    for k in sel.k..end {
-        let i = batch.order[k as usize] as usize;
+    for k in 0..n {
+        let i = batch.order[k] as usize;
 
         let far = distance_fade_far(batch.d2[i].sqrt());
         // Not `far <= 0`. The last stretch before the fade's end is ten pixels by
         // three at a tenth opacity — invisible, and small enough that hundreds
         // of them fit without ever colliding. This is the difference between a
         // budget bounded by what the screen can show and one bounded by how much
-        // world is in reach. Not absorbed either: a count is only honest about
-        // what the layer is looking at.
+        // world is in reach.
         if far < MIN_LEGIBLE_FAR {
             continue;
         }
@@ -176,10 +140,7 @@ pub fn select_place(batch: &mut BillboardBatch, max_count: u32, viewport_w: f64,
         let y0 = sy - batch.anchor_px[i] as f64 * far;
         let (x1, y1) = (x0 + w, y0 + batch.collide_px[i] as f64 * far);
 
-        // No early exit once the budget is full. A candidate that is neither
-        // placed nor counted has been silently deleted, which is the thing this
-        // pass exists to stop doing — so past the budget it still asks who owns
-        // the space, it just cannot take any.
+        // A collision affects visibility only; the source summary is immutable.
         let room = kept < max_count && (kept as usize) < out.len();
         let blocker = if room { sel.screen.place(x0, y0, x1, y1) } else { sel.screen.first_hit(x0, y0, x1, y1) };
 
@@ -189,21 +150,8 @@ pub fn select_place(batch: &mut BillboardBatch, max_count: u32, viewport_w: f64,
                 kept += 1;
             }
             Placement::Placed | Placement::NoRoom => sel.dropped += 1,
-            // The whole point. This candidate is not drawn, and it is not gone
-            // either: the badge standing on its pixels now stands for it too.
-            // `id` is what the grid handed out on insert, which is the order
-            // things were placed in, which is this loop's own `kept` at the
-            // time — so it indexes `out` directly.
-            Placement::Blocked(id) => batch.absorbed[out[id as usize] as usize] += 1,
+            Placement::Blocked(_) => sel.dropped += 1,
         }
     }
-    sel.k = end;
-    sel.kept = kept;
     kept
-}
-
-/// How many candidates the selection has left to place.
-pub fn select_remaining() -> u32 {
-    let sel = selection();
-    sel.n - sel.k
 }

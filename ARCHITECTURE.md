@@ -230,7 +230,7 @@ The command numbers are `spec/pxl/spec/abi/cmd.json`'s. A packet is an XTP tree,
 
 The kernel also posts messages nobody asked for: a fetch to start or cancel, a model or image to decode, a sensor to watch, a console line, a new snapshot. Those are its signals.
 
-The world's change log (`world/change.rs`) has six topics: object column, decor column, object cell, terrain page, POI page, decor asset. Listeners run when the tick pumps, never inside the write.
+The world's change log (`world/change.rs`) has five topics: object column, decor column, object cell, terrain page, decor asset. Listeners run when the tick pumps, never inside the write.
 
 ## The memory map
 
@@ -316,7 +316,7 @@ The **view** (`pxl-kernel world/frame/view.rs`) is an orbit camera in a root fra
 
 **LOD** is a chunk's level and its tier together. A chunk is 64 cells of its level, 2^k units each, drawn from its level's page and from the objects folded to that level by the same majority as the terrain, one dimension up (`pxl-render mesh/paint/object/fold.rs`); decor is scattered from the leaves, whatever level draws the ground over them. A chunk at level 0 builds its own cell's stride and the next; above it, a chunk builds only the next, its cells averaged 2×2, so every stride past 1 is drawn one way — the mean of the level below it — and never as the fold's vote. Past that a chunk merges into its parent or splits into its children at the edge of the ring the level below draws, so the world stride is `1/2/4/8/16/32/64` and on. A tier hands off when one of its cells would project to about six pixels, a screen-space error from viewport height and field of view (`pxl-render look/lod.rs`). At the reference viewport height that puts the handoffs at `192/384/768/1536/3072/6144` units, proportional to the stride. The leaves' two tiers dither with complementary screen-space masks; above them a handoff is a split or a merge at a ring's edge, at least `256·2^k` units from the anchor for level k, past the ladder's `192·2^k`. A chunk coming into view starts at its distance's tier.
 
-The first handoff is the unit everything else keeps step with: the POI lattice (the grid that files place labels by tier), the fade of their badges, and decor's range. Decor is drawn by the same rule on a kind's extent — a thing covering fewer pixels than two of the tier's cells is not drawn.
+The first handoff is the unit everything else keeps step with: the fade of billboards and decor's range. Decor is drawn by the same rule on a kind's extent — a thing covering fewer pixels than two of the tier's cells is not drawn.
 
 Culling uses the exact union of the terrain, object, primary and secondary mesh bounds, which survive GPU eviction and are invalidated with their sources. Until a chunk has been measured, a conservative guard keeps a low camera from culling the ground under it.
 
@@ -346,7 +346,9 @@ Every setting is one entry of one schema (`spec/pxl/web/kernel/shell/setting/sch
 
 ## Billboards and POI
 
-POI is disconnected until its per-page index is rewritten. The design the code holds: a POI page is an XTP record — positions, category, rank and id hash as lanes, strings as leaves — copied into the core memory on arrival. The pages held at any moment make a disc around the range anchor, and a spatial index over that disc (`layer/poi/index.rs`) is what a tick queries instead of reading every record. It is rebuilt a slice of records at a time, in the content phase, while the previous index keeps answering. Placement (`layer/poi/placement.rs`) is a job of the same phase — query, file hits into a lattice by tier, offer them with estimated widths, place greedily on a screen grid in distance order, build the badges — committed whole.
+POI is a development-only summary path, disabled by default. The bake streams normalized entities with full XYZ and original text into canonical backing, keeps provenance separately, and accumulates counts and bounds for one XY region. Its immutable snapshot contains a bounded root and two refinement levels (`pxl-spec poi/`); no raw population crosses the summary wire. Quadtree branching belongs to this transport, not to entity semantics. The kernel (`layer/poi/store.rs`) owns summary residency and selects a cut of at most eight candidates. It replaces a parent only with a complete, matching refinement that fits the candidate and residency budgets; missing responses retain the parent. Terminal summaries can still represent arbitrarily many entities.
+
+Placement (`layer/poi/placement.rs`) derives each billboard anchor from summary bounds. Screen collision changes visibility alone, never summary membership or count. Numeric count badges use the existing canvas-backed atlas. Canonical entity text remains in bake backing; this slice does not load detail or introduce a text pool or glyph representation.
 
 Badges are one instanced quad (`layer/billboard/field.rs`) drawn from one atlas (`pxl-render asset/atlas.rs`, one texture the badges are packed into shelf by shelf): anchor, size and sheet rectangle per instance, with the fit to screen pixels, the distance fade and the badge's anchor pinning in the vertex shader. Occlusion is all or nothing per badge: the pass (`frame/shader/badge.wgsl`) binds the world's depth as a texture, reprojects several points up each badge through it, and discards the badge when most are behind terrain. The same pass writes `gl_FragDepth` from an upright twin of the quad, so billboards sort against the world along world-up. Chat bubbles are drawn by the same pass, with a sprite where a badge has text.
 
