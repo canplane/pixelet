@@ -22,9 +22,8 @@ use crate::layer::terrain::resident::take_record_refusals;
 use crate::layer::terrain::store::level_pages;
 use crate::layer::terrain::tile_fetcher;
 use crate::sched::ledger::record::{
-    ledger_record_frame, ledger_take_rings, name_id, CapSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample, LEVELS,
+    ledger_record_frame, ledger_take_rings, CapSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample, LEVELS,
 };
-use crate::sched::ledger::spec::EFFECT_NAMES;
 use crate::sched::priority::lead_point;
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::shell::map_store::map_store;
@@ -101,7 +100,7 @@ pub fn set_turn_timing(effects_ms: f64, stage_ms: f64) {
         effects_ms,
         stage_ms,
         step_ms,
-        step_name: name_id(EFFECT_NAMES, step_name),
+        step_name: step_name.map_or(-1.0, f64::from),
     };
 }
 

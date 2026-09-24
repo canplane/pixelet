@@ -20,7 +20,7 @@ pub const CENSUS_TAGS: &[&str] = &["chunk", "decor", "ghost_box", "ghost_coplana
 
 pub const PHASE_NAMES: &[&str] = &["interaction", "visible", "content", "cosmetic", "report"];
 
-pub const CATEGORY_NAMES: &[&str] = &["terrain", "ocean", "poi"];
+pub const CATEGORY_NAMES: &[&str] = &["terrain", "ocean", "poi", "geocode", "geocode_dict", "asset"];
 
 pub const OUTCOME_NAMES: &[&str] = &["ok", "aborted", "error"];
 
@@ -46,6 +46,7 @@ pub const EFFECT_NAMES: &[&str] = &[
     "geolocation",
     "orientation",
     "tiles",
+    "geocode",
     "follow",
     "theme",
     "decor",
@@ -53,6 +54,7 @@ pub const EFFECT_NAMES: &[&str] = &[
     "hover",
     "puck",
     "objects",
+    "assets",
     "pump",
 ];
 
@@ -403,11 +405,11 @@ pub mod SUMMARY {
     pub mod tasks {
         pub const AT: u32 = 228;
         pub const slots: u32 = 0;
-        pub const WORDS: u32 = 75;
+        pub const WORDS: u32 = 150;
         pub const KEYS: &[&str] = &["AT", "slots", "WORDS"];
     }
     pub mod counters {
-        pub const AT: u32 = 303;
+        pub const AT: u32 = 378;
         pub const faces_kept: u32 = 0;
         pub const faces_possible: u32 = 1;
         pub const runs_culled: u32 = 2;
@@ -445,7 +447,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod atlas {
-        pub const AT: u32 = 318;
+        pub const AT: u32 = 393;
         pub const size: u32 = 0;
         pub const entries: u32 = 1;
         pub const shelves: u32 = 2;
@@ -454,7 +456,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "size", "entries", "shelves", "used_px", "WORDS"];
     }
     pub mod retain {
-        pub const AT: u32 = 322;
+        pub const AT: u32 = 397;
         pub const nodes: u32 = 0;
         pub const run_sets: u32 = 1;
         pub const run_set_mb: u32 = 2;
@@ -480,7 +482,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod fetch {
-        pub const AT: u32 = 331;
+        pub const AT: u32 = 406;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -488,7 +490,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod poi {
-        pub const AT: u32 = 334;
+        pub const AT: u32 = 409;
         pub const resident_nodes: u32 = 0;
         pub const resident_bytes: u32 = 1;
         pub const candidates: u32 = 2;
@@ -499,7 +501,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "resident_nodes", "resident_bytes", "candidates", "visible", "pending", "hidden", "WORDS"];
     }
     pub mod peak {
-        pub const AT: u32 = 340;
+        pub const AT: u32 = 415;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -547,13 +549,13 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 360;
+        pub const AT: u32 = 435;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
-    pub const WORDS: u32 = 521;
+    pub const WORDS: u32 = 596;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "retain", "fetch", "poi", "peak", "steps", "WORDS"];
 }
 

@@ -28,7 +28,10 @@
   "CATEGORY_NAMES": [
     "terrain",
     "ocean",
-    "poi"
+    "poi",
+    "geocode",
+    "geocode_dict",
+    "asset"
   ],
   "OUTCOME_NAMES": [
     "ok",
@@ -60,6 +63,7 @@
     "geolocation",
     "orientation",
     "tiles",
+    "geocode",
     "follow",
     "theme",
     "decor",
@@ -67,6 +71,7 @@
     "hover",
     "puck",
     "objects",
+    "assets",
     "pump"
   ],
   "GPU_SPAN_NAMES": [
@@ -383,10 +388,10 @@
     "tasks": {
       "AT": 228,
       "slots": 0,
-      "WORDS": 75
+      "WORDS": 150
     },
     "counters": {
-      "AT": 303,
+      "AT": 378,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -405,7 +410,7 @@
       "WORDS": 15
     },
     "atlas": {
-      "AT": 318,
+      "AT": 393,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -413,7 +418,7 @@
       "WORDS": 4
     },
     "retain": {
-      "AT": 322,
+      "AT": 397,
       "nodes": 0,
       "run_sets": 1,
       "run_set_mb": 2,
@@ -426,14 +431,14 @@
       "WORDS": 9
     },
     "fetch": {
-      "AT": 331,
+      "AT": 406,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "poi": {
-      "AT": 334,
+      "AT": 409,
       "resident_nodes": 0,
       "resident_bytes": 1,
       "candidates": 2,
@@ -443,7 +448,7 @@
       "WORDS": 6
     },
     "peak": {
-      "AT": 340,
+      "AT": 415,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -467,12 +472,12 @@
       "WORDS": 20
     },
     "steps": {
-      "AT": 360,
+      "AT": 435,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
-    "WORDS": 521
+    "WORDS": 596
   },
   "READ": {
     "$type": "u32",

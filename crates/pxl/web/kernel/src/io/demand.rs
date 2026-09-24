@@ -82,7 +82,7 @@ impl Category {
     }
 
     /// A short name for a report to print, as `Outcome::as_str` is.
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Category::Terrain => "terrain",
             Category::Ocean => "ocean",
