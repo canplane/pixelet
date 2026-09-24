@@ -37,7 +37,7 @@
 
 use crate::global::Global;
 use crate::layer::terrain::fixed::TERRAIN_SLOTS;
-use crate::layer::terrain::level::LevelPage;
+use pxl_spec::space::pyramid::LevelPage;
 
 /// Records in the range. Every one can carry any page.
 pub const RECORDS: u32 = TERRAIN_SLOTS;

@@ -33,10 +33,10 @@ use crate::io::policy;
 use crate::io::sched::{attempt_of, settle};
 use crate::layer::geocode::{repository as geocode_repository, store as geocode_store};
 use crate::layer::poi::store as poi_store;
-use crate::layer::terrain::level::LevelPage;
 use crate::layer::terrain::tile_repository;
 use crate::sched::ledger::record::{Failure, Outcome};
 use crate::world::change::world_edge;
+use pxl_spec::space::pyramid::LevelPage;
 
 /// A started attempt's object, named inside its bake — what is written where
 /// the read is asked for. Which bake is `Category::bake`, and the two

@@ -24,10 +24,17 @@ impl Default for Limits {
 
 #[derive(Serialize, Deserialize)]
 pub enum Job {
-    Terrain { page: u64, level: u32, cache: PathBuf },
-    Poi { root: u64, revision: u64 },
+    /// A page of a layer held as a pyramid, by its demand subject.
+    Page {
+        kind: super::Kind,
+        subject: u64,
+        cache: PathBuf,
+    },
     Dictionary,
-    Geocode { group: u64, dictionary: PathBuf },
+    Geocode {
+        group: u64,
+        dictionary: PathBuf,
+    },
 }
 
 pub struct Runner {
@@ -142,8 +149,14 @@ pub fn connect(seconds: u64) -> Result<Client, String> {
 
 pub fn execute(job: Job, out: &Path, seconds: u64) -> Result<(), String> {
     match job {
-        Job::Terrain { page, level, cache } => super::terrain::execute(page, level, &cache, out, seconds),
-        Job::Poi { root, revision } => super::poi::execute(root, revision, out, seconds),
+        Job::Page { kind, subject, cache } => {
+            let p = pxl_spec::space::pyramid::LevelPage::of_subject(subject);
+            match kind {
+                super::Kind::Terrain => super::terrain::execute(p, &cache, out, seconds),
+                super::Kind::Poi => super::poi::execute(p, &cache, out, seconds),
+                super::Kind::Geocode => Err("geocode is not held as a pyramid".into()),
+            }
+        }
         Job::Dictionary => super::geocode::dictionary(out, seconds),
         Job::Geocode { group, dictionary } => super::geocode::execute(group, &dictionary, out, seconds),
     }

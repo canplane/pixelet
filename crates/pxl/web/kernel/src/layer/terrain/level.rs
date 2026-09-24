@@ -14,10 +14,10 @@
 //! WINDOW_LEVELS — of which the inner RENDER_AXIS² is what is drawn from
 //! (config.json says why each is what it is).
 
-use pxl_spec::bake::constant::{PAGE_CELL_SPAN, PAGE_TOP_LEVEL};
-use pxl_spec::space::indexer::{L3_IDX, L3_SHAMT, L4_RANGE};
-use pxl_spec::space::pvf3::core::IVEC_X_W;
+use pxl_spec::bake::constant::PAGE_CELL_SPAN;
+use pxl_spec::space::indexer::{L3_IDX, L4_RANGE};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pyramid::{span_of, LevelPage, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::control::camera::config::camera_cfg;
@@ -28,82 +28,11 @@ use crate::world::chunk::range::{CHUNK_WORLD_SPAN, PAGE_SPAN};
 pub use crate::layer::terrain::config::{HELD_AXIS, RENDER_AXIS, WINDOW_LEVELS};
 
 const _: () = assert!(HELD_AXIS % 2 == 1 && RENDER_AXIS % 2 == 1 && RENDER_AXIS < HELD_AXIS, "a ring is centred on the view's page");
-const _: () = assert!(WINDOW_LEVELS <= PAGE_TOP_LEVEL + 1, "a window no wider than the pyramid");
+const _: () = assert!(WINDOW_LEVELS <= TOP_LEVEL + 1, "a window no wider than the pyramid");
 
 /// How far the ladder wants step 1: REFERENCE_THRESHOLD_0 (pxl-render
 /// look/lod.rs), the distance the window's levels are measured against.
 const STEP_1_REACH: f64 = 192.0;
-
-/// A page of the pyramid.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct LevelPage {
-    pub level: u32,
-    /// The page's coordinate at its own level, Z zero.
-    pub page: IVec,
-}
-
-impl LevelPage {
-    pub fn new(level: u32, page: IVec) -> LevelPage {
-        LevelPage { level, page: TO_XY(page) }
-    }
-
-    /// The level-`level` page a leaf lies under: its coordinate shifted right,
-    /// which on the signed lanes is a floor.
-    pub fn over(level: u32, leaf: IVec) -> LevelPage {
-        let s = 1i64 << level;
-        LevelPage::new(level, ivec::gather(ivec::X(leaf).div_euclid(s), ivec::Y(leaf).div_euclid(s), 0))
-    }
-
-    /// The page this one folds into a level up.
-    pub fn parent(self) -> LevelPage {
-        LevelPage::over(1, self.page).at_level(self.level + 1)
-    }
-
-    fn at_level(self, level: u32) -> LevelPage {
-        LevelPage { level, ..self }
-    }
-
-    /// The four pages a level down that fold into this one.
-    pub fn children(self) -> [LevelPage; 4] {
-        let (x, y) = (ivec::X(self.page) * 2, ivec::Y(self.page) * 2);
-        [(0, 0), (1, 0), (0, 1), (1, 1)].map(|(dx, dy)| LevelPage::new(self.level - 1, ivec::gather(x + dx, y + dy, 0)))
-    }
-
-    /// The leaf at the page's south-west corner.
-    pub fn first_leaf(self) -> IVec {
-        ivec::gather(ivec::X(self.page) << self.level, ivec::Y(self.page) << self.level, 0)
-    }
-
-    /// The page's side in world units.
-    pub fn span(self) -> f64 {
-        span_of(self.level)
-    }
-
-    /// A demand's subject: the key with the level in the lane a page does not
-    /// use. The URL and the arrival take it apart again.
-    pub fn subject(self) -> u64 {
-        ivec::gather(ivec::X(self.page), ivec::Y(self.page), self.level as i64)
-    }
-
-    pub fn of_subject(subject: u64) -> LevelPage {
-        LevelPage::new(ivec::Z(subject) as u32, subject)
-    }
-}
-
-/// The 4×4 pages a level down around a page's four children, in the order
-/// the fold reads them (pxl-spec bake/fold.rs): index (qx + 1) + 4·(qy + 1) is
-/// the page at (2X + qx, 2Y + qy), the page's own children 5, 6, 9 and 10. X
-/// wraps, since the lane is one world; a page past Y's edge has no object.
-pub fn neighbourhood(p: LevelPage) -> [LevelPage; 16] {
-    let below = p.level - 1;
-    let across = 1i64 << (IVEC_X_W - L3_SHAMT - below);
-    let wrap = |x: i64| (x + across / 2).rem_euclid(across) - across / 2;
-    let (x, y) = (ivec::X(p.page), ivec::Y(p.page));
-    std::array::from_fn(|k| {
-        let (qx, qy) = ((k % 4) as i64 - 1, (k / 4) as i64 - 1);
-        LevelPage::new(below, ivec::gather(wrap(2 * x + qx), 2 * y + qy, 0))
-    })
-}
 
 // ---- Spans by level ----
 //
@@ -117,11 +46,6 @@ pub fn neighbourhood(p: LevelPage) -> [LevelPage; 16] {
 /// A level-`level` chunk's side in world units.
 pub fn chunk_span_of(level: u32) -> f64 {
     CHUNK_WORLD_SPAN * (1u64 << level) as f64
-}
-
-/// A level-`level` page's side in world units.
-pub fn span_of(level: u32) -> f64 {
-    PAGE_SPAN * (1u64 << level) as f64
 }
 
 /// A level-`level` anchor's side in world units: the floating origin's cell
@@ -186,14 +110,14 @@ pub fn window_for(dist: f64, polar: f64, pivot_height: f64, aspect: f64) -> std:
     let far = if upper > 0.0 { (height / upper.sin()).min(reach) } else { reach };
     // Decoration is scattered from the leaves and reaches past step 1, so
     // the leaves are held while any ground it can reach is in view.
-    let base = if near < DECOR_REACH { 0 } else { level_at(near).min(PAGE_TOP_LEVEL) };
+    let base = if near < DECOR_REACH { 0 } else { level_at(near).min(TOP_LEVEL) };
     // The top is what the farthest ground wants, and at least the level
     // whose ring draws all the ground in view: the ring is measured from the
     // view centre rather than the eye, and a wide screen's upper corners see
     // further than its middle, so the ladder's level alone can fall short.
     let seen = ground_reach(dist, polar, pivot_height, aspect, reach) + ANCHOR_SLACK;
     let covering = (seen / drawn_reach(0)).log2().ceil().max(0.0) as u32;
-    let top = level_at(far.max(near)).max(covering).clamp(base, (base + WINDOW_LEVELS - 1).min(PAGE_TOP_LEVEL));
+    let top = level_at(far.max(near)).max(covering).clamp(base, (base + WINDOW_LEVELS - 1).min(TOP_LEVEL));
     base..top + 1
 }
 

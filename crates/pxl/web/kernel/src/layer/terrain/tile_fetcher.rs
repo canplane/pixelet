@@ -5,10 +5,10 @@
 //! and map_status following the terrain queue. The HTTP is the shell's, for
 //! the demand keys the scheduler starts; what arrives is io/fetch.rs's.
 
-use pxl_spec::bake::constant::PAGE_TOP_LEVEL;
 use pxl_spec::bake::fold::fold_terrain_held;
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pyramid::TOP_LEVEL;
 use pxl_spec::space::xy::TO_XY;
 
 use crate::control::navigation::store::map_navigation;
@@ -18,7 +18,7 @@ use crate::io::policy;
 use crate::io::sched::{declare, pending_count, Rank};
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
-use crate::layer::terrain::level::{centre_dist, centre_page, held, neighbourhood, ring_of, window, LevelPage, RENDER_AXIS};
+use crate::layer::terrain::level::{centre_dist, centre_page, held, ring_of, window, RENDER_AXIS};
 use crate::layer::terrain::resident::holds_record;
 use crate::layer::terrain::resolve::{resolve, Resolved};
 use crate::layer::terrain::store::{level_pages, tile_store};
@@ -26,6 +26,7 @@ use crate::layer::terrain::tile_repository::{adopt_folded, ocean_retain, ocean_w
 use crate::shell::map_store::{map_store, MapStatus};
 use crate::world::change::world_edge;
 use crate::world::frame::range_anchor::range_anchor;
+use pxl_spec::space::pyramid::{neighbourhood, LevelPage};
 
 pub const CATEGORY: Category = Category::Terrain;
 
@@ -168,7 +169,7 @@ fn drop_aliases(anchor: IVec, pinned_page_idx: Option<IVec>) {
     let wanted: Vec<LevelPage> = w.clone().flat_map(|level| held(level, anchor)).collect();
     let keep = |p: LevelPage| Some(p) == pinned || wanted.contains(&p);
     ocean_retain(keep);
-    for level in 0..=PAGE_TOP_LEVEL {
+    for level in 0..=TOP_LEVEL {
         // Collected first: clearing moves the table's last page into the hole.
         let drop: Vec<LevelPage> = level_pages(level).keys().map(|page| LevelPage::new(level, page)).filter(|p| !keep(*p) && !holds_record(*p)).collect();
         for p in drop {

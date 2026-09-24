@@ -3,6 +3,7 @@
 use pxl_spec::space::indexer::FROM_L3_IDX;
 
 use super::*;
+use pxl_spec::space::pyramid::neighbourhood;
 
 fn leaf(x: i64, y: i64) -> IVec {
     ivec::gather(x, y, 0)
@@ -55,7 +56,7 @@ fn a_window_holds_the_levels_the_ground_in_view_wants_and_no_others() {
     // that wants — step 8, from level 2.
     assert_eq!(window_for(1024.0, MIN_POLAR, 0.0, 16.0 / 9.0), 2..3);
     // From as far as the camera goes, the pyramid's top alone.
-    assert_eq!(window_for(MAX_DIST, MIN_POLAR, 0.0, 16.0 / 9.0), PAGE_TOP_LEVEL..PAGE_TOP_LEVEL + 1);
+    assert_eq!(window_for(MAX_DIST, MIN_POLAR, 0.0, 16.0 / 9.0), TOP_LEVEL..TOP_LEVEL + 1);
     // Out to the horizon the fog ends it, and the window spans the octaves
     // between, never more than it is sized for.
     let w = window_for(MAX_DIST, MAX_POLAR, 0.0, 16.0 / 9.0);

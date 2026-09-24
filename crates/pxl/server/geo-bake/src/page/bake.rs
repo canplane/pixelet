@@ -6,7 +6,7 @@
 //! The POI and reverse-geocode bakes differ in their provider, their encoding
 //! and the tables they read — this is everything else, which is most of both.
 
-use pxl_spec::bake::constant::LEVEL0_ZOOM;
+use pxl_spec::space::pyramid::LEVEL0_ZOOM;
 use std::path::PathBuf;
 
 use std::path::Path;

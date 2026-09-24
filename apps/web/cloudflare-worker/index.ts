@@ -66,7 +66,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * in how long a name they have and which shared object they keep beside it:
  *
  * - `terrain/<version>/<quadkey>`, 5 to 15 digits, a page at every level of
- *   the pyramid from the leaf up to `PAGE_TOP_LEVEL`. Plus the shared
+ *   the pyramid from the leaf up to `TOP_LEVEL`. Plus the shared
  *   `_ocean` page every level's open water reads.
  * - `poi/<version>/` and 15–31 digit quadkeys, plus d<quadkey>-<offset> detail pages: a summary
  *   snapshot for one XY region. A missing node is an unavailable refinement,

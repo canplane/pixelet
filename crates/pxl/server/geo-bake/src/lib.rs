@@ -19,6 +19,7 @@
 pub mod geocode;
 pub mod page;
 pub mod poi;
+pub mod pyramid;
 pub mod terrain;
 pub mod util;
 pub mod wkb;

@@ -18,11 +18,12 @@
 
 use core::fmt;
 
-use pxl_spec::bake::constant::{zoom_of_level, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
+use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_spec::bake::format::{decode_terrain, decode_terrain_into, Ground, PageRoom, Terrain, Tile};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::bake::quadkey::quadkey_of;
 use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pyramid::zoom_of_level;
 use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::mem::heap::alloc;
 
@@ -30,12 +31,13 @@ use crate::global::Global;
 use crate::host::now;
 use crate::io::demand::{Category, Phases};
 use crate::layer::terrain::fixed::{ele_at, ground_at, record_ele_at, record_ground_at, RECORD_BYTES};
-use crate::layer::terrain::level::{ring_of, window, LevelPage, HELD_AXIS};
+use crate::layer::terrain::level::{ring_of, window, HELD_AXIS};
 use crate::layer::terrain::resident::{free_record, page_in, put, record_of, RECORDS};
 use crate::layer::terrain::resolve::covered;
 use crate::layer::terrain::store::tile_store;
 use crate::mem;
 use crate::world::frame::range_anchor::range_anchor;
+use pxl_spec::space::pyramid::LevelPage;
 
 /// Object key of the single shared open-ocean tile in the static bucket.
 pub const OCEAN_KEY: &str = "_ocean";

@@ -19,9 +19,9 @@ use xpute_core::math::scalar::clamp;
 
 use crate::control::camera::config::camera_cfg::view::DEFAULT_DIST;
 use crate::global::Global;
-use crate::layer::terrain::level::LevelPage;
 use crate::layer::terrain::store::{level_pages, tile_store};
 use crate::shell::map_store::map_store;
+use pxl_spec::space::pyramid::LevelPage;
 
 /// The minimap's scale and reach, in units: properties of the minimap, not of
 /// how wide a page is. The atlas is a whole number of leaf pages around the

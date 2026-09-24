@@ -38,6 +38,7 @@ use xpute_core::math::scalar::round;
 use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_CELL_SPAN, PAGE_ELE_SPAN};
 use super::format::{Ground, Terrain, GROUND_CH_KEYS};
 use super::pack::{channel_of, with_channel, GroundCell};
+use crate::space::pyramid::{child_block, Folds, CHILDREN};
 
 /// Which child of the 2×2 a tie takes when folding into `level`.
 ///
@@ -101,24 +102,20 @@ pub fn majority8(v: [u32; 8], level: i32) -> u32 {
 /// at a time. A page is one array and there are no planes to take apart.
 pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
     let span = PAGE_CELL_SPAN as usize;
-    let half = span / 2;
     let tie = tie_child(level);
-    let mut out = vec![0 as GroundCell; span * span];
-    for py in 0..span {
-        let (dy, cy) = (py / half, (2 * py) % span);
-        for px in 0..span {
-            let (dx, cx) = (px / half, (2 * px) % span);
-            let c = &children[dx + 2 * dy].cells;
-            let at = cy * span + cx;
+    let out = (0..(span * span) as u32)
+        .map(|index| {
+            let (q, first) = child_block(index);
+            let (c, at) = (&children[q].cells, first as usize);
             let four = [c[at], c[at + 1], c[at + span], c[at + span + 1]];
-            let mut cell = 0;
+            let mut cell = 0 as GroundCell;
             for key in GROUND_CH_KEYS {
                 let v = four.map(|f| channel_of(f, key));
                 cell = with_channel(cell, key, majority(v, v[tie]));
             }
-            out[py * span + px] = cell;
-        }
-    }
+            cell
+        })
+        .collect::<Vec<_>>();
     Ground { cells: out.into() }
 }
 
@@ -173,6 +170,12 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
     }
 }
 
+impl Folds for Terrain {
+    fn fold_held(around: [Option<&Self>; 16], level: u32) -> Option<Self> {
+        fold_terrain_held(around, level)
+    }
+}
+
 /// A parent page from the 4×4 pages around its four children, indexed as
 /// `fold_ele` takes them. Ground reads only the middle four; elevation reads
 /// all sixteen.
@@ -189,8 +192,8 @@ pub fn fold_terrain(around: [&Terrain; 16], level: u32) -> Terrain {
 /// level it is leaving, and a level is folded from four pages of it, not
 /// from the sixteen a bake has lying around.
 pub fn fold_terrain_held(around: [Option<&Terrain>; 16], level: u32) -> Option<Terrain> {
-    let child = |k: usize| around[k].map(|t| &t.ground);
-    let ground = fold_ground([child(5)?, child(6)?, child(9)?, child(10)?], level);
+    let child = |q: usize| around[CHILDREN[q]].map(|t| &t.ground);
+    let ground = fold_ground([child(0)?, child(1)?, child(2)?, child(3)?], level);
     let mut ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
     Some(Terrain { ground, ele: ele.into() })

@@ -14,8 +14,8 @@
 //! coverage and a page with something over it is refinement. Latency then
 //! shows up as ground getting sharper rather than as ground appearing.
 
-use crate::layer::terrain::level::LevelPage;
 use crate::layer::terrain::store::tile_store;
+use pxl_spec::space::pyramid::LevelPage;
 
 /// What the resident pages can do for a page the camera wants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

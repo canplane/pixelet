@@ -27,8 +27,8 @@
 
 use core::fmt;
 
-use crate::bake::constant::LEVEL0_ZOOM;
 use crate::space::pvf3::ivec::{self, IVec};
+use crate::space::pyramid::LEVEL0_ZOOM;
 
 /// A quadkey's digits, in the order a quadrant is numbered: x in the low bit,
 /// y in the high one.

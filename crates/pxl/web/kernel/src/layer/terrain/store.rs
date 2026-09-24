@@ -17,21 +17,21 @@
 //! revision is what a reader of the ground compares; the levels above are the
 //! view's alone and are read through the chunks that draw them.
 
-use pxl_spec::bake::constant::PAGE_TOP_LEVEL;
 use pxl_spec::bake::format::Tile;
 use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pyramid::TOP_LEVEL;
 
 use crate::global::Global;
 use crate::layer::terrain::ground_snap::reground_map_center;
-use crate::layer::terrain::level::LevelPage;
 use crate::world::change::TERRAIN_PAGE;
 use crate::world::chunk::node::{chunk_page, chunk_sources_changed};
 use crate::world::page_table::PageTable;
+use pxl_spec::space::pyramid::LevelPage;
 
 static LEVEL_PAGES: Global<Vec<PageTable<Tile>>> = Global::new();
 
 fn tables() -> &'static mut Vec<PageTable<Tile>> {
-    LEVEL_PAGES.get(|| (0..=PAGE_TOP_LEVEL).map(|level| PageTable::new((level == 0).then_some(TERRAIN_PAGE))).collect())
+    LEVEL_PAGES.get(|| (0..=TOP_LEVEL).map(|level| PageTable::new((level == 0).then_some(TERRAIN_PAGE))).collect())
 }
 
 /// Every resident leaf. Walk it or look a page up here; change it through the

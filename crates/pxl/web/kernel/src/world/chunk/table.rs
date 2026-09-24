@@ -27,8 +27,9 @@ use pxl_render::look::globe::Globe;
 use pxl_render::look::lod::{Ladder, COARSEST};
 use pxl_render::mesh::chunk_mesher::{box_bounds, Heights};
 use pxl_render::mesh::paint::terrain::adapter::ChunkSample;
-use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, PAGE_TOP_LEVEL};
+use pxl_spec::bake::constant::CHUNK_CELL_SPAN;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pyramid::TOP_LEVEL;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::heap::alloc;
 use xpute_runtime::sched::edge::Notify;
@@ -43,13 +44,14 @@ use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::frame_gizmo::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
-use crate::layer::terrain::level::{centre_page, chunk_span_of, decor_reach, ring, LevelPage, DECOR_REACH, RENDER_AXIS, WINDOW_LEVELS};
+use crate::layer::terrain::level::{centre_page, chunk_span_of, decor_reach, ring, DECOR_REACH, RENDER_AXIS, WINDOW_LEVELS};
 use crate::sched::priority::view_centre;
 use crate::shell::setting::store::hidden_ground;
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
 use crate::world::chunk::range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT};
 use pxl_spec::space::indexer::L2_IDX;
+use pxl_spec::space::pyramid::LevelPage;
 
 /// The sphere a chunk nothing has measured is culled by.
 const APPROXIMATE_CHUNK_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
@@ -308,7 +310,7 @@ impl ChunkKey {
 
     /// The chunk a level up that covers it, none at the pyramid's top.
     fn parent(self) -> Option<ChunkKey> {
-        if self.page.level >= PAGE_TOP_LEVEL {
+        if self.page.level >= TOP_LEVEL {
             return None;
         }
         let up = self.page.parent();
@@ -348,7 +350,7 @@ impl ChunkKey {
 /// corner and a side.
 fn ring_rect(level: u32, anchor: IVec) -> (f64, f64, f64) {
     let centre = centre_page(level, anchor);
-    let span = crate::layer::terrain::level::span_of(level);
+    let span = pxl_spec::space::pyramid::span_of(level);
     let r = (RENDER_AXIS / 2) as f64 * span;
     (ivec::X(centre.page) as f64 * span - r, ivec::Y(centre.page) as f64 * span - r, span * RENDER_AXIS as f64)
 }
@@ -594,7 +596,7 @@ pub struct Census {
 }
 
 /// The pyramid's levels, a chunk's being one of them.
-pub const LEVELS: usize = PAGE_TOP_LEVEL as usize + 1;
+pub const LEVELS: usize = TOP_LEVEL as usize + 1;
 
 /// Who holds each mesh slot (mesh_slot.rs), by chunk id, 0 for none; and the
 /// arena epoch the tiers were written under.

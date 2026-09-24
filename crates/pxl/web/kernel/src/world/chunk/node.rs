@@ -39,13 +39,13 @@ use xpute_runtime::mem::heap::{free, Block};
 use crate::global::Global;
 use crate::kernel::{kernel, with_world};
 use crate::layer::object::store::{decor_col_revision, object_col_revision, object_cols, Store, BAND_CELLS};
-use crate::layer::terrain::level::LevelPage;
 use crate::layer::terrain::store::tile_store;
 use crate::mem::fixed::{bake_at, run_set_at};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::mesh_slot::BAKE_BYTES;
 use crate::world::chunk::range::PAGE_SHAMT;
 use crate::world::chunk::table::Event;
+use pxl_spec::space::pyramid::LevelPage;
 
 /// A tier as the node holds it: its boxes, which lie on the device in the
 /// chunk's slot (mesh_slot.rs) and nowhere in the memory.

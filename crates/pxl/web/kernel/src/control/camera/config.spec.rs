@@ -54,7 +54,7 @@ pub mod camera_cfg {
         pub const MIN_DIST: f64 = 2.0;
         /// As far out as the terrain goes: looking straight down from here the
         /// ground wants step 2^11, which level 10, the pyramid's top
-        /// (PAGE_TOP_LEVEL), draws with its cells averaged 2×2 — about 24 km
+        /// (TOP_LEVEL), draws with its cells averaged 2×2 — about 24 km
         /// on the scale bar. Past it no level is coarse enough. The band and
         /// the clip planes follow the reach from up here, which is the planet's
         /// own edge, so every zoom out to here shows the same octaves of

@@ -538,7 +538,7 @@ const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "
 #[cfg(test)]
 #[path = "record.test.rs"]
 mod test;
-const _: () = assert!(LEVELS == pxl_spec::bake::constant::PAGE_TOP_LEVEL as usize + 1, "a lane a level holds every level of the pyramid");
+const _: () = assert!(LEVELS == pxl_spec::space::pyramid::TOP_LEVEL as usize + 1, "a lane a level holds every level of the pyramid");
 
 /// The rings keep the last minute: a record older than WINDOW_MS is dropped as
 /// a new one lands, so what the ledger holds is bounded by the display's rate,

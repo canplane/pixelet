@@ -6,6 +6,7 @@
 mod cache;
 mod geocode;
 mod poi;
+mod pyramid;
 mod terrain;
 
 use cache::Cache;
@@ -16,7 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub mod job;
 use job::{Limits, Runner};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum Kind {
     Terrain,
     Poi,
@@ -62,6 +63,34 @@ enum Source {
     Terrain(terrain::Source),
     Poi,
     Geocode,
+}
+/// What a layer's source says about its pyramid that the pyramid cannot:
+/// where it has nothing, and the one page terrain's open water reads as.
+impl Source {
+    /// A shared object a name addresses rather than a page.
+    fn shared(&self, name: &str) -> Option<&[u8]> {
+        match self {
+            Source::Terrain(s) if name == crate::terrain::leaf::OCEAN_KEY => Some(&s.raw_ocean),
+            _ => None,
+        }
+    }
+
+    /// Whether the source can have anything under a page.
+    fn holds(&self, p: pxl_spec::space::pyramid::LevelPage) -> bool {
+        match self {
+            Source::Terrain(s) => s.coverage.meets(p.level, p.page),
+            _ => true,
+        }
+    }
+
+    /// The object a fold reads for a page the source left as no object,
+    /// where that is not simply an empty page.
+    fn absent(&self) -> Option<(&'static str, &[u8])> {
+        match self {
+            Source::Terrain(s) => Some((crate::terrain::leaf::OCEAN_KEY, &s.raw_ocean)),
+            _ => None,
+        }
+    }
 }
 impl Dataset {
     fn open(base: &std::path::Path, kind: Kind, revision: u64, runner: &Runner) -> Result<Self, String> {
@@ -112,10 +141,10 @@ impl Server {
         let data = self.current.lock().expect("datasets")[kind as usize].clone();
         let runner = self.runner.clone();
         let path = match kind {
-            Kind::Terrain => terrain::resolve(data.clone(), runner, name, self.top_level).await?,
-            Kind::Poi => poi::resolve(data.clone(), runner, name).await?,
-            Kind::Geocode => geocode::resolve(data.clone(), runner, name).await?,
+            Kind::Terrain | Kind::Poi => pyramid::resolve(data.clone(), runner, kind, name, self.top_level).await?,
+            Kind::Geocode => Some(geocode::resolve(data.clone(), runner, name).await?),
         };
+        let Some(path) = path else { return Ok(None) };
         data.cache.read(&path).await.map_err(Failure::Bake)
     }
 

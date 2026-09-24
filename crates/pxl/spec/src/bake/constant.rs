@@ -2,7 +2,6 @@
 
 use crate::space::adapter::epsg3857::{U_PER_M, Z_SCALE};
 use crate::space::indexer::{L2_SHAMT, L3_SHAMT};
-use crate::space::pvf3::core::IVEC_X_W;
 use crate::space::sparse_tree::mem::SparseTreeLayout;
 
 // ---- Unit System ----
@@ -44,35 +43,11 @@ pub const PAGE_CELL_SPAN: u32 = 1 << (L3_SHAMT as i32 - CELL_SHAMT);
 /// One L2 chunk span in raster cells.
 pub const CHUNK_CELL_SPAN: u32 = 1 << (L2_SHAMT as i32 - CELL_SHAMT);
 
-/// The coarsest level the page pyramid is folded to. A level-k page is 2^k
-/// leaves on a side, and at level 10 — zoom 5 — one spans about 9° of
-/// latitude, across which the page-constant vertical scale is already 12%
-/// off: past it Web Mercator on a plane stops being honest, and a coarser
-/// view is a different projection over the same tiles rather than another
-/// level (issue/20260921-level-step-and-zoom-are-one-number.md). A bake folds
-/// up to it and a server answers nothing above it.
-pub const PAGE_TOP_LEVEL: u32 = 10;
-
-/// The zoom a level-0 page is, in the 512-pixel tile convention: the X lane
-/// is one EPSG:3857 world, so a level has 2^(IVEC_X_W − L3_SHAMT − level)
-/// pages across it, which is a zoom's tile count. Level k is zoom
-/// LEVEL0_ZOOM − k, and a level-0 cell is the standard 256-pixel z16 pixel
-/// exactly (issue/20260921-level-step-and-zoom-are-one-number.md).
-pub const LEVEL0_ZOOM: u32 = IVEC_X_W - L3_SHAMT;
-
-pub const fn zoom_of_level(level: u32) -> u32 {
-    LEVEL0_ZOOM - level
-}
-
-// The identity holds by three constants agreeing, not by one deriving the
-// rest: the X lane is one Mercator world (space/adapter/3857.rs), a cell is
-// one unit, and a page is 512 cells. Any of them moving breaks the tiling's
-// match with the web map convention, so each is held here.
+// A baked cell is the pyramid's level cell: one unit at level 0, so a page's
+// raster is the pyramid's page of cells.
 const _: () = {
     assert!(CELL_SHAMT == 0, "a cell is one unit");
-    assert!(PAGE_CELL_SPAN == 512, "a page is one 512-pixel tile");
-    assert!(LEVEL0_ZOOM == 15, "level 0 is zoom 15 at 512 pixels, z16 at 256");
-    assert!(PAGE_TOP_LEVEL <= LEVEL0_ZOOM, "no level coarser than one page across the world");
+    assert!(PAGE_CELL_SPAN == crate::space::pyramid::PAGE_CELLS, "a page's raster is the pyramid's page");
 };
 
 // ---- Elevation (Sampling Contract) ----
