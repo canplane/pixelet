@@ -91,7 +91,7 @@ fn a_chunks_children_have_it_for_their_parent_and_its_ancestors_climb_to_the_top
     for (x, y) in [(0, 0), (5, -3), (-1, -1), (123, 77)] {
         for level in 1..=TOP_LEVEL {
             for (bx, by) in [(0, 0), (64, 448), (448, 64), (256, 192)] {
-                let k = ChunkKey {
+                let k = Chunk {
                     page: LevelPage::new(level, ivec::gather(x, y, 0)),
                     bx,
                     by,
@@ -107,12 +107,12 @@ fn a_chunks_children_have_it_for_their_parent_and_its_ancestors_climb_to_the_top
 
 /// What the mount order has to agree with the build order about: a chunk is
 /// as near as its distance in its own sides, so the levels interleave. Left
-/// in the key's own order a `ChunkKey` sorts by level, and every chunk of the
+/// in the key's own order a `Chunk` sorts by level, and every chunk of the
 /// finest level was mounted before any of the next — which decided what the
 /// screen filled in, since a chunk cannot be built before it is mounted.
 #[test]
 fn mounts_are_ordered_as_the_builds_take_them_and_not_by_level() {
-    let chunk = |level: u32, px: i64, bx: u32| ChunkKey {
+    let chunk = |level: u32, px: i64, bx: u32| Chunk {
         page: LevelPage::new(level, ivec::gather(px, 0, 0)),
         bx,
         by: 0,
@@ -132,67 +132,6 @@ fn mounts_are_ordered_as_the_builds_take_them_and_not_by_level() {
     // when it starts there: the middle of the screen is drawn by the finest
     // level, and that is what goes first.
     assert!(chunk_near(chunk(0, 0, 0), ax, ay) < chunk_near(chunk(4, 0, 0), ax, ay));
-}
-
-/// Where the selection starts when a page of the top ring has not arrived.
-/// The adversarial cases of a zoom out, which is when a top ring is new.
-mod selection_roots {
-    use super::*;
-
-    fn page(level: u32, x: i64, y: i64) -> LevelPage {
-        LevelPage::new(level, ivec::gather(x, y, 0))
-    }
-
-    fn held(of: &[LevelPage]) -> BTreeSet<LevelPage> {
-        of.iter().copied().collect()
-    }
-
-    fn roots_of(pages: &BTreeSet<LevelPage>, top: LevelPage, base: u32) -> Vec<LevelPage> {
-        let mut out = Vec::new();
-        roots(pages, top, base, &mut out);
-        out.sort_unstable();
-        out
-    }
-
-    #[test]
-    fn a_resident_page_is_the_root_and_its_children_are_left_to_the_split() {
-        let top = page(4, 3, 5);
-        let mut pages = held(&[top]);
-        pages.extend(top.children());
-        // Both resident: the page itself roots, and whether the finer ones
-        // are drawn is the ladder's question (`splits`), not this one.
-        assert_eq!(roots_of(&pages, top, 0), [top]);
-    }
-
-    #[test]
-    fn a_missing_page_is_stood_in_for_by_every_child_that_is_resident() {
-        let top = page(4, 3, 5);
-        let kids = top.children();
-        // All four: the whole of its ground is drawn, a level finer.
-        let all = held(&kids);
-        assert_eq!(roots_of(&all, top, 0).len(), 4);
-        // Two of four, which is what a held ring actually leaves
-        // (world/pyramid/window.test.rs): half the ground rather than none of it.
-        let some = held(&kids[..2]);
-        assert_eq!(roots_of(&some, top, 0), {
-            let mut v = kids[..2].to_vec();
-            v.sort_unstable();
-            v
-        });
-    }
-
-    #[test]
-    fn it_goes_one_level_and_no_further_so_a_seam_is_never_more_than_one_apart() {
-        let top = page(4, 0, 0);
-        let deep = top.children()[0].children()[0];
-        assert!(roots_of(&held(&[deep]), top, 0).is_empty(), "a grandchild is not stood in for");
-        assert!(roots_of(&held(&top.children()), top, top.level).is_empty(), "not past the base");
-    }
-
-    #[test]
-    fn nothing_resident_under_it_is_nothing_drawn_and_not_a_guess() {
-        assert!(roots_of(&held(&[]), page(4, 3, 5), 0).is_empty());
-    }
 }
 
 #[test]

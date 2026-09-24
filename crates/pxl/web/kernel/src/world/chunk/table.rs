@@ -20,8 +20,8 @@
 //! go. The nodes hold the meshes; this holds every decision about them.
 
 use pxl_spec::space::indexer::L3_IDX;
-use pxl_spec::space::pyramid::{cell_base, chunk_span_of, CHUNK_CELLS, PAGE_CHUNKS};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use pxl_spec::space::pyramid::{chunk_span_of, Cell, CHUNK_CELLS, PAGE_CELLS, PAGE_CHUNKS};
+use std::collections::{BTreeMap, VecDeque};
 
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
@@ -51,8 +51,11 @@ use crate::shell::setting::store::hidden_ground;
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
 
-use crate::world::pyramid::window::{centre_page, decor_reach, ring, DECOR_REACH};
+use crate::world::pyramid::chunk::Chunk;
+use crate::world::pyramid::window::{centre_page, decor_reach, domain, ring_rect, Domain, DECOR_REACH};
 use crate::world::pyramid::window_spec::{RENDER_AXIS, WINDOW_LEVELS};
+use crate::world::pyramid::Layer;
+use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pyramid::LevelPage;
 
@@ -89,10 +92,13 @@ const _: () = assert!(MAX_MOUNTS_PER_FRAME == PAGE_CHUNKS * PAGE_CHUNKS, "a page
 const RING_CHUNKS: u32 = RENDER_AXIS * RENDER_AXIS * PAGE_CHUNKS * PAGE_CHUNKS;
 
 /// The widest selection there is: the top ring, each of whose pages may be
-/// stood in for by its four children where it has not arrived (`roots`), and
-/// three quarters of a ring for every level under it — a level's ring is half
-/// the width of the one above, so a quarter of it splits and the rest stays
-/// (`splits`).
+/// stood in for by its four children where it has not arrived, and three
+/// quarters of a ring for every level under it — a level's ring is half the
+/// width of the one above, so a quarter of it is wanted finer and the rest
+/// stays (world/pyramid.rs `Cover`, window.rs `Domain`). The balance a mesh
+/// needs only ever refines where a finer page stands in for a coarser one
+/// that a neighbour draws, which puts no more chunks over a piece of ground
+/// than the top ring's stand-in does.
 ///
 /// The point of writing it down is that it is under MAX_CHUNKS. The table is
 /// a hard budget, so what it can refuse matters: with the widest selection
@@ -138,9 +144,8 @@ pub const SETTLING: u16 = 32;
 pub const STALE: u16 = 64;
 /// Nothing coarser in the selection draws this chunk's ground, so the ladder
 /// is followed as far as it goes here rather than stopping one step past the
-/// chunk's own cells (`relative`). A root of the selection's traversal: the
-/// window's top ring, and — where a page of it is not resident — whichever
-/// pages under it are (`roots`).
+/// chunk's own cells (`relative`). A root of the cover: nothing coarser in
+/// the window is resident over it (world/pyramid.rs `Cover`).
 pub const OUTERMOST: u16 = 256;
 
 /// A release, as a request: off screen, nothing built.
@@ -271,135 +276,94 @@ pub enum Event {
 }
 
 /// What a mount pass selected for: the page the anchor stands in at the
-/// window's base, the window and the page set. While it is the same the
-/// selection stands, and the pass is skipped once nothing of it is left to
-/// mount.
+/// window's base, the window and the terrain's resident set (world/pyramid.rs
+/// `revision`). While it is the same the selection stands, and the pass is
+/// skipped once nothing of it is left to mount.
 ///
-/// A counter for the page set, and not a mask of the pages the selection
-/// reads. It was a mask, on the ground that `select` reads only the drawn
-/// rings — true while the traversal could start nowhere but the window's
-/// top. It descends through a page it does not hold now (`roots`), so what
-/// it reads is any page over the top ring's ground at any level of the
-/// window, which no word names. A counter re-selects once a page arrives,
-/// which during a zoom is most frames; the pass keeps its selection across
-/// frames either way (`to_mount`), and whether the re-select itself is worth
-/// narrowing is a measurement nobody has taken. That page and not the anchor: every ring the pass reads is a level
-/// at or above the base, centred on the page over it (`ring`), so the anchor
-/// moving within its base page changes nothing the pass chooses — and a
-/// base page is as far on screen at every zoom, where a chunk of the leaves
-/// is less than a pixel at the farthest.
+/// That page and not the anchor: every ring the pass reads is a level at or
+/// above the base, centred on the page over it, so the anchor moving within
+/// its base page changes nothing the pass chooses — and a base page is as
+/// far on screen at every zoom, where a chunk of the leaves is less than a
+/// pixel at the farthest.
 type MountKey = (LevelPage, (u32, u32), u32);
 
-/// A chunk by where it is: its page, and its corner in the page's cells.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct ChunkKey {
-    page: LevelPage,
-    bx: u32,
-    by: u32,
-}
-
-impl ChunkKey {
-    fn level(self) -> u32 {
-        self.page.level
-    }
-
-    /// The chunk's corner and side, in units.
-    fn rect(self) -> (f64, f64, f64) {
-        let base = cell_base(self.page, self.bx, self.by);
-        (ivec::X(base) as f64, ivec::Y(base) as f64, chunk_span_of(self.page.level))
-    }
-
-    /// The chunk a level up that covers it, none at the pyramid's top.
-    fn parent(self) -> Option<ChunkKey> {
-        if self.page.level >= TOP_LEVEL {
-            return None;
+/// Makes the terrain's cover a mesh can draw: no two chunks that meet more
+/// than a level apart. A chunk's mesh hangs a skirt one of its own cells
+/// deep, which hides the step where it meets a chunk a level from it
+/// (pxl-render mesh/chunk_mesher.rs) and not one two levels from it. The
+/// cover a layer holds has no such limit — a count has no seams — so this
+/// is the terrain's presentation and nothing else's.
+///
+/// First every chunk too coarse for a neighbour is refined, where the view
+/// wants it finer and the page under it is resident: its four children in
+/// its place, a level finer and never finer than the view wants, so this
+/// draws no more chunks than the view does. Then what is still too fine for
+/// a coarse neighbour is coarsened: its sibling group, and anything under
+/// it, becomes its parent where that page is resident, and a gap where it
+/// is not — a gap is drawn by whatever stale chunk still covers it, and is
+/// fetched as any other ground is; a crack is neither. The refining pass
+/// only makes chunks finer and stops at what the view wants; the
+/// coarsening pass only removes chunks or makes them coarser, and stops at
+/// the window's top. Neither undoes the other, so both end.
+fn balance(drawn: &mut BTreeMap<Chunk, bool>, d: &Domain, resident: impl Fn(Chunk) -> bool) {
+    loop {
+        let mut refined = false;
+        for (_, coarse) in unbalanced(drawn) {
+            let under = coarse.children();
+            if drawn.contains_key(&coarse) && d.splits(coarse) && resident(under[0]) {
+                drawn.remove(&coarse);
+                drawn.extend(under.map(|k| (k, false)));
+                refined = true;
+            }
         }
-        let up = self.page.parent();
-        let span = pxl_spec::space::pyramid::PAGE_CELLS as i64;
-        let cell = |page: i64, b: u32, parent: i64| ((page * span + b as i64).div_euclid(2) - parent * span) as u32 & !(CHUNK_CELLS - 1);
-        Some(ChunkKey {
-            page: up,
-            bx: cell(ivec::X(self.page.page), self.bx, ivec::X(up.page)),
-            by: cell(ivec::Y(self.page.page), self.by, ivec::Y(up.page)),
-        })
+        if !refined {
+            break;
+        }
     }
-
-    /// Every chunk above it, nearest first.
-    fn ancestors(self) -> impl Iterator<Item = ChunkKey> {
-        std::iter::successors(self.parent(), |k| k.parent())
-    }
-
-    /// The four chunks a level down that cover it: a chunk is 64 cells of
-    /// its level, which are 128 of the next, in one page of it.
-    fn children(self) -> [ChunkKey; 4] {
-        let (x, y) = (self.bx * 2, self.by * 2);
-        let span = pxl_spec::space::pyramid::PAGE_CELLS;
-        let page = LevelPage::new(
-            self.page.level - 1,
-            ivec::gather(ivec::X(self.page.page) * 2 + (x / span) as i64, ivec::Y(self.page.page) * 2 + (y / span) as i64, 0),
-        );
-        let (x, y) = (x % span, y % span);
-        [(0, 0), (1, 0), (0, 1), (1, 1)].map(|(dx, dy)| ChunkKey {
-            page,
-            bx: x + dx * CHUNK_CELLS,
-            by: y + dy * CHUNK_CELLS,
-        })
+    loop {
+        let pairs = unbalanced(drawn);
+        if pairs.is_empty() {
+            break;
+        }
+        for (fine, _) in pairs {
+            if !drawn.contains_key(&fine) {
+                continue;
+            }
+            let Some(up) = fine.parent() else {
+                drawn.remove(&fine);
+                continue;
+            };
+            drawn.retain(|k, _| k.level() >= up.level() || !k.ancestors().any(|a| a == up));
+            if resident(up) {
+                let root = up.parent().is_none_or(|a| !resident(a));
+                drawn.insert(up, root);
+            }
+        }
     }
 }
 
-/// The ground a level's drawn ring covers around the anchor's page, as a
-/// corner and a side.
-fn ring_rect(level: u32, anchor: IVec) -> (f64, f64, f64) {
-    let centre = centre_page(level, anchor);
-    let span = pxl_spec::space::pyramid::span_of(level);
-    let r = (RENDER_AXIS / 2) as f64 * span;
-    (ivec::X(centre.page) as f64 * span - r, ivec::Y(centre.page) as f64 * span - r, span * RENDER_AXIS as f64)
-}
-
-/// Where the selection starts over `page`'s ground: `page` if it is
-/// resident, else whichever pages under it are.
-///
-/// A page that is not resident is refined *through* rather than skipped.
-/// It used to be skipped, and that decided what could be drawn at all:
-/// the traversal began at the window's top ring and nowhere else, so a
-/// top page that had not arrived took its whole ground with it —
-/// including the finer pages under it the client was already holding. Of
-/// the nine pages a top ring has, four fold from what is held and five
-/// do not, and every one of those five has one or two of its four
-/// children resident (world/pyramid/window.test.rs): nearly half of what showed
-/// as nothing was data in memory with no way to address it. Cesium calls
-/// the same thing `skipLevelOfDetail`, and its rule is this one — a node
-/// that is not loaded is stood in for by its nearest loaded ancestor,
-/// and where there is no ancestor, by its nearest loaded descendants.
-///
-/// One level, and not as far down as there is anything.
-///
-/// Two reasons, and they agree. Counted over every anchor position with the
-/// window a zoom out has just left resident: every root a deeper search
-/// finds is a child, none is a grandchild, and those children are 69% of the
-/// top ring's ground. There is nothing under them to find, because a page is
-/// only ever fetched into its own level's ring and a grandchild's ring is
-/// further from this ground than a child's.
-///
-/// And a chunk's mesh hangs a skirt one of its own cells deep, which is what
-/// hides the step where two chunks of different levels meet (pxl-render
-/// mesh/chunk_mesher.rs). The rings nest, so a chunk has only ever met one a
-/// single level from it; going two down would put a step under a skirt built
-/// for one. A root a level down sits outside its own level's ring and so
-/// touches only another such root or a page of the ring above it — a level
-/// apart at most, as before.
-fn roots(pages: &BTreeSet<LevelPage>, page: LevelPage, base: u32, out: &mut Vec<LevelPage>) {
-    if pages.contains(&page) {
-        out.push(page);
-    } else if page.level > base {
-        out.extend(page.children().into_iter().filter(|c| pages.contains(c)));
+/// Every pair of drawn chunks that meet more than a level apart, the finer
+/// first.
+fn unbalanced(drawn: &BTreeMap<Chunk, bool>) -> Vec<(Chunk, Chunk)> {
+    let set: std::collections::HashSet<Chunk> = drawn.keys().copied().collect();
+    let mut out = Vec::new();
+    for &fine in drawn.keys() {
+        for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+            let next = fine.beside(dx, dy);
+            if let Some(coarse) = std::iter::once(next).chain(next.ancestors()).find(|a| set.contains(a)) {
+                if coarse.level() >= fine.level() + 2 {
+                    out.push((fine, coarse));
+                }
+            }
+        }
     }
+    out
 }
 
 /// How far a chunk's centre is from `(ax, ay)`, squared: what the mounts are
 /// ordered by, as the builds are (`priority`). The anchor is the same ground
 /// the builds measure from, at the resolution a page scheduler has.
-fn chunk_near(k: ChunkKey, ax: f64, ay: f64) -> f64 {
+fn chunk_near(k: Chunk, ax: f64, ay: f64) -> f64 {
     let (x0, y0, side) = k.rect();
     let (dx, dy) = (x0 + side / 2.0 - ax, y0 + side / 2.0 - ay);
     dx * dx + dy * dy
@@ -666,16 +630,13 @@ pub struct Scheduler {
     retained_on: f64,
     retained_off: f64,
     pub census: Census,
-    /// The pages with a terrain tile, which chunks are mounted from.
-    pages: BTreeSet<LevelPage>,
-    pages_revision: u32,
     /// Pages whose records have gone since the last tick, whose chunks stop
     /// building before anything else in the next.
     evicted: Vec<LevelPage>,
     /// The chunks the module mounted, by page and page-local base.
-    mounted: BTreeMap<ChunkKey, u32>,
+    mounted: BTreeMap<Chunk, u32>,
     /// The mounted chunks a pass finds leaving, before they are let go.
-    gone: Vec<(ChunkKey, u32)>,
+    gone: Vec<(Chunk, u32)>,
     next_mount_id: u32,
     /// What the selection standing in `to_mount` was made for, and what of it
     /// is still to be mounted. The pass is done when the key matches and
@@ -693,7 +654,7 @@ pub struct Scheduler {
     /// two thousand chunks re-derived at a tilt wide enough to want five
     /// levels, against six hundred looking down. The work a zoom costs grew
     /// with the tilt for no reason but this.
-    to_mount: VecDeque<(ChunkKey, bool)>,
+    to_mount: VecDeque<(Chunk, bool)>,
     /// The ground the window draws: the top level's drawn ring, as a corner
     /// and a side in units.
     drawn: Option<(f64, f64, f64)>,
@@ -803,8 +764,6 @@ impl Scheduler {
             retained_on: 0.0,
             retained_off: 0.0,
             census: Census::default(),
-            pages: BTreeSet::new(),
-            pages_revision: 0,
             evicted: Vec::new(),
             mounted: BTreeMap::new(),
             gone: Vec::with_capacity(MAX_CHUNKS),
@@ -1184,11 +1143,7 @@ impl Scheduler {
         if !present {
             self.evicted.push(page);
         }
-        let changed = if present { self.pages.insert(page) } else { self.pages.remove(&page) };
-        if changed {
-            self.pages_revision = self.pages_revision.wrapping_add(1);
-            self.view_dirty = true;
-        }
+        self.view_dirty = true;
     }
 
     /// The run sets the builder has lent, and the bytes their runs fill.
@@ -1202,59 +1157,15 @@ impl Scheduler {
         self.decor_scratch.as_ref().map_or(0, |s| s.dropped)
     }
 
-    /// Whether `key` is to be drawn as its four children rather than itself:
-    /// it lies whole inside the ring the level below draws, and that level's
-    /// page under it is here. The rings nest, as a clipmap's do, so a level's
-    /// chunks lie inside its own ring and nowhere else — which is what lets a
-    /// chunk's mesh have a slot of its own by its coordinate (mesh_slot.rs).
-    /// Where the finer page has not come, the chunk over it draws its ground.
-    fn splits(&self, key: ChunkKey, rings: &[(f64, f64, f64)], base: u32) -> bool {
-        let level = key.level();
-        if level <= base {
-            return false;
-        }
-        let (x0, y0, side) = key.rect();
-        let (rx, ry, rside) = rings[(level - 1 - base) as usize];
-        let inside = x0 >= rx && y0 >= ry && x0 + side <= rx + rside && y0 + side <= ry + rside;
-        inside && self.pages.contains(&key.children()[0].page)
-    }
-
-    /// The chunks to draw and which of them are roots: every chunk of the
-    /// window's top ring — or of the pages standing in for one that has not
-    /// arrived — each drawn whole or as its children, down to the window's
-    /// base (issue/20260921-level-step-and-zoom-are-one-number.md).
-    ///
-    /// A root is a chunk nothing coarser draws over, which is what decides
-    /// how far it may follow the ladder (`relative`). Every other chunk came
-    /// from splitting one, and the one it split from covers its ground until
-    /// it is ready.
-    fn select(&self, frame: &Frame, anchor: IVec, out: &mut BTreeMap<ChunkKey, bool>) {
+    /// The chunks to draw and which of them are roots: the terrain's cover
+    /// of what the view wants (world/pyramid.rs `Cover`), balanced so that no
+    /// two chunks that meet are more than a level apart (`balance`).
+    fn select(&self, frame: &Frame, anchor: IVec, out: &mut BTreeMap<Chunk, bool>) {
         let (base, end) = frame.window;
-        let rings: Vec<(f64, f64, f64)> = (base..end).map(|level| ring_rect(level, anchor)).collect();
-        let mut pages = Vec::new();
-        for page in ring(end - 1, anchor, RENDER_AXIS) {
-            roots(&self.pages, page, base, &mut pages);
-        }
-        let mut stack: Vec<(ChunkKey, bool)> = Vec::new();
-        for page in pages {
-            for cy in 0..PAGE_CHUNKS {
-                for cx in 0..PAGE_CHUNKS {
-                    let key = ChunkKey {
-                        page,
-                        bx: cx * CHUNK_CELLS,
-                        by: cy * CHUNK_CELLS,
-                    };
-                    stack.push((key, true));
-                }
-            }
-        }
-        while let Some((key, root)) = stack.pop() {
-            if self.splits(key, &rings, base) {
-                stack.extend(key.children().map(|c| (c, false)));
-            } else {
-                out.insert(key, root);
-            }
-        }
+        let terrain = Terrain::pyramid();
+        let d = domain(anchor, base..end);
+        out.extend(terrain.cover_of(&d).drawn);
+        balance(out, &d, |c| terrain.get(c.page).is_some());
     }
 
     /// Which chunks exist: the ones `select` draws, mounted as they are
@@ -1275,7 +1186,7 @@ impl Scheduler {
     /// The one showing least goes: not drawn before drawn, and the furthest
     /// out among equals.
     fn give_room(&mut self, world: &mut World, emit: &mut impl FnMut(Event)) -> bool {
-        let mut worst: Option<((bool, f64), ChunkKey, u32)> = None;
+        let mut worst: Option<((bool, f64), Chunk, u32)> = None;
         for (&k, &id) in self.mounted.iter() {
             let Some(&i) = self.index.get(&id) else { continue };
             let s = &self.slots[i];
@@ -1297,7 +1208,7 @@ impl Scheduler {
     fn mount(&mut self, world: &mut World, frame: &Frame, emit: &mut impl FnMut(Event)) {
         let Some(anchor) = frame.anchor else { return };
         let anchor_i = ivec::gather(anchor[0] as i64, anchor[1] as i64, 0);
-        let key = (centre_page(frame.window.0, anchor_i), frame.window, self.pages_revision);
+        let key = (centre_page(frame.window.0, anchor_i), frame.window, Terrain::pyramid().revision());
         if self.selected_for == Some(key) && self.to_mount.is_empty() {
             return;
         }
@@ -1323,7 +1234,7 @@ impl Scheduler {
             // In the order the builds will take them, which is a distance in
             // the chunk's own sides (`priority`), so a coarse chunk far off
             // goes with a fine one near. Left in the key's own order — a
-            // `ChunkKey` sorts by its page and a `LevelPage` by its level —
+            // `Chunk` sorts by its page and a `LevelPage` by its level —
             // the pass mounted every chunk of the finest level before any of
             // the next, and within a level in raw coordinate order rather
             // than by distance. A chunk cannot be built before it is mounted,
@@ -1338,7 +1249,7 @@ impl Scheduler {
             // and have a mesh to measure, while this has a key and runs
             // before anything is built.
             let (ax, ay) = (ivec::X(anchor_i) as f64, ivec::Y(anchor_i) as f64);
-            let mut near: Vec<(f64, ChunkKey, bool)> = wanted
+            let mut near: Vec<(f64, Chunk, bool)> = wanted
                 .iter()
                 .filter(|(k, _)| !self.mounted.contains_key(k))
                 .map(|(&k, &root)| (chunk_near(k, ax, ay), k, root))
@@ -1440,7 +1351,7 @@ impl Scheduler {
             s.cover = (0.0, true, false);
         }
         let (slots, index, mounted) = (&mut self.slots, &self.index, &self.mounted);
-        let at = |k: &ChunkKey| mounted.get(k).and_then(|id| index.get(id)).copied();
+        let at = |k: &Chunk| mounted.get(k).and_then(|id| index.get(id)).copied();
         for (&k, &id) in mounted.iter() {
             let Some(&i) = index.get(&id) else { continue };
             let s = &slots[i];
@@ -1713,7 +1624,7 @@ impl Scheduler {
             s.set(COVERED, false);
         }
         let (slots, index, mounted) = (&mut self.slots, &self.index, &self.mounted);
-        let at = |k: &ChunkKey| mounted.get(k).and_then(|id| index.get(id)).copied();
+        let at = |k: &Chunk| mounted.get(k).and_then(|id| index.get(id)).copied();
         let drawn = |s: &Slot| s.has(STALE) && s.has(IN_FRUSTUM) && s.layout_ready;
         for (&k, &id) in mounted.iter() {
             let Some(&i) = index.get(&id) else { continue };
@@ -1792,22 +1703,41 @@ impl Scheduler {
     /// the chunk's; a chunk covered by another, off the screen or not laid
     /// out draws nothing a layer could stand on.
     pub fn drawn(&self) -> impl Iterator<Item = Drawn<'_>> {
-        self.slots.iter().filter_map(|s| {
-            if !s.has(IN_FRUSTUM) || s.has(COVERED) || !s.layout_ready {
-                return None;
-            }
-            let step = match s.told {
-                Some((_, _, true)) if s.layout_secondary != 0 => s.layout_secondary,
-                _ => s.layout_primary,
-            };
-            let t = s.tier(step, s.layout_generation)?;
-            Some(Drawn {
-                level: s.level,
-                base: ivec::gather(s.base_x as i64, s.base_y as i64, 0),
-                step,
-                tops: &self.meshes.surface[t.slot.index],
-                heights: t.heights,
-            })
+        self.slots.iter().filter_map(|s| self.drawn_of(s))
+    }
+
+    fn drawn_of<'a>(&'a self, s: &'a Slot) -> Option<Drawn<'a>> {
+        if !s.has(IN_FRUSTUM) || s.has(COVERED) || !s.layout_ready {
+            return None;
+        }
+        let step = match s.told {
+            Some((_, _, true)) if s.layout_secondary != 0 => s.layout_secondary,
+            _ => s.layout_primary,
+        };
+        let t = s.tier(step, s.layout_generation)?;
+        Some(Drawn {
+            level: s.level,
+            base: ivec::gather(s.base_x as i64, s.base_y as i64, 0),
+            step,
+            tops: &self.meshes.surface[t.slot.index],
+            heights: t.heights,
+        })
+    }
+
+    /// The ground drawn now at `addr`: the level of the cells it is drawn in
+    /// there, and the top of that cell's surface in units. Read from the
+    /// chunk `drawn` gives for that ground, so it is the surface on the
+    /// screen — the tier a crossfade shows more of, a stale chunk while its
+    /// replacement builds — and none where nothing drawn stands there.
+    pub fn surface_at(&self, addr: IVec) -> Option<(u32, f64)> {
+        (0..=TOP_LEVEL).find_map(|level| {
+            let id = self.mounted.get(&Chunk::of(level, addr))?;
+            let d = self.drawn_of(&self.slots[*self.index.get(id)?])?;
+            let cell = Cell::of(d.cell_level(), addr);
+            let first = Cell::of(d.cell_level(), d.base);
+            let at = |i: u32| i % PAGE_CELLS;
+            let (bx, by) = (at(cell.index()).wrapping_sub(at(first.index())), (cell.index() / PAGE_CELLS).wrapping_sub(first.index() / PAGE_CELLS));
+            Some((d.cell_level(), d.top(bx, by)?))
         })
     }
 
@@ -2293,7 +2223,7 @@ fn relative(world_step: u32, level: u32, outermost: bool) -> u32 {
 /// cross a tier boundary at different moments instead of the whole ring
 /// switching at once. It only has to be spread and to be the same for a chunk
 /// every time it is mounted; nothing reads the number itself.
-fn blend_point(k: ChunkKey) -> f64 {
+fn blend_point(k: Chunk) -> f64 {
     let mut h = fnv::FnvHasher::default();
     std::hash::Hasher::write(&mut h, format!("{}/{}:{},{}", k.page.level, k.page.page, k.bx, k.by).as_bytes());
     std::hash::Hasher::finish(&h) as f64 / 2f64.powi(64)
@@ -2601,12 +2531,21 @@ fn surface_centres(words: &[u32], stride: usize, step: u32, level: u32, heights:
 pub struct Drawn<'a> {
     pub level: u32,
     pub base: IVec,
-    pub step: u32,
+    step: u32,
     tops: &'a [u32],
     heights: Heights,
 }
 
 impl Drawn<'_> {
+    /// The level of the cells the chunk is drawn in: a block of 2^s cells of
+    /// the chunk's level is a cell s levels up (pxl-spec space/pyramid.rs
+    /// `Cell`). The ladder's steps are its powers of two, so there is no step
+    /// this does not name.
+    pub fn cell_level(&self) -> u32 {
+        debug_assert!(self.step.is_power_of_two(), "a ladder step is a power of two");
+        self.level + self.step.trailing_zeros()
+    }
+
     /// The top of the drawn surface at the centre of the `step` block at
     /// (bx, by), in units; none where that centre is empty. Samples share the
     /// GPU mesh slot's lifetime, including a stale holder's.

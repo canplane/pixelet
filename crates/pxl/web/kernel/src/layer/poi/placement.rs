@@ -1,11 +1,16 @@
 // pxl-kernel/layer/poi/placement.rs
 
-//! Where the counts are drawn. A chunk drawn at level L with step s shows its
-//! ground in blocks of s cells of that level, so its places are counted in
-//! the same blocks and stood at the same centre (pxl-spec space/pyramid.rs
-//! `cell_centre`), on the top of the surface drawn there. Nothing here decides
-//! a level or a resolution of its own: a place is shown as coarsely as the
-//! ground under it is.
+//! Where the counts are drawn. What the POI pages draw of the view is the
+//! layer's own cover (world/pyramid.rs `Cover`): pieces of the ground in
+//! view, none over another, so every place under them is counted once. Each
+//! of their cells is counted into the cell the ground is drawn in there — a
+//! cell of the level the terrain's chunk draws blocks at, or the POI cell
+//! itself where that is coarser — and the badge stands at that cell's centre
+//! in all three axes, on the surface drawn there (pxl-spec
+//! space/pyramid.rs `Cell::centre`, chunk/table.rs `surface_at`). Nothing
+//! here decides a level or a resolution of its own: a place is shown as
+//! coarsely as the ground under it is, or as its own page is where that is
+//! all that has come.
 
 use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
@@ -19,11 +24,11 @@ use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view::view;
 use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
-use pxl_spec::space::pyramid::CHUNK_CELLS;
 
 use pxl_spec::bake::poi_page::PoiPage;
-use pxl_spec::space::pvf3::{ivec, projection, Pvf3};
-use pxl_spec::space::pyramid::{cell_centre, cell_index, cell_of, PAGE_CELLS};
+use pxl_spec::space::pvf3::{ivec, projection};
+use pxl_spec::space::pyramid::{cell_index, Cell, CHUNK_CELLS};
+use std::collections::BTreeMap;
 
 #[derive(Default)]
 struct Placement {
@@ -52,47 +57,31 @@ pub fn step(ctx: &mut TickContext) {
     let origin = local_world_origin();
     let base = [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))];
     let pages = PoiPage::pyramid();
-    p.batch.reset();
-    let mut counts = Vec::new();
-    for d in crate::kernel::kernel().sched.drawn() {
-        let (page, first) = cell_of(d.level, d.base);
-        let Some(poi) = pages.get(page) else { continue };
-        let (x0, y0) = (first % PAGE_CELLS, first / PAGE_CELLS);
-        let axis = CHUNK_CELLS / d.step;
-        let mut blocks: Vec<(u32, u32)> = Vec::new();
-        for ty in y0..y0 + CHUNK_CELLS {
-            let (lo, hi) = (cell_index(x0, ty), cell_index(x0 + CHUNK_CELLS, ty));
+    let sched = &crate::kernel::kernel().sched;
+    let mut cells: BTreeMap<Cell, u32> = BTreeMap::new();
+    for &(chunk, _) in &pages.cover().drawn {
+        let Some(poi) = pages.get(chunk.page) else { continue };
+        for ty in chunk.by..chunk.by + CHUNK_CELLS {
+            let (lo, hi) = (cell_index(chunk.bx, ty), cell_index(chunk.bx + CHUNK_CELLS, ty));
             let from = poi.cells.partition_point(|c| c.0 < lo);
-            for &(cell, n) in poi.cells[from..].iter().take_while(|c| c.0 < hi) {
-                let block = ((ty - y0) / d.step) * axis + (cell % PAGE_CELLS - x0) / d.step;
-                match blocks.iter_mut().find(|b| b.0 == block) {
-                    Some(b) => b.1 += n,
-                    None => blocks.push((block, n)),
-                }
+            for &(index, n) in poi.cells[from..].iter().take_while(|c| c.0 < hi) {
+                let cell = Cell::at(chunk.page, index);
+                // Where no ground is drawn under it, it is not drawn either.
+                let Some((drawn, _)) = sched.surface_at(cell.mid()) else { continue };
+                *cells.entry(cell.up(drawn.saturating_sub(cell.level()))).or_default() += n;
             }
         }
-        for (block, n) in blocks {
-            let (bx, by) = (block % axis, block / axis);
-            let Some(z) = d.top(bx, by) else { continue };
-            let centre = cell_centre(page, cell_index(x0 + bx * d.step, y0 + by * d.step), d.step);
-            let mut at = [0.0; 3];
-            projection::unproject(&mut at, centre.i, centre.f);
-            let mut absolute = Pvf3::default();
-            projection::project(&mut absolute, at[0], at[1], z);
-            let mut local = [0.0; 3];
-            projection::unproject(&mut local, ivec::sub(absolute.i, origin), absolute.f);
-            p.batch.push(
-                local[0],
-                local[1],
-                local[2],
-                badge::width(n),
-                badge::COLLIDE,
-                badge::ANCHOR,
-                f64::from(d.step << d.level),
-                counts.len() as f64,
-            );
-            counts.push(n);
-        }
+    }
+    p.batch.reset();
+    let mut counts = Vec::new();
+    for (cell, n) in cells {
+        let Some((_, top)) = sched.surface_at(cell.mid()) else { continue };
+        let centre = cell.centre(top);
+        let mut local = [0.0; 3];
+        projection::unproject(&mut local, ivec::sub(centre.i, origin), centre.f);
+        p.batch
+            .push(local[0], local[1], local[2], badge::width(n), badge::COLLIDE, badge::ANCHOR, cell.side(), counts.len() as f64);
+        counts.push(n);
     }
     badge::retain(&counts);
     let v = view();

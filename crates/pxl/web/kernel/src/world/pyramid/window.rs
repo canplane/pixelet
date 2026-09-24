@@ -14,7 +14,7 @@
 use pxl_render::look::lod::REFERENCE_THRESHOLD_0;
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::chunk_span_of;
+use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, PAGE_CHUNKS};
 use pxl_spec::space::pyramid::{span_of, LevelPage, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
@@ -22,6 +22,7 @@ use crate::control::camera::config::camera_cfg;
 use crate::control::camera::store::camera_store;
 use crate::layer::environment::fog::{pivot_height, reach_at};
 
+use super::chunk::Chunk;
 use super::window_spec::{HELD_AXIS, RENDER_AXIS, WINDOW_LEVELS};
 
 const _: () = assert!(HELD_AXIS % 2 == 1 && RENDER_AXIS % 2 == 1 && RENDER_AXIS < HELD_AXIS, "a ring is centred on the view's page");
@@ -190,6 +191,79 @@ pub fn ring_of(anchor: IVec, page: LevelPage) -> u32 {
 /// record for each (mem/fixed.rs).
 pub fn held(level: u32, anchor: IVec) -> Vec<LevelPage> {
     ring(level, anchor, HELD_AXIS)
+}
+
+/// The ground a level's drawn ring covers around the anchor's page, as a
+/// corner and a side.
+pub fn ring_rect(level: u32, anchor: IVec) -> (f64, f64, f64) {
+    let centre = centre_page(level, anchor);
+    let span = span_of(level);
+    let r = (RENDER_AXIS / 2) as f64 * span;
+    (ivec::X(centre.page) as f64 * span - r, ivec::Y(centre.page) as f64 * span - r, span * RENDER_AXIS as f64)
+}
+
+/// What a view wants drawn, before anything is known of what is resident:
+/// every piece of the ground in view once, each at the one level the view
+/// wants it at. The window's levels ask for the same ground over and over —
+/// every ring holds the one under it — and this is them made one partition:
+/// the top ring's chunks, each wanted finer wherever it lies whole inside
+/// the ring the level below draws, down to the window's base. The rings
+/// nest, as a clipmap's do, so what is wanted at a level is its ring less
+/// the ring under it.
+///
+/// Every layer on the pyramid is asked for this same ground at these same
+/// levels; what each can draw of it is its own (`Pyramid::cover`).
+pub struct Domain {
+    window: std::ops::Range<u32>,
+    rings: Vec<(f64, f64, f64)>,
+    anchor: IVec,
+}
+
+pub fn domain(anchor: IVec, window: std::ops::Range<u32>) -> Domain {
+    let rings = window.clone().map(|level| ring_rect(level, anchor)).collect();
+    Domain { window, rings, anchor }
+}
+
+impl Domain {
+    pub fn window(&self) -> std::ops::Range<u32> {
+        self.window.clone()
+    }
+
+    /// Where the partition starts: every chunk of the top level's drawn ring.
+    pub fn roots(&self) -> Vec<Chunk> {
+        let mut out = Vec::new();
+        for page in ring(self.window.end - 1, self.anchor, RENDER_AXIS) {
+            for cy in 0..PAGE_CHUNKS {
+                for cx in 0..PAGE_CHUNKS {
+                    out.push(Chunk {
+                        page,
+                        bx: cx * CHUNK_CELLS,
+                        by: cy * CHUNK_CELLS,
+                    });
+                }
+            }
+        }
+        out
+    }
+
+    /// Whether the view wants `c`'s ground finer than `c`: it lies whole
+    /// inside the ring the level below draws.
+    pub fn splits(&self, c: Chunk) -> bool {
+        let level = c.level();
+        if level <= self.window.start {
+            return false;
+        }
+        let (x0, y0, side) = c.rect();
+        let (rx, ry, rside) = self.rings[(level - 1 - self.window.start) as usize];
+        x0 >= rx && y0 >= ry && x0 + side <= rx + rside && y0 + side <= ry + rside
+    }
+
+    /// Whether `c`'s ground is any of what the view wants.
+    pub fn contains(&self, c: Chunk) -> bool {
+        let (x0, y0, side) = c.rect();
+        let (rx, ry, rside) = self.rings[self.rings.len() - 1];
+        x0 < rx + rside && rx < x0 + side && y0 < ry + rside && ry < y0 + side
+    }
 }
 
 /// How far the anchor stands from `p`'s centre, in `p`'s own spans: the

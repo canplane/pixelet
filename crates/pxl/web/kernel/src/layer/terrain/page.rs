@@ -206,7 +206,7 @@ pub fn adopt_ocean(pkt: &[u8]) -> Result<(), FetchFail> {
 
 // ---- the turn ----
 
-/// Terrain's turn: its pyramid's, with the device's own leaf kept wanted —
+/// Terrain's turn: its pyramid's, with the device's own leaf pinned —
 /// panning moves the view away from the user's real position, and without
 /// it the marker would lose the ground under it — the shared ocean tile
 /// asked for while pages wait on it, and map_status following the queue.
@@ -219,7 +219,9 @@ pub fn terrain_step() {
     let o = ocean();
     let ocean_wants: &[(u64, Rank)] = if o.terrain.is_none() && !o.waiting.is_empty() { &[(0, policy::ocean())] } else { &[] };
     declare(OCEAN_CATEGORY, ocean_wants);
-    Terrain::pyramid().step(device);
+    let terrain = Terrain::pyramid();
+    terrain.pin(device);
+    terrain.step();
     // Derived from the scheduler rather than tracked, so a later pan that
     // supersedes a batch cannot leave a stale SUCCESS behind.
     let map = map_store();
