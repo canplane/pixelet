@@ -22,6 +22,15 @@ import { orientation_permit } from "@/kernel/control/sensor.ts";
 import { request_frame, strobe } from "@/kernel/sched.ts";
 
 export type PoseStatus = "idle" | "loading" | "ready" | "error";
+
+/** A badge on the map, as the panel beside it lists it: `id` is the cell it
+ * stands for, handed back to go there (`poi_focus`); `name` is the one place
+ * it holds, where it holds one. */
+export interface PoiBadge {
+  id: string;
+  count: number;
+  name: string | null;
+}
 export type UiSnapshot = {
   /** `center` is the map centre as [lon, lat]; `page` is the L3 page it falls
    * in, as a decimal string because a page index is 64-bit. The kernel sends
@@ -40,6 +49,8 @@ export type UiSnapshot = {
    * rung the current zoom asks for; empty where the centre is in none or the
    * packets it is read out of have not arrived. */
   place: PlacePart[];
+  /** The badges on the map, nearest what the view looks at first. */
+  poi: PoiBadge[];
   compass: { show: boolean };
   object_storage_version: number;
 };
@@ -53,6 +64,7 @@ const INITIAL: UiSnapshot = {
   is_follow_mode: false,
   camera_busy: false,
   settings: {},
+  poi: [],
   scale_bar: { total_meters: 0, bar_width_px: 0, is_default_zoom: true },
   place: [],
   compass: { show: false },

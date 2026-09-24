@@ -201,7 +201,9 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
         Num(bar.bar_width_px),
         bar.is_default_zoom
     )?;
-    out.write_str("\"place\":")?;
+    out.write_str("\"poi\":")?;
+    crate::layer::poi::placement::snapshot(out)?;
+    out.write_str(",\"place\":")?;
     place_json(out, page, mercator_zoom(view().height.max(1.0)))?;
     write!(out, ",\"compass\":{{\"show\":{}}},", show_compass())?;
     write!(out, "\"camera_busy\":{},", camera.camera_status != CameraStatus::Idle)?;
@@ -264,6 +266,19 @@ pub fn tracking_action(tracking: Tracking) {
 
 /// Applies one UI action, a JSON object with a `type`. False for one that does
 /// not read.
+/// Moves the map centre to `target`, grounded the way every map_center
+/// setter that respects ground_snap is.
+pub fn go_to(target: Pvf3) {
+    // The user drove the camera: GPS stops overriding it.
+    camera_store().is_follow_mode = false;
+    let grounded = ground_or_raw(&target);
+    map_store().map_center = Some(grounded);
+    // A jump usually lands on a page nothing has loaded yet, where the
+    // ground falls back to the raw coordinate: grounded again once the
+    // page's tile arrives, rather than left under the terrain.
+    shell().go_to = (grounded == target).then_some(target);
+}
+
 pub fn ui_action(text: &str) -> bool {
     let Some(action) = read_json(text) else { return false };
     let Some(kind) = text_of(&action, "type") else { return false };
@@ -296,19 +311,15 @@ pub fn ui_action(text: &str) -> bool {
         }
         "compass_reset" => compass_reset(),
         "go_to" => {
-            // A search result: its point, grounded the way every map_center
-            // setter that respects ground_snap is.
+            // A search result.
             let (Some(lon), Some(lat)) = (f64_of(&action, "lon"), f64_of(&action, "lat")) else { return false };
             let mut target = Pvf3::default();
             epsg4326::project(&mut target, &[lon, lat, 0.0]);
-            // The user drove the camera: GPS stops overriding it.
-            camera_store().is_follow_mode = false;
-            let grounded = ground_or_raw(&target);
-            map_store().map_center = Some(grounded);
-            // A jump usually lands on a page nothing has loaded yet, where the
-            // ground falls back to the raw coordinate: grounded again once the
-            // page's tile arrives, rather than left under the terrain.
-            shell().go_to = (grounded == target).then_some(target);
+            go_to(target);
+        }
+        "poi_focus" => {
+            let Some(id) = text_of(&action, "id") else { return false };
+            return crate::layer::poi::placement::focus(&id);
         }
         "enable_sensors" => {
             // Where iOS gates the compass, the shell prompted in the click and

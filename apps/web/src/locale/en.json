@@ -234,6 +234,10 @@
     "companion_loading": "Preparing your companion…"
   },
   "map": {
+    "poi": {
+      "places": "Places nearby",
+      "count": "{{count}} places"
+    },
     "scale_bar": {
       "reset_zoom": "Reset Zoom"
     },

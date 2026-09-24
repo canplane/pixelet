@@ -10,6 +10,7 @@ import { CurrentAddress } from "./current-address.tsx";
 import { useReverseGeocode } from "./use-reverse-geocode.ts";
 import { SensorStatus } from "./sensor-status.tsx";
 import { DummyChatText } from "./dummy-chat-text.tsx";
+import { PoiPanel } from "./poi-panel.tsx";
 import { MapCompass } from "../control/compass.tsx";
 import { MapScaleBar } from "../control/scale-bar.tsx";
 import { TrackingButton } from "@/feature/map/ui/control/tracking-button.tsx";
@@ -29,6 +30,7 @@ export function TopOverlays() {
           <SettingsTriggerButton />
         </div>
         {__IS_DEV__ && <DummyChatText />}
+        <PoiPanel />
       </div>
 
       <div
