@@ -1,13 +1,28 @@
 // pxl-kernel/layer/object/size.rs
 
-//! What a placed object may be sized to, and which of those a cube offers.
+//! What a placed object may be sized to.
 //!
-//! The ladder itself is spec/pxl/spec/bake/cell.json's, derived from CELL_SHAMT and
-//! generated into both languages — so a CELL_SHAMT change rescales every tier
-//! rather than needing three copies edited. What is here is the kernel's use
-//! of it: the default, decor's fixed size, and the per-cube override.
+//! The shell names a size by its tier and never by a length: which tiers
+//! exist and what each measures is this ladder's, sent to it in the
+//! snapshot, so a CELL_SHAMT change rescales every tier with nothing on the
+//! other side to follow.
 
-pub use pxl_spec::bake::cell_spec::{ObjectScaleExponent, OBJECT_SCALE_EXPONENTS, OBJECT_SIZES};
+use pxl_spec::bake::constant::{OBJECT_TIERS, U_PER_CELL};
+
+/// Grid-aligned steps down from one terrain cell, coarsest first: tier `i`
+/// is U_PER_CELL halved `i` times. The largest is the terrain's own cell, so
+/// an object that size lines up 1:1 with a cell, and the finer tiers are
+/// what the object paint writes as sub-cell voxels within the volume's dense
+/// field (pxl-spec bake/constant.rs's OBJECT_LAYOUT, one level a tier).
+pub const OBJECT_SIZES: [f64; OBJECT_TIERS] = {
+    let mut sizes = [0.0; OBJECT_TIERS];
+    let mut i = 0;
+    while i < OBJECT_TIERS {
+        sizes[i] = U_PER_CELL / (1u32 << i) as f64;
+        i += 1;
+    }
+    sizes
+};
 
 /// The tier a fresh session places at: the coarsest, one full cell.
 pub const DEFAULT_OBJECT_SIZE: f64 = OBJECT_SIZES[0];
@@ -21,15 +36,8 @@ pub const DEFAULT_OBJECT_SIZE: f64 = OBJECT_SIZES[0];
 /// even if a future size flyout moves object_size elsewhere.
 pub const DECOR_SIZE: f64 = OBJECT_SIZES[0];
 
-const DEFAULT_ACTIVE_SCALES: &[ObjectScaleExponent] = &OBJECT_SCALE_EXPONENTS;
-
-/// Per-cube override of which of OBJECT_SIZES' tiers mode_bar's size flyout
-/// offers — empty today (every cube, flat color or terrain-styled, offers
-/// every tier), reserved for a future one that shouldn't (a huge painted
-/// mural block, say). Keyed by the full PlaceableCubeId since the hotbar's
-/// own MRU list can surface a terrain-styled pick too.
-const ACTIVE_SCALES: &[(&str, &[ObjectScaleExponent])] = &[];
-
-pub fn object_scale_exponents(id: &str) -> &'static [ObjectScaleExponent] {
-    ACTIVE_SCALES.iter().find(|(key, _)| *key == id).map_or(DEFAULT_ACTIVE_SCALES, |(_, scales)| scales)
+/// The size tier `tier` places at; the default for a tier the ladder does
+/// not have.
+pub fn object_size_of(tier: u32) -> f64 {
+    OBJECT_SIZES.get(tier as usize).copied().unwrap_or(DEFAULT_OBJECT_SIZE)
 }

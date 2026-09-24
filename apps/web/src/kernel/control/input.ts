@@ -27,20 +27,20 @@ export function send_rect(element: HTMLElement): void {
 }
 
 /** What the pointer holds: a tool, the placeable cube's or decor's catalog
- * number, and the object size. The kernel keeps no pick of its own; each
+ * number, and the object size's tier. The kernel keeps no pick of its own; each
  * pointer event carries this. */
 interface Holding {
   tool: u32;
   value: u32;
-  size: f64;
+  tier: u32;
 }
 
-let holding: Holding = { tool: 0, value: 0, size: 0 };
+let holding: Holding = { tool: 0, value: 0, tier: 0 };
 /** The last hovering pointer, while it is over the canvas. */
 let last_hover: { kind: u32; id: i32; button: i32; x: f64; y: f64 } | null = null;
 
 function send_pointer_at(phase: u32, kind: u32, id: i32, button: i32, x: f64, y: f64): void {
-  CORE_BUILD.send(0, Command.INPUT_POINTER, packet((b) => b.u32(phase).u32(kind).i32(id).i32(button).f64(x).f64(y).u32(holding.tool).u32(holding.value).f64(holding.size)));
+  CORE_BUILD.send(0, Command.INPUT_POINTER, packet((b) => b.u32(phase).u32(kind).i32(id).i32(button).f64(x).f64(y).u32(holding.tool).u32(holding.value).u32(holding.tier)));
   strobe.input();
   request_frame();
 }
@@ -57,8 +57,8 @@ function send_pointer(phase: u32, e: PointerEvent): void {
  * is sent, as a browser synthesizes a mouse move when what is under a still
  * cursor changes.
  */
-export function kernel_hold(tool: u32, value: u32, size: f64): void {
-  holding = { tool, value, size };
+export function kernel_hold(tool: u32, value: u32, tier: u32): void {
+  holding = { tool, value, tier };
   if (last_hover) send_pointer_at(1, last_hover.kind, last_hover.id, last_hover.button, last_hover.x, last_hover.y);
 }
 

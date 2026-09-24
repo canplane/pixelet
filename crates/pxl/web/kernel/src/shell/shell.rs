@@ -207,6 +207,16 @@ pub fn ui_snapshot_json<W: Write>(out: &mut W) -> fmt::Result {
     place_json(out, page, mercator_zoom(view().height.max(1.0)))?;
     write!(out, ",\"compass\":{{\"show\":{}}},", show_compass())?;
     write!(out, "\"camera_busy\":{},", camera.camera_status != CameraStatus::Idle)?;
+    // The sizes an object places at, by tier: the shell offers them and names
+    // one back by its index, never by a length of its own.
+    out.write_str("\"object_sizes\":[")?;
+    for (i, size) in crate::layer::object::size::OBJECT_SIZES.iter().enumerate() {
+        if i > 0 {
+            out.write_char(',')?;
+        }
+        write!(out, "{}", Num(*size))?;
+    }
+    out.write_str("],")?;
     write!(out, "\"object_storage_version\":{OBJECT_STORAGE_VERSION}}}")
 }
 

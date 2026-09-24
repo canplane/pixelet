@@ -184,9 +184,10 @@
           "doc": [
             "[phase u32 (0 down, 1 move, 2 up, 3 out), kind u32 (0 mouse, 1 touch, 2 pen), id i32,",
             "button i32, x f64, y f64, tool u32 (0 pointer, 1 object, 2 decor, 3 eraser), value u32 (the",
-            "placeable cube's or the decor's catalog number), size f64] — a pointer event on the canvas,",
-            "in client pixels, with what the pointer holds; the shell sends a move at the last position",
-            "when the holding changes, as a browser synthesizes a mouse move"
+            "placeable cube's or the decor's catalog number), tier u32 (the object size, by its index in",
+            "the snapshot's object_sizes)] — a pointer event on the canvas, in client pixels, with what",
+            "the pointer holds; the shell sends a move at the last position when the holding changes, as",
+            "a browser synthesizes a mouse move"
           ]
         },
         {

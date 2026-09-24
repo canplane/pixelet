@@ -10,8 +10,8 @@
 // and records a bite nobody took. The store is saved, so that number would
 // outlive the session.
 
+use crate::layer::object::size::OBJECT_SIZES;
 use base64::Engine;
-use pxl_spec::bake::cell_spec::OBJECT_SIZES;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::cell::cube_types;
 use pxl_spec::space::pvf3::ivec;

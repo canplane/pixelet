@@ -18,7 +18,7 @@ use super::pvf3::ivec::{self, IVec};
 use super::pvf3::projection;
 use super::pvf3::pvf3::{self, Pvf3};
 use super::xy::TO_XY;
-use crate::bake::cell_spec::CELL_SHAMT;
+use crate::bake::constant::CELL_SHAMT;
 
 /// The coarsest level the pyramid is folded to. At level 10 — zoom 5 — a
 /// page spans about 9° of latitude, across which the page-constant vertical
@@ -128,7 +128,7 @@ impl Lattice {
     }
 }
 
-/// The ground's lattice: bake/cell.json's cell, which terrain and objects
+/// The ground's lattice: bake/constant.rs's cell, which terrain and objects
 /// are cut in.
 pub const GROUND: Lattice = Lattice::new(CELL_SHAMT);
 

@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 
-use crate::bake::cell_spec::CELL_SHAMT;
+use crate::bake::constant::CELL_SHAMT;
 use crate::space::pyramid::{Folds, Lattice, LevelPage};
 
 const MAGIC: &[u8; 4] = b"PXP3";

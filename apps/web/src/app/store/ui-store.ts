@@ -3,9 +3,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import type { f64 } from "@xpute/core/abi/word.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
 import { decor_ids, type DecorId, decorNumId, placeable_cubes, type PlaceableCubeId, placeableCubeId, placeableCubeNumId } from "@/catalog/cell/mod.ts";
-import { DEFAULT_OBJECT_SIZE } from "@/feature/map/object/size.ts";
 import { kernel_action } from "@/kernel/shell.ts";
 import { kernel_hold } from "@/kernel/control/input.ts";
 
@@ -75,8 +74,9 @@ interface UiState {
   // subset, but the field itself has to hold whatever the modal picks too.
   objectColorId: PlaceableCubeId;
 
-  object_size: f64;
-  setObjectSize: (object_size: f64) => void;
+  /** The object size, by its tier in the kernel's `object_sizes`. */
+  object_tier: u32;
+  setObjectTier: (object_tier: u32) => void;
 
   decor_id: DecorId;
 
@@ -107,9 +107,9 @@ export const useUiStore = create<UiState>()(persist((set) => ({
 
   objectColorId: "block.red",
 
-  object_size: DEFAULT_OBJECT_SIZE,
-  setObjectSize: (object_size) => {
-    set({ object_size });
+  object_tier: 0,
+  setObjectTier: (object_tier) => {
+    set({ object_tier });
   },
 
   decor_id: "tree",
@@ -200,10 +200,10 @@ const TOOL_NUMBER: Record<ActiveTool, number> = { pointer: 0, object: 1, decor: 
 function hold(s: UiState): void {
   const cube = placeable_cubes.find((c) => placeableCubeId(c) === s.objectColorId);
   const value = s.activeTool === "object" ? (cube ? placeableCubeNumId(cube) : 0) : s.activeTool === "decor" ? decorNumId(s.decor_id) : 0;
-  kernel_hold(TOOL_NUMBER[s.activeTool], value, s.object_size);
+  kernel_hold(TOOL_NUMBER[s.activeTool], value, s.object_tier);
 }
 
 hold(useUiStore.getState());
 useUiStore.subscribe((s, prev) => {
-  if (s.activeTool !== prev.activeTool || s.objectColorId !== prev.objectColorId || s.decor_id !== prev.decor_id || s.object_size !== prev.object_size) hold(s);
+  if (s.activeTool !== prev.activeTool || s.objectColorId !== prev.objectColorId || s.decor_id !== prev.decor_id || s.object_tier !== prev.object_tier) hold(s);
 });

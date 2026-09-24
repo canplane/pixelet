@@ -595,9 +595,9 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
                 _ => PointerKind::Mouse,
             };
             let (id, button, x, y) = (i32_at(&f, 2)?, i32_at(&f, 3)?, number_at(&f, 4)?, number_at(&f, 5)?);
-            let (tool, value, size) = (u32_at(&f, 6)?, u32_at(&f, 7)?, number_at(&f, 8)?);
+            let (tool, value, tier) = (u32_at(&f, 6)?, u32_at(&f, 7)?, u32_at(&f, 8)?);
             let mut holding = Holding {
-                object_size: size,
+                object_size: pxl_kernel::layer::object::size::object_size_of(tier),
                 ..Holding::default()
             };
             match tool {

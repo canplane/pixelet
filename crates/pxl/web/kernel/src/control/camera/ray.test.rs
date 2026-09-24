@@ -8,7 +8,7 @@
 // which is enough to record a bite where nobody took one, and the store is
 // saved, so that number outlives the session.
 
-use pxl_spec::bake::cell_spec::OBJECT_SIZES;
+use crate::layer::object::size::OBJECT_SIZES;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::{fvec, ivec};
 

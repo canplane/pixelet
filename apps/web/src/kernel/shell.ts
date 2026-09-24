@@ -52,6 +52,9 @@ export type UiSnapshot = {
   /** The badges on the map, nearest what the view looks at first. */
   poi: PoiBadge[];
   compass: { show: boolean };
+  /** The sizes an object places at, in units, coarsest first: the tiers the
+   * size flyout offers, one of which the shell holds by its index. */
+  object_sizes: number[];
   object_storage_version: number;
 };
 
@@ -68,6 +71,7 @@ const INITIAL: UiSnapshot = {
   scale_bar: { total_meters: 0, bar_width_px: 0, is_default_zoom: true },
   place: [],
   compass: { show: false },
+  object_sizes: [],
   object_storage_version: 0,
 };
 
