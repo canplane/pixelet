@@ -22,7 +22,8 @@ use pxl_render::gpu::api::word_bytes;
 use pxl_render::look::lod::{LodStep, TARGET_CELL_PX};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
-use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, PAGE_CELL_SPAN, U_PER_CELL};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, PAGE_CELLS};
+
 use pxl_spec::bake::pack::unpack;
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
@@ -67,7 +68,7 @@ fn decor_gone_px() -> f64 {
 /// The density a kind is scattered at on a tier: 1, or 0 when it is not drawn
 /// there.
 pub fn decor_density(extent_u: f64, lod_step: LodStep) -> f64 {
-    let projected_px = (extent_u / U_PER_CELL) * *TARGET_CELL_PX / lod_step as f64;
+    let projected_px = (extent_u) * *TARGET_CELL_PX / lod_step as f64;
     if projected_px < decor_gone_px() {
         0.0
     } else {
@@ -347,11 +348,11 @@ impl<'s> DecorBuild<'s> {
             if chunk.show_decor && d > 0.0 {
                 let kind_seed = derive_seed_u64(page_seed, kind.tag);
                 let cells = chunk.page.cells;
-                for dy in 0..CHUNK_CELL_SPAN {
+                for dy in 0..CHUNK_CELLS {
                     let cell_y = chunk.ty0 + dy;
-                    for dx in 0..CHUNK_CELL_SPAN {
+                    for dx in 0..CHUNK_CELLS {
                         let cell_x = chunk.tx0 + dx;
-                        let idx = (cell_y * PAGE_CELL_SPAN + cell_x) as usize;
+                        let idx = (cell_y * PAGE_CELLS + cell_x) as usize;
                         let types = unpack(cells[idx]);
                         if !(0..4).all(|c| kind.rules[c].allows(types[c])) {
                             continue;

@@ -1,7 +1,8 @@
 // pxl-kernel/layer/terrain/elevation.rs
 
 use pxl_render::mesh::paint::terrain::elevation::{ground_ele, GroundLanes};
-use pxl_spec::bake::constant::{PAGE_CELL_SPAN, U_PER_CELL};
+use pxl_spec::space::pyramid::PAGE_CELLS;
+
 use pxl_spec::bake::format::{GroundChannelKey, Terrain};
 use pxl_spec::space::indexer::{L1_IDX_IN_L3, L3_IDX, L3_RANGE};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -16,16 +17,16 @@ const L3_RANGE_REAL: f64 = L3_RANGE as f64;
 /// ground_ele), so this module's own consumers — camera ground-snap,
 /// ground_or_raw, any cell-marker probe — agree with the terrain on screen
 /// instead of reasoning about a height it does not show. A page's ele and
-/// ground are page-level here, so tx/ty index them at PAGE_CELL_SPAN stride.
+/// ground are page-level here, so tx/ty index them at PAGE_CELLS stride.
 fn sample_ele_grounded(terrain: &Terrain, tx: u32, ty: u32) -> f64 {
-    let idx = (ty * PAGE_CELL_SPAN + tx) as usize;
+    let idx = (ty * PAGE_CELLS + tx) as usize;
     ground_ele(&terrain.ele, Some(GroundLanes::of(&terrain.ground)), idx, tx as i32, ty as i32) as f64
 }
 
 fn page_cell(at: &Pvf3) -> (u32, u32) {
     let page_off = Pvf3 { i: L1_IDX_IN_L3(at.i), f: at.f };
-    let tx = (pvf3::to_real(pvf3::X(&page_off)) / U_PER_CELL).floor() as u32;
-    let ty = (pvf3::to_real(pvf3::Y(&page_off)) / U_PER_CELL).floor() as u32;
+    let tx = (pvf3::to_real(pvf3::X(&page_off))).floor() as u32;
+    let ty = (pvf3::to_real(pvf3::Y(&page_off))).floor() as u32;
     (tx, ty)
 }
 
@@ -33,7 +34,7 @@ fn page_cell(at: &Pvf3) -> (u32, u32) {
 pub fn get_ele(at: &Pvf3) -> Option<f64> {
     let tile = Terrain::pyramid().get(pxl_spec::space::pyramid::LevelPage::new(0, L3_IDX(at.i)))?;
     let (tx, ty) = page_cell(at);
-    Some(sample_ele_grounded(tile, tx, ty) * U_PER_CELL)
+    Some(sample_ele_grounded(tile, tx, ty))
 }
 
 /// Raw baked ground-channel value at this exact cell, one specific channel
@@ -45,7 +46,7 @@ pub fn get_ele(at: &Pvf3) -> Option<f64> {
 pub fn get_ground_type(at: &Pvf3, channel: GroundChannelKey) -> Option<u32> {
     let tile = Terrain::pyramid().get(pxl_spec::space::pyramid::LevelPage::new(0, L3_IDX(at.i)))?;
     let (tx, ty) = page_cell(at);
-    Some(tile.ground.channel((ty * PAGE_CELL_SPAN + tx) as usize, channel) as u32)
+    Some(tile.ground.channel((ty * PAGE_CELLS + tx) as usize, channel) as u32)
 }
 
 /// Fast path for hot per-step loops (e.g. raycasting): looks up elevation from
@@ -73,9 +74,9 @@ pub fn get_ele_at_local(origin_page_idx_xy: IVec, local_x: f64, local_y: f64) ->
     let page_local_x = local_x - local_page_x * L3_RANGE_REAL;
     let page_local_y = local_y - local_page_y * L3_RANGE_REAL;
 
-    let tx = (page_local_x / U_PER_CELL).floor() as u32;
-    let ty = (page_local_y / U_PER_CELL).floor() as u32;
-    Some(sample_ele_grounded(tile, tx, ty) * U_PER_CELL)
+    let tx = (page_local_x).floor() as u32;
+    let ty = (page_local_y).floor() as u32;
+    Some(sample_ele_grounded(tile, tx, ty))
 }
 
 pub fn with_ele(out: &mut Pvf3, at: &Pvf3) -> Option<Pvf3> {
@@ -105,7 +106,7 @@ pub fn with_ele(out: &mut Pvf3, at: &Pvf3) -> Option<Pvf3> {
 /// grounded to; this is the one place the camera's own convention is applied.
 pub fn ground_pivot(out: &mut Pvf3, at: &Pvf3) -> Option<Pvf3> {
     with_ele(out, at)?;
-    let half_cell_fp = pvf3::from_real(U_PER_CELL / 2.0);
+    let half_cell_fp = pvf3::from_real(0.5);
     let (x, y, z) = (pvf3::X(out), pvf3::Y(out), pvf3::Z(out));
     pvf3::gather(out, x, y, z + half_cell_fp);
     Some(*out)

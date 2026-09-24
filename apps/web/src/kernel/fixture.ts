@@ -21,7 +21,7 @@ import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 
 /**
  * One L3 page's span in raster cells, and the elevation raster's own padded
- * span — `1 << (L3_SHAMT - CELL_SHAMT)` and `1 << (L3_SHAMT + 1 - 5)` plus two
+ * span — `1 << L3_SHAMT` and `1 << (L3_SHAMT + 1 - 5)` plus two
  * cells of padding on each side, which is what gives a bicubic sample a 4×4
  * kernel at every edge texel (pxl-spec/bake/constant.rs).
  */

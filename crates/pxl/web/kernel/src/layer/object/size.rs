@@ -2,10 +2,9 @@
 
 //! What a placed object may be sized to, and which of those a cube offers.
 //!
-//! The ladder itself is spec/pxl/spec/bake/cell.json's, derived from CELL_SHAMT and
-//! generated into both languages — so a CELL_SHAMT change rescales every tier
-//! rather than needing three copies edited. What is here is the kernel's use
-//! of it: the default, decor's fixed size, and the per-cube override.
+//! The ladder itself is spec/pxl/spec/bake/cell.json's, generated into both
+//! languages. What is here is the kernel's use of it: the default and decor's
+//! fixed size.
 
 pub use pxl_spec::bake::cell_spec::{ObjectScaleExponent, OBJECT_SCALE_EXPONENTS, OBJECT_SIZES};
 

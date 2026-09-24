@@ -16,16 +16,16 @@
 //! page leaves a loop that simply does not run, where the same expression in
 //! `u32` would wrap into a very long one.
 
-use pxl_spec::bake::constant::PAGE_CELL_SPAN;
 use pxl_spec::bake::format::{Ground, GroundChannelKey};
 use pxl_spec::bake::model::feature::Feature;
 use pxl_spec::bake::pack::{channel_of, with_channel, GroundCell};
 use pxl_spec::cell::cube::cube_types;
+use pxl_spec::space::pyramid::PAGE_CELLS;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::round;
 
-const PAGE_CELL_SPAN2: usize = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
-const SPAN: i64 = PAGE_CELL_SPAN as i64;
+const PAGE_CELL_SPAN2: usize = (PAGE_CELLS * PAGE_CELLS) as usize;
+const SPAN: i64 = PAGE_CELLS as i64;
 
 /// Ground rasterization uses cell-centre sampling; the bias lives here rather
 /// than sprinkled across the file. The contract must stay aligned with

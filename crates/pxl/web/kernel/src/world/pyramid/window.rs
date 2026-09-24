@@ -11,45 +11,21 @@
 //! WINDOW_LEVELS — of which the inner RENDER_AXIS² is what is drawn from
 //! (window.json says why each is what it is).
 
-use pxl_spec::bake::constant::PAGE_CELL_SPAN;
-use pxl_spec::space::indexer::{L3_IDX, L4_RANGE};
+use pxl_render::look::lod::REFERENCE_THRESHOLD_0;
+use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pyramid::chunk_span_of;
 use pxl_spec::space::pyramid::{span_of, LevelPage, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::store::camera_store;
 use crate::layer::environment::fog::{pivot_height, reach_at};
-use crate::world::chunk::range::{CHUNK_WORLD_SPAN, PAGE_SPAN};
 
 use super::window_spec::{HELD_AXIS, RENDER_AXIS, WINDOW_LEVELS};
 
 const _: () = assert!(HELD_AXIS % 2 == 1 && RENDER_AXIS % 2 == 1 && RENDER_AXIS < HELD_AXIS, "a ring is centred on the view's page");
 const _: () = assert!(WINDOW_LEVELS <= TOP_LEVEL + 1, "a window no wider than the pyramid");
-
-/// How far the ladder wants step 1: REFERENCE_THRESHOLD_0 (pxl-render
-/// look/lod.rs), the distance the window's levels are measured against.
-const STEP_1_REACH: f64 = 192.0;
-
-// ---- Spans by level ----
-//
-// The space hierarchy's extents (pxl-spec space/indexer.rs) are a leaf's: a
-// chunk is 64 leaf blocks, a page 512, an anchor 4096. A level is the same
-// hierarchy over its own blocks, 2^level units each, so every extent a view
-// is measured in scales with the level it is measured at, and a thing sized
-// by a leaf's extent at a far zoom is a pixel wide. What is sized by the
-// hierarchy takes its extent from here.
-
-/// A level-`level` chunk's side in world units.
-pub fn chunk_span_of(level: u32) -> f64 {
-    CHUNK_WORLD_SPAN * (1u64 << level) as f64
-}
-
-/// A level-`level` anchor's side in world units: the floating origin's cell
-/// when the window's finest level is `level` (world/frame/coord.rs).
-pub fn anchor_span_of(level: u32) -> i64 {
-    (L4_RANGE as i64) << level
-}
 
 /// How far a level's drawn ring reaches past the page the anchor stands in,
 /// wherever in it the anchor stands: the pages each side of it, whole.
@@ -58,7 +34,7 @@ pub fn drawn_reach(level: u32) -> f64 {
 }
 
 /// The level whose chunks draw the step the ladder wants at `dist` from the
-/// eye. Step 2^j is wanted out to STEP_1_REACH·2^j, and a level is drawn one
+/// eye. Step 2^j is wanted out to REFERENCE_THRESHOLD_0·2^j, and a level is drawn one
 /// step coarser than its own cells, each 2×2 of them averaged — the leaves as
 /// they are too, for step 1 — so step 2^j is drawn from level j − 1.
 ///
@@ -70,7 +46,7 @@ pub fn drawn_reach(level: u32) -> f64 {
 /// the mean of the same four cells, and the two would part in colour, in
 /// objects and in textures at every level's edge.
 fn level_at(dist: f64) -> u32 {
-    ((dist / STEP_1_REACH).log2().ceil().max(0.0) as u32).saturating_sub(1)
+    ((dist / REFERENCE_THRESHOLD_0).log2().ceil().max(0.0) as u32).saturating_sub(1)
 }
 
 /// The levels held now, finest first: the ones the ground the view shows
@@ -120,7 +96,7 @@ pub fn window_for(dist: f64, polar: f64, pivot_height: f64, aspect: f64) -> std:
 
 /// How far the range anchor can stand from the true view centre: a chunk's
 /// diagonal, since it is chunk-aligned (world/frame/range_anchor.rs).
-const ANCHOR_SLACK: f64 = CHUNK_WORLD_SPAN * std::f64::consts::SQRT_2;
+const ANCHOR_SLACK: f64 = chunk_span_of(0) * std::f64::consts::SQRT_2;
 
 /// The farthest ground a view shows, from the view centre: the farthest of
 /// the frustum's corners on the ground, since a frustum meets a plane in a
@@ -166,15 +142,15 @@ pub fn drawn_from_eye(dist: f64, polar: f64, top: u32) -> f64 {
 
 /// How far decoration can be drawn: what the leaves' ring draws to. A kind
 /// is drawn while its extent is two of the step's cells, which the ladder
-/// wants out to STEP_1_REACH · extent / 2 — `decor_reach` — and every kind is
+/// wants out to REFERENCE_THRESHOLD_0 · extent / 2 — `decor_reach` — and every kind is
 /// held inside this, so decoration never needs a coarser record than the
 /// leaves it is scattered from
 /// (issue/20260921-level-step-and-zoom-are-one-number.md).
-pub const DECOR_REACH: f64 = (RENDER_AXIS / 2) as f64 * PAGE_SPAN;
+pub const DECOR_REACH: f64 = (RENDER_AXIS / 2) as f64 * span_of(0);
 
 /// How far a decor kind of `extent` is drawn.
 pub fn decor_reach(extent: f64) -> f64 {
-    STEP_1_REACH * extent / 2.0
+    REFERENCE_THRESHOLD_0 * extent / 2.0
 }
 
 /// The page the anchor stands in at `level`: what every ring is centred on.
@@ -220,7 +196,7 @@ pub fn held(level: u32, anchor: IVec) -> Vec<LevelPage> {
 /// measure every scheduler here orders by (sched/priority.rs), rooted, since
 /// what reads it packs it into a fraction under one.
 pub fn centre_dist(anchor: IVec, p: LevelPage) -> f64 {
-    let span = ((PAGE_CELL_SPAN as i64) << p.level) as f64;
+    let span = span_of(p.level);
     let at = |a: i64, page: i64| a as f64 - (page as f64 + 0.5) * span;
     let (dx, dy) = (at(ivec::X(anchor), ivec::X(p.page)), at(ivec::Y(anchor), ivec::Y(p.page)));
     crate::sched::priority::in_own_sides(dx * dx + dy * dy, span).sqrt()

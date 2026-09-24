@@ -20,7 +20,6 @@
 //! the scheduler's pressure are told to it once a frame (crates/pxl/web/kernel/src/world/chunk/stage.rs), so
 //! badges climb the rungs the cubes are on.
 
-use pxl_spec::bake::constant::U_PER_CELL;
 use std::sync::LazyLock;
 
 use xpute_runtime::global::Global;
@@ -123,7 +122,7 @@ impl Ladder {
         let k = px_per_unit(viewport_h, fov_deg) / *TARGET_CELL_PX * 2f64.powf(-(pressure as f64) / 2.0);
         let mut thresholds = [0.0; 6];
         for (i, t) in thresholds.iter_mut().enumerate() {
-            *t = LOD_STEP_BY_LEVEL[i] as f64 * U_PER_CELL * k;
+            *t = LOD_STEP_BY_LEVEL[i] as f64 * k;
         }
         Ladder {
             thresholds,

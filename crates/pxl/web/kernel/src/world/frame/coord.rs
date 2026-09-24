@@ -7,7 +7,7 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
 
 use crate::world::frame::view::view;
-use crate::world::pyramid::window::anchor_span_of;
+use pxl_spec::space::pyramid::anchor_span_of;
 
 /// The floating origin for a view centred on `center` whose finest level is
 /// `level`: the centre floored to that level's anchor across (level.rs

@@ -3,7 +3,7 @@
 use super::*;
 
 /// Chunks a level's drawn ring holds: what one pool's slots are counted in.
-const RING_CHUNKS: u32 = RENDER_AXIS * RENDER_AXIS * PAGE_CHUNK_AXIS * PAGE_CHUNK_AXIS;
+const RING_CHUNKS: u32 = RENDER_AXIS * RENDER_AXIS * PAGE_CHUNKS * PAGE_CHUNKS;
 
 #[test]
 fn the_two_pools_are_disjoint_and_cover_every_slot() {

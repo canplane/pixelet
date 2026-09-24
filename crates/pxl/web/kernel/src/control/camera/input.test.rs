@@ -6,13 +6,13 @@
 // The size tier is a live, user-changed selection, and a carve is the one edit
 // it must not reach: the leaf a carve writes is AIR, and a zero material is a
 // voxel the scan emits nothing for whatever its sub-cell bytes say
-// (render/mesh/voxel_scan.rs), so a smaller leaf takes the cell whole anyway
+// (pxl-render mesh/voxel_scan.rs), so a smaller leaf takes the cell whole anyway
 // and records a bite nobody took. The store is saved, so that number would
 // outlive the session.
 
 use base64::Engine;
 use pxl_spec::bake::cell_spec::OBJECT_SIZES;
-use pxl_spec::bake::constant::U_PER_CELL;
+
 use pxl_spec::cell::cube_types;
 use pxl_spec::space::pvf3::ivec;
 use xpute_core::wire::xtp::TreeReader;
@@ -50,7 +50,7 @@ fn eraser_carving_bare_terrain_records_a_whole_cell_whichever_size_tier_is_held(
 
     // The finest tier, which is the one that would record the smallest lie.
     let finest = OBJECT_SIZES[OBJECT_SIZES.len() - 1];
-    assert!(finest < U_PER_CELL, "the ladder needs a tier below the cell for this to be worth asserting");
+    assert!(finest < 1.0, "the ladder needs a tier below the cell for this to be worth asserting");
     input().holding = Holding {
         active_tool: ActiveTool::Eraser,
         object_size: finest,
@@ -63,7 +63,7 @@ fn eraser_carving_bare_terrain_records_a_whole_cell_whichever_size_tier_is_held(
     let carved: Vec<f64> = saved_rows().into_iter().filter(|(_, v)| *v == air).map(|(size, _)| size).collect();
     assert!(!carved.is_empty(), "the tap reached the store");
     for size in carved {
-        assert_eq!(size, U_PER_CELL, "an air leaf is a cell, never a tier");
+        assert_eq!(size, 1.0, "an air leaf is a cell, never a tier");
     }
 
     settings_store().enable_terrain_carving = carving_was;

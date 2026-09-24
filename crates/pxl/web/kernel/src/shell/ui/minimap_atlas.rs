@@ -9,7 +9,8 @@
 //! crosses a page, not on every pan tick — the pan is `minimap_pan_px`'s.
 
 use pxl_render::mesh::paint::palette::shader_meta::rgb255;
-use pxl_spec::bake::constant::PAGE_CELL_SPAN;
+use pxl_spec::space::pyramid::PAGE_CELLS;
+
 use pxl_spec::bake::format::GROUND_CH_KEYS;
 use pxl_spec::cell::{cube_colors, cube_types};
 use pxl_spec::space::indexer::{L3_CENTER, L3_IDX, L3_RANGE};
@@ -110,7 +111,7 @@ pub fn minimap_atlas() -> Option<&'static MinimapAtlas> {
         let mut pixels = vec![0u8; (ATLAS_PX * ATLAS_PX * 4) as usize];
         let (ox, oy) = (ivec::X(origin.i), ivec::Y(origin.i));
         let half = ATLAS_PX as i64 / 2;
-        let cells = PAGE_CELL_SPAN as i64;
+        let cells = PAGE_CELLS as i64;
         let shift = U_PER_MINIMAP_PX.trailing_zeros();
         for py in 0..ATLAS_PX as i64 {
             // Atlas rows run down for a north-up image, and world Y runs up:

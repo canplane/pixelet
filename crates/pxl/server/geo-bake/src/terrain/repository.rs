@@ -6,9 +6,10 @@
 
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
-use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, XY_CELL_PER_M};
+use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use pxl_spec::bake::format::{BaseRow, BuildingRow, CoastRow, SegmentRow};
 use pxl_spec::space::adapter::epsg3857::BBox3857;
+use pxl_spec::space::adapter::epsg3857::U_PER_M;
 
 /// The elevation raster, clipped and resampled onto this page's own grid.
 ///
@@ -185,7 +186,7 @@ impl TerrainRepository {
     pub fn fetch_page_source(&self, client: &mut Client, page_bbox: BBox3857, page_z_scale: f64) -> Result<PageSource, postgres::Error> {
         let (minx, miny, maxx, maxy) = (page_bbox[0][0], page_bbox[0][1], page_bbox[1][0], page_bbox[1][1]);
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
-        let z_cell_per_m = XY_CELL_PER_M * page_z_scale;
+        let z_cell_per_m = U_PER_M * page_z_scale;
 
         let ele = client
             .query(&self.ele, &[&minx, &miny, &maxx, &maxy, &z_cell_per_m])?

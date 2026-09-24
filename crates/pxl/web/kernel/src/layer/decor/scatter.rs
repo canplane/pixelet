@@ -13,10 +13,10 @@
 //! description rather than two rules kept in step. Nothing here reaches for a tile store — plain ground-channel
 //! arrays and numbers, so it can be read head-on.
 
-use pxl_spec::bake::constant::PAGE_CELL_SPAN;
 use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
 use pxl_spec::bake::pack::{channel_of, GroundCell};
 use pxl_spec::cell::cube_types;
+use pxl_spec::space::pyramid::PAGE_CELLS;
 
 /// What a channel's type must be for a kind to stand on the cell: anything,
 /// nothing painted, or one of a list of types.
@@ -140,7 +140,7 @@ const ALIGN_NEIGHBOR_RADIUS: i64 = 3;
 /// road/rail either way, but facing one direction or the opposite one, same as
 /// real two-way traffic never all pointing the same way.
 pub fn transport_aligned_rotation(cells: &[GroundCell], cell_x: u32, cell_y: u32, flip: bool) -> f64 {
-    let span = PAGE_CELL_SPAN as i64;
+    let span = PAGE_CELLS as i64;
     let (x, y) = (cell_x as i64, cell_y as i64);
     let idx = y * span + x;
     let void = cube_types::common::void;

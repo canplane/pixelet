@@ -11,7 +11,7 @@
 //! stands are decided here and nowhere else; a layer owns only what a cell
 //! carries and how a parent's cell is made from its children's (`Folds`).
 
-use super::indexer::{L3_IDX, L3_SHAMT, SPAN_CENTER};
+use super::indexer::{L2_SHAMT, L3_IDX, L3_SHAMT, L4_RANGE, SPAN_CENTER};
 use super::pvf3::core::IVEC_X_W;
 use super::pvf3::ivec::{self, IVec};
 use super::pvf3::pvf3::{self, Pvf3};
@@ -32,8 +32,15 @@ pub const TOP_LEVEL: u32 = 10;
 /// exactly.
 pub const LEVEL0_ZOOM: u32 = IVEC_X_W - L3_SHAMT;
 
-/// Cells on a page's side, at every level.
+/// Cells on a page's side, at every level. A level-0 cell is the unit, so
+/// at level 0 this is the L3 page's side in units.
 pub const PAGE_CELLS: u32 = 1 << L3_SHAMT;
+
+/// Cells on a chunk's side, at every level: the L2 block's.
+pub const CHUNK_CELLS: u32 = 1 << L2_SHAMT;
+
+/// Chunks on a page's side.
+pub const PAGE_CHUNKS: u32 = PAGE_CELLS / CHUNK_CELLS;
 
 pub const fn zoom_of_level(level: u32) -> u32 {
     LEVEL0_ZOOM - level
@@ -105,9 +112,25 @@ impl LevelPage {
     }
 }
 
+// The space hierarchy's extents (indexer.rs) are a leaf's: a chunk is 64
+// leaf blocks, a page 512, an anchor 4096. A level is the same hierarchy over
+// its own blocks, 2^level units each, so every extent a view is measured in
+// scales with the level it is measured at.
+
 /// A level-`level` page's side in units.
-pub fn span_of(level: u32) -> f64 {
-    (u64::from(PAGE_CELLS) << level) as f64
+pub const fn span_of(level: u32) -> f64 {
+    ((PAGE_CELLS as u64) << level) as f64
+}
+
+/// A level-`level` chunk's side in units.
+pub const fn chunk_span_of(level: u32) -> f64 {
+    ((CHUNK_CELLS as u64) << level) as f64
+}
+
+/// A level-`level` anchor's side in units: the floating origin's cell when
+/// the window's finest level is `level`.
+pub const fn anchor_span_of(level: u32) -> i64 {
+    (L4_RANGE as i64) << level
 }
 
 /// The 4×4 pages a level down around a page's four children, in the order a
@@ -142,15 +165,19 @@ pub fn cell_of(level: u32, addr: IVec) -> (LevelPage, u32) {
     (page, cell_index(at(ivec::X(addr), ivec::X(page.page)), at(ivec::Y(addr), ivec::Y(page.page))))
 }
 
+/// The unit address of the south-west corner of the cell at (tx, ty) in
+/// `page`: `cell_of`'s inverse.
+pub fn cell_base(page: LevelPage, tx: u32, ty: u32) -> IVec {
+    let first = |p: i64, t: u32| ((p << L3_SHAMT) + i64::from(t)) << page.level;
+    ivec::gather(first(ivec::X(page.page), tx), first(ivec::Y(page.page), ty), 0)
+}
+
 /// The centre of the block of `step` × `step` cells a cell stands in, on
 /// the ground plane: the one XY every layer at this level stands a thing at.
 /// Z is the layer's to find.
 pub fn cell_centre(page: LevelPage, index: u32, step: u32) -> Pvf3 {
-    let (tx, ty) = ((index % PAGE_CELLS) as i64, (index / PAGE_CELLS) as i64);
-    let first = |p: i64, t: i64| ((p << L3_SHAMT) + t) << page.level;
-    let addr = ivec::gather(first(ivec::X(page.page), tx), first(ivec::Y(page.page), ty), 0);
     let mut out = Pvf3::default();
-    SPAN_CENTER(&mut out, addr, page.level + step.trailing_zeros());
+    SPAN_CENTER(&mut out, cell_base(page, index % PAGE_CELLS, index / PAGE_CELLS), page.level + step.trailing_zeros());
     let (x, y) = (pvf3::X(&out), pvf3::Y(&out));
     pvf3::gather(&mut out, x, y, 0);
     out

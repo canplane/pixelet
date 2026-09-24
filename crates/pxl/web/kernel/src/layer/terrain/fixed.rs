@@ -20,15 +20,16 @@
 //! 72 bytes is not aligned at any offset anyway. Held with the ground it would
 //! carry that 32 into every second page's lanes; held apart it costs nothing.
 
-use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
+use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::pack::GroundCell;
+use pxl_spec::space::pyramid::PAGE_CELLS;
 
 use crate::world::pyramid::RECORDS;
 
 // ---- The routing ----
 
 /// One page's ground: a word a cell, no stride and no padding.
-pub const GROUND_LANE_BYTES: u32 = PAGE_CELL_SPAN * PAGE_CELL_SPAN * core::mem::size_of::<GroundCell>() as u32;
+pub const GROUND_LANE_BYTES: u32 = PAGE_CELLS * PAGE_CELLS * core::mem::size_of::<GroundCell>() as u32;
 
 /// The ground across every record.
 pub const GROUND_BYTES: u32 = RECORDS * GROUND_LANE_BYTES;

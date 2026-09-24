@@ -11,11 +11,12 @@
 //! is fetched under its own category, so the pages waiting on it settle at
 //! once and its one fetch is not tied to any of them.
 
-use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
+use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::format::{decode_terrain, decode_terrain_into, Ground, PageRoom, Terrain};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pyramid::LevelPage;
+use pxl_spec::space::pyramid::PAGE_CELLS;
 use pxl_spec::space::xy::TO_XY;
 use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::mem::heap::alloc;
@@ -106,7 +107,7 @@ impl Layer for Terrain {
     }
 }
 
-const CELLS: usize = (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize;
+const CELLS: usize = (PAGE_CELLS * PAGE_CELLS) as usize;
 const SAMPLES: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 
 /// A page's lanes in the range: the ground cells, packed (pxl-spec

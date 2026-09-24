@@ -44,7 +44,7 @@ interface GroupSpec {
   readonly skin: string;
 }
 
-// Rendering is natively in [u] throughout (U_PER_CELL = 1, terrain/objects
+// Rendering is natively in [u] throughout (a level-0 cell is 1u, terrain/objects
 // are all built directly in this unit) — height_u is exactly the on-screen
 // height the model is scaled to, and it is the group's `size`: one full cell
 // tall for the person, a quarter cell for the pet.

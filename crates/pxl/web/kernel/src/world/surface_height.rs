@@ -1,6 +1,5 @@
 // pxl-kernel/world/surface_height.rs
 
-use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::cell::object::object_value_is_air;
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -30,7 +29,7 @@ fn collect_boxes(map_origin: IVec, local_x: f64, local_y: f64) -> Vec<(f64, f64)
     let mut cols: Vec<IVec> = Vec::with_capacity(9);
     for dx in -1..=1 {
         for dy in -1..=1 {
-            let probe = [local_x + dx as f64 * U_PER_CELL, local_y + dy as f64 * U_PER_CELL, 0.0];
+            let probe = [local_x + dx as f64, local_y + dy as f64, 0.0];
             let mut corner = Pvf3::default();
             local_world_to_canonical(&mut corner, &probe, map_origin);
             let col_idx = L2_IDX(TO_XY(corner.i));
@@ -94,7 +93,7 @@ pub fn surface_z_from_terrain(map_origin: IVec, local_x: f64, local_y: f64, terr
     // Snap-up: the lowest top at or above the hint, among boxes from the cell
     // below where the search starts — what stepping upward from there found.
     let search_from = hint_z.max(terrain_ele);
-    let floor_z = ((search_from / U_PER_CELL).floor() - 1.0) * U_PER_CELL;
+    let floor_z = search_from.floor() - 1.0;
     let mut landing: Option<f64> = None;
     for &(min_z, max_z) in &boxes {
         if min_z < floor_z || max_z < hint_z - SAME_SURFACE_EPS {

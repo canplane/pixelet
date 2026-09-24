@@ -19,6 +19,8 @@
 //! tiers of a blend are weighted, a tier's mesh handed over and a tier to let
 //! go. The nodes hold the meshes; this holds every decision about them.
 
+use pxl_spec::space::indexer::L3_IDX;
+use pxl_spec::space::pyramid::{cell_base, chunk_span_of, CHUNK_CELLS, PAGE_CHUNKS};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use pxl_render::frame::draw::DrawList;
@@ -27,7 +29,7 @@ use pxl_render::look::globe::Globe;
 use pxl_render::look::lod::{Ladder, COARSEST};
 use pxl_render::mesh::chunk_mesher::{box_bounds, Heights};
 use pxl_render::mesh::paint::terrain::adapter::ChunkSample;
-use pxl_spec::bake::constant::CHUNK_CELL_SPAN;
+
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::TOP_LEVEL;
 use pxl_spec::space::v3::V3;
@@ -48,14 +50,14 @@ use crate::sched::priority::view_centre;
 use crate::shell::setting::store::hidden_ground;
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
-use crate::world::chunk::range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT};
-use crate::world::pyramid::window::{centre_page, chunk_span_of, decor_reach, ring, DECOR_REACH};
+
+use crate::world::pyramid::window::{centre_page, decor_reach, ring, DECOR_REACH};
 use crate::world::pyramid::window_spec::{RENDER_AXIS, WINDOW_LEVELS};
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pyramid::LevelPage;
 
 /// The sphere a chunk nothing has measured is culled by.
-const APPROXIMATE_CHUNK_RADIUS: f64 = CHUNK_WORLD_SPAN * 0.75;
+const APPROXIMATE_CHUNK_RADIUS: f64 = chunk_span_of(0) * 0.75;
 /// How long a settled view goes before every chunk is rechecked anyway.
 ///
 /// Reconciliation and nothing else. What a chunk should be showing is a
@@ -81,10 +83,10 @@ const MAX_RECLAIMS_WHEN_REFUSED: u32 = 64;
 /// nodes make a node for each. A page comes into range as 64 of them, so one
 /// page is mounted in the frame it arrives in.
 const MAX_MOUNTS_PER_FRAME: u32 = 64;
-const _: () = assert!(MAX_MOUNTS_PER_FRAME == PAGE_CHUNK_AXIS * PAGE_CHUNK_AXIS, "a page mounts in the frame it arrives in");
+const _: () = assert!(MAX_MOUNTS_PER_FRAME == PAGE_CHUNKS * PAGE_CHUNKS, "a page mounts in the frame it arrives in");
 
 /// Chunks a level's drawn ring holds.
-const RING_CHUNKS: u32 = RENDER_AXIS * RENDER_AXIS * PAGE_CHUNK_AXIS * PAGE_CHUNK_AXIS;
+const RING_CHUNKS: u32 = RENDER_AXIS * RENDER_AXIS * PAGE_CHUNKS * PAGE_CHUNKS;
 
 /// The widest selection there is: the top ring, each of whose pages may be
 /// stood in for by its four children where it has not arrived (`roots`), and
@@ -179,7 +181,7 @@ pub struct Frame {
     /// back on the planet about (pxl-render's look/globe.rs); none for a flat
     /// world.
     pub globe: Option<Globe>,
-    /// The levels held, lowest first and one past the top (terrain/level.rs).
+    /// The levels held, lowest first and one past the top (world/pyramid/window.rs).
     pub window: (u32, u32),
     /// Whether procedural decor is scattered at all (the setting).
     pub show_decor: bool,
@@ -303,10 +305,8 @@ impl ChunkKey {
 
     /// The chunk's corner and side, in units.
     fn rect(self) -> (f64, f64, f64) {
-        let l = self.page.level;
-        let x = ((ivec::X(self.page.page) << PAGE_SHAMT) + self.bx as i64) << l;
-        let y = ((ivec::Y(self.page.page) << PAGE_SHAMT) + self.by as i64) << l;
-        (x as f64, y as f64, chunk_span_of(l))
+        let base = cell_base(self.page, self.bx, self.by);
+        (ivec::X(base) as f64, ivec::Y(base) as f64, chunk_span_of(self.page.level))
     }
 
     /// The chunk a level up that covers it, none at the pyramid's top.
@@ -315,8 +315,8 @@ impl ChunkKey {
             return None;
         }
         let up = self.page.parent();
-        let span = pxl_spec::bake::constant::PAGE_CELL_SPAN as i64;
-        let cell = |page: i64, b: u32, parent: i64| ((page * span + b as i64).div_euclid(2) - parent * span) as u32 & !(CHUNK_CELL_SPAN - 1);
+        let span = pxl_spec::space::pyramid::PAGE_CELLS as i64;
+        let cell = |page: i64, b: u32, parent: i64| ((page * span + b as i64).div_euclid(2) - parent * span) as u32 & !(CHUNK_CELLS - 1);
         Some(ChunkKey {
             page: up,
             bx: cell(ivec::X(self.page.page), self.bx, ivec::X(up.page)),
@@ -333,7 +333,7 @@ impl ChunkKey {
     /// its level, which are 128 of the next, in one page of it.
     fn children(self) -> [ChunkKey; 4] {
         let (x, y) = (self.bx * 2, self.by * 2);
-        let span = pxl_spec::bake::constant::PAGE_CELL_SPAN;
+        let span = pxl_spec::space::pyramid::PAGE_CELLS;
         let page = LevelPage::new(
             self.page.level - 1,
             ivec::gather(ivec::X(self.page.page) * 2 + (x / span) as i64, ivec::Y(self.page.page) * 2 + (y / span) as i64, 0),
@@ -341,8 +341,8 @@ impl ChunkKey {
         let (x, y) = (x % span, y % span);
         [(0, 0), (1, 0), (0, 1), (1, 1)].map(|(dx, dy)| ChunkKey {
             page,
-            bx: x + dx * CHUNK_CELL_SPAN,
-            by: y + dy * CHUNK_CELL_SPAN,
+            bx: x + dx * CHUNK_CELLS,
+            by: y + dy * CHUNK_CELLS,
         })
     }
 }
@@ -366,7 +366,7 @@ fn ring_rect(level: u32, anchor: IVec) -> (f64, f64, f64) {
 /// including the finer pages under it the client was already holding. Of
 /// the nine pages a top ring has, four fold from what is held and five
 /// do not, and every one of those five has one or two of its four
-/// children resident (terrain/level.test.rs): nearly half of what showed
+/// children resident (world/pyramid/window.test.rs): nearly half of what showed
 /// as nothing was data in memory with no way to address it. Cesium calls
 /// the same thing `skipLevelOfDetail`, and its rule is this one — a node
 /// that is not loaded is stood in for by its nearest loaded ancestor,
@@ -1081,9 +1081,9 @@ impl Scheduler {
             let mut sources = Vec::with_capacity((n * n) as usize);
             for cy in 0..n {
                 for cx in 0..n {
-                    let base = ivec::gather(x0 + cx * CHUNK_CELL_SPAN as i64, y0 + cy * CHUNK_CELL_SPAN as i64, 0);
+                    let base = ivec::gather(x0 + cx * CHUNK_CELLS as i64, y0 + cy * CHUNK_CELLS as i64, 0);
                     if let Some(source) = self.builder.leaf_source(base) {
-                        sources.push((base, source, ((cx * CHUNK_CELL_SPAN as i64) as f64, (cy * CHUNK_CELL_SPAN as i64) as f64)));
+                        sources.push((base, source, ((cx * CHUNK_CELLS as i64) as f64, (cy * CHUNK_CELLS as i64) as f64)));
                     }
                 }
             }
@@ -1105,7 +1105,7 @@ impl Scheduler {
                     let (col_x, col_y) = (ivec::X(*base), ivec::Y(*base));
                     let chunk = DecorChunk {
                         page: &views[k],
-                        page_idx: ivec::gather(col_x >> PAGE_SHAMT, col_y >> PAGE_SHAMT, 0),
+                        page_idx: L3_IDX(*base),
                         col_idx,
                         col_x,
                         col_y,
@@ -1237,12 +1237,12 @@ impl Scheduler {
         }
         let mut stack: Vec<(ChunkKey, bool)> = Vec::new();
         for page in pages {
-            for cy in 0..PAGE_CHUNK_AXIS {
-                for cx in 0..PAGE_CHUNK_AXIS {
+            for cy in 0..PAGE_CHUNKS {
+                for cx in 0..PAGE_CHUNKS {
                     let key = ChunkKey {
                         page,
-                        bx: cx * CHUNK_CELL_SPAN,
-                        by: cy * CHUNK_CELL_SPAN,
+                        bx: cx * CHUNK_CELLS,
+                        by: cy * CHUNK_CELLS,
                     };
                     stack.push((key, true));
                 }
@@ -2576,7 +2576,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
 /// Allocation is bounded by mesh slots: 64² words for fine, at most 32²
 /// for coarse, independent of source or POI cardinality.
 fn surface_centres(words: &[u32], stride: usize, step: u32, level: u32, heights: Heights) -> Box<[u32]> {
-    let axis = (CHUNK_CELL_SPAN / step) as usize;
+    let axis = (CHUNK_CELLS / step) as usize;
     let unit = (step << level) as f64;
     let mut tops = vec![0; axis * axis];
     for r in words.chunks_exact(stride) {
@@ -2611,7 +2611,7 @@ impl Drawn<'_> {
     /// (bx, by), in units; none where that centre is empty. Samples share the
     /// GPU mesh slot's lifetime, including a stale holder's.
     pub fn top(&self, bx: u32, by: u32) -> Option<f64> {
-        let axis = CHUNK_CELL_SPAN / self.step;
+        let axis = CHUNK_CELLS / self.step;
         let top = (*self.tops.get((by * axis + bx) as usize)?).checked_sub(1)?;
         Some(self.heights.floor + top as f64 * self.heights.step)
     }
