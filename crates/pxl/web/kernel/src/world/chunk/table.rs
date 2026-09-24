@@ -44,12 +44,13 @@ use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::frame_gizmo::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
-use crate::layer::terrain::level::{centre_page, chunk_span_of, decor_reach, ring, DECOR_REACH, RENDER_AXIS, WINDOW_LEVELS};
 use crate::sched::priority::view_centre;
 use crate::shell::setting::store::hidden_ground;
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
 use crate::world::chunk::range::{CHUNK_WORLD_SPAN, PAGE_CHUNK_AXIS, PAGE_SHAMT};
+use crate::world::pyramid::window::{centre_page, chunk_span_of, decor_reach, ring, DECOR_REACH};
+use crate::world::pyramid::window_spec::{RENDER_AXIS, WINDOW_LEVELS};
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pyramid::LevelPage;
 
@@ -1786,55 +1787,28 @@ impl Scheduler {
         }
     }
 
-    /// Displayed tier envelopes used by ground-attached presentation culling.
-    pub fn surface_envelopes(&self) -> Vec<[f64; 7]> {
-        self.slots
-            .iter()
-            .filter_map(|s| {
-                if !s.has(IN_FRUSTUM) || s.has(COVERED) || !s.layout_ready {
-                    return None;
-                }
-                let step = match s.told {
-                    Some((_, _, true)) if s.layout_secondary != 0 => s.layout_secondary,
-                    _ => s.layout_primary,
-                };
-                let t = s.tier(step, s.layout_generation)?;
-                let span = (CHUNK_CELL_SPAN << s.level) as f64;
-                Some([
-                    s.base_x,
-                    s.base_y,
-                    s.base_x + span,
-                    s.base_y + span,
-                    t.heights.floor,
-                    t.heights.floor + u16::MAX as f64 * t.heights.step,
-                    (step << s.level) as f64 * 0.5,
-                ])
-            })
-            .collect()
-    }
-
-    /// The top face at the centre of the cell actually drawn here. Surface
-    /// samples share the GPU mesh slot's lifetime, including stale holders.
-    pub fn surface_anchor(&self, x: f64, y: f64) -> Option<[f64; 3]> {
-        for s in &self.slots {
-            let span = (CHUNK_CELL_SPAN << s.level) as f64;
-            if !s.has(IN_FRUSTUM) || s.has(COVERED) || !s.layout_ready || x < s.base_x || y < s.base_y || x >= s.base_x + span || y >= s.base_y + span {
-                continue;
+    /// Every chunk drawn now, as the block of the pyramid's cells it draws.
+    /// During a crossfade both tiers are drawn and the one covering more is
+    /// the chunk's; a chunk covered by another, off the screen or not laid
+    /// out draws nothing a layer could stand on.
+    pub fn drawn(&self) -> impl Iterator<Item = Drawn<'_>> {
+        self.slots.iter().filter_map(|s| {
+            if !s.has(IN_FRUSTUM) || s.has(COVERED) || !s.layout_ready {
+                return None;
             }
             let step = match s.told {
                 Some((_, _, true)) if s.layout_secondary != 0 => s.layout_secondary,
                 _ => s.layout_primary,
             };
             let t = s.tier(step, s.layout_generation)?;
-            let unit = (step << s.level) as f64;
-            let axis = (CHUNK_CELL_SPAN / step) as usize;
-            let ix = ((x - s.base_x) / unit).floor() as usize;
-            let iy = ((y - s.base_y) / unit).floor() as usize;
-            let top = *self.meshes.surface[t.slot.index].get(iy * axis + ix)?;
-            let top = top.checked_sub(1)?;
-            return Some([s.base_x + (ix as f64 + 0.5) * unit, s.base_y + (iy as f64 + 0.5) * unit, t.heights.floor + top as f64 * t.heights.step]);
-        }
-        None
+            Some(Drawn {
+                level: s.level,
+                base: ivec::gather(s.base_x as i64, s.base_y as i64, 0),
+                step,
+                tops: &self.meshes.surface[t.slot.index],
+                heights: t.heights,
+            })
+        })
     }
 
     /// Where every chunk is and whether it is on screen, measured against the
@@ -2619,6 +2593,28 @@ fn surface_centres(words: &[u32], stride: usize, step: u32, level: u32, heights:
         }
     }
     tops.into_boxed_slice()
+}
+
+/// A chunk as it is drawn: its level, the unit address its first cell
+/// begins at, the step its drawn tier's cells are, and that tier's surface.
+/// What a layer standing things on the drawn ground reads (`Scheduler::drawn`).
+pub struct Drawn<'a> {
+    pub level: u32,
+    pub base: IVec,
+    pub step: u32,
+    tops: &'a [u32],
+    heights: Heights,
+}
+
+impl Drawn<'_> {
+    /// The top of the drawn surface at the centre of the `step` block at
+    /// (bx, by), in units; none where that centre is empty. Samples share the
+    /// GPU mesh slot's lifetime, including a stale holder's.
+    pub fn top(&self, bx: u32, by: u32) -> Option<f64> {
+        let axis = CHUNK_CELL_SPAN / self.step;
+        let top = (*self.tops.get((by * axis + bx) as usize)?).checked_sub(1)?;
+        Some(self.heights.floor + top as f64 * self.heights.step)
+    }
 }
 
 #[cfg(test)]

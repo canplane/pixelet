@@ -38,12 +38,13 @@ use crate::layer::character::store::companion_load_store;
 use crate::layer::character::variant::{character_variant, CharacterGroup, CharacterVariant};
 use crate::layer::character::variant_spec::IDLE_CLIP;
 use crate::layer::object::store::objects_revision;
-use crate::layer::terrain::store::tile_pages;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::settings_store;
 use crate::world::change::wake_at;
 use crate::world::frame::view::view;
+use crate::world::pyramid::Layer as _;
 use crate::world::surface_height::get_surface_z_at_local;
+use pxl_spec::bake::format::Terrain;
 
 /// A variant's model in the scheduler, registered once per model and height
 /// whoever asks first; None inside while it failed. By asset, then by height's
@@ -329,7 +330,7 @@ impl Walker {
         // when something it depends on moved.
         let s = &mut self.surface;
         let revision = objects_revision();
-        let tiles = tile_pages().revision();
+        let tiles = Terrain::pyramid().level(0).revision();
         if s.x != px || s.y != py || s.hint != target_z || s.origin != Some(map_origin) || s.revision != revision || s.tiles != tiles {
             *s = Surface {
                 x: px,

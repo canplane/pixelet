@@ -234,7 +234,6 @@
     "companion_loading": "Preparing your companion…"
   },
   "map": {
-    "poi": { "places": "Places in view", "count": "{{total}} places", "loading": "Loading…", "first": "First page", "next": "Next page" },
     "scale_bar": {
       "reset_zoom": "Reset Zoom"
     },

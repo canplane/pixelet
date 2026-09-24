@@ -1,12 +1,12 @@
 {
   "$doc": [
-    "Tile streaming, in pages of the pyramid.",
+    "The window a view holds of the pyramid, for every layer on it.",
     "",
     "The page stays the unit of transfer and storage: one object, one decode,",
     "one key, one eviction, the same record at every level. What is derived",
     "rather than chosen is *which* pages: a ring around the view at every level",
     "of a window, which is at once what gets fetched, what stays decoded, and",
-    "what `.fixed.terrain` has a record for (terrain/fixed.rs). One set, so a",
+    "what each layer has a record for (world/pyramid.rs). One set, so a",
     "page can never be requested and then dropped from under its own in-flight",
     "request (issue/20260921-level-step-and-zoom-are-one-number.md)."
   ],

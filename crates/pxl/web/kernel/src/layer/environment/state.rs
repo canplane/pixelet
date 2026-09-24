@@ -22,11 +22,11 @@ use crate::layer::environment::config::light_cfg;
 use crate::layer::environment::fog::{band_at, camera_height, centre_ground};
 use crate::layer::environment::theme::{themes, WorldThemeKey};
 use crate::layer::environment::theme_clock::theme_key;
-use crate::layer::terrain::level::{drawn_from_eye, window};
 use crate::shell::map_store::map_store;
 use crate::world::change::{request_world_tick, wake_at};
 use crate::world::chunk::table::Frame;
 use crate::world::frame::view::{camera_centre, view};
+use crate::world::pyramid::window::{drawn_from_eye, window};
 
 // The map's own fallback, so the first frames before map_center exists light
 // the world from a real place instead of computing sun and moon for (0, 0).

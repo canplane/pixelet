@@ -28,7 +28,6 @@ use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
 use pxl_spec::bake::constant::{CHUNK_CELL_SPAN, ELE_PADDED_SPAN, PAGE_CELL_SPAN};
-use pxl_spec::bake::format::Tile;
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -39,12 +38,13 @@ use xpute_runtime::mem::heap::{free, Block};
 use crate::global::Global;
 use crate::kernel::{kernel, with_world};
 use crate::layer::object::store::{decor_col_revision, object_col_revision, object_cols, Store, BAND_CELLS};
-use crate::layer::terrain::store::tile_store;
 use crate::mem::fixed::{bake_at, run_set_at};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::mesh_slot::BAKE_BYTES;
 use crate::world::chunk::range::PAGE_SHAMT;
 use crate::world::chunk::table::Event;
+use crate::world::pyramid::Layer as _;
+use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::pyramid::LevelPage;
 
 /// A tier as the node holds it: its boxes, which lie on the device in the
@@ -198,10 +198,10 @@ pub struct ChunkNode {
 
 type Queue = VecDeque<Event>;
 
-fn page_lanes(tile: &Tile) -> PageLanes {
+fn page_lanes(tile: &Terrain) -> PageLanes {
     PageLanes {
-        cells: tile.terrain.ground.cells.as_ptr() as usize,
-        ele: tile.terrain.ele.as_ptr() as usize,
+        cells: tile.ground.cells.as_ptr() as usize,
+        ele: tile.ele.as_ptr() as usize,
     }
 }
 
@@ -238,7 +238,7 @@ impl ChunkNode {
 
     /// Tells the scheduler what this chunk is made of now.
     fn tell_source(&mut self) {
-        let page = tile_store().get_page(self.page).map(page_lanes);
+        let page = Terrain::pyramid().get(self.page).map(page_lanes);
         let (id, show) = (self.id, self.show_structures);
         with_world(|world, sched| sched.source(world, id, page, show));
         self.generation += 1;
@@ -681,7 +681,7 @@ impl Builder {
     /// setting. Resident or not, whichever level draws the ground there.
     pub fn leaf_source(&self, base: IVec) -> Option<LeafSource> {
         let page_idx = TO_XY(L3_IDX(base));
-        let page = tile_store().get_tile(page_idx).map(page_lanes)?;
+        let page = Terrain::pyramid().get(pxl_spec::space::pyramid::LevelPage::new(0, page_idx)).map(page_lanes)?;
         Some(LeafSource {
             page,
             tx0: (ivec::X(base) - (ivec::X(page_idx) << PAGE_SHAMT)) as u32,
@@ -712,7 +712,7 @@ impl Builder {
     /// cached composite is compared by.
     pub fn compose_leaf(&mut self, world: &mut World, base: IVec) -> Option<(usize, u32)> {
         let page_idx = TO_XY(L3_IDX(base));
-        let page = tile_store().get_tile(page_idx).map(page_lanes)?;
+        let page = Terrain::pyramid().get(pxl_spec::space::pyramid::LevelPage::new(0, page_idx)).map(page_lanes)?;
         let tx0 = (ivec::X(base) - (ivec::X(page_idx) << PAGE_SHAMT)) as u32;
         let ty0 = (ivec::Y(base) - (ivec::Y(page_idx) << PAGE_SHAMT)) as u32;
         let show = settings_store().show_structures;

@@ -37,8 +37,8 @@ use crate::layer::marker::frame_gizmo::debug_gizmos_step;
 use crate::layer::marker::hover_cursor::hover_cursor_step;
 use crate::layer::marker::location_puck::location_puck_step;
 use crate::layer::object::teach::teach_objects;
+use crate::layer::terrain::page::terrain_step;
 use crate::layer::terrain::teach::teach_terrain;
-use crate::layer::terrain::tile_fetcher::tile_fetcher_step;
 use crate::sched::ledger::record::name_index;
 use crate::sched::ledger::spec::EFFECT_NAMES;
 use crate::sched::tick::{on_tick, run_tick, TickContext, TickReport, TickState, COSMETIC, INTERACTION, REPORT, VISIBLE};
@@ -135,7 +135,8 @@ fn world_tasks() {
     let spawned = spawn(frame_task(), Frame as u8)
         && spawn(crate::io::fetch::fetch_task(), Arrival as u8)
         && spawn(crate::io::load::gltf_task(), Arrival as u8)
-        && spawn(crate::layer::terrain::tile_fetcher::fold_task(), Arrival as u8)
+        && spawn(crate::world::pyramid::fold_task::<pxl_spec::bake::format::Terrain>(), Arrival as u8)
+        && spawn(crate::world::pyramid::fold_task::<pxl_spec::bake::poi_page::PoiPage>(), Arrival as u8)
         && spawn(crate::world::chunk::stage::build_task(), Build as u8)
         && spawn(crate::layer::decor::asset_store::decor_asset_task(), Background as u8)
         && spawn(crate::layer::object::store::save_task(), Background as u8);
@@ -185,7 +186,8 @@ pub fn world_turn() -> f64 {
     effect!(worst, "shell", crate::shell::shell::shell_step());
     effect!(worst, "geolocation", geolocation_step(platform.geolocation));
     effect!(worst, "orientation", orientation_watchdog_step(platform.orientation));
-    effect!(worst, "tiles", tile_fetcher_step());
+    effect!(worst, "tiles", terrain_step());
+    effect!(worst, "poi", crate::layer::poi::poi_step());
     effect!(worst, "geocode", geocode_fetcher_step());
     effect!(worst, "follow", follow_mode_step());
     effect!(worst, "theme", theme_clock_step());

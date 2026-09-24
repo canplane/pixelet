@@ -1,4 +1,4 @@
-// pxl-kernel/layer/terrain/level.test.rs
+// pxl-kernel/world/pyramid/window.test.rs
 
 use pxl_spec::space::indexer::FROM_L3_IDX;
 

@@ -52,8 +52,6 @@ const MIN_LEGIBLE_FAR: f64 = 0.12;
 
 struct Selection {
     screen: GridIndex,
-    /// Candidates hidden by the screen budget or collision.
-    dropped: u32,
 }
 
 static SELECTION: Global<Selection> = Global::new();
@@ -61,12 +59,7 @@ static SELECTION: Global<Selection> = Global::new();
 fn selection() -> &'static mut Selection {
     SELECTION.get(|| Selection {
         screen: GridIndex::new(MAX_VIEWPORT_PX, MAX_VIEWPORT_PX, 512, DEFAULT_CELL_PX, 8),
-        dropped: 0,
     })
-}
-
-pub fn billboard_dropped() -> u32 {
-    selection().dropped
 }
 
 /// The candidates that survive the frustum, the budget and the collision pass,
@@ -75,7 +68,6 @@ pub fn billboard_dropped() -> u32 {
 /// root frame (world/frame/view.rs).
 pub fn select_visible_billboards(batch: &mut BillboardBatch, max_count: u32, viewport_w: f64, viewport_h: f64, out: &mut [u32]) -> u32 {
     let sel = selection();
-    sel.dropped = 0;
     let v = view();
     let eye = v.eye;
 
@@ -140,17 +132,12 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, max_count: u32, vie
         let y0 = sy - batch.anchor_px[i] as f64 * far;
         let (x1, y1) = (x0 + w, y0 + batch.collide_px[i] as f64 * far);
 
-        // A collision affects visibility only; the source summary is immutable.
         let room = kept < max_count && (kept as usize) < out.len();
         let blocker = if room { sel.screen.place(x0, y0, x1, y1) } else { sel.screen.first_hit(x0, y0, x1, y1) };
 
-        match blocker {
-            Placement::Placed if room => {
-                out[kept as usize] = i as u32;
-                kept += 1;
-            }
-            Placement::Placed | Placement::NoRoom => sel.dropped += 1,
-            Placement::Blocked(_) => sel.dropped += 1,
+        if room && matches!(blocker, Placement::Placed) {
+            out[kept as usize] = i as u32;
+            kept += 1;
         }
     }
     kept

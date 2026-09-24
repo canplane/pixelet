@@ -31,8 +31,8 @@
 //!
 
 use crate::io::sched::Rank;
-use crate::layer::terrain::resolve::Resolved;
 use crate::sched::ledger::record::Outcome;
+use crate::world::pyramid::Resolved;
 
 /// The shared open-ocean tile: every page waiting on it is a page showing
 /// nothing, and one arrival answers all of them.
@@ -40,13 +40,15 @@ pub fn ocean() -> Rank {
     Rank { class: 0, distance: 0.0 }
 }
 
-/// A terrain page the view wants, `distance` from what the view is looking
-/// at, and whether it falls outside the ring the view actually draws.
+/// A page of any layer the pyramid holds that the view wants, `distance` from
+/// what the view is looking at, and whether it falls outside the ring the
+/// view actually draws. A layer's page ranks by what its absence costs, the
+/// same for every layer: the orderings below are the pyramid's.
 ///
 /// `Exact` and `Foldable` are not demands — the caller has them already — and
 /// rank as the weakest thing here rather than being given a place of their
 /// own, since nothing should be asking for one.
-pub fn terrain(resolved: Resolved, speculative: bool, distance: f64) -> Rank {
+pub fn page(resolved: Resolved, speculative: bool, distance: f64) -> Rank {
     let class = match (resolved, speculative) {
         (_, true) => 3,
         (Resolved::Missing, _) => 1,

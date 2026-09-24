@@ -12,7 +12,7 @@ export const CENSUS_TAGS = ["chunk", "decor", "ghost_box", "ghost_coplanar", "gh
 
 export const PHASE_NAMES = ["interaction", "visible", "content", "cosmetic", "report"] as const;
 
-export const CATEGORY_NAMES = ["terrain", "ocean", "poi", "geocode", "geocode_dict", "asset", "poi_detail"] as const;
+export const CATEGORY_NAMES = ["terrain", "ocean", "poi", "geocode", "geocode_dict", "asset"] as const;
 
 export const OUTCOME_NAMES = ["ok", "aborted", "error"] as const;
 
@@ -27,6 +27,7 @@ export const EFFECT_NAMES = [
   "geolocation",
   "orientation",
   "tiles",
+  "poi",
   "geocode",
   "follow",
   "theme",
@@ -246,10 +247,10 @@ export const SUMMARY = {
   tasks: {
     AT: 228 as number,
     slots: 0 as number,
-    WORDS: 175 as number,
+    WORDS: 150 as number,
   },
   counters: {
-    AT: 403 as number,
+    AT: 378 as number,
     faces_kept: 0 as number,
     faces_possible: 1 as number,
     runs_culled: 2 as number,
@@ -268,7 +269,7 @@ export const SUMMARY = {
     WORDS: 15 as number,
   },
   atlas: {
-    AT: 418 as number,
+    AT: 393 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -276,7 +277,7 @@ export const SUMMARY = {
     WORDS: 4 as number,
   },
   retain: {
-    AT: 422 as number,
+    AT: 397 as number,
     nodes: 0 as number,
     run_sets: 1 as number,
     run_set_mb: 2 as number,
@@ -289,24 +290,14 @@ export const SUMMARY = {
     WORDS: 9 as number,
   },
   fetch: {
-    AT: 431 as number,
+    AT: 406 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
-  poi: {
-    AT: 434 as number,
-    resident_nodes: 0 as number,
-    resident_bytes: 1 as number,
-    candidates: 2 as number,
-    visible: 3 as number,
-    pending: 4 as number,
-    hidden: 5 as number,
-    WORDS: 6 as number,
-  },
   peak: {
-    AT: 440 as number,
+    AT: 409 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -330,12 +321,12 @@ export const SUMMARY = {
     WORDS: 20 as number,
   },
   steps: {
-    AT: 460 as number,
+    AT: 429 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
-  WORDS: 621 as number,
+  WORDS: 590 as number,
 } as const;
 
 /** What `ledger_read` returns the address of: u32 words, each range's address in the module's memory and its record count. */

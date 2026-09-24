@@ -30,10 +30,11 @@ use crate::kernel::kernel;
 use crate::layer::billboard::canvas::scale::{FONT_FAMILY, FONT_WEIGHT_REGULAR};
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
 use crate::layer::terrain::elevation::{get_ele, with_ele};
-use crate::layer::terrain::store::tile_pages;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::node::World;
 use crate::world::frame::view::view;
+use crate::world::pyramid::Layer as _;
+use pxl_spec::bake::format::Terrain;
 
 const COLOR: V3 = [0.0, 0.0, 0.0];
 const DASH: f64 = 0.3;
@@ -367,7 +368,7 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
         return;
     };
     let v = view();
-    let key = (center, map_origin, tile_pages().revision(), [v.azimuth, v.tx, v.ty, v.tz]);
+    let key = (center, map_origin, Terrain::pyramid().level(0).revision(), [v.azimuth, v.tx, v.ty, v.tz]);
     if g.built_for == Some(key) {
         write_labels(g);
         return;

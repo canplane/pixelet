@@ -9,11 +9,12 @@ use crate::control::camera::orbit::damp_alpha;
 use crate::control::camera::store::camera_store;
 use crate::control::camera::terrain_gate::climb_polar;
 use crate::global::Global;
-use crate::layer::terrain::store::tile_pages;
 use crate::sched::tick::TickContext;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, CameraTerrain};
 use crate::world::frame::view::{view, view_compose};
+use crate::world::pyramid::Layer as _;
+use pxl_spec::bake::format::Terrain;
 
 // The tick runs another frame only when something asks (sched/tick.rs) —
 // this damping loop is the main thing asking while the camera is settling
@@ -80,7 +81,7 @@ fn step_state() -> &'static mut CameraStep {
 
 fn climb_polar_memo(memo: &mut ClimbMemo, dist: f64, polar: f64, azimuth: f64) -> f64 {
     let centre = map_store().map_center;
-    let revision = tile_pages().revision();
+    let revision = Terrain::pyramid().level(0).revision();
     if dist == memo.dist && polar == memo.polar && azimuth == memo.azimuth && centre == memo.centre && revision == memo.revision {
         return memo.polar_out;
     }

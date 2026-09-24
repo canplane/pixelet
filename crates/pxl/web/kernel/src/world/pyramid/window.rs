@@ -1,18 +1,15 @@
-// pxl-kernel/layer/terrain/level.rs
+// pxl-kernel/world/pyramid/window.rs
 
-//! The page pyramid as the client holds it: which levels, and which pages of
-//! each (issue/20260921-level-step-and-zoom-are-one-number.md).
-//!
-//! A level-k page is 2^k leaves on a side at 1/2^k their resolution, the same
-//! record as a leaf. Its key is its coordinate at its own level — a leaf's
-//! shifted right k — so a page is named by a level and a key together.
+//! Which part of the pyramid a view holds: which levels, and which pages of
+//! each (issue/20260921-level-step-and-zoom-are-one-number.md). One window,
+//! whichever layer's pages fill it.
 //!
 //! What a screen shows at once spans a few octaves of distance, and each
 //! octave costs the same, so the client holds a fixed number of pages per
 //! level rather than a radius: a ring of HELD_AXIS² around the view at every
 //! level of a window — the levels the ground in view wants, at most
 //! WINDOW_LEVELS — of which the inner RENDER_AXIS² is what is drawn from
-//! (config.json says why each is what it is).
+//! (window.json says why each is what it is).
 
 use pxl_spec::bake::constant::PAGE_CELL_SPAN;
 use pxl_spec::space::indexer::{L3_IDX, L4_RANGE};
@@ -25,7 +22,7 @@ use crate::control::camera::store::camera_store;
 use crate::layer::environment::fog::{pivot_height, reach_at};
 use crate::world::chunk::range::{CHUNK_WORLD_SPAN, PAGE_SPAN};
 
-pub use crate::layer::terrain::config::{HELD_AXIS, RENDER_AXIS, WINDOW_LEVELS};
+use super::window_spec::{HELD_AXIS, RENDER_AXIS, WINDOW_LEVELS};
 
 const _: () = assert!(HELD_AXIS % 2 == 1 && RENDER_AXIS % 2 == 1 && RENDER_AXIS < HELD_AXIS, "a ring is centred on the view's page");
 const _: () = assert!(WINDOW_LEVELS <= TOP_LEVEL + 1, "a window no wider than the pyramid");
@@ -230,5 +227,5 @@ pub fn centre_dist(anchor: IVec, p: LevelPage) -> f64 {
 }
 
 #[cfg(test)]
-#[path = "level.test.rs"]
+#[path = "window.test.rs"]
 mod test;

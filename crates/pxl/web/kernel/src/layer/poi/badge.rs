@@ -12,7 +12,7 @@ pub const COLLIDE: f64 = 27.0;
 pub const ANCHOR: f64 = 34.0;
 
 struct Badge {
-    label: String,
+    count: u32,
     width: f64,
     slot: i32,
 }
@@ -21,9 +21,10 @@ fn badges() -> &'static mut Vec<Badge> {
     BADGES.get(Vec::new)
 }
 
-pub fn retain(labels: &[String]) {
+/// Keeps the badges of `counts` and lets the rest's sheet slots go.
+pub fn retain(counts: &[u32]) {
     badges().retain(|b| {
-        if labels.contains(&b.label) {
+        if counts.contains(&b.count) {
             return true;
         }
         if b.slot != NO_SLOT {
@@ -33,29 +34,27 @@ pub fn retain(labels: &[String]) {
     });
 }
 
-pub fn width(label: &str) -> f64 {
-    if let Some(b) = badges().iter().find(|b| b.label == label) {
+/// A count's badge width, measured once.
+pub fn width(count: u32) -> f64 {
+    if let Some(b) = badges().iter().find(|b| b.count == count) {
         return b.width;
     }
     let font = format!("400 12px {FONT_FAMILY}");
-    let width = (measure_text(&font, label).ceil() + 20.0).max(27.0);
-    badges().push(Badge {
-        label: label.to_owned(),
-        width,
-        slot: NO_SLOT,
-    });
+    let width = (measure_text(&font, &count.to_string()).ceil() + 20.0).max(27.0);
+    badges().push(Badge { count, width, slot: NO_SLOT });
     width
 }
 
-pub fn slot(label: &str) -> i32 {
-    width(label);
-    let b = badges().iter_mut().find(|b| b.label == label).unwrap();
+/// A count's badge on the sheet, drawn once.
+pub fn slot(count: u32) -> i32 {
+    width(count);
+    let b = badges().iter_mut().find(|b| b.count == count).unwrap();
     if b.slot == NO_SLOT {
         b.slot = billboard_sheet().add(
             b.width * DPR_MAX,
             HEIGHT * DPR_MAX,
             DrawSpec::Cluster {
-                label: label.to_owned(),
+                label: count.to_string(),
                 logical_w: b.width,
             },
         );

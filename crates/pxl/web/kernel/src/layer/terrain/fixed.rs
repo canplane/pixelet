@@ -1,17 +1,15 @@
 // pxl-kernel/layer/terrain/fixed.rs
 
-//! `.fixed.terrain`: the room every resident terrain page lies in — how many
-//! records there are, and where a record's bytes are.
+//! `.fixed.terrain`: the room every resident terrain page lies in, and where
+//! a record's bytes are.
 //!
 //! The first and much the largest of the kernel's `.fixed` ranges
 //! (mem/fixed.rs), which is what the name says — placed once when the
 //! module boots, never freed, and of a size settled at compile time.
 //!
-//! How many records there are is here; which page is in which is
-//! resident.rs's, and it is a policy rather than arithmetic. The count is the
-//! window's rings — a record per page the camera can want at once — so a
-//! wanted page always has room, and what is left over is room for pages the
-//! camera has left. A wider view wants more of them and leaves less over.
+//! How many records there are, and which page is in which, are the
+//! pyramid's (world/pyramid.rs `RECORDS`), the same for every layer; what is
+//! terrain's is that a record is a room of fixed bytes here.
 //!
 //! The routing turns a record into an address, and it is the only thing here
 //! that knows how the bytes are ordered. A page's ground is one lane of words,
@@ -25,16 +23,7 @@
 use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_spec::bake::pack::GroundCell;
 
-use crate::layer::terrain::level::{HELD_AXIS, WINDOW_LEVELS};
-
-// ---- The count ----
-
-/// Records a level's ring takes: one group.
-const GROUP_SLOTS: u32 = HELD_AXIS * HELD_AXIS;
-
-/// Records in the range: a ring for every level of the window, so every page
-/// the widest camera wants at once has room.
-pub const TERRAIN_SLOTS: u32 = WINDOW_LEVELS * GROUP_SLOTS;
+use crate::world::pyramid::RECORDS;
 
 // ---- The routing ----
 
@@ -42,14 +31,14 @@ pub const TERRAIN_SLOTS: u32 = WINDOW_LEVELS * GROUP_SLOTS;
 pub const GROUND_LANE_BYTES: u32 = PAGE_CELL_SPAN * PAGE_CELL_SPAN * core::mem::size_of::<GroundCell>() as u32;
 
 /// The ground across every record.
-pub const GROUND_BYTES: u32 = TERRAIN_SLOTS * GROUND_LANE_BYTES;
+pub const GROUND_BYTES: u32 = RECORDS * GROUND_LANE_BYTES;
 
 /// A page's elevation: the inner samples and the two-cell skirt bicubic reads
 /// at the edges, two bytes a sample.
 pub const ELE_LANE_BYTES: u32 = ELE_PADDED_SPAN * ELE_PADDED_SPAN * 2;
 
 /// The elevation across every record.
-pub const ELE_PLANE_BYTES: u32 = TERRAIN_SLOTS * ELE_LANE_BYTES;
+pub const ELE_PLANE_BYTES: u32 = RECORDS * ELE_LANE_BYTES;
 
 /// The range, whole: `.fixed.terrain` is this and nothing else.
 pub const TERRAIN_BYTES: u32 = GROUND_BYTES + ELE_PLANE_BYTES;

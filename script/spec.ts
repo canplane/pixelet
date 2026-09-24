@@ -923,7 +923,7 @@ const DATA_SPECS: { json: string; ts?: string; rs?: string; mod?: string; enums?
     mod: "variant_spec",
     enums: true,
   },
-  { json: "spec/pxl/web/kernel/layer/terrain/config.json", rs: "crates/pxl/web/kernel/src/layer/terrain/config.spec.rs", mod: "config_spec" },
+  { json: "spec/pxl/web/kernel/world/pyramid/window.json", rs: "crates/pxl/web/kernel/src/world/pyramid/window.spec.rs", mod: "window_spec" },
   { json: "spec/pxl/web/render/gpu/api.json", ts: "apps/web/src/kernel/render/gpu/api.spec.ts", rs: "crates/pxl/web/render/src/gpu/api.spec.rs", mod: "api_spec" },
   { json: "spec/pxl/web/kernel/sched/ledger/ledger.json", ts: "apps/web/src/feature/dev/ledger/ledger.spec.ts", rs: "crates/pxl/web/kernel/src/sched/ledger/ledger.spec.rs", mod: "spec" },
   { json: "spec/pxl/web/kernel/mem/mem.json", ts: "apps/web/src/kernel/mem/mem.spec.ts", rs: "crates/pxl/web/kernel/src/mem/mem.spec.rs", mod: "spec" },

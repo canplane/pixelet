@@ -68,9 +68,9 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * - `terrain/<version>/<quadkey>`, 5 to 15 digits, a page at every level of
  *   the pyramid from the leaf up to `TOP_LEVEL`. Plus the shared
  *   `_ocean` page every level's open water reads.
- * - `poi/<version>/` and 15–31 digit quadkeys, plus d<quadkey>-<offset> detail pages: a summary
- *   snapshot for one XY region. A missing node is an unavailable refinement,
- *   never an empty population.
+ * - `poi/<version>/<quadkey>`, 5 to 15 digits, a page at every level of the
+ *   pyramid as terrain's are: how many places stand in each of its cells. A
+ *   page with none is no object.
  * - `geocode/<version>/<quadkey>`, 11 digits, because a reverse-geocode object
  *   covers a group of 16 pages a side (pxl-spec bake/place_page.rs's
  *   `GROUP_SHAMT`). Plus the one `_dict` the whole set is read against, since
@@ -104,7 +104,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  * match, and the hash in the stem is what makes that shape worth matching.
  */
 const KEY_RE =
-  /^(?:terrain\/v\d{1,3}\/(?:_ocean|[0-3]{5,15})|poi\/v\d{1,3}\/(?:[0-3]{15,31}|d[0-3]{15,31}-[0-9]{1,20})|geocode\/v\d{1,3}\/(?:_dict|[0-3]{11})|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$/;
+  /^(?:terrain\/v\d{1,3}\/(?:_ocean|[0-3]{5,15})|poi\/v\d{1,3}\/[0-3]{5,15}|geocode\/v\d{1,3}\/(?:_dict|[0-3]{11})|asset\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9._-]+-[0-9a-f]{12}\.(?:glb|png|webp))$/;
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the
  * cache has no meaning for is a header it leaves alone, which is the whole

@@ -137,7 +137,6 @@ const fn category_id(c: Category) -> u32 {
         Category::Terrain => const { name_index(CATEGORY_NAMES, Category::Terrain.as_str()) },
         Category::Ocean => const { name_index(CATEGORY_NAMES, Category::Ocean.as_str()) },
         Category::Poi => const { name_index(CATEGORY_NAMES, Category::Poi.as_str()) },
-        Category::PoiDetail => const { name_index(CATEGORY_NAMES, Category::PoiDetail.as_str()) },
         Category::Geocode => const { name_index(CATEGORY_NAMES, Category::Geocode.as_str()) },
         Category::GeocodeDict => const { name_index(CATEGORY_NAMES, Category::GeocodeDict.as_str()) },
         Category::Asset => const { name_index(CATEGORY_NAMES, Category::Asset.as_str()) },
