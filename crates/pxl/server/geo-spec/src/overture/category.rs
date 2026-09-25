@@ -1,27 +1,27 @@
 // pxl-geo-spec/overture/category.rs
 
 /// Overture's `categories.primary` translated into the vocabulary the POI
-/// badge's theme keys off, or none when the table has no entry for it.
+/// badges key off, or none when the table has no entry for it.
 pub fn map(primary: &str) -> Option<&'static str> {
     OVERTURE_CATEGORY_MAP.binary_search_by_key(&primary, |(key, _)| *key).ok().map(|at| OVERTURE_CATEGORY_MAP[at].1)
 }
 
 // Overture's Places taxonomy (docs.overturemaps.org/schema/reference/places/)
 // has thousands of `categories.primary` values — this maps the common ones to
-// the vocabulary the POI badge's theme keys off, so that table does not need to
+// the vocabulary the POI badges key off, so that table does not need to
 // know which provider is behind a given POI. An Overture category with no entry
-// here passes through unmapped and resolves to the theme's default.
+// here passes through unmapped and resolves to the default badge.
 //
 // Deliberately a starting set (the categories Gangnam/Suwon spot-checks actually
 // turned up plus the obvious common ones), not an attempt to cover Overture's
 // full taxonomy — extend as real gaps show up rather than front-loading a guess
 // at every possible value.
 //
-// Every value here has to be a key of spec/pxl/spec/bake/poi_theme.json, and every
-// key of that theme has to be produced by at least one entry here; the tests
-// fail otherwise. A target the theme does not know draws the default badge and
+// Every value here has to be a key of spec/pxl/spec/bake/poi_badge.json, and every
+// key of that table has to be produced by at least one entry here; the tests
+// fail otherwise. A target the table does not know draws the default badge and
 // says nothing about it, which is the failure this is written down to prevent.
-/// Overture's `categories.primary` to the POI theme's own key, sorted by the
+/// Overture's `categories.primary` to the POI badge table's own key, sorted by the
 /// Overture name so that a lookup is a binary search.
 pub static OVERTURE_CATEGORY_MAP: [(&str, &str); 61] = [
     ("atm", "atm"),

@@ -16,7 +16,7 @@
 //! cell: it is there only where the cell holds one, so it is that place, and a
 //! parent holding one place holds what its one child held.
 //!
-//! Which place a cell holds is its name and its kind (bake/poi_theme.json),
+//! Which place a cell holds is its name and its kind (bake/poi_badge.json),
 //! held once a page in a pool the cells index: both are the one place's and
 //! nothing else's, so they fold together. A cell is four words whatever its
 //! place, and a place that stands in many cells — a chain's branch, a
@@ -24,7 +24,7 @@
 
 use std::collections::HashMap;
 
-use crate::bake::poi_theme::{PoiTheme, DEFAULT_THEME, KIND_CATEGORIES, KIND_THEMES};
+use crate::bake::poi_badge::{DEFAULT_COLOR, DEFAULT_ICON, KIND_CATEGORIES, KIND_COLORS, KIND_ICONS};
 use crate::space::pvf3::pvf3::Pvf3;
 use crate::space::pyramid::{Folds, Lattice, LevelPage, GROUND, TOP_LEVEL};
 
@@ -75,7 +75,7 @@ pub struct PoiCell {
 }
 
 /// A place as a cell names it: what it is called, and its kind — its number
-/// in the theme, 0 for none (`kind_of`).
+/// in the badge table, 0 for none (`kind_of`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Place<'a> {
     pub name: &'a str,
@@ -135,14 +135,19 @@ impl<'a> Pool<'a> {
     }
 }
 
-/// A kind's number, by the theme's key for it; 0 where the theme has none.
+/// A kind's number, by its category; 0 where the table has none.
 pub fn kind_of(key: &str) -> u8 {
     KIND_CATEGORIES.iter().position(|k| *k == key).map_or(0, |i| i as u8 + 1)
 }
 
-/// How kind `kind` is drawn: its own theme, or the default for none.
-pub fn theme(kind: u8) -> PoiTheme {
-    kind.checked_sub(1).and_then(|i| KIND_THEMES.get(i as usize)).copied().unwrap_or(DEFAULT_THEME)
+/// Kind `kind`'s badge icon, or the default for none.
+pub fn kind_icon(kind: u8) -> &'static str {
+    kind.checked_sub(1).and_then(|i| KIND_ICONS.get(i as usize)).copied().unwrap_or(DEFAULT_ICON)
+}
+
+/// Kind `kind`'s badge colour, or the default for none.
+pub fn kind_color(kind: u8) -> u32 {
+    kind.checked_sub(1).and_then(|i| KIND_COLORS.get(i as usize)).copied().unwrap_or(DEFAULT_COLOR)
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -314,7 +319,7 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, &'static str> {
 
 /// A page is its cells ascending, each inside the page and holding a place,
 /// its position a half-word a lane, and a place only where a cell holds one,
-/// the place from the pool and of a kind the theme has.
+/// the place from the pool and of a kind the badge table has.
 fn validate(page: &PoiPage) -> Result<(), &'static str> {
     if page.cells.iter().any(|c| c.cell >= CELLS || c.count == 0) || page.cells.windows(2).any(|w| w[0].cell >= w[1].cell) {
         return Err("POI cells out of order or empty");
@@ -322,8 +327,8 @@ fn validate(page: &PoiPage) -> Result<(), &'static str> {
     if page.cells.iter().any(|c| c.place != NO_PLACE && (c.count != 1 || c.place >= page.places.len())) {
         return Err("a POI place where no one place is");
     }
-    if page.places.kinds.iter().any(|&k| k as usize > KIND_THEMES.len()) {
-        return Err("a POI place of a kind the theme does not have");
+    if page.places.kinds.iter().any(|&k| k as usize > KIND_CATEGORIES.len()) {
+        return Err("a POI place of a kind the badge table does not have");
     }
     if page.cells.iter().any(|c| c.at.iter().any(|&l| l > 0xffff)) {
         return Err("a POI position past a half-word");

@@ -13,7 +13,7 @@ pub fn overture_category(properties: &serde_json::Value) -> Option<&str> {
     properties.get("categories")?.get("primary")?.as_str()
 }
 
-/// The category the client's POI theme keys off. An Overture category with no
+/// The category the client's POI badges key off. An Overture category with no
 /// entry in the table passes through unmapped; a place with no category at all
 /// is a "place".
 ///

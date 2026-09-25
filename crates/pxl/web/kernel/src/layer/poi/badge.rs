@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use pxl_spec::bake::poi_page::{theme, Place, PoiPage};
+use pxl_spec::bake::poi_page::{kind_color, kind_icon, Place, PoiPage};
 use pxl_spec::space::pyramid::LevelPage;
 
 use crate::global::Global;
@@ -106,11 +106,11 @@ pub fn slot(label: Label) -> i32 {
                     logical_w: b.width,
                 },
                 Label::Place { page, place } => {
-                    let t = theme(Label::place(page, place).kind);
+                    let kind = Label::place(page, place).kind;
                     DrawSpec::Place {
                         name: label.text(),
-                        icon: t.icon,
-                        color: t.color,
+                        icon: kind_icon(kind),
+                        color: kind_color(kind),
                         logical_w: b.width,
                     }
                 }
