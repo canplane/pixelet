@@ -6,7 +6,6 @@
 //! gpu/renderer.rs) then draws the scheduler's lists. In the report phase it
 //! hands the frame's numbers to the ledger.
 
-use pxl_render::look::lod::set_lod_projection;
 use pxl_spec::space::pvf3::ivec;
 use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
@@ -144,12 +143,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     let c = core_tick();
     c.visible_pass = None;
     view_resize(ctx.state.width, ctx.state.height);
-    // The tier criterion is a screen-space one (crates/pxl/web/render/src/look/lod.rs), and the
-    // other layers that read it read it from here; the scheduler takes the same
-    // projection through the frame, and its pressure — the byte budget paid in
-    // LOD — comes back through the census.
     let v = view();
-    set_lod_projection(v.height, v.fov, kernel().sched.census.pressure);
 
     let origin = v.origin;
 

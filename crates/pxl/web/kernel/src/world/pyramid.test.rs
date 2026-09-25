@@ -20,7 +20,7 @@ fn the_domain() -> Domain {
         at: [ivec::X(anchor()) as f64, ivec::Y(anchor()) as f64, HEIGHT],
         foot: anchor(),
     };
-    domain_for(&eye, HEIGHT, None)
+    domain_for(&eye, HEIGHT, None, 0)
 }
 
 /// The chunks the rule draws of a domain where everything is resident.

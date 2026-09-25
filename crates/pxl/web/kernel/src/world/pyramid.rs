@@ -20,6 +20,7 @@
 
 pub mod chunk;
 pub mod domain;
+pub mod pressure;
 
 use pxl_spec::space::hierarchy::share;
 use pxl_spec::space::pvf3::ivec::IVec;
@@ -36,6 +37,7 @@ use crate::world::change::world_edge;
 use chunk::Chunk;
 pub use domain::Domain;
 use domain::{domain_for, eye, heights_revision, ring_of, Frustum, VIEW_PAGES};
+use pressure::pressure;
 
 /// A layer the pyramid holds: its page is itself, folded by `Folds`.
 pub trait Layer: Folds + Clone + 'static {
@@ -119,12 +121,12 @@ pub struct Cover {
 }
 
 /// What the cover and the wishlist are a function of: where the eye is, what
-/// it sees, whether the camera is moving, the
-/// resident set, the pinned page, and the heights the domain measures the
-/// ground by (`heights_revision`), which neither the eye nor this layer's
-/// resident set moves. Two turns agreeing on all of it want the same pages
+/// it sees, whether the camera is moving, the resident set, the pinned page,
+/// the heights the domain measures the ground by (`heights_revision`), which
+/// neither the eye nor this layer's resident set moves, and the byte
+/// budget's pressure (pressure.rs), which moves the criterion. Two turns agreeing on all of it want the same pages
 /// of the same ground, so the second decides nothing again.
-type Wish = ([f64; 3], Frustum, bool, u32, Option<LevelPage>, (u32, u32));
+type Wish = ([f64; 3], Frustum, bool, u32, Option<LevelPage>, (u32, u32), u32);
 
 /// A resident page, and the record it lives in: none for a page every such
 /// page shares (a layer's `absent`), which takes no room.
@@ -550,9 +552,9 @@ impl<L: Layer> Pyramid<L> {
     pub fn step(&mut self) {
         let Some(e) = eye() else { return };
         let frustum = Frustum::of_view();
-        let wish = (e.at, frustum, crate::sched::turn::interactive(), self.revision, self.pinned, heights_revision());
+        let wish = (e.at, frustum, crate::sched::turn::interactive(), self.revision, self.pinned, heights_revision(), pressure());
         if self.last != Some(wish) {
-            let d = domain_for(&e, eye_height(), Some(frustum));
+            let d = domain_for(&e, eye_height(), Some(frustum), wish.6);
             self.drop_unrecorded(&d);
             let mut cover = L::present(self.cover_of(&d), &d, self);
             cover.drawn.sort_unstable();
@@ -568,7 +570,7 @@ impl<L: Layer> Pyramid<L> {
             }
             // Letting a page go moves the revision; the wish is the resident
             // set the cover was made from.
-            self.last = Some((wish.0, wish.1, wish.2, self.revision, wish.4, heights_revision()));
+            self.last = Some((wish.0, wish.1, wish.2, self.revision, wish.4, heights_revision(), wish.6));
             self.wishlist = self.wants();
             self.folds.notify();
         }

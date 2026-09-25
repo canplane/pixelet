@@ -202,10 +202,11 @@ pub struct Domain {
     /// What the view sees, where it is known: ground outside it is held at
     /// the pyramid's top and never refined.
     frustum: Option<Frustum>,
-    /// What the criterion is loosened by for this view: 1 where the rule's
-    /// wants fit the budget as they are, and a quarter of an octave less a
-    /// step until they do (`VIEW_CHUNKS`, `VIEW_PAGES`). Every split
-    /// distance is multiplied by it, so the view is coarser everywhere alike.
+    /// What the criterion is loosened by for this view: the byte budget's
+    /// pressure, an octave a level (world/pyramid/pressure.rs), and a
+    /// quarter of an octave more a step until the rule's wants fit the
+    /// counts (`VIEW_CHUNKS`, `VIEW_PAGES`). Every split distance is
+    /// multiplied by it, so the view is coarser everywhere alike.
     scale: f64,
     /// The top level's chunks within the reach (`roots`), found once.
     roots: Vec<Chunk>,
@@ -222,8 +223,9 @@ pub struct Domain {
 }
 
 /// The domain of an eye `height` over the ground under it, seeing
-/// `frustum`, or everything around it where that is none.
-pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>) -> Domain {
+/// `frustum`, or everything around it where that is none, under the byte
+/// budget's `pressure`.
+pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>, pressure: u32) -> Domain {
     let mut d = Domain {
         eye: eye.at,
         foot: eye.foot,
@@ -243,7 +245,7 @@ pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>) -> Domain {
     // roots alone, which fit.
     let mut measured = HashMap::new();
     for step in 0..=SCALE_STEPS * (TOP_LEVEL as i32 + 1) {
-        d.scale = (-step as f64 / SCALE_STEPS as f64).exp2();
+        d.scale = (-(pressure as f64) - step as f64 / SCALE_STEPS as f64).exp2();
         let (chunks, pages) = d.select(&mut measured);
         d.pages = pages;
         if chunks <= VIEW_CHUNKS && d.pages.len() as u32 <= VIEW_PAGES {
@@ -320,6 +322,15 @@ impl Domain {
     /// How near the eye `p` comes.
     pub fn page_nearest_to(&self, p: LevelPage) -> f64 {
         self.nearest(p.rect(), Self::heights(p, p.node()))
+    }
+
+    /// The largest drawn cell per unit of distance under this view's
+    /// criterion: past a level's split distance its cells are drawn
+    /// averaged 2 × 2, so a cell there is twice the level's over the
+    /// distance, and half that just before the next split. For whoever has
+    /// to tolerate a drawn cell's height — the badge occlusion test.
+    pub fn cell_per_distance(&self) -> f64 {
+        2.0 / (split_distance(0) * self.scale)
     }
 
     /// The level the rule wants `c`'s nearest ground at, under this view's
