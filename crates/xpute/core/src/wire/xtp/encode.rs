@@ -398,14 +398,18 @@ const fn align(n: u32, unit: u32) -> u32 {
     (n + unit - 1) & !(unit - 1)
 }
 
-/// A packet of one root branch of leaves, written straight into bytes the
-/// caller holds — a ring slot's payload — in the layout `TreeEncoder` gives the same
+/// A packet of one root branch, written straight into bytes the caller holds
+/// — a ring slot's payload — in the layout `TreeEncoder` gives the same
 /// children, byte for byte, with no tree built first and nothing allocated.
-/// The children are declared up front, since the branch's table precedes
-/// them. A child that does not fit spoils the packet and `finish` refuses it;
-/// declaring one count and writing another is the caller's bug, and panics.
+/// A child may itself be a branch (`branch`). A branch's children are
+/// declared up front, since its table precedes them. A child that does not
+/// fit spoils the packet and `finish` refuses it; declaring one count and
+/// writing another is the caller's bug, and panics.
 pub struct PacketWriter<'a> {
     buf: &'a mut [u8],
+    /// The branch being written: where it starts, from the packet's start,
+    /// how many children it declared and how many it has been given.
+    base: u32,
     count: u32,
     written: u32,
     /// The end of what is written, from the packet's start.
@@ -417,7 +421,14 @@ impl<'a> PacketWriter<'a> {
     pub fn new(buf: &'a mut [u8], count: u32) -> PacketWriter<'a> {
         let lim = ROOT + WORD_SZ + count * WORD_SZ;
         let fits = lim as usize <= buf.len();
-        let mut w = PacketWriter { buf, count, written: 0, lim, fits };
+        let mut w = PacketWriter {
+            buf,
+            base: ROOT,
+            count,
+            written: 0,
+            lim,
+            fits,
+        };
         if fits {
             w.buf[..lim as usize].fill(0);
             w.word(0, MAGIC, RESERVED);
@@ -456,8 +467,8 @@ impl<'a> PacketWriter<'a> {
     fn entry(&mut self, base: Option<usize>, type_: u8) -> &mut Self {
         assert!(self.written < self.count, "a packet writer given more than the {} children it declared", self.count);
         if self.fits {
-            let rel_off = base.map_or(0, |b| b as u32 - ROOT);
-            self.word(ROOT + WORD_SZ + self.written * WORD_SZ, rel_off, type_ as u32);
+            let rel_off = base.map_or(0, |b| b as u32 - self.base);
+            self.word(self.base + WORD_SZ + self.written * WORD_SZ, rel_off, type_ as u32);
         }
         self.written += 1;
         self
@@ -607,6 +618,28 @@ impl<'a> PacketWriter<'a> {
     /// A u64 array of `len` elements, written from `value` as it goes.
     pub fn u64_array_with(&mut self, len: u32, mut value: impl FnMut(u32) -> u64) -> &mut Self {
         self.array_with(SequenceType::U64_ARRAY, len, |i| value(i).to_le_bytes())
+    }
+
+    /// A branch of `count` children, which `fill` writes as it would the
+    /// packet's own.
+    pub fn branch(&mut self, count: u32, fill: impl FnOnce(&mut Self)) -> &mut Self {
+        let at = self.reserve(WORD_SZ, WORD_SZ + count * WORD_SZ);
+        if let Some(at) = at {
+            self.word(at as u32, count, RESERVED);
+        }
+        // A branch that did not fit has spoiled the packet: its children are
+        // still counted, against a base nothing is written at.
+        let outer = (self.base, self.count, self.written);
+        (self.base, self.count, self.written) = (at.map_or(ROOT, |at| at as u32), count, 0);
+        fill(self);
+        assert_eq!(self.written, self.count, "a branch declared {} children and was given {}", self.count, self.written);
+        (self.base, self.count, self.written) = outer;
+        self.entry(at, SpecialType::BRANCH as u8)
+    }
+
+    /// A branch that is not there, its kind kept.
+    pub fn no_branch(&mut self) -> &mut Self {
+        self.entry(None, SpecialType::BRANCH as u8)
     }
 
     /// The packet's length, header included and to the word; none when a
