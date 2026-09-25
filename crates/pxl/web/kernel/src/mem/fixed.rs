@@ -26,35 +26,47 @@
 //! asked for against the range's end — nothing adds to a range's offset by
 //! itself, so nothing written through one can land in the next.
 //!
-//! Ranges, in the order they are laid:
+//! Ranges, in the order they are laid, those that serve one thing side by
+//! side:
+//!
+//! The ground as it is held.
 //!
 //!   .fixed.terrain   the resident terrain, one record a page, every record
-//!                    the same size, and the shared open-ocean tile in one
-//!                    record past them (layer/terrain/fixed.rs). Which page
-//!                    lies in which record is the pyramid's (world/
-//!                    pyramid.rs), so the range is laid out once and its
-//!                    records change hands.
-//!   .fixed.bake      the one mesh a chunk bake has open, written there and
-//!                    sent to its slot on the device the moment it is done
-//!                    (world/chunk/mesh_slot.rs): a mesh has no home in the
-//!                    memory, since the device is where it is drawn from.
+//!                    the same size, the first of them the open ocean every
+//!                    page the bake left as no object reads (world/
+//!                    pyramid.rs `ABSENT`; layer/terrain/fixed.rs). Which
+//!                    page lies in which record is the pyramid's, so the
+//!                    range is laid out once and its records change hands.
+//!
+//! A chunk as it is built, in the order its work runs.
+//!
 //!   .fixed.runs      the run sets a chunk's tiers are baked from, two: one
 //!                    filled while the other is baked from (world/chunk/
 //!                    build.rs). A set is let go once its chunk's tiers are
 //!                    all on the device, which is what keeps them.
-//!   .fixed.gpu       the stream the renderer's calls cross to the host in
-//!                    (pxl-render gpu/api.rs), written each turn from the
-//!                    start.
-//!   .fixed.host      the stream the kernel's other asks of the host cross in
-//!                    (host.rs), the same way.
-//!   .fixed.decor     where one chunk's decor is gathered before it is laid
-//!                    into its block (layer/decor/instance.rs).
+//!   .fixed.bake      the one mesh a chunk bake has open, written there and
+//!                    sent to its slot on the device the moment it is done
+//!                    (world/chunk/mesh_slot.rs): a mesh has no home in the
+//!                    memory, since the device is where it is drawn from.
 //!   .fixed.surface   the surface each mesh slot's tier is drawn with, a lane
 //!                    a slot (world/chunk/mesh_slot.rs): what a thing standing
 //!                    on the drawn ground reads.
-//!   .fixed.blocks    the renderer's table of the blocks the draw list named
-//!                    (pxl-render gpu/renderer.rs).
-//!   .fixed.ledger    the ledger's rings (sched/ledger/record.rs).
+//!   .fixed.decor     where one chunk's decor is gathered before it is laid
+//!                    into its block (layer/decor/instance.rs).
+//!
+//! The renderer's.
+//!
+//!   .fixed.blocks    its table of the blocks the draw list named (pxl-render
+//!                    gpu/renderer.rs).
+//!   .fixed.gpu       the stream its calls cross to the host in (pxl-render
+//!                    gpu/api.rs), written each turn from the start.
+//!
+//! What the kernel says to the shell.
+//!
+//!   .fixed.host      the stream the kernel's other asks of the host cross in
+//!                    (host.rs), the same way.
+//!   .fixed.ledger    the ledger's rings (sched/ledger/record.rs), which the
+//!                    shell reads where they lie.
 
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -76,14 +88,14 @@ use crate::world::chunk::mesh_slot::{BAKE_BYTES, SURFACE_BYTES};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Range {
     Terrain,
-    Bake,
     /// Run set `n`, below RUN_SETS.
     Run(usize),
+    Bake,
+    Surface,
+    Decor,
+    Blocks,
     Gpu,
     Host,
-    Decor,
-    Surface,
-    Blocks,
     Ledger,
 }
 
@@ -94,16 +106,16 @@ impl Range {
     const fn index(self) -> usize {
         match self {
             Range::Terrain => 0,
-            Range::Bake => 1,
             Range::Run(set) => {
                 assert!(set < RUN_SETS, "a run set past the ones there are");
-                2 + set
+                1 + set
             }
-            Range::Gpu => 2 + RUN_SETS,
-            Range::Host => 3 + RUN_SETS,
-            Range::Decor => 4 + RUN_SETS,
-            Range::Surface => 5 + RUN_SETS,
-            Range::Blocks => 6 + RUN_SETS,
+            Range::Bake => 1 + RUN_SETS,
+            Range::Surface => 2 + RUN_SETS,
+            Range::Decor => 3 + RUN_SETS,
+            Range::Blocks => 4 + RUN_SETS,
+            Range::Gpu => 5 + RUN_SETS,
+            Range::Host => 6 + RUN_SETS,
             Range::Ledger => 7 + RUN_SETS,
         }
     }
@@ -114,17 +126,17 @@ impl Range {
 const RANGES: [u32; COUNT] = {
     let mut r = [0; COUNT];
     r[Range::Terrain.index()] = TERRAIN_BYTES;
-    r[Range::Bake.index()] = BAKE_BYTES;
     let mut set = 0;
     while set < RUN_SETS {
         r[Range::Run(set).index()] = RUN_SET_BYTES;
         set += 1;
     }
+    r[Range::Bake.index()] = BAKE_BYTES;
+    r[Range::Surface.index()] = SURFACE_BYTES;
+    r[Range::Decor.index()] = DECOR_BYTES;
+    r[Range::Blocks.index()] = BLOCKS_BYTES;
     r[Range::Gpu.index()] = stream::BYTES;
     r[Range::Host.index()] = host_stream::BYTES;
-    r[Range::Decor.index()] = DECOR_BYTES;
-    r[Range::Surface.index()] = SURFACE_BYTES;
-    r[Range::Blocks.index()] = BLOCKS_BYTES;
     r[Range::Ledger.index()] = LEDGER_BYTES;
     r
 };
