@@ -153,6 +153,9 @@ pub struct Pyramid<L: Layer> {
     domain: Option<Domain>,
     cover: Cover,
     covers: u32,
+    /// What the layer asks the fetcher for, made with the cover: a function
+    /// of the same wish, and said again every turn as it stands.
+    wishlist: Vec<(u64, Rank)>,
     last: Option<Wish>,
     folds: Notify,
 }
@@ -168,6 +171,7 @@ impl<L: Layer> Default for Pyramid<L> {
             domain: None,
             cover: Cover::default(),
             covers: 0,
+            wishlist: Vec::new(),
             last: None,
             folds: Notify::new(),
         }
@@ -517,9 +521,10 @@ impl<L: Layer> Pyramid<L> {
     }
 
     /// The layer's turn. Wherever the view or the resident set has changed —
-    /// a page arrived, was folded or went — the cover is made again, what
-    /// the camera left let go and the folds woken, since each is a function
-    /// of both; and the wishlist every turn from that cover.
+    /// a page arrived, was folded or went — the cover and the wishlist are
+    /// made again, what the camera left let go and the folds woken, since each
+    /// is a function of both. A turn where neither changed decides nothing
+    /// and says the wishlist it has.
     pub fn step(&mut self) {
         let Some(e) = eye() else { return };
         let anchor = e.foot;
@@ -543,9 +548,10 @@ impl<L: Layer> Pyramid<L> {
             // Letting a page go moves the revision; the wish is the resident
             // set the cover was made from.
             self.last = Some((wish.0, wish.1, wish.2, wish.3, self.revision, wish.5));
+            self.wishlist = self.wants(anchor);
             self.folds.notify();
         }
-        declare(L::CATEGORY, &self.wants(anchor));
+        declare(L::CATEGORY, &self.wishlist);
     }
 
     /// Asks for nothing: a layer the view does not show holds what it has

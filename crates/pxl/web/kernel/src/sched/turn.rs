@@ -193,7 +193,7 @@ pub fn world_turn() -> f64 {
     effect!(worst, objects, crate::layer::object::store::flush_save_if_due());
     // After every producer has spoken, including whatever asked for an
     // asset while the turn ran.
-    effect!(worst, assets, crate::io::sched::declare(crate::io::demand::Category::asset, &crate::io::load::load_wants()));
+    effect!(worst, assets, crate::io::sched::declare(crate::io::demand::Category::asset, crate::io::load::load_wants()));
     effect!(worst, pump, pump());
     *WORST_EFFECT.get(|| (0.0, None)) = worst;
     now() - at

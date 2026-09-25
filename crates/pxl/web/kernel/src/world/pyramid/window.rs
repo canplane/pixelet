@@ -176,11 +176,6 @@ pub fn window() -> std::ops::Range<u32> {
     eye().map_or(0..0, |_| window_for(eye_height()))
 }
 
-/// How far the view draws the ground as it stands now (`Domain::far`).
-pub fn drawn_far() -> Option<f64> {
-    eye().map(|e| domain(&e).far)
-}
-
 /// How far the leaves are drawn for certain, and so decoration, which is
 /// scattered from them: level 1's split distance, inside which every chunk
 /// the window reaches is split to the leaves.
@@ -273,11 +268,6 @@ pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>) -> Domain {
         d.chain.extend(&level);
     }
     d
-}
-
-/// The domain of the eye as it stands.
-pub fn domain(eye: &Eye) -> Domain {
-    domain_for(eye, eye_height(), Some(Frustum::of_view()))
 }
 
 impl Domain {

@@ -105,6 +105,9 @@ const LOADS: usize = Asset::ALL.len() + 1;
 struct Loader {
     gltf: Vec<Option<Entry<Rc<Gltf>>>>,
     image: Vec<Option<Entry<u32>>>,
+    /// What `load_wants` last said, kept so saying it again every turn asks
+    /// the heap for nothing.
+    wants: Vec<(u64, Rank)>,
 }
 
 static LOADER: Global<Loader> = Global::new();
@@ -113,6 +116,7 @@ fn loader() -> &'static mut Loader {
     LOADER.get(|| Loader {
         gltf: (0..LOADS).map(|_| None).collect(),
         image: (0..LOADS).map(|_| None).collect(),
+        wants: Vec::new(),
     })
 }
 
@@ -162,19 +166,19 @@ pub fn of_subject(subject: u64) -> Option<(LoadKind, Load)> {
 
 /// Every asset something has asked for and has not got. Said in full every
 /// turn: a set that is the same set changes nothing.
-pub fn load_wants() -> Vec<(u64, Rank)> {
+pub fn load_wants() -> &'static [(u64, Rank)] {
     let l = loader();
-    let mut wants = Vec::new();
+    l.wants.clear();
     for n in 0..LOADS {
         let load = Load::of(n as u32).expect("a load's own number");
         if matches!(l.gltf[n], Some(Entry::Pending)) {
-            wants.push((subject_of(LoadKind::Gltf, load), policy::asset()));
+            l.wants.push((subject_of(LoadKind::Gltf, load), policy::asset()));
         }
         if matches!(l.image[n], Some(Entry::Pending)) {
-            wants.push((subject_of(LoadKind::Image, load), policy::asset()));
+            l.wants.push((subject_of(LoadKind::Image, load), policy::asset()));
         }
     }
-    wants
+    &l.wants
 }
 
 /// Ends the attempt a key names and says what it was for.
