@@ -18,7 +18,7 @@ const BRIGHTEST: [(&str, f64, f64, f64); 3] = [
 /// than drawing the sky scrambled. Within the bake's quantization: 20″ in
 /// right ascension, 10″ in declination, a thousandth of a magnitude.
 #[test]
-fn the_baked_catalogue_reads_back_as_the_catalogue_s_brightest_stars() {
+fn the_baked_catalog_reads_back_as_the_catalog_s_brightest_stars() {
     let records = CATALOG.as_chunks::<STAR_BYTES>().0;
     for (packed, (name, ra, dec, vmag)) in records.iter().zip(BRIGHTEST) {
         let s = star(packed);
@@ -37,7 +37,7 @@ fn the_baked_catalogue_reads_back_as_the_catalogue_s_brightest_stars() {
 
 /// Brightest first, so that a prefix of the file is the sky to a magnitude.
 #[test]
-fn the_baked_catalogue_runs_brightest_first() {
+fn the_baked_catalog_runs_brightest_first() {
     let flux: Vec<f32> = CATALOG.as_chunks::<STAR_BYTES>().0.iter().map(|p| star(p)[3]).collect();
     assert!(flux.windows(2).all(|w| w[0] >= w[1]), "a star brighter than the one before it");
 }

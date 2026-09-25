@@ -143,7 +143,7 @@ pub fn pool(level: u32, step: u32) -> core::ops::Range<usize> {
     }
 }
 
-/// Words a slot's surface lane holds: a sample at the centre of each of its
+/// Words a slot's surface lane holds: a sample at the center of each of its
 /// tier's blocks, CHUNK_CELLS a side for the leaves' own tier, which draws
 /// its level's cells, and half that for every other, which draws no finer
 /// than its level's cells averaged 2 × 2 (world/chunk/table.rs

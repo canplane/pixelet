@@ -573,7 +573,7 @@ pub const LEDGER_BYTES: u32 = span_of(&LANES, LANE_ALIGN);
 /// memory out, the host's own allocator stands in: leaked once, which is what
 /// the kernel's lane is too — the ledger holds its rings for the program's
 /// life either way. Without it the ledger records nothing under `cargo test`
-/// and every check of what it summarises reads zero.
+/// and every check of what it summarizes reads zero.
 pub(super) fn fixed_lane<T: Copy>(which: Lane, cap: usize) -> &'static mut [T] {
     match range(Range::Ledger) {
         // SAFETY: the lane's own bytes, which only its ring holds, zeroed as

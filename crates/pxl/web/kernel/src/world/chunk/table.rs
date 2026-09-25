@@ -2391,7 +2391,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<Chunk, usize>, mem: *const u
                     meshes.epoch = arena_epoch();
                 }
             }
-            surface_centres(slot.index, words, box_words as usize, mesh_step(cube, slots[i].level()), slots[i].level(), heights);
+            surface_centers(slot.index, words, box_words as usize, mesh_step(cube, slots[i].level()), slots[i].level(), heights);
             meshes.holder[slot.index] = Some((chunk, id));
             let s = &mut slots[i];
             // A tier of an older generation in the same slot shows these boxes
@@ -2426,11 +2426,11 @@ fn surface(index: usize, step: u32) -> &'static mut [u32] {
     range(Range::Surface).map_or(&mut [], |s| unsafe { lane(s, off, (axis * axis) as usize) })
 }
 
-/// A cell-centre height query needs no CPU copy of the mesh. Quantized tops
-/// use the mesh's own height scale, with zero reserved for an empty centre.
+/// A cell-center height query needs no CPU copy of the mesh. Quantized tops
+/// use the mesh's own height scale, with zero reserved for an empty center.
 /// Written into the slot's own lane, which the slot's tier sizes
 /// (mesh_slot.rs `surface_of`).
-fn surface_centres(index: usize, words: &[u32], stride: usize, step: u32, level: u32, heights: Heights) {
+fn surface_centers(index: usize, words: &[u32], stride: usize, step: u32, level: u32, heights: Heights) {
     let axis = (CHUNK_CELLS / step) as usize;
     let unit = step as f64 * GROUND.scale(level).side();
     let tops = surface(index, step);

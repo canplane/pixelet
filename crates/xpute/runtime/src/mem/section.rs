@@ -40,7 +40,7 @@ impl Section {
     /// Where `bytes` from `off` into the section lie, or none where they would
     /// run past its end. The one way into a section: a range is reached
     /// through this and never by adding to its offset, so nothing written
-    /// through it can land in its neighbour.
+    /// through it can land in its neighbor.
     pub const fn at(&self, off: u32, bytes: u32) -> Option<u32> {
         match off.checked_add(bytes) {
             Some(past) if past <= self.bytes => Some(self.offset + off),

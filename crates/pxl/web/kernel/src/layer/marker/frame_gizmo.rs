@@ -129,7 +129,7 @@ impl Sketch {
         }
     }
 
-    pub fn labelled_line(&mut self, from: V3, to: V3, label: Option<&str>, dashed: bool) {
+    pub fn labeled_line(&mut self, from: V3, to: V3, label: Option<&str>, dashed: bool) {
         if dashed {
             self.dashed(from, to);
         } else {
@@ -172,7 +172,7 @@ impl Sketch {
         self.ring(center, radius, axis([1.0, 0.0, 0.0]), axis([0.0, 1.0, 0.0]));
         self.ring(center, radius, axis(dir), axis([0.0, 0.0, 1.0]));
         if show_radius {
-            self.labelled_line(center, to_local(vertex), Some(&format!("{radius}")), true);
+            self.labeled_line(center, to_local(vertex), Some(&format!("{radius}")), true);
         }
         self.point(to_local(vertex), Some(label));
     }
@@ -231,8 +231,8 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
 
     s.r#box(quant_v, U_PER_CELL, Some("floor(map_center)"));
     s.point(anchor_base_quant_v, Some("anchor_base (map_origin)"));
-    s.labelled_line(quant_v, raw_v, None, false);
-    s.labelled_line(quant_v, anchor_base_quant_v, Some("floor(map_center) <-> anchor_base (map_origin)"), true);
+    s.labeled_line(quant_v, raw_v, None, false);
+    s.labeled_line(quant_v, anchor_base_quant_v, Some("floor(map_center) <-> anchor_base (map_origin)"), true);
 
     for (corner, label) in [(TO_XY(L3_BASE(map_center.i)), "page_base"), (TO_XY(L3_CENTER(map_center.i)), "page_center")] {
         let mut out = Pvf3::default();
