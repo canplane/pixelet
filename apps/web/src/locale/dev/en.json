@@ -27,12 +27,6 @@
         "description": "The sun casts shadows from terrain, objects and characters onto the ground."
       }
     },
-    "quality": {
-      "msaa": {
-        "label": "Anti-aliasing (MSAA)",
-        "description": "Smooths the edges of far-away blocks by sampling each pixel four times. Costs a lot of graphics memory."
-      }
-    },
     "debug": {
       "section_title": "Debug",
       "section_caption": "Diagnostics, in dev builds only",

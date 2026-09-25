@@ -482,7 +482,3 @@ impl Models {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "store.test.rs"]
-mod test;

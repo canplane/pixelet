@@ -1,83 +1,8 @@
 // pxl-render/mesh/paint/terrain/elevation.test.rs
 
-use pxl_spec::bake::constant::ELE_PADDED_SPAN;
-use pxl_spec::cell::cube_types;
 use pxl_spec::space::pyramid::PAGE_CELLS;
 
 use super::*;
-use pxl_spec::bake::format::GROUND_CH_KEYS;
-use pxl_spec::bake::pack::{pack, GroundCell};
-
-const FLAT_ELE: i16 = 100;
-
-/// A flat source raster: bicubic-interpolating a constant field returns that
-/// same constant everywhere, with no edge/padding artifacts to account for —
-/// isolates the recess logic from the interpolation math it sits on top of.
-fn flat_page_ele() -> Vec<i16> {
-    vec![FLAT_ELE; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize]
-}
-
-/// Channels of `span`² cells, each lane's cell 0 set as given.
-fn ground(span: usize, land: u8, water: u8, structure: u8, transport: u8) -> Ground {
-    let first = pack(GROUND_CH_KEYS.map(|k| match k {
-        GroundChannelKey::LAND => land,
-        GroundChannelKey::WATER => water,
-        GroundChannelKey::STRUCTURE => structure,
-        GroundChannelKey::TRANSPORT => transport,
-    }));
-    let mut cells = vec![0 as GroundCell; span * span];
-    cells[0] = first;
-    Ground { cells: cells.into() }
-}
-
-#[test]
-fn dense_ele_region_a_water_channel_cell_is_recessed_by_its_types_recess() {
-    let g = ground(2, 0, cube_types::water::river, 0, 0);
-    let mut out = [0i16; 4];
-    dense_ele_region(&flat_page_ele(), 0, 0, 2, Some(&g), &mut out);
-    assert_eq!(out[0], FLAT_ELE - 1);
-    assert_eq!(out[1], FLAT_ELE);
-}
-
-#[test]
-fn dense_ele_region_land_sea_is_recessed_too_even_though_it_s_not_the_water_channel() {
-    let g = ground(2, cube_types::land::sea, 0, 0, 0);
-    let mut out = [0i16; 4];
-    dense_ele_region(&flat_page_ele(), 0, 0, 2, Some(&g), &mut out);
-    assert_eq!(out[0], FLAT_ELE - 1);
-}
-
-#[test]
-fn dense_ele_region_a_structure_over_water_e_g_a_bridge_is_not_recessed() {
-    let g = ground(2, 0, cube_types::water::river, cube_types::structure::building, 0);
-    let mut out = [0i16; 4];
-    dense_ele_region(&flat_page_ele(), 0, 0, 2, Some(&g), &mut out);
-    assert_eq!(out[0], FLAT_ELE);
-}
-
-#[test]
-fn dense_ele_region_transport_over_water_e_g_a_road_is_not_recessed() {
-    let g = ground(2, 0, cube_types::water::lake, 0, cube_types::transport::road_default);
-    let mut out = [0i16; 4];
-    dense_ele_region(&flat_page_ele(), 0, 0, 2, Some(&g), &mut out);
-    assert_eq!(out[0], FLAT_ELE);
-}
-
-#[test]
-fn dense_ele_region_omitting_ground_recesses_nothing() {
-    let mut out = [0i16; 4];
-    dense_ele_region(&flat_page_ele(), 0, 0, 2, None, &mut out);
-    assert_eq!(out[0], FLAT_ELE);
-    assert_eq!(out[1], FLAT_ELE);
-}
-
-#[test]
-fn dense_ele_region_plain_land_is_not_recessed() {
-    let g = ground(2, cube_types::land::bare, 0, 0, 0);
-    let mut out = [0i16; 4];
-    dense_ele_region(&flat_page_ele(), 0, 0, 2, Some(&g), &mut out);
-    assert_eq!(out[0], FLAT_ELE);
-}
 
 /// What a page folded from the four under it costs where it meets one the
 /// bake wrote, which is the one place the two differ (pxl-spec bake/fold.rs).

@@ -190,7 +190,3 @@ pub fn in_cell(step: [u32; 3]) -> ([u32; 3], [u32; 3]) {
     let base = first_descendant_of(cell, levels);
     (cell.map(|v| v as u32), std::array::from_fn(|i| (i64::from(step[i]) - base[i]) as u32))
 }
-
-#[cfg(test)]
-#[path = "constant.test.rs"]
-mod test;

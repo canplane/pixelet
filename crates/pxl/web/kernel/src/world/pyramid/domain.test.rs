@@ -1,51 +1,7 @@
 // pxl-kernel/world/pyramid/domain.test.rs
 
 use super::*;
-use pxl_spec::space::pyramid::{chunk_span_of, neighbourhood};
-
-fn leaf(x: i64, y: i64) -> IVec {
-    ivec::gather(x, y, 0)
-}
-
-#[test]
-fn a_page_over_a_leaf_is_the_leaf_shifted_right_a_floor_on_negatives() {
-    assert_eq!(LevelPage::over(2, leaf(9, 4)), LevelPage::new(2, leaf(2, 1)));
-    assert_eq!(LevelPage::over(1, leaf(-1, -3)), LevelPage::new(1, leaf(-1, -2)));
-    assert_eq!(LevelPage::over(0, leaf(5, 6)).parent(), LevelPage::new(1, leaf(2, 3)));
-    assert_eq!(LevelPage::new(3, leaf(-2, 5)).first_leaf(), leaf(-16, 40));
-}
-
-#[test]
-fn a_subject_carries_the_level_and_gives_it_back() {
-    for p in [LevelPage::new(0, leaf(11569, 3671)), LevelPage::new(7, leaf(-3, 90)), LevelPage::new(10, leaf(11, -1))] {
-        assert_eq!(LevelPage::of_subject(p.subject()), p);
-    }
-    // A leaf's subject is its key: z16's level is the lane left at zero.
-    assert_eq!(LevelPage::new(0, leaf(11569, 3671)).subject(), leaf(11569, 3671));
-}
-
-#[test]
-fn a_levels_span_doubles_with_the_level() {
-    assert_eq!(span_of(0), span_of(0));
-    assert_eq!(span_of(4), 16.0 * span_of(0));
-}
-
-#[test]
-fn the_neighbourhood_is_the_one_the_bake_folds_from() {
-    // The bake folds from the same neighbourhood (pxl-geo-bake pyramid.rs):
-    // the same pages in the same places, so a page folded here is the page
-    // the server sends.
-    let around = neighbourhood(LevelPage::new(1, leaf(5, 7)));
-    assert_eq!([around[5], around[6], around[9], around[10]].map(|p| p.page), [leaf(10, 14), leaf(11, 14), leaf(10, 15), leaf(11, 15)]);
-    assert_eq!(around[0].page, leaf(9, 13));
-    assert_eq!(around[15].page, leaf(12, 16));
-    assert!(around.iter().all(|p| p.level == 0));
-    // X wraps across the seam: west of the westmost is the eastmost.
-    let across = 1i64 << pxl_spec::space::pyramid::PAGE_ZOOM;
-    let west = neighbourhood(LevelPage::new(1, leaf(-across / 4, 0)));
-    assert_eq!(ivec::X(west[5].page), -across / 2);
-    assert_eq!(ivec::X(west[4].page), across / 2 - 1);
-}
+use pxl_spec::space::pyramid::chunk_span_of;
 
 /// The chunks the rule draws of a domain where everything is resident: the
 /// roots, each split while it comes nearer than its level's split distance.

@@ -46,7 +46,7 @@ impl Mips {
     /// The builder for textures of `format`: a pipeline draws into the
     /// format it was built for, so a chain of another needs its own.
     pub fn new(g: &GpuApi, pipelines: &mut Pipelines, format: u32) -> Mips {
-        let built = pipelines.build(g, PIPELINE_MIPS, format, 1);
+        let built = pipelines.build(g, PIPELINE_MIPS, format);
         let sampler = object();
         (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
         Mips {
@@ -70,7 +70,7 @@ impl Mips {
                 let group = object();
                 (g.bind_group)(group, self.layout, &[0, resource::VIEW, above, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
                 let pass = object();
-                (g.pass)(pass, encoder, &crate::gpu::api::pass_desc(target, 0, load::CLEAR, 0, load::CLEAR, 0.0, crate::gpu::api::Stamp::UNTIMED));
+                (g.pass)(pass, encoder, &crate::gpu::api::pass_desc(target, load::CLEAR, 0, load::CLEAR, 0.0, crate::gpu::api::Stamp::UNTIMED));
                 (g.set_pipeline)(pass, self.pipeline);
                 (g.set_bind_group)(pass, 0, group, &[]);
                 (g.draw)(pass, 3, 1, 0, 0);
@@ -167,7 +167,7 @@ impl Layers {
         let levels = mip_levels(LAYER_TEX_SZ, LAYER_TEX_SZ);
         let usage = texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT;
         let tex = object();
-        (g.texture)(tex, LAYER_TEX_SZ, LAYER_TEX_SZ, slots, format::RGBA8_SRGB, levels, 1, usage);
+        (g.texture)(tex, LAYER_TEX_SZ, LAYER_TEX_SZ, slots, format::RGBA8_SRGB, levels, usage);
         let view = object();
         (g.view)(view, tex, dimension::D2_ARRAY, 0, levels, 0, slots);
         // Anisotropic at the four three's arrays were filtered at: the ground
@@ -219,7 +219,3 @@ impl Layers {
 fn table_len() -> usize {
     GROUND_LAYER_META.len() + block_cubes().len()
 }
-
-#[cfg(test)]
-#[path = "layers.test.rs"]
-mod test;

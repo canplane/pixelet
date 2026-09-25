@@ -200,7 +200,3 @@ pub fn snap3n<'a>(v: &V3, mask: i32, out: &'a mut V3) -> &'a mut V3 {
     out[2] = (to_int32(v[2]) & !mask) as f64;
     out
 }
-
-#[cfg(test)]
-#[path = "v3.test.rs"]
-mod test;

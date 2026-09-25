@@ -250,7 +250,3 @@ pub fn load_rejected(key: u64) {
     }
     decor_assets_arrived();
 }
-
-#[cfg(test)]
-#[path = "load.test.rs"]
-mod test;

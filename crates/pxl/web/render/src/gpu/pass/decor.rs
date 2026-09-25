@@ -80,14 +80,14 @@ impl DecorPass {
     /// Over `frame_buffer`, the shadow map, the occlusion map's entry `ao` and
     /// the air's entries.
     #[allow(clippy::too_many_arguments)]
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, samples: u32, frame_buffer: u32, shadow: &Shadow, ao: [u32; 5], air: [u32; AIR_WORDS], align: u32) -> DecorPass {
-        let lit = pipelines.build(g, PIPELINE_DECOR, format::CANVAS, samples);
+    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, frame_buffer: u32, shadow: &Shadow, ao: [u32; 5], air: [u32; AIR_WORDS], align: u32) -> DecorPass {
+        let lit = pipelines.build(g, PIPELINE_DECOR, format::CANVAS);
         let sampler = object();
         (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::REPEAT, compare::NONE, 1);
         DecorPass {
-            ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, format::CANVAS, samples),
-            depth: pipelines.build(g, PIPELINE_DECOR_DEPTH, format::CANVAS, samples),
-            prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, format::CANVAS, 1),
+            ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, format::CANVAS),
+            depth: pipelines.build(g, PIPELINE_DECOR_DEPTH, format::CANVAS),
+            prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, format::CANVAS),
             frames: FrameGroups::new(g, lit.layouts[0], frame_buffer, shadow.entries(1), Some((shadow.light_frame, shadow.blank_entries(1))), ao, air),
             lit,
             sampler,
@@ -95,12 +95,6 @@ impl DecorPass {
             groups: [Group::default(); GROUPS],
             skins: [Skin::default(); GROUPS],
         }
-    }
-
-    pub fn set_samples(&mut self, g: &GpuApi, pipelines: &mut Pipelines, samples: u32) {
-        self.lit = pipelines.build(g, PIPELINE_DECOR, format::CANVAS, samples);
-        self.ghost = pipelines.build(g, PIPELINE_GHOST_DECOR, format::CANVAS, samples);
-        self.depth = pipelines.build(g, PIPELINE_DECOR_DEPTH, format::CANVAS, samples);
     }
 
     /// Group 0 again over a new occlusion map's entry `ao`.

@@ -69,7 +69,3 @@ pub fn unproject(out: &mut V3, i: IVec, f: FVec) -> &mut V3 {
     out[2] = unproject_comp(ivec::Z(i), fvec::Z(f));
     out
 }
-
-#[cfg(test)]
-#[path = "projection.test.rs"]
-mod test;

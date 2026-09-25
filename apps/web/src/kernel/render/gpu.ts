@@ -209,7 +209,7 @@ function gpu(): GPUDevice {
   return device;
 }
 
-function layout_entries(words: U32Array, samples: u32): GPUBindGroupLayoutEntry[] {
+function layout_entries(words: U32Array): GPUBindGroupLayoutEntry[] {
   const out: GPUBindGroupLayoutEntry[] = [];
   for (let k = 0; k < words.length; k += 3) {
     const [binding, stages, kind] = [words[k], words[k + 1], words[k + 2]];
@@ -220,7 +220,6 @@ function layout_entries(words: U32Array, samples: u32): GPUBindGroupLayoutEntry[
     else if (kind === record.TEXTURE) e.texture = {};
     else if (kind === record.TEXTURE_ARRAY) e.texture = { viewDimension: "2d-array" };
     else if (kind === record.DEPTH) e.texture = { sampleType: "depth" };
-    else if (kind === record.FRAME_DEPTH) e.texture = { sampleType: "depth", multisampled: samples > 1 };
     else if (kind === record.TEXTURE_UNFILTERED) e.texture = { sampleType: "unfilterable-float" };
     else if (kind === record.SAMPLER) e.sampler = {};
     else if (kind === record.SAMPLER_COMPARISON) e.sampler = { type: "comparison" };
@@ -233,7 +232,7 @@ function layout_entries(words: U32Array, samples: u32): GPUBindGroupLayoutEntry[
 const VERTEX_ENTRY = ["vs", "vs_coarse"];
 
 /** A pipeline record's words (crates/pxl/web/render/src/frame/shader.rs) as WebGPU's descriptor. */
-function pipeline_descriptor(words: U32Array, layouts: GPUBindGroupLayout[], module: GPUShaderModule, target: GPUTextureFormat, samples: u32): GPURenderPipelineDescriptor {
+function pipeline_descriptor(words: U32Array, layouts: GPUBindGroupLayout[], module: GPUShaderModule, target: GPUTextureFormat): GPURenderPipelineDescriptor {
   let at = record.HEAD;
   const next = () => words[at++];
   const buffers: GPUVertexBufferLayout[] = Array.from({ length: next() }, () => {
@@ -245,12 +244,11 @@ function pipeline_descriptor(words: U32Array, layouts: GPUBindGroupLayout[], mod
   const descriptor: GPURenderPipelineDescriptor = {
     layout: gpu().createPipelineLayout({ bindGroupLayouts: layouts }),
     vertex: { module, entryPoint: VERTEX_ENTRY[words[record.HEAD - 1]], buffers },
-    primitive: { topology: TOPOLOGY[words[3]], cullMode: CULL[words[4]], frontFace: "ccw" },
-    multisample: { count: samples },
+    primitive: { topology: TOPOLOGY[words[2]], cullMode: CULL[words[3]], frontFace: "ccw" },
   };
-  if (words[2] !== 0) descriptor.fragment = { module, entryPoint: "fs", targets: [{ format: target, blend: BLEND[words[9]] }] };
-  if (words[6] !== record.NO_DEPTH) {
-    descriptor.depthStencil = { format: "depth32float", depthWriteEnabled: words[5] !== 0, depthCompare: COMPARE[words[6]], depthBias: words[7] | 0, depthBiasSlopeScale: float(words[8]) };
+  if (words[1] !== 0) descriptor.fragment = { module, entryPoint: "fs", targets: [{ format: target, blend: BLEND[words[8]] }] };
+  if (words[5] !== record.NO_DEPTH) {
+    descriptor.depthStencil = { format: "depth32float", depthWriteEnabled: words[4] !== 0, depthCompare: COMPARE[words[5]], depthBias: words[6] | 0, depthBiasSlopeScale: float(words[7]) };
   }
   return descriptor;
 }
@@ -267,12 +265,11 @@ function group_entries(words: U32Array): GPUBindGroupEntry[] {
 }
 
 function begin_pass(encoder: GPUCommandEncoder, w: U32Array): GPURenderPassEncoder {
-  const [color, resolve, color_load, r, g, b, a, depth, depth_load, depth_clear, query_set, begin, end] = w;
+  const [color, color_load, r, g, b, a, depth, depth_load, depth_clear, query_set, begin, end] = w;
   const descriptor: GPURenderPassDescriptor = { colorAttachments: [] };
   if (color !== 0) {
     descriptor.colorAttachments = [{
       view: get<GPUTextureView>(color),
-      resolveTarget: resolve !== 0 ? get<GPUTextureView>(resolve) : undefined,
       loadOp: color_load === load.LOAD ? "load" : "clear",
       clearValue: { r: float(r), g: float(g), b: float(b), a: float(a) },
       storeOp: "store",
@@ -509,8 +506,8 @@ export function gpu_imports(memory: WebAssembly.Memory): WebAssembly.ModuleImpor
         }).catch(() => {});
       }
     },
-    gpu_texture: (id: u32, width: u32, height: u32, layers: u32, fmt: u32, mips: u32, samples: u32, usage: u32) =>
-      put(id, gpu().createTexture({ size: { width, height, depthOrArrayLayers: layers }, format: texture_format(fmt), mipLevelCount: mips, sampleCount: samples, usage })),
+    gpu_texture: (id: u32, width: u32, height: u32, layers: u32, fmt: u32, mips: u32, usage: u32) =>
+      put(id, gpu().createTexture({ size: { width, height, depthOrArrayLayers: layers }, format: texture_format(fmt), mipLevelCount: mips, usage })),
     gpu_image_texture: (id: u32, image: u32) => {
       const bitmap = images.get(image);
       if (!bitmap) return 0;
@@ -551,10 +548,10 @@ export function gpu_imports(memory: WebAssembly.Memory): WebAssembly.ModuleImpor
       );
     },
     gpu_shader: (id: u32, at: u32, len: u32) => put(id, gpu().createShaderModule({ code: utf8.decode(new Uint8Array(memory.buffer, at, len)) })),
-    gpu_layout: (id: u32, at: u32, n: u32, samples: u32) => put(id, gpu().createBindGroupLayout({ entries: layout_entries(words(at, n), samples) })),
-    gpu_pipeline: (id: u32, rec: u32, rec_words: u32, lay: u32, lay_count: u32, module: u32, fmt: u32, samples: u32) => {
+    gpu_layout: (id: u32, at: u32, n: u32) => put(id, gpu().createBindGroupLayout({ entries: layout_entries(words(at, n)) })),
+    gpu_pipeline: (id: u32, rec: u32, rec_words: u32, lay: u32, lay_count: u32, module: u32, fmt: u32) => {
       const layouts = Array.from(words(lay, lay_count), (l) => get<GPUBindGroupLayout>(l));
-      put(id, gpu().createRenderPipeline(pipeline_descriptor(words(rec, rec_words), layouts, get<GPUShaderModule>(module), texture_format(fmt), samples)));
+      put(id, gpu().createRenderPipeline(pipeline_descriptor(words(rec, rec_words), layouts, get<GPUShaderModule>(module), texture_format(fmt))));
     },
     gpu_bind_group: (id: u32, layout: u32, at: u32, n: u32) => put(id, gpu().createBindGroup({ layout: get<GPUBindGroupLayout>(layout), entries: group_entries(words(at, n)) })),
     gpu_destroy: (id: u32) => {

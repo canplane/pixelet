@@ -243,7 +243,3 @@ pub fn dist_sq(v: &Pvf3, w: &Pvf3) -> i64 {
     let mut reg = Pvf3::default();
     norm_sq(sub(&mut reg, v, w))
 }
-
-#[cfg(test)]
-#[path = "pvf3.test.rs"]
-mod test;

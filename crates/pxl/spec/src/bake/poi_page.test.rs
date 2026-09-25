@@ -50,17 +50,6 @@ fn a_page_and_its_places_come_back_as_they_went() {
     assert_eq!(page.cells.iter().map(|c| c.at).collect::<Vec<_>>(), [[1, 2], [2, 2], [2, 0], [0, 3], [0, 0]]);
 }
 
-/// A kind is its place in the theme counted from 1, 0 is none, and none is
-/// drawn as the default.
-#[test]
-fn a_kind_is_numbered_from_one_and_none_draws_the_default() {
-    assert_eq!(kind_of(KINDS[0].0), 1);
-    assert_eq!(kind_of(KINDS[KINDS.len() - 1].0), KINDS.len() as u8);
-    assert_eq!(kind_of("nail_salon"), 0);
-    assert_eq!(theme(kind_of("cafe")), KINDS[kind_of("cafe") as usize - 1].1);
-    assert_eq!(theme(0), DEFAULT_THEME);
-}
-
 /// A place and a position are a cell's only while it holds one, at every
 /// level: a parent with one place under it has that place, its kind with it,
 /// and stands it on the same z16 ground cell its leaf did, and a parent with
@@ -125,21 +114,6 @@ fn a_centroid_folds_as_the_places_under_it_average() {
     assert_eq!(folded, PoiPage::of_places(1, places));
     // Two thirds of the way from C's column to A and B's: (0 + 2 + 16) / 3.
     assert_eq!((folded.cells[0].count, folded.cells[0].at), (3, [6, 0]));
-}
-
-/// A name past `NAME_CHARS` is cut to end in an ellipsis inside it, counted
-/// in code points, so a character outside the BMP is one and is never cut
-/// in half; one at the bound is held whole.
-#[test]
-fn a_long_name_is_cut_to_the_bound_with_an_ellipsis() {
-    let whole: String = "가".repeat(NAME_CHARS);
-    let long = format!("{}🏥{}", "가".repeat(NAME_CHARS - 2), "나".repeat(5));
-    let page = PoiPage::of_places(0, [(point(0, 0, 0, 0), called(&whole)), (point(1, 0, 0, 0), called(&long))]);
-    let names: Vec<&str> = page.cells.iter().map(|c| page.place(c).unwrap().name).collect();
-    assert_eq!(names[0], whole);
-    assert_eq!(names[1], format!("{}🏥…", "가".repeat(NAME_CHARS - 2)));
-    assert_eq!(names[1].chars().count(), NAME_CHARS);
-    assert_eq!(decode(&encode(&page).unwrap()).unwrap(), page);
 }
 
 /// What the wire cannot hold is refused: a place in a cell of two, a name

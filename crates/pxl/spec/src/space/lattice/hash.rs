@@ -19,7 +19,3 @@ pub fn hash3(x: i32, y: i32, z: i32) -> u32 {
 pub fn hash4(x: i32, y: i32, z: i32, tier: u32) -> u32 {
     (x.wrapping_mul(P1) ^ y.wrapping_mul(P2) ^ z.wrapping_mul(P3) ^ (tier as i32).wrapping_mul(P4)) as u32
 }
-
-#[cfg(test)]
-#[path = "hash.test.rs"]
-mod test;

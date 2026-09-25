@@ -34,6 +34,19 @@
       "own. Which rows exist in a build is the rows' `dev`, not this."
     ]
   },
+  "RESOLUTION_MODES": {
+    "$value": ["auto", "fixed", "low"],
+    "$doc": [
+      "How many device pixels the world is drawn at to a CSS pixel.",
+      "",
+      "  auto  — the device's, at most two, lowered while the frames run over",
+      "          their budget — the display's interval, no tighter than a",
+      "          sixtieth of a second — and raised again once they have room",
+      "          (crates/pxl/web/kernel/src/world/frame/resolution.rs).",
+      "  fixed — the device's, at most two, whatever the frames cost.",
+      "  low   — one."
+    ]
+  },
   "CAMERA_TERRAIN_MODES": {
     "$value": ["through", "stop", "climb"],
     "$doc": [
@@ -200,6 +213,16 @@
       "dev": true,
       "cost": "high"
     },
+    "resolution": {
+      "$doc": [
+        "The pixels the world is filled at, the GPU's largest cost: two to a",
+        "CSS pixel is four times the fragments of one. RESOLUTION_MODES says each."
+      ],
+      "kind": "choice",
+      "default": "auto",
+      "options": "RESOLUTION_MODES",
+      "section": "quality"
+    },
     "lod_crossfade": {
       "$doc": [
         "A change of what a chunk draws dissolves over 300 ms of frames instead",
@@ -212,21 +235,6 @@
       "default": true,
       "section": "quality",
       "cost": "low"
-    },
-    "msaa": {
-      "$doc": [
-        "Four samples a pixel for the frame's colour and depth:",
-        "the largest allocation the page makes — 32 bytes a device pixel, a",
-        "hundred megabytes on a phone at its native density — for edges the",
-        "far terrain's boxes would otherwise shimmer at. Off, since a phone's",
-        "density does the same job at no cost; the setting is read when the",
-        "renderer is made."
-      ],
-      "kind": "toggle",
-      "default": false,
-      "section": "quality",
-      "dev": true,
-      "cost": "high"
     },
     "show_debug_objects": {
       "$doc": ["The debug gizmos: frame origins, page corners, the map centre and the rings."],

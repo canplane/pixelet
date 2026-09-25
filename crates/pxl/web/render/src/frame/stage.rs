@@ -52,15 +52,15 @@ pub mod STAGE_AT {
     pub const EDGE_WIDTH: usize = 64;
     pub const RIM_INTENSITY: usize = 65;
     pub const SHADOWS: usize = 66;
-    /// MSAA is the renderer's targets and every pipeline's sample count: a
-    /// change rebuilds both over the same canvas.
-    pub const MSAA: usize = 67;
-    pub const AO_STRENGTH: usize = 68;
+    pub const AO_STRENGTH: usize = 67;
     /// The screen-space occlusion (gpu/ao.rs): 1 to run it, 0 not to.
-    pub const SCREEN_AO: usize = 69;
+    pub const SCREEN_AO: usize = 68;
     /// The map origin the root frame is relative to, east and north, in
     /// units (2): where the clouds are anchored to the ground.
-    pub const ORIGIN: usize = 70;
+    pub const ORIGIN: usize = 69;
+    /// The device pixels the world's surface is drawn at to a CSS pixel,
+    /// as the kernel's resolution chose them this frame.
+    pub const RESOLUTION: usize = 71;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

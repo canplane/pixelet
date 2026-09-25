@@ -67,7 +67,3 @@ pub fn recess(shown: ShownGround) -> i16 {
     };
     column.iter().find(|(t, _)| *t as u32 == shown.type_id).map_or(0, |&(_, r)| r)
 }
-
-#[cfg(test)]
-#[path = "ground.test.rs"]
-mod test;

@@ -84,9 +84,9 @@ pub struct CloudPass {
 }
 
 impl CloudPass {
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, samples: u32, frame_buffer: u32, air: [u32; AIR_WORDS]) -> CloudPass {
-        let below = pipelines.build(g, PIPELINE_CLOUDS, format::CANVAS, samples);
-        let above = pipelines.build(g, PIPELINE_CLOUDS_ABOVE, format::CANVAS, samples);
+    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, frame_buffer: u32, air: [u32; AIR_WORDS]) -> CloudPass {
+        let below = pipelines.build(g, PIPELINE_CLOUDS, format::CANVAS);
+        let above = pipelines.build(g, PIPELINE_CLOUDS_ABOVE, format::CANVAS);
         let tile = object();
         let tile_levels = mip_levels(TILE_TEXELS, TILE_TEXELS);
         (g.texture)(
@@ -96,7 +96,6 @@ impl CloudPass {
             1,
             format::R8,
             tile_levels,
-            1,
             texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT,
         );
         let tile_view = object();
@@ -127,11 +126,6 @@ impl CloudPass {
             group,
             words: [0.0; CLOUDS_FLOATS],
         }
-    }
-
-    pub fn set_samples(&mut self, g: &GpuApi, pipelines: &mut Pipelines, samples: u32) {
-        self.below = pipelines.build(g, PIPELINE_CLOUDS, format::CANVAS, samples);
-        self.above = pipelines.build(g, PIPELINE_CLOUDS_ABOVE, format::CANVAS, samples);
     }
 
     /// The frame's clouds: `view_proj`, the root frame to WebGPU clip, and
@@ -200,13 +194,13 @@ pub fn field(origin: IVec, env: &[f32]) -> CloudField {
 /// (frame/shader/cloud_bake.wgsl) and a pixel reads a texel of it in place of
 /// the eight octaves of hashes it takes to make.
 fn bake(g: &GpuApi, pipelines: &mut Pipelines, tile: u32, levels: u32) {
-    let built = pipelines.build(g, PIPELINE_CLOUD_FIELD, format::R8, 1);
+    let built = pipelines.build(g, PIPELINE_CLOUD_FIELD, format::R8);
     let encoder = object();
     (g.encoder)(encoder);
     let level = object();
     (g.view)(level, tile, dimension::D2, 0, 1, 0, 1);
     let pass = object();
-    (g.pass)(pass, encoder, &pass_desc(level, 0, load::CLEAR, 0, load::CLEAR, 0.0, Stamp::UNTIMED));
+    (g.pass)(pass, encoder, &pass_desc(level, load::CLEAR, 0, load::CLEAR, 0.0, Stamp::UNTIMED));
     (g.set_pipeline)(pass, built.pipeline);
     (g.draw)(pass, 3, 1, 0, 0);
     (g.end)(pass);

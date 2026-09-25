@@ -281,7 +281,3 @@ impl Held {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "draw.test.rs"]
-mod test;

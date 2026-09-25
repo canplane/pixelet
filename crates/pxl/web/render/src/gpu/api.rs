@@ -42,19 +42,18 @@ pub struct GpuApi {
     /// Every object the host holds let go: the renderer starts over.
     pub reset: fn(),
     pub buffer: fn(id: u32, size: u32, usage: u32),
-    pub texture: fn(id: u32, width: u32, height: u32, layers: u32, format: u32, mips: u32, samples: u32, usage: u32),
+    pub texture: fn(id: u32, width: u32, height: u32, layers: u32, format: u32, mips: u32, usage: u32),
     /// A texture of an image a load holds, at the image's size, with the
     /// image in it; false while the image has not arrived.
     pub image_texture: fn(id: u32, image: u32) -> bool,
     pub view: fn(id: u32, texture: u32, dimension: u32, base_mip: u32, mips: u32, base_layer: u32, layers: u32),
     pub sampler: fn(id: u32, mag: u32, min: u32, mipmap: u32, address: u32, compare: u32, anisotropy: u32),
     pub shader: fn(id: u32, code: &str),
-    /// A bind group layout: (binding, stages, kind) words, laid out at
-    /// `samples` a pixel where a kind depends on it.
-    pub layout: fn(id: u32, entries: &[u32], samples: u32),
+    /// A bind group layout: (binding, stages, kind) words.
+    pub layout: fn(id: u32, entries: &[u32]),
     /// A pipeline from its record (shader.rs), its group layouts, its
-    /// shader module, the format it draws into and its sample count.
-    pub pipeline: fn(id: u32, record: &[u32], layouts: &[u32], module: u32, format: u32, samples: u32),
+    /// shader module and the format it draws into.
+    pub pipeline: fn(id: u32, record: &[u32], layouts: &[u32], module: u32, format: u32),
     /// A bind group: (binding, resource kind, object, offset, size — 0 the
     /// whole buffer) words.
     pub bind_group: fn(id: u32, layout: u32, entries: &[u32]),
@@ -63,7 +62,7 @@ pub struct GpuApi {
     /// A texture's first mip of one layer, whole.
     pub write_texture: fn(id: u32, layer: u32, width: u32, height: u32, bytes: &[u8]),
     pub encoder: fn(id: u32),
-    /// A render pass: colour view, resolve view, colour load, clear r g b a
+    /// A render pass: colour view, colour load, clear r g b a
     /// (f32 bits), depth view, depth load, depth clear (f32 bits), query set,
     /// the begin and end timestamp indices; NONE or 0 for what is absent.
     pub pass: fn(id: u32, encoder: u32, desc: &[u32]),
@@ -154,11 +153,10 @@ pub fn buffer_entry(binding: u32, buffer: u32) -> [u32; 5] {
     [binding, crate::gpu::api_spec::resource::BUFFER, buffer, 0, 0]
 }
 
-/// A render pass's description: colour (and its resolve), cleared to
-/// transparent or loaded; depth cleared to `depth_clear`, loaded or read only;
+/// A render pass's description: colour, cleared to transparent or loaded; depth cleared to `depth_clear`, loaded or read only;
 /// and the timestamps the pass writes, as its span's `Stamp::pass` gives them.
-pub fn pass_desc(color: u32, resolve: u32, color_load: u32, depth: u32, depth_load: u32, depth_clear: f32, stamp: [u32; 3]) -> [u32; 13] {
-    [color, resolve, color_load, 0, 0, 0, 0, depth, depth_load, depth_clear.to_bits(), stamp[0], stamp[1], stamp[2]]
+pub fn pass_desc(color: u32, color_load: u32, depth: u32, depth_load: u32, depth_clear: f32, stamp: [u32; 3]) -> [u32; 12] {
+    [color, color_load, 0, 0, 0, 0, depth, depth_load, depth_clear.to_bits(), stamp[0], stamp[1], stamp[2]]
 }
 
 /// Where a span of passes writes its GPU time: a pair of queries in the

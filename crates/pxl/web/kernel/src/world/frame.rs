@@ -6,6 +6,7 @@
 //! everything here is relative to an anchor that remounts as the view moves.
 
 pub mod coord;
+pub mod resolution;
 pub mod stage;
 pub mod view;
 pub mod view_frame;

@@ -21,7 +21,9 @@ pub const SURFACES: usize = 9;
 /// the texels cost more than the eye resolves at arm's length; under one is a
 /// zoomed-out page, drawn at least at its own pixels. The billboards' sheets
 /// are drawn at DPR_MAX, so a label is never shown smaller than it was drawn.
-const DPR_MIN: f64 = 1.0;
+/// The world's surface is drawn at what the kernel's resolution chooses
+/// inside these (pxl-kernel world/frame/resolution.rs).
+pub const DPR_MIN: f64 = 1.0;
 pub const DPR_MAX: f64 = 2.0;
 
 /// A case's buffer on its long side, at most: the picker shows it at a
@@ -43,27 +45,25 @@ pub struct Surface {
     pub dpr: f64,
     /// Its context configured on the device the renderer has.
     pub configured: bool,
-    /// The buffer its targets were made at, and their samples.
+    /// The buffer its targets were made at.
     pub width: u32,
     pub height: u32,
-    pub samples: u32,
     /// A size the buffer is waiting to be made at, and the turns it has held.
     pub wanted: (u32, u32),
     pub waited: u32,
     pub depth: u32,
     pub depth_view: u32,
-    pub msaa: u32,
-    pub msaa_view: u32,
 }
 
 impl Surface {
-    /// The buffer its box is drawn into: the box's device pixels at no more
-    /// than DPR_MAX to a CSS pixel, a case's no longer than CASE_LONG_SIDE_MAX,
-    /// both sides scaled alike.
-    pub fn buffer_px(&self) -> (u32, u32) {
+    /// The buffer its box is drawn into: the box's device pixels at `ratio`
+    /// to a CSS pixel, or where there is none, the device's at no more than
+    /// DPR_MAX; a case's no longer than CASE_LONG_SIDE_MAX, both sides scaled
+    /// alike.
+    pub fn buffer_px(&self, ratio: Option<f64>) -> (u32, u32) {
         let (w, h) = (self.px_w.max(1) as f64, self.px_h.max(1) as f64);
         let dpr = if self.dpr > 0.0 { self.dpr } else { 1.0 };
-        let mut k = dpr.clamp(DPR_MIN, DPR_MAX) / dpr;
+        let mut k = ratio.unwrap_or(dpr).clamp(DPR_MIN, DPR_MAX) / dpr;
         if self.role == surface_role::CASE {
             k = k.min(CASE_LONG_SIDE_MAX / w.max(h));
         }

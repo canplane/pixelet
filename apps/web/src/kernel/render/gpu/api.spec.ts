@@ -113,13 +113,13 @@ export const paint = {
  * before its vertex buffers — the one number three parsers of a record would
  * otherwise each hold their own copy of. Then: the topology, the cull mode, the
  * depth compare under reversed Z (LESS is the shadow map's plain depth; NO_DEPTH, no
- * depth attachment), the blend, the sample count, which vertex entry point of
+ * depth attachment), the blend, which vertex entry point of
  * its shader the pipeline enters, a vertex step and format, a
- * binding's stages, and a binding's kind — FRAME_DEPTH a depth texture
- * multisampled as the frame is, TEXTURE_UNFILTERED one in a format no sampler
+ * binding's stages, and a binding's kind — TEXTURE_UNFILTERED a texture in a
+ * format no sampler
  * filters (RGBA32F), read by textureLoad alone. */
 export const record = {
-  HEAD: 12 as number,
+  HEAD: 10 as number,
   TRIANGLES: 0 as number,
   STRIP: 1 as number,
   LINES: 2 as number,
@@ -133,8 +133,6 @@ export const record = {
   OPAQUE: 0 as number,
   ALPHA: 1 as number,
   ADD: 2 as number,
-  FRAME_SAMPLES: 0 as number,
-  ONE_SAMPLE: 1 as number,
   VS: 0 as number,
   VS_COARSE: 1 as number,
   PER_VERTEX: 0 as number,
@@ -157,6 +155,5 @@ export const record = {
   DEPTH: 5 as number,
   SAMPLER: 6 as number,
   SAMPLER_COMPARISON: 7 as number,
-  FRAME_DEPTH: 8 as number,
-  TEXTURE_UNFILTERED: 9 as number,
+  TEXTURE_UNFILTERED: 8 as number,
 } as const;

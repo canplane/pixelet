@@ -241,7 +241,7 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
           }
           <Row k="  core MB" v={`${round(CORE_MEMORY.buffer.byteLength / 1048576)}MB`} />
           <Row k="buffers / arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)} / ${valueText("_mb", f.last.arena_mb)}`} />
-          <Row k="targets MB" v={`d${f.last.tex_depth_mb} m${f.last.tex_msaa_mb} s${f.last.tex_shadow_mb} l${f.last.tex_layers_mb}`} />
+          <Row k="targets MB" v={`d${f.last.tex_depth_mb} s${f.last.tex_shadow_mb} l${f.last.tex_layers_mb}`} />
           {g.atlas.entries > 0 && <Row k="atlas" v={`${g.atlas.size}px ${g.atlas.entries} ${atlasPct}%`} warn={g.atlas.size > ATLAS_INITIAL && atlasPct < ATLAS_SPARSE_PCT} />}
         </>
       )}

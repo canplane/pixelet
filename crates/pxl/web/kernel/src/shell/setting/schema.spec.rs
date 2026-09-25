@@ -99,6 +99,40 @@ impl AoMode {
     }
 }
 
+/// How many device pixels the world is drawn at to a CSS pixel.
+///
+///   auto  — the device's, at most two, lowered while the frames run over
+///           their budget — the display's interval, no tighter than a
+///           sixtieth of a second — and raised again once they have room
+///           (crates/pxl/web/kernel/src/world/frame/resolution.rs).
+///   fixed — the device's, at most two, whatever the frames cost.
+///   low   — one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum ResolutionMode {
+    auto = 0,
+    fixed = 1,
+    low = 2,
+}
+
+impl ResolutionMode {
+    pub const ALL: [ResolutionMode; 3] = [ResolutionMode::auto, ResolutionMode::fixed, ResolutionMode::low];
+
+    /// The option an index names, or none for an index past the list.
+    pub fn of(index: u32) -> Option<ResolutionMode> {
+        ResolutionMode::ALL.get(index as usize).copied()
+    }
+
+    /// The name storage keeps it under.
+    pub fn name(self) -> &'static str {
+        match self {
+            ResolutionMode::auto => "auto",
+            ResolutionMode::fixed => "fixed",
+            ResolutionMode::low => "low",
+        }
+    }
+}
+
 /// How a setting is held.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingKind {
@@ -167,19 +201,15 @@ pub enum SettingKey {
     /// from the sun each frame, depth only, and a 3x3 compare per fragment;
     /// 16 MB of map on a desktop, 4 on a phone.
     show_shadow_map = 11,
+    /// The pixels the world is filled at, the GPU's largest cost: two to a
+    /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
+    resolution = 12,
     /// A change of what a chunk draws dissolves over 300 ms of frames instead
     /// of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
     /// Fade): a cube for another, a stale chunk for what replaced it. The two
     /// draw on complementary halves of one screen-space pattern, so a chunk
     /// in a dissolve is drawn twice while it lasts.
-    lod_crossfade = 12,
-    /// Four samples a pixel for the frame's colour and depth:
-    /// the largest allocation the page makes — 32 bytes a device pixel, a
-    /// hundred megabytes on a phone at its native density — for edges the
-    /// far terrain's boxes would otherwise shimmer at. Off, since a phone's
-    /// density does the same job at no cost; the setting is read when the
-    /// renderer is made.
-    msaa = 13,
+    lod_crossfade = 13,
     /// The debug gizmos: frame origins, page corners, the map centre and the rings.
     show_debug_objects = 14,
     /// The scheduler ledger's corner panel. The console stream is a button on it.
@@ -202,8 +232,8 @@ impl SettingKey {
         SettingKey::show_rim_light,
         SettingKey::ao,
         SettingKey::show_shadow_map,
+        SettingKey::resolution,
         SettingKey::lod_crossfade,
-        SettingKey::msaa,
         SettingKey::show_debug_objects,
         SettingKey::show_ledger,
         SettingKey::person_variant,
@@ -229,8 +259,8 @@ impl SettingKey {
             SettingKey::show_rim_light => SettingKind::Toggle,
             SettingKey::ao => SettingKind::Choice,
             SettingKey::show_shadow_map => SettingKind::Toggle,
+            SettingKey::resolution => SettingKind::Choice,
             SettingKey::lod_crossfade => SettingKind::Toggle,
-            SettingKey::msaa => SettingKind::Toggle,
             SettingKey::show_debug_objects => SettingKind::Toggle,
             SettingKey::show_ledger => SettingKind::Toggle,
             SettingKey::person_variant => SettingKind::Number,
@@ -242,13 +272,7 @@ impl SettingKey {
     pub fn dev(self) -> bool {
         matches!(
             self,
-            SettingKey::camera_terrain
-                | SettingKey::ground_snap
-                | SettingKey::enable_terrain_carving
-                | SettingKey::show_shadow_map
-                | SettingKey::msaa
-                | SettingKey::show_debug_objects
-                | SettingKey::show_ledger
+            SettingKey::camera_terrain | SettingKey::ground_snap | SettingKey::enable_terrain_carving | SettingKey::show_shadow_map | SettingKey::show_debug_objects | SettingKey::show_ledger
         )
     }
 
@@ -277,9 +301,8 @@ impl SettingKey {
             SettingKey::ao => Some("ao"),
             #[cfg(feature = "dev")]
             SettingKey::show_shadow_map => Some("show_shadow_map"),
+            SettingKey::resolution => Some("resolution"),
             SettingKey::lod_crossfade => Some("lod_crossfade"),
-            #[cfg(feature = "dev")]
-            SettingKey::msaa => Some("msaa"),
             #[cfg(feature = "dev")]
             SettingKey::show_debug_objects => Some("show_debug_objects"),
             #[cfg(feature = "dev")]
@@ -297,6 +320,7 @@ impl SettingKey {
             #[cfg(feature = "dev")]
             SettingKey::camera_terrain => CameraTerrainMode::of(index).map(CameraTerrainMode::name),
             SettingKey::ao => AoMode::of(index).map(AoMode::name),
+            SettingKey::resolution => ResolutionMode::of(index).map(ResolutionMode::name),
             _ => None,
         }
     }
@@ -307,6 +331,7 @@ impl SettingKey {
             #[cfg(feature = "dev")]
             SettingKey::camera_terrain => CameraTerrainMode::ALL.into_iter().find(|o| o.name() == name).map(|o| o as u32),
             SettingKey::ao => AoMode::ALL.into_iter().find(|o| o.name() == name).map(|o| o as u32),
+            SettingKey::resolution => ResolutionMode::ALL.into_iter().find(|o| o.name() == name).map(|o| o as u32),
             _ => None,
         }
     }
@@ -327,8 +352,8 @@ pub struct Settings {
     pub show_rim_light: bool,
     pub ao: AoMode,
     pub show_shadow_map: bool,
+    pub resolution: ResolutionMode,
     pub lod_crossfade: bool,
-    pub msaa: bool,
     pub show_debug_objects: bool,
     pub show_ledger: bool,
     pub person_variant: u8,
@@ -350,8 +375,8 @@ impl Settings {
         show_rim_light: true,
         ao: AoMode::corner,
         show_shadow_map: false,
+        resolution: ResolutionMode::auto,
         lod_crossfade: true,
-        msaa: false,
         show_debug_objects: false,
         show_ledger: false,
         person_variant: 1,
@@ -374,8 +399,8 @@ impl Settings {
             SettingKey::show_rim_light => self.show_rim_light as u32,
             SettingKey::ao => self.ao as u32,
             SettingKey::show_shadow_map => self.show_shadow_map as u32,
+            SettingKey::resolution => self.resolution as u32,
             SettingKey::lod_crossfade => self.lod_crossfade as u32,
-            SettingKey::msaa => self.msaa as u32,
             SettingKey::show_debug_objects => self.show_debug_objects as u32,
             SettingKey::show_ledger => self.show_ledger as u32,
             SettingKey::person_variant => self.person_variant as u32,
@@ -405,8 +430,11 @@ impl Settings {
                 None => return false,
             },
             SettingKey::show_shadow_map if value <= 1 => self.show_shadow_map = value == 1,
+            SettingKey::resolution => match ResolutionMode::of(value) {
+                Some(o) => self.resolution = o,
+                None => return false,
+            },
             SettingKey::lod_crossfade if value <= 1 => self.lod_crossfade = value == 1,
-            SettingKey::msaa if value <= 1 => self.msaa = value == 1,
             SettingKey::show_debug_objects if value <= 1 => self.show_debug_objects = value == 1,
             SettingKey::show_ledger if value <= 1 => self.show_ledger = value == 1,
             SettingKey::person_variant => match u8::try_from(value) {

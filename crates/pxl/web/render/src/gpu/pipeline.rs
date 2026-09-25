@@ -1,12 +1,12 @@
 // pxl-render/gpu/pipeline.rs
 
 //! The pipelines as shader.rs defines them, made on the device once
-//! each: a pipeline at a format and a sample count, its shader modules, and
+//! each: a pipeline at a format, its shader modules, and
 //! its bind group layouts — shared by their words, so every pipeline that
 //! declares the same group gets the same layout and a bind group made for one
 //! serves the others.
 
-use crate::frame::shader::record::{pipeline as record_of, source, HEAD, ONE_SAMPLE, SHADERS};
+use crate::frame::shader::record::{pipeline as record_of, source, HEAD, SHADERS};
 use crate::gpu::api::{object, GpuApi};
 
 /// Group layouts a pipeline has at most, and vertex lanes.
@@ -70,30 +70,28 @@ impl Pipelines {
         *m
     }
 
-    fn layout(&mut self, g: &GpuApi, entries: &[u32], samples: u32) -> u32 {
-        let key = entries.iter().fold(fold(0xcbf29ce484222325, (samples > 1) as u32), |k, &w| fold(k, w));
+    fn layout(&mut self, g: &GpuApi, entries: &[u32]) -> u32 {
+        let key = entries.iter().fold(0xcbf29ce484222325, |k, &w| fold(k, w));
         if let Some(&(_, id)) = self.layouts[..self.layout_len].iter().find(|(k, _)| *k == key) {
             return id;
         }
         assert!(self.layout_len < LAYOUTS, "more than {LAYOUTS} bind group layouts");
         let id = object();
-        (g.layout)(id, entries, samples);
+        (g.layout)(id, entries);
         self.layouts[self.layout_len] = (key, id);
         self.layout_len += 1;
         id
     }
 
-    /// Pipeline `id` drawing into `format` at `samples` a pixel — unless its
-    /// record fixes one sample.
-    pub fn build(&mut self, g: &GpuApi, id: u32, format: u32, samples: u32) -> Built {
-        let key = fold(fold(fold(0xcbf29ce484222325, id), format), samples);
+    /// Pipeline `id` drawing into `format`.
+    pub fn build(&mut self, g: &GpuApi, id: u32, format: u32) -> Built {
+        let key = fold(fold(0xcbf29ce484222325, id), format);
         if let Some(&(_, b)) = self.built[..self.built_len].iter().find(|(k, _)| *k == key) {
             return b;
         }
         let words = record_of(id);
         assert!(!words.is_empty(), "no pipeline {id}");
-        let count = if words[10] == ONE_SAMPLE { 1 } else { samples };
-        let module = self.module(g, if count > 1 { words[1] } else { words[0] });
+        let module = self.module(g, words[0]);
         let mut b = Built::default();
         let mut at = HEAD as usize;
         b.lanes = words[at] as usize;
@@ -106,11 +104,11 @@ impl Pipelines {
         at += 1;
         for group in 0..groups {
             let n = words[at] as usize;
-            b.layouts[group] = self.layout(g, &words[at + 1..at + 1 + 3 * n], count);
+            b.layouts[group] = self.layout(g, &words[at + 1..at + 1 + 3 * n]);
             at += 1 + 3 * n;
         }
         b.pipeline = object();
-        (g.pipeline)(b.pipeline, &words, &b.layouts[..groups], module, format, count);
+        (g.pipeline)(b.pipeline, &words, &b.layouts[..groups], module, format);
         assert!(self.built_len < BUILT, "more than {BUILT} pipelines");
         self.built[self.built_len] = (key, b);
         self.built_len += 1;

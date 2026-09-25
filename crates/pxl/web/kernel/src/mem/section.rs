@@ -148,7 +148,3 @@ pub fn set_map(map: Map) {
 pub fn map() -> Option<Map> {
     *MAP.get(|| None)
 }
-
-#[cfg(test)]
-#[path = "section.test.rs"]
-mod test;

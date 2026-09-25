@@ -155,31 +155,26 @@ export const SETTINGS = {
     dev: true,
     cost: "high",
   },
+  /** The pixels the world is filled at, the GPU's largest cost: two to a
+   * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
+  resolution: {
+    key: 12 as number,
+    kind: "choice",
+    default: "auto",
+    options: ["auto", "fixed", "low"],
+    section: "quality",
+  },
   /** A change of what a chunk draws dissolves over 300 ms of frames instead
    * of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
    * Fade): a cube for another, a stale chunk for what replaced it. The two
    * draw on complementary halves of one screen-space pattern, so a chunk
    * in a dissolve is drawn twice while it lasts. */
   lod_crossfade: {
-    key: 12 as number,
+    key: 13 as number,
     kind: "toggle",
     default: true,
     section: "quality",
     cost: "low",
-  },
-  /** Four samples a pixel for the frame's colour and depth:
-   * the largest allocation the page makes — 32 bytes a device pixel, a
-   * hundred megabytes on a phone at its native density — for edges the
-   * far terrain's boxes would otherwise shimmer at. Off, since a phone's
-   * density does the same job at no cost; the setting is read when the
-   * renderer is made. */
-  msaa: {
-    key: 13 as number,
-    kind: "toggle",
-    default: false,
-    section: "quality",
-    dev: true,
-    cost: "high",
   },
   /** The debug gizmos: frame origins, page corners, the map centre and the rings. */
   show_debug_objects: {
@@ -302,13 +297,22 @@ export const SETTINGS_SHIPPED = {
     costs: ["", "low", "high"],
     section: "lighting",
   },
+  /** The pixels the world is filled at, the GPU's largest cost: two to a
+   * CSS pixel is four times the fragments of one. RESOLUTION_MODES says each. */
+  resolution: {
+    key: 12 as number,
+    kind: "choice",
+    default: "auto",
+    options: ["auto", "fixed", "low"],
+    section: "quality",
+  },
   /** A change of what a chunk draws dissolves over 300 ms of frames instead
    * of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
    * Fade): a cube for another, a stale chunk for what replaced it. The two
    * draw on complementary halves of one screen-space pattern, so a chunk
    * in a dissolve is drawn twice while it lasts. */
   lod_crossfade: {
-    key: 12 as number,
+    key: 13 as number,
     kind: "toggle",
     default: true,
     section: "quality",

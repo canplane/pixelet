@@ -16,46 +16,34 @@
 //! bindings by group and slot, the frame uniform's offsets — so a mismatch
 //! fails here rather than in a browser console.
 
-/// The shaders, by kind. A pipeline names one for a frame drawn at one
-/// sample a pixel and one for a multisampled frame; the badge shader is
-/// the one that differs, reading the depth as a multisampled texture.
+/// The shaders, by kind.
 pub const SHADER_CHUNK: u32 = 0;
 pub const SHADER_DECOR: u32 = 1;
 pub const SHADER_SKINNED: u32 = 2;
 pub const SHADER_PUCK_ZONE: u32 = 3;
 pub const SHADER_PUCK_BEACON: u32 = 4;
 pub const SHADER_BADGE: u32 = 5;
-pub const SHADER_BADGE_MSAA: u32 = 6;
-pub const SHADER_SKY: u32 = 7;
-pub const SHADER_DEBUG: u32 = 8;
-pub const SHADER_MIPS: u32 = 9;
-pub const SHADER_AO_DOWNSAMPLE: u32 = 10;
-pub const SHADER_AO_SAMPLE: u32 = 11;
-pub const SHADER_AO_BLUR: u32 = 12;
-pub const SHADER_AO_UPSAMPLE: u32 = 13;
-pub const SHADER_ATMOS_TRANSMITTANCE: u32 = 14;
-pub const SHADER_ATMOS_MULTISCATTER: u32 = 15;
-pub const SHADER_ATMOS_SKY_VIEW: u32 = 16;
-pub const SHADER_ATMOS_EXPOSURE: u32 = 17;
-pub const SHADER_STARS: u32 = 18;
-pub const SHADER_CLOUDS: u32 = 19;
-pub const SHADER_CLOUD_FIELD: u32 = 20;
-pub const SHADERS: u32 = 21;
+pub const SHADER_SKY: u32 = 6;
+pub const SHADER_DEBUG: u32 = 7;
+pub const SHADER_MIPS: u32 = 8;
+pub const SHADER_AO_DOWNSAMPLE: u32 = 9;
+pub const SHADER_AO_SAMPLE: u32 = 10;
+pub const SHADER_AO_BLUR: u32 = 11;
+pub const SHADER_AO_UPSAMPLE: u32 = 12;
+pub const SHADER_ATMOS_TRANSMITTANCE: u32 = 13;
+pub const SHADER_ATMOS_MULTISCATTER: u32 = 14;
+pub const SHADER_ATMOS_SKY_VIEW: u32 = 15;
+pub const SHADER_ATMOS_EXPOSURE: u32 = 16;
+pub const SHADER_STARS: u32 = 17;
+pub const SHADER_CLOUDS: u32 = 18;
+pub const SHADER_CLOUD_FIELD: u32 = 19;
+pub const SHADERS: u32 = 20;
 
 /// The shaders that place a point of the world, each of which lays it on the
 /// planet as the ground is (globe.wgsl's `on_globe_of`) before it projects
 /// it: what is drawn over the map and not laid on it floats off the ground
 /// as the planet falls away. The rest draw the sky or work on the screen.
-pub const WORLD_SHADERS: [u32; 8] = [
-    SHADER_CHUNK,
-    SHADER_DECOR,
-    SHADER_SKINNED,
-    SHADER_PUCK_ZONE,
-    SHADER_PUCK_BEACON,
-    SHADER_BADGE,
-    SHADER_BADGE_MSAA,
-    SHADER_DEBUG,
-];
+pub const WORLD_SHADERS: [u32; 7] = [SHADER_CHUNK, SHADER_DECOR, SHADER_SKINNED, SHADER_PUCK_ZONE, SHADER_PUCK_BEACON, SHADER_BADGE, SHADER_DEBUG];
 
 /// A shader's pieces, as build.rs wrote them: the files beside this one with
 /// their comments and indentation off, since what ships is what the GPU
@@ -121,7 +109,6 @@ pub fn source(kind: u32) -> &'static str {
         SHADER_PUCK_ZONE => wgsl!("frame", "globe", "grade", "finish", "puck", "puck_zone"),
         SHADER_PUCK_BEACON => wgsl!("frame", "globe", "grade", "finish", "place", "puck", "puck_beacon"),
         SHADER_BADGE => wgsl!("globe", "grade", "depth", "badge_depth", "badge"),
-        SHADER_BADGE_MSAA => wgsl!("globe", "grade", "depth", "badge_depth_msaa", "badge"),
         SHADER_SKY => wgsl!(
             "frame",
             "globe",
@@ -232,11 +219,10 @@ pub const PIPELINE_CHUNK_COARSE_DEPTH: u32 = 30;
 pub const PIPELINE_CHUNK_COARSE_PREPASS: u32 = 31;
 pub const PIPELINES: u32 = 33;
 
-// A pipeline record's words, in order: the shader for a frame at one
-// sample and the one for a multisampled frame; whether it has a fragment
+// A pipeline record's words, in order: the shader; whether it has a fragment
 // stage; the topology; the cull mode; whether it writes depth; the depth
 // compare; the depth bias (i32) and its slope scale (f32 bits); the blend;
-// the sample count (the frame's, or one); then the vertex buffers — a
+// the vertex entry point; then the vertex buffers — a
 // count, and for each its stride, its step mode, and its attributes as a
 // count and (location, offset, format) each; then the bind group layouts —
 // a count, and for each its entries as a count and (binding, visibility,
@@ -254,7 +240,6 @@ const fn i(v: i32) -> u32 {
 
 struct Head {
     shader: u32,
-    shader_msaa: u32,
     fragment: bool,
     topology: u32,
     cull: u32,
@@ -263,7 +248,6 @@ struct Head {
     depth_bias: u32,
     depth_bias_slope: u32,
     blend: u32,
-    samples: u32,
     /// Which vertex entry point of `shader` the pipeline enters. A format the
     /// pipeline already fixes is the pipeline's, not a number carried on every
     /// draw for the shader to branch on.
@@ -279,12 +263,10 @@ const fn at_coarse(h: Head) -> Head {
     Head { vertex: VS_COARSE, ..h }
 }
 
-/// An opaque lit pipeline: writes depth, nearer wins, drawn at the frame's
-/// sample count.
+/// An opaque lit pipeline: writes depth, nearer wins.
 const fn lit(shader: u32, cull: u32) -> Head {
     Head {
         shader,
-        shader_msaa: shader,
         fragment: true,
         topology: TRIANGLES,
         cull,
@@ -293,7 +275,6 @@ const fn lit(shader: u32, cull: u32) -> Head {
         depth_bias: 0,
         depth_bias_slope: 0,
         blend: OPAQUE,
-        samples: FRAME_SAMPLES,
         vertex: VS,
     }
 }
@@ -303,7 +284,6 @@ const fn lit(shader: u32, cull: u32) -> Head {
 const fn blended(shader: u32, cull: u32, bias: i32, slope: f32) -> Head {
     Head {
         shader,
-        shader_msaa: shader,
         fragment: true,
         topology: TRIANGLES,
         cull,
@@ -312,18 +292,16 @@ const fn blended(shader: u32, cull: u32, bias: i32, slope: f32) -> Head {
         depth_bias: i(bias),
         depth_bias_slope: f(slope),
         blend: ALPHA,
-        samples: FRAME_SAMPLES,
         vertex: VS,
     }
 }
 
 /// A depth-only pass into the shadow map: the pass's own vertex shader
 /// under the light's frame, no fragment stage, both sides, a plain
-/// less-than depth at one sample.
+/// less-than depth.
 const fn depth_only(shader: u32) -> Head {
     Head {
         shader,
-        shader_msaa: shader,
         fragment: false,
         topology: TRIANGLES,
         cull: CULL_NONE,
@@ -332,13 +310,11 @@ const fn depth_only(shader: u32) -> Head {
         depth_bias: 0,
         depth_bias_slope: 0,
         blend: OPAQUE,
-        samples: ONE_SAMPLE,
         vertex: VS,
     }
 }
 
-/// A depth-only pass from the eye, at one sample whatever the frame's:
-/// the depth the screen-space occlusion reads, under the frame's reversed
+/// A depth-only pass from the eye: the depth the screen-space occlusion reads, under the frame's reversed
 /// depth and the lit pass's culling, so it holds the surfaces the lit pass
 /// draws.
 const fn prepass(shader: u32, cull: u32) -> Head {
@@ -349,13 +325,12 @@ const fn prepass(shader: u32, cull: u32) -> Head {
     }
 }
 
-/// One of the screen-space occlusion's full-screen passes: no depth, one
-/// sample, into the target's own format.
+/// One of the screen-space occlusion's full-screen passes: no depth, into
+/// the target's own format.
 const fn screen(shader: u32) -> Head {
     Head {
         depth_compare: NO_DEPTH,
         blend: OPAQUE,
-        samples: ONE_SAMPLE,
         ..blended(shader, CULL_NONE, 0, 0.0)
     }
 }
@@ -377,7 +352,6 @@ fn group(entries: &[[u32; 3]]) -> Vec<u32> {
 fn record(h: Head, lanes: &[Vec<u32>], groups: &[Vec<u32>]) -> Vec<u32> {
     let mut out = vec![
         h.shader,
-        h.shader_msaa,
         h.fragment as u32,
         h.topology,
         h.cull,
@@ -386,7 +360,6 @@ fn record(h: Head, lanes: &[Vec<u32>], groups: &[Vec<u32>]) -> Vec<u32> {
         h.depth_bias,
         h.depth_bias_slope,
         h.blend,
-        h.samples,
         h.vertex,
     ];
     out.push(lanes.len() as u32);
@@ -530,12 +503,11 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         crate::frame::draw::PIPELINE_BADGE => record(
             Head {
                 topology: STRIP,
-                shader_msaa: SHADER_BADGE_MSAA,
                 depth_compare: GREATER_EQUAL,
                 ..blended(SHADER_BADGE, CULL_NONE, 0, 0.0)
             },
             &[],
-            &[group(&[[0, BOTH, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, FRAME_DEPTH]]), group(&SKIN)],
+            &[group(&[[0, BOTH, UNIFORM], [1, VERTEX, STORAGE], [2, VERTEX, DEPTH]]), group(&SKIN)],
         ),
         // The gizmos: a line list over everything, no depth test.
         crate::frame::draw::PIPELINE_DEBUG => record(
@@ -581,8 +553,8 @@ pub fn pipeline(id: u32) -> Vec<u32> {
                 AIR[5],
             ])],
         ),
-        // A mip level from the one above: no depth, one sample, into the
-        // texture's own format.
+        // A mip level from the one above: no depth, into the texture's own
+        // format.
         PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),
         // The screen-space occlusion (gpu/ao.rs): the frame's depth to half
         // resolution with a normal; the occlusion from that; the denoise,
@@ -678,7 +650,6 @@ pub type Buffer = (u32, u32, Vec<(u32, u32, u32)>);
 #[cfg(test)]
 pub struct Record {
     pub shader: u32,
-    pub shader_msaa: u32,
     pub fragment: bool,
     pub topology: u32,
     pub cull: u32,
@@ -687,7 +658,6 @@ pub struct Record {
     pub depth_bias: i32,
     pub depth_bias_slope: f32,
     pub blend: u32,
-    pub samples: u32,
     pub vertex: u32,
     pub buffers: Vec<Buffer>,
     /// Per group, its entries as (binding, visibility, kind).
@@ -721,17 +691,15 @@ impl Record {
         assert_eq!(at, words.len(), "a record's words end with its groups");
         Record {
             shader: words[0],
-            shader_msaa: words[1],
-            fragment: words[2] != 0,
-            topology: words[3],
-            cull: words[4],
-            depth_write: words[5] != 0,
-            depth_compare: words[6],
-            depth_bias: words[7] as i32,
-            depth_bias_slope: f32::from_bits(words[8]),
-            blend: words[9],
-            samples: words[10],
-            vertex: words[11],
+            fragment: words[1] != 0,
+            topology: words[2],
+            cull: words[3],
+            depth_write: words[4] != 0,
+            depth_compare: words[5],
+            depth_bias: words[6] as i32,
+            depth_bias_slope: f32::from_bits(words[7]),
+            blend: words[8],
+            vertex: words[9],
             buffers,
             groups,
         }

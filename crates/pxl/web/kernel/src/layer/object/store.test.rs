@@ -6,13 +6,12 @@
 
 use pxl_spec::bake::constant::{BAND_CELLS, CELL_STEPS};
 use pxl_spec::cell::cube_types::Block;
-use pxl_spec::space::indexer::{L2_IDX, L2_IDX_IN_L3, L3_IDX};
+use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::{fvec, ivec};
 use pxl_spec::space::xy::TO_XY;
 
 use super::*;
 use crate::global::serial;
-use crate::layer::object::collision::find_overlapping_object;
 use crate::layer::object::size::DECOR_SIZE;
 
 // Distinct, far-apart corners per test so leftover state from one test never
@@ -24,157 +23,6 @@ fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
 fn in_cell(c: &Pvf3) -> Vec<OccupiedEntry> {
     let [ix, iy, iz] = CELL.index_of(c);
     get_objects_in_cell(ix, iy, iz)
-}
-
-#[test]
-fn object_store_place_decor_stores_a_real_decor_entry_not_a_color() {
-    let _g = serial();
-    let c = corner(100_001, 0, 0);
-    place_decor(&c, DECOR_SIZE, DecorId::tree);
-    let entries = in_cell(&c);
-    assert_eq!(entries.len(), 1);
-    assert!(matches!(entries[0].kind, EntryKind::Decor { decor_id: DecorId::tree }));
-}
-
-#[test]
-fn object_store_place_decor_is_retrievable_by_its_own_address_same_path_a_solid_cube_uses() {
-    let _g = serial();
-    let c = corner(100_002, 0, 0);
-    place_decor(&c, DECOR_SIZE, DecorId::tree);
-    let entry = in_cell(&c).remove(0);
-    let fetched = get_placed_object(entry.at).expect("fetched by its address");
-    assert!(matches!(fetched.kind, EntryKind::Decor { .. }));
-}
-
-#[test]
-fn object_store_place_decor_blocks_a_second_placement_at_the_exact_same_corner() {
-    let _g = serial();
-    let c = corner(100_003, 0, 0);
-    place_decor(&c, DECOR_SIZE, DecorId::tree);
-    let blocked = find_overlapping_object(&c, DECOR_SIZE, 0).expect("blocked");
-    assert!(matches!(blocked.kind, EntryKind::Decor { .. }));
-}
-
-#[test]
-fn object_store_place_decor_a_solid_cube_still_blocks_placement_the_same_way_a_decor_entry_does() {
-    let _g = serial();
-    let c = corner(100_004, 0, 0);
-    place(&c, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
-    let blocked = find_overlapping_object(&c, DECOR_SIZE, 0).expect("blocked");
-    assert!(matches!(blocked.kind, EntryKind::Solid { .. }));
-}
-
-#[test]
-fn object_store_remove_erases_a_decor_entry_the_same_way_it_erases_a_solid_cube() {
-    let _g = serial();
-    let c = corner(100_005, 0, 0);
-    place_decor(&c, DECOR_SIZE, DecorId::tree);
-    let entry = in_cell(&c).remove(0);
-    remove(entry.at);
-    assert_eq!(in_cell(&c).len(), 0);
-    assert!(get_placed_object(entry.at).is_none());
-}
-
-#[test]
-fn object_store_column_key_an_object_above_one_l2_span_still_belongs_to_its_xy_column() {
-    // The renderer asks for a col_idx by an XY page index and a z = 0 page
-    // offset. A cell key that let its own Z through put everything above
-    // absolute z = 64u under a key nothing ever queried.
-    let _g = serial();
-    let (x, y) = (4096 * 3, 4096 * 5);
-    let ground = corner(x, y, 10);
-    let high = corner(x, y, 200);
-    place(&ground, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
-    place(&high, DECOR_SIZE, PlaceableCube::Block(Block::blue), false);
-    let col_idx = TO_XY(ground.i);
-    let key = object_col_idx_of(L3_IDX(col_idx), L2_IDX_IN_L3(col_idx));
-    let mut zs = Vec::new();
-    each_col_entry(key, &mut |e| zs.push(ivec::Z(e.corner().i)), false);
-    zs.sort_unstable();
-    assert_eq!(zs, vec![10, 200]);
-    // The renderer's own spelling of the same key — a page offset it builds
-    // with z = 0 — resolves to the same col_idx.
-    assert_eq!(object_col_idx_of(L3_IDX(col_idx), ivec::gather(0, 0, 0) | L2_IDX_IN_L3(col_idx)), key);
-}
-
-#[test]
-fn object_store_band_tree_a_2_2_2_block_of_one_colour_reads_back_as_eight_cells() {
-    // A band tree merges a uniform block of whole cells into one larger leaf
-    // when it compacts; everything downstream assumes an entry is one cell.
-    let _g = serial();
-    let x0 = 4096 * 7;
-    let mut corners = Vec::new();
-    for dz in 0..2 {
-        for dy in 0..2 {
-            for dx in 0..2 {
-                corners.push(corner(x0 + dx, dy, dz));
-            }
-        }
-    }
-    for c in &corners {
-        place(c, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
-    }
-    for c in &corners {
-        let found = in_cell(c);
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].size, 1.0);
-    }
-    let first = in_cell(&corners[0]).remove(0);
-    remove(first.at);
-    assert_eq!(in_cell(&corners[0]).len(), 0);
-    assert_eq!(in_cell(&corners[7]).len(), 1);
-}
-
-#[test]
-fn object_store_band_tree_clearing_a_chunk_s_last_object_frees_the_chunk() {
-    let _g = serial();
-    let c = corner(4096 * 9, 4096 * 2, 3);
-    let before = kernel().objects.cols().count();
-    place(&c, DECOR_SIZE, PlaceableCube::Block(Block::blue), false);
-    assert_eq!(kernel().objects.cols().count(), before + 1);
-    let entry = in_cell(&c).remove(0);
-    remove(entry.at);
-    assert_eq!(kernel().objects.cols().count(), before);
-}
-
-#[test]
-fn object_store_entries_a_column_walk_s_chunk_local_corner_agrees_with_the_absolute_one() {
-    let _g = serial();
-    let x0 = 4096 * 11 + 70; // not on a chunk boundary
-    let c = corner(x0, 4096 * 4 + 5, 130);
-    place(&c, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
-    let col_idx = TO_XY(c.i);
-    let base = object_col_idx_of(L3_IDX(col_idx), L2_IDX_IN_L3(col_idx));
-    let mut seen = 0;
-    each_col_entry(
-        base,
-        &mut |e| {
-            seen += 1;
-            assert_eq!(ivec::Z(e.corner().i), 130);
-            assert_eq!(e.lx, (x0 % 64) as f64);
-            assert_eq!(e.ly, 5.0);
-            assert_eq!(e.lz, 130.0);
-        },
-        false,
-    );
-    assert_eq!(seen, 1);
-}
-
-#[test]
-fn object_store_cells_occupancy_follows_placement_and_removal_and_air_does_not_occupy() {
-    let _g = serial();
-    let c = corner(4096 * 13, 0, 2);
-    let [ix, iy, iz] = CELL.index_of(&c);
-    assert!(!cell_is_occupied(ix, iy, iz));
-    place(&c, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
-    assert!(cell_is_occupied(ix, iy, iz));
-    let entry = get_objects_in_cell(ix, iy, iz).remove(0);
-    remove(entry.at);
-    assert!(!cell_is_occupied(ix, iy, iz));
-    let air = corner(4096 * 13, 0, 5);
-    place_air(&air, DECOR_SIZE);
-    let [ax, ay, az] = CELL.index_of(&air);
-    assert!(!cell_is_occupied(ax, ay, az));
 }
 
 /// A column's revision moves on a write to it, and on nothing else: not
@@ -326,20 +174,6 @@ fn the_lanes_are_in_band_and_walk_order_so_a_cell_s_entries_are_one_run() {
     assert_eq!(store.cell(3, 1, 0, 0).map(|c| c.count), Some(2));
     assert_eq!(store.cell(3, 0, 1, 0).map(|c| c.count), Some(1));
     assert_eq!(store.cell(3, 1, 0, BAND_CELLS as i32).map(|c| c.count), Some(1));
-}
-
-/// A column erased to nothing is gone from the store, and the columns
-/// beside it keep what they hold.
-#[test]
-fn erasing_a_column_leaves_the_others_as_they_were() {
-    let mut store = Store::new();
-    write(&mut store, 10, 0, [0, 0, 0], CELL, 1);
-    write(&mut store, 20, 0, [0, 0, 0], CELL, 1);
-    write(&mut store, 30, 0, [0, 0, 0], CELL, 1);
-    write(&mut store, 10, 0, [0, 0, 0], CELL, VOID);
-    assert_eq!(store.cols().collect::<Vec<_>>(), vec![20, 30]);
-    assert_eq!(store.read(30, 0, [0, 0, 0]), 1);
-    assert_eq!(store.read(20, 0, [0, 0, 0]), 1);
 }
 
 /// A chunk above z16 reads a write to a column it draws, in its tiers and

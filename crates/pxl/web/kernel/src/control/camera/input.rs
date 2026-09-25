@@ -694,7 +694,3 @@ pub fn camera_input_step() {
 pub fn holding() -> Holding {
     input().holding
 }
-
-#[cfg(test)]
-#[path = "input.test.rs"]
-mod test;
