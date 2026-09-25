@@ -79,18 +79,16 @@ pub mod load {
     pub const KEYS: &[&str] = &["CLEAR", "LOAD", "READ_ONLY"];
 }
 
-/// The one place the renderer's calls cross (gpu/api.rs): a range of the
-/// kernel's memory the kernel writes its calls into during a turn, and the host
-/// runs once the turn has returned. A call is a record — its op, the words of
-/// arguments that follow, then those words — and carries everything it names,
-/// bytes included, so nothing a record reads lies outside it.
+/// The one place the renderer's calls cross (gpu/api.rs): a stream
+/// (xpute-runtime ipc/stream.rs) in a range of the kernel's memory, which the
+/// kernel writes its calls into during a turn and the host runs once the turn
+/// has returned. A record carries everything it names, bytes included, so
+/// nothing a record reads lies outside it.
 ///
-/// The range opens on HEAD words: END, where the kernel says how many words of
-/// records the turn wrote; and from GPU_MS, the host's side, each timed span's
-/// GPU time in milliseconds as a double, then the frame's whole, as the host last
-/// read them.
+/// Its head is HEAD words: the stream's END, then from GPU_MS, the host's side,
+/// each timed span's GPU time in milliseconds as a double, then the frame's
+/// whole, as the host last read them.
 pub mod stream {
-    pub const END: u32 = 0;
     pub const GPU_MS: u32 = 2;
     pub const HEAD: u32 = 32;
     /// The range's size: what one turn may send the device. A product number, said
@@ -103,7 +101,7 @@ pub mod stream {
     /// refused, so an upload, which can wait a turn, is taken only while this much
     /// is left after it.
     pub const RESERVE: u32 = 1048576;
-    pub const KEYS: &[&str] = &["END", "GPU_MS", "HEAD", "BYTES", "RESERVE"];
+    pub const KEYS: &[&str] = &["GPU_MS", "HEAD", "BYTES", "RESERVE"];
 }
 
 /// A record's operation, then its arguments. Bytes go as their count, then the bytes padded to a word.

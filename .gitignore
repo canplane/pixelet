@@ -191,9 +191,6 @@ apps/web/src/kernel/kernel.wasm
 # A build's own staging files, gone when it finishes and left only by one
 # that failed part way (apps/web/script/build-wasm.ts).
 apps/web/src/kernel/kernel.*.wasm
-apps/web/src/kernel/abi/symbol.*.ts
-# Binaryen's mapping for that module's minified ABI, written with it.
-apps/web/src/kernel/abi/symbol.ts
 
 # The last build number this checkout published (apps/web/script/deploy.ts)
 apps/web/.build_number

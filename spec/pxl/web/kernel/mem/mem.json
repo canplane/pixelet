@@ -72,6 +72,16 @@
     ]
   },
 
+  "BOOT_AT": {
+    "$value": 33550336,
+    "$type": "u32",
+    "$doc": [
+      "Where the boot block is: the page under GLOBAL_BASE, past the rings' payloads. At",
+      "an address both sides know rather than one the module hands out, so the shell",
+      "finds it with no call but the first turn's, which lays the memory out."
+    ]
+  },
+
   "GLOBAL_BASE": {
     "$value": 33554432,
     "$type": "u32",
@@ -102,7 +112,7 @@
       "constants), so a terrain grown past a phone fails to build; and at boot",
       "against where it actually started and what the device actually gave.",
       "",
-      "256 MiB with the terrain at 63.31 leaves the phone 408.96 in practice, so",
+      "256 MiB with the terrain at 63.31 leaves the phone 408.90 in practice, so",
       "there are 153 MiB of headroom over the guarantee."
     ]
   },

@@ -176,7 +176,9 @@
       "entries": [
         { "name": "START", "value": 16 },
         { "name": "STOP", "value": 17 },
-        { "name": "LOG", "value": 18 }
+        { "name": "LOG", "value": 18 },
+        { "name": "READ", "value": 19 },
+        { "name": "TAKE", "value": 20 }
       ]
     },
     {
@@ -357,13 +359,19 @@
         {
           "name": "WORLD_CREATE",
           "value": 6913,
-          "doc": ["The shell's boot: what the build is and what the device offers; the object store loaded."],
+          "doc": [
+            "The shell's boot: what the build is and what the device offers, and what the browser's",
+            "storage kept under host.json's keys."
+          ],
           "packet": [
             { "name": "development", "type": "bool", "doc": ["A development build, which offers the settings schema.json marks `dev`."] },
             { "name": "handheld", "type": "bool" },
             { "name": "geolocation", "type": "bool" },
             { "name": "orientation", "type": "bool" },
-            { "name": "orientation_permission", "type": "bool", "doc": ["iOS 13+'s gate: requestPermission exists and must run inside a gesture."] }
+            { "name": "orientation_permission", "type": "bool", "doc": ["iOS 13+'s gate: requestPermission exists and must run inside a gesture."] },
+            { "name": "settings", "type": "str", "doc": ["The settings as stored, empty for none: a row a setting, far under a slot."] },
+            { "name": "objects", "type": "u32", "doc": ["The objects as stored, held as a body (host.json's BODY_READ), 0 for none."] },
+            { "name": "objects_bytes", "type": "u32" }
           ]
         },
         {
@@ -381,7 +389,12 @@
             { "name": "delta_s", "type": "f64", "doc": ["The frame interval and the turn, as the host measured them."] },
             { "name": "frame_ms", "type": "f64" },
             { "name": "interactive", "type": "bool" },
-            { "name": "credits", "type": "u32" }
+            { "name": "credits", "type": "u32" },
+            { "name": "unix_ms", "type": "f64", "doc": ["The local wall clock: `Date.now()`, the local hour, minute and second, and the local day's start."] },
+            { "name": "hours", "type": "f64" },
+            { "name": "minutes", "type": "f64" },
+            { "name": "seconds", "type": "f64" },
+            { "name": "day_start_ms", "type": "f64" }
           ],
           "signal": [{ "name": "draws", "type": "u32" }]
         },
@@ -516,7 +529,7 @@
         {
           "name": "FETCH_UPDATE",
           "value": 7683,
-          "doc": ["A read the host finished, its body held as `body` until the kernel takes it (the `body_read` import)."],
+          "doc": ["A read the host finished, its body held as `body` until the kernel takes it (host.json's BODY_READ)."],
           "packet": [
             { "name": "key", "type": "u64" },
             { "name": "outcome", "type": "FetchOutcome" },
@@ -530,7 +543,7 @@
         {
           "name": "LOAD_UPDATE",
           "value": 7939,
-          "doc": ["A model's bytes, held by the host as `body` until the kernel reads them (the `body_read` import)."],
+          "doc": ["A model's bytes, held by the host as `body` until the kernel reads them (host.json's BODY_READ)."],
           "packet": [
             { "name": "key", "type": "u64" },
             { "name": "body", "type": "u32" },
@@ -613,6 +626,20 @@
         { "name": "LEDGER_START", "value": 9488, "doc": ["A fresh recording window."] },
         { "name": "LEDGER_STOP", "value": 9489, "doc": ["The window frozen, so what is exported holds still."] },
         { "name": "LEDGER_LOG", "value": 9490, "doc": ["The console stream on or off."], "packet": [{ "name": "on", "type": "bool" }] },
+        {
+          "name": "LEDGER_READ",
+          "value": 9491,
+          "doc": [
+            "The ledger where it lies: the reply is the address of READ's words (ledger.json) over the",
+            "last `window_ms`, an infinite window being the whole recording, good until the next turn."
+          ],
+          "packet": [{ "name": "window_ms", "type": "f64" }]
+        },
+        {
+          "name": "LEDGER_TAKE",
+          "value": 9492,
+          "doc": ["The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn."]
+        },
         {
           "section": "the turn's signals: kernel → shell, left on the completion ring by a strobe or a command"
         },
@@ -702,8 +729,7 @@
           "type": "f64",
           "list": true,
           "doc": ["The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index."]
-        },
-        { "name": "object_storage_version", "type": "u32" }
+        }
       ]
     },
     {

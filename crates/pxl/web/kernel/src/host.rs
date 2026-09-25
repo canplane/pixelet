@@ -1,65 +1,100 @@
 // pxl-kernel/host.rs
 //
-// What the kernel asks of the host that is not a command it answers: its
-// clock, the browser's key-value storage where the object store keeps its
-// blob, the wall clock, the text measure. The host installs the calls before
-// the first turn (pxl-wasm's `install_host`); a native test runs on the
-// defaults, which keep nothing and hold time at zero.
+// What the kernel asks of the host that is not a command it answers: the
+// browser's key-value storage, a body the host holds copied in, a glyph's
+// advance. Each is a record in the host stream (abi/host.json), which the
+// host runs once the turn has returned, so what a record asks is done by the
+// time the next turn rises — and what it names is kept that long. Only the
+// clock is still called: a turn measures its own budget mid-turn, when the
+// host cannot run. A native test has no stream; storage keeps nothing there,
+// and a glyph is a fixed width.
+
+use std::collections::{HashMap, HashSet};
 
 use pxl_render::gpu::paint::Font;
+use xpute_runtime::ipc::stream::Stream;
 
+use crate::abi::host::{op, stream};
 use crate::global::Global;
 
 /// The host's clock, in milliseconds. The substrate holds it
 /// (xpute clock.rs); it is named here because it arrives with the rest.
 pub use xpute_runtime::clock::{now, set_clock};
 
-pub struct Storage {
-    pub get: fn(key: &str) -> Option<String>,
-    pub set: fn(key: &str, value: &str),
+struct Host {
+    stream: Stream,
+    /// What a record names, kept until the host has run it: a value to store.
+    held: Vec<String>,
 }
 
-fn get_nothing(_: &str) -> Option<String> {
-    None
+static HOST: Global<Option<Host>> = Global::new();
+
+fn host() -> Option<&'static mut Host> {
+    HOST.get(|| None).as_mut()
 }
 
-fn set_nothing(_: &str, _: &str) {}
-
-static STORAGE: Global<Storage> = Global::new();
-
-/// Installs `localStorage`.
-pub fn set_storage(storage: Storage) {
-    STORAGE.set(storage);
+/// Installs the host stream at `at`, `stream::BYTES` of the kernel's memory
+/// nothing else writes.
+///
+/// # Safety
+/// `at` must address that range, 4-aligned, for as long as the module runs.
+pub unsafe fn set_host_stream(at: u32) {
+    // SAFETY: the caller's range.
+    let words = unsafe { core::slice::from_raw_parts_mut(at as usize as *mut u32, (stream::BYTES / 4) as usize) };
+    HOST.set(Some(Host {
+        stream: Stream::new(words, stream::HEAD as usize),
+        held: Vec::new(),
+    }));
 }
 
-fn storage() -> &'static Storage {
-    STORAGE.get(|| Storage { get: get_nothing, set: set_nothing })
+/// The turn's rise: what the host did after the last turn is in, so what was
+/// held for it goes and the advances it wrote are known.
+pub fn host_rise() {
+    *TURN.get(|| 0) += 1;
+    if let Some(h) = host() {
+        h.held.clear();
+    }
+    glyphs_rise();
 }
 
-/// `localStorage.getItem(key)`.
-pub fn storage_get(key: &str) -> Option<String> {
-    (storage().get)(key)
+static TURN: Global<u64> = Global::new();
+
+/// Which turn this is. What a record asked for on turn `n` is done on any
+/// turn after it.
+pub fn turn() -> u64 {
+    *TURN.get(|| 0)
 }
 
-/// `localStorage.setItem(key, value)`.
-pub fn storage_set(key: &str, value: &str) {
-    (storage().set)(key, value)
+/// The turn's fall: its records, for the host to run once it returns.
+pub fn host_fall() {
+    if let Some(h) = host() {
+        h.stream.publish();
+    }
 }
 
-static BODY_READ: Global<fn(body: u32, dst: &mut [u8])> = Global::new();
-
-fn read_nothing(_: u32, _: &mut [u8]) {}
-
-/// Installs the host's read of a body it holds for the kernel (a response, a
-/// model file): copies it into `dst` and lets it go.
-pub fn set_body_read(read: fn(body: u32, dst: &mut [u8])) {
-    BODY_READ.set(read);
+/// The message a panic leaves, as the one record of the turn, published at
+/// once: the host finds it when the trap reaches it.
+pub fn host_panic(message: &str) {
+    if let Some(h) = host() {
+        h.stream.publish();
+        h.stream.record(op::PANIC, &[], &[], Some(message.as_bytes()));
+        h.stream.publish();
+    }
 }
 
-/// Copies body `body` into `dst`, which is its length, and the host lets it
-/// go; an empty `dst` only lets it go.
+/// `localStorage.setItem` under `storage`'s key (host.json).
+pub fn storage_set(storage: u32, value: String) {
+    let Some(h) = host() else { return };
+    h.stream.record(op::STORAGE_SET, &[storage, value.as_ptr() as u32, value.len() as u32], &[], None);
+    h.held.push(value);
+}
+
+/// Asks the host to copy body `body` into `dst`, which is its length, and let
+/// it go; an empty `dst` only lets it go. The bytes are there from the next
+/// turn on, and `dst` must be kept until then.
 pub fn body_read(body: u32, dst: &mut [u8]) {
-    (BODY_READ.get(|| read_nothing))(body, dst)
+    let Some(h) = host() else { return };
+    h.stream.record(op::BODY_READ, &[body, dst.as_mut_ptr() as u32, dst.len() as u32], &[], None);
 }
 
 static HANDHELD: Global<bool> = Global::new();
@@ -86,21 +121,80 @@ pub fn development() -> bool {
     *DEVELOPMENT.get(|| false)
 }
 
-static MEASURE: Global<fn(font: Font, text: &str) -> f64> = Global::new();
-
-fn measure_nothing(_: Font, text: &str) -> f64 {
-    text.chars().count() as f64 * 7.0
+/// Every glyph advance the host has said, by font and code point, and what
+/// was asked for since the last turn and where its answers go. The table
+/// grows with the characters a session has drawn in a font, which is bounded
+/// by the fonts and the script, not by what is drawn.
+struct Glyphs {
+    known: HashMap<(u32, u32, u32), f32>,
+    asked: HashSet<(u32, u32, u32)>,
+    answers: Vec<Asked>,
 }
 
-/// Installs a canvas context's `measureText`: the width `text` takes in `font`.
-pub fn set_measure_text(measure: fn(font: Font, text: &str) -> f64) {
-    MEASURE.set(measure);
+/// One MEASURE record's glyphs, and where the host writes their advances.
+struct Asked {
+    weight: u32,
+    px: u32,
+    cps: Vec<u32>,
+    widths: Box<[f32]>,
 }
 
-/// `ctx.font = font; ctx.measureText(text).width`, in the font the renderer
-/// paints the same text in.
-pub fn measure_text(font: Font, text: &str) -> f64 {
-    (MEASURE.get(|| measure_nothing))(font, text)
+static GLYPHS: Global<Glyphs> = Global::new();
+
+fn glyphs() -> &'static mut Glyphs {
+    GLYPHS.get(|| Glyphs {
+        known: HashMap::new(),
+        asked: HashSet::new(),
+        answers: Vec::new(),
+    })
+}
+
+fn glyphs_rise() {
+    let g = glyphs();
+    if g.answers.is_empty() {
+        return;
+    }
+    for a in g.answers.drain(..) {
+        for (cp, w) in a.cps.into_iter().zip(a.widths.iter()) {
+            g.known.insert((a.weight, a.px, cp), *w);
+        }
+    }
+    g.asked.clear();
+    // What was waiting on a width is laid out on the frame that knows it.
+    crate::world::change::request_world_tick();
+}
+
+/// The width `text` takes in `font`: the sum of its glyphs' advances, as the
+/// host's canvas measures each. None while one is not yet known, and it is
+/// asked for: the next turn knows it.
+pub fn measure_text(font: Font, text: &str) -> Option<f64> {
+    let Some(h) = host() else { return Some(text.chars().count() as f64 * 7.0) };
+    let g = glyphs();
+    let px = font.px.to_bits();
+    let mut width = 0.0;
+    let mut missing = Vec::new();
+    for c in text.chars() {
+        let key = (font.weight, px, c as u32);
+        match g.known.get(&key) {
+            Some(&w) => width += w as f64,
+            None => {
+                if g.asked.insert(key) {
+                    missing.push(c as u32);
+                }
+            }
+        }
+    }
+    if !missing.is_empty() {
+        let mut widths = vec![0.0f32; missing.len()].into_boxed_slice();
+        h.stream.record(op::MEASURE, &[font.weight, px, widths.as_mut_ptr() as u32], &missing, None);
+        g.answers.push(Asked {
+            weight: font.weight,
+            px,
+            cps: missing,
+            widths,
+        });
+    }
+    text.chars().all(|c| g.known.contains_key(&(font.weight, px, c as u32))).then_some(width)
 }
 
 /// The local wall clock: `Date.now()`, and the local hour and the local day's
@@ -115,19 +209,15 @@ pub struct LocalTime {
     pub day_start_ms: f64,
 }
 
-static LOCAL_TIME: Global<fn() -> LocalTime> = Global::new();
+static LOCAL_TIME: Global<LocalTime> = Global::new();
 
-fn no_time() -> LocalTime {
-    LocalTime::default()
-}
-
-/// Installs the host's local wall clock.
-pub fn set_local_time(clock: fn() -> LocalTime) {
-    LOCAL_TIME.set(clock);
+/// The wall clock as the frame's command brought it.
+pub fn set_local_time(t: LocalTime) {
+    LOCAL_TIME.set(t);
 }
 
 pub fn local_time() -> LocalTime {
-    (LOCAL_TIME.get(|| no_time))()
+    *LOCAL_TIME.get(LocalTime::default)
 }
 
 /// `Date.now()`.

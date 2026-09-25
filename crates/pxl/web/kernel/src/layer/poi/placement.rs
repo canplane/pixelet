@@ -125,10 +125,11 @@ pub fn step(ctx: &mut TickContext) {
         let mean = |sum: u64| ((sum + t.count as u64 / 2) / t.count as u64) as u32;
         let stands = cell.inner_at(GROUND, 0, t.at.map(mean));
         let Some((_, top)) = sched.surface_at(&stands.mid()) else { continue };
+        let Some(width) = badge::width(label) else { continue };
         let centre = stands.centre(top);
         let mut local = [0.0; 3];
         projection::unproject(&mut local, ivec::sub(centre.i, origin), centre.f);
-        p.batch.push(local[0], local[1], local[2], badge::width(label), badge::ANCHOR, labelled.len() as f64);
+        p.batch.push(local[0], local[1], local[2], width, badge::ANCHOR, labelled.len() as f64);
         labelled.push((label, stands));
     }
     badge::retain(&labelled.iter().map(|l| l.0).collect());

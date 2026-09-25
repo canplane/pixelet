@@ -63,18 +63,16 @@ export const load = {
   READ_ONLY: 2 as number,
 } as const;
 
-/** The one place the renderer's calls cross (gpu/api.rs): a range of the
- * kernel's memory the kernel writes its calls into during a turn, and the host
- * runs once the turn has returned. A call is a record — its op, the words of
- * arguments that follow, then those words — and carries everything it names,
- * bytes included, so nothing a record reads lies outside it.
+/** The one place the renderer's calls cross (gpu/api.rs): a stream
+ * (xpute-runtime ipc/stream.rs) in a range of the kernel's memory, which the
+ * kernel writes its calls into during a turn and the host runs once the turn
+ * has returned. A record carries everything it names, bytes included, so
+ * nothing a record reads lies outside it.
  *
- * The range opens on HEAD words: END, where the kernel says how many words of
- * records the turn wrote; and from GPU_MS, the host's side, each timed span's
- * GPU time in milliseconds as a double, then the frame's whole, as the host last
- * read them. */
+ * Its head is HEAD words: the stream's END, then from GPU_MS, the host's side,
+ * each timed span's GPU time in milliseconds as a double, then the frame's
+ * whole, as the host last read them. */
 export const stream = {
-  END: 0 as number,
   GPU_MS: 2 as number,
   HEAD: 32 as number,
   /** The range's size: what one turn may send the device. A product number, said

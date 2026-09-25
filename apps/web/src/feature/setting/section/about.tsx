@@ -7,6 +7,7 @@ import { SectionTitle } from "@/feature/setting/row.tsx";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
 import { PUBLISHED_VERSION } from "@/config/route.ts";
 import { useKernel } from "@/kernel/shell.ts";
+import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
 
 /** The environments worth abbreviating; anything else is shown as it is set. */
 const ENV_SHORT: Record<string, string> = { development: "dev", staging: "stg" };
@@ -18,8 +19,8 @@ const ENV_SHORT: Record<string, string> = { development: "dev", staging: "stg" }
  * the same way so the line has one form rather than two. Where the tiles are
  * a live API instead, that is a property of the deployment rather than of
  * any one kind, so it is said once. */
-function dataLabel(object_storage_version: number): string {
-  const object = `object/v${object_storage_version}`;
+function dataLabel(): string {
+  const object = STORAGE_KEYS[storage.OBJECTS].split(":").slice(1).join("/");
   if (!PUBLISHED_TILES) return `live tiles · ${object}`;
   const { terrain, poi, geocode } = PUBLISHED_VERSION;
   return `terrain/${terrain} · ${object} · poi/${poi} · geocode/${geocode}`;
@@ -38,7 +39,6 @@ function buildLabel(): string {
 
 export function AboutSection() {
   const { t } = useTranslation();
-  const object_storage_version = useKernel((s) => s.object_storage_version);
   return (
     <div className="flex flex-col gap-1">
       <SectionTitle>{t("settings.about.section_title")}</SectionTitle>
@@ -58,7 +58,7 @@ export function AboutSection() {
             {APP_ENV !== "production" && ` (${ENV_SHORT[APP_ENV] ?? APP_ENV})`}
             {` · ${buildLabel()}`}
           </span>
-          <span>{dataLabel(object_storage_version)}</span>
+          <span>{dataLabel()}</span>
         </div>
       </div>
     </div>

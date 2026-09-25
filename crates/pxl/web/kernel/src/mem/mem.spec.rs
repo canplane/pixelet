@@ -58,6 +58,11 @@ pub const RING_DESC_AT: u32 = 1048576;
 /// that a ring deepened does not move the payloads of the ring before it.
 pub const RING_SLOT_AT: u32 = 2097152;
 
+/// Where the boot block is: the page under GLOBAL_BASE, past the rings' payloads. At
+/// an address both sides know rather than one the module hands out, so the shell
+/// finds it with no call but the first turn's, which lays the memory out.
+pub const BOOT_AT: u32 = 33550336;
+
 /// Where the linker may start placing `.rodata`, `.data` and `.bss` — passed to
 /// wasm-ld as `--global-base`, which is the only way to keep it out of the range
 /// the rings take.
@@ -79,7 +84,7 @@ pub const GLOBAL_BASE: u32 = 33554432;
 /// constants), so a terrain grown past a phone fails to build; and at boot
 /// against where it actually started and what the device actually gave.
 ///
-/// 256 MiB with the terrain at 63.31 leaves the phone 408.96 in practice, so
+/// 256 MiB with the terrain at 63.31 leaves the phone 408.90 in practice, so
 /// there are 153 MiB of headroom over the guarantee.
 pub const MIN_HEAP_BYTES: u32 = 268435456;
 

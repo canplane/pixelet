@@ -31,7 +31,7 @@ use std::rc::Rc;
 
 use pxl_render::asset::gltf::{parse_gltf, Gltf};
 use pxl_spec::asset::ingested::Asset;
-use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
+use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
 pub use crate::abi::cmd::LoadKind;
 use crate::global::Global;
@@ -218,6 +218,8 @@ pub async fn gltf_task() {
             yield_if_spent(world_edge).await;
             let mut buf = vec![0u8; bytes as usize];
             body_read(body, &mut buf);
+            // In once the host has run the turn's records.
+            next_turn(world_edge).await;
             let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
                 Ok(g) => Entry::Ready(Rc::new(g)),
                 Err(_) => Entry::Failed,

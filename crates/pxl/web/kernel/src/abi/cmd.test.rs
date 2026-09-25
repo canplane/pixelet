@@ -44,6 +44,8 @@ fn every_number_is_its_major_and_minor() {
         (LEDGER_START, Major::LEDGER as u32, LedgerMinor::START as u32),
         (LEDGER_STOP, Major::LEDGER as u32, LedgerMinor::STOP as u32),
         (LEDGER_LOG, Major::LEDGER as u32, LedgerMinor::LOG as u32),
+        (LEDGER_READ, Major::LEDGER as u32, LedgerMinor::READ as u32),
+        (LEDGER_TAKE, Major::LEDGER as u32, LedgerMinor::TAKE as u32),
         (WORLD_SNAPSHOT, Major::WORLD as u32, WorldMinor::SNAPSHOT as u32),
         (SENSOR_CREATE, Major::SENSOR as u32, Minor::CREATE as u32),
         (SENSOR_DELETE, Major::SENSOR as u32, Minor::DELETE as u32),
@@ -64,7 +66,7 @@ fn every_number_is_its_major_and_minor() {
 /// same number as one of the four every subject has.
 #[test]
 fn a_subject_s_own_verbs_start_past_the_four_every_subject_has() {
-    let own: [(&str, u32); 20] = [
+    let own: [(&str, u32); 22] = [
         ("InputMinor::POINTER", InputMinor::POINTER as u32),
         ("InputMinor::WHEEL", InputMinor::WHEEL as u32),
         ("InputMinor::TRACKING", InputMinor::TRACKING as u32),
@@ -85,6 +87,8 @@ fn a_subject_s_own_verbs_start_past_the_four_every_subject_has() {
         ("LedgerMinor::START", LedgerMinor::START as u32),
         ("LedgerMinor::STOP", LedgerMinor::STOP as u32),
         ("LedgerMinor::LOG", LedgerMinor::LOG as u32),
+        ("LedgerMinor::READ", LedgerMinor::READ as u32),
+        ("LedgerMinor::TAKE", LedgerMinor::TAKE as u32),
     ];
     for (name, value) in own {
         assert!(value >= MINOR_OWN, "{name} = {value:#x} is below MINOR_OWN");

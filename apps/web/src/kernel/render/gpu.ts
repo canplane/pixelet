@@ -19,6 +19,7 @@
 import type { U32Array } from "@xpute/core/abi/array.ts";
 import type { f32, f64, u32 } from "@xpute/core/abi/word.ts";
 import { handle_slot } from "@xpute/runtime/abi/handle.ts";
+import { bytes_of, each_record } from "@xpute/runtime/ipc/stream.ts";
 
 import type { UnsupportedReason } from "@/app/store/unsupported-store.ts";
 import { address, compare, dimension, filter, format, load, op, paint, record, resource, stream } from "@/kernel/render/gpu/api.spec.ts";
@@ -470,17 +471,11 @@ function run_paint(w: U32Array): void {
  * no device they are dropped whole: the kernel hears the device went and
  * makes everything again on the next one. */
 export function run_gpu_stream(memory: WebAssembly.Memory, at: u32): void {
-  const base = at + stream.HEAD * 4;
   gpu_ms_at ??= { memory, at: at + stream.GPU_MS * 4 };
-  const end = new Uint32Array(memory.buffer, at, stream.HEAD)[stream.END];
-  if (end === 0 || device === null) return;
+  if (device === null) return;
   const d = device;
-  const w = new Uint32Array(memory.buffer, base, end) as U32Array;
-  /** A record's bytes, which open on their count at word `i`. */
-  const bytes = (i: u32) => new Uint8Array(memory.buffer, base + 4 * (i + 1), w[i]);
-  for (let k = 0; k < end;) {
-    const [code, n, a] = [w[k], w[k + 1], k + 2];
-    k = a + n;
+  each_record(memory.buffer, at, stream.HEAD, (code, w, a, n) => {
+    const k = a + n;
     switch (code) {
       case op.RESET:
         for (const o of objects) (o as { destroy?: () => void } | undefined)?.destroy?.();
@@ -558,7 +553,7 @@ export function run_gpu_stream(memory: WebAssembly.Memory, at: u32): void {
         break;
       }
       case op.SHADER:
-        put(w[a], d.createShaderModule({ code: utf8.decode(bytes(a + 1)) }));
+        put(w[a], d.createShaderModule({ code: utf8.decode(bytes_of(w, a + 1)) }));
         break;
       case op.LAYOUT:
         put(w[a], d.createBindGroupLayout({ entries: layout_entries(w.subarray(a + 1, k)) }));
@@ -579,10 +574,10 @@ export function run_gpu_stream(memory: WebAssembly.Memory, at: u32): void {
         break;
       }
       case op.WRITE_BUFFER:
-        d.queue.writeBuffer(get<GPUBuffer>(w[a]), w[a + 1], memory.buffer, base + 4 * (a + 3), w[a + 2]);
+        d.queue.writeBuffer(get<GPUBuffer>(w[a]), w[a + 1], memory.buffer, w.byteOffset + 4 * (a + 3), w[a + 2]);
         break;
       case op.WRITE_TEXTURE:
-        d.queue.writeTexture({ texture: get<GPUTexture>(w[a]), origin: [0, 0, w[a + 1]] }, bytes(a + 4), { bytesPerRow: w[a + 2] * 4 }, [w[a + 2], w[a + 3], 1]);
+        d.queue.writeTexture({ texture: get<GPUTexture>(w[a]), origin: [0, 0, w[a + 1]] }, bytes_of(w, a + 4), { bytesPerRow: w[a + 2] * 4 }, [w[a + 2], w[a + 3], 1]);
         break;
       case op.ENCODER:
         put(w[a], d.createCommandEncoder());
@@ -658,5 +653,5 @@ export function run_gpu_stream(memory: WebAssembly.Memory, at: u32): void {
       default:
         throw new Error(`[gpu] record ${code}`);
     }
-  }
+  });
 }

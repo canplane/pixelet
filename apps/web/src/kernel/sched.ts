@@ -20,6 +20,23 @@ import { boot_block, quantum_policy } from "@/kernel/module.ts";
 
 let driver: HTMLElement | null = null;
 
+/** The local wall clock, as the frame's command carries it: unix ms, the
+ * local hour, minute and second, and the local day's start. */
+interface LocalTime {
+  unix_ms: f64;
+  hours: f64;
+  minutes: f64;
+  seconds: f64;
+  day_start_ms: f64;
+}
+
+function local_time(): LocalTime {
+  const d = new Date();
+  const start = new Date(d);
+  start.setHours(0, 0, 0, 0);
+  return { unix_ms: d.getTime(), hours: d.getHours(), minutes: d.getMinutes(), seconds: d.getSeconds(), day_start_ms: start.getTime() };
+}
+
 /** Asks for a frame: the next animation frame strobes the kernel. */
 export function request_frame(): void {
   strobe.request();
@@ -48,7 +65,7 @@ const strobe = new Strobe(CORE_BUILD, quantum_policy(boot_block(CORE_KERNEL)), (
   CORE_BUILD.send(
     0,
     Command.WORLD_UPDATE,
-    encode_world_update({ width, height, dpr: dpr(), delta_s, frame_ms: grant.frame_ms, interactive: grant.interactive, credits: NET_CREDITS }),
+    encode_world_update({ width, height, dpr: dpr(), delta_s, frame_ms: grant.frame_ms, interactive: grant.interactive, credits: NET_CREDITS, ...local_time() }),
   );
 }, (run) => requestAnimationFrame(run));
 

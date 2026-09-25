@@ -24,7 +24,7 @@ use core::fmt;
 
 use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::mem::heap::{alloc, free, Block};
-use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
+use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
 use crate::abi::cmd::{FetchOutcome, FetchUpdate};
 use crate::global::Global;
@@ -66,9 +66,10 @@ impl fmt::Display for DemandName {
     }
 }
 
-/// The body the host holds as `body`, `bytes` long, copied into a block of
-/// its own: None when there is none, NoRoom when the heap has no block for it.
-/// The host lets the body go either way.
+/// A block of its own for the body the host holds as `body`, `bytes` long,
+/// which the host copies it into after this turn: None when there is none,
+/// NoRoom when the heap has no block for it. The host lets the body go either
+/// way.
 fn receive((body, bytes): (u32, u32)) -> Result<Option<Block>, FetchFail> {
     if bytes == 0 {
         return Ok(None);
@@ -115,30 +116,30 @@ pub fn fetch_queued(update: FetchUpdate) {
     arrivals().notify();
 }
 
-/// The fetches' task: each arrival read, decoded and settled, one a turn at
-/// least and as many as the quota lets. A body is one unit.
+/// The fetches' task: the arrivals' bodies asked for together, then each
+/// decoded and settled on a later turn, when they are in, as many as the
+/// quota lets and one at least. A body is one unit.
 pub async fn fetch_task() {
     loop {
         notified(arrivals).await;
         while !arrived().is_empty() {
-            yield_if_spent(world_edge).await;
-            fetch_arrived(arrived().remove(0));
+            let received: Vec<_> = arrived().drain(..).map(|u| (receive((u.body, u.body_bytes)), u)).collect();
+            next_turn(world_edge).await;
+            for (block, update) in received {
+                yield_if_spent(world_edge).await;
+                fetch_arrived(update, block);
+            }
         }
     }
 }
 
 fn fetch_arrived(
     FetchUpdate {
-        key,
-        outcome,
-        body,
-        body_bytes,
-        fail,
-        detail,
-        net_ms,
+        key, outcome, fail, detail, net_ms, ..
     }: FetchUpdate,
+    block: Result<Option<Block>, FetchFail>,
 ) {
-    let (outcome, fail, block) = match receive((body, body_bytes)) {
+    let (outcome, fail, block) = match block {
         Ok(block) => (outcome, fail, block),
         Err(no_room) => (FetchOutcome::Error, no_room, None),
     };

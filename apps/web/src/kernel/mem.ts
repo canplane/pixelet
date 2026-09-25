@@ -17,12 +17,13 @@
  * kernel handed out.
  */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { reserve_memory } from "@xpute/runtime/mem/section.ts";
 import { Doorbell } from "@xpute/runtime/ipc/doorbell.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/kernel/mem/mem.spec.ts";
 import { BOOT, boot_block, instantiate_kernel, type KernelExports } from "@/kernel/module.ts";
+import { run_host_stream } from "@/kernel/host.ts";
 import { run_gpu_stream } from "@/kernel/render/gpu.ts";
 
 export { REGION_BYTES };
@@ -56,12 +57,18 @@ export const CORE_MEMORY: WebAssembly.Memory = memory;
 export const MODULE_SECTION: { readonly offset: u32; readonly bytes: u32 } = { offset: 0, bytes: boot_block(CORE_KERNEL)[BOOT.data_end] };
 
 /** The rings to the module and its doorbell, made with it. A turn's
- * falling edge leaves the renderer's calls in its stream, run before
- * anything else can reach the device. */
+ * falling edge leaves what the kernel asks of the host in its two streams,
+ * run before anything else can reach the device or ring again. A turn that
+ * traps leaves a panic's message in the host's. */
 export const CORE_DOORBELL: Doorbell = (() => {
   const boot = boot_block(CORE_KERNEL);
   return new Doorbell(memory.buffer, boot[BOOT.sq], boot[BOOT.cq], (quota_ms) => {
-    const wake = CORE_KERNEL.interrupt(quota_ms);
+    let wake: f64;
+    try {
+      wake = CORE_KERNEL.interrupt(quota_ms);
+    } finally {
+      run_host_stream(memory, boot[BOOT.host]);
+    }
     run_gpu_stream(memory, boot[BOOT.gpu]);
     return wake;
   });

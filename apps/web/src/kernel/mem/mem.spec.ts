@@ -20,6 +20,11 @@ import type { u32 } from "@xpute/core/abi/word.ts";
  * the ring checks, since a position is taken modulo it by masking. */
 export const RING_CAPACITY: u32 = 2048 as number;
 
+/** Where the boot block is: the page under GLOBAL_BASE, past the rings' payloads. At
+ * an address both sides know rather than one the module hands out, so the shell
+ * finds it with no call but the first turn's, which lays the memory out. */
+export const BOOT_AT: u32 = 33550336 as number;
+
 /** What a device's memory is counted in: a reservation is a whole number of
  * these and the bytes past the last one are left out. */
 export const REGION_BYTES: u32 = 67108864 as number;

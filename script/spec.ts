@@ -1205,6 +1205,7 @@ const DATA_SPECS: { json: string; ts?: string; rs?: string; mod?: string; enums?
     tsNames: ["groups", "DEFAULT_PERSON_VARIANT_KEY", "DEFAULT_PET_VARIANT_KEY", "PERSON_GENDER_PREFIXES"],
   },
   { json: "spec/pxl/web/render/gpu/api.json", ts: "apps/web/src/kernel/render/gpu/api.spec.ts", rs: "crates/pxl/web/render/src/gpu/api.spec.rs", mod: "api_spec" },
+  { json: "spec/pxl/web/kernel/abi/host.json", ts: "apps/web/src/kernel/abi/host.spec.ts", rs: "crates/pxl/web/kernel/src/abi/host.spec.rs", mod: "host" },
   {
     json: "spec/pxl/web/kernel/sched/ledger/ledger.json",
     ts: "apps/web/src/feature/dev/ledger/ledger.spec.ts",
@@ -1217,7 +1218,7 @@ const DATA_SPECS: { json: string; ts?: string; rs?: string; mod?: string; enums?
     ts: "apps/web/src/kernel/mem/mem.spec.ts",
     rs: "crates/pxl/web/kernel/src/mem/mem.spec.rs",
     mod: "spec",
-    tsNames: ["DESKTOP_BYTES", "PHONE_BYTES", "REGION_BYTES", "RING_CAPACITY"],
+    tsNames: ["BOOT_AT", "DESKTOP_BYTES", "PHONE_BYTES", "REGION_BYTES", "RING_CAPACITY"],
   },
 ];
 

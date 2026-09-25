@@ -137,7 +137,11 @@ function turn(delta = 1 / 60): Turn {
   fetched = [];
   loads = [];
   const requests = heap_row[HEAP_REQUESTS];
-  CORE_BUILD.send(0, Command.WORLD_UPDATE, encode_world_update({ width: 1280, height: 720, dpr: 1, delta_s: delta, frame_ms: 1000 / 60, interactive: true, credits: 6 }));
+  CORE_BUILD.send(
+    0,
+    Command.WORLD_UPDATE,
+    encode_world_update({ width: 1280, height: 720, dpr: 1, delta_s: delta, frame_ms: 1000 / 60, interactive: true, credits: 6, unix_ms: 0, hours: 12, minutes: 0, seconds: 0, day_start_ms: 0 }),
+  );
   CORE_BUILD.ring(8);
   strobe_requests += heap_row[HEAP_REQUESTS] - requests;
   const started = fetched;
@@ -160,7 +164,7 @@ function command(cmd: Command, pkt?: U8Array): void {
 
 CORE_BUILD.call(
   Command.WORLD_CREATE,
-  encode_world_create({ development: false, handheld: false, geolocation: false, orientation: false, orientation_permission: false }),
+  encode_world_create({ development: false, handheld: false, geolocation: false, orientation: false, orientation_permission: false, settings: "", objects: 0, objects_bytes: 0 }),
   (r) => r,
 );
 console.log(`heap: boot and world create ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);

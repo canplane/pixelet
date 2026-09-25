@@ -26,12 +26,11 @@ use core::fmt::Write;
 use pxl_spec::bake::ground::{channel_bit, ChannelMask, GroundChannelKey};
 use xpute_core::codec::json::{read_json, Quoted};
 
+use crate::abi::host::storage;
 use crate::global::Global;
-use crate::host::{development, storage_get, storage_set};
+use crate::host::{development, storage_set};
 pub use crate::shell::setting::schema_spec::{AoMode, CameraTerrainMode, ResolutionMode, SettingKey, SettingKind, Settings};
 use crate::world::chunk::source::chunk_sources_changed;
-
-const STORAGE_KEY: &str = "pxl:settings";
 
 /// Whether this build offers the setting at all.
 ///
@@ -93,8 +92,12 @@ impl Settings {
     }
 }
 
-/// What differs from the defaults, by name.
 fn save(s: &Settings) {
+    storage_set(storage::SETTINGS, stored(s));
+}
+
+/// What differs from the defaults, by name: what storage keeps.
+fn stored(s: &Settings) -> String {
     let defaults = Settings::DEFAULT;
     let mut body = String::from("{");
     for key in SettingKey::ALL {
@@ -112,13 +115,16 @@ fn save(s: &Settings) {
         };
     }
     body.push('}');
-    storage_set(STORAGE_KEY, &body);
+    body
 }
 
-fn load() -> Settings {
+/// The settings storage kept, as `raw`, empty for none.
+fn load(raw: &str) -> Settings {
     let mut s = Settings::DEFAULT;
-    let Some(raw) = storage_get(STORAGE_KEY) else { return s };
-    let Some(stored) = read_json(&raw) else {
+    if raw.is_empty() {
+        return s;
+    }
+    let Some(stored) = read_json(raw) else {
         save(&s);
         return s;
     };
@@ -151,8 +157,13 @@ fn load() -> Settings {
 
 static SETTINGS_STORE: Global<Settings> = Global::new();
 
+/// The settings from what storage kept (WORLD_CREATE), `raw` empty for none.
+pub fn settings_load(raw: &str) {
+    SETTINGS_STORE.set(load(raw));
+}
+
 pub fn settings_store() -> &'static mut Settings {
-    SETTINGS_STORE.get(load)
+    SETTINGS_STORE.get(|| Settings::DEFAULT)
 }
 
 #[cfg(test)]

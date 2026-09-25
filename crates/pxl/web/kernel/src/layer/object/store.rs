@@ -38,8 +38,9 @@ use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
+use crate::abi::host::storage;
 use crate::global::Global;
-use crate::host::{now, storage_get, storage_set};
+use crate::host::{body_read, now, storage_set, turn};
 use crate::kernel::kernel;
 use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::setting::store::hidden_ground;
@@ -89,14 +90,10 @@ pub type ObjectAir = ObjectLayerEntry;
 pub type OccupiedEntry = ObjectLayerEntry;
 
 // A page is five bare lanes — x, y, z, size, value — with no record header
-// (the persistence section below). A blob of an older version is not read. Bump this again whenever a future change makes an older
-// entry's encoding mean something different from what it meant when it was
-// written.
-pub const OBJECT_STORAGE_VERSION: u32 = 10;
-
-fn storage_key() -> String {
-    format!("pxl:object:v{OBJECT_STORAGE_VERSION}")
-}
+// (the persistence section below). A blob of an older encoding is not read:
+// the key it is kept under carries the encoding's version (abi/host.json's
+// STORAGE_KEYS), bumped whenever a change makes an older entry mean something
+// other than it meant when it was written.
 
 // ---- Chunk storage ----
 //
@@ -442,6 +439,9 @@ struct StoreState {
     virtual_carve_preview: Option<CarvePreview>,
     /// When the pending save is due, if one is.
     save_due_ms: Option<f64>,
+    /// The saved blob the host is copying in, and the turn it was asked on:
+    /// read on a later one.
+    loading: Option<(Vec<u8>, u64)>,
 }
 
 static STORE: Global<StoreState> = Global::new();
@@ -452,6 +452,7 @@ fn store_state() -> &'static mut StoreState {
         hide_in: (false, false),
         virtual_carve_preview: None,
         save_due_ms: None,
+        loading: None,
     })
 }
 
@@ -669,13 +670,24 @@ pub fn decode_objects(blob: &str) -> Result<(), MarshalError> {
     result
 }
 
-/// Reads the saved blob into the store. An unreadable blob starts the world
+/// Asks for the saved blob the host holds as `body`, `bytes` long, which the
+/// frame reads into the store once it is in (`flush_save_if_due`).
+pub fn load(body: u32, bytes: u32) {
+    let mut blob = vec![0; bytes as usize];
+    body_read(body, &mut blob);
+    store_state().loading = Some((blob, turn()));
+}
+
+/// Reads a saved blob that has come in. An unreadable blob starts the world
 /// empty, as a missing one does.
-pub fn load() {
-    if let Some(raw) = storage_get(&storage_key()) {
-        if decode_objects(&raw).is_err() {
-            kernel().objects.clear();
-        }
+fn loaded() {
+    let st = store_state();
+    if !st.loading.as_ref().is_some_and(|(_, asked)| turn() > *asked) {
+        return;
+    }
+    let (blob, _) = st.loading.take().expect("checked above");
+    if core::str::from_utf8(&blob).map_or(true, |raw| decode_objects(raw).is_err()) {
+        kernel().objects.clear();
     }
 }
 
@@ -702,6 +714,7 @@ fn saves() -> &'static mut Notify {
 /// The frame's check: a pending save that is due is asked of the save task,
 /// and one not yet due asks for the turn it falls due on.
 pub fn flush_save_if_due() {
+    loaded();
     match store_state().save_due_ms {
         Some(due) if now() >= due => saves().notify(),
         Some(due) => wake_at(due),
@@ -740,7 +753,7 @@ pub async fn save_task() {
             continue;
         }
         if let Ok(blob) = encode_pages(&by_page) {
-            storage_set(&storage_key(), &blob);
+            storage_set(storage::OBJECTS, blob);
         }
     }
 }
@@ -751,7 +764,7 @@ pub fn flush_save() {
         return;
     }
     if let Ok(blob) = encode_objects() {
-        storage_set(&storage_key(), &blob);
+        storage_set(storage::OBJECTS, blob);
     }
 }
 

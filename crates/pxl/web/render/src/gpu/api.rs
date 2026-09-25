@@ -22,6 +22,8 @@
 
 use xpute_runtime::abi::handle::HandleTable;
 
+use xpute_runtime::ipc::stream::Stream;
+
 use crate::gpu::api_spec::{op, stream};
 
 use xpute_runtime::global::Global;
@@ -49,13 +51,6 @@ pub mod texture_usage {
 /// No timestamp written, no attachment: a pass description's empty word.
 pub const NONE: u32 = u32::MAX;
 
-/// The stream's words, and how many of them past HEAD the turn has written.
-struct Stream {
-    words: &'static mut [u32],
-    len: usize,
-}
-
-const WORDS: usize = (stream::BYTES / 4) as usize;
 const HEAD: usize = stream::HEAD as usize;
 
 static STREAM: Global<Option<Stream>> = Global::new();
@@ -73,8 +68,8 @@ static GPU: Gpu = Gpu(());
 /// `at` must address that range, 8-aligned, for as long as the module runs.
 pub unsafe fn set_gpu_stream(at: u32) {
     // SAFETY: the caller's range.
-    let words = unsafe { core::slice::from_raw_parts_mut(at as usize as *mut u32, WORDS) };
-    STREAM.set(Some(Stream { words, len: 0 }));
+    let words = unsafe { core::slice::from_raw_parts_mut(at as usize as *mut u32, (stream::BYTES / 4) as usize) };
+    STREAM.set(Some(Stream::new(words, HEAD)));
 }
 
 /// The calls; none under a native test, which has no stream.
@@ -86,54 +81,18 @@ fn stream() -> &'static mut Stream {
     STREAM.get(|| None).as_mut().expect("a GPU call with no stream")
 }
 
-/// Ends the turn's records: the host runs what END says once the turn has
-/// returned, and the next turn writes from the start.
+/// Ends the turn's records, for the host to run once the turn has returned.
 pub fn gpu_publish() {
     if let Some(s) = STREAM.get(|| None).as_mut() {
-        s.words[stream::END as usize] = s.len as u32;
-        s.len = 0;
+        s.publish();
     }
 }
 
 /// Whether an upload of `bytes` may go in this turn: taken, it leaves the
 /// stream `stream::RESERVE` for what cannot wait.
 pub fn room(bytes: u32) -> bool {
-    STREAM.get(|| None).as_ref().is_some_and(|s| {
-        let left = (WORDS - HEAD - s.len) * 4;
-        // A record's head and its arguments, at most eight words.
-        left >= bytes as usize + 32 + stream::RESERVE as usize
-    })
-}
-
-impl Stream {
-    fn reserve(&mut self, words: usize) -> usize {
-        let at = HEAD + self.len;
-        assert!(at + words <= WORDS, "a turn's GPU records past the stream's {} bytes", stream::BYTES);
-        self.len += words;
-        at
-    }
-
-    /// A record of `op`: its arguments, then any words, then any bytes.
-    fn record(&mut self, code: u32, args: &[u32], tail: &[u32], bytes: Option<&[u8]>) {
-        let byte_words = bytes.map_or(0, |b| 1 + b.len().div_ceil(4));
-        let n = args.len() + tail.len() + byte_words;
-        let at = self.reserve(2 + n);
-        let w = &mut self.words[at..at + 2 + n];
-        w[0] = code;
-        w[1] = n as u32;
-        w[2..2 + args.len()].copy_from_slice(args);
-        w[2 + args.len()..2 + args.len() + tail.len()].copy_from_slice(tail);
-        if let Some(b) = bytes {
-            let k = 2 + args.len() + tail.len();
-            w[k] = b.len() as u32;
-            let dst = &mut w[k + 1..];
-            if let Some(last) = dst.last_mut() {
-                *last = 0;
-            }
-            // SAFETY: the words reserved, as bytes; at least `b.len()` of them.
-            unsafe { core::ptr::copy_nonoverlapping(b.as_ptr(), dst.as_mut_ptr() as *mut u8, b.len()) };
-        }
-    }
+    // A record's op, count and arguments, at most eight words.
+    STREAM.get(|| None).as_ref().is_some_and(|s| s.left() >= bytes as usize + 32 + stream::RESERVE as usize)
 }
 
 fn put(code: u32, args: &[u32]) {
@@ -184,12 +143,10 @@ impl Gpu {
     /// A pipeline from its record (shader.rs), its group layouts, its
     /// shader module and the format it draws into.
     pub fn pipeline(&self, id: u32, record: &[u32], layouts: &[u32], module: u32, format: u32) {
-        let s = stream();
-        let at = s.reserve(2 + 4 + record.len() + layouts.len());
-        let w = &mut s.words[at..];
-        w[..6].copy_from_slice(&[op::PIPELINE, (4 + record.len() + layouts.len()) as u32, id, module, format, record.len() as u32]);
-        w[6..6 + record.len()].copy_from_slice(record);
-        w[6 + record.len()..6 + record.len() + layouts.len()].copy_from_slice(layouts);
+        let w = stream().open(op::PIPELINE, 4 + record.len() + layouts.len());
+        w[..4].copy_from_slice(&[id, module, format, record.len() as u32]);
+        w[4..4 + record.len()].copy_from_slice(record);
+        w[4 + record.len()..].copy_from_slice(layouts);
     }
 
     /// A bind group: (binding, resource kind, object, offset, size — 0 the
@@ -286,7 +243,7 @@ impl Gpu {
     pub fn gpu_ms(&self, span: u32) -> f64 {
         let at = stream::GPU_MS as usize + 2 * span as usize;
         assert!(at + 2 <= HEAD, "a GPU span past the stream's head");
-        let w = &stream().words;
+        let w = stream().head();
         f64::from_bits(w[at] as u64 | (w[at + 1] as u64) << 32)
     }
 

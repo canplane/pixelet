@@ -65,18 +65,21 @@ pub struct BubbleLayout {
     pub logical_h: f64,
 }
 
-pub fn layout_bubble(text: &str) -> BubbleLayout {
-    let measure = |s: &str| measure_text(BUBBLE_FONT, s);
+/// None until every glyph of `text` has its advance, which the next turn's
+/// have.
+pub fn layout_bubble(text: &str) -> Option<BubbleLayout> {
+    measure_text(BUBBLE_FONT, text)?;
+    let measure = |s: &str| measure_text(BUBBLE_FONT, s).expect("every glyph of the text is known");
     let lines = wrap_text(&measure, text, MAX_TEXT_WIDTH_PX);
     let text_w = lines.iter().map(|l| measure(l)).fold(f64::NEG_INFINITY, f64::max).ceil();
     let box_w = text_w + PADDING_X * 2.0;
     let box_h = lines.len() as f64 * LINE_H + PADDING_Y * 2.0;
-    BubbleLayout {
+    Some(BubbleLayout {
         lines,
         box_w,
         box_h,
         logical_h: box_h + TAIL_H,
-    }
+    })
 }
 
 struct Held {
@@ -119,7 +122,11 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
         b.written = None;
         b.shown = want.clone();
         if let Some((_, text)) = want {
-            let layout = layout_bubble(&text);
+            // Laid out on a later frame, the glyphs' advances in.
+            let Some(layout) = layout_bubble(&text) else {
+                b.shown = None;
+                return;
+            };
             let slot = billboard_sheet().add(
                 layout.box_w * DPR_MAX,
                 layout.logical_h * DPR_MAX,
