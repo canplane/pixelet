@@ -51,7 +51,7 @@ pub const PIPELINE_GHOST_DECOR: u32 = 4;
 /// (3), UV (2), joints (4, as u32), weights (4); the indices follow the
 /// vertex lanes.
 pub const MODEL_VERTEX_WORDS: u32 = 16;
-/// An actor (crates/pxl/web/kernel/src/io/load.rs): words (the model's handle, the joint palette's
+/// An actor (crates/pxl/web/kernel/src/layer/model/store.rs): words (the model's handle, the joint palette's
 /// handle, the model id, uniform, pipeline), its uniform's fourth float the
 /// turn about Z.
 pub const PIPELINE_SKINNED: u32 = 5;

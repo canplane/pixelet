@@ -17,7 +17,7 @@
 //!
 //! Position/facing math lives in path.rs; this file reads that math and tells
 //! the scheduler's actor where to stand. The model is registered once per
-//! variant (io/model_asset.rs) and shared with the settings variant
+//! variant (layer/model/asset.rs) and shared with the settings variant
 //! picker's preview.
 //!
 //! Assets: Kenney's "Mini Characters" (person) and "Cube Pets" (pet) packs,
@@ -30,13 +30,13 @@ use crate::control::camera::orbit::damp_alpha;
 use crate::control::camera::store::{camera_store, CameraStatus};
 use crate::global::Global;
 use crate::io::load::{load_gltf, load_image, Load};
-use crate::io::model_asset::{register_model, ModelHandle};
 use crate::kernel::{kernel, with_world};
 use crate::layer::character::chat_bubble::chat_bubble_step;
 use crate::layer::character::path::{heading_to, init_settle_tracker, sample_walk_plan, update_settle_tracker, SettleTracker, Vec2, WalkPlan, WalkSample};
 use crate::layer::character::store::companion_load_store;
 use crate::layer::character::variant::{character_variant, CharacterGroup, CharacterVariant};
 use crate::layer::character::variant_spec::IDLE_CLIP;
+use crate::layer::model::asset::{register_model, ModelHandle};
 use crate::layer::object::store::objects_revision;
 use crate::sched::tick::TickContext;
 use crate::shell::setting::store::settings_store;
@@ -367,7 +367,7 @@ impl Walker {
             self.actor_clip = Some(clip);
         }
         // The next frame is the scheduler's to ask for: an actor playing a clip
-        // keeps the tick awake (io/load.rs), and nothing here moves otherwise.
+        // keeps the tick awake (layer/model/store.rs), and nothing here moves otherwise.
     }
 }
 

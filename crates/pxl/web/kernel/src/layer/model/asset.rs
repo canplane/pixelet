@@ -1,7 +1,7 @@
-// pxl-kernel/io/model_asset.rs
+// pxl-kernel/layer/model/asset.rs
 
 //! A parsed glTF (crates/pxl/web/render/src/asset/gltf.rs) handed to the scheduler's models as a
-//! model (crates/pxl/web/kernel/src/io/load.rs): the one place a parsed asset
+//! model (crates/pxl/web/kernel/src/layer/model/store.rs): the one place a parsed asset
 //! becomes the kernel's lanes, so a companion, a decor kind or an asset a player
 //! brings all enter the world the same way.
 //!

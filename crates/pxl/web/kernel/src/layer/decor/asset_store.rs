@@ -7,7 +7,7 @@
 //! frame that draws it.
 //!
 //! A model is registered with the scheduler's models as it arrives
-//! (io/model_asset.rs), so the kernel holds its triangles for the
+//! (layer/model/asset.rs), so the kernel holds its triangles for the
 //! eraser's hit test (crates/pxl/web/kernel/src/world/chunk/raycast.rs) and the renderer
 //! draws its instances from the same lanes; the group it is drawn as is its
 //! variant's place across every kind, in registry order. The registering is
@@ -18,10 +18,10 @@ use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::global::Global;
 use crate::io::load::{load_failed, load_gltf, load_image, Load};
-use crate::io::model_asset::register_model;
 use crate::kernel::kernel;
 use crate::layer::decor::build::DecorKindBundle;
 use crate::layer::decor::registry::DECOR_BUNDLES;
+use crate::layer::model::asset::register_model;
 use crate::world::change::{request_world_tick, world_edge};
 
 /// Variants a kind has room for; kind.rs's largest kind has nine.

@@ -9,7 +9,7 @@ pet uses), and renaming the folder to the engine's own tier name would make it
 read as a different thing from that settings surface when it's the same one.
 
 **What makes something an Actor, not one of the other tiers:** one of the
-kernel's actors (`/crates/pxl/web/kernel/src/io/load.rs`) — a model played by
+kernel's actors (`/crates/pxl/web/kernel/src/layer/model/store.rs`) — a model played by
 its own clips, its joint palette written each tick — rather than an instance
 of a static model the way decor's population is, with position and animation
 driven in a step of the frame's tick (`../../sched/tick.rs`, the interaction

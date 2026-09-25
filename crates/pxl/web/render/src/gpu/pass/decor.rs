@@ -6,9 +6,9 @@
 //! on the GPU: the block is the instance buffer, the chunk's translation is its
 //! uniform, and the scheduler says which block a chunk shows.
 //!
-//! A model is the scheduler's (crates/pxl/web/kernel/src/io/load.rs), registered by the decor asset
+//! A model is the scheduler's (crates/pxl/web/kernel/src/layer/model/store.rs), registered by the decor asset
 //! store and drawn from the same block the kernel holds its triangles in for
-//! the hit test — the vertex lanes of crates/pxl/web/kernel/src/io/model_asset.rs's layout, and the indices
+//! the hit test — the vertex lanes of crates/pxl/web/kernel/src/layer/model/asset.rs's layout, and the indices
 //! past them. The groups are every bundle's variants in bundle order, the order
 //! the kinds were taught; a group's skin is the image its variant loaded, held
 //! by image rather than by group, since two variants — two kinds, even — may

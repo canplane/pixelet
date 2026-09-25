@@ -1,6 +1,6 @@
 // pxl-render/gpu/pass/skinned.rs
 
-//! Actors on the device: the scheduler's skinned draws (crates/pxl/web/kernel/src/io/load.rs)
+//! Actors on the device: the scheduler's skinned draws (crates/pxl/web/kernel/src/layer/model/store.rs)
 //! executed against each model's mesh block and each actor's joint palette,
 //! both as the scheduler wrote them, under shader/skinned.wgsl. A model's skin
 //! is the image its asset loaded, by model id.

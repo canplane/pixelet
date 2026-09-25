@@ -42,7 +42,6 @@ use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 
 use crate::global::Global;
-use crate::io::load::Models;
 use crate::layer::billboard::field::Billboards;
 use crate::layer::decor::build::{decor_density, DecorBuild, Ground, Kind as DecorKind, Placed};
 use crate::layer::decor::instance::{decor_groups, DecorScratch};
@@ -50,6 +49,7 @@ use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::frame_gizmo::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
+use crate::layer::model::store::Models;
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::node::{mesh_step, BuildEvent, Builder, Cube, PageLanes, World, MAX_CHUNKS};
@@ -544,7 +544,7 @@ pub struct Scheduler {
     pub draw: DrawList,
     /// The hover ghost (marker/hover_cursor.rs).
     pub ghost: GhostDraw,
-    /// Models and the actors that play them (io/load.rs).
+    /// Models and the actors that play them (layer/model/store.rs).
     pub models: Models,
     /// The location puck (marker/location_puck.rs).
     pub markers: Markers,

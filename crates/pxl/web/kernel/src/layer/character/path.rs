@@ -3,7 +3,7 @@
 //! Pure companion-movement math — no renderer of any kind. Positioning/timing
 //! logic is kept independent of the renderer on purpose, which is how it
 //! survived the move from three to the kernel's actors
-//! (crates/pxl/web/kernel/src/io/load.rs) unchanged.
+//! (crates/pxl/web/kernel/src/layer/model/store.rs) unchanged.
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Vec2 {
