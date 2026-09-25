@@ -107,7 +107,11 @@ impl Range {
         match self {
             Range::Terrain => 0,
             Range::Run(set) => {
-                assert!(set < RUN_SETS, "a run set past the ones there are");
+                // A run set past the ones there are. Const, so no bug report:
+                // the panic names its place and nothing else.
+                if set >= RUN_SETS {
+                    panic!()
+                }
                 1 + set
             }
             Range::Bake => 1 + RUN_SETS,

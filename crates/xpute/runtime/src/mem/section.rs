@@ -53,7 +53,11 @@ impl Section {
     /// begins. What is laid must fit the section, or a range inside it would
     /// reach past it.
     pub const fn nth(&self, sizes: &[u32], unit: u32, n: usize) -> Section {
-        assert!(span_of(sizes, unit) <= self.bytes, "ranges laid past the section they are laid in");
+        // Ranges laid past the section they are laid in. Const, so no bug
+        // report: the panic names its place and nothing else.
+        if span_of(sizes, unit) > self.bytes {
+            panic!()
+        }
         Section {
             offset: nth_at(self.offset, sizes, unit, n),
             bytes: sizes[n],
