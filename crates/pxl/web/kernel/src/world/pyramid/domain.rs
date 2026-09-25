@@ -258,6 +258,9 @@ pub struct Domain {
     /// the order — measured once while the budget was fitted: the cover
     /// walks the same chunks, and a measure reads every placed column.
     measured: HashMap<Chunk, Order>,
+    /// The chunks under each chunk the rule split (`children`), found once
+    /// while the budget was fitted, as the measures are.
+    kids: HashMap<Chunk, Vec<Chunk>>,
     /// The chunks the rule draws under this view's criterion.
     chunks: u32,
 }
@@ -276,6 +279,7 @@ pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>, pressure: u3
         roots: Vec::new(),
         pages: BTreeMap::new(),
         measured: HashMap::new(),
+        kids: HashMap::new(),
         chunks: 0,
     };
     d.roots = d.find_roots();
@@ -284,10 +288,10 @@ pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>, pressure: u3
     // criterion, so each piece of ground is measured once however many
     // steps it takes; and past the top's split distance nothing splits, the
     // roots alone, which fit.
-    let mut measured = HashMap::new();
+    let (mut measured, mut kids) = (HashMap::new(), HashMap::new());
     let mut at = |d: &mut Domain, step: i32| {
         d.scale = (-(pressure as f64) - step as f64 / SCALE_STEPS as f64).exp2();
-        (d.chunks, d.pages) = d.select(&mut measured);
+        (d.chunks, d.pages) = d.select(&mut measured, &mut kids);
         d.chunks <= VIEW_CHUNKS && d.pages.len() as u32 <= VIEW_PAGES
     };
     let last = *STEP.get(|| 0);
@@ -304,7 +308,7 @@ pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>, pressure: u3
         at(&mut d, step);
     }
     *STEP.get(|| 0) = step;
-    d.measured = measured;
+    (d.measured, d.kids) = (measured, kids);
     d
 }
 
@@ -497,7 +501,14 @@ impl Domain {
     /// split into them, and the peak would stand cut. So every chunk of a
     /// finer level is under exactly one chunk of the level over it, the one
     /// it lies in or the one its column's contents end in.
-    pub fn children(&self, c: Chunk) -> impl Iterator<Item = Chunk> + '_ {
+    pub fn children(&self, c: Chunk) -> Vec<Chunk> {
+        match self.kids.get(&c) {
+            Some(kids) => kids.clone(),
+            None => self.children_of(c).collect(),
+        }
+    }
+
+    fn children_of(&self, c: Chunk) -> impl Iterator<Item = Chunk> + '_ {
         let z = c.node().1[2];
         let top = self.occupied(c.beside(0, 0, 1)).is_none();
         let floor = self.occupied(c.beside(0, 0, -1)).is_none();
@@ -508,14 +519,14 @@ impl Domain {
     /// The chunks the rule draws under this view's criterion, counted, and
     /// the pages that takes (`pages`), each chunk's measure kept in
     /// `measured` for the next count.
-    fn select(&self, measured: &mut HashMap<Chunk, Order>) -> (u32, BTreeMap<LevelPage, Option<Order>>) {
+    fn select(&self, measured: &mut HashMap<Chunk, Order>, kids: &mut HashMap<Chunk, Vec<Chunk>>) -> (u32, BTreeMap<LevelPage, Option<Order>>) {
         let mut chunks = 0;
         let mut pages = BTreeMap::new();
         let mut open = self.roots.clone();
         while let Some(c) = open.pop() {
             let m = *measured.entry(c).or_insert_with(|| self.measure(c));
             if self.split_at(c, m.near, m.seen) {
-                open.extend(self.children(c));
+                open.extend(kids.entry(c).or_insert_with(|| self.children_of(c).collect()).iter().copied());
                 continue;
             }
             chunks += 1;

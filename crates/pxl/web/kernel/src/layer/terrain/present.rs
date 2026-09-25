@@ -10,7 +10,7 @@
 //! is held for; until it comes, the stale chunks that drew it last are drawn
 //! (chunk/table.rs `retire`).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::{Cover, Domain};
@@ -46,7 +46,7 @@ pub fn mesh(cover: Cover, d: &Domain, drawable: impl Fn(Chunk) -> bool) -> Cover
         let refine: HashSet<Chunk> = unbalanced(&drawn, d)
             .into_iter()
             .map(|(_, coarse)| coarse)
-            .filter(|&c| d.splits(c) && d.children(c).next().is_some_and(&drawable))
+            .filter(|&c| d.splits(c) && d.children(c).first().is_some_and(|&k| drawable(k)))
             .collect();
         if refine.is_empty() {
             break;
@@ -98,16 +98,28 @@ fn replace(drawn: &mut HashSet<Chunk>, gaps: &mut HashSet<Chunk>, up: &HashSet<C
 }
 
 /// Every pair of drawn chunks the view sees that meet more than a level
-/// apart, the finer first: across each of its sides, where the ground
-/// beside it may stand in the chunk level with it or one above or below.
+/// apart, the finer first: across each of its sides, the chunks of the
+/// column beside it at its level or any over it whose heights reach its own.
+/// The drawn chunks are grouped by column once, so a side is a walk up that
+/// column's levels and not one up every chunk above and below it.
 fn unbalanced(drawn: &HashSet<Chunk>, d: &Domain) -> Vec<(Chunk, Chunk)> {
+    let mut columns: HashMap<(u32, [i64; 2]), Vec<Chunk>> = HashMap::new();
+    for &c in drawn {
+        columns.entry((c.level(), c.column().1)).or_default().push(c);
+    }
     let mut out = Vec::new();
     for &fine in drawn {
-        for (dx, dy, dz) in [(1, 0), (-1, 0), (0, 1), (0, -1)].into_iter().flat_map(|(dx, dy)| (-1..=1).map(move |dz| (dx, dy, dz))) {
-            let next = fine.beside(dx, dy, dz);
-            if let Some(coarse) = std::iter::once(next).chain(next.ancestors()).find(|a| drawn.contains(a)) {
-                if coarse.level() >= fine.level() + 2 && d.sees(fine) && d.sees(coarse) {
-                    out.push((fine, coarse));
+        let (f0, f1) = fine.z_range();
+        let reach = f1 - f0;
+        for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+            let next = fine.beside(dx, dy, 0);
+            for a in std::iter::once(next).chain(next.ancestors()).filter(|a| a.level() >= fine.level() + 2) {
+                let Some(cubes) = columns.get(&(a.level(), a.column().1)) else { continue };
+                for &coarse in cubes {
+                    let (c0, c1) = coarse.z_range();
+                    if c0 < f1 + reach && c1 > f0 - reach && d.sees(fine) && d.sees(coarse) {
+                        out.push((fine, coarse));
+                    }
                 }
             }
         }
