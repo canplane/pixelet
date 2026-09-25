@@ -1048,7 +1048,8 @@ impl Scheduler {
             let span = chunk_span_of(level) as i64;
             let placed: Vec<Placed> = world
                 .store
-                .cols()
+                .cols_under(self.slots[i].chunk.node())
+                .into_iter()
                 .filter_map(|col_idx| {
                     let o = FROM_L2_IDX(col_idx);
                     let (col_x, col_y) = (ivec::X(o), ivec::Y(o));

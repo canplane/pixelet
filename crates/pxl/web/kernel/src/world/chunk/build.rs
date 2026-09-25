@@ -809,7 +809,11 @@ impl Builder {
         let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         let mut columns = Vec::new();
-        for key in world.store.cols() {
+        // Its own ground and the apron a fold reads, which reaches into the
+        // chunks beside it.
+        let near = (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy)));
+        let under: Vec<IVec> = near.flat_map(|(dx, dy)| world.store.cols_under(c.at.beside(dx, dy).node())).collect();
+        for key in under {
             if !tiers_draw(level, base, key) {
                 continue;
             }

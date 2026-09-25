@@ -1028,6 +1028,26 @@ impl Store {
         self.reaches.get(&(u32::try_from(side.above(L2)).ok()?, at)).copied()
     }
 
+    /// The columns holding objects under a node, a column's or coarser,
+    /// found down the reaches: a subtree nothing stands in is not entered, so
+    /// the cost is what is under the node and not what the store holds.
+    pub fn cols_under(&self, (side, at): (Scale, [i64; 2])) -> Vec<IVec> {
+        let Ok(level) = u32::try_from(side.above(L2)) else { return Vec::new() };
+        let mut out = Vec::new();
+        let mut down = vec![(level, at)];
+        while let Some((level, at)) = down.pop() {
+            if !self.reaches.contains_key(&(level, at)) {
+                continue;
+            }
+            match level {
+                0 => out.push(ivec::gather(at[0], at[1], 0)),
+                _ => down.extend((0..4).map(|slot| (level - 1, child_of(at, slot)))),
+            }
+        }
+        out.sort_unstable();
+        out
+    }
+
     /// Makes again the reaches over column `col`, from it up.
     fn reach_up(&mut self, col: IVec) {
         let mut at = [ivec::X(col), ivec::Y(col)];
