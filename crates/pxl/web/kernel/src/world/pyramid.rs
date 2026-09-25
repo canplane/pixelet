@@ -33,7 +33,7 @@ use crate::world::change::{world_edge, WorldTopic};
 use crate::world::page_table::PageTable;
 use chunk::Chunk;
 pub use window::Domain;
-use window::{domain_for, eye, held, ring_of, window, Frustum};
+use window::{domain_for, eye, heights_revision, held, ring_of, window, Frustum};
 use window::{CHAIN_PAGES, HELD_AXIS, WINDOW_LEVELS};
 
 /// A layer the pyramid holds: its page is itself, folded by `Folds`.
@@ -132,9 +132,11 @@ pub struct Cover {
 
 /// What the cover and the wishlist are a function of: where the eye is, what
 /// it sees and the window it holds, whether the camera is moving, the
-/// resident set and the pinned page. Two turns agreeing on all of it want the
-/// same pages of the same ground, so the second decides nothing again.
-type Wish = ([f64; 3], Frustum, (u32, u32), bool, u32, Option<LevelPage>);
+/// resident set, the pinned page, and the heights the domain measures the
+/// ground by (`heights_revision`), which neither the eye nor this layer's
+/// resident set moves. Two turns agreeing on all of it want the same pages
+/// of the same ground, so the second decides nothing again.
+type Wish = ([f64; 3], Frustum, (u32, u32), bool, u32, Option<LevelPage>, (u32, u32));
 
 pub struct Pyramid<L: Layer> {
     tables: Vec<PageTable<L>>,
@@ -530,7 +532,7 @@ impl<L: Layer> Pyramid<L> {
         let anchor = e.foot;
         let w = window();
         let frustum = Frustum::of_view();
-        let wish = (e.at, frustum, (w.start, w.end), crate::sched::turn::interactive(), self.revision, self.pinned);
+        let wish = (e.at, frustum, (w.start, w.end), crate::sched::turn::interactive(), self.revision, self.pinned, heights_revision());
         if self.last != Some(wish) {
             self.drop_unrecorded(anchor);
             let d = domain_for(&e, eye_height(), Some(frustum));
@@ -547,7 +549,7 @@ impl<L: Layer> Pyramid<L> {
             }
             // Letting a page go moves the revision; the wish is the resident
             // set the cover was made from.
-            self.last = Some((wish.0, wish.1, wish.2, wish.3, self.revision, wish.5));
+            self.last = Some((wish.0, wish.1, wish.2, wish.3, self.revision, wish.5, heights_revision()));
             self.wishlist = self.wants(anchor);
             self.folds.notify();
         }
