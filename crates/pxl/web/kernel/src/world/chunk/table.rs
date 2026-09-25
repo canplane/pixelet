@@ -105,8 +105,6 @@ const _: () = assert!(2 * WIDEST_SELECTION <= MAX_CHUNKS, "render: a view and th
 /// Tiers one chunk may keep: the active pair, the off-screen tier, and one
 /// of hysteresis.
 const MAX_CACHED_TIERS: usize = 4;
-/// A wait halves a chunk's distance key every this many milliseconds.
-const AGE_HALF_MS: f64 = 4000.0;
 
 pub const IN_FRUSTUM: u16 = 1;
 pub const EMPTY: u16 = 2;
@@ -682,7 +680,7 @@ pub struct Scheduler {
 #[derive(Default)]
 struct Scratch {
     order: Vec<usize>,
-    keys: Vec<Keyed>,
+    keys: Vec<Priority>,
     visible: Vec<usize>,
     offscreen: Vec<usize>,
     eligible: Vec<usize>,
@@ -873,7 +871,7 @@ impl Scheduler {
     /// decor it holds are an older generation now, drawn until a layout of
     /// the new one is whole and then let go at once, so a change is never a
     /// hole and never half of one. Where it stands among the builds is the one
-    /// order's to say (`priority`'s `restale`), not this.
+    /// order's to say (`priority`), not this.
     fn source(&mut self, world: &mut World, i: usize) {
         self.view_dirty = true;
         let before = self.slots[i].retained();
@@ -1172,9 +1170,8 @@ impl Scheduler {
                 self.slots[i].set(STALE, !wanted.contains(k));
             }
 
-            // In the order the builds will take them, which is a distance in
-            // the chunk's own sides (`priority`), so a coarse chunk far off
-            // goes with a fine one near. Left in the key's own order — a
+            // In the order the builds will take them (`priority`), out from
+            // the view's center. Left in the key's own order — a
             // `Chunk` sorts by its level, then its coordinate —
             // the pass mounted every chunk of the finest level before any of
             // the next, and within a level in raw coordinate order rather
@@ -1185,10 +1182,9 @@ impl Scheduler {
             // the ground at the horizon appeared last however badly the
             // builds wanted it.
             //
-            // Nearest the eye first, by the distance the level was chosen
-            // by (domain.rs `Domain::nearest_to`).
+            // Nearest the view's center first (domain.rs `Domain::order_of`).
             let Some(d) = Terrain::pyramid().domain() else { return };
-            let mut near: Vec<(f64, Chunk)> = wanted.iter().filter(|k| !self.index.contains_key(k)).map(|&k| (d.nearest_to(k), k)).collect();
+            let mut near: Vec<(f64, Chunk)> = wanted.iter().filter(|k| !self.index.contains_key(k)).map(|&k| (d.order_of(k), k)).collect();
             near.sort_by(|a, b| a.0.total_cmp(&b.0));
             self.to_mount.clear();
             self.to_mount.extend(near.into_iter().map(|(_, k)| k));
@@ -1409,7 +1405,7 @@ impl Scheduler {
         self.refresh(&frame);
         self.retire(world, self.clock_ms);
         let mut sc = core::mem::take(&mut self.scratch);
-        self.order(t0, &mut sc.order, &mut sc.keys);
+        self.order(&mut sc.order, &mut sc.keys);
         let Scratch {
             order, visible, offscreen, eligible, ..
         } = &mut sc;
@@ -1479,10 +1475,8 @@ impl Scheduler {
         // own and put at the front of this, which meant in the order its page
         // arrived — so a page answering for ground at the horizon sent its
         // sixty-four chunks ahead of everything under the camera, and what
-        // filled the screen was the order the network replied in. The class
-        // was real and is kept; it is a term of `priority` now (`restale`),
-        // under the holes and over the refinements, where the distance
-        // decides within it.
+        // filled the screen was the order the network replied in. It is only
+        // pending now, placed by its distance like every other chunk.
         let slots = &self.slots;
         self.builds.clear();
         self.builds.extend(visible.iter().filter(|&&i| slots[i].has(PENDING)).map(|&i| slots[i].id));
@@ -1707,27 +1701,21 @@ impl Scheduler {
         }
     }
 
-    /// Every slot's index in priority order (`priority_keyed`) into `idx`,
-    /// the keys aged once into `keys` rather than in the comparator.
-    fn order(&self, now: f64, idx: &mut Vec<usize>, keys: &mut Vec<Keyed>) {
+    /// Every slot's index in priority order (`priority`) into `idx`, each
+    /// slot's key read once into `keys` rather than in the comparator.
+    fn order(&self, idx: &mut Vec<usize>, keys: &mut Vec<Priority>) {
         let holders = self.builder.holders();
         keys.clear();
-        keys.extend(self.slots.iter().map(|s| {
-            Priority {
-                holds: holders.contains(&Some(s.id)),
-                in_frustum: s.has(IN_FRUSTUM),
-                hole: s.has(EMPTY) && !s.has(COVERED),
-                restale: s.layout_ready && s.layout_generation != self.builder.generation_of(s.id).unwrap_or(0),
-                distance2: s.distance2,
-                pending_since: s.pending_since,
-            }
-            .keyed(now)
+        keys.extend(self.slots.iter().map(|s| Priority {
+            holds: holders.contains(&Some(s.id)),
+            in_frustum: s.has(IN_FRUSTUM),
+            distance2: s.distance2,
         }));
         idx.clear();
         idx.extend(0..self.slots.len());
         // Ties broken by the slot, which is the order a stable sort keeps: the
         // same order, with no merge buffer taken each tick.
-        idx.sort_unstable_by(|&a, &b| priority_keyed(&keys[a], &keys[b]).then(a.cmp(&b)));
+        idx.sort_unstable_by(|&a, &b| priority(&keys[a], &keys[b]).then(a.cmp(&b)));
     }
 
     fn set_pending(&mut self, i: usize, pending: bool, request: i32, now: f64) {
@@ -2145,52 +2133,31 @@ fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cube {
     cube.clamp(finest, coarsest)
 }
 
-/// What a chunk's place in the order is decided by. `hole`: nothing is drawn
-/// on its ground, neither its own layout nor a stale chunk it replaces.
+/// What a chunk's place in the order is decided by.
 #[derive(Clone, Copy)]
 struct Priority {
     holds: bool,
     in_frustum: bool,
-    hole: bool,
-    /// Showing a generation older than its sources: the ground it draws is
-    /// not what the page under it now says. Worse than a chunk asking only
-    /// to be sharper, better than one showing nothing at all.
-    restale: bool,
     /// How near the view's center its ground comes, squared: its place in
     /// the view's order.
     distance2: f64,
-    pending_since: f64,
 }
 
-/// A priority with its distance key aged for one `now`.
-#[derive(Clone, Copy)]
-struct Keyed {
-    p: Priority,
-    key: f64,
-}
-
-impl Priority {
-    fn keyed(self, now: f64) -> Keyed {
-        let d2 = self.distance2;
-        let key = if self.pending_since < 0.0 {
-            d2
-        } else {
-            d2 * 2f64.powf(-2.0 * (now - self.pending_since) / AGE_HALF_MS)
-        };
-        Keyed { p: self, key }
-    }
-}
-
-/// The order work is taken in: the slots' holders; then what is on screen,
-/// every hole first, then every chunk showing a generation its sources have
-/// moved past, then the ones asking only to be sharper, as progressive
-/// refinement goes — a coarse chunk a zoom out has just brought covers ground
-/// nothing shows, a fine one ground a stale chunk still shows; within each,
-/// the nearest the view's center (world/pyramid/domain.rs `Domain::order_of`),
-/// the one order every layer's work is taken in, so the ground where the
-/// character stands is built first and the view fills outward from it; then what is off screen farthest first — a release
-/// takes memory from what is least likely to be wanted again. A wait halves
-/// the distance key every AGE_HALF_MS, within its class.
+/// The order work is taken in: the slots' holders, which the rest wait on;
+/// then what is on screen, nearest the view's center first
+/// (world/pyramid/domain.rs `Domain::order_of`), the one order every layer's
+/// work is taken in; then what is off screen, farthest first — a release
+/// takes memory from what is least likely to be wanted again.
+///
+/// Only the distance, and no class over it. The view fills out from where
+/// the camera looks and the character stands, and each chunk it reaches
+/// overwrites what the last view drew there, stale or borrowed from a page
+/// over it: what is on the screen answers the camera first, nearest the
+/// middle, and nothing further out is worth its wait. Classes over it — a
+/// chunk showing nothing before one showing an older generation, before one
+/// asking to be sharper — and a wait that halved the key every four seconds
+/// sent the builds to ground at the edge of the view while the middle stood
+/// coarse, which is the response the view is judged by (2026-09-26).
 ///
 /// A plain distance and not one in the chunk's own sides. That was "the
 /// biggest on the screen first", and it is the same thing for every level:
@@ -2198,16 +2165,12 @@ impl Priority {
 /// coarse one at the horizon subtends about what a fine one under the camera
 /// does, and they came out equal. The screen then filled everywhere at once
 /// rather than from the middle — and everywhere at once means the middle
-/// waits for all of it. At the two hundred chunks a second the builder
-/// manages when it is behind, a five-level window's two thousand three
-/// hundred is eleven seconds; its innermost ring alone is under three.
-fn priority_keyed(a: &Keyed, b: &Keyed) -> core::cmp::Ordering {
-    b.p.holds
-        .cmp(&a.p.holds)
-        .then(b.p.in_frustum.cmp(&a.p.in_frustum))
-        .then_with(|| if a.p.in_frustum { b.p.hole.cmp(&a.p.hole) } else { core::cmp::Ordering::Equal })
-        .then_with(|| if a.p.in_frustum { b.p.restale.cmp(&a.p.restale) } else { core::cmp::Ordering::Equal })
-        .then_with(|| if a.p.in_frustum { a.key.total_cmp(&b.key) } else { b.key.total_cmp(&a.key) })
+/// waits for all of it.
+fn priority(a: &Priority, b: &Priority) -> core::cmp::Ordering {
+    b.holds
+        .cmp(&a.holds)
+        .then(b.in_frustum.cmp(&a.in_frustum))
+        .then_with(|| if a.in_frustum { a.distance2.total_cmp(&b.distance2) } else { b.distance2.total_cmp(&a.distance2) })
 }
 
 /// Where a slot is from a frame: on screen, and its world center.
