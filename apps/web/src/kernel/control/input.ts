@@ -30,8 +30,7 @@ import {
 import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import { send_permission } from "@/kernel/control/sensor.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
-import { request_frame, set_driver, strobe } from "@/kernel/sched.ts";
-import { kernel_command } from "@/kernel/shell.ts";
+import { request_frame, ring_now, set_driver, strobe } from "@/kernel/sched.ts";
 
 export function send_rect(element: HTMLElement): void {
   const r = element.getBoundingClientRect();
@@ -143,12 +142,12 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     }).catch(() => {});
 
     send_rect(element);
-    kernel_command(Command.SENSOR_OPEN);
+    ring_now(Command.SENSOR_OPEN);
     strobe.start();
 
     return () => {
       strobe.stop();
-      kernel_command(Command.SENSOR_CLOSE);
+      ring_now(Command.SENSOR_CLOSE);
       permission?.removeEventListener("change", on_permission);
       observer.disconnect();
       globalThis.removeEventListener("pagehide", on_page_hide);

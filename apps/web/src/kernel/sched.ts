@@ -11,6 +11,7 @@
  * (control/input.ts), and a turn with nothing mounted carries no frame.
  */
 
+import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Strobe } from "@xpute/runtime/sched/strobe.ts";
 import { Command, encode_world_update } from "@/kernel/abi/cmd.spec.ts";
@@ -40,6 +41,15 @@ function local_time(): LocalTime {
 /** Asks for a frame: the next animation frame strobes the kernel. */
 export function request_frame(): void {
   strobe.request();
+}
+
+/** Sends a command and rings it at once with no quota: what it asks of the
+ * host is heard inside the call, the sensors' close sent after the strobe
+ * has stopped included. */
+export function ring_now(cmd: Command, pkt?: U8Array): void {
+  CORE_BUILD.send(0, cmd, pkt);
+  CORE_BUILD.ring(0);
+  request_frame();
 }
 
 export function set_driver(element: HTMLElement | null): void {

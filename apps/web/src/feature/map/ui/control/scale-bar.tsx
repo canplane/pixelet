@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
 
-import { color, font } from "@/shared/ui/theme.ts";
+import { color, font, textEdge } from "@/shared/ui/theme.ts";
 
 const TICK_PX = 6;
 const LINE_PX = 1.5;
@@ -56,8 +56,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.8,
     color: color.white,
-    textShadowColor: EDGE,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 2,
+    ...textEdge(EDGE),
   },
 });

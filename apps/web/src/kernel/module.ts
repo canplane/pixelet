@@ -27,6 +27,7 @@ import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import type { QuantumPolicy } from "@xpute/runtime/sched/quantum.ts";
 
 import { BOOT_AT } from "@/kernel/mem/mem.spec.ts";
+import { DEV_BUNDLE } from "@/config/bundle.ts";
 
 /** What the module exports: the doorbell. */
 export interface KernelExports {
@@ -110,7 +111,7 @@ export async function instantiate_kernel(memory: WebAssembly.Memory): Promise<Ke
   // Not from the HTTP cache in development: the dev server rebuilds the
   // module under the same URL, and a cached one silently runs yesterday's
   // core under today's glue.
-  const bytes = await (await fetch(KERNEL_WASM_URL, import.meta.env?.DEV ? { cache: "no-store" } : undefined)).arrayBuffer();
+  const bytes = await (await fetch(KERNEL_WASM_URL, DEV_BUNDLE ? { cache: "no-store" } : undefined)).arrayBuffer();
   const { instance } = await WebAssembly.instantiate(bytes, {
     // The clock a tick's budget is spent against: the one call the module
     // makes, since a turn measures itself while the host cannot run.

@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { useUiStore } from "@/app/store/ui-store.ts";
-import { alpha, color, font } from "@/shared/ui/theme.ts";
+import { alpha, color, font, textEdge } from "@/shared/ui/theme.ts";
 
 /** The lines said so far, fading with age; a pointer over them brings them
  * all back up to be read. */
@@ -37,9 +37,7 @@ const styles = StyleSheet.create({
     fontFamily: font.family,
     fontSize: 12,
     fontWeight: "500",
-    textShadowColor: alpha(color.black, 0.9),
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 2,
+    ...textEdge(alpha(color.black, 0.9)),
   },
   self: { flexShrink: 0, color: "#ff8904" },
   said: { flexShrink: 1, color: color.white },

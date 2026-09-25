@@ -11,7 +11,7 @@
  * Tailwind v4's own oklch values converted once.
  */
 
-import { Platform } from "react-native";
+import { Platform, type TextStyle } from "react-native";
 
 /** `alpha(color, 0.5)`: a `#rrggbb` at an opacity, as the palette's `/50`. */
 export function alpha(hex: string, a: number): string {
@@ -65,6 +65,12 @@ export const font = {
   /** For numbers that have to line up. */
   mono: Platform.select({ web: 'ui-monospace, SFMono-Regular, Menlo, "Roboto Mono", monospace', ios: "Menlo", default: "monospace" }),
 };
+
+/** A thin dark edge around text, so it reads over any ground. The web draws
+ * a shadow from one CSS value, and warns on the three a device takes. */
+export function textEdge(tint: string): TextStyle {
+  return Platform.OS === "web" ? ({ textShadow: `0 0 2px ${tint}` } as TextStyle) : { textShadowColor: tint, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 };
+}
 
 /** The map's floating chrome. */
 export const chrome = {

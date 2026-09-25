@@ -3,7 +3,7 @@
 /**
  * Dev overlay for the kernel's ledger (crates/pxl/kernel/src/sched/ledger):
  * the recording window and the exports as buttons, over the gauge panel
- * (gauge.tsx). Gated by `import.meta.env.DEV` and the `show_ledger`
+ * (gauge.tsx). Gated by a development bundle and the `show_ledger`
  * setting — off by default.
  *
  * It also owns the dev lifecycle the ledger's surfaces share, which runs
@@ -29,6 +29,7 @@ import { ledgerTraceDownload } from "./trace.ts";
 import { Command, encode_input_view, encode_ledger_log } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
+import { DEV_BUNDLE } from "@/config/bundle.ts";
 
 /** How often the stream is collected while it is on. */
 const DRAIN_MS = 500;
@@ -80,7 +81,7 @@ function startWindow(): void {
 }
 
 export function LedgerOverlay() {
-  const show = useKernel((s) => import.meta.env.DEV && s.settings[SETTINGS.show_ledger.key] === 1);
+  const show = useKernel((s) => DEV_BUNDLE && s.settings[SETTINGS.show_ledger.key] === 1);
   const [logging, setLogging] = useState(false);
   const [g, setG] = useState<Gauge | null>(null);
   const { height } = useWindowDimensions();
@@ -105,7 +106,7 @@ export function LedgerOverlay() {
   }, [logging]);
 
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
+    if (!DEV_BUNDLE) return;
     // The kernel records nothing until something asks, so that a client with no
     // overlay pays for none of it. This is the asking, and it happens on mount
     // rather than when the panel is opened: what makes a ledger worth having is
@@ -127,7 +128,7 @@ export function LedgerOverlay() {
     };
   }, []);
 
-  if (!import.meta.env.DEV || !show) return null;
+  if (!DEV_BUNDLE || !show) return null;
   const recording = g?.rec.recording === true;
 
   return (

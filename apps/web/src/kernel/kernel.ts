@@ -38,7 +38,7 @@ import { bytes_at } from "@/kernel/module.ts";
 import { declareUnsupported } from "@/app/store/unsupported-store.ts";
 import { acquire_device } from "@/kernel/render/gpu.ts";
 import { request_frame, start_sched } from "@/kernel/sched.ts";
-import { kernel_snapshot, set_snapshot, subscribe_snapshot } from "@/kernel/shell.ts";
+import { kernel_snapshot, set_snapshot, subscribe_snapshot } from "@/kernel/snapshot.ts";
 import { keepSettings, storedSettings } from "@/feature/setting/store.ts";
 
 function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {

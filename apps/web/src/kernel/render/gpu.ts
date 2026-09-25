@@ -22,6 +22,7 @@ import { handle_slot } from "@xpute/runtime/abi/handle.ts";
 import { bytes_of, each_record } from "@xpute/runtime/ipc/stream.ts";
 
 import type { UnsupportedReason } from "@/app/store/unsupported-store.ts";
+import { DEV_BUNDLE } from "@/config/bundle.ts";
 import { address, compare, dimension, filter, format, load, op, paint, record, resource, stream } from "@/kernel/render/gpu/api.spec.ts";
 
 type GpuObject =
@@ -98,9 +99,7 @@ export async function acquire_device(lost: () => void): Promise<DeviceInfo | NoD
   // is allowed to refuse outright: OpenGL ES 3.1 hardware may offer none in
   // that stage at all, and a WebGPU running in compatibility mode says so in
   // these numbers rather than in an error.
-  // `?.` because this file is also loaded by a test, which has no Vite and so
-  // no `import.meta.env` at all.
-  if (import.meta.env?.DEV) {
+  if (DEV_BUNDLE) {
     const l = d.limits as unknown as Record<string, number>;
     const of = (k: string) => `${k}=${l[k] ?? "-"}`;
     const info = (adapter as unknown as { info?: Record<string, string> }).info;

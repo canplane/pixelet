@@ -17,7 +17,7 @@ import { boot_kernel } from "@/kernel/kernel.ts";
 import { kernel_hold } from "@/kernel/control/input.ts";
 import { orientation_permit } from "@/kernel/control/sensor.ts";
 import { missing_before_boot } from "@/kernel/render/gpu.ts";
-import { request_frame, strobe } from "@/kernel/sched.ts";
+import { request_frame, ring_now, strobe } from "@/kernel/sched.ts";
 import type { UnsupportedReason } from "@/app/store/unsupported-store.ts";
 
 /** Starts the kernel, or says why this device cannot draw it: a browser that
@@ -31,13 +31,9 @@ export async function host_boot(): Promise<UnsupportedReason | null> {
   return null;
 }
 
-/** Sends one of the UI's commands, rung at once with no quota: what it asks
- * of the host is heard inside the call, including the sensors' close sent
- * after the strobe has stopped. */
+/** Sends one of the UI's commands, rung at once (sched.ts `ring_now`). */
 export function host_command(cmd: Command, pkt?: U8Array): void {
-  CORE_BUILD.send(0, cmd, pkt);
-  CORE_BUILD.ring(0);
-  request_frame();
+  ring_now(cmd, pkt);
 }
 
 /** The tracking button. Following needs the compass, so where iOS gates it,
