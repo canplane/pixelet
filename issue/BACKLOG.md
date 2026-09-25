@@ -54,16 +54,15 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   for terrain and POI alike), so a view that draws nothing finer than
   level 4 has no page it can get.
 - **One order out from the eye, the rest.** Every scheduler takes work in
-  one order out from the eye, a fetch the view leaves is stopped the turn it
-  leaves, a chunk is a cube of three axes, and its heights are its own
-  footprint's, which pages landing only widen
-  ([20260926-one-order-out-from-the-center.md](./20260926-one-order-out-from-the-center.md)).
-  Left: occluded chunks are split, fetched and built like seen ones; a
-  column's objects are one height range, so the cubes between two floating
-  objects count as held; and a column crossing a cube's floor or ceiling is
-  two chunks — measured 2026-09-26 at 1.5 a column near Gangnam and 1.7 on
-  Bukhansan, each built from the whole column's runs again, where the runs
-  could be the column's once and each chunk a cut of them.
+  one order out from the eye, a chunk is a cube of its level holding
+  something, and a placed object lives in the cube its band is in
+  ([20260926-the-view-is-cubes-about-the-eye.md](./20260926-the-view-is-cubes-about-the-eye.md)).
+  Left: occluded chunks are split, fetched and built like seen ones; a cut
+  ceiling flashes on a cold load while a coarser page stands in; and a
+  column crossing a cube's floor or ceiling is two chunks — 1.5 a column
+  near Gangnam and 1.7 on Bukhansan, 2026-09-26 — each scanning the whole
+  column's runs again, where the runs could be the column's once and each
+  chunk a cut of them.
 - **A seam while a chunk is drawn from a page over it.** Since
   2026-09-26 a chunk whose page has not come is drawn in its place from the
   nearest resident page over it, upsampled (world/pyramid.rs `drawn_from`),
