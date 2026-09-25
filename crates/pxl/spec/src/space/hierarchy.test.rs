@@ -54,6 +54,21 @@ fn a_scale_is_one_power_of_two_however_it_is_read() {
     assert_eq!(Scale::of(-3).side(), 0.125);
 }
 
+/// A point's side at a scale is the one whose corner is at or below it and
+/// whose next is above it, on either side of the origin and finer than a
+/// unit too, and a side's corner lies in that side.
+#[test]
+fn a_point_lies_in_the_side_whose_corner_is_under_it() {
+    for s in [Scale::of(-3), Scale::of(0), Scale::of(6)] {
+        for index in [[0i64, 0, 0], [5, -3, 2], [-1, -1, -1], [100, 7, -40]] {
+            assert_eq!(s.index_of(&s.base_of(index)), index);
+            let mut inside = Pvf3::default();
+            pvf3::add(&mut inside, &s.base_of(index), &Scale::of(-8).base_of([1, 1, 1]));
+            assert_eq!(s.index_of(&inside), index, "{s:?} {index:?}");
+        }
+    }
+}
+
 /// A walk's order is its inverse's, and it keeps a coarser node's leaves
 /// together: every leaf of one node falls in one run, the node's own order
 /// shifted up by the levels below it.

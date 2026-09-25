@@ -88,14 +88,12 @@ impl Lattice {
     /// address, since a cell may be finer than a unit.
     pub fn cell_of(self, level: u32, at: &Pvf3) -> Cell {
         let page = LevelPage::over(level, L3_IDX(at.i));
-        // The fixed point's lanes, in cells of this level: a floor on the
-        // signed lanes, and exact while a cell is no finer than the fraction.
-        let shift = FRAC_W as i32 + self.scale(level).shamt();
-        let cell = |fixed: i64, page_lane: i64| (fixed >> shift) - (page_lane << self.page_cell_shamt());
+        let [x, y, _] = self.scale(level).index_of(at);
+        let [x0, y0] = first_descendant_of([ivec::X(page.page), ivec::Y(page.page)], self.page_cell_shamt());
         Cell {
             lattice: self,
             page,
-            index: self.cell_index(cell(pvf3::X(at), ivec::X(page.page)) as u32, cell(pvf3::Y(at), ivec::Y(page.page)) as u32),
+            index: self.cell_index((x - x0) as u32, (y - y0) as u32),
         }
     }
 
@@ -107,11 +105,8 @@ impl Lattice {
 
     /// The point at the south-west corner of the cell at (tx, ty) in `page`.
     pub fn cell_base(self, page: LevelPage, tx: u32, ty: u32) -> Pvf3 {
-        let shift = FRAC_W as i32 + self.scale(page.level).shamt();
-        let first = |p: i64, t: u32| ((p << self.page_cell_shamt()) + i64::from(t)) << shift;
-        let mut out = Pvf3::default();
-        pvf3::gather(&mut out, first(ivec::X(page.page), tx), first(ivec::Y(page.page), ty), 0);
-        out
+        let [x0, y0] = first_descendant_of([ivec::X(page.page), ivec::Y(page.page)], self.page_cell_shamt());
+        self.scale(page.level).base_of([x0 + i64::from(tx), y0 + i64::from(ty), 0])
     }
 
     // A page's four children lie side by side as one block of 2n × 2n cells

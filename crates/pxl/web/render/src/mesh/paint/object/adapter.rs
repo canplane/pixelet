@@ -6,9 +6,8 @@
 
 use std::collections::BTreeSet;
 
-use pxl_spec::bake::constant::{unpack_pos, BandZ, CellZ, BAND_CELLS, BAND_UNITS, STEP_UNITS, U_PER_CELL};
+use pxl_spec::bake::constant::{band_cell_z, in_cell, unpack_pos, BandZ, CellZ, CELL, CELL_STEPS};
 use pxl_spec::cell::cube_types;
-use xpute_core::math::scalar::round;
 
 use crate::mesh::volume::{pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};
 
@@ -33,14 +32,12 @@ pub enum Kind {
     Decor = 3,
 }
 
-/// The one entry that is not stored — the eraser's carve preview, at a
-/// corner relative to the column's base, in world units.
+/// The one entry that is not stored — the eraser's carve preview, as the
+/// band and packed position the store would file it under.
 #[derive(Clone, Copy)]
 pub struct Carve {
-    pub lx: f64,
-    pub ly: f64,
-    pub lz: f64,
-    pub size: f64,
+    pub band: BandZ,
+    pub pos: u32,
 }
 
 /// What a paint made: whether any voxel was set, and whether one was refused.
@@ -154,7 +151,7 @@ impl Painter {
     /// Paints a column's `entries` from the `from`th, until the voxels set
     /// pass `voxels`, with the claims of the paint they continue: a paint
     /// cut into steps, each bounded by `voxels` and one entry past it — an
-    /// entry sets at most a band's cells. The carve preview is not an entry;
+    /// entry sets one voxel. The carve preview is not an entry;
     /// `paint_carve` ends the paint.
     #[allow(clippy::too_many_arguments)]
     pub fn paint_entries(
@@ -178,12 +175,7 @@ impl Painter {
             if hide == Some((band, pos)) {
                 continue;
             }
-            let (x, y, z, scale) = unpack_pos(pos);
-            let lx = x as f64 * STEP_UNITS;
-            let ly = y as f64 * STEP_UNITS;
-            let lz = band as f64 * BAND_UNITS + z as f64 * STEP_UNITS;
-            let size = scale.side();
-            match self.paint_entry(volumes, volume, lx, ly, lz, size, state, claimed, any) {
+            match self.paint_entry(volumes, volume, band, pos, state, claimed, any) {
                 Some(n) => set += n + 1,
                 None => return Painted::Refused,
             }
@@ -194,30 +186,24 @@ impl Painter {
     /// The carve preview painted as air, last. False when a paint was refused.
     pub fn paint_carve(&self, volumes: &mut Volumes, volume: u32, carve: Option<Carve>, claimed: &mut BTreeSet<u32>, any: &mut bool) -> bool {
         match carve {
-            Some(c) => self.paint_entry(volumes, volume, c.lx, c.ly, c.lz, c.size, AIR, claimed, any).is_some(),
+            Some(c) => self.paint_entry(volumes, volume, c.band, c.pos, AIR, claimed, any).is_some(),
             None => true,
         }
     }
 
-    /// One entry at a corner relative to the column's base: the voxels it
-    /// set, or none when a paint was refused.
+    /// One entry: the voxel it set, or none when a paint was refused. An
+    /// entry is at most a cell (the store splits a larger leaf), so it is one
+    /// voxel, and what is finer than a cell rides in the voxel's sub-cell
+    /// fraction.
     #[allow(clippy::too_many_arguments)]
-    fn paint_entry(&self, volumes: &mut Volumes, volume: u32, lx: f64, ly: f64, lz: f64, size: f64, state: u32, claimed: &mut BTreeSet<u32>, any: &mut bool) -> Option<usize> {
+    fn paint_entry(&self, volumes: &mut Volumes, volume: u32, band: BandZ, pos: u32, state: u32, claimed: &mut BTreeSet<u32>, any: &mut bool) -> Option<usize> {
         let kind = self.kind(state);
         if kind == Kind::Decor || kind == Kind::Untaught {
             return Some(0);
         }
-        let is_sub_cell = size < U_PER_CELL;
-        let cell_of = |v: f64| if is_sub_cell { (v / U_PER_CELL).floor() } else { round(v / U_PER_CELL) };
-        let cx0 = cell_of(lx).max(0.0) as u32;
-        let cy0 = cell_of(ly).max(0.0) as u32;
-        let z = cell_of(lz) as i32;
-        if cx0 >= BAND_CELLS || cy0 >= BAND_CELLS {
-            return Some(0);
-        }
-        let sz_cells = (round(size / U_PER_CELL) as u32).max(1);
-        let cx1 = (cx0 + sz_cells).min(BAND_CELLS);
-        let cy1 = (cy0 + sz_cells).min(BAND_CELLS);
+        let (x, y, z, scale) = unpack_pos(pos);
+        let ([cx, cy, cz], into) = in_cell([x, y, z]);
+        let z = band_cell_z(band) as CellZ + cz as CellZ;
         let is_air = kind == Kind::Air;
         let (material, layer_idx) = if is_air {
             (0, NO_LAYER as u8)
@@ -225,30 +211,24 @@ impl Painter {
             (self.materials[state as usize], self.layers[state as usize])
         };
 
-        let fraction = |v: f64| if is_sub_cell { pack_sub_cell_fraction(v) } else { 0 };
-        let sub_sz = if is_sub_cell { pack_sub_cell_fraction(size / U_PER_CELL) } else { SUB_CELL_NONE as u32 };
-        let sub_ox = fraction((lx - cx0 as f64 * U_PER_CELL) / U_PER_CELL);
-        let sub_oy = fraction((ly - cy0 as f64 * U_PER_CELL) / U_PER_CELL);
-        let sub_oz = fraction((lz - z as f64 * U_PER_CELL) / U_PER_CELL);
-        let sub = sub_ox | (sub_oy << 8) | (sub_oz << 16) | (sub_sz << 24);
+        let sub = if scale < CELL {
+            let [ox, oy, oz] = into.map(|v| pack_sub_cell_fraction(v as f64 / CELL_STEPS as f64));
+            let sz = pack_sub_cell_fraction(1.0 / scale.count_in(CELL) as f64);
+            ox | (oy << 8) | (oz << 16) | (sz << 24)
+        } else {
+            (SUB_CELL_NONE as u32) << 24
+        };
         let v = Voxel { material, layer_idx, sub };
 
-        for cy in cy0..cy1 {
-            for cx in cx0..cx1 {
-                let address = voxel_address(cx, cy, z);
-                *any = true;
-                let at = Cell { cx, cy, z };
-                let ok = if claimed.contains(&address) && !is_air {
-                    volumes.append_sub_voxel(volume, at, v)
-                } else {
-                    claimed.insert(address);
-                    volumes.set_voxel(volume, at, v)
-                };
-                if !ok {
-                    return None;
-                }
-            }
-        }
-        Some(((cx1 - cx0) * (cy1 - cy0)) as usize)
+        let address = voxel_address(cx, cy, z);
+        *any = true;
+        let at = Cell { cx, cy, z };
+        let ok = if claimed.contains(&address) && !is_air {
+            volumes.append_sub_voxel(volume, at, v)
+        } else {
+            claimed.insert(address);
+            volumes.set_voxel(volume, at, v)
+        };
+        ok.then_some(1)
     }
 }

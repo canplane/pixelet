@@ -36,10 +36,11 @@ use xpute_runtime::mem::heap::{free, Block};
 
 use crate::global::Global;
 use crate::kernel::{kernel, with_world};
-use crate::layer::object::store::{decor_col_revision, object_col_revision, object_cols, Store, BAND_CELLS};
+use crate::layer::object::store::{decor_col_revision, object_col_revision, object_cols, Store};
 use crate::mem::fixed::{bake_at, run_set_at};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::mesh_slot::BAKE_BYTES;
+use pxl_spec::bake::constant::BAND_CELLS;
 
 use crate::world::chunk::table::Event;
 use crate::world::pyramid::Layer as _;

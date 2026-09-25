@@ -1,7 +1,7 @@
 // pxl-spec/bake/constant.rs
 
 use crate::space::adapter::epsg3857::{U_PER_M, Z_SCALE};
-use crate::space::hierarchy::Scale;
+use crate::space::hierarchy::{ancestor_of, first_descendant_of, Scale};
 use crate::space::indexer::{L2, L3};
 use crate::space::sparse_tree::mem::SparseTreeLayout;
 
@@ -170,6 +170,26 @@ pub const fn unpack_pos(pos: u32) -> (u32, u32, u32, Scale) {
 // An entry is at most a cell, so its tier above the finest is below
 // OBJECT_TIERS, and it has to fit in what three axes leave of the word.
 const _: () = assert!(3 * POS_BITS < 32 && OBJECT_TIERS <= 1 << (32 - 3 * POS_BITS), "an entry's tier fits beside its position");
+
+/// The band a cell's Z lies in, and the cell's Z within that band.
+pub fn band_of(cell_z: i64) -> (BandZ, u32) {
+    let [band] = ancestor_of([cell_z], BAND_CELL_SHAMT);
+    (band as BandZ, (cell_z - band_cell_z(band as BandZ)) as u32)
+}
+
+/// The Z of a band's lowest cell.
+pub fn band_cell_z(band: BandZ) -> i64 {
+    first_descendant_of([i64::from(band)], BAND_CELL_SHAMT)[0]
+}
+
+/// A position within a band, in finest-tier steps, as the band-local cell it
+/// is in and the steps into that cell.
+pub fn in_cell(step: [u32; 3]) -> ([u32; 3], [u32; 3]) {
+    let levels = CELL.above(OBJECT_FINEST) as u32;
+    let cell = ancestor_of(step.map(i64::from), levels);
+    let base = first_descendant_of(cell, levels);
+    (cell.map(|v| v as u32), std::array::from_fn(|i| (i64::from(step[i]) - base[i]) as u32))
+}
 
 #[cfg(test)]
 #[path = "constant.test.rs"]

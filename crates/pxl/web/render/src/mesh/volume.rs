@@ -26,7 +26,7 @@
 
 /// A run whose material is a placed object: exempt from hiding its
 /// neighbours' faces, and drawn with its bottom face.
-use pxl_spec::bake::constant::BAND_CELLS;
+use pxl_spec::bake::constant::{band_of, BAND_CELLS};
 use xpute_core::math::scalar::round;
 use xpute_runtime::abi::handle::Slots;
 use xpute_runtime::mem::heap::{alloc, free, Block, Guard};
@@ -384,8 +384,7 @@ impl Volumes {
     }
 
     fn locate(z: i32) -> (i32, u32) {
-        let band_z = z.div_euclid(BAND_CELLS as i32);
-        (band_z, (z - band_z * BAND_CELLS as i32) as u32)
+        band_of(z as i64)
     }
 
     /// Full replacement at one voxel: later layers overwrite earlier ones.
@@ -453,14 +452,13 @@ impl Volumes {
         if z1 < z0 {
             return true;
         }
-        let span = BAND_CELLS as i32;
-        let (first, _) = Self::locate(z0);
-        let (last, _) = Self::locate(z1);
+        let (first, first_z) = Self::locate(z0);
+        let (last, last_z) = Self::locate(z1);
         for band_z in first..=last {
             let Some(b) = self.get_or_create_band(id, band_z) else { return false };
             let store = self.volume(id).bands[b].store;
-            let local_z0 = if band_z == first { (z0 - band_z * span) as u32 } else { 0 };
-            let local_z1 = if band_z == last { (z1 - band_z * span) as u32 } else { BAND_CELLS - 1 };
+            let local_z0 = if band_z == first { first_z } else { 0 };
+            let local_z1 = if band_z == last { last_z } else { BAND_CELLS - 1 };
             let start = band_voxel_idx(cx, cy, local_z0);
             let end = band_voxel_idx(cx, cy, local_z1) + 1;
             // SAFETY: lanes of BAND_VOXELS; start..end is one column of a band.

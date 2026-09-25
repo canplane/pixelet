@@ -22,7 +22,7 @@ use pxl_render::gpu::api::word_bytes;
 use pxl_render::look::lod::{LodStep, TARGET_CELL_PX};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
-use pxl_spec::bake::constant::U_PER_CELL;
+use pxl_spec::bake::constant::{unpack_pos, U_PER_CELL};
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
 use pxl_spec::space::indexer::L3_IDX;
@@ -39,7 +39,7 @@ use crate::layer::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN
 use crate::layer::decor::kind::DecorKindDef;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
-use crate::layer::object::store::{unpack_pos, Store, BAND_CELLS, BAND_UNITS, CELL, CELL_STEPS, STEP_UNITS};
+use crate::layer::object::store::{At, Store};
 use crate::world::chunk::table::Drawn;
 use pxl_spec::asset::ingested::Asset;
 
@@ -318,12 +318,15 @@ impl<'s> DecorBuild<'s> {
             let pos = poss[k];
             let (x, y, z, scale) = unpack_pos(pos);
             let size = scale.side();
+            let at = At {
+                col_idx: column.col_idx,
+                band: bands[k],
+                step: [x, y, z],
+            };
             // The entry's cell, which seeds its variant and turn.
-            let corner = gather(
-                CELL.index(column.col_x) + (x / CELL_STEPS) as i64,
-                CELL.index(column.col_y) + (y / CELL_STEPS) as i64,
-                bands[k] as i64 * BAND_CELLS as i64 + (z / CELL_STEPS) as i64,
-            );
+            let [cx, cy, cz] = at.cell();
+            let corner = gather(cx, cy, cz);
+            let [lx, ly, lz] = at.local();
             let mut rng = Rng::new(derive_seed_u64(DECOR_MASTER_SEED, corner));
             let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
             let rotation = rng.unit() * core::f64::consts::PI * 2.0;
@@ -332,9 +335,9 @@ impl<'s> DecorBuild<'s> {
             scratch.push(
                 first + variant as usize,
                 Instance {
-                    x: (column.ox + x as f64 * STEP_UNITS + h) as f32,
-                    y: (column.oy + y as f64 * STEP_UNITS + h) as f32,
-                    z: (bands[k] as f64 * BAND_UNITS + z as f64 * STEP_UNITS) as f32,
+                    x: (column.ox + lx + h) as f32,
+                    y: (column.oy + ly + h) as f32,
+                    z: lz as f32,
                     rotation: rotation as f32,
                     scale: 1.0,
                     flags: if hidden { HIDDEN_FLAG } else { 0 },

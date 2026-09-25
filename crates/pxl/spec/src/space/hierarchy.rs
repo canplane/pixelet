@@ -19,6 +19,9 @@
 //! a sparse tree's blocks in either (sparse_tree/mem.rs), and a fold reads
 //! the children in this order whichever it is (bake/fold.rs `majority`).
 
+use super::pvf3::core::FRAC_W;
+use super::pvf3::pvf3::{self, Pvf3};
+
 /// A side of 2^shamt units: negative where it is finer than a unit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Scale(i32);
@@ -73,6 +76,22 @@ impl Scale {
         } else {
             units << -self.0
         }
+    }
+
+    /// Which of this scale's sides a point lies in on each axis, counted from
+    /// the origin: a floor on the fixed point's signed lanes, exact while a
+    /// side is no finer than the fraction.
+    pub fn index_of(self, at: &Pvf3) -> [i64; 3] {
+        let shift = FRAC_W as i32 + self.0;
+        [pvf3::X(at) >> shift, pvf3::Y(at) >> shift, pvf3::Z(at) >> shift]
+    }
+
+    /// The corner of the side at `index` on each axis: `index_of`'s inverse.
+    pub fn base_of(self, index: [i64; 3]) -> Pvf3 {
+        let shift = FRAC_W as i32 + self.0;
+        let mut out = Pvf3::default();
+        pvf3::gather(&mut out, index[0] << shift, index[1] << shift, index[2] << shift);
+        out
     }
 
     /// The scale whose side is nearest `units`, a power of two where it is
