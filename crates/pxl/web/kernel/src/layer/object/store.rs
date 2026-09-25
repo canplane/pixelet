@@ -15,7 +15,7 @@
 //! adds is the eraser's two virtual edits, the change log's bumps, and the
 //! persisted form in the host's storage.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use base64::Engine;
 use pxl_render::mesh::paint::object::adapter::{Carve, Entries};
@@ -23,12 +23,13 @@ use pxl_spec::bake::constant::{band_cell_z, band_of, in_cell, pack_pos, unpack_p
 use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
-use pxl_spec::space::hierarchy::{at_walk_order, first_descendant_of, walk_order, Scale};
-use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3_IDX};
+use pxl_spec::space::hierarchy::{at_walk_order, child_of, first_descendant_of, parent_of, walk_order, Scale};
+use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2, L2_IDX, L3, L3_IDX};
 use pxl_spec::space::pvf3::fvec::FVec;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pvf3::Ivec;
+use pxl_spec::space::pyramid::TOP_LEVEL;
 use pxl_spec::space::sparse_tree::mem;
 use pxl_spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree};
 use pxl_spec::space::xy::TO_XY;
@@ -305,30 +306,6 @@ fn cell_run(ix: i64, iy: i64, iz: i64) -> Option<CellRun> {
 /// answer can tell whether the store has changed under it at all.
 pub fn objects_revision() -> u32 {
     world_changes().tick(OBJECT_COLUMN)
-}
-
-/// A column holding objects, as a box: its coordinate among the L2 blocks on
-/// the ground, and the lowest and highest any of its entries reaches, in
-/// units.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ColumnBox {
-    pub col: [i64; 2],
-    pub z: (f64, f64),
-}
-
-static BOXES: Global<Option<(u32, Vec<ColumnBox>)>> = Global::new();
-
-/// Every column holding objects, as its box: what a view measures how near it
-/// is to what is placed by (world/pyramid/domain.rs `Domain`). Made again
-/// only when the store has changed.
-pub fn column_boxes() -> &'static [ColumnBox] {
-    let revision = objects_revision();
-    let held = BOXES.get(|| None);
-    if held.as_ref().is_none_or(|(r, _)| *r != revision) {
-        let boxes = kernel().objects.reaches().map(|(col, z)| ColumnBox { col: [ivec::X(col), ivec::Y(col)], z }).collect();
-        *held = Some((revision, boxes));
-    }
-    &held.as_ref().expect("made above").1
 }
 
 /// Applies the writes to the store, which makes each changed column's
@@ -1013,7 +990,17 @@ pub struct Store {
     /// band is dropped once every leaf of it reads VOID, and a chunk with its
     /// last band.
     chunks: BTreeMap<IVec, Chunk>,
+    /// The lowest and highest the objects under a node of the hierarchy
+    /// reach, in units, for every node over a column that holds any: keyed
+    /// by the node's levels above a column and its coordinate at them. A
+    /// column's is its own and a node's the union of its four children's,
+    /// so a write makes again the one chain over the column it changed.
+    reaches: HashMap<(u32, [i64; 2]), (f64, f64)>,
 }
+
+/// Levels of `Store::reaches` over a column: to the pyramid's top page, the
+/// largest node a view measures.
+const REACH_LEVELS: u32 = L3.above(L2) as u32 + TOP_LEVEL;
 
 impl Default for Store {
     fn default() -> Self {
@@ -1023,7 +1010,10 @@ impl Default for Store {
 
 impl Store {
     pub fn new() -> Store {
-        Store { chunks: BTreeMap::new() }
+        Store {
+            chunks: BTreeMap::new(),
+            reaches: HashMap::new(),
+        }
     }
 
     /// The columns holding objects.
@@ -1031,10 +1021,28 @@ impl Store {
         self.chunks.keys().copied()
     }
 
-    /// Every column holding objects with the lowest and highest any of its
-    /// entries reaches, in units.
-    pub fn reaches(&self) -> impl Iterator<Item = (IVec, (f64, f64))> + '_ {
-        self.chunks.iter().map(|(&col, chunk)| (col, chunk.z))
+    /// The lowest and highest the objects under a node reach, in units: a
+    /// node of the hierarchy by its side and its coordinate, a column's or
+    /// coarser. None where nothing stands under it.
+    pub fn reach_over(&self, (side, at): (Scale, [i64; 2])) -> Option<(f64, f64)> {
+        self.reaches.get(&(u32::try_from(side.above(L2)).ok()?, at)).copied()
+    }
+
+    /// Makes again the reaches over column `col`, from it up.
+    fn reach_up(&mut self, col: IVec) {
+        let mut at = [ivec::X(col), ivec::Y(col)];
+        match self.chunks.get(&col) {
+            Some(chunk) => self.reaches.insert((0, at), chunk.z),
+            None => self.reaches.remove(&(0, at)),
+        };
+        for level in 1..=REACH_LEVELS {
+            at = parent_of(at);
+            let under = (0..4).filter_map(|slot| self.reaches.get(&(level - 1, child_of(at, slot))));
+            match under.copied().reduce(|a, b| (a.0.min(b.0), a.1.max(b.1))) {
+                Some(z) => self.reaches.insert((level, at), z),
+                None => self.reaches.remove(&(level, at)),
+            };
+        }
     }
 
     /// The state at a lattice position of band `band_idx` of column
@@ -1056,10 +1064,11 @@ impl Store {
                 changed.insert(w.col_idx);
             }
         }
-        for col_idx in &changed {
-            if let Some(chunk) = self.chunks.get_mut(col_idx) {
+        for &col_idx in &changed {
+            if let Some(chunk) = self.chunks.get_mut(&col_idx) {
                 chunk.derive_entries();
             }
+            self.reach_up(col_idx);
         }
         changed
     }
@@ -1136,6 +1145,7 @@ impl Store {
     /// Every record gone, as a load that could not be read leaves the world.
     pub fn clear(&mut self) {
         self.chunks.clear();
+        self.reaches.clear();
     }
 }
 

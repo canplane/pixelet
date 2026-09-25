@@ -359,3 +359,30 @@ fn a_level_chunk_moves_with_the_columns_it_draws_and_no_other() {
     assert!(decor_revision_of(level, home) > before.1, "its decor moved");
     assert_eq!(objects_revision_of(level, far), before.2, "a chunk that does not draw it did not");
 }
+
+/// What stands under a node reaches what the columns under it reach, at
+/// every level, however the columns were written and erased: the tree is
+/// the union of its columns, remade up the chain a write touches.
+#[test]
+fn a_node_reaches_what_the_columns_under_it_reach() {
+    use pxl_spec::space::hierarchy::ancestor_of;
+    use pxl_spec::space::indexer::L2;
+    let mut store = Store::new();
+    let cols = [(3i64, 5i64, 0, 1), (4, 5, 2, 3), (-7, 5, -1, 0), (40, -9, 1, 2), (3, 6, 0, 5)];
+    for &(x, y, band, z) in &cols {
+        write(&mut store, ivec::gather(x, y, 0), band, [0, 0, z * CELL_STEPS], CELL, 1);
+    }
+    write(&mut store, ivec::gather(3, 6, 0), 0, [0, 0, 5 * CELL_STEPS], CELL, VOID);
+    for level in 0..6u32 {
+        for &(x, y, _, _) in &cols {
+            let at = ancestor_of([x, y], level);
+            let union = store
+                .chunks
+                .iter()
+                .filter(|(col, _)| ancestor_of([ivec::X(**col), ivec::Y(**col)], level) == at)
+                .map(|(_, chunk)| chunk.z)
+                .reduce(|a, b| (a.0.min(b.0), a.1.max(b.1)));
+            assert_eq!(store.reach_over((L2.up(level as i32), at)), union, "level {level} at {at:?}");
+        }
+    }
+}

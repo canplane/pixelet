@@ -26,20 +26,23 @@ use std::collections::{BTreeMap, HashMap};
 use std::f64::consts::{PI, SQRT_2};
 
 use pxl_render::look::lod::REFERENCE_THRESHOLD_0;
-use pxl_spec::space::hierarchy::{share, Scale};
-use pxl_spec::space::indexer::{L2, L3_IDX};
+use pxl_spec::space::hierarchy::Scale;
+use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pyramid::{chunk_span_of, span_of, LevelPage, CHUNK_CELLS, GROUND, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
+use crate::kernel::kernel;
 use crate::layer::environment::fog::{eye_height, reach_at};
 use crate::layer::environment::state::globe;
-use crate::layer::object::store::{column_boxes, objects_revision};
-use crate::layer::terrain::relief::{range_over, relief_revision};
+use crate::layer::object::store::objects_revision;
+use crate::layer::terrain::relief::range_over;
 use crate::shell::map_store::map_store;
 use crate::world::chunk::node::MAX_CHUNKS;
 use crate::world::frame::view::view;
+use crate::world::pyramid::Layer as _;
+use pxl_spec::bake::format::Terrain;
 
 use super::chunk::Chunk;
 
@@ -252,11 +255,12 @@ pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>) -> Domain {
 }
 
 /// Moves whenever what a domain measures heights from does — a terrain
-/// page's relief came or went, an object was written — so a domain made
-/// before is known to be stale whichever layer made it: POI's pages carry no
-/// heights of their own and read the terrain's and the objects'.
+/// page came or went, and its relief with it, or an object was written — so
+/// a domain made before is known to be stale whichever layer made it: POI's
+/// pages carry no heights of their own and read the terrain's and the
+/// objects'.
 pub fn heights_revision() -> (u32, u32) {
-    (relief_revision(), objects_revision())
+    (Terrain::pyramid().revision(), objects_revision())
 }
 
 impl Domain {
@@ -284,13 +288,11 @@ impl Domain {
     /// objects standing on it. `heights_revision` says when any answer this
     /// gives may have changed.
     fn heights(page: LevelPage, node: (Scale, [i64; 2])) -> Option<(f64, f64)> {
-        let mut z = range_over(page);
-        for b in column_boxes() {
-            if share((L2, b.col), node) {
-                z = Some(z.map_or(b.z, |(lo, hi)| (lo.min(b.z.0), hi.max(b.z.1))));
-            }
+        let ground = range_over(page);
+        match kernel().objects.reach_over(node) {
+            Some(b) => Some(ground.map_or(b, |(lo, hi)| (lo.min(b.0), hi.max(b.1)))),
+            None => ground,
         }
-        z
     }
 
     /// Whether the view can see any of a box: `x0, y0, side` on the ground
