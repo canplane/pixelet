@@ -15,7 +15,8 @@ use pxl_render::mesh::volume::{unpack_sub_cell_fraction, MaterialClass, SUB_CELL
 use pxl_render::mesh::voxel_scan::{BandView, ColumnRuns};
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::CHUNK_CELLS;
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
+use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS};
 use pxl_spec::space::v3::V3;
 
 use crate::kernel::kernel;
@@ -25,7 +26,7 @@ use crate::world::chunk::table::Scheduler;
 use crate::world::pyramid::chunk::Chunk;
 
 /// A chunk's side, in units.
-const CHUNK_W: f64 = CHUNK_CELLS as f64 * U_PER_CELL;
+const CHUNK_W: f64 = chunk_span_of(0);
 /// A hover ray crosses at most a few chunks at the interact radius.
 const MAX_ENTRIES: usize = 4;
 /// Hard budget: at 1.25 MiB each, eight direct bands are about 10 MiB.
@@ -43,8 +44,8 @@ pub struct Hit {
 }
 
 struct Entry {
-    /// The chunk corner it is the composite of, in units.
-    base: (i64, i64),
+    /// The z16 chunk it is the composite of.
+    chunk: Chunk,
     /// What it was made valid for (the builder's compose_leaf).
     valid: u32,
     volume: u32,
@@ -209,9 +210,11 @@ impl Raycast {
     #[allow(clippy::too_many_arguments)]
     fn test_chunk(&mut self, world: &mut World, sched: &mut Scheduler, origin: [f64; 2], o: &V3, d: &[f64; 3], gx: f64, gy: f64, max_dist: f64) -> Option<Hit> {
         // A point inside the grid cell, then the chunk it falls in.
-        let bx = (((gx + 0.5) * CHUNK_W + origin[0]) / CHUNK_W).floor() * CHUNK_W;
-        let by = (((gy + 0.5) * CHUNK_W + origin[1]) / CHUNK_W).floor() * CHUNK_W;
-        let (volume, temporary) = self.acquire(world, sched, (bx as i64, by as i64))?;
+        let mut inside = Pvf3::default();
+        pvf3::gather(&mut inside, pvf3::from_real((gx + 0.5) * CHUNK_W + origin[0]), pvf3::from_real((gy + 0.5) * CHUNK_W + origin[1]), 0);
+        let chunk = Chunk::of(0, &inside);
+        let (bx, by, _) = chunk.rect();
+        let (volume, temporary) = self.acquire(world, sched, chunk)?;
         let hit = self.hit_chunk(world, volume, o, d, bx - origin[0], by - origin[1], max_dist);
         if temporary {
             world.volumes.release(volume);
@@ -219,27 +222,26 @@ impl Raycast {
         hit
     }
 
-    /// The leaf composite at a chunk corner: the kept one while what it was
+    /// The composite of z16 chunk `chunk`: the kept one while what it was
     /// made from is unchanged, else made now and kept unless too tall to
     /// keep. Least recently used is let go first.
-    fn acquire(&mut self, world: &mut World, sched: &mut Scheduler, base: (i64, i64)) -> Option<(u32, bool)> {
+    fn acquire(&mut self, world: &mut World, sched: &mut Scheduler, chunk: Chunk) -> Option<(u32, bool)> {
         self.tick = self.tick.wrapping_add(1);
-        let at = ivec::gather(base.0, base.1, 0);
-        let valid = sched.builder.leaf_valid(at);
-        if let Some(k) = self.entries.iter().position(|e| e.base == base) {
+        let valid = sched.builder.leaf_valid(chunk);
+        if let Some(k) = self.entries.iter().position(|e| e.chunk == chunk) {
             if self.entries[k].valid == valid {
                 self.entries[k].used = self.tick;
                 return Some((self.entries[k].volume, false));
             }
             self.remove(world, k);
         }
-        let (volume, valid) = sched.builder.compose_leaf(world, at)?;
+        let (volume, valid) = sched.builder.compose_leaf(world, chunk)?;
         let bands = world.volumes.band_count(volume);
         if bands > MAX_BANDS {
             return Some((volume, true));
         }
         self.entries.push(Entry {
-            base,
+            chunk,
             valid,
             volume,
             bands,

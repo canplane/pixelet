@@ -326,25 +326,25 @@ impl Builder {
         Some((tx0, ty0, c.page()?, c.show_structures))
     }
 
-    /// What a leaf composite at `base` is valid for: its column's objects and
-    /// the structure setting, the two things its paint reads that change.
-    pub fn leaf_valid(&self, base: IVec) -> u32 {
-        object_col_revision(L2_IDX(base)).wrapping_mul(2) | settings_store().show_structures as u32
+    /// What the composite of z16 chunk `chunk` is valid for: its column's
+    /// objects and the structure setting, the two things its paint reads that
+    /// change.
+    pub fn leaf_valid(&self, chunk: PyramidChunk) -> u32 {
+        object_col_revision(L2_IDX(chunk.base().i)).wrapping_mul(2) | settings_store().show_structures as u32
     }
 
-    /// The leaf composite at `base`, a chunk corner — the real set, no edits —
+    /// The composite of z16 chunk `chunk` — the real set, no edits —
     /// as a sealed volume for a raycast, or none: no leaf there, or a paint
     /// refused. Made from the leaf page wherever it is resident, whether or
     /// not a chunk is drawn from it: the ground is hit at the finest level
     /// whichever level it is drawn at. With what it is valid for, which a
     /// cached composite is compared by.
-    pub fn compose_leaf(&mut self, world: &mut World, base: IVec) -> Option<(u32, u32)> {
-        let chunk = PyramidChunk::of(0, &pxl_spec::space::pvf3::Pvf3 { i: base, ..Default::default() });
+    pub fn compose_leaf(&mut self, world: &mut World, chunk: PyramidChunk) -> Option<(u32, u32)> {
         let page = Terrain::pyramid().get(chunk.page())?;
         let (tx0, ty0) = chunk.in_page();
         let show = settings_store().show_structures;
-        let col_idx = L2_IDX(base);
-        let valid = self.leaf_valid(base);
+        let col_idx = L2_IDX(chunk.base().i);
+        let valid = self.leaf_valid(chunk);
         let volume = self.paint_terrain_at(world, tx0, ty0, show, page)?;
         if world.painter.paint(world.store.entries(col_idx), world.volumes, volume, None, None).refused {
             world.volumes.release(volume);
