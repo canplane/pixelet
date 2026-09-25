@@ -18,45 +18,35 @@ use crate::world::frame::coord::local_world_to_canonical;
 const SAME_SURFACE_EPS: f64 = 1e-6;
 
 /// The z extents of every placed object whose footprint covers a local XY,
-/// gathered in one pass over the chunk columns that could hold one.
+/// gathered in one pass over the column the point stands in.
 ///
 /// One pass rather than a 27-cell neighbourhood query at each step upward: with
 /// nothing placed at the XY a probe runs to its 64-cell guard on every call,
-/// and the companion asks twice a frame. A placed object is at most a cell across, so
-/// one whose footprint covers the point lives in the chunk the point is in or a
-/// chunk within a cell of it; those are read once.
+/// and the companion asks twice a frame. A placed object is at most a cell and
+/// lies inside one, so one whose footprint covers the point is in the point's
+/// own column.
 fn collect_boxes(map_origin: IVec, local_x: f64, local_y: f64) -> Vec<(f64, f64)> {
     let mut boxes = Vec::new();
-    let mut cols: Vec<IVec> = Vec::with_capacity(9);
-    for dx in -1..=1 {
-        for dy in -1..=1 {
-            let probe = [local_x + dx as f64 * U_PER_CELL, local_y + dy as f64 * U_PER_CELL, 0.0];
-            let mut corner = Pvf3::default();
-            local_world_to_canonical(&mut corner, &probe, map_origin);
-            let col_idx = L2_IDX(TO_XY(corner.i));
-            if cols.contains(&col_idx) {
-                continue;
-            }
-            cols.push(col_idx);
-            // The chunk's corner in the local frame; entries are relative to it.
-            let local = Pvf3 {
-                i: ivec::sub(FROM_L2_IDX(col_idx), map_origin),
-                f: 0,
-            };
-            let (bx, by, bz) = (pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local)));
-            each_col_entry(col_idx, &mut |entry| {
-                if object_value_is_air(entry.state) {
-                    return;
-                }
-                let (x0, y0) = (bx + entry.lx, by + entry.ly);
-                if local_x < x0 || local_x >= x0 + entry.size || local_y < y0 || local_y >= y0 + entry.size {
-                    return;
-                }
-                let z0 = bz + entry.lz;
-                boxes.push((z0, z0 + entry.size));
-            });
+    let mut at = Pvf3::default();
+    local_world_to_canonical(&mut at, &[local_x, local_y, 0.0], map_origin);
+    let col_idx = L2_IDX(TO_XY(at.i));
+    // The column's corner in the local frame; entries are relative to it.
+    let local = Pvf3 {
+        i: ivec::sub(FROM_L2_IDX(col_idx), map_origin),
+        f: 0,
+    };
+    let (bx, by, bz) = (pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local)));
+    each_col_entry(col_idx, &mut |entry| {
+        if object_value_is_air(entry.state) {
+            return;
         }
-    }
+        let (x0, y0) = (bx + entry.lx, by + entry.ly);
+        if local_x < x0 || local_x >= x0 + entry.size || local_y < y0 || local_y >= y0 + entry.size {
+            return;
+        }
+        let z0 = bz + entry.lz;
+        boxes.push((z0, z0 + entry.size));
+    });
     boxes
 }
 
