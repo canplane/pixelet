@@ -209,7 +209,7 @@ unprompted causes regressions or premature hardening.
 ## Overlay CSS over the canvas
 
 The UI sits over a canvas that repaints every frame, and WebKit handles that
-worse than Chromium. Three rules, each learned from the scale bar:
+worse than Chromium. Two rules, each learned from the scale bar:
 
 - **`box-shadow` / `text-shadow`, not `filter: drop-shadow()`.** A filter
   region over the canvas smeared, clipped transformed children and vanished
@@ -218,10 +218,6 @@ worse than Chromium. Three rules, each learned from the scale bar:
 - **Animate `transform` and `opacity`, not layout.** A `width` tween ghosted
   on iOS. When neither is clean, ask whether the animation is worth having —
   the scale bar snaps between its 1/2/5 steps.
-- **Avoid `backdrop-filter` over the canvas.** It re-blurs what is behind it
-  every frame; the leading suspect for a Galaxy S23 janking where an iPhone
-  13 mini ran fine, and why the map controls and the address pill carry an
-  opaque fill. Only where the element is rarely on screen.
 
 ## Sizing UI against something
 
