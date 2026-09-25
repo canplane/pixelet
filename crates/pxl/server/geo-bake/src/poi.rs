@@ -18,11 +18,11 @@ use pxl_spec::space::pvf3::pvf3::Pvf3;
 /// left as no object holds no places.
 impl crate::pyramid::Layer for PoiPage {
     fn encode(&self) -> Result<Vec<u8>, String> {
-        poi_page::encode(self).map_err(str::to_owned)
+        poi_page::encode(self).map_err(|e| e.to_string())
     }
 
     fn decode(raw: &[u8]) -> Result<Self, String> {
-        poi_page::decode(raw).map_err(str::to_owned)
+        poi_page::decode(raw).map_err(|e| e.to_string())
     }
 }
 

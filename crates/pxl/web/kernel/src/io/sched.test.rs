@@ -43,7 +43,10 @@ fn failed(key: u64) {
         key,
         Outcome::error,
         None,
-        Failure { fail: FetchFail::Network, detail: 0 },
+        Failure {
+            fail: FetchFail::Network,
+            ..Failure::default()
+        },
         crate::io::policy::retry_after(Outcome::error),
     );
 }

@@ -343,6 +343,7 @@ impl<'a> TlvReader<'a> {
 
     // ---- Reader bounds ----
 
+    #[track_caller]
     fn _need(&self, n: u32) -> Result<(), MarshalError> {
         // In u64: `n` is a length read off the wire, and the sum past 2^32
         // would wrap under the end rather than exceed it.

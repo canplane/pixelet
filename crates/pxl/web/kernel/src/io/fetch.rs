@@ -140,8 +140,16 @@ fn fetch_arrived(
     block: Result<Option<Block>, FetchFail>,
 ) {
     let (outcome, fail, block) = match block {
-        Ok(block) => (outcome, fail, block),
-        Err(no_room) => (FetchOutcome::Error, no_room, None),
+        Ok(block) => (
+            outcome,
+            Failure {
+                fail,
+                detail: detail as u16,
+                at: None,
+            },
+            block,
+        ),
+        Err(no_room) => (FetchOutcome::Error, no_room.into(), None),
     };
     // A hash the scheduler does not hold is one a reset forgot; its body is
     // already back.
@@ -156,7 +164,7 @@ fn fetch_arrived(
     }
     let (outcome, fail) = match outcome {
         FetchOutcome::Read => match adopt(category, subject, block, &mut phases) {
-            Ok(()) => (Outcome::ok, FetchFail::None),
+            Ok(()) => (Outcome::ok, Failure::default()),
             Err(fail) => (Outcome::error, fail),
         },
         // There is no such object, and for most categories that is an answer
@@ -165,22 +173,22 @@ fn fetch_arrived(
         FetchOutcome::Absent => {
             release(block);
             match absent(category, subject) {
-                Ok(()) => (Outcome::ok, FetchFail::None),
-                Err(fail) => (Outcome::error, fail),
+                Ok(()) => (Outcome::ok, Failure::default()),
+                Err(fail) => (Outcome::error, fail.into()),
             }
         }
         FetchOutcome::Aborted => {
             release(block);
-            (Outcome::aborted, FetchFail::None)
+            (Outcome::aborted, Failure::default())
         }
         // The host's own failure. A failure that names none is still one the
         // host raised, not a read that went well.
         FetchOutcome::Error => {
             release(block);
-            (Outcome::error, if fail == FetchFail::None { FetchFail::Shell } else { fail })
+            (Outcome::error, if fail.fail == FetchFail::None { Failure { fail: FetchFail::Shell, ..fail } } else { fail })
         }
     };
-    settle(key, outcome, Some(phases), Failure { fail, detail: detail as u16 }, policy::retry_after(outcome));
+    settle(key, outcome, Some(phases), fail, policy::retry_after(outcome));
 }
 
 /// There is no such object. What that means is the category's: open water
@@ -204,10 +212,10 @@ fn absent(category: Category, subject: u64) -> Result<(), FetchFail> {
 }
 
 /// The bytes arrived. The block is released here, unless the page keeps it.
-fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Phases) -> Result<(), FetchFail> {
+fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Phases) -> Result<(), Failure> {
     // A read that answered with nothing is not an object; only `absent` says
     // there is none, and it carries no body.
-    let Some(b) = block else { return Err(FetchFail::Decode) };
+    let Some(b) = block else { return Err(FetchFail::Decode.into()) };
     match category {
         Category::terrain => {
             let result = Terrain::pyramid().adopt(LevelPage::of_subject(subject), view(b), phases);
@@ -232,21 +240,21 @@ fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Ph
                 geocode_store::set_group(subject, Some(resident));
                 Ok(())
             }
-            Err(_) => {
+            Err(err) => {
                 release(block);
-                Err(FetchFail::Decode)
+                Err(err.into())
             }
         },
         // As `absent`: an asset never arrives here.
-        Category::asset => Err(FetchFail::Shell),
+        Category::asset => Err(FetchFail::Shell.into()),
         Category::geocode_dict => match unsafe { geocode_repository::open_dict(b.0, b.1) } {
             Ok(resident) => {
                 geocode_store::set_dict(Some(resident));
                 Ok(())
             }
-            Err(_) => {
+            Err(err) => {
                 release(block);
-                Err(FetchFail::Decode)
+                Err(err.into())
             }
         },
     }

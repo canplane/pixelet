@@ -10,11 +10,12 @@ import { Errno, strerror } from "./errno.spec.ts";
  * Notes:
  * - Errno describes the error code, not fatality.
  * - Fatal vs non-fatal is determined by error class (and catch boundary policy).
- * - Origin/context should be attached at catch/log boundary, not encoded in the error.
+ * - Context (what was being done) is attached at the catch/log boundary; the error carries only where it was made.
  *
- * An error is its errno and its class, and nothing else: what a reader is
- * shown is `strerror` of the number, which is the `message` the platform's
- * `Error` asks for.
+ * An error is its errno, its class and where it was made, and nothing else:
+ * what a reader is shown is `strerror` of the number, which is the `message`
+ * the platform's `Error` asks for, and where is the stack it captures, which
+ * xpute-core's error carries as one `#[track_caller]` place.
  */
 export class XputeError extends Error {
   readonly errno: Errno;

@@ -279,7 +279,7 @@ function cmdRsReadOne(spec: CmdSpec, f: CmdField, c: string): string {
   const path = cmdRsEnum(spec, f.type);
   const number = `${c}.get_number()? as u32`;
   const member = "repr" in decl && decl.repr === "u8" ? `u8::try_from(${number}).ok().and_then(${path}::of)` : `${path}::of(${number})`;
-  return decl.unknown ? `${member}.unwrap_or(${path}::${decl.unknown})` : `${member}.ok_or_else(unknown)?`;
+  return decl.unknown ? `${member}.unwrap_or(${path}::${decl.unknown})` : `${member}.ok_or_else(|| unknown())?`;
 }
 
 function cmdRsRead(spec: CmdSpec, f: CmdField, i: number): string {
@@ -341,6 +341,7 @@ function cmdRs(spec: CmdSpec): string {
     "use xpute_core::wire::xtp::{PacketWriter, TreeReader};",
     "",
     "/// A number an enum does not give out, where the enum has no member it reads as.",
+    "#[track_caller]",
     "fn unknown() -> MarshalError {",
     "    MarshalError::new(Errno::EINVAL)",
     "}",

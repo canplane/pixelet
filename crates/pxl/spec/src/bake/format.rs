@@ -192,12 +192,8 @@ pub fn decode_terrain_into(pkt: &[u8], room: PageRoom) -> Result<(), MarshalErro
     let root = TreeReader::new(pkt)?.read_branch()?;
     let ele = root.at(0)?.get_array::<i16>()?;
     let cells = root.at(1)?.get_array::<GroundCell>()?;
-    let wrong = || Err(MarshalError::new(Errno::EBADMSG));
-    if ele.len() != room.ele.len() {
-        return wrong();
-    }
-    if cells.len() != room.cells.len() {
-        return wrong();
+    if ele.len() != room.ele.len() || cells.len() != room.cells.len() {
+        return Err(MarshalError::new(Errno::EBADMSG));
     }
     room.ele.copy_from_slice(ele);
     room.cells.copy_from_slice(cells);

@@ -406,7 +406,7 @@ pub mod FRAME_GROUPS {
     pub const KEYS: &[&str] = &["pace", "turn", "gpu", "lod", "mounts", "stale", "slot", "cap", "work", "q", "pages", "cover", "device", "heap", "ring"];
 }
 
-/// One settled task (sched/ledger/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES.
+/// One settled task (sched/ledger/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's.
 pub mod TASK {
     pub const category: u32 = 0;
     pub const subject: u32 = 1;
@@ -418,10 +418,13 @@ pub mod TASK {
     pub const outcome: u32 = 7;
     pub const fail: u32 = 8;
     pub const detail: u32 = 9;
-    pub const phase_count: u32 = 10;
-    pub const phase_ids: u32 = 11;
-    pub const phase_values: u32 = 17;
-    pub const WORDS: u32 = 23;
+    pub const at_file: u32 = 10;
+    pub const at_file_bytes: u32 = 11;
+    pub const at_line: u32 = 12;
+    pub const phase_count: u32 = 13;
+    pub const phase_ids: u32 = 14;
+    pub const phase_values: u32 = 20;
+    pub const WORDS: u32 = 26;
     pub const KEYS: &[&str] = &[
         "category",
         "subject",
@@ -433,6 +436,9 @@ pub mod TASK {
         "outcome",
         "fail",
         "detail",
+        "at_file",
+        "at_file_bytes",
+        "at_line",
         "phase_count",
         "phase_ids",
         "phase_values",

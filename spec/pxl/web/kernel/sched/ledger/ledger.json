@@ -284,7 +284,7 @@
   "TASK": {
     "$type": "u32",
     "$doc": [
-      "One settled task (sched/ledger/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES."
+      "One settled task (sched/ledger/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's."
     ],
     "category": 0,
     "subject": 1,
@@ -296,10 +296,13 @@
     "outcome": 7,
     "fail": 8,
     "detail": 9,
-    "phase_count": 10,
-    "phase_ids": 11,
-    "phase_values": 17,
-    "WORDS": 23
+    "at_file": 10,
+    "at_file_bytes": 11,
+    "at_line": 12,
+    "phase_count": 13,
+    "phase_ids": 14,
+    "phase_values": 20,
+    "WORDS": 26
   },
   "WORST": {
     "$type": "u32",

@@ -20,6 +20,8 @@ use pxl_spec::space::pyramid::PAGE_CELLS;
 use pxl_spec::space::xy::TO_XY;
 use xpute_runtime::abi::fetch::FetchFail;
 
+use crate::sched::ledger::record::Failure;
+
 use crate::control::navigation::store::map_navigation;
 use crate::global::Global;
 use crate::host::now;
@@ -55,7 +57,7 @@ impl Layer for Terrain {
     /// are read where they lie and packed a cell at a time, so nothing
     /// page-sized stands between the page arriving and the ground being drawn
     /// from it.
-    fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Terrain, FetchFail> {
+    fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Terrain, Failure> {
         let t0 = now();
         let lanes = lanes_of(record)?;
         let room = PageRoom {
@@ -64,7 +66,7 @@ impl Layer for Terrain {
             cells: unsafe { core::slice::from_raw_parts_mut(lanes.cells as *mut GroundCell, CELLS) },
             ele: unsafe { core::slice::from_raw_parts_mut(lanes.ele as *mut i16, SAMPLES) },
         };
-        decode_terrain_into(pkt, room).map_err(|_| FetchFail::Decode)?;
+        decode_terrain_into(pkt, room)?;
         phases.push(TaskPhaseName::decode_ms, now() - t0);
         // SAFETY: the lanes are this page's record until another page takes it.
         Ok(unsafe { open_terrain(lanes) })
@@ -179,13 +181,13 @@ fn ocean() -> &'static mut Ocean {
 
 /// The shared tile's body: written into `ABSENT`, the record every open-ocean
 /// page reads, and given to every page waiting on it.
-pub fn adopt_ocean(pkt: &[u8]) -> Result<(), FetchFail> {
+pub fn adopt_ocean(pkt: &[u8]) -> Result<(), Failure> {
     if ocean().terrain.is_some() {
         return Ok(());
     }
-    let decoded = decode_terrain(pkt).map_err(|_| FetchFail::Decode)?;
+    let decoded = decode_terrain(pkt)?;
     if decoded.ground.len() != CELLS || decoded.ele.len() != SAMPLES {
-        return Err(FetchFail::Decode);
+        return Err(FetchFail::Decode.into());
     }
     let lanes = lanes_of(ABSENT)?;
     write_lanes(&decoded, lanes);

@@ -1,6 +1,7 @@
 // xpute-core/status/error.rs
 
 use core::fmt;
+use core::panic::Location;
 
 use crate::status::errno::Errno;
 
@@ -11,12 +12,14 @@ use crate::status::errno::Errno;
 /// Notes:
 /// - Errno describes the error code, not fatality.
 /// - Fatal vs non-fatal is determined by error class (and catch boundary policy).
-/// - Origin/context should be attached at catch/log boundary, not encoded in the error.
+/// - Context (what was being done) is attached at the catch/log boundary; the error carries only where it was made.
 ///
-/// An error is its errno and its class, and nothing else: what it means to a
-/// reader is `strerror` of the number, where the reader is. A sentence carried
-/// with it would say what the errno and the place it was raised at already
-/// say, in a language the module then ships.
+/// An error is its errno, its class and where it was made, and nothing else:
+/// what it means to a reader is `strerror` of the number, where the reader
+/// is, and which check refused is the place (`#[track_caller]`, so a helper
+/// that makes one reports its caller's). A sentence carried with it would say
+/// what those already say, in a language the module then ships. A script's
+/// error carries its own stack instead (@xpute/core status/error.ts).
 ///
 /// An error is returned: `Result<_, XputeError>`, or a subclass. The
 /// subclasses are newtypes over this, each dereferencing to it, so a
@@ -24,17 +27,19 @@ use crate::status::errno::Errno;
 #[derive(Debug)]
 pub struct XputeError {
     pub errno: Errno,
+    pub at: &'static Location<'static>,
 }
 
 impl XputeError {
+    #[track_caller]
     pub fn new(errno: Errno) -> XputeError {
-        XputeError { errno }
+        XputeError { errno, at: Location::caller() }
     }
 }
 
 impl fmt::Display for XputeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.errno)
+        write!(f, "{:?} at {}", self.errno, self.at)
     }
 }
 
@@ -61,6 +66,7 @@ pub struct NetworkFaultError(pub FaultError);
 macro_rules! subclass {
     ($name:ident extends $base:ident) => {
         impl $name {
+            #[track_caller]
             pub fn new(errno: Errno) -> $name {
                 $name($base::new(errno))
             }
