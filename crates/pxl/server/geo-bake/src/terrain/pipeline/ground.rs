@@ -24,7 +24,7 @@ use pxl_spec::space::pyramid::PAGE_CELLS;
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::round;
 
-const PAGE_CELL_SPAN2: usize = (PAGE_CELLS * PAGE_CELLS) as usize;
+const PAGE_AREA: usize = (PAGE_CELLS * PAGE_CELLS) as usize;
 const SPAN: i64 = PAGE_CELLS as i64;
 
 /// Ground rasterization uses cell-centre sampling; the bias lives here rather
@@ -66,7 +66,7 @@ struct Target<'a> {
 }
 
 pub fn bake_ground(elements: &[Feature], has_coast_row: bool) -> Ground {
-    let mut cells = vec![0 as GroundCell; PAGE_CELL_SPAN2];
+    let mut cells = vec![0 as GroundCell; PAGE_AREA];
     // The land field of every cell, the others untouched: nothing has been
     // painted yet, so the rest of the word is void.
     let fill_land = |cells: &mut Vec<GroundCell>, t: u8| cells.fill(with_channel(0, GroundChannelKey::LAND, t));

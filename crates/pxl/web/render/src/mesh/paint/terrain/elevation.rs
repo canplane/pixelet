@@ -8,8 +8,8 @@
 //!
 //! Unit convention:
 //! - [u]      : Canonical world unit (Standard coordinate space).
-//! - [cell]   : Discrete raster unit. 1u = 2^-CELL_SHAMT cells.
-//! - [texel]  : Continuous coordinate within the PAGE_CELL_SPAN grid [0, PAGE_CELL_SPAN].
+//! - [cell]   : Discrete raster unit. 1u = CELL.count_in(L1) cells (pxl-spec bake/constant.rs).
+//! - [texel]  : Continuous coordinate within the PAGE_CELLS grid [0, PAGE_CELLS].
 //! - [sample] : Low-res elevation grid index (before padding).
 //!
 //! Scale relation:

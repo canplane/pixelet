@@ -4,21 +4,21 @@
 //!
 //! The shell names a size by its tier and never by a length: which tiers
 //! exist and what each measures is this ladder's, sent to it in the
-//! snapshot, so a CELL_SHAMT change rescales every tier with nothing on the
+//! snapshot, so a change of the cell rescales every tier with nothing on the
 //! other side to follow.
 
-use pxl_spec::bake::constant::{OBJECT_TIERS, U_PER_CELL};
+use pxl_spec::bake::constant::{CELL, OBJECT_TIERS};
 
 /// Grid-aligned steps down from one terrain cell, coarsest first: tier `i`
-/// is U_PER_CELL halved `i` times. The largest is the terrain's own cell, so
-/// an object that size lines up 1:1 with a cell, and the finer tiers are
-/// what the object paint writes as sub-cell voxels within the volume's dense
+/// is the cell `i` levels down. The largest is the terrain's own cell, so an
+/// object that size lines up 1:1 with a cell, and the finer tiers are what
+/// the object paint writes as sub-cell voxels within the volume's dense
 /// field (pxl-spec bake/constant.rs's OBJECT_LAYOUT, one level a tier).
 pub const OBJECT_SIZES: [f64; OBJECT_TIERS] = {
     let mut sizes = [0.0; OBJECT_TIERS];
     let mut i = 0;
     while i < OBJECT_TIERS {
-        sizes[i] = U_PER_CELL / (1u32 << i) as f64;
+        sizes[i] = CELL.down(i as u32).side();
         i += 1;
     }
     sizes

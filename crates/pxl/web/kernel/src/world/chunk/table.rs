@@ -20,7 +20,7 @@
 //! go. The nodes hold the meshes; this holds every decision about them.
 
 use pxl_spec::space::indexer::L3_IDX;
-use pxl_spec::space::pyramid::{chunk_span_of, Cell, CHUNK_CELLS, PAGE_CELLS, PAGE_CHUNKS};
+use pxl_spec::space::pyramid::{chunk_span_of, Cell, CHUNK_CELLS, GROUND, PAGE_CELLS, PAGE_CHUNKS};
 use std::collections::{BTreeMap, VecDeque};
 
 use pxl_render::frame::draw::DrawList;
@@ -30,7 +30,6 @@ use pxl_render::look::lod::COARSEST;
 use pxl_render::mesh::chunk_mesher::{box_bounds, Heights};
 use pxl_render::mesh::paint::terrain::adapter::ChunkSample;
 
-use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::Pvf3;
 use pxl_spec::space::pyramid::TOP_LEVEL;
@@ -2361,7 +2360,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
 /// for coarse, independent of source or POI cardinality.
 fn surface_centres(words: &[u32], stride: usize, step: u32, level: u32, heights: Heights) -> Box<[u32]> {
     let axis = (CHUNK_CELLS / step) as usize;
-    let unit = (step << level) as f64 * U_PER_CELL;
+    let unit = step as f64 * GROUND.scale(level).side();
     let mut tops = vec![0; axis * axis];
     for r in words.chunks_exact(stride) {
         let (min, size) = box_bounds(r, unit, heights);

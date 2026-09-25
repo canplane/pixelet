@@ -38,7 +38,7 @@ import { cube_types } from "@/catalog/cell/cube_type.spec.ts";
 import { BAKE_KINDS } from "@/config/published.spec.ts";
 import { SETTINGS } from "@/feature/setting/schema.spec.ts";
 
-import { ELE_PADDED_SPAN, encode_terrain, pack_ground_cell, PAGE_CELL_SPAN } from "@/kernel/fixture.ts";
+import { ELE_PADDED_SPAN, encode_terrain, pack_ground_cell, PAGE_CELLS } from "@/kernel/fixture.ts";
 
 import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { CORE_KERNEL } from "@/kernel/mem.ts";
@@ -90,7 +90,7 @@ CORE_BUILD.signal = (_tag, cmd, f) => {
  * ground that is mostly land, with water, structures and roads sprinkled. */
 function terrain_body(seed: u32): U8Array {
   const next = rng(seed);
-  const cells = PAGE_CELL_SPAN * PAGE_CELL_SPAN;
+  const cells = PAGE_CELLS * PAGE_CELLS;
   const ele = new Int16Array(ELE_PADDED_SPAN * ELE_PADDED_SPAN);
   for (let i = 0; i < ele.length; i++) ele[i] = 10 + (next() % 30);
   const packed = new Uint16Array(cells);

@@ -4,7 +4,11 @@ use super::*;
 use crate::space::pvf3::pvf3;
 use crate::space::sparse_tree::tree as sparse_tree;
 
-const LAYOUT: SparseTreeLayout = SparseTreeLayout { dim: 3, min: -3, max: 6 };
+const LAYOUT: SparseTreeLayout = SparseTreeLayout {
+    dim: 3,
+    min: Scale::of(-3),
+    max: Scale::of(6),
+};
 
 fn at(x: f64, y: f64, z: f64) -> Pvf3 {
     let mut out = Pvf3::default();
@@ -14,12 +18,12 @@ fn at(x: f64, y: f64, z: f64) -> Pvf3 {
 #[test]
 fn sparse_tree_retype_widening_the_leaf_lane_carries_every_value_across() {
     let mut tree = sparse_tree::alloc::<u8>(LAYOUT, 64);
-    sparse_tree::write(&mut tree, &at(3.0, 4.0, 5.0), 200, 0);
+    sparse_tree::write(&mut tree, &at(3.0, 4.0, 5.0), 200, Scale::of(0));
     sparse_tree::write(&mut tree, &at(10.125, 1.0, 0.0), 7, LAYOUT.min);
     let mut tree = sparse_tree::retype::<u8, u16>(tree);
     assert_eq!(sparse_tree::read(&tree, &at(3.5, 4.5, 5.5)), 200);
     assert_eq!(sparse_tree::read(&tree, &at(10.125, 1.0, 0.0)), 7);
-    sparse_tree::write(&mut tree, &at(20.0, 20.0, 20.0), 300, 0);
+    sparse_tree::write(&mut tree, &at(20.0, 20.0, 20.0), 300, Scale::of(0));
     assert_eq!(sparse_tree::read(&tree, &at(20.0, 20.0, 20.0)), 300);
 }
 
@@ -33,8 +37,8 @@ fn sparse_tree_computes_what_the_record_holds() {
     v.each("", |k| {
         let layout = SparseTreeLayout {
             dim: v.u32(&format!("{k}.dim")),
-            min: v.i32(&format!("{k}.min")),
-            max: v.i32(&format!("{k}.max")),
+            min: Scale::of(v.i32(&format!("{k}.min"))),
+            max: Scale::of(v.i32(&format!("{k}.max"))),
         };
         let coord = |base: &str| {
             let mut p = Pvf3::default();
@@ -42,13 +46,13 @@ fn sparse_tree_computes_what_the_record_holds() {
         };
         let mut tree = sparse_tree::alloc::<u16>(layout, 8);
         v.each(&format!("{k}.writes"), |w| {
-            sparse_tree::write(&mut tree, &coord(w), v.u32(&format!("{w}.val")) as u16, v.i32(&format!("{w}.level")));
+            sparse_tree::write(&mut tree, &coord(w), v.u32(&format!("{w}.val")) as u16, Scale::of(v.i32(&format!("{w}.level"))));
         });
         v.each(&format!("{k}.probes"), |p| {
             assert_eq!(sparse_tree::read(&tree, &coord(p)) as u32, v.u32(&format!("{p}.val")), "{p}");
         });
         let mut walked = Vec::new();
-        sparse_tree::walk(&tree, &mut |x, y, z, level, val| walked.push(format!("{x},{y},{z},{level},{val}")));
+        sparse_tree::walk(&tree, &mut |x, y, z, level, val| walked.push(format!("{x},{y},{z},{},{val}", level.shamt())));
         let want: Vec<&str> = (0..v.len(&format!("{k}.walked"))).map(|j| v.s(&format!("{k}.walked.{j}"))).collect();
         assert_eq!(walked, want, "{k}.walked");
         assert_eq!(tree.mem.head, v.u32(&format!("{k}.head")), "{k}.head");
@@ -65,5 +69,12 @@ fn sparse_tree_computes_what_the_record_holds() {
 fn sparse_tree_decode_refuses_a_blob_whose_count_overflows_u32_rather_than_wrapping_under_it() {
     let mut blob = vec![0u64; 4];
     blob[0] = 0xffff_ffff;
-    let _ = decode::<u16>(&blob, SparseTreeLayout { dim: 3, min: -3, max: 3 });
+    let _ = decode::<u16>(
+        &blob,
+        SparseTreeLayout {
+            dim: 3,
+            min: Scale::of(-3),
+            max: Scale::of(3),
+        },
+    );
 }

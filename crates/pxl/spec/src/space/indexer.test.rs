@@ -5,9 +5,9 @@ use crate::space::pvf3::{ivec, projection, Pvf3};
 
 #[test]
 fn the_masks_are_what_fill_makes() {
-    assert_eq!(L2_MASK, ivec::fill(field_mask64(L2_SHAMT, 0) as i64));
-    assert_eq!(L3_MASK, ivec::fill(field_mask64(L3_SHAMT, 0) as i64));
-    assert_eq!(L4_MASK, ivec::fill(field_mask64(L4_SHAMT, 0) as i64));
+    assert_eq!(L2_MASK, ivec::fill(field_mask64(L2.shamt() as u32, 0) as i64));
+    assert_eq!(L3_MASK, ivec::fill(field_mask64(L3.shamt() as u32, 0) as i64));
+    assert_eq!(L4_MASK, ivec::fill(field_mask64(L4.shamt() as u32, 0) as i64));
 }
 
 #[test]

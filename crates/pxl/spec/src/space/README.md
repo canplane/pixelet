@@ -46,7 +46,7 @@ base unit, so a tier's extent is a power of two and its boundary is a mask.
 
 | tier          | shift | extent | inside the one above | what this program puts there |
 | ------------- | ----- | ------ | -------------------- | ---------------------------- |
-| **L1** block  | 0     | 1u     | —                    | the canonical unit: one cell |
+| **L1** block  | 0     | 1u     | —                    | the canonical unit           |
 | **L2** chunk  | 6     | 64u    | 8×8 in L3            | a render and LOD batch       |
 | **L3** page   | 9     | 512u   | 8×8 in L4            | a request and paging unit    |
 | **L4** anchor | 12    | 4096u  | 16×16 in L5          | a floating origin's square   |
@@ -146,6 +146,7 @@ quantity (`issue/20260921-level-step-and-zoom-are-one-number.md`).
 | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | [`pvf3/`](./pvf3/)               | the packed words: `ivec`, `fvec`, their pair, and doubles in and out                                   |
 | [`adapter/`](./adapter/)         | where a unit gets a meaning                                                                            |
+| `hierarchy.rs`                   | `Scale`, the one form a size takes, and parent and child in any number of axes                         |
 | `indexer.rs`                     | the tiers, and the four questions each answers                                                         |
 | [`lattice/`](./lattice/)         | structures over the lattice: one address hash, points bucketed in 3D, rectangles indexed on the screen |
 | [`sparse_tree/`](./sparse_tree/) | an octree in two flat lanes, storing what differs from the default                                     |

@@ -26,6 +26,7 @@
 
 /// A run whose material is a placed object: exempt from hiding its
 /// neighbours' faces, and drawn with its bottom face.
+use pxl_spec::bake::constant::BAND_CELLS;
 use xpute_core::math::scalar::round;
 use xpute_runtime::mem::heap::{alloc, free, Block, Guard};
 
@@ -104,11 +105,9 @@ pub fn unpack_material(packed: u32, layer_idx: u32) -> VoxelMaterial {
 
 // ---- the volume ----
 
-/// A band is a chunk's span on every axis.
-pub const BAND_SPAN: u32 = pxl_spec::space::pyramid::CHUNK_CELLS;
-const BAND_MASK: u32 = BAND_SPAN - 1;
-const BAND_SPAN2: usize = (BAND_SPAN * BAND_SPAN) as usize;
-pub const BAND_VOXELS: usize = BAND_SPAN2 * BAND_SPAN as usize;
+const BAND_MASK: u32 = BAND_CELLS - 1;
+const BAND_AREA: usize = (BAND_CELLS * BAND_CELLS) as usize;
+pub const BAND_VOXELS: usize = BAND_AREA * BAND_CELLS as usize;
 /// A band's lanes: a word of material, a byte of layer and a word of
 /// sub-cell a voxel.
 const MATERIAL_BYTES: u32 = BAND_VOXELS as u32 * 4;
@@ -117,7 +116,7 @@ const SUB_CELL_BYTES: u32 = BAND_VOXELS as u32 * 4;
 
 /// Column-major band-local index: Z is contiguous for paint, scan and raycast.
 pub fn band_voxel_idx(x: u32, y: u32, z: u32) -> usize {
-    ((y * BAND_SPAN + x) * BAND_SPAN + z) as usize
+    ((y * BAND_CELLS + x) * BAND_CELLS + z) as usize
 }
 
 /// How many band stores keep their lanes when their band is released. Past
@@ -392,8 +391,8 @@ impl Volumes {
     }
 
     fn locate(z: i32) -> (i32, u32) {
-        let band_z = z.div_euclid(BAND_SPAN as i32);
-        (band_z, (z - band_z * BAND_SPAN as i32) as u32)
+        let band_z = z.div_euclid(BAND_CELLS as i32);
+        (band_z, (z - band_z * BAND_CELLS as i32) as u32)
     }
 
     /// Full replacement at one voxel: later layers overwrite earlier ones.
@@ -402,7 +401,7 @@ impl Volumes {
         let Cell { cx, cy, z } = at;
         // A column past the band would index the next block in the heap:
         // refused rather than written.
-        if cx >= BAND_SPAN || cy >= BAND_SPAN {
+        if cx >= BAND_CELLS || cy >= BAND_CELLS {
             return false;
         }
         let Voxel { material, layer_idx, sub } = v;
@@ -416,7 +415,7 @@ impl Volumes {
             *self.layer(store).add(idx) = layer_idx;
         }
         if self.stores[store].extra.len() > 0 {
-            let col = (cy & BAND_MASK) * BAND_SPAN + (cx & BAND_MASK);
+            let col = (cy & BAND_MASK) * BAND_CELLS + (cx & BAND_MASK);
             self.stores[store].extra.remove_at(col, z);
         }
         if sub >> 24 != SUB_CELL_NONE as u32 {
@@ -439,14 +438,14 @@ impl Volumes {
     /// layer.
     pub fn append_sub_voxel(&mut self, id: usize, at: Cell, v: Voxel) -> bool {
         let Cell { cx, cy, z } = at;
-        if cx >= BAND_SPAN || cy >= BAND_SPAN {
+        if cx >= BAND_CELLS || cy >= BAND_CELLS {
             return false;
         }
         let Voxel { material, layer_idx, sub } = v;
         let (band_z, _) = Self::locate(z);
         let Some(b) = self.get_or_create_band(id, band_z) else { return false };
         let store = self.volume(id).bands[b].store;
-        let col = (cy & BAND_MASK) * BAND_SPAN + (cx & BAND_MASK);
+        let col = (cy & BAND_MASK) * BAND_CELLS + (cx & BAND_MASK);
         self.stores[store].extra.push(col, z, material, layer_idx, sub);
         true
     }
@@ -454,21 +453,21 @@ impl Volumes {
     /// Paints one solid column across as many whole bands as it needs.
     pub fn fill_column(&mut self, id: usize, column: (u32, u32), z0: i32, z1: i32, v: Voxel) -> bool {
         let (cx, cy) = column;
-        if cx >= BAND_SPAN || cy >= BAND_SPAN {
+        if cx >= BAND_CELLS || cy >= BAND_CELLS {
             return false;
         }
         let Voxel { material, layer_idx, .. } = v;
         if z1 < z0 {
             return true;
         }
-        let span = BAND_SPAN as i32;
+        let span = BAND_CELLS as i32;
         let (first, _) = Self::locate(z0);
         let (last, _) = Self::locate(z1);
         for band_z in first..=last {
             let Some(b) = self.get_or_create_band(id, band_z) else { return false };
             let store = self.volume(id).bands[b].store;
             let local_z0 = if band_z == first { (z0 - band_z * span) as u32 } else { 0 };
-            let local_z1 = if band_z == last { (z1 - band_z * span) as u32 } else { BAND_SPAN - 1 };
+            let local_z1 = if band_z == last { (z1 - band_z * span) as u32 } else { BAND_CELLS - 1 };
             let start = band_voxel_idx(cx, cy, local_z0);
             let end = band_voxel_idx(cx, cy, local_z1) + 1;
             // SAFETY: lanes of BAND_VOXELS; start..end is one column of a band.

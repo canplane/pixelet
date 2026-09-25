@@ -18,10 +18,9 @@
 use std::f64::consts::{PI, SQRT_2};
 
 use pxl_render::look::lod::REFERENCE_THRESHOLD_0;
-use pxl_spec::bake::constant::CELL_SHAMT;
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{span_of, LevelPage, CHUNK_CELLS, PAGE_CELLS, PAGE_CHUNKS, TOP_LEVEL};
+use pxl_spec::space::pyramid::{span_of, LevelPage, CHUNK_CELLS, GROUND, PAGE_CELLS, PAGE_CHUNKS, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::layer::environment::fog::{eye_height, reach_at};
@@ -46,8 +45,7 @@ const SPLIT: f64 = REFERENCE_THRESHOLD_0;
 /// its cells covers more than a cell's pixels. Any integer level, the ones
 /// under a cell included.
 pub const fn split_distance(level: i32) -> f64 {
-    let shamt = CELL_SHAMT + level;
-    SPLIT * if shamt >= 0 { (1u64 << shamt) as f64 } else { 1.0 / (1u64 << -shamt) as f64 }
+    SPLIT * GROUND.scale(0).up(level).side()
 }
 
 /// How far from the eye's foot a level's chunks can lie, in that level's

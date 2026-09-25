@@ -20,7 +20,6 @@
 
 use std::collections::HashMap;
 
-use crate::bake::constant::CELL_SHAMT;
 use crate::space::pvf3::pvf3::Pvf3;
 use crate::space::pyramid::{Folds, Lattice, LevelPage, GROUND, TOP_LEVEL};
 
@@ -31,7 +30,7 @@ const MAGIC: &[u8; 4] = b"PXP4";
 /// its cell, and a cell the ground's size is a few pixels on the screen at
 /// every distance (pxl-render look/lod.rs), far under a badge. Four times is
 /// a product choice, not a derivation: the scale places merge at.
-pub const POI_LATTICE: Lattice = Lattice::new(CELL_SHAMT + 2);
+pub const POI_LATTICE: Lattice = Lattice::new(GROUND.scale(2));
 
 const CELLS: u32 = POI_LATTICE.page_cells() * POI_LATTICE.page_cells();
 
@@ -48,7 +47,7 @@ const NO_AT: u32 = u32::MAX;
 // A position is an offset in level-0 ground cells inside a POI cell, a lane
 // a half-word: the widest cell, at the top level, has to fit.
 const _: () = assert!(
-    POI_LATTICE.cell_shamt(TOP_LEVEL) - GROUND.cell_shamt(0) <= 16,
+    POI_LATTICE.scale(TOP_LEVEL).above(GROUND.scale(0)) <= 16,
     "a POI cell's level-0 ground cells no longer fit a half-word a lane"
 );
 

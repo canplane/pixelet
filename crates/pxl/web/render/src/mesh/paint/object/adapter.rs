@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 
-use pxl_spec::bake::constant::{BandZ, CellZ, BAND_CELLS, BAND_UNITS, MIN_LEVEL, POS_BITS, POS_MASK, STEP_UNITS, U_PER_CELL};
+use pxl_spec::bake::constant::{unpack_pos, BandZ, CellZ, BAND_CELLS, BAND_UNITS, STEP_UNITS, U_PER_CELL};
 use pxl_spec::cell::cube_types;
 use xpute_core::math::scalar::round;
 
@@ -178,14 +178,11 @@ impl Painter {
             if hide == Some((band, pos)) {
                 continue;
             }
-            let x = pos & POS_MASK;
-            let y = (pos >> POS_BITS) & POS_MASK;
-            let z = (pos >> (2 * POS_BITS)) & POS_MASK;
-            let level = (pos >> (3 * POS_BITS)) as i32 + MIN_LEVEL;
+            let (x, y, z, scale) = unpack_pos(pos);
             let lx = x as f64 * STEP_UNITS;
             let ly = y as f64 * STEP_UNITS;
             let lz = band as f64 * BAND_UNITS + z as f64 * STEP_UNITS;
-            let size = (2.0f64).powi(level);
+            let size = scale.side();
             match self.paint_entry(volumes, volume, lx, ly, lz, size, state, claimed, any) {
                 Some(n) => set += n + 1,
                 None => return Painted::Refused,

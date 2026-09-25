@@ -35,13 +35,14 @@ use std::process::ExitCode;
 
 use flate2::write::ZlibEncoder;
 use flate2::{Compression, Crc};
-use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
+use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::format::decode_terrain;
 use pxl_spec::bake::format::GroundChannelKey;
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::cell::cube::ground_pack;
 use pxl_spec::cell::{color, cube_types};
+use pxl_spec::space::pyramid::PAGE_CELLS;
 use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};
 
 const MAGENTA: u32 = 0xff00ff;
@@ -74,8 +75,8 @@ fn decode(pkt: &[u8]) -> Result<Page, String> {
     if ele.len() != (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize {
         return Err(format!("ele has {} samples, expected {ELE_PADDED_SPAN}²", ele.len()));
     }
-    if cells.len() != (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize {
-        return Err(format!("ground has {} cells, expected {PAGE_CELL_SPAN}²", cells.len()));
+    if cells.len() != (PAGE_CELLS * PAGE_CELLS) as usize {
+        return Err(format!("ground has {} cells, expected {PAGE_CELLS}²", cells.len()));
     }
     // Nothing may follow: a page is exactly its tree, and bytes past it are a
     // writer that disagrees with the reader, which only checks that the
@@ -210,7 +211,7 @@ fn channel_png(page: &Page, f: usize) -> Vec<u8> {
             [(v >> 16) as u8, (v >> 8) as u8, v as u8]
         })
         .collect();
-    png(PAGE_CELL_SPAN, PAGE_CELL_SPAN, 3, &px)
+    png(PAGE_CELLS, PAGE_CELLS, 3, &px)
 }
 
 // ---- driver ----

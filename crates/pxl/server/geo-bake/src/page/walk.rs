@@ -29,7 +29,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::Instant;
 
-use pxl_spec::space::indexer::L3_SHAMT;
+use pxl_spec::space::indexer::L3;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 
 use crate::util::{fmt_bytes, fmt_dur, pack, write_atomic, Level};
@@ -125,7 +125,7 @@ pub struct Walked {
 /// Terrain's land pages, as its own classification wrote them.
 ///
 /// A page index means a different square of ground at every page size, so the
-/// list carries the `L3_SHAMT` it was classified at and is refused at any
+/// list carries the L3 shift it was classified at and is refused at any
 /// other. Reused silently, a list from a larger page names a quarter of the
 /// land at the wrong places, and a bake of it looks like a bake.
 pub fn land_pages(path: &Path) -> Result<Vec<IVec>, String> {
@@ -135,8 +135,8 @@ pub fn land_pages(path: &Path) -> Result<Vec<IVec>, String> {
     let Some(shamt) = v.get("l3_shamt").and_then(|s| s.as_u64()) else {
         return Err(format!("{} does not say the page size it was classified at — {reclassify}.", path.display()));
     };
-    if shamt != L3_SHAMT as u64 {
-        return Err(format!("{} was classified at L3_SHAMT {shamt}, and a page is now L3_SHAMT {L3_SHAMT} — {reclassify}.", path.display()));
+    if shamt != L3.shamt() as u64 {
+        return Err(format!("{} was classified at an L3 shift of {shamt}, and a page is now {} — {reclassify}.", path.display(), L3.shamt()));
     }
     let list = v.get("pages").and_then(|p| p.as_array()).ok_or_else(|| format!("{} has no page list", path.display()))?;
     list.iter().map(|s| s.as_str().ok_or("a page is not a string")?.parse::<IVec>().map_err(|e| e.to_string())).collect()
@@ -145,7 +145,7 @@ pub fn land_pages(path: &Path) -> Result<Vec<IVec>, String> {
 /// Writes the land list with the page size it was classified at.
 pub fn write_land_pages(path: &Path, land: &[IVec]) -> Result<(), String> {
     let pages: Vec<String> = land.iter().map(|p| p.to_string()).collect();
-    let v = serde_json::json!({ "l3_shamt": L3_SHAMT, "pages": pages });
+    let v = serde_json::json!({ "l3_shamt": L3.shamt(), "pages": pages });
     std::fs::write(path, serde_json::to_string(&v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
 

@@ -29,7 +29,7 @@ This document is in three parts. **The world** is the vocabulary: what a positio
 
 L2 is Minecraft's chunk under another name — the unit a world is meshed in, cached at, and rebuilt when edited — at 64 blocks rather than 16.
 
-L5 is commented out (`L5_SHAMT`); when it exists it will address X and Y only, since the Z field of a packed position is 16 bits.
+L5 is commented out (`L5`); when it exists it will address X and Y only, since the Z field of a packed position is 16 bits.
 
 An extent is all the table gives. What is stored at a level is a separate question, and the answer is not always a cube: a level is an extent on one axis, not on three. `BASE`, `CENTER`, `LIMIT` and `IDX` (`pxl-spec space/indexer.rs`) are the same operations at every level, and whether a layer fills one axis, two or three is that layer's own choice.
 

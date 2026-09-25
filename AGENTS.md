@@ -80,11 +80,16 @@ is the leaf lattice with cells 2^k units wide, levels 0 to 10, a page 512
 cells a side at every level and named by the Web Mercator tile it stands on.
 The rules below keep it one thing. They come from finding it several.
 
-- **The lattice has one owner.** Level and span, a cell's base and centre,
-  parent and children, the 4 × 4 neighbourhood a fold reads, and a page's
-  name are `pxl-spec space/pyramid.rs`'s. A layer that shifts the hierarchy's
-  constants by a level itself is a second owner, and `check:rules` refuses
-  it outside `space/`.
+- **The lattice has one owner.** A size is a `Scale` against the unit,
+  stepped from two roots — the tiers (`pxl-spec space/indexer.rs`) and the
+  raster's cell (`bake/constant.rs` `CELL`), which is a resolution and
+  derives from neither — and parent and children in any number of axes are
+  `space/hierarchy.rs`'s. Level and span, a cell's base and centre, the
+  4 × 4 neighbourhood a fold reads, and a page's name are
+  `space/pyramid.rs`'s; a level is a count from a lattice's cell, and the
+  lattice is what turns it into a size. A layer that shifts by a tier or a
+  scale's exponent itself is a second owner, and `check:rules` refuses it
+  outside `space/`.
 - **A layer is a payload and a one-level fold, and nothing else.** No key,
   hierarchy, bounds, window, schedule or residency of its own: which pages
   are wanted, held, fetched and folded is the kernel's `Pyramid<L>`, in the
