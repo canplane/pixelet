@@ -1041,23 +1041,19 @@ impl Scheduler {
                 }
             }
             // Every column whose corner lies in the chunk: its own, at z16.
-            let span = chunk_span_of(level) as i64;
             let placed: Vec<Placed> = world
                 .store
                 .cols_under(self.slots[i].chunk.node())
                 .into_iter()
-                .filter_map(|col_idx| {
+                .map(|col_idx| {
                     let o = FROM_L2_IDX(col_idx);
-                    let (col_x, col_y) = (ivec::X(o), ivec::Y(o));
-                    ((x0..x0 + span).contains(&col_x) && (y0..y0 + span).contains(&col_y)).then(|| Placed {
+                    Placed {
                         col_idx,
-                        col_x,
-                        col_y,
                         hide: self.builder.hide_in(col_idx),
-                        ox: (col_x - x0) as f64,
-                        oy: (col_y - y0) as f64,
+                        ox: (ivec::X(o) - x0) as f64,
+                        oy: (ivec::Y(o) - y0) as f64,
                         hittable: level == 0,
-                    })
+                    }
                 })
                 .collect();
             // Above z16 the objects are drawn folded to the level's cell, the
@@ -1068,7 +1064,14 @@ impl Scheduler {
             if level > 0 && scatters {
                 let columns: Vec<Column> = placed
                     .iter()
-                    .filter_map(|p| world.store.entries(p.col_idx).map(|entries| Column { x0: p.col_x, y0: p.col_y, entries }))
+                    .filter_map(|p| {
+                        let o = FROM_L2_IDX(p.col_idx);
+                        world.store.entries(p.col_idx).map(|entries| Column {
+                            x0: ivec::X(o),
+                            y0: ivec::Y(o),
+                            entries,
+                        })
+                    })
                     .collect();
                 let hide = self.builder.hide_edit().map(|(col, band, pos)| {
                     let o = FROM_L2_IDX(col);

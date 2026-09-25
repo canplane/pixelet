@@ -237,9 +237,6 @@ pub struct Ground<'a> {
 /// A column whose placed decor a chunk draws.
 pub struct Placed {
     pub col_idx: IVec,
-    /// The column's X and Y lanes, in units.
-    pub col_x: i64,
-    pub col_y: i64,
     /// The hidden entry's band and packed position in this column.
     pub hide: Option<(i32, u32)>,
     /// Where the column's corner is from the corner of the chunk drawing it,
