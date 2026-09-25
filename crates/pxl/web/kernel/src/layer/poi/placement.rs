@@ -43,6 +43,8 @@ struct Placement {
     /// The badges shown, nearest what the view looks at first: what the
     /// shell lists beside the map (`snapshot`).
     shown: Vec<(Cell, Label, u32)>,
+    /// What `kept` has on the sheet, in the order it is drawn.
+    drawn: Vec<u32>,
 }
 static PLACEMENT: Global<Placement> = Global::new();
 
@@ -112,22 +114,34 @@ pub fn step(ctx: &mut TickContext) {
         let centre = stands.centre(top);
         let mut local = [0.0; 3];
         projection::unproject(&mut local, ivec::sub(centre.i, origin), centre.f);
-        p.batch.push(local[0], local[1], local[2], badge::width(label), badge::ANCHOR, cell.side(), labelled.len() as f64);
+        p.batch.push(local[0], local[1], local[2], badge::width(label), badge::ANCHOR, labelled.len() as f64);
         labelled.push((cell, label, t.count));
     }
     badge::retain(&labelled.iter().map(|l| l.1).collect());
     let v = view();
     select_visible_billboards(&mut p.batch, v.width, v.height, &mut p.kept);
-    let mut instances = Vec::with_capacity(p.kept.len() * BILLBOARD_FLOATS);
     p.shown.clear();
+    p.drawn.clear();
     for &i in &p.kept {
-        let i = i as usize;
-        let slot = badge::slot(labelled[i].1);
-        if slot == NO_SLOT {
+        if badge::slot(labelled[i as usize].1) == NO_SLOT {
             continue;
         }
-        p.shown.push(labelled[i]);
-        let (sheet, slot) = (billboard_sheet(), slot as u32);
+        p.shown.push(labelled[i as usize]);
+        p.drawn.push(i);
+    }
+    // Farthest from the eye first. The pass reads the world's depth and
+    // writes none of its own, so where two badges cross, the one drawn later
+    // is on top, and that has to be the nearer.
+    let batch = &p.batch;
+    p.drawn.sort_by(|&a, &b| {
+        batch.d2[b as usize]
+            .total_cmp(&batch.d2[a as usize])
+            .then(batch.tiebreak[a as usize].total_cmp(&batch.tiebreak[b as usize]))
+    });
+    let mut instances = Vec::with_capacity(p.drawn.len() * BILLBOARD_FLOATS);
+    for &i in &p.drawn {
+        let i = i as usize;
+        let (sheet, slot) = (billboard_sheet(), badge::slot(labelled[i].1) as u32);
         instances.extend_from_slice(&[
             p.batch.local_x[i] as f32,
             p.batch.local_y[i] as f32,
@@ -139,7 +153,6 @@ pub fn step(ctx: &mut TickContext) {
             sheet.u1(slot) as f32,
             sheet.v1(slot) as f32,
             (badge::ANCHOR / badge::HEIGHT) as f32,
-            p.batch.unit[i] as f32,
         ]);
     }
     if p.set.is_none() && instances.is_empty() {

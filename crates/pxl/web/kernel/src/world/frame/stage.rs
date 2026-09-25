@@ -11,7 +11,9 @@ use pxl_render::frame::stage::{stage_lane_mut, AO_STRENGTH, EDGE_STRENGTH, EDGE_
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
-use pxl_render::look::lod::{fade_end_u, fade_start_u, LOD_CELL_PER_DISTANCE};
+use pxl_render::look::lod::LOD_CELL_PER_DISTANCE;
+
+use crate::layer::billboard::distance_fade::fade_range;
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::space::pvf3::ivec;
 use xpute_core::math::mat4::{mat4, mat4_mul};
@@ -52,8 +54,7 @@ pub fn stage_write() {
     s[STAGE_AT::FOV] = v.fov;
     s[STAGE_AT::NEAR] = v.near;
     s[STAGE_AT::FAR] = v.far;
-    s[STAGE_AT::FADE_START] = fade_start_u();
-    s[STAGE_AT::FADE_END] = fade_end_u();
+    (s[STAGE_AT::FADE_START], s[STAGE_AT::FADE_END]) = fade_range();
     s[STAGE_AT::LOD_CELL] = LOD_CELL_PER_DISTANCE();
     s[STAGE_AT::EDGE_STRENGTH] = if settings.show_edge_shade { EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { AO_STRENGTH } else { 0.0 };

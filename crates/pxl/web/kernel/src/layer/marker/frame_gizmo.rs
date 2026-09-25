@@ -333,7 +333,6 @@ fn write_labels(g: &mut Gizmos) {
             sheet.u1(s) as f32,
             sheet.v1(s) as f32,
             0.5,
-            1.0,
         ]);
     }
     write_billboard_set(set, &lane);

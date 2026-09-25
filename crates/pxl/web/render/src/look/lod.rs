@@ -126,15 +126,6 @@ impl Ladder {
     }
 }
 
-// ---- What keeps step with the ladder ----
-
-/// Where a world-anchored billboard starts to fade and where it is gone, in
-/// first-handoff units (billboard/distance_fade.rs): full strength inside
-/// 5/4 of the first handoff, gone by 10/3 of it — 240u and 640u at the
-/// reference, moving with the projection as the tiers under them do.
-const FADE_START_TIERS: f64 = 240.0 / REFERENCE_THRESHOLD_0;
-const FADE_END_TIERS: f64 = 640.0 / REFERENCE_THRESHOLD_0;
-
 static LOD: Global<Ladder> = Global::new();
 
 fn lod() -> &'static mut Ladder {
@@ -146,14 +137,6 @@ fn lod() -> &'static mut Ladder {
 #[allow(non_snake_case)]
 pub fn LOD_CELL_PER_DISTANCE() -> f64 {
     lod().cell_per_distance()
-}
-
-pub fn fade_start_u() -> f64 {
-    FADE_START_TIERS * lod().threshold_0()
-}
-
-pub fn fade_end_u() -> f64 {
-    FADE_END_TIERS * lod().threshold_0()
 }
 
 /// Tells the process-wide ladder what it is projecting onto, and under which

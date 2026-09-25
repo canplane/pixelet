@@ -93,7 +93,7 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
     for k in 0..n {
         let i = batch.order[k] as usize;
 
-        let far = distance_fade_far(batch.d2[i].sqrt(), batch.unit[i]);
+        let far = distance_fade_far(batch.d2[i].sqrt());
         // Not `far <= 0`. The last stretch before the fade's end is ten pixels by
         // three at a tenth opacity — invisible, and not worth a draw.
         if far < MIN_LEGIBLE_FAR {

@@ -161,7 +161,6 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
         sheet.u1(s) as f32,
         sheet.v1(s) as f32,
         1.0,
-        1.0,
     ];
     follow_billboard_set(held.set, actor, tip_z);
     write_billboard_set(held.set, &lane);
