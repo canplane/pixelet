@@ -184,29 +184,6 @@ fn read_state(coord: &Pvf3) -> u32 {
     kernel().objects.read(at.col_idx, at.band, at.step)
 }
 
-/// A chunk's entry lanes, valid until the next write; None where
-/// the chunk holds nothing.
-fn entry_lanes(col_idx: IVec) -> Option<(&'static [i32], &'static [u32], &'static [u32])> {
-    let lanes = kernel().objects.chunk_lanes(col_idx)?;
-    if lanes.count == 0 {
-        return None;
-    }
-    let n = lanes.count as usize;
-    // SAFETY: the store's own lanes, `count` long, untouched until the next
-    // write, which no caller makes while it holds them.
-    unsafe {
-        Some((
-            core::slice::from_raw_parts(lanes.band_at, n),
-            core::slice::from_raw_parts(lanes.pos_at, n),
-            core::slice::from_raw_parts(lanes.state_at, n),
-        ))
-    }
-}
-
-fn entry_count(col_idx: IVec) -> u32 {
-    kernel().objects.chunk_lanes(col_idx).map_or(0, |l| l.count)
-}
-
 // ---- Entries ----
 //
 // What a chunk's trees hold, read back as one entry per leaf — a leaf larger
@@ -393,7 +370,7 @@ fn cursor_at(at: EntryAt) -> EntryCursor {
 /// Whether any entry — including the carve preview — is filed under a
 /// column. One lookup; what a coarse build asks before skipping the scan.
 pub fn col_has_entries(col_idx: IVec) -> bool {
-    if entry_count(col_idx) > 0 {
+    if kernel().objects.entries(col_idx).is_some() {
         return true;
     }
     store_state().virtual_carve_preview.as_ref().is_some_and(|c| c.at.col_idx == col_idx)
@@ -405,10 +382,10 @@ pub fn col_has_entries(col_idx: IVec) -> bool {
 pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor), render: bool) {
     let mut cursor = EntryCursor::default();
     let hide = store_state().virtual_hide;
-    if let Some((bands, poss, states)) = entry_lanes(col_idx) {
+    if let Some(e) = kernel().objects.entries(col_idx) {
         cursor.at_chunk(col_idx);
-        for k in 0..bands.len() {
-            cursor.load(bands[k], poss[k], states[k]);
+        for k in 0..e.band.len() {
+            cursor.load(e.band[k], e.pos[k], e.state[k]);
             if render && hide.is_some_and(|h| cursor.at() == Some(h)) {
                 continue;
             }
@@ -425,11 +402,11 @@ pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor), render
 fn each_cell_entry(ix: i64, iy: i64, iz: i64, visit: &mut dyn FnMut(&EntryCursor)) {
     let Some(run) = cell_run(ix, iy, iz) else { return };
     let col_idx = column_of([ix, iy, iz]);
-    let Some((bands, poss, states)) = entry_lanes(col_idx) else { return };
+    let Some(e) = kernel().objects.entries(col_idx) else { return };
     let mut cursor = EntryCursor::default();
     cursor.at_chunk(col_idx);
     for k in run.start as usize..(run.start + run.count) as usize {
-        cursor.load(bands[k], poss[k], states[k]);
+        cursor.load(e.band[k], e.pos[k], e.state[k]);
         visit(&cursor);
     }
 }
@@ -1041,14 +1018,6 @@ pub struct Write {
     pub state: u32,
 }
 
-/// What a chunk's lanes are, for a reader that takes views.
-pub struct ChunkLanes {
-    pub count: u32,
-    pub band_at: *const BandZ,
-    pub pos_at: *const u32,
-    pub state_at: *const u32,
-}
-
 pub struct Store {
     /// A chunk for every column holding an object, and only for those: a
     /// band is dropped once every leaf of it reads VOID, and a chunk with its
@@ -1135,24 +1104,14 @@ impl Store {
     }
 
     /// A column's entries as the view paints them, or none where the column
-    /// holds no chunk.
+    /// holds nothing: a column is held only while a leaf of it is not VOID,
+    /// and every such leaf is an entry.
     pub fn entries(&self, col_idx: IVec) -> Option<Entries<'_>> {
         let chunk = self.chunks.get(&col_idx)?;
         Some(Entries {
             band: &chunk.e_band,
             pos: &chunk.e_pos,
             state: &chunk.e_state,
-        })
-    }
-
-    /// A chunk's entry lanes, or none where the chunk is gone.
-    pub fn chunk_lanes(&self, col_idx: IVec) -> Option<ChunkLanes> {
-        let chunk = self.chunks.get(&col_idx)?;
-        Some(ChunkLanes {
-            count: chunk.e_band.len() as u32,
-            band_at: chunk.e_band.as_ptr(),
-            pos_at: chunk.e_pos.as_ptr(),
-            state_at: chunk.e_state.as_ptr(),
         })
     }
 

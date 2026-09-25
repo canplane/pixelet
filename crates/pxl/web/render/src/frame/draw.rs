@@ -83,17 +83,20 @@ pub struct DrawList {
     draws: Vec<u32>,
     uniforms: Vec<f32>,
     next_handle: u32,
-    /// The lanes the shell last took, kept until it takes again.
-    taken: Taken,
+    /// The uploads, rewrites and frees the renderer last took, their lanes
+    /// kept to be filled again rather than made anew.
+    taken: [Vec<u32>; 3],
 }
 
-#[derive(Default)]
-struct Taken {
-    uploads: Vec<u32>,
-    rewrites: Vec<u32>,
-    frees: Vec<u32>,
-    draws: Vec<u32>,
-    uniforms: Vec<f32>,
+/// The lists a frame is drawn from, borrowed until the next write: the
+/// blocks to put on the device, rewrite and let go since the last take, and
+/// the last tick's draws and their uniforms.
+pub struct Lists<'a> {
+    pub uploads: &'a [u32],
+    pub rewrites: &'a [u32],
+    pub frees: &'a [u32],
+    pub draws: &'a [u32],
+    pub uniforms: &'a [f32],
 }
 
 impl DrawList {
@@ -213,33 +216,23 @@ impl DrawList {
         (self.draws.len() / DRAW_WORDS) as u32
     }
 
-    /// Hands the lists to the shell: the lanes' addresses and counts, valid
-    /// until the next take. Uploads and frees start fresh; the draws stay
-    /// until the next frame writes them.
-    pub fn take(&mut self) -> [usize; 10] {
-        core::mem::swap(&mut self.taken.uploads, &mut self.uploads);
-        core::mem::swap(&mut self.taken.rewrites, &mut self.rewrites);
-        core::mem::swap(&mut self.taken.frees, &mut self.frees);
+    /// Hands the lists to the renderer. Uploads, rewrites and frees start
+    /// fresh; the draws stay until the next frame writes them.
+    pub fn take(&mut self) -> Lists<'_> {
+        let [uploads, rewrites, frees] = &mut self.taken;
+        core::mem::swap(uploads, &mut self.uploads);
+        core::mem::swap(rewrites, &mut self.rewrites);
+        core::mem::swap(frees, &mut self.frees);
         self.uploads.clear();
         self.rewrites.clear();
         self.frees.clear();
-        self.taken.draws.clear();
-        self.taken.draws.extend_from_slice(&self.draws);
-        self.taken.uniforms.clear();
-        self.taken.uniforms.extend_from_slice(&self.uniforms);
-        let t = &self.taken;
-        [
-            t.uploads.as_ptr() as usize,
-            t.uploads.len() / UPLOAD_WORDS,
-            t.frees.as_ptr() as usize,
-            t.frees.len(),
-            t.draws.as_ptr() as usize,
-            t.draws.len() / DRAW_WORDS,
-            t.uniforms.as_ptr() as usize,
-            t.uniforms.len() / UNIFORM_FLOATS,
-            t.rewrites.as_ptr() as usize,
-            t.rewrites.len() / REWRITE_WORDS,
-        ]
+        Lists {
+            uploads,
+            rewrites,
+            frees,
+            draws: &self.draws,
+            uniforms: &self.uniforms,
+        }
     }
 }
 

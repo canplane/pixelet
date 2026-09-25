@@ -745,7 +745,7 @@ impl Builder {
     }
 
     fn has_objects(&self, world: &World, col_idx: IVec) -> bool {
-        world.store.chunk_lanes(col_idx).is_some_and(|l| l.count > 0) || matches!(self.carve, Some((k, _)) if k == col_idx)
+        world.store.entries(col_idx).is_some() || matches!(self.carve, Some((k, _)) if k == col_idx)
     }
 
     /// The page's lanes as slices.

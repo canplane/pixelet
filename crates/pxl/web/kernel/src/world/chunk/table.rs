@@ -1923,7 +1923,7 @@ impl Scheduler {
         let (level, chunk) = (s.level, s.chunk);
         let outermost = self.outermost(i);
         let Some(d) = Terrain::pyramid().domain() else { return };
-        let objects = level == 0 && world.store.chunk_lanes(L2_IDX(ivec::gather(s.base_x as i64, s.base_y as i64, 0))).is_some_and(|l| l.count > 0);
+        let objects = level == 0 && world.store.entries(L2_IDX(ivec::gather(s.base_x as i64, s.base_y as i64, 0))).is_some();
         let primary = drawn_cube(wanted_cube(d, chunk, self.pressure), level, outermost, objects);
         self.slots[i].desired = (primary, None);
         let current = self.generation(i);

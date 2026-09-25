@@ -230,15 +230,8 @@ fn object_store_persistence_a_save_is_placement_records_per_page_and_loading_it_
 }
 
 fn entries(store: &Store, col_idx: IVec) -> Vec<(i32, u32, u32)> {
-    let Some(lanes) = store.chunk_lanes(col_idx) else { return Vec::new() };
-    // SAFETY: the lanes are the chunk's own, read before any change.
-    unsafe {
-        let n = lanes.count as usize;
-        let b = core::slice::from_raw_parts(lanes.band_at, n);
-        let p = core::slice::from_raw_parts(lanes.pos_at, n);
-        let s = core::slice::from_raw_parts(lanes.state_at, n);
-        (0..n).map(|k| (b[k], p[k], s[k])).collect()
-    }
+    let Some(e) = store.entries(col_idx) else { return Vec::new() };
+    (0..e.band.len()).map(|k| (e.band[k], e.pos[k], e.state[k])).collect()
 }
 
 fn write(store: &mut Store, col_idx: IVec, band_idx: BandZ, at: [u32; 3], scale: Scale, state: u32) -> BTreeSet<IVec> {
