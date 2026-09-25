@@ -214,10 +214,10 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let host = c.host.clone();
     let mut pages = PageSample::default();
     for (level, n) in pages.by_level.iter_mut().enumerate() {
-        *n = Terrain::pyramid().level(level as u32).keys().count() as f64;
+        *n = Terrain::pyramid().level(level as u32).count() as f64;
     }
     pages.total = pages.by_level.iter().sum();
-    pages.poi = (0..=TOP_LEVEL).map(|level| PoiPage::pyramid().level(level).size() as f64).sum();
+    pages.poi = (0..=TOP_LEVEL).map(|level| PoiPage::pyramid().level(level).count() as f64).sum();
     let mut gpu = host.gpu;
     for (tris, boxes) in gpu.level_tris.iter_mut().zip(census.level_boxes) {
         *tris = boxes as f64 * BOX_TRIANGLES;

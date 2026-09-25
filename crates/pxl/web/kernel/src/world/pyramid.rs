@@ -24,7 +24,7 @@ pub mod domain;
 use pxl_spec::space::hierarchy::share;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
@@ -33,7 +33,6 @@ use crate::io::policy;
 use crate::io::sched::{declare, Rank};
 use crate::layer::environment::fog::eye_height;
 use crate::world::change::world_edge;
-use crate::world::page_table::PageTable;
 use chunk::Chunk;
 pub use domain::Domain;
 use domain::{domain_for, eye, heights_revision, ring_of, Frustum, VIEW_PAGES};
@@ -127,12 +126,18 @@ pub struct Cover {
 /// of the same ground, so the second decides nothing again.
 type Wish = ([f64; 3], Frustum, bool, u32, Option<LevelPage>, (u32, u32));
 
+/// A resident page, and the record it lives in: none for a page every such
+/// page shares (a layer's `absent`), which takes no room.
+struct Held<L> {
+    page: L,
+    record: Option<u32>,
+}
+
 pub struct Pyramid<L: Layer> {
-    tables: Vec<PageTable<L>>,
-    /// Which page each record carries. A record is a page's room, not its
-    /// address: any page can sit in any record, and which pages the range
-    /// holds is `worth`'s policy rather than a coordinate's residue.
-    records: Vec<Option<LevelPage>>,
+    /// Every resident page, in level order. A record is a page's room, not
+    /// its address: any page can sit in any record, and which pages the
+    /// range holds is `worth`'s policy rather than a coordinate's residue.
+    pages: BTreeMap<LevelPage, Held<L>>,
     refused: u32,
     /// Moves whenever a page is set or cleared. The resident set is what the
     /// cover and every fold are functions of, so this one number is what
@@ -159,8 +164,7 @@ pub struct Pyramid<L: Layer> {
 impl<L: Layer> Default for Pyramid<L> {
     fn default() -> Self {
         Pyramid {
-            tables: (0..=TOP_LEVEL).map(|_| PageTable::default()).collect(),
-            records: vec![None; RECORDS as usize],
+            pages: BTreeMap::new(),
             refused: 0,
             revision: 0,
             pinned: None,
@@ -180,27 +184,34 @@ impl<L: Layer> Pyramid<L> {
     /// A resident page. None past the pyramid's top too, which is what a top
     /// page's parent is.
     pub fn get(&self, p: LevelPage) -> Option<&L> {
-        self.tables.get(p.level as usize)?.get(p.page)
+        self.pages.get(&p).map(|held| &held.page)
     }
 
     /// Every resident page of `level`.
-    pub fn level(&self, level: u32) -> &PageTable<L> {
-        &self.tables[level as usize]
+    pub fn level(&self, level: u32) -> impl Iterator<Item = (LevelPage, &L)> {
+        self.pages
+            .range(LevelPage { level, page: 0 }..LevelPage { level: level + 1, page: 0 })
+            .map(|(&p, held)| (p, &held.page))
     }
 
-    /// Sets a page, with or without a record: a page with none is one every
-    /// such page shares, which nothing will want the room of.
+    /// Sets a page with no record: one every such page shares, which nothing
+    /// will want the room of, so it is held while the view wants it
+    /// (`drop_unrecorded`).
     pub fn set(&mut self, p: LevelPage, page: L) {
+        self.put(p, page, None);
+    }
+
+    fn put(&mut self, p: LevelPage, page: L, record: Option<u32>) {
         if p.level > 0 {
             self.settled.extend(p.children().into_iter().filter(|&c| page.settles(p, c)));
         }
-        self.tables[p.level as usize].set(p.page, page);
+        self.pages.insert(p, Held { page, record });
         self.revision = self.revision.wrapping_add(1);
         L::changed(p, true);
     }
 
     pub fn clear(&mut self, p: LevelPage) -> Option<L> {
-        let held = self.tables[p.level as usize].clear(p.page)?;
+        let held = self.pages.remove(&p)?.page;
         if p.level > 0 {
             for c in p.children() {
                 self.settled.remove(&c);
@@ -276,12 +287,10 @@ impl<L: Layer> Pyramid<L> {
         // far down a stand-in is looked for without walking ground that has
         // nothing.
         let mut below: HashSet<LevelPage> = HashSet::new();
-        for level in 0..=TOP_LEVEL {
-            for page in self.tables[level as usize].keys() {
-                let mut p = LevelPage::new(level, page);
-                while below.insert(p) && p.level < TOP_LEVEL {
-                    p = p.parent();
-                }
+        for &page in self.pages.keys() {
+            let mut p = page;
+            while below.insert(p) && p.level < TOP_LEVEL {
+                p = p.parent();
             }
         }
         // The roots are the pyramid's top, so every page over the ground a
@@ -370,7 +379,16 @@ impl<L: Layer> Pyramid<L> {
     // ---- records ----
 
     fn record_of(&self, p: LevelPage) -> Option<u32> {
-        self.records.iter().position(|held| *held == Some(p)).map(|at| at as u32)
+        self.pages.get(&p)?.record
+    }
+
+    /// A record no page is in.
+    fn free_record(&self) -> Option<u32> {
+        let mut used = [false; RECORDS as usize];
+        for record in self.pages.values().filter_map(|held| held.record) {
+            used[record as usize] = true;
+        }
+        used.iter().position(|&u| !u).map(|at| at as u32)
     }
 
     /// How readily a resident page gives up its record, highest first. A page
@@ -393,17 +411,17 @@ impl<L: Layer> Pyramid<L> {
         if let Some(record) = self.record_of(p) {
             return Some(record);
         }
-        if let Some(free) = self.records.iter().position(Option::is_none) {
-            return Some(free as u32);
+        if let Some(free) = self.free_record() {
+            return Some(free);
         }
         let anchor = anchor?;
         let mine = self.worth(p, anchor);
         // The pinned page is never the one to go, whatever it is weighed at.
-        let worst = (0..RECORDS)
-            .filter_map(|r| {
-                let held = self.records[r as usize].filter(|held| Some(*held) != self.pinned)?;
-                Some((self.worth(held, anchor), r))
-            })
+        let worst = self
+            .pages
+            .iter()
+            .filter(|(&held, _)| Some(held) != self.pinned)
+            .filter_map(|(&held, h)| Some((self.worth(held, anchor), h.record?)))
             .max_by(|a, b| a.0.cmp(&b.0));
         let taken = worst.filter(|(w, _)| *w > mine).map(|(_, r)| r);
         if taken.is_none() {
@@ -414,10 +432,11 @@ impl<L: Layer> Pyramid<L> {
 
     /// The record is `p`'s from here, and whatever it carried is gone.
     fn take(&mut self, p: LevelPage, record: u32, page: L) {
-        if let Some(gone) = self.records[record as usize].replace(p).filter(|held| *held != p) {
+        let gone = self.pages.iter().find(|(&held, h)| held != p && h.record == Some(record)).map(|(&held, _)| held);
+        if let Some(gone) = gone {
             self.clear(gone);
         }
-        self.set(p, page);
+        self.put(p, page, Some(record));
     }
 
     /// Arrivals dropped for want of a record since the last take, for the
@@ -500,16 +519,14 @@ impl<L: Layer> Pyramid<L> {
         // An answer the camera has left is asked again if it comes back.
         let pinned = self.pinned;
         self.answered.retain(|p| Some(*p) == pinned || d.wants(*p));
-        for level in 0..=TOP_LEVEL {
-            // Collected first: clearing moves the table's last page into the hole.
-            let drop: Vec<LevelPage> = self.tables[level as usize]
-                .keys()
-                .map(|page| LevelPage::new(level, page))
-                .filter(|p| Some(*p) != self.pinned && !d.wants(*p) && self.record_of(*p).is_none())
-                .collect();
-            for p in drop {
-                self.clear(p);
-            }
+        let drop: Vec<LevelPage> = self
+            .pages
+            .iter()
+            .filter(|(&p, held)| held.record.is_none() && Some(p) != self.pinned && !d.wants(p))
+            .map(|(&p, _)| p)
+            .collect();
+        for p in drop {
+            self.clear(p);
         }
     }
 
