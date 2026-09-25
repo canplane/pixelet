@@ -183,3 +183,26 @@ fn ground_outside_the_frustum_is_not_refined() {
     }
     assert!(fine(&east).len() < fine(&around).len());
 }
+
+/// The frustum the view draws, carried into world units, sees what the view
+/// looks at: the map centre it orbits, from every tilt and turn.
+#[test]
+fn the_view_s_frustum_sees_the_ground_it_looks_at() {
+    let _serial = crate::global::serial();
+    let v = crate::world::frame::view::view();
+    v.origin = ivec::gather(3_000_000, 2_000_000, 0);
+    (v.tx, v.ty, v.tz) = (-500.0, -300.0, -10.0);
+    (v.width, v.height) = (1600.0, 900.0);
+    for (dist, polar, azimuth) in [(50.0, 0.3, 0.0), (5000.0, 1.3, 2.0), (200.0, 0.8, -1.0)] {
+        (v.dist, v.polar, v.azimuth) = (dist, polar, azimuth);
+        crate::world::frame::view::view_compose();
+        let f = Frustum::of_view();
+        let centre = [3_000_000.0 + 500.0, 2_000_000.0 + 300.0, 10.0];
+        let v = crate::world::frame::view::view();
+        let eye = [3_000_000.0 + v.eye_local.x, 2_000_000.0 + v.eye_local.y, v.eye_local.z];
+        assert!(f.sees(centre, 1.0, eye), "dist {dist}, polar {polar}, azimuth {azimuth}");
+        // And not what lies straight behind the eye.
+        let behind = [2.0 * eye[0] - centre[0], 2.0 * eye[1] - centre[1], centre[2]];
+        assert!(!f.sees(behind, 1.0, eye), "behind, dist {dist}, polar {polar}, azimuth {azimuth}");
+    }
+}

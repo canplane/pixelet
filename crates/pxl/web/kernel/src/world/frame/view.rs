@@ -15,7 +15,7 @@
 //!
 //! Held here the matrices are current the moment a step writes them.
 
-use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::math::mat4::{
     mat4, mat4_frustum_planes, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_rotation_z, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4,
@@ -26,7 +26,7 @@ use crate::control::camera::config::camera_cfg;
 use crate::control::camera::orbit::orbit_local_offset;
 use crate::global::Global;
 use crate::layer::environment::config::render_cfg;
-use crate::layer::environment::fog::{eye_height, far_clip_at, near_clip_at};
+use crate::layer::environment::fog::{far_clip_at, height_at, near_clip_at};
 use crate::world::frame::coord::local_world_to_canonical;
 
 const UP: Vec3 = Vec3 { x: 0.0, y: 0.0, z: 1.0 };
@@ -162,7 +162,15 @@ pub fn view_compose() {
     // The planes follow the reach, which follows the eye's height over the
     // ground under it: a view laid along the ground reaches no further than
     // the haze, and one from high up no further than the planet's own edge.
-    let height = eye_height();
+    // Read from the view in hand rather than through `eye()`, which would take
+    // the view a second time while this holds it.
+    let o = v.origin;
+    let at = [
+        ivec::to_real(ivec::X(o)) + v.eye_local.x,
+        ivec::to_real(ivec::Y(o)) + v.eye_local.y,
+        ivec::to_real(ivec::Z(o)) + v.eye_local.z,
+    ];
+    let height = height_at(at);
     v.near = near_clip_at(height);
     v.far = far_clip_at(height);
     mat4_perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, v.near, v.far);

@@ -23,17 +23,13 @@
 //! (issue/20260923-the-ground-runs-to-the-horizon.md).
 
 use pxl_render::look::atmosphere::{HAZE_EXTINCTION, HAZE_SCALE_HEIGHT_KM};
-use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::LevelPage;
-use pxl_spec::space::xy::TO_XY;
 
 use crate::control::camera::config::camera_cfg;
 use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::state::{globe, km_per_u};
-use crate::layer::terrain::elevation::get_ele;
-use crate::layer::terrain::relief::range_over;
+use crate::layer::terrain::elevation::ground_at;
 use crate::world::pyramid::window::eye;
 
 /// The optical depth at which a surface's contrast against the horizon sky is
@@ -73,24 +69,32 @@ pub fn reach_at(height: f64) -> f64 {
     horizon_at(height).min(haze_reach_at(height)).max(NEAREST_REACH)
 }
 
-/// How high the ground under the eye stands over the datum the projection
-/// measures from: the leaf's own surface where it is held, the highest the
-/// nearest held page over it reaches where it is not, and the datum where
-/// nothing over it is held. Where the sky draws its own ground, so the
-/// terrain, drawn at its elevation, does not stand over it (pxl-render
-/// atmos_medium.wgsl's land_altitude_km).
-pub fn eye_ground() -> f64 {
-    let Some(eye) = eye() else { return 0.0 };
+/// How high the ground under a point stands over the datum the projection
+/// measures from, as the finest resident page draws it there, and the datum
+/// where nothing over it is held.
+fn ground_under(at: [f64; 3]) -> f64 {
     let mut foot = Pvf3::default();
-    projection::project(&mut foot, eye.at[0], eye.at[1], 0.0);
-    get_ele(&foot).or_else(|| range_over(LevelPage::over(0, TO_XY(L3_IDX(foot.i)))).map(|(_, top)| top)).unwrap_or(0.0)
+    projection::project(&mut foot, at[0], at[1], 0.0);
+    ground_at(&foot).unwrap_or(0.0)
 }
 
-/// How high the eye stands over the ground under it: what the reach, the fog
-/// band, the clip planes and the window's finest level are all measured
-/// from, since the perspective a view costs is its observer's.
+/// How high the ground under the eye stands: where the sky draws its own
+/// ground, so the terrain, drawn at its elevation, does not stand over it
+/// (pxl-render atmos_medium.wgsl's land_altitude_km).
+pub fn eye_ground() -> f64 {
+    eye().map_or(0.0, |e| ground_under(e.at))
+}
+
+/// How high an eye at `at` stands over the ground under it: what the reach,
+/// the fog band, the clip planes and the window's finest level are all
+/// measured from, since the perspective a view costs is its observer's.
+pub fn height_at(at: [f64; 3]) -> f64 {
+    (at[2] - ground_under(at)).max(0.0)
+}
+
+/// `height_at` the eye as the view stands.
 pub fn eye_height() -> f64 {
-    eye().map_or(0.0, |e| (e.at[2] - eye_ground()).max(0.0))
+    eye().map_or(0.0, |e| height_at(e.at))
 }
 
 /// The reach of the view as it is drawn.
