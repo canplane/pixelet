@@ -156,6 +156,18 @@ export const SETTINGS = {
     dev: true,
     cost: "high",
   },
+  /** A change of what a chunk draws dissolves over 300 ms of frames instead
+   * of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
+   * Fade): a cube for another, a stale chunk for what replaced it. The two
+   * draw on complementary halves of one screen-space pattern, so a chunk
+   * in a dissolve is drawn twice while it lasts. */
+  lod_crossfade: {
+    key: 12 as number,
+    kind: "toggle",
+    default: true,
+    section: "quality",
+    cost: "low",
+  },
   /** Four samples a pixel for the frame's colour and depth:
    * the largest allocation the page makes — 32 bytes a device pixel, a
    * hundred megabytes on a phone at its native density — for edges the
@@ -163,25 +175,12 @@ export const SETTINGS = {
    * density does the same job at no cost; the setting is read when the
    * renderer is made. */
   msaa: {
-    key: 12 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "quality",
     dev: true,
     cost: "high",
-  },
-  /** A change of what a chunk draws dissolves over 300 ms of frames instead
-   * of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
-   * Fade): a cube for another, a stale chunk for what replaced it. The two
-   * draw on complementary halves of one screen-space pattern, so a chunk
-   * in a dissolve is drawn twice while it lasts. */
-  lod_fade: {
-    key: 13 as number,
-    kind: "toggle",
-    default: true,
-    section: "quality",
-    dev: true,
-    cost: "low",
   },
   /** The debug gizmos: frame origins, page corners, the map centre and the rings. */
   show_debug_objects: {
@@ -295,6 +294,18 @@ export const SETTINGS_SHIPPED = {
     options: ["off", "corner", "screen"],
     costs: ["", "low", "high"],
     section: "lighting",
+  },
+  /** A change of what a chunk draws dissolves over 300 ms of frames instead
+   * of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
+   * Fade): a cube for another, a stale chunk for what replaced it. The two
+   * draw on complementary halves of one screen-space pattern, so a chunk
+   * in a dissolve is drawn twice while it lasts. */
+  lod_crossfade: {
+    key: 12 as number,
+    kind: "toggle",
+    default: true,
+    section: "quality",
+    cost: "low",
   },
   person_variant: {
     key: 16 as number,

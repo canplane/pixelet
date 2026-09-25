@@ -21,35 +21,30 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   the eye, below z16 too (z17 to z19 near the eye); what a layer draws at
   that level, and in how much detail, is the layer's own, a tuning inside
   the perspective rather than a second rule. At a level L terrain draws its
-  cells averaged 2 × 2 (detail +1), places count in a lattice sixteen times
+  cells averaged 2 × 2 (detail +1) — blended by coverage for the smoother
+  ground it draws, not level L + 1's majority page, though that would fetch
+  a quarter of the pages — places count in a lattice sixteen times
   the ground's cell (+4) and still stand a lone place on its z16 cell, and
   objects draw their own cells (0), so an object's cube and the ground's are
   the same size wherever both have data. Where the rule asks finer than a
   layer's data, the layer draws its finest: terrain z16, objects their
   sub-cell tiers to z19. z16 is terrain's atom and nothing more. What is
   left:
-  - **Terrain's +1 is a choice, not a given.** The mesher averages level
-    L's cells 2 × 2 by coverage (pxl-render mesh/chunk_mesher.rs), which
-    blends colours and fetches pages a level finer than it draws; reading
-    level L + 1's page, the bake's majority vote, draws the same size from a
-    quarter of the pages with one type a cell. Either is terrain's to pick.
   - **The split distance from the real screen.** `SPLIT` is the reference
     1080 px and 50° (pxl-render look/lod.rs); `P` is to come from the
     canvas's device pixels and the field of view, and where a screen needs
     more than the tables are sized for, τ rises rather than the rule
     breaking. Planned 2026-09-25, held.
-  - **No level is a floor.** z16 is terrain's atom and no more to the
-    shared rule, whose levels go below it; `LEAF_TOPIC` on z16's table is
-    what still names it.
   - **What a crossfade leaves.** A change of what a chunk draws dissolves
     over 300 ms of frames (chunk/table.rs `Fade`), a cube for another and a
-    stale chunk for what replaced it, and decor switches half-way, since its
-    pass draws an instance whole. What is left: decor dissolving with its
-    ground rather than switching; hysteresis, so a camera resting on a split
-    distance does not dissolve back and forth; and the 300 ms, which is a
-    number chosen by eye. Above z16 a kind's footing and a transport-aligned
-    kind's heading are read off the level's cells, so an instance can appear,
-    go or turn at a level change, as the ground under it does.
+    stale chunk for what replaced it, its decor with it on the same half of
+    the pattern (pxl-render dissolve.wgsl). The 300 ms is a number chosen by
+    eye, to be measured. No hysteresis: the rule is a function of where the
+    eye is, so a resting camera changes nothing, and the budget's pressure,
+    the one input that moves on its own, steps on timers of its own. Above
+    z16 a kind's footing and a transport-aligned kind's heading are read off
+    the level's cells, so an instance can appear, go or turn at a level
+    change, as the ground under it does.
   - **The window's depth.** `WINDOW_LEVELS` is 5, so from low over the
     ground the far ground ends at the coarsest level's reach, short of the
     horizon.

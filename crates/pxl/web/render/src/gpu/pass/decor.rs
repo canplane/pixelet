@@ -25,7 +25,8 @@ use crate::gpu::renderer::{put_f32, put_u32, skin_group, Blocks};
 use crate::gpu::shadow::Shadow;
 
 /// A decor draw's dynamic uniform (shader/decor.wgsl's Draw): translation, the
-/// group's first lane word, the instance count, the opacity, padding.
+/// group's first lane word, the instance count, the opacity, the dissolve's
+/// share, padding.
 const DRAW_UNIFORM_BYTES: u32 = 32;
 /// Decor groups the pass holds a model and a skin for: every bundle's
 /// variants, in bundle order.
@@ -173,7 +174,8 @@ impl DecorPass {
             put_u32(buf, 12, uniforms[u + 3] as u32);
             put_u32(buf, 16, d[2]);
             put_f32(buf, 20, uniforms[u + 4]);
-            put_u32(buf, 24, 0);
+            // A ghost is no chunk's and is in no dissolve.
+            put_f32(buf, 24, if d[4] == PIPELINE_DECOR { uniforms[u + 5] } else { 1.0 });
             put_u32(buf, 28, 0);
         });
     }

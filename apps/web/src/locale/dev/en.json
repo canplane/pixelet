@@ -37,10 +37,6 @@
       "msaa": {
         "label": "Anti-aliasing (MSAA)",
         "description": "Smooths the edges of far-away blocks by sampling each pixel four times. Costs a lot of graphics memory."
-      },
-      "lod_fade": {
-        "label": "Detail fade",
-        "description": "Blocks fade into their new detail as you zoom or move, instead of switching at once. Draws the changing blocks twice while they fade."
       }
     },
     "debug": {

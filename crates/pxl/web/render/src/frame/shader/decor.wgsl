@@ -4,15 +4,16 @@
 // translation is its uniform. The model's lanes are model.rs's; the skin is
 // the glue's. An instance is its position, its spin about Z after the glTF
 // Y-up to Z-up turn, and its scale; a hidden one is sent outside the clip
-// volume.
+// volume. A chunk's decor dissolves with the tier it stands on
+// (dissolve.wgsl), by the same share.
 
 struct Draw {
   translation: vec3f,
   offset: u32,
   count: u32,
   opacity: f32,
-  _p1: u32,
-  _p2: u32,
+  visible: f32,
+  _p: u32,
 };
 
 @group(1) @binding(0) var<uniform> draw: Draw;
@@ -70,6 +71,9 @@ fn vs(v: VertexIn) -> VertexOut {
 
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
+  if (dissolved(draw.visible, i.clip.xy)) {
+    discard;
+  }
   let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
   let n = normalize(i.normal);
   let color = screen_ao(shade(albedo, n, i.world_pos, sun_lit(i.world_pos, n), vec3f(1.0), Seen(i.through, i.scattered, i.past, i.fill)), i.clip.xy);

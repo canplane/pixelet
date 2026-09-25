@@ -191,9 +191,10 @@ fn coarsest(level: u32) -> Cube {
     GROUND.scale(level).up(COARSEST.trailing_zeros() as i32)
 }
 
-/// The cube decor is shown at in slot `s`'s layout: whichever tier the blend
-/// says the chunk is mostly on, since an instance is drawn or it is not.
-fn decor_cube(s: &Slot) -> Cube {
+/// The tier slot `s`'s layout mostly shows: of the two a dissolve draws, the
+/// one covering more of the pixels, which is what a layer stands on and a
+/// pick hits.
+fn shown_cube(s: &Slot) -> Cube {
     match s.told {
         Some((_, _, true)) => s.layout_secondary.unwrap_or(s.layout_primary),
         _ => s.layout_primary,
@@ -1065,13 +1066,13 @@ impl Scheduler {
     }
 
     /// Every on-screen chunk's decor as shown this frame — the block of the
-    /// tier decor takes in its layout — with the chunk's id and base, in
+    /// tier its layout mostly shows — with the chunk's id and base, in
     /// units: what a hit test walks.
     pub fn shown_decor(&self) -> impl Iterator<Item = (u32, f64, f64, &Decor)> {
         self.slots
             .iter()
             .filter(|s| s.has(IN_FRUSTUM) && s.layout_ready)
-            .filter_map(|s| s.decor_of(decor_cube(s), s.layout_generation).map(|d| (s.id, s.base_x, s.base_y, d)))
+            .filter_map(|s| s.decor_of(shown_cube(s), s.layout_generation).map(|d| (s.id, s.base_x, s.base_y, d)))
     }
 
     /// A page's terrain tile arrived, or left. Once a record has gone — let
@@ -1343,7 +1344,7 @@ impl Scheduler {
             let faded = s.fade.is_some_and(|f| matches!(f, Fade::Out(_)) && f.progress(now) >= 1.0);
             // With the dissolve switched off, one whole and ready under what
             // replaced it goes at once, as a faded one does.
-            let covered_now = whole && ready && !settings_store().lod_fade;
+            let covered_now = whole && ready && !settings_store().lod_crossfade;
             if gone_from_view || shows_nothing || faded || covered_now {
                 self.gone.push((k, id));
             } else if whole && ready {
@@ -1619,6 +1620,16 @@ impl Scheduler {
             let translation = DrawList::translation([s.base_x, s.base_y, 0.0], frame.origin);
             for (cube, visible) in [(Some(s.layout_primary), wp), (s.layout_secondary, ws)] {
                 let Some(cube) = cube else { continue };
+                // A tier's decor dissolves with its tier, on the same half of
+                // the pattern, so an instance of both is on one pixel as the
+                // ground is and never stands twice.
+                if let Some(d) = s.decor_of(cube, s.layout_generation) {
+                    for (group, (offset, count)) in d.groups(mem).enumerate() {
+                        if count > 0 {
+                            self.draw.draw_decor(d.handle, group as u32, count, offset, translation, visible);
+                        }
+                    }
+                }
                 let Some(t) = s.tier(cube, s.layout_generation) else { continue };
                 // A chunk draws only from a slot it holds. The slot is room
                 // now and not an address (world/chunk/mesh_slot.rs), so it is
@@ -1648,20 +1659,6 @@ impl Scheduler {
                 );
                 self.level_boxes[s.level as usize] += t.box_cnt;
             }
-            // A chunk coming in or going shows its decor over the half of
-            // its dissolve it is mostly there for: an instance is drawn or it
-            // is not, and one drawn by both would stand twice.
-            let coverage = |v: f32| if v > 1.5 { 1.0 - (v - 2.0) } else { v };
-            if s.layout_secondary.is_none() && coverage(wp) < 0.5 {
-                continue;
-            }
-            if let Some(d) = s.decor_of(decor_cube(s), s.layout_generation) {
-                for (group, (offset, count)) in d.groups(mem).enumerate() {
-                    if count > 0 {
-                        self.draw.draw_decor(d.handle, group as u32, count, offset, translation);
-                    }
-                }
-            }
         }
     }
 
@@ -1677,7 +1674,7 @@ impl Scheduler {
         if !s.has(IN_FRUSTUM) || s.has(COVERED) || !s.layout_ready {
             return None;
         }
-        let cube = decor_cube(s);
+        let cube = shown_cube(s);
         let t = s.tier(cube, s.layout_generation)?;
         Some(Drawn {
             level: s.level,
@@ -1815,8 +1812,8 @@ impl Scheduler {
 
     fn decide(&mut self, i: usize, primary: f32, secondary: f32) {
         let coverage = |v: f32| if v > 1.5 { 1.0 - (v - 2.0) } else { v };
-        let decor_secondary = self.slots[i].layout_secondary.is_some() && coverage(secondary) > coverage(primary);
-        self.slots[i].told = Some((primary, secondary, decor_secondary));
+        let mostly_secondary = self.slots[i].layout_secondary.is_some() && coverage(secondary) > coverage(primary);
+        self.slots[i].told = Some((primary, secondary, mostly_secondary));
     }
 
     /// The tier this slot should be showing, and whether that makes it
@@ -2051,8 +2048,9 @@ impl Scheduler {
         // stays as the secondary tier until it has gone (`fade`). A change of
         // sources — a cube placed — is shown at once.
         let s = &self.slots[i];
-        let was = (settings_store().lod_fade && s.layout_ready && s.layout_generation == generation && s.layout_primary != p && s.fade.is_none() && s.tier(s.layout_primary, generation).is_some())
-            .then_some(s.layout_primary);
+        let was =
+            (settings_store().lod_crossfade && s.layout_ready && s.layout_generation == generation && s.layout_primary != p && s.fade.is_none() && s.tier(s.layout_primary, generation).is_some())
+                .then_some(s.layout_primary);
         self.trim(i, &[Some(p), q, was], emit);
         self.apply_layout(i, p, q.or(was), generation, true, emit);
         let s = &mut self.slots[i];
