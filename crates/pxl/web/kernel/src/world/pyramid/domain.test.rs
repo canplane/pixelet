@@ -123,6 +123,43 @@ fn ground_outside_the_frustum_is_not_refined() {
     }
 }
 
+/// A column's objects are held chunk by chunk, where they are: two things
+/// stacked far apart in one column make the chunks they stand in and none in
+/// the air between, and no chunk the rule draws lies over another.
+#[test]
+fn things_stacked_apart_hold_their_chunks_and_not_the_air_between() {
+    use crate::layer::object::store::place;
+    use pxl_spec::cell::cube_types::Block;
+    use pxl_spec::cell::object::PlaceableCube;
+    let _serial = crate::global::serial();
+    // Far from every other test's ground: the store is the kernel's.
+    let (x, y, height): (f64, f64, f64) = (-2_000_000.5, 1_500_000.5, 30.0);
+    let at = |z: i64| Pvf3 {
+        i: ivec::gather(x.floor() as i64, y.floor() as i64, z),
+        f: 0,
+    };
+    let (low, high) = (10, 10 + 64 * 6);
+    for z in [low, high] {
+        place(&at(z), 1.0, PlaceableCube::Block(Block::red), false);
+    }
+    let eye = Eye {
+        at: [x, y, height],
+        foot: ivec::gather(x.floor() as i64, y.floor() as i64, 0),
+    };
+    let d = domain_for(&eye, height, None, 0);
+    let chunks = drawn_by_rule(&d);
+    let set: std::collections::HashSet<Chunk> = chunks.iter().copied().collect();
+    assert_eq!(set.len(), chunks.len(), "a chunk drawn twice");
+    assert!(chunks.iter().all(|c| !c.ancestors().any(|a| set.contains(&a))), "a chunk drawn under another");
+    let holding = |z: i64| {
+        chunks
+            .iter()
+            .any(|&c| c.column() == Chunk::of(c.level(), &at(z)).column() && c.node().1[2] == Chunk::of(c.level(), &at(z)).node().1[2])
+    };
+    assert!(holding(low) && holding(high), "each thing's chunk is drawn");
+    assert!(!holding(10 + 64 * 3), "the air between them is no chunk");
+}
+
 /// The frustum the view draws, carried into world units, sees what the view
 /// looks at: the map center it orbits, from every tilt and turn.
 #[test]

@@ -319,7 +319,11 @@ const MAX_STEP: i32 = SCALE_STEPS * (TOP_LEVEL as i32 + 1);
 
 /// Every column's heights as `Domain::heights` read them, and the revision
 /// they were read at.
-type HeightsCache = (Option<(u32, u32)>, HashMap<(u32, (Scale, [i64; 2])), Option<(f64, f64)>>);
+type HeightsCache = (Option<(u32, u32)>, HashMap<(u32, (Scale, [i64; 2])), Spans>);
+
+/// What a column holds, as heights in units: its ground's surface, and the
+/// span from its lowest object to its highest.
+type Spans = (Option<(f64, f64)>, Option<(f64, f64)>);
 static HEIGHTS: Global<HeightsCache> = Global::new();
 
 /// The step the last view's criterion was loosened by (`domain_for`). One
@@ -360,31 +364,45 @@ impl Domain {
     /// the answer only moves with the heights. Asked afresh, it was most of
     /// a zoom's turn (measured 2026-09-26).
     pub fn heights(page: LevelPage, column: (Scale, [i64; 2])) -> Option<(f64, f64)> {
+        match Self::spans(page, column) {
+            (Some(g), Some(o)) => Some((g.0.min(o.0), g.1.max(o.1))),
+            (g, o) => g.or(o),
+        }
+    }
+
+    /// The column's ground and objects apart (`Spans`), read once a
+    /// revision as `heights` says.
+    fn spans(page: LevelPage, column: (Scale, [i64; 2])) -> Spans {
         let revision = heights_revision();
         let cache = HEIGHTS.get(Default::default);
         if cache.0 != Some(revision) {
             *cache = (Some(revision), HashMap::new());
         }
-        *cache.1.entry((page.level, column)).or_insert_with(|| {
-            let ground = ground_under(page, column);
-            match kernel().objects.reach_over(column) {
-                Some(b) => Some(ground.map_or(b, |(lo, hi)| (lo.min(b.0), hi.max(b.1)))),
-                None => ground,
-            }
-        })
+        *cache.1.entry((page.level, column)).or_insert_with(|| (ground_under(page, column), kernel().objects.reach_over(column)))
     }
 
-    /// What of `c` holds anything: the heights its column's contents span,
-    /// cut to its own, or none where they pass it by. A chunk that holds
-    /// nothing is no node of the view — never split, counted, fetched for or
-    /// drawn — and there is no slot for it anywhere: its emptiness is this
-    /// answer and not a thing kept. Where nothing over its column is held
-    /// yet, the ground under the eye stands in for the surface, as it does
-    /// for the distance (`nearest`).
+    /// What of `c` holds anything: the heights its ground's surface and the
+    /// objects in it span, cut to its own, or none where both pass it by. A
+    /// chunk that holds nothing is no node of the view — never split, counted,
+    /// fetched for or drawn — and there is no slot for it anywhere: its
+    /// emptiness is this answer and not a thing kept. The objects are asked
+    /// by the bands they are in (`Store::holds`), not by their span, so a
+    /// chunk between two things stacked apart holds nothing. Where nothing
+    /// over its column is held yet, the ground under the eye stands in for the
+    /// surface, as it does for the distance (`nearest`).
     pub fn occupied(&self, c: Chunk) -> Option<(f64, f64)> {
-        let (lo, hi) = Self::heights(c.page(), c.column()).unwrap_or((self.ground, self.ground));
         let (z0, z1) = c.z_range();
-        (lo < z1 && hi >= z0).then(|| (lo.max(z0), hi.min(z1)))
+        let cut = |(lo, hi): (f64, f64)| (lo < z1 && hi >= z0).then(|| (lo.max(z0), hi.min(z1)));
+        let (ground, objects) = match Self::spans(c.page(), c.column()) {
+            (None, None) => (Some((self.ground, self.ground)), None),
+            spans => spans,
+        };
+        let ground = ground.and_then(cut);
+        let objects = objects.and_then(cut).filter(|_| kernel().objects.holds(c.column(), (z0, z1)));
+        match (ground, objects) {
+            (Some(g), Some(o)) => Some((g.0.min(o.0), g.1.max(o.1))),
+            (g, o) => g.or(o),
+        }
     }
 
     /// Whether the view can see any of a box: `x0, y0, side` on the ground
@@ -496,11 +514,13 @@ impl Domain {
     /// The chunks under `c` that hold anything. Each of the four columns
     /// under it reads its own heights, and where ground finer than `c`'s
     /// reaches past `c`'s top or its floor — a peak the coarser level
-    /// averaged under its ceiling — the chunks it reaches into are `c`'s if
-    /// nothing in `c`'s column is past it, since nothing else would ever
-    /// split into them, and the peak would stand cut. So every chunk of a
-    /// finer level is under exactly one chunk of the level over it, the one
-    /// it lies in or the one its column's contents end in.
+    /// averaged under its ceiling — the chunks it reaches into are `c`'s up
+    /// to the next chunk of `c`'s column that holds anything, since nothing
+    /// else would ever split into them and the peak would stand cut. So every
+    /// chunk of a finer level is under exactly one chunk of the level over
+    /// it: the one it lies in, or the nearest under or over it in its column.
+    /// Objects are found by their bands at every level alike and never need
+    /// it; ground, averaged coarser, does.
     pub fn children(&self, c: Chunk) -> Vec<Chunk> {
         match self.kids.get(&c) {
             Some(kids) => kids.clone(),
@@ -510,9 +530,16 @@ impl Domain {
 
     fn children_of(&self, c: Chunk) -> impl Iterator<Item = Chunk> + '_ {
         let z = c.node().1[2];
-        let top = self.occupied(c.beside(0, 0, 1)).is_none();
-        let floor = self.occupied(c.beside(0, 0, -1)).is_none();
-        let (from, to) = (if floor { i64::MIN } else { 2 * z }, if top { i64::MAX } else { 2 * z + 1 });
+        // The chunks of `c`'s column that hold anything lie within its
+        // contents' span at `c`'s level; the nearest over and under `c` bound
+        // what `c` takes of the finer level.
+        let (lo, hi) = Self::heights(c.page(), c.column()).unwrap_or((self.ground, self.ground));
+        let span = chunk_span_of(c.level());
+        let (k0, k1) = ((lo / span).floor() as i64, (hi / span).floor() as i64);
+        let held = |k: i64| self.occupied(c.beside(0, 0, k - z)).is_some();
+        let over = (z + 1..=k1).find(|&k| held(k));
+        let under = (k0..z).rev().find(|&k| held(k));
+        let (from, to) = (under.map_or(i64::MIN, |k| 2 * k + 2), over.map_or(i64::MAX, |k| 2 * k - 1));
         c.children().into_iter().filter(move |k| k.node().1[2] == 2 * z).flat_map(move |column| self.spanned(column, from, to))
     }
 

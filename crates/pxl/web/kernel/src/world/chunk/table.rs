@@ -56,7 +56,7 @@ use crate::mem::fixed::{lane, range, Range};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::build::{mesh_step, release_block, BuildEvent, Builder, Cube, World, MAX_CHUNKS};
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, surface_of, MeshSlot, FINE_BOXES, OCCUPANCY};
-use crate::world::chunk::source::{decor_draws, decor_revision_of, objects_revision_of, tiers_draw};
+use crate::world::chunk::source::{decor_draws, decor_revision_of, draws_band, objects_revision_of, tiers_draw};
 use xpute_core::math::scalar::round;
 
 use crate::world::pyramid::chunk::Chunk;
@@ -389,11 +389,11 @@ impl Sources {
     fn of(k: Chunk, edits: RenderEdits) -> Sources {
         let settings = settings_store();
         let (level, base) = (k.level(), k.corner());
-        let drawn = |at: &EntryAt| tiers_draw(level, base, at.col_idx);
+        let drawn = |at: &EntryAt| tiers_draw(level, base, at.col_idx) && draws_band(k, at.band_idx);
         Sources {
             show_structures: settings.show_structures,
             textured: settings.texture_pack,
-            objects_revision: objects_revision_of(level, base),
+            objects_revision: objects_revision_of(k),
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
             carve: edits.carve.filter(drawn),
             read_from: Terrain::pyramid().drawn_from(k.page()).map(|p| p.level),
@@ -405,9 +405,9 @@ impl DecorSources {
     fn of(k: Chunk, edits: RenderEdits) -> DecorSources {
         let (level, base) = (k.level(), k.corner());
         DecorSources {
-            revision: decor_revision_of(level, base),
+            revision: decor_revision_of(k),
             shown: settings_store().show_decor,
-            hide: edits.hide.filter(|at| edits.hide_in.1 && decor_draws(level, base, at.col_idx)),
+            hide: edits.hide.filter(|at| edits.hide_in.1 && decor_draws(level, base, at.col_idx) && draws_band(k, at.band_idx)),
         }
     }
 }
