@@ -131,8 +131,9 @@ aws s3 sync ./out/poi/<version>.bucket s3://pixelet-tiles/poi/<version> \
   --cache-control "public, max-age=31536000, immutable"
 ```
 
-A page with no places is no object and reads as empty, so a missing page is
-never an error to repair. The client shows POI only outside production until
+A page its parent settles is no object — the tree stops where no cell over a
+page holds two places — and the client reads its ground from the page over it,
+so a missing page is never an error to repair. The client shows POI only outside production until
 the layer is switched on there.
 
 ### Geocode

@@ -97,17 +97,15 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
     (at, pages)
 }
 
+/// The places a drawn chunk counts: those of its source page — its own, or
+/// the one over it that settles it — whose cell stands on the chunk's ground.
 fn count(pyramid: &Pyramid<PoiPage>, c: Chunk) -> u32 {
-    let page = pyramid.get(c.page).expect("a drawn chunk's page is resident");
-    // The chunk's ground in the POI lattice's cells of its level.
-    let (n, across) = (POI_LATTICE.chunk_cells(), POI_LATTICE.page_cells());
-    let first = POI_LATTICE.cell_of(c.level(), &GROUND.cell_base(c.page, c.bx, c.by)).index();
-    let (x0, y0) = (first % across, first / across);
-    (y0..y0 + n)
-        .map(|ty| {
-            let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + n, ty));
-            page.cells.iter().filter(|c| c.cell >= lo && c.cell < hi).map(|c| c.count).sum::<u32>()
-        })
+    let src = pyramid.source(c.page).expect("a drawn chunk has a page that draws it");
+    let page = pyramid.get(src).expect("a source is resident");
+    page.cells
+        .iter()
+        .filter(|x| Chunk::of(c.level(), &POI_LATTICE.cell_at(src, x.cell).inner_at(GROUND, 0, x.at).mid()) == c)
+        .map(|x| x.count)
         .sum()
 }
 
@@ -338,6 +336,39 @@ fn a_stand_in_too_deep_opens_its_branch_and_not_its_neighbours() {
     assert!(!shown.gaps.contains(&t));
 }
 
+/// A page with a crowd over each of its children, so it settles none of them.
+fn crowded(p: LevelPage) -> PoiPage {
+    let at = |k: LevelPage| POI_LATTICE.cell_base(k, 0, 0);
+    PoiPage::of_places(
+        p.level,
+        p.children().into_iter().flat_map(|k| [(at(k), Place { name: "a", kind: 0 }), (at(k), Place { name: "b", kind: 0 })]),
+    )
+}
+
+/// Where a page over the window says all of the ground under it, the tree
+/// stops there: its roots are drawn from it at their own level, nothing
+/// under it is a gap, and nothing under it is asked for.
+#[test]
+fn ground_a_page_settles_is_drawn_from_it_and_never_asked_for() {
+    let _serial = crate::global::serial();
+    let d = the_domain();
+    let mut pyramid = Pyramid::<PoiPage>::default();
+    for &p in d.chain().iter().filter(|p| p.level == WINDOW.end) {
+        pyramid.set(p, PoiPage::default());
+    }
+    let cover = pyramid.cover_of(&d);
+    assert!(cover.gaps.is_empty(), "{} gaps", cover.gaps.len());
+    assert!(disjoint(&cover.drawn));
+    for &c in &cover.drawn {
+        assert!(pyramid.source(c.page).is_some_and(|s| s.level == WINDOW.end), "{c:?} is drawn from the page over the window");
+    }
+    for level in WINDOW {
+        for p in d.roots().iter().map(|r| r.page).filter(|p| p.level == level) {
+            assert!(pyramid.settled(p), "{p:?} is settled, so never asked for");
+        }
+    }
+}
+
 /// Where the window's own pages have not come, the chain over it stands in:
 /// with only the level over the top resident, every root is drawn by the
 /// page over it, once, and nothing is a gap.
@@ -347,7 +378,7 @@ fn a_root_whose_page_has_not_come_is_stood_in_for_by_the_page_over_the_window() 
     let d = the_domain();
     let mut pyramid = Pyramid::<PoiPage>::default();
     for &p in d.chain().iter().filter(|p| p.level == WINDOW.end) {
-        pyramid.set(p, PoiPage::default());
+        pyramid.set(p, crowded(p));
     }
     let cover = pyramid.cover_of(&d);
     assert!(cover.gaps.is_empty(), "{} gaps", cover.gaps.len());

@@ -17,11 +17,11 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 
 ## The three bakes
 
-| Kind    | Tool                     | Reads                                           | Output                                    | Empty page      |
-| ------- | ------------------------ | ----------------------------------------------- | ----------------------------------------- | --------------- |
-| terrain | `deno task bake:tiles`   | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land page             | shared `_ocean` |
-| poi     | `deno task bake:poi`     | Overture places                                 | packed PXP5 counts, one per page with one | no object       |
-| geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | packed JSON, one per page with a label    | no object       |
+| Kind    | Tool                     | Reads                                           | Output                                   | Empty page      |
+| ------- | ------------------------ | ----------------------------------------------- | ---------------------------------------- | --------------- |
+| terrain | `deno task bake:tiles`   | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land page            | shared `_ocean` |
+| poi     | `deno task bake:poi`     | Overture places                                 | packed PXP5 counts, where a crowd splits | no object       |
+| geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | packed JSON, one per page with a label   | no object       |
 
 Every tool writes to `./out/<kind>/<version>`, where the version defaults to
 `PUBLISHED_VERSION.<kind>` in `spec/pxl/spec/bake/published.json`
@@ -153,7 +153,9 @@ from a pool of places held once a page. A kind is the place's category as the se
 (`pxl-geo-spec overture/properties.rs`), numbered by
 `spec/pxl/spec/bake/poi_theme.json`. The leaves are counted from `overture_places`, the levels above are
 folded by adding, with the same fold driver terrain uses
-(`geo-bake/src/pyramid.rs`), and a page with no places is no object.
+(`geo-bake/src/pyramid.rs`), and then every page its parent settles is let go
+(`prune`): where no cell over a page holds two places, the page over it says
+all of its ground, so the tree stops there.
 
 ```bash
 deno task bake:poi --out ./out/poi/<version> --concurrency 8

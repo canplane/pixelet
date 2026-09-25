@@ -91,6 +91,25 @@ fn a_lone_place_folds_up_with_its_kind_and_its_ground_cell() {
     assert_eq!(pair_up.place(&pair_up.cells[0]), None);
 }
 
+/// A page settles a child where no cell over it holds a crowd: a lone place
+/// and an empty stretch are said whole a level up, and only a crowd comes
+/// apart under it.
+#[test]
+fn a_page_settles_every_child_but_one_under_a_crowd() {
+    let p = LevelPage::over(1, leaf().page);
+    let [crowd, lone, empty, _] = p.children();
+    let at = |k: LevelPage, dx: u32| POI_LATTICE.cell_of(0, &POI_LATTICE.cell_base(k, 0, 0)).inner_at(GROUND, 0, [dx, 0]).mid();
+    let leaves = [
+        (crowd, PoiPage::of_places(0, [(at(crowd, 0), called("A")), (at(crowd, 1), called("B"))])),
+        (lone, PoiPage::of_places(0, [(at(lone, 0), called("C"))])),
+    ];
+    let none = PoiPage::default();
+    let page = PoiPage::fold_page(p, |k| Some(leaves.iter().find(|(q, _)| *q == k).map_or(&none, |(_, page)| page))).unwrap();
+    assert!(!page.settles(p, crowd));
+    assert!(page.settles(p, lone));
+    assert!(page.settles(p, empty));
+}
+
 /// A crowd stands at its places' centroid, and a parent's is its children's
 /// weighted by their counts: folded from the leaves, it is where the places
 /// under it stand on average, as a page made at that level from the places

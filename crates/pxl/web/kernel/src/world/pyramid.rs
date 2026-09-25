@@ -9,6 +9,11 @@
 //! what nothing covers is fetched. A page lives in one of a fixed number of
 //! records, and only another page needing the room takes a record from it.
 //!
+//! The tree is as deep as a layer's data needs and no deeper: where a page
+//! says all of a child's ground (`Folds::settles`), the child is no page, is
+//! never asked for, and its ground is drawn from the page over it
+//! (`source`). Only the finest level is a bound.
+//!
 //! None of that is a layer's. A layer says what its page is and how it folds,
 //! how a fetched body becomes one in a record, what a page with no object is,
 //! and who reads its pages; the rest is here, once.
@@ -147,6 +152,11 @@ pub struct Pyramid<L: Layer> {
     wishlist: Vec<(u64, Rank)>,
     last: Option<Wish>,
     folds: Notify,
+    /// Pages a resident page settles, so none of their own is asked for.
+    settled: HashSet<LevelPage>,
+    /// Pages under the top the bucket has no object for: a page over them
+    /// says their ground, whether or not it is held yet.
+    answered: HashSet<LevelPage>,
 }
 
 impl<L: Layer> Default for Pyramid<L> {
@@ -163,6 +173,8 @@ impl<L: Layer> Default for Pyramid<L> {
             wishlist: Vec::new(),
             last: None,
             folds: Notify::new(),
+            settled: HashSet::new(),
+            answered: HashSet::new(),
         }
     }
 }
@@ -182,6 +194,9 @@ impl<L: Layer> Pyramid<L> {
     /// Sets a page, with or without a record: a page with none is one every
     /// such page shares, which nothing will want the room of.
     pub fn set(&mut self, p: LevelPage, page: L) {
+        if p.level > 0 {
+            self.settled.extend(p.children().into_iter().filter(|&c| page.settles(p, c)));
+        }
         self.tables[p.level as usize].set(p.page, page);
         self.revision = self.revision.wrapping_add(1);
         L::changed(p, true);
@@ -189,6 +204,11 @@ impl<L: Layer> Pyramid<L> {
 
     pub fn clear(&mut self, p: LevelPage) -> Option<L> {
         let held = self.tables[p.level as usize].clear(p.page)?;
+        if p.level > 0 {
+            for c in p.children() {
+                self.settled.remove(&c);
+            }
+        }
         self.revision = self.revision.wrapping_add(1);
         L::changed(p, false);
         Some(held)
@@ -198,6 +218,35 @@ impl<L: Layer> Pyramid<L> {
     /// came or went between them.
     pub fn revision(&self) -> u32 {
         self.revision
+    }
+
+    /// The bucket has no object for `p`, under the top: a page over it says
+    /// its ground.
+    pub fn answer_above(&mut self, p: LevelPage) {
+        if self.answered.insert(p) {
+            self.revision = self.revision.wrapping_add(1);
+        }
+    }
+
+    /// Whether `p` is no page because one over it says its ground: it or a
+    /// page between it and the top is settled by the page over it, or has no
+    /// object in the bucket.
+    fn settled(&self, p: LevelPage) -> bool {
+        std::iter::successors(Some(p), |q| (q.level < TOP_LEVEL).then(|| q.parent()))
+            .take_while(|q| q.level < TOP_LEVEL)
+            .any(|q| self.settled.contains(&q) || self.answered.contains(&q))
+    }
+
+    /// The resident page that draws `p`'s ground: `p` itself, or where it is
+    /// settled, the nearest resident page over it.
+    pub fn source(&self, p: LevelPage) -> Option<LevelPage> {
+        if self.get(p).is_some() {
+            return Some(p);
+        }
+        if !self.settled(p) {
+            return None;
+        }
+        std::iter::successors(Some(p), |q| (q.level < TOP_LEVEL).then(|| q.parent())).find(|&q| self.get(q).is_some())
     }
 
     /// Keeps `p` wanted wherever the view is, and its record with it, until
@@ -280,7 +329,7 @@ impl<L: Layer> Pyramid<L> {
     /// resident chunk over it in the window draws its ground should `c` not
     /// be drawn whole. Whether it is.
     fn wanted(&self, d: &Domain, below: &HashSet<LevelPage>, c: Chunk, above: bool, out: &mut Cover) -> bool {
-        let here = self.get(c.page).is_some();
+        let here = self.source(c.page).is_some();
         if d.splits(c) {
             let mut finer = Cover::default();
             let mut whole = true;
@@ -309,7 +358,7 @@ impl<L: Layer> Pyramid<L> {
     /// `c` from the resident pages under it, where nothing over it is;
     /// whether it is drawn whole.
     fn stand_in(&self, below: &HashSet<LevelPage>, c: Chunk, out: &mut Cover) -> bool {
-        if self.get(c.page).is_some() {
+        if self.source(c.page).is_some() {
             out.drawn.push(c);
             return true;
         }
@@ -337,7 +386,7 @@ impl<L: Layer> Pyramid<L> {
     /// What the resident pages can do for `p`, by what the cover made of its
     /// ground.
     fn resolve(&self, p: LevelPage) -> Resolved {
-        if self.get(p).is_some() {
+        if self.source(p).is_some() {
             Resolved::Exact
         } else if self.children_resident(p) {
             Resolved::Foldable
@@ -461,7 +510,9 @@ impl<L: Layer> Pyramid<L> {
         for level in w.clone().rev() {
             for p in held(level, anchor) {
                 let resolved = self.resolve(p);
-                if matches!(resolved, Resolved::Exact | Resolved::Foldable) {
+                // A page the tree stops above is none to ask for, whether or
+                // not the page over it has come yet: that page is its own want.
+                if matches!(resolved, Resolved::Exact | Resolved::Foldable) || self.settled(p) {
                     continue;
                 }
                 // A page none of whose ground is drawn at its level — past the
@@ -476,12 +527,12 @@ impl<L: Layer> Pyramid<L> {
         // makes of its ground.
         if let Some(d) = self.domain.as_ref() {
             for &p in d.chain() {
-                if self.get(p).is_none() && !self.children_resident(p) {
+                if self.get(p).is_none() && !self.children_resident(p) && !self.settled(p) {
                     wants.push((p.subject(), policy::page(Resolved::Missing, d.page_nearest_to(p))));
                 }
             }
         }
-        if let Some(p) = self.pinned.filter(|p| self.get(*p).is_none() && !wants.iter().any(|(s, _)| *s == p.subject())) {
+        if let Some(p) = self.pinned.filter(|p| self.get(*p).is_none() && !self.settled(*p) && !wants.iter().any(|(s, _)| *s == p.subject())) {
             wants.push((p.subject(), policy::pinned()));
         }
         wants
@@ -496,6 +547,9 @@ impl<L: Layer> Pyramid<L> {
         let w = window();
         let chain = self.domain.as_ref().map_or(&[][..], |d| d.chain());
         let wanted: Vec<LevelPage> = w.clone().flat_map(|level| held(level, anchor)).chain(chain.iter().copied()).collect();
+        // An answer the camera has left is asked again if it comes back.
+        let pinned = self.pinned;
+        self.answered.retain(|p| Some(*p) == pinned || wanted.contains(p));
         for level in 0..=TOP_LEVEL {
             // Collected first: clearing moves the table's last page into the hole.
             let drop: Vec<LevelPage> = self.tables[level as usize]

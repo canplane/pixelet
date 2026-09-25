@@ -388,6 +388,15 @@ pub trait Folds: Sized {
     fn fold_page<'a>(p: LevelPage, held: impl Fn(LevelPage) -> Option<&'a Self>) -> Option<Self>
     where
         Self: 'a;
+
+    /// Whether this page, `p`, says all there is of its `child`'s ground, so
+    /// the child is no page of its own: the tree stops there, above the finest
+    /// level, and the ground under it is read from here. The inverse of the
+    /// fold, where the fold loses nothing it would give back. None of a layer
+    /// that refines everywhere.
+    fn settles(&self, _p: LevelPage, _child: LevelPage) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]

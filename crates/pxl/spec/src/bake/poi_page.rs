@@ -175,6 +175,16 @@ impl PoiPage {
 }
 
 impl Folds for PoiPage {
+    /// A child is settled where no cell over it holds two places: a cell of
+    /// one says where that place stands to the z16 cell and which it is, and
+    /// a cell of none says there is nothing, so the child's cells would say it
+    /// again. Only a crowd comes apart a level down.
+    fn settles(&self, p: LevelPage, child: LevelPage) -> bool {
+        self.cells
+            .iter()
+            .all(|c| c.count < 2 || POI_LATTICE.cell_of(child.level, &POI_LATTICE.cell_at(p, c.cell).base()).page() != child)
+    }
+
     fn fold_page<'a>(p: LevelPage, held: impl Fn(LevelPage) -> Option<&'a Self>) -> Option<Self> {
         let mut cells = Vec::new();
         for (q, k) in p.children().into_iter().enumerate() {

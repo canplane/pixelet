@@ -27,6 +27,7 @@ use crate::sched::tick::TickContext;
 use crate::shell::map_store::map_store;
 use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view::view;
+use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
 
@@ -78,23 +79,37 @@ pub fn step(ctx: &mut TickContext) {
     let (n, across) = (POI_LATTICE.chunk_cells(), POI_LATTICE.page_cells());
     let Some(domain) = pages.domain() else { return };
     for &chunk in &pages.cover().0.drawn {
-        let Some(poi) = pages.get(chunk.page) else { continue };
-        // A finer page standing in counts into the cells the view wants; a
-        // coarser one is as fine as there is until the view's own arrives.
-        let coarser = domain.wanted_over(chunk).level() - chunk.level();
-        // The chunk's ground, in the POI lattice's cells of its level.
-        let first = POI_LATTICE.cell_of(chunk.level(), &GROUND.cell_base(chunk.page, chunk.bx, chunk.by)).index();
+        // The page that draws the chunk's ground: its own, or where the tree
+        // stops above it, the page over it that says that ground — whose cells
+        // there hold one place or none, each standing where it stands.
+        let Some(src) = pages.source(chunk.page) else { continue };
+        let Some(poi) = pages.get(src) else { continue };
+        // The level the view wants the ground at: a finer page standing in
+        // counts into its cells, and a coarser one is counted where its places
+        // stand, which is its own cells where it is the chunk's page.
+        let level = domain.wanted_over(chunk).level();
+        // The chunk's ground in the source's cells: a block of them, or where
+        // the source is so much coarser that one of its cells is wider than
+        // the chunk, part of one, whose place is the chunk's only if it stands
+        // on the chunk's ground.
+        let coarser = src.level - chunk.level();
+        let m = n >> coarser;
+        let first = POI_LATTICE.cell_of(src.level, &GROUND.cell_base(chunk.page, chunk.bx, chunk.by)).index();
         let (x0, y0) = (first % across, first / across);
-        for ty in y0..y0 + n {
-            let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + n, ty));
+        for ty in y0..y0 + m.max(1) {
+            let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + m.max(1), ty));
             let from = poi.cells.partition_point(|c| c.cell < lo);
             for c in poi.cells[from..].iter().take_while(|c| c.cell < hi) {
-                let cell = POI_LATTICE.cell_at(chunk.page, c.cell);
-                let up = cell.up(coarser);
-                let at = up.offset_of(cell.inner_at(GROUND, 0, c.at));
+                let cell = POI_LATTICE.cell_at(src, c.cell);
+                let ground = cell.inner_at(GROUND, 0, c.at);
+                if m == 0 && Chunk::of(chunk.level(), &ground.mid()) != chunk {
+                    continue;
+                }
+                let up = POI_LATTICE.cell_of(level, &ground.mid());
+                let at = up.offset_of(ground);
                 let t = cells.entry(up).or_default();
                 t.count += c.count;
-                t.place = poi.place(c).map(|_| (chunk.page, c.place));
+                t.place = poi.place(c).map(|_| (src, c.place));
                 for (sum, lane) in t.at.iter_mut().zip(at) {
                     *sum += lane as u64 * c.count as u64;
                 }
