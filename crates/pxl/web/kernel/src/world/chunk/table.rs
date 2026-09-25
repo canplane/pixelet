@@ -1025,12 +1025,15 @@ impl Scheduler {
                 continue;
             }
             // A chunk scatters from its own page at its own level, at the
-            // world step its cube is. A chunk above z16 whose step no kind is
-            // drawn at has none: its placed decor is past the pixels a kind
-            // is drawn at too.
+            // world step its cube is. A kind is drawn, scattered or placed,
+            // only at a step where it covers the pixels it is drawn at, so a
+            // step no kind is drawn at has no block. The setting is the
+            // scatter's alone: what the user placed is drawn whatever it says.
             let world_step = GROUND.scale(0).count_in(cube.max(GROUND.scale(0)));
-            let scatters = show_decor && self.decor_kinds.iter().any(|k| k.density > 0.0 && decor_density(k.extent, world_step) > 0.0);
-            if level > 0 && !scatters {
+            let drawn = |k: &&DecorKind| decor_density(k.extent, world_step) > 0.0;
+            let scatters = show_decor && self.decor_kinds.iter().filter(drawn).any(|k| k.density > 0.0);
+            let places = self.decor_kinds.iter().filter(drawn).any(|k| k.decor_value.is_some());
+            if !scatters && !places {
                 continue;
             }
             let source = self.builder.ground_of(id);

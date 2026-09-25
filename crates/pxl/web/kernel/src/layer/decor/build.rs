@@ -285,10 +285,16 @@ impl<'s> DecorBuild<'s> {
                 break;
             }
             scratch.group_count += kind.variant_count as usize;
+            // Placed or scattered, a kind is drawn only where it covers the
+            // pixels it is drawn at: how far a placed tree is seen is its own
+            // size, as a scattered one's is.
+            if decor_density(kind.extent, step) == 0.0 {
+                continue;
+            }
             for column in placed {
                 Self::placed(scratch, kind, first, column, store);
             }
-            if let Some(ground) = ground.filter(|_| show_decor && decor_density(kind.extent, step) > 0.0) {
+            if let Some(ground) = ground.filter(|_| show_decor) {
                 Self::scatter(scratch, kind, first, ground, store);
             }
         }
