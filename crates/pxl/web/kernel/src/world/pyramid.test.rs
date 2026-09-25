@@ -1,16 +1,15 @@
 // pxl-kernel/world/pyramid.test.rs
 
 use super::*;
+use domain::{domain_for, Eye};
 use pxl_spec::bake::poi_page::{Place, PoiPage, POI_LATTICE};
 use pxl_spec::space::hierarchy::share;
 use pxl_spec::space::pvf3::{ivec, Pvf3};
-use pxl_spec::space::pyramid::{span_of, GROUND};
-use window::{domain_for, Eye};
+use pxl_spec::space::pyramid::GROUND;
 
 /// How high the eye stands over flat ground: where the rule wants level 2
-/// under it, and so a window of WINDOW_LEVELS from there.
+/// under it.
 const HEIGHT: f64 = 1000.0;
-const WINDOW: std::ops::Range<u32> = 2..2 + WINDOW_LEVELS;
 
 fn anchor() -> IVec {
     ivec::gather(30_000, -17_000, 0)
@@ -21,9 +20,21 @@ fn the_domain() -> Domain {
         at: [ivec::X(anchor()) as f64, ivec::Y(anchor()) as f64, HEIGHT],
         foot: anchor(),
     };
-    let d = domain_for(&eye, HEIGHT, None);
-    assert_eq!(d.window(), WINDOW);
-    d
+    domain_for(&eye, HEIGHT, None)
+}
+
+/// The chunks the rule draws of a domain where everything is resident.
+fn drawn_by_rule(d: &Domain) -> Vec<Chunk> {
+    let mut out = Vec::new();
+    let mut open = d.roots().to_vec();
+    while let Some(c) = open.pop() {
+        if d.splits(c) {
+            open.extend(c.children());
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 /// The ground a domain draws, as the square around it and its area.
@@ -56,8 +67,9 @@ fn inside(c: Chunk, at: IVec) -> bool {
     x >= x0 && x < x0 + side && y >= y0 && y < y0 + side
 }
 
-/// Places scattered over the domain's ground, and every level's pages
-/// counting them: a page of every level over that ground, empty or not.
+/// Places scattered over the domain's ground, and the pages counting them:
+/// every page the domain wants and the four under each, empty or not, which
+/// is every page a cover of it can draw from.
 fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
     let d = the_domain();
     let ((rx, ry, side), _) = ground_of(&d);
@@ -73,23 +85,21 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
         .map(|_| ivec::gather(rx as i64 + next(side), ry as i64 + next(side), 0))
         .filter(|&a| ground.iter().any(|&c| inside(c, a)))
         .collect();
-    let mut pages = Vec::new();
-    for level in 0..WINDOW.end {
-        let span = span_of(level);
-        let (x0, y0) = ((rx / span).floor() as i64, (ry / span).floor() as i64);
-        let n = (side / span).ceil() as i64 + 1;
-        for y in y0..y0 + n {
-            for x in x0..x0 + n {
-                let p = LevelPage::new(level, ivec::gather(x, y, 0));
-                let places = at
-                    .iter()
-                    .map(|&a| Pvf3 { i: a, ..Default::default() })
-                    .filter(|a| POI_LATTICE.cell_of(level, a).page() == p)
-                    .map(|a| (a, Place { name: "", kind: 0 }));
-                pages.push((p, PoiPage::of_places(level, places)));
-            }
-        }
-    }
+    let mut wanted: Vec<LevelPage> = d.pages().map(|(p, _)| p).collect();
+    wanted.extend(d.pages().filter(|(p, _)| p.level > 0).flat_map(|(p, _)| p.children()));
+    wanted.sort_unstable();
+    wanted.dedup();
+    let pages = wanted
+        .into_iter()
+        .map(|p| {
+            let places = at
+                .iter()
+                .map(|&a| Pvf3 { i: a, ..Default::default() })
+                .filter(|a| POI_LATTICE.cell_of(p.level, a).page() == p)
+                .map(|a| (a, Place { name: "", kind: 0 }));
+            (p, PoiPage::of_places(p.level, places))
+        })
+        .collect();
     (at, pages)
 }
 
@@ -182,7 +192,7 @@ fn a_stand_in_reaches_as_far_down_as_there_are_pages() {
     // globals.
     let _serial = crate::global::serial();
     let d = the_domain();
-    let c = d.roots().iter().copied().find(|&c| !d.splits(c)).expect("the top level holds ground wanted at the top");
+    let c = drawn_by_rule(&d).into_iter().find(|c| c.level() >= 2).expect("ground drawn two levels over z16");
     let grand: Vec<Chunk> = c.children().iter().flat_map(|k| k.children()).collect();
     let mut pyramid = Pyramid::<PoiPage>::default();
     for g in &grand {
@@ -194,9 +204,9 @@ fn a_stand_in_reaches_as_far_down_as_there_are_pages() {
 }
 
 /// The terrain's mesh draws its cover balanced: no two chunks that meet
-/// more than a level apart, never finer than the view wants but for the top
-/// ring's stand-in, and still the domain's ground exactly once — what it
-/// cannot draw is a gap.
+/// more than a level apart, never more than a level finer than the view
+/// wants, and still the domain's ground exactly once — what it cannot draw
+/// is a gap.
 #[test]
 fn the_terrain_draws_its_cover_balanced_and_still_whole() {
     // The domain reads the terrain's and the objects' heights, which are
@@ -205,7 +215,6 @@ fn the_terrain_draws_its_cover_balanced_and_still_whole() {
     let (_, pages) = places();
     let d = the_domain();
     let (_, whole) = ground_of(&d);
-    let top = WINDOW.end - 1;
     let mut seed = 11u64;
     for trial in 0..12 {
         let mut pyramid = Pyramid::<PoiPage>::default();
@@ -218,10 +227,7 @@ fn the_terrain_draws_its_cover_balanced_and_still_whole() {
         let cover = crate::layer::terrain::present::mesh(pyramid.cover_of(&d), &d, |c| pyramid.get(c.page()).is_some());
         for &c in &cover.drawn {
             let want = d.wanted_over(c);
-            assert!(
-                c.level() >= want.level() || (want.level() == top && c.level() + 1 == top),
-                "trial {trial}: {c:?} finer than the view wants"
-            );
+            assert!(c.level() + 1 >= want.level(), "trial {trial}: {c:?} finer than the view wants");
             for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
                 let next = c.beside(dx, dy);
                 if let Some(o) = std::iter::once(next).chain(next.ancestors()).find(|a| cover.drawn.contains(a)) {
@@ -257,42 +263,26 @@ fn a_gap_the_mesh_leaves_is_fetched_as_coverage() {
     }
 }
 
-/// The pinned page keeps its record through a whole window of arrivals,
-/// every one of them placed.
+/// The pinned page keeps its record through every page a view wants
+/// arriving, every one of them placed.
 #[test]
 fn the_pinned_page_keeps_its_record_and_every_wanted_page_still_fits() {
+    let _serial = crate::global::serial();
     let mut pyramid = Pyramid::<PoiPage>::default();
     let far = |i: u32| LevelPage::new(0, ivec::gather(1_000_000 + i64::from(i), 0, 0));
     for i in 0..RECORDS {
-        let record = pyramid.record_for(far(i), Some(anchor()), &WINDOW).expect("a free record");
+        let record = pyramid.record_for(far(i), Some(anchor())).expect("a free record");
         pyramid.take(far(i), record, PoiPage::default());
     }
     pyramid.pin(Some(far(0)));
-    for level in 0..WINDOW_LEVELS {
-        for p in held(level, anchor()) {
-            let record = pyramid.record_for(p, Some(anchor()), &(0..WINDOW_LEVELS)).expect("room for every page the view wants");
-            pyramid.take(p, record, PoiPage::default());
-        }
+    let d = the_domain();
+    let wanted: Vec<LevelPage> = d.pages().map(|(p, _)| p).collect();
+    pyramid.domain = Some(d);
+    for p in wanted {
+        let record = pyramid.record_for(p, Some(anchor())).expect("room for every page the view wants");
+        pyramid.take(p, record, PoiPage::default());
     }
     assert!(pyramid.get(far(0)).is_some());
-}
-
-/// Only ground the view wants at the window's top is outermost: nothing
-/// coarser draws its far steps. Ground it wants finer has a ring over it.
-#[test]
-fn only_ground_wanted_at_the_top_is_outermost() {
-    // The domain reads the terrain's and the objects' heights, which are
-    // globals.
-    let _serial = crate::global::serial();
-    let d = the_domain();
-    for &c in d.roots() {
-        if d.splits(c) {
-            assert!(!d.outermost(c), "{c:?} is wanted finer, even where it is drawn for want of its children");
-            assert!(c.children().iter().all(|&k| !d.outermost(k)), "{c:?}'s children are wanted finer");
-        } else {
-            assert!(d.outermost(c) && c.children().iter().all(|&k| d.outermost(k)), "{c:?}: a stand-in is outermost too");
-        }
-    }
 }
 
 /// A count folds from its four children and reads nothing around them.
@@ -313,14 +303,14 @@ fn a_count_folds_from_its_four_children_alone() {
 }
 
 /// A stand-in too deep for the terrain opens its own branch a level under
-/// the top, and the stand-ins a level under the top beside it stay drawn.
+/// the ground it stands in for, and the stand-ins beside it stay drawn.
 #[test]
 fn a_stand_in_too_deep_opens_its_branch_and_not_its_neighbours() {
     // The domain reads the terrain's and the objects' heights, which are
     // globals.
     let _serial = crate::global::serial();
     let d = the_domain();
-    let t = d.roots().iter().copied().find(|&c| !d.splits(c)).expect("the top level holds ground wanted at the top");
+    let t = drawn_by_rule(&d).into_iter().find(|c| c.level() >= 3).expect("ground drawn three levels over z16");
     let [a, b, deep, gap] = t.children();
     let cover = Cover {
         drawn: [a, b].into_iter().chain(deep.children().iter().flat_map(|k| k.children())).collect(),
@@ -341,46 +331,43 @@ fn crowded(p: LevelPage) -> PoiPage {
     )
 }
 
-/// Where a page over the window says all of the ground under it, the tree
-/// stops there: its roots are drawn from it at their own level, nothing
-/// under it is a gap, and nothing under it is asked for.
+/// Where a page says all of the ground under it, the tree stops there: the
+/// roots are drawn from their own pages, nothing under them is a gap, and
+/// nothing under them is asked for.
 #[test]
 fn ground_a_page_settles_is_drawn_from_it_and_never_asked_for() {
     let _serial = crate::global::serial();
     let d = the_domain();
     let mut pyramid = Pyramid::<PoiPage>::default();
-    for &p in d.chain().iter().filter(|p| p.level == WINDOW.end) {
-        pyramid.set(p, PoiPage::default());
+    for r in d.roots() {
+        pyramid.set(r.page(), PoiPage::default());
     }
     let cover = pyramid.cover_of(&d);
     assert!(cover.gaps.is_empty(), "{} gaps", cover.gaps.len());
     assert!(disjoint(&cover.drawn));
     for &c in &cover.drawn {
-        assert!(pyramid.source(c.page()).is_some_and(|s| s.level == WINDOW.end), "{c:?} is drawn from the page over the window");
+        assert!(pyramid.source(c.page()).is_some_and(|s| s.level == TOP_LEVEL), "{c:?} is drawn from the page at the top");
     }
-    for level in WINDOW {
-        for p in d.roots().iter().map(|r| r.page()).filter(|p| p.level == level) {
-            assert!(pyramid.settled(p), "{p:?} is settled, so never asked for");
-        }
+    for (p, _) in d.pages().filter(|(p, _)| p.level < TOP_LEVEL) {
+        assert!(pyramid.settled(p), "{p:?} is settled, so never asked for");
     }
 }
 
-/// Where the window's own pages have not come, the chain over it stands in:
-/// with only the level over the top resident, every root is drawn by the
-/// page over it, once, and nothing is a gap.
+/// Where the finer pages have not come, the pages over them stand in: with
+/// only the wanted pages from some level up resident, every root's ground
+/// is drawn, once, and nothing is a gap.
 #[test]
-fn a_root_whose_page_has_not_come_is_stood_in_for_by_the_page_over_the_window() {
+fn ground_whose_page_has_not_come_is_stood_in_for_by_the_page_over_it() {
     let _serial = crate::global::serial();
     let d = the_domain();
     let mut pyramid = Pyramid::<PoiPage>::default();
-    for &p in d.chain().iter().filter(|p| p.level == WINDOW.end) {
+    for (p, _) in d.pages().filter(|(p, _)| p.level >= 5) {
         pyramid.set(p, crowded(p));
     }
     let cover = pyramid.cover_of(&d);
     assert!(cover.gaps.is_empty(), "{} gaps", cover.gaps.len());
     assert!(disjoint(&cover.drawn));
-    assert!(cover.drawn.iter().all(|c| c.level() == WINDOW.end));
-    for &r in d.roots() {
-        assert!(cover.drawn.iter().any(|&a| r.ancestors().any(|b| b == a)), "{r:?} is not stood in for");
-    }
+    assert!(cover.drawn.iter().all(|c| c.level() >= 5));
+    let (_, whole) = ground_of(&d);
+    assert_eq!(cover.drawn.iter().map(|&c| area(c)).sum::<f64>(), whole);
 }

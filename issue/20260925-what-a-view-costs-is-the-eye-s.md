@@ -215,3 +215,50 @@ and where it asks finer than a layer's data the layer draws its finest:
 terrain z16, objects their sub-cell tiers down to z19. z16 is terrain's atom
 and nothing more. What this leaves open is in
 [the backlog](./BACKLOG.md), under this rule's entry.
+
+## The window goes
+
+Settled and built later the same day. The window was the one piece of the
+old selection left standing, and both of its ends cut the rule short: its
+base was the level the ground under the eye wanted, so a hill beside an eye
+floating over a valley — 300 units off, the valley 2,000 under — was held at
+the valley's level 3 where its distance wanted z16, eight times the pixels a
+cell is allowed; and its top was five levels over that, so from low over the
+ground the far ground ended at the coarsest level's reach, short of the
+horizon. Geometry clipmaps (Losasso and Hoppe) take the first as the price
+of holding levels by the height under the viewer; CDLOD and Cesium have no
+window at all and select every node by its own box.
+
+The window's one job was the budget: five levels of 5 × 5 records, and five
+groups of the mesh arena. What replaces it is the budget itself
+(`world/pyramid/domain.rs`, which `window.rs` became):
+
+- The roots are the pyramid's top, and the rule splits from there down to
+  terrain's atom, so a hill is split by its own distance and the ground
+  runs to the air's reach, or the top level's.
+- A view wants the pages its drawn chunks lie in and every ancestor of
+  those up to the top — the chain's job, now for all of it — and nothing
+  else.
+- Before anything is asked for, the chunks drawn and the pages wanted are
+  counted. Where they pass `VIEW_CHUNKS` (1,024, a quarter of the chunk
+  table, since a stand-in draws four for one) or `VIEW_PAGES` (165, the
+  records the window had, so `.fixed` did not move), every split distance
+  is shortened alike, a quarter of an octave a step, until they fit. A view
+  over budget is coarser everywhere, never missing a piece; the fit is
+  decided from the eye at once, not fed back from refusals.
+- The arena's coarse groups are derived from the chunks a view draws and
+  half again for what a change holds on to, which is the five it had.
+
+Over flat ground the budget does not bind at any height: all around the
+eye, with no frustum, a view draws at most 992 chunks from 41 pages; a view
+looking one way, 250 to 450 chunks from under 30. The pages are a quarter of
+what `.fixed` holds for them, which is room to be measured before it is
+given back.
+
+A page's height range before it arrives stays its nearest resident
+ancestor's, an estimate: a bound would need the bake to write each page's
+range of the leaves under it. Cesium, whose quantized-mesh carries a tile's
+own range, knows a child's no better before the child comes. A peak the
+estimate misses is split a fetch late and corrected when its page arrives,
+so what is drawn once the pages are held is exact and the bake is left as
+it is.

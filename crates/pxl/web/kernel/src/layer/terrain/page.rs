@@ -32,7 +32,7 @@ use crate::layer::terrain::ground_snap::reground_map_center;
 use crate::mem;
 use crate::shell::map_store::{map_store, MapStatus};
 use crate::world::chunk::node::chunk_page;
-use crate::world::pyramid::window::{eye, ring_of, window, HELD_AXIS};
+use crate::world::pyramid::domain::eye;
 use crate::world::pyramid::{Cover, Domain, Layer, Pyramid};
 
 /// Object key of the single shared open-ocean tile in the static bucket.
@@ -213,9 +213,9 @@ pub fn adopt_ocean(pkt: &[u8]) -> Result<(), FetchFail> {
 /// asked for while pages wait on it, and map_status following the queue.
 pub fn terrain_step() {
     let device = map_navigation().device_coord.map(|c| LevelPage::new(0, TO_XY(L3_IDX(c.i))));
-    if let Some(e) = eye() {
-        let w = window();
-        ocean().waiting.retain(|p| Some(*p) == device || (w.contains(&p.level) && ring_of(e.foot, *p) <= HELD_AXIS / 2));
+    if eye().is_some() {
+        let d = Terrain::pyramid().domain();
+        ocean().waiting.retain(|p| Some(*p) == device || d.is_some_and(|d| d.wants(*p)));
     }
     let o = ocean();
     let ocean_wants: &[(u64, Rank)] = if o.terrain.is_none() && !o.waiting.is_empty() { &[(0, policy::ocean())] } else { &[] };

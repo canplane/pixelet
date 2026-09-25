@@ -1,6 +1,4 @@
-// pxl-kernel/world/pyramid/window.test.rs
-
-use pxl_spec::space::indexer::FROM_L3_IDX;
+// pxl-kernel/world/pyramid/domain.test.rs
 
 use super::*;
 use pxl_spec::space::pyramid::{chunk_span_of, neighbourhood};
@@ -24,18 +22,6 @@ fn a_subject_carries_the_level_and_gives_it_back() {
     }
     // A leaf's subject is its key: z16's level is the lane left at zero.
     assert_eq!(LevelPage::new(0, leaf(11569, 3671)).subject(), leaf(11569, 3671));
-}
-
-#[test]
-fn a_ring_is_the_axis_squared_centred_on_the_anchors_page_nearest_first() {
-    let anchor = FROM_L3_IDX(leaf(40, 20));
-    for level in 0..4 {
-        let held = ring(level, anchor, HELD_AXIS);
-        assert_eq!(held.len(), (HELD_AXIS * HELD_AXIS) as usize);
-        assert_eq!(held[0], LevelPage::over(level, leaf(40, 20)));
-        assert!(held.windows(2).all(|w| ring_of(anchor, w[0]) <= ring_of(anchor, w[1])));
-        assert!(held.iter().all(|&p| ring_of(anchor, p) <= HELD_AXIS / 2));
-    }
 }
 
 #[test]
@@ -85,13 +71,13 @@ fn farthest(eye: [f64; 3], c: Chunk, z: f64) -> f64 {
 
 /// The invariant the rule is for, over flat ground and every height the
 /// camera can stand at: a chunk drawn under a split parent is no nearer than
-/// its own level's split distance and no farther than its parent's plus the
-/// parent's diagonal, so a cell drawn covers between two fixed shares of a
-/// cell's pixels wherever the eye is; and a level draws no more chunks than
-/// LEVEL_CHUNKS, all inside the ring its records are held for. The tilt is
-/// not an input at all.
+/// its own level's split distance under the view's criterion and no farther
+/// than its parent's plus the parent's diagonal, so a cell drawn covers
+/// between two fixed shares of the criterion's pixels wherever the eye is;
+/// a level draws no more chunks than LEVEL_CHUNKS; and what the view wants
+/// fits what the device holds. The tilt is not an input at all.
 #[test]
-fn every_drawn_chunk_lies_between_its_split_distances_wherever_the_eye_stands() {
+fn every_drawn_chunk_lies_between_its_split_distances_and_the_view_fits_its_budget() {
     // The domain reads the terrain's and the objects' heights, which are
     // globals.
     let _serial = crate::global::serial();
@@ -102,34 +88,35 @@ fn every_drawn_chunk_lies_between_its_split_distances_wherever_the_eye_stands() 
                 foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
             };
             let d = domain_for(&eye, height, None);
-            let w = d.window();
-            assert!(w.end - w.start <= WINDOW_LEVELS);
-            let top = w.end - 1;
+            let s = d.scale();
+            assert!(s > 0.0 && s <= 1.0);
             let chunks = drawn_by_rule(&d);
             for &c in &chunks {
                 let level = c.level();
                 let at = format!("height {height}, eye ({x}, {y}), {c:?}");
-                if level > w.start {
-                    assert!(d.nearest_to(c) >= split_distance(level as i32), "{at}: nearer than its split distance");
+                if level > 0 {
+                    assert!(d.nearest_to(c) >= split_distance(level as i32) * s, "{at}: nearer than its split distance");
                 }
-                if level < top {
-                    let parent = split_distance(level as i32 + 1) + chunk_span_of(level + 1) * SQRT_2;
+                if level < TOP_LEVEL {
+                    let parent = split_distance(level as i32 + 1) * s + chunk_span_of(level + 1) * SQRT_2;
                     assert!(farthest(eye.at, c, 0.0) <= parent, "{at}: farther than its parent could reach");
                 }
-                assert!(ring_of(eye.foot, c.page()) <= HELD_AXIS / 2, "{at}: outside the ring held for it");
             }
-            for level in w.clone() {
+            for level in 0..=TOP_LEVEL {
                 let n = chunks.iter().filter(|c| c.level() == level).count() as u32;
                 assert!(n <= LEVEL_CHUNKS, "height {height}: {n} chunks at level {level}");
             }
+            assert!(chunks.len() as u32 <= VIEW_CHUNKS, "height {height}: {} chunks", chunks.len());
+            assert!(d.pages().count() as u32 <= VIEW_PAGES, "height {height}: {} pages", d.pages().count());
         }
     }
 }
 
-/// The chain over the window's top is every root's page's ancestors, at most
-/// 2 × 2 pages a level, so CHAIN_PAGES holds it wherever the eye stands.
+/// What a view wants held is every page its drawn chunks lie in, and every
+/// ancestor of those up to the pyramid's top, so ground whose page has not
+/// come has something coarser held over it.
 #[test]
-fn the_chain_over_the_window_holds_every_root_s_ancestors_in_two_by_two_a_level() {
+fn every_page_drawn_from_is_wanted_with_every_ancestor_up_to_the_top() {
     let _serial = crate::global::serial();
     for height in [1.0, 400.0, 5000.0, 250_000.0] {
         for (x, y) in [(0.3, 0.2), (511.9, 0.1), (123_456.7, -98_765.4)] {
@@ -138,17 +125,12 @@ fn the_chain_over_the_window_holds_every_root_s_ancestors_in_two_by_two_a_level(
                 foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
             };
             let d = domain_for(&eye, height, None);
-            let chain = d.chain();
-            assert!(chain.len() as u32 <= CHAIN_PAGES);
-            for level in d.window().end..=TOP_LEVEL {
-                let n = chain.iter().filter(|p| p.level == level).count();
-                assert!((1..=4).contains(&n), "height {height}: {n} pages at level {level}");
+            for c in drawn_by_rule(&d) {
+                assert!(d.reaches(c.page()), "height {height}: {c:?} is drawn from a page not wanted");
             }
-            for &r in d.roots() {
-                let mut p = r.page();
-                while p.level < TOP_LEVEL {
-                    p = p.parent();
-                    assert!(chain.contains(&p), "height {height}: {p:?} over a root is not held");
+            for (p, _) in d.pages() {
+                if p.level < TOP_LEVEL {
+                    assert!(d.wants(p.parent()), "height {height}: {p:?} is wanted and the page over it is not");
                 }
             }
         }
@@ -157,8 +139,7 @@ fn the_chain_over_the_window_holds_every_root_s_ancestors_in_two_by_two_a_level(
 
 /// Ground the view does not see is not refined: with a view looking east,
 /// every chunk drawn under the top has a parent the view saw — its sphere
-/// reaches east of the eye — and the view refines less than one that sees
-/// all around.
+/// reaches east of the eye.
 #[test]
 fn ground_outside_the_frustum_is_not_refined() {
     let _serial = crate::global::serial();
@@ -174,14 +155,12 @@ fn ground_outside_the_frustum_is_not_refined() {
         planes[k * 4 + 3] = 1.0;
     }
     let east = domain_for(&eye, height, Some(Frustum { planes, planet: 1e12 }));
-    let around = domain_for(&eye, height, None);
-    let top = east.window().end - 1;
-    let fine = |d: &Domain| drawn_by_rule(d).into_iter().filter(|c| c.level() < top).collect::<Vec<_>>();
-    for c in fine(&east) {
+    let fine: Vec<Chunk> = drawn_by_rule(&east).into_iter().filter(|c| c.level() < TOP_LEVEL).collect();
+    assert!(!fine.is_empty(), "the view refines what it sees");
+    for c in fine {
         let (x0, _, side) = c.parent().expect("a chunk under the top has a parent").rect();
         assert!(x0 + side / 2.0 + side * SQRT_2 / 2.0 >= x, "{c:?} was refined from a parent the view does not see");
     }
-    assert!(fine(&east).len() < fine(&around).len());
 }
 
 /// The frustum the view draws, carried into world units, sees what the view

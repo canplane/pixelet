@@ -7,7 +7,7 @@
 //! screen than the reference view's cell at the reference distance, so the
 //! handoffs scale with the viewport's height and the field of view. Which
 //! level and cube a chunk is drawn in is the kernel's rule
-//! (kernel world/pyramid/window.rs `level_for`, world/chunk/table.rs
+//! (kernel world/pyramid/domain.rs `level_for`, world/chunk/table.rs
 //! `wanted_cube`); what stays here is the projection the rest keeps step
 //! with — the billboards' fade range, the badge occlusion's cell per
 //! distance, decor's target cell — told once a frame with the scheduler's

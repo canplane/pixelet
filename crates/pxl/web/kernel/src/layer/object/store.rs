@@ -319,7 +319,7 @@ pub struct ColumnBox {
 static BOXES: Global<Option<(u32, Vec<ColumnBox>)>> = Global::new();
 
 /// Every column holding objects, as its box: what a view measures how near it
-/// is to what is placed by (world/pyramid/window.rs `Domain`). Made again
+/// is to what is placed by (world/pyramid/domain.rs `Domain`). Made again
 /// only when the store has changed.
 pub fn column_boxes() -> &'static [ColumnBox] {
     let revision = objects_revision();

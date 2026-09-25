@@ -18,7 +18,7 @@ use crate::sched::tick::TickContext;
 use crate::shell::map_store::map_store;
 use crate::world::frame::coord::origin_for;
 use crate::world::frame::view::{view, view_compose};
-use crate::world::pyramid::window::window;
+use crate::world::pyramid::domain::ground_level;
 
 // see damping.rs's DIST_EPS/POLAR_EPS comment — the same reasoning about
 // asking for frames.
@@ -75,7 +75,7 @@ pub fn view_rotation_step(ctx: &mut TickContext) {
 /// centre, in the floating origin taken from it.
 pub fn view_translation_step(ctx: &mut TickContext) {
     let Some(map_center) = map_store().map_center else { return };
-    let map_origin = origin_for(map_center.i, window().start);
+    let map_origin = origin_for(map_center.i, ground_level());
     let s = steps();
     let v = view();
 

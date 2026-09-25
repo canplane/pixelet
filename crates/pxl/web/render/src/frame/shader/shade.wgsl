@@ -44,8 +44,8 @@ fn shade(albedo: vec3f, n: vec3f, world_pos: vec3f, lit: f32, open: vec3f, seen:
   // into what the sky pass draws past it along the same ray, so the edge is
   // not a seam. A smoothstep over the band, not a ramp, on the distance from
   // the eye: the band is a sphere round it, which meets the ground inside
-  // the circle round the eye's foot that the window is drawn out to
-  // (world/pyramid/window.rs's window), so the drawn edge lies past where the band
+  // the circle round the eye's foot that the ground is drawn out to
+  // (world/pyramid/domain.rs's Domain::far), so the drawn edge lies past where the band
   // has hidden the ground, toward every corner of the screen as toward its
   // middle — where a depth along the view axis reaches a corner's ground
   // further out than its middle's.

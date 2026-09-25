@@ -3,8 +3,8 @@
 //! The grain a view is held and drawn at: a chunk is 64 × 64 cells of one
 //! level, one eighth of that level's page on a side. Pages are what is
 //! fetched and kept; a chunk is the finest piece of one that a view asks for
-//! at a resolution of its own, since the rings of neighbouring levels meet
-//! at chunk edges and not at page edges (window.rs).
+//! at a resolution of its own, since the levels the rule draws meet at chunk
+//! edges and not at page edges (domain.rs).
 //!
 //! A chunk is a node of the hierarchy: the L2 block at its level, named by
 //! its coordinate among that level's chunks. Its page and its place in the

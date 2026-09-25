@@ -57,7 +57,7 @@ use crate::world::chunk::node::{decor_draws, decor_revision_of, mesh_step, objec
 use xpute_core::math::scalar::round;
 
 use crate::world::pyramid::chunk::Chunk;
-use crate::world::pyramid::window::{level_for, LEVEL_CHUNKS, WINDOW_LEVELS};
+use crate::world::pyramid::domain::VIEW_CHUNKS;
 use crate::world::pyramid::{Domain, Layer};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::hierarchy::share;
@@ -93,19 +93,19 @@ const MAX_RECLAIMS_WHEN_REFUSED: u32 = 64;
 const MAX_MOUNTS_PER_FRAME: u32 = 64;
 const _: () = assert!(MAX_MOUNTS_PER_FRAME == PAGE_CHUNKS * PAGE_CHUNKS, "a page mounts in the frame it arrives in");
 
-/// The widest selection there is: the top level's chunks, each of whose
-/// pages may be stood in for by its four children where it has not arrived,
-/// and a level's chunks for every level under it (window.rs `LEVEL_CHUNKS`).
-/// The terrain draws no more than that (layer/terrain/present.rs): a finer
-/// page stands in only at the top, a level finer, and the balance a mesh
-/// needs only refines toward what the view wants.
+/// The widest selection there is: the chunks a view draws (domain.rs
+/// `VIEW_CHUNKS`), each of which may be stood in for by its four children
+/// where it has not arrived. The terrain draws no more than that
+/// (layer/terrain/present.rs): a finer page stands in a level finer and no
+/// more, and the balance a mesh needs only refines toward what the view
+/// wants.
 ///
 /// The point of writing it down is that it is under MAX_CHUNKS. The table is
 /// a hard budget, so what it can refuse matters: with the widest selection
 /// inside it, what a full table turns away is never the chunk the camera
 /// wants — there is always a stale one to give up instead (`give_room`), and
 /// the current view can always be represented whatever the last one left.
-const WIDEST_SELECTION: usize = (4 * LEVEL_CHUNKS + LEVEL_CHUNKS * (WINDOW_LEVELS - 1)) as usize;
+const WIDEST_SELECTION: usize = 4 * VIEW_CHUNKS as usize;
 
 const _: () = assert!(WIDEST_SELECTION <= MAX_CHUNKS, "render: a view the chunk table cannot hold at once");
 /// The heap's live share past which off-screen chunks are reclaimed
@@ -145,7 +145,7 @@ pub const STALE: u16 = 64;
 /// Nothing coarser in the selection draws this chunk's ground, so the rule
 /// is followed as far as it goes here rather than stopping one cube past the
 /// chunk's own cells (`drawn_cube`): the view wants its ground at the
-/// window's top, which has no ring over it (window.rs `Domain::outermost`).
+/// pyramid's top, which has nothing over it (domain.rs `Domain::outermost`).
 pub const OUTERMOST: u16 = 256;
 
 /// How long a change of what a chunk draws dissolves over, in milliseconds:
@@ -364,7 +364,7 @@ struct Slot {
     bc: V3,
     radius: f64,
     /// The nearest distance from the eye to its ground, squared: what its
-    /// level was chosen by (window.rs `Domain::nearest_to`), and so what its
+    /// level was chosen by (domain.rs `Domain::nearest_to`), and so what its
     /// work is ordered by.
     distance2: f64,
     flags: u16,
@@ -1265,7 +1265,7 @@ impl Scheduler {
             // builds wanted it.
             //
             // Nearest the eye first, by the distance the level was chosen
-            // by (window.rs `Domain::nearest_to`).
+            // by (domain.rs `Domain::nearest_to`).
             let Some(d) = Terrain::pyramid().domain() else { return };
             let mut near: Vec<(f64, Chunk, bool)> = wanted.iter().filter(|(k, _)| !self.mounted.contains_key(k)).map(|(&k, &root)| (d.nearest_to(k), k, root)).collect();
             near.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -2226,14 +2226,14 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
 }
 
 /// The cube the rule wants `c` drawn in: the level wanted at its nearest
-/// point (window.rs `level_for`), whose cells terrain draws averaged 2 × 2 —
+/// point (domain.rs `Domain::wanted_level`), whose cells terrain draws averaged 2 × 2 —
 /// a cube a level over it — coarser by the byte budget's `pressure`. It has
 /// no floor at terrain's atom: nearer than z16's split distance it is finer
 /// than a z16 cell, which terrain draws as it is and objects fold to, down
 /// to their finest tier (node.rs `Cube`).
 fn wanted_cube(d: &Domain, c: Chunk, pressure: u32) -> Cube {
     let finest = OBJECT_FINEST.above(GROUND.scale(0));
-    let level = level_for(d.nearest_to(c)).max(finest - 1) + 1 + pressure as i32;
+    let level = d.wanted_level(c).max(finest - 1) + 1 + pressure as i32;
     GROUND.scale(0).up(level.min((COARSEST.trailing_zeros() + TOP_LEVEL) as i32))
 }
 

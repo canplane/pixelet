@@ -2,7 +2,7 @@
 
 //! How high the ground a page draws stands: the lowest and highest point of
 //! the surface its own elevation samples make, for every resident page. A
-//! view measures how near it is to ground from these (world/pyramid/window.rs
+//! view measures how near it is to ground from these (world/pyramid/domain.rs
 //! `Domain`), in three dimensions, so a hill is as near as it stands.
 //!
 //! A level's chunks are drawn from that level's own samples, so for a

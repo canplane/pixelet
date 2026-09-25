@@ -17,7 +17,7 @@
 //! 2. A page nothing draws before a page drawn coarsely. The first is a hole
 //!    on the screen and the second is already there (`world/pyramid.rs`'s `resolve`).
 //! 3. Nearer the eye before further, within any of those: the distance the
-//!    page's level was chosen by (world/pyramid/window.rs `Domain`).
+//!    page's level was chosen by (world/pyramid/domain.rs `Domain`).
 //!
 //! **Everything else is a tie.** A label, a POI page, the device's own page
 //! and a catalog asset have no relation to each other or to terrain that

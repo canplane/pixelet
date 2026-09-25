@@ -22,10 +22,10 @@
 /// scale and nothing else.
 ///
 /// What is drawn at which level is measured from the eye (world/pyramid/
-/// window.rs `Domain`), so the band ends the ground at the nearer of the
-/// reach and how far the window's coarsest level draws, and nothing the band
-/// leaves visible is outside what the window draws: a root is any top-level
-/// chunk nearer than that.
+/// domain.rs `Domain`), so the band ends the ground at the nearer of the
+/// reach and how far the pyramid's top draws, and nothing the band leaves
+/// visible is outside what the view draws: a root is any top-level chunk
+/// nearer than that.
 pub mod render_cfg {
     /// 1.5 × FOG_FAR: the far plane a reach of FOG_FAR asks for, so the band
     /// completes inside the frustum rather than being cut by it. Read as that
@@ -37,7 +37,7 @@ pub mod render_cfg {
     pub const FOG_NEAR: f64 = 4608.0;
     /// The reach the two above were tuned against, and what the near plane's
     /// scale is measured in: five levels from the leaves draw step 2^5, which
-    /// the ladder wants out to 192 · 2^5 (world/pyramid/window.rs's level_for).
+    /// the rule wants out to 192 · 2^5 (world/pyramid/domain.rs's level_for).
     pub const FOG_FAR: f64 = 6144.0;
 }
 
