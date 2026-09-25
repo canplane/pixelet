@@ -9,7 +9,9 @@
 //!
 //! How many records there are, and which page is in which, are the
 //! pyramid's (world/pyramid.rs `RECORDS`), the same for every layer; what is
-//! terrain's is that a record is a room of fixed bytes here.
+//! terrain's is that a record is a room of fixed bytes here, and that one
+//! record past the pyramid's holds the shared open-ocean tile, which belongs
+//! to no page and every open-ocean page reads.
 //!
 //! The routing turns a record into an address, and it is the only thing here
 //! that knows how the bytes are ordered. A page's ground is one lane of words,
@@ -31,15 +33,21 @@ use crate::world::pyramid::RECORDS;
 /// One page's ground: a `GroundCell` a cell, no stride and no padding.
 pub const GROUND_LANE_BYTES: u32 = PAGE_CELLS * PAGE_CELLS * core::mem::size_of::<GroundCell>() as u32;
 
+/// The record the shared open-ocean tile lies in, past the pyramid's own.
+pub const OCEAN_RECORD: u32 = RECORDS;
+
+/// Records the range holds: the pyramid's, and the ocean's.
+const RANGE_RECORDS: u32 = RECORDS + 1;
+
 /// The ground across every record.
-pub const GROUND_BYTES: u32 = RECORDS * GROUND_LANE_BYTES;
+pub const GROUND_BYTES: u32 = RANGE_RECORDS * GROUND_LANE_BYTES;
 
 /// A page's elevation: the inner samples and the two-cell skirt bicubic reads
 /// at the edges, two bytes a sample.
 pub const ELE_LANE_BYTES: u32 = ELE_PADDED_SPAN * ELE_PADDED_SPAN * 2;
 
 /// The elevation across every record.
-pub const ELE_PLANE_BYTES: u32 = RECORDS * ELE_LANE_BYTES;
+pub const ELE_PLANE_BYTES: u32 = RANGE_RECORDS * ELE_LANE_BYTES;
 
 /// The range, whole: `.fixed.terrain` is this and nothing else.
 pub const TERRAIN_BYTES: u32 = GROUND_BYTES + ELE_PLANE_BYTES;
@@ -49,27 +57,12 @@ const _: () = assert!(
     "terrain: a ground lane must be whole cache lines, or every second record's lane starts part way into one"
 );
 
-/// One page's bytes on their own, channel after channel and the elevation
-/// past them: what the shared open-ocean tile is held as, since it belongs to
-/// no page and every ocean page reads it.
-pub const RECORD_BYTES: u32 = GROUND_LANE_BYTES + ELE_LANE_BYTES;
-
-/// Where a standalone record's ground lies.
-pub fn record_ground_at(record: usize) -> usize {
-    record
+/// Where a record's ground lies in the range.
+pub const fn ground_off(record: u32) -> u32 {
+    record * GROUND_LANE_BYTES
 }
 
-/// Where a standalone record's elevation grid lies.
-pub fn record_ele_at(record: usize) -> usize {
-    record + GROUND_LANE_BYTES as usize
-}
-
-/// Where a record's ground lies, `base` the range's own.
-pub fn ground_at(base: usize, slot: u32) -> usize {
-    base + slot as usize * GROUND_LANE_BYTES as usize
-}
-
-/// Where a record's elevation grid lies, `base` the range's own.
-pub fn ele_at(base: usize, slot: u32) -> usize {
-    base + GROUND_BYTES as usize + slot as usize * ELE_LANE_BYTES as usize
+/// Where a record's elevation grid lies in the range.
+pub const fn ele_off(record: u32) -> u32 {
+    GROUND_BYTES + record * ELE_LANE_BYTES
 }

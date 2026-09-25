@@ -52,9 +52,10 @@ use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
 use crate::layer::model::store::Models;
 use crate::layer::object::store::{render_edits, EntryAt, RenderEdits};
+use crate::mem::fixed::{lane, range, Range};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::build::{mesh_step, release_block, BuildEvent, Builder, Cube, World, MAX_CHUNKS};
-use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
+use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, surface_of, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::source::{decor_draws, decor_revision_of, objects_revision_of, tiers_draw};
 use xpute_core::math::scalar::round;
 
@@ -555,7 +556,6 @@ pub const LEVELS: usize = TOP_LEVEL as usize + 1;
 /// a free one; and the arena epoch the tiers were written under.
 pub struct Meshes {
     holder: Vec<Option<(Chunk, u32)>>,
-    surface: Vec<Box<[u32]>>,
     epoch: u32,
     /// Boxes cut from meshes past their slot, until a census takes them.
     pub cut: u32,
@@ -725,7 +725,6 @@ impl Scheduler {
             kept: (0, 0, 0),
             meshes: Meshes {
                 holder: vec![None; OCCUPANCY],
-                surface: (0..OCCUPANCY).map(|_| Box::default()).collect(),
                 epoch: arena_epoch(),
                 cut: 0,
                 fine_peak: 0,
@@ -977,11 +976,6 @@ impl Scheduler {
         let show_decor = self.slots[i].decor_sources.shown;
         if self.decor_scratch.is_none() {
             self.decor_scratch = DecorScratch::new();
-            if self.decor_scratch.is_none() {
-                self.builder.stat.starved += 1;
-                self.slots[i].refused = Some(crate::host::heap_stat().releases);
-                return false;
-            }
         }
         for cube in cubes.into_iter().flatten() {
             if self.slots[i].decor_of(cube, generation).is_some() {
@@ -1035,7 +1029,7 @@ impl Scheduler {
                 level,
                 base: ivec::gather(x0, y0, 0),
                 step: mesh_step(cube, level),
-                tops: &self.meshes.surface[t.slot.index],
+                tops: surface(t.slot.index, mesh_step(cube, level)),
                 heights: t.heights,
             });
             let ground = source.zip(view.as_ref()).map(|((tx0, ty0, _, _), view)| Ground {
@@ -1665,7 +1659,7 @@ impl Scheduler {
             level: s.level(),
             base: s.chunk.base().i,
             step: mesh_step(cube, s.level()),
-            tops: &self.meshes.surface[t.slot.index],
+            tops: surface(t.slot.index, mesh_step(cube, s.level())),
             heights: t.heights,
         })
     }
@@ -2397,7 +2391,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<Chunk, usize>, mem: *const u
                     meshes.epoch = arena_epoch();
                 }
             }
-            meshes.surface[slot.index] = surface_centers(words, box_words as usize, mesh_step(cube, slots[i].level()), slots[i].level(), heights);
+            surface_centres(slot.index, words, box_words as usize, mesh_step(cube, slots[i].level()), slots[i].level(), heights);
             meshes.holder[slot.index] = Some((chunk, id));
             let s = &mut slots[i];
             // A tier of an older generation in the same slot shows these boxes
@@ -2419,14 +2413,31 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<Chunk, usize>, mem: *const u
     }
 }
 
-/// A cell-center height query needs no CPU copy of the mesh. Quantized tops
-/// use the mesh's own height scale, with zero reserved for an empty center.
-/// Allocation is bounded by mesh slots: 64² words for fine, at most 32²
-/// for coarse, independent of source or POI cardinality.
-fn surface_centers(words: &[u32], stride: usize, step: u32, level: u32, heights: Heights) -> Box<[u32]> {
+/// Slot `index`'s surface as its tier of `step` holds it, a word a block:
+/// the lane's first (CHUNK_CELLS / step)² words. Empty under a native test,
+/// which lays no memory out.
+fn surface(index: usize, step: u32) -> &'static mut [u32] {
+    let (off, words) = surface_of(index);
+    let axis = CHUNK_CELLS / step;
+    xpute_core::ensure!(axis * axis <= words, ENOTRECOVERABLE, index, step);
+    // SAFETY: the slot's own lane in `.fixed.surface`, written only by the
+    // tier landing in the slot and read by what stands on it, both the chunk
+    // table's, on its one thread.
+    range(Range::Surface).map_or(&mut [], |s| unsafe { lane(s, off, (axis * axis) as usize) })
+}
+
+/// A cell-centre height query needs no CPU copy of the mesh. Quantized tops
+/// use the mesh's own height scale, with zero reserved for an empty centre.
+/// Written into the slot's own lane, which the slot's tier sizes
+/// (mesh_slot.rs `surface_of`).
+fn surface_centres(index: usize, words: &[u32], stride: usize, step: u32, level: u32, heights: Heights) {
     let axis = (CHUNK_CELLS / step) as usize;
     let unit = step as f64 * GROUND.scale(level).side();
-    let mut tops = vec![0; axis * axis];
+    let tops = surface(index, step);
+    tops.fill(0);
+    if tops.is_empty() {
+        return;
+    }
     for r in words.chunks_exact(stride) {
         let (min, size) = box_bounds(r, unit, heights);
         let x0 = ((min[0] / unit - 0.5).ceil().max(0.0) as usize).min(axis);
@@ -2441,7 +2452,6 @@ fn surface_centers(words: &[u32], stride: usize, step: u32, level: u32, heights:
             }
         }
     }
-    tops.into_boxed_slice()
 }
 
 /// A chunk as it is drawn: its level, the unit address its first cell

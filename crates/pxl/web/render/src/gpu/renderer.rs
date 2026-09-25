@@ -275,8 +275,8 @@ const EMPTY: u32 = 0;
 /// puck's zone, whichever the block is. The memory is the source and the
 /// device a copy: a block stays in the heap until its free is listed, so a
 /// device that went away, or lists taken while there was none, are made good
-/// from the addresses. Open addressing in lanes of heap blocks never given back, since
-/// the handles are the list's and sparse.
+/// from the addresses. Open addressing in `.fixed.blocks`'s lanes, since the
+/// handles are the list's and sparse.
 pub struct Blocks {
     handle: &'static mut [u32],
     at: &'static mut [u32],
@@ -303,12 +303,33 @@ fn memory(at: u32, n: u32) -> &'static [u8] {
     unsafe { core::slice::from_raw_parts(at as usize as *const u8, n as usize) }
 }
 
-fn fixed_lane() -> &'static mut [u32] {
-    let (at, _) = alloc(word_bytes(BLOCK_SLOTS)).or_bug(Errno::ENOMEM);
-    // SAFETY: a block never given back, BLOCK_SLOTS words.
-    let lane = unsafe { core::slice::from_raw_parts_mut(at as *mut u32, BLOCK_SLOTS) };
-    lane.fill(0);
-    lane
+/// Lanes the table is: handle, where, length, the two counts, buffer, group.
+const BLOCK_LANES: usize = 7;
+
+/// `.fixed.blocks`, the table's lanes end to end: the kernel lays it out
+/// (pxl-kernel mem/fixed.rs) and installs it with `set_blocks`.
+pub const BLOCKS_BYTES: u32 = (BLOCK_LANES * BLOCK_SLOTS * 4) as u32;
+
+/// Installs the table in the `BLOCKS_BYTES` at `at`.
+///
+/// # Safety
+/// `at` must address that range, 4-aligned and zeroed, the renderer's alone
+/// for as long as the module runs.
+pub unsafe fn set_blocks(at: u32) {
+    // SAFETY: the caller's range, one lane of BLOCK_SLOTS words after another.
+    let lane = |k: usize| unsafe { core::slice::from_raw_parts_mut((at as usize + k * BLOCK_SLOTS * 4) as *mut u32, BLOCK_SLOTS) };
+    BLOCKS.set(Blocks {
+        handle: lane(0),
+        at: lane(1),
+        len: lane(2),
+        vertex_cnt: lane(3),
+        index_cnt: lane(4),
+        buffer: lane(5),
+        group: lane(6),
+        count: 0,
+        bytes: 0,
+        missing: 0,
+    });
 }
 
 fn home(handle: u32) -> usize {
@@ -316,21 +337,6 @@ fn home(handle: u32) -> usize {
 }
 
 impl Blocks {
-    fn new() -> Blocks {
-        Blocks {
-            handle: fixed_lane(),
-            at: fixed_lane(),
-            len: fixed_lane(),
-            vertex_cnt: fixed_lane(),
-            index_cnt: fixed_lane(),
-            buffer: fixed_lane(),
-            group: fixed_lane(),
-            count: 0,
-            bytes: 0,
-            missing: 0,
-        }
-    }
-
     /// The device went away with every buffer and group: the blocks stand,
     /// each to be put on the next one.
     fn lose(&mut self) {
@@ -494,8 +500,9 @@ impl Blocks {
 
 static BLOCKS: Global<Blocks> = Global::new();
 
+/// The table, which the module installs at boot (`set_blocks`).
 fn blocks() -> &'static mut Blocks {
-    BLOCKS.get(Blocks::new)
+    BLOCKS.get(|| xpute_core::bug!(ENOTRECOVERABLE))
 }
 
 #[derive(Clone, Copy)]

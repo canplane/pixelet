@@ -19,6 +19,7 @@ mod executor;
 use pxl_kernel::abi::cmd::{self as abi, Command, FetchCreateSignal, FetchDeleteSignal, LoadCreateSignal, Sensor, SensorCreateSignal, WorldSnapshotSignal, WorldUpdateSignal};
 use pxl_kernel::global::Global;
 use pxl_kernel::kernel::kernel;
+use pxl_kernel::mem::fixed::Range;
 use pxl_kernel::mem::section;
 use pxl_render::mesh::volume::Volumes;
 use xpute_core::math::scalar::round;
@@ -245,8 +246,8 @@ fn boot() {
     let block = unsafe { &mut *(module_memory().add(pxl_kernel::mem::spec::BOOT_AT as usize) as *mut [u32; BOOT_WORDS]) };
     block[..3].copy_from_slice(&[data_end(), ring_address(&s.sq), ring_address(&s.outbox.cq)]);
     block[BOOT_HEAP] = ALLOC.stat() as u32;
-    block[BOOT_GPU] = pxl_kernel::mem::fixed::gpu_stream_at().unwrap();
-    block[BOOT_HOST] = pxl_kernel::mem::fixed::host_stream_at().unwrap();
+    block[BOOT_GPU] = fixed_at(Range::Gpu);
+    block[BOOT_HOST] = fixed_at(Range::Host);
     for (i, sec) in [map.fixed, map.heap].into_iter().enumerate() {
         write_section(block, 3 + i * SECTION_WORDS as usize, sec);
     }
@@ -254,6 +255,11 @@ fn boot() {
     for (i, v) in [q.margin_share, q.batch_frames, q.settle_ms].into_iter().enumerate() {
         block[BOOT_QUANTUM + i] = round(v * 1000.0) as u32;
     }
+}
+
+/// Where fixed range `r` begins, the map laid.
+fn fixed_at(r: Range) -> u32 {
+    pxl_kernel::mem::fixed::range(r).or_bug(Errno::ENOTRECOVERABLE).offset
 }
 
 /// Records the kernel's map over the memory the central scheduler gave, and
@@ -270,11 +276,13 @@ fn lay_out() -> section::Map {
     // SAFETY: the memory is this module's own, addressed from 0.
     kernel().volumes = Some(unsafe { Volumes::new(core::ptr::null_mut()) });
     section::set_map(map);
-    // SAFETY: `.fixed.gpu` and `.fixed.host`, each its stream's bytes from a
-    // page, the renderer's and the host's alone.
+    // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, each what it
+    // is installed as from a page, zeroed, the renderer's and the host's
+    // alone.
     unsafe {
-        pxl_render::gpu::api::set_gpu_stream(pxl_kernel::mem::fixed::gpu_stream_at().unwrap());
-        pxl_kernel::host::set_host_stream(pxl_kernel::mem::fixed::host_stream_at().unwrap());
+        pxl_render::gpu::api::set_gpu_stream(fixed_at(Range::Gpu));
+        pxl_kernel::host::set_host_stream(fixed_at(Range::Host));
+        pxl_render::gpu::renderer::set_blocks(fixed_at(Range::Blocks));
     }
     map
 }

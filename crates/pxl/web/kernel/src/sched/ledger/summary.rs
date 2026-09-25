@@ -21,7 +21,7 @@ use crate::kernel::{kernel, with_world};
 use crate::layer::billboard::sheet::billboard_sheet;
 use crate::sched::ledger::block::{AtlasBlock, FetchBlock, FramesBlock, RecBlock, RetainBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
 use crate::sched::ledger::log::window_counters;
-use crate::sched::ledger::record::{fixed_lane, ledger_frame_peak, ledger_frames_since, ledger_recording_state, ledger_tasks_since, put, FrameSample, Outcome, TaskRow, FRAME_LIMIT, TASK_LIMIT};
+use crate::sched::ledger::record::{fixed_lane, ledger_frame_peak, ledger_frames_since, ledger_recording_state, ledger_tasks_since, put, FrameSample, Lane, Outcome, TaskRow, SPREAD_LIMIT};
 use crate::sched::ledger::spec::{LIMITS, SUMMARY, TASK_PHASE_NAMES};
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
 use crate::world::chunk::build::RETAIN_BUDGET_BYTES;
@@ -85,7 +85,7 @@ fn spread(scratch: &mut [f64], values: impl Iterator<Item = f64>) -> Spread {
 pub fn ledger_summarize(window_ms: f64) -> &'static [f64] {
     let b = block();
     if b.scratch.is_empty() {
-        b.scratch = fixed_lane(FRAME_LIMIT.max(TASK_LIMIT));
+        b.scratch = fixed_lane(Lane::Scratch, SPREAD_LIMIT);
     }
     let (out, scratch) = (&mut b.words, &mut *b.scratch);
     out.fill(0.0);

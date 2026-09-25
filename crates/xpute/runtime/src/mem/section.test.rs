@@ -44,3 +44,38 @@ fn memory_a_section_s_words_read_back_as_they_were_written() {
     write_section(&mut words, SECTION_WORDS as usize, s);
     assert_eq!(read_section(&words, SECTION_WORDS as usize), s);
 }
+
+#[test]
+fn memory_a_span_inside_a_section_is_reached_only_where_it_ends_by_the_section_s_end() {
+    let s = Section {
+        offset: 4 * PAGE,
+        bytes: 2 * PAGE,
+        align: PAGE,
+    };
+    assert_eq!(s.end(), 6 * PAGE);
+    assert_eq!(s.at(0, 2 * PAGE), Some(4 * PAGE), "the whole of it");
+    assert_eq!(s.at(PAGE, PAGE), Some(5 * PAGE), "its last page");
+    assert_eq!(s.at(2 * PAGE, 0), Some(6 * PAGE), "nothing, at its end");
+    assert_eq!(s.at(PAGE, PAGE + 1), None, "a byte past its end");
+    assert_eq!(s.at(u32::MAX, 2), None, "past the address space");
+}
+
+#[test]
+fn memory_a_range_laid_inside_a_section_ends_where_its_own_size_does() {
+    let s = Section {
+        offset: 8 * PAGE,
+        bytes: 4 * PAGE,
+        align: PAGE,
+    };
+    let sizes = [PAGE + 1, PAGE];
+    let second = s.nth(&sizes, PAGE, 1);
+    assert_eq!(
+        second,
+        Section {
+            offset: 10 * PAGE,
+            bytes: PAGE,
+            align: PAGE
+        }
+    );
+    assert_eq!(second.at(0, PAGE + 1), None, "its own end, not the section's");
+}

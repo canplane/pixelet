@@ -24,11 +24,13 @@ use core::fmt;
 use core::mem::{offset_of, size_of};
 
 use xpute_runtime::abi::fetch::FetchFail;
-use xpute_runtime::mem::heap::alloc;
+use xpute_runtime::mem::section::span_of;
 
 use crate::global::Global;
 use crate::host::now;
 use crate::io::demand::{DemandKey, Phases};
+use crate::mem::fixed::{lane, range, Range};
+use crate::sched::ledger::log::PENDING;
 use crate::sched::ledger::spec::{FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, TASK, WORST};
 use crate::sched::tick::PHASES;
 
@@ -498,6 +500,8 @@ pub const WINDOW_MS: f64 = 60_000.0;
 pub const TASK_LIMIT: usize = 2_048;
 pub const FRAME_LIMIT: usize = 4_096;
 const WORST_CAP: usize = 12;
+/// Values a spread is taken over at most: the longer ring's.
+pub const SPREAD_LIMIT: usize = if FRAME_LIMIT > TASK_LIMIT { FRAME_LIMIT } else { TASK_LIMIT };
 
 /// Steps `head` past the records at the front of `ring[*head..]` older than
 /// `cutoff`; how many to drop from the front now — the head, once the dropped
@@ -535,27 +539,48 @@ pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
     *len -= n;
 }
 
-/// A lane for `cap` records, zeroed; none where there is no heap yet (a native
-/// test), and then nothing is recorded into it.
-pub(super) fn fixed_lane<T: Copy>(cap: usize) -> &'static mut [T] {
-    let bytes = cap * size_of::<T>();
-    let Some((at, _)) = u32::try_from(bytes).ok().and_then(alloc) else {
-        // No kernel heap to take it from: a native check, where there is no
-        // memory to lay out and the host's own allocator stands in. Leaked
-        // once, which is what the kernel's lane is too — the ledger holds its
-        // rings for the program's life either way. Without this the ledger
-        // records nothing under `cargo test` and every check of what it
-        // summarizes reads zero.
-        // SAFETY: the rings hold plain numbers, which the kernel's own lane
-        // is handed zeroed below for the same reason.
-        return Box::leak(vec![unsafe { core::mem::zeroed::<T>() }; cap].into_boxed_slice());
-    };
-    // SAFETY: a block this lane holds alone and never gives back, `bytes` long
-    // and aligned past a record's alignment; zeroed, which is a valid record
-    // for the plain numbers the rings hold.
-    unsafe {
-        core::ptr::write_bytes(at as *mut u8, 0, bytes);
-        core::slice::from_raw_parts_mut(at as *mut T, cap)
+/// The ledger's lanes in `.fixed.ledger`, in the order they are laid.
+#[derive(Clone, Copy)]
+pub(super) enum Lane {
+    Tasks,
+    Frames,
+    Worst,
+    /// Where a summary's spreads are sorted (summary.rs).
+    Scratch,
+    /// What the console stream holds for the shell (log.rs).
+    LogTasks,
+    LogFrames,
+}
+
+/// Each lane's bytes, in `Lane`'s order.
+const LANES: [u32; 6] = [
+    (TASK_LIMIT * size_of::<TaskRow>()) as u32,
+    (FRAME_LIMIT * size_of::<FrameSample>()) as u32,
+    (WORST_CAP * size_of::<WorstFrame>()) as u32,
+    (SPREAD_LIMIT * size_of::<f64>()) as u32,
+    (PENDING * size_of::<TaskRow>()) as u32,
+    (PENDING * size_of::<FrameSample>()) as u32,
+];
+
+/// What a lane begins on: a cache line, past any record's alignment.
+const LANE_ALIGN: u32 = 64;
+
+/// `.fixed.ledger`: every lane, end to end.
+pub const LEDGER_BYTES: u32 = span_of(&LANES, LANE_ALIGN);
+
+/// `lane`, as `cap` records, zeroed. Under a native test, which lays no
+/// memory out, the host's own allocator stands in: leaked once, which is what
+/// the kernel's lane is too — the ledger holds its rings for the program's
+/// life either way. Without it the ledger records nothing under `cargo test`
+/// and every check of what it summarises reads zero.
+pub(super) fn fixed_lane<T: Copy>(which: Lane, cap: usize) -> &'static mut [T] {
+    match range(Range::Ledger) {
+        // SAFETY: the lane's own bytes, which only its ring holds, zeroed as
+        // the range was laid; a zeroed record is a valid one for the plain
+        // numbers the rings hold.
+        Some(r) => unsafe { lane(r.nth(&LANES, LANE_ALIGN, which as usize), 0, cap) },
+        // SAFETY: as for the kernel's lane.
+        None => Box::leak(vec![unsafe { core::mem::zeroed::<T>() }; cap].into_boxed_slice()),
     }
 }
 
@@ -718,7 +743,7 @@ pub fn ledger_record(rec: TaskRecord) {
         task(&row);
     }
     if l.task_ring.is_empty() {
-        l.task_ring = fixed_lane(TASK_LIMIT);
+        l.task_ring = fixed_lane(Lane::Tasks, TASK_LIMIT);
     }
     let dropped = trim(&l.task_ring[..l.task_len], &mut l.task_head, row.end_ms - WINDOW_MS, |r| r.end_ms);
     drop_front(l.task_ring, &mut l.task_len, dropped);
@@ -751,7 +776,7 @@ pub fn ledger_record_frame(s: FrameSample) {
         return;
     }
     if l.worst.is_empty() {
-        l.worst = fixed_lane(WORST_CAP);
+        l.worst = fixed_lane(Lane::Worst, WORST_CAP);
     }
     let at = l.worst[..l.worst_len].partition_point(|w| w.sample.dt_ms >= s.dt_ms);
     if at < l.worst.len() {
@@ -792,7 +817,7 @@ pub fn ledger_record_frame(s: FrameSample) {
         frame(&s);
     }
     if l.frame_ring.is_empty() {
-        l.frame_ring = fixed_lane(FRAME_LIMIT);
+        l.frame_ring = fixed_lane(Lane::Frames, FRAME_LIMIT);
     }
     let dropped = trim(&l.frame_ring[..l.frame_len], &mut l.frame_head, s.t - WINDOW_MS, |f| f.t);
     drop_front(l.frame_ring, &mut l.frame_len, dropped);

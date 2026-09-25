@@ -27,7 +27,7 @@
 /// take has to stay out of the sentinel, and a band is a cell's Z divided by
 /// BAND_CELLS, from a sixteen-bit Z lane (spec/space/pvf3's IVEC_Z_W), so it
 /// fits in ten bits signed and nothing reaches `i32::MIN`.
-use xpute_runtime::mem::heap::{alloc, Guard};
+use crate::mem::fixed::{lane, range, Range};
 
 pub const NO_ENTRY: u32 = i32::MIN as u32;
 pub const HIDDEN_FLAG: u8 = 1;
@@ -53,10 +53,15 @@ pub const DECOR_GROUPS: usize = 64;
 /// fit is left out.
 const DECOR_INSTANCES: usize = 1 << 16;
 
+/// Bytes of the instances' lane in `.fixed.decor`, which the groups' follows.
+const INSTANCE_LANE_BYTES: u32 = (DECOR_INSTANCES * core::mem::size_of::<Instance>()) as u32;
+
+/// `.fixed.decor`: the instances' lane, then the groups'.
+pub const DECOR_BYTES: u32 = INSTANCE_LANE_BYTES + (DECOR_INSTANCES * core::mem::size_of::<u16>()) as u32;
+
 /// Where a chunk's instances are gathered, in the order they are made, before
-/// they are laid into its block group by group: two lanes in blocks of the mesh
-/// section, taken once and kept by the scheduler, so a build takes nothing of
-/// its own and the megabytes they are sit outside the module heap.
+/// they are laid into its block group by group: two lanes in `.fixed.decor`,
+/// one chunk's at a time, so a build takes nothing of its own.
 pub struct DecorScratch {
     pub(crate) instances: &'static mut [Instance],
     /// The group each instance is in.
@@ -71,22 +76,14 @@ pub struct DecorScratch {
 }
 
 impl DecorScratch {
-    /// Its lanes, taken from the heap; none when it has no room for them.
+    /// Its lanes in `.fixed.decor`; none under a native test, which lays no
+    /// memory out. Made once: the scheduler keeps the one there is.
     pub fn new() -> Option<DecorScratch> {
-        let instance_bytes = (DECOR_INSTANCES * core::mem::size_of::<Instance>()) as u32;
-        let instances = Guard::alloc(instance_bytes)?;
-        let (groups, _) = alloc((DECOR_INSTANCES * core::mem::size_of::<u16>()) as u32)?;
-        let instances = instances.keep();
-        // SAFETY: two heap blocks this scratch holds alone and never
-        // gives back, each DECOR_INSTANCES of its lane's element and aligned
-        // past it; the elements are plain numbers, and none is read before a
-        // build has written it.
-        let (instances, groups) = unsafe {
-            (
-                core::slice::from_raw_parts_mut(instances.0 as *mut Instance, DECOR_INSTANCES),
-                core::slice::from_raw_parts_mut(groups as *mut u16, DECOR_INSTANCES),
-            )
-        };
+        let decor = range(Range::Decor)?;
+        // SAFETY: the range's two lanes, which this scratch holds alone; the
+        // elements are plain numbers, and none is read before a build has
+        // written it.
+        let (instances, groups) = unsafe { (lane(decor, 0, DECOR_INSTANCES), lane(decor, INSTANCE_LANE_BYTES, DECOR_INSTANCES)) };
         Some(DecorScratch {
             instances,
             groups,
