@@ -36,11 +36,16 @@ const CELL_STEP: f64 = PAGE_CELLS as f64 / PAGE_ELE_SPAN as f64;
 /// nothing over it is held.
 ///
 /// A cell's height is the Catmull-Rom interpolation of the 4 × 4 samples
-/// about it (pxl-render mesh/paint/terrain/elevation.rs), so the samples read
-/// are the footprint's and one more on every side. Its weights are negative
-/// by at most an eighth along an axis; the positive part of the two axes'
-/// products then sums to at most (9/8)² + (1/8)² = 41/32, so an interpolated
-/// height lies within 9/32 of the samples' span past either end of it.
+/// about it (pxl-render mesh/paint/terrain/elevation.rs). Its weights are
+/// negative by at most an eighth along an axis; the positive part of the two
+/// axes' products then sums to at most (9/8)² + (1/8)² = 41/32, so an
+/// interpolated height lies within 9/32 of those sixteen samples' span past
+/// either end of it. The bound is each window's, and taken window by window:
+/// over the whole footprint's span it reaches past ground that does not move
+/// by as much as a quarter of the tallest relief anywhere in the footprint,
+/// water at sea level beside a hill read that far under the sea, and a chunk
+/// holding only what the bound reached into is made one all the same
+/// (world/pyramid/domain.rs `Domain::occupied`).
 pub fn ground_under(page: LevelPage, (side, at): (Scale, [i64; 2])) -> Option<(f64, f64)> {
     let pyramid = Terrain::pyramid();
     let src = pyramid.drawn_from(page)?;
@@ -57,13 +62,22 @@ pub fn ground_under(page: LevelPage, (side, at): (Scale, [i64; 2])) -> Option<(f
         ((s(t0) - 1).clamp(0, span - 1), (s(t0 + cells) + 2).clamp(0, span - 1))
     };
     let ((x0, x1), (y0, y1)) = (samples(ox as f64 / n), samples(oy as f64 / n));
-    let (mut lo, mut hi) = (i16::MAX, i16::MIN);
-    for y in y0..=y1 {
-        for &e in &ele[(y * span + x0) as usize..=(y * span + x1) as usize] {
-            (lo, hi) = (lo.min(e), hi.max(e));
+    // Every 4 × 4 window a cell of the footprint is interpolated from.
+    let window = |a0: i64, a1: i64, k: i64| (k.max(a0), (k + 3).min(a1));
+    let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+    for wy in y0..=(y1 - 3).max(y0) {
+        for wx in x0..=(x1 - 3).max(x0) {
+            let ((ax, bx), (ay, by)) = (window(x0, x1, wx), window(y0, y1, wy));
+            let (mut wlo, mut whi) = (i16::MAX, i16::MIN);
+            for y in ay..=by {
+                for &e in &ele[(y * span + ax) as usize..=(y * span + bx) as usize] {
+                    (wlo, whi) = (wlo.min(e), whi.max(e));
+                }
+            }
+            let past = (whi - wlo) as f64 * 9.0 / 32.0;
+            lo = lo.min(wlo as f64 - past);
+            hi = hi.max(whi as f64 + past);
         }
     }
-    let (lo, hi) = (lo as f64 * U_PER_CELL, hi as f64 * U_PER_CELL);
-    let past = (hi - lo) * 9.0 / 32.0;
-    Some((lo - past, hi + past))
+    Some((lo * U_PER_CELL, hi * U_PER_CELL))
 }

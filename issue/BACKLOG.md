@@ -53,16 +53,22 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   answers nothing past `--top-level` (3 by default; z11 and coarser are 503
   for terrain and POI alike), so a view that draws nothing finer than
   level 4 has no page it can get.
-- **One order out from the center, finished.** Every scheduler takes work
-  nearest the view's center first and drops what leaves the demand
+- **One order out from the eye, the rest.** Every scheduler takes work in
+  one order out from the eye, a fetch the view leaves is stopped the turn it
+  leaves, a chunk is a cube of three axes, and its heights are its own
+  footprint's, which pages landing only widen
   ([20260926-one-order-out-from-the-center.md](./20260926-one-order-out-from-the-center.md)).
-  Left: fetches the view no longer wants stopped in the turn they leave it,
-  not one per round trip; a drawn level held until its replacement is ready,
-  so steep ground does not flip its splits as pages land and starve; and
-  occluded chunks left unsplit. Under all three, the view's nodes are still
-  2.5D columns: a chunk is a footprint and one height range, the budget
-  counts a disc, and objects ride the ground's chunk. 3D nodes — a level's
-  blocks in three axes, a band high — are what the rule was derived for.
+  Left: occluded chunks are split, fetched and built like seen ones; a
+  column's objects are one height range, so the cubes between two floating
+  objects count as held; and a column crossing a cube's floor or ceiling is
+  two chunks — measured 2026-09-26 at 1.5 a column near Gangnam and 1.7 on
+  Bukhansan, each built from the whole column's runs again, where the runs
+  could be the column's once and each chunk a cut of them.
+- **A kernel trap with no place.** 2026-09-26, main, Bonghwa's mountains at
+  150u: a `RuntimeError: unreachable` left no `ensure!` record, so no file
+  or line, and the page drew its last frame from then on. It came as the
+  texture pack was toggled while the view was being moved, and toggling it
+  again from the same place, still or not, did not bring it back.
 - **A seam while a chunk is drawn from a page over it.** Since
   2026-09-26 a chunk whose page has not come is drawn in its place from the
   nearest resident page over it, upsampled (world/pyramid.rs `drawn_from`),
