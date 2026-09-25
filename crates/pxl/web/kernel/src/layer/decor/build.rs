@@ -25,8 +25,8 @@ use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
-use pxl_spec::space::pvf3::ivec::{gather, IVec};
 use pxl_spec::space::indexer::L3_IDX;
+use pxl_spec::space::pvf3::ivec::{gather, IVec};
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
@@ -35,12 +35,12 @@ use std::collections::HashMap;
 use pxl_spec::cell::cube_types;
 
 use crate::kernel::kernel;
-use crate::world::chunk::table::Drawn;
 use crate::layer::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::layer::decor::kind::DecorKindDef;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
 use crate::layer::object::store::{unpack_pos, Store, BAND_CELLS, BAND_UNITS, CELL, CELL_STEPS, STEP_UNITS};
+use crate::world::chunk::table::Drawn;
 use pxl_spec::asset::ingested::Asset;
 
 const AIR: u32 = cube_types::common::air as u32;

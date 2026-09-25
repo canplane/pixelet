@@ -1310,7 +1310,10 @@ impl Builder {
                 return Progress::Blocked;
             }
             let cube = c.wanted().next().unwrap();
-            assert!(self.bake.begin(&set, mesh_step(cube, c.level), 1 << c.level, settings_store().texture_pack), "a bake open with no job naming it");
+            assert!(
+                self.bake.begin(&set, mesh_step(cube, c.level), 1 << c.level, settings_store().texture_pack),
+                "a bake open with no job naming it"
+            );
             self.bake_job = Some(BakeJob {
                 id,
                 cube,

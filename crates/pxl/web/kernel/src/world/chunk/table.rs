@@ -1354,9 +1354,10 @@ impl Scheduler {
             // Once what replaced it is whole and ready it dissolves into
             // that (`Fade::Out`), and goes when it has.
             let faded = s.fade.is_some_and(|f| matches!(f, Fade::Out(_)) && f.progress(now) >= 1.0);
-            if gone_from_view || shows_nothing || faded {
-                self.gone.push((k, id));
-            } else if whole && ready && !settings_store().lod_fade {
+            // With the dissolve switched off, one whole and ready under what
+            // replaced it goes at once, as a faded one does.
+            let covered_now = whole && ready && !settings_store().lod_fade;
+            if gone_from_view || shows_nothing || faded || covered_now {
                 self.gone.push((k, id));
             } else if whole && ready {
                 if !matches!(s.fade, Some(Fade::Out(_))) {
@@ -2075,7 +2076,8 @@ impl Scheduler {
         // stays as the secondary tier until it has gone (`fade`). A change of
         // sources — a cube placed — is shown at once.
         let s = &self.slots[i];
-        let was = (settings_store().lod_fade && s.layout_ready && s.layout_generation == generation && s.layout_primary != p && s.fade.is_none() && s.tier(s.layout_primary, generation).is_some()).then_some(s.layout_primary);
+        let was = (settings_store().lod_fade && s.layout_ready && s.layout_generation == generation && s.layout_primary != p && s.fade.is_none() && s.tier(s.layout_primary, generation).is_some())
+            .then_some(s.layout_primary);
         self.trim(i, &[Some(p), q, was], emit);
         self.apply_layout(i, p, q.or(was), generation, true, emit);
         let s = &mut self.slots[i];
