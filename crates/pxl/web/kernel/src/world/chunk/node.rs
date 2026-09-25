@@ -415,7 +415,6 @@ fn dispatch(e: Event) {
                 node.on_evict(cube, generation);
             }
         }
-        Event::Visible { .. } | Event::Blend { .. } => {}
     }
 }
 

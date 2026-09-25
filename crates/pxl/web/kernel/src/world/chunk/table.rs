@@ -272,11 +272,6 @@ pub enum Event {
     Unmount {
         id: u32,
     },
-    /// Show or hide the chunk's group.
-    Visible {
-        id: u32,
-        on: bool,
-    },
     /// The layout to show: its tiers, all of them already handed over, of
     /// `generation`. `ready` false is the release: nothing shown.
     Layout {
@@ -285,13 +280,6 @@ pub enum Event {
         secondary: Option<Cube>,
         generation: u32,
         ready: bool,
-    },
-    /// How the layout's two tiers are weighted, and which one decor takes.
-    Blend {
-        id: u32,
-        primary: f32,
-        secondary: f32,
-        decor_secondary: bool,
     },
     /// Let go of a tier the chunk nodes hold, and the decor at its cube, of
     /// `generation`; the layout keeps what it shows.
@@ -1433,7 +1421,7 @@ impl Scheduler {
         self.stop_evicted(world);
         self.lose_meshes(emit);
         self.mount(world, emit);
-        self.refresh(&frame, emit);
+        self.refresh(&frame);
         self.retire(world, self.clock_ms, emit);
         let mut sc = core::mem::take(&mut self.scratch);
         self.order(t0, &mut sc.order, &mut sc.keys);
@@ -1479,7 +1467,7 @@ impl Scheduler {
         eligible.clear();
         eligible.extend(order.iter().copied().filter(|&i| full_recheck || self.slots[i].flags & (FRESH | BLEND_ACTIVE | SETTLING) != 0));
         for &i in eligible.iter() {
-            self.recheck(world, i, t0, emit);
+            self.recheck(world, i, t0);
         }
         if full_recheck {
             self.view_dirty = false;
@@ -1719,9 +1707,9 @@ impl Scheduler {
 
     /// Where every chunk is and whether it is on screen, measured against the
     /// frame. A slot that crosses the frustum's edge moves its retained bytes
-    /// between the on-screen and off-screen totals and says so with a
-    /// `Visible` event, which is what the retention budget is spent from.
-    fn refresh(&mut self, frame: &Frame, emit: &mut impl FnMut(Event)) {
+    /// between the on-screen and off-screen totals, which is what the
+    /// retention budget is spent from.
+    fn refresh(&mut self, frame: &Frame) {
         let domain = Terrain::pyramid().domain();
         for i in 0..self.slots.len() {
             let visible = measure(frame, &self.slots[i]).0;
@@ -1739,7 +1727,6 @@ impl Scheduler {
                     self.retained_on -= bytes;
                     self.retained_off += bytes;
                 }
-                emit(Event::Visible { id: s.id, on: visible });
                 self.view_dirty = true;
             }
         }
@@ -1795,7 +1782,7 @@ impl Scheduler {
             let t = fade.progress(now) as f32;
             let active = match fade {
                 Fade::Tier(_) if t < 1.0 && self.slots[i].layout_secondary.is_some() => {
-                    self.decide(i, t, 2.0 + t, emit);
+                    self.decide(i, t, 2.0 + t);
                     true
                 }
                 Fade::Tier(_) => {
@@ -1805,20 +1792,20 @@ impl Scheduler {
                     if ready {
                         self.apply_layout(i, p, None, g, true, emit);
                     }
-                    self.decide(i, 1.0, 0.0, emit);
+                    self.decide(i, 1.0, 0.0);
                     false
                 }
                 Fade::In(_) if t < 1.0 => {
-                    self.decide(i, t, 0.0, emit);
+                    self.decide(i, t, 0.0);
                     true
                 }
                 Fade::In(_) => {
                     self.slots[i].fade = None;
-                    self.decide(i, 1.0, 0.0, emit);
+                    self.decide(i, 1.0, 0.0);
                     false
                 }
                 Fade::Out(_) => {
-                    self.decide(i, 2.0 + t, 0.0, emit);
+                    self.decide(i, 2.0 + t, 0.0);
                     true
                 }
             };
@@ -1826,21 +1813,10 @@ impl Scheduler {
         }
     }
 
-    fn decide(&mut self, i: usize, primary: f32, secondary: f32, emit: &mut impl FnMut(Event)) {
+    fn decide(&mut self, i: usize, primary: f32, secondary: f32) {
         let coverage = |v: f32| if v > 1.5 { 1.0 - (v - 2.0) } else { v };
         let decor_secondary = self.slots[i].layout_secondary.is_some() && coverage(secondary) > coverage(primary);
-        let s = &mut self.slots[i];
-        let told = (primary, secondary, decor_secondary);
-        if s.told == Some(told) {
-            return;
-        }
-        s.told = Some(told);
-        emit(Event::Blend {
-            id: s.id,
-            primary,
-            secondary,
-            decor_secondary,
-        });
+        self.slots[i].told = Some((primary, secondary, decor_secondary));
     }
 
     /// The tier this slot should be showing, and whether that makes it
@@ -1851,7 +1827,7 @@ impl Scheduler {
     /// pending when what it shows is not that.
     /// SETTLING is pending with a layout already up, so a frame can tell a
     /// chunk that is changing tier from one that has nothing to show yet.
-    fn recheck(&mut self, world: &mut World, i: usize, now: f64, emit: &mut impl FnMut(Event)) {
+    fn recheck(&mut self, world: &mut World, i: usize, now: f64) {
         self.slots[i].set(FRESH, false);
         // A stale chunk shows what it shows until it is let go: nothing
         // more is built for it.
@@ -1870,7 +1846,7 @@ impl Scheduler {
             let s = &mut self.slots[i];
             s.set(BLEND_ACTIVE, false);
             s.set(SETTLING, false);
-            self.decide(i, 1.0, 0.0, emit);
+            self.decide(i, 1.0, 0.0);
             return;
         }
         let s = &self.slots[i];
@@ -1892,7 +1868,7 @@ impl Scheduler {
             self.stop_work(world, i);
         }
         if self.slots[i].fade.is_none() {
-            self.decide(i, 1.0, 0.0, emit);
+            self.decide(i, 1.0, 0.0);
         }
     }
 
