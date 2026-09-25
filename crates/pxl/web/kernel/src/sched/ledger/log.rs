@@ -30,59 +30,19 @@
 use crate::global::Global;
 use crate::kernel::kernel;
 use crate::layer::billboard::sheet::billboard_sheet;
+use crate::sched::ledger::block::CountersBlock;
 use crate::sched::ledger::record::{drop_front, fixed_lane, ledger_recording_start, ledger_recording_stop, ledger_set_sink, FrameSample, LedgerSink, TaskRow};
 use crate::sched::ledger::summary::{missed, overran};
 use crate::sched::tick::{set_step_timing, tick_step_stats_reset};
 
 /// The side counters printed beside the rings, cumulative from load.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Counters {
-    pub faces_kept: f64,
-    pub faces_possible: f64,
-    pub runs_culled: f64,
-    pub runs_total: f64,
-    pub coarse_boxes: f64,
-    pub coarse_low_fill: f64,
-    pub bands_reused: f64,
-    pub bands_allocated: f64,
-    pub built_direct: f64,
-    pub built_scans: f64,
-    pub built_bakes: f64,
-    pub built_starved: f64,
-    pub decor_dropped: f64,
-    pub atlas_repacks: f64,
-    pub atlas_uploads: f64,
-}
-
-impl Counters {
-    fn minus(self, b: Counters) -> Counters {
-        Counters {
-            faces_kept: self.faces_kept - b.faces_kept,
-            faces_possible: self.faces_possible - b.faces_possible,
-            runs_culled: self.runs_culled - b.runs_culled,
-            runs_total: self.runs_total - b.runs_total,
-            coarse_boxes: self.coarse_boxes - b.coarse_boxes,
-            coarse_low_fill: self.coarse_low_fill - b.coarse_low_fill,
-            bands_reused: self.bands_reused - b.bands_reused,
-            bands_allocated: self.bands_allocated - b.bands_allocated,
-            built_direct: self.built_direct - b.built_direct,
-            built_scans: self.built_scans - b.built_scans,
-            built_bakes: self.built_bakes - b.built_bakes,
-            built_starved: self.built_starved - b.built_starved,
-            decor_dropped: self.decor_dropped - b.decor_dropped,
-            atlas_repacks: self.atlas_repacks - b.atlas_repacks,
-            atlas_uploads: self.atlas_uploads - b.atlas_uploads,
-        }
-    }
-}
-
-fn counters() -> Counters {
+fn counters() -> CountersBlock {
     let k = kernel();
     let st = k.sched.builder.stat;
     let c = k.sched.builder.bake_context().counters;
     let bands = k.volumes.as_ref().map_or([0; 2], |v| [v.stat.allocated, v.stat.reused]);
     let atlas = billboard_sheet().stats();
-    Counters {
+    CountersBlock {
         faces_kept: c.faces_kept as f64,
         faces_possible: c.faces_possible as f64,
         runs_culled: c.culled as f64,
@@ -108,7 +68,7 @@ fn counters() -> Counters {
 const PENDING: usize = 512;
 
 struct Log {
-    baseline: Counters,
+    baseline: CountersBlock,
     logging: bool,
     tasks: &'static mut [TaskRow],
     tasks_len: usize,
@@ -130,8 +90,8 @@ fn log() -> &'static mut Log {
 }
 
 /// The side counters since the window began.
-pub fn window_counters() -> Counters {
-    counters().minus(log().baseline)
+pub fn window_counters() -> CountersBlock {
+    counters().minus(&log().baseline)
 }
 
 /// Clears the ledger and opens a fresh window, side counters included.

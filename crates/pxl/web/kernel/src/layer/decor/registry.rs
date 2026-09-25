@@ -9,23 +9,22 @@
 use pxl_spec::cell::DecorId;
 
 use crate::global::Global;
-use crate::layer::decor::build::{teach_decor_kinds, DecorKindBundle};
-use crate::layer::decor::kind::boat::BOAT_DECOR_BUNDLE;
-use crate::layer::decor::kind::car::CAR_DECOR_BUNDLE;
-use crate::layer::decor::kind::train::TRAIN_DECOR_BUNDLE;
-use crate::layer::decor::kind::tree::TREE_DECOR_BUNDLE;
+use crate::layer::decor::build::{bind_models, teach_decor_kinds, DecorKindBundle};
+use crate::layer::decor::kind::{boat, car, train, tree};
 
-static TAUGHT: Global<bool> = Global::new();
+static BUNDLES: Global<[DecorKindBundle; 4]> = Global::new();
 
 /// Every bundle, in group order; the scheduler is taught them the first time
 /// they are asked for.
 #[allow(non_snake_case)]
-pub fn DECOR_BUNDLES() -> [&'static DecorKindBundle; 4] {
-    let bundles = [TREE_DECOR_BUNDLE(), BOAT_DECOR_BUNDLE(), CAR_DECOR_BUNDLE(), TRAIN_DECOR_BUNDLE()];
-    let taught = TAUGHT.get(|| false);
-    if !*taught {
-        *taught = true;
-        teach_decor_kinds(&bundles);
+pub fn DECOR_BUNDLES() -> &'static [DecorKindBundle; 4] {
+    let mut made = false;
+    let bundles = BUNDLES.get(|| {
+        made = true;
+        [tree::DEF, boat::DEF, car::DEF, train::DEF].each_ref().map(bind_models)
+    });
+    if made {
+        teach_decor_kinds(&bundles.each_ref());
     }
     bundles
 }
@@ -33,5 +32,5 @@ pub fn DECOR_BUNDLES() -> [&'static DecorKindBundle; 4] {
 /// Which bundle a user-placeable decor_id belongs to — None for a decor_id
 /// somehow missing its own bundle, which would itself be a real bug.
 pub fn decor_bundle_for(decor_id: DecorId) -> Option<&'static DecorKindBundle> {
-    DECOR_BUNDLES().into_iter().find(|b| b.decor_id == Some(decor_id))
+    DECOR_BUNDLES().iter().find(|b| b.decor_id == Some(decor_id))
 }

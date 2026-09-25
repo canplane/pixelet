@@ -1,7 +1,7 @@
 // pxl-kernel/layer/decor/kind/car.rs
 
-//! A decor kind: its seed and rules, and the kind as a bundle, those rules
-//! bound to its models.
+//! A decor kind: its seed, its rules and its models, as the registry
+//! (decor/registry.rs) binds them.
 //!
 //! Ambient cars on major roads. Motorway/primary/secondary only,
 //! deliberately: ordinary neighborhood streets and pedestrian ways
@@ -16,12 +16,12 @@
 //! land/water/structure value sits underneath it.
 
 use pxl_spec::asset::ingested::Asset;
+use pxl_spec::bake::format::GroundChannelKey;
 use pxl_spec::cell::cube_types::Transport;
 
-use crate::global::Global;
-use crate::layer::decor::build::{bind_models, DecorKindBundle, DecorVariantAsset};
-use crate::layer::decor::kind::DecorKind;
-use crate::layer::decor::scatter::{eligibility_of, rules_of, DecorKindSeed, DecorOrientationMode, DecorRules};
+use crate::layer::decor::build::DecorVariantAsset;
+use crate::layer::decor::kind::DecorKindDef;
+use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
 
 /// The kind's variants, each a model by its path under asset/ and the skin
 /// it is drawn with, in the order the scatter picks among them.
@@ -48,27 +48,18 @@ const VARIANTS: [DecorVariantAsset; 5] = [
     },
 ];
 
-pub const CAR_KIND: DecorKindSeed = DecorKindSeed {
-    tag: 0x0ca5eed00003dec0,
-    // Much sparser than trees/boats: a highway with a car every couple of
-    // cells would read as gridlock, not ambient traffic.
-    density: 0.004,
-    variant_count: VARIANTS.len() as u32,
-    orientation: DecorOrientationMode::AlignTransport,
+pub const DEF: DecorKindDef = DecorKindDef {
+    seed: DecorKindSeed {
+        tag: 0x0ca5eed00003dec0,
+        // Much sparser than trees/boats: a highway with a car every couple of
+        // cells would read as gridlock, not ambient traffic.
+        density: 0.004,
+        orientation: DecorOrientationMode::AlignTransport,
+    },
+    rules: DecorRules::ANY.one_of(
+        GroundChannelKey::TRANSPORT,
+        &[Transport::road_motorway as u8, Transport::road_primary as u8, Transport::road_secondary as u8],
+    ),
+    variants: &VARIANTS,
+    decor_id: None,
 };
-
-#[allow(non_snake_case)]
-pub fn CAR_RULES() -> DecorRules {
-    rules_of(&[], &[], &[], &[], &[Transport::road_motorway, Transport::road_primary, Transport::road_secondary].map(|t| t as u32))
-}
-
-pub fn is_car_eligible(land: u32, water: u32, structure: u32, transport: u32) -> bool {
-    eligibility_of(&CAR_RULES(), land, water, structure, transport)
-}
-
-static BUNDLE: Global<DecorKindBundle> = Global::new();
-
-#[allow(non_snake_case)]
-pub fn CAR_DECOR_BUNDLE() -> &'static DecorKindBundle {
-    BUNDLE.get(|| bind_models(DecorKind::Car, CAR_KIND, CAR_RULES(), &VARIANTS, None))
-}

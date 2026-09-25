@@ -1,7 +1,7 @@
 // pxl-kernel/layer/decor/kind/boat.rs
 
-//! A decor kind: its seed and rules, and the kind as a bundle, those rules
-//! bound to its models.
+//! A decor kind: its seed, its rules and its models, as the registry
+//! (decor/registry.rs) binds them.
 //!
 //! Small boats on open water. Open river/lake water only — WETLAND is
 //! excluded (too shallow/marshy for a boat to sit in), and
@@ -14,10 +14,9 @@ use pxl_spec::asset::ingested::Asset;
 use pxl_spec::bake::format::GroundChannelKey;
 use pxl_spec::cell::cube_types::Water;
 
-use crate::global::Global;
-use crate::layer::decor::build::{bind_models, DecorKindBundle, DecorVariantAsset};
-use crate::layer::decor::kind::DecorKind;
-use crate::layer::decor::scatter::{eligibility_of, rules_of, DecorKindSeed, DecorOrientationMode, DecorRules};
+use crate::layer::decor::build::DecorVariantAsset;
+use crate::layer::decor::kind::DecorKindDef;
+use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
 
 /// The kind's variants, each a model by its path under asset/ and the skin
 /// it is drawn with, in the order the scatter picks among them.
@@ -40,36 +39,21 @@ const VARIANTS: [DecorVariantAsset; 4] = [
     },
 ];
 
-pub const BOAT_KIND: DecorKindSeed = DecorKindSeed {
-    tag: 0xb0a75eed0002dec0,
-    // Sparser than trees' own density would look right here — most rivers are
-    // only a few cells wide, so the same per-cell rate reads far denser on a
-    // narrow water strip than it does scattered across a wide green area. Cut
-    // to 1/4 of the first-pass value (0.015) after that read as boats covering
-    // the water, not scattered on it.
-    density: 0.002,
-    variant_count: VARIANTS.len() as u32,
-    orientation: DecorOrientationMode::Random,
+pub const DEF: DecorKindDef = DecorKindDef {
+    seed: DecorKindSeed {
+        tag: 0xb0a75eed0002dec0,
+        // Sparser than trees' own density would look right here — most rivers are
+        // only a few cells wide, so the same per-cell rate reads far denser on a
+        // narrow water strip than it does scattered across a wide green area. Cut
+        // to 1/4 of the first-pass value (0.015) after that read as boats covering
+        // the water, not scattered on it.
+        density: 0.002,
+        orientation: DecorOrientationMode::Random,
+    },
+    rules: DecorRules::ANY
+        .void(GroundChannelKey::STRUCTURE)
+        .void(GroundChannelKey::TRANSPORT)
+        .one_of(GroundChannelKey::WATER, &[Water::river as u8, Water::lake as u8]),
+    variants: &VARIANTS,
+    decor_id: None,
 };
-
-#[allow(non_snake_case)]
-pub fn BOAT_RULES() -> DecorRules {
-    rules_of(
-        &[GroundChannelKey::STRUCTURE, GroundChannelKey::TRANSPORT],
-        &[],
-        &[Water::river, Water::lake].map(|t| t as u32),
-        &[],
-        &[],
-    )
-}
-
-pub fn is_boat_eligible(land: u32, water: u32, structure: u32, transport: u32) -> bool {
-    eligibility_of(&BOAT_RULES(), land, water, structure, transport)
-}
-
-static BUNDLE: Global<DecorKindBundle> = Global::new();
-
-#[allow(non_snake_case)]
-pub fn BOAT_DECOR_BUNDLE() -> &'static DecorKindBundle {
-    BUNDLE.get(|| bind_models(DecorKind::Boat, BOAT_KIND, BOAT_RULES(), &VARIANTS, None))
-}

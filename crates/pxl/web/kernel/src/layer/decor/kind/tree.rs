@@ -1,7 +1,7 @@
 // pxl-kernel/layer/decor/kind/tree.rs
 
-//! A decor kind: its seed and rules, and the kind as a bundle, those rules
-//! bound to its models.
+//! A decor kind: its seed, its rules and its models, as the registry
+//! (decor/registry.rs) binds them.
 //!
 //! Trees on green/forest terrain, and only where nothing else (water, a
 //! structure, a road) already claims the cell — the same "what actually
@@ -23,10 +23,9 @@ use pxl_spec::bake::format::GroundChannelKey;
 use pxl_spec::cell::cube_types::Land;
 use pxl_spec::cell::decor_types::Decor;
 
-use crate::global::Global;
-use crate::layer::decor::build::{bind_models, DecorKindBundle, DecorVariantAsset};
-use crate::layer::decor::kind::DecorKind;
-use crate::layer::decor::scatter::{eligibility_of, rules_of, DecorKindSeed, DecorOrientationMode, DecorRules};
+use crate::layer::decor::build::DecorVariantAsset;
+use crate::layer::decor::kind::DecorKindDef;
+use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
 
 /// The kind's variants, each a model by its path under asset/, in the
 /// order the scatter picks among them: the fantasy town kit's five trees
@@ -74,38 +73,24 @@ const VARIANTS: [DecorVariantAsset; 9] = [
     },
 ];
 
-pub const TREE_KIND: DecorKindSeed = DecorKindSeed {
-    // Arbitrary, fixed — only has to stay stable across sessions; a big odd
-    // constant rather than a small number so it mixes well even before
-    // combining with a per-page seed.
-    tag: 0x7ee5eed7eec0de1,
-    // Moderate, deliberately sparse — a scattered handful of trees reading as
-    // "this hillside has some trees on it", not a solid forest wall at 1u
-    // spacing (which a much higher density would read as, given every eligible
-    // cell is only 1u wide).
-    density: 0.04,
-    variant_count: VARIANTS.len() as u32,
-    orientation: DecorOrientationMode::Random,
+pub const DEF: DecorKindDef = DecorKindDef {
+    seed: DecorKindSeed {
+        // Arbitrary, fixed — only has to stay stable across sessions; a big odd
+        // constant rather than a small number so it mixes well even before
+        // combining with a per-page seed.
+        tag: 0x7ee5eed7eec0de1,
+        // Moderate, deliberately sparse — a scattered handful of trees reading as
+        // "this hillside has some trees on it", not a solid forest wall at 1u
+        // spacing (which a much higher density would read as, given every eligible
+        // cell is only 1u wide).
+        density: 0.04,
+        orientation: DecorOrientationMode::Random,
+    },
+    rules: DecorRules::ANY
+        .void(GroundChannelKey::WATER)
+        .void(GroundChannelKey::STRUCTURE)
+        .void(GroundChannelKey::TRANSPORT)
+        .one_of(GroundChannelKey::LAND, &[Land::green_light as u8, Land::green_deep as u8, Land::bare as u8]),
+    variants: &VARIANTS,
+    decor_id: Some(Decor::tree),
 };
-
-#[allow(non_snake_case)]
-pub fn TREE_RULES() -> DecorRules {
-    rules_of(
-        &[GroundChannelKey::WATER, GroundChannelKey::STRUCTURE, GroundChannelKey::TRANSPORT],
-        &[Land::green_light, Land::green_deep, Land::bare].map(|t| t as u32),
-        &[],
-        &[],
-        &[],
-    )
-}
-
-pub fn is_tree_eligible(land: u32, water: u32, structure: u32, transport: u32) -> bool {
-    eligibility_of(&TREE_RULES(), land, water, structure, transport)
-}
-
-static BUNDLE: Global<DecorKindBundle> = Global::new();
-
-#[allow(non_snake_case)]
-pub fn TREE_DECOR_BUNDLE() -> &'static DecorKindBundle {
-    BUNDLE.get(|| bind_models(DecorKind::Tree, TREE_KIND, TREE_RULES(), &VARIANTS, Some(Decor::tree)))
-}

@@ -200,7 +200,7 @@ pub fn hover_cursor_step() {
             let z = ivec::to_real(ivec::Z(h.i)) + fvec::to_real(fvec::Z(h.f));
             match (decor_bundle, decor_pick) {
                 (Some(bundle), Some((variant, rotation))) if is_decor_ghost => {
-                    let before: u32 = DECOR_BUNDLES().iter().take_while(|b| !core::ptr::eq(**b, bundle)).map(|b| b.variants.len() as u32).sum();
+                    let before: u32 = DECOR_BUNDLES().iter().take_while(|b| !core::ptr::eq(*b, bundle)).map(|b| b.variants.len() as u32).sum();
                     Ghost::Decor {
                         at: [x + preview_size / 2.0, y + preview_size / 2.0, z],
                         group: before + variant,

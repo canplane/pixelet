@@ -23,7 +23,6 @@ use pxl_render::look::lod::{LodStep, TARGET_CELL_PX};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::U_PER_CELL;
-use pxl_spec::bake::pack::unpack;
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
 use pxl_spec::space::pvf3::ivec::{gather, IVec};
@@ -32,9 +31,9 @@ use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use crate::kernel::kernel;
 use crate::layer::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
-use crate::layer::decor::kind::DecorKind;
+use crate::layer::decor::kind::DecorKindDef;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
-use crate::layer::decor::scatter::{DecorChannelRule, DecorKindSeed, DecorOrientationMode, DecorRules};
+use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
 use crate::layer::object::store::{unpack_pos, Store, BAND_CELLS, BAND_UNITS, CELL, CELL_STEPS, STEP_UNITS};
 use pxl_spec::asset::ingested::Asset;
 
@@ -87,8 +86,6 @@ pub struct DecorVariantAsset {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DecorKindBundle {
-    /// The kind: kind.rs's entry, and the draw census's tag.
-    pub kind: DecorKind,
     pub seed: DecorKindSeed,
     /// Where the kind stands, as the scheduler is taught it.
     pub rules: DecorRules,
@@ -107,18 +104,18 @@ pub struct DecorKindBundle {
 
 /// Binds a kind's seed and rules to its variants, and measures the kind's
 /// extent over all of them.
-pub fn bind_models(kind: DecorKind, seed: DecorKindSeed, rules: DecorRules, variants: &[DecorVariantAsset], decor_id: Option<DecorId>) -> DecorKindBundle {
+pub fn bind_models(def: &DecorKindDef) -> DecorKindBundle {
     // A NaN extent stays NaN rather than being dropped.
-    let extent = variants
+    let extent = def
+        .variants
         .iter()
         .flat_map(|v| v.model.ingested().extent.unwrap_or([0.0; 3]))
         .fold(0.0, |a: f64, b| if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) });
     DecorKindBundle {
-        kind,
-        seed,
-        rules,
-        variants: variants.to_vec(),
-        decor_id,
+        seed: def.seed,
+        rules: def.rules,
+        variants: def.variants.to_vec(),
+        decor_id: def.decor_id,
         extent,
     }
 }
@@ -130,27 +127,15 @@ pub fn teach_decor_kinds(bundles: &[&DecorKindBundle]) {
     let sched = &mut kernel().sched;
     sched.decor_forget();
     for bundle in bundles {
-        let idx = sched.decor_kind(Kind {
+        sched.decor_kind(Kind {
             tag: bundle.seed.tag,
             density: bundle.seed.density,
-            variant_count: bundle.seed.variant_count,
+            variant_count: bundle.variants.len() as u32,
             align_transport: bundle.seed.orientation == DecorOrientationMode::AlignTransport,
             extent: bundle.extent,
             decor_value: bundle.decor_id.map(decor_num_id),
-            rules: [Rule::Any; 4],
+            rules: bundle.rules,
         });
-        for ch in 0..4 {
-            match bundle.rules.channel(ch) {
-                DecorChannelRule::Any => {}
-                DecorChannelRule::Void => sched.decor_rule(idx, ch, Rule::Void),
-                DecorChannelRule::OneOf(types) => {
-                    sched.decor_rule(idx, ch, Rule::OneOf([0; 4]));
-                    for &t in types {
-                        sched.decor_allow(idx, ch, t as u8);
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -196,25 +181,6 @@ impl Rng {
     }
 }
 
-/// What a channel's type must be for a kind to stand on the cell.
-#[derive(Clone, Copy)]
-pub enum Rule {
-    Any,
-    Void,
-    /// One of the types whose bits are set.
-    OneOf([u64; 4]),
-}
-
-impl Rule {
-    fn allows(&self, t: u8) -> bool {
-        match self {
-            Rule::Any => true,
-            Rule::Void => t == 0,
-            Rule::OneOf(bits) => bits[(t >> 6) as usize] & (1 << (t & 63)) != 0,
-        }
-    }
-}
-
 #[derive(Clone, Copy)]
 pub struct Kind {
     pub tag: u64,
@@ -225,8 +191,7 @@ pub struct Kind {
     pub extent: f64,
     /// The object store's value a placed instance of this kind carries.
     pub decor_value: Option<u32>,
-    /// Land, water, structure, transport.
-    pub rules: [Rule; 4],
+    pub rules: DecorRules,
 }
 
 /// A chunk's decor at a tier, gathered and ready to be laid into its block.
@@ -351,8 +316,7 @@ impl<'s> DecorBuild<'s> {
                     for dx in 0..CHUNK_CELLS {
                         let cell_x = chunk.tx0 + dx;
                         let idx = (cell_y * PAGE_CELLS + cell_x) as usize;
-                        let types = unpack(cells[idx]);
-                        if !(0..4).all(|c| kind.rules[c].allows(types[c])) {
+                        if !kind.rules.allows(cells[idx]) {
                             continue;
                         }
                         let mut rng = Rng::new(derive_seed_u64(kind_seed, ((cell_x as u64) << 16) | cell_y as u64));
