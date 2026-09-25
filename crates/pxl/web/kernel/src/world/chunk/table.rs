@@ -29,7 +29,7 @@ use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
 use pxl_render::look::globe::Globe;
 use pxl_render::look::lod::COARSEST;
-use pxl_render::mesh::chunk_mesher::{box_bounds, Heights};
+use pxl_render::mesh::chunk_mesher::{box_bounds, box_z, Heights};
 use pxl_render::mesh::paint::terrain::adapter::ChunkSample;
 
 use pxl_spec::bake::constant::OBJECT_FINEST;
@@ -2511,7 +2511,8 @@ fn surface_centres(words: &[u32], stride: usize, step: u32, level: u32, heights:
         let y0 = ((min[1] / unit - 0.5).ceil().max(0.0) as usize).min(axis);
         let x1 = (((min[0] + size[0]) / unit - 0.5).ceil().max(0.0) as usize).min(axis);
         let y1 = (((min[1] + size[1]) / unit - 0.5).ceil().max(0.0) as usize).min(axis);
-        let top = (r[2] & 0xffff) + (r[2] >> 16) + 1;
+        let (lo, span) = box_z(r);
+        let top = lo + span + 1;
         for y in y0..y1 {
             for x in x0..x1 {
                 tops[y * axis + x] = tops[y * axis + x].max(top);

@@ -932,8 +932,9 @@ fn steps(v: f64, step: f64) -> u32 {
 /// drawing it (the chunk scheduler's bounds). `m` is one box, and its length
 /// says which format.
 pub fn box_bounds(m: &[u32], unit: f64, heights: Heights) -> (V3, [f64; 3]) {
-    let z0 = heights.floor + (m[2] & 0xffff) as f64 * heights.step;
-    let dz = (m[2] >> 16) as f64 * heights.step;
+    let (lo, span) = box_z(m);
+    let z0 = heights.floor + lo as f64 * heights.step;
+    let dz = span as f64 * heights.step;
     if m.len() == COARSE_BOX_WORDS as usize {
         let xy = unit / COARSE_XY_STEPS;
         let byte = |k: u32| ((m[3] >> k) & 0xff) as f64;
@@ -942,6 +943,12 @@ pub fn box_bounds(m: &[u32], unit: f64, heights: Heights) -> (V3, [f64; 3]) {
     let xy = unit / XY_STEPS;
     let half = |w: u32, high: bool| (if high { w >> 16 } else { w & 0xffff }) as f64 * xy;
     ([half(m[0], false), half(m[0], true), z0], [half(m[1], false), half(m[1], true), dz])
+}
+
+/// A box's floor and height, in its mesh's height steps (`Heights`): the
+/// one word both formats keep them in.
+pub fn box_z(m: &[u32]) -> (u32, u32) {
+    (m[2] & 0xffff, m[2] >> 16)
 }
 
 /// Whether one whole-cell run of column `col` spans all of z0..=z1.
