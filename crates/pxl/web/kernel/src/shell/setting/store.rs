@@ -29,7 +29,7 @@ use xpute_core::codec::json::{read_json, Quoted};
 use crate::global::Global;
 use crate::host::{development, storage_get, storage_set};
 pub use crate::shell::setting::schema_spec::{AoMode, CameraTerrainMode, SettingKey, SettingKind, Settings};
-use crate::world::chunk::node::chunk_sources_changed;
+use crate::world::chunk::source::chunk_sources_changed;
 
 const STORAGE_KEY: &str = "pxl:settings";
 

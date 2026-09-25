@@ -2,7 +2,7 @@
 
 //
 // A col_idx's changes are read as its revisions moving, which is what
-// world/chunk/node.rs follows.
+// world/chunk/source.rs follows.
 
 use pxl_spec::bake::constant::{BAND_CELLS, CELL_STEPS};
 use pxl_spec::cell::cube_types::Block;
@@ -347,7 +347,7 @@ fn erasing_a_column_leaves_the_others_as_they_were() {
 /// agrees with what it draws.
 #[test]
 fn a_level_chunk_moves_with_the_columns_it_draws_and_no_other() {
-    use crate::world::chunk::node::{decor_revision_of, objects_revision_of};
+    use crate::world::chunk::source::{decor_revision_of, objects_revision_of};
     use crate::world::pyramid::chunk::Chunk;
     let _g = serial();
     let c = corner(4096 * 13, 4096 * 5, 3);

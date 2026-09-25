@@ -4,8 +4,9 @@
 //! each is built at, and the raycast that finds what a ray met. This is where
 //! a page's cells become something a frame can draw.
 
+pub mod build;
 pub mod mesh_slot;
-pub mod node;
 pub mod raycast;
+pub mod source;
 pub mod stage;
 pub mod table;

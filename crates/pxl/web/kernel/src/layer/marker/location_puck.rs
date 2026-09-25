@@ -21,7 +21,7 @@ use crate::layer::environment::theme::Theme;
 use crate::layer::environment::theme_clock::theme_key;
 use crate::layer::terrain::elevation::ground_at;
 use crate::world::change::request_world_tick;
-use crate::world::chunk::node::World;
+use crate::world::chunk::build::World;
 use crate::world::chunk::table::Frame;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;

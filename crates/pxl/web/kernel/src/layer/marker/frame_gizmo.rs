@@ -31,7 +31,7 @@ use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::terrain::elevation::{ground_at, with_ele};
 use crate::world::change::request_world_tick;
-use crate::world::chunk::node::World;
+use crate::world::chunk::build::World;
 use crate::world::frame::view::view;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;

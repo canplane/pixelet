@@ -16,7 +16,7 @@ use pxl_spec::space::v3::V3;
 use xpute_runtime::abi::handle::Slots;
 
 use crate::layer::model::store::Models;
-use crate::world::chunk::node::World;
+use crate::world::chunk::build::World;
 
 /// Floats an instance takes: its anchor relative to the set's (3), its
 /// logical size in pixels (2), its rectangle of the sheet (4), and where the

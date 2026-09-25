@@ -24,7 +24,7 @@ use crate::sched::ledger::log::window_counters;
 use crate::sched::ledger::record::{fixed_lane, ledger_frame_peak, ledger_frames_since, ledger_recording_state, ledger_tasks_since, put, FrameSample, Outcome, TaskRow, FRAME_LIMIT, TASK_LIMIT};
 use crate::sched::ledger::spec::{LIMITS, SUMMARY, TASK_PHASE_NAMES};
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
-use crate::world::chunk::node::RETAIN_BUDGET_BYTES;
+use crate::world::chunk::build::RETAIN_BUDGET_BYTES;
 
 /// A gap this many display intervals long skipped a vsync.
 const MISSED_INTERVALS: f64 = 1.5;
@@ -237,7 +237,6 @@ fn side(out: &mut [f64]) {
         out,
         SUMMARY::retain::AT,
         &RetainBlock {
-            nodes: retain.chunks as f64,
             run_sets: retain.run_sets as f64,
             run_set_mb: retain.run_set_mb as f64,
             tiers: retain.tiers as f64,

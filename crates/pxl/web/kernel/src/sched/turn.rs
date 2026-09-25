@@ -42,7 +42,7 @@ use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickReport, T
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
 use crate::world::change::{request_world_tick, world_edge};
-use crate::world::chunk::node::chunk_sources_step;
+use crate::world::chunk::source::chunk_sources_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
 use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view_frame::{view_rotation_step, view_translation_step};
@@ -182,7 +182,7 @@ pub fn world_turn() -> f64 {
     effect!(worst, follow, follow_mode_step());
     effect!(worst, theme, theme_clock_step());
     effect!(worst, decor, decor_assets_wanted());
-    effect!(worst, chunk_nodes, chunk_sources_step());
+    effect!(worst, chunk_sources, chunk_sources_step());
     effect!(worst, hover, hover_cursor_step());
     // device_coord is deliberately not gated the way map_center is — the puck
     // holds its own last-known coordinate across a transient none.

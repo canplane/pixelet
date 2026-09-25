@@ -15,7 +15,7 @@
 //! A chunk has one owner, its slot here: the tiers built for it, its decor
 //! blocks — a block's memory and its handle let go together — and what its
 //! tiers and decor were made from, against which `sources_step` finds a
-//! change. The builder (node.rs) makes the tiers; the chunk stage
+//! change. The builder (build.rs) makes the tiers; the chunk stage
 //! (stage.rs) composes the frame — the camera, the anchor root's matrix,
 //! the frustum — and calls the tick.
 
@@ -52,8 +52,9 @@ use crate::layer::marker::location_puck::Markers;
 use crate::layer::model::store::Models;
 use crate::layer::object::store::{render_edits, EntryAt, RenderEdits};
 use crate::shell::setting::store::{hidden_ground, settings_store};
+use crate::world::chunk::build::{mesh_step, release_block, BuildEvent, Builder, Cube, World, MAX_CHUNKS};
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
-use crate::world::chunk::node::{decor_draws, decor_revision_of, mesh_step, objects_revision_of, release_block, tiers_draw, BuildEvent, Builder, Cube, World, MAX_CHUNKS};
+use crate::world::chunk::source::{decor_draws, decor_revision_of, objects_revision_of, tiers_draw};
 use xpute_core::math::scalar::round;
 
 use crate::world::pyramid::chunk::Chunk;
@@ -308,7 +309,6 @@ pub struct ChunkCounts {
 /// What the chunks hold, for the ledger.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ChunkRetention {
-    pub chunks: u32,
     /// Chunks holding a run set, and what those sets cost in the heap.
     pub run_sets: u32,
     pub run_set_mb: u32,
@@ -1064,7 +1064,7 @@ impl Scheduler {
                 })
                 .collect();
             // Above z16 the objects are drawn folded to the level's cell, the
-            // fold the chunk's runs are made with (node.rs `level_runs`): what
+            // fold the chunk's runs are made with (build.rs `level_runs`): what
             // keeps a candidate off a cell is that fold, as a z16 chunk's is
             // the store's own cell.
             self.decor_folded.clear();
@@ -1168,7 +1168,6 @@ impl Scheduler {
         let mem = world_mem(world);
         let (run_sets, run_bytes) = self.builder.run_sets();
         let mut out = ChunkRetention {
-            chunks: self.slots.len() as u32,
             run_sets,
             run_set_mb: round(run_bytes as f64 / 1_048_576.0) as u32,
             ..ChunkRetention::default()
@@ -1948,7 +1947,7 @@ impl Scheduler {
     /// Whether the chunk holds every tier of (primary, secondary) of the
     /// current generation. When not, the builder is asked for every tier the
     /// chunk lacks, those two first: its runs are let go once its tiers are
-    /// baked (node.rs), so a tier asked later would cost the runs again.
+    /// baked (build.rs), so a tier asked later would cost the runs again.
     fn ask(&mut self, world: &mut World, i: usize, primary: Cube, secondary: Option<Cube>) -> bool {
         let generation = self.generation(i);
         let outermost = self.outermost(i);
@@ -2233,7 +2232,7 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
 /// a cube a level over it — coarser by the byte budget's `pressure`. It has
 /// no floor at terrain's atom: nearer than z16's split distance it is finer
 /// than a z16 cell, which terrain draws as it is and objects fold to, down
-/// to their finest tier (node.rs `Cube`).
+/// to their finest tier (build.rs `Cube`).
 fn wanted_cube(d: &Domain, c: Chunk, pressure: u32) -> Cube {
     let finest = OBJECT_FINEST.above(GROUND.scale(0));
     let level = d.wanted_level(c).max(finest - 1) + 1 + pressure as i32;

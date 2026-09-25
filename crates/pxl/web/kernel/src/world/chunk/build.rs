@@ -1,15 +1,14 @@
-// pxl-kernel/world/chunk/node.rs
+// pxl-kernel/world/chunk/build.rs
 
 //! A chunk's build: the builder that makes its tiers from what it is made
-//! of, and what says that changed.
+//! of (source.rs).
 //!
 //! Every decision about a chunk, and everything it holds — its tiers, its
 //! decor blocks, the sources they were made from — is the scheduler's
 //! (crates/pxl/web/kernel/src/world/chunk/table.rs). What is here acts on
-//! what it asks: the builder, the revisions a chunk's objects and decor are
-//! read as, and the flag that has the scheduler compare them.
+//! what it asks.
 
-use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, PAGE_CELLS, TOP_LEVEL};
+use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
@@ -20,25 +19,21 @@ use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
 use pxl_spec::bake::constant::{pack_pos, BandZ, BAND, CELL, OBJECT_FINEST};
-use pxl_spec::space::indexer::{FROM_L2_IDX, L1, L2, L2_IDX};
+use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_runtime::mem::heap::{free, Block};
 
-use crate::global::Global;
-use crate::kernel::{kernel, with_world};
 use crate::layer::object::store::{object_col_revision, Store};
 use crate::mem::fixed::{bake_at, run_set_at};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::mesh_slot::BAKE_BYTES;
 use pxl_spec::bake::constant::BAND_CELLS;
 
-use crate::world::change::{bump_world, world_changes, DECOR_CHUNK, TIERS_CHUNK};
+use crate::world::chunk::source::tiers_draw;
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::hierarchy::Scale;
-use pxl_spec::space::pyramid::LevelPage;
 
 /// A tier: the cube a chunk is drawn in, its side as a scale of the unit.
 /// The shared rule chooses it by the chunk's distance from the eye
@@ -79,102 +74,6 @@ pub fn release_block(at: usize, bytes: u32) {
 #[allow(non_snake_case)]
 pub fn RETAIN_BUDGET_BYTES() -> f64 {
     crate::mem::section::map().map_or(0.0, |m| (m.heap.bytes / 2) as f64)
-}
-
-// ---- Sources ----
-
-static SOURCES_CHANGED: Global<bool> = Global::new();
-
-/// A chunk's sources changed somewhere — a column written, a setting a chunk
-/// paints with: the scheduler compares each chunk's own at its next turn
-/// (table.rs `Scheduler::sources_step`).
-pub fn chunk_sources_changed() {
-    *SOURCES_CHANGED.get(|| false) = true;
-}
-
-pub fn chunk_sources_step() {
-    if core::mem::take(SOURCES_CHANGED.get(|| false)) {
-        with_world(|world, sched| sched.sources_step(world));
-    }
-}
-
-/// Whether page `page_idx` has a terrain tile chunks can be mounted from.
-pub fn chunk_page(page: LevelPage, present: bool) {
-    kernel().sched.page(page, present);
-}
-
-/// Whether a chunk of `level` at `base` draws the objects of column `col`
-/// in its tiers: its own column's for a leaf chunk, and every column under a
-/// level chunk and its apron, since what it draws is all of theirs folded.
-pub fn tiers_draw(level: u32, base: IVec, col: IVec) -> bool {
-    if level == 0 {
-        col == L2_IDX(base)
-    } else {
-        folds_into(level, base, col)
-    }
-}
-
-/// Whether a chunk of `level` at `base` draws the placed decor of column
-/// `col`: the columns whose corner lies in it.
-pub fn decor_draws(level: u32, base: IVec, col: IVec) -> bool {
-    let span = chunk_span_of(level) as i64;
-    let o = FROM_L2_IDX(col);
-    (ivec::X(base)..ivec::X(base) + span).contains(&ivec::X(o)) && (ivec::Y(base)..ivec::Y(base) + span).contains(&ivec::Y(o))
-}
-
-/// A chunk as the change log keys it: its coordinate among its level's
-/// chunks and its level, in one word.
-fn chunk_key(level: u32, base: IVec) -> i64 {
-    let [x, y] = PyramidChunk::of(level, &Pvf3 { i: base, f: 0 }).node().1;
-    ivec::gather(x, y, level as i64) as i64
-}
-
-/// What a chunk's objects are made of, as a revision: its column's for a
-/// leaf chunk, and for a level chunk the one every column its tiers draw
-/// moves (`column_written`).
-pub fn objects_revision_of(level: u32, base: IVec) -> u32 {
-    if level == 0 {
-        return object_col_revision(L2_IDX(base));
-    }
-    world_changes().revision_of(TIERS_CHUNK, chunk_key(level, base))
-}
-
-/// What a chunk's placed decor is made of, as a revision, the same way.
-pub fn decor_revision_of(level: u32, base: IVec) -> u32 {
-    if level == 0 {
-        return object_col_revision(L2_IDX(base));
-    }
-    world_changes().revision_of(DECOR_CHUNK, chunk_key(level, base))
-}
-
-/// A write to column `col`: every chunk above z16 that draws it moves, in
-/// its tiers or its decor. Its tiers' are the chunk the column lies in and,
-/// through the apron a fold reads, its neighbours; its decor's the one it
-/// lies in.
-pub fn column_written(col: IVec) {
-    let corner = Pvf3 { i: FROM_L2_IDX(col), f: 0 };
-    for level in 1..=TOP_LEVEL {
-        let home = PyramidChunk::of(level, &corner);
-        for (dx, dy) in (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy))) {
-            let base = home.beside(dx, dy).base().i;
-            if tiers_draw(level, base, col) {
-                bump_world(TIERS_CHUNK, chunk_key(level, base) as u64);
-            }
-            if decor_draws(level, base, col) {
-                bump_world(DECOR_CHUNK, chunk_key(level, base) as u64);
-            }
-        }
-    }
-}
-
-/// Whether the objects of column `col` fold into the level-`level` chunk at
-/// `base`: its own cells, and the one-cell apron around them a fold reads.
-fn folds_into(level: u32, base: IVec, col: IVec) -> bool {
-    // In cells of the level: the chunk's with its apron, and the first and
-    // last a column, a leaf chunk, reaches.
-    let (cell, o, last) = (GROUND.scale(level), FROM_L2_IDX(col), i64::from(L1.count_in(L2)) - 1);
-    let across = |b: i64, o: i64| cell.index(o) <= cell.index(b) + CHUNK_CELLS as i64 && cell.index(o + last) >= cell.index(b) - 1;
-    across(ivec::X(base), ivec::X(o)) && across(ivec::Y(base), ivec::Y(o))
 }
 
 // ---- the build as the kernel runs it ----
@@ -911,7 +810,7 @@ impl Builder {
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         let mut columns = Vec::new();
         for key in world.store.cols() {
-            if !folds_into(level, base, key) {
+            if !tiers_draw(level, base, key) {
                 continue;
             }
             let o = FROM_L2_IDX(key);

@@ -31,7 +31,7 @@ use crate::layer::object::store::{clear_virtual_carve_preview, get_placed_object
 use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::change::request_world_tick;
-use crate::world::chunk::node::World;
+use crate::world::chunk::build::World;
 use crate::world::frame::coord::local_world_origin;
 
 #[derive(Clone, Debug, PartialEq)]

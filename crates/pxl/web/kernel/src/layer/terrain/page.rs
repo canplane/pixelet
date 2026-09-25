@@ -31,7 +31,7 @@ use crate::layer::terrain::fixed::{ele_at, ground_at, record_ele_at, record_grou
 use crate::layer::terrain::ground_snap::reground_map_center;
 use crate::mem;
 use crate::shell::map_store::{map_store, MapStatus};
-use crate::world::chunk::node::chunk_page;
+use crate::world::chunk::source::chunk_page;
 use crate::world::pyramid::domain::eye;
 use crate::world::pyramid::{Cover, Domain, Layer, Pyramid};
 

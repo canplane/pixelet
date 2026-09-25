@@ -19,7 +19,7 @@ use pxl_spec::space::pyramid::CHUNK_CELLS;
 use pxl_spec::space::v3::V3;
 
 use crate::kernel::kernel;
-use crate::world::chunk::node::World;
+use crate::world::chunk::build::World;
 use crate::world::chunk::table::Scheduler;
 
 /// A chunk's side, in units.

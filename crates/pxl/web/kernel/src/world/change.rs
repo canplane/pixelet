@@ -20,7 +20,7 @@ use crate::kernel::kernel;
 /// What a column stores (object/store.rs), keyed by column index.
 pub const OBJECT_COLUMN: Topic = 0;
 /// What a chunk above z16 draws of the objects in its tiers and in its
-/// decor, keyed by the chunk (world/chunk/node.rs `chunk_key`): moved by a
+/// decor, keyed by the chunk (world/chunk/source.rs `chunk_key`): moved by a
 /// write to any column it draws, so a chunk reads one revision rather than
 /// summing its columns'.
 pub const TIERS_CHUNK: Topic = 1;

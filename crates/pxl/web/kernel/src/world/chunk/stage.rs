@@ -22,7 +22,7 @@ use crate::sched::ledger::record::{
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::shell::setting::store::settings_store;
 use crate::world::change::{request_world_tick, world_edge};
-use crate::world::chunk::node::RETAIN_BUDGET_BYTES;
+use crate::world::chunk::build::RETAIN_BUDGET_BYTES;
 use crate::world::chunk::table::{builds, Census, Frame};
 use crate::world::frame::view::{view, view_resize};
 use crate::world::pyramid::Layer;
@@ -210,7 +210,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let Some(chunks_ms) = c.visible_pass else { return };
     let frame_t0 = ctx.budget.t0;
     let census = kernel().sched.census;
-    let node_work = kernel().sched.take_counts();
+    let counts = kernel().sched.take_counts();
     let host = c.host.clone();
     let mut pages = PageSample::default();
     for (level, n) in pages.by_level.iter_mut().enumerate() {
@@ -235,9 +235,9 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         gpu,
         device: host.device,
         mounts: MountSample {
-            added: node_work.added as f64,
-            removed: node_work.removed as f64,
-            layouts: node_work.layouts as f64,
+            added: counts.added as f64,
+            removed: counts.removed as f64,
+            layouts: counts.layouts as f64,
         },
         lod: LodSample {
             chunks: census.chunks as f64,

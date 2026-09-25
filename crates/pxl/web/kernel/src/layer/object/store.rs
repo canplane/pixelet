@@ -44,7 +44,7 @@ use crate::kernel::kernel;
 use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::setting::store::hidden_ground;
 use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
-use crate::world::chunk::node::{chunk_sources_changed, column_written};
+use crate::world::chunk::source::{chunk_sources_changed, column_written};
 use crate::world::frame::coord::local_world_to_canonical;
 
 /// What a leaf holds, past its corner and size. A solid is the catalog's own

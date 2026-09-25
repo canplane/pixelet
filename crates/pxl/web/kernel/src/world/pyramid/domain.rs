@@ -39,7 +39,7 @@ use crate::layer::environment::state::globe;
 use crate::layer::object::store::objects_revision;
 use crate::layer::terrain::relief::range_over;
 use crate::shell::map_store::map_store;
-use crate::world::chunk::node::MAX_CHUNKS;
+use crate::world::chunk::build::MAX_CHUNKS;
 use crate::world::frame::view::view;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
@@ -77,7 +77,7 @@ pub const LEVEL_CHUNKS: u32 = {
 };
 
 /// The most chunks a view draws at once. A quarter of the chunk table
-/// (world/chunk/node.rs `MAX_CHUNKS`): where nothing over a piece of ground
+/// (world/chunk/build.rs `MAX_CHUNKS`): where nothing over a piece of ground
 /// is held, the pages a level under it stand in, four chunks for its one
 /// (layer/terrain/present.rs), and the table holds even that.
 pub const VIEW_CHUNKS: u32 = MAX_CHUNKS as u32 / 4;
