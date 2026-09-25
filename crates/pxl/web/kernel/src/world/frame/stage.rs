@@ -31,12 +31,14 @@ use crate::sched::ledger::record::{DeviceSample, DrawCensus, GpuSample, CENSUS_L
 use crate::shell::setting::store::{settings_store, AoMode};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::stage::{set_host_frame_stat, HostFrameStat};
+use crate::world::frame::resolution::resolution_observe;
 use crate::world::frame::view::view;
 
 const MB: f64 = 1_048_576.0;
 
-/// Writes the frame's uniforms from the view and the settings as they stand.
-pub fn stage_write() {
+/// Writes the frame's uniforms from the view and the settings as they stand,
+/// the world drawn at `resolution` device pixels to a CSS pixel.
+pub fn stage_write(resolution: f64) {
     let v = view();
     let settings = settings_store();
     let s = stage_lane_mut();
@@ -63,6 +65,7 @@ pub fn stage_write() {
     s[STAGE_AT::EDGE_WIDTH] = EDGE_WIDTH;
     s[STAGE_AT::RIM_INTENSITY] = if settings.show_rim_light { rim_cfg::INTENSITY } else { 0.0 };
     s[STAGE_AT::SHADOWS] = if settings.show_shadow_map { 1.0 } else { 0.0 };
+    s[STAGE_AT::RESOLUTION] = resolution;
 }
 
 /// The turn's draw: the stage's frame handed to the renderer with the
@@ -105,6 +108,7 @@ pub fn stage_render() {
         request_world_tick();
     }
     let Some(stat) = out.stat else { return };
+    resolution_observe(stat.gpu_ms);
     let mut census: DrawCensus = Default::default();
     census.copy_from_slice(&stat.census[..CENSUS_LEN]);
     set_host_frame_stat(HostFrameStat {

@@ -58,6 +58,9 @@ pub mod STAGE_AT {
     /// The map origin the root frame is relative to, east and north, in
     /// units (2): where the clouds are anchored to the ground.
     pub const ORIGIN: usize = 69;
+    /// The device pixels the world's surface is drawn at to a CSS pixel,
+    /// as the kernel's resolution chose them this frame.
+    pub const RESOLUTION: usize = 71;
 }
 
 static STAGE: Global<[f64; STAGE_WORDS]> = Global::new();

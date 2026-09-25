@@ -72,6 +72,21 @@
     "quality": {
       "section_title": "Graphics Quality",
       "section_caption": "Adjust visual clarity and detail",
+      "resolution": {
+        "label": "Resolution",
+        "auto": {
+          "label": "Auto",
+          "description": "Draws at the device's resolution, lowering it for a while when frames stutter and restoring it once there is room."
+        },
+        "fixed": {
+          "label": "Fixed",
+          "description": "Always draws at the device's resolution. Sharpest, but may stutter on slower devices."
+        },
+        "low": {
+          "label": "Low",
+          "description": "Draws at a lower resolution to save battery and heat. Looks a little softer."
+        }
+      },
       "lod_crossfade": {
         "label": "LOD Crossfade",
         "description": "Blocks fade into their new level of detail as you zoom or move, instead of switching at once. Draws the changing blocks twice while they fade."

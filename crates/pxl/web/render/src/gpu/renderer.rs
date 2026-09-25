@@ -1157,7 +1157,10 @@ impl Renderer {
 /// SETTLE_TURNS turns — until then the buffer it has is drawn and the page
 /// scales it.
 fn targets(g: &GpuApi, s: &mut Surface) {
-    let (width, height) = s.buffer_px();
+    // The world's surface at what the kernel's resolution chose; a case at
+    // the device's own.
+    let ratio = (s.role == surface_role::WORLD).then(|| stage_lane()[STAGE_AT::RESOLUTION]).filter(|r| *r > 0.0);
+    let (width, height) = s.buffer_px(ratio);
     if !s.configured {
         (g.configure)(s.handle);
         s.configured = true;

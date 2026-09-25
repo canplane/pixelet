@@ -34,6 +34,19 @@
       "own. Which rows exist in a build is the rows' `dev`, not this."
     ]
   },
+  "RESOLUTION_MODES": {
+    "$value": ["auto", "fixed", "low"],
+    "$doc": [
+      "How many device pixels the world is drawn at to a CSS pixel.",
+      "",
+      "  auto  — the device's, at most two, lowered while the frames run over",
+      "          their budget — the display's interval, no tighter than a",
+      "          sixtieth of a second — and raised again once they have room",
+      "          (crates/pxl/web/kernel/src/world/frame/resolution.rs).",
+      "  fixed — the device's, at most two, whatever the frames cost.",
+      "  low   — one."
+    ]
+  },
   "CAMERA_TERRAIN_MODES": {
     "$value": ["through", "stop", "climb"],
     "$doc": [
@@ -199,6 +212,16 @@
       "section": "lighting",
       "dev": true,
       "cost": "high"
+    },
+    "resolution": {
+      "$doc": [
+        "The pixels the world is filled at, the GPU's largest cost: two to a",
+        "CSS pixel is four times the fragments of one. RESOLUTION_MODES says each."
+      ],
+      "kind": "choice",
+      "default": "auto",
+      "options": "RESOLUTION_MODES",
+      "section": "quality"
     },
     "lod_crossfade": {
       "$doc": [
