@@ -67,10 +67,14 @@ pub const fn split_distance(level: i32) -> f64 {
 /// point.
 const LEVEL_REACH_CELLS: f64 = 2.0 * SPLIT + 2.0 * SQRT_2 * CHUNK_CELLS as f64;
 
-/// The most chunks one level draws: every chunk with ground inside that
-/// reach, a disc widened by a chunk's diagonal. What z16's own tier is sized
-/// for in the mesh arena (world/chunk/mesh_slot.rs), derived rather than
-/// set; a loosened criterion only draws fewer.
+/// The chunks one level draws over flat ground: every chunk with ground
+/// inside that reach, a disc widened by a chunk's diagonal. What z16's own
+/// tier is sized for in the mesh arena (world/chunk/mesh_slot.rs). It is not
+/// a bound the rule keeps by itself: a chunk is a cube, and ground steep
+/// enough to cross a chunk's floor or ceiling is two of them a column, so a
+/// mountain wants more. The view is held to it instead — the seen z16 chunks
+/// are counted with the budget, and where they are more the criterion is
+/// loosened (`domain_for`) — so z16's pool is fixed and never waited on.
 pub const LEVEL_CHUNKS: u32 = {
     let r = LEVEL_REACH_CELLS / CHUNK_CELLS as f64 + SQRT_2;
     (PI * r * r) as u32 + 1
@@ -291,8 +295,9 @@ pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>, pressure: u3
     let (mut measured, mut kids) = (HashMap::new(), HashMap::new());
     let mut at = |d: &mut Domain, step: i32| {
         d.scale = (-(pressure as f64) - step as f64 / SCALE_STEPS as f64).exp2();
-        (d.chunks, d.pages) = d.select(&mut measured, &mut kids);
-        d.chunks <= VIEW_CHUNKS && d.pages.len() as u32 <= VIEW_PAGES
+        let z16;
+        (d.chunks, z16, d.pages) = d.select(&mut measured, &mut kids);
+        d.chunks <= VIEW_CHUNKS && z16 <= LEVEL_CHUNKS && d.pages.len() as u32 <= VIEW_PAGES
     };
     let last = *STEP.get(|| 0);
     let fits = (0..MAX_STEP).find(|&step| at(&mut d, step)).unwrap_or(MAX_STEP);
@@ -546,8 +551,8 @@ impl Domain {
     /// The chunks the rule draws under this view's criterion, counted, and
     /// the pages that takes (`pages`), each chunk's measure kept in
     /// `measured` for the next count.
-    fn select(&self, measured: &mut HashMap<Chunk, Order>, kids: &mut HashMap<Chunk, Vec<Chunk>>) -> (u32, BTreeMap<LevelPage, Option<Order>>) {
-        let mut chunks = 0;
+    fn select(&self, measured: &mut HashMap<Chunk, Order>, kids: &mut HashMap<Chunk, Vec<Chunk>>) -> (u32, u32, BTreeMap<LevelPage, Option<Order>>) {
+        let (mut chunks, mut z16) = (0, 0);
         let mut pages = BTreeMap::new();
         let mut open = self.roots.clone();
         while let Some(c) = open.pop() {
@@ -557,6 +562,7 @@ impl Domain {
                 continue;
             }
             chunks += 1;
+            z16 += u32::from(c.level() == 0 && m.seen);
             let first = pages.entry(c.page()).or_insert(Some(m));
             if first.is_some_and(|o| m.cmp(&o).is_lt()) {
                 *first = Some(m);
@@ -573,7 +579,7 @@ impl Domain {
                 pages.insert(up, None);
             }
         }
-        (chunks, pages)
+        (chunks, z16, pages)
     }
 
     /// Every page the view wants, and where the ground drawn at its level

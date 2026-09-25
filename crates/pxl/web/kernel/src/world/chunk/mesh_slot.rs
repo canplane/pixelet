@@ -55,8 +55,9 @@ use pxl_render::look::lod::COARSEST;
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_spec::space::pyramid::CHUNK_CELLS;
 
-/// Slots a group holds: the most chunks one level draws, which is what the
-/// leaves' own tier needs, since only z16 draws it.
+/// Slots a group holds: the z16 chunks a view is held to seeing at once
+/// (domain.rs `LEVEL_CHUNKS`), which is what the leaves' own tier needs,
+/// since only z16 draws it and only where it is seen.
 const SLOTS: u32 = LEVEL_CHUNKS;
 /// Boxes a leaf's first tier holds, the one tier drawn at a leaf's own cells:
 /// one a column. The ground is a heightfield, so a column of it is one run

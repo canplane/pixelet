@@ -81,10 +81,11 @@ const MAX_RELEASES_WHEN_REFUSED: u32 = 64;
 const MAX_RECLAIMS_PER_FRAME: u32 = 16;
 const MAX_RECLAIMS_WHEN_REFUSED: u32 = 64;
 /// Chunks mounted in one frame, which is a frame's worth of work: each is a
-/// slot and a build told its sources. A page comes into range as 64 of them,
-/// so one page is mounted in the frame it arrives in.
-const MAX_MOUNTS_PER_FRAME: u32 = 64;
-const _: () = assert!(MAX_MOUNTS_PER_FRAME == PAGE_CHUNKS * PAGE_CHUNKS, "a page mounts in the frame it arrives in");
+/// slot and a build told its sources. A product number, said aloud: a page's
+/// columns, so a page of flat ground is mounted in the frame it arrives in;
+/// a page of steep ground is more chunks than its columns, and those beyond
+/// go the next frame, nearest first.
+const MAX_MOUNTS_PER_FRAME: u32 = PAGE_CHUNKS * PAGE_CHUNKS;
 
 /// The widest selection there is: the chunks a view draws (domain.rs
 /// `VIEW_CHUNKS`), each in its own place whether its page has come or a page
