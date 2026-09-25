@@ -10,9 +10,9 @@
 //! a sparse octree per 64³ band whose leaves are catalog values — and,
 //! derived from them a column at a time, the column's entries as three lanes
 //! in an order a cell's are one run of. A coordinate is lowered here to a
-//! column key, a band and a lattice position, and what comes back is lanes. What this module
-//! adds is the eraser's two virtual edits, the change log's bumps, and the
-//! persisted form in the host's storage.
+//! column key, a band and a lattice position, and what comes back is lanes.
+//! What this module adds is the eraser's two virtual edits, the change log's
+//! bumps, and the persisted form in the host's storage.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 

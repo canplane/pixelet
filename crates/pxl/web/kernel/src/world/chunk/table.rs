@@ -1012,9 +1012,11 @@ impl Scheduler {
             // step no kind is drawn at has no block. The setting is the
             // scatter's alone: what the user placed is drawn whatever it says.
             let world_step = GROUND.scale(0).count_in(cube.max(GROUND.scale(0)));
+            // Every column whose corner lies in the chunk: its own, at z16.
+            let cols = world.store.cols_under(self.slots[i].chunk.node());
             let drawn = |k: &&DecorKind| decor_density(k.extent, world_step) > 0.0;
             let scatters = show_decor && self.decor_kinds.iter().filter(drawn).any(|k| k.density > 0.0);
-            let places = self.decor_kinds.iter().filter(drawn).any(|k| k.decor_value.is_some());
+            let places = !cols.is_empty() && self.decor_kinds.iter().filter(drawn).any(|k| k.decor_value.is_some());
             if !scatters && !places {
                 continue;
             }
@@ -1025,10 +1027,7 @@ impl Scheduler {
                     self.decor_sample.read(view, world.materials, tx0, ty0, hidden_ground(show));
                 }
             }
-            // Every column whose corner lies in the chunk: its own, at z16.
-            let placed: Vec<Placed> = world
-                .store
-                .cols_under(self.slots[i].chunk.node())
+            let placed: Vec<Placed> = cols
                 .into_iter()
                 .map(|col_idx| {
                     let o = FROM_L2_IDX(col_idx);
