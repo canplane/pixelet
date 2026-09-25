@@ -576,13 +576,6 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
             ui::go_to_degrees(p.lon, p.lat);
             applied(s)
         }
-        Command::INPUT_POI_FOCUS => {
-            let p = abi::InputPoiFocus::read(packet(pkt)?)?;
-            if !pxl_kernel::layer::poi::placement::focus(p.page, p.index) {
-                return Err(MarshalError::new(Errno::EINVAL, Some("a badge's cell that is no cell"), None));
-            }
-            applied(s)
-        }
         Command::SENSOR_UPDATE => {
             let p = abi::SensorUpdate::read(packet(pkt)?)?;
             geolocation::geolocation_fix(p.lon, p.lat, p.altitude, p.accuracy, p.heading);

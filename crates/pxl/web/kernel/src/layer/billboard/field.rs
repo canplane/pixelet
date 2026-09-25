@@ -15,7 +15,7 @@ use pxl_render::gpu::api::word_bytes;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::abi::handle::Slots;
 
-use crate::io::load::Models;
+use crate::layer::model::store::Models;
 use crate::world::chunk::node::World;
 
 /// Floats an instance takes: its anchor relative to the set's (3), its

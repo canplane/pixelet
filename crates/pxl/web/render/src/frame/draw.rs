@@ -51,7 +51,7 @@ pub const PIPELINE_GHOST_DECOR: u32 = 4;
 /// (3), UV (2), joints (4, as u32), weights (4); the indices follow the
 /// vertex lanes.
 pub const MODEL_VERTEX_WORDS: u32 = 16;
-/// An actor (crates/pxl/web/kernel/src/io/load.rs): words (the model's handle, the joint palette's
+/// An actor (crates/pxl/web/kernel/src/layer/model/store.rs): words (the model's handle, the joint palette's
 /// handle, the model id, uniform, pipeline), its uniform's fourth float the
 /// turn about Z.
 pub const PIPELINE_SKINNED: u32 = 5;
@@ -198,10 +198,13 @@ impl DrawList {
     }
 
     /// A decor group's instances: `offset` is the group's first lane word in
-    /// the block (crates/pxl/web/kernel/src/layer/decor/build.rs's layout), exact in a float to 2^24 words.
-    pub fn draw_decor(&mut self, handle: u32, group: u32, count: u32, offset: u32, translation: [f32; 3]) {
+    /// the block (crates/pxl/web/kernel/src/layer/decor/build.rs's layout), exact in a float to 2^24 words,
+    /// and `visible` the share of a dissolve they are drawn over, as a
+    /// chunk's tier is (`draw_arena`).
+    pub fn draw_decor(&mut self, handle: u32, group: u32, count: u32, offset: u32, translation: [f32; 3], visible: f32) {
         let uniform = (self.uniforms.len() / UNIFORM_FLOATS) as u32;
-        self.uniforms.extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, 1.0, 0.0, 0.0, 0.0]);
+        self.uniforms
+            .extend_from_slice(&[translation[0], translation[1], translation[2], offset as f32, 1.0, visible, 0.0, 0.0]);
         self.draws.extend_from_slice(&[handle, group, count, uniform, PIPELINE_DECOR]);
     }
 

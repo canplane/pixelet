@@ -2,12 +2,12 @@
 
 //! Every decor kind's loaded models and skins, as a plain module store.
 //!
-//! Arrival is a change like any other: each model or skin that lands is a bump
-//! on the world change log's decor-asset topic, and whoever draws the decor
-//! re-reads the snapshot at the tick's pump.
+//! Whoever draws the decor reads the store itself each tick, so an arrival
+//! needs no record of its own: each model or skin that lands asks for the
+//! frame that draws it.
 //!
 //! A model is registered with the scheduler's models as it arrives
-//! (io/model_asset.rs), so the kernel holds its triangles for the
+//! (layer/model/asset.rs), so the kernel holds its triangles for the
 //! eraser's hit test (crates/pxl/web/kernel/src/world/chunk/raycast.rs) and the renderer
 //! draws its instances from the same lanes; the group it is drawn as is its
 //! variant's place across every kind, in registry order. The registering is
@@ -17,12 +17,13 @@ use pxl_spec::asset::ingested::Asset;
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::global::Global;
+use crate::host::heap_stat;
 use crate::io::load::{load_failed, load_gltf, load_image, Load};
-use crate::io::model_asset::register_model;
 use crate::kernel::kernel;
 use crate::layer::decor::build::DecorKindBundle;
 use crate::layer::decor::registry::DECOR_BUNDLES;
-use crate::world::change::{bump_world, world_edge, DECOR_ASSET};
+use crate::layer::model::asset::register_model;
+use crate::world::change::{request_world_tick, world_edge};
 
 /// Variants a kind has room for; kind.rs's largest kind has nine.
 const VARIANTS: usize = 16;
@@ -40,40 +41,34 @@ struct Store {
     /// One entry per kind, in registry order, written in place as its
     /// variants' assets arrive: the snapshot is the store itself.
     entries: [DecorBundleAssets; 4],
-    /// Set when a model or a skin arrives or fails, and kept while a model the
-    /// heap refused is still waiting for room.
-    arrived: bool,
+    /// The heap's release count when it last refused a model: until a block
+    /// is given back, the same model meets the same heap, and it is not tried.
+    refused: Option<u32>,
 }
 
 static STORE: Global<Store> = Global::new();
 
 /// Writes what arrived for `asset` into every variant naming it, across every
 /// kind: two kinds may name the same model or the same skin, and both should
-/// reach one object.
+/// reach one object. A model is told to the scheduler as the group each
+/// variant naming it is drawn as — its place across every kind — for its hit
+/// test; and the frame that draws what arrived is asked for.
 fn settle(entries: &mut [DecorBundleAssets], asset: Asset, value: u32, skin: bool) {
+    let mut group = 0u32;
     for entry in entries {
         for (v, variant) in entry.bundle.variants.iter().enumerate() {
             match skin {
                 true if variant.skin == asset => entry.skins[v] = Some(value),
-                false if variant.model == asset => entry.models[v] = Some(value),
+                false if variant.model == asset => {
+                    entry.models[v] = Some(value);
+                    kernel().sched.decor_model(group, value);
+                }
                 _ => {}
-            }
-        }
-    }
-}
-
-fn publish(s: &mut Store, asset: Asset) {
-    // The group each variant is drawn as, told to the scheduler for its hit test.
-    let mut group = 0u32;
-    for entry in &s.entries {
-        for model in &entry.models {
-            if let Some(m) = model {
-                kernel().sched.decor_model(group, *m);
             }
             group += 1;
         }
     }
-    bump_world(DECOR_ASSET, asset as u64);
+    request_world_tick();
 }
 
 fn store() -> &'static mut Store {
@@ -90,14 +85,9 @@ fn store() -> &'static mut Store {
         };
         Store {
             entries: DECOR_BUNDLES().each_ref().map(entry),
-            arrived: true,
+            refused: None,
         }
     })
-}
-
-/// A model or a skin arrived or failed.
-pub fn decor_assets_arrived() {
-    store().arrived = true;
 }
 
 static WANTED: Global<Notify> = Global::new();
@@ -106,23 +96,28 @@ fn wanted() -> &'static mut Notify {
     WANTED.get(Notify::new)
 }
 
-/// The frame's check: something arrived since the task last ran, so the task
-/// is asked to run.
+/// A model or a skin arrived or failed: the task looks at once.
+pub fn decor_assets_arrived() {
+    wanted().notify();
+}
+
+/// The frame's check: a model the heap refused is tried again once the heap
+/// has given a block back.
 pub fn decor_assets_wanted() {
-    if store().arrived {
+    let s = store();
+    if s.refused.is_some_and(|r| r != heap_stat().releases) {
+        s.refused = None;
         wanted().notify();
     }
 }
 
 /// The store's task: asks for every variant's model and skin, and registers
-/// whatever arrived, a variant at a time on a turn's quota.
+/// whatever arrived, a variant at a time on a turn's quota — at once, which
+/// asks for them all, and again whenever something arrives or the heap has
+/// room for a model it refused.
 pub async fn decor_asset_task() {
     loop {
-        notified(wanted).await;
-        store().arrived = false;
-        // A model the heap had no room for: the flag is set again, and
-        // the frame after — which may have room — asks again.
-        let mut refused = false;
+        let mut refused = None;
         for b in 0..store().entries.len() {
             let bundle = store().entries[b].bundle;
             for (v, variant) in bundle.variants.iter().enumerate() {
@@ -132,25 +127,22 @@ pub async fn decor_asset_task() {
                 if s.entries[b].models[v].is_none() && !load_failed(model) {
                     if let Some(gltf) = load_gltf(model) {
                         match register_model(&gltf, None) {
-                            Some(handle) => {
-                                settle(&mut s.entries, variant.model, handle.model, false);
-                                publish(s, variant.model);
+                            Some(handle) => settle(&mut s.entries, variant.model, handle.model, false),
+                            None => {
+                                refused.get_or_insert(heap_stat().releases);
                             }
-                            None => refused = true,
                         }
                     }
                 }
                 if s.entries[b].skins[v].is_none() && !load_failed(skin) {
                     if let Some(image) = load_image(skin) {
                         settle(&mut s.entries, variant.skin, image, true);
-                        publish(s, variant.skin);
                     }
                 }
             }
         }
-        if refused {
-            store().arrived = true;
-        }
+        store().refused = refused;
+        notified(wanted).await;
     }
 }
 

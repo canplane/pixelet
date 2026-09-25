@@ -96,7 +96,7 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
 /// The places a drawn chunk counts: those of its source page — its own, or
 /// the one over it that settles it — whose cell stands on the chunk's ground.
 fn count(pyramid: &Pyramid<PoiPage>, c: Chunk) -> u32 {
-    let src = pyramid.source(c.page).expect("a drawn chunk has a page that draws it");
+    let src = pyramid.source(c.page()).expect("a drawn chunk has a page that draws it");
     let page = pyramid.get(src).expect("a source is resident");
     page.cells
         .iter()
@@ -149,8 +149,8 @@ fn a_parent_gives_way_only_to_all_of_its_children() {
     let parent = d.roots().iter().copied().find(|&c| d.splits(c)).expect("the top level holds ground wanted finer");
     let under = parent.children();
     let mut pyramid = Pyramid::<PoiPage>::default();
-    pyramid.set(parent.page, PoiPage::default());
-    pyramid.set(under[0].page, PoiPage::default());
+    pyramid.set(parent.page(), PoiPage::default());
+    pyramid.set(under[0].page(), PoiPage::default());
     let drawn: Vec<Chunk> = pyramid.cover_of(&d).drawn;
     let here = |c: Chunk| drawn.contains(&c);
     // The children lie in one page, so a finer page resident is all four of
@@ -186,7 +186,7 @@ fn a_stand_in_reaches_as_far_down_as_there_are_pages() {
     let grand: Vec<Chunk> = c.children().iter().flat_map(|k| k.children()).collect();
     let mut pyramid = Pyramid::<PoiPage>::default();
     for g in &grand {
-        pyramid.set(g.page, PoiPage::default());
+        pyramid.set(g.page(), PoiPage::default());
     }
     let cover = pyramid.cover_of(&d);
     assert!(grand.iter().all(|g| cover.drawn.contains(g)), "two levels down, all sixteen");
@@ -215,7 +215,7 @@ fn the_terrain_draws_its_cover_balanced_and_still_whole() {
                 pyramid.set(*p, page.clone());
             }
         }
-        let cover = crate::layer::terrain::present::mesh(pyramid.cover_of(&d), &d, |c| pyramid.get(c.page).is_some());
+        let cover = crate::layer::terrain::present::mesh(pyramid.cover_of(&d), &d, |c| pyramid.get(c.page()).is_some());
         for &c in &cover.drawn {
             let want = d.wanted_over(c);
             assert!(
@@ -248,11 +248,11 @@ fn a_gap_the_mesh_leaves_is_fetched_as_coverage() {
     for (p, page) in pages.iter().filter(|(p, _)| p.level == 2 || (p.level == 4 && ivec::X(p.page) % 2 == 0)) {
         pyramid.set(*p, page.clone());
     }
-    pyramid.cover = crate::layer::terrain::present::mesh(pyramid.cover_of(&d), &d, |c| pyramid.get(c.page).is_some());
+    pyramid.cover = crate::layer::terrain::present::mesh(pyramid.cover_of(&d), &d, |c| pyramid.get(c.page()).is_some());
     assert!(!pyramid.cover.gaps.is_empty(), "a residency with ground left open");
     for g in pyramid.cover.gaps.clone() {
-        if pyramid.get(g.page).is_none() && !pyramid.children_resident(g.page) {
-            assert_eq!(pyramid.resolve(g.page), Resolved::Missing, "{g:?}");
+        if pyramid.get(g.page()).is_none() && !pyramid.children_resident(g.page()) {
+            assert_eq!(pyramid.resolve(g.page()), Resolved::Missing, "{g:?}");
         }
     }
 }
@@ -356,10 +356,10 @@ fn ground_a_page_settles_is_drawn_from_it_and_never_asked_for() {
     assert!(cover.gaps.is_empty(), "{} gaps", cover.gaps.len());
     assert!(disjoint(&cover.drawn));
     for &c in &cover.drawn {
-        assert!(pyramid.source(c.page).is_some_and(|s| s.level == WINDOW.end), "{c:?} is drawn from the page over the window");
+        assert!(pyramid.source(c.page()).is_some_and(|s| s.level == WINDOW.end), "{c:?} is drawn from the page over the window");
     }
     for level in WINDOW {
-        for p in d.roots().iter().map(|r| r.page).filter(|p| p.level == level) {
+        for p in d.roots().iter().map(|r| r.page()).filter(|p| p.level == level) {
             assert!(pyramid.settled(p), "{p:?} is settled, so never asked for");
         }
     }

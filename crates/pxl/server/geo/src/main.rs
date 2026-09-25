@@ -6,9 +6,9 @@
 //! are served as static objects out of the bucket, while a free-text query
 //! has no such key and has to reach Postgres at request time.
 //!
-//! It answers under `/geo/`, one of the three roots spec/pxl/spec/route.json reserves:
+//! It answers under `/geo/`, one of the four roots spec/pxl/spec/route.json reserves:
 //! the world's data. The application's is `/api/`, which pxl-api answers, and
-//! the assets have their own. Each root is one prefix a relay reads and never a
+//! the baked pages and the assets have their own. Each root is one prefix a relay reads and never a
 //! route it enumerates (issue/20260910-one-server-root.md), and the two servers
 //! are separate processes because they read separate databases — see
 //! issue/20260918-the-server-in-rust-and-the-line-already-drawn.md.

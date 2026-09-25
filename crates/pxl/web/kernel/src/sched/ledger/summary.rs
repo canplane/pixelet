@@ -17,14 +17,14 @@
 use crate::global::Global;
 use crate::host::now;
 use crate::io::sched::{counts, credits};
-use crate::kernel::kernel;
+use crate::kernel::{kernel, with_world};
 use crate::layer::billboard::sheet::billboard_sheet;
 use crate::sched::ledger::block::{AtlasBlock, FetchBlock, FramesBlock, RecBlock, RetainBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
 use crate::sched::ledger::log::window_counters;
 use crate::sched::ledger::record::{fixed_lane, ledger_frame_peak, ledger_frames_since, ledger_recording_state, ledger_tasks_since, put, FrameSample, Outcome, TaskRow, FRAME_LIMIT, TASK_LIMIT};
 use crate::sched::ledger::spec::{LIMITS, SUMMARY, TASK_PHASE_NAMES};
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
-use crate::world::chunk::node::{chunk_retention, RETAIN_BUDGET_BYTES};
+use crate::world::chunk::node::RETAIN_BUDGET_BYTES;
 
 /// A gap this many display intervals long skipped a vsync.
 const MISSED_INTERVALS: f64 = 1.5;
@@ -231,13 +231,13 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let retain = chunk_retention(kernel().sched.builder_run_sets());
+    let retain = with_world(|world, sched| sched.retention(world)).unwrap_or_default();
     let census = kernel().sched.census;
     put(
         out,
         SUMMARY::retain::AT,
         &RetainBlock {
-            nodes: retain.nodes as f64,
+            nodes: retain.chunks as f64,
             run_sets: retain.run_sets as f64,
             run_set_mb: retain.run_set_mb as f64,
             tiers: retain.tiers as f64,

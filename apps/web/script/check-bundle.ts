@@ -55,12 +55,13 @@ const DEV_MARKERS = ["dev/test", "development"];
  * These have to be literals that survive minification, not paths the app
  * composes at runtime, and what survives is the whole branch the client
  * requests rather than the root it hangs off: spec/pxl/spec/route.json folds a branch
- * into one constant, so `"/geo/tiles"` reaches an artifact and `"/geo"` never
- * does.
+ * into one constant, so `"/geo/search"` reaches an artifact and `"/geo"` never
+ * does. A root the client requests whole, as it does the baked pages under
+ * `"/tile"`, reaches one as itself.
  *
  * Which artifact is the point of the split. A path is a literal in whichever
- * of the two asks for it, and asking moves — it has moved twice. The tiles
- * branch was the shell's until the kernel took over composing a page's URL, at
+ * of the two asks for it, and asking moves — it has moved twice. The tile
+ * address was the shell's until the kernel took over composing a page's URL, at
  * which point the shell's copy had no consumer, the bundler dropped it, and
  * this failed a deploy over a path that was present all along, in the other
  * file (2026-09-23). It is the shell's again now that the kernel names an
@@ -76,7 +77,7 @@ const DEV_MARKERS = ["dev/test", "development"];
  * KERNEL_SENTINELS is what no route names: the terrain's page names are the
  * kernel's own (world/pyramid.rs), so nothing generates them
  * and there is nothing to check them against. */
-const SENTINELS = ["/geo/search", "/geo/tiles"];
+const SENTINELS = ["/geo/search", "/tile"];
 // Empty, and kept rather than deleted: the generator's error when this list is
 // missing is what would catch a branch marked for the kernel with nothing here
 // to check it.

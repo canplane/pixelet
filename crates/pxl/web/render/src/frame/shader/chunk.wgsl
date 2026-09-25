@@ -16,7 +16,7 @@
 // `var<storage>` array, read in the vertex stage, on every device there is.
 struct Draw {
   // The mesh's corner in the frame's own space, and whether the draw shows:
-  // 0 or 1, and past 2 the same blend inverted (`fs`).
+  // 0 or 1, and past 2 the same blend inverted (dissolve.wgsl).
   place: vec4f,
   // The blend's opacity; the cell a box of this draw is measured in, in
   // units — a leaf's own cell is one, a tier's is its step, and a level's is
@@ -220,12 +220,6 @@ fn chunk_vertex(v: u32, words: BoxWords, fine: bool) -> VertexOut {
     o.box_uv = vec2f((local.x + 0.5) * size.x, (local.y + 0.5) * size.y);
   }
   return o;
-}
-
-// Interleaved gradient noise (Jimenez): screen-space on purpose, so a
-// cross-fade reads as a fade and not as a texture stuck to the surface.
-fn dither_threshold(frag: vec2f) -> f32 {
-  return fract(52.9829189 * fract(dot(frag, vec2f(0.06711056, 0.00583715))));
 }
 
 fn face_bit(faces: u32, bit: u32) -> bool {
@@ -443,11 +437,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
       + sample_tap(i.layer_taps.z, is_side, i.box_uv, ddx, ddy, i.rgb)
       + sample_tap(i.layer_taps.w, is_side, i.box_uv, ddx, ddy, i.rgb)) * 0.25;
   }
-  // The blend: an amount, or 2 + amount for the complementary pattern.
-  let inverted = d.place.w > 1.5;
-  let amount = select(d.place.w, d.place.w - 2.0, inverted);
-  let pattern = dither_threshold(i.clip.xy);
-  if (select(pattern >= amount, pattern < amount, inverted)) {
+  if (dissolved(d.place.w, i.clip.xy)) {
     discard;
   }
   var base = taps;

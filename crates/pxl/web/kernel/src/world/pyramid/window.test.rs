@@ -116,7 +116,7 @@ fn every_drawn_chunk_lies_between_its_split_distances_wherever_the_eye_stands() 
                     let parent = split_distance(level as i32 + 1) + chunk_span_of(level + 1) * SQRT_2;
                     assert!(farthest(eye.at, c, 0.0) <= parent, "{at}: farther than its parent could reach");
                 }
-                assert!(ring_of(eye.foot, c.page) <= HELD_AXIS / 2, "{at}: outside the ring held for it");
+                assert!(ring_of(eye.foot, c.page()) <= HELD_AXIS / 2, "{at}: outside the ring held for it");
             }
             for level in w.clone() {
                 let n = chunks.iter().filter(|c| c.level() == level).count() as u32;
@@ -145,7 +145,7 @@ fn the_chain_over_the_window_holds_every_root_s_ancestors_in_two_by_two_a_level(
                 assert!((1..=4).contains(&n), "height {height}: {n} pages at level {level}");
             }
             for &r in d.roots() {
-                let mut p = r.page;
+                let mut p = r.page();
                 while p.level < TOP_LEVEL {
                     p = p.parent();
                     assert!(chain.contains(&p), "height {height}: {p:?} over a root is not held");

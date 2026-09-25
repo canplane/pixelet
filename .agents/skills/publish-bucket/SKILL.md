@@ -8,7 +8,7 @@ description: Upload baked tiles, ingested models and textures to the R2 bucket t
 One private R2 bucket, `pixelet-tiles`, holds everything the client fetches
 that is not the app itself. One Cloudflare Worker (`apps/web/cloudflare-worker/index.ts`,
 `apps/web/wrangler.jsonc`) serves the built app and reads the bucket under
-`/geo/tiles/*` and `/asset/*` on the app's own hostname — same-origin, no CORS, and the
+`/tile/*` and `/asset/*` on the app's own hostname — same-origin, no CORS, and the
 client's paths stay relative. Producing what goes in is
 [bake-tiles](../bake-tiles/SKILL.md) and `asset/script`'s own ingest; this is
 how it gets there and how you know it arrived.
@@ -233,8 +233,8 @@ s5cmd --endpoint-url $R2 run /tmp/rekey-meta.txt
 check that it decodes rather than that a header is present:
 
 ```bash
-curl -s --compressed "https://plei.me/geo/tiles/poi/<v>/<quadkey>" | head -c 4                           # PXP5
-curl -s -H "Accept-Encoding: zstd" "https://plei.me/geo/tiles/terrain/<v>/<quadkey>" \
+curl -s --compressed "https://plei.me/tile/poi/<v>/<quadkey>" | head -c 4                           # PXP5
+curl -s -H "Accept-Encoding: zstd" "https://plei.me/tile/terrain/<v>/<quadkey>" \
   | zstd -dcq | head -c 2 | xxd -p                                                              # 5854
 ```
 
@@ -278,7 +278,7 @@ one-loop smoke test over every path the app takes.
 perfectly correct while the serving path is not:
 
 ```bash
-U=https://plei.me/geo/tiles/terrain/<version>/<quadkey>
+U=https://plei.me/tile/terrain/<version>/<quadkey>
 curl -s -H "Accept-Encoding: gzip, zstd" -D - -o /dev/null "$U"   # expect the manifest's content-encoding
 curl -s -H "Accept-Encoding: gzip, zstd" "$U" | zstd -dcq | head -c 2 | xxd -p   # zstd: expect 5854 (XT)
 curl -s --compressed "$U" | head -c 2 | xxd -p                  # gzip: expect 5854 (XT), never 1f8b
@@ -317,7 +317,7 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache
 # or by URL, up to 30 per call
 curl -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
   -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
-  --data '{"files":["https://plei.me/geo/tiles/poi/<version>/<quadkey>"]}'
+  --data '{"files":["https://plei.me/tile/poi/<version>/<quadkey>"]}'
 ```
 
 The token needs the `Zone → Cache Purge` permission; the zone ID is on the

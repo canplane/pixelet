@@ -17,10 +17,10 @@ use pxl_spec::space::pvf3::ivec;
 
 use crate::global::Global;
 use crate::io::load::{load_gltf, load_image, Load};
-use crate::io::model_asset::{register_model, ModelHandle};
 use crate::kernel::{kernel, with_world};
 use crate::layer::character::variant::{character_variant, CharacterGroup, CharacterVariant};
 use crate::layer::character::variant_spec::IDLE_CLIP;
+use crate::layer::model::asset::{register_model, ModelHandle};
 use crate::sched::tick::TickContext;
 use crate::world::change::request_world_tick;
 use crate::world::frame::coord::local_world_origin;

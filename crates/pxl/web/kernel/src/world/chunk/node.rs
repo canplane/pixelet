@@ -1,24 +1,16 @@
 // pxl-kernel/world/chunk/node.rs
 
-//! One chunk: the tiers and decor blocks it holds, and the build that makes
-//! them (the second half).
+//! A chunk's build: the builder that makes its tiers from what it is made
+//! of, and what says that changed.
 //!
-//! Every decision about a chunk is the scheduler's
-//! (crates/pxl/web/kernel/src/world/chunk/table.rs): whether it is on screen, which tiers it
-//! shows and how a blend weighs them, what to build and when, what to give back.
-//! What stays here is what the decisions act on and the sources they are made
-//! from: the tiers and decor blocks the scheduler handed over, held for exactly
-//! as long as it names them, and the revisions that say a chunk's sources
-//! changed.
-//!
-//! A block has one owner: this node, from the tier's arrival to the scheduler's
-//! evict of the tier (or the chunk's unmount, or its sources told again, when
-//! the scheduler lets every tier go at once). The scheduler draws from its own
-//! lists, so nothing here decides what is shown, and a block never has to
-//! outlive the scheduler's naming of it.
+//! Every decision about a chunk, and everything it holds — its tiers, its
+//! decor blocks, the sources they were made from — is the scheduler's
+//! (crates/pxl/web/kernel/src/world/chunk/table.rs). What is here acts on
+//! what it asks: the builder, the revisions a chunk's objects and decor are
+//! read as, and the flag that has the scheduler compare them.
 
 use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, PAGE_CELLS};
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::level::write_level_runs;
@@ -29,9 +21,8 @@ use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
 use pxl_spec::bake::constant::{pack_pos, BandZ, BAND, CELL, ELE_PADDED_SPAN, OBJECT_FINEST};
 use pxl_spec::bake::pack::GroundCell;
-use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L1, L2, L2_IDX};
+use pxl_spec::space::indexer::{FROM_L2_IDX, L1, L2, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use xpute_core::math::scalar::round;
 use xpute_runtime::mem::heap::{free, Block};
 
 use crate::global::Global;
@@ -42,7 +33,6 @@ use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::mesh_slot::BAKE_BYTES;
 use pxl_spec::bake::constant::BAND_CELLS;
 
-use crate::world::chunk::table::Event;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::hierarchy::Scale;
@@ -70,23 +60,6 @@ pub fn object_fold(cube: Cube) -> Scale {
     cube.clamp(OBJECT_FINEST, CELL)
 }
 
-/// A tier as the node holds it: its boxes, which lie on the device in the
-/// chunk's slot (mesh_slot.rs) and nowhere in the memory.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct MeshBlock {
-    pub box_cnt: u32,
-    /// What its boxes' heights are held in (pxl-render mesh/chunk_mesher.rs).
-    pub heights: Heights,
-}
-
-/// A chunk's decor at one tier: one heap block holding every
-/// group's lanes (layer/decor/instance.rs).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct DecorBlock {
-    pub at: usize,
-    pub bytes: u32,
-}
-
 /// Hands a block back to the heap. Every view into it is dead
 /// afterwards.
 pub fn release_block(at: usize, bytes: u32) {
@@ -106,341 +79,29 @@ pub fn RETAIN_BUDGET_BYTES() -> f64 {
     crate::mem::section::map().map_or(0.0, |m| (m.heap.bytes / 2) as f64)
 }
 
-// ---- Dev-only counters, read by the scheduler's frame sample ----
+// ---- Sources ----
 
-/// Chunks that appeared, disappeared, were laid out and were released since the
-/// last frame sample.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct NodeCounts {
-    pub added: u32,
-    pub removed: u32,
-    pub layouts: u32,
-    pub released: u32,
+static SOURCES_CHANGED: Global<bool> = Global::new();
+
+/// A chunk's sources changed somewhere — a column written, a setting a chunk
+/// paints with: the scheduler compares each chunk's own at its next turn
+/// (table.rs `Scheduler::sources_step`).
+pub fn chunk_sources_changed() {
+    *SOURCES_CHANGED.get(|| false) = true;
 }
 
-static NODE_COUNTS: Global<NodeCounts> = Global::new();
-
-fn node_counts() -> &'static mut NodeCounts {
-    NODE_COUNTS.get(NodeCounts::default)
-}
-
-pub fn take_node_counts() -> NodeCounts {
-    core::mem::take(node_counts())
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ChunkRetention {
-    pub nodes: u32,
-    /// Nodes holding a run set, and what those sets cost in the heap.
-    pub run_sets: u32,
-    pub run_set_mb: u32,
-    /// Built tiers held across every node's cache.
-    pub tiers: u32,
-    /// Decor: cached per-tier blocks.
-    pub decor_steps: u32,
-    /// The instances those blocks hold, which is what they cost to draw.
-    pub decor_instances: u32,
-}
-
-// ---- The live chunks ----
-
-struct Nodes {
-    nodes: HashMap<u32, ChunkNode>,
-    /// Set where a chunk's sources change — a column written, a terrain page
-    /// come or gone, the two settings a chunk paints with — and taken when
-    /// the nodes next look at their own.
-    sources_changed: bool,
-    /// Chunks whose layout named tiers they do not hold, rebuilt after the
-    /// events that found it — a rebuild would re-enter them.
-    rebuild: Vec<u32>,
-}
-
-static NODES: Global<Nodes> = Global::new();
-
-fn nodes() -> &'static mut Nodes {
-    NODES.get(|| Nodes {
-        nodes: HashMap::new(),
-        sources_changed: false,
-        rebuild: Vec::new(),
-    })
-}
-
-/// Every live node by the scheduler's id.
-pub fn chunk_nodes() -> &'static HashMap<u32, ChunkNode> {
-    &nodes().nodes
-}
-
-/// What the chunk nodes hold, with the run sets `.fixed.runs` has lent as the
-/// builder counts them (`Builder::run_sets`).
-pub fn chunk_retention(run_sets: (u32, u32)) -> ChunkRetention {
-    let mut out = ChunkRetention::default();
-    let (held, run_bytes) = run_sets;
-    out.run_sets = held;
-    for node in nodes().nodes.values() {
-        out.nodes += 1;
-        out.tiers += node.tiers.len() as u32;
-        out.decor_steps += node.decor_cache.len() as u32;
-        for d in node.decor_cache.values() {
-            // SAFETY: the block the scheduler wrote at `at`, `bytes` long, held
-            // for as long as the node holds this decor.
-            let words: &[u32] = unsafe { core::slice::from_raw_parts(d.at as *const u32, d.bytes as usize / 4) };
-            out.decor_instances += crate::layer::decor::instance::decor_groups(words).map(|(_, n)| n).sum::<u32>();
-        }
+pub fn chunk_sources_step() {
+    if core::mem::take(SOURCES_CHANGED.get(|| false)) {
+        with_world(|world, sched| sched.sources_step(world));
     }
-    out.run_set_mb = round(run_bytes as f64 / 1_048_576.0) as u32;
-    out
 }
 
-pub struct ChunkNode {
-    /// The page this chunk is drawn from.
-    pub page: LevelPage,
-    /// This chunk's own absolute lattice origin.
-    pub base_i: IVec,
-    /// The column this chunk stands in, as the object store keys it.
-    pub col_idx: IVec,
-    id: u32,
-    /// The tiers and the decor blocks the scheduler handed over, by cube and
-    /// generation: a source changed leaves the older ones held until the
-    /// scheduler evicts them, when a layout of the newer is up.
-    tiers: HashMap<(Cube, u32), MeshBlock>,
-    decor_cache: HashMap<(Cube, u32), DecorBlock>,
-    /// How many times the scheduler has been told this chunk's sources: a tier
-    /// built from an earlier telling arriving after a newer one was told is
-    /// released on arrival.
-    generation: u32,
-    show_structures: bool,
-    /// The texture setting the tiers were baked under. A leaf's box carries
-    /// its layer and the shader samples or does not, but a tier over it
-    /// carries one colour and no layer, so which colour that is was decided
-    /// when it was baked (mesh/chunk_mesher.rs).
-    textured: bool,
-    objects_revision: u32,
-    decor_revision: u32,
-    show_decor: bool,
-}
-
-type Queue = VecDeque<Event>;
-
-fn page_lanes(tile: &Terrain) -> PageLanes {
+/// A terrain page's lanes, where they lie in the memory.
+pub fn page_lanes(tile: &Terrain) -> PageLanes {
     PageLanes {
         cells: tile.ground.cells.as_ptr() as usize,
         ele: tile.ele.as_ptr() as usize,
     }
-}
-
-impl ChunkNode {
-    fn new(id: u32, page: LevelPage, base_x: u32, base_y: u32) -> ChunkNode {
-        let page_off = ivec::gather((base_x as i64) << page.level, (base_y as i64) << page.level, 0);
-        let base_i = ivec::add(FROM_L3_IDX(page.first_leaf()), page_off);
-        let col_idx = L2_IDX(base_i);
-        let settings = settings_store();
-        ChunkNode {
-            page,
-            base_i,
-            col_idx,
-            id,
-            tiers: HashMap::new(),
-            decor_cache: HashMap::new(),
-            generation: 0,
-            show_structures: settings.show_structures,
-            textured: settings.texture_pack,
-            objects_revision: objects_revision_of(page.level, base_i),
-            decor_revision: decor_revision_of(page.level, base_i),
-            show_decor: settings.show_decor,
-        }
-    }
-
-    /// Every decor block back to the heap, and the tiers forgotten: the chunk
-    /// unmounted.
-    fn release_all(&mut self) {
-        self.tiers.clear();
-        for (_, d) in self.decor_cache.drain() {
-            release_block(d.at, d.bytes);
-        }
-    }
-
-    /// Tells the scheduler what this chunk is made of now.
-    fn tell_source(&mut self) {
-        let page = Terrain::pyramid().get(self.page).map(page_lanes);
-        let (id, show) = (self.id, self.show_structures);
-        with_world(|world, sched| sched.source(world, id, page, show));
-        self.generation += 1;
-    }
-
-    /// A source change rebuilds what the chunk shows, not the whole visible
-    /// world: the scheduler is told, keeps drawing what the chunk shows, and
-    /// builds its layout ahead of every other chunk, swapping it in whole once
-    /// every tier and decor of it is built. `objects_revision` is the
-    /// SOLID-only revision; a solid change still rebuilds decor too, because a
-    /// newly placed cube can occlude a scattered decor candidate.
-    ///
-    /// The terrain page is not a source that changes. A bake is the same
-    /// whenever and wherever it is fetched — a page that differs is a broken
-    /// bake, not a change — and a mounted chunk's page stays in its record
-    /// until the chunk unmounts, so a page set again is the same lanes at the
-    /// same addresses and nothing to rebuild.
-    fn on_source_change(&mut self) {
-        let show_structures = settings_store().show_structures;
-        let textured = settings_store().texture_pack;
-        let objects_revision = objects_revision_of(self.page.level, self.base_i);
-        if self.show_structures == show_structures && self.textured == textured && self.objects_revision == objects_revision {
-            return;
-        }
-        self.show_structures = show_structures;
-        self.textured = textured;
-        self.objects_revision = objects_revision;
-        self.tell_source();
-    }
-
-    /// Decor's own revision-only rebuild. It must never touch the tiers: that
-    /// would reintroduce the needless cube rebuild — visible as a flicker — this
-    /// split exists to avoid.
-    fn on_decor_change(&mut self, queue: &mut Queue) {
-        let revision = decor_revision_of(self.page.level, self.base_i);
-        let show_decor = settings_store().show_decor;
-        if revision == self.decor_revision && show_decor == self.show_decor {
-            return;
-        }
-        self.decor_revision = revision;
-        self.show_decor = show_decor;
-        for (_, d) in self.decor_cache.drain() {
-            release_block(d.at, d.bytes);
-        }
-        let id = self.id;
-        with_world(|world, sched| sched.decor_now(world, id, show_decor, &mut |e| queue.push_back(e)));
-    }
-
-    fn on_tier(&mut self, generation: u32, cube: Cube, mesh: MeshBlock) {
-        if generation != self.generation || self.tiers.contains_key(&(cube, generation)) {
-            return;
-        }
-        self.tiers.insert((cube, generation), mesh);
-    }
-
-    /// The scheduler hands a tier's decor over only where it believes this node
-    /// holds none of that generation, so one already held is stale and gives
-    /// way.
-    fn on_decor(&mut self, cube: Cube, generation: u32, decor: DecorBlock) {
-        if let Some(held) = self.decor_cache.insert((cube, generation), decor) {
-            release_block(held.at, held.bytes);
-        }
-    }
-
-    fn on_evict(&mut self, cube: Cube, generation: u32) {
-        self.tiers.remove(&(cube, generation));
-        if let Some(d) = self.decor_cache.remove(&(cube, generation)) {
-            release_block(d.at, d.bytes);
-        }
-    }
-
-    /// The layout is the scheduler's to draw; what is checked here is that this
-    /// node holds every tier it names, of its generation. When it does not, the
-    /// chunk starts over from its sources.
-    fn on_layout(&mut self, primary: Cube, secondary: Option<Cube>, generation: u32, ready: bool) -> bool {
-        if !ready {
-            node_counts().released += 1;
-            return true;
-        }
-        let holds = self.tiers.contains_key(&(primary, generation)) && secondary.is_none_or(|s| self.tiers.contains_key(&(s, generation)));
-        if holds {
-            node_counts().layouts += 1;
-        }
-        holds
-    }
-}
-
-/// Applies what the scheduler told, and whatever that made it tell next.
-pub fn run_chunk_events(events: impl IntoIterator<Item = Event>) {
-    let mut queue: Queue = events.into_iter().collect();
-    loop {
-        while let Some(e) = queue.pop_front() {
-            dispatch(e);
-        }
-        let ids = core::mem::take(&mut nodes().rebuild);
-        if ids.is_empty() {
-            break;
-        }
-        for id in ids {
-            let Some(node) = nodes().nodes.get_mut(&id) else { continue };
-            node.tell_source();
-        }
-    }
-}
-
-fn dispatch(e: Event) {
-    let n = nodes();
-    match e {
-        Event::Mount { id, page, base_x, base_y } => {
-            let mut node = ChunkNode::new(id, page, base_x, base_y);
-            node.tell_source();
-            n.nodes.insert(id, node);
-            node_counts().added += 1;
-        }
-        Event::Unmount { id } => {
-            if let Some(mut node) = n.nodes.remove(&id) {
-                node.release_all();
-                node_counts().removed += 1;
-            }
-        }
-        Event::Build(BuildEvent::Tier {
-            id,
-            generation,
-            cube,
-            box_cnt,
-            heights,
-            ..
-        }) => {
-            if let Some(node) = n.nodes.get_mut(&id) {
-                node.on_tier(generation, cube, MeshBlock { box_cnt, heights });
-            }
-        }
-        Event::Decor { id, cube, generation, at, bytes } => match n.nodes.get_mut(&id) {
-            Some(node) => node.on_decor(cube, generation, DecorBlock { at: at as usize, bytes }),
-            None => release_block(at as usize, bytes),
-        },
-        Event::Layout {
-            id,
-            primary,
-            secondary,
-            generation,
-            ready,
-        } => {
-            let Some(node) = n.nodes.get_mut(&id) else { return };
-            if !node.on_layout(primary, secondary, generation, ready) {
-                n.rebuild.push(id);
-            }
-        }
-        Event::Evict { id, cube, generation } => {
-            if let Some(node) = n.nodes.get_mut(&id) {
-                node.on_evict(cube, generation);
-            }
-        }
-        Event::Visible { .. } | Event::Blend { .. } => {}
-    }
-}
-
-/// The nodes' turn: a settings change, a tile arriving or leaving, or an object
-/// change reaches every node, which compares its own sources against them.
-/// A chunk's sources changed somewhere: the nodes look at their own next turn.
-pub fn chunk_sources_changed() {
-    nodes().sources_changed = true;
-}
-
-pub fn chunk_nodes_step() {
-    let n = nodes();
-    if !n.sources_changed {
-        return;
-    }
-    n.sources_changed = false;
-    let mut queue = Queue::new();
-    let ids: Vec<u32> = n.nodes.keys().copied().collect();
-    for id in ids {
-        if let Some(node) = nodes().nodes.get_mut(&id) {
-            node.on_source_change();
-            node.on_decor_change(&mut queue);
-        }
-    }
-    run_chunk_events(queue);
 }
 
 /// Whether page `page_idx` has a terrain tile chunks can be mounted from.
@@ -451,7 +112,7 @@ pub fn chunk_page(page: LevelPage, present: bool) {
 /// What a chunk's objects are made of, as a revision: its column's for a
 /// leaf chunk, and every column under a level chunk and its apron summed,
 /// since what it draws is all of theirs folded.
-fn objects_revision_of(level: u32, base: IVec) -> u32 {
+pub fn objects_revision_of(level: u32, base: IVec) -> u32 {
     if level == 0 {
         return object_col_revision(L2_IDX(base));
     }
@@ -463,7 +124,7 @@ fn objects_revision_of(level: u32, base: IVec) -> u32 {
 
 /// The decor revision of every column a chunk of `level` at `base` draws
 /// the placed decor of: the columns whose corner lies in it.
-fn decor_revision_of(level: u32, base: IVec) -> u32 {
+pub fn decor_revision_of(level: u32, base: IVec) -> u32 {
     if level == 0 {
         return decor_col_revision(L2_IDX(base));
     }
@@ -493,7 +154,7 @@ fn folds_into(level: u32, base: IVec, col: IVec) -> bool {
 // A chunk's build, from its sources to its meshes, a chunk at a time under
 // the frame's budget.
 //
-// The chunk nodes say which chunks exist, what each is made of (its terrain
+// The scheduler says which chunks exist, what each is made of (its terrain
 // page's lanes and the settings that change what they paint), and which
 // tiers it still lacks; each tick it hands over the order to take them in
 // and a budget. A chunk's runs come the direct way — one run a column
@@ -522,7 +183,7 @@ pub const RUN_SET_BYTES: u32 = 1 << 20;
 /// assert past it says the caller has a bug, not that the view grew.
 pub const MAX_CHUNKS: usize = 4096;
 
-/// What the chunk nodes are told.
+/// What a build hands the scheduler.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BuildEvent {
     /// Tier `cube` of chunk `id`, built from its sources as of `generation`:
@@ -1082,8 +743,9 @@ impl Builder {
     ///
     /// # Safety
     /// `page` names lanes of a page's fixed shape inside the world's memory,
-    /// resident for as long as the view is read: what the chunk node promises
-    /// when it tells a chunk its source.
+    /// resident for as long as the view is read: what the scheduler promises
+    /// when it tells a chunk its source, a chunk being mounted from a resident
+    /// page that stays until it goes.
     pub unsafe fn page_view(world: &World, page: PageLanes) -> PageView<'static> {
         let mem = world.volumes.mem();
         let cells = (PAGE_CELLS * PAGE_CELLS) as usize;

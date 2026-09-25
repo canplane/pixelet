@@ -38,8 +38,8 @@ const CLIMB_EPS: f64 = 0.0005;
 /// climb_polar's answer for the last inputs: the climb samples the terrain
 /// twice through the page tables and page math, and every ticked frame asked
 /// it again with the view at rest. The answer changes only with the view, the
-/// map centre, or a page arriving — the page table's revision moves for the
-/// last, which is also when ground not known yet becomes known.
+/// map centre, or a page arriving — the terrain pyramid's revision moves for
+/// the last, which is also when ground not known yet becomes known.
 struct ClimbMemo {
     dist: f64,
     polar: f64,
@@ -81,7 +81,7 @@ fn step_state() -> &'static mut CameraStep {
 
 fn climb_polar_memo(memo: &mut ClimbMemo, dist: f64, polar: f64, azimuth: f64) -> f64 {
     let centre = map_store().map_center;
-    let revision = Terrain::pyramid().level(0).revision();
+    let revision = Terrain::pyramid().revision();
     if dist == memo.dist && polar == memo.polar && azimuth == memo.azimuth && centre == memo.centre && revision == memo.revision {
         return memo.polar_out;
     }

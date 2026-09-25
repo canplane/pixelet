@@ -19,7 +19,6 @@ fn every_number_is_its_major_and_minor() {
         (INPUT_RESET_DIST, Major::INPUT as u32, InputMinor::RESET_DIST as u32),
         (INPUT_COMPASS_RESET, Major::INPUT as u32, InputMinor::COMPASS_RESET as u32),
         (INPUT_GO_TO, Major::INPUT as u32, InputMinor::GO_TO as u32),
-        (INPUT_POI_FOCUS, Major::INPUT as u32, InputMinor::POI_FOCUS as u32),
         (SENSOR_UPDATE, Major::SENSOR as u32, Minor::UPDATE as u32),
         (SENSOR_ERROR, Major::SENSOR as u32, SensorMinor::ERROR as u32),
         (SENSOR_ORIENTATION, Major::SENSOR as u32, SensorMinor::ORIENTATION as u32),
@@ -65,7 +64,7 @@ fn every_number_is_its_major_and_minor() {
 /// same number as one of the four every subject has.
 #[test]
 fn a_subject_s_own_verbs_start_past_the_four_every_subject_has() {
-    let own: [(&str, u32); 21] = [
+    let own: [(&str, u32); 20] = [
         ("InputMinor::POINTER", InputMinor::POINTER as u32),
         ("InputMinor::WHEEL", InputMinor::WHEEL as u32),
         ("InputMinor::TRACKING", InputMinor::TRACKING as u32),
@@ -73,7 +72,6 @@ fn a_subject_s_own_verbs_start_past_the_four_every_subject_has() {
         ("InputMinor::RESET_DIST", InputMinor::RESET_DIST as u32),
         ("InputMinor::COMPASS_RESET", InputMinor::COMPASS_RESET as u32),
         ("InputMinor::GO_TO", InputMinor::GO_TO as u32),
-        ("InputMinor::POI_FOCUS", InputMinor::POI_FOCUS as u32),
         ("SensorMinor::ERROR", SensorMinor::ERROR as u32),
         ("SensorMinor::ORIENTATION", SensorMinor::ORIENTATION as u32),
         ("SensorMinor::PERMISSION", SensorMinor::PERMISSION as u32),

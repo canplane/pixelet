@@ -358,7 +358,7 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
         return;
     };
     let v = view();
-    let key = (center, map_origin, Terrain::pyramid().level(0).revision(), [v.azimuth, v.tx, v.ty, v.tz]);
+    let key = (center, map_origin, Terrain::pyramid().revision(), [v.azimuth, v.tx, v.ty, v.tz]);
     if g.built_for == Some(key) {
         write_labels(g);
         return;

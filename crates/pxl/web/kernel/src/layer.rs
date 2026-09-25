@@ -12,6 +12,7 @@ pub mod decor;
 pub mod environment;
 pub mod geocode;
 pub mod marker;
+pub mod model;
 pub mod object;
 pub mod poi;
 pub mod terrain;

@@ -67,7 +67,11 @@
     },
     "quality": {
       "section_title": "Graphics Quality",
-      "section_caption": "Adjust visual clarity and detail"
+      "section_caption": "Adjust visual clarity and detail",
+      "lod_crossfade": {
+        "label": "LOD Crossfade",
+        "description": "Blocks fade into their new level of detail as you zoom or move, instead of switching at once. Draws the changing blocks twice while they fade."
+      }
     },
     "disclaimer": {
       "section_title": "Notice",
@@ -234,10 +238,6 @@
     "companion_loading": "Preparing your companion…"
   },
   "map": {
-    "poi": {
-      "places": "Places nearby",
-      "count": "{{count}} places"
-    },
     "scale_bar": {
       "reset_zoom": "Reset Zoom"
     },

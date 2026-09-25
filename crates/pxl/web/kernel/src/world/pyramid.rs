@@ -32,7 +32,7 @@ use crate::io::demand::{Category, Phases};
 use crate::io::policy;
 use crate::io::sched::{declare, Rank};
 use crate::layer::environment::fog::eye_height;
-use crate::world::change::{world_edge, WorldTopic};
+use crate::world::change::world_edge;
 use crate::world::page_table::PageTable;
 use chunk::Chunk;
 pub use window::Domain;
@@ -43,9 +43,6 @@ use window::{CHAIN_PAGES, HELD_AXIS, WINDOW_LEVELS};
 pub trait Layer: Folds + Clone + 'static {
     /// The stream a page of this layer is asked for under.
     const CATEGORY: Category;
-    /// The topic a change to a leaf is logged under, where a reader compares
-    /// revisions (world/change.rs).
-    const LEAF_TOPIC: Option<WorldTopic> = None;
 
     fn pyramid() -> &'static mut Pyramid<Self>;
 
@@ -163,7 +160,7 @@ pub struct Pyramid<L: Layer> {
 impl<L: Layer> Default for Pyramid<L> {
     fn default() -> Self {
         Pyramid {
-            tables: (0..=TOP_LEVEL).map(|level| PageTable::new(if level == 0 { L::LEAF_TOPIC } else { None })).collect(),
+            tables: (0..=TOP_LEVEL).map(|_| PageTable::default()).collect(),
             records: vec![None; RECORDS as usize],
             refused: 0,
             revision: 0,
@@ -308,7 +305,7 @@ impl<L: Layer> Pyramid<L> {
         for &c in d.roots() {
             let mut own = Cover::default();
             if !self.wanted(d, &below, c, false, &mut own) {
-                over.extend(c.ancestors().find(|a| a.level() >= top && self.get(a.page).is_some()));
+                over.extend(c.ancestors().find(|a| a.level() >= top && self.get(a.page()).is_some()));
             }
             roots.push((c, own));
         }
@@ -330,7 +327,7 @@ impl<L: Layer> Pyramid<L> {
     /// resident chunk over it in the window draws its ground should `c` not
     /// be drawn whole. Whether it is.
     fn wanted(&self, d: &Domain, below: &HashSet<LevelPage>, c: Chunk, above: bool, out: &mut Cover) -> bool {
-        let here = self.source(c.page).is_some();
+        let here = self.source(c.page()).is_some();
         if d.splits(c) {
             let mut finer = Cover::default();
             let mut whole = true;
@@ -359,11 +356,11 @@ impl<L: Layer> Pyramid<L> {
     /// `c` from the resident pages under it, where nothing over it is;
     /// whether it is drawn whole.
     fn stand_in(&self, below: &HashSet<LevelPage>, c: Chunk, out: &mut Cover) -> bool {
-        if self.source(c.page).is_some() {
+        if self.source(c.page()).is_some() {
             out.drawn.push(c);
             return true;
         }
-        if c.level() == 0 || !below.contains(&c.children()[0].page) {
+        if c.level() == 0 || !below.contains(&c.children()[0].page()) {
             out.gaps.push(c);
             return false;
         }

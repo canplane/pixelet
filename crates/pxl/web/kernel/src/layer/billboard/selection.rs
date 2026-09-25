@@ -115,6 +115,7 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
         if x1 < 0.0 || y1 < 0.0 || x0 > viewport_w || y0 > viewport_h {
             continue;
         }
+        batch.screen[i] = [x0, y0, x1, y1];
         out.push(i as u32);
     }
 }

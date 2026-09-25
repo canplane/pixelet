@@ -140,6 +140,38 @@ kernel's mesher measures its own step against the same scale, so the
 mesher's step, the level a page is held at and a web map's zoom are one
 quantity (`issue/20260921-level-step-and-zoom-are-one-number.md`).
 
+## Two trees, two jobs
+
+The pyramid is a tree across levels. Every page in it holds a summary of
+the ground under it — terrain's cells voted and averaged, places summed — so
+a far view draws a coarse level as it is, the way a mipmap is read. Placed
+objects need a tree of another kind: they are all resident, mostly empty
+space, and three-dimensional, so what matters is storing one level without
+its empty cells. That is the **sparse tree** (`sparse_tree/`), a tree inside
+one level whose inner nodes hold nothing but the way down.
+
+|                     | pyramid                            | sparse tree                    |
+| ------------------- | ---------------------------------- | ------------------------------ |
+| a node is           | a page, at one level               | a block of cells, in one level |
+| an inner node holds | a summary of all under it          | nothing                        |
+| it is for           | drawing far ground coarse          | storing a level compactly      |
+| it stops where      | a summary loses nothing of a child | every cell of a block is equal |
+| it lives            | in pages, fetched and let go       | resident, whole                |
+
+The two ways of stopping are one rule. A node stops growing where it
+already says all of the ground under it, and a block of equal cells is the
+case where any summary loses nothing. The pyramid asks it of the layer's fold
+(`Folds::settles`, in `pyramid.rs`): a page of places settles a child when
+no cell over it holds two places, so the tree of places is only as deep as
+a crowd needs, and a layer whose fold is lossy, like terrain's vote, never
+settles one. Parent and child for both trees come from `hierarchy.rs`.
+
+They stay two because they answer different questions on different axes.
+Objects do have coarse levels, but they are folded when a chunk is built
+rather than stored, since nothing about objects is fetched; were they ever
+paged, their summaries would be a layer of the pyramid, and their octree's
+collapse its `settles`.
+
 ## What else is here
 
 |                                  |                                                                                                        |

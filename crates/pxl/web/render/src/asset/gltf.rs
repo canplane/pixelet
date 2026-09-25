@@ -11,7 +11,7 @@
 //!
 //! Nothing here is Y-up or Z-up: the vertices, poses and keys come out as the
 //! file holds them, in the file's own frame, and whoever registers the model
-//! (crates/pxl/web/kernel/src/io/model_asset.rs) decides how it stands.
+//! (crates/pxl/web/kernel/src/layer/model/asset.rs) decides how it stands.
 //!
 //! The parse is a future that awaits `pause` between its units — an
 //! accessor's elements a slice at a time, a node, a skin, a channel — so a

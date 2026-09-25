@@ -67,7 +67,11 @@
     },
     "quality": {
       "section_title": "그래픽 품질",
-      "section_caption": "화면의 선명도와 디테일을 설정합니다"
+      "section_caption": "화면의 선명도와 디테일을 설정합니다",
+      "lod_crossfade": {
+        "label": "LOD 크로스페이드",
+        "description": "줌하거나 움직일 때 블록의 디테일 단계가 한 번에 바뀌지 않고 서서히 겹쳐 바뀝니다. 바뀌는 동안 그 블록을 두 번 그립니다."
+      }
     },
     "disclaimer": {
       "section_title": "유의사항",
@@ -234,10 +238,6 @@
     "companion_loading": "동행을 준비하고 있습니다."
   },
   "map": {
-    "poi": {
-      "places": "주변 장소",
-      "count": "{{count}}곳"
-    },
     "scale_bar": {
       "reset_zoom": "줌 초기화"
     },

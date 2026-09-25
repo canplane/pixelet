@@ -21,7 +21,7 @@ use pxl_render::look::lod::REFERENCE_THRESHOLD_0;
 use pxl_spec::space::hierarchy::{share, Scale};
 use pxl_spec::space::indexer::{L2, L3_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pyramid::{span_of, LevelPage, CHUNK_CELLS, GROUND, PAGE_CELLS, PAGE_CHUNKS, TOP_LEVEL};
+use pxl_spec::space::pyramid::{span_of, LevelPage, CHUNK_CELLS, GROUND, PAGE_CELLS, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::layer::environment::fog::{eye_height, reach_at};
@@ -259,7 +259,7 @@ pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>) -> Domain {
         roots: Vec::new(),
     };
     d.roots = d.find_roots();
-    let mut level: Vec<LevelPage> = d.roots.iter().map(|c| c.page).collect();
+    let mut level: Vec<LevelPage> = d.roots.iter().map(|c| c.page()).collect();
     while level.first().is_some_and(|p| p.level < TOP_LEVEL) {
         level = level.iter().map(|p| p.parent()).collect();
         level.sort_unstable();
@@ -325,13 +325,13 @@ impl Domain {
     /// frustum is not known.
     pub fn sees(&self, c: Chunk) -> bool {
         let rect = c.rect();
-        self.in_view(rect, Self::heights(c.page, c.node()))
+        self.in_view(rect, Self::heights(c.page(), c.node()))
     }
 
     /// How near the eye `c` comes.
     pub fn nearest_to(&self, c: Chunk) -> f64 {
         let rect = c.rect();
-        self.nearest(rect, Self::heights(c.page, c.node()))
+        self.nearest(rect, Self::heights(c.page(), c.node()))
     }
 
     /// How near the eye `p` comes.
@@ -350,18 +350,7 @@ impl Domain {
     fn find_roots(&self) -> Vec<Chunk> {
         let mut out = Vec::new();
         for page in ring(self.window.end - 1, self.foot, HELD_AXIS) {
-            for cy in 0..PAGE_CHUNKS {
-                for cx in 0..PAGE_CHUNKS {
-                    let c = Chunk {
-                        page,
-                        bx: cx * CHUNK_CELLS,
-                        by: cy * CHUNK_CELLS,
-                    };
-                    if self.nearest_to(c) < self.far {
-                        out.push(c);
-                    }
-                }
-            }
+            out.extend(Chunk::of_page(page).filter(|&c| self.nearest_to(c) < self.far));
         }
         out
     }
@@ -386,7 +375,7 @@ impl Domain {
             return false;
         }
         let rect = c.rect();
-        let z = Self::heights(c.page, c.node());
+        let z = Self::heights(c.page(), c.node());
         self.nearest(rect, z) < split_distance(c.level() as i32) && self.in_view(rect, z)
     }
 

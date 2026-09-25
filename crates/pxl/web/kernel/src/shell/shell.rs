@@ -124,7 +124,6 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
             is_default_zoom: bar.is_default_zoom,
         },
         place: &|each| place_parts(page, zoom, each),
-        poi: &crate::layer::poi::placement::badges,
         object_sizes: &crate::layer::object::size::OBJECT_SIZES,
         object_storage_version: OBJECT_STORAGE_VERSION,
     };
