@@ -2,14 +2,14 @@
 
 use std::collections::{HashMap, HashSet};
 
-use pxl_spec::bake::poi_page::PoiPage;
+use pxl_spec::bake::poi_page::{theme, Place, PoiPage};
 use pxl_spec::space::pyramid::LevelPage;
 
 use crate::global::Global;
 use crate::host::measure_text;
 use crate::layer::billboard::sheet::billboard_sheet;
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
-use pxl_render::gpu::pass::badges::BADGE_FONT;
+use pxl_render::gpu::pass::badges::{badge_width, BADGE_FONT};
 use pxl_render::gpu::surface::DPR_MAX;
 
 use crate::world::pyramid::Layer;
@@ -18,23 +18,29 @@ pub const HEIGHT: f64 = 37.0;
 pub const ANCHOR: f64 = 34.0;
 
 /// What a badge says, by what it is rather than by its text: a count, or the
-/// one place a cell holds, by its name's index in the pool of the page it was
-/// read from. The text is read only to measure the badge and to draw it
-/// (`text`), and a badge is found again by these numbers.
+/// one place a cell holds, by its index in the pool of the page it was read
+/// from. The place is read only to measure the badge and to draw it (`text`,
+/// `slot`), and a badge is found again by these numbers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Label {
     Count(u32),
-    Place { page: LevelPage, name: u32 },
+    Place { page: LevelPage, place: u32 },
 }
 
 impl Label {
+    /// The place a badge names, from the page it was read from; nameless and
+    /// of no kind once that page has gone.
+    fn place(page: LevelPage, place: u32) -> Place<'static> {
+        PoiPage::pyramid().get(page).map_or(Place { name: "", kind: 0 }, |p| p.places.get(place))
+    }
+
     /// What the badge shows: the count, or the name cut where a badge would
     /// run past the rest.
     pub fn text(self) -> String {
         match self {
             Label::Count(n) => n.to_string(),
-            Label::Place { page, name } => {
-                let full = PoiPage::pyramid().get(page).map_or("", |p| p.names.get(name));
+            Label::Place { page, place } => {
+                let full = Label::place(page, place).name;
                 let mut shown: String = full.chars().take(SHOWN_CHARS).collect();
                 if full.chars().count() > SHOWN_CHARS {
                     shown.push('…');
@@ -79,7 +85,7 @@ pub fn width(label: Label) -> f64 {
     badges()
         .entry(label)
         .or_insert_with(|| {
-            let width = (measure_text(BADGE_FONT, &label.text()).ceil() + 20.0).max(27.0);
+            let width = badge_width(measure_text(BADGE_FONT, &label.text()).ceil(), matches!(label, Label::Place { .. }));
             Badge { width, slot: NO_SLOT }
         })
         .width
@@ -93,9 +99,20 @@ pub fn slot(label: Label) -> i32 {
         b.slot = billboard_sheet().add(
             b.width * DPR_MAX,
             HEIGHT * DPR_MAX,
-            DrawSpec::Cluster {
-                label: label.text(),
-                logical_w: b.width,
+            match label {
+                Label::Count(_) => DrawSpec::Cluster {
+                    label: label.text(),
+                    logical_w: b.width,
+                },
+                Label::Place { page, place } => {
+                    let t = theme(Label::place(page, place).kind);
+                    DrawSpec::Place {
+                        name: label.text(),
+                        icon: t.icon,
+                        color: t.color,
+                        logical_w: b.width,
+                    }
+                }
             },
         );
     }

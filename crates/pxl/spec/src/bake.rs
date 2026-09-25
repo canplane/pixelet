@@ -15,6 +15,8 @@ pub mod model;
 pub mod pack;
 pub mod place_page;
 pub mod poi_page;
+#[path = "bake/poi_theme.spec.rs"]
+pub mod poi_theme;
 #[path = "bake/published.spec.rs"]
 pub mod published;
 pub mod quadkey;

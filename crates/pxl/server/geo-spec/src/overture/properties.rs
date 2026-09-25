@@ -17,13 +17,19 @@ pub fn overture_category(properties: &serde_json::Value) -> Option<&str> {
 /// entry in the table passes through unmapped; a place with no category at all
 /// is a "place".
 ///
-/// Both servers call this, and that is the reason this crate exists: the badge
-/// a place draws on the map and the icon beside it in the search list come
-/// from here, and they have to agree.
+/// The search server and the POI bake both call this, and that is the reason
+/// this crate exists: the badge a place draws on the map and the icon beside
+/// it in the search list come from here, and they have to agree.
 pub fn category_of(properties: &serde_json::Value) -> String {
-    match overture_category(properties) {
-        Some(primary) => category::map(primary).unwrap_or(primary).to_string(),
-        None => "place".to_string(),
+    category_named(overture_category(properties)).to_string()
+}
+
+/// The same, from Overture's own category where that is all that was read,
+/// as the POI bake reads it out of the table.
+pub fn category_named(primary: Option<&str>) -> &str {
+    match primary {
+        Some(primary) => category::map(primary).unwrap_or(primary),
+        None => "place",
     }
 }
 

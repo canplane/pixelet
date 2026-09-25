@@ -1,7 +1,7 @@
 // pxl-kernel/world/pyramid.test.rs
 
 use super::*;
-use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
+use pxl_spec::bake::poi_page::{Place, PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::{ivec, Pvf3};
 use pxl_spec::space::pyramid::{cell_base, span_of};
 use window::{domain_for, Eye};
@@ -89,7 +89,7 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
                     .iter()
                     .map(|&a| Pvf3 { i: a, ..Default::default() })
                     .filter(|a| POI_LATTICE.cell_of(level, a).page() == p)
-                    .map(|a| (a, ""));
+                    .map(|a| (a, Place { name: "", kind: 0 }));
                 pages.push((p, PoiPage::of_places(level, places)));
             }
         }
@@ -307,7 +307,13 @@ fn a_count_folds_from_its_four_children_alone() {
     let p = LevelPage::new(3, ivec::gather(5, -2, 0));
     assert_eq!(PoiPage::sources(p), p.children().to_vec());
     let k = p.children()[0];
-    let child = PoiPage::of_places(k.level, [(POI_LATTICE.cell_base(k, 0, 0), ""), (POI_LATTICE.cell_base(k, 1, 0), "")]);
+    let child = PoiPage::of_places(
+        k.level,
+        [
+            (POI_LATTICE.cell_base(k, 0, 0), Place { name: "", kind: 0 }),
+            (POI_LATTICE.cell_base(k, 1, 0), Place { name: "", kind: 0 }),
+        ],
+    );
     let folded = PoiPage::fold_page(p, |q| p.children().contains(&q).then_some(&child)).expect("the four are enough");
     assert_eq!(folded.cells.iter().map(|c| c.count).sum::<u32>(), 8);
 }

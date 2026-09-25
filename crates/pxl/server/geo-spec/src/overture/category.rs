@@ -17,7 +17,7 @@ pub fn map(primary: &str) -> Option<&'static str> {
 // full taxonomy — extend as real gaps show up rather than front-loading a guess
 // at every possible value.
 //
-// Every value here has to be a key of spec/pxl/web/kernel/layer/poi/theme.json, and every
+// Every value here has to be a key of spec/pxl/spec/bake/poi_theme.json, and every
 // key of that theme has to be produced by at least one entry here; the tests
 // fail otherwise. A target the theme does not know draws the default badge and
 // says nothing about it, which is the failure this is written down to prevent.

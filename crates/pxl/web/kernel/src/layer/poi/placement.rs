@@ -8,11 +8,12 @@
 //! level the view wants there, where a finer page stands in for it: how
 //! coarse places are is the camera's distance and nothing else, the ground's
 //! the same way but apart from it. A cell holding two places or more is a
-//! count at that cell's centre; a cell holding one is the place, at the
-//! centre of the z16 ground cell it stands in. Either stands in all
-//! three axes, on the surface drawn there (pxl-spec space/pyramid.rs
-//! `Cell::centre`, chunk/table.rs `surface_at`), which is the one thing read
-//! from the ground.
+//! count, a cell holding one is the place, and either stands at the centre
+//! of the z16 ground cell its places' centroid falls in — the page's, or the
+//! centroids of the finer cells counted into it weighted by their counts. It
+//! stands in all three axes, on the surface drawn there (pxl-spec
+//! space/pyramid.rs `Cell::centre`, chunk/table.rs `surface_at`), which is
+//! the one thing read from the ground.
 
 use crate::abi::cmd::PoiBadge;
 use crate::global::Global;
@@ -45,14 +46,15 @@ struct Placement {
 }
 static PLACEMENT: Global<Placement> = Global::new();
 
-/// How many places a badge's cell holds, and where it holds one, that
-/// place's name — its page and pool index, read only once the count is known
-/// to be one — and the z16 ground cell it stands in.
+/// How many places a badge's cell holds, where it holds one, that place —
+/// its page and pool index, read only once the count is known to be one —
+/// and the sum of its places' z16 ground cells, as offsets in the badge's
+/// cell, which over the count is their centroid.
 #[derive(Clone, Copy, Default)]
 struct Tally {
     count: u32,
-    name: Option<(LevelPage, u32)>,
-    at: Option<Cell>,
+    place: Option<(LevelPage, u32)>,
+    at: [u64; 2],
 }
 
 pub fn step(ctx: &mut TickContext) {
@@ -86,20 +88,26 @@ pub fn step(ctx: &mut TickContext) {
             let from = poi.cells.partition_point(|c| c.cell < lo);
             for c in poi.cells[from..].iter().take_while(|c| c.cell < hi) {
                 let cell = POI_LATTICE.cell_at(chunk.page, c.cell);
-                let t = cells.entry(cell.up(coarser)).or_default();
+                let up = cell.up(coarser);
+                let at = up.offset_of(cell.inner_at(GROUND, 0, c.at));
+                let t = cells.entry(up).or_default();
                 t.count += c.count;
-                t.name = poi.name(c).map(|_| (chunk.page, c.name));
-                t.at = c.at.map(|at| cell.inner_at(GROUND, 0, at));
+                t.place = poi.place(c).map(|_| (chunk.page, c.place));
+                for (sum, lane) in t.at.iter_mut().zip(at) {
+                    *sum += lane as u64 * c.count as u64;
+                }
             }
         }
     }
     p.batch.reset();
     let mut labelled = Vec::new();
     for (cell, t) in cells {
-        let (label, stands) = match (t.count, t.at) {
-            (1, Some(at)) => (t.name.map_or(Label::Count(1), |(page, name)| Label::Place { page, name }), at),
-            _ => (Label::Count(t.count), cell),
+        let label = match (t.count, t.place) {
+            (1, Some((page, place))) => Label::Place { page, place },
+            _ => Label::Count(t.count),
         };
+        let mean = |sum: u64| ((sum + t.count as u64 / 2) / t.count as u64) as u32;
+        let stands = cell.inner_at(GROUND, 0, t.at.map(mean));
         let Some((_, top)) = sched.surface_at(&stands.mid()) else { continue };
         let centre = stands.centre(top);
         let mut local = [0.0; 3];

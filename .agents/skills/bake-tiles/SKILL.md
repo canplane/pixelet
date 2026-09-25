@@ -20,7 +20,7 @@ Read it before changing a pipeline's shape; this file is the procedure only.
 | Kind    | Tool                     | Reads                                           | Output                                    | Empty page      |
 | ------- | ------------------------ | ----------------------------------------------- | ----------------------------------------- | --------------- |
 | terrain | `deno task bake:tiles`   | Overture buildings/transportation/base, GEDTM30 | packed XTP, one per land page             | shared `_ocean` |
-| poi     | `deno task bake:poi`     | Overture places                                 | packed PXP4 counts, one per page with one | no object       |
+| poi     | `deno task bake:poi`     | Overture places                                 | packed PXP5 counts, one per page with one | no object       |
 | geocode | `deno task bake:geocode` | Overture divisions, terrain's `land_pages.json` | packed JSON, one per page with a label    | no object       |
 
 Every tool writes to `./out/<kind>/<version>`, where the version defaults to
@@ -147,8 +147,11 @@ and reused unless `--reclassify` is passed.
 
 POI is a second layer of terrain's pyramid: the same pages, levels and names,
 holding a count of places per cell (`pxl-spec bake/poi_page.rs`, magic
-`PXP4`), with the name of the one place a cell holds alone, from a pool of
-names held once a page, and the level-0 ground cell it stands in. The leaves are counted from `overture_places`, the levels above are
+`PXP5`), the z16 ground cell its places' centroid falls in, and the one
+place a cell holds alone — its name, held to 32 code points, and its kind,
+from a pool of places held once a page. A kind is the place's category as the search list names it
+(`pxl-geo-spec overture/properties.rs`), numbered by
+`spec/pxl/spec/bake/poi_theme.json`. The leaves are counted from `overture_places`, the levels above are
 folded by adding, with the same fold driver terrain uses
 (`geo-bake/src/pyramid.rs`), and a page with no places is no object.
 
@@ -158,7 +161,7 @@ deno task bake:poi --out ./out/poi/<version> --concurrency 8
 
 It is not resumable: a run clears the version directory and bakes it whole,
 which takes the one pass over the table the leaves need. Verify that the
-manifest's `levels` reach level 10 and that a leaf decompresses to `PXP4`.
+manifest's `levels` reach level 10 and that a leaf decompresses to `PXP5`.
 The client shows it only outside production, behind `show_poi` in the
 development settings, until a nationwide version is published.
 

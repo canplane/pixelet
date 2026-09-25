@@ -102,7 +102,9 @@ The rules below keep it one thing. They come from finding it several.
   share the lattice and the fold rule (`majority`, `pxl-spec bake/fold.rs`)
   and are folded when a chunk is built.
 - **A mark stands at a cell's centre** (`cell_centre`), at the height of the
-  surface drawn there, never at a centre derived from its data's bounds.
+  surface drawn there, never at a centre derived from its data's bounds. A
+  mark for many things stands at the z16 cell their centroid falls in,
+  which folds by count as the things do (`pxl-spec bake/poi_page.rs`).
 - **One rule chooses the level; a layer chooses its detail.** The shared
   rule chooses a level for a piece of ground by its distance from the eye,
   finer than z16 too — z17 to z19 near the eye. How much detail a layer
