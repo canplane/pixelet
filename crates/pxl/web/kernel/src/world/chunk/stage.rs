@@ -2,9 +2,8 @@
 
 //! The world's turn of the tick. In the visible phase it composes the frame the
 //! scheduler reads — the view, the frustum, the budget, the range anchor, the
-//! settings — runs the scheduler's pass once, and applies what it told to the
-//! chunk nodes (node.rs); the view's renderer (pxl-render's gpu/renderer.rs)
-//! then draws the scheduler's lists. In the report phase it hands the frame's
+//! settings — and runs the scheduler's pass once; the view's renderer
+//! (pxl-render's gpu/renderer.rs) then draws the scheduler's lists. In the report phase it hands the frame's
 //! numbers to the ledger.
 
 use pxl_render::look::lod::set_lod_projection;
@@ -23,7 +22,7 @@ use crate::sched::ledger::record::{
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::shell::setting::store::settings_store;
 use crate::world::change::{request_world_tick, world_edge};
-use crate::world::chunk::node::{run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES};
+use crate::world::chunk::node::RETAIN_BUDGET_BYTES;
 use crate::world::chunk::table::{builds, Census, Frame};
 use crate::world::frame::view::{view, view_resize};
 use crate::world::pyramid::Layer;
@@ -140,8 +139,8 @@ fn heap_sample() -> HeapSample {
     }
 }
 
-/// The visible phase's step: the frame, the scheduler's pass over every chunk,
-/// and what it told applied to the nodes.
+/// The visible phase's step: the frame, and the scheduler's pass over every
+/// chunk.
 pub fn core_tick_visible_step(ctx: &mut TickContext) {
     let c = core_tick();
     c.visible_pass = None;
@@ -173,9 +172,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     };
 
     let t0 = now();
-    let mut events = Vec::new();
-    let draw = with_world(|world, sched| sched.tick(world, frame, &now, &mut |e| events.push(e))).unwrap_or(false);
-    run_chunk_events(events);
+    let draw = with_world(|world, sched| sched.tick(world, frame, &now)).unwrap_or(false);
     crate::layer::poi::placement::step(ctx);
     let sched = &mut kernel().sched;
     sched.billboards.draw(&mut sched.draw, &sched.models, frame.origin);
@@ -195,10 +192,8 @@ pub async fn build_task() {
         notified(builds).await;
         loop {
             yield_if_spent(world_edge).await;
-            let mut events = Vec::new();
             let budget = world_edge().remaining();
-            let worked = with_world(|world, sched| sched.build_step(world, budget, &mut |e| events.push(e))).unwrap_or(false);
-            run_chunk_events(events);
+            let worked = with_world(|world, sched| sched.build_step(world, budget)).unwrap_or(false);
             if !worked {
                 break;
             }
@@ -215,7 +210,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     let Some(chunks_ms) = c.visible_pass else { return };
     let frame_t0 = ctx.budget.t0;
     let census = kernel().sched.census;
-    let node_work = take_node_counts();
+    let node_work = kernel().sched.take_counts();
     let host = c.host.clone();
     let mut pages = PageSample::default();
     for (level, n) in pages.by_level.iter_mut().enumerate() {

@@ -31,7 +31,7 @@ use crate::layer::terrain::fixed::{ele_at, ground_at, record_ele_at, record_grou
 use crate::layer::terrain::ground_snap::reground_map_center;
 use crate::mem;
 use crate::shell::map_store::{map_store, MapStatus};
-use crate::world::chunk::node::{chunk_page, chunk_sources_changed};
+use crate::world::chunk::node::chunk_page;
 use crate::world::pyramid::window::{eye, ring_of, window, HELD_AXIS};
 use crate::world::pyramid::{Cover, Domain, Layer, Pyramid};
 
@@ -95,16 +95,15 @@ impl Layer for Terrain {
         crate::layer::terrain::present::mesh(cover, d, |c| pyramid.get(c.page()).is_some())
     }
 
-    /// A leaf is what the scheduler mounts from, and what a map centre that
-    /// could not be grounded before may be grounded on now.
+    /// A page is what the scheduler mounts from, and a leaf what a map
+    /// centre that could not be grounded before may be grounded on now. It is
+    /// no chunk's source changing: a chunk is mounted from a resident page,
+    /// which stays until the chunk goes.
     fn changed(p: LevelPage, present: bool) {
         crate::layer::terrain::relief::page_changed(p, Terrain::pyramid().get(p));
         chunk_page(p, present);
-        if p.level == 0 {
-            chunk_sources_changed();
-            if present {
-                reground_map_center();
-            }
+        if p.level == 0 && present {
+            reground_map_center();
         }
     }
 }
