@@ -50,9 +50,10 @@ use crate::layer::marker::frame_gizmo::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
 use crate::layer::model::store::Models;
+use crate::layer::object::store::{render_edits, EntryAt, RenderEdits};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
-use crate::world::chunk::node::{decor_revision_of, mesh_step, objects_revision_of, page_lanes, release_block, BuildEvent, Builder, Cube, World, MAX_CHUNKS};
+use crate::world::chunk::node::{decor_draws, decor_revision_of, mesh_step, objects_revision_of, page_lanes, release_block, tiers_draw, BuildEvent, Builder, Cube, World, MAX_CHUNKS};
 use xpute_core::math::scalar::round;
 
 use crate::world::pyramid::chunk::Chunk;
@@ -400,7 +401,8 @@ struct Slot {
 }
 
 /// What a chunk's tiers are made of, past its page: the settings it paints
-/// with and the revision of the objects folded into it.
+/// with, the revision of the objects folded into it, and the eraser's edits
+/// that fall on them (object/store.rs `render_edits`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Sources {
     show_structures: bool,
@@ -410,32 +412,42 @@ struct Sources {
     /// when it was baked (mesh/chunk_mesher.rs).
     textured: bool,
     objects_revision: u32,
+    hide: Option<EntryAt>,
+    carve: Option<EntryAt>,
 }
 
-/// What a chunk's decor is made of: the decor revision of the columns it
-/// draws the placed decor of, and the setting.
+/// What a chunk's decor is made of: the revision of the columns it draws the
+/// placed decor of, the setting, and the hidden entry where it is decor
+/// there.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct DecorSources {
     revision: u32,
     shown: bool,
+    hide: Option<EntryAt>,
 }
 
 impl Sources {
-    fn of(k: Chunk) -> Sources {
+    fn of(k: Chunk, edits: RenderEdits) -> Sources {
         let settings = settings_store();
+        let (level, base) = (k.level(), k.base().i);
+        let drawn = |at: &EntryAt| tiers_draw(level, base, at.col_idx);
         Sources {
             show_structures: settings.show_structures,
             textured: settings.texture_pack,
-            objects_revision: objects_revision_of(k.level(), k.base().i),
+            objects_revision: objects_revision_of(level, base),
+            hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
+            carve: edits.carve.filter(drawn),
         }
     }
 }
 
 impl DecorSources {
-    fn of(k: Chunk) -> DecorSources {
+    fn of(k: Chunk, edits: RenderEdits) -> DecorSources {
+        let (level, base) = (k.level(), k.base().i);
         DecorSources {
-            revision: decor_revision_of(k.level(), k.base().i),
+            revision: decor_revision_of(level, base),
             shown: settings_store().show_decor,
+            hide: edits.hide.filter(|at| edits.hide_in.1 && decor_draws(level, base, at.col_idx)),
         }
     }
 }
@@ -797,7 +809,8 @@ impl Scheduler {
     fn add(&mut self, world: &mut World, id: u32, k: Chunk, root: bool) {
         let level = k.level();
         let (bx, by) = k.in_page();
-        let sources = Sources::of(k);
+        let edits = render_edits();
+        let sources = Sources::of(k, edits);
         self.builder.add(id, level, k.base().i, bx, by);
         self.builder.source(world, id, Terrain::pyramid().get(k.page()).map(page_lanes), sources.show_structures);
         let (base_x, base_y, _) = k.rect();
@@ -827,7 +840,7 @@ impl Scheduler {
             cover: (0.0, true, false),
             fade: None,
             sources,
-            decor_sources: DecorSources::of(k),
+            decor_sources: DecorSources::of(k, edits),
         };
         slot.set(OUTERMOST, root);
         slot.unmeasured();
@@ -920,14 +933,15 @@ impl Scheduler {
     /// that changes: a bake is the same whenever it is fetched, and a
     /// mounted chunk's page stays resident until the chunk unmounts.
     pub fn sources_step(&mut self, world: &mut World) {
+        let edits = render_edits();
         for i in 0..self.slots.len() {
             let k = self.slots[i].chunk;
-            let sources = Sources::of(k);
+            let sources = Sources::of(k, edits);
             if sources != self.slots[i].sources {
                 self.slots[i].sources = sources;
                 self.source(world, i);
             }
-            let decor = DecorSources::of(k);
+            let decor = DecorSources::of(k, edits);
             if decor != self.slots[i].decor_sources {
                 self.slots[i].decor_sources = decor;
                 self.decor_now(world, i, decor.shown);

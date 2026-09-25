@@ -17,12 +17,10 @@ use xpute_runtime::sched::edge::Edge;
 use crate::global::Global;
 use crate::kernel::kernel;
 
-/// A column's cube content (object/store.rs), keyed by column base.
+/// What a column stores (object/store.rs), keyed by column index.
 pub const OBJECT_COLUMN: Topic = 0;
-/// A column's placed decor, apart from its cubes, keyed by column base.
-pub const DECOR_COLUMN: Topic = 1;
 /// How many topics the log keeps.
-pub const WORLD_TOPICS: Topic = DECOR_COLUMN + 1;
+pub const WORLD_TOPICS: Topic = OBJECT_COLUMN + 1;
 
 /// `WorldTopic`.
 pub type WorldTopic = Topic;

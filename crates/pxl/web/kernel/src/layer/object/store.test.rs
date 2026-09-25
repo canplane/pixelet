@@ -177,23 +177,25 @@ fn object_store_cells_occupancy_follows_placement_and_removal_and_air_does_not_o
     assert!(!cell_is_occupied(ax, ay, az));
 }
 
+/// A column's revision moves on a write to it, and on nothing else: not
+/// another column's write, and not the eraser's previews, which change what
+/// is drawn and not what is stored.
 #[test]
-fn object_store_revisions_a_column_s_revisions_move_on_its_own_changes_on_the_right_channel() {
+fn a_column_s_revision_moves_on_its_own_writes_and_not_on_a_preview() {
     let _g = serial();
     let c = corner(100_020, 0, 0);
     let col_idx = L2_IDX(TO_XY(c.i));
     let elsewhere = L2_IDX(TO_XY(ivec::gather(1_000_000, 1_000_000, 0)));
-    let (objects0, decor0, other0) = (object_col_revision(col_idx), decor_col_revision(col_idx), object_col_revision(elsewhere));
+    let (before, other) = (object_col_revision(col_idx), object_col_revision(elsewhere));
     place_decor(&c, DECOR_SIZE, DecorId::tree);
-    assert!(decor_col_revision(col_idx) > decor0, "decor channel moved");
-    assert_eq!(object_col_revision(elsewhere), other0, "another col_idx did not");
-    let objects1 = object_col_revision(col_idx);
-    let solid = corner(100_021, 0, 0);
-    place(&solid, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
-    assert!(
-        object_col_revision(L2_IDX(TO_XY(solid.i))) > if L2_IDX(TO_XY(solid.i)) == col_idx { objects1 } else { objects0 },
-        "objects channel moved"
-    );
+    assert!(object_col_revision(col_idx) > before, "its own write moved it");
+    assert_eq!(object_col_revision(elsewhere), other, "another column's did not");
+    let (placed, all) = (object_col_revision(col_idx), objects_revision());
+    set_virtual_hide(Some(in_cell(&c).remove(0).at));
+    set_virtual_carve_preview(&corner(100_021, 0, 0), DECOR_SIZE);
+    set_virtual_hide(None);
+    clear_virtual_carve_preview();
+    assert_eq!((object_col_revision(col_idx), objects_revision()), (placed, all), "a preview moved nothing stored");
 }
 
 #[test]

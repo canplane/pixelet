@@ -27,7 +27,7 @@ use xpute_runtime::mem::heap::{free, Block};
 
 use crate::global::Global;
 use crate::kernel::{kernel, with_world};
-use crate::layer::object::store::{decor_col_revision, object_col_revision, object_cols, Store};
+use crate::layer::object::store::{object_col_revision, object_cols, Store};
 use crate::mem::fixed::{bake_at, run_set_at};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::mesh_slot::BAKE_BYTES;
@@ -109,34 +109,47 @@ pub fn chunk_page(page: LevelPage, present: bool) {
     kernel().sched.page(page, present);
 }
 
-/// What a chunk's objects are made of, as a revision: its column's for a
-/// leaf chunk, and every column under a level chunk and its apron summed,
-/// since what it draws is all of theirs folded.
+/// Whether a chunk of `level` at `base` draws the objects of column `col`
+/// in its tiers: its own column's for a leaf chunk, and every column under a
+/// level chunk and its apron, since what it draws is all of theirs folded.
+pub fn tiers_draw(level: u32, base: IVec, col: IVec) -> bool {
+    if level == 0 {
+        col == L2_IDX(base)
+    } else {
+        folds_into(level, base, col)
+    }
+}
+
+/// Whether a chunk of `level` at `base` draws the placed decor of column
+/// `col`: the columns whose corner lies in it.
+pub fn decor_draws(level: u32, base: IVec, col: IVec) -> bool {
+    let span = chunk_span_of(level) as i64;
+    let o = FROM_L2_IDX(col);
+    (ivec::X(base)..ivec::X(base) + span).contains(&ivec::X(o)) && (ivec::Y(base)..ivec::Y(base) + span).contains(&ivec::Y(o))
+}
+
+/// What a chunk's objects are made of, as a revision: the columns its tiers
+/// draw, summed.
 pub fn objects_revision_of(level: u32, base: IVec) -> u32 {
     if level == 0 {
         return object_col_revision(L2_IDX(base));
     }
     object_cols()
         .into_iter()
-        .filter(|&c| folds_into(level, base, c))
+        .filter(|&c| tiers_draw(level, base, c))
         .fold(0u32, |acc, c| acc.wrapping_add(object_col_revision(c)))
 }
 
-/// The decor revision of every column a chunk of `level` at `base` draws
-/// the placed decor of: the columns whose corner lies in it.
+/// What a chunk's placed decor is made of, as a revision: the columns it
+/// draws the decor of, summed.
 pub fn decor_revision_of(level: u32, base: IVec) -> u32 {
     if level == 0 {
-        return decor_col_revision(L2_IDX(base));
+        return object_col_revision(L2_IDX(base));
     }
-    let span = chunk_span_of(level) as i64;
-    let (x0, y0) = (ivec::X(base), ivec::Y(base));
     object_cols()
         .into_iter()
-        .filter(|&c| {
-            let o = FROM_L2_IDX(c);
-            (x0..x0 + span).contains(&ivec::X(o)) && (y0..y0 + span).contains(&ivec::Y(o))
-        })
-        .fold(0u32, |acc, c| acc.wrapping_add(decor_col_revision(c)))
+        .filter(|&c| decor_draws(level, base, c))
+        .fold(0u32, |acc, c| acc.wrapping_add(object_col_revision(c)))
 }
 
 /// Whether the objects of column `col` fold into the level-`level` chunk at
@@ -277,7 +290,7 @@ struct PaintJob {
     /// Whether it paints the builder's folded entries rather than the
     /// store's own: its fold is coarser than an object's finest tier.
     folded: bool,
-    revision: (u32, u32),
+    revision: u32,
     hide: Option<(i32, u32)>,
     carve: Option<Carve>,
 }
@@ -286,10 +299,6 @@ struct PaintJob {
 /// is also the most one entry sets, so a step sets at most twice this
 /// whatever the column holds.
 const PAINT_VOXELS: usize = (BAND_CELLS * BAND_CELLS) as usize;
-
-fn column_revision(col_idx: IVec) -> (u32, u32) {
-    (object_col_revision(col_idx), decor_col_revision(col_idx))
-}
 
 struct BakeJob {
     id: u32,
@@ -693,7 +702,7 @@ impl Builder {
             let paint = PaintJob {
                 next: 0,
                 folded,
-                revision: column_revision(col_idx),
+                revision: object_col_revision(col_idx),
                 hide,
                 carve: self.carve.filter(|c| c.0 == col_idx).map(|c| c.1),
             };
@@ -809,7 +818,7 @@ impl Builder {
     /// begins on it.
     fn advance_paint(&mut self, world: &mut World, id: u32, volume: u32, mut paint: PaintJob) -> Progress {
         let col_idx = self.chunks[&id].col_idx;
-        if column_revision(col_idx) != paint.revision {
+        if object_col_revision(col_idx) != paint.revision {
             self.abort_scan_of(world, id);
             return Progress::Busy;
         }

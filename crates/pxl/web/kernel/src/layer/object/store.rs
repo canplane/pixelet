@@ -42,7 +42,7 @@ use crate::host::{now, storage_get, storage_set};
 use crate::kernel::kernel;
 use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::setting::store::hidden_ground;
-use crate::world::change::{bump_world, wake_at, world_changes, world_edge, DECOR_COLUMN, OBJECT_COLUMN};
+use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
 use crate::world::chunk::node::chunk_sources_changed;
 use crate::world::frame::coord::local_world_to_canonical;
 
@@ -327,8 +327,7 @@ fn cell_run(ix: i64, iy: i64, iz: i64) -> Option<CellRun> {
 /// Moves on every write to any column, so a reader that cached a derived
 /// answer can tell whether the store has changed under it at all.
 pub fn objects_revision() -> u32 {
-    let log = world_changes();
-    log.tick(OBJECT_COLUMN) + log.tick(DECOR_COLUMN)
+    world_changes().tick(OBJECT_COLUMN)
 }
 
 /// A column holding objects, as a box: its coordinate among the L2 blocks on
@@ -373,22 +372,12 @@ pub fn column_boxes() -> &'static [ColumnBox] {
     &held.as_ref().expect("made above").1
 }
 
-fn bump_col(col_idx: IVec, objects: bool, decor: bool) {
-    chunk_sources_changed();
-    if objects {
-        bump_world(OBJECT_COLUMN, col_idx);
-    }
-    if decor {
-        bump_world(DECOR_COLUMN, col_idx);
-    }
-}
-
 /// Applies the writes to the store, which makes each changed column's
-/// entries again inside the call, and announces every column changed in
-/// both of its topics.
+/// entries again inside the call, and announces every column changed.
 fn apply(writes: impl IntoIterator<Item = Write>) {
     for col_idx in kernel().objects.write(writes) {
-        bump_col(col_idx, true, true);
+        chunk_sources_changed();
+        bump_world(OBJECT_COLUMN, col_idx);
     }
 }
 
@@ -509,8 +498,10 @@ struct CarvePreview {
 
 struct StoreState {
     /// The one object painted as absent from the real render build — see
-    /// set_virtual_hide.
+    /// set_virtual_hide — and whether it is drawn in a chunk's tiers, its
+    /// decor, or, where it is gone already, either.
     virtual_hide: Option<EntryAt>,
+    hide_in: (bool, bool),
     virtual_carve_preview: Option<CarvePreview>,
     /// When the pending save is due, if one is.
     save_due_ms: Option<f64>,
@@ -521,6 +512,7 @@ static STORE: Global<StoreState> = Global::new();
 fn store_state() -> &'static mut StoreState {
     STORE.get(|| StoreState {
         virtual_hide: None,
+        hide_in: (false, false),
         virtual_carve_preview: None,
         save_due_ms: None,
     })
@@ -535,33 +527,22 @@ fn store_state() -> &'static mut StoreState {
 /// occupancy) or a raycast paint: the object has not been removed, and the
 /// raycaster is what resolves the hover in the first place — if it stopped
 /// seeing the hidden object, hover would clear, the hide would lift, the
-/// raycaster would hit it again: an infinite loop. Bumps the column's revision, the same path a real
-/// place()/remove() takes.
+/// raycaster would hit it again: an infinite loop.
+///
+/// Nor is it a change to what is stored: no revision moves, so nothing that
+/// reads the store — a save, the boxes a view measures heights by — sees
+/// the hover. A chunk sees it as one of its sources (`render_edits`), in
+/// its tiers or its decor by the entry's kind, so hover churn never
+/// rebakes the wrong half.
 pub fn set_virtual_hide(at: Option<EntryAt>) {
     let st = store_state();
     if st.virtual_hide == at {
         return;
     }
-    let previous = st.virtual_hide.take();
     st.virtual_hide = at;
+    let kind = at.and_then(get_placed_object).map(|o| o.kind);
+    st.hide_in = (!matches!(kind, Some(EntryKind::Decor { .. })), !matches!(kind, Some(EntryKind::Solid { .. })));
     send_render_edits();
-    if let Some(previous) = previous {
-        bump_for_object(previous);
-    }
-    if let Some(at) = at {
-        bump_for_object(at);
-    }
-}
-
-/// Bumps only the revision relevant to the entry's kind — decor or cube
-/// content — so hover churn never rebakes the wrong half; both when the kind
-/// is gone already (erased while hidden), which costs one extra bump on each
-/// side.
-fn bump_for_object(at: EntryAt) {
-    let kind = get_placed_object(at).map(|o| o.kind);
-    let is_decor = matches!(kind, Some(EntryKind::Decor { .. }));
-    let is_solid = matches!(kind, Some(EntryKind::Solid { .. }));
-    bump_col(at.col_idx, !is_decor, !is_solid);
 }
 
 /// The eraser's "dig into bare terrain" preview — the terrain-side twin of
@@ -577,7 +558,6 @@ pub fn set_virtual_carve_preview(at: &Pvf3, size: f64) {
     if st.virtual_carve_preview.as_ref().is_some_and(|c| c.cell == cell) {
         return;
     }
-    let previous = st.virtual_carve_preview.take();
     let [x, y, z] = lowered.step;
     let at = EntryAt {
         col_idx: lowered.col_idx,
@@ -586,35 +566,46 @@ pub fn set_virtual_carve_preview(at: &Pvf3, size: f64) {
     };
     st.virtual_carve_preview = Some(CarvePreview { cell, at });
     send_render_edits();
-    if let Some(previous) = previous {
-        bump_col(previous.at.col_idx, true, false);
-    }
-    bump_col(at.col_idx, true, false);
 }
 
 pub fn clear_virtual_carve_preview() {
-    let Some(carve) = store_state().virtual_carve_preview.take() else { return };
-    send_render_edits();
-    bump_col(carve.at.col_idx, true, false);
+    if store_state().virtual_carve_preview.take().is_some() {
+        send_render_edits();
+    }
 }
 
-/// Tells the builds the two edits, before the bumps that rebuild the columns
-/// they touch reach a chunk.
+/// The drawn build's two edits, which a chunk's sources are compared with
+/// beside the store (world/chunk/table.rs `Sources`): the hidden entry, with
+/// whether it is drawn in tiers and in decor, and the carve preview.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RenderEdits {
+    pub hide: Option<EntryAt>,
+    pub hide_in: (bool, bool),
+    pub carve: Option<EntryAt>,
+}
+
+pub fn render_edits() -> RenderEdits {
+    let st = store_state();
+    RenderEdits {
+        hide: st.virtual_hide,
+        hide_in: st.hide_in,
+        carve: st.virtual_carve_preview.map(|c| c.at),
+    }
+}
+
+/// Tells the builds the two edits, and the chunks that their sources moved.
 fn send_render_edits() {
     let st = store_state();
     let hide = st.virtual_hide.map(|h| (h.col_idx, h.band_idx, h.pos));
     let carve = st.virtual_carve_preview.map(|c| (c.at.col_idx, Carve { band: c.at.band_idx, pos: c.at.pos }));
     kernel().sched.builder.set_edits(hide, carve);
+    chunk_sources_changed();
 }
 
-/// Cube-content revision of a column — a decor-only change never bumps it.
+/// A column's revision: it moves on every write to what the column stores,
+/// and on nothing else.
 pub fn object_col_revision(col_idx: IVec) -> u32 {
     world_changes().revision_of(OBJECT_COLUMN, col_idx as i64)
-}
-
-/// Decor revision of a column — a solid-only change never bumps it.
-pub fn decor_col_revision(col_idx: IVec) -> u32 {
-    world_changes().revision_of(DECOR_COLUMN, col_idx as i64)
 }
 
 // ---- Persistence ----
