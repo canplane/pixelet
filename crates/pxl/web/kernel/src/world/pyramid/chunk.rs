@@ -9,7 +9,7 @@
 use pxl_spec::space::hierarchy::{child_of, parent_of};
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::{cell_base, chunk_span_of, span_of, Cell, LevelPage, CHUNK_CELLS, PAGE_CELLS, PAGE_CHUNKS, TOP_LEVEL};
+use pxl_spec::space::pyramid::{chunk_span_of, span_of, LevelPage, CHUNK_CELLS, GROUND, PAGE_CELLS, PAGE_CHUNKS, TOP_LEVEL};
 
 /// A chunk by where it is: its page, and its corner in the page's cells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -22,7 +22,7 @@ pub struct Chunk {
 impl Chunk {
     /// The level-`level` chunk a point stands in.
     pub fn of(level: u32, at: &Pvf3) -> Chunk {
-        let cell = Cell::of(level, at);
+        let cell = GROUND.cell_of(level, at);
         let (tx, ty) = (cell.index() % PAGE_CELLS, cell.index() / PAGE_CELLS);
         Chunk {
             page: cell.page(),
@@ -43,7 +43,7 @@ impl Chunk {
 
     /// The chunk's corner and side, in units.
     pub fn rect(self) -> (f64, f64, f64) {
-        let base = cell_base(self.page, self.bx, self.by);
+        let base = GROUND.cell_base(self.page, self.bx, self.by);
         (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)), chunk_span_of(self.page.level))
     }
 

@@ -100,6 +100,18 @@ pub fn child_of<const D: usize>(at: [i64; D], slot: usize) -> [i64; D] {
     std::array::from_fn(|i| 2 * at[i] + ((slot >> i) & 1) as i64)
 }
 
+/// The node `levels` up that `at` lies under: `parent_of` taken `levels`
+/// times, which on the signed lanes is one floor.
+pub fn ancestor_of<const D: usize>(at: [i64; D], levels: u32) -> [i64; D] {
+    at.map(|v| v >> levels)
+}
+
+/// The first of the nodes `levels` down under `at`, every slot 0: `child_of`
+/// taken `levels` times, and `ancestor_of`'s inverse there.
+pub fn first_descendant_of<const D: usize>(at: [i64; D], levels: u32) -> [i64; D] {
+    at.map(|v| v << levels)
+}
+
 /// Where a depth-first walk that visits each node's children in slot order
 /// reaches the node at `at`, `levels` below the block it starts from: each
 /// level's slot (`slot_of`), the coarsest first. Nodes a walk visits

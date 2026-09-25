@@ -17,6 +17,27 @@ fn a_child_is_its_parent_and_slot_in_two_and_three_dimensions() {
     }
 }
 
+/// Several levels at once are one level taken as many times: an ancestor is
+/// its parent's parent, and the first descendant is the one it gives back.
+#[test]
+fn several_levels_are_one_level_taken_as_many_times() {
+    for at in [[5i64, -3], [-1, -1], [0, 8], [-9, 17]] {
+        for levels in 0..5 {
+            let mut up = at;
+            for _ in 0..levels {
+                up = parent_of(up);
+            }
+            assert_eq!(ancestor_of(at, levels), up);
+            let mut first = at;
+            for _ in 0..levels {
+                first = child_of(first, 0);
+            }
+            assert_eq!(first_descendant_of(at, levels), first);
+            assert_eq!(ancestor_of(first_descendant_of(at, levels), levels), at);
+        }
+    }
+}
+
 /// A scale counts, steps and measures as one power of two: a side is the
 /// count of the unit in it, stepping up and back is the identity, and a count
 /// across several levels is the product of the counts across each.

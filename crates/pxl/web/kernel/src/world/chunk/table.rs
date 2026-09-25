@@ -20,7 +20,7 @@
 //! go. The nodes hold the meshes; this holds every decision about them.
 
 use pxl_spec::space::indexer::FROM_L2_IDX;
-use pxl_spec::space::pyramid::{chunk_span_of, Cell, CHUNK_CELLS, GROUND, PAGE_CELLS, PAGE_CHUNKS};
+use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, PAGE_CELLS, PAGE_CHUNKS};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
@@ -1709,8 +1709,8 @@ impl Scheduler {
         (0..=TOP_LEVEL).find_map(|level| {
             let id = self.mounted.get(&Chunk::of(level, at))?;
             let d = self.drawn_of(&self.slots[*self.index.get(id)?])?;
-            let cell = Cell::of(d.cell_level(), at);
-            let first = Cell::of(d.cell_level(), &Pvf3 { i: d.base, ..Default::default() });
+            let cell = GROUND.cell_of(d.cell_level(), at);
+            let first = GROUND.cell_of(d.cell_level(), &Pvf3 { i: d.base, ..Default::default() });
             let at = |i: u32| i % PAGE_CELLS;
             let (bx, by) = (at(cell.index()).wrapping_sub(at(first.index())), (cell.index() / PAGE_CELLS).wrapping_sub(first.index() / PAGE_CELLS));
             Some((d.cell_level(), d.top(bx, by)?))

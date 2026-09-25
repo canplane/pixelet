@@ -32,7 +32,7 @@ use pxl_render::asset::atlas::NO_SLOT;
 
 use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::{ivec, projection};
-use pxl_spec::space::pyramid::{cell_base, Cell, LevelPage, GROUND, TOP_LEVEL};
+use pxl_spec::space::pyramid::{Cell, LevelPage, GROUND, TOP_LEVEL};
 use std::collections::{BTreeMap, HashSet};
 
 #[derive(Default)]
@@ -83,7 +83,7 @@ pub fn step(ctx: &mut TickContext) {
         // coarser one is as fine as there is until the view's own arrives.
         let coarser = domain.wanted_over(chunk).level() - chunk.level();
         // The chunk's ground, in the POI lattice's cells of its level.
-        let first = POI_LATTICE.cell_of(chunk.level(), &cell_base(chunk.page, chunk.bx, chunk.by)).index();
+        let first = POI_LATTICE.cell_of(chunk.level(), &GROUND.cell_base(chunk.page, chunk.bx, chunk.by)).index();
         let (x0, y0) = (first % across, first / across);
         for ty in y0..y0 + n {
             let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + n, ty));

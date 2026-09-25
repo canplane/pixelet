@@ -17,7 +17,7 @@
 //! lists, so nothing here decides what is shown, and a block never has to
 //! outlive the scheduler's naming of it.
 
-use pxl_spec::space::pyramid::{chunk_span_of, Cell, CHUNK_CELLS, GROUND, PAGE_CELLS};
+use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, PAGE_CELLS};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
@@ -756,7 +756,7 @@ impl Builder {
     /// whichever level it is drawn at. With what it is valid for, which a
     /// cached composite is compared by.
     pub fn compose_leaf(&mut self, world: &mut World, base: IVec) -> Option<(u32, u32)> {
-        let cell = Cell::of(0, &pxl_spec::space::pvf3::Pvf3 { i: base, ..Default::default() });
+        let cell = GROUND.cell_of(0, &pxl_spec::space::pvf3::Pvf3 { i: base, ..Default::default() });
         let (leaf, first) = (cell.page(), cell.index());
         let page = Terrain::pyramid().get(leaf).map(page_lanes)?;
         let (tx0, ty0) = (first % PAGE_CELLS, first / PAGE_CELLS);

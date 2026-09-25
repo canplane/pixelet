@@ -3,7 +3,7 @@
 use super::*;
 use pxl_spec::bake::poi_page::{Place, PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::{ivec, Pvf3};
-use pxl_spec::space::pyramid::{cell_base, span_of};
+use pxl_spec::space::pyramid::{span_of, GROUND};
 use window::{domain_for, Eye};
 
 /// How high the eye stands over flat ground: where the rule wants level 2
@@ -101,7 +101,7 @@ fn count(pyramid: &Pyramid<PoiPage>, c: Chunk) -> u32 {
     let page = pyramid.get(c.page).expect("a drawn chunk's page is resident");
     // The chunk's ground in the POI lattice's cells of its level.
     let (n, across) = (POI_LATTICE.chunk_cells(), POI_LATTICE.page_cells());
-    let first = POI_LATTICE.cell_of(c.level(), &cell_base(c.page, c.bx, c.by)).index();
+    let first = POI_LATTICE.cell_of(c.level(), &GROUND.cell_base(c.page, c.bx, c.by)).index();
     let (x0, y0) = (first % across, first / across);
     (y0..y0 + n)
         .map(|ty| {
