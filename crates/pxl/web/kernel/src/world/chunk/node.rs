@@ -19,9 +19,8 @@ use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
-use pxl_spec::bake::constant::{pack_pos, BandZ, BAND, CELL, ELE_PADDED_SPAN, OBJECT_FINEST};
-use pxl_spec::bake::pack::GroundCell;
-use pxl_spec::space::indexer::{FROM_L2_IDX, L1, L2, L2_IDX};
+use pxl_spec::bake::constant::{pack_pos, BandZ, BAND, CELL, OBJECT_FINEST};
+use pxl_spec::space::indexer::{FROM_L2_IDX, L1, L2, L2_IDX, L3_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use xpute_runtime::mem::heap::{free, Block};
 
@@ -93,14 +92,6 @@ pub fn chunk_sources_changed() {
 pub fn chunk_sources_step() {
     if core::mem::take(SOURCES_CHANGED.get(|| false)) {
         with_world(|world, sched| sched.sources_step(world));
-    }
-}
-
-/// A terrain page's lanes, where they lie in the memory.
-pub fn page_lanes(tile: &Terrain) -> PageLanes {
-    PageLanes {
-        cells: tile.ground.cells.as_ptr() as usize,
-        ele: tile.ele.as_ptr() as usize,
     }
 }
 
@@ -214,14 +205,6 @@ pub enum BuildEvent {
     },
 }
 
-/// A terrain page's lanes, as addresses into the memory.
-#[derive(Clone, Copy)]
-pub struct PageLanes {
-    /// The page's ground cells, packed (pxl-spec bake/pack.rs).
-    pub cells: usize,
-    pub ele: usize,
-}
-
 /// A chunk's runs: which of `.fixed.runs`'s sets, and what is in it — and
 /// the scale its objects were folded to where it painted any
 /// (`object_fold`), which only the cubes that fold to it are baked from.
@@ -246,7 +229,6 @@ struct Chunk {
     /// Where the chunk starts in its page, in cells.
     tx0: u32,
     ty0: u32,
-    page: Option<PageLanes>,
     show_structures: bool,
     generation: u32,
     /// The tiers the node lacks, in the order it wants them.
@@ -259,6 +241,12 @@ struct Chunk {
 }
 
 impl Chunk {
+    /// The page the chunk is drawn from, where it is resident: a chunk is
+    /// mounted from a resident page, which stays until the chunk goes.
+    fn page(&self) -> Option<&'static Terrain> {
+        Terrain::pyramid().get(LevelPage::over(self.level, L3_IDX(self.base)))
+    }
+
     fn wants(&self, cube: Cube) -> bool {
         self.want.contains(&Some(cube))
     }
@@ -400,17 +388,17 @@ impl Builder {
     /// Where chunk `id` starts in its page, the page's lanes and the
     /// structure setting it is drawn under: the ground its decor is
     /// scattered over, at any level. None while its page has not come.
-    pub fn ground_of(&self, id: u32) -> Option<(u32, u32, PageLanes, bool)> {
+    pub fn ground_of(&self, id: u32) -> Option<(u32, u32, &'static Terrain, bool)> {
         let c = self.chunks.get(&id)?;
-        Some((c.tx0, c.ty0, c.page?, c.show_structures))
+        Some((c.tx0, c.ty0, c.page()?, c.show_structures))
     }
 
     /// What chunk `id` is made of, for a decor build: its corner, the column
     /// it stands in as the object store keys it, where it starts in its page,
     /// and its page's lanes.
-    pub fn source_of(&self, id: u32) -> Option<(IVec, IVec, u32, u32, PageLanes, bool)> {
+    pub fn source_of(&self, id: u32) -> Option<(IVec, IVec, u32, u32, &'static Terrain, bool)> {
         let c = self.chunks.get(&id).filter(|c| c.level == 0)?;
-        Some((c.base, c.col_idx, c.tx0, c.ty0, c.page?, c.show_structures))
+        Some((c.base, c.col_idx, c.tx0, c.ty0, c.page()?, c.show_structures))
     }
 
     /// What a leaf composite at `base` is valid for: its column's objects and
@@ -428,7 +416,7 @@ impl Builder {
     pub fn compose_leaf(&mut self, world: &mut World, base: IVec) -> Option<(u32, u32)> {
         let cell = GROUND.cell_of(0, &pxl_spec::space::pvf3::Pvf3 { i: base, ..Default::default() });
         let (leaf, first) = (cell.page(), cell.index());
-        let page = Terrain::pyramid().get(leaf).map(page_lanes)?;
+        let page = Terrain::pyramid().get(leaf)?;
         let (tx0, ty0) = (first % PAGE_CELLS, first / PAGE_CELLS);
         let show = settings_store().show_structures;
         let col_idx = L2_IDX(base);
@@ -477,7 +465,6 @@ impl Builder {
                 col_idx: L2_IDX(base),
                 tx0,
                 ty0,
-                page: None,
                 show_structures: false,
                 generation: 0,
                 want: [None; 2],
@@ -494,10 +481,9 @@ impl Builder {
 
     /// The chunk's sources changed: what it was built from is gone, and a
     /// tier built before now is stale.
-    pub fn source(&mut self, world: &mut World, id: u32, page: Option<PageLanes>, show_structures: bool) {
+    pub fn source(&mut self, world: &mut World, id: u32, show_structures: bool) {
         self.drop_work(world, id);
         if let Some(c) = self.chunks.get_mut(&id) {
-            c.page = page;
             c.show_structures = show_structures;
             c.generation = c.generation.wrapping_add(1);
         }
@@ -668,7 +654,7 @@ impl Builder {
 
     fn advance_runs(&mut self, world: &mut World, id: u32) -> Progress {
         let c = &self.chunks[&id];
-        let Some(page) = c.page else { return Progress::Blocked };
+        let Some(page) = c.page() else { return Progress::Blocked };
         if c.level > 0 {
             return self.level_runs(world, id, page);
         }
@@ -748,34 +734,24 @@ impl Builder {
         world.store.entries(col_idx).is_some() || matches!(self.carve, Some((k, _)) if k == col_idx)
     }
 
-    /// The page's lanes as slices.
-    ///
-    /// # Safety
-    /// `page` names lanes of a page's fixed shape inside the world's memory,
-    /// resident for as long as the view is read: what the scheduler promises
-    /// when it tells a chunk its source, a chunk being mounted from a resident
-    /// page that stays until it goes.
-    pub unsafe fn page_view(world: &World, page: PageLanes) -> PageView<'static> {
-        let mem = world.volumes.mem();
-        let cells = (PAGE_CELLS * PAGE_CELLS) as usize;
-        let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
+    /// A page's lanes as the paint reads them.
+    pub fn page_view(page: &Terrain) -> PageView<'_> {
         PageView {
-            cells: core::slice::from_raw_parts(mem.add(page.cells) as *const GroundCell, cells),
-            ele: core::slice::from_raw_parts(mem.add(page.ele) as *const i16, samples),
+            cells: &page.ground.cells,
+            ele: &page.ele,
         }
     }
 
     /// A new volume with the chunk's terrain painted in, open; none when a
     /// paint was refused.
-    fn paint_terrain(&mut self, world: &mut World, id: u32, page: PageLanes) -> Option<u32> {
+    fn paint_terrain(&mut self, world: &mut World, id: u32, page: &Terrain) -> Option<u32> {
         let c = &self.chunks[&id];
         let (tx0, ty0, show) = (c.tx0, c.ty0, c.show_structures);
         self.paint_terrain_at(world, tx0, ty0, show, page)
     }
 
-    fn paint_terrain_at(&mut self, world: &mut World, tx0: u32, ty0: u32, show: bool, page: PageLanes) -> Option<u32> {
-        // SAFETY: a resident page's lanes, read within the command.
-        let view = unsafe { Self::page_view(world, page) };
+    fn paint_terrain_at(&mut self, world: &mut World, tx0: u32, ty0: u32, show: bool, page: &Terrain) -> Option<u32> {
+        let view = Self::page_view(page);
         self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
         let volume = world.volumes.open();
         if !self.sample.paint(world.volumes, volume) {
@@ -858,15 +834,13 @@ impl Builder {
         Progress::Busy
     }
 
-    fn direct_runs(&mut self, world: &mut World, id: u32, page: PageLanes) -> Progress {
+    fn direct_runs(&mut self, world: &mut World, id: u32, page: &Terrain) -> Progress {
         if self.run_set_for(id).is_none() {
             return Progress::Blocked;
         }
         let c = &self.chunks[&id];
         let (tx0, ty0, show) = (c.tx0, c.ty0, c.show_structures);
-        // SAFETY: the chunk's page, as its source named it, resident while
-        // the chunk is.
-        let view = unsafe { Self::page_view(world, page) };
+        let view = Self::page_view(page);
         self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
         assert!(self.direct.begin_direct(), "the direct writer left open");
         let floor = self.sample.floor;
@@ -896,15 +870,13 @@ impl Builder {
     /// A level chunk's runs, written the direct way: its level page's ground
     /// and the object layer folded to its level (pxl-render mesh/paint/level.rs),
     /// in the level's cells. Cheap to make again, like a leaf's direct runs.
-    fn level_runs(&mut self, world: &mut World, id: u32, page: PageLanes) -> Progress {
+    fn level_runs(&mut self, world: &mut World, id: u32, page: &Terrain) -> Progress {
         if self.run_set_for(id).is_none() {
             return Progress::Blocked;
         }
         let c = &self.chunks[&id];
         let (tx0, ty0, show, level, base) = (c.tx0, c.ty0, c.show_structures, c.level, c.base);
-        // SAFETY: the chunk's page, as its source named it, resident while
-        // the chunk is.
-        let view = unsafe { Self::page_view(world, page) };
+        let view = Self::page_view(page);
         self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
         let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));

@@ -53,7 +53,7 @@ use crate::layer::model::store::Models;
 use crate::layer::object::store::{render_edits, EntryAt, RenderEdits};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
-use crate::world::chunk::node::{decor_draws, decor_revision_of, mesh_step, objects_revision_of, page_lanes, release_block, tiers_draw, BuildEvent, Builder, Cube, World, MAX_CHUNKS};
+use crate::world::chunk::node::{decor_draws, decor_revision_of, mesh_step, objects_revision_of, release_block, tiers_draw, BuildEvent, Builder, Cube, World, MAX_CHUNKS};
 use xpute_core::math::scalar::round;
 
 use crate::world::pyramid::chunk::Chunk;
@@ -812,7 +812,7 @@ impl Scheduler {
         let edits = render_edits();
         let sources = Sources::of(k, edits);
         self.builder.add(id, level, k.base().i, bx, by);
-        self.builder.source(world, id, Terrain::pyramid().get(k.page()).map(page_lanes), sources.show_structures);
+        self.builder.source(world, id, sources.show_structures);
         let (base_x, base_y, _) = k.rect();
         let span = chunk_span_of(level);
         let mut slot = Slot {
@@ -911,8 +911,8 @@ impl Scheduler {
     fn source(&mut self, world: &mut World, i: usize) {
         self.view_dirty = true;
         let before = self.slots[i].retained();
-        let (id, k, show_structures) = (self.slots[i].id, self.slots[i].chunk, self.slots[i].sources.show_structures);
-        self.builder.source(world, id, Terrain::pyramid().get(k.page()).map(page_lanes), show_structures);
+        let (id, show_structures) = (self.slots[i].id, self.slots[i].sources.show_structures);
+        self.builder.source(world, id, show_structures);
         let s = &mut self.slots[i];
         if !s.layout_ready {
             s.unmeasured();
@@ -1033,9 +1033,7 @@ impl Scheduler {
                 continue;
             }
             let source = self.builder.ground_of(id);
-            // SAFETY: the chunk's page, resident while the chunk is, read
-            // within the command.
-            let view = source.map(|(_, _, page, _)| unsafe { Builder::page_view(world, page) });
+            let view = source.map(|(_, _, page, _)| Builder::page_view(page));
             if let (Some((tx0, ty0, _, show)), Some(view)) = (source, view.as_ref()) {
                 if scatters {
                     self.decor_sample.read(view, world.materials, tx0, ty0, hidden_ground(show));
