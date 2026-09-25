@@ -5,14 +5,12 @@
 //! centre corners, and the two frames' gyro rings — one fixed to the screen
 //! whatever the azimuth, one turning with the map so its vertex points north —
 //! as line segments the kernel holds and the renderer draws over everything
-//! (the second half), with labels at points drawn as billboards: a line of
+//! (debug_lines.rs), with labels at points drawn as billboards: a line of
 //! text a label in the one sheet (layer/billboard/sheet.rs), one set standing
 //! where the lines do. The map's part is rebuilt when the map moves, the
 //! frames' part when the view does; both go to the kernel as one set.
 
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
-use pxl_render::frame::draw::{DrawList, Held, PIPELINE_DEBUG};
-use pxl_render::gpu::api::word_bytes;
 use pxl_render::gpu::pass::badges::LABEL_FONT;
 use pxl_render::gpu::surface::DPR_MAX;
 use pxl_spec::bake::constant::U_PER_CELL;
@@ -31,7 +29,6 @@ use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::terrain::elevation::{ground_at, with_ele};
 use crate::world::change::request_world_tick;
-use crate::world::chunk::build::World;
 use crate::world::frame::view::view;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
@@ -387,44 +384,4 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
 /// The labels of the drawn sketch.
 pub fn debug_labels() -> &'static [Label] {
     gizmos().drawn.labels.as_slice()
-}
-
-// ---- the gizmos as the kernel holds them ----
-//
-// Line segments over the world, drawn on top of everything — the frame's
-// origins, page corners and the map centre. The segments are
-// written whenever what they mark moves; this holds them as a block and
-// lists their draw each frame, placed against the frame's origin.
-
-/// Floats a vertex takes: its position relative to the set's origin (3)
-/// and its colour, linear (3). Two vertices a segment.
-pub const DEBUG_VERTEX_FLOATS: usize = 6;
-
-#[derive(Default)]
-pub struct DebugLines {
-    held: Held,
-    vertex_cnt: u32,
-    origin: V3,
-}
-
-impl DebugLines {
-    /// Replaces the segments with `vertex_cnt` vertices from `lane`,
-    /// relative to `origin` in units.
-    ///
-    /// # Safety
-    /// `lane` addresses vertex_cnt * DEBUG_VERTEX_FLOATS f32s in the memory.
-    pub unsafe fn set(&mut self, world: &mut World, draw: &mut DrawList, origin: V3, vertex_cnt: u32, lane: usize) {
-        let len = word_bytes(vertex_cnt as usize * DEBUG_VERTEX_FLOATS);
-        let written = self.held.write(draw, world.volumes.mem(), lane, len);
-        self.vertex_cnt = if written { vertex_cnt } else { 0 };
-        self.origin = origin;
-    }
-
-    pub fn draw(&self, draw: &mut DrawList, origin: V3) {
-        if self.vertex_cnt == 0 || self.held.handle == 0 {
-            return;
-        }
-        let t = DrawList::translation(self.origin, origin);
-        draw.draw_as(PIPELINE_DEBUG, self.held.handle, self.vertex_cnt, 0, t, 0.0, 1.0);
-    }
 }

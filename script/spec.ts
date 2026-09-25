@@ -547,7 +547,7 @@ async function colorOutputs(): Promise<Output[]> {
     for (const [name, entry] of Object.entries(entries as Record<string, { hex: string; note?: string }>)) {
       if (!channel.entries.some((e) => "name" in e && e.name === name)) throw new Error(`color.json: ${ch}.${name} is no type cube_type.json has`);
       if (entry.note !== undefined) rs.push(`        // ${entry.note}`);
-      rs.push(`        cube_types::${ch}::${rsIdent(name)} => Some(Swatch::new(${JSON.stringify(entry.hex)}, ${rgbLiteral(entry.hex)})),`);
+      rs.push(`        cube_types::${ch}::${rsIdent(name)} => Some(Swatch::new(${rgbLiteral(entry.hex)})),`);
     }
     rs.push("        _ => None,", "    }", "}");
   }
@@ -1135,9 +1135,10 @@ async function publishedOutputs(): Promise<Output[]> {
 //
 // The shell reads the table by a place's category key, which a search result
 // carries as text (the data spec above writes that). What the Rust reads is a
-// kind as the number a POI page carries it by, so it is written as one list in
-// the JSON's order: the bake numbers a place's category by it, and the kernel
-// draws a badge from it.
+// kind as the number a POI page carries it by, so it is written as two lists
+// in the JSON's order, indexed alike: the categories, which the bake numbers a
+// place by, and the themes, which the kernel draws a badge from — apart, so a
+// module that only draws carries no category name.
 
 interface PoiThemeSpec {
   $doc: string[];
@@ -1167,9 +1168,15 @@ async function poiThemeOutputs(): Promise<Output[]> {
     "    pub color: u32,",
     "}",
     "",
-    "/// Every kind by its key, kind k at `KINDS[k - 1]`.",
-    `pub const KINDS: [(&str, PoiTheme); ${kinds.length}] = [`,
-    ...kinds.map(([k, t]) => `    (${JSON.stringify(k)}, ${theme(t)}),`),
+    "/// Each kind's category, kind k at `KIND_CATEGORIES[k - 1]`: what the bake",
+    "/// numbers a place by. The kernel reads none of it.",
+    `pub const KIND_CATEGORIES: [&str; ${kinds.length}] = [`,
+    ...kinds.map(([k]) => `    ${JSON.stringify(k)},`),
+    "];",
+    "",
+    "/// Each kind's theme, kind k at `KIND_THEMES[k - 1]`: what a badge draws.",
+    `pub const KIND_THEMES: [PoiTheme; ${kinds.length}] = [`,
+    ...kinds.map(([, t]) => `    ${theme(t)},`),
     "];",
     "",
     "/// A place of no kind the table names.",

@@ -132,7 +132,7 @@ fn a_page_that_names_a_crowd_or_splits_a_character_is_refused() {
     assert!(decode(&split).is_err());
     let mut unknown = good;
     // The first place's kind, past the theme's last.
-    unknown[at + 2 * 4] = KINDS.len() as u8 + 1;
+    unknown[at + 2 * 4] = KIND_THEMES.len() as u8 + 1;
     assert!(decode(&unknown).is_err());
     let mut bytes = encode(&PoiPage::of_places(0, [(point(1, 0, 0, 0), called("a"))])).unwrap();
     // One code point past the bound, written in over the pool's one name.

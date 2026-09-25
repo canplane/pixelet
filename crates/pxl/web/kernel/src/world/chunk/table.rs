@@ -47,7 +47,7 @@ use crate::layer::billboard::field::Billboards;
 use crate::layer::decor::build::{decor_density, DecorBuild, Ground, Kind as DecorKind, Placed};
 use crate::layer::decor::instance::{decor_groups, DecorScratch};
 use crate::layer::environment::state::EnvironmentDraw;
-use crate::layer::marker::frame_gizmo::DebugLines;
+use crate::layer::marker::debug_lines::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
 use crate::layer::model::store::Models;
@@ -597,7 +597,7 @@ pub struct Scheduler {
     pub decor_models: Vec<Option<u32>>,
     /// The sun, the moon, the light and the sky (layer/environment/state.rs).
     pub environment: EnvironmentDraw,
-    /// The dev gizmos (marker/frame_gizmo.rs).
+    /// The dev gizmos' segments (marker/debug_lines.rs).
     pub debug: DebugLines,
     slots: Vec<Slot>,
     /// Where each mounted chunk's slot is: the one way a chunk is found. A

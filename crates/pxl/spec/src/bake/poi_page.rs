@@ -24,7 +24,7 @@
 
 use std::collections::HashMap;
 
-use crate::bake::poi_theme::{PoiTheme, DEFAULT_THEME, KINDS};
+use crate::bake::poi_theme::{PoiTheme, DEFAULT_THEME, KIND_CATEGORIES, KIND_THEMES};
 use crate::space::pvf3::pvf3::Pvf3;
 use crate::space::pyramid::{Folds, Lattice, LevelPage, GROUND, TOP_LEVEL};
 
@@ -137,12 +137,12 @@ impl<'a> Pool<'a> {
 
 /// A kind's number, by the theme's key for it; 0 where the theme has none.
 pub fn kind_of(key: &str) -> u8 {
-    KINDS.iter().position(|(k, _)| *k == key).map_or(0, |i| i as u8 + 1)
+    KIND_CATEGORIES.iter().position(|k| *k == key).map_or(0, |i| i as u8 + 1)
 }
 
 /// How kind `kind` is drawn: its own theme, or the default for none.
 pub fn theme(kind: u8) -> PoiTheme {
-    kind.checked_sub(1).and_then(|i| KINDS.get(i as usize)).map_or(DEFAULT_THEME, |(_, t)| *t)
+    kind.checked_sub(1).and_then(|i| KIND_THEMES.get(i as usize)).copied().unwrap_or(DEFAULT_THEME)
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -322,7 +322,7 @@ fn validate(page: &PoiPage) -> Result<(), &'static str> {
     if page.cells.iter().any(|c| c.place != NO_PLACE && (c.count != 1 || c.place >= page.places.len())) {
         return Err("a POI place where no one place is");
     }
-    if page.places.kinds.iter().any(|&k| k as usize > KINDS.len()) {
+    if page.places.kinds.iter().any(|&k| k as usize > KIND_THEMES.len()) {
         return Err("a POI place of a kind the theme does not have");
     }
     if page.cells.iter().any(|c| c.at.iter().any(|&l| l > 0xffff)) {

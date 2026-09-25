@@ -118,10 +118,9 @@ pub fn heap_at(data_end: u32) -> u32 {
 pub fn lay_out(bytes: u32, data_end: u32) -> Map {
     let regions = bytes / REGION_BYTES;
     let heap = heap_at(data_end);
-    assert!(
-        heap + MIN_HEAP_BYTES <= regions * REGION_BYTES,
-        "what is fixed in this memory leaves the heap less than it is budgeted: {FIXED_BYTES} bytes of fixed ranges past {data_end}, and the heap begins at {heap}"
-    );
+    // What is fixed in this memory leaves the heap less than it is budgeted:
+    // where the heap began, against the memory the device gave.
+    xpute_core::ensure!(heap + MIN_HEAP_BYTES <= regions * REGION_BYTES, ENOMEM, heap, bytes);
     Map {
         fixed: Section {
             offset: fixed_at(data_end),

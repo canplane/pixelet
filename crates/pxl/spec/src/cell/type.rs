@@ -1,19 +1,17 @@
 // pxl-spec/cell/type.rs
 
-/// A catalog colour, in both the forms anyone wants it: as written, for a
-/// record a person reads, and packed `0xRRGGBB` by the generator, for
-/// everything that has to light or blend with it. One table carries both
-/// because they are one colour — a second table keyed the same way is how
-/// they come to disagree.
+/// A catalog colour, packed `0xRRGGBB` by the generator from the hex
+/// color.json writes it in: what everything that has to light or blend with
+/// it reads. The hex is the JSON's and the shell's; nothing here reads it,
+/// so the module does not carry it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Swatch {
-    pub hex: &'static str,
     pub rgb: u32,
 }
 
 impl Swatch {
-    pub const fn new(hex: &'static str, rgb: u32) -> Swatch {
-        Swatch { hex, rgb }
+    pub const fn new(rgb: u32) -> Swatch {
+        Swatch { rgb }
     }
 }
 
