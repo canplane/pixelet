@@ -126,6 +126,14 @@ pub struct At {
 }
 
 impl At {
+    /// Where a cube of `side` with its corner at `at` is filed: the corner
+    /// lowered to the cube's own lattice, which is the only place a cube of
+    /// that side can be, so a corner off it is not one to store another
+    /// way than it is drawn, checked and placed.
+    pub fn of_cube(at: &Pvf3, side: Scale) -> At {
+        At::of(&side.base_of(side.index_of(at)))
+    }
+
     pub fn of(at: &Pvf3) -> At {
         let cell = CELL.index_of(at);
         At {
@@ -336,25 +344,19 @@ pub fn cell_is_occupied(ix: i64, iy: i64, iz: i64) -> bool {
     cell_run(ix, iy, iz).is_some_and(|run| run.solid > 0)
 }
 
-/// Objects near a candidate corner+size — the cell it's in plus the 26
-/// neighbors, since a candidate near a cell face can legitimately need to see
-/// an object one cell over (collision.rs's find_overlapping_object, ray.rs's
-/// resolve_hit_object). 27 O(1) lookups, still independent of total object
-/// count.
-pub fn get_objects_near(corner: &Pvf3) -> Vec<OccupiedEntry> {
-    let [cx, cy, cz] = CELL.index_of(corner);
-    // size can push the candidate's own far corner into the NEXT cell too —
-    // covered by the same 3x3x3 neighborhood as long as size <= one cell
-    // (object/size.rs's own largest tier), which every placeable size is.
-    let mut out = Vec::new();
-    for dx in -1..=1 {
-        for dy in -1..=1 {
-            for dz in -1..=1 {
-                occupants(cx + dx, cy + dy, cz + dz, &mut out);
-            }
-        }
-    }
-    out
+/// Every object claiming the cell `at` stands in.
+pub fn objects_at(at: &Pvf3) -> Vec<OccupiedEntry> {
+    let [ix, iy, iz] = CELL.index_of(at);
+    get_objects_in_cell(ix, iy, iz)
+}
+
+/// A cube as a node of the hierarchy: its side, and its index at that side,
+/// the corner lowered to its own lattice as the store files it (`At`). Two
+/// cubes share space exactly when one's node lies under the other's
+/// (hierarchy.rs `share`), since every cube sits on its own size's lattice.
+pub fn cube_node(corner: &Pvf3, size: f64) -> (Scale, [i64; 3]) {
+    let side = Scale::of_side(size);
+    (side, side.index_of(corner))
 }
 
 /// One object by its address, or None — the address says which cell it is
@@ -437,7 +439,7 @@ pub fn set_virtual_hide(at: Option<EntryAt>) {
 /// reason. `i`/`f`/`size` match what a real place_air() at this hover would
 /// write, so the preview renders identically to what it stands in for.
 pub fn set_virtual_carve_preview(at: &Pvf3, size: f64) {
-    let lowered = At::of(at);
+    let lowered = At::of_cube(at, Scale::of_side(size));
     let cell = lowered.cell();
     let st = store_state();
     if st.virtual_carve_preview.as_ref().is_some_and(|c| c.cell == cell) {
@@ -709,10 +711,10 @@ pub fn flush_save() {
 
 // ---- Mutations ----
 
-/// i/f is taken as-is — whatever camera/ray.rs's world_adjacent_corner
-/// already computed (the same coordinate the hover preview and overlap check
-/// used), never re-derived or re-snapped here. One source of truth for where
-/// a placement goes, not a second one that quietly overrides it.
+/// i/f is what camera/ray.rs's world_adjacent_corner computed — the same
+/// coordinate the hover preview and the overlap check used — filed on the
+/// cube's own lattice (`At::of_cube`), which that corner already lies on, so
+/// the write names the cube they did.
 ///
 /// The kernel writes the leaf, compacts the band and drops it — and the
 /// column — once every leaf in it reads back VOID: a redundant place() and a
@@ -727,12 +729,13 @@ fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
 fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
     // size is always an exact power of two by construction (object/size.rs's
     // OBJECT_SIZES); the nearest scale only guards against float noise.
-    let at = At::of(coord);
+    let scale = Scale::of_side(size);
+    let at = At::of_cube(coord, scale);
     Write {
         col_idx: at.col_idx,
         band_idx: at.band,
         at: at.step,
-        scale: Scale::of_side(size),
+        scale,
         state: val,
     }
 }

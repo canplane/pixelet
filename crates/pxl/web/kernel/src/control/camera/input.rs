@@ -247,12 +247,11 @@ fn handle_tap(hovered: Pvf3) {
         ActiveTool::Decor | ActiveTool::Object => {
             // Still guard against the candidate slot being occupied since the
             // last hover update.
-            let map_origin = local_world_origin();
             if ui.active_tool == ActiveTool::Decor {
-                if !is_placement_blocked(PlacementTool::Decor, &hovered, object_size, map_origin) {
+                if !is_placement_blocked(PlacementTool::Decor, &hovered, object_size) {
                     place_decor(&hovered, DECOR_SIZE, ui.decor_id);
                 }
-            } else if !is_placement_blocked(PlacementTool::Object, &hovered, object_size, map_origin) {
+            } else if !is_placement_blocked(PlacementTool::Object, &hovered, object_size) {
                 place(&hovered, object_size, ui.object_cube, settings_store().show_structures);
             }
         }

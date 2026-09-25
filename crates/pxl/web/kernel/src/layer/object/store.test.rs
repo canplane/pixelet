@@ -4,7 +4,7 @@
 // A col_idx's changes are read as its revisions moving, which is what
 // world/chunk/source.rs follows.
 
-use pxl_spec::bake::constant::{BAND_CELLS, CELL_STEPS};
+use pxl_spec::bake::constant::{BAND_CELLS, CELL, CELL_STEPS};
 use pxl_spec::cell::cube_types::Block;
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::{fvec, ivec};
@@ -65,6 +65,12 @@ fn object_store_persistence_a_save_is_placement_records_per_page_and_loading_it_
         DecorId::tree,
     );
     let shape = |o: &OccupiedEntry| (o.i, o.f, o.size.to_bits(), matches!(o.kind, EntryKind::Decor { .. }));
+    // The three cells the test places in and the ones around them.
+    let get_objects_near = |at: &Pvf3| {
+        let [cx, cy, cz] = CELL.index_of(at);
+        let near = (-1..=1).flat_map(|dx| (-1..=1).flat_map(move |dy| (-1..=1).map(move |dz| [cx + dx, cy + dy, cz + dz])));
+        near.flat_map(|[x, y, z]| get_objects_in_cell(x, y, z)).collect::<Vec<_>>()
+    };
     let before: Vec<_> = get_objects_near(&a).iter().map(shape).collect();
     assert_eq!(before.len(), 3);
     let blob = encode_objects().unwrap();

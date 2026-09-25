@@ -32,7 +32,6 @@ use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::build::World;
-use crate::world::frame::coord::local_world_origin;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Ghost {
@@ -101,9 +100,8 @@ pub fn hover_cursor_step() {
     let blocked = match (&hovered, active_tool) {
         (None, _) => false,
         (Some(h), ActiveTool::Object | ActiveTool::Decor) => {
-            let map_origin = local_world_origin();
             let tool = if active_tool == ActiveTool::Object { PlacementTool::Object } else { PlacementTool::Decor };
-            is_placement_blocked(tool, h, ui.object_size, map_origin)
+            is_placement_blocked(tool, h, ui.object_size)
         }
         // Eraser hovering an existing object is never blocked; bare terrain is
         // blocked exactly when digging into it isn't enabled.
