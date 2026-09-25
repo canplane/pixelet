@@ -187,7 +187,6 @@ pub struct Frame {
     /// the quota itself (`FrameSample::budget_ms`).
     pub remaining_ms: f64,
     pub hard_slack_ms: f64,
-    pub pixel_dither: bool,
     pub retain_budget_bytes: f64,
     /// The camera centre's height (view.rs's camera_centre), in units: what
     /// the camera's height over the sea is measured up from.
@@ -2067,7 +2066,6 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
         && a.camera == b.camera
         && a.viewport_h == b.viewport_h
         && a.fov_deg == b.fov_deg
-        && a.pixel_dither == b.pixel_dither
         && a.show_decor == b.show_decor
 }
 

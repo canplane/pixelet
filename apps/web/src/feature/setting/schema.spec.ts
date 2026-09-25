@@ -170,24 +170,9 @@ export const SETTINGS = {
     dev: true,
     cost: "high",
   },
-  /** LOD cross-fade per fragment instead of per chunk: both tiers draw with
-   * complementary dither and dissolve, at the cost of drawing a blending
-   * chunk twice and a pattern that crawls without temporal AA. Off by
-   * default: the crawl is there to see, so the second draw buys one
-   * artefact with another. What it replaces swaps a whole chunk at a
-   * hashed threshold and pops tier by tier, which is the cheaper of the
-   * two to live with until the pattern holds still. */
-  pixel_dither: {
-    key: 13 as number,
-    kind: "toggle",
-    default: false,
-    section: "quality",
-    dev: true,
-    cost: "med",
-  },
   /** The debug gizmos: frame origins, page corners, the map centre and the rings. */
   show_debug_objects: {
-    key: 14 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
@@ -195,20 +180,20 @@ export const SETTINGS = {
   },
   /** The scheduler ledger's corner panel. The console stream is a button on it. */
   show_ledger: {
-    key: 15 as number,
+    key: 14 as number,
     kind: "toggle",
     default: false,
     section: "debug",
     dev: true,
   },
   person_variant: {
-    key: 16 as number,
+    key: 15 as number,
     kind: "number",
     default: 1 as number,
     section: "character",
   },
   pet_variant: {
-    key: 17 as number,
+    key: 16 as number,
     kind: "number",
     default: 5 as number,
     section: "character",
@@ -299,13 +284,13 @@ export const SETTINGS_SHIPPED = {
     section: "lighting",
   },
   person_variant: {
-    key: 16 as number,
+    key: 15 as number,
     kind: "number",
     default: 1 as number,
     section: "character",
   },
   pet_variant: {
-    key: 17 as number,
+    key: 16 as number,
     kind: "number",
     default: 5 as number,
     section: "character",

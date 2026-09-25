@@ -37,10 +37,6 @@
       "msaa": {
         "label": "Anti-aliasing (MSAA)",
         "description": "Smooths the edges of far-away blocks by sampling each pixel four times. Costs a lot of graphics memory."
-      },
-      "pixel_dither": {
-        "label": "LOD cross-fade (per pixel)",
-        "description": "Dissolves between LOD tiers with overlapping dither patterns instead of switching a whole chunk at once. Only the three nearest thresholds (192/384/768) blend at all. Draws blending chunks twice, and the pattern crawls without temporal AA."
       }
     },
     "debug": {
