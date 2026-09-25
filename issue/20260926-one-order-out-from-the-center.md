@@ -53,13 +53,42 @@ multiply:
 - **Occlusion as proposed was an azimuth horizon**, which only ground can
   cast; a 3D occluder is a box.
 
-What the 3D shape asks for: a node is a block of a level's cells in three
-axes, 64 across and a band of them high; ground occupies the bands its
-surface crosses, objects the bands they fill, and an empty block does not
-exist. Split, order, budget and occlusion are all taken over those nodes,
-and the 2.5D ground is the case of a node with one band. The object store
-already keeps band trees under each column, and a chunk's volume is painted
-by band.
+## Addresses in 3D, storage where there is something
+
+Making the nodes 3D does not mean making an array 3D: one allocated in three
+axes over the view would be almost all air and would not fit. The view is
+given a 3D address space instead, and a lookup that turns an address into
+where the thing addressed is stored.
+
+- **A node is an address.** A block of a level's cells in three axes —
+  `(level, x, y, band)`, 64 across and a band high — exists only as that
+  tuple. The domain's walk makes them as it splits and drops them after; no
+  table holds one per block.
+- **A lookup points into storage.** Given an address, it returns where its
+  contents are: for ground, the page that draws it — its own, or the nearest
+  resident page over it — the cell in that page and the elevation samples
+  around it, which is what a chunk's build already resolves in two
+  dimensions (world/chunk/build.rs `Chunk::read`); for objects, the band
+  tree under the column (layer/object/store.rs). A band adds one axis to
+  what is there.
+- **Empty is an answer, not a slot.** A block the ground's surface does not
+  cross and no object fills is found empty by the lookup — the footprint's
+  height range against the band, the objects' reach against it — and is
+  never split, counted, fetched for or drawn. The 2.5D ground is the case of
+  a footprint whose one crossed band is all there is.
+- **A 2.5D path lives inside the lookup.** Where the answer is known to be
+  the 3D one — the height of the ground at a point, read off the raster
+  rather than found by a ray through the volume — the lookup takes the short
+  way. The shortcut cannot change what the view does, because nothing
+  outside the lookup can tell it was taken.
+
+Two costs come with it. A lookup is an indirection, and the mesher reads a
+chunk's cells tens of thousands of times a build: it resolves the chunk's
+storage once and reads the region as it does now, rather than looking up
+cell by cell — what OpenVDB's accessors do by caching the path to the last
+leaf. And the footprint's height range has to be a chunk's, not a page's,
+for the empty test to discard anything: the page's relief is too coarse, and
+a chunk's range is a few dozen of its elevation samples.
 
 ## What stands on it now
 
@@ -105,6 +134,25 @@ Found by reading, not yet measured or built.
 
 ## Prior art
 
+The first four are how a sparse 3D space is addressed; the rest, how a
+view is scheduled over one.
+
+- OpenVDB holds a sparse volume as a shallow tree of fixed-size blocks,
+  stores only blocks with something in them, and reads it through an
+  accessor that caches the path to the last leaf, about three times faster
+  for coherent access
+  ([overview](https://www.openvdb.org/documentation/doxygen/overview.html),
+  [ValueAccessor](https://www.openvdb.org/documentation/doxygen/ValueAccessor_8h_source.html)).
+- 3D Tiles' implicit tiling names every tile by `(level, x, y, z)` in a
+  quadtree or octree and ships no tree at all, only bitstreams saying which
+  addresses have a tile and which have content
+  ([spec](https://github.com/CesiumGS/3d-tiles/tree/main/specification/ImplicitTiling)).
+- GigaVoxels keeps an N³-tree whose nodes point into a pool of bricks or
+  mark themselves empty or constant, and streams bricks as rays ask for them
+  by level of detail and occlusion
+  ([paper](http://gigavoxels.inria.fr/Publications/2009/CNLE09/CNLE09.pdf)).
+- Minecraft cuts a column into 16 × 16 × 16 sections and does not store an
+  empty one ([chunk format](https://minecraft.wiki/w/Chunk_format)).
 - Cesium's 3D Tiles streaming ranks every request by one number built from
   distance to the camera and to the screen's center, cancels requests that
   have left the view or will have by the time they land, and defers the
