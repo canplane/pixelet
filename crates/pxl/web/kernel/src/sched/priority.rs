@@ -15,15 +15,14 @@
 //!   leaves the middle, which is the whole of what a tilted view is for,
 //!   until last. `lead_point` gives the eye plus the target's offset and
 //!   `view_centre` takes the offset back out; at rest it is the frame's
-//!   origin. The page schedulers reach the same point by another road —
-//!   `range_anchor`, which is `map_center` on the ground — and `map_center`
-//!   is the target `lead_point` is built from, so the two are one point at
-//!   two resolutions.
+//!   origin. The page schedulers measure from the eye instead, by the same
+//!   distance the level of a page was chosen by (world/pyramid/window.rs
+//!   `Domain`): what they order is what the rule wants first, not what the
+//!   screen shows first.
 //! - **How far.** The distance from that ground, and the two schedulers
 //!   measure it in the units their own work comes in. A page scheduler asks
-//!   which ring a page is in, and a ring is the same shape at every level,
-//!   so the centre page of every level is ring 0 and they go together. A
-//!   chunk scheduler asks the plain distance, because a chunk is a piece of
+//!   the nearest distance from the eye to the page's ground. A chunk
+//!   scheduler asks the plain distance, because a chunk is a piece of
 //!   the screen and the middle of the screen is what anyone is looking at.
 //!
 //!   It was `in_own_sides` — the distance over the thing's own side, which

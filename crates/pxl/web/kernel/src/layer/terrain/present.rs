@@ -19,8 +19,8 @@ use crate::world::pyramid::{Cover, Domain};
 ///
 /// First, a finer page stands in for the ground the view wants only at the
 /// window's top and a level finer: a stand-in draws its ground with four
-/// times the chunks a level, and the chunk table holds the top ring four
-/// times over and the rest of the view once (chunk/table.rs
+/// times the chunks a level, and the chunk table holds the top level's
+/// chunks four times over and every other level's once (chunk/table.rs
 /// `WIDEST_SELECTION`). A stand-in deeper than that leaves the chunk a level
 /// under the top it lies in a gap; one anywhere under the top leaves the
 /// ground it stood in for a gap.

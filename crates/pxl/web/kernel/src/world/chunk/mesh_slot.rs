@@ -51,14 +51,11 @@
 //! (issue/20260923-a-coarse-cell-is-isotropic.md). Either is read live as the
 //! ledger's `work fine_peak` and `coarse_peak`, through a zoom out and back.
 
+use crate::world::pyramid::window::{LEVEL_CHUNKS, WINDOW_LEVELS};
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
-use pxl_spec::space::pyramid::PAGE_CHUNKS;
 
-use crate::world::pyramid::window::{RENDER_AXIS, WINDOW_LEVELS};
-
-/// Chunks along a level's drawn ring, the axis a slot is reduced modulo.
-pub const AXIS: u32 = RENDER_AXIS * PAGE_CHUNKS;
-const SLOTS: u32 = AXIS * AXIS;
+/// Slots a group holds: the most chunks one level draws.
+const SLOTS: u32 = LEVEL_CHUNKS;
 /// Boxes a leaf's first tier holds, the one tier drawn at a leaf's own cells:
 /// the 2,294 the measurement asked for and a fifth again.
 pub const FINE_BOXES: u32 = 2730;

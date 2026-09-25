@@ -399,6 +399,52 @@ pub fn objects_revision() -> u32 {
     log.tick(OBJECT_COLUMN) + log.tick(DECOR_COLUMN)
 }
 
+/// A column holding objects, as a box in units: its corner and side on the
+/// ground, and the lowest and highest any of its entries reaches.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ColumnBox {
+    pub x0: f64,
+    pub y0: f64,
+    pub side: f64,
+    pub z: (f64, f64),
+}
+
+static BOXES: Global<Option<(u32, Vec<ColumnBox>)>> = Global::new();
+
+/// Every column holding objects, as its box: what a view measures how near it
+/// is to what is placed by (world/pyramid/window.rs `Domain`). Made again
+/// only when the store has changed.
+pub fn column_boxes() -> &'static [ColumnBox] {
+    let revision = objects_revision();
+    let held = BOXES.get(|| None);
+    if held.as_ref().is_none_or(|(r, _)| *r != revision) {
+        let boxes = object_cols()
+            .into_iter()
+            .filter_map(|col| {
+                let mut z: Option<(f64, f64)> = None;
+                each_col_entry(
+                    col,
+                    &mut |e| {
+                        let lo = pvf3::to_real(pvf3::Z(&e.corner()));
+                        let hi = lo + e.size;
+                        z = Some(z.map_or((lo, hi), |(a, b)| (a.min(lo), b.max(hi))));
+                    },
+                    false,
+                );
+                let base = FROM_L2_IDX(col);
+                Some(ColumnBox {
+                    x0: ivec::to_real(ivec::X(base)),
+                    y0: ivec::to_real(ivec::Y(base)),
+                    side: pxl_spec::space::pyramid::chunk_span_of(0),
+                    z: z?,
+                })
+            })
+            .collect();
+        *held = Some((revision, boxes));
+    }
+    &held.as_ref().expect("made above").1
+}
+
 fn bump_col(col_idx: IVec, objects: bool, decor: bool) {
     chunk_sources_changed();
     if objects {

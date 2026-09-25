@@ -26,10 +26,8 @@ use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::node::{run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES};
-use crate::world::chunk::range::range_anchor_of;
 use crate::world::chunk::table::{builds, Census, Frame};
 use crate::world::frame::view::{view, view_resize};
-use crate::world::pyramid::window::window;
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::bake::poi_page::PoiPage;
@@ -177,7 +175,6 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     };
 
     let settings = settings_store();
-    let range_anchor = target.map(|t| range_anchor_of(t.i));
     let frame = Frame {
         root: v.root,
         origin: [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))],
@@ -191,13 +188,8 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
         hard_slack_ms: HARD_SLACK_MS,
         pixel_dither: settings.pixel_dither,
         retain_budget_bytes: RETAIN_BUDGET_BYTES(),
-        anchor: range_anchor.map(|a| [ivec::to_real(ivec::X(a)), ivec::to_real(ivec::Y(a))]),
         centre_z: ivec::to_real(ivec::Z(v.origin)) - v.tz,
         globe: Some(globe()),
-        window: {
-            let w = window();
-            (w.start, w.end)
-        },
         show_decor: settings.show_decor,
     };
 

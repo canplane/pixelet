@@ -19,14 +19,14 @@ use crate::host::{now, wall_now};
 use crate::kernel::kernel;
 use crate::layer::environment::celestial_position::{equatorial_to_local, moon_position, sun_position};
 use crate::layer::environment::config::light_cfg;
-use crate::layer::environment::fog::{band_at, camera_height, centre_ground};
+use crate::layer::environment::fog::{band_at, camera_height, centre_ground, reach_at};
 use crate::layer::environment::theme::{themes, Theme};
 use crate::layer::environment::theme_clock::theme_key;
 use crate::shell::map_store::map_store;
 use crate::world::change::{request_world_tick, wake_at};
 use crate::world::chunk::table::Frame;
 use crate::world::frame::view::{camera_centre, view};
-use crate::world::pyramid::window::{drawn_from_eye, window};
+use crate::world::pyramid::window::drawn_far;
 
 // The map's own fallback, so the first frames before map_center exists light
 // the world from a real place instead of computing sun and moon for (0, 0).
@@ -280,9 +280,10 @@ impl EnvironmentDraw {
         let r = Globe::at(self.lat.to_radians()).radius_u();
         let over = frame.camera[0].hypot(frame.camera[1]).hypot(frame.camera[2] + r) - r;
         // Where the ground ends for the eye: the nearer of what the air and
-        // the planet leave (environment/fog.rs) and what the rings draw.
+        // the planet leave (environment/fog.rs) and what the window draws.
         let v = view();
-        let band = band_at(camera_height(v.dist, v.polar), drawn_from_eye(v.dist, v.polar, window().end - 1));
+        let height = camera_height(v.dist, v.polar);
+        let band = band_at(height, drawn_far().unwrap_or_else(|| reach_at(height)));
         let light = Light {
             theme: self.current,
             sun: self.sun,

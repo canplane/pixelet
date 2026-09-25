@@ -29,12 +29,11 @@ use crate::io::demand::{Category, Phases};
 use crate::io::policy;
 use crate::io::sched::{declare, Rank};
 use crate::world::change::{world_edge, WorldTopic};
-use crate::world::frame::range_anchor::range_anchor;
 use crate::world::page_table::PageTable;
 use chunk::Chunk;
 pub use window::Domain;
-use window::{centre_dist, centre_page, domain, held, ring_of, window};
-use window::{HELD_AXIS, RENDER_AXIS, WINDOW_LEVELS};
+use window::{domain, eye, held, ring_of, window, window_of};
+use window::{HELD_AXIS, WINDOW_LEVELS};
 
 /// A layer the pyramid holds: its page is itself, folded by `Folds`.
 pub trait Layer: Folds + Clone + 'static {
@@ -124,17 +123,17 @@ pub const RECORDS: u32 = WINDOW_LEVELS * HELD_AXIS * HELD_AXIS + PINNED;
 /// none is, the resident pages under it stand in, as far down as there are
 /// any (Cesium's `skipLevelOfDetail`, which stands a node in by its loaded
 /// descendants where no ancestor is loaded), with gaps where there are none.
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct Cover {
     pub drawn: Vec<Chunk>,
     pub gaps: Vec<Chunk>,
 }
 
-/// What the cover and the wishlist are a function of: the view's base page
-/// and window, whether the camera is moving, the resident set and the pinned
-/// page. Two turns agreeing on all of it want the same pages of the same
-/// ground, so the second decides nothing again.
-type Wish = (LevelPage, (u32, u32), bool, u32, Option<LevelPage>);
+/// What the cover and the wishlist are a function of: where the eye is and
+/// the window it holds, whether the camera is moving, the resident set and
+/// the pinned page. Two turns agreeing on all of it want the same pages of
+/// the same ground, so the second decides nothing again.
+type Wish = ([f64; 3], (u32, u32), bool, u32, Option<LevelPage>);
 
 pub struct Pyramid<L: Layer> {
     tables: Vec<PageTable<L>>,
@@ -396,7 +395,7 @@ impl<L: Layer> Pyramid<L> {
 
     /// A page's fetched body, made resident.
     pub fn adopt(&mut self, p: LevelPage, pkt: &[u8], phases: &mut Phases) -> Result<(), FetchFail> {
-        let Some(record) = self.record_for(p, range_anchor(), &window()) else { return Ok(()) };
+        let Some(record) = self.record_for(p, eye().map(|e| e.foot), &window()) else { return Ok(()) };
         let page = L::receive(record, pkt, phases)?;
         self.take(p, record, page);
         Ok(())
@@ -443,10 +442,10 @@ impl<L: Layer> Pyramid<L> {
                 if matches!(resolved, Resolved::Exact | Resolved::Foldable) {
                     continue;
                 }
-                // Outside the ring the view draws: margin against a move that
+                // None of it drawn at its level: margin against a move that
                 // has not happened.
-                let speculative = ring_of(anchor, p) > RENDER_AXIS / 2;
-                wants.push((p.subject(), policy::page(resolved, speculative, centre_dist(anchor, p) * p.span())));
+                let (speculative, near) = self.domain.as_ref().map_or((false, 0.0), |d| (!d.reaches(p), d.page_nearest_to(p)));
+                wants.push((p.subject(), policy::page(resolved, speculative, near)));
             }
         }
         if let Some(p) = self.pinned.filter(|p| self.get(*p).is_none() && !wants.iter().any(|(s, _)| *s == p.subject())) {
@@ -481,15 +480,24 @@ impl<L: Layer> Pyramid<L> {
     /// the camera left let go and the folds woken, since each is a function
     /// of both; and the wishlist every turn from that cover.
     pub fn step(&mut self) {
-        let Some(anchor) = range_anchor() else { return };
-        let w = window();
-        let wish = (centre_page(w.start, anchor), (w.start, w.end), crate::sched::turn::interactive(), self.revision, self.pinned);
+        let Some(e) = eye() else { return };
+        let anchor = e.foot;
+        let w = window_of(&e);
+        let wish = (e.at, (w.start, w.end), crate::sched::turn::interactive(), self.revision, self.pinned);
         if self.last != Some(wish) {
             self.drop_unrecorded(anchor);
-            let d = domain(anchor, w.clone());
-            self.cover = L::present(self.cover_of(&d), &d, self);
+            let d = domain(&e);
+            let mut cover = L::present(self.cover_of(&d), &d, self);
+            cover.drawn.sort_unstable();
+            cover.gaps.sort_unstable();
             self.domain = Some(d);
-            self.covers = self.covers.wrapping_add(1);
+            // The eye moves every frame the camera does, and most of those
+            // moves cross no chunk's split distance: whoever reads the cover
+            // is told only when what it draws has changed.
+            if cover != self.cover {
+                self.cover = cover;
+                self.covers = self.covers.wrapping_add(1);
+            }
             // Letting a page go moves the revision; the wish is the resident
             // set the cover was made from.
             self.last = Some((wish.0, wish.1, wish.2, self.revision, wish.4));
@@ -519,7 +527,7 @@ pub async fn fold_task<L: Layer>() {
         notified(folds::<L>).await;
         loop {
             yield_if_spent(world_edge).await;
-            let Some(anchor) = range_anchor() else { break };
+            let Some(anchor) = eye().map(|e| e.foot) else { break };
             if !L::pyramid().fold_one(anchor) {
                 break;
             }

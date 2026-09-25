@@ -4,12 +4,34 @@ use super::*;
 use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::{ivec, Pvf3};
 use pxl_spec::space::pyramid::{cell_base, span_of};
-use window::ring_rect;
+use window::{domain_for, Eye};
 
-const WINDOW: std::ops::Range<u32> = 2..5;
+/// How high the eye stands over flat ground: where the rule wants level 2
+/// under it, and so a window of WINDOW_LEVELS from there.
+const HEIGHT: f64 = 1000.0;
+const WINDOW: std::ops::Range<u32> = 2..2 + WINDOW_LEVELS;
 
 fn anchor() -> IVec {
     ivec::gather(30_000, -17_000, 0)
+}
+
+fn the_domain() -> Domain {
+    let eye = Eye {
+        at: [ivec::X(anchor()) as f64, ivec::Y(anchor()) as f64, HEIGHT],
+        foot: anchor(),
+    };
+    let d = domain_for(&eye, HEIGHT);
+    assert_eq!(d.window(), WINDOW);
+    d
+}
+
+/// The ground a domain draws, as the square around it and its area.
+fn ground_of(d: &Domain) -> ((f64, f64, f64), f64) {
+    let g = d.ground();
+    let (x0, y0) = g.iter().fold((f64::MAX, f64::MAX), |(x, y), r| (x.min(r.0), y.min(r.1)));
+    let x1 = g.iter().map(|r| r.0 + r.2).fold(f64::MIN, f64::max);
+    let y1 = g.iter().map(|r| r.1 + r.2).fold(f64::MIN, f64::max);
+    ((x0, y0, (x1 - x0).max(y1 - y0)), g.iter().map(|r| r.2 * r.2).sum())
 }
 
 fn area(c: Chunk) -> f64 {
@@ -37,13 +59,24 @@ fn inside(c: Chunk, at: IVec) -> bool {
 /// Places scattered over the domain's ground, and every level's pages
 /// counting them: a page of every level over that ground, empty or not.
 fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
-    let (rx, ry, side) = ring_rect(WINDOW.end - 1, anchor());
+    let d = the_domain();
+    let ((rx, ry, side), _) = ground_of(&d);
+    let ground = d.ground();
     let mut seed = 0x2545_f491u64;
     let mut next = |span: f64| {
         seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
         ((seed >> 33) as f64 / (1u64 << 31) as f64 * span) as i64
     };
-    let at: Vec<IVec> = (0..400).map(|_| ivec::gather(rx as i64 + next(side), ry as i64 + next(side), 0)).collect();
+    // On the ground the domain draws, which is a disc of chunks and not the
+    // square around it.
+    let at: Vec<IVec> = (0..800)
+        .map(|_| ivec::gather(rx as i64 + next(side), ry as i64 + next(side), 0))
+        .filter(|&a| {
+            ground
+                .iter()
+                .any(|&(x0, y0, s)| (x0..x0 + s).contains(&(ivec::X(a) as f64)) && (y0..y0 + s).contains(&(ivec::Y(a) as f64)))
+        })
+        .collect();
     let mut pages = Vec::new();
     for level in 0..WINDOW.end {
         let span = span_of(level);
@@ -83,9 +116,12 @@ fn count(pyramid: &Pyramid<PoiPage>, c: Chunk) -> u32 {
 /// counted exactly once — whatever is resident, at whatever levels.
 #[test]
 fn the_cover_and_its_gaps_partition_the_domain_and_count_every_place_once() {
+    // The domain reads the terrain's and the objects' heights, which are
+    // globals.
+    let _serial = crate::global::serial();
     let (at, pages) = places();
-    let d = domain(anchor(), WINDOW);
-    let (_, _, side) = ring_rect(WINDOW.end - 1, anchor());
+    let d = the_domain();
+    let (_, whole) = ground_of(&d);
     let mut seed = 7u64;
     for trial in 0..12 {
         let mut pyramid = Pyramid::<PoiPage>::default();
@@ -100,7 +136,7 @@ fn the_cover_and_its_gaps_partition_the_domain_and_count_every_place_once() {
         let pieces: Vec<Chunk> = cover.drawn.iter().copied().chain(cover.gaps.iter().copied()).collect();
         assert!(disjoint(&pieces), "trial {trial}: two pieces meet");
         let total: f64 = pieces.iter().map(|&c| area(c)).sum();
-        assert_eq!(total, side * side, "trial {trial}: the pieces are the domain's ground");
+        assert_eq!(total, whole, "trial {trial}: the pieces are the domain's ground");
         let drawn: u32 = cover.drawn.iter().map(|&c| count(&pyramid, c)).sum();
         let in_gaps = at.iter().filter(|&&a| cover.gaps.iter().any(|&g| inside(g, a))).count() as u32;
         assert_eq!(drawn + in_gaps, at.len() as u32, "trial {trial}: every place once");
@@ -112,8 +148,11 @@ fn the_cover_and_its_gaps_partition_the_domain_and_count_every_place_once() {
 /// not at all.
 #[test]
 fn a_parent_gives_way_only_to_all_of_its_children() {
-    let d = domain(anchor(), WINDOW);
-    let parent = d.roots().into_iter().find(|&c| d.splits(c)).expect("the top ring holds ground wanted finer");
+    // The domain reads the terrain's and the objects' heights, which are
+    // globals.
+    let _serial = crate::global::serial();
+    let d = the_domain();
+    let parent = d.roots().into_iter().find(|&c| d.splits(c)).expect("the top level holds ground wanted finer");
     let under = parent.children();
     let mut pyramid = Pyramid::<PoiPage>::default();
     pyramid.set(parent.page, PoiPage::default());
@@ -145,8 +184,11 @@ fn every_arrival_and_departure_moves_the_resident_revision() {
 /// in however far down they are.
 #[test]
 fn a_stand_in_reaches_as_far_down_as_there_are_pages() {
-    let d = domain(anchor(), WINDOW);
-    let c = d.roots().into_iter().find(|&c| !d.splits(c)).expect("the top ring holds ground wanted at the top");
+    // The domain reads the terrain's and the objects' heights, which are
+    // globals.
+    let _serial = crate::global::serial();
+    let d = the_domain();
+    let c = d.roots().into_iter().find(|&c| !d.splits(c)).expect("the top level holds ground wanted at the top");
     let grand: Vec<Chunk> = c.children().iter().flat_map(|k| k.children()).collect();
     let mut pyramid = Pyramid::<PoiPage>::default();
     for g in &grand {
@@ -163,9 +205,12 @@ fn a_stand_in_reaches_as_far_down_as_there_are_pages() {
 /// cannot draw is a gap.
 #[test]
 fn the_terrain_draws_its_cover_balanced_and_still_whole() {
+    // The domain reads the terrain's and the objects' heights, which are
+    // globals.
+    let _serial = crate::global::serial();
     let (_, pages) = places();
-    let d = domain(anchor(), WINDOW);
-    let (_, _, side) = ring_rect(WINDOW.end - 1, anchor());
+    let d = the_domain();
+    let (_, whole) = ground_of(&d);
     let top = WINDOW.end - 1;
     let mut seed = 11u64;
     for trial in 0..12 {
@@ -192,7 +237,7 @@ fn the_terrain_draws_its_cover_balanced_and_still_whole() {
         }
         let pieces: Vec<Chunk> = cover.drawn.iter().chain(&cover.gaps).copied().collect();
         assert!(disjoint(&pieces), "trial {trial}: two pieces meet");
-        assert_eq!(pieces.iter().map(|&c| area(c)).sum::<f64>(), side * side, "trial {trial}");
+        assert_eq!(pieces.iter().map(|&c| area(c)).sum::<f64>(), whole, "trial {trial}");
     }
 }
 
@@ -200,8 +245,11 @@ fn the_terrain_draws_its_cover_balanced_and_still_whole() {
 /// presentation made, and nothing resident or foldable, is coverage.
 #[test]
 fn a_gap_the_mesh_leaves_is_fetched_as_coverage() {
+    // The domain reads the terrain's and the objects' heights, which are
+    // globals.
+    let _serial = crate::global::serial();
     let (_, pages) = places();
-    let d = domain(anchor(), WINDOW);
+    let d = the_domain();
     let mut pyramid = Pyramid::<PoiPage>::default();
     for (p, page) in pages.iter().filter(|(p, _)| p.level == 2 || (p.level == 4 && ivec::X(p.page) % 2 == 0)) {
         pyramid.set(*p, page.clone());
@@ -239,7 +287,10 @@ fn the_pinned_page_keeps_its_record_and_every_wanted_page_still_fits() {
 /// coarser draws its far steps. Ground it wants finer has a ring over it.
 #[test]
 fn only_ground_wanted_at_the_top_is_outermost() {
-    let d = domain(anchor(), WINDOW);
+    // The domain reads the terrain's and the objects' heights, which are
+    // globals.
+    let _serial = crate::global::serial();
+    let d = the_domain();
     for c in d.roots() {
         if d.splits(c) {
             assert!(!d.outermost(c), "{c:?} is wanted finer, even where it is drawn for want of its children");
@@ -265,8 +316,11 @@ fn a_count_folds_from_its_four_children_alone() {
 /// the top, and the stand-ins a level under the top beside it stay drawn.
 #[test]
 fn a_stand_in_too_deep_opens_its_branch_and_not_its_neighbours() {
-    let d = domain(anchor(), WINDOW);
-    let t = d.roots().into_iter().find(|&c| !d.splits(c)).expect("the top ring holds ground wanted at the top");
+    // The domain reads the terrain's and the objects' heights, which are
+    // globals.
+    let _serial = crate::global::serial();
+    let d = the_domain();
+    let t = d.roots().into_iter().find(|&c| !d.splits(c)).expect("the top level holds ground wanted at the top");
     let [a, b, deep, gap] = t.children();
     let cover = Cover {
         drawn: [a, b].into_iter().chain(deep.children().iter().flat_map(|k| k.children())).collect(),
