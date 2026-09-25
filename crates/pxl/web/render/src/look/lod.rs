@@ -242,16 +242,6 @@ impl Ladder {
 
 // ---- What keeps step with the ladder ----
 
-/// How many terrain cells a place badge's cell spans at any range: the badge
-/// ladder is the cube ladder times this (poi/placement.rs). A pixel width of
-/// its own comes out at about eight cubes, which gathers places that are
-/// plainly apart on screen; four is the setting, not a derivation.
-const BADGE_CELLS_PER_CUBE: f64 = 4.0;
-/// The same, as a shift on the lattice: a badge node sits this many tiers
-/// above the cube tier at its range.
-pub const BADGE_SHAMT_OVER_CUBE: u32 = 2;
-const _: () = assert!((1 << BADGE_SHAMT_OVER_CUBE) as f64 == BADGE_CELLS_PER_CUBE, "BADGE_CELLS_PER_CUBE must be a power of two");
-
 /// Where a world-anchored billboard starts to fade and where it is gone, in
 /// first-handoff units (billboard/distance_fade.rs): full strength inside
 /// 5/4 of the first handoff, gone by 10/3 of it — 240u and 640u at the

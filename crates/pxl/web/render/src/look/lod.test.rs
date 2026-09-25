@@ -45,7 +45,7 @@ fn lod_step_at_the_rungs_are_the_module_s_192_384_768_1536_at_the_reference_64_p
 }
 
 #[test]
-fn lod_step_at_a_badge_climbs_the_cube_ladder_same_handoff_same_hysteresis_the_badge_tier_a_fixed_shift_above() {
+fn lod_step_at_goes_coarse_past_the_first_handoff_and_holds_it_by_the_hysteresis() {
     let _g = serial();
     set_lod_projection(1080.0, 50.0, 0);
     // Just past the first handoff both go coarse together.
@@ -55,7 +55,6 @@ fn lod_step_at_a_badge_climbs_the_cube_ladder_same_handoff_same_hysteresis_the_b
     assert_eq!(lod_step_at(190.0, past), 2);
     // Well inside, both come back.
     assert_eq!(lod_step_at(150.0, past), 1);
-    assert_eq!(get_lod_level(lod_step_at(200.0, 1)) + BADGE_SHAMT_OVER_CUBE, 3);
 }
 
 #[test]

@@ -3,13 +3,13 @@
 use super::*;
 use crate::space::pvf3::ivec;
 
-/// The level-0 page every place below stands in.
+/// The z16 page every place below stands in.
 fn leaf() -> LevelPage {
     LevelPage::new(0, ivec::gather(3, -2, 0))
 }
 
 /// A point in `leaf()`: the corner of its POI cell (tx, ty), then `dx`, `dy`
-/// level-0 ground cells in.
+/// z16 ground cells in.
 fn point(tx: u32, ty: u32, dx: u32, dy: u32) -> Pvf3 {
     let base = POI_LATTICE.cell_base(leaf(), tx, ty);
     POI_LATTICE.cell_of(0, &base).inner_at(GROUND, 0, [dx, dy]).mid()
@@ -25,7 +25,7 @@ fn a_page_and_its_names_come_back_as_they_went() {
             (point(9, 0, 0, 0), "서울역"),
             (point(9, 0, 3, 3), "남대문"),
             (point(12, 0, 2, 0), ""),
-            (point(40, 1, 0, 3), "Seoul Station"),
+            (point(20, 1, 0, 3), "Seoul Station"),
         ],
     );
     assert_eq!(decode(&encode(&page).unwrap()).unwrap(), page);
@@ -38,11 +38,11 @@ fn a_page_and_its_names_come_back_as_they_went() {
 
 /// A name and a position are a cell's only while it holds one place, at
 /// every level: a parent with one place under it has that place's name and
-/// stands it on the same level-0 ground cell its leaf did, and a parent with
+/// stands it on the same z16 ground cell its leaf did, and a parent with
 /// two has a count and nothing else.
 #[test]
 fn a_lone_place_folds_up_with_its_name_and_its_ground_cell() {
-    let at = point(101, 77, 3, 1);
+    let at = point(21, 17, 3, 1);
     let ground = GROUND.cell_of(0, &at);
     let empty = PoiPage::default();
     let mut below = (leaf(), PoiPage::of_places(0, [(at, "Namsan Tower")]));

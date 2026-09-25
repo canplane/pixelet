@@ -3,7 +3,7 @@
 //! The POI layer's page. A place is 2.5D: it belongs to the cell of the POI
 //! lattice it stands in (`POI_LATTICE`). A cell holding two places or more is
 //! drawn as their count at its own centre; a cell holding one is that place,
-//! drawn where it stands — at the centre of the ground's level-0 cell it is
+//! drawn where it stands — at the centre of the ground's z16 cell it is
 //! in, at every level. So a page holds, for each occupied cell, how many
 //! places stand in it and, where that is one, which place it is and where.
 //!
@@ -25,12 +25,14 @@ use crate::space::pyramid::{Folds, Lattice, LevelPage, GROUND, TOP_LEVEL};
 
 const MAGIC: &[u8; 4] = b"PXP4";
 
-/// The lattice places are counted in: a cell four times the ground's on a
-/// side, sharing the ground's pages, levels and names. A badge stands for
-/// its cell, and a cell the ground's size is a few pixels on the screen at
-/// every distance (pxl-render look/lod.rs), far under a badge. Four times is
-/// a product choice, not a derivation: the scale places merge at.
-pub const POI_LATTICE: Lattice = Lattice::new(GROUND.scale(2));
+/// The lattice places are counted in: a cell sixteen times the ground's on a
+/// side — four levels over it, so a POI page's cells at z16 are z12's —
+/// sharing the ground's pages, levels and names. A badge stands for its
+/// cell, and a cell the ground's size is a few pixels on the screen at every
+/// distance (pxl-render look/lod.rs), far under a badge. Sixteen times is a
+/// product choice, not a derivation: the scale places merge at, the layer's
+/// own detail at a level the shared rule chooses.
+pub const POI_LATTICE: Lattice = Lattice::new(GROUND.scale(4));
 
 const CELLS: u32 = POI_LATTICE.page_cells() * POI_LATTICE.page_cells();
 
@@ -44,16 +46,16 @@ pub const NO_NAME: u32 = u32::MAX;
 /// A cell with no position: it holds more than one place.
 const NO_AT: u32 = u32::MAX;
 
-// A position is an offset in level-0 ground cells inside a POI cell, a lane
+// A position is an offset in z16 ground cells inside a POI cell, a lane
 // a half-word: the widest cell, at the top level, has to fit.
 const _: () = assert!(
     POI_LATTICE.scale(TOP_LEVEL).above(GROUND.scale(0)) <= 16,
-    "a POI cell's level-0 ground cells no longer fit a half-word a lane"
+    "a POI cell's z16 ground cells no longer fit a half-word a lane"
 );
 
 /// An occupied cell: its index in the page, how many places stand in it, and
 /// where `count` is 1, the pool index of its one place's name (NO_NAME where
-/// it has none) and the level-0 ground cell it stands in, as that cell's
+/// it has none) and the z16 ground cell it stands in, as that cell's
 /// offset in this one (pxl-spec space/pyramid.rs `Cell::offset_of`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PoiCell {
