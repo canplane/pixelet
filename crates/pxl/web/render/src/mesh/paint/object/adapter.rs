@@ -6,20 +6,34 @@
 
 use std::collections::BTreeSet;
 
-use pxl_spec::bake::constant::{band_cell_z, in_cell, unpack_pos, BandZ, CellZ, CELL, CELL_STEPS};
+use pxl_spec::bake::constant::{band_cell_z, in_cell, unpack_pos, BandZ, CellZ, EntryAt, CELL, CELL_STEPS};
 use pxl_spec::cell::cube_types;
+use pxl_spec::space::pvf3::ivec::IVec;
 
 use crate::mesh::volume::{pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};
 
 const AIR: u32 = cube_types::common::air as u32;
 
 /// A column's entries as the object store lays them out, one lane a field:
-/// each entry's band, its packed position in the band, and its state.
+/// each entry's band, its packed position in the band, and its state, and
+/// the column they are filed under.
 #[derive(Clone, Copy)]
 pub struct Entries<'a> {
+    pub col_idx: IVec,
     pub band: &'a [BandZ],
     pub pos: &'a [u32],
     pub state: &'a [u32],
+}
+
+impl Entries<'_> {
+    /// Where entry `k` is filed.
+    pub fn at(&self, k: usize) -> EntryAt {
+        EntryAt {
+            col_idx: self.col_idx,
+            band_idx: self.band[k],
+            pos: self.pos[k],
+        }
+    }
 }
 
 /// What a state paints as: nothing (decor renders as instanced geometry,
@@ -30,14 +44,6 @@ pub enum Kind {
     Solid = 1,
     Air = 2,
     Decor = 3,
-}
-
-/// The one entry that is not stored — the eraser's carve preview, as the
-/// band and packed position the store would file it under.
-#[derive(Clone, Copy)]
-pub struct Carve {
-    pub band: BandZ,
-    pub pos: u32,
 }
 
 /// What a paint made: whether any voxel was set, and whether one was refused.
@@ -123,11 +129,12 @@ impl Painter {
     }
 
     /// Paints a column's `entries` into `volume`: every one but the one
-    /// hidden (by its band and packed position), then the carve preview.
+    /// hidden, then the carve preview — the one entry that is not stored,
+    /// where the store would file it.
     /// Whether any voxel was painted, and whether a paint was refused — after
     /// which the rest is not painted, as the volume is not the composite that
     /// was asked for anyway.
-    pub fn paint(&mut self, entries: Option<Entries>, volumes: &mut Volumes, volume: u32, hide: Option<(i32, u32)>, carve: Option<Carve>) -> Paint {
+    pub fn paint(&mut self, entries: Option<Entries>, volumes: &mut Volumes, volume: u32, hide: Option<EntryAt>, carve: Option<EntryAt>) -> Paint {
         let mut claimed = core::mem::take(&mut self.claimed);
         claimed.clear();
         let mut any = false;
@@ -145,17 +152,17 @@ impl Painter {
     /// entry sets one voxel. The carve preview is not an entry;
     /// `paint_carve` ends the paint.
     #[allow(clippy::too_many_arguments)]
-    pub fn paint_entries(&self, entries: Option<Entries>, volumes: &mut Volumes, volume: u32, hide: Option<(i32, u32)>, from: usize, voxels: usize, claimed: &mut Claims, any: &mut bool) -> Painted {
+    pub fn paint_entries(&self, entries: Option<Entries>, volumes: &mut Volumes, volume: u32, hide: Option<EntryAt>, from: usize, voxels: usize, claimed: &mut Claims, any: &mut bool) -> Painted {
         let Some(e) = entries else { return Painted::Done };
         let mut set = 0;
         for k in from..e.band.len() {
             if set >= voxels {
                 return Painted::More(k);
             }
-            let (band, pos, state) = (e.band[k], e.pos[k], e.state[k]);
-            if hide == Some((band, pos)) {
+            if hide == Some(e.at(k)) {
                 continue;
             }
+            let (band, pos, state) = (e.band[k], e.pos[k], e.state[k]);
             match self.paint_entry(volumes, volume, band, pos, state, claimed, any) {
                 Some(n) => set += n + 1,
                 None => return Painted::Refused,
@@ -165,9 +172,9 @@ impl Painter {
     }
 
     /// The carve preview painted as air, last. False when a paint was refused.
-    pub fn paint_carve(&self, volumes: &mut Volumes, volume: u32, carve: Option<Carve>, claimed: &mut Claims, any: &mut bool) -> bool {
+    pub fn paint_carve(&self, volumes: &mut Volumes, volume: u32, carve: Option<EntryAt>, claimed: &mut Claims, any: &mut bool) -> bool {
         match carve {
-            Some(c) => self.paint_entry(volumes, volume, c.band, c.pos, AIR, claimed, any).is_some(),
+            Some(c) => self.paint_entry(volumes, volume, c.band_idx, c.pos, AIR, claimed, any).is_some(),
             None => true,
         }
     }

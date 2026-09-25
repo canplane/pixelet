@@ -23,7 +23,8 @@ use pxl_spec::space::indexer::FROM_L2_IDX;
 use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, PAGE_CHUNKS};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
-use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
+use pxl_render::mesh::paint::object::adapter::Entries;
+use pxl_render::mesh::paint::object::fold::fold_columns;
 
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
@@ -1029,7 +1030,6 @@ impl Scheduler {
                     let o = FROM_L2_IDX(col_idx);
                     Placed {
                         col_idx,
-                        hide: self.builder.hide_in(col_idx),
                         ox: (ivec::X(o) - x0) as f64,
                         oy: (ivec::Y(o) - y0) as f64,
                         hittable: level == 0,
@@ -1042,22 +1042,8 @@ impl Scheduler {
             // the store's own cell.
             self.decor_folded.clear();
             if level > 0 && scatters {
-                let columns: Vec<Column> = placed
-                    .iter()
-                    .filter_map(|p| {
-                        let o = FROM_L2_IDX(p.col_idx);
-                        world.store.entries(p.col_idx).map(|entries| Column {
-                            x0: ivec::X(o),
-                            y0: ivec::Y(o),
-                            entries,
-                        })
-                    })
-                    .collect();
-                let hide = self.builder.hide_edit().map(|(col, band, pos)| {
-                    let o = FROM_L2_IDX(col);
-                    (ivec::X(o), ivec::Y(o), band, pos)
-                });
-                fold_columns(world.painter, &columns, GROUND.scale(level), hide, &mut self.decor_folded);
+                let columns: Vec<Entries> = placed.iter().filter_map(|p| world.store.entries(p.col_idx)).collect();
+                fold_columns(world.painter, &columns, GROUND.scale(level), self.builder.hide(), &mut self.decor_folded);
             }
             // The surface the tier is drawn with, which an instance stands
             // on: its tier is built before its decor (`commit`).
@@ -1081,7 +1067,7 @@ impl Scheduler {
                 folded: (level > 0).then_some(&self.decor_folded),
             });
             let Some(scratch) = self.decor_scratch.as_mut() else { return false };
-            let built = DecorBuild::build(scratch, &self.decor_kinds, ground.as_ref(), &placed, world.store, world_step, show_decor);
+            let built = DecorBuild::build(scratch, &self.decor_kinds, ground.as_ref(), &placed, self.builder.hide(), world.store, world_step, show_decor);
             let bytes = built.bytes();
             let Some((at, bytes)) = alloc(bytes) else {
                 self.builder.stat.starved += 1;

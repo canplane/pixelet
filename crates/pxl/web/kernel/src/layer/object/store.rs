@@ -17,7 +17,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use base64::Engine;
-use pxl_render::mesh::paint::object::adapter::{Carve, Entries};
+use pxl_render::mesh::paint::object::adapter::Entries;
 use pxl_spec::bake::constant::{band_cell_z, band_of, in_cell, pack_pos, unpack_pos, BandZ, CellZ, BAND_CELL_SHAMT, BAND_UNITS, CELL, OBJECT_FINEST, OBJECT_LAYOUT, POS_MASK, STEP_UNITS, U_PER_CELL};
 use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube};
@@ -58,17 +58,9 @@ pub enum EntryKind {
     Air,
 }
 
-/// Where an entry is, which is also what names it: the column it is filed
-/// under, its band, and its packed position in that band — the three numbers
-/// the kernel keys by. A holder of one reads the entry back, hides it or
-/// erases it without a reverse lookup, which is what the formatted id this
-/// replaced carried as text.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct EntryAt {
-    pub col_idx: IVec,
-    pub band_idx: BandZ,
-    pub pos: u32,
-}
+/// Where an entry is (pxl-spec bake/constant.rs): a holder of one reads the
+/// entry back, hides it or erases it without a reverse lookup.
+pub use pxl_spec::bake::constant::EntryAt;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ObjectLayerEntry {
@@ -489,9 +481,7 @@ pub fn render_edits() -> RenderEdits {
 /// Tells the builds the two edits, and the chunks that their sources moved.
 fn send_render_edits() {
     let st = store_state();
-    let hide = st.virtual_hide.map(|h| (h.col_idx, h.band_idx, h.pos));
-    let carve = st.virtual_carve_preview.map(|c| (c.at.col_idx, Carve { band: c.at.band_idx, pos: c.at.pos }));
-    kernel().sched.builder.set_edits(hide, carve);
+    kernel().sched.builder.set_edits(st.virtual_hide, st.virtual_carve_preview.map(|c| c.at));
     chunk_sources_changed();
 }
 
@@ -1096,6 +1086,7 @@ impl Store {
     pub fn entries(&self, col_idx: IVec) -> Option<Entries<'_>> {
         let column = self.columns.get(&col_idx)?;
         Some(Entries {
+            col_idx,
             band: &column.e_band,
             pos: &column.e_pos,
             state: &column.e_state,

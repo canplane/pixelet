@@ -39,7 +39,7 @@ use crate::layer::decor::instance::{DecorScratch, GroupLanes, Instance, DECOR_GR
 use crate::layer::decor::kind::DecorKindDef;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
-use crate::layer::object::store::{At, Store};
+use crate::layer::object::store::{At, EntryAt, Store};
 use crate::world::chunk::table::Drawn;
 use pxl_spec::asset::ingested::Asset;
 
@@ -237,8 +237,6 @@ pub struct Ground<'a> {
 /// A column whose placed decor a chunk draws.
 pub struct Placed {
     pub col_idx: IVec,
-    /// The hidden entry's band and packed position in this column.
-    pub hide: Option<(i32, u32)>,
     /// Where the column's corner is from the corner of the chunk drawing it,
     /// in units: zero for a z16 chunk, its place among the columns under it
     /// for a coarser one.
@@ -266,12 +264,13 @@ fn representative(tag: u64, level: u32, x: i64, y: i64) -> (i64, i64) {
 
 impl<'s> DecorBuild<'s> {
     /// Builds every kind's instances at world step `step` into `scratch`:
-    /// the decor placed in `placed`'s columns, and where `show_decor`, the
+    /// the decor placed in `placed`'s columns, `hide` flagged hidden, and
+    /// where `show_decor`, the
     /// scatter over `ground`. A chunk scatters from its own level's page, so
     /// decoration reaches as far as the ground it stands on is drawn, a kind
     /// as far as it covers the pixels it is drawn at (`decor_density`).
     #[allow(clippy::too_many_arguments)]
-    pub fn build(scratch: &'s mut DecorScratch, kinds: &[Kind], ground: Option<&Ground>, placed: &[Placed], store: &Store, step: u32, show_decor: bool) -> DecorBuild<'s> {
+    pub fn build(scratch: &'s mut DecorScratch, kinds: &[Kind], ground: Option<&Ground>, placed: &[Placed], hide: Option<EntryAt>, store: &Store, step: u32, show_decor: bool) -> DecorBuild<'s> {
         scratch.clear();
         for kind in kinds {
             // A kind with no variant has no group to fill and no variant to
@@ -293,7 +292,7 @@ impl<'s> DecorBuild<'s> {
                 continue;
             }
             for column in placed {
-                Self::placed(scratch, kind, first, column, store);
+                Self::placed(scratch, kind, first, column, hide, store);
             }
             if let Some(ground) = ground.filter(|_| show_decor) {
                 Self::scatter(scratch, kind, first, ground, store);
@@ -304,7 +303,7 @@ impl<'s> DecorBuild<'s> {
 
     /// One column's placed instances of `kind`, into its groups from
     /// `first`, in the store's entry order.
-    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, store: &Store) {
+    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, hide: Option<EntryAt>, store: &Store) {
         let (Some(value), Some(e)) = (kind.decor_value, store.entries(column.col_idx)) else { return };
         let (bands, poss, states) = (e.band, e.pos, e.state);
         for k in 0..bands.len() {
@@ -323,7 +322,7 @@ impl<'s> DecorBuild<'s> {
             // placed it predicted.
             let (variant, rotation) = user_decor_pick(at.corner().i, kind.variant_count);
             let [lx, ly, lz] = at.local();
-            let hidden = column.hide == Some((bands[k], pos));
+            let hidden = hide == Some(e.at(k));
             let h = size / 2.0;
             scratch.push(
                 first + variant as usize,

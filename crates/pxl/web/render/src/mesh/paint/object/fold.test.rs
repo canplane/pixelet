@@ -31,14 +31,11 @@ fn fold(cells: &[(u32, u32, u32, u32)], level: u32) -> HashMap<[i64; 3], u32> {
     let band: Vec<i32> = cells.iter().map(|_| 0).collect();
     let pos: Vec<u32> = cells.iter().map(|&(x, y, z, _)| cell_pos(x, y, z)).collect();
     let state: Vec<u32> = cells.iter().map(|c| c.3).collect();
-    let columns = [Column {
-        x0: 64,
-        y0: -64,
-        entries: Entries {
-            band: &band,
-            pos: &pos,
-            state: &state,
-        },
+    let columns = [Entries {
+        col_idx: pxl_spec::space::indexer::L2_IDX(pxl_spec::space::pvf3::ivec::gather(64, -64, 0)),
+        band: &band,
+        pos: &pos,
+        state: &state,
     }];
     let mut out = HashMap::new();
     fold_columns(&painter(), &columns, GROUND.scale(level), None, &mut out);

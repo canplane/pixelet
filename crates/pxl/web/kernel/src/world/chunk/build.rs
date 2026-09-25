@@ -15,12 +15,12 @@ use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
 use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::level::write_level_runs;
-use pxl_render::mesh::paint::object::adapter::{Carve, Claims, Entries, Painted, Painter};
-use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
+use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
+use pxl_render::mesh::paint::object::fold::fold_columns;
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
-use pxl_spec::bake::constant::{pack_pos, BandZ, BAND, CELL, OBJECT_FINEST};
+use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, BAND, CELL, OBJECT_FINEST};
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use xpute_runtime::mem::heap::{free, Block};
@@ -217,8 +217,8 @@ struct PaintJob {
     /// store's own: its fold is coarser than an object's finest tier.
     folded: bool,
     revision: u32,
-    hide: Option<(i32, u32)>,
-    carve: Option<Carve>,
+    hide: Option<EntryAt>,
+    carve: Option<EntryAt>,
 }
 
 /// The voxels a step of a paint sets before it stops: a band's cells, which
@@ -270,10 +270,10 @@ pub struct Builder {
     scan_job: Option<ScanJob>,
     bake_job: Option<BakeJob>,
     sample: ChunkSample,
-    /// The drawn build's two edits: the hidden entry by its column, band
-    /// and packed position, and the carve preview by its column.
-    hide: Option<(IVec, i32, u32)>,
-    carve: Option<(IVec, Carve)>,
+    /// The drawn build's two edits: the hidden entry, and the carve
+    /// preview where the store would file it.
+    hide: Option<EntryAt>,
+    carve: Option<EntryAt>,
     /// The chunk holding each run set, whether it is being filled or baked
     /// from.
     run_holders: [Option<u32>; RUN_SETS],
@@ -361,13 +361,8 @@ impl Builder {
         self.chunks.get(&id).map(|c| c.generation)
     }
 
-    /// The hidden entry's band and packed position, when it is in the column `key`.
-    pub fn hide_in(&self, key: IVec) -> Option<(i32, u32)> {
-        self.hide.filter(|h| h.0 == key).map(|h| (h.1, h.2))
-    }
-
-    /// The hidden entry, by its column, band and packed position.
-    pub fn hide_edit(&self) -> Option<(IVec, i32, u32)> {
+    /// The entry the drawn build leaves out.
+    pub fn hide(&self) -> Option<EntryAt> {
         self.hide
     }
 
@@ -426,7 +421,7 @@ impl Builder {
         }
     }
 
-    pub fn set_edits(&mut self, hide: Option<(IVec, i32, u32)>, carve: Option<(IVec, Carve)>) {
+    pub fn set_edits(&mut self, hide: Option<EntryAt>, carve: Option<EntryAt>) {
         self.hide = hide;
         self.carve = carve;
     }
@@ -592,17 +587,16 @@ impl Builder {
             };
             self.claimed.clear();
             let fold = object_fold(self.chunks[&id].wanted().next().or_bug(Errno::ENOTRECOVERABLE));
-            let hide = self.hide.filter(|h| h.0 == col_idx).map(|h| (h.1, h.2));
             let folded = fold > OBJECT_FINEST;
             if folded {
-                self.fold_objects(world, col_idx, hide, fold);
+                self.fold_objects(world, col_idx, fold);
             }
             let paint = PaintJob {
                 next: 0,
                 folded,
                 revision: object_col_revision(col_idx),
-                hide,
-                carve: self.carve.filter(|c| c.0 == col_idx).map(|c| c.1),
+                hide: self.hide,
+                carve: self.carve.filter(|c| c.col_idx == col_idx),
             };
             self.scan_job = Some(ScanJob { id, volume, fold, paint: Some(paint) });
             return Progress::Busy;
@@ -643,7 +637,7 @@ impl Builder {
     }
 
     fn has_objects(&self, world: &World, col_idx: IVec) -> bool {
-        world.store.entries(col_idx).is_some() || matches!(self.carve, Some((k, _)) if k == col_idx)
+        world.store.entries(col_idx).is_some() || self.carve.is_some_and(|c| c.col_idx == col_idx)
     }
 
     /// A page's lanes as the paint reads them.
@@ -678,11 +672,11 @@ impl Builder {
     /// scale in the builder's fold lanes: what a z16 chunk paints for a cube
     /// coarser than an object's finest tier. The hidden entry is left out
     /// before the fold, as the paint would leave it out.
-    fn fold_objects(&mut self, world: &mut World, col_idx: IVec, hide: Option<(i32, u32)>, scale: Scale) {
+    fn fold_objects(&mut self, world: &mut World, col_idx: IVec, scale: Scale) {
         let o = FROM_L2_IDX(col_idx);
         let (x0, y0) = (ivec::X(o), ivec::Y(o));
-        let columns: Vec<Column> = world.store.entries(col_idx).map(|entries| Column { x0, y0, entries }).into_iter().collect();
-        fold_columns(world.painter, &columns, scale, hide.map(|(band, pos)| (x0, y0, band, pos)), &mut self.folded);
+        let columns: Vec<Entries> = world.store.entries(col_idx).into_iter().collect();
+        fold_columns(world.painter, &columns, scale, self.hide, &mut self.folded);
         // A cell's corner in finest steps: absolute, then from the column's
         // corner and its band's floor.
         let n = OBJECT_FINEST.count_in(scale) as i64;
@@ -713,6 +707,7 @@ impl Builder {
         let mut any = false;
         let (entries, hide) = if paint.folded {
             let folded = Entries {
+                col_idx,
                 band: &self.fold_band,
                 pos: &self.fold_pos,
                 state: &self.fold_state,
@@ -801,17 +796,9 @@ impl Builder {
             if !tiers_draw(level, base, key) {
                 continue;
             }
-            let o = FROM_L2_IDX(key);
-            let (ox, oy) = (ivec::X(o), ivec::Y(o));
-            if let Some(entries) = world.store.entries(key) {
-                columns.push(Column { x0: ox, y0: oy, entries });
-            }
+            columns.extend(world.store.entries(key));
         }
-        let hide = self.hide.map(|(col, band, pos)| {
-            let o = FROM_L2_IDX(col);
-            (ivec::X(o), ivec::Y(o), band, pos)
-        });
-        fold_columns(world.painter, &columns, target, hide, &mut self.folded);
+        fold_columns(world.painter, &columns, target, self.hide, &mut self.folded);
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
         write_level_runs(
             &mut self.direct,
