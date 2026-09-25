@@ -1029,8 +1029,9 @@ impl Scheduler {
             }
             // Every column whose corner lies in the chunk: its own, at z16.
             let span = chunk_span_of(level) as i64;
-            let placed: Vec<Placed> = (0..world.store.chunk_count())
-                .map(|k| world.store.chunk_key(k))
+            let placed: Vec<Placed> = world
+                .store
+                .cols()
                 .filter_map(|col_idx| {
                     let o = FROM_L2_IDX(col_idx);
                     let (col_x, col_y) = (ivec::X(o), ivec::Y(o));

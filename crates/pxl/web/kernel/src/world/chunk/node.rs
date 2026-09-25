@@ -900,8 +900,7 @@ impl Builder {
         let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         let mut columns = Vec::new();
-        for i in 0..world.store.chunk_count() {
-            let key = world.store.chunk_key(i);
+        for key in world.store.cols() {
             if !folds_into(level, base, key) {
                 continue;
             }

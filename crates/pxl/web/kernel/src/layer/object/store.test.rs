@@ -129,12 +129,12 @@ fn object_store_band_tree_a_2_2_2_block_of_one_colour_reads_back_as_eight_cells(
 fn object_store_band_tree_clearing_a_chunk_s_last_object_frees_the_chunk() {
     let _g = serial();
     let c = corner(4096 * 9, 4096 * 2, 3);
-    let before = kernel().objects.chunk_count();
+    let before = kernel().objects.cols().count();
     place(&c, DECOR_SIZE, PlaceableCube::Block(Block::blue), false);
-    assert_eq!(kernel().objects.chunk_count(), before + 1);
+    assert_eq!(kernel().objects.cols().count(), before + 1);
     let entry = in_cell(&c).remove(0);
     remove(entry.at);
-    assert_eq!(kernel().objects.chunk_count(), before);
+    assert_eq!(kernel().objects.cols().count(), before);
 }
 
 #[test]
@@ -260,11 +260,11 @@ fn a_write_is_read_back_and_its_entries_are_made_within_it() {
 fn a_void_write_prunes_the_band_and_the_chunk() {
     let mut store = Store::new();
     write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, AIR);
-    assert_eq!(store.chunk_count(), 1);
+    assert_eq!(store.cols().count(), 1);
     let cell = store.cell(7, 0, 0, 2 * BAND_CELLS as i32).expect("the cell is found");
     assert_eq!(cell.solid, 0, "AIR does not occupy");
     assert_eq!(write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, VOID), BTreeSet::from([7]));
-    assert_eq!(store.chunk_count(), 0);
+    assert_eq!(store.cols().count(), 0);
     assert_eq!(entries(&store, 7), vec![]);
     assert!(store.cell(7, 0, 0, 2 * BAND_CELLS as i32).is_none());
     assert!(write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, VOID).is_empty(), "erasing nothing changes nothing");
@@ -333,14 +333,16 @@ fn the_lanes_are_in_band_and_walk_order_so_a_cell_s_entries_are_one_run() {
     assert_eq!(store.cell(3, 1, 0, BAND_CELLS as i32).map(|c| c.count), Some(1));
 }
 
+/// A column erased to nothing is gone from the store, and the columns
+/// beside it keep what they hold.
 #[test]
-fn closing_a_chunk_moves_the_last_into_its_place() {
+fn erasing_a_column_leaves_the_others_as_they_were() {
     let mut store = Store::new();
     write(&mut store, 10, 0, [0, 0, 0], CELL, 1);
     write(&mut store, 20, 0, [0, 0, 0], CELL, 1);
     write(&mut store, 30, 0, [0, 0, 0], CELL, 1);
     write(&mut store, 10, 0, [0, 0, 0], CELL, VOID);
-    assert_eq!((store.chunk_key(0), store.chunk_key(1)), (30, 20));
+    assert_eq!(store.cols().collect::<Vec<_>>(), vec![20, 30]);
     assert_eq!(store.read(30, 0, [0, 0, 0]), 1);
     assert_eq!(store.read(20, 0, [0, 0, 0]), 1);
 }
