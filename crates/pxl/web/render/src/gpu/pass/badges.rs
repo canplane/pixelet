@@ -209,7 +209,7 @@ pub struct BadgePass {
     /// The frame's inputs: the view in the anchor root's frame and the
     /// projection into WebGPU's clip space, the projection's pixels per unit at
     /// one unit of depth, the fade's range, the camera's near and far, and the
-    /// tier ladder's cell per distance.
+    /// rule's cell per distance.
     pub view: [f32; 16],
     pub proj: [f32; 16],
     pub px_k: f32,

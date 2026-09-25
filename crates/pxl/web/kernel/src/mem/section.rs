@@ -22,13 +22,13 @@
 //!   heap      everything left, ascending from the page past the last of the
 //!             fixed ranges to the end of the memory. One allocator answers
 //!             all of it — a slab of size classes over a buddy of pages
-//!             (xpute-core alloc/slab.rs over alloc/buddy_tree.rs) — so a band's lanes, a
-//!             chunk mesh and a `String` all come out of the same range and
-//!             give back into it.
+//!             (xpute-core alloc/slab.rs over alloc/buddy_tree.rs) — so a
+//!             band's lanes, a fetch body and a `String` all come out of the
+//!             same range and give back into it.
 //!
 //! **The fixed ranges are not `.bss`, and the difference is deliberate.** Both
 //! are a size known at compile time, zeroed, never freed, reached by index
-//! arithmetic; a 125 MiB `static [u8; N]` would land in the same place and
+//! arithmetic; a 50 MiB `static [u8; N]` would land in the same place and
 //! work. What it would lose is that the size is *decided* here. `.bss` is what
 //! the compiler happens to put there, and a range this large is a choice about
 //! how much world is resident — it should not read as compiler output, and the

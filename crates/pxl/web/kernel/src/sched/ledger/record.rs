@@ -189,8 +189,9 @@ pub struct LodSample {
     /// on-screen chunk has.
     pub oldest_release_ms: f64,
     pub oldest_visible_ms: f64,
-    /// How far the byte budget has pulled the LOD ladder in: 0 is the ladder as
-    /// the view asks for it, 2 one tier coarser.
+    /// Levels the byte budget has pulled the view's criterion coarser by
+    /// (world/pyramid/pressure.rs): 0 is the criterion as the view asks for
+    /// it.
     pub pressure: f64,
 }
 
@@ -655,9 +656,9 @@ struct Ledger {
     /// Off until someone asks. Nothing in the world reads the ledger — the one
     /// caller outside the instrument writes a turn's task time back into the
     /// frame it belongs to and does nothing when there is no frame — so a
-    /// client with no dev overlay pays for none of this: the rings are 2.1 MiB
-    /// of frames and 360 KiB of tasks, taken on the first record and, being
-    /// lanes, never given back.
+    /// client with no dev overlay pays for none of this: the rings are lanes of
+    /// `.fixed.ledger`, 3.75 MiB of frames and 368 KiB of tasks, and nothing
+    /// writes them while this is off.
     recording: bool,
     started_at: f64,
     stopped_at: Option<f64>,
