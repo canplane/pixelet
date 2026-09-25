@@ -245,7 +245,7 @@ address        bytes                    range                  placed by
 1 MiB          36 KiB × 3               .ring.desc             build.rs
 2 MiB          8 MiB × 3                .ring.slot             build.rs
 32 MiB         ~0.7 MiB                 .rodata .data .bss     wasm-ld (--global-base)
-               ↑ __data_end, rounded up to 64 KiB
+               ↑ __data_end, rounded up to 4 KiB (PAGE_BYTES)
 ~32.7 MiB      25.12 MiB                .fixed.terrain         the kernel (mem/fixed.rs)
 ~57.8 MiB      1 MiB                    .fixed.bake            the kernel (mem/fixed.rs)
 ~58.8 MiB      1 MiB × 2                .fixed.runs            the kernel (mem/fixed.rs)
