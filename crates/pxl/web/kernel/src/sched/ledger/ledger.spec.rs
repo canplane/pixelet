@@ -483,7 +483,7 @@ pub mod STEP {
     pub const KEYS: &[&str] = &["phase", "name", "ms", "count", "max_ms", "WORDS"];
 }
 
-/// The block `ledger_read` computes: each section's words at its AT, the fields relative to it. Every word an f64.
+/// The block LEDGER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64.
 pub mod SUMMARY {
     pub mod rec {
         pub const AT: u32 = 0;
@@ -703,7 +703,7 @@ pub mod SUMMARY {
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "retain", "fetch", "peak", "steps", "WORDS"];
 }
 
-/// What `ledger_read` returns the address of: u32 words, each range's address in the module's memory and its record count.
+/// What LEDGER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count.
 pub mod READ {
     pub const summary_at: u32 = 0;
     pub const summary_words: u32 = 1;
@@ -727,7 +727,7 @@ pub mod READ {
     ];
 }
 
-/// What `ledger_log` returns the address of: u32 words, the frames and tasks the stream has kept since `ledger_log_clear`.
+/// What LEDGER_TAKE answers with the address of: u32 words, the frames and tasks the stream has kept since the last take.
 pub mod LOG {
     pub const frames_at: u32 = 0;
     pub const frames_count: u32 = 1;

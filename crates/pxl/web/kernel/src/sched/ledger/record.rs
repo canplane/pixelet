@@ -14,7 +14,7 @@
 //!   when asked), which is correct: idle means nothing to sample.
 //!
 //! Both are laid out word for word as ledger.json says, and the rings holding
-//! them are lanes the shell reads where they lie (pxl-wasm's `ledger_read`):
+//! them are lanes the shell reads where they lie (LEDGER_READ):
 //! nothing is built to be read, so reading the instrument allocates nothing in
 //! the heap it measures. The summary a panel or a report shows is summary.rs's,
 //! written into a block of the same kind; the words for any of it are the

@@ -59,7 +59,8 @@ export const MODULE_SECTION: { readonly offset: u32; readonly bytes: u32 } = { o
 /** The rings to the module and its doorbell, made with it. A turn's
  * falling edge leaves what the kernel asks of the host in its two streams,
  * run before anything else can reach the device or ring again. A turn that
- * traps leaves a panic's message in the host's. */
+ * traps leaves its report in the host's: the broken invariant's errno and
+ * place (xpute-core status/bug.rs). */
 export const CORE_DOORBELL: Doorbell = (() => {
   const boot = boot_block(CORE_KERNEL);
   return new Doorbell(memory.buffer, boot[BOOT.sq], boot[BOOT.cq], (quota_ms) => {
