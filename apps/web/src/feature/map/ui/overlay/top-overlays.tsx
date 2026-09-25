@@ -4,6 +4,7 @@ import { Search } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, View } from "react-native";
 
+import { Glass } from "@platform/glass.tsx";
 import { useViewportTop } from "@platform/visual-viewport.ts";
 import { useAppContext } from "@/app/provider/context.ts";
 import { alpha, chrome, color } from "@/shared/ui/theme.ts";
@@ -32,11 +33,10 @@ export function TopOverlays() {
 
       <View style={[styles.right, { top }]}>
         {
-          /* Solid, not translucent — same as mode-bar.tsx's own chrome
-          (its tool strip is a flat bg-neutral-900, not an alpha'd one), and
-          matches the round controls' own solid cream. */
+          /* The round controls' ground: the platform's glass, or their solid
+          cream where it has none. */
         }
-        <View style={styles.pill}>
+        <Glass fill={color.cream} style={styles.pill}>
           {
             /* Opens forward search — the current-address label and "where
             do I want to go" share the same mental slot on a map, so this
@@ -56,7 +56,7 @@ export function TopOverlays() {
             <CurrentAddress label={addressLabel} />
           </Pressable>
           <SensorStatus />
-        </View>
+        </Glass>
 
         <View style={styles.controls}>
           <MapScaleBar />
@@ -83,7 +83,6 @@ const styles = StyleSheet.create({
     height: 24,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: color.cream,
   },
   search: { flexDirection: "row", alignItems: "center", gap: 6, minWidth: 0, flexShrink: 1 },
   controls: { flexDirection: "row", alignItems: "flex-start", gap: chrome.controlGap },

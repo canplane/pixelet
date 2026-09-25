@@ -3,11 +3,13 @@
 import { CheckCircle2, MapPinOff } from "lucide-react-native";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
+import { Glass } from "@platform/glass.tsx";
 import { alpha, color, font } from "@/shared/ui/theme.ts";
 import type { ToastSpec, ToastTone } from "./store.ts";
 
 const SIDE = 32;
 const GREEN = "#34C759";
+const ERROR_FILL = "#fef2f2";
 
 function glyph(tone: ToastTone) {
   switch (tone) {
@@ -24,13 +26,13 @@ function glyph(tone: ToastTone) {
 export function Toast({ message, tone }: ToastSpec) {
   const error = tone === "error";
   return (
-    <View style={[styles.pill, error && styles.pillError]}>
+    <Glass fill={error ? ERROR_FILL : color.cream} tint={error ? alpha(color.red500, 0.15) : undefined} style={[styles.pill, error && styles.pillError]}>
       <View style={styles.slot}>{glyph(tone)}</View>
       <Text numberOfLines={1} style={styles.message}>{message}</Text>
       <View style={styles.slot}>
         <View style={[styles.dot, { backgroundColor: error ? color.red500 : tone === "ready" ? GREEN : alpha(GREEN, 0.3) }]} />
       </View>
-    </View>
+    </Glass>
   );
 }
 
@@ -42,11 +44,10 @@ const styles = StyleSheet.create({
     borderRadius: SIDE / 2,
     borderWidth: 2,
     borderColor: alpha(color.white, 0.9),
-    backgroundColor: color.cream,
     boxShadow: "0 6px 20px rgba(0, 0, 0, 0.25)",
     overflow: "hidden",
   },
-  pillError: { backgroundColor: "#fef2f2", borderColor: "#fecaca", boxShadow: "0 6px 20px rgba(220, 38, 38, 0.15)" },
+  pillError: { borderColor: "#fecaca", boxShadow: "0 6px 20px rgba(220, 38, 38, 0.15)" },
   // A glyph's square, pulled over the pill's own border so a card that says
   // little still reads as a pill and not an oval.
   slot: { width: SIDE, height: SIDE, marginHorizontal: -2, alignItems: "center", justifyContent: "center" },

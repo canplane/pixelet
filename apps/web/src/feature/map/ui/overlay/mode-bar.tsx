@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, StyleSheet, type TextInput, useWindowDimensions, View } from "react-native";
 
 import type { f64, u32, u8 } from "@xpute/core/abi/word.ts";
+import { Glass } from "@platform/glass.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { alpha, color } from "@/shared/ui/theme.ts";
 import { useAppContext } from "@/app/provider/context.ts";
@@ -53,7 +54,7 @@ function SizeFlyout({ left, onClose }: { left: FlyoutAt; onClose: () => void }) 
   const sizes = useKernel((s) => s.object_sizes);
 
   return (
-    <View style={[styles.flyout, { left }]}>
+    <Glass fill={alpha(color.neutral900, 0.8)} tint={DARK_TINT} style={[styles.flyout, { left }]}>
       {sizeTiers(sizes.length).map((tier) => {
         const mark = sizeMark(tier);
         return (
@@ -71,7 +72,7 @@ function SizeFlyout({ left, onClose }: { left: FlyoutAt; onClose: () => void }) 
           </Pressable>
         );
       })}
-    </View>
+    </Glass>
   );
 }
 
@@ -188,7 +189,7 @@ export function ModeBar() {
     <View ref={bar} style={styles.bar}>
       {flyoutAt !== null && paletteExpanded && <SizeFlyout left={flyoutAt} onClose={() => setFlyoutAt(null)} />}
 
-      <View style={[styles.messagePill, messageExpanded && styles.messagePillOpen]}>
+      <Glass fill={color.white} interactive={!messageExpanded} style={[styles.messagePill, messageExpanded && styles.messagePillOpen]}>
         <Pressable
           onPress={() => setMode("message")}
           accessibilityRole="button"
@@ -212,7 +213,7 @@ export function ModeBar() {
             />
           </View>
         )}
-      </View>
+      </Glass>
 
       <View style={[styles.palettePill, { maxWidth: width - 92 }]}>
         {!paletteExpanded && (
@@ -233,15 +234,17 @@ export function ModeBar() {
                 onPress={() => setMode("palette")}
                 accessibilityRole="button"
                 accessibilityLabel={t("map.mode_bar.palette_tooltip")}
-                style={[styles.slotButton, styles.dark]}
+                style={styles.slotButton}
               >
-                <Palette size={GLYPH} strokeWidth={2} color={alpha(color.white, 0.6)} />
+                <Glass fill={color.neutral900} tint={DARK_TINT} interactive style={styles.slotGround}>
+                  <Palette size={GLYPH} strokeWidth={2} color={alpha(color.white, 0.6)} />
+                </Glass>
               </Pressable>
             )
         )}
 
         {paletteExpanded && (
-          <View style={styles.strip}>
+          <Glass fill={color.neutral900} tint={DARK_TINT} style={styles.strip}>
             <View style={styles.group}>
               <ToolButton label={t("map.mode_bar.pointer")} active={activeTool === ActiveTool.Pointer} onPress={() => set_activeTool(ActiveTool.Pointer)}>
                 <MousePointer size={GLYPH} strokeWidth={2} color={activeTool === ActiveTool.Pointer ? color.white : alpha(color.white, 0.6)} />
@@ -276,7 +279,7 @@ export function ModeBar() {
                 <LayoutGrid size={GLYPH} strokeWidth={2} color={alpha(color.white, 0.6)} />
               </ToolButton>
             </View>
-          </View>
+          </Glass>
         )}
       </View>
     </View>
@@ -284,6 +287,10 @@ export function ModeBar() {
 }
 
 const PILL = { height: MODE_BAR_HEIGHT_PX, borderRadius: MODE_BAR_HEIGHT_PX / 2 };
+
+/** The strip's glass, where there is glass: dark enough that its white
+ * glyphs read over a bright map. */
+const DARK_TINT = alpha(color.neutral900, 0.6);
 
 const styles = StyleSheet.create({
   bar: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, width: "100%", minWidth: 0 },
@@ -295,7 +302,6 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexShrink: 1,
     overflow: "hidden",
-    backgroundColor: color.white,
     boxShadow: "0 6px 20px rgba(0, 0, 0, 0.25)",
   },
   messagePillOpen: { paddingLeft: 8 },
@@ -309,11 +315,11 @@ const styles = StyleSheet.create({
   // pill-shaped themselves, so the shadow follows this box's own radius.
   palettePill: { ...PILL, flexDirection: "row", alignItems: "center", flexShrink: 0, boxShadow: "0 3px 6px rgba(0, 0, 0, 0.25)" },
   slotButton: { ...PILL, width: MODE_BAR_HEIGHT_PX, alignItems: "center", justifyContent: "center" },
-  dark: { backgroundColor: color.neutral900 },
+  slotGround: { ...PILL, alignSelf: "stretch", alignItems: "center", justifyContent: "center" },
   send: { backgroundColor: color.orange500, boxShadow: `0 4px 6px ${alpha(color.orange500, 0.4)}` },
   sendPressed: { transform: [{ scale: 0.95 }] },
 
-  strip: { ...PILL, flexDirection: "row", alignItems: "center", minWidth: 0, flexShrink: 1, backgroundColor: color.neutral900 },
+  strip: { ...PILL, flexDirection: "row", alignItems: "center", minWidth: 0, flexShrink: 1 },
   group: { flexDirection: "row", alignItems: "center", padding: 4, flexShrink: 0 },
   divider: { width: 1, height: 28, backgroundColor: alpha(color.white, 0.15), flexShrink: 0 },
   picks: { flexShrink: 1, minWidth: 0 },
@@ -335,7 +341,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 6,
     borderRadius: 999,
-    backgroundColor: alpha(color.neutral900, 0.8),
     boxShadow: "0 6px 20px rgba(0, 0, 0, 0.25)",
   },
   flyoutItem: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
