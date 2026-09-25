@@ -33,7 +33,7 @@ use crate::world::page_table::PageTable;
 use chunk::Chunk;
 pub use window::Domain;
 use window::{domain, eye, held, ring_of, window, window_of};
-use window::{HELD_AXIS, WINDOW_LEVELS};
+use window::{CHAIN_PAGES, HELD_AXIS, WINDOW_LEVELS};
 
 /// A layer the pyramid holds: its page is itself, folded by `Folds`.
 pub trait Layer: Folds + Clone + 'static {
@@ -104,11 +104,11 @@ pub enum Resolved {
 const PINNED: u32 = 1;
 
 /// Records a layer holds its pages in: a ring for every level of the widest
-/// window and the pinned page, so every page a layer can want at once has
-/// room — which is what lets a page wanted never be turned out for another
-/// (`record_for`) — and what the window leaves over is room for pages the
-/// camera has left.
-pub const RECORDS: u32 = WINDOW_LEVELS * HELD_AXIS * HELD_AXIS + PINNED;
+/// window, the chain over its top and the pinned page, so every page a layer
+/// can want at once has room — which is what lets a page wanted never be
+/// turned out for another (`record_for`) — and what the window leaves over is
+/// room for pages the camera has left.
+pub const RECORDS: u32 = WINDOW_LEVELS * HELD_AXIS * HELD_AXIS + CHAIN_PAGES + PINNED;
 
 /// What the resident pages draw of a view's `Domain`: pieces of its ground,
 /// none over another, and the gaps between them, the two together being
@@ -253,10 +253,32 @@ impl<L: Layer> Pyramid<L> {
                 }
             }
         }
-        let mut out = Cover::default();
+        // A root not drawn whole is stood in for by the nearest resident page
+        // over the window's top, which the chain keeps there (window.rs
+        // `CHAIN_PAGES`): coarser ground rather than none. It is drawn once and
+        // in place of everything under it, as a sibling group is drawn whole
+        // or not at all, so nothing is drawn twice.
+        let top = d.window().end;
+        let mut over: Vec<Chunk> = Vec::new();
+        let mut roots: Vec<(Chunk, Cover)> = Vec::new();
         for c in d.roots() {
-            self.wanted(d, &below, c, false, &mut out);
+            let mut own = Cover::default();
+            if !self.wanted(d, &below, c, false, &mut own) {
+                over.extend(c.ancestors().find(|a| a.level() >= top && self.get(a.page).is_some()));
+            }
+            roots.push((c, own));
         }
+        over.sort_unstable();
+        over.dedup();
+        let over: Vec<Chunk> = over.iter().copied().filter(|a| !a.ancestors().any(|b| over.contains(&b))).collect();
+        let mut out = Cover::default();
+        for (c, own) in roots {
+            if !c.ancestors().any(|a| over.contains(&a)) {
+                out.drawn.extend(own.drawn);
+                out.gaps.extend(own.gaps);
+            }
+        }
+        out.drawn.extend(over);
         out
     }
 
@@ -345,7 +367,8 @@ impl<L: Layer> Pyramid<L> {
     /// comparison rather than a score, so a page the camera wants is never
     /// given up for one it does not, whatever the distance.
     fn worth(&self, p: LevelPage, anchor: IVec, view: &std::ops::Range<u32>) -> (bool, bool, u32) {
-        let wanted = Some(p) == self.pinned || (view.contains(&p.level) && ring_of(anchor, p) <= HELD_AXIS / 2);
+        let chained = self.domain.as_ref().is_some_and(|d| d.chain().contains(&p));
+        let wanted = Some(p) == self.pinned || chained || (view.contains(&p.level) && ring_of(anchor, p) <= HELD_AXIS / 2);
         (!wanted, self.covered(p, view), ring_of(anchor, p))
     }
 
@@ -409,13 +432,16 @@ impl<L: Layer> Pyramid<L> {
     /// where it is not: requiring it would put this at one page a level, and
     /// a zoom out would fetch pages whose ground is already held.
     fn fold_one(&mut self, anchor: IVec) -> bool {
-        for level in window().filter(|&l| l > 0) {
-            for p in held(level, anchor) {
+        let chain = self.domain.as_ref().map_or_else(Vec::new, |d| d.chain().to_vec());
+        let w = window();
+        for level in w.start.max(1)..=TOP_LEVEL {
+            let ring = if w.contains(&level) { held(level, anchor) } else { Vec::new() };
+            for p in ring.into_iter().chain(chain.iter().copied().filter(|p| p.level == level)) {
                 if self.get(p).is_some() {
                     continue;
                 }
                 let Some(folded) = L::fold_page(p, |q| self.get(q)) else { continue };
-                let Some(record) = self.record_for(p, Some(anchor), &window()) else { return false };
+                let Some(record) = self.record_for(p, Some(anchor), &w) else { return false };
                 return match L::keep(record, &folded) {
                     Ok(page) => {
                         self.take(p, record, page);
@@ -448,6 +474,15 @@ impl<L: Layer> Pyramid<L> {
                 wants.push((p.subject(), policy::page(resolved, speculative, near)));
             }
         }
+        // The chain is coverage by what it is for, whatever the cover now
+        // makes of its ground.
+        if let Some(d) = self.domain.as_ref() {
+            for &p in d.chain() {
+                if self.get(p).is_none() && !self.children_resident(p) {
+                    wants.push((p.subject(), policy::page(Resolved::Missing, false, d.page_nearest_to(p))));
+                }
+            }
+        }
         if let Some(p) = self.pinned.filter(|p| self.get(*p).is_none() && !wants.iter().any(|(s, _)| *s == p.subject())) {
             wants.push((p.subject(), policy::pinned()));
         }
@@ -461,7 +496,8 @@ impl<L: Layer> Pyramid<L> {
     /// leaving a page is not a reason to throw it away.
     fn drop_unrecorded(&mut self, anchor: IVec) {
         let w = window();
-        let wanted: Vec<LevelPage> = w.clone().flat_map(|level| held(level, anchor)).collect();
+        let chain = self.domain.as_ref().map_or(&[][..], |d| d.chain());
+        let wanted: Vec<LevelPage> = w.clone().flat_map(|level| held(level, anchor)).chain(chain.iter().copied()).collect();
         for level in 0..=TOP_LEVEL {
             // Collected first: clearing moves the table's last page into the hole.
             let drop: Vec<LevelPage> = self.tables[level as usize]

@@ -83,6 +83,18 @@ pub const HELD_AXIS: u32 = 5;
 
 const _: () = assert!(LEVEL_REACH_CELLS <= (HELD_AXIS / 2 * PAGE_CELLS) as f64, "a level's chunks reach past its held ring");
 
+/// The pages a view holds over its window's top, so that ground whose page
+/// has not come always has something coarser to stand in for it: every
+/// ancestor of a root's page, up to the pyramid's top (Google Earth holds its
+/// root, Cesium preloads ancestors). A root lies inside the reach and a chunk
+/// of the top level beyond it, which is inside `split_distance(top + 1)` plus
+/// a top chunk — SPLIT plus half a chunk of the level above's cells from the
+/// eye's foot, a square under a page across — so each level over the window
+/// takes at most 2 × 2 pages, and parents of those no more.
+pub const CHAIN_PAGES: u32 = 4 * TOP_LEVEL;
+
+const _: () = assert!(2.0 * SPLIT + CHUNK_CELLS as f64 <= PAGE_CELLS as f64, "a level over the window takes more than 2 × 2 pages");
+
 /// Where the eye is: its position in units, and the point under it the rings
 /// are centred on.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -201,19 +213,30 @@ pub struct Domain {
     /// How far the ground is drawn: where the air ends it, or past the
     /// coarsest level's reach, whichever is nearer.
     pub far: f64,
+    /// The pages held over the window's top (`CHAIN_PAGES`), coarsest last.
+    chain: Vec<LevelPage>,
 }
 
 /// The domain of an eye `height` over the ground under it.
 pub fn domain_for(eye: &Eye, height: f64) -> Domain {
     let window = window_for(height);
     let far = reach_at(height).min(split_distance(window.end as i32));
-    Domain {
+    let mut d = Domain {
         window,
         eye: eye.at,
         foot: eye.foot,
         ground: eye.at[2] - height,
         far,
+        chain: Vec::new(),
+    };
+    let mut level: Vec<LevelPage> = d.roots().into_iter().map(|c| c.page).collect();
+    while level.first().is_some_and(|p| p.level < TOP_LEVEL) {
+        level = level.iter().map(|p| p.parent()).collect();
+        level.sort_unstable();
+        level.dedup();
+        d.chain.extend(&level);
     }
+    d
 }
 
 /// The domain of the eye as it stands.
@@ -287,6 +310,11 @@ impl Domain {
         out
     }
 
+    /// The pages held over the window's top (`CHAIN_PAGES`).
+    pub fn chain(&self) -> &[LevelPage] {
+        &self.chain
+    }
+
     /// The ground the view draws, as the roots' squares: a corner and a side
     /// each, in units.
     pub fn ground(&self) -> Vec<(f64, f64, f64)> {
@@ -309,9 +337,13 @@ impl Domain {
         self.window.contains(&p.level) && self.page_nearest_to(p) < within
     }
 
-    /// Whether the view wants `c`'s ground at the window's top: nothing coarser
-    /// would draw that ground's far steps.
+    /// Whether the view wants `c`'s ground at the window's top, or `c` is an
+    /// ancestor over it standing in: nothing coarser would draw that ground's
+    /// far steps.
     pub fn outermost(&self, c: Chunk) -> bool {
+        if c.level() >= self.window.end {
+            return true;
+        }
         let top = std::iter::once(c).chain(c.ancestors()).find(|a| a.level() + 1 == self.window.end);
         top.is_some_and(|t| !self.splits(t))
     }

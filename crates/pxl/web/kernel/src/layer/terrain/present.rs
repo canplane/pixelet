@@ -21,9 +21,10 @@ use crate::world::pyramid::{Cover, Domain};
 /// window's top and a level finer: a stand-in draws its ground with four
 /// times the chunks a level, and the chunk table holds the top level's
 /// chunks four times over and every other level's once (chunk/table.rs
-/// `WIDEST_SELECTION`). A stand-in deeper than that leaves the chunk a level
-/// under the top it lies in a gap; one anywhere under the top leaves the
-/// ground it stood in for a gap.
+/// `WIDEST_SELECTION`). A stand-in deeper than that gives way to the chunk a
+/// level under the top it lies in; one anywhere under the top gives way to
+/// the ground it stood in for — each drawn by its nearest resident self or
+/// ancestor (`standing`), and a gap only where nothing over it is held.
 ///
 /// Then the balance: no two chunks that meet more than a level apart. A
 /// chunk's mesh hangs a skirt one of its own cells deep, which hides the
@@ -33,10 +34,11 @@ use crate::world::pyramid::{Cover, Domain};
 /// page under it is resident — its four children in its place, never finer
 /// than the view wants, so no more chunks than the view has. Then what is
 /// still too fine for a coarse neighbour is coarsened: its sibling group and
-/// everything under it becomes its parent where that page is resident, and
-/// a gap where it is not. The first pass only makes chunks finer and stops
-/// at what the view wants; the second only makes them coarser or removes
-/// them and stops at the window's top. Neither undoes the other, so both end.
+/// everything under it becomes its parent, or the nearest resident ancestor
+/// over it where the parent's page is not. The first pass only makes chunks
+/// finer and stops at what the view wants; the second only makes them
+/// coarser or removes them and stops at the pyramid's top. Neither undoes
+/// the other, so both end.
 pub fn mesh(cover: Cover, d: &Domain, resident: impl Fn(Chunk) -> bool) -> Cover {
     let top = d.window().end - 1;
     let mut drawn: HashSet<Chunk> = HashSet::with_capacity(cover.drawn.len());
@@ -55,7 +57,8 @@ pub fn mesh(cover: Cover, d: &Domain, resident: impl Fn(Chunk) -> bool) -> Cover
         }
     }
     let mut gaps: HashSet<Chunk> = cover.gaps.into_iter().collect();
-    replace(&mut drawn, &mut gaps, &HashSet::new(), open);
+    let (up, open) = standing(open, &resident);
+    replace(&mut drawn, &mut gaps, &up, open);
 
     loop {
         let refine: HashSet<Chunk> = unbalanced(&drawn).into_iter().map(|(_, coarse)| coarse).filter(|&c| d.splits(c) && resident(c.children()[0])).collect();
@@ -78,13 +81,35 @@ pub fn mesh(cover: Cover, d: &Domain, resident: impl Fn(Chunk) -> bool) -> Cover
         // One sibling group at a time from the finest: a parent coarsened
         // in the same round as one over it would be drawn under it.
         let ups: HashSet<Chunk> = ups.iter().copied().filter(|u| !u.ancestors().any(|a| ups.contains(&a))).collect();
-        let (up, open): (HashSet<Chunk>, HashSet<Chunk>) = ups.into_iter().partition(|&u| resident(u));
+        let (up, open) = standing(ups, &resident);
         replace(&mut drawn, &mut gaps, &up, open);
     }
     Cover {
         drawn: drawn.into_iter().collect(),
         gaps: gaps.into_iter().collect(),
     }
+}
+
+/// What stands in for ground the mesh cannot draw as it is: each chunk's
+/// nearest resident self or ancestor, the window's chain up to the pyramid's
+/// top included (window.rs `CHAIN_PAGES`), so the ground is drawn coarser
+/// rather than opened; a gap only where nothing over it is held. An ancestor
+/// drawn draws everything under it, so none is kept inside another.
+fn standing(chunks: HashSet<Chunk>, resident: &impl Fn(Chunk) -> bool) -> (HashSet<Chunk>, HashSet<Chunk>) {
+    let mut up = HashSet::new();
+    let mut open = HashSet::new();
+    for c in chunks {
+        match std::iter::once(c).chain(c.ancestors()).find(|&a| resident(a)) {
+            Some(a) => up.insert(a),
+            None => open.insert(c),
+        };
+    }
+    let nested: Vec<Chunk> = up.iter().copied().filter(|a| a.ancestors().any(|b| up.contains(&b))).collect();
+    for a in nested {
+        up.remove(&a);
+    }
+    open.retain(|c| !c.ancestors().any(|b| up.contains(&b)));
+    (up, open)
 }
 
 /// Everything drawn or open under `up` or `open` gone, `up` drawn and

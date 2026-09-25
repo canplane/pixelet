@@ -162,7 +162,28 @@ and places:
 - Turning the camera moves the eye around the map centre in this orbit
   model, so a spin changes what is near and what is held.
 
-Not yet: the chunk ladder (`pxl-render look/lod.rs`) still picks a chunk's
-tier by its own distances, and objects' sub-cell tiers are not yet levels of
-the rule. τ, whether the work is equalised across devices, and hysteresis
-are left to measurement.
+- Every ancestor of the window's top pages is held up to the pyramid's top,
+  at most 2 × 2 a level (`CHAIN_PAGES`), and the cover stands the nearest
+  resident one in for a root not drawn whole, in place of everything under
+  it, so a zoom or a pan draws coarser ground rather than a hole while the
+  window's own pages come.
+
+- A chunk's tier is the rule's step (`wanted_step` in world/chunk/table.rs)
+  in place of the table's ladder; the byte budget's pressure only moves the
+  criterion.
+
+Not yet:
+
+- Objects' sub-cell tiers are not levels of the rule, and decoration is
+  scattered from the leaves alone, so it ends where the rule stops drawing
+  them (level 1's split distance), nearer than a kind's own reach.
+- What is held is the whole sphere's ground and not the frustum's, which is
+  rotation-stable but holds several times what a view shows; Cesium and
+  Mapbox select by the frustum.
+- A tier changes at its threshold with no crossfade; the machinery for one
+  (a secondary tier and its weight) is kept but unused.
+- The window is WINDOW_LEVELS deep, so from low over the ground the far
+  ground ends at the coarsest level's reach rather than at the horizon.
+
+τ, whether the work is equalised across devices, and hysteresis are left to
+measurement.

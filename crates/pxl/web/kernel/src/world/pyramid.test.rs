@@ -331,3 +331,23 @@ fn a_stand_in_too_deep_opens_its_branch_and_not_its_neighbours() {
     assert!(shown.gaps.contains(&deep) && shown.gaps.contains(&gap), "its own branch opens, and nothing wider");
     assert!(!shown.gaps.contains(&t));
 }
+
+/// Where the window's own pages have not come, the chain over it stands in:
+/// with only the level over the top resident, every root is drawn by the
+/// page over it, once, and nothing is a gap.
+#[test]
+fn a_root_whose_page_has_not_come_is_stood_in_for_by_the_page_over_the_window() {
+    let _serial = crate::global::serial();
+    let d = the_domain();
+    let mut pyramid = Pyramid::<PoiPage>::default();
+    for &p in d.chain().iter().filter(|p| p.level == WINDOW.end) {
+        pyramid.set(p, PoiPage::default());
+    }
+    let cover = pyramid.cover_of(&d);
+    assert!(cover.gaps.is_empty(), "{} gaps", cover.gaps.len());
+    assert!(disjoint(&cover.drawn));
+    assert!(cover.drawn.iter().all(|c| c.level() == WINDOW.end));
+    for r in d.roots() {
+        assert!(cover.drawn.iter().any(|&a| r.ancestors().any(|b| b == a)), "{r:?} is not stood in for");
+    }
+}

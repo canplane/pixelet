@@ -125,3 +125,32 @@ fn every_drawn_chunk_lies_between_its_split_distances_wherever_the_eye_stands() 
         }
     }
 }
+
+/// The chain over the window's top is every root's page's ancestors, at most
+/// 2 × 2 pages a level, so CHAIN_PAGES holds it wherever the eye stands.
+#[test]
+fn the_chain_over_the_window_holds_every_root_s_ancestors_in_two_by_two_a_level() {
+    let _serial = crate::global::serial();
+    for height in [1.0, 400.0, 5000.0, 250_000.0] {
+        for (x, y) in [(0.3, 0.2), (511.9, 0.1), (123_456.7, -98_765.4)] {
+            let eye = Eye {
+                at: [x, y, height],
+                foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
+            };
+            let d = domain_for(&eye, height);
+            let chain = d.chain();
+            assert!(chain.len() as u32 <= CHAIN_PAGES);
+            for level in d.window().end..=TOP_LEVEL {
+                let n = chain.iter().filter(|p| p.level == level).count();
+                assert!((1..=4).contains(&n), "height {height}: {n} pages at level {level}");
+            }
+            for r in d.roots() {
+                let mut p = r.page;
+                while p.level < TOP_LEVEL {
+                    p = p.parent();
+                    assert!(chain.contains(&p), "height {height}: {p:?} over a root is not held");
+                }
+            }
+        }
+    }
+}
