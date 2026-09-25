@@ -120,7 +120,7 @@ A terrain page is fetched at several resolutions, and those levels are
 **not** tiers of this ladder.
 
 ```
-level 0        level 1
+z16            z15
 ┌────┬────┐    ┌─────────┐
 │    │    │    │         │    the same 512-cell record,
 ├────┼────┤    │         │    a cell of 2u instead of 1u,
@@ -130,7 +130,7 @@ level 0        level 1
 
 A level-k page holds the same record a leaf does — 512 cells a side — over
 2^k leaves a side, so its cells are 2^k units. Its key is a leaf key shifted
-down k, and a key alone does not say by how much, so a page above level 0 is
+down k, and a key alone does not say by how much, so a page coarser than z16 is
 named by a level and a key together (`LevelPage`, `pxl-spec
 space/pyramid.rs`). `L3_IDX` always answers the leaf question: which
 512u square.

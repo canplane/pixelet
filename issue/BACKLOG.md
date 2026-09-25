@@ -11,11 +11,68 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 ## P0
 
 - **A view's level from the eye, in 3D, by one rule.** A node splits while
-  its nearest distance from the camera is under `r_L = (P / τ) · 2^(s + L)`,
-  for every layer and every level including an object's sub-cell ones, so a
-  cell's pixels and a view's node count are held between constants whatever
-  the tilt or position; the window's rings around the map centre go
+  its nearest distance from the camera is under `r_L = (P / τ) · 2^L`, one
+  rule for every layer, so a cell's pixels and a view's node count are held
+  between constants whatever the tilt or position; the window's rings
+  around the map centre go
   ([20260925-what-a-view-costs-is-the-eye-s.md](./20260925-what-a-view-costs-is-the-eye-s.md)).
+  Built for terrain and places. Settled 2026-09-25: the rule is shared and
+  chooses a level — a zoom — for each piece of ground by its distance from
+  the eye, below z16 too (z17 to z19 near the eye); what a layer draws at
+  that level, and in how much detail, is the layer's own, a tuning inside
+  the perspective rather than a second rule. At a level L terrain draws its
+  cells averaged 2 × 2 (detail +1), places count in a lattice sixteen times
+  the ground's cell (+4) and still stand a lone place on its z16 cell, and
+  objects draw their own cells (0), so an object's cube and the ground's are
+  the same size wherever both have data. Where the rule asks finer than a
+  layer's data, the layer draws its finest: terrain z16, objects their
+  sub-cell tiers to z19. z16 is terrain's atom and nothing more. What is
+  left:
+  - **Terrain's +1 is a choice, not a given.** The mesher averages level
+    L's cells 2 × 2 by coverage (pxl-render mesh/chunk_mesher.rs), which
+    blends colours and fetches pages a level finer than it draws; reading
+    level L + 1's page, the bake's majority vote, draws the same size from a
+    quarter of the pages with one type a cell. Either is terrain's to pick.
+  - **Objects at the rule's levels below z16.** A z16 chunk draws every
+    sub-cell tier whatever its distance, finer than the rule asks past
+    z17's reach; at z15 and coarser objects are already folded to the
+    level's cell (pxl-render mesh/paint/object/fold.rs). The rule is to
+    reach z17 to z19 (split distances 96, 48 and 24 u at the reference),
+    and a z16 chunk to fold its objects to the level its distance wants
+    there, terrain drawing z16 under them.
+  - **The split distance from the real screen.** `SPLIT` is the reference
+    1080 px and 50° (pxl-render look/lod.rs); `P` is to come from the
+    canvas's device pixels and the field of view, and where a screen needs
+    more than the tables are sized for, τ rises rather than the rule
+    breaking. Planned 2026-09-25, held.
+  - **Decoration by the same rule.** Decor is scattered from z16 pages
+    only, so it ends at z15's split distance (384 u) whatever a kind's
+    own reach; proposed: each chunk scatters from its own level's page, a
+    kind present while its instance covers τ, thinned and scaled up with
+    distance, seeded from a leaf cell so a level change does not move it.
+  - **No level is a floor.** z16 is terrain's atom and no more to the
+    shared rule: the split distance counted from `GROUND.scale(0)`, decor
+    from z16 pages only, step 1 only at z16, `level_at` floored at z16 and
+    `LEAF_TOPIC` on z16's table each treat it as special.
+  - **A tier change crossfades.** It switches at its threshold; the
+    secondary tier and its weight are kept but unused.
+  - **The window's depth.** `WINDOW_LEVELS` is 5, so from low over the
+    ground the far ground ends at the coarsest level's reach, short of the
+    horizon.
+  - **A hill nearer than the ground under the eye.** The window's base is
+    the level the ground under the eye wants, so nearer, higher ground is
+    drawn no finer than that base.
+  - **A page's height before it arrives.** A page not yet resident borrows
+    its nearest resident ancestor's range, an average and not a bound; a
+    bound needs the bake to write each page's range of the leaves under it.
+- **A blank screen after a far search from a zoomed-out view.** Location
+  pending, 30 ticks of zoom out, search "아주대학교", the first result:
+  nothing is drawn and the frame count stops (2 of 2 under dev:local,
+  2026-09-25). The first requests after the jump go to the world origin
+  (`eye()` on the stale origin). A lead not yet followed: `serve_tiles`
+  answers nothing past `--top-level` (3 by default; z11 and coarser are 503
+  for terrain and POI alike), so a view whose window starts above level 3
+  has no page it can get.
 - **The move to a Rust core in WASM, drawing through WebGPU.** Scheduled
   2026-09-13 ([20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md))
   and through by 2026-09-15: the kernel (`crates/pxl/kernel`, built by

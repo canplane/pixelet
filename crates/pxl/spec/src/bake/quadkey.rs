@@ -28,7 +28,7 @@
 use core::fmt;
 
 use crate::space::pvf3::ivec::{self, IVec};
-use crate::space::pyramid::{zoom_of_level, LevelPage, LEVEL0_ZOOM, TOP_LEVEL};
+use crate::space::pyramid::{zoom_of_level, LevelPage, PAGE_ZOOM, TOP_LEVEL};
 
 /// A quadkey's digits, in the order a quadrant is numbered: x in the low bit,
 /// y in the high one.
@@ -79,7 +79,7 @@ pub fn quadkey_of(zoom: u32, idx: IVec) -> Quadkey {
 /// data rather than as a third page axis (`space/xy.rs`).
 pub fn index_of(key: &str) -> Option<(u32, IVec)> {
     let zoom = u32::try_from(key.len()).ok()?;
-    if zoom == 0 || zoom > LEVEL0_ZOOM {
+    if zoom == 0 || zoom > PAGE_ZOOM {
         return None;
     }
     let (mut tx, mut ty) = (0i64, 0i64);
@@ -102,7 +102,7 @@ pub fn page_name(p: LevelPage) -> Quadkey {
 /// holds: `page_name`'s inverse.
 pub fn page_of_name(name: &str) -> Option<LevelPage> {
     let (zoom, page) = index_of(name)?;
-    let level = LEVEL0_ZOOM - zoom;
+    let level = PAGE_ZOOM - zoom;
     (level <= TOP_LEVEL).then(|| LevelPage::new(level, page))
 }
 

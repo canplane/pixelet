@@ -274,7 +274,7 @@ impl ChunkNode {
     /// split exists to avoid.
     fn on_decor_change(&mut self, queue: &mut Queue) {
         // Decor is scattered from the leaves alone: a kind's extent puts it
-        // inside the reach level 0 is drawn to, so a level chunk has none.
+        // inside the reach z16 is drawn to, so a level chunk has none.
         if self.page.level > 0 {
             return;
         }

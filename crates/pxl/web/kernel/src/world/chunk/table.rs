@@ -2041,7 +2041,7 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
 /// The world step the rule wants `c` shown at: the level wanted at its
 /// nearest point (window.rs `split_distance`), as that level's cells averaged
 /// 2×2 — step 2^(want + 1) — and coarser by the byte budget's `pressure`.
-/// Nearer than level 0's split distance the rule wants a level the ground
+/// Nearer than z16's split distance the rule wants a level the ground
 /// has no data for, and the leaves' own cells are what there is.
 fn wanted_step(d: &Domain, c: Chunk, pressure: u32) -> u32 {
     let want = (d.nearest_to(c) / split_distance(0)).log2().floor().max(-1.0) as i32 + pressure as i32;

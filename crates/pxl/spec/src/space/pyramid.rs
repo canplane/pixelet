@@ -29,23 +29,24 @@ use crate::bake::constant::CELL;
 /// nothing above it.
 pub const TOP_LEVEL: u32 = 10;
 
-/// The zoom a level-0 page is, in the 512-pixel tile convention: the X lane
-/// is one EPSG:3857 world, so a level has 2^(IVEC_X_W − L3 − level)
-/// pages across it, which is a zoom's tile count. Level k is zoom
-/// LEVEL0_ZOOM − k, and a level-0 cell is the standard 256-pixel z16 pixel
-/// exactly.
-pub const LEVEL0_ZOOM: u32 = IVEC_X_W - L3.shamt() as u32;
+/// The zoom the ground's finest pages are named at, in the 512-pixel tile
+/// convention: the X lane is one EPSG:3857 world, so a level has
+/// 2^(IVEC_X_W − L3 − level) pages across it, which is a zoom's tile count.
+/// Their cells are the standard 256-pixel z16 pixel exactly, so level k is
+/// z(16 − k) — its cells z(16 − k)'s pixels — and its pages are named at
+/// PAGE_ZOOM − k.
+pub const PAGE_ZOOM: u32 = IVEC_X_W - L3.shamt() as u32;
 
 // ---- the lattice's scale ----
 //
 // A cell is not a unit. A lattice is scales against the unit, as
-// sparse_tree's layout is: its level-0 cell is one scale, and a level-k cell
+// sparse_tree's layout is: its first level's cell is one scale, and a level-k cell
 // k above it. A page and a chunk are fixed in units — the L3 and L2 blocks —
 // so every layer shares the pyramid's pages, levels and names, and how many
 // cells stand across one is what its lattice decides. A level is a count
 // from the lattice's cell, and the lattice is what turns it into a size.
 
-/// A layer's lattice: its level-0 cell's side.
+/// A layer's lattice: its cell's side at the pyramid's first level, z16's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Lattice {
     cell: Scale,
@@ -143,7 +144,7 @@ pub const CHUNK_CELLS: u32 = GROUND.chunk_cells();
 pub const PAGE_CHUNKS: u32 = PAGE_CELLS / CHUNK_CELLS;
 
 pub const fn zoom_of_level(level: u32) -> u32 {
-    LEVEL0_ZOOM - level
+    PAGE_ZOOM - level
 }
 
 // The identity holds by constants agreeing, not by one deriving the rest: the
@@ -153,8 +154,8 @@ pub const fn zoom_of_level(level: u32) -> u32 {
 // nothing here.
 const _: () = {
     assert!(L1.count_in(L3) == 512, "a page is one 512-pixel tile");
-    assert!(LEVEL0_ZOOM == 15, "level 0 is zoom 15 at 512 pixels, z16 at 256");
-    assert!(TOP_LEVEL <= LEVEL0_ZOOM, "no level coarser than one page across the world");
+    assert!(PAGE_ZOOM == 15, "z16 pages are zoom 15 at 512 pixels");
+    assert!(TOP_LEVEL <= PAGE_ZOOM, "no level coarser than one page across the world");
 };
 
 /// A page of the pyramid.

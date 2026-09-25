@@ -50,7 +50,7 @@ fn a_cell_found_by_its_offset_in_a_coarser_one_is_itself() {
 
 /// A lattice is shifts against the unit, so two lattices whose cells are the
 /// same size cut the same ground: a lattice two shifts coarser than the
-/// ground has at level 0 the ground's level-2 cell, held in a level-0 page
+/// ground has at z16 the ground's z14 cell, held in a z16 page
 /// rather than a level-2 one.
 #[test]
 fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_levels_up() {

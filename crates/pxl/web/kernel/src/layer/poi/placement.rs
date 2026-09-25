@@ -9,7 +9,7 @@
 //! coarse places are is the camera's distance and nothing else, the ground's
 //! the same way but apart from it. A cell holding two places or more is a
 //! count at that cell's centre; a cell holding one is the place, at the
-//! centre of the level-0 ground cell it stands in. Either stands in all
+//! centre of the z16 ground cell it stands in. Either stands in all
 //! three axes, on the surface drawn there (pxl-spec space/pyramid.rs
 //! `Cell::centre`, chunk/table.rs `surface_at`), which is the one thing read
 //! from the ground.
@@ -47,7 +47,7 @@ static PLACEMENT: Global<Placement> = Global::new();
 
 /// How many places a badge's cell holds, and where it holds one, that
 /// place's name — its page and pool index, read only once the count is known
-/// to be one — and the level-0 ground cell it stands in.
+/// to be one — and the z16 ground cell it stands in.
 #[derive(Clone, Copy, Default)]
 struct Tally {
     count: u32,

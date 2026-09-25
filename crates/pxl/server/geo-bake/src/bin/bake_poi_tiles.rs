@@ -42,7 +42,7 @@ fn run() -> Result<(), String> {
     for (page, poi) in &pages {
         set.write(LevelPage::new(0, *page), &pack(&poi.encode()?, Level::Stored).map_err(|e| e.to_string())?)?;
     }
-    println!("[bake/poi] level 0: {} pages", pages.len());
+    println!("[bake/poi] z16: {} pages", pages.len());
     let top = build(&set, &PoiPage::default(), concurrency)?;
     write_manifest(&set, top, serde_json::json!({ "source": catalog::sources(&mut client, &[PLACES]) }))?;
     println!("[bake/poi] complete to level {top}: {}", out.display());

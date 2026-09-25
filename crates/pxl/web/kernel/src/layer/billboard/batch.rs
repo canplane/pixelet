@@ -18,7 +18,7 @@ pub struct BillboardBatch {
     pub w_px: Vec<f32>,
     /// Canvas-space Y of the anchor, in CSS pixels before the fade.
     pub anchor_px: Vec<f32>,
-    /// The side in level-0 cells of what the candidate marks, which its
+    /// The side in z16 cells of what the candidate marks, which its
     /// distance fade is scaled by.
     pub unit: Vec<f64>,
 

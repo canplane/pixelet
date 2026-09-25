@@ -21,7 +21,7 @@ use crate::world::chunk::node::World;
 /// Floats an instance takes: its anchor relative to the set's (3), its
 /// logical size in pixels (2), its rectangle of the sheet (4), where the
 /// anchor falls down the sprite, 0 top and 1 bottom (1), and the side of the
-/// block of level-0 cells it marks (1), which its distance fade is scaled by
+/// block of z16 cells it marks (1), which its distance fade is scaled by
 /// (distance_fade.rs). badge.wgsl reads the same stride.
 pub const BILLBOARD_FLOATS: usize = 11;
 

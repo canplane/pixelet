@@ -1,7 +1,7 @@
 // pxl-geo-bake/poi.rs
 
 //! The POI layer's source: Overture's places, each counted in the leaf cell
-//! it stands in and, where it stands there alone, placed on its level-0
+//! it stands in and, where it stands there alone, placed on its z16
 //! ground cell (pxl-spec bake/poi_page.rs). Where the pages are kept and how
 //! the levels above are folded are the pyramid's (pyramid.rs).
 

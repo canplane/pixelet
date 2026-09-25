@@ -85,7 +85,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   let size_px = vec2f(instances[k + 3u], instances[k + 4u]);
   let rect = vec4f(instances[k + 5u], instances[k + 6u], instances[k + 7u], instances[k + 8u]);
   let frac = instances[k + 9u];
-  // The block the badge marks, in level-0 cells: its fade reaches as far as
+  // The block the badge marks, in z16 cells: its fade reaches as far as
   // the level that block is drawn at (billboard/distance_fade.rs).
   let unit = instances[k + 10u];
   let corners = array<vec2f, 4>(vec2f(-0.5, -0.5), vec2f(0.5, -0.5), vec2f(-0.5, 0.5), vec2f(0.5, 0.5));
