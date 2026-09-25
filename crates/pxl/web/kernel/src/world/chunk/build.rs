@@ -8,7 +8,7 @@
 //! (crates/pxl/web/kernel/src/world/chunk/table.rs). What is here acts on
 //! what it asks.
 
-use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
+use pxl_spec::space::pyramid::GROUND;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use pxl_render::gpu::api::{gpu, room};
@@ -350,10 +350,9 @@ impl Builder {
     /// whichever level it is drawn at. With what it is valid for, which a
     /// cached composite is compared by.
     pub fn compose_leaf(&mut self, world: &mut World, base: IVec) -> Option<(u32, u32)> {
-        let cell = GROUND.cell_of(0, &pxl_spec::space::pvf3::Pvf3 { i: base, ..Default::default() });
-        let (leaf, first) = (cell.page(), cell.index());
-        let page = Terrain::pyramid().get(leaf)?;
-        let (tx0, ty0) = (first % PAGE_CELLS, first / PAGE_CELLS);
+        let chunk = PyramidChunk::of(0, &pxl_spec::space::pvf3::Pvf3 { i: base, ..Default::default() });
+        let page = Terrain::pyramid().get(chunk.page())?;
+        let (tx0, ty0) = chunk.in_page();
         let show = settings_store().show_structures;
         let col_idx = L2_IDX(base);
         let valid = self.leaf_valid(base);

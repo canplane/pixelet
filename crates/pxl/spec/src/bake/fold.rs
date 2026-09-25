@@ -76,12 +76,11 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], level: i32) -> T {
 /// Read straight out of the packed cells and written straight back, a field
 /// at a time. A page is one array and there are no planes to take apart.
 pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
-    let span = PAGE_CELLS as usize;
-    let out = (0..(span * span) as u32)
+    let out = (0..PAGE_CELLS * PAGE_CELLS)
         .map(|index| {
             let (q, first) = GROUND.child_block(index);
-            let (c, at) = (&children[q].cells, first as usize);
-            let four = [c[at], c[at + 1], c[at + span], c[at + span + 1]];
+            let ([x, y], c) = (GROUND.in_page(first), &children[q].cells);
+            let four = [[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]].map(|[x, y]| c[GROUND.cell_index(x, y) as usize]);
             let mut cell = 0 as GroundCell;
             for key in GROUND_CH_KEYS {
                 let v = four.map(|f| channel_of(f, key));

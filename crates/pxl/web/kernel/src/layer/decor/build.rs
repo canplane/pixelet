@@ -25,9 +25,9 @@ use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::{unpack_pos, U_PER_CELL};
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
-use pxl_spec::space::indexer::L3_IDX;
+use pxl_spec::space::hierarchy::child_of;
 use pxl_spec::space::pvf3::ivec::{gather, IVec};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use std::collections::HashMap;
@@ -257,10 +257,11 @@ pub struct Placed {
 /// each one the instance that z16 cell draws, where it stands, as it turns —
 /// and adds or drops the others, a quarter a level.
 fn representative(tag: u64, level: u32, x: i64, y: i64) -> (i64, i64) {
-    (1..=level).rev().fold((x, y), |(x, y), l| {
+    let [x, y] = (1..=level).rev().fold([x, y], |[x, y], l| {
         let slot = derive_seed_u64(derive_seed_u64(derive_seed_u64(DECOR_MASTER_SEED, tag), gather(x, y, 0)), l as u64);
-        (2 * x + (slot & 1) as i64, 2 * y + (slot >> 1 & 1) as i64)
-    })
+        child_of([x, y], slot as usize)
+    });
+    (x, y)
 }
 
 impl<'s> DecorBuild<'s> {
@@ -363,17 +364,15 @@ impl<'s> DecorBuild<'s> {
             let cell_y = ground.ty0 + dy;
             for dx in 0..CHUNK_CELLS {
                 let cell_x = ground.tx0 + dx;
-                let idx = (cell_y * PAGE_CELLS + cell_x) as usize;
-                if !kind.rules.allows(cells[idx]) {
+                if !kind.rules.allows(cells[GROUND.cell_index(cell_x, cell_y) as usize]) {
                     continue;
                 }
                 let (gx, gy) = representative(kind.tag, ground.level, lx0 + dx as i64, ly0 + dy as i64);
                 // The z16 cell's own stream: its page's seed, the kind's, and
                 // its place in its page.
-                let unit = |g: i64| (g as f64 * atom.side()) as i64;
-                let page_idx = L3_IDX(gather(unit(gx), unit(gy), 0));
-                let (px, py) = (gx.rem_euclid(PAGE_CELLS as i64) as u64, gy.rem_euclid(PAGE_CELLS as i64) as u64);
-                let kind_seed = derive_seed_u64(derive_seed_u64(DECOR_MASTER_SEED, page_idx), kind.tag);
+                let z16 = GROUND.cell_of(0, &atom.base_of([gx, gy, 0]));
+                let [px, py] = z16.in_page().map(u64::from);
+                let kind_seed = derive_seed_u64(derive_seed_u64(DECOR_MASTER_SEED, z16.page().page), kind.tag);
                 let mut rng = Rng::new(derive_seed_u64(kind_seed, (px << 16) | py));
                 if rng.unit() >= kind.density {
                     continue;

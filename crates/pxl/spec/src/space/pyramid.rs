@@ -118,7 +118,7 @@ impl Lattice {
     /// The parent cell a child's cell folds into, the child page in slot `q`.
     pub fn parent_cell(self, q: usize, index: u32) -> u32 {
         let n = self.page_cells() as i64;
-        let (page, [tx, ty]) = (child_of([0, 0], q), self.local(index));
+        let (page, [tx, ty]) = (child_of([0, 0], q), self.in_page(index).map(i64::from));
         let [x, y] = parent_of([page[0] * n + tx, page[1] * n + ty]);
         self.cell_index(x as u32, y as u32)
     }
@@ -127,14 +127,15 @@ impl Lattice {
     /// cell is folded from: `parent_cell`'s inverse.
     pub fn child_block(self, index: u32) -> (usize, u32) {
         let n = self.page_cells() as i64;
-        let [x, y] = child_of(self.local(index), 0);
+        let [x, y] = child_of(self.in_page(index).map(i64::from), 0);
         (slot_of([x / n, y / n]), self.cell_index((x % n) as u32, (y % n) as u32))
     }
 
-    /// A cell index as its column and row in its page.
-    fn local(self, index: u32) -> [i64; 2] {
+    /// A cell index as its column and row in its page: `cell_index`'s
+    /// inverse.
+    pub const fn in_page(self, index: u32) -> [u32; 2] {
         let n = self.page_cells();
-        [(index % n) as i64, (index / n) as i64]
+        [index % n, index / n]
     }
 }
 
@@ -309,10 +310,15 @@ impl Cell {
         self.lattice.scale(self.page.level)
     }
 
+    /// Its column and row in its page.
+    pub fn in_page(self) -> [u32; 2] {
+        self.lattice.in_page(self.index)
+    }
+
     /// The point at the cell's south-west corner.
     pub fn base(self) -> Pvf3 {
-        let n = self.lattice.page_cells();
-        self.lattice.cell_base(self.page, self.index % n, self.index / n)
+        let [tx, ty] = self.in_page();
+        self.lattice.cell_base(self.page, tx, ty)
     }
 
     /// The point at the cell's middle on the ground plane.

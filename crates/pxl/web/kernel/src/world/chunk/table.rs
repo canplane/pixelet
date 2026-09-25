@@ -20,7 +20,7 @@
 //! the frustum — and calls the tick.
 
 use pxl_spec::space::indexer::FROM_L2_IDX;
-use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, PAGE_CELLS, PAGE_CHUNKS};
+use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, PAGE_CHUNKS};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
@@ -1773,11 +1773,11 @@ impl Scheduler {
     pub fn surface_at(&self, at: &Pvf3) -> Option<(u32, f64)> {
         (0..=TOP_LEVEL).find_map(|level| {
             let d = self.drawn_of(&self.slots[*self.index.get(&Chunk::of(level, at))?])?;
-            let cell = GROUND.cell_of(d.cell_level(), at);
-            let first = GROUND.cell_of(d.cell_level(), &Pvf3 { i: d.base, ..Default::default() });
-            let at = |i: u32| i % PAGE_CELLS;
-            let (bx, by) = (at(cell.index()).wrapping_sub(at(first.index())), (cell.index() / PAGE_CELLS).wrapping_sub(first.index() / PAGE_CELLS));
-            Some((d.cell_level(), d.top(bx, by)?))
+            // The chunk lies in one page at every level over its own, so the
+            // point's cell and the chunk's first are of one page.
+            let [cx, cy] = GROUND.cell_of(d.cell_level(), at).in_page();
+            let [fx, fy] = GROUND.cell_of(d.cell_level(), &Pvf3 { i: d.base, ..Default::default() }).in_page();
+            Some((d.cell_level(), d.top(cx - fx, cy - fy)?))
         })
     }
 
