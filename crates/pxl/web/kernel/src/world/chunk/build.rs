@@ -11,6 +11,8 @@
 use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+use pxl_render::gpu::api::{gpu, room};
+use pxl_render::gpu::renderer::device_ready;
 use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::level::write_level_runs;
 use pxl_render::mesh::paint::object::adapter::{Carve, Entries, Painted, Painter};
@@ -918,6 +920,14 @@ impl Builder {
                 // over as none: zero bytes at zero.
                 debug_assert!(job.mesh.is_some() || mesh_words(0, FINE_BOX_WORDS) == 0);
                 let (at, bytes) = job.mesh.unwrap_or((0, 0));
+                // Handed over, the mesh goes to the device in this turn's
+                // stream; with no room there it stays where it is, finished,
+                // and is handed over from the next turn's. With no device
+                // there is no stream to fill, and the hand-over goes on as
+                // before one arrives.
+                if gpu().is_some() && device_ready() && !room(bytes) {
+                    return Progress::Blocked;
+                }
                 let mesh = self.bake.finish();
                 let job = self.bake_job.take().unwrap();
                 self.stat.bakes += 1;

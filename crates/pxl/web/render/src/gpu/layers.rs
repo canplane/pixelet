@@ -21,7 +21,7 @@ use pxl_spec::asset::texture::{shipped_texture_tile, CubeFace, TileOrigin, SHIPP
 use pxl_spec::cell::object::{block_cubes, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 
 use crate::frame::shader::record::PIPELINE_MIPS;
-use crate::gpu::api::{buffer_usage, bytes, object, texture_usage, GpuApi};
+use crate::gpu::api::{buffer_usage, bytes, object, texture_usage, Gpu};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::paint::Paint;
 use crate::gpu::pipeline::Pipelines;
@@ -45,10 +45,10 @@ pub struct Mips {
 impl Mips {
     /// The builder for textures of `format`: a pipeline draws into the
     /// format it was built for, so a chain of another needs its own.
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, format: u32) -> Mips {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, format: u32) -> Mips {
         let built = pipelines.build(g, PIPELINE_MIPS, format);
         let sampler = object();
-        (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
+        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
         Mips {
             pipeline: built.pipeline,
             layout: built.layouts[0],
@@ -58,23 +58,23 @@ impl Mips {
 
     /// Draws every level of `texture` below the first, for `layers` array
     /// layers from `first_layer`, each box-filtered from the one above.
-    pub fn build(&self, g: &GpuApi, texture: u32, levels: u32, first_layer: u32, layers: u32) {
+    pub fn build(&self, g: &Gpu, texture: u32, levels: u32, first_layer: u32, layers: u32) {
         let encoder = object();
-        (g.encoder)(encoder);
+        g.encoder(encoder);
         for layer in first_layer..first_layer + layers {
             for level in 1..levels {
                 let above = object();
-                (g.view)(above, texture, dimension::D2, level - 1, 1, layer, 1);
+                g.view(above, texture, dimension::D2, level - 1, 1, layer, 1);
                 let target = object();
-                (g.view)(target, texture, dimension::D2, level, 1, layer, 1);
+                g.view(target, texture, dimension::D2, level, 1, layer, 1);
                 let group = object();
-                (g.bind_group)(group, self.layout, &[0, resource::VIEW, above, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
+                g.bind_group(group, self.layout, &[0, resource::VIEW, above, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
                 let pass = object();
-                (g.pass)(pass, encoder, &crate::gpu::api::pass_desc(target, load::CLEAR, 0, load::CLEAR, 0.0, crate::gpu::api::Stamp::UNTIMED));
-                (g.set_pipeline)(pass, self.pipeline);
-                (g.set_bind_group)(pass, 0, group, &[]);
-                (g.draw)(pass, 3, 1, 0, 0);
-                (g.end)(pass);
+                g.pass(pass, encoder, &crate::gpu::api::pass_desc(target, load::CLEAR, 0, load::CLEAR, 0.0, crate::gpu::api::Stamp::UNTIMED));
+                g.set_pipeline(pass, self.pipeline);
+                g.set_bind_group(pass, 0, group, &[]);
+                g.draw(pass, 3, 1, 0, 0);
+                g.end(pass);
                 // The encoder keeps what it recorded: a view, a group or a pass
                 // let go now is gone from the table, not from the commands.
                 for id in [pass, group, target, above] {
@@ -82,7 +82,7 @@ impl Mips {
                 }
             }
         }
-        (g.submit)(encoder);
+        g.submit(encoder);
         crate::gpu::api::release(encoder);
     }
 }
@@ -161,24 +161,24 @@ impl Layers {
     /// colour is the box's own colour, which the shader already has, so a
     /// slot filled with it would be a mip chain built to say what the vertex
     /// says. Until then the table sends every face to NO_SLOT.
-    pub fn new(g: &GpuApi) -> Layers {
+    pub fn new(g: &Gpu) -> Layers {
         let (tiles, _) = plan();
         let slots = tiles.len() as u32;
         let levels = mip_levels(LAYER_TEX_SZ, LAYER_TEX_SZ);
         let usage = texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT;
         let tex = object();
-        (g.texture)(tex, LAYER_TEX_SZ, LAYER_TEX_SZ, slots, format::RGBA8_SRGB, levels, usage);
+        g.texture(tex, LAYER_TEX_SZ, LAYER_TEX_SZ, slots, format::RGBA8_SRGB, levels, usage);
         let view = object();
-        (g.view)(view, tex, dimension::D2_ARRAY, 0, levels, 0, slots);
+        g.view(view, tex, dimension::D2_ARRAY, 0, levels, 0, slots);
         // Anisotropic at the four three's arrays were filtered at: the ground
         // is mostly seen at a grazing angle, where an isotropic mip blurs the
         // tile along the view.
         let sampler = object();
-        (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::REPEAT, compare::NONE, 4);
+        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::REPEAT, compare::NONE, 4);
         let table = object();
         let blank: Vec<u32> = vec![slot_word(NO_SLOT, NO_SLOT); table_len()];
-        (g.buffer)(table, (blank.len() * 4) as u32, buffer_usage::STORAGE | buffer_usage::COPY_DST);
-        (g.write_buffer)(table, 0, bytes(&blank));
+        g.buffer(table, (blank.len() * 4) as u32, buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        g.write_buffer(table, 0, bytes(&blank));
         // A chain is the sum of its levels' texels: under four thirds of the first.
         let bytes = (0..levels).map(|level| (LAYER_TEX_SZ >> level).pow(2) * 4 * slots).sum();
         Layers {
@@ -195,7 +195,7 @@ impl Layers {
 
     /// Draws the pack's sheet into the array once it has arrived, and opens
     /// the table onto it: `sheet` asks for its image, until it is drawn.
-    pub fn step(&mut self, g: &GpuApi, mips: &Mips, sheet: fn() -> Option<u32>) {
+    pub fn step(&mut self, g: &Gpu, mips: &Mips, sheet: fn() -> Option<u32>) {
         if self.loaded {
             return;
         }
@@ -207,10 +207,10 @@ impl Layers {
             p.size(LAYER_TEX_SZ, LAYER_TEX_SZ);
             p.image(image, tile.x as f32, tile.y as f32, cell, cell, 0.0, 0.0, size, size);
             p.run(g);
-            (g.paint_copy)(self.tex, 0, 0, slot as u32, LAYER_TEX_SZ, LAYER_TEX_SZ);
+            g.paint_copy(self.tex, 0, 0, slot as u32, LAYER_TEX_SZ, LAYER_TEX_SZ);
         }
         mips.build(g, self.tex, self.levels, 0, self.slots);
-        (g.write_buffer)(self.table, 0, bytes(&table));
+        g.write_buffer(self.table, 0, bytes(&table));
         self.loaded = true;
     }
 }

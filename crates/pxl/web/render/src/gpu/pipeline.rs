@@ -7,7 +7,7 @@
 //! serves the others.
 
 use crate::frame::shader::record::{pipeline as record_of, source, HEAD, SHADERS};
-use crate::gpu::api::{object, GpuApi};
+use crate::gpu::api::{object, Gpu};
 
 /// Group layouts a pipeline has at most, and vertex lanes.
 pub const GROUPS: usize = 4;
@@ -61,30 +61,30 @@ impl Pipelines {
         }
     }
 
-    fn module(&mut self, g: &GpuApi, kind: u32) -> u32 {
+    fn module(&mut self, g: &Gpu, kind: u32) -> u32 {
         let m = &mut self.modules[kind as usize];
         if *m == 0 {
             *m = object();
-            (g.shader)(*m, source(kind));
+            g.shader(*m, source(kind));
         }
         *m
     }
 
-    fn layout(&mut self, g: &GpuApi, entries: &[u32]) -> u32 {
+    fn layout(&mut self, g: &Gpu, entries: &[u32]) -> u32 {
         let key = entries.iter().fold(0xcbf29ce484222325, |k, &w| fold(k, w));
         if let Some(&(_, id)) = self.layouts[..self.layout_len].iter().find(|(k, _)| *k == key) {
             return id;
         }
         assert!(self.layout_len < LAYOUTS, "more than {LAYOUTS} bind group layouts");
         let id = object();
-        (g.layout)(id, entries);
+        g.layout(id, entries);
         self.layouts[self.layout_len] = (key, id);
         self.layout_len += 1;
         id
     }
 
     /// Pipeline `id` drawing into `format`.
-    pub fn build(&mut self, g: &GpuApi, id: u32, format: u32) -> Built {
+    pub fn build(&mut self, g: &Gpu, id: u32, format: u32) -> Built {
         let key = fold(fold(0xcbf29ce484222325, id), format);
         if let Some(&(_, b)) = self.built[..self.built_len].iter().find(|(k, _)| *k == key) {
             return b;
@@ -108,7 +108,7 @@ impl Pipelines {
             at += 1 + 3 * n;
         }
         b.pipeline = object();
-        (g.pipeline)(b.pipeline, &words, &b.layouts[..groups], module, format);
+        g.pipeline(b.pipeline, &words, &b.layouts[..groups], module, format);
         assert!(self.built_len < BUILT, "more than {BUILT} pipelines");
         self.built[self.built_len] = (key, b);
         self.built_len += 1;

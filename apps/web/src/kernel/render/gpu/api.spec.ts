@@ -63,9 +63,99 @@ export const load = {
   READ_ONLY: 2 as number,
 } as const;
 
+/** The one place the renderer's calls cross (gpu/api.rs): a range of the
+ * kernel's memory the kernel writes its calls into during a turn, and the host
+ * runs once the turn has returned. A call is a record — its op, the words of
+ * arguments that follow, then those words — and carries everything it names,
+ * bytes included, so nothing a record reads lies outside it.
+ *
+ * The range opens on HEAD words: END, where the kernel says how many words of
+ * records the turn wrote; and from GPU_MS, the host's side, each timed span's
+ * GPU time in milliseconds as a double, then the frame's whole, as the host last
+ * read them. */
+export const stream = {
+  END: 0 as number,
+  GPU_MS: 2 as number,
+  HEAD: 32 as number,
+  /** The range's size: what one turn may send the device. A product number, said
+   * rather than derived; a chunk's mesh is under a tenth of a megabyte and a
+   * frame's own records tens of kilobytes, so a turn's uploads wait only when
+   * a burst of them comes at once. */
+  BYTES: 4194304 as number,
+  /** What an upload leaves of the range. The records a turn cannot put off — a
+   * frame's passes and draws, the shaders the first frame makes — are never
+   * refused, so an upload, which can wait a turn, is taken only while this much
+   * is left after it. */
+  RESERVE: 1048576 as number,
+} as const;
+
+/** A record's operation, then its arguments. Bytes go as their count, then the bytes padded to a word. */
+export const op = {
+  /** every object the host holds let go */
+  RESET: 1 as number,
+  /** id, size, usage */
+  BUFFER: 2 as number,
+  /** id, width, height, layers, format, mips, usage */
+  TEXTURE: 3 as number,
+  /** id, image: a texture of an image a load holds, at its size, with it in it */
+  IMAGE_TEXTURE: 4 as number,
+  /** id, texture, dimension, base mip, mips, base layer, layers */
+  VIEW: 5 as number,
+  /** id, mag, min, mipmap, address, compare, anisotropy */
+  SAMPLER: 6 as number,
+  /** id, the WGSL's bytes */
+  SHADER: 7 as number,
+  /** id, then (binding, stages, kind) words */
+  LAYOUT: 8 as number,
+  /** id, module, format, the record's words, the record, then the group layouts */
+  PIPELINE: 9 as number,
+  /** id, layout, then (binding, resource, object, offset, size) words */
+  BIND_GROUP: 10 as number,
+  /** id */
+  DESTROY: 11 as number,
+  /** id, offset, the bytes */
+  WRITE_BUFFER: 12 as number,
+  /** id, layer, width, height, the bytes: the first mip of one layer, whole */
+  WRITE_TEXTURE: 13 as number,
+  /** id */
+  ENCODER: 14 as number,
+  /** id, encoder, the pass's description (api.rs pass_desc) */
+  PASS: 15 as number,
+  /** pass, pipeline */
+  SET_PIPELINE: 16 as number,
+  /** pass, index, group, then the dynamic offsets */
+  SET_BIND_GROUP: 17 as number,
+  /** pass, slot, buffer, offset, size (0 the rest) */
+  SET_VERTEX_BUFFER: 18 as number,
+  /** pass, buffer, offset, size (0 the rest) */
+  SET_INDEX_BUFFER: 19 as number,
+  /** pass, vertices, instances, first vertex, first instance */
+  DRAW: 20 as number,
+  /** pass, indices, instances, first index, first instance */
+  DRAW_INDEXED: 21 as number,
+  /** pass */
+  END: 22 as number,
+  /** encoder */
+  SUBMIT: 23 as number,
+  /** surface: its context configured on the device, in the canvas's format */
+  CONFIGURE: 24 as number,
+  /** surface, width, height */
+  RESIZE: 25 as number,
+  /** surface, view: a view of the surface's texture for this frame */
+  CURRENT: 26 as number,
+  /** id, count */
+  QUERY_SET: 27 as number,
+  /** encoder, query set, written: the pairs of the spans set in `written` read once the GPU has them */
+  TIMESTAMPS: 28 as number,
+  /** a 2D paint stream (`paint`) run over the host's scratch */
+  PAINT: 29 as number,
+  /** texture, x, y, layer, width, height: the scratch's corner into a texture's layer */
+  PAINT_COPY: 30 as number,
+} as const;
+
 /** The 2D paint stream's operations, over the host's scratch canvas: an operation
  * then its arguments, a number a word (f32 bits where fractional), a string as its
- * address and length, an image as the handle a load gave it. */
+ * bytes' count and its bytes, an image as the handle a load gave it. */
 export const paint = {
   /** width, height: the scratch at least this big, and cleared that far */
   SIZE: 1 as number,
@@ -103,7 +193,7 @@ export const paint = {
   STROKE: 20 as number,
   /** x, y, w, h */
   FILL_RECT: 21 as number,
-  /** text, x, y */
+  /** x, y, then the text: its bytes' count and its UTF-8, padded to a word */
   FILL_TEXT: 22 as number,
   /** image, sx, sy, sw, sh, dx, dy, dw, dh */
   IMAGE: 23 as number,

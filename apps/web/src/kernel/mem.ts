@@ -23,6 +23,7 @@ import { Doorbell } from "@xpute/runtime/ipc/doorbell.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/kernel/mem/mem.spec.ts";
 import { BOOT, boot_block, instantiate_kernel, type KernelExports } from "@/kernel/module.ts";
+import { run_gpu_stream } from "@/kernel/render/gpu.ts";
 
 export { REGION_BYTES };
 
@@ -54,8 +55,14 @@ export const CORE_MEMORY: WebAssembly.Memory = memory;
  * not a number chosen in advance, so it moves when the module's code does. */
 export const MODULE_SECTION: { readonly offset: u32; readonly bytes: u32 } = { offset: 0, bytes: boot_block(CORE_KERNEL)[BOOT.data_end] };
 
-/** The rings to the module and its doorbell, made with it. */
+/** The rings to the module and its doorbell, made with it. A turn's
+ * falling edge leaves the renderer's calls in its stream, run before
+ * anything else can reach the device. */
 export const CORE_DOORBELL: Doorbell = (() => {
   const boot = boot_block(CORE_KERNEL);
-  return new Doorbell(memory.buffer, boot[BOOT.sq], boot[BOOT.cq], (quota_ms) => CORE_KERNEL.interrupt(quota_ms));
+  return new Doorbell(memory.buffer, boot[BOOT.sq], boot[BOOT.cq], (quota_ms) => {
+    const wake = CORE_KERNEL.interrupt(quota_ms);
+    run_gpu_stream(memory, boot[BOOT.gpu]);
+    return wake;
+  });
 })();

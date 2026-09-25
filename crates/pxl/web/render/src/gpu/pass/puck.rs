@@ -6,7 +6,7 @@
 //! puck_beacon.wgsl. The geometry is built here, once.
 
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, UNIFORM_FLOATS};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, GpuApi};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, Gpu};
 use crate::gpu::api_spec::format;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Blocks;
@@ -86,26 +86,26 @@ pub struct PuckPass {
     color: [f32; 3],
 }
 
-fn put(g: &GpuApi, data: &[u8], usage: u32) -> u32 {
+fn put(g: &Gpu, data: &[u8], usage: u32) -> u32 {
     let id = object();
-    (g.buffer)(id, ((data.len() as u32 + 3) & !3).max(4), usage | buffer_usage::COPY_DST);
-    (g.write_buffer)(id, 0, data);
+    g.buffer(id, ((data.len() as u32 + 3) & !3).max(4), usage | buffer_usage::COPY_DST);
+    g.write_buffer(id, 0, data);
     id
 }
 
 impl PuckPass {
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, frame_buffer: u32) -> PuckPass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> PuckPass {
         let zone = pipelines.build(g, PIPELINE_PUCK_ZONE, format::CANVAS);
         let beacon = pipelines.build(g, PIPELINE_PUCK_BEACON, format::CANVAS);
         let uniform = || {
             let id = object();
-            (g.buffer)(id, 32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            g.buffer(id, 32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
             id
         };
         let (zone_uniform, beacon_uniform) = (uniform(), uniform());
         let group = |layout: u32, buffer: u32| {
             let id = object();
-            (g.bind_group)(id, layout, &buffer_entry(0, buffer));
+            g.bind_group(id, layout, &buffer_entry(0, buffer));
             id
         };
         let (box_p, box_uv, box_i) = box_lanes();
@@ -128,37 +128,37 @@ impl PuckPass {
         }
     }
 
-    fn write_uniform(&self, g: &GpuApi, buffer: u32, uniforms: &[f32], at: usize, night: f32) {
+    fn write_uniform(&self, g: &Gpu, buffer: u32, uniforms: &[f32], at: usize, night: f32) {
         let c = self.color;
-        (g.write_buffer)(buffer, 0, bytes(&[uniforms[at], uniforms[at + 1], uniforms[at + 2], uniforms[at + 3], c[0], c[1], c[2], night]));
+        g.write_buffer(buffer, 0, bytes(&[uniforms[at], uniforms[at + 1], uniforms[at + 2], uniforms[at + 3], c[0], c[1], c[2], night]));
     }
 
     /// The beacon, opaque; before anything blended.
-    pub fn draw_beacon(&self, g: &GpuApi, pass: u32, draws: &[u32], uniforms: &[f32]) {
+    pub fn draw_beacon(&self, g: &Gpu, pass: u32, draws: &[u32], uniforms: &[f32]) {
         for d in draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| d[4] == PIPELINE_PUCK_BEACON) {
             self.write_uniform(g, self.beacon_uniform, uniforms, d[3] as usize * UNIFORM_FLOATS, d[1] as f32);
-            (g.set_pipeline)(pass, self.beacon.pipeline);
-            (g.set_bind_group)(pass, 0, self.frame_group, &[]);
-            (g.set_bind_group)(pass, 1, self.beacon_draw_group, &[]);
-            (g.set_vertex_buffer)(pass, 0, self.oct_position, 0, 0);
-            (g.set_vertex_buffer)(pass, 1, self.oct_normal, 0, 0);
-            (g.draw)(pass, 24, 1, 0, 0);
+            g.set_pipeline(pass, self.beacon.pipeline);
+            g.set_bind_group(pass, 0, self.frame_group, &[]);
+            g.set_bind_group(pass, 1, self.beacon_draw_group, &[]);
+            g.set_vertex_buffer(pass, 0, self.oct_position, 0, 0);
+            g.set_vertex_buffer(pass, 1, self.oct_normal, 0, 0);
+            g.draw(pass, 24, 1, 0, 0);
         }
     }
 
     /// The zone, blended; with the rest of what is blended.
-    pub fn draw_zone(&self, g: &GpuApi, pass: u32, draws: &[u32], uniforms: &[f32], blocks: &mut Blocks) {
+    pub fn draw_zone(&self, g: &Gpu, pass: u32, draws: &[u32], uniforms: &[f32], blocks: &mut Blocks) {
         for d in draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| d[4] == PIPELINE_PUCK_ZONE && d[1] > 0) {
             let Some(group) = blocks.group(g, d[0], self.zone.layouts[2]) else { continue };
             self.write_uniform(g, self.zone_uniform, uniforms, d[3] as usize * UNIFORM_FLOATS, 0.0);
-            (g.set_pipeline)(pass, self.zone.pipeline);
-            (g.set_bind_group)(pass, 0, self.frame_group, &[]);
-            (g.set_bind_group)(pass, 1, self.zone_draw_group, &[]);
-            (g.set_bind_group)(pass, 2, group, &[]);
-            (g.set_vertex_buffer)(pass, 0, self.box_position, 0, 0);
-            (g.set_vertex_buffer)(pass, 1, self.box_uv, 0, 0);
-            (g.set_index_buffer)(pass, self.box_index, 0, 0);
-            (g.draw_indexed)(pass, 36, d[1], 0, 0);
+            g.set_pipeline(pass, self.zone.pipeline);
+            g.set_bind_group(pass, 0, self.frame_group, &[]);
+            g.set_bind_group(pass, 1, self.zone_draw_group, &[]);
+            g.set_bind_group(pass, 2, group, &[]);
+            g.set_vertex_buffer(pass, 0, self.box_position, 0, 0);
+            g.set_vertex_buffer(pass, 1, self.box_uv, 0, 0);
+            g.set_index_buffer(pass, self.box_index, 0, 0);
+            g.draw_indexed(pass, 36, d[1], 0, 0);
         }
     }
 }

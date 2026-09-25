@@ -79,9 +79,132 @@ pub mod load {
     pub const KEYS: &[&str] = &["CLEAR", "LOAD", "READ_ONLY"];
 }
 
+/// The one place the renderer's calls cross (gpu/api.rs): a range of the
+/// kernel's memory the kernel writes its calls into during a turn, and the host
+/// runs once the turn has returned. A call is a record — its op, the words of
+/// arguments that follow, then those words — and carries everything it names,
+/// bytes included, so nothing a record reads lies outside it.
+///
+/// The range opens on HEAD words: END, where the kernel says how many words of
+/// records the turn wrote; and from GPU_MS, the host's side, each timed span's
+/// GPU time in milliseconds as a double, then the frame's whole, as the host last
+/// read them.
+pub mod stream {
+    pub const END: u32 = 0;
+    pub const GPU_MS: u32 = 2;
+    pub const HEAD: u32 = 32;
+    /// The range's size: what one turn may send the device. A product number, said
+    /// rather than derived; a chunk's mesh is under a tenth of a megabyte and a
+    /// frame's own records tens of kilobytes, so a turn's uploads wait only when
+    /// a burst of them comes at once.
+    pub const BYTES: u32 = 4194304;
+    /// What an upload leaves of the range. The records a turn cannot put off — a
+    /// frame's passes and draws, the shaders the first frame makes — are never
+    /// refused, so an upload, which can wait a turn, is taken only while this much
+    /// is left after it.
+    pub const RESERVE: u32 = 1048576;
+    pub const KEYS: &[&str] = &["END", "GPU_MS", "HEAD", "BYTES", "RESERVE"];
+}
+
+/// A record's operation, then its arguments. Bytes go as their count, then the bytes padded to a word.
+pub mod op {
+    /// every object the host holds let go
+    pub const RESET: u32 = 1;
+    /// id, size, usage
+    pub const BUFFER: u32 = 2;
+    /// id, width, height, layers, format, mips, usage
+    pub const TEXTURE: u32 = 3;
+    /// id, image: a texture of an image a load holds, at its size, with it in it
+    pub const IMAGE_TEXTURE: u32 = 4;
+    /// id, texture, dimension, base mip, mips, base layer, layers
+    pub const VIEW: u32 = 5;
+    /// id, mag, min, mipmap, address, compare, anisotropy
+    pub const SAMPLER: u32 = 6;
+    /// id, the WGSL's bytes
+    pub const SHADER: u32 = 7;
+    /// id, then (binding, stages, kind) words
+    pub const LAYOUT: u32 = 8;
+    /// id, module, format, the record's words, the record, then the group layouts
+    pub const PIPELINE: u32 = 9;
+    /// id, layout, then (binding, resource, object, offset, size) words
+    pub const BIND_GROUP: u32 = 10;
+    /// id
+    pub const DESTROY: u32 = 11;
+    /// id, offset, the bytes
+    pub const WRITE_BUFFER: u32 = 12;
+    /// id, layer, width, height, the bytes: the first mip of one layer, whole
+    pub const WRITE_TEXTURE: u32 = 13;
+    /// id
+    pub const ENCODER: u32 = 14;
+    /// id, encoder, the pass's description (api.rs pass_desc)
+    pub const PASS: u32 = 15;
+    /// pass, pipeline
+    pub const SET_PIPELINE: u32 = 16;
+    /// pass, index, group, then the dynamic offsets
+    pub const SET_BIND_GROUP: u32 = 17;
+    /// pass, slot, buffer, offset, size (0 the rest)
+    pub const SET_VERTEX_BUFFER: u32 = 18;
+    /// pass, buffer, offset, size (0 the rest)
+    pub const SET_INDEX_BUFFER: u32 = 19;
+    /// pass, vertices, instances, first vertex, first instance
+    pub const DRAW: u32 = 20;
+    /// pass, indices, instances, first index, first instance
+    pub const DRAW_INDEXED: u32 = 21;
+    /// pass
+    pub const END: u32 = 22;
+    /// encoder
+    pub const SUBMIT: u32 = 23;
+    /// surface: its context configured on the device, in the canvas's format
+    pub const CONFIGURE: u32 = 24;
+    /// surface, width, height
+    pub const RESIZE: u32 = 25;
+    /// surface, view: a view of the surface's texture for this frame
+    pub const CURRENT: u32 = 26;
+    /// id, count
+    pub const QUERY_SET: u32 = 27;
+    /// encoder, query set, written: the pairs of the spans set in `written` read once the GPU has them
+    pub const TIMESTAMPS: u32 = 28;
+    /// a 2D paint stream (`paint`) run over the host's scratch
+    pub const PAINT: u32 = 29;
+    /// texture, x, y, layer, width, height: the scratch's corner into a texture's layer
+    pub const PAINT_COPY: u32 = 30;
+    pub const KEYS: &[&str] = &[
+        "RESET",
+        "BUFFER",
+        "TEXTURE",
+        "IMAGE_TEXTURE",
+        "VIEW",
+        "SAMPLER",
+        "SHADER",
+        "LAYOUT",
+        "PIPELINE",
+        "BIND_GROUP",
+        "DESTROY",
+        "WRITE_BUFFER",
+        "WRITE_TEXTURE",
+        "ENCODER",
+        "PASS",
+        "SET_PIPELINE",
+        "SET_BIND_GROUP",
+        "SET_VERTEX_BUFFER",
+        "SET_INDEX_BUFFER",
+        "DRAW",
+        "DRAW_INDEXED",
+        "END",
+        "SUBMIT",
+        "CONFIGURE",
+        "RESIZE",
+        "CURRENT",
+        "QUERY_SET",
+        "TIMESTAMPS",
+        "PAINT",
+        "PAINT_COPY",
+    ];
+}
+
 /// The 2D paint stream's operations, over the host's scratch canvas: an operation
 /// then its arguments, a number a word (f32 bits where fractional), a string as its
-/// address and length, an image as the handle a load gave it.
+/// bytes' count and its bytes, an image as the handle a load gave it.
 pub mod paint {
     /// width, height: the scratch at least this big, and cleared that far
     pub const SIZE: u32 = 1;
@@ -119,7 +242,7 @@ pub mod paint {
     pub const STROKE: u32 = 20;
     /// x, y, w, h
     pub const FILL_RECT: u32 = 21;
-    /// text, x, y
+    /// x, y, then the text: its bytes' count and its UTF-8, padded to a word
     pub const FILL_TEXT: u32 = 22;
     /// image, sx, sy, sw, sh, dx, dy, dw, dh
     pub const IMAGE: u32 = 23;

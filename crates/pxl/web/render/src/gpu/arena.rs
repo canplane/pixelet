@@ -70,14 +70,14 @@ pub fn arena_write(group: usize, offset: u32, bytes: &[u8]) -> bool {
         for i in 0..ARENA_GROUPS {
             if a.sizes[i] > 0 {
                 let id = object();
-                (g.buffer)(id, a.sizes[i], buffer_usage::VERTEX | buffer_usage::COPY_DST);
+                g.buffer(id, a.sizes[i], buffer_usage::VERTEX | buffer_usage::COPY_DST);
                 a.buffers[i] = id;
             }
         }
         a.epoch = a.epoch.wrapping_add(1);
     }
     assert!(offset as usize + bytes.len() <= a.sizes[group] as usize, "a mesh past its arena group's end");
-    (g.write_buffer)(a.buffers[group], offset, bytes);
+    g.write_buffer(a.buffers[group], offset, bytes);
     true
 }
 

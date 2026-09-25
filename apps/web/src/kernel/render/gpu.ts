@@ -1,11 +1,12 @@
 // @pxl/web/kernel/render/gpu.ts
 
 /**
- * The host's WebGPU: the device, and the calls the kernel's renderer makes
- * (crates/pxl/web/render/src/gpu/api.rs), every object named by the handle
- * the kernel gave it and kept here at that handle's slot. Nothing is decided
- * here — what is made, from what, and drawn when, is the renderer's; each
- * call is translated into WebGPU's and made. It exists because a WebAssembly
+ * The host's WebGPU: the device, and the calls the kernel's renderer made
+ * in a turn (crates/pxl/web/render/src/gpu/api.rs), run from its stream once
+ * the turn has returned. Every object is named by the handle the kernel gave
+ * it and kept here at that handle's slot. Nothing is decided here — what is
+ * made, from what, and drawn when, is the renderer's; each record is
+ * translated into WebGPU's call and made. It exists because a WebAssembly
  * module reaches WebGPU no other way.
  *
  * A canvas handed to the kernel is a surface: transferred to an
@@ -20,7 +21,7 @@ import type { f32, f64, u32 } from "@xpute/core/abi/word.ts";
 import { handle_slot } from "@xpute/runtime/abi/handle.ts";
 
 import type { UnsupportedReason } from "@/app/store/unsupported-store.ts";
-import { address, compare, dimension, filter, format, load, paint, record, resource } from "@/kernel/render/gpu/api.spec.ts";
+import { address, compare, dimension, filter, format, load, op, paint, record, resource, stream } from "@/kernel/render/gpu/api.spec.ts";
 
 type GpuObject =
   | GPUBuffer
@@ -290,8 +291,9 @@ function begin_pass(encoder: GPUCommandEncoder, w: U32Array): GPURenderPassEncod
 // ---- timestamps ----
 
 let stamps: { count: u32; resolve: GPUBuffer; read: GPUBuffer[]; pending: Set<GPUBuffer> } | null = null;
-/** The last frame read: each span's time, then the frame's whole. */
-let last_gpu_ms: f64[] = [];
+/** Where the last frame read goes: the stream's head, from GPU_MS — each
+ * span's time, then the frame's whole — where the kernel reads it in a turn. */
+let gpu_ms_at: { memory: WebAssembly.Memory; at: u32 } | null = null;
 
 /** Resolves the timestamps an encoder's passes wrote into `set`, a begin and
  * an end a span, and reads them once the GPU has them, a few frames behind.
@@ -315,8 +317,8 @@ function read_timestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: 
   encoder.resolveQuerySet(set, 0, count, s.resolve, 0);
   encoder.copyBufferToBuffer(s.resolve, 0, read, 0, count * 8);
   s.pending.add(read);
-  // Mapped once the kernel's turn has submitted the encoder: the microtask
-  // runs only after the call into the module returns.
+  // Mapped once the stream has submitted the encoder: the microtask runs
+  // only after the whole stream has.
   queueMicrotask(() =>
     read.mapAsync(GPUMapMode.READ).then(() => {
       const t = new BigUint64Array(read.getMappedRange());
@@ -331,7 +333,7 @@ function read_timestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: 
         if (e > last) last = e;
       }
       spans.push(Number(last - first) / 1e6);
-      last_gpu_ms = spans;
+      if (gpu_ms_at) new Float64Array(gpu_ms_at.memory.buffer, gpu_ms_at.at, spans.length).set(spans);
       read.unmap();
       s.pending.delete(read);
     }, () => s.pending.delete(read))
@@ -366,15 +368,10 @@ function scratch_canvas(): [OffscreenCanvas, OffscreenCanvasRenderingContext2D] 
   return [scratch, scratch_ctx!];
 }
 
-function run_paint(w: U32Array, memory: WebAssembly.Memory): void {
+function run_paint(w: U32Array): void {
   const [canvas, ctx] = scratch_canvas();
   let k = 0;
   const f = () => float(w[k++]);
-  const text = () => {
-    const at = w[k++];
-    const len = w[k++];
-    return utf8.decode(new Uint8Array(memory.buffer, at, len));
-  };
   while (k < w.length) {
     const op = w[k++];
     switch (op) {
@@ -452,8 +449,9 @@ function run_paint(w: U32Array, memory: WebAssembly.Memory): void {
         ctx.fillRect(f(), f(), f(), f());
         break;
       case paint.FILL_TEXT: {
-        const s = text();
-        ctx.fillText(s, f(), f());
+        const [x, y, len] = [f(), f(), w[k++]];
+        ctx.fillText(utf8.decode(new Uint8Array(w.buffer, w.byteOffset + 4 * k, len)), x, y);
+        k += (len + 3) >>> 2;
         break;
       }
       case paint.IMAGE: {
@@ -468,144 +466,197 @@ function run_paint(w: U32Array, memory: WebAssembly.Memory): void {
   }
 }
 
-/** The kernel's WebGPU imports, over its memory. */
-export function gpu_imports(memory: WebAssembly.Memory): WebAssembly.ModuleImports {
-  const words = (at: u32, n: u32) => new Uint32Array(memory.buffer, at, n);
-  // setBindGroup runs a few hundred times a frame, once or more per draw, so
-  // a fresh view or array per call is garbage that grows with what is drawn.
-  // One view over the whole memory, rebuilt only when growth detaches it, is
-  // what the (data, start, length) overload reads the offsets from instead.
-  let all = new Uint32Array(memory.buffer);
-  const all_words = () => all.buffer === memory.buffer ? all : (all = new Uint32Array(memory.buffer));
-  const surface = (handle: u32) => surfaces[handle_slot(handle)];
-  return {
-    gpu_reset: () => {
-      for (const o of objects) (o as { destroy?: () => void } | undefined)?.destroy?.();
-      objects.length = 0;
-    },
-    // Wrapped in an out-of-memory scope because a refused buffer is not an
-    // exception: WebGPU hands back an object that is invalid, and nothing
-    // says so until something uses it — by which point the kernel has long
-    // since recorded the id as live. The mesh arena asks for six buffers of
-    // 36–40 MiB the moment the first mesh is written, and a device that
-    // refuses one draws no terrain at all while every gauge reads normal,
-    // since `arena_bytes` counts a group by its id and the draw that finds
-    // no bind group is skipped without a word (pxl-render gpu/arena.rs,
-    // gpu/renderer.rs).
-    gpu_buffer: (id: u32, size: u32, usage: u32) => {
-      const d = gpu();
-      // Guarded on what comes back rather than on what is there, because a
-      // check stands in its own device here and answers the calls a kernel
-      // makes, not the ones an instrument does.
-      d.pushErrorScope?.("out-of-memory");
-      put(id, d.createBuffer({ size, usage }));
-      const scope = d.popErrorScope?.() as Promise<GPUError | null> | undefined;
-      if (typeof scope?.then === "function") {
-        scope.then((e) => {
-          if (e) console.error(`[gpu] buffer ${id} of ${(size / 1048576).toFixed(1)}MB refused: ${e.message}`);
-        }).catch(() => {});
+/** Runs the records the turn just returned left in the stream at `at`. With
+ * no device they are dropped whole: the kernel hears the device went and
+ * makes everything again on the next one. */
+export function run_gpu_stream(memory: WebAssembly.Memory, at: u32): void {
+  const base = at + stream.HEAD * 4;
+  gpu_ms_at ??= { memory, at: at + stream.GPU_MS * 4 };
+  const end = new Uint32Array(memory.buffer, at, stream.HEAD)[stream.END];
+  if (end === 0 || device === null) return;
+  const d = device;
+  const w = new Uint32Array(memory.buffer, base, end) as U32Array;
+  /** A record's bytes, which open on their count at word `i`. */
+  const bytes = (i: u32) => new Uint8Array(memory.buffer, base + 4 * (i + 1), w[i]);
+  for (let k = 0; k < end;) {
+    const [code, n, a] = [w[k], w[k + 1], k + 2];
+    k = a + n;
+    switch (code) {
+      case op.RESET:
+        for (const o of objects) (o as { destroy?: () => void } | undefined)?.destroy?.();
+        objects.length = 0;
+        break;
+      case op.BUFFER: {
+        const [id, size, usage] = [w[a], w[a + 1], w[a + 2]];
+        // Wrapped in an out-of-memory scope because a refused buffer is not
+        // an exception: WebGPU hands back an object that is invalid, and
+        // nothing says so until something uses it — by which point the kernel
+        // has long since recorded the id as live. The mesh arena asks for six
+        // buffers of 36–40 MiB the moment the first mesh is written, and a
+        // device that refuses one draws no terrain at all while every gauge
+        // reads normal, since `arena_bytes` counts a group by its id and the
+        // draw that finds no bind group is skipped without a word (pxl-render
+        // gpu/arena.rs, gpu/renderer.rs).
+        //
+        // Guarded on what comes back rather than on what is there, because a
+        // check stands in its own device here and answers the calls a kernel
+        // makes, not the ones an instrument does.
+        d.pushErrorScope?.("out-of-memory");
+        put(id, d.createBuffer({ size, usage }));
+        const scope = d.popErrorScope?.() as Promise<GPUError | null> | undefined;
+        if (typeof scope?.then === "function") {
+          scope.then((e) => {
+            if (e) console.error(`[gpu] buffer ${id} of ${(size / 1048576).toFixed(1)}MB refused: ${e.message}`);
+          }).catch(() => {});
+        }
+        break;
       }
-    },
-    gpu_texture: (id: u32, width: u32, height: u32, layers: u32, fmt: u32, mips: u32, usage: u32) =>
-      put(id, gpu().createTexture({ size: { width, height, depthOrArrayLayers: layers }, format: texture_format(fmt), mipLevelCount: mips, usage })),
-    gpu_image_texture: (id: u32, image: u32) => {
-      const bitmap = images.get(image);
-      if (!bitmap) return 0;
-      const texture = gpu().createTexture({
-        size: [bitmap.width, bitmap.height],
-        format: "rgba8unorm-srgb",
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-      });
-      gpu().queue.copyExternalImageToTexture({ source: bitmap }, { texture }, [bitmap.width, bitmap.height]);
-      put(id, texture);
-      return 1;
-    },
-    gpu_view: (id: u32, texture: u32, dim: u32, base_mip: u32, mips: u32, base_layer: u32, layers: u32) =>
-      put(
-        id,
-        get<GPUTexture>(texture).createView({
-          dimension: dim === dimension.D2_ARRAY ? "2d-array" : "2d",
-          baseMipLevel: base_mip,
-          mipLevelCount: mips,
-          baseArrayLayer: base_layer,
-          arrayLayerCount: layers,
-        }),
-      ),
-    gpu_sampler: (id: u32, mag: u32, min: u32, mipmap: u32, addr: u32, cmp: u32, anisotropy: u32) => {
-      const filtered = (code: u32): GPUFilterMode => code === filter.LINEAR ? "linear" : "nearest";
-      const mode: GPUAddressMode = addr === address.REPEAT ? "repeat" : "clamp-to-edge";
-      put(
-        id,
-        gpu().createSampler({
-          magFilter: filtered(mag),
-          minFilter: filtered(min),
-          mipmapFilter: filtered(mipmap),
-          addressModeU: mode,
-          addressModeV: mode,
-          compare: cmp === compare.LESS_EQUAL ? "less-equal" : undefined,
-          maxAnisotropy: anisotropy,
-        }),
-      );
-    },
-    gpu_shader: (id: u32, at: u32, len: u32) => put(id, gpu().createShaderModule({ code: utf8.decode(new Uint8Array(memory.buffer, at, len)) })),
-    gpu_layout: (id: u32, at: u32, n: u32) => put(id, gpu().createBindGroupLayout({ entries: layout_entries(words(at, n)) })),
-    gpu_pipeline: (id: u32, rec: u32, rec_words: u32, lay: u32, lay_count: u32, module: u32, fmt: u32) => {
-      const layouts = Array.from(words(lay, lay_count), (l) => get<GPUBindGroupLayout>(l));
-      put(id, gpu().createRenderPipeline(pipeline_descriptor(words(rec, rec_words), layouts, get<GPUShaderModule>(module), texture_format(fmt))));
-    },
-    gpu_bind_group: (id: u32, layout: u32, at: u32, n: u32) => put(id, gpu().createBindGroup({ layout: get<GPUBindGroupLayout>(layout), entries: group_entries(words(at, n)) })),
-    gpu_destroy: (id: u32) => {
-      const slot = handle_slot(id);
-      (objects[slot] as { destroy?: () => void } | undefined)?.destroy?.();
-      objects[slot] = undefined;
-    },
-    gpu_write_buffer: (id: u32, offset: u32, at: u32, len: u32) => gpu().queue.writeBuffer(get<GPUBuffer>(id), offset, memory.buffer, at, len),
-    gpu_write_texture: (id: u32, layer: u32, width: u32, height: u32, at: u32, len: u32) =>
-      gpu().queue.writeTexture({ texture: get<GPUTexture>(id), origin: [0, 0, layer] }, new Uint8Array(memory.buffer, at, len), { bytesPerRow: width * 4 }, [width, height, 1]),
-    gpu_encoder: (id: u32) => put(id, gpu().createCommandEncoder()),
-    gpu_pass: (id: u32, encoder: u32, at: u32, n: u32) => put(id, begin_pass(get<GPUCommandEncoder>(encoder), words(at, n))),
-    gpu_set_pipeline: (pass: u32, pipeline: u32) => get<GPURenderPassEncoder>(pass).setPipeline(get<GPURenderPipeline>(pipeline)),
-    gpu_set_bind_group: (pass: u32, index: u32, group: u32, at: u32, count: u32) => {
-      const p = get<GPURenderPassEncoder>(pass);
-      if (count === 0) p.setBindGroup(index, get<GPUBindGroup>(group));
-      else p.setBindGroup(index, get<GPUBindGroup>(group), all_words(), at >>> 2, count);
-    },
-    gpu_set_vertex_buffer: (pass: u32, slot: u32, buffer: u32, offset: u32, size: u32) => {
-      const p = get<GPURenderPassEncoder>(pass);
-      if (size === 0) p.setVertexBuffer(slot, get<GPUBuffer>(buffer), offset);
-      else p.setVertexBuffer(slot, get<GPUBuffer>(buffer), offset, size);
-    },
-    gpu_set_index_buffer: (pass: u32, buffer: u32, offset: u32, size: u32) => {
-      const p = get<GPURenderPassEncoder>(pass);
-      if (size === 0) p.setIndexBuffer(get<GPUBuffer>(buffer), "uint32", offset);
-      else p.setIndexBuffer(get<GPUBuffer>(buffer), "uint32", offset, size);
-    },
-    gpu_draw: (pass: u32, vertices: u32, instances: u32, first_vertex: u32, first_instance: u32) => get<GPURenderPassEncoder>(pass).draw(vertices, instances, first_vertex, first_instance),
-    gpu_draw_indexed: (pass: u32, indices: u32, instances: u32, first_index: u32, first_instance: u32) =>
-      get<GPURenderPassEncoder>(pass).drawIndexed(indices, instances, first_index, 0, first_instance),
-    gpu_end: (pass: u32) => get<GPURenderPassEncoder>(pass).end(),
-    gpu_submit: (encoder: u32) => gpu().queue.submit([get<GPUCommandEncoder>(encoder).finish()]),
-    gpu_configure: (handle: u32) => {
-      const s = surface(handle);
-      if (!s) return;
-      s.context ??= s.canvas.getContext("webgpu");
-      s.context?.configure({ device: gpu(), format: canvas_format, alphaMode: "premultiplied" });
-    },
-    gpu_resize: (handle: u32, width: u32, height: u32) => {
-      const s = surface(handle);
-      if (!s) return;
-      s.canvas.width = width;
-      s.canvas.height = height;
-    },
-    gpu_current: (handle: u32, view: u32) => {
-      const context = surface(handle)?.context;
-      if (context) put(view, context.getCurrentTexture().createView());
-    },
-    gpu_query_set: (id: u32, count: u32) => put(id, gpu().createQuerySet({ type: "timestamp", count })),
-    gpu_timestamps: (encoder: u32, set: u32, written: u32) => read_timestamps(get<GPUCommandEncoder>(encoder), get<GPUQuerySet>(set), written),
-    gpu_ms: (span: u32) => last_gpu_ms[span] ?? 0,
-    gpu_paint: (at: u32, n: u32) => run_paint(words(at, n), memory),
-    gpu_paint_copy: (texture: u32, x: u32, y: u32, layer: u32, width: u32, height: u32) =>
-      gpu().queue.copyExternalImageToTexture({ source: scratch_canvas()[0] }, { texture: get<GPUTexture>(texture), origin: [x, y, layer] }, [width, height]),
-  };
+      case op.TEXTURE:
+        put(
+          w[a],
+          d.createTexture({ size: { width: w[a + 1], height: w[a + 2], depthOrArrayLayers: w[a + 3] }, format: texture_format(w[a + 4]), mipLevelCount: w[a + 5], usage: w[a + 6] }),
+        );
+        break;
+      case op.IMAGE_TEXTURE: {
+        const bitmap = images.get(w[a + 1])!;
+        const texture = d.createTexture({
+          size: [bitmap.width, bitmap.height],
+          format: "rgba8unorm-srgb",
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+        d.queue.copyExternalImageToTexture({ source: bitmap }, { texture }, [bitmap.width, bitmap.height]);
+        put(w[a], texture);
+        break;
+      }
+      case op.VIEW:
+        put(
+          w[a],
+          get<GPUTexture>(w[a + 1]).createView({
+            dimension: w[a + 2] === dimension.D2_ARRAY ? "2d-array" : "2d",
+            baseMipLevel: w[a + 3],
+            mipLevelCount: w[a + 4],
+            baseArrayLayer: w[a + 5],
+            arrayLayerCount: w[a + 6],
+          }),
+        );
+        break;
+      case op.SAMPLER: {
+        const filtered = (code: u32): GPUFilterMode => code === filter.LINEAR ? "linear" : "nearest";
+        const mode: GPUAddressMode = w[a + 4] === address.REPEAT ? "repeat" : "clamp-to-edge";
+        put(
+          w[a],
+          d.createSampler({
+            magFilter: filtered(w[a + 1]),
+            minFilter: filtered(w[a + 2]),
+            mipmapFilter: filtered(w[a + 3]),
+            addressModeU: mode,
+            addressModeV: mode,
+            compare: w[a + 5] === compare.LESS_EQUAL ? "less-equal" : undefined,
+            maxAnisotropy: w[a + 6],
+          }),
+        );
+        break;
+      }
+      case op.SHADER:
+        put(w[a], d.createShaderModule({ code: utf8.decode(bytes(a + 1)) }));
+        break;
+      case op.LAYOUT:
+        put(w[a], d.createBindGroupLayout({ entries: layout_entries(w.subarray(a + 1, k)) }));
+        break;
+      case op.PIPELINE: {
+        const [id, module, fmt, len] = [w[a], w[a + 1], w[a + 2], w[a + 3]];
+        const layouts = Array.from(w.subarray(a + 4 + len, k), (l) => get<GPUBindGroupLayout>(l));
+        put(id, d.createRenderPipeline(pipeline_descriptor(w.subarray(a + 4, a + 4 + len), layouts, get<GPUShaderModule>(module), texture_format(fmt))));
+        break;
+      }
+      case op.BIND_GROUP:
+        put(w[a], d.createBindGroup({ layout: get<GPUBindGroupLayout>(w[a + 1]), entries: group_entries(w.subarray(a + 2, k)) }));
+        break;
+      case op.DESTROY: {
+        const slot = handle_slot(w[a]);
+        (objects[slot] as { destroy?: () => void } | undefined)?.destroy?.();
+        objects[slot] = undefined;
+        break;
+      }
+      case op.WRITE_BUFFER:
+        d.queue.writeBuffer(get<GPUBuffer>(w[a]), w[a + 1], memory.buffer, base + 4 * (a + 3), w[a + 2]);
+        break;
+      case op.WRITE_TEXTURE:
+        d.queue.writeTexture({ texture: get<GPUTexture>(w[a]), origin: [0, 0, w[a + 1]] }, bytes(a + 4), { bytesPerRow: w[a + 2] * 4 }, [w[a + 2], w[a + 3], 1]);
+        break;
+      case op.ENCODER:
+        put(w[a], d.createCommandEncoder());
+        break;
+      case op.PASS:
+        put(w[a], begin_pass(get<GPUCommandEncoder>(w[a + 1]), w.subarray(a + 2, k)));
+        break;
+      case op.SET_PIPELINE:
+        get<GPURenderPassEncoder>(w[a]).setPipeline(get<GPURenderPipeline>(w[a + 1]));
+        break;
+      // setBindGroup runs a few hundred times a frame, once or more per draw,
+      // so a fresh array per call is garbage that grows with what is drawn:
+      // the (data, start, length) overload reads the offsets where they lie.
+      case op.SET_BIND_GROUP:
+        if (n === 3) get<GPURenderPassEncoder>(w[a]).setBindGroup(w[a + 1], get<GPUBindGroup>(w[a + 2]));
+        else get<GPURenderPassEncoder>(w[a]).setBindGroup(w[a + 1], get<GPUBindGroup>(w[a + 2]), w, a + 3, n - 3);
+        break;
+      case op.SET_VERTEX_BUFFER: {
+        const p = get<GPURenderPassEncoder>(w[a]);
+        if (w[a + 4] === 0) p.setVertexBuffer(w[a + 1], get<GPUBuffer>(w[a + 2]), w[a + 3]);
+        else p.setVertexBuffer(w[a + 1], get<GPUBuffer>(w[a + 2]), w[a + 3], w[a + 4]);
+        break;
+      }
+      case op.SET_INDEX_BUFFER: {
+        const p = get<GPURenderPassEncoder>(w[a]);
+        if (w[a + 3] === 0) p.setIndexBuffer(get<GPUBuffer>(w[a + 1]), "uint32", w[a + 2]);
+        else p.setIndexBuffer(get<GPUBuffer>(w[a + 1]), "uint32", w[a + 2], w[a + 3]);
+        break;
+      }
+      case op.DRAW:
+        get<GPURenderPassEncoder>(w[a]).draw(w[a + 1], w[a + 2], w[a + 3], w[a + 4]);
+        break;
+      case op.DRAW_INDEXED:
+        get<GPURenderPassEncoder>(w[a]).drawIndexed(w[a + 1], w[a + 2], w[a + 3], 0, w[a + 4]);
+        break;
+      case op.END:
+        get<GPURenderPassEncoder>(w[a]).end();
+        break;
+      case op.SUBMIT:
+        d.queue.submit([get<GPUCommandEncoder>(w[a]).finish()]);
+        break;
+      case op.CONFIGURE: {
+        const s = surfaces[handle_slot(w[a])];
+        if (!s) break;
+        s.context ??= s.canvas.getContext("webgpu");
+        s.context?.configure({ device: d, format: canvas_format, alphaMode: "premultiplied" });
+        break;
+      }
+      case op.RESIZE: {
+        const s = surfaces[handle_slot(w[a])];
+        if (!s) break;
+        s.canvas.width = w[a + 1];
+        s.canvas.height = w[a + 2];
+        break;
+      }
+      case op.CURRENT: {
+        const context = surfaces[handle_slot(w[a])]?.context;
+        if (context) put(w[a + 1], context.getCurrentTexture().createView());
+        break;
+      }
+      case op.QUERY_SET:
+        put(w[a], d.createQuerySet({ type: "timestamp", count: w[a + 1] }));
+        break;
+      case op.TIMESTAMPS:
+        read_timestamps(get<GPUCommandEncoder>(w[a]), get<GPUQuerySet>(w[a + 1]), w[a + 2]);
+        break;
+      case op.PAINT:
+        run_paint(w.subarray(a, k));
+        break;
+      case op.PAINT_COPY:
+        d.queue.copyExternalImageToTexture({ source: scratch_canvas()[0] }, { texture: get<GPUTexture>(w[a]), origin: [w[a + 1], w[a + 2], w[a + 3]] }, [w[a + 4], w[a + 5]]);
+        break;
+      default:
+        throw new Error(`[gpu] record ${code}`);
+    }
+  }
 }

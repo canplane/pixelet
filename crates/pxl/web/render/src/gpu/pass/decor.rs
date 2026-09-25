@@ -16,7 +16,7 @@
 
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, UNIFORM_FLOATS};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS};
-use crate::gpu::api::{object, release, GpuApi};
+use crate::gpu::api::{object, release, Gpu};
 use crate::gpu::api_spec::{address, compare, filter, format};
 use crate::gpu::atmosphere::AIR_WORDS;
 use crate::gpu::pass::model::{draw_model, DrawUniforms, FrameGroups};
@@ -80,10 +80,10 @@ impl DecorPass {
     /// Over `frame_buffer`, the shadow map, the occlusion map's entry `ao` and
     /// the air's entries.
     #[allow(clippy::too_many_arguments)]
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, frame_buffer: u32, shadow: &Shadow, ao: [u32; 5], air: [u32; AIR_WORDS], align: u32) -> DecorPass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, shadow: &Shadow, ao: [u32; 5], air: [u32; AIR_WORDS], align: u32) -> DecorPass {
         let lit = pipelines.build(g, PIPELINE_DECOR, format::CANVAS);
         let sampler = object();
-        (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::REPEAT, compare::NONE, 1);
+        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::REPEAT, compare::NONE, 1);
         DecorPass {
             ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, format::CANVAS),
             depth: pipelines.build(g, PIPELINE_DECOR_DEPTH, format::CANVAS),
@@ -98,7 +98,7 @@ impl DecorPass {
     }
 
     /// Group 0 again over a new occlusion map's entry `ao`.
-    pub fn rebind(&mut self, g: &GpuApi, frame_buffer: u32, shadow: &Shadow, ao: [u32; 5]) {
+    pub fn rebind(&mut self, g: &Gpu, frame_buffer: u32, shadow: &Shadow, ao: [u32; 5]) {
         self.frames
             .rebind(g, self.lit.layouts[0], frame_buffer, shadow.entries(1), Some((shadow.light_frame, shadow.blank_entries(1))), ao);
     }
@@ -118,7 +118,7 @@ impl DecorPass {
 
     /// A group's model block and counts and its skin's group, the skin made on
     /// first use once its image is here.
-    fn model_of(&mut self, g: &GpuApi, group: u32, blocks: &Blocks) -> Option<(u32, u32, u32, u32)> {
+    fn model_of(&mut self, g: &Gpu, group: u32, blocks: &Blocks) -> Option<(u32, u32, u32, u32)> {
         let gr = *self.groups.get(group as usize)?;
         let (buffer, vertex_cnt, index_cnt) = blocks.get(gr.mesh)?;
         let at = if gr.skin == NO_SKIN { self.take_skin(g, gr.image?)? } else { gr.skin };
@@ -128,13 +128,13 @@ impl DecorPass {
 
     /// The row `image` is on, made on first use and shared from then on: two
     /// variants naming one skin are one texture on the device.
-    fn take_skin(&mut self, g: &GpuApi, image: u32) -> Option<usize> {
+    fn take_skin(&mut self, g: &Gpu, image: u32) -> Option<usize> {
         if let Some(at) = self.skins.iter().position(|s| s.uses > 0 && s.image == image) {
             self.skins[at].uses += 1;
             return Some(at);
         }
         let at = self.skins.iter().position(|s| s.uses == 0)?;
-        let ids = skin_group(g, self.lit.layouts[2], self.sampler, image)?;
+        let ids = skin_group(g, self.lit.layouts[2], self.sampler, image);
         self.skins[at] = Skin { image, ids, uses: 1 };
         Some(at)
     }
@@ -158,7 +158,7 @@ impl DecorPass {
     }
 
     /// Writes every decor draw's uniforms, ghosts included, in one write.
-    pub fn prepare(&mut self, g: &GpuApi, draws: &[u32], uniforms: &[f32]) {
+    pub fn prepare(&mut self, g: &Gpu, draws: &[u32], uniforms: &[f32]) {
         let mine = || draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| is_decor(d[4]));
         self.uniforms.write(g, self.lit.layouts[1], mine().count() as u32, mine(), |buf, d| {
             let u = d[3] as usize * UNIFORM_FLOATS;
@@ -175,27 +175,27 @@ impl DecorPass {
     }
 
     /// The opaque decor into the open pass, after `prepare`.
-    pub fn draw(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
+    pub fn draw(&mut self, g: &Gpu, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
         self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, self.lit.pipeline, self.frames.frame)
     }
 
     /// The opaque decor's depth from the light.
-    pub fn draw_depth(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
+    pub fn draw_depth(&mut self, g: &Gpu, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
         self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, self.depth.pipeline, self.frames.light)
     }
 
     /// The opaque decor's depth from the eye, for the screen-space occlusion.
-    pub fn draw_prepass(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
+    pub fn draw_prepass(&mut self, g: &Gpu, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
         self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, self.prepass.pipeline, self.frames.frame)
     }
 
     /// The ghost's decor, blended, after everything opaque.
-    pub fn draw_ghosts(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
+    pub fn draw_ghosts(&mut self, g: &Gpu, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
         self.draw_pipeline(g, pass, draws, blocks, PIPELINE_GHOST_DECOR, self.ghost.pipeline, self.frames.frame)
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn draw_pipeline(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks, which: u32, pipeline: u32, group0: u32) -> u32 {
+    fn draw_pipeline(&mut self, g: &Gpu, pass: u32, draws: &[u32], blocks: &mut Blocks, which: u32, pipeline: u32, group0: u32) -> u32 {
         let mut drawn = 0;
         for (k, d) in draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| is_decor(d[4])).enumerate() {
             let Some((group, offset)) = self.uniforms.at(k as u32) else { break };
@@ -205,12 +205,12 @@ impl DecorPass {
             let Some((model, vertex_cnt, index_cnt, skin)) = self.model_of(g, d[1], blocks) else { continue };
             let Some(block) = blocks.group(g, d[0], self.lit.layouts[3]) else { continue };
             if drawn == 0 {
-                (g.set_pipeline)(pass, pipeline);
-                (g.set_bind_group)(pass, 0, group0, &[]);
+                g.set_pipeline(pass, pipeline);
+                g.set_bind_group(pass, 0, group0, &[]);
             }
-            (g.set_bind_group)(pass, 1, group, &[offset]);
-            (g.set_bind_group)(pass, 2, skin, &[]);
-            (g.set_bind_group)(pass, 3, block, &[]);
+            g.set_bind_group(pass, 1, group, &[offset]);
+            g.set_bind_group(pass, 2, skin, &[]);
+            g.set_bind_group(pass, 3, block, &[]);
             draw_model(g, pass, &self.lit, model, vertex_cnt, index_cnt, d[2]);
             drawn += 1;
         }

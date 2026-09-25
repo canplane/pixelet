@@ -24,7 +24,7 @@ import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
 import type { f32, f64, u32 } from "@xpute/core/abi/word.ts";
 import type { QuantumPolicy } from "@xpute/runtime/sched/quantum.ts";
 
-import { css_font, gpu_imports } from "@/kernel/render/gpu.ts";
+import { css_font } from "@/kernel/render/gpu.ts";
 import { EXPORT, IMPORT } from "@/kernel/abi/symbol.ts";
 
 /** What the module exports: the boot block and the doorbell. Every address
@@ -53,12 +53,13 @@ export interface KernelExports {
 /** crates/pxl/web/wasm/src/lib.rs's boot block, word by word: where the module's
  * own front ends; where the submission and completion rings are; then `.fixed`
  * and the heap, each its offset, bytes and page size; then the quantum the
- * kernel declares, three words in thousandths; then the heap's row. */
+ * kernel declares, three words in thousandths; then the heap's row; then the
+ * renderer's stream, run after every turn (render/gpu.ts). */
 /** Where each thing the kernel reports lies in the boot block. `data_end` is
  * where the linker stopped, which is everything the module keeps for itself —
  * the stack, the rings and its own data. */
-export const BOOT = { data_end: 0, sq: 1, cq: 2, fixed: 3, heap: 6, quantum: 9, heap_row: 12 } as const;
-const BOOT_WORDS = 13;
+export const BOOT = { data_end: 0, sq: 1, cq: 2, fixed: 3, heap: 6, quantum: 9, heap_row: 12, gpu: 13 } as const;
+const BOOT_WORDS = 14;
 
 /** The boot block, read in place. */
 export function boot_block(pxl: KernelExports): U32Array {
@@ -180,8 +181,6 @@ export async function instantiate_kernel(memory: WebAssembly.Memory): Promise<Ke
         bodies.delete(body);
         if (bytes !== undefined && len > 0) new Uint8Array(memory.buffer, dst, len).set(bytes.subarray(0, len));
       },
-      // The renderer's WebGPU (crates/pxl/web/render/src/gpu/api.rs).
-      ...gpu_imports(memory),
     }),
   });
   const exports: KernelExports = { ...(lengthened(instance.exports) as unknown as KernelExports), memory };

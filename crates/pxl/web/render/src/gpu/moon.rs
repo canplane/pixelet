@@ -14,7 +14,7 @@
 //!
 //! What it costs: 1.4 MB on the device, a 512 × 512 level and its chain.
 
-use crate::gpu::api::{object, texture_usage, GpuApi};
+use crate::gpu::api::{object, texture_usage, Gpu};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format};
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::paint::Paint;
@@ -32,15 +32,15 @@ pub struct MoonMap {
 }
 
 impl MoonMap {
-    pub fn new(g: &GpuApi) -> MoonMap {
+    pub fn new(g: &Gpu) -> MoonMap {
         let levels = mip_levels(MOON_TEX_SZ, MOON_TEX_SZ);
         let texture = object();
         let usage = texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT;
-        (g.texture)(texture, MOON_TEX_SZ, MOON_TEX_SZ, 1, format::RGBA8_SRGB, levels, usage);
+        g.texture(texture, MOON_TEX_SZ, MOON_TEX_SZ, 1, format::RGBA8_SRGB, levels, usage);
         let view = object();
-        (g.view)(view, texture, dimension::D2_ARRAY, 0, levels, 0, 1);
+        g.view(view, texture, dimension::D2_ARRAY, 0, levels, 0, 1);
         let sampler = object();
-        (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::CLAMP, compare::NONE, 1);
+        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::CLAMP, compare::NONE, 1);
         MoonMap {
             texture,
             view,
@@ -52,7 +52,7 @@ impl MoonMap {
 
     /// Paints the face in once it has arrived: `image` asks for it, until it
     /// has been painted.
-    pub fn step(&mut self, g: &GpuApi, mips: &Mips, image: fn() -> Option<u32>) {
+    pub fn step(&mut self, g: &Gpu, mips: &Mips, image: fn() -> Option<u32>) {
         if self.loaded {
             return;
         }
@@ -62,7 +62,7 @@ impl MoonMap {
         p.size(MOON_TEX_SZ, MOON_TEX_SZ);
         p.image(image, 0.0, 0.0, size, size, 0.0, 0.0, size, size);
         p.run(g);
-        (g.paint_copy)(self.texture, 0, 0, 0, MOON_TEX_SZ, MOON_TEX_SZ);
+        g.paint_copy(self.texture, 0, 0, 0, MOON_TEX_SZ, MOON_TEX_SZ);
         mips.build(g, self.texture, self.levels, 0, 1);
         self.loaded = true;
     }

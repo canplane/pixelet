@@ -5,12 +5,10 @@
 //! shaping a module has not; what is painted — shapes, colours, sizes, text —
 //! is decided here and in whoever writes the stream.
 //!
-//! A string goes as its address and length, so it has to outlive the run:
-//! the stream borrows every string it names.
+//! A string goes as its bytes, in the stream, so the stream is one record
+//! the host reads whole.
 
-use core::marker::PhantomData;
-
-use crate::gpu::api::GpuApi;
+use crate::gpu::api::Gpu;
 use crate::gpu::api_spec::paint as op;
 
 const PAINT_WORDS: usize = 512;
@@ -24,35 +22,26 @@ pub struct Font {
     pub px: f32,
 }
 
-pub struct Paint<'a> {
+pub struct Paint {
     ops: [u32; PAINT_WORDS],
     len: usize,
-    strings: PhantomData<&'a str>,
 }
 
-impl Default for Paint<'_> {
+impl Default for Paint {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'a> Paint<'a> {
+impl Paint {
     pub fn new() -> Self {
-        Paint {
-            ops: [0; PAINT_WORDS],
-            len: 0,
-            strings: PhantomData,
-        }
+        Paint { ops: [0; PAINT_WORDS], len: 0 }
     }
 
     fn push(&mut self, words: &[u32]) {
         assert!(self.len + words.len() <= PAINT_WORDS, "a paint stream past {PAINT_WORDS} words");
         self.ops[self.len..self.len + words.len()].copy_from_slice(words);
         self.len += words.len();
-    }
-
-    fn text(s: &'a str) -> [u32; 2] {
-        [s.as_ptr() as usize as u32, s.len() as u32]
     }
 
     /// The scratch at least `width` by `height`, cleared that far.
@@ -144,9 +133,13 @@ impl<'a> Paint<'a> {
         self.push(&[op::FILL_RECT, x.to_bits(), y.to_bits(), w.to_bits(), h.to_bits()]);
     }
 
-    pub fn fill_text(&mut self, text: &'a str, x: f32, y: f32) {
-        let [at, len] = Self::text(text);
-        self.push(&[op::FILL_TEXT, at, len, x.to_bits(), y.to_bits()]);
+    pub fn fill_text(&mut self, text: &str, x: f32, y: f32) {
+        self.push(&[op::FILL_TEXT, x.to_bits(), y.to_bits(), text.len() as u32]);
+        for chunk in text.as_bytes().chunks(4) {
+            let mut word = [0; 4];
+            word[..chunk.len()].copy_from_slice(chunk);
+            self.push(&[u32::from_le_bytes(word)]);
+        }
     }
 
     /// `image`'s rectangle (sx, sy, sw, sh) drawn into (dx, dy, dw, dh).
@@ -167,8 +160,8 @@ impl<'a> Paint<'a> {
     }
 
     /// Runs the stream, and starts it over.
-    pub fn run(&mut self, g: &GpuApi) {
-        (g.paint)(&self.ops[..self.len]);
+    pub fn run(&mut self, g: &Gpu) {
+        g.paint(&self.ops[..self.len]);
         self.len = 0;
     }
 }

@@ -32,7 +32,7 @@
 use pxl_spec::space::v3::V3;
 
 use crate::frame::shader::record::{PIPELINE_ATMOS_EXPOSURE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, Stamp};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::clouds::CloudField;
 use crate::gpu::pipeline::{Built, Pipelines};
@@ -128,9 +128,9 @@ pub struct Atmosphere {
 }
 
 impl Atmosphere {
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines) -> Atmosphere {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Atmosphere {
         let uniform = object();
-        (g.buffer)(uniform, word_bytes(ATMOS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        g.buffer(uniform, word_bytes(ATMOS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let white = model::white();
         let mut words = [0.0f32; ATMOS_FLOATS];
         for (at, rgb) in [
@@ -166,15 +166,15 @@ impl Atmosphere {
         words[SUN_DIR + 2] = 1.0;
 
         let sampler = object();
-        (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
+        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
         let mut textures = [0; 5];
         let mut views = [0; 5];
         for k in 0..5 {
             textures[k] = object();
             let (w, h) = SIZES[k];
-            (g.texture)(textures[k], w, h, 1, format::RGBA16F, 1, texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT);
+            g.texture(textures[k], w, h, 1, format::RGBA16F, 1, texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT);
             views[k] = object();
-            (g.view)(views[k], textures[k], dimension::D2, 0, 1, 0, 1);
+            g.view(views[k], textures[k], dimension::D2, 0, 1, 0, 1);
         }
         let passes = [PIPELINE_ATMOS_TRANSMITTANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_EXPOSURE].map(|id| pipelines.build(g, id, format::RGBA16F));
 
@@ -191,20 +191,20 @@ impl Atmosphere {
         e[15..20].copy_from_slice(&multiscatter);
         for (k, n) in [(TRANSMITTANCE, 5), (MULTISCATTER, 15)] {
             groups[k] = object();
-            (g.bind_group)(groups[k], passes[k].layouts[0], &e[..n]);
+            g.bind_group(groups[k], passes[k].layouts[0], &e[..n]);
         }
         // The sky view's two groups, told which light by a word of their own.
         for (k, which) in [(SKY_VIEW, 0.0f32), (MOON_VIEW, 1.0)] {
             let light = object();
-            (g.buffer)(light, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            (g.write_buffer)(light, 0, bytes(&[which, 0.0, 0.0, 0.0]));
+            g.buffer(light, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            g.write_buffer(light, 0, bytes(&[which, 0.0, 0.0, 0.0]));
             e[20..25].copy_from_slice(&buffer_entry(14, light));
             groups[k] = object();
-            (g.bind_group)(groups[k], passes[SKY_VIEW].layouts[0], &e);
+            g.bind_group(groups[k], passes[SKY_VIEW].layouts[0], &e);
         }
         e[15..20].copy_from_slice(&sky_view);
         groups[EXPOSURE_TEXEL] = object();
-        (g.bind_group)(groups[EXPOSURE_TEXEL], passes[EXPOSURE_TEXEL].layouts[0], &e[..20]);
+        g.bind_group(groups[EXPOSURE_TEXEL], passes[EXPOSURE_TEXEL].layouts[0], &e[..20]);
         Atmosphere {
             uniform,
             words,
@@ -240,7 +240,7 @@ impl Atmosphere {
     /// them and the ground's own height, which the sky draws its ground at;
     /// and straight up where the eye stands, which every height of a light or
     /// a ray is measured from.
-    pub fn lay_out(&mut self, g: &GpuApi, env: &[f32], up: &V3) {
+    pub fn lay_out(&mut self, g: &Gpu, env: &[f32], up: &V3) {
         let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4]);
         let altitude_km = env[ENV_AIR];
         self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(sun);
@@ -257,7 +257,7 @@ impl Atmosphere {
         for (w, v) in self.words[SUN_SEEN..SUN_SEEN + 3].iter_mut().zip(model::light_at(altitude_km as f64, self.sun_mu as f64)) {
             *w = v as f32;
         }
-        (g.write_buffer)(self.uniform, 0, bytes(&self.words));
+        g.write_buffer(self.uniform, 0, bytes(&self.words));
     }
 
     /// The cloud field for the frame (gpu/clouds.rs's `field`): written with
@@ -277,7 +277,7 @@ impl Atmosphere {
     /// Draws what is due into `encoder`, ahead of every pass that reads the
     /// tables: the fixed two the first time, the sky view when the sun or the
     /// camera has moved far enough to show; timed under `stamp`.
-    pub fn draw(&mut self, g: &GpuApi, encoder: u32, stamp: &mut Stamp) {
+    pub fn draw(&mut self, g: &Gpu, encoder: u32, stamp: &mut Stamp) {
         if !self.baked {
             self.table(g, encoder, TRANSMITTANCE, stamp);
             self.table(g, encoder, MULTISCATTER, stamp);
@@ -299,13 +299,13 @@ impl Atmosphere {
         }
     }
 
-    fn table(&self, g: &GpuApi, encoder: u32, k: usize, stamp: &mut Stamp) {
+    fn table(&self, g: &Gpu, encoder: u32, k: usize, stamp: &mut Stamp) {
         let pass = object();
-        (g.pass)(pass, encoder, &pass_desc(self.views[k], load::CLEAR, 0, load::CLEAR, 0.0, stamp.pass()));
-        (g.set_pipeline)(pass, self.passes[if k == MOON_VIEW { SKY_VIEW } else { k }].pipeline);
-        (g.set_bind_group)(pass, 0, self.groups[k], &[]);
-        (g.draw)(pass, 3, 1, 0, 0);
-        (g.end)(pass);
+        g.pass(pass, encoder, &pass_desc(self.views[k], load::CLEAR, 0, load::CLEAR, 0.0, stamp.pass()));
+        g.set_pipeline(pass, self.passes[if k == MOON_VIEW { SKY_VIEW } else { k }].pipeline);
+        g.set_bind_group(pass, 0, self.groups[k], &[]);
+        g.draw(pass, 3, 1, 0, 0);
+        g.end(pass);
         release(pass);
     }
 }

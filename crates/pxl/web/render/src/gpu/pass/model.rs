@@ -8,7 +8,7 @@
 //! block, a skin — stay the pass's (skinned.rs, decor.rs).
 
 use crate::frame::draw::MODEL_VERTEX_WORDS;
-use crate::gpu::api::{buffer_usage, object, release, GpuApi};
+use crate::gpu::api::{buffer_usage, object, release, Gpu};
 use crate::gpu::api_spec::resource;
 use crate::gpu::atmosphere::AIR_WORDS;
 use crate::gpu::pipeline::Built;
@@ -26,7 +26,7 @@ pub struct FrameGroups {
 impl FrameGroups {
     /// Over `frame_buffer` and a shadow map's entries, and over the light's
     /// frame and its entries where there is one; `ao` the occlusion map's entry.
-    pub fn new(g: &GpuApi, layout: u32, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5], air: [u32; AIR_WORDS]) -> FrameGroups {
+    pub fn new(g: &Gpu, layout: u32, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5], air: [u32; AIR_WORDS]) -> FrameGroups {
         FrameGroups {
             frame: frame_group(g, layout, frame_buffer, shadow, ao, air),
             light: light.map_or(0, |(frame, entries)| frame_group(g, layout, frame, entries, ao, air)),
@@ -35,7 +35,7 @@ impl FrameGroups {
     }
 
     /// Both again over a new occlusion map's entry `ao`.
-    pub fn rebind(&mut self, g: &GpuApi, layout: u32, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5]) {
+    pub fn rebind(&mut self, g: &Gpu, layout: u32, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5]) {
         self.release();
         *self = FrameGroups::new(g, layout, frame_buffer, shadow, light, ao, self.air);
     }
@@ -76,7 +76,7 @@ impl DrawUniforms {
     /// before the submit would stand for every draw. The buffer grows to the
     /// next power of two, eight at least, so a count that wanders does not
     /// make it again every frame.
-    pub fn write<T>(&mut self, g: &GpuApi, layout: u32, count: u32, draws: impl Iterator<Item = T>, mut put: impl FnMut(&mut [u8], T)) {
+    pub fn write<T>(&mut self, g: &Gpu, layout: u32, count: u32, draws: impl Iterator<Item = T>, mut put: impl FnMut(&mut [u8], T)) {
         if count == 0 {
             return;
         }
@@ -85,9 +85,9 @@ impl DrawUniforms {
             release(self.group);
             release(self.buffer);
             self.buffer = object();
-            (g.buffer)(self.buffer, need, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+            g.buffer(self.buffer, need, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
             self.group = object();
-            (g.bind_group)(self.group, layout, &[0, resource::BUFFER, self.buffer, 0, self.bytes]);
+            g.bind_group(self.group, layout, &[0, resource::BUFFER, self.buffer, 0, self.bytes]);
             self.capacity = need;
         }
         let stride = self.stride as usize;
@@ -95,7 +95,7 @@ impl DrawUniforms {
         for (k, draw) in draws.take(count as usize).enumerate() {
             put(&mut buf[k * stride..(k + 1) * stride], draw);
         }
-        (g.write_buffer)(self.buffer, 0, buf);
+        g.write_buffer(self.buffer, 0, buf);
     }
 
     /// The group and slot `k`'s offset in it; none before the first write.
@@ -112,13 +112,13 @@ impl DrawUniforms {
 
 /// Binds `mesh`, a model block of `vertex_cnt` vertices in `lit`'s lanes and
 /// then `index_cnt` indices, and draws `instances` of it.
-pub fn draw_model(g: &GpuApi, pass: u32, lit: &Built, mesh: u32, vertex_cnt: u32, index_cnt: u32, instances: u32) {
+pub fn draw_model(g: &Gpu, pass: u32, lit: &Built, mesh: u32, vertex_cnt: u32, index_cnt: u32, instances: u32) {
     let mut at = 0;
     for lane in 0..lit.lanes {
         let size = vertex_cnt * lit.strides[lane];
-        (g.set_vertex_buffer)(pass, lane as u32, mesh, at, size);
+        g.set_vertex_buffer(pass, lane as u32, mesh, at, size);
         at += size;
     }
-    (g.set_index_buffer)(pass, mesh, vertex_cnt * MODEL_VERTEX_WORDS * 4, index_cnt * 4);
-    (g.draw_indexed)(pass, index_cnt, instances, 0, 0);
+    g.set_index_buffer(pass, mesh, vertex_cnt * MODEL_VERTEX_WORDS * 4, index_cnt * 4);
+    g.draw_indexed(pass, index_cnt, instances, 0, 0);
 }

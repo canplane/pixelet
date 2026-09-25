@@ -218,8 +218,12 @@ fn state() -> &'static mut State {
 /// each its offset, its bytes and the page it begins on; then the quantum the kernel declares to the
 /// central scheduler (xpute_runtime::sched::quantum's QuantumPolicy): margin
 /// share, batch frames and the settle time, each in thousandths; then the
-/// heap's row.
-pub const BOOT_WORDS: usize = 13;
+/// heap's row; then the renderer's stream (pxl_render::gpu::api), which the
+/// shell runs after every turn.
+pub const BOOT_WORDS: usize = 14;
+
+/// The boot word holding the address of the renderer's stream.
+const BOOT_GPU: usize = 13;
 
 /// The boot word holding the address of the heap's row (`BuddyMalloc`'s
 /// `stat`): the range it spans, the top it has reached and what it has served.
@@ -241,10 +245,12 @@ pub extern "C" fn boot() -> *const u32 {
         pxl_kernel::sched::turn::boot();
         map
     });
+    let gpu_stream = pxl_kernel::mem::fixed::gpu_stream_at().unwrap();
     let s = state();
     let (sq, cq) = (ring_address(&s.sq), ring_address(&s.outbox.cq));
     s.boot[..3].copy_from_slice(&[data_end(), sq, cq]);
     s.boot[BOOT_HEAP] = ALLOC.stat() as u32;
+    s.boot[BOOT_GPU] = gpu_stream;
     for (i, sec) in [map.fixed, map.heap].into_iter().enumerate() {
         write_section(&mut s.boot, 3 + i * SECTION_WORDS as usize, sec);
     }
@@ -272,6 +278,8 @@ fn lay_out() -> section::Map {
     // SAFETY: the memory is this module's own, addressed from 0.
     kernel().volumes = Some(unsafe { Volumes::new(core::ptr::null_mut()) });
     section::set_map(map);
+    // SAFETY: `.fixed.gpu`, stream::BYTES from a page, the renderer's alone.
+    unsafe { pxl_render::gpu::api::set_gpu_stream(pxl_kernel::mem::fixed::gpu_stream_at().unwrap()) };
     map
 }
 
@@ -280,7 +288,9 @@ fn lay_out() -> section::Map {
 /// — the frame among them, when the host asked for one — and the return is
 /// the falling edge: when the kernel wants the next turn, in ms from now, 0
 /// for the next frame and xpute_runtime::sched::quantum's NO_WAKE for none. A
-/// turn rung with no quota and no frame only applies what waits.
+/// turn rung with no quota and no frame only applies what waits. What the
+/// renderer called in the turn is in its stream by then, for the shell to run
+/// before anything else touches the device.
 #[no_mangle]
 pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
     use pxl_kernel::sched::turn::{take_world_drawn, world_frame_waiting};
@@ -293,6 +303,7 @@ pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
     if take_world_drawn() {
         post_turn(s);
     }
+    pxl_render::gpu::api::gpu_publish();
     pxl_kernel::world::change::world_fall()
 }
 
@@ -780,115 +791,6 @@ extern "C" {
     fn host_body_read(body: u32, dst: *mut u8, len: usize);
 }
 
-// ---- The host's WebGPU (pxl_render::gpu::api, apps/web/src/kernel/render/gpu.ts) ----
-
-#[link(wasm_import_module = "env")]
-extern "C" {
-    #[link_name = "gpu_reset"]
-    fn host_gpu_reset();
-    #[link_name = "gpu_buffer"]
-    fn host_gpu_buffer(id: u32, size: u32, usage: u32);
-    #[link_name = "gpu_texture"]
-    fn host_gpu_texture(id: u32, width: u32, height: u32, layers: u32, format: u32, mips: u32, usage: u32);
-    #[link_name = "gpu_image_texture"]
-    fn host_gpu_image_texture(id: u32, image: u32) -> u32;
-    #[link_name = "gpu_view"]
-    fn host_gpu_view(id: u32, texture: u32, dimension: u32, base_mip: u32, mips: u32, base_layer: u32, layers: u32);
-    #[link_name = "gpu_sampler"]
-    fn host_gpu_sampler(id: u32, mag: u32, min: u32, mipmap: u32, address: u32, compare: u32, anisotropy: u32);
-    #[link_name = "gpu_shader"]
-    fn host_gpu_shader(id: u32, code: *const u8, len: usize);
-    #[link_name = "gpu_layout"]
-    fn host_gpu_layout(id: u32, entries: *const u32, words: usize);
-    #[link_name = "gpu_pipeline"]
-    fn host_gpu_pipeline(id: u32, record: *const u32, words: usize, layouts: *const u32, count: usize, module: u32, format: u32);
-    #[link_name = "gpu_bind_group"]
-    fn host_gpu_bind_group(id: u32, layout: u32, entries: *const u32, words: usize);
-    #[link_name = "gpu_destroy"]
-    fn host_gpu_destroy(id: u32);
-    #[link_name = "gpu_write_buffer"]
-    fn host_gpu_write_buffer(id: u32, offset: u32, bytes: *const u8, len: usize);
-    #[link_name = "gpu_write_texture"]
-    fn host_gpu_write_texture(id: u32, layer: u32, width: u32, height: u32, bytes: *const u8, len: usize);
-    #[link_name = "gpu_encoder"]
-    fn host_gpu_encoder(id: u32);
-    #[link_name = "gpu_pass"]
-    fn host_gpu_pass(id: u32, encoder: u32, desc: *const u32, words: usize);
-    #[link_name = "gpu_set_pipeline"]
-    fn host_gpu_set_pipeline(pass: u32, pipeline: u32);
-    #[link_name = "gpu_set_bind_group"]
-    fn host_gpu_set_bind_group(pass: u32, index: u32, group: u32, offsets: *const u32, count: usize);
-    #[link_name = "gpu_set_vertex_buffer"]
-    fn host_gpu_set_vertex_buffer(pass: u32, slot: u32, buffer: u32, offset: u32, size: u32);
-    #[link_name = "gpu_set_index_buffer"]
-    fn host_gpu_set_index_buffer(pass: u32, buffer: u32, offset: u32, size: u32);
-    #[link_name = "gpu_draw"]
-    fn host_gpu_draw(pass: u32, vertices: u32, instances: u32, first_vertex: u32, first_instance: u32);
-    #[link_name = "gpu_draw_indexed"]
-    fn host_gpu_draw_indexed(pass: u32, indices: u32, instances: u32, first_index: u32, first_instance: u32);
-    #[link_name = "gpu_end"]
-    fn host_gpu_end(pass: u32);
-    #[link_name = "gpu_submit"]
-    fn host_gpu_submit(encoder: u32);
-    #[link_name = "gpu_configure"]
-    fn host_gpu_configure(surface: u32);
-    #[link_name = "gpu_resize"]
-    fn host_gpu_resize(surface: u32, width: u32, height: u32);
-    #[link_name = "gpu_current"]
-    fn host_gpu_current(surface: u32, view: u32);
-    #[link_name = "gpu_query_set"]
-    fn host_gpu_query_set(id: u32, count: u32);
-    #[link_name = "gpu_timestamps"]
-    fn host_gpu_timestamps(encoder: u32, query_set: u32, written: u32);
-    #[link_name = "gpu_ms"]
-    fn host_gpu_ms(span: u32) -> f64;
-    #[link_name = "gpu_paint"]
-    fn host_gpu_paint(ops: *const u32, words: usize);
-    #[link_name = "gpu_paint_copy"]
-    fn host_gpu_paint_copy(texture: u32, x: u32, y: u32, layer: u32, width: u32, height: u32);
-}
-
-/// Hands the renderer the host's WebGPU. Every call passes numbers and the
-/// address and length of what it names, which the host reads during the call.
-fn install_gpu() {
-    use pxl_render::gpu::api::{set_gpu_api, GpuApi};
-    // SAFETY, for every call below: an import that reads its numbers and the
-    // lanes it is given where they lie, and keeps no address past the call.
-    set_gpu_api(GpuApi {
-        reset: || unsafe { host_gpu_reset() },
-        buffer: |id, size, usage| unsafe { host_gpu_buffer(id, size, usage) },
-        texture: |id, width, height, layers, format, mips, usage| unsafe { host_gpu_texture(id, width, height, layers, format, mips, usage) },
-        image_texture: |id, image| unsafe { host_gpu_image_texture(id, image) != 0 },
-        view: |id, texture, dimension, base_mip, mips, base_layer, layers| unsafe { host_gpu_view(id, texture, dimension, base_mip, mips, base_layer, layers) },
-        sampler: |id, mag, min, mipmap, address, compare, anisotropy| unsafe { host_gpu_sampler(id, mag, min, mipmap, address, compare, anisotropy) },
-        shader: |id, code| unsafe { host_gpu_shader(id, code.as_ptr(), code.len()) },
-        layout: |id, entries| unsafe { host_gpu_layout(id, entries.as_ptr(), entries.len()) },
-        pipeline: |id, record, layouts, module, format| unsafe { host_gpu_pipeline(id, record.as_ptr(), record.len(), layouts.as_ptr(), layouts.len(), module, format) },
-        bind_group: |id, layout, entries| unsafe { host_gpu_bind_group(id, layout, entries.as_ptr(), entries.len()) },
-        destroy: |id| unsafe { host_gpu_destroy(id) },
-        write_buffer: |id, offset, bytes| unsafe { host_gpu_write_buffer(id, offset, bytes.as_ptr(), bytes.len()) },
-        write_texture: |id, layer, width, height, bytes| unsafe { host_gpu_write_texture(id, layer, width, height, bytes.as_ptr(), bytes.len()) },
-        encoder: |id| unsafe { host_gpu_encoder(id) },
-        pass: |id, encoder, desc| unsafe { host_gpu_pass(id, encoder, desc.as_ptr(), desc.len()) },
-        set_pipeline: |pass, pipeline| unsafe { host_gpu_set_pipeline(pass, pipeline) },
-        set_bind_group: |pass, index, group, offsets| unsafe { host_gpu_set_bind_group(pass, index, group, offsets.as_ptr(), offsets.len()) },
-        set_vertex_buffer: |pass, slot, buffer, offset, size| unsafe { host_gpu_set_vertex_buffer(pass, slot, buffer, offset, size) },
-        set_index_buffer: |pass, buffer, offset, size| unsafe { host_gpu_set_index_buffer(pass, buffer, offset, size) },
-        draw: |pass, vertices, instances, first_vertex, first_instance| unsafe { host_gpu_draw(pass, vertices, instances, first_vertex, first_instance) },
-        draw_indexed: |pass, indices, instances, first_index, first_instance| unsafe { host_gpu_draw_indexed(pass, indices, instances, first_index, first_instance) },
-        end: |pass| unsafe { host_gpu_end(pass) },
-        submit: |encoder| unsafe { host_gpu_submit(encoder) },
-        configure: |surface| unsafe { host_gpu_configure(surface) },
-        resize: |surface, width, height| unsafe { host_gpu_resize(surface, width, height) },
-        current: |surface, view| unsafe { host_gpu_current(surface, view) },
-        query_set: |id, count| unsafe { host_gpu_query_set(id, count) },
-        timestamps: |encoder, query_set, written| unsafe { host_gpu_timestamps(encoder, query_set, written) },
-        gpu_ms: |span| unsafe { host_gpu_ms(span) },
-        paint: |ops| unsafe { host_gpu_paint(ops.as_ptr(), ops.len()) },
-        paint_copy: |texture, x, y, layer, width, height| unsafe { host_gpu_paint_copy(texture, x, y, layer, width, height) },
-    });
-}
-
 fn hook_now() -> f64 {
     // SAFETY: an import with no arguments.
     unsafe { host_now() }
@@ -957,7 +859,6 @@ fn install_host() {
         releases: ALLOC.releases(),
         refusals: ALLOC.refusals(),
     });
-    install_gpu();
 }
 
 /// The ledger, where it lies: the address of READ's words (ledger.json) —
