@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "pixelet",
+    "slug": "pixelet",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["ios", "android"]
+  }
+}

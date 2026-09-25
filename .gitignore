@@ -209,5 +209,9 @@ apps/web/.wrangler/
 # What a device posts to the dev server's /__console, for reading with tail.
 apps/web/.dev-console.log
 
+# Expo's per-machine state for the device app: the dev server's settings and
+# the types it generates.
+apps/native/.expo/
+
 # A standalone WebGPU repro page is dev-only and not part of the app.
 apps/web/public/repro-*.html

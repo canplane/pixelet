@@ -3,6 +3,9 @@
 
   "workspace": [
     "apps/web",
+    // The same shell on a device, through Expo: a package.json member, since
+    // Expo and Metro find their packages the way npm lays them out.
+    "apps/native",
 
     "packages/xpute/core",
     "packages/xpute/runtime"

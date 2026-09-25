@@ -63,9 +63,10 @@ function header(f: string): string | null {
     }
     return null;
   }
-  if (!/\.tsx?$/.test(f) || f.includes("/shadcn/")) return null;
-  if (f.startsWith("apps/web/src/")) return `@pxl/web/${f.slice("apps/web/src/".length)}`;
-  if (f.startsWith("apps/web/")) return `@pxl/web/${f.slice("apps/web/".length)}`;
+  if (!/\.tsx?$/.test(f)) return null;
+  // An app's file by the app's name: under its src/, or at its root.
+  const app = f.match(/^apps\/([\w-]+)\/(?:src\/)?(.*)$/);
+  if (app) return `@pxl/${app[1]}/${app[2]}`;
   const pkg = f.match(/^packages\/xpute\/(\w+)\/src\/(.*)$/);
   return pkg ? `@xpute/${pkg[1]}/${pkg[2]}` : null;
 }
@@ -94,7 +95,11 @@ function exists(path: string, from: string): boolean {
   if (suffixes.has(path)) return true;
   const [head, ...rest] = path.split("/");
   const tail = rest.join("/");
-  if (head === "@pxl") return suffixes.has(`apps/web/src/${tail.replace(/^web\//, "")}`) || suffixes.has(`apps/web/${tail.replace(/^web\//, "")}`);
+  if (head === "@pxl") {
+    // `@pxl/<app>/…`: under the app's src/, or at its root.
+    const [app, ...within] = rest;
+    return suffixes.has(`apps/${app}/src/${within.join("/")}`) || suffixes.has(`apps/${app}/${within.join("/")}`);
+  }
   if (head === "@") return suffixes.has(`apps/web/src/${tail}`);
   if (head === "@xpute") return suffixes.has(`packages/xpute/${rest[0]}/src/${rest.slice(1).join("/")}`);
   const dir = crates.get(head);
