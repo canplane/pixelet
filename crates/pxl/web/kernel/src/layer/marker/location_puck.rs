@@ -117,7 +117,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
     let mut center_pos = [0.0; 3];
     floor3n(&raw, U_PER_CELL, &mut center_pos);
 
-    let tiles = Terrain::pyramid().level(0).revision();
+    let tiles = Terrain::pyramid().revision();
     if p.zone_for != Some((center_pos, tiles)) {
         p.zone_for = Some((center_pos, tiles));
         let mut lane: Vec<f32> = Vec::with_capacity(p.samples.len() * 7);

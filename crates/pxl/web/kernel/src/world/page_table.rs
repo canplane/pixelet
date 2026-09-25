@@ -7,43 +7,36 @@
 //! array: for terrain the views over the page's blocks, for POI the page's
 //! records. The keys, the positions and the walk are linear.
 //!
-//! A table given a world topic writes every set and clear to the world
-//! change log (world/change.rs) — which page, as its own key — and its
-//! `revision` is that topic's tick; readers compare it. Without a topic it
-//! only counts. The keys are normalised through TO_XY on the way in (xy.rs on
-//! why), and come back out unsigned, the form every IVec is.
+//! Its `revision` counts every set and clear. The keys are normalised
+//! through TO_XY on the way in (xy.rs on why), and come back out unsigned,
+//! the form every IVec is.
 
 use fnv::FnvBuildHasher;
 use indexmap::IndexSet;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::xy::TO_XY;
 
-use crate::world::change::{bump_world, world_changes, WorldTopic};
-
 pub struct PageTable<T> {
     index: IndexSet<IVec, FnvBuildHasher>,
     /// What each position holds.
     pub handles: Vec<T>,
     count: u32,
-    pub topic: Option<WorldTopic>,
 }
 
-impl<T> PageTable<T> {
-    pub fn new(topic: Option<WorldTopic>) -> PageTable<T> {
+impl<T> Default for PageTable<T> {
+    fn default() -> PageTable<T> {
         PageTable {
             index: IndexSet::with_capacity_and_hasher(64, FnvBuildHasher::default()),
             handles: Vec::new(),
             count: 0,
-            topic,
         }
     }
+}
 
-    /// Moves on every set and clear: the topic's tick, or a count.
+impl<T> PageTable<T> {
+    /// Moves on every set and clear.
     pub fn revision(&self) -> u32 {
-        match self.topic {
-            None => self.count,
-            Some(topic) => world_changes().tick(topic),
-        }
+        self.count
     }
 
     pub fn size(&self) -> u32 {
@@ -72,7 +65,7 @@ impl<T> PageTable<T> {
         } else {
             self.handles.push(value);
         }
-        self.changed(key, false);
+        self.count += 1;
     }
 
     /// Removes the page and returns what it held, or None.
@@ -81,7 +74,7 @@ impl<T> PageTable<T> {
         let pos = self.index.swap_remove_full(&key)?.0;
         // The last position moved into the removed one's place.
         let held = self.handles.swap_remove(pos);
-        self.changed(key, true);
+        self.count += 1;
         Some(held)
     }
 
@@ -96,15 +89,6 @@ impl<T> PageTable<T> {
 
     pub fn entries(&self) -> impl Iterator<Item = (IVec, &T)> + '_ {
         self.index.iter().copied().zip(self.handles.iter())
-    }
-
-    fn changed(&mut self, key: IVec, left: bool) {
-        self.count += 1;
-        let Some(topic) = self.topic else { return };
-        bump_world(topic, key);
-        if left {
-            world_changes().forget(topic, key as i64);
-        }
     }
 }
 

@@ -330,7 +330,7 @@ impl Walker {
         // when something it depends on moved.
         let s = &mut self.surface;
         let revision = objects_revision();
-        let tiles = Terrain::pyramid().level(0).revision();
+        let tiles = Terrain::pyramid().revision();
         if s.x != px || s.y != py || s.hint != target_z || s.origin != Some(map_origin) || s.revision != revision || s.tiles != tiles {
             *s = Surface {
                 x: px,

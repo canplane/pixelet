@@ -32,7 +32,7 @@ use crate::io::demand::{Category, Phases};
 use crate::io::policy;
 use crate::io::sched::{declare, Rank};
 use crate::layer::environment::fog::eye_height;
-use crate::world::change::{world_edge, WorldTopic};
+use crate::world::change::world_edge;
 use crate::world::page_table::PageTable;
 use chunk::Chunk;
 pub use window::Domain;
@@ -43,9 +43,6 @@ use window::{CHAIN_PAGES, HELD_AXIS, WINDOW_LEVELS};
 pub trait Layer: Folds + Clone + 'static {
     /// The stream a page of this layer is asked for under.
     const CATEGORY: Category;
-    /// The topic a change to a leaf is logged under, where a reader compares
-    /// revisions (world/change.rs).
-    const LEAF_TOPIC: Option<WorldTopic> = None;
 
     fn pyramid() -> &'static mut Pyramid<Self>;
 
@@ -163,7 +160,7 @@ pub struct Pyramid<L: Layer> {
 impl<L: Layer> Default for Pyramid<L> {
     fn default() -> Self {
         Pyramid {
-            tables: (0..=TOP_LEVEL).map(|level| PageTable::new(if level == 0 { L::LEAF_TOPIC } else { None })).collect(),
+            tables: (0..=TOP_LEVEL).map(|_| PageTable::default()).collect(),
             records: vec![None; RECORDS as usize],
             refused: 0,
             revision: 0,

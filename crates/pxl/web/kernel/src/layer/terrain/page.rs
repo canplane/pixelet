@@ -31,7 +31,6 @@ use crate::layer::terrain::fixed::{ele_at, ground_at, record_ele_at, record_grou
 use crate::layer::terrain::ground_snap::reground_map_center;
 use crate::mem;
 use crate::shell::map_store::{map_store, MapStatus};
-use crate::world::change::TERRAIN_PAGE;
 use crate::world::chunk::node::{chunk_page, chunk_sources_changed};
 use crate::world::pyramid::window::{eye, ring_of, window, HELD_AXIS};
 use crate::world::pyramid::{Cover, Domain, Layer, Pyramid};
@@ -49,7 +48,6 @@ impl Layer for Terrain {
     // The leaves carry the terrain topic, so its revision is what a reader of
     // the ground compares; the levels above are the view's alone and are read
     // through the chunks that draw them.
-    const LEAF_TOPIC: Option<crate::world::change::WorldTopic> = Some(TERRAIN_PAGE);
 
     fn pyramid() -> &'static mut Pyramid<Terrain> {
         TERRAIN.get(Pyramid::default)
