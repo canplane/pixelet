@@ -211,10 +211,10 @@ fn a_node_reaches_what_the_columns_under_it_reach() {
         for &(x, y, _, _) in &cols {
             let at = ancestor_of([x, y], level);
             let union = store
-                .chunks
+                .columns
                 .iter()
                 .filter(|(col, _)| ancestor_of([ivec::X(**col), ivec::Y(**col)], level) == at)
-                .map(|(_, chunk)| chunk.z)
+                .map(|(_, column)| column.z)
                 .reduce(|a, b| (a.0.min(b.0), a.1.max(b.1)));
             assert_eq!(store.reach_over((L2.up(level as i32), at)), union, "level {level} at {at:?}");
         }
