@@ -87,11 +87,10 @@ pub enum InputMinor {
     RESET_DIST = 0x14,
     COMPASS_RESET = 0x15,
     GO_TO = 0x16,
-    POI_FOCUS = 0x17,
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 8] = [
+    pub const ALL: [InputMinor; 7] = [
         InputMinor::POINTER,
         InputMinor::WHEEL,
         InputMinor::TRACKING,
@@ -99,7 +98,6 @@ impl InputMinor {
         InputMinor::RESET_DIST,
         InputMinor::COMPASS_RESET,
         InputMinor::GO_TO,
-        InputMinor::POI_FOCUS,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -518,8 +516,6 @@ pub enum Command {
     INPUT_COMPASS_RESET = 0x1c15,
     /// A search result: the map centre moved there.
     INPUT_GO_TO = 0x1c16,
-    /// A badge chosen from the list beside the map, by the cell the snapshot gave it.
-    INPUT_POI_FOCUS = 0x1c17,
     /// A GPS fix; a field is absent where the browser gave none.
     SENSOR_UPDATE = 0x1d03,
     /// The watch failed and was stopped.
@@ -597,7 +593,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 43] = [
+    pub const ALL: [Command; 42] = [
         Command::NOP,
         Command::WORLD_CREATE,
         Command::WORLD_UPDATE,
@@ -609,7 +605,6 @@ impl Command {
         Command::INPUT_RESET_DIST,
         Command::INPUT_COMPASS_RESET,
         Command::INPUT_GO_TO,
-        Command::INPUT_POI_FOCUS,
         Command::SENSOR_UPDATE,
         Command::SENSOR_ERROR,
         Command::SENSOR_ORIENTATION,
@@ -667,8 +662,6 @@ pub struct Snapshot<'a> {
     /// current zoom asks for; empty where the centre is in none or the packets it is
     /// read out of have not arrived.
     pub place: &'a dyn Fn(&mut dyn FnMut(&PlacePart<'_>)),
-    /// The badges on the map, nearest what the view looks at first.
-    pub poi: &'a dyn Fn(&mut dyn FnMut(&PoiBadge<'_>)),
     /// The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index.
     pub object_sizes: &'a [f64],
     pub object_storage_version: u32,
@@ -676,7 +669,7 @@ pub struct Snapshot<'a> {
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 14;
+    pub const FIELDS: u32 = 13;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(MapState::FIELDS, |w| self.map.write(w));
@@ -694,13 +687,6 @@ impl Snapshot<'_> {
         w.branch(n, |w| {
             (self.place)(&mut |item| {
                 w.branch(PlacePart::FIELDS, |w| item.write(w));
-            })
-        });
-        let mut n = 0;
-        (self.poi)(&mut |_| n += 1);
-        w.branch(n, |w| {
-            (self.poi)(&mut |item| {
-                w.branch(PoiBadge::FIELDS, |w| item.write(w));
             })
         });
         w.f64_array(Some(self.object_sizes));
@@ -849,31 +835,6 @@ impl PlaceName<'_> {
     pub fn write(&self, w: &mut PacketWriter) {
         w.str_display(self.lang);
         w.str_display(self.name);
-    }
-}
-
-/// A badge on the map, as the panel beside it lists it.
-pub struct PoiBadge<'a> {
-    /// The cell it stands for, as INPUT_POI_FOCUS hands it back: its page's subject and its index.
-    pub page: u64,
-    pub index: u32,
-    pub count: u32,
-    /// The one place it holds, where it holds one.
-    pub name: Option<&'a dyn Display>,
-}
-
-impl PoiBadge<'_> {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 4;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u64(Some(self.page));
-        w.u32(Some(self.index));
-        w.u32(Some(self.count));
-        match self.name {
-            Some(s) => w.str_display(s),
-            None => w.str(None),
-        };
     }
 }
 
@@ -1087,23 +1048,6 @@ impl InputGoTo {
         Ok(InputGoTo {
             lon: f.at(0)?.get_number()?,
             lat: f.at(1)?.get_number()?,
-        })
-    }
-}
-
-/// Command::INPUT_POI_FOCUS's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct InputPoiFocus {
-    pub page: u64,
-    pub index: u32,
-}
-
-impl InputPoiFocus {
-    pub fn read(pkt: &[u8]) -> Result<InputPoiFocus, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(InputPoiFocus {
-            page: f.at(0)?.get_u64()?,
-            index: f.at(1)?.get_number()? as u32,
         })
     }
 }

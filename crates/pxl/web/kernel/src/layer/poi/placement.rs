@@ -15,7 +15,6 @@
 //! space/pyramid.rs `Cell::centre`, chunk/table.rs `surface_at`), which is
 //! the one thing read from the ground.
 
-use crate::abi::cmd::PoiBadge;
 use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
@@ -33,7 +32,7 @@ use pxl_render::asset::atlas::NO_SLOT;
 
 use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::{ivec, projection};
-use pxl_spec::space::pyramid::{Cell, LevelPage, GROUND, TOP_LEVEL};
+use pxl_spec::space::pyramid::{Cell, LevelPage, GROUND};
 use std::collections::{BTreeMap, HashSet};
 
 #[derive(Default)]
@@ -41,11 +40,11 @@ struct Placement {
     batch: BillboardBatch,
     kept: Vec<u32>,
     set: Option<u32>,
-    /// The badges shown, nearest what the view looks at first: what the
-    /// shell lists beside the map (`snapshot`).
-    shown: Vec<(Cell, Label, u32)>,
     /// What `kept` has on the sheet, in the order it is drawn.
     drawn: Vec<u32>,
+    /// The badges drawn, as a tap finds them: nearest the eye first, each by
+    /// its box on the screen, what it says and where it stands.
+    hits: Vec<([f64; 4], Label, Cell)>,
 }
 static PLACEMENT: Global<Placement> = Global::new();
 
@@ -67,7 +66,7 @@ pub fn step(ctx: &mut TickContext) {
             remove_billboard_set(set);
             ctx.invalidate();
         }
-        p.shown.clear();
+        p.hits.clear();
         badge::retain(&HashSet::new());
         return;
     }
@@ -130,18 +129,16 @@ pub fn step(ctx: &mut TickContext) {
         let mut local = [0.0; 3];
         projection::unproject(&mut local, ivec::sub(centre.i, origin), centre.f);
         p.batch.push(local[0], local[1], local[2], badge::width(label), badge::ANCHOR, labelled.len() as f64);
-        labelled.push((cell, label, t.count));
+        labelled.push((label, stands));
     }
-    badge::retain(&labelled.iter().map(|l| l.1).collect());
+    badge::retain(&labelled.iter().map(|l| l.0).collect());
     let v = view();
     select_visible_billboards(&mut p.batch, v.width, v.height, &mut p.kept);
-    p.shown.clear();
     p.drawn.clear();
     for &i in &p.kept {
-        if badge::slot(labelled[i as usize].1) == NO_SLOT {
+        if badge::slot(labelled[i as usize].0) == NO_SLOT {
             continue;
         }
-        p.shown.push(labelled[i as usize]);
         p.drawn.push(i);
     }
     // Farthest from the eye first. The pass reads the world's depth and
@@ -153,10 +150,13 @@ pub fn step(ctx: &mut TickContext) {
             .total_cmp(&batch.d2[a as usize])
             .then(batch.tiebreak[a as usize].total_cmp(&batch.tiebreak[b as usize]))
     });
+    p.hits.clear();
+    p.hits
+        .extend(p.drawn.iter().rev().map(|&i| (p.batch.screen[i as usize], labelled[i as usize].0, labelled[i as usize].1)));
     let mut instances = Vec::with_capacity(p.drawn.len() * BILLBOARD_FLOATS);
     for &i in &p.drawn {
         let i = i as usize;
-        let (sheet, slot) = (billboard_sheet(), badge::slot(labelled[i].1) as u32);
+        let (sheet, slot) = (billboard_sheet(), badge::slot(labelled[i].0) as u32);
         instances.extend_from_slice(&[
             p.batch.local_x[i] as f32,
             p.batch.local_y[i] as f32,
@@ -179,40 +179,23 @@ pub fn step(ctx: &mut TickContext) {
     ctx.invalidate();
 }
 
-/// The badges shown, as the shell lists them: nearest what the view looks at
-/// first, each by its cell — which the shell hands back to go there
-/// (`focus`) — its count, and the name where it is one place.
-pub fn badges(each: &mut dyn FnMut(&PoiBadge<'_>)) {
-    for &(cell, label, count) in PLACEMENT.get(Placement::default).shown.iter() {
-        let text = match label {
-            Label::Place { .. } => Some(label.text()),
-            Label::Count(_) => None,
-        };
-        each(&PoiBadge {
-            page: cell.page().subject(),
-            index: cell.index(),
-            count,
-            name: text.as_ref().map(|t| t as &dyn core::fmt::Display),
-        });
-    }
-}
-
-/// Goes to the cell a badge stands for, by what `badges` gave it: its
-/// middle, a level closer, where the ladder draws that ground a level finer
-/// and the cell comes apart into the places under it. Whether the two named
-/// a cell.
-pub fn focus(subject: u64, index: u32) -> bool {
-    // A cell from outside: a level past the pyramid, a subject that does not
-    // give itself back, or an index past the page is no cell.
-    let page = LevelPage::of_subject(subject);
-    let across = POI_LATTICE.page_cells();
-    if page.level > TOP_LEVEL || page.subject() != subject || index >= across * across {
+/// A tap at `ndc_x`, `ndc_y` (in [−1, 1], y up) on the badges: the nearest
+/// one whose box it falls in takes it, and the view goes to where that badge
+/// stands — a place to the place, a crowd a level closer too, where the
+/// ladder draws that ground a level finer and it comes apart into the places
+/// under it. Whether a badge took the tap.
+pub fn tap(ndc_x: f64, ndc_y: f64) -> bool {
+    let v = view();
+    let (x, y) = ((ndc_x * 0.5 + 0.5) * v.width, (-ndc_y * 0.5 + 0.5) * v.height);
+    let hits = &PLACEMENT.get(Placement::default).hits;
+    let Some(&(_, label, stands)) = hits.iter().find(|(r, _, _)| (r[0]..=r[2]).contains(&x) && (r[1]..=r[3]).contains(&y)) else {
         return false;
+    };
+    crate::shell::shell::go_to(stands.mid());
+    if let Label::Count(_) = label {
+        let camera = crate::control::camera::store::camera_store();
+        let dist = Some(camera.view_state.dist / 2.0);
+        camera.set_view_state(crate::control::camera::store::ViewPatch { dist, azimuth: None, polar: None });
     }
-    let cell = POI_LATTICE.cell_at(page, index);
-    crate::shell::shell::go_to(cell.mid());
-    let camera = crate::control::camera::store::camera_store();
-    let dist = Some(camera.view_state.dist / 2.0);
-    camera.set_view_state(crate::control::camera::store::ViewPatch { dist, azimuth: None, polar: None });
     true
 }

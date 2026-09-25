@@ -589,6 +589,12 @@ fn update_hover(s: &Input) {
 
 fn tap_if_still(s: &Input, mode: DragMode) {
     if !s.did_drag && mode == DragMode::Pan {
+        // A badge floats over the ground it marks, so it takes the tap before
+        // the ground under it does — with the pointer only: with a cube or the
+        // eraser in hand, a tap is meant for the ground and the objects on it.
+        if s.holding.active_tool == ActiveTool::Pointer && crate::layer::poi::placement::tap(s.pointer_x, s.pointer_y) {
+            return;
+        }
         update_hover(s);
         if let Some(hovered) = camera_store().hovered_coord {
             handle_tap(hovered);

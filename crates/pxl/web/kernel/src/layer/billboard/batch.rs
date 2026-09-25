@@ -30,6 +30,9 @@ pub struct BillboardBatch {
     pub world_z: Vec<f64>,
     /// Squared distance to the eye. Squared because only the order is used.
     pub d2: Vec<f64>,
+    /// Where a candidate kept is on the screen, in viewport pixels: its box
+    /// as drawn, left, top, right, bottom.
+    pub screen: Vec<[f64; 4]>,
     /// Candidate indices that passed the frustum, in the order they will be
     /// offered to the placement pass.
     pub order: Vec<u32>,
@@ -70,6 +73,7 @@ impl BillboardBatch {
         self.world_y.resize(n, 0.0);
         self.world_z.resize(n, 0.0);
         self.d2.resize(n, 0.0);
+        self.screen.resize(n, [0.0; 4]);
         self.order.resize(n, 0);
     }
 }

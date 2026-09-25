@@ -106,8 +106,7 @@
         { "name": "VIEW", "value": 19 },
         { "name": "RESET_DIST", "value": 20 },
         { "name": "COMPASS_RESET", "value": 21 },
-        { "name": "GO_TO", "value": 22 },
-        { "name": "POI_FOCUS", "value": 23 }
+        { "name": "GO_TO", "value": 22 }
       ]
     },
     {
@@ -458,15 +457,6 @@
           ]
         },
         {
-          "name": "INPUT_POI_FOCUS",
-          "value": 7191,
-          "doc": ["A badge chosen from the list beside the map, by the cell the snapshot gave it."],
-          "packet": [
-            { "name": "page", "type": "u64" },
-            { "name": "index", "type": "u32" }
-          ]
-        },
-        {
           "name": "SENSOR_UPDATE",
           "value": 7427,
           "doc": ["A GPS fix; a field is absent where the browser gave none."],
@@ -707,7 +697,6 @@
             "read out of have not arrived."
           ]
         },
-        { "name": "poi", "type": "PoiBadge", "list": true, "doc": ["The badges on the map, nearest what the view looks at first."] },
         {
           "name": "object_sizes",
           "type": "f64",
@@ -789,16 +778,6 @@
       "fields": [
         { "name": "lang", "type": "str" },
         { "name": "name", "type": "str" }
-      ]
-    },
-    {
-      "name": "PoiBadge",
-      "doc": ["A badge on the map, as the panel beside it lists it."],
-      "fields": [
-        { "name": "page", "type": "u64", "doc": ["The cell it stands for, as INPUT_POI_FOCUS hands it back: its page's subject and its index."] },
-        { "name": "index", "type": "u32" },
-        { "name": "count", "type": "u32" },
-        { "name": "name", "type": "str", "optional": true, "doc": ["The one place it holds, where it holds one."] }
       ]
     }
   ]

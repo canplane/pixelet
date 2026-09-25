@@ -55,7 +55,6 @@ export const enum InputMinor {
   RESET_DIST = 0x14,
   COMPASS_RESET = 0x15,
   GO_TO = 0x16,
-  POI_FOCUS = 0x17,
 }
 
 /** The device sensors' own verbs. */
@@ -250,8 +249,6 @@ export const enum Command {
   INPUT_COMPASS_RESET = 0x1c15,
   /** A search result: the map centre moved there. */
   INPUT_GO_TO = 0x1c16,
-  /** A badge chosen from the list beside the map, by the cell the snapshot gave it. */
-  INPUT_POI_FOCUS = 0x1c17,
   /** A GPS fix; a field is absent where the browser gave none. */
   SENSOR_UPDATE = 0x1d03,
   /** The watch failed and was stopped. */
@@ -358,8 +355,6 @@ export interface Snapshot {
    * current zoom asks for; empty where the centre is in none or the packets it is
    * read out of have not arrived. */
   place: PlacePart[];
-  /** The badges on the map, nearest what the view looks at first. */
-  poi: PoiBadge[];
   /** The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index. */
   object_sizes: f64[];
   object_storage_version: u32;
@@ -378,9 +373,8 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     settings: Array.from(b.at(8).get<U32Array>()),
     scale_bar: read_scale_bar(b.at_branch(9)),
     place: list(b.at_branch(10), read_place_part),
-    poi: list(b.at_branch(11), read_poi_badge),
-    object_sizes: Array.from(b.at(12).get<F64Array>()),
-    object_storage_version: b.at(13).get<u32>(),
+    object_sizes: Array.from(b.at(11).get<F64Array>()),
+    object_storage_version: b.at(12).get<u32>(),
   };
 }
 
@@ -465,20 +459,6 @@ export interface PlaceName {
 
 export function read_place_name(b: BranchCursor): PlaceName {
   return { lang: b.at(0).get<string>(), name: b.at(1).get<string>() };
-}
-
-/** A badge on the map, as the panel beside it lists it. */
-export interface PoiBadge {
-  /** The cell it stands for, as INPUT_POI_FOCUS hands it back: its page's subject and its index. */
-  page: u64;
-  index: u32;
-  count: u32;
-  /** The one place it holds, where it holds one. */
-  name: string | null;
-}
-
-export function read_poi_badge(b: BranchCursor): PoiBadge {
-  return { page: b.at(0).get<u64>(), index: b.at(1).get<u32>(), count: b.at(2).get<u32>(), name: b.at(3).get<string | null>() };
 }
 
 /** Command.NOP's packet. */
@@ -600,16 +580,6 @@ export interface InputGoTo {
 
 export function encode_input_go_to(p: InputGoTo): U8Array {
   return packet((b) => b.f64(p.lon).f64(p.lat));
-}
-
-/** Command.INPUT_POI_FOCUS's packet. */
-export interface InputPoiFocus {
-  page: u64;
-  index: u32;
-}
-
-export function encode_input_poi_focus(p: InputPoiFocus): U8Array {
-  return packet((b) => b.u64(p.page).u32(p.index));
 }
 
 /** Command.SENSOR_UPDATE's packet. */
