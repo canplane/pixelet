@@ -463,33 +463,46 @@ impl Domain {
     }
 
     /// Every column of the top within the reach, and in each the chunks its
-    /// contents span, from the lowest to the highest: a column's contents are
-    /// one span of heights, so the chunks between hold something too.
+    /// contents span.
     fn find_roots(&self) -> Vec<Chunk> {
         let n = (self.far / chunk_span_of(TOP_LEVEL)).ceil() as i64 + 1;
         let foot = Pvf3 { i: self.foot, ..Pvf3::default() };
-        let span = chunk_span_of(TOP_LEVEL);
         let mut out = Vec::new();
         for dy in -n..=n {
             for dx in -n..=n {
                 let column = Chunk::of(TOP_LEVEL, &foot).beside(dx, dy, 0);
-                let (lo, hi) = Self::heights(column.page(), column.column()).unwrap_or((self.ground, self.ground));
-                let z0 = column.z_range().0;
-                let (k0, k1) = (((lo - z0) / span).floor() as i64, ((hi - z0) / span).floor() as i64);
-                for dz in k0..=k1 {
-                    let c = column.beside(0, 0, dz);
-                    if self.occupied(c).is_some() && self.nearest_to(c) < self.far {
-                        out.push(c);
-                    }
-                }
+                out.extend(self.spanned(column, i64::MIN, i64::MAX).filter(|&c| self.nearest_to(c) < self.far));
             }
         }
         out
     }
 
-    /// The chunks under `c` that hold anything.
+    /// The chunks of `column`'s column its contents span, from the lowest to
+    /// the highest, those between `from` and `to` in its level's chunks: a
+    /// column's contents are one span of heights, so the chunks between the
+    /// two it ends in hold something too.
+    fn spanned(&self, column: Chunk, from: i64, to: i64) -> impl Iterator<Item = Chunk> + '_ {
+        let (lo, hi) = Self::heights(column.page(), column.column()).unwrap_or((self.ground, self.ground));
+        let span = chunk_span_of(column.level());
+        let (base, k0, k1) = (column.z_range().0, (lo / span).floor() as i64, (hi / span).floor() as i64);
+        let base = (base / span).round() as i64;
+        (k0.max(from)..=k1.min(to)).map(move |k| column.beside(0, 0, k - base)).filter(|&c| self.occupied(c).is_some())
+    }
+
+    /// The chunks under `c` that hold anything. Each of the four columns
+    /// under it reads its own heights, and where ground finer than `c`'s
+    /// reaches past `c`'s top or its floor — a peak the coarser level
+    /// averaged under its ceiling — the chunks it reaches into are `c`'s if
+    /// nothing in `c`'s column is past it, since nothing else would ever
+    /// split into them, and the peak would stand cut. So every chunk of a
+    /// finer level is under exactly one chunk of the level over it, the one
+    /// it lies in or the one its column's contents end in.
     pub fn children(&self, c: Chunk) -> impl Iterator<Item = Chunk> + '_ {
-        c.children().into_iter().filter(|&k| self.occupied(k).is_some())
+        let z = c.node().1[2];
+        let top = self.occupied(c.beside(0, 0, 1)).is_none();
+        let floor = self.occupied(c.beside(0, 0, -1)).is_none();
+        let (from, to) = (if floor { i64::MIN } else { 2 * z }, if top { i64::MAX } else { 2 * z + 1 });
+        c.children().into_iter().filter(move |k| k.node().1[2] == 2 * z).flat_map(move |column| self.spanned(column, from, to))
     }
 
     /// The chunks the rule draws under this view's criterion, counted, and
