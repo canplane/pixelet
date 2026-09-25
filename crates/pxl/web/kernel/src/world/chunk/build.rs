@@ -178,8 +178,9 @@ impl Chunk {
         L2_IDX(self.base())
     }
 
-    /// The page the chunk is drawn from, where it is resident: a chunk is
-    /// mounted from a resident page, which stays until the chunk goes.
+    /// The page the chunk is drawn from, while it is resident: a page is
+    /// found by its key, so one gone, or whose record another page now holds,
+    /// is none and never another page's bytes.
     fn page(&self) -> Option<&'static Terrain> {
         Terrain::pyramid().get(self.at.page())
     }
@@ -559,7 +560,13 @@ impl Builder {
 
     fn advance_runs(&mut self, world: &mut World, id: u32) -> Progress {
         let c = &self.chunks[&id];
-        let Some(page) = c.page() else { return Progress::Blocked };
+        // A page gone under a scan: the scan is given up and the slot with
+        // it, since held, it is every other chunk's wait, and the page may
+        // not come back before the chunk goes.
+        let Some(page) = c.page() else {
+            self.abort_scan_of(world, id);
+            return Progress::Blocked;
+        };
         if c.level() > 0 {
             return self.level_runs(world, id, page);
         }

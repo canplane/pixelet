@@ -63,7 +63,6 @@ use crate::world::pyramid::{Domain, Layer};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::hierarchy::share;
 use pxl_spec::space::indexer::L2_IDX;
-use pxl_spec::space::pyramid::LevelPage;
 
 /// The sphere a chunk nothing has measured is culled by.
 const APPROXIMATE_CHUNK_RADIUS: f64 = chunk_span_of(0) * 0.75;
@@ -634,9 +633,6 @@ pub struct Scheduler {
     retained_off: f64,
     pub census: Census,
     counts: ChunkCounts,
-    /// Pages whose records have gone since the last tick, whose chunks stop
-    /// building before anything else in the next.
-    evicted: Vec<LevelPage>,
     /// The mounted chunks a pass finds leaving, before they are let go.
     gone: Vec<Chunk>,
     next_mount_id: u32,
@@ -771,7 +767,6 @@ impl Scheduler {
             retained_off: 0.0,
             census: Census::default(),
             counts: ChunkCounts::default(),
-            evicted: Vec::new(),
             gone: Vec::with_capacity(MAX_CHUNKS),
             next_mount_id: MOUNT_ID_BASE,
             selected_for: None,
@@ -917,8 +912,9 @@ impl Scheduler {
     /// Every chunk's sources against what it was built from: a chunk whose
     /// tiers' sources moved is told again, and one whose decor's did has its
     /// decor rebuilt, the tiers untouched. The terrain page is not a source
-    /// that changes: a bake is the same whenever it is fetched, and a
-    /// mounted chunk's page stays resident until the chunk unmounts.
+    /// that changes: a bake is the same whenever it is fetched. A page that
+    /// goes is no change either: its chunks leave the cover, and so go stale,
+    /// and a build of one finds no page by its key and waits (build.rs).
     pub fn sources_step(&mut self, world: &mut World) {
         let edits = render_edits();
         for i in 0..self.slots.len() {
@@ -1128,19 +1124,6 @@ impl Scheduler {
             .filter_map(|s| s.decor_of(shown_cube(s), s.layout_generation).map(|d| (s.chunk, s.base_x(), s.base_y(), d)))
     }
 
-    /// A page's terrain tile arrived, or left. Once a record has gone — let
-    /// go, or taken by another page whose bytes now lie where this page's
-    /// did — nothing may be built from it again: a build would read what is no
-    /// longer its page. What its chunks have built stays drawn, since the
-    /// ground they cover may have nothing else to draw it yet; they go stale
-    /// and leave as any stale chunk does, once covered (`retire`).
-    pub fn page(&mut self, page: LevelPage, present: bool) {
-        if !present {
-            self.evicted.push(page);
-        }
-        self.view_dirty = true;
-    }
-
     /// The counts since the last frame sample, taken.
     pub fn take_counts(&mut self) -> ChunkCounts {
         core::mem::take(&mut self.counts)
@@ -1270,22 +1253,6 @@ impl Scheduler {
             self.add(world, id, k);
             self.counts.added += 1;
         }
-    }
-
-    /// Stops every chunk of a page whose record has gone, before anything of
-    /// the tick can build one: stale, its scan and bake given up, what it has
-    /// built still drawn (`page` says why).
-    fn stop_evicted(&mut self, world: &mut World) {
-        if self.evicted.is_empty() {
-            return;
-        }
-        for (k, &i) in self.index.iter() {
-            if self.evicted.contains(&k.page()) {
-                self.slots[i].set(STALE, true);
-                self.builder.want(world, self.slots[i].id, [None, None]);
-            }
-        }
-        self.evicted.clear();
     }
 
     /// The device's meshes are gone — the arena was made anew, the device with
@@ -1472,7 +1439,6 @@ impl Scheduler {
         }
         let full_recheck = self.view_dirty;
 
-        self.stop_evicted(world);
         self.lose_meshes();
         self.mount(world);
         self.refresh(&frame);

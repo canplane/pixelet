@@ -8,10 +8,10 @@
 use pxl_spec::space::indexer::{FROM_L2_IDX, L1, L2, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, TOP_LEVEL};
+use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, TOP_LEVEL};
 
 use crate::global::Global;
-use crate::kernel::{kernel, with_world};
+use crate::kernel::with_world;
 use crate::layer::object::store::object_col_revision;
 use crate::world::change::{bump_world, world_changes, DECOR_CHUNK, TIERS_CHUNK};
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
@@ -29,11 +29,6 @@ pub fn chunk_sources_step() {
     if core::mem::take(SOURCES_CHANGED.get(|| false)) {
         with_world(|world, sched| sched.sources_step(world));
     }
-}
-
-/// Whether `page` has a terrain tile chunks can be mounted from.
-pub fn chunk_page(page: LevelPage, present: bool) {
-    kernel().sched.page(page, present);
 }
 
 /// Whether a chunk of `level` at `base` draws the objects of column `col`
