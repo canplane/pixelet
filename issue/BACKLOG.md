@@ -38,16 +38,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     canvas's device pixels and the field of view, and where a screen needs
     more than the tables are sized for, τ rises rather than the rule
     breaking. Planned 2026-09-25, held.
-  - **Decoration by the same rule.** Decor is scattered from z16 pages
-    only, so it ends at z15's split distance (384 u) whatever a kind's
-    own reach; proposed: each chunk scatters from its own level's page, a
-    kind present while its instance covers τ, thinned and scaled up with
-    distance, seeded from a leaf cell so a level change does not move it.
   - **No level is a floor.** z16 is terrain's atom and no more to the
-    shared rule, whose levels go below it; decor scattered from z16 pages
-    only and `LEAF_TOPIC` on z16's table still treat it as special.
+    shared rule, whose levels go below it; `LEAF_TOPIC` on z16's table is
+    what still names it.
   - **A tier change crossfades.** It switches at its threshold; the
-    secondary tier and its weight are kept but unused.
+    secondary tier and its weight are kept but unused. Decor changes with
+    it: above z16 a kind's footing and a transport-aligned kind's heading
+    are read off the level's cells, so an instance can appear, go or turn
+    at a level change, as the ground under it does.
   - **The window's depth.** `WINDOW_LEVELS` is 5, so from low over the
     ground the far ground ends at the coarsest level's reach, short of the
     horizon.

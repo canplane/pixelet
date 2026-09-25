@@ -244,7 +244,7 @@ impl ChunkNode {
             show_structures: settings.show_structures,
             textured: settings.texture_pack,
             objects_revision: objects_revision_of(page.level, base_i),
-            decor_revision: decor_col_revision(col_idx),
+            decor_revision: decor_revision_of(page.level, base_i),
             show_decor: settings.show_decor,
         }
     }
@@ -295,12 +295,7 @@ impl ChunkNode {
     /// would reintroduce the needless cube rebuild — visible as a flicker — this
     /// split exists to avoid.
     fn on_decor_change(&mut self, queue: &mut Queue) {
-        // Decor is scattered from the leaves alone: a kind's extent puts it
-        // inside the reach z16 is drawn to, so a level chunk has none.
-        if self.page.level > 0 {
-            return;
-        }
-        let revision = decor_col_revision(self.col_idx);
+        let revision = decor_revision_of(self.page.level, self.base_i);
         let show_decor = settings_store().show_decor;
         if revision == self.decor_revision && show_decor == self.show_decor {
             return;
@@ -467,6 +462,23 @@ fn objects_revision_of(level: u32, base: IVec) -> u32 {
 
 /// Whether the objects of column `col` fold into the level-`level` chunk at
 /// `base`: its own cells, and the one-cell apron around them a fold reads.
+/// The decor revision of every column a chunk of `level` at `base` draws
+/// the placed decor of: the columns whose corner lies in it.
+fn decor_revision_of(level: u32, base: IVec) -> u32 {
+    if level == 0 {
+        return decor_col_revision(L2_IDX(base));
+    }
+    let span = chunk_span_of(level) as i64;
+    let (x0, y0) = (ivec::X(base), ivec::Y(base));
+    object_cols()
+        .into_iter()
+        .filter(|&c| {
+            let o = FROM_L2_IDX(c);
+            (x0..x0 + span).contains(&ivec::X(o)) && (y0..y0 + span).contains(&ivec::Y(o))
+        })
+        .fold(0u32, |acc, c| acc.wrapping_add(decor_col_revision(c)))
+}
+
 fn folds_into(level: u32, base: IVec, col: IVec) -> bool {
     // In units: a cell of the level, the chunk, and a column, which is a
     // leaf chunk.
@@ -526,15 +538,6 @@ pub enum BuildEvent {
         box_cnt: u32,
         heights: Heights,
     },
-}
-
-/// A leaf column, as a decor build reads it (Builder::leaf_source).
-#[derive(Clone, Copy)]
-pub struct LeafSource {
-    pub page: PageLanes,
-    pub tx0: u32,
-    pub ty0: u32,
-    pub show_structures: bool,
 }
 
 /// A terrain page's lanes, as addresses into the memory.
@@ -724,16 +727,12 @@ impl Builder {
     /// The leaf column at `base`, a chunk corner, as a decor build reads it:
     /// its page's lanes and where it starts in them, and the structure
     /// setting. Resident or not, whichever level draws the ground there.
-    pub fn leaf_source(&self, base: IVec) -> Option<LeafSource> {
-        let cell = Cell::of(0, &pxl_spec::space::pvf3::Pvf3 { i: base, ..Default::default() });
-        let (leaf, first) = (cell.page(), cell.index());
-        let page = Terrain::pyramid().get(leaf).map(page_lanes)?;
-        Some(LeafSource {
-            page,
-            tx0: first % PAGE_CELLS,
-            ty0: first / PAGE_CELLS,
-            show_structures: settings_store().show_structures,
-        })
+    /// Where chunk `id` starts in its page, the page's lanes and the
+    /// structure setting it is drawn under: the ground its decor is
+    /// scattered over, at any level. None while its page has not come.
+    pub fn ground_of(&self, id: u32) -> Option<(u32, u32, PageLanes, bool)> {
+        let c = self.chunks.get(&id)?;
+        Some((c.tx0, c.ty0, c.page?, c.show_structures))
     }
 
     /// What chunk `id` is made of, for a decor build: its corner, the column
@@ -780,6 +779,11 @@ impl Builder {
     /// The hidden entry's band and packed position, when it is in the column `key`.
     pub fn hide_in(&self, key: IVec) -> Option<(i32, u32)> {
         self.hide.filter(|h| h.0 == key).map(|h| (h.1, h.2))
+    }
+
+    /// The hidden entry, by its column, band and packed position.
+    pub fn hide_edit(&self) -> Option<(IVec, i32, u32)> {
+        self.hide
     }
 
     /// The chunks holding the scan slot and the bake slot.

@@ -179,11 +179,6 @@ pub fn window() -> std::ops::Range<u32> {
     eye().map_or(0..0, |_| window_for(eye_height()))
 }
 
-/// How far the leaves are drawn for certain, and so decoration, which is
-/// scattered from them: level 1's split distance, inside which every chunk
-/// the window reaches is split to the leaves.
-pub const DECOR_REACH: f64 = split_distance(1);
-
 /// The page `anchor` stands in at `level`: what every ring is centred on.
 pub fn centre_page(level: u32, anchor: IVec) -> LevelPage {
     LevelPage::over(level, TO_XY(L3_IDX(anchor)))

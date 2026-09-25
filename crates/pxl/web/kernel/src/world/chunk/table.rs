@@ -19,9 +19,11 @@
 //! tiers of a blend are weighted, a tier's mesh handed over and a tier to let
 //! go. The nodes hold the meshes; this holds every decision about them.
 
-use pxl_spec::space::indexer::L3_IDX;
+use pxl_spec::space::indexer::FROM_L2_IDX;
 use pxl_spec::space::pyramid::{chunk_span_of, Cell, CHUNK_CELLS, GROUND, PAGE_CELLS, PAGE_CHUNKS};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
+
+use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
 
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
@@ -42,7 +44,7 @@ use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats
 use crate::global::Global;
 use crate::io::load::Models;
 use crate::layer::billboard::field::Billboards;
-use crate::layer::decor::build::{decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind};
+use crate::layer::decor::build::{decor_density, DecorBuild, Ground, Kind as DecorKind, Placed};
 use crate::layer::decor::instance::{decor_groups, DecorScratch};
 use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::frame_gizmo::DebugLines;
@@ -585,9 +587,10 @@ pub struct Scheduler {
     /// The decor kinds, in the order decor/build.rs taught them — the order of
     /// the groups in every decor block.
     decor_kinds: Vec<DecorKind>,
-    /// A decor build's leaf columns' samples, one a column, kept for their
-    /// capacity.
-    decor_samples: Vec<ChunkSample>,
+    /// A decor build's sample of its chunk's ground, and its chunk's objects
+    /// folded to its level, kept for their capacity.
+    decor_sample: ChunkSample,
+    decor_folded: HashMap<[i64; 3], u32>,
     /// Where a decor build gathers its instances, made at the first build:
     /// the scheduler is made before the sections are.
     decor_scratch: Option<DecorScratch>,
@@ -696,7 +699,8 @@ impl Scheduler {
             to_mount: VecDeque::new(),
             drawn: None,
             decor_kinds: Vec::new(),
-            decor_samples: Vec::new(),
+            decor_sample: ChunkSample::default(),
+            decor_folded: HashMap::new(),
             decor_scratch: None,
             refused_seen: 0,
             scratch: Scratch::default(),
@@ -711,10 +715,6 @@ impl Scheduler {
 
     /// Teaches a decor kind.
     pub fn decor_kind(&mut self, kind: DecorKind) {
-        // Decoration is scattered from the leaves alone, and the rule draws
-        // leaves only out to DECOR_REACH for certain: a kind whose own reach
-        // runs past that is cut where the leaves end, until decoration is
-        // scattered at whatever level the rule draws its ground at.
         self.decor_kinds.push(kind);
     }
 
@@ -923,61 +923,87 @@ impl Scheduler {
             if self.slots[i].decor_of(cube, generation).is_some() {
                 continue;
             }
-            // Decor is scattered from the leaves whatever level draws the
-            // ground: the leaf columns this chunk covers, at the world step
-            // it is drawn at. A level whose step no kind is drawn at has none,
-            // and past that nothing is built for it.
+            // A chunk scatters from its own page at its own level, at the
+            // world step its cube is. A chunk above z16 whose step no kind is
+            // drawn at has none: its placed decor is past the pixels a kind
+            // is drawn at too.
             let world_step = GROUND.scale(0).count_in(cube.max(GROUND.scale(0)));
             let scatters = show_decor && self.decor_kinds.iter().any(|k| k.density > 0.0 && decor_density(k.extent, world_step) > 0.0);
             if level > 0 && !scatters {
                 continue;
             }
-            let n = 1i64 << level;
-            let mut sources = Vec::with_capacity((n * n) as usize);
-            for cy in 0..n {
-                for cx in 0..n {
-                    let leaf = chunk_span_of(0) as i64;
-                    let base = ivec::gather(x0 + cx * leaf, y0 + cy * leaf, 0);
-                    if let Some(source) = self.builder.leaf_source(base) {
-                        sources.push((base, source, ((cx * leaf) as f64, (cy * leaf) as f64)));
-                    }
+            let source = self.builder.ground_of(id);
+            // SAFETY: the chunk's page, resident while the chunk is, read
+            // within the command.
+            let view = source.map(|(_, _, page, _)| unsafe { Builder::page_view(world, page) });
+            if let (Some((tx0, ty0, _, show)), Some(view)) = (source, view.as_ref()) {
+                if scatters {
+                    self.decor_sample.read(view, world.materials, tx0, ty0, hidden_ground(show));
                 }
             }
-            if self.decor_samples.len() < sources.len() {
-                self.decor_samples.resize_with(sources.len(), ChunkSample::default);
-            }
-            // SAFETY: each a resident leaf page, read within the command.
-            let views: Vec<_> = sources.iter().map(|(_, src, _)| unsafe { Builder::page_view(world, src.page) }).collect();
-            if scatters {
-                for (k, (_, src, _)) in sources.iter().enumerate() {
-                    self.decor_samples[k].read(&views[k], world.materials, src.tx0, src.ty0, hidden_ground(src.show_structures));
-                }
-            }
-            let columns: Vec<(DecorChunk, &ChunkSample)> = sources
-                .iter()
-                .enumerate()
-                .map(|(k, (base, src, (ox, oy)))| {
-                    let col_idx = L2_IDX(*base);
-                    let (col_x, col_y) = (ivec::X(*base), ivec::Y(*base));
-                    let chunk = DecorChunk {
-                        page: &views[k],
-                        page_idx: L3_IDX(*base),
+            // Every column whose corner lies in the chunk: its own, at z16.
+            let span = chunk_span_of(level) as i64;
+            let placed: Vec<Placed> = (0..world.store.chunk_count())
+                .map(|k| world.store.chunk_key(k))
+                .filter_map(|col_idx| {
+                    let o = FROM_L2_IDX(col_idx);
+                    let (col_x, col_y) = (ivec::X(o), ivec::Y(o));
+                    ((x0..x0 + span).contains(&col_x) && (y0..y0 + span).contains(&col_y)).then(|| Placed {
                         col_idx,
                         col_x,
                         col_y,
-                        tx0: src.tx0,
-                        ty0: src.ty0,
-                        show_decor,
                         hide: self.builder.hide_in(col_idx),
-                        ox: *ox,
-                        oy: *oy,
+                        ox: (col_x - x0) as f64,
+                        oy: (col_y - y0) as f64,
                         hittable: level == 0,
-                    };
-                    (chunk, &self.decor_samples[k])
+                    })
                 })
                 .collect();
+            // Above z16 the objects are drawn folded to the level's cell, the
+            // fold the chunk's runs are made with (node.rs `level_runs`): what
+            // keeps a candidate off a cell is that fold, as a z16 chunk's is
+            // the store's own cell.
+            self.decor_folded.clear();
+            if level > 0 && scatters {
+                let columns: Vec<Column> = placed
+                    .iter()
+                    .filter_map(|p| {
+                        world.store.entries(p.col_idx).map(|entries| Column {
+                            x0: p.col_x,
+                            y0: p.col_y,
+                            entries,
+                        })
+                    })
+                    .collect();
+                let hide = self.builder.hide_edit().map(|(col, band, pos)| {
+                    let o = FROM_L2_IDX(col);
+                    (ivec::X(o), ivec::Y(o), band, pos)
+                });
+                fold_columns(world.painter, &columns, GROUND.scale(level), hide, &mut self.decor_folded);
+            }
+            // The surface the tier is drawn with, which an instance stands
+            // on: its tier is built before its decor (`commit`).
+            let surface = self.slots[i].tier(cube, generation).map(|t| Drawn {
+                level,
+                base: ivec::gather(x0, y0, 0),
+                step: mesh_step(cube, level),
+                tops: &self.meshes.surface[t.slot.index],
+                heights: t.heights,
+            });
+            let ground = source.zip(view.as_ref()).map(|((tx0, ty0, _, _), view)| Ground {
+                page: view,
+                sample: &self.decor_sample,
+                level,
+                x0,
+                y0,
+                tx0,
+                ty0,
+                col_idx: (level == 0).then(|| L2_IDX(ivec::gather(x0, y0, 0))),
+                surface: surface.as_ref(),
+                folded: (level > 0).then_some(&self.decor_folded),
+            });
             let Some(scratch) = self.decor_scratch.as_mut() else { return false };
-            let built = DecorBuild::build(scratch, &self.decor_kinds, &columns, world.store, world_step);
+            let built = DecorBuild::build(scratch, &self.decor_kinds, ground.as_ref(), &placed, world.store, world_step, show_decor);
             let bytes = built.bytes();
             let Some((at, bytes)) = alloc(bytes) else {
                 self.builder.stat.starved += 1;
@@ -2392,6 +2418,13 @@ impl Drawn<'_> {
     pub fn cell_level(&self) -> u32 {
         debug_assert!(self.step.is_power_of_two(), "a ladder step is a power of two");
         self.level + self.step.trailing_zeros()
+    }
+
+    /// The top of the drawn surface under a point `x`, `y` units from the
+    /// chunk's corner: the block's it lies in.
+    pub fn top_under(&self, x: f64, y: f64) -> Option<f64> {
+        let unit = self.step as f64 * GROUND.scale(self.level).side();
+        self.top((x / unit) as u32, (y / unit) as u32)
     }
 
     /// The top of the drawn surface at the centre of the `step` block at

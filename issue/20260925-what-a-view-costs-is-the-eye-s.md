@@ -182,9 +182,14 @@ and places:
 
 Not yet:
 
-- Objects' sub-cell tiers are not levels of the rule, and decoration is
-  scattered from the leaves alone, so it ends where the rule stops drawing
-  them (level 1's split distance), nearer than a kind's own reach.
+- Objects' sub-cell tiers are not levels of the rule. Built later the same
+  day: the rule reaches below z16 and a z16 chunk folds its objects to the
+  cube its distance wants.
+- Decoration is scattered from the leaves alone, so it ends where the rule
+  stops drawing them (level 1's split distance), nearer than a kind's own
+  reach. Built later the same day: a chunk scatters from its own level's
+  page, each level cell's candidate that of a z16 cell under it, so a
+  zoom keeps the instances it had and thins them a quarter a level.
 - A tier changes at its threshold with no crossfade; the machinery for one
   (a secondary tier and its weight) is kept but unused.
 - The window is WINDOW_LEVELS deep, so from low over the ground the far
