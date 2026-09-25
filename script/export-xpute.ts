@@ -21,7 +21,7 @@
 // that no build output can come along. Four manifests are written instead of
 // copied, because pixelet's own say things that are not xpute's: the Cargo
 // workspace (whose members and header describe pxl), `deno.jsonc` (28 tasks,
-// all of them pixelet's), the notices (shadcn is the shell's) and the license
+// all of them pixelet's), the notices (pixelet's point into its shell) and the license
 // — pixelet's is proprietary and xpute is MIT.
 //
 // The export carries the commit it came from. It cannot stop someone from

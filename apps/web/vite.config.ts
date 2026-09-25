@@ -9,7 +9,6 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
 import svgr from "vite-plugin-svgr";
 
 import { DEV_PROXY_ROUTES } from "./src/config/route.ts";
@@ -369,7 +368,6 @@ export default defineConfig(({ mode }) => {
       const_enum([path.resolve(__dirname, "src"), path.resolve(__dirname, "..", "..", "packages")]),
       deno(),
       react(),
-      tailwindcss(), // Tailwind
       svgr({ svgrOptions: { titleProp: true } }), // SVGR
 
       // monorepo core packages change => force full reload (no HMR)
@@ -377,7 +375,30 @@ export default defineConfig(({ mode }) => {
     ],
 
     resolve: {
-      alias: { "@": path.resolve(__dirname, "src") },
+      alias: [
+        { find: "@", replacement: path.resolve(__dirname, "src") },
+        // The shell imports React Native's API, which deno.jsonc resolves to
+        // React Native itself for the type-check; a web bundle takes the
+        // same names from react-native-web. Exact, so a package under
+        // `react-native/…` is not rewritten into one that does not exist.
+        { find: /^react-native$/, replacement: "react-native-web" },
+        // react-native-svg picks its platform by file suffix, which a web
+        // bundle reached through Deno's resolver never sees: the package
+        // resolves to its CommonJS entry, whose native half reaches into
+        // React Native's Flow sources. The web half is named instead.
+        { find: /^react-native-svg$/, replacement: path.resolve(__dirname, "../../node_modules/react-native-svg/lib/module/ReactNativeSVG.web.js") },
+        // Where a bundled image's address is kept: React Native's own
+        // registry reads it off React Native, which the web does not run, and
+        // react-native-web keeps the same registry under this name.
+        { find: /^@react-native\/assets-registry\/registry$/, replacement: path.resolve(__dirname, "../../node_modules/react-native-web/dist/modules/AssetRegistry/index.js") },
+      ],
+      // Inside such a library, a file per platform stands beside the shared
+      // one (`elements.web.js` beside `elements.js`), and a bundler for a
+      // platform is expected to prefer that platform's.
+      extensions: [".web.mjs", ".web.js", ".web.ts", ".web.tsx", ".mjs", ".js", ".mts", ".ts", ".jsx", ".tsx", ".json"],
+    },
+    optimizeDeps: {
+      rolldownOptions: { resolve: { extensions: [".web.mjs", ".web.js", ".web.ts", ".web.tsx", ".mjs", ".js", ".mts", ".ts", ".jsx", ".tsx", ".json"] } },
     },
 
     // A worker is bundled by its own Rollup pass, which gets none of the
@@ -446,6 +467,10 @@ export default defineConfig(({ mode }) => {
       __APP_NAME__: JSON.stringify("pixelet"),
 
       __ROLE__: JSON.stringify("client"),
+
+      // react-native-web's Animated reads React Native's `global`, which a
+      // browser calls `globalThis`.
+      global: "globalThis",
     },
   };
 });

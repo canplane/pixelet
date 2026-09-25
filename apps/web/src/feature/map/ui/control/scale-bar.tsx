@@ -1,76 +1,63 @@
 // @pxl/web/feature/map/ui/control/scale-bar.tsx
 
 import { useTranslation } from "react-i18next";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Command } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
 
-import { cn } from "@/shared/lib/util/cn.ts";
-import { MotionContainer } from "@/shared/ui/motion/motion-container.tsx";
+import { color, font } from "@/shared/ui/theme.ts";
 
-const SCALE_BAR_TICK_PX = 6;
-const SCALE_BAR_PAD_PX = 3;
+const TICK_PX = 6;
+const LINE_PX = 1.5;
+/** The dark edge each stroke is drawn on, so the bar reads over any ground. */
+const EDGE_PX = 1;
+const EDGE = "rgba(0, 0, 0, 0.9)";
 
+/** How far a distance on the map spans on screen, at the camera's zoom; a
+ * tap puts the zoom back. Hidden at the default zoom. */
 export function MapScaleBar() {
   const { t } = useTranslation();
   const { total_meters, bar_width_px, is_default_zoom } = useKernel((s) => s.scale_bar);
+  if (is_default_zoom) return null;
+
+  // SI units are case-sensitive: m (meter) != M (mega), km != KM — the
+  // label must not be forced to upper case.
   const label: string = total_meters >= 1000 ? `${total_meters / 1000}km` : `${total_meters}m`;
-  const reset_dist = () => kernel_command(Command.INPUT_RESET_DIST);
 
   return (
-    // layout={false}: MotionContainer's motion.div defaults to layout={true},
-    // which fakes a bounding-box size change via a transform: scale() —
-    // visibly stretches this bar's text glyphs on every zoom tick. Animating
-    // `width` directly below instead keeps glyphs undistorted.
-    <MotionContainer show={!is_default_zoom} variant="riseUp" delay={0.2} layout={false}>
-      <div
-        onClick={reset_dist}
-        // box-shadow/text-shadow, not filter: drop-shadow — a filter
-        // interacts badly with transforms and opacity on WebKit (clips a
-        // transformed child, vanishes during an opacity fade) in a way
-        // Chromium does not.
-        className="group flex flex-col items-center cursor-pointer transition-all duration-300 active:scale-95 pt-1 pb-2 min-w-[44px]"
-        title={t("map.scale_bar.reset_zoom")}
-      >
-        <svg
-          width={bar_width_px + SCALE_BAR_PAD_PX * 2}
-          height={SCALE_BAR_TICK_PX + SCALE_BAR_PAD_PX * 2}
-          viewBox={`0 0 ${bar_width_px + SCALE_BAR_PAD_PX * 2} ${SCALE_BAR_TICK_PX + SCALE_BAR_PAD_PX * 2}`}
-          aria-hidden="true"
-        >
-          {(() => {
-            const left = SCALE_BAR_PAD_PX + 0.5;
-            const right = SCALE_BAR_PAD_PX + bar_width_px - 0.5;
-            const top = SCALE_BAR_PAD_PX;
-            const bottom = SCALE_BAR_PAD_PX + SCALE_BAR_TICK_PX;
-            const mid = top + SCALE_BAR_TICK_PX / 2;
-            const d = `M${left} ${top}V${bottom} M${left} ${mid}H${right} M${right} ${top}V${bottom}`;
-            return (
-              <>
-                <path d={d} stroke="rgba(0,0,0,0.9)" strokeWidth={3.5} fill="none" strokeLinecap="square" />
-                <path
-                  d={d}
-                  className={cn("transition-colors", is_default_zoom ? "stroke-amber-400" : "stroke-white")}
-                  strokeWidth={1.5}
-                  fill="none"
-                  strokeLinecap="square"
-                />
-              </>
-            );
-          })()}
-        </svg>
-
-        <span
-          className={cn(
-            // SI units are case-sensitive: m (meter) != M (mega), km != KM —
-            // the label string must not be force-uppercased.
-            "text-[8px] font-bold -mt-0.5 tracking-widest [text-shadow:1px_0_0_rgba(0,0,0,0.9),-1px_0_0_rgba(0,0,0,0.9),0_1px_0_rgba(0,0,0,0.9),0_-1px_0_rgba(0,0,0,0.9),1px_1px_0_rgba(0,0,0,0.9),-1px_1px_0_rgba(0,0,0,0.9),1px_-1px_0_rgba(0,0,0,0.9),-1px_-1px_0_rgba(0,0,0,0.9)] transition-colors",
-            is_default_zoom ? "text-amber-400" : "text-white",
-          )}
-        >
-          {label}
-        </span>
-      </div>
-    </MotionContainer>
+    <Pressable
+      onPress={() => kernel_command(Command.INPUT_RESET_DIST)}
+      accessibilityRole="button"
+      accessibilityLabel={t("map.scale_bar.reset_zoom")}
+      style={({ pressed }) => [styles.root, pressed && styles.pressed]}
+    >
+      <View style={[styles.bar, { width: bar_width_px }]}>
+        <View style={[styles.stroke, styles.tick, { left: 0 }]} />
+        <View style={[styles.stroke, styles.line]} />
+        <View style={[styles.stroke, styles.tick, { right: 0 }]} />
+      </View>
+      <Text style={styles.label}>{label}</Text>
+    </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { alignItems: "center", paddingTop: 4, paddingBottom: 8, minWidth: 44 },
+  pressed: { transform: [{ scale: 0.95 }] },
+  bar: { height: TICK_PX + 2 * EDGE_PX },
+  stroke: { position: "absolute", backgroundColor: color.white, borderWidth: EDGE_PX, borderColor: EDGE, boxSizing: "content-box" },
+  tick: { top: 0, width: LINE_PX, height: TICK_PX },
+  line: { left: 0, right: 0, top: TICK_PX / 2 - LINE_PX / 2, height: LINE_PX },
+  label: {
+    marginTop: 1,
+    fontFamily: font.family,
+    fontSize: 8,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    color: color.white,
+    textShadowColor: EDGE,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 2,
+  },
+});

@@ -1,9 +1,11 @@
 // @pxl/web/feature/setting/section/about.tsx
 
-import { Box } from "lucide-react";
+import { Box } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
+import { StyleSheet, Text, View } from "react-native";
 
-import { SectionTitle } from "@/feature/setting/row.tsx";
+import { SectionTitle, settingText } from "@/feature/setting/row.tsx";
+import { color, font } from "@/shared/ui/theme.ts";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
 import { PUBLISHED_VERSION } from "@/config/route.ts";
 import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
@@ -39,27 +41,34 @@ function buildLabel(): string {
 export function AboutSection() {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col gap-1">
+    <View style={styles.section}>
       <SectionTitle>{t("settings.about.section_title")}</SectionTitle>
-      <div className="flex flex-col gap-2 py-1 text-[12px] text-muted-foreground">
-        <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
-          <Box className="size-5" aria-hidden="true" />
-          <span>pixelet</span>
-        </div>
+      <View style={styles.body}>
+        <View style={styles.name}>
+          <Box size={20} color={color.foreground} />
+          <Text style={styles.nameText}>pixelet</Text>
+        </View>
 
-        <span>{t("settings.about.tagline")}</span>
+        <Text style={settingText.small}>{t("settings.about.tagline")}</Text>
 
-        <span>© 2025 pixelet. All rights reserved.</span>
+        <Text style={settingText.small}>© 2025 pixelet. All rights reserved.</Text>
 
-        <div className="flex flex-col text-muted-foreground/70">
-          <span>
+        <View>
+          <Text style={settingText.faint}>
             {BUILD_NUMBER}
             {APP_ENV !== "production" && ` (${ENV_SHORT[APP_ENV] ?? APP_ENV})`}
             {` · ${buildLabel()}`}
-          </span>
-          <span>{dataLabel()}</span>
-        </div>
-      </div>
-    </div>
+          </Text>
+          <Text style={settingText.faint}>{dataLabel()}</Text>
+        </View>
+      </View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  section: { gap: 4 },
+  body: { gap: 8, paddingVertical: 4 },
+  name: { flexDirection: "row", alignItems: "center", gap: 8 },
+  nameText: { fontFamily: font.family, fontSize: 15, fontWeight: "600", color: color.foreground },
+});

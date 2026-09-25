@@ -10,7 +10,7 @@
  */
 
 import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
+import { AppRegistry, type RootTag } from "react-native";
 
 import { App } from "@/app/app.tsx";
 import { bootstrapApp } from "@/app/bootstrap.ts";
@@ -27,11 +27,16 @@ try {
 
   const container = document.getElementById("root");
   if (!container) throw new Error("web: missing root container: #root");
-  createRoot(container).render(
+  // Registered as a device's build registers it, which is also what gives
+  // the tree a root that fills the page as a device's window.
+  AppRegistry.registerComponent("pixelet", () => () => (
     <StrictMode>
       <App />
-    </StrictMode>,
-  );
+    </StrictMode>
+  ));
+  // A device's root is a native tag; react-native-web's is the element it
+  // renders into, which React Native's types have no word for.
+  AppRegistry.runApplication("pixelet", { rootTag: container as unknown as RootTag, initialProps: {} });
 } catch (err) {
   console.error("[web] failed to start:", err);
 }

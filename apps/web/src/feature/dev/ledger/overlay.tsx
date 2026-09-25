@@ -17,8 +17,10 @@
  */
 
 import { useEffect, useState } from "react";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
-import { LedgerGauge } from "./gauge.tsx";
+import { alpha, color } from "@/shared/ui/theme.ts";
+import { gauge, LedgerGauge, Rule } from "./gauge.tsx";
 import { ledgerDrainLog, ledgerLogLongFrames } from "./log.ts";
 import { ledgerReportPrint, ledgerReportText } from "./report.ts";
 import { type Gauge, ledgerGaugeRead, ledgerReportRead } from "./view.ts";
@@ -31,11 +33,30 @@ import { SETTINGS } from "@/feature/setting/schema.ts";
 /** How often the stream is collected while it is on. */
 const DRAIN_MS = 500;
 
-const BUTTON = "pointer-events-auto flex-1 rounded border border-white/15 bg-white/5 py-1 text-white/60 transition-colors hover:bg-white/10 hover:text-white/90";
-/** start, when a window is stopped and one can begin; stop, while one is open. */
-const BUTTON_GO = "pointer-events-auto flex-1 rounded border border-emerald-400/40 bg-emerald-400/10 py-1 text-emerald-300 transition-colors hover:bg-emerald-400/20";
-const BUTTON_HALT = "pointer-events-auto flex-1 rounded border border-amber-400/40 bg-amber-400/10 py-1 text-amber-300 transition-colors hover:bg-amber-400/20";
-const BUTTON_OFF = "pointer-events-auto flex-1 rounded border border-white/10 bg-white/5 py-1 text-white/25";
+/** A button's tint: plain; go, when a window is stopped and one can begin;
+ * halt, while one is open; off, when there is nothing to press it for. */
+type Tint = "plain" | "go" | "halt" | "off";
+const TINT: Record<Tint, string> = {
+  plain: alpha(color.white, 0.6),
+  go: color.emerald500,
+  halt: color.amber400,
+  off: alpha(color.white, 0.25),
+};
+
+function PanelButton({ label, hint, tint = "plain", onPress, disabled }: { label: string; hint: string; tint?: Tint; onPress: () => void; disabled?: boolean }) {
+  const ink = TINT[tint];
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityHint={hint}
+      style={[styles.button, { borderColor: alpha(ink, 0.4), backgroundColor: alpha(ink, 0.1) }]}
+    >
+      <Text style={[gauge.text, { color: ink }]}>{label}</Text>
+    </Pressable>
+  );
+}
 
 /** How often the panel repaints. */
 const POLL_MS = 500;
@@ -62,6 +83,7 @@ export function LedgerOverlay() {
   const show = useKernel((s) => import.meta.env.DEV && s.settings[SETTINGS.show_ledger.key] === 1);
   const [logging, setLogging] = useState(false);
   const [g, setG] = useState<Gauge | null>(null);
+  const { height } = useWindowDimensions();
 
   useEffect(() => {
     if (!show) return;
@@ -109,8 +131,8 @@ export function LedgerOverlay() {
   const recording = g?.rec.recording === true;
 
   return (
-    <div className="pointer-events-none fixed left-2 top-[84px] z-50 max-h-[calc(100dvh-96px)] w-[228px] overflow-hidden rounded-lg bg-black/72 p-2.5 font-mono text-[10.5px] leading-[1.5] text-white/90 backdrop-blur-sm">
-      <div className="mb-1 font-semibold tracking-wide text-white/55">sched/ledger, last 10s</div>
+    <View style={[styles.panel, { maxHeight: height - 96 }]}>
+      <Text style={[gauge.text, styles.title]}>sched/ledger, last 10s</Text>
 
       {
         /* The buttons come before the numbers: on a phone the panel runs past
@@ -119,7 +141,7 @@ export function LedgerOverlay() {
           panel lets gestures through to the map, and a scrolling body would
           not. */
       }
-      <div className="mt-1 flex gap-1">
+      <View style={styles.buttons}>
         {
           /* start and stop are both present rather than one toggle: the dev
             overlay opens a window on mount so a cold-load stall is never
@@ -127,42 +149,52 @@ export function LedgerOverlay() {
             and then "start" is the button you cannot find when you want a
             clean window. */
         }
-        <button type="button" onClick={startWindow} title="clear everything and begin a fresh window" className={recording ? BUTTON : BUTTON_GO}>
-          start
-        </button>
-        <button
-          type="button"
-          onClick={() => kernel_command(Command.LEDGER_STOP)}
+        <PanelButton label="start" hint="clear everything and begin a fresh window" tint={recording ? "plain" : "go"} onPress={startWindow} />
+        <PanelButton
+          label="stop"
+          hint="freeze the window so exports are stable while you read them"
+          tint={recording ? "halt" : "off"}
           disabled={!recording}
-          title="freeze the window so exports are stable while you read them"
-          className={recording ? BUTTON_HALT : BUTTON_OFF}
-        >
-          stop
-        </button>
-      </div>
-      <div className="mt-1 flex gap-1">
-        <button type="button" onClick={() => void ledgerReportPrint(ledgerReportText(ledgerReportRead()))} title="print + copy a text report" className={BUTTON}>
-          report
-        </button>
-        <button type="button" onClick={ledgerTraceDownload} title="save the window as a Trace Event Format file for ui.perfetto.dev" className={BUTTON}>
-          trace
-        </button>
-        <button
-          type="button"
-          onClick={() => {
+          onPress={() => kernel_command(Command.LEDGER_STOP)}
+        />
+      </View>
+      <View style={styles.buttons}>
+        <PanelButton label="report" hint="print + copy a text report" onPress={() => void ledgerReportPrint(ledgerReportText(ledgerReportRead()))} />
+        <PanelButton label="trace" hint="save the window as a Trace Event Format file for ui.perfetto.dev" onPress={ledgerTraceDownload} />
+        <PanelButton
+          label={logging ? "log on" : "log"}
+          hint="stream each settled task, missed frame and long frame to the console"
+          onPress={() => {
             kernel_command(Command.LEDGER_LOG, encode_ledger_log({ on: !logging }));
             ledgerLogLongFrames(!logging);
             setLogging(!logging);
           }}
-          title="stream each settled task, missed frame and long frame to the console"
-          className={BUTTON}
-        >
-          {logging ? "log on" : "log"}
-        </button>
-      </div>
-      <div className="my-1 border-t border-white/10" />
+        />
+      </View>
+      <Rule />
 
-      <LedgerGauge g={g} />
-    </div>
+      <View style={{ pointerEvents: "none" }}>
+        <LedgerGauge g={g} />
+      </View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  // Under the settings button, and over the map's chrome.
+  panel: {
+    position: "absolute",
+    left: 8,
+    top: 84,
+    zIndex: 50,
+    width: 228,
+    overflow: "hidden",
+    borderRadius: 8,
+    padding: 10,
+    backgroundColor: alpha(color.black, 0.72),
+    pointerEvents: "box-none",
+  },
+  title: { marginBottom: 4, fontWeight: "600", letterSpacing: 0.5, color: alpha(color.white, 0.55) },
+  buttons: { flexDirection: "row", gap: 4, marginTop: 4 },
+  button: { flex: 1, alignItems: "center", paddingVertical: 4, borderWidth: 1, borderRadius: 4 },
+});

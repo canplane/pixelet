@@ -1,14 +1,17 @@
 // @pxl/web/feature/search/modal.tsx
 
 import type { f64 } from "@xpute/core/abi/word.ts";
-import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronLeft, X } from "lucide-react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { round } from "@xpute/core/math/scalar.ts";
 import { useTranslation } from "react-i18next";
 
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
+import { useSafeArea } from "@platform/safe-area.ts";
+import { Panel, PANEL_HEADER_PX } from "@/shared/ui/panel.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
+import { alpha, color, font, hairline } from "@/shared/ui/theme.ts";
 import { Command, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_snapshot } from "@/kernel/shell.ts";
 import { resolvePoiBadge } from "@/feature/search/poi-badge.ts";
@@ -77,33 +80,32 @@ function displayName(result: SearchResult, lang: string): string {
 function SubtitleRow(props: { label: string; distance: string | null }) {
   if (props.label === "" && props.distance === null) return null;
   return (
-    <span className="flex items-baseline gap-2 text-xs text-muted-foreground">
-      <span className="truncate">{props.label}</span>
-      {props.distance !== null && <span className="ml-auto shrink-0 tabular-nums">{props.distance}</span>}
-    </span>
+    <View style={styles.subtitle}>
+      <Text numberOfLines={1} style={[styles.small, styles.context]}>{props.label}</Text>
+      {props.distance !== null && <Text style={[styles.small, styles.distance]}>{props.distance}</Text>}
+    </View>
   );
 }
 
 function SectionHeader(props: { label: string }) {
-  return (
-    <div className="px-4 pt-3 pb-1.5 text-xs font-medium text-muted-foreground/70 uppercase tracking-wide">
-      {props.label}
-    </div>
-  );
+  return <Text style={styles.sectionHeader}>{props.label}</Text>;
 }
 
 /**
  * Forward search — the one world/ feature with no static bake behind it
  * (repository.ts's own top comment), so this always round-trips to the
- * live API. Lives in a right-side Sheet (same ModalManager-hosted pattern
+ * live API. Lives in a right-side panel (same ModalManager-hosted pattern
  * as SettingsModal/DrawerModal) rather than an always-visible floating bar
  * on the map itself — opened from CurrentAddress's own trigger
  * (top-overlays.tsx), since "where am I" and "where do I want to go" are
- * the same mental slot for a map.
+ * the same mental slot for a map. It is mounted fresh each time it opens,
+ * so a returning search starts empty: the last thing it almost never wants
+ * is last session's list for a place already visited.
  */
 export function SearchModal(props: BaseModalProps & SearchModalProps) {
-  const { open, onOpenChange } = props;
+  const { onOpenChange } = props;
   const { t, i18n } = useTranslation();
+  const { top } = useSafeArea();
   const lang = i18n.language.split("-")[0].toLowerCase();
 
   const [query, setQuery] = useState("");
@@ -111,34 +113,10 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
   // Where the distances on the rows are measured from, frozen at the moment
   // the query ran rather than read live. It is the same point the API ranked
   // against, so the numbers shown always agree with the order they are shown
-  // in — and a camera still drifting behind the open sheet cannot renumber a
+  // in — and a camera still drifting behind the open panel cannot renumber a
   // list the reader is looking at.
   const [origin, setOrigin] = useState<LonLat | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Sheet's own open/close animation still runs on the frame `open` flips —
-  // focusing synchronously in the same render would fight it, so this
-  // waits a tick, same as any "focus on open" pattern layered onto a
-  // portal-mounted dialog.
-  useEffect(() => {
-    if (!open) return;
-    const id = setTimeout(() => inputRef.current?.focus(), 50);
-    return () => clearTimeout(id);
-  }, [open]);
-
-  // Starting fresh each time beats resuming a stale query — the last
-  // thing a returning search almost never wants is last session's list
-  // for a place already visited.
-  useEffect(() => {
-    if (!open) {
-      setQuery("");
-      setResults([]);
-      setOrigin(null);
-      setLoading(false);
-    }
-  }, [open]);
 
   useEffect(() => {
     const q = query.trim();
@@ -189,124 +167,130 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
   const poiResults = results.filter((r) => r.kind === "poi");
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" hideClose className="sm:w-[380px] p-0 gap-0 flex flex-col bg-background text-foreground">
-        <div className="shrink-0 border-b border-border/60" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
-          <div className="flex h-14 items-center gap-2.5 px-4">
-            {
-              /* Doubles as the modal's own close trigger — a leading
-              magnifying-glass icon here was purely decorative, and the
-              trailing SheetClose it used to sit across from was a second
-              X right next to the "clear query" X, reading as one button
-              doing nothing. One `<` in the corner a search UI's own
-              back-navigation slot already occupies reads unambiguously as
-              "leave", with no second X anywhere in the row. */
-            }
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              aria-label={t("settings.close")}
-              className="-ml-2.5 flex size-[42px] items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer shrink-0"
-            >
-              <ChevronLeft className="size-5" />
-            </button>
-            <SheetTitle asChild>
-              <TextField
-                ref={inputRef}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t("map.search.placeholder")}
-                className="flex-1 min-w-0 bg-transparent outline-none"
-              />
-            </SheetTitle>
-            <SheetDescription className="sr-only">{t("map.search.placeholder")}</SheetDescription>
-            {
-              /* Lucide has no filled circle-X glyph (it's a pure
-              outline/stroke icon set) — composed by hand: a solid circle
-              with a smaller X cut into it in the background color, the
-              familiar "clear field" shape (iOS/macOS search fields) rather
-              than a bare X that reads more like "close" than "clear". */
-            }
-            {query.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setQuery("");
-                  setResults([]);
-                }}
-                aria-label={t("map.search.clear_aria_label")}
-                className="shrink-0 flex items-center justify-center size-4 rounded-full bg-muted-foreground/50 hover:bg-muted-foreground/70"
-              >
-                <X className="size-2.5 text-background" strokeWidth={3} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {query.trim().length > 0 && results.length === 0 && (
-            <div className="px-4 py-3 text-sm text-muted-foreground">
-              {loading ? t("map.search.loading") : t("map.search.no_results")}
-            </div>
-          )}
-
+    <Panel side="right" width={380} label={t("map.search.placeholder")} onClose={() => onOpenChange(false)} dismissOnOutside>
+      <View style={[styles.header, { paddingTop: top }]}>
+        <View style={styles.headerRow}>
           {
-            /* Divisions first — the backend already orders them that way
-            (search/provider/overture_provider.ts's own top comment: a
-            name matching an admin area is rare enough to surface ahead of
-            whatever POI happens to contain the same substring), and a
-            section header on each group makes that ordering legible
-            instead of just an unlabeled jump from areas to places. */
+            /* Doubles as the panel's own close trigger — a leading
+            magnifying-glass icon here was purely decorative, and a trailing
+            close beside it was a second X right next to the "clear query"
+            X, reading as one button doing nothing. One `<` in the corner a
+            search UI's own back-navigation slot already occupies reads
+            unambiguously as "leave", with no second X anywhere in the row. */
           }
-          {divisionResults.length > 0 && <SectionHeader label={t("map.search.section_areas")} />}
-          {divisionResults.map((r) => (
-            <button
-              key={r.gers_id}
-              type="button"
-              onClick={() => select(r)}
-              className="w-full text-left px-4 py-3 hover:bg-accent flex flex-col gap-0.5 border-b border-border/40"
+          <Pressable onPress={() => onOpenChange(false)} accessibilityRole="button" accessibilityLabel={t("settings.close")} style={styles.back}>
+            <ChevronLeft size={20} color={color.mutedForeground} />
+          </Pressable>
+          <TextField
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t("map.search.placeholder")}
+            placeholderTextColor={color.mutedForeground}
+            autoFocus
+            style={styles.field}
+          />
+          {
+            /* Lucide has no filled circle-X glyph (it's a pure
+            outline/stroke icon set) — composed by hand: a solid circle
+            with a smaller X cut into it in the background color, the
+            familiar "clear field" shape (iOS/macOS search fields) rather
+            than a bare X that reads more like "close" than "clear". */
+          }
+          {query.length > 0 && (
+            <Pressable
+              onPress={() => {
+                setQuery("");
+                setResults([]);
+              }}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={t("map.search.clear_aria_label")}
+              style={styles.clear}
             >
-              {
-                /* No icon here, unlike a POI row — a division doesn't
-                have a "kind of place" to badge the way a category does,
-                and the section header already says what these are. */
-              }
-              <span className="text-sm truncate">{displayName(r, lang)}</span>
-              <SubtitleRow label={r.context.length > 0 ? assembleLabel(r.context, lang) : ""} distance={distanceOf(r)} />
-            </button>
-          ))}
+              <X size={10} strokeWidth={3} color={color.background} />
+            </Pressable>
+          )}
+        </View>
+      </View>
 
-          {poiResults.length > 0 && <SectionHeader label={t("map.search.section_places")} />}
-          {poiResults.map((r) => {
-            // poi-badge.ts says why an emoji beats a Lucide glyph at this size.
-            const badge = resolvePoiBadge(r.category);
-            return (
-              <button
-                key={r.gers_id}
-                type="button"
-                onClick={() => select(r)}
-                className="w-full text-left px-4 py-3 hover:bg-accent flex items-center gap-2.5 border-b border-border/40"
-              >
-                <span
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-[13px] shrink-0"
-                  style={{ backgroundColor: `${badge.color}33` }}
-                >
-                  {badge.icon}
-                </span>
-                {
-                  /* flex-1, or the column sizes to its own text and SubtitleRow's
-                    ml-auto has nothing to push against — the distance ends up
-                    beside the address instead of at the row's right edge. */
-                }
-                <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-                  <span className="text-sm truncate">{displayName(r, lang)}</span>
-                  <SubtitleRow label={r.context.length > 0 ? assembleLabel(r.context, lang) : ""} distance={distanceOf(r)} />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </SheetContent>
-    </Sheet>
+      <ScrollView style={styles.results} keyboardShouldPersistTaps="handled">
+        {query.trim().length > 0 && results.length === 0 && <Text style={styles.empty}>{loading ? t("map.search.loading") : t("map.search.no_results")}</Text>}
+
+        {
+          /* Divisions first — the backend already orders them that way
+          (search/provider/overture_provider.ts's own top comment: a
+          name matching an admin area is rare enough to surface ahead of
+          whatever POI happens to contain the same substring), and a
+          section header on each group makes that ordering legible
+          instead of just an unlabeled jump from areas to places. */
+        }
+        {divisionResults.length > 0 && <SectionHeader label={t("map.search.section_areas")} />}
+        {divisionResults.map((r) => (
+          <Pressable key={r.gers_id} onPress={() => select(r)} accessibilityRole="button" style={styles.row}>
+            {
+              /* No icon here, unlike a POI row — a division doesn't
+              have a "kind of place" to badge the way a category does,
+              and the section header already says what these are. */
+            }
+            <View style={styles.rowText}>
+              <Text numberOfLines={1} style={styles.name}>{displayName(r, lang)}</Text>
+              <SubtitleRow label={r.context.length > 0 ? assembleLabel(r.context, lang) : ""} distance={distanceOf(r)} />
+            </View>
+          </Pressable>
+        ))}
+
+        {poiResults.length > 0 && <SectionHeader label={t("map.search.section_places")} />}
+        {poiResults.map((r) => {
+          // poi-badge.ts says why an emoji beats a Lucide glyph at this size.
+          const badge = resolvePoiBadge(r.category);
+          return (
+            <Pressable key={r.gers_id} onPress={() => select(r)} accessibilityRole="button" style={styles.row}>
+              <View style={[styles.badge, { backgroundColor: `${badge.color}33` }]}>
+                <Text style={styles.badgeIcon}>{badge.icon}</Text>
+              </View>
+              {
+                /* Grows, or the column sizes to its own text and the
+                distance ends up beside the address instead of at the
+                row's right edge. */
+              }
+              <View style={styles.rowText}>
+                <Text numberOfLines={1} style={styles.name}>{displayName(r, lang)}</Text>
+                <SubtitleRow label={r.context.length > 0 ? assembleLabel(r.context, lang) : ""} distance={distanceOf(r)} />
+              </View>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </Panel>
   );
 }
+
+const styles = StyleSheet.create({
+  header: { borderBottomWidth: 1, borderBottomColor: alpha(color.foreground, 0.06) },
+  headerRow: { height: PANEL_HEADER_PX, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 },
+  back: { width: 42, height: 42, marginLeft: -10, borderRadius: 21, alignItems: "center", justifyContent: "center" },
+  field: { flex: 1, minWidth: 0, color: color.foreground },
+  clear: { width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: alpha(color.mutedForeground, 0.5) },
+  results: { flex: 1 },
+  empty: { paddingHorizontal: 16, paddingVertical: 12, fontFamily: font.family, fontSize: 14, color: color.mutedForeground },
+  sectionHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 6,
+    fontFamily: font.family,
+    fontSize: 12,
+    fontWeight: "500",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: alpha(color.mutedForeground, 0.7),
+  },
+  row: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: hairline },
+  rowText: { flex: 1, minWidth: 0, gap: 2 },
+  name: { fontFamily: font.family, fontSize: 14, color: color.foreground },
+  subtitle: { flexDirection: "row", alignItems: "baseline", gap: 8 },
+  small: { fontFamily: font.family, fontSize: 12, color: color.mutedForeground },
+  context: { flexShrink: 1 },
+  distance: { marginLeft: "auto", flexShrink: 0, fontVariant: ["tabular-nums"] },
+  badge: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  badgeIcon: { fontSize: 13 },
+});

@@ -246,11 +246,8 @@ import-map path with its extension (`// @pxl/web/feature/map/ui/view.tsx`); a
 Rust file gives its package name as Cargo.toml spells it, hyphens and all,
 then the path under `src/` (`// pxl-spec/space/indexer.rs`). A crate named in
 a comment is hyphenated; only a `::` path keeps the underscore. New files get
-one too, tests included. The one exception is `shared/ui/shadcn/`, uniformly
-header-less as a flat shadcn tree; its notice is in
-[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md). Don't add headers there,
-and don't drop them elsewhere. An executable script opens on its interpreter
-instead. `check:rules` holds every other file to it.
+one too, tests included, and don't drop them. An executable script opens on
+its interpreter instead. `check:rules` holds every other file to it.
 
 **A name's case follows the side it is on.** `PascalCase` for types,
 `SCREAMING_SNAKE_CASE` for module constants. Functions and locals are
@@ -303,7 +300,7 @@ that is only a number stays `number`. A typed array over an `ArrayBuffer` for
 certain is `U32Array` and kin; one that may sit in a `SharedArrayBuffer` keeps
 `Uint32Array`.
 
-**Ported code keeps its original conventions** (`shadcn/tabs.tsx`). Some of
+**Ported code keeps its original conventions** (`alloc/buddy_tree.rs`). Some of
 `@xpute/core` came from other projects to stay reusable; the divergence is
 deliberate. React hooks, stores and components keep their ecosystem's
 `camelCase`/`PascalCase` (`useTileStore`, `MapStatus`), and a component file

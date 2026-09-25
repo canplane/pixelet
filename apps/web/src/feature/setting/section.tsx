@@ -1,9 +1,10 @@
 // @pxl/web/feature/setting/section.tsx
 
-import type { LucideIcon } from "lucide-react";
-import { Bug, Eye, Gauge, Move3d, Pickaxe, Sun } from "lucide-react";
+import type { LucideIcon } from "lucide-react-native";
+import { Bug, Eye, Gauge, Move3d, Pickaxe, Sun } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { View } from "react-native";
 
 import { isDevSection, type Setting, type SettingName, SETTINGS, type SettingSection, settingsIn } from "@/feature/setting/schema.ts";
 import { SectionTitle, SettingGroup, SettingRadioRow, SettingRow } from "./row.tsx";
@@ -38,13 +39,13 @@ export function SettingsSection(props: { section: SettingSection; children?: Rea
   if (keys.length === 0 && children === undefined) return null;
 
   return (
-    <div className="flex flex-col gap-1">
+    <View style={{ gap: 4 }}>
       <SectionTitle icon={SECTION_ICONS[section]} caption={t(`settings.${section}.section_caption`)} dev={dev}>
         {t(`settings.${section}.section_title`)}
       </SectionTitle>
       {keys.map((key) => <SettingControl key={key} name={key} />)}
       {children}
-    </div>
+    </View>
   );
 }
 

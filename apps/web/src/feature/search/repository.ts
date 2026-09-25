@@ -1,6 +1,7 @@
 // @pxl/web/feature/search/repository.ts
 
 import type { f64 } from "@xpute/core/abi/word.ts";
+import { ORIGIN } from "@platform/origin.ts";
 import { SEARCH_URL } from "@/config/route.ts";
 import type { PlacePart } from "@/feature/map/geocode/label.ts";
 
@@ -39,7 +40,7 @@ export async function fetchSearch(query: string, opts?: { near?: { lon: f64; lat
   const params = new URLSearchParams({ q: query });
   if (opts?.near) params.set("near", `${opts.near.lon},${opts.near.lat}`);
 
-  const res = await fetch(`${SEARCH_URL}?${params.toString()}`, { signal: opts?.signal });
+  const res = await fetch(`${ORIGIN}${SEARCH_URL}?${params.toString()}`, { signal: opts?.signal });
   if (!res.ok) throw new Error(`[search] http ${res.status}`);
   return await res.json() as SearchResult[];
 }
