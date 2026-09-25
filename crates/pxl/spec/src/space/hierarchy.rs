@@ -131,6 +131,17 @@ pub fn first_descendant_of<const D: usize>(at: [i64; D], levels: u32) -> [i64; D
     at.map(|v| v << levels)
 }
 
+/// Whether two nodes, each a side and its index at that side, share any of
+/// what they cover. Two nodes of one hierarchy nest or are apart, so they
+/// share it exactly when the finer lies under the coarser.
+pub fn share<const D: usize>((a_side, a): (Scale, [i64; D]), (b_side, b): (Scale, [i64; D])) -> bool {
+    if a_side <= b_side {
+        ancestor_of(a, b_side.above(a_side) as u32) == b
+    } else {
+        ancestor_of(b, a_side.above(b_side) as u32) == a
+    }
+}
+
 /// Where a depth-first walk that visits each node's children in slot order
 /// reaches the node at `at`, `levels` below the block it starts from: each
 /// level's slot (`slot_of`), the coarsest first. Nodes a walk visits

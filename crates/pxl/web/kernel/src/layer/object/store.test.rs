@@ -4,6 +4,7 @@
 // A col_idx's changes are read as its revisions moving, which is what
 // world/chunk/node.rs follows.
 
+use pxl_spec::bake::constant::{BAND_CELLS, CELL_STEPS};
 use pxl_spec::cell::cube_types::Block;
 use pxl_spec::space::indexer::{L2_IDX, L2_IDX_IN_L3, L3_IDX};
 use pxl_spec::space::pvf3::{fvec, ivec};

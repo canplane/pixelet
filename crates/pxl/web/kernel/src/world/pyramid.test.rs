@@ -2,6 +2,7 @@
 
 use super::*;
 use pxl_spec::bake::poi_page::{Place, PoiPage, POI_LATTICE};
+use pxl_spec::space::hierarchy::share;
 use pxl_spec::space::pvf3::{ivec, Pvf3};
 use pxl_spec::space::pyramid::{span_of, GROUND};
 use window::{domain_for, Eye};
@@ -27,7 +28,7 @@ fn the_domain() -> Domain {
 
 /// The ground a domain draws, as the square around it and its area.
 fn ground_of(d: &Domain) -> ((f64, f64, f64), f64) {
-    let g = d.ground();
+    let g: Vec<_> = d.ground().iter().map(|c| c.rect()).collect();
     let (x0, y0) = g.iter().fold((f64::MAX, f64::MAX), |(x, y), r| (x.min(r.0), y.min(r.1)));
     let x1 = g.iter().map(|r| r.0 + r.2).fold(f64::MIN, f64::max);
     let y1 = g.iter().map(|r| r.1 + r.2).fold(f64::MIN, f64::max);
@@ -39,8 +40,7 @@ fn area(c: Chunk) -> f64 {
 }
 
 fn meet(a: Chunk, b: Chunk) -> bool {
-    let (a, b) = (a.rect(), b.rect());
-    a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.2 && b.1 < a.1 + a.2
+    share(a.node(), b.node())
 }
 
 /// Whether no two pieces share ground. Pieces of the pyramid meet only where
@@ -71,11 +71,7 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
     // square around it.
     let at: Vec<IVec> = (0..800)
         .map(|_| ivec::gather(rx as i64 + next(side), ry as i64 + next(side), 0))
-        .filter(|&a| {
-            ground
-                .iter()
-                .any(|&(x0, y0, s)| (x0..x0 + s).contains(&(ivec::X(a) as f64)) && (y0..y0 + s).contains(&(ivec::Y(a) as f64)))
-        })
+        .filter(|&a| ground.iter().any(|&c| inside(c, a)))
         .collect();
     let mut pages = Vec::new();
     for level in 0..WINDOW.end {

@@ -29,7 +29,7 @@ use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
 use pxl_spec::bake::constant::{pack_pos, BandZ, BAND, CELL, ELE_PADDED_SPAN, OBJECT_FINEST};
 use pxl_spec::bake::pack::GroundCell;
-use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX};
+use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L1, L2, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use xpute_core::math::scalar::round;
 use xpute_runtime::mem::heap::{free, Block};
@@ -461,8 +461,6 @@ fn objects_revision_of(level: u32, base: IVec) -> u32 {
         .fold(0u32, |acc, c| acc.wrapping_add(object_col_revision(c)))
 }
 
-/// Whether the objects of column `col` fold into the level-`level` chunk at
-/// `base`: its own cells, and the one-cell apron around them a fold reads.
 /// The decor revision of every column a chunk of `level` at `base` draws
 /// the placed decor of: the columns whose corner lies in it.
 fn decor_revision_of(level: u32, base: IVec) -> u32 {
@@ -480,13 +478,14 @@ fn decor_revision_of(level: u32, base: IVec) -> u32 {
         .fold(0u32, |acc, c| acc.wrapping_add(decor_col_revision(c)))
 }
 
+/// Whether the objects of column `col` fold into the level-`level` chunk at
+/// `base`: its own cells, and the one-cell apron around them a fold reads.
 fn folds_into(level: u32, base: IVec, col: IVec) -> bool {
-    // In units: a cell of the level, the chunk, and a column, which is a
-    // leaf chunk.
-    let (s, span, w) = (GROUND.scale(level).side(), chunk_span_of(level), chunk_span_of(0));
-    let (o, x0, y0) = (FROM_L2_IDX(col), ivec::X(base) as f64, ivec::Y(base) as f64);
-    let (ox, oy) = (ivec::X(o) as f64, ivec::Y(o) as f64);
-    ox + w > x0 - s && ox < x0 + span + s && oy + w > y0 - s && oy < y0 + span + s
+    // In cells of the level: the chunk's with its apron, and the first and
+    // last a column, a leaf chunk, reaches.
+    let (cell, o, last) = (GROUND.scale(level), FROM_L2_IDX(col), i64::from(L1.count_in(L2)) - 1);
+    let across = |b: i64, o: i64| cell.index(o) <= cell.index(b) + CHUNK_CELLS as i64 && cell.index(o + last) >= cell.index(b) - 1;
+    across(ivec::X(base), ivec::X(o)) && across(ivec::Y(base), ivec::Y(o))
 }
 
 // ---- the build as the kernel runs it ----

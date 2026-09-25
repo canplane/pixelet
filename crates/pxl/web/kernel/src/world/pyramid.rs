@@ -21,6 +21,7 @@
 pub mod chunk;
 pub mod window;
 
+use pxl_spec::space::hierarchy::share;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 use std::collections::HashSet;
@@ -390,7 +391,7 @@ impl<L: Layer> Pyramid<L> {
             Resolved::Exact
         } else if self.children_resident(p) {
             Resolved::Foldable
-        } else if self.cover.gaps.iter().any(|g| g.overlaps_page(p)) {
+        } else if self.cover.gaps.iter().any(|g| share(g.node(), p.node())) {
             Resolved::Missing
         } else {
             Resolved::Covered

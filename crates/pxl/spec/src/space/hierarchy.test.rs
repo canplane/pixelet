@@ -69,6 +69,21 @@ fn a_point_lies_in_the_side_whose_corner_is_under_it() {
     }
 }
 
+/// Two nodes share ground exactly when one lies under the other, however
+/// many levels apart, and a node shares none with its neighbour's children.
+#[test]
+fn nodes_share_ground_only_where_one_lies_under_the_other() {
+    let at = (Scale::of(4), [3i64, -2]);
+    assert!(share(at, at));
+    for levels in 1..4 {
+        let first = (Scale::of(4 - levels), first_descendant_of(at.1, levels as u32));
+        assert!(share(at, first) && share(first, at));
+        let beside = (Scale::of(4 - levels), first_descendant_of([4, -2], levels as u32));
+        assert!(!share(at, beside) && !share(beside, at));
+        assert!(share((Scale::of(4 + levels), ancestor_of(at.1, levels as u32)), at));
+    }
+}
+
 /// A walk's order is its inverse's, and it keeps a coarser node's leaves
 /// together: every leaf of one node falls in one run, the node's own order
 /// shifted up by the levels below it.

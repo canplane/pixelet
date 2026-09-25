@@ -19,9 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use base64::Engine;
 use pxl_render::mesh::paint::object::adapter::{Carve, Entries};
-use pxl_spec::bake::constant::{
-    band_cell_z, band_of, in_cell, pack_pos, unpack_pos, BandZ, CellZ, BAND_CELLS, BAND_CELL_SHAMT, BAND_UNITS, CELL, CELL_STEPS, OBJECT_FINEST, OBJECT_LAYOUT, POS_MASK, STEP_UNITS, U_PER_CELL,
-};
+use pxl_spec::bake::constant::{band_cell_z, band_of, in_cell, pack_pos, unpack_pos, BandZ, CellZ, BAND_CELL_SHAMT, BAND_UNITS, CELL, OBJECT_FINEST, OBJECT_LAYOUT, POS_MASK, STEP_UNITS, U_PER_CELL};
 use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
@@ -333,13 +331,12 @@ pub fn objects_revision() -> u32 {
     log.tick(OBJECT_COLUMN) + log.tick(DECOR_COLUMN)
 }
 
-/// A column holding objects, as a box in units: its corner and side on the
-/// ground, and the lowest and highest any of its entries reaches.
+/// A column holding objects, as a box: its coordinate among the L2 blocks on
+/// the ground, and the lowest and highest any of its entries reaches, in
+/// units.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColumnBox {
-    pub x0: f64,
-    pub y0: f64,
-    pub side: f64,
+    pub col: [i64; 2],
     pub z: (f64, f64),
 }
 
@@ -365,11 +362,8 @@ pub fn column_boxes() -> &'static [ColumnBox] {
                     },
                     false,
                 );
-                let base = FROM_L2_IDX(col);
                 Some(ColumnBox {
-                    x0: ivec::to_real(ivec::X(base)),
-                    y0: ivec::to_real(ivec::Y(base)),
-                    side: pxl_spec::space::pyramid::chunk_span_of(0),
+                    col: [ivec::X(col), ivec::Y(col)],
                     z: z?,
                 })
             })

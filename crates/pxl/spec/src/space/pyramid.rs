@@ -205,6 +205,11 @@ impl LevelPage {
         })
     }
 
+    /// The page as a node of the hierarchy: its side and its coordinate.
+    pub fn node(self) -> (Scale, [i64; 2]) {
+        (L3.up(self.level as i32), self.at())
+    }
+
     /// The leaf page at this page's south-west corner.
     pub fn first_leaf(self) -> IVec {
         let [x, y] = first_descendant_of(self.at(), self.level);

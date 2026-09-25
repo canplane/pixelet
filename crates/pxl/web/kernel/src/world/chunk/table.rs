@@ -58,6 +58,7 @@ use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::window::{level_for, LEVEL_CHUNKS, WINDOW_LEVELS};
 use crate::world::pyramid::{Domain, Layer};
 use pxl_spec::bake::format::Terrain;
+use pxl_spec::space::hierarchy::share;
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pyramid::LevelPage;
 
@@ -317,16 +318,15 @@ pub enum Event {
 /// stands, and the pass is skipped once nothing of it is left to mount.
 type MountKey = u32;
 
-/// Whether two squares, each a corner and a side, share any ground.
-fn overlaps(a: (f64, f64, f64), b: (f64, f64, f64)) -> bool {
-    a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.2 && b.1 < a.1 + a.2
-}
-
-/// The ground two such squares share.
-fn shared_area(a: (f64, f64, f64), b: (f64, f64, f64)) -> f64 {
-    let w = (a.0 + a.2).min(b.0 + b.2) - a.0.max(b.0);
-    let h = (a.1 + a.2).min(b.1 + b.2) - a.1.max(b.1);
-    w.max(0.0) * h.max(0.0)
+/// The ground two chunks share, in square units: the finer one's where it
+/// lies under the other, and none where they are apart.
+fn shared_area(a: Chunk, b: Chunk) -> f64 {
+    let (a, b) = (a.node(), b.node());
+    if share(a, b) {
+        a.0.min(b.0).side().powi(2)
+    } else {
+        0.0
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -611,9 +611,9 @@ pub struct Scheduler {
     /// levels, against six hundred looking down. The work a zoom costs grew
     /// with the tilt for no reason but this.
     to_mount: VecDeque<(Chunk, bool)>,
-    /// The ground the view draws: the window's top-level chunks, each a
-    /// corner and a side in units (window.rs `Domain::ground`).
-    drawn: Option<Vec<(f64, f64, f64)>>,
+    /// The ground the view draws: the window's top-level chunks (window.rs
+    /// `Domain::ground`).
+    drawn: Option<Vec<Chunk>>,
     /// The decor kinds, in the order decor/build.rs taught them — the order of
     /// the groups in every decor block.
     decor_kinds: Vec<DecorKind>,
@@ -1161,7 +1161,7 @@ impl Scheduler {
             return;
         }
         self.census.mount_full = 0;
-        self.drawn = Terrain::pyramid().domain().map(Domain::ground);
+        self.drawn = Terrain::pyramid().domain().map(|d| d.ground().to_vec());
         if self.selected_for != Some(key) {
             let mut wanted = BTreeMap::new();
             self.select(&mut wanted);
@@ -1321,7 +1321,6 @@ impl Scheduler {
             if !s.has(STALE) {
                 continue;
             }
-            let rect = k.rect();
             let (covered, ready, on_waiter) = s.cover;
             // What has to be covered is the ground this chunk still shows —
             // its own against what the rings draw — and not its whole extent.
@@ -1331,10 +1330,10 @@ impl Scheduler {
             // its extent has no chunks at all and never will. Measured against
             // the whole, that never comes to its area, and neither does the
             // other way out — the view lies inside it, so it never leaves the
-            // drawn rect either. Both doors shut, and it stays drawn over
+            // drawn ground either. Both doors shut, and it stays drawn over
             // ground it no longer describes, for as long as the view is there.
-            let gone_from_view = self.drawn.as_ref().is_none_or(|d| !d.iter().any(|&g| overlaps(rect, g)));
-            let whole = covered >= self.drawn.as_ref().map_or(0.0, |d| d.iter().map(|&g| shared_area(rect, g)).sum());
+            let gone_from_view = self.drawn.as_ref().is_none_or(|d| !d.iter().any(|&g| share(k.node(), g.node())));
+            let whole = covered >= self.drawn.as_ref().map_or(0.0, |d| d.iter().map(|&g| shared_area(k, g)).sum());
             // A stale chunk is kept for what it is showing. One that never
             // got a layout is showing nothing, so there is nothing to keep
             // and no reason to wait on whatever covers it.
