@@ -16,7 +16,7 @@
 use pxl_spec::bake::format::GroundChannelKey;
 use pxl_spec::bake::pack::{channel_of, GroundCell};
 use pxl_spec::cell::cube_types;
-use pxl_spec::space::pyramid::PAGE_CELLS;
+use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
 
 /// What a channel's type must be for a kind to stand on the cell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -123,25 +123,14 @@ const ALIGN_NEIGHBOR_RADIUS: i64 = 3;
 /// road/rail either way, but facing one direction or the opposite one, same as
 /// real two-way traffic never all pointing the same way.
 pub fn transport_aligned_rotation(cells: &[GroundCell], cell_x: u32, cell_y: u32, flip: bool) -> f64 {
-    let span = PAGE_CELLS as i64;
+    let span = 0..PAGE_CELLS as i64;
     let (x, y) = (cell_x as i64, cell_y as i64);
-    let idx = y * span + x;
     let void = cube_types::common::void;
-    let at = |i: i64| channel_of(cells[i as usize], GroundChannelKey::TRANSPORT) != void;
+    let at = |x: i64, y: i64| span.contains(&x) && span.contains(&y) && channel_of(cells[GROUND.cell_index(x as u32, y as u32) as usize], GroundChannelKey::TRANSPORT) != void;
     let (mut horizontal_votes, mut vertical_votes) = (0, 0);
     for d in 1..=ALIGN_NEIGHBOR_RADIUS {
-        if x - d >= 0 && at(idx - d) {
-            horizontal_votes += 1;
-        }
-        if x + d < span && at(idx + d) {
-            horizontal_votes += 1;
-        }
-        if y - d >= 0 && at(idx - d * span) {
-            vertical_votes += 1;
-        }
-        if y + d < span && at(idx + d * span) {
-            vertical_votes += 1;
-        }
+        horizontal_votes += at(x - d, y) as u32 + at(x + d, y) as u32;
+        vertical_votes += at(x, y - d) as u32 + at(x, y + d) as u32;
     }
     let axis_rotation = if horizontal_votes > vertical_votes { core::f64::consts::PI / 2.0 } else { 0.0 };
     if flip {

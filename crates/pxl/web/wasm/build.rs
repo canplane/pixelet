@@ -22,7 +22,7 @@ use std::io::Write;
 #[path = "../kernel/src/mem/mem.spec.rs"]
 mod spec;
 
-use spec::{DESKTOP_BYTES, GLOBAL_BASE, PAGE_BYTES, PHONE_BYTES, RING_CAPACITY, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES};
+use spec::{BOOT_AT, DESKTOP_BYTES, GLOBAL_BASE, PAGE_BYTES, PHONE_BYTES, RING_CAPACITY, RING_DESC_AT, RING_SLOT_AT, STACK_BYTES};
 
 /// A ring slot's payload is a page: a packet is at most one, and anything
 /// larger is bulk and crosses by address. The page is also the buddy's
@@ -60,7 +60,13 @@ fn main() {
     };
     const { assert!(STACK_BYTES <= RING_DESC_AT, "the stack runs into the descriptors") };
     const { assert!(RING_DESC_AT + RING_COUNT * RING_DESC_STRIDE <= RING_SLOT_AT, "the descriptors run into the payloads") };
-    const { assert!(RING_SLOT_AT + RING_COUNT * RING_SLOT_STRIDE <= GLOBAL_BASE, "the payloads run into the module's data") };
+    const { assert!(RING_SLOT_AT + RING_COUNT * RING_SLOT_STRIDE <= BOOT_AT, "the payloads run into the boot block") };
+    const {
+        assert!(
+            BOOT_AT.is_multiple_of(PAGE_BYTES) && BOOT_AT + PAGE_BYTES <= GLOBAL_BASE,
+            "the boot block is a page under the module's data"
+        )
+    };
     const { assert!(MIN_MEMORY_BYTES <= DESKTOP_BYTES, "the module asks for more than the larger of the two reservations") };
     const { assert!(MIN_MEMORY_BYTES.is_multiple_of(1 << 16), "a memory is declared in WebAssembly pages") };
 

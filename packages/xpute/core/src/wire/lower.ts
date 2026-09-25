@@ -24,6 +24,8 @@
 
 import type { primitive } from "@xpute/core/abi/word.ts";
 import type { BigTypedArray, TypedArray } from "@xpute/core/abi/array.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
+import { MarshalError } from "@xpute/core/status/error.ts";
 
 export type LowerValue =
   | primitive
@@ -70,7 +72,7 @@ export function to_tuple<T extends Record<PropertyKey, unknown>>(
 
   for (let i = 0; i < len; i++) {
     const key = keys[i];
-    if (!(key in obj)) throw new Error(`missing key in obj: ${String(key)}`);
+    if (!(key in obj)) throw new MarshalError(Errno.EINVAL);
     out[i] = obj[key];
   }
   return out;
@@ -82,7 +84,7 @@ export function from_tuple<T extends Record<PropertyKey, unknown>>(
   keys: readonly (keyof T)[],
 ): T {
   if (vals.length !== keys.length) {
-    throw new Error(`tuple length mismatch: expected ${keys.length}, got ${vals.length}`);
+    throw new MarshalError(Errno.EINVAL);
   }
 
   const out = {} as T;

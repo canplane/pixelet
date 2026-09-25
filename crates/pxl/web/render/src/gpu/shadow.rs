@@ -20,7 +20,7 @@ use pxl_spec::space::mat4::{mat4, mat4_look_at, mat4_mul, Mat4};
 use pxl_spec::space::v3::V3;
 
 use crate::frame::shader::record::FRAME_FLOATS;
-use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, word_bytes, GpuApi, Stamp};
+use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::renderer::{AIR_AT_VERTICES, CAMERA_POS, GLOBE, PLANET, VIEW_PROJ};
 
@@ -62,22 +62,22 @@ pub struct Shadow {
 }
 
 impl Shadow {
-    pub fn new(g: &GpuApi, handheld: bool) -> Shadow {
+    pub fn new(g: &Gpu, handheld: bool) -> Shadow {
         let size = map_size(handheld);
         let map = object();
-        (g.texture)(map, size, size, 1, format::DEPTH32, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
+        g.texture(map, size, size, 1, format::DEPTH32, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
         let map_view = object();
-        (g.view)(map_view, map, dimension::D2, 0, 1, 0, 1);
+        g.view(map_view, map, dimension::D2, 0, 1, 0, 1);
         let sampler = object();
-        (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::LESS_EQUAL, 1);
+        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::LESS_EQUAL, 1);
         let blank = object();
-        (g.texture)(blank, 1, 1, 1, format::DEPTH32, 1, texture_usage::TEXTURE_BINDING);
+        g.texture(blank, 1, 1, 1, format::DEPTH32, 1, texture_usage::TEXTURE_BINDING);
         let blank_view = object();
-        (g.view)(blank_view, blank, dimension::D2, 0, 1, 0, 1);
+        g.view(blank_view, blank, dimension::D2, 0, 1, 0, 1);
         let blank_sampler = object();
-        (g.sampler)(blank_sampler, filter::NEAREST, filter::NEAREST, filter::NEAREST, address::CLAMP, compare::LESS_EQUAL, 1);
+        g.sampler(blank_sampler, filter::NEAREST, filter::NEAREST, filter::NEAREST, address::CLAMP, compare::LESS_EQUAL, 1);
         let light_frame = object();
-        (g.buffer)(light_frame, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        g.buffer(light_frame, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         Shadow {
             map_view,
             sampler,
@@ -105,7 +105,7 @@ impl Shadow {
     /// writes the light's frame, with the frame's curve and globe: the map
     /// drawn into the shadow is the one the eye sees laid on the planet, or a
     /// far caster would shade the ground it no longer stands over.
-    pub fn aim(&mut self, g: &GpuApi, sun_dir: &[f32], target: V3, globe: [f32; 8]) {
+    pub fn aim(&mut self, g: &Gpu, sun_dir: &[f32], target: V3, globe: [f32; 8]) {
         let eye = [
             target[0] + sun_dir[0] as f64 * LIGHT_DISTANCE,
             target[1] + sun_dir[1] as f64 * LIGHT_DISTANCE,
@@ -124,14 +124,14 @@ impl Shadow {
         // Depth and nothing else: no vertex takes the air (frame.wgsl's
         // air_at_vertices).
         self.light[AIR_AT_VERTICES] = 0.0;
-        (g.write_buffer)(self.light_frame, 0, bytes(&self.light));
+        g.write_buffer(self.light_frame, 0, bytes(&self.light));
     }
 
     /// Opens the depth pass over the map, timed under `stamp`; the caller
     /// draws into it and ends it.
-    pub fn begin(&self, g: &GpuApi, encoder: u32, stamp: &mut Stamp) -> u32 {
+    pub fn begin(&self, g: &Gpu, encoder: u32, stamp: &mut Stamp) -> u32 {
         let pass = object();
-        (g.pass)(pass, encoder, &pass_desc(0, load::CLEAR, self.map_view, load::CLEAR, 1.0, stamp.pass()));
+        g.pass(pass, encoder, &pass_desc(0, load::CLEAR, self.map_view, load::CLEAR, 1.0, stamp.pass()));
         pass
     }
 }

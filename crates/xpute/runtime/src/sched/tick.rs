@@ -41,6 +41,8 @@
 
 use super::frame_budget::{run_under_budget, BudgetOpts, PassStats};
 use crate::clock::now;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 pub type Phase = usize;
 pub const INTERACTION: Phase = 0;
@@ -131,7 +133,7 @@ impl<S> TickContext<'_, S> {
 
     /// Unregisters a step from inside the tick, before the next step runs.
     pub fn off_tick(&mut self, id: u32) {
-        assert!(self.off_len < OFFS_MAX, "a step unregistered more than {OFFS_MAX} steps at once");
+        xpute_core::ensure!(self.off_len < OFFS_MAX, ENOSPC, OFFS_MAX);
         self.offs[self.off_len] = id;
         self.off_len += 1;
     }
@@ -206,7 +208,7 @@ impl<S, const N: usize> Tick<S, N> {
     /// is what the step's time is reported under: the caller's own number for
     /// it, which the words for it are looked up by where they are printed.
     pub fn on_tick(&mut self, phase: Phase, step: TickStep<S>, name: u32) -> u32 {
-        assert!(self.len < N, "the tick's {N} steps are taken");
+        xpute_core::ensure!(self.len < N, ENOSPC, N);
         let id = self.next_id;
         self.next_id += 1;
         self.registry[self.len] = Some(Registered { id, phase, step, name });
@@ -268,7 +270,7 @@ impl<S, const N: usize> Tick<S, N> {
         // sibling, and a snapshot would run something that just asked not to be.
         let mut i = 0;
         while i < self.len {
-            let r = self.registry[i].expect("a registered step");
+            let r = self.registry[i].or_bug(Errno::ENOTRECOVERABLE);
             i += 1;
             if r.phase != phase {
                 continue;

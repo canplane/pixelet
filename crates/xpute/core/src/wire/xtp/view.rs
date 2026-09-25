@@ -289,7 +289,7 @@ impl<'a> BranchViewImpl<'a> {
     fn children(&mut self) -> &mut Vec<Node<'a>> {
         match &mut self.node {
             Node::Branch(BranchNode { val: Some(children) }) => children,
-            _ => unreachable!("a branch view holds a branch with children"),
+            _ => crate::bug!(ENOTRECOVERABLE),
         }
     }
 

@@ -3,22 +3,21 @@
 //! Object storage + spatial index. No "fine at current counts" here — this
 //! is sized to work the same way at a handful of objects and at millions:
 //! every mutation touches exactly the one L1 cell it affects (never a
-//! whole-world walk), and every query is scoped to a cell or chunk (never a
+//! whole-world walk), and every query is scoped to a cell or column (never a
 //! scan over every placed object anywhere).
 //!
-//! The records are the second half: one per L2 chunk column holding user
-//! objects — a sparse octree per 64³ band whose leaves are catalog values —
-//! and, derived from them a
-//! chunk at a time, the chunk's entries as three lanes and an index of the
-//! cells they fall in. A coordinate is lowered here to a chunk key, a band
-//! and a lattice position, and what comes back is lanes. What this module
-//! adds is the eraser's two virtual edits, the change log's bumps, and the
-//! persisted form in the host's storage.
+//! The records are the second half: one per L2 column holding user objects —
+//! a sparse octree per 64³ band whose leaves are catalog values — and,
+//! derived from them a column at a time, the column's entries as three lanes
+//! in an order a cell's are one run of. A coordinate is lowered here to a
+//! column key, a band and a lattice position, and what comes back is lanes.
+//! What this module adds is the eraser's two virtual edits, the change log's
+//! bumps, and the persisted form in the host's storage.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use base64::Engine;
-use pxl_render::mesh::paint::object::adapter::{Carve, Entries};
+use pxl_render::mesh::paint::object::adapter::Entries;
 use pxl_spec::bake::constant::{band_cell_z, band_of, in_cell, pack_pos, unpack_pos, BandZ, CellZ, BAND_CELL_SHAMT, BAND_UNITS, CELL, OBJECT_FINEST, OBJECT_LAYOUT, POS_MASK, STEP_UNITS, U_PER_CELL};
 use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube};
@@ -38,14 +37,16 @@ use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
+use crate::abi::host::storage;
 use crate::global::Global;
-use crate::host::{now, storage_get, storage_set};
+use crate::host::{body_read, now, storage_set, turn};
 use crate::kernel::kernel;
 use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::setting::store::hidden_ground;
 use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
 use crate::world::chunk::source::{chunk_sources_changed, column_written};
 use crate::world::frame::coord::local_world_to_canonical;
+use xpute_core::status::bug::OrBug;
 
 /// What a leaf holds, past its corner and size. A solid is the catalog's own
 /// cube; the id it is spelled out under belongs to the two sides' shared
@@ -57,17 +58,9 @@ pub enum EntryKind {
     Air,
 }
 
-/// Where an entry is, which is also what names it: the column it is filed
-/// under, its band, and its packed position in that band — the three numbers
-/// the kernel keys by. A holder of one reads the entry back, hides it or
-/// erases it without a reverse lookup, which is what the formatted id this
-/// replaced carried as text.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct EntryAt {
-    pub col_idx: IVec,
-    pub band_idx: BandZ,
-    pub pos: u32,
-}
+/// Where an entry is (pxl-spec bake/constant.rs): a holder of one reads the
+/// entry back, hides it or erases it without a reverse lookup.
+pub use pxl_spec::bake::constant::EntryAt;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ObjectLayerEntry {
@@ -78,9 +71,6 @@ pub struct ObjectLayerEntry {
     pub kind: EntryKind,
 }
 
-pub type PlacedObject = ObjectLayerEntry;
-pub type PlacedDecor = ObjectLayerEntry;
-pub type ObjectAir = ObjectLayerEntry;
 /// Anything a placement/erase/selection query should actually treat as "a
 /// real thing occupying this slot" — a solid color cube or a decor object
 /// alike, just never `EntryKind::Air` (that's a virtual erase-marker, not a
@@ -89,21 +79,17 @@ pub type ObjectAir = ObjectLayerEntry;
 pub type OccupiedEntry = ObjectLayerEntry;
 
 // A page is five bare lanes — x, y, z, size, value — with no record header
-// (the persistence section below). A blob of an older version is not read. Bump this again whenever a future change makes an older
-// entry's encoding mean something different from what it meant when it was
-// written.
-pub const OBJECT_STORAGE_VERSION: u32 = 10;
+// (the persistence section below). A blob of an older encoding is not read:
+// the key it is kept under carries the encoding's version (abi/host.json's
+// STORAGE_KEYS), bumped whenever a change makes an older entry mean something
+// other than it meant when it was written.
 
-fn storage_key() -> String {
-    format!("pxl:object:v{OBJECT_STORAGE_VERSION}")
-}
-
-// ---- Chunk storage ----
+// ---- Column storage ----
 //
-// One record per L2 chunk column that holds user objects, and inside it one
+// One record per L2 column that holds user objects, and inside it one
 // sparse octree per 64³ band — the unified cell format of
 // issue/20260911-decor-identity-orientation-and-one-cell-format.md. What a
-// coordinate is keyed by — the chunk (the L2 index of the XY column), the
+// coordinate is keyed by — the column (the L2 index of its XY), the
 // band's Z, and the position within the band in finest-tier steps — is `At`,
 // each part a scale's index of the coordinate; this section also reads the
 // lanes back.
@@ -140,6 +126,14 @@ pub struct At {
 }
 
 impl At {
+    /// Where a cube of `side` with its corner at `at` is filed: the corner
+    /// lowered to the cube's own lattice, which is the only place a cube of
+    /// that side can be, so a corner off it is not one to store another
+    /// way than it is drawn, checked and placed.
+    pub fn of_cube(at: &Pvf3, side: Scale) -> At {
+        At::of(&side.base_of(side.index_of(at)))
+    }
+
     pub fn of(at: &Pvf3) -> At {
         let cell = CELL.index_of(at);
         At {
@@ -172,13 +166,6 @@ impl At {
     }
 }
 
-/// The same key from the renderer's side, a page index and a page offset.
-/// Both are normalised to XY, so a caller cannot reopen the gap `column_of`
-/// closes by handing in an offset that still carries Z.
-pub fn object_col_idx_of(page_idx: IVec, page_off: IVec) -> IVec {
-    L2_IDX(TO_XY(ivec::add(FROM_L3_IDX(TO_XY(page_idx)), TO_XY(page_off))))
-}
-
 /// The state stored at `coord`, VOID where nothing is.
 fn read_state(coord: &Pvf3) -> u32 {
     let at = At::of(coord);
@@ -187,17 +174,17 @@ fn read_state(coord: &Pvf3) -> u32 {
 
 // ---- Entries ----
 //
-// What a chunk's trees hold, read back as one entry per leaf — a leaf larger
+// What a column's trees hold, read back as one entry per leaf — a leaf larger
 // than a cell split into the cells it covers, since everything downstream
 // (collision's 3×3×3 neighbourhood, a size never past one cell) assumes an
-// entry is at most a cell. The kernel keeps them per chunk as three lanes —
+// entry is at most a cell. The kernel keeps them per column as three lanes —
 // the band, a packed position, the state. A tree walked depth first visits a
 // cell's leaves together, so a cell's entries are one contiguous run.
 //
 // `pos` packs the leaf's band-local position in finest-tier steps and its
 // scale as the tiers above the finest (pxl-spec bake/constant.rs `pack_pos`).
 
-/// One entry as a visit sees it. The chunk-local corner, size and state are
+/// One entry as a visit sees it. The column-local corner, size and state are
 /// plain numbers; `corner()`, `cell()` and `at()` are worked out when asked
 /// for, because few callers need them.
 #[derive(Clone, Debug, Default)]
@@ -212,29 +199,15 @@ pub struct EntryCursor {
 
     at: At,
     pos: u32,
-    /// False for the carve preview, which is not filed anywhere.
-    stored: bool,
 }
 
 impl EntryCursor {
     /// Points the cursor at a column; `load` then reads its entries.
-    pub fn at_chunk(&mut self, col_idx: IVec) {
+    pub fn at_column(&mut self, col_idx: IVec) {
         self.at.col_idx = col_idx;
     }
 
     pub fn load(&mut self, band_idx: BandZ, pos: u32, state: u32) {
-        self.put(band_idx, pos, state);
-        self.stored = true;
-    }
-
-    /// The carve preview, which is an entry the store would write but has not.
-    fn load_carve(&mut self, carve: EntryAt) {
-        self.at_chunk(carve.col_idx);
-        self.put(carve.band_idx, carve.pos, AIR);
-        self.stored = false;
-    }
-
-    fn put(&mut self, band_idx: BandZ, pos: u32, state: u32) {
         let (x, y, z, scale) = unpack_pos(pos);
         self.at.band = band_idx;
         self.at.step = [x, y, z];
@@ -254,17 +227,16 @@ impl EntryCursor {
         self.at.corner()
     }
 
-    /// Where the entry is filed; None for the carve preview, which is not.
-    pub fn at(&self) -> Option<EntryAt> {
-        self.stored.then_some(EntryAt {
+    /// Where the entry is filed.
+    pub fn at(&self) -> EntryAt {
+        EntryAt {
             col_idx: self.at.col_idx,
             band_idx: self.at.band,
             pos: self.pos,
-        })
+        }
     }
 
-    /// The entry as an object, for the few callers that keep one — every one
-    /// of them reading entries out of the lanes, never the carve preview.
+    /// The entry as an object, for the few callers that keep one.
     pub fn object(&self) -> ObjectLayerEntry {
         let Pvf3 { i, f } = self.corner();
         let kind = if object_value_is_decor(self.state) {
@@ -276,11 +248,11 @@ impl EntryCursor {
         } else {
             EntryKind::Solid {
                 // Every value the store writes is one the catalog gives out.
-                cube: placeable_cube_of(self.state).expect("a solid leaf holds a cube the catalog gives out"),
+                cube: placeable_cube_of(self.state).or_bug(Errno::ENOTRECOVERABLE),
             }
         };
         ObjectLayerEntry {
-            at: self.at().unwrap_or_default(),
+            at: self.at(),
             i,
             f,
             size: self.size,
@@ -291,7 +263,7 @@ impl EntryCursor {
 
 // ---- Cells ----
 //
-// A cell's entries are one run of its chunk's lanes, found where the cell
+// A cell's entries are one run of its column's lanes, found where the cell
 // falls in their order (Store::cell).
 
 /// The run of the column's entries in the cell; None where the cell holds
@@ -322,39 +294,19 @@ fn apply(writes: impl IntoIterator<Item = Write>) {
 /// cell it falls in, and the corner and size a write back to it needs.
 fn cursor_at(at: EntryAt) -> EntryCursor {
     let mut cursor = EntryCursor::default();
-    cursor.at_chunk(at.col_idx);
+    cursor.at_column(at.col_idx);
     cursor.load(at.band_idx, at.pos, 0);
     cursor
 }
 
-/// Whether any entry — including the carve preview — is filed under a
-/// column. One lookup; what a coarse build asks before skipping the scan.
-pub fn col_has_entries(col_idx: IVec) -> bool {
-    if kernel().objects.entries(col_idx).is_some() {
-        return true;
-    }
-    store_state().virtual_carve_preview.as_ref().is_some_and(|c| c.at.col_idx == col_idx)
-}
-
-/// Every entry of a column. `render` applies the eraser preview's two edits,
-/// the hidden entry left out and the carve preview put in, which only the
-/// drawn build may see (see set_virtual_hide).
-pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor), render: bool) {
+/// Every entry a column stores. The eraser's two edits are the drawn
+/// build's alone (see set_virtual_hide), and none of these readers is one.
+pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor)) {
+    let Some(e) = kernel().objects.entries(col_idx) else { return };
     let mut cursor = EntryCursor::default();
-    let hide = store_state().virtual_hide;
-    if let Some(e) = kernel().objects.entries(col_idx) {
-        cursor.at_chunk(col_idx);
-        for k in 0..e.band.len() {
-            cursor.load(e.band[k], e.pos[k], e.state[k]);
-            if render && hide.is_some_and(|h| cursor.at() == Some(h)) {
-                continue;
-            }
-            visit(&cursor);
-        }
-    }
-    let carve = store_state().virtual_carve_preview;
-    if let Some(carve) = carve.filter(|c| render && c.at.col_idx == col_idx) {
-        cursor.load_carve(carve.at);
+    cursor.at_column(col_idx);
+    for k in 0..e.band.len() {
+        cursor.load(e.band[k], e.pos[k], e.state[k]);
         visit(&cursor);
     }
 }
@@ -364,7 +316,7 @@ fn each_cell_entry(ix: i64, iy: i64, iz: i64, visit: &mut dyn FnMut(&EntryCursor
     let col_idx = column_of([ix, iy, iz]);
     let Some(e) = kernel().objects.entries(col_idx) else { return };
     let mut cursor = EntryCursor::default();
-    cursor.at_chunk(col_idx);
+    cursor.at_column(col_idx);
     for k in run.start as usize..(run.start + run.count) as usize {
         cursor.load(e.band[k], e.pos[k], e.state[k]);
         visit(&cursor);
@@ -392,25 +344,19 @@ pub fn cell_is_occupied(ix: i64, iy: i64, iz: i64) -> bool {
     cell_run(ix, iy, iz).is_some_and(|run| run.solid > 0)
 }
 
-/// Objects near a candidate corner+size — the cell it's in plus the 26
-/// neighbors, since a candidate near a cell face can legitimately need to see
-/// an object one cell over (collision.rs's find_overlapping_object, ray.rs's
-/// resolve_hit_object). 27 O(1) lookups, still independent of total object
-/// count.
-pub fn get_objects_near(corner: &Pvf3, _size: f64) -> Vec<OccupiedEntry> {
-    let [cx, cy, cz] = CELL.index_of(corner);
-    // size can push the candidate's own far corner into the NEXT cell too —
-    // covered by the same 3x3x3 neighborhood as long as size <= one cell
-    // (object/size.rs's own largest tier), which every placeable size is.
-    let mut out = Vec::new();
-    for dx in -1..=1 {
-        for dy in -1..=1 {
-            for dz in -1..=1 {
-                occupants(cx + dx, cy + dy, cz + dz, &mut out);
-            }
-        }
-    }
-    out
+/// Every object claiming the cell `at` stands in.
+pub fn objects_at(at: &Pvf3) -> Vec<OccupiedEntry> {
+    let [ix, iy, iz] = CELL.index_of(at);
+    get_objects_in_cell(ix, iy, iz)
+}
+
+/// A cube as a node of the hierarchy: its side, and its index at that side,
+/// the corner lowered to its own lattice as the store files it (`At`). Two
+/// cubes share space exactly when one's node lies under the other's
+/// (hierarchy.rs `share`), since every cube sits on its own size's lattice.
+pub fn cube_node(corner: &Pvf3, size: f64) -> (Scale, [i64; 3]) {
+    let side = Scale::of_side(size);
+    (side, side.index_of(corner))
 }
 
 /// One object by its address, or None — the address says which cell it is
@@ -419,7 +365,7 @@ pub fn get_placed_object(at: EntryAt) -> Option<OccupiedEntry> {
     let [ix, iy, iz] = cursor_at(at).cell();
     let mut found = None;
     each_cell_entry(ix, iy, iz, &mut |entry| {
-        if found.is_none() && !object_value_is_air(entry.state) && entry.at() == Some(at) {
+        if found.is_none() && !object_value_is_air(entry.state) && entry.at() == at {
             found = Some(entry.object());
         }
     });
@@ -442,6 +388,9 @@ struct StoreState {
     virtual_carve_preview: Option<CarvePreview>,
     /// When the pending save is due, if one is.
     save_due_ms: Option<f64>,
+    /// The saved blob the host is copying in, and the turn it was asked on:
+    /// read on a later one.
+    loading: Option<(Vec<u8>, u64)>,
 }
 
 static STORE: Global<StoreState> = Global::new();
@@ -452,6 +401,7 @@ fn store_state() -> &'static mut StoreState {
         hide_in: (false, false),
         virtual_carve_preview: None,
         save_due_ms: None,
+        loading: None,
     })
 }
 
@@ -489,7 +439,7 @@ pub fn set_virtual_hide(at: Option<EntryAt>) {
 /// reason. `i`/`f`/`size` match what a real place_air() at this hover would
 /// write, so the preview renders identically to what it stands in for.
 pub fn set_virtual_carve_preview(at: &Pvf3, size: f64) {
-    let lowered = At::of(at);
+    let lowered = At::of_cube(at, Scale::of_side(size));
     let cell = lowered.cell();
     let st = store_state();
     if st.virtual_carve_preview.as_ref().is_some_and(|c| c.cell == cell) {
@@ -533,9 +483,7 @@ pub fn render_edits() -> RenderEdits {
 /// Tells the builds the two edits, and the chunks that their sources moved.
 fn send_render_edits() {
     let st = store_state();
-    let hide = st.virtual_hide.map(|h| (h.col_idx, h.band_idx, h.pos));
-    let carve = st.virtual_carve_preview.map(|c| (c.at.col_idx, Carve { band: c.at.band_idx, pos: c.at.pos }));
-    kernel().sched.builder.set_edits(hide, carve);
+    kernel().sched.builder.set_edits(st.virtual_hide, st.virtual_carve_preview.map(|c| c.at));
     chunk_sources_changed();
 }
 
@@ -596,22 +544,18 @@ fn collect_col(by_page: &mut Vec<(IVec, PageRows)>, col_idx: IVec) {
         }
     };
     let rows = &mut by_page[slot].1;
-    each_col_entry(
-        col_idx,
-        &mut |entry| {
-            let corner = entry.corner();
-            let local = Pvf3 {
-                i: ivec::sub(corner.i, page_base),
-                f: corner.f,
-            };
-            rows.x.push(pvf3::to_real(pvf3::X(&local)) as f32);
-            rows.y.push(pvf3::to_real(pvf3::Y(&local)) as f32);
-            rows.z.push(pvf3::to_real(pvf3::Z(&local)) as f32);
-            rows.size.push(entry.size as f32);
-            rows.value.push(entry.state);
-        },
-        false,
-    );
+    each_col_entry(col_idx, &mut |entry| {
+        let corner = entry.corner();
+        let local = Pvf3 {
+            i: ivec::sub(corner.i, page_base),
+            f: corner.f,
+        };
+        rows.x.push(pvf3::to_real(pvf3::X(&local)) as f32);
+        rows.y.push(pvf3::to_real(pvf3::Y(&local)) as f32);
+        rows.z.push(pvf3::to_real(pvf3::Z(&local)) as f32);
+        rows.size.push(entry.size as f32);
+        rows.value.push(entry.state);
+    });
 }
 
 fn encode_pages(by_page: &[(IVec, PageRows)]) -> Result<String, MarshalError> {
@@ -643,9 +587,7 @@ fn encode_pages(by_page: &[(IVec, PageRows)]) -> Result<String, MarshalError> {
 }
 
 pub fn decode_objects(blob: &str) -> Result<(), MarshalError> {
-    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(blob)
-        .map_err(|_| MarshalError::new(Errno::EINVAL, Some("objects: the stored blob is not base64url"), None))?;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(blob).map_err(|_| MarshalError::new(Errno::EINVAL))?;
     let root = TreeReader::new(&bytes)?.read_branch()?;
     // Every record is one write of one batch, so each column's entries are
     // made once however many objects it holds.
@@ -669,13 +611,24 @@ pub fn decode_objects(blob: &str) -> Result<(), MarshalError> {
     result
 }
 
-/// Reads the saved blob into the store. An unreadable blob starts the world
+/// Asks for the saved blob the host holds as `body`, `bytes` long, which the
+/// frame reads into the store once it is in (`flush_save_if_due`).
+pub fn load(body: u32, bytes: u32) {
+    let mut blob = vec![0; bytes as usize];
+    body_read(body, &mut blob);
+    store_state().loading = Some((blob, turn()));
+}
+
+/// Reads a saved blob that has come in. An unreadable blob starts the world
 /// empty, as a missing one does.
-pub fn load() {
-    if let Some(raw) = storage_get(&storage_key()) {
-        if decode_objects(&raw).is_err() {
-            kernel().objects.clear();
-        }
+fn loaded() {
+    let st = store_state();
+    if !st.loading.as_ref().is_some_and(|(_, asked)| turn() > *asked) {
+        return;
+    }
+    let (blob, _) = st.loading.take().or_bug(Errno::ENOTRECOVERABLE);
+    if core::str::from_utf8(&blob).map_or(true, |raw| decode_objects(raw).is_err()) {
+        kernel().objects.clear();
     }
 }
 
@@ -702,6 +655,7 @@ fn saves() -> &'static mut Notify {
 /// The frame's check: a pending save that is due is asked of the save task,
 /// and one not yet due asks for the turn it falls due on.
 pub fn flush_save_if_due() {
+    loaded();
     match store_state().save_due_ms {
         Some(due) if now() >= due => saves().notify(),
         Some(due) => wake_at(due),
@@ -740,7 +694,7 @@ pub async fn save_task() {
             continue;
         }
         if let Ok(blob) = encode_pages(&by_page) {
-            storage_set(&storage_key(), &blob);
+            storage_set(storage::OBJECTS, blob);
         }
     }
 }
@@ -751,19 +705,19 @@ pub fn flush_save() {
         return;
     }
     if let Ok(blob) = encode_objects() {
-        storage_set(&storage_key(), &blob);
+        storage_set(storage::OBJECTS, blob);
     }
 }
 
 // ---- Mutations ----
 
-/// i/f is taken as-is — whatever camera/ray.rs's world_adjacent_corner
-/// already computed (the same coordinate the hover preview and overlap check
-/// used), never re-derived or re-snapped here. One source of truth for where
-/// a placement goes, not a second one that quietly overrides it.
+/// i/f is what camera/ray.rs's world_adjacent_corner computed — the same
+/// coordinate the hover preview and the overlap check used — filed on the
+/// cube's own lattice (`At::of_cube`), which that corner already lies on, so
+/// the write names the cube they did.
 ///
-/// The kernel writes the leaf, compacts the band and drops it — and the chunk
-/// — once every leaf in it reads back VOID: a redundant place() and a
+/// The kernel writes the leaf, compacts the band and drops it — and the
+/// column — once every leaf in it reads back VOID: a redundant place() and a
 /// remove() both write VOID on purpose, and a record carrying no information
 /// would otherwise sit in every save for nothing.
 fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
@@ -775,12 +729,13 @@ fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
 fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
     // size is always an exact power of two by construction (object/size.rs's
     // OBJECT_SIZES); the nearest scale only guards against float noise.
-    let at = At::of(coord);
+    let scale = Scale::of_side(size);
+    let at = At::of_cube(coord, scale);
     Write {
         col_idx: at.col_idx,
         band_idx: at.band,
         at: at.step,
-        scale: Scale::of_side(size),
+        scale,
         state: val,
     }
 }
@@ -859,20 +814,19 @@ pub fn remove(at: EntryAt) {
 // The object store's records; the paint that turns them into voxels is
 // crates/pxl/web/render/src/mesh/paint/object/adapter.rs.
 //
-// One record per L2 chunk column that holds user objects — a sparse
-// octree per 64³ band whose leaves are catalog values — and, derived from
-// it a chunk at a time, the chunk's entries as three
-// lanes (band, packed position, state) and an index of the cells they
-// fall in. Everything here is numbers: the client lowers a coordinate to
-// a chunk key, a band and a lattice position before it crosses, and gets
-// lanes back as views.
+// One record per L2 column that holds user objects — a sparse octree per
+// 64³ band whose leaves are catalog values — and, derived from it a column
+// at a time, the column's entries as three lanes (band, packed position,
+// state), in an order a cell's entries are one run of. Everything here is
+// numbers: the client lowers a coordinate to a column key, a band and a
+// lattice position before it crosses, and gets lanes back as views.
 //
 // A leaf is the catalog value itself, which the catalog keeps within a
 // leaf's width (pxl-spec cell/object.rs); an entry is at most a cell because everything downstream — the collision neighbourhood,
 // the raycast's per-cell runs — assumes one, and a leaf covering more is
-// split into the cells it covers as the lanes are built; and the index is
-// rebuilt a chunk at a time because a write touches one chunk and the cost
-// is bounded by what that chunk holds.
+// split into the cells it covers as the lanes are built; and the lanes are
+// made again a column at a time because a write touches one column and the
+// cost is bounded by what that column holds.
 
 /// The first of `0..n` for which `before` no longer holds, `before` holding
 /// for a prefix of them.
@@ -910,7 +864,7 @@ pub const UNKNOWN: u32 = cube_types::common::unknown as u32;
 /// unwritten index is.
 const _: () = assert!(VOID == 0);
 
-pub(crate) struct Chunk {
+pub(crate) struct Column {
     /// The band trees by Z, each leaf the catalog value it holds — VOID, a
     /// zeroed leaf, being the absence.
     bands: BTreeMap<BandZ, SparseTree<u16>>,
@@ -918,7 +872,7 @@ pub(crate) struct Chunk {
     /// order, a leaf coarser than a cell split into its cells in that order,
     /// so a cell's entries are one run and the lanes are sorted by
     /// (band, cell's walk order). Made again whenever a write changes the
-    /// chunk, inside the write.
+    /// column, inside the write.
     pub(crate) e_band: Vec<BandZ>,
     pub(crate) e_pos: Vec<u32>,
     pub(crate) e_state: Vec<u32>,
@@ -927,7 +881,7 @@ pub(crate) struct Chunk {
     z: (f64, f64),
 }
 
-impl Chunk {
+impl Column {
     /// Re-reads the trees into the entry lanes: one entry per leaf, a leaf
     /// larger than a cell split into the cells it covers.
     fn derive_entries(&mut self) {
@@ -965,7 +919,7 @@ impl Chunk {
     }
 }
 
-/// The run [start, start + count) of a chunk's entries in one cell, and how
+/// The run [start, start + count) of a column's entries in one cell, and how
 /// many of them really occupy it — every kind but AIR.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CellRun {
@@ -986,10 +940,10 @@ pub struct Write {
 }
 
 pub struct Store {
-    /// A chunk for every column holding an object, and only for those: a
-    /// band is dropped once every leaf of it reads VOID, and a chunk with its
-    /// last band.
-    chunks: BTreeMap<IVec, Chunk>,
+    /// A record for every column holding an object, and only for those: a
+    /// band is dropped once every leaf of it reads VOID, and a column with
+    /// its last band.
+    columns: BTreeMap<IVec, Column>,
     /// The lowest and highest the objects under a node of the hierarchy
     /// reach, in units, for every node over a column that holds any: keyed
     /// by the node's levels above a column and its coordinate at them. A
@@ -1011,14 +965,14 @@ impl Default for Store {
 impl Store {
     pub fn new() -> Store {
         Store {
-            chunks: BTreeMap::new(),
+            columns: BTreeMap::new(),
             reaches: HashMap::new(),
         }
     }
 
     /// The columns holding objects.
     pub fn cols(&self) -> impl Iterator<Item = IVec> + '_ {
-        self.chunks.keys().copied()
+        self.columns.keys().copied()
     }
 
     /// The lowest and highest the objects under a node reach, in units: a
@@ -1051,8 +1005,8 @@ impl Store {
     /// Makes again the reaches over column `col`, from it up.
     fn reach_up(&mut self, col: IVec) {
         let mut at = [ivec::X(col), ivec::Y(col)];
-        match self.chunks.get(&col) {
-            Some(chunk) => self.reaches.insert((0, at), chunk.z),
+        match self.columns.get(&col) {
+            Some(column) => self.reaches.insert((0, at), column.z),
             None => self.reaches.remove(&(0, at)),
         };
         for level in 1..=REACH_LEVELS {
@@ -1068,7 +1022,7 @@ impl Store {
     /// The state at a lattice position of band `band_idx` of column
     /// `col_idx`; VOID where nothing is.
     pub fn read(&self, col_idx: IVec, band_idx: BandZ, at: [u32; 3]) -> u32 {
-        let Some(tree) = self.chunks.get(&col_idx).and_then(|c| c.bands.get(&band_idx)) else {
+        let Some(tree) = self.columns.get(&col_idx).and_then(|c| c.bands.get(&band_idx)) else {
             return VOID;
         };
         u32::from(mem::get::<Ivec, u16>(&tree.mem, &tree.layout, band_key(at), 0))
@@ -1085,8 +1039,8 @@ impl Store {
             }
         }
         for &col_idx in &changed {
-            if let Some(chunk) = self.chunks.get_mut(&col_idx) {
-                chunk.derive_entries();
+            if let Some(column) = self.columns.get_mut(&col_idx) {
+                column.derive_entries();
             }
             self.reach_up(col_idx);
         }
@@ -1094,30 +1048,30 @@ impl Store {
     }
 
     /// Writes one leaf, compacts its band, and drops the band — and the
-    /// chunk — once every leaf reads VOID. False where nothing was there to
+    /// column — once every leaf reads VOID. False where nothing was there to
     /// change: VOID written where no band is.
     fn put(&mut self, w: Write) -> bool {
         let Write { col_idx, band_idx, at, scale, state } = w;
-        assert!((OBJECT_FINEST..=CELL).contains(&scale), "an object no finer than its finest tier and no coarser than a cell");
-        let value = u16::try_from(state).expect("a catalog value fits a leaf");
-        let has_band = self.chunks.get(&col_idx).is_some_and(|c| c.bands.contains_key(&band_idx));
+        xpute_core::ensure!((OBJECT_FINEST..=CELL).contains(&scale), ENOTRECOVERABLE);
+        let value = u16::try_from(state).or_bug(Errno::EOVERFLOW);
+        let has_band = self.columns.get(&col_idx).is_some_and(|c| c.bands.contains_key(&band_idx));
         if !has_band && state == VOID {
             return false;
         }
-        let chunk = self.chunks.entry(col_idx).or_insert_with(|| Chunk {
+        let column = self.columns.entry(col_idx).or_insert_with(|| Column {
             bands: BTreeMap::new(),
             e_band: Vec::new(),
             e_pos: Vec::new(),
             e_state: Vec::new(),
             z: (0.0, 0.0),
         });
-        let tree = chunk.bands.entry(band_idx).or_insert_with(|| sparse_tree::alloc::<u16>(OBJECT_LAYOUT, 64));
+        let tree = column.bands.entry(band_idx).or_insert_with(|| sparse_tree::alloc::<u16>(OBJECT_LAYOUT, 64));
         mem::set::<Ivec, u16>(&mut tree.mem, &tree.layout, band_key(at), value, scale, 0);
         sparse_tree::compact(tree);
         if band_is_empty(tree) {
-            chunk.bands.remove(&band_idx);
-            if chunk.bands.is_empty() {
-                self.chunks.remove(&col_idx);
+            column.bands.remove(&band_idx);
+            if column.bands.is_empty() {
+                self.columns.remove(&col_idx);
             }
         }
         true
@@ -1133,38 +1087,39 @@ impl Store {
     /// holds nothing: a column is held only while a leaf of it is not VOID,
     /// and every such leaf is an entry.
     pub fn entries(&self, col_idx: IVec) -> Option<Entries<'_>> {
-        let chunk = self.chunks.get(&col_idx)?;
+        let column = self.columns.get(&col_idx)?;
         Some(Entries {
-            band: &chunk.e_band,
-            pos: &chunk.e_pos,
-            state: &chunk.e_state,
+            col_idx,
+            band: &column.e_band,
+            pos: &column.e_pos,
+            state: &column.e_state,
         })
     }
 
-    /// The run of a chunk's entries in the cell at band-local (cx, cy) and
+    /// The run of a column's entries in the cell at band-local (cx, cy) and
     /// absolute cell Z `cz`: found where it lies in the lanes' order.
     pub fn cell(&self, col_idx: IVec, cx: u32, cy: u32, cz: CellZ) -> Option<CellRun> {
-        let chunk = self.chunks.get(&col_idx)?;
+        let column = self.columns.get(&col_idx)?;
         let (band_idx, z) = band_of(cz as i64);
         let want = Self::cell_order(band_idx, cx, cy, z);
         let order = |k: usize| {
-            let (x, y, z, _) = unpack_pos(chunk.e_pos[k]);
+            let (x, y, z, _) = unpack_pos(column.e_pos[k]);
             let ([x, y, z], _) = in_cell([x, y, z]);
-            Self::cell_order(chunk.e_band[k], x, y, z)
+            Self::cell_order(column.e_band[k], x, y, z)
         };
-        let n = chunk.e_band.len();
+        let n = column.e_band.len();
         let start = partition_point(n, |k| order(k) < want);
         let end = start + partition_point(n - start, |k| order(start + k) == want);
         (end > start).then(|| CellRun {
             start: start as u32,
             count: (end - start) as u32,
-            solid: (start..end).filter(|&k| chunk.e_state[k] != AIR).count() as u32,
+            solid: (start..end).filter(|&k| column.e_state[k] != AIR).count() as u32,
         })
     }
 
     /// Every record gone, as a load that could not be read leaves the world.
     pub fn clear(&mut self) {
-        self.chunks.clear();
+        self.columns.clear();
         self.reaches.clear();
     }
 }

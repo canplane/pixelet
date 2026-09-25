@@ -20,7 +20,7 @@ use pxl_spec::bake::format::{Ground, GroundChannelKey};
 use pxl_spec::bake::model::feature::Feature;
 use pxl_spec::bake::pack::{channel_of, with_channel, GroundCell};
 use pxl_spec::cell::cube::cube_types;
-use pxl_spec::space::pyramid::PAGE_CELLS;
+use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
 use pxl_spec::space::v3::V3;
 use xpute_core::math::scalar::round;
 
@@ -39,7 +39,7 @@ fn snap_px(x: f64) -> i64 {
 }
 
 fn cell_idx(x: i64, y: i64) -> usize {
-    (y * SPAN + x) as usize
+    GROUND.cell_index(x as u32, y as u32) as usize
 }
 
 /// Whether a pass stops at sea. Water and land overlays must not paint over

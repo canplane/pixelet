@@ -54,8 +54,9 @@ pub struct Lattice {
 
 impl Lattice {
     pub const fn new(cell: Scale) -> Lattice {
-        assert!(cell.shamt() + FRAC_W as i32 > 0, "a cell no finer than the fixed point's fraction");
-        assert!(cell.shamt() <= L2.shamt(), "a cell no coarser than a chunk");
+        if cell.shamt() + FRAC_W as i32 <= 0 || cell.shamt() > L2.shamt() {
+            panic!()
+        }
         Lattice { cell }
     }
 
@@ -99,7 +100,7 @@ impl Lattice {
 
     /// The cell at `index` of `page`.
     pub fn cell_at(self, page: LevelPage, index: u32) -> Cell {
-        assert!(index < self.page_cells() * self.page_cells(), "a cell index is inside its page");
+        xpute_core::ensure!(index < self.page_cells() * self.page_cells(), ENOTRECOVERABLE);
         Cell { lattice: self, page, index }
     }
 
@@ -118,7 +119,7 @@ impl Lattice {
     /// The parent cell a child's cell folds into, the child page in slot `q`.
     pub fn parent_cell(self, q: usize, index: u32) -> u32 {
         let n = self.page_cells() as i64;
-        let (page, [tx, ty]) = (child_of([0, 0], q), self.local(index));
+        let (page, [tx, ty]) = (child_of([0, 0], q), self.in_page(index).map(i64::from));
         let [x, y] = parent_of([page[0] * n + tx, page[1] * n + ty]);
         self.cell_index(x as u32, y as u32)
     }
@@ -127,14 +128,15 @@ impl Lattice {
     /// cell is folded from: `parent_cell`'s inverse.
     pub fn child_block(self, index: u32) -> (usize, u32) {
         let n = self.page_cells() as i64;
-        let [x, y] = child_of(self.local(index), 0);
+        let [x, y] = child_of(self.in_page(index).map(i64::from), 0);
         (slot_of([x / n, y / n]), self.cell_index((x % n) as u32, (y % n) as u32))
     }
 
-    /// A cell index as its column and row in its page.
-    fn local(self, index: u32) -> [i64; 2] {
+    /// A cell index as its column and row in its page: `cell_index`'s
+    /// inverse.
+    pub const fn in_page(self, index: u32) -> [u32; 2] {
         let n = self.page_cells();
-        [(index % n) as i64, (index / n) as i64]
+        [index % n, index / n]
     }
 }
 
@@ -219,6 +221,13 @@ impl LevelPage {
     /// The page's side in units.
     pub fn span(self) -> f64 {
         span_of(self.level)
+    }
+
+    /// The page's south-west corner and side, in units.
+    pub fn rect(self) -> (f64, f64, f64) {
+        let (side, [x, y]) = self.node();
+        let base = side.base_of([x, y, 0]);
+        (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)), side.side())
     }
 
     /// A demand's subject: the key with the level in the lane a page does not
@@ -309,10 +318,15 @@ impl Cell {
         self.lattice.scale(self.page.level)
     }
 
+    /// Its column and row in its page.
+    pub fn in_page(self) -> [u32; 2] {
+        self.lattice.in_page(self.index)
+    }
+
     /// The point at the cell's south-west corner.
     pub fn base(self) -> Pvf3 {
-        let n = self.lattice.page_cells();
-        self.lattice.cell_base(self.page, self.index % n, self.index / n)
+        let [tx, ty] = self.in_page();
+        self.lattice.cell_base(self.page, tx, ty)
     }
 
     /// The point at the cell's middle on the ground plane.

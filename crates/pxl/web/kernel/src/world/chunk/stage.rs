@@ -1,10 +1,10 @@
 // pxl-kernel/world/chunk/stage.rs
 
-//! The world's turn of the tick. In the visible phase it composes the frame the
-//! scheduler reads — the view, the frustum, the budget, the range anchor, the
-//! settings — and runs the scheduler's pass once; the view's renderer
-//! (pxl-render's gpu/renderer.rs) then draws the scheduler's lists. In the report phase it hands the frame's
-//! numbers to the ledger.
+//! The world's turn of the tick. In the visible phase it composes the frame
+//! the scheduler reads — the view, the frustum, the budget — and runs the
+//! scheduler's pass once; the view's renderer (pxl-render's
+//! gpu/renderer.rs) then draws the scheduler's lists. In the report phase it
+//! hands the frame's numbers to the ledger.
 
 use pxl_render::look::lod::set_lod_projection;
 use pxl_spec::space::pvf3::ivec;
@@ -20,7 +20,6 @@ use crate::sched::ledger::record::{
     ledger_record_frame, ledger_take_rings, CapSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample, LEVELS,
 };
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
-use crate::shell::setting::store::settings_store;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::build::RETAIN_BUDGET_BYTES;
 use crate::world::chunk::table::{builds, Census, Frame};
@@ -154,21 +153,17 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
 
     let origin = v.origin;
 
-    let settings = settings_store();
     let frame = Frame {
         root: v.root,
         origin: [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))],
         planes: v.planes,
         camera: v.eye,
-        viewport_h: v.height,
-        fov_deg: v.fov,
         delta_s: ctx.delta,
         remaining_ms: ctx.budget.remaining(),
         hard_slack_ms: HARD_SLACK_MS,
         retain_budget_bytes: RETAIN_BUDGET_BYTES(),
         centre_z: ivec::to_real(ivec::Z(v.origin)) - v.tz,
         globe: Some(globe()),
-        show_decor: settings.show_decor,
     };
 
     let t0 = now();

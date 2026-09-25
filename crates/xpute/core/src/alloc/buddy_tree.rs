@@ -430,11 +430,11 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
             self.min_log2 = min_log2;
             self.max_log2 = max_log2;
             self.bucket_count = max_log2 - min_log2 + 1;
-            assert!(
+            crate::ensure!(
                 self.bucket_count <= MAX_BUCKETS && self.node_is_split.as_ref().len() * 8 == 1 << (self.bucket_count - 1),
-                "buddy_tree: the split bitmap the range declared is not what its exponents ask for"
+                ENOTRECOVERABLE
             );
-            assert!(1usize << min_log2 >= core::mem::size_of::<List>(), "a free block must hold its own list links");
+            crate::ensure!(1usize << min_log2 >= core::mem::size_of::<List>(), ENOTRECOVERABLE);
             self.base_ptr = base;
             self.max_ptr = base;
             self.end_ptr = end;

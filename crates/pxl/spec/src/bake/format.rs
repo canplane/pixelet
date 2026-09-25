@@ -94,7 +94,7 @@ pub const fn ch_index(key: GroundChannelKey) -> usize {
         }
         i += 1;
     }
-    panic!("a ground channel missing from GROUND_CH_KEYS")
+    panic!()
 }
 
 const _: () = {
@@ -192,12 +192,12 @@ pub fn decode_terrain_into(pkt: &[u8], room: PageRoom) -> Result<(), MarshalErro
     let root = TreeReader::new(pkt)?.read_branch()?;
     let ele = root.at(0)?.get_array::<i16>()?;
     let cells = root.at(1)?.get_array::<GroundCell>()?;
-    let wrong = |what: &str| Err(MarshalError::new(Errno::EBADMSG, Some(&format!("a terrain page whose {what} is not the page's own size")), None));
+    let wrong = || Err(MarshalError::new(Errno::EBADMSG));
     if ele.len() != room.ele.len() {
-        return wrong("elevation");
+        return wrong();
     }
     if cells.len() != room.cells.len() {
-        return wrong("ground");
+        return wrong();
     }
     room.ele.copy_from_slice(ele);
     room.cells.copy_from_slice(cells);

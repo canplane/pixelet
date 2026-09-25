@@ -8,6 +8,8 @@
 
 import type { Bytes } from "@xpute/core/abi/array.ts";
 import * as encoding from "@xpute/core/codec/encoding.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
+import { MarshalError } from "@xpute/core/status/error.ts";
 
 /**
  * [Encode] Converts an object to UTF-8 binary.
@@ -27,13 +29,13 @@ export function encode<T>(data: T): Bytes {
     // [Validation]
     // undefined result means the input was only a function/symbol — reject it.
     if (json === undefined) {
-      throw new Error("json codec: result is undefined. input is not a valid json shape.");
+      throw new MarshalError(Errno.EBADMSG);
     }
 
     return encoding.te.encode(json);
   } catch (err) {
     // wrap and report as a system-level error
-    throw new Error(`json codec: encode failed: ${err instanceof Error ? err.message : "unknown error"}`);
+    throw new MarshalError(Errno.EINVAL);
   }
 }
 

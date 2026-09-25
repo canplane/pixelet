@@ -14,6 +14,8 @@ use std::collections::HashSet;
 
 use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::{Cover, Domain};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// The terrain's cover as its mesh can draw it.
 ///
@@ -54,7 +56,7 @@ pub fn mesh(cover: Cover, d: &Domain, resident: impl Fn(Chunk) -> bool) -> Cover
         } else {
             // Past the one level a stand-in may reach: that branch opens, a
             // level under the wanted one, and the stand-ins beside it stay.
-            open.insert(c.ancestors().find(|a| a.level() + 1 == want.level()).expect("a chunk under the wanted one has one a level under it"));
+            open.insert(c.ancestors().find(|a| a.level() + 1 == want.level()).or_bug(Errno::ENOTRECOVERABLE));
         }
     }
     let mut gaps: HashSet<Chunk> = cover.gaps.into_iter().collect();
@@ -76,10 +78,7 @@ pub fn mesh(cover: Cover, d: &Domain, resident: impl Fn(Chunk) -> bool) -> Cover
         }
     }
     loop {
-        let ups: HashSet<Chunk> = unbalanced(&drawn, d)
-            .into_iter()
-            .map(|(fine, _)| fine.parent().expect("a chunk two levels under another has a parent"))
-            .collect();
+        let ups: HashSet<Chunk> = unbalanced(&drawn, d).into_iter().map(|(fine, _)| fine.parent().or_bug(Errno::ENOTRECOVERABLE)).collect();
         if ups.is_empty() {
             break;
         }

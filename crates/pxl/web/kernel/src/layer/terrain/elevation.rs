@@ -5,7 +5,7 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::format::{GroundChannelKey, Terrain};
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::{LevelPage, GROUND, PAGE_CELLS, TOP_LEVEL};
+use pxl_spec::space::pyramid::{Cell, LevelPage, GROUND, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::world::pyramid::Layer as _;
@@ -14,11 +14,10 @@ use crate::world::pyramid::Layer as _;
 /// one query that answers it (crates/pxl/web/render/src/mesh/paint/terrain/elevation.rs's
 /// ground_ele), so this module's own consumers — camera ground-snap,
 /// ground_or_raw, any cell-marker probe — agree with the terrain on screen
-/// instead of reasoning about a height it does not show. A page's ele and
-/// ground are page-level here, so tx/ty index them at PAGE_CELLS stride.
-fn sample_ele_grounded(terrain: &Terrain, tx: u32, ty: u32) -> f64 {
-    let idx = (ty * PAGE_CELLS + tx) as usize;
-    ground_ele(&terrain.ele, Some(GroundLanes::of(&terrain.ground)), idx, tx as i32, ty as i32) as f64
+/// instead of reasoning about a height it does not show.
+fn sample_ele_grounded(terrain: &Terrain, cell: Cell) -> f64 {
+    let [tx, ty] = cell.in_page();
+    ground_ele(&terrain.ele, Some(GroundLanes::of(&terrain.ground)), tx as i32, ty as i32) as f64
 }
 
 /// The ground's height at `at` as the finest resident page draws it, in
@@ -34,8 +33,7 @@ pub fn ground_at(at: &Pvf3) -> Option<f64> {
     let leaf = TO_XY(L3_IDX(at.i));
     (0..=TOP_LEVEL).find_map(|level| {
         let tile = Terrain::pyramid().get(LevelPage::over(level, leaf))?;
-        let cell = GROUND.cell_of(level, at);
-        Some(sample_ele_grounded(tile, cell.index() % PAGE_CELLS, cell.index() / PAGE_CELLS) * U_PER_CELL)
+        Some(sample_ele_grounded(tile, GROUND.cell_of(level, at)) * U_PER_CELL)
     })
 }
 

@@ -3,6 +3,7 @@
 use crate::space::adapter::epsg3857::{U_PER_M, Z_SCALE};
 use crate::space::hierarchy::{ancestor_of, first_descendant_of, Scale};
 use crate::space::indexer::{L2, L3};
+use crate::space::pvf3::ivec::IVec;
 use crate::space::sparse_tree::mem::SparseTreeLayout;
 
 // ---- Unit System ----
@@ -134,6 +135,18 @@ pub const OBJECT_LAYOUT: SparseTreeLayout = SparseTreeLayout {
 /// one: what the width is for is written down rather than enforced.
 pub type CellZ = i32;
 pub type BandZ = i32;
+
+/// Where an entry of the object layer is, which is also what names it: the
+/// column it is filed under (the L2 index of its XY), its band, and its
+/// packed position in that band (`pack_pos`). One address for everything
+/// that points at an entry — the store, the eraser's edits, the paint and
+/// the fold, a hit — so none of them spells it another way.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EntryAt {
+    pub col_idx: IVec,
+    pub band_idx: BandZ,
+    pub pos: u32,
+}
 
 /// Cells along a band's side, and as a shift: a band-local column is
 /// `(cy << BAND_CELL_SHAMT) | cx`.

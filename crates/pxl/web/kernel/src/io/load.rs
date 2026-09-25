@@ -31,7 +31,7 @@ use std::rc::Rc;
 
 use pxl_render::asset::gltf::{parse_gltf, Gltf};
 use pxl_spec::asset::ingested::Asset;
-use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
+use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
 pub use crate::abi::cmd::LoadKind;
 use crate::global::Global;
@@ -41,6 +41,8 @@ use crate::io::sched::{attempt_of, settle, Rank};
 use crate::layer::decor::asset_store::decor_assets_arrived;
 use crate::sched::ledger::record::{Failure, Outcome};
 use crate::world::change::{request_world_tick, world_edge};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// What a load names: a shipped asset, or the texture pack's sheet, which the
 /// ingest writes beside the table rather than as a row of it.
@@ -165,7 +167,7 @@ pub fn load_wants() -> &'static [(u64, Rank)] {
     let l = loader();
     l.wants.clear();
     for n in 0..LOADS {
-        let load = Load::of(n as u32).expect("a load's own number");
+        let load = Load::of(n as u32).or_bug(Errno::ENOTRECOVERABLE);
         if matches!(l.gltf[n], Some(Entry::Pending)) {
             l.wants.push((subject_of(LoadKind::Gltf, load), policy::asset()));
         }
@@ -218,6 +220,8 @@ pub async fn gltf_task() {
             yield_if_spent(world_edge).await;
             let mut buf = vec![0u8; bytes as usize];
             body_read(body, &mut buf);
+            // In once the host has run the turn's records.
+            next_turn(world_edge).await;
             let entry = match parse_gltf(&buf, &[], || yield_if_spent(world_edge)).await {
                 Ok(g) => Entry::Ready(Rc::new(g)),
                 Err(_) => Entry::Failed,

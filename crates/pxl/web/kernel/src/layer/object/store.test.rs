@@ -4,7 +4,7 @@
 // A col_idx's changes are read as its revisions moving, which is what
 // world/chunk/source.rs follows.
 
-use pxl_spec::bake::constant::{BAND_CELLS, CELL_STEPS};
+use pxl_spec::bake::constant::{BAND_CELLS, CELL, CELL_STEPS};
 use pxl_spec::cell::cube_types::Block;
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::{fvec, ivec};
@@ -65,15 +65,21 @@ fn object_store_persistence_a_save_is_placement_records_per_page_and_loading_it_
         DecorId::tree,
     );
     let shape = |o: &OccupiedEntry| (o.i, o.f, o.size.to_bits(), matches!(o.kind, EntryKind::Decor { .. }));
-    let before: Vec<_> = get_objects_near(&a, 1.0).iter().map(shape).collect();
+    // The three cells the test places in and the ones around them.
+    let get_objects_near = |at: &Pvf3| {
+        let [cx, cy, cz] = CELL.index_of(at);
+        let near = (-1..=1).flat_map(|dx| (-1..=1).flat_map(move |dy| (-1..=1).map(move |dz| [cx + dx, cy + dy, cz + dz])));
+        near.flat_map(|[x, y, z]| get_objects_in_cell(x, y, z)).collect::<Vec<_>>()
+    };
+    let before: Vec<_> = get_objects_near(&a).iter().map(shape).collect();
     assert_eq!(before.len(), 3);
     let blob = encode_objects().unwrap();
-    for o in get_objects_near(&a, 1.0) {
+    for o in get_objects_near(&a) {
         remove(o.at);
     }
-    assert_eq!(get_objects_near(&a, 1.0).len(), 0);
+    assert_eq!(get_objects_near(&a).len(), 0);
     decode_objects(&blob).unwrap();
-    assert_eq!(get_objects_near(&a, 1.0).iter().map(shape).collect::<Vec<_>>(), before);
+    assert_eq!(get_objects_near(&a).iter().map(shape).collect::<Vec<_>>(), before);
     assert_eq!(encode_objects().unwrap(), blob);
 }
 
@@ -211,10 +217,10 @@ fn a_node_reaches_what_the_columns_under_it_reach() {
         for &(x, y, _, _) in &cols {
             let at = ancestor_of([x, y], level);
             let union = store
-                .chunks
+                .columns
                 .iter()
                 .filter(|(col, _)| ancestor_of([ivec::X(**col), ivec::Y(**col)], level) == at)
-                .map(|(_, chunk)| chunk.z)
+                .map(|(_, column)| column.z)
                 .reduce(|a, b| (a.0.min(b.0), a.1.max(b.1)));
             assert_eq!(store.reach_over((L2.up(level as i32), at)), union, "level {level} at {at:?}");
         }

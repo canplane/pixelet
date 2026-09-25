@@ -118,7 +118,7 @@ impl Ring {
         let head = unsafe { core::slice::from_raw_parts(at_of::<u32>(mem, at as usize), RING_HEADER_WORDS as usize) };
         let capacity = head[0];
         if capacity == 0 || (capacity & (capacity - 1)) != 0 {
-            panic!("ring: capacity {capacity} at {at} is not a power of two");
+            xpute_core::bug!(EINVAL, capacity, at);
         }
         Ring {
             mem,
@@ -153,10 +153,10 @@ impl Ring {
     /// As `new`.
     pub unsafe fn init(mem: *mut u8, at: u32, capacity: u32, slot_base: u32, slot_bytes: u32) -> Ring {
         if capacity == 0 || (capacity & (capacity - 1)) != 0 {
-            panic!("ring: capacity {capacity} is not a power of two");
+            xpute_core::bug!(EINVAL, capacity);
         }
         if slot_bytes == 0 || (slot_bytes & (slot_bytes - 1)) != 0 || !slot_bytes.is_multiple_of(8) {
-            panic!("ring: a slot of {slot_bytes} bytes is not a power of two of whole words");
+            xpute_core::bug!(EINVAL, slot_bytes);
         }
         // SAFETY: the caller's memory, as `new` requires.
         unsafe {
@@ -294,7 +294,7 @@ impl Ring {
         if packet_at == 0 {
             return Ok(None);
         }
-        let bad = || MarshalError::new(Errno::EBADMSG, Some(&format!("ring: message packet at {packet_at} lies outside a slot")), None);
+        let bad = || MarshalError::new(Errno::EBADMSG);
         let off = packet_at.checked_sub(self.slot_base).ok_or_else(bad)? as usize;
         if !off.is_multiple_of(self.slot_bytes as usize) || off + 16 > self.slots().len() {
             return Err(bad());
@@ -310,7 +310,7 @@ impl Ring {
     /// Consumes the message at the head.
     pub fn advance(&self) {
         if self.is_empty() {
-            panic!("ring: advance on an empty ring");
+            xpute_core::bug!(ENOTRECOVERABLE);
         }
         self.words()[1] = self.words()[1].wrapping_add(1);
     }

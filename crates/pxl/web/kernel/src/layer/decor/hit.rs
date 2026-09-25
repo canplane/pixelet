@@ -7,10 +7,10 @@
 //! entry's band and packed position in that column, which is the address the
 //! object store files the entry under.
 
+use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::v3::V3;
 
-use crate::kernel::kernel;
 use crate::layer::object::store::EntryAt;
 use crate::world::chunk::raycast::{ray_hit_decor, RayLike};
 
@@ -33,11 +33,10 @@ const SAME_SURFACE_EPS: f64 = 1e-3;
 /// relative to `map_origin`, as the voxel raycast takes it.
 pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64) -> Option<EntryAt> {
     let hit = ray_hit_decor(&RayLike { origin, direction }, map_origin, max_dist + SAME_SURFACE_EPS)?;
-    let (_, col_idx, ..) = kernel().sched.builder.source_of(hit.chunk)?;
     // The lane holds the band's own i32 as a word (layer/decor/build.rs), NO_ENTRY
     // apart, which the kernel has already passed over.
     Some(EntryAt {
-        col_idx,
+        col_idx: L2_IDX(hit.chunk.base().i),
         band_idx: hit.band as i32,
         pos: hit.pos,
     })

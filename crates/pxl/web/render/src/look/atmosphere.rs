@@ -14,6 +14,9 @@
 //! that absorbs and does not scatter, a tent peaking at 25 km. Distances are
 //! kilometres and coefficients per kilometre throughout.
 
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
+
 /// The planet is the map's (look/globe.rs), so the ground the world is laid
 /// on and the horizon the sky is drawn with are one sphere; the literature's
 /// 6,360 km differs by a third of a percent, which the scattering does not see.
@@ -61,7 +64,7 @@ pub const GROUND_ALBEDO: f64 = 0.3;
 pub fn land() -> [f64; 3] {
     use pxl_spec::bake::format::GroundChannelKey;
     use pxl_spec::cell::cube_types;
-    let swatch = pxl_spec::cell::color::ground(GroundChannelKey::LAND, cube_types::land::green_deep).expect("the palette has a forest");
+    let swatch = pxl_spec::cell::color::ground(GroundChannelKey::LAND, cube_types::land::green_deep).or_bug(Errno::ENOTRECOVERABLE);
     crate::look::color::linear_rgb(swatch.rgb)
 }
 /// The sun's disc, as seen from the Earth.

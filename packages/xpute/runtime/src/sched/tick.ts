@@ -44,6 +44,8 @@
 import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
 import { now } from "../clock.ts";
 import { type PassStats, run_under_budget } from "./frame_budget.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
+import { InvariantError } from "@xpute/core/status/error.ts";
 
 export type Phase = u32;
 export const INTERACTION: Phase = 0;
@@ -113,7 +115,7 @@ export class TickContext<S> {
 
   /** Unregisters a step from inside the tick, before the next step runs. */
   off_tick(id: u32): void {
-    if (this.offs.length >= OFFS_MAX) throw new Error(`a step unregistered more than ${OFFS_MAX} steps at once`);
+    if (this.offs.length >= OFFS_MAX) throw new InvariantError(Errno.ENOSPC);
     this.offs.push(id);
   }
 }
@@ -160,7 +162,7 @@ export class Tick<S> {
   /** Registers a step into a phase. Returns the id `off_tick` takes. `name`
    * is what the step's time is reported under. */
   on_tick(phase: Phase, step: TickStep<S>, name: string): u32 {
-    if (this.registry.length >= this.capacity) throw new Error(`the tick's ${this.capacity} steps are taken`);
+    if (this.registry.length >= this.capacity) throw new InvariantError(Errno.ENOSPC);
     const id = this.next_id++;
     this.registry.push({ id, phase, step, name });
     return id;

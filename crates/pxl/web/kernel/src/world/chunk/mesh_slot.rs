@@ -1,8 +1,7 @@
 // pxl-kernel/world/chunk/mesh_slot.rs
 
-//! Where a chunk's mesh lies on the device: a slot decided by the chunk's
-//! own coordinate, the way a terrain page's record is (layer/terrain/fixed.rs),
-//! in the arena of fixed buffers the renderer keeps (pxl-render gpu/arena.rs).
+//! Where a chunk's mesh lies on the device: a slot in the arena of fixed
+//! buffers the renderer keeps (pxl-render gpu/arena.rs).
 //!
 //! A slot is room, not an address. Any tier may take any slot of its pool,
 //! and which one it takes is the scheduler's to decide
@@ -11,18 +10,18 @@
 //! back, so a mesh outlives its page's record — it is drawn until something
 //! covers its ground — and there is nothing to free.
 //!
-//! It used to be the chunk's coordinate reduced modulo the drawn ring's axis
-//! in chunks, within a group for its level modulo the levels a view held. That
-//! made a level's chunks addressable *only* inside its own drawn ring, and
-//! so it decided what could be drawn at all: `select` could not descend past
-//! a page it did not hold, because the chunks under it lie outside the ring
-//! below and two of them would land in one slot. Of the nine pages a top
-//! ring has, four fold from what is held and five do not — and every one of
-//! those five has one or two of its four children resident.
-//! Nearly half the ground that showed as nothing was data the client already
-//! had and could not address. Cesium's answer to the same thing is
-//! `skipLevelOfDetail`: a tile whose content is missing is refined through
-//! rather than rendered, and the loaded descendants are drawn.
+//! A slot named by the chunk's coordinate — reduced modulo the drawn ring's
+//! axis in chunks, within a group for its level modulo the levels a view
+//! holds — makes a level's chunks addressable *only* inside its own drawn
+//! ring, and so decides what can be drawn at all: `select` cannot descend
+//! past a page it does not hold, because the chunks under it lie outside the
+//! ring below and two of them land in one slot. Of the nine pages a top ring
+//! has, four fold from what is held and five do not, and every one of those
+//! five has one or two of its four children resident: nearly half the ground
+//! that shows as nothing is data the client already has and cannot address.
+//! Cesium's answer to the same thing is `skipLevelOfDetail`: a tile whose
+//! content is missing is refined through rather than rendered, and the
+//! loaded descendants are drawn.
 //!
 //! Two pools, because a group is one storage binding and a binding holds
 //! 128 MiB. The leaves' own tier — the one drawn at their cells — has a

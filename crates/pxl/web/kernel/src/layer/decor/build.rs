@@ -25,9 +25,9 @@ use pxl_render::mesh::voxel_scan::apron_col;
 use pxl_spec::bake::constant::{unpack_pos, U_PER_CELL};
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
-use pxl_spec::space::indexer::L3_IDX;
+use pxl_spec::space::hierarchy::child_of;
 use pxl_spec::space::pvf3::ivec::{gather, IVec};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND};
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
 
 use std::collections::HashMap;
@@ -35,11 +35,11 @@ use std::collections::HashMap;
 use pxl_spec::cell::cube_types;
 
 use crate::kernel::kernel;
-use crate::layer::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
+use crate::layer::decor::instance::{DecorScratch, GroupLanes, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::layer::decor::kind::DecorKindDef;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
-use crate::layer::object::store::{At, Store};
+use crate::layer::object::store::{At, EntryAt, Store};
 use crate::world::chunk::table::Drawn;
 use pxl_spec::asset::ingested::Asset;
 
@@ -237,8 +237,6 @@ pub struct Ground<'a> {
 /// A column whose placed decor a chunk draws.
 pub struct Placed {
     pub col_idx: IVec,
-    /// The hidden entry's band and packed position in this column.
-    pub hide: Option<(i32, u32)>,
     /// Where the column's corner is from the corner of the chunk drawing it,
     /// in units: zero for a z16 chunk, its place among the columns under it
     /// for a coarser one.
@@ -257,20 +255,22 @@ pub struct Placed {
 /// each one the instance that z16 cell draws, where it stands, as it turns —
 /// and adds or drops the others, a quarter a level.
 fn representative(tag: u64, level: u32, x: i64, y: i64) -> (i64, i64) {
-    (1..=level).rev().fold((x, y), |(x, y), l| {
+    let [x, y] = (1..=level).rev().fold([x, y], |[x, y], l| {
         let slot = derive_seed_u64(derive_seed_u64(derive_seed_u64(DECOR_MASTER_SEED, tag), gather(x, y, 0)), l as u64);
-        (2 * x + (slot & 1) as i64, 2 * y + (slot >> 1 & 1) as i64)
-    })
+        child_of([x, y], slot as usize)
+    });
+    (x, y)
 }
 
 impl<'s> DecorBuild<'s> {
     /// Builds every kind's instances at world step `step` into `scratch`:
-    /// the decor placed in `placed`'s columns, and where `show_decor`, the
+    /// the decor placed in `placed`'s columns, `hide` flagged hidden, and
+    /// where `show_decor`, the
     /// scatter over `ground`. A chunk scatters from its own level's page, so
     /// decoration reaches as far as the ground it stands on is drawn, a kind
     /// as far as it covers the pixels it is drawn at (`decor_density`).
     #[allow(clippy::too_many_arguments)]
-    pub fn build(scratch: &'s mut DecorScratch, kinds: &[Kind], ground: Option<&Ground>, placed: &[Placed], store: &Store, step: u32, show_decor: bool) -> DecorBuild<'s> {
+    pub fn build(scratch: &'s mut DecorScratch, kinds: &[Kind], ground: Option<&Ground>, placed: &[Placed], hide: Option<EntryAt>, store: &Store, step: u32, show_decor: bool) -> DecorBuild<'s> {
         scratch.clear();
         for kind in kinds {
             // A kind with no variant has no group to fill and no variant to
@@ -285,10 +285,16 @@ impl<'s> DecorBuild<'s> {
                 break;
             }
             scratch.group_count += kind.variant_count as usize;
-            for column in placed {
-                Self::placed(scratch, kind, first, column, store);
+            // Placed or scattered, a kind is drawn only where it covers the
+            // pixels it is drawn at: how far a placed tree is seen is its own
+            // size, as a scattered one's is.
+            if decor_density(kind.extent, step) == 0.0 {
+                continue;
             }
-            if let Some(ground) = ground.filter(|_| show_decor && decor_density(kind.extent, step) > 0.0) {
+            for column in placed {
+                Self::placed(scratch, kind, first, column, hide, store);
+            }
+            if let Some(ground) = ground.filter(|_| show_decor) {
                 Self::scatter(scratch, kind, first, ground, store);
             }
         }
@@ -297,7 +303,7 @@ impl<'s> DecorBuild<'s> {
 
     /// One column's placed instances of `kind`, into its groups from
     /// `first`, in the store's entry order.
-    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, store: &Store) {
+    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, hide: Option<EntryAt>, store: &Store) {
         let (Some(value), Some(e)) = (kind.decor_value, store.entries(column.col_idx)) else { return };
         let (bands, poss, states) = (e.band, e.pos, e.state);
         for k in 0..bands.len() {
@@ -312,14 +318,11 @@ impl<'s> DecorBuild<'s> {
                 band: bands[k],
                 step: [x, y, z],
             };
-            // The entry's cell, which seeds its variant and turn.
-            let [cx, cy, cz] = at.cell();
-            let corner = gather(cx, cy, cz);
+            // Turned and varied by where it stands, as the ghost that
+            // placed it predicted.
+            let (variant, rotation) = user_decor_pick(at.corner().i, kind.variant_count);
             let [lx, ly, lz] = at.local();
-            let mut rng = Rng::new(derive_seed_u64(DECOR_MASTER_SEED, corner));
-            let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
-            let rotation = rng.unit() * core::f64::consts::PI * 2.0;
-            let hidden = column.hide == Some((bands[k], pos));
+            let hidden = hide == Some(e.at(k));
             let h = size / 2.0;
             scratch.push(
                 first + variant as usize,
@@ -357,17 +360,15 @@ impl<'s> DecorBuild<'s> {
             let cell_y = ground.ty0 + dy;
             for dx in 0..CHUNK_CELLS {
                 let cell_x = ground.tx0 + dx;
-                let idx = (cell_y * PAGE_CELLS + cell_x) as usize;
-                if !kind.rules.allows(cells[idx]) {
+                if !kind.rules.allows(cells[GROUND.cell_index(cell_x, cell_y) as usize]) {
                     continue;
                 }
                 let (gx, gy) = representative(kind.tag, ground.level, lx0 + dx as i64, ly0 + dy as i64);
                 // The z16 cell's own stream: its page's seed, the kind's, and
                 // its place in its page.
-                let unit = |g: i64| (g as f64 * atom.side()) as i64;
-                let page_idx = L3_IDX(gather(unit(gx), unit(gy), 0));
-                let (px, py) = (gx.rem_euclid(PAGE_CELLS as i64) as u64, gy.rem_euclid(PAGE_CELLS as i64) as u64);
-                let kind_seed = derive_seed_u64(derive_seed_u64(DECOR_MASTER_SEED, page_idx), kind.tag);
+                let z16 = GROUND.cell_of(0, &atom.base_of([gx, gy, 0]));
+                let [px, py] = z16.in_page().map(u64::from);
+                let kind_seed = derive_seed_u64(derive_seed_u64(DECOR_MASTER_SEED, z16.page().page), kind.tag);
                 let mut rng = Rng::new(derive_seed_u64(kind_seed, (px << 16) | py));
                 if rng.unit() >= kind.density {
                     continue;
@@ -407,12 +408,10 @@ impl<'s> DecorBuild<'s> {
         }
     }
 
-    /// The block's size in bytes: a word of group count, a word of count a
-    /// group, then each group's lanes — five of f32, the flags padded to a
-    /// word, the band and the position.
+    /// The block's size in bytes (instance.rs `GroupLanes`).
     pub fn bytes(&self) -> u32 {
         let s = self.scratch;
-        let words: usize = 1 + s.group_count + s.counts[..s.group_count].iter().map(|&n| 7 * n as usize + (n as usize).div_ceil(4)).sum::<usize>();
+        let words: usize = 1 + s.group_count + s.counts[..s.group_count].iter().map(|&n| GroupLanes::words(n as usize)).sum::<usize>();
         word_bytes(words)
     }
 
@@ -426,28 +425,26 @@ impl<'s> DecorBuild<'s> {
         let words = at as *mut u32;
         let groups = s.group_count;
         *words = groups as u32;
-        let mut first = [0usize; DECOR_GROUPS];
+        let mut lanes = [GroupLanes { first: 0, count: 0 }; DECOR_GROUPS];
         let mut k = 1 + groups;
-        for (g, start) in first.iter_mut().enumerate().take(groups) {
+        for (g, lane) in lanes.iter_mut().enumerate().take(groups) {
             let n = s.counts[g] as usize;
             *words.add(1 + g) = n as u32;
-            *start = k;
+            *lane = GroupLanes { first: k, count: n };
             // The flags are bytes padded to a word, and a pad byte is zero.
-            core::ptr::write_bytes(at.add((k + 5 * n) * 4), 0, n.div_ceil(4) * 4);
-            k += 7 * n + n.div_ceil(4);
+            core::ptr::write_bytes(at.add(lane.flags() * 4), 0, n.div_ceil(4) * 4);
+            k += GroupLanes::words(n);
         }
         let mut rank = [0usize; DECOR_GROUPS];
         for (i, &g) in s.instances[..s.len].iter().zip(&s.groups[..s.len]) {
-            let g = g as usize;
-            let (n, r, f) = (s.counts[g] as usize, rank[g], first[g]);
-            for (lane, v) in [i.x, i.y, i.z, i.rotation, i.scale].into_iter().enumerate() {
-                *words.add(f + lane * n + r) = v.to_bits();
+            let (lane, r) = (lanes[g as usize], rank[g as usize]);
+            for (l, v) in [i.x, i.y, i.z, i.rotation, i.scale].into_iter().enumerate() {
+                *words.add(lane.f32_at(l, r)) = v.to_bits();
             }
-            *at.add((f + 5 * n) * 4 + r) = i.flags;
-            let past_flags = f + 5 * n + n.div_ceil(4);
-            *words.add(past_flags + r) = i.band;
-            *words.add(past_flags + n + r) = i.pos;
-            rank[g] += 1;
+            *at.add(lane.flags() * 4 + r) = i.flags;
+            *words.add(lane.band_at(r)) = i.band;
+            *words.add(lane.pos_at(r)) = i.pos;
+            rank[g as usize] += 1;
         }
     }
 }

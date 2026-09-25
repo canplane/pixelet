@@ -22,7 +22,7 @@ use pxl_spec::space::v3::V3;
 
 use crate::frame::shader::record::PIPELINE_STARS;
 use crate::frame::stage::{stage_lane, STAGE_AT};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, word_bytes, GpuApi};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, word_bytes, Gpu};
 use crate::gpu::api_spec::format;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::look::atmosphere::transmittance;
@@ -55,19 +55,19 @@ pub struct StarPass {
 }
 
 impl StarPass {
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines) -> StarPass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> StarPass {
         let built = pipelines.build(g, PIPELINE_STARS, format::CANVAS);
         let uniform = object();
-        (g.buffer)(uniform, word_bytes(STARS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        g.buffer(uniform, word_bytes(STARS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let stars: Vec<f32> = CATALOGUE.as_chunks::<STAR_BYTES>().0.iter().flat_map(star).collect();
         let catalogue = object();
-        (g.buffer)(catalogue, word_bytes(stars.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
-        (g.write_buffer)(catalogue, 0, bytes(&stars));
+        g.buffer(catalogue, word_bytes(stars.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        g.write_buffer(catalogue, 0, bytes(&stars));
         let group = object();
         let mut e = [0u32; 10];
         e[..5].copy_from_slice(&buffer_entry(0, uniform));
         e[5..].copy_from_slice(&buffer_entry(1, catalogue));
-        (g.bind_group)(group, built.layouts[0], &e);
+        g.bind_group(group, built.layouts[0], &e);
         StarPass {
             built,
             uniform,
@@ -81,7 +81,7 @@ impl StarPass {
     /// pixels, and straight up where the eye stands, which a star's height
     /// and the air it is seen through are measured from. Nothing is written
     /// while they are faded out.
-    pub fn lay_out(&mut self, g: &GpuApi, view_proj: &Mat4, env: &[f32], width: u32, height: u32, up: &V3) {
+    pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, env: &[f32], width: u32, height: u32, up: &V3) {
         let u = &mut self.words;
         u[INTENSITY] = env[ENV_SKY];
         if u[INTENSITY] <= SHOWN {
@@ -105,17 +105,17 @@ impl StarPass {
         for k in 0..3 {
             u[DEPTH + k] = -(t[k].max(1e-6)).ln() as f32;
         }
-        (g.write_buffer)(self.uniform, 0, bytes(u));
+        g.write_buffer(self.uniform, 0, bytes(u));
     }
 
     /// Every star into the open pass, where they show.
-    pub fn draw(&self, g: &GpuApi, pass: u32) {
+    pub fn draw(&self, g: &Gpu, pass: u32) {
         if self.words[INTENSITY] <= SHOWN {
             return;
         }
-        (g.set_pipeline)(pass, self.built.pipeline);
-        (g.set_bind_group)(pass, 0, self.group, &[]);
-        (g.draw)(pass, 4, (CATALOGUE.len() / STAR_BYTES) as u32, 0, 0);
+        g.set_pipeline(pass, self.built.pipeline);
+        g.set_bind_group(pass, 0, self.group, &[]);
+        g.draw(pass, 4, (CATALOGUE.len() / STAR_BYTES) as u32, 0, 0);
     }
 }
 

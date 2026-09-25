@@ -28,6 +28,8 @@
 /// neighbours' faces, and drawn with its bottom face.
 use pxl_spec::bake::constant::{band_of, BAND_CELLS};
 use xpute_core::math::scalar::round;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 use xpute_runtime::abi::handle::Slots;
 use xpute_runtime::mem::heap::{alloc, free, Block, Guard};
 
@@ -201,7 +203,7 @@ impl Extras {
 }
 
 /// A cell of the chunk: chunk-local x and y, absolute z.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Cell {
     pub cx: u32,
     pub cy: u32,
@@ -295,7 +297,7 @@ impl Volumes {
     }
 
     fn volume(&mut self, id: u32) -> &mut Volume {
-        self.volumes.get_mut(id).expect("a volume that is not open")
+        self.volumes.get_mut(id).or_bug(Errno::ENOTRECOVERABLE)
     }
 
     fn material(&self, store: usize) -> *mut u32 {
@@ -345,7 +347,7 @@ impl Volumes {
     /// The band at `band_z`, made if the volume has none there: the index
     /// into the volume's bands, or None when no store could be had.
     fn get_or_create_band(&mut self, id: u32, band_z: i32) -> Option<usize> {
-        assert!(!self.volume(id).sealed, "paint into a sealed volume");
+        xpute_core::ensure!(!self.volume(id).sealed, ENOTRECOVERABLE);
         let bands = &self.volume(id).bands;
         let insert_at = bands.iter().position(|b| b.band_z >= band_z).unwrap_or(bands.len());
         if insert_at < bands.len() && bands[insert_at].band_z == band_z {
@@ -557,7 +559,7 @@ impl Volumes {
     /// sub-cell one 0 when the band has none), the extras' count and their
     /// five lanes' addresses — valid until the volume is painted again.
     pub fn band_row(&mut self, id: u32, i: usize) -> &[u32; BAND_WORDS] {
-        let band = &self.volumes.get(id).expect("a volume that is not open").bands[i];
+        let band = &self.volumes.get(id).or_bug(Errno::ENOTRECOVERABLE).bands[i];
         let store = &self.stores[band.store];
         let e = &store.extra;
         let rel = |p: *const u8| (p as usize).wrapping_sub(self.mem as usize) as u32;

@@ -14,7 +14,10 @@
 //   and pages are 2^level of the leaf's, and every size is a `Scale` stepped
 //   and counted in `pxl-spec space/`; a shift by a tier or by a scale's own
 //   exponent written in a layer is a second owner of the lattice, and every
-//   one found had drifted or duplicated a constant.
+//   one found had drifted or duplicated a constant. So is a cell's place in
+//   its page worked out by hand: the lattice numbers a page's cells, and
+//   that number is the index into every lane a page has (`cell_index`,
+//   `in_page`), where seven layers had each spelled it out again.
 //
 // `issue/` is exempt from the second: a decision record names the files of
 // its day.
@@ -130,11 +133,16 @@ for (const f of files) {
  * the elevation format's sampling, which is derived from a page's span. */
 const LATTICE_OWNERS = ["crates/pxl/spec/src/space/", "crates/pxl/spec/src/bake/constant.rs"];
 const SHIFT = /(\b(L[1-4]|L[2-4]_RANGE|PAGE_CELLS|CHUNK_CELLS)\b|\.shamt\(\))[^;]*(<<|>>)|(<<|>>)[^;]*(\bL[1-4]\b|\.shamt\(\))/;
+/** A page's cell index split into its column and row, or put together from
+ * them, by the page's width. */
+const IN_PAGE = /[%/]\s*PAGE_CELLS\b|(rem|div)_euclid\(\s*PAGE_CELLS\b|\*\s*PAGE_CELLS\b(\s+as\s+\w+)?\s*\+/;
 
 for (const f of files) {
   if (!f.endsWith(".rs") || LATTICE_OWNERS.some((o) => f.startsWith(o))) continue;
   read(f)?.split("\n").forEach((line, n) => {
-    if (!/^\s*\/\//.test(line) && SHIFT.test(line)) problems.push(`${f}:${n + 1}: shifts the lattice outside pxl-spec space/: ${line.trim()}`);
+    if (/^\s*\/\//.test(line)) return;
+    if (SHIFT.test(line)) problems.push(`${f}:${n + 1}: shifts the lattice outside pxl-spec space/: ${line.trim()}`);
+    if (IN_PAGE.test(line)) problems.push(`${f}:${n + 1}: numbers a page's cells outside pxl-spec space/: ${line.trim()}`);
   });
 }
 

@@ -18,14 +18,16 @@
 //! same level.
 
 use pxl_spec::bake::constant::BAND_CELLS;
-use pxl_spec::bake::format::GROUND_CH_KEYS;
-use pxl_spec::bake::ground::{channel_bit, ChannelMask};
+use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
+use pxl_spec::bake::ground::{channel_bit, ChannelMask, BASE};
 use pxl_spec::bake::pack::{unpack, GroundCell};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, PAGE_CELLS};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
 
+use crate::mesh::paint::palette::shader_meta::{ground_color_lookup, ground_layer_index_lookup};
 use crate::mesh::paint::terrain::elevation::{ground_ele, GroundLanes};
-use crate::mesh::volume::{Volumes, Voxel, NO_LAYER};
+use crate::mesh::volume::{MaterialClasses, Volumes, Voxel, NO_LAYER};
 use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
+use std::sync::LazyLock;
 
 /// How far below the chunk's lowest cell the shared floor sits, before it
 /// is rounded down to a band.
@@ -69,29 +71,59 @@ pub struct Materials {
     pub base_class: u8,
 }
 
-impl Default for Materials {
-    fn default() -> Self {
-        Materials {
+/// Every ground type's colour and layer, from the palette's tables
+/// (palette/shader_meta.rs), each channel's class, and the catalog's base:
+/// a function of the palette and the catalog alone, so made once, here,
+/// where the paint and the minimap read it.
+pub static MATERIALS: LazyLock<Materials> = LazyLock::new(Materials::of_palette);
+
+/// The class a channel's cells are painted as.
+fn class_of(ch: GroundChannelKey) -> u8 {
+    (match ch {
+        GroundChannelKey::LAND => MaterialClasses::LAND,
+        GroundChannelKey::WATER => MaterialClasses::WATER,
+        GroundChannelKey::STRUCTURE => MaterialClasses::STRUCTURE,
+        GroundChannelKey::TRANSPORT => MaterialClasses::TRANSPORT,
+    }) as u8
+}
+
+impl Materials {
+    fn of_palette() -> Materials {
+        let rgb_of = |ch, t: usize| ground_color_lookup(ch).filter(|c| c.has[t] != 0).map(|c| [c.rgb[t * 3], c.rgb[t * 3 + 1], c.rgb[t * 3 + 2]]);
+        let layer_of = |ch, t: usize| ground_layer_index_lookup(ch).filter(|l| l.has[t] != 0).map(|l| l.index[t]);
+        let base = BASE.type_id as usize;
+        let mut m = Materials {
             channels: [Channel::default(); CHANNELS],
-            base_rgb: [0; 3],
-            base_layer: NO_LAYER as u8,
-            base_class: 0,
+            base_rgb: rgb_of(BASE.channel, base).unwrap_or([0; 3]),
+            base_layer: layer_of(BASE.channel, base).unwrap_or(NO_LAYER as u8),
+            base_class: class_of(BASE.channel),
+        };
+        for (dst, ch) in m.channels.iter_mut().zip(GROUND_CH_KEYS) {
+            dst.class = class_of(ch);
+            for t in 0..256 {
+                if let Some(rgb) = rgb_of(ch, t) {
+                    (dst.rgb[t], dst.has_color[t]) = (rgb, true);
+                }
+                if let Some(layer) = layer_of(ch, t) {
+                    (dst.layer[t], dst.has_layer[t]) = (layer, true);
+                }
+            }
         }
+        m
     }
 }
 
 /// One page's lanes, as the client keeps them in the core memory.
 pub struct PageView<'a> {
-    /// The page's ground, a word a cell, the four channels packed into it
-    /// (pxl-spec bake/pack.rs).
+    /// The page's ground, a cell's four channels packed into one
+    /// `GroundCell` (pxl-spec bake/pack.rs), in the lattice's cell order.
     pub cells: &'a [GroundCell],
     pub ele: &'a [i16],
 }
 
 /// One chunk of a page, sampled: a material and a top a cell, and the
-/// floor the columns share.
-/// A chunk's terrain over the run set's padded column grid: the chunk's own
-/// cells and the ring of neighbours around them (voxel_scan.rs's APRON). The
+/// floor the columns share, over the run set's padded column grid: the
+/// chunk's own cells and the ring of neighbours around them (voxel_scan.rs's APRON). The
 /// ring is sampled from the same page — the elevation raster is padded, so a
 /// cell outside the page still has a height — and is never painted into the
 /// volume or emitted; it is there for the face mask to ask about.
@@ -118,7 +150,8 @@ impl Default for ChunkSample {
 impl ChunkSample {
     /// Samples the chunk at page cell (tx0, ty0). A channel in `hidden` is
     /// stepped over, as `shown_ground` steps over it.
-    pub fn read(&mut self, page: &PageView, tables: &Materials, tx0: u32, ty0: u32, hidden: ChannelMask) {
+    pub fn read(&mut self, page: &PageView, tx0: u32, ty0: u32, hidden: ChannelMask) {
+        let tables = &*MATERIALS;
         let skip = GROUND_CH_KEYS.map(|k| hidden & channel_bit(k) != 0);
         let mut min_ele = i32::MAX;
         let last = PAGE_CELLS as i32 - 1;
@@ -133,8 +166,11 @@ impl ChunkSample {
                 // page keeps the height — which is all the face mask reads
                 // — and takes the base material, which nothing draws.
                 let on_page = (0..=last).contains(&tx) && (0..=last).contains(&ty);
-                let page_idx = (ty.clamp(0, last) * PAGE_CELLS as i32 + tx.clamp(0, last)) as usize;
-                let types = if on_page { unpack(page.cells[page_idx]) } else { [VOID; 4] };
+                let types = if on_page {
+                    unpack(page.cells[GROUND.cell_index(tx as u32, ty as u32) as usize])
+                } else {
+                    [VOID; 4]
+                };
 
                 // The material: the base, then each channel in order.
                 let (mut rgb, mut class, mut layer) = (tables.base_rgb, tables.base_class, tables.base_layer);
@@ -157,7 +193,7 @@ impl ChunkSample {
                 // all (elevation.rs's ground_ele). An apron cell off the page
                 // has no channels to judge by and takes the raw height.
                 let lanes = on_page.then_some(GroundLanes { cells: page.cells });
-                let ele = ground_ele(page.ele, lanes, page_idx, tx, ty) as i32;
+                let ele = ground_ele(page.ele, lanes, tx, ty) as i32;
                 self.ele[i] = ele as i16;
                 // The floor is the chunk's own: an apron column is written
                 // from it, and a neighbour's valley must not drop it.

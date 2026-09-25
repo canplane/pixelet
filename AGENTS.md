@@ -85,12 +85,13 @@ The rules below keep it one thing. They come from finding it several.
   stepped from two roots — the tiers (`pxl-spec space/indexer.rs`) and the
   raster's cell (`bake/constant.rs` `CELL`), which is a resolution and
   derives from neither — and parent and children in any number of axes are
-  `space/hierarchy.rs`'s. Level and span, a cell's base and centre, the
-  4 × 4 neighbourhood a fold reads, and a page's name are
+  `space/hierarchy.rs`'s. Level and span, a cell's base and centre, its
+  place in its page — which is the index into every lane the page has —
+  the 4 × 4 neighbourhood a fold reads, and a page's name are
   `space/pyramid.rs`'s; a level is a count from a lattice's cell, and the
   lattice is what turns it into a size. A layer that shifts by a tier or a
-  scale's exponent itself is a second owner, and `check:rules` refuses it
-  outside `space/`.
+  scale's exponent itself, or numbers a page's cells by its width, is a
+  second owner, and `check:rules` refuses it outside `space/`.
 - **A layer is a payload and a one-level fold, and nothing else.** No key,
   hierarchy, bounds, window, schedule or residency of its own: which pages
   are wanted, held, fetched and folded is the kernel's `Pyramid<L>`, from

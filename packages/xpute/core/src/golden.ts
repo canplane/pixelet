@@ -19,6 +19,8 @@
 
 import type { U8Array } from "./abi/array.ts";
 import type { f64, u32, u64 } from "./abi/word.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
+import { InvariantError } from "@xpute/core/status/error.ts";
 const CRATE = new URL("../../../../crates/xpute/core/golden/", import.meta.url);
 
 export class Golden {
@@ -44,7 +46,7 @@ export class Golden {
 
   s(key: string): string {
     const v = this.map.get(key);
-    if (v === undefined) throw new Error(`golden: no ${key}`);
+    if (v === undefined) throw new InvariantError(Errno.ENOENT);
     return v;
   }
 
@@ -68,7 +70,7 @@ export class Golden {
     const v = this.s(key);
     if (v === "true") return true;
     if (v === "false") return false;
-    throw new Error(`golden: ${key} is ${v}, not a boolean`);
+    throw new InvariantError(Errno.EINVAL);
   }
 
   /** Bytes written as hex. */
@@ -95,7 +97,7 @@ export class Golden {
       if (!found) break;
       f(prefix);
     }
-    if (k === 0) throw new Error(`golden: ${base} is empty`);
+    if (k === 0) throw new InvariantError(Errno.ENOENT);
   }
 
   /** How many entries `base` has. */

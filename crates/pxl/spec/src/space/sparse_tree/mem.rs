@@ -107,7 +107,7 @@ fn block_width(dim: u32) -> u32 {
 fn validate_layout(layout: &SparseTreeLayout) {
     let dep = layout.max.above(layout.min);
     if dep <= 0 {
-        panic!("sparse_tree: bad layout: expected max > min, got min={:?}, max={:?}", layout.min, layout.max);
+        xpute_core::bug!(EBADMSG);
     }
 }
 
@@ -270,7 +270,7 @@ where
     let node = mem.heap[slot as usize];
 
     if node & NODE_MSB != 0 {
-        panic!("sparse_tree: expected leaf slot, got branch");
+        xpute_core::bug!(EBADMSG);
     }
     mem.data[slot as usize]
 }
@@ -355,7 +355,7 @@ pub fn build<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layou
     let dep = layout.max.above(layout.min);
 
     if leaves.is_empty() {
-        panic!("sparse_tree: empty leaves");
+        xpute_core::bug!(EBADMSG);
     }
 
     let mut expect: u32 = 1;
@@ -363,7 +363,7 @@ pub fn build<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layou
         expect *= width;
     }
     if leaves.len() != expect as usize {
-        panic!("sparse_tree: bad leaf count: expected {expect}, got {}", leaves.len());
+        xpute_core::bug!(EBADMSG, expect, leaves.len());
     }
 
     let mut cur_base = alloc_slots(mem, leaves.len() as u32);
@@ -414,7 +414,7 @@ pub fn append<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layo
 
     let width = block_width(layout.dim);
     if vals.len() != width as usize {
-        panic!("sparse_tree: block size mismatch: expected {width}, got {}", vals.len());
+        xpute_core::bug!(EBADMSG, width, vals.len());
     }
 
     let base = alloc_block(mem, layout.dim);
@@ -674,8 +674,8 @@ fn write_mem<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, buf: &mut
 /// ALIGN does.
 fn aligned_word(nbyte: u64) -> u64 {
     match u32::try_from(nbyte) {
-        Ok(n) => ALIGN(n, WORD_SZ).unwrap_or_else(|e| panic!("{e}")) as u64,
-        Err(_) => panic!("ALIGN: {nbyte} does not align within u32"),
+        Ok(n) => ALIGN(n, WORD_SZ).unwrap_or_else(|_| xpute_core::bug!(EOVERFLOW, n)) as u64,
+        Err(_) => xpute_core::bug!(EOVERFLOW, nbyte),
     }
 }
 
@@ -713,7 +713,7 @@ fn read_mem<T: Copy + Default + PartialEq>(buf: &[u8]) -> (SparseTreeMemory<T>, 
     off += aligned_word(used as u64 * data_bpe as u64);
 
     if off > buf.len() as u64 {
-        panic!("sparse_tree: truncated buffer");
+        xpute_core::bug!(EBADMSG);
     }
     let (data_off, off) = (data_off as u32, off as u32);
 

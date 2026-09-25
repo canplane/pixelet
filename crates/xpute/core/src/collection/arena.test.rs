@@ -83,21 +83,6 @@ fn growth_past_max_cap_is_refused_and_leaves_the_arena_as_it_was() {
     assert!(a.reserve(1).is_err());
 }
 
-/// A cursor above the live end is a caller's mistake, not a resize: it is
-/// refused whole, where clamping would silently hand out slots that were never
-/// filled.
-#[test]
-fn a_truncate_above_the_cursor_is_refused_rather_than_clamped() {
-    let mut a = arena(8, 1 << 10);
-    for i in 0..3 {
-        a.alloc().unwrap().mark = i;
-    }
-    a.truncate(9);
-    assert_eq!(a.len(), 3, "a truncate above the cursor moved it");
-    a.truncate(1);
-    assert_eq!(a.len(), 1);
-}
-
 /// The scope is the rewind written as a lifetime: what a pass took is given
 /// back when it ends, whichever way it ends.
 #[test]

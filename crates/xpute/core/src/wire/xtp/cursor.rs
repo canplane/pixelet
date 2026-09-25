@@ -32,7 +32,7 @@ const WORD_REG: [u32; 2] = [NONE, NONE];
 fn CURSOR(pkt: &[u8], base: u32, type_: NodeType) -> Result<Cursor<'_>, MarshalError> {
     let align_sz: AlignUnit = ALIGN_SZ(type_)?;
     if !base.is_multiple_of(align_sz) {
-        return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("misaligned node base {base} for type 0x{type_:x}")), None));
+        return Err(MarshalError::new(Errno::EBADMSG));
     }
     if type_ == SpecialType::BRANCH as u8 {
         return Ok(Cursor::Branch(BranchCursor::new(pkt, base)?));
@@ -40,7 +40,7 @@ fn CURSOR(pkt: &[u8], base: u32, type_: NodeType) -> Result<Cursor<'_>, MarshalE
     if TYPE_IS_LEAF(type_) {
         return Ok(Cursor::Node(NodeCursor::new(pkt, base, type_)));
     }
-    Err(MarshalError::new(Errno::EBADMSG, Some(&format!("unsupported special node type: 0x{type_:x}")), None))
+    Err(MarshalError::new(Errno::EBADMSG))
 }
 
 fn ENTRY_OFF(base: u32, idx: u32) -> u32 {
@@ -100,7 +100,7 @@ impl<'a> Cursor<'a> {
     pub fn get_array<T: Copy>(&self) -> Result<&'a [T], MarshalError> {
         match self {
             Cursor::Node(c) if TYPE_IS_SEQ(c.type_) && c.type_ != SequenceType::BITSET as u8 && c.type_ != SequenceType::STR as u8 => c._array::<T>(),
-            _ => Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected an array, got type 0x{:x}", self.type_())), None)),
+            _ => Err(MarshalError::new(Errno::EBADMSG)),
         }
     }
 
@@ -108,7 +108,7 @@ impl<'a> Cursor<'a> {
     pub fn get_u64(&self) -> Result<u64, MarshalError> {
         match self.get()? {
             NodeValue::U64(x) => Ok(x),
-            _ => Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected a u64, got type 0x{:x}", self.type_())), None)),
+            _ => Err(MarshalError::new(Errno::EBADMSG)),
         }
     }
 
@@ -116,7 +116,7 @@ impl<'a> Cursor<'a> {
     pub fn get_i64(&self) -> Result<i64, MarshalError> {
         match self.get()? {
             NodeValue::I64(x) => Ok(x),
-            _ => Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected an i64, got type 0x{:x}", self.type_())), None)),
+            _ => Err(MarshalError::new(Errno::EBADMSG)),
         }
     }
 
@@ -124,7 +124,7 @@ impl<'a> Cursor<'a> {
     pub fn get_bool(&self) -> Result<bool, MarshalError> {
         match self.get()? {
             NodeValue::Bool(b) => Ok(b),
-            _ => Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected a boolean, got type 0x{:x}", self.type_())), None)),
+            _ => Err(MarshalError::new(Errno::EBADMSG)),
         }
     }
 
@@ -132,7 +132,7 @@ impl<'a> Cursor<'a> {
     pub fn get_str(&self) -> Result<String, MarshalError> {
         match self.get()? {
             NodeValue::Str(s) => Ok(s),
-            _ => Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected a string, got type 0x{:x}", self.type_())), None)),
+            _ => Err(MarshalError::new(Errno::EBADMSG)),
         }
     }
 
@@ -144,7 +144,7 @@ impl<'a> Cursor<'a> {
     pub fn get_str_ref(&self) -> Result<&'a str, MarshalError> {
         match self {
             Cursor::Node(c) if c.type_ == SequenceType::STR as u8 => c._str_ref(),
-            _ => Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected a string, got type 0x{:x}", self.type_())), None)),
+            _ => Err(MarshalError::new(Errno::EBADMSG)),
         }
     }
 
@@ -161,7 +161,7 @@ impl<'a> Cursor<'a> {
             NodeValue::I32(v) => v as f64,
             NodeValue::F32(v) => v as f64,
             NodeValue::F64(v) => v,
-            _ => return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("expected a number, got type 0x{:x}", self.type_())), None)),
+            _ => return Err(MarshalError::new(Errno::EBADMSG)),
         })
     }
 
@@ -178,7 +178,7 @@ impl<'a> Cursor<'a> {
 /// A leaf's or null's shallow value holds no cursor, so it is its deep value.
 fn deepen(v: ShallowNodeValue<'_>) -> NodeValue<'_> {
     match v {
-        NodeValue::Extra(_) => unreachable!("a leaf's shallow value holds no cursor"),
+        NodeValue::Extra(_) => crate::bug!(ENOTRECOVERABLE),
         NodeValue::Null => NodeValue::Null,
         NodeValue::Bool(b) => NodeValue::Bool(b),
         NodeValue::U8(n) => NodeValue::U8(n),
@@ -216,11 +216,11 @@ impl<'a> TreeReader<'a> {
     pub fn new(pkt: &'a [u8]) -> Result<TreeReader<'a>, MarshalError> {
         let base = pkt.as_ptr() as usize;
         if !base.is_multiple_of(WORD_SZ as usize) {
-            return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("bad packet: misaligned base offset {base}")), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
 
         if (pkt.len() as u32) < HDR_SZ {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("bad packet: truncated header"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         let hdr_view = &pkt[..HDR_SZ as usize];
 
@@ -228,13 +228,13 @@ impl<'a> TreeReader<'a> {
         let mut reg = WORD_REG;
         let [magic, _] = GET_WORD(hdr_view, 0, &mut reg); // word0
         if magic != MAGIC {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("bad packet: magic mismatch"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
 
         // word1: the root header stores payload byte size, not a relative offset
         let [payload_sz, desc] = GET_WORD(hdr_view, WORD_SZ, &mut reg);
         if payload_sz > pkt.len() as u32 - HDR_SZ {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("bad packet: truncated payload"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         let type_: NodeType = field_get32(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType;
 
@@ -281,7 +281,7 @@ impl<'a> NodeCursor<'a> {
     /// Fails if the current node is not a branch.
     pub fn as_branch(self) -> Result<BranchCursor<'a>, MarshalError> {
         if self.type_ != SpecialType::BRANCH as u8 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("node is not a branch: 0x{:x}", self.type_)), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         BranchCursor::new(self.pkt, self.base)
     }
@@ -366,7 +366,7 @@ impl<'a> NodeCursor<'a> {
             }),
             t if t == SequenceType::STR as u8 => NodeValue::Str(self._str()?),
 
-            _ => return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("unknown node type 0x{t:x}")), None)),
+            _ => return Err(MarshalError::new(Errno::EBADMSG)),
         })
     }
 
@@ -374,7 +374,7 @@ impl<'a> NodeCursor<'a> {
 
     fn scalar<const N: usize>(&self) -> Result<[u8; N], MarshalError> {
         if self.base as usize + N > self.pkt.len() {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("scalar OOB"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         Ok(self.pkt[self.base as usize..self.base as usize + N].try_into().unwrap())
     }
@@ -423,7 +423,7 @@ impl<'a> NodeCursor<'a> {
     ///   naturally aligned for all supported typed-array element sizes (<= 8)
     fn _array<T: Copy>(&self) -> Result<&'a [T], MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("len slot OOB"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         let mut reg = WORD_REG;
         let [len, _] = GET_WORD(self.pkt, self.base, &mut reg);
@@ -433,14 +433,14 @@ impl<'a> NodeCursor<'a> {
         let payload_sz = len.wrapping_mul(elem_sz);
 
         if len != 0 && payload_sz / elem_sz != len {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("payload size overflow"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
 
         if payload_start > self.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("payload OOB"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         if payload_sz > self.pkt.len() as u32 - payload_start {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("payload OOB"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
 
         let at = payload_start as usize;
@@ -484,7 +484,7 @@ impl<'a> NodeCursor<'a> {
 
     fn _bitset(&self) -> Result<Vec<u8>, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("len slot OOB"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         let mut reg = WORD_REG;
         let [len, _] = GET_WORD(self.pkt, self.base, &mut reg);
@@ -493,10 +493,10 @@ impl<'a> NodeCursor<'a> {
         // A wire length: u64, so a count near 2^32 cannot wrap to a small size.
         let payload_sz = (len as u64 + 7) >> 3;
         if payload_start > self.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("payload OOB"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         if payload_sz > (self.pkt.len() as u32 - payload_start) as u64 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("payload OOB"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
 
         let mut arr = vec![0u8; len as usize];
@@ -510,38 +510,38 @@ impl<'a> NodeCursor<'a> {
     /// The string's own bytes where they lie, checked as `_str` checks them.
     fn _str_ref(&self) -> Result<&'a str, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("len slot OOB"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         let mut reg = WORD_REG;
         let [nbyte, _] = GET_WORD(self.pkt, self.base, &mut reg);
         let payload_start = self.base + WORD_SZ;
         if payload_start > self.pkt.len() as u32 || nbyte as u64 + 1 > (self.pkt.len() as u32 - payload_start) as u64 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("payload OOB"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         let bytes = self.pkt;
         if bytes[(payload_start + nbyte) as usize] != 0 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("missing string terminator"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
-        core::str::from_utf8(&bytes[payload_start as usize..(payload_start + nbyte) as usize]).map_err(|_| MarshalError::new(Errno::EBADMSG, Some("a string that is not UTF-8"), None))
+        core::str::from_utf8(&bytes[payload_start as usize..(payload_start + nbyte) as usize]).map_err(|_| MarshalError::new(Errno::EBADMSG))
     }
 
     // STR stores UTF-8 bytes with a trailing NUL on wire, while len excludes that terminator.
     fn _str(&self) -> Result<String, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("len slot OOB"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         let mut reg = WORD_REG;
         let [nbyte, _] = GET_WORD(self.pkt, self.base, &mut reg);
         let payload_start = self.base + WORD_SZ;
 
         if payload_start > self.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("payload OOB"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         if nbyte as u64 + 1 > (self.pkt.len() as u32 - payload_start) as u64 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("payload OOB"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         if self.pkt[(payload_start + nbyte) as usize] != 0 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("missing string terminator"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
 
         Ok(String::from_utf8_lossy(&self.pkt[payload_start as usize..(payload_start + nbyte) as usize]).into_owned())
@@ -566,7 +566,7 @@ impl<'a> NullCursor<'a> {
     /// Reinterpret current node as a branch cursor.
     /// Fails if the current node is not a branch.
     pub fn as_branch(self) -> Result<BranchCursor<'a>, MarshalError> {
-        Err(MarshalError::new(Errno::EFAULT, Some("cannot cast a null node to a branch"), None))
+        Err(MarshalError::new(Errno::EFAULT))
     }
 
     // ---- Nullable Guard ----
@@ -606,14 +606,14 @@ impl<'a> BranchCursor<'a> {
         let pkt = &cursor.pkt;
 
         if base + WORD_SZ > pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("branch header OOB"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         let mut reg = WORD_REG;
         let [len, _] = GET_WORD(pkt, base, &mut reg);
 
         let table_off = base + WORD_SZ;
         if len > (pkt.len() as u32 - table_off) / WORD_SZ {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("branch table overflow"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
 
         let child_start = ENTRY_OFF(base, len);
@@ -683,7 +683,7 @@ impl<'a> BranchCursor<'a> {
     /// - validates child offset bounds against the enclosing branch table
     pub fn at(&self, idx: u32) -> Result<Cursor<'a>, MarshalError> {
         if idx >= self.len {
-            return Err(MarshalError::new(Errno::EFAULT, Some(&format!("child index out of bounds: {idx}")), None));
+            return Err(MarshalError::new(Errno::EFAULT));
         }
         let entry_off = ENTRY_OFF(self.cursor.base, idx);
 
@@ -695,11 +695,11 @@ impl<'a> BranchCursor<'a> {
             return Ok(Cursor::Null(NullCursor::new(self.cursor.pkt, type_)));
         }
         if rel_off > self.cursor.pkt.len() as u32 - self.cursor.base {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("child offset overflow"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         let base = self.cursor.base + rel_off;
         if base < self.child_start || base >= self.cursor.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("bad child offset: base={} rel_off={rel_off}", self.cursor.base)), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         CURSOR(self.cursor.pkt, base, type_)
     }

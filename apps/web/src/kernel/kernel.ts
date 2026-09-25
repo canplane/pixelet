@@ -26,6 +26,9 @@ import {
   Sensor,
 } from "@/kernel/abi/cmd.spec.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
+import { storage } from "@/kernel/abi/host.spec.ts";
+import { stored } from "@/kernel/host.ts";
+import { hold_body } from "@/kernel/module.ts";
 import { geolocation_start, geolocation_stop, orientation_listen, orientation_needs_permission, orientation_remove, orientation_supported } from "@/kernel/control/sensor.ts";
 import { abort_fetch, run_fetch } from "@/kernel/io/fetch.ts";
 import { load_image, load_model } from "@/kernel/io/load.ts";
@@ -99,6 +102,14 @@ function gpu_boot(): void {
   }, (err) => console.error("[gpu] the device request failed; nothing can be drawn:", err));
 }
 
+/** The objects storage kept, held as a body for the kernel to copy in. */
+function objects_body(): { objects: u32; objects_bytes: u32 } {
+  const raw = stored(storage.OBJECTS);
+  if (raw === null) return { objects: 0, objects_bytes: 0 };
+  const bytes = new TextEncoder().encode(raw);
+  return { objects: hold_body(bytes), objects_bytes: bytes.byteLength };
+}
+
 /** Starts the kernel: a device to draw with, then the world it draws.
  * Called once by the app's bootstrap, so that what boots is ordered rather
  * than whichever module happened to be imported first. */
@@ -112,6 +123,8 @@ export function boot_kernel(): void {
       geolocation: "geolocation" in navigator,
       orientation: orientation_supported(),
       orientation_permission: orientation_needs_permission(),
+      settings: stored(storage.SETTINGS) ?? "",
+      ...objects_body(),
     }),
     (result) => result,
   );

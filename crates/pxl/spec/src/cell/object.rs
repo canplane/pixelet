@@ -52,7 +52,7 @@ pub fn decor_num_id(id: DecorId) -> u32 {
 pub fn decor_id_from_num(num_id: u32) -> DecorId {
     match u8::try_from(num_id).ok().and_then(decor_types::Decor::of) {
         Some(id) => id,
-        None => panic!("no decor kind registered for numeric id {num_id}"),
+        None => xpute_core::bug!(ENOTRECOVERABLE, num_id),
     }
 }
 

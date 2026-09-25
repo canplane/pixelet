@@ -30,7 +30,7 @@ use pxl_spec::space::hierarchy::Scale;
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_span_of, span_of, LevelPage, CHUNK_CELLS, GROUND, TOP_LEVEL};
+use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::kernel::kernel;
@@ -264,16 +264,6 @@ pub fn heights_revision() -> (u32, u32) {
 }
 
 impl Domain {
-    /// The point under the eye.
-    pub fn foot(&self) -> IVec {
-        self.foot
-    }
-
-    /// What the criterion is loosened by for this view (`Domain::scale`).
-    pub fn scale(&self) -> f64 {
-        self.scale
-    }
-
     /// The nearest distance from the eye to a box: `x0, y0, side` on the
     /// ground and the heights it spans, or the ground under the eye's where
     /// none is known.
@@ -329,9 +319,7 @@ impl Domain {
 
     /// How near the eye `p` comes.
     pub fn page_nearest_to(&self, p: LevelPage) -> f64 {
-        let span = span_of(p.level);
-        let rect = (ivec::X(p.page) as f64 * span, ivec::Y(p.page) as f64 * span, span);
-        self.nearest(rect, Self::heights(p, p.node()))
+        self.nearest(p.rect(), Self::heights(p, p.node()))
     }
 
     /// The level the rule wants `c`'s nearest ground at, under this view's
@@ -343,11 +331,6 @@ impl Domain {
     /// Where the partition starts: every chunk of the pyramid's top within
     /// the reach.
     pub fn roots(&self) -> &[Chunk] {
-        &self.roots
-    }
-
-    /// The ground the view draws: the roots.
-    pub fn ground(&self) -> &[Chunk] {
         &self.roots
     }
 
@@ -408,11 +391,6 @@ impl Domain {
         self.pages.contains_key(&p)
     }
 
-    /// Whether some of `p`'s ground is drawn at `p`'s level.
-    pub fn reaches(&self, p: LevelPage) -> bool {
-        self.pages.get(&p) == Some(&true)
-    }
-
     /// The rule's split for a chunk measured `near` the eye, `seen` or not.
     fn split_at(&self, c: Chunk, near: f64, seen: bool) -> bool {
         c.level() > 0 && near < split_distance(c.level() as i32) * self.scale && seen
@@ -426,12 +404,6 @@ impl Domain {
     pub fn splits(&self, c: Chunk) -> bool {
         let (near, seen) = self.measure(c);
         self.split_at(c, near, seen)
-    }
-
-    /// Whether `c` is a root the view does not refine: nothing coarser would
-    /// draw that ground's far steps.
-    pub fn outermost(&self, c: Chunk) -> bool {
-        c.level() >= TOP_LEVEL
     }
 
     /// The chunk over `c`'s ground at the level the view wants that ground

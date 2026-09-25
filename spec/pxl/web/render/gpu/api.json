@@ -63,12 +63,80 @@
     "LOAD": 1,
     "READ_ONLY": 2
   },
+  "stream": {
+    "$type": "u32",
+    "$doc": [
+      "The one place the renderer's calls cross (gpu/api.rs): a stream",
+      "(xpute-runtime ipc/stream.rs) in a range of the kernel's memory, which the",
+      "kernel writes its calls into during a turn and the host runs once the turn",
+      "has returned. A record carries everything it names, bytes included, so",
+      "nothing a record reads lies outside it.",
+      "",
+      "Its head is HEAD words: the stream's END, then from GPU_MS, the host's side,",
+      "each timed span's GPU time in milliseconds as a double, then the frame's",
+      "whole, as the host last read them."
+    ],
+    "GPU_MS": 2,
+    "HEAD": 32,
+    "BYTES": {
+      "$value": 4194304,
+      "$doc": [
+        "The range's size: what one turn may send the device. A product number, said",
+        "rather than derived; a chunk's mesh is under a tenth of a megabyte and a",
+        "frame's own records tens of kilobytes, so a turn's uploads wait only when",
+        "a burst of them comes at once."
+      ]
+    },
+    "RESERVE": {
+      "$value": 1048576,
+      "$doc": [
+        "What an upload leaves of the range. The records a turn cannot put off — a",
+        "frame's passes and draws, the shaders the first frame makes — are never",
+        "refused, so an upload, which can wait a turn, is taken only while this much",
+        "is left after it."
+      ]
+    }
+  },
+  "op": {
+    "$type": "u32",
+    "$doc": ["A record's operation, then its arguments. Bytes go as their count, then the bytes padded to a word."],
+    "RESET": { "$value": 1, "$doc": ["every object the host holds let go"] },
+    "BUFFER": { "$value": 2, "$doc": ["id, size, usage"] },
+    "TEXTURE": { "$value": 3, "$doc": ["id, width, height, layers, format, mips, usage"] },
+    "IMAGE_TEXTURE": { "$value": 4, "$doc": ["id, image: a texture of an image a load holds, at its size, with it in it"] },
+    "VIEW": { "$value": 5, "$doc": ["id, texture, dimension, base mip, mips, base layer, layers"] },
+    "SAMPLER": { "$value": 6, "$doc": ["id, mag, min, mipmap, address, compare, anisotropy"] },
+    "SHADER": { "$value": 7, "$doc": ["id, the WGSL's bytes"] },
+    "LAYOUT": { "$value": 8, "$doc": ["id, then (binding, stages, kind) words"] },
+    "PIPELINE": { "$value": 9, "$doc": ["id, module, format, the record's words, the record, then the group layouts"] },
+    "BIND_GROUP": { "$value": 10, "$doc": ["id, layout, then (binding, resource, object, offset, size) words"] },
+    "DESTROY": { "$value": 11, "$doc": ["id"] },
+    "WRITE_BUFFER": { "$value": 12, "$doc": ["id, offset, the bytes"] },
+    "WRITE_TEXTURE": { "$value": 13, "$doc": ["id, layer, width, height, the bytes: the first mip of one layer, whole"] },
+    "ENCODER": { "$value": 14, "$doc": ["id"] },
+    "PASS": { "$value": 15, "$doc": ["id, encoder, the pass's description (api.rs pass_desc)"] },
+    "SET_PIPELINE": { "$value": 16, "$doc": ["pass, pipeline"] },
+    "SET_BIND_GROUP": { "$value": 17, "$doc": ["pass, index, group, then the dynamic offsets"] },
+    "SET_VERTEX_BUFFER": { "$value": 18, "$doc": ["pass, slot, buffer, offset, size (0 the rest)"] },
+    "SET_INDEX_BUFFER": { "$value": 19, "$doc": ["pass, buffer, offset, size (0 the rest)"] },
+    "DRAW": { "$value": 20, "$doc": ["pass, vertices, instances, first vertex, first instance"] },
+    "DRAW_INDEXED": { "$value": 21, "$doc": ["pass, indices, instances, first index, first instance"] },
+    "END": { "$value": 22, "$doc": ["pass"] },
+    "SUBMIT": { "$value": 23, "$doc": ["encoder"] },
+    "CONFIGURE": { "$value": 24, "$doc": ["surface: its context configured on the device, in the canvas's format"] },
+    "RESIZE": { "$value": 25, "$doc": ["surface, width, height"] },
+    "CURRENT": { "$value": 26, "$doc": ["surface, view: a view of the surface's texture for this frame"] },
+    "QUERY_SET": { "$value": 27, "$doc": ["id, count"] },
+    "TIMESTAMPS": { "$value": 28, "$doc": ["encoder, query set, written: the pairs of the spans set in `written` read once the GPU has them"] },
+    "PAINT": { "$value": 29, "$doc": ["a 2D paint stream (`paint`) run over the host's scratch"] },
+    "PAINT_COPY": { "$value": 30, "$doc": ["texture, x, y, layer, width, height: the scratch's corner into a texture's layer"] }
+  },
   "paint": {
     "$type": "u32",
     "$doc": [
       "The 2D paint stream's operations, over the host's scratch canvas: an operation",
       "then its arguments, a number a word (f32 bits where fractional), a string as its",
-      "address and length, an image as the handle a load gave it."
+      "bytes' count and its bytes, an image as the handle a load gave it."
     ],
     "SIZE": { "$value": 1, "$doc": ["width, height: the scratch at least this big, and cleared that far"] },
     "SAVE": 2,
@@ -91,7 +159,7 @@
     "FILL": 19,
     "STROKE": 20,
     "FILL_RECT": { "$value": 21, "$doc": ["x, y, w, h"] },
-    "FILL_TEXT": { "$value": 22, "$doc": ["text, x, y"] },
+    "FILL_TEXT": { "$value": 22, "$doc": ["x, y, then the text: its bytes' count and its UTF-8, padded to a word"] },
     "IMAGE": { "$value": 23, "$doc": ["image, sx, sy, sw, sh, dx, dy, dw, dh"] }
   },
   "record": {

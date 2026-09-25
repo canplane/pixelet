@@ -6,38 +6,47 @@
 
 use std::collections::BTreeSet;
 
-use pxl_spec::bake::constant::{band_cell_z, in_cell, unpack_pos, BandZ, CellZ, CELL, CELL_STEPS};
+use pxl_spec::bake::constant::{band_cell_z, in_cell, unpack_pos, BandZ, CellZ, EntryAt, CELL, CELL_STEPS};
 use pxl_spec::cell::cube_types;
+use pxl_spec::cell::object::{decor_ids, decor_num_id, placeable_cube_num_id, placeable_cubes};
 
-use crate::mesh::volume::{pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};
+use crate::mesh::paint::object::material::solid_material;
+use pxl_spec::space::pvf3::ivec::IVec;
+
+use crate::mesh::volume::{pack_material, pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};
 
 const AIR: u32 = cube_types::common::air as u32;
 
 /// A column's entries as the object store lays them out, one lane a field:
-/// each entry's band, its packed position in the band, and its state.
+/// each entry's band, its packed position in the band, and its state, and
+/// the column they are filed under.
 #[derive(Clone, Copy)]
 pub struct Entries<'a> {
+    pub col_idx: IVec,
     pub band: &'a [BandZ],
     pub pos: &'a [u32],
     pub state: &'a [u32],
 }
 
+impl Entries<'_> {
+    /// Where entry `k` is filed.
+    pub fn at(&self, k: usize) -> EntryAt {
+        EntryAt {
+            col_idx: self.col_idx,
+            band_idx: self.band[k],
+            pos: self.pos[k],
+        }
+    }
+}
+
 /// What a state paints as: nothing (decor renders as instanced geometry,
 /// not a voxel), air, or a solid with a material.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Kind {
+enum Kind {
     Untaught = 0,
     Solid = 1,
     Air = 2,
     Decor = 3,
-}
-
-/// The one entry that is not stored — the eraser's carve preview, as the
-/// band and packed position the store would file it under.
-#[derive(Clone, Copy)]
-pub struct Carve {
-    pub band: BandZ,
-    pub pos: u32,
 }
 
 /// What a paint made: whether any voxel was set, and whether one was refused.
@@ -61,22 +70,13 @@ pub struct Painter {
     kinds: Vec<Kind>,
     materials: Vec<u32>,
     layers: Vec<u8>,
-    /// The voxels this paint has claimed, so a second sub-cell object
-    /// landing on a claimed one is filed as overflow rather than
-    /// overwriting it; by packed address, cleared per paint.
-    claimed: BTreeSet<u32>,
+    claimed: Claims,
 }
 
-/// What a cell's Z is shifted by to address it unsigned: PVF3 gives Z sixteen
-/// bits, so this is half that range and the sum is one.
-const Z_BIAS: CellZ = 1 << 15;
-
-/// A voxel's address within a paint: its Z above the bias, then its cell in
-/// the band. Sixteen bits of Z over twelve of column is twenty-eight, which is
-/// what the claimed set is keyed by.
-fn voxel_address(cx: u32, cy: u32, z: CellZ) -> u32 {
-    (((z + Z_BIAS) as u32) << 12) | (cy << 6) | cx
-}
+/// The voxels a paint has claimed, so a second sub-cell object landing on a
+/// claimed one is filed as overflow rather than overwriting it: by the cell
+/// the volume addresses it by, cleared per paint.
+pub type Claims = BTreeSet<Cell>;
 
 impl Default for Painter {
     fn default() -> Self {
@@ -85,19 +85,31 @@ impl Default for Painter {
 }
 
 impl Painter {
+    /// A painter of every state the catalog can put in a leaf: each
+    /// placeable cube as its material (material.rs), AIR, and the decor
+    /// kinds, which paint nothing.
     pub fn new() -> Painter {
-        Painter {
+        let mut p = Painter {
             kinds: Vec::new(),
             materials: Vec::new(),
             layers: Vec::new(),
             claimed: BTreeSet::new(),
+        };
+        for &cube in placeable_cubes.iter() {
+            let m = solid_material(cube);
+            p.set(placeable_cube_num_id(cube), Kind::Solid, pack_material(&m), m.layer_idx as u8);
         }
+        p.set(AIR, Kind::Air, 0, NO_LAYER as u8);
+        for &id in decor_ids.iter() {
+            p.set(decor_num_id(id), Kind::Decor, 0, NO_LAYER as u8);
+        }
+        p
     }
 
-    /// Teaches what `state` paints as. A state is what a leaf's palette
-    /// index resolves to, so a state past a leaf's width is a bug in the
-    /// catalogue and not taught, rather than sizing the tables to it.
-    pub fn teach(&mut self, state: u32, kind: Kind, material: u32, layer: u8) {
+    /// What `state` paints as. A state is what a leaf's palette index
+    /// resolves to, so a state past a leaf's width is a bug in the catalogue
+    /// and not set, rather than sizing the tables to it.
+    fn set(&mut self, state: u32, kind: Kind, material: u32, layer: u8) {
         if state >= u16::MAX as u32 {
             return;
         }
@@ -132,11 +144,12 @@ impl Painter {
     }
 
     /// Paints a column's `entries` into `volume`: every one but the one
-    /// hidden (by its band and packed position), then the carve preview.
+    /// hidden, then the carve preview — the one entry that is not stored,
+    /// where the store would file it.
     /// Whether any voxel was painted, and whether a paint was refused — after
     /// which the rest is not painted, as the volume is not the composite that
     /// was asked for anyway.
-    pub fn paint(&mut self, entries: Option<Entries>, volumes: &mut Volumes, volume: u32, hide: Option<(i32, u32)>, carve: Option<Carve>) -> Paint {
+    pub fn paint(&mut self, entries: Option<Entries>, volumes: &mut Volumes, volume: u32, hide: Option<EntryAt>, carve: Option<EntryAt>) -> Paint {
         let mut claimed = core::mem::take(&mut self.claimed);
         claimed.clear();
         let mut any = false;
@@ -154,27 +167,17 @@ impl Painter {
     /// entry sets one voxel. The carve preview is not an entry;
     /// `paint_carve` ends the paint.
     #[allow(clippy::too_many_arguments)]
-    pub fn paint_entries(
-        &self,
-        entries: Option<Entries>,
-        volumes: &mut Volumes,
-        volume: u32,
-        hide: Option<(i32, u32)>,
-        from: usize,
-        voxels: usize,
-        claimed: &mut BTreeSet<u32>,
-        any: &mut bool,
-    ) -> Painted {
+    pub fn paint_entries(&self, entries: Option<Entries>, volumes: &mut Volumes, volume: u32, hide: Option<EntryAt>, from: usize, voxels: usize, claimed: &mut Claims, any: &mut bool) -> Painted {
         let Some(e) = entries else { return Painted::Done };
         let mut set = 0;
         for k in from..e.band.len() {
             if set >= voxels {
                 return Painted::More(k);
             }
-            let (band, pos, state) = (e.band[k], e.pos[k], e.state[k]);
-            if hide == Some((band, pos)) {
+            if hide == Some(e.at(k)) {
                 continue;
             }
+            let (band, pos, state) = (e.band[k], e.pos[k], e.state[k]);
             match self.paint_entry(volumes, volume, band, pos, state, claimed, any) {
                 Some(n) => set += n + 1,
                 None => return Painted::Refused,
@@ -184,9 +187,9 @@ impl Painter {
     }
 
     /// The carve preview painted as air, last. False when a paint was refused.
-    pub fn paint_carve(&self, volumes: &mut Volumes, volume: u32, carve: Option<Carve>, claimed: &mut BTreeSet<u32>, any: &mut bool) -> bool {
+    pub fn paint_carve(&self, volumes: &mut Volumes, volume: u32, carve: Option<EntryAt>, claimed: &mut Claims, any: &mut bool) -> bool {
         match carve {
-            Some(c) => self.paint_entry(volumes, volume, c.band, c.pos, AIR, claimed, any).is_some(),
+            Some(c) => self.paint_entry(volumes, volume, c.band_idx, c.pos, AIR, claimed, any).is_some(),
             None => true,
         }
     }
@@ -196,7 +199,7 @@ impl Painter {
     /// voxel, and what is finer than a cell rides in the voxel's sub-cell
     /// fraction.
     #[allow(clippy::too_many_arguments)]
-    fn paint_entry(&self, volumes: &mut Volumes, volume: u32, band: BandZ, pos: u32, state: u32, claimed: &mut BTreeSet<u32>, any: &mut bool) -> Option<usize> {
+    fn paint_entry(&self, volumes: &mut Volumes, volume: u32, band: BandZ, pos: u32, state: u32, claimed: &mut Claims, any: &mut bool) -> Option<usize> {
         let kind = self.kind(state);
         if kind == Kind::Decor || kind == Kind::Untaught {
             return Some(0);
@@ -220,13 +223,12 @@ impl Painter {
         };
         let v = Voxel { material, layer_idx, sub };
 
-        let address = voxel_address(cx, cy, z);
         *any = true;
         let at = Cell { cx, cy, z };
-        let ok = if claimed.contains(&address) && !is_air {
+        let ok = if claimed.contains(&at) && !is_air {
             volumes.append_sub_voxel(volume, at, v)
         } else {
-            claimed.insert(address);
+            claimed.insert(at);
             volumes.set_voxel(volume, at, v)
         };
         ok.then_some(1)

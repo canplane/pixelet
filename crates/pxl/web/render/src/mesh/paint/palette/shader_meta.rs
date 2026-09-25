@@ -4,9 +4,9 @@
 //! numbered as the layers of the texture pack's arrays (layers builds the
 //! arrays in this order); the placed cubes' colours are numbered after them
 //! (tex_array.rs).
-//! What the kernel is taught for the terrain (terrain/teach) and the objects
-//! (object/teach) reads from here, so the kernel and the arrays cannot
-//! disagree about what a type_id means.
+//! The terrain's materials (terrain/adapter.rs `MATERIALS`) and a placed
+//! cube's (object/material.rs) are read from here, so the paint and the
+//! arrays cannot disagree about what a type_id means.
 
 use std::sync::LazyLock;
 
@@ -15,6 +15,8 @@ use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
 use pxl_spec::cell::object::{block_cubes, ground_channel_types, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 
 use crate::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// A coloured type of a channel, and the array layer it is.
 #[derive(Clone, Debug, PartialEq)]
@@ -114,7 +116,7 @@ pub struct FlatChannelLookup {
 pub type FlatGroundColorLookup = [Option<FlatChannelLookup>; 4];
 
 fn channel_slot(ch: GroundChannelKey) -> usize {
-    GROUND_CH_KEYS.iter().position(|k| *k == ch).expect("a ground channel")
+    GROUND_CH_KEYS.iter().position(|k| *k == ch).or_bug(Errno::ENOTRECOVERABLE)
 }
 
 fn build_flat_color_lookup(meta: &[TerrainLayerMeta]) -> FlatGroundColorLookup {

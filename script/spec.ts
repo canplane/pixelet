@@ -270,7 +270,7 @@ function cmdRsReadOne(spec: CmdSpec, f: CmdField, c: string): string {
   const path = cmdRsEnum(spec, f.type);
   const number = `${c}.get_number()? as u32`;
   const member = "repr" in decl && decl.repr === "u8" ? `u8::try_from(${number}).ok().and_then(${path}::of)` : `${path}::of(${number})`;
-  return decl.unknown ? `${member}.unwrap_or(${path}::${decl.unknown})` : `${member}.ok_or_else(|| unknown("${f.type}"))?`;
+  return decl.unknown ? `${member}.unwrap_or(${path}::${decl.unknown})` : `${member}.ok_or_else(unknown)?`;
 }
 
 function cmdRsRead(spec: CmdSpec, f: CmdField, i: number): string {
@@ -332,8 +332,8 @@ function cmdRs(spec: CmdSpec): string {
     "use xpute_core::wire::xtp::{PacketWriter, TreeReader};",
     "",
     "/// A number an enum does not give out, where the enum has no member it reads as.",
-    "fn unknown(of: &str) -> MarshalError {",
-    "    MarshalError::new(Errno::EINVAL, Some(of), None)",
+    "fn unknown() -> MarshalError {",
+    "    MarshalError::new(Errno::EINVAL)",
     "}",
   );
   for (const e of spec.enums) {
@@ -988,6 +988,19 @@ async function errnoOutputs(): Promise<Output[]> {
     "// It does not imply pointer semantics; it is just the empty result slot.",
     "export type ErrnoResult<T> = [Errno, T | null];",
   );
+  const entries = spec.entries.filter((e): e is ErrnoEntry => !isErrnoSection(e));
+  ts.push(
+    "",
+    "/** An errno as a reader is shown it: its name and what it means. The",
+    " * strings are the shell's; an error carries the number alone. */",
+    "export function strerror(errno: Errno): string {",
+    "  return STRERROR[errno] ?? `errno ${errno}`;",
+    "}",
+    "",
+    "const STRERROR: Record<number, string> = {",
+    ...entries.map((e) => `  [${e.value}]: ${JSON.stringify(`${e.name}: ${e.doc}`)},`),
+    "};",
+  );
   return [
     { path: "packages/xpute/core/src/status/errno.spec.ts", text: ts.join("\n") + "\n" },
     { path: "crates/xpute/core/src/status/errno.spec.rs", text: rs.join("\n") + "\n" },
@@ -1205,6 +1218,7 @@ const DATA_SPECS: { json: string; ts?: string; rs?: string; mod?: string; enums?
     tsNames: ["groups", "DEFAULT_PERSON_VARIANT_KEY", "DEFAULT_PET_VARIANT_KEY", "PERSON_GENDER_PREFIXES"],
   },
   { json: "spec/pxl/web/render/gpu/api.json", ts: "apps/web/src/kernel/render/gpu/api.spec.ts", rs: "crates/pxl/web/render/src/gpu/api.spec.rs", mod: "api_spec" },
+  { json: "spec/pxl/web/kernel/abi/host.json", ts: "apps/web/src/kernel/abi/host.spec.ts", rs: "crates/pxl/web/kernel/src/abi/host.spec.rs", mod: "host" },
   {
     json: "spec/pxl/web/kernel/sched/ledger/ledger.json",
     ts: "apps/web/src/feature/dev/ledger/ledger.spec.ts",
@@ -1217,7 +1231,7 @@ const DATA_SPECS: { json: string; ts?: string; rs?: string; mod?: string; enums?
     ts: "apps/web/src/kernel/mem/mem.spec.ts",
     rs: "crates/pxl/web/kernel/src/mem/mem.spec.rs",
     mod: "spec",
-    tsNames: ["DESKTOP_BYTES", "PHONE_BYTES", "REGION_BYTES", "RING_CAPACITY"],
+    tsNames: ["BOOT_AT", "DESKTOP_BYTES", "PHONE_BYTES", "REGION_BYTES", "RING_CAPACITY"],
   },
 ];
 

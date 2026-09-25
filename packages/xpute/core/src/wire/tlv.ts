@@ -160,7 +160,7 @@ export class TlvWriter {
 
   private _check_unsealed() {
     if (this._sealed) {
-      throw new MarshalError(Errno.EBADMSG, "TLV: write after finish()");
+      throw new MarshalError(Errno.EBADMSG);
     }
   }
 
@@ -290,7 +290,7 @@ export class TlvWriter {
         }
       } else if (typeof v === "bigint") {
         if (v < I64_MIN || v > I64_MAX) {
-          throw new MarshalError(Errno.EBADMSG, `TLV: bigint out of i64 range ${v}`);
+          throw new MarshalError(Errno.EBADMSG);
         }
         this.i64(v);
       } else if (typeof v === "string") {
@@ -369,62 +369,62 @@ export class TlvReader implements Iterable<TlvValue> {
           yield this._bytes();
           break;
         default:
-          throw new MarshalError(Errno.EBADMSG, `TLV: unknown tag 0x${(tag as u8).toString(16)} at ${this._stream.off - 1}`);
+          throw new MarshalError(Errno.EBADMSG);
       }
     }
   }
 
   // ---- Reader bounds ----
 
-  private _need(n: u32, what: string): void {
-    if (this._stream.off + n > this._end) throw new MarshalError(Errno.EBADMSG, `TLV: truncated ${what} at ${this._stream.off}`);
+  private _need(n: u32): void {
+    if (this._stream.off + n > this._end) throw new MarshalError(Errno.EBADMSG);
   }
 
   // ---- Primitive readers ----
 
   private _u8(): u8 {
-    this._need(U8_SZ, "U8");
+    this._need(U8_SZ);
     return scalar.getu8(this._stream);
   }
   private _i8(): i8 {
-    this._need(U8_SZ, "I8");
+    this._need(U8_SZ);
     return scalar.geti8(this._stream);
   }
   private _u16(): u16 {
-    this._need(U16_SZ, "U16");
+    this._need(U16_SZ);
     return scalar.getu16(this._stream);
   }
   private _i16(): i16 {
-    this._need(U16_SZ, "I16");
+    this._need(U16_SZ);
     return scalar.geti16(this._stream);
   }
   private _u32(): u32 {
-    this._need(U32_SZ, "U32");
+    this._need(U32_SZ);
     return scalar.getu32(this._stream);
   }
   private _i32(): i32 {
-    this._need(U32_SZ, "I32");
+    this._need(U32_SZ);
     return scalar.geti32(this._stream);
   }
   private _u64(): u64 {
-    this._need(U64_SZ, "U64");
+    this._need(U64_SZ);
     return scalar.getu64(this._stream);
   }
   private _i64(): i64 {
-    this._need(U64_SZ, "I64");
+    this._need(U64_SZ);
     return scalar.geti64(this._stream);
   }
   private _f32(): f32 {
-    this._need(U32_SZ, "F32");
+    this._need(U32_SZ);
     return scalar.getf32(this._stream);
   }
   private _f64(): f64 {
-    this._need(U64_SZ, "F64");
+    this._need(U64_SZ);
     return scalar.getf64(this._stream);
   }
 
   private _bool(): boolean {
-    this._need(U8_SZ, "BOOL");
+    this._need(U8_SZ);
     return scalar.getu8(this._stream) !== 0;
   }
 
@@ -432,7 +432,7 @@ export class TlvReader implements Iterable<TlvValue> {
 
   private _str(): string {
     const len = this._u32();
-    this._need(len, `STR(len=${len})`);
+    this._need(len);
     const s: string = encoding.td.decode(this._buf.subarray(this._stream.off, this._stream.off + len));
     this._stream.off += len;
     return s;
@@ -440,7 +440,7 @@ export class TlvReader implements Iterable<TlvValue> {
 
   private _bytes(): Bytes {
     const len = this._u32();
-    this._need(len, `BYTES(len=${len})`);
+    this._need(len);
     const b = this._buf.subarray(this._stream.off, this._stream.off + len);
     this._stream.off += len;
     return b;

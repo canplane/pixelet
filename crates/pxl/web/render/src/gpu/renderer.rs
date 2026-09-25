@@ -30,7 +30,7 @@ use crate::frame::draw::{
 use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_SKY};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, texture_usage, word_bytes, GpuApi, Stamp};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{dimension, format, load, resource, surface_role};
 use crate::gpu::arena::{arena_buffer, arena_lose};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
@@ -48,6 +48,8 @@ use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURN
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::look::globe::{Globe, MERCATOR_RADIUS_U};
 use crate::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
 pub const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
@@ -207,30 +209,27 @@ pub(crate) fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4, eye: &V3) {
 
 /// A frame group: the frame uniform at 0, a shadow map's two entries, the
 /// occlusion map and the air's five (gpu/atmosphere.rs).
-pub fn frame_group(g: &GpuApi, layout: u32, frame: u32, shadow: [u32; 10], ao: [u32; 5], air: [u32; AIR_WORDS]) -> u32 {
+pub fn frame_group(g: &Gpu, layout: u32, frame: u32, shadow: [u32; 10], ao: [u32; 5], air: [u32; AIR_WORDS]) -> u32 {
     let id = object();
     let mut e = [0u32; 20 + AIR_WORDS];
     e[..5].copy_from_slice(&buffer_entry(0, frame));
     e[5..15].copy_from_slice(&shadow);
     e[15..20].copy_from_slice(&ao);
     e[20..].copy_from_slice(&air);
-    (g.bind_group)(id, layout, &e);
+    g.bind_group(id, layout, &e);
     id
 }
 
-/// A skin's texture and its sampler as a group, over the image `image`; none
-/// while the image has not arrived. The texture, its view and the group.
-pub fn skin_group(g: &GpuApi, layout: u32, sampler: u32, image: u32) -> Option<[u32; 3]> {
+/// A skin's texture and its sampler as a group, over the image `image`. The
+/// texture, its view and the group.
+pub fn skin_group(g: &Gpu, layout: u32, sampler: u32, image: u32) -> [u32; 3] {
     let texture = object();
-    if !(g.image_texture)(texture, image) {
-        release(texture);
-        return None;
-    }
+    g.image_texture(texture, image);
     let view = object();
-    (g.view)(view, texture, dimension::D2, 0, 1, 0, 1);
+    g.view(view, texture, dimension::D2, 0, 1, 0, 1);
     let group = object();
-    (g.bind_group)(group, layout, &[0, resource::VIEW, view, 0, 0, 1, resource::SAMPLER, sampler, 0, 0]);
-    Some([texture, view, group])
+    g.bind_group(group, layout, &[0, resource::VIEW, view, 0, 0, 1, resource::SAMPLER, sampler, 0, 0]);
+    [texture, view, group]
 }
 
 /// A heap block words are laid out in before they go to the
@@ -249,7 +248,7 @@ impl Scratch {
                 unsafe { free((self.at, self.bytes)) };
             }
             let size = bytes.next_power_of_two().max(4096);
-            (self.at, self.bytes) = alloc(size).expect("the heap has no room for the renderer's scratch");
+            (self.at, self.bytes) = alloc(size).or_bug(Errno::ENOMEM);
         }
         // SAFETY: a heap block this scratch holds alone, at
         // least `bytes` long.
@@ -305,7 +304,7 @@ fn memory(at: u32, n: u32) -> &'static [u8] {
 }
 
 fn fixed_lane() -> &'static mut [u32] {
-    let (at, _) = alloc(word_bytes(BLOCK_SLOTS)).expect("the heap has no room for the renderer's blocks");
+    let (at, _) = alloc(word_bytes(BLOCK_SLOTS)).or_bug(Errno::ENOMEM);
     // SAFETY: a block never given back, BLOCK_SLOTS words.
     let lane = unsafe { core::slice::from_raw_parts_mut(at as *mut u32, BLOCK_SLOTS) };
     lane.fill(0);
@@ -340,32 +339,38 @@ impl Blocks {
         self.missing = self.count;
     }
 
-    /// Puts every block that has no buffer on the device.
-    fn restore(&mut self, g: &GpuApi) {
+    /// Puts every block that has no buffer on the device, as far as the
+    /// turn's stream has room.
+    fn restore(&mut self, g: &Gpu) {
         if self.missing == 0 {
             return;
         }
         for i in 0..BLOCK_SLOTS {
-            if self.handle[i] != EMPTY && self.buffer[i] == 0 {
-                self.put(g, i);
+            if self.handle[i] != EMPTY && self.buffer[i] == 0 && !self.put(g, i) {
+                return;
             }
         }
-        self.missing = 0;
     }
 
-    /// A buffer for the block at `i`, its bytes written.
-    fn put(&mut self, g: &GpuApi, i: usize) {
+    /// A buffer for the block at `i`, its bytes written; false, and the
+    /// block still missing, where the turn's stream has no room for them.
+    fn put(&mut self, g: &Gpu, i: usize) -> bool {
+        if !room(self.len[i]) {
+            return false;
+        }
         let buffer = object();
         // Every block is usable every way a draw reads one: a mesh's lanes as
         // vertices and indices, a decor block's as storage.
-        (g.buffer)(
+        g.buffer(
             buffer,
             buffer_size(self.len[i]),
             buffer_usage::VERTEX | buffer_usage::INDEX | buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
-        (g.write_buffer)(buffer, 0, memory(self.at[i], self.len[i] & !3));
+        g.write_buffer(buffer, 0, memory(self.at[i], self.len[i] & !3));
         self.buffer[i] = buffer;
         self.group[i] = 0;
+        self.missing -= 1;
+        true
     }
 
     fn find(&self, handle: u32) -> Option<usize> {
@@ -390,9 +395,9 @@ impl Blocks {
 
     /// Records a block, and puts it on the device when there is one; what the
     /// handle held before is let go.
-    fn insert(&mut self, g: Option<&GpuApi>, handle: u32, at: u32, len: u32, vertex_cnt: u32, index_cnt: u32) {
+    fn insert(&mut self, g: Option<&Gpu>, handle: u32, at: u32, len: u32, vertex_cnt: u32, index_cnt: u32) {
         self.remove(handle);
-        assert!((self.count as usize) < BLOCK_SLOTS / 2, "more than {} blocks listed", BLOCK_SLOTS / 2);
+        xpute_core::ensure!((self.count as usize) < BLOCK_SLOTS / 2, ENOSPC, BLOCK_SLOTS / 2);
         let mut i = home(handle);
         while self.handle[i] != EMPTY {
             i = (i + 1) & BLOCK_MASK;
@@ -406,19 +411,28 @@ impl Blocks {
         self.group[i] = 0;
         self.count += 1;
         self.bytes += buffer_size(len) as u64;
-        match g {
-            Some(g) => self.put(g, i),
-            None => self.missing += 1,
+        self.missing += 1;
+        if let Some(g) = g {
+            self.put(g, i);
         }
     }
 
     /// The block's bytes changed at `at`: written into its buffer when it has
-    /// one, and read from there when it is next put on a device.
-    fn rewrite(&mut self, g: Option<&GpuApi>, handle: u32, at: u32, len: u32) {
+    /// one, and read from there when it is next put on a device. Where the
+    /// turn's stream has no room for them, the buffer goes and the block is
+    /// missing, put again whole once there is.
+    fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u32, len: u32) {
         let Some(i) = self.find(handle) else { return };
         self.at[i] = at;
-        if let (Some(g), buffer @ 1..) = (g, self.buffer[i]) {
-            (g.write_buffer)(buffer, 0, memory(at, len.min(self.len[i]) & !3));
+        let (Some(g), buffer @ 1..) = (g, self.buffer[i]) else { return };
+        let bytes = len.min(self.len[i]) & !3;
+        if room(bytes) {
+            g.write_buffer(buffer, 0, memory(at, bytes));
+        } else {
+            release(self.group[i]);
+            release(buffer);
+            (self.buffer[i], self.group[i]) = (0, 0);
+            self.missing += 1;
         }
     }
 
@@ -467,11 +481,11 @@ impl Blocks {
         self.find(handle).filter(|&i| self.buffer[i] != 0).map(|i| self.buffer[i])
     }
 
-    pub fn group(&mut self, g: &GpuApi, handle: u32, layout: u32) -> Option<u32> {
+    pub fn group(&mut self, g: &Gpu, handle: u32, layout: u32) -> Option<u32> {
         let i = self.find(handle).filter(|&i| self.buffer[i] != 0)?;
         if self.group[i] == 0 {
             let id = object();
-            (g.bind_group)(id, layout, &buffer_entry(0, self.buffer[i]));
+            g.bind_group(id, layout, &buffer_entry(0, self.buffer[i]));
             self.group[i] = id;
         }
         Some(self.group[i])
@@ -539,14 +553,14 @@ struct DebugPass {
 }
 
 impl DebugPass {
-    fn new(g: &GpuApi, pipelines: &mut Pipelines, frame_buffer: u32) -> DebugPass {
+    fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32) -> DebugPass {
         let built = pipelines.build(g, PIPELINE_DEBUG, format::CANVAS);
         let draw_buffer = object();
-        (g.buffer)(draw_buffer, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        g.buffer(draw_buffer, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let frame_group = object();
-        (g.bind_group)(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
+        g.bind_group(frame_group, built.layouts[0], &buffer_entry(0, frame_buffer));
         let draw_group = object();
-        (g.bind_group)(draw_group, built.layouts[1], &buffer_entry(0, draw_buffer));
+        g.bind_group(draw_group, built.layouts[1], &buffer_entry(0, draw_buffer));
         DebugPass {
             built,
             draw_buffer,
@@ -556,7 +570,7 @@ impl DebugPass {
     }
 
     /// The frame's segments into the open pass; how many vertices.
-    fn draw(&self, g: &GpuApi, pass: u32, draws: &[u32], uniforms: &[f32], blocks: &Blocks) -> u32 {
+    fn draw(&self, g: &Gpu, pass: u32, draws: &[u32], uniforms: &[f32], blocks: &Blocks) -> u32 {
         let Some(d) = draws.as_chunks::<DRAW_WORDS>().0.iter().find(|d| d[4] == PIPELINE_DEBUG) else {
             return 0;
         };
@@ -565,12 +579,12 @@ impl DebugPass {
             return 0;
         }
         let at = d[3] as usize * UNIFORM_FLOATS;
-        (g.write_buffer)(self.draw_buffer, 0, bytes(&[uniforms[at], uniforms[at + 1], uniforms[at + 2], 0.0]));
-        (g.set_pipeline)(pass, self.built.pipeline);
-        (g.set_bind_group)(pass, 0, self.frame_group, &[]);
-        (g.set_bind_group)(pass, 1, self.draw_group, &[]);
-        (g.set_vertex_buffer)(pass, 0, block, 0, count * 24);
-        (g.draw)(pass, count, 1, 0, 0);
+        g.write_buffer(self.draw_buffer, 0, bytes(&[uniforms[at], uniforms[at + 1], uniforms[at + 2], 0.0]));
+        g.set_pipeline(pass, self.built.pipeline);
+        g.set_bind_group(pass, 0, self.frame_group, &[]);
+        g.set_bind_group(pass, 1, self.draw_group, &[]);
+        g.set_vertex_buffer(pass, 0, block, 0, count * 24);
+        g.draw(pass, count, 1, 0, 0);
         count
     }
 }
@@ -589,9 +603,9 @@ const CASE_TARGET: V3 = [0.0, 0.0, 0.55];
 const CASE_FOV_DEG: f64 = 35.0;
 
 impl Case {
-    fn new(g: &GpuApi, pipelines: &mut Pipelines, shadow: &Shadow, ao: &ScreenAo, air: [u32; AIR_WORDS], align: u32) -> Case {
+    fn new(g: &Gpu, pipelines: &mut Pipelines, shadow: &Shadow, ao: &ScreenAo, air: [u32; AIR_WORDS], align: u32) -> Case {
         let frame_buffer = object();
-        (g.buffer)(frame_buffer, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        g.buffer(frame_buffer, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let skinned = SkinnedPass::new(g, pipelines, frame_buffer, shadow.blank_entries(1), None, ao.blank_entry(7), air, align);
         Case {
             frame_buffer,
@@ -650,12 +664,12 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    fn new(g: &GpuApi, device: Device, handheld: bool) -> Renderer {
+    fn new(g: &Gpu, device: Device, handheld: bool) -> Renderer {
         let mut pipelines = Pipelines::new();
         let frame_buffer = object();
-        (g.buffer)(frame_buffer, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        g.buffer(frame_buffer, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let sky_buffer = object();
-        (g.buffer)(sky_buffer, word_bytes(SKY_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        g.buffer(sky_buffer, word_bytes(SKY_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let shadow = Shadow::new(g, handheld);
         let ao = ScreenAo::new(g, &mut pipelines, device.align);
         let atmosphere = Atmosphere::new(g, &mut pipelines);
@@ -674,12 +688,12 @@ impl Renderer {
         sky_entries[10..15].copy_from_slice(&[2, resource::VIEW, moon.view, 0, 0]);
         sky_entries[15..20].copy_from_slice(&[3, resource::SAMPLER, moon.sampler, 0, 0]);
         sky_entries[20..].copy_from_slice(&air);
-        (g.bind_group)(sky_group, sky_built.layouts[0], &sky_entries);
+        g.bind_group(sky_group, sky_built.layouts[0], &sky_entries);
         let draws_buffer = object();
-        (g.buffer)(draws_buffer, DRAWS_INITIAL * 4, buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        g.buffer(draws_buffer, DRAWS_INITIAL * 4, buffer_usage::STORAGE | buffer_usage::COPY_DST);
         let query_set = if device.timestamps {
             let q = object();
-            (g.query_set)(q, 2 * GPU_SPANS.len() as u32);
+            g.query_set(q, 2 * GPU_SPANS.len() as u32);
             q
         } else {
             0
@@ -741,7 +755,7 @@ impl Renderer {
     /// The chunk pass's group over `frame`: the frame, a shadow map, the draws,
     /// the texture pack's array, the table its faces are found through and
     /// their sampler, the occlusion map, the air.
-    fn chunk_group(&self, g: &GpuApi, frame: u32, shadow: [u32; 10]) -> u32 {
+    fn chunk_group(&self, g: &Gpu, frame: u32, shadow: [u32; 10]) -> u32 {
         let mut e = [0u32; 40 + AIR_WORDS];
         e[..5].copy_from_slice(&buffer_entry(0, frame));
         e[5..15].copy_from_slice(&shadow);
@@ -752,12 +766,12 @@ impl Renderer {
         e[35..40].copy_from_slice(&self.ao.entry(7));
         e[40..].copy_from_slice(&self.atmosphere.entries());
         let id = object();
-        (g.bind_group)(id, self.chunk.layouts[0], &e);
+        g.bind_group(id, self.chunk.layouts[0], &e);
         id
     }
 
     /// Every lit pass's group 0 again: the occlusion map is a new object.
-    fn rebind(&mut self, g: &GpuApi) {
+    fn rebind(&mut self, g: &Gpu) {
         release(self.bind_group);
         release(self.light_group);
         self.bind_group = self.chunk_group(g, self.frame_buffer, self.shadow.entries(1));
@@ -771,7 +785,7 @@ impl Renderer {
     /// The frame's uniforms and the sky's, laid out from the stage and the
     /// environment `env` for the world's surface at (width, height) device
     /// pixels.
-    fn lay_out(&mut self, g: &GpuApi, width: u32, height: u32, env: &[f32]) {
+    fn lay_out(&mut self, g: &Gpu, width: u32, height: u32, env: &[f32]) {
         let s = stage_lane();
         let (mut a, mut m, mut proj) = (mat4(), mat4(), mat4());
         a.copy_from_slice(&s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16]);
@@ -779,7 +793,7 @@ impl Renderer {
         // The badges take the view and the projection apart: their size is
         // measured in view space.
         let b = &mut self.badges;
-        put_mat(&mut b.view, 0, s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].try_into().expect("16 doubles"));
+        put_mat(&mut b.view, 0, s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].try_into().or_bug(Errno::ENOTRECOVERABLE));
         put_mat(&mut b.proj, 0, &proj);
         b.px_k = (s[STAGE_AT::VIEWPORT + 1] / (2.0 * (s[STAGE_AT::FOV] * core::f64::consts::PI / 360.0).tan())) as f32;
         b.fade_start = s[STAGE_AT::FADE_START] as f32;
@@ -882,7 +896,7 @@ impl Renderer {
     /// first instance would be added to it rather than read beside it. The
     /// draw record's index goes on the first vertex instead, which no
     /// attribute here steps by (chunk.wgsl).
-    fn draw_meshes(&self, g: &GpuApi, pass: u32, draws: &[u32], which: u32, stride: u32, own: Option<u32>) -> bool {
+    fn draw_meshes(&self, g: &Gpu, pass: u32, draws: &[u32], which: u32, stride: u32, own: Option<u32>) -> bool {
         let b = blocks();
         let mut any = false;
         for d in draws.as_chunks::<DRAW_WORDS>().0 {
@@ -903,12 +917,10 @@ impl Renderer {
             // is how a device came to draw no ground at all with every gauge
             // reading normal. Saying so here is also what lets the census be
             // taken from the list: every draw listed is a draw issued.
-            let Some(buffer) = buffer else {
-                panic!("a draw named a buffer nothing holds: handle {handle:#x}, pipeline {pipeline}")
-            };
+            let Some(buffer) = buffer else { xpute_core::bug!(ENOTRECOVERABLE, handle, pipeline) };
             if let (Some(p), false) = (own, any) {
-                (g.set_pipeline)(pass, p);
-                (g.set_bind_group)(pass, 0, self.bind_group, &[]);
+                g.set_pipeline(pass, p);
+                g.set_bind_group(pass, 0, self.bind_group, &[]);
             }
             any = true;
             // Both slots over the one buffer: the second reads the two words a
@@ -920,16 +932,16 @@ impl Renderer {
             // first vertex free to carry the draw record's index, which the
             // shader divides back out (chunk.wgsl).
             let at = first_box * stride;
-            (g.set_vertex_buffer)(pass, 0, buffer, at, 0);
-            (g.set_vertex_buffer)(pass, 1, buffer, at, 0);
-            (g.draw)(pass, BOX_VERTICES, box_cnt, uniform * BOX_VERTICES, 0);
+            g.set_vertex_buffer(pass, 0, buffer, at, 0);
+            g.set_vertex_buffer(pass, 1, buffer, at, 0);
+            g.draw(pass, BOX_VERTICES, box_cnt, uniform * BOX_VERTICES, 0);
         }
         any
     }
 
     /// The world, on the world's surface, and every case on its own; what the
     /// frame cost.
-    fn frame(&mut self, g: &GpuApi, world: &mut Surface, input: FrameInput) -> FrameStat {
+    fn frame(&mut self, g: &Gpu, world: &mut Surface, input: FrameInput) -> FrameStat {
         self.decor.set_models(input.decor);
         for &(model, image) in input.skins {
             self.skinned.set_skin(g, model, image);
@@ -944,8 +956,8 @@ impl Renderer {
         if self.screen_ao && self.ao.ensure(g, world.width, world.height) {
             self.rebind(g);
         }
-        (g.write_buffer)(self.frame_buffer, 0, bytes(&self.frame));
-        (g.write_buffer)(self.sky_buffer, 0, bytes(&self.sky));
+        g.write_buffer(self.frame_buffer, 0, bytes(&self.frame));
+        g.write_buffer(self.sky_buffer, 0, bytes(&self.sky));
         let uniform_bytes = word_bytes(uniforms.len());
         if uniform_bytes > self.draws_bytes {
             release(self.bind_group);
@@ -953,19 +965,19 @@ impl Renderer {
             release(self.draws_buffer);
             self.draws_bytes = uniform_bytes * 2;
             self.draws_buffer = object();
-            (g.buffer)(self.draws_buffer, self.draws_bytes, buffer_usage::STORAGE | buffer_usage::COPY_DST);
+            g.buffer(self.draws_buffer, self.draws_bytes, buffer_usage::STORAGE | buffer_usage::COPY_DST);
             self.bind_group = self.chunk_group(g, self.frame_buffer, self.shadow.entries(1));
             self.light_group = self.chunk_group(g, self.shadow.light_frame, self.shadow.blank_entries(1));
         }
         if !uniforms.is_empty() {
-            (g.write_buffer)(self.draws_buffer, 0, bytes(uniforms));
+            g.write_buffer(self.draws_buffer, 0, bytes(uniforms));
         }
         self.decor.prepare(g, draws, uniforms);
         self.skinned.prepare(g, draws, uniforms);
 
         let b = blocks();
         let encoder = object();
-        (g.encoder)(encoder);
+        g.encoder(encoder);
         let q = self.query_set;
         // The air's tables, where any is due, before any pass reads them.
         // A span a pair of queries, each written only by the passes the frame
@@ -976,48 +988,48 @@ impl Renderer {
         // The sun's shadow map first, from the frame's lists, where it is on.
         if self.shadows {
             let pass = self.shadow.begin(g, encoder, &mut stamps[SPAN_SHADOW]);
-            (g.set_pipeline)(pass, self.chunk_depth.pipeline);
-            (g.set_bind_group)(pass, 0, self.light_group, &[]);
+            g.set_pipeline(pass, self.chunk_depth.pipeline);
+            g.set_bind_group(pass, 0, self.light_group, &[]);
             self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, FINE_BOX_BYTES, None);
-            (g.set_pipeline)(pass, self.chunk_coarse_depth.pipeline);
+            g.set_pipeline(pass, self.chunk_coarse_depth.pipeline);
             self.draw_meshes(g, pass, draws, PIPELINE_CHUNK_COARSE, COARSE_BOX_BYTES, None);
             self.decor.draw_depth(g, pass, draws, b);
             self.skinned.draw_depth(g, pass, draws, b);
-            (g.end)(pass);
+            g.end(pass);
             release(pass);
         }
         // The world's depth from the eye, and the screen-space occlusion
         // from it, where that mode is on: the lit passes read the map.
         if self.screen_ao {
             let pass = self.ao.begin_prepass(g, encoder, &mut stamps[SPAN_PREPASS]);
-            (g.set_pipeline)(pass, self.chunk_prepass.pipeline);
-            (g.set_bind_group)(pass, 0, self.bind_group, &[]);
+            g.set_pipeline(pass, self.chunk_prepass.pipeline);
+            g.set_bind_group(pass, 0, self.bind_group, &[]);
             self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, FINE_BOX_BYTES, None);
-            (g.set_pipeline)(pass, self.chunk_coarse_prepass.pipeline);
+            g.set_pipeline(pass, self.chunk_coarse_prepass.pipeline);
             self.draw_meshes(g, pass, draws, PIPELINE_CHUNK_COARSE, COARSE_BOX_BYTES, None);
             self.decor.draw_prepass(g, pass, draws, b);
             self.skinned.draw_prepass(g, pass, draws, b);
-            (g.end)(pass);
+            g.end(pass);
             release(pass);
             self.ao.run(g, encoder, &mut stamps[SPAN_AO]);
         }
         let canvas_view = object();
-        (g.current)(world.handle, canvas_view);
+        g.current(world.handle, canvas_view);
         let pass = object();
-        (g.pass)(pass, encoder, &pass_desc(canvas_view, load::CLEAR, world.depth_view, load::CLEAR, 0.0, stamps[SPAN_WORLD].pass()));
-        (g.set_pipeline)(pass, self.chunk.pipeline);
-        (g.set_bind_group)(pass, 0, self.bind_group, &[]);
+        g.pass(pass, encoder, &pass_desc(canvas_view, load::CLEAR, world.depth_view, load::CLEAR, 0.0, stamps[SPAN_WORLD].pass()));
+        g.set_pipeline(pass, self.chunk.pipeline);
+        g.set_bind_group(pass, 0, self.bind_group, &[]);
         self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, FINE_BOX_BYTES, None);
-        (g.set_pipeline)(pass, self.chunk_coarse.pipeline);
+        g.set_pipeline(pass, self.chunk_coarse.pipeline);
         self.draw_meshes(g, pass, draws, PIPELINE_CHUNK_COARSE, COARSE_BOX_BYTES, None);
         self.decor.draw(g, pass, draws, b);
         self.skinned.draw(g, pass, draws, b);
         // The sky and the stars after the opaque world, at the far plane, so
         // only a pixel it left empty runs the sky's shader: looking down at the
         // map, none does.
-        (g.set_pipeline)(pass, self.sky_built.pipeline);
-        (g.set_bind_group)(pass, 0, self.sky_group, &[]);
-        (g.draw)(pass, 3, 1, 0, 0);
+        g.set_pipeline(pass, self.sky_built.pipeline);
+        g.set_bind_group(pass, 0, self.sky_group, &[]);
+        g.draw(pass, 3, 1, 0, 0);
         self.stars.draw(g, pass);
         // The clouds over the opaque world and the sky: from under the layer
         // where the world left the sky, from over it over everything
@@ -1030,7 +1042,7 @@ impl Renderer {
         self.draw_meshes(g, pass, draws, PIPELINE_GHOST_BOX_COPLANAR, FINE_BOX_BYTES, Some(self.ghost[1].pipeline));
         self.decor.draw_ghosts(g, pass, draws, b);
         self.debug.draw(g, pass, draws, uniforms, b);
-        (g.end)(pass);
+        g.end(pass);
         release(pass);
         let badges = self
             .badges
@@ -1038,19 +1050,19 @@ impl Renderer {
         self.draw_cases(g, encoder, draws, uniforms, input.cases, &mut stamps[SPAN_CASES]);
         if q != 0 {
             let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
-            (g.timestamps)(encoder, q, written);
+            g.timestamps(encoder, q, written);
             for (k, ms) in self.gpu_spans.iter_mut().enumerate() {
-                *ms = (g.gpu_ms)(k as u32);
+                *ms = g.gpu_ms(k as u32);
             }
-            self.gpu_ms = (g.gpu_ms)(GPU_SPANS.len() as u32);
+            self.gpu_ms = g.gpu_ms(GPU_SPANS.len() as u32);
         }
-        (g.submit)(encoder);
+        g.submit(encoder);
         release(encoder);
         release(canvas_view);
         self.stat(draws, world, badges)
     }
 
-    fn draw_cases(&mut self, g: &GpuApi, encoder: u32, draws: &[u32], uniforms: &[f32], cases: &[(u32, u32, u32)], stamp: &mut Stamp) {
+    fn draw_cases(&mut self, g: &Gpu, encoder: u32, draws: &[u32], uniforms: &[f32], cases: &[(u32, u32, u32)], stamp: &mut Stamp) {
         for &(id, model, image) in cases {
             let Some(s) = surface(id) else { continue };
             if s.role != surface_role::CASE {
@@ -1067,7 +1079,7 @@ impl Renderer {
                 self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.shadow, &self.ao, self.atmosphere.entries(), self.align));
             }
             let world_frame = self.frame;
-            let case = self.cases[slot].as_mut().expect("just made");
+            let case = self.cases[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
             case.skinned.set_skin(g, model, image);
             let at = own[3] as usize * UNIFORM_FLOATS;
             let actor = [uniforms[at] as f64, uniforms[at + 1] as f64, uniforms[at + 2] as f64];
@@ -1097,14 +1109,14 @@ impl Renderer {
             u[SCREEN_AO] = 0.0;
             // No planet: the case is a room of its own.
             u[PLANET + 2] = 0.0;
-            (g.write_buffer)(case.frame_buffer, 0, bytes(&case.frame));
+            g.write_buffer(case.frame_buffer, 0, bytes(&case.frame));
             case.skinned.prepare(g, own, uniforms);
             let view_id = object();
-            (g.current)(s.handle, view_id);
+            g.current(s.handle, view_id);
             let pass = object();
-            (g.pass)(pass, encoder, &pass_desc(view_id, load::CLEAR, s.depth_view, load::CLEAR, 0.0, stamp.pass()));
+            g.pass(pass, encoder, &pass_desc(view_id, load::CLEAR, s.depth_view, load::CLEAR, 0.0, stamp.pass()));
             case.skinned.draw(g, pass, own, blocks());
-            (g.end)(pass);
+            g.end(pass);
             release(pass);
             release(view_id);
         }
@@ -1156,13 +1168,13 @@ impl Renderer {
 /// at once where there is none, and for a new size once it has held
 /// SETTLE_TURNS turns — until then the buffer it has is drawn and the page
 /// scales it.
-fn targets(g: &GpuApi, s: &mut Surface) {
+fn targets(g: &Gpu, s: &mut Surface) {
     // The world's surface at what the kernel's resolution chose; a case at
     // the device's own.
     let ratio = (s.role == surface_role::WORLD).then(|| stage_lane()[STAGE_AT::RESOLUTION]).filter(|r| *r > 0.0);
     let (width, height) = s.buffer_px(ratio);
     if !s.configured {
-        (g.configure)(s.handle);
+        g.configure(s.handle);
         s.configured = true;
         s.depth = 0;
     }
@@ -1183,14 +1195,14 @@ fn targets(g: &GpuApi, s: &mut Surface) {
         }
     }
     s.waited = 0;
-    (g.resize)(s.handle, width, height);
+    g.resize(s.handle, width, height);
     for id in [s.depth_view, s.depth] {
         release(id);
     }
     s.depth = object();
-    (g.texture)(s.depth, width, height, 1, format::DEPTH32, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
+    g.texture(s.depth, width, height, 1, format::DEPTH32, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
     s.depth_view = object();
-    (g.view)(s.depth_view, s.depth, dimension::D2, 0, 1, 0, 1);
+    g.view(s.depth_view, s.depth, dimension::D2, 0, 1, 0, 1);
     s.width = width;
     s.height = height;
 }
@@ -1219,7 +1231,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
 /// named recorded, and put on the device or let go there when `g` has one;
 /// and the frame's draws and their uniforms. Blocks listed with no device
 /// wait in the table for the next one.
-fn take_lists<'a>(g: Option<&GpuApi>, lists: Lists<'a>) -> (&'a [u32], &'a [f32]) {
+fn take_lists<'a>(g: Option<&Gpu>, lists: Lists<'a>) -> (&'a [u32], &'a [f32]) {
     let b = blocks();
     for u in lists.uploads.as_chunks::<UPLOAD_WORDS>().0 {
         b.insert(g, u[0], u[1], u[2], u[3], u[4]);

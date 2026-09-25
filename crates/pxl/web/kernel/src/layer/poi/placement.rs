@@ -75,7 +75,6 @@ pub fn step(ctx: &mut TickContext) {
     let pages = PoiPage::pyramid();
     let sched = &crate::kernel::kernel().sched;
     let mut cells: BTreeMap<Cell, Tally> = BTreeMap::new();
-    let (n, across) = (POI_LATTICE.chunk_cells(), POI_LATTICE.page_cells());
     let Some(domain) = pages.domain() else { return };
     for &chunk in &pages.cover().0.drawn {
         // The page that draws the chunk's ground: its own, or where the tree
@@ -91,10 +90,9 @@ pub fn step(ctx: &mut TickContext) {
         // the source is so much coarser that one of its cells is wider than
         // the chunk, part of one, whose place is the chunk's only if it stands
         // on the chunk's ground.
-        let coarser = src.level - chunk.level();
-        let m = n >> coarser;
-        let first = POI_LATTICE.cell_of(src.level, &chunk.base()).index();
-        let (x0, y0) = (first % across, first / across);
+        let (side, cell) = (chunk.node().0, POI_LATTICE.scale(src.level));
+        let m = if cell <= side { cell.count_in(side) } else { 0 };
+        let [x0, y0] = POI_LATTICE.cell_of(src.level, &chunk.base()).in_page();
         for ty in y0..y0 + m.max(1) {
             let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + m.max(1), ty));
             let from = poi.cells.partition_point(|c| c.cell < lo);
@@ -125,10 +123,11 @@ pub fn step(ctx: &mut TickContext) {
         let mean = |sum: u64| ((sum + t.count as u64 / 2) / t.count as u64) as u32;
         let stands = cell.inner_at(GROUND, 0, t.at.map(mean));
         let Some((_, top)) = sched.surface_at(&stands.mid()) else { continue };
+        let Some(width) = badge::width(label) else { continue };
         let centre = stands.centre(top);
         let mut local = [0.0; 3];
         projection::unproject(&mut local, ivec::sub(centre.i, origin), centre.f);
-        p.batch.push(local[0], local[1], local[2], badge::width(label), badge::ANCHOR, labelled.len() as f64);
+        p.batch.push(local[0], local[1], local[2], width, badge::ANCHOR, labelled.len() as f64);
         labelled.push((label, stands));
     }
     badge::retain(&labelled.iter().map(|l| l.0).collect());

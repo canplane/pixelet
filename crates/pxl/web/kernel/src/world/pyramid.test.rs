@@ -39,7 +39,7 @@ fn drawn_by_rule(d: &Domain) -> Vec<Chunk> {
 
 /// The ground a domain draws, as the square around it and its area.
 fn ground_of(d: &Domain) -> ((f64, f64, f64), f64) {
-    let g: Vec<_> = d.ground().iter().map(|c| c.rect()).collect();
+    let g: Vec<_> = d.roots().iter().map(|c| c.rect()).collect();
     let (x0, y0) = g.iter().fold((f64::MAX, f64::MAX), |(x, y), r| (x.min(r.0), y.min(r.1)));
     let x1 = g.iter().map(|r| r.0 + r.2).fold(f64::MIN, f64::max);
     let y1 = g.iter().map(|r| r.1 + r.2).fold(f64::MIN, f64::max);
@@ -73,7 +73,7 @@ fn inside(c: Chunk, at: IVec) -> bool {
 fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
     let d = the_domain();
     let ((rx, ry, side), _) = ground_of(&d);
-    let ground = d.ground();
+    let ground = d.roots();
     let mut seed = 0x2545_f491u64;
     let mut next = |span: f64| {
         seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);

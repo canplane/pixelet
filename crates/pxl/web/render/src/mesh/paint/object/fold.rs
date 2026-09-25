@@ -15,35 +15,31 @@
 
 use std::collections::HashMap;
 
-use pxl_spec::bake::constant::{unpack_pos, BAND, CELL, OBJECT_FINEST};
+use pxl_spec::bake::constant::{unpack_pos, EntryAt, BAND, CELL, OBJECT_FINEST};
 use pxl_spec::bake::fold::majority;
 use pxl_spec::space::hierarchy::{parent_of, slot_of, Scale};
+use pxl_spec::space::indexer::FROM_L2_IDX;
+use pxl_spec::space::pvf3::ivec;
 
 use super::adapter::{Entries, Painter};
-
-/// One column's entries and where the column starts, in units.
-pub struct Column<'a> {
-    pub x0: i64,
-    pub y0: i64,
-    pub entries: Entries<'a>,
-}
 
 /// Every non-empty cell of scale `target` the columns' voxel entries fold to,
 /// by its index at that scale, into `out`. Instances and untaught states are
 /// not voxels and do not fold; `hide` is left out, as the paint leaves it.
-pub fn fold_columns(painter: &Painter, columns: &[Column], target: Scale, hide: Option<(i64, i64, i32, u32)>, out: &mut HashMap<[i64; 3], u32>) {
+pub fn fold_columns(painter: &Painter, columns: &[Entries], target: Scale, hide: Option<EntryAt>, out: &mut HashMap<[i64; 3], u32>) {
     let mut native: HashMap<Scale, Vec<([i64; 3], u32)>> = HashMap::new();
-    for col in columns {
-        let e = &col.entries;
+    for e in columns {
+        let corner = FROM_L2_IDX(e.col_idx);
+        let (x0, y0) = (OBJECT_FINEST.index(ivec::X(corner)), OBJECT_FINEST.index(ivec::Y(corner)));
         for k in 0..e.band.len() {
             let (band, pos, state) = (e.band[k], e.pos[k], e.state[k]);
-            if !painter.is_voxel(state) || hide == Some((col.x0, col.y0, band, pos)) {
+            if !painter.is_voxel(state) || hide == Some(e.at(k)) {
                 continue;
             }
             // In finest steps, absolute: the column's corner, then the band's.
             let (x, y, z, own) = unpack_pos(pos);
-            let x = OBJECT_FINEST.index(col.x0) + x as i64;
-            let y = OBJECT_FINEST.index(col.y0) + y as i64;
+            let x = x0 + x as i64;
+            let y = y0 + y as i64;
             let z = band as i64 * OBJECT_FINEST.count_in(BAND) as i64 + z as i64;
             let at = |v: i64, s: Scale| v.div_euclid(OBJECT_FINEST.count_in(s) as i64);
             if own <= target {

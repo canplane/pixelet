@@ -177,7 +177,7 @@ impl TlvWriter {
 
     fn _check_unsealed(&self) -> Result<(), MarshalError> {
         if self._sealed {
-            return Err(MarshalError::new(Errno::EBADMSG, Some("TLV: write after finish()"), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         Ok(())
     }
@@ -337,17 +337,17 @@ impl<'a> TlvReader<'a> {
             t if t == Tag::BOOL as u8 => TlvValue::Bool(self._bool()?),
             t if t == Tag::STR as u8 => TlvValue::Str(self._str()?),
             t if t == Tag::BYTES as u8 => TlvValue::Bytes(self._bytes()?),
-            _ => return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("TLV: unknown tag 0x{:x} at {}", tag, self._off - 1)), None)),
+            _ => return Err(MarshalError::new(Errno::EBADMSG)),
         }))
     }
 
     // ---- Reader bounds ----
 
-    fn _need(&self, n: u32, what: &str) -> Result<(), MarshalError> {
+    fn _need(&self, n: u32) -> Result<(), MarshalError> {
         // In u64: `n` is a length read off the wire, and the sum past 2^32
         // would wrap under the end rather than exceed it.
         if self._off as u64 + n as u64 > self._buf.len() as u64 {
-            return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("TLV: truncated {what} at {}", self._off)), None));
+            return Err(MarshalError::new(Errno::EBADMSG));
         }
         Ok(())
     }
@@ -355,48 +355,48 @@ impl<'a> TlvReader<'a> {
     // ---- Primitive readers ----
 
     fn _u8(&mut self) -> Result<u8, MarshalError> {
-        self._need(U8_SZ, "U8")?;
+        self._need(U8_SZ)?;
         Ok(u8::from_le_bytes(self._take()))
     }
     fn _i8(&mut self) -> Result<i8, MarshalError> {
-        self._need(U8_SZ, "I8")?;
+        self._need(U8_SZ)?;
         Ok(i8::from_le_bytes(self._take()))
     }
     fn _u16(&mut self) -> Result<u16, MarshalError> {
-        self._need(U16_SZ, "U16")?;
+        self._need(U16_SZ)?;
         Ok(u16::from_le_bytes(self._take()))
     }
     fn _i16(&mut self) -> Result<i16, MarshalError> {
-        self._need(U16_SZ, "I16")?;
+        self._need(U16_SZ)?;
         Ok(i16::from_le_bytes(self._take()))
     }
     fn _u32(&mut self) -> Result<u32, MarshalError> {
-        self._need(U32_SZ, "U32")?;
+        self._need(U32_SZ)?;
         Ok(u32::from_le_bytes(self._take()))
     }
     fn _i32(&mut self) -> Result<i32, MarshalError> {
-        self._need(U32_SZ, "I32")?;
+        self._need(U32_SZ)?;
         Ok(i32::from_le_bytes(self._take()))
     }
     fn _u64(&mut self) -> Result<u64, MarshalError> {
-        self._need(U64_SZ, "U64")?;
+        self._need(U64_SZ)?;
         Ok(u64::from_le_bytes(self._take()))
     }
     fn _i64(&mut self) -> Result<i64, MarshalError> {
-        self._need(U64_SZ, "I64")?;
+        self._need(U64_SZ)?;
         Ok(i64::from_le_bytes(self._take()))
     }
     fn _f32(&mut self) -> Result<f32, MarshalError> {
-        self._need(U32_SZ, "F32")?;
+        self._need(U32_SZ)?;
         Ok(f32::from_le_bytes(self._take()))
     }
     fn _f64(&mut self) -> Result<f64, MarshalError> {
-        self._need(U64_SZ, "F64")?;
+        self._need(U64_SZ)?;
         Ok(f64::from_le_bytes(self._take()))
     }
 
     fn _bool(&mut self) -> Result<bool, MarshalError> {
-        self._need(U8_SZ, "BOOL")?;
+        self._need(U8_SZ)?;
         Ok(u8::from_le_bytes(self._take()) != 0)
     }
 
@@ -404,7 +404,7 @@ impl<'a> TlvReader<'a> {
 
     fn _str(&mut self) -> Result<String, MarshalError> {
         let len = self._u32()?;
-        self._need(len, &format!("STR(len={len})"))?;
+        self._need(len)?;
         let at = self._off;
         self._off += len as usize;
         Ok(String::from_utf8_lossy(&self._buf[at..at + len as usize]).into_owned())
@@ -412,7 +412,7 @@ impl<'a> TlvReader<'a> {
 
     fn _bytes(&mut self) -> Result<Vec<u8>, MarshalError> {
         let len = self._u32()?;
-        self._need(len, &format!("BYTES(len={len})"))?;
+        self._need(len)?;
         let at = self._off;
         self._off += len as usize;
         Ok(self._buf[at..at + len as usize].to_vec())

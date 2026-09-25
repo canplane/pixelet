@@ -49,37 +49,12 @@ pub struct Aabb {
     pub max: V3,
 }
 
+/// An object's exact box, in map_origin-relative units: what a cube stacked
+/// on it is placed flush against (camera/ray.rs `world_adjacent_corner`).
 pub fn object_aabb(obj: &OccupiedEntry, map_origin: IVec) -> Aabb {
-    corner_aabb(obj.i, obj.f, obj.size, map_origin)
-}
-
-/// Same box shape object_aabb produces, for a candidate corner+size that isn't
-/// (yet) a stored entry — e.g. a placement/overlap check before committing.
-pub fn corner_aabb(i: IVec, f: FVec, size: f64, map_origin: IVec) -> Aabb {
-    let min = object_local_corner(i, f, map_origin);
-    let max = [min[0] + size, min[1] + size, min[2] + size];
+    let min = object_local_corner(obj.i, obj.f, map_origin);
+    let max = [min[0] + obj.size, min[1] + obj.size, min[2] + obj.size];
     Aabb { min, max }
-}
-
-// Two AABBs must overlap by MORE than this to count — a flush-touching pair
-// (one box's own face exactly against another's, e.g. stacking) is supposed
-// to read as zero overlap, but both AABBs here are built by re-deriving real
-// coordinates from PVF3 at each of possibly several chained placements — a
-// strict `<` with no tolerance treats even a single ULP of drift either
-// direction as a real verdict, silently flipping a legitimate flush placement
-// to "blocked" (or the reverse). Comfortably bigger than realistic float64
-// noise over a handful of chained conversions, comfortably smaller than the
-// smallest real gap two placements could ever legitimately have (any
-// OBJECT_SIZES tier, U_PER_CELL/8 at minimum).
-const OVERLAP_EPS: f64 = 1e-6;
-
-pub fn aabb_overlap(a: &Aabb, b: &Aabb) -> bool {
-    a.min[0] < b.max[0] - OVERLAP_EPS
-        && b.min[0] < a.max[0] - OVERLAP_EPS
-        && a.min[1] < b.max[1] - OVERLAP_EPS
-        && b.min[1] < a.max[1] - OVERLAP_EPS
-        && a.min[2] < b.max[2] - OVERLAP_EPS
-        && b.min[2] < a.max[2] - OVERLAP_EPS
 }
 
 /// This object's true center (corner + size/2 on every axis), as an absolute

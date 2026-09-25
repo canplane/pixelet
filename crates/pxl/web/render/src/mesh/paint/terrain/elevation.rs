@@ -20,38 +20,10 @@ use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use pxl_spec::bake::format::{Ground, GroundChannelKey};
 use pxl_spec::bake::ground::{recess, shown_ground};
 use pxl_spec::bake::pack::{channel_of, GroundCell};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, PAGE_CELLS};
-use xpute_core::math::scalar::lerp;
-
+use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
 use xpute_core::math::scalar::round;
 
 const ELE_CELL_STEP: f64 = PAGE_CELLS as f64 / PAGE_ELE_SPAN as f64;
-
-/// Bilinear elevation sample from the padded elevation tile raster.
-///
-/// Coordinate convention:
-/// - (tx, ty) are continuous texel coordinates.
-/// - source samples are center samples at: (i - pad + 0.5) * step
-///
-/// Therefore the source-grid coordinates are:
-///   sx = tx / step + pad - 0.5
-///   sy = ty / step + pad - 0.5
-pub fn sample_ele_bilinear(page_ele: &[i16], tx: i32, ty: i32) -> i16 {
-    let sx = (tx as f64 + 0.5) / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
-    let sy = (ty as f64 + 0.5) / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
-    let last = (ELE_PADDED_SPAN - 1) as f64;
-    let sx0 = sx.floor().clamp(0.0, last);
-    let sy0 = sy.floor().clamp(0.0, last);
-    let sx1 = (sx0 + 1.0).clamp(0.0, last);
-    let sy1 = (sy0 + 1.0).clamp(0.0, last);
-    let sdx = sx - sx0;
-    let sdy = sy - sy0;
-    let span = ELE_PADDED_SPAN as usize;
-    let at = |x: f64, y: f64| page_ele[y as usize * span + x as usize] as f64;
-    let ab = lerp(at(sx0, sy0), at(sx1, sy0), sdx);
-    let cd = lerp(at(sx0, sy1), at(sx1, sy1), sdx);
-    round(lerp(ab, cd, sdy)) as i16
-}
 
 /// Bicubic elevation sampling from the padded source raster.
 ///
@@ -157,34 +129,9 @@ impl<'a> GroundLanes<'a> {
 /// channels are the page's own span and stop at its edge. The one place this
 /// policy is not whole, and it is written here rather than left for each
 /// caller to discover.
-pub fn ground_ele(page_ele: &[i16], ground: Option<GroundLanes>, idx: usize, tx: i32, ty: i32) -> i16 {
+pub fn ground_ele(page_ele: &[i16], ground: Option<GroundLanes>, tx: i32, ty: i32) -> i16 {
     let ele = sample_ele(page_ele, tx, ty);
-    ground.map_or(ele, |g| ele - g.recess(idx))
-}
-
-/// Unpacks a dense (CHUNK_CELLS x CHUNK_CELLS) elevation chunk from
-/// the coarse heightmap. Samples are taken at cell centers (0.5 offset) to
-/// match DB-side resampling.
-pub fn dense_ele(page_ele: &[i16], tx0: u32, ty0: u32, ground: Option<&Ground>) -> Vec<i16> {
-    let mut out = vec![0; (CHUNK_CELLS * CHUNK_CELLS) as usize];
-    dense_ele_region(page_ele, tx0, ty0, CHUNK_CELLS, ground, &mut out);
-    out
-}
-
-/// Dense reconstruction for a renderer-owned square region. `ground`, when
-/// given, must already be sliced/aligned to this same tx0/ty0/span region —
-/// every cell in it gets its recess subtracted from its sampled height.
-pub fn dense_ele_region<'a>(page_ele: &[i16], tx0: u32, ty0: u32, span: u32, ground: Option<&Ground>, out: &'a mut [i16]) -> &'a mut [i16] {
-    let mut idx: u32 = 0;
-    for dy in 0..span {
-        let ty = ty0 + dy;
-        for dx in 0..span {
-            let tx = tx0 + dx;
-            out[idx as usize] = ground_ele(page_ele, ground.map(GroundLanes::of), idx as usize, tx as i32, ty as i32);
-            idx += 1;
-        }
-    }
-    out
+    ground.map_or(ele, |g| ele - g.recess(GROUND.cell_index(tx as u32, ty as u32) as usize))
 }
 
 #[cfg(test)]

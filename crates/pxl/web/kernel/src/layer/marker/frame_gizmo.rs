@@ -35,6 +35,8 @@ use crate::world::chunk::build::World;
 use crate::world::frame::view::view;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 const COLOR: V3 = [0.0, 0.0, 0.0];
 const DASH: f64 = 0.3;
@@ -288,15 +290,22 @@ fn drop_labels(g: &mut Gizmos) {
 }
 
 /// Paints the drawn sketch's labels into the sheet and stands their set at
-/// `origin`; the instances follow on the next `write_labels`.
+/// `origin`; the instances follow on the next `write_labels`. Where a label's
+/// glyphs are not all measured yet, nothing is painted and the sketch is
+/// built again on a later frame, when they are.
 fn make_labels(g: &mut Gizmos, origin: V3) {
     drop_labels(g);
     if g.drawn.labels.is_empty() {
         return;
     }
+    let widths: Vec<Option<f64>> = g.drawn.labels.iter().map(|l| measure_text(LABEL_FONT, &l.text)).collect();
+    if widths.contains(&None) {
+        g.built_for = None;
+        return;
+    }
     let sheet = billboard_sheet();
-    for label in &g.drawn.labels {
-        let logical_w = measure_text(LABEL_FONT, &label.text).ceil() + LABEL_PAD_X * 2.0;
+    for (label, width) in g.drawn.labels.iter().zip(widths) {
+        let logical_w = width.or_bug(Errno::ENOTRECOVERABLE).ceil() + LABEL_PAD_X * 2.0;
         let slot = sheet.add(logical_w * DPR_MAX, LABEL_H * DPR_MAX, DrawSpec::Text { text: label.text.clone(), logical_w });
         g.slots.push((slot, logical_w));
     }

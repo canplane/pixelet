@@ -13,6 +13,8 @@ use pxl_render::gpu::pass::badges::{badge_width, BADGE_FONT};
 use pxl_render::gpu::surface::DPR_MAX;
 
 use crate::world::pyramid::Layer;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 pub const HEIGHT: f64 = 37.0;
 pub const ANCHOR: f64 = 34.0;
@@ -80,21 +82,20 @@ pub fn retain(labels: &HashSet<Label>) {
     });
 }
 
-/// A badge's width, measured once.
-pub fn width(label: Label) -> f64 {
-    badges()
-        .entry(label)
-        .or_insert_with(|| {
-            let width = badge_width(measure_text(BADGE_FONT, &label.text()).ceil(), matches!(label, Label::Place { .. }));
-            Badge { width, slot: NO_SLOT }
-        })
-        .width
+/// A badge's width, measured once; none until its glyphs' advances are
+/// known, which the next turn's are.
+pub fn width(label: Label) -> Option<f64> {
+    if let Some(b) = badges().get(&label) {
+        return Some(b.width);
+    }
+    let width = badge_width(measure_text(BADGE_FONT, &label.text())?.ceil(), matches!(label, Label::Place { .. }));
+    badges().insert(label, Badge { width, slot: NO_SLOT });
+    Some(width)
 }
 
-/// A badge on the sheet, drawn once.
+/// A badge on the sheet, drawn once. Its label was measured first.
 pub fn slot(label: Label) -> i32 {
-    width(label);
-    let b = badges().get_mut(&label).expect("measured above");
+    let b = badges().get_mut(&label).or_bug(Errno::ENOTRECOVERABLE);
     if b.slot == NO_SLOT {
         b.slot = billboard_sheet().add(
             b.width * DPR_MAX,

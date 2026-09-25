@@ -34,9 +34,7 @@ use crate::layer::geocode::fetcher::geocode_fetcher_step;
 use crate::layer::marker::frame_gizmo::debug_gizmos_step;
 use crate::layer::marker::hover_cursor::hover_cursor_step;
 use crate::layer::marker::location_puck::location_puck_step;
-use crate::layer::object::teach::teach_objects;
 use crate::layer::terrain::page::terrain_step;
-use crate::layer::terrain::teach::teach_terrain;
 use crate::sched::ledger::spec::EffectName;
 use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickReport, TickState, COSMETIC, INTERACTION, REPORT, VISIBLE};
 use crate::shell::map_store::map_store;
@@ -87,14 +85,10 @@ fn environment_tick(_: &mut TickContext) {
     map_environment_step();
 }
 
-/// The kernel's boot, once, from the module's: the build taught its tables —
-/// before the first page is told — the tick's steps registered, and the tasks
-/// spawned. Nothing runs until the first poll; the frame task waits for the
+/// The kernel's boot, once, from the module's: the tick's steps registered,
+/// and the tasks spawned. Nothing runs until the first poll; the frame task waits for the
 /// first frame the host asks, so the boot has to come from outside a frame.
 pub fn boot() {
-    teach_terrain();
-    teach_objects();
-
     on_tick(INTERACTION, camera_input_tick, StepName::input);
     on_tick(INTERACTION, camera_step, StepName::camera);
     on_tick(INTERACTION, view_rotation_step, StepName::view_rotation);

@@ -88,6 +88,8 @@ export const enum LedgerMinor {
   START = 0x10,
   STOP = 0x11,
   LOG = 0x12,
+  READ = 0x13,
+  TAKE = 0x14,
 }
 
 /** Where a pointer event is in its gesture. */
@@ -225,7 +227,8 @@ export const enum Command {
 
   // ---- the world's turn: the shell's events in, the kernel's asks out ----
 
-  /** The shell's boot: what the build is and what the device offers; the object store loaded. */
+  /** The shell's boot: what the build is and what the device offers, and what the browser's
+   * storage kept under host.json's keys. */
   WORLD_CREATE = 0x1b01,
   /** The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
    * phases on what is left of the quota, the fetches within the credits. The turn leaves
@@ -267,9 +270,9 @@ export const enum Command {
   SENSOR_OPEN = 0x1d15,
   /** The map is gone, and the sensors are let go. */
   SENSOR_CLOSE = 0x1d16,
-  /** A read the host finished, its body held as `body` until the kernel takes it (the `body_read` import). */
+  /** A read the host finished, its body held as `body` until the kernel takes it (host.json's BODY_READ). */
   FETCH_UPDATE = 0x1e03,
-  /** A model's bytes, held by the host as `body` until the kernel reads them (the `body_read` import). */
+  /** A model's bytes, held by the host as `body` until the kernel reads them (host.json's BODY_READ). */
   LOAD_UPDATE = 0x1f03,
   /** An image decoded and held by the shell. */
   LOAD_IMAGE = 0x1f10,
@@ -301,6 +304,11 @@ export const enum Command {
   LEDGER_STOP = 0x2511,
   /** The console stream on or off. */
   LEDGER_LOG = 0x2512,
+  /** The ledger where it lies: the reply is the address of READ's words (ledger.json) over the
+   * last `window_ms`, an infinite window being the whole recording, good until the next turn. */
+  LEDGER_READ = 0x2513,
+  /** The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn. */
+  LEDGER_TAKE = 0x2514,
 
   // ---- the turn's signals: kernel → shell, left on the completion ring by a strobe or a command ----
 
@@ -357,7 +365,6 @@ export interface Snapshot {
   place: PlacePart[];
   /** The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index. */
   object_sizes: f64[];
-  object_storage_version: u32;
 }
 
 export function read_snapshot(b: BranchCursor): Snapshot {
@@ -374,7 +381,6 @@ export function read_snapshot(b: BranchCursor): Snapshot {
     scale_bar: read_scale_bar(b.at_branch(9)),
     place: list(b.at_branch(10), read_place_part),
     object_sizes: Array.from(b.at(11).get<F64Array>()),
-    object_storage_version: b.at(12).get<u32>(),
   };
 }
 
@@ -479,10 +485,15 @@ export interface WorldCreate {
   orientation: boolean;
   /** iOS 13+'s gate: requestPermission exists and must run inside a gesture. */
   orientation_permission: boolean;
+  /** The settings as stored, empty for none: a row a setting, far under a slot. */
+  settings: string;
+  /** The objects as stored, held as a body (host.json's BODY_READ), 0 for none. */
+  objects: u32;
+  objects_bytes: u32;
 }
 
 export function encode_world_create(p: WorldCreate): U8Array {
-  return packet((b) => b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission));
+  return packet((b) => b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).str(p.settings).u32(p.objects).u32(p.objects_bytes));
 }
 
 /** Command.WORLD_UPDATE's packet. */
@@ -496,10 +507,18 @@ export interface WorldUpdate {
   frame_ms: f64;
   interactive: boolean;
   credits: u32;
+  /** The local wall clock: `Date.now()`, the local hour, minute and second, and the local day's start. */
+  unix_ms: f64;
+  hours: f64;
+  minutes: f64;
+  seconds: f64;
+  day_start_ms: f64;
 }
 
 export function encode_world_update(p: WorldUpdate): U8Array {
-  return packet((b) => b.f64(p.width).f64(p.height).f64(p.dpr).f64(p.delta_s).f64(p.frame_ms).bool(p.interactive).u32(p.credits));
+  return packet((b) =>
+    b.f64(p.width).f64(p.height).f64(p.dpr).f64(p.delta_s).f64(p.frame_ms).bool(p.interactive).u32(p.credits).f64(p.unix_ms).f64(p.hours).f64(p.minutes).f64(p.seconds).f64(p.day_start_ms)
+  );
 }
 
 /** Command.WORLD_UPDATE's signal. */
@@ -779,6 +798,15 @@ export interface LedgerLog {
 
 export function encode_ledger_log(p: LedgerLog): U8Array {
   return packet((b) => b.bool(p.on));
+}
+
+/** Command.LEDGER_READ's packet. */
+export interface LedgerRead {
+  window_ms: f64;
+}
+
+export function encode_ledger_read(p: LedgerRead): U8Array {
+  return packet((b) => b.f64(p.window_ms));
 }
 
 /** Command.WORLD_SNAPSHOT's signal. */

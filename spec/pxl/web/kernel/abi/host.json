@@ -1,0 +1,55 @@
+{
+  "$doc": [
+    "What the kernel asks of the host that no command answers, as records in a stream",
+    "(xpute-runtime ipc/stream.rs) the host runs once each turn has returned",
+    "(pxl-kernel host.rs, apps/web/src/kernel/host.ts). A record may name memory the",
+    "kernel holds: the host reads or writes it before the next turn, and the kernel",
+    "keeps it that long."
+  ],
+  "stream": {
+    "$type": "u32",
+    "$doc": ["Its head is the stream's END alone."],
+    "HEAD": 2,
+    "BYTES": {
+      "$value": 65536,
+      "$doc": [
+        "The range's size. A record names what it moves rather than carrying it, so",
+        "a turn's records are words, and a glyph request's code points the most of them."
+      ]
+    }
+  },
+  "op": {
+    "$type": "u32",
+    "$doc": ["A record's operation, then its arguments."],
+    "BODY_READ": { "$value": 1, "$doc": ["body, at, len: the body the host holds copied to `at`, `len` bytes, and let go; a `len` of 0 only lets it go"] },
+    "STORAGE_SET": { "$value": 2, "$doc": ["key, at, len: the UTF-8 at `at` stored under `storage`'s key"] },
+    "MEASURE": {
+      "$value": 3,
+      "$doc": [
+        "weight, px (f32 bits), at, then code points: each one's advance in the page's own",
+        "family at the weight and size, a float apiece from `at`"
+      ]
+    },
+    "PANIC": {
+      "$value": 4,
+      "$doc": [
+        "errno, line, column, a (low, high word), b (low, high word), then the file's bytes:",
+        "the broken invariant the kernel reported before it trapped (xpute-core status/bug.rs)"
+      ]
+    }
+  },
+  "storage": {
+    "$type": "u32",
+    "$doc": ["What the kernel keeps in the browser's storage, by the key the host keeps it under (`STORAGE_KEYS`)."],
+    "SETTINGS": 0,
+    "OBJECTS": 1
+  },
+  "STORAGE_KEYS": {
+    "$doc": [
+      "The keys, in `storage`'s order. The objects' carries the encoding's version: a blob",
+      "of an older one is not read, so bump it whenever a change makes an older entry",
+      "mean something other than it meant when it was written (layer/object/store.rs)."
+    ],
+    "$value": ["pxl:settings", "pxl:object:v10"]
+  }
+}

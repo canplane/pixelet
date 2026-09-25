@@ -83,5 +83,5 @@ export function reserve_memory(candidates: readonly u32[], region_bytes: u32): W
       // too large for this device; try the next
     }
   }
-  throw new MarshalError(Errno.ENOMEM, `memory: the device reserved none of ${candidates.join(", ")} regions`);
+  throw new MarshalError(Errno.ENOMEM);
 }

@@ -42,6 +42,8 @@ use crate::world::change::request_world_tick;
 use crate::world::chunk::raycast::WorldHit;
 use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view::{view, view_ray_local};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DragMode {
@@ -245,12 +247,11 @@ fn handle_tap(hovered: Pvf3) {
         ActiveTool::Decor | ActiveTool::Object => {
             // Still guard against the candidate slot being occupied since the
             // last hover update.
-            let map_origin = local_world_origin();
             if ui.active_tool == ActiveTool::Decor {
-                if !is_placement_blocked(PlacementTool::Decor, &hovered, object_size, map_origin) {
+                if !is_placement_blocked(PlacementTool::Decor, &hovered, object_size) {
                     place_decor(&hovered, DECOR_SIZE, ui.decor_id);
                 }
-            } else if !is_placement_blocked(PlacementTool::Object, &hovered, object_size, map_origin) {
+            } else if !is_placement_blocked(PlacementTool::Object, &hovered, object_size) {
                 place(&hovered, object_size, ui.object_cube, settings_store().show_structures);
             }
         }
@@ -622,7 +623,7 @@ pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32, holding: Holding) {
             1 => {
                 // Dropped from 2 fingers to 1 — resume single-finger pan
                 // seamlessly; already mid-gesture, so the lift is no tap.
-                let remaining = *s.active_pointers.values().next().expect("one pointer");
+                let remaining = *s.active_pointers.values().next().or_bug(Errno::ENOTRECOVERABLE);
                 s.drag_mode = DragMode::Pan;
                 s.last_x = remaining.x;
                 s.last_y = remaining.y;

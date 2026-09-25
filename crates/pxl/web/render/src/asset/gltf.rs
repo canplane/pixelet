@@ -24,6 +24,8 @@ use core::future::Future;
 use pxl_spec::space::mat4::{mat4, mat4_mul, Mat4};
 
 use xpute_core::codec::json::{read_json, JsonValue};
+use xpute_core::status::errno::Errno;
+use xpute_core::status::error::MarshalError;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GltfPrimitive {
@@ -129,7 +131,7 @@ const ELEMENTS_PER_PAUSE: usize = 1 << 12;
 
 /// Parses a `.glb`, or a `.gltf` document whose buffers are `external_buffers`,
 /// awaiting `pause` between its units.
-pub async fn parse_gltf<P: Future<Output = ()>>(bytes: &[u8], external_buffers: &[&[u8]], pause: impl Fn() -> P) -> Result<Gltf, String> {
+pub async fn parse_gltf<P: Future<Output = ()>>(bytes: &[u8], external_buffers: &[&[u8]], pause: impl Fn() -> P) -> Result<Gltf, MarshalError> {
     if bytes.len() >= 12 && u32_le(bytes, 0) == GLB_MAGIC {
         let length = (u32_le(bytes, 8) as usize).min(bytes.len());
         let mut at = 12;
@@ -147,14 +149,14 @@ pub async fn parse_gltf<P: Future<Output = ()>>(bytes: &[u8], external_buffers: 
             }
             at += 8 + chunk_length;
         }
-        let text = text.ok_or("gltf: a GLB without a JSON chunk")?;
-        let json = read_json(text).ok_or("gltf: the JSON chunk does not parse")?;
+        let text = text.ok_or(MarshalError::new(Errno::EBADMSG))?;
+        let json = read_json(text).ok_or(MarshalError::new(Errno::EBADMSG))?;
         let mut buffers: Vec<&[u8]> = bin.into_iter().collect();
         buffers.extend_from_slice(external_buffers);
         read_document(json, &buffers, &pause).await
     } else {
-        let text = core::str::from_utf8(bytes).map_err(|_| "gltf: not UTF-8")?;
-        let json = read_json(text).ok_or("gltf: the document does not parse")?;
+        let text = core::str::from_utf8(bytes).map_err(|_| MarshalError::new(Errno::EBADMSG))?;
+        let json = read_json(text).ok_or(MarshalError::new(Errno::EBADMSG))?;
         read_document(json, external_buffers, &pause).await
     }
 }
@@ -196,20 +198,16 @@ struct Reader<'a, F> {
 
 impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
     /// An accessor's elements, tightly packed, each as `convert` makes it.
-    async fn read<T: Copy + Default>(&self, index: usize, convert: fn(f64) -> T) -> Result<Vec<T>, String> {
+    async fn read<T: Copy + Default>(&self, index: usize, convert: fn(f64) -> T) -> Result<Vec<T>, MarshalError> {
         (self.pause)().await;
-        let a = self.json.get("accessors").and_then(|x| x.at(index)).ok_or_else(|| format!("gltf: no accessor {index}"))?;
+        let a = self.json.get("accessors").and_then(|x| x.at(index)).ok_or_else(|| MarshalError::new(Errno::ENOENT))?;
         let count = num(a.get("count")).unwrap_or(0.0) as usize;
         let width = type_size(plain(a.get("type")).unwrap_or("SCALAR"));
         let mut out = vec![T::default(); count * width];
         if let Some(bv_index) = num(a.get("bufferView")) {
-            let bv = self
-                .json
-                .get("bufferViews")
-                .and_then(|x| x.at(bv_index as usize))
-                .ok_or_else(|| format!("gltf: no buffer view {bv_index}"))?;
+            let bv = self.json.get("bufferViews").and_then(|x| x.at(bv_index as usize)).ok_or_else(|| MarshalError::new(Errno::ENOENT))?;
             let buffer_index = num(bv.get("buffer")).unwrap_or(0.0) as usize;
-            let buffer = *self.buffers.get(buffer_index).ok_or_else(|| format!("gltf: buffer {buffer_index} not provided"))?;
+            let buffer = *self.buffers.get(buffer_index).ok_or_else(|| MarshalError::new(Errno::ENOENT))?;
             let component_type = num(a.get("componentType")).unwrap_or(5126.0) as u32;
             let comp = component_size(component_type);
             let stride = num(bv.get("byteStride")).map_or(comp * width, |s| s as usize);
@@ -266,20 +264,20 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         Ok(out)
     }
 
-    async fn f32s(&self, index: usize) -> Result<Vec<f32>, String> {
+    async fn f32s(&self, index: usize) -> Result<Vec<f32>, MarshalError> {
         self.read(index, |v| v as f32).await
     }
 
-    async fn u32s(&self, index: usize) -> Result<Vec<u32>, String> {
+    async fn u32s(&self, index: usize) -> Result<Vec<u32>, MarshalError> {
         self.read(index, |v| v as u32).await
     }
 
-    async fn u16s(&self, index: usize) -> Result<Vec<u16>, String> {
+    async fn u16s(&self, index: usize) -> Result<Vec<u16>, MarshalError> {
         self.read(index, |v| v as u16).await
     }
 
     /// An attribute's accessor read when the primitive names one.
-    async fn f32s_of(&self, index: Option<usize>) -> Result<Option<Vec<f32>>, String> {
+    async fn f32s_of(&self, index: Option<usize>) -> Result<Option<Vec<f32>>, MarshalError> {
         match index {
             Some(i) => self.f32s(i).await.map(Some),
             None => Ok(None),
@@ -287,7 +285,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
     }
 }
 
-async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(json: JsonValue<'_>, buffers: &[&[u8]], pause: &F) -> Result<Gltf, String> {
+async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(json: JsonValue<'_>, buffers: &[&[u8]], pause: &F) -> Result<Gltf, MarshalError> {
     let r = Reader { json, buffers, pause };
 
     let mut meshes = Vec::new();

@@ -32,8 +32,8 @@ use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{PacketWriter, TreeReader};
 
 /// A number an enum does not give out, where the enum has no member it reads as.
-fn unknown(of: &str) -> MarshalError {
-    MarshalError::new(Errno::EINVAL, Some(of), None)
+fn unknown() -> MarshalError {
+    MarshalError::new(Errno::EINVAL)
 }
 
 /// What a command is about.
@@ -191,10 +191,12 @@ pub enum LedgerMinor {
     START = 0x10,
     STOP = 0x11,
     LOG = 0x12,
+    READ = 0x13,
+    TAKE = 0x14,
 }
 
 impl LedgerMinor {
-    pub const ALL: [LedgerMinor; 3] = [LedgerMinor::START, LedgerMinor::STOP, LedgerMinor::LOG];
+    pub const ALL: [LedgerMinor; 5] = [LedgerMinor::START, LedgerMinor::STOP, LedgerMinor::LOG, LedgerMinor::READ, LedgerMinor::TAKE];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<LedgerMinor> {
@@ -492,7 +494,8 @@ pub enum Command {
     NOP = 0x0000,
 
     // ---- the world's turn: the shell's events in, the kernel's asks out ----
-    /// The shell's boot: what the build is and what the device offers; the object store loaded.
+    /// The shell's boot: what the build is and what the device offers, and what the browser's
+    /// storage kept under host.json's keys.
     WORLD_CREATE = 0x1b01,
     /// The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
     /// phases on what is left of the quota, the fetches within the credits. The turn leaves
@@ -534,9 +537,9 @@ pub enum Command {
     SENSOR_OPEN = 0x1d15,
     /// The map is gone, and the sensors are let go.
     SENSOR_CLOSE = 0x1d16,
-    /// A read the host finished, its body held as `body` until the kernel takes it (the `body_read` import).
+    /// A read the host finished, its body held as `body` until the kernel takes it (host.json's BODY_READ).
     FETCH_UPDATE = 0x1e03,
-    /// A model's bytes, held by the host as `body` until the kernel reads them (the `body_read` import).
+    /// A model's bytes, held by the host as `body` until the kernel reads them (host.json's BODY_READ).
     LOAD_UPDATE = 0x1f03,
     /// An image decoded and held by the shell.
     LOAD_IMAGE = 0x1f10,
@@ -568,6 +571,11 @@ pub enum Command {
     LEDGER_STOP = 0x2511,
     /// The console stream on or off.
     LEDGER_LOG = 0x2512,
+    /// The ledger where it lies: the reply is the address of READ's words (ledger.json) over the
+    /// last `window_ms`, an infinite window being the whole recording, good until the next turn.
+    LEDGER_READ = 0x2513,
+    /// The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn.
+    LEDGER_TAKE = 0x2514,
 
     // ---- the turn's signals: kernel → shell, left on the completion ring by a strobe or a command ----
     /// The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
@@ -593,7 +601,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 42] = [
+    pub const ALL: [Command; 44] = [
         Command::NOP,
         Command::WORLD_CREATE,
         Command::WORLD_UPDATE,
@@ -630,6 +638,8 @@ impl Command {
         Command::LEDGER_START,
         Command::LEDGER_STOP,
         Command::LEDGER_LOG,
+        Command::LEDGER_READ,
+        Command::LEDGER_TAKE,
         Command::WORLD_SNAPSHOT,
         Command::SENSOR_CREATE,
         Command::SENSOR_DELETE,
@@ -664,12 +674,11 @@ pub struct Snapshot<'a> {
     pub place: &'a dyn Fn(&mut dyn FnMut(&PlacePart<'_>)),
     /// The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index.
     pub object_sizes: &'a [f64],
-    pub object_storage_version: u32,
 }
 
 impl Snapshot<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 13;
+    pub const FIELDS: u32 = 12;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(MapState::FIELDS, |w| self.map.write(w));
@@ -690,7 +699,6 @@ impl Snapshot<'_> {
             })
         });
         w.f64_array(Some(self.object_sizes));
-        w.u32(Some(self.object_storage_version));
     }
 }
 
@@ -853,7 +861,7 @@ impl Nop {
 
 /// Command::WORLD_CREATE's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct WorldCreate {
+pub struct WorldCreate<'a> {
     /// A development build, which offers the settings schema.json marks `dev`.
     pub development: bool,
     pub handheld: bool,
@@ -861,10 +869,15 @@ pub struct WorldCreate {
     pub orientation: bool,
     /// iOS 13+'s gate: requestPermission exists and must run inside a gesture.
     pub orientation_permission: bool,
+    /// The settings as stored, empty for none: a row a setting, far under a slot.
+    pub settings: &'a str,
+    /// The objects as stored, held as a body (host.json's BODY_READ), 0 for none.
+    pub objects: u32,
+    pub objects_bytes: u32,
 }
 
-impl WorldCreate {
-    pub fn read(pkt: &[u8]) -> Result<WorldCreate, MarshalError> {
+impl<'a> WorldCreate<'a> {
+    pub fn read(pkt: &'a [u8]) -> Result<WorldCreate<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(WorldCreate {
             development: f.at(0)?.get_bool()?,
@@ -872,6 +885,9 @@ impl WorldCreate {
             geolocation: f.at(2)?.get_bool()?,
             orientation: f.at(3)?.get_bool()?,
             orientation_permission: f.at(4)?.get_bool()?,
+            settings: f.at(5)?.get_str_ref()?,
+            objects: f.at(6)?.get_number()? as u32,
+            objects_bytes: f.at(7)?.get_number()? as u32,
         })
     }
 }
@@ -888,6 +904,12 @@ pub struct WorldUpdate {
     pub frame_ms: f64,
     pub interactive: bool,
     pub credits: u32,
+    /// The local wall clock: `Date.now()`, the local hour, minute and second, and the local day's start.
+    pub unix_ms: f64,
+    pub hours: f64,
+    pub minutes: f64,
+    pub seconds: f64,
+    pub day_start_ms: f64,
 }
 
 impl WorldUpdate {
@@ -901,6 +923,11 @@ impl WorldUpdate {
             frame_ms: f.at(4)?.get_number()?,
             interactive: f.at(5)?.get_bool()?,
             credits: f.at(6)?.get_number()? as u32,
+            unix_ms: f.at(7)?.get_number()?,
+            hours: f.at(8)?.get_number()?,
+            minutes: f.at(9)?.get_number()?,
+            seconds: f.at(10)?.get_number()?,
+            day_start_ms: f.at(11)?.get_number()?,
         })
     }
 }
@@ -962,20 +989,15 @@ impl InputPointer {
     pub fn read(pkt: &[u8]) -> Result<InputPointer, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputPointer {
-            phase: PointerPhase::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown("PointerPhase"))?,
-            kind: PointerKind::of(f.at(1)?.get_number()? as u32).ok_or_else(|| unknown("PointerKind"))?,
+            phase: PointerPhase::of(f.at(0)?.get_number()? as u32).ok_or_else(unknown)?,
+            kind: PointerKind::of(f.at(1)?.get_number()? as u32).ok_or_else(unknown)?,
             id: f.at(2)?.get_number()? as i32,
             button: f.at(3)?.get_number()? as i32,
             x: f.at(4)?.get_number()?,
             y: f.at(5)?.get_number()?,
-            tool: ActiveTool::of(f.at(6)?.get_number()? as u32).ok_or_else(|| unknown("ActiveTool"))?,
+            tool: ActiveTool::of(f.at(6)?.get_number()? as u32).ok_or_else(unknown)?,
             channel: match f.at(7)?.opt() {
-                Some(c) => Some(
-                    u8::try_from(c.get_number()? as u32)
-                        .ok()
-                        .and_then(pxl_spec::bake::format::GroundChannelKey::of)
-                        .ok_or_else(|| unknown("GroundChannelKey"))?,
-                ),
+                Some(c) => Some(u8::try_from(c.get_number()? as u32).ok().and_then(pxl_spec::bake::format::GroundChannelKey::of).ok_or_else(unknown)?),
                 None => None,
             },
             value: f.at(8)?.get_number()? as u32,
@@ -1007,7 +1029,7 @@ impl InputTracking {
     pub fn read(pkt: &[u8]) -> Result<InputTracking, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputTracking {
-            tracking: Tracking::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown("Tracking"))?,
+            tracking: Tracking::of(f.at(0)?.get_number()? as u32).ok_or_else(unknown)?,
         })
     }
 }
@@ -1140,8 +1162,8 @@ impl SensorPermission {
     pub fn read(pkt: &[u8]) -> Result<SensorPermission, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SensorPermission {
-            sensor: Sensor::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown("Sensor"))?,
-            answer: PermissionAnswer::of(f.at(1)?.get_number()? as u32).ok_or_else(|| unknown("PermissionAnswer"))?,
+            sensor: Sensor::of(f.at(0)?.get_number()? as u32).ok_or_else(unknown)?,
+            answer: PermissionAnswer::of(f.at(1)?.get_number()? as u32).ok_or_else(unknown)?,
         })
     }
 }
@@ -1178,7 +1200,7 @@ impl FetchUpdate {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(FetchUpdate {
             key: f.at(0)?.get_u64()?,
-            outcome: FetchOutcome::of(f.at(1)?.get_number()? as u32).ok_or_else(|| unknown("FetchOutcome"))?,
+            outcome: FetchOutcome::of(f.at(1)?.get_number()? as u32).ok_or_else(unknown)?,
             body: f.at(2)?.get_number()? as u32,
             body_bytes: f.at(3)?.get_number()? as u32,
             fail: xpute_runtime::abi::fetch::FetchFail::of(f.at(4)?.get_number()? as u32).unwrap_or(xpute_runtime::abi::fetch::FetchFail::Shell),
@@ -1316,7 +1338,7 @@ impl SettingUpdate {
     pub fn read(pkt: &[u8]) -> Result<SettingUpdate, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SettingUpdate {
-            key: crate::shell::setting::schema_spec::SettingKey::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown("SettingKey"))?,
+            key: crate::shell::setting::schema_spec::SettingKey::of(f.at(0)?.get_number()? as u32).ok_or_else(unknown)?,
             value: f.at(1)?.get_number()? as u32,
         })
     }
@@ -1332,7 +1354,7 @@ impl SettingToggle {
     pub fn read(pkt: &[u8]) -> Result<SettingToggle, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SettingToggle {
-            key: crate::shell::setting::schema_spec::SettingKey::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown("SettingKey"))?,
+            key: crate::shell::setting::schema_spec::SettingKey::of(f.at(0)?.get_number()? as u32).ok_or_else(unknown)?,
         })
     }
 }
@@ -1366,7 +1388,7 @@ impl PreviewCreate {
             group: u8::try_from(f.at(1)?.get_number()? as u32)
                 .ok()
                 .and_then(crate::layer::character::variant_spec::Group::of)
-                .ok_or_else(|| unknown("CharacterGroup"))?,
+                .ok_or_else(unknown)?,
             number: f.at(2)?.get_number()? as u32,
         })
     }
@@ -1397,6 +1419,19 @@ impl LedgerLog {
     pub fn read(pkt: &[u8]) -> Result<LedgerLog, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(LedgerLog { on: f.at(0)?.get_bool()? })
+    }
+}
+
+/// Command::LEDGER_READ's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct LedgerRead {
+    pub window_ms: f64,
+}
+
+impl LedgerRead {
+    pub fn read(pkt: &[u8]) -> Result<LedgerRead, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(LedgerRead { window_ms: f.at(0)?.get_number()? })
     }
 }
 

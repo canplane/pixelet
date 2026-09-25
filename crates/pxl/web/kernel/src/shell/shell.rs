@@ -25,7 +25,6 @@ use crate::global::Global;
 use crate::layer::character::store::companion_load_store;
 use crate::layer::geocode::fetcher::centre_group;
 use crate::layer::geocode::store as geocode_store;
-use crate::layer::object::store::OBJECT_STORAGE_VERSION;
 use crate::layer::terrain::elevation::{ground_at, ground_or_raw};
 use crate::sched::turn::world_platform;
 use crate::shell::map_store::map_store;
@@ -125,7 +124,6 @@ pub fn ui_snapshot(out: &mut [u8]) -> Option<u32> {
         },
         place: &|each| place_parts(page, zoom, each),
         object_sizes: &crate::layer::object::size::OBJECT_SIZES,
-        object_storage_version: OBJECT_STORAGE_VERSION,
     };
     let mut w = PacketWriter::new(out, Snapshot::FIELDS);
     snapshot.write(&mut w);

@@ -7,9 +7,11 @@
  * read them through the same URL.
  *
  * The module imports its memory: the central scheduler gives it one
- * (mem.ts), and booting the module lays out everything inside it —
- * the rings, `.fixed` and the heap — as the kernel's map says
- * (crates/pxl/web/kernel/src/mem/section.rs).
+ * (mem.ts), and its first turn lays out everything inside it — the rings,
+ * `.fixed` and the heap — as the kernel's map says
+ * (crates/pxl/web/kernel/src/mem/section.rs). Past the memory it imports the
+ * clock alone and exports the doorbell alone: everything else crosses in the
+ * memory.
  *
  * One instance per memory: instantiating writes the module's data segments
  * over the front of it, so a second instance over the same memory would
@@ -21,48 +23,33 @@
  */
 
 import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
-import type { f32, f64, u32 } from "@xpute/core/abi/word.ts";
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import type { QuantumPolicy } from "@xpute/runtime/sched/quantum.ts";
 
-import { css_font, gpu_imports } from "@/kernel/render/gpu.ts";
-import { EXPORT, IMPORT } from "@/kernel/abi/symbol.ts";
+import { BOOT_AT } from "@/kernel/mem/mem.spec.ts";
 
-/** What the module exports: the boot block and the doorbell. Every address
- * is into the memory it was given. */
+/** What the module exports: the doorbell. */
 export interface KernelExports {
   memory: WebAssembly.Memory;
-  /** Lays out the memory the module was given, the first time; the boot
-   * block's address. */
-  boot(): u32;
   /** Hands the kernel a turn of `quota_ms`; when it wants the next, in ms
-   * (@xpute/runtime/sched/quantum.ts). */
+   * (@xpute/runtime/sched/quantum.ts). The first turn lays the memory out. */
   interrupt(quota_ms: f64): f64;
-  /** The ledger, where it lies: the address of `READ`'s u32 words
-   * (dev/ledger/ledger.spec.ts) — the summary block over the last
-   * `window_ms`, Infinity for the whole recording, and the frame, task and
-   * worst-frame rings. Read in place and good until the next turn; nothing is
-   * built for it, and nothing crosses the control ring. */
-  ledger_read(window_ms: f64): u32;
-  /** The rows the ledger's live stream kept since the last clear: the address
-   * of `LOG`'s u32 words. */
-  ledger_log(): u32;
-  /** Forgets the stream's rows once they have been read. */
-  ledger_log_clear(): void;
 }
 
 /** crates/pxl/web/wasm/src/lib.rs's boot block, word by word: where the module's
  * own front ends; where the submission and completion rings are; then `.fixed`
  * and the heap, each its offset, bytes and page size; then the quantum the
- * kernel declares, three words in thousandths; then the heap's row. */
-/** Where each thing the kernel reports lies in the boot block. `data_end` is
- * where the linker stopped, which is everything the module keeps for itself —
- * the stack, the rings and its own data. */
-export const BOOT = { data_end: 0, sq: 1, cq: 2, fixed: 3, heap: 6, quantum: 9, heap_row: 12 } as const;
-const BOOT_WORDS = 13;
+ * kernel declares, three words in thousandths; then the heap's row; then the
+ * two streams run after every turn, the renderer's (render/gpu.ts) and the
+ * host's (host.ts). `data_end` is where the linker stopped, which is
+ * everything the module keeps for itself — the stack, the rings and its own
+ * data. */
+export const BOOT = { data_end: 0, sq: 1, cq: 2, fixed: 3, heap: 6, quantum: 9, heap_row: 12, gpu: 13, host: 14 } as const;
+const BOOT_WORDS = 15;
 
-/** The boot block, read in place. */
+/** The boot block, read in place at mem.json's BOOT_AT. */
 export function boot_block(pxl: KernelExports): U32Array {
-  return new Uint32Array(pxl.memory.buffer, pxl.boot(), BOOT_WORDS);
+  return new Uint32Array(pxl.memory.buffer, BOOT_AT, BOOT_WORDS);
 }
 
 /** The quantum the kernel declared, for the central scheduler to grant by. */
@@ -73,11 +60,10 @@ export function quantum_policy(boot: U32Array): QuantumPolicy {
 
 const KERNEL_WASM_URL = new URL("./kernel.wasm", import.meta.url);
 
-const utf8 = new TextEncoder();
-
-/** Bodies the host holds for the kernel — a response, a model file — until
- * the kernel reads them in its turn (the `body_read` import). */
-const bodies = new Map<u32, Uint8Array>();
+/** Bodies the host holds for the kernel — a response, a model file, what
+ * storage kept — until the kernel asks for them to be copied in (host.ts's
+ * BODY_READ). */
+const bodies = new Map<u32, U8Array>();
 let next_body: u32 = 1;
 
 /** Holds `bytes` for the kernel: the number a command names them by. */
@@ -87,6 +73,14 @@ export function hold_body(bytes: U8Array): u32 {
   bodies.set(body, bytes);
   return body;
 }
+
+/** The body held as `body`, let go. */
+export function take_body(body: u32): U8Array | undefined {
+  const bytes = bodies.get(body);
+  bodies.delete(body);
+  return bytes;
+}
+
 const utf8_decoder = new TextDecoder();
 
 /** The `(at, bytes)` pair at `at`: how the kernel names a run of memory it
@@ -110,22 +104,6 @@ export function text_at(memory: WebAssembly.Memory, at: u32, len: u32): string {
   return utf8_decoder.decode(bytes_at(memory, at, len));
 }
 
-function storage_read(key: string): string | null {
-  try {
-    return globalThis.localStorage?.getItem(key) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-let measure: OffscreenCanvasRenderingContext2D | null | undefined;
-
-/** A 2D context to measure text with, where the runtime has one. */
-function measure_context(): OffscreenCanvasRenderingContext2D | null {
-  if (measure === undefined) measure = typeof OffscreenCanvas === "undefined" ? null : new OffscreenCanvas(1, 1).getContext("2d");
-  return measure;
-}
-
 /** Instantiates the module over the memory the central scheduler gives it,
  * and boots it. */
 export async function instantiate_kernel(memory: WebAssembly.Memory): Promise<KernelExports> {
@@ -134,78 +112,13 @@ export async function instantiate_kernel(memory: WebAssembly.Memory): Promise<Ke
   // core under today's glue.
   const bytes = await (await fetch(KERNEL_WASM_URL, import.meta.env?.DEV ? { cache: "no-store" } : undefined)).arrayBuffer();
   const { instance } = await WebAssembly.instantiate(bytes, {
-    env: shortened({
-      memory,
-      // A panic's message, before the trap: what "unreachable" would otherwise hide.
-      panic: (ptr: u32, len: u32) => console.error(`[pxl] ${text_at(memory, ptr, len)}`),
-      // The clock a tick's budget is spent against.
-      now: () => performance.now(),
-      // The kernel's storage (crates/pxl/web/kernel/src/host.rs): an item's UTF-8
-      // length, or -1 for none, then its bytes into the kernel's buffer.
-      storage_len: (key: u32, key_len: u32) => {
-        const value = storage_read(text_at(memory, key, key_len));
-        return value === null ? -1 : utf8.encode(value).byteLength;
-      },
-      storage_get: (key: u32, key_len: u32, dst: u32, cap: u32) => {
-        const value = storage_read(text_at(memory, key, key_len));
-        if (value === null) return;
-        const bytes = utf8.encode(value).subarray(0, cap);
-        new Uint8Array(memory.buffer, dst, bytes.byteLength).set(bytes);
-      },
-      storage_set: (key: u32, key_len: u32, value: u32, value_len: u32) => {
-        try {
-          globalThis.localStorage?.setItem(text_at(memory, key, key_len), text_at(memory, value, value_len));
-        } catch {
-          // Storage refused (a private window's quota): the kernel keeps its state for the session.
-        }
-      },
-      // The local wall clock: unix ms, the local hour, minute and second, and
-      // the local day's start.
-      local_time: (out: u32) => {
-        const d = new Date();
-        const start = new Date(d);
-        start.setHours(0, 0, 0, 0);
-        new Float64Array(memory.buffer, out, 5).set([d.getTime(), d.getHours(), d.getMinutes(), d.getSeconds(), start.getTime()]);
-      },
-      measure_text: (weight: u32, px: f32, text: u32, text_len: u32) => {
-        const ctx = measure_context();
-        const s = text_at(memory, text, text_len);
-        if (ctx === null) return s.length * 7;
-        ctx.font = css_font(weight, px);
-        return ctx.measureText(s).width;
-      },
-      // A body the host holds, copied where the kernel asks and let go.
-      body_read: (body: u32, dst: u32, len: u32) => {
-        const bytes = bodies.get(body);
-        bodies.delete(body);
-        if (bytes !== undefined && len > 0) new Uint8Array(memory.buffer, dst, len).set(bytes.subarray(0, len));
-      },
-      // The renderer's WebGPU (crates/pxl/web/render/src/gpu/api.rs).
-      ...gpu_imports(memory),
-    }),
+    // The clock a tick's budget is spent against: the one call the module
+    // makes, since a turn measures itself while the host cannot run.
+    env: { memory, now: () => performance.now() },
   });
-  const exports: KernelExports = { ...(lengthened(instance.exports) as unknown as KernelExports), memory };
-  exports.boot();
+  const exports: KernelExports = { interrupt: instance.exports.interrupt as KernelExports["interrupt"], memory };
+  // A turn with no quota applies what waits, which is nothing: the first one
+  // lays the memory out and writes the boot block.
+  exports.interrupt(0);
   return exports;
-}
-
-// Binaryen minifies the names the two sides call each other by, down to a
-// letter apiece (script/build-wasm.ts), and writes the mapping it chose into
-// kernel/abi/symbol.ts. Neither side spells a letter: the build decides them, both
-// read them, and a module that renamed cannot leave the shell behind.
-
-/** What the host offers, under the names the module imports them by. */
-function shortened(host: WebAssembly.ModuleImports): WebAssembly.ModuleImports {
-  const out: WebAssembly.ModuleImports = {};
-  for (const [name, value] of Object.entries(host)) out[IMPORT[name] ?? name] = value;
-  return out;
-}
-
-/** What the module exports, under the names the shell calls them by. */
-function lengthened(from: WebAssembly.Exports): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...from };
-  for (const [name, short] of Object.entries(EXPORT)) {
-    if (short in from) out[name] = from[short];
-  }
-  return out;
 }

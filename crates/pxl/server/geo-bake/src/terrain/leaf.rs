@@ -13,6 +13,7 @@ use postgres::types::ToSql;
 use postgres::Client;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
+use pxl_spec::space::hierarchy::ancestor_of;
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
@@ -73,9 +74,8 @@ impl Coverage {
     /// covers — meets the range. A page that does not can have no leaf under
     /// it, so it does not exist whatever else is asked.
     pub fn meets(&self, level: u32, page: IVec) -> bool {
-        let span = 1i64 << level;
-        let (x0, y0) = (ivec::X(page) * span, ivec::Y(page) * span);
-        x0 <= self.x.1 && x0 + span > self.x.0 && y0 <= self.y.1 && y0 + span > self.y.0
+        let ([x0, y0], [x1, y1]) = (ancestor_of([self.x.0, self.y.0], level), ancestor_of([self.x.1, self.y.1], level));
+        (x0..=x1).contains(&ivec::X(page)) && (y0..=y1).contains(&ivec::Y(page))
     }
 
     /// Every page in the range, X-major.

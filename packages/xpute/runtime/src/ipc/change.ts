@@ -37,6 +37,8 @@ import type { u32 } from "@xpute/core/abi/word.ts";
 import type { I64Array, U32Array } from "@xpute/core/abi/array.ts";
 import { Vector } from "@xpute/core/collection/arena.ts";
 import { I64_KEYS, IndexedMap } from "@xpute/core/collection/map.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
+import { InvariantError } from "@xpute/core/status/error.ts";
 
 export type Topic = u32;
 export type Revision = u32;
@@ -79,8 +81,8 @@ export class ChangeLog implements ChangeJournal {
 
   constructor(opts: ChangeLogOptions) {
     const { topics, capacity, keys_per_topic = 64 } = opts;
-    if (topics < 1 || topics > 0x10000) throw new Error(`change: ${topics} topics, want 1..65536`);
-    if (capacity < 1) throw new Error("change: a journal needs a capacity");
+    if (topics < 1 || topics > 0x10000) throw new InvariantError(Errno.EINVAL);
+    if (capacity < 1) throw new InvariantError(Errno.EINVAL);
     this.capacity = capacity;
     this.topic = new Uint16Array(capacity);
     this.key = new BigInt64Array(capacity);

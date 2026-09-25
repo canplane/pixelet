@@ -312,6 +312,11 @@
       "name": "ECANCELED",
       "value": -125,
       "doc": "Operation canceled"
+    },
+    {
+      "name": "ENOTRECOVERABLE",
+      "value": -131,
+      "doc": "State not recoverable: an invariant the code stands on does not hold"
     }
   ]
 }

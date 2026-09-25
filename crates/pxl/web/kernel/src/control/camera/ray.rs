@@ -14,14 +14,15 @@
 //! (world/frame/view.rs), in the root frame the chunks are placed in.
 
 use pxl_render::mesh::volume::MaterialClasses;
-use pxl_spec::bake::constant::U_PER_CELL;
+use pxl_spec::bake::constant::{OBJECT_FINEST, U_PER_CELL};
+use pxl_spec::space::hierarchy::share;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::V3;
 
-use crate::layer::object::geometry::{aabb_overlap, object_aabb, Aabb};
-use crate::layer::object::store::{get_objects_near, OccupiedEntry};
+use crate::layer::object::geometry::Aabb;
+use crate::layer::object::store::{cube_node, objects_at, OccupiedEntry};
 use crate::layer::terrain::elevation::with_ele;
 use crate::world::chunk::raycast::{ray_hit_world, RayLike, WorldHit};
 use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
@@ -104,12 +105,11 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 /// ~1/510 of a cell — so stacking off it compounded that error stack-to-stack,
 /// visibly drifting. Terrain/unknown hits have no more precise source.
 ///
-/// Also snaps a whole-cell(-or-larger) result to a real cell boundary — the
-/// store can't store that tier at a fractional height, so this is the one
-/// place to fix it: both the hover preview and the real placement read this
-/// exact same PVF3, so snapping here is what keeps the preview, the
-/// overlap/blocked check, and the actual write all agreeing on the same target
-/// cell.
+/// Each axis is a multiple of `new_size`, which float holds exactly, and the
+/// map origin is whole units, so the corner lies on the cube's own lattice:
+/// the hover preview, the overlap check and the write, which all read this
+/// PVF3, and the store, which files a cube on its lattice (store.rs
+/// `At::of_cube`), agree on the one cube.
 #[allow(clippy::needless_range_loop)]
 pub fn world_adjacent_corner(hit: &WorldHit, new_size: f64, map_origin: IVec, precise_box: Option<&Aabb>) -> Pvf3 {
     let box_min = precise_box.map_or(hit.box_min, |b| b.min);
@@ -125,19 +125,6 @@ pub fn world_adjacent_corner(hit: &WorldHit, new_size: f64, map_origin: IVec, pr
         } else {
             grid_floor(hit.hit_point[axis], new_size)
         };
-    }
-
-    // Whole-cell(-or-larger) snap to a real cell boundary — see this
-    // function's own doc comment.
-    if new_size >= U_PER_CELL - SAME_EXTENT_EPS {
-        for v in out.iter_mut() {
-            let cells = *v / U_PER_CELL;
-            let frac = cells - cells.floor();
-            if !(SAME_EXTENT_EPS..=1.0 - SAME_EXTENT_EPS).contains(&frac) {
-                continue; // already (near-)integer.
-            }
-            *v = cells.ceil() * U_PER_CELL;
-        }
     }
 
     let mut p = Pvf3::default();
@@ -179,42 +166,30 @@ pub fn world_struck_corner(hit: &WorldHit, size: f64, map_origin: IVec) -> Pvf3 
 }
 
 /// Which solid placed object `hit` actually struck, when hit.material_class is
-/// OBJECT — whichever placed object's own real AABB (full precision, including
-/// sub-cell) overlaps the hit box. The voxel field carries no object identity,
-/// so this is a small secondary lookup, not the raycast itself. Decor is never
-/// resolved here — it never paints a voxel of its own and has its own hit test
-/// (hit.rs).
+/// OBJECT: the one whose cube holds a point inside what was struck. The voxel
+/// field carries no object identity, so this is a small secondary lookup, not
+/// the raycast itself. Decor is never resolved here — it never paints a voxel
+/// of its own and has its own hit test (hit.rs).
+///
+/// The point is half an object's finest step in from the struck face on the
+/// face's axis. Across a column it is the struck box's middle, since a run is
+/// one column's, and a sub-cell run's box is its object's to within the
+/// sub-cell packing — finer than that half step. Up a column it is where the
+/// ray struck, since a run there may be several objects stacked.
 pub fn resolve_hit_object(hit: &WorldHit, map_origin: IVec) -> Option<OccupiedEntry> {
     if hit.material_class != MaterialClasses::OBJECT {
         return None;
     }
-    let hit_aabb = Aabb { min: hit.box_min, max: hit.box_max };
-
-    // Only checks objects near the hit point (the containing cell plus its 26
-    // neighbors), not every placed object in the world.
-    let mut hit_point_abs = Pvf3::default();
-    local_world_to_canonical(&mut hit_point_abs, &hit.hit_point, map_origin);
-
-    // Nearest-to-hit_point match, not first-in-order — two objects flush
-    // against each other can both register as touching the same hit_aabb right
-    // at their shared boundary, and picking whichever is closest to where the
-    // ray landed resolves that correctly.
-    let mut best = None;
-    let mut best_dist2 = f64::INFINITY;
-    for o in get_objects_near(&hit_point_abs, U_PER_CELL) {
-        let aabb = object_aabb(&o, map_origin);
-        if !aabb_overlap(&aabb, &hit_aabb) {
-            continue;
-        }
-        let c = [(aabb.min[0] + aabb.max[0]) * 0.5, (aabb.min[1] + aabb.max[1]) * 0.5, (aabb.min[2] + aabb.max[2]) * 0.5];
-        let (dx, dy, dz) = (c[0] - hit.hit_point[0], c[1] - hit.hit_point[1], c[2] - hit.hit_point[2]);
-        let dist2 = dx * dx + dy * dy + dz * dz;
-        if dist2 < best_dist2 {
-            best = Some(o);
-            best_dist2 = dist2;
-        }
-    }
-    best
+    let half = OBJECT_FINEST.side() / 2.0;
+    let inside: V3 = core::array::from_fn(|k| match hit.face_normal[k] {
+        n if n != 0.0 => hit.hit_point[k] - n * half,
+        _ if k < 2 => (hit.box_min[k] + hit.box_max[k]) / 2.0,
+        _ => hit.hit_point[k],
+    });
+    let mut at = Pvf3::default();
+    local_world_to_canonical(&mut at, &inside, map_origin);
+    let point = (OBJECT_FINEST, OBJECT_FINEST.index_of(&at));
+    objects_at(&at).into_iter().find(|o| share(cube_node(&Pvf3 { i: o.i, f: o.f }, o.size), point))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

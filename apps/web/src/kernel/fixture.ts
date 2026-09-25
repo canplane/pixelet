@@ -43,7 +43,7 @@ export function pack_ground_cell(numbers: { land: u32; water: u32; structure: u3
 }
 
 /** `[ele, cells]` — the terrain page as the bake writes it and the client
- * reads it, a word a cell. */
+ * reads it, sixteen bits a cell. */
 export function encode_terrain(ele: I16Array, cells: U16Array): U8Array {
   return encoder.encode(new TreeView().branch((__) => __.i16_array(ele).u16_array(cells)));
 }

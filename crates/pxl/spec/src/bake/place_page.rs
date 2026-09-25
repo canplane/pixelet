@@ -45,6 +45,7 @@ use crate::bake::quadkey::{quadkey_of, Quadkey};
 use crate::place::PlaceRank;
 use crate::space::pvf3::ivec::IVec;
 use crate::space::pyramid::PAGE_ZOOM;
+use xpute_core::status::bug::OrBug;
 
 /// The one object the dictionary is under, beside the groups.
 pub const DICT_OBJECT: &str = "_dict";
@@ -134,10 +135,10 @@ fn read_places<'a>(root: &BranchCursor<'a>, at: u32) -> Result<PlacesView<'a>, M
         langs: root.at(at + 3)?.as_branch()?,
     };
     if view.starts.len() != view.ranks.len() + 1 {
-        return Err(bad("a run of places whose lanes are different lengths"));
+        return Err(bad());
     }
     if view.starts.windows(2).any(|w| w[0] > w[1]) {
-        return Err(bad("a run of places whose language names run backwards"));
+        return Err(bad());
     }
     Ok(view)
 }
@@ -281,10 +282,10 @@ pub fn open_place_group(pkt: &[u8]) -> Result<PlaceGroupView<'_>, MarshalError> 
         locals: read_places(&root, 3)?,
     };
     if view.pages.len() != GROUP_PAGES {
-        return Err(bad("a group that is not the pages under one"));
+        return Err(bad());
     }
-    if view.starts.is_empty() || view.starts.windows(2).any(|w| w[0] > w[1]) || *view.starts.last().expect("checked") as usize > view.flat.len() {
-        return Err(bad("a group whose labels run past its numbers"));
+    if view.starts.is_empty() || view.starts.windows(2).any(|w| w[0] > w[1]) || *view.starts.last().or_bug(Errno::ENOTRECOVERABLE) as usize > view.flat.len() {
+        return Err(bad());
     }
     Ok(view)
 }
@@ -314,8 +315,8 @@ impl<'a> PlaceGroupView<'a> {
     }
 }
 
-fn bad(message: &str) -> MarshalError {
-    MarshalError::new(Errno::EBADMSG, Some(message), None)
+fn bad() -> MarshalError {
+    MarshalError::new(Errno::EBADMSG)
 }
 
 #[cfg(test)]

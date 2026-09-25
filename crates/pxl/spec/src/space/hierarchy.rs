@@ -55,7 +55,9 @@ impl Scale {
 
     /// How many of this scale's sides lie along one of `outer`'s.
     pub const fn count_in(self, outer: Scale) -> u32 {
-        assert!(outer.0 >= self.0, "no coarser than what it is counted in");
+        if outer.0 < self.0 {
+            panic!()
+        }
         1 << (outer.0 - self.0)
     }
 

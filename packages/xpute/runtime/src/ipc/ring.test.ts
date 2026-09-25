@@ -6,6 +6,7 @@ import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { encoder, TreeReader, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 import { Ring, ring_bytes, slots_bytes } from "./ring.ts";
 import { FrameFlag } from "./frame.ts";
+import { MarshalError } from "@xpute/core/status/error.ts";
 
 /** A ring of `capacity` slots of `slot` bytes, its descriptors at 8 and its
  * payloads past them, in a buffer of its own. */
@@ -55,7 +56,6 @@ Deno.test("ring - one payload a slot, so the payloads run out with the slots and
       r.words[at + 3] = 4;
       r.packet(at);
     },
-    Error,
-    "outside a slot",
+    MarshalError,
   );
 });

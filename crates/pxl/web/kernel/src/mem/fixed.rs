@@ -26,8 +26,17 @@
 //!                    filled while the other is baked from (world/chunk/
 //!                    build.rs). A set is let go once its chunk's tiers are
 //!                    all on the device, which is what keeps them.
+//!   .fixed.gpu       the stream the renderer's calls cross to the host in
+//!                    (pxl-render gpu/api.rs), written each turn from the
+//!                    start.
+//!   .fixed.host      the stream the kernel's other asks of the host cross in
+//!                    (host.rs), the same way.
 
 use xpute_runtime::mem::section::{nth_at, span_of};
+
+use pxl_render::gpu::api_spec::stream;
+
+use crate::abi::host::stream as host_stream;
 
 use crate::layer::terrain::fixed::TERRAIN_BYTES;
 use crate::mem::section::{map, PAGE_BYTES};
@@ -36,7 +45,7 @@ use crate::world::chunk::mesh_slot::BAKE_BYTES;
 
 /// Each range's bytes, in address order. What a range holds is its own
 /// affair; this says how many bytes it takes and nothing more.
-const RANGES: [u32; 3] = [TERRAIN_BYTES, BAKE_BYTES, RUN_SETS as u32 * RUN_SET_BYTES];
+const RANGES: [u32; 5] = [TERRAIN_BYTES, BAKE_BYTES, RUN_SETS as u32 * RUN_SET_BYTES, stream::BYTES, host_stream::BYTES];
 
 /// What `.fixed` spans, which is where the heap begins past it.
 pub const BYTES: u32 = span_of(&RANGES, PAGE_BYTES);
@@ -60,4 +69,14 @@ pub fn bake_at() -> Option<u32> {
 /// memory out.
 pub fn run_set_at(set: usize) -> Option<u32> {
     map().map(|m| range_at(m.fixed.offset, 2) + set as u32 * RUN_SET_BYTES)
+}
+
+/// Where `.fixed.gpu` lies, once the module has laid its memory out.
+pub fn gpu_stream_at() -> Option<u32> {
+    map().map(|m| range_at(m.fixed.offset, 3))
+}
+
+/// Where `.fixed.host` lies, once the module has laid its memory out.
+pub fn host_stream_at() -> Option<u32> {
+    map().map(|m| range_at(m.fixed.offset, 4))
 }

@@ -58,6 +58,18 @@ A push can fail in two ways and no others. `EAGAIN` means the ring is full: the 
 
 Two rings make a pair: one for what the host submits, one for what the guest completes. Driving that pair from the host end is the **doorbell** (`ipc/doorbell.ts`). It pushes the commands, rings the guest with a quota, and then reads the completion ring dry, handing each message either to the call that was waiting for it or to whoever listens for signals. One ring of the bell is one whole turn of the guest.
 
+## Streams, for what the host must do before the next turn
+
+A message on the completion ring waits until the host reads it, and the guest cannot tell when that is. Some requests cannot wait like that: a call the host has to make before anything else reaches a device, or one whose result the guest will read on its next turn. For those the guest writes a **stream** (`ipc/stream.rs`): records laid end to end in a range of the memory during a turn, which the host runs, all of them, when the turn returns and before it rings again.
+
+```text
+0       END   how many words of records the turn wrote
+1…            the rest of the head, the user's
+head…   op · n · n words   op · n · n words   …
+```
+
+A record is an op the user numbers, a count, and that many words. Because the whole stream runs between two turns, a record can name memory for the host to write into, and the guest reads it on its next turn without being told it is there: the order is the acknowledgement. What a stream costs is its range, which bounds what one turn can ask for; what a full stream means is the user's to decide.
+
 ---
 
 ## The packet

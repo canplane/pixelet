@@ -14,6 +14,11 @@ const CRATES = new URL("../../../crates/", import.meta.url);
 const TARGET = "wasm32-unknown-unknown";
 const BUILT = new URL(`target/${TARGET}/release/pxl_wasm.wasm`, CRATES);
 const OUT = new URL("../src/kernel/kernel.wasm", import.meta.url);
+/** What each number a published module reports a place by stands for: its
+ * source path. Beside the module and never bundled with it; the deploy keeps
+ * it under the build's number (script/deploy.ts), the way a symbol file is
+ * kept beside a release rather than inside it. */
+const PATHS = new URL("../src/kernel/kernel.paths.json", import.meta.url);
 
 /**
  * The paths a panic carries, cut back to nothing that names this machine.
@@ -54,15 +59,7 @@ const cargo = new Deno.Command("cargo", {
 
 /**
  * Binaryen's finish over the linker's output: the sections a published module
- * has no use for, and the names of everything it says to the shell.
- *
- * `--minify-imports-and-exports` is what renames the host ABI, and it is the
- * only thing that can: the symbols embassy and critical-section require are
- * fixed by those crates, so nothing in the Rust can shorten them, while this
- * runs after the link and does not care where a name came from. It answers
- * with the mapping, which is written beside the module for the shell to
- * import — the letters are assigned by the optimizer's own order and change
- * whenever the module does, so neither side may spell them by hand.
+ * has no use for.
  *
  * The strips run here rather than through Cargo's `strip`, so that the target
  * features are still declared when wasm-opt reads them; taken off in the same
@@ -77,10 +74,7 @@ const WASM_OPT = [
   "--strip-debug",
   "--strip-producers",
   "--strip-target-features",
-  "--minify-imports-and-exports",
 ];
-
-type Abi = { imports: [string, string, string][]; exports: [string, string][] };
 
 /** A file of this run's own beside the module. Every step works on these and
  * the module lands in one rename at the end: a dev server's build and a
@@ -90,10 +84,10 @@ function staged(step: string): URL {
   return new URL(`kernel.${Deno.pid}.${step}.wasm`, OUT);
 }
 
-async function minified(from: URL, out: URL): Promise<Abi> {
+async function optimized(from: URL, out: URL): Promise<void> {
   const wasmOpt = new Deno.Command("wasm-opt", {
     args: [...WASM_OPT, fileURLToPath(from), "-o", fileURLToPath(out)],
-    stdout: "piped",
+    stdout: "inherit",
     stderr: "inherit",
   });
   let done: Deno.CommandOutput;
@@ -105,12 +99,83 @@ async function minified(from: URL, out: URL): Promise<Abi> {
   }
   await Deno.remove(from);
   if (!done.success) Deno.exit(done.code || 1);
-  return JSON.parse(new TextDecoder().decode(done.stdout));
+}
+
+/** What the module says to the shell: the doorbell and nothing else. */
+const EXPORTS = new Set(["interrupt"]);
+
+/**
+ * The export section cut to EXPORTS, before the optimizer runs.
+ *
+ * The linker exports every `#[no_mangle]` function in the crate graph, and
+ * embassy and critical-section name theirs so (`__pender`,
+ * `_critical_section_1_0_acquire` and kin) for one another to find at link
+ * time, not for any host. Nothing in the Rust can keep them out of the
+ * section, so they are taken out of it here; what calls them inside the
+ * module is untouched, and the optimizer drops whatever only the export kept.
+ */
+function exportedOnly(module: URL): void {
+  const bytes = Deno.readFileSync(module);
+  let at = 8;
+  const leb = (): number => {
+    let [n, shift] = [0, 0];
+    for (;;) {
+      const b = bytes[at++];
+      n |= (b & 0x7f) << shift;
+      if ((b & 0x80) === 0) return n >>> 0;
+      shift += 7;
+    }
+  };
+  const put = (n: number): number[] => {
+    const out: number[] = [];
+    do {
+      let b = n & 0x7f;
+      n >>>= 7;
+      if (n !== 0) b |= 0x80;
+      out.push(b);
+    } while (n !== 0);
+    return out;
+  };
+  const parts: Uint8Array[] = [bytes.subarray(0, 8)];
+  let kept = 0;
+  while (at < bytes.length) {
+    const start = at;
+    const id = bytes[at++];
+    const size = leb();
+    const end = at + size;
+    if (id !== 7) {
+      parts.push(bytes.subarray(start, end));
+      at = end;
+      continue;
+    }
+    const entries: number[] = [];
+    for (let n = leb(); n > 0; n--) {
+      const from = at;
+      const len = leb();
+      const name = new TextDecoder().decode(bytes.subarray(at, at + len));
+      at += len + 1;
+      leb();
+      if (!EXPORTS.has(name)) continue;
+      entries.push(...bytes.subarray(from, at));
+      kept++;
+    }
+    const body = [...put(kept), ...entries];
+    parts.push(new Uint8Array([7, ...put(body.length), ...body]));
+    at = end;
+  }
+  if (kept !== EXPORTS.size) throw new Error(`[build-wasm] the module exports ${kept} of ${[...EXPORTS].join(", ")}`);
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let k = 0;
+  for (const p of parts) {
+    out.set(p, k);
+    k += p.length;
+  }
+  Deno.writeFileSync(module, out);
 }
 
 /**
- * The source paths a panic carries, blanked where they lie — the published
- * shape only.
+ * The source paths a report carries, replaced where they lie by a number —
+ * the published shape only.
  *
  * Rust embeds them and offers no way not to. `unwrap`, `expect` and an index
  * are `#[track_caller]`, so the location a panic reports is the caller's, and
@@ -123,64 +188,43 @@ async function minified(from: URL, out: URL): Promise<Abi> {
  * A `&'static str` is a pointer and a length held apart, so overwriting the
  * bytes in place, to the same length, leaves a module that runs exactly as it
  * did: nothing compares a path at runtime, and the length nothing reads from
- * the text is unchanged. What is lost is the file in a panic's message, which
- * is why this is for what ships and not for what anyone debugs.
+ * the text is unchanged. What goes in its place is `#n` at the end, dots
+ * before it: a report names the file by `n`, and PATHS turns `n` back into
+ * the path.
  */
 /** Where a source path can have come from: this workspace, the toolchain, or
  * a dependency. Anything else ending in `.rs` is not one, and is refused
  * rather than guessed at. */
 const SOURCE_ROOT = /(?:^|[^A-Za-z0-9_])(?:pxl|xpute)\/|\/library\/|\/registry\/|^\/rustc\/|^\/rust\/deps\/|\.rustup\//;
 
-function blanked(module: URL): number {
+function numbered(module: URL): number {
   const bytes = Deno.readFileSync(module);
   const text = new TextDecoder("latin1").decode(bytes);
+  const numbers = new Map<string, number>();
   let n = 0;
   for (const m of text.matchAll(/[A-Za-z0-9_/.-]*\.rs\b/g)) {
     // A word that merely ends in those two letters is not a path.
     if (!m[0].includes("/")) continue;
     if (!SOURCE_ROOT.test(m[0])) {
-      // Never blanked on a guess: a `.rs` from somewhere this does not know
-      // could be a format string or something a user typed, and overwriting
-      // it would be a bug nobody sees until it ships.
+      // Never overwritten on a guess: a `.rs` from somewhere this does not
+      // know could be a format string or something a user typed, and
+      // overwriting it would be a bug nobody sees until it ships.
       throw new Error(`[build-wasm] ${JSON.stringify(m[0])} ends in .rs but is under no source root — widen SOURCE_ROOT or leave it alone`);
     }
-    // Every match is filled with the same byte, which is what makes an
-    // overlap safe: the linker merges a string that is another's tail, so two
-    // matches can cover the same bytes, and filling both with the one
-    // character leaves the same result either way.
-    bytes.fill(0x2e, m.index, m.index + m[0].length);
+    if (!numbers.has(m[0])) numbers.set(m[0], numbers.size);
+    // The number goes at the end and dots before it. The linker merges a
+    // string that is another's tail, so a shorter path can lie inside a
+    // longer one's bytes and end where it ends: it reads the same number.
+    const tag = new TextEncoder().encode(`#${numbers.get(m[0])}`);
+    const end = m.index + m[0].length;
+    const at = Math.max(m.index, end - tag.length);
+    bytes.fill(0x2e, m.index, at);
+    bytes.set(tag.subarray(tag.length - (end - at)), at);
     n++;
   }
   if (n > 0) Deno.writeFileSync(module, bytes);
+  Deno.writeTextFileSync(PATHS, JSON.stringify(Object.fromEntries([...numbers].map(([path, k]) => [`#${k}`, path])), null, 2) + "\n");
   return n;
-}
-
-/** The mapping as the shell reads it: a logical name to the one letter the
- * module now answers to. */
-async function writeAbi(abi: Abi): Promise<void> {
-  const rows = (pairs: [string, string][]) => pairs.map(([name, short]) => `  ${JSON.stringify(name)}: ${JSON.stringify(short)},`).join("\n");
-  const target = new URL("../src/kernel/abi/symbol.ts", import.meta.url);
-  const own = new URL(`symbol.${Deno.pid}.ts`, target);
-  await Deno.writeTextFile(
-    own,
-    `// @pxl/web/kernel/abi/symbol.ts
-//
-// GENERATED by script/build-wasm.ts from wasm-opt's mapping — do not edit,
-// and do not commit: the letters are the optimizer's and change with the
-// module. Every build writes it before anything reads it.
-
-/** What the module calls the host's imports. */
-export const IMPORT: Record<string, string> = {
-${rows(abi.imports.map(([, name, short]) => [name, short]))}
-};
-
-/** What the module calls its own exports. */
-export const EXPORT: Record<string, string> = {
-${rows(abi.exports)}
-};
-`,
-  );
-  await Deno.rename(own, target);
 }
 
 let status: Deno.CommandStatus;
@@ -196,10 +240,10 @@ const linkedFile = staged("linked");
 const done = staged("done");
 await Deno.copyFile(BUILT, linkedFile);
 const linked = (await Deno.stat(linkedFile)).size;
-const abi = await minified(linkedFile, done);
-// Only what is published loses its panic paths.
-const paths = published ? blanked(done) : 0;
+exportedOnly(linkedFile);
+await optimized(linkedFile, done);
+// Only what is published has its paths numbered.
+const paths = published ? numbered(done) : 0;
 await Deno.rename(done, OUT);
-await writeAbi(abi);
-const said = (published ? ", without the dev-only settings" : "") + (paths > 0 ? `, and ${paths} source paths blanked` : "");
-console.log(`[build-wasm] ${linked} -> ${(await Deno.stat(OUT)).size} bytes, stripped and its names minified${said} -> src/kernel/kernel.wasm`);
+const said = (published ? ", without the dev-only settings" : "") + (paths > 0 ? `, and ${paths} source paths numbered` : "");
+console.log(`[build-wasm] ${linked} -> ${(await Deno.stat(OUT)).size} bytes, stripped${said} -> src/kernel/kernel.wasm`);

@@ -64,6 +64,8 @@ struct Resolution {
     probe_hold_ms: f64,
     /// The last step up was a probe not yet trusted.
     probing: bool,
+    /// The last turn was judged: this turn's gap is a frame's.
+    moving: bool,
 }
 
 static RESOLUTION: Global<Resolution> = Global::new();
@@ -77,6 +79,7 @@ fn resolution() -> &'static mut Resolution {
         since_change_ms: 0.0,
         probe_hold_ms: PROBE_HOLD_MS,
         probing: false,
+        moving: false,
     })
 }
 
@@ -95,9 +98,17 @@ pub fn resolution_step(state: &TickState) -> f64 {
         ResolutionMode::low => r.ratio = DPR_MIN,
         ResolutionMode::auto => {
             r.ratio = if r.ratio > 0.0 { r.ratio.clamp(DPR_MIN, top) } else { top };
-            if state.interactive {
-                judge(r, top, state.gap_s * 1000.0, state.frame_ms.max(BUDGET_FLOOR_MS));
+            // The gap before the first moving turn is how long the view
+            // stood still, not how long a frame took, so it is no frame's
+            // time: counted, it alone held a step down, or up, whenever the
+            // view moved again. The holds are runs of moving frames, and a
+            // stop ends them.
+            match (state.interactive, r.moving) {
+                (true, true) => judge(r, top, state.gap_s * 1000.0, state.frame_ms.max(BUDGET_FLOOR_MS)),
+                (true, false) => (r.over_ms, r.room_ms) = (0.0, 0.0),
+                _ => {}
             }
+            r.moving = state.interactive;
         }
     }
     r.ratio

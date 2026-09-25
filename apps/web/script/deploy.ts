@@ -42,6 +42,13 @@ if (unclean !== "") console.log(`[deploy] the tree is not clean, so the build id
 await step("build", "deno", ["task", "build"], number ? { PXL_BUILD_NUMBER: number } : {});
 await step("check:bundle", "deno", ["task", "check:bundle"]);
 await step("publish", "deno", wrangler("deploy"));
+// What the module's reports name a file by, kept under the build's number
+// beside the build log (script/build-log.ts) and never served: the module
+// says `#n`, and this is what `n` was in this build.
+if (number) {
+  const paths = new URL("../src/kernel/kernel.paths.json", import.meta.url);
+  await step("keep the paths", "deno", wrangler("r2", "object", "put", `pixelet-tiles/_meta/paths/${number}.json`, "--remote", "--file", paths.pathname, "--content-type", "application/json"));
+}
 
 // This checkout's copy of the last number it saw published, so a dev server
 // can say which official build it follows without wrangler or a login. The

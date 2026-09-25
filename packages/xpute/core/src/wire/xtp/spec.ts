@@ -333,11 +333,11 @@ export type AlignUnit = 1 | 2 | 4 | 8;
  * - `unit` must not exceed WORD_SZ
  */
 export const ALIGN = (nbyte: u32, unit: AlignUnit): u32 => {
-  if ((unit & (unit - 1)) || unit > WORD_SZ) throw new MarshalError(Errno.EINVAL, `ALIGN: bad unit ${unit}`);
+  if ((unit & (unit - 1)) || unit > WORD_SZ) throw new MarshalError(Errno.EINVAL);
 
   const mask = unit - 1;
   // `&` works in int32: past 2^31 the aligned size came out negative.
-  if (nbyte > 0xffffffff - mask) throw new MarshalError(Errno.EOVERFLOW, `ALIGN: ${nbyte} does not align within u32`);
+  if (nbyte > 0xffffffff - mask) throw new MarshalError(Errno.EOVERFLOW);
   return ((nbyte + mask) & ~mask) >>> 0;
 };
 
@@ -376,7 +376,7 @@ export const ALIGN_SZ = (type: u8): AlignUnit => {
       return 1;
 
     default:
-      throw new MarshalError(Errno.EBADMSG, `unknown type 0x${type}`);
+      throw new MarshalError(Errno.EBADMSG);
   }
 };
 

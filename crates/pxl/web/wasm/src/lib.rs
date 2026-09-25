@@ -3,10 +3,14 @@
 //! The one WebAssembly module: pxl-kernel behind a boot block and a doorbell.
 //!
 //! No wasm-bindgen. The central scheduler gives the module its memory, and
-//! the module lays out everything inside it when it is booted (`boot`,
-//! pxl_kernel::mem); the shell reads the boot block once, and everything after
-//! crosses in the rings in that memory: a command and its packet in, its
-//! reply and the kernel's signals out, and `interrupt` to hand over the turn.
+//! the module lays out everything inside it on its first turn
+//! (pxl_kernel::mem); the shell reads the boot block once, at an address both
+//! sides know, and everything after crosses in that memory: a command and its
+//! packet in the submission ring, its reply and the kernel's signals in the
+//! completion ring, what the kernel asks of the host in two streams the host
+//! runs after each turn, and `interrupt` to hand over the turn. The clock is
+//! the one call the module makes: a turn spends its quota against it while
+//! the host cannot run.
 //!
 //! The module is single-threaded, so the state is a plain global.
 
@@ -18,6 +22,7 @@ use pxl_kernel::kernel::kernel;
 use pxl_kernel::mem::section;
 use pxl_render::mesh::volume::Volumes;
 use xpute_core::math::scalar::round;
+use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::PacketWriter;
@@ -109,8 +114,9 @@ struct State {
     outbox: Outbox,
     /// The UI snapshot last posted, by hash: one is posted only when it changed.
     snapshot: u64,
-    /// The block `boot` hands out.
-    boot: [u32; BOOT_WORDS],
+    /// The console stream's rows were handed over, to be let go on the next
+    /// turn (LEDGER_TAKE).
+    ledger_taken: bool,
 }
 
 // The front of the memory: where the rings are and where the linker was told
@@ -162,45 +168,28 @@ fn ring_address(ring: &Ring) -> u32 {
 /// `Global` is built on.
 static STATE: Global<State> = Global::new();
 
-// `wasm_import_module` is what makes these imports, and it is load-bearing
+// `wasm_import_module` is what makes this an import, and it is load-bearing
 // rather than documentation. wasm-ld used to be handed `--allow-undefined`,
 // under which any symbol nothing defined became an import of the module named
 // `env` — which is the module the shell instantiates with
 // (apps/web/src/kernel/module.ts). Rust stopped passing that flag in 1.96, so
-// an extern block that says nothing is a link error naming every host call by
-// hand. Naming `env` here is the same binary as before and does not depend on
-// a default: wasm-opt's --minify-imports-and-exports renames the entries and
-// leaves the module alone, so the shell's `env:` still answers them.
+// an extern block that says nothing is a link error.
 #[link(wasm_import_module = "env")]
 extern "C" {
-    /// The client's: told a panic's message before the trap, since the trap
-    /// itself carries none — `panic = "abort"` and no hook would leave only
-    /// "unreachable" in the console.
-    #[link_name = "panic"]
-    fn host_panic(ptr: *const u8, len: usize);
     /// The client's clock, in milliseconds: what a tick's budget is spent against.
     #[link_name = "now"]
     fn host_now() -> f64;
 }
 
 fn state() -> &'static mut State {
-    STATE.get(|| {
-        std::panic::set_hook(Box::new(|info| {
-            let text = info.to_string();
-            // SAFETY: the client's import, told a message it copies out before
-            // the trap.
-            unsafe { host_panic(text.as_ptr(), text.len()) };
-        }));
-        section::map().unwrap_or_else(lay_out);
-        State {
-            sq: new_ring(SQ),
-            outbox: Outbox {
-                cq: new_ring(CQ),
-                spill: new_ring(SPILL),
-            },
-            snapshot: 0,
-            boot: [0; BOOT_WORDS],
-        }
+    STATE.get(|| State {
+        sq: new_ring(SQ),
+        outbox: Outbox {
+            cq: new_ring(CQ),
+            spill: new_ring(SPILL),
+        },
+        snapshot: 0,
+        ledger_taken: false,
     })
 }
 
@@ -218,8 +207,14 @@ fn state() -> &'static mut State {
 /// each its offset, its bytes and the page it begins on; then the quantum the kernel declares to the
 /// central scheduler (xpute_runtime::sched::quantum's QuantumPolicy): margin
 /// share, batch frames and the settle time, each in thousandths; then the
-/// heap's row.
-pub const BOOT_WORDS: usize = 13;
+/// heap's row; then the two streams the shell runs after every turn, the
+/// renderer's (pxl_render::gpu::api) and the host's (pxl_kernel::host).
+pub const BOOT_WORDS: usize = 15;
+
+/// The boot words holding the addresses of the renderer's and the host's
+/// streams.
+const BOOT_GPU: usize = 13;
+const BOOT_HOST: usize = 14;
 
 /// The boot word holding the address of the heap's row (`BuddyMalloc`'s
 /// `stat`): the range it spans, the top it has reached and what it has served.
@@ -227,32 +222,38 @@ const BOOT_HEAP: usize = 12;
 
 const BOOT_QUANTUM: usize = 9;
 
-/// Lays out the memory the module was given, the first time, and hands out
-/// the boot block's address: what the shell reads once, before any ring.
-#[no_mangle]
-pub extern "C" fn boot() -> *const u32 {
+/// The first turn's: lays out the memory the module was given and writes the
+/// boot block where mem.json's BOOT_AT says, for the shell to read once
+/// before any ring.
+fn boot() {
     install_host();
     executor::install();
-    // The shell calls boot() again for the block's address (module.ts's
-    // boot_block), so the kernel boots with the layout, the first time only:
-    // a second boot would spawn its tasks past the pool.
-    let map = section::map().unwrap_or_else(|| {
-        let map = lay_out();
-        pxl_kernel::sched::turn::boot();
-        map
-    });
+    // A broken invariant the kernel names reports itself (`bug!`); one core
+    // raises — an index past a slice, an `unwrap` of nothing — reports its
+    // place alone, the errno being that no invariant said why.
+    xpute_core::status::bug::set_report(pxl_kernel::host::host_bug);
+    std::panic::set_hook(Box::new(|info| {
+        if let Some(at) = info.location() {
+            pxl_kernel::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);
+        }
+    }));
+    let map = lay_out();
+    pxl_kernel::sched::turn::boot();
     let s = state();
-    let (sq, cq) = (ring_address(&s.sq), ring_address(&s.outbox.cq));
-    s.boot[..3].copy_from_slice(&[data_end(), sq, cq]);
-    s.boot[BOOT_HEAP] = ALLOC.stat() as u32;
+    // SAFETY: the page at BOOT_AT, which build.rs keeps clear of the rings
+    // and the module's data; the boot block's alone.
+    let block = unsafe { &mut *(module_memory().add(pxl_kernel::mem::spec::BOOT_AT as usize) as *mut [u32; BOOT_WORDS]) };
+    block[..3].copy_from_slice(&[data_end(), ring_address(&s.sq), ring_address(&s.outbox.cq)]);
+    block[BOOT_HEAP] = ALLOC.stat() as u32;
+    block[BOOT_GPU] = pxl_kernel::mem::fixed::gpu_stream_at().unwrap();
+    block[BOOT_HOST] = pxl_kernel::mem::fixed::host_stream_at().unwrap();
     for (i, sec) in [map.fixed, map.heap].into_iter().enumerate() {
-        write_section(&mut s.boot, 3 + i * SECTION_WORDS as usize, sec);
+        write_section(block, 3 + i * SECTION_WORDS as usize, sec);
     }
     let q = pxl_kernel::sched::tick::QUANTUM;
     for (i, v) in [q.margin_share, q.batch_frames, q.settle_ms].into_iter().enumerate() {
-        s.boot[BOOT_QUANTUM + i] = round(v * 1000.0) as u32;
+        block[BOOT_QUANTUM + i] = round(v * 1000.0) as u32;
     }
-    s.boot.as_ptr()
 }
 
 /// Records the kernel's map over the memory the central scheduler gave, and
@@ -263,15 +264,18 @@ pub extern "C" fn boot() -> *const u32 {
 /// without being told (`buddy_tree`'s `Range`).
 fn lay_out() -> section::Map {
     let stack_high = core::ptr::addr_of!(__stack_high) as u32;
-    assert!(
-        stack_high == pxl_kernel::mem::spec::STACK_BYTES,
-        "the stack was linked to end at {stack_high}, not at mem.json's STACK_BYTES"
-    );
+    xpute_core::ensure!(stack_high == pxl_kernel::mem::spec::STACK_BYTES, ENOTRECOVERABLE, stack_high);
     let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
     let map = section::lay_out(given.min(u32::MAX as u64) as u32, data_end());
     // SAFETY: the memory is this module's own, addressed from 0.
     kernel().volumes = Some(unsafe { Volumes::new(core::ptr::null_mut()) });
     section::set_map(map);
+    // SAFETY: `.fixed.gpu` and `.fixed.host`, each its stream's bytes from a
+    // page, the renderer's and the host's alone.
+    unsafe {
+        pxl_render::gpu::api::set_gpu_stream(pxl_kernel::mem::fixed::gpu_stream_at().unwrap());
+        pxl_kernel::host::set_host_stream(pxl_kernel::mem::fixed::host_stream_at().unwrap());
+    }
     map
 }
 
@@ -280,11 +284,21 @@ fn lay_out() -> section::Map {
 /// — the frame among them, when the host asked for one — and the return is
 /// the falling edge: when the kernel wants the next turn, in ms from now, 0
 /// for the next frame and xpute_runtime::sched::quantum's NO_WAKE for none. A
-/// turn rung with no quota and no frame only applies what waits.
+/// turn rung with no quota and no frame only applies what waits. What the
+/// kernel asked of the host in the turn is in the two streams by then, for
+/// the shell to run before anything else can reach the device or the next
+/// turn can begin. The first turn boots.
 #[no_mangle]
 pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
     use pxl_kernel::sched::turn::{take_world_drawn, world_frame_waiting};
+    if section::map().is_none() {
+        boot();
+    }
     let s = state();
+    if core::mem::take(&mut s.ledger_taken) {
+        pxl_kernel::sched::ledger::log::ledger_log_clear();
+    }
+    pxl_kernel::host::host_rise();
     pxl_kernel::world::change::world_edge().rise(quota_ms);
     drain(s);
     if quota_ms > 0.0 || world_frame_waiting() {
@@ -293,6 +307,8 @@ pub extern "C" fn interrupt(quota_ms: f64) -> f64 {
     if take_world_drawn() {
         post_turn(s);
     }
+    pxl_render::gpu::api::gpu_publish();
+    pxl_kernel::host::host_fall();
     pxl_kernel::world::change::world_fall()
 }
 
@@ -329,7 +345,7 @@ impl Outbox {
         }
         let e = push(&self.spill);
         pxl_kernel::sched::ledger::record::ledger_note_rings(self.cq.len(), self.spill.len());
-        assert!(e == Errno::OK, "the completion ring and its spill are full: 0x{cmd:x} has nowhere to go (errno {})", e as i32);
+        xpute_core::ensure!(e == Errno::OK, ENOSPC, cmd, e as i32);
     }
 
     /// Whether another command's worth of signals has somewhere to go. What
@@ -352,7 +368,7 @@ impl Outbox {
                 return;
             }
             let at = at as u32;
-            let pkt = self.spill.packet(at).expect("a spilled packet is the kernel's own");
+            let pkt = self.spill.packet(at).or_bug(Errno::ENOTRECOVERABLE);
             if self.cq.push(self.spill.tag(at), self.spill.cmd(at), self.spill.flags(at), pkt, self.spill.result(at)) != Errno::OK {
                 return;
             }
@@ -449,7 +465,7 @@ fn post_turn(s: &mut State) {
 /// A command's packet, refused when the command needs one and the message
 /// has none.
 fn packet<'a>(pkt: &Option<&'a [u8]>) -> Result<&'a [u8], MarshalError> {
-    pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG, Some("command without its packet"), None))
+    pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))
 }
 
 /// A command from the page's UI, applied: a turn asked for, and what it asks
@@ -469,7 +485,7 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
     use pxl_kernel::control::sensor::{device_orientation, geolocation};
     use pxl_kernel::sched::ledger::log::{ledger_set_logging, ledger_window_start, ledger_window_stop};
     use pxl_kernel::sched::turn::world_platform;
-    use pxl_kernel::shell::setting::store::settings_store;
+    use pxl_kernel::shell::setting::store::{settings_load, settings_store};
     use pxl_kernel::shell::shell as ui;
     use pxl_kernel::world::change::request_world_tick;
 
@@ -493,6 +509,13 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
                 interactive: p.interactive,
                 credits: p.credits,
             });
+            pxl_kernel::host::set_local_time(pxl_kernel::host::LocalTime {
+                unix_ms: p.unix_ms,
+                hours: p.hours,
+                minutes: p.minutes,
+                seconds: p.seconds,
+                day_start_ms: p.day_start_ms,
+            });
             Ok(Some(0))
         }
         Command::WORLD_CREATE => {
@@ -506,7 +529,10 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
                     needs_permission: p.orientation_permission,
                 },
             });
-            pxl_kernel::layer::object::store::load();
+            settings_load(p.settings);
+            if p.objects != 0 {
+                pxl_kernel::layer::object::store::load(p.objects, p.objects_bytes);
+            }
             Ok(Some(0))
         }
         Command::INPUT_UPDATE => {
@@ -689,9 +715,9 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
         }
         Command::PREVIEW_CREATE => {
             let p = abi::PreviewCreate::read(packet(pkt)?)?;
-            let number = u8::try_from(p.number).map_err(|_| MarshalError::new(Errno::EINVAL, Some("a variant past its group"), None))?;
+            let number = u8::try_from(p.number).map_err(|_| MarshalError::new(Errno::EINVAL))?;
             if !pxl_kernel::layer::character::preview::preview_open(p.surface, p.group, number) {
-                return Err(MarshalError::new(Errno::EINVAL, Some("a preview of no variant, or into no surface"), None));
+                return Err(MarshalError::new(Errno::EINVAL));
             }
             applied(s)
         }
@@ -711,6 +737,9 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
             ledger_set_logging(abi::LedgerLog::read(packet(pkt)?)?.on);
             applied(s)
         }
+        // An address in a memory of at most a gibibyte, which an i32 holds.
+        Command::LEDGER_READ => Ok(Some(ledger_read(abi::LedgerRead::read(packet(pkt)?)?.window_ms) as i32)),
+        Command::LEDGER_TAKE => Ok(Some(ledger_take(s) as i32)),
         Command::WORLD_SNAPSHOT | Command::SENSOR_CREATE | Command::SENSOR_DELETE | Command::FETCH_CREATE | Command::FETCH_DELETE | Command::LOAD_CREATE => Ok(None),
     }
 }
@@ -753,200 +782,17 @@ fn drain(s: &mut State) -> u32 {
     s.outbox.cq.tail().wrapping_sub(tail)
 }
 
-// ---- The host's hooks (pxl_kernel::host) ----
-
-#[link(wasm_import_module = "env")]
-extern "C" {
-    /// `localStorage.getItem(key)`'s length in UTF-8 bytes, or -1 for none.
-    #[link_name = "storage_len"]
-    fn host_storage_len(key: *const u8, key_len: usize) -> i32;
-    /// Copies the item's UTF-8 bytes into `dst`, at most `cap` of them.
-    #[link_name = "storage_get"]
-    fn host_storage_get(key: *const u8, key_len: usize, dst: *mut u8, cap: usize);
-    /// `localStorage.setItem(key, value)`.
-    #[link_name = "storage_set"]
-    fn host_storage_set(key: *const u8, key_len: usize, value: *const u8, value_len: usize);
-    /// Writes the local wall clock's five doubles at `out`: unix ms, hours,
-    /// minutes, seconds, and the local day's start in unix ms.
-    #[link_name = "local_time"]
-    fn host_local_time(out: *mut f64);
-    /// A canvas context's `measureText(text).width` in the page's own family at
-    /// `weight` and `px`.
-    #[link_name = "measure_text"]
-    fn host_measure_text(weight: u32, px: f32, text: *const u8, text_len: usize) -> f64;
-    /// Copies the body the host holds as `body` into `dst`, `len` bytes, and
-    /// lets it go; a `len` of 0 only lets it go.
-    #[link_name = "body_read"]
-    fn host_body_read(body: u32, dst: *mut u8, len: usize);
-}
-
-// ---- The host's WebGPU (pxl_render::gpu::api, apps/web/src/kernel/render/gpu.ts) ----
-
-#[link(wasm_import_module = "env")]
-extern "C" {
-    #[link_name = "gpu_reset"]
-    fn host_gpu_reset();
-    #[link_name = "gpu_buffer"]
-    fn host_gpu_buffer(id: u32, size: u32, usage: u32);
-    #[link_name = "gpu_texture"]
-    fn host_gpu_texture(id: u32, width: u32, height: u32, layers: u32, format: u32, mips: u32, usage: u32);
-    #[link_name = "gpu_image_texture"]
-    fn host_gpu_image_texture(id: u32, image: u32) -> u32;
-    #[link_name = "gpu_view"]
-    fn host_gpu_view(id: u32, texture: u32, dimension: u32, base_mip: u32, mips: u32, base_layer: u32, layers: u32);
-    #[link_name = "gpu_sampler"]
-    fn host_gpu_sampler(id: u32, mag: u32, min: u32, mipmap: u32, address: u32, compare: u32, anisotropy: u32);
-    #[link_name = "gpu_shader"]
-    fn host_gpu_shader(id: u32, code: *const u8, len: usize);
-    #[link_name = "gpu_layout"]
-    fn host_gpu_layout(id: u32, entries: *const u32, words: usize);
-    #[link_name = "gpu_pipeline"]
-    fn host_gpu_pipeline(id: u32, record: *const u32, words: usize, layouts: *const u32, count: usize, module: u32, format: u32);
-    #[link_name = "gpu_bind_group"]
-    fn host_gpu_bind_group(id: u32, layout: u32, entries: *const u32, words: usize);
-    #[link_name = "gpu_destroy"]
-    fn host_gpu_destroy(id: u32);
-    #[link_name = "gpu_write_buffer"]
-    fn host_gpu_write_buffer(id: u32, offset: u32, bytes: *const u8, len: usize);
-    #[link_name = "gpu_write_texture"]
-    fn host_gpu_write_texture(id: u32, layer: u32, width: u32, height: u32, bytes: *const u8, len: usize);
-    #[link_name = "gpu_encoder"]
-    fn host_gpu_encoder(id: u32);
-    #[link_name = "gpu_pass"]
-    fn host_gpu_pass(id: u32, encoder: u32, desc: *const u32, words: usize);
-    #[link_name = "gpu_set_pipeline"]
-    fn host_gpu_set_pipeline(pass: u32, pipeline: u32);
-    #[link_name = "gpu_set_bind_group"]
-    fn host_gpu_set_bind_group(pass: u32, index: u32, group: u32, offsets: *const u32, count: usize);
-    #[link_name = "gpu_set_vertex_buffer"]
-    fn host_gpu_set_vertex_buffer(pass: u32, slot: u32, buffer: u32, offset: u32, size: u32);
-    #[link_name = "gpu_set_index_buffer"]
-    fn host_gpu_set_index_buffer(pass: u32, buffer: u32, offset: u32, size: u32);
-    #[link_name = "gpu_draw"]
-    fn host_gpu_draw(pass: u32, vertices: u32, instances: u32, first_vertex: u32, first_instance: u32);
-    #[link_name = "gpu_draw_indexed"]
-    fn host_gpu_draw_indexed(pass: u32, indices: u32, instances: u32, first_index: u32, first_instance: u32);
-    #[link_name = "gpu_end"]
-    fn host_gpu_end(pass: u32);
-    #[link_name = "gpu_submit"]
-    fn host_gpu_submit(encoder: u32);
-    #[link_name = "gpu_configure"]
-    fn host_gpu_configure(surface: u32);
-    #[link_name = "gpu_resize"]
-    fn host_gpu_resize(surface: u32, width: u32, height: u32);
-    #[link_name = "gpu_current"]
-    fn host_gpu_current(surface: u32, view: u32);
-    #[link_name = "gpu_query_set"]
-    fn host_gpu_query_set(id: u32, count: u32);
-    #[link_name = "gpu_timestamps"]
-    fn host_gpu_timestamps(encoder: u32, query_set: u32, written: u32);
-    #[link_name = "gpu_ms"]
-    fn host_gpu_ms(span: u32) -> f64;
-    #[link_name = "gpu_paint"]
-    fn host_gpu_paint(ops: *const u32, words: usize);
-    #[link_name = "gpu_paint_copy"]
-    fn host_gpu_paint_copy(texture: u32, x: u32, y: u32, layer: u32, width: u32, height: u32);
-}
-
-/// Hands the renderer the host's WebGPU. Every call passes numbers and the
-/// address and length of what it names, which the host reads during the call.
-fn install_gpu() {
-    use pxl_render::gpu::api::{set_gpu_api, GpuApi};
-    // SAFETY, for every call below: an import that reads its numbers and the
-    // lanes it is given where they lie, and keeps no address past the call.
-    set_gpu_api(GpuApi {
-        reset: || unsafe { host_gpu_reset() },
-        buffer: |id, size, usage| unsafe { host_gpu_buffer(id, size, usage) },
-        texture: |id, width, height, layers, format, mips, usage| unsafe { host_gpu_texture(id, width, height, layers, format, mips, usage) },
-        image_texture: |id, image| unsafe { host_gpu_image_texture(id, image) != 0 },
-        view: |id, texture, dimension, base_mip, mips, base_layer, layers| unsafe { host_gpu_view(id, texture, dimension, base_mip, mips, base_layer, layers) },
-        sampler: |id, mag, min, mipmap, address, compare, anisotropy| unsafe { host_gpu_sampler(id, mag, min, mipmap, address, compare, anisotropy) },
-        shader: |id, code| unsafe { host_gpu_shader(id, code.as_ptr(), code.len()) },
-        layout: |id, entries| unsafe { host_gpu_layout(id, entries.as_ptr(), entries.len()) },
-        pipeline: |id, record, layouts, module, format| unsafe { host_gpu_pipeline(id, record.as_ptr(), record.len(), layouts.as_ptr(), layouts.len(), module, format) },
-        bind_group: |id, layout, entries| unsafe { host_gpu_bind_group(id, layout, entries.as_ptr(), entries.len()) },
-        destroy: |id| unsafe { host_gpu_destroy(id) },
-        write_buffer: |id, offset, bytes| unsafe { host_gpu_write_buffer(id, offset, bytes.as_ptr(), bytes.len()) },
-        write_texture: |id, layer, width, height, bytes| unsafe { host_gpu_write_texture(id, layer, width, height, bytes.as_ptr(), bytes.len()) },
-        encoder: |id| unsafe { host_gpu_encoder(id) },
-        pass: |id, encoder, desc| unsafe { host_gpu_pass(id, encoder, desc.as_ptr(), desc.len()) },
-        set_pipeline: |pass, pipeline| unsafe { host_gpu_set_pipeline(pass, pipeline) },
-        set_bind_group: |pass, index, group, offsets| unsafe { host_gpu_set_bind_group(pass, index, group, offsets.as_ptr(), offsets.len()) },
-        set_vertex_buffer: |pass, slot, buffer, offset, size| unsafe { host_gpu_set_vertex_buffer(pass, slot, buffer, offset, size) },
-        set_index_buffer: |pass, buffer, offset, size| unsafe { host_gpu_set_index_buffer(pass, buffer, offset, size) },
-        draw: |pass, vertices, instances, first_vertex, first_instance| unsafe { host_gpu_draw(pass, vertices, instances, first_vertex, first_instance) },
-        draw_indexed: |pass, indices, instances, first_index, first_instance| unsafe { host_gpu_draw_indexed(pass, indices, instances, first_index, first_instance) },
-        end: |pass| unsafe { host_gpu_end(pass) },
-        submit: |encoder| unsafe { host_gpu_submit(encoder) },
-        configure: |surface| unsafe { host_gpu_configure(surface) },
-        resize: |surface, width, height| unsafe { host_gpu_resize(surface, width, height) },
-        current: |surface, view| unsafe { host_gpu_current(surface, view) },
-        query_set: |id, count| unsafe { host_gpu_query_set(id, count) },
-        timestamps: |encoder, query_set, written| unsafe { host_gpu_timestamps(encoder, query_set, written) },
-        gpu_ms: |span| unsafe { host_gpu_ms(span) },
-        paint: |ops| unsafe { host_gpu_paint(ops.as_ptr(), ops.len()) },
-        paint_copy: |texture, x, y, layer, width, height| unsafe { host_gpu_paint_copy(texture, x, y, layer, width, height) },
-    });
-}
+// ---- The host's clock (pxl_kernel::host) ----
 
 fn hook_now() -> f64 {
     // SAFETY: an import with no arguments.
     unsafe { host_now() }
 }
 
-fn hook_storage_get(key: &str) -> Option<String> {
-    // SAFETY: the host reads `key` where it lies and writes at most the length
-    // it just reported into a buffer of that length.
-    unsafe {
-        let len = host_storage_len(key.as_ptr(), key.len());
-        if len < 0 {
-            return None;
-        }
-        let mut buf = vec![0u8; len as usize];
-        host_storage_get(key.as_ptr(), key.len(), buf.as_mut_ptr(), buf.len());
-        String::from_utf8(buf).ok()
-    }
-}
-
-fn hook_storage_set(key: &str, value: &str) {
-    // SAFETY: the host reads both strings where they lie.
-    unsafe { host_storage_set(key.as_ptr(), key.len(), value.as_ptr(), value.len()) }
-}
-
-fn hook_local_time() -> pxl_kernel::host::LocalTime {
-    let mut t = [0.0f64; 5];
-    // SAFETY: the host writes five doubles into `t`.
-    unsafe { host_local_time(t.as_mut_ptr()) };
-    pxl_kernel::host::LocalTime {
-        unix_ms: t[0],
-        hours: t[1],
-        minutes: t[2],
-        seconds: t[3],
-        day_start_ms: t[4],
-    }
-}
-
-fn hook_measure_text(font: pxl_render::gpu::paint::Font, text: &str) -> f64 {
-    // SAFETY: the host reads the string where it lies.
-    unsafe { host_measure_text(font.weight, font.px, text.as_ptr(), text.len()) }
-}
-
-fn hook_body_read(body: u32, dst: &mut [u8]) {
-    // SAFETY: the host writes `dst.len()` bytes at most into `dst`.
-    unsafe { host_body_read(body, dst.as_mut_ptr(), dst.len()) }
-}
-
-/// Hands the kernel the host's clock, storage, local time and text measure,
-/// before anything reads them.
+/// Hands the kernel the host's clock and the allocator's reading, before
+/// anything reads them.
 fn install_host() {
     pxl_kernel::host::set_clock(hook_now);
-    pxl_kernel::host::set_storage(pxl_kernel::host::Storage {
-        get: hook_storage_get,
-        set: hook_storage_set,
-    });
-    pxl_kernel::host::set_local_time(hook_local_time);
-    pxl_kernel::host::set_measure_text(hook_measure_text);
-    pxl_kernel::host::set_body_read(hook_body_read);
     pxl_kernel::host::set_heap_stat(|| pxl_kernel::host::HeapStat {
         range: ALLOC.range_bytes(),
         used: ALLOC.used(),
@@ -957,7 +803,6 @@ fn install_host() {
         releases: ALLOC.releases(),
         refusals: ALLOC.refusals(),
     });
-    install_gpu();
 }
 
 /// The ledger, where it lies: the address of READ's words (ledger.json) —
@@ -972,8 +817,7 @@ fn install_host() {
 /// own lanes and the summary a block written where it stays — so a reader
 /// allocates nothing from the heap the ledger measures. The addresses are good
 /// until the next turn.
-#[no_mangle]
-pub extern "C" fn ledger_read(window_ms: f64) -> *const u32 {
+fn ledger_read(window_ms: f64) -> *const u32 {
     use pxl_kernel::sched::ledger::record::{ledger_frames, ledger_tasks, ledger_worst};
     use pxl_kernel::sched::ledger::spec::READ;
     static WORDS: pxl_kernel::global::Global<[u32; READ::WORDS as usize]> = pxl_kernel::global::Global::new();
@@ -994,9 +838,8 @@ pub extern "C" fn ledger_read(window_ms: f64) -> *const u32 {
 /// What the live stream kept since the shell last cleared it: the address of
 /// LOG's words (ledger.json), the task rows and the frames, each an address
 /// and a count. Zero counts when nothing is waiting, which a shell polling is
-/// asking about most of the time.
-#[no_mangle]
-pub extern "C" fn ledger_log() -> *const u32 {
+/// asking about most of the time. The rows are let go on the next turn.
+fn ledger_take(s: &mut State) -> *const u32 {
     use pxl_kernel::sched::ledger::spec::LOG;
     static WORDS: pxl_kernel::global::Global<[u32; LOG::WORDS as usize]> = pxl_kernel::global::Global::new();
     let (tasks, frames) = pxl_kernel::sched::ledger::log::ledger_log_rows();
@@ -1005,11 +848,6 @@ pub extern "C" fn ledger_log() -> *const u32 {
     w[LOG::tasks_count as usize] = tasks.len() as u32;
     w[LOG::frames_at as usize] = frames.as_ptr() as u32;
     w[LOG::frames_count as usize] = frames.len() as u32;
+    s.ledger_taken = true;
     w.as_ptr()
-}
-
-/// Forgets what the stream kept, once the shell has read it.
-#[no_mangle]
-pub extern "C" fn ledger_log_clear() {
-    pxl_kernel::sched::ledger::log::ledger_log_clear();
 }

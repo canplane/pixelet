@@ -12,7 +12,7 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::v3::V3;
 
 use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, Stamp};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::atmosphere::AIR_WORDS;
 use crate::gpu::layers::{mip_levels, Mips};
@@ -84,12 +84,12 @@ pub struct CloudPass {
 }
 
 impl CloudPass {
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, frame_buffer: u32, air: [u32; AIR_WORDS]) -> CloudPass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buffer: u32, air: [u32; AIR_WORDS]) -> CloudPass {
         let below = pipelines.build(g, PIPELINE_CLOUDS, format::CANVAS);
         let above = pipelines.build(g, PIPELINE_CLOUDS_ABOVE, format::CANVAS);
         let tile = object();
         let tile_levels = mip_levels(TILE_TEXELS, TILE_TEXELS);
-        (g.texture)(
+        g.texture(
             tile,
             TILE_TEXELS,
             TILE_TEXELS,
@@ -99,14 +99,14 @@ impl CloudPass {
             texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT,
         );
         let tile_view = object();
-        (g.view)(tile_view, tile, dimension::D2, 0, tile_levels, 0, 1);
+        g.view(tile_view, tile, dimension::D2, 0, tile_levels, 0, 1);
         // Repeated, since the tile meets itself, and filtered between its
         // levels as well as within one: a pixel reads the level its
         // footprint asks for.
         let tile_sampler = object();
-        (g.sampler)(tile_sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::REPEAT, compare::NONE, 1);
+        g.sampler(tile_sampler, filter::LINEAR, filter::LINEAR, filter::LINEAR, address::REPEAT, compare::NONE, 1);
         let uniform = object();
-        (g.buffer)(uniform, word_bytes(CLOUDS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        g.buffer(uniform, word_bytes(CLOUDS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let group = object();
         let mut e = [0u32; 20 + AIR_WORDS];
         e[..5].copy_from_slice(&buffer_entry(0, frame_buffer));
@@ -115,7 +115,7 @@ impl CloudPass {
         e[15..20].copy_from_slice(&[3, resource::SAMPLER, tile_sampler, 0, 0]);
         e[20..].copy_from_slice(&air);
         // One layout serves both pipelines: their groups are the same.
-        (g.bind_group)(group, below.layouts[0], &e);
+        g.bind_group(group, below.layouts[0], &e);
         bake(g, pipelines, tile, tile_levels);
         CloudPass {
             below,
@@ -133,7 +133,7 @@ impl CloudPass {
     /// moon's directions, whose light reaches the layer through the air; and
     /// straight up where the eye stands, which their heights are measured
     /// from.
-    pub fn lay_out(&mut self, g: &GpuApi, view_proj: &Mat4, eye: &V3, env: &[f32], up: &V3) {
+    pub fn lay_out(&mut self, g: &Gpu, view_proj: &Mat4, eye: &V3, env: &[f32], up: &V3) {
         put_ray(&mut self.words, 0, view_proj, eye);
         self.over = env[ENV_AIR] as f64 > ALTITUDE_KM;
         self.gone = env[ENV_AIR] as f64 >= GONE_KM;
@@ -143,17 +143,17 @@ impl CloudPass {
                 *w = v as f32;
             }
         }
-        (g.write_buffer)(self.uniform, 0, bytes(&self.words));
+        g.write_buffer(self.uniform, 0, bytes(&self.words));
     }
 
     /// The layer into the open pass, over what is drawn opaque.
-    pub fn draw(&self, g: &GpuApi, pass: u32) {
+    pub fn draw(&self, g: &Gpu, pass: u32) {
         if self.gone {
             return;
         }
-        (g.set_pipeline)(pass, if self.over { self.above.pipeline } else { self.below.pipeline });
-        (g.set_bind_group)(pass, 0, self.group, &[]);
-        (g.draw)(pass, 3, 1, 0, 0);
+        g.set_pipeline(pass, if self.over { self.above.pipeline } else { self.below.pipeline });
+        g.set_bind_group(pass, 0, self.group, &[]);
+        g.draw(pass, 3, 1, 0, 0);
     }
 }
 
@@ -193,21 +193,21 @@ pub fn field(origin: IVec, env: &[f32]) -> CloudField {
 /// the whole map, so it is made once for the device
 /// (frame/shader/cloud_bake.wgsl) and a pixel reads a texel of it in place of
 /// the eight octaves of hashes it takes to make.
-fn bake(g: &GpuApi, pipelines: &mut Pipelines, tile: u32, levels: u32) {
+fn bake(g: &Gpu, pipelines: &mut Pipelines, tile: u32, levels: u32) {
     let built = pipelines.build(g, PIPELINE_CLOUD_FIELD, format::R8);
     let encoder = object();
-    (g.encoder)(encoder);
+    g.encoder(encoder);
     let level = object();
-    (g.view)(level, tile, dimension::D2, 0, 1, 0, 1);
+    g.view(level, tile, dimension::D2, 0, 1, 0, 1);
     let pass = object();
-    (g.pass)(pass, encoder, &pass_desc(level, load::CLEAR, 0, load::CLEAR, 0.0, Stamp::UNTIMED));
-    (g.set_pipeline)(pass, built.pipeline);
-    (g.draw)(pass, 3, 1, 0, 0);
-    (g.end)(pass);
+    g.pass(pass, encoder, &pass_desc(level, load::CLEAR, 0, load::CLEAR, 0.0, Stamp::UNTIMED));
+    g.set_pipeline(pass, built.pipeline);
+    g.draw(pass, 3, 1, 0, 0);
+    g.end(pass);
     for id in [pass, level] {
         release(id);
     }
-    (g.submit)(encoder);
+    g.submit(encoder);
     release(encoder);
     Mips::new(g, pipelines, format::R8).build(g, tile, levels, 0, 1);
 }

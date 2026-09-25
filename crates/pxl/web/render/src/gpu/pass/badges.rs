@@ -25,7 +25,7 @@ use core::f32::consts::TAU;
 
 use crate::asset::atlas::{BillboardAtlas, DrawSpec, PAD};
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_BADGE, UNIFORM_FLOATS};
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, Stamp};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::layers::{mip_levels, Mips};
 use crate::gpu::paint::{Font, Paint};
@@ -100,7 +100,7 @@ pub fn badge_width(text_w: f64, icon: bool) -> f64 {
     }
 }
 
-fn place<'a>(p: &mut Paint<'a>, name: &'a str, icon: &'a str, color: u32, logical_w: f32) {
+fn place(p: &mut Paint, name: &str, icon: &str, color: u32, logical_w: f32) {
     pill(p, logical_w);
     let (cx, cy) = (PILL_R, PILL_H / 2.0);
     p.fill_style(color);
@@ -118,7 +118,7 @@ fn place<'a>(p: &mut Paint<'a>, name: &'a str, icon: &'a str, color: u32, logica
     anchor_dot(p, logical_w);
 }
 
-fn cluster<'a>(p: &mut Paint<'a>, label: &'a str, logical_w: f32) {
+fn cluster(p: &mut Paint, label: &str, logical_w: f32) {
     pill(p, logical_w);
     p.font(BADGE_FONT);
     p.text_align(CENTER);
@@ -133,7 +133,7 @@ fn cluster<'a>(p: &mut Paint<'a>, label: &'a str, logical_w: f32) {
 pub const LABEL_FONT: Font = Font { weight: REGULAR, px: 10.0 };
 const LABEL_H: f32 = 12.0;
 
-fn label<'a>(p: &mut Paint<'a>, text: &'a str, logical_w: f32) {
+fn label(p: &mut Paint, text: &str, logical_w: f32) {
     p.font(LABEL_FONT);
     p.text_align(CENTER);
     p.text_baseline(MIDDLE);
@@ -155,13 +155,13 @@ const TAIL_H: f32 = 10.0;
 /// uncovered read as a chunky, pixel-art rounded corner without a real arc,
 /// which would anti-alias against nearest sampling.
 #[allow(clippy::too_many_arguments)]
-fn notched_rect(p: &mut Paint<'_>, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: u32) {
+fn notched_rect(p: &mut Paint, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: u32) {
     p.fill_style(fill);
     p.fill_rect(x + notch, y, (w - notch * 2.0).max(0.0), h);
     p.fill_rect(x, y + notch, w, (h - notch * 2.0).max(0.0));
 }
 
-fn bubble<'a>(p: &mut Paint<'a>, lines: &'a [String], box_w: f32, box_h: f32) {
+fn bubble(p: &mut Paint, lines: &[String], box_w: f32, box_h: f32) {
     notched_rect(p, 0.0, 0.0, box_w, box_h, NOTCH, BLACK);
     notched_rect(p, BORDER, BORDER, box_w - BORDER * 2.0, box_h - BORDER * 2.0, (NOTCH - BORDER).max(1.0), WHITE);
     let cx = box_w / 2.0;
@@ -225,9 +225,9 @@ pub struct BadgePass {
 }
 
 impl BadgePass {
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines) -> BadgePass {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> BadgePass {
         let sampler = object();
-        (g.sampler)(sampler, filter::NEAREST, filter::LINEAR, filter::LINEAR, address::CLAMP, compare::NONE, 1);
+        g.sampler(sampler, filter::NEAREST, filter::LINEAR, filter::LINEAR, address::CLAMP, compare::NONE, 1);
         BadgePass {
             built: pipelines.build(g, PIPELINE_BADGE, format::CANVAS),
             sampler,
@@ -252,7 +252,7 @@ impl BadgePass {
 
     /// Paints what `atlas` changed since the texture last looked, and
     /// rebuilds its mip chain when anything moved.
-    pub fn sync_sheet(&mut self, g: &GpuApi, mips: &Mips, atlas: &mut BillboardAtlas) {
+    pub fn sync_sheet(&mut self, g: &Gpu, mips: &Mips, atlas: &mut BillboardAtlas) {
         let flush = atlas.flush(self.generation);
         self.generation = flush.generation;
         let slots = if flush.whole {
@@ -264,7 +264,7 @@ impl BadgePass {
             }
             self.levels = mip_levels(flush.size, flush.size);
             self.sheet = object();
-            (g.texture)(
+            g.texture(
                 self.sheet,
                 flush.size,
                 flush.size,
@@ -274,9 +274,9 @@ impl BadgePass {
                 texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT,
             );
             self.sheet_view = object();
-            (g.view)(self.sheet_view, self.sheet, dimension::D2, 0, self.levels, 0, 1);
+            g.view(self.sheet_view, self.sheet, dimension::D2, 0, self.levels, 0, 1);
             self.sheet_group = object();
-            (g.bind_group)(
+            g.bind_group(
                 self.sheet_group,
                 self.built.layouts[1],
                 &[0, resource::VIEW, self.sheet_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0],
@@ -305,7 +305,7 @@ impl BadgePass {
             }
             p.restore();
             p.run(g);
-            (g.paint_copy)(self.sheet, x, y, 0, w, h);
+            g.paint_copy(self.sheet, x, y, 0, w, h);
         }
         mips.build(g, self.sheet, self.levels, 0, 1);
     }
@@ -314,7 +314,7 @@ impl BadgePass {
     /// own over `color` reading `depth`, timed under `stamp`; how many
     /// instances it drew.
     #[allow(clippy::too_many_arguments)]
-    pub fn draw(&mut self, g: &GpuApi, encoder: u32, color: u32, depth: u32, viewport: [u32; 2], draws: &[u32], uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) -> u32 {
+    pub fn draw(&mut self, g: &Gpu, encoder: u32, color: u32, depth: u32, viewport: [u32; 2], draws: &[u32], uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) -> u32 {
         if self.sheet_group == 0 {
             return 0;
         }
@@ -332,7 +332,7 @@ impl BadgePass {
             n += 1;
             if set.uniform == 0 {
                 set.uniform = object();
-                (g.buffer)(set.uniform, word_bytes(BADGE_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+                g.buffer(set.uniform, word_bytes(BADGE_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
             }
             let at = d[3] as usize * UNIFORM_FLOATS;
             let s = &mut self.uniform;
@@ -341,7 +341,7 @@ impl BadgePass {
             s[32..35].copy_from_slice(&uniforms[at..at + 3]);
             s[35..44].copy_from_slice(&[self.px_k, self.fade_start, self.fade_end, self.near, self.far, self.cell, 1.0, viewport[0] as f32, viewport[1] as f32]);
             s[44..52].copy_from_slice(&self.globe);
-            (g.write_buffer)(set.uniform, 0, bytes(s));
+            g.write_buffer(set.uniform, 0, bytes(s));
             if set.block != block || set.depth != depth || set.group == 0 {
                 release(set.group);
                 set.group = object();
@@ -349,22 +349,22 @@ impl BadgePass {
                 e[..5].copy_from_slice(&buffer_entry(0, set.uniform));
                 e[5..10].copy_from_slice(&buffer_entry(1, block));
                 e[10..].copy_from_slice(&[2, resource::VIEW, depth, 0, 0]);
-                (g.bind_group)(set.group, self.built.layouts[0], &e);
+                g.bind_group(set.group, self.built.layouts[0], &e);
                 set.block = block;
                 set.depth = depth;
             }
             if pass == 0 {
                 pass = object();
-                (g.pass)(pass, encoder, &pass_desc(color, load::LOAD, depth, load::READ_ONLY, 0.0, stamp.pass()));
-                (g.set_pipeline)(pass, self.built.pipeline);
-                (g.set_bind_group)(pass, 1, self.sheet_group, &[]);
+                g.pass(pass, encoder, &pass_desc(color, load::LOAD, depth, load::READ_ONLY, 0.0, stamp.pass()));
+                g.set_pipeline(pass, self.built.pipeline);
+                g.set_bind_group(pass, 1, self.sheet_group, &[]);
             }
-            (g.set_bind_group)(pass, 0, set.group, &[]);
-            (g.draw)(pass, 4, d[1], 0, 0);
+            g.set_bind_group(pass, 0, set.group, &[]);
+            g.draw(pass, 4, d[1], 0, 0);
             drawn += d[1];
         }
         if pass != 0 {
-            (g.end)(pass);
+            g.end(pass);
             release(pass);
         }
         drawn

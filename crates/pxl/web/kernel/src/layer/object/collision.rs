@@ -1,23 +1,18 @@
 // pxl-kernel/layer/object/collision.rs
 
-use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::hierarchy::share;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 
-use crate::layer::object::geometry::{aabb_overlap, corner_aabb, object_aabb};
 use crate::layer::object::size::DECOR_SIZE;
-use crate::layer::object::store::{get_objects_near, OccupiedEntry};
+use crate::layer::object::store::{cube_node, objects_at, OccupiedEntry};
 
-/// Whether a candidate box (corner + size) overlaps any existing placed
-/// object — real per-axis AABB overlap, which catches cross-size overlap too.
-///
-/// Only checks objects near `corner` (store.rs's own get_objects_near — the
-/// candidate's own cell plus its 26 neighbors), not every placed object in
-/// the world — a real object count can be arbitrarily large, and a placement
-/// can only ever conflict with something within one cell's own width of it
-/// regardless.
-pub fn find_overlapping_object(corner: &Pvf3, size: f64, map_origin: IVec) -> Option<OccupiedEntry> {
-    let candidate = corner_aabb(corner.i, corner.f, size, map_origin);
-    get_objects_near(corner, size).into_iter().find(|o| aabb_overlap(&candidate, &object_aabb(o, map_origin)))
+/// Whether a candidate cube (corner + size) shares space with any placed
+/// object: every cube sits on its own size's lattice and is at most a cell,
+/// so two share space exactly when one's node lies under the other's, and
+/// one that shares the candidate's is in the candidate's own cell.
+pub fn find_overlapping_object(corner: &Pvf3, size: f64) -> Option<OccupiedEntry> {
+    let candidate = cube_node(corner, size);
+    objects_at(corner).into_iter().find(|o| share(candidate, cube_node(&Pvf3 { i: o.i, f: o.f }, o.size)))
 }
 
 /// The tool a placement is made with.
@@ -31,7 +26,7 @@ pub enum PlacementTool {
 /// land somewhere already occupied — the one "object size vs decor's own
 /// fixed DECOR_SIZE" dispatch both the real placement commit and its own
 /// hover preview need.
-pub fn is_placement_blocked(tool: PlacementTool, corner: &Pvf3, object_size: f64, map_origin: IVec) -> bool {
+pub fn is_placement_blocked(tool: PlacementTool, corner: &Pvf3, object_size: f64) -> bool {
     let size = if tool == PlacementTool::Decor { DECOR_SIZE } else { object_size };
-    find_overlapping_object(corner, size, map_origin).is_some()
+    find_overlapping_object(corner, size).is_some()
 }

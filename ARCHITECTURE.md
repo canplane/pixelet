@@ -146,7 +146,7 @@ app           │ apps/web  *.spec.ts │◀────────────
 | `pxl-spec`      | The model: PVF3, the spatial hierarchy, the cell catalogs, the command numbers, the page formats, the asset tables. One implementation, in Rust. |
 | `pxl-render`    | The view: volumes, the column scan, the mesher, glTF, the LOD ladder, the atlas, the draw list, the shaders, the renderer.                       |
 | `pxl-kernel`    | The kernel: the chunk scheduler, the layers and their stores, fetches and loads, the camera and sensors, the turn, the ledger.                   |
-| `pxl-wasm`      | The module: installs the allocator and the executor, fixes the memory's front with linker flags, exports `boot` and `interrupt`.                 |
+| `pxl-wasm`      | The module: installs the allocator and the executor, fixes the memory's front with linker flags, imports the clock and exports `interrupt`.      |
 | `apps/web`      | The shell: React over the kernel's snapshot, the WebGPU host, the I/O the kernel names; and the Cloudflare Worker that serves it all.            |
 | `pxl-server`    | What both servers need before answering: the environment variables, the database pool, the gate over internal routes.                            |
 | `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                         |
@@ -222,7 +222,7 @@ What the policy says: the frame is the 25th percentile of recent gaps between fr
 
 **The credits** bound what is out, and one place spends them (`io/sched.rs`). A producer says only what it wants — the subjects it wants read, each with a rank, replacing whatever it said last turn — and never that an attempt should start, stop or be retried. What is wanted, what is running and what has just failed are three tables, so an attempt ending answers nothing about the demand that outlived it, a failure waits rather than asking straight back, and the demand of a camera that has just moved is representable however much old work is still draining. A rank is a class and a distance; the numbers behind both are in one module (`io/policy.rs`) rather than one per layer, and a model or a texture is a read like any other, spending the same credits as a page rather than bidding against it from a second scheduler.
 
-**The ledger** (`sched/ledger`, laid out by `spec/pxl/web/kernel/sched/ledger/ledger.json`) records what each frame and each task cost — pacing, per-phase time, GPU ask, heap gauges, LOD pressure, draw census, per-job waits — into rings the shell reads in place (`ledger_read`, `ledger_log`) and prints as a report or exports as a Chrome trace. The scheduler never reads them.
+**The ledger** (`sched/ledger`, laid out by `spec/pxl/web/kernel/sched/ledger/ledger.json`) records what each frame and each task cost — pacing, per-phase time, GPU ask, heap gauges, LOD pressure, draw census, per-job waits — into rings the shell reads in place (`LEDGER_READ`, `LEDGER_TAKE`) and prints as a report or exports as a Chrome trace. The scheduler never reads them.
 
 ## The channel
 

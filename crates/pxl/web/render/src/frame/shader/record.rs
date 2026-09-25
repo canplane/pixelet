@@ -688,7 +688,7 @@ impl Record {
                 (0..e).map(|_| (next(), next(), next())).collect()
             })
             .collect();
-        assert_eq!(at, words.len(), "a record's words end with its groups");
+        xpute_core::ensure!(at == words.len(), ENOTRECOVERABLE);
         Record {
             shader: words[0],
             fragment: words[1] != 0,
