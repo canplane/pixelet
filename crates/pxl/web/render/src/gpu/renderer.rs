@@ -26,7 +26,7 @@ use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::asset::atlas::BillboardAtlas;
 use crate::frame::draw::{
-    Lists, ARENA_DRAW, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
+    Lists, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
     PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
 use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_SKY};
@@ -922,8 +922,10 @@ impl Renderer {
             if pipeline != which {
                 continue;
             }
-            let buffer = if handle & ARENA_DRAW != 0 {
-                arena_buffer((handle & !ARENA_DRAW) as usize)
+            // A chunk's mesh is in the arena, its first word the group; the
+            // hover ghost's is a block of its own.
+            let buffer = if matches!(pipeline, PIPELINE_CHUNK | PIPELINE_CHUNK_COARSE) {
+                arena_buffer(handle as usize)
             } else {
                 b.buffer(handle)
             };

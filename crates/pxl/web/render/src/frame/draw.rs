@@ -30,16 +30,14 @@ pub const DRAW_WORDS: usize = 5;
 /// 32-byte stride.
 pub const UNIFORM_FLOATS: usize = 8;
 
-/// The pipelines a draw names. A chunk draw's words are (handle, vertex
-/// count, index count, uniform, pipeline); a decor draw's are (the decor
-/// block's handle, the group — which kind and variant, in teaching order —,
-/// the instance count, uniform, pipeline), its uniform carrying the group's
+/// The pipelines a draw names. A chunk draw's words are (its arena group
+/// (gpu/arena.rs), box count, first box, uniform, pipeline): a chunk's mesh
+/// is always in the arena, which the pipeline says, so the first word is the
+/// group and never a block's handle. A decor draw's are (the decor block's
+/// handle, the group — which kind and variant, in teaching order —, the
+/// instance count, uniform, pipeline), its uniform carrying the group's
 /// first lane word in place of the visibility.
 pub const PIPELINE_CHUNK: u32 = 0;
-/// A chunk draw's handle with this bit is an arena group (gpu/arena.rs), not
-/// a block: its words are (ARENA_DRAW | group, box count, first box,
-/// uniform, pipeline).
-pub const ARENA_DRAW: u32 = 1 << 31;
 pub const PIPELINE_DECOR: u32 = 1;
 /// The hover ghost: a box through the chunk shader, or one decor instance
 /// through decor's, half transparent; the box biased toward the eye, more so
@@ -180,7 +178,7 @@ impl DrawList {
     #[allow(clippy::too_many_arguments)]
     pub fn draw_arena(&mut self, group: u32, first_box: u32, box_cnt: u32, translation: [f32; 3], visible: f32, unit: f32, z_step: f32, fine: bool) {
         let pipeline = if fine { PIPELINE_CHUNK } else { PIPELINE_CHUNK_COARSE };
-        self.draw_in(pipeline, ARENA_DRAW | group, box_cnt, first_box, translation, visible, 1.0, unit, z_step);
+        self.draw_in(pipeline, group, box_cnt, first_box, translation, visible, 1.0, unit, z_step);
     }
 
     #[allow(clippy::too_many_arguments)]
