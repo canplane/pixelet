@@ -20,25 +20,40 @@
 //! Geocode needs neither: it keeps no level directories, so its bake writes
 //! the bucket's name directly.
 
+use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
+use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::page::rekey::Bake;
 
 /// What the bake leaves beside an object for its own use and the bucket never
 /// holds.
 const LOCAL_ONLY: [&str; 2] = [".part", ".empty"];
 
-fn flag(argv: &[String], name: &str) -> Result<String, String> {
-    let at = argv.iter().position(|a| a == name).ok_or_else(|| format!("{name} is wanted"))?;
-    argv.get(at + 1).cloned().ok_or_else(|| format!("{name} wants a value"))
+/// A subcommand's flags, every one `--name value`, by name.
+struct Named(HashMap<String, String>);
+
+impl Named {
+    fn read(flags: &mut Flags) -> Result<Named, String> {
+        let mut named = HashMap::new();
+        while let Some(flag) = flags.arg() {
+            let value = flags.value()?;
+            named.insert(flag, value);
+        }
+        Ok(Named(named))
+    }
+
+    fn get(&self, name: &str) -> Result<String, String> {
+        self.0.get(name).cloned().ok_or_else(|| format!("{name} is wanted"))
+    }
 }
 
 /// A key a line in, an `s5cmd` copy a line out.
-fn emit(argv: &[String]) -> Result<(), String> {
-    let bucket = flag(argv, "--bucket")?;
-    let from = flag(argv, "--from")?.trim_matches('/').to_string();
-    let to = flag(argv, "--to")?.trim_matches('/').to_string();
+fn emit(flags: &Named) -> Result<(), String> {
+    let bucket = flags.get("--bucket")?;
+    let from = flags.get("--from")?.trim_matches('/').to_string();
+    let to = flags.get("--to")?.trim_matches('/').to_string();
     let bake = Bake::of(&from)?;
 
     let out = io::stdout();
@@ -77,10 +92,10 @@ fn objects(dir: &Path, under: &str, out: &mut Vec<String>) -> Result<(), String>
 }
 
 /// A tree of hard links under the names the bucket serves.
-fn link(argv: &[String]) -> Result<(), String> {
-    let bake = Bake::of(&flag(argv, "--bake")?)?;
-    let from = PathBuf::from(flag(argv, "--from")?);
-    let to = PathBuf::from(flag(argv, "--to")?);
+fn link(flags: &Named) -> Result<(), String> {
+    let bake = Bake::of(&flags.get("--bake")?)?;
+    let from = PathBuf::from(flags.get("--from")?);
+    let to = PathBuf::from(flags.get("--to")?);
     if to.exists() {
         std::fs::remove_dir_all(&to).map_err(|e| format!("{}: {e}", to.display()))?;
     }
@@ -97,10 +112,11 @@ fn link(argv: &[String]) -> Result<(), String> {
 }
 
 fn run() -> Result<(), String> {
-    let argv: Vec<String> = std::env::args().skip(1).collect();
-    match argv.first().map(String::as_str) {
-        Some("emit") => emit(&argv),
-        Some("link") => link(&argv),
+    let mut flags = Flags::from_env();
+    let command = flags.arg();
+    match command.as_deref() {
+        Some("emit") => emit(&Named::read(&mut flags)?),
+        Some("link") => link(&Named::read(&mut flags)?),
         _ => Err("usage: rekey_tiles emit --bucket <b> --from <prefix> --to <prefix>\n       rekey_tiles link --bake <kind> --from <dir> --to <dir>".into()),
     }
 }

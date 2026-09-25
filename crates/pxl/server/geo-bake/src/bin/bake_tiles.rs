@@ -43,6 +43,7 @@ use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::LevelPage;
 
+use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::page::walk::{land_pages, write_land_pages};
 use pxl_geo_bake::pyramid::{build, write_manifest, Layer, PageSet};
 use pxl_geo_bake::terrain::leaf::{bake_leaf, bake_ocean, has_land, ocean_samples, Coverage, NE, OCEAN_KEY, SW};
@@ -71,22 +72,16 @@ fn parse_args() -> Result<Args, String> {
         reclassify: false,
     };
 
-    let argv: Vec<String> = std::env::args().skip(1).collect();
-    let mut i = 0;
-    while i < argv.len() {
-        let next = |i: &mut usize| -> Result<String, String> {
-            *i += 1;
-            argv.get(*i).cloned().ok_or_else(|| format!("{} wants a value", argv[*i - 1]))
-        };
-        match argv[i].as_str() {
-            "--out" => args.out = PathBuf::from(next(&mut i)?),
-            "--concurrency" => args.concurrency = next(&mut i)?.parse().map_err(|_| "bad --concurrency")?,
-            "--limit" => args.limit = Some(next(&mut i)?.parse().map_err(|_| "bad --limit")?),
+    let mut flags = Flags::from_env();
+    while let Some(flag) = flags.arg() {
+        match flag.as_str() {
+            "--out" => args.out = PathBuf::from(flags.value()?),
+            "--concurrency" => args.concurrency = flags.parse()?,
+            "--limit" => args.limit = Some(flags.parse()?),
             "--force" => args.force = true,
             "--reclassify" => args.reclassify = true,
             other => return Err(format!("unknown flag: {other}")),
         }
-        i += 1;
     }
     Ok(args)
 }

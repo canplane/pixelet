@@ -16,6 +16,7 @@
 //! type it holds. The command lines that drive them are `src/bin/`, outside
 //! the library — each links it by name like any other consumer.
 
+pub mod cli;
 pub mod geocode;
 pub mod page;
 pub mod poi;
