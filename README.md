@@ -12,7 +12,7 @@ _Started on December 15, 2025._
 
 The client is a small operating system in a browser tab. A Rust **kernel**, compiled to one WebAssembly module, holds the world, schedules its own work and draws through WebGPU; a TypeScript **shell** drives it the way a driver drives a device, and decides nothing about the world. The arrangement they run in — one fixed memory, ring buffers, a turn on a doorbell — is [xpute](./ARCHITECTURE.xpute.md), which is generic and knows nothing of any of this. What follows is pixelet's own.
 
-- **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into pages of 512² blocks, four channels of ground type and one elevation raster each. A page is fetched, read where it lands in memory, and kept only while the view is near it.
+- **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into pages of 512² blocks, four channels of ground type and one elevation raster each. A page is fetched into one of a fixed number of records in memory and kept there until a page the view wants needs the room.
 - **One coordinate, 96 bits of fixed point.** A position is two packed words — three integer fields for which block, three 8-bit fractions for where inside it — so it resolves to 1/256 of a block. The arithmetic is integer, so it is the same bits on every machine, and the X field is cyclic, so the world wraps at the longitude seam.
 - **Terrain and what you build meet only when a chunk is built.** The chunk is Minecraft's, at 64 blocks. The ground is a dense raster for a whole page; placed objects are a sparse tree per 64³ band. They converge in one pipeline, and the mesher and the pointer's ray read the same spans out of it — so what is drawn is what is hit.
 - **Running short of memory costs detail, not the frame.** Work off screen is reclaimed first, and if that is not enough the view's criterion is pulled a level coarser and let out again when the pressure passes. The view gets blockier; the tab does not die.
@@ -34,7 +34,7 @@ A block on screen has come a long way: a provider's geometry, a bake, a fetch, a
                    a page of 512² blocks:
              four ground channels and elevation
 ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┼ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-                              ▼             fetched by version, read in place
+                              ▼             fetched by version, into a record
                       a terrain record
                               │
 the player's placements ──────┤
@@ -158,7 +158,7 @@ Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and *
 │           ├── kernel/       #   the kernel's driver: abi, control, io, mem, render, sched, shell
 │           ├── app/ page/    #   the frame, the router, the pages
 │           ├── feature/      #   a screen's own pieces: map, search, setting, character, dev
-│           ├── catalog/      #   the data screens show (cells, assets, geocode)
+│           ├── catalog/      #   the data screens show (cells, assets)
 │           ├── locale/       #   i18n catalogs, dev-only ones apart
 │           ├── config/       #   deployment config and routes
 │           └── shared/       #   shared UI kit and browser helpers
@@ -191,16 +191,16 @@ Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and *
 └── issue/                    # Decisions and why, the backlog, experiment/ for measurements
 ```
 
-A crate's root holds directories only, sorted by kind; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat.
+A crate's root holds its modules, the directories sorted by kind and the one-file modules after them; `pxl-geo`, `pxl-api` and `pxl-geo-spec` are flat.
 
 | Crate           | Directories                                                              |
 | --------------- | ------------------------------------------------------------------------ |
 | `xpute-core`    | `abi` `alloc` `codec` `collection` `math` `status` `wire`, plus `golden` |
 | `xpute-runtime` | `abi` `io` `ipc` `mem` `sched`, plus `clock`, `global`                   |
-| `pxl-spec`      | `abi` `asset` `bake` `cell` `space`, plus `route`                        |
+| `pxl-spec`      | `asset` `bake` `cell` `space`, plus `place`, `route`                     |
 | `pxl-render`    | `mesh` `asset` `look` `frame` `gpu`                                      |
-| `pxl-kernel`    | `mem` `sched` `world` `layer` `io` `control` `shell`                     |
-| `pxl-geo-bake`  | `terrain` `poi` `geocode` `page`, and `bin` beside them                  |
+| `pxl-kernel`    | `abi` `mem` `sched` `world` `layer` `io` `control` `shell`, plus `host`  |
+| `pxl-geo-bake`  | `terrain` `geocode` `page` `demand`, plus `poi`, `pyramid`, and `bin`    |
 
 The casing in the tree is not mixed by accident. Rust, the xpute packages and the kernel's driver (`apps/web/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 

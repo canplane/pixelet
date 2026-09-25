@@ -33,7 +33,7 @@ Two budgets run and they never touch: time for the guest's own work, and credits
 
 ## `core` and `runtime`
 
-`core` is a kit and nothing more — collections, codecs, maths over one libm, an errno table, the wire formats. Link it and use it: it knows nothing of turns, hosts or memories.
+`core` is a kit and nothing more — collections, codecs, math over one libm, an errno table, the wire formats. Link it and use it: it knows nothing of turns, hosts or memories.
 
 Golden records under `crates/xpute/core/golden/` hold the two languages to each other wherever bytes cross.
 
