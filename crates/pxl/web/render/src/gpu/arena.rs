@@ -42,7 +42,7 @@ fn arena() -> &'static mut Arena {
 /// meshes out.
 pub fn arena_configure(sizes: &[u32]) {
     let a = arena();
-    assert!(sizes.len() <= ARENA_GROUPS, "more arena groups than {ARENA_GROUPS}");
+    xpute_core::ensure!(sizes.len() <= ARENA_GROUPS, ENOTRECOVERABLE, ARENA_GROUPS);
     a.sizes = [0; ARENA_GROUPS];
     a.sizes[..sizes.len()].copy_from_slice(sizes);
 }
@@ -76,7 +76,7 @@ pub fn arena_write(group: usize, offset: u32, bytes: &[u8]) -> bool {
         }
         a.epoch = a.epoch.wrapping_add(1);
     }
-    assert!(offset as usize + bytes.len() <= a.sizes[group] as usize, "a mesh past its arena group's end");
+    xpute_core::ensure!(offset as usize + bytes.len() <= a.sizes[group] as usize, ENOSPC);
     g.write_buffer(a.buffers[group], offset, bytes);
     true
 }

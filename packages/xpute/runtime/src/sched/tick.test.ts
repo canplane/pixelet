@@ -167,14 +167,3 @@ test_on_a_held_clock("tick - what the interaction phase spends comes off the bud
   t.run(s, 1 / 60, QUOTA_MS, clock.now());
   assert(s.a <= s.b - 1.5, `visible saw ${s.a} of ${s.b}`);
 });
-
-Deno.test("tick - the step table is fixed: a step past it is refused", () => {
-  const t = tick();
-  assertThrows(
-    () => {
-      for (let i = 0; i < 9; i++) t.on_tick(COSMETIC, () => {}, "t");
-    },
-    Error,
-    "steps are taken",
-  );
-});

@@ -6,6 +6,8 @@
  */
 
 import type { Bytes } from "@xpute/core/abi/array.ts";
+import { Errno } from "@xpute/core/status/errno.spec.ts";
+import { MarshalError } from "@xpute/core/status/error.ts";
 
 // ============ UTF-8 ============
 
@@ -115,7 +117,7 @@ export function generate_uuid(): Uuid {
  */
 export function uuid_to_b64url(uuid: Uuid): Base64Url {
   if (uuid.length !== 16) {
-    throw new Error("UUID: Invalid length");
+    throw new MarshalError(Errno.EINVAL);
   }
   return bytes_to_b64url(uuid);
 }
@@ -126,7 +128,7 @@ export function uuid_to_b64url(uuid: Uuid): Base64Url {
 export function b64url_to_uuid(b64url: Base64Url): Uuid {
   const bytes: Uuid = b64url_to_bytes(b64url);
   if (bytes.length !== 16) {
-    throw new Error("UUID: Invalid format");
+    throw new MarshalError(Errno.EINVAL);
   }
   return bytes;
 }
@@ -158,14 +160,14 @@ export function bytes_to_hex(bytes: Bytes): string {
  */
 export function hex_to_bytes(hex: string): Bytes {
   if (hex.length % 2 !== 0) {
-    throw new Error("Hex: Invalid length");
+    throw new MarshalError(Errno.EINVAL);
   }
 
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
     // parseInt reads what it can and stops: "1g" would be 1, "zz" NaN stored as 0.
     const pair = hex.slice(i, i + 2);
-    if (!/^[0-9a-fA-F]{2}$/.test(pair)) throw new Error("Hex: Invalid digit");
+    if (!/^[0-9a-fA-F]{2}$/.test(pair)) throw new MarshalError(Errno.EINVAL);
     bytes[i / 2] = parseInt(pair, 16);
   }
   return bytes;

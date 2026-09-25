@@ -35,6 +35,8 @@ use crate::world::chunk::build::World;
 use crate::world::frame::view::view;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 const COLOR: V3 = [0.0, 0.0, 0.0];
 const DASH: f64 = 0.3;
@@ -303,7 +305,7 @@ fn make_labels(g: &mut Gizmos, origin: V3) {
     }
     let sheet = billboard_sheet();
     for (label, width) in g.drawn.labels.iter().zip(widths) {
-        let logical_w = width.expect("checked above").ceil() + LABEL_PAD_X * 2.0;
+        let logical_w = width.or_bug(Errno::ENOTRECOVERABLE).ceil() + LABEL_PAD_X * 2.0;
         let slot = sheet.add(logical_w * DPR_MAX, LABEL_H * DPR_MAX, DrawSpec::Text { text: label.text.clone(), logical_w });
         g.slots.push((slot, logical_w));
     }

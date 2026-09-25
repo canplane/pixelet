@@ -39,7 +39,7 @@ impl Paint {
     }
 
     fn push(&mut self, words: &[u32]) {
-        assert!(self.len + words.len() <= PAINT_WORDS, "a paint stream past {PAINT_WORDS} words");
+        xpute_core::ensure!(self.len + words.len() <= PAINT_WORDS, ENOSPC, PAINT_WORDS);
         self.ops[self.len..self.len + words.len()].copy_from_slice(words);
         self.len += words.len();
     }

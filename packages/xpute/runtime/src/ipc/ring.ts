@@ -62,6 +62,7 @@ import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { MarshalError } from "@xpute/core/status/error.ts";
 
 import { cmd_of, cmd_word, flags_of, FRAME_CMD, FRAME_PACKET, FRAME_RESULT, FRAME_TAG, FRAME_WORDS } from "@xpute/runtime/ipc/frame.ts";
+import { InvariantError } from "@xpute/core/status/error.ts";
 
 export const RING_HEADER_WORDS: u32 = 8;
 
@@ -99,7 +100,7 @@ export class Ring {
   constructor(mem: ArrayBufferLike, at: u32) {
     const head = new Uint32Array(mem, at, RING_HEADER_WORDS);
     const capacity = head[0];
-    if (capacity === 0 || (capacity & (capacity - 1)) !== 0) throw new Error(`ring: capacity ${capacity} at ${at} is not a power of two`);
+    if (capacity === 0 || (capacity & (capacity - 1)) !== 0) throw new InvariantError(Errno.EINVAL);
     this.capacity = capacity;
     this.slot_bytes = head[3];
     this.slot_base = head[4];
@@ -114,9 +115,9 @@ export class Ring {
   /** Lays out an empty ring: `capacity` descriptors at byte `at` of `mem`,
    * and as many payloads of `slot_bytes` at `slot_base`. */
   static init(mem: ArrayBufferLike, at: u32, capacity: u32, slot_base: u32, slot_bytes: u32): Ring {
-    if (capacity === 0 || (capacity & (capacity - 1)) !== 0) throw new Error(`ring: capacity ${capacity} is not a power of two`);
+    if (capacity === 0 || (capacity & (capacity - 1)) !== 0) throw new InvariantError(Errno.EINVAL);
     if (slot_bytes === 0 || (slot_bytes & (slot_bytes - 1)) !== 0 || slot_bytes % 8 !== 0) {
-      throw new Error(`ring: a slot of ${slot_bytes} bytes is not a power of two of whole words`);
+      throw new InvariantError(Errno.EINVAL);
     }
     new Uint8Array(mem as ArrayBuffer, at, ring_bytes(capacity)).fill(0);
     const head = new Uint32Array(mem, at, RING_HEADER_WORDS);
@@ -209,14 +210,14 @@ export class Ring {
     if (packet_at === 0) return null;
     const off = packet_at - this.slot_base;
     if (off < 0 || off % this.slot_bytes !== 0 || off + 16 > this.slots.byteLength || packet_bytes(this.slots, off) > this.slot_bytes) {
-      throw new MarshalError(Errno.EBADMSG, `ring: message packet at ${packet_at} lies outside a slot`);
+      throw new MarshalError(Errno.EBADMSG);
     }
     return this.slots.subarray(off, off + packet_bytes(this.slots, off));
   }
 
   /** Consumes the message at the head. */
   advance(): void {
-    if (this.len === 0) throw new Error("ring: advance on an empty ring");
+    if (this.len === 0) throw new InvariantError(Errno.ENOTRECOVERABLE);
     this.words[1] = (this.words[1] + 1) >>> 0;
   }
 }

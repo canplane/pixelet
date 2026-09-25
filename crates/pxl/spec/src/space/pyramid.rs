@@ -54,8 +54,9 @@ pub struct Lattice {
 
 impl Lattice {
     pub const fn new(cell: Scale) -> Lattice {
-        assert!(cell.shamt() + FRAC_W as i32 > 0, "a cell no finer than the fixed point's fraction");
-        assert!(cell.shamt() <= L2.shamt(), "a cell no coarser than a chunk");
+        if cell.shamt() + FRAC_W as i32 <= 0 || cell.shamt() > L2.shamt() {
+            panic!()
+        }
         Lattice { cell }
     }
 
@@ -99,7 +100,7 @@ impl Lattice {
 
     /// The cell at `index` of `page`.
     pub fn cell_at(self, page: LevelPage, index: u32) -> Cell {
-        assert!(index < self.page_cells() * self.page_cells(), "a cell index is inside its page");
+        xpute_core::ensure!(index < self.page_cells() * self.page_cells(), ENOTRECOVERABLE);
         Cell { lattice: self, page, index }
     }
 

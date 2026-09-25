@@ -16,6 +16,8 @@ use crate::global::Global;
 use crate::host::{measure_text, now};
 use crate::layer::billboard::canvas::text::wrap_text;
 use crate::layer::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 // ts (the host's clock at append) lets the bubble derive its own remaining
 // show time from when the line was said, not from when it happened to start
@@ -67,7 +69,7 @@ pub struct BubbleLayout {
 /// have.
 pub fn layout_bubble(text: &str) -> Option<BubbleLayout> {
     measure_text(BUBBLE_FONT, text)?;
-    let measure = |s: &str| measure_text(BUBBLE_FONT, s).expect("every glyph of the text is known");
+    let measure = |s: &str| measure_text(BUBBLE_FONT, s).or_bug(Errno::ENOTRECOVERABLE);
     let lines = wrap_text(&measure, text, MAX_TEXT_WIDTH_PX);
     let text_w = lines.iter().map(|l| measure(l)).fold(f64::NEG_INFINITY, f64::max).ceil();
     let box_w = text_w + PADDING_X * 2.0;

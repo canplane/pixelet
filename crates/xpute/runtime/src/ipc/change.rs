@@ -81,10 +81,10 @@ impl ChangeLog {
         let capacity = opts.capacity;
         let keys_per_topic = opts.keys_per_topic.unwrap_or(64);
         if !(1..=0x10000).contains(&topics) {
-            panic!("change: {topics} topics, want 1..65536");
+            xpute_core::bug!(EINVAL, topics);
         }
         if capacity < 1 {
-            panic!("change: a journal needs a capacity");
+            xpute_core::bug!(EINVAL);
         }
         let topic = vec![0u16; capacity as usize].into_boxed_slice();
         let key = vec![0i64; capacity as usize].into_boxed_slice();

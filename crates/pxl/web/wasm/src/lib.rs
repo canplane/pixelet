@@ -22,6 +22,7 @@ use pxl_kernel::kernel::kernel;
 use pxl_kernel::mem::section;
 use pxl_render::mesh::volume::Volumes;
 use xpute_core::math::scalar::round;
+use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::PacketWriter;
@@ -227,7 +228,15 @@ const BOOT_QUANTUM: usize = 9;
 fn boot() {
     install_host();
     executor::install();
-    std::panic::set_hook(Box::new(|info| pxl_kernel::host::host_panic(&info.to_string())));
+    // A broken invariant the kernel names reports itself (`bug!`); one core
+    // raises — an index past a slice, an `unwrap` of nothing — reports its
+    // place alone, the errno being that no invariant said why.
+    xpute_core::status::bug::set_report(pxl_kernel::host::host_bug);
+    std::panic::set_hook(Box::new(|info| {
+        if let Some(at) = info.location() {
+            pxl_kernel::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);
+        }
+    }));
     let map = lay_out();
     pxl_kernel::sched::turn::boot();
     let s = state();
@@ -255,10 +264,7 @@ fn boot() {
 /// without being told (`buddy_tree`'s `Range`).
 fn lay_out() -> section::Map {
     let stack_high = core::ptr::addr_of!(__stack_high) as u32;
-    assert!(
-        stack_high == pxl_kernel::mem::spec::STACK_BYTES,
-        "the stack was linked to end at {stack_high}, not at mem.json's STACK_BYTES"
-    );
+    xpute_core::ensure!(stack_high == pxl_kernel::mem::spec::STACK_BYTES, ENOTRECOVERABLE, stack_high);
     let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
     let map = section::lay_out(given.min(u32::MAX as u64) as u32, data_end());
     // SAFETY: the memory is this module's own, addressed from 0.
@@ -339,7 +345,7 @@ impl Outbox {
         }
         let e = push(&self.spill);
         pxl_kernel::sched::ledger::record::ledger_note_rings(self.cq.len(), self.spill.len());
-        assert!(e == Errno::OK, "the completion ring and its spill are full: 0x{cmd:x} has nowhere to go (errno {})", e as i32);
+        xpute_core::ensure!(e == Errno::OK, ENOSPC, cmd, e as i32);
     }
 
     /// Whether another command's worth of signals has somewhere to go. What
@@ -362,7 +368,7 @@ impl Outbox {
                 return;
             }
             let at = at as u32;
-            let pkt = self.spill.packet(at).expect("a spilled packet is the kernel's own");
+            let pkt = self.spill.packet(at).or_bug(Errno::ENOTRECOVERABLE);
             if self.cq.push(self.spill.tag(at), self.spill.cmd(at), self.spill.flags(at), pkt, self.spill.result(at)) != Errno::OK {
                 return;
             }
@@ -459,7 +465,7 @@ fn post_turn(s: &mut State) {
 /// A command's packet, refused when the command needs one and the message
 /// has none.
 fn packet<'a>(pkt: &Option<&'a [u8]>) -> Result<&'a [u8], MarshalError> {
-    pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG, Some("command without its packet"), None))
+    pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))
 }
 
 /// A command from the page's UI, applied: a turn asked for, and what it asks
@@ -709,9 +715,9 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
         }
         Command::PREVIEW_CREATE => {
             let p = abi::PreviewCreate::read(packet(pkt)?)?;
-            let number = u8::try_from(p.number).map_err(|_| MarshalError::new(Errno::EINVAL, Some("a variant past its group"), None))?;
+            let number = u8::try_from(p.number).map_err(|_| MarshalError::new(Errno::EINVAL))?;
             if !pxl_kernel::layer::character::preview::preview_open(p.surface, p.group, number) {
-                return Err(MarshalError::new(Errno::EINVAL, Some("a preview of no variant, or into no surface"), None));
+                return Err(MarshalError::new(Errno::EINVAL));
             }
             applied(s)
         }

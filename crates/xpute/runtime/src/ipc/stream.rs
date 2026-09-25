@@ -35,7 +35,7 @@ pub struct Stream {
 impl Stream {
     /// A stream over `words`, its first `head` words the head.
     pub fn new(words: &'static mut [u32], head: usize) -> Stream {
-        assert!(head > END && head < words.len(), "a stream's head holds END and leaves room for records");
+        xpute_core::ensure!(head > END && head < words.len(), EINVAL);
         Stream { words, head, len: 0 }
     }
 
@@ -60,7 +60,7 @@ impl Stream {
     /// words, to be filled.
     pub fn open(&mut self, op: u32, n: usize) -> &mut [u32] {
         let at = self.head + self.len;
-        assert!(at + 2 + n <= self.words.len(), "a turn's records past the stream's {} bytes", self.words.len() * 4);
+        xpute_core::ensure!(at + 2 + n <= self.words.len(), ENOSPC, self.words.len() * 4);
         self.len += 2 + n;
         let w = &mut self.words[at..at + 2 + n];
         w[0] = op;

@@ -8,7 +8,7 @@
 
 import type { u32 } from "../abi/word.ts";
 import type { AnyElementOf, AnyTypedArray, AnyTypedArrayCtor } from "../abi/array.ts";
-import { MarshalError } from "@xpute/core/status/error.ts";
+import { InvariantError, MarshalError } from "@xpute/core/status/error.ts";
 import { Errno } from "@xpute/core/status/errno.spec.ts";
 
 export interface ArenaOptions {
@@ -78,19 +78,18 @@ export class Arena<T extends object> {
    *
    * Kernel rule:
    * - new_len validity is caller-owned
-   * - if new_len exceeds the current len, the request is ignored with a warning
+   * - a new_len past the current len is a broken invariant, not a clamp
    */
   truncate(new_len: u32): void {
     if (new_len > this._len) {
-      console.warn(`[arena] truncate ignored: new_len=${new_len} > len=${this._len}`);
-      return;
+      throw new InvariantError(Errno.EINVAL);
     }
     this._len = new_len;
   }
 
   private _grow(new_cap: u32): void {
     if (new_cap <= this._cap) return;
-    if (new_cap > this.max_cap) throw new MarshalError(Errno.EOVERFLOW, `arena: required size exceeds max_cap=${this.max_cap}`);
+    if (new_cap > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
 
     this.mem.length = new_cap; // V8 Array pre-allocation hint
     for (let i = this._cap; i < new_cap; i++) this.mem[i] = this._factory();
@@ -211,7 +210,7 @@ export class Vector<T extends AnyTypedArray> {
    */
   private _grow(new_cap: u32): void {
     if (new_cap <= this._cap) return;
-    if (new_cap > this.max_cap) throw new MarshalError(Errno.EOVERFLOW, `vector: required size exceeds max_cap=${this.max_cap}`);
+    if (new_cap > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
 
     const new_mem: T = new this.ctor(new_cap);
     // AnyTypedArray spans both the number and bigint families — TS can't

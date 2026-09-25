@@ -14,6 +14,11 @@ const CRATES = new URL("../../../crates/", import.meta.url);
 const TARGET = "wasm32-unknown-unknown";
 const BUILT = new URL(`target/${TARGET}/release/pxl_wasm.wasm`, CRATES);
 const OUT = new URL("../src/kernel/kernel.wasm", import.meta.url);
+/** What each number a published module reports a place by stands for: its
+ * source path. Beside the module and never bundled with it; the deploy keeps
+ * it under the build's number (script/deploy.ts), the way a symbol file is
+ * kept beside a release rather than inside it. */
+const PATHS = new URL("../src/kernel/kernel.paths.json", import.meta.url);
 
 /**
  * The paths a panic carries, cut back to nothing that names this machine.
@@ -169,8 +174,8 @@ function exportedOnly(module: URL): void {
 }
 
 /**
- * The source paths a panic carries, blanked where they lie — the published
- * shape only.
+ * The source paths a report carries, replaced where they lie by a number —
+ * the published shape only.
  *
  * Rust embeds them and offers no way not to. `unwrap`, `expect` and an index
  * are `#[track_caller]`, so the location a panic reports is the caller's, and
@@ -183,35 +188,42 @@ function exportedOnly(module: URL): void {
  * A `&'static str` is a pointer and a length held apart, so overwriting the
  * bytes in place, to the same length, leaves a module that runs exactly as it
  * did: nothing compares a path at runtime, and the length nothing reads from
- * the text is unchanged. What is lost is the file in a panic's message, which
- * is why this is for what ships and not for what anyone debugs.
+ * the text is unchanged. What goes in its place is `#n` at the end, dots
+ * before it: a report names the file by `n`, and PATHS turns `n` back into
+ * the path.
  */
 /** Where a source path can have come from: this workspace, the toolchain, or
  * a dependency. Anything else ending in `.rs` is not one, and is refused
  * rather than guessed at. */
 const SOURCE_ROOT = /(?:^|[^A-Za-z0-9_])(?:pxl|xpute)\/|\/library\/|\/registry\/|^\/rustc\/|^\/rust\/deps\/|\.rustup\//;
 
-function blanked(module: URL): number {
+function numbered(module: URL): number {
   const bytes = Deno.readFileSync(module);
   const text = new TextDecoder("latin1").decode(bytes);
+  const numbers = new Map<string, number>();
   let n = 0;
   for (const m of text.matchAll(/[A-Za-z0-9_/.-]*\.rs\b/g)) {
     // A word that merely ends in those two letters is not a path.
     if (!m[0].includes("/")) continue;
     if (!SOURCE_ROOT.test(m[0])) {
-      // Never blanked on a guess: a `.rs` from somewhere this does not know
-      // could be a format string or something a user typed, and overwriting
-      // it would be a bug nobody sees until it ships.
+      // Never overwritten on a guess: a `.rs` from somewhere this does not
+      // know could be a format string or something a user typed, and
+      // overwriting it would be a bug nobody sees until it ships.
       throw new Error(`[build-wasm] ${JSON.stringify(m[0])} ends in .rs but is under no source root — widen SOURCE_ROOT or leave it alone`);
     }
-    // Every match is filled with the same byte, which is what makes an
-    // overlap safe: the linker merges a string that is another's tail, so two
-    // matches can cover the same bytes, and filling both with the one
-    // character leaves the same result either way.
-    bytes.fill(0x2e, m.index, m.index + m[0].length);
+    if (!numbers.has(m[0])) numbers.set(m[0], numbers.size);
+    // The number goes at the end and dots before it. The linker merges a
+    // string that is another's tail, so a shorter path can lie inside a
+    // longer one's bytes and end where it ends: it reads the same number.
+    const tag = new TextEncoder().encode(`#${numbers.get(m[0])}`);
+    const end = m.index + m[0].length;
+    const at = Math.max(m.index, end - tag.length);
+    bytes.fill(0x2e, m.index, at);
+    bytes.set(tag.subarray(tag.length - (end - at)), at);
     n++;
   }
   if (n > 0) Deno.writeFileSync(module, bytes);
+  Deno.writeTextFileSync(PATHS, JSON.stringify(Object.fromEntries([...numbers].map(([path, k]) => [`#${k}`, path])), null, 2) + "\n");
   return n;
 }
 
@@ -230,8 +242,8 @@ await Deno.copyFile(BUILT, linkedFile);
 const linked = (await Deno.stat(linkedFile)).size;
 exportedOnly(linkedFile);
 await optimized(linkedFile, done);
-// Only what is published loses its panic paths.
-const paths = published ? blanked(done) : 0;
+// Only what is published has its paths numbered.
+const paths = published ? numbered(done) : 0;
 await Deno.rename(done, OUT);
-const said = (published ? ", without the dev-only settings" : "") + (paths > 0 ? `, and ${paths} source paths blanked` : "");
+const said = (published ? ", without the dev-only settings" : "") + (paths > 0 ? `, and ${paths} source paths numbered` : "");
 console.log(`[build-wasm] ${linked} -> ${(await Deno.stat(OUT)).size} bytes, stripped${said} -> src/kernel/kernel.wasm`);

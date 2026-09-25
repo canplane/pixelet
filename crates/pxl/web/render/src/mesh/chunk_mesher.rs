@@ -20,6 +20,8 @@ use xpute_core::math::scalar::round;
 use crate::mesh::paint::palette::shader_meta::layer_mean;
 use crate::mesh::volume::{pack_sub_cell_fraction, unpack_sub_cell_fraction, unpack_sub_cell_size, MATERIAL_LAND, MATERIAL_OBJECT, NO_LAYER, SUB_CELL_NONE};
 use crate::mesh::voxel_scan::{OwnedRunSet, RunSet, COL_SPAN};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// The widest span a bake is handed.
 const MAX_BAKE_SPAN: usize = COL_SPAN as usize;
@@ -384,7 +386,7 @@ impl BakeContext {
             return false;
         }
         self.textured = textured;
-        assert!(set.span as usize <= MAX_BAKE_SPAN, "bake span {} past {}", set.span, MAX_BAKE_SPAN);
+        xpute_core::ensure!(set.span as usize <= MAX_BAKE_SPAN, ENOSPC, set.span, MAX_BAKE_SPAN);
         // Every surviving box is at most one run, so the boxes fit this
         // many words: reserved up front rather than grown by doubling, which
         // on a dense chunk held the old block and the new together.
@@ -403,7 +405,7 @@ impl BakeContext {
             // The chunk's own columns, not the apron's: a coarse tier is
             // summarised from them and carries no ring of its own.
             let inner = set.span - 2 * set.apron;
-            assert!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step), "lod step {} does not divide span {}", lod_step, inner);
+            xpute_core::ensure!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step), EINVAL, lod_step, inner);
             Open::Coarse(CoarseBake {
                 lod_step,
                 scale,
@@ -425,7 +427,7 @@ impl BakeContext {
         if self.mesh_words > 0 && self.mesh.is_none() {
             return Step::NeedMesh(self.mesh_words);
         }
-        let mut open = self.open.take().expect("bake step with no bake open");
+        let mut open = self.open.take().or_bug(Errno::ENOTRECOVERABLE);
         self.done = match &mut open {
             Open::Fine(b) => self.step_fine(b, set),
             Open::Coarse(b) => self.step_coarse(b, set),
@@ -446,14 +448,14 @@ impl BakeContext {
     /// `ptr` must address at least the words asked for, 4-aligned, and stay
     /// valid and otherwise untouched until `finish` or `abort`.
     pub unsafe fn provide_mesh(&mut self, ptr: *mut u32, words: u32) {
-        assert!(self.mesh_words > 0 && self.mesh.is_none(), "mesh provided to a bake that did not ask");
-        assert!(words >= self.mesh_words, "mesh of {} words provided where {} were asked", words, self.mesh_words);
+        xpute_core::ensure!(self.mesh_words > 0 && self.mesh.is_none(), ENOTRECOVERABLE);
+        xpute_core::ensure!(words >= self.mesh_words, ENOTRECOVERABLE, words, self.mesh_words);
         self.mesh = Some(MeshTarget { ptr, words: self.mesh_words as usize });
     }
 
     /// The complete mesh's counts. Its words are the caller's.
     pub fn finish(&mut self) -> Mesh {
-        assert!(self.done && self.open.is_some(), "finish on a bake that is not open and complete");
+        xpute_core::ensure!(self.done && self.open.is_some(), ENOTRECOVERABLE);
         self.open = None;
         self.mesh = None;
         self.surviving.clear();
@@ -655,7 +657,7 @@ impl BakeContext {
     /// own cell in units, which its corner and width are measured in.
     #[allow(clippy::too_many_arguments)]
     fn emit_box(&mut self, min: V3, size: [f64; 3], rgb: [u8; 3], taps: u32, faces: u32, unit: f64) {
-        let target = self.mesh.expect("emit with no mesh provided");
+        let target = self.mesh.or_bug(Errno::ENOTRECOVERABLE);
         // SAFETY: provide_mesh's contract — the range is the caller's, valid
         // and untouched until the bake closes.
         let m = unsafe { core::slice::from_raw_parts_mut(target.ptr, target.words) };
@@ -720,7 +722,7 @@ impl BakeContext {
 
         // The coarse set is lifted out of the context for the step, so the
         // fine bake can read it while writing the context's scratch.
-        let fine = b.fine.as_mut().expect("coarse bake past packing without its fine bake");
+        let fine = b.fine.as_mut().or_bug(Errno::ENOSPC);
         let coarse = core::mem::take(&mut self.coarse);
         let done = self.step_fine(fine, &coarse.view());
         self.coarse = coarse;
@@ -891,7 +893,7 @@ pub const LONE_BOX_FACES: u32 = 0b11_1111 | (0b1111 << 18);
 /// drawn from, so it is lit, textured and edge-shaded as a placed cube is.
 /// `rgb` is sRGB bytes.
 pub fn write_lone_box(m: &mut [u32], size: f64, rgb: [u8; 3], layer: u8) -> Heights {
-    assert!(m.len() == FINE_BOX_WORDS as usize, "the ghost is a leaf's own box");
+    xpute_core::ensure!(m.len() == FINE_BOX_WORDS as usize, ENOTRECOVERABLE);
     let heights = Heights { floor: 0.0, step: size / Z_STEPS };
     write_box(m, [0.0; 3], [size; 3], rgb, layer as u32 * 0x0101_0101, LONE_BOX_FACES, size, heights);
     heights

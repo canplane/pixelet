@@ -1,10 +1,6 @@
 // @xpute/core/status/error.ts
 
-import { Errno } from "./errno.spec.ts";
-
-export interface XputeErrorOptions {
-  cause?: unknown;
-}
+import { Errno, strerror } from "./errno.spec.ts";
 
 /**
  * Error policy:
@@ -14,38 +10,23 @@ export interface XputeErrorOptions {
  * Notes:
  * - Errno describes the error code, not fatality.
  * - Fatal vs non-fatal is determined by error class (and catch boundary policy).
- * - Origin/context should be attached at catch/log boundary, not encoded in message prefixes.
+ * - Origin/context should be attached at catch/log boundary, not encoded in the error.
+ *
+ * An error is its errno and its class, and nothing else: what a reader is
+ * shown is `strerror` of the number, which is the `message` the platform's
+ * `Error` asks for.
  */
 export class XputeError extends Error {
   readonly errno: Errno;
 
-  constructor(errno: Errno, message?: string, opts?: XputeErrorOptions) {
-    const msg = message || `errno: ${errno}`;
-    super(msg);
+  constructor(errno: Errno) {
+    super(strerror(errno));
 
     // subclass-safe
     Object.setPrototypeOf(this, new.target.prototype);
     this.name = new.target.name;
 
     this.errno = errno;
-
-    // portable-ish cause support (works even on runtimes without native ErrorOptions)
-    if (opts && Object.prototype.hasOwnProperty.call(opts, "cause")) {
-      try {
-        Object.defineProperty(this, "cause", {
-          value: opts.cause,
-          writable: false,
-          enumerable: false,
-          configurable: true,
-        });
-      } catch {
-        try {
-          (this as Error & { cause?: unknown }).cause = opts.cause;
-        } catch {
-          // runtime refuses even the plain-assignment fallback — give up on cause
-        }
-      }
-    }
 
     // V8 nicety (optional, safe). `Function` here matches V8's own real
     // signature (Error.captureStackTrace(target, constructorOpt?: Function))

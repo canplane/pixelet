@@ -75,7 +75,8 @@ pub enum Errno {
     EINPROGRESS = -115,  // Operation now in progress
 
     // ---- Lifecycle / Cancellation ----
-    ECANCELED = -125, // Operation canceled
+    ECANCELED = -125,       // Operation canceled
+    ENOTRECOVERABLE = -131, // State not recoverable: an invariant the code stands on does not hold
 }
 
 // Result pair: (errno, data)

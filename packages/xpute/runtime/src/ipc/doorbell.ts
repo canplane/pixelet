@@ -22,6 +22,7 @@ import { Errno } from "@xpute/core/status/errno.spec.ts";
 import { type BranchCursor, type BranchView, encoder, TreeReader, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 import { FrameFlag } from "./frame.ts";
 import { Ring } from "./ring.ts";
+import { InvariantError } from "@xpute/core/status/error.ts";
 
 /** A packet of one branch, its children written by `fill`. */
 export function packet(fill: (b: BranchView) => void): U8Array {
@@ -98,12 +99,12 @@ export class Doorbell {
       if (this.reading > 0) {
         this.edge(0);
         this.take_ahead(tag);
-        if (out === null) throw new Error(`[xpute/doorbell] command 0x${cmd.toString(16)} asked inside a listener found the completion ring full`);
+        if (out === null) throw new InvariantError(Errno.ENOSPC);
       }
       while (out === null) {
         const pending = this.sq.len;
         this.ring(0);
-        if (out === null && pending === 0) throw new Error(`[xpute/doorbell] command 0x${cmd.toString(16)} was never replied to`);
+        if (out === null && pending === 0) throw new InvariantError(Errno.EPROTO);
       }
     } finally {
       this.waiting.delete(tag);

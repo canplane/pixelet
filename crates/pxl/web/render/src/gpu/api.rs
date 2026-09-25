@@ -26,6 +26,8 @@ use xpute_runtime::ipc::stream::Stream;
 
 use crate::gpu::api_spec::{op, stream};
 
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 use xpute_runtime::global::Global;
 
 /// WebGPU's buffer usage bits.
@@ -78,7 +80,7 @@ pub fn gpu() -> Option<&'static Gpu> {
 }
 
 fn stream() -> &'static mut Stream {
-    STREAM.get(|| None).as_mut().expect("a GPU call with no stream")
+    STREAM.get(|| None).as_mut().or_bug(Errno::ENODEV)
 }
 
 /// Ends the turn's records, for the host to run once the turn has returned.
@@ -242,7 +244,7 @@ impl Gpu {
     /// written end.
     pub fn gpu_ms(&self, span: u32) -> f64 {
         let at = stream::GPU_MS as usize + 2 * span as usize;
-        assert!(at + 2 <= HEAD, "a GPU span past the stream's head");
+        xpute_core::ensure!(at + 2 <= HEAD, ENOSPC);
         let w = stream().head();
         f64::from_bits(w[at] as u64 | (w[at + 1] as u64) << 32)
     }
@@ -266,7 +268,7 @@ static OBJECT_TABLE: Global<HandleTable<OBJECTS>> = Global::new();
 
 /// A handle for an object about to be made.
 pub fn object() -> u32 {
-    OBJECT_TABLE.get(HandleTable::new).acquire().expect("the GPU's object table is full")
+    OBJECT_TABLE.get(HandleTable::new).acquire().or_bug(Errno::ENOSPC)
 }
 
 /// Lets an object go, on the host and its handle with it; 0 is nothing.

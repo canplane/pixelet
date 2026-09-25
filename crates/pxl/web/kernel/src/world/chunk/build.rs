@@ -36,6 +36,8 @@ use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::hierarchy::Scale;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// A tier: the cube a chunk is drawn in, its side as a scale of the unit.
 /// The shared rule chooses it by the chunk's distance from the eye
@@ -545,7 +547,7 @@ impl Builder {
         }
         // Runs whose objects were folded for another cube than the next one
         // wanted draw that cube's objects, not this one's: made again.
-        let next = c.wanted().next().expect("a wanted tier");
+        let next = c.wanted().next().or_bug(Errno::ENOTRECOVERABLE);
         if c.runs.is_some_and(|r| r.fold.is_some_and(|f| f != object_fold(next))) && !matches!(&self.bake_job, Some(j) if j.id == id) {
             self.let_runs_go(id);
         }
@@ -582,7 +584,7 @@ impl Builder {
                 return Progress::Blocked;
             };
             self.claimed.clear();
-            let fold = object_fold(self.chunks[&id].wanted().next().expect("a wanted tier"));
+            let fold = object_fold(self.chunks[&id].wanted().next().or_bug(Errno::ENOTRECOVERABLE));
             let hide = self.hide.filter(|h| h.0 == col_idx).map(|h| (h.1, h.2));
             let folded = fold > OBJECT_FINEST;
             if folded {
@@ -615,7 +617,7 @@ impl Builder {
         };
         match self.scan.step(&self.bands, &apron) {
             ScanStep::Working => Progress::Busy,
-            ScanStep::Done => unreachable!("a scan is finished when its set is provided"),
+            ScanStep::Done => xpute_core::bug!(ENOTRECOVERABLE),
             ScanStep::NeedSet(bytes) => {
                 let Some((set, at)) = self.set_of(id, bytes) else {
                     self.refuse(world, id);
@@ -732,7 +734,7 @@ impl Builder {
         // SAFETY: the volume was just sealed and is held by the scan job
         // until the scan finishes.
         unsafe { world.volumes.band_views(volume, &mut self.bands) };
-        assert!(self.scan.begin(&self.bands), "a scan open with no job naming it");
+        xpute_core::ensure!(self.scan.begin(&self.bands), ENOTRECOVERABLE);
         self.scan_job.as_mut().unwrap().paint = None;
         Progress::Busy
     }
@@ -745,7 +747,7 @@ impl Builder {
         let ((tx0, ty0), show) = (c.at.in_page(), c.show_structures);
         let view = Self::page_view(page);
         self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
-        assert!(self.direct.begin_direct(), "the direct writer left open");
+        xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
         let floor = self.sample.floor;
         // Every column of the set, the chunk's own and the apron's: the
         // sample holds both, and the writer wants them in one order.
@@ -803,7 +805,7 @@ impl Builder {
             (ivec::X(o), ivec::Y(o), band, pos)
         });
         fold_columns(world.painter, &columns, target, hide, &mut self.folded);
-        assert!(self.direct.begin_direct(), "the direct writer left open");
+        xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
         write_level_runs(
             &mut self.direct,
             &self.sample,
@@ -845,7 +847,7 @@ impl Builder {
 
     fn run_set(world: &World, runs: &Runs) -> RunSet<'static> {
         let bytes = pxl_render::mesh::voxel_scan::run_set_bytes(runs.count, COL_SPAN) as usize;
-        let at = run_set_at(runs.set).expect("runs made before the memory was laid out") as usize;
+        let at = run_set_at(runs.set).or_bug(Errno::ENOTRECOVERABLE) as usize;
         // SAFETY: the chunk's own set, held until its runs are let go.
         unsafe { RunSet::carve(core::slice::from_raw_parts(world.volumes.mem().add(at), bytes), runs.count, COL_SPAN, APRON) }
     }
@@ -859,10 +861,7 @@ impl Builder {
                 return Progress::Blocked;
             }
             let cube = c.wanted().next().unwrap();
-            assert!(
-                self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().texture_pack),
-                "a bake open with no job naming it"
-            );
+            xpute_core::ensure!(self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().texture_pack), ENOTRECOVERABLE);
             self.bake_job = Some(BakeJob {
                 id,
                 cube,

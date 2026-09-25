@@ -852,7 +852,7 @@ impl Scheduler {
             }
         }
         self.index.insert(k, self.slots.len());
-        assert!(self.slots.len() < MAX_CHUNKS, "more than {MAX_CHUNKS} chunks held");
+        xpute_core::ensure!(self.slots.len() < MAX_CHUNKS, ENOSPC, MAX_CHUNKS);
         self.slots.push(slot);
         self.view_dirty = true;
     }
@@ -1690,7 +1690,7 @@ impl Scheduler {
                 // that took it, taking the slot removes that tier in the same
                 // step, and this looks the tier up again every frame. The
                 // assert is what says so out loud, at an array index a draw.
-                assert_eq!(holder[t.slot.index].map(|h| h.1), Some(s.id), "a chunk drew from a slot another holds");
+                xpute_core::ensure!(holder[t.slot.index].map(|h| h.1) == Some(s.id), ENOTRECOVERABLE);
                 if t.box_cnt == 0 {
                     continue;
                 }

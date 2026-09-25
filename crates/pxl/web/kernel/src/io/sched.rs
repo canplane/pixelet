@@ -31,6 +31,8 @@ use crate::global::Global;
 use crate::host::now;
 use crate::io::demand::{Category, Phases};
 use crate::sched::ledger::record::{ledger_record, Failure, Outcome, TaskRecord};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// Fetches out at once at most, whatever the host grants.
 pub const MAX_CREDITS: u32 = 16;
@@ -258,11 +260,11 @@ fn preempt(s: &mut Sched, waiting: &[Wanted]) {
         }
         let obsolete = |a: &Attempt| !s.desired.iter().any(|d| d.category == a.category && d.subject == a.subject);
         let victim = (0..s.attempt.len()).filter(|&k| s.attempt[k].is_some_and(|a| !a.stopping)).max_by(|&a, &b| {
-            let (x, y) = (s.attempt[a].expect("some"), s.attempt[b].expect("some"));
+            let (x, y) = (s.attempt[a].or_bug(Errno::ENOTRECOVERABLE), s.attempt[b].or_bug(Errno::ENOTRECOVERABLE));
             obsolete(&x).cmp(&obsolete(&y)).then(x.rank.class.cmp(&y.rank.class)).then(x.rank.distance.total_cmp(&y.rank.distance))
         });
         let Some(slot) = victim else { return };
-        let a = s.attempt[slot].expect("some");
+        let a = s.attempt[slot].or_bug(Errno::ENOTRECOVERABLE);
         // A whole class better, and nothing finer. Distance says which of two
         // alike to start, not that one running is worth restarting; taking a
         // credit costs everything the attempt has already spent, and only a
@@ -304,7 +306,7 @@ pub fn attempt_of(key: u64) -> Option<(Category, u64)> {
 /// again, and the producer has already been given it.
 pub fn settle(key: u64, outcome: Outcome, phases: Option<Phases>, fail: Failure, retry_in_ms: Option<f64>) {
     let Some(slot) = slot_of(key) else { return };
-    let a = sched().attempt[slot].expect("a slot a key names");
+    let a = sched().attempt[slot].or_bug(Errno::ENOTRECOVERABLE);
     let s = sched();
     s.attempt[slot] = None;
     s.generation[slot] = s.generation[slot].wrapping_add(1);

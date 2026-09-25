@@ -75,7 +75,7 @@ fn store() -> &'static mut Store {
     STORE.get(|| {
         let entry = |bundle: &'static DecorKindBundle| {
             let n = bundle.variants.len();
-            assert!(n <= VARIANTS, "decor: the kind tagged {:#x} has {n} variants, room for {VARIANTS}", bundle.seed.tag);
+            xpute_core::ensure!(n <= VARIANTS, ENOSPC, bundle.seed.tag, n);
             let none = vec![None; n];
             DecorBundleAssets {
                 bundle,

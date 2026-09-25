@@ -16,6 +16,7 @@
 //! The one thing it cannot be: a lone surrogate, which a JavaScript string
 //! holds and a Rust one cannot; `\ud800` alone parses to U+FFFD.
 
+use crate::status::bug::OrBug;
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
 
@@ -89,8 +90,8 @@ struct Parser<'a> {
 }
 
 impl Parser<'_> {
-    fn fail(&self, what: &str) -> MarshalError {
-        MarshalError::new(Errno::EBADMSG, Some(&format!("JSON: {what} at {}", self.at)), None)
+    fn fail(&self) -> MarshalError {
+        MarshalError::new(Errno::EBADMSG)
     }
 
     fn ws(&mut self) {
@@ -102,17 +103,17 @@ impl Parser<'_> {
     fn eat(&mut self, b: u8) -> Result<(), MarshalError> {
         self.ws();
         if self.s.get(self.at) != Some(&b) {
-            return Err(self.fail(&format!("expected '{}'", b as char)));
+            return Err(self.fail());
         }
         self.at += 1;
         Ok(())
     }
 
     fn hex4(&mut self) -> Result<u32, MarshalError> {
-        let digits = self.s.get(self.at..self.at + 4).ok_or_else(|| self.fail("short \\u escape"))?;
-        let text = core::str::from_utf8(digits).map_err(|_| self.fail("bad \\u escape"))?;
+        let digits = self.s.get(self.at..self.at + 4).ok_or_else(|| self.fail())?;
+        let text = core::str::from_utf8(digits).map_err(|_| self.fail())?;
         if !text.bytes().all(|b| b.is_ascii_hexdigit()) {
-            return Err(self.fail("bad \\u escape"));
+            return Err(self.fail());
         }
         self.at += 4;
         Ok(u32::from_str_radix(text, 16).unwrap())
@@ -122,7 +123,7 @@ impl Parser<'_> {
         self.eat(b'"')?;
         let mut out = String::new();
         loop {
-            let Some(&b) = self.s.get(self.at) else { return Err(self.fail("unterminated string")) };
+            let Some(&b) = self.s.get(self.at) else { return Err(self.fail()) };
             match b {
                 b'"' => {
                     self.at += 1;
@@ -130,7 +131,7 @@ impl Parser<'_> {
                 }
                 b'\\' => {
                     self.at += 1;
-                    let Some(&e) = self.s.get(self.at) else { return Err(self.fail("unterminated escape")) };
+                    let Some(&e) = self.s.get(self.at) else { return Err(self.fail()) };
                     self.at += 1;
                     match e {
                         b'"' => out.push('"'),
@@ -158,10 +159,10 @@ impl Parser<'_> {
                             };
                             out.push(char::from_u32(unit).unwrap_or('\u{fffd}'));
                         }
-                        _ => return Err(self.fail("bad escape")),
+                        _ => return Err(self.fail()),
                     }
                 }
-                b if b < 0x20 => return Err(self.fail("control character in string")),
+                b if b < 0x20 => return Err(self.fail()),
                 _ => {
                     // A whole UTF-8 sequence: the input is a &str, so it is valid.
                     let len = match b {
@@ -202,13 +203,13 @@ pub fn parse_str_map(text: &str) -> Result<StrMap, MarshalError> {
                     p.at += 1;
                     break;
                 }
-                _ => return Err(p.fail("expected ',' or '}'")),
+                _ => return Err(p.fail()),
             }
         }
     }
     p.ws();
     if p.at != p.s.len() {
-        return Err(p.fail("trailing text"));
+        return Err(p.fail());
     }
     Ok(ordered(&raw).into_iter().map(|(k, v)| (k.to_string(), v.map(str::to_string))).collect())
 }
@@ -418,7 +419,7 @@ impl<'a> Iterator for JsonItems<'a> {
             return None;
         }
         // The text was checked whole, so a value is where the grammar says.
-        let end = skip_value(b, start, 0).expect("a checked value");
+        let end = skip_value(b, start, 0).or_bug(Errno::ENOTRECOVERABLE);
         self.at = skip_ws(b, end) + 1;
         Some(JsonValue { s: &self.s[start..end] })
     }
@@ -439,9 +440,9 @@ impl<'a> Iterator for JsonFields<'a> {
             self.at = b.len();
             return None;
         }
-        let key_end = skip_string(b, key_at).expect("a checked key");
+        let key_end = skip_string(b, key_at).or_bug(Errno::ENOTRECOVERABLE);
         let value_at = skip_ws(b, skip_ws(b, key_end) + 1);
-        let value_end = skip_value(b, value_at, 0).expect("a checked value");
+        let value_end = skip_value(b, value_at, 0).or_bug(Errno::ENOTRECOVERABLE);
         self.at = skip_ws(b, value_end) + 1;
         Some((
             JsonStr {

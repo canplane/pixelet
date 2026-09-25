@@ -27,6 +27,8 @@
 use pxl_spec::bake::constant::BAND_CELLS;
 
 use crate::mesh::volume::{BAND_VOXELS, MATERIAL_OBJECT, SUB_CELL_NONE};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// Cells on a band's side; a chunk is one column of bands.
 /// The ring of neighbour columns a run set carries around the chunk's own.
@@ -90,16 +92,13 @@ pub struct BandView<'a> {
 
 impl BandView<'_> {
     fn check(&self) {
-        assert!(self.material.len() >= BAND_VOXELS && self.layer_idx.len() >= BAND_VOXELS, "band shorter than its voxels");
+        xpute_core::ensure!(self.material.len() >= BAND_VOXELS && self.layer_idx.len() >= BAND_VOXELS, EINVAL);
         if let Some(sub) = self.sub_cell {
-            assert!(sub.len() >= BAND_VOXELS * 4, "sub-cell lane shorter than its voxels");
+            xpute_core::ensure!(sub.len() >= BAND_VOXELS * 4, EINVAL);
         }
         let e = &self.extra;
         let n = e.col.len();
-        assert!(
-            e.z.len() >= n && e.material.len() >= n && e.layer_idx.len() >= n && e.sub.len() >= n,
-            "extra lanes shorter than their count"
-        );
+        xpute_core::ensure!(e.z.len() >= n && e.material.len() >= n && e.layer_idx.len() >= n && e.sub.len() >= n, EINVAL);
     }
 }
 
@@ -192,8 +191,8 @@ impl ScanContext {
     /// Starts column `col`; the columns skipped since the last are empty,
     /// their prefix entries all pointing at the current run count.
     pub fn direct_column(&mut self, col: u32) {
-        let next = self.next_col.expect("a column with no direct writer open");
-        assert!(col < COLUMN_CNT as u32, "a column past the chunk");
+        let next = self.next_col.or_bug(Errno::ENOTRECOVERABLE);
+        xpute_core::ensure!(col < COLUMN_CNT as u32, ENOSPC);
         for c in next..=col {
             self.starts[c as usize] = self.runs.len() as u32;
         }
@@ -203,14 +202,14 @@ impl ScanContext {
     /// One full-cell run `[z0, z1]` of the column last started, in a
     /// packed 0xCC_RRGGBB material on `layer_idx`.
     pub fn direct_run(&mut self, z0: i32, z1: i32, material: u32, layer_idx: u8) {
-        assert!(self.next_col.is_some_and(|n| n > 0), "a run with no column started");
+        xpute_core::ensure!(self.next_col.is_some_and(|n| n > 0), ENOTRECOVERABLE);
         self.runs.push(run_of(z0, z1, material, layer_idx));
     }
 
     /// Closes the writer: the columns not started are empty, and the set
     /// is asked for — `provide_set` this many bytes, then `finish`.
     pub fn close_direct(&mut self) -> u32 {
-        let next = self.next_col.take().expect("close with no direct writer open");
+        let next = self.next_col.take().or_bug(Errno::ENOTRECOVERABLE);
         for c in next..=COLUMN_CNT as u32 {
             self.starts[c as usize] = self.runs.len() as u32;
         }
@@ -223,7 +222,7 @@ impl ScanContext {
     /// padded ones, so every column of the set is written in the one order
     /// its prefix array is read in.
     pub fn step(&mut self, bands: &[BandView], apron: &Apron) -> ScanStep {
-        assert!(self.open, "scan step with no scan open");
+        xpute_core::ensure!(self.open, ENOTRECOVERABLE);
         if self.packed {
             return ScanStep::Done;
         }
@@ -273,9 +272,9 @@ impl ScanContext {
     /// `ptr` must address at least the bytes asked for, 4-aligned, and be
     /// the caller's to write.
     pub unsafe fn provide_set(&mut self, ptr: *mut u8, bytes: u32) {
-        assert!(self.open && self.row >= COL_SPAN && !self.packed, "set provided to a scan that did not ask");
+        xpute_core::ensure!(self.open && self.row >= COL_SPAN && !self.packed, ENOTRECOVERABLE);
         let need = self.set_bytes();
-        assert!(bytes >= need, "set of {} bytes provided where {} were asked", bytes, need);
+        xpute_core::ensure!(bytes >= need, ENOTRECOVERABLE, bytes, need);
         let n = self.runs.len();
         let mut at = ptr;
         let mut words = |len: usize| {
@@ -316,7 +315,7 @@ impl ScanContext {
 
     /// Closes the packed scan: how many runs the set holds.
     pub fn finish(&mut self) -> u32 {
-        assert!(self.open && self.packed, "finish on a scan that is not open and packed");
+        xpute_core::ensure!(self.open && self.packed, ENOTRECOVERABLE);
         self.open = false;
         self.runs.len() as u32
     }
@@ -560,8 +559,8 @@ impl<'a> RunSet<'a> {
     /// block is a panic and never a misread.
     pub fn carve(bytes: &'a [u8], count: u32, span: u32, apron: u32) -> RunSet<'a> {
         let need = run_set_bytes(count, span) as usize;
-        assert!(bytes.len() >= need, "run set of {} bytes shorter than {}", bytes.len(), need);
-        assert!((bytes.as_ptr() as usize).is_multiple_of(4), "run set not 4-aligned");
+        xpute_core::ensure!(bytes.len() >= need, EINVAL, bytes.len(), need);
+        xpute_core::ensure!((bytes.as_ptr() as usize).is_multiple_of(4), EINVAL);
         let base = bytes.as_ptr();
         let n = count as usize;
         let cols = (span * span + 1) as usize;

@@ -3,13 +3,14 @@
 /**
  * What the kernel asks of the host that no command answers (crates/pxl/web/
  * kernel/src/host.rs): a body copied in, a value stored, glyphs measured, a
- * panic's message. Each is a record in the host stream (abi/host.json), run
+ * broken invariant. Each is a record in the host stream (abi/host.json), run
  * here once the turn has returned and before the next can begin, so whatever
  * a record names in the kernel's memory is written by the time the kernel
  * reads it.
  */
 
 import type { u32 } from "@xpute/core/abi/word.ts";
+import { strerror } from "@xpute/core/status/errno.spec.ts";
 import { bytes_of, each_record } from "@xpute/runtime/ipc/stream.ts";
 
 import { op, STORAGE_KEYS, stream } from "@/kernel/abi/host.spec.ts";
@@ -63,9 +64,13 @@ export function run_host_stream(memory: WebAssembly.Memory, at: u32): void {
         for (let i = 0; i < out.length; i++) out[i] = ctx === null ? 7 : ctx.measureText(String.fromCodePoint(w[a + 3 + i])).width;
         break;
       }
-      case op.PANIC:
-        console.error(`[pxl] ${utf8.decode(bytes_of(w, a))}`);
+      case op.PANIC: {
+        const [errno, line, col] = [w[a] | 0, w[a + 1], w[a + 2]];
+        const num = (i: u32) => BigInt(w[a + i]) | BigInt(w[a + i + 1]) << 32n;
+        const file = utf8.decode(bytes_of(w, a + 7)).replace(/^\.+/, "");
+        console.error(`[pxl] ${strerror(errno)} at ${file}:${line}:${col} (${num(3)}, ${num(5)})`);
         break;
+      }
       default:
         throw new Error(`[host] record ${code}`);
     }

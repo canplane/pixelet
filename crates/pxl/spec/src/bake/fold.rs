@@ -40,6 +40,8 @@ use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::format::{Ground, Terrain, GROUND_CH_KEYS};
 use super::pack::{channel_of, with_channel, GroundCell};
 use crate::space::pyramid::{neighbourhood, Folds, LevelPage, CHILDREN, GROUND};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// The value that fills more than half of a 2×2 block, or of a 2×2×2 one,
 /// folding into `level`; when none does, or two fill half each, the tie
@@ -160,7 +162,7 @@ impl Folds for Terrain {
 /// `fold_ele` takes them. Ground reads only the middle four; elevation reads
 /// all sixteen.
 pub fn fold_terrain(around: [&Terrain; 16], level: u32) -> Terrain {
-    fold_terrain_held(around.map(Some), level).expect("every page of the block")
+    fold_terrain_held(around.map(Some), level).or_bug(Errno::ENOTRECOVERABLE)
 }
 
 /// A parent page from whichever of those sixteen are held. The middle four —

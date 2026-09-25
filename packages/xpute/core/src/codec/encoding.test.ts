@@ -11,6 +11,7 @@
 import { assertEquals, assertThrows } from "@std/assert";
 
 import { b64url_to_bytes, b64url_to_uuid, bytes_to_b64url, bytes_to_hex, ct_eq, generate_uuid, hex_to_bytes, is_b64url, uuid_equals, uuid_to_b64url } from "@xpute/core/codec/encoding.ts";
+import { MarshalError } from "@xpute/core/status/error.ts";
 
 const bytes = (...b: number[]) => new Uint8Array(b);
 
@@ -28,10 +29,10 @@ Deno.test("hex refuses what it cannot read whole rather than taking what it can"
   // `parseInt` would read "1g" as 1 and "zz" as NaN, which is the fault these
   // guards exist for: a packet's length taken from half a pair reads as a
   // shorter packet instead of as an error.
-  assertThrows(() => hex_to_bytes("0"), Error, "Invalid length");
-  assertThrows(() => hex_to_bytes("abc"), Error, "Invalid length");
-  assertThrows(() => hex_to_bytes("1g"), Error, "Invalid digit");
-  assertThrows(() => hex_to_bytes("zz"), Error, "Invalid digit");
+  assertThrows(() => hex_to_bytes("0"), MarshalError);
+  assertThrows(() => hex_to_bytes("abc"), MarshalError);
+  assertThrows(() => hex_to_bytes("1g"), MarshalError);
+  assertThrows(() => hex_to_bytes("zz"), MarshalError);
   assertThrows(() => hex_to_bytes("00 11"), Error);
 });
 

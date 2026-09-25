@@ -42,6 +42,8 @@ use crate::world::change::request_world_tick;
 use crate::world::chunk::raycast::WorldHit;
 use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view::{view, view_ray_local};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DragMode {
@@ -622,7 +624,7 @@ pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32, holding: Holding) {
             1 => {
                 // Dropped from 2 fingers to 1 — resume single-finger pan
                 // seamlessly; already mid-gesture, so the lift is no tap.
-                let remaining = *s.active_pointers.values().next().expect("one pointer");
+                let remaining = *s.active_pointers.values().next().or_bug(Errno::ENOTRECOVERABLE);
                 s.drag_mode = DragMode::Pan;
                 s.last_x = remaining.x;
                 s.last_y = remaining.y;

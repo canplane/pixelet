@@ -49,36 +49,36 @@ impl Golden {
     }
 
     pub fn s(&self, key: &str) -> &'static str {
-        self.map.get(key).unwrap_or_else(|| panic!("golden: no {key}"))
+        self.map.get(key).unwrap_or_else(|| crate::bug!(ENOENT))
     }
 
     pub fn u64(&self, key: &str) -> u64 {
-        self.s(key).parse().unwrap_or_else(|_| panic!("golden: {key} is not a u64"))
+        self.s(key).parse().unwrap_or_else(|_| crate::bug!(EINVAL))
     }
 
     pub fn i64(&self, key: &str) -> i64 {
-        self.s(key).parse().unwrap_or_else(|_| panic!("golden: {key} is not an i64"))
+        self.s(key).parse().unwrap_or_else(|_| crate::bug!(EINVAL))
     }
 
     pub fn u32(&self, key: &str) -> u32 {
-        self.s(key).parse().unwrap_or_else(|_| panic!("golden: {key} is not a u32"))
+        self.s(key).parse().unwrap_or_else(|_| crate::bug!(EINVAL))
     }
 
     pub fn i32(&self, key: &str) -> i32 {
-        self.s(key).parse().unwrap_or_else(|_| panic!("golden: {key} is not an i32"))
+        self.s(key).parse().unwrap_or_else(|_| crate::bug!(EINVAL))
     }
 
     /// A double written through f64_bits.
     pub fn f64(&self, key: &str) -> f64 {
         let text = self.s(key);
-        f64::from_bits(u64::from_str_radix(text.trim_start_matches("0x"), 16).unwrap_or_else(|_| panic!("golden: {key} is not a double's bits")))
+        f64::from_bits(u64::from_str_radix(text.trim_start_matches("0x"), 16).unwrap_or_else(|_| crate::bug!(EINVAL)))
     }
 
     pub fn bool(&self, key: &str) -> bool {
         match self.s(key) {
             "true" => true,
             "false" => false,
-            other => panic!("golden: {key} is {other}, not a boolean"),
+            _ => crate::bug!(EINVAL),
         }
     }
 
@@ -87,7 +87,7 @@ impl Golden {
         let text = self.s(key);
         (0..text.len())
             .step_by(2)
-            .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap_or_else(|_| panic!("golden: {key} is not hex")))
+            .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap_or_else(|_| crate::bug!(EINVAL)))
             .collect()
     }
 
@@ -103,7 +103,7 @@ impl Golden {
             f(&prefix);
             k += 1;
         }
-        assert!(k > 0, "golden: {base} is empty");
+        crate::ensure!(k > 0, ENOENT);
     }
 
     /// How many entries `base` has.

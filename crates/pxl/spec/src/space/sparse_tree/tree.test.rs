@@ -28,7 +28,7 @@ fn sparse_tree_retype_widening_the_leaf_lane_carries_every_value_across() {
 }
 
 #[test]
-#[should_panic(expected = "does not align within u32")]
+#[should_panic(expected = "EOVERFLOW")]
 fn sparse_tree_decode_refuses_a_blob_whose_count_overflows_u32_rather_than_wrapping_under_it() {
     let mut blob = vec![0u64; 4];
     blob[0] = 0xffff_ffff;

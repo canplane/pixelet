@@ -46,6 +46,7 @@ use crate::shell::setting::store::hidden_ground;
 use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
 use crate::world::chunk::source::{chunk_sources_changed, column_written};
 use crate::world::frame::coord::local_world_to_canonical;
+use xpute_core::status::bug::OrBug;
 
 /// What a leaf holds, past its corner and size. A solid is the catalog's own
 /// cube; the id it is spelled out under belongs to the two sides' shared
@@ -247,7 +248,7 @@ impl EntryCursor {
         } else {
             EntryKind::Solid {
                 // Every value the store writes is one the catalog gives out.
-                cube: placeable_cube_of(self.state).expect("a solid leaf holds a cube the catalog gives out"),
+                cube: placeable_cube_of(self.state).or_bug(Errno::ENOTRECOVERABLE),
             }
         };
         ObjectLayerEntry {
@@ -594,9 +595,7 @@ fn encode_pages(by_page: &[(IVec, PageRows)]) -> Result<String, MarshalError> {
 }
 
 pub fn decode_objects(blob: &str) -> Result<(), MarshalError> {
-    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(blob)
-        .map_err(|_| MarshalError::new(Errno::EINVAL, Some("objects: the stored blob is not base64url"), None))?;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(blob).map_err(|_| MarshalError::new(Errno::EINVAL))?;
     let root = TreeReader::new(&bytes)?.read_branch()?;
     // Every record is one write of one batch, so each column's entries are
     // made once however many objects it holds.
@@ -635,7 +634,7 @@ fn loaded() {
     if !st.loading.as_ref().is_some_and(|(_, asked)| turn() > *asked) {
         return;
     }
-    let (blob, _) = st.loading.take().expect("checked above");
+    let (blob, _) = st.loading.take().or_bug(Errno::ENOTRECOVERABLE);
     if core::str::from_utf8(&blob).map_or(true, |raw| decode_objects(raw).is_err()) {
         kernel().objects.clear();
     }
@@ -1060,8 +1059,8 @@ impl Store {
     /// change: VOID written where no band is.
     fn put(&mut self, w: Write) -> bool {
         let Write { col_idx, band_idx, at, scale, state } = w;
-        assert!((OBJECT_FINEST..=CELL).contains(&scale), "an object no finer than its finest tier and no coarser than a cell");
-        let value = u16::try_from(state).expect("a catalog value fits a leaf");
+        xpute_core::ensure!((OBJECT_FINEST..=CELL).contains(&scale), ENOTRECOVERABLE);
+        let value = u16::try_from(state).or_bug(Errno::EOVERFLOW);
         let has_band = self.columns.get(&col_idx).is_some_and(|c| c.bands.contains_key(&band_idx));
         if !has_band && state == VOID {
             return false;

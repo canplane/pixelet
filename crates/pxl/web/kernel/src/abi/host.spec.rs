@@ -20,7 +20,7 @@
 pub mod stream {
     pub const HEAD: u32 = 2;
     /// The range's size. A record names what it moves rather than carrying it, so
-    /// a turn's records are words: a message a panic leaves is the largest.
+    /// a turn's records are words, and a glyph request's code points the most of them.
     pub const BYTES: u32 = 65536;
     pub const KEYS: &[&str] = &["HEAD", "BYTES"];
 }
@@ -34,7 +34,8 @@ pub mod op {
     /// weight, px (f32 bits), at, then code points: each one's advance in the page's own
     /// family at the weight and size, a float apiece from `at`
     pub const MEASURE: u32 = 3;
-    /// the message's bytes: what the kernel said before it trapped
+    /// errno, line, column, a (low, high word), b (low, high word), then the file's bytes:
+    /// the broken invariant the kernel reported before it trapped (xpute-core status/bug.rs)
     pub const PANIC: u32 = 4;
     pub const KEYS: &[&str] = &["BODY_READ", "STORAGE_SET", "MEASURE", "PANIC"];
 }

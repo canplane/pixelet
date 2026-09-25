@@ -7,6 +7,8 @@ use pxl_render::mesh::paint::palette::shader_meta::{ground_color_lookup, ground_
 use pxl_render::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
 use pxl_render::mesh::volume::{MaterialClasses, VoxelMaterial, NO_LAYER};
 use pxl_spec::cell::object::{placeable_cube_rgb, terrain_style_cube_source, PlaceableCube};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// A placed "solid" cube's own real color/layer_idx — either a flat color or,
 /// for a terrain-styled pick, the exact same color/layer_idx
@@ -29,7 +31,7 @@ pub fn resolve_solid_material(cube: PlaceableCube) -> VoxelMaterial {
             layer_idx: layer.map_or(NO_LAYER, |l| l.index[t] as u32),
         };
     }
-    let [r, g, b] = rgb255(placeable_cube_rgb(cube).expect("a flat colour carries a swatch"));
+    let [r, g, b] = rgb255(placeable_cube_rgb(cube).or_bug(Errno::ENOTRECOVERABLE));
     VoxelMaterial {
         material_class: MaterialClasses::OBJECT,
         r: r as u32,

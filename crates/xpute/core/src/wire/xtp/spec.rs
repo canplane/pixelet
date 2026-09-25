@@ -450,12 +450,12 @@ pub type AlignUnit = u32;
 /// - `unit` must not exceed WORD_SZ
 pub fn ALIGN(nbyte: u32, unit: AlignUnit) -> Result<u32, MarshalError> {
     if (unit & unit.wrapping_sub(1)) != 0 || unit > WORD_SZ {
-        return Err(MarshalError::new(Errno::EINVAL, Some(&format!("ALIGN: bad unit {unit}")), None));
+        return Err(MarshalError::new(Errno::EINVAL));
     }
 
     let mask = unit - 1;
     if nbyte > u32::MAX - mask {
-        return Err(MarshalError::new(Errno::EOVERFLOW, Some(&format!("ALIGN: {nbyte} does not align within u32")), None));
+        return Err(MarshalError::new(Errno::EOVERFLOW));
     }
     Ok((nbyte + mask) & !mask)
 }
@@ -496,7 +496,7 @@ pub fn ALIGN_SZ(type_: u8) -> Result<AlignUnit, MarshalError> {
 
         t if t == ScalarType::BOOL as u8 => 1,
 
-        _ => return Err(MarshalError::new(Errno::EBADMSG, Some(&format!("unknown type 0x{type_:x}")), None)),
+        _ => return Err(MarshalError::new(Errno::EBADMSG)),
     })
 }
 

@@ -60,7 +60,7 @@ export class TreeEncoder {
     if (new_cap <= cap) return cap;
 
     new_cap = Math.max(cap * 2, new_cap);
-    if (new_cap > this.max_cap) throw new MarshalError(Errno.EOVERFLOW, `required packet size exceeds max cap (${this.max_cap})`);
+    if (new_cap > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
 
     const new_buf: U8Array = new Uint8Array(new_cap);
     new_buf.set(this.buf);
@@ -76,7 +76,7 @@ export class TreeEncoder {
     const { node } = view;
 
     const { init_cap: _init_cap = 1 << 10, max_cap = MAX_PKT_SZ } = opts;
-    if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) throw new MarshalError(Errno.EINVAL, `bad max cap ${max_cap} (expected ${HDR_SZ}..${MAX_PKT_SZ})`);
+    if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) throw new MarshalError(Errno.EINVAL);
     this.max_cap = max_cap;
 
     const init_cap: u32 = Math.max(HDR_SZ, Math.min(_init_cap, this.max_cap));
@@ -112,7 +112,7 @@ export class TreeEncoder {
     if (NODE_IS_BRANCH(node)) return this._branch(node, st);
     if (NODE_IS_GRAFT(node)) return this._graft(node, st);
     if (NODE_IS_NIL(node)) return;
-    throw new MarshalError(Errno.EBADMSG, `unknown type 0x${(node as { type: number }).type} at ${st.base}`);
+    throw new MarshalError(Errno.EBADMSG);
   }
 
   // graft semantics:
@@ -127,25 +127,25 @@ export class TreeEncoder {
   private _graft(node: GraftNode, st: EncodingState): void {
     const { val: pkt } = node;
 
-    if (pkt.byteLength < HDR_SZ) throw new MarshalError(Errno.EBADMSG, "bad graft packet: truncated header");
+    if (pkt.byteLength < HDR_SZ) throw new MarshalError(Errno.EBADMSG);
     const hdr_view = new DataView(pkt.buffer, pkt.byteOffset, HDR_SZ);
 
     // packet header fallback
     const [magic] = GET_WORD(hdr_view, 0, WORD_REG); // word0
-    if (magic !== MAGIC) throw new MarshalError(Errno.EBADMSG, "bad graft packet: magic mismatch");
+    if (magic !== MAGIC) throw new MarshalError(Errno.EBADMSG);
 
     const [payload_sz, desc] = GET_WORD(hdr_view, WORD_SZ, WORD_REG); // word1
-    if (payload_sz > pkt.byteLength - HDR_SZ) throw new MarshalError(Errno.EBADMSG, "bad graft packet: truncated payload");
+    if (payload_sz > pkt.byteLength - HDR_SZ) throw new MarshalError(Errno.EBADMSG);
     st.type = FIELD_GET(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType; // hi
 
     if (payload_sz === 0) return;
 
     const align_sz: AlignUnit = ALIGN_SZ(st.type);
-    if (payload_sz % align_sz) throw new MarshalError(Errno.EBADMSG, `bad graft payload size: ${payload_sz}`);
+    if (payload_sz % align_sz) throw new MarshalError(Errno.EBADMSG);
 
     st.base = ALIGN(st.base, align_sz);
 
-    if (payload_sz > this.max_cap - st.base) throw new MarshalError(Errno.EOVERFLOW, `required packet size exceeds max cap (${this.max_cap})`);
+    if (payload_sz > this.max_cap - st.base) throw new MarshalError(Errno.EOVERFLOW);
     this._ensure(st.lim = st.base + payload_sz);
     this.buf.set(pkt.subarray(HDR_SZ, HDR_SZ + payload_sz), st.base);
   }
@@ -173,7 +173,7 @@ export class TreeEncoder {
 
     const len: u32 = children.length;
     // empty branch (len = 0) is valid — analogous to [] or {} in JSON
-    if (len > (this.max_cap >>> 3)) throw new MarshalError(Errno.EOVERFLOW, `required packet size exceeds max cap (${this.max_cap})`);
+    if (len > (this.max_cap >>> 3)) throw new MarshalError(Errno.EOVERFLOW);
 
     this._ensure(st.lim = table_start + len * WORD_SZ); // [len | child entries...]
 
@@ -257,7 +257,7 @@ export class TreeEncoder {
         break;
 
       default:
-        throw new MarshalError(Errno.EBADMSG, `unknown type 0x${type} at ${st.base}`);
+        throw new MarshalError(Errno.EBADMSG);
     }
 
     st.base = ALIGN(st.base, elem_sz);
@@ -336,7 +336,7 @@ export class TreeEncoder {
           const min_needed: u32 = s.length;
 
           if (s.length > ((this.max_cap - payload_start) >>> 2)) {
-            throw new MarshalError(Errno.EOVERFLOW, `required packet size exceeds max cap (${this.max_cap})`);
+            throw new MarshalError(Errno.EOVERFLOW);
           }
           const max_needed: u32 = s.length * 4;
 
@@ -365,7 +365,7 @@ export class TreeEncoder {
       }
 
       default:
-        throw new MarshalError(Errno.EBADMSG, `unknown type 0x${type} at ${st.base}`);
+        throw new MarshalError(Errno.EBADMSG);
     }
 
     // computed after payload size is known; in later mode this is finalized only after payload write
@@ -378,7 +378,7 @@ export class TreeEncoder {
       set_payload();
       this._ensure(st.lim = payload_start + ALIGN(payload_sz, WORD_SZ));
     } else {
-      if (payload_sz > this.max_cap - payload_start) throw new MarshalError(Errno.EOVERFLOW, `required packet size exceeds max cap (${this.max_cap})`);
+      if (payload_sz > this.max_cap - payload_start) throw new MarshalError(Errno.EOVERFLOW);
       this._ensure(st.lim = payload_start + ALIGN(payload_sz, WORD_SZ));
       set_payload();
     }

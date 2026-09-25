@@ -41,6 +41,8 @@ use crate::io::sched::{attempt_of, settle, Rank};
 use crate::layer::decor::asset_store::decor_assets_arrived;
 use crate::sched::ledger::record::{Failure, Outcome};
 use crate::world::change::{request_world_tick, world_edge};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// What a load names: a shipped asset, or the texture pack's sheet, which the
 /// ingest writes beside the table rather than as a row of it.
@@ -165,7 +167,7 @@ pub fn load_wants() -> &'static [(u64, Rank)] {
     let l = loader();
     l.wants.clear();
     for n in 0..LOADS {
-        let load = Load::of(n as u32).expect("a load's own number");
+        let load = Load::of(n as u32).or_bug(Errno::ENOTRECOVERABLE);
         if matches!(l.gltf[n], Some(Entry::Pending)) {
             l.wants.push((subject_of(LoadKind::Gltf, load), policy::asset()));
         }

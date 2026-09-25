@@ -4,11 +4,6 @@ use core::fmt;
 
 use crate::status::errno::Errno;
 
-#[derive(Default)]
-pub struct XputeErrorOptions {
-    pub cause: Option<Box<dyn std::error::Error>>,
-}
-
 /// Error policy:
 /// - Internal invariant violation (our bug / impossible state) => FATAL (crash process).
 /// - External fault (peer/network/remote/env/input) => NON-FATAL (catch, isolate, degrade, drop).
@@ -16,7 +11,12 @@ pub struct XputeErrorOptions {
 /// Notes:
 /// - Errno describes the error code, not fatality.
 /// - Fatal vs non-fatal is determined by error class (and catch boundary policy).
-/// - Origin/context should be attached at catch/log boundary, not encoded in message prefixes.
+/// - Origin/context should be attached at catch/log boundary, not encoded in the error.
+///
+/// An error is its errno and its class, and nothing else: what it means to a
+/// reader is `strerror` of the number, where the reader is. A sentence carried
+/// with it would say what the errno and the place it was raised at already
+/// say, in a language the module then ships.
 ///
 /// An error is returned: `Result<_, XputeError>`, or a subclass. The
 /// subclasses are newtypes over this, each dereferencing to it, so a
@@ -24,35 +24,21 @@ pub struct XputeErrorOptions {
 #[derive(Debug)]
 pub struct XputeError {
     pub errno: Errno,
-    pub message: String,
-    pub cause: Option<Box<dyn std::error::Error>>,
 }
 
 impl XputeError {
-    pub fn new(errno: Errno, message: Option<&str>, opts: Option<XputeErrorOptions>) -> XputeError {
-        let msg = match message {
-            Some(m) if !m.is_empty() => m.to_string(),
-            _ => format!("errno: {}", errno as i32),
-        };
-        XputeError {
-            errno,
-            message: msg,
-            cause: opts.and_then(|o| o.cause),
-        }
+    pub fn new(errno: Errno) -> XputeError {
+        XputeError { errno }
     }
 }
 
 impl fmt::Display for XputeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.message)
+        write!(f, "{:?}", self.errno)
     }
 }
 
-impl std::error::Error for XputeError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.cause.as_deref()
-    }
-}
+impl std::error::Error for XputeError {}
 
 /// Internal invariant violation / impossible state / our bug (fatal).
 #[derive(Debug)]
@@ -75,8 +61,8 @@ pub struct NetworkFaultError(pub FaultError);
 macro_rules! subclass {
     ($name:ident extends $base:ident) => {
         impl $name {
-            pub fn new(errno: Errno, message: Option<&str>, opts: Option<XputeErrorOptions>) -> $name {
-                $name($base::new(errno, message, opts))
+            pub fn new(errno: Errno) -> $name {
+                $name($base::new(errno))
             }
         }
 
@@ -89,15 +75,11 @@ macro_rules! subclass {
 
         impl fmt::Display for $name {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "{}: {}", stringify!($name), self.0.message)
+                write!(f, "{}: {}", stringify!($name), self.0)
             }
         }
 
-        impl std::error::Error for $name {
-            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-                self.0.source()
-            }
-        }
+        impl std::error::Error for $name {}
 
         impl From<$name> for XputeError {
             fn from(e: $name) -> XputeError {

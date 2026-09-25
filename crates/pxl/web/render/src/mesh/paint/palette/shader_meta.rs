@@ -15,6 +15,8 @@ use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
 use pxl_spec::cell::object::{block_cubes, ground_channel_types, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 
 use crate::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// A coloured type of a channel, and the array layer it is.
 #[derive(Clone, Debug, PartialEq)]
@@ -114,7 +116,7 @@ pub struct FlatChannelLookup {
 pub type FlatGroundColorLookup = [Option<FlatChannelLookup>; 4];
 
 fn channel_slot(ch: GroundChannelKey) -> usize {
-    GROUND_CH_KEYS.iter().position(|k| *k == ch).expect("a ground channel")
+    GROUND_CH_KEYS.iter().position(|k| *k == ch).or_bug(Errno::ENOTRECOVERABLE)
 }
 
 fn build_flat_color_lookup(meta: &[TerrainLayerMeta]) -> FlatGroundColorLookup {

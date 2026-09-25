@@ -14,7 +14,7 @@
       "$value": 65536,
       "$doc": [
         "The range's size. A record names what it moves rather than carrying it, so",
-        "a turn's records are words: a message a panic leaves is the largest."
+        "a turn's records are words, and a glyph request's code points the most of them."
       ]
     }
   },
@@ -30,7 +30,13 @@
         "family at the weight and size, a float apiece from `at`"
       ]
     },
-    "PANIC": { "$value": 4, "$doc": ["the message's bytes: what the kernel said before it trapped"] }
+    "PANIC": {
+      "$value": 4,
+      "$doc": [
+        "errno, line, column, a (low, high word), b (low, high word), then the file's bytes:",
+        "the broken invariant the kernel reported before it trapped (xpute-core status/bug.rs)"
+      ]
+    }
   },
   "storage": {
     "$type": "u32",

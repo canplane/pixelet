@@ -13,6 +13,8 @@ use pxl_render::gpu::pass::badges::{badge_width, BADGE_FONT};
 use pxl_render::gpu::surface::DPR_MAX;
 
 use crate::world::pyramid::Layer;
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 pub const HEIGHT: f64 = 37.0;
 pub const ANCHOR: f64 = 34.0;
@@ -93,7 +95,7 @@ pub fn width(label: Label) -> Option<f64> {
 
 /// A badge on the sheet, drawn once. Its label was measured first.
 pub fn slot(label: Label) -> i32 {
-    let b = badges().get_mut(&label).expect("a badge is measured before it is drawn");
+    let b = badges().get_mut(&label).or_bug(Errno::ENOTRECOVERABLE);
     if b.slot == NO_SLOT {
         b.slot = billboard_sheet().add(
             b.width * DPR_MAX,

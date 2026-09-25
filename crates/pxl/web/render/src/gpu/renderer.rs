@@ -48,6 +48,8 @@ use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURN
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::look::globe::{Globe, MERCATOR_RADIUS_U};
 use crate::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
+use xpute_core::status::bug::OrBug;
+use xpute_core::status::errno::Errno;
 
 /// GL clip z [-1, 1] to reversed WebGPU clip z [1, 0], column-major.
 pub const GL_TO_WGPU: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.5, 1.0];
@@ -246,7 +248,7 @@ impl Scratch {
                 unsafe { free((self.at, self.bytes)) };
             }
             let size = bytes.next_power_of_two().max(4096);
-            (self.at, self.bytes) = alloc(size).expect("the heap has no room for the renderer's scratch");
+            (self.at, self.bytes) = alloc(size).or_bug(Errno::ENOMEM);
         }
         // SAFETY: a heap block this scratch holds alone, at
         // least `bytes` long.
@@ -302,7 +304,7 @@ fn memory(at: u32, n: u32) -> &'static [u8] {
 }
 
 fn fixed_lane() -> &'static mut [u32] {
-    let (at, _) = alloc(word_bytes(BLOCK_SLOTS)).expect("the heap has no room for the renderer's blocks");
+    let (at, _) = alloc(word_bytes(BLOCK_SLOTS)).or_bug(Errno::ENOMEM);
     // SAFETY: a block never given back, BLOCK_SLOTS words.
     let lane = unsafe { core::slice::from_raw_parts_mut(at as *mut u32, BLOCK_SLOTS) };
     lane.fill(0);
@@ -395,7 +397,7 @@ impl Blocks {
     /// handle held before is let go.
     fn insert(&mut self, g: Option<&Gpu>, handle: u32, at: u32, len: u32, vertex_cnt: u32, index_cnt: u32) {
         self.remove(handle);
-        assert!((self.count as usize) < BLOCK_SLOTS / 2, "more than {} blocks listed", BLOCK_SLOTS / 2);
+        xpute_core::ensure!((self.count as usize) < BLOCK_SLOTS / 2, ENOSPC, BLOCK_SLOTS / 2);
         let mut i = home(handle);
         while self.handle[i] != EMPTY {
             i = (i + 1) & BLOCK_MASK;
@@ -791,7 +793,7 @@ impl Renderer {
         // The badges take the view and the projection apart: their size is
         // measured in view space.
         let b = &mut self.badges;
-        put_mat(&mut b.view, 0, s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].try_into().expect("16 doubles"));
+        put_mat(&mut b.view, 0, s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].try_into().or_bug(Errno::ENOTRECOVERABLE));
         put_mat(&mut b.proj, 0, &proj);
         b.px_k = (s[STAGE_AT::VIEWPORT + 1] / (2.0 * (s[STAGE_AT::FOV] * core::f64::consts::PI / 360.0).tan())) as f32;
         b.fade_start = s[STAGE_AT::FADE_START] as f32;
@@ -915,9 +917,7 @@ impl Renderer {
             // is how a device came to draw no ground at all with every gauge
             // reading normal. Saying so here is also what lets the census be
             // taken from the list: every draw listed is a draw issued.
-            let Some(buffer) = buffer else {
-                panic!("a draw named a buffer nothing holds: handle {handle:#x}, pipeline {pipeline}")
-            };
+            let Some(buffer) = buffer else { xpute_core::bug!(ENOTRECOVERABLE, handle, pipeline) };
             if let (Some(p), false) = (own, any) {
                 g.set_pipeline(pass, p);
                 g.set_bind_group(pass, 0, self.bind_group, &[]);
@@ -1079,7 +1079,7 @@ impl Renderer {
                 self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.shadow, &self.ao, self.atmosphere.entries(), self.align));
             }
             let world_frame = self.frame;
-            let case = self.cases[slot].as_mut().expect("just made");
+            let case = self.cases[slot].as_mut().or_bug(Errno::ENOTRECOVERABLE);
             case.skinned.set_skin(g, model, image);
             let at = own[3] as usize * UNIFORM_FLOATS;
             let actor = [uniforms[at] as f64, uniforms[at + 1] as f64, uniforms[at + 2] as f64];

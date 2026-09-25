@@ -44,7 +44,7 @@ impl<const N: usize> Default for HandleTable<N> {
 
 impl<const N: usize> HandleTable<N> {
     pub fn new() -> Self {
-        assert!((2..=1 << SLOT_BITS).contains(&N), "a handle table holds 2 to 2^{SLOT_BITS} slots");
+        xpute_core::ensure!((2..=1 << SLOT_BITS).contains(&N), EINVAL, SLOT_BITS);
         HandleTable {
             generation: [0; N],
             live: [false; N],
@@ -131,7 +131,7 @@ impl<T> Slots<T> {
             self.entries.push((0, None));
         }
         let slot = self.free.pop().unwrap_or_else(|| {
-            assert!(self.entries.len() < 1 << SLOT_BITS, "a table of slots holds under 2^{SLOT_BITS}");
+            xpute_core::ensure!(self.entries.len() < 1 << SLOT_BITS, ENOSPC, SLOT_BITS);
             self.entries.push((0, None));
             (self.entries.len() - 1) as u32
         });

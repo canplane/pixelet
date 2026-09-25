@@ -9,9 +9,11 @@
 // host cannot run. A native test has no stream; storage keeps nothing there,
 // and a glyph is a fixed width.
 
+use core::panic::Location;
 use std::collections::{HashMap, HashSet};
 
 use pxl_render::gpu::paint::Font;
+use xpute_core::status::errno::Errno;
 use xpute_runtime::ipc::stream::Stream;
 
 use crate::abi::host::{op, stream};
@@ -72,12 +74,15 @@ pub fn host_fall() {
     }
 }
 
-/// The message a panic leaves, as the one record of the turn, published at
-/// once: the host finds it when the trap reaches it.
-pub fn host_panic(message: &str) {
+/// A broken invariant (xpute-core status/bug.rs): its errno, its place and
+/// its two numbers, as the one record of the turn, published at once for the
+/// host to find when the trap reaches it. What was recorded before it in the
+/// turn is dropped: the kernel stops here, and none of it is to be done.
+pub fn host_bug(errno: Errno, at: &Location<'_>, a: u64, b: u64) {
     if let Some(h) = host() {
         h.stream.publish();
-        h.stream.record(op::PANIC, &[], &[], Some(message.as_bytes()));
+        let args = [errno as i32 as u32, at.line(), at.column(), a as u32, (a >> 32) as u32, b as u32, (b >> 32) as u32];
+        h.stream.record(op::PANIC, &args, &[], Some(at.file().as_bytes()));
         h.stream.publish();
     }
 }

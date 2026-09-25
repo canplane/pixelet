@@ -4,7 +4,6 @@
 
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
-use crate::status::log;
 
 pub struct ArenaOptions {
     /// Slots built at construction; growth passes it.
@@ -88,13 +87,10 @@ impl<T: Default> Arena<T> {
     /// Rewinds the cursor. Slots above `new_len` stay constructed.
     ///
     /// Which `new_len` is live is the caller's to know; one above the cursor
-    /// is a mistake rather than a resize request, so it is refused whole and
-    /// not clamped.
+    /// is a mistake rather than a resize request, so it is a broken
+    /// invariant and not a clamp.
     pub fn truncate(&mut self, new_len: u32) {
-        if new_len > self._len {
-            log::warn(&format!("[arena] truncate ignored: new_len={new_len} > len={}", self._len));
-            return;
-        }
+        crate::ensure!(new_len <= self._len, EINVAL, new_len, self._len);
         self._len = new_len;
     }
 
@@ -103,7 +99,7 @@ impl<T: Default> Arena<T> {
             return Ok(());
         }
         if new_cap > self.max_cap {
-            return Err(MarshalError::new(Errno::EOVERFLOW, Some(&format!("arena: required size exceeds max_cap={}", self.max_cap)), None));
+            return Err(MarshalError::new(Errno::EOVERFLOW));
         }
 
         self.mem.reserve(new_cap as usize - self.mem.len());
