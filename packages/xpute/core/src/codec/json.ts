@@ -33,7 +33,7 @@ export function encode<T>(data: T): Bytes {
     }
 
     return encoding.te.encode(json);
-  } catch (err) {
+  } catch {
     // wrap and report as a system-level error
     throw new MarshalError(Errno.EINVAL);
   }

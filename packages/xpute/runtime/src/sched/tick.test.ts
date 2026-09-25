@@ -1,6 +1,6 @@
 // @xpute/runtime/sched/tick.test.ts
 
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 
 import { CONTENT, COSMETIC, FrameBudget, INTERACTION, PHASES, REPORT, Tick, type TickPolicy, VISIBLE } from "./tick.ts";
 import { set_clock } from "../clock.ts";

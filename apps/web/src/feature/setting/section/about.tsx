@@ -6,7 +6,6 @@ import { useTranslation } from "react-i18next";
 import { SectionTitle } from "@/feature/setting/row.tsx";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
 import { PUBLISHED_VERSION } from "@/config/route.ts";
-import { useKernel } from "@/kernel/shell.ts";
 import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
 
 /** The environments worth abbreviating; anything else is shown as it is set. */
