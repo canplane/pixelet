@@ -650,6 +650,41 @@ impl OwnedRunSet {
         }
     }
 
+    /// `set` cut to the heights `z0..z1`, in units: every run that reaches
+    /// into them, cut to them, and none that does not. What a chunk of the
+    /// view draws of the column its runs were read from, since a chunk is a
+    /// cube and its column's contents run through every chunk over it
+    /// (kernel world/pyramid/chunk.rs). A run cut at a face ends there as
+    /// any run ends, and the chunk beside it across that face draws the rest.
+    pub fn clip_from(&mut self, set: &RunSet, z0: i32, z1: i32) {
+        self.clear();
+        self.span = set.span;
+        self.apron = set.apron;
+        let columns = (set.span * set.span) as usize;
+        self.start.push(0);
+        for col in 0..columns {
+            for i in set.start[col] as usize..set.start[col + 1] as usize {
+                if set.z1[i] < z0 || set.z0[i] >= z1 {
+                    continue;
+                }
+                self.z0.push(set.z0[i].max(z0));
+                self.z1.push(set.z1[i].min(z1 - 1));
+                self.layer_taps.push(set.layer_taps[i]);
+                self.r.push(set.r[i]);
+                self.g.push(set.g[i]);
+                self.b.push(set.b[i]);
+                self.material_class.push(set.material_class[i]);
+                self.sub_ox.push(set.sub_ox[i]);
+                self.sub_oy.push(set.sub_oy[i]);
+                self.sub_oz.push(set.sub_oz[i]);
+                self.sub_sx.push(set.sub_sx[i]);
+                self.sub_sy.push(set.sub_sy[i]);
+                self.sub_sz.push(set.sub_sz[i]);
+            }
+            self.start.push(self.z0.len() as u32);
+        }
+    }
+
     pub fn view(&self) -> RunSet<'_> {
         RunSet {
             count: self.z0.len() as u32,

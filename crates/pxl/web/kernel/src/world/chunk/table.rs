@@ -60,15 +60,13 @@ use crate::world::chunk::source::{decor_draws, decor_revision_of, objects_revisi
 use xpute_core::math::scalar::round;
 
 use crate::world::pyramid::chunk::Chunk;
-use crate::world::pyramid::domain::VIEW_CHUNKS;
+use crate::world::pyramid::domain::{Order, VIEW_CHUNKS};
 use crate::world::pyramid::pressure::{heap_pressed, pressure, pressure_step};
 use crate::world::pyramid::{Domain, Layer};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::hierarchy::share;
 use pxl_spec::space::indexer::L2_IDX;
 
-/// The sphere a chunk nothing has measured is culled by.
-const APPROXIMATE_CHUNK_RADIUS: f64 = chunk_span_of(0) * 0.75;
 /// Layouts applied per frame on screen, and releases off it — more of the
 /// latter after a frame that had a block refused: a release is cheap, and
 /// what an off-screen chunk still shows is what the refused block needs
@@ -236,17 +234,6 @@ impl Frame {
 /// stands, and the pass is skipped once nothing of it is left to mount.
 type MountKey = u32;
 
-/// The ground two chunks share, in square units: the finer one's where it
-/// lies under the other, and none where they are apart.
-fn shared_area(a: Chunk, b: Chunk) -> f64 {
-    let (a, b) = (a.node(), b.node());
-    if share(a, b) {
-        a.0.min(b.0).side().powi(2)
-    } else {
-        0.0
-    }
-}
-
 #[derive(Clone, Copy, Default)]
 struct Bounds {
     min: [f32; 3],
@@ -328,10 +315,9 @@ struct Slot {
     /// The bounding sphere in the chunk's own space.
     bc: V3,
     radius: f64,
-    /// How near the view's center its ground comes, squared: its place in
-    /// the order every layer's work is taken in (domain.rs
-    /// `Domain::order_of`).
-    distance2: f64,
+    /// Its place in the order every layer's work is taken in (domain.rs
+    /// `Order`).
+    order: Order,
     flags: u16,
     pending_since: f64,
     request: i32,
@@ -398,7 +384,7 @@ struct DecorSources {
 impl Sources {
     fn of(k: Chunk, edits: RenderEdits) -> Sources {
         let settings = settings_store();
-        let (level, base) = (k.level(), k.base().i);
+        let (level, base) = (k.level(), k.corner());
         let drawn = |at: &EntryAt| tiers_draw(level, base, at.col_idx);
         Sources {
             show_structures: settings.show_structures,
@@ -413,7 +399,7 @@ impl Sources {
 
 impl DecorSources {
     fn of(k: Chunk, edits: RenderEdits) -> DecorSources {
-        let (level, base) = (k.level(), k.base().i);
+        let (level, base) = (k.level(), k.corner());
         DecorSources {
             revision: decor_revision_of(level, base),
             shown: settings_store().show_decor,
@@ -443,13 +429,19 @@ impl Slot {
     }
 
     /// The sphere the chunk is culled by until its mesh has measured it: the
-    /// whole of its ground, which is `span` wide at its level. A leaf's
-    /// sphere at a coarse chunk's corner culls the chunk from any view that
-    /// misses the corner, and a chunk never in view is never built, so it is
-    /// never measured and stays culled.
+    /// box the view measured it by (domain.rs `Domain::heights`), its whole
+    /// footprint and the heights its ground and objects span there. A chunk
+    /// culled until it is built is never built, so it is never measured and
+    /// stays culled: a sphere at a corner missed every view that missed the
+    /// corner, and one at sea level missed every chunk of a mountain, whose
+    /// ground stood hundreds of units over it, and left the middle of the
+    /// view empty with nothing left to fetch.
     fn unmeasured(&mut self) {
-        self.bc = [self.span() * 0.5, self.span() * 0.5, 0.0];
-        self.radius = APPROXIMATE_CHUNK_RADIUS * (1u64 << self.level()) as f64;
+        let span = self.span();
+        let (z0, z1) = self.chunk.z_range();
+        let (lo, hi) = Domain::heights(self.chunk.page(), self.chunk.column()).map_or((z0, z1), |(lo, hi)| (lo.max(z0), hi.min(z1).max(z0)));
+        self.bc = [span * 0.5, span * 0.5, (lo + hi) * 0.5];
+        self.radius = (2.0 * span * span + (hi - lo) * (hi - lo)).sqrt() * 0.5;
     }
 
     /// Whether nothing coarser draws this chunk's ground, so its own tier is
@@ -803,7 +795,7 @@ impl Scheduler {
             chunk: k,
             bc: [0.0; 3],
             radius: 0.0,
-            distance2: f64::INFINITY,
+            order: Order::LAST,
             flags: EMPTY | FRESH,
             pending_since: -1.0,
             request: 0,
@@ -968,7 +960,7 @@ impl Scheduler {
     /// `generation`, building what it lacks: false when the
     /// heap refused a block. A chunk with no page has no decor to build.
     fn ensure_decor(&mut self, world: &mut World, i: usize, cubes: [Option<Cube>; 2], generation: u32) -> bool {
-        let (id, level, corner) = (self.slots[i].id, self.slots[i].level(), self.slots[i].chunk.base().i);
+        let (id, level, corner) = (self.slots[i].id, self.slots[i].level(), self.slots[i].chunk.corner());
         let (x0, y0) = (ivec::X(corner), ivec::Y(corner));
         // Whether it scatters is one of what its decor is made of, as told.
         let show_decor = self.slots[i].decor_sources.shown;
@@ -986,7 +978,7 @@ impl Scheduler {
             // scatter's alone: what the user placed is drawn whatever it says.
             let world_step = GROUND.scale(0).count_in(cube.max(GROUND.scale(0)));
             // Every column whose corner lies in the chunk: its own, at z16.
-            let cols = world.store.cols_under(self.slots[i].chunk.node());
+            let cols = world.store.cols_under(self.slots[i].chunk.column());
             let drawn = |k: &&DecorKind| decor_density(k.extent, world_step) > 0.0;
             let scatters = show_decor && self.decor_kinds.iter().filter(drawn).any(|k| k.density > 0.0);
             let places = !cols.is_empty() && self.decor_kinds.iter().filter(drawn).any(|k| k.decor_value.is_some());
@@ -1043,7 +1035,8 @@ impl Scheduler {
                 folded: (level > 0).then_some(&self.decor_folded),
             });
             let Some(scratch) = self.decor_scratch.as_mut() else { return false };
-            let built = DecorBuild::build(scratch, &self.decor_kinds, ground.as_ref(), &placed, self.builder.hide(), world.store, world_step, show_decor);
+            let heights = self.slots[i].chunk.z_range();
+            let built = DecorBuild::build(scratch, &self.decor_kinds, ground.as_ref(), &placed, self.builder.hide(), world.store, world_step, show_decor, heights);
             let bytes = built.bytes();
             let Some((at, bytes)) = alloc(bytes) else {
                 self.builder.stat.starved += 1;
@@ -1139,7 +1132,7 @@ impl Scheduler {
             if !s.has(STALE) {
                 continue;
             }
-            let key = (!(s.has(IN_FRUSTUM) && s.layout_ready), s.distance2);
+            let key = (!(s.order.seen && s.layout_ready), s.order.near);
             if worst.as_ref().is_none_or(|(low, _)| key > *low) {
                 worst = Some((key, k));
             }
@@ -1171,7 +1164,7 @@ impl Scheduler {
             }
 
             // In the order the builds will take them (`priority`), out from
-            // the view's center. Left in the key's own order — a
+            // the eye. Left in the key's own order — a
             // `Chunk` sorts by its level, then its coordinate —
             // the pass mounted every chunk of the finest level before any of
             // the next, and within a level in raw coordinate order rather
@@ -1182,10 +1175,10 @@ impl Scheduler {
             // the ground at the horizon appeared last however badly the
             // builds wanted it.
             //
-            // Nearest the view's center first (domain.rs `Domain::order_of`).
+            // In the view's order (domain.rs `Order`).
             let Some(d) = Terrain::pyramid().domain() else { return };
-            let mut near: Vec<(f64, Chunk)> = wanted.iter().filter(|k| !self.index.contains_key(k)).map(|&k| (d.order_of(k), k)).collect();
-            near.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let mut near: Vec<(Order, Chunk)> = wanted.iter().filter(|k| !self.index.contains_key(k)).map(|&k| (d.order_of(k), k)).collect();
+            near.sort_by_key(|a| a.0);
             self.to_mount.clear();
             self.to_mount.extend(near.into_iter().map(|(_, k)| k));
             self.selected_for = Some(key);
@@ -1253,9 +1246,12 @@ impl Scheduler {
         let waiters = &waiters[..core::mem::take(&mut self.meshes.waiter_cnt)];
         // What covers each stale chunk, from the chunk tree rather than every
         // pair: the wanted chunks are a cut through it, so what covers a
-        // stale chunk's ground is a wanted chunk above it, whole, or the
-        // wanted chunks below it, each its own area. Each chunk walks up its
-        // ancestors once — ten at most — and meets the other kind there.
+        // stale chunk is a wanted chunk above it, whole, or the wanted chunks
+        // below it, counted. Each chunk walks up its ancestors once — ten at
+        // most — and meets the other kind there. Counted and not measured: a
+        // chunk that holds nothing is no chunk (domain.rs `occupied`), so
+        // what is under a stale chunk never adds up to its volume, and it is
+        // covered when every chunk the view wants under it is here.
         for s in self.slots.iter_mut().filter(|s| s.has(STALE)) {
             s.cover = (0.0, true, false);
         }
@@ -1274,13 +1270,20 @@ impl Scheduler {
                 }
                 continue;
             }
-            let area = s.span() * s.span();
-            // Its area to every stale chunk above it: one it covers part of.
+            // Itself to every stale chunk above it: one it covers part of.
             for j in k.ancestors().filter_map(|a| at(&a)) {
                 let w = &mut slots[j];
                 if w.has(STALE) && w.cover.0.is_finite() {
-                    w.cover = (w.cover.0 + area, w.cover.1 && laid, w.cover.2 || waiting);
+                    w.cover = (w.cover.0 + 1.0, w.cover.1 && laid, w.cover.2 || waiting);
                 }
+            }
+        }
+        // How many chunks the view wants under each stale one: it is covered
+        // once all of them are here.
+        let mut wanted_under: HashMap<Chunk, f64> = HashMap::new();
+        for &g in Terrain::pyramid().cover().0.drawn.iter() {
+            for a in g.ancestors().filter(|a| at(a).is_some_and(|j| slots[j].has(STALE))) {
+                *wanted_under.entry(a).or_default() += 1.0;
             }
         }
         // The ground the view draws, from the domain as it stands: a mount
@@ -1304,7 +1307,7 @@ impl Scheduler {
             // drawn ground either. Both doors shut, and it stays drawn over
             // ground it no longer describes, for as long as the view is there.
             let gone_from_view = drawn.is_none_or(|d| !d.iter().any(|&g| share(k.node(), g.node())));
-            let whole = covered >= drawn.map_or(0.0, |d| d.iter().map(|&g| shared_area(k, g)).sum());
+            let whole = covered >= wanted_under.get(&k).copied().unwrap_or(0.0);
             // A stale chunk is kept for what it is showing. One that never
             // got a layout is showing nothing, so there is nothing to keep
             // and no reason to wait on whatever covers it.
@@ -1651,7 +1654,7 @@ impl Scheduler {
         let t = s.tier(cube, s.layout_generation)?;
         Some(Drawn {
             level: s.level(),
-            base: s.chunk.base().i,
+            base: s.chunk.corner(),
             step: mesh_step(cube, s.level()),
             tops: surface(t.slot.index, mesh_step(cube, s.level())),
             heights: t.heights,
@@ -1663,14 +1666,21 @@ impl Scheduler {
     /// chunk `drawn_of` gives for that ground, so it is the surface on the
     /// screen — the tier a crossfade shows more of, a stale chunk while its
     /// replacement builds — and none where nothing drawn stands there.
+    ///
+    /// A column is drawn by every chunk over it that holds something, each
+    /// cut to its own heights (world/pyramid/chunk.rs), so a chunk under the
+    /// surface tops out where it is cut. The highest one drawn there is the
+    /// one whose top is the surface's.
     pub fn surface_at(&self, at: &Pvf3) -> Option<(u32, f64)> {
         (0..=TOP_LEVEL).find_map(|level| {
-            let d = self.drawn_of(&self.slots[*self.index.get(&Chunk::of(level, at))?])?;
-            // The chunk lies in one page at every level over its own, so the
-            // point's cell and the chunk's first are of one page.
-            let [cx, cy] = GROUND.cell_of(d.cell_level(), at).in_page();
-            let [fx, fy] = GROUND.cell_of(d.cell_level(), &Pvf3 { i: d.base, ..Default::default() }).in_page();
-            Some((d.cell_level(), d.top(cx - fx, cy - fy)?))
+            self.index.range(Chunk::column_of(level, at)).rev().find_map(|(_, &i)| {
+                let d = self.drawn_of(&self.slots[i])?;
+                // The chunk lies in one page at every level over its own, so
+                // the point's cell and the chunk's first are of one page.
+                let [cx, cy] = GROUND.cell_of(d.cell_level(), at).in_page();
+                let [fx, fy] = GROUND.cell_of(d.cell_level(), &Pvf3 { i: d.base, ..Default::default() }).in_page();
+                Some((d.cell_level(), d.top(cx - fx, cy - fy)?))
+            })
         })
     }
 
@@ -1682,9 +1692,9 @@ impl Scheduler {
         let domain = Terrain::pyramid().domain();
         for i in 0..self.slots.len() {
             let visible = measure(frame, &self.slots[i]).0;
-            let order = domain.map_or(f64::INFINITY, |d| d.order_of(self.slots[i].chunk));
+            let order = domain.map_or(Order::LAST, |d| d.order_of(self.slots[i].chunk));
             let s = &mut self.slots[i];
-            s.distance2 = order * order;
+            s.order = order;
             let was = s.has(IN_FRUSTUM);
             if visible != was {
                 let bytes = s.retained();
@@ -1708,8 +1718,7 @@ impl Scheduler {
         keys.clear();
         keys.extend(self.slots.iter().map(|s| Priority {
             holds: holders.contains(&Some(s.id)),
-            in_frustum: s.has(IN_FRUSTUM),
-            distance2: s.distance2,
+            order: s.order,
         }));
         idx.clear();
         idx.extend(0..self.slots.len());
@@ -1815,7 +1824,7 @@ impl Scheduler {
         let (level, chunk) = (s.level(), s.chunk);
         let outermost = s.outermost();
         let Some(d) = Terrain::pyramid().domain() else { return };
-        let objects = level == 0 && world.store.entries(L2_IDX(s.chunk.base().i)).is_some();
+        let objects = level == 0 && world.store.entries(L2_IDX(s.chunk.corner())).is_some();
         let primary = drawn_cube(wanted_cube(d, chunk), level, outermost, objects);
         self.slots[i].desired = (primary, None);
         let current = self.generation(i);
@@ -2137,23 +2146,19 @@ fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cube {
 #[derive(Clone, Copy)]
 struct Priority {
     holds: bool,
-    in_frustum: bool,
-    /// How near the view's center its ground comes, squared: its place in
-    /// the view's order.
-    distance2: f64,
+    order: Order,
 }
 
 /// The order work is taken in: the slots' holders, which the rest wait on;
-/// then what is on screen, nearest the view's center first
-/// (world/pyramid/domain.rs `Domain::order_of`), the one order every layer's
-/// work is taken in; then what is off screen, farthest first — a release
-/// takes memory from what is least likely to be wanted again.
+/// then what the view sees, nearest the eye first (world/pyramid/domain.rs
+/// `Order`), the one order every layer's work is taken in; then what it
+/// does not, farthest first — a release takes memory from what is least
+/// likely to be wanted again.
 ///
-/// Only the distance, and no class over it. The view fills out from where
-/// the camera looks and the character stands, and each chunk it reaches
-/// overwrites what the last view drew there, stale or borrowed from a page
-/// over it: what is on the screen answers the camera first, nearest the
-/// middle, and nothing further out is worth its wait. Classes over it — a
+/// Only the distance, and no class over it. The view fills out from the
+/// eye, and each chunk it reaches overwrites what the last view drew there,
+/// stale or borrowed from a page over it: what is in front of the eye
+/// answers the camera first, and nothing further out is worth its wait. Classes over it — a
 /// chunk showing nothing before one showing an older generation, before one
 /// asking to be sharper — and a wait that halved the key every four seconds
 /// sent the builds to ground at the edge of the view while the middle stood
@@ -2167,10 +2172,11 @@ struct Priority {
 /// rather than from the middle — and everywhere at once means the middle
 /// waits for all of it.
 fn priority(a: &Priority, b: &Priority) -> core::cmp::Ordering {
+    let (x, y) = (a.order, b.order);
     b.holds
         .cmp(&a.holds)
-        .then(b.in_frustum.cmp(&a.in_frustum))
-        .then_with(|| if a.in_frustum { a.distance2.total_cmp(&b.distance2) } else { b.distance2.total_cmp(&a.distance2) })
+        .then(y.seen.cmp(&x.seen))
+        .then_with(|| if x.seen { x.near.total_cmp(&y.near) } else { y.near.total_cmp(&x.near) })
 }
 
 /// Where a slot is from a frame: on screen, and its world center.

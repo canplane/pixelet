@@ -10,7 +10,7 @@ fn drawn_by_rule(d: &Domain) -> Vec<Chunk> {
     let mut open = d.roots().to_vec();
     while let Some(c) = open.pop() {
         if d.splits(c) {
-            open.extend(c.children());
+            open.extend(d.children(c));
         } else {
             out.push(c);
         }
@@ -42,7 +42,6 @@ fn every_drawn_chunk_lies_between_its_split_distances_and_the_view_fits_its_budg
             let eye = Eye {
                 at: [x, y, height],
                 foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
-                center: [x, y, 0.0],
             };
             let d = domain_for(&eye, height, None, 0);
             let s = d.scale;
@@ -80,7 +79,6 @@ fn every_page_drawn_from_is_wanted_with_every_ancestor_up_to_the_top() {
             let eye = Eye {
                 at: [x, y, height],
                 foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
-                center: [x, y, 0.0],
             };
             let d = domain_for(&eye, height, None, 0);
             for c in drawn_by_rule(&d) {
@@ -109,7 +107,6 @@ fn ground_outside_the_frustum_is_not_refined() {
     let eye = Eye {
         at: [x, y, height],
         foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
-        center: [x, y, 0.0],
     };
     // One plane, x ≥ the eye's, and five that pass everything.
     let mut planes = [0.0; 24];

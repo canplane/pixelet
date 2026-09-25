@@ -50,10 +50,12 @@ pub fn decor_draws(level: u32, base: IVec, col: IVec) -> bool {
     (ivec::X(base)..ivec::X(base) + span).contains(&ivec::X(o)) && (ivec::Y(base)..ivec::Y(base) + span).contains(&ivec::Y(o))
 }
 
-/// A chunk as the change log keys it: its coordinate among its level's
-/// chunks and its level, in one word.
+/// A chunk's column as the change log keys it: its coordinate among its
+/// level's columns and its level, in one word. Every chunk of a column is
+/// made of that column's objects, which are stored by the column, so they
+/// move together.
 fn chunk_key(level: u32, base: IVec) -> i64 {
-    let [x, y] = PyramidChunk::of(level, &Pvf3 { i: base, f: 0 }).node().1;
+    let [x, y] = PyramidChunk::of(level, &Pvf3 { i: base, f: 0 }).column().1;
     ivec::gather(x, y, level as i64) as i64
 }
 
@@ -84,7 +86,7 @@ pub fn column_written(col: IVec) {
     for level in 1..=TOP_LEVEL {
         let home = PyramidChunk::of(level, &corner);
         for (dx, dy) in (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy))) {
-            let base = home.beside(dx, dy).base().i;
+            let base = home.beside(dx, dy, 0).corner();
             if tiers_draw(level, base, col) {
                 bump_world(TIERS_CHUNK, chunk_key(level, base) as u64);
             }

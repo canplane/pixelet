@@ -23,6 +23,7 @@ use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanSte
 use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, BAND, CELL, OBJECT_FINEST};
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_runtime::mem::heap::{free, Block};
 
 use crate::layer::object::store::{object_col_revision, Store};
@@ -184,9 +185,10 @@ impl Chunk {
         self.at.level()
     }
 
-    /// The chunk's corner, as an L1 coordinate.
+    /// The corner of the chunk's column, as an L1 coordinate at no height:
+    /// what its objects are read by.
     fn base(&self) -> IVec {
-        self.at.base().i
+        self.at.corner()
     }
 
     /// The column it stands in, as the object store keys it: a chunk is one
@@ -203,7 +205,7 @@ impl Chunk {
         let pyramid = Terrain::pyramid();
         let src = pyramid.drawn_from(self.at.page())?;
         let page = pyramid.get(src)?;
-        let own = GROUND.cell_of(self.level(), &self.at.base());
+        let own = GROUND.cell_of(self.level(), &Pvf3 { i: self.base(), f: 0 });
         let levels = src.level - self.level();
         Some(Read {
             page,
@@ -362,7 +364,7 @@ impl Builder {
     /// objects and the structure setting, the two things its paint reads that
     /// change.
     pub fn leaf_valid(&self, chunk: PyramidChunk) -> u32 {
-        object_col_revision(L2_IDX(chunk.base().i)).wrapping_mul(2) | settings_store().show_structures as u32
+        object_col_revision(L2_IDX(chunk.corner())).wrapping_mul(2) | settings_store().show_structures as u32
     }
 
     /// The composite of z16 chunk `chunk` — the real set, no edits —
@@ -375,7 +377,7 @@ impl Builder {
         let page = Terrain::pyramid().get(chunk.page())?;
         let (tx0, ty0) = chunk.in_page();
         let show = settings_store().show_structures;
-        let col_idx = L2_IDX(chunk.base().i);
+        let col_idx = L2_IDX(chunk.corner());
         let valid = self.leaf_valid(chunk);
         let volume = self.paint_terrain_at(world, [tx0 as i64, ty0 as i64], 1, show, page)?;
         if world.painter.paint(world.store.entries(col_idx), world.volumes, volume, None, None).refused {
@@ -818,7 +820,7 @@ impl Builder {
         // Its own ground and the apron a fold reads, which reaches into the
         // chunks beside it.
         let near = (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy)));
-        let under: Vec<IVec> = near.flat_map(|(dx, dy)| world.store.cols_under(c.at.beside(dx, dy).node())).collect();
+        let under: Vec<IVec> = near.flat_map(|(dx, dy)| world.store.cols_under(c.at.beside(dx, dy, 0).column())).collect();
         for key in under {
             if !tiers_draw(level, base, key) {
                 continue;
@@ -882,7 +884,12 @@ impl Builder {
                 return Progress::Blocked;
             }
             let cube = c.wanted().next().unwrap();
-            xpute_core::ensure!(self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().texture_pack), ENOTRECOVERABLE);
+            // The runs are the column's, through every chunk over it; this
+            // chunk draws what lies in its own heights (world/pyramid/
+            // chunk.rs).
+            let (z0, z1) = c.at.z_range();
+            let clip = Some((z0 as i32, z1 as i32));
+            xpute_core::ensure!(self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().texture_pack, clip), ENOTRECOVERABLE);
             self.bake_job = Some(BakeJob {
                 id,
                 cube,

@@ -100,7 +100,6 @@ impl Layer for Terrain {
     /// the cover's, made again from the pyramid's revision, and a chunk
     /// whose page has gone leaves it.
     fn changed(p: LevelPage, present: bool) {
-        crate::layer::terrain::relief::page_changed(p, Terrain::pyramid().get(p));
         // A chunk is read from its own page or the nearest one over it, so a
         // page coming or going changes what some are read from.
         crate::world::chunk::source::chunk_sources_changed();

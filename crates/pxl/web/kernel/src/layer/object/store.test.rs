@@ -192,7 +192,7 @@ fn a_level_chunk_moves_with_the_columns_it_draws_and_no_other() {
     let _g = serial();
     let c = corner(4096 * 13, 4096 * 5, 3);
     let level = 3;
-    let (home, far) = (Chunk::of(level, &c).base().i, Chunk::of(level, &c).beside(5, 0).base().i);
+    let (home, far) = (Chunk::of(level, &c).corner(), Chunk::of(level, &c).beside(5, 0, 0).corner());
     let before = (objects_revision_of(level, home), decor_revision_of(level, home), objects_revision_of(level, far));
     place(&c, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
     assert!(objects_revision_of(level, home) > before.0, "its tiers moved");

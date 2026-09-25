@@ -46,14 +46,14 @@ pub fn mesh(cover: Cover, d: &Domain, drawable: impl Fn(Chunk) -> bool) -> Cover
         let refine: HashSet<Chunk> = unbalanced(&drawn, d)
             .into_iter()
             .map(|(_, coarse)| coarse)
-            .filter(|&c| d.splits(c) && drawable(c.children()[0]))
+            .filter(|&c| d.splits(c) && d.children(c).next().is_some_and(&drawable))
             .collect();
         if refine.is_empty() {
             break;
         }
         for c in refine {
             drawn.remove(&c);
-            drawn.extend(c.children());
+            drawn.extend(d.children(c));
         }
     }
     loop {
@@ -98,12 +98,13 @@ fn replace(drawn: &mut HashSet<Chunk>, gaps: &mut HashSet<Chunk>, up: &HashSet<C
 }
 
 /// Every pair of drawn chunks the view sees that meet more than a level
-/// apart, the finer first.
+/// apart, the finer first: across each of its sides, where the ground
+/// beside it may stand in the chunk level with it or one above or below.
 fn unbalanced(drawn: &HashSet<Chunk>, d: &Domain) -> Vec<(Chunk, Chunk)> {
     let mut out = Vec::new();
     for &fine in drawn {
-        for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
-            let next = fine.beside(dx, dy);
+        for (dx, dy, dz) in [(1, 0), (-1, 0), (0, 1), (0, -1)].into_iter().flat_map(|(dx, dy)| (-1..=1).map(move |dz| (dx, dy, dz))) {
+            let next = fine.beside(dx, dy, dz);
             if let Some(coarse) = std::iter::once(next).chain(next.ancestors()).find(|a| drawn.contains(a)) {
                 if coarse.level() >= fine.level() + 2 && d.sees(fine) && d.sees(coarse) {
                     out.push((fine, coarse));

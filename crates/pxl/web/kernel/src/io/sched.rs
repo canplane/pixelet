@@ -8,7 +8,8 @@
 //!
 //! - **desired** — what a producer says it needs *now*. Replaced whole, per
 //!   producer, on every turn that producer speaks.
-//! - **attempt** — what the host was told to run and has not reported.
+//! - **attempt** — what the host was told to run, while it is wanted and
+//!   the host has not reported.
 //! - **backoff** — when an identity whose attempt failed may be tried again.
 //!
 //! **A completion ends an attempt and touches neither of the others.** A
@@ -68,9 +69,6 @@ struct Attempt {
     rank: Rank,
     enqueue_ms: f64,
     start_ms: f64,
-    /// Told to stop. Still out, still spending its credit: a stop is a credit
-    /// on its way back and not the end of anything.
-    stopping: bool,
 }
 
 /// When a failed identity may be tried again.
@@ -188,8 +186,9 @@ fn held_back(s: &Sched, category: Category, subject: u64, at: f64) -> bool {
     s.backoff.iter().any(|b| b.category == category && b.subject == subject && at < b.until_ms)
 }
 
-/// Starts what is wanted and not out, best first, and where there is nothing
-/// left to start with, takes a credit from work that ranks worse.
+/// Stops what no producer wants any more, then starts what is wanted and not
+/// out, best first, and where there is nothing left to start with, takes a
+/// credit from work that ranks a class worse.
 ///
 /// One pump a turn, after every producer has spoken: with a pump per
 /// declaration whichever spoke first would fill every slot before another had
@@ -198,6 +197,16 @@ pub fn pump() {
     let s = sched();
     let at = now();
     s.backoff.retain(|b| at < b.until_ms);
+
+    // What the camera has left is stopped in the turn it leaves, every one
+    // of it: a zoom out and straight back in must not leave the credits on
+    // the level it passed through while the level wanted now waits for them
+    // one round trip at a time.
+    for slot in 0..s.attempt.len() {
+        if s.attempt[slot].is_some_and(|a| !s.desired.iter().any(|w| w.category == a.category && w.subject == a.subject)) {
+            stop(s, slot, at);
+        }
+    }
 
     // Best first, and where two rank the same, the same order every run.
     let mut ready: Vec<usize> = (0..s.desired.len())
@@ -217,15 +226,13 @@ pub fn pump() {
             .then((x.category as u8, x.subject).cmp(&(y.category as u8, y.subject)))
     });
 
-    let mut waiting = Vec::new();
     for i in ready {
         let w = s.desired[i];
-        match free_slot(s) {
-            Some(slot) => start(s, slot, w, at),
-            None => waiting.push(w),
-        }
+        // Best first, so where nothing makes room for this one nothing
+        // makes room for what follows it.
+        let Some(slot) = free_slot(s).or_else(|| preempt(s, w, at)) else { break };
+        start(s, slot, w, at);
     }
-    preempt(s, &waiting);
 }
 
 fn free_slot(s: &Sched) -> Option<usize> {
@@ -239,42 +246,50 @@ fn start(s: &mut Sched, slot: usize, w: Wanted, at: f64) {
         rank: w.rank,
         enqueue_ms: w.enqueue_ms,
         start_ms: at,
-        stopping: false,
     });
     s.started.push((key_of(slot, s.generation[slot]), w.category, w.subject));
 }
 
-/// Takes a credit for what is wanted now from what is not, and only then from
-/// work that ranks enough worse to be worth restarting.
-///
-/// A stop is logical: the attempt is still out and still spending its credit
-/// until the host says it is over, and what it brings back is adopted like
-/// anything else. The demand under a stopped attempt is not withdrawn — it is
-/// still desired, and the next pump starts it again.
-fn preempt(s: &mut Sched, waiting: &[Wanted]) {
-    for w in waiting {
-        // One already told to stop is a credit on its way back and counts
-        // against the shortfall, so a turn does not tell a second.
-        if s.attempt.iter().flatten().any(|a| a.stopping) {
-            return;
-        }
-        let obsolete = |a: &Attempt| !s.desired.iter().any(|d| d.category == a.category && d.subject == a.subject);
-        let victim = (0..s.attempt.len()).filter(|&k| s.attempt[k].is_some_and(|a| !a.stopping)).max_by(|&a, &b| {
-            let (x, y) = (s.attempt[a].or_bug(Errno::ENOTRECOVERABLE), s.attempt[b].or_bug(Errno::ENOTRECOVERABLE));
-            obsolete(&x).cmp(&obsolete(&y)).then(x.rank.class.cmp(&y.rank.class)).then(x.rank.distance.total_cmp(&y.rank.distance))
-        });
-        let Some(slot) = victim else { return };
-        let a = s.attempt[slot].or_bug(Errno::ENOTRECOVERABLE);
-        // A whole class better, and nothing finer. Distance says which of two
-        // alike to start, not that one running is worth restarting; taking a
-        // credit costs everything the attempt has already spent, and only a
-        // class says the waiting work is a different kind of wanted.
-        if !obsolete(&a) && w.rank.class >= a.rank.class {
-            return;
-        }
-        s.attempt[slot] = Some(Attempt { stopping: true, ..a });
-        s.stops.push(key_of(slot, s.generation[slot]));
+/// Takes a credit for `w` from the attempt that ranks worst, where that is a
+/// whole class worse, and says which slot it freed. The demand under the
+/// attempt stopped is not withdrawn: it is still desired, and a later pump
+/// starts it again.
+fn preempt(s: &mut Sched, w: Wanted, at: f64) -> Option<usize> {
+    let rank = |k: usize| s.attempt[k].or_bug(Errno::ENOTRECOVERABLE).rank;
+    let slot = (0..s.attempt.len())
+        .filter(|&k| s.attempt[k].is_some())
+        .max_by(|&a, &b| rank(a).class.cmp(&rank(b).class).then(rank(a).distance.total_cmp(&rank(b).distance)))?;
+    // A whole class better, and nothing finer. Distance says which of two
+    // alike to start, not that one running is worth restarting; taking a
+    // credit costs everything the attempt has already spent, and only a
+    // class says the waiting work is a different kind of wanted.
+    if w.rank.class >= rank(slot).class {
+        return None;
     }
+    stop(s, slot, at);
+    Some(slot)
+}
+
+/// Ends an attempt from this side: the host is told to stop it, and the
+/// credit is free at once. The key is spent with it, so whatever the host
+/// still reports under it — an abort, or a body that landed as the stop went
+/// out — finds no attempt and is let go (io/fetch.rs). A body that came as
+/// the camera left is lost that way; one it comes back for is asked again.
+fn stop(s: &mut Sched, slot: usize, at: f64) {
+    let a = s.attempt[slot].take().or_bug(Errno::ENOTRECOVERABLE);
+    s.stops.push(key_of(slot, s.generation[slot]));
+    s.generation[slot] = s.generation[slot].wrapping_add(1);
+    ledger_record(TaskRecord {
+        key: crate::io::demand::DemandKey::new(a.category, a.subject),
+        priority: a.rank.class as f64 + a.rank.distance,
+        enqueue_ms: a.enqueue_ms,
+        start_ms: Some(a.start_ms),
+        end_ms: at,
+        transport_ms: 0.0,
+        phases: None,
+        outcome: Outcome::aborted,
+        fail: Failure::default(),
+    });
 }
 
 /// Each attempt the pump started since the last take, for the host to run.
@@ -284,8 +299,8 @@ pub fn take_started(mut each: impl FnMut(u64, Category, u64)) {
     }
 }
 
-/// Each attempt told to stop since the last take. Each is still settled by
-/// the host like any other.
+/// Each attempt stopped since the last take, for the host to abort. Its key
+/// is spent: what the host reports under it afterwards names nothing.
 pub fn take_stops(mut each: impl FnMut(u64)) {
     for key in core::mem::take(&mut sched().stops) {
         each(key);

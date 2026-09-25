@@ -22,7 +22,6 @@ pub mod chunk;
 pub mod domain;
 pub mod pressure;
 
-use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 use std::collections::{BTreeMap, HashSet};
 use xpute_runtime::abi::fetch::FetchFail;
@@ -37,7 +36,7 @@ use crate::layer::environment::fog::eye_height;
 use crate::world::change::world_edge;
 use chunk::Chunk;
 pub use domain::Domain;
-use domain::{domain_for, eye, heights_revision, ring_of, Frustum, VIEW_PAGES};
+use domain::{domain_for, eye, heights_revision, Frustum, Order, VIEW_PAGES};
 use pressure::pressure;
 
 /// A layer the pyramid holds: its page is itself, folded by `Folds`.
@@ -292,7 +291,7 @@ impl<L: Layer> Pyramid<L> {
         let mut open = d.roots().to_vec();
         while let Some(c) = open.pop() {
             if d.splits(c) {
-                open.extend(c.children());
+                open.extend(d.children(c));
             } else if self.drawn_from(c.page()).is_some() {
                 out.drawn.push(c);
             } else {
@@ -349,15 +348,15 @@ impl<L: Layer> Pyramid<L> {
         used.iter().position(|&u| !u).map(|at| at as u32)
     }
 
-    /// How readily a resident page gives up its record, highest first. A page
-    /// the camera does not want goes before one it does; among those, one
-    /// something else already draws goes before one nothing covers; and among
-    /// equals the one furthest out, the rim being margin. Ordered by
-    /// comparison rather than a score, so a page the camera wants is never
-    /// given up for one it does not, whatever the distance.
-    fn worth(&self, p: LevelPage, anchor: IVec) -> (bool, bool, u32) {
-        let wanted = self.keeps(p);
-        (!wanted, self.covered(p), ring_of(anchor, p))
+    /// What a resident page is weighed at for its record, the greater giving
+    /// it up first: a page the camera does not want goes before one it does; among those,
+    /// one something else already draws goes before one nothing covers; and
+    /// among equals the one last in the view's order, the one the eye is
+    /// least likely to reach again. Ordered by comparison rather than a
+    /// score, so a page the camera wants is never given up for one it does
+    /// not, whatever the distance.
+    fn worth(&self, d: &Domain, p: LevelPage) -> (bool, bool, Order) {
+        (!self.keeps(p), self.covered(p), d.page_order(p))
     }
 
     /// The record `p` goes into: its own, a free one, or the one whose page
@@ -365,23 +364,23 @@ impl<L: Layer> Pyramid<L> {
     /// which is an arrival the camera has moved past: dropped rather than
     /// turning out a page that is wanted, and counted, since whether the
     /// range is the wrong size is a reading and not an argument.
-    fn record_for(&mut self, p: LevelPage, anchor: Option<IVec>) -> Option<u32> {
+    fn record_for(&mut self, p: LevelPage) -> Option<u32> {
         if let Some(record) = self.record_of(p) {
             return Some(record);
         }
         if let Some(free) = self.free_record() {
             return Some(free);
         }
-        let anchor = anchor?;
-        let mine = self.worth(p, anchor);
+        let d = self.domain.as_ref()?;
+        let mine = self.worth(d, p);
         // The pinned page is never the one to go, whatever it is weighed at.
         let worst = self
             .pages
             .iter()
             .filter(|(&held, _)| Some(held) != self.pinned)
             .filter(|(_, h)| h.record != ABSENT)
-            .map(|(&held, h)| (self.worth(held, anchor), h.record))
-            .max_by(|a, b| a.0.cmp(&b.0));
+            .map(|(&held, h)| (self.worth(d, held), h.record))
+            .max_by_key(|&(w, _)| w);
         let taken = worst.filter(|(w, _)| *w > mine).map(|(_, r)| r);
         if taken.is_none() {
             self.refused += 1;
@@ -409,7 +408,7 @@ impl<L: Layer> Pyramid<L> {
 
     /// A page's fetched body, made resident.
     pub fn adopt(&mut self, p: LevelPage, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
-        let Some(record) = self.record_for(p, eye().map(|e| e.foot)) else { return Ok(()) };
+        let Some(record) = self.record_for(p) else { return Ok(()) };
         let page = L::receive(record, pkt, phases)?;
         self.take(p, record, page);
         Ok(())
@@ -422,7 +421,7 @@ impl<L: Layer> Pyramid<L> {
     /// The ring around those four is read where it is held and stood in for
     /// where it is not: requiring it would put this at one page a level, and
     /// a zoom out would fetch pages whose ground is already held.
-    fn fold_one(&mut self, anchor: IVec) -> bool {
+    fn fold_one(&mut self) -> bool {
         let Some(d) = self.domain.as_ref() else { return false };
         let wanted: Vec<LevelPage> = d.pages().map(|(p, _)| p).filter(|p| p.level > 0).collect();
         for p in wanted {
@@ -430,7 +429,7 @@ impl<L: Layer> Pyramid<L> {
                 continue;
             }
             let Some(folded) = L::fold_page(p, |q| self.get(q)) else { continue };
-            let Some(record) = self.record_for(p, Some(anchor)) else { return false };
+            let Some(record) = self.record_for(p) else { return false };
             return match L::keep(record, &folded) {
                 Ok(page) => {
                     self.take(p, record, page);
@@ -450,22 +449,22 @@ impl<L: Layer> Pyramid<L> {
     fn wants(&self) -> Vec<(u64, Rank)> {
         let mut wants = Vec::new();
         if let Some(d) = self.domain.as_ref() {
-            // The page the ground nearest the view's center is drawn from:
+            // The page the first ground of the view's order is drawn from:
             // the first of the layer's order (io/policy.rs).
-            let center = d.pages().filter_map(|(p, order)| order.map(|o| (o, p))).min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, p)| p);
+            let first = d.pages().filter_map(|(p, order)| order.map(|o| (o, p))).min().map(|(_, p)| p);
             for (p, order) in d.pages() {
                 // A page the tree stops above is none to ask for, whether or
                 // not the page over it has come yet: that page is its own want.
                 if self.answers(p) || self.settled(p) {
                     continue;
                 }
-                let (shell, distance) = match order {
-                    _ if Some(p) == center => (Shell::Center, 0.0),
+                let (shell, order) = match order {
+                    Some(order) if Some(p) == first => (Shell::First, order),
                     _ if p.level == TOP_LEVEL => (Shell::Top, d.page_order(p)),
-                    Some(distance) => (Shell::Drawn, distance),
+                    Some(order) => (Shell::Drawn, order),
                     None => (Shell::Fallback, d.page_order(p)),
                 };
-                wants.push((p.subject(), policy::page(L::CATEGORY, shell, distance)));
+                wants.push((p.subject(), policy::page(L::CATEGORY, shell, order)));
             }
         }
         if let Some(p) = self.pinned.filter(|p| self.get(*p).is_none() && !self.settled(*p) && !wants.iter().any(|(s, _)| *s == p.subject())) {
@@ -548,8 +547,7 @@ pub async fn fold_task<L: Layer>() {
         notified(folds::<L>).await;
         loop {
             yield_if_spent(world_edge).await;
-            let Some(anchor) = eye().map(|e| e.foot) else { break };
-            if !L::pyramid().fold_one(anchor) {
+            if !L::pyramid().fold_one() {
                 break;
             }
         }
