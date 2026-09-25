@@ -9,7 +9,6 @@
 use pxl_render::mesh::paint::object::adapter::Painter;
 use pxl_render::mesh::paint::terrain::adapter::Materials;
 use pxl_render::mesh::volume::Volumes;
-use pxl_spec::space::pvf3::ivec::{self, gather};
 use xpute_runtime::ipc::change::{ChangeLog, ChangeLogOptions};
 
 use crate::global::Global;
@@ -17,12 +16,7 @@ use crate::layer::object::store::Store;
 use crate::world::chunk::raycast::Raycast;
 use crate::world::chunk::table::Scheduler;
 
-/// world/change.rs's WorldTopic numbers the store bumps, and the
-/// log's shape.
-pub const TOPIC_OBJECT_COLUMN: u32 = 0;
-pub const TOPIC_DECOR_COLUMN: u32 = 1;
-pub const TOPIC_OBJECT_CELL: u32 = 2;
-pub const WORLD_TOPICS: u32 = 6;
+/// The log's shape: world/change.rs's topics, and how many changes it keeps.
 pub const JOURNAL_CAPACITY: u32 = 4096;
 
 pub struct Kernel {
@@ -51,7 +45,7 @@ impl Kernel {
             sched: Scheduler::new(),
             raycast: Raycast::default(),
             changes: ChangeLog::new(ChangeLogOptions {
-                topics: WORLD_TOPICS,
+                topics: crate::world::change::WORLD_TOPICS,
                 capacity: JOURNAL_CAPACITY,
                 keys_per_topic: None,
             }),
@@ -64,24 +58,6 @@ static KERNEL: Global<Kernel> = Global::new();
 /// The kernel.
 pub fn kernel() -> &'static mut Kernel {
     KERNEL.get(Kernel::new)
-}
-
-/// Re-derives the chunk's entries and cells, and records the change: the
-/// column in both of its topics, and every cell whose entries changed, by
-/// its corner.
-pub fn reindex_object(k: &mut Kernel, key: u64) {
-    k.objects.reindex(key);
-    crate::world::chunk::node::chunk_sources_changed();
-    k.changes.bump(TOPIC_OBJECT_COLUMN, key as i64);
-    k.changes.bump(TOPIC_DECOR_COLUMN, key as i64);
-    let (at, n) = k.objects.take_touched();
-    let (x0, y0) = (ivec::X(key), ivec::Y(key));
-    for r in 0..n {
-        // SAFETY: the rows take_touched just handed back, three words each.
-        let row = unsafe { core::slice::from_raw_parts(at.add(r * 3), 3) };
-        let corner = gather(x0 + row[0] as i64, y0 + row[1] as i64, row[2] as i64);
-        k.changes.bump(TOPIC_OBJECT_CELL, corner as i64);
-    }
 }
 
 /// The kernel's world and its scheduler, borrowed together for a call that

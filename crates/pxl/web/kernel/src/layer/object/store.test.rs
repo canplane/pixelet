@@ -128,12 +128,12 @@ fn object_store_band_tree_a_2_2_2_block_of_one_colour_reads_back_as_eight_cells(
 fn object_store_band_tree_clearing_a_chunk_s_last_object_frees_the_chunk() {
     let _g = serial();
     let c = corner(4096 * 9, 4096 * 2, 3);
-    let before = object_store_stats().0;
+    let before = kernel().objects.chunk_count();
     place(&c, DECOR_SIZE, PlaceableCube::Block(Block::blue), false);
-    assert_eq!(object_store_stats().0, before + 1);
+    assert_eq!(kernel().objects.chunk_count(), before + 1);
     let entry = in_cell(&c).remove(0);
     remove(entry.at);
-    assert_eq!(object_store_stats().0, before);
+    assert_eq!(kernel().objects.chunk_count(), before);
 }
 
 #[test]
@@ -238,65 +238,107 @@ fn entries(store: &Store, col_idx: IVec) -> Vec<(i32, u32, u32)> {
     }
 }
 
+fn write(store: &mut Store, col_idx: IVec, band_idx: BandZ, at: [u32; 3], scale: Scale, state: u32) -> BTreeSet<IVec> {
+    store.write([Write { col_idx, band_idx, at, scale, state }])
+}
+
 #[test]
-fn a_write_is_read_back_and_derived_as_one_entry() {
+fn a_write_is_read_back_and_its_entries_are_made_within_it() {
     let mut store = Store::new();
-    store.write(7, 0, [8, 16, 24], CELL, 3);
+    assert_eq!(write(&mut store, 7, 0, [8, 16, 24], CELL, 3), BTreeSet::from([7]));
     assert_eq!(store.read(7, 0, [8, 16, 24]), 3);
     assert_eq!(store.read(7, 0, [15, 23, 31]), 3, "a cell leaf covers its eight steps");
     assert_eq!(store.read(7, 0, [16, 16, 24]), VOID);
-    store.reindex(7);
     assert_eq!(entries(&store, 7), vec![(0, pack_pos(8, 16, 24, CELL), 3)]);
-    let cell = store.cell(7, 1, 2, 3).expect("the cell is indexed");
+    let cell = store.cell(7, 1, 2, 3).expect("the cell is found");
     assert_eq!((cell.start, cell.count, cell.solid), (0, 1, 1));
-    let (_, n) = store.take_touched();
-    assert_eq!(n, 1);
+    assert!(store.cell(7, 2, 2, 3).is_none());
 }
 
 #[test]
 fn a_void_write_prunes_the_band_and_the_chunk() {
     let mut store = Store::new();
-    store.write(7, 2, [0, 0, 0], OBJECT_FINEST, AIR);
-    store.reindex(7);
+    write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, AIR);
     assert_eq!(store.chunk_count(), 1);
-    let cell = store.cell(7, 0, 0, 2 * BAND_CELLS as i32).expect("the cell is indexed");
+    let cell = store.cell(7, 0, 0, 2 * BAND_CELLS as i32).expect("the cell is found");
     assert_eq!(cell.solid, 0, "AIR does not occupy");
-    store.write(7, 2, [0, 0, 0], OBJECT_FINEST, VOID);
-    store.reindex(7);
-    assert_eq!((store.chunk_count(), store.band_count(), store.cell_count()), (0, 0, 0));
+    assert_eq!(write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, VOID), BTreeSet::from([7]));
+    assert_eq!(store.chunk_count(), 0);
     assert_eq!(entries(&store, 7), vec![]);
-    let (at, n) = store.take_touched();
-    assert_eq!(n, 1, "the closed chunk's cell is reported once");
-    // SAFETY: the rows were just written and stay until the next change.
-    let row = unsafe { core::slice::from_raw_parts(at, 3) };
-    assert_eq!(row, &[0, 0, 2 * BAND_CELLS as i32]);
+    assert!(store.cell(7, 0, 0, 2 * BAND_CELLS as i32).is_none());
+    assert!(write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, VOID).is_empty(), "erasing nothing changes nothing");
 }
 
 #[test]
-fn eight_cells_of_one_colour_merge_and_come_back_as_eight_entries() {
+fn a_merged_block_comes_back_as_its_cells_each_found_where_it_lies() {
     let mut store = Store::new();
-    for z in 0..2 {
-        for y in 0..2 {
-            for x in 0..2 {
-                store.write(1, -1, [x * 8, y * 8, z * 8], CELL, 5);
-            }
+    // A 4×4×4 block of whole cells folds into one leaf two levels above the
+    // cell; its cells come back one entry each, in the lanes' own order.
+    let writes = (0..64u32).map(|k| {
+        let [x, y, z] = at_walk_order::<3>(k as u64, 2);
+        Write {
+            col_idx: 1,
+            band_idx: -1,
+            at: [x * CELL_STEPS, y * CELL_STEPS, z * CELL_STEPS],
+            scale: CELL,
+            state: 5,
         }
-    }
-    store.reindex(1);
+    });
+    store.write(writes);
     let found = entries(&store, 1);
-    assert_eq!(found.len(), 8);
+    assert_eq!(found.len(), 64);
     assert!(found.iter().all(|&(b, p, s)| b == -1 && s == 5 && unpack_pos(p).3 == CELL));
-    assert_eq!(store.cell_count(), 8);
-    assert_eq!(store.cell(1, 1, 1, -(BAND_CELLS as i32) + 1).map(|c| c.count), Some(1));
+    for (k, &(_, p, _)) in found.iter().enumerate() {
+        let (x, y, z, _) = unpack_pos(p);
+        let cell = store
+            .cell(1, x / CELL_STEPS, y / CELL_STEPS, -(BAND_CELLS as i32) + (z / CELL_STEPS) as i32)
+            .expect("every cell is found");
+        assert_eq!((cell.start, cell.count), (k as u32, 1));
+    }
+}
+
+#[test]
+fn the_lanes_are_in_band_and_walk_order_so_a_cell_s_entries_are_one_run() {
+    let mut store = Store::new();
+    // Sub-cell leaves in two cells and a whole cell between them, over two
+    // bands, written out of order.
+    let finest = |x: u32, y: u32, z: u32| Write {
+        col_idx: 3,
+        band_idx: 0,
+        at: [x, y, z],
+        scale: OBJECT_FINEST,
+        state: 2,
+    };
+    store.write([
+        Write { band_idx: 1, ..finest(8, 0, 0) },
+        finest(9, 1, 0),
+        finest(8, 0, 0),
+        Write { scale: CELL, ..finest(0, 8, 0) },
+        finest(1, 0, 0),
+        finest(0, 0, 1),
+    ]);
+    let found = entries(&store, 3);
+    let order: Vec<(BandZ, u64)> = found
+        .iter()
+        .map(|&(b, p, _)| {
+            let (x, y, z, _) = unpack_pos(p);
+            (b, walk_order([x / CELL_STEPS, y / CELL_STEPS, z / CELL_STEPS], BAND_CELL_SHAMT))
+        })
+        .collect();
+    assert!(order.is_sorted(), "{order:?}");
+    assert_eq!(store.cell(3, 0, 0, 0).map(|c| c.count), Some(2));
+    assert_eq!(store.cell(3, 1, 0, 0).map(|c| c.count), Some(2));
+    assert_eq!(store.cell(3, 0, 1, 0).map(|c| c.count), Some(1));
+    assert_eq!(store.cell(3, 1, 0, BAND_CELLS as i32).map(|c| c.count), Some(1));
 }
 
 #[test]
 fn closing_a_chunk_moves_the_last_into_its_place() {
     let mut store = Store::new();
-    store.write(10, 0, [0, 0, 0], CELL, 1);
-    store.write(20, 0, [0, 0, 0], CELL, 1);
-    store.write(30, 0, [0, 0, 0], CELL, 1);
-    store.write(10, 0, [0, 0, 0], CELL, VOID);
+    write(&mut store, 10, 0, [0, 0, 0], CELL, 1);
+    write(&mut store, 20, 0, [0, 0, 0], CELL, 1);
+    write(&mut store, 30, 0, [0, 0, 0], CELL, 1);
+    write(&mut store, 10, 0, [0, 0, 0], CELL, VOID);
     assert_eq!((store.chunk_key(0), store.chunk_key(1)), (30, 20));
     assert_eq!(store.read(30, 0, [0, 0, 0]), 1);
     assert_eq!(store.read(20, 0, [0, 0, 0]), 1);

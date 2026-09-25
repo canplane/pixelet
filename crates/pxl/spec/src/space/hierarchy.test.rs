@@ -32,3 +32,19 @@ fn a_scale_is_one_power_of_two_however_it_is_read() {
     assert_eq!(unit.count_in(Scale::of(9)) as f64, Scale::of(9).side());
     assert_eq!(Scale::of(-3).side(), 0.125);
 }
+
+/// A walk's order is its inverse's, and it keeps a coarser node's leaves
+/// together: every leaf of one node falls in one run, the node's own order
+/// shifted up by the levels below it.
+#[test]
+fn a_walk_order_is_invertible_and_keeps_a_node_s_leaves_in_one_run() {
+    for at in [[0u32, 0, 0], [5, 3, 7], [63, 0, 31], [12, 40, 9]] {
+        assert_eq!(at_walk_order::<3>(walk_order(at, 6), 6), at);
+        let node = walk_order(at.map(|v| v >> 2), 4);
+        assert_eq!(walk_order(at, 6) >> (3 * 2), node, "{at:?} lies in its node's run");
+    }
+    let mut order: Vec<u64> = (0..16u32).flat_map(|y| (0..16u32).map(move |x| walk_order([x, y], 4))).collect();
+    order.sort_unstable();
+    order.dedup();
+    assert_eq!(order, (0..256).collect::<Vec<_>>(), "a walk visits every node once");
+}
