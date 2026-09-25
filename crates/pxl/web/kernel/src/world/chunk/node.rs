@@ -20,7 +20,7 @@ use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
 use pxl_spec::bake::constant::{pack_pos, BandZ, BAND, CELL, OBJECT_FINEST};
-use pxl_spec::space::indexer::{FROM_L2_IDX, L1, L2, L2_IDX, L3_IDX};
+use pxl_spec::space::indexer::{FROM_L2_IDX, L1, L2, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_runtime::mem::heap::{free, Block};
@@ -242,17 +242,9 @@ struct Runs {
 
 #[derive(Clone, Copy)]
 struct Chunk {
-    /// The level of the page it is drawn from: its cells are 2^level units.
-    level: u32,
-    /// The chunk's corner, as an L1 coordinate.
-    base: IVec,
-    /// The column it stands in, as the object store keys it. Derived from the
-    /// corner — a chunk is one L2 span — and kept beside it because the two
-    /// are different units and nothing but this would say so.
-    col_idx: IVec,
-    /// Where the chunk starts in its page, in cells.
-    tx0: u32,
-    ty0: u32,
+    /// The chunk being built: its level, corner, column and page all come
+    /// from it.
+    at: PyramidChunk,
     show_structures: bool,
     generation: u32,
     /// The tiers the node lacks, in the order it wants them.
@@ -265,10 +257,26 @@ struct Chunk {
 }
 
 impl Chunk {
+    /// The level of the page it is drawn from: its cells are 2^level units.
+    fn level(&self) -> u32 {
+        self.at.level()
+    }
+
+    /// The chunk's corner, as an L1 coordinate.
+    fn base(&self) -> IVec {
+        self.at.base().i
+    }
+
+    /// The column it stands in, as the object store keys it: a chunk is one
+    /// L2 span.
+    fn col_idx(&self) -> IVec {
+        L2_IDX(self.base())
+    }
+
     /// The page the chunk is drawn from, where it is resident: a chunk is
     /// mounted from a resident page, which stays until the chunk goes.
     fn page(&self) -> Option<&'static Terrain> {
-        Terrain::pyramid().get(LevelPage::over(self.level, L3_IDX(self.base)))
+        Terrain::pyramid().get(self.at.page())
     }
 
     fn wants(&self, cube: Cube) -> bool {
@@ -414,15 +422,17 @@ impl Builder {
     /// scattered over, at any level. None while its page has not come.
     pub fn ground_of(&self, id: u32) -> Option<(u32, u32, &'static Terrain, bool)> {
         let c = self.chunks.get(&id)?;
-        Some((c.tx0, c.ty0, c.page()?, c.show_structures))
+        let (tx0, ty0) = c.at.in_page();
+        Some((tx0, ty0, c.page()?, c.show_structures))
     }
 
     /// What chunk `id` is made of, for a decor build: its corner, the column
     /// it stands in as the object store keys it, where it starts in its page,
     /// and its page's lanes.
     pub fn source_of(&self, id: u32) -> Option<(IVec, IVec, u32, u32, &'static Terrain, bool)> {
-        let c = self.chunks.get(&id).filter(|c| c.level == 0)?;
-        Some((c.base, c.col_idx, c.tx0, c.ty0, c.page()?, c.show_structures))
+        let c = self.chunks.get(&id).filter(|c| c.level() == 0)?;
+        let (tx0, ty0) = c.at.in_page();
+        Some((c.base(), c.col_idx(), tx0, ty0, c.page()?, c.show_structures))
     }
 
     /// What a leaf composite at `base` is valid for: its column's objects and
@@ -479,16 +489,11 @@ impl Builder {
 
     // ---- commands ----
 
-    pub fn add(&mut self, id: u32, level: u32, base: IVec, tx0: u32, ty0: u32) {
-        assert!(tx0 + CHUNK_CELLS <= PAGE_CELLS && ty0 + CHUNK_CELLS <= PAGE_CELLS, "a chunk past its page");
+    pub fn add(&mut self, id: u32, at: PyramidChunk) {
         self.chunks.insert(
             id,
             Chunk {
-                level,
-                base,
-                col_idx: L2_IDX(base),
-                tx0,
-                ty0,
+                at,
                 show_structures: false,
                 generation: 0,
                 want: [None; 2],
@@ -679,7 +684,7 @@ impl Builder {
     fn advance_runs(&mut self, world: &mut World, id: u32) -> Progress {
         let c = &self.chunks[&id];
         let Some(page) = c.page() else { return Progress::Blocked };
-        if c.level > 0 {
+        if c.level() > 0 {
             return self.level_runs(world, id, page);
         }
         let holding = matches!(&self.scan_job, Some(j) if j.id == id);
@@ -690,11 +695,11 @@ impl Builder {
         // only ever about what is placed, so the direct path serves every
         // tier: a zoom-in would otherwise scan every chunk in view, most of
         // them empty of objects.
-        if !holding && !self.has_objects(world, c.col_idx) {
+        if !holding && !self.has_objects(world, c.col_idx()) {
             return self.direct_runs(world, id, page);
         }
         if !holding {
-            let col_idx = c.col_idx;
+            let col_idx = c.col_idx();
             if self.scan_job.is_some() || self.run_set_for(id).is_none() {
                 return Progress::Blocked;
             }
@@ -770,7 +775,7 @@ impl Builder {
     /// paint was refused.
     fn paint_terrain(&mut self, world: &mut World, id: u32, page: &Terrain) -> Option<u32> {
         let c = &self.chunks[&id];
-        let (tx0, ty0, show) = (c.tx0, c.ty0, c.show_structures);
+        let ((tx0, ty0), show) = (c.at.in_page(), c.show_structures);
         self.paint_terrain_at(world, tx0, ty0, show, page)
     }
 
@@ -817,7 +822,7 @@ impl Builder {
     /// entry and the carve are painted, the volume is sealed and the scan
     /// begins on it.
     fn advance_paint(&mut self, world: &mut World, id: u32, volume: u32, mut paint: PaintJob) -> Progress {
-        let col_idx = self.chunks[&id].col_idx;
+        let col_idx = self.chunks[&id].col_idx();
         if object_col_revision(col_idx) != paint.revision {
             self.abort_scan_of(world, id);
             return Progress::Busy;
@@ -863,7 +868,7 @@ impl Builder {
             return Progress::Blocked;
         }
         let c = &self.chunks[&id];
-        let (tx0, ty0, show) = (c.tx0, c.ty0, c.show_structures);
+        let ((tx0, ty0), show) = (c.at.in_page(), c.show_structures);
         let view = Self::page_view(page);
         self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
         assert!(self.direct.begin_direct(), "the direct writer left open");
@@ -899,7 +904,7 @@ impl Builder {
             return Progress::Blocked;
         }
         let c = &self.chunks[&id];
-        let (tx0, ty0, show, level, base) = (c.tx0, c.ty0, c.show_structures, c.level, c.base);
+        let ((tx0, ty0), show, level, base) = (c.at.in_page(), c.show_structures, c.level(), c.base());
         let view = Self::page_view(page);
         self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
         let target = GROUND.scale(level);
@@ -977,7 +982,7 @@ impl Builder {
             }
             let cube = c.wanted().next().unwrap();
             assert!(
-                self.bake.begin(&set, mesh_step(cube, c.level), 1 << c.level, settings_store().texture_pack),
+                self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().texture_pack),
                 "a bake open with no job naming it"
             );
             self.bake_job = Some(BakeJob {
