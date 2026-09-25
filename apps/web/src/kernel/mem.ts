@@ -51,11 +51,6 @@ export let CORE_KERNEL: KernelExports;
 
 export let CORE_MEMORY: WebAssembly.Memory;
 
-/** The module's own front, `[0, bytes)` of the memory: its stack, its rings
- * and everything the linker placed. Where it ends is the linker's answer and
- * not a number chosen in advance, so it moves when the module's code does. */
-export let MODULE_SECTION: { readonly offset: u32; readonly bytes: u32 };
-
 /** The rings to the module and its doorbell, made with it. A turn's
  * falling edge leaves what the kernel asks of the host in its two streams,
  * run before anything else can reach the device or ring again. A turn that
@@ -71,7 +66,6 @@ export async function load_core(): Promise<void> {
   const boot = boot_block(kernel);
   CORE_MEMORY = memory;
   CORE_KERNEL = kernel;
-  MODULE_SECTION = { offset: 0, bytes: boot[BOOT.data_end] };
   CORE_DOORBELL = new Doorbell(memory.buffer, boot[BOOT.sq], boot[BOOT.cq], (quota_ms) => {
     let wake: f64;
     try {
