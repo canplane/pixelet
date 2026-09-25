@@ -19,13 +19,13 @@ use crate::host::{now, wall_now};
 use crate::kernel::kernel;
 use crate::layer::environment::celestial_position::{equatorial_to_local, moon_position, sun_position};
 use crate::layer::environment::config::light_cfg;
-use crate::layer::environment::fog::{band_at, camera_height, centre_ground, reach_at};
+use crate::layer::environment::fog::{band_at, eye_ground, eye_height, reach_at};
 use crate::layer::environment::theme::{themes, Theme};
 use crate::layer::environment::theme_clock::theme_key;
 use crate::shell::map_store::map_store;
 use crate::world::change::{request_world_tick, wake_at};
 use crate::world::chunk::table::Frame;
-use crate::world::frame::view::{camera_centre, view};
+use crate::world::frame::view::camera_centre;
 use crate::world::pyramid::window::drawn_far;
 
 // The map's own fallback, so the first frames before map_center exists light
@@ -281,8 +281,7 @@ impl EnvironmentDraw {
         let over = frame.camera[0].hypot(frame.camera[1]).hypot(frame.camera[2] + r) - r;
         // Where the ground ends for the eye: the nearer of what the air and
         // the planet leave (environment/fog.rs) and what the window draws.
-        let v = view();
-        let height = camera_height(v.dist, v.polar);
+        let height = eye_height();
         let band = band_at(height, drawn_far().unwrap_or_else(|| reach_at(height)));
         let light = Light {
             theme: self.current,
@@ -295,7 +294,7 @@ impl EnvironmentDraw {
             fog_far: band.1,
             floor: light_cfg::FLOOR,
             altitude_km: (frame.centre_z + over) * km_per_u,
-            ground_km: centre_ground() * km_per_u,
+            ground_km: eye_ground() * km_per_u,
             km_per_u,
             latitude: self.lat.to_radians(),
             star_frame: equatorial_to_local(self.days, self.lat, self.lon),

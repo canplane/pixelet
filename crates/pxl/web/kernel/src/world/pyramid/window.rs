@@ -24,7 +24,7 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::{span_of, LevelPage, CHUNK_CELLS, PAGE_CELLS, PAGE_CHUNKS, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
-use crate::layer::environment::fog::{camera_height, reach_at};
+use crate::layer::environment::fog::{eye_height, reach_at};
 use crate::layer::object::store::column_boxes;
 use crate::layer::terrain::relief::range_over;
 use crate::shell::map_store::map_store;
@@ -122,15 +122,6 @@ fn level_at(dist: f64) -> u32 {
     ((dist / split_distance(0)).log2().floor().max(0.0) as u32).min(TOP_LEVEL)
 }
 
-/// How high the eye stands over the ground under it: the highest the ground
-/// there is known to reach, or the camera's own height over the map centre's
-/// ground where none of it is held.
-fn height_of(eye: &Eye) -> f64 {
-    let leaf = LevelPage::over(0, TO_XY(L3_IDX(eye.foot)));
-    let v = view();
-    range_over(leaf).map_or_else(|| camera_height(v.dist, v.polar), |(_, top)| eye.at[2] - top).max(0.0)
-}
-
 /// The levels a view holds, finest first, for an eye `height` over the
 /// ground under it: from the level that ground wants, WINDOW_LEVELS up at
 /// most.
@@ -139,14 +130,9 @@ pub fn window_for(height: f64) -> std::ops::Range<u32> {
     base..(base + WINDOW_LEVELS).min(TOP_LEVEL + 1)
 }
 
-/// `window_for` the eye as it stands.
-pub fn window_of(eye: &Eye) -> std::ops::Range<u32> {
-    window_for(height_of(eye))
-}
-
-/// `window_of` the eye as it is now; empty before there is a map.
+/// `window_for` the eye as it stands now; empty before there is a map.
 pub fn window() -> std::ops::Range<u32> {
-    eye().map_or(0..0, |e| window_of(&e))
+    eye().map_or(0..0, |_| window_for(eye_height()))
 }
 
 /// How far the view draws the ground as it stands now (`Domain::far`).
@@ -241,7 +227,7 @@ pub fn domain_for(eye: &Eye, height: f64) -> Domain {
 
 /// The domain of the eye as it stands.
 pub fn domain(eye: &Eye) -> Domain {
-    domain_for(eye, height_of(eye))
+    domain_for(eye, eye_height())
 }
 
 impl Domain {
@@ -354,16 +340,6 @@ impl Domain {
         let chain: Vec<Chunk> = std::iter::once(c).chain(c.ancestors().take_while(|a| a.level() < self.window.end)).collect();
         chain.into_iter().rev().find(|&k| !self.splits(k)).unwrap_or(c)
     }
-}
-
-/// How far the anchor stands from `p`'s centre, in `p`'s own spans: the
-/// measure every scheduler here orders by (sched/priority.rs), rooted, since
-/// what reads it packs it into a fraction under one.
-pub fn centre_dist(anchor: IVec, p: LevelPage) -> f64 {
-    let span = span_of(p.level);
-    let at = |a: i64, page: i64| a as f64 - (page as f64 + 0.5) * span;
-    let (dx, dy) = (at(ivec::X(anchor), ivec::X(p.page)), at(ivec::Y(anchor), ivec::Y(p.page)));
-    crate::sched::priority::in_own_sides(dx * dx + dy * dy, span).sqrt()
 }
 
 #[cfg(test)]

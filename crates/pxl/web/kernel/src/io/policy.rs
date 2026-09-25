@@ -4,8 +4,8 @@
 //!
 //! This is the only module that knows every producer's vocabulary, and the
 //! only one that holds a number. A producer says what it knows in its own
-//! terms — a page is not drawn, a page is drawn coarsely, a page is outside
-//! the ring the view draws — and the number it lands on is decided here, once,
+//! terms — a page is not drawn, a page is drawn coarsely, none of a page is
+//! drawn at its level — and the number it lands on is decided here, once,
 //! where the producers can be read against each other.
 //!
 //! **Only the orderings the code gives a reason for are kept.** There are
@@ -16,9 +16,10 @@
 //!    `waiting`); a page's own arrival sets one.
 //! 2. A page nothing draws before a page drawn coarsely. The first is a hole
 //!    on the screen and the second is already there (`world/pyramid.rs`'s `resolve`).
-//! 3. A page the view draws before one outside the ring it draws. The second
+//! 3. A page the view draws at its level before one it does not. The second
 //!    is margin against a move that has not happened.
-//! 4. Nearer before further, within any of those.
+//! 4. Nearer the eye before further, within any of those: the distance the
+//!    page's level was chosen by (world/pyramid/window.rs `Domain`).
 //!
 //! **Everything else is a tie.** A label, a POI page, the device's own page
 //! and a catalog asset have no relation to each other or to terrain that
@@ -40,9 +41,8 @@ pub fn ocean() -> Rank {
     Rank { class: 0, distance: 0.0 }
 }
 
-/// A page of any layer the pyramid holds that the view wants, `distance` from
-/// what the view is looking at, and whether it falls outside the ring the
-/// view actually draws. A layer's page ranks by what its absence costs, the
+/// A page of any layer the pyramid holds that the view wants, its nearest
+/// `distance` from the eye, and whether none of it is drawn at its level. A layer's page ranks by what its absence costs, the
 /// same for every layer: the orderings below are the pyramid's.
 ///
 /// `Exact` and `Foldable` are not demands — the caller has them already — and

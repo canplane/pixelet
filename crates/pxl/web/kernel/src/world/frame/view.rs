@@ -26,7 +26,7 @@ use crate::control::camera::config::camera_cfg;
 use crate::control::camera::orbit::orbit_local_offset;
 use crate::global::Global;
 use crate::layer::environment::config::render_cfg;
-use crate::layer::environment::fog::{camera_height, far_clip_at, near_clip_at};
+use crate::layer::environment::fog::{eye_height, far_clip_at, near_clip_at};
 use crate::world::frame::coord::local_world_to_canonical;
 
 const UP: Vec3 = Vec3 { x: 0.0, y: 0.0, z: 1.0 };
@@ -151,10 +151,18 @@ pub fn view_compose() {
     mat4_look_at(&mut v.view_matrix, v.eye, ORIGIN, UP);
     let vm = v.view_matrix;
     mat4_invert(&mut v.inv_view_matrix, &vm);
-    // The planes follow the reach, which follows the camera's height: a view
-    // laid along the ground reaches no further than the haze, and one from
-    // high up no further than the planet's own edge.
-    let height = camera_height(v.dist, v.polar);
+    let (mut rot, mut trans) = (mat4(), mat4());
+    mat4_rotation_z(&mut rot, v.azimuth);
+    mat4_translation(&mut trans, v.tx, v.ty, v.tz);
+    mat4_mul(&mut v.root, &rot, &trans);
+    let root = v.root;
+    mat4_invert(&mut v.inv_root, &root);
+    let (inv_root, eye) = (v.inv_root, v.eye);
+    mat4_transform_point(&mut v.eye_local, &inv_root, eye.x, eye.y, eye.z);
+    // The planes follow the reach, which follows the eye's height over the
+    // ground under it: a view laid along the ground reaches no further than
+    // the haze, and one from high up no further than the planet's own edge.
+    let height = eye_height();
     v.near = near_clip_at(height);
     v.far = far_clip_at(height);
     mat4_perspective(&mut v.proj, (v.fov * core::f64::consts::PI) / 180.0, v.width / v.height, v.near, v.far);
@@ -162,16 +170,8 @@ pub fn view_compose() {
     mat4_mul(&mut v.view_proj, &proj, &vm);
     let vp = v.view_proj;
     mat4_invert(&mut v.inv_view_proj, &vp);
-    let (mut rot, mut trans) = (mat4(), mat4());
-    mat4_rotation_z(&mut rot, v.azimuth);
-    mat4_translation(&mut trans, v.tx, v.ty, v.tz);
-    mat4_mul(&mut v.root, &rot, &trans);
-    let root = v.root;
-    mat4_invert(&mut v.inv_root, &root);
     mat4_mul(&mut v.local_view_proj, &vp, &root);
     mat4_frustum_planes(&mut v.planes, &vp);
-    let (inv_root, eye) = (v.inv_root, v.eye);
-    mat4_transform_point(&mut v.eye_local, &inv_root, eye.x, eye.y, eye.z);
 }
 
 /// The ray under a screen point, in the root frame: `ndc_x`/`ndc_y` in

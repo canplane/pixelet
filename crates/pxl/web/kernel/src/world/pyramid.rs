@@ -32,7 +32,7 @@ use crate::world::change::{world_edge, WorldTopic};
 use crate::world::page_table::PageTable;
 use chunk::Chunk;
 pub use window::Domain;
-use window::{domain, eye, held, ring_of, window, window_of};
+use window::{domain, eye, held, ring_of, window};
 use window::{CHAIN_PAGES, HELD_AXIS, WINDOW_LEVELS};
 
 /// A layer the pyramid holds: its page is itself, folded by `Folds`.
@@ -518,7 +518,7 @@ impl<L: Layer> Pyramid<L> {
     pub fn step(&mut self) {
         let Some(e) = eye() else { return };
         let anchor = e.foot;
-        let w = window_of(&e);
+        let w = window();
         let wish = (e.at, (w.start, w.end), crate::sched::turn::interactive(), self.revision, self.pinned);
         if self.last != Some(wish) {
             self.drop_unrecorded(anchor);

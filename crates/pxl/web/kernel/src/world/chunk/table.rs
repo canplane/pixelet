@@ -48,7 +48,6 @@ use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::frame_gizmo::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
-use crate::sched::priority::view_centre;
 use crate::shell::setting::store::hidden_ground;
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
@@ -161,8 +160,6 @@ pub struct Frame {
     /// The frustum as six planes of (nx, ny, nz, constant).
     pub planes: [f64; 24],
     pub camera: V3,
-    /// Where the camera is heading.
-    pub lead: V3,
     pub viewport_h: f64,
     pub fov_deg: f64,
     pub delta_s: f64,
@@ -339,8 +336,10 @@ struct Slot {
     /// The bounding sphere in the chunk's own space.
     bc: V3,
     radius: f64,
+    /// The nearest distance from the eye to its ground, squared: what its
+    /// level was chosen by (window.rs `Domain::nearest_to`), and so what its
+    /// work is ordered by.
     distance2: f64,
-    centre_distance2: f64,
     flags: u16,
     pending_since: f64,
     request: i32,
@@ -752,7 +751,6 @@ impl Scheduler {
             bc: [0.0; 3],
             radius: 0.0,
             distance2: f64::INFINITY,
-            centre_distance2: f64::INFINITY,
             flags: EMPTY | FRESH,
             pending_since: -1.0,
             request: 0,
@@ -1090,7 +1088,7 @@ impl Scheduler {
             if !s.has(STALE) {
                 continue;
             }
-            let key = (!(s.has(IN_FRUSTUM) && s.layout_ready), s.centre_distance2);
+            let key = (!(s.has(IN_FRUSTUM) && s.layout_ready), s.distance2);
             if worst.as_ref().is_none_or(|(low, _, _)| key > *low) {
                 worst = Some((key, k, id));
             }
@@ -1632,11 +1630,12 @@ impl Scheduler {
     /// between the on-screen and off-screen totals and says so with a
     /// `Visible` event, which is what the retention budget is spent from.
     fn refresh(&mut self, frame: &Frame, emit: &mut impl FnMut(Event)) {
+        let domain = Terrain::pyramid().domain();
         for i in 0..self.slots.len() {
-            let (visible, _, d2, ld2) = measure(frame, &self.slots[i]);
+            let visible = measure(frame, &self.slots[i]).0;
+            let near = domain.map_or(f64::INFINITY, |d| d.nearest_to(self.slots[i].chunk));
             let s = &mut self.slots[i];
-            s.distance2 = d2;
-            s.centre_distance2 = ld2;
+            s.distance2 = near * near;
             let was = s.has(IN_FRUSTUM);
             if visible != was {
                 let bytes = s.retained();
@@ -1666,7 +1665,7 @@ impl Scheduler {
                 in_frustum: s.has(IN_FRUSTUM),
                 hole: s.has(EMPTY) && !s.has(COVERED),
                 restale: s.layout_ready && s.layout_generation != self.builder.generation_of(s.id).unwrap_or(0),
-                centre_distance2: s.centre_distance2,
+                distance2: s.distance2,
                 pending_since: s.pending_since,
             }
             .keyed(now)
@@ -2054,7 +2053,6 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
         && a.origin == b.origin
         && a.planes == b.planes
         && a.camera == b.camera
-        && a.lead == b.lead
         && a.viewport_h == b.viewport_h
         && a.fov_deg == b.fov_deg
         && a.pixel_dither == b.pixel_dither
@@ -2099,7 +2097,8 @@ pub struct Priority {
     /// not what the page under it now says. Worse than a chunk asking only
     /// to be sharper, better than one showing nothing at all.
     pub restale: bool,
-    pub centre_distance2: f64,
+    /// The nearest distance from the eye to its ground, squared.
+    pub distance2: f64,
     pub pending_since: f64,
 }
 
@@ -2108,8 +2107,8 @@ pub struct Priority {
 /// moved past, then the ones asking only to be sharper, as progressive
 /// refinement goes — a coarse chunk a zoom out has just brought covers ground
 /// nothing shows, a fine one ground a stale chunk still shows; within each,
-/// the nearest the ground the view is heading to look at, which is the
-/// middle of the screen; then what is off screen farthest first — a release
+/// the nearest the eye, by the distance its level was chosen by, so the work
+/// follows the rule that asked for it; then what is off screen farthest first — a release
 /// takes memory from what is least likely to be wanted again. A wait halves
 /// the distance key every AGE_HALF_MS, within its class.
 ///
@@ -2135,7 +2134,7 @@ pub struct Keyed {
 
 impl Priority {
     pub fn keyed(self, now: f64) -> Keyed {
-        let d2 = self.centre_distance2;
+        let d2 = self.distance2;
         let key = if self.pending_since < 0.0 {
             d2
         } else {
@@ -2154,9 +2153,8 @@ fn priority_keyed(a: &Keyed, b: &Keyed) -> core::cmp::Ordering {
         .then_with(|| if a.p.in_frustum { a.key.total_cmp(&b.key) } else { b.key.total_cmp(&a.key) })
 }
 
-/// Where a slot is from a frame: on screen, its world centre, and its two
-/// squared distances.
-fn measure(frame: &Frame, s: &Slot) -> (bool, V3, f64, f64) {
+/// Where a slot is from a frame: on screen, and its world centre.
+fn measure(frame: &Frame, s: &Slot) -> (bool, V3) {
     let [x, y, z] = frame.world_of([s.base_x + s.bc[0], s.base_y + s.bc[1], s.bc[2]]);
     // Where the renderer draws it: laid back on the planet about the view
     // centre, the world's origin here, in the map's own axes — the view's
@@ -2168,9 +2166,6 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3, f64, f64) {
         None => [x, y, z],
     };
     let c = frame.camera;
-    let d2 = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2);
-    let t = view_centre(c, frame.lead);
-    let ld2 = (x - t[0]).powi(2) + (y - t[1]).powi(2) + (z - t[2]).powi(2);
     let half = s.span * 0.5;
     let mut visible = (c[0] - x).abs() <= half && (c[1] - y).abs() <= half;
     if !visible {
@@ -2197,7 +2192,7 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3, f64, f64) {
             }
         }
     }
-    (visible, [x, y, z], d2, ld2)
+    (visible, [x, y, z])
 }
 
 fn world_mem(world: &World) -> *const u8 {

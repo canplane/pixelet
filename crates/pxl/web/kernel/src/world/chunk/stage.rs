@@ -8,7 +8,7 @@
 //! numbers to the ledger.
 
 use pxl_render::look::lod::set_lod_projection;
-use pxl_spec::space::pvf3::{fvec, ivec};
+use pxl_spec::space::pvf3::ivec;
 use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
 
@@ -20,9 +20,7 @@ use crate::layer::environment::state::globe;
 use crate::sched::ledger::record::{
     ledger_record_frame, ledger_take_rings, CapSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample, LEVELS,
 };
-use crate::sched::priority::lead_point;
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
-use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::node::{run_chunk_events, take_node_counts, RETAIN_BUDGET_BYTES};
@@ -155,24 +153,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     let v = view();
     set_lod_projection(v.height, v.fov, kernel().sched.census.pressure);
 
-    // Where the camera is heading — see sched/priority.rs. The scheduler orders
-    // the work by it; the tier each chunk picks still comes from the camera as
-    // drawn.
-    let target = map_store().map_center;
     let origin = v.origin;
-    let lead = match &target {
-        Some(t) => {
-            let local = ivec::sub(t.i, origin);
-            lead_point(
-                &v.eye,
-                ivec::to_real(ivec::X(local)) + fvec::to_real(fvec::X(t.f)),
-                ivec::to_real(ivec::Y(local)) + fvec::to_real(fvec::Y(t.f)),
-                ivec::to_real(ivec::Z(local)) + fvec::to_real(fvec::Z(t.f)),
-                &v.root,
-            )
-        }
-        None => v.eye,
-    };
 
     let settings = settings_store();
     let frame = Frame {
@@ -180,7 +161,6 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
         origin: [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))],
         planes: v.planes,
         camera: [v.eye.x, v.eye.y, v.eye.z],
-        lead: [lead.x, lead.y, lead.z],
         viewport_h: v.height,
         fov_deg: v.fov,
         delta_s: ctx.delta,

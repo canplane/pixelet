@@ -4,13 +4,13 @@ use pxl_spec::space::pvf3::ivec;
 
 use super::*;
 
-fn p(in_frustum: bool, centre_distance2: f64) -> Priority {
+fn p(in_frustum: bool, distance2: f64) -> Priority {
     Priority {
         holds: false,
         in_frustum,
         hole: false,
         restale: false,
-        centre_distance2,
+        distance2,
         pending_since: -1.0,
     }
 }

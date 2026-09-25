@@ -23,14 +23,18 @@
 //! (issue/20260923-the-ground-runs-to-the-horizon.md).
 
 use pxl_render::look::atmosphere::{HAZE_EXTINCTION, HAZE_SCALE_HEIGHT_KM};
-use pxl_spec::space::pvf3::{fvec, ivec};
+use pxl_spec::space::indexer::L3_IDX;
+use pxl_spec::space::pvf3::projection;
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::pyramid::LevelPage;
+use pxl_spec::space::xy::TO_XY;
 
 use crate::control::camera::config::camera_cfg;
 use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::state::{globe, km_per_u};
 use crate::layer::terrain::elevation::get_ele;
-use crate::shell::map_store::map_store;
-use crate::world::frame::view::view;
+use crate::layer::terrain::relief::range_over;
+use crate::world::pyramid::window::eye;
 
 /// The optical depth at which a surface's contrast against the horizon sky is
 /// gone: `ln(1/0.02)`, the 2% the visual range is defined by (Koschmieder).
@@ -69,33 +73,29 @@ pub fn reach_at(height: f64) -> f64 {
     horizon_at(height).min(haze_reach_at(height)).max(NEAREST_REACH)
 }
 
-/// How high the ground under the map centre stands over the datum the
-/// projection measures from: where the sky draws its own ground, so the
-/// terrain, which is drawn at its elevation, does not stand over it
-/// (pxl-render atmos_medium.wgsl's land_altitude_km).
-pub fn centre_ground() -> f64 {
-    map_store().map_center.and_then(|c| get_ele(&c)).unwrap_or(0.0)
+/// How high the ground under the eye stands over the datum the projection
+/// measures from: the leaf's own surface where it is held, the highest the
+/// nearest held page over it reaches where it is not, and the datum where
+/// nothing over it is held. Where the sky draws its own ground, so the
+/// terrain, drawn at its elevation, does not stand over it (pxl-render
+/// atmos_medium.wgsl's land_altitude_km).
+pub fn eye_ground() -> f64 {
+    let Some(eye) = eye() else { return 0.0 };
+    let mut foot = Pvf3::default();
+    projection::project(&mut foot, eye.at[0], eye.at[1], 0.0);
+    get_ele(&foot).or_else(|| range_over(LevelPage::over(0, TO_XY(L3_IDX(foot.i)))).map(|(_, top)| top)).unwrap_or(0.0)
 }
 
-/// How high the map centre stands over the ground under it: on a building,
-/// that much further below the camera.
-pub fn pivot_height() -> f64 {
-    map_store().map_center.map_or(0.0, |c| {
-        let z = ivec::to_real(ivec::Z(c.i)) + fvec::to_real(fvec::Z(c.f));
-        get_ele(&c).map_or(0.0, |ground| (z - ground).max(0.0))
-    })
-}
-
-/// The camera's height over the ground, for a camera `dist` from its pivot at
-/// `polar` from straight down.
-pub fn camera_height(dist: f64, polar: f64) -> f64 {
-    pivot_height() + dist * polar.cos()
+/// How high the eye stands over the ground under it: what the reach, the fog
+/// band, the clip planes and the window's finest level are all measured
+/// from, since the perspective a view costs is its observer's.
+pub fn eye_height() -> f64 {
+    eye().map_or(0.0, |e| (e.at[2] - eye_ground()).max(0.0))
 }
 
 /// The reach of the view as it is drawn.
 pub fn view_reach() -> f64 {
-    let v = view();
-    reach_at(camera_height(v.dist, v.polar))
+    reach_at(eye_height())
 }
 
 /// What the near plane and the sizes tuned with it are scaled by: the reach
@@ -108,11 +108,11 @@ fn scale(reach: f64) -> f64 {
 /// Where the ground is gone, and where it begins to fade: the band that
 /// hides the drawn edge.
 ///
-/// The ground ends at whichever comes first, the air and the planet or the
-/// rings themselves. The window holds the levels `.fixed` is sized for and
-/// no more (world/pyramid/window.rs), so from a few hundred metres up the data runs
-/// out before the air does, and the band is then a crossfade over the edge
-/// of what is drawn rather than over the reach.
+/// The ground ends at whichever comes first, the air and the planet or what
+/// the window draws. The window holds the levels `.fixed` is sized for and
+/// no more (world/pyramid/window.rs), so from a few hundred metres up the
+/// data runs out before the air does, and the band is then a crossfade over
+/// the edge of what is drawn rather than over the reach.
 pub fn band_at(height: f64, drawn: f64) -> (f64, f64) {
     let far = reach_at(height).min(drawn);
     (far * (render_cfg::FOG_NEAR / render_cfg::FOG_FAR), far)
