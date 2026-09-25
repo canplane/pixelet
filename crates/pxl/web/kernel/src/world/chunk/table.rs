@@ -946,7 +946,7 @@ impl Scheduler {
         let mem = world_mem(world);
         let (slots, index, meshes, landed) = (&mut self.slots, &self.index, &mut self.meshes, &mut self.landed);
         landed.clear();
-        let worked = self.builder.tick_capped(world, &self.builds, budget_ms, u32::MAX, &crate::host::now, &mut |e| {
+        let worked = self.builder.tick(world, &self.builds, budget_ms, &crate::host::now, &mut |e| {
             let BuildEvent::Tier { chunk, id, .. } = e;
             landed.push((chunk, id));
             self_record(slots, index, mem, meshes, e);
@@ -1120,13 +1120,13 @@ impl Scheduler {
     }
 
     /// Every on-screen chunk's decor as shown this frame — the block of the
-    /// tier its layout mostly shows — with the chunk's id and base, in
-    /// units: what a hit test walks.
-    pub fn shown_decor(&self) -> impl Iterator<Item = (u32, f64, f64, &Decor)> {
+    /// tier its layout mostly shows — with the chunk and its base, in units:
+    /// what a hit test walks.
+    pub fn shown_decor(&self) -> impl Iterator<Item = (Chunk, f64, f64, &Decor)> {
         self.slots
             .iter()
             .filter(|s| s.has(IN_FRUSTUM) && s.layout_ready)
-            .filter_map(|s| s.decor_of(shown_cube(s), s.layout_generation).map(|d| (s.id, s.base_x(), s.base_y(), d)))
+            .filter_map(|s| s.decor_of(shown_cube(s), s.layout_generation).map(|d| (s.chunk, s.base_x(), s.base_y(), d)))
     }
 
     /// A page's terrain tile arrived, or left. Once a record has gone — let
@@ -1361,7 +1361,7 @@ impl Scheduler {
         // The ground the view draws, from the domain as it stands: a mount
         // pass is skipped while the cover holds, and the roots under a
         // stand-in move without the cover.
-        let drawn = Terrain::pyramid().domain().map(Domain::ground);
+        let drawn = Terrain::pyramid().domain().map(Domain::roots);
         for (&k, &i) in self.index.iter() {
             let s = &self.slots[i];
             if !s.has(STALE) {
@@ -1531,7 +1531,7 @@ impl Scheduler {
 
         let pending_total = (visible.len() + offscreen.len()) as u32;
         // A commit on screen may build decor, and a block refused ends the
-        // commits this tick as it ends the builds (Builder::tick_capped):
+        // commits this tick as it ends the builds (Builder::tick):
         // the heap is the same until reclaim, and the decor is scattered
         // before its block is asked for.
         let starved = self.builder.stat.starved;
@@ -1714,14 +1714,10 @@ impl Scheduler {
         }
     }
 
-    /// Every chunk drawn now, as the block of the pyramid's cells it draws.
-    /// During a crossfade both tiers are drawn and the one covering more is
-    /// the chunk's; a chunk covered by another, off the screen or not laid
-    /// out draws nothing a layer could stand on.
-    pub fn drawn(&self) -> impl Iterator<Item = Drawn<'_>> {
-        self.slots.iter().filter_map(|s| self.drawn_of(s))
-    }
-
+    /// Chunk `s` as it is drawn now, as the block of the pyramid's cells it
+    /// draws. During a crossfade both tiers are drawn and the one covering
+    /// more is the chunk's; a chunk covered by another, off the screen or not
+    /// laid out draws nothing a layer could stand on.
     fn drawn_of<'a>(&'a self, s: &'a Slot) -> Option<Drawn<'a>> {
         if !s.has(IN_FRUSTUM) || s.has(COVERED) || !s.layout_ready {
             return None;
@@ -1739,7 +1735,7 @@ impl Scheduler {
 
     /// The ground drawn now at `addr`: the level of the cells it is drawn in
     /// there, and the top of that cell's surface in units. Read from the
-    /// chunk `drawn` gives for that ground, so it is the surface on the
+    /// chunk `drawn_of` gives for that ground, so it is the surface on the
     /// screen — the tier a crossfade shows more of, a stale chunk while its
     /// replacement builds — and none where nothing drawn stands there.
     pub fn surface_at(&self, at: &Pvf3) -> Option<(u32, f64)> {
@@ -2240,17 +2236,36 @@ fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cube {
 /// What a chunk's place in the order is decided by. `hole`: nothing is drawn
 /// on its ground, neither its own layout nor a stale chunk it replaces.
 #[derive(Clone, Copy)]
-pub struct Priority {
-    pub holds: bool,
-    pub in_frustum: bool,
-    pub hole: bool,
+struct Priority {
+    holds: bool,
+    in_frustum: bool,
+    hole: bool,
     /// Showing a generation older than its sources: the ground it draws is
     /// not what the page under it now says. Worse than a chunk asking only
     /// to be sharper, better than one showing nothing at all.
-    pub restale: bool,
+    restale: bool,
     /// The nearest distance from the eye to its ground, squared.
-    pub distance2: f64,
-    pub pending_since: f64,
+    distance2: f64,
+    pending_since: f64,
+}
+
+/// A priority with its distance key aged for one `now`.
+#[derive(Clone, Copy)]
+struct Keyed {
+    p: Priority,
+    key: f64,
+}
+
+impl Priority {
+    fn keyed(self, now: f64) -> Keyed {
+        let d2 = self.distance2;
+        let key = if self.pending_since < 0.0 {
+            d2
+        } else {
+            d2 * 2f64.powf(-2.0 * (now - self.pending_since) / AGE_HALF_MS)
+        };
+        Keyed { p: self, key }
+    }
 }
 
 /// The order work is taken in: the slots' holders; then what is on screen,
@@ -2272,29 +2287,6 @@ pub struct Priority {
 /// waits for all of it. At the two hundred chunks a second the builder
 /// manages when it is behind, a five-level window's two thousand three
 /// hundred is eleven seconds; its innermost ring alone is under three.
-pub fn priority(a: &Priority, b: &Priority, now: f64) -> core::cmp::Ordering {
-    priority_keyed(&a.keyed(now), &b.keyed(now))
-}
-
-/// A priority with its distance key aged for one `now`.
-#[derive(Clone, Copy)]
-pub struct Keyed {
-    p: Priority,
-    key: f64,
-}
-
-impl Priority {
-    pub fn keyed(self, now: f64) -> Keyed {
-        let d2 = self.distance2;
-        let key = if self.pending_since < 0.0 {
-            d2
-        } else {
-            d2 * 2f64.powf(-2.0 * (now - self.pending_since) / AGE_HALF_MS)
-        };
-        Keyed { p: self, key }
-    }
-}
-
 fn priority_keyed(a: &Keyed, b: &Keyed) -> core::cmp::Ordering {
     b.p.holds
         .cmp(&a.p.holds)
@@ -2533,7 +2525,8 @@ fn surface_centres(words: &[u32], stride: usize, step: u32, level: u32, heights:
 
 /// A chunk as it is drawn: its level, the unit address its first cell
 /// begins at, the step its drawn tier's cells are, and that tier's surface.
-/// What a layer standing things on the drawn ground reads (`Scheduler::drawn`).
+/// What a layer standing things on the drawn ground reads
+/// (`Scheduler::surface_at`, a decor build's surface).
 pub struct Drawn<'a> {
     pub level: u32,
     pub base: IVec,

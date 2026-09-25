@@ -264,16 +264,6 @@ pub fn heights_revision() -> (u32, u32) {
 }
 
 impl Domain {
-    /// The point under the eye.
-    pub fn foot(&self) -> IVec {
-        self.foot
-    }
-
-    /// What the criterion is loosened by for this view (`Domain::scale`).
-    pub fn scale(&self) -> f64 {
-        self.scale
-    }
-
     /// The nearest distance from the eye to a box: `x0, y0, side` on the
     /// ground and the heights it spans, or the ground under the eye's where
     /// none is known.
@@ -346,11 +336,6 @@ impl Domain {
         &self.roots
     }
 
-    /// The ground the view draws: the roots.
-    pub fn ground(&self) -> &[Chunk] {
-        &self.roots
-    }
-
     fn find_roots(&self) -> Vec<Chunk> {
         let n = (self.far / chunk_span_of(TOP_LEVEL)).ceil() as i64 + 1;
         let foot = Pvf3 { i: self.foot, ..Pvf3::default() };
@@ -406,11 +391,6 @@ impl Domain {
     /// Whether the view wants `p` held.
     pub fn wants(&self, p: LevelPage) -> bool {
         self.pages.contains_key(&p)
-    }
-
-    /// Whether some of `p`'s ground is drawn at `p`'s level.
-    pub fn reaches(&self, p: LevelPage) -> bool {
-        self.pages.get(&p) == Some(&true)
     }
 
     /// The rule's split for a chunk measured `near` the eye, `seen` or not.

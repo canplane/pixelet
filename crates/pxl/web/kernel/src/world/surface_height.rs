@@ -44,21 +44,17 @@ fn collect_boxes(map_origin: IVec, local_x: f64, local_y: f64) -> Vec<(f64, f64)
                 f: 0,
             };
             let (bx, by, bz) = (pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local)));
-            each_col_entry(
-                col_idx,
-                &mut |entry| {
-                    if object_value_is_air(entry.state) {
-                        return;
-                    }
-                    let (x0, y0) = (bx + entry.lx, by + entry.ly);
-                    if local_x < x0 || local_x >= x0 + entry.size || local_y < y0 || local_y >= y0 + entry.size {
-                        return;
-                    }
-                    let z0 = bz + entry.lz;
-                    boxes.push((z0, z0 + entry.size));
-                },
-                false,
-            );
+            each_col_entry(col_idx, &mut |entry| {
+                if object_value_is_air(entry.state) {
+                    return;
+                }
+                let (x0, y0) = (bx + entry.lx, by + entry.ly);
+                if local_x < x0 || local_x >= x0 + entry.size || local_y < y0 || local_y >= y0 + entry.size {
+                    return;
+                }
+                let z0 = bz + entry.lz;
+                boxes.push((z0, z0 + entry.size));
+            });
         }
     }
     boxes

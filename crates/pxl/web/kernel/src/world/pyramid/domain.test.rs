@@ -44,7 +44,7 @@ fn every_drawn_chunk_lies_between_its_split_distances_and_the_view_fits_its_budg
                 foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
             };
             let d = domain_for(&eye, height, None);
-            let s = d.scale();
+            let s = d.scale;
             assert!(s > 0.0 && s <= 1.0);
             let chunks = drawn_by_rule(&d);
             for &c in &chunks {
@@ -82,7 +82,7 @@ fn every_page_drawn_from_is_wanted_with_every_ancestor_up_to_the_top() {
             };
             let d = domain_for(&eye, height, None);
             for c in drawn_by_rule(&d) {
-                assert!(d.reaches(c.page()), "height {height}: {c:?} is drawn from a page not wanted");
+                assert!(d.pages.get(&c.page()) == Some(&true), "height {height}: {c:?} is drawn from a page not wanted");
             }
             for (p, _) in d.pages() {
                 if p.level < TOP_LEVEL {

@@ -79,9 +79,6 @@ pub struct ObjectLayerEntry {
     pub kind: EntryKind,
 }
 
-pub type PlacedObject = ObjectLayerEntry;
-pub type PlacedDecor = ObjectLayerEntry;
-pub type ObjectAir = ObjectLayerEntry;
 /// Anything a placement/erase/selection query should actually treat as "a
 /// real thing occupying this slot" — a solid color cube or a decor object
 /// alike, just never `EntryKind::Air` (that's a virtual erase-marker, not a
@@ -169,13 +166,6 @@ impl At {
     }
 }
 
-/// The same key from the renderer's side, a page index and a page offset.
-/// Both are normalised to XY, so a caller cannot reopen the gap `column_of`
-/// closes by handing in an offset that still carries Z.
-pub fn object_col_idx_of(page_idx: IVec, page_off: IVec) -> IVec {
-    L2_IDX(TO_XY(ivec::add(FROM_L3_IDX(TO_XY(page_idx)), TO_XY(page_off))))
-}
-
 /// The state stored at `coord`, VOID where nothing is.
 fn read_state(coord: &Pvf3) -> u32 {
     let at = At::of(coord);
@@ -209,8 +199,6 @@ pub struct EntryCursor {
 
     at: At,
     pos: u32,
-    /// False for the carve preview, which is not filed anywhere.
-    stored: bool,
 }
 
 impl EntryCursor {
@@ -220,18 +208,6 @@ impl EntryCursor {
     }
 
     pub fn load(&mut self, band_idx: BandZ, pos: u32, state: u32) {
-        self.put(band_idx, pos, state);
-        self.stored = true;
-    }
-
-    /// The carve preview, which is an entry the store would write but has not.
-    fn load_carve(&mut self, carve: EntryAt) {
-        self.at_chunk(carve.col_idx);
-        self.put(carve.band_idx, carve.pos, AIR);
-        self.stored = false;
-    }
-
-    fn put(&mut self, band_idx: BandZ, pos: u32, state: u32) {
         let (x, y, z, scale) = unpack_pos(pos);
         self.at.band = band_idx;
         self.at.step = [x, y, z];
@@ -251,17 +227,16 @@ impl EntryCursor {
         self.at.corner()
     }
 
-    /// Where the entry is filed; None for the carve preview, which is not.
-    pub fn at(&self) -> Option<EntryAt> {
-        self.stored.then_some(EntryAt {
+    /// Where the entry is filed.
+    pub fn at(&self) -> EntryAt {
+        EntryAt {
             col_idx: self.at.col_idx,
             band_idx: self.at.band,
             pos: self.pos,
-        })
+        }
     }
 
-    /// The entry as an object, for the few callers that keep one — every one
-    /// of them reading entries out of the lanes, never the carve preview.
+    /// The entry as an object, for the few callers that keep one.
     pub fn object(&self) -> ObjectLayerEntry {
         let Pvf3 { i, f } = self.corner();
         let kind = if object_value_is_decor(self.state) {
@@ -277,7 +252,7 @@ impl EntryCursor {
             }
         };
         ObjectLayerEntry {
-            at: self.at().unwrap_or_default(),
+            at: self.at(),
             i,
             f,
             size: self.size,
@@ -324,34 +299,14 @@ fn cursor_at(at: EntryAt) -> EntryCursor {
     cursor
 }
 
-/// Whether any entry — including the carve preview — is filed under a
-/// column. One lookup; what a coarse build asks before skipping the scan.
-pub fn col_has_entries(col_idx: IVec) -> bool {
-    if kernel().objects.entries(col_idx).is_some() {
-        return true;
-    }
-    store_state().virtual_carve_preview.as_ref().is_some_and(|c| c.at.col_idx == col_idx)
-}
-
-/// Every entry of a column. `render` applies the eraser preview's two edits,
-/// the hidden entry left out and the carve preview put in, which only the
-/// drawn build may see (see set_virtual_hide).
-pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor), render: bool) {
+/// Every entry a column stores. The eraser's two edits are the drawn
+/// build's alone (see set_virtual_hide), and none of these readers is one.
+pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor)) {
+    let Some(e) = kernel().objects.entries(col_idx) else { return };
     let mut cursor = EntryCursor::default();
-    let hide = store_state().virtual_hide;
-    if let Some(e) = kernel().objects.entries(col_idx) {
-        cursor.at_chunk(col_idx);
-        for k in 0..e.band.len() {
-            cursor.load(e.band[k], e.pos[k], e.state[k]);
-            if render && hide.is_some_and(|h| cursor.at() == Some(h)) {
-                continue;
-            }
-            visit(&cursor);
-        }
-    }
-    let carve = store_state().virtual_carve_preview;
-    if let Some(carve) = carve.filter(|c| render && c.at.col_idx == col_idx) {
-        cursor.load_carve(carve.at);
+    cursor.at_chunk(col_idx);
+    for k in 0..e.band.len() {
+        cursor.load(e.band[k], e.pos[k], e.state[k]);
         visit(&cursor);
     }
 }
@@ -394,7 +349,7 @@ pub fn cell_is_occupied(ix: i64, iy: i64, iz: i64) -> bool {
 /// an object one cell over (collision.rs's find_overlapping_object, ray.rs's
 /// resolve_hit_object). 27 O(1) lookups, still independent of total object
 /// count.
-pub fn get_objects_near(corner: &Pvf3, _size: f64) -> Vec<OccupiedEntry> {
+pub fn get_objects_near(corner: &Pvf3) -> Vec<OccupiedEntry> {
     let [cx, cy, cz] = CELL.index_of(corner);
     // size can push the candidate's own far corner into the NEXT cell too —
     // covered by the same 3x3x3 neighborhood as long as size <= one cell
@@ -416,7 +371,7 @@ pub fn get_placed_object(at: EntryAt) -> Option<OccupiedEntry> {
     let [ix, iy, iz] = cursor_at(at).cell();
     let mut found = None;
     each_cell_entry(ix, iy, iz, &mut |entry| {
-        if found.is_none() && !object_value_is_air(entry.state) && entry.at() == Some(at) {
+        if found.is_none() && !object_value_is_air(entry.state) && entry.at() == at {
             found = Some(entry.object());
         }
     });
@@ -597,22 +552,18 @@ fn collect_col(by_page: &mut Vec<(IVec, PageRows)>, col_idx: IVec) {
         }
     };
     let rows = &mut by_page[slot].1;
-    each_col_entry(
-        col_idx,
-        &mut |entry| {
-            let corner = entry.corner();
-            let local = Pvf3 {
-                i: ivec::sub(corner.i, page_base),
-                f: corner.f,
-            };
-            rows.x.push(pvf3::to_real(pvf3::X(&local)) as f32);
-            rows.y.push(pvf3::to_real(pvf3::Y(&local)) as f32);
-            rows.z.push(pvf3::to_real(pvf3::Z(&local)) as f32);
-            rows.size.push(entry.size as f32);
-            rows.value.push(entry.state);
-        },
-        false,
-    );
+    each_col_entry(col_idx, &mut |entry| {
+        let corner = entry.corner();
+        let local = Pvf3 {
+            i: ivec::sub(corner.i, page_base),
+            f: corner.f,
+        };
+        rows.x.push(pvf3::to_real(pvf3::X(&local)) as f32);
+        rows.y.push(pvf3::to_real(pvf3::Y(&local)) as f32);
+        rows.z.push(pvf3::to_real(pvf3::Z(&local)) as f32);
+        rows.size.push(entry.size as f32);
+        rows.value.push(entry.state);
+    });
 }
 
 fn encode_pages(by_page: &[(IVec, PageRows)]) -> Result<String, MarshalError> {

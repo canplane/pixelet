@@ -316,9 +316,6 @@ impl Builder {
         }
     }
 
-    /// The leaf column at `base`, a chunk corner, as a decor build reads it:
-    /// its page's lanes and where it starts in them, and the structure
-    /// setting. Resident or not, whichever level draws the ground there.
     /// Where chunk `id` starts in its page, the page's lanes and the
     /// structure setting it is drawn under: the ground its decor is
     /// scattered over, at any level. None while its page has not come.
@@ -326,15 +323,6 @@ impl Builder {
         let c = self.chunks.get(&id)?;
         let (tx0, ty0) = c.at.in_page();
         Some((tx0, ty0, c.page()?, c.show_structures))
-    }
-
-    /// What chunk `id` is made of, for a decor build: its corner, the column
-    /// it stands in as the object store keys it, where it starts in its page,
-    /// and its page's lanes.
-    pub fn source_of(&self, id: u32) -> Option<(IVec, IVec, u32, u32, &'static Terrain, bool)> {
-        let c = self.chunks.get(&id).filter(|c| c.level() == 0)?;
-        let (tx0, ty0) = c.at.in_page();
-        Some((c.base(), c.col_idx(), tx0, ty0, c.page()?, c.show_structures))
     }
 
     /// What a leaf composite at `base` is valid for: its column's objects and
@@ -507,23 +495,15 @@ impl Builder {
     /// Advances the chunks in `order` under `budget_ms` of `now`, the
     /// holders of the scan and the bake slot first: a slot held is every
     /// other chunk's wait. At least one step is taken, whatever the budget.
-    pub fn tick(&mut self, world: &mut World, order: &[u32], budget_ms: f64, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent)) {
-        self.tick_capped(world, order, budget_ms, u32::MAX, now, emit);
-    }
-
-    /// `tick`, stopping once `max_chunks` chunks have made progress: the
-    /// scheduler's cap on how many chunks move in a frame. A chunk that
-    /// waits on a slot or a block does not count. A block refused ends the
-    /// tick: the heap does not change until the scheduler reclaims after,
-    /// so every later request would meet the same heap, and a refusal is
-    /// not free — the direct runs are written whole before their block is
-    /// asked for. Whether any chunk did work.
-    pub fn tick_capped(&mut self, world: &mut World, order: &[u32], budget_ms: f64, max_chunks: u32, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent)) -> bool {
+    /// A block refused ends the tick: the heap does not change until the
+    /// scheduler reclaims after, so every later request would meet the same
+    /// heap, and a refusal is not free — the direct runs are written whole
+    /// before their block is asked for. Whether any chunk did work.
+    pub fn tick(&mut self, world: &mut World, order: &[u32], budget_ms: f64, now: &impl Fn() -> f64, emit: &mut impl FnMut(BuildEvent)) -> bool {
         let t0 = now();
         let starved = self.stat.starved;
         let mut stepped = false;
         let mut worked = false;
-        let mut moved = 0;
         // The chunks holding the scan, the bake or a run set go first, each
         // once: held, a slot is every other chunk's wait.
         let mut first = [None; 2 + RUN_SETS];
@@ -534,10 +514,6 @@ impl Builder {
         }
         let is_first = |id: u32| first.contains(&Some(id));
         for id in first.iter().flatten().copied().chain(order.iter().copied().filter(|&id| !is_first(id))) {
-            if moved >= max_chunks {
-                return worked;
-            }
-            let mut progressed = false;
             loop {
                 if stepped && now() - t0 >= budget_ms {
                     return worked;
@@ -553,10 +529,6 @@ impl Builder {
                     break;
                 }
                 worked = true;
-                progressed = true;
-            }
-            if progressed {
-                moved += 1;
             }
         }
         worked

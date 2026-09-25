@@ -17,7 +17,7 @@ use crate::layer::object::store::{get_objects_near, OccupiedEntry};
 /// regardless.
 pub fn find_overlapping_object(corner: &Pvf3, size: f64, map_origin: IVec) -> Option<OccupiedEntry> {
     let candidate = corner_aabb(corner.i, corner.f, size, map_origin);
-    get_objects_near(corner, size).into_iter().find(|o| aabb_overlap(&candidate, &object_aabb(o, map_origin)))
+    get_objects_near(corner).into_iter().find(|o| aabb_overlap(&candidate, &object_aabb(o, map_origin)))
 }
 
 /// The tool a placement is made with.

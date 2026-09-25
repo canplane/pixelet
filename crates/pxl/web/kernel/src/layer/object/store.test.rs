@@ -65,15 +65,15 @@ fn object_store_persistence_a_save_is_placement_records_per_page_and_loading_it_
         DecorId::tree,
     );
     let shape = |o: &OccupiedEntry| (o.i, o.f, o.size.to_bits(), matches!(o.kind, EntryKind::Decor { .. }));
-    let before: Vec<_> = get_objects_near(&a, 1.0).iter().map(shape).collect();
+    let before: Vec<_> = get_objects_near(&a).iter().map(shape).collect();
     assert_eq!(before.len(), 3);
     let blob = encode_objects().unwrap();
-    for o in get_objects_near(&a, 1.0) {
+    for o in get_objects_near(&a) {
         remove(o.at);
     }
-    assert_eq!(get_objects_near(&a, 1.0).len(), 0);
+    assert_eq!(get_objects_near(&a).len(), 0);
     decode_objects(&blob).unwrap();
-    assert_eq!(get_objects_near(&a, 1.0).iter().map(shape).collect::<Vec<_>>(), before);
+    assert_eq!(get_objects_near(&a).iter().map(shape).collect::<Vec<_>>(), before);
     assert_eq!(encode_objects().unwrap(), blob);
 }
 

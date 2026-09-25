@@ -201,7 +201,7 @@ pub fn resolve_hit_object(hit: &WorldHit, map_origin: IVec) -> Option<OccupiedEn
     // ray landed resolves that correctly.
     let mut best = None;
     let mut best_dist2 = f64::INFINITY;
-    for o in get_objects_near(&hit_point_abs, U_PER_CELL) {
+    for o in get_objects_near(&hit_point_abs) {
         let aabb = object_aabb(&o, map_origin);
         if !aabb_overlap(&aabb, &hit_aabb) {
             continue;

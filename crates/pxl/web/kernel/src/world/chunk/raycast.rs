@@ -21,6 +21,7 @@ use pxl_spec::space::v3::V3;
 use crate::kernel::kernel;
 use crate::world::chunk::build::World;
 use crate::world::chunk::table::Scheduler;
+use crate::world::pyramid::chunk::Chunk;
 
 /// A chunk's side, in units.
 const CHUNK_W: f64 = CHUNK_CELLS as f64 * U_PER_CELL;
@@ -324,11 +325,12 @@ impl Raycast {
 
 // ---- the decor ----
 
-/// What a ray struck among the decor shown: the chunk it stands in, the
-/// entry's band and packed position in that column, and how far along.
+/// What a ray struck among the decor shown: the chunk it stands in, a z16
+/// one since only those name their entries, the entry's band and packed
+/// position in that chunk's column, and how far along.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DecorHit {
-    pub chunk: u32,
+    pub chunk: Chunk,
     pub band: u32,
     pub pos: u32,
     pub t: f64,
@@ -348,7 +350,7 @@ pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: V3, d: [
     let mem = world.volumes.mem();
     let mut best: Option<DecorHit> = None;
     let mut limit = max_dist;
-    for (id, base_x, base_y, decor) in sched.shown_decor() {
+    for (chunk, base_x, base_y, decor) in sched.shown_decor() {
         let tx = base_x - origin[0];
         let ty = base_y - origin[1];
         if !ray_meets_square(&o, &d, tx - DECOR_REACH, ty - DECOR_REACH, tx + CHUNK_W + DECOR_REACH, ty + CHUNK_W + DECOR_REACH, limit) {
@@ -404,7 +406,7 @@ pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: V3, d: [
                         if t < limit {
                             limit = t;
                             best = Some(DecorHit {
-                                chunk: id,
+                                chunk,
                                 band,
                                 pos: words[band_at + count + i],
                                 t,
