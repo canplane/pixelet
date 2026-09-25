@@ -64,11 +64,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   two chunks — measured 2026-09-26 at 1.5 a column near Gangnam and 1.7 on
   Bukhansan, each built from the whole column's runs again, where the runs
   could be the column's once and each chunk a cut of them.
-- **A kernel trap with no place.** 2026-09-26, main, Bonghwa's mountains at
-  150u: a `RuntimeError: unreachable` left no `ensure!` record, so no file
-  or line, and the page drew its last frame from then on. It came as the
-  texture pack was toggled while the view was being moved, and toggling it
-  again from the same place, still or not, did not bring it back.
 - **A seam while a chunk is drawn from a page over it.** Since
   2026-09-26 a chunk whose page has not come is drawn in its place from the
   nearest resident page over it, upsampled (world/pyramid.rs `drawn_from`),
