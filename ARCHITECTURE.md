@@ -232,7 +232,7 @@ The commands are `spec/pxl/web/kernel/abi/cmd.json`'s: each one's number and the
 
 The kernel also posts messages nobody asked for: a fetch to start or cancel, a model or image to decode, a sensor to watch, a console line, a new snapshot. Those are its signals.
 
-The world's change log (`world/change.rs`) has five topics: object column, decor column, object cell, terrain page, decor asset. Listeners run when the tick pumps, never inside the write.
+The world's change log (`world/change.rs`) has three topics: object column, decor column, terrain page. Listeners run when the tick pumps, never inside the write.
 
 ## The memory map
 

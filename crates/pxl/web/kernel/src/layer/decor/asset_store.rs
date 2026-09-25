@@ -2,9 +2,9 @@
 
 //! Every decor kind's loaded models and skins, as a plain module store.
 //!
-//! Arrival is a change like any other: each model or skin that lands is a bump
-//! on the world change log's decor-asset topic, and whoever draws the decor
-//! re-reads the snapshot at the tick's pump.
+//! Whoever draws the decor reads the store itself each tick, so an arrival
+//! needs no record of its own: each model or skin that lands asks for the
+//! frame that draws it.
 //!
 //! A model is registered with the scheduler's models as it arrives
 //! (io/model_asset.rs), so the kernel holds its triangles for the
@@ -22,7 +22,7 @@ use crate::io::model_asset::register_model;
 use crate::kernel::kernel;
 use crate::layer::decor::build::DecorKindBundle;
 use crate::layer::decor::registry::DECOR_BUNDLES;
-use crate::world::change::{bump_world, world_edge, DECOR_ASSET};
+use crate::world::change::{request_world_tick, world_edge};
 
 /// Variants a kind has room for; kind.rs's largest kind has nine.
 const VARIANTS: usize = 16;
@@ -62,7 +62,7 @@ fn settle(entries: &mut [DecorBundleAssets], asset: Asset, value: u32, skin: boo
     }
 }
 
-fn publish(s: &mut Store, asset: Asset) {
+fn publish(s: &mut Store) {
     // The group each variant is drawn as, told to the scheduler for its hit test.
     let mut group = 0u32;
     for entry in &s.entries {
@@ -73,7 +73,7 @@ fn publish(s: &mut Store, asset: Asset) {
             group += 1;
         }
     }
-    bump_world(DECOR_ASSET, asset as u64);
+    request_world_tick();
 }
 
 fn store() -> &'static mut Store {
@@ -134,7 +134,7 @@ pub async fn decor_asset_task() {
                         match register_model(&gltf, None) {
                             Some(handle) => {
                                 settle(&mut s.entries, variant.model, handle.model, false);
-                                publish(s, variant.model);
+                                publish(s);
                             }
                             None => refused = true,
                         }
@@ -143,7 +143,7 @@ pub async fn decor_asset_task() {
                 if s.entries[b].skins[v].is_none() && !load_failed(skin) {
                     if let Some(image) = load_image(skin) {
                         settle(&mut s.entries, variant.skin, image, true);
-                        publish(s, variant.skin);
+                        publish(s);
                     }
                 }
             }

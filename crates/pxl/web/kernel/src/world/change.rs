@@ -23,10 +23,8 @@ pub const OBJECT_COLUMN: Topic = 0;
 pub const DECOR_COLUMN: Topic = 1;
 /// A resident terrain page arrived or left, keyed by page index.
 pub const TERRAIN_PAGE: Topic = 2;
-/// A decor model or skin finished loading, keyed by its URL's FNV-1a hash.
-pub const DECOR_ASSET: Topic = 3;
 /// How many topics the log keeps.
-pub const WORLD_TOPICS: Topic = DECOR_ASSET + 1;
+pub const WORLD_TOPICS: Topic = TERRAIN_PAGE + 1;
 
 /// `WorldTopic`.
 pub type WorldTopic = Topic;
