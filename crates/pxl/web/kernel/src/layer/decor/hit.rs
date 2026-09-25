@@ -36,7 +36,7 @@ pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64)
     // The lane holds the band's own i32 as a word (layer/decor/build.rs), NO_ENTRY
     // apart, which the kernel has already passed over.
     Some(EntryAt {
-        col_idx: L2_IDX(hit.chunk.base().i),
+        col_idx: L2_IDX(hit.chunk.corner()),
         band_idx: hit.band as i32,
         pos: hit.pos,
     })

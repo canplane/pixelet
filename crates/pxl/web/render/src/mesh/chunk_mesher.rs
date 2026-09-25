@@ -328,6 +328,10 @@ pub struct BakeContext {
     /// The coarse tier's run set, packed a cell at a time straight into
     /// the run set's own fields; the fine bake then reads it as any set.
     coarse: OwnedRunSet,
+    /// The set the open bake reads where it was opened on a chunk's heights
+    /// (`begin`'s `clip`): what it was handed, cut to them, and held until
+    /// the bake is done, since every step reads it.
+    clipped: Option<OwnedRunSet>,
     /// Every word a mesh uses is written by the emit before it is read,
     /// except the visibility lane, which the renderer owns — so the target
     /// is never cleared, which for a large mesh would write it twice.
@@ -365,6 +369,7 @@ impl BakeContext {
             merge_mask: vec![0; MAX_BAKE_SPAN * MAX_BAKE_SPAN],
             buckets: Vec::with_capacity(1 << 12),
             coarse: OwnedRunSet::default(),
+            clipped: None,
             mesh: None,
             heights: Heights::default(),
             box_words: FINE_BOX_WORDS,
@@ -379,32 +384,48 @@ impl BakeContext {
 
     /// Opens a bake of `set` at `lod_step`, the set's columns `scale` units
     /// across: 1 for a leaf chunk, 2^k for a level-k one. Heights are units at
-    /// every level. `textured` is whether the pack is drawn. False when one is
+    /// every level. `textured` is whether the pack is drawn. `clip`, the
+    /// heights a chunk spans where its set is its whole column's, cuts the
+    /// set to them (`OwnedRunSet::clip_from`), and every step of the bake
+    /// reads the cut set in place of the one it is handed. False when one is
     /// already open.
-    pub fn begin(&mut self, set: &RunSet, lod_step: u32, scale: u32, textured: bool) -> bool {
+    pub fn begin(&mut self, set: &RunSet, lod_step: u32, scale: u32, textured: bool, clip: Option<(i32, i32)>) -> bool {
         if self.open.is_some() {
             return false;
         }
+        match clip {
+            Some((z0, z1)) => {
+                let mut cut = self.clipped.take().unwrap_or_default();
+                cut.clip_from(set, z0, z1);
+                self.clipped = Some(cut);
+            }
+            None => self.clipped = None,
+        }
+        let (count, span, apron, heights) = {
+            let cut = self.clipped.as_ref().map(OwnedRunSet::view);
+            let set = cut.as_ref().unwrap_or(set);
+            // A coarse bake summarizes the set into one of its own and takes
+            // its heights from that, once it is packed (step_coarse).
+            (set.count, set.span, set.apron, if lod_step == 1 { Heights::of(set, 1.0) } else { Heights::default() })
+        };
         self.textured = textured;
-        xpute_core::ensure!(set.span as usize <= MAX_BAKE_SPAN, ENOSPC, set.span, MAX_BAKE_SPAN);
+        xpute_core::ensure!(span as usize <= MAX_BAKE_SPAN, ENOSPC, span, MAX_BAKE_SPAN);
         // Every surviving box is at most one run, so the boxes fit this
         // many words: reserved up front rather than grown by doubling, which
         // on a dense chunk held the old block and the new together.
-        self.surviving.reserve((set.count as usize) * 6);
+        self.surviving.reserve((count as usize) * 6);
         self.done = false;
         self.mesh = None;
         self.mesh_words = 0;
         self.box_cnt = 0;
-        // A coarse bake summarizes the set into one of its own and takes its
-        // heights from that, once it is packed (step_coarse).
-        self.heights = if lod_step == 1 { Heights::of(set, 1.0) } else { Heights::default() };
+        self.heights = heights;
         self.box_words = box_words(lod_step);
         self.open = Some(if lod_step == 1 {
-            Open::Fine(self.begin_fine(set.span, set.apron, scale, 1))
+            Open::Fine(self.begin_fine(span, apron, scale, 1))
         } else {
             // The chunk's own columns, not the apron's: a coarse tier is
             // summarized from them and carries no ring of its own.
-            let inner = set.span - 2 * set.apron;
+            let inner = span - 2 * apron;
             xpute_core::ensure!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step), EINVAL, lod_step, inner);
             Open::Coarse(CoarseBake {
                 lod_step,
@@ -428,10 +449,14 @@ impl BakeContext {
             return Step::NeedMesh(self.mesh_words);
         }
         let mut open = self.open.take().or_bug(Errno::ENOTRECOVERABLE);
+        let cut = self.clipped.take();
+        let view = cut.as_ref().map(OwnedRunSet::view);
+        let set = view.as_ref().unwrap_or(set);
         self.done = match &mut open {
             Open::Fine(b) => self.step_fine(b, set),
             Open::Coarse(b) => self.step_coarse(b, set),
         };
+        self.clipped = cut;
         self.open = Some(open);
         if self.done {
             Step::Done
@@ -494,6 +519,33 @@ impl BakeContext {
         // run_face_mask's neighbor lookups and is never walked: nothing is
         // emitted from a column that belongs to the next chunk.
         let (lo, hi) = (b.apron, span - b.apron);
+        // The sides a column on the chunk's rim faces out of it: drawn
+        // whatever the apron beside them holds. The apron is the chunk's own
+        // level read past its edge, and the chunk drawn there may be another
+        // level whose ground stands lower than that reading — with the side
+        // hidden against the apron, the step between them was open to the
+        // sky. Drawn down to the chunk's floor, the rim closes on whatever
+        // lies beside it, so no two chunks need to be a level apart or less.
+        let rim = |cx: u32, cy: u32| {
+            if b.apron == 0 {
+                return 0;
+            }
+            let x = if cx + 1 == hi {
+                FACE_PX
+            } else if cx == lo {
+                FACE_NX
+            } else {
+                0
+            };
+            let y = if cy + 1 == hi {
+                FACE_PY
+            } else if cy == lo {
+                FACE_NY
+            } else {
+                0
+            };
+            x | y
+        };
 
         if b.phase == 0 {
             let row_end = hi.min(b.row + BAKE_ROWS_PER_STEP);
@@ -505,7 +557,7 @@ impl BakeContext {
                     for i in set.start[col as usize]..end {
                         let i = i as usize;
                         self.counters.total_runs += 1;
-                        let mask = run_face_mask(set, span, cx, cy, i);
+                        let mask = run_face_mask(set, span, cx, cy, i) | if set.z1[i] >= set.z0[i] { rim(cx, cy) } else { 0 };
                         self.counters.faces_possible += if run_include_bottom(set, i) { FULL_FACE_CNT } else { OPEN_BOTTOM_FACE_CNT };
                         if mask & ALL_FACES == 0 {
                             self.counters.culled += 1;

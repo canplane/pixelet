@@ -31,6 +31,7 @@ use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
 
 use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{ivec, projection};
 use pxl_spec::space::pyramid::{Cell, LevelPage, GROUND};
 use std::collections::{BTreeMap, HashSet};
@@ -90,16 +91,25 @@ pub fn step(ctx: &mut TickContext) {
         // the source is so much coarser that one of its cells is wider than
         // the chunk, part of one, whose place is the chunk's only if it stands
         // on the chunk's ground.
-        let (side, cell) = (chunk.node().0, POI_LATTICE.scale(src.level));
+        let (side, cell) = (chunk.column().0, POI_LATTICE.scale(src.level));
         let m = if cell <= side { cell.count_in(side) } else { 0 };
-        let [x0, y0] = POI_LATTICE.cell_of(src.level, &chunk.base()).in_page();
+        let [x0, y0] = POI_LATTICE.cell_of(src.level, &Pvf3 { i: chunk.corner(), f: 0 }).in_page();
+        let (z0, z1) = chunk.z_range();
         for ty in y0..y0 + m.max(1) {
             let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + m.max(1), ty));
             let from = poi.cells.partition_point(|c| c.cell < lo);
             for c in poi.cells[from..].iter().take_while(|c| c.cell < hi) {
                 let cell = POI_LATTICE.cell_at(src, c.cell);
                 let ground = cell.inner_at(GROUND, 0, c.at);
-                if m == 0 && Chunk::of(chunk.level(), &ground.mid()) != chunk {
+                if m == 0 && Chunk::of(chunk.level(), &ground.mid()).column() != chunk.column() {
+                    continue;
+                }
+                // A column is drawn by every chunk over it that holds
+                // something (world/pyramid/chunk.rs); a place is counted by
+                // the one its ground's top voxel is in, and by none where no
+                // ground is drawn under it, where no badge could stand.
+                let Some((_, top)) = sched.surface_at(&ground.mid()) else { continue };
+                if top - 1.0 < z0 || top - 1.0 >= z1 {
                     continue;
                 }
                 let up = POI_LATTICE.cell_of(level, &ground.mid());

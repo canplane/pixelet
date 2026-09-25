@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
-use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
+use pxl_render::mesh::chunk_mesher::{box_words, mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::level::write_level_runs;
 use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
 use pxl_render::mesh::paint::object::fold::fold_columns;
@@ -23,6 +23,7 @@ use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanSte
 use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, BAND, CELL, OBJECT_FINEST};
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_runtime::mem::heap::{free, Block};
 
 use crate::layer::object::store::{object_col_revision, Store};
@@ -30,6 +31,7 @@ use crate::mem::fixed::{at, Range};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use pxl_spec::bake::constant::BAND_CELLS;
 
+use crate::world::chunk::mesh_slot::capacity;
 use crate::world::chunk::source::tiers_draw;
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 use crate::world::pyramid::Layer as _;
@@ -131,6 +133,10 @@ pub enum BuildEvent {
         box_cnt: u32,
         heights: Heights,
     },
+    /// Tier `cube` of chunk `id`, of its sources as of `generation`, has more
+    /// boxes than a slot of its pool holds (mesh_slot.rs `capacity`): it is
+    /// not baked, and the chunk is drawn a step coarser.
+    Coarser { chunk: PyramidChunk, id: u32, generation: u32, cube: Cube },
 }
 
 /// A chunk's runs: which of `.fixed.runs`'s sets, and what is in it — and
@@ -184,9 +190,10 @@ impl Chunk {
         self.at.level()
     }
 
-    /// The chunk's corner, as an L1 coordinate.
+    /// The corner of the chunk's column, as an L1 coordinate at no height:
+    /// what its objects are read by.
     fn base(&self) -> IVec {
-        self.at.base().i
+        self.at.corner()
     }
 
     /// The column it stands in, as the object store keys it: a chunk is one
@@ -203,7 +210,7 @@ impl Chunk {
         let pyramid = Terrain::pyramid();
         let src = pyramid.drawn_from(self.at.page())?;
         let page = pyramid.get(src)?;
-        let own = GROUND.cell_of(self.level(), &self.at.base());
+        let own = GROUND.cell_of(self.level(), &Pvf3 { i: self.base(), f: 0 });
         let levels = src.level - self.level();
         Some(Read {
             page,
@@ -362,7 +369,7 @@ impl Builder {
     /// objects and the structure setting, the two things its paint reads that
     /// change.
     pub fn leaf_valid(&self, chunk: PyramidChunk) -> u32 {
-        object_col_revision(L2_IDX(chunk.base().i)).wrapping_mul(2) | settings_store().show_structures as u32
+        object_col_revision(L2_IDX(chunk.corner())).wrapping_mul(2) | settings_store().show_structures as u32
     }
 
     /// The composite of z16 chunk `chunk` — the real set, no edits —
@@ -375,7 +382,7 @@ impl Builder {
         let page = Terrain::pyramid().get(chunk.page())?;
         let (tx0, ty0) = chunk.in_page();
         let show = settings_store().show_structures;
-        let col_idx = L2_IDX(chunk.base().i);
+        let col_idx = L2_IDX(chunk.corner());
         let valid = self.leaf_valid(chunk);
         let volume = self.paint_terrain_at(world, [tx0 as i64, ty0 as i64], 1, show, page)?;
         if world.painter.paint(world.store.entries(col_idx), world.volumes, volume, None, None).refused {
@@ -818,7 +825,7 @@ impl Builder {
         // Its own ground and the apron a fold reads, which reaches into the
         // chunks beside it.
         let near = (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy)));
-        let under: Vec<IVec> = near.flat_map(|(dx, dy)| world.store.cols_under(c.at.beside(dx, dy).node())).collect();
+        let under: Vec<IVec> = near.flat_map(|(dx, dy)| world.store.cols_under(c.at.beside(dx, dy, 0).column())).collect();
         for key in under {
             if !tiers_draw(level, base, key) {
                 continue;
@@ -882,7 +889,12 @@ impl Builder {
                 return Progress::Blocked;
             }
             let cube = c.wanted().next().unwrap();
-            xpute_core::ensure!(self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().texture_pack), ENOTRECOVERABLE);
+            // The runs are the column's, through every chunk over it; this
+            // chunk draws what lies in its own heights (world/pyramid/
+            // chunk.rs).
+            let (z0, z1) = c.at.z_range();
+            let clip = Some((z0 as i32, z1 as i32));
+            xpute_core::ensure!(self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().texture_pack, clip), ENOTRECOVERABLE);
             self.bake_job = Some(BakeJob {
                 id,
                 cube,
@@ -893,8 +905,30 @@ impl Builder {
         match self.bake.step(&set) {
             Step::Working => Progress::Busy,
             Step::NeedMesh(words) => {
+                // A mesh past its slot is not baked and not cut: the chunk is
+                // drawn a step coarser, which fits sooner or later
+                // (mesh_slot.rs `COARSE_BOXES`).
+                let step = mesh_step(self.bake_job.as_ref().unwrap().cube, c.level());
+                if words / box_words(step) > capacity(c.level(), step) {
+                    let job = self.bake_job.take().unwrap();
+                    self.bake.abort();
+                    let c = self.chunks.get_mut(&id).unwrap();
+                    for w in c.want.iter_mut().filter(|w| **w == Some(job.cube)) {
+                        *w = None;
+                    }
+                    if c.wanted().next().is_none() {
+                        self.let_runs_go(id);
+                    }
+                    emit(BuildEvent::Coarser {
+                        chunk: self.chunks[&id].at,
+                        id,
+                        generation: job.generation,
+                        cube: job.cube,
+                    });
+                    return Progress::Busy;
+                }
                 // The one bake open writes into `.fixed.bake`, which is past
-                // any mesh a chunk has been measured to make (mesh_slot.rs).
+                // any mesh a slot holds (mesh_slot.rs).
                 let Some(mesh_at) = at(Range::Bake, 0, words * 4) else {
                     self.abort_bake();
                     self.refuse(world, id);

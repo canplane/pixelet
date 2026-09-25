@@ -88,14 +88,14 @@ fn entries(store: &Store, col_idx: IVec) -> Vec<(i32, u32, u32)> {
     (0..e.band.len()).map(|k| (e.band[k], e.pos[k], e.state[k])).collect()
 }
 
-fn write(store: &mut Store, col_idx: IVec, band_idx: BandZ, at: [u32; 3], scale: Scale, state: u32) -> BTreeSet<IVec> {
+fn write(store: &mut Store, col_idx: IVec, band_idx: BandZ, at: [u32; 3], scale: Scale, state: u32) -> BTreeSet<(IVec, BandZ)> {
     store.write([Write { col_idx, band_idx, at, scale, state }])
 }
 
 #[test]
 fn a_write_is_read_back_and_its_entries_are_made_within_it() {
     let mut store = Store::new();
-    assert_eq!(write(&mut store, 7, 0, [8, 16, 24], CELL, 3), BTreeSet::from([7]));
+    assert_eq!(write(&mut store, 7, 0, [8, 16, 24], CELL, 3), BTreeSet::from([(7, 0)]));
     assert_eq!(store.read(7, 0, [8, 16, 24]), 3);
     assert_eq!(store.read(7, 0, [15, 23, 31]), 3, "a cell leaf covers its eight steps");
     assert_eq!(store.read(7, 0, [16, 16, 24]), VOID);
@@ -112,7 +112,7 @@ fn a_void_write_prunes_the_band_and_the_chunk() {
     assert_eq!(store.cols().count(), 1);
     let cell = store.cell(7, 0, 0, 2 * BAND_CELLS as i32).expect("the cell is found");
     assert_eq!(cell.solid, 0, "AIR does not occupy");
-    assert_eq!(write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, VOID), BTreeSet::from([7]));
+    assert_eq!(write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, VOID), BTreeSet::from([(7, 2)]));
     assert_eq!(store.cols().count(), 0);
     assert_eq!(entries(&store, 7), vec![]);
     assert!(store.cell(7, 0, 0, 2 * BAND_CELLS as i32).is_none());
@@ -182,22 +182,26 @@ fn the_lanes_are_in_band_and_walk_order_so_a_cell_s_entries_are_one_run() {
     assert_eq!(store.cell(3, 1, 0, BAND_CELLS as i32).map(|c| c.count), Some(1));
 }
 
-/// A chunk above z16 reads a write to a column it draws, in its tiers and
-/// its decor, and not one to a column it does not: the revision it reads
-/// agrees with what it draws.
+/// A chunk reads a write to a column and a height it draws, in its tiers
+/// and its decor, and not one it does not — a chunk beside it, or the chunk
+/// over the same column a height up: the revision it reads agrees with what
+/// it draws, at z16 and above.
 #[test]
-fn a_level_chunk_moves_with_the_columns_it_draws_and_no_other() {
+fn a_chunk_moves_with_what_it_draws_and_no_other() {
     use crate::world::chunk::source::{decor_revision_of, objects_revision_of};
     use crate::world::pyramid::chunk::Chunk;
     let _g = serial();
     let c = corner(4096 * 13, 4096 * 5, 3);
-    let level = 3;
-    let (home, far) = (Chunk::of(level, &c).base().i, Chunk::of(level, &c).beside(5, 0).base().i);
-    let before = (objects_revision_of(level, home), decor_revision_of(level, home), objects_revision_of(level, far));
-    place(&c, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
-    assert!(objects_revision_of(level, home) > before.0, "its tiers moved");
-    assert!(decor_revision_of(level, home) > before.1, "its decor moved");
-    assert_eq!(objects_revision_of(level, far), before.2, "a chunk that does not draw it did not");
+    for level in [0, 3] {
+        let home = Chunk::of(level, &c);
+        let (far, above) = (home.beside(5, 0, 0), home.beside(0, 0, 1));
+        let before = (objects_revision_of(home), decor_revision_of(home), objects_revision_of(far), objects_revision_of(above));
+        place(&c, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
+        assert!(objects_revision_of(home) > before.0, "level {level}: its tiers moved");
+        assert!(decor_revision_of(home) > before.1, "level {level}: its decor moved");
+        assert_eq!(objects_revision_of(far), before.2, "level {level}: a chunk beside it did not");
+        assert_eq!(objects_revision_of(above), before.3, "level {level}: the chunk over it did not");
+    }
 }
 
 /// What stands under a node reaches what the columns under it reach, at

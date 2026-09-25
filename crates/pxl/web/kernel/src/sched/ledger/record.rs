@@ -290,9 +290,9 @@ pub struct WorkSample {
     pub bakes: f64,
     /// The largest mesh a bake handed over since the last frame, in boxes,
     /// of each kind of slot — a high-water mark where `scans` and `bakes`
-    /// beside it are counts. It is what the slots are sized against
-    /// (world/chunk/mesh_slot.rs), since a mesh past its slot is cut and the
-    /// ground it held is missing.
+    /// beside it are counts. What a slot is read against
+    /// (world/chunk/mesh_slot.rs): a mesh past its slot is baked a step
+    /// coarser, which `coarser` counts.
     pub fine_peak: f64,
     pub coarse_peak: f64,
 }
@@ -383,10 +383,9 @@ pub struct StaleSample {
     pub slot_waits: f64,
     pub wait_levels: f64,
     pub holder_levels: f64,
-    /// Boxes cut from meshes that ran past the slot they go to: ground that
-    /// is simply missing, and the sign that a tier outgrew what its slot was
-    /// measured for (world/chunk/mesh_slot.rs).
-    pub cut: f64,
+    /// Tiers baked a step coarser than asked: they had more boxes than their
+    /// slot holds (world/chunk/mesh_slot.rs `capacity`).
+    pub coarser: f64,
 }
 
 /// The turn, in parts that add up. `task_ms` is the whole of it, and the
@@ -488,7 +487,7 @@ words!(FrameSample, FRAME::WORDS,
     stale.chunks => FRAME::stale_chunks, stale.drawn => FRAME::stale_drawn, stale.levels => FRAME::stale_levels, stale.hidden => FRAME::stale_hidden,
     stale.uncovered => FRAME::stale_uncovered, stale.unready => FRAME::stale_unready, stale.on_waiter => FRAME::stale_on_waiter,
     stale.slot_waits => FRAME::slot_waits, stale.wait_levels => FRAME::slot_wait_levels, stale.holder_levels => FRAME::slot_holder_levels,
-    stale.cut => FRAME::slot_cut,
+    stale.coarser => FRAME::slot_coarser,
     cap.commit_left => FRAME::cap_commit_left, cap.mount_left => FRAME::cap_mount_left,
     cap.mount_full => FRAME::cap_mount_full, cap.record_refused => FRAME::cap_record_refused,
     turn.effects_ms => FRAME::turn_effects_ms, turn.stage_ms => FRAME::turn_stage_ms,

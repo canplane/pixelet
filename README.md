@@ -14,7 +14,8 @@ The client is a small operating system in a browser tab. A Rust **kernel**, comp
 
 - **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into pages of 512² blocks, four channels of ground type and one elevation raster each. A page is fetched into one of a fixed number of records in memory and kept there until a page the view wants needs the room.
 - **One coordinate, 96 bits of fixed point.** A position is two packed words — three integer fields for which block, three 8-bit fractions for where inside it — so it resolves to 1/256 of a block. The arithmetic is integer, so it is the same bits on every machine, and the X field is cyclic, so the world wraps at the longitude seam.
-- **Terrain and what you build meet only when a chunk is built.** The chunk is Minecraft's, at 64 blocks. The ground is a dense raster for a whole page; placed objects are a sparse tree per 64³ band. They converge in one pipeline, and the mesher and the pointer's ray read the same spans out of it — so what is drawn is what is hit.
+- **The view is cubes about the eye.** What is drawn is decided from the eye alone, in three dimensions: a chunk is a cube of its level, 64 of its cells a side, and it is split into eight while its cells would cover too much of the screen. A cube with nothing in it is never made, so the air costs nothing, and everything a view asks for — pages fetched, chunks built, records given up — goes in one order out from the eye. Storage stays 2D; only the addresses are 3D.
+- **Terrain and what you build meet only when a chunk is built.** The chunk is a cube, Minecraft's section at 64 blocks a side rather than 16. The ground is a dense raster for a whole page; placed objects are a sparse tree per 64³ band, and an object belongs to the cube its band is in. They converge in one pipeline, and the mesher and the pointer's ray read the same spans out of it — so what is drawn is what is hit.
 - **Running short of memory costs detail, not the frame.** Work off screen is reclaimed first, and if that is not enough the view's criterion is pulled a level coarser and let out again when the pressure passes. The view gets blockier; the tab does not die.
 - **Numbers, not strings.** Commands, catalogs, assets and messages are numbered once in JSON under `spec/`, and both languages are generated from it. Nothing is ever looked up by name.
 
@@ -38,7 +39,7 @@ A block on screen has come a long way: a provider's geometry, a bake, a fetch, a
                       a terrain record
                               │
 the player's placements ──────┤
-a sparse tree per band        ▼             one L2 chunk, 64 blocks
+a sparse tree per band        ▼             one L2 chunk, a 64³ cube
                 terrain paint + object paint
                               │
                               ▼

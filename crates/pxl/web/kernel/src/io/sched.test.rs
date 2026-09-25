@@ -111,14 +111,13 @@ fn a_current_demand_is_said_whatever_old_work_is_draining() {
     declare(Category::terrain, &[(3, rank(1, 0.0))]);
     assert_eq!(s.desired.len(), 1, "the new want is representable with both credits spent");
     pump();
-    assert_eq!(stopped().len(), 1, "one obsolete attempt is told to stop");
-    assert_eq!(s.attempt.iter().flatten().filter(|a| a.stopping).count(), 1, "and only one, since a stop is a credit on its way back");
-    // Telling it to stop is not the end of it: it is still out and still
-    // spending, and the credit comes back when the host says it is over.
-    assert!(started().is_empty(), "nothing starts on a credit that has not come back");
+    // What the camera left is stopped the turn it leaves, all of it, and its
+    // credits start what is wanted now in the same turn.
+    assert_eq!(stopped().len(), 2, "every obsolete attempt is told to stop");
+    assert_eq!(started().len(), 1, "and the current want starts at once");
+    // What the host still reports under a stopped key names nothing.
     ok(out[0]);
-    pump();
-    assert_eq!(started().len(), 1, "and now it does");
+    assert_eq!(counts(), (0, 1), "the late report neither frees nor ends anything");
 }
 
 #[test]
@@ -136,7 +135,8 @@ fn a_whole_class_better_takes_a_credit_and_a_nearer_one_does_not() {
     // A class better: the waiting work is a different kind of wanted.
     declare(Category::terrain, &[(1, rank(2, 5.0)), (3, rank(1, 9.0))]);
     pump();
-    assert_eq!(stopped().len(), 1, "a hole takes the credit from a refinement");
+    assert_eq!(stopped().len(), 1, "a class better takes the credit");
+    assert_eq!(started().len(), 1, "in the same turn");
     assert_eq!(s.desired.len(), 2, "and the one it took from is still wanted");
 }
 
@@ -145,7 +145,13 @@ fn an_asset_shares_the_credits_and_is_never_withdrawn() {
     let _g = fresh();
     set_credits(1);
     // A page the viewer is waiting on and an asset, both wanted at once.
-    declare(Category::terrain, &[(1, crate::io::policy::page(Category::terrain, crate::io::policy::Shell::Drawn, 0.0))]);
+    declare(
+        Category::terrain,
+        &[(
+            1,
+            crate::io::policy::page(Category::terrain, crate::io::policy::Shell::Drawn, crate::world::pyramid::domain::Order { seen: true, near: 0.0 }),
+        )],
+    );
     declare(Category::asset, &[(7, crate::io::policy::asset())]);
     pump();
     assert_eq!(started().len(), 1, "one credit, one read — an asset does not go beside the pages");

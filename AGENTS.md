@@ -98,16 +98,21 @@ The rules below keep it one thing. They come from finding it several.
   the one domain (`world/pyramid.rs`), and the bake's `build`
   (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not data — terrain
   folds by majority and average, POI by sum.
-- **2.5D is paged; 3D is not.** Terrain and POI are pages of the pyramid.
-  Placed objects are all resident, so they have no lifecycle to share; they
-  share the lattice and the fold rule (`majority`, `pxl-spec bake/fold.rs`)
-  and are folded when a chunk is built.
+- **The view is 3D; storage is not.** A chunk is a cube, addressed by its
+  level and x, y and z (`world/pyramid/chunk.rs`), and a cube that holds
+  nothing is no chunk. Terrain and POI are pages of the pyramid, a 2D
+  heightfield and a 2D count; placed objects are resident in their store, by
+  column and band. A lookup points a chunk at them (`Domain::occupied`,
+  `Chunk::column`), and nothing else reads them by column. A placed object
+  lives in the chunk its band is in — built, made again and drawn with it,
+  the ground's lifecycle there — and shares the lattice and the fold rule
+  (`majority`, `pxl-spec bake/fold.rs`).
 - **2.5D is how ground is stored, not how anything behaves.** A page's
   heightfield is a compression; what the view selects, orders, budgets,
-  occludes and draws is 3D — boxes in a sphere about the eye and the view's
-  center — for terrain, places and objects alike. A 2.5D shortcut (a height
-  read off the raster, `get_ele`) is an optimization where it is known to
-  behave exactly as the 3D rule would, never a model of its own.
+  occludes and draws is 3D — cubes in a sphere about the eye — for terrain,
+  places and objects alike. A 2.5D shortcut (a height read off the raster,
+  `ground_ele_at`) is an optimization where it is known to behave exactly as
+  the 3D rule would, never a model of its own.
 - **A mark stands at a cell's center** (`cell_center`), at the height of the
   surface drawn there, never at a center derived from its data's bounds. A
   mark for many things stands at the z16 cell their centroid falls in,
