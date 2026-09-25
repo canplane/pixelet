@@ -1323,6 +1323,11 @@ impl Scheduler {
 
     /// The device's meshes are gone — the arena was made anew, the device with
     /// it — so every tier is forgotten and built again from the records.
+    ///
+    /// A layout is what a chunk shows, and it showed those tiers: kept ready
+    /// over tiers that are gone, the recheck finds nothing to ask for and the
+    /// chunk draws its decor over no ground until its cube happens to change.
+    /// With its layout gone it is a hole, which the recheck asks for first.
     fn lose_meshes(&mut self) {
         let epoch = arena_epoch();
         if epoch == self.meshes.epoch {
@@ -1332,6 +1337,11 @@ impl Scheduler {
         self.meshes.holder.fill(None);
         for s in self.slots.iter_mut() {
             s.tiers.clear();
+            s.layout_ready = false;
+            s.layout_secondary = None;
+            s.fade = None;
+            s.told = None;
+            s.set(EMPTY, true);
         }
         self.view_dirty = true;
     }
