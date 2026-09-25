@@ -5,10 +5,10 @@
 //!
 //! What an instance is: a chunk-local position, a spin about Z, a scale, and
 //! where it came from — a user-placed entry in object/store.rs, or a procedural
-//! scatter that no store names. The id is not stored: a placed entry is named
-//! by its band and packed position in the store's own lanes, two u32s, and the
-//! string id is rebuilt from those only when a hit needs it (object/store.rs's
-//! entry_id_of). `hidden` is a flag lane rather than a separate list: the vertex
+//! scatter that no store names. A placed entry is named by its band and packed
+//! position in its column, two u32s, which with the chunk's column is the
+//! store's own address for it (object/store.rs `EntryAt`). `hidden` is a flag
+//! lane rather than a separate list: the vertex
 //! shader sends a hidden instance outside the clip volume (decor.wgsl) while the
 //! hit test keeps seeing it.
 //!
@@ -115,6 +115,45 @@ impl DecorScratch {
     }
 }
 
+/// A block is a word of group count, a word of instance count a group, then
+/// each group's lanes. A group of `count` instances is five lanes of f32 —
+/// x, y, z, the spin and the scale — the flags a byte each padded to a word,
+/// then the band and the packed position: where each lies, in words from the
+/// block's start, is this and nothing else's.
+#[derive(Clone, Copy)]
+pub struct GroupLanes {
+    /// The group's first word.
+    pub first: usize,
+    pub count: usize,
+}
+
+impl GroupLanes {
+    /// The words a group of `count` instances takes.
+    pub const fn words(count: usize) -> usize {
+        7 * count + count.div_ceil(4)
+    }
+
+    /// The word of instance `i` in f32 lane `lane`: 0 x, 1 y, 2 z, 3 the
+    /// spin, 4 the scale.
+    pub const fn f32_at(self, lane: usize, i: usize) -> usize {
+        self.first + lane * self.count + i
+    }
+
+    /// The first word of the flags, a byte an instance.
+    pub const fn flags(self) -> usize {
+        self.first + 5 * self.count
+    }
+
+    /// The word of instance `i`'s band, and of its packed position.
+    pub const fn band_at(self, i: usize) -> usize {
+        self.flags() + self.count.div_ceil(4) + i
+    }
+
+    pub const fn pos_at(self, i: usize) -> usize {
+        self.band_at(i) + self.count
+    }
+}
+
 /// Each group's first lane word in a block and its count, in group order, as
 /// the block's own header says: what a draw of the group reads its instances
 /// by.
@@ -123,7 +162,7 @@ pub fn decor_groups(words: &[u32]) -> impl Iterator<Item = (u32, u32)> + '_ {
     let mut at = 1 + groups;
     words.get(1..1 + groups).unwrap_or(&[]).iter().map(move |&n| {
         let (first, n) = (at, n as usize);
-        at += 7 * n + n.div_ceil(4);
+        at += GroupLanes::words(n);
         (first as u32, n as u32)
     })
 }

@@ -35,7 +35,7 @@ use std::collections::HashMap;
 use pxl_spec::cell::cube_types;
 
 use crate::kernel::kernel;
-use crate::layer::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
+use crate::layer::decor::instance::{DecorScratch, GroupLanes, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::layer::decor::kind::DecorKindDef;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
@@ -319,13 +319,10 @@ impl<'s> DecorBuild<'s> {
                 band: bands[k],
                 step: [x, y, z],
             };
-            // The entry's cell, which seeds its variant and turn.
-            let [cx, cy, cz] = at.cell();
-            let corner = gather(cx, cy, cz);
+            // Turned and varied by where it stands, as the ghost that
+            // placed it predicted.
+            let (variant, rotation) = user_decor_pick(at.corner().i, kind.variant_count);
             let [lx, ly, lz] = at.local();
-            let mut rng = Rng::new(derive_seed_u64(DECOR_MASTER_SEED, corner));
-            let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
-            let rotation = rng.unit() * core::f64::consts::PI * 2.0;
             let hidden = column.hide == Some((bands[k], pos));
             let h = size / 2.0;
             scratch.push(
@@ -412,12 +409,10 @@ impl<'s> DecorBuild<'s> {
         }
     }
 
-    /// The block's size in bytes: a word of group count, a word of count a
-    /// group, then each group's lanes — five of f32, the flags padded to a
-    /// word, the band and the position.
+    /// The block's size in bytes (instance.rs `GroupLanes`).
     pub fn bytes(&self) -> u32 {
         let s = self.scratch;
-        let words: usize = 1 + s.group_count + s.counts[..s.group_count].iter().map(|&n| 7 * n as usize + (n as usize).div_ceil(4)).sum::<usize>();
+        let words: usize = 1 + s.group_count + s.counts[..s.group_count].iter().map(|&n| GroupLanes::words(n as usize)).sum::<usize>();
         word_bytes(words)
     }
 
@@ -431,28 +426,26 @@ impl<'s> DecorBuild<'s> {
         let words = at as *mut u32;
         let groups = s.group_count;
         *words = groups as u32;
-        let mut first = [0usize; DECOR_GROUPS];
+        let mut lanes = [GroupLanes { first: 0, count: 0 }; DECOR_GROUPS];
         let mut k = 1 + groups;
-        for (g, start) in first.iter_mut().enumerate().take(groups) {
+        for (g, lane) in lanes.iter_mut().enumerate().take(groups) {
             let n = s.counts[g] as usize;
             *words.add(1 + g) = n as u32;
-            *start = k;
+            *lane = GroupLanes { first: k, count: n };
             // The flags are bytes padded to a word, and a pad byte is zero.
-            core::ptr::write_bytes(at.add((k + 5 * n) * 4), 0, n.div_ceil(4) * 4);
-            k += 7 * n + n.div_ceil(4);
+            core::ptr::write_bytes(at.add(lane.flags() * 4), 0, n.div_ceil(4) * 4);
+            k += GroupLanes::words(n);
         }
         let mut rank = [0usize; DECOR_GROUPS];
         for (i, &g) in s.instances[..s.len].iter().zip(&s.groups[..s.len]) {
-            let g = g as usize;
-            let (n, r, f) = (s.counts[g] as usize, rank[g], first[g]);
-            for (lane, v) in [i.x, i.y, i.z, i.rotation, i.scale].into_iter().enumerate() {
-                *words.add(f + lane * n + r) = v.to_bits();
+            let (lane, r) = (lanes[g as usize], rank[g as usize]);
+            for (l, v) in [i.x, i.y, i.z, i.rotation, i.scale].into_iter().enumerate() {
+                *words.add(lane.f32_at(l, r)) = v.to_bits();
             }
-            *at.add((f + 5 * n) * 4 + r) = i.flags;
-            let past_flags = f + 5 * n + n.div_ceil(4);
-            *words.add(past_flags + r) = i.band;
-            *words.add(past_flags + n + r) = i.pos;
-            rank[g] += 1;
+            *at.add(lane.flags() * 4 + r) = i.flags;
+            *words.add(lane.band_at(r)) = i.band;
+            *words.add(lane.pos_at(r)) = i.pos;
+            rank[g as usize] += 1;
         }
     }
 }

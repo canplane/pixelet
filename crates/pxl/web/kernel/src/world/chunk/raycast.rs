@@ -19,6 +19,7 @@ use pxl_spec::space::pyramid::CHUNK_CELLS;
 use pxl_spec::space::v3::V3;
 
 use crate::kernel::kernel;
+use crate::layer::decor::instance::{decor_groups, GroupLanes, NO_ENTRY};
 use crate::world::chunk::build::World;
 use crate::world::chunk::table::Scheduler;
 use crate::world::pyramid::chunk::Chunk;
@@ -359,12 +360,14 @@ pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: V3, d: [
         // SAFETY: the block the scheduler wrote at `at`, of the groups it
         // recorded; every lane read is inside its group's run.
         let words = unsafe { core::slice::from_raw_parts(mem.add(decor.at as usize) as *const u32, decor.bytes as usize / 4) };
-        for (g, (offset, count)) in crate::layer::decor::instance::decor_groups(words).enumerate() {
+        for (g, (offset, count)) in decor_groups(words).enumerate() {
             let Some(Some(model)) = sched.decor_models.get(g) else { continue };
             let Some(mesh) = sched.models.mesh(*model) else { continue };
-            let (offset, count) = (offset as usize, count as usize);
-            let lane = |k: usize, i: usize| f32::from_bits(words[offset + k * count + i]) as f64;
-            let band_at = offset + 5 * count + count.div_ceil(4);
+            let lanes = GroupLanes {
+                first: offset as usize,
+                count: count as usize,
+            };
+            let lane = |k: usize, i: usize| f32::from_bits(words[lanes.f32_at(k, i)]) as f64;
             // SAFETY: the model's block, positions first and the indices
             // past the vertex words.
             let (positions, indices) = unsafe {
@@ -376,9 +379,9 @@ pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: V3, d: [
                     ),
                 )
             };
-            for i in 0..count {
-                let band = words[band_at + i];
-                if band == crate::layer::decor::instance::NO_ENTRY {
+            for i in 0..lanes.count {
+                let band = words[lanes.band_at(i)];
+                if band == NO_ENTRY {
                     continue;
                 }
                 let c = [tx + lane(0, i), ty + lane(1, i), lane(2, i)];
@@ -408,7 +411,7 @@ pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: V3, d: [
                             best = Some(DecorHit {
                                 chunk,
                                 band,
-                                pos: words[band_at + count + i],
+                                pos: words[lanes.pos_at(i)],
                                 t,
                             });
                         }
