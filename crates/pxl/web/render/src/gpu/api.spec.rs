@@ -93,13 +93,13 @@ pub mod paint {
     pub const SCALE: u32 = 5;
     /// on
     pub const SMOOTHING: u32 = 6;
-    /// css
+    /// rgba: 0xRRGGBBAA
     pub const FILL_STYLE: u32 = 7;
-    /// css
+    /// rgba: 0xRRGGBBAA
     pub const STROKE_STYLE: u32 = 8;
     /// width
     pub const LINE_WIDTH: u32 = 9;
-    /// css
+    /// weight, px: the page's own font-family at them
     pub const FONT: u32 = 10;
     /// 0 left, 1 center
     pub const TEXT_ALIGN: u32 = 11;

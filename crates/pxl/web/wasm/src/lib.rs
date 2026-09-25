@@ -777,9 +777,10 @@ extern "C" {
     /// minutes, seconds, and the local day's start in unix ms.
     #[link_name = "local_time"]
     fn host_local_time(out: *mut f64);
-    /// A canvas context's `measureText(text).width` in `font`.
+    /// A canvas context's `measureText(text).width` in the page's own family at
+    /// `weight` and `px`.
     #[link_name = "measure_text"]
-    fn host_measure_text(font: *const u8, font_len: usize, text: *const u8, text_len: usize) -> f64;
+    fn host_measure_text(weight: u32, px: f32, text: *const u8, text_len: usize) -> f64;
     /// Copies the body the host holds as `body` into `dst`, `len` bytes, and
     /// lets it go; a `len` of 0 only lets it go.
     #[link_name = "body_read"]
@@ -932,9 +933,9 @@ fn hook_local_time() -> pxl_kernel::host::LocalTime {
     }
 }
 
-fn hook_measure_text(font: &str, text: &str) -> f64 {
-    // SAFETY: the host reads both strings where they lie.
-    unsafe { host_measure_text(font.as_ptr(), font.len(), text.as_ptr(), text.len()) }
+fn hook_measure_text(font: pxl_render::gpu::paint::Font, text: &str) -> f64 {
+    // SAFETY: the host reads the string where it lies.
+    unsafe { host_measure_text(font.weight, font.px, text.as_ptr(), text.len()) }
 }
 
 fn hook_body_read(body: u32, dst: &mut [u8]) {

@@ -343,6 +343,21 @@ function read_timestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: 
 
 // ---- the 2D scratch ----
 
+/** A colour the kernel packs as `0xRRGGBBAA`. */
+function css_color(rgba: u32): string {
+  return `rgba(${rgba >>> 24},${(rgba >>> 16) & 0xff},${(rgba >>> 8) & 0xff},${(rgba & 0xff) / 255})`;
+}
+
+let family: string | null = null;
+
+/** The kernel's font — a weight and a size — in the page's own family, read
+ * off the page once it is styled, so what the kernel paints and measures is
+ * the face the page sets around it. */
+export function css_font(weight: u32, px: f32): string {
+  family ??= globalThis.document ? getComputedStyle(document.body).fontFamily : "sans-serif";
+  return `${weight} ${px}px ${family}`;
+}
+
 let scratch: OffscreenCanvas | null = null;
 let scratch_ctx: OffscreenCanvasRenderingContext2D | null = null;
 
@@ -392,17 +407,19 @@ function run_paint(w: U32Array, memory: WebAssembly.Memory): void {
         ctx.imageSmoothingEnabled = w[k++] !== 0;
         break;
       case paint.FILL_STYLE:
-        ctx.fillStyle = text();
+        ctx.fillStyle = css_color(w[k++]);
         break;
       case paint.STROKE_STYLE:
-        ctx.strokeStyle = text();
+        ctx.strokeStyle = css_color(w[k++]);
         break;
       case paint.LINE_WIDTH:
         ctx.lineWidth = f();
         break;
-      case paint.FONT:
-        ctx.font = text();
+      case paint.FONT: {
+        const weight = w[k++];
+        ctx.font = css_font(weight, f());
         break;
+      }
       case paint.TEXT_ALIGN:
         ctx.textAlign = w[k++] === 1 ? "center" : "left";
         break;

@@ -77,13 +77,13 @@ export const paint = {
   SCALE: 5 as number,
   /** on */
   SMOOTHING: 6 as number,
-  /** css */
+  /** rgba: 0xRRGGBBAA */
   FILL_STYLE: 7 as number,
-  /** css */
+  /** rgba: 0xRRGGBBAA */
   STROKE_STYLE: 8 as number,
   /** width */
   LINE_WIDTH: 9 as number,
-  /** css */
+  /** weight, px: the page's own font-family at them */
   FONT: 10 as number,
   /** 0 left, 1 center */
   TEXT_ALIGN: 11 as number,

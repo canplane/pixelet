@@ -9,11 +9,11 @@
 //! speech-bubble shape the shell paints.
 
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
+use pxl_render::gpu::pass::badges::BUBBLE_FONT;
 use pxl_render::gpu::surface::DPR_MAX;
 
 use crate::global::Global;
 use crate::host::{measure_text, wall_now};
-use crate::layer::billboard::canvas::scale::{FONT_FAMILY, FONT_WEIGHT_BOLD};
 use crate::layer::billboard::canvas::text::wrap_text;
 use crate::layer::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 
@@ -42,10 +42,6 @@ pub fn append_chat_line(text: &str) {
 // has no such expiry, so this is tracked here, not in the shell's chat log.
 const SHOW_DURATION_MS: f64 = 8000.0;
 
-fn font() -> String {
-    format!("{FONT_WEIGHT_BOLD} 14px {FONT_FAMILY}")
-}
-
 const PADDING_X: f64 = 11.0;
 const PADDING_Y: f64 = 8.0;
 const LINE_H: f64 = 17.0;
@@ -70,8 +66,7 @@ pub struct BubbleLayout {
 }
 
 pub fn layout_bubble(text: &str) -> BubbleLayout {
-    let f = font();
-    let measure = |s: &str| measure_text(&f, s);
+    let measure = |s: &str| measure_text(BUBBLE_FONT, s);
     let lines = wrap_text(&measure, text, MAX_TEXT_WIDTH_PX);
     let text_w = lines.iter().map(|l| measure(l)).fold(f64::NEG_INFINITY, f64::max).ceil();
     let box_w = text_w + PADDING_X * 2.0;
