@@ -105,7 +105,7 @@ fn storage_key() -> String {
 // this section does is lower a coordinate to what the kernel keys by — the
 // chunk (the L2 index of the XY column), the band's Z, and the position within
 // the band in finest-tier steps, which is the low bits of each lane of the
-// coordinate shifted to the finest level — and read its lanes back.
+// coordinate shifted to the finest tier's scale — and read its lanes back.
 
 fn cell_size_fp() -> i64 {
     pvf3::from_real(U_PER_CELL)
@@ -212,7 +212,7 @@ fn entry_count(col_idx: IVec) -> u32 {
     kernel().objects.chunk_lanes(col_idx).map_or(0, |l| l.count)
 }
 
-/// Real-unit local offset (x,y,z at min-level lattice units) as a PVF3,
+/// Real-unit local offset (x,y,z in finest-tier steps) as a PVF3,
 /// computed via exact bit-shift (pvf3::sh), not a float multiply.
 fn local_offset(x: u32, y: u32, z: u32) -> Pvf3 {
     let mut scalar = Pvf3::default();

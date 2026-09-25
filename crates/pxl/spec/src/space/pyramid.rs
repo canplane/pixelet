@@ -64,7 +64,7 @@ impl Lattice {
     }
 
     /// Cells on a page's side, at every level, as a shift.
-    pub const fn page_cell_shamt(self) -> u32 {
+    const fn page_cell_shamt(self) -> u32 {
         L3.above(self.cell) as u32
     }
 

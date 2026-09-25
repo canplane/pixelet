@@ -471,8 +471,8 @@ where
 /// Visit every maximal uniform leaf block in the tree — the inverse of
 /// `dense()`: instead of expanding to one value per finest-level cell, this
 /// calls `visit` once per *block*, however coarse, with that block's own
-/// corner (in min-level lattice units — multiply by `2**layout.min` for a
-/// real-unit offset) and shift level (`2**level` is that block's real-unit
+/// corner (in steps of `layout.min` — multiply by `layout.min.side()` for a
+/// real-unit offset) and scale (its `side()` is the block's real-unit
 /// size). Skips branch slots entirely (never visits an internal node, only
 /// leaves), so a caller building a sparse "list of occupied regions" view
 /// (e.g. one render/placement record per uniform block) never has to

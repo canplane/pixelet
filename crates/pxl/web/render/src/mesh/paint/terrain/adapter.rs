@@ -11,12 +11,13 @@
 //! writes as one run a column without a volume.
 //!
 //! The floor is rounded down to a whole band (`min_ele - TERRAIN_Z_MARGIN`,
-//! floored to CHUNK_CELLS) because a volume allocates in whole bands: a floor
+//! floored to BAND_CELLS) because a volume allocates in whole bands: a floor
 //! anywhere inside one would open a band below it for the few voxels that
 //! cross. A cell sits its type's recess below its sampled height, so a
 //! shoreline reads as water meeting land rather than as two surfaces at the
 //! same level.
 
+use pxl_spec::bake::constant::BAND_CELLS;
 use pxl_spec::bake::format::GROUND_CH_KEYS;
 use pxl_spec::bake::ground::{channel_bit, ChannelMask};
 use pxl_spec::bake::pack::{unpack, GroundCell};
@@ -166,7 +167,7 @@ impl ChunkSample {
             }
         }
         // One band-aligned floor shared by the whole chunk, under every peak.
-        self.floor = (min_ele - TERRAIN_Z_MARGIN).div_euclid(CHUNK_CELLS as i32) * CHUNK_CELLS as i32;
+        self.floor = (min_ele - TERRAIN_Z_MARGIN).div_euclid(BAND_CELLS as i32) * BAND_CELLS as i32;
     }
 
     /// Paints the chunk's own columns into `volume`, floor to top. The
