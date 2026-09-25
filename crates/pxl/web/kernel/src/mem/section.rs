@@ -35,14 +35,14 @@
 //! reasoning for it should not have to be recovered from a linker map.
 //!
 //! Where each lands, at the two memories the shell reserves. Everything but
-//! the heap is the same on both: the terrain is what the level rings hold,
+//! the heap is the same on both: the terrain is what a view can hold,
 //! not a share of what the device happens to have.
 //!
 //! ```text
 //!              offset         end            phone        desktop
 //!   module     0              ~32.7 MiB      the linker's
-//!   .fixed     ~32.7 MiB      ~102.6 MiB     69.87 MiB    69.87 MiB
-//!   heap       ~102.6 MiB     —              409.40 MiB   921.40 MiB
+//!   .fixed     ~32.7 MiB      ~64.4 MiB      31.69 MiB    31.69 MiB
+//!   heap       ~64.4 MiB      —              447.61 MiB   959.61 MiB
 //! ```
 //!
 //! What everything in front of the heap is checked against is MIN_HEAP_BYTES —
