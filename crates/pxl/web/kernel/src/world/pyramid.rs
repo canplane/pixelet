@@ -16,11 +16,8 @@
 pub mod chunk;
 pub mod window;
 
-use core::fmt;
-
-use pxl_spec::bake::quadkey::quadkey_of;
 use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pyramid::{zoom_of_level, Folds, LevelPage, TOP_LEVEL};
+use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 use std::collections::HashSet;
 use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
@@ -33,7 +30,7 @@ use crate::world::change::{world_edge, WorldTopic};
 use crate::world::page_table::PageTable;
 use chunk::Chunk;
 pub use window::Domain;
-use window::{domain_for, eye, held, ring_of, window, Frustum};
+use window::{domain_for, eye, heights_revision, held, ring_of, window, Frustum};
 use window::{CHAIN_PAGES, HELD_AXIS, WINDOW_LEVELS};
 
 /// A layer the pyramid holds: its page is itself, folded by `Folds`.
@@ -66,16 +63,6 @@ pub trait Layer: Folds + Clone + 'static {
     /// screen and what is asked for are one cover.
     fn present(cover: Cover, _d: &Domain, _pyramid: &Pyramid<Self>) -> Cover {
         cover
-    }
-}
-
-/// A page's name in a bake: the quadkey of the tile it stands on, at the zoom
-/// its level is (pxl-spec bake/quadkey.rs). The name's length is the level.
-pub struct PageName(pub LevelPage);
-
-impl fmt::Display for PageName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", quadkey_of(zoom_of_level(self.0.level), self.0.page))
     }
 }
 
@@ -132,9 +119,11 @@ pub struct Cover {
 
 /// What the cover and the wishlist are a function of: where the eye is, what
 /// it sees and the window it holds, whether the camera is moving, the
-/// resident set and the pinned page. Two turns agreeing on all of it want the
-/// same pages of the same ground, so the second decides nothing again.
-type Wish = ([f64; 3], Frustum, (u32, u32), bool, u32, Option<LevelPage>);
+/// resident set, the pinned page, and the heights the domain measures the
+/// ground by (`heights_revision`), which neither the eye nor this layer's
+/// resident set moves. Two turns agreeing on all of it want the same pages
+/// of the same ground, so the second decides nothing again.
+type Wish = ([f64; 3], Frustum, (u32, u32), bool, u32, Option<LevelPage>, (u32, u32));
 
 pub struct Pyramid<L: Layer> {
     tables: Vec<PageTable<L>>,
@@ -530,7 +519,7 @@ impl<L: Layer> Pyramid<L> {
         let anchor = e.foot;
         let w = window();
         let frustum = Frustum::of_view();
-        let wish = (e.at, frustum, (w.start, w.end), crate::sched::turn::interactive(), self.revision, self.pinned);
+        let wish = (e.at, frustum, (w.start, w.end), crate::sched::turn::interactive(), self.revision, self.pinned, heights_revision());
         if self.last != Some(wish) {
             self.drop_unrecorded(anchor);
             let d = domain_for(&e, eye_height(), Some(frustum));
@@ -547,7 +536,7 @@ impl<L: Layer> Pyramid<L> {
             }
             // Letting a page go moves the revision; the wish is the resident
             // set the cover was made from.
-            self.last = Some((wish.0, wish.1, wish.2, wish.3, self.revision, wish.5));
+            self.last = Some((wish.0, wish.1, wish.2, wish.3, self.revision, wish.5, heights_revision()));
             self.wishlist = self.wants(anchor);
             self.folds.notify();
         }

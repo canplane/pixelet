@@ -34,6 +34,7 @@ use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
 use pxl_spec::asset::ingested::Asset;
 use pxl_spec::space::v3::V3;
+use xpute_runtime::abi::handle::Slots;
 use xpute_runtime::mem::heap::{alloc, free};
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
@@ -357,8 +358,10 @@ pub struct Actor {
 
 #[derive(Default)]
 pub struct Models {
-    models: Vec<Option<Model>>,
-    actors: Vec<Option<Actor>>,
+    /// Every model registered, by number: none is let go, since a model is
+    /// an asset of the build and the build's assets stay while it runs.
+    models: Vec<Model>,
+    actors: Slots<Actor>,
 }
 
 // ---- small math over column-major f32 matrices ----
@@ -493,23 +496,14 @@ impl Models {
             scale: 1.0,
             radius: 0.0,
         };
-        let id = match self.models.iter().position(|m| m.is_none()) {
-            Some(k) => {
-                self.models[k] = Some(model);
-                k
-            }
-            None => {
-                self.models.push(Some(model));
-                self.models.len() - 1
-            }
-        };
-        Some((id as u32, at))
+        self.models.push(model);
+        Some(((self.models.len() - 1) as u32, at))
     }
 
     /// A joint: its parent (-1 for a root), its rest pose, the transform
     /// above it when it is a root, and its inverse bind matrix.
     pub fn joint(&mut self, model: u32, joint: u32, parent: i32, rest: [f32; 10], root_pre: [f32; 16], inverse_bind: [f32; 16]) {
-        let Some(Some(m)) = self.models.get_mut(model as usize) else { return };
+        let Some(m) = self.models.get_mut(model as usize) else { return };
         let j = joint as usize;
         if j >= m.parent.len() {
             return;
@@ -522,7 +516,7 @@ impl Models {
 
     /// A clip; its index in the model.
     pub fn clip(&mut self, model: u32, duration: f32) -> u32 {
-        let Some(Some(m)) = self.models.get_mut(model as usize) else { return u32::MAX };
+        let Some(m) = self.models.get_mut(model as usize) else { return u32::MAX };
         m.clips.push(Clip { duration, channels: Vec::new() });
         (m.clips.len() - 1) as u32
     }
@@ -534,7 +528,7 @@ impl Models {
     /// f32s, width 4 for a rotation and 3 otherwise.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn channel(&mut self, mem: *const u8, model: u32, clip: u32, joint: u32, path: u8, step: bool, key_cnt: u32, times_at: usize, values_at: usize) {
-        let Some(Some(m)) = self.models.get_mut(model as usize) else { return };
+        let Some(m) = self.models.get_mut(model as usize) else { return };
         let Some(c) = m.clips.get_mut(clip as usize) else { return };
         let width = if path == R { 4 } else { 3 };
         let times = core::slice::from_raw_parts(mem.add(times_at) as *const f32, key_cnt as usize).to_vec();
@@ -548,7 +542,7 @@ impl Models {
     /// # Safety
     /// `mem` is the memory the model's block was written in.
     pub unsafe fn seal(&mut self, draw: &mut DrawList, mem: *const u8, model: u32, scale: f32) {
-        let Some(Some(m)) = self.models.get_mut(model as usize) else { return };
+        let Some(m) = self.models.get_mut(model as usize) else { return };
         m.scale = scale;
         m.handle = draw.upload(m.at as u32, m.bytes, m.vertex_cnt, m.index_cnt);
         let positions = core::slice::from_raw_parts(mem.add(m.at) as *const f32, m.vertex_cnt as usize * 3);
@@ -580,7 +574,7 @@ impl Models {
     /// A model's mesh, for a hit test: where its block is, its counts, its
     /// reach from the origin and its scale.
     pub fn mesh(&self, model: u32) -> Option<MeshRef> {
-        let m = self.models.get(model as usize)?.as_ref()?;
+        let m = self.models.get(model as usize)?;
         Some(MeshRef {
             at: m.at,
             handle: m.handle,
@@ -591,24 +585,8 @@ impl Models {
         })
     }
 
-    /// Lets a model go, and every actor of it.
-    pub fn remove_model(&mut self, draw: &mut DrawList, model: u32) {
-        for a in 0..self.actors.len() {
-            if self.actors[a].as_ref().is_some_and(|x| x.model == model) {
-                self.remove_actor(draw, a as u32);
-            }
-        }
-        if let Some(slot) = self.models.get_mut(model as usize) {
-            if let Some(m) = slot.take() {
-                draw.free(m.handle);
-                // SAFETY: the block this model took and has not given back.
-                unsafe { free((m.at, m.bytes)) };
-            }
-        }
-    }
-
     pub fn new_actor(&mut self, world: &mut World, draw: &mut DrawList, model: u32) -> Option<u32> {
-        let joints = self.models.get(model as usize)?.as_ref()?.parent.len();
+        let joints = self.models.get(model as usize)?.parent.len();
         let palette_bytes = word_bytes(joints.max(1) * 16);
         let (palette_at, palette_bytes) = alloc(palette_bytes)?;
         // SAFETY: the block just acquired; identity joints until the first tick.
@@ -637,25 +615,15 @@ impl Models {
             local: vec![[0.0; 10]; joints],
             global: vec![[0.0; 16]; joints],
         };
-        let id = match self.actors.iter().position(|a| a.is_none()) {
-            Some(k) => {
-                self.actors[k] = Some(actor);
-                k
-            }
-            None => {
-                self.actors.push(Some(actor));
-                self.actors.len() - 1
-            }
-        };
-        Some(id as u32)
+        Some(self.actors.insert(actor))
     }
 
     pub fn actor(&mut self, id: u32) -> Option<&mut Actor> {
-        self.actors.get_mut(id as usize)?.as_mut()
+        self.actors.get_mut(id)
     }
 
     pub fn actor_ref(&self, id: u32) -> Option<&Actor> {
-        self.actors.get(id as usize)?.as_ref()
+        self.actors.get(id)
     }
 
     /// Starts `clip` from its beginning, fading over `fade_s` from what
@@ -672,12 +640,10 @@ impl Models {
     }
 
     pub fn remove_actor(&mut self, draw: &mut DrawList, id: u32) {
-        if let Some(slot) = self.actors.get_mut(id as usize) {
-            if let Some(a) = slot.take() {
-                draw.free(a.palette_handle);
-                // SAFETY: the block this asset took and has not given back.
-                unsafe { free((a.palette_at, a.palette_bytes)) };
-            }
+        if let Some(a) = self.actors.remove(id) {
+            draw.free(a.palette_handle);
+            // SAFETY: the block this asset took and has not given back.
+            unsafe { free((a.palette_at, a.palette_bytes)) };
         }
     }
 
@@ -688,8 +654,8 @@ impl Models {
     pub fn tick(&mut self, world: &mut World, draw: &mut DrawList, dt: f32) -> bool {
         let mem = world.volumes.mem();
         let mut animating = false;
-        for a in self.actors.iter_mut().flatten() {
-            let Some(Some(m)) = self.models.get(a.model as usize) else { continue };
+        for a in self.actors.values_mut() {
+            let Some(m) = self.models.get(a.model as usize) else { continue };
             animating |= a.current.is_some_and(|p| m.clips.get(p.clip as usize).is_some_and(|c| c.duration > 0.0));
             let wrap = |p: &mut Playing| {
                 p.time += dt;
@@ -754,11 +720,11 @@ impl Models {
 
     /// Every visible actor's draw, placed against the frame's origin.
     pub fn draw(&self, draw: &mut DrawList, origin: V3) {
-        for a in self.actors.iter().flatten() {
+        for (_, a) in self.actors.iter() {
             if !a.visible {
                 continue;
             }
-            let Some(Some(m)) = self.models.get(a.model as usize) else { continue };
+            let Some(m) = self.models.get(a.model as usize) else { continue };
             if m.handle == 0 {
                 continue;
             }

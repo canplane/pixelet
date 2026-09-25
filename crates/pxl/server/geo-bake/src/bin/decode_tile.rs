@@ -35,6 +35,7 @@ use std::process::ExitCode;
 
 use flate2::write::ZlibEncoder;
 use flate2::{Compression, Crc};
+use pxl_geo_bake::cli::Flags;
 use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::format::decode_terrain;
 use pxl_spec::bake::format::GroundChannelKey;
@@ -286,23 +287,32 @@ fn one(path: &Path, out: Option<PathBuf>) -> Result<bool, String> {
 }
 
 fn main() -> ExitCode {
-    let mut args: Vec<String> = std::env::args().skip(1).collect();
-    let mut flag = |name: &str| {
-        let i = args.iter().position(|a| a == name)?;
-        let value = args.get(i + 1).cloned();
-        args.drain(i..(i + 2).min(args.len()));
-        value
-    };
-    let version = flag("--version").unwrap_or_else(|| PUBLISHED_VERSION.terrain.to_string());
-    let level = flag("--level").unwrap_or_else(|| "0".to_string());
-    let out = flag("--out").map(PathBuf::from);
-    let all = args.iter().position(|a| a == "--all").map(|i| args.remove(i)).is_some();
+    const USAGE: &str = "usage: decode_tile <key | path> [--level n] [--version v6] [--out dir] | --all [--version v6]";
+    let (mut version, mut level, mut out, mut all, mut target) = (PUBLISHED_VERSION.terrain.to_string(), "0".to_string(), None, false, None);
+    let mut flags = Flags::from_env();
+    let read = (|| {
+        while let Some(arg) = flags.arg() {
+            match arg.as_str() {
+                "--version" => version = flags.value()?,
+                "--level" => level = flags.value()?,
+                "--out" => out = Some(PathBuf::from(flags.value()?)),
+                "--all" => all = true,
+                _ if target.is_none() && !arg.starts_with("--") => target = Some(arg),
+                other => return Err(format!("unknown argument: {other}")),
+            }
+        }
+        Ok::<(), String>(())
+    })();
+    if let Err(e) = read {
+        eprintln!("{e}\n{USAGE}");
+        return ExitCode::from(2);
+    }
     let pages = Path::new("out/terrain").join(&version);
     if all {
         return check_all(&pages);
     }
-    let Some(target) = args.first() else {
-        eprintln!("usage: decode_tile <key | path> [--level n] [--version v6] [--out dir] | --all [--version v6]");
+    let Some(target) = target else {
+        eprintln!("{USAGE}");
         return ExitCode::from(2);
     };
     let path = if target.bytes().all(|b| b.is_ascii_digit()) {

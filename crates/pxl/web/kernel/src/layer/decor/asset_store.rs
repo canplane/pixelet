@@ -80,7 +80,7 @@ fn store() -> &'static mut Store {
     STORE.get(|| {
         let entry = |bundle: &'static DecorKindBundle| {
             let n = bundle.variants.len();
-            assert!(n <= VARIANTS, "decor: {:?} has {n} variants, room for {VARIANTS}", bundle.kind);
+            assert!(n <= VARIANTS, "decor: the kind tagged {:#x} has {n} variants, room for {VARIANTS}", bundle.seed.tag);
             let none = vec![None; n];
             DecorBundleAssets {
                 bundle,
@@ -89,7 +89,7 @@ fn store() -> &'static mut Store {
             }
         };
         Store {
-            entries: DECOR_BUNDLES().map(entry),
+            entries: DECOR_BUNDLES().each_ref().map(entry),
             arrived: true,
         }
     })

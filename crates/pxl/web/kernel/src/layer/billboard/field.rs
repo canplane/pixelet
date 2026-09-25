@@ -13,6 +13,7 @@
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_BADGE};
 use pxl_render::gpu::api::word_bytes;
 use pxl_spec::space::v3::V3;
+use xpute_runtime::abi::handle::Slots;
 
 use crate::io::load::Models;
 use crate::world::chunk::node::World;
@@ -42,7 +43,7 @@ struct Set {
 
 #[derive(Default)]
 pub struct Billboards {
-    sets: Vec<Option<Set>>,
+    sets: Slots<Set>,
 }
 
 impl Billboards {
@@ -54,16 +55,7 @@ impl Billboards {
             held: Held::default(),
             count: 0,
         };
-        match self.sets.iter().position(Option::is_none) {
-            Some(i) => {
-                self.sets[i] = Some(set);
-                i as u32
-            }
-            None => {
-                self.sets.push(Some(set));
-                (self.sets.len() - 1) as u32
-            }
-        }
+        self.sets.insert(set)
     }
 
     /// Replaces a set's instances with `count` of BILLBOARD_FLOATS floats
@@ -72,7 +64,7 @@ impl Billboards {
     /// # Safety
     /// `lane` addresses count * BILLBOARD_FLOATS f32s in the memory.
     pub unsafe fn write(&mut self, world: &mut World, draw: &mut DrawList, id: u32, count: u32, lane: usize) {
-        let Some(Some(s)) = self.sets.get_mut(id as usize) else { return };
+        let Some(s) = self.sets.get_mut(id) else { return };
         let len = word_bytes(count as usize * BILLBOARD_FLOATS);
         let written = s.held.write(draw, world.volumes.mem(), lane, len);
         s.count = if written { count } else { 0 };
@@ -80,21 +72,20 @@ impl Billboards {
 
     /// Stands a set at `origin`, in units.
     pub fn place(&mut self, id: u32, origin: V3) {
-        if let Some(Some(s)) = self.sets.get_mut(id as usize) {
+        if let Some(s) = self.sets.get_mut(id) {
             s.anchor = Anchor::At(origin);
         }
     }
 
     /// Stands a set `lift` units above wherever `actor` stands.
     pub fn follow(&mut self, id: u32, actor: u32, lift: f64) {
-        if let Some(Some(s)) = self.sets.get_mut(id as usize) {
+        if let Some(s) = self.sets.get_mut(id) {
             s.anchor = Anchor::On(actor, lift);
         }
     }
 
     pub fn remove(&mut self, draw: &mut DrawList, id: u32) {
-        let Some(slot) = self.sets.get_mut(id as usize) else { return };
-        if let Some(mut s) = slot.take() {
+        if let Some(mut s) = self.sets.remove(id) {
             s.held.free(draw);
         }
     }
@@ -102,26 +93,25 @@ impl Billboards {
     /// Every set with something to show, in order; a set on an actor that
     /// is gone or hidden shows nothing.
     pub fn draw(&self, draw: &mut DrawList, models: &Models, origin: V3) {
-        let mut shown: Vec<(u32, u32, V3)> = Vec::new();
-        for (i, s) in self.sets.iter().enumerate() {
-            let Some(s) = s else { continue };
-            if s.count == 0 || s.held.handle == 0 {
-                continue;
+        // By order, and within one in the order their slots lie: a pass an
+        // order over the few there are, so a frame makes no list to sort.
+        let orders = || self.sets.iter().map(|(_, s)| s.order);
+        let mut next = orders().min();
+        while let Some(order) = next {
+            for (_, s) in self.sets.iter().filter(|(_, s)| s.order == order) {
+                if s.count == 0 || s.held.handle == 0 {
+                    continue;
+                }
+                let at = match s.anchor {
+                    Anchor::At(at) => at,
+                    Anchor::On(actor, lift) => match models.actor_ref(actor) {
+                        Some(a) if a.visible => [a.at[0], a.at[1], a.at[2] + lift],
+                        _ => continue,
+                    },
+                };
+                draw.draw_as(PIPELINE_BADGE, s.held.handle, s.count, 0, DrawList::translation(at, origin), 0.0, 1.0);
             }
-            let at = match s.anchor {
-                Anchor::At(at) => at,
-                Anchor::On(actor, lift) => match models.actor_ref(actor) {
-                    Some(a) if a.visible => [a.at[0], a.at[1], a.at[2] + lift],
-                    _ => continue,
-                },
-            };
-            shown.push((s.order, i as u32, at));
-        }
-        shown.sort_by_key(|&(order, i, _)| (order, i));
-        for (_, i, at) in shown {
-            let s = self.sets[i as usize].as_ref().unwrap();
-            let t = DrawList::translation(at, origin);
-            draw.draw_as(PIPELINE_BADGE, s.held.handle, s.count, 0, t, 0.0, 1.0);
+            next = orders().filter(|&o| o > order).min();
         }
     }
 }

@@ -10,6 +10,7 @@ use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
+use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::demand::{
     job::{self, Limits},
     Failure, Kind, Server,
@@ -109,24 +110,19 @@ fn run() -> Result<(), String> {
     let mut cache = PathBuf::from("./out/dev");
     let mut top_level: u32 = 3;
 
-    let mut i = 0;
-    while i < argv.len() {
-        let next = |i: &mut usize| -> Result<String, String> {
-            *i += 1;
-            argv.get(*i).cloned().ok_or_else(|| format!("{} wants a value", argv[*i - 1]))
-        };
-        match argv[i].as_str() {
-            "--port" => port = next(&mut i)?.parse().map_err(|_| "bad --port")?,
-            "--host" => host = next(&mut i)?,
-            "--asset" => asset_dir = PathBuf::from(next(&mut i)?),
-            "--queue" => limits.queued = next(&mut i)?.parse().map_err(|_| "bad --queue")?,
-            "--job-seconds" => limits.seconds = next(&mut i)?.parse().map_err(|_| "bad --job-seconds")?,
-            "--workers" => workers = next(&mut i)?.parse().map_err(|_| "bad --workers")?,
-            "--cache" => cache = PathBuf::from(next(&mut i)?),
-            "--top-level" => top_level = next(&mut i)?.parse().map_err(|_| "bad --top-level")?,
+    let mut flags = Flags::of(argv);
+    while let Some(flag) = flags.arg() {
+        match flag.as_str() {
+            "--port" => port = flags.parse()?,
+            "--host" => host = flags.value()?,
+            "--asset" => asset_dir = PathBuf::from(flags.value()?),
+            "--queue" => limits.queued = flags.parse()?,
+            "--job-seconds" => limits.seconds = flags.parse()?,
+            "--workers" => workers = flags.parse()?,
+            "--cache" => cache = PathBuf::from(flags.value()?),
+            "--top-level" => top_level = flags.parse()?,
             other => return Err(format!("unknown flag: {other}")),
         }
-        i += 1;
     }
 
     let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;

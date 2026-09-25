@@ -10,6 +10,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use pxl_geo_bake::cli::Flags;
 use pxl_geo_bake::page::catalog;
 use pxl_geo_bake::poi::leaves;
 use pxl_geo_bake::pyramid::{build, write_manifest, Layer, PageSet};
@@ -22,13 +23,12 @@ use pxl_spec::space::pyramid::LevelPage;
 fn run() -> Result<(), String> {
     let mut out = PathBuf::from(format!("out/poi/{}", PUBLISHED_VERSION.poi));
     let mut concurrency = 8;
-    let mut args = std::env::args().skip(1);
-    while let Some(flag) = args.next() {
-        let value = args.next().ok_or("missing flag value")?;
+    let mut flags = Flags::from_env();
+    while let Some(flag) = flags.arg() {
         match flag.as_str() {
-            "--out" => out = PathBuf::from(value),
-            "--concurrency" => concurrency = value.parse().map_err(|_| "bad --concurrency")?,
-            _ => return Err(format!("unknown flag {flag}")),
+            "--out" => out = PathBuf::from(flags.value()?),
+            "--concurrency" => concurrency = flags.parse()?,
+            other => return Err(format!("unknown flag: {other}")),
         }
     }
     let set = PageSet::new(&out);

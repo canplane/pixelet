@@ -139,7 +139,7 @@ impl Painter {
     /// Whether any voxel was painted, and whether a paint was refused — after
     /// which the rest is not painted, as the volume is not the composite that
     /// was asked for anyway.
-    pub fn paint(&mut self, entries: Option<Entries>, volumes: &mut Volumes, volume: usize, hide: Option<(i32, u32)>, carve: Option<Carve>) -> Paint {
+    pub fn paint(&mut self, entries: Option<Entries>, volumes: &mut Volumes, volume: u32, hide: Option<(i32, u32)>, carve: Option<Carve>) -> Paint {
         let mut claimed = core::mem::take(&mut self.claimed);
         claimed.clear();
         let mut any = false;
@@ -161,7 +161,7 @@ impl Painter {
         &self,
         entries: Option<Entries>,
         volumes: &mut Volumes,
-        volume: usize,
+        volume: u32,
         hide: Option<(i32, u32)>,
         from: usize,
         voxels: usize,
@@ -192,7 +192,7 @@ impl Painter {
     }
 
     /// The carve preview painted as air, last. False when a paint was refused.
-    pub fn paint_carve(&self, volumes: &mut Volumes, volume: usize, carve: Option<Carve>, claimed: &mut BTreeSet<u32>, any: &mut bool) -> bool {
+    pub fn paint_carve(&self, volumes: &mut Volumes, volume: u32, carve: Option<Carve>, claimed: &mut BTreeSet<u32>, any: &mut bool) -> bool {
         match carve {
             Some(c) => self.paint_entry(volumes, volume, c.lx, c.ly, c.lz, c.size, AIR, claimed, any).is_some(),
             None => true,
@@ -202,7 +202,7 @@ impl Painter {
     /// One entry at a corner relative to the column's base: the voxels it
     /// set, or none when a paint was refused.
     #[allow(clippy::too_many_arguments)]
-    fn paint_entry(&self, volumes: &mut Volumes, volume: usize, lx: f64, ly: f64, lz: f64, size: f64, state: u32, claimed: &mut BTreeSet<u32>, any: &mut bool) -> Option<usize> {
+    fn paint_entry(&self, volumes: &mut Volumes, volume: u32, lx: f64, ly: f64, lz: f64, size: f64, state: u32, claimed: &mut BTreeSet<u32>, any: &mut bool) -> Option<usize> {
         let kind = self.kind(state);
         if kind == Kind::Decor || kind == Kind::Untaught {
             return Some(0);

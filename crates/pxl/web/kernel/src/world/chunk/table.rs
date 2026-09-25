@@ -41,7 +41,7 @@ use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats
 use crate::global::Global;
 use crate::io::load::Models;
 use crate::layer::billboard::field::Billboards;
-use crate::layer::decor::build::{decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind, Rule as DecorRule};
+use crate::layer::decor::build::{decor_density, Chunk as DecorChunk, DecorBuild, Kind as DecorKind};
 use crate::layer::decor::instance::{decor_groups, DecorScratch};
 use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::frame_gizmo::DebugLines;
@@ -689,38 +689,18 @@ impl Scheduler {
         }
     }
 
-    /// Teaches a decor kind; its index. Its rules start as `Any` on every
-    /// channel, and `decor_rule` sets them.
-    pub fn decor_kind(&mut self, kind: DecorKind) -> u32 {
+    /// Teaches a decor kind.
+    pub fn decor_kind(&mut self, kind: DecorKind) {
         // Decoration is scattered from the leaves alone, and the rule draws
         // leaves only out to DECOR_REACH for certain: a kind whose own reach
         // runs past that is cut where the leaves end, until decoration is
         // scattered at whatever level the rule draws its ground at.
         self.decor_kinds.push(kind);
-        (self.decor_kinds.len() - 1) as u32
     }
 
     /// Forgets every kind taught, so they can be taught again.
     pub fn decor_forget(&mut self) {
         self.decor_kinds.clear();
-    }
-
-    pub fn decor_rule(&mut self, kind: u32, channel: usize, rule: DecorRule) {
-        if let Some(k) = self.decor_kinds.get_mut(kind as usize) {
-            k.rules[channel] = rule;
-        }
-    }
-
-    /// Allows one type on a channel of a kind's rule, which becomes `OneOf`
-    /// if it was not.
-    pub fn decor_allow(&mut self, kind: u32, channel: usize, t: u8) {
-        let Some(k) = self.decor_kinds.get_mut(kind as usize) else { return };
-        let mut bits = match k.rules[channel] {
-            DecorRule::OneOf(b) => b,
-            _ => [0; 4],
-        };
-        bits[(t >> 6) as usize] |= 1 << (t & 63);
-        k.rules[channel] = DecorRule::OneOf(bits);
     }
 
     fn account(&mut self, i: usize, before: f64) {

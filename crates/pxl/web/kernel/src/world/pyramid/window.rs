@@ -25,8 +25,8 @@ use pxl_spec::space::xy::TO_XY;
 
 use crate::layer::environment::fog::{eye_height, reach_at};
 use crate::layer::environment::state::globe;
-use crate::layer::object::store::column_boxes;
-use crate::layer::terrain::relief::range_over;
+use crate::layer::object::store::{column_boxes, objects_revision};
+use crate::layer::terrain::relief::{range_over, relief_revision};
 use crate::shell::map_store::map_store;
 use crate::world::frame::view::view;
 
@@ -270,6 +270,14 @@ pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>) -> Domain {
     d
 }
 
+/// Moves whenever what a domain measures heights from does — a terrain
+/// page's relief came or went, an object was written — so a domain made
+/// before is known to be stale whichever layer made it: POI's pages carry no
+/// heights of their own and read the terrain's and the objects'.
+pub fn heights_revision() -> (u32, u32) {
+    (relief_revision(), objects_revision())
+}
+
 impl Domain {
     pub fn window(&self) -> std::ops::Range<u32> {
         self.window.clone()
@@ -291,7 +299,8 @@ impl Domain {
     }
 
     /// The heights a box of `page`'s ground spans: its terrain's, and the
-    /// objects standing on it.
+    /// objects standing on it. `heights_revision` says when any answer this
+    /// gives may have changed.
     fn heights(page: LevelPage, (x0, y0, side): (f64, f64, f64)) -> Option<(f64, f64)> {
         let mut z = range_over(page);
         for b in column_boxes() {

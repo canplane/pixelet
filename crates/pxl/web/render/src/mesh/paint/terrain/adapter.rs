@@ -173,7 +173,7 @@ impl ChunkSample {
     /// Paints the chunk's own columns into `volume`, floor to top. The
     /// apron's are not painted: the volume is the chunk's, and they exist
     /// only as columns of the run set.
-    pub fn paint(&self, volumes: &mut Volumes, volume: usize) -> bool {
+    pub fn paint(&self, volumes: &mut Volumes, volume: u32) -> bool {
         for cy in 0..CHUNK_CELLS {
             for cx in 0..CHUNK_CELLS {
                 let i = apron_col(cx, cy) as usize;

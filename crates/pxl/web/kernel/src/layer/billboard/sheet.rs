@@ -16,7 +16,6 @@ use crate::global::Global;
 use crate::host::handheld;
 use crate::kernel::kernel;
 pub use crate::layer::billboard::order::BillboardOrder;
-use crate::world::chunk::node::World;
 
 static SHEET: Global<BillboardAtlas> = Global::new();
 
@@ -42,15 +41,7 @@ pub fn follow_billboard_set(set: u32, actor: u32, lift: f64) {
 
 /// Replaces a set's instances with `lane`, BILLBOARD_FLOATS floats each.
 pub fn write_billboard_set(set: u32, lane: &[f32]) {
-    let k = kernel();
-    let Some(volumes) = k.volumes.as_mut() else { return };
-    let mut world = World {
-        volumes,
-        materials: &k.terrain,
-        store: &k.objects,
-        painter: &mut k.painter,
-    };
-    let sched = &mut k.sched;
+    let Some((mut world, sched, _)) = kernel().world() else { return };
     let count = (lane.len() / crate::layer::billboard::field::BILLBOARD_FLOATS) as u32;
     // SAFETY: `lane` is `count` instances of f32s in the kernel's memory, read
     // before this returns.

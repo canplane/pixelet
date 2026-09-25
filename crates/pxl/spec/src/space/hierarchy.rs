@@ -100,6 +100,22 @@ pub fn child_of<const D: usize>(at: [i64; D], slot: usize) -> [i64; D] {
     std::array::from_fn(|i| 2 * at[i] + ((slot >> i) & 1) as i64)
 }
 
+/// Where a depth-first walk that visits each node's children in slot order
+/// reaches the node at `at`, `levels` below the block it starts from: each
+/// level's slot (`slot_of`), the coarsest first. Nodes a walk visits
+/// together — the leaves of one coarser node — are one run of this order.
+pub fn walk_order<const D: usize>(at: [u32; D], levels: u32) -> u64 {
+    (0..levels).rev().fold(0, |order, l| (order << D) | slot_of(at.map(|v| i64::from(v >> l))) as u64)
+}
+
+/// The node `walk_order` puts at `order`: its inverse.
+pub fn at_walk_order<const D: usize>(order: u64, levels: u32) -> [u32; D] {
+    (0..levels).rev().fold([0; D], |at, l| {
+        let slot = ((order >> (l as usize * D)) & ((1 << D) - 1)) as usize;
+        child_of(at.map(i64::from), slot).map(|v| v as u32)
+    })
+}
+
 #[cfg(test)]
 #[path = "hierarchy.test.rs"]
 mod test;

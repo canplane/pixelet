@@ -23,7 +23,7 @@ use pxl_spec::bake::constant::{OBJECT_FINEST, OBJECT_LAYOUT, POS_MASK, U_PER_CEL
 use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
-use pxl_spec::space::hierarchy::Scale;
+use pxl_spec::space::hierarchy::{at_walk_order, walk_order, Scale};
 use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3_IDX};
 use pxl_spec::space::pvf3::fvec::{self, FVec};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -39,10 +39,10 @@ use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::global::Global;
 use crate::host::{now, storage_get, storage_set};
-use crate::kernel::{kernel, reindex_object};
+use crate::kernel::kernel;
 use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::setting::store::hidden_ground;
-use crate::world::change::{bump_world, request_world_tick, wake_at, world_changes, world_edge, DECOR_COLUMN, OBJECT_COLUMN};
+use crate::world::change::{bump_world, wake_at, world_changes, world_edge, DECOR_COLUMN, OBJECT_COLUMN};
 use crate::world::chunk::node::chunk_sources_changed;
 use crate::world::frame::coord::local_world_to_canonical;
 
@@ -189,7 +189,7 @@ fn read_state(coord: &Pvf3) -> u32 {
     kernel().objects.read(at.col_idx, at.band, [at.x, at.y, at.z])
 }
 
-/// A chunk's entry lanes, valid until the next write or reindex; None where
+/// A chunk's entry lanes, valid until the next write; None where
 /// the chunk holds nothing.
 fn entry_lanes(col_idx: IVec) -> Option<(&'static [i32], &'static [u32], &'static [u32])> {
     let lanes = kernel().objects.chunk_lanes(col_idx)?;
@@ -198,7 +198,7 @@ fn entry_lanes(col_idx: IVec) -> Option<(&'static [i32], &'static [u32], &'stati
     }
     let n = lanes.count as usize;
     // SAFETY: the store's own lanes, `count` long, untouched until the next
-    // write or reindex, which no caller makes while it holds them.
+    // write, which no caller makes while it holds them.
     unsafe {
         Some((
             core::slice::from_raw_parts(lanes.band_at, n),
@@ -361,31 +361,17 @@ impl EntryCursor {
     }
 }
 
-// ---- Index ----
+// ---- Cells ----
 //
-// Cells by their corner, each naming the run of its chunk's entries it
-// covers — the kernel's, rebuilt a chunk at a time by reindex_chunk, which
-// then bumps the revisions of the column and of every cell that changed.
+// A cell's entries are one run of its chunk's lanes, found where the cell
+// falls in their order (Store::cell).
 
-#[derive(Clone, Copy, Debug, Default)]
-struct CellRun {
-    start: u32,
-    count: u32,
-    solid: u32,
-}
-
-/// The run [start, start + count) of the column's entries in the cell, and
-/// how many of them really occupy it — every kind but AIR. None where the
-/// cell holds nothing.
+/// The run of the column's entries in the cell; None where the cell holds
+/// nothing.
 fn cell_run(ix: i64, iy: i64, iz: i64) -> Option<CellRun> {
     let col_idx = col_idx_of_cell(ix, iy, iz);
     let [cx0, cy0, _] = cell_index(&Pvf3 { i: FROM_L2_IDX(col_idx), f: 0 });
-    let rec = kernel().objects.cell(col_idx, (ix - cx0) as u32, (iy - cy0) as u32, iz as i32)?;
-    Some(CellRun {
-        start: rec.start,
-        count: rec.count,
-        solid: rec.solid,
-    })
+    kernel().objects.cell(col_idx, (ix - cx0) as u32, (iy - cy0) as u32, iz as i32)
 }
 
 /// Moves on every write to any column, so a reader that cached a derived
@@ -451,12 +437,13 @@ fn bump_col(col_idx: IVec, objects: bool, decor: bool) {
     }
 }
 
-/// Re-derives one chunk's entries and cells in the kernel, which records the
-/// change itself — the column in both of its topics and every cell whose
-/// entries changed — and asks for the frame that delivers it.
-fn reindex_chunk(col_idx: IVec) {
-    reindex_object(kernel(), col_idx);
-    request_world_tick();
+/// Applies the writes to the store, which makes each changed column's
+/// entries again inside the call, and announces every column changed in
+/// both of its topics.
+fn apply(writes: impl IntoIterator<Item = Write>) {
+    for col_idx in kernel().objects.write(writes) {
+        bump_col(col_idx, true, true);
+    }
 }
 
 /// A cursor loaded at an address, for the two readers that hold one: the
@@ -582,10 +569,6 @@ struct StoreState {
     /// set_virtual_hide.
     virtual_hide: Option<EntryAt>,
     virtual_carve_preview: Option<CarvePreview>,
-    /// Set while a blob is being replayed into the store, so the writes it
-    /// makes neither save (the blob is what is being loaded) nor reindex per
-    /// row (the load reindexes every chunk once, after).
-    restoring: bool,
     /// When the pending save is due, if one is.
     save_due_ms: Option<f64>,
 }
@@ -596,7 +579,6 @@ fn store_state() -> &'static mut StoreState {
     STORE.get(|| StoreState {
         virtual_hide: None,
         virtual_carve_preview: None,
-        restoring: false,
         save_due_ms: None,
     })
 }
@@ -807,7 +789,9 @@ pub fn decode_objects(blob: &str) -> Result<(), MarshalError> {
         .decode(blob)
         .map_err(|_| MarshalError::new(Errno::EINVAL, Some("objects: the stored blob is not base64url"), None))?;
     let root = TreeReader::new(&bytes)?.read_branch()?;
-    store_state().restoring = true;
+    // Every record is one write of one batch, so each column's entries are
+    // made once however many objects it holds.
+    let mut writes = Vec::new();
     let result = (|| {
         for k in 0..root.len {
             let page = root.at_branch(k)?;
@@ -818,30 +802,22 @@ pub fn decode_objects(blob: &str) -> Result<(), MarshalError> {
                 let local = [x[r] as f64, y[r] as f64, z[r] as f64];
                 let mut corner = Pvf3::default();
                 local_world_to_canonical(&mut corner, &local, page_base);
-                write_object_value(&corner, size[r] as f64, value[r]);
+                writes.push(write_of(&corner, size[r] as f64, value[r]));
             }
         }
         Ok(())
     })();
-    store_state().restoring = false;
-    for col_idx in object_cols() {
-        reindex_chunk(col_idx);
-    }
+    apply(writes);
     result
 }
 
-/// Reads the saved blob into the store and builds the index once: what the
-/// store's module load did. An unreadable blob starts the world empty, as a
-/// missing one does.
+/// Reads the saved blob into the store. An unreadable blob starts the world
+/// empty, as a missing one does.
 pub fn load() {
     if let Some(raw) = storage_get(&storage_key()) {
         if decode_objects(&raw).is_err() {
             kernel().objects.clear();
         }
-    }
-    // Initial index build — O(total objects), paid once.
-    for base in object_cols() {
-        reindex_chunk(base);
     }
 }
 
@@ -921,12 +897,6 @@ pub fn flush_save() {
     }
 }
 
-/// Chunks, bands and cells currently holding objects.
-pub fn object_store_stats() -> (u32, u32, u32) {
-    let o = &kernel().objects;
-    (o.chunk_count() as u32, o.band_count() as u32, o.cell_count() as u32)
-}
-
 // ---- Mutations ----
 
 /// i/f is taken as-is — whatever camera/ray.rs's world_adjacent_corner
@@ -939,15 +909,22 @@ pub fn object_store_stats() -> (u32, u32, u32) {
 /// remove() both write VOID on purpose, and a record carrying no information
 /// would otherwise sit in every save for nothing.
 fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
+    apply([write_of(coord, size, val)]);
+    save();
+}
+
+/// The write that puts `val` at a corner, a leaf `size` on a side.
+fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
     // size is always an exact power of two by construction (object/size.rs's
     // OBJECT_SIZES); the nearest scale only guards against float noise.
     let at = lower(coord);
-    kernel().objects.write(at.col_idx, at.band, [at.x, at.y, at.z], Scale::of_side(size), val);
-    if store_state().restoring {
-        return;
+    Write {
+        col_idx: at.col_idx,
+        band_idx: at.band,
+        at: [at.x, at.y, at.z],
+        scale: Scale::of_side(size),
+        state: val,
     }
-    save();
-    reindex_chunk(at.col_idx);
 }
 
 /// Whether painting `color_id` at this exact whole cell would actually change
@@ -1042,6 +1019,21 @@ pub fn remove(at: EntryAt) {
 
 pub use pxl_spec::bake::constant::{pack_pos, unpack_pos, BandZ, CellZ, BAND_CELLS, BAND_CELL_SHAMT, BAND_UNITS, CELL, CELL_STEPS, STEP_UNITS};
 
+/// The first of `0..n` for which `before` no longer holds, `before` holding
+/// for a prefix of them.
+fn partition_point(n: usize, before: impl Fn(usize) -> bool) -> usize {
+    let (mut lo, mut hi) = (0, n);
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        if before(mid) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    lo
+}
+
 /// A lattice position in a band, as its tree's key.
 fn band_key(at: [u32; 3]) -> IVec {
     ivec::gather(at[0] as i64, at[1] as i64, at[2] as i64)
@@ -1071,21 +1063,34 @@ pub(crate) struct Chunk {
     /// The band Z range the chunk's bands lie in; a band inside it may be gone.
     band_min: BandZ,
     band_max: BandZ,
-    /// The entries, derived by `reindex`.
+    /// The entries: the band trees walked in band order and each tree's walk
+    /// order, a leaf coarser than a cell split into its cells in that order,
+    /// so a cell's entries are one run and the lanes are sorted by
+    /// (band, cell's walk order). Made again whenever a write changes the
+    /// chunk, inside the write.
     pub(crate) e_band: Vec<BandZ>,
     pub(crate) e_pos: Vec<u32>,
     pub(crate) e_state: Vec<u32>,
 }
 
-/// A cell by its column and its absolute cell Z, and its band-local column.
-type CellKey = (IVec, CellZ, u32);
-
-#[derive(Clone, Copy, Default)]
-pub struct CellRec {
+/// The run [start, start + count) of a chunk's entries in one cell, and how
+/// many of them really occupy it — every kind but AIR.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CellRun {
     pub start: u32,
     pub count: u32,
-    /// Entries that really occupy the cell — every kind but AIR.
     pub solid: u32,
+}
+
+/// One write: a leaf of `scale` holding `state` at a lattice position of band
+/// `band_idx` of the column `col_idx`.
+#[derive(Clone, Copy, Debug)]
+pub struct Write {
+    pub col_idx: IVec,
+    pub band_idx: BandZ,
+    pub at: [u32; 3],
+    pub scale: Scale,
+    pub state: u32,
 }
 
 /// What a chunk's lanes are, for a reader that takes views.
@@ -1102,11 +1107,6 @@ pub struct Store {
     pub(crate) chunks: Vec<Chunk>,
     pub(crate) chunk_at: BTreeMap<IVec, u32>,
     bands: BTreeMap<(IVec, BandZ), SparseTree<u16>>,
-    cells: BTreeMap<CellKey, CellRec>,
-    /// Cells whose entries changed since the client last took them, as
-    /// band-local (cx, cy) and absolute cell Z rows.
-    touched: Vec<[i32; 3]>,
-    touched_set: BTreeSet<CellKey>,
 }
 
 impl Default for Store {
@@ -1121,9 +1121,6 @@ impl Store {
             chunks: Vec::new(),
             chunk_at: BTreeMap::new(),
             bands: BTreeMap::new(),
-            cells: BTreeMap::new(),
-            touched: Vec::new(),
-            touched_set: BTreeSet::new(),
         }
     }
 
@@ -1133,14 +1130,6 @@ impl Store {
 
     pub fn chunk_key(&self, i: usize) -> IVec {
         self.chunks[i].col_idx
-    }
-
-    pub fn band_count(&self) -> usize {
-        self.bands.len()
-    }
-
-    pub fn cell_count(&self) -> usize {
-        self.cells.len()
     }
 
     fn open_chunk(&mut self, col_idx: IVec) -> usize {
@@ -1164,7 +1153,6 @@ impl Store {
     /// Removes a chunk that has no bands left, moving the last one into its
     /// position.
     fn close_chunk(&mut self, pos: usize) {
-        self.unindex_cells(pos);
         let gone = self.chunks.swap_remove(pos);
         self.chunk_at.remove(&gone.col_idx);
         if pos < self.chunks.len() {
@@ -1224,20 +1212,38 @@ impl Store {
         self.chunks[cpos as usize].palette[mem::get::<Ivec, u16>(&tree.mem, &tree.layout, band_key(at), 0) as usize]
     }
 
-    /// Writes `state` as one leaf of `scale` at a lattice position of band
-    /// `z` of chunk `key`, compacts the band, and drops the band — and the
-    /// chunk — once every leaf reads VOID. The entries are not re-derived:
-    /// that is `reindex`, once, after however many writes.
-    pub fn write(&mut self, col_idx: IVec, band_idx: BandZ, at: [u32; 3], scale: Scale, state: u32) {
+    /// Applies every write, then makes again the entries of each column one
+    /// changed, once: what a reader sees is the trees, whatever it reads.
+    /// The columns changed, for the caller to announce.
+    pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> BTreeSet<IVec> {
+        let mut changed = BTreeSet::new();
+        for w in writes {
+            if self.put(w) {
+                changed.insert(w.col_idx);
+            }
+        }
+        for &col_idx in &changed {
+            if let Some(&cpos) = self.chunk_at.get(&col_idx) {
+                self.derive_entries(cpos as usize);
+            }
+        }
+        changed
+    }
+
+    /// Writes one leaf, compacts its band, and drops the band — and the
+    /// chunk — once every leaf reads VOID. False where nothing was there to
+    /// change: VOID written where no band is.
+    fn put(&mut self, w: Write) -> bool {
+        let Write { col_idx, band_idx, at, scale, state } = w;
         assert!((OBJECT_FINEST..=CELL).contains(&scale), "an object no finer than its finest tier and no coarser than a cell");
         let cpos = match self.chunk_at.get(&col_idx) {
             Some(&pos) => pos as usize,
-            None if state == VOID => return,
+            None if state == VOID => return false,
             None => self.open_chunk(col_idx),
         };
         if !self.bands.contains_key(&(col_idx, band_idx)) {
             if state == VOID {
-                return;
+                return false;
             }
             self.open_band(cpos, band_idx);
         }
@@ -1248,16 +1254,7 @@ impl Store {
         if band_is_empty(tree) {
             self.close_band(cpos, band_idx);
         }
-    }
-
-    /// Re-derives one chunk's entries and cells; a chunk that is gone has
-    /// nothing to derive, and its cells were unindexed as it closed.
-    pub fn reindex(&mut self, col_idx: IVec) {
-        let Some(&cpos) = self.chunk_at.get(&col_idx) else { return };
-        let cpos = cpos as usize;
-        self.unindex_cells(cpos);
-        self.derive_entries(cpos);
-        self.index_cells(cpos);
+        true
     }
 
     /// Re-reads a chunk's trees into its entry lanes: one entry per leaf,
@@ -1283,82 +1280,23 @@ impl Store {
                     chunk.e_state.push(val);
                     return;
                 }
-                let span = OBJECT_FINEST.count_in(scale);
-                for dz in (0..span).step_by(CELL_STEPS as usize) {
-                    for dy in (0..span).step_by(CELL_STEPS as usize) {
-                        for dx in (0..span).step_by(CELL_STEPS as usize) {
-                            chunk.e_band.push(bz);
-                            chunk.e_pos.push(pack_pos(x + dx, y + dy, z + dz, CELL));
-                            chunk.e_state.push(val);
-                        }
-                    }
+                // Its cells in the walk's own order, so the lanes stay
+                // sorted by it.
+                let levels = scale.above(CELL) as u32;
+                for k in 0..1u64 << (3 * levels) {
+                    let [dx, dy, dz] = at_walk_order::<3>(k, levels).map(|v| v * CELL_STEPS);
+                    chunk.e_band.push(bz);
+                    chunk.e_pos.push(pack_pos(x + dx, y + dy, z + dz, CELL));
+                    chunk.e_state.push(val);
                 }
             });
         }
     }
 
-    fn cell_of(col_idx: IVec, band_idx: BandZ, pos: u32) -> CellKey {
-        let (x, y, z, _) = unpack_pos(pos);
-        (
-            col_idx,
-            band_idx * BAND_CELLS as i32 + (z / CELL_STEPS) as i32,
-            ((y / CELL_STEPS) << BAND_CELL_SHAMT) | (x / CELL_STEPS),
-        )
-    }
-
-    fn touch(&mut self, cell: CellKey) {
-        if self.touched_set.insert(cell) {
-            self.touched.push([(cell.2 & (BAND_CELLS - 1)) as i32, (cell.2 >> BAND_CELL_SHAMT) as i32, cell.1]);
-        }
-    }
-
-    /// Removes a chunk's cells from the index, reading its entry lanes as
-    /// they were before the change that is being reindexed.
-    fn unindex_cells(&mut self, cpos: usize) {
-        let mut last: Option<CellKey> = None;
-        for k in 0..self.chunks[cpos].e_band.len() {
-            let chunk = &self.chunks[cpos];
-            let cell = Self::cell_of(chunk.col_idx, chunk.e_band[k], chunk.e_pos[k]);
-            if last == Some(cell) {
-                continue;
-            }
-            last = Some(cell);
-            self.touch(cell);
-            self.cells.remove(&cell);
-        }
-    }
-
-    /// The entries are sorted by cell, so each cell's record is summed
-    /// whole and written once.
-    fn index_cells(&mut self, cpos: usize) {
-        let mut open: Option<(CellKey, CellRec)> = None;
-        for k in 0..self.chunks[cpos].e_band.len() {
-            let chunk = &self.chunks[cpos];
-            let cell = Self::cell_of(chunk.col_idx, chunk.e_band[k], chunk.e_pos[k]);
-            let solid = (chunk.e_state[k] != AIR) as u32;
-            if open.is_none_or(|(c, _)| c != cell) {
-                if let Some((c, rec)) = open.take() {
-                    self.cells.insert(c, rec);
-                }
-                self.touch(cell);
-                open = Some((cell, CellRec { start: k as u32, count: 0, solid: 0 }));
-            }
-            let rec = &mut open.as_mut().expect("the cell just opened").1;
-            rec.count += 1;
-            rec.solid += solid;
-        }
-        if let Some((c, rec)) = open {
-            self.cells.insert(c, rec);
-        }
-    }
-
-    /// The cells touched since the last take, as rows; the rows stay where
-    /// they are until the next change.
-    pub fn take_touched(&mut self) -> (*const i32, usize) {
-        self.touched_set.clear();
-        let n = self.touched.len();
-        self.touched.clear();
-        (self.touched.as_ptr() as *const i32, n)
+    /// Where an entry's cell falls in the lanes' order: its band, then the
+    /// cell's place in its band's walk.
+    fn cell_order(band_idx: BandZ, cx: u32, cy: u32, cz: u32) -> (BandZ, u64) {
+        (band_idx, walk_order([cx, cy, cz], BAND_CELL_SHAMT))
     }
 
     /// A column's entries as the view paints them, or none where the column
@@ -1385,9 +1323,23 @@ impl Store {
     }
 
     /// The run of a chunk's entries in the cell at band-local (cx, cy) and
-    /// absolute cell Z `cz`.
-    pub fn cell(&self, col_idx: IVec, cx: u32, cy: u32, cz: CellZ) -> Option<CellRec> {
-        self.cells.get(&(col_idx, cz, (cy << BAND_CELL_SHAMT) | cx)).copied()
+    /// absolute cell Z `cz`: found where it lies in the lanes' order.
+    pub fn cell(&self, col_idx: IVec, cx: u32, cy: u32, cz: CellZ) -> Option<CellRun> {
+        let chunk = &self.chunks[*self.chunk_at.get(&col_idx)? as usize];
+        let band_idx = cz.div_euclid(BAND_CELLS as i32);
+        let want = Self::cell_order(band_idx, cx, cy, cz.rem_euclid(BAND_CELLS as i32) as u32);
+        let order = |k: usize| {
+            let (x, y, z, _) = unpack_pos(chunk.e_pos[k]);
+            Self::cell_order(chunk.e_band[k], x / CELL_STEPS, y / CELL_STEPS, z / CELL_STEPS)
+        };
+        let n = chunk.e_band.len();
+        let start = partition_point(n, |k| order(k) < want);
+        let end = start + partition_point(n - start, |k| order(start + k) == want);
+        (end > start).then(|| CellRun {
+            start: start as u32,
+            count: (end - start) as u32,
+            solid: (start..end).filter(|&k| chunk.e_state[k] != AIR).count() as u32,
+        })
     }
 
     /// Every record gone, as a load that could not be read leaves the world.
@@ -1395,9 +1347,6 @@ impl Store {
         self.chunks.clear();
         self.chunk_at.clear();
         self.bands.clear();
-        self.cells.clear();
-        self.touched.clear();
-        self.touched_set.clear();
     }
 }
 

@@ -15,7 +15,7 @@ use pxl_spec::space::v3::{add3, center3n, floor3n, V3};
 use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::global::Global;
-use crate::kernel::kernel;
+use crate::kernel::{kernel, with_world};
 use crate::layer::environment::fog::view_reach;
 use crate::layer::environment::theme::Theme;
 use crate::layer::environment::theme_clock::theme_key;
@@ -88,18 +88,6 @@ struct Puck {
 
 static PUCK: Global<Puck> = Global::new();
 
-fn world_of<R>(f: impl FnOnce(&mut World, &mut crate::world::chunk::table::Scheduler) -> R) -> Option<R> {
-    let k = kernel();
-    let volumes = k.volumes.as_mut()?;
-    let mut world = World {
-        volumes,
-        materials: &k.terrain,
-        store: &k.objects,
-        painter: &mut k.painter,
-    };
-    Some(f(&mut world, &mut k.sched))
-}
-
 /// The puck's turn, for the device's coordinate as it stands.
 pub fn location_puck_step(device_coord: Option<Pvf3>) {
     let p = PUCK.get(|| Puck {
@@ -155,7 +143,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
             ]);
         }
         let count = p.samples.len() as u32;
-        world_of(|world, sched| {
+        with_world(|world, sched| {
             // SAFETY: the zone's floats are in the kernel's memory, read before this returns.
             unsafe { sched.markers.set_zone(world, &mut sched.draw, center_pos, count, lane.as_ptr() as usize, ZONE_RADIUS_CELL * U_PER_CELL) };
         });
@@ -180,7 +168,7 @@ fn clear(p: &mut Puck) {
     }
     p.shown = false;
     p.zone_for = None;
-    world_of(|_world, sched| sched.markers.clear(&mut sched.draw));
+    with_world(|_world, sched| sched.markers.clear(&mut sched.draw));
     request_world_tick();
 }
 

@@ -18,73 +18,24 @@ mod search;
 
 use std::process::ExitCode;
 
-use axum::extract::DefaultBodyLimit;
-use axum::http::StatusCode;
-use axum::Router;
-use pxl_server::{admin_auth, config, db};
+use pxl_server::config::Env;
+use pxl_server::db::Probe;
+use pxl_server::serve::{serve, Server};
 use pxl_spec::route::GEO_INTERNAL;
-use tower_http::compression::CompressionLayer;
-
-fn router(cfg: &config::Config, pool: deadpool_postgres::Pool) -> Router {
-    // Nothing is mounted under the internal prefix yet — the cache
-    // invalidation routes it was built for belong to the bake's own dev
-    // server, not here. The gate is registered anyway so that it covers the
-    // prefix rather than a list of routes: whatever is added under it later is
-    // behind the token by construction.
-    //
-    // The fallback is what makes that true, and it is not decoration. A layer
-    // over a router with no routes of its own wraps nothing — the request falls
-    // through to the outer router's 404 without the middleware ever running,
-    // which is what this did until main.test.rs said so. An explicit fallback
-    // gives the layer something to wrap, so the prefix is answered here, and
-    // answered behind the token.
-    let internal = Router::new()
-        .fallback(|| async { StatusCode::NOT_FOUND })
-        .layer(axum::middleware::from_fn_with_state(cfg.admin_token.clone(), admin_auth::admin_auth));
-
-    Router::new()
-        .merge(search::endpoint::routes(pool))
-        .nest(GEO_INTERNAL, internal)
-        // Search answers JSON, which compresses well and which the browser
-        // decodes transparently.
-        .layer(CompressionLayer::new().gzip(true))
-        .layer(DefaultBodyLimit::max(cfg.max_body_sz))
-}
-
-async fn run() -> Result<(), db::DbError> {
-    let cfg = config::Config::from_env(&config::Env {
-        prefix: "GEO",
-        default_port: 3000,
-        db_url_key: "DB_GEO_URL",
-    })?;
-    let pool = db::connect(
-        &cfg.db_url,
-        cfg.db_pool_size,
-        &db::Probe {
-            sql: "select postgis_full_version()",
-            name: "geo",
-        },
-    )
-    .await?;
-
-    let listener = tokio::net::TcpListener::bind((cfg.host.as_str(), cfg.port)).await?;
-    println!("[app] listening on {}:{}", cfg.host, cfg.port);
-
-    axum::serve(listener, router(&cfg, pool)).await?;
-    Ok(())
-}
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    match run().await {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(err) => {
-            eprintln!("[app] {err}");
-            ExitCode::FAILURE
-        }
-    }
+    let server = Server {
+        env: Env {
+            prefix: "GEO",
+            default_port: 3000,
+            db_url_key: "DB_GEO_URL",
+        },
+        probe: Probe {
+            sql: "select postgis_full_version()",
+            name: "geo",
+        },
+        internal: GEO_INTERNAL,
+    };
+    serve(server, search::endpoint::routes).await
 }
-
-#[cfg(test)]
-#[path = "main.test.rs"]
-mod test;

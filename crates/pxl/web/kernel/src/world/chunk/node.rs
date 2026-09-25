@@ -569,7 +569,7 @@ impl Chunk {
 #[derive(Clone, Copy)]
 struct ScanJob {
     id: u32,
-    volume: usize,
+    volume: u32,
     /// The objects' paint into the volume, until it is finished and the scan
     /// begins.
     paint: Option<PaintJob>,
@@ -718,7 +718,7 @@ impl Builder {
     /// not a chunk is drawn from it: the ground is hit at the finest level
     /// whichever level it is drawn at. With what it is valid for, which a
     /// cached composite is compared by.
-    pub fn compose_leaf(&mut self, world: &mut World, base: IVec) -> Option<(usize, u32)> {
+    pub fn compose_leaf(&mut self, world: &mut World, base: IVec) -> Option<(u32, u32)> {
         let cell = Cell::of(0, &pxl_spec::space::pvf3::Pvf3 { i: base, ..Default::default() });
         let (leaf, first) = (cell.page(), cell.index());
         let page = Terrain::pyramid().get(leaf).map(page_lanes)?;
@@ -1041,13 +1041,13 @@ impl Builder {
 
     /// A new volume with the chunk's terrain painted in, open; none when a
     /// paint was refused.
-    fn paint_terrain(&mut self, world: &mut World, id: u32, page: PageLanes) -> Option<usize> {
+    fn paint_terrain(&mut self, world: &mut World, id: u32, page: PageLanes) -> Option<u32> {
         let c = &self.chunks[&id];
         let (tx0, ty0, show) = (c.tx0, c.ty0, c.show_structures);
         self.paint_terrain_at(world, tx0, ty0, show, page)
     }
 
-    fn paint_terrain_at(&mut self, world: &mut World, tx0: u32, ty0: u32, show: bool, page: PageLanes) -> Option<usize> {
+    fn paint_terrain_at(&mut self, world: &mut World, tx0: u32, ty0: u32, show: bool, page: PageLanes) -> Option<u32> {
         // SAFETY: a resident page's lanes, read within the command.
         let view = unsafe { Self::page_view(world, page) };
         self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
@@ -1062,7 +1062,7 @@ impl Builder {
     /// A step of the scan job's paint of the chunk's objects. Once every
     /// entry and the carve are painted, the volume is sealed and the scan
     /// begins on it.
-    fn advance_paint(&mut self, world: &mut World, id: u32, volume: usize, mut paint: PaintJob) -> Progress {
+    fn advance_paint(&mut self, world: &mut World, id: u32, volume: u32, mut paint: PaintJob) -> Progress {
         let col_idx = self.chunks[&id].col_idx;
         if column_revision(col_idx) != paint.revision {
             self.abort_scan_of(world, id);

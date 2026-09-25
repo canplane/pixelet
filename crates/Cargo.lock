@@ -1037,13 +1037,9 @@ name = "pxl-api"
 version = "0.0.0"
 dependencies = [
  "axum",
- "deadpool-postgres",
  "pxl-server",
  "pxl-spec",
  "tokio",
- "tokio-postgres",
- "tower",
- "tower-http",
 ]
 
 [[package]]
@@ -1060,7 +1056,6 @@ dependencies = [
  "tokio",
  "tokio-postgres",
  "tower",
- "tower-http",
 ]
 
 [[package]]
@@ -1118,7 +1113,10 @@ version = "0.0.0"
 dependencies = [
  "axum",
  "deadpool-postgres",
+ "tokio",
  "tokio-postgres",
+ "tower",
+ "tower-http",
 ]
 
 [[package]]

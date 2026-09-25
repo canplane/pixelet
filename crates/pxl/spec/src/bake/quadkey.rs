@@ -28,7 +28,7 @@
 use core::fmt;
 
 use crate::space::pvf3::ivec::{self, IVec};
-use crate::space::pyramid::LEVEL0_ZOOM;
+use crate::space::pyramid::{zoom_of_level, LevelPage, LEVEL0_ZOOM, TOP_LEVEL};
 
 /// A quadkey's digits, in the order a quadrant is numbered: x in the low bit,
 /// y in the high one.
@@ -91,6 +91,19 @@ pub fn index_of(key: &str) -> Option<(u32, IVec)> {
     }
     let n = 1i64 << zoom;
     Some((zoom, ivec::gather(tx - n / 2, n / 2 - 1 - ty, 0)))
+}
+
+/// A pyramid page's name: its tile's quadkey at the zoom its level is.
+pub fn page_name(p: LevelPage) -> Quadkey {
+    quadkey_of(zoom_of_level(p.level), p.page)
+}
+
+/// The pyramid page a name is, or `None` where it names no level the pyramid
+/// holds: `page_name`'s inverse.
+pub fn page_of_name(name: &str) -> Option<LevelPage> {
+    let (zoom, page) = index_of(name)?;
+    let level = LEVEL0_ZOOM - zoom;
+    (level <= TOP_LEVEL).then(|| LevelPage::new(level, page))
 }
 
 #[cfg(test)]

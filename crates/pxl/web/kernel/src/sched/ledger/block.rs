@@ -165,6 +165,26 @@ pub struct CountersBlock {
     pub atlas_uploads: f64,
 }
 
+impl CountersBlock {
+    /// Each counter less `b`'s: the window's share of what accrued since
+    /// load. Word by word, as the block is laid out, so a counter added to
+    /// the block is subtracted without being named here.
+    pub fn minus(mut self, b: &CountersBlock) -> CountersBlock {
+        let n = size_of::<CountersBlock>() / 8;
+        // SAFETY: `words!` below holds the block to plain f64s end to end.
+        let (a, b) = unsafe {
+            (
+                core::slice::from_raw_parts_mut(&mut self as *mut _ as *mut f64, n),
+                core::slice::from_raw_parts(b as *const _ as *const f64, n),
+            )
+        };
+        for (x, y) in a.iter_mut().zip(b) {
+            *x -= y;
+        }
+        self
+    }
+}
+
 words!(CountersBlock, SUMMARY::counters::WORDS,
     faces_kept => SUMMARY::counters::faces_kept, faces_possible => SUMMARY::counters::faces_possible,
     runs_culled => SUMMARY::counters::runs_culled, runs_total => SUMMARY::counters::runs_total,

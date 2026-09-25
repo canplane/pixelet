@@ -19,7 +19,7 @@ use crate::host::now;
 use crate::io::sched::{counts, credits};
 use crate::kernel::kernel;
 use crate::layer::billboard::sheet::billboard_sheet;
-use crate::sched::ledger::block::{AtlasBlock, CountersBlock, FetchBlock, FramesBlock, RecBlock, RetainBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
+use crate::sched::ledger::block::{AtlasBlock, FetchBlock, FramesBlock, RecBlock, RetainBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
 use crate::sched::ledger::log::window_counters;
 use crate::sched::ledger::record::{fixed_lane, ledger_frame_peak, ledger_frames_since, ledger_recording_state, ledger_tasks_since, put, FrameSample, Outcome, TaskRow, FRAME_LIMIT, TASK_LIMIT};
 use crate::sched::ledger::spec::{LIMITS, SUMMARY, TASK_PHASE_NAMES};
@@ -217,28 +217,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
 /// What the report prints beside the rings: the side counters, the badge
 /// sheet, what chunks keep, the fetch queue, the POI placement and the steps.
 fn side(out: &mut [f64]) {
-    let c = window_counters();
-    put(
-        out,
-        SUMMARY::counters::AT,
-        &CountersBlock {
-            faces_kept: c.faces_kept,
-            faces_possible: c.faces_possible,
-            runs_culled: c.runs_culled,
-            runs_total: c.runs_total,
-            coarse_boxes: c.coarse_boxes,
-            coarse_low_fill: c.coarse_low_fill,
-            bands_reused: c.bands_reused,
-            bands_allocated: c.bands_allocated,
-            built_direct: c.built_direct,
-            built_scans: c.built_scans,
-            built_bakes: c.built_bakes,
-            built_starved: c.built_starved,
-            decor_dropped: c.decor_dropped,
-            atlas_repacks: c.atlas_repacks,
-            atlas_uploads: c.atlas_uploads,
-        },
-    );
+    put(out, SUMMARY::counters::AT, &window_counters());
 
     let atlas = billboard_sheet().stats();
     put(

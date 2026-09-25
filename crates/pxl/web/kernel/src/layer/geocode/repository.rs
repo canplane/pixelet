@@ -10,23 +10,13 @@
 //! object for answers 404, which is "no page under it is in any place"
 //! rather than a failure.
 
-use pxl_spec::bake::place_page::{open_place_dict, open_place_group, PlaceGroupView, PlacesView, DICT_OBJECT, GROUP_SHAMT};
-use pxl_spec::bake::quadkey::{quadkey_of, Quadkey};
-use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pyramid::LEVEL0_ZOOM;
+use pxl_spec::bake::place_page::{open_place_dict, open_place_group, PlaceGroupView, PlacesView, DICT_OBJECT};
 use xpute_core::status::error::MarshalError;
 use xpute_runtime::mem::heap::{free, Block};
 
 /// The dictionary, which the set has one of at the name the bake gives it.
 pub fn dict_name() -> &'static str {
     DICT_OBJECT
-}
-
-/// A group's name in its bake. A group covers `GROUP_SHAMT` levels of pages, so
-/// it is named at that much coarser a zoom than a page is (pxl-spec
-/// bake/quadkey.rs).
-pub fn group_name(group_idx: IVec) -> Quadkey {
-    quadkey_of(LEVEL0_ZOOM - GROUP_SHAMT, group_idx)
 }
 
 /// Every place a polygon names, held for the session: a group's numbers are

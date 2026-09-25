@@ -13,79 +13,64 @@
 //! description rather than two rules kept in step. Nothing here reaches for a tile store — plain ground-channel
 //! arrays and numbers, so it can be read head-on.
 
-use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
+use pxl_spec::bake::format::GroundChannelKey;
 use pxl_spec::bake::pack::{channel_of, GroundCell};
 use pxl_spec::cell::cube_types;
 use pxl_spec::space::pyramid::PAGE_CELLS;
 
-/// What a channel's type must be for a kind to stand on the cell: anything,
-/// nothing painted, or one of a list of types.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum DecorChannelRule {
+/// What a channel's type must be for a kind to stand on the cell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Rule {
     Any,
+    /// Nothing painted.
     Void,
-    OneOf(Vec<u32>),
+    /// One of the types whose bits are set.
+    OneOf([u64; 4]),
 }
 
-/// A kind's rule per ground channel, declared so the scheduler can be taught
-/// the same rule (crates/pxl/web/kernel/src/layer/decor/build.rs) and `eligibility_of`
-/// derives the predicate from it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DecorRules {
-    pub land: DecorChannelRule,
-    pub water: DecorChannelRule,
-    pub structure: DecorChannelRule,
-    pub transport: DecorChannelRule,
+impl Rule {
+    fn allows(&self, t: u8) -> bool {
+        match self {
+            Rule::Any => true,
+            Rule::Void => t == cube_types::common::void,
+            Rule::OneOf(bits) => bits[(t >> 6) as usize] & (1 << (t & 63)) != 0,
+        }
+    }
 }
+
+/// A kind's rule per ground channel, by the channel's number: what a kind's
+/// file writes and what the scatter tests, one and the same. A channel no
+/// rule names takes anything.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DecorRules([Rule; 4]);
 
 impl DecorRules {
-    /// A channel's rule, in GROUND_CH_KEYS' order.
-    pub fn channel(&self, index: usize) -> &DecorChannelRule {
-        match GROUND_CH_KEYS[index] {
-            GroundChannelKey::LAND => &self.land,
-            GroundChannelKey::WATER => &self.water,
-            GroundChannelKey::STRUCTURE => &self.structure,
-            GroundChannelKey::TRANSPORT => &self.transport,
+    pub const ANY: DecorRules = DecorRules([Rule::Any; 4]);
+
+    /// `channel` has nothing painted.
+    pub const fn void(mut self, channel: GroundChannelKey) -> DecorRules {
+        self.0[channel as usize] = Rule::Void;
+        self
+    }
+
+    /// `channel` holds one of `types`.
+    pub const fn one_of(mut self, channel: GroundChannelKey, types: &[u8]) -> DecorRules {
+        let mut bits = [0u64; 4];
+        let mut i = 0;
+        while i < types.len() {
+            bits[(types[i] >> 6) as usize] |= 1 << (types[i] & 63);
+            i += 1;
         }
+        self.0[channel as usize] = Rule::OneOf(bits);
+        self
     }
-}
 
-fn rule_allows(rule: &DecorChannelRule, t: u32) -> bool {
-    match rule {
-        DecorChannelRule::Any => true,
-        DecorChannelRule::Void => t == cube_types::common::void as u32,
-        DecorChannelRule::OneOf(types) => types.contains(&t),
+    /// Whether a cell's channels are ground the kind may stand on — the
+    /// terrain paint's precedence: land is the base, and water, structure and
+    /// transport each stand over it where they are painted.
+    pub fn allows(&self, cell: GroundCell) -> bool {
+        GroundChannelKey::ALL.iter().all(|&key| self.0[key as usize].allows(channel_of(cell, key)))
     }
-}
-
-/// A kind's rules as kind.rs writes them, in the numbers a cell's channels
-/// hold: each channel's types where it lists them, nothing painted for the
-/// channels its `void` names, and anything else.
-pub fn rules_of(void: &[GroundChannelKey], land: &[u32], water: &[u32], structure: &[u32], transport: &[u32]) -> DecorRules {
-    let types = [land, water, structure, transport];
-    let rule = |channel: GroundChannelKey| {
-        if void.contains(&channel) {
-            DecorChannelRule::Void
-        } else if types[channel as usize].is_empty() {
-            DecorChannelRule::Any
-        } else {
-            DecorChannelRule::OneOf(types[channel as usize].to_vec())
-        }
-    };
-    DecorRules {
-        land: rule(GroundChannelKey::LAND),
-        water: rule(GroundChannelKey::WATER),
-        structure: rule(GroundChannelKey::STRUCTURE),
-        transport: rule(GroundChannelKey::TRANSPORT),
-    }
-}
-
-/// True if this cell's raw ground-channel values are safe ground for this
-/// decoration kind to stand on — mirrors the terrain paint's ground_material_at
-/// precedence (land is the base, water/structure/transport each override it
-/// only when not VOID).
-pub fn eligibility_of(rules: &DecorRules, land: u32, water: u32, structure: u32, transport: u32) -> bool {
-    rule_allows(&rules.land, land) && rule_allows(&rules.water, water) && rule_allows(&rules.structure, structure) && rule_allows(&rules.transport, transport)
 }
 
 /// How a placed instance picks its own heading:
@@ -111,8 +96,6 @@ pub struct DecorKindSeed {
     /// Per-eligible-cell probability [0, 1) of actually placing an instance
     /// there — the only knob "how dense" tuning needs.
     pub density: f64,
-    /// Uniformly picks a variant index in [0, variant_count).
-    pub variant_count: u32,
     pub orientation: DecorOrientationMode,
 }
 

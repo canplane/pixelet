@@ -9,10 +9,10 @@
 //! `pxl-spec` rather than in a script that would be a second copy of the
 //! packed-lane maths.
 
-use pxl_spec::bake::place_page::{DICT_OBJECT, GROUP_SHAMT};
-use pxl_spec::bake::quadkey::quadkey_of;
+use pxl_spec::bake::place_page::{DICT_OBJECT, GROUP_ZOOM};
+use pxl_spec::bake::quadkey::{page_name, quadkey_of};
 use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pyramid::{zoom_of_level, LEVEL0_ZOOM, TOP_LEVEL};
+use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
 
 /// The objects a bake keeps beside its pages, which are named rather than
 /// keyed and so are carried across unchanged.
@@ -34,7 +34,7 @@ impl Bake {
     pub fn of(prefix: &str) -> Result<Self, String> {
         match prefix.split('/').next().unwrap_or_default() {
             "terrain" | "poi" => Ok(Bake::Pyramid),
-            "geocode" => Ok(Bake::Flat(LEVEL0_ZOOM - GROUP_SHAMT)),
+            "geocode" => Ok(Bake::Flat(GROUP_ZOOM)),
             other => Err(format!("{other}: not a bake this renames")),
         }
     }
@@ -56,7 +56,8 @@ impl Bake {
                 if level > TOP_LEVEL {
                     return Err(format!("level {level} is past the pyramid's top"));
                 }
-                (zoom_of_level(level), page)
+                let page = page.parse::<IVec>().map_err(|e| format!("{page}: {e}"))?;
+                return Ok(page_name(LevelPage::new(level, page)).to_string());
             }
         };
         let page = raw.parse::<IVec>().map_err(|e| format!("{raw}: {e}"))?;

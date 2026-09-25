@@ -1,9 +1,7 @@
 // pxl-kernel/layer/decor/scatter.test.rs
 
 use super::*;
-use crate::layer::decor::kind::car::CAR_RULES;
-use crate::layer::decor::kind::train::TRAIN_RULES;
-use crate::layer::decor::kind::tree::TREE_RULES;
+use crate::layer::decor::kind::{car, train, tree};
 use pxl_spec::bake::pack::with_channel;
 
 // A whole page's lanes, because that is what a page is: PAGE_CELLS²
@@ -11,7 +9,6 @@ use pxl_spec::bake::pack::with_channel;
 // read past the lane.
 const SPAN: usize = PAGE_CELLS as usize;
 const PI: f64 = core::f64::consts::PI;
-const VOID: u32 = cube_types::common::void as u32;
 
 fn transport_page(cells: &[(usize, usize)], t: u8) -> Vec<GroundCell> {
     let mut lane = vec![0 as GroundCell; SPAN * SPAN];
@@ -21,34 +18,48 @@ fn transport_page(cells: &[(usize, usize)], t: u8) -> Vec<GroundCell> {
     lane
 }
 
+/// A cell holding `land`, `water`, `structure` and `transport`.
+fn cell(land: u8, water: u8, structure: u8, transport: u8) -> GroundCell {
+    [
+        (GroundChannelKey::LAND, land),
+        (GroundChannelKey::WATER, water),
+        (GroundChannelKey::STRUCTURE, structure),
+        (GroundChannelKey::TRANSPORT, transport),
+    ]
+    .into_iter()
+    .fold(0, |c, (key, t)| with_channel(c, key, t))
+}
+
+const V: u8 = cube_types::common::void;
+
 #[test]
-fn eligibility_of_a_tree_stands_on_green_and_bare_land_and_on_nothing_else() {
+fn a_tree_stands_on_green_and_bare_land_and_on_nothing_else() {
     for land in [cube_types::land::green_light, cube_types::land::green_deep, cube_types::land::bare] {
-        assert!(eligibility_of(&TREE_RULES(), land as u32, VOID, VOID, VOID), "land {land}");
+        assert!(tree::DEF.rules.allows(cell(land, V, V, V)), "land {land}");
     }
-    assert!(!eligibility_of(&TREE_RULES(), cube_types::land::residential as u32, VOID, VOID, VOID));
+    assert!(!tree::DEF.rules.allows(cell(cube_types::land::residential, V, V, V)));
 }
 
 #[test]
-fn eligibility_of_any_painted_water_structure_or_transport_overrides_otherwise_green_land() {
-    let green = cube_types::land::green_deep as u32;
-    assert!(eligibility_of(&TREE_RULES(), green, VOID, VOID, VOID));
-    assert!(!eligibility_of(&TREE_RULES(), green, cube_types::water::lake as u32, VOID, VOID));
-    assert!(!eligibility_of(&TREE_RULES(), green, VOID, cube_types::structure::building as u32, VOID));
-    assert!(!eligibility_of(&TREE_RULES(), green, VOID, VOID, cube_types::transport::road_motorway as u32));
+fn any_painted_water_structure_or_transport_overrides_otherwise_green_land() {
+    let green = cube_types::land::green_deep;
+    assert!(tree::DEF.rules.allows(cell(green, V, V, V)));
+    assert!(!tree::DEF.rules.allows(cell(green, cube_types::water::lake, V, V)));
+    assert!(!tree::DEF.rules.allows(cell(green, V, cube_types::structure::building, V)));
+    assert!(!tree::DEF.rules.allows(cell(green, V, V, cube_types::transport::road_motorway)));
 }
 
 #[test]
-fn eligibility_of_a_car_stands_on_a_motorway_and_not_on_a_plain_road_or_a_rail() {
-    assert!(eligibility_of(&CAR_RULES(), VOID, VOID, VOID, cube_types::transport::road_motorway as u32));
-    assert!(!eligibility_of(&CAR_RULES(), VOID, VOID, VOID, cube_types::transport::road_default as u32));
-    assert!(!eligibility_of(&CAR_RULES(), VOID, VOID, VOID, cube_types::transport::rail_main as u32));
+fn a_car_stands_on_a_motorway_and_not_on_a_plain_road_or_a_rail() {
+    assert!(car::DEF.rules.allows(cell(V, V, V, cube_types::transport::road_motorway)));
+    assert!(!car::DEF.rules.allows(cell(V, V, V, cube_types::transport::road_default)));
+    assert!(!car::DEF.rules.allows(cell(V, V, V, cube_types::transport::rail_main)));
 }
 
 #[test]
-fn eligibility_of_a_train_stands_on_a_rail_and_not_on_a_motorway() {
-    assert!(eligibility_of(&TRAIN_RULES(), VOID, VOID, VOID, cube_types::transport::rail_main as u32));
-    assert!(!eligibility_of(&TRAIN_RULES(), VOID, VOID, VOID, cube_types::transport::road_motorway as u32));
+fn a_train_stands_on_a_rail_and_not_on_a_motorway() {
+    assert!(train::DEF.rules.allows(cell(V, V, V, cube_types::transport::rail_main)));
+    assert!(!train::DEF.rules.allows(cell(V, V, V, cube_types::transport::road_motorway)));
 }
 
 /// align_transport also randomly flips the heading +PI, so these check
