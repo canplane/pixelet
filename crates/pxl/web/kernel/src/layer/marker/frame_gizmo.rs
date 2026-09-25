@@ -34,6 +34,7 @@ use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
+use xpute_runtime::mem::base::off_of;
 
 const COLOR: V3 = [0.0, 0.0, 0.0];
 const DASH: f64 = 0.3;
@@ -352,9 +353,9 @@ fn write_labels(g: &mut Gizmos) {
 }
 
 fn set_lines(at: V3, vertices: &[f32]) {
-    let Some((mut world, sched, _)) = kernel().world() else { return };
+    let Some((_, sched, _)) = kernel().world() else { return };
     // SAFETY: the vertices are f32s of the kernel's memory, read before this returns.
-    unsafe { sched.debug.set(&mut world, &mut sched.draw, at, (vertices.len() / 6) as u32, vertices.as_ptr() as usize) };
+    unsafe { sched.debug.set(&mut sched.draw, at, (vertices.len() / 6) as u32, off_of(vertices.as_ptr())) };
 }
 
 /// The gizmos' turn, while `show` is on: the set rebuilt when the map or the

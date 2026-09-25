@@ -35,6 +35,8 @@ use std::collections::HashMap;
 
 use fnv::FnvBuildHasher;
 
+use crate::mem::base::off_of;
+
 pub type Topic = u32;
 pub type Revision = u32;
 /// A position in the journal: how many changes had been written before it.
@@ -162,15 +164,15 @@ impl ChangeLog {
         position % self.capacity
     }
 
-    /// The lanes' addresses, for a reader through views (the glue's): topic,
-    /// key, revision, the head word and the ticks.
+    /// The lanes' addresses in the memory (mem/base.rs), for a reader through
+    /// views (the glue's): topic, key, revision, the head word and the ticks.
     pub fn lanes(&self) -> [usize; 5] {
         [
-            self.topic.as_ptr() as usize,
-            self.key.as_ptr() as usize,
-            self.revision.as_ptr() as usize,
-            &self._head as *const u32 as usize,
-            self.ticks.as_ptr() as usize,
+            off_of(self.topic.as_ptr()),
+            off_of(self.key.as_ptr()),
+            off_of(self.revision.as_ptr()),
+            off_of(&raw const self._head),
+            off_of(self.ticks.as_ptr()),
         ]
     }
 }

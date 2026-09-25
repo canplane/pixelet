@@ -7,7 +7,10 @@
 //! — and the span it serves from is one of the map's sections (section.rs).
 //! What is here is the door, and the shape a block travels in.
 
-/// A block of the heap: where it lies in the memory, and its bytes.
+use crate::mem::base::{off_of, ptr_at};
+
+/// A block of the heap: where it lies in the memory, as an offset from its
+/// base (base.rs), and its bytes.
 ///
 /// Two numbers rather than a `Vec` or a slice, because what holds a block
 /// names it by number — a list that uploads it, a table of a chunk's
@@ -28,7 +31,7 @@ pub fn alloc(bytes: u32) -> Option<Block> {
     let layout = std::alloc::Layout::from_size_align(bytes as usize, BLOCK_ALIGN).ok()?;
     // SAFETY: a layout of non-zero size.
     let at = unsafe { std::alloc::alloc(layout) };
-    (!at.is_null()).then_some((at as usize, bytes))
+    (!at.is_null()).then_some((off_of(at), bytes))
 }
 
 /// Gives a block back.
@@ -37,7 +40,7 @@ pub fn alloc(bytes: u32) -> Option<Block> {
 /// `block` came from `alloc` and has not been given back.
 pub unsafe fn free((at, bytes): Block) {
     // SAFETY: the caller's; `alloc` made this layout for this address.
-    unsafe { std::alloc::dealloc(at as *mut u8, std::alloc::Layout::from_size_align_unchecked(bytes as usize, BLOCK_ALIGN)) }
+    unsafe { std::alloc::dealloc(ptr_at(at), std::alloc::Layout::from_size_align_unchecked(bytes as usize, BLOCK_ALIGN)) }
 }
 
 /// A block freed when it goes out of scope, as `ArenaGuard` rewinds an arena:

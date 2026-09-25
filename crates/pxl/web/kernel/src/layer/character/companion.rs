@@ -187,7 +187,7 @@ impl Walker {
         let (Some(model), Some(skin)) = (model_for(variant), load_image(Load::Asset(variant.skin))) else {
             return;
         };
-        let Some(Some(actor)) = with_world(|world, sched| sched.models.new_actor(world, &mut sched.draw, model.model)) else {
+        let Some(Some(actor)) = with_world(|_, sched| sched.models.new_actor(&mut sched.draw, model.model)) else {
             return;
         };
         self.held = Some(Held { actor, model, skin });

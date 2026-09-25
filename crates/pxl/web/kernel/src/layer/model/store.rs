@@ -23,9 +23,8 @@ use pxl_render::frame::draw::{DrawList, MODEL_VERTEX_WORDS, PIPELINE_SKINNED};
 use pxl_render::gpu::api::word_bytes;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::abi::handle::Slots;
+use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
-
-use crate::world::chunk::build::World;
 
 /// A channel's path: translation, rotation; anything else is scale.
 const T: u8 = 0;
@@ -270,18 +269,15 @@ impl Models {
         (m.clips.len() - 1) as u32
     }
 
-    /// A channel of a clip: keys' times and values, read from the memory.
-    ///
-    /// # Safety
-    /// `times_at` addresses `key_cnt` f32s and `values_at` `key_cnt * width`
-    /// f32s, width 4 for a rotation and 3 otherwise.
+    /// A channel of a clip: keys' times and values, `values` holding the
+    /// keys' values end to end — four for a rotation and three otherwise.
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn channel(&mut self, mem: *const u8, model: u32, clip: u32, joint: u32, path: u8, step: bool, key_cnt: u32, times_at: usize, values_at: usize) {
+    pub fn channel(&mut self, model: u32, clip: u32, joint: u32, path: u8, step: bool, times: &[f32], values: &[f32]) {
         let Some(m) = self.models.get_mut(model as usize) else { return };
         let Some(c) = m.clips.get_mut(clip as usize) else { return };
         let width = if path == R { 4 } else { 3 };
-        let times = core::slice::from_raw_parts(mem.add(times_at) as *const f32, key_cnt as usize).to_vec();
-        let values = core::slice::from_raw_parts(mem.add(values_at) as *const f32, key_cnt as usize * width).to_vec();
+        let values = values[..times.len() * width].to_vec();
+        let times = times.to_vec();
         c.channels.push(Channel { joint, path, step, times, values });
     }
 
@@ -289,12 +285,12 @@ impl Models {
     /// ordered parent first.
     ///
     /// # Safety
-    /// `mem` is the memory the model's block was written in.
-    pub unsafe fn seal(&mut self, draw: &mut DrawList, mem: *const u8, model: u32, scale: f32) {
+    /// The model's block has been written.
+    pub unsafe fn seal(&mut self, draw: &mut DrawList, model: u32, scale: f32) {
         let Some(m) = self.models.get_mut(model as usize) else { return };
         m.scale = scale;
         m.handle = draw.upload(m.at as u32, m.bytes, m.vertex_cnt, m.index_cnt);
-        let positions = core::slice::from_raw_parts(mem.add(m.at) as *const f32, m.vertex_cnt as usize * 3);
+        let positions = core::slice::from_raw_parts(ptr_at::<f32>(m.at), m.vertex_cnt as usize * 3);
         m.radius = positions.as_chunks::<3>().0.iter().map(|p| p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).fold(0.0f32, f32::max).sqrt();
         let n = m.parent.len();
         let mut placed = vec![false; n];
@@ -334,13 +330,13 @@ impl Models {
         })
     }
 
-    pub fn new_actor(&mut self, world: &mut World, draw: &mut DrawList, model: u32) -> Option<u32> {
+    pub fn new_actor(&mut self, draw: &mut DrawList, model: u32) -> Option<u32> {
         let joints = self.models.get(model as usize)?.parent.len();
         let palette_bytes = word_bytes(joints.max(1) * 16);
         let (palette_at, palette_bytes) = alloc(palette_bytes)?;
         // SAFETY: the block just acquired; identity joints until the first tick.
         unsafe {
-            let p = core::slice::from_raw_parts_mut(world.volumes.mem().add(palette_at) as *mut f32, palette_bytes as usize / 4);
+            let p = core::slice::from_raw_parts_mut(ptr_at::<f32>(palette_at), palette_bytes as usize / 4);
             p.fill(0.0);
             for j in 0..joints.max(1) {
                 for d in 0..4 {
@@ -400,8 +396,7 @@ impl Models {
     /// Advances every actor's clips and writes the palettes; whether any
     /// actor is playing a clip of some length, which is what asks for the
     /// next frame — nothing else says an actor moved.
-    pub fn tick(&mut self, world: &mut World, draw: &mut DrawList, dt: f32) -> bool {
-        let mem = world.volumes.mem();
+    pub fn tick(&mut self, draw: &mut DrawList, dt: f32) -> bool {
         let mut animating = false;
         for a in self.actors.values_mut() {
             let Some(m) = self.models.get(a.model as usize) else { continue };
@@ -458,7 +453,7 @@ impl Models {
                 a.global[j] = if p < 0 { mat_mul(&m.root_pre[j], &local) } else { mat_mul(&a.global[p as usize], &local) };
             }
             // SAFETY: the actor's own palette block, one mat4 a joint.
-            let palette = unsafe { core::slice::from_raw_parts_mut(mem.add(a.palette_at) as *mut f32, joints * 16) };
+            let palette = unsafe { core::slice::from_raw_parts_mut(ptr_at::<f32>(a.palette_at), joints * 16) };
             for j in 0..joints {
                 palette[j * 16..j * 16 + 16].copy_from_slice(&mat_mul(&a.global[j], &m.inverse_bind[j]));
             }

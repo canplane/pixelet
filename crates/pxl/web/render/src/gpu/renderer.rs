@@ -20,6 +20,7 @@ use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::v3::{norm3, sub3, V3};
 use xpute_core::math::scalar::round;
 use xpute_runtime::global::Global;
+use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::asset::atlas::BillboardAtlas;
@@ -299,8 +300,8 @@ fn buffer_size(len: u32) -> u32 {
 /// `n` bytes of the memory at `at`.
 fn memory(at: u32, n: u32) -> &'static [u8] {
     // SAFETY: a heap block the draw list named, live until its free is
-    // listed, in the memory addressed from 0.
-    unsafe { core::slice::from_raw_parts(at as usize as *const u8, n as usize) }
+    // listed.
+    unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at as usize), n as usize) }
 }
 
 /// Lanes the table is: handle, where, length, the two counts, buffer, group.

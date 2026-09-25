@@ -29,6 +29,7 @@ use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::PacketWriter;
 use xpute_runtime::ipc::frame::FrameFlag;
 use xpute_runtime::ipc::ring::{ring_bytes, slots_bytes, Ring};
+use xpute_runtime::mem::base::{off_of, ptr_at};
 use xpute_runtime::mem::section::{write_section, SECTION_WORDS};
 
 extern "C" {
@@ -134,33 +135,19 @@ const _: () = assert!(ring_bytes(RING_CAPACITY) <= RING_DESC_STRIDE, "a ring's d
 const _: () = assert!(slots_bytes(RING_CAPACITY, RING_SLOT_BYTES) == RING_SLOT_STRIDE, "a ring's payloads are not its stride");
 const _: () = assert!(RING_SLOT_BYTES == section::PAGE_BYTES, "a slot's payload is the page the rest of the memory is counted in");
 
-/// The whole memory as one buffer, which is what a ring's two areas are cut
-/// from: the descriptors near the bottom and the slots' payloads past them, at
-/// addresses build.rs fixed rather than anyone hands out.
-///
-/// # Safety
-/// The module's own memory, addressed from 0.
-unsafe fn module_memory() -> *mut u8 {
-    // An address, not a pointer into anything: the linear memory is the
-    // machine's and address 0 is its base. `null_mut()` would say the same
-    // number and mean something else — offsetting a null pointer is undefined,
-    // and the optimizer is free to drop the stores that follow, which it does:
-    // a ring's capacity word went missing from an otherwise correct header.
-    core::ptr::with_exposed_provenance_mut(0)
-}
-
-/// The nth ring, laid out empty.
+/// The nth ring, laid out empty: the whole memory is what a ring's two areas
+/// are cut from, the descriptors near the bottom and the slots' payloads past
+/// them, at addresses build.rs fixed rather than anyone hands out.
 fn new_ring(n: u32) -> Ring {
-    // SAFETY: the module's own memory; the two ranges are build.rs's and no
-    // one else's, the linker included.
-    let mem = unsafe { module_memory() };
-    // SAFETY: the module's memory never moves and outlives every ring over it.
-    unsafe { Ring::init(mem, RING_DESC_AT + n * RING_DESC_STRIDE, RING_CAPACITY, RING_SLOT_AT + n * RING_SLOT_STRIDE, RING_SLOT_BYTES) }
+    // SAFETY: the module's memory, which never moves and outlives every ring
+    // over it; the two ranges are build.rs's and no one else's, the linker
+    // included.
+    unsafe { Ring::init(ptr_at(0), RING_DESC_AT + n * RING_DESC_STRIDE, RING_CAPACITY, RING_SLOT_AT + n * RING_SLOT_STRIDE, RING_SLOT_BYTES) }
 }
 
 /// Where a ring's words start in the memory.
 fn ring_address(ring: &Ring) -> u32 {
-    ring.words().as_ptr() as u32
+    off_of(ring.words().as_ptr()) as u32
 }
 
 /// The module's one state, made on first use. xpute's device for it rather
@@ -243,7 +230,7 @@ fn boot() {
     let s = state();
     // SAFETY: the page at BOOT_AT, which build.rs keeps clear of the rings
     // and the module's data; the boot block's alone.
-    let block = unsafe { &mut *(module_memory().add(pxl_kernel::mem::spec::BOOT_AT as usize) as *mut [u32; BOOT_WORDS]) };
+    let block = unsafe { &mut *ptr_at::<[u32; BOOT_WORDS]>(pxl_kernel::mem::spec::BOOT_AT as usize) };
     block[..3].copy_from_slice(&[data_end(), ring_address(&s.sq), ring_address(&s.outbox.cq)]);
     block[BOOT_HEAP] = ALLOC.stat() as u32;
     block[BOOT_GPU] = fixed_at(Range::Gpu);
@@ -273,8 +260,7 @@ fn lay_out() -> section::Map {
     xpute_core::ensure!(stack_high == pxl_kernel::mem::spec::STACK_BYTES, ENOTRECOVERABLE, stack_high);
     let given = core::arch::wasm32::memory_size(0) as u64 * (1 << 16);
     let map = section::lay_out(given.min(u32::MAX as u64) as u32, data_end());
-    // SAFETY: the memory is this module's own, addressed from 0.
-    kernel().volumes = Some(unsafe { Volumes::new(core::ptr::null_mut()) });
+    kernel().volumes = Some(Volumes::new());
     section::set_map(map);
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, each what it
     // is installed as from a page, zeroed, the renderer's and the host's
@@ -439,7 +425,7 @@ fn post_shell(s: &mut State) {
     let hash = std::hash::Hasher::finish(&h);
     if hash != s.snapshot {
         s.snapshot = hash;
-        let signal = WorldSnapshotSignal { at: buf.as_ptr() as u32, len };
+        let signal = WorldSnapshotSignal { at: off_of(buf.as_ptr()) as u32, len };
         raise(&s.outbox, Command::WORLD_SNAPSHOT, WorldSnapshotSignal::FIELDS, |w| signal.write(w));
     }
     // The key crosses as the one word the queue orders by; the shell holds it
@@ -825,37 +811,37 @@ fn install_host() {
 /// own lanes and the summary a block written where it stays — so a reader
 /// allocates nothing from the heap the ledger measures. The addresses are good
 /// until the next turn.
-fn ledger_read(window_ms: f64) -> *const u32 {
+fn ledger_read(window_ms: f64) -> u32 {
     use pxl_kernel::sched::ledger::record::{ledger_frames, ledger_tasks, ledger_worst};
     use pxl_kernel::sched::ledger::spec::READ;
     static WORDS: pxl_kernel::global::Global<[u32; READ::WORDS as usize]> = pxl_kernel::global::Global::new();
     let summary = pxl_kernel::sched::ledger::summary::ledger_summarize(window_ms);
     let (frames, tasks, worst) = (ledger_frames(), ledger_tasks(), ledger_worst());
     let w = WORDS.get(|| [0; READ::WORDS as usize]);
-    w[READ::summary_at as usize] = summary.as_ptr() as u32;
+    w[READ::summary_at as usize] = off_of(summary.as_ptr()) as u32;
     w[READ::summary_words as usize] = summary.len() as u32;
-    w[READ::frames_at as usize] = frames.as_ptr() as u32;
+    w[READ::frames_at as usize] = off_of(frames.as_ptr()) as u32;
     w[READ::frames_count as usize] = frames.len() as u32;
-    w[READ::tasks_at as usize] = tasks.as_ptr() as u32;
+    w[READ::tasks_at as usize] = off_of(tasks.as_ptr()) as u32;
     w[READ::tasks_count as usize] = tasks.len() as u32;
-    w[READ::worst_at as usize] = worst.as_ptr() as u32;
+    w[READ::worst_at as usize] = off_of(worst.as_ptr()) as u32;
     w[READ::worst_count as usize] = worst.len() as u32;
-    w.as_ptr()
+    off_of(w.as_ptr()) as u32
 }
 
 /// What the live stream kept since the shell last cleared it: the address of
 /// LOG's words (ledger.json), the task rows and the frames, each an address
 /// and a count. Zero counts when nothing is waiting, which a shell polling is
 /// asking about most of the time. The rows are let go on the next turn.
-fn ledger_take(s: &mut State) -> *const u32 {
+fn ledger_take(s: &mut State) -> u32 {
     use pxl_kernel::sched::ledger::spec::LOG;
     static WORDS: pxl_kernel::global::Global<[u32; LOG::WORDS as usize]> = pxl_kernel::global::Global::new();
     let (tasks, frames) = pxl_kernel::sched::ledger::log::ledger_log_rows();
     let w = WORDS.get(|| [0; LOG::WORDS as usize]);
-    w[LOG::tasks_at as usize] = tasks.as_ptr() as u32;
+    w[LOG::tasks_at as usize] = off_of(tasks.as_ptr()) as u32;
     w[LOG::tasks_count as usize] = tasks.len() as u32;
-    w[LOG::frames_at as usize] = frames.as_ptr() as u32;
+    w[LOG::frames_at as usize] = off_of(frames.as_ptr()) as u32;
     w[LOG::frames_count as usize] = frames.len() as u32;
     s.ledger_taken = true;
-    w.as_ptr()
+    off_of(w.as_ptr()) as u32
 }

@@ -16,7 +16,6 @@ use pxl_spec::space::v3::V3;
 use xpute_runtime::abi::handle::Slots;
 
 use crate::layer::model::store::Models;
-use crate::world::chunk::build::World;
 
 /// Floats an instance takes: its anchor relative to the set's (3), its
 /// logical size in pixels (2), its rectangle of the sheet (4), and where the
@@ -62,10 +61,10 @@ impl Billboards {
     ///
     /// # Safety
     /// `lane` addresses count * BILLBOARD_FLOATS f32s in the memory.
-    pub unsafe fn write(&mut self, world: &mut World, draw: &mut DrawList, id: u32, count: u32, lane: usize) {
+    pub unsafe fn write(&mut self, draw: &mut DrawList, id: u32, count: u32, lane: usize) {
         let Some(s) = self.sets.get_mut(id) else { return };
         let len = word_bytes(count as usize * BILLBOARD_FLOATS);
-        let written = s.held.write(draw, world.volumes.mem(), lane, len);
+        let written = s.held.write(draw, lane, len);
         s.count = if written { count } else { 0 };
     }
 

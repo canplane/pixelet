@@ -18,6 +18,7 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS};
 use pxl_spec::space::v3::V3;
+use xpute_runtime::mem::base::ptr_at;
 
 use crate::kernel::kernel;
 use crate::layer::decor::instance::{decor_groups, GroupLanes, NO_ENTRY};
@@ -351,8 +352,7 @@ const DECOR_REACH: f64 = 16.0;
 /// after a bounding sphere. Procedural instances — the ones with no entry —
 /// are passed over, as the eraser has nothing to remove there; hidden
 /// ones are tested, since the hidden one is what the eraser is over.
-pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
-    let mem = world.volumes.mem();
+pub fn hit_decor(sched: &Scheduler, origin: [f64; 2], o: V3, d: [f64; 3], max_dist: f64) -> Option<DecorHit> {
     let mut best: Option<DecorHit> = None;
     let mut limit = max_dist;
     for (chunk, base_x, base_y, decor) in sched.shown_decor() {
@@ -363,7 +363,7 @@ pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: V3, d: [
         }
         // SAFETY: the block the scheduler wrote at `at`, of the groups it
         // recorded; every lane read is inside its group's run.
-        let words = unsafe { core::slice::from_raw_parts(mem.add(decor.at as usize) as *const u32, decor.bytes as usize / 4) };
+        let words = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(decor.at as usize), decor.bytes as usize / 4) };
         for (g, (offset, count)) in decor_groups(words).enumerate() {
             let Some(Some(model)) = sched.decor_models.get(g) else { continue };
             let Some(mesh) = sched.models.mesh(*model) else { continue };
@@ -376,9 +376,9 @@ pub fn hit_decor(world: &World, sched: &Scheduler, origin: [f64; 2], o: V3, d: [
             // past the vertex words.
             let (positions, indices) = unsafe {
                 (
-                    core::slice::from_raw_parts(mem.add(mesh.at) as *const f32, mesh.vertex_cnt as usize * 3),
+                    core::slice::from_raw_parts(ptr_at::<f32>(mesh.at), mesh.vertex_cnt as usize * 3),
                     core::slice::from_raw_parts(
-                        (mem.add(mesh.at) as *const u32).add(mesh.vertex_cnt as usize * pxl_render::frame::draw::MODEL_VERTEX_WORDS as usize),
+                        (ptr_at::<u32>(mesh.at)).add(mesh.vertex_cnt as usize * pxl_render::frame::draw::MODEL_VERTEX_WORDS as usize),
                         mesh.index_cnt as usize,
                     ),
                 )
@@ -541,9 +541,9 @@ pub fn ray_hit_world(ray: &RayLike, map_origin: IVec, max_dist: f64) -> Option<W
 /// The placed decor entry the ray strikes within `max_dist`, or None:
 /// the kernel's hit test over every placed instance the on-screen chunks show.
 pub fn ray_hit_decor(ray: &RayLike, map_origin: IVec, max_dist: f64) -> Option<DecorHit> {
-    let (world, sched, _) = kernel().world()?;
+    let (_, sched, _) = kernel().world()?;
     let (o, d) = (ray.origin, ray.direction);
-    hit_decor(&world, sched, ray_origin(map_origin), o, d, max_dist)
+    hit_decor(sched, ray_origin(map_origin), o, d, max_dist)
 }
 
 #[cfg(test)]

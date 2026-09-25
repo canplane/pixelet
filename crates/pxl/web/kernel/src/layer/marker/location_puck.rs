@@ -12,6 +12,7 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{add3, center3n, floor3n, V3};
+use xpute_runtime::mem::base::{off_of, ptr_at};
 use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::global::Global;
@@ -21,7 +22,6 @@ use crate::layer::environment::theme::Theme;
 use crate::layer::environment::theme_clock::theme_key;
 use crate::layer::terrain::elevation::ground_at;
 use crate::world::change::request_world_tick;
-use crate::world::chunk::build::World;
 use crate::world::chunk::table::Frame;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
@@ -143,9 +143,9 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
             ]);
         }
         let count = p.samples.len() as u32;
-        with_world(|world, sched| {
+        with_world(|_, sched| {
             // SAFETY: the zone's floats are in the kernel's memory, read before this returns.
-            unsafe { sched.markers.set_zone(world, &mut sched.draw, center_pos, count, lane.as_ptr() as usize, ZONE_RADIUS_CELL * U_PER_CELL) };
+            unsafe { sched.markers.set_zone(&mut sched.draw, center_pos, count, off_of(lane.as_ptr()), ZONE_RADIUS_CELL * U_PER_CELL) };
         });
         p.shown = true;
         request_world_tick();
@@ -217,7 +217,7 @@ impl Markers {
     /// # Safety
     /// `lane` addresses count * ZONE_INSTANCE_FLOATS f32s in the memory.
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn set_zone(&mut self, world: &mut World, draw: &mut DrawList, center: V3, count: u32, lane: usize, snap_dist: f64) {
+    pub unsafe fn set_zone(&mut self, draw: &mut DrawList, center: V3, count: u32, lane: usize, snap_dist: f64) {
         let bytes = word_bytes(count as usize * ZONE_INSTANCE_FLOATS).max(4);
         let keep = self.puck.as_ref().is_some_and(|p| p.bytes == bytes);
         if !keep {
@@ -246,8 +246,7 @@ impl Markers {
         }
         p.center = center;
         p.count = count;
-        let mem = world.volumes.mem();
-        core::ptr::copy_nonoverlapping(mem.add(lane), mem.add(p.at), count as usize * ZONE_INSTANCE_FLOATS * 4);
+        core::ptr::copy_nonoverlapping(ptr_at::<u8>(lane), ptr_at::<u8>(p.at), count as usize * ZONE_INSTANCE_FLOATS * 4);
         if p.handle == 0 {
             p.handle = draw.upload(p.at as u32, p.bytes, 0, 0);
         } else {

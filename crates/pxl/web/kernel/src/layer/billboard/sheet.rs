@@ -11,6 +11,7 @@
 
 use pxl_render::asset::atlas::BillboardAtlas;
 use pxl_spec::space::v3::V3;
+use xpute_runtime::mem::base::off_of;
 
 use crate::global::Global;
 use crate::host::handheld;
@@ -41,11 +42,11 @@ pub fn follow_billboard_set(set: u32, actor: u32, lift: f64) {
 
 /// Replaces a set's instances with `lane`, BILLBOARD_FLOATS floats each.
 pub fn write_billboard_set(set: u32, lane: &[f32]) {
-    let Some((mut world, sched, _)) = kernel().world() else { return };
+    let Some((_, sched, _)) = kernel().world() else { return };
     let count = (lane.len() / crate::layer::billboard::field::BILLBOARD_FLOATS) as u32;
     // SAFETY: `lane` is `count` instances of f32s in the kernel's memory, read
     // before this returns.
-    unsafe { sched.billboards.write(&mut world, &mut sched.draw, set, count, lane.as_ptr() as usize) };
+    unsafe { sched.billboards.write(&mut sched.draw, set, count, off_of(lane.as_ptr())) };
 }
 
 pub fn remove_billboard_set(set: u32) {

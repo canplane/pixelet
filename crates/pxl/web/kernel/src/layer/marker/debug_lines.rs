@@ -10,8 +10,6 @@ use pxl_render::frame::draw::{DrawList, Held, PIPELINE_DEBUG};
 use pxl_render::gpu::api::word_bytes;
 use pxl_spec::space::v3::V3;
 
-use crate::world::chunk::build::World;
-
 /// Floats a vertex takes: its position relative to the set's origin (3)
 /// and its color, linear (3). Two vertices a segment.
 pub const DEBUG_VERTEX_FLOATS: usize = 6;
@@ -29,9 +27,9 @@ impl DebugLines {
     ///
     /// # Safety
     /// `lane` addresses vertex_cnt * DEBUG_VERTEX_FLOATS f32s in the memory.
-    pub unsafe fn set(&mut self, world: &mut World, draw: &mut DrawList, origin: V3, vertex_cnt: u32, lane: usize) {
+    pub unsafe fn set(&mut self, draw: &mut DrawList, origin: V3, vertex_cnt: u32, lane: usize) {
         let len = word_bytes(vertex_cnt as usize * DEBUG_VERTEX_FLOATS);
-        let written = self.held.write(draw, world.volumes.mem(), lane, len);
+        let written = self.held.write(draw, lane, len);
         self.vertex_cnt = if written { vertex_cnt } else { 0 };
         self.origin = origin;
     }

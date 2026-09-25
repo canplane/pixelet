@@ -38,6 +38,7 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::Pvf3;
 use pxl_spec::space::pyramid::TOP_LEVEL;
 use pxl_spec::space::v3::V3;
+use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::alloc;
 use xpute_runtime::sched::edge::Notify;
 use xpute_runtime::sched::frame_budget::{run_under_budget, BudgetOpts, PassStats};
@@ -298,11 +299,11 @@ impl Decor {
     }
 
     /// Each group's first lane word in the block and its count
-    /// (decor/instance.rs's decor_groups), the block read in `mem`.
-    fn groups(&self, mem: *const u8) -> impl Iterator<Item = (u32, u32)> {
+    /// (decor/instance.rs's decor_groups).
+    fn groups(&self) -> impl Iterator<Item = (u32, u32)> {
         // SAFETY: the block the scheduler wrote at `at`, `bytes` long, held
         // for as long as this decor is.
-        let words: &[u32] = unsafe { core::slice::from_raw_parts(mem.add(self.at as usize) as *const u32, self.bytes as usize / 4) };
+        let words: &[u32] = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(self.at as usize), self.bytes as usize / 4) };
         decor_groups(words)
     }
 }
@@ -929,13 +930,12 @@ impl Scheduler {
     /// or a block was refused — the heap is the same until the next tick
     /// reclaims.
     pub fn build_step(&mut self, world: &mut World, budget_ms: f64) -> bool {
-        let mem = world_mem(world);
         let (slots, index, meshes, landed) = (&mut self.slots, &self.index, &mut self.meshes, &mut self.landed);
         landed.clear();
         let worked = self.builder.tick(world, &self.builds, budget_ms, &crate::host::now, &mut |e| match e {
             BuildEvent::Tier { chunk, id, .. } => {
                 landed.push((chunk, id));
-                self_record(slots, index, mem, meshes, e);
+                self_record(slots, index, meshes, e);
             }
             BuildEvent::Coarser { chunk, id, generation, cube } => {
                 let Some(i) = slot_of(slots, index, chunk, id) else { return };
@@ -1071,7 +1071,7 @@ impl Scheduler {
             };
             // SAFETY: a block of the bytes the build asked for, the slot's from
             // here until its decor is let go.
-            unsafe { built.write(world.volumes.mem().add(at)) };
+            unsafe { built.write(ptr_at::<u8>(at)) };
             let before = self.slots[i].retained();
             let handle = self.draw.upload(at as u32, bytes, 0, 0);
             self.slots[i].decor.push(Decor {
@@ -1112,8 +1112,7 @@ impl Scheduler {
 
     /// What the chunks hold, with the run sets `.fixed.runs` has lent as the
     /// builder counts them (`Builder::run_sets`).
-    pub fn retention(&self, world: &World) -> ChunkRetention {
-        let mem = world_mem(world);
+    pub fn retention(&self) -> ChunkRetention {
         let (run_sets, run_bytes) = self.builder.run_sets();
         let mut out = ChunkRetention {
             run_sets,
@@ -1123,7 +1122,7 @@ impl Scheduler {
         for s in &self.slots {
             out.tiers += s.tiers.len() as u32;
             out.decor_steps += s.decor.len() as u32;
-            out.decor_instances += s.decor.iter().flat_map(|d| d.groups(mem)).map(|(_, n)| n).sum::<u32>();
+            out.decor_instances += s.decor.iter().flat_map(|d| d.groups()).map(|(_, n)| n).sum::<u32>();
         }
         out
     }
@@ -1519,9 +1518,9 @@ impl Scheduler {
         // The byte budget steps in on a refusal only where giving back what
         // the view no longer shows answered nothing (world/pyramid/pressure.rs).
         pressure_step(t0, freed);
-        let animating = self.models.tick(world, &mut self.draw, frame.delta_s as f32) | self.markers.tick(&frame) | self.environment.tick(&frame);
+        let animating = self.models.tick(&mut self.draw, frame.delta_s as f32) | self.markers.tick(&frame) | self.environment.tick(&frame);
         self.fade(self.clock_ms);
-        self.draw_frame(&frame, world_mem(world));
+        self.draw_frame(&frame);
 
         let mut c = Census {
             chunks: self.slots.len() as u32,
@@ -1581,7 +1580,7 @@ impl Scheduler {
     /// This frame's draws: every chunk on screen with a layout, its tiers at
     /// the weights the blend decided, placed where the chunk is in the frame
     /// the camera is written in.
-    fn draw_frame(&mut self, frame: &Frame, mem: *const u8) {
+    fn draw_frame(&mut self, frame: &Frame) {
         self.draw.begin_frame();
         self.hidden = 0;
         self.level_boxes = [0; LEVELS];
@@ -1630,7 +1629,7 @@ impl Scheduler {
                 // the pattern, so an instance of both is on one pixel as the
                 // ground is and never stands twice.
                 if let Some(d) = s.decor_of(cube, s.layout_generation) {
-                    for (group, (offset, count)) in d.groups(mem).enumerate() {
+                    for (group, (offset, count)) in d.groups().enumerate() {
                         if count > 0 {
                             self.draw.draw_decor(d.handle, group as u32, count, offset, translation, visible);
                         }
@@ -2249,10 +2248,6 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3) {
     (visible, [x, y, z])
 }
 
-fn world_mem(world: &World) -> *const u8 {
-    world.volumes.mem()
-}
-
 /// A slot for a tier of `step` on the chunk at `i`, and whoever it is taken
 /// from.
 ///
@@ -2294,7 +2289,7 @@ fn slot_of(slots: &[Slot], index: &BTreeMap<Chunk, usize>, k: Chunk, id: u32) ->
 
 /// Records what a build handed over on the slot it belongs to, and passes
 /// it on.
-fn self_record(slots: &mut [Slot], index: &BTreeMap<Chunk, usize>, mem: *const u8, meshes: &mut Meshes, e: BuildEvent) {
+fn self_record(slots: &mut [Slot], index: &BTreeMap<Chunk, usize>, meshes: &mut Meshes, e: BuildEvent) {
     let BuildEvent::Tier {
         chunk,
         id,
@@ -2362,7 +2357,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<Chunk, usize>, mem: *const u
     // The format is the group's, not the mesh's: a slot is a
     // stride into its group's arena (mesh_slot.rs).
     let box_words = group_box_words(slot.group);
-    let words = unsafe { core::slice::from_raw_parts(mem.add(at as usize) as *const u32, (boxes * box_words) as usize) };
+    let words = unsafe { core::slice::from_raw_parts(ptr_at::<u32>(at as usize), (boxes * box_words) as usize) };
     let bounds = (boxes > 0).then(|| {
         let mut b = Bounds {
             min: [f32::INFINITY; 3],

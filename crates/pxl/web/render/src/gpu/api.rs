@@ -29,6 +29,7 @@ use crate::gpu::api_spec::{op, stream};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::global::Global;
+use xpute_runtime::mem::base::ptr_at;
 
 /// WebGPU's buffer usage bits.
 pub mod buffer_usage {
@@ -70,7 +71,7 @@ static GPU: Gpu = Gpu(());
 /// `at` must address that range, 8-aligned, for as long as the module runs.
 pub unsafe fn set_gpu_stream(at: u32) {
     // SAFETY: the caller's range.
-    let words = unsafe { core::slice::from_raw_parts_mut(at as usize as *mut u32, (stream::BYTES / 4) as usize) };
+    let words = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize), (stream::BYTES / 4) as usize) };
     STREAM.set(Some(Stream::new(words, HEAD)));
 }
 
