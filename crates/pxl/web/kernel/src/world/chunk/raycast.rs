@@ -46,7 +46,7 @@ struct Entry {
     base: (i64, i64),
     /// What it was made valid for (the builder's compose_leaf).
     valid: u32,
-    volume: usize,
+    volume: u32,
     bands: usize,
     used: u32,
 }
@@ -221,7 +221,7 @@ impl Raycast {
     /// The leaf composite at a chunk corner: the kept one while what it was
     /// made from is unchanged, else made now and kept unless too tall to
     /// keep. Least recently used is let go first.
-    fn acquire(&mut self, world: &mut World, sched: &mut Scheduler, base: (i64, i64)) -> Option<(usize, bool)> {
+    fn acquire(&mut self, world: &mut World, sched: &mut Scheduler, base: (i64, i64)) -> Option<(u32, bool)> {
         self.tick = self.tick.wrapping_add(1);
         let at = ivec::gather(base.0, base.1, 0);
         let valid = sched.builder.leaf_valid(at);
@@ -263,7 +263,7 @@ impl Raycast {
     /// testing every run of each cell it steps into and stopping at the
     /// nearest hit.
     #[allow(clippy::too_many_arguments)]
-    fn hit_chunk(&mut self, world: &mut World, volume: usize, o: &V3, d: &[f64; 3], chunk_ox: f64, chunk_oy: f64, max_dist: f64) -> Option<Hit> {
+    fn hit_chunk(&mut self, world: &mut World, volume: u32, o: &V3, d: &[f64; 3], chunk_ox: f64, chunk_oy: f64, max_dist: f64) -> Option<Hit> {
         // SAFETY: the composite is sealed and held until released here or kept.
         unsafe { world.volumes.band_views(volume, &mut self.bands) };
         let (bands, column) = (&self.bands, &mut self.column);

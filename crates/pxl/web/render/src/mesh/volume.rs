@@ -28,6 +28,7 @@
 /// neighbours' faces, and drawn with its bottom face.
 use pxl_spec::bake::constant::BAND_CELLS;
 use xpute_core::math::scalar::round;
+use xpute_runtime::abi::handle::Slots;
 use xpute_runtime::mem::heap::{alloc, free, Block, Guard};
 
 pub const MATERIAL_OBJECT: u8 = 5;
@@ -263,8 +264,7 @@ pub struct Volumes {
     free_stores: Vec<usize>,
     /// Stores whose lanes were given back.
     empty_stores: Vec<usize>,
-    volumes: Vec<Option<Volume>>,
-    free_ids: Vec<usize>,
+    volumes: Slots<Volume>,
     /// The current band row, for readers.
     row: [u32; BAND_WORDS],
     pub stat: VolumeStat,
@@ -282,27 +282,20 @@ impl Volumes {
             stores: Vec::new(),
             free_stores: Vec::new(),
             empty_stores: Vec::new(),
-            volumes: Vec::new(),
-            free_ids: Vec::new(),
+            volumes: Slots::new(),
             row: [0; BAND_WORDS],
             stat: VolumeStat::default(),
         }
     }
 
-    /// A volume with no bands: its id.
-    pub fn open(&mut self) -> usize {
-        let v = Volume { bands: Vec::new(), sealed: false };
-        if let Some(id) = self.free_ids.pop() {
-            self.volumes[id] = Some(v);
-            id
-        } else {
-            self.volumes.push(Some(v));
-            self.volumes.len() - 1
-        }
+    /// A volume with no bands: its handle, which names nothing once it is
+    /// released.
+    pub fn open(&mut self) -> u32 {
+        self.volumes.insert(Volume { bands: Vec::new(), sealed: false })
     }
 
-    fn volume(&mut self, id: usize) -> &mut Volume {
-        self.volumes[id].as_mut().expect("a volume that is not open")
+    fn volume(&mut self, id: u32) -> &mut Volume {
+        self.volumes.get_mut(id).expect("a volume that is not open")
     }
 
     fn material(&self, store: usize) -> *mut u32 {
@@ -351,7 +344,7 @@ impl Volumes {
 
     /// The band at `band_z`, made if the volume has none there: the index
     /// into the volume's bands, or None when no store could be had.
-    fn get_or_create_band(&mut self, id: usize, band_z: i32) -> Option<usize> {
+    fn get_or_create_band(&mut self, id: u32, band_z: i32) -> Option<usize> {
         assert!(!self.volume(id).sealed, "paint into a sealed volume");
         let bands = &self.volume(id).bands;
         let insert_at = bands.iter().position(|b| b.band_z >= band_z).unwrap_or(bands.len());
@@ -397,7 +390,7 @@ impl Volumes {
 
     /// Full replacement at one voxel: later layers overwrite earlier ones.
     /// False when a band could not be made.
-    pub fn set_voxel(&mut self, id: usize, at: Cell, v: Voxel) -> bool {
+    pub fn set_voxel(&mut self, id: u32, at: Cell, v: Voxel) -> bool {
         let Cell { cx, cy, z } = at;
         // A column past the band would index the next block in the heap:
         // refused rather than written.
@@ -436,7 +429,7 @@ impl Volumes {
 
     /// Another sub-cell object on a base voxel already claimed in the same
     /// layer.
-    pub fn append_sub_voxel(&mut self, id: usize, at: Cell, v: Voxel) -> bool {
+    pub fn append_sub_voxel(&mut self, id: u32, at: Cell, v: Voxel) -> bool {
         let Cell { cx, cy, z } = at;
         if cx >= BAND_CELLS || cy >= BAND_CELLS {
             return false;
@@ -451,7 +444,7 @@ impl Volumes {
     }
 
     /// Paints one solid column across as many whole bands as it needs.
-    pub fn fill_column(&mut self, id: usize, column: (u32, u32), z0: i32, z1: i32, v: Voxel) -> bool {
+    pub fn fill_column(&mut self, id: u32, column: (u32, u32), z0: i32, z1: i32, v: Voxel) -> bool {
         let (cx, cy) = column;
         if cx >= BAND_CELLS || cy >= BAND_CELLS {
             return false;
@@ -484,7 +477,7 @@ impl Volumes {
 
     /// Closes the volume to painting and orders every band's extras by
     /// column, which is what lets a column find its own during the scan.
-    pub fn seal(&mut self, id: usize) {
+    pub fn seal(&mut self, id: u32) {
         let v = self.volume(id);
         v.sealed = true;
         let stores: Vec<usize> = v.bands.iter().map(|b| b.store).collect();
@@ -495,8 +488,8 @@ impl Volumes {
 
     /// Returns the volume's bands to the stores, and the stores past the
     /// cap to the heap.
-    pub fn release(&mut self, id: usize) {
-        let Some(v) = self.volumes[id].take() else { return };
+    pub fn release(&mut self, id: u32) {
+        let Some(v) = self.volumes.remove(id) else { return };
         for band in v.bands {
             let s = band.store;
             self.stores[s].extra.clear();
@@ -513,7 +506,6 @@ impl Volumes {
                 self.empty_stores.push(s);
             }
         }
-        self.free_ids.push(id);
     }
 
     /// The memory the volumes' addresses are offsets into.
@@ -525,7 +517,7 @@ impl Volumes {
     ///
     /// # Safety
     /// The views are valid until the volume is painted again or released.
-    pub unsafe fn band_view(&mut self, id: usize, i: usize) -> crate::mesh::voxel_scan::BandView<'static> {
+    pub unsafe fn band_view(&mut self, id: u32, i: usize) -> crate::mesh::voxel_scan::BandView<'static> {
         let row = *self.band_row(id, i);
         let mem = self.mem;
         let at = |w: u32| mem.add(w as usize);
@@ -552,22 +544,22 @@ impl Volumes {
     ///
     /// # Safety
     /// As `band_view`: valid until the volume is painted again or released.
-    pub unsafe fn band_views(&mut self, id: usize, out: &mut Vec<crate::mesh::voxel_scan::BandView<'static>>) {
+    pub unsafe fn band_views(&mut self, id: u32, out: &mut Vec<crate::mesh::voxel_scan::BandView<'static>>) {
         out.clear();
         for i in 0..self.band_count(id) {
             out.push(self.band_view(id, i));
         }
     }
 
-    pub fn band_count(&self, id: usize) -> usize {
-        self.volumes[id].as_ref().map_or(0, |v| v.bands.len())
+    pub fn band_count(&self, id: u32) -> usize {
+        self.volumes.get(id).map_or(0, |v| v.bands.len())
     }
 
     /// The row of band `i` of volume `id`: band_z, the lanes' addresses (the
     /// sub-cell one 0 when the band has none), the extras' count and their
     /// five lanes' addresses — valid until the volume is painted again.
-    pub fn band_row(&mut self, id: usize, i: usize) -> &[u32; BAND_WORDS] {
-        let band = &self.volumes[id].as_ref().expect("a volume that is not open").bands[i];
+    pub fn band_row(&mut self, id: u32, i: usize) -> &[u32; BAND_WORDS] {
+        let band = &self.volumes.get(id).expect("a volume that is not open").bands[i];
         let store = &self.stores[band.store];
         let e = &store.extra;
         let rel = |p: *const u8| (p as usize).wrapping_sub(self.mem as usize) as u32;
