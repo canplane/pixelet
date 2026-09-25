@@ -42,8 +42,9 @@ fn every_drawn_chunk_lies_between_its_split_distances_and_the_view_fits_its_budg
             let eye = Eye {
                 at: [x, y, height],
                 foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
+                centre: [x, y, 0.0],
             };
-            let d = domain_for(&eye, height, None);
+            let d = domain_for(&eye, height, None, 0);
             let s = d.scale;
             assert!(s > 0.0 && s <= 1.0);
             let chunks = drawn_by_rule(&d);
@@ -79,10 +80,15 @@ fn every_page_drawn_from_is_wanted_with_every_ancestor_up_to_the_top() {
             let eye = Eye {
                 at: [x, y, height],
                 foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
+                centre: [x, y, 0.0],
             };
-            let d = domain_for(&eye, height, None);
+            let d = domain_for(&eye, height, None, 0);
             for c in drawn_by_rule(&d) {
-                assert!(d.pages.get(&c.page()) == Some(&true), "height {height}: {c:?} is drawn from a page not wanted");
+                let order = d.order_of(c);
+                assert!(
+                    matches!(d.pages.get(&c.page()), Some(Some(o)) if *o <= order),
+                    "height {height}: {c:?} is drawn from a page not wanted, or one ordered after it"
+                );
             }
             for (p, _) in d.pages() {
                 if p.level < TOP_LEVEL {
@@ -103,6 +109,7 @@ fn ground_outside_the_frustum_is_not_refined() {
     let eye = Eye {
         at: [x, y, height],
         foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
+        centre: [x, y, 0.0],
     };
     // One plane, x ≥ the eye's, and five that pass everything.
     let mut planes = [0.0; 24];
@@ -110,7 +117,7 @@ fn ground_outside_the_frustum_is_not_refined() {
     for k in 1..6 {
         planes[k * 4 + 3] = 1.0;
     }
-    let east = domain_for(&eye, height, Some(Frustum { planes, planet: 1e12 }));
+    let east = domain_for(&eye, height, Some(Frustum { planes, planet: 1e12 }), 0);
     let fine: Vec<Chunk> = drawn_by_rule(&east).into_iter().filter(|c| c.level() < TOP_LEVEL).collect();
     assert!(!fine.is_empty(), "the view refines what it sees");
     for c in fine {

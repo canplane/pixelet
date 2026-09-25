@@ -151,7 +151,7 @@ holding a count of places per cell (`pxl-spec bake/poi_page.rs`, magic
 place a cell holds alone — its name, held to 32 code points, and its kind,
 from a pool of places held once a page. A kind is the place's category as the search list names it
 (`pxl-geo-spec overture/properties.rs`), numbered by
-`spec/pxl/spec/bake/poi_theme.json`. The leaves are counted from `overture_places`, the levels above are
+`spec/pxl/spec/bake/poi_badge.json`. The leaves are counted from `overture_places`, the levels above are
 folded by adding, with the same fold driver terrain uses
 (`geo-bake/src/pyramid.rs`), and then every page its parent settles is let go
 (`prune`): where no cell over a page holds two places, the page over it says

@@ -164,7 +164,7 @@ function command(cmd: Command, pkt?: U8Array): void {
 
 CORE_BUILD.call(
   Command.WORLD_CREATE,
-  encode_world_create({ development: false, handheld: false, geolocation: false, orientation: false, orientation_permission: false, settings: "", objects: 0, objects_bytes: 0 }),
+  encode_world_create({ development: false, handheld: false, geolocation: false, orientation: false, orientation_permission: false, settings: [], objects: 0, objects_bytes: 0 }),
   (r) => r,
 );
 console.log(`heap: boot and world create ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);

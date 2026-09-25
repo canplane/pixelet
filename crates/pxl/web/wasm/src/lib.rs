@@ -529,7 +529,7 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
                     needs_permission: p.orientation_permission,
                 },
             });
-            settings_load(p.settings);
+            settings_load(p.settings.iter().copied());
             if p.objects != 0 {
                 pxl_kernel::layer::object::store::load(p.objects, p.objects_bytes);
             }

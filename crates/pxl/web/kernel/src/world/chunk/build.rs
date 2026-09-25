@@ -145,6 +145,24 @@ struct Runs {
     fold: Option<Scale>,
 }
 
+/// What a chunk's ground is read from: the page, the chunk's first cell as
+/// its own cells from that page's corner, and how many of them a side a
+/// page cell stands for — 1 on its own page, more on the nearest page over
+/// it held while its own has not come (world/pyramid.rs `drawn_from`).
+#[derive(Clone, Copy)]
+struct Read {
+    page: &'static Terrain,
+    origin: [i64; 2],
+    n: u32,
+}
+
+impl Read {
+    /// Whether it is the chunk's own page.
+    fn own(&self) -> bool {
+        self.n == 1
+    }
+}
+
 #[derive(Clone, Copy)]
 struct Chunk {
     /// The chunk being built: its level, corner, column and page all come
@@ -178,11 +196,21 @@ impl Chunk {
         L2_IDX(self.base())
     }
 
-    /// The page the chunk is drawn from, while it is resident: a page is
-    /// found by its key, so one gone, or whose record another page now holds,
-    /// is none and never another page's bytes.
-    fn page(&self) -> Option<&'static Terrain> {
-        Terrain::pyramid().get(self.at.page())
+    /// What the chunk is drawn from now: its own page, or the nearest
+    /// resident page over it. A page is found by its key, so one gone, or
+    /// whose record another page now holds, is none and never another page's
+    /// bytes.
+    fn read(&self) -> Option<Read> {
+        let pyramid = Terrain::pyramid();
+        let src = pyramid.drawn_from(self.at.page())?;
+        let page = pyramid.get(src)?;
+        let own = GROUND.cell_of(self.level(), &self.at.base());
+        let levels = src.level - self.level();
+        Some(Read {
+            page,
+            origin: own.in_page_above(levels),
+            n: GROUND.scale(self.level()).count_in(GROUND.scale(src.level)),
+        })
     }
 
     fn wants(&self, cube: Cube) -> bool {
@@ -321,11 +349,14 @@ impl Builder {
 
     /// Where chunk `id` starts in its page, the page's lanes and the
     /// structure setting it is drawn under: the ground its decor is
-    /// scattered over, at any level. None while its page has not come.
+    /// scattered over, at any level. None while its own page has not come:
+    /// a chunk drawn from a page over it scatters nothing, since what it
+    /// scattered there would move when its own page came.
     pub fn ground_of(&self, id: u32) -> Option<(u32, u32, &'static Terrain, bool)> {
         let c = self.chunks.get(&id)?;
+        let read = c.read().filter(Read::own)?;
         let (tx0, ty0) = c.at.in_page();
-        Some((tx0, ty0, c.page()?, c.show_structures))
+        Some((tx0, ty0, read.page, c.show_structures))
     }
 
     /// What the composite of z16 chunk `chunk` is valid for: its column's
@@ -347,7 +378,7 @@ impl Builder {
         let show = settings_store().show_structures;
         let col_idx = L2_IDX(chunk.base().i);
         let valid = self.leaf_valid(chunk);
-        let volume = self.paint_terrain_at(world, tx0, ty0, show, page)?;
+        let volume = self.paint_terrain_at(world, [tx0 as i64, ty0 as i64], 1, show, page)?;
         if world.painter.paint(world.store.entries(col_idx), world.volumes, volume, None, None).refused {
             world.volumes.release(volume);
             return None;
@@ -557,12 +588,12 @@ impl Builder {
         // A page gone under a scan: the scan is given up and the slot with
         // it, since held, it is every other chunk's wait, and the page may
         // not come back before the chunk goes.
-        let Some(page) = c.page() else {
+        let Some(read) = c.read() else {
             self.abort_scan_of(world, id);
             return Progress::Blocked;
         };
         if c.level() > 0 {
-            return self.level_runs(world, id, page);
+            return self.level_runs(world, id, read);
         }
         let holding = matches!(&self.scan_job, Some(j) if j.id == id);
         // A column with nothing placed is one run of terrain, floor to top,
@@ -573,14 +604,14 @@ impl Builder {
         // tier: a zoom-in would otherwise scan every chunk in view, most of
         // them empty of objects.
         if !holding && !self.has_objects(world, c.col_idx()) {
-            return self.direct_runs(world, id, page);
+            return self.direct_runs(world, id, read);
         }
         if !holding {
             let col_idx = c.col_idx();
             if self.scan_job.is_some() || self.run_set_for(id).is_none() {
                 return Progress::Blocked;
             }
-            let Some(volume) = self.paint_terrain(world, id, page) else {
+            let Some(volume) = self.paint_terrain(world, id, read) else {
                 self.refuse(world, id);
                 return Progress::Blocked;
             };
@@ -649,15 +680,14 @@ impl Builder {
 
     /// A new volume with the chunk's terrain painted in, open; none when a
     /// paint was refused.
-    fn paint_terrain(&mut self, world: &mut World, id: u32, page: &Terrain) -> Option<u32> {
-        let c = &self.chunks[&id];
-        let ((tx0, ty0), show) = (c.at.in_page(), c.show_structures);
-        self.paint_terrain_at(world, tx0, ty0, show, page)
+    fn paint_terrain(&mut self, world: &mut World, id: u32, read: Read) -> Option<u32> {
+        let show = self.chunks[&id].show_structures;
+        self.paint_terrain_at(world, read.origin, read.n, show, read.page)
     }
 
-    fn paint_terrain_at(&mut self, world: &mut World, tx0: u32, ty0: u32, show: bool, page: &Terrain) -> Option<u32> {
+    fn paint_terrain_at(&mut self, world: &mut World, origin: [i64; 2], n: u32, show: bool, page: &Terrain) -> Option<u32> {
         let view = Self::page_view(page);
-        self.sample.read(&view, tx0, ty0, hidden_ground(show));
+        self.sample.read(&view, origin, n, hidden_ground(show));
         let volume = world.volumes.open();
         if !self.sample.paint(world.volumes, volume) {
             world.volumes.release(volume);
@@ -740,14 +770,13 @@ impl Builder {
         Progress::Busy
     }
 
-    fn direct_runs(&mut self, world: &mut World, id: u32, page: &Terrain) -> Progress {
+    fn direct_runs(&mut self, world: &mut World, id: u32, read: Read) -> Progress {
         if self.run_set_for(id).is_none() {
             return Progress::Blocked;
         }
-        let c = &self.chunks[&id];
-        let ((tx0, ty0), show) = (c.at.in_page(), c.show_structures);
-        let view = Self::page_view(page);
-        self.sample.read(&view, tx0, ty0, hidden_ground(show));
+        let show = self.chunks[&id].show_structures;
+        let view = Self::page_view(read.page);
+        self.sample.read(&view, read.origin, read.n, hidden_ground(show));
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
         let floor = self.sample.floor;
         // Every column of the set, the chunk's own and the apron's: the
@@ -776,14 +805,14 @@ impl Builder {
     /// A level chunk's runs, written the direct way: its level page's ground
     /// and the object layer folded to its level (pxl-render mesh/paint/level.rs),
     /// in the level's cells. Cheap to make again, like a leaf's direct runs.
-    fn level_runs(&mut self, world: &mut World, id: u32, page: &Terrain) -> Progress {
+    fn level_runs(&mut self, world: &mut World, id: u32, read: Read) -> Progress {
         if self.run_set_for(id).is_none() {
             return Progress::Blocked;
         }
         let c = &self.chunks[&id];
-        let ((tx0, ty0), show, level, base) = (c.at.in_page(), c.show_structures, c.level(), c.base());
-        let view = Self::page_view(page);
-        self.sample.read(&view, tx0, ty0, hidden_ground(show));
+        let (show, level, base) = (c.show_structures, c.level(), c.base());
+        let view = Self::page_view(read.page);
+        self.sample.read(&view, read.origin, read.n, hidden_ground(show));
         let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         let mut columns = Vec::new();

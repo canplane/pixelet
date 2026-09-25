@@ -3,7 +3,6 @@
 use super::*;
 use domain::{domain_for, Eye};
 use pxl_spec::bake::poi_page::{Place, PoiPage, POI_LATTICE};
-use pxl_spec::space::hierarchy::share;
 use pxl_spec::space::pvf3::{ivec, Pvf3};
 use pxl_spec::space::pyramid::GROUND;
 
@@ -19,8 +18,9 @@ fn the_domain() -> Domain {
     let eye = Eye {
         at: [ivec::X(anchor()) as f64, ivec::Y(anchor()) as f64, HEIGHT],
         foot: anchor(),
+        centre: [ivec::X(anchor()) as f64, ivec::Y(anchor()) as f64, 0.0],
     };
-    domain_for(&eye, HEIGHT, None)
+    domain_for(&eye, HEIGHT, None, 0)
 }
 
 /// The chunks the rule draws of a domain where everything is resident.
@@ -48,10 +48,6 @@ fn ground_of(d: &Domain) -> ((f64, f64, f64), f64) {
 
 fn area(c: Chunk) -> f64 {
     c.rect().2 * c.rect().2
-}
-
-fn meet(a: Chunk, b: Chunk) -> bool {
-    share(a.node(), b.node())
 }
 
 /// Whether no two pieces share ground. Pieces of the pyramid meet only where
@@ -106,7 +102,7 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
 /// The places a drawn chunk counts: those of its source page — its own, or
 /// the one over it that settles it — whose cell stands on the chunk's ground.
 fn count(pyramid: &Pyramid<PoiPage>, c: Chunk) -> u32 {
-    let src = pyramid.source(c.page()).expect("a drawn chunk has a page that draws it");
+    let src = pyramid.drawn_from(c.page()).expect("a drawn chunk has a page that draws it");
     let page = pyramid.get(src).expect("a source is resident");
     page.cells
         .iter()
@@ -147,52 +143,10 @@ fn the_cover_and_its_gaps_partition_the_domain_and_count_every_place_once() {
     }
 }
 
-/// A coarse page with some of the finer pages under it draws the coarse
-/// one, and not the fine ones beside it: a sibling group is drawn whole or
-/// not at all.
-#[test]
-fn a_parent_gives_way_only_to_all_of_its_children() {
-    // The domain reads the terrain's and the objects' heights, which are
-    // globals.
-    let _serial = crate::global::serial();
-    let d = the_domain();
-    let parent = d.roots().iter().copied().find(|&c| d.splits(c)).expect("the top level holds ground wanted finer");
-    let under = parent.children();
-    let mut pyramid = Pyramid::<PoiPage>::default();
-    pyramid.set(parent.page(), PoiPage::default());
-    pyramid.set(under[0].page(), PoiPage::default());
-    let drawn: Vec<Chunk> = pyramid.cover_of(&d).drawn;
-    let here = |c: Chunk| drawn.contains(&c);
-    // The children lie in one page, so a finer page resident is all four of
-    // them; they give way only where each is drawn whole, which a split
-    // child with nothing under it is not.
-    assert!(here(parent) || under.iter().all(|&k| here(k) || k.children().iter().all(|&g| here(g))));
-    assert!(!(here(parent) && under.iter().any(|&k| here(k))), "never a parent and its child");
-}
-
-/// Where nothing over a wanted chunk is resident, the pages under it stand
-/// in however far down they are.
-#[test]
-fn a_stand_in_reaches_as_far_down_as_there_are_pages() {
-    // The domain reads the terrain's and the objects' heights, which are
-    // globals.
-    let _serial = crate::global::serial();
-    let d = the_domain();
-    let c = drawn_by_rule(&d).into_iter().find(|c| c.level() >= 2).expect("ground drawn two levels over z16");
-    let grand: Vec<Chunk> = c.children().iter().flat_map(|k| k.children()).collect();
-    let mut pyramid = Pyramid::<PoiPage>::default();
-    for g in &grand {
-        pyramid.set(g.page(), PoiPage::default());
-    }
-    let cover = pyramid.cover_of(&d);
-    assert!(grand.iter().all(|g| cover.drawn.contains(g)), "two levels down, all sixteen");
-    assert!(!cover.gaps.iter().any(|&g| meet(g, c)));
-}
-
 /// The terrain's mesh draws its cover balanced: no two chunks that meet
-/// more than a level apart, never more than a level finer than the view
-/// wants, and still the domain's ground exactly once — what it cannot draw
-/// is a gap.
+/// more than a level apart unless nothing over the finer is held, never more
+/// than a level finer than the view wants, and still the domain's ground
+/// exactly once.
 #[test]
 fn the_terrain_draws_its_cover_balanced_and_still_whole() {
     // The domain reads the terrain's and the objects' heights, which are
@@ -217,7 +171,8 @@ fn the_terrain_draws_its_cover_balanced_and_still_whole() {
             for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
                 let next = c.beside(dx, dy);
                 if let Some(o) = std::iter::once(next).chain(next.ancestors()).find(|a| cover.drawn.contains(a)) {
-                    assert!(o.level() < c.level() + 2, "trial {trial}: {c:?} meets {o:?}");
+                    let held_over = c.ancestors().any(|a| pyramid.get(a.page()).is_some());
+                    assert!(o.level() < c.level() + 2 || !held_over, "trial {trial}: {c:?} meets {o:?}");
                 }
             }
         }
@@ -227,10 +182,38 @@ fn the_terrain_draws_its_cover_balanced_and_still_whole() {
     }
 }
 
-/// What the terrain leaves open is what it asks for: a page under a gap the
-/// presentation made, and nothing resident or foldable, is coverage.
+/// Fine ground that arrived before anything over it stays drawn beside a
+/// coarse neighbour rather than opening: an island's land beside the sea a
+/// coarse page draws.
 #[test]
-fn a_gap_the_mesh_leaves_is_fetched_as_coverage() {
+fn fine_ground_with_nothing_held_over_it_is_drawn_beside_a_coarse_neighbour() {
+    let _serial = crate::global::serial();
+    let d = the_domain();
+    let level4 = |c: Chunk| c.ancestors().find(|a| a.level() == 4).expect("a level-4 chunk over it");
+    let (fine, coarse) = drawn_by_rule(&d)
+        .into_iter()
+        .filter(|c| c.level() == 2)
+        .find_map(|c| {
+            [(1, 0), (-1, 0), (0, 1), (0, -1)]
+                .into_iter()
+                .map(|(dx, dy)| level4(c.beside(dx, dy)))
+                .find(|&k| k != level4(c))
+                .map(|k| (c, k))
+        })
+        .expect("level-2 ground beside another level-4 chunk's");
+    let cover = Cover {
+        drawn: vec![fine, coarse],
+        gaps: Vec::new(),
+    };
+    let shown = crate::layer::terrain::present::mesh(cover, &d, |c| c == fine || c == coarse);
+    assert!(shown.drawn.contains(&fine), "the fine ground stays drawn");
+    assert!(!shown.gaps.contains(&fine) && !shown.gaps.iter().any(|g| fine.ancestors().any(|a| a == *g)), "and is not opened");
+}
+
+/// What the terrain leaves open is what it asks for: a page under a gap the
+/// presentation made that nothing resident answers is in the wishlist.
+#[test]
+fn a_gap_the_mesh_leaves_is_asked_for() {
     // The domain reads the terrain's and the objects' heights, which are
     // globals.
     let _serial = crate::global::serial();
@@ -241,12 +224,50 @@ fn a_gap_the_mesh_leaves_is_fetched_as_coverage() {
         pyramid.set(*p, page.clone());
     }
     pyramid.cover = crate::layer::terrain::present::mesh(pyramid.cover_of(&d), &d, |c| pyramid.get(c.page()).is_some());
-    assert!(!pyramid.cover.gaps.is_empty(), "a residency with ground left open");
-    for g in pyramid.cover.gaps.clone() {
-        if pyramid.get(g.page()).is_none() && !pyramid.children_resident(g.page()) {
-            assert_eq!(pyramid.resolve(g.page()), Resolved::Missing, "{g:?}");
+    let gaps = pyramid.cover.gaps.clone();
+    assert!(!gaps.is_empty(), "a residency with ground left open");
+    pyramid.domain = Some(d);
+    let asked: Vec<u64> = pyramid.wants().iter().map(|(s, _)| *s).collect();
+    let d = pyramid.domain.as_ref().expect("set above");
+    for g in gaps {
+        if d.wants(g.page()) && !pyramid.answers(g.page()) && !pyramid.settled(g.page()) {
+            assert!(asked.contains(&g.page().subject()), "{g:?}");
         }
     }
+}
+
+/// The view is asked for out from its centre, one order for every layer:
+/// the page the ground nearest the centre is drawn from first, then the
+/// pyramid's top, then every page the view draws ground from nearest the
+/// centre first, and the pages held only for finer ground to fall back on
+/// last.
+#[test]
+fn the_view_is_asked_for_out_from_its_centre() {
+    let _serial = crate::global::serial();
+    let mut pyramid = Pyramid::<PoiPage>::default();
+    let d = the_domain();
+    let order: std::collections::HashMap<u64, Option<f64>> = d.pages().map(|(p, o)| (p.subject(), o)).collect();
+    let centre = d.pages().filter_map(|(p, o)| o.map(|o| (o, p))).min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, p)| p.subject());
+    pyramid.domain = Some(d);
+    let mut wants = pyramid.wants();
+    wants.sort_by(|a, b| a.1.class.cmp(&b.1.class).then(a.1.distance.total_cmp(&b.1.distance)));
+    assert_eq!(Some(wants[0].0), centre, "the page under the centre first");
+    let shell = |s: u64| {
+        let p = LevelPage::of_subject(s);
+        if Some(s) == centre {
+            0
+        } else if p.level == TOP_LEVEL {
+            1
+        } else if order[&s].is_some() {
+            2
+        } else {
+            3
+        }
+    };
+    let shells: Vec<u8> = wants.iter().map(|(s, _)| shell(*s)).collect();
+    assert!(shells.windows(2).all(|w| w[0] <= w[1]), "centre, top, drawn, fallback: {shells:?}");
+    let drawn: Vec<f64> = wants.iter().filter(|(s, _)| shell(*s) == 2).map(|(s, _)| order[s].expect("drawn")).collect();
+    assert!(drawn.windows(2).all(|w| w[0] <= w[1]), "drawn pages nearest the centre first");
 }
 
 /// The pinned page keeps its record through every page a view wants
@@ -288,26 +309,6 @@ fn a_count_folds_from_its_four_children_alone() {
     assert_eq!(folded.cells.iter().map(|c| c.count).sum::<u32>(), 8);
 }
 
-/// A stand-in too deep for the terrain opens its own branch a level under
-/// the ground it stands in for, and the stand-ins beside it stay drawn.
-#[test]
-fn a_stand_in_too_deep_opens_its_branch_and_not_its_neighbours() {
-    // The domain reads the terrain's and the objects' heights, which are
-    // globals.
-    let _serial = crate::global::serial();
-    let d = the_domain();
-    let t = drawn_by_rule(&d).into_iter().find(|c| c.level() >= 3).expect("ground drawn three levels over z16");
-    let [a, b, deep, gap] = t.children();
-    let cover = Cover {
-        drawn: [a, b].into_iter().chain(deep.children().iter().flat_map(|k| k.children())).collect(),
-        gaps: vec![gap],
-    };
-    let shown = crate::layer::terrain::present::mesh(cover, &d, |_| false);
-    assert!(shown.drawn.contains(&a) && shown.drawn.contains(&b), "the stand-ins beside it stay");
-    assert!(shown.gaps.contains(&deep) && shown.gaps.contains(&gap), "its own branch opens, and nothing wider");
-    assert!(!shown.gaps.contains(&t));
-}
-
 /// A page with a crowd over each of its children, so it settles none of them.
 fn crowded(p: LevelPage) -> PoiPage {
     let at = |k: LevelPage| POI_LATTICE.cell_base(k, 0, 0);
@@ -339,11 +340,12 @@ fn ground_a_page_settles_is_drawn_from_it_and_never_asked_for() {
     }
 }
 
-/// Where the finer pages have not come, the pages over them stand in: with
-/// only the wanted pages from some level up resident, every root's ground
-/// is drawn, once, and nothing is a gap.
+/// Every chunk the rule wants is drawn in its own place, never waiting on its
+/// siblings: from its page where that has come, and from the nearest page
+/// over it where it has not, so only the pages held from some level up draw
+/// the whole domain once, at the levels the rule wants, with no gap.
 #[test]
-fn ground_whose_page_has_not_come_is_stood_in_for_by_the_page_over_it() {
+fn ground_whose_page_has_not_come_is_drawn_in_its_place_from_the_page_over_it() {
     let _serial = crate::global::serial();
     let d = the_domain();
     let mut pyramid = Pyramid::<PoiPage>::default();
@@ -352,8 +354,13 @@ fn ground_whose_page_has_not_come_is_stood_in_for_by_the_page_over_it() {
     }
     let cover = pyramid.cover_of(&d);
     assert!(cover.gaps.is_empty(), "{} gaps", cover.gaps.len());
-    assert!(disjoint(&cover.drawn));
-    assert!(cover.drawn.iter().all(|c| c.level() >= 5));
-    let (_, whole) = ground_of(&d);
-    assert_eq!(cover.drawn.iter().map(|&c| area(c)).sum::<f64>(), whole);
+    let mut wanted = drawn_by_rule(&d);
+    let mut drawn = cover.drawn.clone();
+    wanted.sort_unstable();
+    drawn.sort_unstable();
+    assert_eq!(drawn, wanted, "the chunks the rule wants, each in its own place");
+    for &c in &cover.drawn {
+        let from = pyramid.drawn_from(c.page()).expect("drawn from a page");
+        assert!(from.level >= 5.max(c.level()), "{c:?} drawn from {from:?}");
+    }
 }

@@ -132,6 +132,13 @@ function cmdTsType(spec: CmdSpec, f: CmdField): string {
 /** A field as the shell writes it into a packet. */
 function cmdTsWrite(spec: CmdSpec, f: CmdField, value: string): string {
   const kind = cmdKind(spec, f.type);
+  if (f.list && kind === "number") {
+    // A list of numbers is one typed-array leaf, which the kernel reads where
+    // it lies (`get_array`).
+    const array = { u32: "Uint32Array", u64: "BigUint64Array", f64: "Float64Array" }[f.type as "u32" | "u64" | "f64"];
+    if (!array) throw new Error(`cmd.json: a list of ${f.type} (${f.name}) is not packed`);
+    return `.${f.type}_array(${array}.from(${value}))`;
+  }
   if (f.list || kind === "record") throw new Error(`cmd.json: the shell writes no ${f.list ? "list" : "record"} (${f.name})`);
   const method = kind === "number" ? f.type : kind === "bool" ? "bool" : kind === "str" ? "str" : "u32";
   return `.${method}(${value})`;
@@ -255,6 +262,7 @@ function cmdRsEnum(spec: CmdSpec, type: string): string {
 /** A field as the kernel reads it, from a packet the shell wrote. */
 function cmdRsReadType(spec: CmdSpec, f: CmdField): string {
   const kind = cmdKind(spec, f.type);
+  if (f.list && kind === "number") return `&'a [${f.type}]`;
   if (f.list || kind === "record") throw new Error(`cmd.json: the kernel reads no ${f.list ? "list" : "record"} (${f.name})`);
   const one = kind === "number" ? f.type : kind === "str" ? "&'a str" : kind === "bool" ? "bool" : cmdRsEnum(spec, f.type);
   return f.optional ? `Option<${one}>` : one;
@@ -263,6 +271,7 @@ function cmdRsReadType(spec: CmdSpec, f: CmdField): string {
 /** The expression that reads one field out of the cursor `c`. */
 function cmdRsReadOne(spec: CmdSpec, f: CmdField, c: string): string {
   const kind = cmdKind(spec, f.type);
+  if (f.list) return `${c}.get_array::<${f.type}>()?`;
   if (kind === "number") return f.type === "u64" ? `${c}.get_u64()?` : f.type === "f64" ? `${c}.get_number()?` : `${c}.get_number()? as ${f.type}`;
   if (kind === "bool") return `${c}.get_bool()?`;
   if (kind === "str") return `${c}.get_str_ref()?`;
@@ -374,7 +383,7 @@ function cmdRs(spec: CmdSpec): string {
   for (const c of cmdCommands(spec)) {
     const name = pascal(c.name);
     if (c.packet) {
-      const borrows = c.packet.some((f) => cmdKind(spec, f.type) === "str");
+      const borrows = c.packet.some((f) => f.list || cmdKind(spec, f.type) === "str");
       const lt = borrows ? "<'a>" : "";
       out.push("", `/// Command::${c.name}'s packet.`, "#[derive(Clone, Copy, Debug)]", `pub struct ${name}${lt} {`);
       for (const f of c.packet) out.push(...(f.doc ? rsDoc(f.doc, "    ") : []), `    pub ${f.name}: ${cmdRsReadType(spec, f)},`);
@@ -547,7 +556,7 @@ async function colorOutputs(): Promise<Output[]> {
     for (const [name, entry] of Object.entries(entries as Record<string, { hex: string; note?: string }>)) {
       if (!channel.entries.some((e) => "name" in e && e.name === name)) throw new Error(`color.json: ${ch}.${name} is no type cube_type.json has`);
       if (entry.note !== undefined) rs.push(`        // ${entry.note}`);
-      rs.push(`        cube_types::${ch}::${rsIdent(name)} => Some(Swatch::new(${JSON.stringify(entry.hex)}, ${rgbLiteral(entry.hex)})),`);
+      rs.push(`        cube_types::${ch}::${rsIdent(name)} => Some(Swatch::new(${rgbLiteral(entry.hex)})),`);
     }
     rs.push("        _ => None,", "    }", "}");
   }
@@ -1131,51 +1140,56 @@ async function publishedOutputs(): Promise<Output[]> {
   ];
 }
 
-// ---- the POI theme ----
+// ---- the POI badges ----
 //
 // The shell reads the table by a place's category key, which a search result
-// carries as text (the data spec above writes that). What the Rust reads is a
-// kind as the number a POI page carries it by, so it is written as one list in
-// the JSON's order: the bake numbers a place's category by it, and the kernel
-// draws a badge from it.
+// carries as text (the data spec below writes that). What the Rust reads is a
+// kind as the number a POI page carries it by, so it is written as lists in
+// the JSON's order, indexed alike: the categories, which the bake numbers a
+// place by, and the icons and colours, which the kernel draws a badge from —
+// apart, so a module that only draws carries no category name.
 
-interface PoiThemeSpec {
+interface PoiBadgeSpec {
   $doc: string[];
-  CATEGORY_THEME: Record<string, { icon: string; color: string } | string[]>;
-  DEFAULT_THEME: { icon: string; color: string };
+  CATEGORY_BADGE: Record<string, { icon: string; color: string } | string[]>;
+  DEFAULT_BADGE: { icon: string; color: string };
 }
 
-async function poiThemeOutputs(): Promise<Output[]> {
-  const json = "spec/pxl/spec/bake/poi_theme.json";
-  const spec = await readJson<PoiThemeSpec>(json);
-  const kinds = Object.entries(spec.CATEGORY_THEME).filter(([k]) => !k.startsWith("$")) as [string, { icon: string; color: string }][];
+async function poiBadgeOutputs(): Promise<Output[]> {
+  const json = "spec/pxl/spec/bake/poi_badge.json";
+  const spec = await readJson<PoiBadgeSpec>(json);
+  const kinds = Object.entries(spec.CATEGORY_BADGE).filter(([k]) => !k.startsWith("$")) as [string, { icon: string; color: string }][];
   // A kind is a byte on the wire, and 0 is none.
   if (kinds.length > 255) throw new Error(`${json}: ${kinds.length} kinds do not fit a byte beside none`);
-  const theme = (t: { icon: string; color: string }) => `PoiTheme { icon: ${JSON.stringify(t.icon)}, color: 0x${packed(t.color).toString(16).padStart(6, "0")}ff }`;
+  const color = (c: string) => `0x${packed(c).toString(16).padStart(6, "0")}ff`;
   const rs = [
-    "// pxl-spec/bake/poi_theme.spec.rs",
+    "// pxl-spec/bake/poi_badge.spec.rs",
     "//",
-    `// GENERATED by script/spec.ts from poi_theme.json — do not edit.`,
+    `// GENERATED by script/spec.ts from poi_badge.json — do not edit.`,
     "//",
     ...spec.$doc.map((l) => (l === "" ? "//" : `// ${l}`)),
     "",
-    "/// How a kind of place is drawn: its icon, an emoji, and its colour as",
-    "/// `0xRRGGBBAA`.",
-    "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
-    "pub struct PoiTheme {",
-    "    pub icon: &'static str,",
-    "    pub color: u32,",
-    "}",
-    "",
-    "/// Every kind by its key, kind k at `KINDS[k - 1]`.",
-    `pub const KINDS: [(&str, PoiTheme); ${kinds.length}] = [`,
-    ...kinds.map(([k, t]) => `    (${JSON.stringify(k)}, ${theme(t)}),`),
+    "/// Each kind's category, kind k at `KIND_CATEGORIES[k - 1]`: what the bake",
+    "/// numbers a place by. The kernel reads none of it.",
+    `pub const KIND_CATEGORIES: [&str; ${kinds.length}] = [`,
+    ...kinds.map(([k]) => `    ${JSON.stringify(k)},`),
     "];",
     "",
-    "/// A place of no kind the table names.",
-    `pub const DEFAULT_THEME: PoiTheme = ${theme(spec.DEFAULT_THEME)};`,
+    "/// Each kind's badge icon, an emoji, kind k at `KIND_ICONS[k - 1]`.",
+    `pub const KIND_ICONS: [&str; ${kinds.length}] = [`,
+    ...kinds.map(([, b]) => `    ${JSON.stringify(b.icon)},`),
+    "];",
+    "",
+    "/// Each kind's badge colour as `0xRRGGBBAA`, kind k at `KIND_COLORS[k - 1]`.",
+    `pub const KIND_COLORS: [u32; ${kinds.length}] = [`,
+    ...kinds.map(([, b]) => `    ${color(b.color)},`),
+    "];",
+    "",
+    "/// The badge of a place of no kind the table names.",
+    `pub const DEFAULT_ICON: &str = ${JSON.stringify(spec.DEFAULT_BADGE.icon)};`,
+    `pub const DEFAULT_COLOR: u32 = ${color(spec.DEFAULT_BADGE.color)};`,
   ];
-  return [{ path: "crates/pxl/spec/src/bake/poi_theme.spec.rs", text: rs.join("\n") + "\n" }];
+  return [{ path: "crates/pxl/spec/src/bake/poi_badge.spec.rs", text: rs.join("\n") + "\n" }];
 }
 
 // ---- data specs ----
@@ -1208,7 +1222,7 @@ type DataSpec = { $doc?: string[]; $ts?: string; $rs?: string; $tsHeader?: strin
 /** `enums` may instead list the top-level lists of names that are enums, for
  * a spec whose other tables are structures and not sets. */
 const DATA_SPECS: { json: string; ts?: string; rs?: string; mod?: string; enums?: true | string[]; tsNames?: string[] }[] = [
-  { json: "spec/pxl/spec/bake/poi_theme.json", ts: "apps/web/src/feature/search/poi_theme.spec.ts" },
+  { json: "spec/pxl/spec/bake/poi_badge.json", ts: "apps/web/src/feature/search/poi_badge.spec.ts" },
   {
     json: "spec/pxl/web/kernel/layer/character/variant.json",
     ts: "apps/web/src/feature/character/variant.spec.ts",
@@ -1667,7 +1681,6 @@ async function settingOutputs(): Promise<Output[]> {
   const defaultOf = (n: DataNode) => (isLeafWrapper(n) ? n.$value : n);
   const choices = [...new Set(settings.filter(([, s]) => s.kind === "choice").map(([, s]) => s.options!))];
   const dev = (s: SettingSpec) => s.dev === true;
-  const cfg = '#[cfg(feature = "dev")]';
 
   // ---- Rust ----
   const rs = ["// pxl-kernel/shell/setting/schema.spec.rs", "//", `// GENERATED by script/spec.ts from ${json.split("/").pop()} — do not edit.`, "//"];
@@ -1683,13 +1696,6 @@ async function settingOutputs(): Promise<Output[]> {
       "    /// The option an index names, or none for an index past the list.",
       `    pub fn of(index: u32) -> Option<${e}> {`,
       `        ${e}::ALL.get(index as usize).copied()`,
-      "    }",
-      "",
-      "    /// The name storage keeps it under.",
-      "    pub fn name(self) -> &'static str {",
-      "        match self {",
-      ...values.map((v) => `            ${e}::${rsIdent(v)} => ${JSON.stringify(v)},`),
-      "        }",
       "    }",
       "}",
     );
@@ -1725,36 +1731,6 @@ async function settingOutputs(): Promise<Output[]> {
     "    /// Read by a chunk's build, so a change builds the chunks again.",
     "    pub fn sources_chunks(self) -> bool {",
     `        ${keysWhere((s) => s.sources_chunks === true)}`,
-    "    }",
-    "",
-    "    /// The name storage keeps it under, or none where this module does not",
-    "    /// name it.",
-    "    pub fn name(self) -> Option<&'static str> {",
-    "        match self {",
-    ...settings.flatMap(([k, s]) => [...(dev(s) ? [`            ${cfg}`] : []), `            SettingKey::${k} => Some(${JSON.stringify(k)}),`]),
-    ...(settings.some(([, s]) => dev(s)) ? ["            #[allow(unreachable_patterns)]", "            _ => None,"] : []),
-    "        }",
-    "    }",
-    "",
-    "    /// A choice's option by its index, as storage names it.",
-    "    pub fn option_name(self, index: u32) -> Option<&'static str> {",
-    "        match self {",
-    ...settings.filter(([, s]) => s.kind === "choice").flatMap((
-      [k, s],
-    ) => [...(dev(s) ? [`            ${cfg}`] : []), `            SettingKey::${k} => ${enumName(s.options!)}::of(index).map(${enumName(s.options!)}::name),`]),
-    "            _ => None,",
-    "        }",
-    "    }",
-    "",
-    "    /// A choice's option by the name storage keeps it under, as its index.",
-    "    pub fn option_index(self, name: &str) -> Option<u32> {",
-    "        match self {",
-    ...settings.filter(([, s]) => s.kind === "choice").flatMap(([k, s]) => [
-      ...(dev(s) ? [`            ${cfg}`] : []),
-      `            SettingKey::${k} => ${enumName(s.options!)}::ALL.into_iter().find(|o| o.name() == name).map(|o| o as u32),`,
-    ]),
-    "            _ => None,",
-    "        }",
     "    }",
     "}",
   );
@@ -1835,7 +1811,7 @@ const GENERATORS: (() => Promise<Output[]>)[] = [
   cubeTypeOutputs,
   decorOutputs,
   publishedOutputs,
-  poiThemeOutputs,
+  poiBadgeOutputs,
   dataOutputs,
   routeOutputs,
 ];

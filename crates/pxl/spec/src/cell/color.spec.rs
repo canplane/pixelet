@@ -22,7 +22,7 @@ use super::r#type::Swatch;
 pub const fn common(t: u8) -> Option<Swatch> {
     match t {
         // A cell whose data is missing or invalid, a visible neutral grey so it reads as not known rather than as whatever drew last.
-        cube_types::common::unknown => Some(Swatch::new("#D9D0CC", 0xd9d0cc)),
+        cube_types::common::unknown => Some(Swatch::new(0xd9d0cc)),
         _ => None,
     }
 }
@@ -30,20 +30,20 @@ pub const fn common(t: u8) -> Option<Swatch> {
 /// `land`'s colour for a type, by its number.
 pub const fn land(t: u8) -> Option<Swatch> {
     match t {
-        cube_types::land::bare => Some(Swatch::new("#EEE5DC", 0xeee5dc)),
-        cube_types::land::sea => Some(Swatch::new("#AAD3DF", 0xaad3df)),
-        cube_types::land::green_deep => Some(Swatch::new("#ADD19E", 0xadd19e)),
-        cube_types::land::green_light => Some(Swatch::new("#C8FACC", 0xc8facc)),
-        cube_types::land::sand => Some(Swatch::new("#F5E9C6", 0xf5e9c6)),
-        cube_types::land::residential => Some(Swatch::new("#E0DFDF", 0xe0dfdf)),
-        cube_types::land::commercial => Some(Swatch::new("#F2DAD9", 0xf2dad9)),
-        cube_types::land::industrial => Some(Swatch::new("#EBDBE8", 0xebdbe8)),
-        cube_types::land::sports => Some(Swatch::new("#88E0BE", 0x88e0be)),
-        cube_types::land::education => Some(Swatch::new("#FFFFE5", 0xffffe5)),
-        cube_types::land::medical => Some(Swatch::new("#FFFFE5", 0xffffe5)),
-        cube_types::land::public => Some(Swatch::new("#FFFFE5", 0xffffe5)),
-        cube_types::land::apron => Some(Swatch::new("#DADAE0", 0xdadae0)),
-        cube_types::land::helipad => Some(Swatch::new("#BBBBCC", 0xbbbbcc)),
+        cube_types::land::bare => Some(Swatch::new(0xeee5dc)),
+        cube_types::land::sea => Some(Swatch::new(0xaad3df)),
+        cube_types::land::green_deep => Some(Swatch::new(0xadd19e)),
+        cube_types::land::green_light => Some(Swatch::new(0xc8facc)),
+        cube_types::land::sand => Some(Swatch::new(0xf5e9c6)),
+        cube_types::land::residential => Some(Swatch::new(0xe0dfdf)),
+        cube_types::land::commercial => Some(Swatch::new(0xf2dad9)),
+        cube_types::land::industrial => Some(Swatch::new(0xebdbe8)),
+        cube_types::land::sports => Some(Swatch::new(0x88e0be)),
+        cube_types::land::education => Some(Swatch::new(0xffffe5)),
+        cube_types::land::medical => Some(Swatch::new(0xffffe5)),
+        cube_types::land::public => Some(Swatch::new(0xffffe5)),
+        cube_types::land::apron => Some(Swatch::new(0xdadae0)),
+        cube_types::land::helipad => Some(Swatch::new(0xbbbbcc)),
         _ => None,
     }
 }
@@ -51,9 +51,9 @@ pub const fn land(t: u8) -> Option<Swatch> {
 /// `water`'s colour for a type, by its number.
 pub const fn water(t: u8) -> Option<Swatch> {
     match t {
-        cube_types::water::river => Some(Swatch::new("#AAD3DF", 0xaad3df)),
-        cube_types::water::lake => Some(Swatch::new("#AAD3DF", 0xaad3df)),
-        cube_types::water::wetland => Some(Swatch::new("#AAD3DF", 0xaad3df)),
+        cube_types::water::river => Some(Swatch::new(0xaad3df)),
+        cube_types::water::lake => Some(Swatch::new(0xaad3df)),
+        cube_types::water::wetland => Some(Swatch::new(0xaad3df)),
         _ => None,
     }
 }
@@ -61,11 +61,11 @@ pub const fn water(t: u8) -> Option<Swatch> {
 /// `structure`'s colour for a type, by its number.
 pub const fn structure(t: u8) -> Option<Swatch> {
     match t {
-        cube_types::structure::building => Some(Swatch::new("#D9D0C9", 0xd9d0c9)),
-        cube_types::structure::building_station => Some(Swatch::new("#C4B6AB", 0xc4b6ab)),
-        cube_types::structure::building_medical => Some(Swatch::new("#D9D0C9", 0xd9d0c9)),
-        cube_types::structure::building_education => Some(Swatch::new("#D9D0C9", 0xd9d0c9)),
-        cube_types::structure::building_public => Some(Swatch::new("#D9D0C9", 0xd9d0c9)),
+        cube_types::structure::building => Some(Swatch::new(0xd9d0c9)),
+        cube_types::structure::building_station => Some(Swatch::new(0xc4b6ab)),
+        cube_types::structure::building_medical => Some(Swatch::new(0xd9d0c9)),
+        cube_types::structure::building_education => Some(Swatch::new(0xd9d0c9)),
+        cube_types::structure::building_public => Some(Swatch::new(0xd9d0c9)),
         _ => None,
     }
 }
@@ -73,16 +73,16 @@ pub const fn structure(t: u8) -> Option<Swatch> {
 /// `transport`'s colour for a type, by its number.
 pub const fn transport(t: u8) -> Option<Swatch> {
     match t {
-        cube_types::transport::road_default => Some(Swatch::new("#FFFFFF", 0xffffff)),
-        cube_types::transport::road_motorway => Some(Swatch::new("#E892A2", 0xe892a2)),
-        cube_types::transport::road_primary => Some(Swatch::new("#FCD6A4", 0xfcd6a4)),
-        cube_types::transport::road_secondary => Some(Swatch::new("#F7FABF", 0xf7fabf)),
-        cube_types::transport::pedestrian => Some(Swatch::new("#DDDDE8", 0xdddde8)),
-        cube_types::transport::parking => Some(Swatch::new("#EEEEEE", 0xeeeeee)),
-        cube_types::transport::rail_main => Some(Swatch::new("#707070", 0x707070)),
-        cube_types::transport::rail_subway => Some(Swatch::new("#999999", 0x999999)),
-        cube_types::transport::runway => Some(Swatch::new("#BBBBCC", 0xbbbbcc)),
-        cube_types::transport::taxiway => Some(Swatch::new("#BBBBCC", 0xbbbbcc)),
+        cube_types::transport::road_default => Some(Swatch::new(0xffffff)),
+        cube_types::transport::road_motorway => Some(Swatch::new(0xe892a2)),
+        cube_types::transport::road_primary => Some(Swatch::new(0xfcd6a4)),
+        cube_types::transport::road_secondary => Some(Swatch::new(0xf7fabf)),
+        cube_types::transport::pedestrian => Some(Swatch::new(0xdddde8)),
+        cube_types::transport::parking => Some(Swatch::new(0xeeeeee)),
+        cube_types::transport::rail_main => Some(Swatch::new(0x707070)),
+        cube_types::transport::rail_subway => Some(Swatch::new(0x999999)),
+        cube_types::transport::runway => Some(Swatch::new(0xbbbbcc)),
+        cube_types::transport::taxiway => Some(Swatch::new(0xbbbbcc)),
         _ => None,
     }
 }
@@ -90,21 +90,21 @@ pub const fn transport(t: u8) -> Option<Swatch> {
 /// `block`'s colour for a type, by its number.
 pub const fn block(t: u8) -> Option<Swatch> {
     match t {
-        cube_types::block::white => Some(Swatch::new("#f7f7f7", 0xf7f7f7)),
-        cube_types::block::grey => Some(Swatch::new("#8d8d8d", 0x8d8d8d)),
-        cube_types::block::dark_grey => Some(Swatch::new("#3f3f3f", 0x3f3f3f)),
-        cube_types::block::black => Some(Swatch::new("#191919", 0x191919)),
-        cube_types::block::red => Some(Swatch::new("#b01313", 0xb01313)),
-        cube_types::block::pink => Some(Swatch::new("#ff8787", 0xff8787)),
-        cube_types::block::brown => Some(Swatch::new("#572b00", 0x572b00)),
-        cube_types::block::orange => Some(Swatch::new("#d44e14", 0xd44e14)),
-        cube_types::block::yellow => Some(Swatch::new("#ffe611", 0xffe611)),
-        cube_types::block::green => Some(Swatch::new("#60dc1e", 0x60dc1e)),
-        cube_types::block::dark_green => Some(Swatch::new("#206700", 0x206700)),
-        cube_types::block::cyan => Some(Swatch::new("#008c94", 0x008c94)),
-        cube_types::block::blue => Some(Swatch::new("#004791", 0x004791)),
-        cube_types::block::violet => Some(Swatch::new("#57039f", 0x57039f)),
-        cube_types::block::magenta => Some(Swatch::new("#c9036d", 0xc9036d)),
+        cube_types::block::white => Some(Swatch::new(0xf7f7f7)),
+        cube_types::block::grey => Some(Swatch::new(0x8d8d8d)),
+        cube_types::block::dark_grey => Some(Swatch::new(0x3f3f3f)),
+        cube_types::block::black => Some(Swatch::new(0x191919)),
+        cube_types::block::red => Some(Swatch::new(0xb01313)),
+        cube_types::block::pink => Some(Swatch::new(0xff8787)),
+        cube_types::block::brown => Some(Swatch::new(0x572b00)),
+        cube_types::block::orange => Some(Swatch::new(0xd44e14)),
+        cube_types::block::yellow => Some(Swatch::new(0xffe611)),
+        cube_types::block::green => Some(Swatch::new(0x60dc1e)),
+        cube_types::block::dark_green => Some(Swatch::new(0x206700)),
+        cube_types::block::cyan => Some(Swatch::new(0x008c94)),
+        cube_types::block::blue => Some(Swatch::new(0x004791)),
+        cube_types::block::violet => Some(Swatch::new(0x57039f)),
+        cube_types::block::magenta => Some(Swatch::new(0xc9036d)),
         _ => None,
     }
 }

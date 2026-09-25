@@ -11,7 +11,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/s
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { Command, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_snapshot } from "@/kernel/shell.ts";
-import { resolvePoiTheme } from "@/feature/search/poi-theme.ts";
+import { resolvePoiBadge } from "@/feature/search/poi-badge.ts";
 import { assembleLabel } from "@/feature/map/geocode/label.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
 
@@ -278,8 +278,8 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
 
           {poiResults.length > 0 && <SectionHeader label={t("map.search.section_places")} />}
           {poiResults.map((r) => {
-            // poi-theme.ts says why an emoji beats a Lucide glyph at this size.
-            const theme = resolvePoiTheme(r.category);
+            // poi-badge.ts says why an emoji beats a Lucide glyph at this size.
+            const badge = resolvePoiBadge(r.category);
             return (
               <button
                 key={r.gers_id}
@@ -289,9 +289,9 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
               >
                 <span
                   className="w-6 h-6 rounded-full flex items-center justify-center text-[13px] shrink-0"
-                  style={{ backgroundColor: `${theme.color}33` }}
+                  style={{ backgroundColor: `${badge.color}33` }}
                 >
-                  {theme.icon}
+                  {badge.icon}
                 </span>
                 {
                   /* flex-1, or the column sizes to its own text and SubtitleRow's

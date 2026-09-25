@@ -485,15 +485,18 @@ export interface WorldCreate {
   orientation: boolean;
   /** iOS 13+'s gate: requestPermission exists and must run inside a gesture. */
   orientation_permission: boolean;
-  /** The settings as stored, empty for none: a row a setting, far under a slot. */
-  settings: string;
+  /** The settings as storage kept them, a value a setting in SettingKey's order as the
+   * snapshot carries them, 0xffffffff for one it kept nothing for. */
+  settings: u32[];
   /** The objects as stored, held as a body (host.json's BODY_READ), 0 for none. */
   objects: u32;
   objects_bytes: u32;
 }
 
 export function encode_world_create(p: WorldCreate): U8Array {
-  return packet((b) => b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).str(p.settings).u32(p.objects).u32(p.objects_bytes));
+  return packet((b) =>
+    b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).u32_array(Uint32Array.from(p.settings)).u32(p.objects).u32(p.objects_bytes)
+  );
 }
 
 /** Command.WORLD_UPDATE's packet. */

@@ -122,7 +122,10 @@ export const FRAME = {
   turn_stage_ms: 117 as number,
   turn_step_ms: 118 as number,
   turn_step_name: 119 as number,
-  WORDS: 120 as number,
+  cover_rule: 120 as number,
+  cover_drawn: 121 as number,
+  cover_gaps: 122 as number,
+  WORDS: 123 as number,
 } as const;
 
 /** What each of the report's lines prints of a frame, FRAME's lanes in groups: a lane's label is its name without the group's prefix, and every lane is in one group (lane.test.ts), so a lane the kernel adds is printed without a word written for it. The order is what a reader asks in turn — where the time went, what was drawn, what the chunk scheduler is doing, what it built and fetched, and what it all holds — and the report and the panel both follow it. */
@@ -138,6 +141,7 @@ export const FRAME_GROUPS = {
   work: ["work_scans", "work_bakes", "work_fine_peak", "work_coarse_peak"],
   q: ["q_terrain", "q_poi"],
   pages: ["pages_total", "pages_by_level", "pages_poi"],
+  cover: ["cover_rule", "cover_drawn", "cover_gaps"],
   device: ["buffers", "buffer_mb", "arena_mb", "tex_depth_mb", "tex_shadow_mb", "tex_layers_mb"],
   heap: ["heap_used_mb", "heap_live_mb", "heap_run_mb", "heap_slot_mb", "heap_range_mb", "heap_refusals", "heap_largest_free_mb"],
   ring: ["ring_cq_peak", "ring_spill_peak"],
@@ -164,9 +168,9 @@ export const TASK = {
 /** One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0. */
 export const WORST = {
   sample: 0 as number,
-  has_prev: 120 as number,
-  prev: 121 as number,
-  WORDS: 241 as number,
+  has_prev: 123 as number,
+  prev: 124 as number,
+  WORDS: 247 as number,
 } as const;
 
 export const SPREAD = {
@@ -241,15 +245,15 @@ export const SUMMARY = {
     census: 71 as number,
     level_tris: 91 as number,
     last: 102 as number,
-    WORDS: 222 as number,
+    WORDS: 225 as number,
   },
   tasks: {
-    AT: 227 as number,
+    AT: 230 as number,
     slots: 0 as number,
     WORDS: 150 as number,
   },
   counters: {
-    AT: 377 as number,
+    AT: 380 as number,
     faces_kept: 0 as number,
     faces_possible: 1 as number,
     runs_culled: 2 as number,
@@ -268,7 +272,7 @@ export const SUMMARY = {
     WORDS: 15 as number,
   },
   atlas: {
-    AT: 392 as number,
+    AT: 395 as number,
     size: 0 as number,
     entries: 1 as number,
     shelves: 2 as number,
@@ -276,7 +280,7 @@ export const SUMMARY = {
     WORDS: 4 as number,
   },
   retain: {
-    AT: 396 as number,
+    AT: 399 as number,
     run_sets: 0 as number,
     run_set_mb: 1 as number,
     tiers: 2 as number,
@@ -288,14 +292,14 @@ export const SUMMARY = {
     WORDS: 8 as number,
   },
   fetch: {
-    AT: 404 as number,
+    AT: 407 as number,
     queued: 0 as number,
     running: 1 as number,
     credits: 2 as number,
     WORDS: 3 as number,
   },
   peak: {
-    AT: 407 as number,
+    AT: 410 as number,
     present: 0 as number,
     dt_ms: 1 as number,
     sched_ms: 2 as number,
@@ -319,12 +323,12 @@ export const SUMMARY = {
     WORDS: 20 as number,
   },
   steps: {
-    AT: 427 as number,
+    AT: 430 as number,
     count: 0 as number,
     slots: 1 as number,
     WORDS: 161 as number,
   },
-  WORDS: 588 as number,
+  WORDS: 591 as number,
 } as const;
 
 /** What `ledger_read` returns the address of: u32 words, each range's address in the module's memory and its record count. */

@@ -91,7 +91,7 @@ impl Layer for Terrain {
 
     /// What the mesh can draw of the cover (present.rs).
     fn present(cover: Cover, d: &Domain, pyramid: &Pyramid<Terrain>) -> Cover {
-        crate::layer::terrain::present::mesh(cover, d, |c| pyramid.get(c.page()).is_some())
+        crate::layer::terrain::present::mesh(cover, d, |c| pyramid.drawn_from(c.page()).is_some())
     }
 
     /// A leaf is what a map centre that could not be grounded before may be
@@ -100,6 +100,9 @@ impl Layer for Terrain {
     /// whose page has gone leaves it.
     fn changed(p: LevelPage, present: bool) {
         crate::layer::terrain::relief::page_changed(p, Terrain::pyramid().get(p));
+        // A chunk is read from its own page or the nearest one over it, so a
+        // page coming or going changes what some are read from.
+        crate::world::chunk::source::chunk_sources_changed();
         if p.level == 0 && present {
             reground_map_center();
         }

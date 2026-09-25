@@ -35,14 +35,14 @@
 //! reasoning for it should not have to be recovered from a linker map.
 //!
 //! Where each lands, at the two memories the shell reserves. Everything but
-//! the heap is the same on both: the terrain is what the level rings hold,
+//! the heap is the same on both: the terrain is what a view can hold,
 //! not a share of what the device happens to have.
 //!
 //! ```text
 //!              offset         end            phone        desktop
 //!   module     0              ~32.7 MiB      the linker's
-//!   .fixed     ~32.7 MiB      ~102.6 MiB     69.87 MiB    69.87 MiB
-//!   heap       ~102.6 MiB     —              409.40 MiB   921.40 MiB
+//!   .fixed     ~32.7 MiB      ~64.4 MiB      31.69 MiB    31.69 MiB
+//!   heap       ~64.4 MiB      —              447.61 MiB   959.61 MiB
 //! ```
 //!
 //! What everything in front of the heap is checked against is MIN_HEAP_BYTES —
@@ -118,10 +118,9 @@ pub fn heap_at(data_end: u32) -> u32 {
 pub fn lay_out(bytes: u32, data_end: u32) -> Map {
     let regions = bytes / REGION_BYTES;
     let heap = heap_at(data_end);
-    assert!(
-        heap + MIN_HEAP_BYTES <= regions * REGION_BYTES,
-        "what is fixed in this memory leaves the heap less than it is budgeted: {FIXED_BYTES} bytes of fixed ranges past {data_end}, and the heap begins at {heap}"
-    );
+    // What is fixed in this memory leaves the heap less than it is budgeted:
+    // where the heap began, against the memory the device gave.
+    xpute_core::ensure!(heap + MIN_HEAP_BYTES <= regions * REGION_BYTES, ENOMEM, heap, bytes);
     Map {
         fixed: Section {
             offset: fixed_at(data_end),

@@ -1,6 +1,6 @@
-// @pxl/web/feature/search/poi-theme.ts
+// @pxl/web/feature/search/poi-badge.ts
 
-import { CATEGORY_THEME, DEFAULT_THEME } from "./poi_theme.spec.ts";
+import { CATEGORY_BADGE, DEFAULT_BADGE } from "./poi_badge.spec.ts";
 
 /**
  * Category -> icon/color lookup for a place in the search results, so a
@@ -9,7 +9,7 @@ import { CATEGORY_THEME, DEFAULT_THEME } from "./poi_theme.spec.ts";
  * Keyed off a result's category (pxl-geo-spec overture/properties.rs's
  * `category_of()`, which
  * maps Overture's `categories.primary` through OVERTURE_CATEGORY_MAP into
- * this table's own vocabulary), falling back to DEFAULT_THEME for anything
+ * this table's own vocabulary), falling back to DEFAULT_BADGE for anything
  * not explicitly listed rather than guessing a mapping.
  *
  * `icon` is a plain emoji — tried swapping these for tinted Lucide glyphs
@@ -19,11 +19,11 @@ import { CATEGORY_THEME, DEFAULT_THEME } from "./poi_theme.spec.ts";
  * weight, tried thickening it first) was the real problem.
  */
 
-export interface PoiTheme {
+export interface PoiBadge {
   icon: string;
   color: string;
 }
 
-export function resolvePoiTheme(category: string): PoiTheme {
-  return (CATEGORY_THEME as Record<string, PoiTheme>)[category] ?? DEFAULT_THEME;
+export function resolvePoiBadge(category: string): PoiBadge {
+  return (CATEGORY_BADGE as Record<string, PoiBadge>)[category] ?? DEFAULT_BADGE;
 }

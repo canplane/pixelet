@@ -869,8 +869,9 @@ pub struct WorldCreate<'a> {
     pub orientation: bool,
     /// iOS 13+'s gate: requestPermission exists and must run inside a gesture.
     pub orientation_permission: bool,
-    /// The settings as stored, empty for none: a row a setting, far under a slot.
-    pub settings: &'a str,
+    /// The settings as storage kept them, a value a setting in SettingKey's order as the
+    /// snapshot carries them, 0xffffffff for one it kept nothing for.
+    pub settings: &'a [u32],
     /// The objects as stored, held as a body (host.json's BODY_READ), 0 for none.
     pub objects: u32,
     pub objects_bytes: u32,
@@ -885,7 +886,7 @@ impl<'a> WorldCreate<'a> {
             geolocation: f.at(2)?.get_bool()?,
             orientation: f.at(3)?.get_bool()?,
             orientation_permission: f.at(4)?.get_bool()?,
-            settings: f.at(5)?.get_str_ref()?,
+            settings: f.at(5)?.get_array::<u32>()?,
             objects: f.at(6)?.get_number()? as u32,
             objects_bytes: f.at(7)?.get_number()? as u32,
         })

@@ -31,9 +31,12 @@ const ELE_CELL_STEP: f64 = PAGE_CELLS as f64 / PAGE_ELE_SPAN as f64;
 /// - keeps the hot path allocation-free
 /// - uses an unclamped fast path for the common interior case
 /// - falls back to clamped sampling near tile boundaries
-fn sample_ele_bicubic(page_ele: &[i16], tx: i32, ty: i32) -> i16 {
-    let sx = (tx as f64 + 0.5) / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
-    let sy = (ty as f64 + 0.5) / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
+///
+/// `tx`/`ty` are a point in texels, continuous: a cell's centre is its
+/// index and a half.
+fn sample_ele_bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
+    let sx = tx / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
+    let sy = ty / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
 
     let sx0 = sx.floor() as i32;
     let sy0 = sy.floor() as i32;
@@ -82,7 +85,7 @@ fn sample_ele_bicubic(page_ele: &[i16], tx: i32, ty: i32) -> i16 {
 /// page has a height here, which is what lets a chunk at the page's edge
 /// read the ground its neighbour stands on.
 pub fn sample_ele(page_ele: &[i16], tx: i32, ty: i32) -> i16 {
-    sample_ele_bicubic(page_ele, tx, ty)
+    sample_ele_bicubic(page_ele, tx as f64 + 0.5, ty as f64 + 0.5)
 }
 
 /// One page's ground cells, however the caller holds them: a page's own
@@ -130,8 +133,15 @@ impl<'a> GroundLanes<'a> {
 /// policy is not whole, and it is written here rather than left for each
 /// caller to discover.
 pub fn ground_ele(page_ele: &[i16], ground: Option<GroundLanes>, tx: i32, ty: i32) -> i16 {
-    let ele = sample_ele(page_ele, tx, ty);
-    ground.map_or(ele, |g| ele - g.recess(GROUND.cell_index(tx as u32, ty as u32) as usize))
+    ground_ele_at(page_ele, ground, tx as f64 + 0.5, ty as f64 + 0.5)
+}
+
+/// `ground_ele` at a point in texels rather than a cell's centre: where a
+/// finer cell read from this page stands, its height the surface's there
+/// and its recess the page cell's it lies in.
+pub fn ground_ele_at(page_ele: &[i16], ground: Option<GroundLanes>, tx: f64, ty: f64) -> i16 {
+    let ele = sample_ele_bicubic(page_ele, tx, ty);
+    ground.map_or(ele, |g| ele - g.recess(GROUND.cell_index(tx.floor() as u32, ty.floor() as u32) as usize))
 }
 
 #[cfg(test)]

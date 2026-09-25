@@ -358,6 +358,19 @@ impl Cell {
         [lane(pvf3::X(&outer), pvf3::X(&inner_base)), lane(pvf3::Y(&outer), pvf3::Y(&inner_base))]
     }
 
+    /// Where this cell lies in the page `levels` above it, in its own sides:
+    /// how many of them its corner is from that page's corner, east and
+    /// north. A chunk whose page has not come is read from a page over it
+    /// (pxl-render mesh/paint/terrain/adapter.rs `ChunkSample::read`), each
+    /// of that page's cells standing for a block of its own.
+    pub fn in_page_above(self, levels: u32) -> [i64; 2] {
+        let up = self.up(levels);
+        let [ax, ay] = up.in_page();
+        let n = self.scale().count_in(up.scale()) as i64;
+        let [ox, oy] = up.offset_of(self);
+        [ax as i64 * n + ox as i64, ay as i64 * n + oy as i64]
+    }
+
     /// The `lattice`'s level-`level` cell `offset` of its own sides from this
     /// cell's corner: `offset_of`'s inverse.
     pub fn inner_at(self, lattice: Lattice, level: u32, offset: [u32; 2]) -> Cell {

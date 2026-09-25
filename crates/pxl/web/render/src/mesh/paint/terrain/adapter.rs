@@ -24,7 +24,7 @@ use pxl_spec::bake::pack::{unpack, GroundCell};
 use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
 
 use crate::mesh::paint::palette::shader_meta::{ground_color_lookup, ground_layer_index_lookup};
-use crate::mesh::paint::terrain::elevation::{ground_ele, GroundLanes};
+use crate::mesh::paint::terrain::elevation::{ground_ele_at, GroundLanes};
 use crate::mesh::volume::{MaterialClasses, Volumes, Voxel, NO_LAYER};
 use crate::mesh::voxel_scan::{apron_col, APRON, COL_SPAN};
 use std::sync::LazyLock;
@@ -148,9 +148,15 @@ impl Default for ChunkSample {
 }
 
 impl ChunkSample {
-    /// Samples the chunk at page cell (tx0, ty0). A channel in `hidden` is
+    /// Samples the chunk whose first cell is `origin` of its own cells from
+    /// `page`'s corner, a page cell standing for `n` × `n` of them: 1 where
+    /// the page is the chunk's own, more where it is a page over it read in
+    /// the chunk's place until its own comes. Each cell takes the material of
+    /// the page cell it lies in and the height of the page's surface at its
+    /// own centre, so a chunk read from a coarser page is that page's ground
+    /// at the chunk's step and nothing invented. A channel in `hidden` is
     /// stepped over, as `shown_ground` steps over it.
-    pub fn read(&mut self, page: &PageView, tx0: u32, ty0: u32, hidden: ChannelMask) {
+    pub fn read(&mut self, page: &PageView, origin: [i64; 2], n: u32, hidden: ChannelMask) {
         let tables = &*MATERIALS;
         let skip = GROUND_CH_KEYS.map(|k| hidden & channel_bit(k) != 0);
         let mut min_ele = i32::MAX;
@@ -160,7 +166,8 @@ impl ChunkSample {
                 let i = (py * COL_SPAN + px) as usize;
                 let own = APRON..COL_SPAN - APRON;
                 let inner = own.contains(&px) && own.contains(&py);
-                let (tx, ty) = (tx0 as i32 + px as i32 - APRON as i32, ty0 as i32 + py as i32 - APRON as i32);
+                let (x, y) = (origin[0] + px as i64 - APRON as i64, origin[1] + py as i64 - APRON as i64);
+                let (tx, ty) = (x.div_euclid(n as i64) as i32, y.div_euclid(n as i64) as i32);
                 // The ground channels are the page's own span; only the
                 // elevation is padded past it. An apron cell outside the
                 // page keeps the height — which is all the face mask reads
@@ -193,7 +200,8 @@ impl ChunkSample {
                 // all (elevation.rs's ground_ele). An apron cell off the page
                 // has no channels to judge by and takes the raw height.
                 let lanes = on_page.then_some(GroundLanes { cells: page.cells });
-                let ele = ground_ele(page.ele, lanes, tx, ty) as i32;
+                let centre = |v: i64| (v as f64 + 0.5) / n as f64;
+                let ele = ground_ele_at(page.ele, lanes, centre(x), centre(y)) as i32;
                 self.ele[i] = ele as i16;
                 // The floor is the chunk's own: an apron column is written
                 // from it, and a neighbour's valley must not drop it.

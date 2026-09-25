@@ -6,7 +6,6 @@
 //! gpu/renderer.rs) then draws the scheduler's lists. In the report phase it
 //! hands the frame's numbers to the ledger.
 
-use pxl_render::look::lod::set_lod_projection;
 use pxl_spec::space::pvf3::ivec;
 use xpute_core::math::scalar::round;
 use xpute_runtime::sched::edge::{notified, yield_if_spent};
@@ -17,7 +16,7 @@ use crate::io::sched::pending_count;
 use crate::kernel::{kernel, with_world};
 use crate::layer::environment::state::globe;
 use crate::sched::ledger::record::{
-    ledger_record_frame, ledger_take_rings, CapSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample, LEVELS,
+    ledger_record_frame, ledger_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample, LEVELS,
 };
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
@@ -144,12 +143,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
     let c = core_tick();
     c.visible_pass = None;
     view_resize(ctx.state.width, ctx.state.height);
-    // The tier criterion is a screen-space one (crates/pxl/web/render/src/look/lod.rs), and the
-    // other layers that read it read it from here; the scheduler takes the same
-    // projection through the frame, and its pressure — the byte budget paid in
-    // LOD — comes back through the census.
     let v = view();
-    set_lod_projection(v.height, v.fov, kernel().sched.census.pressure);
 
     let origin = v.origin;
 
@@ -265,6 +259,15 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
             on_waiter: census.stale_on_waiter as f64,
         },
         turn: TurnSample::default(),
+        cover: {
+            let terrain = Terrain::pyramid();
+            let (cover, _) = terrain.cover();
+            CoverSample {
+                rule: terrain.domain().map_or(0.0, |d| d.chunks() as f64),
+                drawn: cover.drawn.len() as f64,
+                gaps: cover.gaps.len() as f64,
+            }
+        },
         cap: CapSample {
             commit_left: census.commit_left as f64,
             mount_left: census.mount_left as f64,

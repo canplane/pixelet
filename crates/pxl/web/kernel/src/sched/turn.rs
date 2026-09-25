@@ -31,13 +31,17 @@ use crate::layer::decor::asset_store::decor_assets_wanted;
 use crate::layer::environment::state::map_environment_step;
 use crate::layer::environment::theme_clock::theme_clock_step;
 use crate::layer::geocode::fetcher::geocode_fetcher_step;
+#[cfg(feature = "dev")]
 use crate::layer::marker::frame_gizmo::debug_gizmos_step;
 use crate::layer::marker::hover_cursor::hover_cursor_step;
 use crate::layer::marker::location_puck::location_puck_step;
 use crate::layer::terrain::page::terrain_step;
 use crate::sched::ledger::spec::EffectName;
-use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickReport, TickState, COSMETIC, INTERACTION, REPORT, VISIBLE};
+#[cfg(feature = "dev")]
+use crate::sched::tick::COSMETIC;
+use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickReport, TickState, INTERACTION, REPORT, VISIBLE};
 use crate::shell::map_store::map_store;
+#[cfg(feature = "dev")]
 use crate::shell::setting::store::settings_store;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::source::chunk_sources_step;
@@ -71,6 +75,7 @@ fn companion_tick(ctx: &mut TickContext) {
     companion_step(ctx, companion_props());
 }
 
+#[cfg(feature = "dev")]
 fn debug_gizmos_tick(_: &mut TickContext) {
     let map_center = map_store().map_center;
     let show = settings_store().show_debug_objects && map_center.is_some();
@@ -99,6 +104,7 @@ pub fn boot() {
     on_tick(INTERACTION, companion_tick, StepName::companion);
     on_tick(INTERACTION, crate::layer::character::preview::preview_step, StepName::preview);
     on_tick(VISIBLE, core_tick_visible_step, StepName::chunks);
+    #[cfg(feature = "dev")]
     on_tick(COSMETIC, debug_gizmos_tick, StepName::debug_gizmos);
     on_tick(REPORT, core_tick_report_step, StepName::ledger);
     world_tasks();
