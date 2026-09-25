@@ -26,7 +26,7 @@ use crate::layer::character::store::companion_load_store;
 use crate::layer::geocode::fetcher::centre_group;
 use crate::layer::geocode::store as geocode_store;
 use crate::layer::object::store::OBJECT_STORAGE_VERSION;
-use crate::layer::terrain::elevation::{get_ele, ground_or_raw};
+use crate::layer::terrain::elevation::{ground_at, ground_or_raw};
 use crate::sched::turn::world_platform;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, SettingKey};
@@ -214,7 +214,7 @@ pub fn sensors_close() {
 /// has arrived, if the map is still on that page.
 pub fn shell_step() {
     let Some(target) = shell().go_to else { return };
-    if get_ele(&target).is_none() {
+    if ground_at(&target).is_none() {
         return;
     }
     shell().go_to = None;

@@ -26,7 +26,7 @@ use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::asset::atlas::BillboardAtlas;
 use crate::frame::draw::{
-    ARENA_DRAW, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
+    Lists, DRAW_WORDS, PIPELINE_BADGE, PIPELINE_CHUNK, PIPELINE_CHUNK_COARSE, PIPELINE_DEBUG, PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_BOX_COPLANAR, PIPELINE_GHOST_DECOR,
     PIPELINE_PUCK_BEACON, PIPELINE_PUCK_ZONE, PIPELINE_SKINNED, REWRITE_WORDS, UNIFORM_FLOATS, UPLOAD_WORDS,
 };
 use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_SKY};
@@ -109,7 +109,7 @@ pub type Frame = [f32; FRAME_FLOATS];
 /// that is not the renderer's own.
 pub struct FrameInput<'a> {
     /// The draw list's lanes, as the scheduler's `DrawList::take` gave them.
-    pub lists: [usize; 10],
+    pub lists: Lists<'a>,
     /// The environment's lane (look/environment.rs), ENV_FLOATS floats.
     pub environment: &'a [f32],
     /// Each decor group's model block, by the list's handle (0 while it
@@ -922,8 +922,10 @@ impl Renderer {
             if pipeline != which {
                 continue;
             }
-            let buffer = if handle & ARENA_DRAW != 0 {
-                arena_buffer((handle & !ARENA_DRAW) as usize)
+            // A chunk's mesh is in the arena, its first word the group; the
+            // hover ghost's is a block of its own.
+            let buffer = if matches!(pipeline, PIPELINE_CHUNK | PIPELINE_CHUNK_COARSE) {
+                arena_buffer(handle as usize)
             } else {
                 b.buffer(handle)
             };
@@ -1272,21 +1274,16 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
 /// named recorded, and put on the device or let go there when `g` has one;
 /// and the frame's draws and their uniforms. Blocks listed with no device
 /// wait in the table for the next one.
-fn take_lists(g: Option<&GpuApi>, row: [usize; 10]) -> (&'static [u32], &'static [f32]) {
-    // SAFETY: the list's lanes, in the memory addressed from 0, valid until
-    // the next take.
-    let words = |at: usize, n: usize| unsafe { core::slice::from_raw_parts(at as *const u32, n) };
+fn take_lists<'a>(g: Option<&GpuApi>, lists: Lists<'a>) -> (&'a [u32], &'a [f32]) {
     let b = blocks();
-    for u in words(row[0], row[1] * UPLOAD_WORDS).as_chunks::<UPLOAD_WORDS>().0 {
+    for u in lists.uploads.as_chunks::<UPLOAD_WORDS>().0 {
         b.insert(g, u[0], u[1], u[2], u[3], u[4]);
     }
-    for r in words(row[8], row[9] * REWRITE_WORDS).as_chunks::<REWRITE_WORDS>().0 {
+    for r in lists.rewrites.as_chunks::<REWRITE_WORDS>().0 {
         b.rewrite(g, r[0], r[1], r[2]);
     }
-    for &handle in words(row[2], row[3]) {
+    for &handle in lists.frees {
         b.remove(handle);
     }
-    // SAFETY: as above; the uniforms' floats are 32 bits, 8 a draw.
-    let uniforms = unsafe { core::slice::from_raw_parts(row[6] as *const f32, row[7] * UNIFORM_FLOATS) };
-    (words(row[4], row[5] * DRAW_WORDS), uniforms)
+    (lists.draws, lists.uniforms)
 }

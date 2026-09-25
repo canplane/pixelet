@@ -2,7 +2,7 @@
 
 //
 // A col_idx's changes are read as its revisions moving, which is what
-// world/chunk/node.rs follows.
+// world/chunk/source.rs follows.
 
 use pxl_spec::bake::constant::{BAND_CELLS, CELL_STEPS};
 use pxl_spec::cell::cube_types::Block;
@@ -129,12 +129,12 @@ fn object_store_band_tree_a_2_2_2_block_of_one_colour_reads_back_as_eight_cells(
 fn object_store_band_tree_clearing_a_chunk_s_last_object_frees_the_chunk() {
     let _g = serial();
     let c = corner(4096 * 9, 4096 * 2, 3);
-    let before = kernel().objects.chunk_count();
+    let before = kernel().objects.cols().count();
     place(&c, DECOR_SIZE, PlaceableCube::Block(Block::blue), false);
-    assert_eq!(kernel().objects.chunk_count(), before + 1);
+    assert_eq!(kernel().objects.cols().count(), before + 1);
     let entry = in_cell(&c).remove(0);
     remove(entry.at);
-    assert_eq!(kernel().objects.chunk_count(), before);
+    assert_eq!(kernel().objects.cols().count(), before);
 }
 
 #[test]
@@ -177,23 +177,25 @@ fn object_store_cells_occupancy_follows_placement_and_removal_and_air_does_not_o
     assert!(!cell_is_occupied(ax, ay, az));
 }
 
+/// A column's revision moves on a write to it, and on nothing else: not
+/// another column's write, and not the eraser's previews, which change what
+/// is drawn and not what is stored.
 #[test]
-fn object_store_revisions_a_column_s_revisions_move_on_its_own_changes_on_the_right_channel() {
+fn a_column_s_revision_moves_on_its_own_writes_and_not_on_a_preview() {
     let _g = serial();
     let c = corner(100_020, 0, 0);
     let col_idx = L2_IDX(TO_XY(c.i));
     let elsewhere = L2_IDX(TO_XY(ivec::gather(1_000_000, 1_000_000, 0)));
-    let (objects0, decor0, other0) = (object_col_revision(col_idx), decor_col_revision(col_idx), object_col_revision(elsewhere));
+    let (before, other) = (object_col_revision(col_idx), object_col_revision(elsewhere));
     place_decor(&c, DECOR_SIZE, DecorId::tree);
-    assert!(decor_col_revision(col_idx) > decor0, "decor channel moved");
-    assert_eq!(object_col_revision(elsewhere), other0, "another col_idx did not");
-    let objects1 = object_col_revision(col_idx);
-    let solid = corner(100_021, 0, 0);
-    place(&solid, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
-    assert!(
-        object_col_revision(L2_IDX(TO_XY(solid.i))) > if L2_IDX(TO_XY(solid.i)) == col_idx { objects1 } else { objects0 },
-        "objects channel moved"
-    );
+    assert!(object_col_revision(col_idx) > before, "its own write moved it");
+    assert_eq!(object_col_revision(elsewhere), other, "another column's did not");
+    let (placed, all) = (object_col_revision(col_idx), objects_revision());
+    set_virtual_hide(Some(in_cell(&c).remove(0).at));
+    set_virtual_carve_preview(&corner(100_021, 0, 0), DECOR_SIZE);
+    set_virtual_hide(None);
+    clear_virtual_carve_preview();
+    assert_eq!((object_col_revision(col_idx), objects_revision()), (placed, all), "a preview moved nothing stored");
 }
 
 #[test]
@@ -228,15 +230,8 @@ fn object_store_persistence_a_save_is_placement_records_per_page_and_loading_it_
 }
 
 fn entries(store: &Store, col_idx: IVec) -> Vec<(i32, u32, u32)> {
-    let Some(lanes) = store.chunk_lanes(col_idx) else { return Vec::new() };
-    // SAFETY: the lanes are the chunk's own, read before any change.
-    unsafe {
-        let n = lanes.count as usize;
-        let b = core::slice::from_raw_parts(lanes.band_at, n);
-        let p = core::slice::from_raw_parts(lanes.pos_at, n);
-        let s = core::slice::from_raw_parts(lanes.state_at, n);
-        (0..n).map(|k| (b[k], p[k], s[k])).collect()
-    }
+    let Some(e) = store.entries(col_idx) else { return Vec::new() };
+    (0..e.band.len()).map(|k| (e.band[k], e.pos[k], e.state[k])).collect()
 }
 
 fn write(store: &mut Store, col_idx: IVec, band_idx: BandZ, at: [u32; 3], scale: Scale, state: u32) -> BTreeSet<IVec> {
@@ -260,11 +255,11 @@ fn a_write_is_read_back_and_its_entries_are_made_within_it() {
 fn a_void_write_prunes_the_band_and_the_chunk() {
     let mut store = Store::new();
     write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, AIR);
-    assert_eq!(store.chunk_count(), 1);
+    assert_eq!(store.cols().count(), 1);
     let cell = store.cell(7, 0, 0, 2 * BAND_CELLS as i32).expect("the cell is found");
     assert_eq!(cell.solid, 0, "AIR does not occupy");
     assert_eq!(write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, VOID), BTreeSet::from([7]));
-    assert_eq!(store.chunk_count(), 0);
+    assert_eq!(store.cols().count(), 0);
     assert_eq!(entries(&store, 7), vec![]);
     assert!(store.cell(7, 0, 0, 2 * BAND_CELLS as i32).is_none());
     assert!(write(&mut store, 7, 2, [0, 0, 0], OBJECT_FINEST, VOID).is_empty(), "erasing nothing changes nothing");
@@ -333,14 +328,61 @@ fn the_lanes_are_in_band_and_walk_order_so_a_cell_s_entries_are_one_run() {
     assert_eq!(store.cell(3, 1, 0, BAND_CELLS as i32).map(|c| c.count), Some(1));
 }
 
+/// A column erased to nothing is gone from the store, and the columns
+/// beside it keep what they hold.
 #[test]
-fn closing_a_chunk_moves_the_last_into_its_place() {
+fn erasing_a_column_leaves_the_others_as_they_were() {
     let mut store = Store::new();
     write(&mut store, 10, 0, [0, 0, 0], CELL, 1);
     write(&mut store, 20, 0, [0, 0, 0], CELL, 1);
     write(&mut store, 30, 0, [0, 0, 0], CELL, 1);
     write(&mut store, 10, 0, [0, 0, 0], CELL, VOID);
-    assert_eq!((store.chunk_key(0), store.chunk_key(1)), (30, 20));
+    assert_eq!(store.cols().collect::<Vec<_>>(), vec![20, 30]);
     assert_eq!(store.read(30, 0, [0, 0, 0]), 1);
     assert_eq!(store.read(20, 0, [0, 0, 0]), 1);
+}
+
+/// A chunk above z16 reads a write to a column it draws, in its tiers and
+/// its decor, and not one to a column it does not: the revision it reads
+/// agrees with what it draws.
+#[test]
+fn a_level_chunk_moves_with_the_columns_it_draws_and_no_other() {
+    use crate::world::chunk::source::{decor_revision_of, objects_revision_of};
+    use crate::world::pyramid::chunk::Chunk;
+    let _g = serial();
+    let c = corner(4096 * 13, 4096 * 5, 3);
+    let level = 3;
+    let (home, far) = (Chunk::of(level, &c).base().i, Chunk::of(level, &c).beside(5, 0).base().i);
+    let before = (objects_revision_of(level, home), decor_revision_of(level, home), objects_revision_of(level, far));
+    place(&c, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
+    assert!(objects_revision_of(level, home) > before.0, "its tiers moved");
+    assert!(decor_revision_of(level, home) > before.1, "its decor moved");
+    assert_eq!(objects_revision_of(level, far), before.2, "a chunk that does not draw it did not");
+}
+
+/// What stands under a node reaches what the columns under it reach, at
+/// every level, however the columns were written and erased: the tree is
+/// the union of its columns, remade up the chain a write touches.
+#[test]
+fn a_node_reaches_what_the_columns_under_it_reach() {
+    use pxl_spec::space::hierarchy::ancestor_of;
+    use pxl_spec::space::indexer::L2;
+    let mut store = Store::new();
+    let cols = [(3i64, 5i64, 0, 1), (4, 5, 2, 3), (-7, 5, -1, 0), (40, -9, 1, 2), (3, 6, 0, 5)];
+    for &(x, y, band, z) in &cols {
+        write(&mut store, ivec::gather(x, y, 0), band, [0, 0, z * CELL_STEPS], CELL, 1);
+    }
+    write(&mut store, ivec::gather(3, 6, 0), 0, [0, 0, 5 * CELL_STEPS], CELL, VOID);
+    for level in 0..6u32 {
+        for &(x, y, _, _) in &cols {
+            let at = ancestor_of([x, y], level);
+            let union = store
+                .chunks
+                .iter()
+                .filter(|(col, _)| ancestor_of([ivec::X(**col), ivec::Y(**col)], level) == at)
+                .map(|(_, chunk)| chunk.z)
+                .reduce(|a, b| (a.0.min(b.0), a.1.max(b.1)));
+            assert_eq!(store.reach_over((L2.up(level as i32), at)), union, "level {level} at {at:?}");
+        }
+    }
 }

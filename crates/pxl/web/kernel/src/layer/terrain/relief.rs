@@ -2,7 +2,7 @@
 
 //! How high the ground a page draws stands: the lowest and highest point of
 //! the surface its own elevation samples make, for every resident page. A
-//! view measures how near it is to ground from these (world/pyramid/window.rs
+//! view measures how near it is to ground from these (world/pyramid/domain.rs
 //! `Domain`), in three dimensions, so a hill is as near as it stands.
 //!
 //! A level's chunks are drawn from that level's own samples, so for a
@@ -20,11 +20,11 @@ use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
 
 use crate::global::Global;
 
-/// Every resident page's range, and how many times the set has changed.
+/// Every resident page's range. It changes with the resident set, so the
+/// terrain pyramid's revision is its revision too.
 #[derive(Default)]
 struct Relief {
     pages: HashMap<LevelPage, (f64, f64)>,
-    revision: u32,
 }
 
 static RELIEF: Global<Relief> = Global::new();
@@ -52,13 +52,6 @@ pub fn page_changed(p: LevelPage, page: Option<&Terrain>) {
         Some(t) => r.pages.insert(p, surface_of(t)),
         None => r.pages.remove(&p),
     };
-    r.revision = r.revision.wrapping_add(1);
-}
-
-/// Moves whenever a page's range comes or goes, so a reader that decided
-/// something from `range_over` can tell whether that answer still stands.
-pub fn relief_revision() -> u32 {
-    relief().revision
 }
 
 /// The heights the ground `p` draws spans, in units: its own where it is

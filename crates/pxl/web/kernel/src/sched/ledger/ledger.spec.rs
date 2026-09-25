@@ -152,7 +152,7 @@ pub const EFFECT_NAMES: &[&str] = &[
     "follow",
     "theme",
     "decor",
-    "chunk_nodes",
+    "chunk_sources",
     "hover",
     "puck",
     "objects",
@@ -173,7 +173,7 @@ pub enum EffectName {
     follow = 8,
     theme = 9,
     decor = 10,
-    chunk_nodes = 11,
+    chunk_sources = 11,
     hover = 12,
     puck = 13,
     objects = 14,
@@ -195,7 +195,7 @@ impl EffectName {
         EffectName::follow,
         EffectName::theme,
         EffectName::decor,
-        EffectName::chunk_nodes,
+        EffectName::chunk_sources,
         EffectName::hover,
         EffectName::puck,
         EffectName::objects,
@@ -609,19 +609,17 @@ pub mod SUMMARY {
     }
     pub mod retain {
         pub const AT: u32 = 397;
-        pub const nodes: u32 = 0;
-        pub const run_sets: u32 = 1;
-        pub const run_set_mb: u32 = 2;
-        pub const tiers: u32 = 3;
-        pub const decor_steps: u32 = 4;
-        pub const decor_instances: u32 = 5;
-        pub const on_bytes: u32 = 6;
-        pub const off_bytes: u32 = 7;
-        pub const budget_bytes: u32 = 8;
-        pub const WORDS: u32 = 9;
+        pub const run_sets: u32 = 0;
+        pub const run_set_mb: u32 = 1;
+        pub const tiers: u32 = 2;
+        pub const decor_steps: u32 = 3;
+        pub const decor_instances: u32 = 4;
+        pub const on_bytes: u32 = 5;
+        pub const off_bytes: u32 = 6;
+        pub const budget_bytes: u32 = 7;
+        pub const WORDS: u32 = 8;
         pub const KEYS: &[&str] = &[
             "AT",
-            "nodes",
             "run_sets",
             "run_set_mb",
             "tiers",
@@ -634,7 +632,7 @@ pub mod SUMMARY {
         ];
     }
     pub mod fetch {
-        pub const AT: u32 = 406;
+        pub const AT: u32 = 405;
         pub const queued: u32 = 0;
         pub const running: u32 = 1;
         pub const credits: u32 = 2;
@@ -642,7 +640,7 @@ pub mod SUMMARY {
         pub const KEYS: &[&str] = &["AT", "queued", "running", "credits", "WORDS"];
     }
     pub mod peak {
-        pub const AT: u32 = 409;
+        pub const AT: u32 = 408;
         pub const present: u32 = 0;
         pub const dt_ms: u32 = 1;
         pub const sched_ms: u32 = 2;
@@ -690,13 +688,13 @@ pub mod SUMMARY {
         ];
     }
     pub mod steps {
-        pub const AT: u32 = 429;
+        pub const AT: u32 = 428;
         pub const count: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
         pub const KEYS: &[&str] = &["AT", "count", "slots", "WORDS"];
     }
-    pub const WORDS: u32 = 590;
+    pub const WORDS: u32 = 589;
     pub const KEYS: &[&str] = &["rec", "frames", "tasks", "counters", "atlas", "retain", "fetch", "peak", "steps", "WORDS"];
 }
 

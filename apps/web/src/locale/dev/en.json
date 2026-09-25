@@ -1,11 +1,5 @@
 {
   "settings": {
-    "display": {
-      "show_poi": {
-        "label": "Places",
-        "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
-      }
-    },
     "camera": {
       "ground_snap": {
         "label": "Ground Altitude Lock",

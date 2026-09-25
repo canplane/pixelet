@@ -45,23 +45,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     z16 a kind's footing and a transport-aligned kind's heading are read off
     the level's cells, so an instance can appear, go or turn at a level
     change, as the ground under it does.
-  - **The window's depth.** `WINDOW_LEVELS` is 5, so from low over the
-    ground the far ground ends at the coarsest level's reach, short of the
-    horizon.
-  - **A hill nearer than the ground under the eye.** The window's base is
-    the level the ground under the eye wants, so nearer, higher ground is
-    drawn no finer than that base.
-  - **A page's height before it arrives.** A page not yet resident borrows
-    its nearest resident ancestor's range, an average and not a bound; a
-    bound needs the bake to write each page's range of the leaves under it.
 - **A blank screen after a far search from a zoomed-out view.** Location
   pending, 30 ticks of zoom out, search "아주대학교", the first result:
   nothing is drawn and the frame count stops (2 of 2 under dev:local,
   2026-09-25). The first requests after the jump go to the world origin
   (`eye()` on the stale origin). A lead not yet followed: `serve_tiles`
   answers nothing past `--top-level` (3 by default; z11 and coarser are 503
-  for terrain and POI alike), so a view whose window starts above level 3
-  has no page it can get.
+  for terrain and POI alike), so a view that draws nothing finer than
+  level 4 has no page it can get.
 - **The move to a Rust core in WASM, drawing through WebGPU.** Scheduled
   2026-09-13 ([20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md))
   and through by 2026-09-15: the kernel (`crates/pxl/kernel`, built by

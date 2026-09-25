@@ -138,7 +138,7 @@ pub enum SettingKey {
     /// would being decided and not built. The badge is an ordering, and this is
     /// the one to reach for before any shading term.
     show_decor = 2,
-    /// Opt-in bounded POI summary snapshot for the local vertical slice.
+    /// The places' badges over the map, from the published POI pages.
     show_poi = 3,
     /// Rotate-drag and pinch stop writing polar; azimuth is unaffected.
     /// Off by default: the tilt is the one control a map view is expected to
@@ -242,8 +242,7 @@ impl SettingKey {
     pub fn dev(self) -> bool {
         matches!(
             self,
-            SettingKey::show_poi
-                | SettingKey::camera_terrain
+            SettingKey::camera_terrain
                 | SettingKey::ground_snap
                 | SettingKey::enable_terrain_carving
                 | SettingKey::show_shadow_map
@@ -265,7 +264,6 @@ impl SettingKey {
             SettingKey::texture_pack => Some("texture_pack"),
             SettingKey::show_structures => Some("show_structures"),
             SettingKey::show_decor => Some("show_decor"),
-            #[cfg(feature = "dev")]
             SettingKey::show_poi => Some("show_poi"),
             SettingKey::lock_camera_tilt => Some("lock_camera_tilt"),
             #[cfg(feature = "dev")]

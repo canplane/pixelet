@@ -7,16 +7,14 @@
 //! bar reads, so a control that failed to take effect further down would move
 //! the bar while the view stood still.
 
-use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::V3;
-use pxl_spec::space::xy::TO_XY;
 use xpute_core::math::scalar::wrap;
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::orbit::{orbit_local_offset, rotate2};
-use crate::layer::terrain::elevation::get_ele_at_local;
+use crate::layer::terrain::elevation::ground_at;
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::{settings_store, CameraTerrainMode};
 use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
@@ -38,12 +36,12 @@ pub struct ViewTriple {
 /// The target belongs here because the eye is `target + orbit offset` and a
 /// gate that reads only the second term can be walked through by moving the
 /// first — which is what panning does. It is carried in the local render frame
-/// (real u against `origin_page`), the frame the orbit offset and the
+/// (real u against `origin`), the frame the orbit offset and the
 /// heightfield lookup already share, and the one a step can be interpolated in.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewPose {
-    /// `TO_XY(L3_IDX(map_origin))` for the frame `target` is expressed in.
-    pub origin_page: IVec,
+    /// The floating origin `target` is expressed against.
+    pub origin: IVec,
     pub target: V3,
     pub dist: f64,
     pub polar: f64,
@@ -62,7 +60,7 @@ pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
     let origin = local_world_origin();
     let local = Pvf3 { i: ivec::sub(at.i, origin), f: at.f };
     Some(ViewPose {
-        origin_page: TO_XY(L3_IDX(origin)),
+        origin,
         target: [pvf3::to_real(pvf3::X(&local)), pvf3::to_real(pvf3::Y(&local)), pvf3::to_real(pvf3::Z(&local))],
         dist: view.dist,
         polar: view.polar,
@@ -78,7 +76,9 @@ fn required_rise(at: &ViewPose) -> Option<f64> {
     // The camera never rotates; azimuth spins the world beneath it, so
     // un-rotating the camera-local offset puts it in the ground's frame.
     let offset = rotate2(0.0, -o.horiz_dist, -at.azimuth);
-    let ground = get_ele_at_local(at.origin_page, at.target[0] + offset.x, at.target[1] + offset.y)?;
+    let mut below = Pvf3::default();
+    local_world_to_canonical(&mut below, &[at.target[0] + offset.x, at.target[1] + offset.y, 0.0], at.origin);
+    let ground = ground_at(&below)?;
     Some(ground + EYE_CLEARANCE_U - at.target[2])
 }
 
@@ -117,7 +117,7 @@ pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     for i in 1..=STEP_SAMPLES {
         let t = i as f64 / STEP_SAMPLES as f64;
         let at = ViewPose {
-            origin_page: from.origin_page,
+            origin: from.origin,
             target: [
                 from.target[0] + (to.target[0] - from.target[0]) * t,
                 from.target[1] + (to.target[1] - from.target[1]) * t,

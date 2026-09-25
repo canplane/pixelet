@@ -93,8 +93,8 @@ The rules below keep it one thing. They come from finding it several.
   outside `space/`.
 - **A layer is a payload and a one-level fold, and nothing else.** No key,
   hierarchy, bounds, window, schedule or residency of its own: which pages
-  are wanted, held, fetched and folded is the kernel's `Pyramid<L>`, in the
-  one window (`world/pyramid.rs`), and the bake's `build`
+  are wanted, held, fetched and folded is the kernel's `Pyramid<L>`, from
+  the one domain (`world/pyramid.rs`), and the bake's `build`
   (`pxl-geo-bake pyramid.rs`). Layers share mechanics, not data — terrain
   folds by majority and average, POI by sum.
 - **2.5D is paged; 3D is not.** Terrain and POI are pages of the pyramid.

@@ -44,16 +44,14 @@ export function asset_url(key: string): string {
  * the tile server and the third to the search server is that arrangement with the bucket's side baked on demand rather than read. `tiles`
  * says which — a relay reading a prefix, never a route.
  *
- * `published` marks what a published deployment answers, so `dev:remote` can
- * forward it there and leave the local processes out of the loop entirely.
- * `/api/` is not among them — pxl-api answers nothing yet, so a published
- * deployment has nothing there to forward to — but it is still proxied
- * locally, because the process is running and a 404 from it reads differently
- * from the app's own index.html coming back.
+ * `published` marks what a published deployment answers, so `dev` forwards
+ * it there and leaves the local processes out of the loop entirely: every
+ * root is, since the Worker relays each one, and `dev:local` is where the
+ * three servers run instead.
  */
 export const DEV_PROXY_ROUTES = [
   { path: TILE_PREFIX, tiles: true, published: true },
   { path: ASSET_PREFIX, tiles: true, published: true },
   { path: GEO_PREFIX, published: true },
-  { path: API_PREFIX, app: true },
+  { path: API_PREFIX, app: true, published: true },
 ] as const satisfies readonly { path: string; tiles?: boolean; app?: boolean; published?: boolean }[];

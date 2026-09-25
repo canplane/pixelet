@@ -68,7 +68,7 @@
     "follow",
     "theme",
     "decor",
-    "chunk_nodes",
+    "chunk_sources",
     "hover",
     "puck",
     "objects",
@@ -420,26 +420,25 @@
     },
     "retain": {
       "AT": 397,
-      "nodes": 0,
-      "run_sets": 1,
-      "run_set_mb": 2,
-      "tiers": 3,
-      "decor_steps": 4,
-      "decor_instances": 5,
-      "on_bytes": 6,
-      "off_bytes": 7,
-      "budget_bytes": 8,
-      "WORDS": 9
+      "run_sets": 0,
+      "run_set_mb": 1,
+      "tiers": 2,
+      "decor_steps": 3,
+      "decor_instances": 4,
+      "on_bytes": 5,
+      "off_bytes": 6,
+      "budget_bytes": 7,
+      "WORDS": 8
     },
     "fetch": {
-      "AT": 406,
+      "AT": 405,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "peak": {
-      "AT": 409,
+      "AT": 408,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -463,12 +462,12 @@
       "WORDS": 20
     },
     "steps": {
-      "AT": 429,
+      "AT": 428,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
-    "WORDS": 590
+    "WORDS": 589
   },
   "READ": {
     "$type": "u32",

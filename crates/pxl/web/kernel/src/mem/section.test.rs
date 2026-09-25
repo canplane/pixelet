@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::layer::terrain::fixed::TERRAIN_BYTES;
+use crate::world::chunk::build::{RUN_SETS, RUN_SET_BYTES};
 use crate::world::chunk::mesh_slot::BAKE_BYTES;
-use crate::world::chunk::node::{RUN_SETS, RUN_SET_BYTES};
 
 /// What a linker might leave behind it. The map is a function of this. A page
 /// boundary already, so `page_up` does nothing to it.

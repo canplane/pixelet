@@ -21,6 +21,10 @@
         "label": "Decor",
         "description": "Shows procedurally placed trees, vehicles, and other decor. Objects you place yourself are always shown."
       },
+      "show_poi": {
+        "label": "Places",
+        "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
+      },
       "show_structures": {
         "label": "Buildings",
         "description": "Shows or hides buildings on the terrain."

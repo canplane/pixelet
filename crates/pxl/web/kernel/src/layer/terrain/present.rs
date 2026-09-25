@@ -17,14 +17,14 @@ use crate::world::pyramid::{Cover, Domain};
 
 /// The terrain's cover as its mesh can draw it.
 ///
-/// First, a finer page stands in for the ground the view wants only at the
-/// window's top and a level finer: a stand-in draws its ground with four
-/// times the chunks a level, and the chunk table holds the top level's
-/// chunks four times over and every other level's once (chunk/table.rs
-/// `WIDEST_SELECTION`). A stand-in deeper than that gives way to the chunk a
-/// level under the top it lies in; one anywhere under the top gives way to
-/// the ground it stood in for — each drawn by its nearest resident self or
-/// ancestor (`standing`), and a gap only where nothing over it is held.
+/// First, a finer page stands in for the ground the view wants a level
+/// finer and no more: a stand-in draws its ground with four times the chunks
+/// a level, and the chunk table holds the view's chunks four times over
+/// (domain.rs `VIEW_CHUNKS`). A stand-in deeper than that gives way to the
+/// chunk a level under the wanted one it lies in, drawn by its nearest
+/// resident self or ancestor (`standing`), and a gap only where nothing over
+/// it is held. Every ancestor of the ground drawn is wanted held, so a
+/// stand-in from under is what a view falls back to only before those come.
 ///
 /// Then the balance: no two chunks the view sees that meet more than a level
 /// apart. A chunk's mesh hangs a skirt one of its own cells deep, which hides
@@ -33,7 +33,7 @@ use crate::world::pyramid::{Cover, Domain};
 /// where the edge two chunks share is on screen, and an edge on screen is
 /// inside both chunks' bounds, so both are seen: a pair the view does not
 /// see both of has no step to hide. Held to it anyway, ground the frustum
-/// leaves at the window's top — which is never refined — coarsened the
+/// leaves at the pyramid's top — which is never refined — coarsened the
 /// ground under the eye, a level a step, from the screen's edge inwards. Every chunk too
 /// coarse for a neighbour is refined where the view wants it finer and the
 /// page under it is resident — its four children in its place, never finer
@@ -45,20 +45,16 @@ use crate::world::pyramid::{Cover, Domain};
 /// coarser or removes them and stops at the pyramid's top. Neither undoes
 /// the other, so both end.
 pub fn mesh(cover: Cover, d: &Domain, resident: impl Fn(Chunk) -> bool) -> Cover {
-    let top = d.window().end - 1;
     let mut drawn: HashSet<Chunk> = HashSet::with_capacity(cover.drawn.len());
     let mut open: HashSet<Chunk> = HashSet::new();
     for c in cover.drawn {
         let want = d.wanted_over(c);
-        if c.level() >= want.level() || (want.level() == top && c.level() + 1 == top) {
+        if c.level() + 1 >= want.level() {
             drawn.insert(c);
-        } else if want.level() == top {
-            // Past the one level the top allows: that branch opens, a level
-            // under the top, and the stand-ins beside it stay.
-            open.insert(c.ancestors().find(|a| a.level() + 1 == top).expect("a chunk under the top has one a level under it"));
         } else {
-            // Nothing stands in under the top, so none of `want` is drawn.
-            open.insert(want);
+            // Past the one level a stand-in may reach: that branch opens, a
+            // level under the wanted one, and the stand-ins beside it stay.
+            open.insert(c.ancestors().find(|a| a.level() + 1 == want.level()).expect("a chunk under the wanted one has one a level under it"));
         }
     }
     let mut gaps: HashSet<Chunk> = cover.gaps.into_iter().collect();
@@ -100,9 +96,8 @@ pub fn mesh(cover: Cover, d: &Domain, resident: impl Fn(Chunk) -> bool) -> Cover
 }
 
 /// What stands in for ground the mesh cannot draw as it is: each chunk's
-/// nearest resident self or ancestor, the window's chain up to the pyramid's
-/// top included (window.rs `CHAIN_PAGES`), so the ground is drawn coarser
-/// rather than opened; a gap only where nothing over it is held. An ancestor
+/// nearest resident self or ancestor, up to the pyramid's top (domain.rs
+/// `pages`), so the ground is drawn coarser rather than opened; a gap only where nothing over it is held. An ancestor
 /// drawn draws everything under it, so none is kept inside another.
 fn standing(chunks: HashSet<Chunk>, resident: &impl Fn(Chunk) -> bool) -> (HashSet<Chunk>, HashSet<Chunk>) {
     let mut up = HashSet::new();

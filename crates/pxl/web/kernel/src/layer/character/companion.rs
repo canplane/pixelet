@@ -203,7 +203,7 @@ impl Walker {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn step(&mut self, ctx: &TickContext, variant: &CharacterVariant, origin_page_idx_xy: IVec, map_origin: IVec, target: Vec2, target_z: f64, is_follow_mode: bool) {
+    fn step(&mut self, ctx: &TickContext, variant: &CharacterVariant, map_origin: IVec, target: Vec2, target_z: f64, is_follow_mode: bool) {
         self.acquire(variant, target);
         if self.held.is_none() {
             return;
@@ -339,7 +339,7 @@ impl Walker {
                 origin: Some(map_origin),
                 revision,
                 tiles,
-                z: get_surface_z_at_local(origin_page_idx_xy, map_origin, px, py, target_z),
+                z: get_surface_z_at_local(map_origin, px, py, target_z),
             };
         }
         self.pose[0] = px;
@@ -379,10 +379,9 @@ struct Companion {
 static COMPANION: Global<Companion> = Global::new();
 
 /// Where the companion stands: map_center in the local floating-origin frame,
-/// the frame's origin and its page.
+/// and the frame's origin.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CompanionProps {
-    pub origin_page_idx_xy: IVec,
     pub map_origin: IVec,
     pub center_x: f64,
     pub center_y: f64,
@@ -423,7 +422,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
 
     let person_target = Vec2 { x: p.center_x, y: p.center_y };
     let person = walker_for(&mut c.person, person_variant, person_target, p.map_origin);
-    person.step(ctx, person_variant, p.origin_page_idx_xy, p.map_origin, person_target, p.center_z, is_follow_mode);
+    person.step(ctx, person_variant, p.map_origin, person_target, p.center_z, is_follow_mode);
     // Only the person talks — the pet doesn't get a chat bubble.
     chat_bubble_step(person.held.as_ref().map(|h| h.actor), person_variant.height_u);
 
@@ -432,7 +431,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         y: p.center_y + PET_OFFSET.y,
     };
     let pet = walker_for(&mut c.pet, pet_variant, pet_target, p.map_origin);
-    pet.step(ctx, pet_variant, p.origin_page_idx_xy, p.map_origin, pet_target, p.center_z, is_follow_mode);
+    pet.step(ctx, pet_variant, p.map_origin, pet_target, p.center_z, is_follow_mode);
 }
 
 /// Which skin each live companion model is drawn with: (model, image handle),

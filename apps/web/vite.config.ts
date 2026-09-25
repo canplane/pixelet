@@ -12,7 +12,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import svgr from "vite-plugin-svgr";
 
-import { DEV_PROXY_ROUTES, PUBLISHED_VERSION, TILE_ROOT } from "./src/config/route.ts";
+import { DEV_PROXY_ROUTES } from "./src/config/route.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -352,24 +352,10 @@ export default defineConfig(({ mode }) => {
   const published = mode === "production" || remote;
 
   const remoteOrigin = remote ? (env.VITE_REMOTE_ORIGIN || remoteOriginDefault) : "";
-  // A new POI snapshot can be checked against the published map before its
-  // Worker route ships. The override is used only by the development proxy.
-  const poiPrefix = `${TILE_ROOT}/poi/`;
-  const proxy = {
-    ...(env.VITE_POI_BASE_URL
-      ? {
-        [poiPrefix]: {
-          target: env.VITE_POI_BASE_URL,
-          changeOrigin: true,
-          rewrite: (url: string) => published ? url.replace(`${poiPrefix}${PUBLISHED_VERSION.poi}/`, poiPrefix) : url,
-        },
-      }
-      : {}),
-    ...Object.fromEntries(DEV_PROXY_ROUTES.map((route) => [
-      route.path,
-      remoteOrigin && route.published ? { target: remoteOrigin, changeOrigin: true } : { target: route.tiles ? tileBase : route.app ? apiBase : geoBase, changeOrigin: true },
-    ])),
-  };
+  const proxy = Object.fromEntries(DEV_PROXY_ROUTES.map((route) => [
+    route.path,
+    remoteOrigin && route.published ? { target: remoteOrigin, changeOrigin: true } : { target: route.tiles ? tileBase : route.app ? apiBase : geoBase, changeOrigin: true },
+  ]));
 
   return {
     // Root `deno task dev:local` runs the three servers and this in one

@@ -24,15 +24,15 @@
 //!                    memory, since the device is where it is drawn from.
 //!   .fixed.runs      the run sets a chunk's tiers are baked from, two: one
 //!                    filled while the other is baked from (world/chunk/
-//!                    node.rs). A set is let go once its chunk's tiers are
+//!                    build.rs). A set is let go once its chunk's tiers are
 //!                    all on the device, which is what keeps them.
 
 use xpute_runtime::mem::section::{nth_at, span_of};
 
 use crate::layer::terrain::fixed::TERRAIN_BYTES;
 use crate::mem::section::{map, PAGE_BYTES};
+use crate::world::chunk::build::{RUN_SETS, RUN_SET_BYTES};
 use crate::world::chunk::mesh_slot::BAKE_BYTES;
-use crate::world::chunk::node::{RUN_SETS, RUN_SET_BYTES};
 
 /// Each range's bytes, in address order. What a range holds is its own
 /// affair; this says how many bytes it takes and nothing more.

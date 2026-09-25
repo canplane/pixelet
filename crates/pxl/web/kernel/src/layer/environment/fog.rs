@@ -30,7 +30,7 @@ use crate::control::camera::config::camera_cfg;
 use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::state::{globe, km_per_u};
 use crate::layer::terrain::elevation::ground_at;
-use crate::world::pyramid::window::eye;
+use crate::world::pyramid::domain::eye;
 
 /// The optical depth at which a surface's contrast against the horizon sky is
 /// gone: `ln(1/0.02)`, the 2% the visual range is defined by (Koschmieder).
@@ -86,7 +86,7 @@ pub fn eye_ground() -> f64 {
 }
 
 /// How high an eye at `at` stands over the ground under it: what the reach,
-/// the fog band, the clip planes and the window's finest level are all
+/// the fog band, the clip planes and the floating origin's grain are all
 /// measured from, since the perspective a view costs is its observer's.
 pub fn height_at(at: [f64; 3]) -> f64 {
     (at[2] - ground_under(at)).max(0.0)
@@ -113,10 +113,11 @@ fn scale(reach: f64) -> f64 {
 /// hides the drawn edge.
 ///
 /// The ground ends at whichever comes first, the air and the planet or what
-/// the window draws. The window holds the levels `.fixed` is sized for and
-/// no more (world/pyramid/window.rs), so from a few hundred metres up the
-/// data runs out before the air does, and the band is then a crossfade over
-/// the edge of what is drawn rather than over the reach.
+/// the view draws, which runs to the pyramid top's reach
+/// (world/pyramid/domain.rs `Domain::far`): only from high enough that the
+/// planet's horizon is past that does the data run out before the air does,
+/// and the band is then a crossfade over the edge of what is drawn rather
+/// than over the reach.
 pub fn band_at(height: f64, drawn: f64) -> (f64, f64) {
     let far = reach_at(height).min(drawn);
     (far * (render_cfg::FOG_NEAR / render_cfg::FOG_FAR), far)

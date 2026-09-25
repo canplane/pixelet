@@ -17,12 +17,16 @@ use xpute_runtime::sched::edge::Edge;
 use crate::global::Global;
 use crate::kernel::kernel;
 
-/// A column's cube content (object/store.rs), keyed by column base.
+/// What a column stores (object/store.rs), keyed by column index.
 pub const OBJECT_COLUMN: Topic = 0;
-/// A column's placed decor, apart from its cubes, keyed by column base.
-pub const DECOR_COLUMN: Topic = 1;
+/// What a chunk above z16 draws of the objects in its tiers and in its
+/// decor, keyed by the chunk (world/chunk/source.rs `chunk_key`): moved by a
+/// write to any column it draws, so a chunk reads one revision rather than
+/// summing its columns'.
+pub const TIERS_CHUNK: Topic = 1;
+pub const DECOR_CHUNK: Topic = 2;
 /// How many topics the log keeps.
-pub const WORLD_TOPICS: Topic = DECOR_COLUMN + 1;
+pub const WORLD_TOPICS: Topic = DECOR_CHUNK + 1;
 
 /// `WorldTopic`.
 pub type WorldTopic = Topic;

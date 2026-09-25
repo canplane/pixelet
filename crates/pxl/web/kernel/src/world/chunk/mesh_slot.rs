@@ -12,13 +12,13 @@
 //! covers its ground — and there is nothing to free.
 //!
 //! It used to be the chunk's coordinate reduced modulo the drawn ring's axis
-//! in chunks, within a group for its level modulo the window's width. That
+//! in chunks, within a group for its level modulo the levels a view held. That
 //! made a level's chunks addressable *only* inside its own drawn ring, and
 //! so it decided what could be drawn at all: `select` could not descend past
 //! a page it did not hold, because the chunks under it lie outside the ring
 //! below and two of them would land in one slot. Of the nine pages a top
 //! ring has, four fold from what is held and five do not — and every one of
-//! those five has one or two of its four children resident (world/pyramid/window.test.rs).
+//! those five has one or two of its four children resident.
 //! Nearly half the ground that showed as nothing was data the client already
 //! had and could not address. Cesium's answer to the same thing is
 //! `skipLevelOfDetail`: a tile whose content is missing is refined through
@@ -27,8 +27,8 @@
 //! Two pools, because a group is one storage binding and a binding holds
 //! 128 MiB. The leaves' own tier — the one drawn at their cells — has a
 //! group to itself, since its box is six words where every other is four and
-//! a group is one format throughout; the coarse tiers share the
-//! WINDOW_LEVELS groups between them, any tier in any of them.
+//! a group is one format throughout; the coarse tiers share
+//! COARSE_GROUPS groups between them, any tier of any level in any of them.
 //!
 //! A slot holds as many boxes as its tier has been measured to need, and a
 //! mesh past that is cut to it — ground that is simply missing, which the
@@ -51,10 +51,11 @@
 //! (issue/20260923-a-coarse-cell-is-isotropic.md). Either is read live as the
 //! ledger's `work fine_peak` and `coarse_peak`, through a zoom out and back.
 
-use crate::world::pyramid::window::{LEVEL_CHUNKS, WINDOW_LEVELS};
+use crate::world::pyramid::domain::{LEVEL_CHUNKS, VIEW_CHUNKS};
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 
-/// Slots a group holds: the most chunks one level draws.
+/// Slots a group holds: the most chunks one level draws, which is what the
+/// leaves' own tier needs, since only z16 draws it.
 const SLOTS: u32 = LEVEL_CHUNKS;
 /// Boxes a leaf's first tier holds, the one tier drawn at a leaf's own cells:
 /// the 2,294 the measurement asked for and a fifth again.
@@ -65,11 +66,18 @@ pub const COARSE_BOXES: u32 = 4551;
 /// The largest mesh one bake may write before it is cut to its slot: past
 /// every tier measured, so what a bake asks for always fits.
 pub const BAKE_BYTES: u32 = 1 << 20;
-/// Groups the arena holds: one a level of the window, and the leaves' own
-/// tier beside them.
-pub const GROUPS: u32 = WINDOW_LEVELS + 1;
+/// Groups the coarse tiers share: a slot for every chunk a view draws, each
+/// drawn in one coarse tier, and half as many again for what a change of view
+/// holds on to while it lasts — a dissolve's other tier, a stale chunk
+/// drawn until what replaced it is whole. Past that a mesh waits for a slot
+/// rather than take one from ground on the screen (world/chunk/table.rs
+/// `claim`).
+const COARSE_GROUPS: u32 = (VIEW_CHUNKS * 3 / 2).div_ceil(SLOTS);
+/// Groups the arena holds: the coarse tiers', and the leaves' own tier
+/// beside them.
+pub const GROUPS: u32 = COARSE_GROUPS + 1;
 /// The group the leaves' own tier lies in.
-const FINE_GROUP: u32 = WINDOW_LEVELS;
+const FINE_GROUP: u32 = COARSE_GROUPS;
 /// Slots across every group, for whoever tracks who holds each.
 pub const OCCUPANCY: usize = (GROUPS * SLOTS) as usize;
 
@@ -131,7 +139,7 @@ pub fn pool(level: u32, step: u32) -> core::ops::Range<usize> {
     if level == 0 && step == 1 {
         (FINE_GROUP * SLOTS) as usize..((FINE_GROUP + 1) * SLOTS) as usize
     } else {
-        0..(WINDOW_LEVELS * SLOTS) as usize
+        0..(COARSE_GROUPS * SLOTS) as usize
     }
 }
 

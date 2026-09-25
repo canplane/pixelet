@@ -237,9 +237,6 @@ pub struct Ground<'a> {
 /// A column whose placed decor a chunk draws.
 pub struct Placed {
     pub col_idx: IVec,
-    /// The column's X and Y lanes, in units.
-    pub col_x: i64,
-    pub col_y: i64,
     /// The hidden entry's band and packed position in this column.
     pub hide: Option<(i32, u32)>,
     /// Where the column's corner is from the corner of the chunk drawing it,
@@ -301,16 +298,8 @@ impl<'s> DecorBuild<'s> {
     /// One column's placed instances of `kind`, into its groups from
     /// `first`, in the store's entry order.
     fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, store: &Store) {
-        let (Some(value), Some(l)) = (kind.decor_value, store.chunk_lanes(column.col_idx)) else { return };
-        // SAFETY: the column's lanes, read before anything writes the store.
-        let (bands, poss, states) = unsafe {
-            let n = l.count as usize;
-            (
-                core::slice::from_raw_parts(l.band_at, n),
-                core::slice::from_raw_parts(l.pos_at, n),
-                core::slice::from_raw_parts(l.state_at, n),
-            )
-        };
+        let (Some(value), Some(e)) = (kind.decor_value, store.entries(column.col_idx)) else { return };
+        let (bands, poss, states) = (e.band, e.pos, e.state);
         for k in 0..bands.len() {
             if states[k] != value {
                 continue;
@@ -363,7 +352,7 @@ impl<'s> DecorBuild<'s> {
         let cells = ground.page.cells;
         let (level, atom) = (GROUND.scale(ground.level), GROUND.scale(0));
         let (lx0, ly0) = (level.index(ground.x0), level.index(ground.y0));
-        let has_entries = ground.col_idx.and_then(|c| store.chunk_lanes(c)).is_some_and(|l| l.count > 0);
+        let has_entries = ground.col_idx.is_some_and(|c| store.entries(c).is_some());
         for dy in 0..CHUNK_CELLS {
             let cell_y = ground.ty0 + dy;
             for dx in 0..CHUNK_CELLS {

@@ -8,7 +8,7 @@ use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::layer::object::store::each_col_entry;
-use crate::layer::terrain::elevation::get_ele_at_local;
+use crate::layer::terrain::elevation::ground_at;
 use crate::world::frame::coord::local_world_to_canonical;
 
 // Two Z values within this of each other count as "flush" — guards the climb
@@ -65,14 +65,16 @@ fn collect_boxes(map_origin: IVec, local_x: f64, local_y: f64) -> Vec<(f64, f64)
 }
 
 /// Ground height at a local XY point, accounting for placed objects sitting on
-/// top of terrain there — not just the raw terrain elevation get_ele_at_local
-/// alone reports. The companion needs this: walking onto a placed block (or a
+/// top of terrain there — not just the terrain's own height (elevation.rs
+/// `ground_at`, the one every reader of it asks). The companion needs this: walking onto a placed block (or a
 /// stack of them) should stand on top. Thin wrapper over
 /// surface_z_from_terrain: the only tile-store-dependent part of this query is
 /// the terrain lookup itself, split out so the gap/climb algorithm can be
 /// exercised headlessly against synthetic terrain heights.
-pub fn get_surface_z_at_local(origin_page_idx_xy: IVec, map_origin: IVec, local_x: f64, local_y: f64, hint_z: f64) -> Option<f64> {
-    let terrain_ele = get_ele_at_local(origin_page_idx_xy, local_x, local_y)?;
+pub fn get_surface_z_at_local(map_origin: IVec, local_x: f64, local_y: f64, hint_z: f64) -> Option<f64> {
+    let mut at = Pvf3::default();
+    local_world_to_canonical(&mut at, &[local_x, local_y, 0.0], map_origin);
+    let terrain_ele = ground_at(&at)?;
     Some(surface_z_from_terrain(map_origin, local_x, local_y, terrain_ele, hint_z))
 }
 

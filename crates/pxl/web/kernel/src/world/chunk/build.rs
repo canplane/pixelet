@@ -1,15 +1,14 @@
-// pxl-kernel/world/chunk/node.rs
+// pxl-kernel/world/chunk/build.rs
 
 //! A chunk's build: the builder that makes its tiers from what it is made
-//! of, and what says that changed.
+//! of (source.rs).
 //!
 //! Every decision about a chunk, and everything it holds — its tiers, its
 //! decor blocks, the sources they were made from — is the scheduler's
 //! (crates/pxl/web/kernel/src/world/chunk/table.rs). What is here acts on
-//! what it asks: the builder, the revisions a chunk's objects and decor are
-//! read as, and the flag that has the scheduler compare them.
+//! what it asks.
 
-use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, PAGE_CELLS};
+use pxl_spec::space::pyramid::{GROUND, PAGE_CELLS};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
@@ -19,24 +18,22 @@ use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
-use pxl_spec::bake::constant::{pack_pos, BandZ, BAND, CELL, ELE_PADDED_SPAN, OBJECT_FINEST};
-use pxl_spec::bake::pack::GroundCell;
-use pxl_spec::space::indexer::{FROM_L2_IDX, L1, L2, L2_IDX};
+use pxl_spec::bake::constant::{pack_pos, BandZ, BAND, CELL, OBJECT_FINEST};
+use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use xpute_runtime::mem::heap::{free, Block};
 
-use crate::global::Global;
-use crate::kernel::{kernel, with_world};
-use crate::layer::object::store::{decor_col_revision, object_col_revision, object_cols, Store};
+use crate::layer::object::store::{object_col_revision, Store};
 use crate::mem::fixed::{bake_at, run_set_at};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::mesh_slot::BAKE_BYTES;
 use pxl_spec::bake::constant::BAND_CELLS;
 
+use crate::world::chunk::source::tiers_draw;
+use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::hierarchy::Scale;
-use pxl_spec::space::pyramid::LevelPage;
 
 /// A tier: the cube a chunk is drawn in, its side as a scale of the unit.
 /// The shared rule chooses it by the chunk's distance from the eye
@@ -77,76 +74,6 @@ pub fn release_block(at: usize, bytes: u32) {
 #[allow(non_snake_case)]
 pub fn RETAIN_BUDGET_BYTES() -> f64 {
     crate::mem::section::map().map_or(0.0, |m| (m.heap.bytes / 2) as f64)
-}
-
-// ---- Sources ----
-
-static SOURCES_CHANGED: Global<bool> = Global::new();
-
-/// A chunk's sources changed somewhere — a column written, a setting a chunk
-/// paints with: the scheduler compares each chunk's own at its next turn
-/// (table.rs `Scheduler::sources_step`).
-pub fn chunk_sources_changed() {
-    *SOURCES_CHANGED.get(|| false) = true;
-}
-
-pub fn chunk_sources_step() {
-    if core::mem::take(SOURCES_CHANGED.get(|| false)) {
-        with_world(|world, sched| sched.sources_step(world));
-    }
-}
-
-/// A terrain page's lanes, where they lie in the memory.
-pub fn page_lanes(tile: &Terrain) -> PageLanes {
-    PageLanes {
-        cells: tile.ground.cells.as_ptr() as usize,
-        ele: tile.ele.as_ptr() as usize,
-    }
-}
-
-/// Whether page `page_idx` has a terrain tile chunks can be mounted from.
-pub fn chunk_page(page: LevelPage, present: bool) {
-    kernel().sched.page(page, present);
-}
-
-/// What a chunk's objects are made of, as a revision: its column's for a
-/// leaf chunk, and every column under a level chunk and its apron summed,
-/// since what it draws is all of theirs folded.
-pub fn objects_revision_of(level: u32, base: IVec) -> u32 {
-    if level == 0 {
-        return object_col_revision(L2_IDX(base));
-    }
-    object_cols()
-        .into_iter()
-        .filter(|&c| folds_into(level, base, c))
-        .fold(0u32, |acc, c| acc.wrapping_add(object_col_revision(c)))
-}
-
-/// The decor revision of every column a chunk of `level` at `base` draws
-/// the placed decor of: the columns whose corner lies in it.
-pub fn decor_revision_of(level: u32, base: IVec) -> u32 {
-    if level == 0 {
-        return decor_col_revision(L2_IDX(base));
-    }
-    let span = chunk_span_of(level) as i64;
-    let (x0, y0) = (ivec::X(base), ivec::Y(base));
-    object_cols()
-        .into_iter()
-        .filter(|&c| {
-            let o = FROM_L2_IDX(c);
-            (x0..x0 + span).contains(&ivec::X(o)) && (y0..y0 + span).contains(&ivec::Y(o))
-        })
-        .fold(0u32, |acc, c| acc.wrapping_add(decor_col_revision(c)))
-}
-
-/// Whether the objects of column `col` fold into the level-`level` chunk at
-/// `base`: its own cells, and the one-cell apron around them a fold reads.
-fn folds_into(level: u32, base: IVec, col: IVec) -> bool {
-    // In cells of the level: the chunk's with its apron, and the first and
-    // last a column, a leaf chunk, reaches.
-    let (cell, o, last) = (GROUND.scale(level), FROM_L2_IDX(col), i64::from(L1.count_in(L2)) - 1);
-    let across = |b: i64, o: i64| cell.index(o) <= cell.index(b) + CHUNK_CELLS as i64 && cell.index(o + last) >= cell.index(b) - 1;
-    across(ivec::X(base), ivec::X(o)) && across(ivec::Y(base), ivec::Y(o))
 }
 
 // ---- the build as the kernel runs it ----
@@ -191,6 +118,7 @@ pub enum BuildEvent {
     /// to its slot on the device, and its boxes' heights are held in
     /// `heights` (pxl-render mesh/chunk_mesher.rs).
     Tier {
+        chunk: PyramidChunk,
         id: u32,
         generation: u32,
         cube: Cube,
@@ -199,14 +127,6 @@ pub enum BuildEvent {
         box_cnt: u32,
         heights: Heights,
     },
-}
-
-/// A terrain page's lanes, as addresses into the memory.
-#[derive(Clone, Copy)]
-pub struct PageLanes {
-    /// The page's ground cells, packed (pxl-spec bake/pack.rs).
-    pub cells: usize,
-    pub ele: usize,
 }
 
 /// A chunk's runs: which of `.fixed.runs`'s sets, and what is in it — and
@@ -222,18 +142,9 @@ struct Runs {
 
 #[derive(Clone, Copy)]
 struct Chunk {
-    /// The level of the page it is drawn from: its cells are 2^level units.
-    level: u32,
-    /// The chunk's corner, as an L1 coordinate.
-    base: IVec,
-    /// The column it stands in, as the object store keys it. Derived from the
-    /// corner — a chunk is one L2 span — and kept beside it because the two
-    /// are different units and nothing but this would say so.
-    col_idx: IVec,
-    /// Where the chunk starts in its page, in cells.
-    tx0: u32,
-    ty0: u32,
-    page: Option<PageLanes>,
+    /// The chunk being built: its level, corner, column and page all come
+    /// from it.
+    at: PyramidChunk,
     show_structures: bool,
     generation: u32,
     /// The tiers the node lacks, in the order it wants them.
@@ -246,6 +157,28 @@ struct Chunk {
 }
 
 impl Chunk {
+    /// The level of the page it is drawn from: its cells are 2^level units.
+    fn level(&self) -> u32 {
+        self.at.level()
+    }
+
+    /// The chunk's corner, as an L1 coordinate.
+    fn base(&self) -> IVec {
+        self.at.base().i
+    }
+
+    /// The column it stands in, as the object store keys it: a chunk is one
+    /// L2 span.
+    fn col_idx(&self) -> IVec {
+        L2_IDX(self.base())
+    }
+
+    /// The page the chunk is drawn from, where it is resident: a chunk is
+    /// mounted from a resident page, which stays until the chunk goes.
+    fn page(&self) -> Option<&'static Terrain> {
+        Terrain::pyramid().get(self.at.page())
+    }
+
     fn wants(&self, cube: Cube) -> bool {
         self.want.contains(&Some(cube))
     }
@@ -277,7 +210,7 @@ struct PaintJob {
     /// Whether it paints the builder's folded entries rather than the
     /// store's own: its fold is coarser than an object's finest tier.
     folded: bool,
-    revision: (u32, u32),
+    revision: u32,
     hide: Option<(i32, u32)>,
     carve: Option<Carve>,
 }
@@ -286,10 +219,6 @@ struct PaintJob {
 /// is also the most one entry sets, so a step sets at most twice this
 /// whatever the column holds.
 const PAINT_VOXELS: usize = (BAND_CELLS * BAND_CELLS) as usize;
-
-fn column_revision(col_idx: IVec) -> (u32, u32) {
-    (object_col_revision(col_idx), decor_col_revision(col_idx))
-}
 
 struct BakeJob {
     id: u32,
@@ -391,17 +320,19 @@ impl Builder {
     /// Where chunk `id` starts in its page, the page's lanes and the
     /// structure setting it is drawn under: the ground its decor is
     /// scattered over, at any level. None while its page has not come.
-    pub fn ground_of(&self, id: u32) -> Option<(u32, u32, PageLanes, bool)> {
+    pub fn ground_of(&self, id: u32) -> Option<(u32, u32, &'static Terrain, bool)> {
         let c = self.chunks.get(&id)?;
-        Some((c.tx0, c.ty0, c.page?, c.show_structures))
+        let (tx0, ty0) = c.at.in_page();
+        Some((tx0, ty0, c.page()?, c.show_structures))
     }
 
     /// What chunk `id` is made of, for a decor build: its corner, the column
     /// it stands in as the object store keys it, where it starts in its page,
     /// and its page's lanes.
-    pub fn source_of(&self, id: u32) -> Option<(IVec, IVec, u32, u32, PageLanes, bool)> {
-        let c = self.chunks.get(&id).filter(|c| c.level == 0)?;
-        Some((c.base, c.col_idx, c.tx0, c.ty0, c.page?, c.show_structures))
+    pub fn source_of(&self, id: u32) -> Option<(IVec, IVec, u32, u32, &'static Terrain, bool)> {
+        let c = self.chunks.get(&id).filter(|c| c.level() == 0)?;
+        let (tx0, ty0) = c.at.in_page();
+        Some((c.base(), c.col_idx(), tx0, ty0, c.page()?, c.show_structures))
     }
 
     /// What a leaf composite at `base` is valid for: its column's objects and
@@ -419,7 +350,7 @@ impl Builder {
     pub fn compose_leaf(&mut self, world: &mut World, base: IVec) -> Option<(u32, u32)> {
         let cell = GROUND.cell_of(0, &pxl_spec::space::pvf3::Pvf3 { i: base, ..Default::default() });
         let (leaf, first) = (cell.page(), cell.index());
-        let page = Terrain::pyramid().get(leaf).map(page_lanes)?;
+        let page = Terrain::pyramid().get(leaf)?;
         let (tx0, ty0) = (first % PAGE_CELLS, first / PAGE_CELLS);
         let show = settings_store().show_structures;
         let col_idx = L2_IDX(base);
@@ -458,17 +389,11 @@ impl Builder {
 
     // ---- commands ----
 
-    pub fn add(&mut self, id: u32, level: u32, base: IVec, tx0: u32, ty0: u32) {
-        assert!(tx0 + CHUNK_CELLS <= PAGE_CELLS && ty0 + CHUNK_CELLS <= PAGE_CELLS, "a chunk past its page");
+    pub fn add(&mut self, id: u32, at: PyramidChunk) {
         self.chunks.insert(
             id,
             Chunk {
-                level,
-                base,
-                col_idx: L2_IDX(base),
-                tx0,
-                ty0,
-                page: None,
+                at,
                 show_structures: false,
                 generation: 0,
                 want: [None; 2],
@@ -485,10 +410,9 @@ impl Builder {
 
     /// The chunk's sources changed: what it was built from is gone, and a
     /// tier built before now is stale.
-    pub fn source(&mut self, world: &mut World, id: u32, page: Option<PageLanes>, show_structures: bool) {
+    pub fn source(&mut self, world: &mut World, id: u32, show_structures: bool) {
         self.drop_work(world, id);
         if let Some(c) = self.chunks.get_mut(&id) {
-            c.page = page;
             c.show_structures = show_structures;
             c.generation = c.generation.wrapping_add(1);
         }
@@ -659,8 +583,8 @@ impl Builder {
 
     fn advance_runs(&mut self, world: &mut World, id: u32) -> Progress {
         let c = &self.chunks[&id];
-        let Some(page) = c.page else { return Progress::Blocked };
-        if c.level > 0 {
+        let Some(page) = c.page() else { return Progress::Blocked };
+        if c.level() > 0 {
             return self.level_runs(world, id, page);
         }
         let holding = matches!(&self.scan_job, Some(j) if j.id == id);
@@ -671,11 +595,11 @@ impl Builder {
         // only ever about what is placed, so the direct path serves every
         // tier: a zoom-in would otherwise scan every chunk in view, most of
         // them empty of objects.
-        if !holding && !self.has_objects(world, c.col_idx) {
+        if !holding && !self.has_objects(world, c.col_idx()) {
             return self.direct_runs(world, id, page);
         }
         if !holding {
-            let col_idx = c.col_idx;
+            let col_idx = c.col_idx();
             if self.scan_job.is_some() || self.run_set_for(id).is_none() {
                 return Progress::Blocked;
             }
@@ -693,7 +617,7 @@ impl Builder {
             let paint = PaintJob {
                 next: 0,
                 folded,
-                revision: column_revision(col_idx),
+                revision: object_col_revision(col_idx),
                 hide,
                 carve: self.carve.filter(|c| c.0 == col_idx).map(|c| c.1),
             };
@@ -736,37 +660,27 @@ impl Builder {
     }
 
     fn has_objects(&self, world: &World, col_idx: IVec) -> bool {
-        world.store.chunk_lanes(col_idx).is_some_and(|l| l.count > 0) || matches!(self.carve, Some((k, _)) if k == col_idx)
+        world.store.entries(col_idx).is_some() || matches!(self.carve, Some((k, _)) if k == col_idx)
     }
 
-    /// The page's lanes as slices.
-    ///
-    /// # Safety
-    /// `page` names lanes of a page's fixed shape inside the world's memory,
-    /// resident for as long as the view is read: what the scheduler promises
-    /// when it tells a chunk its source, a chunk being mounted from a resident
-    /// page that stays until it goes.
-    pub unsafe fn page_view(world: &World, page: PageLanes) -> PageView<'static> {
-        let mem = world.volumes.mem();
-        let cells = (PAGE_CELLS * PAGE_CELLS) as usize;
-        let samples = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
+    /// A page's lanes as the paint reads them.
+    pub fn page_view(page: &Terrain) -> PageView<'_> {
         PageView {
-            cells: core::slice::from_raw_parts(mem.add(page.cells) as *const GroundCell, cells),
-            ele: core::slice::from_raw_parts(mem.add(page.ele) as *const i16, samples),
+            cells: &page.ground.cells,
+            ele: &page.ele,
         }
     }
 
     /// A new volume with the chunk's terrain painted in, open; none when a
     /// paint was refused.
-    fn paint_terrain(&mut self, world: &mut World, id: u32, page: PageLanes) -> Option<u32> {
+    fn paint_terrain(&mut self, world: &mut World, id: u32, page: &Terrain) -> Option<u32> {
         let c = &self.chunks[&id];
-        let (tx0, ty0, show) = (c.tx0, c.ty0, c.show_structures);
+        let ((tx0, ty0), show) = (c.at.in_page(), c.show_structures);
         self.paint_terrain_at(world, tx0, ty0, show, page)
     }
 
-    fn paint_terrain_at(&mut self, world: &mut World, tx0: u32, ty0: u32, show: bool, page: PageLanes) -> Option<u32> {
-        // SAFETY: a resident page's lanes, read within the command.
-        let view = unsafe { Self::page_view(world, page) };
+    fn paint_terrain_at(&mut self, world: &mut World, tx0: u32, ty0: u32, show: bool, page: &Terrain) -> Option<u32> {
+        let view = Self::page_view(page);
         self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
         let volume = world.volumes.open();
         if !self.sample.paint(world.volumes, volume) {
@@ -808,8 +722,8 @@ impl Builder {
     /// entry and the carve are painted, the volume is sealed and the scan
     /// begins on it.
     fn advance_paint(&mut self, world: &mut World, id: u32, volume: u32, mut paint: PaintJob) -> Progress {
-        let col_idx = self.chunks[&id].col_idx;
-        if column_revision(col_idx) != paint.revision {
+        let col_idx = self.chunks[&id].col_idx();
+        if object_col_revision(col_idx) != paint.revision {
             self.abort_scan_of(world, id);
             return Progress::Busy;
         }
@@ -849,15 +763,13 @@ impl Builder {
         Progress::Busy
     }
 
-    fn direct_runs(&mut self, world: &mut World, id: u32, page: PageLanes) -> Progress {
+    fn direct_runs(&mut self, world: &mut World, id: u32, page: &Terrain) -> Progress {
         if self.run_set_for(id).is_none() {
             return Progress::Blocked;
         }
         let c = &self.chunks[&id];
-        let (tx0, ty0, show) = (c.tx0, c.ty0, c.show_structures);
-        // SAFETY: the chunk's page, as its source named it, resident while
-        // the chunk is.
-        let view = unsafe { Self::page_view(world, page) };
+        let ((tx0, ty0), show) = (c.at.in_page(), c.show_structures);
+        let view = Self::page_view(page);
         self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
         assert!(self.direct.begin_direct(), "the direct writer left open");
         let floor = self.sample.floor;
@@ -887,22 +799,23 @@ impl Builder {
     /// A level chunk's runs, written the direct way: its level page's ground
     /// and the object layer folded to its level (pxl-render mesh/paint/level.rs),
     /// in the level's cells. Cheap to make again, like a leaf's direct runs.
-    fn level_runs(&mut self, world: &mut World, id: u32, page: PageLanes) -> Progress {
+    fn level_runs(&mut self, world: &mut World, id: u32, page: &Terrain) -> Progress {
         if self.run_set_for(id).is_none() {
             return Progress::Blocked;
         }
         let c = &self.chunks[&id];
-        let (tx0, ty0, show, level, base) = (c.tx0, c.ty0, c.show_structures, c.level, c.base);
-        // SAFETY: the chunk's page, as its source named it, resident while
-        // the chunk is.
-        let view = unsafe { Self::page_view(world, page) };
+        let ((tx0, ty0), show, level, base) = (c.at.in_page(), c.show_structures, c.level(), c.base());
+        let view = Self::page_view(page);
         self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
         let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         let mut columns = Vec::new();
-        for i in 0..world.store.chunk_count() {
-            let key = world.store.chunk_key(i);
-            if !folds_into(level, base, key) {
+        // Its own ground and the apron a fold reads, which reaches into the
+        // chunks beside it.
+        let near = (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy)));
+        let under: Vec<IVec> = near.flat_map(|(dx, dy)| world.store.cols_under(c.at.beside(dx, dy).node())).collect();
+        for key in under {
+            if !tiers_draw(level, base, key) {
                 continue;
             }
             let o = FROM_L2_IDX(key);
@@ -973,7 +886,7 @@ impl Builder {
             }
             let cube = c.wanted().next().unwrap();
             assert!(
-                self.bake.begin(&set, mesh_step(cube, c.level), 1 << c.level, settings_store().texture_pack),
+                self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().texture_pack),
                 "a bake open with no job naming it"
             );
             self.bake_job = Some(BakeJob {
@@ -1018,6 +931,7 @@ impl Builder {
                     self.let_runs_go(id);
                 }
                 emit(BuildEvent::Tier {
+                    chunk: self.chunks[&id].at,
                     id,
                     generation: job.generation,
                     cube: job.cube,

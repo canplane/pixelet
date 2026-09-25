@@ -215,10 +215,6 @@ words!(AtlasBlock, SUMMARY::atlas::WORDS,
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RetainBlock {
-    /// The builder's nodes, which is not the table's chunks
-    /// (`FramesBlock::last.lod.chunks`): the two are stepped together and
-    /// saying both is what makes a divergence visible.
-    pub nodes: f64,
     pub run_sets: f64,
     pub run_set_mb: f64,
     pub tiers: f64,
@@ -230,7 +226,7 @@ pub struct RetainBlock {
 }
 
 words!(RetainBlock, SUMMARY::retain::WORDS,
-    nodes => SUMMARY::retain::nodes, run_sets => SUMMARY::retain::run_sets, run_set_mb => SUMMARY::retain::run_set_mb,
+    run_sets => SUMMARY::retain::run_sets, run_set_mb => SUMMARY::retain::run_set_mb,
     tiers => SUMMARY::retain::tiers, decor_steps => SUMMARY::retain::decor_steps,
     decor_instances => SUMMARY::retain::decor_instances, on_bytes => SUMMARY::retain::on_bytes,
     off_bytes => SUMMARY::retain::off_bytes, budget_bytes => SUMMARY::retain::budget_bytes,

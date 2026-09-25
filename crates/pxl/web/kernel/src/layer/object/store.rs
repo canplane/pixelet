@@ -7,15 +7,15 @@
 //! scan over every placed object anywhere).
 //!
 //! The records are the second half: one per L2 chunk column holding user
-//! objects — a palette, and one sparse octree
-//! per 64³ band whose leaves are palette indices — and, derived from them a
+//! objects — a sparse octree per 64³ band whose leaves are catalog values —
+//! and, derived from them a
 //! chunk at a time, the chunk's entries as three lanes and an index of the
 //! cells they fall in. A coordinate is lowered here to a chunk key, a band
 //! and a lattice position, and what comes back is lanes. What this module
 //! adds is the eraser's two virtual edits, the change log's bumps, and the
 //! persisted form in the host's storage.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use base64::Engine;
 use pxl_render::mesh::paint::object::adapter::{Carve, Entries};
@@ -23,12 +23,13 @@ use pxl_spec::bake::constant::{band_cell_z, band_of, in_cell, pack_pos, unpack_p
 use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
-use pxl_spec::space::hierarchy::{at_walk_order, first_descendant_of, walk_order, Scale};
-use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3_IDX};
+use pxl_spec::space::hierarchy::{at_walk_order, child_of, first_descendant_of, parent_of, walk_order, Scale};
+use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2, L2_IDX, L3, L3_IDX};
 use pxl_spec::space::pvf3::fvec::FVec;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pvf3::Ivec;
+use pxl_spec::space::pyramid::TOP_LEVEL;
 use pxl_spec::space::sparse_tree::mem;
 use pxl_spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree};
 use pxl_spec::space::xy::TO_XY;
@@ -42,8 +43,8 @@ use crate::host::{now, storage_get, storage_set};
 use crate::kernel::kernel;
 use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::setting::store::hidden_ground;
-use crate::world::change::{bump_world, wake_at, world_changes, world_edge, DECOR_COLUMN, OBJECT_COLUMN};
-use crate::world::chunk::node::chunk_sources_changed;
+use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
+use crate::world::chunk::source::{chunk_sources_changed, column_written};
 use crate::world::frame::coord::local_world_to_canonical;
 
 /// What a leaf holds, past its corner and size. A solid is the catalog's own
@@ -184,29 +185,6 @@ fn read_state(coord: &Pvf3) -> u32 {
     kernel().objects.read(at.col_idx, at.band, at.step)
 }
 
-/// A chunk's entry lanes, valid until the next write; None where
-/// the chunk holds nothing.
-fn entry_lanes(col_idx: IVec) -> Option<(&'static [i32], &'static [u32], &'static [u32])> {
-    let lanes = kernel().objects.chunk_lanes(col_idx)?;
-    if lanes.count == 0 {
-        return None;
-    }
-    let n = lanes.count as usize;
-    // SAFETY: the store's own lanes, `count` long, untouched until the next
-    // write, which no caller makes while it holds them.
-    unsafe {
-        Some((
-            core::slice::from_raw_parts(lanes.band_at, n),
-            core::slice::from_raw_parts(lanes.pos_at, n),
-            core::slice::from_raw_parts(lanes.state_at, n),
-        ))
-    }
-}
-
-fn entry_count(col_idx: IVec) -> u32 {
-    kernel().objects.chunk_lanes(col_idx).map_or(0, |l| l.count)
-}
-
 // ---- Entries ----
 //
 // What a chunk's trees hold, read back as one entry per leaf — a leaf larger
@@ -327,68 +305,16 @@ fn cell_run(ix: i64, iy: i64, iz: i64) -> Option<CellRun> {
 /// Moves on every write to any column, so a reader that cached a derived
 /// answer can tell whether the store has changed under it at all.
 pub fn objects_revision() -> u32 {
-    let log = world_changes();
-    log.tick(OBJECT_COLUMN) + log.tick(DECOR_COLUMN)
-}
-
-/// A column holding objects, as a box: its coordinate among the L2 blocks on
-/// the ground, and the lowest and highest any of its entries reaches, in
-/// units.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ColumnBox {
-    pub col: [i64; 2],
-    pub z: (f64, f64),
-}
-
-static BOXES: Global<Option<(u32, Vec<ColumnBox>)>> = Global::new();
-
-/// Every column holding objects, as its box: what a view measures how near it
-/// is to what is placed by (world/pyramid/window.rs `Domain`). Made again
-/// only when the store has changed.
-pub fn column_boxes() -> &'static [ColumnBox] {
-    let revision = objects_revision();
-    let held = BOXES.get(|| None);
-    if held.as_ref().is_none_or(|(r, _)| *r != revision) {
-        let boxes = object_cols()
-            .into_iter()
-            .filter_map(|col| {
-                let mut z: Option<(f64, f64)> = None;
-                each_col_entry(
-                    col,
-                    &mut |e| {
-                        let lo = pvf3::to_real(pvf3::Z(&e.corner()));
-                        let hi = lo + e.size;
-                        z = Some(z.map_or((lo, hi), |(a, b)| (a.min(lo), b.max(hi))));
-                    },
-                    false,
-                );
-                Some(ColumnBox {
-                    col: [ivec::X(col), ivec::Y(col)],
-                    z: z?,
-                })
-            })
-            .collect();
-        *held = Some((revision, boxes));
-    }
-    &held.as_ref().expect("made above").1
-}
-
-fn bump_col(col_idx: IVec, objects: bool, decor: bool) {
-    chunk_sources_changed();
-    if objects {
-        bump_world(OBJECT_COLUMN, col_idx);
-    }
-    if decor {
-        bump_world(DECOR_COLUMN, col_idx);
-    }
+    world_changes().tick(OBJECT_COLUMN)
 }
 
 /// Applies the writes to the store, which makes each changed column's
-/// entries again inside the call, and announces every column changed in
-/// both of its topics.
+/// entries again inside the call, and announces every column changed.
 fn apply(writes: impl IntoIterator<Item = Write>) {
     for col_idx in kernel().objects.write(writes) {
-        bump_col(col_idx, true, true);
+        chunk_sources_changed();
+        bump_world(OBJECT_COLUMN, col_idx);
+        column_written(col_idx);
     }
 }
 
@@ -404,7 +330,7 @@ fn cursor_at(at: EntryAt) -> EntryCursor {
 /// Whether any entry — including the carve preview — is filed under a
 /// column. One lookup; what a coarse build asks before skipping the scan.
 pub fn col_has_entries(col_idx: IVec) -> bool {
-    if entry_count(col_idx) > 0 {
+    if kernel().objects.entries(col_idx).is_some() {
         return true;
     }
     store_state().virtual_carve_preview.as_ref().is_some_and(|c| c.at.col_idx == col_idx)
@@ -416,10 +342,10 @@ pub fn col_has_entries(col_idx: IVec) -> bool {
 pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor), render: bool) {
     let mut cursor = EntryCursor::default();
     let hide = store_state().virtual_hide;
-    if let Some((bands, poss, states)) = entry_lanes(col_idx) {
+    if let Some(e) = kernel().objects.entries(col_idx) {
         cursor.at_chunk(col_idx);
-        for k in 0..bands.len() {
-            cursor.load(bands[k], poss[k], states[k]);
+        for k in 0..e.band.len() {
+            cursor.load(e.band[k], e.pos[k], e.state[k]);
             if render && hide.is_some_and(|h| cursor.at() == Some(h)) {
                 continue;
             }
@@ -436,11 +362,11 @@ pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor), render
 fn each_cell_entry(ix: i64, iy: i64, iz: i64, visit: &mut dyn FnMut(&EntryCursor)) {
     let Some(run) = cell_run(ix, iy, iz) else { return };
     let col_idx = column_of([ix, iy, iz]);
-    let Some((bands, poss, states)) = entry_lanes(col_idx) else { return };
+    let Some(e) = kernel().objects.entries(col_idx) else { return };
     let mut cursor = EntryCursor::default();
     cursor.at_chunk(col_idx);
     for k in run.start as usize..(run.start + run.count) as usize {
-        cursor.load(bands[k], poss[k], states[k]);
+        cursor.load(e.band[k], e.pos[k], e.state[k]);
         visit(&cursor);
     }
 }
@@ -509,8 +435,10 @@ struct CarvePreview {
 
 struct StoreState {
     /// The one object painted as absent from the real render build — see
-    /// set_virtual_hide.
+    /// set_virtual_hide — and whether it is drawn in a chunk's tiers, its
+    /// decor, or, where it is gone already, either.
     virtual_hide: Option<EntryAt>,
+    hide_in: (bool, bool),
     virtual_carve_preview: Option<CarvePreview>,
     /// When the pending save is due, if one is.
     save_due_ms: Option<f64>,
@@ -521,6 +449,7 @@ static STORE: Global<StoreState> = Global::new();
 fn store_state() -> &'static mut StoreState {
     STORE.get(|| StoreState {
         virtual_hide: None,
+        hide_in: (false, false),
         virtual_carve_preview: None,
         save_due_ms: None,
     })
@@ -535,33 +464,22 @@ fn store_state() -> &'static mut StoreState {
 /// occupancy) or a raycast paint: the object has not been removed, and the
 /// raycaster is what resolves the hover in the first place — if it stopped
 /// seeing the hidden object, hover would clear, the hide would lift, the
-/// raycaster would hit it again: an infinite loop. Bumps the column's revision, the same path a real
-/// place()/remove() takes.
+/// raycaster would hit it again: an infinite loop.
+///
+/// Nor is it a change to what is stored: no revision moves, so nothing that
+/// reads the store — a save, the boxes a view measures heights by — sees
+/// the hover. A chunk sees it as one of its sources (`render_edits`), in
+/// its tiers or its decor by the entry's kind, so hover churn never
+/// rebakes the wrong half.
 pub fn set_virtual_hide(at: Option<EntryAt>) {
     let st = store_state();
     if st.virtual_hide == at {
         return;
     }
-    let previous = st.virtual_hide.take();
     st.virtual_hide = at;
+    let kind = at.and_then(get_placed_object).map(|o| o.kind);
+    st.hide_in = (!matches!(kind, Some(EntryKind::Decor { .. })), !matches!(kind, Some(EntryKind::Solid { .. })));
     send_render_edits();
-    if let Some(previous) = previous {
-        bump_for_object(previous);
-    }
-    if let Some(at) = at {
-        bump_for_object(at);
-    }
-}
-
-/// Bumps only the revision relevant to the entry's kind — decor or cube
-/// content — so hover churn never rebakes the wrong half; both when the kind
-/// is gone already (erased while hidden), which costs one extra bump on each
-/// side.
-fn bump_for_object(at: EntryAt) {
-    let kind = get_placed_object(at).map(|o| o.kind);
-    let is_decor = matches!(kind, Some(EntryKind::Decor { .. }));
-    let is_solid = matches!(kind, Some(EntryKind::Solid { .. }));
-    bump_col(at.col_idx, !is_decor, !is_solid);
 }
 
 /// The eraser's "dig into bare terrain" preview — the terrain-side twin of
@@ -577,7 +495,6 @@ pub fn set_virtual_carve_preview(at: &Pvf3, size: f64) {
     if st.virtual_carve_preview.as_ref().is_some_and(|c| c.cell == cell) {
         return;
     }
-    let previous = st.virtual_carve_preview.take();
     let [x, y, z] = lowered.step;
     let at = EntryAt {
         col_idx: lowered.col_idx,
@@ -586,35 +503,46 @@ pub fn set_virtual_carve_preview(at: &Pvf3, size: f64) {
     };
     st.virtual_carve_preview = Some(CarvePreview { cell, at });
     send_render_edits();
-    if let Some(previous) = previous {
-        bump_col(previous.at.col_idx, true, false);
-    }
-    bump_col(at.col_idx, true, false);
 }
 
 pub fn clear_virtual_carve_preview() {
-    let Some(carve) = store_state().virtual_carve_preview.take() else { return };
-    send_render_edits();
-    bump_col(carve.at.col_idx, true, false);
+    if store_state().virtual_carve_preview.take().is_some() {
+        send_render_edits();
+    }
 }
 
-/// Tells the builds the two edits, before the bumps that rebuild the columns
-/// they touch reach a chunk.
+/// The drawn build's two edits, which a chunk's sources are compared with
+/// beside the store (world/chunk/table.rs `Sources`): the hidden entry, with
+/// whether it is drawn in tiers and in decor, and the carve preview.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RenderEdits {
+    pub hide: Option<EntryAt>,
+    pub hide_in: (bool, bool),
+    pub carve: Option<EntryAt>,
+}
+
+pub fn render_edits() -> RenderEdits {
+    let st = store_state();
+    RenderEdits {
+        hide: st.virtual_hide,
+        hide_in: st.hide_in,
+        carve: st.virtual_carve_preview.map(|c| c.at),
+    }
+}
+
+/// Tells the builds the two edits, and the chunks that their sources moved.
 fn send_render_edits() {
     let st = store_state();
     let hide = st.virtual_hide.map(|h| (h.col_idx, h.band_idx, h.pos));
     let carve = st.virtual_carve_preview.map(|c| (c.at.col_idx, Carve { band: c.at.band_idx, pos: c.at.pos }));
     kernel().sched.builder.set_edits(hide, carve);
+    chunk_sources_changed();
 }
 
-/// Cube-content revision of a column — a decor-only change never bumps it.
+/// A column's revision: it moves on every write to what the column stores,
+/// and on nothing else.
 pub fn object_col_revision(col_idx: IVec) -> u32 {
     world_changes().revision_of(OBJECT_COLUMN, col_idx as i64)
-}
-
-/// Decor revision of a column — a solid-only change never bumps it.
-pub fn decor_col_revision(col_idx: IVec) -> u32 {
-    world_changes().revision_of(DECOR_COLUMN, col_idx as i64)
 }
 
 // ---- Persistence ----
@@ -635,7 +563,7 @@ pub fn decor_col_revision(col_idx: IVec) -> u32 {
 /// everything placed, which is what a save is.
 pub fn object_cols() -> Vec<IVec> {
     let objects = &kernel().objects;
-    (0..objects.chunk_count()).map(|i| objects.chunk_key(i)).collect()
+    objects.cols().collect()
 }
 
 /// One page's entries, a lane a field.
@@ -931,17 +859,16 @@ pub fn remove(at: EntryAt) {
 // The object store's records; the paint that turns them into voxels is
 // crates/pxl/web/render/src/mesh/paint/object/adapter.rs.
 //
-// One record per L2 chunk column that holds user objects — a palette,
-// and one sparse octree per 64³ band whose leaves are palette indices —
-// and, derived from it a chunk at a time, the chunk's entries as three
+// One record per L2 chunk column that holds user objects — a sparse
+// octree per 64³ band whose leaves are catalog values — and, derived from
+// it a chunk at a time, the chunk's entries as three
 // lanes (band, packed position, state) and an index of the cells they
 // fall in. Everything here is numbers: the client lowers a coordinate to
 // a chunk key, a band and a lattice position before it crosses, and gets
 // lanes back as views.
 //
-// The palette is per chunk so a leaf is an index into a table the chunk
-// carries rather than a value from a catalog that grows; an entry is at
-// most a cell because everything downstream — the collision neighbourhood,
+// A leaf is the catalog value itself, which the catalog keeps within a
+// leaf's width (pxl-spec cell/object.rs); an entry is at most a cell because everything downstream — the collision neighbourhood,
 // the raycast's per-cell runs — assumes one, and a leaf covering more is
 // split into the cells it covers as the lanes are built; and the index is
 // rebuilt a chunk at a time because a write touches one chunk and the cost
@@ -984,13 +911,9 @@ pub const UNKNOWN: u32 = cube_types::common::unknown as u32;
 const _: () = assert!(VOID == 0);
 
 pub(crate) struct Chunk {
-    /// The column this chunk is, as the key everything about it is filed under.
-    col_idx: IVec,
-    /// Index → state; index 0 is VOID in every chunk.
-    palette: Vec<u32>,
-    /// The band Z range the chunk's bands lie in; a band inside it may be gone.
-    band_min: BandZ,
-    band_max: BandZ,
+    /// The band trees by Z, each leaf the catalog value it holds — VOID, a
+    /// zeroed leaf, being the absence.
+    bands: BTreeMap<BandZ, SparseTree<u16>>,
     /// The entries: the band trees walked in band order and each tree's walk
     /// order, a leaf coarser than a cell split into its cells in that order,
     /// so a cell's entries are one run and the lanes are sorted by
@@ -999,6 +922,47 @@ pub(crate) struct Chunk {
     pub(crate) e_band: Vec<BandZ>,
     pub(crate) e_pos: Vec<u32>,
     pub(crate) e_state: Vec<u32>,
+    /// The lowest and highest any entry reaches, in units: the column's box
+    /// on Z, made with the entries.
+    z: (f64, f64),
+}
+
+impl Chunk {
+    /// Re-reads the trees into the entry lanes: one entry per leaf, a leaf
+    /// larger than a cell split into the cells it covers.
+    fn derive_entries(&mut self) {
+        self.e_band.clear();
+        self.e_pos.clear();
+        self.e_state.clear();
+        let mut reach = (f64::INFINITY, f64::NEG_INFINITY);
+        for (&bz, tree) in &self.bands {
+            sparse_tree::walk(tree, &mut |x, y, z, scale, value| {
+                let (x, y, z, val) = (x as u32, y as u32, z as u32, u32::from(value));
+                if val == VOID || val == UNKNOWN {
+                    return;
+                }
+                let lo = bz as f64 * BAND_UNITS + z as f64 * STEP_UNITS;
+                reach = (reach.0.min(lo), reach.1.max(lo + scale.side()));
+                if scale <= CELL {
+                    self.e_band.push(bz);
+                    self.e_pos.push(pack_pos(x, y, z, scale));
+                    self.e_state.push(val);
+                    return;
+                }
+                // Its cells in the walk's own order, so the lanes stay
+                // sorted by it.
+                let levels = scale.above(CELL) as u32;
+                for k in 0..1u64 << (3 * levels) {
+                    let cell = at_walk_order::<3>(k, levels).map(i64::from);
+                    let [dx, dy, dz] = first_descendant_of(cell, CELL.above(OBJECT_FINEST) as u32).map(|v| v as u32);
+                    self.e_band.push(bz);
+                    self.e_pos.push(pack_pos(x + dx, y + dy, z + dz, CELL));
+                    self.e_state.push(val);
+                }
+            });
+        }
+        self.z = reach;
+    }
 }
 
 /// The run [start, start + count) of a chunk's entries in one cell, and how
@@ -1021,21 +985,22 @@ pub struct Write {
     pub state: u32,
 }
 
-/// What a chunk's lanes are, for a reader that takes views.
-pub struct ChunkLanes {
-    pub count: u32,
-    pub band_at: *const BandZ,
-    pub pos_at: *const u32,
-    pub state_at: *const u32,
+pub struct Store {
+    /// A chunk for every column holding an object, and only for those: a
+    /// band is dropped once every leaf of it reads VOID, and a chunk with its
+    /// last band.
+    chunks: BTreeMap<IVec, Chunk>,
+    /// The lowest and highest the objects under a node of the hierarchy
+    /// reach, in units, for every node over a column that holds any: keyed
+    /// by the node's levels above a column and its coordinate at them. A
+    /// column's is its own and a node's the union of its four children's,
+    /// so a write makes again the one chain over the column it changed.
+    reaches: HashMap<(u32, [i64; 2]), (f64, f64)>,
 }
 
-pub struct Store {
-    /// Chunks in the order they were opened, the last moved into a closed
-    /// one's place — which is the order the persisted form lists them in.
-    pub(crate) chunks: Vec<Chunk>,
-    pub(crate) chunk_at: BTreeMap<IVec, u32>,
-    bands: BTreeMap<(IVec, BandZ), SparseTree<u16>>,
-}
+/// Levels of `Store::reaches` over a column: to the pyramid's top page, the
+/// largest node a view measures.
+const REACH_LEVELS: u32 = L3.above(L2) as u32 + TOP_LEVEL;
 
 impl Default for Store {
     fn default() -> Self {
@@ -1046,98 +1011,67 @@ impl Default for Store {
 impl Store {
     pub fn new() -> Store {
         Store {
-            chunks: Vec::new(),
-            chunk_at: BTreeMap::new(),
-            bands: BTreeMap::new(),
+            chunks: BTreeMap::new(),
+            reaches: HashMap::new(),
         }
     }
 
-    pub fn chunk_count(&self) -> usize {
-        self.chunks.len()
+    /// The columns holding objects.
+    pub fn cols(&self) -> impl Iterator<Item = IVec> + '_ {
+        self.chunks.keys().copied()
     }
 
-    pub fn chunk_key(&self, i: usize) -> IVec {
-        self.chunks[i].col_idx
+    /// The lowest and highest the objects under a node reach, in units: a
+    /// node of the hierarchy by its side and its coordinate, a column's or
+    /// coarser. None where nothing stands under it.
+    pub fn reach_over(&self, (side, at): (Scale, [i64; 2])) -> Option<(f64, f64)> {
+        self.reaches.get(&(u32::try_from(side.above(L2)).ok()?, at)).copied()
     }
 
-    fn open_chunk(&mut self, col_idx: IVec) -> usize {
-        if let Some(&pos) = self.chunk_at.get(&col_idx) {
-            return pos as usize;
+    /// The columns holding objects under a node, a column's or coarser,
+    /// found down the reaches: a subtree nothing stands in is not entered, so
+    /// the cost is what is under the node and not what the store holds.
+    pub fn cols_under(&self, (side, at): (Scale, [i64; 2])) -> Vec<IVec> {
+        let Ok(level) = u32::try_from(side.above(L2)) else { return Vec::new() };
+        let mut out = Vec::new();
+        let mut down = vec![(level, at)];
+        while let Some((level, at)) = down.pop() {
+            if !self.reaches.contains_key(&(level, at)) {
+                continue;
+            }
+            match level {
+                0 => out.push(ivec::gather(at[0], at[1], 0)),
+                _ => down.extend((0..4).map(|slot| (level - 1, child_of(at, slot)))),
+            }
         }
-        let pos = self.chunks.len();
-        self.chunks.push(Chunk {
-            col_idx,
-            palette: vec![VOID],
-            band_min: i32::MAX,
-            band_max: i32::MIN,
-            e_band: Vec::new(),
-            e_pos: Vec::new(),
-            e_state: Vec::new(),
-        });
-        self.chunk_at.insert(col_idx, pos as u32);
-        pos
+        out.sort_unstable();
+        out
     }
 
-    /// Removes a chunk that has no bands left, moving the last one into its
-    /// position.
-    fn close_chunk(&mut self, pos: usize) {
-        let gone = self.chunks.swap_remove(pos);
-        self.chunk_at.remove(&gone.col_idx);
-        if pos < self.chunks.len() {
-            self.chunk_at.insert(self.chunks[pos].col_idx, pos as u32);
-        }
-    }
-
-    fn open_band(&mut self, cpos: usize, band_idx: BandZ) {
-        let key = self.chunks[cpos].col_idx;
-        if self.bands.contains_key(&(key, band_idx)) {
-            return;
-        }
-        self.bands.insert((key, band_idx), sparse_tree::alloc::<u16>(OBJECT_LAYOUT, 64));
-        let chunk = &mut self.chunks[cpos];
-        chunk.band_min = chunk.band_min.min(band_idx);
-        chunk.band_max = chunk.band_max.max(band_idx);
-    }
-
-    /// Removes a band, then tightens its chunk's Z range — and removes the
-    /// chunk when nothing is left in it.
-    fn close_band(&mut self, cpos: usize, band_idx: BandZ) {
-        let key = self.chunks[cpos].col_idx;
-        self.bands.remove(&(key, band_idx));
-        let chunk = &self.chunks[cpos];
-        let mut left = self.bands.range((key, chunk.band_min)..=(key, chunk.band_max)).map(|(&(_, bz), _)| bz);
-        // Nothing left in the range is the chunk's last band gone, and it is
-        // the empty iterator that says so. Read as a pair of bounds it does
-        // not: the low one falls back to `BandZ::MAX` and the high one to the
-        // low, so the two come out equal and a `lo > hi` never fires — the
-        // chunk stayed, and a column placed in and erased again kept one.
-        let Some(lo) = left.next() else {
-            self.close_chunk(cpos);
-            return;
+    /// Makes again the reaches over column `col`, from it up.
+    fn reach_up(&mut self, col: IVec) {
+        let mut at = [ivec::X(col), ivec::Y(col)];
+        match self.chunks.get(&col) {
+            Some(chunk) => self.reaches.insert((0, at), chunk.z),
+            None => self.reaches.remove(&(0, at)),
         };
-        let hi = left.next_back().unwrap_or(lo);
-        let chunk = &mut self.chunks[cpos];
-        chunk.band_min = lo;
-        chunk.band_max = hi;
-    }
-
-    /// The state's index in the chunk's palette, appended if new.
-    fn palette_index(&mut self, cpos: usize, state: u32) -> u16 {
-        let palette = &mut self.chunks[cpos].palette;
-        if let Some(k) = palette.iter().position(|&s| s == state) {
-            return k as u16;
+        for level in 1..=REACH_LEVELS {
+            at = parent_of(at);
+            let under = (0..4).filter_map(|slot| self.reaches.get(&(level - 1, child_of(at, slot))));
+            match under.copied().reduce(|a, b| (a.0.min(b.0), a.1.max(b.1))) {
+                Some(z) => self.reaches.insert((level, at), z),
+                None => self.reaches.remove(&(level, at)),
+            };
         }
-        assert!(palette.len() < u16::MAX as usize, "a chunk's palette past a leaf's width");
-        palette.push(state);
-        (palette.len() - 1) as u16
     }
 
-    /// The state at a lattice position of band `z` of chunk `key`; VOID
-    /// where nothing is.
+    /// The state at a lattice position of band `band_idx` of column
+    /// `col_idx`; VOID where nothing is.
     pub fn read(&self, col_idx: IVec, band_idx: BandZ, at: [u32; 3]) -> u32 {
-        let Some(&cpos) = self.chunk_at.get(&col_idx) else { return VOID };
-        let Some(tree) = self.bands.get(&(col_idx, band_idx)) else { return VOID };
-        self.chunks[cpos as usize].palette[mem::get::<Ivec, u16>(&tree.mem, &tree.layout, band_key(at), 0) as usize]
+        let Some(tree) = self.chunks.get(&col_idx).and_then(|c| c.bands.get(&band_idx)) else {
+            return VOID;
+        };
+        u32::from(mem::get::<Ivec, u16>(&tree.mem, &tree.layout, band_key(at), 0))
     }
 
     /// Applies every write, then makes again the entries of each column one
@@ -1151,9 +1085,10 @@ impl Store {
             }
         }
         for &col_idx in &changed {
-            if let Some(&cpos) = self.chunk_at.get(&col_idx) {
-                self.derive_entries(cpos as usize);
+            if let Some(chunk) = self.chunks.get_mut(&col_idx) {
+                chunk.derive_entries();
             }
+            self.reach_up(col_idx);
         }
         changed
     }
@@ -1164,62 +1099,28 @@ impl Store {
     fn put(&mut self, w: Write) -> bool {
         let Write { col_idx, band_idx, at, scale, state } = w;
         assert!((OBJECT_FINEST..=CELL).contains(&scale), "an object no finer than its finest tier and no coarser than a cell");
-        let cpos = match self.chunk_at.get(&col_idx) {
-            Some(&pos) => pos as usize,
-            None if state == VOID => return false,
-            None => self.open_chunk(col_idx),
-        };
-        if !self.bands.contains_key(&(col_idx, band_idx)) {
-            if state == VOID {
-                return false;
-            }
-            self.open_band(cpos, band_idx);
+        let value = u16::try_from(state).expect("a catalog value fits a leaf (pxl-spec cell/object.rs)");
+        let has_band = self.chunks.get(&col_idx).is_some_and(|c| c.bands.contains_key(&band_idx));
+        if !has_band && state == VOID {
+            return false;
         }
-        let idx = self.palette_index(cpos, state);
-        let tree = self.bands.get_mut(&(col_idx, band_idx)).expect("the band just opened");
-        mem::set::<Ivec, u16>(&mut tree.mem, &tree.layout, band_key(at), idx, scale, 0);
+        let chunk = self.chunks.entry(col_idx).or_insert_with(|| Chunk {
+            bands: BTreeMap::new(),
+            e_band: Vec::new(),
+            e_pos: Vec::new(),
+            e_state: Vec::new(),
+            z: (0.0, 0.0),
+        });
+        let tree = chunk.bands.entry(band_idx).or_insert_with(|| sparse_tree::alloc::<u16>(OBJECT_LAYOUT, 64));
+        mem::set::<Ivec, u16>(&mut tree.mem, &tree.layout, band_key(at), value, scale, 0);
         sparse_tree::compact(tree);
         if band_is_empty(tree) {
-            self.close_band(cpos, band_idx);
+            chunk.bands.remove(&band_idx);
+            if chunk.bands.is_empty() {
+                self.chunks.remove(&col_idx);
+            }
         }
         true
-    }
-
-    /// Re-reads a chunk's trees into its entry lanes: one entry per leaf,
-    /// a leaf larger than a cell split into the cells it covers.
-    fn derive_entries(&mut self, cpos: usize) {
-        let chunk = &mut self.chunks[cpos];
-        chunk.e_band.clear();
-        chunk.e_pos.clear();
-        chunk.e_state.clear();
-        // One descent to the column's first band, then its bands in order: the
-        // key is the column before the Z, so a column's bands lie together and
-        // the Z between two of them is a step rather than a search.
-        for (&(_, bz), tree) in self.bands.range((chunk.col_idx, chunk.band_min)..=(chunk.col_idx, chunk.band_max)) {
-            sparse_tree::walk(tree, &mut |x, y, z, scale, idx| {
-                let (x, y, z) = (x as u32, y as u32, z as u32);
-                let val = chunk.palette[idx as usize];
-                if val == VOID || val == UNKNOWN {
-                    return;
-                }
-                if scale <= CELL {
-                    chunk.e_band.push(bz);
-                    chunk.e_pos.push(pack_pos(x, y, z, scale));
-                    chunk.e_state.push(val);
-                    return;
-                }
-                // Its cells in the walk's own order, so the lanes stay
-                // sorted by it.
-                let levels = scale.above(CELL) as u32;
-                for k in 0..1u64 << (3 * levels) {
-                    let cell = at_walk_order::<3>(k, levels).map(i64::from);
-                    let [dx, dy, dz] = first_descendant_of(cell, CELL.above(OBJECT_FINEST) as u32).map(|v| v as u32);
-                    chunk.e_band.push(bz);
-                    chunk.e_pos.push(pack_pos(x + dx, y + dy, z + dz, CELL));
-                    chunk.e_state.push(val);
-                }
-            });
-        }
     }
 
     /// Where an entry's cell falls in the lanes' order: its band, then the
@@ -1229,9 +1130,10 @@ impl Store {
     }
 
     /// A column's entries as the view paints them, or none where the column
-    /// holds no chunk.
+    /// holds nothing: a column is held only while a leaf of it is not VOID,
+    /// and every such leaf is an entry.
     pub fn entries(&self, col_idx: IVec) -> Option<Entries<'_>> {
-        let chunk = &self.chunks[*self.chunk_at.get(&col_idx)? as usize];
+        let chunk = self.chunks.get(&col_idx)?;
         Some(Entries {
             band: &chunk.e_band,
             pos: &chunk.e_pos,
@@ -1239,22 +1141,10 @@ impl Store {
         })
     }
 
-    /// A chunk's entry lanes, or none where the chunk is gone.
-    pub fn chunk_lanes(&self, col_idx: IVec) -> Option<ChunkLanes> {
-        let &cpos = self.chunk_at.get(&col_idx)?;
-        let chunk = &self.chunks[cpos as usize];
-        Some(ChunkLanes {
-            count: chunk.e_band.len() as u32,
-            band_at: chunk.e_band.as_ptr(),
-            pos_at: chunk.e_pos.as_ptr(),
-            state_at: chunk.e_state.as_ptr(),
-        })
-    }
-
     /// The run of a chunk's entries in the cell at band-local (cx, cy) and
     /// absolute cell Z `cz`: found where it lies in the lanes' order.
     pub fn cell(&self, col_idx: IVec, cx: u32, cy: u32, cz: CellZ) -> Option<CellRun> {
-        let chunk = &self.chunks[*self.chunk_at.get(&col_idx)? as usize];
+        let chunk = self.chunks.get(&col_idx)?;
         let (band_idx, z) = band_of(cz as i64);
         let want = Self::cell_order(band_idx, cx, cy, z);
         let order = |k: usize| {
@@ -1275,8 +1165,7 @@ impl Store {
     /// Every record gone, as a load that could not be read leaves the world.
     pub fn clear(&mut self) {
         self.chunks.clear();
-        self.chunk_at.clear();
-        self.bands.clear();
+        self.reaches.clear();
     }
 }
 

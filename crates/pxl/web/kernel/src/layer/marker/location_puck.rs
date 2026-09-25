@@ -19,9 +19,9 @@ use crate::kernel::{kernel, with_world};
 use crate::layer::environment::fog::view_reach;
 use crate::layer::environment::theme::Theme;
 use crate::layer::environment::theme_clock::theme_key;
-use crate::layer::terrain::elevation::get_ele;
+use crate::layer::terrain::elevation::ground_at;
 use crate::world::change::request_world_tick;
-use crate::world::chunk::node::World;
+use crate::world::chunk::build::World;
 use crate::world::chunk::table::Frame;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
@@ -107,7 +107,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
 
     let mut pos = [0.0; 3];
     projection::unproject(&mut pos, device.i, device.f);
-    if let Some(ele) = get_ele(&device) {
+    if let Some(ele) = ground_at(&device) {
         p.last_known_center_z = Some(ele);
     }
     let Some(center_z) = p.last_known_center_z else {
@@ -129,7 +129,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
             // Falls back to flat (center height) rather than 0 when a sample
             // lands on an unloaded neighboring page — absolute 0 would sink or
             // launch that instance away from the rest of the zone.
-            let delta_ele = get_ele(&coord).unwrap_or(center_pos[2]) - center_pos[2];
+            let delta_ele = ground_at(&coord).unwrap_or(center_pos[2]) - center_pos[2];
             let lifted = [s.off[0], s.off[1], s.off[2] + delta_ele];
             center3n(&lifted, U_PER_CELL, &mut v);
             lane.extend([

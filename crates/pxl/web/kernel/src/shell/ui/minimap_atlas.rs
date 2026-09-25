@@ -84,7 +84,7 @@ pub struct MinimapAtlas {
 struct Atlas {
     colors: Colors,
     image: Option<MinimapAtlas>,
-    baked_for: Option<(u32, IVec)>,
+    baked_for: Option<(u64, IVec)>,
 }
 
 static ATLAS: Global<Atlas> = Global::new();
@@ -97,15 +97,25 @@ pub fn minimap_atlas() -> Option<&'static MinimapAtlas> {
         baked_for: None,
     });
     let map_center = map_store().map_center?;
-    let key = (Terrain::pyramid().level(ATLAS_LEVEL).revision(), L3_IDX(map_center.i));
+    let origin = Pvf3 { i: L3_CENTER(map_center.i), f: 0 };
+    let (ox, oy) = (ivec::X(origin.i), ivec::Y(origin.i));
+    let half = ATLAS_PX as i64 / 2;
+    let cells = PAGE_CELLS as i64;
+    let shift = U_PER_MINIMAP_PX.trailing_zeros();
+    // What the image is made of: which of the pages it reads are resident.
+    // A bake's page is the same whenever it comes, so that says every
+    // change there is.
+    let (cx0, cy1) = ((ox >> shift) - half, (oy >> shift) + half - 1);
+    let (cx1, cy0) = (cx0 + ATLAS_PX as i64 - 1, cy1 - (ATLAS_PX as i64 - 1));
+    let resident: u64 = (cy0.div_euclid(cells)..=cy1.div_euclid(cells))
+        .flat_map(|y| (cx0.div_euclid(cells)..=cx1.div_euclid(cells)).map(move |x| (x, y)))
+        .enumerate()
+        .filter(|&(_, (x, y))| Terrain::pyramid().get(LevelPage::new(ATLAS_LEVEL, ivec::gather(x, y, 0))).is_some())
+        .fold(0, |bits, (k, _)| bits | 1 << k);
+    let key = (resident, L3_IDX(map_center.i));
     if a.baked_for != Some(key) {
         a.baked_for = Some(key);
-        let origin = Pvf3 { i: L3_CENTER(map_center.i), f: 0 };
         let mut pixels = vec![0u8; (ATLAS_PX * ATLAS_PX * 4) as usize];
-        let (ox, oy) = (ivec::X(origin.i), ivec::Y(origin.i));
-        let half = ATLAS_PX as i64 / 2;
-        let cells = PAGE_CELLS as i64;
-        let shift = U_PER_MINIMAP_PX.trailing_zeros();
         for py in 0..ATLAS_PX as i64 {
             // Atlas rows run down for a north-up image, and world Y runs up:
             // the flip, or the minimap renders upside down.

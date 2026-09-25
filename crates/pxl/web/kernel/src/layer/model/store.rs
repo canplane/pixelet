@@ -25,7 +25,7 @@ use pxl_spec::space::v3::V3;
 use xpute_runtime::abi::handle::Slots;
 use xpute_runtime::mem::heap::{alloc, free};
 
-use crate::world::chunk::node::World;
+use crate::world::chunk::build::World;
 
 /// A channel's path: translation, rotation; anything else is scale.
 const T: u8 = 0;
