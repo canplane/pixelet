@@ -341,3 +341,21 @@ fn erasing_a_column_leaves_the_others_as_they_were() {
     assert_eq!(store.read(30, 0, [0, 0, 0]), 1);
     assert_eq!(store.read(20, 0, [0, 0, 0]), 1);
 }
+
+/// A chunk above z16 reads a write to a column it draws, in its tiers and
+/// its decor, and not one to a column it does not: the revision it reads
+/// agrees with what it draws.
+#[test]
+fn a_level_chunk_moves_with_the_columns_it_draws_and_no_other() {
+    use crate::world::chunk::node::{decor_revision_of, objects_revision_of};
+    use crate::world::pyramid::chunk::Chunk;
+    let _g = serial();
+    let c = corner(4096 * 13, 4096 * 5, 3);
+    let level = 3;
+    let (home, far) = (Chunk::of(level, &c).base().i, Chunk::of(level, &c).beside(5, 0).base().i);
+    let before = (objects_revision_of(level, home), decor_revision_of(level, home), objects_revision_of(level, far));
+    place(&c, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
+    assert!(objects_revision_of(level, home) > before.0, "its tiers moved");
+    assert!(decor_revision_of(level, home) > before.1, "its decor moved");
+    assert_eq!(objects_revision_of(level, far), before.2, "a chunk that does not draw it did not");
+}

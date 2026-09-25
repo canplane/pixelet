@@ -232,7 +232,7 @@ The commands are `spec/pxl/web/kernel/abi/cmd.json`'s: each one's number and the
 
 The kernel also posts messages nobody asked for: a fetch to start or cancel, a model or image to decode, a sensor to watch, a console line, a new snapshot. Those are its signals.
 
-The world's change log (`world/change.rs`) has one topic: what a column stores, keyed by column. It moves on a write and on nothing else — the eraser's previews are what a chunk is drawn from, which a chunk compares as its sources, not a change to the store. Listeners run when the tick pumps, never inside the write.
+The world's change log (`world/change.rs`) keeps what is stored: a column's revision, keyed by column, and for every chunk above z16 one in its tiers and one in its decor, keyed by chunk, which a write to any column it draws moves — so a chunk reads one revision rather than summing its columns'. They move on a write and on nothing else: the eraser's previews are what a chunk is drawn from, which a chunk compares as its sources, not a change to the store. Listeners run when the tick pumps, never inside the write.
 
 ## The memory map
 

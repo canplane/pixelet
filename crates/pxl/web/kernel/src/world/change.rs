@@ -19,8 +19,14 @@ use crate::kernel::kernel;
 
 /// What a column stores (object/store.rs), keyed by column index.
 pub const OBJECT_COLUMN: Topic = 0;
+/// What a chunk above z16 draws of the objects in its tiers and in its
+/// decor, keyed by the chunk (world/chunk/node.rs `chunk_key`): moved by a
+/// write to any column it draws, so a chunk reads one revision rather than
+/// summing its columns'.
+pub const TIERS_CHUNK: Topic = 1;
+pub const DECOR_CHUNK: Topic = 2;
 /// How many topics the log keeps.
-pub const WORLD_TOPICS: Topic = OBJECT_COLUMN + 1;
+pub const WORLD_TOPICS: Topic = DECOR_CHUNK + 1;
 
 /// `WorldTopic`.
 pub type WorldTopic = Topic;

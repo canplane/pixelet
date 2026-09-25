@@ -9,7 +9,7 @@
 //! what it asks: the builder, the revisions a chunk's objects and decor are
 //! read as, and the flag that has the scheduler compare them.
 
-use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, PAGE_CELLS};
+use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, PAGE_CELLS, TOP_LEVEL};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
@@ -22,16 +22,19 @@ use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanSte
 use pxl_spec::bake::constant::{pack_pos, BandZ, BAND, CELL, OBJECT_FINEST};
 use pxl_spec::space::indexer::{FROM_L2_IDX, L1, L2, L2_IDX, L3_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_runtime::mem::heap::{free, Block};
 
 use crate::global::Global;
 use crate::kernel::{kernel, with_world};
-use crate::layer::object::store::{object_col_revision, object_cols, Store};
+use crate::layer::object::store::{object_col_revision, Store};
 use crate::mem::fixed::{bake_at, run_set_at};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::mesh_slot::BAKE_BYTES;
 use pxl_spec::bake::constant::BAND_CELLS;
 
+use crate::world::change::{bump_world, world_changes, DECOR_CHUNK, TIERS_CHUNK};
+use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::hierarchy::Scale;
@@ -119,28 +122,49 @@ pub fn decor_draws(level: u32, base: IVec, col: IVec) -> bool {
     (ivec::X(base)..ivec::X(base) + span).contains(&ivec::X(o)) && (ivec::Y(base)..ivec::Y(base) + span).contains(&ivec::Y(o))
 }
 
-/// What a chunk's objects are made of, as a revision: the columns its tiers
-/// draw, summed.
+/// A chunk as the change log keys it: its coordinate among its level's
+/// chunks and its level, in one word.
+fn chunk_key(level: u32, base: IVec) -> i64 {
+    let [x, y] = PyramidChunk::of(level, &Pvf3 { i: base, f: 0 }).node().1;
+    ivec::gather(x, y, level as i64) as i64
+}
+
+/// What a chunk's objects are made of, as a revision: its column's for a
+/// leaf chunk, and for a level chunk the one every column its tiers draw
+/// moves (`column_written`).
 pub fn objects_revision_of(level: u32, base: IVec) -> u32 {
     if level == 0 {
         return object_col_revision(L2_IDX(base));
     }
-    object_cols()
-        .into_iter()
-        .filter(|&c| tiers_draw(level, base, c))
-        .fold(0u32, |acc, c| acc.wrapping_add(object_col_revision(c)))
+    world_changes().revision_of(TIERS_CHUNK, chunk_key(level, base))
 }
 
-/// What a chunk's placed decor is made of, as a revision: the columns it
-/// draws the decor of, summed.
+/// What a chunk's placed decor is made of, as a revision, the same way.
 pub fn decor_revision_of(level: u32, base: IVec) -> u32 {
     if level == 0 {
         return object_col_revision(L2_IDX(base));
     }
-    object_cols()
-        .into_iter()
-        .filter(|&c| decor_draws(level, base, c))
-        .fold(0u32, |acc, c| acc.wrapping_add(object_col_revision(c)))
+    world_changes().revision_of(DECOR_CHUNK, chunk_key(level, base))
+}
+
+/// A write to column `col`: every chunk above z16 that draws it moves, in
+/// its tiers or its decor. Its tiers' are the chunk the column lies in and,
+/// through the apron a fold reads, its neighbours; its decor's the one it
+/// lies in.
+pub fn column_written(col: IVec) {
+    let corner = Pvf3 { i: FROM_L2_IDX(col), f: 0 };
+    for level in 1..=TOP_LEVEL {
+        let home = PyramidChunk::of(level, &corner);
+        for (dx, dy) in (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy))) {
+            let base = home.beside(dx, dy).base().i;
+            if tiers_draw(level, base, col) {
+                bump_world(TIERS_CHUNK, chunk_key(level, base) as u64);
+            }
+            if decor_draws(level, base, col) {
+                bump_world(DECOR_CHUNK, chunk_key(level, base) as u64);
+            }
+        }
+    }
 }
 
 /// Whether the objects of column `col` fold into the level-`level` chunk at

@@ -43,7 +43,7 @@ use crate::kernel::kernel;
 use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::setting::store::hidden_ground;
 use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
-use crate::world::chunk::node::chunk_sources_changed;
+use crate::world::chunk::node::{chunk_sources_changed, column_written};
 use crate::world::frame::coord::local_world_to_canonical;
 
 /// What a leaf holds, past its corner and size. A solid is the catalog's own
@@ -325,25 +325,7 @@ pub fn column_boxes() -> &'static [ColumnBox] {
     let revision = objects_revision();
     let held = BOXES.get(|| None);
     if held.as_ref().is_none_or(|(r, _)| *r != revision) {
-        let boxes = object_cols()
-            .into_iter()
-            .filter_map(|col| {
-                let mut z: Option<(f64, f64)> = None;
-                each_col_entry(
-                    col,
-                    &mut |e| {
-                        let lo = pvf3::to_real(pvf3::Z(&e.corner()));
-                        let hi = lo + e.size;
-                        z = Some(z.map_or((lo, hi), |(a, b)| (a.min(lo), b.max(hi))));
-                    },
-                    false,
-                );
-                Some(ColumnBox {
-                    col: [ivec::X(col), ivec::Y(col)],
-                    z: z?,
-                })
-            })
-            .collect();
+        let boxes = kernel().objects.reaches().map(|(col, z)| ColumnBox { col: [ivec::X(col), ivec::Y(col)], z }).collect();
         *held = Some((revision, boxes));
     }
     &held.as_ref().expect("made above").1
@@ -355,6 +337,7 @@ fn apply(writes: impl IntoIterator<Item = Write>) {
     for col_idx in kernel().objects.write(writes) {
         chunk_sources_changed();
         bump_world(OBJECT_COLUMN, col_idx);
+        column_written(col_idx);
     }
 }
 
@@ -962,6 +945,9 @@ pub(crate) struct Chunk {
     pub(crate) e_band: Vec<BandZ>,
     pub(crate) e_pos: Vec<u32>,
     pub(crate) e_state: Vec<u32>,
+    /// The lowest and highest any entry reaches, in units: the column's box
+    /// on Z, made with the entries.
+    z: (f64, f64),
 }
 
 impl Chunk {
@@ -971,12 +957,15 @@ impl Chunk {
         self.e_band.clear();
         self.e_pos.clear();
         self.e_state.clear();
+        let mut reach = (f64::INFINITY, f64::NEG_INFINITY);
         for (&bz, tree) in &self.bands {
             sparse_tree::walk(tree, &mut |x, y, z, scale, value| {
                 let (x, y, z, val) = (x as u32, y as u32, z as u32, u32::from(value));
                 if val == VOID || val == UNKNOWN {
                     return;
                 }
+                let lo = bz as f64 * BAND_UNITS + z as f64 * STEP_UNITS;
+                reach = (reach.0.min(lo), reach.1.max(lo + scale.side()));
                 if scale <= CELL {
                     self.e_band.push(bz);
                     self.e_pos.push(pack_pos(x, y, z, scale));
@@ -995,6 +984,7 @@ impl Chunk {
                 }
             });
         }
+        self.z = reach;
     }
 }
 
@@ -1041,6 +1031,12 @@ impl Store {
         self.chunks.keys().copied()
     }
 
+    /// Every column holding objects with the lowest and highest any of its
+    /// entries reaches, in units.
+    pub fn reaches(&self) -> impl Iterator<Item = (IVec, (f64, f64))> + '_ {
+        self.chunks.iter().map(|(&col, chunk)| (col, chunk.z))
+    }
+
     /// The state at a lattice position of band `band_idx` of column
     /// `col_idx`; VOID where nothing is.
     pub fn read(&self, col_idx: IVec, band_idx: BandZ, at: [u32; 3]) -> u32 {
@@ -1084,6 +1080,7 @@ impl Store {
             e_band: Vec::new(),
             e_pos: Vec::new(),
             e_state: Vec::new(),
+            z: (0.0, 0.0),
         });
         let tree = chunk.bands.entry(band_idx).or_insert_with(|| sparse_tree::alloc::<u16>(OBJECT_LAYOUT, 64));
         mem::set::<Ivec, u16>(&mut tree.mem, &tree.layout, band_key(at), value, scale, 0);
