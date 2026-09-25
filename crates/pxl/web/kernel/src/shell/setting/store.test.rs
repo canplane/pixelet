@@ -90,9 +90,9 @@ fn a_development_build_offers_its_dev_settings() {
     let _g = serial();
     under(true, None);
     let mut s = Settings::DEFAULT;
-    s.toggle_setting(SettingKey::show_poi);
-    assert!(s.show_poi);
-    assert_eq!(stored().as_deref(), Some(r#"{"show_poi":true}"#));
+    s.toggle_setting(SettingKey::enable_terrain_carving);
+    assert!(s.enable_terrain_carving);
+    assert_eq!(stored().as_deref(), Some(r#"{"enable_terrain_carving":true}"#));
 }
 
 /// Built without the feature, a dev setting is not named in the module at
@@ -104,6 +104,6 @@ fn a_module_without_the_feature_names_no_dev_setting() {
     assert!(SettingKey::ALL.into_iter().filter(|k| k.dev()).all(|k| k.name().is_none()));
     under(true, None);
     let mut s = Settings::DEFAULT;
-    s.toggle_setting(SettingKey::show_poi);
-    assert!(!s.show_poi);
+    s.toggle_setting(SettingKey::enable_terrain_carving);
+    assert!(!s.enable_terrain_carving);
 }
