@@ -1,9 +1,7 @@
-// pxl-geo/main.test.rs
+// pxl-server/serve.test.rs
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
-use tokio_postgres::NoTls;
 use tower::ServiceExt;
 
 use super::*;
@@ -21,26 +19,14 @@ fn cfg() -> config::Config {
     }
 }
 
-/// See search/endpoint.test.rs: deadpool connects lazily, and no path exercised here
-/// reaches the database.
-fn unreachable_pool() -> Pool {
-    let pg: tokio_postgres::Config = "postgresql://nobody@127.0.0.1:1/nothing".parse().unwrap();
-    let mgr = Manager::from_config(
-        pg,
-        NoTls,
-        ManagerConfig {
-            recycling_method: RecyclingMethod::Fast,
-        },
-    );
-    Pool::builder(mgr).max_size(1).build().unwrap()
-}
+const INTERNAL: &str = "/root/internal";
 
 async fn get(uri: &str, token: Option<&str>) -> StatusCode {
     let mut req = Request::builder().uri(uri);
     if let Some(token) = token {
         req = req.header("x-admin-token", token);
     }
-    router(&cfg(), unreachable_pool()).oneshot(req.body(Body::empty()).unwrap()).await.unwrap().status()
+    shell(&cfg(), INTERNAL, Router::new()).oneshot(req.body(Body::empty()).unwrap()).await.unwrap().status()
 }
 
 /// The claim the gate is registered on: it covers the prefix rather than a
@@ -49,15 +35,17 @@ async fn get(uri: &str, token: Option<&str>) -> StatusCode {
 /// get wrong and impossible to notice.
 #[tokio::test]
 async fn the_internal_prefix_is_gated_even_where_nothing_is_mounted() {
-    assert_eq!(get("/geo/internal/anything", None).await, StatusCode::UNAUTHORIZED);
-    assert_eq!(get("/geo/internal/anything", Some("wrong")).await, StatusCode::UNAUTHORIZED);
+    assert_eq!(get("/root/internal/anything", None).await, StatusCode::UNAUTHORIZED);
+    assert_eq!(get("/root/internal/anything", Some("wrong")).await, StatusCode::UNAUTHORIZED);
 
     // Past the gate there is genuinely nothing there, and saying so is the
     // right answer — a 404 here means the token was accepted.
-    assert_eq!(get("/geo/internal/anything", Some(TOKEN)).await, StatusCode::NOT_FOUND);
+    assert_eq!(get("/root/internal/anything", Some(TOKEN)).await, StatusCode::NOT_FOUND);
 }
 
+/// Nothing else is mounted, so everything outside the gated prefix is a plain
+/// 404 — not a 401, which would say the gate reaches further than it does.
 #[tokio::test]
 async fn the_gate_does_not_reach_past_its_own_prefix() {
-    assert_eq!(get("/geo/search?q=", None).await, StatusCode::BAD_REQUEST);
+    assert_eq!(get("/root/anything", None).await, StatusCode::NOT_FOUND);
 }
