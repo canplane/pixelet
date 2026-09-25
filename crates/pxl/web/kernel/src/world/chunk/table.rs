@@ -15,9 +15,8 @@
 //! The chunk nodes (node.rs) say what each chunk is made of; the chunk
 //! stage (stage.rs) composes the frame — the camera, the anchor root's
 //! matrix, the frustum — and calls the tick. What comes back is events: a
-//! chunk shown or hidden, the layout it should show (its tiers), how the two
-//! tiers of a blend are weighted, a tier's mesh handed over and a tier to let
-//! go. The nodes hold the meshes; this holds every decision about them.
+//! chunk mounted or gone, the layout it should show (its tiers), a tier's
+//! mesh and its decor handed over, and a tier to let go. The nodes hold the meshes; this holds every decision about them.
 
 use pxl_spec::space::indexer::FROM_L2_IDX;
 use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, PAGE_CELLS, PAGE_CHUNKS};
@@ -600,9 +599,6 @@ pub struct Scheduler {
     /// levels, against six hundred looking down. The work a zoom costs grew
     /// with the tilt for no reason but this.
     to_mount: VecDeque<(Chunk, bool)>,
-    /// The ground the view draws: the window's top-level chunks (window.rs
-    /// `Domain::ground`).
-    drawn: Option<Vec<Chunk>>,
     /// The decor kinds, in the order decor/build.rs taught them — the order of
     /// the groups in every decor block.
     decor_kinds: Vec<DecorKind>,
@@ -722,7 +718,6 @@ impl Scheduler {
             next_mount_id: MOUNT_ID_BASE,
             selected_for: None,
             to_mount: VecDeque::new(),
-            drawn: None,
             decor_kinds: Vec::new(),
             decor_sample: ChunkSample::default(),
             decor_folded: HashMap::new(),
@@ -1150,7 +1145,6 @@ impl Scheduler {
             return;
         }
         self.census.mount_full = 0;
-        self.drawn = Terrain::pyramid().domain().map(|d| d.ground().to_vec());
         if self.selected_for != Some(key) {
             let mut wanted = BTreeMap::new();
             self.select(&mut wanted);
@@ -1321,8 +1315,12 @@ impl Scheduler {
             // other way out — the view lies inside it, so it never leaves the
             // drawn ground either. Both doors shut, and it stays drawn over
             // ground it no longer describes, for as long as the view is there.
-            let gone_from_view = self.drawn.as_ref().is_none_or(|d| !d.iter().any(|&g| share(k.node(), g.node())));
-            let whole = covered >= self.drawn.as_ref().map_or(0.0, |d| d.iter().map(|&g| shared_area(k, g)).sum());
+            // The ground the view draws is the domain's as it stands now,
+            // not as the last mount pass found it: a pass is skipped while
+            // the cover holds, and roots under a stand-in move without it.
+            let drawn = Terrain::pyramid().domain().map(Domain::ground);
+            let gone_from_view = drawn.is_none_or(|d| !d.iter().any(|&g| share(k.node(), g.node())));
+            let whole = covered >= drawn.map_or(0.0, |d| d.iter().map(|&g| shared_area(k, g)).sum());
             // A stale chunk is kept for what it is showing. One that never
             // got a layout is showing nothing, so there is nothing to keep
             // and no reason to wait on whatever covers it.
