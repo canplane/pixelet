@@ -1,7 +1,8 @@
 // pxl-geo-bake/poi.rs
 
 //! The POI layer's source: Overture's places, each counted in the leaf cell
-//! it stands in (pxl-spec bake/poi_page.rs). Where the pages are kept and how
+//! it stands in and, where it stands there alone, placed on its level-0
+//! ground cell (pxl-spec bake/poi_page.rs). Where the pages are kept and how
 //! the levels above are folded are the pyramid's (pyramid.rs).
 
 use std::collections::BTreeMap;
@@ -42,18 +43,20 @@ pub fn leaves(client: &mut Client, within: Option<IVec>) -> Result<BTreeMap<IVec
         None => client.query("SELECT ST_X(geom), ST_Y(geom), name FROM overture_places", &[]),
     }
     .map_err(|e| e.to_string())?;
-    let mut cells: BTreeMap<IVec, Vec<(u32, String)>> = BTreeMap::new();
+    let mut places: BTreeMap<IVec, Vec<(Pvf3, String)>> = BTreeMap::new();
     for row in rows {
         let mut at = Pvf3::default();
         epsg3857::project(&mut at, row.get(0), row.get(1), 0.0);
-        let cell = POI_LATTICE.cell_of(0, &at);
-        let leaf = cell.page();
+        let leaf = POI_LATTICE.cell_of(0, &at).page();
         // The envelope is an index's bound, closed on its far edges; the
         // page a place belongs to is the lattice's.
         if within.is_some_and(|w| leaf.page != w) {
             continue;
         }
-        cells.entry(leaf.page).or_default().push((cell.index(), row.get(2)));
+        places.entry(leaf.page).or_default().push((at, row.get(2)));
     }
-    Ok(cells.into_iter().map(|(page, c)| (page, PoiPage::of_places(c.iter().map(|(i, name)| (*i, name.as_str()))))).collect())
+    Ok(places
+        .into_iter()
+        .map(|(page, p)| (page, PoiPage::of_places(0, p.iter().map(|(at, name)| (*at, name.as_str())))))
+        .collect())
 }

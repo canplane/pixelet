@@ -368,6 +368,26 @@ impl Cell {
         self.lattice.cell_of(self.page.level + levels, &self.base())
     }
 
+    /// Where `inner`, a cell no coarser than this one and inside it, lies in
+    /// it: how many of `inner`'s sides its corner is from this one's, east
+    /// and north. Any two lattices', since both are shifts against the unit.
+    pub fn offset_of(self, inner: Cell) -> [u32; 2] {
+        let (outer, inner_base) = (self.base(), inner.base());
+        let shift = FRAC_W as i32 + inner.shamt();
+        let lane = |o: i64, i: i64| ((i - o) >> shift) as u32;
+        [lane(pvf3::X(&outer), pvf3::X(&inner_base)), lane(pvf3::Y(&outer), pvf3::Y(&inner_base))]
+    }
+
+    /// The `lattice`'s level-`level` cell `offset` of its own sides from this
+    /// cell's corner: `offset_of`'s inverse.
+    pub fn inner_at(self, lattice: Lattice, level: u32, offset: [u32; 2]) -> Cell {
+        let base = self.base();
+        let shift = FRAC_W as i32 + lattice.cell_shamt(level);
+        let mut at = Pvf3::default();
+        pvf3::gather(&mut at, pvf3::X(&base) + ((offset[0] as i64) << shift), pvf3::Y(&base) + ((offset[1] as i64) << shift), 0);
+        lattice.cell_of(level, &at)
+    }
+
     /// The centre of the cell as a thing standing on `ground` occupies it:
     /// its XY centre, and half its side above the ground, since a level's
     /// cells are as tall as they are wide. The one point every layer at this

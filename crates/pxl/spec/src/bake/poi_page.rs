@@ -1,16 +1,18 @@
 // pxl-spec/bake/poi_page.rs
 
 //! The POI layer's page. A place is 2.5D: it belongs to the cell of the POI
-//! lattice it stands in (`POI_LATTICE`) and is drawn at that cell's centre.
-//! So a page holds, for each occupied cell, how many places stand in it —
-//! and, where that is one, which place it is.
+//! lattice it stands in (`POI_LATTICE`). A cell holding two places or more is
+//! drawn as their count at its own centre; a cell holding one is that place,
+//! drawn where it stands — at the centre of the ground's level-0 cell it is
+//! in, at every level. So a page holds, for each occupied cell, how many
+//! places stand in it and, where that is one, which place it is and where.
 //!
 //! Folding is counting. A parent cell holds what its 2×2 children hold, which
 //! needs no ring and loses nothing: every level counts exactly the places
-//! under it, so a count read at any level agrees with the leaves. A name is
-//! not a representative chosen for a cell: it is there only where the cell
-//! holds one place, so it is that place's, and a parent holding one place
-//! holds the name its one child held.
+//! under it, so a count read at any level agrees with the leaves. A name and
+//! a position are not a representative chosen for a cell: they are there
+//! only where the cell holds one place, so they are that place's, and a
+//! parent holding one place holds what its one child held.
 //!
 //! Names are held once a page, in a pool the cells index. A cell is three
 //! numbers whatever its name, and a name that stands in many cells — a
@@ -19,9 +21,10 @@
 use std::collections::HashMap;
 
 use crate::bake::constant::CELL_SHAMT;
-use crate::space::pyramid::{Folds, Lattice, LevelPage};
+use crate::space::pvf3::pvf3::Pvf3;
+use crate::space::pyramid::{Folds, Lattice, LevelPage, GROUND, TOP_LEVEL};
 
-const MAGIC: &[u8; 4] = b"PXP3";
+const MAGIC: &[u8; 4] = b"PXP4";
 
 /// The lattice places are counted in: a cell four times the ground's on a
 /// side, sharing the ground's pages, levels and names. A badge stands for
@@ -32,17 +35,33 @@ pub const POI_LATTICE: Lattice = Lattice::new(CELL_SHAMT + 2);
 
 const CELLS: u32 = POI_LATTICE.page_cells() * POI_LATTICE.page_cells();
 
+/// A cell on the wire: its index, count, position and name, a word each.
+const CELL_BYTES: usize = 16;
+
 /// A cell with no name: it holds more than one place, or its one place has
 /// none.
 pub const NO_NAME: u32 = u32::MAX;
 
+/// A cell with no position: it holds more than one place.
+const NO_AT: u32 = u32::MAX;
+
+// A position is an offset in level-0 ground cells inside a POI cell, a lane
+// a half-word: the widest cell, at the top level, has to fit.
+const _: () = assert!(
+    POI_LATTICE.cell_shamt(TOP_LEVEL) - GROUND.cell_shamt(0) <= 16,
+    "a POI cell's level-0 ground cells no longer fit a half-word a lane"
+);
+
 /// An occupied cell: its index in the page, how many places stand in it, and
-/// the pool index of its one place's name, NO_NAME unless `count` is 1.
+/// where `count` is 1, the pool index of its one place's name (NO_NAME where
+/// it has none) and the level-0 ground cell it stands in, as that cell's
+/// offset in this one (pxl-spec space/pyramid.rs `Cell::offset_of`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PoiCell {
     pub cell: u32,
     pub count: u32,
     pub name: u32,
+    pub at: Option<[u32; 2]>,
 }
 
 /// A page's names, each once, as one run of UTF-8: name i is
@@ -97,9 +116,18 @@ pub struct PoiPage {
 }
 
 impl PoiPage {
-    /// A page from the cell each place stands in and its name, in any order.
-    pub fn of_places<'a>(places: impl IntoIterator<Item = (u32, &'a str)>) -> PoiPage {
-        gathered(places.into_iter().map(|(cell, name)| (cell, 1, name)).collect())
+    /// A level-`level` page from where each place stands and its name, in
+    /// any order. Every place has to stand in the one page.
+    pub fn of_places<'a>(level: u32, places: impl IntoIterator<Item = (Pvf3, &'a str)>) -> PoiPage {
+        gathered(
+            places
+                .into_iter()
+                .map(|(point, name)| {
+                    let cell = POI_LATTICE.cell_of(level, &point);
+                    (cell.index(), 1, cell.offset_of(GROUND.cell_of(0, &point)), name)
+                })
+                .collect(),
+        )
     }
 
     /// The name of the one place `c` holds; none where it holds more, or its
@@ -114,15 +142,24 @@ impl Folds for PoiPage {
         let mut cells = Vec::new();
         for (q, k) in p.children().into_iter().enumerate() {
             let child = held(k)?;
-            cells.extend(child.cells.iter().map(|c| (POI_LATTICE.parent_cell(q, c.cell), c.count, child.name(c).unwrap_or(""))));
+            cells.extend(child.cells.iter().map(|c| {
+                let parent = POI_LATTICE.parent_cell(q, c.cell);
+                // The one place's ground cell, found again from the child's
+                // cell and read from the parent's.
+                let at = c.at.map_or([0; 2], |at| {
+                    let ground = POI_LATTICE.cell_at(k, c.cell).inner_at(GROUND, 0, at);
+                    POI_LATTICE.cell_at(p, parent).offset_of(ground)
+                });
+                (parent, c.count, at, child.name(c).unwrap_or(""))
+            }));
         }
         Some(gathered(cells))
     }
 }
 
 /// Cells ascending, each once, holding the sum of what it was given, and a
-/// name where that sum is one.
-fn gathered(mut cells: Vec<(u32, u32, &str)>) -> PoiPage {
+/// name and a position where that sum is one.
+fn gathered(mut cells: Vec<(u32, u32, [u32; 2], &str)>) -> PoiPage {
     cells.sort_unstable_by_key(|c| c.0);
     cells.dedup_by(|next, kept| {
         let same = next.0 == kept.0;
@@ -134,27 +171,30 @@ fn gathered(mut cells: Vec<(u32, u32, &str)>) -> PoiPage {
     let mut pool = Pool::default();
     let cells = cells
         .into_iter()
-        .map(|(cell, count, name)| PoiCell {
+        .map(|(cell, count, at, name)| PoiCell {
             cell,
             count,
             name: if count == 1 { pool.add(name) } else { NO_NAME },
+            at: (count == 1).then_some(at),
         })
         .collect();
     PoiPage { cells, names: pool.names }
 }
 
-/// The magic; how many cells, names and bytes of names; the cells, three
-/// words each; each name's end; the names.
+/// The magic; how many cells, names and bytes of names; the cells, four
+/// words each (the position's two lanes a half-word each); each name's end;
+/// the names.
 pub fn encode(page: &PoiPage) -> Result<Vec<u8>, &'static str> {
     validate(page)?;
     let names = &page.names;
-    let mut out = Vec::with_capacity(16 + page.cells.len() * 12 + names.ends.len() * 4 + names.bytes.len());
+    let mut out = Vec::with_capacity(16 + page.cells.len() * CELL_BYTES + names.ends.len() * 4 + names.bytes.len());
     out.extend_from_slice(MAGIC);
     for n in [page.cells.len() as u32, names.len(), names.bytes.len() as u32] {
         out.extend_from_slice(&n.to_le_bytes());
     }
     for c in &page.cells {
-        for w in [c.cell, c.count, c.name] {
+        let at = c.at.map_or(NO_AT, |[x, y]| x | y << 16);
+        for w in [c.cell, c.count, at, c.name] {
             out.extend_from_slice(&w.to_le_bytes());
         }
     }
@@ -172,17 +212,21 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, &'static str> {
     let word = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
     let (n, names, pool) = (word(4) as usize, word(8) as usize, word(12) as usize);
     // Checked against the page's own bound before anything is allocated.
-    if n > CELLS as usize || names > n || bytes.len() != 16 + n * 12 + names * 4 + pool {
+    if n > CELLS as usize || names > n || bytes.len() != 16 + n * CELL_BYTES + names * 4 + pool {
         return Err("a POI page of the wrong length");
     }
     let cells = (0..n)
-        .map(|i| PoiCell {
-            cell: word(16 + i * 12),
-            count: word(20 + i * 12),
-            name: word(24 + i * 12),
+        .map(|i| {
+            let (at, w) = (16 + i * CELL_BYTES, word(24 + i * CELL_BYTES));
+            PoiCell {
+                cell: word(at),
+                count: word(at + 4),
+                at: (w != NO_AT).then_some([w & 0xffff, w >> 16]),
+                name: word(at + 12),
+            }
         })
         .collect();
-    let at = 16 + n * 12;
+    let at = 16 + n * CELL_BYTES;
     let ends: Vec<u32> = (0..names).map(|i| word(at + i * 4)).collect();
     let text = &bytes[at + names * 4..];
     if ends.windows(2).any(|w| w[0] > w[1]) || ends.last().map_or(0, |&e| e as usize) != text.len() {
@@ -204,13 +248,17 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, &'static str> {
 }
 
 /// A page is its cells ascending, each inside the page and holding a place,
-/// and a name only where a cell holds one place, from the pool.
+/// and a name and a position only where a cell holds one place, the name
+/// from the pool.
 fn validate(page: &PoiPage) -> Result<(), &'static str> {
     if page.cells.iter().any(|c| c.cell >= CELLS || c.count == 0) || page.cells.windows(2).any(|w| w[0].cell >= w[1].cell) {
         return Err("POI cells out of order or empty");
     }
     if page.cells.iter().any(|c| c.name != NO_NAME && (c.count != 1 || c.name >= page.names.len())) {
         return Err("a POI name where no one place is");
+    }
+    if page.cells.iter().any(|c| c.at.is_some() != (c.count == 1) || c.at.is_some_and(|a| a.iter().any(|&l| l > 0xffff))) {
+        return Err("a POI position where no one place is, or none where one is");
     }
     Ok(())
 }
