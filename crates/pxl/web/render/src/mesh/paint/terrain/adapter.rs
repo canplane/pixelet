@@ -74,7 +74,7 @@ pub struct Materials {
 /// Every ground type's color and layer, from the palette's tables
 /// (palette/shader_meta.rs), each channel's class, and the catalog's base:
 /// a function of the palette and the catalog alone, so made once, here,
-/// where the paint and the minimap read it.
+/// where the paint reads it.
 pub static MATERIALS: LazyLock<Materials> = LazyLock::new(Materials::of_palette);
 
 /// The class a channel's cells are painted as.
