@@ -53,6 +53,17 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   answers nothing past `--top-level` (3 by default; z11 and coarser are 503
   for terrain and POI alike), so a view that draws nothing finer than
   level 4 has no page it can get.
+- **A seam while a chunk is drawn from a page over it.** Since
+  2026-09-26 a chunk whose page has not come is drawn in its place from the
+  nearest resident page over it, upsampled (world/pyramid.rs `drawn_from`),
+  and its apron is read from that same page. A neighbour already built from
+  its own page reads its apron from its own, so the two sides of their edge
+  are two surfaces, the coarser one smoothed, and at a cliff or a coast they
+  part by more than the one cell a skirt hides. Measured after a jump to a
+  coast: brown walls about the character for a second, gone by the second
+  after as the pages landed. What would close it: an edge read from one
+  source while either side is borrowed — the apron from the neighbour's own
+  source, and a neighbour's source among a chunk's build sources.
 - **The move to a Rust core in WASM, drawing through WebGPU.** Scheduled
   2026-09-13 ([20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md))
   and through by 2026-09-15: the kernel (`crates/pxl/kernel`, built by

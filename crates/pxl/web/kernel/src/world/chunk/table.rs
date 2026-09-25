@@ -88,20 +88,19 @@ const MAX_MOUNTS_PER_FRAME: u32 = 64;
 const _: () = assert!(MAX_MOUNTS_PER_FRAME == PAGE_CHUNKS * PAGE_CHUNKS, "a page mounts in the frame it arrives in");
 
 /// The widest selection there is: the chunks a view draws (domain.rs
-/// `VIEW_CHUNKS`), each of which may be stood in for by its four children
-/// where it has not arrived. The terrain draws no more than that
-/// (layer/terrain/present.rs): a finer page stands in a level finer and no
-/// more, and the balance a mesh needs only refines toward what the view
-/// wants.
+/// `VIEW_CHUNKS`), each in its own place whether its page has come or a page
+/// over it draws it (world/pyramid.rs `Cover`), and the balance a mesh needs
+/// only refines toward what the view wants (layer/terrain/present.rs).
 ///
-/// The point of writing it down is that it is under MAX_CHUNKS. The table is
-/// a hard budget, so what it can refuse matters: with the widest selection
-/// inside it, what a full table turns away is never the chunk the camera
-/// wants — there is always a stale one to give up instead (`give_room`), and
-/// the current view can always be represented whatever the last one left.
-const WIDEST_SELECTION: usize = 4 * VIEW_CHUNKS as usize;
+/// The point of writing it down is that it is under MAX_CHUNKS with the
+/// view it replaces beside it. The table is a hard budget, so what it can
+/// refuse matters: with both inside it, what a full table turns away is
+/// never the chunk the camera wants — there is always a stale one to give up
+/// instead (`give_room`), and the current view can always be represented
+/// whatever the last one left.
+const WIDEST_SELECTION: usize = VIEW_CHUNKS as usize;
 
-const _: () = assert!(WIDEST_SELECTION <= MAX_CHUNKS, "render: a view the chunk table cannot hold at once");
+const _: () = assert!(2 * WIDEST_SELECTION <= MAX_CHUNKS, "render: a view and the one it replaces the chunk table cannot hold at once");
 /// Tiers one chunk may keep: the active pair, the off-screen tier, and one
 /// of hysteresis.
 const MAX_CACHED_TIERS: usize = 4;
@@ -330,9 +329,9 @@ struct Slot {
     /// The bounding sphere in the chunk's own space.
     bc: V3,
     radius: f64,
-    /// The nearest distance from the eye to its ground, squared: what its
-    /// level was chosen by (domain.rs `Domain::nearest_to`), and so what its
-    /// work is ordered by.
+    /// How near the view's centre its ground comes, squared: its place in
+    /// the order every layer's work is taken in (domain.rs
+    /// `Domain::order_of`).
     distance2: f64,
     flags: u16,
     pending_since: f64,
@@ -381,6 +380,10 @@ struct Sources {
     objects_revision: u32,
     hide: Option<EntryAt>,
     carve: Option<EntryAt>,
+    /// The level of the page the chunk is read from: its own, or the nearest
+    /// resident page over it (world/pyramid.rs `drawn_from`), so its own
+    /// page arriving builds it again from its own ground.
+    read_from: Option<u32>,
 }
 
 /// What a chunk's decor is made of: the revision of the columns it draws the
@@ -404,6 +407,7 @@ impl Sources {
             objects_revision: objects_revision_of(level, base),
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
             carve: edits.carve.filter(drawn),
+            read_from: Terrain::pyramid().drawn_from(k.page()).map(|p| p.level),
         }
     }
 }
@@ -1001,7 +1005,7 @@ impl Scheduler {
             let view = source.map(|(_, _, page, _)| Builder::page_view(page));
             if let (Some((tx0, ty0, _, show)), Some(view)) = (source, view.as_ref()) {
                 if scatters {
-                    self.decor_sample.read(view, tx0, ty0, hidden_ground(show));
+                    self.decor_sample.read(view, [tx0 as i64, ty0 as i64], 1, hidden_ground(show));
                 }
             }
             let placed: Vec<Placed> = cols
@@ -1690,9 +1694,9 @@ impl Scheduler {
         let domain = Terrain::pyramid().domain();
         for i in 0..self.slots.len() {
             let visible = measure(frame, &self.slots[i]).0;
-            let near = domain.map_or(f64::INFINITY, |d| d.nearest_to(self.slots[i].chunk));
+            let order = domain.map_or(f64::INFINITY, |d| d.order_of(self.slots[i].chunk));
             let s = &mut self.slots[i];
-            s.distance2 = near * near;
+            s.distance2 = order * order;
             let was = s.has(IN_FRUSTUM);
             if visible != was {
                 let bytes = s.retained();
@@ -2123,6 +2127,13 @@ fn wanted_cube(d: &Domain, c: Chunk) -> Cube {
 /// where they hold objects, which fold to the cube. Finer than that a chunk
 /// is not drawn — the split serves it — and coarser it is merged into its
 /// parent.
+///
+/// A chunk read from a page over it is drawn at its own cube like any other:
+/// its heights are that page's surface sampled at its own cells, which
+/// invents no step, and only its colour is the coarser page's. Drawn at the
+/// coarser page's cells instead, a chunk far under its page stood one cube
+/// as wide as itself, and those stood apart as blocks over the sea after a
+/// jump (2026-09-26).
 fn drawn_cube(cube: Cube, level: u32, outermost: bool, objects: bool) -> Cube {
     // A level draws its own cells one cube coarser than they are, and no
     // coarser: level k's cells averaged 4 × 4 are the ground level k+1 draws
@@ -2151,7 +2162,8 @@ struct Priority {
     /// not what the page under it now says. Worse than a chunk asking only
     /// to be sharper, better than one showing nothing at all.
     restale: bool,
-    /// The nearest distance from the eye to its ground, squared.
+    /// How near the view's centre its ground comes, squared: its place in
+    /// the view's order.
     distance2: f64,
     pending_since: f64,
 }
@@ -2180,8 +2192,9 @@ impl Priority {
 /// moved past, then the ones asking only to be sharper, as progressive
 /// refinement goes — a coarse chunk a zoom out has just brought covers ground
 /// nothing shows, a fine one ground a stale chunk still shows; within each,
-/// the nearest the eye, by the distance its level was chosen by, so the work
-/// follows the rule that asked for it; then what is off screen farthest first — a release
+/// the nearest the view's centre (world/pyramid/domain.rs `Domain::order_of`),
+/// the one order every layer's work is taken in, so the ground where the
+/// character stands is built first and the view fills outwards from it; then what is off screen farthest first — a release
 /// takes memory from what is least likely to be wanted again. A wait halves
 /// the distance key every AGE_HALF_MS, within its class.
 ///

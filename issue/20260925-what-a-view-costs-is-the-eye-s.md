@@ -262,3 +262,37 @@ own range, knows a child's no better before the child comes. A peak the
 estimate misses is split a fetch late and corrected when its page arrives,
 so what is drawn once the pages are held is exact and the bake is left as
 it is.
+
+## Drawn in place, and ordered from the centre
+
+2026-09-26. With the window gone, a view fetched its pages coarsest first:
+every ancestor of the page under the eye was a hole at distance nought, so
+the first six connections went to z6 through z11, and the top page's
+two-kilometre cubes stood as walls in front of the eye for seconds while the
+eye's own page waited (measured on a cold origin: the eye's z16 page asked
+for at 3.5 s, landed at 5.9 s). Fetched finest first instead, the fine pages
+sat unused: a sibling group was drawn whole or not at all, so a resident top
+page drew the whole view as one chunk until the last page under it landed —
+new ledger lanes read one chunk drawn and none open for 4.3 s after a jump,
+with some 260 wanted and twenty pages resident.
+
+Two changes, decided with the user and reviewed by the other sessions:
+
+- Every chunk the rule wants is drawn in its own place, from its page or the
+  nearest resident page over it, upsampled: that page's cells for its
+  colour, its surface at the chunk's own cells for its height (Cesium draws
+  a parent tile's data for a child not yet loaded). The whole-group rule,
+  stand-ins from under, their depth limit and the chunk table's fourfold
+  room for them went. A chunk borrowing a page scatters no decor, and its
+  own page landing rebuilds it through the ordinary sources compare.
+- One order for every layer's work, out from the view's centre — the point
+  the camera turns about, where the character stands: within a layer the
+  page the ground nearest the centre is drawn from, then the top pages,
+  then every page drawn from nearest the centre first, then the fallbacks;
+  the layers terrain, then the decor's models, then the places; the chunk
+  table builds in the same order.
+
+After a jump to a cold coast the cover drew every wanted chunk from the
+first frame and left nothing open, and the ground was its own from two
+seconds on. A seam where a borrowed chunk meets one built from its own page
+is left in [the backlog](./BACKLOG.md).

@@ -48,6 +48,32 @@ fn a_cell_found_by_its_offset_in_a_coarser_one_is_itself() {
     }
 }
 
+/// A cell's place in a page some levels over it, counted in its own sides,
+/// is its own place where the page is its own, and lies inside the cell of
+/// that page it falls in: a block of them per page cell, as a chunk read from
+/// a coarser page reads it.
+#[test]
+fn a_cells_place_in_a_page_above_lies_in_the_page_cell_over_it() {
+    for (x, y) in [(-1234, 5678), (0, 0), (97, -3), (400_000, -250_000)] {
+        let point = Pvf3 {
+            i: ivec::gather(x, y, 0),
+            ..Default::default()
+        };
+        for level in [0, 3] {
+            let cell = GROUND.cell_of(level, &point);
+            let [tx, ty] = cell.in_page();
+            assert_eq!(cell.in_page_above(0), [tx as i64, ty as i64]);
+            for levels in [1, 4, TOP_LEVEL - level] {
+                let up = cell.up(levels);
+                let n = cell.scale().count_in(up.scale()) as i64;
+                let [ax, ay] = up.in_page();
+                let [x, y] = cell.in_page_above(levels);
+                assert_eq!([x.div_euclid(n), y.div_euclid(n)], [ax as i64, ay as i64], "level {level}, {levels} up");
+            }
+        }
+    }
+}
+
 /// A lattice is shifts against the unit, so two lattices whose cells are the
 /// same size cut the same ground: a lattice two shifts coarser than the
 /// ground has at z16 the ground's z14 cell, held in a z16 page

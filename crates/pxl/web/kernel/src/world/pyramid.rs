@@ -22,7 +22,6 @@ pub mod chunk;
 pub mod domain;
 pub mod pressure;
 
-use pxl_spec::space::hierarchy::share;
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 use std::collections::{BTreeMap, HashSet};
@@ -30,7 +29,7 @@ use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::io::demand::{Category, Phases};
-use crate::io::policy;
+use crate::io::policy::{self, Shell};
 use crate::io::sched::{declare, Rank};
 use crate::layer::environment::fog::eye_height;
 use crate::world::change::world_edge;
@@ -69,27 +68,6 @@ pub trait Layer: Folds + Clone + 'static {
     }
 }
 
-/// What the resident pages can do for a page the view wants.
-///
-/// Which of the four it is decides what a fetch is *for*: a page whose ground
-/// the cover leaves a gap in is coverage and a page the cover draws otherwise
-/// is refinement, so latency shows up as a layer getting sharper rather than
-/// as it appearing.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Resolved {
-    /// The page itself is resident.
-    Exact,
-    /// Not resident, but every page it folds from is: the client stands it
-    /// up itself, and no request is made.
-    Foldable,
-    /// Not resident and not foldable, but the cover draws all of its ground
-    /// from other pages. The fetch refines what is already on the screen.
-    Covered,
-    /// The cover leaves a gap in its ground. The fetch is what puts it on
-    /// the screen.
-    Missing,
-}
-
 /// Pages a layer keeps wherever the view is: the device's own leaf, so the
 /// marker keeps the ground under it while the view is panned away.
 const PINNED: u32 = 1;
@@ -101,19 +79,12 @@ const PINNED: u32 = 1;
 /// and what the view leaves over is room for pages the camera has left.
 pub const RECORDS: u32 = VIEW_PAGES + PINNED;
 
-/// What the resident pages draw of a view's `Domain`: pieces of its ground,
-/// none over another, and the gaps between them, the two together being
-/// the domain's ground exactly.
-///
-/// Chosen a sibling group at a time. Where the view wants a chunk finer and
-/// the four under it are not all drawn, the chunk itself is drawn if it is
-/// resident and its finer pieces are not: a coarse page with one fine page
-/// under it shows the coarse one, never both, so whatever is counted over
-/// the cover is counted once. Where a wanted chunk is not resident, the
-/// nearest resident chunk over it draws its ground; where
-/// none is, the resident pages under it stand in, as far down as there are
-/// any (Cesium's `skipLevelOfDetail`, which stands a node in by its loaded
-/// descendants where no ancestor is loaded), with gaps where there are none.
+/// What the resident pages draw of a view's `Domain`: the chunks the rule
+/// wants, each drawn from the finest resident page at or over it, and the
+/// ones nothing over is held for, as gaps — the two together being the
+/// domain's ground exactly, once. Whatever is counted over the cover is
+/// counted once, since every piece is a chunk the rule chose and none lies
+/// over another.
 #[derive(Default, PartialEq)]
 pub struct Cover {
     pub drawn: Vec<Chunk>,
@@ -264,6 +235,15 @@ impl<L: Layer> Pyramid<L> {
         std::iter::successors(Some(p), |q| (q.level < TOP_LEVEL).then(|| q.parent())).find(|&q| self.get(q).is_some())
     }
 
+    /// The resident page `p`'s ground is drawn from: `p` itself, or the
+    /// nearest resident page over it, which draws that ground coarser — a
+    /// count in its own lattice, terrain in its own cells upsampled — until
+    /// `p` comes. Where `p` is settled that is `source`'s page and exact.
+    /// None where nothing over it is held.
+    pub fn drawn_from(&self, p: LevelPage) -> Option<LevelPage> {
+        std::iter::successors(Some(p), |q| (q.level < TOP_LEVEL).then(|| q.parent())).find(|&q| self.get(q).is_some())
+    }
+
     /// Keeps `p` wanted wherever the view is, and its record with it, until
     /// another page is pinned in its place.
     pub fn pin(&mut self, p: Option<LevelPage>) {
@@ -288,75 +268,27 @@ impl<L: Layer> Pyramid<L> {
         self.ancestor(p).is_some() || self.children_resident(p)
     }
 
-    /// What the resident pages draw of `d` (`Cover`).
+    /// What the resident pages draw of `d` (`Cover`): every chunk the rule
+    /// wants, in its own place, drawn from its page or the nearest resident
+    /// page over it (`drawn_from`), and a gap where nothing over it is held.
+    /// A page is never waited on for its siblings, so ground whose own page
+    /// has come is drawn at once however little of the ground around it has,
+    /// and whatever arrives first — the finest near the eye, the view filling
+    /// outwards (io/policy.rs) — is on the screen the turn it lands (Cesium's
+    /// upsampled tiles).
     pub fn cover_of(&self, d: &Domain) -> Cover {
-        // The pages that are resident or have one under them, which is how
-        // far down a stand-in is looked for without walking ground that has
-        // nothing.
-        let mut below: HashSet<LevelPage> = HashSet::new();
-        for &page in self.pages.keys() {
-            let mut p = page;
-            while below.insert(p) && p.level < TOP_LEVEL {
-                p = p.parent();
-            }
-        }
-        // The roots are the pyramid's top, so every page over the ground a
-        // view draws is one the view wants held (domain.rs `pages`): a root's
-        // own page, where it is resident, stands in for whatever under it has
-        // not come.
         let mut out = Cover::default();
-        for &c in d.roots() {
-            self.wanted(d, &below, c, false, &mut out);
-        }
-        out
-    }
-
-    /// `c` as the domain wants it, into `out`, `above` saying whether a
-    /// resident chunk over it draws its ground should `c` not be drawn whole.
-    /// Whether it is.
-    fn wanted(&self, d: &Domain, below: &HashSet<LevelPage>, c: Chunk, above: bool, out: &mut Cover) -> bool {
-        let here = self.source(c.page()).is_some();
-        if d.splits(c) {
-            let mut finer = Cover::default();
-            let mut whole = true;
-            for k in c.children() {
-                whole &= self.wanted(d, below, k, above || here, &mut finer);
-            }
-            if here && !whole {
-                out.drawn.push(c);
-                return true;
-            }
-            out.drawn.append(&mut finer.drawn);
-            out.gaps.append(&mut finer.gaps);
-            return whole;
-        }
-        if here || above {
-            if here {
+        let mut open = d.roots().to_vec();
+        while let Some(c) = open.pop() {
+            if d.splits(c) {
+                open.extend(c.children());
+            } else if self.drawn_from(c.page()).is_some() {
                 out.drawn.push(c);
             } else {
                 out.gaps.push(c);
             }
-            return here;
         }
-        self.stand_in(below, c, out)
-    }
-
-    /// `c` from the resident pages under it, where nothing over it is;
-    /// whether it is drawn whole.
-    fn stand_in(&self, below: &HashSet<LevelPage>, c: Chunk, out: &mut Cover) -> bool {
-        if self.source(c.page()).is_some() {
-            out.drawn.push(c);
-            return true;
-        }
-        if c.level() == 0 || !below.contains(&c.children()[0].page()) {
-            out.gaps.push(c);
-            return false;
-        }
-        let mut whole = true;
-        for k in c.children() {
-            whole &= self.stand_in(below, k, out);
-        }
-        whole
+        out
     }
 
     /// What the layer draws of the view, and which making of it this is.
@@ -381,18 +313,11 @@ impl<L: Layer> Pyramid<L> {
         self.domains
     }
 
-    /// What the resident pages can do for `p`, by what the cover made of its
-    /// ground.
-    fn resolve(&self, p: LevelPage) -> Resolved {
-        if self.source(p).is_some() {
-            Resolved::Exact
-        } else if self.children_resident(p) {
-            Resolved::Foldable
-        } else if self.cover.gaps.iter().any(|g| share(g.node(), p.node())) {
-            Resolved::Missing
-        } else {
-            Resolved::Covered
-        }
+    /// Whether the resident pages answer `p` with no request: it is
+    /// resident, or the page over it that settles it is, or every page it
+    /// folds from is and the client stands it up itself.
+    fn answers(&self, p: LevelPage) -> bool {
+        self.source(p).is_some() || self.children_resident(p)
     }
 
     // ---- records ----
@@ -509,18 +434,22 @@ impl<L: Layer> Pyramid<L> {
     fn wants(&self) -> Vec<(u64, Rank)> {
         let mut wants = Vec::new();
         if let Some(d) = self.domain.as_ref() {
-            for (p, drawn) in d.pages() {
-                let resolved = self.resolve(p);
+            // The page the ground nearest the view's centre is drawn from:
+            // the first of the layer's order (io/policy.rs).
+            let centre = d.pages().filter_map(|(p, order)| order.map(|o| (o, p))).min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, p)| p);
+            for (p, order) in d.pages() {
                 // A page the tree stops above is none to ask for, whether or
                 // not the page over it has come yet: that page is its own want.
-                if matches!(resolved, Resolved::Exact | Resolved::Foldable) || self.settled(p) {
+                if self.answers(p) || self.settled(p) {
                     continue;
                 }
-                // A page held over ground drawn finer is coverage by what it
-                // is for, whatever the cover now makes of its ground: it is
-                // what that ground falls back to.
-                let resolved = if drawn { resolved } else { Resolved::Missing };
-                wants.push((p.subject(), policy::page(resolved, d.page_nearest_to(p))));
+                let (shell, distance) = match order {
+                    _ if Some(p) == centre => (Shell::Centre, 0.0),
+                    _ if p.level == TOP_LEVEL => (Shell::Top, d.page_order(p)),
+                    Some(distance) => (Shell::Drawn, distance),
+                    None => (Shell::Fallback, d.page_order(p)),
+                };
+                wants.push((p.subject(), policy::page(L::CATEGORY, shell, distance)));
             }
         }
         if let Some(p) = self.pinned.filter(|p| self.get(*p).is_none() && !self.settled(*p) && !wants.iter().any(|(s, _)| *s == p.subject())) {

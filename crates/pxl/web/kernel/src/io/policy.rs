@@ -8,30 +8,43 @@
 //! lands on is decided here, once,
 //! where the producers can be read against each other.
 //!
-//! **Only the orderings the code gives a reason for are kept.** There are
-//! three, and they are all terrain's or terrain's dependency's:
+//! **Only the orderings the code gives a reason for are kept.**
 //!
-//! 1. The shared ocean tile before a page that is not drawn. One arrival sets
-//!    every page waiting on it (`layer/terrain/page.rs`'s `adopt_ocean` drains
+//! 1. The shared ocean tile before any page. One arrival sets every page
+//!    waiting on it (`layer/terrain/page.rs`'s `adopt_ocean` drains
 //!    `waiting`); a page's own arrival sets one.
-//! 2. A page nothing draws before a page drawn coarsely. The first is a hole
-//!    on the screen and the second is already there (`world/pyramid.rs`'s `resolve`).
-//! 3. Nearer the eye before further, within any of those: the distance the
-//!    page's level was chosen by (world/pyramid/domain.rs `Domain`).
+//! 2. The layers in the order a view is built up: the ground, then what
+//!    stands on it, then the marks over it — terrain's pages, then the
+//!    catalog's models and images the decor is drawn with, then the places'
+//!    pages (the user's order, 2026-09-26). Placed objects are all resident
+//!    and are built with the ground's chunks, so they are never fetched.
+//! 3. Within a layer, one order for every layer, out from the view's centre
+//!    (world/pyramid/domain.rs `Domain::order_of`), the point the camera
+//!    turns about and the character stands on:
+//!    - the page the ground nearest the centre is drawn from, so where the
+//!      character stands is right before anything else is;
+//!    - the pyramid's top pages, a handful, which every chunk under them can
+//!      be drawn from until its own comes, so no ground is left open for
+//!      long;
+//!    - every page the view draws ground from, nearest the centre first, so
+//!      the view fills outwards as a sphere grows;
+//!    - the pages held only for ground drawn finer to fall back on.
 //!
-//! **Everything else is a tie.** A label, a POI page, the device's own page
-//! and a catalog asset have no relation to each other or to terrain that
-//! anything in this tree gives a reason for — the numbers they carry today
-//! (`BEHIND_TERRAIN`, `PRIORITY_BIAS`, `PINNED_PAGE_PRIORITY`, and a `+1.0`
-//! between a dictionary and its group) were each written to place one thing
-//! against another and none of them is argued anywhere. They rank the same
-//! here, and `io/sched.rs` breaks the tie by category and subject: an order
+//!    Ranking a hole before ground drawn coarsely filled the view coarsest
+//!    first instead: from a cold start the eye's ancestors took the first six
+//!    connections, and the top page's two-kilometre cubes stood in front of
+//!    the eye for seconds while its own page waited (measured 2026-09-26).
+//!
+//! **Everything else is a tie.** A label, the device's own page and the
+//! geocode dictionary have no relation to each other or to the view that
+//! anything in this tree gives a reason for. They rank the same, after the
+//! view, and `io/sched.rs` breaks the tie by category and subject: an order
 //! that means nothing and is the same every run.
 //!
 
+use crate::io::demand::Category;
 use crate::io::sched::Rank;
 use crate::sched::ledger::record::Outcome;
-use crate::world::pyramid::Resolved;
 
 /// The shared open-ocean tile: every page waiting on it is a page showing
 /// nothing, and one arrival answers all of them.
@@ -39,25 +52,35 @@ pub fn ocean() -> Rank {
     Rank { class: 0, distance: 0.0 }
 }
 
-/// A page of any layer the pyramid holds that the view wants, and its
-/// nearest `distance` from the eye. A layer's page ranks by what its absence costs, the
-/// same for every layer: the orderings below are the pyramid's.
-///
-/// `Exact` and `Foldable` are not demands — the caller has them already — and
-/// rank as the weakest thing here rather than being given a place of their
-/// own, since nothing should be asking for one.
-pub fn page(resolved: Resolved, distance: f64) -> Rank {
-    let class = match resolved {
-        Resolved::Missing => 1,
-        Resolved::Covered => 2,
-        Resolved::Exact | Resolved::Foldable => ASIDE,
-    };
-    Rank { class, distance }
+/// Where a page stands in its layer's order (point 3 above).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shell {
+    /// The page the ground nearest the view's centre is drawn from.
+    Centre,
+    /// A page of the pyramid's top.
+    Top,
+    /// A page the view draws ground from.
+    Drawn,
+    /// A page held only for ground drawn finer to fall back on.
+    Fallback,
 }
 
-/// Where everything with no argued relation sits: one class, and the tie
-/// broken by nothing that means anything.
-const ASIDE: u8 = 4;
+const SHELLS: u8 = 4;
+/// Where each layer's shells begin (point 2 above).
+const TERRAIN: u8 = 1;
+const ASSET: u8 = TERRAIN + SHELLS;
+const PLACES: u8 = ASSET + 1;
+
+/// A page of a layer the pyramid holds, where it stands in the layer's order,
+/// and its distance from the view's centre.
+pub fn page(layer: Category, shell: Shell, distance: f64) -> Rank {
+    let base = if layer == Category::terrain { TERRAIN } else { PLACES };
+    Rank { class: base + shell as u8, distance }
+}
+
+/// Where everything with no argued relation sits: one class after the view,
+/// and the tie broken by nothing that means anything.
+const ASIDE: u8 = PLACES + SHELLS;
 
 /// The device's own page, which the marker grounds itself against. It is
 /// genuinely far and nothing on the screen waits on it.
@@ -73,15 +96,10 @@ pub fn geocode() -> Rank {
     Rank { class: ASIDE, distance: 0.0 }
 }
 
-/// POI demand has already passed view relevance. Proximity orders only
-/// those summaries whose refinement the current view needs.
-pub fn poi(distance: f64) -> Rank {
-    Rank { class: ASIDE, distance }
-}
-
-/// A catalog model or image: a fixed set, wanted once, never stale.
+/// A catalog model or image: a fixed set, wanted once, never stale, and
+/// what the decor standing on the ground is drawn with.
 pub fn asset() -> Rank {
-    Rank { class: ASIDE, distance: 0.0 }
+    Rank { class: ASSET, distance: 0.0 }
 }
 
 /// How long an identity waits before another attempt.

@@ -167,7 +167,10 @@
     "turn_stage_ms": 117,
     "turn_step_ms": 118,
     "turn_step_name": 119,
-    "WORDS": 120
+    "cover_rule": 120,
+    "cover_drawn": 121,
+    "cover_gaps": 122,
+    "WORDS": 123
   },
   "FRAME_GROUPS": {
     "$doc": [
@@ -251,6 +254,11 @@
       "pages_by_level",
       "pages_poi"
     ],
+    "cover": [
+      "cover_rule",
+      "cover_drawn",
+      "cover_gaps"
+    ],
     "device": [
       "buffers",
       "buffer_mb",
@@ -299,9 +307,9 @@
       "One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0."
     ],
     "sample": 0,
-    "has_prev": 120,
-    "prev": 121,
-    "WORDS": 241
+    "has_prev": 123,
+    "prev": 124,
+    "WORDS": 247
   },
   "SPREAD": {
     "$type": "u32",
@@ -382,15 +390,15 @@
       "census": 71,
       "level_tris": 91,
       "last": 102,
-      "WORDS": 222
+      "WORDS": 225
     },
     "tasks": {
-      "AT": 227,
+      "AT": 230,
       "slots": 0,
       "WORDS": 150
     },
     "counters": {
-      "AT": 377,
+      "AT": 380,
       "faces_kept": 0,
       "faces_possible": 1,
       "runs_culled": 2,
@@ -409,7 +417,7 @@
       "WORDS": 15
     },
     "atlas": {
-      "AT": 392,
+      "AT": 395,
       "size": 0,
       "entries": 1,
       "shelves": 2,
@@ -417,7 +425,7 @@
       "WORDS": 4
     },
     "retain": {
-      "AT": 396,
+      "AT": 399,
       "run_sets": 0,
       "run_set_mb": 1,
       "tiers": 2,
@@ -429,14 +437,14 @@
       "WORDS": 8
     },
     "fetch": {
-      "AT": 404,
+      "AT": 407,
       "queued": 0,
       "running": 1,
       "credits": 2,
       "WORDS": 3
     },
     "peak": {
-      "AT": 407,
+      "AT": 410,
       "present": 0,
       "dt_ms": 1,
       "sched_ms": 2,
@@ -460,12 +468,12 @@
       "WORDS": 20
     },
     "steps": {
-      "AT": 427,
+      "AT": 430,
       "count": 0,
       "slots": 1,
       "WORDS": 161
     },
-    "WORDS": 588
+    "WORDS": 591
   },
   "READ": {
     "$type": "u32",

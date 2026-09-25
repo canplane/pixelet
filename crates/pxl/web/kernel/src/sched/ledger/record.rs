@@ -305,6 +305,19 @@ pub struct FrameSample {
     pub stale: StaleSample,
     pub cap: CapSample,
     pub turn: TurnSample,
+    pub cover: CoverSample,
+}
+
+/// What the terrain's cover made of the view: the chunks the rule draws with
+/// everything resident, and of those the chunks it draws from the pages it
+/// holds and the ones it leaves open. The three apart are what tells a view
+/// waiting on its pages from one whose pages came and are not drawn.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct CoverSample {
+    pub rule: f64,
+    pub drawn: f64,
+    pub gaps: f64,
 }
 
 /// The chunks a view has moved off and that are kept until what replaces
@@ -440,6 +453,7 @@ words!(FrameSample, FRAME::WORDS,
     cap.mount_full => FRAME::cap_mount_full, cap.record_refused => FRAME::cap_record_refused,
     turn.effects_ms => FRAME::turn_effects_ms, turn.stage_ms => FRAME::turn_stage_ms,
     turn.step_ms => FRAME::turn_step_ms, turn.step_name => FRAME::turn_step_name,
+    cover.rule => FRAME::cover_rule, cover.drawn => FRAME::cover_drawn, cover.gaps => FRAME::cover_gaps,
 );
 
 words!(TaskRow, TASK::WORDS,

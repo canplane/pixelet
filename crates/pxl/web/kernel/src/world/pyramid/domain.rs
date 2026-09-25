@@ -29,7 +29,7 @@ use pxl_render::look::lod::REFERENCE_THRESHOLD_0;
 use pxl_spec::space::hierarchy::Scale;
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, PAGE_CELLS, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
@@ -77,9 +77,10 @@ pub const LEVEL_CHUNKS: u32 = {
 };
 
 /// The most chunks a view draws at once. A quarter of the chunk table
-/// (world/chunk/build.rs `MAX_CHUNKS`): where nothing over a piece of ground
-/// is held, the pages a level under it stand in, four chunks for its one
-/// (layer/terrain/present.rs), and the table holds even that.
+/// (world/chunk/build.rs `MAX_CHUNKS`), which holds the view, the view it is
+/// replacing — drawn until the new one's chunks are built (world/chunk/
+/// table.rs `retire`) — and room past both; the mesh arena is sized from it
+/// (world/chunk/mesh_slot.rs).
 pub const VIEW_CHUNKS: u32 = MAX_CHUNKS as u32 / 4;
 
 /// The most pages a view holds at once, one record each (world/pyramid.rs
@@ -153,11 +154,14 @@ impl Frustum {
 pub struct Eye {
     pub at: [f64; 3],
     pub foot: IVec,
+    /// The point the camera turns about — the map centre, where the
+    /// character stands — which every layer's work is ordered out from.
+    pub centre: [f64; 3],
 }
 
 /// The eye as the view draws it, once there is a map to stand over.
 pub fn eye() -> Option<Eye> {
-    map_store().map_center?;
+    let mc = map_store().map_center?;
     let v = view();
     let at = [
         ivec::to_real(ivec::X(v.origin)) + v.eye_local[0],
@@ -165,7 +169,8 @@ pub fn eye() -> Option<Eye> {
         ivec::to_real(ivec::Z(v.origin)) + v.eye_local[2],
     ];
     let foot = ivec::gather(at[0].floor() as i64, at[1].floor() as i64, 0);
-    Some(Eye { at, foot })
+    let centre = [pvf3::to_real(pvf3::X(&mc)), pvf3::to_real(pvf3::Y(&mc)), pvf3::to_real(pvf3::Z(&mc))];
+    Some(Eye { at, foot, centre })
 }
 
 /// The level the rule wants ground `dist` from the eye at: the one whose
@@ -204,6 +209,8 @@ pub fn ring_of(anchor: IVec, page: LevelPage) -> u32 {
 /// it is its own (`Pyramid::cover`).
 pub struct Domain {
     eye: [f64; 3],
+    /// Where the view's work is ordered out from (`Eye::centre`).
+    centre: [f64; 3],
     foot: IVec,
     /// The height of the ground under the eye: what ground no page over it is
     /// held for is taken to stand at, until one is.
@@ -222,16 +229,28 @@ pub struct Domain {
     scale: f64,
     /// The top level's chunks within the reach (`roots`), found once.
     roots: Vec<Chunk>,
-    /// Every page the view wants, and whether some of its ground is drawn at
-    /// its level: the pages the rule draws from, and every ancestor of those
-    /// up to the pyramid's top, so ground whose page has not come always has
-    /// something coarser held over it (Google Earth holds its root, Cesium
-    /// preloads ancestors).
-    pages: BTreeMap<LevelPage, bool>,
+    /// Every page the view wants, and how near the eye the ground drawn at
+    /// its level comes, none where none is: the pages the rule draws from,
+    /// and every ancestor of those up to the pyramid's top, so ground whose
+    /// page has not come always has something coarser held over it (Google
+    /// Earth holds its root, Cesium preloads ancestors).
+    pages: BTreeMap<LevelPage, Option<f64>>,
     /// How near the eye each chunk the rule walked comes and whether the view
     /// sees it, measured once while the budget was fitted: the cover walks
     /// the same chunks, and a measure reads every placed column.
-    measured: HashMap<Chunk, (f64, bool)>,
+    measured: HashMap<Chunk, Measure>,
+    /// The chunks the rule draws under this view's criterion.
+    chunks: u32,
+}
+
+/// A piece of ground as the view measures it: how near the eye it comes,
+/// which chooses its level, whether the view sees it, and how near the
+/// view's centre it comes, which orders the work on it.
+#[derive(Clone, Copy)]
+struct Measure {
+    near: f64,
+    seen: bool,
+    order: f64,
 }
 
 /// The domain of an eye `height` over the ground under it, seeing
@@ -240,6 +259,7 @@ pub struct Domain {
 pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>, pressure: u32) -> Domain {
     let mut d = Domain {
         eye: eye.at,
+        centre: eye.centre,
         foot: eye.foot,
         ground: eye.at[2] - height,
         far: reach_at(height).min(split_distance(TOP_LEVEL as i32 + 1)),
@@ -248,6 +268,7 @@ pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>, pressure: u3
         roots: Vec::new(),
         pages: BTreeMap::new(),
         measured: HashMap::new(),
+        chunks: 0,
     };
     d.roots = d.find_roots();
     // The rule's wants at the criterion, and a quarter of an octave looser
@@ -259,7 +280,7 @@ pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>, pressure: u3
     for step in 0..=SCALE_STEPS * (TOP_LEVEL as i32 + 1) {
         d.scale = (-(pressure as f64) - step as f64 / SCALE_STEPS as f64).exp2();
         let (chunks, pages) = d.select(&mut measured);
-        d.pages = pages;
+        (d.chunks, d.pages) = (chunks, pages);
         if chunks <= VIEW_CHUNKS && d.pages.len() as u32 <= VIEW_PAGES {
             break;
         }
@@ -281,8 +302,12 @@ impl Domain {
     /// The nearest distance from the eye to a box: `x0, y0, side` on the
     /// ground and the heights it spans, or the ground under the eye's where
     /// none is known.
-    fn nearest(&self, (x0, y0, side): (f64, f64, f64), z: Option<(f64, f64)>) -> f64 {
-        let [ex, ey, ez] = self.eye;
+    fn nearest(&self, rect: (f64, f64, f64), z: Option<(f64, f64)>) -> f64 {
+        self.nearest_from(self.eye, rect, z)
+    }
+
+    /// `nearest`, from any point.
+    fn nearest_from(&self, [ex, ey, ez]: [f64; 3], (x0, y0, side): (f64, f64, f64), z: Option<(f64, f64)>) -> f64 {
         let gap = |e: f64, lo: f64, hi: f64| (lo - e).max(e - hi).max(0.0);
         let (zlo, zhi) = z.unwrap_or((self.ground, self.ground));
         gap(ex, x0, x0 + side).hypot(gap(ey, y0, y0 + side)).hypot(gap(ez, zlo, zhi))
@@ -311,29 +336,42 @@ impl Domain {
     }
 
     /// How near the eye `c` comes, and whether the view sees any of it.
-    fn measure(&self, c: Chunk) -> (f64, bool) {
+    fn measure(&self, c: Chunk) -> Measure {
         if let Some(&m) = self.measured.get(&c) {
             return m;
         }
         let rect = c.rect();
         let z = Self::heights(c.page(), c.node());
-        (self.nearest(rect, z), self.in_view(rect, z))
+        Measure {
+            near: self.nearest(rect, z),
+            seen: self.in_view(rect, z),
+            order: self.nearest_from(self.centre, rect, z),
+        }
     }
 
     /// Whether the view can see any of `c`'s ground: everything where the
     /// frustum is not known.
     pub fn sees(&self, c: Chunk) -> bool {
-        self.measure(c).1
+        self.measure(c).seen
     }
 
     /// How near the eye `c` comes.
     pub fn nearest_to(&self, c: Chunk) -> f64 {
-        self.measure(c).0
+        self.measure(c).near
     }
 
-    /// How near the eye `p` comes.
-    pub fn page_nearest_to(&self, p: LevelPage) -> f64 {
-        self.nearest(p.rect(), Self::heights(p, p.node()))
+    /// Where `c` falls in the view's order: how near the view's centre its
+    /// ground comes. Every layer's work — a page fetched, a chunk built — is
+    /// taken nearest the centre first, so the view fills out from where the
+    /// camera looks and the character stands, whatever the tilt.
+    pub fn order_of(&self, c: Chunk) -> f64 {
+        self.measure(c).order
+    }
+
+    /// Where `p` falls in the view's order, by its whole ground: for a page
+    /// held only for finer ground to fall back on.
+    pub fn page_order(&self, p: LevelPage) -> f64 {
+        self.nearest_from(self.centre, p.rect(), Self::heights(p, p.node()))
     }
 
     /// The largest drawn cell per unit of distance under this view's
@@ -349,6 +387,12 @@ impl Domain {
     /// criterion (`level_for`).
     pub fn wanted_level(&self, c: Chunk) -> i32 {
         level_for(self.nearest_to(c) / self.scale)
+    }
+
+    /// The chunks the rule draws under this view's criterion, with every
+    /// page resident: what the ledger sets the cover against.
+    pub fn chunks(&self) -> u32 {
+        self.chunks
     }
 
     /// Where the partition starts: every chunk of the pyramid's top within
@@ -376,18 +420,19 @@ impl Domain {
     /// The chunks the rule draws under this view's criterion, counted, and
     /// the pages that takes (`pages`), each chunk's measure kept in
     /// `measured` for the next count.
-    fn select(&self, measured: &mut HashMap<Chunk, (f64, bool)>) -> (u32, BTreeMap<LevelPage, bool>) {
+    fn select(&self, measured: &mut HashMap<Chunk, Measure>) -> (u32, BTreeMap<LevelPage, Option<f64>>) {
         let mut chunks = 0;
         let mut pages = BTreeMap::new();
         let mut open = self.roots.clone();
         while let Some(c) = open.pop() {
-            let (near, seen) = *measured.entry(c).or_insert_with(|| self.measure(c));
-            if self.split_at(c, near, seen) {
+            let m = *measured.entry(c).or_insert_with(|| self.measure(c));
+            if self.split_at(c, m.near, m.seen) {
                 open.extend(c.children());
                 continue;
             }
             chunks += 1;
-            pages.insert(c.page(), true);
+            let order = pages.entry(c.page()).or_insert(Some(m.order));
+            *order = order.map(|o: f64| o.min(m.order));
         }
         let drawn: Vec<LevelPage> = pages.keys().copied().collect();
         for p in drawn {
@@ -397,16 +442,18 @@ impl Domain {
                 if pages.contains_key(&up) {
                     break;
                 }
-                pages.insert(up, false);
+                pages.insert(up, None);
             }
         }
         (chunks, pages)
     }
 
-    /// Every page the view wants, and whether some of its ground is drawn at
-    /// its level rather than it being held over ground drawn finer.
-    pub fn pages(&self) -> impl Iterator<Item = (LevelPage, bool)> + '_ {
-        self.pages.iter().map(|(&p, &drawn)| (p, drawn))
+    /// Every page the view wants, and where the ground drawn at its level
+    /// falls in the view's order (`order_of`): the nearest of its chunks to
+    /// the centre. None for a page held only over ground drawn finer, which
+    /// is what that ground falls back to and not ground of its own.
+    pub fn pages(&self) -> impl Iterator<Item = (LevelPage, Option<f64>)> + '_ {
+        self.pages.iter().map(|(&p, &order)| (p, order))
     }
 
     /// Whether the view wants `p` held.
@@ -425,8 +472,8 @@ impl Domain {
     /// see is held at the level it is reached at and refined only once it is
     /// seen, as Cesium refines only what is in the frustum.
     pub fn splits(&self, c: Chunk) -> bool {
-        let (near, seen) = self.measure(c);
-        self.split_at(c, near, seen)
+        let m = self.measure(c);
+        self.split_at(c, m.near, m.seen)
     }
 
     /// The chunk over `c`'s ground at the level the view wants that ground
