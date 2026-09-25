@@ -129,6 +129,6 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
 
   // Where the layer lies in the root frame, for the air in front of it.
   let world = frame.camera_pos + dir * du;
-  color = aerial(color, world, air_along(dir));
+  color = aerial(color, world);
   return vec4f(finish(shoulder(color), v.clip.xy), alpha);
 }

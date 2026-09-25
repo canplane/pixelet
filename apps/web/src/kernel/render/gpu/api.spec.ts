@@ -232,6 +232,7 @@ export const record = {
   F32X4: 3 as number,
   U32X4: 4 as number,
   U32: 5 as number,
+  NONE: 0 as number,
   VERTEX: 1 as number,
   FRAGMENT: 2 as number,
   BOTH: 3 as number,

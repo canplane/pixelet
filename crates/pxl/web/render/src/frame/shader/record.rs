@@ -415,15 +415,18 @@ const LIT_FRAME: [[u32; 3]; 10] = [
     AIR_AT_VERTICES[5],
 ];
 /// The clouds' group: the frame, their own uniform, the tile the shape is
-/// baked into and its sampler, and the air.
+/// baked into and its sampler, and the air. The air in front of a cloud is
+/// lit where it stands (atmos_view.wgsl's `veil`) and reads neither the
+/// transmittance nor the sky-view table, which the layout still lays, since
+/// the shader declares them with the rest.
 const CLOUD_GROUP: [[u32; 3]; 10] = [
     [0, FRAGMENT, UNIFORM],
     [1, FRAGMENT, UNIFORM],
     [2, FRAGMENT, TEXTURE],
     [3, FRAGMENT, SAMPLER],
     AIR[0],
-    AIR[1],
-    AIR[2],
+    [9, NONE, TEXTURE],
+    [10, NONE, TEXTURE],
     AIR[3],
     AIR[4],
     AIR[5],
