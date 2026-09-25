@@ -28,11 +28,12 @@ use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 use crate::io::demand::{Category, Phases};
 use crate::io::policy;
 use crate::io::sched::{declare, Rank};
+use crate::layer::environment::fog::eye_height;
 use crate::world::change::{world_edge, WorldTopic};
 use crate::world::page_table::PageTable;
 use chunk::Chunk;
 pub use window::Domain;
-use window::{domain, eye, held, ring_of, window};
+use window::{domain_for, eye, held, ring_of, window, Frustum};
 use window::{CHAIN_PAGES, HELD_AXIS, WINDOW_LEVELS};
 
 /// A layer the pyramid holds: its page is itself, folded by `Folds`.
@@ -129,11 +130,11 @@ pub struct Cover {
     pub gaps: Vec<Chunk>,
 }
 
-/// What the cover and the wishlist are a function of: where the eye is and
-/// the window it holds, whether the camera is moving, the resident set and
-/// the pinned page. Two turns agreeing on all of it want the same pages of
-/// the same ground, so the second decides nothing again.
-type Wish = ([f64; 3], (u32, u32), bool, u32, Option<LevelPage>);
+/// What the cover and the wishlist are a function of: where the eye is, what
+/// it sees and the window it holds, whether the camera is moving, the
+/// resident set and the pinned page. Two turns agreeing on all of it want the
+/// same pages of the same ground, so the second decides nothing again.
+type Wish = ([f64; 3], Frustum, (u32, u32), bool, u32, Option<LevelPage>);
 
 pub struct Pyramid<L: Layer> {
     tables: Vec<PageTable<L>>,
@@ -261,7 +262,7 @@ impl<L: Layer> Pyramid<L> {
         let top = d.window().end;
         let mut over: Vec<Chunk> = Vec::new();
         let mut roots: Vec<(Chunk, Cover)> = Vec::new();
-        for c in d.roots() {
+        for &c in d.roots() {
             let mut own = Cover::default();
             if !self.wanted(d, &below, c, false, &mut own) {
                 over.extend(c.ancestors().find(|a| a.level() >= top && self.get(a.page).is_some()));
@@ -432,11 +433,13 @@ impl<L: Layer> Pyramid<L> {
     /// where it is not: requiring it would put this at one page a level, and
     /// a zoom out would fetch pages whose ground is already held.
     fn fold_one(&mut self, anchor: IVec) -> bool {
-        let chain = self.domain.as_ref().map_or_else(Vec::new, |d| d.chain().to_vec());
+        let Some(d) = self.domain.as_ref() else { return false };
+        // What the view asks for, and nothing it does not: a held page none of
+        // whose ground is drawn at its level is not worth a fold's work.
+        let wanted: Vec<LevelPage> = d.chain().iter().copied().chain(d.window().flat_map(|level| held(level, anchor)).filter(|&p| d.reaches(p))).collect();
         let w = window();
         for level in w.start.max(1)..=TOP_LEVEL {
-            let ring = if w.contains(&level) { held(level, anchor) } else { Vec::new() };
-            for p in ring.into_iter().chain(chain.iter().copied().filter(|p| p.level == level)) {
+            for p in wanted.iter().copied().filter(|p| p.level == level) {
                 if self.get(p).is_some() {
                     continue;
                 }
@@ -468,10 +471,12 @@ impl<L: Layer> Pyramid<L> {
                 if matches!(resolved, Resolved::Exact | Resolved::Foldable) {
                     continue;
                 }
-                // None of it drawn at its level: margin against a move that
-                // has not happened.
-                let (speculative, near) = self.domain.as_ref().map_or((false, 0.0), |d| (!d.reaches(p), d.page_nearest_to(p)));
-                wants.push((p.subject(), policy::page(resolved, speculative, near)));
+                // A page none of whose ground is drawn at its level — past the
+                // reach, or where the view does not look — is not asked for:
+                // what is held of it stays until its record is wanted, and a
+                // turn back finds it there.
+                let Some(d) = self.domain.as_ref().filter(|d| d.reaches(p)) else { continue };
+                wants.push((p.subject(), policy::page(resolved, d.page_nearest_to(p))));
             }
         }
         // The chain is coverage by what it is for, whatever the cover now
@@ -479,7 +484,7 @@ impl<L: Layer> Pyramid<L> {
         if let Some(d) = self.domain.as_ref() {
             for &p in d.chain() {
                 if self.get(p).is_none() && !self.children_resident(p) {
-                    wants.push((p.subject(), policy::page(Resolved::Missing, false, d.page_nearest_to(p))));
+                    wants.push((p.subject(), policy::page(Resolved::Missing, d.page_nearest_to(p))));
                 }
             }
         }
@@ -519,10 +524,11 @@ impl<L: Layer> Pyramid<L> {
         let Some(e) = eye() else { return };
         let anchor = e.foot;
         let w = window();
-        let wish = (e.at, (w.start, w.end), crate::sched::turn::interactive(), self.revision, self.pinned);
+        let frustum = Frustum::of_view();
+        let wish = (e.at, frustum, (w.start, w.end), crate::sched::turn::interactive(), self.revision, self.pinned);
         if self.last != Some(wish) {
             self.drop_unrecorded(anchor);
-            let d = domain(&e);
+            let d = domain_for(&e, eye_height(), Some(frustum));
             let mut cover = L::present(self.cover_of(&d), &d, self);
             cover.drawn.sort_unstable();
             cover.gaps.sort_unstable();
@@ -536,7 +542,7 @@ impl<L: Layer> Pyramid<L> {
             }
             // Letting a page go moves the revision; the wish is the resident
             // set the cover was made from.
-            self.last = Some((wish.0, wish.1, wish.2, self.revision, wish.4));
+            self.last = Some((wish.0, wish.1, wish.2, wish.3, self.revision, wish.5));
             self.folds.notify();
         }
         declare(L::CATEGORY, &self.wants(anchor));

@@ -20,7 +20,7 @@ fn the_domain() -> Domain {
         at: [ivec::X(anchor()) as f64, ivec::Y(anchor()) as f64, HEIGHT],
         foot: anchor(),
     };
-    let d = domain_for(&eye, HEIGHT);
+    let d = domain_for(&eye, HEIGHT, None);
     assert_eq!(d.window(), WINDOW);
     d
 }
@@ -152,7 +152,7 @@ fn a_parent_gives_way_only_to_all_of_its_children() {
     // globals.
     let _serial = crate::global::serial();
     let d = the_domain();
-    let parent = d.roots().into_iter().find(|&c| d.splits(c)).expect("the top level holds ground wanted finer");
+    let parent = d.roots().iter().copied().find(|&c| d.splits(c)).expect("the top level holds ground wanted finer");
     let under = parent.children();
     let mut pyramid = Pyramid::<PoiPage>::default();
     pyramid.set(parent.page, PoiPage::default());
@@ -188,7 +188,7 @@ fn a_stand_in_reaches_as_far_down_as_there_are_pages() {
     // globals.
     let _serial = crate::global::serial();
     let d = the_domain();
-    let c = d.roots().into_iter().find(|&c| !d.splits(c)).expect("the top level holds ground wanted at the top");
+    let c = d.roots().iter().copied().find(|&c| !d.splits(c)).expect("the top level holds ground wanted at the top");
     let grand: Vec<Chunk> = c.children().iter().flat_map(|k| k.children()).collect();
     let mut pyramid = Pyramid::<PoiPage>::default();
     for g in &grand {
@@ -291,7 +291,7 @@ fn only_ground_wanted_at_the_top_is_outermost() {
     // globals.
     let _serial = crate::global::serial();
     let d = the_domain();
-    for c in d.roots() {
+    for &c in d.roots() {
         if d.splits(c) {
             assert!(!d.outermost(c), "{c:?} is wanted finer, even where it is drawn for want of its children");
             assert!(c.children().iter().all(|&k| !d.outermost(k)), "{c:?}'s children are wanted finer");
@@ -320,7 +320,7 @@ fn a_stand_in_too_deep_opens_its_branch_and_not_its_neighbours() {
     // globals.
     let _serial = crate::global::serial();
     let d = the_domain();
-    let t = d.roots().into_iter().find(|&c| !d.splits(c)).expect("the top level holds ground wanted at the top");
+    let t = d.roots().iter().copied().find(|&c| !d.splits(c)).expect("the top level holds ground wanted at the top");
     let [a, b, deep, gap] = t.children();
     let cover = Cover {
         drawn: [a, b].into_iter().chain(deep.children().iter().flat_map(|k| k.children())).collect(),
@@ -347,7 +347,7 @@ fn a_root_whose_page_has_not_come_is_stood_in_for_by_the_page_over_the_window() 
     assert!(cover.gaps.is_empty(), "{} gaps", cover.gaps.len());
     assert!(disjoint(&cover.drawn));
     assert!(cover.drawn.iter().all(|c| c.level() == WINDOW.end));
-    for r in d.roots() {
+    for &r in d.roots() {
         assert!(cover.drawn.iter().any(|&a| r.ancestors().any(|b| b == a)), "{r:?} is not stood in for");
     }
 }

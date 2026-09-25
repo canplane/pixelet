@@ -172,14 +172,19 @@ and places:
   in place of the table's ladder; the byte budget's pressure only moves the
   criterion.
 
+- Ground the frustum does not see is not refined (`Domain::splits`), and
+  pages none of whose ground is drawn at their level are not asked for, as
+  Cesium and Mapbox select by the frustum. The top level's roots and the
+  chain stay all around the eye, so a turn finds coarse ground there at
+  once; what was held of the far side keeps its record until another page
+  wants it. The frustum is widened by the planet's curvature, which draws
+  far ground lower than it lies.
+
 Not yet:
 
 - Objects' sub-cell tiers are not levels of the rule, and decoration is
   scattered from the leaves alone, so it ends where the rule stops drawing
   them (level 1's split distance), nearer than a kind's own reach.
-- What is held is the whole sphere's ground and not the frustum's, which is
-  rotation-stable but holds several times what a view shows; Cesium and
-  Mapbox select by the frustum.
 - A tier changes at its threshold with no crossfade; the machinery for one
   (a secondary tier and its weight) is kept but unused.
 - The window is WINDOW_LEVELS deep, so from low over the ground the far

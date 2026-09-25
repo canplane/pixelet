@@ -24,6 +24,7 @@ use pxl_spec::space::pyramid::{span_of, LevelPage, CHUNK_CELLS, GROUND, PAGE_CEL
 use pxl_spec::space::xy::TO_XY;
 
 use crate::layer::environment::fog::{eye_height, reach_at};
+use crate::layer::environment::state::globe;
 use crate::layer::object::store::column_boxes;
 use crate::layer::terrain::relief::range_over;
 use crate::shell::map_store::map_store;
@@ -92,6 +93,48 @@ const _: () = assert!(LEVEL_REACH_CELLS <= (HELD_AXIS / 2 * PAGE_CELLS) as f64, 
 pub const CHAIN_PAGES: u32 = 4 * TOP_LEVEL;
 
 const _: () = assert!(2.0 * SPLIT + CHUNK_CELLS as f64 <= PAGE_CELLS as f64, "a level over the window takes more than 2 × 2 pages");
+
+/// The view's frustum in world units: its six planes, normals in, as the
+/// domain tests ground against them, and the planet's radius, which draws
+/// far ground lower than it lies.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Frustum {
+    planes: [f64; 24],
+    planet: f64,
+}
+
+impl Frustum {
+    /// The frustum as the view draws it. The view's planes are in its own
+    /// frame, which reaches world units as `root · (x − origin)`; a plane
+    /// `n · x + d` there is `(Rᵀn) · x + d + n · t − (Rᵀn) · origin` here, the
+    /// root being a rotation R and a translation t.
+    pub fn of_view() -> Frustum {
+        let v = view();
+        let r = v.root;
+        let o = [ivec::to_real(ivec::X(v.origin)), ivec::to_real(ivec::Y(v.origin)), ivec::to_real(ivec::Z(v.origin))];
+        let mut planes = [0.0; 24];
+        for (k, p) in v.planes.as_chunks::<4>().0.iter().enumerate() {
+            let n = [
+                r[0] * p[0] + r[1] * p[1] + r[2] * p[2],
+                r[4] * p[0] + r[5] * p[1] + r[6] * p[2],
+                r[8] * p[0] + r[9] * p[1] + r[10] * p[2],
+            ];
+            let d = p[3] + p[0] * r[12] + p[1] * r[13] + p[2] * r[14] - (n[0] * o[0] + n[1] * o[1] + n[2] * o[2]);
+            planes[k * 4..k * 4 + 4].copy_from_slice(&[n[0], n[1], n[2], d]);
+        }
+        Frustum { planes, planet: globe().radius_u() }
+    }
+
+    /// Whether any of a sphere at `centre` of `radius` can be on screen from
+    /// `eye`. The planet curves ground `d` away down by about `d² / 2R`, which
+    /// can bring ground under the frustum's upper plane into it, so the
+    /// sphere is widened by that much.
+    fn sees(&self, centre: [f64; 3], radius: f64, eye: [f64; 3]) -> bool {
+        let d2 = (0..3).map(|k| (centre[k] - eye[k]).powi(2)).sum::<f64>();
+        let r = radius + d2 / (2.0 * self.planet);
+        self.planes.as_chunks::<4>().0.iter().all(|p| p[0] * centre[0] + p[1] * centre[1] + p[2] * centre[2] + p[3] >= -r)
+    }
+}
 
 /// Where the eye is: its position in units, and the point under it the rings
 /// are centred on.
@@ -199,10 +242,16 @@ pub struct Domain {
     pub far: f64,
     /// The pages held over the window's top (`CHAIN_PAGES`), coarsest last.
     chain: Vec<LevelPage>,
+    /// What the view sees, where it is known: ground outside it is held at
+    /// the window's top and never refined.
+    frustum: Option<Frustum>,
+    /// The top level's chunks within the reach (`roots`), found once.
+    roots: Vec<Chunk>,
 }
 
-/// The domain of an eye `height` over the ground under it.
-pub fn domain_for(eye: &Eye, height: f64) -> Domain {
+/// The domain of an eye `height` over the ground under it, seeing
+/// `frustum`, or everything around it where that is none.
+pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>) -> Domain {
     let window = window_for(height);
     let far = reach_at(height).min(split_distance(window.end as i32));
     let mut d = Domain {
@@ -212,8 +261,11 @@ pub fn domain_for(eye: &Eye, height: f64) -> Domain {
         ground: eye.at[2] - height,
         far,
         chain: Vec::new(),
+        frustum,
+        roots: Vec::new(),
     };
-    let mut level: Vec<LevelPage> = d.roots().into_iter().map(|c| c.page).collect();
+    d.roots = d.find_roots();
+    let mut level: Vec<LevelPage> = d.roots.iter().map(|c| c.page).collect();
     while level.first().is_some_and(|p| p.level < TOP_LEVEL) {
         level = level.iter().map(|p| p.parent()).collect();
         level.sort_unstable();
@@ -225,7 +277,7 @@ pub fn domain_for(eye: &Eye, height: f64) -> Domain {
 
 /// The domain of the eye as it stands.
 pub fn domain(eye: &Eye) -> Domain {
-    domain_for(eye, eye_height())
+    domain_for(eye, eye_height(), Some(Frustum::of_view()))
 }
 
 impl Domain {
@@ -260,6 +312,17 @@ impl Domain {
         z
     }
 
+    /// Whether the view can see any of a box: `x0, y0, side` on the ground
+    /// and the heights it spans, the ground under the eye's where none is
+    /// known.
+    fn in_view(&self, (x0, y0, side): (f64, f64, f64), z: Option<(f64, f64)>) -> bool {
+        let Some(f) = self.frustum else { return true };
+        let (zlo, zhi) = z.unwrap_or((self.ground, self.ground));
+        let centre = [x0 + side / 2.0, y0 + side / 2.0, (zlo + zhi) / 2.0];
+        let radius = (2.0 * side * side + (zhi - zlo).powi(2)).sqrt() / 2.0;
+        f.sees(centre, radius, self.eye)
+    }
+
     /// How near the eye `c` comes.
     pub fn nearest_to(&self, c: Chunk) -> f64 {
         let rect = c.rect();
@@ -275,7 +338,11 @@ impl Domain {
 
     /// Where the partition starts: every chunk of the window's top level
     /// within the reach.
-    pub fn roots(&self) -> Vec<Chunk> {
+    pub fn roots(&self) -> &[Chunk] {
+        &self.roots
+    }
+
+    fn find_roots(&self) -> Vec<Chunk> {
         let mut out = Vec::new();
         for page in ring(self.window.end - 1, self.foot, HELD_AXIS) {
             for cy in 0..PAGE_CHUNKS {
@@ -302,23 +369,36 @@ impl Domain {
     /// The ground the view draws, as the roots' squares: a corner and a side
     /// each, in units.
     pub fn ground(&self) -> Vec<(f64, f64, f64)> {
-        self.roots().into_iter().map(Chunk::rect).collect()
+        self.roots.iter().map(|c| c.rect()).collect()
     }
 
     /// Whether the rule wants `c`'s ground finer than `c`: it comes nearer the
-    /// eye than its level's split distance, and the window holds a level
-    /// under it.
+    /// eye than its level's split distance, the window holds a level under
+    /// it, and the view sees it. Ground the view does not see is held at the
+    /// level it is reached at and refined only once it is seen, as Cesium
+    /// refines only what is in the frustum.
     pub fn splits(&self, c: Chunk) -> bool {
-        c.level() > self.window.start && self.nearest_to(c) < split_distance(c.level() as i32)
+        if c.level() <= self.window.start {
+            return false;
+        }
+        let rect = c.rect();
+        let z = Self::heights(c.page, rect);
+        self.nearest(rect, z) < split_distance(c.level() as i32) && self.in_view(rect, z)
     }
 
     /// Whether some of `p`'s ground is drawn at `p`'s level: it lies under a
-    /// parent the rule splits, or is a root. A held page this says no of is
+    /// parent the rule splits, which the view sees, or is a root. A held page this says no of is
     /// margin against a move that has not happened.
     pub fn reaches(&self, p: LevelPage) -> bool {
         let top = self.window.end - 1;
         let within = if p.level == top { self.far } else { split_distance(p.level as i32 + 1) };
-        self.window.contains(&p.level) && self.page_nearest_to(p) < within
+        if !self.window.contains(&p.level) {
+            return false;
+        }
+        let span = span_of(p.level);
+        let rect = (ivec::X(p.page) as f64 * span, ivec::Y(p.page) as f64 * span, span);
+        let z = Self::heights(p, rect);
+        self.nearest(rect, z) < within && (p.level == top || self.in_view(rect, z))
     }
 
     /// Whether the view wants `c`'s ground at the window's top, or `c` is an

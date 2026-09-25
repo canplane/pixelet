@@ -65,7 +65,7 @@ fn the_neighbourhood_is_the_one_the_bake_folds_from() {
 /// roots, each split while it comes nearer than its level's split distance.
 fn drawn_by_rule(d: &Domain) -> Vec<Chunk> {
     let mut out = Vec::new();
-    let mut open = d.roots();
+    let mut open = d.roots().to_vec();
     while let Some(c) = open.pop() {
         if d.splits(c) {
             open.extend(c.children());
@@ -101,7 +101,7 @@ fn every_drawn_chunk_lies_between_its_split_distances_wherever_the_eye_stands() 
                 at: [x, y, height],
                 foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
             };
-            let d = domain_for(&eye, height);
+            let d = domain_for(&eye, height, None);
             let w = d.window();
             assert!(w.end - w.start <= WINDOW_LEVELS);
             let top = w.end - 1;
@@ -137,14 +137,14 @@ fn the_chain_over_the_window_holds_every_root_s_ancestors_in_two_by_two_a_level(
                 at: [x, y, height],
                 foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
             };
-            let d = domain_for(&eye, height);
+            let d = domain_for(&eye, height, None);
             let chain = d.chain();
             assert!(chain.len() as u32 <= CHAIN_PAGES);
             for level in d.window().end..=TOP_LEVEL {
                 let n = chain.iter().filter(|p| p.level == level).count();
                 assert!((1..=4).contains(&n), "height {height}: {n} pages at level {level}");
             }
-            for r in d.roots() {
+            for &r in d.roots() {
                 let mut p = r.page;
                 while p.level < TOP_LEVEL {
                     p = p.parent();
@@ -153,4 +153,33 @@ fn the_chain_over_the_window_holds_every_root_s_ancestors_in_two_by_two_a_level(
             }
         }
     }
+}
+
+/// Ground the view does not see is not refined: with a view looking east,
+/// every chunk drawn under the top has a parent the view saw — its sphere
+/// reaches east of the eye — and the view refines less than one that sees
+/// all around.
+#[test]
+fn ground_outside_the_frustum_is_not_refined() {
+    let _serial = crate::global::serial();
+    let (height, x, y) = (400.0, 123_456.7, -98_765.4);
+    let eye = Eye {
+        at: [x, y, height],
+        foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
+    };
+    // One plane, x ≥ the eye's, and five that pass everything.
+    let mut planes = [0.0; 24];
+    planes[..4].copy_from_slice(&[1.0, 0.0, 0.0, -x]);
+    for k in 1..6 {
+        planes[k * 4 + 3] = 1.0;
+    }
+    let east = domain_for(&eye, height, Some(Frustum { planes, planet: 1e12 }));
+    let around = domain_for(&eye, height, None);
+    let top = east.window().end - 1;
+    let fine = |d: &Domain| drawn_by_rule(d).into_iter().filter(|c| c.level() < top).collect::<Vec<_>>();
+    for c in fine(&east) {
+        let (x0, _, side) = c.parent().expect("a chunk under the top has a parent").rect();
+        assert!(x0 + side / 2.0 + side * SQRT_2 / 2.0 >= x, "{c:?} was refined from a parent the view does not see");
+    }
+    assert!(fine(&east).len() < fine(&around).len());
 }
