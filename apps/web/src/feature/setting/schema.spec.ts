@@ -170,9 +170,22 @@ export const SETTINGS = {
     dev: true,
     cost: "high",
   },
+  /** A change of what a chunk draws dissolves over 300 ms of frames instead
+   * of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
+   * Fade): a cube for another, a stale chunk for what replaced it. The two
+   * draw on complementary halves of one screen-space pattern, so a chunk
+   * in a dissolve is drawn twice while it lasts. */
+  lod_fade: {
+    key: 13 as number,
+    kind: "toggle",
+    default: true,
+    section: "quality",
+    dev: true,
+    cost: "low",
+  },
   /** The debug gizmos: frame origins, page corners, the map centre and the rings. */
   show_debug_objects: {
-    key: 13 as number,
+    key: 14 as number,
     kind: "toggle",
     default: false,
     section: "debug",
@@ -180,20 +193,20 @@ export const SETTINGS = {
   },
   /** The scheduler ledger's corner panel. The console stream is a button on it. */
   show_ledger: {
-    key: 14 as number,
+    key: 15 as number,
     kind: "toggle",
     default: false,
     section: "debug",
     dev: true,
   },
   person_variant: {
-    key: 15 as number,
+    key: 16 as number,
     kind: "number",
     default: 1 as number,
     section: "character",
   },
   pet_variant: {
-    key: 16 as number,
+    key: 17 as number,
     kind: "number",
     default: 5 as number,
     section: "character",
@@ -284,13 +297,13 @@ export const SETTINGS_SHIPPED = {
     section: "lighting",
   },
   person_variant: {
-    key: 15 as number,
+    key: 16 as number,
     kind: "number",
     default: 1 as number,
     section: "character",
   },
   pet_variant: {
-    key: 16 as number,
+    key: 17 as number,
     kind: "number",
     default: 5 as number,
     section: "character",

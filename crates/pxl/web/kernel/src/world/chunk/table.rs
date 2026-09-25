@@ -21,7 +21,7 @@
 
 use pxl_spec::space::indexer::FROM_L2_IDX;
 use pxl_spec::space::pyramid::{chunk_span_of, Cell, CHUNK_CELLS, GROUND, PAGE_CELLS, PAGE_CHUNKS};
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
 
@@ -32,9 +32,9 @@ use pxl_render::look::lod::COARSEST;
 use pxl_render::mesh::chunk_mesher::{box_bounds, Heights};
 use pxl_render::mesh::paint::terrain::adapter::ChunkSample;
 
+use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::Pvf3;
-use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::pyramid::TOP_LEVEL;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::heap::alloc;
@@ -50,7 +50,7 @@ use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::frame_gizmo::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
-use crate::shell::setting::store::hidden_ground;
+use crate::shell::setting::store::{hidden_ground, settings_store};
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::node::{mesh_step, BuildEvent, Builder, Cube, PageLanes, World, MAX_CHUNKS};
 
@@ -144,6 +144,35 @@ pub const STALE: u16 = 64;
 /// chunk's own cells (`drawn_cube`): the view wants its ground at the
 /// window's top, which has no ring over it (window.rs `Domain::outermost`).
 pub const OUTERMOST: u16 = 256;
+
+/// How long a change of what a chunk draws dissolves over, in milliseconds:
+/// a tier for another, a stale chunk for what replaced it. A number chosen
+/// by eye, to be measured.
+const FADE_MS: f64 = 300.0;
+
+/// A dissolve under way, and when it began on the frames' clock
+/// (`Scheduler::clock_ms`). The two
+/// sides of one draw with complementary halves of the screen-space pattern
+/// (pxl-render chunk.wgsl's blend), so a pixel shows one of them and never
+/// both or neither.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Fade {
+    /// The layout's secondary tier, what the chunk showed, going as its
+    /// primary comes.
+    Tier(f64),
+    /// A chunk coming in over ground a stale one is leaving.
+    In(f64),
+    /// A stale chunk going as what replaced it comes.
+    Out(f64),
+}
+
+impl Fade {
+    /// How far the dissolve has got, 0 to 1.
+    fn progress(self, now: f64) -> f64 {
+        let (Fade::Tier(since) | Fade::In(since) | Fade::Out(since)) = self;
+        ((now - since) / FADE_MS).clamp(0.0, 1.0)
+    }
+}
 
 /// A release, as a request: off screen, nothing built.
 const RELEASE_REQUEST: i32 = -1;
@@ -384,6 +413,8 @@ struct Slot {
     /// wanted chunks cover, whether every one of them is laid out, and
     /// whether one that is not is waiting on a mesh slot.
     cover: (f64, bool, bool),
+    /// The dissolve it is in, if any.
+    fade: Option<Fade>,
 }
 
 impl Slot {
@@ -590,6 +621,12 @@ pub struct Scheduler {
     /// folded to its level, kept for their capacity.
     decor_sample: ChunkSample,
     decor_folded: HashMap<[i64; 3], u32>,
+    /// The stale chunks `retire` found covered this tick, which start to go.
+    leaving: Vec<Chunk>,
+    /// The frames' time, in milliseconds: what a dissolve runs on, as every
+    /// animation does, so it takes the frames it says rather than whatever
+    /// the wall clock did between them.
+    clock_ms: f64,
     /// Where a decor build gathers its instances, made at the first build:
     /// the scheduler is made before the sections are.
     decor_scratch: Option<DecorScratch>,
@@ -700,6 +737,8 @@ impl Scheduler {
             decor_kinds: Vec::new(),
             decor_sample: ChunkSample::default(),
             decor_folded: HashMap::new(),
+            leaving: Vec::new(),
+            clock_ms: 0.0,
             decor_scratch: None,
             refused_seen: 0,
             scratch: Scratch::default(),
@@ -762,6 +801,7 @@ impl Scheduler {
             told: None,
             refused: None,
             cover: (0.0, true, false),
+            fade: None,
         };
         slot.set(OUTERMOST, root);
         slot.unmeasured();
@@ -966,13 +1006,7 @@ impl Scheduler {
             if level > 0 && scatters {
                 let columns: Vec<Column> = placed
                     .iter()
-                    .filter_map(|p| {
-                        world.store.entries(p.col_idx).map(|entries| Column {
-                            x0: p.col_x,
-                            y0: p.col_y,
-                            entries,
-                        })
-                    })
+                    .filter_map(|p| world.store.entries(p.col_idx).map(|entries| Column { x0: p.col_x, y0: p.col_y, entries }))
                     .collect();
                 let hide = self.builder.hide_edit().map(|(col, band, pos)| {
                     let o = FROM_L2_IDX(col);
@@ -1046,9 +1080,10 @@ impl Scheduler {
     /// tier decor takes in its layout — with the chunk's id and base, in
     /// units: what a hit test walks.
     pub fn shown_decor(&self) -> impl Iterator<Item = (u32, f64, f64, &Decor)> {
-        self.slots.iter().filter(|s| s.has(IN_FRUSTUM) && s.layout_ready).filter_map(|s| {
-            s.decor_of(decor_cube(s), s.layout_generation).map(|d| (s.id, s.base_x, s.base_y, d))
-        })
+        self.slots
+            .iter()
+            .filter(|s| s.has(IN_FRUSTUM) && s.layout_ready)
+            .filter_map(|s| s.decor_of(decor_cube(s), s.layout_generation).map(|d| (s.id, s.base_x, s.base_y, d)))
     }
 
     /// A page's terrain tile arrived, or left. Once a record has gone — let
@@ -1242,7 +1277,7 @@ impl Scheduler {
         self.view_dirty = true;
     }
 
-    fn retire(&mut self, world: &mut World, emit: &mut impl FnMut(Event)) {
+    fn retire(&mut self, world: &mut World, now: f64, emit: &mut impl FnMut(Event)) {
         self.gone.clear();
         self.kept = (0, 0, 0);
         let waiters = self.meshes.waiters;
@@ -1316,8 +1351,17 @@ impl Scheduler {
             // coverage; it is the last epoch's unfinished work outliving its
             // authority.
             let shows_nothing = !s.layout_ready;
-            if gone_from_view || shows_nothing || (whole && ready) {
+            // Once what replaced it is whole and ready it dissolves into
+            // that (`Fade::Out`), and goes when it has.
+            let faded = s.fade.is_some_and(|f| matches!(f, Fade::Out(_)) && f.progress(now) >= 1.0);
+            if gone_from_view || shows_nothing || faded {
                 self.gone.push((k, id));
+            } else if whole && ready && !settings_store().lod_fade {
+                self.gone.push((k, id));
+            } else if whole && ready {
+                if !matches!(s.fade, Some(Fade::Out(_))) {
+                    self.leaving.push(k);
+                }
             } else if !whole {
                 self.kept.0 += 1;
             } else {
@@ -1330,6 +1374,34 @@ impl Scheduler {
             self.mounted.remove(&k);
             self.remove(world, id);
             emit(Event::Unmount { id });
+        }
+        self.start_leaving(now);
+    }
+
+    /// The stale chunks `retire` found covered start to go, and the wanted
+    /// chunks sharing their ground — over them or under them in the chunk
+    /// tree — start to come in with them, from the same instant, so the two
+    /// halves of the pattern stay complementary. A chunk mid-way through a
+    /// tier's dissolve comes in on its primary alone.
+    fn start_leaving(&mut self, now: f64) {
+        if self.leaving.is_empty() {
+            return;
+        }
+        let leaving: HashSet<Chunk> = self.leaving.drain(..).collect();
+        let over: HashSet<Chunk> = leaving.iter().flat_map(|k| k.ancestors()).collect();
+        for (&k, &id) in self.mounted.iter() {
+            let Some(&i) = self.index.get(&id) else { continue };
+            let s = &mut self.slots[i];
+            if s.has(STALE) {
+                if leaving.contains(&k) {
+                    s.fade = Some(Fade::Out(now));
+                }
+                continue;
+            }
+            if over.contains(&k) || k.ancestors().any(|a| leaving.contains(&a)) {
+                s.layout_secondary = None;
+                s.fade = Some(Fade::In(now));
+            }
         }
     }
 
@@ -1345,6 +1417,7 @@ impl Scheduler {
             self.view_dirty = true;
         }
         self.frame = Some(frame);
+        self.clock_ms += frame.delta_s * 1000.0;
         // The view decides what every chunk should be showing, so a view
         // that has moved is answered now and not on the next tick of a
         // timer. `view_dirty` is that question outstanding — set by a frame
@@ -1361,7 +1434,7 @@ impl Scheduler {
         self.lose_meshes(emit);
         self.mount(world, emit);
         self.refresh(&frame, emit);
-        self.retire(world, emit);
+        self.retire(world, self.clock_ms, emit);
         let mut sc = core::mem::take(&mut self.scratch);
         self.order(t0, &mut sc.order, &mut sc.keys);
         let Scratch {
@@ -1451,6 +1524,7 @@ impl Scheduler {
         self.scratch = sc;
         self.press(world, t0, freed);
         let animating = self.models.tick(world, &mut self.draw, frame.delta_s as f32) | self.markers.tick(&frame) | self.environment.tick(&frame);
+        self.fade(self.clock_ms, emit);
         self.draw_frame(&frame, world_mem(world));
 
         let mut c = Census {
@@ -1529,7 +1603,9 @@ impl Scheduler {
         }
         let (slots, index, mounted) = (&mut self.slots, &self.index, &self.mounted);
         let at = |k: &Chunk| mounted.get(k).and_then(|id| index.get(id)).copied();
-        let drawn = |s: &Slot| s.has(STALE) && s.has(IN_FRUSTUM) && s.layout_ready;
+        // A stale chunk that is going draws beside what replaced it, on the
+        // other half of the pattern, and hides nothing.
+        let drawn = |s: &Slot| s.has(STALE) && s.has(IN_FRUSTUM) && s.layout_ready && !matches!(s.fade, Some(Fade::Out(_)));
         for (&k, &id) in mounted.iter() {
             let Some(&i) = index.get(&id) else { continue };
             if drawn(&slots[i]) {
@@ -1583,6 +1659,13 @@ impl Scheduler {
                     group_is_fine(t.slot.group),
                 );
                 self.level_boxes[s.level as usize] += t.box_cnt;
+            }
+            // A chunk coming in or going shows its decor over the half of
+            // its dissolve it is mostly there for: an instance is drawn or it
+            // is not, and one drawn by both would stand twice.
+            let coverage = |v: f32| if v > 1.5 { 1.0 - (v - 2.0) } else { v };
+            if s.layout_secondary.is_none() && coverage(wp) < 0.5 {
+                continue;
             }
             if let Some(d) = s.decor_of(decor_cube(s), s.layout_generation) {
                 for (group, (offset, count)) in d.groups(mem).enumerate() {
@@ -1702,6 +1785,47 @@ impl Scheduler {
         self.builder.want(world, self.slots[i].id, [None, None]);
     }
 
+    /// Every dissolve's weights as it stands at `now`, and the ends of those
+    /// that are over: a tier's secondary let go, a chunk come in shown whole.
+    /// A stale chunk that has gone is `retire`'s to let go. A chunk in one
+    /// is blending, which asks for the next frame.
+    fn fade(&mut self, now: f64, emit: &mut impl FnMut(Event)) {
+        for i in 0..self.slots.len() {
+            let Some(fade) = self.slots[i].fade else { continue };
+            let t = fade.progress(now) as f32;
+            let active = match fade {
+                Fade::Tier(_) if t < 1.0 && self.slots[i].layout_secondary.is_some() => {
+                    self.decide(i, t, 2.0 + t, emit);
+                    true
+                }
+                Fade::Tier(_) => {
+                    let s = &self.slots[i];
+                    let (p, g, ready) = (s.layout_primary, s.layout_generation, s.layout_ready);
+                    self.slots[i].fade = None;
+                    if ready {
+                        self.apply_layout(i, p, None, g, true, emit);
+                    }
+                    self.decide(i, 1.0, 0.0, emit);
+                    false
+                }
+                Fade::In(_) if t < 1.0 => {
+                    self.decide(i, t, 0.0, emit);
+                    true
+                }
+                Fade::In(_) => {
+                    self.slots[i].fade = None;
+                    self.decide(i, 1.0, 0.0, emit);
+                    false
+                }
+                Fade::Out(_) => {
+                    self.decide(i, 2.0 + t, 0.0, emit);
+                    true
+                }
+            };
+            self.slots[i].set(BLEND_ACTIVE, active);
+        }
+    }
+
     fn decide(&mut self, i: usize, primary: f32, secondary: f32, emit: &mut impl FnMut(Event)) {
         let coverage = |v: f32| if v > 1.5 { 1.0 - (v - 2.0) } else { v };
         let decor_secondary = self.slots[i].layout_secondary.is_some() && coverage(secondary) > coverage(primary);
@@ -1758,7 +1882,7 @@ impl Scheduler {
         self.slots[i].desired = (primary, None);
         let current = self.generation(i);
         let s = &self.slots[i];
-        let pending = !s.layout_ready || s.layout_primary != primary || s.layout_secondary.is_some() || s.layout_generation != current;
+        let pending = !s.layout_ready || s.layout_primary != primary || s.layout_generation != current;
         self.set_pending(i, pending, build_request(primary, None), now);
         let s = &mut self.slots[i];
         let settling = s.has(PENDING) && s.layout_ready;
@@ -1767,7 +1891,9 @@ impl Scheduler {
         if !s.has(PENDING) {
             self.stop_work(world, i);
         }
-        self.decide(i, 1.0, 0.0, emit);
+        if self.slots[i].fade.is_none() {
+            self.decide(i, 1.0, 0.0, emit);
+        }
     }
 
     /// Whether the chunk nodes hold every tier of (primary, secondary) of the
@@ -1888,7 +2014,7 @@ impl Scheduler {
 
     /// Lets go of tiers past MAX_CACHED_TIERS, oldest built first, never the
     /// active ones or the off-screen tier.
-    fn trim(&mut self, i: usize, active: [Option<Cube>; 2], emit: &mut impl FnMut(Event)) {
+    fn trim(&mut self, i: usize, active: &[Option<Cube>], emit: &mut impl FnMut(Event)) {
         let before = self.slots[i].retained();
         let s = &mut self.slots[i];
         let mut k = 0;
@@ -1929,6 +2055,7 @@ impl Scheduler {
         }
         if !in_frustum {
             self.stop_work(world, i);
+            self.slots[i].fade = None;
             let g = self.slots[i].layout_generation;
             self.apply_layout(i, coarsest(self.slots[i].level), None, g, false, emit);
             self.set_pending(i, false, RELEASE_REQUEST, 0.0);
@@ -1944,8 +2071,19 @@ impl Scheduler {
         if !asked || !self.ensure_decor(world, i, [Some(p), q], generation, emit) {
             return false;
         }
-        self.trim(i, [Some(p), q], emit);
-        self.apply_layout(i, p, q, generation, true, emit);
+        // A new cube of the same sources dissolves from the one shown, which
+        // stays as the secondary tier until it has gone (`fade`). A change of
+        // sources — a cube placed — is shown at once.
+        let s = &self.slots[i];
+        let was = (settings_store().lod_fade && s.layout_ready && s.layout_generation == generation && s.layout_primary != p && s.fade.is_none() && s.tier(s.layout_primary, generation).is_some()).then_some(s.layout_primary);
+        self.trim(i, &[Some(p), q, was], emit);
+        self.apply_layout(i, p, q.or(was), generation, true, emit);
+        let s = &mut self.slots[i];
+        if was.is_some() {
+            s.fade = Some(Fade::Tier(self.clock_ms));
+        } else if matches!(s.fade, Some(Fade::Tier(_))) {
+            s.fade = None;
+        }
         self.set_pending(i, false, RELEASE_REQUEST, 0.0);
         true
     }
@@ -2060,13 +2198,7 @@ const MOUNT_ID_BASE: u32 = 1 << 31;
 /// Whether two frames look at the world the same way: what a recheck's
 /// answer depends on, not the budget or the elapsed time.
 fn same_view(a: &Frame, b: &Frame) -> bool {
-    a.root == b.root
-        && a.origin == b.origin
-        && a.planes == b.planes
-        && a.camera == b.camera
-        && a.viewport_h == b.viewport_h
-        && a.fov_deg == b.fov_deg
-        && a.show_decor == b.show_decor
+    a.root == b.root && a.origin == b.origin && a.planes == b.planes && a.camera == b.camera && a.viewport_h == b.viewport_h && a.fov_deg == b.fov_deg && a.show_decor == b.show_decor
 }
 
 /// The cube the rule wants `c` drawn in: the level wanted at its nearest

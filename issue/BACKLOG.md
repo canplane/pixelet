@@ -41,11 +41,15 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   - **No level is a floor.** z16 is terrain's atom and no more to the
     shared rule, whose levels go below it; `LEAF_TOPIC` on z16's table is
     what still names it.
-  - **A tier change crossfades.** It switches at its threshold; the
-    secondary tier and its weight are kept but unused. Decor changes with
-    it: above z16 a kind's footing and a transport-aligned kind's heading
-    are read off the level's cells, so an instance can appear, go or turn
-    at a level change, as the ground under it does.
+  - **What a crossfade leaves.** A change of what a chunk draws dissolves
+    over 300 ms of frames (chunk/table.rs `Fade`), a cube for another and a
+    stale chunk for what replaced it, and decor switches half-way, since its
+    pass draws an instance whole. What is left: decor dissolving with its
+    ground rather than switching; hysteresis, so a camera resting on a split
+    distance does not dissolve back and forth; and the 300 ms, which is a
+    number chosen by eye. Above z16 a kind's footing and a transport-aligned
+    kind's heading are read off the level's cells, so an instance can appear,
+    go or turn at a level change, as the ground under it does.
   - **The window's depth.** `WINDOW_LEVELS` is 5, so from low over the
     ground the far ground ends at the coarsest level's reach, short of the
     horizon.
