@@ -201,8 +201,6 @@ pub struct Frame {
     /// The frustum as six planes of (nx, ny, nz, constant).
     pub planes: [f64; 24],
     pub camera: V3,
-    pub viewport_h: f64,
-    pub fov_deg: f64,
     pub delta_s: f64,
     /// What is left of the turn's quota when the pass begins, which is not
     /// the quota itself (`FrameSample::budget_ms`).
@@ -216,8 +214,6 @@ pub struct Frame {
     /// back on the planet about (pxl-render's look/globe.rs); none for a flat
     /// world.
     pub globe: Option<Globe>,
-    /// Whether procedural decor is scattered at all (the setting).
-    pub show_decor: bool,
 }
 
 impl Frame {
@@ -935,7 +931,7 @@ impl Scheduler {
             let decor = DecorSources::of(k, edits);
             if decor != self.slots[i].decor_sources {
                 self.slots[i].decor_sources = decor;
-                self.decor_now(world, i, decor.shown);
+                self.decor_now(world, i);
             }
         }
     }
@@ -971,10 +967,7 @@ impl Scheduler {
     /// setting): the decor it holds is stale and let go; the layout's decor is
     /// rebuilt now and the layout applied again, the tiers untouched. Unless a
     /// block was refused, when it lands on a later tick.
-    fn decor_now(&mut self, world: &mut World, i: usize, show_decor: bool) {
-        if let Some(f) = self.frame.as_mut() {
-            f.show_decor = show_decor;
-        }
+    fn decor_now(&mut self, world: &mut World, i: usize) {
         let before = self.slots[i].retained();
         for d in core::mem::take(&mut self.slots[i].decor) {
             d.release(&mut self.draw);
@@ -999,7 +992,8 @@ impl Scheduler {
     fn ensure_decor(&mut self, world: &mut World, i: usize, cubes: [Option<Cube>; 2], generation: u32) -> bool {
         let (id, level, corner) = (self.slots[i].id, self.slots[i].level(), self.slots[i].chunk.base().i);
         let (x0, y0) = (ivec::X(corner), ivec::Y(corner));
-        let show_decor = self.frame.is_some_and(|f| f.show_decor);
+        // Whether it scatters is one of what its decor is made of, as told.
+        let show_decor = self.slots[i].decor_sources.shown;
         if self.decor_scratch.is_none() {
             self.decor_scratch = DecorScratch::new();
             if self.decor_scratch.is_none() {
@@ -2205,7 +2199,7 @@ const MOUNT_ID_BASE: u32 = 1 << 31;
 /// Whether two frames look at the world the same way: what a recheck's
 /// answer depends on, not the budget or the elapsed time.
 fn same_view(a: &Frame, b: &Frame) -> bool {
-    a.root == b.root && a.origin == b.origin && a.planes == b.planes && a.camera == b.camera && a.viewport_h == b.viewport_h && a.fov_deg == b.fov_deg && a.show_decor == b.show_decor
+    a.root == b.root && a.origin == b.origin && a.planes == b.planes && a.camera == b.camera
 }
 
 /// The cube the rule wants `c` drawn in: the level wanted at its nearest
