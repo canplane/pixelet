@@ -86,9 +86,9 @@ const MAX_RELEASES_WHEN_REFUSED: u32 = 64;
 /// on screen going nowhere, and the heap has no spill to fall back on.
 const MAX_RECLAIMS_PER_FRAME: u32 = 16;
 const MAX_RECLAIMS_WHEN_REFUSED: u32 = 64;
-/// Chunks mounted in one frame, which is a frame's worth of work: the chunk
-/// nodes make a node for each. A page comes into range as 64 of them, so one
-/// page is mounted in the frame it arrives in.
+/// Chunks mounted in one frame, which is a frame's worth of work: each is a
+/// slot and a build told its sources. A page comes into range as 64 of them,
+/// so one page is mounted in the frame it arrives in.
 const MAX_MOUNTS_PER_FRAME: u32 = 64;
 const _: () = assert!(MAX_MOUNTS_PER_FRAME == PAGE_CHUNKS * PAGE_CHUNKS, "a page mounts in the frame it arrives in");
 
@@ -964,7 +964,8 @@ impl Scheduler {
 
     /// Only the chunk's decor changed (an entry placed or hidden, the
     /// setting): the decor it holds is stale and let go; the layout's decor is
-    /// rebuilt now and the layout applied again, the tiers untouched. Unless a block was refused, when it lands on a later tick.
+    /// rebuilt now and the layout applied again, the tiers untouched. Unless a
+    /// block was refused, when it lands on a later tick.
     fn decor_now(&mut self, world: &mut World, i: usize, show_decor: bool) {
         if let Some(f) = self.frame.as_mut() {
             f.show_decor = show_decor;

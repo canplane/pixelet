@@ -44,7 +44,7 @@ One more word belongs to the renderer rather than to the model. A **Band** is on
 | terrain + object, for build | L2 Chunk           | Volume | a volume of bands (`pxl-render mesh/volume.rs`) |
 | any                         | L4 Anchor          | —      | the view's frame of reference                   |
 
-Objects are client-local. The store (`pxl-kernel layer/object/store.rs`) keeps a palette per chunk and a sparse octree per occupied band, leaves being palette indices, and derives the chunk's entries as columns inside every write, in the trees' walk order, so a cell's entries are one run found by a binary search — the occupancy and hit queries read no index of their own. It persists to `localStorage` as five columns per page — page-local `x`, `y` and `z`, footprint side, value — under a key that carries the layout's version. One chunk (`world/chunk/table.rs`'s slot) owns one L2 column and composes as many signed 64-cell Z bands as its content touches; a page holds 64 columns.
+Objects are client-local. The store (`pxl-kernel layer/object/store.rs`) keeps a palette per chunk and a sparse octree per occupied band, leaves being palette indices, and derives the chunk's entries as columns inside every write, in the trees' walk order, so a cell's entries are one run found by a binary search — the occupancy and hit queries read no index of their own. It persists to `localStorage` as five columns per page — page-local `x`, `y` and `z`, footprint side, value — under a key that carries the layout's version. One chunk — a slot of `world/chunk/table.rs`, built by `world/chunk/node.rs` — is one L2 column and composes as many signed 64-cell Z bands as its content touches; a page holds 64 columns.
 
 ## Coordinate System — PVF3
 
