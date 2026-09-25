@@ -3,15 +3,14 @@
 use pxl_render::mesh::paint::terrain::elevation::{ground_ele, GroundLanes};
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::format::{GroundChannelKey, Terrain};
-use pxl_spec::space::indexer::{L1_IDX_IN_L3, L3_IDX, L3_RANGE};
-use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::indexer::{FROM_L3_IDX, L3_IDX};
+use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pyramid::{LevelPage, GROUND, PAGE_CELLS, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
+use crate::world::frame::coord::local_world_to_canonical;
 use crate::world::pyramid::Layer as _;
-
-const L3_RANGE_REAL: f64 = L3_RANGE as f64;
 
 /// The height the chunk's mesh and its raycast are built from, asked of the
 /// one query that answers it (crates/pxl/web/render/src/mesh/paint/terrain/elevation.rs's
@@ -24,18 +23,11 @@ fn sample_ele_grounded(terrain: &Terrain, tx: u32, ty: u32) -> f64 {
     ground_ele(&terrain.ele, Some(GroundLanes::of(&terrain.ground)), idx, tx as i32, ty as i32) as f64
 }
 
-fn page_cell(at: &Pvf3) -> (u32, u32) {
-    let page_off = Pvf3 { i: L1_IDX_IN_L3(at.i), f: at.f };
-    let tx = (pvf3::to_real(pvf3::X(&page_off)) / U_PER_CELL).floor() as u32;
-    let ty = (pvf3::to_real(pvf3::Y(&page_off)) / U_PER_CELL).floor() as u32;
-    (tx, ty)
-}
-
 /// Returns ground height in lattice/render units.
 pub fn get_ele(at: &Pvf3) -> Option<f64> {
-    let tile = Terrain::pyramid().get(pxl_spec::space::pyramid::LevelPage::new(0, L3_IDX(at.i)))?;
-    let (tx, ty) = page_cell(at);
-    Some(sample_ele_grounded(tile, tx, ty) * U_PER_CELL)
+    let cell = GROUND.cell_of(0, at);
+    let tile = Terrain::pyramid().get(cell.page())?;
+    Some(sample_ele_grounded(tile, cell.index() % PAGE_CELLS, cell.index() / PAGE_CELLS) * U_PER_CELL)
 }
 
 /// The ground's height at `at` as the finest resident page draws it, in
@@ -58,39 +50,18 @@ pub fn ground_at(at: &Pvf3) -> Option<f64> {
 /// actually change anything — painting "land.green_deep" over ground the bake
 /// already recorded as GREEN_DEEP land paints nothing new.
 pub fn get_ground_type(at: &Pvf3, channel: GroundChannelKey) -> Option<u32> {
-    let tile = Terrain::pyramid().get(pxl_spec::space::pyramid::LevelPage::new(0, L3_IDX(at.i)))?;
-    let (tx, ty) = page_cell(at);
-    Some(tile.ground.channel((ty * PAGE_CELLS + tx) as usize, channel) as u32)
+    let cell = GROUND.cell_of(0, at);
+    let tile = Terrain::pyramid().get(cell.page())?;
+    Some(tile.ground.channel(cell.index() as usize, channel) as u32)
 }
 
-/// Fast path for hot per-step loops (e.g. raycasting): looks up elevation from
-/// local float coordinates already relative to map_origin (same real "u" units
-/// as pvf3::to_real), instead of round-tripping through the full PVF3
-/// fixed-point representation on every call.
-///
-/// `origin_page_idx_xy` must be TO_XY(L3_IDX(map_origin)), precomputed once by
-/// the caller outside the loop. map_origin is L4-aligned, which is coarser
-/// than (and therefore also aligned to) L3, so page indices compose
-/// additively: L3_IDX(local + origin) = L3_IDX(local) + L3_IDX(origin).
+/// `get_ele` at a point given in the frame of `origin_page_idx_xy`'s page
+/// corner, in units: TO_XY(L3_IDX(map_origin)), map_origin being L4-aligned
+/// and so aligned to its page too.
 pub fn get_ele_at_local(origin_page_idx_xy: IVec, local_x: f64, local_y: f64) -> Option<f64> {
-    let local_page_x = (local_x / L3_RANGE_REAL).floor();
-    let local_page_y = (local_y / L3_RANGE_REAL).floor();
-
-    // the overwhelmingly common case per-step (a ray mostly stays within the
-    // origin page) — skip the gather/add round-trip entirely.
-    let page_idx = if local_page_x == 0.0 && local_page_y == 0.0 {
-        origin_page_idx_xy
-    } else {
-        ivec::add(origin_page_idx_xy, ivec::gather(local_page_x as i64, local_page_y as i64, 0))
-    };
-    let tile = Terrain::pyramid().get(pxl_spec::space::pyramid::LevelPage::new(0, page_idx))?;
-
-    let page_local_x = local_x - local_page_x * L3_RANGE_REAL;
-    let page_local_y = local_y - local_page_y * L3_RANGE_REAL;
-
-    let tx = (page_local_x / U_PER_CELL).floor() as u32;
-    let ty = (page_local_y / U_PER_CELL).floor() as u32;
-    Some(sample_ele_grounded(tile, tx, ty) * U_PER_CELL)
+    let mut at = Pvf3::default();
+    local_world_to_canonical(&mut at, &[local_x, local_y, 0.0], FROM_L3_IDX(origin_page_idx_xy));
+    get_ele(&at)
 }
 
 pub fn with_ele(out: &mut Pvf3, at: &Pvf3) -> Option<Pvf3> {

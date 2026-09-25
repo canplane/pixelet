@@ -302,17 +302,13 @@ impl Raycast {
             })
         };
 
-        if dx.abs() < 1e-9 && dy.abs() < 1e-9 {
-            let cx = (ox / U_PER_CELL).floor();
-            let cy = (oy / U_PER_CELL).floor();
-            if cx < 0.0 || cx >= span || cy < 0.0 || cy >= span {
-                return None;
-            }
-            return test_cell(column, cx as u32, cy as u32);
-        }
-
+        // A ray straight down stays in the cell it starts in.
         let mut walk = GridWalk::new(ox, oy, dx, dy, U_PER_CELL);
-        let max_cells = (max_dist.min(CHUNK_W * 1.5) / U_PER_CELL).ceil() as usize + 2;
+        let max_cells = if dx.abs() < 1e-9 && dy.abs() < 1e-9 {
+            1
+        } else {
+            (max_dist.min(CHUNK_W * 1.5) / U_PER_CELL).ceil() as usize + 2
+        };
         for _ in 0..max_cells {
             let (cell_x, cell_y) = (walk.x, walk.y);
             if cell_x >= 0.0 && cell_x < span && cell_y >= 0.0 && cell_y < span {
