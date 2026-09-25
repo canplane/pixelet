@@ -22,7 +22,7 @@ use pxl_spec::cell::{cube_types, DecorId};
 use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use xpute_core::math::vec3::Vec3;
+use pxl_spec::space::v3::V3;
 
 pub use crate::abi::cmd::{ActiveTool, PointerKind};
 use crate::control::camera::config::camera_cfg;
@@ -194,7 +194,7 @@ fn input() -> &'static mut Input {
 /// raycast first, bounded by hit.t: decor sitting on solid ground can only be
 /// the right answer when it's genuinely closer along the ray than whatever the
 /// voxel raycast found, falling back to ray.rs's solid-object AABB resolution.
-fn resolve_hit_target(hit: &WorldHit, origin: Vec3, direction: Vec3, map_origin: IVec) -> Option<OccupiedEntry> {
+fn resolve_hit_target(hit: &WorldHit, origin: V3, direction: V3, map_origin: IVec) -> Option<OccupiedEntry> {
     if let Some(decor) = raycast_decor(origin, direction, map_origin, hit.t).and_then(get_placed_object) {
         return Some(decor);
     }
@@ -540,8 +540,8 @@ fn update_hover(s: &Input) {
     let Some(map_center) = map_store().map_center else {
         return clear_hovered_once();
     };
-    let mut origin = Vec3 { x: 0.0, y: 0.0, z: 0.0 };
-    let mut direction = Vec3 { x: 0.0, y: 0.0, z: 0.0 };
+    let mut origin = [0.0; 3];
+    let mut direction = [0.0; 3];
     view_ray_local(s.pointer_x, s.pointer_y, &mut origin, &mut direction);
 
     let ui = s.holding;

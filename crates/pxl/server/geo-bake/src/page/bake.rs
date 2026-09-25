@@ -3,7 +3,7 @@
 //! The reverse-geocode bake apart from its provider: the walk over the land
 //! pages, then the manifest beside the version directory.
 
-use pxl_spec::space::pyramid::LEVEL0_ZOOM;
+use pxl_spec::space::pyramid::PAGE_ZOOM;
 use std::path::PathBuf;
 
 use std::path::Path;
@@ -61,7 +61,7 @@ pub fn bake<T>(
         targets.truncate(n);
     }
 
-    let walked = walk::walk(&args, b.kind, LEVEL0_ZOOM - b.group_shamt, b.every, &targets, connect, one)?;
+    let walked = walk::walk(&args, b.kind, PAGE_ZOOM - b.group_shamt, b.every, &targets, connect, one)?;
     let t = &walked.tally;
     println!("[bake/{}] {} items across {} non-empty pages, {}", b.kind, t.items, t.baked, fmt_bytes(t.bytes as f64));
 

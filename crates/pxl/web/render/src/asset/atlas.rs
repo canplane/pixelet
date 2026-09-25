@@ -62,9 +62,11 @@ pub const NO_SLOT: i32 = -1;
 /// scales the context by it and draws the shape.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DrawSpec {
-    /// A place: the themed icon circle, the name, the pill and its anchor dot.
-    /// A count where a name would be, on the same pill.
+    /// A count of places: the number on the pill, and its anchor dot.
     Cluster { label: String, logical_w: f64 },
+    /// One place: its kind's icon on its colour in the pill's left cap, and
+    /// its name after it.
+    Place { name: String, icon: &'static str, color: u32, logical_w: f64 },
     /// The notched speech bubble and its wrapped lines.
     Bubble { lines: Vec<String>, box_w: f64, box_h: f64 },
     /// A line of small text on nothing: the dev gizmos' labels.

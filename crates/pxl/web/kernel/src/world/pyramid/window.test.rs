@@ -22,7 +22,7 @@ fn a_subject_carries_the_level_and_gives_it_back() {
     for p in [LevelPage::new(0, leaf(11569, 3671)), LevelPage::new(7, leaf(-3, 90)), LevelPage::new(10, leaf(11, -1))] {
         assert_eq!(LevelPage::of_subject(p.subject()), p);
     }
-    // A leaf's subject is its key: level 0 is the lane left at zero.
+    // A leaf's subject is its key: z16's level is the lane left at zero.
     assert_eq!(LevelPage::new(0, leaf(11569, 3671)).subject(), leaf(11569, 3671));
 }
 
@@ -55,7 +55,7 @@ fn the_neighbourhood_is_the_one_the_bake_folds_from() {
     assert_eq!(around[15].page, leaf(12, 16));
     assert!(around.iter().all(|p| p.level == 0));
     // X wraps across the seam: west of the westmost is the eastmost.
-    let across = 1i64 << pxl_spec::space::pyramid::LEVEL0_ZOOM;
+    let across = 1i64 << pxl_spec::space::pyramid::PAGE_ZOOM;
     let west = neighbourhood(LevelPage::new(1, leaf(-across / 4, 0)));
     assert_eq!(ivec::X(west[5].page), -across / 2);
     assert_eq!(ivec::X(west[4].page), across / 2 - 1);
@@ -199,7 +199,7 @@ fn the_view_s_frustum_sees_the_ground_it_looks_at() {
         let f = Frustum::of_view();
         let centre = [3_000_000.0 + 500.0, 2_000_000.0 + 300.0, 10.0];
         let v = crate::world::frame::view::view();
-        let eye = [3_000_000.0 + v.eye_local.x, 2_000_000.0 + v.eye_local.y, v.eye_local.z];
+        let eye = [3_000_000.0 + v.eye_local[0], 2_000_000.0 + v.eye_local[1], v.eye_local[2]];
         assert!(f.sees(centre, 1.0, eye), "dist {dist}, polar {polar}, azimuth {azimuth}");
         // And not what lies straight behind the eye.
         let behind = [2.0 * eye[0] - centre[0], 2.0 * eye[1] - centre[1], centre[2]];

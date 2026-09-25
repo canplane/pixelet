@@ -26,10 +26,15 @@ use crate::world::pyramid::{Cover, Domain};
 /// the ground it stood in for — each drawn by its nearest resident self or
 /// ancestor (`standing`), and a gap only where nothing over it is held.
 ///
-/// Then the balance: no two chunks that meet more than a level apart. A
-/// chunk's mesh hangs a skirt one of its own cells deep, which hides the
-/// step where it meets a chunk a level from it (pxl-render
-/// mesh/chunk_mesher.rs) and not one two levels from it. Every chunk too
+/// Then the balance: no two chunks the view sees that meet more than a level
+/// apart. A chunk's mesh hangs a skirt one of its own cells deep, which hides
+/// the step where it meets a chunk a level from it (pxl-render
+/// mesh/chunk_mesher.rs) and not one two levels from it. A step only shows
+/// where the edge two chunks share is on screen, and an edge on screen is
+/// inside both chunks' bounds, so both are seen: a pair the view does not
+/// see both of has no step to hide. Held to it anyway, ground the frustum
+/// leaves at the window's top — which is never refined — coarsened the
+/// ground under the eye, a level a step, from the screen's edge inwards. Every chunk too
 /// coarse for a neighbour is refined where the view wants it finer and the
 /// page under it is resident — its four children in its place, never finer
 /// than the view wants, so no more chunks than the view has. Then what is
@@ -61,7 +66,11 @@ pub fn mesh(cover: Cover, d: &Domain, resident: impl Fn(Chunk) -> bool) -> Cover
     replace(&mut drawn, &mut gaps, &up, open);
 
     loop {
-        let refine: HashSet<Chunk> = unbalanced(&drawn).into_iter().map(|(_, coarse)| coarse).filter(|&c| d.splits(c) && resident(c.children()[0])).collect();
+        let refine: HashSet<Chunk> = unbalanced(&drawn, d)
+            .into_iter()
+            .map(|(_, coarse)| coarse)
+            .filter(|&c| d.splits(c) && resident(c.children()[0]))
+            .collect();
         if refine.is_empty() {
             break;
         }
@@ -71,7 +80,7 @@ pub fn mesh(cover: Cover, d: &Domain, resident: impl Fn(Chunk) -> bool) -> Cover
         }
     }
     loop {
-        let ups: HashSet<Chunk> = unbalanced(&drawn)
+        let ups: HashSet<Chunk> = unbalanced(&drawn, d)
             .into_iter()
             .map(|(fine, _)| fine.parent().expect("a chunk two levels under another has a parent"))
             .collect();
@@ -125,15 +134,15 @@ fn replace(drawn: &mut HashSet<Chunk>, gaps: &mut HashSet<Chunk>, up: &HashSet<C
     gaps.extend(open);
 }
 
-/// Every pair of drawn chunks that meet more than a level apart, the finer
-/// first.
-fn unbalanced(drawn: &HashSet<Chunk>) -> Vec<(Chunk, Chunk)> {
+/// Every pair of drawn chunks the view sees that meet more than a level
+/// apart, the finer first.
+fn unbalanced(drawn: &HashSet<Chunk>, d: &Domain) -> Vec<(Chunk, Chunk)> {
     let mut out = Vec::new();
     for &fine in drawn {
         for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
             let next = fine.beside(dx, dy);
             if let Some(coarse) = std::iter::once(next).chain(next.ancestors()).find(|a| drawn.contains(a)) {
-                if coarse.level() >= fine.level() + 2 {
+                if coarse.level() >= fine.level() + 2 && d.sees(fine) && d.sees(coarse) {
                     out.push((fine, coarse));
                 }
             }

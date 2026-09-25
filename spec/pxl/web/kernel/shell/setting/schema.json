@@ -216,21 +216,19 @@
       "dev": true,
       "cost": "high"
     },
-    "pixel_dither": {
+    "lod_fade": {
       "$doc": [
-        "LOD cross-fade per fragment instead of per chunk: both tiers draw with",
-        "complementary dither and dissolve, at the cost of drawing a blending",
-        "chunk twice and a pattern that crawls without temporal AA. Off by",
-        "default: the crawl is there to see, so the second draw buys one",
-        "artefact with another. What it replaces swaps a whole chunk at a",
-        "hashed threshold and pops tier by tier, which is the cheaper of the",
-        "two to live with until the pattern holds still."
+        "A change of what a chunk draws dissolves over 300 ms of frames instead",
+        "of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's",
+        "Fade): a cube for another, a stale chunk for what replaced it. The two",
+        "draw on complementary halves of one screen-space pattern, so a chunk",
+        "in a dissolve is drawn twice while it lasts."
       ],
       "kind": "toggle",
-      "default": false,
+      "default": true,
       "section": "quality",
       "dev": true,
-      "cost": "med"
+      "cost": "low"
     },
     "show_debug_objects": {
       "$doc": ["The debug gizmos: frame origins, page corners, the map centre and the rings."],

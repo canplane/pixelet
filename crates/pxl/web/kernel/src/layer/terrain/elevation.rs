@@ -6,7 +6,7 @@ use pxl_spec::bake::format::{GroundChannelKey, Terrain};
 use pxl_spec::space::indexer::{L1_IDX_IN_L3, L3_IDX, L3_RANGE};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::{Cell, LevelPage, PAGE_CELLS, TOP_LEVEL};
+use pxl_spec::space::pyramid::{LevelPage, GROUND, PAGE_CELLS, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::world::pyramid::Layer as _;
@@ -46,7 +46,7 @@ pub fn ground_at(at: &Pvf3) -> Option<f64> {
     let leaf = TO_XY(L3_IDX(at.i));
     (0..=TOP_LEVEL).find_map(|level| {
         let tile = Terrain::pyramid().get(LevelPage::over(level, leaf))?;
-        let cell = Cell::of(level, at);
+        let cell = GROUND.cell_of(level, at);
         Some(sample_ele_grounded(tile, cell.index() % PAGE_CELLS, cell.index() / PAGE_CELLS) * U_PER_CELL)
     })
 }

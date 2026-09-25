@@ -238,3 +238,59 @@ fn a_summary_is_drawn_in_the_tile_where_the_pack_is_drawn_and_in_the_swatch_wher
         assert_eq!(shown, srgb_of(linear_of(want[0], want[1], want[2])), "textured {textured}");
     }
 }
+
+#[test]
+fn a_cells_floor_is_its_bottom_face_and_the_box_stands_clear_of_it() {
+    // Ground one cell thick under a coarse cell four cells on a side: what
+    // spans the cell rises no higher than the cell's bottom — the skirt and
+    // the face on it — and the inset box stands over it with nothing between.
+    let columns: Vec<Vec<Run>> = (0..36).map(|_| ground(0)).collect();
+    let set = set_of(6, &columns);
+    let baked = bake(&set, 4, 1);
+    let floors: Vec<_> = baked.boxes().filter(|b| baked.at(b).1[0] >= 4.0).collect();
+    assert!(!floors.is_empty(), "the cell lays a floor");
+    for b in floors {
+        let (min, size) = baked.at(b);
+        assert!(
+            min[2] + size[2] <= baked.heights.step,
+            "the floor reaches no higher than the cell's bottom, a height step aside: {min:?} {size:?}"
+        );
+    }
+    let boxes: Vec<_> = baked.boxes().filter(|b| baked.at(b).1[0] < 4.0).collect();
+    assert!(boxes.iter().all(|b| baked.at(b).0[2] > 0.0), "the box stands clear of the floor");
+}
+
+#[test]
+fn a_cell_of_placed_things_alone_lays_no_floor_and_floats() {
+    // Ground at the bottom, and a placed cube eight cells up in one column:
+    // its bucket holds no ground, so its box floats at the cell's centre with
+    // nothing under it, and is lit underneath as the placed thing it is.
+    let columns: Vec<Vec<Run>> = (0..36)
+        .map(|k| {
+            let mut column = ground(0);
+            if k == 14 {
+                column.push(Run {
+                    z0: 9,
+                    z1: 9,
+                    rgb: [200, 0, 0],
+                    layer: 0,
+                });
+            }
+            column
+        })
+        .collect();
+    let mut set = set_of(6, &columns);
+    for i in 0..set.z0.len() {
+        if set.z0[i] == 9 {
+            set.material_class[i] = MATERIAL_OBJECT;
+        }
+    }
+    let baked = bake(&set, 4, 1);
+    let up_there: Vec<_> = baked.boxes().filter(|b| baked.at(b).0[2] + baked.at(b).1[2] > 4.0).collect();
+    assert!(!up_there.is_empty(), "the placed cube's box is drawn");
+    for b in up_there {
+        let size = baked.at(b).1;
+        assert!(size[0] < 4.0, "no floor spans its cell: {size:?}");
+        assert!(b[0] & FACE_NZ != 0 && b[0] & UNDER_AS_TOP == 0, "its underside is drawn as its own");
+    }
+}

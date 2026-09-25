@@ -11,7 +11,7 @@
 //! stands are decided here and nowhere else; a layer owns only what a cell
 //! carries and how a parent's cell is made from its children's (`Folds`).
 
-use super::hierarchy::{child_of, parent_of, Scale};
+use super::hierarchy::{ancestor_of, child_of, first_descendant_of, parent_of, slot_of, Scale};
 use super::indexer::{L1, L2, L3, L3_IDX, L4};
 use super::pvf3::core::FRAC_W;
 use super::pvf3::core::IVEC_X_W;
@@ -29,23 +29,24 @@ use crate::bake::constant::CELL;
 /// nothing above it.
 pub const TOP_LEVEL: u32 = 10;
 
-/// The zoom a level-0 page is, in the 512-pixel tile convention: the X lane
-/// is one EPSG:3857 world, so a level has 2^(IVEC_X_W − L3 − level)
-/// pages across it, which is a zoom's tile count. Level k is zoom
-/// LEVEL0_ZOOM − k, and a level-0 cell is the standard 256-pixel z16 pixel
-/// exactly.
-pub const LEVEL0_ZOOM: u32 = IVEC_X_W - L3.shamt() as u32;
+/// The zoom the ground's finest pages are named at, in the 512-pixel tile
+/// convention: the X lane is one EPSG:3857 world, so a level has
+/// 2^(IVEC_X_W − L3 − level) pages across it, which is a zoom's tile count.
+/// Their cells are the standard 256-pixel z16 pixel exactly, so level k is
+/// z(16 − k) — its cells z(16 − k)'s pixels — and its pages are named at
+/// PAGE_ZOOM − k.
+pub const PAGE_ZOOM: u32 = IVEC_X_W - L3.shamt() as u32;
 
 // ---- the lattice's scale ----
 //
 // A cell is not a unit. A lattice is scales against the unit, as
-// sparse_tree's layout is: its level-0 cell is one scale, and a level-k cell
+// sparse_tree's layout is: its first level's cell is one scale, and a level-k cell
 // k above it. A page and a chunk are fixed in units — the L3 and L2 blocks —
 // so every layer shares the pyramid's pages, levels and names, and how many
 // cells stand across one is what its lattice decides. A level is a count
 // from the lattice's cell, and the lattice is what turns it into a size.
 
-/// A layer's lattice: its level-0 cell's side.
+/// A layer's lattice: its cell's side at the pyramid's first level, z16's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Lattice {
     cell: Scale,
@@ -87,14 +88,12 @@ impl Lattice {
     /// address, since a cell may be finer than a unit.
     pub fn cell_of(self, level: u32, at: &Pvf3) -> Cell {
         let page = LevelPage::over(level, L3_IDX(at.i));
-        // The fixed point's lanes, in cells of this level: a floor on the
-        // signed lanes, and exact while a cell is no finer than the fraction.
-        let shift = FRAC_W as i32 + self.scale(level).shamt();
-        let cell = |fixed: i64, page_lane: i64| (fixed >> shift) - (page_lane << self.page_cell_shamt());
+        let [x, y, _] = self.scale(level).index_of(at);
+        let [x0, y0] = first_descendant_of([ivec::X(page.page), ivec::Y(page.page)], self.page_cell_shamt());
         Cell {
             lattice: self,
             page,
-            index: self.cell_index(cell(pvf3::X(at), ivec::X(page.page)) as u32, cell(pvf3::Y(at), ivec::Y(page.page)) as u32),
+            index: self.cell_index((x - x0) as u32, (y - y0) as u32),
         }
     }
 
@@ -106,26 +105,36 @@ impl Lattice {
 
     /// The point at the south-west corner of the cell at (tx, ty) in `page`.
     pub fn cell_base(self, page: LevelPage, tx: u32, ty: u32) -> Pvf3 {
-        let shift = FRAC_W as i32 + self.scale(page.level).shamt();
-        let first = |p: i64, t: u32| ((p << self.page_cell_shamt()) + i64::from(t)) << shift;
-        let mut out = Pvf3::default();
-        pvf3::gather(&mut out, first(ivec::X(page.page), tx), first(ivec::Y(page.page), ty), 0);
-        out
+        let [x0, y0] = first_descendant_of([ivec::X(page.page), ivec::Y(page.page)], self.page_cell_shamt());
+        self.scale(page.level).base_of([x0 + i64::from(tx), y0 + i64::from(ty), 0])
     }
 
-    /// The parent cell a child's cell folds into, the child at quadrant `q`.
+    // A page's four children lie side by side as one block of 2n × 2n cells
+    // a level down, the child page in slot q its (q & 1, q >> 1) square of
+    // it. A cell and the one it folds into are parent and child in that
+    // block, as anything a level apart is (hierarchy.rs); a page's slot is
+    // its square's.
+
+    /// The parent cell a child's cell folds into, the child page in slot `q`.
     pub fn parent_cell(self, q: usize, index: u32) -> u32 {
-        let n = self.page_cells();
-        let (tx, ty) = (index % n, index / n);
-        self.cell_index((q as u32 % 2) * (n / 2) + tx / 2, (q as u32 / 2) * (n / 2) + ty / 2)
+        let n = self.page_cells() as i64;
+        let (page, [tx, ty]) = (child_of([0, 0], q), self.local(index));
+        let [x, y] = parent_of([page[0] * n + tx, page[1] * n + ty]);
+        self.cell_index(x as u32, y as u32)
     }
 
-    /// The child quadrant and the first of the 2×2 child cells a parent's
+    /// The child page's slot and the first of the 2×2 child cells a parent's
     /// cell is folded from: `parent_cell`'s inverse.
     pub fn child_block(self, index: u32) -> (usize, u32) {
+        let n = self.page_cells() as i64;
+        let [x, y] = child_of(self.local(index), 0);
+        (slot_of([x / n, y / n]), self.cell_index((x % n) as u32, (y % n) as u32))
+    }
+
+    /// A cell index as its column and row in its page.
+    fn local(self, index: u32) -> [i64; 2] {
         let n = self.page_cells();
-        let (tx, ty) = (index % n, index / n);
-        ((tx / (n / 2) + 2 * (ty / (n / 2))) as usize, self.cell_index((2 * tx) % n, (2 * ty) % n))
+        [(index % n) as i64, (index / n) as i64]
     }
 }
 
@@ -143,7 +152,7 @@ pub const CHUNK_CELLS: u32 = GROUND.chunk_cells();
 pub const PAGE_CHUNKS: u32 = PAGE_CELLS / CHUNK_CELLS;
 
 pub const fn zoom_of_level(level: u32) -> u32 {
-    LEVEL0_ZOOM - level
+    PAGE_ZOOM - level
 }
 
 // The identity holds by constants agreeing, not by one deriving the rest: the
@@ -153,8 +162,8 @@ pub const fn zoom_of_level(level: u32) -> u32 {
 // nothing here.
 const _: () = {
     assert!(L1.count_in(L3) == 512, "a page is one 512-pixel tile");
-    assert!(LEVEL0_ZOOM == 15, "level 0 is zoom 15 at 512 pixels, z16 at 256");
-    assert!(TOP_LEVEL <= LEVEL0_ZOOM, "no level coarser than one page across the world");
+    assert!(PAGE_ZOOM == 15, "z16 pages are zoom 15 at 512 pixels");
+    assert!(TOP_LEVEL <= PAGE_ZOOM, "no level coarser than one page across the world");
 };
 
 /// A page of the pyramid.
@@ -173,8 +182,8 @@ impl LevelPage {
     /// The level-`level` page a leaf page lies under: its coordinate shifted
     /// right, which on the signed lanes is a floor.
     pub fn over(level: u32, leaf: IVec) -> LevelPage {
-        let s = 1i64 << level;
-        LevelPage::new(level, ivec::gather(ivec::X(leaf).div_euclid(s), ivec::Y(leaf).div_euclid(s), 0))
+        let [x, y] = ancestor_of([ivec::X(leaf), ivec::Y(leaf)], level);
+        LevelPage::new(level, ivec::gather(x, y, 0))
     }
 
     fn at(self) -> [i64; 2] {
@@ -196,9 +205,15 @@ impl LevelPage {
         })
     }
 
+    /// The page as a node of the hierarchy: its side and its coordinate.
+    pub fn node(self) -> (Scale, [i64; 2]) {
+        (L3.up(self.level as i32), self.at())
+    }
+
     /// The leaf page at this page's south-west corner.
     pub fn first_leaf(self) -> IVec {
-        ivec::gather(ivec::X(self.page) << self.level, ivec::Y(self.page) << self.level, 0)
+        let [x, y] = first_descendant_of(self.at(), self.level);
+        ivec::gather(x, y, 0)
     }
 
     /// The page's side in units.
@@ -239,28 +254,23 @@ pub const fn anchor_span_of(level: u32) -> i64 {
 }
 
 /// The 4×4 pages a level down around a page's four children, in the order a
-/// fold reads them: index (qx + 1) + 4·(qy + 1) is the page at
-/// (2X + qx, 2Y + qy), the page's own children at `CHILDREN`. X wraps, since
+/// fold reads them: index (qx + 1) + 4·(qy + 1) is the page (qx, qy) from
+/// its first child, the page's own children at `CHILDREN`. X wraps, since
 /// the lane is one world; a page past Y's edge has no object.
 pub fn neighbourhood(p: LevelPage) -> [LevelPage; 16] {
     let below = p.level - 1;
     let across = 1i64 << (IVEC_X_W - L3.shamt() as u32 - below);
     let wrap = |x: i64| (x + across / 2).rem_euclid(across) - across / 2;
-    let (x, y) = (ivec::X(p.page), ivec::Y(p.page));
+    let [x, y] = child_of(p.at(), 0);
     std::array::from_fn(|k| {
         let (qx, qy) = ((k % 4) as i64 - 1, (k / 4) as i64 - 1);
-        LevelPage::new(below, ivec::gather(wrap(2 * x + qx), 2 * y + qy, 0))
+        LevelPage::new(below, ivec::gather(wrap(x + qx), y + qy, 0))
     })
 }
 
-/// Where a page's own four children sit in its neighbourhood, in quadrant
-/// order: (0, 0), (1, 0), (0, 1), (1, 1).
+/// Where a page's own four children sit in its neighbourhood, in `slot_of`'s
+/// order: (0, 0), (1, 0), (0, 1), (1, 1) from the first.
 pub const CHILDREN: [usize; 4] = [5, 6, 9, 10];
-
-/// A cell's index in its page in the ground's lattice.
-pub fn cell_index(tx: u32, ty: u32) -> u32 {
-    GROUND.cell_index(tx, ty)
-}
 
 /// A cell of the pyramid: its lattice, the page it lies in and its index
 /// there. Made from a point (`Lattice::cell_of`) or a page's own index
@@ -278,16 +288,6 @@ pub struct Cell {
 }
 
 impl Cell {
-    /// The ground's level-`level` cell a point stands in.
-    pub fn of(level: u32, at: &Pvf3) -> Cell {
-        GROUND.cell_of(level, at)
-    }
-
-    /// The ground's cell at `index` of `page`.
-    pub fn at(page: LevelPage, index: u32) -> Cell {
-        GROUND.cell_at(page, index)
-    }
-
     pub fn lattice(self) -> Lattice {
         self.lattice
     }
@@ -368,22 +368,6 @@ impl Cell {
     }
 }
 
-/// The point at the south-west corner of the ground's cell at (tx, ty) in
-/// `page`.
-pub fn cell_base(page: LevelPage, tx: u32, ty: u32) -> Pvf3 {
-    GROUND.cell_base(page, tx, ty)
-}
-
-/// The ground's parent cell a child's cell folds into.
-pub fn parent_cell(q: usize, index: u32) -> u32 {
-    GROUND.parent_cell(q, index)
-}
-
-/// The ground's child quadrant and first child cell of a parent's cell.
-pub fn child_block(index: u32) -> (usize, u32) {
-    GROUND.child_block(index)
-}
-
 /// A layer's page as the pyramid holds it. Every level of a layer is folded
 /// from the level under it by one function, which the bake runs to build the
 /// pyramid and the client runs to stand a coarse page up from the fine ones
@@ -404,6 +388,15 @@ pub trait Folds: Sized {
     fn fold_page<'a>(p: LevelPage, held: impl Fn(LevelPage) -> Option<&'a Self>) -> Option<Self>
     where
         Self: 'a;
+
+    /// Whether this page, `p`, says all there is of its `child`'s ground, so
+    /// the child is no page of its own: the tree stops there, above the finest
+    /// level, and the ground under it is read from here. The inverse of the
+    /// fold, where the fold loses nothing it would give back. None of a layer
+    /// that refines everywhere.
+    fn settles(&self, _p: LevelPage, _child: LevelPage) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]

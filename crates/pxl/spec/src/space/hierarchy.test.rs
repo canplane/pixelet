@@ -17,6 +17,27 @@ fn a_child_is_its_parent_and_slot_in_two_and_three_dimensions() {
     }
 }
 
+/// Several levels at once are one level taken as many times: an ancestor is
+/// its parent's parent, and the first descendant is the one it gives back.
+#[test]
+fn several_levels_are_one_level_taken_as_many_times() {
+    for at in [[5i64, -3], [-1, -1], [0, 8], [-9, 17]] {
+        for levels in 0..5 {
+            let mut up = at;
+            for _ in 0..levels {
+                up = parent_of(up);
+            }
+            assert_eq!(ancestor_of(at, levels), up);
+            let mut first = at;
+            for _ in 0..levels {
+                first = child_of(first, 0);
+            }
+            assert_eq!(first_descendant_of(at, levels), first);
+            assert_eq!(ancestor_of(first_descendant_of(at, levels), levels), at);
+        }
+    }
+}
+
 /// A scale counts, steps and measures as one power of two: a side is the
 /// count of the unit in it, stepping up and back is the identity, and a count
 /// across several levels is the product of the counts across each.
@@ -31,6 +52,36 @@ fn a_scale_is_one_power_of_two_however_it_is_read() {
     }
     assert_eq!(unit.count_in(Scale::of(9)) as f64, Scale::of(9).side());
     assert_eq!(Scale::of(-3).side(), 0.125);
+}
+
+/// A point's side at a scale is the one whose corner is at or below it and
+/// whose next is above it, on either side of the origin and finer than a
+/// unit too, and a side's corner lies in that side.
+#[test]
+fn a_point_lies_in_the_side_whose_corner_is_under_it() {
+    for s in [Scale::of(-3), Scale::of(0), Scale::of(6)] {
+        for index in [[0i64, 0, 0], [5, -3, 2], [-1, -1, -1], [100, 7, -40]] {
+            assert_eq!(s.index_of(&s.base_of(index)), index);
+            let mut inside = Pvf3::default();
+            pvf3::add(&mut inside, &s.base_of(index), &Scale::of(-8).base_of([1, 1, 1]));
+            assert_eq!(s.index_of(&inside), index, "{s:?} {index:?}");
+        }
+    }
+}
+
+/// Two nodes share ground exactly when one lies under the other, however
+/// many levels apart, and a node shares none with its neighbour's children.
+#[test]
+fn nodes_share_ground_only_where_one_lies_under_the_other() {
+    let at = (Scale::of(4), [3i64, -2]);
+    assert!(share(at, at));
+    for levels in 1..4 {
+        let first = (Scale::of(4 - levels), first_descendant_of(at.1, levels as u32));
+        assert!(share(at, first) && share(first, at));
+        let beside = (Scale::of(4 - levels), first_descendant_of([4, -2], levels as u32));
+        assert!(!share(at, beside) && !share(beside, at));
+        assert!(share((Scale::of(4 + levels), ancestor_of(at.1, levels as u32)), at));
+    }
 }
 
 /// A walk's order is its inverse's, and it keeps a coarser node's leaves

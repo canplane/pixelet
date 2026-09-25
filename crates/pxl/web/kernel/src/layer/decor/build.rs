@@ -22,20 +22,28 @@ use pxl_render::gpu::api::word_bytes;
 use pxl_render::look::lod::{LodStep, TARGET_CELL_PX};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::voxel_scan::apron_col;
-use pxl_spec::bake::constant::U_PER_CELL;
+use pxl_spec::bake::constant::{unpack_pos, U_PER_CELL};
 use pxl_spec::cell::object::decor_num_id;
 use pxl_spec::cell::DecorId;
+use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{gather, IVec};
-use pxl_spec::space::pyramid::{CHUNK_CELLS, PAGE_CELLS};
+use pxl_spec::space::pyramid::{CHUNK_CELLS, GROUND, PAGE_CELLS};
 use xpute_core::math::rng::{derive_seed_u64, u32_to_unit, SplitMix64};
+
+use std::collections::HashMap;
+
+use pxl_spec::cell::cube_types;
 
 use crate::kernel::kernel;
 use crate::layer::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN_FLAG, NO_ENTRY};
 use crate::layer::decor::kind::DecorKindDef;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::layer::decor::scatter::{DecorKindSeed, DecorOrientationMode, DecorRules};
-use crate::layer::object::store::{unpack_pos, Store, BAND_CELLS, BAND_UNITS, CELL, CELL_STEPS, STEP_UNITS};
+use crate::layer::object::store::{At, Store};
+use crate::world::chunk::table::Drawn;
 use pxl_spec::asset::ingested::Asset;
+
+const AIR: u32 = cube_types::common::air as u32;
 
 // Fixed, arbitrary — the one thing every kind's own placement ultimately
 // derives from (alongside its own seed tag). Changing this reshuffles every
@@ -156,14 +164,15 @@ pub fn user_decor_pick(i: IVec, variant_count: u32) -> (u32, f64) {
 // ---- the layer as the kernel builds it ----
 //
 // Two halves. The procedural one scatters each kind over the chunk's cells
-// with a random stream seeded from the page, the kind and the cell alone —
-// nothing about the view, so a tree stands in the same place however the
-// chunk was reached — keeps what lands on eligible ground at the density,
-// and
-// stands it on the terrain unless a placed object occupies that cell. The
-// user one is every decor entry the object store holds in the column,
-// turned and varied by a stream seeded from its own corner. What comes out
-// is one block: for each kind and variant, the instances' lanes.
+// at its own level, each cell's candidate the one a z16 cell under it draws
+// with a random stream seeded from that cell's page, the kind and the cell
+// alone — nothing about the view, so a tree stands in the same place however
+// the chunk was reached and whatever level draws it — keeps what lands on
+// eligible ground at the density, and stands it on the terrain unless a
+// placed object occupies that cell. The user one is every decor entry the
+// object store holds in the chunk's columns, turned and varied by a stream
+// seeded from its own corner. What comes out is one block: for each kind and
+// variant, the instances' lanes.
 //
 // A kind is drawn on a tier only where it is at least two of the tier's
 // cells across (decor_density).
@@ -199,40 +208,72 @@ pub struct DecorBuild<'s> {
     scratch: &'s DecorScratch,
 }
 
-/// What a chunk's decor is built from.
-pub struct Chunk<'a> {
+/// The ground a chunk's decor is scattered over: the chunk's own page at
+/// its own level, the cells of it the chunk covers, and their heights.
+pub struct Ground<'a> {
     pub page: &'a PageView<'a>,
-    pub page_idx: IVec,
-    /// The column this chunk stands in, and its X and Y lanes in units.
-    pub col_idx: IVec,
-    pub col_x: i64,
-    pub col_y: i64,
+    pub sample: &'a ChunkSample,
+    pub level: u32,
+    /// The chunk's corner, in units.
+    pub x0: i64,
+    pub y0: i64,
+    /// Where the chunk starts in its page, in the level's cells.
     pub tx0: u32,
     pub ty0: u32,
-    pub show_decor: bool,
+    /// The column a z16 chunk stands in, whose placed objects keep a
+    /// candidate off the cell they fill. None above z16, where a cell is the
+    /// ground of many columns and the objects are folded into the chunk's
+    /// cubes rather than standing in its cells.
+    pub col_idx: Option<IVec>,
+    /// The surface the chunk's tier is drawn with, which an instance stands
+    /// on, as every mark stands on the surface drawn under it; the page's
+    /// height where none is built yet.
+    pub surface: Option<&'a Drawn<'a>>,
+    /// Above z16, the chunk's objects folded to its level's cell, as its
+    /// runs draw them: a candidate is kept off a cell they fill.
+    pub folded: Option<&'a HashMap<[i64; 3], u32>>,
+}
+
+/// A column whose placed decor a chunk draws.
+pub struct Placed {
+    pub col_idx: IVec,
+    /// The column's X and Y lanes, in units.
+    pub col_x: i64,
+    pub col_y: i64,
     /// The hidden entry's band and packed position in this column.
     pub hide: Option<(i32, u32)>,
     /// Where the column's corner is from the corner of the chunk drawing it,
-    /// in units: zero for a leaf chunk, its place among the columns under it
-    /// for a level chunk.
+    /// in units: zero for a z16 chunk, its place among the columns under it
+    /// for a coarser one.
     pub ox: f64,
     pub oy: f64,
     /// Whether a placed instance keeps the entry it came from, for the
-    /// eraser's hit. A level chunk draws several columns' decor and names
+    /// eraser's hit. A coarser chunk draws several columns' decor and names
     /// none of their entries: what is erased is erased from close by.
     pub hittable: bool,
 }
 
+/// The z16 cell a level cell's candidate is drawn from: at each level down,
+/// one of the node's four children, chosen by a stream keyed to the kind and
+/// the node alone. So a level's candidate is always the candidate of one of
+/// the cells under it, and a zoom in or out keeps the instances it had —
+/// each one the instance that z16 cell draws, where it stands, as it turns —
+/// and adds or drops the others, a quarter a level.
+fn representative(tag: u64, level: u32, x: i64, y: i64) -> (i64, i64) {
+    (1..=level).rev().fold((x, y), |(x, y), l| {
+        let slot = derive_seed_u64(derive_seed_u64(derive_seed_u64(DECOR_MASTER_SEED, tag), gather(x, y, 0)), l as u64);
+        (2 * x + (slot & 1) as i64, 2 * y + (slot >> 1 & 1) as i64)
+    })
+}
+
 impl<'s> DecorBuild<'s> {
-    /// Builds every kind's instances at world step `step` into `scratch`,
-    /// from `columns` — the leaf columns a chunk covers, each with the sample
-    /// already read for it (its elevations). Decoration is scattered from the
-    /// leaves alone, whatever level draws the ground under it
-    /// (issue/20260921-level-step-and-zoom-are-one-number.md): a column's page
-    /// comes from the chunk builder's `leaf_source`, which reads the leaves'
-    /// table and no other, and every level's page is the same shape, so it is
-    /// that and not a size that holds it.
-    pub fn build(scratch: &'s mut DecorScratch, kinds: &[Kind], columns: &[(Chunk, &ChunkSample)], store: &Store, step: u32) -> DecorBuild<'s> {
+    /// Builds every kind's instances at world step `step` into `scratch`:
+    /// the decor placed in `placed`'s columns, and where `show_decor`, the
+    /// scatter over `ground`. A chunk scatters from its own level's page, so
+    /// decoration reaches as far as the ground it stands on is drawn, a kind
+    /// as far as it covers the pixels it is drawn at (`decor_density`).
+    #[allow(clippy::too_many_arguments)]
+    pub fn build(scratch: &'s mut DecorScratch, kinds: &[Kind], ground: Option<&Ground>, placed: &[Placed], store: &Store, step: u32, show_decor: bool) -> DecorBuild<'s> {
         scratch.clear();
         for kind in kinds {
             // A kind with no variant has no group to fill and no variant to
@@ -247,109 +288,132 @@ impl<'s> DecorBuild<'s> {
                 break;
             }
             scratch.group_count += kind.variant_count as usize;
-            for (chunk, sample) in columns {
-                Self::column(scratch, kind, first, chunk, sample, store, step);
+            for column in placed {
+                Self::placed(scratch, kind, first, column, store);
+            }
+            if let Some(ground) = ground.filter(|_| show_decor && decor_density(kind.extent, step) > 0.0) {
+                Self::scatter(scratch, kind, first, ground, store);
             }
         }
         DecorBuild { scratch }
     }
 
-    /// One column's instances of `kind`, into its groups from `first`.
-    fn column(scratch: &mut DecorScratch, kind: &Kind, first: usize, chunk: &Chunk, sample: &ChunkSample, store: &Store, step: u32) {
-        let page_seed = derive_seed_u64(DECOR_MASTER_SEED, chunk.page_idx);
-        let lanes = store.chunk_lanes(chunk.col_idx);
-        // A chunk with no entry has no cell to look up: most chunks.
-        let has_entries = lanes.as_ref().is_some_and(|l| l.count > 0);
-        {
-            // Placed instances first, in the store's entry order.
-            if let (Some(value), Some(l)) = (kind.decor_value, &lanes) {
-                // SAFETY: the column's lanes, read before anything writes the store.
-                let (bands, poss, states) = unsafe {
-                    let n = l.count as usize;
-                    (
-                        core::slice::from_raw_parts(l.band_at, n),
-                        core::slice::from_raw_parts(l.pos_at, n),
-                        core::slice::from_raw_parts(l.state_at, n),
-                    )
-                };
-                for k in 0..bands.len() {
-                    if states[k] != value {
-                        continue;
-                    }
-                    let pos = poss[k];
-                    let (x, y, z, scale) = unpack_pos(pos);
-                    let size = scale.side();
-                    // The entry's cell, which seeds its variant and turn.
-                    let corner = gather(
-                        CELL.index(chunk.col_x) + (x / CELL_STEPS) as i64,
-                        CELL.index(chunk.col_y) + (y / CELL_STEPS) as i64,
-                        bands[k] as i64 * BAND_CELLS as i64 + (z / CELL_STEPS) as i64,
-                    );
-                    let mut rng = Rng::new(derive_seed_u64(DECOR_MASTER_SEED, corner));
-                    let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
-                    let rotation = rng.unit() * core::f64::consts::PI * 2.0;
-                    let hidden = chunk.hide == Some((bands[k], pos));
-                    let h = size / 2.0;
-                    scratch.push(
-                        first + variant as usize,
-                        Instance {
-                            x: (chunk.ox + x as f64 * STEP_UNITS + h) as f32,
-                            y: (chunk.oy + y as f64 * STEP_UNITS + h) as f32,
-                            z: (bands[k] as f64 * BAND_UNITS + z as f64 * STEP_UNITS) as f32,
-                            rotation: rotation as f32,
-                            scale: 1.0,
-                            flags: if hidden { HIDDEN_FLAG } else { 0 },
-                            band: if chunk.hittable { bands[k] as u32 } else { NO_ENTRY },
-                            pos,
-                        },
-                    );
-                }
+    /// One column's placed instances of `kind`, into its groups from
+    /// `first`, in the store's entry order.
+    fn placed(scratch: &mut DecorScratch, kind: &Kind, first: usize, column: &Placed, store: &Store) {
+        let (Some(value), Some(l)) = (kind.decor_value, store.chunk_lanes(column.col_idx)) else { return };
+        // SAFETY: the column's lanes, read before anything writes the store.
+        let (bands, poss, states) = unsafe {
+            let n = l.count as usize;
+            (
+                core::slice::from_raw_parts(l.band_at, n),
+                core::slice::from_raw_parts(l.pos_at, n),
+                core::slice::from_raw_parts(l.state_at, n),
+            )
+        };
+        for k in 0..bands.len() {
+            if states[k] != value {
+                continue;
             }
+            let pos = poss[k];
+            let (x, y, z, scale) = unpack_pos(pos);
+            let size = scale.side();
+            let at = At {
+                col_idx: column.col_idx,
+                band: bands[k],
+                step: [x, y, z],
+            };
+            // The entry's cell, which seeds its variant and turn.
+            let [cx, cy, cz] = at.cell();
+            let corner = gather(cx, cy, cz);
+            let [lx, ly, lz] = at.local();
+            let mut rng = Rng::new(derive_seed_u64(DECOR_MASTER_SEED, corner));
+            let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
+            let rotation = rng.unit() * core::f64::consts::PI * 2.0;
+            let hidden = column.hide == Some((bands[k], pos));
+            let h = size / 2.0;
+            scratch.push(
+                first + variant as usize,
+                Instance {
+                    x: (column.ox + lx + h) as f32,
+                    y: (column.oy + ly + h) as f32,
+                    z: lz as f32,
+                    rotation: rotation as f32,
+                    scale: 1.0,
+                    flags: if hidden { HIDDEN_FLAG } else { 0 },
+                    band: if column.hittable { bands[k] as u32 } else { NO_ENTRY },
+                    pos,
+                },
+            );
+        }
+    }
 
-            // Then the scatter, where the kind is drawn on this tier.
-            let d = decor_density(kind.extent, step);
-            if chunk.show_decor && d > 0.0 {
-                let kind_seed = derive_seed_u64(page_seed, kind.tag);
-                let cells = chunk.page.cells;
-                for dy in 0..CHUNK_CELLS {
-                    let cell_y = chunk.ty0 + dy;
-                    for dx in 0..CHUNK_CELLS {
-                        let cell_x = chunk.tx0 + dx;
-                        let idx = (cell_y * PAGE_CELLS + cell_x) as usize;
-                        if !kind.rules.allows(cells[idx]) {
-                            continue;
-                        }
-                        let mut rng = Rng::new(derive_seed_u64(kind_seed, ((cell_x as u64) << 16) | cell_y as u64));
-                        if rng.unit() >= kind.density * d {
-                            continue;
-                        }
-                        let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
-                        let rotation = if kind.align_transport {
-                            let flip = rng.unit() < 0.5;
-                            transport_aligned_rotation(cells, cell_x, cell_y, flip)
-                        } else {
-                            rng.unit() * core::f64::consts::PI * 2.0
-                        };
-                        let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
-                        let ele = sample.ele[apron_col(dx, dy) as usize] as i32;
-                        if has_entries && store.cell(chunk.col_idx, dx, dy, ele).is_some_and(|c| c.solid > 0) {
-                            continue;
-                        }
-                        scratch.push(
-                            first + variant as usize,
-                            Instance {
-                                x: (chunk.ox + dx as f64 + 0.5) as f32,
-                                y: (chunk.oy + dy as f64 + 0.5) as f32,
-                                z: ele as f32,
-                                rotation: rotation as f32,
-                                scale: scale as f32,
-                                flags: 0,
-                                band: NO_ENTRY,
-                                pos: 0,
-                            },
-                        );
-                    }
+    /// The scatter of `kind` over `ground`: for each of the chunk's cells
+    /// the kind may stand on, the candidate of the z16 cell it draws from
+    /// (`representative`), with the draws that cell makes at z16 — kept at
+    /// the kind's density, stood on the surface drawn there, and left out
+    /// where a placed object fills the cell as it is drawn.
+    ///
+    /// Whether a kind may stand on a cell, and which way a kind aligned to
+    /// transport faces, are read off the level's own cells, the ground drawn
+    /// there: a tree above z16 stands on the grass the view sees, not on a
+    /// z16 cell it cannot, so it can come and go with a level as that grass
+    /// does.
+    fn scatter(scratch: &mut DecorScratch, kind: &Kind, first: usize, ground: &Ground, store: &Store) {
+        let cells = ground.page.cells;
+        let (level, atom) = (GROUND.scale(ground.level), GROUND.scale(0));
+        let (lx0, ly0) = (level.index(ground.x0), level.index(ground.y0));
+        let has_entries = ground.col_idx.and_then(|c| store.chunk_lanes(c)).is_some_and(|l| l.count > 0);
+        for dy in 0..CHUNK_CELLS {
+            let cell_y = ground.ty0 + dy;
+            for dx in 0..CHUNK_CELLS {
+                let cell_x = ground.tx0 + dx;
+                let idx = (cell_y * PAGE_CELLS + cell_x) as usize;
+                if !kind.rules.allows(cells[idx]) {
+                    continue;
                 }
+                let (gx, gy) = representative(kind.tag, ground.level, lx0 + dx as i64, ly0 + dy as i64);
+                // The z16 cell's own stream: its page's seed, the kind's, and
+                // its place in its page.
+                let unit = |g: i64| (g as f64 * atom.side()) as i64;
+                let page_idx = L3_IDX(gather(unit(gx), unit(gy), 0));
+                let (px, py) = (gx.rem_euclid(PAGE_CELLS as i64) as u64, gy.rem_euclid(PAGE_CELLS as i64) as u64);
+                let kind_seed = derive_seed_u64(derive_seed_u64(DECOR_MASTER_SEED, page_idx), kind.tag);
+                let mut rng = Rng::new(derive_seed_u64(kind_seed, (px << 16) | py));
+                if rng.unit() >= kind.density {
+                    continue;
+                }
+                let variant = ((rng.unit() * kind.variant_count as f64).floor() as u32).min(kind.variant_count - 1);
+                let rotation = if kind.align_transport {
+                    let flip = rng.unit() < 0.5;
+                    transport_aligned_rotation(cells, cell_x, cell_y, flip)
+                } else {
+                    rng.unit() * core::f64::consts::PI * 2.0
+                };
+                let scale = 1.0 + (rng.unit() * 2.0 - 1.0) * SCALE_JITTER;
+                let ele = ground.sample.ele[apron_col(dx, dy) as usize] as i32;
+                if has_entries && ground.col_idx.is_some_and(|c| store.cell(c, dx, dy, ele).is_some_and(|c| c.solid > 0)) {
+                    continue;
+                }
+                let filled = |f: &HashMap<[i64; 3], u32>| f.get(&[lx0 + dx as i64, ly0 + dy as i64, level.index(ele as i64)]).is_some_and(|&s| s != AIR);
+                if ground.folded.is_some_and(filled) {
+                    continue;
+                }
+                let (x, y) = ((gx as f64 + 0.5) * atom.side() - ground.x0 as f64, (gy as f64 + 0.5) * atom.side() - ground.y0 as f64);
+                let z = ground.surface.and_then(|d| d.top_under(x, y)).unwrap_or(ele as f64);
+                scratch.push(
+                    first + variant as usize,
+                    Instance {
+                        x: x as f32,
+                        y: y as f32,
+                        z: z as f32,
+                        rotation: rotation as f32,
+                        scale: scale as f32,
+                        flags: 0,
+                        band: NO_ENTRY,
+                        pos: 0,
+                    },
+                );
             }
         }
     }

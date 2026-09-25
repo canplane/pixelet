@@ -244,6 +244,9 @@ struct MeshTarget {
 #[derive(Clone, Copy, Default)]
 struct ZBucketAccum {
     bz: i32,
+    /// Whether any of it is ground rather than a placed thing: what lays a
+    /// floor under its box.
+    ground: bool,
     coverage: f64,
     faces: f64,
     /// The exposed faces' colour and the whole volume's, both summed in
@@ -756,6 +759,7 @@ impl BakeContext {
             // the cell's air, so none of them is hidden.
             let idx = self.find_or_create_bucket(start, cnt, run_z0.div_euclid(bucket));
             let acc = &mut self.buckets[idx as usize];
+            acc.ground |= set.material_class[i] != MATERIAL_OBJECT;
             acc.add(frac * frac * frac * cell as f64, FULL_FACE_CNT as f64 * frac * frac, rgb);
             return cnt.max(idx - start + 1);
         }
@@ -766,6 +770,7 @@ impl BakeContext {
             let idx = self.find_or_create_bucket(start, cnt, bz);
             cnt = cnt.max(idx - start + 1);
             let acc = &mut self.buckets[idx as usize];
+            acc.ground |= set.material_class[i] != MATERIAL_OBJECT;
             acc.add((hi - lo + 1) as f64, exposed_faces(set, col, i, lo, hi), rgb);
         }
         cnt
@@ -800,27 +805,38 @@ impl BakeContext {
             // where a top and a side mean something; a box summarising a
             // patch of ground has no cut through earth to show (chunk.wgsl).
             let taps = packed_taps(0, 0);
-            // What holds the box up. A box shrunk about its centre stands
+            // What lies under the box. A box shrunk about its centre stands
             // clear of its cell on every side, and a view from above reads
             // those gaps as holes rather than as one surface
-            // (issue/20260923-a-coarse-cell-is-isotropic.md), so every box
-            // lays a floor of its own colour under itself: the whole
-            // footprint, from under the box down to the cell's floor. It is
-            // one run, so neighbouring cells of a colour merge into one box
-            // the way a floor always did.
+            // (issue/20260923-a-coarse-cell-is-isotropic.md), so a cell of
+            // ground lays its floor: the cell's own bottom face, its whole
+            // footprint, in the box's colour — a face and not a run up to
+            // the box, so the box stands over it as a placed thing stands
+            // over the ground. A cell of placed things alone lays none: its
+            // box floats at the cell's centre.
             //
-            // The cell's lowest box hangs its floor a cell lower still — the
+            // The cell's lowest box hangs a cell below its floor too — the
             // skirt every terrain LOD hangs off its tiles: two cells whose
             // ground lands in different buckets leave a step between their
             // floors, and a view along the ground would see daylight through
-            // it. A box over another needs none, since the one under it
-            // already fills that cell.
-            let gap = inset.map_or(0, |(o, _)| round(unpack_sub_cell_fraction(o) * step as f64) as i32);
-            let skirt = if open.is_none() { step } else { 0 };
-            if gap + skirt > 0 {
+            // it. Its top is the floor. A box over a whole box needs neither:
+            // the one under it is the floor already.
+            let lowest = open.is_none() && last_top == i32::MIN;
+            let floored = last_top == bucket_lo - 1 && open.is_some_and(|o| self.coarse.sub_sz[o] == SUB_CELL_NONE);
+            let under = if !acc.ground || floored {
+                None
+            } else if lowest {
+                Some((bucket_lo - step, bucket_lo - 1))
+            } else if inset.is_some() {
+                // A run with no height: its top alone, at the cell's bottom.
+                Some((bucket_lo, bucket_lo - 1))
+            } else {
+                None
+            };
+            if let Some((z0, z1)) = under {
                 let co = &mut self.coarse;
-                co.z0.push(bucket_lo - skirt);
-                co.z1.push(bucket_lo + gap - 1);
+                co.z0.push(z0);
+                co.z1.push(z1);
                 co.r.push(rgb[0]);
                 co.g.push(rgb[1]);
                 co.b.push(rgb[2]);
@@ -832,11 +848,15 @@ impl BakeContext {
                 }
                 // The run above is not this box, so nothing merges across it.
                 open = None;
-                last_top = bucket_lo + gap - 1;
+                last_top = z1;
             }
+            // A box of placed things alone is one of them: it hides none of
+            // its neighbours' faces and shows its underside, as a placed cube
+            // does over the ground.
+            let class = if acc.ground { MATERIAL_LAND } else { MATERIAL_OBJECT };
             let co = &mut self.coarse;
             if let Some(o) = open.filter(|_| inset.is_none() && bucket_lo == last_top + 1) {
-                if [co.r[o], co.g[o], co.b[o]] == rgb && co.layer_taps[o] == taps && co.sub_sz[o] == SUB_CELL_NONE {
+                if [co.r[o], co.g[o], co.b[o]] == rgb && co.layer_taps[o] == taps && co.sub_sz[o] == SUB_CELL_NONE && co.material_class[o] == class {
                     co.z1[o] = bucket_hi;
                     last_top = bucket_hi;
                     continue;
@@ -849,7 +869,7 @@ impl BakeContext {
             co.g.push(rgb[1]);
             co.b.push(rgb[2]);
             co.layer_taps.push(taps);
-            co.material_class.push(MATERIAL_LAND);
+            co.material_class.push(class);
             let (offset, scale) = inset.unwrap_or((0, 0));
             co.sub_sz.push(if inset.is_none() { SUB_CELL_NONE } else { scale.max(1) });
             co.sub_sx.push(scale);
@@ -1023,6 +1043,16 @@ fn side_bits(mut mask: u32, rel: u32, face: u32, crease: u32, rises: u32, dips: 
 }
 
 fn run_face_mask(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
+    let mask = run_faces(set, span, cx, cy, i);
+    // A run with no height is a face and nothing else: a coarse cell's floor
+    // (pack_coarse_cell), drawn by its top alone.
+    if set.z1[i] < set.z0[i] {
+        return mask & !(ALL_FACES & !FACE_PZ);
+    }
+    mask
+}
+
+fn run_faces(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
     let mask_all = if run_include_bottom(set, i) { ALL_FACES } else { OPEN_BOTTOM_FACES };
     if set.sub_sz[i] != SUB_CELL_NONE {
         // A thing placed in a cell is lit as it stands; a coarse cell's box

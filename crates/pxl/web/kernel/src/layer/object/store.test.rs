@@ -4,6 +4,7 @@
 // A col_idx's changes are read as its revisions moving, which is what
 // world/chunk/node.rs follows.
 
+use pxl_spec::bake::constant::{BAND_CELLS, CELL_STEPS};
 use pxl_spec::cell::cube_types::Block;
 use pxl_spec::space::indexer::{L2_IDX, L2_IDX_IN_L3, L3_IDX};
 use pxl_spec::space::pvf3::{fvec, ivec};
@@ -21,7 +22,7 @@ fn corner(x: i64, y: i64, z: i64) -> Pvf3 {
 }
 
 fn in_cell(c: &Pvf3) -> Vec<OccupiedEntry> {
-    let [ix, iy, iz] = cell_index(c);
+    let [ix, iy, iz] = CELL.index_of(c);
     get_objects_in_cell(ix, iy, iz)
 }
 
@@ -163,7 +164,7 @@ fn object_store_entries_a_column_walk_s_chunk_local_corner_agrees_with_the_absol
 fn object_store_cells_occupancy_follows_placement_and_removal_and_air_does_not_occupy() {
     let _g = serial();
     let c = corner(4096 * 13, 0, 2);
-    let [ix, iy, iz] = cell_index(&c);
+    let [ix, iy, iz] = CELL.index_of(&c);
     assert!(!cell_is_occupied(ix, iy, iz));
     place(&c, DECOR_SIZE, PlaceableCube::Block(Block::red), false);
     assert!(cell_is_occupied(ix, iy, iz));
@@ -172,7 +173,7 @@ fn object_store_cells_occupancy_follows_placement_and_removal_and_air_does_not_o
     assert!(!cell_is_occupied(ix, iy, iz));
     let air = corner(4096 * 13, 0, 5);
     place_air(&air, DECOR_SIZE);
-    let [ax, ay, az] = cell_index(&air);
+    let [ax, ay, az] = CELL.index_of(&air);
     assert!(!cell_is_occupied(ax, ay, az));
 }
 

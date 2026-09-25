@@ -18,7 +18,8 @@
 use std::f64::consts::{PI, SQRT_2};
 
 use pxl_render::look::lod::REFERENCE_THRESHOLD_0;
-use pxl_spec::space::indexer::L3_IDX;
+use pxl_spec::space::hierarchy::{share, Scale};
+use pxl_spec::space::indexer::{L2, L3_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::{span_of, LevelPage, CHUNK_CELLS, GROUND, PAGE_CELLS, PAGE_CHUNKS, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
@@ -149,25 +150,28 @@ pub fn eye() -> Option<Eye> {
     map_store().map_center?;
     let v = view();
     let at = [
-        ivec::to_real(ivec::X(v.origin)) + v.eye_local.x,
-        ivec::to_real(ivec::Y(v.origin)) + v.eye_local.y,
-        ivec::to_real(ivec::Z(v.origin)) + v.eye_local.z,
+        ivec::to_real(ivec::X(v.origin)) + v.eye_local[0],
+        ivec::to_real(ivec::Y(v.origin)) + v.eye_local[1],
+        ivec::to_real(ivec::Z(v.origin)) + v.eye_local[2],
     ];
     let foot = ivec::gather(at[0].floor() as i64, at[1].floor() as i64, 0);
     Some(Eye { at, foot })
 }
 
-/// The level the rule draws ground `dist` from the eye at: the one whose
-/// split distance it is past and the next one's it is not.
-fn level_at(dist: f64) -> u32 {
-    ((dist / split_distance(0)).log2().floor().max(0.0) as u32).min(TOP_LEVEL)
+/// The level the rule wants ground `dist` from the eye at: the one whose
+/// split distance it is past and the next one's it is not. Finer than z16
+/// too — negative, z17 and on — where the eye is nearer than z16's split
+/// distance: the rule has no floor, and a layer whose data ends coarser
+/// draws its finest there.
+pub fn level_for(dist: f64) -> i32 {
+    (dist / split_distance(0)).log2().floor() as i32
 }
 
 /// The levels a view holds, finest first, for an eye `height` over the
 /// ground under it: from the level that ground wants, WINDOW_LEVELS up at
-/// most.
+/// most. The pages begin at z16, where terrain's data does.
 pub fn window_for(height: f64) -> std::ops::Range<u32> {
-    let base = level_at(height);
+    let base = level_for(height).clamp(0, TOP_LEVEL as i32) as u32;
     base..(base + WINDOW_LEVELS).min(TOP_LEVEL + 1)
 }
 
@@ -175,11 +179,6 @@ pub fn window_for(height: f64) -> std::ops::Range<u32> {
 pub fn window() -> std::ops::Range<u32> {
     eye().map_or(0..0, |_| window_for(eye_height()))
 }
-
-/// How far the leaves are drawn for certain, and so decoration, which is
-/// scattered from them: level 1's split distance, inside which every chunk
-/// the window reaches is split to the leaves.
-pub const DECOR_REACH: f64 = split_distance(1);
 
 /// The page `anchor` stands in at `level`: what every ring is centred on.
 pub fn centre_page(level: u32, anchor: IVec) -> LevelPage {
@@ -301,10 +300,10 @@ impl Domain {
     /// The heights a box of `page`'s ground spans: its terrain's, and the
     /// objects standing on it. `heights_revision` says when any answer this
     /// gives may have changed.
-    fn heights(page: LevelPage, (x0, y0, side): (f64, f64, f64)) -> Option<(f64, f64)> {
+    fn heights(page: LevelPage, node: (Scale, [i64; 2])) -> Option<(f64, f64)> {
         let mut z = range_over(page);
         for b in column_boxes() {
-            if b.x0 < x0 + side && x0 < b.x0 + b.side && b.y0 < y0 + side && y0 < b.y0 + b.side {
+            if share((L2, b.col), node) {
                 z = Some(z.map_or(b.z, |(lo, hi)| (lo.min(b.z.0), hi.max(b.z.1))));
             }
         }
@@ -322,17 +321,24 @@ impl Domain {
         f.sees(centre, radius, self.eye)
     }
 
+    /// Whether the view can see any of `c`'s ground: everything where the
+    /// frustum is not known.
+    pub fn sees(&self, c: Chunk) -> bool {
+        let rect = c.rect();
+        self.in_view(rect, Self::heights(c.page, c.node()))
+    }
+
     /// How near the eye `c` comes.
     pub fn nearest_to(&self, c: Chunk) -> f64 {
         let rect = c.rect();
-        self.nearest(rect, Self::heights(c.page, rect))
+        self.nearest(rect, Self::heights(c.page, c.node()))
     }
 
     /// How near the eye `p` comes.
     pub fn page_nearest_to(&self, p: LevelPage) -> f64 {
         let span = span_of(p.level);
         let rect = (ivec::X(p.page) as f64 * span, ivec::Y(p.page) as f64 * span, span);
-        self.nearest(rect, Self::heights(p, rect))
+        self.nearest(rect, Self::heights(p, p.node()))
     }
 
     /// Where the partition starts: every chunk of the window's top level
@@ -365,10 +371,9 @@ impl Domain {
         &self.chain
     }
 
-    /// The ground the view draws, as the roots' squares: a corner and a side
-    /// each, in units.
-    pub fn ground(&self) -> Vec<(f64, f64, f64)> {
-        self.roots.iter().map(|c| c.rect()).collect()
+    /// The ground the view draws: the roots.
+    pub fn ground(&self) -> &[Chunk] {
+        &self.roots
     }
 
     /// Whether the rule wants `c`'s ground finer than `c`: it comes nearer the
@@ -381,7 +386,7 @@ impl Domain {
             return false;
         }
         let rect = c.rect();
-        let z = Self::heights(c.page, rect);
+        let z = Self::heights(c.page, c.node());
         self.nearest(rect, z) < split_distance(c.level() as i32) && self.in_view(rect, z)
     }
 
@@ -396,7 +401,7 @@ impl Domain {
         }
         let span = span_of(p.level);
         let rect = (ivec::X(p.page) as f64 * span, ivec::Y(p.page) as f64 * span, span);
-        let z = Self::heights(p, rect);
+        let z = Self::heights(p, p.node());
         self.nearest(rect, z) < within && (p.level == top || self.in_view(rect, z))
     }
 

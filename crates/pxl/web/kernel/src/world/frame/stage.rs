@@ -11,10 +11,12 @@ use pxl_render::frame::stage::{stage_lane_mut, AO_STRENGTH, EDGE_STRENGTH, EDGE_
 use pxl_render::gpu::pass::decor::GROUPS;
 use pxl_render::gpu::renderer::{render_frame, FrameInput};
 use pxl_render::gpu::surface::SURFACES;
-use pxl_render::look::lod::{fade_end_u, fade_start_u, LOD_CELL_PER_DISTANCE};
+use pxl_render::look::lod::LOD_CELL_PER_DISTANCE;
+
+use crate::layer::billboard::distance_fade::fade_range;
 use pxl_spec::asset::ingested::Asset;
+use pxl_spec::space::mat4::{mat4, mat4_mul};
 use pxl_spec::space::pvf3::ivec;
-use xpute_core::math::mat4::{mat4, mat4_mul};
 use xpute_core::math::scalar::round;
 
 use crate::host::handheld;
@@ -43,7 +45,7 @@ pub fn stage_write() {
     s[STAGE_AT::BADGE_VIEW..STAGE_AT::BADGE_VIEW + 16].copy_from_slice(&m);
     s[STAGE_AT::PROJ..STAGE_AT::PROJ + 16].copy_from_slice(&v.proj);
     s[STAGE_AT::LOCAL_VIEW_PROJ..STAGE_AT::LOCAL_VIEW_PROJ + 16].copy_from_slice(&v.local_view_proj);
-    s[STAGE_AT::EYE_LOCAL..STAGE_AT::EYE_LOCAL + 3].copy_from_slice(&[v.eye_local.x, v.eye_local.y, v.eye_local.z]);
+    s[STAGE_AT::EYE_LOCAL..STAGE_AT::EYE_LOCAL + 3].copy_from_slice(&v.eye_local);
     s[STAGE_AT::TRANSLATION..STAGE_AT::TRANSLATION + 3].copy_from_slice(&[v.tx, v.ty, v.tz]);
     s[STAGE_AT::ORIGIN] = ivec::to_real(ivec::X(v.origin));
     s[STAGE_AT::ORIGIN + 1] = ivec::to_real(ivec::Y(v.origin));
@@ -52,8 +54,7 @@ pub fn stage_write() {
     s[STAGE_AT::FOV] = v.fov;
     s[STAGE_AT::NEAR] = v.near;
     s[STAGE_AT::FAR] = v.far;
-    s[STAGE_AT::FADE_START] = fade_start_u();
-    s[STAGE_AT::FADE_END] = fade_end_u();
+    (s[STAGE_AT::FADE_START], s[STAGE_AT::FADE_END]) = fade_range();
     s[STAGE_AT::LOD_CELL] = LOD_CELL_PER_DISTANCE();
     s[STAGE_AT::EDGE_STRENGTH] = if settings.show_edge_shade { EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { AO_STRENGTH } else { 0.0 };

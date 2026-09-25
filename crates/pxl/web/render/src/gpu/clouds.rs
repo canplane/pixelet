@@ -6,10 +6,10 @@
 //! fragment a pixel where a ray meets the layer — eight octaves of value noise
 //! and the air's lookups — and nothing where one does not.
 
+use pxl_spec::space::mat4::Mat4;
 use pxl_spec::space::pvf3::core::{IVEC_X_W, IVEC_Y_W};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::v3::V3;
-use xpute_core::math::mat4::Mat4;
 
 use crate::frame::shader::record::{PIPELINE_CLOUDS, PIPELINE_CLOUDS_ABOVE, PIPELINE_CLOUD_FIELD};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, Stamp};

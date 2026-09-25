@@ -31,7 +31,7 @@ fn a_mapped_category_resolves_and_an_unmapped_one_does_not() {
 /// is one no place ever wears.
 #[test]
 fn the_table_and_the_poi_theme_name_the_same_categories() {
-    let theme: serde_json::Value = serde_json::from_str(include_str!("../../../../../../spec/pxl/web/kernel/layer/poi/theme.json")).unwrap();
+    let theme: serde_json::Value = serde_json::from_str(include_str!("../../../../../../spec/pxl/spec/bake/poi_theme.json")).unwrap();
     let keys: std::collections::BTreeSet<&str> = theme["CATEGORY_THEME"].as_object().unwrap().keys().map(String::as_str).filter(|k| !k.starts_with('$')).collect();
     let targets: std::collections::BTreeSet<&str> = OVERTURE_CATEGORY_MAP.iter().map(|&(_, t)| t).collect();
     assert_eq!(targets.difference(&keys).collect::<Vec<_>>(), Vec::<&&str>::new(), "targets the POI theme does not know");

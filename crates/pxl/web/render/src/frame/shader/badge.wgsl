@@ -80,21 +80,18 @@ fn behind_world(clip: vec4f) -> bool {
 @vertex
 fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
   // BILLBOARD_FLOATS (kernel billboard/field.rs) floats an instance.
-  let k = ii * 11u;
+  let k = ii * 10u;
   let anchor = on_globe_of(vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + badge.translation, badge.planet, badge.globe);
   let size_px = vec2f(instances[k + 3u], instances[k + 4u]);
   let rect = vec4f(instances[k + 5u], instances[k + 6u], instances[k + 7u], instances[k + 8u]);
   let frac = instances[k + 9u];
-  // The block the badge marks, in level-0 cells: its fade reaches as far as
-  // the level that block is drawn at (billboard/distance_fade.rs).
-  let unit = instances[k + 10u];
   let corners = array<vec2f, 4>(vec2f(-0.5, -0.5), vec2f(0.5, -0.5), vec2f(-0.5, 0.5), vec2f(0.5, 0.5));
   let q = corners[vi];
 
   let anchor_view = (badge.view * vec4f(anchor, 1.0)).xyz;
   let dist = length(anchor_view);
   let depth = max(-anchor_view.z, 1e-3);
-  let fade = 1.0 - smoothstep(badge.fade_start * unit, badge.fade_end * unit, dist);
+  let fade = 1.0 - smoothstep(badge.fade_start, badge.fade_end, dist);
   let size = size_px * depth / badge.px_k * fade;
   let drop = size.y * (frac - 0.5);
   // The sprite anchor is a screen offset, independent of camera tilt.

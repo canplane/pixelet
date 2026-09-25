@@ -6,18 +6,27 @@
 //! box a billboard will take. A billboard at full strength is drawn at one
 //! screen pixel per logical pixel, so its drawn width is `logical_w * far`.
 
-/// Full opacity/size at or inside fade_start_u(), smoothstepped to gone by
-/// fade_end_u() — both a fixed number of the terrain's first tier handoff
-/// (crates/pxl/web/render/src/look/lod.rs), so they move with the projection as the tiers do.
-pub use pxl_render::look::lod::{fade_end_u, fade_start_u};
+use crate::world::frame::view::view;
 
-///
-/// Both scale with `unit`, the side in level-0 cells of what the billboard
-/// marks: a mark standing for a block the ground draws at a coarser level is
-/// shown out to where that level is drawn, as the ladder draws step 2^j out to
-/// 2^j times step 1's reach (world/pyramid/window.rs).
-pub fn distance_fade_far(dist: f64, unit: f64) -> f64 {
-    let (start, end) = (fade_start_u() * unit, fade_end_u() * unit);
+/// Where a billboard is at full strength and where it is gone, in the
+/// camera's distance to what it looks at: a sphere about the eye that grows
+/// with the zoom, so what the view is about keeps its marks at every zoom and
+/// the ground far past it — toward the horizon of a tilted view — does not.
+/// Looking straight down, the screen's farthest corner is 1.4 zooms away, so
+/// nothing on it fades. Product numbers, not derivations.
+const FADE_START_ZOOMS: f64 = 2.0;
+const FADE_END_ZOOMS: f64 = 4.0;
+
+/// Where the fade starts and ends, in units from the eye, this frame.
+pub fn fade_range() -> (f64, f64) {
+    let zoom = view().dist;
+    (FADE_START_ZOOMS * zoom, FADE_END_ZOOMS * zoom)
+}
+
+/// What a billboard `dist` from the eye is drawn at: its size and its
+/// opacity, 1 inside the fade and smoothstepped to 0 across it.
+pub fn distance_fade_far(dist: f64) -> f64 {
+    let (start, end) = fade_range();
     if dist <= start {
         return 1.0;
     }

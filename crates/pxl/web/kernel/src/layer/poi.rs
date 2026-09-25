@@ -10,7 +10,7 @@ pub mod badge;
 pub mod placement;
 
 use pxl_spec::bake::poi_page::{self, PoiPage};
-use pxl_spec::space::pyramid::LevelPage;
+use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
 use xpute_runtime::abi::fetch::FetchFail;
 
 use crate::global::Global;
@@ -37,9 +37,14 @@ impl Layer for PoiPage {
         Ok(page.clone())
     }
 
-    /// A page the bake has no object for holds no places.
+    /// A page the bake has no object for: at the top, one holding no places;
+    /// under it, one the page over it settles, whose ground that page says.
     fn absent(p: LevelPage) {
-        PoiPage::pyramid().set(p, PoiPage::default());
+        if p.level < TOP_LEVEL {
+            PoiPage::pyramid().answer_above(p);
+        } else {
+            PoiPage::pyramid().set(p, PoiPage::default());
+        }
     }
 }
 

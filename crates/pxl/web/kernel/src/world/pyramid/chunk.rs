@@ -6,10 +6,11 @@
 //! at a resolution of its own, since the rings of neighbouring levels meet
 //! at chunk edges and not at page edges (window.rs).
 
-use pxl_spec::space::hierarchy::{child_of, parent_of};
+use pxl_spec::space::hierarchy::{child_of, parent_of, Scale};
+use pxl_spec::space::indexer::L2;
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::{cell_base, chunk_span_of, span_of, Cell, LevelPage, CHUNK_CELLS, PAGE_CELLS, PAGE_CHUNKS, TOP_LEVEL};
+use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, PAGE_CELLS, PAGE_CHUNKS, TOP_LEVEL};
 
 /// A chunk by where it is: its page, and its corner in the page's cells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -22,7 +23,7 @@ pub struct Chunk {
 impl Chunk {
     /// The level-`level` chunk a point stands in.
     pub fn of(level: u32, at: &Pvf3) -> Chunk {
-        let cell = Cell::of(level, at);
+        let cell = GROUND.cell_of(level, at);
         let (tx, ty) = (cell.index() % PAGE_CELLS, cell.index() / PAGE_CELLS);
         Chunk {
             page: cell.page(),
@@ -43,8 +44,14 @@ impl Chunk {
 
     /// The chunk's corner and side, in units.
     pub fn rect(self) -> (f64, f64, f64) {
-        let base = cell_base(self.page, self.bx, self.by);
+        let base = GROUND.cell_base(self.page, self.bx, self.by);
         (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)), chunk_span_of(self.page.level))
+    }
+
+    /// The chunk as a node of the hierarchy: its side, the L2 block's at its
+    /// level, and its coordinate among its level's chunks.
+    pub fn node(self) -> (Scale, [i64; 2]) {
+        (L2.up(self.page.level as i32), self.at())
     }
 
     /// The chunk's coordinate among its level's chunks.
@@ -77,13 +84,5 @@ impl Chunk {
     /// page of it.
     pub fn children(self) -> [Chunk; 4] {
         std::array::from_fn(|slot| Chunk::from_at(self.page.level - 1, child_of(self.at(), slot)))
-    }
-
-    /// Whether the chunk and a page share any ground, whatever their levels.
-    pub fn overlaps_page(self, p: LevelPage) -> bool {
-        let a = self.rect();
-        let span = span_of(p.level);
-        let b = (ivec::X(p.page) as f64 * span, ivec::Y(p.page) as f64 * span, span);
-        a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.2 && b.1 < a.1 + a.2
     }
 }

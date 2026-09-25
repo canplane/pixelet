@@ -14,26 +14,26 @@ const BUNDANG_QUADKEY: &str = "132110320312001";
 
 #[test]
 fn the_known_page_is_the_tile_it_stands_on() {
-    assert_eq!(quadkey_of(LEVEL0_ZOOM, BUNDANG).to_string(), BUNDANG_QUADKEY);
-    assert_eq!(index_of(BUNDANG_QUADKEY), Some((LEVEL0_ZOOM, BUNDANG)));
-    assert_eq!(tile_of(BUNDANG, LEVEL0_ZOOM), (27953, 12712));
+    assert_eq!(quadkey_of(PAGE_ZOOM, BUNDANG).to_string(), BUNDANG_QUADKEY);
+    assert_eq!(index_of(BUNDANG_QUADKEY), Some((PAGE_ZOOM, BUNDANG)));
+    assert_eq!(tile_of(BUNDANG, PAGE_ZOOM), (27953, 12712));
 }
 
 /// The property the name has this shape for: one prefix is one region at every
 /// level it is held at.
 #[test]
 fn a_coarser_page_is_named_by_a_prefix_of_the_leaf_over_it() {
-    let leaf = quadkey_of(LEVEL0_ZOOM, BUNDANG).to_string();
+    let leaf = quadkey_of(PAGE_ZOOM, BUNDANG).to_string();
     for level in 1..=TOP_LEVEL {
         let coarse = quadkey_of(zoom_of_level(level), ivec::sh(BUNDANG, -(level as i32))).to_string();
-        assert_eq!(coarse.len(), (LEVEL0_ZOOM - level) as usize, "a level is its length");
+        assert_eq!(coarse.len(), (PAGE_ZOOM - level) as usize, "a level is its length");
         assert!(leaf.starts_with(&coarse), "level {level} {coarse} is not a prefix of {leaf}");
     }
 }
 
 #[test]
 fn every_page_survives_the_round_trip_at_every_zoom() {
-    let n = 1i64 << LEVEL0_ZOOM;
+    let n = 1i64 << PAGE_ZOOM;
     for x in [-n / 2, -12345, -1, 0, 1, 11569, n / 2 - 1] {
         for y in [-n / 2, -7777, -1, 0, 1, 3671, n / 2 - 1] {
             for level in 0..=TOP_LEVEL {
@@ -51,9 +51,9 @@ fn every_page_survives_the_round_trip_at_every_zoom() {
 /// actually stands on rather than none at all.
 #[test]
 fn the_seam_wraps_rather_than_falling_outside() {
-    let n = 1i64 << LEVEL0_ZOOM;
+    let n = 1i64 << PAGE_ZOOM;
     let west = ivec::gather(-n / 2, 0, 0);
-    assert_eq!(quadkey_of(LEVEL0_ZOOM, ivec::gather(n / 2, 0, 0)).to_string(), quadkey_of(LEVEL0_ZOOM, west).to_string());
+    assert_eq!(quadkey_of(PAGE_ZOOM, ivec::gather(n / 2, 0, 0)).to_string(), quadkey_of(PAGE_ZOOM, west).to_string());
 }
 
 #[test]
@@ -62,8 +62,8 @@ fn what_is_not_a_name_is_refused() {
     assert_eq!(index_of("4"), None, "a quadkey has four digits, not ten");
     assert_eq!(index_of("13211032031200a"), None, "nor any other letter");
     assert_eq!(index_of("-1321103203120"), None, "nor a sign: the digits carry it");
-    assert_eq!(index_of(&"0".repeat(LEVEL0_ZOOM as usize + 1)), None, "nothing is finer than a leaf");
-    assert!(index_of(&"0".repeat(LEVEL0_ZOOM as usize)).is_some(), "a leaf is");
+    assert_eq!(index_of(&"0".repeat(PAGE_ZOOM as usize + 1)), None, "nothing is finer than a leaf");
+    assert!(index_of(&"0".repeat(PAGE_ZOOM as usize)).is_some(), "a leaf is");
 }
 
 /// A pyramid page's name reads back as the page at every level the pyramid

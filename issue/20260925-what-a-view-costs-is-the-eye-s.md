@@ -58,7 +58,7 @@ base's bound.
   a sphere around it.
 - **Three dimensions, one rule.** 2.5D is not a basis: terrain, places and
   objects are selected by the same rule in 3D.
-- **No floor at level 0.** An object's sub-cell tree has levels below the
+- **No floor at z16.** An object's sub-cell tree has levels below the
   cell, −1, −2, −3; the rule reaches them as it reaches every other level.
 - **One formula, a step function, the same at every level.** 192, 384, the
   window's `− 1`, the decor reach that pins the base to 0 and the five
@@ -82,12 +82,12 @@ r_L = (P / τ) · 2^(s + L)
 ```
 
 the distance at which a cell of side `2^(s + L)` covers τ pixels; `s` is the
-lattice's level-0 cell as a shift (the ground's CELL_SHAMT, the places' two
+lattice's z16 cell as a shift (the ground's CELL_SHAMT, the places' two
 more), `L` any integer.
 
 **A level-L node is split into its children while `D_min < r_L`.** This is
 Cesium's screen-space error, with the eye as the one origin. Splitting stops
-only where the data does: terrain has nothing under level 0, an object has
+only where the data does: terrain has nothing under z16, an object has
 its tiers down to −3. Where the data stops above the formula's level, it is
 the data drawn exactly, larger than τ, and not an approximation.
 
@@ -182,9 +182,14 @@ and places:
 
 Not yet:
 
-- Objects' sub-cell tiers are not levels of the rule, and decoration is
-  scattered from the leaves alone, so it ends where the rule stops drawing
-  them (level 1's split distance), nearer than a kind's own reach.
+- Objects' sub-cell tiers are not levels of the rule. Built later the same
+  day: the rule reaches below z16 and a z16 chunk folds its objects to the
+  cube its distance wants.
+- Decoration is scattered from the leaves alone, so it ends where the rule
+  stops drawing them (level 1's split distance), nearer than a kind's own
+  reach. Built later the same day: a chunk scatters from its own level's
+  page, each level cell's candidate that of a z16 cell under it, so a
+  zoom keeps the instances it had and thins them a quarter a level.
 - A tier changes at its threshold with no crossfade; the machinery for one
   (a secondary tier and its weight) is kept but unused.
 - The window is WINDOW_LEVELS deep, so from low over the ground the far
@@ -192,3 +197,21 @@ Not yet:
 
 τ, whether the work is equalised across devices, and hysteresis are left to
 measurement.
+
+## What the rule is and what a layer is
+
+Settled later the same day, and it replaces "places take the rule by their
+cell's side" above. The
+rule is shared: it chooses a level — a zoom — for each piece of ground by its
+distance from the eye, `r_L = (P / τ) · 2^L`, and nothing about a layer
+enters it. What a layer draws at the level it is given, and in how much
+detail, is the layer's own: a tuning inside the perspective, not a second
+rule. At level L terrain draws its cells averaged 2 × 2 (detail +1), places
+count in a lattice sixteen times the ground's cell (+4) and stand a lone place
+on its z16 cell, and objects draw their own cells (0): an object's cube and
+the ground's are one size wherever both have data, never fine objects on
+coarse ground. The rule's levels go below z16 — z17 to z19 near the eye —
+and where it asks finer than a layer's data the layer draws its finest:
+terrain z16, objects their sub-cell tiers down to z19. z16 is terrain's atom
+and nothing more. What this leaves open is in
+[the backlog](./BACKLOG.md), under this rule's entry.

@@ -19,6 +19,9 @@
 //! a sparse tree's blocks in either (sparse_tree/mem.rs), and a fold reads
 //! the children in this order whichever it is (bake/fold.rs `majority`).
 
+use super::pvf3::core::FRAC_W;
+use super::pvf3::pvf3::{self, Pvf3};
+
 /// A side of 2^shamt units: negative where it is finer than a unit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Scale(i32);
@@ -75,6 +78,22 @@ impl Scale {
         }
     }
 
+    /// Which of this scale's sides a point lies in on each axis, counted from
+    /// the origin: a floor on the fixed point's signed lanes, exact while a
+    /// side is no finer than the fraction.
+    pub fn index_of(self, at: &Pvf3) -> [i64; 3] {
+        let shift = FRAC_W as i32 + self.0;
+        [pvf3::X(at) >> shift, pvf3::Y(at) >> shift, pvf3::Z(at) >> shift]
+    }
+
+    /// The corner of the side at `index` on each axis: `index_of`'s inverse.
+    pub fn base_of(self, index: [i64; 3]) -> Pvf3 {
+        let shift = FRAC_W as i32 + self.0;
+        let mut out = Pvf3::default();
+        pvf3::gather(&mut out, index[0] << shift, index[1] << shift, index[2] << shift);
+        out
+    }
+
     /// The scale whose side is nearest `units`, a power of two where it is
     /// one.
     pub fn of_side(units: f64) -> Scale {
@@ -98,6 +117,29 @@ pub fn slot_of<const D: usize>(at: [i64; D]) -> usize {
 /// inverse.
 pub fn child_of<const D: usize>(at: [i64; D], slot: usize) -> [i64; D] {
     std::array::from_fn(|i| 2 * at[i] + ((slot >> i) & 1) as i64)
+}
+
+/// The node `levels` up that `at` lies under: `parent_of` taken `levels`
+/// times, which on the signed lanes is one floor.
+pub fn ancestor_of<const D: usize>(at: [i64; D], levels: u32) -> [i64; D] {
+    at.map(|v| v >> levels)
+}
+
+/// The first of the nodes `levels` down under `at`, every slot 0: `child_of`
+/// taken `levels` times, and `ancestor_of`'s inverse there.
+pub fn first_descendant_of<const D: usize>(at: [i64; D], levels: u32) -> [i64; D] {
+    at.map(|v| v << levels)
+}
+
+/// Whether two nodes, each a side and its index at that side, share any of
+/// what they cover. Two nodes of one hierarchy nest or are apart, so they
+/// share it exactly when the finer lies under the coarser.
+pub fn share<const D: usize>((a_side, a): (Scale, [i64; D]), (b_side, b): (Scale, [i64; D])) -> bool {
+    if a_side <= b_side {
+        ancestor_of(a, b_side.above(a_side) as u32) == b
+    } else {
+        ancestor_of(b, a_side.above(b_side) as u32) == a
+    }
 }
 
 /// Where a depth-first walk that visits each node's children in slot order

@@ -14,7 +14,7 @@
 //! Tile bytes come from terrain/source.rs, the same assembly the dev endpoint
 //! uses, so a bucket tile and a locally served one are identical byte for byte.
 //!
-//! Those are the leaves, level 0, under `<out>/0/`. Every level above is folded
+//! Those are the leaves, z16, under `<out>/0/`. Every level above is folded
 //! from the one below it on disk (pyramid.rs) into `<out>/<level>/`,
 //! with no database in the loop, up to TOP_LEVEL. The levels are
 //! always refolded whole: they are a function of the leaves, so a resumed or

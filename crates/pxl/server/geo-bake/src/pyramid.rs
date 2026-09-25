@@ -163,6 +163,31 @@ pub fn build<L: Layer>(set: &PageSet, absent: &L, workers: usize) -> Result<u32,
     Ok(top)
 }
 
+/// Lets go of every page its parent settles (pxl-spec space/pyramid.rs
+/// `Folds::settles`): the tree stops where a page says all of the ground
+/// under it, and the client, which reads that ground from the page over it,
+/// never asks for one. Decided over the whole set before any page goes, so
+/// each is judged by the parent it was folded into. How many went.
+pub fn prune<L: Layer>(set: &PageSet, top: u32) -> Result<usize, String> {
+    let mut gone = Vec::new();
+    for level in 0..top {
+        let mut parents: HashMap<LevelPage, Option<L>> = HashMap::new();
+        for p in set.pages(level)? {
+            let parent = p.parent();
+            if let std::collections::hash_map::Entry::Vacant(e) = parents.entry(parent) {
+                e.insert(set.read::<L>(parent)?);
+            }
+            if parents[&parent].as_ref().is_some_and(|q| q.settles(parent, p)) {
+                gone.push(set.path(p));
+            }
+        }
+    }
+    for path in &gone {
+        fs::remove_file(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    }
+    Ok(gone.len())
+}
+
 /// Writes the manifest beside a version: what the set holds, level by level,
 /// how its objects are served, and what the layer says it was made from.
 ///

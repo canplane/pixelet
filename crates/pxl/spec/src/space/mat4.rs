@@ -1,11 +1,11 @@
-// xpute-core/math/mat4.rs
+// pxl-spec/space/mat4.rs
 
 //! 4x4 matrices as sixteen doubles, column-major — the layout GL, WebGPU and
 //! glTF share, so a matrix here uploads as it is. Every function writes into
 //! an `out` the caller owns; nothing allocates. The trigonometry and the
 //! lengths are `libm`'s, so the doubles are the same on every target.
 
-use super::vec3::Vec3;
+use super::v3::V3;
 
 pub type Mat4 = [f64; 16];
 
@@ -116,13 +116,13 @@ fn or_one(l: f64) -> f64 {
 
 /// The view matrix of an eye at `eye` looking at `target` with `up` up:
 /// world to camera, the camera looking down its own −Z.
-pub fn mat4_look_at(out: &mut Mat4, eye: Vec3, target: Vec3, up: Vec3) -> &mut Mat4 {
-    let (mut zx, mut zy, mut zz) = (eye.x - target.x, eye.y - target.y, eye.z - target.z);
+pub fn mat4_look_at(out: &mut Mat4, eye: V3, target: V3, up: V3) -> &mut Mat4 {
+    let (mut zx, mut zy, mut zz) = (eye[0] - target[0], eye[1] - target[1], eye[2] - target[2]);
     let mut l = or_one(libm::hypot(libm::hypot(zx, zy), zz));
     zx /= l;
     zy /= l;
     zz /= l;
-    let (mut xx, mut xy, mut xz) = (up.y * zz - up.z * zy, up.z * zx - up.x * zz, up.x * zy - up.y * zx);
+    let (mut xx, mut xy, mut xz) = (up[1] * zz - up[2] * zy, up[2] * zx - up[0] * zz, up[0] * zy - up[1] * zx);
     l = libm::hypot(libm::hypot(xx, xy), xz);
     if l == 0.0 {
         // Looking straight along `up`: any horizontal right will do.
@@ -138,15 +138,15 @@ pub fn mat4_look_at(out: &mut Mat4, eye: Vec3, target: Vec3, up: Vec3) -> &mut M
     out[0] = xx;
     out[4] = xy;
     out[8] = xz;
-    out[12] = -(xx * eye.x + xy * eye.y + xz * eye.z);
+    out[12] = -(xx * eye[0] + xy * eye[1] + xz * eye[2]);
     out[1] = yx;
     out[5] = yy;
     out[9] = yz;
-    out[13] = -(yx * eye.x + yy * eye.y + yz * eye.z);
+    out[13] = -(yx * eye[0] + yy * eye[1] + yz * eye[2]);
     out[2] = zx;
     out[6] = zy;
     out[10] = zz;
-    out[14] = -(zx * eye.x + zy * eye.y + zz * eye.z);
+    out[14] = -(zx * eye[0] + zy * eye[1] + zz * eye[2]);
     out[3] = 0.0;
     out[7] = 0.0;
     out[11] = 0.0;
@@ -155,23 +155,23 @@ pub fn mat4_look_at(out: &mut Mat4, eye: Vec3, target: Vec3, up: Vec3) -> &mut M
 }
 
 /// m × (x, y, z, 1), divided by w.
-pub fn mat4_transform_point<'a>(out: &'a mut Vec3, m: &Mat4, x: f64, y: f64, z: f64) -> &'a mut Vec3 {
+pub fn mat4_transform_point<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64) -> &'a mut V3 {
     let w = or_one(m[3] * x + m[7] * y + m[11] * z + m[15]);
-    out.x = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
-    out.y = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
-    out.z = (m[2] * x + m[6] * y + m[10] * z + m[14]) / w;
+    out[0] = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
+    out[1] = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
+    out[2] = (m[2] * x + m[6] * y + m[10] * z + m[14]) / w;
     out
 }
 
 /// m × (x, y, z, 0), normalized.
-pub fn mat4_transform_direction<'a>(out: &'a mut Vec3, m: &Mat4, x: f64, y: f64, z: f64) -> &'a mut Vec3 {
+pub fn mat4_transform_direction<'a>(out: &'a mut V3, m: &Mat4, x: f64, y: f64, z: f64) -> &'a mut V3 {
     let ox = m[0] * x + m[4] * y + m[8] * z;
     let oy = m[1] * x + m[5] * y + m[9] * z;
     let oz = m[2] * x + m[6] * y + m[10] * z;
     let l = or_one(libm::hypot(libm::hypot(ox, oy), oz));
-    out.x = ox / l;
-    out.y = oy / l;
-    out.z = oz / l;
+    out[0] = ox / l;
+    out[1] = oy / l;
+    out[2] = oz / l;
     out
 }
 

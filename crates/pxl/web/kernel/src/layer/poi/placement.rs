@@ -8,11 +8,12 @@
 //! level the view wants there, where a finer page stands in for it: how
 //! coarse places are is the camera's distance and nothing else, the ground's
 //! the same way but apart from it. A cell holding two places or more is a
-//! count at that cell's centre; a cell holding one is the place, at the
-//! centre of the level-0 ground cell it stands in. Either stands in all
-//! three axes, on the surface drawn there (pxl-spec space/pyramid.rs
-//! `Cell::centre`, chunk/table.rs `surface_at`), which is the one thing read
-//! from the ground.
+//! count, a cell holding one is the place, and either stands at the centre
+//! of the z16 ground cell its places' centroid falls in — the page's, or the
+//! centroids of the finer cells counted into it weighted by their counts. It
+//! stands in all three axes, on the surface drawn there (pxl-spec
+//! space/pyramid.rs `Cell::centre`, chunk/table.rs `surface_at`), which is
+//! the one thing read from the ground.
 
 use crate::abi::cmd::PoiBadge;
 use crate::global::Global;
@@ -26,12 +27,13 @@ use crate::sched::tick::TickContext;
 use crate::shell::map_store::map_store;
 use crate::world::frame::coord::local_world_origin;
 use crate::world::frame::view::view;
+use crate::world::pyramid::chunk::Chunk;
 use crate::world::pyramid::Layer;
 use pxl_render::asset::atlas::NO_SLOT;
 
 use pxl_spec::bake::poi_page::{PoiPage, POI_LATTICE};
 use pxl_spec::space::pvf3::{ivec, projection};
-use pxl_spec::space::pyramid::{cell_base, Cell, LevelPage, GROUND, TOP_LEVEL};
+use pxl_spec::space::pyramid::{Cell, LevelPage, GROUND, TOP_LEVEL};
 use std::collections::{BTreeMap, HashSet};
 
 #[derive(Default)]
@@ -42,17 +44,20 @@ struct Placement {
     /// The badges shown, nearest what the view looks at first: what the
     /// shell lists beside the map (`snapshot`).
     shown: Vec<(Cell, Label, u32)>,
+    /// What `kept` has on the sheet, in the order it is drawn.
+    drawn: Vec<u32>,
 }
 static PLACEMENT: Global<Placement> = Global::new();
 
-/// How many places a badge's cell holds, and where it holds one, that
-/// place's name — its page and pool index, read only once the count is known
-/// to be one — and the level-0 ground cell it stands in.
+/// How many places a badge's cell holds, where it holds one, that place —
+/// its page and pool index, read only once the count is known to be one —
+/// and the sum of its places' z16 ground cells, as offsets in the badge's
+/// cell, which over the count is their centroid.
 #[derive(Clone, Copy, Default)]
 struct Tally {
     count: u32,
-    name: Option<(LevelPage, u32)>,
-    at: Option<Cell>,
+    place: Option<(LevelPage, u32)>,
+    at: [u64; 2],
 }
 
 pub fn step(ctx: &mut TickContext) {
@@ -74,52 +79,84 @@ pub fn step(ctx: &mut TickContext) {
     let (n, across) = (POI_LATTICE.chunk_cells(), POI_LATTICE.page_cells());
     let Some(domain) = pages.domain() else { return };
     for &chunk in &pages.cover().0.drawn {
-        let Some(poi) = pages.get(chunk.page) else { continue };
-        // A finer page standing in counts into the cells the view wants; a
-        // coarser one is as fine as there is until the view's own arrives.
-        let coarser = domain.wanted_over(chunk).level() - chunk.level();
-        // The chunk's ground, in the POI lattice's cells of its level.
-        let first = POI_LATTICE.cell_of(chunk.level(), &cell_base(chunk.page, chunk.bx, chunk.by)).index();
+        // The page that draws the chunk's ground: its own, or where the tree
+        // stops above it, the page over it that says that ground — whose cells
+        // there hold one place or none, each standing where it stands.
+        let Some(src) = pages.source(chunk.page) else { continue };
+        let Some(poi) = pages.get(src) else { continue };
+        // The level the view wants the ground at: a finer page standing in
+        // counts into its cells, and a coarser one is counted where its places
+        // stand, which is its own cells where it is the chunk's page.
+        let level = domain.wanted_over(chunk).level();
+        // The chunk's ground in the source's cells: a block of them, or where
+        // the source is so much coarser that one of its cells is wider than
+        // the chunk, part of one, whose place is the chunk's only if it stands
+        // on the chunk's ground.
+        let coarser = src.level - chunk.level();
+        let m = n >> coarser;
+        let first = POI_LATTICE.cell_of(src.level, &GROUND.cell_base(chunk.page, chunk.bx, chunk.by)).index();
         let (x0, y0) = (first % across, first / across);
-        for ty in y0..y0 + n {
-            let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + n, ty));
+        for ty in y0..y0 + m.max(1) {
+            let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + m.max(1), ty));
             let from = poi.cells.partition_point(|c| c.cell < lo);
             for c in poi.cells[from..].iter().take_while(|c| c.cell < hi) {
-                let cell = POI_LATTICE.cell_at(chunk.page, c.cell);
-                let t = cells.entry(cell.up(coarser)).or_default();
+                let cell = POI_LATTICE.cell_at(src, c.cell);
+                let ground = cell.inner_at(GROUND, 0, c.at);
+                if m == 0 && Chunk::of(chunk.level(), &ground.mid()) != chunk {
+                    continue;
+                }
+                let up = POI_LATTICE.cell_of(level, &ground.mid());
+                let at = up.offset_of(ground);
+                let t = cells.entry(up).or_default();
                 t.count += c.count;
-                t.name = poi.name(c).map(|_| (chunk.page, c.name));
-                t.at = c.at.map(|at| cell.inner_at(GROUND, 0, at));
+                t.place = poi.place(c).map(|_| (src, c.place));
+                for (sum, lane) in t.at.iter_mut().zip(at) {
+                    *sum += lane as u64 * c.count as u64;
+                }
             }
         }
     }
     p.batch.reset();
     let mut labelled = Vec::new();
     for (cell, t) in cells {
-        let (label, stands) = match (t.count, t.at) {
-            (1, Some(at)) => (t.name.map_or(Label::Count(1), |(page, name)| Label::Place { page, name }), at),
-            _ => (Label::Count(t.count), cell),
+        let label = match (t.count, t.place) {
+            (1, Some((page, place))) => Label::Place { page, place },
+            _ => Label::Count(t.count),
         };
+        let mean = |sum: u64| ((sum + t.count as u64 / 2) / t.count as u64) as u32;
+        let stands = cell.inner_at(GROUND, 0, t.at.map(mean));
         let Some((_, top)) = sched.surface_at(&stands.mid()) else { continue };
         let centre = stands.centre(top);
         let mut local = [0.0; 3];
         projection::unproject(&mut local, ivec::sub(centre.i, origin), centre.f);
-        p.batch.push(local[0], local[1], local[2], badge::width(label), badge::ANCHOR, cell.side(), labelled.len() as f64);
+        p.batch.push(local[0], local[1], local[2], badge::width(label), badge::ANCHOR, labelled.len() as f64);
         labelled.push((cell, label, t.count));
     }
     badge::retain(&labelled.iter().map(|l| l.1).collect());
     let v = view();
     select_visible_billboards(&mut p.batch, v.width, v.height, &mut p.kept);
-    let mut instances = Vec::with_capacity(p.kept.len() * BILLBOARD_FLOATS);
     p.shown.clear();
+    p.drawn.clear();
     for &i in &p.kept {
-        let i = i as usize;
-        let slot = badge::slot(labelled[i].1);
-        if slot == NO_SLOT {
+        if badge::slot(labelled[i as usize].1) == NO_SLOT {
             continue;
         }
-        p.shown.push(labelled[i]);
-        let (sheet, slot) = (billboard_sheet(), slot as u32);
+        p.shown.push(labelled[i as usize]);
+        p.drawn.push(i);
+    }
+    // Farthest from the eye first. The pass reads the world's depth and
+    // writes none of its own, so where two badges cross, the one drawn later
+    // is on top, and that has to be the nearer.
+    let batch = &p.batch;
+    p.drawn.sort_by(|&a, &b| {
+        batch.d2[b as usize]
+            .total_cmp(&batch.d2[a as usize])
+            .then(batch.tiebreak[a as usize].total_cmp(&batch.tiebreak[b as usize]))
+    });
+    let mut instances = Vec::with_capacity(p.drawn.len() * BILLBOARD_FLOATS);
+    for &i in &p.drawn {
+        let i = i as usize;
+        let (sheet, slot) = (billboard_sheet(), badge::slot(labelled[i].1) as u32);
         instances.extend_from_slice(&[
             p.batch.local_x[i] as f32,
             p.batch.local_y[i] as f32,
@@ -131,7 +168,6 @@ pub fn step(ctx: &mut TickContext) {
             sheet.u1(slot) as f32,
             sheet.v1(slot) as f32,
             (badge::ANCHOR / badge::HEIGHT) as f32,
-            p.batch.unit[i] as f32,
         ]);
     }
     if p.set.is_none() && instances.is_empty() {

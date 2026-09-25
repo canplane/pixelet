@@ -19,13 +19,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use base64::Engine;
 use pxl_render::mesh::paint::object::adapter::{Carve, Entries};
-use pxl_spec::bake::constant::{OBJECT_FINEST, OBJECT_LAYOUT, POS_MASK, U_PER_CELL};
+use pxl_spec::bake::constant::{band_cell_z, band_of, in_cell, pack_pos, unpack_pos, BandZ, CellZ, BAND_CELL_SHAMT, BAND_UNITS, CELL, OBJECT_FINEST, OBJECT_LAYOUT, POS_MASK, STEP_UNITS, U_PER_CELL};
 use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
-use pxl_spec::space::hierarchy::{at_walk_order, walk_order, Scale};
+use pxl_spec::space::hierarchy::{at_walk_order, first_descendant_of, walk_order, Scale};
 use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3_IDX};
-use pxl_spec::space::pvf3::fvec::{self, FVec};
+use pxl_spec::space::pvf3::fvec::FVec;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pvf3::Ivec;
@@ -101,38 +101,11 @@ fn storage_key() -> String {
 //
 // One record per L2 chunk column that holds user objects, and inside it one
 // sparse octree per 64³ band — the unified cell format of
-// issue/20260911-decor-identity-orientation-and-one-cell-format.md. What
-// this section does is lower a coordinate to what the kernel keys by — the
-// chunk (the L2 index of the XY column), the band's Z, and the position within
-// the band in finest-tier steps, which is the low bits of each lane of the
-// coordinate shifted to the finest tier's scale — and read its lanes back.
-
-fn cell_size_fp() -> i64 {
-    pvf3::from_real(U_PER_CELL)
-}
-
-/// Floor division: the X axis is signed/cyclic (indexer.rs), and the divisor
-/// is always positive, so a Euclidean quotient is the floor.
-fn floor_div(a: i64, b: i64) -> i64 {
-    a.div_euclid(b)
-}
-
-/// The cell a coordinate is in — for callers that need to probe exact-cell
-/// occupancy directly (get_objects_in_cell) instead of get_objects_near's
-/// ±1-cell neighborhood, e.g. decor, which must tell "no object in this
-/// exact ground cell" apart from "an object one cell over".
-pub fn cell_index(coord: &Pvf3) -> [i64; 3] {
-    let fp = cell_size_fp();
-    [floor_div(pvf3::X(coord), fp), floor_div(pvf3::Y(coord), fp), floor_div(pvf3::Z(coord), fp)]
-}
-
-/// Absolute PVF3 corner (min-x/y/z) of cell (ix,iy,iz).
-fn cell_corner(ix: i64, iy: i64, iz: i64) -> Pvf3 {
-    let fp = cell_size_fp();
-    let mut out = Pvf3::default();
-    pvf3::gather(&mut out, ix * fp, iy * fp, iz * fp);
-    out
-}
+// issue/20260911-decor-identity-orientation-and-one-cell-format.md. What a
+// coordinate is keyed by — the chunk (the L2 index of the XY column), the
+// band's Z, and the position within the band in finest-tier steps — is `At`,
+// each part a scale's index of the coordinate; this section also reads the
+// lanes back.
 
 /// The column a cell belongs to, as the key everything about objects is filed
 /// under: the L2 index of the cell's XY column.
@@ -146,47 +119,69 @@ fn cell_corner(ix: i64, iy: i64, iz: i64) -> Pvf3 {
 /// that kept the cell's own Z put every object above absolute z = 64u (about
 /// 120 m, one L2 span) under a key nothing ever asked for: stored, indexed,
 /// hit-tested and never drawn.
-fn col_idx_of_cell(ix: i64, iy: i64, iz: i64) -> IVec {
-    L2_IDX(TO_XY(cell_corner(ix, iy, iz).i))
+fn column_of(cell: [i64; 3]) -> IVec {
+    L2_IDX(TO_XY(CELL.base_of(cell).i))
+}
+
+/// The cell at a column's corner, on z = 0.
+fn column_cell(col_idx: IVec) -> [i64; 3] {
+    CELL.index_of(&Pvf3 { i: FROM_L2_IDX(col_idx), f: 0 })
+}
+
+/// Where a corner is filed: its column, its band, and its position within
+/// the band in finest-tier steps. A corner finer than a step is not one an
+/// entry can have, and lowering one drops the difference, as a write does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct At {
+    pub col_idx: IVec,
+    pub band: BandZ,
+    pub step: [u32; 3],
+}
+
+impl At {
+    pub fn of(at: &Pvf3) -> At {
+        let cell = CELL.index_of(at);
+        At {
+            col_idx: column_of(cell),
+            band: band_of(cell[2]).0,
+            step: OBJECT_FINEST.index_of(at).map(|v| v as u32 & POS_MASK),
+        }
+    }
+
+    /// The cell it is in.
+    pub fn cell(self) -> [i64; 3] {
+        let [x0, y0, _] = column_cell(self.col_idx);
+        let ([cx, cy, cz], _) = in_cell(self.step);
+        [x0 + i64::from(cx), y0 + i64::from(cy), band_cell_z(self.band) + i64::from(cz)]
+    }
+
+    /// The corner, exactly: the band's corner and the steps from it.
+    pub fn corner(self) -> Pvf3 {
+        let [x0, y0, _] = column_cell(self.col_idx);
+        let mut out = Pvf3::default();
+        pvf3::add(&mut out, &CELL.base_of([x0, y0, band_cell_z(self.band)]), &OBJECT_FINEST.base_of(self.step.map(i64::from)));
+        out
+    }
+
+    /// The corner from the column's corner on z = 0, in units. Exact, since a
+    /// step is a binary fraction of a unit.
+    pub fn local(self) -> [f64; 3] {
+        let [x, y, z] = self.step.map(|v| v as f64 * STEP_UNITS);
+        [x, y, self.band as f64 * BAND_UNITS + z]
+    }
 }
 
 /// The same key from the renderer's side, a page index and a page offset.
-/// Both are normalised to XY, so a caller cannot reopen the gap above by
-/// handing in an offset that still carries Z.
+/// Both are normalised to XY, so a caller cannot reopen the gap `column_of`
+/// closes by handing in an offset that still carries Z.
 pub fn object_col_idx_of(page_idx: IVec, page_off: IVec) -> IVec {
     L2_IDX(TO_XY(ivec::add(FROM_L3_IDX(TO_XY(page_idx)), TO_XY(page_off))))
 }
 
-fn band_z_of(iz: i64) -> i32 {
-    floor_div(iz, BAND_CELLS as i64) as i32
-}
-
-/// A coordinate as the kernel keys it: its column, band, and position within
-/// the band in finest-tier steps.
-struct At {
-    col_idx: IVec,
-    band: i32,
-    x: u32,
-    y: u32,
-    z: u32,
-}
-
-fn lower(coord: &Pvf3) -> At {
-    let mut lattice = Pvf3::default();
-    pvf3::sh(&mut lattice, coord, -OBJECT_FINEST.shamt());
-    At {
-        col_idx: L2_IDX(TO_XY(coord.i)),
-        band: band_z_of(cell_index(coord)[2]),
-        x: ivec::X(lattice.i) as u32 & POS_MASK,
-        y: ivec::Y(lattice.i) as u32 & POS_MASK,
-        z: ivec::Z(lattice.i) as u32 & POS_MASK,
-    }
-}
-
 /// The state stored at `coord`, VOID where nothing is.
 fn read_state(coord: &Pvf3) -> u32 {
-    let at = lower(coord);
-    kernel().objects.read(at.col_idx, at.band, [at.x, at.y, at.z])
+    let at = At::of(coord);
+    kernel().objects.read(at.col_idx, at.band, at.step)
 }
 
 /// A chunk's entry lanes, valid until the next write; None where
@@ -212,16 +207,6 @@ fn entry_count(col_idx: IVec) -> u32 {
     kernel().objects.chunk_lanes(col_idx).map_or(0, |l| l.count)
 }
 
-/// Real-unit local offset (x,y,z in finest-tier steps) as a PVF3,
-/// computed via exact bit-shift (pvf3::sh), not a float multiply.
-fn local_offset(x: u32, y: u32, z: u32) -> Pvf3 {
-    let mut scalar = Pvf3::default();
-    pvf3::gather(&mut scalar, pvf3::from_real(x as f64), pvf3::from_real(y as f64), pvf3::from_real(z as f64));
-    let mut out = Pvf3::default();
-    pvf3::sh(&mut out, &scalar, OBJECT_FINEST.shamt());
-    out
-}
-
 // ---- Entries ----
 //
 // What a chunk's trees hold, read back as one entry per leaf — a leaf larger
@@ -233,13 +218,6 @@ fn local_offset(x: u32, y: u32, z: u32) -> Pvf3 {
 //
 // `pos` packs the leaf's band-local position in finest-tier steps and its
 // scale as the tiers above the finest (pxl-spec bake/constant.rs `pack_pos`).
-
-/// The one entry that is not stored — the eraser's carve preview.
-#[derive(Clone, Debug)]
-struct Fixed {
-    i: IVec,
-    f: FVec,
-}
 
 /// One entry as a visit sees it. The chunk-local corner, size and state are
 /// plain numbers; `corner()`, `cell()` and `at()` are worked out when asked
@@ -254,83 +232,55 @@ pub struct EntryCursor {
     /// The catalog value: a cube colour, AIR, or a decor kind.
     pub state: u32,
 
-    col_idx: IVec,
-    cx0: i64,
-    cy0: i64,
-    band_idx: BandZ,
+    at: At,
     pos: u32,
-    x: u32,
-    y: u32,
-    z: u32,
-    fixed: Option<Fixed>,
+    /// False for the carve preview, which is not filed anywhere.
+    stored: bool,
 }
 
 impl EntryCursor {
     /// Points the cursor at a column; `load` then reads its entries.
     pub fn at_chunk(&mut self, col_idx: IVec) {
-        let [cx0, cy0, _] = cell_index(&Pvf3 { i: FROM_L2_IDX(col_idx), f: 0 });
-        self.col_idx = col_idx;
-        self.cx0 = cx0;
-        self.cy0 = cy0;
+        self.at.col_idx = col_idx;
     }
 
     pub fn load(&mut self, band_idx: BandZ, pos: u32, state: u32) {
-        self.fixed = None;
-        self.band_idx = band_idx;
-        self.pos = pos;
-        let scale;
-        (self.x, self.y, self.z, scale) = unpack_pos(pos);
-        self.lx = self.x as f64 * STEP_UNITS;
-        self.ly = self.y as f64 * STEP_UNITS;
-        self.lz = band_idx as f64 * BAND_UNITS + self.z as f64 * STEP_UNITS;
-        self.size = scale.side();
-        self.state = state;
+        self.put(band_idx, pos, state);
+        self.stored = true;
     }
 
-    /// An entry given by its absolute corner rather than read from lanes.
-    pub fn load_fixed(&mut self, col_idx: IVec, at: &Pvf3, size: f64, state: u32) {
-        self.fixed = Some(Fixed { i: at.i, f: at.f });
-        self.col_idx = col_idx;
-        let local = ivec::sub(at.i, FROM_L2_IDX(col_idx));
-        self.lx = ivec::to_real(ivec::X(local)) + fvec::to_real(fvec::X(at.f));
-        self.ly = ivec::to_real(ivec::Y(local)) + fvec::to_real(fvec::Y(at.f));
-        self.lz = ivec::to_real(ivec::Z(local)) + fvec::to_real(fvec::Z(at.f));
-        self.size = size;
+    /// The carve preview, which is an entry the store would write but has not.
+    fn load_carve(&mut self, carve: EntryAt) {
+        self.at_chunk(carve.col_idx);
+        self.put(carve.band_idx, carve.pos, AIR);
+        self.stored = false;
+    }
+
+    fn put(&mut self, band_idx: BandZ, pos: u32, state: u32) {
+        let (x, y, z, scale) = unpack_pos(pos);
+        self.at.band = band_idx;
+        self.at.step = [x, y, z];
+        self.pos = pos;
+        [self.lx, self.ly, self.lz] = self.at.local();
+        self.size = scale.side();
         self.state = state;
     }
 
     /// The cell the entry is in.
     pub fn cell(&self) -> [i64; 3] {
-        let steps = CELL_STEPS;
-        [
-            self.cx0 + (self.x / steps) as i64,
-            self.cy0 + (self.y / steps) as i64,
-            self.band_idx as i64 * BAND_CELLS as i64 + (self.z / steps) as i64,
-        ]
+        self.at.cell()
     }
 
     /// The absolute corner.
     pub fn corner(&self) -> Pvf3 {
-        if let Some(fixed) = &self.fixed {
-            return Pvf3 { i: fixed.i, f: fixed.f };
-        }
-        let mut out = Pvf3::default();
-        pvf3::add(
-            &mut out,
-            &cell_corner(self.cx0, self.cy0, self.band_idx as i64 * BAND_CELLS as i64),
-            &local_offset(self.x, self.y, self.z),
-        );
-        out
+        self.at.corner()
     }
 
     /// Where the entry is filed; None for the carve preview, which is not.
     pub fn at(&self) -> Option<EntryAt> {
-        if self.fixed.is_some() {
-            return None;
-        }
-        Some(EntryAt {
-            col_idx: self.col_idx,
-            band_idx: self.band_idx,
+        self.stored.then_some(EntryAt {
+            col_idx: self.at.col_idx,
+            band_idx: self.at.band,
             pos: self.pos,
         })
     }
@@ -369,8 +319,8 @@ impl EntryCursor {
 /// The run of the column's entries in the cell; None where the cell holds
 /// nothing.
 fn cell_run(ix: i64, iy: i64, iz: i64) -> Option<CellRun> {
-    let col_idx = col_idx_of_cell(ix, iy, iz);
-    let [cx0, cy0, _] = cell_index(&Pvf3 { i: FROM_L2_IDX(col_idx), f: 0 });
+    let col_idx = column_of([ix, iy, iz]);
+    let [cx0, cy0, _] = column_cell(col_idx);
     kernel().objects.cell(col_idx, (ix - cx0) as u32, (iy - cy0) as u32, iz as i32)
 }
 
@@ -381,13 +331,12 @@ pub fn objects_revision() -> u32 {
     log.tick(OBJECT_COLUMN) + log.tick(DECOR_COLUMN)
 }
 
-/// A column holding objects, as a box in units: its corner and side on the
-/// ground, and the lowest and highest any of its entries reaches.
+/// A column holding objects, as a box: its coordinate among the L2 blocks on
+/// the ground, and the lowest and highest any of its entries reaches, in
+/// units.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColumnBox {
-    pub x0: f64,
-    pub y0: f64,
-    pub side: f64,
+    pub col: [i64; 2],
     pub z: (f64, f64),
 }
 
@@ -413,11 +362,8 @@ pub fn column_boxes() -> &'static [ColumnBox] {
                     },
                     false,
                 );
-                let base = FROM_L2_IDX(col);
                 Some(ColumnBox {
-                    x0: ivec::to_real(ivec::X(base)),
-                    y0: ivec::to_real(ivec::Y(base)),
-                    side: pxl_spec::space::pyramid::chunk_span_of(0),
+                    col: [ivec::X(col), ivec::Y(col)],
                     z: z?,
                 })
             })
@@ -461,7 +407,7 @@ pub fn col_has_entries(col_idx: IVec) -> bool {
     if entry_count(col_idx) > 0 {
         return true;
     }
-    store_state().virtual_carve_preview.as_ref().is_some_and(|c| c.col_idx == col_idx)
+    store_state().virtual_carve_preview.as_ref().is_some_and(|c| c.at.col_idx == col_idx)
 }
 
 /// Every entry of a column. `render` applies the eraser preview's two edits,
@@ -480,16 +426,16 @@ pub fn each_col_entry(col_idx: IVec, visit: &mut dyn FnMut(&EntryCursor), render
             visit(&cursor);
         }
     }
-    let carve = store_state().virtual_carve_preview.clone();
-    if let Some(carve) = carve.filter(|c| render && c.col_idx == col_idx) {
-        cursor.load_fixed(col_idx, &Pvf3 { i: carve.i, f: carve.f }, carve.size, cube_types::common::air as u32);
+    let carve = store_state().virtual_carve_preview;
+    if let Some(carve) = carve.filter(|c| render && c.at.col_idx == col_idx) {
+        cursor.load_carve(carve.at);
         visit(&cursor);
     }
 }
 
 fn each_cell_entry(ix: i64, iy: i64, iz: i64, visit: &mut dyn FnMut(&EntryCursor)) {
     let Some(run) = cell_run(ix, iy, iz) else { return };
-    let col_idx = col_idx_of_cell(ix, iy, iz);
+    let col_idx = column_of([ix, iy, iz]);
     let Some((bands, poss, states)) = entry_lanes(col_idx) else { return };
     let mut cursor = EntryCursor::default();
     cursor.at_chunk(col_idx);
@@ -526,7 +472,7 @@ pub fn cell_is_occupied(ix: i64, iy: i64, iz: i64) -> bool {
 /// resolve_hit_object). 27 O(1) lookups, still independent of total object
 /// count.
 pub fn get_objects_near(corner: &Pvf3, _size: f64) -> Vec<OccupiedEntry> {
-    let [cx, cy, cz] = cell_index(corner);
+    let [cx, cy, cz] = CELL.index_of(corner);
     // size can push the candidate's own far corner into the NEXT cell too —
     // covered by the same 3x3x3 neighborhood as long as size <= one cell
     // (object/size.rs's own largest tier), which every placeable size is.
@@ -555,13 +501,10 @@ pub fn get_placed_object(at: EntryAt) -> Option<OccupiedEntry> {
 }
 
 /// The eraser's "dig into bare terrain" preview — see set_virtual_carve_preview.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 struct CarvePreview {
     cell: [i64; 3],
-    col_idx: IVec,
-    i: IVec,
-    f: FVec,
-    size: f64,
+    at: EntryAt,
 }
 
 struct StoreState {
@@ -628,32 +571,31 @@ fn bump_for_object(at: EntryAt) {
 /// reason. `i`/`f`/`size` match what a real place_air() at this hover would
 /// write, so the preview renders identically to what it stands in for.
 pub fn set_virtual_carve_preview(at: &Pvf3, size: f64) {
-    let cell = cell_index(at);
-    let [ix, iy, iz] = cell;
+    let lowered = At::of(at);
+    let cell = lowered.cell();
     let st = store_state();
     if st.virtual_carve_preview.as_ref().is_some_and(|c| c.cell == cell) {
         return;
     }
     let previous = st.virtual_carve_preview.take();
-    let col_idx = col_idx_of_cell(ix, iy, iz);
-    st.virtual_carve_preview = Some(CarvePreview {
-        cell,
-        col_idx,
-        i: at.i,
-        f: at.f,
-        size,
-    });
+    let [x, y, z] = lowered.step;
+    let at = EntryAt {
+        col_idx: lowered.col_idx,
+        band_idx: lowered.band,
+        pos: pack_pos(x, y, z, Scale::of_side(size)),
+    };
+    st.virtual_carve_preview = Some(CarvePreview { cell, at });
     send_render_edits();
     if let Some(previous) = previous {
-        bump_col(previous.col_idx, true, false);
+        bump_col(previous.at.col_idx, true, false);
     }
-    bump_col(col_idx, true, false);
+    bump_col(at.col_idx, true, false);
 }
 
 pub fn clear_virtual_carve_preview() {
     let Some(carve) = store_state().virtual_carve_preview.take() else { return };
     send_render_edits();
-    bump_col(carve.col_idx, true, false);
+    bump_col(carve.at.col_idx, true, false);
 }
 
 /// Tells the builds the two edits, before the bumps that rebuild the columns
@@ -661,19 +603,7 @@ pub fn clear_virtual_carve_preview() {
 fn send_render_edits() {
     let st = store_state();
     let hide = st.virtual_hide.map(|h| (h.col_idx, h.band_idx, h.pos));
-    let carve = st.virtual_carve_preview.as_ref().map(|c| {
-        let mut cursor = EntryCursor::default();
-        cursor.load_fixed(c.col_idx, &Pvf3 { i: c.i, f: c.f }, c.size, cube_types::common::air as u32);
-        (
-            c.col_idx,
-            Carve {
-                lx: cursor.lx,
-                ly: cursor.ly,
-                lz: cursor.lz,
-                size: c.size,
-            },
-        )
-    });
+    let carve = st.virtual_carve_preview.map(|c| (c.at.col_idx, Carve { band: c.at.band_idx, pos: c.at.pos }));
     kernel().sched.builder.set_edits(hide, carve);
 }
 
@@ -917,11 +847,11 @@ fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
 fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
     // size is always an exact power of two by construction (object/size.rs's
     // OBJECT_SIZES); the nearest scale only guards against float noise.
-    let at = lower(coord);
+    let at = At::of(coord);
     Write {
         col_idx: at.col_idx,
         band_idx: at.band,
-        at: [at.x, at.y, at.z],
+        at: at.step,
         scale: Scale::of_side(size),
         state: val,
     }
@@ -1016,8 +946,6 @@ pub fn remove(at: EntryAt) {
 // split into the cells it covers as the lanes are built; and the index is
 // rebuilt a chunk at a time because a write touches one chunk and the cost
 // is bounded by what that chunk holds.
-
-pub use pxl_spec::bake::constant::{pack_pos, unpack_pos, BandZ, CellZ, BAND_CELLS, BAND_CELL_SHAMT, BAND_UNITS, CELL, CELL_STEPS, STEP_UNITS};
 
 /// The first of `0..n` for which `before` no longer holds, `before` holding
 /// for a prefix of them.
@@ -1284,7 +1212,8 @@ impl Store {
                 // sorted by it.
                 let levels = scale.above(CELL) as u32;
                 for k in 0..1u64 << (3 * levels) {
-                    let [dx, dy, dz] = at_walk_order::<3>(k, levels).map(|v| v * CELL_STEPS);
+                    let cell = at_walk_order::<3>(k, levels).map(i64::from);
+                    let [dx, dy, dz] = first_descendant_of(cell, CELL.above(OBJECT_FINEST) as u32).map(|v| v as u32);
                     chunk.e_band.push(bz);
                     chunk.e_pos.push(pack_pos(x + dx, y + dy, z + dz, CELL));
                     chunk.e_state.push(val);
@@ -1326,11 +1255,12 @@ impl Store {
     /// absolute cell Z `cz`: found where it lies in the lanes' order.
     pub fn cell(&self, col_idx: IVec, cx: u32, cy: u32, cz: CellZ) -> Option<CellRun> {
         let chunk = &self.chunks[*self.chunk_at.get(&col_idx)? as usize];
-        let band_idx = cz.div_euclid(BAND_CELLS as i32);
-        let want = Self::cell_order(band_idx, cx, cy, cz.rem_euclid(BAND_CELLS as i32) as u32);
+        let (band_idx, z) = band_of(cz as i64);
+        let want = Self::cell_order(band_idx, cx, cy, z);
         let order = |k: usize| {
             let (x, y, z, _) = unpack_pos(chunk.e_pos[k]);
-            Self::cell_order(chunk.e_band[k], x / CELL_STEPS, y / CELL_STEPS, z / CELL_STEPS)
+            let ([x, y, z], _) = in_cell([x, y, z]);
+            Self::cell_order(chunk.e_band[k], x, y, z)
         };
         let n = chunk.e_band.len();
         let start = partition_point(n, |k| order(k) < want);

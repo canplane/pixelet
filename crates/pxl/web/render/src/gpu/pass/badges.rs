@@ -52,7 +52,10 @@ const WHITE: u32 = 0xffffffff;
 // ---- a place and a cluster (crates/pxl/web/kernel/src/layer/poi/badge.rs) ----
 
 pub const BADGE_FONT: Font = Font { weight: REGULAR, px: 12.0 };
+const ICON_FONT: Font = Font { weight: REGULAR, px: 13.0 };
 const ICON_SIZE: f32 = 20.0;
+const PAD_X: f32 = 10.0;
+const GAP: f32 = 6.0;
 const PAD_Y: f32 = 7.0;
 const DOT_DIAM: f32 = 6.0;
 const DOT_GAP: f32 = 4.0;
@@ -60,7 +63,11 @@ const DOT_BORDER: f32 = 1.0;
 const PILL_H: f32 = ICON_SIZE + PAD_Y;
 const PILL_R: f32 = PILL_H / 2.0;
 const DOT_CY: f32 = PILL_H + DOT_GAP + DOT_DIAM / 2.0;
+/// Where a place's name starts: past the icon, which is concentric with the
+/// pill's left cap.
+const TEXT_X: f32 = PILL_R + ICON_SIZE / 2.0 + GAP;
 
+const LEFT: u32 = 0;
 const CENTER: u32 = 1;
 const MIDDLE: u32 = 0;
 
@@ -81,6 +88,34 @@ fn anchor_dot(p: &mut Paint, logical_w: f32) {
     p.stroke_style(0xffffff40);
     p.line_width(DOT_BORDER);
     p.stroke();
+}
+
+/// A badge's width around a line of `text_w`: a count's centred on the pill,
+/// never narrower than the pill's two caps, and a place's after its icon.
+pub fn badge_width(text_w: f64, icon: bool) -> f64 {
+    if icon {
+        (TEXT_X + PAD_X) as f64 + text_w
+    } else {
+        (text_w + 2.0 * PAD_X as f64).max(PILL_H as f64)
+    }
+}
+
+fn place<'a>(p: &mut Paint<'a>, name: &'a str, icon: &'a str, color: u32, logical_w: f32) {
+    pill(p, logical_w);
+    let (cx, cy) = (PILL_R, PILL_H / 2.0);
+    p.fill_style(color);
+    p.begin_path();
+    p.arc(cx, cy, ICON_SIZE / 2.0, 0.0, TAU);
+    p.fill();
+    p.font(ICON_FONT);
+    p.text_align(CENTER);
+    p.text_baseline(MIDDLE);
+    p.fill_text(icon, cx, cy + 1.0);
+    p.font(BADGE_FONT);
+    p.text_align(LEFT);
+    p.fill_style(WHITE);
+    p.fill_text(name, TEXT_X, PILL_H / 2.0 + 1.0);
+    anchor_dot(p, logical_w);
 }
 
 fn cluster<'a>(p: &mut Paint<'a>, label: &'a str, logical_w: f32) {
@@ -276,6 +311,7 @@ impl BadgePass {
             p.scale(DPR_MAX as f32, DPR_MAX as f32);
             match spec {
                 DrawSpec::Cluster { label, logical_w } => cluster(&mut p, label, *logical_w as f32),
+                DrawSpec::Place { name, icon, color, logical_w } => place(&mut p, name, icon, *color, *logical_w as f32),
                 DrawSpec::Bubble { lines, box_w, box_h } => bubble(&mut p, lines, *box_w as f32, *box_h as f32),
                 DrawSpec::Text { text, logical_w } => label(&mut p, text, *logical_w as f32),
             }

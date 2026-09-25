@@ -174,14 +174,12 @@ pub enum SettingKey {
     /// density does the same job at no cost; the setting is read when the
     /// renderer is made.
     msaa = 12,
-    /// LOD cross-fade per fragment instead of per chunk: both tiers draw with
-    /// complementary dither and dissolve, at the cost of drawing a blending
-    /// chunk twice and a pattern that crawls without temporal AA. Off by
-    /// default: the crawl is there to see, so the second draw buys one
-    /// artefact with another. What it replaces swaps a whole chunk at a
-    /// hashed threshold and pops tier by tier, which is the cheaper of the
-    /// two to live with until the pattern holds still.
-    pixel_dither = 13,
+    /// A change of what a chunk draws dissolves over 300 ms of frames instead
+    /// of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
+    /// Fade): a cube for another, a stale chunk for what replaced it. The two
+    /// draw on complementary halves of one screen-space pattern, so a chunk
+    /// in a dissolve is drawn twice while it lasts.
+    lod_fade = 13,
     /// The debug gizmos: frame origins, page corners, the map centre and the rings.
     show_debug_objects = 14,
     /// The scheduler ledger's corner panel. The console stream is a button on it.
@@ -205,7 +203,7 @@ impl SettingKey {
         SettingKey::ao,
         SettingKey::show_shadow_map,
         SettingKey::msaa,
-        SettingKey::pixel_dither,
+        SettingKey::lod_fade,
         SettingKey::show_debug_objects,
         SettingKey::show_ledger,
         SettingKey::person_variant,
@@ -232,7 +230,7 @@ impl SettingKey {
             SettingKey::ao => SettingKind::Choice,
             SettingKey::show_shadow_map => SettingKind::Toggle,
             SettingKey::msaa => SettingKind::Toggle,
-            SettingKey::pixel_dither => SettingKind::Toggle,
+            SettingKey::lod_fade => SettingKind::Toggle,
             SettingKey::show_debug_objects => SettingKind::Toggle,
             SettingKey::show_ledger => SettingKind::Toggle,
             SettingKey::person_variant => SettingKind::Number,
@@ -250,7 +248,7 @@ impl SettingKey {
                 | SettingKey::enable_terrain_carving
                 | SettingKey::show_shadow_map
                 | SettingKey::msaa
-                | SettingKey::pixel_dither
+                | SettingKey::lod_fade
                 | SettingKey::show_debug_objects
                 | SettingKey::show_ledger
         )
@@ -285,7 +283,7 @@ impl SettingKey {
             #[cfg(feature = "dev")]
             SettingKey::msaa => Some("msaa"),
             #[cfg(feature = "dev")]
-            SettingKey::pixel_dither => Some("pixel_dither"),
+            SettingKey::lod_fade => Some("lod_fade"),
             #[cfg(feature = "dev")]
             SettingKey::show_debug_objects => Some("show_debug_objects"),
             #[cfg(feature = "dev")]
@@ -334,7 +332,7 @@ pub struct Settings {
     pub ao: AoMode,
     pub show_shadow_map: bool,
     pub msaa: bool,
-    pub pixel_dither: bool,
+    pub lod_fade: bool,
     pub show_debug_objects: bool,
     pub show_ledger: bool,
     pub person_variant: u8,
@@ -357,7 +355,7 @@ impl Settings {
         ao: AoMode::corner,
         show_shadow_map: false,
         msaa: false,
-        pixel_dither: false,
+        lod_fade: true,
         show_debug_objects: false,
         show_ledger: false,
         person_variant: 1,
@@ -381,7 +379,7 @@ impl Settings {
             SettingKey::ao => self.ao as u32,
             SettingKey::show_shadow_map => self.show_shadow_map as u32,
             SettingKey::msaa => self.msaa as u32,
-            SettingKey::pixel_dither => self.pixel_dither as u32,
+            SettingKey::lod_fade => self.lod_fade as u32,
             SettingKey::show_debug_objects => self.show_debug_objects as u32,
             SettingKey::show_ledger => self.show_ledger as u32,
             SettingKey::person_variant => self.person_variant as u32,
@@ -412,7 +410,7 @@ impl Settings {
             },
             SettingKey::show_shadow_map if value <= 1 => self.show_shadow_map = value == 1,
             SettingKey::msaa if value <= 1 => self.msaa = value == 1,
-            SettingKey::pixel_dither if value <= 1 => self.pixel_dither = value == 1,
+            SettingKey::lod_fade if value <= 1 => self.lod_fade = value == 1,
             SettingKey::show_debug_objects if value <= 1 => self.show_debug_objects = value == 1,
             SettingKey::show_ledger if value <= 1 => self.show_ledger = value == 1,
             SettingKey::person_variant => match u8::try_from(value) {

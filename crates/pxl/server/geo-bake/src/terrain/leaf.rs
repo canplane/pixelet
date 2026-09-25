@@ -1,6 +1,6 @@
 // pxl-geo-bake/terrain/leaf.rs
 
-//! The leaves: which level-0 pages exist, and each one's bytes.
+//! The leaves: which z16 pages exist, and each one's bytes.
 //!
 //! A leaf exists where the elevation source covers it and land touches it.
 //! Anything else is open water, which the bake leaves as no object and every

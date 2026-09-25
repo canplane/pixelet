@@ -76,8 +76,9 @@ moves a provider's columns into Postgres shares nothing, so it is a script;
 ## One spatial model
 
 Everything placed on the map sits in one hierarchy, the **pyramid**: level k
-is the leaf lattice with cells 2^k units wide, levels 0 to 10, a page 512
-cells a side at every level and named by the Web Mercator tile it stands on.
+is z(16 − k), cells 2^k units wide, from z16 — terrain's atom, a 1u cell —
+to z6, a page 512 cells a side at every level and named by the Web Mercator
+tile it stands on. Say z16, not "level 0": no level is special.
 The rules below keep it one thing. They come from finding it several.
 
 - **The lattice has one owner.** A size is a `Scale` against the unit,
@@ -101,9 +102,17 @@ The rules below keep it one thing. They come from finding it several.
   share the lattice and the fold rule (`majority`, `pxl-spec bake/fold.rs`)
   and are folded when a chunk is built.
 - **A mark stands at a cell's centre** (`cell_centre`), at the height of the
-  surface drawn there, never at a centre derived from its data's bounds.
-  Nothing goes below level 0 unless a common L0 is defined first; an
-  object's sub-cell tree is its payload, not a level.
+  surface drawn there, never at a centre derived from its data's bounds. A
+  mark for many things stands at the z16 cell their centroid falls in,
+  which folds by count as the things do (`pxl-spec bake/poi_page.rs`).
+- **One rule chooses the level; a layer chooses its detail.** The shared
+  rule chooses a level for a piece of ground by its distance from the eye,
+  finer than z16 too — z17 to z19 near the eye. How much detail a layer
+  draws at that level is the layer's own — terrain its cells averaged
+  2 × 2, places a lattice sixteen times the ground's cell, objects their own
+  cells — a tuning inside the perspective and never a second rule. Where
+  the rule asks for a level finer than a layer's data, the layer draws its
+  finest: terrain z16, objects their sub-cell tiers down to z19.
 - **A number is derived or said aloud.** A capacity or a count that bounds
   what something else already bounds is a second limit derived from nothing
   (a badge count once capped what screen collision already did). A product

@@ -39,7 +39,7 @@ use xpute_core::math::scalar::round;
 use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::format::{Ground, Terrain, GROUND_CH_KEYS};
 use super::pack::{channel_of, with_channel, GroundCell};
-use crate::space::pyramid::{child_block, neighbourhood, Folds, LevelPage, CHILDREN};
+use crate::space::pyramid::{neighbourhood, Folds, LevelPage, CHILDREN, GROUND};
 
 /// The value that fills more than half of a 2×2 block, or of a 2×2×2 one,
 /// folding into `level`; when none does, or two fill half each, the tie
@@ -79,7 +79,7 @@ pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
     let span = PAGE_CELLS as usize;
     let out = (0..(span * span) as u32)
         .map(|index| {
-            let (q, first) = child_block(index);
+            let (q, first) = GROUND.child_block(index);
             let (c, at) = (&children[q].cells, first as usize);
             let four = [c[at], c[at + 1], c[at + span], c[at + span + 1]];
             let mut cell = 0 as GroundCell;
