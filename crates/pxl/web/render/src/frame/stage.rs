@@ -19,7 +19,7 @@ pub const EDGE_WIDTH: f64 = 0.03;
 /// because the kernel decides whether the mode is on and writes this or
 /// zero into the lane; the shader cannot see a setting. It scales the warm
 /// tint by the same amount as the darkening, so a face reads no more
-/// coloured than it reads dark. How far the shading reaches from the wall,
+/// colored than it reads dark. How far the shading reaches from the wall,
 /// and how it falls away over that distance, are chunk.wgsl's AO_REACH and
 /// occlusion_of.
 pub const AO_STRENGTH: f64 = 0.2;

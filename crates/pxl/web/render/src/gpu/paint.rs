@@ -2,7 +2,7 @@
 
 //! A 2D paint stream: what to draw on the host's scratch canvas, as words
 //! (api.json's `paint`), run in one call. The host has the fonts and the text
-//! shaping a module has not; what is painted — shapes, colours, sizes, text —
+//! shaping a module has not; what is painted — shapes, colors, sizes, text —
 //! is decided here and in whoever writes the stream.
 //!
 //! A string goes as its bytes, in the stream, so the stream is one record
@@ -69,12 +69,12 @@ impl Paint {
         self.push(&[op::SMOOTHING, on as u32]);
     }
 
-    /// A colour as `0xRRGGBBAA`.
+    /// A color as `0xRRGGBBAA`.
     pub fn fill_style(&mut self, rgba: u32) {
         self.push(&[op::FILL_STYLE, rgba]);
     }
 
-    /// A colour as `0xRRGGBBAA`.
+    /// A color as `0xRRGGBBAA`.
     pub fn stroke_style(&mut self, rgba: u32) {
         self.push(&[op::STROKE_STYLE, rgba]);
     }

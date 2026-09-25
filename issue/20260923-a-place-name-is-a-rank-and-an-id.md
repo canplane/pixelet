@@ -8,7 +8,7 @@ over — 3,426 distinct answers across 167,495 objects.
 
 Two things follow from that one number, and both are now built. A part of an
 answer becomes a **rank** and an **id** into a dictionary fetched once, so the
-names are stored once. And the page stops being the unit: neighbouring pages
+names are stored once. And the page stops being the unit: neighboring pages
 give the same answer, so an object covers a square of 256 of them. The set is
 **902 objects and 1.29 MB** where it was 167,495 objects and 30.1 MB.
 
@@ -17,7 +17,7 @@ give the same answer, so an object covers a square of 256 of them. The set is
 A page is the same L3 page terrain's leaves are, 512 cells of Web Mercator's
 z16 — 1,223 m a side, which is exactly one z15 tile. `bake_geocode_tiles`
 walked the 167,499 land pages, asked Overture's Divisions for the label at
-each page's centre, and wrote one object for each of the 167,495 that were in
+each page's center, and wrote one object for each of the 167,495 that were in
 any place at all:
 
 ```json
@@ -31,10 +31,10 @@ any place at all:
 ```
 
 `parts` runs broad to narrow. Which parts there are is the provider's ladder:
-every `region` and `county` polygon containing the centre, then the first
+every `region` and `county` polygon containing the center, then the first
 match among `locality`, `neighborhood`, `microhood`, `macrohood`, and where
 no polygon gives a fine one, the nearest division point within two
-kilometres — `approx` marks that one as an approximation. Joining the parts
+kilometers — `approx` marks that one as an approximation. Joining the parts
 into a line, and picking which language's name to show, is the reader's,
 because broad-to-narrow is a language convention rather than a property of
 the place.
@@ -57,9 +57,9 @@ Three and a half thousand distinct answers, written 167,495 times.
 [Nominatim](https://nominatim.org/release-docs/latest/api/Reverse/) takes a
 `zoom` on its reverse endpoint and answers at that depth:
 
-| zoom | 3       | 5     | 8      | 10   | 12   | 13      | 14            | 15         | 16            | 17        | 18       |
-| ---- | ------- | ----- | ------ | ---- | ---- | ------- | ------------- | ---------- | ------------- | --------- | -------- |
-|      | country | state | county | city | town | village | neighbourhood | settlement | major streets | and minor | building |
+| zoom | 3       | 5     | 8      | 10   | 12   | 13      | 14           | 15         | 16            | 17        | 18       |
+| ---- | ------- | ----- | ------ | ---- | ---- | ------- | ------------ | ---------- | ------------- | --------- | -------- |
+|      | country | state | county | city | town | village | neighborhood | settlement | major streets | and minor | building |
 
 What makes that a lookup rather than a search is that every part of an
 address carries a rank — `address_rank` in Nominatim's own tables, `types`
@@ -74,7 +74,7 @@ written not to expose.
 ## A part is a rank and an id
 
 **The rank is ours, not a provider's.** A small fixed ladder — country,
-region, county, city, district, neighbourhood, street, building — and every
+region, county, city, district, neighborhood, street, building — and every
 provider maps its own vocabulary onto it: Overture's `region`/`county`/
 `locality`, Naver's `area1`..`area4`, Google's `administrative_area_level_*`
 and `sublocality_level_*`. The provider owns the mapping, the wire owns the
@@ -149,7 +149,7 @@ reader now does the cutting.
 
 The reader is the kernel, not the shell. The page format is `pxl-spec`'s, so
 what opens it is where `pxl-spec` compiles: the kernel holds the dictionary
-and the group the map centre is in, reads a name out of the packet where it
+and the group the map center is in, reads a name out of the packet where it
 lies, cuts the parts at the rung the current zoom asks for, and hands the UI
 snapshot the parts unjoined and in every language the provider had. Picking a
 language and joining stays the reader's, so switching UI language re-orders a
@@ -178,5 +178,5 @@ as z8 and z9 do.
 
 - POI has the same shape of question — one object a page, names spelled out —
   and is not in this note.
-- A part below a neighbourhood needs a street or an address, which is a
+- A part below a neighborhood needs a street or an address, which is a
   different source. Nothing here reaches z16.

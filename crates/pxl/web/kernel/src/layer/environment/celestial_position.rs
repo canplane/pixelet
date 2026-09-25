@@ -70,7 +70,7 @@ pub fn sun_position(d: f64, lat: f64, lon: f64) -> V3 {
 
 /// The rotation from the equatorial frame — X to the vernal equinox, Z to
 /// the celestial pole — to the observer's local one, X east, Y north, Z up,
-/// as rows: what turns a star's catalogued direction into where it stands.
+/// as rows: what turns a star's cataloged direction into where it stands.
 /// The same sky as `local_direction` reads one body at a time, as a matrix,
 /// since the stars are nine thousand bodies and one sky: the hour angle is
 /// the sidereal time less the right ascension, turned about the pole, and the

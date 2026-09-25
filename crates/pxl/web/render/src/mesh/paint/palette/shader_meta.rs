@@ -1,8 +1,8 @@
 // pxl-render/mesh/paint/palette/shader_meta.rs
 
-//! The palette as tables: every (channel, type) the cube catalogue colours,
+//! The palette as tables: every (channel, type) the cube catalog colors,
 //! numbered as the layers of the texture pack's arrays (layers builds the
-//! arrays in this order); the placed cubes' colours are numbered after them
+//! arrays in this order); the placed cubes' colors are numbered after them
 //! (tex_array.rs).
 //! The terrain's materials (terrain/adapter.rs `MATERIALS`) and a placed
 //! cube's (object/material.rs) are read from here, so the paint and the
@@ -18,7 +18,7 @@ use crate::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
-/// A coloured type of a channel, and the array layer it is.
+/// A colored type of a channel, and the array layer it is.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerrainLayerMeta {
     pub ch_key: GroundChannelKey,
@@ -28,17 +28,17 @@ pub struct TerrainLayerMeta {
     pub layer_index: u32,
 }
 
-/// One array layer per (channel, type) pair, in the catalogue's order.
+/// One array layer per (channel, type) pair, in the catalog's order.
 fn layer_meta() -> Vec<TerrainLayerMeta> {
     let mut out = Vec::new();
     for ch_key in GROUND_CH_KEYS {
         // A channel carries only its own real types — VOID/AIR/UNKNOWN live in
         // cube_types::common instead — so they are walked first for this
-        // iteration, not merged into the data: AIR never resolves to a colour
+        // iteration, not merged into the data: AIR never resolves to a color
         // for any of these channels, so it's filtered out below as any other
-        // type with no real colour is; VOID and UNKNOWN do.
+        // type with no real color is; VOID and UNKNOWN do.
         for type_id in ground_channel_types(ch_key) {
-            // Every swatch the catalog holds is a colour: the generator packs
+            // Every swatch the catalog holds is a color: the generator packs
             // it from the JSON and refuses anything that is not #RRGGBB, so
             // there is nothing left here to validate.
             if let Some(swatch) = pxl_spec::cell::color::ground(ch_key, type_id) {
@@ -65,11 +65,11 @@ pub fn rgb255(rgb: u32) -> [u8; 3] {
 pub static GROUND_LAYER_META: LazyLock<Vec<TerrainLayerMeta>> = LazyLock::new(layer_meta);
 
 /// What each array layer reads as once its tile is too small to see: the
-/// tile's own mean colour (asset/ingested.spec.rs's `means`), and the
+/// tile's own mean color (asset/ingested.spec.rs's `means`), and the
 /// catalog's swatch for a type the pack has no tile for.
 ///
 /// A summary of a patch of ground is drawn in this and not in the swatch.
-/// The swatch is the colour a type is filed under — the colour a legend
+/// The swatch is the color a type is filed under — the color a legend
 /// would use — while the tile is what the ground actually shows, and the two
 /// part company wherever a tile is painted rather than flat.
 pub static LAYER_MEAN: LazyLock<Vec<[u8; 3]>> = LazyLock::new(layer_means);
@@ -96,23 +96,23 @@ fn layer_means() -> Vec<[u8; 3]> {
     out
 }
 
-/// The colour a run of layer `layer` is summarised in: the layer's mean where
+/// The color a run of layer `layer` is summarized in: the layer's mean where
 /// the pack has one, and `rgb` — the run's own — where it has none.
 pub fn layer_mean(layer: u32, rgb: [u8; 3]) -> [u8; 3] {
     LAYER_MEAN.get(layer as usize).copied().unwrap_or(rgb)
 }
 
-/// A channel's colours by type, as flat u8-indexed arrays rather than a map:
+/// A channel's colors by type, as flat u8-indexed arrays rather than a map:
 /// the per-cell decode was dominated by map lookups when it was one. `has` is
-/// a separate 0/1 flag array (not a sentinel colour) because [0,0,0] is
-/// itself sometimes a real mapped colour.
+/// a separate 0/1 flag array (not a sentinel color) because [0,0,0] is
+/// itself sometimes a real mapped color.
 #[derive(Clone, Debug)]
 pub struct FlatChannelLookup {
     pub rgb: [u8; 256 * 3],
     pub has: [u8; 256],
 }
 
-/// By channel, in GROUND_CH_KEYS' order; None for a channel with no colour.
+/// By channel, in GROUND_CH_KEYS' order; None for a channel with no color.
 pub type FlatGroundColorLookup = [Option<FlatChannelLookup>; 4];
 
 fn channel_slot(ch: GroundChannelKey) -> usize {
@@ -158,7 +158,7 @@ fn build_flat_layer_index_lookup(meta: &[TerrainLayerMeta]) -> FlatLayerIndexLoo
 
 pub static GROUND_LAYER_INDEX_LOOKUP_FLAT: LazyLock<FlatLayerIndexLookup> = LazyLock::new(|| build_flat_layer_index_lookup(&GROUND_LAYER_META));
 
-/// A channel's colour lookup.
+/// A channel's color lookup.
 pub fn ground_color_lookup(ch: GroundChannelKey) -> Option<&'static FlatChannelLookup> {
     GROUND_COLOR_LOOKUP_FLAT[channel_slot(ch)].as_ref()
 }

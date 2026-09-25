@@ -4,7 +4,7 @@
 the raycast in the module, the dev build was slower than the deployed b7
 and left pages empty: a page never rendered, a placement was in the store
 and under the raycast but not on screen, the fill after a load did not
-spread out from the centre, and a zoom stalled until the next input. None
+spread out from the center, and a zoom stalled until the next input. None
 of it was the Rust being slow. Each was a thing the TypeScript had relied
 on without naming it, which the port had not carried because it lived in
 the runtime around the code rather than in the code. This records what
@@ -69,7 +69,7 @@ not rediscover them.
 - **The Rust.** Release build; a bake is 2–5 ms; the tick is 0.22 ms at
   rest after the sort keys were aged once and the slots walked by index.
 - **The dev proxy** is slow on a cold edge — terrain p50 5.5 s on one
-  load, 121–149 ms warm — which is why the centre page arrived last and
+  load, 121–149 ms warm — which is why the center page arrived last and
   the fill did not spread from it. That is `dev:remote`, not the client.
 
 ## How to look next time

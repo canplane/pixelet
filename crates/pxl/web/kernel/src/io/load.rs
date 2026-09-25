@@ -24,7 +24,7 @@
 //! with the bytes of a model it holds (`gltf_arrived`, then read and parsed by
 //! `gltf_task` on the turns' quota) or the handle of an image it
 //! decoded and holds (`image_arrived`) — the file's own pixels, top row
-//! first, no colour conversion and no premultiplied alpha. A consumer polls:
+//! first, no color conversion and no premultiplied alpha. A consumer polls:
 //! None while the read is out or the asset is broken.
 
 use std::rc::Rc;
@@ -181,7 +181,7 @@ pub fn load_wants() -> &'static [(u64, Rank)] {
 /// Ends the attempt a key names and says what it was for.
 ///
 /// The read is over the moment the host reports it. Parsing what it brought
-/// is the kernel's own work afterwards and does not hold the credit — which
+/// is the kernel's own work afterward and does not hold the credit — which
 /// is the difference between a read and what is done with it.
 fn ended(key: u64, outcome: Outcome) -> Option<(LoadKind, Load)> {
     let what = attempt_of(key).and_then(|(_, subject)| of_subject(subject));

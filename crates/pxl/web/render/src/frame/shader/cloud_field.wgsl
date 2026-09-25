@@ -8,18 +8,18 @@
 @group(0) @binding(3) var cloud_tile_sampler: sampler;
 
 // The size of the largest cloud shapes: the lattice the tile is drawn on,
-// 2^12 cells, some eight kilometres in the middle latitudes. A power of two,
+// 2^12 cells, some eight kilometers in the middle latitudes. A power of two,
 // so it divides the world and the clouds wrap with the map (gpu/clouds.rs's
 // LATTICE_SHAMT).
 const CLOUD_LATTICE_CELLS: u32 = 4096u;
-// The wind that carries them, in cells a second: about eight metres a
+// The wind that carries them, in cells a second: about eight meters a
 // second, at the cell's size in the middle latitudes.
 const CLOUD_WIND: vec2f = vec2f(3.0, 1.25);
 
 // A point of the root frame, on the layer or anywhere over the planet, in
 // lattice units past the origin's lattice point: taken back to the flat map
 // (globe.wgsl's off_globe_of), so a cloud stays over the ground under it
-// wherever the view is centred, and carried by the wind.
+// wherever the view is centered, and carried by the wind.
 fn cloud_lattice(point: vec3f) -> vec2f {
   let on_map = off_globe_of(point, frame.planet, frame.globe);
   let cells = frame.planet.xy + on_map + atmos.cloud_time * CLOUD_WIND;

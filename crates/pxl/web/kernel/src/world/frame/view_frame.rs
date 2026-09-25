@@ -2,7 +2,7 @@
 
 //! The root frame's two damped halves (world/frame/view.rs): its turn
 //! about Z toward the controls' azimuth, and its translation toward putting
-//! the map centre at the origin. The floating origin is decided here, once a
+//! the map center at the origin. The floating origin is decided here, once a
 //! tick, and rebased in the same step the translation is rewritten in it, so
 //! nothing reads the two apart (coord.rs `local_world_origin`).
 
@@ -25,7 +25,7 @@ use crate::world::pyramid::domain::ground_level;
 const AZIMUTH_EPS: f64 = 0.0001;
 const POS_EPS: f64 = 0.0005;
 
-/// How far, in camera distances, the map centre may stand from where the view
+/// How far, in camera distances, the map center may stand from where the view
 /// is for the view to glide there; past it the move is a jump — a search, a
 /// locate — and the view is put there at once. A drag's lag is the damping's
 /// tenth of a second of travel, a fraction of a screen, and a screen is about
@@ -72,7 +72,7 @@ pub fn view_rotation_step(ctx: &mut TickContext) {
 }
 
 /// The "frame_translation" step of the interaction phase: toward the map
-/// centre, in the floating origin taken from it.
+/// center, in the floating origin taken from it.
 pub fn view_translation_step(ctx: &mut TickContext) {
     let Some(map_center) = map_store().map_center else { return };
     let map_origin = origin_for(map_center.i, ground_level());

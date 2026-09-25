@@ -1,6 +1,6 @@
 // pxl-kernel/layer/geocode/store.rs
 
-//! What the layer holds: the dictionary, and the one group the map centre is
+//! What the layer holds: the dictionary, and the one group the map center is
 //! in.
 //!
 //! One group rather than a table of them. A group covers sixteen pages a
@@ -15,7 +15,7 @@
 //! was refused: measured at 120 requests a second with the tile server down,
 //! which against the bucket is a budget that fails closed reached in a
 //! quarter of an hour (issue/20260816-deployment-hosting.md). What re-opens
-//! a question is the centre moving to a different group — the one event that
+//! a question is the center moving to a different group — the one event that
 //! says the viewer is still looking for a label — so a retry runs at the
 //! speed a hand pans rather than at the turn rate.
 
@@ -63,7 +63,7 @@ pub fn answered() -> Option<IVec> {
     store().group.as_ref().map(|(idx, _)| *idx)
 }
 
-/// The group the centre is in, where it is the one held and it has an
+/// The group the center is in, where it is the one held and it has an
 /// object.
 pub fn group_of(group_idx: IVec) -> Option<&'static ResidentGroup> {
     match &store().group {

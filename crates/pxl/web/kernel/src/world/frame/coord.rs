@@ -9,8 +9,8 @@ use pxl_spec::space::v3::V3;
 use crate::world::frame::view::view;
 use pxl_spec::space::pyramid::anchor_span_of;
 
-/// The floating origin for a view centred on `center` whose finest level is
-/// `level`: the centre floored to that level's anchor across (level.rs
+/// The floating origin for a view centered on `center` whose finest level is
+/// `level`: the center floored to that level's anchor across (level.rs
 /// `anchor_span_of`), and to a leaf's anchor up, since heights do not scale
 /// with the level. Scaled with the level so it is as far on screen at every
 /// zoom: a leaf's 4096u is twenty pixels at the farthest, a rebase in nearly

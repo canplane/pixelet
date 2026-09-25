@@ -32,7 +32,7 @@ const CASE_LONG_SIDE_MAX: f64 = 256.0;
 
 /// Turns a new buffer size must hold before the buffer is made again: a box
 /// that is animating in passes through a size a frame, and each would be a new
-/// depth and colour target.
+/// depth and color target.
 pub const SETTLE_TURNS: u32 = 4;
 
 #[derive(Clone, Copy, Default)]

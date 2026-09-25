@@ -24,7 +24,7 @@ fn scratch(name: &str) -> std::path::PathBuf {
 }
 
 #[test]
-fn a_packed_page_is_labelled_what_it_is_and_unpacks_to_itself() {
+fn a_packed_page_is_labeled_what_it_is_and_unpacks_to_itself() {
     let packed = pack(&page(), Level::Stored).unwrap();
     assert_eq!(encoding_of(&packed), Some(CONTENT_ENCODING));
     assert_eq!(unpack(&packed).unwrap(), page());

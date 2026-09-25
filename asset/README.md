@@ -53,7 +53,7 @@ writes them into `cube/`, keeping the source-size originals under
 `cube/original/`. `original/` is never ingested — the client fetches the
 resized tiles, and the sheet is composed from those.
 
-Run the ingest afterwards: the sheet's key changes with any tile.
+Run the ingest afterward: the sheet's key changes with any tile.
 
 ### After changing the Moon's map
 
@@ -61,6 +61,6 @@ Run the ingest afterwards: the sheet's key changes with any tile.
 ./asset/script/download_moon.rs
 ```
 
-It fetches the CGI Moon Kit's 1K colour map, cuts the near side, takes it to
-grey reflectance and writes `sky/moon.png`, and prints the face's mean,
-which `sky.wgsl`'s `MOON_MAP_MEAN` has to equal. Run the ingest afterwards.
+It fetches the CGI Moon Kit's 1K color map, cuts the near side, takes it to
+gray reflectance and writes `sky/moon.png`, and prints the face's mean,
+which `sky.wgsl`'s `MOON_MAP_MEAN` has to equal. Run the ingest afterward.

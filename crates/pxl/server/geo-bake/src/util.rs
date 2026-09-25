@@ -67,7 +67,7 @@ pub fn unpack(stored: &[u8]) -> std::io::Result<Vec<u8>> {
 /// Refuses to add objects to a directory whose objects are in another
 /// encoding. An upload gives a whole directory one Content-Encoding, so a
 /// resumed bake that skipped the old objects and wrote new ones beside them
-/// would publish half of them wrongly labelled.
+/// would publish half of them wrongly labeled.
 pub fn refuse_mixed(dir: &Path) -> Result<(), String> {
     let Ok(entries) = std::fs::read_dir(dir) else { return Ok(()) };
     for entry in entries {
@@ -83,7 +83,7 @@ pub fn refuse_mixed(dir: &Path) -> Result<(), String> {
             other => Err(format!(
                 "{} holds {} objects and this bake writes {CONTENT_ENCODING}: bake into a fresh directory, or pass --force to rewrite every object",
                 dir.display(),
-                other.unwrap_or("unrecognised")
+                other.unwrap_or("unrecognized")
             )),
         };
     }

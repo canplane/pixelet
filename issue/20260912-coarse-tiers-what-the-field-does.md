@@ -64,7 +64,7 @@ a country with the same code path.
    coarsest level and only descends where the range demands it.
 4. **The finest level is the only one that has to be exact.** Coarse levels
    are approximations by design; their job is a stable silhouette and the
-   right colour at the right size on screen.
+   right color at the right size on screen.
 
 ## Where this codebase stands against that
 
@@ -72,7 +72,7 @@ The terrain page is already the source these systems read from: a page is
 `{ ground, ele: Int16Array }` — one elevation and one ground type per cell,
 a heightmap with a material map. The finest tier does the right thing with
 it: the terrain layer fills one column per cell into a 64³ volume, the scan
-reads the columns back as runs, and the mesher bakes faces with neighbour
+reads the columns back as runs, and the mesher bakes faces with neighbor
 culling and greedy merging. That is a voxel pipeline, and at step 1 it has to
 be one — placed cubes, sub-cell objects and carved terrain live in the same
 volume and the mesh must be exact.
@@ -118,7 +118,7 @@ What this preserves:
 - The scheduler, untouched. A chunk stays the unit of work at every tier;
   a coarse chunk is simply a cheap chunk. Every rule from
   [20260912-what-to-render-when.md](./20260912-what-to-render-when.md)
-  — priority classes, ageing, slot holders, request validity, release order,
+  — priority classes, aging, slot holders, request validity, release order,
   memory budget — keeps its premise.
 - The mesher's coarse path, reused. It already takes a `res × res` grid of
   cells; the only change is that the cells come from the heightmap rather
@@ -128,7 +128,7 @@ What this preserves:
   covers a coarse cell still shows. What is lost at coarse tiers is
   sub-cell detail, which is lost there today too.
 
-What it gives up: at coarse tiers, a cell's colour is a nearest or majority
+What it gives up: at coarse tiers, a cell's color is a nearest or majority
 sample rather than the exact four-material average the fold produces. The
 field accepts this everywhere — coarse levels are approximations by design —
 and at the distances where step 8 applies a cell is a few pixels wide.
@@ -164,7 +164,7 @@ without a measurement that says it is.
 ## What to do with the block
 
 Revert the node wiring (step 3). Keep the span-parametric scan and the block
-module: they change no behaviour, the tests pin them, and a wider unit may
+module: they change no behavior, the tests pin them, and a wider unit may
 still be wanted later for draw calls once the scan cost is gone — at which
 point it would be built on the direct path, not on the fold, and would not
 share work across scheduler entries. Keep the boot-time bake-slot fix found

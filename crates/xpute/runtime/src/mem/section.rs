@@ -31,6 +31,37 @@ pub struct Section {
     pub align: u32,
 }
 
+impl Section {
+    /// Where the section ends: the first byte past it.
+    pub const fn end(&self) -> u32 {
+        self.offset + self.bytes
+    }
+
+    /// Where `bytes` from `off` into the section lie, or none where they would
+    /// run past its end. The one way into a section: a range is reached
+    /// through this and never by adding to its offset, so nothing written
+    /// through it can land in its neighbor.
+    pub const fn at(&self, off: u32, bytes: u32) -> Option<u32> {
+        match off.checked_add(bytes) {
+            Some(past) if past <= self.bytes => Some(self.offset + off),
+            _ => None,
+        }
+    }
+
+    /// The `n`th of `sizes` laid end to end inside the section, each on
+    /// `unit`: a section of its own, which ends `sizes[n]` past where it
+    /// begins. What is laid must fit the section, or a range inside it would
+    /// reach past it.
+    pub const fn nth(&self, sizes: &[u32], unit: u32, n: usize) -> Section {
+        assert!(span_of(sizes, unit) <= self.bytes, "ranges laid past the section they are laid in");
+        Section {
+            offset: nth_at(self.offset, sizes, unit, n),
+            bytes: sizes[n],
+            align: unit,
+        }
+    }
+}
+
 /// `n` at the next multiple of `unit`, which is where the range holding `n`
 /// bytes ends and the one after it may begin.
 pub const fn align_up(n: u32, unit: u32) -> u32 {

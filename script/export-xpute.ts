@@ -21,7 +21,7 @@
 // that no build output can come along. Four manifests are written instead of
 // copied, because pixelet's own say things that are not xpute's: the Cargo
 // workspace (whose members and header describe pxl), `deno.jsonc` (28 tasks,
-// all of them pixelet's), the notices (shadcn is the shell's) and the licence
+// all of them pixelet's), the notices (shadcn is the shell's) and the license
 // — pixelet's is proprietary and xpute is MIT.
 //
 // The export carries the commit it came from. It cannot stop someone from
@@ -271,8 +271,8 @@ function relink(md: string): string {
  * point of the `.xpute` infix is that dropping it is the whole migration. */
 function readme(at: string): string {
   const doc = relink(Deno.readTextFileSync(join(ROOT, "README.xpute.md")));
-  const at_licence = doc.indexOf("## Licence");
-  if (at_licence < 0) die("README.xpute.md has no Licence section to splice the provenance before");
+  const at_license = doc.indexOf("## License");
+  if (at_license < 0) die("README.xpute.md has no License section to splice the provenance before");
   const provenance = `## Where this comes from
 
 This is a copy. xpute is developed inside pixelet, a closed application that is its only consumer so far, and exported here whole — the layout is pixelet's own, so the day it moves for real nothing has to change. Pull requests are welcome as conversation, but the change has to land upstream.
@@ -284,7 +284,7 @@ Taken from **${at}**.
 The four files generated from \`spec/xpute/\` — the errno table and the fetch ABI, on both sides — are checked in as pixelet generates them. The generator itself knows every one of pixelet's specs and did not come along, so this copy reads but does not regenerate them.
 
 `;
-  return doc.slice(0, at_licence) + provenance + doc.slice(at_licence);
+  return doc.slice(0, at_license) + provenance + doc.slice(at_license);
 }
 
 /** The stamp the copy already carries, read before it is overwritten. It is

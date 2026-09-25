@@ -68,7 +68,7 @@ A message on the completion ring waits until the host reads it, and the guest ca
 head…   op · n · n words   op · n · n words   …
 ```
 
-A record is an op the user numbers, a count, and that many words. Because the whole stream runs between two turns, a record can name memory for the host to write into, and the guest reads it on its next turn without being told it is there: the order is the acknowledgement. What a stream costs is its range, which bounds what one turn can ask for; what a full stream means is the user's to decide.
+A record is an op the user numbers, a count, and that many words. Because the whole stream runs between two turns, a record can name memory for the host to write into, and the guest reads it on its next turn without being told it is there: the order is the acknowledgment. What a stream costs is its range, which bounds what one turn can ask for; what a full stream means is the user's to decide.
 
 ---
 

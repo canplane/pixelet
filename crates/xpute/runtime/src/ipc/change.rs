@@ -127,7 +127,7 @@ impl ChangeLog {
     }
 
     /// Drops a key that has left — a page unloaded — from its topic's table.
-    /// Its revision reads 0 afterwards; the journal keeps what was written.
+    /// Its revision reads 0 afterward; the journal keeps what was written.
     pub fn forget(&mut self, topic: Topic, key: i64) {
         self.revisions[topic as usize].remove(&key);
     }

@@ -8,7 +8,7 @@
 //! `dist` from the origin, `polar` down from vertical, on the −Y side,
 //! looking at the origin with Z up — and never turns. The world turns
 //! under it instead: the root frame everything is placed in is the map's
-//! azimuth about Z, then a translation that puts the map centre at the
+//! azimuth about Z, then a translation that puts the map center at the
 //! origin. Each of those is damped toward its control by its own step
 //! (camera/damping.rs, frame/view_frame.rs), and whichever moved
 //! composes the matrices again.
@@ -40,7 +40,7 @@ pub struct View {
     pub polar: f64,
     /// The map's turn about Z.
     pub azimuth: f64,
-    /// Where the root frame's origin stands: minus the map centre's offset
+    /// Where the root frame's origin stands: minus the map center's offset
     /// from the map origin, in units.
     pub tx: f64,
     pub ty: f64,
@@ -115,13 +115,13 @@ pub fn view() -> &'static mut View {
     VIEW.get(View::new)
 }
 
-/// The camera centre: the point the orbit looks at, which the world is
-/// drawn about and laid on the planet about — the map centre as the view has
+/// The camera center: the point the orbit looks at, which the world is
+/// drawn about and laid on the planet about — the map center as the view has
 /// eased toward it, not the control's target (map_store's map_center), which
 /// it trails while it moves. What takes the planet's frame takes it from
 /// here — its latitude, its units, the sun and the moon over it — so the
-/// sphere's centre and its latitude are one point in the same tick.
-pub fn camera_centre() -> Pvf3 {
+/// sphere's center and its latitude are one point in the same tick.
+pub fn camera_center() -> Pvf3 {
     let v = view();
     let mut out = Pvf3::default();
     local_world_to_canonical(&mut out, &[-v.tx, -v.ty, -v.tz], v.origin);

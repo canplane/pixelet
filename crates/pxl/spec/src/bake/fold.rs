@@ -39,7 +39,7 @@ use xpute_core::math::scalar::round;
 use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::format::{Ground, Terrain, GROUND_CH_KEYS};
 use super::pack::{channel_of, with_channel, GroundCell};
-use crate::space::pyramid::{neighbourhood, Folds, LevelPage, CHILDREN, GROUND};
+use crate::space::pyramid::{neighborhood, Folds, LevelPage, CHILDREN, GROUND};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -99,16 +99,16 @@ pub fn fold_ground(children: [&Ground; 4], level: u32) -> Ground {
 /// 0..=1. A page that does not exist is the ocean's, which is what it would
 /// have been baked as.
 ///
-/// The ring of neighbours is what the skirt costs. A parent's two padding
+/// The ring of neighbors is what the skirt costs. A parent's two padding
 /// samples reach four child samples past the block, and a child pads only two,
-/// so they are read from the neighbours' own inner samples — never from a
+/// so they are read from the neighbors' own inner samples — never from a
 /// child's padding, which would read a copy of the same thing and take the
 /// fold's answer from how that copy was made.
 ///
 /// A ring page may be `None`, which is the client folding from what it holds
 /// rather than the bake folding a whole pyramid. Where one is, the block's
 /// own four answer instead: they pad two samples of their own, which *are*
-/// the neighbour's samples and reach half as far as the parent's skirt, and
+/// the neighbor's samples and reach half as far as the parent's skirt, and
 /// past that the block's edge is extended. Nothing inside the parent moves —
 /// every sample of it is read from the four — so a page folded without the
 /// ring differs from the baked one in its outermost padding sample alone,
@@ -147,14 +147,14 @@ pub fn fold_ele(around: [Option<&[i16]>; 16], out: &mut [i16]) {
 
 /// Terrain reads the ring around the four children as well: a parent's
 /// elevation pads two samples past its rim, which lie in its children's
-/// neighbours (`fold_ele`).
+/// neighbors (`fold_ele`).
 impl Folds for Terrain {
     fn sources(p: LevelPage) -> Vec<LevelPage> {
-        neighbourhood(p).to_vec()
+        neighborhood(p).to_vec()
     }
 
     fn fold_page<'a>(p: LevelPage, held: impl Fn(LevelPage) -> Option<&'a Self>) -> Option<Self> {
-        fold_terrain_held(neighbourhood(p).map(held), p.level)
+        fold_terrain_held(neighborhood(p).map(held), p.level)
     }
 }
 

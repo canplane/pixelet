@@ -26,7 +26,7 @@ fn sample_ele_grounded(terrain: &Terrain, cell: Cell) -> f64 {
 /// page's extremes. None where no page over it is held.
 ///
 /// The one question every reader of the terrain's height asks — the
-/// camera's clearance, a character's footing, a marker, the map centre — so
+/// camera's clearance, a character's footing, a marker, the map center — so
 /// that none of them stands on a height the others do not: before a leaf
 /// comes, all of them stand on the page over it.
 pub fn ground_at(at: &Pvf3) -> Option<f64> {
@@ -62,14 +62,14 @@ pub fn with_ele(out: &mut Pvf3, at: &Pvf3) -> Option<Pvf3> {
 }
 
 /// Where the camera's pivot sits on the ground at a coordinate's X/Y: the
-/// centre of the cube standing on the ground there — the cell the character
+/// center of the cube standing on the ground there — the cell the character
 /// occupies, the cell a placement's ghost fills — its original Z discarded.
 /// None when no elevation is loaded yet, like with_ele.
 ///
-/// A centre, not the top face, because everything the camera pivots on is a
-/// cube: a tap on an object pivots on that cube's centre
+/// A center, not the top face, because everything the camera pivots on is a
+/// cube: a tap on an object pivots on that cube's center
 /// (object/geometry.rs's object_center), and a tap on the ground on the
-/// centre of the cube above it (camera/input). A pivot that merely sits on
+/// center of the cube above it (camera/input). A pivot that merely sits on
 /// the ground has to agree with those, or the first pan after a tap moves the
 /// camera by the half cell between the two. with_ele itself answers the top
 /// face, which is what standing things (the puck, decor, a place) are

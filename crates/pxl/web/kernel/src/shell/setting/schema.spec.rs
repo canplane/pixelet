@@ -5,10 +5,10 @@
 // Every setting the app has, declared once: its default, its kind, and
 // where the settings sheet shows it. The store reads the defaults from here
 // and the sheet renders rows from here, so adding a setting is one entry in
-// SETTINGS plus its two strings in the locale catalogue under
+// SETTINGS plus its two strings in the locale catalog under
 // `settings.<section>.<key>`. A choice may carry `costs` beside its
 // `options`, one per option in the same order, for when what an option costs
-// differs from its neighbours'; an empty string is no badge. A `dev` setting
+// differs from its neighbors'; an empty string is no badge. A `dev` setting
 // is in the kernel's table in every build and offered only under a
 // development one; the shell's production bundle carries SETTINGS_SHIPPED,
 // the table without them, in SETTINGS' place.
@@ -118,7 +118,7 @@ pub enum SettingKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SettingKey {
-    /// Ground colour from the art pack (four sampler2DArray taps per fragment)
+    /// Ground color from the art pack (four sampler2DArray taps per fragment)
     /// instead of the flat per-instance average. The shader's `u_low_spec` is
     /// this, inverted.
     ///
@@ -128,8 +128,8 @@ pub enum SettingKey {
     /// already holds.
     ///
     /// It sources the chunks: the shader samples a leaf's layer or does not,
-    /// but a tier over it carries one colour and no layer to sample, so which
-    /// colour that is was baked in (mesh/chunk_mesher.rs).
+    /// but a tier over it carries one color and no layer to sample, so which
+    /// color that is was baked in (mesh/chunk_mesher.rs).
     texture_pack = 0,
     /// Whether the STRUCTURE ground channel is painted. The bake writes it
     /// either way (pipeline/overture/policy.rs); this is a render decision.
@@ -156,7 +156,7 @@ pub enum SettingKey {
     /// back a control that did nothing, which reads as the app being stuck
     /// rather than as the ground being in the way.
     camera_terrain = 5,
-    /// Panning re-samples the terrain height under the map centre each step.
+    /// Panning re-samples the terrain height under the map center each step.
     ground_snap = 6,
     /// The eraser digs into the baked terrain where nothing is placed. Off by
     /// default: the terrain is real map data, not the player's scratch canvas.
@@ -183,7 +183,7 @@ pub enum SettingKey {
     /// draw on complementary halves of one screen-space pattern, so a chunk
     /// in a dissolve is drawn twice while it lasts.
     lod_crossfade = 13,
-    /// The debug gizmos: frame origins, page corners, the map centre and the rings.
+    /// The debug gizmos: frame origins, page corners, the map center and the rings.
     show_debug_objects = 14,
     /// The scheduler ledger's corner panel. The console stream is a button on it.
     show_ledger = 15,

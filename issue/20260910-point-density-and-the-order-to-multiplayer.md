@@ -23,7 +23,7 @@ in the question.
 A uniform grid sized to the query radius is the usual replacement, and in
 3D it fails differently: a dense grid costs cells whether or not anything
 is in them. For sparse, moving, three-dimensional points the convention is
-a **spatial hash** — quantise the position, hash it, bucket the entity —
+a **spatial hash** — quantize the position, hash it, bucket the entity —
 which is insensitive to both density and emptiness and makes re-insertion
 on movement cheap. Actors move every frame; that last property is not
 optional.
@@ -32,7 +32,7 @@ optional.
 
 Characters sit on terrain today. Assuming they always will is the mistake
 to avoid: flight, interiors, and stacking all break it, and an index chosen
-for ground-attached points cannot be widened afterwards without redoing the
+for ground-attached points cannot be widened afterward without redoing the
 things built on it.
 
 Two consequences are already visible in the current code.
@@ -40,7 +40,7 @@ Two consequences are already visible in the current code.
 **The hierarchy is 3D only up to L4.** `L5_SHAMT` is 16 and the Z lane is
 16 bits wide, so L5's Z collapses and it can only ever address X/Y
 (`indexer.ts`, and [20260811-coordinate-system.md](./20260811-coordinate-system.md)).
-A spatial index that quantises against the existing address space — which
+A spatial index that quantizes against the existing address space — which
 it should, rather than inventing a second one — has a 3D ceiling at L4 and
 horizontal-only sharding above it. That is a constraint to design with, not
 a bug.
@@ -52,7 +52,7 @@ all-or-nothing against one anchor point
 anchor is derived from terrain: `poi_layer.tsx` grounds candidates with
 `with_ele` before the frustum test and offsets by a fixed `ANCHOR_Z_U`, and
 `anchor_occlusion.ts` recovers the anchor by dropping `u_anchor_drop` below
-the sprite centre. A billboard free in Z has to carry its own anchor
+the sprite center. A billboard free in Z has to carry its own anchor
 instead, and "which point represents this thing for occlusion" reopens.
 
 ## Drawing ten thousand is not the hard part
@@ -85,7 +85,7 @@ The structural point under all of it:
 
 Engines that collapse store and index break when density changes. pixelet
 collapses them for placed objects today and gets away with it because
-objects are cell-quantised and static. Billboards and actors are neither.
+objects are cell-quantized and static. Billboards and actors are neither.
 
 ## The order, and why this is not the moment
 

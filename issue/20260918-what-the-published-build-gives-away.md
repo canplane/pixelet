@@ -180,14 +180,14 @@ byte**, which is what an overlap needs: the linker merges a string that is
 another's tail, so two matches can cover the same bytes, and one character
 leaves the same result whichever order they are written in. And **a match under
 no known source root stops the build** rather than being blanked on a guess —
-a `.rs` from somewhere unrecognised could be a format string or something a
+a `.rs` from somewhere unrecognized could be a format string or something a
 person typed. That check earned itself immediately, refusing
 `/rust/deps/hashbrown-0.16.1/src/raw/mod.rs`, a real path from a dependency
 rustc vendors that the roots did not yet name.
 
 It runs after wasm-opt, which it must: the optimizer rewrites the data section,
 and anything blanked before it would be moved or merged underneath. What no test
-proves is how a real panic reads afterwards, since the checks exercise no
+proves is how a real panic reads afterward, since the checks exercise no
 panicking path; the argument is structural — the hook formats the location and
 hands the text to the host, and nothing parses or compares it — and the module
 boots, runs its turns and answers failed fetches with the paths blanked.
@@ -281,7 +281,7 @@ named the module tree, and these describe what is inside it:
   uses
 
 Alongside them sit the name tables the spec generates and the shell reads: the
-ground channels, the colour catalogue, the road classes, the tick's phases, the
+ground channels, the color catalog, the road classes, the tick's phases, the
 settings' sections, the UI's fourteen actions. Those are domain vocabulary
 rather than internals, and the last of them — the action names — is the one
 that hands back what the ring's numbering otherwise hides.
@@ -335,7 +335,7 @@ console turned the scheduler ledger on in the published build.
 None of it was a decision either. The settings table is generated whole from
 `schema.json`, and the sheet filtered it on `__IS_DEV__` at run time — which
 removes the row from the screen and leaves it in the artifact, the same shape
-the debug section's labels had taken through the locale catalogue. The rule
+the debug section's labels had taken through the locale catalog. The rule
 above already says what to do with it: the rows are something a production
 build does not need to run, so they go.
 
@@ -379,7 +379,7 @@ have published both. Now `build` bundles the module `build-wasm.ts` makes
 with `--published`, whoever runs it, and the number is a stamp on the build
 info and nothing more: a local build and the deploy's are the same bytes,
 and the kernel is checked every time. What this costs is the file name in a
-panic under `vite preview`, which is the deploy's own behaviour reproduced
+panic under `vite preview`, which is the deploy's own behavior reproduced
 rather than a loss.
 
 One row nearly changed sides and did not. `show_ledger` turns on the

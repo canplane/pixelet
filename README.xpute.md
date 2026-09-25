@@ -23,7 +23,7 @@ It was written for a Rust program compiled to one WebAssembly module and driven 
            └─────────────────────────────────────────────────────┘
 ```
 
-Three edges, and no others: there is no second entry point, no callback, and nothing either side holds a pointer to on the other.
+Three edges, and one call the other way: the guest reads the host's clock (`now`), because it spends its quota against that clock in the middle of a turn, when the host cannot run. There is no second entry point, no other callback, and nothing either side holds a pointer to on the other.
 
 `interrupt` is the whole of the guest's life. It runs when the host rings, for as long as the quota it was handed, and when the call returns it is not running at all — its answer is when it would like the next one. A guest that asks for nothing is rung for nothing.
 
@@ -66,6 +66,6 @@ deno task test    # deno test and cargo test, the golden records included
 deno task lint    # deno lint
 ```
 
-## Licence
+## License
 
-xpute is MIT. One file under `alloc/` is a port of someone else's code rather than a dependency, and `THIRD_PARTY_NOTICES.md` carries the notice its licence asks for.
+xpute is MIT. One file under `alloc/` is a port of someone else's code rather than a dependency, and `THIRD_PARTY_NOTICES.md` carries the notice its license asks for.

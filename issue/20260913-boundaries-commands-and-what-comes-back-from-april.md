@@ -83,7 +83,7 @@ What a boundary needs depends on what can go wrong across it.
 | -------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **UI ↔ core**, main thread | A command is a synchronous call. State is read where it lives, in linear memory | **None.** Nothing is waited for, nothing is lost, so there is no timeout, retry or debounce. A reader that looks once a tick already coalesces                                                                           |
 | **Main ↔ bake worker**     | A fixed frame header, and the body as a slab handed over by transfer            | **The scheduler's, not a new one.** A Demand already has a priority, cancellation and in-flight state, so `tx_id` names a Demand slot. A worker does not drop messages; a dead one is restarted and its Demands requeued |
-| **Client ↔ server**, later | Packets                                                                         | **Here, and only here.** Loss, reordering and a peer that does not answer are real, so acknowledgement, deadlines and retry belong to this boundary. Designed when the server work starts                                |
+| **Client ↔ server**, later | Packets                                                                         | **Here, and only here.** Loss, reordering and a peer that does not answer are real, so acknowledgment, deadlines and retry belong to this boundary. Designed when the server work starts                                 |
 
 The worry that bringing April's `TxController` back means owning lifecycles
 and debouncing everywhere is right. On the first two rows a transaction
@@ -103,7 +103,7 @@ the worker, a packet to the server. That is
 **The frame, for the worker only.** Kept from April: `tx_id` with the
 worker id in its high bits, so a reply is routed without a lookup and a
 switch can be inserted later without changing the header; `ACKREQ` as
-behaviour (set, exactly one reply; unset, none); `errno` replies and a
+behavior (set, exactly one reply; unset, none); `errno` replies and a
 synthesized failure reply. Changed: a fixed C-layout header instead of TLV
 fields; args as XTP; the body as a slab transfer — April's own TODO read
 "body will be replaced with SAB pointer handle", and SharedArrayBuffer is
@@ -130,7 +130,7 @@ bake testable without a thread.
 
 ## Where reliability and transactions are decided
 
-Reliable delivery, acknowledgement, deadlines, retry and a transaction
+Reliable delivery, acknowledgment, deadlines, retry and a transaction
 table are one question, and it is answered per boundary by what the
 boundary can lose — not once, globally, as a layer every message passes
 through. That was April's shape, and it is the one this document does not
@@ -139,7 +139,7 @@ take.
 - **Inside a page (UI ↔ core, main ↔ worker) there is nothing to decide.**
   A call on one thread cannot be lost. `postMessage` between a page and its
   worker is not lost and not reordered; the one failure is the worker
-  dying, which the worker's `error` event reports. So no acknowledgement,
+  dying, which the worker's `error` event reports. So no acknowledgment,
   no timeout, no retry. What a request needs beyond correlating its reply
   — priority, cancellation, being re-run after a crash — is the
   scheduler's: the Demand already holds it, and `tx_id` only names the

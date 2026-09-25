@@ -130,7 +130,7 @@ discarded, and the checkpoint's own invented types removed by deleting them
 and following the compiler: xpute's `kit/text.rs` (`FixStr`, `Text`) and pxl
 `memory.rs`'s `FixedAlloc`, `FixedVec`, `InlineVec`, `LaneKey`/`LaneMap` and
 `Span`/`TextLane`. Their sites went back to `Vec`, `String` and `BTreeMap`
-(a `BTreeMap` where the walk's order was part of the behaviour), and the POI
+(a `BTreeMap` where the walk's order was part of the behavior), and the POI
 index's `SpatialHash` and `IndexedMap` to their default allocator. `Quoted`,
 a formatter rather than a place to keep text, moved into `kit/json.rs`.
 

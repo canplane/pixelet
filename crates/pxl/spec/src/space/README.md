@@ -6,7 +6,7 @@ request fetches, the square a floating origin sits in — is that same word
 with its low bits cleared. Grouping is a mask, never a division, and a tier
 is a shift and nothing else.
 
-What a unit is worth in metres is not in this module. The lattice counts
+What a unit is worth in meters is not in this module. The lattice counts
 units; what a unit means belongs to whoever projects it. That split is why
 `indexer.rs` names tiers and no distance, and it is the one thing to
 understand before reading anything here.
@@ -64,7 +64,7 @@ and one shift between them:
 - `L3_BASE(addr)` — the tier boundary at or below it, its low bits cleared.
   Inclusive, where `L3_LIMIT` is exclusive.
 - `L3_CENTER(addr)` — the middle of that square. `SPAN_CENTER` is the same
-  for a span resolved at runtime, and returns a `Pvf3` because the centre of
+  for a span resolved at runtime, and returns a `Pvf3` because the center of
   a 1u cell is 0.5u and lives in the fraction.
 - `L3_IDX(addr)` — which square, counted in squares rather than units: the
   base shifted down. `FROM_L3_IDX` shifts it back.
@@ -85,9 +85,9 @@ distance.
 
 Meaning enters at an **adapter**, and only there:
 
-- `adapter/3857.rs` — EPSG:3857 planar metres. `U_PER_M` and `M_PER_U` are
+- `adapter/3857.rs` — EPSG:3857 planar meters. `U_PER_M` and `M_PER_U` are
   the whole of the conversion, and in this adapter `m` always means a planar
-  metre, which is latitude-dependent against a real one.
+  meter, which is latitude-dependent against a real one.
 - `adapter/4326.rs` — lon/lat, and the projection to and from 3857.
 - `adapter/yup.rs` — a Y-up basis, for a boundary that meets one. Nothing
   imports it, which the file says is the expected state.
@@ -98,7 +98,7 @@ The X lane is exactly one EPSG:3857 world. So the lattice is that world cut
 2^24 ways, and every tier lands on a web map's zoom — not by design of the
 ladder but because the lane width and the world are the same thing.
 
-| tier          | extent | planar metres | tile |
+| tier          | extent | planar meters | tile |
 | ------------- | ------ | ------------- | ---- |
 | **L1** block  | 1u     | 2.39          | z24  |
 | **L2** chunk  | 64u    | 152.9         | z18  |

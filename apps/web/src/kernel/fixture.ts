@@ -22,7 +22,7 @@ import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 /**
  * Cells on an L3 page's side, and the elevation raster's own padded span —
  * pxl-spec's `PAGE_CELLS` (space/pyramid.rs) and `ELE_PADDED_SPAN`, a sample
- * every 32 metres plus two of padding on each side, which is what gives a
+ * every 32 meters plus two of padding on each side, which is what gives a
  * bicubic sample a 4×4 kernel at every edge texel (bake/constant.rs).
  */
 export const PAGE_CELLS = 512;

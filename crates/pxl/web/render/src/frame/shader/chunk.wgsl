@@ -34,7 +34,7 @@ struct Draw {
 @group(0) @binding(5) var<storage, read> layer_slot: array<u32>;
 @group(0) @binding(6) var layer_sampler: sampler;
 
-// volume.rs's NO_LAYER: a tap past the last layer means the vertex colour.
+// volume.rs's NO_LAYER: a tap past the last layer means the vertex color.
 const NO_LAYER: f32 = 255.0;
 // gpu/layers.rs's NO_SLOT.
 const NO_SLOT: u32 = 0xffffu;
@@ -305,7 +305,7 @@ fn edge_factor(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) ->
 // sample count that thins out over the whole radius.
 const AO_REACH: f32 = 1.5;
 // The occluded light's hue: #1a1006 as a ratio, red kept — the warm dark of
-// a contact shadow rather than a grey one, which is what the screen-space
+// a contact shadow rather than a gray one, which is what the screen-space
 // pass this replaces was tuned to.
 const AO_TINT: vec3f = vec3f(1.0, 0.615, 0.231);
 
@@ -383,7 +383,7 @@ fn occlusion(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) -> f
       open *= 1.0 - occlusion_of(to_neg.z);
     }
     // The inside corners at the face's two ends, which the diagonal bits
-    // name by the quadrant the neighbour is in.
+    // name by the quadrant the neighbor is in.
     if (x_dom) {
       if (face_bit(faces, select(DIAG_NP, DIAG_PP, n_positive))) {
         open *= 1.0 - occlusion_of(to_pos.y);
@@ -422,7 +422,7 @@ fn sample_tap(layer: f32, is_side: bool, uv: vec2f, ddx: vec2f, ddy: vec2f, fall
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
   let d = draws[i.draw];
-  // A box with no layer of its own is its colour and nothing else: that is
+  // A box with no layer of its own is its color and nothing else: that is
   // every tier over a leaf's own cells, which are the only ones the texture
   // pack is for (mesh/chunk_mesher.rs). The four samples are skipped with
   // it, not taken and thrown away.

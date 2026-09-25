@@ -40,7 +40,7 @@ impl Drop for ResidentDict {
     }
 }
 
-/// One group of pages, held while the centre is in it.
+/// One group of pages, held while the center is in it.
 pub struct ResidentGroup {
     pub view: PlaceGroupView<'static>,
     block: Block,

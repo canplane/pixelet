@@ -6,7 +6,7 @@
 //! A slot of the array is a distinct tile of the pack, not a layer: a side
 //! with no tile of its own wears the top's and shares its slot, and a layer
 //! the pack ships nothing for takes none at all — it reads as the box's own
-//! colour, which the shader already has. The table turns the layer index the
+//! color, which the shader already has. The table turns the layer index the
 //! mesher bakes into a box's taps (mesh/paint/palette/shader_meta.rs) into
 //! the slot its top and its side are in. Two arrays of a layer each, one the
 //! copy of the other for most of them, was half again the memory and twice
@@ -88,7 +88,7 @@ impl Mips {
 }
 
 /// Every layer: the cube it is, where one stands for it, its index, and its
-/// colour. A ground type no cube stands in for (common's) has no tile.
+/// color. A ground type no cube stands in for (common's) has no tile.
 fn each_layer(mut f: impl FnMut(Option<PlaceableCube>, u32, u32)) {
     for m in GROUND_LAYER_META.iter() {
         f(terrain_style_cube_for(m.ch_key, m.type_id as u32), m.layer_index, m.rgb);
@@ -101,7 +101,7 @@ fn each_layer(mut f: impl FnMut(Option<PlaceableCube>, u32, u32)) {
     }
 }
 
-/// A face with no tile of its own in the pack: the box's own colour is what
+/// A face with no tile of its own in the pack: the box's own color is what
 /// it reads as, and no slot of the array is spent waiting for one.
 const NO_SLOT: u32 = 0xffff;
 
@@ -158,7 +158,7 @@ impl Layers {
     /// The array the pack's tiles go in, and the table that finds them.
     ///
     /// Nothing is drawn into either until the sheet arrives: a layer's flat
-    /// colour is the box's own colour, which the shader already has, so a
+    /// color is the box's own color, which the shader already has, so a
     /// slot filled with it would be a mip chain built to say what the vertex
     /// says. Until then the table sends every face to NO_SLOT.
     pub fn new(g: &Gpu) -> Layers {

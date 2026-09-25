@@ -46,12 +46,13 @@
 //! to carry two different pairs of numbers for it (2026-09-23). What the
 //! measurement showed, and the constants cannot say, is that the coarse tier
 //! asks for *more* than the leaf's own: nothing of it merges, since a box
-//! shrunk about its cell's centre touches nothing
+//! shrunk about its cell's center touches nothing
 //! (issue/20260923-a-coarse-cell-is-isotropic.md). Either is read live as the
 //! ledger's `work fine_peak` and `coarse_peak`, through a zoom out and back.
 
 use crate::world::pyramid::domain::{LEVEL_CHUNKS, VIEW_CHUNKS};
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
+use pxl_spec::space::pyramid::CHUNK_CELLS;
 
 /// Slots a group holds: the most chunks one level draws, which is what the
 /// leaves' own tier needs, since only z16 draws it.
@@ -140,6 +141,27 @@ pub fn pool(level: u32, step: u32) -> core::ops::Range<usize> {
     } else {
         0..(COARSE_GROUPS * SLOTS) as usize
     }
+}
+
+/// Words a slot's surface lane holds: a sample at the center of each of its
+/// tier's blocks, CHUNK_CELLS a side for the leaves' own tier, which draws
+/// its level's cells, and half that for every other, which draws no finer
+/// than its level's cells averaged 2 × 2 (world/chunk/table.rs
+/// `drawn_cube`).
+const fn surface_words(group: u32) -> u32 {
+    let axis = if group == FINE_GROUP { CHUNK_CELLS } else { CHUNK_CELLS / 2 };
+    axis * axis
+}
+
+/// `.fixed.surface`: every slot's surface lane, the coarse groups' then the
+/// leaves'.
+pub const SURFACE_BYTES: u32 = SLOTS * (COARSE_GROUPS * surface_words(0) + surface_words(FINE_GROUP)) * 4;
+
+/// Where slot `index`'s surface lane lies in `.fixed.surface`, and the words
+/// it holds.
+pub const fn surface_of(index: usize) -> (u32, u32) {
+    let (group, residue) = (index as u32 / SLOTS, index as u32 % SLOTS);
+    ((group * SLOTS * surface_words(0) + residue * surface_words(group)) * 4, surface_words(group))
 }
 
 /// The slot an index names: which group's arena it is in, where in it, and

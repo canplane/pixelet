@@ -1,10 +1,10 @@
-// The colour grade over everything, called by each pass on its linear
-// colour before the sRGB encode: a brightness and contrast step in sRGB,
+// The color grade over everything, called by each pass on its linear
+// color before the sRGB encode: a brightness and contrast step in sRGB,
 // then a saturation step in linear light, the formulas of the post stack
-// three ran (postprocessing's BrightnessContrastEffect, whose input colour
+// three ran (postprocessing's BrightnessContrastEffect, whose input color
 // space is sRGB, and HueSaturationEffect, whose is linear —
 // b9e31004). The contrast step in linear light
-// would put its zero at linear 0.05 and crush every night colour below it
+// would put its zero at linear 0.05 and crush every night color below it
 // to black. The numbers are cosmetic dials.
 
 const GRADE_BRIGHTNESS: f32 = -0.01;

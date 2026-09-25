@@ -23,9 +23,9 @@ struct VertexOut {
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
   let k = v.i * 7u;
-  let centre = vec3f(zone[k], zone[k + 1u], zone[k + 2u]);
+  let center = vec3f(zone[k], zone[k + 1u], zone[k + 2u]);
   var o: VertexOut;
-  o.clip = frame.view_proj * vec4f(on_globe(v.position + centre + draw.translation), 1.0);
+  o.clip = frame.view_proj * vec4f(on_globe(v.position + center + draw.translation), 1.0);
   o.uv = v.uv;
   o.borders = vec4f(zone[k + 3u], zone[k + 4u], zone[k + 5u], zone[k + 6u]);
   return o;

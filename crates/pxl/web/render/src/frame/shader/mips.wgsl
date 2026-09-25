@@ -1,5 +1,5 @@
 // A mip level from the one above, box-filtered by one linear sample at the
-// centre of each 2x2, a render pass a level. WebGPU has no generateMipmap;
+// center of each 2x2, a render pass a level. WebGPU has no generateMipmap;
 // this is the one every texture that minifies asks for.
 
 @group(0) @binding(0) var above: texture_2d<f32>;

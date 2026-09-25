@@ -12,7 +12,7 @@
 //!
 //! A part carries a **rank**: where it sits on one ladder, from a country
 //! down to a building. That is what lets a reader ask for the depth a zoom
-//! wants — a map drawn from four hundred kilometres up names a province and
+//! wants — a map drawn from four hundred kilometers up names a province and
 //! stops, and one at street level does not
 //! (issue/20260923-a-place-name-is-a-rank-and-an-id.md). Nominatim's reverse
 //! endpoint takes a zoom for the same reason and can, because every row of
@@ -35,7 +35,7 @@ use std::collections::BTreeMap;
 /// to map onto rather than a choice of two wrong ones.
 ///
 /// Korea uses five of them: a 도 or 특별시 is a region, a 시/군/구 a county,
-/// a 동 or 리 a neighbourhood. The rest are here because the ladder is not
+/// a 동 or 리 a neighborhood. The rest are here because the ladder is not
 /// Korea's.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -46,7 +46,7 @@ pub enum PlaceRank {
     County = 20,
     City = 30,
     District = 40,
-    Neighbourhood = 50,
+    Neighborhood = 50,
     Street = 60,
     Building = 70,
 }
@@ -59,7 +59,7 @@ impl PlaceRank {
         PlaceRank::County,
         PlaceRank::City,
         PlaceRank::District,
-        PlaceRank::Neighbourhood,
+        PlaceRank::Neighborhood,
         PlaceRank::Street,
         PlaceRank::Building,
     ];
@@ -72,7 +72,7 @@ impl PlaceRank {
     /// The deepest rung a map at Web Mercator zoom `z` names, which is
     /// Nominatim's own table read onto this ladder: a country to z4, a state
     /// to z7, a county to z9, a city to z11, a town or village to z13, a
-    /// neighbourhood or settlement to z15, streets to z17, a building past
+    /// neighborhood or settlement to z15, streets to z17, a building past
     /// that. The steps are what the convention is; nothing here was derived.
     pub fn at_zoom(z: f64) -> PlaceRank {
         const LADDER: [(f64, PlaceRank); 7] = [
@@ -81,7 +81,7 @@ impl PlaceRank {
             (9.0, PlaceRank::County),
             (11.0, PlaceRank::City),
             (13.0, PlaceRank::District),
-            (15.0, PlaceRank::Neighbourhood),
+            (15.0, PlaceRank::Neighborhood),
             (17.0, PlaceRank::Street),
         ];
         // A zoom that is not a number is the whole ladder rather than none of

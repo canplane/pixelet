@@ -118,7 +118,7 @@ export function ledgerTraceJson(): string {
   }
 
   // ---- worst frames of the window ----
-  // Already on the counter track above; repeated as labelled spans so a
+  // Already on the counter track above; repeated as labeled spans so a
   // stall can be found without scrubbing, at its real timestamp.
   if (worst.length > 0) {
     events.push(thread_name(TID_WORST, "worst frames"));

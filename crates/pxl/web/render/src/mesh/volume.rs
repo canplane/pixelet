@@ -19,13 +19,13 @@
 
 // ---- the voxel ----
 //
-// What one voxel's bytes mean: its material class and colour packed into a
+// What one voxel's bytes mean: its material class and color packed into a
 // word, its texture layer, and the inset of a box that fills only part of
 // its cell. Pure encoding, shared by the volume that stores voxels, the
 // scan that reads them into runs and the mesher that draws the runs.
 
 /// A run whose material is a placed object: exempt from hiding its
-/// neighbours' faces, and drawn with its bottom face.
+/// neighbors' faces, and drawn with its bottom face.
 use pxl_spec::bake::constant::{band_of, BAND_CELLS};
 use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
@@ -34,7 +34,7 @@ use xpute_runtime::abi::handle::Slots;
 use xpute_runtime::mem::heap::{alloc, free, Block, Guard};
 
 pub const MATERIAL_OBJECT: u8 = 5;
-/// A coarse tier's cells, whatever they summarise.
+/// A coarse tier's cells, whatever they summarize.
 pub const MATERIAL_LAND: u8 = 1;
 
 /// No texture-array layer applies; use the material's flat RGB.

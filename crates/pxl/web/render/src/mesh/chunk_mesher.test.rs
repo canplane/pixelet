@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// One run as a column holds it: its heights, its colour and its layer.
+/// One run as a column holds it: its heights, its color and its layer.
 struct Run {
     z0: i32,
     z1: i32,
@@ -44,7 +44,7 @@ fn ground(z1: i32) -> Vec<Run> {
 
 #[test]
 fn a_cell_walled_in_on_every_side_shows_only_its_top_and_its_bottom() {
-    // Three columns a side, the middle one as tall as its neighbours.
+    // Three columns a side, the middle one as tall as its neighbors.
     let columns: Vec<Vec<Run>> = (0..9).map(|_| ground(3)).collect();
     let set = set_of(3, &columns);
     let view = set.view();
@@ -54,7 +54,7 @@ fn a_cell_walled_in_on_every_side_shows_only_its_top_and_its_bottom() {
 
 #[test]
 fn a_wall_shows_the_side_it_stands_above() {
-    // The middle column stands four cells over its neighbours' one.
+    // The middle column stands four cells over its neighbors' one.
     let columns: Vec<Vec<Run>> = (0..9).map(|k| ground(if k == 4 { 4 } else { 0 })).collect();
     let set = set_of(3, &columns);
     let view = set.view();

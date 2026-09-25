@@ -121,7 +121,7 @@ pub fn bake_leaf(repo: &TerrainRepository, client: &mut Client, page: IVec, stat
 }
 
 /// The source packet an open-ocean page would produce: a flat zero elevation
-/// grid, no terrain features, no coastline rows. Synthesised rather than read
+/// grid, no terrain features, no coastline rows. Synthesized rather than read
 /// from the DB so the fallback page is exactly "nothing here but water",
 /// independent of whichever far-offshore page happened to get sampled.
 fn empty_source() -> Vec<u8> {

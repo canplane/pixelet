@@ -24,8 +24,8 @@
 //! `--all` after `deno task bake:tiles` is for.
 //!
 //! For one page it also writes `heights.png` (the raster stretched to its own
-//! range, so a flat page is flat grey) and one PNG a channel in the palette's
-//! colours, with `void` left black and an index the pack has no type for in
+//! range, so a flat page is flat gray) and one PNG a channel in the palette's
+//! colors, with `void` left black and an index the pack has no type for in
 //! magenta. The picture is for the eye; the summary is the check.
 
 use std::collections::BTreeMap;
@@ -167,7 +167,7 @@ fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
     out.extend_from_slice(&crc.sum().to_be_bytes());
 }
 
-/// A PNG of `width`×`height` pixels, `channels` bytes each (1 grey, 3 RGB).
+/// A PNG of `width`×`height` pixels, `channels` bytes each (1 gray, 3 RGB).
 fn png(width: u32, height: u32, channels: u8, pixels: &[u8]) -> Vec<u8> {
     let stride = (width * channels as u32) as usize;
     let mut z = ZlibEncoder::new(Vec::new(), Compression::default());
@@ -188,15 +188,15 @@ fn png(width: u32, height: u32, channels: u8, pixels: &[u8]) -> Vec<u8> {
 
 fn heights_png(page: &Page, s: &Summary) -> Vec<u8> {
     let span = (s.max as f64 - s.min as f64).max(0.0);
-    let grey: Vec<u8> = page
+    let gray: Vec<u8> = page
         .ele
         .iter()
         .map(|&h| if span == 0.0 { 128 } else { ((h as f64 - s.min as f64) / span * 255.0).round() as u8 })
         .collect();
-    png(ELE_PADDED_SPAN, ELE_PADDED_SPAN, 1, &grey)
+    png(ELE_PADDED_SPAN, ELE_PADDED_SPAN, 1, &gray)
 }
 
-/// Channel `f` in the palette's colours.
+/// Channel `f` in the palette's colors.
 fn channel_png(page: &Page, f: usize) -> Vec<u8> {
     let channel = GroundChannelKey::from_id(f as u32).expect("a packed field is a ground channel");
     let rgb_of = |cell: GroundCell| match ground_pack::NUMBER[f].get(index_of(cell, f)) {

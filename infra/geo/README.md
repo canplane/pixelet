@@ -154,7 +154,7 @@ FROM overture_catalog ORDER BY file_name;
 
 A table with rows but no catalog entry means an ingest stopped between its last
 insert and its last statement. A table whose `data_date` differs from its
-neighbours' was filled from a different Overture release, and a bake over the
+neighbors' was filled from a different Overture release, and a bake over the
 set would mix them.
 
 After a large ingest, `VACUUM ANALYZE` — or `VACUUM FULL ANALYZE` where

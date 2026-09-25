@@ -1,6 +1,6 @@
 {
   "$doc": [
-    "A kind of place and its badge — an icon and a colour — keyed by the category",
+    "A kind of place and its badge — an icon and a color — keyed by the category",
     "pxl-geo-spec's overture/properties.rs `category_of()` gives a place, and",
     "DEFAULT_BADGE for one this does not list, rather than a guessed mapping.",
     "",
@@ -20,7 +20,7 @@
     "dentist": { "icon": "🦷", "color": "#e57373" },
     "restaurant": {
       "$doc": [
-        "Food & drink, a colour of its own apart from fast_food and bar, whatever",
+        "Food & drink, a color of its own apart from fast_food and bar, whatever",
         "the icon style."
       ],
       "icon": "🍴",

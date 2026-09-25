@@ -614,10 +614,10 @@ pub struct Sheet {
     pub columns: u32,
     pub tiles: &'static [(PlaceableCube, CubeFace, u32)],
     /// What each tile reads as from far enough away that the tile itself is
-    /// gone: its own mean colour, taken in linear light. A mesh that
-    /// summarises a patch of ground takes its colour from here rather than
-    /// from the catalog's swatch, which is the colour a type is filed under
-    /// and not the colour its material shows.
+    /// gone: its own mean color, taken in linear light. A mesh that
+    /// summarizes a patch of ground takes its color from here rather than
+    /// from the catalog's swatch, which is the color a type is filed under
+    /// and not the color its material shows.
     pub means: &'static [[u8; 3]],
 }
 
@@ -631,9 +631,9 @@ pub const SHEET: Sheet = Sheet {
         (PlaceableCube::Block(cube_types::Block::brown), CubeFace::Top, 2),
         (PlaceableCube::Block(cube_types::Block::cyan), CubeFace::Top, 3),
         (PlaceableCube::Block(cube_types::Block::dark_green), CubeFace::Top, 4),
-        (PlaceableCube::Block(cube_types::Block::dark_grey), CubeFace::Top, 5),
+        (PlaceableCube::Block(cube_types::Block::dark_gray), CubeFace::Top, 5),
         (PlaceableCube::Block(cube_types::Block::green), CubeFace::Top, 6),
-        (PlaceableCube::Block(cube_types::Block::grey), CubeFace::Top, 7),
+        (PlaceableCube::Block(cube_types::Block::gray), CubeFace::Top, 7),
         (PlaceableCube::Block(cube_types::Block::magenta), CubeFace::Top, 8),
         (PlaceableCube::Block(cube_types::Block::orange), CubeFace::Top, 9),
         (PlaceableCube::Block(cube_types::Block::pink), CubeFace::Top, 10),

@@ -13,7 +13,7 @@
 //!
 //! Sizing that quota is the host's alone (sched/quantum.ts): the frame interval
 //! it measures rather than assumes, the overrun a turn carries into its own
-//! next quota, whether behaviour makes a turn interactive. None of it is
+//! next quota, whether behavior makes a turn interactive. None of it is
 //! mirrored here — the two sides of `runtime` are the two ends of one
 //! arrangement, not one thing implemented twice, and a guest that could size
 //! its own quota would not be under a scheduler. What must agree is the

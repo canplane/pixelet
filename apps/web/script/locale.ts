@@ -4,9 +4,9 @@
 //
 // The rest of the chain from a stored number to what a person reads is held
 // by something already: spec.ts writes the numbering from cube_type.json,
-// the colour table it writes from color.json does not compile against a type
+// the color table it writes from color.json does not compile against a type
 // no channel has, and a
-// texture the pack lacks falls back to the cube's own colour. The last link
+// texture the pack lacks falls back to the cube's own color. The last link
 // is the only silent one — i18next renders a missing key as the key itself,
 // so a catalog entry nobody translated reads as `cubes.land.bare` on screen
 // and a translation whose type was renamed or dropped simply stops being
@@ -19,19 +19,19 @@ import { decor_kinds, decorName, placeable_cubes, placeableCubeChannel, placeabl
 const web = dirname(dirname(new URL(import.meta.url).pathname));
 const LOCALES = ["en", "ko"];
 
-type Catalogue = { [key: string]: string | Catalogue };
+type Catalog = { [key: string]: string | Catalog };
 
 const problems: string[] = [];
 
 /** Every leaf of a branch as a dotted path, or none where the branch is
  * missing entirely — which the caller reports as every key missing. */
-function leaves(node: Catalogue[string] | undefined, prefix = ""): string[] {
+function leaves(node: Catalog[string] | undefined, prefix = ""): string[] {
   if (typeof node !== "object" || node === null) return prefix === "" ? [] : [prefix];
   return Object.entries(node).flatMap(([key, value]) => leaves(value, prefix === "" ? key : `${prefix}.${key}`));
 }
 
 /** What a branch holds against what the catalog gives out. */
-function branch(locale: string, doc: Catalogue, name: string, want: string[]): void {
+function branch(locale: string, doc: Catalog, name: string, want: string[]): void {
   const have = new Set(leaves(doc[name]));
   for (const key of want) {
     if (!have.has(key)) problems.push(`${locale}.json: ${name}.${key} has no name — the catalog gives out ${key}`);
@@ -45,7 +45,7 @@ const cube_ids = placeable_cubes.map(placeableCubeId);
 const channels = [...new Set(placeable_cubes.map(placeableCubeChannel))];
 
 for (const locale of LOCALES) {
-  const doc: Catalogue = JSON.parse(await Deno.readTextFile(join(web, `src/locale/${locale}.json`)));
+  const doc: Catalog = JSON.parse(await Deno.readTextFile(join(web, `src/locale/${locale}.json`)));
   branch(locale, doc, "cubes", cube_ids);
   branch(locale, doc, "decors", decor_kinds.map(decorName));
   // The drawer groups the catalog by channel, one heading each.

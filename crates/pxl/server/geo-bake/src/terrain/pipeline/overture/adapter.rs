@@ -73,7 +73,7 @@ pub enum OvertureRawFeature {
     Base(OvertureBaseRawFeature),
 }
 
-/// The centre a row's geometry gives, or the origin when it gives none —
+/// The center a row's geometry gives, or the origin when it gives none —
 /// `g.points[0] ?? [0, 0, 0]`.
 fn center_of(g: &WkbGeometry) -> G3857 {
     g.points.first().copied().unwrap_or([0.0, 0.0, 0.0])

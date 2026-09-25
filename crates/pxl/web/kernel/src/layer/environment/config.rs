@@ -74,7 +74,7 @@ pub mod rim_cfg {
     pub const INTENSITY: f64 = 0.1;
 }
 
-/// The canvas's resolution. The colour grade and the vignette are the
+/// The canvas's resolution. The color grade and the vignette are the
 /// shaders' own constants (crates/pxl/web/render/src/frame/shader/{grade,shade}.wgsl);
 /// the rest of the post stack three ran — contact AO, bloom, god rays,
 /// SMAA — is at b9e31004 with its tuning.

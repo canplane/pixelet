@@ -6,7 +6,7 @@
 //! allocation and one material binding per badge, which is one draw call per
 //! badge, because two sprites with different textures cannot be batched.
 //! Holding them in one image is what makes a single instanced draw possible at
-//! all — the atlas is not the optimisation, it is the precondition for it.
+//! all — the atlas is not the optimization, it is the precondition for it.
 //!
 //! It is worth being clear about what it does *not* buy: the same badges at the
 //! same resolution occupy the same pixels whether they live in one image or
@@ -64,7 +64,7 @@ pub const NO_SLOT: i32 = -1;
 pub enum DrawSpec {
     /// A count of places: the number on the pill, and its anchor dot.
     Cluster { label: String, logical_w: f64 },
-    /// One place: its kind's icon on its colour in the pill's left cap, and
+    /// One place: its kind's icon on its color in the pill's left cap, and
     /// its name after it.
     Place { name: String, icon: &'static str, color: u32, logical_w: f64 },
     /// The notched speech bubble and its wrapped lines.
@@ -105,7 +105,7 @@ fn max_size(handheld: bool) -> u32 {
 }
 
 /// One device pixel of transparent margin, so a linear sample at the edge of
-/// one entry cannot reach into its neighbour. Mipmaps make the reach wider than
+/// one entry cannot reach into its neighbor. Mipmaps make the reach wider than
 /// a texel at distance, which is exactly when badges are small.
 pub const PAD: u32 = 1;
 

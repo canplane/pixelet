@@ -203,7 +203,7 @@ built the same way:
 
 - **GPU work isn't decomposable into scheduler-driven named tasks.** It's
   "render the frame," one blob, and the browser hides its timing on purpose
-  (Spectre-era fingerprinting defense). So the GPU section is a per-frame gauge
+  (Specter-era fingerprinting defense). So the GPU section is a per-frame gauge
   panel, not a span log.
 - **`scene.tsx` runs `frameloop="demand"`** — a static scene costs ~0 GPU. GPU
   budget only means anything during active frames (pan, animation, an effect
@@ -213,7 +213,7 @@ What's measurable, by availability:
 
 | tier                               | signal                                                               | note                                                                                                    |
 | ---------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| always, cheap                      | `renderer.info` — draw calls, triangles, textures, programs          | what the GPU is being asked to do; the CPU-side queue-depth analogue                                    |
+| always, cheap                      | `renderer.info` — draw calls, triangles, textures, programs          | what the GPU is being asked to do; the CPU-side queue-depth analog                                      |
 | always, cheap                      | rAF frame interval + a demand/continuous flag                        | under `frameloop="demand"` with near-zero per-frame CPU, the interval ≈ GPU + compositor                |
 | always, cheap                      | pixel load = `drawingBufferWidth·Height` × active post-fx pass count | `dpr` and every effect toggle live in `render_settings_store`; estimates B with no GPU timing at all    |
 | always                             | LoAF `PerformanceObserver` — long frame with a script/render split   | makes CPU-vs-GPU attribution possible                                                                   |
@@ -322,7 +322,7 @@ static labels live next to each task category's registration.
      it never existed without one.
    - **4b — the integration.** Pool the per-pass budgets into one frame-wide
      allowance, and move the `set_tile` commit cascade onto it. A real
-     behaviour change; needs a render to tune and verify against.
+     behavior change; needs a render to tune and verify against.
 
    (Tile _decode_ was on this list until it was measured at 0.6 ms; see the
    second finding below.)
@@ -374,7 +374,7 @@ flight. No bespoke `AbortController` on POI, as decided.
 Priorities as shipped: terrain `chebyshev_dist * 2`, POI `chebyshev_dist * 2 +
 1` (POI one step behind terrain at equal distance, since a badge grounds against
 its page's terrain), device-pinned terrain page `1_000` (loads, but never jumps
-the line). Geocode `-5` and search `-10` were folded in afterwards, both single
+the line). Geocode `-5` and search `-10` were folded in afterward, both single
 slot — see below.
 
 ## Update 2026-09-09: the ledger's first real finding
@@ -696,10 +696,10 @@ Four more changes after the imperative conversion, each one found by the
 ledger rather than by reading code. Recorded mostly for the pattern.
 
 **Faces nothing can see.** Every cube emitted all five or six of its faces
-regardless of its neighbours, so a flat plateau baked four hidden faces per
-cell. Culling a face when a neighbouring column spans the run's whole z
+regardless of its neighbors, so a flat plateau baked four hidden faces per
+cell. Culling a face when a neighboring column spans the run's whole z
 range keeps **23-24%** of the faces on real terrain — measured identically
-across three sessions, which is what a workload-normalised counter is for.
+across three sessions, which is what a workload-normalized counter is for.
 A run-level occlusion test already existed and had fired **zero times in
 half a million runs**: its condition was strictly narrower, and narrower in
 the wrong direction, since it refused to consider chunk-edge columns at all.
@@ -759,17 +759,17 @@ passed over for the entire session while the pending count stayed between
 window peak read 17 180 ms, so it predates the core-memory work that session
 tested. The rate says the scheduler is working; the monotonic wait says its
 order can starve one chunk indefinitely — the unified priority
-(`holds_slot`, `in_frustum`, `lead_distance2`) has no ageing term, so a chunk
+(`holds_slot`, `in_frustum`, `lead_distance2`) has no aging term, so a chunk
 that is always slightly farther from the lead point than whatever keeps
 arriving never reaches the front while the view keeps moving. Trace:
 pxl-ledger-2026-09-11T14-35-25-187Z.json.
 
-Fixed with ageing (`sched/priority.ts`'s `AGE_HALF_MS`), the textbook cure
+Fixed with aging (`sched/priority.ts`'s `AGE_HALF_MS`), the textbook cure
 for starvation under a static priority: every 500 ms a pending item waits
 halves its effective distance from the lead point, so one k times farther
 than a fresh arrival overtakes it after log2(k) half-lives — two seconds at
 sixteen times, the overlay's `STARVED_MS`. Items that began waiting together
-age alike, so a jump or a load still fills nearest-first. Ageing reorders
+age alike, so a jump or a load still fills nearest-first. Aging reorders
 within a tier and never across one: slot holders still go first and an
 off-screen release still cannot pass a visible build, so releases can in
 principle still wait out an endless stream of on-screen work — accepted, as

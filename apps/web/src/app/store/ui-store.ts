@@ -69,7 +69,7 @@ interface UiState {
   set_activeTool: (activeTool: ActiveTool) => void;
 
   /** The cube the object tool holds: any the drawer offers, not only the
-   * hotbar's flat colours. */
+   * hotbar's flat colors. */
   cube: PlaceableCube;
 
   /** The object size, by its tier in the kernel's `object_sizes`. */

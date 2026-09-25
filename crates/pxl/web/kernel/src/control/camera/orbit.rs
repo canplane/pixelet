@@ -2,7 +2,7 @@
 
 //! Pure math for this app's orbit camera model, pulled out of damping.rs /
 //! view_frame.rs so it can be unit tested on its own. Doc'd once here
-//! because the model is easy to get backwards:
+//! because the model is easy to get backward:
 //!
 //! **Azimuth never rotates the camera.** Only `dist` and `polar` determine
 //! camera.position (orbit_local_offset below), and the camera always looks

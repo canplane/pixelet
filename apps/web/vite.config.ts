@@ -322,10 +322,10 @@ export default defineConfig(({ mode }) => {
   // deployed bundle and ship the debug settings section and the dev routes
   // with it.
   //
-  // The other direction is honoured: running the dev server with
+  // The other direction is honored: running the dev server with
   // VITE_APP_ENV=production turns dev-only surfaces off locally, which is
   // the point of the variable. Only the "development" value is overridden,
-  // so a production build labelled `staging` still says staging.
+  // so a production build labeled `staging` still says staging.
   //
   // The override lands on the NAME, and isDev is derived from it: a guard
   // on isDev alone would leave __APP_ENV__ reading "development" while the

@@ -15,7 +15,7 @@ fn dict() -> Vec<Division> {
     vec![
         division(PlaceRank::Region, "경기도", "Gyeonggi-do"),
         division(PlaceRank::County, "성남시", "Seongnam-si"),
-        division(PlaceRank::Neighbourhood, "수내동", "Sunae-dong"),
+        division(PlaceRank::Neighborhood, "수내동", "Sunae-dong"),
     ]
 }
 
@@ -28,7 +28,7 @@ fn group() -> PlaceGroup {
         pages,
         // A place no polygon named: the group carries it rather than the
         // dictionary, which holds only what a polygon names.
-        locals: vec![division(PlaceRank::Neighbourhood, "백현동", "Baekhyeon-dong")],
+        locals: vec![division(PlaceRank::Neighborhood, "백현동", "Baekhyeon-dong")],
     }
 }
 
@@ -45,7 +45,7 @@ fn a_dictionary_survives_the_wire() {
     let at = |i| view.at(i).expect("a place the dictionary has");
     assert_eq!((at(0).rank, at(0).name), (PlaceRank::Region, "경기도"));
     assert_eq!(at(1).in_language("en"), "Seongnam-si");
-    assert_eq!(at(2).rank, PlaceRank::Neighbourhood);
+    assert_eq!(at(2).rank, PlaceRank::Neighborhood);
     assert!(view.at(3).is_none(), "and nothing past its end");
 }
 
@@ -126,7 +126,7 @@ fn a_label_running_past_the_numbers_is_refused() {
     // truncated body is the one way this arrives.
     let pkt = group_pkt(&[0, 9], &[0], &[NO_LABEL; GROUP_PAGES], &[]);
     assert!(open_place_group(&pkt).is_err());
-    // And a label whose numbers run backwards, which would read as a
+    // And a label whose numbers run backward, which would read as a
     // negative length.
     let pkt = group_pkt(&[0, 2, 1], &[0, 1], &[NO_LABEL; GROUP_PAGES], &[]);
     assert!(open_place_group(&pkt).is_err());

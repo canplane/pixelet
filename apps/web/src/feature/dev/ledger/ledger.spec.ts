@@ -204,7 +204,7 @@ export const STEP = {
   WORDS: 5 as number,
 } as const;
 
-/** The block `ledger_read` computes: each section's words at its AT, the fields relative to it. Every word an f64. */
+/** The block LEDGER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64. */
 export const SUMMARY = {
   rec: {
     AT: 0 as number,
@@ -331,7 +331,7 @@ export const SUMMARY = {
   WORDS: 591 as number,
 } as const;
 
-/** What `ledger_read` returns the address of: u32 words, each range's address in the module's memory and its record count. */
+/** What LEDGER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count. */
 export const READ = {
   summary_at: 0 as number,
   summary_words: 1 as number,
@@ -344,7 +344,7 @@ export const READ = {
   WORDS: 16 as number,
 } as const;
 
-/** What `ledger_log` returns the address of: u32 words, the frames and tasks the stream has kept since `ledger_log_clear`. */
+/** What LEDGER_TAKE answers with the address of: u32 words, the frames and tasks the stream has kept since the last take. */
 export const LOG = {
   frames_at: 0 as number,
   frames_count: 1 as number,

@@ -86,13 +86,13 @@ Each is pinned by a vector now, so both sides answer the same.
   pxl-core's own band tree onto this one (2026-09-15, the old one at
   `a1722d4d`): the same leaves after each of
   3,000 random writes, and 6.7 µs a write on a band of a player's size
-  against the specialised tree's 4.6.
+  against the specialized tree's 4.6.
 
 ## Different because the languages are, and kept
 
 - **A throw is a `Result` or a panic.** A malformed packet or a refused
   size is `Err(MarshalError)` with the same errno the TypeScript throws. A
-  programmer's error — a bad capacity, a double registration, a bad hex
+  programr's error — a bad capacity, a double registration, a bad hex
   string, an index past a typed array (where JavaScript reads `undefined`)
   — panics. A JavaScript throw can be caught; a panic in the module stops
   it, which is why anything that reads outside input is a `Result`. The one
@@ -176,7 +176,7 @@ recorded here so the reshaping that follows starts from it:
   layout (`OBJECT_LAYOUT`, the placement model's). `crates/pxl/core/src/
   space/constant.rs` was a hand copy with the shifts as literals; it
   reads from the mirrored `bake/constant.rs` now that one exists.
-- **`spec/cell` is the type numbering and colours.** The client reads it
+- **`spec/cell` is the type numbering and colors.** The client reads it
   widely; the server reads `cube_types` only. The module's
   `bake/terrain.rs` restates the channel order, `SEA` and the water rule
   by hand, and is what the mirrored `cube.rs`/`ground.rs` replace.

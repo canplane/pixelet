@@ -16,7 +16,7 @@ serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 //! Places, Divisions, Buildings and Transportation:
 //!
 //! - `land_use` — residential/park/commercial/school/hospital/pitch/..., this
-//!   project's own main land-colouring signal
+//!   project's own main land-coloring signal
 //! - `water` — river/lake/stream/canal
 //! - `land` — tree/forest/wood/peninsula, still needed separately from
 //!   land_use, since a green patch with no administrative land_use polygon

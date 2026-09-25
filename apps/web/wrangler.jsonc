@@ -4,7 +4,7 @@
   // bundle check, then wrangler through Deno.
   //
   // `name` becomes the *.workers.dev subdomain; a custom domain is attached
-  // in the dashboard afterwards. Rationale for this shape — one Worker, one
+  // in the dashboard afterward. Rationale for this shape — one Worker, one
   // origin, no CORS — is in issue/20260816-deployment-hosting.md.
   "name": "pixelet",
   "main": "cloudflare-worker/index.ts",

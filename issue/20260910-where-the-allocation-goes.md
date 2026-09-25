@@ -140,7 +140,7 @@ needs a new recording to be checked.
 ## 0. Scale of the thing being measured
 
 From `U_PER_CELL = 1`, `M_PER_U = 2.389`, Seoul's latitude (EPSG:3857 planar
-metres are inflated by `1/cos(lat)`; real metres shown).
+meters are inflated by `1/cos(lat)`; real meters shown).
 
 ```
 1 cell   1.89 m
@@ -464,7 +464,7 @@ inflated by roughly 2x on one side.
 
 ---
 
-## 4. Read from the source afterwards
+## 4. Read from the source afterward
 
 Facts about the code, not measurements.
 
@@ -528,7 +528,7 @@ repaint; recording and the console handles run regardless.
   and rotate. A major collection costs 20–47 ms; the jump's 4903.8 ms is a
   100x outlier against the other nine in these traces.
 - Terrain fetch is 2–3 s per 4.2 MB tile, latency-bound; decode is 0.0 ms.
-- The chunk pipeline's normalised costs are 5.6 ms per bake, 2.8 ms per chunk
+- The chunk pipeline's normalized costs are 5.6 ms per bake, 2.8 ms per chunk
   scan, 0.3 ms per thousand runs, at a 100% mesh-pool hit rate and 100% band
   reuse.
 

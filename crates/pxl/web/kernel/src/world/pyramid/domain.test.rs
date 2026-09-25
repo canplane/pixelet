@@ -42,7 +42,7 @@ fn every_drawn_chunk_lies_between_its_split_distances_and_the_view_fits_its_budg
             let eye = Eye {
                 at: [x, y, height],
                 foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
-                centre: [x, y, 0.0],
+                center: [x, y, 0.0],
             };
             let d = domain_for(&eye, height, None, 0);
             let s = d.scale;
@@ -80,7 +80,7 @@ fn every_page_drawn_from_is_wanted_with_every_ancestor_up_to_the_top() {
             let eye = Eye {
                 at: [x, y, height],
                 foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
-                centre: [x, y, 0.0],
+                center: [x, y, 0.0],
             };
             let d = domain_for(&eye, height, None, 0);
             for c in drawn_by_rule(&d) {
@@ -109,7 +109,7 @@ fn ground_outside_the_frustum_is_not_refined() {
     let eye = Eye {
         at: [x, y, height],
         foot: ivec::gather(f64::floor(x) as i64, f64::floor(y) as i64, 0),
-        centre: [x, y, 0.0],
+        center: [x, y, 0.0],
     };
     // One plane, x ≥ the eye's, and five that pass everything.
     let mut planes = [0.0; 24];
@@ -127,7 +127,7 @@ fn ground_outside_the_frustum_is_not_refined() {
 }
 
 /// The frustum the view draws, carried into world units, sees what the view
-/// looks at: the map centre it orbits, from every tilt and turn.
+/// looks at: the map center it orbits, from every tilt and turn.
 #[test]
 fn the_view_s_frustum_sees_the_ground_it_looks_at() {
     let _serial = crate::global::serial();
@@ -139,12 +139,12 @@ fn the_view_s_frustum_sees_the_ground_it_looks_at() {
         (v.dist, v.polar, v.azimuth) = (dist, polar, azimuth);
         crate::world::frame::view::view_compose();
         let f = Frustum::of_view();
-        let centre = [3_000_000.0 + 500.0, 2_000_000.0 + 300.0, 10.0];
+        let center = [3_000_000.0 + 500.0, 2_000_000.0 + 300.0, 10.0];
         let v = crate::world::frame::view::view();
         let eye = [3_000_000.0 + v.eye_local[0], 2_000_000.0 + v.eye_local[1], v.eye_local[2]];
-        assert!(f.sees(centre, 1.0, eye), "dist {dist}, polar {polar}, azimuth {azimuth}");
+        assert!(f.sees(center, 1.0, eye), "dist {dist}, polar {polar}, azimuth {azimuth}");
         // And not what lies straight behind the eye.
-        let behind = [2.0 * eye[0] - centre[0], 2.0 * eye[1] - centre[1], centre[2]];
+        let behind = [2.0 * eye[0] - center[0], 2.0 * eye[1] - center[1], center[2]];
         assert!(!f.sees(behind, 1.0, eye), "behind, dist {dist}, polar {polar}, azimuth {azimuth}");
     }
 }

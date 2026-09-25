@@ -15,7 +15,7 @@ fn the_sun_at_seoul_noon_is_high_and_south_south_east() {
     }
 }
 
-/// The stars' matrix and the bodies' construction agree: the same catalogued
+/// The stars' matrix and the bodies' construction agree: the same cataloged
 /// directions come out where `local_direction` puts them, Sirius, Polaris and
 /// a star on the celestial equator, at Seoul and at Sydney.
 #[test]

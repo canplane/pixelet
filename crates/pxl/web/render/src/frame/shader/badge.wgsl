@@ -5,7 +5,7 @@
 // after the world with the world's depth attached read-only and bound as
 // a texture at once, so both occlusion questions are asked of this
 // frame's depth.
-// Whether the labelled point is visible is asked in the vertex shader, at
+// Whether the labeled point is visible is asked in the vertex shader, at
 // five points up the badge from just above the anchor, and answered for
 // the whole badge; whether something stands between the camera and the
 // badge itself is the depth test's, against the depth of an upright twin
@@ -95,11 +95,11 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   let size = size_px * depth / badge.px_k * fade;
   let drop = size.y * (frac - 0.5);
   // The sprite anchor is a screen offset, independent of camera tilt.
-  let centre_view = anchor_view + vec3f(0.0, drop, 0.0);
+  let center_view = anchor_view + vec3f(0.0, drop, 0.0);
   let corner = q * size;
 
   var o: VertexOut;
-  o.clip = badge.proj * vec4f(centre_view + vec3f(corner, 0.0), 1.0);
+  o.clip = badge.proj * vec4f(center_view + vec3f(corner, 0.0), 1.0);
   // The sheet's v0 is the rectangle's top edge.
   o.uv = vec2f(mix(rect.x, rect.z, q.x + 0.5), mix(rect.w, rect.y, q.y + 0.5));
   o.opacity = fade;
@@ -116,8 +116,8 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   o.hidden = select(0u, 1u, hidden >= DEPTH_HIDE_AT);
 
   let world_up_view = normalize((badge.view * vec4f(0.0, 0.0, 1.0, 0.0)).xyz);
-  let push = DEPTH_BIAS_U + max(0.0, -centre_view.z) * badge.cell * DEPTH_BIAS_CELLS;
-  let upright = badge.proj * vec4f(centre_view + vec3f(corner.x, 0.0, push) + world_up_view * corner.y, 1.0);
+  let push = DEPTH_BIAS_U + max(0.0, -center_view.z) * badge.cell * DEPTH_BIAS_CELLS;
+  let upright = badge.proj * vec4f(center_view + vec3f(corner.x, 0.0, push) + world_up_view * corner.y, 1.0);
   o.upright_z = clamp(upright.z / upright.w, 0.0, 1.0);
   return o;
 }

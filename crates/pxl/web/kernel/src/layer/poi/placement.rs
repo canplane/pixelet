@@ -8,11 +8,11 @@
 //! level the view wants there, where a finer page stands in for it: how
 //! coarse places are is the camera's distance and nothing else, the ground's
 //! the same way but apart from it. A cell holding two places or more is a
-//! count, a cell holding one is the place, and either stands at the centre
+//! count, a cell holding one is the place, and either stands at the center
 //! of the z16 ground cell its places' centroid falls in — the page's, or the
 //! centroids of the finer cells counted into it weighted by their counts. It
 //! stands in all three axes, on the surface drawn there (pxl-spec
-//! space/pyramid.rs `Cell::centre`, chunk/table.rs `surface_at`), which is
+//! space/pyramid.rs `Cell::center`, chunk/table.rs `surface_at`), which is
 //! the one thing read from the ground.
 
 use crate::global::Global;
@@ -114,7 +114,7 @@ pub fn step(ctx: &mut TickContext) {
         }
     }
     p.batch.reset();
-    let mut labelled = Vec::new();
+    let mut labeled = Vec::new();
     for (cell, t) in cells {
         let label = match (t.count, t.place) {
             (1, Some((page, place))) => Label::Place { page, place },
@@ -124,18 +124,18 @@ pub fn step(ctx: &mut TickContext) {
         let stands = cell.inner_at(GROUND, 0, t.at.map(mean));
         let Some((_, top)) = sched.surface_at(&stands.mid()) else { continue };
         let Some(width) = badge::width(label) else { continue };
-        let centre = stands.centre(top);
+        let center = stands.center(top);
         let mut local = [0.0; 3];
-        projection::unproject(&mut local, ivec::sub(centre.i, origin), centre.f);
-        p.batch.push(local[0], local[1], local[2], width, badge::ANCHOR, labelled.len() as f64);
-        labelled.push((label, stands));
+        projection::unproject(&mut local, ivec::sub(center.i, origin), center.f);
+        p.batch.push(local[0], local[1], local[2], width, badge::ANCHOR, labeled.len() as f64);
+        labeled.push((label, stands));
     }
-    badge::retain(&labelled.iter().map(|l| l.0).collect());
+    badge::retain(&labeled.iter().map(|l| l.0).collect());
     let v = view();
     select_visible_billboards(&mut p.batch, v.width, v.height, &mut p.kept);
     p.drawn.clear();
     for &i in &p.kept {
-        if badge::slot(labelled[i as usize].0) == NO_SLOT {
+        if badge::slot(labeled[i as usize].0) == NO_SLOT {
             continue;
         }
         p.drawn.push(i);
@@ -150,12 +150,11 @@ pub fn step(ctx: &mut TickContext) {
             .then(batch.tiebreak[a as usize].total_cmp(&batch.tiebreak[b as usize]))
     });
     p.hits.clear();
-    p.hits
-        .extend(p.drawn.iter().rev().map(|&i| (p.batch.screen[i as usize], labelled[i as usize].0, labelled[i as usize].1)));
+    p.hits.extend(p.drawn.iter().rev().map(|&i| (p.batch.screen[i as usize], labeled[i as usize].0, labeled[i as usize].1)));
     let mut instances = Vec::with_capacity(p.drawn.len() * BILLBOARD_FLOATS);
     for &i in &p.drawn {
         let i = i as usize;
-        let (sheet, slot) = (billboard_sheet(), badge::slot(labelled[i].0) as u32);
+        let (sheet, slot) = (billboard_sheet(), badge::slot(labeled[i].0) as u32);
         instances.extend_from_slice(&[
             p.batch.local_x[i] as f32,
             p.batch.local_y[i] as f32,

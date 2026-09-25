@@ -3,7 +3,7 @@
 **2026-09-19** — a design conversation, not a code change. The question was
 whether to lay HTTP/3 and WebTransport as a conduit now, with a fallback for
 where it cannot connect, and let `pxl-api`'s routes accumulate through it
-afterwards. That is the same move `pxl-api` itself already made — it answers
+afterward. That is the same move `pxl-api` itself already made — it answers
 nothing and exists anyway, because the shape is what a later route arrives
 into — so the instinct is the project's own and not a departure from it.
 
@@ -121,9 +121,9 @@ measures rather than replaces.
 
 One reading is worth correcting while here. AGENTS.md puts "traffic/scale
 optimization (AOI filtering, decay systems, sync protocols)" outside MVP
-scope. That excludes optimising sync at scale; it does not exclude having a
+scope. That excludes optimizing sync at scale; it does not exclude having a
 channel, which is step 4 of the order and a feature rather than an
-optimisation.
+optimization.
 
 ## Where WebTransport earns its keep, and where it does not
 

@@ -57,7 +57,7 @@ fn small() -> Layout {
 /// another, or a run's own bookkeeping written into a caller's bytes, shows up
 /// here and nowhere else.
 #[test]
-fn what_was_written_in_a_slot_is_still_there_after_its_neighbours_come_and_go() {
+fn what_was_written_in_a_slot_is_still_there_after_its_neighbors_come_and_go() {
     let heap: SlabMalloc<Slots> = SlabMalloc::new();
     let sizes = [1usize, 16, 17, 24, 64, 200, 1000, 4096, 9000];
     let mut live: Vec<(*mut u8, usize, u8)> = Vec::new();

@@ -161,7 +161,7 @@ read half.
     once per pump in which anything arrived, and `useDecorAssets` stays a
     `useSyncExternalStore` over it.
 
-**What moved in behaviour:** every listener runs at the start of the next
+**What moved in behavior:** every listener runs at the start of the next
 frame, never inside the write that caused it. Checked by hand in the running
 app after the object and page steps: terrain fills, search re-grounds, the
 puck and the POI badges sit on the ground. The decor-asset step is checked

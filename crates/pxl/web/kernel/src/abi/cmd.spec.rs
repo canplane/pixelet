@@ -517,7 +517,7 @@ pub enum Command {
     INPUT_RESET_DIST = 0x1c14,
     /// The compass's press: north up.
     INPUT_COMPASS_RESET = 0x1c15,
-    /// A search result: the map centre moved there.
+    /// A search result: the map center moved there.
     INPUT_GO_TO = 0x1c16,
     /// A GPS fix; a field is absent where the browser gave none.
     SENSOR_UPDATE = 0x1d03,
@@ -668,8 +668,8 @@ pub struct Snapshot<'a> {
     /// Every setting's value by its SettingKey, as SETTING_UPDATE carries one.
     pub settings: &'a [u32],
     pub scale_bar: ScaleBar,
-    /// The place the map centre is in, broad to narrow, already cut at the rung the
-    /// current zoom asks for; empty where the centre is in none or the packets it is
+    /// The place the map center is in, broad to narrow, already cut at the rung the
+    /// current zoom asks for; empty where the center is in none or the packets it is
     /// read out of have not arrived.
     pub place: &'a dyn Fn(&mut dyn FnMut(&PlacePart<'_>)),
     /// The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index.
@@ -705,9 +705,9 @@ impl Snapshot<'_> {
 pub struct MapState {
     pub status: MapStatus,
     pub is_off_center: bool,
-    /// The map centre in degrees: what the search measures distance from.
+    /// The map center in degrees: what the search measures distance from.
     pub center: Option<LonLat>,
-    /// The L3 page the centre falls in: what the area being looked at is announced per.
+    /// The L3 page the center falls in: what the area being looked at is announced per.
     /// Sent because the shell would otherwise need a second implementation of the space
     /// to reach it.
     pub page: Option<u64>,
@@ -978,7 +978,7 @@ pub struct InputPointer {
     pub x: f64,
     pub y: f64,
     pub tool: ActiveTool,
-    /// The ground channel the held cube stands in for; absent for a flat colour, a decor kind or nothing.
+    /// The ground channel the held cube stands in for; absent for a flat color, a decor kind or nothing.
     pub channel: Option<pxl_spec::bake::format::GroundChannelKey>,
     /// The held cube's type in its channel, or the decor kind, by the catalog's number; what the object store keeps is the kernel's to derive.
     pub value: u32,

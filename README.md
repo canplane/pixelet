@@ -15,7 +15,7 @@ The client is a small operating system in a browser tab. A Rust **kernel**, comp
 - **Real ground, as blocks.** Overture geometry and GEDTM30 elevation are rasterized ahead of time into pages of 512² blocks, four channels of ground type and one elevation raster each. A page is fetched, read where it lands in memory, and kept only while the view is near it.
 - **One coordinate, 96 bits of fixed point.** A position is two packed words — three integer fields for which block, three 8-bit fractions for where inside it — so it resolves to 1/256 of a block. The arithmetic is integer, so it is the same bits on every machine, and the X field is cyclic, so the world wraps at the longitude seam.
 - **Terrain and what you build meet only when a chunk is built.** The chunk is Minecraft's, at 64 blocks. The ground is a dense raster for a whole page; placed objects are a sparse tree per 64³ band. They converge in one pipeline, and the mesher and the pointer's ray read the same spans out of it — so what is drawn is what is hit.
-- **Running short of memory costs detail, not the frame.** Work off screen is reclaimed first, and if that is not enough the LOD ladder steps one tier coarser and climbs back when the pressure passes. The view gets blockier; the tab does not die.
+- **Running short of memory costs detail, not the frame.** Work off screen is reclaimed first, and if that is not enough the view's criterion is pulled a level coarser and let out again when the pressure passes. The view gets blockier; the tab does not die.
 - **Numbers, not strings.** Commands, catalogs, assets and messages are numbered once in JSON under `spec/`, and both languages are generated from it. Nothing is ever looked up by name.
 
 ---
@@ -144,7 +144,7 @@ filled by the bakes, offline
 
 The four roots are written in one file, `spec/pxl/spec/route.json`, and every relay reads them from there. A green push to the `deploy` branch takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
 
-Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and **XTP**, a relocatable binary tree read without copying. One piece of the kernel is a port rather than a dependency: evanw/buddy-malloc, under the heap, and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) carries what its licence asks.
+Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and **XTP**, a relocatable binary tree read without copying. One piece of the kernel is a port rather than a dependency: evanw/buddy-malloc, under the heap, and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) carries what its license asks.
 
 ---
 
@@ -159,7 +159,7 @@ Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and *
 │           ├── app/ page/    #   the frame, the router, the pages
 │           ├── feature/      #   a screen's own pieces: map, search, setting, character, dev
 │           ├── catalog/      #   the data screens show (cells, assets, geocode)
-│           ├── locale/       #   i18n catalogues, dev-only ones apart
+│           ├── locale/       #   i18n catalogs, dev-only ones apart
 │           ├── config/       #   deployment config and routes
 │           └── shared/       #   shared UI kit and browser helpers
 ├── crates/                   # The Rust workspace, grouped by where a crate runs

@@ -22,7 +22,7 @@ carry and were not repeated.
 - `crates/pxl/core/src/module/world/sched/chunk_table.rs`: room among. A zoom-in leaves a thousand chunks showing their last layout off screen; at two a frame that is eight seconds of the fine tiers finding no room (2026-09-14).
 - `crates/pxl/core/src/module/world/sched/chunk_table.rs`: off its pressure mark. Seen on the desktop, 2026-09-14: a zoom through a city left 1,091 chunks pending on tiers the section could not hold, nothing off screen to reclaim, for the rest of the session.
 - `crates/pxl/core/src/module/world/sched/tick.rs`: Without it a placement of a few dozen units took 25 frames and 3.3 s on a phone while a load kept the visible phase busy, and an index rebuild 49 frames (2026-09-13). A fixed share, not a feedback loop.
-- `crates/pxl/core/src/module/world/surface_height.rs`: This replaces probing upward a cell at a time with a 27-cell neighbourhood query at each step: with nothing placed at the XY the probe loop ran to its 64-cell guard every call, and the companion asked twice a frame — 4.8 ms a frame on a phone (2026-09-13). A placed object
+- `crates/pxl/core/src/module/world/surface_height.rs`: This replaces probing upward a cell at a time with a 27-cell neighborhood query at each step: with nothing placed at the XY the probe loop ran to its 64-cell guard every call, and the companion asked twice a frame — 4.8 ms a frame on a phone (2026-09-13). A placed object
 - `crates/pxl/core/src/render/chunk_range.rs`: scan up: measured 2026-09-12, and it reads on screen
 - `crates/pxl/core/src/render/chunk_range.rs`: them a moment later (200 terrain aborts in one session, 2026-09-12). One
 - `crates/pxl/core/src/render/layer/pipeline/chunk_mesher.rs`: would from a pass over every cell's buckets held at once — the TypeScript's two phases — without holding them. Held, a dense chunk's buckets ran to megabytes and, doubling as they grew, past the module's heap (b3, 2026-09-13).
@@ -57,14 +57,14 @@ carry and were not repeated.
 - `crates/pxl/core/src/render/lod.rs`: reference. Twice the 120u and 320u the fade was first tuned at, which read as too near once the badges gathered by the cube ladder (2026-09-12); and moving with the projection now rather than staying fixed while the tiers under them moved.
 - `crates/pxl/core/src/render/lod.rs`: inside render_cfg.RENDER_DIST, so including it removes both its hard pop and the old 29% non-blended hysteresis gap.
 - `crates/pxl/shared/src/bake/constant.rs`: unlike the old TERRAIN_LAYOUT above) because objects never merge past
-- `crates/pxl/shared/src/bake/ground.rs`: anything the terrain does not already show. They disagreed before this was one definition — a road over bare ground reads `land = BARE` while rendering as road, so comparing one channel cancelled a bare-ground cube into a road.
+- `crates/pxl/shared/src/bake/ground.rs`: anything the terrain does not already show. They disagreed before this was one definition — a road over bare ground reads `land = BARE` while rendering as road, so comparing one channel canceled a bare-ground cube into a road.
 - `crates/pxl/shared/src/spec/cell/mod.rs`: explicit air — the only real distinction left (2026-09-06) now that a
 - `crates/pxl/shared/src/spec/cell/mod.rs`: hand-typed per-type catalog to keep in sync — 2026-09-06, see
 - `crates/pxl/shared/src/spec/cell/mod.rs`: the original 15 flat colors (2026-09-06 UX decision — the full catalog
 - `crates/pxl/shared/src/spec/space/adapter/yup.rs`: The engine is natively Z-up throughout, and the 2026-04 Z-up unification deleted the per-subsystem Y-up adaptations that used to call helpers like these. Inside the engine there is no longer anywhere for a conversion to happen — ENU maps straight onto the render axes.
 - `crates/pxl/wasm/src/lib.rs`: It used to — a line per settled task, raised as `WORLD_LOG` every tick — and that gave a debug feature the ring's failure policy, which is that `Outbox::post` asserts when the completion queue and its spill are both full. Turning the stream on during a fetch burst is the case that fills them, and it is also the only case anyone turns it on for.
 - `packages/pxl/shared/src/bake/constant.ts`: unlike the old TERRAIN_LAYOUT above) because objects never merge past
-- `packages/pxl/shared/src/bake/ground.ts`: anything the terrain does not already show. They disagreed before this was one definition — a road over bare ground reads `land = BARE` while rendering as road, so comparing one channel cancelled a bare-ground cube into a road.
+- `packages/pxl/shared/src/bake/ground.ts`: anything the terrain does not already show. They disagreed before this was one definition — a road over bare ground reads `land = BARE` while rendering as road, so comparing one channel canceled a bare-ground cube into a road.
 - `packages/pxl/shared/src/spec/cell/cube_type.json`: Flat user-painted colors only — no sentinels of its own anymore.
 - `packages/pxl/shared/src/spec/cell/mod.ts`: explicit air — the only real distinction left (2026-09-06) now that a
 - `packages/pxl/shared/src/spec/cell/mod.ts`: hand-typed per-type catalog to keep in sync — 2026-09-06, see

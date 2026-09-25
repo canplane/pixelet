@@ -175,7 +175,7 @@ introduce WASM-only assumptions into `pxl-kernel`.
 
 ## Where the boundaries fall
 
-The proposal was to split the GIS-flavoured serving from the ordinary
+The proposal was to split the GIS-flavored serving from the ordinary
 application serving. The boundary is harder than that, and it is already
 provisioned: **there are two databases.**
 
@@ -373,7 +373,7 @@ One query differed on ordering and turned out not to be a difference at all.
 similarity(name, $1) DESC, name` leaves them exactly tied and Postgres returns
 them in scan order — the _same_ server shuffles them between calls. Worth
 knowing rather than fixing here: adding `gers_id` as a last tiebreaker would
-make the order stable, and would also be the first deliberate behaviour change
+make the order stable, and would also be the first deliberate behavior change
 of the port, so it is a decision rather than a repair.
 
 **The framework is off the critical path, as expected, and now measured.**
@@ -600,7 +600,7 @@ already. Both directions were broken deliberately to confirm the gate fires:
 
 The first is the one worth a gate: a POI whose category the theme does not know
 falls back to the default badge and reports nothing, so the only way to notice
-was to look at the map and recognise the wrong icon.
+was to look at the map and recognize the wrong icon.
 
 ## The POI and geocode bakes, and what they did not gain
 
@@ -810,7 +810,7 @@ check with every target — and `check:spec` is what keeps the addresses honest.
 **Deployed 09-18**, server then client, as build b15. Published tile URLs moved
 from `/api/tiles/…` to `/geo/tiles/…` and `/asset/…`; R2 keys did not change —
 only the prefix stripped to reach them — so there was no re-bake and no
-re-upload, and the cache went cold once. Every route answered afterwards, both
+re-upload, and the cache went cold once. Every route answered afterward, both
 at the edge and against the origin directly:
 
 ```

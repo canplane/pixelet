@@ -27,7 +27,7 @@ pub struct Sheet {
     pub columns: u32,
     /// The asset path of each tile, in the order they are laid out.
     pub tiles: Vec<String>,
-    /// Each tile's own mean colour (sheet.rs).
+    /// Each tile's own mean color (sheet.rs).
     pub means: Vec<[u8; 3]>,
 }
 
@@ -204,10 +204,10 @@ pub struct Sheet {
     pub columns: u32,
     pub tiles: &'static [(PlaceableCube, CubeFace, u32)],
     /// What each tile reads as from far enough away that the tile itself is
-    /// gone: its own mean colour, taken in linear light. A mesh that
-    /// summarises a patch of ground takes its colour from here rather than
-    /// from the catalog's swatch, which is the colour a type is filed under
-    /// and not the colour its material shows.
+    /// gone: its own mean color, taken in linear light. A mesh that
+    /// summarizes a patch of ground takes its color from here rather than
+    /// from the catalog's swatch, which is the color a type is filed under
+    /// and not the color its material shows.
     pub means: &'static [[u8; 3]],
 }
 

@@ -18,21 +18,21 @@
 //!    catalog's models and images the decor is drawn with, then the places'
 //!    pages (the user's order, 2026-09-26). Placed objects are all resident
 //!    and are built with the ground's chunks, so they are never fetched.
-//! 3. Within a layer, one order for every layer, out from the view's centre
+//! 3. Within a layer, one order for every layer, out from the view's center
 //!    (world/pyramid/domain.rs `Domain::order_of`), the point the camera
 //!    turns about and the character stands on:
-//!    - the page the ground nearest the centre is drawn from, so where the
+//!    - the page the ground nearest the center is drawn from, so where the
 //!      character stands is right before anything else is;
 //!    - the pyramid's top pages, a handful, which every chunk under them can
 //!      be drawn from until its own comes, so no ground is left open for
 //!      long;
-//!    - every page the view draws ground from, nearest the centre first, so
-//!      the view fills outwards as a sphere grows;
+//!    - every page the view draws ground from, nearest the center first, so
+//!      the view fills outward as a sphere grows;
 //!    - the pages held only for ground drawn finer to fall back on.
 //!
 //!    Ranking a hole before ground drawn coarsely filled the view coarsest
 //!    first instead: from a cold start the eye's ancestors took the first six
-//!    connections, and the top page's two-kilometre cubes stood in front of
+//!    connections, and the top page's two-kilometer cubes stood in front of
 //!    the eye for seconds while its own page waited (measured 2026-09-26).
 //!
 //! **Everything else is a tie.** A label, the device's own page and the
@@ -55,8 +55,8 @@ pub fn ocean() -> Rank {
 /// Where a page stands in its layer's order (point 3 above).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shell {
-    /// The page the ground nearest the view's centre is drawn from.
-    Centre,
+    /// The page the ground nearest the view's center is drawn from.
+    Center,
     /// A page of the pyramid's top.
     Top,
     /// A page the view draws ground from.
@@ -72,7 +72,7 @@ const ASSET: u8 = TERRAIN + SHELLS;
 const PLACES: u8 = ASSET + 1;
 
 /// A page of a layer the pyramid holds, where it stands in the layer's order,
-/// and its distance from the view's centre.
+/// and its distance from the view's center.
 pub fn page(layer: Category, shell: Shell, distance: f64) -> Rank {
     let base = if layer == Category::terrain { TERRAIN } else { PLACES };
     Rank { class: base + shell as u8, distance }

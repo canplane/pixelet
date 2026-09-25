@@ -2,8 +2,8 @@
 
 //! pixelet's view: what the model (pxl-spec) looks like when drawn — the
 //! voxel volumes and the meshes a chunk bakes into, the terrain's elevation,
-//! the LOD ladder, the models' glTF, the billboards' sheet, the draw list,
-//! the shaders and pipelines — and the device that draws it. It knows the
+//! the LOD criterion's reference, the models' glTF, the billboards' sheet,
+//! the draw list, the shaders and pipelines — and the device that draws it. It knows the
 //! model and nothing of the kernel (pxl-kernel): the kernel decides what and
 //! when, and hands a frame what it reads (`gpu::renderer::FrameInput`).
 

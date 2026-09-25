@@ -17,7 +17,7 @@ struct Draw { translation: vec3f, visible: f32, opacity: f32, unit: f32, … };
 
 A `vec3f` is twelve bytes and aligns to sixteen. WGSL puts the float after it
 at twelve; this device's backend put it at sixteen. So the first member read
-and every member past it took its neighbour's value, and the shader spent
+and every member past it took its neighbor's value, and the shader spent
 each draw's numbers one slot along from where they were written.
 
 ## What the device was
@@ -154,7 +154,7 @@ device — that format's `unit` is always 1, and its pipeline is already its
 own — which is what made them readable. A probe that also changes the answer
 says nothing.
 
-Two cautions that still hold about the table above. The colour probes — "red
+Two cautions that still hold about the table above. The color probes — "red
 if this, green if that" — sample **one** vertex of thousands of overlapping
 full-screen triangles, so they prove "at least one box passed", never "all
 did"; only the probes read as a _shape_ (piled against scattered) carried

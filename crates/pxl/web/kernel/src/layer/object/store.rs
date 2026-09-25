@@ -176,7 +176,7 @@ fn read_state(coord: &Pvf3) -> u32 {
 //
 // What a column's trees hold, read back as one entry per leaf — a leaf larger
 // than a cell split into the cells it covers, since everything downstream
-// (collision's 3×3×3 neighbourhood, a size never past one cell) assumes an
+// (collision's 3×3×3 neighborhood, a size never past one cell) assumes an
 // entry is at most a cell. The kernel keeps them per column as three lanes —
 // the band, a packed position, the state. A tree walked depth first visits a
 // cell's leaves together, so a cell's entries are one contiguous run.
@@ -194,7 +194,7 @@ pub struct EntryCursor {
     pub ly: f64,
     pub lz: f64,
     pub size: f64,
-    /// The catalog value: a cube colour, AIR, or a decor kind.
+    /// The catalog value: a cube color, AIR, or a decor kind.
     pub state: u32,
 
     at: At,
@@ -498,7 +498,7 @@ pub fn object_col_revision(col_idx: IVec) -> u32 {
 // A page's entries as five lanes, in a container that names the page:
 //   [[page_idx u64, x f32[], y f32[], z f32[], size f32[], value u32[]], ...]
 // Positions are page-local to FROM_L3_IDX(page_idx); a value is the catalog
-// value the store writes (a block colour, AIR, a decor kind). Nothing else is
+// value the store writes (a block color, AIR, a decor kind). Nothing else is
 // kept: a placed decor's facing is derived from its position
 // (decor/build.rs's user_decor_pick), and an entry's address is rebuilt from
 // where it lies. The layout is the code below and the version in the storage
@@ -753,7 +753,7 @@ fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
 /// channel it happens to carry — bake/ground.rs's shown_ground, the same
 /// precedence the shader resolves a texture layer with. A road over bare
 /// ground reads land=BARE and renders as road, so comparing the pick's own
-/// channel alone cancelled a bare-ground cube into a road.
+/// channel alone canceled a bare-ground cube into a road.
 ///
 /// And the cell must already hold an explicit AIR leaf, so the placement is
 /// undoing a carve rather than adding a voxel terrain does not have. A ground
@@ -822,7 +822,7 @@ pub fn remove(at: EntryAt) {
 // lattice position before it crosses, and gets lanes back as views.
 //
 // A leaf is the catalog value itself, which the catalog keeps within a
-// leaf's width (pxl-spec cell/object.rs); an entry is at most a cell because everything downstream — the collision neighbourhood,
+// leaf's width (pxl-spec cell/object.rs); an entry is at most a cell because everything downstream — the collision neighborhood,
 // the raycast's per-cell runs — assumes one, and a leaf covering more is
 // split into the cells it covers as the lanes are built; and the lanes are
 // made again a column at a time because a write touches one column and the

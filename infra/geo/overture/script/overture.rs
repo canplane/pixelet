@@ -125,7 +125,7 @@ pub fn record_catalog(client: &mut Client, table: &str, bbox: &str, data_date: &
 /// One column's value in one row, as the insert binds it.
 ///
 /// Absence is inside each variant rather than a `Null` of its own: a
-/// parameter is serialised by its Rust type, so an untyped NULL reaches a
+/// parameter is serialized by its Rust type, so an untyped NULL reaches a
 /// `double precision` column as text and the driver refuses it ("error
 /// serializing parameter"). A missing height has to be a missing *float*.
 pub enum Cell {
@@ -366,7 +366,7 @@ fn flush(client: &mut Client, table: &Table, batch: &mut Vec<Row>) -> Result<u64
     sql.push_str(" ON CONFLICT (gers_id) DO NOTHING");
 
     // The geometry parameters have to outlive the slice of references below,
-    // so they are materialised alongside the cells rather than formatted in
+    // so they are materialized alongside the cells rather than formatted in
     // place.
     let mut geoms: Vec<Cell> = Vec::with_capacity(batch.len() * 2);
     for r in batch.iter() {

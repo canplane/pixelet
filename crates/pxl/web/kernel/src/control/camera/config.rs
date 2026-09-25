@@ -57,7 +57,7 @@ pub mod camera_cfg {
         /// How much of the viewport a vertical drag has to cover to sweep the
         /// whole tilt range. Stated against the screen rather than as a rad/px
         /// rate, because that is the only form comparable to azimuth: azimuth
-        /// has no gain at all, it tracks the cursor's angle around screen centre
+        /// has no gain at all, it tracks the cursor's angle around screen center
         /// 1:1 (arcball — control/camera/input.rs's do_rotate).
         ///
         /// A fixed rad/px rate is what makes the two diverge: -0.012 at a 1080px

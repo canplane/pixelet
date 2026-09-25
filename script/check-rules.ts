@@ -3,7 +3,7 @@
 // what drifts without anyone deciding it is caught where it drifts.
 //
 // Three of them, each a rule that went wrong by accident more than once and
-// none a judgement about design:
+// none a judgment about design:
 //
 // - A source file opens with its own logical path. The comment is how a file
 //   is named in every other comment, so a wrong one sends readers elsewhere.

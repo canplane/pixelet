@@ -10,7 +10,7 @@ the run set in and a copy of the mesh out; every number below includes
 both.
 
 This measures the translation only. The algorithmic changes the port
-carries (the O(k²) neighbour walks, the coarse pack's selection sort) are
+carries (the O(k²) neighbor walks, the coarse pack's selection sort) are
 not in it, so this is the baseline they are measured against.
 
 ## Procedure
@@ -42,7 +42,7 @@ equal stretches) and `busy` (10,288 runs, stacked runs, objects, sub-cells)
 
 ## Numbers
 
-Phone, from the reports (workload-normalised lines, and the bake line):
+Phone, from the reports (workload-normalized lines, and the bake line):
 
 | session             | build per 1k runs | commit per bake | longest bake step | runs baked |
 | ------------------- | ----------------- | --------------- | ----------------- | ---------- |
@@ -102,7 +102,7 @@ Desktop, mean per whole bake, V8:
 - **On the desktop the gap is smaller**: V8's JIT gets the TypeScript
   within 1.0–1.65x of the Rust. The dense fine bakes (`busy` at steps 1
   and 2) are even, which suggests — not measured — that their time is in
-  work the translation kept, the per-run neighbour walks, rather than in
+  work the translation kept, the per-run neighbor walks, rather than in
   the language. The coarse
   tiers gain most. JavaScriptCore on the phone is where the translation
   alone pays, which is where the decision is.
@@ -114,9 +114,9 @@ taken, with wasm_bake.test.ts as the net (its scene now also echoes
 sub-cell boxes out of order, the way the scan's overflow sub-voxels trail
 their band).
 
-- **Neighbour walks as forward cursors.** A run's own column was scanned
-  four times and each neighbour column from its head for every run, O(k²)
-  per stacked column. Rewritten as one cursor per neighbour that only moves
+- **Neighbor walks as forward cursors.** A run's own column was scanned
+  four times and each neighbor column from its head for every run, O(k²)
+  per stacked column. Rewritten as one cursor per neighbor that only moves
   up — exact, because a column's full runs are ascending and disjoint and
   no run before a full run starts above it — the mesh stayed byte for byte,
   and bench.ts did not move: `busy` at step 1 4.1 ms before and after,

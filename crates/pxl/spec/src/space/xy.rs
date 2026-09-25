@@ -20,7 +20,7 @@ use super::pvf3::{ivec, IVec};
 /// and `L3_IDX(map_center.i)` must be TO_XY'd before it is compared against
 /// one of those keys.
 ///
-/// The trap, and why it is easy to get backwards in both directions:
+/// The trap, and why it is easy to get backward in both directions:
 ///
 /// - It usually cannot bite. `L3_IDX` shifts X/Y/Z together, but real
 ///   elevations sit far inside one L3 page, so `Z` of `L3_IDX(map_center.i)`

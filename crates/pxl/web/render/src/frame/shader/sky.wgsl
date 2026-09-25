@@ -23,7 +23,7 @@ struct Sky {
 @group(0) @binding(3) var moon_sampler: sampler;
 
 // The sun's disc before the exposure: far past white once exposed, so it
-// is the air in front of it that colours it, as it reddens a low sun.
+// is the air in front of it that colors it, as it reddens a low sun.
 const SUN_DISC: f32 = 4.0;
 // Limb darkening: the disc's edge is the sun's cooler outer layer, seen
 // through more of it.
@@ -73,7 +73,7 @@ fn vs(@builtin(vertex_index) i: u32) -> VertexOut {
 }
 
 // The Sun's disc along `dir` from radius `r`, `a` the ray's offset from its
-// centre in disc radii and `w` how far `a` moves across a pixel: limb-
+// center in disc radii and `w` how far `a` moves across a pixel: limb-
 // darkened, through the air in front of it, its edge a pixel soft. Nothing
 // where the planet stands in the way.
 fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
@@ -88,12 +88,12 @@ fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
 }
 
 // The Moon's face along `dir` from radius `r`: `across` is the ray's offset
-// from the disc's centre in disc radii and `a` its length, and `w` how far
+// from the disc's center in disc radii and `a` its length, and `w` how far
 // `a` moves across a pixel, taken where every pixel of the pass takes it.
 // Each point of the face is the map's, the near side turned with its north
 // toward the celestial pole; it sends back the sunlight by the
 // Lommel–Seeliger law — which is why a full Moon is as bright at its limb as
-// at its centre, where a Lambertian ball would dim — so its phase is where
+// at its center, where a Lambertian ball would dim — so its phase is where
 // the Sun lights it, pixel by pixel. It is seen through the air as the Sun
 // is. Its limb is a pixel's soft edge. Nothing where the planet stands in
 // the way.
@@ -108,7 +108,7 @@ fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
   let normal = on - axis * sqrt(max(1.0 - dot(on, on), 0.0));
 
   // Selenographic: north toward the pole, east to the right as the Earth
-  // sees it, and the near side's centre toward the Earth.
+  // sees it, and the near side's center toward the Earth.
   let north = normalize(sky.pole - dot(sky.pole, axis) * axis);
   let east = cross(axis, north);
   let lon = atan2(dot(normal, east), -dot(normal, axis));

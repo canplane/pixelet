@@ -349,7 +349,7 @@
   "SUMMARY": {
     "$type": "u32",
     "$doc": [
-      "The block `ledger_read` computes: each section's words at its AT, the fields relative to it. Every word an f64."
+      "The block LEDGER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64."
     ],
     "rec": {
       "AT": 0,
@@ -478,7 +478,7 @@
   "READ": {
     "$type": "u32",
     "$doc": [
-      "What `ledger_read` returns the address of: u32 words, each range's address in the module's memory and its record count."
+      "What LEDGER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count."
     ],
     "summary_at": 0,
     "summary_words": 1,
@@ -493,7 +493,7 @@
   "LOG": {
     "$type": "u32",
     "$doc": [
-      "What `ledger_log` returns the address of: u32 words, the frames and tasks the stream has kept since `ledger_log_clear`."
+      "What LEDGER_TAKE answers with the address of: u32 words, the frames and tasks the stream has kept since the last take."
     ],
     "frames_at": 0,
     "frames_count": 1,

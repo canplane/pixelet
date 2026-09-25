@@ -292,7 +292,7 @@ impl<R: Range> SlabMalloc<R> {
         }
         let class = 1usize << class_log2(c);
         let mut next: *mut u8 = ptr::null_mut();
-        // From the back, so the list runs forwards through the run and a run's
+        // From the back, so the list runs forward through the run and a run's
         // first allocations are its lowest addresses.
         let mut i = Self::slots(c);
         while i > Self::head_slots(c) {

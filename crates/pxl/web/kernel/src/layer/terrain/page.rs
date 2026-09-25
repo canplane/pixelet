@@ -19,7 +19,6 @@ use pxl_spec::space::pyramid::LevelPage;
 use pxl_spec::space::pyramid::PAGE_CELLS;
 use pxl_spec::space::xy::TO_XY;
 use xpute_runtime::abi::fetch::FetchFail;
-use xpute_runtime::mem::heap::alloc;
 
 use crate::control::navigation::store::map_navigation;
 use crate::global::Global;
@@ -27,12 +26,12 @@ use crate::host::now;
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::policy;
 use crate::io::sched::{declare, pending_count, Rank};
-use crate::layer::terrain::fixed::{ele_at, ground_at, record_ele_at, record_ground_at, RECORD_BYTES};
+use crate::layer::terrain::fixed::{ele_off, ground_off, ELE_LANE_BYTES, GROUND_LANE_BYTES};
 use crate::layer::terrain::ground_snap::reground_map_center;
-use crate::mem;
+use crate::mem::fixed::{at, Range};
 use crate::shell::map_store::{map_store, MapStatus};
 use crate::world::pyramid::domain::eye;
-use crate::world::pyramid::{Cover, Domain, Layer, Pyramid};
+use crate::world::pyramid::{Cover, Domain, Layer, Pyramid, ABSENT};
 
 /// Object key of the single shared open-ocean tile in the static bucket.
 pub const OCEAN_KEY: &str = "_ocean";
@@ -94,7 +93,7 @@ impl Layer for Terrain {
         crate::layer::terrain::present::mesh(cover, d, |c| pyramid.drawn_from(c.page()).is_some())
     }
 
-    /// A leaf is what a map centre that could not be grounded before may be
+    /// A leaf is what a map center that could not be grounded before may be
     /// grounded on now. The chunks are told nothing: which a view draws is
     /// the cover's, made again from the pyramid's revision, and a chunk
     /// whose page has gone leaves it.
@@ -157,10 +156,10 @@ fn write_lanes(t: &Terrain, lanes: TerrainLanes) {
 /// Where a record's lanes are. NoRoom under a native test, which lays no
 /// memory out.
 fn lanes_of(record: u32) -> Result<TerrainLanes, FetchFail> {
-    let base = mem::fixed::terrain_at().ok_or(FetchFail::NoRoom)? as usize;
+    let lane = |off, bytes| at(Range::Terrain, off, bytes).map(|a| a as usize).ok_or(FetchFail::NoRoom);
     Ok(TerrainLanes {
-        cells: ground_at(base, record),
-        ele: ele_at(base, record),
+        cells: lane(ground_off(record), GROUND_LANE_BYTES)?,
+        ele: lane(ele_off(record), ELE_LANE_BYTES)?,
     })
 }
 
@@ -178,10 +177,8 @@ fn ocean() -> &'static mut Ocean {
     OCEAN.get(|| Ocean { terrain: None, waiting: Vec::new() })
 }
 
-/// The shared tile's body: written into a room of its own that belongs to no
-/// page and nothing releases, and given to every page waiting on it. It is
-/// not in the range: a record is one page's, and every open-ocean page reads
-/// these same bytes.
+/// The shared tile's body: written into `ABSENT`, the record every open-ocean
+/// page reads, and given to every page waiting on it.
 pub fn adopt_ocean(pkt: &[u8]) -> Result<(), FetchFail> {
     if ocean().terrain.is_some() {
         return Ok(());
@@ -190,13 +187,9 @@ pub fn adopt_ocean(pkt: &[u8]) -> Result<(), FetchFail> {
     if decoded.ground.len() != CELLS || decoded.ele.len() != SAMPLES {
         return Err(FetchFail::Decode);
     }
-    let (at, _) = alloc(RECORD_BYTES).ok_or(FetchFail::NoRoom)?;
-    let lanes = TerrainLanes {
-        cells: record_ground_at(at),
-        ele: record_ele_at(at),
-    };
+    let lanes = lanes_of(ABSENT)?;
     write_lanes(&decoded, lanes);
-    // SAFETY: a room nothing ever releases, at the page's lane sizes.
+    // SAFETY: `ABSENT`, which no page takes and is written once.
     let terrain = unsafe { open_terrain(lanes) };
     let o = ocean();
     for p in o.waiting.drain(..) {
@@ -216,8 +209,8 @@ pub fn terrain_step() {
     let device = map_navigation().device_coord.map(|c| LevelPage::new(0, TO_XY(L3_IDX(c.i))));
     let terrain = Terrain::pyramid();
     terrain.pin(device);
-    // A page waiting on the shared tile is held as the view holds a page
-    // with no record: while it keeps it.
+    // A page waiting on the shared tile is held as the view holds a page in
+    // `ABSENT`: while it keeps it.
     if eye().is_some() {
         ocean().waiting.retain(|&p| terrain.keeps(p));
     }

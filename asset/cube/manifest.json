@@ -371,7 +371,7 @@
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
       },
-      "grey": {
+      "gray": {
         "sourceCreationId": "9fca7c3f-06c5-48ac-ae3d-41864559da0e",
         "url": "https://image-assets.jianhua.art/public/1788315269172_djslb9.png",
         "file": "block/block_grey.png",
@@ -379,7 +379,7 @@
         "style": "cute-painted-fantasy-v1",
         "material": "generic-painted-plaster-stucco-v1"
       },
-      "dark_grey": {
+      "dark_gray": {
         "sourceCreationId": "b69889bb-a4f0-47b2-ba3a-b14878ab3d87",
         "url": "https://image-assets.jianhua.art/public/1788315261438_7t0ont.png",
         "file": "block/block_dark_grey.png",

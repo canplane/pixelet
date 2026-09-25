@@ -24,7 +24,7 @@ use pxl_spec::space::v3::{dot3, norm3, V3};
 
 use crate::look::atmosphere::{moon_phase_light, sun_light, white, MOONLIT_SKY};
 
-/// Floats a theme takes, linear colours: ambient colour and intensity (4),
+/// Floats a theme takes, linear colors: ambient color and intensity (4),
 /// night (1). What is eased between themes and nothing else: the fog's band
 /// and the lighting floor are the same under every theme, and come with the
 /// light; the hemisphere is the air's at both ends now, its sky the sky's own
@@ -32,16 +32,16 @@ use crate::look::atmosphere::{moon_phase_light, sun_light, white, MOONLIT_SKY};
 /// (atmos_view.wgsl's sky_fill and ground_bounce).
 pub const THEME_FLOATS: usize = 5;
 
-/// Where the colours of a theme sit in its floats.
+/// Where the colors of a theme sit in its floats.
 const AMBIENT: usize = 0;
 pub const NIGHT: usize = 4;
 
 /// Floats the environment's lane takes: the frame uniform's lighting run
 /// (24), laid out as the frame uniform has it; the stars' fade and the sky's
 /// clock (4); the air's (4): the camera's altitude and a unit's length, in
-/// kilometres, the map centre's latitude, and the ground's height under it;
+/// kilometers, the map center's latitude, and the ground's height under it;
 /// the second light (8), the dimmer of the sun and the moon, its direction
-/// and its colour; the sun's
+/// and its color; the sun's
 /// direction (4), which the air is lit from whichever light is the brighter;
 /// the stars' frame (12), the equatorial frame to the map's as three columns
 /// of four; and the moon's direction and how bright the sky it lights is
@@ -61,7 +61,7 @@ pub const ENV_STARS: usize = 44;
 /// Where the moon's direction and its sky's brightness start.
 pub const ENV_MOON: usize = 56;
 
-/// The moon's light on the terrain: a fixed colour (#9fb4d6, linear), so
+/// The moon's light on the terrain: a fixed color (#9fb4d6, linear), so
 /// that at night it is the light the terrain takes.
 const MOON_COLOR: [f32; 3] = [0.3467, 0.4564, 0.6724];
 
@@ -86,12 +86,12 @@ pub struct Light {
     /// phone's night from going black.
     pub floor: f64,
     /// The camera's altitude above the datum, and a world unit's length, in
-    /// kilometres; and the map centre's latitude, in radians.
+    /// kilometers; and the map center's latitude, in radians.
     pub altitude_km: f64,
     pub km_per_u: f64,
     pub latitude: f64,
-    /// How high the ground under the map centre stands over that datum, in
-    /// kilometres: where the sky draws its own ground, so the terrain does
+    /// How high the ground under the map center stands over that datum, in
+    /// kilometers: where the sky draws its own ground, so the terrain does
     /// not stand over it (atmos_medium.wgsl's land_altitude_km).
     pub ground_km: f64,
     /// The equatorial frame to the local one, X east, Y north, Z up, as rows
@@ -99,10 +99,10 @@ pub struct Light {
     pub star_frame: [V3; 3],
 }
 
-/// A linear colour's luminance weights (Rec. 709), constant.wgsl's LUMA.
+/// A linear color's luminance weights (Rec. 709), constant.wgsl's LUMA.
 pub(crate) const LUMA: [f64; 3] = [0.2126, 0.7152, 0.0722];
 
-/// A colour's luminance, for which of two lights is the brighter.
+/// A color's luminance, for which of two lights is the brighter.
 fn luminance(c: [f64; 3]) -> f64 {
     dot3(&LUMA, &c)
 }

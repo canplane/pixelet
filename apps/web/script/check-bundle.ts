@@ -4,7 +4,7 @@
 // Gating a dev surface behind __IS_DEV__ removes the *component*, but not
 // necessarily everything attached to it: the debug settings section was
 // eliminated correctly while its labels rode along inside the bundled i18n
-// catalogue, so a production bundle named every debug toggle it offered. And
+// catalog, so a production bundle named every debug toggle it offered. And
 // before that, `VITE_APP_ENV=development` in a local .env — which Vite loads
 // for every mode — made __IS_DEV__ true in the deployed build outright.
 //
@@ -17,20 +17,20 @@
 const DIST = "./dist";
 
 /** Files whose every leaf string must not appear in a production bundle. The
- * dev catalogues are the authoritative list of dev-only copy, so deriving the
+ * dev catalogs are the authoritative list of dev-only copy, so deriving the
  * check from them means a new dev string is covered the day it is added. */
 const DEV_LOCALE_FILES = [
   "./src/locale/dev/en.json",
   "./src/locale/dev/ko.json",
 ];
 
-/** The catalogues a production build is supposed to carry. A string one of
- * these holds cannot be evidence that the dev catalogue leaked — the bundle
+/** The catalogs a production build is supposed to carry. A string one of
+ * these holds cannot be evidence that the dev catalog leaked — the bundle
  * is meant to have it — so a dev string that is also one of these is not
  * counted against the build. `Places` is the case that found this: the
  * attribution section names Overture's Places theme, and the dev row for the
  * place badges is the same word. What is only ever dev-only still fires, and
- * a whole catalogue riding along would light up every string of it that is
+ * a whole catalog riding along would light up every string of it that is
  * not shared, which is nearly all of them. */
 const SHIPPED_LOCALE_FILES = [
   "./src/locale/en.json",
@@ -42,7 +42,7 @@ const SHIPPED_LOCALE_FILES = [
  * "development" is __APP_ENV__'s value, which the settings panel prints. A
  * production build shipped it once: the guard that forces a production build
  * out of development mode had been written into the isDev boolean only, so
- * the name kept whatever .env said and the deployed panel labelled itself
+ * the name kept whatever .env said and the deployed panel labeled itself
  * "development" while the debug section it implies was correctly absent.
  * Confirmed absent from a correct production bundle, so it is safe to forbid
  * outright rather than to check contextually. */
@@ -152,7 +152,7 @@ for (const f of DEV_LOCALE_FILES) {
  * Matches the quoted literal, not the bare substring. A bare search flagged
  * the English string "Debug" because React's `useDebugValue` contains those
  * letters — short dictionary words will collide with minified identifiers
- * every time. A catalogue string reaches the bundle as a string literal, so
+ * every time. A catalog string reaches the bundle as a string literal, so
  * requiring its delimiters is both stricter and closer to what is being
  * asked.
  *
@@ -171,7 +171,7 @@ const shipped = new Set<string>();
 for (const f of SHIPPED_LOCALE_FILES) {
   for (const [, v] of leaves(JSON.parse(await Deno.readTextFile(f)))) shipped.add(v);
 }
-// A marker is not copy, so the catalogues cannot excuse one.
+// A marker is not copy, so the catalogs cannot excuse one.
 const shared = (where: string, v: string) => where !== "marker" && shipped.has(v);
 const leaked = forbidden.filter(([where, v]) => present(bundle, v) && !shared(where, v));
 
@@ -185,7 +185,7 @@ if (leaked.length > 0) {
 }
 
 const excused = forbidden.filter(([where, v]) => shared(where, v)).length;
-console.log(`[check-bundle] ok — ${forbidden.length} development-only string(s), none present${excused > 0 ? ` (${excused} the shipped catalogues carry too)` : ""}`);
+console.log(`[check-bundle] ok — ${forbidden.length} development-only string(s), none present${excused > 0 ? ` (${excused} the shipped catalogs carry too)` : ""}`);
 
 // A dev setting's row: the settings table is generated whole from
 // schema.json, and a build that filtered it at run time shipped every dev

@@ -139,20 +139,20 @@ pub fn L4_CENTER(addr: IVec) -> IVec {
 }
 // pub fn L5_CENTER(addr: IVec) -> IVec { L5_BASE(addr) | (fill(L5_RANGE as i64) >> 1) }
 
-/// The centre of the cell that contains `addr`, for a span of `1 << shamt`
-/// canonical units — the parameterised form of the three CENTER helpers
+/// The center of the cell that contains `addr`, for a span of `1 << shamt`
+/// canonical units — the parameterized form of the three CENTER helpers
 /// above, for a span resolved at runtime (a render tier, say) rather than
 /// named at compile time.
 ///
 /// PVF3 rather than IVec, because the half is sub-integer at the base level:
-/// a 1u cell's centre is 0.5u and lives in the fractional lane. L2/L3/L4 can
+/// a 1u cell's center is 0.5u and lives in the fractional lane. L2/L3/L4 can
 /// OR their half into the integer lane only because their spans are 64u and
 /// up; this is the same expression written where it also holds at shamt 0.
 ///
-/// All three axes, symmetric. A cell is a cube and its centre is its centre —
-/// X/Y quantised while Z is left raw (or the reverse) is two coordinate
+/// All three axes, symmetric. A cell is a cube and its center is its center —
+/// X/Y quantized while Z is left raw (or the reverse) is two coordinate
 /// systems in one point, and everything that marks a cell here already avoids
-/// it: a cell's anchor centre adds the half on every axis, and hover, placed
+/// it: a cell's anchor center adds the half on every axis, and hover, placed
 /// cubes and the location puck all read a cell the same way.
 pub fn SPAN_CENTER(out: &mut Pvf3, addr: IVec, shamt: u32) -> &mut Pvf3 {
     out.i = if shamt == 0 { addr } else { addr & !fill(field_mask64(shamt, 0) as i64) };

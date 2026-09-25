@@ -7,7 +7,7 @@
 //! (issue/20260921-level-step-and-zoom-are-one-number.md).
 //!
 //! It is the one hierarchy every layer is held in. Where a cell is, which
-//! page it belongs to, which pages fold into which, and where a cell's centre
+//! page it belongs to, which pages fold into which, and where a cell's center
 //! stands are decided here and nowhere else; a layer owns only what a cell
 //! carries and how a parent's cell is made from its children's (`Folds`).
 
@@ -266,7 +266,7 @@ pub const fn anchor_span_of(level: u32) -> i64 {
 /// fold reads them: index (qx + 1) + 4·(qy + 1) is the page (qx, qy) from
 /// its first child, the page's own children at `CHILDREN`. X wraps, since
 /// the lane is one world; a page past Y's edge has no object.
-pub fn neighbourhood(p: LevelPage) -> [LevelPage; 16] {
+pub fn neighborhood(p: LevelPage) -> [LevelPage; 16] {
     let below = p.level - 1;
     let across = 1i64 << (IVEC_X_W - L3.shamt() as u32 - below);
     let wrap = |x: i64| (x + across / 2).rem_euclid(across) - across / 2;
@@ -277,7 +277,7 @@ pub fn neighbourhood(p: LevelPage) -> [LevelPage; 16] {
     })
 }
 
-/// Where a page's own four children sit in its neighbourhood, in `slot_of`'s
+/// Where a page's own four children sit in its neighborhood, in `slot_of`'s
 /// order: (0, 0), (1, 0), (0, 1), (1, 1) from the first.
 pub const CHILDREN: [usize; 4] = [5, 6, 9, 10];
 
@@ -381,11 +381,11 @@ impl Cell {
         lattice.cell_of(level, &at)
     }
 
-    /// The centre of the cell as a thing standing on `ground` occupies it:
-    /// its XY centre, and half its side above the ground, since a level's
+    /// The center of the cell as a thing standing on `ground` occupies it:
+    /// its XY center, and half its side above the ground, since a level's
     /// cells are as tall as they are wide. The one point every layer at this
     /// level stands a thing at.
-    pub fn centre(self, ground: f64) -> Pvf3 {
+    pub fn center(self, ground: f64) -> Pvf3 {
         let flat = self.mid();
         let mut at = [0.0; 3];
         projection::unproject(&mut at, flat.i, flat.f);

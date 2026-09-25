@@ -97,7 +97,7 @@ of an angle nobody asked for.
 The solve is closed-form. The eye sits `dist * cos(polar)` above the target,
 so clearing a required rise `h` needs `acos(h / dist)`. A bounded scan was
 tried first and juddered on ground it was only passing over: sixteen fixed
-angles quantise the answer a second time, after the cell the height was read
+angles quantize the answer a second time, after the cell the height was read
 from. Two passes settle the implicit part (steepening moves the eye, which
 changes the ground under it), since the eye travels less as the pitch
 approaches vertical.
@@ -108,7 +108,7 @@ Feedback is impossible by construction: the probe reads `dist`, `polar` and
 ## What this does not solve
 
 Rotation into a hillside is handled the same way as everything else — the
-azimuth destination is gated — but "there is a hundred-storey building to my
+azimuth destination is gated — but "there is a hundred-story building to my
 left" has no good answer beyond stopping. That was accepted rather than
 solved: the edge cases of continuing to rotate past an obstruction are not
 worth carrying.

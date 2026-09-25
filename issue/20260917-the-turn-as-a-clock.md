@@ -63,7 +63,7 @@ the worker a single remaining time and sizes it outside:
 `deadline`, React's scheduler's `frameInterval`, an OS time slice, Tokio's and
 BEAM's per-task budgets. None of them makes the worker choose between two.
 
-**The host classifies a turn from behaviour, the way an OS scheduler does.**
+**The host classifies a turn from behavior, the way an OS scheduler does.**
 ULE and Windows' foreground quantum decide "interactive" from what a process
 did, not from what it says. So a turn is interactive when there was input
 within `settle_ms`, or when the guest's last falling edge asked for the very

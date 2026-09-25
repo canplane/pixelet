@@ -137,10 +137,10 @@ const _: () = assert!(
 
 // =============================================================================
 // Placeable cube catalog — everything the shell's hotbar and drawer can offer:
-// every flat colour, then every terrain-styled cube.
+// every flat color, then every terrain-styled cube.
 // =============================================================================
 
-/// A placeable cube: a flat colour, or a stand-in for one baked terrain
+/// A placeable cube: a flat color, or a stand-in for one baked terrain
 /// type. The numbers the catalog declares, never the words they are spelled
 /// out with — those are the shell's, for a label and for an asset path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -152,7 +152,7 @@ pub enum PlaceableCube {
     Transport(cube_types::Transport),
 }
 
-/// The ground channel a cube stands in for, none for a flat colour, and its
+/// The ground channel a cube stands in for, none for a flat color, and its
 /// type as its number: what the shell names a cube by (INPUT_POINTER).
 pub fn placeable_cube_parts(cube: PlaceableCube) -> (Option<GroundChannelKey>, u8) {
     match cube {
@@ -164,7 +164,7 @@ pub fn placeable_cube_parts(cube: PlaceableCube) -> (Option<GroundChannelKey>, u
     }
 }
 
-/// The cube the shell names by a ground channel, or none for a flat colour,
+/// The cube the shell names by a ground channel, or none for a flat color,
 /// and a type's number; none for a pair the catalog gives out no cube for.
 pub fn placeable_cube(channel: Option<GroundChannelKey>, type_num: u32) -> Option<PlaceableCube> {
     match channel {
@@ -185,7 +185,7 @@ fn cube_of_source(source: TerrainStyleSource) -> Option<PlaceableCube> {
     })
 }
 
-/// The value a leaf holds the cube as: a flat colour's own catalog number,
+/// The value a leaf holds the cube as: a flat color's own catalog number,
 /// or the dense one the terrain-styled walk assigns.
 pub fn placeable_cube_num_id(cube: PlaceableCube) -> u32 {
     match placeable_cube_parts(cube) {
@@ -209,7 +209,7 @@ pub fn placeable_cube_of(num_id: u32) -> Option<PlaceableCube> {
 }
 
 /// Which baked (channel, type) the cube stands in for, None for a flat
-/// colour, which stands in for nothing.
+/// color, which stands in for nothing.
 pub fn terrain_style_cube_source(cube: PlaceableCube) -> Option<TerrainStyleSource> {
     let (channel, t) = placeable_cube_parts(cube);
     channel.map(|channel| TerrainStyleSource { channel, terrain_num_id: t as u32 })
@@ -230,7 +230,7 @@ pub fn ground_channel_types(channel: GroundChannelKey) -> Vec<u8> {
     cube_types::Common::ALL.iter().map(|t| *t as u8).chain(own_types(channel)).collect()
 }
 
-/// The flat colours, in their numbers' order: the layer arrays' order for
+/// The flat colors, in their numbers' order: the layer arrays' order for
 /// placed blocks.
 pub fn block_cubes() -> Vec<cube_types::Block> {
     let mut blocks = cube_types::Block::ALL.to_vec();
@@ -238,8 +238,8 @@ pub fn block_cubes() -> Vec<cube_types::Block> {
     blocks
 }
 
-/// The colour the catalog gives a cube, as the one number it is — what
-/// everything that lights or blends with a colour wants.
+/// The color the catalog gives a cube, as the one number it is — what
+/// everything that lights or blends with a color wants.
 pub fn placeable_cube_rgb(cube: PlaceableCube) -> Option<u32> {
     placeable_cube_swatch(cube).map(|s| s.rgb)
 }
@@ -251,7 +251,7 @@ fn placeable_cube_swatch(cube: PlaceableCube) -> Option<crate::cell::r#type::Swa
     }
 }
 
-/// Every cube the catalogs give out, flat colours first in the catalog's own
+/// Every cube the catalogs give out, flat colors first in the catalog's own
 /// numeric order, then every terrain-styled entry channel by channel.
 pub static placeable_cubes: LazyLock<Vec<PlaceableCube>> = LazyLock::new(|| block_cubes().into_iter().map(PlaceableCube::Block).chain(TERRAIN_STYLE.iter().copied()).collect());
 

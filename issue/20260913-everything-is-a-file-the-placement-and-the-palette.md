@@ -28,7 +28,7 @@ have, which is the discipline
 [20260708-vision-and-scope-pivot.md](./20260708-vision-and-scope-pivot.md)
 exists to enforce.
 
-**The data plane is specialised.** A terrain page stays dense lanes, an
+**The data plane is specialized.** A terrain page stays dense lanes, an
 object band a sparse tree, a POI page point records, a mesh vertex and
 index spans. Containers are not unified. What is unified is one level
 down: the **Placement** — the record for one placed thing, whatever it is
@@ -135,7 +135,7 @@ object, an object never changes so it is cached forever, and the mutable
 thing is the palette row that maps a name to a hash, which is a directory
 entry. A user-uploaded model is ingested on the server: validated, its
 extent measured (the same bounds pass that read the GLBs today), its
-triangle count and licence recorded, a palette id issued from a user
+triangle count and license recorded, a palette id issued from a user
 range. The client never opens a model to learn what it is; the palette
 says.
 
@@ -199,7 +199,7 @@ takes the same path as a shipped one. Half a day.
 **The ingest.** `POST /api/models` on the API: validate the glb (magic,
 size, triangle count), hash it, measure its bounds (the pass that read the
 shipped models), store it in the bucket, insert a palette row from
-`USER_ID_BASE` with the kind, name, extent, size, licence and author, and
+`USER_ID_BASE` with the kind, name, extent, size, license and author, and
 return the id. The client fetches the palette as one record — the shipped
 rows and the user rows together, which `shipped_palette()` stands in for
 now — and a Placement whose `value` is that id draws the model through
@@ -231,7 +231,7 @@ is replaced with the skin anyway.
 **The texture pack is on the same path.** Sixty images that were `?url`
 imports are objects now, and one table (`record/texture.ts`) says which
 image a cube type wears on which face, derived from the file names. The
-cube's _colour_ did not move: it is the palette row's `color`, kept with
+cube's _color_ did not move: it is the palette row's `color`, kept with
 the type numbering in `spec/cell/color.ts`, because the minimap, the
 coarse tiers and the texture-pack-off path read it and a pack only
 decorates it.
@@ -285,6 +285,6 @@ What moved rather than went:
 
 What went with no replacement: palette ids and their ranges
 (`CHANNEL_ID_BASE`, `MODEL_ID_BASE`, `ACTOR_ID_BASE`, `USER_ID_BASE`), the
-licence and author columns, `model_hash`, and the two items this document
+license and author columns, `model_hash`, and the two items this document
 left open — the scatter emitting `Placement` and the ingest route issuing
 palette rows. Nothing read any of them.

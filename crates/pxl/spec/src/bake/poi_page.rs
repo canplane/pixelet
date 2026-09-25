@@ -145,7 +145,7 @@ pub fn kind_icon(kind: u8) -> &'static str {
     kind.checked_sub(1).and_then(|i| KIND_ICONS.get(i as usize)).copied().unwrap_or(DEFAULT_ICON)
 }
 
-/// Kind `kind`'s badge colour, or the default for none.
+/// Kind `kind`'s badge color, or the default for none.
 pub fn kind_color(kind: u8) -> u32 {
     kind.checked_sub(1).and_then(|i| KIND_COLORS.get(i as usize)).copied().unwrap_or(DEFAULT_COLOR)
 }

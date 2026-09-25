@@ -185,7 +185,7 @@ The one version that is not redundant is persisting the **decoded** structures,
 which nothing does today (`tile_map` dies with the tab) and which is where the
 expensive work actually is. `IndexedDB` fits that best, not Cache Storage:
 structured clone stores typed arrays directly, while a Response-shaped store
-would need them serialised and parsed back. It is unusually promising here
+would need them serialized and parsed back. It is unusually promising here
 because the app opens at the user's real location, so the same pages repeat.
 
 **Gated on A above.** Move the decode off the main thread first, then measure

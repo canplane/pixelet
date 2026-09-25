@@ -5,7 +5,7 @@
 //! The substrate runs on one thread and a turn never re-enters another, which
 //! is what makes handing out `&mut` from a shared static sound. Nothing here
 //! is for a second thread, and nothing here is lazy in the sense of being
-//! synchronised — `get` is a null check and a call.
+//! synchronized — `get` is a null check and a call.
 
 use core::cell::UnsafeCell;
 

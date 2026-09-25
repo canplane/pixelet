@@ -2,7 +2,7 @@
 
 /**
  * The kernel driven the way kernel/kernel.ts drives it, without a page: the
- * boot, a map centre, the world's turns rung, the fetches it starts
+ * boot, a map center, the world's turns rung, the fetches it starts
  * answered from fixtures through the bodies the host holds, and what
  * comes back — what was drawn, the map's status, the UI's snapshot and its
  * commands.
@@ -203,14 +203,14 @@ CORE_BUILD.ring(0);
 turn();
 console.log(`heap: through the first turn ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);
 
-Deno.test("kernel - a map centre fetches its terrain and draws it, and the map settles to success", () => {
+Deno.test("kernel - a map center fetches its terrain and draws it, and the map settles to success", () => {
   command(Command.INPUT_GO_TO, encode_input_go_to({ lon: 126.978, lat: 37.5665 }));
   let first = turn();
-  assert(first.snapshot.map.center !== null, "the centre is set");
+  assert(first.snapshot.map.center !== null, "the center is set");
   // The page the shell keys a reverse-geocode label by. It is the index, not
   // an object's name — what the kernel asks the host for is the name.
   const page = first.snapshot.map.page;
-  assert(page !== null, "the centre's page is an index");
+  assert(page !== null, "the center's page is an index");
   const statuses = new Set<MapStatus>([first.snapshot.map.status]);
   const categories = new Set(first.fetched.map((f) => f.category));
   let terrain_names = first.fetched.filter((f) => f.category === "terrain").map((f) => f.name);
@@ -231,7 +231,7 @@ Deno.test("kernel - a map centre fetches its terrain and draws it, and the map s
   // The property the names have this shape for: a coarser object's name is a
   // prefix of a finer one's over the same ground, so one prefix in the store
   // is one region. Two layers that share no code arrive at the same digits
-  // from the same centre, which is also what says these are that centre's
+  // from the same center, which is also what says these are that center's
   // pages rather than well-shaped numbers.
   assert(geocode_names.length > 0, "a reverse-geocode group was asked for");
   assert(

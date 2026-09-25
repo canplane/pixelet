@@ -66,7 +66,7 @@ enum RotateAxisLock {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Holding {
     pub active_tool: ActiveTool,
-    /// The hotbar only ever sets this to a flat colour, but the drawer picks
+    /// The hotbar only ever sets this to a flat color, but the drawer picks
     /// terrain-styled cubes too.
     pub object_cube: PlaceableCube,
     pub object_size: f64,
@@ -213,8 +213,8 @@ fn handle_tap(hovered: Pvf3) {
 
     match ui.active_tool {
         ActiveTool::Pointer => {
-            // Recenter on the centre of the cube the tap names: an object's own
-            // centre, or the centre of the cube standing on the struck ground,
+            // Recenter on the center of the cube the tap names: an object's own
+            // center, or the center of the cube standing on the struck ground,
             // pivoted by the ground's own rule — what every pan, the bootstrap
             // and follow mode set too, so a pan after a terrain tap changes
             // nothing.
@@ -603,7 +603,7 @@ fn tap_if_still(s: &Input, mode: DragMode) {
     }
 }
 
-/// A pointer went up, or was cancelled.
+/// A pointer went up, or was canceled.
 pub fn camera_pointer_up(kind: PointerKind, pointer_id: i32, holding: Holding) {
     let s = input();
     s.holding = holding;

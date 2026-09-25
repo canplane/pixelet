@@ -22,13 +22,13 @@
 //!   heap      everything left, ascending from the page past the last of the
 //!             fixed ranges to the end of the memory. One allocator answers
 //!             all of it — a slab of size classes over a buddy of pages
-//!             (xpute-core alloc/slab.rs over alloc/buddy_tree.rs) — so a band's lanes, a
-//!             chunk mesh and a `String` all come out of the same range and
-//!             give back into it.
+//!             (xpute-core alloc/slab.rs over alloc/buddy_tree.rs) — so a
+//!             band's lanes, a fetch body and a `String` all come out of the
+//!             same range and give back into it.
 //!
 //! **The fixed ranges are not `.bss`, and the difference is deliberate.** Both
 //! are a size known at compile time, zeroed, never freed, reached by index
-//! arithmetic; a 125 MiB `static [u8; N]` would land in the same place and
+//! arithmetic; a 50 MiB `static [u8; N]` would land in the same place and
 //! work. What it would lose is that the size is *decided* here. `.bss` is what
 //! the compiler happens to put there, and a range this large is a choice about
 //! how much world is resident — it should not read as compiler output, and the
@@ -41,8 +41,8 @@
 //! ```text
 //!              offset         end            phone        desktop
 //!   module     0              ~32.7 MiB      the linker's
-//!   .fixed     ~32.7 MiB      ~64.4 MiB      31.69 MiB    31.69 MiB
-//!   heap       ~64.4 MiB      —              447.61 MiB   959.61 MiB
+//!   .fixed     ~32.7 MiB      ~84.2 MiB      51.51 MiB    51.51 MiB
+//!   heap       ~84.2 MiB      —              427.79 MiB   939.79 MiB
 //! ```
 //!
 //! What everything in front of the heap is checked against is MIN_HEAP_BYTES —

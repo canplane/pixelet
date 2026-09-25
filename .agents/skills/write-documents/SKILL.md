@@ -48,7 +48,7 @@ at two possible things. A forty-word list of fields reads fine as a list.
 
 Every document here coins nouns — a ring, a strobe, a handle, a band, a run.
 The failure is dropping one in as the subject of the sentence that first
-mentions it, leaving the reader to work backwards to what it is for:
+mentions it, leaving the reader to work backward to what it is for:
 
 > The host's clock for one guest is the **strobe** (`sched/strobe.ts`): a turn
 > on an animation frame, and only when something asked for one.
@@ -76,7 +76,7 @@ its own subject. Where a plainer word is as precise, prefer the plainer one.
 ## Order by dependency
 
 Nothing may be used before it exists. This governs the order of sections, not
-just of sentences: a catalogue of module names belongs at the end, once each
+just of sentences: a catalog of module names belongs at the end, once each
 name means something, and the vocabulary of a model belongs before the machine
 that operates on it.
 
@@ -158,8 +158,8 @@ The same rule inside a document: if a section has already said the turn is
 somebody else's, it should not then draw that turn.
 
 A file that is assembled at build time still has to read as a file. One
-README here has a provenance section spliced in on export, and the licence
-paragraph under it said "the copy carries the licence" — a phrase whose
+README here has a provenance section spliced in on export, and the license
+paragraph under it said "the copy carries the license" — a phrase whose
 antecedent only exists after the splice. In the file itself it pointed at
 nothing.
 
@@ -214,7 +214,7 @@ Ask what the sentence would have to say if the fact changed. If the answer is
 
 ## Symmetry is not a reason
 
-Every rule above pushes toward consistency, and applied without judgement that
+Every rule above pushes toward consistency, and applied without judgment that
 becomes its own fault. A section does not need an opening because its siblings
 have one; it needs one when its point is buried or when the first thing a
 reader meets has no frame. Two parts of one document here earned an opening —
@@ -234,7 +234,7 @@ for a document whose order is already right.
 
 `deno fmt` runs with `proseWrap: preserve`, which means it keeps whatever line
 breaks you wrote and imposes none. The convention is therefore per file, and
-the rule is to match the file's neighbours: `README.md` and the two
+the rule is to match the file's neighbors: `README.md` and the two
 `ARCHITECTURE` documents run a paragraph to one line, while `AGENTS.md`, the
 skills and `issue/` wrap at about eighty columns. Reformatting a document to
 the other convention makes a diff of the whole file for no reason.

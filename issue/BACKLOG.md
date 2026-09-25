@@ -14,7 +14,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   its nearest distance from the camera is under `r_L = (P / τ) · 2^L`, one
   rule for every layer, so a cell's pixels and a view's node count are held
   between constants whatever the tilt or position; the window's rings
-  around the map centre go
+  around the map center go
   ([20260925-what-a-view-costs-is-the-eye-s.md](./20260925-what-a-view-costs-is-the-eye-s.md)).
   Built for terrain and places. Settled 2026-09-25: the rule is shared and
   chooses a level — a zoom — for each piece of ground by its distance from
@@ -56,14 +56,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **A seam while a chunk is drawn from a page over it.** Since
   2026-09-26 a chunk whose page has not come is drawn in its place from the
   nearest resident page over it, upsampled (world/pyramid.rs `drawn_from`),
-  and its apron is read from that same page. A neighbour already built from
+  and its apron is read from that same page. A neighbor already built from
   its own page reads its apron from its own, so the two sides of their edge
   are two surfaces, the coarser one smoothed, and at a cliff or a coast they
   part by more than the one cell a skirt hides. Measured after a jump to a
   coast: brown walls about the character for a second, gone by the second
   after as the pages landed. What would close it: an edge read from one
-  source while either side is borrowed — the apron from the neighbour's own
-  source, and a neighbour's source among a chunk's build sources.
+  source while either side is borrowed — the apron from the neighbor's own
+  source, and a neighbor's source among a chunk's build sources.
 - **The move to a Rust core in WASM, drawing through WebGPU.** Scheduled
   2026-09-13 ([20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md))
   and through by 2026-09-15: the kernel (`crates/pxl/kernel`, built by
@@ -272,7 +272,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   status beside it, a `Message` and a `CameraTerrain` are numbers, a
   placeable cube is a sum type over the catalog's own numbering, and the
   ledger's report, trace and live stream are documents of numbers the shell
-  writes the words for. A colour is a number too — the catalog's swatches and
+  writes the words for. A color is a number too — the catalog's swatches and
   the themes' lighting are packed by the generator, and nothing in the kernel
   parses `#rrggbb` any more.
 
@@ -321,12 +321,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   county, the fine polygon and a nearby point — shown whole at every zoom, so
   zoomed out to a province it still names a 동. The prior art is Nominatim's
   reverse `zoom`, which the client used before the bake: 5 a state, 8 a
-  county, 10–13 a city or suburb, 14 on a neighbourhood. Here, with level `k`
+  county, 10–13 a city or suburb, 14 on a neighborhood. Here, with level `k`
   at zoom 15 − k, something like the whole chain to level 2, region and county
   to level 5, region alone above.
   - Cut the leaf page's chain rather than bake one per level. A level page's
-    centre is not the map's: at level 4 a page is some 16 km, and its label
-    would name the next county over. The leaf page is about a kilometre, so
+    center is not the map's: at level 4 a page is some 16 km, and its label
+    would name the next county over. The leaf page is about a kilometer, so
     its chain is right and only needs shortening.
   - Each part carries its `subtype`, which means rebaking the geocode set
     and a new published version. Cutting by position is wrong where a level
@@ -344,14 +344,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   none blocking:
   - The terrain stands at its elevation and the planet's ground past it at sea
     level, so from high up a far piece of terrain floats over it with its
-    chunk walls showing. Setting the ground at the map centre's height, or
+    chunk walls showing. Setting the ground at the map center's height, or
     skirting the coarse levels down to it, would close it.
-  - Clouds with a thickness: a slab a kilometre or two deep, sampled a few
+  - Clouds with a thickness: a slab a kilometer or two deep, sampled a few
     times a pixel, for the volume a side view misses — as a quality setting,
     since it is several times today's cost. Volumetric clouds proper are out
     while the client draws at rest every two seconds.
-  - The Milky Way, which a naked-eye catalogue does not make (a low-resolution
-    all-sky texture, whose licences are attribution ones), and the bright
+  - The Milky Way, which a naked-eye catalog does not make (a low-resolution
+    all-sky texture, whose licenses are attribution ones), and the bright
     planets, which the sun's and the moon's low-precision formulas extend to.
   - The themes' remaining fill — ambient, hemisphere, the floor — from the
     sky's irradiance, the way the sunlight now comes from the air. The floor
@@ -455,11 +455,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **The scheduler's port, read against the TypeScript it replaced.**
   Read line for line on 2026-09-14 after the move (crates/pxl/kernel/src/world/sched.rs
   against 9ff57fe's chunk_node.ts, chunk_stage.tsx, chunk_table.ts,
-  priority.ts). Fixed: the reclaim walked the order backwards and gave back
+  priority.ts). Fixed: the reclaim walked the order backward and gave back
   the nearest off-screen chunk first (core_sched.test.ts now pins farthest
   first); a layout the node re-attached on its own — decor changing — lost
   the blend the module does not repeat. Brought back to the TypeScript's
-  behaviour: builds move at most eight chunks a frame, counting only chunks
+  behavior: builds move at most eight chunks a frame, counting only chunks
   that made progress; the pending lists are taken before the recheck; a
   rebuild on the spot trims the tier cache. Hardened: a layout naming a tier
   the node does not hold is warned and the chunk rebuilt from its sources,
@@ -467,7 +467,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   equivalence test is this layer: the pieces under it (mesher, scan, volume,
   terrain, object store, build) are held to the TypeScript byte for byte,
   the scheduler only by its order's unit tests and core_sched.test.ts's
-  cases — worth a trace-driven comparison if its behaviour is ever in doubt.
+  cases — worth a trace-driven comparison if its behavior is ever in doubt.
 
 ## Parked, with the reason on file
 

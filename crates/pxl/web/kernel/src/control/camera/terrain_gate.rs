@@ -52,7 +52,7 @@ pub struct ViewPose {
 /// the first fix, when there is no frame to express it in.
 ///
 /// Both ends of a step have to be built against one origin or the walk
-/// between them crosses frames; the store's current centre supplies it for
+/// between them crosses frames; the store's current center supplies it for
 /// every caller, and a candidate target is expressed against that same one.
 pub fn pose(view: ViewTriple, center: Option<&Pvf3>) -> Option<ViewPose> {
     let map_center = map_store().map_center?;
@@ -154,7 +154,7 @@ pub fn allowed_view(to: ViewTriple, from: ViewTriple) -> ViewTriple {
 ///
 /// Panning is the one continuous control that is not in the view triple, so
 /// it went through no gate at all and walking into a hill sideways simply
-/// worked. Jumps do not come through here — a search result or a GPS recentre
+/// worked. Jumps do not come through here — a search result or a GPS recenter
 /// is a destination the user named, not a path they dragged.
 pub fn allowed_pan(view: ViewTriple, to_center: &Pvf3) -> Pvf3 {
     let (Some(from_pose), Some(to_pose)) = (pose(view, None), pose(view, Some(to_center))) else {

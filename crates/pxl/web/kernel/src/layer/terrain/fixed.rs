@@ -8,8 +8,10 @@
 //! module boots, never freed, and of a size settled at compile time.
 //!
 //! How many records there are, and which page is in which, are the
-//! pyramid's (world/pyramid.rs `RECORDS`), the same for every layer; what is
-//! terrain's is that a record is a room of fixed bytes here.
+//! pyramid's (world/pyramid.rs `RECORDS`), the same for every layer, and so
+//! is the first, `ABSENT`, which every page the bake left as no object reads
+//! — the open ocean; what is terrain's is that a record is a room of fixed
+//! bytes here.
 //!
 //! The routing turns a record into an address, and it is the only thing here
 //! that knows how the bytes are ordered. A page's ground is one lane of words,
@@ -49,27 +51,12 @@ const _: () = assert!(
     "terrain: a ground lane must be whole cache lines, or every second record's lane starts part way into one"
 );
 
-/// One page's bytes on their own, channel after channel and the elevation
-/// past them: what the shared open-ocean tile is held as, since it belongs to
-/// no page and every ocean page reads it.
-pub const RECORD_BYTES: u32 = GROUND_LANE_BYTES + ELE_LANE_BYTES;
-
-/// Where a standalone record's ground lies.
-pub fn record_ground_at(record: usize) -> usize {
-    record
+/// Where a record's ground lies in the range.
+pub const fn ground_off(record: u32) -> u32 {
+    record * GROUND_LANE_BYTES
 }
 
-/// Where a standalone record's elevation grid lies.
-pub fn record_ele_at(record: usize) -> usize {
-    record + GROUND_LANE_BYTES as usize
-}
-
-/// Where a record's ground lies, `base` the range's own.
-pub fn ground_at(base: usize, slot: u32) -> usize {
-    base + slot as usize * GROUND_LANE_BYTES as usize
-}
-
-/// Where a record's elevation grid lies, `base` the range's own.
-pub fn ele_at(base: usize, slot: u32) -> usize {
-    base + GROUND_BYTES as usize + slot as usize * ELE_LANE_BYTES as usize
+/// Where a record's elevation grid lies in the range.
+pub const fn ele_off(record: u32) -> u32 {
+    GROUND_BYTES + record * ELE_LANE_BYTES
 }

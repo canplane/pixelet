@@ -6,9 +6,9 @@ import { assembleLabel } from "@/feature/map/geocode/label.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
 /**
- * The place the map centre is in, as one line.
+ * The place the map center is in, as one line.
  *
- * The kernel resolves it: it holds the centre, the page that centre falls
+ * The kernel resolves it: it holds the center, the page that center falls
  * in, the group of pages that page belongs to and the dictionary the group's
  * numbers name places in, and it cuts the parts at the rung the current zoom
  * asks for (pxl-kernel layer/geocode/). Nothing is fetched here — the

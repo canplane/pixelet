@@ -238,7 +238,7 @@ curl -s -H "Accept-Encoding: zstd" "https://plei.me/tile/terrain/<v>/<quadkey>" 
   | zstd -dcq | head -c 2 | xxd -p                                                              # 5854
 ```
 
-Count both prefixes afterwards and only then delete the old ones — an object
+Count both prefixes afterward and only then delete the old ones — an object
 the rename skipped is one the new prefix does not have, and nothing else would
 say so.
 

@@ -53,7 +53,7 @@ range!(Reused, REUSED_AT);
 /// and gone. An overlap, a bad coalesce, or a header written into a caller's
 /// bytes all show up here and nowhere else.
 #[test]
-fn what_was_written_in_a_block_is_still_there_after_its_neighbours_come_and_go() {
+fn what_was_written_in_a_block_is_still_there_after_its_neighbors_come_and_go() {
     let heap: BuddyMalloc<Spread> = BuddyMalloc::new();
     let (base, end) = (Spread::base(), Spread::end());
     let sizes = [1usize, 4096, 4097, 8192, 100, 16384, 40, 65536];

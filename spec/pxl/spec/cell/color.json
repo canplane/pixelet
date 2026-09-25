@@ -1,7 +1,7 @@
 {
   "_meta": { "source": "land/water/structure/transport: OpenStreetMap Carto; block: hand-picked" },
   "common": {
-    "unknown": { "hex": "#D9D0CC", "note": "A cell whose data is missing or invalid, a visible neutral grey so it reads as not known rather than as whatever drew last." }
+    "unknown": { "hex": "#D9D0CC", "note": "A cell whose data is missing or invalid, a visible neutral gray so it reads as not known rather than as whatever drew last." }
   },
   "land": {
     "bare": { "hex": "#EEE5DC" },
@@ -45,8 +45,8 @@
   },
   "block": {
     "white": { "hex": "#f7f7f7" },
-    "grey": { "hex": "#8d8d8d" },
-    "dark_grey": { "hex": "#3f3f3f" },
+    "gray": { "hex": "#8d8d8d" },
+    "dark_gray": { "hex": "#3f3f3f" },
     "black": { "hex": "#191919" },
     "red": { "hex": "#b01313" },
     "pink": { "hex": "#ff8787" },

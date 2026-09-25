@@ -4,7 +4,7 @@
 //! numbers live here and nowhere else. The GPU reads them from the
 //! atmosphere uniform (gpu/atmosphere.rs lays it out) to draw its tables and
 //! the sky from them (frame/shader/atmos_*.wgsl); the CPU integrates the
-//! same model along the sun's ray to colour the light the terrain is lit by,
+//! same model along the sun's ray to color the light the terrain is lit by,
 //! which is one number a frame and not worth a texture read a fragment.
 //!
 //! The model is Bruneton's and Hillaire's ("A Scalable and Production Ready
@@ -12,7 +12,7 @@
 //! their papers and Unreal's SkyAtmosphere take as the Earth: Rayleigh
 //! scattering falling off over 8 km, Mie over 1.2 km, and an ozone layer
 //! that absorbs and does not scatter, a tent peaking at 25 km. Distances are
-//! kilometres and coefficients per kilometre throughout.
+//! kilometers and coefficients per kilometer throughout.
 
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -30,13 +30,13 @@ pub const MIE_SCALE_HEIGHT_KM: f64 = 1.2;
 /// The Mie phase's asymmetry: how strongly haze throws light forward, which
 /// is the glow around the sun.
 pub const MIE_G: f64 = 0.8;
-/// How far the eye sees through the air near the ground, in kilometres:
+/// How far the eye sees through the air near the ground, in kilometers:
 /// Koschmieder's visual range, `3.912/β`, which is 30 to 50 km on a clear
 /// day on Earth and under 10 in haze.
 ///
 /// Bruneton's medium alone gives 179 km — cleaner than the clearest day
 /// anyone stands in — because it carries no aerosol in the boundary layer,
-/// only the stratospheric Mie the sky's colour wants. Without one the ground
+/// only the stratospheric Mie the sky's color wants. Without one the ground
 /// stays sharp to the horizon and something else has to hide where it ends
 /// (issue/20260923-the-ground-runs-to-the-horizon.md).
 pub const HAZE_VISUAL_RANGE_KM: f64 = 40.0;
@@ -52,7 +52,7 @@ pub const OZONE_ABSORPTION: [f64; 3] = [0.650e-3, 1.881e-3, 0.085e-3];
 pub const OZONE_CENTER_KM: f64 = 25.0;
 pub const OZONE_HALF_WIDTH_KM: f64 = 15.0;
 /// What the planet's surface reflects, for the light the ground bounces back
-/// into the air: the Earth's mean, a grey the scattering sees and the eye
+/// into the air: the Earth's mean, a gray the scattering sees and the eye
 /// does not. The ground the eye sees past the terrain is `land` below.
 pub const GROUND_ALBEDO: f64 = 0.3;
 
@@ -60,7 +60,7 @@ pub const GROUND_ALBEDO: f64 = 0.3;
 /// from high up: the palette's forest (spec/pxl/spec/cell/color.json's
 /// land.green_deep), which is what covers most of the land a view that wide
 /// takes in, in linear light — so the terrain's edge runs into ground of its
-/// own colour rather than a grey.
+/// own color rather than a gray.
 pub fn land() -> [f64; 3] {
     use pxl_spec::bake::format::GroundChannelKey;
     use pxl_spec::cell::cube_types;
@@ -89,10 +89,10 @@ pub const EXPOSURE: f64 = 4.0;
 /// scene dimmer than a bright one.
 pub const ADAPTATION: f64 = 0.5;
 /// How far it rises at most, as a factor over EXPOSURE: six stops, so a
-/// sunset's sky shows as the colour it is rather than dark; past it the
+/// sunset's sky shows as the color it is rather than dark; past it the
 /// twilight falls away to night, as it does to an eye.
 pub const MAX_ADAPTATION: f64 = 64.0;
-/// The terrain's direct sunlight at noon, before the air colours it: the
+/// The terrain's direct sunlight at noon, before the air colors it: the
 /// directional intensity the daylight themes were tuned at, so the ground is
 /// no brighter or darker than it was under them.
 pub const SUN_LIGHT: f64 = 0.5;
@@ -119,7 +119,7 @@ pub fn moon_phase_light(alpha: f64) -> f64 {
 /// Steps the CPU's transmittance takes to the top of the atmosphere.
 const STEPS: u32 = 64;
 
-/// The extinction per kilometre at altitude `h` km, by channel.
+/// The extinction per kilometer at altitude `h` km, by channel.
 fn extinction(h: f64) -> [f64; 3] {
     let r = (-h / RAYLEIGH_SCALE_HEIGHT_KM).exp();
     let m = (-h / MIE_SCALE_HEIGHT_KM).exp();
@@ -166,7 +166,7 @@ pub fn white() -> [f64; 3] {
 /// What reaches a point at `altitude_km` of a light at `mu` from the zenith,
 /// by channel, the ground's shadow included (atmos_lut.wgsl's
 /// sun_transmittance, on the CPU). The disc sets over the horizon rather
-/// than switching off at its centre: the part still above the horizon, taken
+/// than switching off at its center: the part still above the horizon, taken
 /// linearly across the disc's width.
 pub fn light_at(altitude_km: f64, mu: f64) -> [f64; 3] {
     let r = BOTTOM_RADIUS_KM + altitude_km.max(0.0);

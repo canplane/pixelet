@@ -6,7 +6,7 @@
  * the commands its controls send.
  *
  * The snapshot arrives as a Snapshot packet in a block the kernel holds, read
- * whole when it is signalled and replaced whole — a component subscribes and
+ * whole when it is signaled and replaced whole — a component subscribes and
  * re-renders on the part it selects. A control's command is rung at once with
  * no quota, so what it asks of the host is heard inside the call.
  */

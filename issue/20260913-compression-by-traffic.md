@@ -1,4 +1,4 @@
-# Compression, by what is travelling
+# Compression, by what is traveling
 
 **2026-09-13** — asked whether anything beats gzip. For the baked pages,
 yes, and by a margin; but the tiles are one kind of traffic among several,
@@ -53,7 +53,7 @@ POI. Decode time was not measured (the timing run broke on shell quoting).
 ## What follows from it
 
 - **Encoding before codec.** What a codec can take is set by the layout it
-  is given: quantised positions, columns rather than rows, deltas. XTP's
+  is given: quantized positions, columns rather than rows, deltas. XTP's
   column layer and the string-sequence leaf (BACKLOG) do more for realtime
   traffic than any codec swap.
 - **The codec belongs to the transport, not the protocol.** A command frame
@@ -262,14 +262,14 @@ the client's own header is still intact, which is not a Worker.
 
 What the Worker does keep is the cache: the encoding stays parked on a header
 the cache has no meaning for while the entry is stored, because an encoding a
-cache can read is one it normalises, and it stores the decoded body.
+cache can read is one it normalizes, and it stores the decoded body.
 
 **So the reader finds it in the body instead.** A browser handed a
 `Content-Encoding` it does not know passes the bytes through undecoded rather
 than saying anything, so a body that still begins with a compression magic is
 one the transport did not decode — a fact about the browser, found on the one
 side that can see it (`apps/web/src/kernel/io/fetch.ts`). It is the same
-judgement the bake makes on the other side of the wire (`geo-bake util.rs`'s
+judgment the bake makes on the other side of the wire (`geo-bake util.rs`'s
 `encoding_of`). Such a body is not handed to the kernel, which would spend a
 heap block and fail in its decoder far from the cause; the notice goes up and
 every later read is settled without being made.

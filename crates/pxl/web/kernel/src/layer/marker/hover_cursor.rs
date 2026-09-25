@@ -145,7 +145,7 @@ pub fn hover_cursor_step() {
     };
 
     // Pointer always reads as the generic marker color; object placement and
-    // eraser-on-an-object ghost at the real thing's own colour.
+    // eraser-on-an-object ghost at the real thing's own color.
     let cube: Option<PlaceableCube> = match (active_tool, hovered_object.as_ref().map(|o| &o.kind)) {
         (ActiveTool::Pointer | ActiveTool::Decor, _) => None,
         (_, Some(EntryKind::Solid { cube })) => Some(*cube),

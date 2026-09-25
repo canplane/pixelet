@@ -59,9 +59,9 @@ The mesher is parametric now: both bake paths read `span` off the run set,
 and the scratch grids (`MERGE_RUN`, `CO_START`) are sized for the largest
 unit (`MAX_UNIT_CHUNKS`, 4 on a side). The
 mesher also has a note worth reading in this light: at a chunk's own
-boundary it cannot see the neighbouring columns, so it emits every edge
+boundary it cannot see the neighboring columns, so it emits every edge
 face conservatively and never shades the seam. A 4×4 block puts fifteen
-former boundaries _inside_ one scan, where the neighbour is known.
+former boundaries _inside_ one scan, where the neighbor is known.
 
 What is bound to 64 is the unit of work, in five places:
 
@@ -96,7 +96,7 @@ What is bound to 64 is the unit of work, in five places:
 
 Making the block the only node at every tier was the first idea and it is
 the wrong one: eighteen sites in `ChunkNode` assume one chunk, and decor,
-bounds and the object-store subscriptions would all have to generalise
+bounds and the object-store subscriptions would all have to generalize
 sixteen ways for a change whose whole value is in two coarse tiers.
 
 The chunk stays the node at every tier. What changes is _who bakes the
@@ -129,7 +129,7 @@ regions of it.
 - The finest tiers. A chunk at step 1, 2 or 4 is the same node, the same
   scan and the same mesh as today.
 - The store, the page as the streaming unit, the object layer's column keys.
-- The scheduler's rules: the same four classes, the same ageing, the same
+- The scheduler's rules: the same four classes, the same aging, the same
   budget. A block is one more kind of entry with a larger span.
 - The dither blend. A block blends as a whole, which is what a chunk did.
 

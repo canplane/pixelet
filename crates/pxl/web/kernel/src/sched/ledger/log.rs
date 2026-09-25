@@ -31,7 +31,7 @@ use crate::global::Global;
 use crate::kernel::kernel;
 use crate::layer::billboard::sheet::billboard_sheet;
 use crate::sched::ledger::block::CountersBlock;
-use crate::sched::ledger::record::{drop_front, fixed_lane, ledger_recording_start, ledger_recording_stop, ledger_set_sink, FrameSample, LedgerSink, TaskRow};
+use crate::sched::ledger::record::{drop_front, fixed_lane, ledger_recording_start, ledger_recording_stop, ledger_set_sink, FrameSample, Lane, LedgerSink, TaskRow};
 use crate::sched::ledger::summary::{missed, overran};
 use crate::sched::tick::{set_step_timing, tick_step_stats_reset};
 
@@ -65,7 +65,7 @@ fn counters() -> CountersBlock {
 /// reading must not grow the heap the thing being measured allocates from, so
 /// each lane is capped and the oldest goes — printk's ring loses the oldest
 /// line too, rather than the producer waiting on the reader.
-const PENDING: usize = 512;
+pub(super) const PENDING: usize = 512;
 
 struct Log {
     baseline: CountersBlock,
@@ -106,7 +106,7 @@ pub fn ledger_window_start() {
     log().baseline = counters();
 }
 
-/// Freezes the window, so an export taken afterwards sees exactly this data,
+/// Freezes the window, so an export taken afterward sees exactly this data,
 /// and stops paying for the timing that fills it.
 pub fn ledger_window_stop() {
     ledger_recording_stop();
@@ -151,8 +151,8 @@ pub fn ledger_set_logging(on: bool) {
     }
     l.logging = on;
     if on && l.tasks.is_empty() {
-        l.tasks = fixed_lane(PENDING);
-        l.frames = fixed_lane(PENDING);
+        l.tasks = fixed_lane(Lane::LogTasks, PENDING);
+        l.frames = fixed_lane(Lane::LogFrames, PENDING);
     }
     ledger_set_sink(on.then_some(LedgerSink {
         task: Some(log_task),

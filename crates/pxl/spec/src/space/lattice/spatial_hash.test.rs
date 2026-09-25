@@ -106,7 +106,7 @@ fn spatial_hash_every_reported_point_lies_within_one_cell_of_the_box() {
         let radius = 3.0;
         for id in found(&h, probe.x, probe.y, probe.z, radius) {
             let p = by_id[&id];
-            // One cell of quantisation on each side, and nothing beyond it: this
+            // One cell of quantization on each side, and nothing beyond it: this
             // is the assertion a bucket-level filter cannot pass, since a hash
             // collision would put an arbitrary point in the answer.
             let slack = radius + cell;

@@ -127,7 +127,7 @@ neither of which was chosen to land there.
   The free list would have two pushers and two poppers, and splitting it back
   into two SPSC lists fixes the division again; and AF_XDP does not balance
   either — the application moves buffers, so the split stays a decision
-  somebody makes. Against that, the thing being optimised is free: an
+  somebody makes. Against that, the thing being optimized is free: an
   untouched page of linear memory costs address space and not RAM, so
   over-provisioning both sides dominates.
 - **Runtime resize.** `io_uring_resize_rings()` exists. It would cost the one
@@ -184,7 +184,7 @@ reservation did not change here, so neither does that.
 **The stack stays at the bottom, and that is the only guard there is.** rustc
 passes `--stack-first` and `-z stack-size=1048576` to wasm-ld for
 wasm32-unknown-unknown by default; the linked module's `__stack_pointer`
-initialises to 1,048,576. With the stack first, an overflow goes below zero,
+initializes to 1,048,576. With the stack first, an overflow goes below zero,
 wraps as an unsigned 32-bit address, lands outside the memory and traps. With
 the default layout it would write over `.data` silently instead, which is the
 reason Rust and Zig both pass the flag and why LLVM has an open issue to make

@@ -31,7 +31,7 @@ use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
 /// Cells on a band's side; a chunk is one column of bands.
-/// The ring of neighbour columns a run set carries around the chunk's own.
+/// The ring of neighbor columns a run set carries around the chunk's own.
 ///
 /// A chunk is meshed from its own columns, and every question the face mask
 /// asks — is the face hidden, does the cell beside it rise above this run,
@@ -40,7 +40,7 @@ use xpute_core::status::errno::Errno;
 /// resident, so the mask was left saying "open air" and every seam lost its
 /// occlusion, its crease, and the culling of the face behind it.
 ///
-/// The ring answers those questions without the neighbour. The ground beyond
+/// The ring answers those questions without the neighbor. The ground beyond
 /// a page's own span is in the page already — the elevation raster is padded
 /// (pxl-spec's ELE_PAD) — so a column of it can be written here from the same
 /// source the chunk's own terrain came from. Nothing is emitted from an apron
@@ -59,7 +59,7 @@ pub fn apron_col(cx: u32, cy: u32) -> u32 {
 /// out over the padded column grid, and the floor every run starts at. The
 /// interior entries are never read — those columns come from the bands. A
 /// column whose ground does not reach the floor gets no run, and reads as
-/// open air exactly as an absent neighbour used to.
+/// open air exactly as an absent neighbor used to.
 pub struct Apron<'a> {
     /// The ground's height a cell, as the sample holds it: the column's top
     /// is one below.
@@ -525,9 +525,9 @@ pub struct RunSet<'a> {
     pub count: u32,
     /// Columns on a side; column `(cx, cy)` is `cy * span + cx`.
     pub span: u32,
-    /// The ring of neighbour columns around the chunk's own, in columns: one
+    /// The ring of neighbor columns around the chunk's own, in columns: one
     /// for a scanned or directly written set, none for a coarse tier's,
-    /// which is summarised from one and carries no neighbours of its own.
+    /// which is summarized from one and carries no neighbors of its own.
     pub apron: u32,
     pub start: &'a [u32],
     pub z0: &'a [i32],

@@ -437,7 +437,7 @@
               "name": "channel",
               "type": "GroundChannelKey",
               "optional": true,
-              "doc": ["The ground channel the held cube stands in for; absent for a flat colour, a decor kind or nothing."]
+              "doc": ["The ground channel the held cube stands in for; absent for a flat color, a decor kind or nothing."]
             },
             {
               "name": "value",
@@ -471,7 +471,7 @@
         {
           "name": "INPUT_GO_TO",
           "value": 7190,
-          "doc": ["A search result: the map centre moved there."],
+          "doc": ["A search result: the map center moved there."],
           "packet": [
             { "name": "lon", "type": "f64" },
             { "name": "lat", "type": "f64" }
@@ -727,8 +727,8 @@
           "type": "PlacePart",
           "list": true,
           "doc": [
-            "The place the map centre is in, broad to narrow, already cut at the rung the",
-            "current zoom asks for; empty where the centre is in none or the packets it is",
+            "The place the map center is in, broad to narrow, already cut at the rung the",
+            "current zoom asks for; empty where the center is in none or the packets it is",
             "read out of have not arrived."
           ]
         },
@@ -745,13 +745,13 @@
       "fields": [
         { "name": "status", "type": "MapStatus" },
         { "name": "is_off_center", "type": "bool" },
-        { "name": "center", "type": "LonLat", "optional": true, "doc": ["The map centre in degrees: what the search measures distance from."] },
+        { "name": "center", "type": "LonLat", "optional": true, "doc": ["The map center in degrees: what the search measures distance from."] },
         {
           "name": "page",
           "type": "u64",
           "optional": true,
           "doc": [
-            "The L3 page the centre falls in: what the area being looked at is announced per.",
+            "The L3 page the center falls in: what the area being looked at is announced per.",
             "Sent because the shell would otherwise need a second implementation of the space",
             "to reach it."
           ]

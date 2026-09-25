@@ -2,9 +2,9 @@
 
 /**
  * The cell catalog as the shell shows it. A cube and a decor kind are held the
- * way the kernel names them — a ground channel, or none for a flat colour,
+ * way the kernel names them — a ground channel, or none for a flat color,
  * and the catalog's number — and their words are looked up only to be shown:
- * a cube's id for its locale entry and its texture's path, its colour for a
+ * a cube's id for its locale entry and its texture's path, its color for a
  * swatch, a decor kind's name for its icon and its label. What a cube is
  * stored as is the kernel's (pxl-spec cell/object.rs).
  */
@@ -15,7 +15,7 @@ import { cube_types, ground_pack, type GroundChannelKey } from "./cube_type.spec
 import { decor_types, type DecorId } from "./decor.spec.ts";
 
 /** A placeable cube, as INPUT_POINTER carries it: the ground channel it
- * stands in for, none for a flat colour, and its type by number. */
+ * stands in for, none for a flat color, and its type by number. */
 export interface PlaceableCube {
   readonly channel: GroundChannelKey | null;
   readonly type: u8;
@@ -29,7 +29,7 @@ export function sameCube(a: PlaceableCube, b: PlaceableCube): boolean {
 export type ChannelName = keyof typeof cube_types;
 
 /** The channel a cube's type is numbered in, by name: `"block"` for a flat
- * colour. */
+ * color. */
 export function placeableCubeChannel(cube: PlaceableCube): ChannelName {
   return cube.channel === null ? "block" : ground_pack.channels[cube.channel];
 }
@@ -51,13 +51,13 @@ export function placeableCubeId(cube: PlaceableCube): string {
   return `${placeableCubeChannel(cube)}.${placeableCubeType(cube)}`;
 }
 
-/** The colour the catalog gives a cube, as written, for a swatch. */
+/** The color the catalog gives a cube, as written, for a swatch. */
 export function placeableCubeHex(cube: PlaceableCube): string | null {
   const entries = (palette as unknown as Record<string, Record<string, { hex: string }> | undefined>)[placeableCubeChannel(cube)];
   return entries?.[placeableCubeType(cube)]?.hex ?? null;
 }
 
-/** Every cube the catalog gives out: the flat colours by number, then each
+/** Every cube the catalog gives out: the flat colors by number, then each
  * ground channel's types, the channels in their own order. */
 export const placeable_cubes: readonly PlaceableCube[] = [
   ...Object.values(cube_types.block).sort((a, b) => a - b).map((type) => ({ channel: null, type })),

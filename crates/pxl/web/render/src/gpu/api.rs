@@ -174,7 +174,7 @@ impl Gpu {
         put(op::ENCODER, &[id]);
     }
 
-    /// A render pass: colour view, colour load, clear r g b a
+    /// A render pass: color view, color load, clear r g b a
     /// (f32 bits), depth view, depth load, depth clear (f32 bits), query set,
     /// the begin and end timestamp indices; NONE or 0 for what is absent.
     pub fn pass(&self, id: u32, encoder: u32, desc: &[u32]) {
@@ -307,7 +307,7 @@ pub fn buffer_entry(binding: u32, buffer: u32) -> [u32; 5] {
     [binding, crate::gpu::api_spec::resource::BUFFER, buffer, 0, 0]
 }
 
-/// A render pass's description: colour, cleared to transparent or loaded; depth cleared to `depth_clear`, loaded or read only;
+/// A render pass's description: color, cleared to transparent or loaded; depth cleared to `depth_clear`, loaded or read only;
 /// and the timestamps the pass writes, as its span's `Stamp::pass` gives them.
 pub fn pass_desc(color: u32, color_load: u32, depth: u32, depth_load: u32, depth_clear: f32, stamp: [u32; 3]) -> [u32; 12] {
     [color, color_load, 0, 0, 0, 0, depth, depth_load, depth_clear.to_bits(), stamp[0], stamp[1], stamp[2]]

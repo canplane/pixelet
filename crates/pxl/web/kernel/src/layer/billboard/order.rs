@@ -5,7 +5,7 @@
 /// testing settles everything else; this only settles ties, and the tie is
 /// between a badge that labels a fixed place and a bubble somebody is saying
 /// right now. The bubble wins — it is transient and the badge will still be
-/// there afterwards.
+/// there afterward.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum BillboardOrder {

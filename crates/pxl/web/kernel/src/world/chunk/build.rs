@@ -26,9 +26,8 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use xpute_runtime::mem::heap::{free, Block};
 
 use crate::layer::object::store::{object_col_revision, Store};
-use crate::mem::fixed::{bake_at, run_set_at};
+use crate::mem::fixed::{at, Range};
 use crate::shell::setting::store::{hidden_ground, settings_store};
-use crate::world::chunk::mesh_slot::BAKE_BYTES;
 use pxl_spec::bake::constant::BAND_CELLS;
 
 use crate::world::chunk::source::tiers_draw;
@@ -62,7 +61,7 @@ pub fn object_fold(cube: Cube) -> Scale {
 }
 
 /// Hands a block back to the heap. Every view into it is dead
-/// afterwards.
+/// afterward.
 pub fn release_block(at: usize, bytes: u32) {
     // SAFETY: a block this chunk took and has not given back.
     unsafe { free((at, bytes)) };
@@ -854,7 +853,7 @@ impl Builder {
     /// A set past it is refused, and the set given back.
     fn set_of(&mut self, id: u32, bytes: u32) -> Option<(usize, usize)> {
         let set = self.run_set_for(id)?;
-        match run_set_at(set).filter(|_| bytes <= RUN_SET_BYTES) {
+        match at(Range::Run(set), 0, bytes) {
             Some(at) => Some((set, at as usize)),
             None => {
                 self.let_runs_go(id);
@@ -869,9 +868,9 @@ impl Builder {
 
     fn run_set(world: &World, runs: &Runs) -> RunSet<'static> {
         let bytes = pxl_render::mesh::voxel_scan::run_set_bytes(runs.count, COL_SPAN) as usize;
-        let at = run_set_at(runs.set).or_bug(Errno::ENOTRECOVERABLE) as usize;
+        let set_at = at(Range::Run(runs.set), 0, bytes as u32).or_bug(Errno::ENOTRECOVERABLE) as usize;
         // SAFETY: the chunk's own set, held until its runs are let go.
-        unsafe { RunSet::carve(core::slice::from_raw_parts(world.volumes.mem().add(at), bytes), runs.count, COL_SPAN, APRON) }
+        unsafe { RunSet::carve(core::slice::from_raw_parts(world.volumes.mem().add(set_at), bytes), runs.count, COL_SPAN, APRON) }
     }
 
     fn advance_bake(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) -> Progress {
@@ -896,15 +895,15 @@ impl Builder {
             Step::NeedMesh(words) => {
                 // The one bake open writes into `.fixed.bake`, which is past
                 // any mesh a chunk has been measured to make (mesh_slot.rs).
-                let Some(at) = bake_at().filter(|_| words * 4 <= BAKE_BYTES) else {
+                let Some(mesh_at) = at(Range::Bake, 0, words * 4) else {
                     self.abort_bake();
                     self.refuse(world, id);
                     return Progress::Blocked;
                 };
                 // SAFETY: `.fixed.bake`, the open bake's alone until it is
                 // finished and handed over, or aborted.
-                unsafe { self.bake.provide_mesh(world.volumes.mem().add(at as usize) as *mut u32, words) };
-                self.bake_job.as_mut().unwrap().mesh = Some((at as usize, words * 4));
+                unsafe { self.bake.provide_mesh(world.volumes.mem().add(mesh_at as usize) as *mut u32, words) };
+                self.bake_job.as_mut().unwrap().mesh = Some((mesh_at as usize, words * 4));
                 Progress::Busy
             }
             Step::Done => {

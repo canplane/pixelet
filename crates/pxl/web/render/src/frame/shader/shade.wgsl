@@ -19,7 +19,7 @@ fn rim_light(n: vec3f, world_pos: vec3f) -> vec3f {
 // `open` is how much of the ambient sky the point sees, per channel, 1 for
 // all of it: the corner occlusion a chunk computes from
 // its own geometry (chunk.wgsl's occlusion), tinted warm so a corner reads
-// as a contact shadow and not as a rendering artefact. It scales the
+// as a contact shadow and not as a rendering artifact. It scales the
 // ambient, hemisphere and second light, which come from everywhere, and
 // not the sun, whose visibility is the shadow map's to say.
 //

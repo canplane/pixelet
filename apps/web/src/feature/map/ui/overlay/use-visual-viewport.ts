@@ -11,7 +11,7 @@ const SETTLE_MS = 250;
  * `interactive-widget=resizes-content` in the viewport meta is meant to make
  * this unnecessary — the browser shrinks the layout viewport when the
  * keyboard opens, so `absolute top-4` keeps meaning "below the visible top".
- * Chromium honours it; iOS Safari does not, and instead scrolls the visual
+ * Chromium honors it; iOS Safari does not, and instead scrolls the visual
  * viewport over an unchanged layout viewport, riding everything positioned
  * against the layout viewport off the top of the screen. The meta tag stays
  * — it's still what makes `env(safe-area-inset-*)` report real values — this

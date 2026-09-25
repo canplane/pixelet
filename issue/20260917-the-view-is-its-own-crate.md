@@ -89,7 +89,7 @@ a thing is instead, and a crate's root holds its directories and their barrels.
   config, the settings, the map's controls).
 - **pxl-render:** `mesh` (voxels to a mesh, and the paint of terrain, objects
   and the palette into voxels), `asset` (glTF, the billboards' atlas), `look`
-  (LOD, the light, colour, the markers' style), `frame` (the draw list, the
+  (LOD, the light, color, the markers' style), `frame` (the draw list, the
   stage, the shaders) and `gpu` (the device, and a pass for each of badges,
   decor, the puck and actors).
 
@@ -119,7 +119,7 @@ implementation, and "shared" named who uses it, which is the TypeScript
 monorepo's convention rather than a Rust crate's. Its inner `spec/` level went,
 so a path is `pxl_spec::cell` rather than `pxl_spec::spec::cell`. `pxl-core` is
 `pxl-kernel`, which is what its own docs called it, and `core` in `xpute-core`
-means a generic kit, not the centre of pixelet.
+means a generic kit, not the center of pixelet.
 
 The TypeScript package keeps `@pxl/shared` for now. Once the server and the
 bake tools are Rust, what the shell still reads of it (the command numbers,

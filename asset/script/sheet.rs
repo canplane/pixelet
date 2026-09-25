@@ -21,7 +21,7 @@ pub struct Sheet {
     pub bytes: Vec<u8>,
     /// The asset path of each tile, in the order they were laid out.
     pub tiles: Vec<String>,
-    /// Each tile's own mean colour, as sRGB bytes: what a patch of that
+    /// Each tile's own mean color, as sRGB bytes: what a patch of that
     /// material reads as once it is too far to see the tile itself. The mean
     /// is taken in linear light, which is where light adds up — a mean of the
     /// sRGB bytes of a tile that is half dark and half light comes out darker
@@ -29,7 +29,7 @@ pub struct Sheet {
     pub means: Vec<[u8; 3]>,
 }
 
-/// One tile's mean colour, in linear light and back.
+/// One tile's mean color, in linear light and back.
 fn mean_of(img: &RgbaImage) -> [u8; 3] {
     let mut sum = [0.0f64; 3];
     for px in img.pixels() {
