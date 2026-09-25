@@ -139,9 +139,10 @@ pub struct Pyramid<L: Layer> {
     /// range holds is `worth`'s policy rather than a coordinate's residue.
     pages: BTreeMap<LevelPage, Held<L>>,
     refused: u32,
-    /// Moves whenever a page is set or cleared. The resident set is what the
-    /// cover and every fold are functions of, so this one number is what
-    /// makes an arrival, a fold or an eviction reach both.
+    /// Moves whenever a page is set or cleared, or a page is answered as
+    /// said by the one over it. The resident set is what the cover and every
+    /// fold are functions of, so this one number is what makes an arrival, a
+    /// fold, an answer or an eviction reach both.
     revision: u32,
     pinned: Option<LevelPage>,
     /// The view the layer last drew, what it draws of it, and which making

@@ -1177,12 +1177,6 @@ impl Scheduler {
         Terrain::pyramid().cover().0.drawn.iter().copied().collect()
     }
 
-    /// Which chunks exist: the ones `select` draws, mounted as they are
-    /// wanted, and the ones it no longer draws marked stale rather than let
-    /// go, so the ground they cover is never a hole while what replaces them
-    /// builds (`retire`). Rerun when the anchor crosses into another page
-    /// at the window's base, the window slides or a page comes or goes
-    /// (`MountKey`).
     /// Lets one stale chunk go so a wanted one can mount.
     ///
     /// The table is a hard budget and the widest selection fits inside it
@@ -1211,6 +1205,11 @@ impl Scheduler {
         true
     }
 
+    /// Which chunks exist: the ones `select` draws, mounted as they are
+    /// wanted, and the ones it no longer draws marked stale rather than let
+    /// go, so the ground they cover is never a hole while what replaces them
+    /// builds (`retire`). Rerun when the terrain's cover is made again
+    /// (`MountKey`).
     fn mount(&mut self, world: &mut World) {
         let key = Terrain::pyramid().cover().1;
         if self.selected_for == Some(key) && self.to_mount.is_empty() {
@@ -1274,12 +1273,6 @@ impl Scheduler {
         }
     }
 
-    /// Lets go of the stale chunks whose ground is ready to be drawn by what
-    /// replaced them: wanted chunks cover all of it, and every one of them
-    /// has a layout or is off screen and never will. A stale chunk wholly
-    /// outside what the window draws — the view has moved on — goes at once;
-    /// one inside it that nothing covers yet is ground whose pages have not
-    /// come, and it stays.
     /// Stops every chunk of a page whose record has gone, before anything of
     /// the tick can build one: stale, its scan and bake given up, what it has
     /// built still drawn (`page` says why).
@@ -1321,6 +1314,12 @@ impl Scheduler {
         self.view_dirty = true;
     }
 
+    /// Lets go of the stale chunks whose ground is ready to be drawn by what
+    /// replaced them: wanted chunks cover all of it, and every one of them
+    /// has a layout or is off screen and never will. A stale chunk wholly
+    /// outside the ground the view draws — the view has moved on — goes at
+    /// once; one inside it that nothing covers yet is ground whose pages
+    /// have not come, and it stays.
     fn retire(&mut self, world: &mut World, now: f64) {
         self.gone.clear();
         self.kept = (0, 0, 0);
@@ -1776,9 +1775,8 @@ impl Scheduler {
         }
     }
 
-    /// Every slot in priority order (`priority`), the keys aged once rather
-    /// than in the comparator.
-    /// Every slot's index by priority into `idx`, the keys through `keys`.
+    /// Every slot's index in priority order (`priority_keyed`) into `idx`,
+    /// the keys aged once into `keys` rather than in the comparator.
     fn order(&self, now: f64, idx: &mut Vec<usize>, keys: &mut Vec<Keyed>) {
         let holders = self.builder.holders();
         keys.clear();

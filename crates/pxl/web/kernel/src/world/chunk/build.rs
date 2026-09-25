@@ -106,10 +106,11 @@ pub const RUN_SETS: usize = 2;
 /// past it is refused rather than cut, since a run left out is a hole.
 pub const RUN_SET_BYTES: u32 = 1 << 20;
 
-/// Chunks held at once: the mount radius and its hysteresis cover about
-/// three thousand. The mount pass stops
-/// at it rather than trapping (`Scheduler::mount`), so `Scheduler::add`'s
-/// assert past it says the caller has a bug, not that the view grew.
+/// Chunks held at once, the table's hard budget: a view draws a quarter of
+/// it (domain.rs `VIEW_CHUNKS`), so the widest selection fits with room for
+/// stale chunks. At it the mount pass lets a stale chunk go rather than trapping
+/// (`Scheduler::give_room`), so `Scheduler::add`'s assert past it says the
+/// caller has a bug, not that the view grew.
 pub const MAX_CHUNKS: usize = 4096;
 
 /// What a build hands the scheduler.

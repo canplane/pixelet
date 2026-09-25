@@ -28,7 +28,7 @@ use crate::world::pyramid::RECORDS;
 
 // ---- The routing ----
 
-/// One page's ground: a word a cell, no stride and no padding.
+/// One page's ground: a `GroundCell` a cell, no stride and no padding.
 pub const GROUND_LANE_BYTES: u32 = PAGE_CELLS * PAGE_CELLS * core::mem::size_of::<GroundCell>() as u32;
 
 /// The ground across every record.

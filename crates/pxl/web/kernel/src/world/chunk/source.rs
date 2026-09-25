@@ -31,7 +31,7 @@ pub fn chunk_sources_step() {
     }
 }
 
-/// Whether page `page_idx` has a terrain tile chunks can be mounted from.
+/// Whether `page` has a terrain tile chunks can be mounted from.
 pub fn chunk_page(page: LevelPage, present: bool) {
     kernel().sched.page(page, present);
 }

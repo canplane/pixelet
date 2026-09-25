@@ -125,7 +125,7 @@ struct TerrainLanes {
 /// Every lane is a block of the kernel's memory held for this page for as
 /// long as the page is resident, at the page's fixed lane sizes.
 unsafe fn open_terrain(lanes: TerrainLanes) -> Terrain {
-    // SAFETY: the caller's contract; a ground lane is one word a cell, an
+    // SAFETY: the caller's contract; a ground lane is one `GroundCell` a cell, an
     // i16 lane 2 bytes a sample.
     Terrain {
         ground: Ground {
