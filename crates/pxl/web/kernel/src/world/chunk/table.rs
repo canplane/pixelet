@@ -566,10 +566,10 @@ pub struct Census {
 /// The pyramid's levels, a chunk's being one of them.
 pub const LEVELS: usize = TOP_LEVEL as usize + 1;
 
-/// Who holds each mesh slot (mesh_slot.rs), by chunk id, 0 for none; and the
-/// arena epoch the tiers were written under.
+/// Who holds each mesh slot (mesh_slot.rs), by chunk and mounting, none for
+/// a free one; and the arena epoch the tiers were written under.
 pub struct Meshes {
-    holder: Vec<u32>,
+    holder: Vec<Option<(Chunk, u32)>>,
     surface: Vec<Box<[u32]>>,
     epoch: u32,
     /// Boxes cut from meshes past their slot, until a census takes them.
@@ -619,7 +619,10 @@ pub struct Scheduler {
     /// The dev gizmos (marker/frame_gizmo.rs).
     pub debug: DebugLines,
     slots: Vec<Slot>,
-    index: BTreeMap<u32, usize>,
+    /// Where each mounted chunk's slot is: the one way a chunk is found. A
+    /// slot's `id` is which mounting of the chunk it is, so what was built
+    /// for one that has gone is told from what is built for it now.
+    index: BTreeMap<Chunk, usize>,
     /// How many levels coarser than the rule the byte budget has pulled the
     /// tiers (`press`): it moves the criterion, never the rule.
     pressure: u32,
@@ -639,10 +642,8 @@ pub struct Scheduler {
     /// Pages whose records have gone since the last tick, whose chunks stop
     /// building before anything else in the next.
     evicted: Vec<LevelPage>,
-    /// The chunks the module mounted, by page and page-local base.
-    mounted: BTreeMap<Chunk, u32>,
     /// The mounted chunks a pass finds leaving, before they are let go.
-    gone: Vec<(Chunk, u32)>,
+    gone: Vec<Chunk>,
     next_mount_id: u32,
     /// What the selection standing in `to_mount` was made for, and what of it
     /// is still to be mounted. The pass is done when the key matches and
@@ -685,7 +686,7 @@ pub struct Scheduler {
     /// The chunks the build task advances, in the one order, as the last
     /// tick left them.
     builds: Vec<u32>,
-    landed: Vec<u32>,
+    landed: Vec<(Chunk, u32)>,
     /// Chunks the build task committed since the last census.
     build_committed: u32,
     /// When the pressure last moved, and when a block was last refused.
@@ -744,7 +745,7 @@ impl Scheduler {
             level_boxes: [0; LEVELS],
             kept: (0, 0, 0),
             meshes: Meshes {
-                holder: vec![0; OCCUPANCY],
+                holder: vec![None; OCCUPANCY],
                 surface: (0..OCCUPANCY).map(|_| Box::default()).collect(),
                 epoch: arena_epoch(),
                 cut: 0,
@@ -776,7 +777,6 @@ impl Scheduler {
             census: Census::default(),
             counts: ChunkCounts::default(),
             evicted: Vec::new(),
-            mounted: BTreeMap::new(),
             gone: Vec::with_capacity(MAX_CHUNKS),
             next_mount_id: MOUNT_ID_BASE,
             selected_for: None,
@@ -857,7 +857,7 @@ impl Scheduler {
                 slot.desired = (slot.layout_primary, None);
             }
         }
-        self.index.insert(id, self.slots.len());
+        self.index.insert(k, self.slots.len());
         assert!(self.slots.len() < MAX_CHUNKS, "more than {MAX_CHUNKS} chunks held");
         self.slots.push(slot);
         self.view_dirty = true;
@@ -878,8 +878,9 @@ impl Scheduler {
         self.slots[i].has(OUTERMOST)
     }
 
-    pub fn remove(&mut self, world: &mut World, id: u32) {
-        let Some(i) = self.index.remove(&id) else { return };
+    fn remove(&mut self, world: &mut World, k: Chunk) {
+        let Some(i) = self.index.remove(&k) else { return };
+        let id = self.slots[i].id;
         self.view_dirty = true;
         self.counts.removed += 1;
         self.builder.remove(world, id);
@@ -891,8 +892,8 @@ impl Scheduler {
         }
         for t in self.slots[i].tiers.iter() {
             let held = &mut self.meshes.holder[t.slot.index];
-            if *held == id {
-                *held = 0;
+            if held.is_some_and(|(_, h)| h == id) {
+                *held = None;
             }
         }
         for d in self.slots[i].decor.iter() {
@@ -900,7 +901,7 @@ impl Scheduler {
         }
         self.slots.swap_remove(i);
         if i < self.slots.len() {
-            self.index.insert(self.slots[i].id, i);
+            self.index.insert(self.slots[i].chunk, i);
         }
     }
 
@@ -967,13 +968,13 @@ impl Scheduler {
         let (slots, index, meshes, landed) = (&mut self.slots, &self.index, &mut self.meshes, &mut self.landed);
         landed.clear();
         let worked = self.builder.tick_capped(world, &self.builds, budget_ms, u32::MAX, &crate::host::now, &mut |e| {
-            let BuildEvent::Tier { id, .. } = e;
-            landed.push(id);
+            let BuildEvent::Tier { chunk, id, .. } = e;
+            landed.push((chunk, id));
             self_record(slots, index, mem, meshes, e);
         });
         let landed = core::mem::take(&mut self.landed);
-        for &id in &landed {
-            if let Some(&i) = self.index.get(&id) {
+        for &(k, id) in &landed {
+            if let Some(i) = slot_of(&self.slots, &self.index, k, id) {
                 if self.commit(world, i) {
                     self.build_committed += 1;
                 }
@@ -1213,21 +1214,19 @@ impl Scheduler {
     /// The one showing least goes: not drawn before drawn, and the furthest
     /// out among equals.
     fn give_room(&mut self, world: &mut World) -> bool {
-        let mut worst: Option<((bool, f64), Chunk, u32)> = None;
-        for (&k, &id) in self.mounted.iter() {
-            let Some(&i) = self.index.get(&id) else { continue };
+        let mut worst: Option<((bool, f64), Chunk)> = None;
+        for (&k, &i) in self.index.iter() {
             let s = &self.slots[i];
             if !s.has(STALE) {
                 continue;
             }
             let key = (!(s.has(IN_FRUSTUM) && s.layout_ready), s.distance2);
-            if worst.as_ref().is_none_or(|(low, _, _)| key > *low) {
-                worst = Some((key, k, id));
+            if worst.as_ref().is_none_or(|(low, _)| key > *low) {
+                worst = Some((key, k));
             }
         }
-        let Some((_, k, id)) = worst else { return false };
-        self.mounted.remove(&k);
-        self.remove(world, id);
+        let Some((_, k)) = worst else { return false };
+        self.remove(world, k);
         true
     }
 
@@ -1245,12 +1244,10 @@ impl Scheduler {
             // whether a chunk is a root can change under it — a page
             // arriving puts a level over ground that had none — so it is
             // written here for every chunk the selection keeps.
-            for (k, &id) in self.mounted.iter() {
-                if let Some(&i) = self.index.get(&id) {
-                    self.slots[i].set(STALE, !wanted.contains_key(k));
-                    if let Some(&root) = wanted.get(k) {
-                        self.slots[i].set(OUTERMOST, root);
-                    }
+            for (k, &i) in self.index.iter() {
+                self.slots[i].set(STALE, !wanted.contains_key(k));
+                if let Some(&root) = wanted.get(k) {
+                    self.slots[i].set(OUTERMOST, root);
                 }
             }
 
@@ -1270,7 +1267,7 @@ impl Scheduler {
             // Nearest the eye first, by the distance the level was chosen
             // by (domain.rs `Domain::nearest_to`).
             let Some(d) = Terrain::pyramid().domain() else { return };
-            let mut near: Vec<(f64, Chunk, bool)> = wanted.iter().filter(|(k, _)| !self.mounted.contains_key(k)).map(|(&k, &root)| (d.nearest_to(k), k, root)).collect();
+            let mut near: Vec<(f64, Chunk, bool)> = wanted.iter().filter(|(k, _)| !self.index.contains_key(k)).map(|(&k, &root)| (d.nearest_to(k), k, root)).collect();
             near.sort_by(|a, b| a.0.total_cmp(&b.0));
             self.to_mount.clear();
             self.to_mount.extend(near.into_iter().map(|(_, k, root)| (k, root)));
@@ -1298,7 +1295,6 @@ impl Scheduler {
             self.next_mount_id = self.next_mount_id.wrapping_add(1).max(MOUNT_ID_BASE);
             self.add(world, id, k, root);
             self.counts.added += 1;
-            self.mounted.insert(k, id);
         }
     }
 
@@ -1315,12 +1311,10 @@ impl Scheduler {
         if self.evicted.is_empty() {
             return;
         }
-        for (k, &id) in self.mounted.iter() {
+        for (k, &i) in self.index.iter() {
             if self.evicted.contains(&k.page()) {
-                if let Some(&i) = self.index.get(&id) {
-                    self.slots[i].set(STALE, true);
-                    self.builder.want(world, id, [None, None]);
-                }
+                self.slots[i].set(STALE, true);
+                self.builder.want(world, self.slots[i].id, [None, None]);
             }
         }
         self.evicted.clear();
@@ -1334,7 +1328,7 @@ impl Scheduler {
             return;
         }
         self.meshes.epoch = epoch;
-        self.meshes.holder.fill(0);
+        self.meshes.holder.fill(None);
         for s in self.slots.iter_mut() {
             s.tiers.clear();
         }
@@ -1354,13 +1348,12 @@ impl Scheduler {
         for s in self.slots.iter_mut().filter(|s| s.has(STALE)) {
             s.cover = (0.0, true, false);
         }
-        let (slots, index, mounted) = (&mut self.slots, &self.index, &self.mounted);
-        let at = |k: &Chunk| mounted.get(k).and_then(|id| index.get(id)).copied();
-        for (&k, &id) in mounted.iter() {
-            let Some(&i) = index.get(&id) else { continue };
+        let (slots, index) = (&mut self.slots, &self.index);
+        let at = |k: &Chunk| index.get(k).copied();
+        for (&k, &i) in index.iter() {
             let s = &slots[i];
             let laid = s.layout_ready || !s.has(IN_FRUSTUM);
-            let waiting = !laid && waiters.contains(&id);
+            let waiting = !laid && waiters.contains(&s.id);
             if s.has(STALE) {
                 // A wanted chunk above covers it whole.
                 if let Some(j) = k.ancestors().filter_map(|a| at(&a)).find(|&j| !slots[j].has(STALE)) {
@@ -1383,8 +1376,7 @@ impl Scheduler {
         // pass is skipped while the cover holds, and the roots under a
         // stand-in move without the cover.
         let drawn = Terrain::pyramid().domain().map(Domain::ground);
-        for (&k, &id) in self.mounted.iter() {
-            let Some(&i) = self.index.get(&id) else { continue };
+        for (&k, &i) in self.index.iter() {
             let s = &self.slots[i];
             if !s.has(STALE) {
                 continue;
@@ -1425,7 +1417,7 @@ impl Scheduler {
             // replaced it goes at once, as a faded one does.
             let covered_now = whole && ready && !settings_store().lod_crossfade;
             if gone_from_view || shows_nothing || faded || covered_now {
-                self.gone.push((k, id));
+                self.gone.push(k);
             } else if whole && ready {
                 if !matches!(s.fade, Some(Fade::Out(_))) {
                     self.leaving.push(k);
@@ -1438,9 +1430,8 @@ impl Scheduler {
             }
         }
         for g in 0..self.gone.len() {
-            let (k, id) = self.gone[g];
-            self.mounted.remove(&k);
-            self.remove(world, id);
+            let k = self.gone[g];
+            self.remove(world, k);
         }
         self.start_leaving(now);
     }
@@ -1456,8 +1447,7 @@ impl Scheduler {
         }
         let leaving: HashSet<Chunk> = self.leaving.drain(..).collect();
         let over: HashSet<Chunk> = leaving.iter().flat_map(|k| k.ancestors()).collect();
-        for (&k, &id) in self.mounted.iter() {
-            let Some(&i) = self.index.get(&id) else { continue };
+        for (&k, &i) in self.index.iter() {
             let s = &mut self.slots[i];
             if s.has(STALE) {
                 if leaving.contains(&k) {
@@ -1666,13 +1656,12 @@ impl Scheduler {
         for s in self.slots.iter_mut() {
             s.set(COVERED, false);
         }
-        let (slots, index, mounted) = (&mut self.slots, &self.index, &self.mounted);
-        let at = |k: &Chunk| mounted.get(k).and_then(|id| index.get(id)).copied();
+        let (slots, index) = (&mut self.slots, &self.index);
+        let at = |k: &Chunk| index.get(k).copied();
         // A stale chunk that is going draws beside what replaced it, on the
         // other half of the pattern, and hides nothing.
         let drawn = |s: &Slot| s.has(STALE) && s.has(IN_FRUSTUM) && s.layout_ready && !matches!(s.fade, Some(Fade::Out(_)));
-        for (&k, &id) in mounted.iter() {
-            let Some(&i) = index.get(&id) else { continue };
+        for (&k, &i) in index.iter() {
             if drawn(&slots[i]) {
                 for j in k.ancestors().filter_map(|a| at(&a)) {
                     if !slots[j].has(STALE) {
@@ -1716,7 +1705,7 @@ impl Scheduler {
                 // that took it, taking the slot removes that tier in the same
                 // step, and this looks the tier up again every frame. The
                 // assert is what says so out loud, at an array index a draw.
-                assert_eq!(holder[t.slot.index], s.id, "a chunk drew from a slot another holds");
+                assert_eq!(holder[t.slot.index].map(|h| h.1), Some(s.id), "a chunk drew from a slot another holds");
                 if t.box_cnt == 0 {
                     continue;
                 }
@@ -1768,8 +1757,7 @@ impl Scheduler {
     /// replacement builds — and none where nothing drawn stands there.
     pub fn surface_at(&self, at: &Pvf3) -> Option<(u32, f64)> {
         (0..=TOP_LEVEL).find_map(|level| {
-            let id = self.mounted.get(&Chunk::of(level, at))?;
-            let d = self.drawn_of(&self.slots[*self.index.get(id)?])?;
+            let d = self.drawn_of(&self.slots[*self.index.get(&Chunk::of(level, at))?])?;
             let cell = GROUND.cell_of(d.cell_level(), at);
             let first = GROUND.cell_of(d.cell_level(), &Pvf3 { i: d.base, ..Default::default() });
             let at = |i: u32| i % PAGE_CELLS;
@@ -2389,31 +2377,38 @@ fn world_mem(world: &World) -> *const u8 {
 /// a slot handed out rather than derived from a coordinate, two chunks
 /// meeting at one say nothing about each other's ground, and what matters is
 /// only whether the one holding it is showing it.
-fn claim(slots: &[Slot], index: &BTreeMap<u32, usize>, meshes: &Meshes, i: usize, cube: Cube) -> Option<(MeshSlot, Option<u32>)> {
+fn claim(slots: &[Slot], index: &BTreeMap<Chunk, usize>, meshes: &Meshes, i: usize, cube: Cube) -> Option<(MeshSlot, Option<(Chunk, u32)>)> {
     let mut spare = None;
     for at in pool(slots[i].level(), mesh_step(cube, slots[i].level())) {
-        let holder = meshes.holder[at];
-        if holder == 0 {
+        let Some((k, id)) = meshes.holder[at] else {
             return Some((slot_at(at), None));
-        }
-        let Some(&j) = index.get(&holder) else {
+        };
+        let Some(j) = slot_of(slots, index, k, id) else {
             // The chunk that held it is gone; so is its claim.
             return Some((slot_at(at), None));
         };
         let s = &slots[j];
         let showing = s.has(IN_FRUSTUM) && s.layout_ready && s.tiers.iter().any(|t| t.slot.index == at);
         if !showing && spare.is_none() {
-            spare = Some((slot_at(at), Some(holder)));
+            spare = Some((slot_at(at), Some((k, id))));
         }
     }
     spare
 }
 
+/// The slot chunk `k` is in while it is the mounting `id` names, and none
+/// once that mounting is gone: what was built for a chunk unmounted and
+/// mounted again is not the new one's.
+fn slot_of(slots: &[Slot], index: &BTreeMap<Chunk, usize>, k: Chunk, id: u32) -> Option<usize> {
+    index.get(&k).copied().filter(|&i| slots[i].id == id)
+}
+
 /// Records what a build handed over on the slot it belongs to, and passes
 /// it on.
-fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8, meshes: &mut Meshes, e: BuildEvent) {
+fn self_record(slots: &mut [Slot], index: &BTreeMap<Chunk, usize>, mem: *const u8, meshes: &mut Meshes, e: BuildEvent) {
     match e {
         BuildEvent::Tier {
+            chunk,
             id,
             generation,
             cube,
@@ -2422,7 +2417,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
             heights,
             ..
         } => {
-            let Some(&i) = index.get(&id) else { return };
+            let Some(i) = slot_of(slots, index, chunk, id) else { return };
             if slots[i].tier(cube, generation).is_some() {
                 return;
             }
@@ -2450,8 +2445,8 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
                     }
                 },
             };
-            if let Some(holder) = turned_out {
-                if let Some(&j) = index.get(&holder) {
+            if let Some((k, holder)) = turned_out {
+                if let Some(j) = slot_of(slots, index, k, holder) {
                     meshes.holder_levels |= 1 << slots[j].level();
                     let other = &mut slots[j];
                     let mut k = 0;
@@ -2505,7 +2500,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
                 }
             }
             meshes.surface[slot.index] = surface_centres(words, box_words as usize, mesh_step(cube, slots[i].level()), slots[i].level(), heights);
-            meshes.holder[slot.index] = id;
+            meshes.holder[slot.index] = Some((chunk, id));
             let s = &mut slots[i];
             // A tier of an older generation in the same slot shows these boxes
             // now: they were written over its own.

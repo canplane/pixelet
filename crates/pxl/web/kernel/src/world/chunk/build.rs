@@ -118,6 +118,7 @@ pub enum BuildEvent {
     /// to its slot on the device, and its boxes' heights are held in
     /// `heights` (pxl-render mesh/chunk_mesher.rs).
     Tier {
+        chunk: PyramidChunk,
         id: u32,
         generation: u32,
         cube: Cube,
@@ -930,6 +931,7 @@ impl Builder {
                     self.let_runs_go(id);
                 }
                 emit(BuildEvent::Tier {
+                    chunk: self.chunks[&id].at,
                     id,
                     generation: job.generation,
                     cube: job.cube,
