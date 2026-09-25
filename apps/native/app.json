@@ -5,6 +5,8 @@
     "version": "0.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "platforms": ["ios", "android"]
+    "platforms": ["ios", "android"],
+    "ios": { "bundleIdentifier": "me.plei.pixelet" },
+    "android": { "package": "me.plei.pixelet" }
   }
 }

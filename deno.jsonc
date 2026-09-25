@@ -90,8 +90,9 @@
     // The wasm32 pass builds libraries only, so a broken `.test.rs` still
     // passes it; the host pass is what compiles those. geo-bake runs twice
     // because `serve` gates the dev tile server, and pxl-wasm twice because
-    // the published module is built without `dev` (build-wasm.ts).
-    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings",
+    // the published module is built without `dev` (build-wasm.ts). pxl-native
+    // is checked for the iPhone, the one target its Metal backend has.
+    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings",
     // Before anything compiles: a Rust version written twice is a binary
     // built on a compiler the gate never ran.
     "check:toolchain": "./script/check-toolchain.ts",

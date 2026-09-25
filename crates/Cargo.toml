@@ -7,7 +7,9 @@
 # The client is one core compiled to one WebAssembly module that the main
 # thread and each worker instantiate for themselves
 # (issue/20260912-why-the-destination-is-wasm.md): pxl/render, pxl/kernel and
-# pxl/wasm. The server end is native
+# pxl/wasm. On a device the same core is linked into the app instead, through
+# pxl/native, which draws with wgpu where the page's host draws with the
+# browser's WebGPU. The server end is native
 # (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md): pxl/geo
 # and pxl/api over pxl/server, pxl/geo-bake beside them for what is baked
 # rather than answered, and pxl/overture where the two geo halves read the
@@ -29,6 +31,7 @@ members = [
   "pxl/web/render",
   "pxl/web/kernel",
   "pxl/web/wasm",
+  "pxl/web/native",
   "pxl/server",
   "pxl/server/geo-spec",
   "pxl/server/geo",
@@ -121,3 +124,11 @@ panic = "abort"
 inherits = "release"
 opt-level = 3
 panic = "unwind"
+
+# What the device app links (pxl-native). The release profile's `z` is for a
+# download, and an app is installed once and then runs every frame on a
+# phone's battery, so it takes the faster code; it aborts as the module does,
+# since a trap ends the client either way.
+[profile.native]
+inherits = "release"
+opt-level = 3

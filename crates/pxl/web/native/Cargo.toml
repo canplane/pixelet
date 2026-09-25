@@ -1,0 +1,22 @@
+[package]
+name = "pxl-native"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+# Linked into the device app's binary, as pxl-wasm is instantiated by the page.
+crate-type = ["staticlib"]
+path = "src/lib.rs"
+test = false
+doctest = false
+
+[dependencies]
+xpute-runtime = { path = "../../../xpute/runtime" }
+# The device's GPU: what the browser's WebGPU is to pxl-wasm, a Metal or
+# Vulkan device behind the same API. Only the Metal backend is built, which
+# is the one an iPhone has.
+wgpu = { version = "30", default-features = false, features = ["metal", "wgsl"] }
+# Waits out the adapter's and the device's futures at start-up, which wgpu
+# resolves at once on a native backend.
+pollster = "1"
