@@ -82,6 +82,10 @@ function edgeChecks(): Check[] {
     // index. A 200 here means the bucket still holds a set in the old layout
     // under a version the client asks for.
     { path: `${TILE_ROOT}/terrain/${PUBLISHED_VERSION.terrain}/0/12720250262323200`, want: 404, why: "the old page name, which must be gone" },
+    // The shape before the tile root was its own, when the bake's pages were a
+    // branch of the geo root. A 200 here means the edge still sends it to the
+    // bucket.
+    { path: `${GEO_ROOT}/tiles/terrain/${PUBLISHED_VERSION.terrain}/${PAGE}`, want: 404, why: "the old tile address under the geo root, which must be gone" },
     { path: `${API_ROOT}/search?q=x`, want: 404, why: "the old search address, which must be gone" },
   ];
 }

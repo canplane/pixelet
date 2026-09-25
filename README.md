@@ -137,12 +137,12 @@ To measure the client, use `preview` (`localhost:4173`). It is the bundle as the
 ┌─────────────────────┴─────────────────┐
 ▼   answered here                       ▼   relayed to the VM
 the client                              /geo/search ─▶ pxl-geo ─▶ db-geo
-/geo/tiles   R2, by version                                     (PostGIS)
+/tile        R2, by version                                     (PostGIS)
 /asset       R2, by hashed path         /api        ─▶ pxl-api ─▶ db-main
 filled by the bakes, offline
 ```
 
-The three roots are written in one file, `spec/pxl/spec/route.json`, and every relay reads them from there. A green push to the `deploy` branch takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
+The four roots are written in one file, `spec/pxl/spec/route.json`, and every relay reads them from there. A green push to the `deploy` branch takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
 
 Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and **XTP**, a relocatable binary tree read without copying. One piece of the kernel is a port rather than a dependency: evanw/buddy-malloc, under the heap, and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) carries what its licence asks.
 

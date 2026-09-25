@@ -135,21 +135,22 @@ docker compose up -d --build
 
 ### Wiring
 
-Three roots, decided in `spec/pxl/spec/route.json` and written from there into every
+Four roots, decided in `spec/pxl/spec/route.json` and written from there into every
 place that builds a URL or reads one:
 
-| Root      | What it is                                           | Who answers it                            |
-| :-------- | :--------------------------------------------------- | :---------------------------------------- |
-| `/geo/`   | the world's data                                     | R2 under `/geo/tiles/`, pxl-geo otherwise |
-| `/api/`   | the application                                      | pxl-api                                   |
-| `/asset/` | models and textures, by path with a hash in the stem | R2                                        |
+| Root      | What it is                                           | Who answers it |
+| :-------- | :--------------------------------------------------- | :------------- |
+| `/geo/`   | the world's data                                     | pxl-geo        |
+| `/api/`   | the application                                      | pxl-api        |
+| `/tile/`  | baked pages, by kind, version and quadkey            | R2             |
+| `/asset/` | models and textures, by path with a hash in the stem | R2             |
 
-The Worker claims all three (`wrangler.jsonc`'s `run_worker_first`) and splits
-them: `/geo/tiles/*` and `/asset/*` come straight out of the bucket, and the
-rest of `/geo/*` and all of `/api/*` are reverse-proxied to `GEO_ORIGIN` and
+The Worker claims all four (`wrangler.jsonc`'s `run_worker_first`) and splits
+them: `/tile/*` and `/asset/*` come straight out of the bucket, and `/geo/*`
+and `/api/*` are reverse-proxied to `GEO_ORIGIN` and
 `API_ORIGIN` with the path unchanged. An asset's key _is_ its path without the
 leading slash — the root and the bucket's own prefix are the same word — where
-a page's key is the tile branch removed. Caddy on the VM then sends each root
+a page's key is its path with the tile root removed. Caddy on the VM then sends each root
 to the container that answers it. Nothing is rewritten in transit: client,
 relay and origin use identical paths.
 

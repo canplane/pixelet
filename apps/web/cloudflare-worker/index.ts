@@ -6,9 +6,8 @@
  *
  * Static assets are handled by the platform before this script runs (see
  * wrangler.jsonc). What reaches this script is the roots of
- * spec/pxl/spec/route.json: `/geo/tiles/*` and `/asset/*` come straight out
- * of the R2 bucket, and the rest of `/geo/*` and all of `/api/*` are
- * reverse-proxied to GEO_ORIGIN and API_ORIGIN as-is (see infra/README.md).
+ * spec/pxl/spec/route.json: `/tile/*` and `/asset/*` come straight out of the
+ * R2 bucket, and `/geo/*` and `/api/*` are reverse-proxied to GEO_ORIGIN and API_ORIGIN as-is (see infra/README.md).
  * Keeping it on the app's own hostname is what makes them same-origin, so no
  * CORS policy exists to configure or get wrong — see
  * issue/20260816-deployment-hosting.md.
@@ -147,10 +146,10 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // What the bucket answers, claimed first: the baked pages under the geo
-    // root's tile branch, and the assets under their own root. An asset's key
-    // *is* its path without the leading slash — the root and the bucket's
-    // prefix are the same word — where a page's key is the tile branch removed.
+    // What the bucket answers, claimed first: the baked pages and the assets,
+    // each under its own root. An asset's key *is* its path without the
+    // leading slash — the root and the bucket's prefix are the same word —
+    // where a page's key is its path with the tile root removed.
     const bucket = url.pathname.startsWith(TILE_PREFIX) ? url.pathname.slice(TILE_PREFIX.length) : url.pathname.startsWith(ASSET_PREFIX) ? url.pathname.slice(1) : null;
 
     // Everything else under a claimed root is reverse-proxied to that root's

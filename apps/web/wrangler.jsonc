@@ -57,11 +57,11 @@
     "not_found_handling": "single-page-application",
 
     // ...but that fallback would also swallow every request meant for a
-    // server, answering a page index or a query with index.html. Three roots
-    // are claimed here instead of one: the world's data, the application, and
-    // the content-addressed assets. spec/route.json is where they are decided
+    // server, answering a page index or a query with index.html. Four roots
+    // are claimed here instead of one: the world's data, the application, the
+    // baked pages and the content-addressed assets. spec/route.json is where they are decided
     // and script/spec.ts fails when this list drifts from it.
-    "run_worker_first": ["/geo/*", "/api/*", "/asset/*"]
+    "run_worker_first": ["/geo/*", "/api/*", "/tile/*", "/asset/*"]
   },
 
   "r2_buckets": [

@@ -135,7 +135,7 @@ and reused unless `--reclassify` is passed.
    while the file on disk is still under its level — one page, two names:
 
    ```bash
-   curl -s localhost:3001/geo/tiles/terrain/<quadkey> | zstd -dcq | shasum
+   curl -s localhost:3001/tile/terrain/<quadkey> | zstd -dcq | shasum
    zstd -dcq ./out/terrain/<version>/<level>/<page_idx> | shasum   # gunzip -c before zstd
    ```
 

@@ -15,7 +15,7 @@ export { PUBLISHED_VERSION };
 export { API_PREFIX, API_ROOT, ASSET_PREFIX, ASSET_ROOT, GEO_PREFIX, GEO_ROOT, SEARCH_URL, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
 export type TileKind = BakeKind;
 
-/** Where a baked object lives: `<tiles>/<kind>[/<version>]/<name>`.
+/** Where a baked object lives: `<tile>/<kind>[/<version>]/<name>`.
  *
  * The kernel names the object — which bake it belongs to, and its name inside
  * that bake — and this is the half it does not know. The version segment is a
@@ -39,10 +39,9 @@ export function asset_url(key: string): string {
  * Prefixes a dev server forwards. Paths rather than URLs: a deployment serves
  * all of them itself, and nothing is rewritten in transit.
  *
- * The split is the edge's own. The Worker sends `/geo/tiles/` and `/asset/` to
- * the bucket and the rest of `/geo/` to the origin, so a dev server sending the
- * first two to the tile server and the rest to the search server is that
- * arrangement with the bucket's side baked on demand rather than read. `tiles`
+ * The split is the edge's own. The Worker sends `/tile/` and `/asset/` to the
+ * bucket and `/geo/` to the origin, so a dev server sending the first two to
+ * the tile server and the third to the search server is that arrangement with the bucket's side baked on demand rather than read. `tiles`
  * says which — a relay reading a prefix, never a route.
  *
  * `published` marks what a published deployment answers, so `dev:remote` can
