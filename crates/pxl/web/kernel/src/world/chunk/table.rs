@@ -2218,8 +2218,10 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3) {
         None => [x, y, z],
     };
     let c = frame.camera;
-    let half = s.span() * 0.5;
-    let mut visible = (c[0] - x).abs() <= half && (c[1] - y).abs() <= half;
+    // A chunk the camera stands in is seen whatever the planes say of its
+    // center: in its sphere, not over its footprint, since the chunks over
+    // a column above and below the camera are not around it.
+    let mut visible = (c[0] - x).hypot(c[1] - y).hypot(c[2] - z) <= s.radius;
     if !visible {
         visible = true;
         for p in frame.planes.as_chunks::<4>().0 {
