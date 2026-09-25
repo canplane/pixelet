@@ -41,9 +41,12 @@ import { SETTINGS } from "@/feature/setting/schema.spec.ts";
 import { ELE_PADDED_SPAN, encode_terrain, pack_ground_cell, PAGE_CELLS } from "@/kernel/fixture.ts";
 
 import { CORE_BUILD } from "@/kernel/ipc.ts";
-import { CORE_KERNEL } from "@/kernel/mem.ts";
+import { CORE_KERNEL, load_core } from "@/kernel/mem.ts";
 import { BOOT, boot_block, bytes_at, hold_body } from "@/kernel/module.ts";
 import { acquire_device } from "@/kernel/render/gpu.ts";
+
+// The module the tests drive, loaded before any of them reads it.
+await load_core();
 
 function rng(seed: u32): () => u32 {
   let s = seed >>> 0 || 1;

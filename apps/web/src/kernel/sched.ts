@@ -56,17 +56,20 @@ export function dpr(): f64 {
 const NET_CREDITS = 6;
 
 /** The central scheduler's turns for the kernel, sized by the quantum the
- * kernel declared at boot; each frame carries the viewport it runs in. */
-const strobe = new Strobe(CORE_BUILD, quantum_policy(boot_block(CORE_KERNEL)), (grant, delta_s) => {
-  const element = driver;
-  if (element === null) return;
-  const width = Math.max(1, element.clientWidth);
-  const height = Math.max(1, element.clientHeight);
-  CORE_BUILD.send(
-    0,
-    Command.WORLD_UPDATE,
-    encode_world_update({ width, height, dpr: dpr(), delta_s, frame_ms: grant.frame_ms, interactive: grant.interactive, credits: NET_CREDITS, ...local_time() }),
-  );
-}, (run) => requestAnimationFrame(run));
+ * kernel declared at boot; each frame carries the viewport it runs in. Made
+ * by `start_sched` once the module has loaded. */
+export let strobe: Strobe;
 
-export { strobe };
+export function start_sched(): void {
+  strobe = new Strobe(CORE_BUILD, quantum_policy(boot_block(CORE_KERNEL)), (grant, delta_s) => {
+    const element = driver;
+    if (element === null) return;
+    const width = Math.max(1, element.clientWidth);
+    const height = Math.max(1, element.clientHeight);
+    CORE_BUILD.send(
+      0,
+      Command.WORLD_UPDATE,
+      encode_world_update({ width, height, dpr: dpr(), delta_s, frame_ms: grant.frame_ms, interactive: grant.interactive, credits: NET_CREDITS, ...local_time() }),
+    );
+  }, (run) => requestAnimationFrame(run));
+}

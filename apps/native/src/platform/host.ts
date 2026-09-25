@@ -14,8 +14,8 @@ import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import type { ActiveTool, Command, Tracking } from "@/kernel/abi/cmd.spec.ts";
 import type { UnsupportedReason } from "@/app/store/unsupported-store.ts";
 
-export function host_boot(): UnsupportedReason | null {
-  return null;
+export function host_boot(): Promise<UnsupportedReason | null> {
+  return Promise.resolve(null);
 }
 
 export function host_command(cmd: Command, _pkt?: U8Array): void {

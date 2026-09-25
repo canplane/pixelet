@@ -40,37 +40,46 @@ export { REGION_BYTES };
  * (`--initial-memory`), so asking for less fails at instantiation too. */
 const CORE_BYTES: u32 = HANDHELD ? PHONE_BYTES : DESKTOP_BYTES;
 
-const memory = reserve_memory([CORE_BYTES / REGION_BYTES], REGION_BYTES);
+// Set once by `load_core`, which the host's boot awaits before anything that
+// reads them can run (platform/web/host.ts): the module arrives over the
+// network, and a bundle that cannot wait on a module's import — Metro's —
+// waits on the boot instead.
 
-/**
- * The one module over it, booted: the kernel has laid the memory out before
- * anything here reads it, and nothing may run before it has arrived. A module
- * that fails to load fails the client — the memory exists for the kernel.
- */
-export const CORE_KERNEL: KernelExports = await instantiate_kernel(memory);
+/** The one module over the memory, booted: the kernel has laid the memory
+ * out before anything here reads it. */
+export let CORE_KERNEL: KernelExports;
 
-export const CORE_MEMORY: WebAssembly.Memory = memory;
+export let CORE_MEMORY: WebAssembly.Memory;
 
 /** The module's own front, `[0, bytes)` of the memory: its stack, its rings
  * and everything the linker placed. Where it ends is the linker's answer and
  * not a number chosen in advance, so it moves when the module's code does. */
-export const MODULE_SECTION: { readonly offset: u32; readonly bytes: u32 } = { offset: 0, bytes: boot_block(CORE_KERNEL)[BOOT.data_end] };
+export let MODULE_SECTION: { readonly offset: u32; readonly bytes: u32 };
 
 /** The rings to the module and its doorbell, made with it. A turn's
  * falling edge leaves what the kernel asks of the host in its two streams,
  * run before anything else can reach the device or ring again. A turn that
  * traps leaves its report in the host's: the broken invariant's errno and
  * place (xpute-core status/bug.rs). */
-export const CORE_DOORBELL: Doorbell = (() => {
-  const boot = boot_block(CORE_KERNEL);
-  return new Doorbell(memory.buffer, boot[BOOT.sq], boot[BOOT.cq], (quota_ms) => {
+export let CORE_DOORBELL: Doorbell;
+
+/** Reserves the memory and loads the module over it. A module that fails to
+ * load fails the client — the memory exists for the kernel. */
+export async function load_core(): Promise<void> {
+  const memory = reserve_memory([CORE_BYTES / REGION_BYTES], REGION_BYTES);
+  const kernel = await instantiate_kernel(memory);
+  const boot = boot_block(kernel);
+  CORE_MEMORY = memory;
+  CORE_KERNEL = kernel;
+  MODULE_SECTION = { offset: 0, bytes: boot[BOOT.data_end] };
+  CORE_DOORBELL = new Doorbell(memory.buffer, boot[BOOT.sq], boot[BOOT.cq], (quota_ms) => {
     let wake: f64;
     try {
-      wake = CORE_KERNEL.interrupt(quota_ms);
+      wake = kernel.interrupt(quota_ms);
     } finally {
       run_host_stream(memory, boot[BOOT.host]);
     }
     run_gpu_stream(memory, boot[BOOT.gpu]);
     return wake;
   });
-})();
+}

@@ -33,11 +33,11 @@ import { geolocation_start, geolocation_stop, orientation_listen, orientation_ne
 import { abort_fetch, run_fetch } from "@/kernel/io/fetch.ts";
 import { load_image, load_model } from "@/kernel/io/load.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
-import { CORE_KERNEL } from "@/kernel/mem.ts";
+import { CORE_KERNEL, load_core } from "@/kernel/mem.ts";
 import { bytes_at } from "@/kernel/module.ts";
 import { declareUnsupported } from "@/app/store/unsupported-store.ts";
 import { acquire_device } from "@/kernel/render/gpu.ts";
-import { request_frame } from "@/kernel/sched.ts";
+import { request_frame, start_sched } from "@/kernel/sched.ts";
 import { kernel_snapshot, set_snapshot, subscribe_snapshot } from "@/kernel/shell.ts";
 import { keepSettings, storedSettings } from "@/feature/setting/store.ts";
 
@@ -78,8 +78,6 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
   console.warn(`[kernel] signal 0x${cmd.toString(16)} with no one to hear it`);
 }
 
-CORE_BUILD.signal = on_signal;
-
 /** Asks for a device and tells the kernel when one answers, and again after
  * one is lost. */
 function gpu_boot(): void {
@@ -111,10 +109,14 @@ function objects_body(): { objects: u32; objects_bytes: u32 } {
   return { objects: hold_body(bytes), objects_bytes: bytes.byteLength };
 }
 
-/** Starts the kernel: a device to draw with, then the world it draws.
- * Called once by the app's bootstrap, so that what boots is ordered rather
- * than whichever module happened to be imported first. */
-export function boot_kernel(): void {
+/** Starts the kernel: the module, the turns it is given and who hears what
+ * a turn leaves, then a device to draw with and the world it draws. Called
+ * once by the host's boot, so that what boots is ordered rather than
+ * whichever module happened to be imported first. */
+export async function boot_kernel(): Promise<void> {
+  await load_core();
+  start_sched();
+  CORE_BUILD.signal = on_signal;
   gpu_boot();
   CORE_BUILD.call(
     Command.WORLD_CREATE,

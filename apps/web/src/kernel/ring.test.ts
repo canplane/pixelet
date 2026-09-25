@@ -8,9 +8,12 @@ import { FrameFlag } from "@xpute/runtime/ipc/frame.ts";
 import { Ring } from "@xpute/runtime/ipc/ring.ts";
 import { Command } from "@/kernel/abi/cmd.spec.ts";
 
-import { CORE_KERNEL } from "@/kernel/mem.ts";
+import { CORE_KERNEL, load_core } from "@/kernel/mem.ts";
 import { BOOT, boot_block } from "@/kernel/module.ts";
 import { RING_CAPACITY } from "@/kernel/mem/mem.spec.ts";
+
+// The module the test reads, loaded before it runs.
+await load_core();
 
 /** A command crates/pxl/web/wasm/src/lib.rs does not number. */
 const UNNUMBERED = 0x0fff;

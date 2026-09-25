@@ -24,10 +24,10 @@ import type { UnsupportedReason } from "@/app/store/unsupported-store.ts";
  * cannot is told so instead of being started, since the kernel would
  * otherwise fetch its module, open a world and raise toasts about loading it,
  * under a notice saying none of it can be shown. */
-export function host_boot(): UnsupportedReason | null {
+export async function host_boot(): Promise<UnsupportedReason | null> {
   const missing = missing_before_boot();
   if (missing) return missing;
-  boot_kernel();
+  await boot_kernel();
   return null;
 }
 

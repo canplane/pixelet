@@ -8,11 +8,8 @@
  * inside; none of that crosses here.
  */
 
-import type { Doorbell } from "@xpute/runtime/ipc/doorbell.ts";
-
-import { CORE_DOORBELL } from "@/kernel/mem.ts";
-
 export { packet } from "@xpute/runtime/ipc/doorbell.ts";
 
-/** The one channel to the kernel. */
-export const CORE_BUILD: Doorbell = CORE_DOORBELL;
+/** The one channel to the kernel: a live name for the doorbell `load_core`
+ * makes, so that whoever imports it reads the one the boot made. */
+export { CORE_DOORBELL as CORE_BUILD } from "@/kernel/mem.ts";
