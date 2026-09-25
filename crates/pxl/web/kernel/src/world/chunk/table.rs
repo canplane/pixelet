@@ -320,6 +320,11 @@ struct Slot {
     order: Order,
     flags: u16,
     pending_since: f64,
+    /// The finest cube a tier of this chunk fits its slot at, of the sources
+    /// generation it was found for: where a finer one had more boxes than a
+    /// slot holds (build.rs `BuildEvent::Coarser`). A new generation finds it
+    /// again.
+    fit: Option<(u32, Cube)>,
     request: i32,
     /// The tiers built for it, oldest built first. A source changed
     /// leaves them where they are: a cube's tier of the new generation joins
@@ -444,6 +449,15 @@ impl Slot {
         self.radius = (2.0 * span * span + (hi - lo) * (hi - lo)).sqrt() * 0.5;
     }
 
+    /// `cube`, or the finest cube this chunk's `generation` fits its slot at
+    /// where that is coarser (`fit`).
+    fn fitting(&self, cube: Cube, generation: u32) -> Cube {
+        match self.fit {
+            Some((g, fit)) if g == generation => cube.max(fit),
+            _ => cube,
+        }
+    }
+
     /// Whether nothing coarser draws this chunk's ground, so its own tier is
     /// free to be as coarse as the rule says: it is the pyramid's top, which
     /// has nothing over it. A stand-in under a page that has not come is not
@@ -514,8 +528,9 @@ pub struct Census {
     pub slot_waits: u32,
     pub wait_levels: u32,
     pub holder_levels: u32,
-    /// Boxes cut from meshes past their slot since the last census.
-    pub cut: u32,
+    /// Tiers baked a step coarser than asked since the last census: they had
+    /// more boxes than their slot holds (mesh_slot.rs `capacity`).
+    pub coarser: u32,
     /// The largest mesh handed over since the last census, in boxes, of a
     /// fine slot and of a coarse one.
     pub fine_peak: u32,
@@ -547,8 +562,8 @@ pub const LEVELS: usize = TOP_LEVEL as usize + 1;
 pub struct Meshes {
     holder: Vec<Option<(Chunk, u32)>>,
     epoch: u32,
-    /// Boxes cut from meshes past their slot, until a census takes them.
-    pub cut: u32,
+    /// Tiers baked a step coarser than asked, until a census takes them.
+    pub coarser: u32,
     /// The largest mesh handed to a slot of each kind, until a census takes
     /// them: what a slot's size is read against.
     fine_peak: u32,
@@ -716,7 +731,7 @@ impl Scheduler {
             meshes: Meshes {
                 holder: vec![None; OCCUPANCY],
                 epoch: arena_epoch(),
-                cut: 0,
+                coarser: 0,
                 fine_peak: 0,
                 coarse_peak: 0,
                 waits: 0,
@@ -798,6 +813,7 @@ impl Scheduler {
             order: Order::LAST,
             flags: EMPTY | FRESH,
             pending_since: -1.0,
+            fit: None,
             request: 0,
             tiers: Vec::new(),
             decor: Vec::new(),
@@ -916,10 +932,20 @@ impl Scheduler {
         let mem = world_mem(world);
         let (slots, index, meshes, landed) = (&mut self.slots, &self.index, &mut self.meshes, &mut self.landed);
         landed.clear();
-        let worked = self.builder.tick(world, &self.builds, budget_ms, &crate::host::now, &mut |e| {
-            let BuildEvent::Tier { chunk, id, .. } = e;
-            landed.push((chunk, id));
-            self_record(slots, index, mem, meshes, e);
+        let worked = self.builder.tick(world, &self.builds, budget_ms, &crate::host::now, &mut |e| match e {
+            BuildEvent::Tier { chunk, id, .. } => {
+                landed.push((chunk, id));
+                self_record(slots, index, mem, meshes, e);
+            }
+            BuildEvent::Coarser { chunk, id, generation, cube } => {
+                let Some(i) = slot_of(slots, index, chunk, id) else { return };
+                let s = &mut slots[i];
+                let finer = s.fit.filter(|&(g, _)| g == generation).map(|(_, f)| f);
+                s.fit = Some((generation, cube.up(1).max(finer.unwrap_or(cube.up(1)))));
+                // Asked again at the cube it fits, on the next tick.
+                s.set(FRESH, true);
+                meshes.coarser += 1;
+            }
         });
         let landed = core::mem::take(&mut self.landed);
         for &(k, id) in &landed {
@@ -1538,7 +1564,7 @@ impl Scheduler {
         c.hidden = self.hidden;
         c.level_boxes = self.level_boxes;
         c.slot_waits = core::mem::take(&mut self.meshes.waits);
-        c.cut = core::mem::take(&mut self.meshes.cut);
+        c.coarser = core::mem::take(&mut self.meshes.coarser);
         c.fine_peak = core::mem::take(&mut self.meshes.fine_peak);
         c.coarse_peak = core::mem::take(&mut self.meshes.coarse_peak);
         c.wait_levels = core::mem::take(&mut self.meshes.wait_levels);
@@ -1825,9 +1851,9 @@ impl Scheduler {
         let outermost = s.outermost();
         let Some(d) = Terrain::pyramid().domain() else { return };
         let objects = level == 0 && world.store.entries(L2_IDX(s.chunk.corner())).is_some();
-        let primary = drawn_cube(wanted_cube(d, chunk), level, outermost, objects);
-        self.slots[i].desired = (primary, None);
         let current = self.generation(i);
+        let primary = self.slots[i].fitting(drawn_cube(wanted_cube(d, chunk), level, outermost, objects), current);
+        self.slots[i].desired = (primary, None);
         let s = &self.slots[i];
         let pending = !s.layout_ready || s.layout_primary != primary || s.layout_generation != current;
         self.set_pending(i, pending, build_request(primary, None), now);
@@ -1868,7 +1894,7 @@ impl Scheduler {
         };
         let mut want = [None; 2];
         let mut n = 0;
-        for c in [Some(primary), secondary].into_iter().chain(tiers).flatten() {
+        for c in [Some(primary), secondary].into_iter().chain(tiers).flatten().map(|c| s.fitting(c, generation)) {
             if n == want.len() {
                 break;
             }
@@ -2267,119 +2293,121 @@ fn slot_of(slots: &[Slot], index: &BTreeMap<Chunk, usize>, k: Chunk, id: u32) ->
 /// Records what a build handed over on the slot it belongs to, and passes
 /// it on.
 fn self_record(slots: &mut [Slot], index: &BTreeMap<Chunk, usize>, mem: *const u8, meshes: &mut Meshes, e: BuildEvent) {
-    match e {
-        BuildEvent::Tier {
-            chunk,
-            id,
-            generation,
-            cube,
-            at,
-            box_cnt,
-            heights,
-            ..
-        } => {
-            let Some(i) = slot_of(slots, index, chunk, id) else { return };
-            if slots[i].tier(cube, generation).is_some() {
+    let BuildEvent::Tier {
+        chunk,
+        id,
+        generation,
+        cube,
+        at,
+        box_cnt,
+        heights,
+        ..
+    } = e
+    else {
+        return;
+    };
+    let Some(i) = slot_of(slots, index, chunk, id) else { return };
+    if slots[i].tier(cube, generation).is_some() {
+        return;
+    }
+    let s = &slots[i];
+    // The slot this tier is rebuilt into, or one the pool can give
+    // it. A tier keeps the slot it took, so a rebuild writes over its
+    // own boxes and nothing else moves.
+    let (slot, turned_out) = match s.tiers.iter().find(|t| t.cube == cube).map(|t| t.slot) {
+        Some(slot) => (slot, None),
+        None => match claim(slots, index, meshes, i, cube) {
+            Some(claimed) => claimed,
+            None => {
+                // Every slot of the pool is held by a chunk drawing
+                // from it. This mesh waits, thrown away and asked for
+                // again, rather than take ground from under one that
+                // has nothing else covering it.
+                meshes.waits += 1;
+                meshes.wait_levels |= 1 << slots[i].level();
+                let named = &meshes.waiters[..meshes.waiter_cnt];
+                if !named.contains(&id) && meshes.waiter_cnt < WAITERS {
+                    meshes.waiters[meshes.waiter_cnt] = id;
+                    meshes.waiter_cnt += 1;
+                }
                 return;
             }
-            let s = &slots[i];
-            // The slot this tier is rebuilt into, or one the pool can give
-            // it. A tier keeps the slot it took, so a rebuild writes over its
-            // own boxes and nothing else moves.
-            let (slot, turned_out) = match s.tiers.iter().find(|t| t.cube == cube).map(|t| t.slot) {
-                Some(slot) => (slot, None),
-                None => match claim(slots, index, meshes, i, cube) {
-                    Some(claimed) => claimed,
-                    None => {
-                        // Every slot of the pool is held by a chunk drawing
-                        // from it. This mesh waits, thrown away and asked for
-                        // again, rather than take ground from under one that
-                        // has nothing else covering it.
-                        meshes.waits += 1;
-                        meshes.wait_levels |= 1 << slots[i].level();
-                        let named = &meshes.waiters[..meshes.waiter_cnt];
-                        if !named.contains(&id) && meshes.waiter_cnt < WAITERS {
-                            meshes.waiters[meshes.waiter_cnt] = id;
-                            meshes.waiter_cnt += 1;
-                        }
-                        return;
-                    }
-                },
-            };
-            if let Some((k, holder)) = turned_out {
-                if let Some(j) = slot_of(slots, index, k, holder) {
-                    meshes.holder_levels |= 1 << slots[j].level();
-                    let other = &mut slots[j];
-                    let mut k = 0;
-                    while k < other.tiers.len() {
-                        if other.tiers[k].slot.index == slot.index {
-                            other.tiers.remove(k);
-                        } else {
-                            k += 1;
-                        }
-                    }
+        },
+    };
+    if let Some((k, holder)) = turned_out {
+        if let Some(j) = slot_of(slots, index, k, holder) {
+            meshes.holder_levels |= 1 << slots[j].level();
+            let other = &mut slots[j];
+            let mut k = 0;
+            while k < other.tiers.len() {
+                if other.tiers[k].slot.index == slot.index {
+                    other.tiers.remove(k);
+                } else {
+                    k += 1;
                 }
             }
-            let boxes = box_cnt.min(slot.capacity);
-            meshes.cut += box_cnt - boxes;
-            let asked = if slot.capacity == FINE_BOXES { &mut meshes.fine_peak } else { &mut meshes.coarse_peak };
-            *asked = (*asked).max(box_cnt);
-            // SAFETY: the mesh's boxes, a least corner and a size in the
-            // first six floats of each, in `.fixed.bake` where the bake
-            // just wrote them.
-            // The format is the group's, not the mesh's: a slot is a
-            // stride into its group's arena (mesh_slot.rs).
-            let box_words = group_box_words(slot.group);
-            let words = unsafe { core::slice::from_raw_parts(mem.add(at as usize) as *const u32, (boxes * box_words) as usize) };
-            let bounds = (boxes > 0).then(|| {
-                let mut b = Bounds {
-                    min: [f32::INFINITY; 3],
-                    max: [f32::NEG_INFINITY; 3],
-                };
-                let unit = (mesh_step(cube, slots[i].level()) << slots[i].level()) as f64;
-                for r in words.chunks_exact(box_words as usize) {
-                    let (min, size) = box_bounds(r, unit, heights);
-                    for a in 0..3 {
-                        let (lo, size) = (min[a] as f32, size[a] as f32);
-                        b.min[a] = b.min[a].min(lo);
-                        b.max[a] = b.max[a].max(lo + size);
-                    }
-                }
-                b
-            });
-            if boxes > 0 {
-                let before = arena_epoch();
-                // SAFETY: the same words, as bytes.
-                let bytes = unsafe { core::slice::from_raw_parts(words.as_ptr() as *const u8, words.len() * 4) };
-                // No device to write to: asked for again once there is one.
-                if !arena_write(slot.group as usize, slot.first_box * box_words * 4, bytes) {
-                    return;
-                }
-                // The write that made the arena lost nothing written before it.
-                if arena_epoch() != before && before == meshes.epoch {
-                    meshes.epoch = arena_epoch();
-                }
-            }
-            surface_centers(slot.index, words, box_words as usize, mesh_step(cube, slots[i].level()), slots[i].level(), heights);
-            meshes.holder[slot.index] = Some((chunk, id));
-            let s = &mut slots[i];
-            // A tier of an older generation in the same slot shows these boxes
-            // now: they were written over its own.
-            for t in s.tiers.iter_mut().filter(|t| t.slot.index == slot.index) {
-                t.box_cnt = boxes;
-                t.bounds = bounds;
-                t.heights = heights;
-            }
-            s.tiers.push(Tier {
-                cube,
-                generation,
-                bounds,
-                slot,
-                box_cnt: boxes,
-                heights,
-            });
         }
     }
+    // A mesh past its slot is never handed over (build.rs
+    // `BuildEvent::Coarser`).
+    xpute_core::ensure!(box_cnt <= slot.capacity, ENOTRECOVERABLE, box_cnt, slot.capacity);
+    let boxes = box_cnt;
+    let asked = if slot.capacity == FINE_BOXES { &mut meshes.fine_peak } else { &mut meshes.coarse_peak };
+    *asked = (*asked).max(box_cnt);
+    // SAFETY: the mesh's boxes, a least corner and a size in the
+    // first six floats of each, in `.fixed.bake` where the bake
+    // just wrote them.
+    // The format is the group's, not the mesh's: a slot is a
+    // stride into its group's arena (mesh_slot.rs).
+    let box_words = group_box_words(slot.group);
+    let words = unsafe { core::slice::from_raw_parts(mem.add(at as usize) as *const u32, (boxes * box_words) as usize) };
+    let bounds = (boxes > 0).then(|| {
+        let mut b = Bounds {
+            min: [f32::INFINITY; 3],
+            max: [f32::NEG_INFINITY; 3],
+        };
+        let unit = (mesh_step(cube, slots[i].level()) << slots[i].level()) as f64;
+        for r in words.chunks_exact(box_words as usize) {
+            let (min, size) = box_bounds(r, unit, heights);
+            for a in 0..3 {
+                let (lo, size) = (min[a] as f32, size[a] as f32);
+                b.min[a] = b.min[a].min(lo);
+                b.max[a] = b.max[a].max(lo + size);
+            }
+        }
+        b
+    });
+    if boxes > 0 {
+        let before = arena_epoch();
+        // SAFETY: the same words, as bytes.
+        let bytes = unsafe { core::slice::from_raw_parts(words.as_ptr() as *const u8, words.len() * 4) };
+        // No device to write to: asked for again once there is one.
+        if !arena_write(slot.group as usize, slot.first_box * box_words * 4, bytes) {
+            return;
+        }
+        // The write that made the arena lost nothing written before it.
+        if arena_epoch() != before && before == meshes.epoch {
+            meshes.epoch = arena_epoch();
+        }
+    }
+    surface_centers(slot.index, words, box_words as usize, mesh_step(cube, slots[i].level()), slots[i].level(), heights);
+    meshes.holder[slot.index] = Some((chunk, id));
+    let s = &mut slots[i];
+    // A tier of an older generation in the same slot shows these boxes
+    // now: they were written over its own.
+    for t in s.tiers.iter_mut().filter(|t| t.slot.index == slot.index) {
+        t.box_cnt = boxes;
+        t.bounds = bounds;
+        t.heights = heights;
+    }
+    s.tiers.push(Tier {
+        cube,
+        generation,
+        bounds,
+        slot,
+        box_cnt: boxes,
+        heights,
+    });
 }
 
 /// Slot `index`'s surface as its tier of `step` holds it, a word a block:

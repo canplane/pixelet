@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
-use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
+use pxl_render::mesh::chunk_mesher::{box_words, mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::level::write_level_runs;
 use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
 use pxl_render::mesh::paint::object::fold::fold_columns;
@@ -31,6 +31,7 @@ use crate::mem::fixed::{at, Range};
 use crate::shell::setting::store::{hidden_ground, settings_store};
 use pxl_spec::bake::constant::BAND_CELLS;
 
+use crate::world::chunk::mesh_slot::capacity;
 use crate::world::chunk::source::tiers_draw;
 use crate::world::pyramid::chunk::Chunk as PyramidChunk;
 use crate::world::pyramid::Layer as _;
@@ -132,6 +133,10 @@ pub enum BuildEvent {
         box_cnt: u32,
         heights: Heights,
     },
+    /// Tier `cube` of chunk `id`, of its sources as of `generation`, has more
+    /// boxes than a slot of its pool holds (mesh_slot.rs `capacity`): it is
+    /// not baked, and the chunk is drawn a step coarser.
+    Coarser { chunk: PyramidChunk, id: u32, generation: u32, cube: Cube },
 }
 
 /// A chunk's runs: which of `.fixed.runs`'s sets, and what is in it — and
@@ -900,8 +905,30 @@ impl Builder {
         match self.bake.step(&set) {
             Step::Working => Progress::Busy,
             Step::NeedMesh(words) => {
+                // A mesh past its slot is not baked and not cut: the chunk is
+                // drawn a step coarser, which fits sooner or later
+                // (mesh_slot.rs `COARSE_BOXES`).
+                let step = mesh_step(self.bake_job.as_ref().unwrap().cube, c.level());
+                if words / box_words(step) > capacity(c.level(), step) {
+                    let job = self.bake_job.take().unwrap();
+                    self.bake.abort();
+                    let c = self.chunks.get_mut(&id).unwrap();
+                    for w in c.want.iter_mut().filter(|w| **w == Some(job.cube)) {
+                        *w = None;
+                    }
+                    if c.wanted().next().is_none() {
+                        self.let_runs_go(id);
+                    }
+                    emit(BuildEvent::Coarser {
+                        chunk: self.chunks[&id].at,
+                        id,
+                        generation: job.generation,
+                        cube: job.cube,
+                    });
+                    return Progress::Busy;
+                }
                 // The one bake open writes into `.fixed.bake`, which is past
-                // any mesh a chunk has been measured to make (mesh_slot.rs).
+                // any mesh a slot holds (mesh_slot.rs).
                 let Some(mesh_at) = at(Range::Bake, 0, words * 4) else {
                     self.abort_bake();
                     self.refuse(world, id);

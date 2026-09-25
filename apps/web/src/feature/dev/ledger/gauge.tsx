@@ -157,16 +157,16 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
             warn={f.last.stale_on_waiter > 0}
           />
           {
-            /* A finished mesh thrown away because a drawn chunk holds the slot
-              its residue names, and the boxes cut from one past its slot: the
-              levels are the waiters' and the holders' (world/chunk/mesh_slot.rs).
-              Two levels share a group when they lie a window apart, which a
-              zoom that skips the levels between puts on screen at once. */
+            /* A finished mesh thrown away because every slot of its pool is
+              held by a chunk drawing from it, and the tiers baked a step
+              coarser than asked because they had more boxes than a slot holds:
+              the levels are the waiters' and the holders'
+              (world/chunk/mesh_slot.rs). */
           }
           <Row
-            k="slot wait/cut"
-            v={`${round(f.last.slot_waits)}/${round(f.last.slot_cut)} L${levelBits(f.last.slot_wait_levels)} on ${levelBits(f.last.slot_holder_levels)}`}
-            warn={f.last.slot_waits > 0 || f.last.slot_cut > 0}
+            k="slot wait/coarser"
+            v={`${round(f.last.slot_waits)}/${round(f.last.slot_coarser)} L${levelBits(f.last.slot_wait_levels)} on ${levelBits(f.last.slot_holder_levels)}`}
+            warn={f.last.slot_waits > 0}
           />
           {
             /* What the frame's ceilings left behind: chunks on screen wanting a

@@ -29,9 +29,12 @@
 //! a group is one format throughout; the coarse tiers share
 //! COARSE_GROUPS groups between them, any tier of any level in any of them.
 //!
-//! A slot holds as many boxes as its tier has been measured to need, and a
-//! mesh past that is cut to it — ground that is simply missing, which the
-//! ledger's `slot cut` says outright.
+//! A slot holds a number of boxes derived from the chunk's geometry, and a
+//! mesh never goes past it: one that would is baked a step coarser instead
+//! (world/chunk/build.rs), and a step always fits (`COARSE_BOXES`). Cut to
+//! its slot instead, a mesh leaves ground simply missing: the chunk's last
+//! rows, wherever steep ground makes more boxes than the slot holds, with its
+//! decor standing over nothing (measured 2026-09-26).
 //!
 //! A slot's cost is its box's words (pxl-render mesh/chunk_mesher.rs), and
 //! the two tiers do not weigh the same: a leaf's box is six words and every
@@ -41,16 +44,14 @@
 //! is what every measurement below is multiplied by. A group is one format
 //! throughout, which is what lets a slot be `residue × capacity`.
 //!
-//! What each tier was measured to ask for is on the constant sized against
-//! it, and nowhere else — two copies of one measurement is how this file came
-//! to carry two different pairs of numbers for it (2026-09-23). What the
-//! measurement showed, and the constants cannot say, is that the coarse tier
-//! asks for *more* than the leaf's own: nothing of it merges, since a box
-//! shrunk about its cell's center touches nothing
-//! (issue/20260923-a-coarse-cell-is-isotropic.md). Either is read live as the
-//! ledger's `work fine_peak` and `coarse_peak`, through a zoom out and back.
+//! What each tier asks for is read live as the ledger's `work fine_peak` and
+//! `coarse_peak`, and how many were baked a step coarser than asked as its
+//! `slot coarser`. The coarse tier asks for more than a leaf's own: nothing of
+//! it merges, since a box shrunk about its cell's center touches nothing
+//! (issue/20260923-a-coarse-cell-is-isotropic.md).
 
 use crate::world::pyramid::domain::{LEVEL_CHUNKS, VIEW_CHUNKS};
+use pxl_render::look::lod::COARSEST;
 use pxl_render::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
 use pxl_spec::space::pyramid::CHUNK_CELLS;
 
@@ -58,13 +59,35 @@ use pxl_spec::space::pyramid::CHUNK_CELLS;
 /// leaves' own tier needs, since only z16 draws it.
 const SLOTS: u32 = LEVEL_CHUNKS;
 /// Boxes a leaf's first tier holds, the one tier drawn at a leaf's own cells:
-/// the 2,294 the measurement asked for and a fifth again.
-pub const FINE_BOXES: u32 = 2730;
-/// Boxes every other tier holds: the 3,769 it asked for and a fifth again.
+/// one a column. The ground is a heightfield, so a column of it is one run
+/// in a chunk, and a chunk is a cube that cuts it to its heights
+/// (world/pyramid/chunk.rs); a box is at most a run (pxl-render
+/// mesh/chunk_mesher.rs). A chunk whose placed objects make it more is baked
+/// a step coarser, into the coarse pool.
+pub const FINE_BOXES: u32 = CHUNK_CELLS * CHUNK_CELLS;
+/// Boxes every other tier holds. A product number, said aloud: the room the
+/// coarse pool gives a mesh, which is its size on the device. It is not a
+/// bound the content keeps, and needs not be one: a coarse cell at step `s`
+/// is a cube `s` cells a side, holding at most its own box and the floor laid
+/// under it, so a chunk — 64 cells a side in all three — bakes to at most
+/// 2·(64/s)³ boxes, and a mesh that does not fit is baked a step coarser
+/// until it does. This fits at step 8 at the latest, and the coarsest step,
+/// one cell a chunk, always.
 pub const COARSE_BOXES: u32 = 4551;
 
-/// The largest mesh one bake may write before it is cut to its slot: past
-/// every tier measured, so what a bake asks for always fits.
+const _: () = assert!(2 * (CHUNK_CELLS / COARSEST).pow(3) <= COARSE_BOXES, "a chunk at its coarsest step past what a coarse slot holds");
+
+/// Boxes a tier of step `step` on a chunk of `level` may have: its pool's.
+pub const fn capacity(level: u32, step: u32) -> u32 {
+    if level == 0 && step == 1 {
+        FINE_BOXES
+    } else {
+        COARSE_BOXES
+    }
+}
+
+/// The largest mesh one bake may write: past what any slot holds, so a bake
+/// is weighed against its slot before it could outgrow its block.
 pub const BAKE_BYTES: u32 = 1 << 20;
 /// Groups the coarse tiers share: a slot for every chunk a view draws, each
 /// drawn in one coarse tier, and half as many again for what a change of view
