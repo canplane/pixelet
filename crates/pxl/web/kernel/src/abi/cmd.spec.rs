@@ -32,6 +32,7 @@ use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::{PacketWriter, TreeReader};
 
 /// A number an enum does not give out, where the enum has no member it reads as.
+#[track_caller]
 fn unknown() -> MarshalError {
     MarshalError::new(Errno::EINVAL)
 }
@@ -990,15 +991,20 @@ impl InputPointer {
     pub fn read(pkt: &[u8]) -> Result<InputPointer, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputPointer {
-            phase: PointerPhase::of(f.at(0)?.get_number()? as u32).ok_or_else(unknown)?,
-            kind: PointerKind::of(f.at(1)?.get_number()? as u32).ok_or_else(unknown)?,
+            phase: PointerPhase::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
+            kind: PointerKind::of(f.at(1)?.get_number()? as u32).ok_or_else(|| unknown())?,
             id: f.at(2)?.get_number()? as i32,
             button: f.at(3)?.get_number()? as i32,
             x: f.at(4)?.get_number()?,
             y: f.at(5)?.get_number()?,
-            tool: ActiveTool::of(f.at(6)?.get_number()? as u32).ok_or_else(unknown)?,
+            tool: ActiveTool::of(f.at(6)?.get_number()? as u32).ok_or_else(|| unknown())?,
             channel: match f.at(7)?.opt() {
-                Some(c) => Some(u8::try_from(c.get_number()? as u32).ok().and_then(pxl_spec::bake::format::GroundChannelKey::of).ok_or_else(unknown)?),
+                Some(c) => Some(
+                    u8::try_from(c.get_number()? as u32)
+                        .ok()
+                        .and_then(pxl_spec::bake::format::GroundChannelKey::of)
+                        .ok_or_else(|| unknown())?,
+                ),
                 None => None,
             },
             value: f.at(8)?.get_number()? as u32,
@@ -1030,7 +1036,7 @@ impl InputTracking {
     pub fn read(pkt: &[u8]) -> Result<InputTracking, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(InputTracking {
-            tracking: Tracking::of(f.at(0)?.get_number()? as u32).ok_or_else(unknown)?,
+            tracking: Tracking::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
         })
     }
 }
@@ -1163,8 +1169,8 @@ impl SensorPermission {
     pub fn read(pkt: &[u8]) -> Result<SensorPermission, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SensorPermission {
-            sensor: Sensor::of(f.at(0)?.get_number()? as u32).ok_or_else(unknown)?,
-            answer: PermissionAnswer::of(f.at(1)?.get_number()? as u32).ok_or_else(unknown)?,
+            sensor: Sensor::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
+            answer: PermissionAnswer::of(f.at(1)?.get_number()? as u32).ok_or_else(|| unknown())?,
         })
     }
 }
@@ -1201,7 +1207,7 @@ impl FetchUpdate {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(FetchUpdate {
             key: f.at(0)?.get_u64()?,
-            outcome: FetchOutcome::of(f.at(1)?.get_number()? as u32).ok_or_else(unknown)?,
+            outcome: FetchOutcome::of(f.at(1)?.get_number()? as u32).ok_or_else(|| unknown())?,
             body: f.at(2)?.get_number()? as u32,
             body_bytes: f.at(3)?.get_number()? as u32,
             fail: xpute_runtime::abi::fetch::FetchFail::of(f.at(4)?.get_number()? as u32).unwrap_or(xpute_runtime::abi::fetch::FetchFail::Shell),
@@ -1339,7 +1345,7 @@ impl SettingUpdate {
     pub fn read(pkt: &[u8]) -> Result<SettingUpdate, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SettingUpdate {
-            key: crate::shell::setting::schema_spec::SettingKey::of(f.at(0)?.get_number()? as u32).ok_or_else(unknown)?,
+            key: crate::shell::setting::schema_spec::SettingKey::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
             value: f.at(1)?.get_number()? as u32,
         })
     }
@@ -1355,7 +1361,7 @@ impl SettingToggle {
     pub fn read(pkt: &[u8]) -> Result<SettingToggle, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SettingToggle {
-            key: crate::shell::setting::schema_spec::SettingKey::of(f.at(0)?.get_number()? as u32).ok_or_else(unknown)?,
+            key: crate::shell::setting::schema_spec::SettingKey::of(f.at(0)?.get_number()? as u32).ok_or_else(|| unknown())?,
         })
     }
 }
@@ -1389,7 +1395,7 @@ impl PreviewCreate {
             group: u8::try_from(f.at(1)?.get_number()? as u32)
                 .ok()
                 .and_then(crate::layer::character::variant_spec::Group::of)
-                .ok_or_else(unknown)?,
+                .ok_or_else(|| unknown())?,
             number: f.at(2)?.get_number()? as u32,
         })
     }

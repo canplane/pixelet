@@ -22,7 +22,9 @@
 
 use core::fmt;
 use core::mem::{offset_of, size_of};
+use core::panic::Location;
 
+use xpute_core::status::error::MarshalError;
 use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::mem::section::span_of;
 
@@ -63,10 +65,35 @@ pub struct TaskRecord {
 /// and the summary counts by them rather than by prose — the words for a
 /// reason are the shell's, as `strerror` is libc's. What `detail` means is
 /// the host's too: nothing here reads it, and it exists to be printed.
+///
+/// A failure the kernel made carries where it made it, which a decode fault
+/// needs: `decode` says a body was wrong and not which rule it broke.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Failure {
     pub fail: FetchFail,
     pub detail: u16,
+    pub at: Option<&'static Location<'static>>,
+}
+
+impl From<FetchFail> for Failure {
+    #[track_caller]
+    fn from(fail: FetchFail) -> Failure {
+        Failure {
+            fail,
+            detail: 0,
+            at: Some(Location::caller()),
+        }
+    }
+}
+
+impl From<MarshalError> for Failure {
+    fn from(err: MarshalError) -> Failure {
+        Failure {
+            fail: FetchFail::Decode,
+            detail: 0,
+            at: Some(err.at),
+        }
+    }
 }
 
 impl fmt::Display for Failure {
@@ -101,6 +128,11 @@ pub struct TaskRow {
     /// The FetchFail's own number, and the host's own number beside it.
     pub fail: f64,
     pub detail: f64,
+    /// Where the failure was made: its file name's address and length, and
+    /// its line. 0 for one the host raised.
+    pub at_file: f64,
+    pub at_file_bytes: f64,
+    pub at_line: f64,
     /// How many of the phase lanes are filled; 0 where the run reported none.
     pub phase_count: f64,
     /// Indices into TASK_PHASE_NAMES.
@@ -123,6 +155,11 @@ impl TaskRow {
             detail: rec.fail.detail as f64,
             ..TaskRow::default()
         };
+        if let Some(at) = rec.fail.at {
+            row.at_file = at.file().as_ptr() as usize as f64;
+            row.at_file_bytes = at.file().len() as f64;
+            row.at_line = at.line() as f64;
+        }
         for (k, (name, value)) in rec.phases.iter().flat_map(|p| p.iter()).enumerate() {
             row.phase_ids[k] = name as u32 as f64;
             row.phase_values[k] = value;
@@ -462,7 +499,8 @@ words!(FrameSample, FRAME::WORDS,
 words!(TaskRow, TASK::WORDS,
     category => TASK::category, subject => TASK::subject, priority => TASK::priority, enqueue_ms => TASK::enqueue_ms,
     start_ms => TASK::start_ms, end_ms => TASK::end_ms, transport_ms => TASK::transport_ms, outcome => TASK::outcome,
-    fail => TASK::fail, detail => TASK::detail, phase_count => TASK::phase_count, phase_ids => TASK::phase_ids, phase_values => TASK::phase_values,
+    fail => TASK::fail, detail => TASK::detail,
+    at_file => TASK::at_file, at_file_bytes => TASK::at_file_bytes, at_line => TASK::at_line, phase_count => TASK::phase_count, phase_ids => TASK::phase_ids, phase_values => TASK::phase_values,
 );
 
 words!(WorstFrame, WORST::WORDS, sample => WORST::sample, has_prev => WORST::has_prev, prev => WORST::prev);

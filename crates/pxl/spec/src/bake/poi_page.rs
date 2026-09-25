@@ -27,6 +27,8 @@ use std::collections::HashMap;
 use crate::bake::poi_badge::{DEFAULT_COLOR, DEFAULT_ICON, KIND_CATEGORIES, KIND_COLORS, KIND_ICONS};
 use crate::space::pvf3::pvf3::Pvf3;
 use crate::space::pyramid::{Folds, Lattice, LevelPage, GROUND, TOP_LEVEL};
+use xpute_core::status::errno::Errno;
+use xpute_core::status::error::MarshalError;
 
 const MAGIC: &[u8; 4] = b"PXP5";
 
@@ -250,7 +252,7 @@ fn gathered(mut cells: Vec<(u32, u32, [u32; 2], Place)>) -> PoiPage {
 /// The magic; how many cells, places and bytes of names; the cells, four
 /// words each (the position's two lanes a half-word each); each place's
 /// name's end; each place's kind, a byte; the names.
-pub fn encode(page: &PoiPage) -> Result<Vec<u8>, &'static str> {
+pub fn encode(page: &PoiPage) -> Result<Vec<u8>, MarshalError> {
     validate(page)?;
     let places = &page.places;
     let mut out = Vec::with_capacity(16 + page.cells.len() * CELL_BYTES + places.ends.len() * 5 + places.bytes.len());
@@ -271,15 +273,15 @@ pub fn encode(page: &PoiPage) -> Result<Vec<u8>, &'static str> {
     Ok(out)
 }
 
-pub fn decode(bytes: &[u8]) -> Result<PoiPage, &'static str> {
+pub fn decode(bytes: &[u8]) -> Result<PoiPage, MarshalError> {
     if bytes.len() < 16 || &bytes[..4] != MAGIC {
-        return Err("not a POI page");
+        return Err(bad());
     }
     let word = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
     let (n, places, pool) = (word(4) as usize, word(8) as usize, word(12) as usize);
     // Checked against the page's own bound before anything is allocated.
     if n > CELLS as usize || places > n || bytes.len() != 16 + n * CELL_BYTES + places * 5 + pool {
-        return Err("a POI page of the wrong length");
+        return Err(bad());
     }
     let cells = (0..n)
         .map(|i| {
@@ -297,15 +299,15 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, &'static str> {
     let kinds = bytes[at + places * 4..at + places * 5].to_vec();
     let text = &bytes[at + places * 5..];
     if ends.windows(2).any(|w| w[0] > w[1]) || ends.last().map_or(0, |&e| e as usize) != text.len() {
-        return Err("POI names out of order");
+        return Err(bad());
     }
     // Name by name: a pool that is UTF-8 whole could still split a character
     // between two names.
     let mut start = 0;
     for &end in &ends {
-        let name = std::str::from_utf8(&text[start..end as usize]).map_err(|_| "a POI name that is not UTF-8")?;
+        let name = std::str::from_utf8(&text[start..end as usize]).map_err(|_| bad())?;
         if name.chars().nth(NAME_CHARS).is_some() {
-            return Err("a POI name past NAME_CHARS");
+            return Err(bad());
         }
         start = end as usize;
     }
@@ -320,20 +322,25 @@ pub fn decode(bytes: &[u8]) -> Result<PoiPage, &'static str> {
 /// A page is its cells ascending, each inside the page and holding a place,
 /// its position a half-word a lane, and a place only where a cell holds one,
 /// the place from the pool and of a kind the badge table has.
-fn validate(page: &PoiPage) -> Result<(), &'static str> {
+fn validate(page: &PoiPage) -> Result<(), MarshalError> {
     if page.cells.iter().any(|c| c.cell >= CELLS || c.count == 0) || page.cells.windows(2).any(|w| w[0].cell >= w[1].cell) {
-        return Err("POI cells out of order or empty");
+        return Err(bad());
     }
     if page.cells.iter().any(|c| c.place != NO_PLACE && (c.count != 1 || c.place >= page.places.len())) {
-        return Err("a POI place where no one place is");
+        return Err(bad());
     }
     if page.places.kinds.iter().any(|&k| k as usize > KIND_CATEGORIES.len()) {
-        return Err("a POI place of a kind the badge table does not have");
+        return Err(bad());
     }
     if page.cells.iter().any(|c| c.at.iter().any(|&l| l > 0xffff)) {
-        return Err("a POI position past a half-word");
+        return Err(bad());
     }
     Ok(())
+}
+
+#[track_caller]
+fn bad() -> MarshalError {
+    MarshalError::new(Errno::EBADMSG)
 }
 
 #[cfg(test)]

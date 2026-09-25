@@ -147,7 +147,7 @@ export const FRAME_GROUPS = {
   ring: ["ring_cq_peak", "ring_spill_peak"],
 } as const;
 
-/** One settled task (sched/ledger/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. */
+/** One settled task (sched/ledger/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's. */
 export const TASK = {
   category: 0 as number,
   subject: 1 as number,
@@ -159,10 +159,13 @@ export const TASK = {
   outcome: 7 as number,
   fail: 8 as number,
   detail: 9 as number,
-  phase_count: 10 as number,
-  phase_ids: 11 as number,
-  phase_values: 17 as number,
-  WORDS: 23 as number,
+  at_file: 10 as number,
+  at_file_bytes: 11 as number,
+  at_line: 12 as number,
+  phase_count: 13 as number,
+  phase_ids: 14 as number,
+  phase_values: 20 as number,
+  WORDS: 26 as number,
 } as const;
 
 /** One of the window's worst frames and the frame before it, which is zero where `has_prev` is 0. */

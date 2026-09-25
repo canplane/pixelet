@@ -100,6 +100,7 @@ export function ledgerTraceJson(): string {
     if (r.fail !== 0) {
       args.fail = failText(r.fail, r.detail);
       if (r.detail !== 0) args.detail = r.detail;
+      if (r.at !== null) args.at = r.at;
     }
     for (const [k, v] of r.phases) args[k] = v;
     events.push(event(`${r.category}:${r.subject}`, `task,${r.outcome}`, "X", us(r.enqueue_ms), us(Math.max(0, r.end_ms - r.enqueue_ms)), tid, args));

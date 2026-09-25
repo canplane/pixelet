@@ -379,6 +379,7 @@ impl TreeEncoder {
     }
 }
 
+#[track_caller]
 fn bad_type() -> MarshalError {
     MarshalError::new(Errno::EBADMSG)
 }

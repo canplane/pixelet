@@ -69,7 +69,7 @@ const phasesText = (p: [string, f64][]) => p.length === 0 ? "" : `  [${p.map(([k
 export function taskLine(r: TaskRecord): string {
   const total = r.end_ms - r.enqueue_ms;
   const timing = r.start_ms === null ? "" : `  q ${n1(r.start_ms - r.enqueue_ms)} + run ${n1(r.end_ms - r.start_ms)}`;
-  const why = r.fail === 0 ? "" : `  [${failText(r.fail, r.detail)}]`;
+  const why = r.fail === 0 ? "" : `  [${failText(r.fail, r.detail)}${r.at === null ? "" : ` at ${r.at}`}]`;
   return `[${n1(r.enqueue_ms).padStart(9)}] ${`${r.category}:${r.subject}`.padEnd(34)}${r.outcome.padEnd(7)}${n1(total).padStart(8)}ms${timing} p${r.priority}${phasesText(r.phases)}${why}`;
 }
 

@@ -15,6 +15,7 @@ use xpute_runtime::abi::fetch::FetchFail;
 
 use crate::global::Global;
 use crate::io::demand::{Category, Phases};
+use crate::sched::ledger::record::Failure;
 use crate::shell::setting::store::settings_store;
 use crate::world::pyramid::{Layer, Pyramid};
 
@@ -29,8 +30,8 @@ impl Layer for PoiPage {
 
     /// A page is small and held on the heap; its record is only its room in
     /// the count the pyramid bounds.
-    fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<PoiPage, FetchFail> {
-        poi_page::decode(pkt).map_err(|_| FetchFail::Decode)
+    fn receive(_record: u32, pkt: &[u8], _phases: &mut Phases) -> Result<PoiPage, Failure> {
+        Ok(poi_page::decode(pkt)?)
     }
 
     fn keep(_record: u32, page: &PoiPage) -> Result<PoiPage, FetchFail> {

@@ -26,6 +26,8 @@ use pxl_spec::space::pvf3::ivec::IVec;
 use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 use std::collections::{BTreeMap, HashSet};
 use xpute_runtime::abi::fetch::FetchFail;
+
+use crate::sched::ledger::record::Failure;
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::io::demand::{Category, Phases};
@@ -46,7 +48,7 @@ pub trait Layer: Folds + Clone + 'static {
     fn pyramid() -> &'static mut Pyramid<Self>;
 
     /// A fetched body, made the page `record` holds.
-    fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Self, FetchFail>;
+    fn receive(record: u32, pkt: &[u8], phases: &mut Phases) -> Result<Self, Failure>;
 
     /// A page the client folded, made the page `record` holds.
     fn keep(record: u32, page: &Self) -> Result<Self, FetchFail>;
@@ -406,7 +408,7 @@ impl<L: Layer> Pyramid<L> {
     // ---- arriving ----
 
     /// A page's fetched body, made resident.
-    pub fn adopt(&mut self, p: LevelPage, pkt: &[u8], phases: &mut Phases) -> Result<(), FetchFail> {
+    pub fn adopt(&mut self, p: LevelPage, pkt: &[u8], phases: &mut Phases) -> Result<(), Failure> {
         let Some(record) = self.record_for(p, eye().map(|e| e.foot)) else { return Ok(()) };
         let page = L::receive(record, pkt, phases)?;
         self.take(p, record, page);

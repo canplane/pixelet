@@ -47,6 +47,8 @@ const RECENT_TASKS = 20;
 
 const words = (at: u32, n: u32) => new Float64Array(CORE_KERNEL.memory.buffer, at, n);
 const u32s = (at: u32, n: u32) => new Uint32Array(CORE_KERNEL.memory.buffer, at, n);
+/** Where the kernel made a failure: a file name in its memory and a line. */
+const site = (file: u32, bytes: u32, line: u32) => file === 0 ? null : `${new TextDecoder().decode(new Uint8Array(CORE_KERNEL.memory.buffer, file, bytes))}:${line}`;
 
 function frames_at(at: u32, count: u32): Frame[] {
   const w = words(at, count * FRAME.WORDS);
@@ -75,6 +77,7 @@ function tasks_at(at: u32, count: u32): TaskRecord[] {
       outcome: OUTCOME_NAMES[w[o + TASK.outcome]] ?? "?",
       fail: w[o + TASK.fail],
       detail: w[o + TASK.detail],
+      at: site(w[o + TASK.at_file], w[o + TASK.at_file_bytes], w[o + TASK.at_line]),
       phases,
     };
   });
@@ -128,6 +131,8 @@ export interface TaskRecord {
   outcome: string;
   fail: u32;
   detail: u32;
+  /** `file:line`, where the kernel made the failure; null for the host's. */
+  at: string | null;
   phases: [string, f64][];
 }
 

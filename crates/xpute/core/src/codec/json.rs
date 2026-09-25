@@ -90,6 +90,7 @@ struct Parser<'a> {
 }
 
 impl Parser<'_> {
+    #[track_caller]
     fn fail(&self) -> MarshalError {
         MarshalError::new(Errno::EBADMSG)
     }

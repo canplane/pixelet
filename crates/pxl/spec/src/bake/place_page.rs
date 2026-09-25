@@ -315,6 +315,7 @@ impl<'a> PlaceGroupView<'a> {
     }
 }
 
+#[track_caller]
 fn bad() -> MarshalError {
     MarshalError::new(Errno::EBADMSG)
 }
