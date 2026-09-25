@@ -16,7 +16,8 @@
 //! stage (stage.rs) composes the frame — the camera, the anchor root's
 //! matrix, the frustum — and calls the tick. What comes back is events: a
 //! chunk mounted or gone, the layout it should show (its tiers), a tier's
-//! mesh and its decor handed over, and a tier to let go. The nodes hold the meshes; this holds every decision about them.
+//! mesh and its decor handed over, and a tier to let go. The nodes hold the
+//! meshes; this holds every decision about them.
 
 use pxl_spec::space::indexer::FROM_L2_IDX;
 use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, PAGE_CELLS, PAGE_CHUNKS};
@@ -1295,6 +1296,10 @@ impl Scheduler {
                 }
             }
         }
+        // The ground the view draws, from the domain as it stands: a mount
+        // pass is skipped while the cover holds, and the roots under a
+        // stand-in move without the cover.
+        let drawn = Terrain::pyramid().domain().map(Domain::ground);
         for (&k, &id) in self.mounted.iter() {
             let Some(&i) = self.index.get(&id) else { continue };
             let s = &self.slots[i];
@@ -1312,10 +1317,6 @@ impl Scheduler {
             // other way out — the view lies inside it, so it never leaves the
             // drawn ground either. Both doors shut, and it stays drawn over
             // ground it no longer describes, for as long as the view is there.
-            // The ground the view draws is the domain's as it stands now,
-            // not as the last mount pass found it: a pass is skipped while
-            // the cover holds, and roots under a stand-in move without it.
-            let drawn = Terrain::pyramid().domain().map(Domain::ground);
             let gone_from_view = drawn.is_none_or(|d| !d.iter().any(|&g| share(k.node(), g.node())));
             let whole = covered >= drawn.map_or(0.0, |d| d.iter().map(|&g| shared_area(k, g)).sum());
             // A stale chunk is kept for what it is showing. One that never
