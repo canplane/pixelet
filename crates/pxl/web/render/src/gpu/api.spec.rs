@@ -306,6 +306,7 @@ pub mod record {
     pub const F32X4: u32 = 3;
     pub const U32X4: u32 = 4;
     pub const U32: u32 = 5;
+    pub const NONE: u32 = 0;
     pub const VERTEX: u32 = 1;
     pub const FRAGMENT: u32 = 2;
     pub const BOTH: u32 = 3;
@@ -344,6 +345,7 @@ pub mod record {
         "F32X4",
         "U32X4",
         "U32",
+        "NONE",
         "VERTEX",
         "FRAGMENT",
         "BOTH",

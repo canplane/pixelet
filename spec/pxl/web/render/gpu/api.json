@@ -200,6 +200,7 @@
     "F32X4": 3,
     "U32X4": 4,
     "U32": 5,
+    "NONE": 0,
     "VERTEX": 1,
     "FRAGMENT": 2,
     "BOTH": 3,

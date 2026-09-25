@@ -86,8 +86,9 @@ fn transmittance_along(r: f32, mu: f32, d: f32, ground: bool) -> vec3f {
 // scatters toward the eye over its whole length, exposed and balanced —
 // the sun's sky and, while it lights one, the moon's — and what it leaves
 // of what lies at the ray's far end, the ground where the ray meets the
-// planet and the top of the air where it does not. Read once for a ray,
-// and shared by what lies along it (`aerial`) and past it (`beyond`).
+// planet and the top of the air where it does not: what lies past the
+// terrain (`beyond`), which the sky pass draws and the band hiding the
+// world's drawn edge fades into.
 struct Air {
   light: vec3f,
   end: vec3f,
@@ -141,6 +142,36 @@ fn haze_through(h0: f32, h1: f32, d: f32) -> f32 {
   return exp(-atmos.haze_extinction * layer_depth(h0, h1, d, atmos.haze_scale_height));
 }
 
+// What the aerosol scatters of the light it takes: a continental haze's
+// single-scattering albedo, about where OPAC's continental types sit at
+// green (Hess, Koepke and Schult, 1998). Said aloud rather than derived: the
+// haze is a layer the tables do not carry, so nothing else fixes it.
+const HAZE_ALBEDO: f32 = 0.9;
+
+// The light the air along `dir` takes and turns toward the eye, on the
+// terrain's scale, by what scatters it: the two lights as they reach the
+// terrain, each by the scatterer's phase, and the light from every other
+// way — the sky's over the upper half, the ground's over the lower — as the
+// terrain is lit by them. It is the light of the air where it is and not
+// the ray's: the air in front of a mountain is lit where it stands, while
+// the sky along the same ray is lit for hundreds of kilometers past the
+// mountain, most of all along the horizon toward a low sun, and a veil taken
+// from it laid that over the ground as a line at the horizon's height.
+struct AirLight {
+  rayleigh: vec3f,
+  mie: vec3f,
+};
+
+fn air_light(dir: vec3f, fill: vec3f) -> AirLight {
+  let c_sun = dot(dir, frame.sun_dir);
+  let c_other = dot(dir, frame.other_dir);
+  let around = 0.5 * ((fill + frame.ambient) / PI + ground_bounce(fill));
+  var l: AirLight;
+  l.rayleigh = frame.sun_color * rayleigh_phase(c_sun) + frame.other_color * rayleigh_phase(c_other) + around;
+  l.mie = frame.sun_color * mie_phase(c_sun) + frame.other_color * mie_phase(c_other) + around;
+  return l;
+}
+
 // What the eye sees along a ray to its end: the air's light, and where the
 // ray meets the planet, the ground's through the air. It is what lies past
 // the terrain's drawn edge, so a view from high up reads as ground in haze
@@ -163,16 +194,14 @@ fn beyond(air: Air) -> vec3f {
 
 // Aerial perspective: what the air between the eye and `world_pos` does to
 // a color there — `through`, the segment's transmittance, dims it, and
-// `scattered`, the light the air scatters along it, fills it in. `air` is
-// the ray's through that point (`air_along`), whose light is scattered
-// along it to its end, so a point part way along has the share of it that
-// the segment's extinction is of the whole ray's.
+// `scattered`, the light the air along it takes and turns toward the eye,
+// fills it in (`air_light`).
 struct Veil {
   through: vec3f,
   scattered: vec3f,
 };
 
-fn veil(world_pos: vec3f, air: Air) -> Veil {
+fn veil(world_pos: vec3f) -> Veil {
   var v: Veil;
   let du = length(world_pos - frame.camera_pos);
   if (du < 1e-4) {
@@ -187,24 +216,24 @@ fn veil(world_pos: vec3f, air: Air) -> Veil {
   let h0 = clamp(atmos.camera_altitude, 0.0, atmos.top_radius - atmos.bottom_radius);
   let planet = vec3f(frame.planet.xy, frame.planet.w - frame.planet.z);
   let h1 = max(h0 + (length(world_pos - planet) - length(frame.camera_pos - planet)) * atmos.km_per_u, 0.0);
-  let depth = atmos.rayleigh_scattering * layer_depth(h0, h1, d, atmos.rayleigh_scale_height)
-    + vec3f(atmos.mie_extinction * layer_depth(h0, h1, d, atmos.mie_scale_height));
-  let through = exp(-depth);
-  // The medium's own share, from the ray's light: what the segment scatters
-  // is the ray's in proportion to what it extinguishes.
-  let scattered = min(air.light * (vec3f(1.0) - through) / max(vec3f(1.0) - air.end, vec3f(1e-4)), air.light);
-  // The haze is a layer in front of that, not another term inside it: the
-  // ratio above divides by what the whole ray extinguishes, which is nearly
-  // nothing from space, so a haze folded into it would saturate and lay the
-  // sky's full light over the ground.
-  let t = haze_through(h0, h1, d);
-  v.through = through * t;
-  v.scattered = scattered * t + (1.0 - t) * air.light;
+  let rayleigh = atmos.rayleigh_scattering * layer_depth(h0, h1, d, atmos.rayleigh_scale_height);
+  let mie = atmos.mie_extinction * layer_depth(h0, h1, d, atmos.mie_scale_height);
+  let haze = atmos.haze_extinction * layer_depth(h0, h1, d, atmos.haze_scale_height);
+  // One segment, its scatterers each taking the share of what it
+  // extinguishes that is theirs, and of that share scattering what their
+  // albedo is: the single-scattering integral over a medium lit the same
+  // along the segment, which a segment the terrain draws is short enough
+  // for. Its light is the air's where the segment is (`air_light`).
+  let depth = rayleigh + vec3f(mie + haze);
+  v.through = exp(-depth);
+  let lit = air_light((world_pos - frame.camera_pos) / du, sky_fill());
+  let turned = rayleigh * lit.rayleigh + (mie * atmos.mie_scattering / atmos.mie_extinction + haze * HAZE_ALBEDO) * lit.mie;
+  v.scattered = (vec3f(1.0) - v.through) * turned / max(depth, vec3f(1e-6));
   return v;
 }
 
-fn aerial(color: vec3f, world_pos: vec3f, air: Air) -> vec3f {
-  let v = veil(world_pos, air);
+fn aerial(color: vec3f, world_pos: vec3f) -> vec3f {
+  let v = veil(world_pos);
   return color * v.through + v.scattered;
 }
 
@@ -238,7 +267,7 @@ fn seen_at_vertex(world_pos: vec3f) -> Seen {
 
 fn seen_from_eye(world_pos: vec3f) -> Seen {
   let air = air_along(normalize(world_pos - frame.camera_pos));
-  let v = veil(world_pos, air);
+  let v = veil(world_pos);
   var s: Seen;
   s.through = v.through;
   s.scattered = v.scattered;
