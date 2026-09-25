@@ -96,13 +96,14 @@ function exists(path: string, from: string): boolean {
   if (head === "@xpute") return suffixes.has(`packages/xpute/${rest[0]}/src/${rest.slice(1).join("/")}`);
   const dir = crates.get(head);
   if (dir && (suffixes.has(`${dir}src/${tail}`) || suffixes.has(`${dir}${tail}`))) return true;
-  // What a build writes and git ignores, such as the ABI's symbol table.
+  // What a build writes and git ignores, such as the ABI's symbol table: named
+  // by what git ignores rather than by what is on disk, since a fresh checkout
+  // — the gate's, in CI — runs this before any build has written it.
   return [join(dirname(from), path), path, `apps/web/src/${path}`].some((p) => {
     try {
-      return Deno.statSync(join(root, p)).isFile;
-    } catch {
-      return false;
-    }
+      if (Deno.statSync(join(root, p)).isFile) return true;
+    } catch { /* not built here */ }
+    return new Deno.Command("git", { args: ["check-ignore", "-q", p], cwd: root }).outputSync().code === 0;
   });
 }
 
