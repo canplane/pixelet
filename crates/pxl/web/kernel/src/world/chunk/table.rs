@@ -21,7 +21,7 @@
 
 use pxl_spec::space::indexer::FROM_L2_IDX;
 use pxl_spec::space::pyramid::{chunk_span_of, CHUNK_CELLS, GROUND, PAGE_CHUNKS};
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
 
@@ -135,11 +135,6 @@ pub const SETTLING: u16 = 32;
 /// parent it merged into, the children it split into — and it is drawn until
 /// every one of those is ready, then let go.
 pub const STALE: u16 = 64;
-/// Nothing coarser in the selection draws this chunk's ground, so the rule
-/// is followed as far as it goes here rather than stopping one cube past the
-/// chunk's own cells (`drawn_cube`): the view wants its ground at the
-/// pyramid's top, which has nothing over it (domain.rs `Domain::outermost`).
-pub const OUTERMOST: u16 = 256;
 
 /// How long a change of what a chunk draws dissolves over, in milliseconds:
 /// a tier for another, a stale chunk for what replaced it. A number chosen
@@ -469,6 +464,15 @@ impl Slot {
         self.radius = APPROXIMATE_CHUNK_RADIUS * (1u64 << self.level()) as f64;
     }
 
+    /// Whether nothing coarser draws this chunk's ground, so its own tier is
+    /// free to be as coarse as the rule says: it is the pyramid's top, which
+    /// has nothing over it. A stand-in under a page that has not come is not
+    /// one — the page over it is held (domain.rs `pages`) and draws that
+    /// ground's far steps.
+    fn outermost(&self) -> bool {
+        self.chunk.parent().is_none()
+    }
+
     fn has(&self, f: u16) -> bool {
         self.flags & f != 0
     }
@@ -656,7 +660,7 @@ pub struct Scheduler {
     /// two thousand chunks re-derived at a tilt wide enough to want five
     /// levels, against six hundred looking down. The work a zoom costs grew
     /// with the tilt for no reason but this.
-    to_mount: VecDeque<(Chunk, bool)>,
+    to_mount: VecDeque<Chunk>,
     /// The decor kinds, in the order decor/build.rs taught them — the order of
     /// the groups in every decor block.
     decor_kinds: Vec<DecorKind>,
@@ -815,7 +819,7 @@ impl Scheduler {
     // ---- commands ----
 
     /// Chunk `k`, its first tier the one the rule wants for it now.
-    fn add(&mut self, world: &mut World, id: u32, k: Chunk, root: bool) {
+    fn add(&mut self, world: &mut World, id: u32, k: Chunk) {
         let level = k.level();
         let edits = render_edits();
         let sources = Sources::of(k, edits);
@@ -844,11 +848,10 @@ impl Scheduler {
             sources,
             decor_sources: DecorSources::of(k, edits),
         };
-        slot.set(OUTERMOST, root);
         slot.unmeasured();
         if let (Some(frame), Some(d)) = (self.frame, Terrain::pyramid().domain()) {
             if measure(&frame, &slot).0 {
-                slot.layout_primary = drawn_cube(wanted_cube(d, k, self.pressure), level, root, false);
+                slot.layout_primary = drawn_cube(wanted_cube(d, k, self.pressure), level, slot.outermost(), false);
                 slot.desired = (slot.layout_primary, None);
             }
         }
@@ -856,21 +859,6 @@ impl Scheduler {
         assert!(self.slots.len() < MAX_CHUNKS, "more than {MAX_CHUNKS} chunks held");
         self.slots.push(slot);
         self.view_dirty = true;
-    }
-
-    /// Whether nothing coarser in the selection draws this chunk's ground, so
-    /// its own tier is free to be as coarse as the rule says.
-    ///
-    /// A root of the selection's traversal (`select`), which used to be the
-    /// same as being at the window's top ring and is not any more: a chunk
-    /// standing in for a page that has not arrived is a root at whatever
-    /// level it is, and capping it one step past its own cells would draw the
-    /// far ground at the fine step the level over it was supposed to spare
-    /// it. Cesium's is the same: a descendant rendering in place of an
-    /// unloaded ancestor is measured against the screen on its own, not
-    /// against the ancestor's.
-    fn outermost(&self, i: usize) -> bool {
-        self.slots[i].has(OUTERMOST)
     }
 
     fn remove(&mut self, world: &mut World, k: Chunk) {
@@ -1189,12 +1177,10 @@ impl Scheduler {
         self.decor_scratch.as_ref().map_or(0, |s| s.dropped)
     }
 
-    /// The chunks to draw and which of them are roots: what the terrain
-    /// draws of the view (world/pyramid.rs `Cover`, layer/terrain/present.rs).
-    fn select(&self, out: &mut BTreeMap<Chunk, bool>) {
-        let terrain = Terrain::pyramid();
-        let Some(d) = terrain.domain() else { return };
-        out.extend(terrain.cover().0.drawn.iter().map(|&c| (c, d.outermost(c))));
+    /// The chunks to draw: what the terrain draws of the view
+    /// (world/pyramid.rs `Cover`, layer/terrain/present.rs).
+    fn select(&self) -> BTreeSet<Chunk> {
+        Terrain::pyramid().cover().0.drawn.iter().copied().collect()
     }
 
     /// Which chunks exist: the ones `select` draws, mounted as they are
@@ -1238,21 +1224,13 @@ impl Scheduler {
         }
         self.census.mount_full = 0;
         if self.selected_for != Some(key) {
-            // A chunk's staleness and whether it is a root are the
-            // selection's, which a recheck reads.
+            // A chunk's staleness is the selection's, which a recheck reads.
             self.view_dirty = true;
-            let mut wanted = BTreeMap::new();
-            self.select(&mut wanted);
+            let wanted = self.select();
 
-            // What is no longer wanted goes stale; what is again, fresh. And
-            // whether a chunk is a root can change under it — a page
-            // arriving puts a level over ground that had none — so it is
-            // written here for every chunk the selection keeps.
+            // What is no longer wanted goes stale; what is again, fresh.
             for (k, &i) in self.index.iter() {
-                self.slots[i].set(STALE, !wanted.contains_key(k));
-                if let Some(&root) = wanted.get(k) {
-                    self.slots[i].set(OUTERMOST, root);
-                }
+                self.slots[i].set(STALE, !wanted.contains(k));
             }
 
             // In the order the builds will take them, which is a distance in
@@ -1271,15 +1249,15 @@ impl Scheduler {
             // Nearest the eye first, by the distance the level was chosen
             // by (domain.rs `Domain::nearest_to`).
             let Some(d) = Terrain::pyramid().domain() else { return };
-            let mut near: Vec<(f64, Chunk, bool)> = wanted.iter().filter(|(k, _)| !self.index.contains_key(k)).map(|(&k, &root)| (d.nearest_to(k), k, root)).collect();
+            let mut near: Vec<(f64, Chunk)> = wanted.iter().filter(|k| !self.index.contains_key(k)).map(|&k| (d.nearest_to(k), k)).collect();
             near.sort_by(|a, b| a.0.total_cmp(&b.0));
             self.to_mount.clear();
-            self.to_mount.extend(near.into_iter().map(|(_, k, root)| (k, root)));
+            self.to_mount.extend(near.into_iter().map(|(_, k)| k));
             self.selected_for = Some(key);
         }
 
         let mut mounts = 0;
-        while let Some(&(k, root)) = self.to_mount.front() {
+        while let Some(&k) = self.to_mount.front() {
             // At the ceiling a stale chunk gives up its place; only when
             // there is none does the pass stop, which is a table holding
             // nothing but what the camera wants and still wanting more.
@@ -1297,7 +1275,7 @@ impl Scheduler {
             mounts += 1;
             let id = self.next_mount_id;
             self.next_mount_id = self.next_mount_id.wrapping_add(1).max(MOUNT_ID_BASE);
-            self.add(world, id, k, root);
+            self.add(world, id, k);
             self.counts.added += 1;
         }
     }
@@ -1927,7 +1905,7 @@ impl Scheduler {
         }
         let s = &self.slots[i];
         let (level, chunk) = (s.level(), s.chunk);
-        let outermost = self.outermost(i);
+        let outermost = s.outermost();
         let Some(d) = Terrain::pyramid().domain() else { return };
         let objects = level == 0 && world.store.entries(L2_IDX(s.chunk.base().i)).is_some();
         let primary = drawn_cube(wanted_cube(d, chunk, self.pressure), level, outermost, objects);
@@ -1954,8 +1932,8 @@ impl Scheduler {
     /// baked (build.rs), so a tier asked later would cost the runs again.
     fn ask(&mut self, world: &mut World, i: usize, primary: Cube, secondary: Option<Cube>) -> bool {
         let generation = self.generation(i);
-        let outermost = self.outermost(i);
         let s = &self.slots[i];
+        let outermost = s.outermost();
         let lacks = |c: Cube| s.tier(c, generation).is_none();
         if !lacks(primary) && !secondary.is_some_and(lacks) {
             self.builder.want(world, s.id, [None, None]);

@@ -428,12 +428,6 @@ impl Domain {
         self.split_at(c, near, seen)
     }
 
-    /// Whether `c` is a root the view does not refine: nothing coarser would
-    /// draw that ground's far steps.
-    pub fn outermost(&self, c: Chunk) -> bool {
-        c.level() >= TOP_LEVEL
-    }
-
     /// The chunk over `c`'s ground at the level the view wants that ground
     /// at: `c` itself where the view wants it at `c`'s level or finer.
     pub fn wanted_over(&self, c: Chunk) -> Chunk {
