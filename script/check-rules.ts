@@ -91,6 +91,7 @@ function exists(path: string, from: string): boolean {
   const [head, ...rest] = path.split("/");
   const tail = rest.join("/");
   if (head === "@pxl") return suffixes.has(`apps/web/src/${tail.replace(/^web\//, "")}`) || suffixes.has(`apps/web/${tail.replace(/^web\//, "")}`);
+  if (head === "@") return suffixes.has(`apps/web/src/${tail}`);
   if (head === "@xpute") return suffixes.has(`packages/xpute/${rest[0]}/src/${rest.slice(1).join("/")}`);
   const dir = crates.get(head);
   if (dir && (suffixes.has(`${dir}src/${tail}`) || suffixes.has(`${dir}${tail}`))) return true;

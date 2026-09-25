@@ -71,74 +71,7 @@ pub struct CoastRow {
 
 // ---- Ground ----
 
-/// A ground channel. The discriminant is its identity — the number a stored
-/// value names it by, such as a terrain-styled cube's — and is not its place
-/// in any order: moving a channel in `GROUND_CH_KEYS` must not renumber what
-/// the object store already holds.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum GroundChannelKey {
-    LAND = 0,
-    WATER = 1,
-    STRUCTURE = 2,
-    TRANSPORT = 3,
-}
-
-impl GroundChannelKey {
-    /// The key's string on the wire.
-    pub fn as_str(self) -> &'static str {
-        self.name()
-    }
-
-    /// The channel the catalog names `name`, the reverse of `as_str`.
-    pub const fn from_name(name: &str) -> Option<GroundChannelKey> {
-        let mut id = 0;
-        while let Some(key) = GroundChannelKey::from_id(id) {
-            if const_str_eq(key.name(), name) {
-                return Some(key);
-            }
-            id += 1;
-        }
-        None
-    }
-
-    /// The same, where a const is what the caller needs: `bake/pack.rs` finds
-    /// a channel's field by it.
-    pub const fn name(self) -> &'static str {
-        match self {
-            GroundChannelKey::LAND => "land",
-            GroundChannelKey::WATER => "water",
-            GroundChannelKey::STRUCTURE => "structure",
-            GroundChannelKey::TRANSPORT => "transport",
-        }
-    }
-
-    /// The channel a stored identity names, the reverse of `self as u8`.
-    pub const fn from_id(id: u32) -> Option<GroundChannelKey> {
-        match id {
-            0 => Some(GroundChannelKey::LAND),
-            1 => Some(GroundChannelKey::WATER),
-            2 => Some(GroundChannelKey::STRUCTURE),
-            3 => Some(GroundChannelKey::TRANSPORT),
-            _ => None,
-        }
-    }
-}
-
-pub(crate) const fn const_str_eq(a: &str, b: &str) -> bool {
-    let (a, b) = (a.as_bytes(), b.as_bytes());
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut i = 0;
-    while i < a.len() {
-        if a[i] != b[i] {
-            return false;
-        }
-        i += 1;
-    }
-    true
-}
+pub use crate::cell::cube_type::GroundChannelKey;
 
 /// The one order the ground channels are in: the lanes of a baked page, the
 /// planes of `.fixed.terrain`, and the order a cell is painted in, a later

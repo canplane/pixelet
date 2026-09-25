@@ -10,91 +10,116 @@
 // each row's `color`. A texture pack decorates these; it does not
 // replace them, which is why this table lives with the type numbering in
 // spec/cell rather than beside the pack's images.
-//
-// `default` is the TypeScript module's default export, the colour file
-// cube.rs builds its colours from.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To
 // case them the way Rust would is to rename the protocol.
-#![allow(non_upper_case_globals)]
 
-use super::r#type::{ColorJsonEntry, ColorJsonFile, ColorJsonMeta};
+use super::cube_type::{cube_types, GroundChannelKey};
+use super::r#type::Swatch;
 
-const fn e(hex: &'static str, rgb: u32) -> ColorJsonEntry {
-    ColorJsonEntry { hex, rgb, note: None }
+/// `common`'s colour for a type, by its number.
+pub const fn common(t: u8) -> Option<Swatch> {
+    match t {
+        // A cell whose data is missing or invalid, a visible neutral grey so it reads as not known rather than as whatever drew last.
+        cube_types::common::unknown => Some(Swatch::new("#D9D0CC", 0xd9d0cc)),
+        _ => None,
+    }
 }
 
-pub const default: ColorJsonFile = ColorJsonFile {
-    _meta: Some(ColorJsonMeta {
-        description: None,
-        source: Some("land/water/structure/transport: OpenStreetMap Carto; block: hand-picked"),
-    }),
-    channels: &[
-        (
-            "land",
-            &[
-                ("bare", e("#EEE5DC", 0xeee5dc)),
-                ("sea", e("#AAD3DF", 0xaad3df)),
-                ("green_deep", e("#ADD19E", 0xadd19e)),
-                ("green_light", e("#C8FACC", 0xc8facc)),
-                ("sand", e("#F5E9C6", 0xf5e9c6)),
-                ("residential", e("#E0DFDF", 0xe0dfdf)),
-                ("commercial", e("#F2DAD9", 0xf2dad9)),
-                ("industrial", e("#EBDBE8", 0xebdbe8)),
-                ("sports", e("#88E0BE", 0x88e0be)),
-                ("education", e("#FFFFE5", 0xffffe5)),
-                ("medical", e("#FFFFE5", 0xffffe5)),
-                ("public", e("#FFFFE5", 0xffffe5)),
-                ("apron", e("#DADAE0", 0xdadae0)),
-                ("helipad", e("#BBBBCC", 0xbbbbcc)),
-            ],
-        ),
-        ("water", &[("river", e("#AAD3DF", 0xaad3df)), ("lake", e("#AAD3DF", 0xaad3df)), ("wetland", e("#AAD3DF", 0xaad3df))]),
-        (
-            "structure",
-            &[
-                ("building", e("#D9D0C9", 0xd9d0c9)),
-                ("building_station", e("#C4B6AB", 0xc4b6ab)),
-                ("building_medical", e("#D9D0C9", 0xd9d0c9)),
-                ("building_education", e("#D9D0C9", 0xd9d0c9)),
-                ("building_public", e("#D9D0C9", 0xd9d0c9)),
-            ],
-        ),
-        (
-            "transport",
-            &[
-                ("road_default", e("#FFFFFF", 0xffffff)),
-                ("road_motorway", e("#E892A2", 0xe892a2)),
-                ("road_primary", e("#FCD6A4", 0xfcd6a4)),
-                ("road_secondary", e("#F7FABF", 0xf7fabf)),
-                ("pedestrian", e("#DDDDE8", 0xdddde8)),
-                ("parking", e("#EEEEEE", 0xeeeeee)),
-                ("rail_main", e("#707070", 0x707070)),
-                ("rail_subway", e("#999999", 0x999999)),
-                ("runway", e("#BBBBCC", 0xbbbbcc)),
-                ("taxiway", e("#BBBBCC", 0xbbbbcc)),
-            ],
-        ),
-        (
-            "block",
-            &[
-                ("white", e("#f7f7f7", 0xf7f7f7)),
-                ("grey", e("#8d8d8d", 0x8d8d8d)),
-                ("dark_grey", e("#3f3f3f", 0x3f3f3f)),
-                ("black", e("#191919", 0x191919)),
-                ("red", e("#b01313", 0xb01313)),
-                ("pink", e("#ff8787", 0xff8787)),
-                ("brown", e("#572b00", 0x572b00)),
-                ("orange", e("#d44e14", 0xd44e14)),
-                ("yellow", e("#ffe611", 0xffe611)),
-                ("green", e("#60dc1e", 0x60dc1e)),
-                ("dark_green", e("#206700", 0x206700)),
-                ("cyan", e("#008c94", 0x008c94)),
-                ("blue", e("#004791", 0x004791)),
-                ("violet", e("#57039f", 0x57039f)),
-                ("magenta", e("#c9036d", 0xc9036d)),
-            ],
-        ),
-    ],
-};
+/// `land`'s colour for a type, by its number.
+pub const fn land(t: u8) -> Option<Swatch> {
+    match t {
+        cube_types::land::bare => Some(Swatch::new("#EEE5DC", 0xeee5dc)),
+        cube_types::land::sea => Some(Swatch::new("#AAD3DF", 0xaad3df)),
+        cube_types::land::green_deep => Some(Swatch::new("#ADD19E", 0xadd19e)),
+        cube_types::land::green_light => Some(Swatch::new("#C8FACC", 0xc8facc)),
+        cube_types::land::sand => Some(Swatch::new("#F5E9C6", 0xf5e9c6)),
+        cube_types::land::residential => Some(Swatch::new("#E0DFDF", 0xe0dfdf)),
+        cube_types::land::commercial => Some(Swatch::new("#F2DAD9", 0xf2dad9)),
+        cube_types::land::industrial => Some(Swatch::new("#EBDBE8", 0xebdbe8)),
+        cube_types::land::sports => Some(Swatch::new("#88E0BE", 0x88e0be)),
+        cube_types::land::education => Some(Swatch::new("#FFFFE5", 0xffffe5)),
+        cube_types::land::medical => Some(Swatch::new("#FFFFE5", 0xffffe5)),
+        cube_types::land::public => Some(Swatch::new("#FFFFE5", 0xffffe5)),
+        cube_types::land::apron => Some(Swatch::new("#DADAE0", 0xdadae0)),
+        cube_types::land::helipad => Some(Swatch::new("#BBBBCC", 0xbbbbcc)),
+        _ => None,
+    }
+}
+
+/// `water`'s colour for a type, by its number.
+pub const fn water(t: u8) -> Option<Swatch> {
+    match t {
+        cube_types::water::river => Some(Swatch::new("#AAD3DF", 0xaad3df)),
+        cube_types::water::lake => Some(Swatch::new("#AAD3DF", 0xaad3df)),
+        cube_types::water::wetland => Some(Swatch::new("#AAD3DF", 0xaad3df)),
+        _ => None,
+    }
+}
+
+/// `structure`'s colour for a type, by its number.
+pub const fn structure(t: u8) -> Option<Swatch> {
+    match t {
+        cube_types::structure::building => Some(Swatch::new("#D9D0C9", 0xd9d0c9)),
+        cube_types::structure::building_station => Some(Swatch::new("#C4B6AB", 0xc4b6ab)),
+        cube_types::structure::building_medical => Some(Swatch::new("#D9D0C9", 0xd9d0c9)),
+        cube_types::structure::building_education => Some(Swatch::new("#D9D0C9", 0xd9d0c9)),
+        cube_types::structure::building_public => Some(Swatch::new("#D9D0C9", 0xd9d0c9)),
+        _ => None,
+    }
+}
+
+/// `transport`'s colour for a type, by its number.
+pub const fn transport(t: u8) -> Option<Swatch> {
+    match t {
+        cube_types::transport::road_default => Some(Swatch::new("#FFFFFF", 0xffffff)),
+        cube_types::transport::road_motorway => Some(Swatch::new("#E892A2", 0xe892a2)),
+        cube_types::transport::road_primary => Some(Swatch::new("#FCD6A4", 0xfcd6a4)),
+        cube_types::transport::road_secondary => Some(Swatch::new("#F7FABF", 0xf7fabf)),
+        cube_types::transport::pedestrian => Some(Swatch::new("#DDDDE8", 0xdddde8)),
+        cube_types::transport::parking => Some(Swatch::new("#EEEEEE", 0xeeeeee)),
+        cube_types::transport::rail_main => Some(Swatch::new("#707070", 0x707070)),
+        cube_types::transport::rail_subway => Some(Swatch::new("#999999", 0x999999)),
+        cube_types::transport::runway => Some(Swatch::new("#BBBBCC", 0xbbbbcc)),
+        cube_types::transport::taxiway => Some(Swatch::new("#BBBBCC", 0xbbbbcc)),
+        _ => None,
+    }
+}
+
+/// `block`'s colour for a type, by its number.
+pub const fn block(t: u8) -> Option<Swatch> {
+    match t {
+        cube_types::block::white => Some(Swatch::new("#f7f7f7", 0xf7f7f7)),
+        cube_types::block::grey => Some(Swatch::new("#8d8d8d", 0x8d8d8d)),
+        cube_types::block::dark_grey => Some(Swatch::new("#3f3f3f", 0x3f3f3f)),
+        cube_types::block::black => Some(Swatch::new("#191919", 0x191919)),
+        cube_types::block::red => Some(Swatch::new("#b01313", 0xb01313)),
+        cube_types::block::pink => Some(Swatch::new("#ff8787", 0xff8787)),
+        cube_types::block::brown => Some(Swatch::new("#572b00", 0x572b00)),
+        cube_types::block::orange => Some(Swatch::new("#d44e14", 0xd44e14)),
+        cube_types::block::yellow => Some(Swatch::new("#ffe611", 0xffe611)),
+        cube_types::block::green => Some(Swatch::new("#60dc1e", 0x60dc1e)),
+        cube_types::block::dark_green => Some(Swatch::new("#206700", 0x206700)),
+        cube_types::block::cyan => Some(Swatch::new("#008c94", 0x008c94)),
+        cube_types::block::blue => Some(Swatch::new("#004791", 0x004791)),
+        cube_types::block::violet => Some(Swatch::new("#57039f", 0x57039f)),
+        cube_types::block::magenta => Some(Swatch::new("#c9036d", 0xc9036d)),
+        _ => None,
+    }
+}
+
+/// A ground channel's colour for a type: its own, or `common`'s for a
+/// sentinel a baked cell can hold.
+pub const fn ground(channel: GroundChannelKey, t: u8) -> Option<Swatch> {
+    let own = match channel {
+        GroundChannelKey::LAND => land(t),
+        GroundChannelKey::WATER => water(t),
+        GroundChannelKey::STRUCTURE => structure(t),
+        GroundChannelKey::TRANSPORT => transport(t),
+    };
+    match own {
+        Some(swatch) => Some(swatch),
+        None => common(t),
+    }
+}

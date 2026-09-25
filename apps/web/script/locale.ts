@@ -4,7 +4,8 @@
 //
 // The rest of the chain from a stored number to what a person reads is held
 // by something already: spec.ts writes the numbering from cube_type.json,
-// cell/type.ts throws on a colour keyed by a type no channel has, and a
+// the colour table it writes from color.json does not compile against a type
+// no channel has, and a
 // texture the pack lacks falls back to the cube's own colour. The last link
 // is the only silent one — i18next renders a missing key as the key itself,
 // so a catalog entry nobody translated reads as `cubes.land.bare` on screen
@@ -13,7 +14,7 @@
 
 import { dirname, join } from "@std/path";
 
-import { decor_ids, placeable_cubes, placeableCubeId } from "../src/catalog/cell/mod.ts";
+import { decor_kinds, decorName, placeable_cubes, placeableCubeChannel, placeableCubeId } from "../src/catalog/cell/mod.ts";
 
 const web = dirname(dirname(new URL(import.meta.url).pathname));
 const LOCALES = ["en", "ko"];
@@ -41,12 +42,12 @@ function branch(locale: string, doc: Catalogue, name: string, want: string[]): v
 }
 
 const cube_ids = placeable_cubes.map(placeableCubeId);
-const channels = [...new Set(placeable_cubes.map((cube) => cube.channel))];
+const channels = [...new Set(placeable_cubes.map(placeableCubeChannel))];
 
 for (const locale of LOCALES) {
   const doc: Catalogue = JSON.parse(await Deno.readTextFile(join(web, `src/locale/${locale}.json`)));
   branch(locale, doc, "cubes", cube_ids);
-  branch(locale, doc, "decors", [...decor_ids]);
+  branch(locale, doc, "decors", decor_kinds.map(decorName));
   // The drawer groups the catalog by channel, one heading each.
   const sections = doc["drawer_modal"];
   branch(locale, typeof sections === "object" ? sections : {}, "sections", channels);

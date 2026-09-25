@@ -6,13 +6,14 @@ import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { Eraser, LayoutGrid, MessageCircle, MousePointer, Palette, Send, TreePine } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import type { f64, u32, u8 } from "@xpute/core/abi/word.ts";
 import { cn } from "@/shared/lib/util/cn.ts";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { useAppContext } from "@/app/provider/context.ts";
 import { useUiStore } from "@/app/store/ui-store.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
-import { type DecorId, placeable_cubes, type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
+import { decorName, type PlaceableCube, placeableCubeChannel, placeableCubeId, sameCube } from "@/catalog/cell/mod.ts";
+import type { DecorId } from "@/catalog/cell/decor.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 import { cubeSwatchStyle } from "./cube-swatch.ts";
 
@@ -194,10 +195,10 @@ function SizeFlyout({ anchor, dragIndex, itemRefs, object_tier, sizes }: SizeFly
 function ColorSwatchButton({ cube }: { cube: PlaceableCube }) {
   const { t } = useTranslation();
   const activeTool = useUiStore((s) => s.activeTool);
-  const objectColorId = useUiStore((s) => s.objectColorId);
+  const held = useUiStore((s) => s.cube);
   const object_tier = useUiStore((s) => s.object_tier);
   const sizes = useKernel((s) => s.object_sizes);
-  const selectCube = (pick: PlaceableCube) => useUiStore.getState().selectCube(placeableCubeId(pick));
+  const selectCube = useUiStore.getState().selectCube;
 
   const { menuOpen, anchor, dragIndex, itemRefs, buttonRef, onPointerDown } = useSizeFlyout(() => selectCube(cube));
 
@@ -215,7 +216,7 @@ function ColorSwatchButton({ cube }: { cube: PlaceableCube }) {
           style={cubeSwatchStyle(cube)}
           className={cn(
             "w-5 h-5 rounded-full transition-transform",
-            activeTool === ActiveTool.Object && objectColorId === placeableCubeId(cube) ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
+            activeTool === ActiveTool.Object && sameCube(held, cube) ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
           )}
         />
       </button>
@@ -227,30 +228,31 @@ function ColorSwatchButton({ cube }: { cube: PlaceableCube }) {
 // (ui-store.ts) is one shared MRU list across cube and decor: unlike a
 // ColorSwatchButton, a decor pick has no size flyout of its own (DECOR_SIZE
 // is fixed, pxl-kernel layer/object/size.rs), so this stays a plain tap button.
-function DecorIconButton({ id }: { id: DecorId }) {
+function DecorIconButton({ kind }: { kind: u8 }) {
   const { t } = useTranslation();
   const activeTool = useUiStore((s) => s.activeTool);
-  const decor_id = useUiStore((s) => s.decor_id);
+  const held = useUiStore((s) => s.decor);
   const selectDecor = useUiStore.getState().selectDecor;
-  const Icon = DECOR_ICONS[id];
-  const active = activeTool === ActiveTool.Decor && decor_id === id;
+  const name = decorName(kind);
+  const Icon = DECOR_ICONS[name];
+  const active = activeTool === ActiveTool.Decor && held === kind;
 
   return (
     <button
       type="button"
-      onClick={() => selectDecor(id)}
+      onClick={() => selectDecor(kind)}
       className={cn(
         "flex items-center justify-center w-[38px] h-[38px] rounded-full cursor-pointer transition-colors shrink-0",
         active ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
       )}
-      title={t(`decors.${id}`)}
+      title={t(`decors.${name}`)}
     >
       <Icon className="w-5 h-5" strokeWidth={2} />
     </button>
   );
 }
 
-// Icon per decor id — TypeScript enforces one entry per DecorId, so
+// Icon per decor kind, by name — TypeScript enforces one entry per DecorId, so
 // adding a new decor kind (decor.spec.ts's own decor_types) can't silently ship
 // without a button icon for it. Lives here (this file's own DecorIconButton
 // is one consumer) and is also imported by drawer-modal.tsx's own
@@ -513,9 +515,9 @@ export function ModeBar() {
 
                   <div className="flex items-center px-[4px] min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     {recentPicks.map((pick) =>
-                      pick.kind === "object"
-                        ? <ColorSwatchButton key={`object:${pick.id}`} cube={placeable_cubes.find((c) => placeableCubeId(c) === pick.id)!} />
-                        : <DecorIconButton key={`decor:${pick.id}`} id={pick.id} />
+                      pick.tool === ActiveTool.Object
+                        ? <ColorSwatchButton key={`${placeableCubeChannel(pick.cube)}:${pick.cube.type}`} cube={pick.cube} />
+                        : <DecorIconButton key={`decor:${pick.kind}`} kind={pick.kind} />
                     )}
                   </div>
 

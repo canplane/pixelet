@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use super::*;
-use crate::cell::cube::cube_types;
+use crate::cell::cube::{cube_types, ground_pack};
 
 #[test]
 fn cube_types_common_void_is_zero_sparse_tree_absence() {
@@ -25,74 +25,63 @@ fn cube_types_common_air_unknown_the_two_reserved_sentinels() {
     assert!(!object_value_is_air(cube_types::block::white as u32));
 }
 
+/// A cube spelled as the shell spells it, `"land.bare"`: the words the
+/// record kept, from the catalog's name tables.
+fn spelled(cube: PlaceableCube) -> String {
+    let (channel, t) = placeable_cube_parts(cube);
+    let name = channel.map_or("block", |c| ground_pack::CHANNELS[c as usize]);
+    let entries = cube_types::CHANNELS.iter().find(|(n, _)| *n == name).unwrap().1;
+    format!("{name}.{}", entries.iter().find(|(_, x)| *x == t).unwrap().0)
+}
+
 #[test]
-fn cube_num_id_cube_hex_cube_id_from_num_round_trip_every_flat_color() {
-    for id in cube_ids.iter() {
-        let num_id = cube_num_id(id);
-        assert_eq!(cube_id_from_num(num_id), *id);
-        assert!(!cube_hex(id).is_empty());
+fn every_flat_colour_round_trips_through_its_leaf_value_and_has_a_colour() {
+    for block in block_cubes() {
+        let cube = PlaceableCube::Block(block);
+        assert_eq!(placeable_cube_num_id(cube), block as u32);
+        assert_eq!(placeable_cube_of(block as u32), Some(cube));
+        assert_eq!(terrain_style_cube_source(cube), None);
+        assert!(placeable_cube_rgb(cube).is_some(), "{}", spelled(cube));
     }
 }
 
 #[test]
-#[should_panic]
-fn cube_id_from_num_throws_for_an_unregistered_numeric_id() {
-    cube_id_from_num(0);
-}
-
-#[test]
-fn cube_ids_no_two_entries_collide_on_the_same_numeric_id() {
-    let mut seen = HashSet::new();
-    for id in cube_ids.iter() {
-        let num_id = cube_num_id(id);
-        assert!(seen.insert(num_id), "duplicate numeric id {num_id} ({id})");
+fn a_cube_named_by_its_channel_and_number_is_the_cube() {
+    for &cube in placeable_cubes.iter() {
+        let (channel, t) = placeable_cube_parts(cube);
+        assert_eq!(placeable_cube(channel, t as u32), Some(cube), "{}", spelled(cube));
     }
+    assert_eq!(placeable_cube(None, cube_types::common::air as u32), None, "air is no flat colour");
+    assert_eq!(placeable_cube(Some(GroundChannelKey::WATER), cube_types::common::unknown as u32), None, "unknown is no water cube");
 }
 
 #[test]
-fn placeable_cube_round_trips_a_terrain_styled_cube_derived_from_cube_types_own_land_water_structure_transport_channels() {
+fn a_terrain_styled_cube_round_trips_through_its_leaf_value() {
     let cube = terrain_style_cube_for(GroundChannelKey::LAND, cube_types::land::green_deep as u32).unwrap();
-    assert_eq!(placeable_cube_id(cube), "land.green_deep");
-    let num_id = placeable_cube_num_id(cube);
-    assert_eq!(placeable_cube_of(num_id), Some(cube));
-    assert!(placeable_cube_hex(cube).is_some());
-}
-
-#[test]
-fn placeable_cube_a_flat_color_still_routes_through_cube_num_id_cube_hex_not_the_terrain_style_path() {
-    let white = placeable_cube_of(cube_types::block::white as u32).unwrap();
-    assert_eq!(terrain_style_cube_source(white), None);
-    assert_eq!(placeable_cube_num_id(white), cube_num_id("white"));
-    assert_eq!(placeable_cube_hex(white), Some(cube_hex("white")));
+    assert_eq!(cube, PlaceableCube::Land(cube_types::Land::green_deep));
+    assert_eq!(placeable_cube_of(placeable_cube_num_id(cube)), Some(cube));
+    assert!(placeable_cube_rgb(cube).is_some());
 }
 
 #[test]
 fn placeable_cubes_every_flat_color_and_every_terrain_styled_entry_no_duplicates() {
     let mut seen = HashSet::new();
     for &cube in placeable_cubes.iter() {
-        let id = placeable_cube_id(cube);
-        assert!(seen.insert(id.clone()), "duplicate placeable id {id}");
-    }
-    // Every terrain-styled entry adds to cube_ids' own 15 flat colors, never replaces one.
-    assert_eq!(seen.len(), placeable_cubes.len());
-    assert!(placeable_cubes.len() > cube_ids.len());
-    // Every flat color is present, under the block channel like any other...
-    for id in cube_ids.iter() {
-        assert!(seen.contains(&format!("block.{id}")));
-    }
-    // ...and at least one terrain-styled entry per channel is present.
-    assert!(seen.contains("land.green_deep"));
-    assert!(seen.contains("water.river"));
-    assert!(seen.contains("structure.building"));
-    assert!(seen.contains("transport.road_default"));
-}
-
-#[test]
-fn placeable_cube_num_id_a_terrain_styled_cube_never_collides_with_a_flat_color_s_own_global_byte() {
-    let mut seen = HashSet::new();
-    for &cube in placeable_cubes.iter() {
         let num_id = placeable_cube_num_id(cube);
-        assert!(seen.insert(num_id), "duplicate global byte {num_id} ({})", placeable_cube_id(cube));
+        assert!(seen.insert(num_id), "duplicate global byte {num_id} ({})", spelled(cube));
+    }
+    // Every terrain-styled entry adds to the flat colours, never replaces one.
+    assert!(placeable_cubes.len() > block_cubes().len());
+    for block in block_cubes() {
+        assert!(placeable_cubes.contains(&PlaceableCube::Block(block)));
+    }
+    for cube in [
+        PlaceableCube::Land(cube_types::Land::green_deep),
+        PlaceableCube::Water(cube_types::Water::river),
+        PlaceableCube::Structure(cube_types::Structure::building),
+        PlaceableCube::Transport(cube_types::Transport::road_default),
+    ] {
+        assert!(placeable_cubes.contains(&cube), "{}", spelled(cube));
     }
 }
 
@@ -123,11 +112,22 @@ fn the_catalogs_are_what_the_record_holds() {
         })
         .collect();
     assert_eq!(channels, want);
-    let colors: Vec<(String, Vec<String>)> = cube_colors
-        .0
-        .iter()
-        .map(|(ch, c)| (ch.to_string(), c.iter().map(|(n, swatch)| format!("{n}={}", swatch.map_or("null", |s| s.hex))).collect()))
-        .collect();
+    // A channel's colours as the record listed them: its sentinels, which a
+    // ground channel shares with `common`, then every type with a colour, by
+    // number.
+    let listed = |name: &str, colour: &dyn Fn(u8) -> Option<crate::cell::r#type::Swatch>, sentinels: &[u8], own: &[u8]| {
+        let mut numbers: Vec<u8> = sentinels.iter().copied().chain(own.iter().copied().filter(|&t| colour(t).is_some())).collect();
+        numbers.sort();
+        numbers.dedup();
+        (name.to_string(), numbers.iter().map(|&n| format!("{n}={}", colour(n).map_or("null", |s| s.hex))).collect::<Vec<_>>())
+    };
+    let (void, air, unknown) = (cube_types::common::void, cube_types::common::air, cube_types::common::unknown);
+    let mut colors = vec![listed("common", &color::common, &[void, air, unknown], &[])];
+    for channel in GroundChannelKey::ALL {
+        colors.push(listed(ground_pack::CHANNELS[channel as usize], &|t| color::ground(channel, t), &[void, unknown], &own_types(channel)));
+    }
+    let blocks: Vec<u8> = block_cubes().iter().map(|b| *b as u8).collect();
+    colors.push(listed("block", &color::block, &[], &blocks));
     let want: Vec<(String, Vec<String>)> = (0..v.len("colors"))
         .map(|j| {
             (
@@ -137,7 +137,13 @@ fn the_catalogs_are_what_the_record_holds() {
         })
         .collect();
     assert_eq!(colors, want);
-    let ids: Vec<String> = cube_ids.iter().map(|id| format!("{id}={}={}", cube_num_id(id), cube_hex(id))).collect();
+    let ids: Vec<String> = block_cubes()
+        .into_iter()
+        .map(|b| {
+            let cube = PlaceableCube::Block(b);
+            format!("{}={}={}", spelled(cube).trim_start_matches("block."), b as u8, placeable_cube_swatch(cube).unwrap().hex)
+        })
+        .collect();
     assert_eq!(ids, list(&v, "cube_ids"));
     let ids: Vec<String> = decor_ids.iter().map(|id| format!("{id:?}={}", decor_num_id(*id))).collect();
     assert_eq!(ids, list(&v, "decor_ids"));
@@ -145,13 +151,13 @@ fn the_catalogs_are_what_the_record_holds() {
     v.each("placeable", |k| {
         let cube = placeable_cubes[n];
         n += 1;
-        assert_eq!(placeable_cube_id(cube), v.s(&format!("{k}.id")), "{k}.id");
+        assert_eq!(spelled(cube), v.s(&format!("{k}.id")), "{k}.id");
         let num = placeable_cube_num_id(cube);
         assert_eq!(num, v.u32(&format!("{k}.num")), "{k}.num");
-        assert_eq!(placeable_cube_hex(cube).unwrap_or("null"), v.s(&format!("{k}.hex")), "{k}.hex");
-        assert_eq!(placeable_cube_id(placeable_cube_of(num).unwrap()), v.s(&format!("{k}.back")), "{k}.back");
+        assert_eq!(placeable_cube_swatch(cube).map_or("null", |s| s.hex), v.s(&format!("{k}.hex")), "{k}.hex");
+        assert_eq!(spelled(placeable_cube_of(num).unwrap()), v.s(&format!("{k}.back")), "{k}.back");
         let source = match terrain_style_cube_source(cube) {
-            Some(s) => format!("{}.{}", s.channel.as_str(), s.terrain_num_id),
+            Some(s) => format!("{}.{}", ground_pack::CHANNELS[s.channel as usize], s.terrain_num_id),
             None => "none".to_string(),
         };
         assert_eq!(source, v.s(&format!("{k}.source")), "{k}.source");
@@ -167,7 +173,7 @@ fn the_catalogs_are_what_the_record_holds() {
     .into_iter()
     .enumerate()
     {
-        let got = terrain_style_cube_for(ch, num).map_or("null".to_string(), placeable_cube_id);
+        let got = terrain_style_cube_for(ch, num).map_or("null".to_string(), spelled);
         assert_eq!(got, v.s(&format!("style_for.{j}")), "style_for.{j}");
     }
 }

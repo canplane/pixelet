@@ -34,7 +34,7 @@ import {
   read_world_update,
   type Snapshot,
 } from "@/kernel/abi/cmd.spec.ts";
-import { cube_types } from "@/catalog/cell/cube.ts";
+import { cube_types } from "@/catalog/cell/cube_type.spec.ts";
 import { BAKE_KINDS } from "@/config/published.spec.ts";
 import { SETTINGS } from "@/feature/setting/schema.spec.ts";
 

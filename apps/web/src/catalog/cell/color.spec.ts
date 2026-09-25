@@ -15,6 +15,13 @@ export default {
   _meta: {
     source: "land/water/structure/transport: OpenStreetMap Carto; block: hand-picked",
   },
+  common: {
+    unknown: {
+      hex: "#D9D0CC",
+      note: "A cell whose data is missing or invalid, a visible neutral grey so it reads as not known rather than as whatever drew last.",
+      rgb: 14274764,
+    },
+  },
   land: {
     bare: {
       hex: "#EEE5DC",

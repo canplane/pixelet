@@ -37,10 +37,11 @@ use flate2::write::ZlibEncoder;
 use flate2::{Compression, Crc};
 use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
 use pxl_spec::bake::format::decode_terrain;
+use pxl_spec::bake::format::GroundChannelKey;
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::cell::cube::ground_pack;
-use pxl_spec::cell::{cube_colors, cube_types};
+use pxl_spec::cell::{color, cube_types};
 use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};
 
 const MAGENTA: u32 = 0xff00ff;
@@ -195,11 +196,11 @@ fn heights_png(page: &Page, s: &Summary) -> Vec<u8> {
 
 /// Channel `f` in the palette's colours.
 fn channel_png(page: &Page, f: usize) -> Vec<u8> {
-    let swatches = cube_colors.get(ground_pack::CHANNELS[f]);
+    let channel = GroundChannelKey::from_id(f as u32).expect("a packed field is a ground channel");
     let rgb_of = |cell: GroundCell| match ground_pack::NUMBER[f].get(index_of(cell, f)) {
         None => MAGENTA,
         Some(&n) if n == cube_types::common::void => 0,
-        Some(&n) => swatches.and_then(|c| c.get(&(n as u32))).copied().flatten().map_or(MAGENTA, |s| s.rgb),
+        Some(&n) => color::ground(channel, n).map_or(MAGENTA, |s| s.rgb),
     };
     let px: Vec<u8> = page
         .cells

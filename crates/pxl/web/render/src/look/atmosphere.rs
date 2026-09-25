@@ -61,10 +61,7 @@ pub const GROUND_ALBEDO: f64 = 0.3;
 pub fn land() -> [f64; 3] {
     use pxl_spec::bake::format::GroundChannelKey;
     use pxl_spec::cell::cube_types;
-    use pxl_spec::cell::object::ground_channel_colors;
-    let swatch = ground_channel_colors(GroundChannelKey::LAND)
-        .and_then(|c| c.get(&(cube_types::land::green_deep as u32)).copied().flatten())
-        .expect("the palette has a forest");
+    let swatch = pxl_spec::cell::color::ground(GroundChannelKey::LAND, cube_types::land::green_deep).expect("the palette has a forest");
     crate::look::color::linear_rgb(swatch.rgb)
 }
 /// The sun's disc, as seen from the Earth.

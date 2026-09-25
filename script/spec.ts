@@ -533,37 +533,38 @@ async function colorOutputs(): Promise<Output[]> {
     "",
     "export default " + JSON.stringify(packedSpec, null, 2).replace(/"([A-Za-z_][A-Za-z0-9_]*)":/g, "$1:").replace(/\n(\s*)\}/g, ",\n$1}").replace(/\n(\s*)\]/g, ",\n$1]") + ";",
   ];
-  const rs = [
-    "// pxl-spec/cell/color.spec.rs",
-    ...head,
-    "//",
-    "// `default` is the TypeScript module's default export, the colour file",
-    "// cube.rs builds its colours from.",
-    "",
-    ...RS_CASING_NOTE,
-    "#![allow(non_upper_case_globals)]",
-    "",
-  ];
-  rs.push("use super::r#type::{ColorJsonEntry, ColorJsonFile, ColorJsonMeta};", "");
-  rs.push("const fn e(hex: &'static str, rgb: u32) -> ColorJsonEntry {", "    ColorJsonEntry { hex, rgb, note: None }", "}", "");
-  rs.push("pub const default: ColorJsonFile = ColorJsonFile {");
-  const opt = (s?: string) => (s === undefined ? "None" : `Some(${JSON.stringify(s)})`);
-  rs.push(spec._meta ? `    _meta: Some(ColorJsonMeta { description: ${opt(spec._meta.description)}, source: ${opt(spec._meta.source)} }),` : "    _meta: None,");
-  rs.push("    channels: &[");
+  // What the Rust holds is each channel's colour as a function of its type's
+  // number, matched on the catalog's own constants, so nothing there finds a
+  // channel or a type by its name. A ground channel falls back to `common`'s,
+  // which is what a sentinel a baked cell can hold (VOID, UNKNOWN) shows as.
+  const types = await readJson<CubeSpec>("spec/pxl/spec/cell/cube_type.json");
+  const rs = ["// pxl-spec/cell/color.spec.rs", ...head, "", ...RS_CASING_NOTE, "", "use super::cube_type::{cube_types, GroundChannelKey};", "use super::r#type::Swatch;"];
   for (const [ch, entries] of Object.entries(spec)) {
     if (ch === "_meta") continue;
-    rs.push(`        (`, `            ${JSON.stringify(ch)},`, "            &[");
+    const channel = types.channels.find((c) => c.name === ch);
+    if (!channel) throw new Error(`color.json: ${ch} is no channel cube_type.json has`);
+    rs.push("", `/// \`${ch}\`'s colour for a type, by its number.`, `pub const fn ${ch}(t: u8) -> Option<Swatch> {`, "    match t {");
     for (const [name, entry] of Object.entries(entries as Record<string, { hex: string; note?: string }>)) {
-      const rgb = `0x${packed(entry.hex).toString(16).padStart(6, "0")}`;
-      rs.push(
-        entry.note === undefined
-          ? `                (${JSON.stringify(name)}, e(${JSON.stringify(entry.hex)}, ${rgb})),`
-          : `                (${JSON.stringify(name)}, ColorJsonEntry { hex: ${JSON.stringify(entry.hex)}, rgb: ${rgb}, note: Some(${JSON.stringify(entry.note)}) }),`,
-      );
+      if (!channel.entries.some((e) => "name" in e && e.name === name)) throw new Error(`color.json: ${ch}.${name} is no type cube_type.json has`);
+      if (entry.note !== undefined) rs.push(`        // ${entry.note}`);
+      rs.push(`        cube_types::${ch}::${rsIdent(name)} => Some(Swatch::new(${JSON.stringify(entry.hex)}, ${rgbLiteral(entry.hex)})),`);
     }
-    rs.push("            ],", "        ),");
+    rs.push("        _ => None,", "    }", "}");
   }
-  rs.push("    ],", "};");
+  rs.push(
+    "",
+    "/// A ground channel's colour for a type: its own, or `common`'s for a",
+    "/// sentinel a baked cell can hold.",
+    "pub const fn ground(channel: GroundChannelKey, t: u8) -> Option<Swatch> {",
+    "    let own = match channel {",
+    ...GROUND_CHANNELS.map((name) => `        GroundChannelKey::${name.toUpperCase()} => ${name}(t),`),
+    "    };",
+    "    match own {",
+    "        Some(swatch) => Some(swatch),",
+    "        None => common(t),",
+    "    }",
+    "}",
+  );
   return [
     { path: "apps/web/src/catalog/cell/color.spec.ts", text: ts.join("\n") + "\n" },
     { path: "crates/pxl/spec/src/cell/color.spec.rs", text: rs.join("\n") + "\n" },
@@ -576,9 +577,10 @@ interface CubeSpec {
   channels: { name: string; note?: string[]; entries: CubeEntry[] }[];
 }
 
-/// The ground channels in the order their fields sit in a packed cell, which
-/// is the JSON's own order among them. `bake/format.rs` reads them through
-/// `GroundChannelKey`, and its `from_name` is what ties the two together.
+/// The ground channels, numbered by their place here: that number is
+/// `GroundChannelKey`'s, which is a channel's identity in what the object
+/// store holds, and the field a packed cell holds it in. Appending one is
+/// free; moving one renumbers stored placements.
 const GROUND_CHANNELS = ["land", "water", "structure", "transport"];
 
 /// A ground cell's four channels packed into one word, for Rust alone: the
@@ -653,7 +655,8 @@ function groundPack(spec: CubeSpec): { rs: string[]; ts: string[] } {
     "    use super::cube_types::*;",
     "",
     "    /// The channels a packed cell holds, in the order their fields sit in",
-    `    /// the word. \`bake/format.rs\` reads them by name.`,
+    "    /// the word, by name for a tool that prints one. A field is found by",
+    "    /// `GroundChannelKey`'s number, which is this order.",
     `    pub const CHANNELS: [&str; ${tables.length}] = [${tables.map((t) => JSON.stringify(t.name)).join(", ")}];`,
     "",
     "    /// The catalog number each dense index names, a channel a row.",
@@ -686,13 +689,52 @@ async function cubeTypeOutputs(): Promise<Output[]> {
     "//",
     "// GENERATED by script/spec.ts from cube_type.json — do not edit.",
     "//",
-    "// The cube catalog's numbering, every channel a name per value; cube.ts",
-    "// builds the colours from it and its top comment says what each channel",
-    "// is.",
+    "// The cube catalog's numbering, every channel a name per value;",
+    "// color.json colours it by the same names, and pxl-spec cell/cube.rs says",
+    "// what each channel is.",
   ];
-  const ts = ["// @pxl/web/catalog/cell/cube_type.spec.ts", ...head, "", "export const cube_types = {"];
+  const keyDoc = [
+    "A ground channel: one of the four a baked cell is painted in. The number is",
+    "its identity — the number a stored value names it by, such as a",
+    "terrain-styled cube's — and the field a packed cell holds it in",
+    "(`ground_pack`), both written from one list; it is not its place in the",
+    "order a cell is painted in (bake/format.rs `GROUND_CH_KEYS`), which can move",
+    "without renumbering anything the object store holds.",
+  ];
+  const keys = GROUND_CHANNELS.map((name, i) => [name.toUpperCase(), i] as const);
+  const ts = [
+    "// @pxl/web/catalog/cell/cube_type.spec.ts",
+    ...head,
+    "",
+    ...tsDoc(keyDoc, ""),
+    "export const enum GroundChannelKey {",
+    ...keys.map(([k, i]) => `  ${k} = ${i},`),
+    "}",
+    "",
+    "export const cube_types = {",
+  ];
   const enums: string[] = [];
   const rs = ["// pxl-spec/cell/cube_type.spec.rs", ...head, "", ...RS_CASING_NOTE, "#![allow(non_camel_case_types, non_upper_case_globals)]", "", "use super::r#type::Channels;", ""];
+  rs.push(...rsDoc(keyDoc, ""), "#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]", "#[repr(u8)]", "pub enum GroundChannelKey {", ...keys.map(([k, i]) => `    ${k} = ${i},`), "}", "");
+  rs.push(
+    "impl GroundChannelKey {",
+    `    pub const ALL: [GroundChannelKey; ${keys.length}] = [${keys.map(([k]) => `GroundChannelKey::${k}`).join(", ")}];`,
+    "",
+    "    /// The channel a stored identity names, the reverse of `self as u8`.",
+    "    pub const fn from_id(id: u32) -> Option<GroundChannelKey> {",
+    "        match id {",
+    ...keys.map(([k, i]) => `            ${i} => Some(GroundChannelKey::${k}),`),
+    "            _ => None,",
+    "        }",
+    "    }",
+    "",
+    "    /// The same, from the byte a packet carries it as.",
+    "    pub const fn of(id: u8) -> Option<GroundChannelKey> {",
+    "        GroundChannelKey::from_id(id as u32)",
+    "    }",
+    "}",
+    "",
+  );
   rs.push(
     "/// The catalog: a module per channel, each type a constant, and `ENTRIES`",
     "/// the channel as the object's keys walk it. `CHANNELS` is `cube_types`",
@@ -775,7 +817,7 @@ async function cubeTypeOutputs(): Promise<Output[]> {
     "",
     ...rsDoc(spec.base.doc, "    "),
     "    pub mod base {",
-    `        pub const CHANNEL: &str = ${JSON.stringify(spec.base.channel)};`,
+    `        pub const CHANNEL: super::super::GroundChannelKey = super::super::GroundChannelKey::${spec.base.channel.toUpperCase()};`,
     `        pub const TYPE: u8 = super::${spec.base.channel}::${spec.base.type};`,
     "    }",
   );
