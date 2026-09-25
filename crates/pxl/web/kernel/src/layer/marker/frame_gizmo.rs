@@ -340,15 +340,7 @@ fn write_labels(g: &mut Gizmos) {
 }
 
 fn set_lines(at: V3, vertices: &[f32]) {
-    let k = kernel();
-    let Some(volumes) = k.volumes.as_mut() else { return };
-    let mut world = World {
-        volumes,
-        materials: &k.terrain,
-        store: &k.objects,
-        painter: &mut k.painter,
-    };
-    let sched = &mut k.sched;
+    let Some((mut world, sched, _)) = kernel().world() else { return };
     // SAFETY: the vertices are f32s of the kernel's memory, read before this returns.
     unsafe { sched.debug.set(&mut world, &mut sched.draw, at, (vertices.len() / 6) as u32, vertices.as_ptr() as usize) };
 }

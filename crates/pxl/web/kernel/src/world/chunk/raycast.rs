@@ -521,15 +521,9 @@ pub fn ray_origin(map_origin: IVec) -> [f64; 2] {
 /// local world frame — relative to `map_origin` on X and Y — and so is what
 /// comes back.
 pub fn ray_hit_world(ray: &RayLike, map_origin: IVec, max_dist: f64) -> Option<WorldHit> {
-    let k = kernel();
-    let mut world = World {
-        volumes: k.volumes.as_mut()?,
-        materials: &k.terrain,
-        store: &k.objects,
-        painter: &mut k.painter,
-    };
+    let (mut world, sched, raycast) = kernel().world()?;
     let (o, d) = (ray.origin, ray.direction);
-    let h = k.raycast.hit(&mut world, &mut k.sched, ray_origin(map_origin), [o.x, o.y, o.z], [d.x, d.y, d.z], max_dist)?;
+    let h = raycast.hit(&mut world, sched, ray_origin(map_origin), [o.x, o.y, o.z], [d.x, d.y, d.z], max_dist)?;
     Some(WorldHit {
         material_class: h.material_class as MaterialClass,
         face_normal: h.normal,
@@ -543,15 +537,9 @@ pub fn ray_hit_world(ray: &RayLike, map_origin: IVec, max_dist: f64) -> Option<W
 /// The placed decor entry the ray strikes within `max_dist`, or None:
 /// the kernel's hit test over every placed instance the on-screen chunks show.
 pub fn ray_hit_decor(ray: &RayLike, map_origin: IVec, max_dist: f64) -> Option<DecorHit> {
-    let k = kernel();
-    let world = World {
-        volumes: k.volumes.as_mut()?,
-        materials: &k.terrain,
-        store: &k.objects,
-        painter: &mut k.painter,
-    };
+    let (world, sched, _) = kernel().world()?;
     let (o, d) = (ray.origin, ray.direction);
-    hit_decor(&world, &k.sched, ray_origin(map_origin), [o.x, o.y, o.z], [d.x, d.y, d.z], max_dist)
+    hit_decor(&world, sched, ray_origin(map_origin), [o.x, o.y, o.z], [d.x, d.y, d.z], max_dist)
 }
 
 #[cfg(test)]

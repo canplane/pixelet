@@ -60,16 +60,33 @@ pub fn kernel() -> &'static mut Kernel {
     KERNEL.get(Kernel::new)
 }
 
+impl Kernel {
+    /// The world over the kernel's volumes, materials, objects and painter,
+    /// with the scheduler and the raycast beside it: each a field of its own,
+    /// so the three are borrowed at once. None before the volumes are opened.
+    pub fn world(&mut self) -> Option<(crate::world::chunk::node::World<'_>, &mut Scheduler, &mut Raycast)> {
+        let Kernel {
+            volumes,
+            terrain,
+            objects,
+            painter,
+            sched,
+            raycast,
+            ..
+        } = self;
+        let world = crate::world::chunk::node::World {
+            volumes: volumes.as_mut()?,
+            materials: terrain,
+            store: objects,
+            painter,
+        };
+        Some((world, sched, raycast))
+    }
+}
+
 /// The kernel's world and its scheduler, borrowed together for a call that
 /// builds, draws or reads the volumes; None before the volumes are opened.
-pub fn with_world<R>(f: impl FnOnce(&mut crate::world::chunk::node::World, &mut crate::world::chunk::table::Scheduler) -> R) -> Option<R> {
-    let k = kernel();
-    let volumes = k.volumes.as_mut()?;
-    let mut world = crate::world::chunk::node::World {
-        volumes,
-        materials: &k.terrain,
-        store: &k.objects,
-        painter: &mut k.painter,
-    };
-    Some(f(&mut world, &mut k.sched))
+pub fn with_world<R>(f: impl FnOnce(&mut crate::world::chunk::node::World, &mut Scheduler) -> R) -> Option<R> {
+    let (mut world, sched, _) = kernel().world()?;
+    Some(f(&mut world, sched))
 }
