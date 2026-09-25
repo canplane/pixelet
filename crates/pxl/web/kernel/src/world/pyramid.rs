@@ -305,7 +305,7 @@ impl<L: Layer> Pyramid<L> {
         for &c in d.roots() {
             let mut own = Cover::default();
             if !self.wanted(d, &below, c, false, &mut own) {
-                over.extend(c.ancestors().find(|a| a.level() >= top && self.get(a.page).is_some()));
+                over.extend(c.ancestors().find(|a| a.level() >= top && self.get(a.page()).is_some()));
             }
             roots.push((c, own));
         }
@@ -327,7 +327,7 @@ impl<L: Layer> Pyramid<L> {
     /// resident chunk over it in the window draws its ground should `c` not
     /// be drawn whole. Whether it is.
     fn wanted(&self, d: &Domain, below: &HashSet<LevelPage>, c: Chunk, above: bool, out: &mut Cover) -> bool {
-        let here = self.source(c.page).is_some();
+        let here = self.source(c.page()).is_some();
         if d.splits(c) {
             let mut finer = Cover::default();
             let mut whole = true;
@@ -356,11 +356,11 @@ impl<L: Layer> Pyramid<L> {
     /// `c` from the resident pages under it, where nothing over it is;
     /// whether it is drawn whole.
     fn stand_in(&self, below: &HashSet<LevelPage>, c: Chunk, out: &mut Cover) -> bool {
-        if self.source(c.page).is_some() {
+        if self.source(c.page()).is_some() {
             out.drawn.push(c);
             return true;
         }
-        if c.level() == 0 || !below.contains(&c.children()[0].page) {
+        if c.level() == 0 || !below.contains(&c.children()[0].page()) {
             out.gaps.push(c);
             return false;
         }

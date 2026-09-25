@@ -81,7 +81,7 @@ pub fn step(ctx: &mut TickContext) {
         // The page that draws the chunk's ground: its own, or where the tree
         // stops above it, the page over it that says that ground — whose cells
         // there hold one place or none, each standing where it stands.
-        let Some(src) = pages.source(chunk.page) else { continue };
+        let Some(src) = pages.source(chunk.page()) else { continue };
         let Some(poi) = pages.get(src) else { continue };
         // The level the view wants the ground at: a finer page standing in
         // counts into its cells, and a coarser one is counted where its places
@@ -93,7 +93,7 @@ pub fn step(ctx: &mut TickContext) {
         // on the chunk's ground.
         let coarser = src.level - chunk.level();
         let m = n >> coarser;
-        let first = POI_LATTICE.cell_of(src.level, &GROUND.cell_base(chunk.page, chunk.bx, chunk.by)).index();
+        let first = POI_LATTICE.cell_of(src.level, &chunk.base()).index();
         let (x0, y0) = (first % across, first / across);
         for ty in y0..y0 + m.max(1) {
             let (lo, hi) = (POI_LATTICE.cell_index(x0, ty), POI_LATTICE.cell_index(x0 + m.max(1), ty));

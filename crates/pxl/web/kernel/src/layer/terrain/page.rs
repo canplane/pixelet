@@ -92,7 +92,7 @@ impl Layer for Terrain {
 
     /// What the mesh can draw of the cover (present.rs).
     fn present(cover: Cover, d: &Domain, pyramid: &Pyramid<Terrain>) -> Cover {
-        crate::layer::terrain::present::mesh(cover, d, |c| pyramid.get(c.page).is_some())
+        crate::layer::terrain::present::mesh(cover, d, |c| pyramid.get(c.page()).is_some())
     }
 
     /// A leaf is what the scheduler mounts from, and what a map centre that

@@ -759,8 +759,9 @@ impl Scheduler {
     /// Chunk `k`, its first tier the one the rule wants for it now.
     fn add(&mut self, id: u32, k: Chunk, root: bool) {
         let level = k.level();
+        let (bx, by) = k.in_page();
+        self.builder.add(id, level, k.base().i, bx, by);
         let (base_x, base_y, _) = k.rect();
-        self.builder.add(id, level, ivec::gather(base_x as i64, base_y as i64, 0), k.bx, k.by);
         let span = chunk_span_of(level);
         let mut slot = Slot {
             id,
@@ -1165,7 +1166,7 @@ impl Scheduler {
             // In the order the builds will take them, which is a distance in
             // the chunk's own sides (`priority`), so a coarse chunk far off
             // goes with a fine one near. Left in the key's own order — a
-            // `Chunk` sorts by its page and a `LevelPage` by its level —
+            // `Chunk` sorts by its level, then its coordinate —
             // the pass mounted every chunk of the finest level before any of
             // the next, and within a level in raw coordinate order rather
             // than by distance. A chunk cannot be built before it is mounted,
@@ -1204,12 +1205,8 @@ impl Scheduler {
             mounts += 1;
             let id = self.next_mount_id;
             self.next_mount_id = self.next_mount_id.wrapping_add(1).max(MOUNT_ID_BASE);
-            emit(Event::Mount {
-                id,
-                page: k.page,
-                base_x: k.bx,
-                base_y: k.by,
-            });
+            let (base_x, base_y) = k.in_page();
+            emit(Event::Mount { id, page: k.page(), base_x, base_y });
             self.add(id, k, root);
             self.mounted.insert(k, id);
         }
@@ -1229,7 +1226,7 @@ impl Scheduler {
             return;
         }
         for (k, &id) in self.mounted.iter() {
-            if self.evicted.contains(&k.page) {
+            if self.evicted.contains(&k.page()) {
                 if let Some(&i) = self.index.get(&id) {
                     self.slots[i].set(STALE, true);
                     self.builder.want(world, id, [None, None]);
