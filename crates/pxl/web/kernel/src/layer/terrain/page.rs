@@ -26,12 +26,12 @@ use crate::host::now;
 use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::policy;
 use crate::io::sched::{declare, pending_count, Rank};
-use crate::layer::terrain::fixed::{ele_off, ground_off, ELE_LANE_BYTES, GROUND_LANE_BYTES, OCEAN_RECORD};
+use crate::layer::terrain::fixed::{ele_off, ground_off, ELE_LANE_BYTES, GROUND_LANE_BYTES};
 use crate::layer::terrain::ground_snap::reground_map_center;
 use crate::mem::fixed::{at, Range};
 use crate::shell::map_store::{map_store, MapStatus};
 use crate::world::pyramid::domain::eye;
-use crate::world::pyramid::{Cover, Domain, Layer, Pyramid};
+use crate::world::pyramid::{Cover, Domain, Layer, Pyramid, ABSENT};
 
 /// Object key of the single shared open-ocean tile in the static bucket.
 pub const OCEAN_KEY: &str = "_ocean";
@@ -177,8 +177,8 @@ fn ocean() -> &'static mut Ocean {
     OCEAN.get(|| Ocean { terrain: None, waiting: Vec::new() })
 }
 
-/// The shared tile's body: written into the ocean's own record, which no
-/// page holds, and given to every page waiting on it.
+/// The shared tile's body: written into `ABSENT`, the record every open-ocean
+/// page reads, and given to every page waiting on it.
 pub fn adopt_ocean(pkt: &[u8]) -> Result<(), FetchFail> {
     if ocean().terrain.is_some() {
         return Ok(());
@@ -187,9 +187,9 @@ pub fn adopt_ocean(pkt: &[u8]) -> Result<(), FetchFail> {
     if decoded.ground.len() != CELLS || decoded.ele.len() != SAMPLES {
         return Err(FetchFail::Decode);
     }
-    let lanes = lanes_of(OCEAN_RECORD)?;
+    let lanes = lanes_of(ABSENT)?;
     write_lanes(&decoded, lanes);
-    // SAFETY: the ocean's record, which no page holds and is written once.
+    // SAFETY: `ABSENT`, which no page takes and is written once.
     let terrain = unsafe { open_terrain(lanes) };
     let o = ocean();
     for p in o.waiting.drain(..) {
@@ -209,8 +209,8 @@ pub fn terrain_step() {
     let device = map_navigation().device_coord.map(|c| LevelPage::new(0, TO_XY(L3_IDX(c.i))));
     let terrain = Terrain::pyramid();
     terrain.pin(device);
-    // A page waiting on the shared tile is held as the view holds a page
-    // with no record: while it keeps it.
+    // A page waiting on the shared tile is held as the view holds a page in
+    // `ABSENT`: while it keeps it.
     if eye().is_some() {
         ocean().waiting.retain(|&p| terrain.keeps(p));
     }

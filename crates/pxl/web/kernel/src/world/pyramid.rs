@@ -72,12 +72,21 @@ pub trait Layer: Folds + Clone + 'static {
 /// marker keeps the ground under it while the view is panned away.
 const PINNED: u32 = 1;
 
-/// Records a layer holds its pages in: every page a view can want at once
-/// (domain.rs `VIEW_PAGES`, which the view's criterion is loosened to fit)
-/// and the pinned page, so every page a layer can want has room — which is
-/// what lets a page wanted never be turned out for another (`record_for`) —
-/// and what the view leaves over is room for pages the camera has left.
-pub const RECORDS: u32 = VIEW_PAGES + PINNED;
+/// The record every page the bake left as no object shares: what such a
+/// page reads as (a layer's `absent`) — the open ocean, a page of no places.
+/// It is a layer's room like any other record, written once, never handed
+/// to a page of its own and never taken back, however many pages read it,
+/// so an absent page is resident the way any page is and needs no state of
+/// its own.
+pub const ABSENT: u32 = 0;
+
+/// Records a layer holds its pages in: `ABSENT`, then one for every page a
+/// view can want at once (domain.rs `VIEW_PAGES`, which the view's criterion
+/// is loosened to fit) and the pinned page, so every page a layer can want
+/// has room — which is what lets a page wanted never be turned out for
+/// another (`record_for`) — and what the view leaves over is room for pages
+/// the camera has left.
+pub const RECORDS: u32 = 1 + VIEW_PAGES + PINNED;
 
 /// What the resident pages draw of a view's `Domain`: the chunks the rule
 /// wants, each drawn from the finest resident page at or over it, and the
@@ -99,11 +108,11 @@ pub struct Cover {
 /// of the same ground, so the second decides nothing again.
 type Wish = ([f64; 3], Frustum, bool, u32, Option<LevelPage>, (u32, u32), u32);
 
-/// A resident page, and the record it lives in: none for a page every such
-/// page shares (a layer's `absent`), which takes no room.
+/// A resident page, and the record it lives in: `ABSENT` for a page the bake
+/// left as no object, which shares it with every other.
 struct Held<L> {
     page: L,
-    record: Option<u32>,
+    record: u32,
 }
 
 pub struct Pyramid<L: Layer> {
@@ -172,14 +181,14 @@ impl<L: Layer> Pyramid<L> {
             .map(|(&p, held)| (p, &held.page))
     }
 
-    /// Sets a page with no record: one every such page shares, which nothing
-    /// will want the room of, so it is held while the view wants it
-    /// (`drop_unrecorded`).
+    /// Sets a page the bake left as no object, in `ABSENT`: nothing will want
+    /// the room of it, so it is held while the view wants it
+    /// (`drop_absent`).
     pub fn set(&mut self, p: LevelPage, page: L) {
-        self.put(p, page, None);
+        self.put(p, page, ABSENT);
     }
 
-    fn put(&mut self, p: LevelPage, page: L, record: Option<u32>) {
+    fn put(&mut self, p: LevelPage, page: L, record: u32) {
         if p.level > 0 {
             self.settled.extend(p.children().into_iter().filter(|&c| page.settles(p, c)));
         }
@@ -302,7 +311,7 @@ impl<L: Layer> Pyramid<L> {
     }
 
     /// Whether the view keeps `p` now: the pinned page, or one the domain
-    /// wants. What a page with no record lives by, and what anything held
+    /// wants. What a page in `ABSENT` lives by, and what anything held
     /// for the view is held by.
     pub fn keeps(&self, p: LevelPage) -> bool {
         keeps(self.pinned, self.domain.as_ref(), p)
@@ -322,15 +331,18 @@ impl<L: Layer> Pyramid<L> {
 
     // ---- records ----
 
+    /// The record `p` holds of its own: none for a page in `ABSENT`, whose
+    /// record is every such page's.
     fn record_of(&self, p: LevelPage) -> Option<u32> {
-        self.pages.get(&p)?.record
+        self.pages.get(&p).map(|held| held.record).filter(|&r| r != ABSENT)
     }
 
-    /// A record no page is in.
+    /// A record no page is in, past `ABSENT`.
     fn free_record(&self) -> Option<u32> {
         let mut used = [false; RECORDS as usize];
-        for record in self.pages.values().filter_map(|held| held.record) {
-            used[record as usize] = true;
+        used[ABSENT as usize] = true;
+        for held in self.pages.values() {
+            used[held.record as usize] = true;
         }
         used.iter().position(|&u| !u).map(|at| at as u32)
     }
@@ -365,7 +377,8 @@ impl<L: Layer> Pyramid<L> {
             .pages
             .iter()
             .filter(|(&held, _)| Some(held) != self.pinned)
-            .filter_map(|(&held, h)| Some((self.worth(held, anchor), h.record?)))
+            .filter(|(_, h)| h.record != ABSENT)
+            .map(|(&held, h)| (self.worth(held, anchor), h.record))
             .max_by(|a, b| a.0.cmp(&b.0));
         let taken = worst.filter(|(w, _)| *w > mine).map(|(_, r)| r);
         if taken.is_none() {
@@ -376,11 +389,12 @@ impl<L: Layer> Pyramid<L> {
 
     /// The record is `p`'s from here, and whatever it carried is gone.
     fn take(&mut self, p: LevelPage, record: u32, page: L) {
-        let gone = self.pages.iter().find(|(&held, h)| held != p && h.record == Some(record)).map(|(&held, _)| held);
+        xpute_core::ensure!(record != ABSENT, ENOTRECOVERABLE);
+        let gone = self.pages.iter().find(|(&held, h)| held != p && h.record == record).map(|(&held, _)| held);
         if let Some(gone) = gone {
             self.clear(gone);
         }
-        self.put(p, page, Some(record));
+        self.put(p, page, record);
     }
 
     /// Arrivals dropped for want of a record since the last take, for the
@@ -458,16 +472,16 @@ impl<L: Layer> Pyramid<L> {
         wants
     }
 
-    /// Lets go of the pages the camera has left that carry no record: a page
+    /// Lets go of the pages the camera has left that lie in `ABSENT`: a page
     /// the bake has no object for shares what it reads as with every other,
     /// so nothing will ever want its room and it would sit in the table for
-    /// the session. A page with a record is left to `record_for`: the camera
-    /// leaving a page is not a reason to throw it away.
-    fn drop_unrecorded(&mut self, d: &Domain) {
+    /// the session. A page with a record of its own is left to `record_for`:
+    /// the camera leaving a page is not a reason to throw it away.
+    fn drop_absent(&mut self, d: &Domain) {
         // An answer the camera has left is asked again if it comes back.
         let pinned = self.pinned;
         self.answered.retain(|&p| keeps(pinned, Some(d), p));
-        let drop: Vec<LevelPage> = self.pages.iter().filter(|(&p, held)| held.record.is_none() && !keeps(pinned, Some(d), p)).map(|(&p, _)| p).collect();
+        let drop: Vec<LevelPage> = self.pages.iter().filter(|(&p, held)| held.record == ABSENT && !keeps(pinned, Some(d), p)).map(|(&p, _)| p).collect();
         for p in drop {
             self.clear(p);
         }
@@ -484,7 +498,7 @@ impl<L: Layer> Pyramid<L> {
         let wish = (e.at, frustum, crate::sched::turn::interactive(), self.revision, self.pinned, heights_revision(), pressure());
         if self.last != Some(wish) {
             let d = domain_for(&e, eye_height(), Some(frustum), wish.6);
-            self.drop_unrecorded(&d);
+            self.drop_absent(&d);
             let mut cover = L::present(self.cover_of(&d), &d, self);
             cover.drawn.sort_unstable();
             cover.gaps.sort_unstable();

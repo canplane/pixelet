@@ -277,7 +277,7 @@ fn the_pinned_page_keeps_its_record_and_every_wanted_page_still_fits() {
     let _serial = crate::global::serial();
     let mut pyramid = Pyramid::<PoiPage>::default();
     let far = |i: u32| LevelPage::new(0, ivec::gather(1_000_000 + i64::from(i), 0, 0));
-    for i in 0..RECORDS {
+    for i in 0..RECORDS - 1 {
         let record = pyramid.record_for(far(i), Some(anchor())).expect("a free record");
         pyramid.take(far(i), record, PoiPage::default());
     }

@@ -8,10 +8,10 @@
 //! module boots, never freed, and of a size settled at compile time.
 //!
 //! How many records there are, and which page is in which, are the
-//! pyramid's (world/pyramid.rs `RECORDS`), the same for every layer; what is
-//! terrain's is that a record is a room of fixed bytes here, and that one
-//! record past the pyramid's holds the shared open-ocean tile, which belongs
-//! to no page and every open-ocean page reads.
+//! pyramid's (world/pyramid.rs `RECORDS`), the same for every layer, and so
+//! is the first, `ABSENT`, which every page the bake left as no object reads
+//! — the open ocean; what is terrain's is that a record is a room of fixed
+//! bytes here.
 //!
 //! The routing turns a record into an address, and it is the only thing here
 //! that knows how the bytes are ordered. A page's ground is one lane of words,
@@ -33,21 +33,15 @@ use crate::world::pyramid::RECORDS;
 /// One page's ground: a `GroundCell` a cell, no stride and no padding.
 pub const GROUND_LANE_BYTES: u32 = PAGE_CELLS * PAGE_CELLS * core::mem::size_of::<GroundCell>() as u32;
 
-/// The record the shared open-ocean tile lies in, past the pyramid's own.
-pub const OCEAN_RECORD: u32 = RECORDS;
-
-/// Records the range holds: the pyramid's, and the ocean's.
-const RANGE_RECORDS: u32 = RECORDS + 1;
-
 /// The ground across every record.
-pub const GROUND_BYTES: u32 = RANGE_RECORDS * GROUND_LANE_BYTES;
+pub const GROUND_BYTES: u32 = RECORDS * GROUND_LANE_BYTES;
 
 /// A page's elevation: the inner samples and the two-cell skirt bicubic reads
 /// at the edges, two bytes a sample.
 pub const ELE_LANE_BYTES: u32 = ELE_PADDED_SPAN * ELE_PADDED_SPAN * 2;
 
 /// The elevation across every record.
-pub const ELE_PLANE_BYTES: u32 = RANGE_RECORDS * ELE_LANE_BYTES;
+pub const ELE_PLANE_BYTES: u32 = RECORDS * ELE_LANE_BYTES;
 
 /// The range, whole: `.fixed.terrain` is this and nothing else.
 pub const TERRAIN_BYTES: u32 = GROUND_BYTES + ELE_PLANE_BYTES;
