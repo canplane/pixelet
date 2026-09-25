@@ -30,7 +30,7 @@ use pxl_spec::space::hierarchy::Scale;
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, TOP_LEVEL};
+use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, PAGE_CELLS, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::kernel::kernel;
@@ -83,11 +83,23 @@ pub const LEVEL_CHUNKS: u32 = {
 pub const VIEW_CHUNKS: u32 = MAX_CHUNKS as u32 / 4;
 
 /// The most pages a view holds at once, one record each (world/pyramid.rs
-/// `RECORDS`): 165, what `.fixed.terrain` held when a view was five levels
-/// of 5 × 5 rings and the chain over them, kept when those went so that the
-/// device's memory did not move with them (2026-09-25). A product number:
-/// more buys farther ground at the reference criterion, at 514 KiB a page.
-pub const VIEW_PAGES: u32 = 165;
+/// `RECORDS`), at 514 KiB a page. A product number, said aloud (2026-09-26):
+/// a view wanted at most 41 over flat ground from 2u to 250,000u up, with and
+/// without a frustum, and this is that with room. It is not a bound the rule
+/// keeps by itself — the pages a level's reach can touch, 12 to 16 a level
+/// over eleven levels, come to more than the old 165 — but one the view is
+/// held to: where its wants are more, the criterion is loosened until they
+/// fit (`domain_for`), and the pyramid's top alone is nine pages at most.
+/// Records past what a view wants hold the pages it has left, which a pan
+/// back finds without fetching again.
+pub const VIEW_PAGES: u32 = 48;
+
+// The top's reach is its split distance, a disc 2·SPLIT of its cells across,
+// and a disc touches at most the pages its bounding square spans.
+const _: () = {
+    let across = (2 * SPLIT as u32).div_ceil(PAGE_CELLS) + 1;
+    assert!(VIEW_PAGES >= across * across, "a view's page budget below what the pyramid's top alone can want");
+};
 
 /// Steps a halving of the criterion is loosened in when a view's wants do
 /// not fit: a quarter of an octave, so a view over its budget coarsens by
