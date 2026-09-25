@@ -18,7 +18,7 @@ export default {
   common: {
     unknown: {
       hex: "#D9D0CC",
-      note: "A cell whose data is missing or invalid, a visible neutral grey so it reads as not known rather than as whatever drew last.",
+      note: "A cell whose data is missing or invalid, a visible neutral gray so it reads as not known rather than as whatever drew last.",
       rgb: 14274764,
     },
   },
@@ -163,11 +163,11 @@ export default {
       hex: "#f7f7f7",
       rgb: 16250871,
     },
-    grey: {
+    gray: {
       hex: "#8d8d8d",
       rgb: 9276813,
     },
-    dark_grey: {
+    dark_gray: {
       hex: "#3f3f3f",
       rgb: 4144959,
     },

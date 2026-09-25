@@ -136,8 +136,8 @@
       ],
       "entries": [
         { "name": "white", "value": 130 },
-        { "name": "grey", "value": 131 },
-        { "name": "dark_grey", "value": 132 },
+        { "name": "gray", "value": 131 },
+        { "name": "dark_gray", "value": 132 },
         { "name": "black", "value": 133 },
         { "name": "red", "value": 134 },
         { "name": "orange", "value": 135 },

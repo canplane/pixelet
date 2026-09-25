@@ -13,7 +13,7 @@
 
 // How much of the sky the layer covers, and how thick a full cloud is to
 // light, as optical depth: past a few, its underside is in its own shadow
-// and grey, and its edges, thin, are bright.
+// and gray, and its edges, thin, are bright.
 const CLOUD_COVER: f32 = 0.42;
 const CLOUD_DEPTH: f32 = 6.0;
 // The share of the cover that is a cloud's full thickness rather than its

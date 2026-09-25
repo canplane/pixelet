@@ -16,7 +16,7 @@ ureq = "2"
 //! equirectangular map with longitude 0 at its center and east to the right)
 //! cut to the near side, longitude −90° to 90°, since the Moon keeps that face
 //! to the Earth; each pixel's color taken to its luminance in linear light
-//! and written back as an eight-bit sRGB grey, 512 × 512, to
+//! and written back as an eight-bit sRGB gray, 512 × 512, to
 //! `asset/sky/moon.png`. The ingest ships it from there.
 //!
 //! It prints the face's mean reflectance as the map holds it, over the disc

@@ -305,7 +305,7 @@ fn edge_factor(local_pos: vec3f, box_scale: vec3f, normal: vec3f, faces: u32) ->
 // sample count that thins out over the whole radius.
 const AO_REACH: f32 = 1.5;
 // The occluded light's hue: #1a1006 as a ratio, red kept — the warm dark of
-// a contact shadow rather than a grey one, which is what the screen-space
+// a contact shadow rather than a gray one, which is what the screen-space
 // pass this replaces was tuned to.
 const AO_TINT: vec3f = vec3f(1.0, 0.615, 0.231);
 

@@ -52,7 +52,7 @@ pub const OZONE_ABSORPTION: [f64; 3] = [0.650e-3, 1.881e-3, 0.085e-3];
 pub const OZONE_CENTER_KM: f64 = 25.0;
 pub const OZONE_HALF_WIDTH_KM: f64 = 15.0;
 /// What the planet's surface reflects, for the light the ground bounces back
-/// into the air: the Earth's mean, a grey the scattering sees and the eye
+/// into the air: the Earth's mean, a gray the scattering sees and the eye
 /// does not. The ground the eye sees past the terrain is `land` below.
 pub const GROUND_ALBEDO: f64 = 0.3;
 
@@ -60,7 +60,7 @@ pub const GROUND_ALBEDO: f64 = 0.3;
 /// from high up: the palette's forest (spec/pxl/spec/cell/color.json's
 /// land.green_deep), which is what covers most of the land a view that wide
 /// takes in, in linear light — so the terrain's edge runs into ground of its
-/// own color rather than a grey.
+/// own color rather than a gray.
 pub fn land() -> [f64; 3] {
     use pxl_spec::bake::format::GroundChannelKey;
     use pxl_spec::cell::cube_types;

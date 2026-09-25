@@ -62,5 +62,5 @@ Run the ingest afterward: the sheet's key changes with any tile.
 ```
 
 It fetches the CGI Moon Kit's 1K color map, cuts the near side, takes it to
-grey reflectance and writes `sky/moon.png`, and prints the face's mean,
+gray reflectance and writes `sky/moon.png`, and prints the face's mean,
 which `sky.wgsl`'s `MOON_MAP_MEAN` has to equal. Run the ingest afterward.
