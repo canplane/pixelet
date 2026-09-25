@@ -1099,7 +1099,7 @@ impl Store {
     fn put(&mut self, w: Write) -> bool {
         let Write { col_idx, band_idx, at, scale, state } = w;
         assert!((OBJECT_FINEST..=CELL).contains(&scale), "an object no finer than its finest tier and no coarser than a cell");
-        let value = u16::try_from(state).expect("a catalog value fits a leaf (pxl-spec cell/object.rs)");
+        let value = u16::try_from(state).expect("a catalog value fits a leaf");
         let has_band = self.chunks.get(&col_idx).is_some_and(|c| c.bands.contains_key(&band_idx));
         if !has_band && state == VOID {
             return false;
