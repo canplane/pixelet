@@ -2,7 +2,8 @@
 
 import { useTranslation } from "react-i18next";
 
-import { kernel_action, useKernel } from "@/kernel/shell.ts";
+import { Command } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_command, useKernel } from "@/kernel/shell.ts";
 
 import { cn } from "@/shared/lib/util/cn.ts";
 import { MotionContainer } from "@/shared/ui/motion/motion-container.tsx";
@@ -14,7 +15,7 @@ export function MapScaleBar() {
   const { t } = useTranslation();
   const { total_meters, bar_width_px, is_default_zoom } = useKernel((s) => s.scale_bar);
   const label: string = total_meters >= 1000 ? `${total_meters / 1000}km` : `${total_meters}m`;
-  const reset_dist = () => kernel_action({ type: "reset_dist" });
+  const reset_dist = () => kernel_command(Command.INPUT_RESET_DIST);
 
   return (
     // layout={false}: MotionContainer's motion.div defaults to layout={true},

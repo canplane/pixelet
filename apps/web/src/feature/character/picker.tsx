@@ -5,7 +5,10 @@ import { useTranslation } from "react-i18next";
 
 import { cn } from "@/shared/lib/util/cn.ts";
 import { CharacterPreview } from "@/feature/character/preview.tsx";
-import { kernel_action, useKernel } from "@/kernel/shell.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
+import { Command, encode_setting_update } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_command, useKernel } from "@/kernel/shell.ts";
+import { SETTINGS } from "@/feature/setting/schema.ts";
 import { findPersonVariant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_VARIANTS } from "@/feature/character/variant.ts";
 
 // Not a setting: person/pet variant is a companion *appearance* pick, the
@@ -107,11 +110,11 @@ function PetPicker(props: PetPickerProps) {
 export function CharacterPicker() {
   // The settings hold a variant as its number; the picker reads its key off
   // the same catalog the kernel was numbered from.
-  const person_variant = useKernel((s) => Number(s.settings.person_variant ?? -1));
-  const pet_variant = useKernel((s) => Number(s.settings.pet_variant ?? -1));
+  const person_variant = useKernel((s) => s.settings[SETTINGS.person_variant.key] ?? -1);
+  const pet_variant = useKernel((s) => s.settings[SETTINGS.pet_variant.key] ?? -1);
   const personVariantKey = [...PERSON_VARIANTS_FEMALE, ...PERSON_VARIANTS_MALE].find((v) => v.number === person_variant)?.key ?? "";
   const petVariantKey = PET_VARIANTS.find((v) => v.number === pet_variant)?.key ?? "";
-  const set_setting = (key: string, value: number) => kernel_action({ type: "set_setting", key, value });
+  const set_setting = (key: u32, value: u32) => kernel_command(Command.SETTING_UPDATE, encode_setting_update({ key, value }));
 
   // Opens on whichever gender the current selection already belongs to,
   // not always "female" — so a male variant picked earlier doesn't look
@@ -122,8 +125,8 @@ export function CharacterPicker() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PersonPicker gender={gender} onGenderChange={setGender} selectedKey={personVariantKey} onSelect={(key) => set_setting("person_variant", findPersonVariant(key).number)} />
-      <PetPicker selectedKey={petVariantKey} onSelect={(key) => set_setting("pet_variant", (PET_VARIANTS.find((v) => v.key === key) ?? PET_VARIANTS[0]).number)} />
+      <PersonPicker gender={gender} onGenderChange={setGender} selectedKey={personVariantKey} onSelect={(key) => set_setting(SETTINGS.person_variant.key, findPersonVariant(key).number)} />
+      <PetPicker selectedKey={petVariantKey} onSelect={(key) => set_setting(SETTINGS.pet_variant.key, (PET_VARIANTS.find((v) => v.key === key) ?? PET_VARIANTS[0]).number)} />
     </div>
   );
 }

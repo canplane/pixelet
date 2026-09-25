@@ -5,11 +5,29 @@
 /**
  * The shell's and the kernel's commands, by number (@xpute/core/abi/cmd.ts:
  * `major << 8 | minor`), and the packet each carries — an XTP branch whose
- * children are listed in order. A command with no children carries no packet.
+ * children are its fields, in order. A command with no fields carries no
+ * packet.
  *
  * The same number is a command on the submission ring and a signal on the
- * completion ring (its `RES` clear). The direction is the ring.
+ * completion ring (its `RES` clear). The direction is the ring: `packet` is
+ * what the shell submits, `signal` what the kernel posts. Each is written and
+ * read by what this file generates, on both sides, so no field is found by
+ * its position anywhere else.
+ *
+ * A field is a number of a width, a `bool`, a `str`, a member of an enum
+ * below or of one another spec declares (`extern`), or a record below. An
+ * `optional` one may be absent, its kind kept; a `list` is a branch of them,
+ * or a packed array where the item is a number. A record crosses as a branch
+ * of its own fields, and is how a block past a slot is laid out. An enum's
+ * `unknown` is the member a number it does not give out reads as; an enum
+ * without one refuses the packet.
  */
+
+import type { BranchCursor, NodeCursor } from "@xpute/core/wire/xtp/mod.ts";
+import type { F64Array, U32Array, U8Array } from "@xpute/core/abi/array.ts";
+import type { f64, i32, u32, u64 } from "@xpute/core/abi/word.ts";
+import { packet } from "@xpute/runtime/ipc/doorbell.ts";
+import type { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
 
 /** What a command is about. */
 export const enum Major {
@@ -21,6 +39,10 @@ export const enum Major {
   LOAD = 0x1f,
   GPU = 0x20,
   SURFACE = 0x21,
+  SETTING = 0x22,
+  CHAT = 0x23,
+  PREVIEW = 0x24,
+  LEDGER = 0x25,
 }
 
 /** The pointer's own verbs, and the map controls'. */
@@ -28,6 +50,11 @@ export const enum InputMinor {
   POINTER = 0x10,
   WHEEL = 0x11,
   TRACKING = 0x12,
+  VIEW = 0x13,
+  RESET_DIST = 0x14,
+  COMPASS_RESET = 0x15,
+  GO_TO = 0x16,
+  POI_FOCUS = 0x17,
 }
 
 /** The device sensors' own verbs. */
@@ -36,6 +63,9 @@ export const enum SensorMinor {
   ORIENTATION = 0x11,
   PERMISSION = 0x12,
   VISIBILITY = 0x13,
+  ENABLE = 0x14,
+  OPEN = 0x15,
+  CLOSE = 0x16,
 }
 
 /** A load's own verb. */
@@ -45,117 +75,795 @@ export const enum LoadMinor {
 
 /** The world's own verbs. */
 export const enum WorldMinor {
-  ACTION = 0x11,
   SNAPSHOT = 0x15,
 }
 
+/** A setting's own verb. */
+export const enum SettingMinor {
+  TOGGLE = 0x10,
+}
+
+/** The ledger's own verbs. */
+export const enum LedgerMinor {
+  START = 0x10,
+  STOP = 0x11,
+  LOG = 0x12,
+}
+
+/** Where a pointer event is in its gesture. */
+export const enum PointerPhase {
+  Down = 0,
+  Move = 1,
+  Up = 2,
+  Out = 3,
+}
+
+/** What the pointer is, as the browser's `pointerType` says. */
+export const enum PointerKind {
+  Mouse = 0,
+  Touch = 1,
+  Pen = 2,
+}
+
+/** What the pointer holds. */
+export const enum ActiveTool {
+  Pointer = 0,
+  Object = 1,
+  Decor = 2,
+  Eraser = 3,
+}
+
+/** What the tracking button did, as the button showed it. */
+export const enum Tracking {
+  /** Back to the device. */
+  Recenter = 0,
+  /** Follow mode on, where the compass is listened to. */
+  Follow = 1,
+  /** Follow mode off, north up again. */
+  Unfollow = 2,
+}
+
+/** The browser's PositionError codes. */
+export const enum GeolocationErrorCode {
+  Other = 0,
+  PermissionDenied = 1,
+  PositionUnavailable = 2,
+  Timeout = 3,
+}
+
+/** Which of the device's sensors. */
+export const enum Sensor {
+  Geolocation = 0,
+  Orientation = 1,
+}
+
+/** A sensor permission, as the shell's prompt or the browser's change reported it. */
+export const enum PermissionAnswer {
+  /** The shell's prompt is up. */
+  Asking = 0,
+  Granted = 1,
+  Denied = 2,
+  /** The prompt itself threw. */
+  Failed = 3,
+}
+
+/** What a read came to. **Absent is an outcome, not a code the guest reads.**
+ * There is no such object, however the protocol spells that — an HTTP 404, a
+ * missing file — and the host is the one that can tell. */
+export const enum FetchOutcome {
+  Read = 0,
+  Aborted = 1,
+  Error = 2,
+  Absent = 3,
+}
+
+/** What an asset is read as. */
+export const enum LoadKind {
+  Gltf = 0,
+  Image = 1,
+}
+
+/** The map's loading lifecycle. */
+export const enum MapStatus {
+  Idle = 0,
+  Loading = 1,
+  Success = 2,
+  Error = 3,
+}
+
+/** Where a sensor's reading is: none asked for, asked for, arriving, or failed. */
+export const enum DevicePoseStatus {
+  Idle = 0,
+  Loading = 1,
+  Ready = 2,
+  Error = 3,
+}
+
+/** A message the kernel raises and the shell shows.
+ *
+ * The kernel decides which message a state calls for and carries the number.
+ * It never carries the words: a string that exists to be read has no reason
+ * to sit in the kernel's memory, and the shell has the locale files already
+ * (apps/web/src/locale) — the same split `strerror` is on the other side of.
+ *
+ * The number is the name here. A band is what a message is about, and a
+ * message keeps its number for as long as anything can be holding one: an
+ * old shell reads a number a new kernel sends, so a number that has meant
+ * something must never come to mean another thing. Retire one by leaving
+ * the gap. */
+export const enum Message {
+  None = 0x0000,
+
+  // ---- 0x01 the world's own state ----
+
+  MapLoading = 0x0101,
+  MapLoadError = 0x0102,
+  CompanionLoading = 0x0103,
+  WorldReady = 0x0104,
+
+  // ---- 0x02 where the device says it is ----
+
+  LocationChecking = 0x0201,
+  LocationWeakSignal = 0x0202,
+  GeolocationUnsupported = 0x0203,
+  GeolocationPermissionDenied = 0x0204,
+  GeolocationPositionUnavailable = 0x0205,
+  GeolocationTimeout = 0x0206,
+  GeolocationGenericError = 0x0207,
+
+  // ---- 0x03 which way the device is facing ----
+
+  OrientationUnsupported = 0x0301,
+  OrientationPermissionError = 0x0302,
+  OrientationPermissionDenied = 0x0303,
+  OrientationSignalLost = 0x0304,
+}
+
 export const enum Command {
-  /** Replies with its packet's first child, a u32, or 0 — the rings' own
-   * test. */
+  /** Replies with its packet's value, or 0 where it has none — the rings' own test. */
   NOP = 0x0000,
 
   // ---- the world's turn: the shell's events in, the kernel's asks out ----
 
-  /** [app_env str, build_time str, build_id str, build_number str, published_tiles bool,
-   * handheld bool, geolocation bool, orientation bool, orientation_permission bool] — the
-   * shell's boot: what the bundler defined and what the device offers; the object store
-   * loaded */
+  /** The shell's boot: what the build is and what the device offers; the object store loaded. */
   WORLD_CREATE = 0x1b01,
-  /** [width f64, height f64, dpr f64, delta_s f64, frame_ms f64, interactive bool,
-   * credits u32] — the
-   * frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
-   * phases on what is left of the quota, the fetches within the credits; the viewport in
-   * CSS pixels, the frame interval and the turn as the host measured them. The turn
-   * leaves its signals on the completion ring, drawn by the kernel, and last this
-   * command's own as a signal: [draws u32] */
+  /** The frame of the turn the doorbell's quota rang in: the effects' turn, then the tick's
+   * phases on what is left of the quota, the fetches within the credits. The turn leaves
+   * its signals on the completion ring, drawn by the kernel, and last this command's own. */
   WORLD_UPDATE = 0x1b03,
-  /** [action str (JSON, shell/shell.rs)] — the UI's action; the host rings the doorbell for it at once,
-   * so what it asks of the host is heard before the call returns */
-  WORLD_ACTION = 0x1b11,
-  /** [left f64, top f64, width f64, height f64] — the canvas's client rect */
+  /** The canvas's client rect. */
   INPUT_UPDATE = 0x1c03,
-  /** [phase u32 (0 down, 1 move, 2 up, 3 out), kind u32 (0 mouse, 1 touch, 2 pen), id i32,
-   * button i32, x f64, y f64, tool u32 (0 pointer, 1 object, 2 decor, 3 eraser), value u32 (the
-   * placeable cube's or the decor's catalog number), tier u32 (the object size, by its index in
-   * the snapshot's object_sizes)] — a pointer event on the canvas, in client pixels, with what
-   * the pointer holds; the shell sends a move at the last position when the holding changes, as
-   * a browser synthesizes a mouse move */
+  /** A pointer event on the canvas, in client pixels, with what the pointer holds; the
+   * shell sends a move at the last position when the holding changes, as a browser
+   * synthesizes a mouse move. */
   INPUT_POINTER = 0x1c10,
-  /** [delta_y f64] */
   INPUT_WHEEL = 0x1c11,
-  /** [tracking u32 (0 recenter, 1 follow, 2 unfollow)] — the tracking button's press, as
-   * the button showed it */
+  /** The tracking button's press, as the button showed it. */
   INPUT_TRACKING = 0x1c12,
-  /** [lon f64, lat f64, altitude f64, accuracy f64, heading f64] — a GPS fix; NaN where the
-   * browser gave none */
+  /** Where the camera stands, set outright rather than driven: what the kernel's own
+   * test puts a view at, and what an A/B reads two builds at the same view with. */
+  INPUT_VIEW = 0x1c13,
+  /** The scale bar's press: the default zoom. */
+  INPUT_RESET_DIST = 0x1c14,
+  /** The compass's press: north up. */
+  INPUT_COMPASS_RESET = 0x1c15,
+  /** A search result: the map centre moved there. */
+  INPUT_GO_TO = 0x1c16,
+  /** A badge chosen from the list beside the map, by the cell the snapshot gave it. */
+  INPUT_POI_FOCUS = 0x1c17,
+  /** A GPS fix; a field is absent where the browser gave none. */
   SENSOR_UPDATE = 0x1d03,
-  /** [code u32 (1 permission denied, 2 position unavailable, 3 timeout, 0 other)] — the
-   * watch failed and was stopped */
+  /** The watch failed and was stopped. */
   SENSOR_ERROR = 0x1d10,
-  /** [webkit_compass_heading f64, alpha f64, beta f64, gamma f64] — an orientation
-   * event; NaN where the browser gave none */
+  /** An orientation event; a field is absent where the browser gave none. */
   SENSOR_ORIENTATION = 0x1d11,
-  /** [sensor u32 (0 geolocation, 1 orientation), answer u32 (0 asking, 1 granted, 2 denied,
-   * 3 failed)] — a permission as the shell's prompt or the browser's change reported it */
+  /** A permission as the shell's prompt or the browser's change reported it. */
   SENSOR_PERMISSION = 0x1d12,
-  /** [visible bool] — the tab's visibility; the host rings the doorbell for it at once,
-   * since a hidden page gets no frame and hiding is the save's last sure moment */
+  /** The tab's visibility; the host rings the doorbell for it at once, since a hidden
+   * page gets no frame and hiding is the save's last sure moment. */
   SENSOR_VISIBILITY = 0x1d13,
-  /** [key u64, outcome u32 (0 read, 1 aborted, 2 error, 3 absent), body u32, body_bytes
-   * u32 (0 for none), fail u32, detail u32, net_ms f64] — a read the host finished, its
-   * body held as `body` until the kernel takes it (the `body_read` import).
-   * **Absent is an outcome, not a code the guest reads.** There is no such object,
-   * however the protocol spells that — an HTTP 404, a missing file — and the host is
-   * the one that can tell. `detail` is whatever number the host refused with, kept for
-   * the ledger to print and for nothing to branch on */
+  /** The sensor button: both sensors asked for. Where iOS gates the compass, the shell
+   * prompted in the click and this starts nothing for it; its answer arrives on its own. */
+  SENSOR_ENABLE = 0x1d14,
+  /** The map is on screen and wants the sensors. */
+  SENSOR_OPEN = 0x1d15,
+  /** The map is gone, and the sensors are let go. */
+  SENSOR_CLOSE = 0x1d16,
+  /** A read the host finished, its body held as `body` until the kernel takes it (the `body_read` import). */
   FETCH_UPDATE = 0x1e03,
-  /** [key u64, body u32, bytes u32] — a model's bytes, held by the host as `body` until the
-   * kernel reads them (the `body_read` import) */
+  /** A model's bytes, held by the host as `body` until the kernel reads them (the `body_read` import). */
   LOAD_UPDATE = 0x1f03,
-  /** [key u64, handle u32] — an image decoded and held by the shell */
+  /** An image decoded and held by the shell. */
   LOAD_IMAGE = 0x1f10,
-  /** [key u64] — a read of an asset failed. The guest wants it again, after whatever the
-   * scheduler makes it wait; a model whose *bytes* do not parse is a different thing and
-   * is not this */
+  /** A read of an asset failed. The guest wants it again, after whatever the scheduler
+   * makes it wait; a model whose *bytes* do not parse is a different thing and is not this. */
   LOAD_DELETE = 0x1f04,
-  /** [min_uniform_offset_alignment u32, timestamps bool] — a device answered; the kernel's
-   * renderer is made on it (crates/pxl/web/render/src/gpu/renderer.rs) */
+  /** A device answered; the kernel's renderer is made on it (crates/pxl/web/render/src/gpu/renderer.rs). */
   GPU_CREATE = 0x2001,
-  /** no packet — the device went away, and every object on it */
+  /** The device went away, and every object on it. */
   GPU_DELETE = 0x2004,
-  /** tag call · [role u32 (0 world, 1 case)] → result: the surface's handle, 0 refused — a
-   * canvas the shell hands over, drawn by the kernel alone from then on */
+  /** A call, answered with the surface's handle, 0 refused: a canvas the shell hands over, drawn by the kernel alone from then on. */
   SURFACE_CREATE = 0x2101,
-  /** [surface u32, width u32, height u32, device_pixel_ratio f64] — the canvas's layout box in
-   * device pixels, transforms aside; the buffer it is drawn into is the kernel's */
+  /** The canvas's layout box in device pixels, transforms aside; the buffer it is drawn into is the kernel's. */
   SURFACE_UPDATE = 0x2103,
-  /** tag call · [surface u32] — the canvas is going; what it held on the device is let go
-   * before the call returns */
+  /** A call: the canvas is going, and what it held on the device is let go before the call returns. */
   SURFACE_DELETE = 0x2104,
+  /** A setting set from the sheet or the character picker. */
+  SETTING_UPDATE = 0x2203,
+  /** A toggle's switch. */
+  SETTING_TOGGLE = 0x2210,
+  /** A line the player said, shown over the character. */
+  CHAT_CREATE = 0x2301,
+  /** A character drawn alone into a surface the shell handed over, as the picker shows it. */
+  PREVIEW_CREATE = 0x2401,
+  PREVIEW_DELETE = 0x2404,
+  /** A fresh recording window. */
+  LEDGER_START = 0x2510,
+  /** The window frozen, so what is exported holds still. */
+  LEDGER_STOP = 0x2511,
+  /** The console stream on or off. */
+  LEDGER_LOG = 0x2512,
 
-  // ---- the turn's signals: kernel → shell, left on the completion ring by a strobe or an action ----
+  // ---- the turn's signals: kernel → shell, left on the completion ring by a strobe or a command ----
 
-  /** [at u32, len u32] — shell/shell.rs's snapshot, when it changed: UTF-8
-   * past a ring frame, so it is a block the kernel holds, valid until the
-   * next snapshot */
+  /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
+   * block the kernel holds, valid until the next snapshot. */
   WORLD_SNAPSHOT = 0x1b15,
-  /** [sensor u32 (0 geolocation, 1 orientation)] — start watching */
+  /** Start watching. */
   SENSOR_CREATE = 0x1d01,
-  /** [sensor u32] — stop watching */
+  /** Stop watching. */
   SENSOR_DELETE = 0x1d04,
-  /** [key u64, bake u32 (BakeKind), name str] — an object the scheduler wants read.
-   * The guest names it in its own terms — which bake it belongs to, and the name
-   * inside that bake — and the host is the one that knows what address that is and
-   * what protocol reaches it. The key is a handle the shell hands back and never
-   * reads into */
+  /** An object the scheduler wants read. The guest names it in its own terms — which
+   * bake it belongs to, and the name inside that bake — and the host is the one that
+   * knows what address that is and what protocol reaches it. The key is a handle the
+   * shell hands back and never reads into. */
   FETCH_CREATE = 0x1e01,
-  /** [key u64] — stop this read, whichever kind it is. The scheduler took its credit
-   * for something the viewer is more waiting on; the host settles it as stopped, and the
-   * guest still wants it */
+  /** Stop this read, whichever kind it is. The scheduler took its credit for something
+   * the viewer is more waiting on; the host settles it as stopped, and the guest still
+   * wants it. */
   FETCH_DELETE = 0x1e04,
-  /** [key u64, kind u32 (0 glTF, 1 image), load u32 (asset/ingested's asset number, the
-   * texture pack's sheet one past the last)] — an asset the scheduler wants read. It shares
-   * the credits with the pages, and so is started when one is free rather than all at once;
-   * what it is and where it lives is the host's, as a page's address is */
+  /** An asset the scheduler wants read. It shares the credits with the pages, and so is
+   * started when one is free rather than all at once; what it is and where it lives is
+   * the host's, as a page's address is. */
   LOAD_CREATE = 0x1f01,
+}
+
+/** A branch of records, each read by `read`. */
+function list<T>(b: BranchCursor, read: (b: BranchCursor) => T): T[] {
+  return Array.from({ length: b.len }, (_, k) => read(b.at_branch(k)));
+}
+
+/** A record that may be absent. */
+function optional<T>(c: NodeCursor, read: (b: BranchCursor) => T): T | null {
+  const present = c.opt();
+  return present === undefined ? null : read(present.as_branch());
+}
+
+/** What the page's UI shows of the kernel (shell/shell.rs): written after a turn that changed it, and replaced whole. */
+export interface Snapshot {
+  map: MapState;
+  location: LocationState;
+  companion: CompanionState;
+  orientation: OrientationState;
+  /** The view's azimuth. */
+  azimuth: f64;
+  is_follow_mode: boolean;
+  camera_busy: boolean;
+  show_compass: boolean;
+  /** Every setting's value by its SettingKey, as SETTING_UPDATE carries one. */
+  settings: u32[];
+  scale_bar: ScaleBar;
+  /** The place the map centre is in, broad to narrow, already cut at the rung the
+   * current zoom asks for; empty where the centre is in none or the packets it is
+   * read out of have not arrived. */
+  place: PlacePart[];
+  /** The badges on the map, nearest what the view looks at first. */
+  poi: PoiBadge[];
+  /** The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index. */
+  object_sizes: f64[];
+  object_storage_version: u32;
+}
+
+export function read_snapshot(b: BranchCursor): Snapshot {
+  return {
+    map: read_map_state(b.at_branch(0)),
+    location: read_location_state(b.at_branch(1)),
+    companion: read_companion_state(b.at_branch(2)),
+    orientation: read_orientation_state(b.at_branch(3)),
+    azimuth: b.at(4).get<f64>(),
+    is_follow_mode: b.at(5).get<boolean>(),
+    camera_busy: b.at(6).get<boolean>(),
+    show_compass: b.at(7).get<boolean>(),
+    settings: Array.from(b.at(8).get<U32Array>()),
+    scale_bar: read_scale_bar(b.at_branch(9)),
+    place: list(b.at_branch(10), read_place_part),
+    poi: list(b.at_branch(11), read_poi_badge),
+    object_sizes: Array.from(b.at(12).get<F64Array>()),
+    object_storage_version: b.at(13).get<u32>(),
+  };
+}
+
+export interface MapState {
+  status: MapStatus;
+  is_off_center: boolean;
+  /** The map centre in degrees: what the search measures distance from. */
+  center: LonLat | null;
+  /** The L3 page the centre falls in: what the area being looked at is announced per.
+   * Sent because the shell would otherwise need a second implementation of the space
+   * to reach it. */
+  page: u64 | null;
+}
+
+export function read_map_state(b: BranchCursor): MapState {
+  return { status: b.at(0).get<MapStatus>(), is_off_center: b.at(1).get<boolean>(), center: optional(b.at(2), read_lon_lat), page: b.at(3).get<u64 | null>() };
+}
+
+export interface LonLat {
+  lon: f64;
+  lat: f64;
+}
+
+export function read_lon_lat(b: BranchCursor): LonLat {
+  return { lon: b.at(0).get<f64>(), lat: b.at(1).get<f64>() };
+}
+
+export interface LocationState {
+  status: DevicePoseStatus;
+  has_location: boolean;
+  error: Message | null;
+}
+
+export function read_location_state(b: BranchCursor): LocationState {
+  return { status: b.at(0).get<DevicePoseStatus>(), has_location: b.at(1).get<boolean>(), error: b.at(2).get<Message | null>() };
+}
+
+export interface CompanionState {
+  person_ready: boolean;
+  pet_ready: boolean;
+}
+
+export function read_companion_state(b: BranchCursor): CompanionState {
+  return { person_ready: b.at(0).get<boolean>(), pet_ready: b.at(1).get<boolean>() };
+}
+
+export interface OrientationState {
+  status: DevicePoseStatus;
+  heading: f64 | null;
+}
+
+export function read_orientation_state(b: BranchCursor): OrientationState {
+  return { status: b.at(0).get<DevicePoseStatus>(), heading: b.at(1).get<f64 | null>() };
+}
+
+export interface ScaleBar {
+  total_meters: f64;
+  bar_width_px: f64;
+  is_default_zoom: boolean;
+}
+
+export function read_scale_bar(b: BranchCursor): ScaleBar {
+  return { total_meters: b.at(0).get<f64>(), bar_width_px: b.at(1).get<f64>(), is_default_zoom: b.at(2).get<boolean>() };
+}
+
+/** One rung of the place, in every language the provider had rather than one resolved
+ * name: the reader's language is the page's, and switching it re-reads a label already
+ * sent. */
+export interface PlacePart {
+  name: string;
+  names: PlaceName[];
+}
+
+export function read_place_part(b: BranchCursor): PlacePart {
+  return { name: b.at(0).get<string>(), names: list(b.at_branch(1), read_place_name) };
+}
+
+export interface PlaceName {
+  lang: string;
+  name: string;
+}
+
+export function read_place_name(b: BranchCursor): PlaceName {
+  return { lang: b.at(0).get<string>(), name: b.at(1).get<string>() };
+}
+
+/** A badge on the map, as the panel beside it lists it. */
+export interface PoiBadge {
+  /** The cell it stands for, as INPUT_POI_FOCUS hands it back: its page's subject and its index. */
+  page: u64;
+  index: u32;
+  count: u32;
+  /** The one place it holds, where it holds one. */
+  name: string | null;
+}
+
+export function read_poi_badge(b: BranchCursor): PoiBadge {
+  return { page: b.at(0).get<u64>(), index: b.at(1).get<u32>(), count: b.at(2).get<u32>(), name: b.at(3).get<string | null>() };
+}
+
+/** Command.NOP's packet. */
+export interface Nop {
+  value: u32;
+}
+
+export function encode_nop(p: Nop): U8Array {
+  return packet((b) => b.u32(p.value));
+}
+
+/** Command.WORLD_CREATE's packet. */
+export interface WorldCreate {
+  /** A development build, which offers the settings schema.json marks `dev`. */
+  development: boolean;
+  handheld: boolean;
+  geolocation: boolean;
+  orientation: boolean;
+  /** iOS 13+'s gate: requestPermission exists and must run inside a gesture. */
+  orientation_permission: boolean;
+}
+
+export function encode_world_create(p: WorldCreate): U8Array {
+  return packet((b) => b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission));
+}
+
+/** Command.WORLD_UPDATE's packet. */
+export interface WorldUpdate {
+  /** The viewport, in CSS pixels. */
+  width: f64;
+  height: f64;
+  dpr: f64;
+  /** The frame interval and the turn, as the host measured them. */
+  delta_s: f64;
+  frame_ms: f64;
+  interactive: boolean;
+  credits: u32;
+}
+
+export function encode_world_update(p: WorldUpdate): U8Array {
+  return packet((b) => b.f64(p.width).f64(p.height).f64(p.dpr).f64(p.delta_s).f64(p.frame_ms).bool(p.interactive).u32(p.credits));
+}
+
+/** Command.WORLD_UPDATE's signal. */
+export interface WorldUpdateSignal {
+  draws: u32;
+}
+
+export function read_world_update(b: BranchCursor): WorldUpdateSignal {
+  return { draws: b.at(0).get<u32>() };
+}
+
+/** Command.INPUT_UPDATE's packet. */
+export interface InputUpdate {
+  left: f64;
+  top: f64;
+  width: f64;
+  height: f64;
+}
+
+export function encode_input_update(p: InputUpdate): U8Array {
+  return packet((b) => b.f64(p.left).f64(p.top).f64(p.width).f64(p.height));
+}
+
+/** Command.INPUT_POINTER's packet. */
+export interface InputPointer {
+  phase: PointerPhase;
+  kind: PointerKind;
+  id: i32;
+  button: i32;
+  x: f64;
+  y: f64;
+  tool: ActiveTool;
+  /** The placeable cube's or the decor's catalog number. */
+  value: u32;
+  /** The object size, by its index in the snapshot's object_sizes. */
+  tier: u32;
+}
+
+export function encode_input_pointer(p: InputPointer): U8Array {
+  return packet((b) => b.u32(p.phase).u32(p.kind).i32(p.id).i32(p.button).f64(p.x).f64(p.y).u32(p.tool).u32(p.value).u32(p.tier));
+}
+
+/** Command.INPUT_WHEEL's packet. */
+export interface InputWheel {
+  delta_y: f64;
+}
+
+export function encode_input_wheel(p: InputWheel): U8Array {
+  return packet((b) => b.f64(p.delta_y));
+}
+
+/** Command.INPUT_TRACKING's packet. */
+export interface InputTracking {
+  tracking: Tracking;
+}
+
+export function encode_input_tracking(p: InputTracking): U8Array {
+  return packet((b) => b.u32(p.tracking));
+}
+
+/** Command.INPUT_VIEW's packet. */
+export interface InputView {
+  dist: f64 | null;
+  polar: f64 | null;
+}
+
+export function encode_input_view(p: InputView): U8Array {
+  return packet((b) => b.f64(p.dist).f64(p.polar));
+}
+
+/** Command.INPUT_GO_TO's packet. */
+export interface InputGoTo {
+  lon: f64;
+  lat: f64;
+}
+
+export function encode_input_go_to(p: InputGoTo): U8Array {
+  return packet((b) => b.f64(p.lon).f64(p.lat));
+}
+
+/** Command.INPUT_POI_FOCUS's packet. */
+export interface InputPoiFocus {
+  page: u64;
+  index: u32;
+}
+
+export function encode_input_poi_focus(p: InputPoiFocus): U8Array {
+  return packet((b) => b.u64(p.page).u32(p.index));
+}
+
+/** Command.SENSOR_UPDATE's packet. */
+export interface SensorUpdate {
+  lon: f64;
+  lat: f64;
+  altitude: f64 | null;
+  accuracy: f64;
+  heading: f64 | null;
+}
+
+export function encode_sensor_update(p: SensorUpdate): U8Array {
+  return packet((b) => b.f64(p.lon).f64(p.lat).f64(p.altitude).f64(p.accuracy).f64(p.heading));
+}
+
+/** Command.SENSOR_ERROR's packet. */
+export interface SensorError {
+  code: GeolocationErrorCode;
+}
+
+export function encode_sensor_error(p: SensorError): U8Array {
+  return packet((b) => b.u32(p.code));
+}
+
+/** Command.SENSOR_ORIENTATION's packet. */
+export interface SensorOrientation {
+  webkit_compass_heading: f64 | null;
+  alpha: f64 | null;
+  beta: f64 | null;
+  gamma: f64 | null;
+}
+
+export function encode_sensor_orientation(p: SensorOrientation): U8Array {
+  return packet((b) => b.f64(p.webkit_compass_heading).f64(p.alpha).f64(p.beta).f64(p.gamma));
+}
+
+/** Command.SENSOR_PERMISSION's packet. */
+export interface SensorPermission {
+  sensor: Sensor;
+  answer: PermissionAnswer;
+}
+
+export function encode_sensor_permission(p: SensorPermission): U8Array {
+  return packet((b) => b.u32(p.sensor).u32(p.answer));
+}
+
+/** Command.SENSOR_VISIBILITY's packet. */
+export interface SensorVisibility {
+  visible: boolean;
+}
+
+export function encode_sensor_visibility(p: SensorVisibility): U8Array {
+  return packet((b) => b.bool(p.visible));
+}
+
+/** Command.FETCH_UPDATE's packet. */
+export interface FetchUpdate {
+  key: u64;
+  outcome: FetchOutcome;
+  body: u32;
+  /** 0 for none. */
+  body_bytes: u32;
+  fail: FetchFail;
+  /** Whatever number the host refused with, kept for the ledger to print and for nothing to branch on. */
+  detail: u32;
+  net_ms: f64;
+}
+
+export function encode_fetch_update(p: FetchUpdate): U8Array {
+  return packet((b) => b.u64(p.key).u32(p.outcome).u32(p.body).u32(p.body_bytes).u32(p.fail).u32(p.detail).f64(p.net_ms));
+}
+
+/** Command.LOAD_UPDATE's packet. */
+export interface LoadUpdate {
+  key: u64;
+  body: u32;
+  bytes: u32;
+}
+
+export function encode_load_update(p: LoadUpdate): U8Array {
+  return packet((b) => b.u64(p.key).u32(p.body).u32(p.bytes));
+}
+
+/** Command.LOAD_IMAGE's packet. */
+export interface LoadImage {
+  key: u64;
+  handle: u32;
+}
+
+export function encode_load_image(p: LoadImage): U8Array {
+  return packet((b) => b.u64(p.key).u32(p.handle));
+}
+
+/** Command.LOAD_DELETE's packet. */
+export interface LoadDelete {
+  key: u64;
+}
+
+export function encode_load_delete(p: LoadDelete): U8Array {
+  return packet((b) => b.u64(p.key));
+}
+
+/** Command.GPU_CREATE's packet. */
+export interface GpuCreate {
+  min_uniform_offset_alignment: u32;
+  timestamps: boolean;
+}
+
+export function encode_gpu_create(p: GpuCreate): U8Array {
+  return packet((b) => b.u32(p.min_uniform_offset_alignment).bool(p.timestamps));
+}
+
+/** Command.SURFACE_CREATE's packet. */
+export interface SurfaceCreate {
+  /** The renderer's surface_role (render/gpu/api.json). */
+  role: u32;
+}
+
+export function encode_surface_create(p: SurfaceCreate): U8Array {
+  return packet((b) => b.u32(p.role));
+}
+
+/** Command.SURFACE_UPDATE's packet. */
+export interface SurfaceUpdate {
+  surface: u32;
+  width: u32;
+  height: u32;
+  device_pixel_ratio: f64;
+}
+
+export function encode_surface_update(p: SurfaceUpdate): U8Array {
+  return packet((b) => b.u32(p.surface).u32(p.width).u32(p.height).f64(p.device_pixel_ratio));
+}
+
+/** Command.SURFACE_DELETE's packet. */
+export interface SurfaceDelete {
+  surface: u32;
+}
+
+export function encode_surface_delete(p: SurfaceDelete): U8Array {
+  return packet((b) => b.u32(p.surface));
+}
+
+/** Command.SETTING_UPDATE's packet. */
+export interface SettingUpdate {
+  key: u32;
+  /** A toggle's 0 or 1, a choice's option by its index, or a number. */
+  value: u32;
+}
+
+export function encode_setting_update(p: SettingUpdate): U8Array {
+  return packet((b) => b.u32(p.key).u32(p.value));
+}
+
+/** Command.SETTING_TOGGLE's packet. */
+export interface SettingToggle {
+  key: u32;
+}
+
+export function encode_setting_toggle(p: SettingToggle): U8Array {
+  return packet((b) => b.u32(p.key));
+}
+
+/** Command.CHAT_CREATE's packet. */
+export interface ChatCreate {
+  text: string;
+}
+
+export function encode_chat_create(p: ChatCreate): U8Array {
+  return packet((b) => b.str(p.text));
+}
+
+/** Command.PREVIEW_CREATE's packet. */
+export interface PreviewCreate {
+  surface: u32;
+  group: u32;
+  number: u32;
+}
+
+export function encode_preview_create(p: PreviewCreate): U8Array {
+  return packet((b) => b.u32(p.surface).u32(p.group).u32(p.number));
+}
+
+/** Command.PREVIEW_DELETE's packet. */
+export interface PreviewDelete {
+  surface: u32;
+}
+
+export function encode_preview_delete(p: PreviewDelete): U8Array {
+  return packet((b) => b.u32(p.surface));
+}
+
+/** Command.LEDGER_LOG's packet. */
+export interface LedgerLog {
+  on: boolean;
+}
+
+export function encode_ledger_log(p: LedgerLog): U8Array {
+  return packet((b) => b.bool(p.on));
+}
+
+/** Command.WORLD_SNAPSHOT's signal. */
+export interface WorldSnapshotSignal {
+  at: u32;
+  len: u32;
+}
+
+export function read_world_snapshot(b: BranchCursor): WorldSnapshotSignal {
+  return { at: b.at(0).get<u32>(), len: b.at(1).get<u32>() };
+}
+
+/** Command.SENSOR_CREATE's signal. */
+export interface SensorCreateSignal {
+  sensor: Sensor;
+}
+
+export function read_sensor_create(b: BranchCursor): SensorCreateSignal {
+  return { sensor: b.at(0).get<Sensor>() };
+}
+
+/** Command.SENSOR_DELETE's signal. */
+export interface SensorDeleteSignal {
+  sensor: Sensor;
+}
+
+export function read_sensor_delete(b: BranchCursor): SensorDeleteSignal {
+  return { sensor: b.at(0).get<Sensor>() };
+}
+
+/** Command.FETCH_CREATE's signal. */
+export interface FetchCreateSignal {
+  key: u64;
+  bake: u32;
+  name: string;
+}
+
+export function read_fetch_create(b: BranchCursor): FetchCreateSignal {
+  return { key: b.at(0).get<u64>(), bake: b.at(1).get<u32>(), name: b.at(2).get<string>() };
+}
+
+/** Command.FETCH_DELETE's signal. */
+export interface FetchDeleteSignal {
+  key: u64;
+}
+
+export function read_fetch_delete(b: BranchCursor): FetchDeleteSignal {
+  return { key: b.at(0).get<u64>() };
+}
+
+/** Command.LOAD_CREATE's signal. */
+export interface LoadCreateSignal {
+  key: u64;
+  kind: LoadKind;
+  /** asset/ingested's asset number, the texture pack's sheet one past the last. */
+  load: u32;
+}
+
+export function read_load_create(b: BranchCursor): LoadCreateSignal {
+  return { key: b.at(0).get<u64>(), kind: b.at(1).get<LoadKind>(), load: b.at(2).get<u32>() };
 }

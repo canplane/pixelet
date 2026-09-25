@@ -15,6 +15,7 @@ pub use xpute_runtime::sched::tick::{FrameBudget, Phase, StepStats, TickReport, 
 use xpute_runtime::sched::tick::{Tick, TickPolicy};
 
 use crate::global::Global;
+pub use crate::sched::ledger::spec::StepName;
 
 /// What a step reads of the frame beside the tick's own numbers.
 #[derive(Clone, Copy, Debug, Default)]
@@ -85,8 +86,8 @@ pub fn tick_step_stats_reset() {
 
 /// Registers a step into a phase. Returns the id `off_tick` takes. `name` is
 /// what the ledger reports the step's time under.
-pub fn on_tick(phase: Phase, step: TickStep, name: &'static str) -> u32 {
-    tick().on_tick(phase, step, name)
+pub fn on_tick(phase: Phase, step: TickStep, name: StepName) -> u32 {
+    tick().on_tick(phase, step, name as u32)
 }
 
 pub fn off_tick(id: u32) {

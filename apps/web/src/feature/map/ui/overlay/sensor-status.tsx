@@ -3,19 +3,20 @@
 import { Compass, Locate } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { kernel_enable_sensors, type PoseStatus, useKernel } from "@/kernel/shell.ts";
+import { DevicePoseStatus } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_enable_sensors, useKernel } from "@/kernel/shell.ts";
 
 import { cn } from "@/shared/lib/util/cn.ts";
 
-function statusClass(status: PoseStatus): string {
+function statusClass(status: DevicePoseStatus): string {
   switch (status) {
-    case "ready":
+    case DevicePoseStatus.Ready:
       return "text-emerald-500";
-    case "loading":
+    case DevicePoseStatus.Loading:
       return "text-amber-400 animate-pulse";
-    case "error":
+    case DevicePoseStatus.Error:
       return "text-red-400";
-    case "idle":
+    case DevicePoseStatus.Idle:
     default:
       return "text-[#5B4636]/30";
   }
@@ -31,7 +32,7 @@ export function SensorStatus() {
   const locationStatus = useKernel((s) => s.location.status);
   const orientationStatus = useKernel((s) => s.orientation.status);
 
-  const canRequest: boolean = locationStatus !== "ready" || orientationStatus !== "ready";
+  const canRequest: boolean = locationStatus !== DevicePoseStatus.Ready || orientationStatus !== DevicePoseStatus.Ready;
 
   const icons = (
     <>

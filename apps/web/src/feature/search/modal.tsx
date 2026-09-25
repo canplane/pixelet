@@ -9,7 +9,8 @@ import { useTranslation } from "react-i18next";
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
-import { kernel_action, kernel_snapshot } from "@/kernel/shell.ts";
+import { Command, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_command, kernel_snapshot } from "@/kernel/shell.ts";
 import { resolvePoiTheme } from "@/feature/search/poi-theme.ts";
 import { assembleLabel } from "@/feature/map/geocode/label.ts";
 import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
@@ -27,11 +28,6 @@ export interface SearchModalProps {
 interface LonLat {
   lon: f64;
   lat: f64;
-}
-
-/** The kernel's map centre, as the snapshot's `map.center` gives it in degrees. */
-function mapCenterToNear(map_center: [number, number]): LonLat {
-  return { lon: map_center[0], lat: map_center[1] };
 }
 
 const EARTH_RADIUS_M = 6378137;
@@ -158,8 +154,8 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
     const controller = new AbortController();
     const signal = controller.signal;
     const timer = setTimeout(() => {
-      const map_center = kernel_snapshot().map.center;
-      const near = map_center ? mapCenterToNear(map_center) : undefined;
+      // The kernel's map centre, in degrees.
+      const near = kernel_snapshot().map.center ?? undefined;
       fetchSearch(q, { near, signal })
         .then((found) => {
           setOrigin(near ?? null);
@@ -181,7 +177,7 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
     // The kernel's map centre: it grounds the jump the way a pan is, stops
     // follow mode (the user drove the camera), and grounds it again once the
     // target page's tile arrives, while the map is still on that page.
-    kernel_action({ type: "go_to", lon: result.lon, lat: result.lat });
+    kernel_command(Command.INPUT_GO_TO, encode_input_go_to({ lon: result.lon, lat: result.lat }));
     onOpenChange(false);
   }
 

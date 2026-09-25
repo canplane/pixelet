@@ -72,6 +72,18 @@ pub fn handheld() -> bool {
     *HANDHELD.get(|| false)
 }
 
+static DEVELOPMENT: Global<bool> = Global::new();
+
+/// Installs whether the build is a development one (the shell's
+/// `__IS_DEV__`), which offers the settings schema.json marks `dev`.
+pub fn set_development(development: bool) {
+    DEVELOPMENT.set(development);
+}
+
+pub fn development() -> bool {
+    *DEVELOPMENT.get(|| false)
+}
+
 static MEASURE: Global<fn(font: &str, text: &str) -> f64> = Global::new();
 
 fn measure_nothing(_: &str, text: &str) -> f64 {

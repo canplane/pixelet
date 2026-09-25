@@ -11,9 +11,9 @@
 //! issue/20260909-cooperative-scheduler-and-task-ledger.md: a black box the
 //! scheduler drives by key/priority, nothing more.
 
-use core::fmt;
-
 use pxl_spec::bake::published::BakeKind;
+
+pub use crate::sched::ledger::spec::TaskPhaseName;
 
 /// The most sub-timings one run reports.
 pub const PHASES_MAX: usize = 6;
@@ -22,22 +22,31 @@ pub const PHASES_MAX: usize = 6;
 /// its network wait from its decode, say. Lands in TaskRecord.phases, so the
 /// report can state whether a category is actually network- or memory-bound
 /// instead of leaning on category.rs's static guess. Named by the run.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Phases {
-    items: [(&'static str, f64); PHASES_MAX],
+    items: [(TaskPhaseName, f64); PHASES_MAX],
     len: usize,
+}
+
+impl Default for Phases {
+    fn default() -> Phases {
+        Phases {
+            items: [(TaskPhaseName::net_ms, 0.0); PHASES_MAX],
+            len: 0,
+        }
+    }
 }
 
 impl Phases {
     /// One more timing; past PHASES_MAX it is left out.
-    pub fn push(&mut self, name: &'static str, value: f64) {
+    pub fn push(&mut self, name: TaskPhaseName, value: f64) {
         if self.len < PHASES_MAX {
             self.items[self.len] = (name, value);
             self.len += 1;
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&'static str, f64)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (TaskPhaseName, f64)> + '_ {
         self.items[..self.len].iter().copied()
     }
 
@@ -47,23 +56,17 @@ impl Phases {
 }
 
 /// Which stream of deferrable I/O a demand belongs to. Coarse grouping —
-/// scopes sync's diff, and is what map_status and the ledger roll up by.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Category {
-    Terrain,
-    /// The one tile every open-water page shares.
-    Ocean,
-    Poi,
-    /// One group of pages of the reverse-geocode bake.
-    Geocode,
-    /// Its dictionary, which is a stream of one.
-    GeocodeDict,
-    /// A model or an image from the catalog. It shares the credits with the
-    /// pages and nothing else: a page is wanted while the view is where it
-    /// is, and an asset is wanted from the first time something needs it
-    /// until it is there, so it is never stale and never withdrawn.
-    Asset,
-}
+/// scopes sync's diff, and is what map_status and the ledger roll up by, so
+/// it is the ledger's own list (ledger.json's CATEGORY_NAMES):
+///
+/// - `ocean`: the one tile every open-water page shares.
+/// - `geocode`: one group of pages of the reverse-geocode bake, and
+///   `geocode_dict` its dictionary, which is a stream of one.
+/// - `asset`: a model or an image from the catalog. It shares the credits
+///   with the pages and nothing else: a page is wanted while the view is
+///   where it is, and an asset is wanted from the first time something needs
+///   it until it is there, so it is never stale and never withdrawn.
+pub use crate::sched::ledger::spec::CategoryName as Category;
 
 impl Category {
     /// Which bake an object of this category belongs to. The name inside that
@@ -74,22 +77,10 @@ impl Category {
     /// its content — and is asked for by its own command.
     pub fn bake(self) -> Option<BakeKind> {
         match self {
-            Category::Terrain | Category::Ocean => Some(BakeKind::terrain),
-            Category::Poi => Some(BakeKind::poi),
-            Category::Geocode | Category::GeocodeDict => Some(BakeKind::geocode),
-            Category::Asset => None,
-        }
-    }
-
-    /// A short name for a report to print, as `Outcome::as_str` is.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Category::Terrain => "terrain",
-            Category::Ocean => "ocean",
-            Category::Poi => "poi",
-            Category::Geocode => "geocode",
-            Category::GeocodeDict => "geocode_dict",
-            Category::Asset => "asset",
+            Category::terrain | Category::ocean => Some(BakeKind::terrain),
+            Category::poi => Some(BakeKind::poi),
+            Category::geocode | Category::geocode_dict => Some(BakeKind::geocode),
+            Category::asset => None,
         }
     }
 }
@@ -108,13 +99,6 @@ pub struct DemandKey {
 impl DemandKey {
     pub fn new(category: Category, subject: u64) -> DemandKey {
         DemandKey { category, subject }
-    }
-}
-
-impl fmt::Display for DemandKey {
-    /// `terrain:3231700000000`, for a report to print.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.category.as_str(), self.subject)
     }
 }
 

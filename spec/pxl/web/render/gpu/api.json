@@ -50,6 +50,12 @@
     "VIEW": 1,
     "SAMPLER": 2
   },
+  "surface_role": {
+    "$type": "u32",
+    "$doc": ["What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing in a case."],
+    "WORLD": 0,
+    "CASE": 1
+  },
   "load": {
     "$type": "u32",
     "$doc": ["An attachment's start: cleared, loaded, or a depth read and not written."],

@@ -7,6 +7,7 @@ import { decor_ids, type DecorId, placeable_cubes, type PlaceableCube, placeable
 
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { useUiStore } from "@/app/store/ui-store.ts";
+import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { cn } from "@/shared/lib/util/cn.ts";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs.tsx";
@@ -54,7 +55,7 @@ function CubeSwatchButton({ cube, onPick }: { cube: PlaceableCube; onPick: (cube
   const { t } = useTranslation();
   const activeTool = useUiStore((s) => s.activeTool);
   const objectColorId = useUiStore((s) => s.objectColorId);
-  const active = activeTool === "object" && objectColorId === placeableCubeId(cube);
+  const active = activeTool === ActiveTool.Object && objectColorId === placeableCubeId(cube);
   const label = cubeLabel(t, cube);
 
   return (
@@ -82,7 +83,7 @@ function DecorGridButton({ id, onPick }: { id: DecorId; onPick: (id: DecorId) =>
   const { t } = useTranslation();
   const activeTool = useUiStore((s) => s.activeTool);
   const decor_id = useUiStore((s) => s.decor_id);
-  const active = activeTool === "decor" && decor_id === id;
+  const active = activeTool === ActiveTool.Decor && decor_id === id;
   const Icon = DECOR_ICONS[id];
 
   return (

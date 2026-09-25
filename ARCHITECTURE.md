@@ -173,7 +173,7 @@ The shell is a device driver (`apps/web/src/kernel/`). It does five things:
 - Does the I/O the kernel names — fetches, image decodes, sensor watches — and hands the bytes to blocks the kernel chose.
 - Hands over canvases. A canvas is transferred to an `OffscreenCanvas` once and drawn by the kernel from then on, named by a handle like any GPU object.
 
-The UI is React over one snapshot, a JSON document the kernel writes after a turn in which something changed. Every control is an action the kernel applies. Nothing in the shell computes a coordinate, a tile or a draw.
+The UI is React over one snapshot, a packet the kernel writes after a turn in which something changed. Every control is a command of its own that the kernel applies. Nothing in the shell computes a coordinate, a tile or a draw.
 
 ## The kernel's turn
 
@@ -228,7 +228,7 @@ What the policy says: the frame is the 25th percentile of recent gaps between fr
 
 The shell and the kernel share three rings, each 2048 messages of four words with 4 KiB payload slots. Two of them are the pair xpute describes: one for what the shell submits, one for what the kernel completes. The third is a spill, which the completion ring overflows into when it is full, so that nothing is dropped and completions stay in order.
 
-The command numbers are `spec/pxl/spec/abi/cmd.json`'s. A packet is an XTP tree, and anything larger than a slot crosses in a heap block the kernel hands out.
+The commands are `spec/pxl/web/kernel/abi/cmd.json`'s: each one's number and the fields of the packet it carries, from which both sides' readers and writers are generated, so no field is found by its position anywhere else. A packet is an XTP tree, and anything larger than a slot crosses in a heap block the kernel hands out.
 
 The kernel also posts messages nobody asked for: a fetch to start or cancel, a model or image to decode, a sensor to watch, a console line, a new snapshot. Those are its signals.
 
@@ -358,7 +358,7 @@ Badges are one instanced quad (`layer/billboard/field.rs`) drawn from one atlas 
 
 ## Catalogs and assets
 
-Everything a build ships is decided at build time, as JSON under `spec/` grouped the way `crates/` is. `script/spec.ts` writes a Rust module from each file and, where the shell reads it, a TypeScript one; `deno task spec` writes them and `check:spec` fails when the tree disagrees with the JSON. That covers the command numbers, the cell catalogs, the memory map, the GPU API's enums, the ledger's layout, the settings schema, the decor and character catalogs, the routes and the published versions.
+Everything a build ships is decided at build time, as JSON under `spec/` grouped the way `crates/` is. `script/spec.ts` writes a Rust module from each file and, where the shell reads it, a TypeScript one; `deno task spec` writes them and `check:spec` fails when the tree disagrees with the JSON. That covers the commands and their packets, the cell catalogs, the memory map, the GPU API's enums, the ledger's layout, the settings schema, the decor and character catalogs, the routes and the published versions.
 
 A catalog is never sent. Both sides compile it, so a message carrying it would be a program telling itself what it already knows. Where bytes do cross — a published page, a saved blob — the layout is the model's and the version is in the envelope: the path, or the storage key.
 

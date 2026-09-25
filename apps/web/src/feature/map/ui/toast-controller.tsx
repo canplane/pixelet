@@ -6,6 +6,7 @@ import { CheckCircle2, Loader2, MapPinOff } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { messageKey as locationMessageKey } from "@/locale/message-key.ts";
+import { DevicePoseStatus, MapStatus } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
 import { Toast } from "@/shared/ui/toast/toast.tsx";
@@ -73,8 +74,8 @@ export function ToastController() {
   tRef.current = t;
 
   useEffect(() => {
-    const isLoading = locationStatus === "loading";
-    const isError = locationStatus === "error";
+    const isLoading = locationStatus === DevicePoseStatus.Loading;
+    const isError = locationStatus === DevicePoseStatus.Error;
 
     if (!isLoading && !isError) {
       if (shownLocationToastRef.current) {
@@ -106,7 +107,7 @@ export function ToastController() {
   const wasWorldLoadingRef = useRef(false);
   // The last page announced as ready. `undefined` rather than null so that the
   // very first announcement is not swallowed by a centre that has none yet.
-  const announcedPageRef = useRef<string | null | undefined>(undefined);
+  const announcedPageRef = useRef<bigint | null | undefined>(undefined);
   const shownWorldToastRef = useRef(false);
   // The ready toast's own timer, held here rather than returned as the
   // effect's cleanup: the effect re-runs whenever the page changes, and a
@@ -129,8 +130,8 @@ export function ToastController() {
   // so companion_loading stops feeding this toast after that point.
   const companionFirstLoadDoneRef = useRef(false);
   useEffect(() => {
-    const isMapLoading = mapStatus === "loading";
-    const isError = mapStatus === "error";
+    const isMapLoading = mapStatus === MapStatus.Loading;
+    const isError = mapStatus === MapStatus.Error;
     const relevantCompanionLoading = companion_loading && !companionFirstLoadDoneRef.current;
     if (!companion_loading) companionFirstLoadDoneRef.current = true;
     const isLoading = isMapLoading || relevantCompanionLoading;

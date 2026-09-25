@@ -2,7 +2,8 @@
 
 import { useTranslation } from "react-i18next";
 
-import { kernel_action, useKernel } from "@/kernel/shell.ts";
+import { Command, encode_input_poi_focus } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_command, useKernel } from "@/kernel/shell.ts";
 
 /** The badges on the map as a list, nearest what the view looks at first: a
  * place by its name, a crowd by how many it is. Choosing one goes to it a
@@ -17,11 +18,11 @@ export function PoiPanel() {
       <summary className="cursor-pointer">{t("map.poi.places")}</summary>
       <ul className="max-h-[35vh] overflow-y-auto">
         {badges.map((b) => (
-          <li key={b.id}>
+          <li key={`${b.page}:${b.index}`}>
             <button
               type="button"
               className="min-h-8 w-full break-words text-left"
-              onClick={() => kernel_action({ type: "poi_focus", id: b.id })}
+              onClick={() => kernel_command(Command.INPUT_POI_FOCUS, encode_input_poi_focus({ page: b.page, index: b.index }))}
             >
               {b.name ?? t("map.poi.count", { count: b.count })}
             </button>

@@ -2,29 +2,8 @@
 
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 
+pub use crate::abi::cmd::MapStatus;
 use crate::global::Global;
-
-/// Data loading lifecycle.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum MapStatus {
-    #[default]
-    Idle,
-    Loading,
-    Success,
-    Error,
-}
-
-impl MapStatus {
-    /// The name the UI snapshot carries.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            MapStatus::Idle => "idle",
-            MapStatus::Loading => "loading",
-            MapStatus::Success => "success",
-            MapStatus::Error => "error",
-        }
-    }
-}
 
 #[derive(Default)]
 pub struct MapStore {

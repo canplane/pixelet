@@ -10,7 +10,8 @@
 import { useEffect, useRef, useState } from "react";
 
 import { KernelDriver } from "@/kernel/control/input.ts";
-import { open_surface, SURFACE_WORLD } from "@/kernel/render/surface.ts";
+import { open_surface } from "@/kernel/render/surface.ts";
+import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
 import { LedgerOverlay } from "@/feature/dev/ledger/overlay.tsx";
 
 import { Overlays } from "./overlay/overlays.tsx";
@@ -25,7 +26,7 @@ export function MapView() {
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
-    const surface = open_surface(element, SURFACE_WORLD);
+    const surface = open_surface(element, surface_role.WORLD);
     setCanvas(element);
     return () => {
       setCanvas(null);

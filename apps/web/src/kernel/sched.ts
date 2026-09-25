@@ -13,8 +13,8 @@
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Strobe } from "@xpute/runtime/sched/strobe.ts";
-import { Command } from "@/kernel/abi/cmd.spec.ts";
-import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
+import { Command, encode_world_update } from "@/kernel/abi/cmd.spec.ts";
+import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { CORE_KERNEL } from "@/kernel/mem.ts";
 import { boot_block, quantum_policy } from "@/kernel/module.ts";
 
@@ -48,7 +48,7 @@ const strobe = new Strobe(CORE_BUILD, quantum_policy(boot_block(CORE_KERNEL)), (
   CORE_BUILD.send(
     0,
     Command.WORLD_UPDATE,
-    packet((b) => b.f64(width).f64(height).f64(dpr()).f64(delta_s).f64(grant.frame_ms).bool(grant.interactive).u32(NET_CREDITS)),
+    encode_world_update({ width, height, dpr: dpr(), delta_s, frame_ms: grant.frame_ms, interactive: grant.interactive, credits: NET_CREDITS }),
   );
 }, (run) => requestAnimationFrame(run));
 

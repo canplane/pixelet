@@ -39,10 +39,8 @@ use crate::layer::marker::location_puck::location_puck_step;
 use crate::layer::object::teach::teach_objects;
 use crate::layer::terrain::page::terrain_step;
 use crate::layer::terrain::teach::teach_terrain;
-use crate::sched::ledger::record::name_index;
-use crate::sched::ledger::spec::EFFECT_NAMES;
-use crate::sched::tick::{on_tick, run_tick, TickContext, TickReport, TickState, COSMETIC, INTERACTION, REPORT, VISIBLE};
-use crate::shell::config::env::APP_ENV;
+use crate::sched::ledger::spec::EffectName;
+use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickReport, TickState, COSMETIC, INTERACTION, REPORT, VISIBLE};
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
 use crate::world::change::{request_world_tick, world_edge};
@@ -80,7 +78,7 @@ fn companion_tick(ctx: &mut TickContext) {
 
 fn debug_gizmos_tick(_: &mut TickContext) {
     let map_center = map_store().map_center;
-    let show = APP_ENV() != "production" && settings_store().show_debug_objects && map_center.is_some();
+    let show = settings_store().show_debug_objects && map_center.is_some();
     debug_gizmos_step(show, map_center, local_world_origin());
 }
 
@@ -100,18 +98,18 @@ pub fn boot() {
     teach_terrain();
     teach_objects();
 
-    on_tick(INTERACTION, camera_input_tick, "input");
-    on_tick(INTERACTION, camera_step, "camera");
-    on_tick(INTERACTION, view_rotation_step, "view_rotation");
-    on_tick(INTERACTION, view_translation_step, "view_translation");
+    on_tick(INTERACTION, camera_input_tick, StepName::input);
+    on_tick(INTERACTION, camera_step, StepName::camera);
+    on_tick(INTERACTION, view_rotation_step, StepName::view_rotation);
+    on_tick(INTERACTION, view_translation_step, StepName::view_translation);
     // After the view has moved: the environment observes the camera centre
     // the view eased to this tick.
-    on_tick(INTERACTION, environment_tick, "environment");
-    on_tick(INTERACTION, companion_tick, "companion");
-    on_tick(INTERACTION, crate::layer::character::preview::preview_step, "preview");
-    on_tick(VISIBLE, core_tick_visible_step, "chunks");
-    on_tick(COSMETIC, debug_gizmos_tick, "debug_gizmos");
-    on_tick(REPORT, core_tick_report_step, "ledger");
+    on_tick(INTERACTION, environment_tick, StepName::environment);
+    on_tick(INTERACTION, companion_tick, StepName::companion);
+    on_tick(INTERACTION, crate::layer::character::preview::preview_step, StepName::preview);
+    on_tick(VISIBLE, core_tick_visible_step, StepName::chunks);
+    on_tick(COSMETIC, debug_gizmos_tick, StepName::debug_gizmos);
+    on_tick(REPORT, core_tick_report_step, StepName::ledger);
     world_tasks();
 }
 
@@ -161,17 +159,12 @@ pub fn worst_effect() -> (f64, Option<u32>) {
 /// milliseconds of a turn whose tick was one and a half, and no number in
 /// the ledger named the region it was in (2026-09-23).
 macro_rules! effect {
-    ($worst:ident, $name:literal, $step:expr) => {{
-        // An item and not an inline `const {}`: in a function that is not
-        // `const` the block is evaluated only when the function is built,
-        // which `deno task check` never does, and the gate would pass a name
-        // EFFECT_NAMES lacks.
-        const EFFECT: u32 = name_index(EFFECT_NAMES, $name);
+    ($worst:ident, $name:ident, $step:expr) => {{
         let at = now();
         $step;
         let ms = now() - at;
         if ms > $worst.0 {
-            $worst = (ms, Some(EFFECT));
+            $worst = (ms, Some(EffectName::$name as u32));
         }
     }};
 }
@@ -181,27 +174,27 @@ pub fn world_turn() -> f64 {
     let at = now();
     let platform = world_platform();
     let mut worst = (0.0f64, None);
-    effect!(worst, "navigation", map_navigation_step());
-    effect!(worst, "bootstrap", map_bootstrap_step());
-    effect!(worst, "shell", crate::shell::shell::shell_step());
-    effect!(worst, "geolocation", geolocation_step(platform.geolocation));
-    effect!(worst, "orientation", orientation_watchdog_step(platform.orientation));
-    effect!(worst, "tiles", terrain_step());
-    effect!(worst, "poi", crate::layer::poi::poi_step());
-    effect!(worst, "geocode", geocode_fetcher_step());
-    effect!(worst, "follow", follow_mode_step());
-    effect!(worst, "theme", theme_clock_step());
-    effect!(worst, "decor", decor_assets_wanted());
-    effect!(worst, "chunk_nodes", chunk_nodes_step());
-    effect!(worst, "hover", hover_cursor_step());
+    effect!(worst, navigation, map_navigation_step());
+    effect!(worst, bootstrap, map_bootstrap_step());
+    effect!(worst, shell, crate::shell::shell::shell_step());
+    effect!(worst, geolocation, geolocation_step(platform.geolocation));
+    effect!(worst, orientation, orientation_watchdog_step(platform.orientation));
+    effect!(worst, tiles, terrain_step());
+    effect!(worst, poi, crate::layer::poi::poi_step());
+    effect!(worst, geocode, geocode_fetcher_step());
+    effect!(worst, follow, follow_mode_step());
+    effect!(worst, theme, theme_clock_step());
+    effect!(worst, decor, decor_assets_wanted());
+    effect!(worst, chunk_nodes, chunk_nodes_step());
+    effect!(worst, hover, hover_cursor_step());
     // device_coord is deliberately not gated the way map_center is — the puck
     // holds its own last-known coordinate across a transient none.
-    effect!(worst, "puck", location_puck_step(map_navigation().device_coord));
-    effect!(worst, "objects", crate::layer::object::store::flush_save_if_due());
+    effect!(worst, puck, location_puck_step(map_navigation().device_coord));
+    effect!(worst, objects, crate::layer::object::store::flush_save_if_due());
     // After every producer has spoken, including whatever asked for an
     // asset while the turn ran.
-    effect!(worst, "assets", crate::io::sched::declare(crate::io::demand::Category::Asset, &crate::io::load::load_wants()));
-    effect!(worst, "pump", pump());
+    effect!(worst, assets, crate::io::sched::declare(crate::io::demand::Category::asset, &crate::io::load::load_wants()));
+    effect!(worst, pump, pump());
     *WORST_EFFECT.get(|| (0.0, None)) = worst;
     now() - at
 }

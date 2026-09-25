@@ -5,9 +5,10 @@ import { Bug, Eye, Gauge, Move3d, Pickaxe, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { isDevSection, type SettingKey, SETTINGS, type SettingSection, settingsIn, type ToggleKey } from "@/feature/setting/schema.ts";
+import { isDevSection, type Setting, type SettingName, SETTINGS, type SettingSection, settingsIn } from "@/feature/setting/schema.ts";
 import { SectionTitle, SettingGroup, SettingRadioRow, SettingRow } from "./row.tsx";
-import { kernel_action, useKernel } from "@/kernel/shell.ts";
+import { Command, encode_setting_toggle, encode_setting_update } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_command, useKernel } from "@/kernel/shell.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, LucideIcon>> = {
   display: Eye,
@@ -47,13 +48,12 @@ export function SettingsSection(props: { section: SettingSection; children?: Rea
   );
 }
 
-function SettingControl(props: { name: SettingKey }) {
+function SettingControl(props: { name: SettingName }) {
   const { name } = props;
   const { t } = useTranslation();
-  const setting = SETTINGS[name];
-  const value = useKernel((s) => s.settings[name]);
-  const set_setting = (key: string, option: string) => kernel_action({ type: "set_setting", key, value: option });
-  const toggle_setting = (key: string) => kernel_action({ type: "toggle_setting", key });
+  const setting: Setting = SETTINGS[name];
+  const { key } = setting;
+  const value = useKernel((s) => s.settings[key]);
   const base = `settings.${setting.section}.${name}`;
 
   switch (setting.kind) {
@@ -62,8 +62,8 @@ function SettingControl(props: { name: SettingKey }) {
         <SettingRow
           label={t(`${base}.label`)}
           description={t(`${base}.description`)}
-          active={value as boolean}
-          onToggle={() => toggle_setting(name as ToggleKey)}
+          active={value === 1}
+          onToggle={() => kernel_command(Command.SETTING_TOGGLE, encode_setting_toggle({ key }))}
           cost={setting.cost}
           dev={setting.dev && !isDevSection(setting.section)}
         />
@@ -76,14 +76,14 @@ function SettingControl(props: { name: SettingKey }) {
               key={option}
               label={t(`${base}.${option}.label`)}
               description={t(`${base}.${option}.description`)}
-              selected={value === option}
-              onSelect={() => set_setting(name, option)}
+              selected={value === i}
+              onSelect={() => kernel_command(Command.SETTING_UPDATE, encode_setting_update({ key, value: i }))}
               cost={setting.costs?.[i] || setting.cost}
             />
           ))}
         </SettingGroup>
       );
-    case "text":
+    case "number":
       return null;
   }
 }

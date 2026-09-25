@@ -64,6 +64,13 @@ pub mod resource {
     pub const KEYS: &[&str] = &["BUFFER", "VIEW", "SAMPLER"];
 }
 
+/// What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing in a case.
+pub mod surface_role {
+    pub const WORLD: u32 = 0;
+    pub const CASE: u32 = 1;
+    pub const KEYS: &[&str] = &["WORLD", "CASE"];
+}
+
 /// An attachment's start: cleared, loaded, or a depth read and not written.
 pub mod load {
     pub const CLEAR: u32 = 0;

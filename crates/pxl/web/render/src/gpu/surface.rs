@@ -12,9 +12,7 @@ use xpute_core::math::scalar::round;
 use xpute_runtime::abi::handle::{handle_slot, HandleTable};
 use xpute_runtime::global::Global;
 
-/// What a surface shows.
-pub const ROLE_WORLD: u32 = 0;
-pub const ROLE_CASE: u32 = 1;
+use crate::gpu::api_spec::surface_role;
 
 /// Surfaces open at once, and slot 0, which is never one.
 pub const SURFACES: usize = 9;
@@ -66,7 +64,7 @@ impl Surface {
         let (w, h) = (self.px_w.max(1) as f64, self.px_h.max(1) as f64);
         let dpr = if self.dpr > 0.0 { self.dpr } else { 1.0 };
         let mut k = dpr.clamp(DPR_MIN, DPR_MAX) / dpr;
-        if self.role == ROLE_CASE {
+        if self.role == surface_role::CASE {
             k = k.min(CASE_LONG_SIDE_MAX / w.max(h));
         }
         (round(w * k).max(1.0) as u32, round(h * k).max(1.0) as u32)

@@ -50,6 +50,12 @@ export const resource = {
   SAMPLER: 2 as number,
 } as const;
 
+/** What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing in a case. */
+export const surface_role = {
+  WORLD: 0 as number,
+  CASE: 1 as number,
+} as const;
+
 /** An attachment's start: cleared, loaded, or a depth read and not written. */
 export const load = {
   CLEAR: 0 as number,

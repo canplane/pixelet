@@ -15,39 +15,51 @@
 import { useLayoutEffect } from "react";
 
 import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
-import { Command } from "@/kernel/abi/cmd.spec.ts";
-import { GEOLOCATION, PERMISSION_DENIED, PERMISSION_GRANTED, send_permission } from "@/kernel/control/sensor.ts";
-import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
+import {
+  ActiveTool,
+  Command,
+  encode_input_pointer,
+  encode_input_update,
+  encode_input_wheel,
+  encode_sensor_visibility,
+  PermissionAnswer,
+  PointerKind,
+  PointerPhase,
+  Sensor,
+} from "@/kernel/abi/cmd.spec.ts";
+import { send_permission } from "@/kernel/control/sensor.ts";
+import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { request_frame, set_driver, strobe } from "@/kernel/sched.ts";
-import { kernel_action } from "@/kernel/shell.ts";
+import { kernel_command } from "@/kernel/shell.ts";
 
 export function send_rect(element: HTMLElement): void {
   const r = element.getBoundingClientRect();
-  CORE_BUILD.send(0, Command.INPUT_UPDATE, packet((b) => b.f64(r.left).f64(r.top).f64(r.width).f64(r.height)));
+  CORE_BUILD.send(0, Command.INPUT_UPDATE, encode_input_update({ left: r.left, top: r.top, width: r.width, height: r.height }));
 }
 
 /** What the pointer holds: a tool, the placeable cube's or decor's catalog
  * number, and the object size's tier. The kernel keeps no pick of its own; each
  * pointer event carries this. */
 interface Holding {
-  tool: u32;
+  tool: ActiveTool;
   value: u32;
   tier: u32;
 }
 
-let holding: Holding = { tool: 0, value: 0, tier: 0 };
+let holding: Holding = { tool: ActiveTool.Pointer, value: 0, tier: 0 };
 /** The last hovering pointer, while it is over the canvas. */
-let last_hover: { kind: u32; id: i32; button: i32; x: f64; y: f64 } | null = null;
+let last_hover: { kind: PointerKind; id: i32; button: i32; x: f64; y: f64 } | null = null;
 
-function send_pointer_at(phase: u32, kind: u32, id: i32, button: i32, x: f64, y: f64): void {
-  CORE_BUILD.send(0, Command.INPUT_POINTER, packet((b) => b.u32(phase).u32(kind).i32(id).i32(button).f64(x).f64(y).u32(holding.tool).u32(holding.value).u32(holding.tier)));
+function send_pointer_at(phase: PointerPhase, kind: PointerKind, id: i32, button: i32, x: f64, y: f64): void {
+  const { tool, value, tier } = holding;
+  CORE_BUILD.send(0, Command.INPUT_POINTER, encode_input_pointer({ phase, kind, id, button, x, y, tool, value, tier }));
   strobe.input();
   request_frame();
 }
 
-function send_pointer(phase: u32, e: PointerEvent): void {
-  const kind = e.pointerType === "touch" ? 1 : e.pointerType === "pen" ? 2 : 0;
-  last_hover = phase === 3 || kind === 1 ? null : { kind, id: e.pointerId, button: e.button, x: e.clientX, y: e.clientY };
+function send_pointer(phase: PointerPhase, e: PointerEvent): void {
+  const kind = e.pointerType === "touch" ? PointerKind.Touch : e.pointerType === "pen" ? PointerKind.Pen : PointerKind.Mouse;
+  last_hover = phase === PointerPhase.Out || kind === PointerKind.Touch ? null : { kind, id: e.pointerId, button: e.button, x: e.clientX, y: e.clientY };
   send_pointer_at(phase, kind, e.pointerId, e.button, e.clientX, e.clientY);
 }
 
@@ -57,9 +69,9 @@ function send_pointer(phase: u32, e: PointerEvent): void {
  * is sent, as a browser synthesizes a mouse move when what is under a still
  * cursor changes.
  */
-export function kernel_hold(tool: u32, value: u32, tier: u32): void {
+export function kernel_hold(tool: ActiveTool, value: u32, tier: u32): void {
   holding = { tool, value, tier };
-  if (last_hover) send_pointer_at(1, last_hover.kind, last_hover.id, last_hover.button, last_hover.x, last_hover.y);
+  if (last_hover) send_pointer_at(PointerPhase.Move, last_hover.kind, last_hover.id, last_hover.button, last_hover.x, last_hover.y);
 }
 
 /**
@@ -73,14 +85,14 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
 
     const on_down = (e: PointerEvent) => {
       send_rect(element);
-      send_pointer(0, e);
+      send_pointer(PointerPhase.Down, e);
     };
-    const on_move = (e: PointerEvent) => send_pointer(1, e);
-    const on_up = (e: PointerEvent) => send_pointer(2, e);
-    const on_leave = (e: PointerEvent) => send_pointer(3, e);
+    const on_move = (e: PointerEvent) => send_pointer(PointerPhase.Move, e);
+    const on_up = (e: PointerEvent) => send_pointer(PointerPhase.Up, e);
+    const on_leave = (e: PointerEvent) => send_pointer(PointerPhase.Out, e);
     const on_wheel = (e: WheelEvent) => {
       if (e.ctrlKey) e.preventDefault();
-      CORE_BUILD.send(0, Command.INPUT_WHEEL, packet((b) => b.f64(e.deltaY)));
+      CORE_BUILD.send(0, Command.INPUT_WHEEL, encode_input_wheel({ delta_y: e.deltaY }));
       strobe.input();
       request_frame();
     };
@@ -93,7 +105,7 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     // hiding is the last moment a phone's tab is sure to get for the pending
     // save.
     const send_visibility = (visible: boolean) => {
-      CORE_BUILD.send(0, Command.SENSOR_VISIBILITY, packet((b) => b.bool(visible)));
+      CORE_BUILD.send(0, Command.SENSOR_VISIBILITY, encode_sensor_visibility({ visible }));
       CORE_BUILD.ring(0);
     };
     const on_visibility = () => {
@@ -120,7 +132,7 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     // from outside the app, since nothing else would ask again.
     let permission: PermissionStatus | null = null;
     const on_permission = () => {
-      send_permission(GEOLOCATION, permission?.state === "granted" ? PERMISSION_GRANTED : PERMISSION_DENIED);
+      send_permission(Sensor.Geolocation, permission?.state === "granted" ? PermissionAnswer.Granted : PermissionAnswer.Denied);
     };
     navigator.permissions?.query({ name: "geolocation" }).then((status) => {
       permission = status;
@@ -128,12 +140,12 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     }).catch(() => {});
 
     send_rect(element);
-    kernel_action({ type: "sensors_open" });
+    kernel_command(Command.SENSOR_OPEN);
     strobe.start();
 
     return () => {
       strobe.stop();
-      kernel_action({ type: "sensors_close" });
+      kernel_command(Command.SENSOR_CLOSE);
       permission?.removeEventListener("change", on_permission);
       observer.disconnect();
       globalThis.removeEventListener("pagehide", on_page_hide);

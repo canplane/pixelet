@@ -15,14 +15,13 @@ use xpute_runtime::abi::fetch::FetchFail;
 
 use crate::global::Global;
 use crate::io::demand::{Category, Phases};
-use crate::shell::config::env::APP_ENV;
 use crate::shell::setting::store::settings_store;
 use crate::world::pyramid::{Layer, Pyramid};
 
 static POI: Global<Pyramid<PoiPage>> = Global::new();
 
 impl Layer for PoiPage {
-    const CATEGORY: Category = Category::Poi;
+    const CATEGORY: Category = Category::poi;
 
     fn pyramid() -> &'static mut Pyramid<PoiPage> {
         POI.get(Pyramid::default)
@@ -45,7 +44,7 @@ impl Layer for PoiPage {
 }
 
 pub fn enabled() -> bool {
-    APP_ENV() != "production" && settings_store().show_poi
+    settings_store().show_poi
 }
 
 /// The layer's turn: its pyramid's while places are shown, and nothing asked

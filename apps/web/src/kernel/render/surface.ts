@@ -8,14 +8,10 @@
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
-import { Command } from "@/kernel/abi/cmd.spec.ts";
-import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
+import { Command, encode_surface_create, encode_surface_delete, encode_surface_update } from "@/kernel/abi/cmd.spec.ts";
+import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { bind_surface, unbind_surface } from "@/kernel/render/gpu.ts";
 import { dpr, request_frame } from "@/kernel/sched.ts";
-
-/** What a surface shows: surface.rs's ROLE_WORLD and ROLE_CASE. */
-export const SURFACE_WORLD = 0;
-export const SURFACE_CASE = 1;
 
 export interface OpenSurface {
   handle: u32;
@@ -33,11 +29,11 @@ export interface OpenSurface {
  * does not (Safari), the CSS box times the pixel ratio stands in, and a zoom —
  * which changes the ratio and not the box — is caught by the window's resize. */
 export function open_surface(canvas: HTMLCanvasElement, role: u32): OpenSurface {
-  const handle = CORE_BUILD.call(Command.SURFACE_CREATE, packet((b) => b.u32(role)), (result) => result >>> 0);
+  const handle = CORE_BUILD.call(Command.SURFACE_CREATE, encode_surface_create({ role }), (result) => result >>> 0);
   if (handle === 0) return { handle, close: () => {} };
   bind_surface(handle, canvas);
   const send = (width: u32, height: u32) => {
-    CORE_BUILD.send(0, Command.SURFACE_UPDATE, packet((b) => b.u32(handle).u32(width).u32(height).f64(dpr())));
+    CORE_BUILD.send(0, Command.SURFACE_UPDATE, encode_surface_update({ surface: handle, width, height, device_pixel_ratio: dpr() }));
     request_frame();
   };
   const send_box = () => send(round(canvas.clientWidth * dpr()), round(canvas.clientHeight * dpr()));
@@ -58,7 +54,7 @@ export function open_surface(canvas: HTMLCanvasElement, role: u32): OpenSurface 
     close: () => {
       globalThis.removeEventListener("resize", send_box);
       observer.disconnect();
-      CORE_BUILD.call(Command.SURFACE_DELETE, packet((b) => b.u32(handle)), (result) => result);
+      CORE_BUILD.call(Command.SURFACE_DELETE, encode_surface_delete({ surface: handle }), (result) => result);
       unbind_surface(handle);
     },
   };

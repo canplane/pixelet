@@ -11,6 +11,7 @@ import { cn } from "@/shared/lib/util/cn.ts";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { useAppContext } from "@/app/provider/context.ts";
 import { useUiStore } from "@/app/store/ui-store.ts";
+import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { type DecorId, placeable_cubes, type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
 import { useKernel } from "@/kernel/shell.ts";
 import { cubeSwatchStyle } from "./cube-swatch.ts";
@@ -214,7 +215,7 @@ function ColorSwatchButton({ cube }: { cube: PlaceableCube }) {
           style={cubeSwatchStyle(cube)}
           className={cn(
             "w-5 h-5 rounded-full transition-transform",
-            activeTool === "object" && objectColorId === placeableCubeId(cube) ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
+            activeTool === ActiveTool.Object && objectColorId === placeableCubeId(cube) ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
           )}
         />
       </button>
@@ -232,7 +233,7 @@ function DecorIconButton({ id }: { id: DecorId }) {
   const decor_id = useUiStore((s) => s.decor_id);
   const selectDecor = useUiStore.getState().selectDecor;
   const Icon = DECOR_ICONS[id];
-  const active = activeTool === "decor" && decor_id === id;
+  const active = activeTool === ActiveTool.Decor && decor_id === id;
 
   return (
     <button
@@ -485,10 +486,10 @@ export function ModeBar() {
                   <div className="flex items-center p-[4px] shrink-0">
                     <button
                       type="button"
-                      onClick={() => set_activeTool("pointer")}
+                      onClick={() => set_activeTool(ActiveTool.Pointer)}
                       className={cn(
                         "flex items-center justify-center w-[38px] h-[38px] rounded-full cursor-pointer transition-colors shrink-0",
-                        activeTool === "pointer" ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
+                        activeTool === ActiveTool.Pointer ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
                       )}
                       title={t("map.mode_bar.pointer")}
                     >
@@ -497,10 +498,10 @@ export function ModeBar() {
 
                     <button
                       type="button"
-                      onClick={() => set_activeTool("eraser")}
+                      onClick={() => set_activeTool(ActiveTool.Eraser)}
                       className={cn(
                         "flex items-center justify-center w-[38px] h-[38px] rounded-full cursor-pointer transition-colors shrink-0",
-                        activeTool === "eraser" ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
+                        activeTool === ActiveTool.Eraser ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
                       )}
                       title={t("map.mode_bar.eraser")}
                     >

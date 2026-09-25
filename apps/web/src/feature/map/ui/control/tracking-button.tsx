@@ -3,7 +3,8 @@
 import { Compass, Loader2, Locate, Navigation } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { kernel_tracking, TRACKING_FOLLOW, TRACKING_RECENTER, TRACKING_UNFOLLOW, useKernel } from "@/kernel/shell.ts";
+import { DevicePoseStatus, Tracking } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_tracking, useKernel } from "@/kernel/shell.ts";
 
 import { cn } from "@/shared/lib/util/cn.ts";
 import { CircularButton } from "@/shared/ui/shadcn/circular-button.tsx";
@@ -14,13 +15,13 @@ export function TrackingButton() {
   const locationStatus = useKernel((s) => s.location.status);
   const has_location = useKernel((s) => s.location.has_location);
   const heading = useKernel((s) => s.orientation.heading);
-  const azimuth = useKernel((s) => s.view.azimuth);
+  const azimuth = useKernel((s) => s.azimuth);
   const is_follow_mode = useKernel((s) => s.is_follow_mode);
   const is_off_center = useKernel((s) => s.map.is_off_center);
 
   const canShowLocationControl: boolean = is_off_center && !is_follow_mode;
-  const isEnabled: boolean = locationStatus === "ready" && has_location;
-  const isLoading: boolean = locationStatus === "loading";
+  const isEnabled: boolean = locationStatus === DevicePoseStatus.Ready && has_location;
+  const isLoading: boolean = locationStatus === DevicePoseStatus.Loading;
 
   const getIconStyle = () => {
     if (isLoading) return { Icon: Loader2, className: "animate-spin opacity-40" };
@@ -40,7 +41,7 @@ export function TrackingButton() {
     <CircularButton
       className="w-12 h-12"
       shadow={false}
-      onClick={() => void kernel_tracking(canShowLocationControl ? TRACKING_RECENTER : is_follow_mode ? TRACKING_UNFOLLOW : TRACKING_FOLLOW)}
+      onClick={() => void kernel_tracking(canShowLocationControl ? Tracking.Recenter : is_follow_mode ? Tracking.Unfollow : Tracking.Follow)}
       isActive={is_follow_mode}
       disabled={!isEnabled || isLoading}
       title={title}

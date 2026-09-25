@@ -12,6 +12,7 @@
 //! unit, not by their level, since the same level is a different size in
 //! each.
 
+use crate::abi::cmd::PoiBadge;
 use crate::global::Global;
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
@@ -140,30 +141,27 @@ pub fn step(ctx: &mut TickContext) {
 /// The badges shown, as the shell lists them: nearest what the view looks at
 /// first, each by its cell — which the shell hands back to go there
 /// (`focus`) — its count, and the name where it is one place.
-pub fn snapshot<W: std::fmt::Write>(out: &mut W) -> std::fmt::Result {
-    use xpute_core::codec::json::Quoted;
-    out.write_char('[')?;
-    for (i, &(cell, label, count)) in PLACEMENT.get(Placement::default).shown.iter().enumerate() {
-        if i > 0 {
-            out.write_char(',')?;
-        }
-        write!(out, "{{\"id\":{},\"count\":{count},\"name\":", Quoted(format!("{}:{}", cell.page().subject(), cell.index())))?;
-        match label {
-            Label::Place { .. } => write!(out, "{}}}", Quoted(label.text()))?,
-            Label::Count(_) => out.write_str("null}")?,
-        }
+pub fn badges(each: &mut dyn FnMut(&PoiBadge<'_>)) {
+    for &(cell, label, count) in PLACEMENT.get(Placement::default).shown.iter() {
+        let text = match label {
+            Label::Place { .. } => Some(label.text()),
+            Label::Count(_) => None,
+        };
+        each(&PoiBadge {
+            page: cell.page().subject(),
+            index: cell.index(),
+            count,
+            name: text.as_ref().map(|t| t as &dyn core::fmt::Display),
+        });
     }
-    out.write_char(']')
 }
 
-/// Goes to the cell a badge stands for, by the id `snapshot` gave it: its
+/// Goes to the cell a badge stands for, by what `badges` gave it: its
 /// middle, a level closer, where the ladder draws that ground a level finer
-/// and the cell comes apart into the places under it. Whether the id named
+/// and the cell comes apart into the places under it. Whether the two named
 /// a cell.
-pub fn focus(id: &str) -> bool {
-    let Some((subject, index)) = id.split_once(':') else { return false };
-    let (Ok(subject), Ok(index)) = (subject.parse::<u64>(), index.parse::<u32>()) else { return false };
-    // An id from outside: a level past the pyramid, a subject that does not
+pub fn focus(subject: u64, index: u32) -> bool {
+    // A cell from outside: a level past the pyramid, a subject that does not
     // give itself back, or an index past the page is no cell.
     let page = LevelPage::of_subject(subject);
     let across = POI_LATTICE.page_cells();

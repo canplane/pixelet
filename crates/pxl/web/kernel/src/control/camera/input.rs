@@ -24,6 +24,7 @@ use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use xpute_core::math::vec3::Vec3;
 
+pub use crate::abi::cmd::{ActiveTool, PointerKind};
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::ray::{ray_pick, resolve_hit_object, world_adjacent_corner, world_hover_pvf3, world_struck_corner};
 use crate::control::camera::store::{camera_store, CameraStatus, ViewPatch};
@@ -59,15 +60,6 @@ enum RotateAxisLock {
     Rotate,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ActiveTool {
-    #[default]
-    Pointer,
-    Object,
-    Decor,
-    Eraser,
-}
-
 /// What the pointer holds, as INPUT_POINTER carries it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Holding {
@@ -88,13 +80,6 @@ impl Default for Holding {
             decor_id: DecorId::tree,
         }
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PointerKind {
-    Mouse,
-    Touch,
-    Pen,
 }
 
 /// The canvas's client rect, as the shell measured it.

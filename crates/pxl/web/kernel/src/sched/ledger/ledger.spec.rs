@@ -14,17 +14,82 @@
 //
 // `dead_code` because a table is generated whole: an entry earns its
 // place in the JSON, not by having a caller in this crate.
-#![allow(non_upper_case_globals, non_snake_case, dead_code)]
+#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types, dead_code)]
 
 pub const CENSUS_TAGS: &[&str] = &["chunk", "decor", "ghost_box", "ghost_coplanar", "ghost_decor", "skinned", "puck_zone", "puck_beacon", "badge", "debug"];
 
 pub const PHASE_NAMES: &[&str] = &["interaction", "visible", "content", "cosmetic", "report"];
 
 pub const CATEGORY_NAMES: &[&str] = &["terrain", "ocean", "poi", "geocode", "geocode_dict", "asset"];
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum CategoryName {
+    terrain = 0,
+    ocean = 1,
+    poi = 2,
+    geocode = 3,
+    geocode_dict = 4,
+    asset = 5,
+}
+
+impl CategoryName {
+    /// Every member, in the JSON's own order.
+    pub const ALL: [CategoryName; 6] = [
+        CategoryName::terrain,
+        CategoryName::ocean,
+        CategoryName::poi,
+        CategoryName::geocode,
+        CategoryName::geocode_dict,
+        CategoryName::asset,
+    ];
+
+    /// The member a number names, or none for a number the set does not
+    /// give out.
+    pub fn of(value: u8) -> Option<CategoryName> {
+        CategoryName::ALL.into_iter().find(|member| *member as u8 == value)
+    }
+}
 
 pub const OUTCOME_NAMES: &[&str] = &["ok", "aborted", "error"];
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum OutcomeName {
+    ok = 0,
+    aborted = 1,
+    error = 2,
+}
+
+impl OutcomeName {
+    /// Every member, in the JSON's own order.
+    pub const ALL: [OutcomeName; 3] = [OutcomeName::ok, OutcomeName::aborted, OutcomeName::error];
+
+    /// The member a number names, or none for a number the set does not
+    /// give out.
+    pub fn of(value: u8) -> Option<OutcomeName> {
+        OutcomeName::ALL.into_iter().find(|member| *member as u8 == value)
+    }
+}
 
 pub const TASK_PHASE_NAMES: &[&str] = &["net_ms", "bytes", "decode_ms", "adopt_ms"];
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum TaskPhaseName {
+    net_ms = 0,
+    bytes = 1,
+    decode_ms = 2,
+    adopt_ms = 3,
+}
+
+impl TaskPhaseName {
+    /// Every member, in the JSON's own order.
+    pub const ALL: [TaskPhaseName; 4] = [TaskPhaseName::net_ms, TaskPhaseName::bytes, TaskPhaseName::decode_ms, TaskPhaseName::adopt_ms];
+
+    /// The member a number names, or none for a number the set does not
+    /// give out.
+    pub fn of(value: u8) -> Option<TaskPhaseName> {
+        TaskPhaseName::ALL.into_iter().find(|member| *member as u8 == value)
+    }
+}
 
 pub const STEP_NAMES: &[&str] = &[
     "input",
@@ -38,6 +103,42 @@ pub const STEP_NAMES: &[&str] = &[
     "debug_gizmos",
     "ledger",
 ];
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum StepName {
+    input = 0,
+    camera = 1,
+    environment = 2,
+    view_rotation = 3,
+    view_translation = 4,
+    companion = 5,
+    preview = 6,
+    chunks = 7,
+    debug_gizmos = 8,
+    ledger = 9,
+}
+
+impl StepName {
+    /// Every member, in the JSON's own order.
+    pub const ALL: [StepName; 10] = [
+        StepName::input,
+        StepName::camera,
+        StepName::environment,
+        StepName::view_rotation,
+        StepName::view_translation,
+        StepName::companion,
+        StepName::preview,
+        StepName::chunks,
+        StepName::debug_gizmos,
+        StepName::ledger,
+    ];
+
+    /// The member a number names, or none for a number the set does not
+    /// give out.
+    pub fn of(value: u8) -> Option<StepName> {
+        StepName::ALL.into_iter().find(|member| *member as u8 == value)
+    }
+}
 
 pub const EFFECT_NAMES: &[&str] = &[
     "navigation",
@@ -58,6 +159,56 @@ pub const EFFECT_NAMES: &[&str] = &[
     "assets",
     "pump",
 ];
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum EffectName {
+    navigation = 0,
+    bootstrap = 1,
+    shell = 2,
+    geolocation = 3,
+    orientation = 4,
+    tiles = 5,
+    poi = 6,
+    geocode = 7,
+    follow = 8,
+    theme = 9,
+    decor = 10,
+    chunk_nodes = 11,
+    hover = 12,
+    puck = 13,
+    objects = 14,
+    assets = 15,
+    pump = 16,
+}
+
+impl EffectName {
+    /// Every member, in the JSON's own order.
+    pub const ALL: [EffectName; 17] = [
+        EffectName::navigation,
+        EffectName::bootstrap,
+        EffectName::shell,
+        EffectName::geolocation,
+        EffectName::orientation,
+        EffectName::tiles,
+        EffectName::poi,
+        EffectName::geocode,
+        EffectName::follow,
+        EffectName::theme,
+        EffectName::decor,
+        EffectName::chunk_nodes,
+        EffectName::hover,
+        EffectName::puck,
+        EffectName::objects,
+        EffectName::assets,
+        EffectName::pump,
+    ];
+
+    /// The member a number names, or none for a number the set does not
+    /// give out.
+    pub fn of(value: u8) -> Option<EffectName> {
+        EffectName::ALL.into_iter().find(|member| *member as u8 == value)
+    }
+}
 
 pub const GPU_SPAN_NAMES: &[&str] = &["air", "shadow", "prepass", "ao", "world", "badges", "cases"];
 
@@ -316,7 +467,7 @@ pub mod TASK_SUMMARY {
     pub const KEYS: &[&str] = &["n", "ok", "aborted", "error", "lat", "reason_count", "reasons", "phase_n", "phase_mean", "WORDS"];
 }
 
-/// One registered step's timing, at SUMMARY.steps.slots + its index × WORDS. `name` indexes STEP_NAMES, or is -1 for a name the list lacks.
+/// One registered step's timing, at SUMMARY.steps.slots + its index × WORDS. `name` indexes STEP_NAMES.
 pub mod STEP {
     pub const phase: u32 = 0;
     pub const name: u32 = 1;

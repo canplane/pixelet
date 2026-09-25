@@ -24,7 +24,7 @@ use xpute_runtime::mem::heap::alloc;
 use crate::control::navigation::store::map_navigation;
 use crate::global::Global;
 use crate::host::now;
-use crate::io::demand::{Category, Phases};
+use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::policy;
 use crate::io::sched::{declare, pending_count, Rank};
 use crate::layer::terrain::fixed::{ele_at, ground_at, record_ele_at, record_ground_at, RECORD_BYTES};
@@ -42,12 +42,12 @@ use crate::world::pyramid::{Cover, Domain, Layer, Pyramid};
 pub const OCEAN_KEY: &str = "_ocean";
 
 /// The category the shared ocean tile is fetched under.
-pub const OCEAN_CATEGORY: Category = Category::Ocean;
+pub const OCEAN_CATEGORY: Category = Category::ocean;
 
 static TERRAIN: Global<Pyramid<Terrain>> = Global::new();
 
 impl Layer for Terrain {
-    const CATEGORY: Category = Category::Terrain;
+    const CATEGORY: Category = Category::terrain;
     // The leaves carry the terrain topic, so its revision is what a reader of
     // the ground compares; the levels above are the view's alone and are read
     // through the chunks that draw them.
@@ -71,7 +71,7 @@ impl Layer for Terrain {
             ele: unsafe { core::slice::from_raw_parts_mut(lanes.ele as *mut i16, SAMPLES) },
         };
         decode_terrain_into(pkt, room).map_err(|_| FetchFail::Decode)?;
-        phases.push("decode_ms", now() - t0);
+        phases.push(TaskPhaseName::decode_ms, now() - t0);
         // SAFETY: the lanes are this page's record until another page takes it.
         Ok(unsafe { open_terrain(lanes) })
     }

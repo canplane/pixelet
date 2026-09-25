@@ -7,7 +7,7 @@
 //! way a page's handler calls `requestPermission` and the browser answers, and
 //! the kernel hears only the answer (`orientation_permission`).
 
-use pxl_spec::abi::message::Message;
+use crate::abi::cmd::Message;
 
 use crate::control::sensor::store::{device_orientation_store, DevicePoseStatus, PermissionAnswer};
 use crate::global::Global;

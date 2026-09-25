@@ -5,10 +5,9 @@ import { persist } from "zustand/middleware";
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { decor_ids, type DecorId, decorNumId, placeable_cubes, type PlaceableCubeId, placeableCubeId, placeableCubeNumId } from "@/catalog/cell/mod.ts";
-import { kernel_action } from "@/kernel/shell.ts";
+import { ActiveTool, Command, encode_chat_create } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_command } from "@/kernel/shell.ts";
 import { kernel_hold } from "@/kernel/control/input.ts";
-
-export type ActiveTool = "pointer" | "object" | "decor" | "eraser";
 
 // ts (Date.now() at append) lets ChatBubble derive its own remaining show
 // time from wall-clock, not from when its own component happened to mount —
@@ -100,7 +99,7 @@ interface UiState {
 // (partialize below): a fresh load should always start at the neutral
 // pointer tool, and chatLines is dev-only dummy data, not user state.
 export const useUiStore = create<UiState>()(persist((set) => ({
-  activeTool: "pointer",
+  activeTool: ActiveTool.Pointer,
   set_activeTool: (activeTool) => {
     set({ activeTool });
   },
@@ -138,14 +137,14 @@ export const useUiStore = create<UiState>()(persist((set) => ({
   selectCube: (id) => {
     set((state) => ({
       objectColorId: id,
-      activeTool: "object",
+      activeTool: ActiveTool.Object,
       recentPicks: touchRecent(state.recentPicks, { kind: "object", id }),
     }));
   },
   selectDecor: (id) => {
     set((state) => ({
       decor_id: id,
-      activeTool: "decor",
+      activeTool: ActiveTool.Decor,
       recentPicks: touchRecent(state.recentPicks, { kind: "decor", id }),
     }));
   },
@@ -156,7 +155,7 @@ export const useUiStore = create<UiState>()(persist((set) => ({
       chatLines: [...state.chatLines, { id: nextChatLineId++, text, ts: Date.now() }].slice(-MAX_CHAT_LINES),
     }));
     // The kernel draws the bubble over the companion from the last line.
-    kernel_action({ type: "append_chat_line", text });
+    kernel_command(Command.CHAT_CREATE, encode_chat_create({ text }));
   },
 }), {
   name: "pxl:ui_hotbar",
@@ -195,12 +194,11 @@ export const useUiStore = create<UiState>()(persist((set) => ({
 // What the pointer holds crosses to the kernel with each pointer event, by
 // the catalog's numbers (spec/cell): the object tool holds the cube, the decor
 // tool the decor kind.
-const TOOL_NUMBER: Record<ActiveTool, number> = { pointer: 0, object: 1, decor: 2, eraser: 3 };
 
 function hold(s: UiState): void {
   const cube = placeable_cubes.find((c) => placeableCubeId(c) === s.objectColorId);
-  const value = s.activeTool === "object" ? (cube ? placeableCubeNumId(cube) : 0) : s.activeTool === "decor" ? decorNumId(s.decor_id) : 0;
-  kernel_hold(TOOL_NUMBER[s.activeTool], value, s.object_tier);
+  const value = s.activeTool === ActiveTool.Object ? (cube ? placeableCubeNumId(cube) : 0) : s.activeTool === ActiveTool.Decor ? decorNumId(s.decor_id) : 0;
+  kernel_hold(s.activeTool, value, s.object_tier);
 }
 
 hold(useUiStore.getState());
