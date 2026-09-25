@@ -33,13 +33,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     blends colours and fetches pages a level finer than it draws; reading
     level L + 1's page, the bake's majority vote, draws the same size from a
     quarter of the pages with one type a cell. Either is terrain's to pick.
-  - **Objects at the rule's levels below z16.** A z16 chunk draws every
-    sub-cell tier whatever its distance, finer than the rule asks past
-    z17's reach; at z15 and coarser objects are already folded to the
-    level's cell (pxl-render mesh/paint/object/fold.rs). The rule is to
-    reach z17 to z19 (split distances 96, 48 and 24 u at the reference),
-    and a z16 chunk to fold its objects to the level its distance wants
-    there, terrain drawing z16 under them.
   - **The split distance from the real screen.** `SPLIT` is the reference
     1080 px and 50° (pxl-render look/lod.rs); `P` is to come from the
     canvas's device pixels and the field of view, and where a screen needs
@@ -51,9 +44,8 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     kind present while its instance covers τ, thinned and scaled up with
     distance, seeded from a leaf cell so a level change does not move it.
   - **No level is a floor.** z16 is terrain's atom and no more to the
-    shared rule: the split distance counted from `GROUND.scale(0)`, decor
-    from z16 pages only, step 1 only at z16, `level_at` floored at z16 and
-    `LEAF_TOPIC` on z16's table each treat it as special.
+    shared rule, whose levels go below it; decor scattered from z16 pages
+    only and `LEAF_TOPIC` on z16's table still treat it as special.
   - **A tier change crossfades.** It switches at its threshold; the
     secondary tier and its weight are kept but unused.
   - **The window's depth.** `WINDOW_LEVELS` is 5, so from low over the

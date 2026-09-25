@@ -12,7 +12,7 @@
 //! changed.
 //!
 //! A block has one owner: this node, from the tier's arrival to the scheduler's
-//! evict of the step (or the chunk's unmount, or its sources told again, when
+//! evict of the tier (or the chunk's unmount, or its sources told again, when
 //! the scheduler lets every tier go at once). The scheduler draws from its own
 //! lists, so nothing here decides what is shown, and a block never has to
 //! outlive the scheduler's naming of it.
@@ -20,15 +20,14 @@
 use pxl_spec::space::pyramid::{chunk_span_of, Cell, CHUNK_CELLS, GROUND, PAGE_CELLS};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
-use pxl_render::look::lod::LodStep;
 use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::level::write_level_runs;
-use pxl_render::mesh::paint::object::adapter::{Carve, Painted, Painter};
+use pxl_render::mesh::paint::object::adapter::{Carve, Entries, Painted, Painter};
 use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
-use pxl_spec::bake::constant::ELE_PADDED_SPAN;
+use pxl_spec::bake::constant::{pack_pos, BandZ, BAND, CELL, ELE_PADDED_SPAN, OBJECT_FINEST};
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -45,7 +44,30 @@ use crate::world::chunk::mesh_slot::BAKE_BYTES;
 use crate::world::chunk::table::Event;
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
+use pxl_spec::space::hierarchy::Scale;
 use pxl_spec::space::pyramid::LevelPage;
+
+/// A tier: the cube a chunk is drawn in, its side as a scale of the unit.
+/// The shared rule chooses it by the chunk's distance from the eye
+/// (chunk/table.rs `wanted_cube`), and each layer draws its own detail at it:
+/// terrain its level's cells, averaged to the cube where the cube is
+/// coarser and as they are where it is finer, since there is nothing under
+/// them; objects folded to it, down to their finest tier.
+pub type Cube = Scale;
+
+/// How many of a level's cells a cube spans along an axis: the mesher's
+/// step, one where the cube is no coarser than the level's cell.
+pub fn mesh_step(cube: Cube, level: u32) -> u32 {
+    let own = GROUND.scale(level);
+    own.count_in(cube.max(own))
+}
+
+/// The scale a chunk's objects are folded to for a cube: the cube, no finer
+/// than an object's finest tier and no coarser than a cell, past which the
+/// mesher's step averages them with the ground they stand on.
+pub fn object_fold(cube: Cube) -> Scale {
+    cube.clamp(OBJECT_FINEST, CELL)
+}
 
 /// A tier as the node holds it: its boxes, which lie on the device in the
 /// chunk's slot (mesh_slot.rs) and nowhere in the memory.
@@ -113,7 +135,7 @@ pub struct ChunkRetention {
     pub run_set_mb: u32,
     /// Built tiers held across every node's cache.
     pub tiers: u32,
-    /// Decor: cached per-step blocks.
+    /// Decor: cached per-tier blocks.
     pub decor_steps: u32,
     /// The instances those blocks hold, which is what they cost to draw.
     pub decor_instances: u32,
@@ -176,11 +198,11 @@ pub struct ChunkNode {
     /// The column this chunk stands in, as the object store keys it.
     pub col_idx: IVec,
     id: u32,
-    /// The tiers and the decor blocks the scheduler handed over, by step and
+    /// The tiers and the decor blocks the scheduler handed over, by cube and
     /// generation: a source changed leaves the older ones held until the
     /// scheduler evicts them, when a layout of the newer is up.
-    tiers: HashMap<(LodStep, u32), MeshBlock>,
-    decor_cache: HashMap<(LodStep, u32), DecorBlock>,
+    tiers: HashMap<(Cube, u32), MeshBlock>,
+    decor_cache: HashMap<(Cube, u32), DecorBlock>,
     /// How many times the scheduler has been told this chunk's sources: a tier
     /// built from an earlier telling arriving after a newer one was told is
     /// released on arrival.
@@ -292,25 +314,25 @@ impl ChunkNode {
         with_world(|world, sched| sched.decor_now(world, id, show_decor, &mut |e| queue.push_back(e)));
     }
 
-    fn on_tier(&mut self, generation: u32, step: LodStep, mesh: MeshBlock) {
-        if generation != self.generation || self.tiers.contains_key(&(step, generation)) {
+    fn on_tier(&mut self, generation: u32, cube: Cube, mesh: MeshBlock) {
+        if generation != self.generation || self.tiers.contains_key(&(cube, generation)) {
             return;
         }
-        self.tiers.insert((step, generation), mesh);
+        self.tiers.insert((cube, generation), mesh);
     }
 
-    /// The scheduler hands a step's decor over only where it believes this node
+    /// The scheduler hands a tier's decor over only where it believes this node
     /// holds none of that generation, so one already held is stale and gives
     /// way.
-    fn on_decor(&mut self, step: LodStep, generation: u32, decor: DecorBlock) {
-        if let Some(held) = self.decor_cache.insert((step, generation), decor) {
+    fn on_decor(&mut self, cube: Cube, generation: u32, decor: DecorBlock) {
+        if let Some(held) = self.decor_cache.insert((cube, generation), decor) {
             release_block(held.at, held.bytes);
         }
     }
 
-    fn on_evict(&mut self, step: LodStep, generation: u32) {
-        self.tiers.remove(&(step, generation));
-        if let Some(d) = self.decor_cache.remove(&(step, generation)) {
+    fn on_evict(&mut self, cube: Cube, generation: u32) {
+        self.tiers.remove(&(cube, generation));
+        if let Some(d) = self.decor_cache.remove(&(cube, generation)) {
             release_block(d.at, d.bytes);
         }
     }
@@ -318,7 +340,7 @@ impl ChunkNode {
     /// The layout is the scheduler's to draw; what is checked here is that this
     /// node holds every tier it names, of its generation. When it does not, the
     /// chunk starts over from its sources.
-    fn on_layout(&mut self, primary: LodStep, secondary: Option<LodStep>, generation: u32, ready: bool) -> bool {
+    fn on_layout(&mut self, primary: Cube, secondary: Option<Cube>, generation: u32, ready: bool) -> bool {
         if !ready {
             node_counts().released += 1;
             return true;
@@ -367,17 +389,17 @@ fn dispatch(e: Event) {
         Event::Build(BuildEvent::Tier {
             id,
             generation,
-            step,
+            cube,
             box_cnt,
             heights,
             ..
         }) => {
             if let Some(node) = n.nodes.get_mut(&id) {
-                node.on_tier(generation, step, MeshBlock { box_cnt, heights });
+                node.on_tier(generation, cube, MeshBlock { box_cnt, heights });
             }
         }
-        Event::Decor { id, step, generation, at, bytes } => match n.nodes.get_mut(&id) {
-            Some(node) => node.on_decor(step, generation, DecorBlock { at: at as usize, bytes }),
+        Event::Decor { id, cube, generation, at, bytes } => match n.nodes.get_mut(&id) {
+            Some(node) => node.on_decor(cube, generation, DecorBlock { at: at as usize, bytes }),
             None => release_block(at as usize, bytes),
         },
         Event::Layout {
@@ -388,13 +410,13 @@ fn dispatch(e: Event) {
             ready,
         } => {
             let Some(node) = n.nodes.get_mut(&id) else { return };
-            if !node.on_layout(primary, (secondary != 0).then_some(secondary), generation, ready) {
+            if !node.on_layout(primary, secondary, generation, ready) {
                 n.rebuild.push(id);
             }
         }
-        Event::Evict { id, step, generation } => {
+        Event::Evict { id, cube, generation } => {
             if let Some(node) = n.nodes.get_mut(&id) {
-                node.on_evict(step, generation);
+                node.on_evict(cube, generation);
             }
         }
         Event::Visible { .. } | Event::Blend { .. } => {}
@@ -491,14 +513,14 @@ pub const MAX_CHUNKS: usize = 4096;
 /// What the chunk nodes are told.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BuildEvent {
-    /// Tier `step` of chunk `id`, built from its sources as of `generation`:
+    /// Tier `cube` of chunk `id`, built from its sources as of `generation`:
     /// the mesh is `bytes` bytes at `at` in `.fixed.bake`, until it is sent
     /// to its slot on the device, and its boxes' heights are held in
     /// `heights` (pxl-render mesh/chunk_mesher.rs).
     Tier {
         id: u32,
         generation: u32,
-        step: u32,
+        cube: Cube,
         at: u32,
         bytes: u32,
         box_cnt: u32,
@@ -523,12 +545,15 @@ pub struct PageLanes {
     pub ele: usize,
 }
 
-/// A chunk's runs: which of `.fixed.runs`'s sets, and what is in it.
+/// A chunk's runs: which of `.fixed.runs`'s sets, and what is in it — and
+/// the scale its objects were folded to where it painted any
+/// (`object_fold`), which only the cubes that fold to it are baked from.
 #[derive(Clone, Copy)]
 struct Runs {
     set: usize,
     bytes: u32,
     count: u32,
+    fold: Option<Scale>,
 }
 
 #[derive(Clone, Copy)]
@@ -547,8 +572,8 @@ struct Chunk {
     page: Option<PageLanes>,
     show_structures: bool,
     generation: u32,
-    /// The tiers the node lacks, in the order it wants them; 0 is none.
-    want: [u32; 2],
+    /// The tiers the node lacks, in the order it wants them.
+    want: [Option<Cube>; 2],
     runs: Option<Runs>,
     /// The heap's release count when it last refused this chunk a
     /// block: until a block is given back, the same request meets the
@@ -557,12 +582,12 @@ struct Chunk {
 }
 
 impl Chunk {
-    fn wants(&self, step: u32) -> bool {
-        step != 0 && self.want.contains(&step)
+    fn wants(&self, cube: Cube) -> bool {
+        self.want.contains(&Some(cube))
     }
 
-    fn wanted(&self) -> impl Iterator<Item = u32> + '_ {
-        self.want.iter().copied().filter(|&s| s != 0)
+    fn wanted(&self) -> impl Iterator<Item = Cube> + '_ {
+        self.want.iter().copied().flatten()
     }
 }
 
@@ -570,6 +595,8 @@ impl Chunk {
 struct ScanJob {
     id: u32,
     volume: u32,
+    /// The scale its objects are painted at (`object_fold`).
+    fold: Scale,
     /// The objects' paint into the volume, until it is finished and the scan
     /// begins.
     paint: Option<PaintJob>,
@@ -583,6 +610,9 @@ struct ScanJob {
 #[derive(Clone, Copy)]
 struct PaintJob {
     next: usize,
+    /// Whether it paints the builder's folded entries rather than the
+    /// store's own: its fold is coarser than an object's finest tier.
+    folded: bool,
     revision: (u32, u32),
     hide: Option<(i32, u32)>,
     carve: Option<Carve>,
@@ -599,7 +629,7 @@ fn column_revision(col_idx: IVec) -> (u32, u32) {
 
 struct BakeJob {
     id: u32,
-    step: u32,
+    cube: Cube,
     generation: u32,
     mesh: Option<Block>,
 }
@@ -654,6 +684,11 @@ pub struct Builder {
     claimed: BTreeSet<u32>,
     /// A level chunk's objects folded, kept for its capacity.
     folded: HashMap<[i64; 3], u32>,
+    /// A z16 chunk's objects folded to its cube, as entries: what its paint
+    /// reads where the cube is coarser than an object's finest tier.
+    fold_band: Vec<BandZ>,
+    fold_pos: Vec<u32>,
+    fold_state: Vec<u32>,
     pub stat: BuildStat,
 }
 
@@ -679,6 +714,9 @@ impl Builder {
             bands: Vec::new(),
             claimed: BTreeSet::new(),
             folded: HashMap::new(),
+            fold_band: Vec::new(),
+            fold_pos: Vec::new(),
+            fold_state: Vec::new(),
             stat: BuildStat::default(),
         }
     }
@@ -768,7 +806,7 @@ impl Builder {
                 page: None,
                 show_structures: false,
                 generation: 0,
-                want: [0; 2],
+                want: [None; 2],
                 runs: None,
                 refused: None,
             },
@@ -793,14 +831,14 @@ impl Builder {
 
     /// The tiers the chunk still lacks. A bake of a tier not wanted
     /// gives the slot back now.
-    pub fn want(&mut self, world: &mut World, id: u32, want: [u32; 2]) {
+    pub fn want(&mut self, world: &mut World, id: u32, want: [Option<Cube>; 2]) {
         let Some(c) = self.chunks.get_mut(&id) else { return };
         c.want = want;
-        let stale = matches!(&self.bake_job, Some(j) if j.id == id && !c.wants(j.step));
+        let stale = matches!(&self.bake_job, Some(j) if j.id == id && !c.wants(j.cube));
         if stale {
             self.abort_bake();
         }
-        if want == [0, 0] {
+        if want == [None, None] {
             self.abort_scan_of(world, id);
             self.let_runs_go(id);
         }
@@ -942,7 +980,13 @@ impl Builder {
         if c.refused.is_some_and(|r| r == crate::host::heap_stat().releases) {
             return Progress::Blocked;
         }
-        if c.runs.is_none() {
+        // Runs whose objects were folded for another cube than the next one
+        // wanted draw that cube's objects, not this one's: made again.
+        let next = c.wanted().next().expect("a wanted tier");
+        if c.runs.is_some_and(|r| r.fold.is_some_and(|f| f != object_fold(next))) && !matches!(&self.bake_job, Some(j) if j.id == id) {
+            self.let_runs_go(id);
+        }
+        if self.chunks[&id].runs.is_none() {
             return self.advance_runs(world, id);
         }
         self.advance_bake(world, id, emit)
@@ -975,16 +1019,23 @@ impl Builder {
                 return Progress::Blocked;
             };
             self.claimed.clear();
+            let fold = object_fold(self.chunks[&id].wanted().next().expect("a wanted tier"));
+            let hide = self.hide.filter(|h| h.0 == col_idx).map(|h| (h.1, h.2));
+            let folded = fold > OBJECT_FINEST;
+            if folded {
+                self.fold_objects(world, col_idx, hide, fold);
+            }
             let paint = PaintJob {
                 next: 0,
+                folded,
                 revision: column_revision(col_idx),
-                hide: self.hide.filter(|h| h.0 == col_idx).map(|h| (h.1, h.2)),
+                hide,
                 carve: self.carve.filter(|c| c.0 == col_idx).map(|c| c.1),
             };
-            self.scan_job = Some(ScanJob { id, volume, paint: Some(paint) });
+            self.scan_job = Some(ScanJob { id, volume, fold, paint: Some(paint) });
             return Progress::Busy;
         }
-        let ScanJob { volume, paint, .. } = *self.scan_job.as_ref().unwrap();
+        let ScanJob { volume, paint, fold, .. } = *self.scan_job.as_ref().unwrap();
         if let Some(paint) = paint {
             return self.advance_paint(world, id, volume, paint);
         }
@@ -1013,7 +1064,7 @@ impl Builder {
                 let job = self.scan_job.take().unwrap();
                 world.volumes.release(job.volume);
                 self.stat.scans += 1;
-                self.keep_runs(id, Runs { set, bytes, count });
+                self.keep_runs(id, Runs { set, bytes, count, fold: Some(fold) });
                 Progress::Busy
             }
         }
@@ -1059,6 +1110,34 @@ impl Builder {
         Some(volume)
     }
 
+    /// A column's voxel entries folded to `scale` by the fold every level
+    /// shares (pxl-render mesh/paint/object/fold.rs), as entries of that
+    /// scale in the builder's fold lanes: what a z16 chunk paints for a cube
+    /// coarser than an object's finest tier. The hidden entry is left out
+    /// before the fold, as the paint would leave it out.
+    fn fold_objects(&mut self, world: &mut World, col_idx: IVec, hide: Option<(i32, u32)>, scale: Scale) {
+        let o = FROM_L2_IDX(col_idx);
+        let (x0, y0) = (ivec::X(o), ivec::Y(o));
+        let columns: Vec<Column> = world.store.entries(col_idx).map(|entries| Column { x0, y0, entries }).into_iter().collect();
+        fold_columns(world.painter, &columns, scale, hide.map(|(band, pos)| (x0, y0, band, pos)), &mut self.folded);
+        // A cell's corner in finest steps: absolute, then from the column's
+        // corner and its band's floor.
+        let n = OBJECT_FINEST.count_in(scale) as i64;
+        let band_steps = OBJECT_FINEST.count_in(BAND) as i64;
+        let (fx, fy) = (OBJECT_FINEST.index(x0), OBJECT_FINEST.index(y0));
+        let mut cells: Vec<([i64; 3], u32)> = self.folded.iter().map(|(&c, &state)| (c, state)).collect();
+        cells.sort_unstable();
+        self.fold_band.clear();
+        self.fold_pos.clear();
+        self.fold_state.clear();
+        for ([cx, cy, cz], state) in cells {
+            let z = cz * n;
+            self.fold_band.push(z.div_euclid(band_steps) as BandZ);
+            self.fold_pos.push(pack_pos((cx * n - fx) as u32, (cy * n - fy) as u32, z.rem_euclid(band_steps) as u32, scale));
+            self.fold_state.push(state);
+        }
+    }
+
     /// A step of the scan job's paint of the chunk's objects. Once every
     /// entry and the carve are painted, the volume is sealed and the scan
     /// begins on it.
@@ -1069,10 +1148,17 @@ impl Builder {
             return Progress::Busy;
         }
         let mut any = false;
-        match world
-            .painter
-            .paint_entries(world.store.entries(col_idx), world.volumes, volume, paint.hide, paint.next, PAINT_VOXELS, &mut self.claimed, &mut any)
-        {
+        let (entries, hide) = if paint.folded {
+            let folded = Entries {
+                band: &self.fold_band,
+                pos: &self.fold_pos,
+                state: &self.fold_state,
+            };
+            (Some(folded), None)
+        } else {
+            (world.store.entries(col_idx), paint.hide)
+        };
+        match world.painter.paint_entries(entries, world.volumes, volume, hide, paint.next, PAINT_VOXELS, &mut self.claimed, &mut any) {
             Painted::Refused => {
                 self.refuse(world, id);
                 return Progress::Blocked;
@@ -1128,7 +1214,7 @@ impl Builder {
         unsafe { self.direct.provide_set(world.volumes.mem().add(at), bytes) };
         let count = self.direct.finish();
         self.stat.direct += 1;
-        self.keep_runs(id, Runs { set, bytes, count });
+        self.keep_runs(id, Runs { set, bytes, count, fold: None });
         Progress::Busy
     }
 
@@ -1183,7 +1269,7 @@ impl Builder {
         unsafe { self.direct.provide_set(world.volumes.mem().add(at), bytes) };
         let count = self.direct.finish();
         self.stat.direct += 1;
-        self.keep_runs(id, Runs { set, bytes, count });
+        self.keep_runs(id, Runs { set, bytes, count, fold: None });
         Progress::Busy
     }
 
@@ -1219,11 +1305,11 @@ impl Builder {
             if self.bake_job.is_some() {
                 return Progress::Blocked;
             }
-            let step = c.wanted().next().unwrap();
-            assert!(self.bake.begin(&set, step, 1 << c.level, settings_store().texture_pack), "a bake open with no job naming it");
+            let cube = c.wanted().next().unwrap();
+            assert!(self.bake.begin(&set, mesh_step(cube, c.level), 1 << c.level, settings_store().texture_pack), "a bake open with no job naming it");
             self.bake_job = Some(BakeJob {
                 id,
-                step,
+                cube,
                 generation: c.generation,
                 mesh: None,
             });
@@ -1255,8 +1341,8 @@ impl Builder {
                 self.stat.bakes += 1;
                 let c = self.chunks.get_mut(&id).unwrap();
                 for w in c.want.iter_mut() {
-                    if *w == job.step {
-                        *w = 0;
+                    if *w == Some(job.cube) {
+                        *w = None;
                     }
                 }
                 if c.wanted().next().is_none() {
@@ -1265,7 +1351,7 @@ impl Builder {
                 emit(BuildEvent::Tier {
                     id,
                     generation: job.generation,
-                    step: job.step,
+                    cube: job.cube,
                     at: at as u32,
                     bytes,
                     box_cnt: mesh.box_cnt,

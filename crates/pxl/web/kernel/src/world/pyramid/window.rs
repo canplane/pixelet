@@ -157,17 +157,20 @@ pub fn eye() -> Option<Eye> {
     Some(Eye { at, foot })
 }
 
-/// The level the rule draws ground `dist` from the eye at: the one whose
-/// split distance it is past and the next one's it is not.
-fn level_at(dist: f64) -> u32 {
-    ((dist / split_distance(0)).log2().floor().max(0.0) as u32).min(TOP_LEVEL)
+/// The level the rule wants ground `dist` from the eye at: the one whose
+/// split distance it is past and the next one's it is not. Finer than z16
+/// too — negative, z17 and on — where the eye is nearer than z16's split
+/// distance: the rule has no floor, and a layer whose data ends coarser
+/// draws its finest there.
+pub fn level_for(dist: f64) -> i32 {
+    (dist / split_distance(0)).log2().floor() as i32
 }
 
 /// The levels a view holds, finest first, for an eye `height` over the
 /// ground under it: from the level that ground wants, WINDOW_LEVELS up at
-/// most.
+/// most. The pages begin at z16, where terrain's data does.
 pub fn window_for(height: f64) -> std::ops::Range<u32> {
-    let base = level_at(height);
+    let base = level_for(height).clamp(0, TOP_LEVEL as i32) as u32;
     base..(base + WINDOW_LEVELS).min(TOP_LEVEL + 1)
 }
 
