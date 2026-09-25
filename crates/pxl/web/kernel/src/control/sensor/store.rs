@@ -4,20 +4,12 @@
 //! The sensors themselves are the shell's; what they report lands here, and
 //! what is significant enough to keep is decided here.
 
-use pxl_spec::abi::message::Message;
 use pxl_spec::space::adapter::epsg4326::G4326;
 
+use crate::abi::cmd::Message;
+pub use crate::abi::cmd::{DevicePoseStatus, PermissionAnswer};
 use crate::global::Global;
 use crate::host::now;
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum DevicePoseStatus {
-    #[default]
-    Idle,
-    Loading,
-    Ready,
-    Error,
-}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DeviceLocation {
@@ -141,17 +133,6 @@ impl DeviceLocationStore {
         self.status = DevicePoseStatus::Error;
         self.error = Some(error);
     }
-}
-
-/// A sensor permission, as SENSOR_PERMISSION carries it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PermissionAnswer {
-    /// The shell's prompt is up.
-    Asking,
-    Granted,
-    Denied,
-    /// The prompt itself threw.
-    Failed,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]

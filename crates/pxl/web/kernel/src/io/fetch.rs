@@ -26,9 +26,10 @@ use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::mem::heap::{alloc, free, Block};
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
+use crate::abi::cmd::{FetchOutcome, FetchUpdate};
 use crate::global::Global;
 use crate::host::body_read;
-use crate::io::demand::{Category, Phases};
+use crate::io::demand::{Category, Phases, TaskPhaseName};
 use crate::io::policy;
 use crate::io::sched::{attempt_of, settle};
 use crate::layer::geocode::{repository as geocode_repository, store as geocode_store};
@@ -49,16 +50,16 @@ impl fmt::Display for DemandName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let key = self;
         match key.0 {
-            Category::Terrain => write!(f, "{}", PageName(LevelPage::of_subject(key.1))),
+            Category::terrain => write!(f, "{}", PageName(LevelPage::of_subject(key.1))),
             // The one tile the stream has, at the name the bake gives it.
-            Category::Ocean => f.write_str(OCEAN_KEY),
-            Category::Poi => write!(f, "{}", PageName(LevelPage::of_subject(key.1))),
-            Category::Geocode => write!(f, "{}", geocode_repository::group_name(key.1)),
+            Category::ocean => f.write_str(OCEAN_KEY),
+            Category::poi => write!(f, "{}", PageName(LevelPage::of_subject(key.1))),
+            Category::geocode => write!(f, "{}", geocode_repository::group_name(key.1)),
             // The one packet the stream has, at the name the bake gives it.
-            Category::GeocodeDict => write!(f, "{}", geocode_repository::dict_name()),
+            Category::geocode_dict => write!(f, "{}", geocode_repository::dict_name()),
             // An asset is named by its content and belongs to no bake, so it
             // is asked for by its own command and never written here.
-            Category::Asset => Ok(()),
+            Category::asset => Ok(()),
         }
     }
 }
@@ -93,23 +94,10 @@ fn view<'a>((at, bytes): Block) -> &'a [u8] {
     unsafe { core::slice::from_raw_parts(at as *const u8, bytes as usize) }
 }
 
-/// A finished read as the host reported it, waiting for `fetch_task`.
-#[derive(Clone, Copy)]
-struct Arrival {
-    key: u64,
-    outcome: u32,
-    body: (u32, u32),
-    fail: u32,
-    /// Whatever number the host refused with, kept for the ledger to print.
-    /// Nothing branches on it, which is what keeps a protocol out of here.
-    detail: u32,
-    net_ms: f64,
-}
-
-static ARRIVED: Global<Vec<Arrival>> = Global::new();
+static ARRIVED: Global<Vec<FetchUpdate>> = Global::new();
 static ARRIVALS: Global<Notify> = Global::new();
 
-fn arrived() -> &'static mut Vec<Arrival> {
+fn arrived() -> &'static mut Vec<FetchUpdate> {
     ARRIVED.get(Vec::new)
 }
 
@@ -117,18 +105,11 @@ fn arrivals() -> &'static mut Notify {
     ARRIVALS.get(Notify::new)
 }
 
-/// The host's report that a read finished, queued for `fetch_task`:
-/// `outcome` 0 with the body it holds, `(body, bytes)`, 1 stopped, 2 failed
-/// with `fail`, 3 no such object.
-pub fn fetch_queued(key: u64, outcome: u32, body: (u32, u32), fail: u32, detail: u32, net_ms: f64) {
-    arrived().push(Arrival {
-        key,
-        outcome,
-        body,
-        fail,
-        detail,
-        net_ms,
-    });
+/// The host's report that a read finished, queued for `fetch_task`. `detail`
+/// is whatever number the host refused with, kept for the ledger to print;
+/// nothing branches on it, which is what keeps a protocol out of here.
+pub fn fetch_queued(update: FetchUpdate) {
+    arrived().push(update);
     arrivals().notify();
 }
 
@@ -139,16 +120,25 @@ pub async fn fetch_task() {
         notified(arrivals).await;
         while !arrived().is_empty() {
             yield_if_spent(world_edge).await;
-            let a = arrived().remove(0);
-            fetch_arrived(a.key, a.outcome, a.body, a.fail, a.detail, a.net_ms);
+            fetch_arrived(arrived().remove(0));
         }
     }
 }
 
-fn fetch_arrived(key: u64, outcome: u32, body: (u32, u32), fail: u32, detail: u32, net_ms: f64) {
-    let (outcome, fail, block) = match receive(body) {
+fn fetch_arrived(
+    FetchUpdate {
+        key,
+        outcome,
+        body,
+        body_bytes,
+        fail,
+        detail,
+        net_ms,
+    }: FetchUpdate,
+) {
+    let (outcome, fail, block) = match receive((body, body_bytes)) {
         Ok(block) => (outcome, fail, block),
-        Err(no_room) => (2, no_room as u32, None),
+        Err(no_room) => (FetchOutcome::Error, no_room, None),
     };
     // A hash the scheduler does not hold is one a reset forgot; its body is
     // already back.
@@ -157,45 +147,37 @@ fn fetch_arrived(key: u64, outcome: u32, body: (u32, u32), fail: u32, detail: u3
         return;
     };
     let mut phases = Phases::default();
-    phases.push("net_ms", net_ms);
+    phases.push(TaskPhaseName::net_ms, net_ms);
     if let Some((_, bytes)) = block {
-        phases.push("bytes", bytes as f64);
+        phases.push(TaskPhaseName::bytes, bytes as f64);
     }
     let (outcome, fail) = match outcome {
-        0 => match adopt(category, subject, block, &mut phases) {
-            Ok(()) => (Outcome::Ok, FetchFail::None),
-            Err(fail) => (Outcome::Error, fail),
+        FetchOutcome::Read => match adopt(category, subject, block, &mut phases) {
+            Ok(()) => (Outcome::ok, FetchFail::None),
+            Err(fail) => (Outcome::error, fail),
         },
         // There is no such object, and for most categories that is an answer
         // rather than a fault — which of the two is the category's own and
         // is the one piece of this the world decides.
-        3 => {
+        FetchOutcome::Absent => {
             release(block);
             match absent(category, subject) {
-                Ok(()) => (Outcome::Ok, FetchFail::None),
-                Err(fail) => (Outcome::Error, fail),
+                Ok(()) => (Outcome::ok, FetchFail::None),
+                Err(fail) => (Outcome::error, fail),
             }
         }
-        1 => {
+        FetchOutcome::Aborted => {
             release(block);
-            (Outcome::Aborted, FetchFail::None)
+            (Outcome::aborted, FetchFail::None)
         }
-        // The host's own failure, as the number it sent. A code this build
-        // does not know reads as one the host raised rather than as none.
-        _ => {
+        // The host's own failure. A failure that names none is still one the
+        // host raised, not a read that went well.
+        FetchOutcome::Error => {
             release(block);
-            (Outcome::Error, fetch_fail_of(fail))
+            (Outcome::error, if fail == FetchFail::None { FetchFail::Shell } else { fail })
         }
     };
     settle(key, outcome, Some(phases), Failure { fail, detail: detail as u16 }, policy::retry_after(outcome));
-}
-
-/// The reason a number names, or `Shell` for one this build does not know —
-/// an older kernel reading a newer shell still counts the failure apart from
-/// the rest.
-fn fetch_fail_of(fail: u32) -> FetchFail {
-    const KNOWN: [FetchFail; 5] = [FetchFail::Network, FetchFail::Shell, FetchFail::Refused, FetchFail::NoRoom, FetchFail::Decode];
-    KNOWN.into_iter().find(|f| *f as u32 == fail).unwrap_or(FetchFail::Shell)
 }
 
 /// There is no such object. What that means is the category's: open water
@@ -204,16 +186,16 @@ fn fetch_fail_of(fail: u32) -> FetchFail {
 /// their absence is a fault.
 fn absent(category: Category, subject: u64) -> Result<(), FetchFail> {
     match category {
-        Category::Terrain => Terrain::absent(LevelPage::of_subject(subject)),
-        Category::Poi => PoiPage::absent(LevelPage::of_subject(subject)),
-        Category::Geocode => geocode_store::set_group(subject, None),
+        Category::terrain => Terrain::absent(LevelPage::of_subject(subject)),
+        Category::poi => PoiPage::absent(LevelPage::of_subject(subject)),
+        Category::geocode => geocode_store::set_group(subject, None),
         // A bake with no dictionary is one whose groups name nothing: an
         // answer, so the demand is not made again.
-        Category::GeocodeDict => geocode_store::set_dict(None),
-        Category::Ocean => return Err(FetchFail::Refused),
+        Category::geocode_dict => geocode_store::set_dict(None),
+        Category::ocean => return Err(FetchFail::Refused),
         // An asset's read is settled where it is asked for (io/load.rs) and
         // never arrives here.
-        Category::Asset => return Err(FetchFail::Shell),
+        Category::asset => return Err(FetchFail::Shell),
     };
     Ok(())
 }
@@ -224,12 +206,12 @@ fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Ph
     // there is none, and it carries no body.
     let Some(b) = block else { return Err(FetchFail::Decode) };
     match category {
-        Category::Terrain => {
+        Category::terrain => {
             let result = Terrain::pyramid().adopt(LevelPage::of_subject(subject), view(b), phases);
             release(block);
             result
         }
-        Category::Ocean => {
+        Category::ocean => {
             let result = adopt_ocean(view(b));
             release(block);
             result
@@ -237,12 +219,12 @@ fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Ph
         // SAFETY of each `open_*` below: the block is the heap's, given for
         // this body alone; the page or packet keeps it and the store releases
         // it with them.
-        Category::Poi => {
+        Category::poi => {
             let result = PoiPage::pyramid().adopt(LevelPage::of_subject(subject), view(b), phases);
             release(block);
             result
         }
-        Category::Geocode => match unsafe { geocode_repository::open_group(b.0, b.1) } {
+        Category::geocode => match unsafe { geocode_repository::open_group(b.0, b.1) } {
             Ok(resident) => {
                 geocode_store::set_group(subject, Some(resident));
                 Ok(())
@@ -253,8 +235,8 @@ fn adopt(category: Category, subject: u64, block: Option<Block>, phases: &mut Ph
             }
         },
         // As `absent`: an asset never arrives here.
-        Category::Asset => Err(FetchFail::Shell),
-        Category::GeocodeDict => match unsafe { geocode_repository::open_dict(b.0, b.1) } {
+        Category::asset => Err(FetchFail::Shell),
+        Category::geocode_dict => match unsafe { geocode_repository::open_dict(b.0, b.1) } {
             Ok(resident) => {
                 geocode_store::set_dict(Some(resident));
                 Ok(())

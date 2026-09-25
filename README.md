@@ -56,7 +56,7 @@ a sparse tree per band        ▼             one L2 chunk, 64 blocks
 
 Above the dashed line is served as files; below it runs in the tab, on the turn's quota.
 
-The kernel decides what exists, what is on screen, at what detail, and what to draw. The shell forwards events, does the I/O the kernel names, renders the UI, and turns the renderer's calls into WebGPU. What it renders from is the kernel's snapshot: one JSON document of UI state, written after a turn that changed it. What each frame and task cost goes to a read-only ledger, which nothing that schedules is allowed to read.
+The kernel decides what exists, what is on screen, at what detail, and what to draw. The shell forwards events, does the I/O the kernel names, renders the UI, and turns the renderer's calls into WebGPU. What it renders from is the kernel's snapshot: one packet of UI state, written after a turn that changed it. What each frame and task cost goes to a read-only ledger, which nothing that schedules is allowed to read.
 
 Almost nothing is computed at request time. Pages and assets are baked ahead and served from the bucket under names that cannot come to mean something else — a page under its bake's version, an asset under a hash of its own bytes; the one exception is forward search, which queries a database when asked.
 
@@ -202,7 +202,7 @@ A crate's root holds directories only, sorted by kind; `pxl-geo`, `pxl-api` and 
 | `pxl-kernel`    | `mem` `sched` `world` `layer` `io` `control` `shell`                     |
 | `pxl-geo-bake`  | `terrain` `poi` `geocode` `page`, and `bin` beside them                  |
 
-The casing in the tree is not mixed by accident. Rust, the xpute packages and the kernel's driver (`apps/web/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, an action, a catalog entry — keeps the kernel's.
+The casing in the tree is not mixed by accident. Rust, the xpute packages and the kernel's driver (`apps/web/src/kernel/`) share one `snake_case` vocabulary across the boundary: `len`, `u32`, `new_len`. The rest of the shell and the scripts are `camelCase`, as TypeScript is. A name that crosses — a snapshot field, a packet's field, a catalog entry — keeps the kernel's.
 
 ---
 

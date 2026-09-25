@@ -37,6 +37,7 @@ use pxl_spec::space::v3::V3;
 use xpute_runtime::mem::heap::{alloc, free};
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
+pub use crate::abi::cmd::LoadKind;
 use crate::global::Global;
 use crate::host::body_read;
 use crate::io::policy;
@@ -45,12 +46,6 @@ use crate::layer::decor::asset_store::decor_assets_arrived;
 use crate::sched::ledger::record::{Failure, Outcome};
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::node::World;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LoadKind {
-    Gltf,
-    Image,
-}
 
 /// What a load names: a shipped asset, or the texture pack's sheet, which the
 /// ingest writes beside the table rather than as a row of it.
@@ -201,7 +196,7 @@ fn arrivals() -> &'static mut Notify {
 
 /// The host holds a model's bytes as `body`: `gltf_task`'s to parse.
 pub fn gltf_arrived(key: u64, body: u32, bytes: u32) {
-    let Some((_, load)) = ended(key, Outcome::Ok) else { return };
+    let Some((_, load)) = ended(key, Outcome::ok) else { return };
     loader().gltf[load.number() as usize] = Some(Entry::Arrived(body, bytes));
     arrivals().notify();
 }
@@ -237,7 +232,7 @@ pub async fn gltf_task() {
 
 /// The shell's handle for a decoded image.
 pub fn image_arrived(key: u64, handle: u32) {
-    let Some((_, load)) = ended(key, Outcome::Ok) else { return };
+    let Some((_, load)) = ended(key, Outcome::ok) else { return };
     loader().image[load.number() as usize] = Some(Entry::Ready(handle));
     decor_assets_arrived();
     request_world_tick();
@@ -247,7 +242,7 @@ pub fn image_arrived(key: u64, handle: u32) {
 /// being wanted — the transport failed, not the asset — and the scheduler
 /// decides how long it waits before the next attempt.
 pub fn load_rejected(key: u64) {
-    let Some((kind, load)) = ended(key, Outcome::Error) else { return };
+    let Some((kind, load)) = ended(key, Outcome::error) else { return };
     let l = loader();
     let n = load.number() as usize;
     match kind {

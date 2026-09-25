@@ -27,8 +27,8 @@ use crate::io::sched::declare;
 use crate::layer::geocode::store;
 use crate::shell::map_store::map_store;
 
-pub const CATEGORY: Category = Category::Geocode;
-pub const DICT_CATEGORY: Category = Category::GeocodeDict;
+pub const CATEGORY: Category = Category::geocode;
+pub const DICT_CATEGORY: Category = Category::geocode_dict;
 
 /// The dictionary is a stream of one, so its key names no page.
 const DICT_SUBJECT: u64 = 0;

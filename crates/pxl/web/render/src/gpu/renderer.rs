@@ -34,7 +34,7 @@ use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_C
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, texture_usage, word_bytes, GpuApi, Stamp};
-use crate::gpu::api_spec::{dimension, format, load, resource};
+use crate::gpu::api_spec::{dimension, format, load, resource, surface_role};
 use crate::gpu::arena::{arena_buffer, arena_lose};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
 use crate::gpu::clouds::{self, CloudPass};
@@ -47,7 +47,7 @@ use crate::gpu::pass::skinned::SkinnedPass;
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::shadow::Shadow;
 use crate::gpu::stars::StarPass;
-use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, ROLE_CASE, ROLE_WORLD, SETTLE_TURNS, SURFACES};
+use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::look::globe::{Globe, MERCATOR_RADIUS_U};
 use crate::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
@@ -1090,7 +1090,7 @@ impl Renderer {
     fn draw_cases(&mut self, g: &GpuApi, encoder: u32, draws: &[u32], uniforms: &[f32], cases: &[(u32, u32, u32)], stamp: &mut Stamp) {
         for &(id, model, image) in cases {
             let Some(s) = surface(id) else { continue };
-            if s.role != ROLE_CASE {
+            if s.role != surface_role::CASE {
                 continue;
             }
             // The case's actor's draw, and where it stands; nothing drawn until
@@ -1254,7 +1254,7 @@ fn targets(g: &GpuApi, s: &mut Surface, samples: u32) {
 /// recorded for the frame that has both, and nothing is drawn.
 pub fn render_frame(input: FrameInput) -> FrameOutput {
     REDRAW.set(false);
-    let world = surfaces().find(|s| s.role == ROLE_WORLD);
+    let world = surfaces().find(|s| s.role == surface_role::WORLD);
     let (Some(g), Some(device), Some(world)) = (gpu(), *DEVICE.get(|| None), world) else {
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()), input.lists);
         return FrameOutput { redraw: false, stat: None };

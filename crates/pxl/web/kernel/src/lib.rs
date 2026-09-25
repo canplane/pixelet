@@ -7,6 +7,7 @@
 //! is the one crate that does — so the same code runs under `cargo test`
 //! natively and inside the module the client loads.
 
+pub mod abi;
 pub mod control;
 pub mod global;
 pub mod host;

@@ -4,8 +4,8 @@
 //! error means, and when to try again. The watch itself is the shell's — it
 //! takes `take_geolocation_commands` and reports fixes and errors back.
 
-use pxl_spec::abi::message::Message;
-
+pub use crate::abi::cmd::GeolocationErrorCode;
+use crate::abi::cmd::Message;
 use crate::control::sensor::store::{device_location_store, DevicePoseStatus};
 use crate::global::Global;
 use crate::host::now;
@@ -39,15 +39,6 @@ pub enum GeolocationCommand {
 /// failure in the middle of one.
 pub const MAXIMUM_AGE_MS: f64 = 5000.0;
 pub const TIMEOUT_MS: f64 = 30000.0;
-
-/// The browser's PositionError codes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GeolocationErrorCode {
-    PermissionDenied,
-    PositionUnavailable,
-    Timeout,
-    Other,
-}
 
 struct Geolocation {
     /// Whether the map wants the sensor: what a return to the foreground

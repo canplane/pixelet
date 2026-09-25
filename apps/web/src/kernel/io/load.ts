@@ -14,11 +14,11 @@
  */
 
 import type { u32, u64 } from "@xpute/core/abi/word.ts";
-import { Command } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_load_delete, encode_load_image, encode_load_update } from "@/kernel/abi/cmd.spec.ts";
 import { load_key } from "@/catalog/asset/load.ts";
 import { asset_url } from "@/config/route.ts";
 import { running } from "@/kernel/io/fetch.ts";
-import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
+import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { hold_body } from "@/kernel/module.ts";
 import { register_image } from "@/kernel/render/gpu.ts";
 import { request_frame } from "@/kernel/sched.ts";
@@ -46,7 +46,7 @@ async function read(key: u64, load: u32, take: (res: Response) => Promise<void>)
     // the viewer is more waiting on, and it still wants this. Either way the
     // guest is told the read did not arrive and asks again in its own time.
     if (!controller.signal.aborted) console.error(`[kernel] asset: ${err instanceof Error ? err.message : String(err)}`);
-    CORE_BUILD.send(0, Command.LOAD_DELETE, packet((b) => b.u64(key)));
+    CORE_BUILD.send(0, Command.LOAD_DELETE, encode_load_delete({ key }));
   } finally {
     running.delete(key);
     request_frame();
@@ -58,7 +58,7 @@ export function load_model(key: u64, load: u32): Promise<void> {
     const bytes = new Uint8Array(await res.arrayBuffer());
     // A model is far past a ring frame: the host holds it, and the kernel
     // reads it in its turn.
-    CORE_BUILD.send(0, Command.LOAD_UPDATE, packet((b) => b.u64(key).u32(hold_body(bytes)).u32(bytes.byteLength)));
+    CORE_BUILD.send(0, Command.LOAD_UPDATE, encode_load_update({ key, body: hold_body(bytes), bytes: bytes.byteLength }));
   });
 }
 
@@ -69,6 +69,6 @@ export function load_image(key: u64, load: u32): Promise<void> {
     const image = await createImageBitmap(await res.blob(), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
     const handle = next_image++;
     register_image(handle, image);
-    CORE_BUILD.send(0, Command.LOAD_IMAGE, packet((b) => b.u64(key).u32(handle)));
+    CORE_BUILD.send(0, Command.LOAD_IMAGE, encode_load_image({ key, handle }));
   });
 }

@@ -10,7 +10,6 @@ pub mod batch;
 pub mod canvas;
 pub mod distance_fade;
 pub mod field;
-#[path = "billboard/order.spec.rs"]
 pub mod order;
 pub mod selection;
 pub mod sheet;

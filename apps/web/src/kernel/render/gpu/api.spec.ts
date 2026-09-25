@@ -50,6 +50,12 @@ export const resource = {
   SAMPLER: 2 as number,
 } as const;
 
+/** What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing in a case. */
+export const surface_role = {
+  WORLD: 0 as number,
+  CASE: 1 as number,
+} as const;
+
 /** An attachment's start: cleared, loaded, or a depth read and not written. */
 export const load = {
   CLEAR: 0 as number,
@@ -71,13 +77,13 @@ export const paint = {
   SCALE: 5 as number,
   /** on */
   SMOOTHING: 6 as number,
-  /** css */
+  /** rgba: 0xRRGGBBAA */
   FILL_STYLE: 7 as number,
-  /** css */
+  /** rgba: 0xRRGGBBAA */
   STROKE_STYLE: 8 as number,
   /** width */
   LINE_WIDTH: 9 as number,
-  /** css */
+  /** weight, px: the page's own font-family at them */
   FONT: 10 as number,
   /** 0 left, 1 center */
   TEXT_ALIGN: 11 as number,

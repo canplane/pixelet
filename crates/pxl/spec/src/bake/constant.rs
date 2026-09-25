@@ -12,9 +12,16 @@ use crate::space::sparse_tree::mem::SparseTreeLayout;
 /// - [m]    : Physical meters (EPSG:3857 based).
 ///
 /// SCALE HIERARCHY:
-/// - CELL_SHAMT defines the cell<->u relation (cell.spec.rs, from cell.json).
+/// - CELL_SHAMT defines the cell<->u relation: 1 cell = 2^CELL_SHAMT u.
 /// - when CELL_SHAMT = -1, 1u = 2cell.
-pub use super::cell_spec::{CELL_SHAMT, U_PER_CELL};
+///
+/// Everything below is derived from it rather than written out, so changing
+/// it rescales the page and chunk spans, the object layout and the object
+/// ladder together.
+pub const CELL_SHAMT: i32 = 0;
+
+/// `2^CELL_SHAMT`.
+pub const U_PER_CELL: f64 = if CELL_SHAMT >= 0 { (1u64 << CELL_SHAMT) as f64 } else { 1.0 / (1u64 << -CELL_SHAMT) as f64 };
 
 // Valid when CELL_SHAMT <= 0.
 const CELL_PER_U: u32 = 1 << -CELL_SHAMT;
@@ -101,21 +108,29 @@ pub const PAGE_ELE_SPAN: u32 = 1 << (L3_SHAMT + 1 - 5);
 pub const ELE_PAD: u32 = 2;
 pub const ELE_PADDED_SPAN: u32 = PAGE_ELE_SPAN + 2 * ELE_PAD;
 
+/// How many sizes an object places at: a cell and its halvings, each tier a
+/// level of the object layout below.
+///
+/// 4 deliberately, not 3. When CELL_SHAMT changed U_PER_CELL from 0.5u to
+/// 1u, sliding a fixed count of tiers down from it would have silently
+/// dropped the finest one (0.125u) that building at sub-block detail already
+/// depended on, instead of gaining a coarser option to match the new cell
+/// size. One more halving keeps every size that already worked.
+pub const OBJECT_TIERS: usize = 4;
+
 /// Object sub-block (SVO) octree layout — one instance per occupied L1
 /// cell, not one global tree (`resolve`/`set` only ever consume the low
 /// `max-min` bits of the key, so a tree only distinguishes position within
-/// one `2^(max-min)`-wide span). min/max track CELL_SHAMT so this rescales
-/// automatically the same way object/size.ts's OBJECT_SIZES already does.
+/// one `2^(max-min)`-wide span). min/max track CELL_SHAMT, and its depth is
+/// the object ladder's, one level a tier.
 ///
-/// dep = max - min = 3 matches OBJECT_SIZES exactly (4 tiers: the root plus
-/// 3 halving steps down to U_PER_CELL/8). max = CELL_SHAMT (not L3_SHAMT)
-/// because objects never merge past
-/// one cell — sparse_tree's own set()/compact() enforce that ceiling
+/// max = CELL_SHAMT (not L3_SHAMT) because objects never merge past one
+/// cell — sparse_tree's own set()/compact() enforce that ceiling
 /// structurally, since there's no coarser level for a tree this shallow to
 /// ever report.
 pub const OBJECT_LAYOUT: SparseTreeLayout = SparseTreeLayout {
     dim: 3,
-    min: CELL_SHAMT - 3,
+    min: CELL_SHAMT - (OBJECT_TIERS as i32 - 1),
     max: CELL_SHAMT,
 };
 

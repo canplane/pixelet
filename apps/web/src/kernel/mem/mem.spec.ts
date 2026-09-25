@@ -15,67 +15,10 @@
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 
-/** What every range in the memory begins on, and the smallest block the heap's
- * buddy hands out (pxl-wasm's HEAP_MIN_LOG2 is derived from it). A ring slot's
- * payload is one of these too.
- *
- * A borrowed analogy rather than a hardware number: this kernel is handed one
- * fixed range, addresses it with 32-bit offsets and has no MMU, which is the
- * situation a 32-bit machine was in, and 4 KiB is what that situation settled
- * on. The host's own page size is deliberately ignored — 16 KiB on Apple
- * silicon, 4 KiB on x86-64, 64 KiB for a WebAssembly page — since none of the
- * three is visible here or acts on anything decided here
- * (issue/20260916-the-page-table-the-pool-did-not-need.md). */
-export const PAGE_BYTES: u32 = 4096 as number;
-
-/** The stack, at the bottom of the memory. build.rs hands this number to wasm-ld
- * as `-z stack-size` with `--stack-first`, and the kernel asserts at boot that
- * the linker's `__stack_high` is where it says, so the ranges above are placed
- * against the stack the module was actually linked with rather than against a
- * default that happens to agree.
- *
- * First so that an overflow goes below zero, wraps as an unsigned 32-bit
- * address and lands outside the memory, which traps. With the stack after the
- * data it would write over `.data` silently instead. There is no MMU here and
- * so no guard page: the wraparound is the whole of the protection. */
-export const STACK_BYTES: u32 = 1048576 as number;
-
 /** Messages a ring holds, and so payloads: one a slot
  * (issue/20260917-the-ring-a-slot-and-its-payload.md). A power of two, which
  * the ring checks, since a position is taken modulo it by masking. */
 export const RING_CAPACITY: u32 = 2048 as number;
-
-/** Where the rings' descriptors begin: the first page past the stack. */
-export const RING_DESC_AT: u32 = 1048576 as number;
-
-/** Where the rings' payloads begin. Past the descriptors with room to spare, so
- * that a ring deepened does not move the payloads of the ring before it. */
-export const RING_SLOT_AT: u32 = 2097152 as number;
-
-/** Where the linker may start placing `.rodata`, `.data` and `.bss` — passed to
- * wasm-ld as `--global-base`, which is the only way to keep it out of the range
- * the rings take.
- *
- * A round number rather than wherever the rings happen to end, so the two
- * ranges grow without moving each other: the rings have everything below it and
- * the module's own data everything above. */
-export const GLOBAL_BASE: u32 = 33554432 as number;
-
-/** The heap a phone is guaranteed, and so what everything in front of it is
- * checked against: the stack, the rings, the module's data and the fixed
- * ranges together must leave this much of PHONE_BYTES.
- *
- * Measured from where `.heap` begins, because that is the quantity that
- * matters — where the module's data happens to end is only interesting for
- * pushing that figure up. Which lets one number stand for the whole front,
- * and lets the question be asked twice: at compile time against the lowest
- * the heap could possibly start (`--global-base` plus the fixed ranges, both
- * constants), so a terrain grown past a phone fails to build; and at boot
- * against where it actually started and what the device actually gave.
- *
- * 256 MiB with the terrain at 63.31 leaves the phone 412.96 in practice, so
- * there are 157 MiB of headroom over the guarantee. */
-export const MIN_HEAP_BYTES: u32 = 268435456 as number;
 
 /** What a device's memory is counted in: a reservation is a whole number of
  * these and the bytes past the last one are left out. */

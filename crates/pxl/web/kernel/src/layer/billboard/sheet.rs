@@ -15,7 +15,7 @@ use pxl_spec::space::v3::V3;
 use crate::global::Global;
 use crate::host::handheld;
 use crate::kernel::kernel;
-pub use crate::layer::billboard::order::BILLBOARD_ORDER;
+pub use crate::layer::billboard::order::BillboardOrder;
 use crate::world::chunk::node::World;
 
 static SHEET: Global<BillboardAtlas> = Global::new();
@@ -26,8 +26,8 @@ pub fn billboard_sheet() -> &'static mut BillboardAtlas {
 }
 
 /// A billboard set, empty and standing at the origin, drawn in `order`.
-pub fn new_billboard_set(order: u32) -> u32 {
-    kernel().sched.billboards.new_set(order)
+pub fn new_billboard_set(order: BillboardOrder) -> u32 {
+    kernel().sched.billboards.new_set(order as u32)
 }
 
 /// Stands a set at `origin`, in units.

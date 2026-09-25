@@ -164,3 +164,7 @@ fn star_colour(bv: f64) -> [f64; 3] {
     let peak = c[0].max(c[1]).max(c[2]);
     c.map(|v| 0.5 + 0.5 * v / peak)
 }
+
+#[cfg(test)]
+#[path = "stars.test.rs"]
+mod test;

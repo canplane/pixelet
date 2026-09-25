@@ -26,22 +26,16 @@
  */
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
-import type { u64 } from "@xpute/core/abi/word.ts";
-import { Command } from "@/kernel/abi/cmd.spec.ts";
+import type { f64, u32, u64 } from "@xpute/core/abi/word.ts";
+import { Command, encode_fetch_update, FetchOutcome } from "@/kernel/abi/cmd.spec.ts";
 import { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
 import { declareUnsupported, isUnsupported } from "@/app/store/unsupported-store.ts";
 import { PUBLISHED_TILES } from "@/config/deploy.ts";
-import { tile_url, type TileKind } from "@/config/route.ts";
-import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
+import { tile_url } from "@/config/route.ts";
+import { BAKE_KINDS } from "@/config/published.spec.ts";
+import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { hold_body } from "@/kernel/module.ts";
 import { request_frame } from "@/kernel/sched.ts";
-
-/** What a read came to, as FETCH_UPDATE carries it (spec/pxl/spec/abi/cmd.json). */
-const READ = 0, STOPPED = 1, FAILED = 2, ABSENT = 3;
-
-/** The bakes, in the order `BakeKind` numbers them — which is the order
- * `PUBLISHED_VERSION` declares them in, since the enum is generated from it. */
-const BAKE: readonly TileKind[] = ["terrain", "poi", "geocode"];
 
 /** Every read the scheduler started and the host has not settled, by the key
  * it handed out. One map for both kinds: a stop names a key and nothing else,
@@ -56,8 +50,8 @@ function packed(body: U8Array): boolean {
 }
 
 /** Tells the kernel what became of the read it started under `key`. */
-function settle(key: u64, outcome: number, held: number, bytes: number, fail: FetchFail, detail: number, net_ms: number): void {
-  CORE_BUILD.send(0, Command.FETCH_UPDATE, packet((b) => b.u64(key).u32(outcome).u32(held).u32(bytes).u32(fail).u32(detail).f64(net_ms)));
+function settle(key: u64, outcome: FetchOutcome, body: u32, body_bytes: u32, fail: FetchFail, detail: u32, net_ms: f64): void {
+  CORE_BUILD.send(0, Command.FETCH_UPDATE, encode_fetch_update({ key, outcome, body, body_bytes, fail, detail, net_ms }));
   request_frame();
 }
 
@@ -68,11 +62,11 @@ export async function run_fetch(key: u64, bake: number, name: string): Promise<v
   // read. The kernel keeps its demand and keeps asking, which is right — the
   // demand is real and nothing about it failed — but the answer would be the
   // same bytes again, and the reader is looking at the notice.
-  if (isUnsupported()) return settle(key, FAILED, 0, 0, FetchFail.Shell, 0, 0);
+  if (isUnsupported()) return settle(key, FetchOutcome.Error, 0, 0, FetchFail.Shell, 0, 0);
   const controller = new AbortController();
   running.set(key, controller);
   const signal = controller.signal;
-  let outcome: number = READ;
+  let outcome: FetchOutcome = FetchOutcome.Read;
   let held = 0;
   let bytes = 0;
   let fail: FetchFail = FetchFail.None;
@@ -80,27 +74,27 @@ export async function run_fetch(key: u64, bake: number, name: string): Promise<v
   let net_ms = 0;
   try {
     const t0 = performance.now();
-    const res = await fetch(tile_url(BAKE[bake], name, PUBLISHED_TILES), { signal });
+    const res = await fetch(tile_url(BAKE_KINDS[bake], name, PUBLISHED_TILES), { signal });
     const body = new Uint8Array(await res.arrayBuffer());
     net_ms = performance.now() - t0;
     if (res.status === 404) {
-      outcome = ABSENT;
+      outcome = FetchOutcome.Absent;
     } else if (!res.ok) {
-      outcome = FAILED;
+      outcome = FetchOutcome.Error;
       fail = FetchFail.Refused;
       detail = res.status;
     } else if (body.byteLength > 0 && packed(body)) {
       // Handing these on would spend a heap block and fail in the kernel's
       // decoder, far from the one thing that is actually wrong.
       declareUnsupported("encoding");
-      outcome = FAILED;
+      outcome = FetchOutcome.Error;
       fail = FetchFail.Shell;
     } else if (body.byteLength > 0) {
       held = hold_body(body);
       bytes = body.byteLength;
     }
   } catch (err) {
-    outcome = signal.aborted ? STOPPED : FAILED;
+    outcome = signal.aborted ? FetchOutcome.Aborted : FetchOutcome.Error;
     // A stop is the scheduler's own doing and carries no reason. Everything
     // else is the transport's: a browser raises TypeError for offline, DNS,
     // CORS and a refused connection alike, and its words for them are this

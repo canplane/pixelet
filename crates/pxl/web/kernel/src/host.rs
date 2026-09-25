@@ -6,6 +6,8 @@
 // the first turn (pxl-wasm's `install_host`); a native test runs on the
 // defaults, which keep nothing and hold time at zero.
 
+use pxl_render::gpu::paint::Font;
+
 use crate::global::Global;
 
 /// The host's clock, in milliseconds. The substrate holds it
@@ -72,19 +74,32 @@ pub fn handheld() -> bool {
     *HANDHELD.get(|| false)
 }
 
-static MEASURE: Global<fn(font: &str, text: &str) -> f64> = Global::new();
+static DEVELOPMENT: Global<bool> = Global::new();
 
-fn measure_nothing(_: &str, text: &str) -> f64 {
+/// Installs whether the build is a development one (the shell's
+/// `__IS_DEV__`), which offers the settings schema.json marks `dev`.
+pub fn set_development(development: bool) {
+    DEVELOPMENT.set(development);
+}
+
+pub fn development() -> bool {
+    *DEVELOPMENT.get(|| false)
+}
+
+static MEASURE: Global<fn(font: Font, text: &str) -> f64> = Global::new();
+
+fn measure_nothing(_: Font, text: &str) -> f64 {
     text.chars().count() as f64 * 7.0
 }
 
 /// Installs a canvas context's `measureText`: the width `text` takes in `font`.
-pub fn set_measure_text(measure: fn(font: &str, text: &str) -> f64) {
+pub fn set_measure_text(measure: fn(font: Font, text: &str) -> f64) {
     MEASURE.set(measure);
 }
 
-/// `ctx.font = font; ctx.measureText(text).width`.
-pub fn measure_text(font: &str, text: &str) -> f64 {
+/// `ctx.font = font; ctx.measureText(text).width`, in the font the renderer
+/// paints the same text in.
+pub fn measure_text(font: Font, text: &str) -> f64 {
     (MEASURE.get(|| measure_nothing))(font, text)
 }
 

@@ -15,6 +15,15 @@ use crate::gpu::api_spec::paint as op;
 
 const PAINT_WORDS: usize = 512;
 
+/// A font as the page's own family at a weight and a size: the family is the
+/// host's, which reads it off the page, so what is painted and what the page
+/// sets around it are the same face.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Font {
+    pub weight: u32,
+    pub px: f32,
+}
+
 pub struct Paint<'a> {
     ops: [u32; PAINT_WORDS],
     len: usize,
@@ -71,23 +80,22 @@ impl<'a> Paint<'a> {
         self.push(&[op::SMOOTHING, on as u32]);
     }
 
-    pub fn fill_style(&mut self, css: &'a str) {
-        let [at, len] = Self::text(css);
-        self.push(&[op::FILL_STYLE, at, len]);
+    /// A colour as `0xRRGGBBAA`.
+    pub fn fill_style(&mut self, rgba: u32) {
+        self.push(&[op::FILL_STYLE, rgba]);
     }
 
-    pub fn stroke_style(&mut self, css: &'a str) {
-        let [at, len] = Self::text(css);
-        self.push(&[op::STROKE_STYLE, at, len]);
+    /// A colour as `0xRRGGBBAA`.
+    pub fn stroke_style(&mut self, rgba: u32) {
+        self.push(&[op::STROKE_STYLE, rgba]);
     }
 
     pub fn line_width(&mut self, width: f32) {
         self.push(&[op::LINE_WIDTH, width.to_bits()]);
     }
 
-    pub fn font(&mut self, css: &'a str) {
-        let [at, len] = Self::text(css);
-        self.push(&[op::FONT, at, len]);
+    pub fn font(&mut self, font: Font) {
+        self.push(&[op::FONT, font.weight, font.px.to_bits()]);
     }
 
     /// 0 left, 1 center.

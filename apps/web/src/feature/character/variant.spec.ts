@@ -7,8 +7,6 @@
 // player starts as. What a path's bytes are is the asset ingest's
 // (pxl_spec::asset::ingested).
 
-import type { u32 } from "@xpute/core/abi/word.ts";
-
 /** The groups a character is of, each numbered, and in each its variants by
  * key, row for row with its models, the colormap its pack shares, how tall it
  * stands and which clip is its move. */
@@ -120,9 +118,6 @@ export const Group = {
   person: 0,
   pet: 1,
 } as const;
-
-/** The clip a character stands in, "idle", by its index in both packs' animations. */
-export const IDLE_CLIP: u32 = 1 as number;
 
 /** Split by gender (not one flat list) so the settings UI can show two
  * separate rows instead of one row a user has to scan by label text to tell

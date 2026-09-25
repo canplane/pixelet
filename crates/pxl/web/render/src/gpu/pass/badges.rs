@@ -28,7 +28,7 @@ use crate::frame::draw::{DRAW_WORDS, PIPELINE_BADGE, UNIFORM_FLOATS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::layers::{mip_levels, Mips};
-use crate::gpu::paint::Paint;
+use crate::gpu::paint::{Font, Paint};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Blocks;
 
@@ -37,15 +37,21 @@ const BADGE_FLOATS: usize = 52;
 /// Sets drawn in one frame at most.
 const SETS: usize = 32;
 
-macro_rules! font_family {
-    () => {
-        "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"SF Pro Display\", \"Pretendard Variable\", system-ui, sans-serif"
-    };
-}
+// The fonts are the kernel's too, which measures what is painted in them.
+// The weights are the page's own scale (Tailwind's font-normal and
+// font-semibold) rather than canvas's "bold", which resolves to 700 —
+// Pretendard Variable's weight axis (45–920) renders either as a real
+// distinct face, not a synthetic bold.
+
+const REGULAR: u32 = 400;
+const SEMIBOLD: u32 = 600;
+
+const BLACK: u32 = 0x000000ff;
+const WHITE: u32 = 0xffffffff;
 
 // ---- a place and a cluster (crates/pxl/web/kernel/src/layer/poi/badge.rs) ----
 
-const BADGE_FONT: &str = concat!("400 12px ", font_family!());
+pub const BADGE_FONT: Font = Font { weight: REGULAR, px: 12.0 };
 const ICON_SIZE: f32 = 20.0;
 const PAD_Y: f32 = 7.0;
 const DOT_DIAM: f32 = 6.0;
@@ -60,7 +66,7 @@ const MIDDLE: u32 = 0;
 
 /// The pill every badge stands on: fully-rounded ends.
 fn pill(p: &mut Paint, logical_w: f32) {
-    p.fill_style("rgba(20,20,26,0.72)");
+    p.fill_style(0x14141ab8);
     p.begin_path();
     p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R);
     p.fill();
@@ -68,11 +74,11 @@ fn pill(p: &mut Paint, logical_w: f32) {
 
 /// The anchor dot, centred under the pill, marking the ground point it floats above.
 fn anchor_dot(p: &mut Paint, logical_w: f32) {
-    p.fill_style("rgba(255,255,255,0.6)");
+    p.fill_style(0xffffff99);
     p.begin_path();
     p.arc(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, 0.0, TAU);
     p.fill();
-    p.stroke_style("rgba(255,255,255,0.25)");
+    p.stroke_style(0xffffff40);
     p.line_width(DOT_BORDER);
     p.stroke();
 }
@@ -82,27 +88,27 @@ fn cluster<'a>(p: &mut Paint<'a>, label: &'a str, logical_w: f32) {
     p.font(BADGE_FONT);
     p.text_align(CENTER);
     p.text_baseline(MIDDLE);
-    p.fill_style("#fff");
+    p.fill_style(WHITE);
     p.fill_text(label, logical_w / 2.0, PILL_H / 2.0 + 1.0);
     anchor_dot(p, logical_w);
 }
 
 // ---- a label (crates/pxl/web/kernel/src/layer/marker/frame_gizmo.rs) ----
 
-const LABEL_FONT: &str = concat!("400 10px ", font_family!());
+pub const LABEL_FONT: Font = Font { weight: REGULAR, px: 10.0 };
 const LABEL_H: f32 = 12.0;
 
 fn label<'a>(p: &mut Paint<'a>, text: &'a str, logical_w: f32) {
     p.font(LABEL_FONT);
     p.text_align(CENTER);
     p.text_baseline(MIDDLE);
-    p.fill_style("#000");
+    p.fill_style(BLACK);
     p.fill_text(text, logical_w / 2.0, LABEL_H / 2.0);
 }
 
 // ---- a speech bubble (crates/pxl/web/kernel/src/layer/character/chat_bubble.rs) ----
 
-const BUBBLE_FONT: &str = concat!("600 14px ", font_family!());
+pub const BUBBLE_FONT: Font = Font { weight: SEMIBOLD, px: 14.0 };
 const PADDING_Y: f32 = 8.0;
 const LINE_H: f32 = 17.0;
 const BORDER: f32 = 2.0;
@@ -114,24 +120,24 @@ const TAIL_H: f32 = 10.0;
 /// uncovered read as a chunky, pixel-art rounded corner without a real arc,
 /// which would anti-alias against nearest sampling.
 #[allow(clippy::too_many_arguments)]
-fn notched_rect<'a>(p: &mut Paint<'a>, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: &'a str) {
+fn notched_rect(p: &mut Paint<'_>, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: u32) {
     p.fill_style(fill);
     p.fill_rect(x + notch, y, (w - notch * 2.0).max(0.0), h);
     p.fill_rect(x, y + notch, w, (h - notch * 2.0).max(0.0));
 }
 
 fn bubble<'a>(p: &mut Paint<'a>, lines: &'a [String], box_w: f32, box_h: f32) {
-    notched_rect(p, 0.0, 0.0, box_w, box_h, NOTCH, "#000");
-    notched_rect(p, BORDER, BORDER, box_w - BORDER * 2.0, box_h - BORDER * 2.0, (NOTCH - BORDER).max(1.0), "#fff");
+    notched_rect(p, 0.0, 0.0, box_w, box_h, NOTCH, BLACK);
+    notched_rect(p, BORDER, BORDER, box_w - BORDER * 2.0, box_h - BORDER * 2.0, (NOTCH - BORDER).max(1.0), WHITE);
     let cx = box_w / 2.0;
-    p.fill_style("#000");
+    p.fill_style(BLACK);
     p.begin_path();
     p.move_to(cx - TAIL_W / 2.0, box_h - BORDER);
     p.line_to(cx + TAIL_W / 2.0, box_h - BORDER);
     p.line_to(cx, box_h + TAIL_H - BORDER);
     p.close_path();
     p.fill();
-    p.fill_style("#fff");
+    p.fill_style(WHITE);
     p.begin_path();
     p.move_to(cx - TAIL_W / 2.0 + BORDER * 1.5, box_h - BORDER);
     p.line_to(cx + TAIL_W / 2.0 - BORDER * 1.5, box_h - BORDER);
@@ -139,7 +145,7 @@ fn bubble<'a>(p: &mut Paint<'a>, lines: &'a [String], box_w: f32, box_h: f32) {
     p.close_path();
     p.fill();
     p.font(BUBBLE_FONT);
-    p.fill_style("#000");
+    p.fill_style(BLACK);
     p.text_align(CENTER);
     p.text_baseline(MIDDLE);
     for (i, line) in lines.iter().enumerate() {

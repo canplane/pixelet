@@ -13,6 +13,7 @@
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_DEBUG};
 use pxl_render::gpu::api::word_bytes;
+use pxl_render::gpu::pass::badges::LABEL_FONT;
 use pxl_render::gpu::surface::DPR_MAX;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::indexer::{L3_BASE, L3_CENTER};
@@ -27,9 +28,8 @@ use xpute_core::math::vec3::Vec3;
 use crate::global::Global;
 use crate::host::measure_text;
 use crate::kernel::kernel;
-use crate::layer::billboard::canvas::scale::{FONT_FAMILY, FONT_WEIGHT_REGULAR};
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
-use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BILLBOARD_ORDER};
+use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::terrain::elevation::{get_ele, with_ele};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::node::World;
@@ -44,9 +44,8 @@ const GAP: f64 = 0.2;
 const POINT_HALF: f64 = 0.15;
 const RING_RADIUS: f64 = 4.0;
 const RING_SEGMENTS: u32 = 64;
-/// A label's text, as the view paints it (gpu/pass/badges.rs's LABEL_FONT and
-/// LABEL_H): the width is measured here at the same font.
-const LABEL_FONT_PX: u32 = 10;
+/// A label's height, as the view paints it (gpu/pass/badges.rs's LABEL_H); its
+/// width is measured here in the font the view paints it in.
 const LABEL_H: f64 = 12.0;
 const LABEL_PAD_X: f64 = 2.0;
 
@@ -296,14 +295,13 @@ fn make_labels(g: &mut Gizmos, origin: V3) {
     if g.drawn.labels.is_empty() {
         return;
     }
-    let font = format!("{FONT_WEIGHT_REGULAR} {LABEL_FONT_PX}px {FONT_FAMILY}");
     let sheet = billboard_sheet();
     for label in &g.drawn.labels {
-        let logical_w = measure_text(&font, &label.text).ceil() + LABEL_PAD_X * 2.0;
+        let logical_w = measure_text(LABEL_FONT, &label.text).ceil() + LABEL_PAD_X * 2.0;
         let slot = sheet.add(logical_w * DPR_MAX, LABEL_H * DPR_MAX, DrawSpec::Text { text: label.text.clone(), logical_w });
         g.slots.push((slot, logical_w));
     }
-    let set = new_billboard_set(BILLBOARD_ORDER::debug);
+    let set = new_billboard_set(BillboardOrder::Debug);
     place_billboard_set(set, origin);
     g.set = Some(set);
 }

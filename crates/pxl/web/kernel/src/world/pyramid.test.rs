@@ -52,12 +52,12 @@ fn places() -> (Vec<IVec>, Vec<(LevelPage, PoiPage)>) {
         for y in y0..y0 + n {
             for x in x0..x0 + n {
                 let p = LevelPage::new(level, ivec::gather(x, y, 0));
-                let cells = at
+                let places = at
                     .iter()
-                    .map(|&a| POI_LATTICE.cell_of(level, &Pvf3 { i: a, ..Default::default() }))
-                    .filter(|c| c.page() == p)
-                    .map(|c| (c.index(), ""));
-                pages.push((p, PoiPage::of_places(cells)));
+                    .map(|&a| Pvf3 { i: a, ..Default::default() })
+                    .filter(|a| POI_LATTICE.cell_of(level, a).page() == p)
+                    .map(|a| (a, ""));
+                pages.push((p, PoiPage::of_places(level, places)));
             }
         }
     }
@@ -255,7 +255,8 @@ fn only_ground_wanted_at_the_top_is_outermost() {
 fn a_count_folds_from_its_four_children_alone() {
     let p = LevelPage::new(3, ivec::gather(5, -2, 0));
     assert_eq!(PoiPage::sources(p), p.children().to_vec());
-    let child = PoiPage::of_places([(0, ""), (1, "")]);
+    let k = p.children()[0];
+    let child = PoiPage::of_places(k.level, [(POI_LATTICE.cell_base(k, 0, 0), ""), (POI_LATTICE.cell_base(k, 1, 0), "")]);
     let folded = PoiPage::fold_page(p, |q| p.children().contains(&q).then_some(&child)).expect("the four are enough");
     assert_eq!(folded.cells.iter().map(|c| c.count).sum::<u32>(), 8);
 }

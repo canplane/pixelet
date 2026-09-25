@@ -61,6 +61,3 @@ export const API_PREFIX = "/api/";
 export const ASSET_PREFIX = "/asset/";
 
 export const TILE_PREFIX = "/geo/tiles/";
-
-/** Every root, as the edge claims them. */
-export const WORKER_FIRST = ["/geo/*", "/api/*", "/asset/*"] as const;

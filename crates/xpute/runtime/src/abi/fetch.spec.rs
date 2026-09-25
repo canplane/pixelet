@@ -51,6 +51,13 @@ pub enum FetchFail {
 }
 
 impl FetchFail {
+    pub const ALL: [FetchFail; 6] = [FetchFail::None, FetchFail::Network, FetchFail::Shell, FetchFail::Refused, FetchFail::NoRoom, FetchFail::Decode];
+
+    /// The reason a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<FetchFail> {
+        FetchFail::ALL.into_iter().find(|f| *f as u32 == number)
+    }
+
     /// A short name for a report to print. The words a person reads for a
     /// failure are the host's; this is the one the guest's own dev report
     /// needs, and it is a `&'static str` in the module's rodata rather than

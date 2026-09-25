@@ -7,8 +7,6 @@
 //! version the client asks for. One implementation, so a page the bake wrote
 //! and a page the kernel reads cannot drift.
 
-#[path = "bake/cell.spec.rs"]
-pub mod cell_spec;
 pub mod constant;
 pub mod fold;
 pub mod format;

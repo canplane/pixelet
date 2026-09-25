@@ -331,7 +331,7 @@
   "STEP": {
     "$type": "u32",
     "$doc": [
-      "One registered step's timing, at SUMMARY.steps.slots + its index × WORDS. `name` indexes STEP_NAMES, or is -1 for a name the list lacks."
+      "One registered step's timing, at SUMMARY.steps.slots + its index × WORDS. `name` indexes STEP_NAMES."
     ],
     "phase": 0,
     "name": 1,

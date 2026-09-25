@@ -191,7 +191,7 @@ export const TASK_SUMMARY = {
   WORDS: 25 as number,
 } as const;
 
-/** One registered step's timing, at SUMMARY.steps.slots + its index × WORDS. `name` indexes STEP_NAMES, or is -1 for a name the list lacks. */
+/** One registered step's timing, at SUMMARY.steps.slots + its index × WORDS. `name` indexes STEP_NAMES. */
 export const STEP = {
   phase: 0 as number,
   name: 1 as number,

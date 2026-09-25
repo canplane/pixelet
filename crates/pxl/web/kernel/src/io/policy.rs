@@ -96,5 +96,5 @@ pub fn asset() -> Rank {
 /// nothing here says it should differ; when something does, this is where it
 /// is said.
 pub fn retry_after(outcome: Outcome) -> Option<f64> {
-    (outcome == Outcome::Error).then_some(2_000.0)
+    (outcome == Outcome::error).then_some(2_000.0)
 }

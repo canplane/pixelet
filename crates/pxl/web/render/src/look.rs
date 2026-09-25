@@ -11,5 +11,4 @@ pub mod color;
 pub mod environment;
 pub mod globe;
 pub mod lod;
-#[path = "look/style.spec.rs"]
 pub mod style;

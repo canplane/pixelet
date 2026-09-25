@@ -21,10 +21,10 @@
  */
 
 import type { U32Array, U8Array } from "@xpute/core/abi/array.ts";
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
+import type { f32, f64, u32 } from "@xpute/core/abi/word.ts";
 import type { QuantumPolicy } from "@xpute/runtime/sched/quantum.ts";
 
-import { gpu_imports } from "@/kernel/render/gpu.ts";
+import { css_font, gpu_imports } from "@/kernel/render/gpu.ts";
 import { EXPORT, IMPORT } from "@/kernel/abi/symbol.ts";
 
 /** What the module exports: the boot block and the doorbell. Every address
@@ -167,11 +167,11 @@ export async function instantiate_kernel(memory: WebAssembly.Memory): Promise<Ke
         start.setHours(0, 0, 0, 0);
         new Float64Array(memory.buffer, out, 5).set([d.getTime(), d.getHours(), d.getMinutes(), d.getSeconds(), start.getTime()]);
       },
-      measure_text: (font: u32, font_len: u32, text: u32, text_len: u32) => {
+      measure_text: (weight: u32, px: f32, text: u32, text_len: u32) => {
         const ctx = measure_context();
         const s = text_at(memory, text, text_len);
         if (ctx === null) return s.length * 7;
-        ctx.font = text_at(memory, font, font_len);
+        ctx.font = css_font(weight, px);
         return ctx.measureText(s).width;
       },
       // A body the host holds, copied where the kernel asks and let go.

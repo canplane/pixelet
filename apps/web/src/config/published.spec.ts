@@ -16,8 +16,11 @@
  */
 export const PUBLISHED_VERSION = {
   terrain: "v6",
-  poi: "v8",
+  poi: "v7",
   geocode: "v4",
 } as const;
 
 export type BakeKind = keyof typeof PUBLISHED_VERSION;
+
+/** The kinds by the number the kernel names one by (FETCH_CREATE's `bake`). */
+export const BAKE_KINDS: readonly BakeKind[] = ["terrain", "poi", "geocode"];

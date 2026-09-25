@@ -11,14 +11,9 @@
  * that asked for it.
  */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
-import { Command } from "@/kernel/abi/cmd.spec.ts";
-import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
+import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_update, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
+import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { request_frame } from "@/kernel/sched.ts";
-
-/** crates/pxl/web/wasm/src/lib.rs's sensor numbers. */
-export const GEOLOCATION = 0;
-export const ORIENTATION = 1;
 
 interface IOSOrientationEvent extends DeviceOrientationEvent {
   webkitCompassHeading?: number;
@@ -45,15 +40,21 @@ export function geolocation_start(): void {
   geolocation_watch = navigator.geolocation.watchPosition(
     (pos) => {
       const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-      CORE_BUILD.send(0, Command.SENSOR_UPDATE, packet((b) => b.f64(longitude).f64(latitude).f64(altitude ?? NaN).f64(accuracy).f64(heading ?? NaN)));
+      CORE_BUILD.send(0, Command.SENSOR_UPDATE, encode_sensor_update({ lon: longitude, lat: latitude, altitude, accuracy, heading }));
       request_frame();
     },
     (err) => {
       // The dead watch is cleared, not just forgotten: it keeps calling back,
       // and a later start would race it.
       geolocation_stop();
-      const code = err.code === err.PERMISSION_DENIED ? 1 : err.code === err.POSITION_UNAVAILABLE ? 2 : err.code === err.TIMEOUT ? 3 : 0;
-      CORE_BUILD.send(0, Command.SENSOR_ERROR, packet((b) => b.u32(code)));
+      const code = err.code === err.PERMISSION_DENIED
+        ? GeolocationErrorCode.PermissionDenied
+        : err.code === err.POSITION_UNAVAILABLE
+        ? GeolocationErrorCode.PositionUnavailable
+        : err.code === err.TIMEOUT
+        ? GeolocationErrorCode.Timeout
+        : GeolocationErrorCode.Other;
+      CORE_BUILD.send(0, Command.SENSOR_ERROR, encode_sensor_error({ code }));
       request_frame();
     },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 },
@@ -64,7 +65,7 @@ let orientation_event: string | null = null;
 
 function on_orientation(e: Event): void {
   const o = e as IOSOrientationEvent;
-  CORE_BUILD.send(0, Command.SENSOR_ORIENTATION, packet((b) => b.f64(o.webkitCompassHeading ?? NaN).f64(o.alpha ?? NaN).f64(o.beta ?? NaN).f64(o.gamma ?? NaN)));
+  CORE_BUILD.send(0, Command.SENSOR_ORIENTATION, encode_sensor_orientation({ webkit_compass_heading: o.webkitCompassHeading ?? null, alpha: o.alpha, beta: o.beta, gamma: o.gamma }));
   request_frame();
 }
 
@@ -78,11 +79,8 @@ export function orientation_listen(): void {
   listen_orientation("ondeviceorientationabsolute" in globalThis ? "deviceorientationabsolute" : "deviceorientation");
 }
 
-/** crates/pxl/web/kernel/src/control/sensor/store.rs's PermissionAnswer. */
-export const PERMISSION_ASKING = 0, PERMISSION_GRANTED = 1, PERMISSION_DENIED = 2, PERMISSION_FAILED = 3;
-
-export function send_permission(sensor: u32, answer: u32): void {
-  CORE_BUILD.send(0, Command.SENSOR_PERMISSION, packet((b) => b.u32(sensor).u32(answer)));
+export function send_permission(sensor: Sensor, answer: PermissionAnswer): void {
+  CORE_BUILD.send(0, Command.SENSOR_PERMISSION, encode_sensor_permission({ sensor, answer }));
   request_frame();
 }
 
@@ -94,17 +92,17 @@ export function send_permission(sensor: u32, answer: u32): void {
 export function orientation_permit(): Promise<boolean> {
   if (!orientation_needs_permission() || orientation_event !== null) return Promise.resolve(true);
   const prompt = (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission!();
-  send_permission(ORIENTATION, PERMISSION_ASKING);
+  send_permission(Sensor.Orientation, PermissionAnswer.Asking);
   return prompt.then(
     (permission) => {
       const granted = permission === "granted";
       if (granted) listen_orientation("deviceorientation");
-      send_permission(ORIENTATION, granted ? PERMISSION_GRANTED : PERMISSION_DENIED);
+      send_permission(Sensor.Orientation, granted ? PermissionAnswer.Granted : PermissionAnswer.Denied);
       return granted;
     },
     (err) => {
       console.error("[kernel] orientation permission error:", err);
-      send_permission(ORIENTATION, PERMISSION_FAILED);
+      send_permission(Sensor.Orientation, PermissionAnswer.Failed);
       return false;
     },
   );

@@ -10,17 +10,28 @@
  * does the work.
  */
 
-import type { u32, u64 } from "@xpute/core/abi/word.ts";
+import type { u32 } from "@xpute/core/abi/word.ts";
 import type { BranchCursor } from "@xpute/core/wire/xtp/mod.ts";
-import { Command } from "@/kernel/abi/cmd.spec.ts";
-import { APP_ENV, BUILD_ID, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
+import {
+  Command,
+  encode_gpu_create,
+  encode_world_create,
+  LoadKind,
+  read_fetch_create,
+  read_fetch_delete,
+  read_load_create,
+  read_sensor_create,
+  read_sensor_delete,
+  read_world_snapshot,
+  Sensor,
+} from "@/kernel/abi/cmd.spec.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
-import { GEOLOCATION, geolocation_start, geolocation_stop, orientation_listen, orientation_needs_permission, orientation_remove, orientation_supported } from "@/kernel/control/sensor.ts";
+import { geolocation_start, geolocation_stop, orientation_listen, orientation_needs_permission, orientation_remove, orientation_supported } from "@/kernel/control/sensor.ts";
 import { abort_fetch, run_fetch } from "@/kernel/io/fetch.ts";
 import { load_image, load_model } from "@/kernel/io/load.ts";
-import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
+import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { CORE_KERNEL } from "@/kernel/mem.ts";
-import { text_at } from "@/kernel/module.ts";
+import { bytes_at } from "@/kernel/module.ts";
 import { declareUnsupported } from "@/app/store/unsupported-store.ts";
 import { acquire_device } from "@/kernel/render/gpu.ts";
 import { request_frame } from "@/kernel/sched.ts";
@@ -29,34 +40,34 @@ import { set_snapshot } from "@/kernel/shell.ts";
 function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
   switch (cmd) {
     case Command.WORLD_SNAPSHOT: {
-      // The JSON is far past a ring frame, so the kernel names the block it
-      // holds it in. It is the kernel's and stays valid until it makes the
-      // next one, which is a turn away.
-      const [at, len] = f!.get<[u32, u32]>();
-      set_snapshot(text_at(CORE_KERNEL.memory, at >>> 0, len >>> 0));
+      // The packet is far past a ring frame, so the kernel names the block
+      // it holds it in. It is the kernel's and stays valid until it writes
+      // the next one, which is a turn away.
+      const { at, len } = read_world_snapshot(f!);
+      set_snapshot(bytes_at(CORE_KERNEL.memory, at, len));
       return;
     }
     case Command.WORLD_UPDATE:
       return;
     case Command.SENSOR_CREATE:
-      if (f!.at(0).get<u32>() === GEOLOCATION) geolocation_start();
+      if (read_sensor_create(f!).sensor === Sensor.Geolocation) geolocation_start();
       else orientation_listen();
       return;
     case Command.SENSOR_DELETE:
-      if (f!.at(0).get<u32>() === GEOLOCATION) geolocation_stop();
+      if (read_sensor_delete(f!).sensor === Sensor.Geolocation) geolocation_stop();
       else orientation_remove();
       return;
     case Command.FETCH_CREATE: {
-      const [key, bake, name] = f!.get<[u64, u32, string]>();
+      const { key, bake, name } = read_fetch_create(f!);
       void run_fetch(key, bake, name);
       return;
     }
     case Command.FETCH_DELETE:
-      abort_fetch(f!.at(0).get<u64>());
+      abort_fetch(read_fetch_delete(f!).key);
       return;
     case Command.LOAD_CREATE: {
-      const [key, kind, load] = f!.get<[u64, u32, u32]>();
-      void (kind === 0 ? load_model(key, load) : load_image(key, load));
+      const { key, kind, load } = read_load_create(f!);
+      void (kind === LoadKind.Gltf ? load_model(key, load) : load_image(key, load));
       return;
     }
   }
@@ -83,7 +94,7 @@ function gpu_boot(): void {
       declareUnsupported(info.reason);
       return;
     }
-    CORE_BUILD.send(0, Command.GPU_CREATE, packet((b) => b.u32(info.align).bool(info.timestamps)));
+    CORE_BUILD.send(0, Command.GPU_CREATE, encode_gpu_create({ min_uniform_offset_alignment: info.align, timestamps: info.timestamps }));
     request_frame();
   }, (err) => console.error("[gpu] the device request failed; nothing can be drawn:", err));
 }
@@ -95,10 +106,13 @@ export function boot_kernel(): void {
   gpu_boot();
   CORE_BUILD.call(
     Command.WORLD_CREATE,
-    packet((b) =>
-      b.str(APP_ENV).str(BUILD_TIME).str(BUILD_ID).str(BUILD_NUMBER).bool(PUBLISHED_TILES).bool(HANDHELD)
-        .bool("geolocation" in navigator).bool(orientation_supported()).bool(orientation_needs_permission())
-    ),
+    encode_world_create({
+      development: __IS_DEV__,
+      handheld: HANDHELD,
+      geolocation: "geolocation" in navigator,
+      orientation: orientation_supported(),
+      orientation_permission: orientation_needs_permission(),
+    }),
     (result) => result,
   );
 }

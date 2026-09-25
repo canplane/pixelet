@@ -11,8 +11,8 @@
  * which is off until something asks for it; the long-frame observers, so the
  * ring is already warm when the panel is opened; and the handles on `window`
  * an A/B is driven and read through from the console — `__pxl_ledger_trace`,
- * `__pxl_action` and `__pxl_gauge`. Two builds are only comparable read at
- * the same view, which is what an action puts the camera at (`set_view`),
+ * `__pxl_view` and `__pxl_gauge`. Two builds are only comparable read at
+ * the same view, which is what `__pxl_view` puts the camera at (INPUT_VIEW),
  * and the numbers are the panel's own.
  */
 
@@ -24,7 +24,9 @@ import { ledgerReportPrint, ledgerReportText } from "./report.ts";
 import { type Gauge, ledgerGaugeRead, ledgerReportRead } from "./view.ts";
 import { installLongFrameObservers, longFramesClear } from "./long-frame.ts";
 import { ledgerTraceDownload } from "./trace.ts";
-import { kernel_action, useKernel } from "@/kernel/shell.ts";
+import { Command, encode_input_view, encode_ledger_log } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_command, useKernel } from "@/kernel/shell.ts";
+import { SETTINGS } from "@/feature/setting/schema.ts";
 
 /** How often the stream is collected while it is on. */
 const DRAIN_MS = 500;
@@ -46,18 +48,18 @@ const LIVE_WINDOW_MS = 10_000;
 
 type LedgerGlobals = typeof globalThis & {
   __pxl_ledger_trace?: () => void;
-  __pxl_action?: (action: Record<string, unknown>) => void;
+  __pxl_view?: (dist: number | null, polar: number | null) => void;
   __pxl_gauge?: (window_ms: number) => Gauge;
 };
 
 /** A fresh window on both sides: the kernel's rings and the shell's long frames. */
 function startWindow(): void {
-  kernel_action({ type: "ledger_window_start" });
+  kernel_command(Command.LEDGER_START);
   longFramesClear();
 }
 
 export function LedgerOverlay() {
-  const show = useKernel((s) => s.settings.show_ledger === true);
+  const show = useKernel((s) => import.meta.env.DEV && s.settings[SETTINGS.show_ledger.key] === 1);
   const [logging, setLogging] = useState(false);
   const [g, setG] = useState<Gauge | null>(null);
 
@@ -94,11 +96,11 @@ export function LedgerOverlay() {
     installLongFrameObservers();
     const w = globalThis as LedgerGlobals;
     w.__pxl_ledger_trace = ledgerTraceDownload;
-    w.__pxl_action = (action) => kernel_action(action as never);
+    w.__pxl_view = (dist, polar) => kernel_command(Command.INPUT_VIEW, encode_input_view({ dist, polar }));
     w.__pxl_gauge = (window_ms) => ledgerGaugeRead(window_ms);
     return () => {
       delete w.__pxl_ledger_trace;
-      delete w.__pxl_action;
+      delete w.__pxl_view;
       delete w.__pxl_gauge;
     };
   }, []);
@@ -130,7 +132,7 @@ export function LedgerOverlay() {
         </button>
         <button
           type="button"
-          onClick={() => kernel_action({ type: "ledger_window_stop" })}
+          onClick={() => kernel_command(Command.LEDGER_STOP)}
           disabled={!recording}
           title="freeze the window so exports are stable while you read them"
           className={recording ? BUTTON_HALT : BUTTON_OFF}
@@ -148,7 +150,7 @@ export function LedgerOverlay() {
         <button
           type="button"
           onClick={() => {
-            kernel_action({ type: "ledger_logging", on: !logging });
+            kernel_command(Command.LEDGER_LOG, encode_ledger_log({ on: !logging }));
             ledgerLogLongFrames(!logging);
             setLogging(!logging);
           }}

@@ -56,8 +56,8 @@ pub fn stage_write() {
     s[STAGE_AT::FADE_END] = fade_end_u();
     s[STAGE_AT::LOD_CELL] = LOD_CELL_PER_DISTANCE();
     s[STAGE_AT::EDGE_STRENGTH] = if settings.show_edge_shade { EDGE_STRENGTH } else { 0.0 };
-    s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::Corner { AO_STRENGTH } else { 0.0 };
-    s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::Screen { 1.0 } else { 0.0 };
+    s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { AO_STRENGTH } else { 0.0 };
+    s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
     s[STAGE_AT::LOW_SPEC] = if settings.texture_pack { 0.0 } else { 1.0 };
     s[STAGE_AT::EDGE_WIDTH] = EDGE_WIDTH;
     s[STAGE_AT::RIM_INTENSITY] = if settings.show_rim_light { rim_cfg::INTENSITY } else { 0.0 };

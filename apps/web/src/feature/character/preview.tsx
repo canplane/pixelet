@@ -11,8 +11,10 @@
 
 import { useEffect, useRef } from "react";
 
-import { kernel_action } from "@/kernel/shell.ts";
-import { open_surface, SURFACE_CASE } from "@/kernel/render/surface.ts";
+import { Command, encode_preview_create, encode_preview_delete } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_command } from "@/kernel/shell.ts";
+import { open_surface } from "@/kernel/render/surface.ts";
+import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
 import type { CharacterVariant } from "@/feature/character/variant.ts";
 
 export interface CharacterPreviewProps {
@@ -27,10 +29,10 @@ export function CharacterPreview(props: CharacterPreviewProps) {
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const surface = open_surface(canvas, SURFACE_CASE);
-    if (surface.handle !== 0) kernel_action({ type: "preview_open", id: surface.handle, group: variant.group, number: variant.number });
+    const surface = open_surface(canvas, surface_role.CASE);
+    if (surface.handle !== 0) kernel_command(Command.PREVIEW_CREATE, encode_preview_create({ surface: surface.handle, group: variant.group, number: variant.number }));
     return () => {
-      if (surface.handle !== 0) kernel_action({ type: "preview_close", id: surface.handle });
+      if (surface.handle !== 0) kernel_command(Command.PREVIEW_DELETE, encode_preview_delete({ surface: surface.handle }));
       surface.close();
     };
   }, [variant.group, variant.number]);

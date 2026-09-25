@@ -5,21 +5,44 @@
  * boot, a map centre, the world's turns rung, the fetches it starts
  * answered from fixtures through the bodies the host holds, and what
  * comes back — what was drawn, the map's status, the UI's snapshot and its
- * actions.
+ * commands.
  */
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
 import { assert, assertEquals } from "@std/assert";
 
 import type { u32 } from "@xpute/core/abi/word.ts";
-import { Command } from "@/kernel/abi/cmd.spec.ts";
+import { TreeReader } from "@xpute/core/wire/xtp/mod.ts";
+import { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
+import {
+  Command,
+  encode_fetch_update,
+  encode_gpu_create,
+  encode_input_go_to,
+  encode_input_view,
+  encode_load_delete,
+  encode_setting_toggle,
+  encode_setting_update,
+  encode_world_create,
+  encode_world_update,
+  FetchOutcome,
+  MapStatus,
+  read_fetch_create,
+  read_load_create,
+  read_snapshot,
+  read_world_snapshot,
+  read_world_update,
+  type Snapshot,
+} from "@/kernel/abi/cmd.spec.ts";
 import { cube_types } from "@/catalog/cell/cube.ts";
+import { BAKE_KINDS } from "@/config/published.spec.ts";
+import { SETTINGS } from "@/feature/setting/schema.spec.ts";
 
 import { ELE_PADDED_SPAN, encode_terrain, pack_ground_cell, PAGE_CELL_SPAN } from "@/kernel/fixture.ts";
 
-import { CORE_BUILD, packet } from "@/kernel/ipc.ts";
+import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { CORE_KERNEL } from "@/kernel/mem.ts";
-import { BOOT, boot_block, hold_body, text_at } from "@/kernel/module.ts";
+import { BOOT, boot_block, bytes_at, hold_body } from "@/kernel/module.ts";
 import { acquire_device } from "@/kernel/render/gpu.ts";
 
 function rng(seed: u32): () => u32 {
@@ -32,25 +55,17 @@ function rng(seed: u32): () => u32 {
   };
 }
 
-type Snapshot = {
-  map: { status: string; is_off_center: boolean; center: [number, number] | null; page: string | null };
-  settings: Record<string, boolean | string | number>;
-};
-
 /** A started read: the key the kernel hands out and takes back, the object it
  * named — which bake, and the name inside it — and the stream that names.
  * There is no URL here, and that is the point: the kernel does not send one. */
 type Fetched = { key: bigint; bake: number; name: string; category: string };
-
-/** The bakes, as `BakeKind` numbers them. */
-const BAKE = ["terrain", "poi", "geocode"];
 
 /** The stream an object belongs to. The two shared objects are named rather
  * than keyed, which is what tells them from the pages of their own bake. */
 function category_of(bake: number, name: string): string {
   if (name === "_ocean") return "ocean";
   if (name === "_dict") return "geocode_dict";
-  return BAKE[bake];
+  return BAKE_KINDS[bake];
 }
 
 type Turn = { snapshot: Snapshot; fetched: Fetched[]; draws: number };
@@ -62,13 +77,13 @@ let draws = 0;
 
 CORE_BUILD.signal = (_tag, cmd, f) => {
   if (cmd === Command.WORLD_SNAPSHOT) {
-    const [at, len] = f!.get<[number, number]>();
-    snapshot = JSON.parse(text_at(CORE_KERNEL.memory, at >>> 0, len >>> 0)) as Snapshot;
-  } else if (cmd === Command.WORLD_UPDATE) draws = f!.at(0).get<number>();
+    const { at, len } = read_world_snapshot(f!);
+    snapshot = read_snapshot(new TreeReader(bytes_at(CORE_KERNEL.memory, at, len)).read_branch());
+  } else if (cmd === Command.WORLD_UPDATE) draws = read_world_update(f!).draws;
   else if (cmd === Command.FETCH_CREATE) {
-    const [key, bake, name] = f!.get<[bigint, number, string]>();
+    const { key, bake, name } = read_fetch_create(f!);
     fetched.push({ key, bake, name, category: category_of(bake, name) });
-  } else if (cmd === Command.LOAD_CREATE) loads.push(f!.at(0).get<bigint>());
+  } else if (cmd === Command.LOAD_CREATE) loads.push(read_load_create(f!).key);
 };
 
 /** A page's body as the bake encodes it: a rolling elevation raster and
@@ -100,12 +115,12 @@ let strobe_requests = 0;
 const answer_requests: Record<string, number> = {};
 
 /** A response as the driver reports one: the body held for the kernel. */
-function answer(f: Fetched, outcome: number, body: U8Array | null): void {
+function answer(f: Fetched, outcome: FetchOutcome, body: U8Array | null): void {
   const requests = heap_row[HEAP_REQUESTS];
   try {
     const bytes = body?.byteLength ?? 0;
     const held = body !== null && bytes > 0 ? hold_body(body) : 0;
-    CORE_BUILD.send(0, Command.FETCH_UPDATE, packet((b) => b.u64(f.key).u32(outcome).u32(held).u32(bytes).u32(0).u32(0).f64(0)));
+    CORE_BUILD.send(0, Command.FETCH_UPDATE, encode_fetch_update({ key: f.key, outcome, body: held, body_bytes: bytes, fail: FetchFail.None, detail: 0, net_ms: 0 }));
     CORE_BUILD.ring(0);
   } finally {
     answer_requests[f.category] = (answer_requests[f.category] ?? 0) + heap_row[HEAP_REQUESTS] - requests;
@@ -113,7 +128,7 @@ function answer(f: Fetched, outcome: number, body: U8Array | null): void {
 }
 
 function fail(f: Fetched): void {
-  CORE_BUILD.send(0, Command.FETCH_UPDATE, packet((b) => b.u64(f.key).u32(2).u32(0).u32(0).u32(0).u32(0).f64(0)));
+  CORE_BUILD.send(0, Command.FETCH_UPDATE, encode_fetch_update({ key: f.key, outcome: FetchOutcome.Error, body: 0, body_bytes: 0, fail: FetchFail.Network, detail: 0, net_ms: 0 }));
   CORE_BUILD.ring(0);
 }
 
@@ -122,29 +137,30 @@ function turn(delta = 1 / 60): Turn {
   fetched = [];
   loads = [];
   const requests = heap_row[HEAP_REQUESTS];
-  CORE_BUILD.send(0, Command.WORLD_UPDATE, packet((b) => b.f64(1280).f64(720).f64(1).f64(delta).f64(1000 / 60).bool(true).u32(6)));
+  CORE_BUILD.send(0, Command.WORLD_UPDATE, encode_world_update({ width: 1280, height: 720, dpr: 1, delta_s: delta, frame_ms: 1000 / 60, interactive: true, credits: 6 }));
   CORE_BUILD.ring(8);
   strobe_requests += heap_row[HEAP_REQUESTS] - requests;
   const started = fetched;
   for (const f of started) {
-    if (f.category === "terrain") answer(f, 0, terrain_body(Number(BigInt(f.name.slice(f.name.indexOf("/") + 1)) & 0xffffn)));
+    if (f.category === "terrain") answer(f, FetchOutcome.Read, terrain_body(Number(BigInt(f.name.slice(f.name.indexOf("/") + 1)) & 0xffffn)));
     else fail(f);
   }
   // An asset's read is a read: it is settled by the key it was started with,
   // and the kernel asks again in its own time.
-  for (const key of loads) CORE_BUILD.send(0, Command.LOAD_DELETE, packet((b) => b.u64(key)));
+  for (const key of loads) CORE_BUILD.send(0, Command.LOAD_DELETE, encode_load_delete({ key }));
   assert(snapshot !== null, "the kernel posted its snapshot");
   return { snapshot, fetched: started, draws };
 }
 
-function action(a: Record<string, unknown>): void {
-  CORE_BUILD.send(0, Command.WORLD_ACTION, packet((b) => b.str(JSON.stringify(a))));
+/** One of the UI's commands, rung at once as the shell rings it. */
+function command(cmd: Command, pkt?: U8Array): void {
+  CORE_BUILD.send(0, cmd, pkt);
   CORE_BUILD.ring(0);
 }
 
 CORE_BUILD.call(
   Command.WORLD_CREATE,
-  packet((b) => b.str("test").str("2026-09-15T00:00:00Z").str("r0-test").str("b?").bool(false).bool(false).bool(false).bool(false).bool(false)),
+  encode_world_create({ development: false, handheld: false, geolocation: false, orientation: false, orientation_permission: false }),
   (r) => r,
 );
 console.log(`heap: boot and world create ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);
@@ -178,20 +194,20 @@ Object.defineProperty(navigator, "gpu", {
 });
 const device = await acquire_device(() => {});
 assert("align" in device, "the stand-in device answered");
-CORE_BUILD.send(0, Command.GPU_CREATE, packet((b) => b.u32(device.align).bool(device.timestamps)));
+CORE_BUILD.send(0, Command.GPU_CREATE, encode_gpu_create({ min_uniform_offset_alignment: device.align, timestamps: device.timestamps }));
 CORE_BUILD.ring(0);
 turn();
 console.log(`heap: through the first turn ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);
 
 Deno.test("kernel - a map centre fetches its terrain and draws it, and the map settles to success", () => {
-  action({ type: "go_to", lon: 126.978, lat: 37.5665 });
+  command(Command.INPUT_GO_TO, encode_input_go_to({ lon: 126.978, lat: 37.5665 }));
   let first = turn();
   assert(first.snapshot.map.center !== null, "the centre is set");
   // The page the shell keys a reverse-geocode label by. It is the index, not
   // an object's name — what the kernel asks the host for is the name.
   const page = first.snapshot.map.page;
-  assert(page !== null && /^\d+$/.test(page), `the centre's page is a decimal index: ${page}`);
-  const statuses = new Set<string>([first.snapshot.map.status]);
+  assert(page !== null, "the centre's page is an index");
+  const statuses = new Set<MapStatus>([first.snapshot.map.status]);
   const categories = new Set(first.fetched.map((f) => f.category));
   let terrain_names = first.fetched.filter((f) => f.category === "terrain").map((f) => f.name);
   let geocode_names = first.fetched.filter((f) => f.category === "geocode").map((f) => f.name);
@@ -219,24 +235,26 @@ Deno.test("kernel - a map centre fetches its terrain and draws it, and the map s
     `no leaf sits under a fetched group: ${terrain_names.slice(0, 3)} / ${geocode_names.slice(0, 3)}`,
   );
   assert(max_draws > 0, "something was drawn");
-  assert(statuses.has("loading"), `the map loaded: ${[...statuses]}`);
-  assertEquals(first.snapshot.map.status, "success");
+  assert(statuses.has(MapStatus.Loading), `the map loaded: ${[...statuses]}`);
+  assertEquals(first.snapshot.map.status, MapStatus.Success);
 });
 
-Deno.test("kernel - the settings actions reach the snapshot", () => {
-  const before = turn().snapshot.settings.lock_camera_tilt;
-  action({ type: "toggle_setting", key: "lock_camera_tilt" });
-  assertEquals(turn().snapshot.settings.lock_camera_tilt, !before);
-  action({ type: "set_setting", key: "lock_camera_tilt", value: before });
-  assertEquals(turn().snapshot.settings.lock_camera_tilt, before);
-  // The world was created under "test", not "development": a dev-only
-  // setting is one this build does not offer, and the action is refused
-  // rather than applied to a row nothing on screen could undo.
-  const dev = turn().snapshot.settings.show_poi;
-  action({ type: "toggle_setting", key: "show_poi" });
-  assertEquals(turn().snapshot.settings.show_poi, dev);
-  action({ type: "set_setting", key: "show_poi", value: !dev });
-  assertEquals(turn().snapshot.settings.show_poi, dev);
+Deno.test("kernel - the settings commands reach the snapshot", () => {
+  const tilt = SETTINGS.lock_camera_tilt.key;
+  const before = turn().snapshot.settings[tilt];
+  command(Command.SETTING_TOGGLE, encode_setting_toggle({ key: tilt }));
+  assertEquals(turn().snapshot.settings[tilt], 1 - before);
+  command(Command.SETTING_UPDATE, encode_setting_update({ key: tilt, value: before }));
+  assertEquals(turn().snapshot.settings[tilt], before);
+  // The world was created as no development build: a dev-only setting is one
+  // this build does not offer, and the command is refused rather than
+  // applied to a row nothing on screen could undo.
+  const poi = SETTINGS.show_poi.key;
+  const dev = turn().snapshot.settings[poi];
+  command(Command.SETTING_TOGGLE, encode_setting_toggle({ key: poi }));
+  assertEquals(turn().snapshot.settings[poi], dev);
+  command(Command.SETTING_UPDATE, encode_setting_update({ key: poi, value: 1 - dev }));
+  assertEquals(turn().snapshot.settings[poi], dev);
 });
 
 Deno.test("kernel - a settled turn asks the module heap for nothing", () => {
@@ -256,7 +274,7 @@ Deno.test("kernel - heap requests along the event paths", () => {
   };
   strobe_requests = 0;
   for (const k of Object.keys(answer_requests)) delete answer_requests[k];
-  action({ type: "go_to", lon: 127.3, lat: 36.35 });
+  command(Command.INPUT_GO_TO, encode_input_go_to({ lon: 127.3, lat: 36.35 }));
   let load = 0;
   for (let i = 0; i < 200; i++) turn();
   load = since();
@@ -265,12 +283,12 @@ Deno.test("kernel - heap requests along the event paths", () => {
 });
 
 Deno.test("kernel - a view from high up draws its outermost ring, which is coarser than the rings under it", () => {
-  action({ type: "go_to", lon: 126.9706, lat: 37.5547 });
+  command(Command.INPUT_GO_TO, encode_input_go_to({ lon: 126.9706, lat: 37.5547 }));
   for (let k = 0; k < 40; k++) turn();
   // Far enough that the window spans several levels: the outermost has no
   // level over it, so it is drawn as coarse as the ladder says rather than
   // one step off its own cells, and asks for tiers the finer rings never do.
-  action({ type: "set_view", dist: 8000, polar: (80 * Math.PI) / 180 });
+  command(Command.INPUT_VIEW, encode_input_view({ dist: 8000, polar: (80 * Math.PI) / 180 }));
   let drawn = 0;
   for (let k = 0; k < 200; k++) drawn = Math.max(drawn, turn().draws);
   assert(drawn > 0, "the far view drew something");

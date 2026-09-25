@@ -6,32 +6,23 @@
 // where the settings sheet shows it. The store reads the defaults from here
 // and the sheet renders rows from here, so adding a setting is one entry in
 // SETTINGS plus its two strings in the locale catalogue under
-// `settings.<section>.<key>`. A `handheld_default` is the default on a
-// handheld device, where it differs. A choice may carry `costs` beside its
+// `settings.<section>.<key>`. A choice may carry `costs` beside its
 // `options`, one per option in the same order, for when what an option costs
 // differs from its neighbours'; an empty string is no badge. A `dev` setting
 // is in the kernel's table in every build and offered only under a
 // development one; the shell's production bundle carries SETTINGS_SHIPPED,
 // the table without them, in SETTINGS' place.
+//
+// A choice's `options` names one of the lists below, and the option crosses
+// and is held as its index there; only storage keeps it by name. A setting
+// is numbered by its place in SETTINGS (the kernel's SettingKey), which is
+// what crosses for it. `sources_chunks` marks one a chunk's build reads, so
+// that changing it builds the chunks again.
 
 // Casing here is the spec's and not Rust's: a name is spelled as the JSON
 // spells it, so that one record is indexed by one name on both sides. To
 // case them the way Rust would is to rename the protocol.
-//
-// `dead_code` because a table is generated whole: an entry earns its
-// place in the JSON, not by having a caller in this crate.
-#![allow(non_upper_case_globals, non_snake_case, dead_code)]
-
-/// The sheet's sections, in the order they are shown. `character` is not a
-/// section of the sheet at all — its two settings are picked from the
-/// drawer's Character tab (feature/character/picker.tsx).
-pub const SETTING_SECTIONS: &[&str] = &["display", "camera", "editing", "lighting", "quality", "debug", "character"];
-
-/// The sections that are a development build's as a whole. One of these is
-/// shown under `__IS_DEV__` only and carries the badge on its heading, so
-/// its rows do not repeat it; a `dev` row in any other section carries its
-/// own. Which rows exist in a build is the rows' `dev`, not this.
-pub const DEV_SECTIONS: &[&str] = &["debug"];
+#![allow(non_camel_case_types)]
 
 /// What terrain does to the camera.
 ///
@@ -43,7 +34,31 @@ pub const DEV_SECTIONS: &[&str] = &["debug"];
 ///   climb   — dist is always granted and the *view* pitches up instead,
 ///             as far as straight down, so every zoom level stays
 ///             reachable at the cost of an angle nobody asked for.
-pub const CAMERA_TERRAIN_MODES: &[&str] = &["through", "stop", "climb"];
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum CameraTerrainMode {
+    through = 0,
+    stop = 1,
+    climb = 2,
+}
+
+impl CameraTerrainMode {
+    pub const ALL: [CameraTerrainMode; 3] = [CameraTerrainMode::through, CameraTerrainMode::stop, CameraTerrainMode::climb];
+
+    /// The option an index names, or none for an index past the list.
+    pub fn of(index: u32) -> Option<CameraTerrainMode> {
+        CameraTerrainMode::ALL.get(index as usize).copied()
+    }
+
+    /// The name storage keeps it under.
+    pub fn name(self) -> &'static str {
+        match self {
+            CameraTerrainMode::through => "through",
+            CameraTerrainMode::stop => "stop",
+            CameraTerrainMode::climb => "climb",
+        }
+    }
+}
 
 /// Where the ambient occlusion comes from.
 ///
@@ -58,9 +73,44 @@ pub const CAMERA_TERRAIN_MODES: &[&str] = &["through", "stop", "climb"];
 ///            once more, the occlusion sampled from it at half resolution,
 ///            denoised, and applied to every lit surface as a warm dark
 ///            tint. Five passes and 11 bytes a pixel.
-pub const AO_MODES: &[&str] = &["off", "corner", "screen"];
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum AoMode {
+    off = 0,
+    corner = 1,
+    screen = 2,
+}
 
-pub mod SETTINGS {
+impl AoMode {
+    pub const ALL: [AoMode; 3] = [AoMode::off, AoMode::corner, AoMode::screen];
+
+    /// The option an index names, or none for an index past the list.
+    pub fn of(index: u32) -> Option<AoMode> {
+        AoMode::ALL.get(index as usize).copied()
+    }
+
+    /// The name storage keeps it under.
+    pub fn name(self) -> &'static str {
+        match self {
+            AoMode::off => "off",
+            AoMode::corner => "corner",
+            AoMode::screen => "screen",
+        }
+    }
+}
+
+/// How a setting is held.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SettingKind {
+    Toggle,
+    Choice,
+    Number,
+}
+
+/// Every setting, by its place in schema.json's SETTINGS.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum SettingKey {
     /// Ground colour from the art pack (four sampler2DArray taps per fragment)
     /// instead of the flat per-instance average. The shader's `u_low_spec` is
     /// this, inverted.
@@ -69,21 +119,14 @@ pub mod SETTINGS {
     /// the screen and not with the world, and nothing else — no geometry, no
     /// pass of its own, and no work off the GPU past an atlas the client
     /// already holds.
-    pub mod texture_pack {
-        pub const kind: &str = "toggle";
-        pub const default: bool = true;
-        pub const section: &str = "display";
-        pub const cost: &str = "low";
-        pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
-    }
+    ///
+    /// It sources the chunks: the shader samples a leaf's layer or does not,
+    /// but a tier over it carries one colour and no layer to sample, so which
+    /// colour that is was baked in (mesh/chunk_mesher.rs).
+    texture_pack = 0,
     /// Whether the STRUCTURE ground channel is painted. The bake writes it
     /// either way (pipeline/overture/policy.rs); this is a render decision.
-    pub mod show_structures {
-        pub const kind: &str = "toggle";
-        pub const default: bool = true;
-        pub const section: &str = "display";
-        pub const KEYS: &[&str] = &["kind", "default", "section"];
-    }
+    show_structures = 1,
     /// Procedurally scattered decor only; what the player placed stays.
     ///
     /// Med because it is models rather than a shading term: a chunk builds its
@@ -94,114 +137,43 @@ pub mod SETTINGS {
     /// the nearest tier without making far decor cheap, the impostor tier that
     /// would being decided and not built. The badge is an ordering, and this is
     /// the one to reach for before any shading term.
-    pub mod show_decor {
-        pub const kind: &str = "toggle";
-        pub const default: bool = true;
-        pub const section: &str = "display";
-        pub const cost: &str = "med";
-        pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
-    }
+    show_decor = 2,
     /// Opt-in bounded POI summary snapshot for the local vertical slice.
-    pub mod show_poi {
-        pub const kind: &str = "toggle";
-        pub const default: bool = false;
-        pub const section: &str = "display";
-        pub const cost: &str = "low";
-        pub const dev: bool = true;
-        pub const KEYS: &[&str] = &["kind", "default", "section", "cost", "dev"];
-    }
+    show_poi = 3,
     /// Rotate-drag and pinch stop writing polar; azimuth is unaffected.
     /// Off by default: the tilt is the one control a map view is expected to
     /// have, and locking it reads as the app being stuck.
-    pub mod lock_camera_tilt {
-        pub const kind: &str = "toggle";
-        pub const default: bool = false;
-        pub const section: &str = "camera";
-        pub const KEYS: &[&str] = &["kind", "default", "section"];
-    }
+    lock_camera_tilt = 4,
     /// climb, because the one thing a map camera must not do is refuse to
     /// move. stop is the more literal answer and the worse default: it hands
     /// back a control that did nothing, which reads as the app being stuck
     /// rather than as the ground being in the way.
-    pub mod camera_terrain {
-        pub const kind: &str = "choice";
-        pub const default: &str = "climb";
-        pub const options: &[&str] = &["through", "stop", "climb"];
-        pub const section: &str = "camera";
-        pub const dev: bool = true;
-        pub const KEYS: &[&str] = &["kind", "default", "options", "section", "dev"];
-    }
+    camera_terrain = 5,
     /// Panning re-samples the terrain height under the map centre each step.
-    pub mod ground_snap {
-        pub const kind: &str = "toggle";
-        pub const default: bool = true;
-        pub const section: &str = "camera";
-        pub const dev: bool = true;
-        pub const KEYS: &[&str] = &["kind", "default", "section", "dev"];
-    }
+    ground_snap = 6,
     /// The eraser digs into the baked terrain where nothing is placed. Off by
     /// default: the terrain is real map data, not the player's scratch canvas.
-    pub mod enable_terrain_carving {
-        pub const kind: &str = "toggle";
-        pub const default: bool = false;
-        pub const section: &str = "editing";
-        pub const dev: bool = true;
-        pub const KEYS: &[&str] = &["kind", "default", "section", "dev"];
-    }
+    enable_terrain_carving = 7,
     /// Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
-    pub mod show_edge_shade {
-        pub const kind: &str = "toggle";
-        pub const default: bool = true;
-        pub const section: &str = "lighting";
-        pub const cost: &str = "low";
-        pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
-    }
+    show_edge_shade = 8,
     /// A uniform on an already-compiled shader term; not a pass.
-    pub mod show_rim_light {
-        pub const kind: &str = "toggle";
-        pub const default: bool = true;
-        pub const section: &str = "lighting";
-        pub const cost: &str = "low";
-        pub const KEYS: &[&str] = &["kind", "default", "section", "cost"];
-    }
+    show_rim_light = 9,
     /// corner, the occlusion a voxel world gets from its own geometry with no
     /// screen-space pass; screen, the three.js build's N8AO, kept to be put
     /// beside it. AO_MODES says each.
-    pub mod ao {
-        pub const kind: &str = "choice";
-        pub const default: &str = "corner";
-        pub const options: &[&str] = &["off", "corner", "screen"];
-        pub const costs: &[&str] = &["", "low", "high"];
-        pub const section: &str = "lighting";
-        pub const KEYS: &[&str] = &["kind", "default", "options", "costs", "section"];
-    }
+    ao = 10,
     /// The sun's shadow map (crates/pxl/web/render/src/gpu/shadow.rs): the world drawn once more
     /// from the sun each frame, depth only, and a 3x3 compare per fragment;
     /// 16 MB of map on a desktop, 4 on a phone.
-    pub mod show_shadow_map {
-        pub const kind: &str = "toggle";
-        pub const default: bool = false;
-        pub const section: &str = "lighting";
-        pub const dev: bool = true;
-        pub const cost: &str = "high";
-        pub const KEYS: &[&str] = &["kind", "default", "section", "dev", "cost"];
-    }
+    show_shadow_map = 11,
     /// Four samples a pixel for the frame's colour and depth:
     /// the largest allocation the page makes — 32 bytes a device pixel, a
     /// hundred megabytes on a phone at its native density — for edges the
-    /// far terrain's boxes would otherwise shimmer at. Off on a phone, whose
+    /// far terrain's boxes would otherwise shimmer at. Off, since a phone's
     /// density does the same job at no cost; the setting is read when the
     /// renderer is made.
-    pub mod msaa {
-        pub const kind: &str = "toggle";
-        pub const default: bool = false;
-        pub const handheld_default: bool = false;
-        pub const section: &str = "quality";
-        pub const dev: bool = true;
-        pub const cost: &str = "high";
-        pub const KEYS: &[&str] = &["kind", "default", "handheld_default", "section", "dev", "cost"];
-    }
+    msaa = 12,
     /// LOD cross-fade per fragment instead of per chunk: both tiers draw with
     /// complementary dither and dissolve, at the cost of drawing a blending
     /// chunk twice and a pattern that crawls without temporal AA. Off by
@@ -209,62 +181,250 @@ pub mod SETTINGS {
     /// artefact with another. What it replaces swaps a whole chunk at a
     /// hashed threshold and pops tier by tier, which is the cheaper of the
     /// two to live with until the pattern holds still.
-    pub mod pixel_dither {
-        pub const kind: &str = "toggle";
-        pub const default: bool = false;
-        pub const section: &str = "quality";
-        pub const dev: bool = true;
-        pub const cost: &str = "med";
-        pub const KEYS: &[&str] = &["kind", "default", "section", "dev", "cost"];
-    }
+    pixel_dither = 13,
     /// The debug gizmos: frame origins, page corners, the map centre and the rings.
-    pub mod show_debug_objects {
-        pub const kind: &str = "toggle";
-        pub const default: bool = false;
-        pub const section: &str = "debug";
-        pub const dev: bool = true;
-        pub const KEYS: &[&str] = &["kind", "default", "section", "dev"];
-    }
+    show_debug_objects = 14,
     /// The scheduler ledger's corner panel. The console stream is a button on it.
-    pub mod show_ledger {
-        pub const kind: &str = "toggle";
-        pub const default: bool = false;
-        pub const section: &str = "debug";
-        pub const dev: bool = true;
-        pub const KEYS: &[&str] = &["kind", "default", "section", "dev"];
-    }
-    pub mod person_variant {
-        pub const kind: &str = "number";
-        /// female-2, by its number in variant.json's person keys.
-        pub const default: u8 = 1;
-        pub const section: &str = "character";
-        pub const KEYS: &[&str] = &["kind", "default", "section"];
-    }
-    pub mod pet_variant {
-        pub const kind: &str = "number";
-        /// chick, by its number in variant.json's pet keys.
-        pub const default: u8 = 5;
-        pub const section: &str = "character";
-        pub const KEYS: &[&str] = &["kind", "default", "section"];
-    }
-    pub const KEYS: &[&str] = &[
-        "texture_pack",
-        "show_structures",
-        "show_decor",
-        "show_poi",
-        "lock_camera_tilt",
-        "camera_terrain",
-        "ground_snap",
-        "enable_terrain_carving",
-        "show_edge_shade",
-        "show_rim_light",
-        "ao",
-        "show_shadow_map",
-        "msaa",
-        "pixel_dither",
-        "show_debug_objects",
-        "show_ledger",
-        "person_variant",
-        "pet_variant",
+    show_ledger = 15,
+    person_variant = 16,
+    pet_variant = 17,
+}
+
+impl SettingKey {
+    pub const ALL: [SettingKey; 18] = [
+        SettingKey::texture_pack,
+        SettingKey::show_structures,
+        SettingKey::show_decor,
+        SettingKey::show_poi,
+        SettingKey::lock_camera_tilt,
+        SettingKey::camera_terrain,
+        SettingKey::ground_snap,
+        SettingKey::enable_terrain_carving,
+        SettingKey::show_edge_shade,
+        SettingKey::show_rim_light,
+        SettingKey::ao,
+        SettingKey::show_shadow_map,
+        SettingKey::msaa,
+        SettingKey::pixel_dither,
+        SettingKey::show_debug_objects,
+        SettingKey::show_ledger,
+        SettingKey::person_variant,
+        SettingKey::pet_variant,
     ];
+
+    /// The setting a number names, or none for a number past the table.
+    pub fn of(number: u32) -> Option<SettingKey> {
+        SettingKey::ALL.get(number as usize).copied()
+    }
+
+    pub fn kind(self) -> SettingKind {
+        match self {
+            SettingKey::texture_pack => SettingKind::Toggle,
+            SettingKey::show_structures => SettingKind::Toggle,
+            SettingKey::show_decor => SettingKind::Toggle,
+            SettingKey::show_poi => SettingKind::Toggle,
+            SettingKey::lock_camera_tilt => SettingKind::Toggle,
+            SettingKey::camera_terrain => SettingKind::Choice,
+            SettingKey::ground_snap => SettingKind::Toggle,
+            SettingKey::enable_terrain_carving => SettingKind::Toggle,
+            SettingKey::show_edge_shade => SettingKind::Toggle,
+            SettingKey::show_rim_light => SettingKind::Toggle,
+            SettingKey::ao => SettingKind::Choice,
+            SettingKey::show_shadow_map => SettingKind::Toggle,
+            SettingKey::msaa => SettingKind::Toggle,
+            SettingKey::pixel_dither => SettingKind::Toggle,
+            SettingKey::show_debug_objects => SettingKind::Toggle,
+            SettingKey::show_ledger => SettingKind::Toggle,
+            SettingKey::person_variant => SettingKind::Number,
+            SettingKey::pet_variant => SettingKind::Number,
+        }
+    }
+
+    /// Offered by a development build only.
+    pub fn dev(self) -> bool {
+        matches!(
+            self,
+            SettingKey::show_poi
+                | SettingKey::camera_terrain
+                | SettingKey::ground_snap
+                | SettingKey::enable_terrain_carving
+                | SettingKey::show_shadow_map
+                | SettingKey::msaa
+                | SettingKey::pixel_dither
+                | SettingKey::show_debug_objects
+                | SettingKey::show_ledger
+        )
+    }
+
+    /// Read by a chunk's build, so a change builds the chunks again.
+    pub fn sources_chunks(self) -> bool {
+        matches!(self, SettingKey::texture_pack | SettingKey::show_structures | SettingKey::show_decor)
+    }
+
+    /// The name storage keeps it under, or none where this module does not
+    /// name it.
+    pub fn name(self) -> Option<&'static str> {
+        match self {
+            SettingKey::texture_pack => Some("texture_pack"),
+            SettingKey::show_structures => Some("show_structures"),
+            SettingKey::show_decor => Some("show_decor"),
+            #[cfg(feature = "dev")]
+            SettingKey::show_poi => Some("show_poi"),
+            SettingKey::lock_camera_tilt => Some("lock_camera_tilt"),
+            #[cfg(feature = "dev")]
+            SettingKey::camera_terrain => Some("camera_terrain"),
+            #[cfg(feature = "dev")]
+            SettingKey::ground_snap => Some("ground_snap"),
+            #[cfg(feature = "dev")]
+            SettingKey::enable_terrain_carving => Some("enable_terrain_carving"),
+            SettingKey::show_edge_shade => Some("show_edge_shade"),
+            SettingKey::show_rim_light => Some("show_rim_light"),
+            SettingKey::ao => Some("ao"),
+            #[cfg(feature = "dev")]
+            SettingKey::show_shadow_map => Some("show_shadow_map"),
+            #[cfg(feature = "dev")]
+            SettingKey::msaa => Some("msaa"),
+            #[cfg(feature = "dev")]
+            SettingKey::pixel_dither => Some("pixel_dither"),
+            #[cfg(feature = "dev")]
+            SettingKey::show_debug_objects => Some("show_debug_objects"),
+            #[cfg(feature = "dev")]
+            SettingKey::show_ledger => Some("show_ledger"),
+            SettingKey::person_variant => Some("person_variant"),
+            SettingKey::pet_variant => Some("pet_variant"),
+            #[allow(unreachable_patterns)]
+            _ => None,
+        }
+    }
+
+    /// A choice's option by its index, as storage names it.
+    pub fn option_name(self, index: u32) -> Option<&'static str> {
+        match self {
+            #[cfg(feature = "dev")]
+            SettingKey::camera_terrain => CameraTerrainMode::of(index).map(CameraTerrainMode::name),
+            SettingKey::ao => AoMode::of(index).map(AoMode::name),
+            _ => None,
+        }
+    }
+
+    /// A choice's option by the name storage keeps it under, as its index.
+    pub fn option_index(self, name: &str) -> Option<u32> {
+        match self {
+            #[cfg(feature = "dev")]
+            SettingKey::camera_terrain => CameraTerrainMode::ALL.into_iter().find(|o| o.name() == name).map(|o| o as u32),
+            SettingKey::ao => AoMode::ALL.into_iter().find(|o| o.name() == name).map(|o| o as u32),
+            _ => None,
+        }
+    }
+}
+
+/// Every setting's value: what the store holds, and what the app reads.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Settings {
+    pub texture_pack: bool,
+    pub show_structures: bool,
+    pub show_decor: bool,
+    pub show_poi: bool,
+    pub lock_camera_tilt: bool,
+    pub camera_terrain: CameraTerrainMode,
+    pub ground_snap: bool,
+    pub enable_terrain_carving: bool,
+    pub show_edge_shade: bool,
+    pub show_rim_light: bool,
+    pub ao: AoMode,
+    pub show_shadow_map: bool,
+    pub msaa: bool,
+    pub pixel_dither: bool,
+    pub show_debug_objects: bool,
+    pub show_ledger: bool,
+    pub person_variant: u8,
+    pub pet_variant: u8,
+}
+
+impl Settings {
+    /// Every setting at schema.json's default.
+    pub const DEFAULT: Settings = Settings {
+        texture_pack: true,
+        show_structures: true,
+        show_decor: true,
+        show_poi: false,
+        lock_camera_tilt: false,
+        camera_terrain: CameraTerrainMode::climb,
+        ground_snap: true,
+        enable_terrain_carving: false,
+        show_edge_shade: true,
+        show_rim_light: true,
+        ao: AoMode::corner,
+        show_shadow_map: false,
+        msaa: false,
+        pixel_dither: false,
+        show_debug_objects: false,
+        show_ledger: false,
+        person_variant: 1,
+        pet_variant: 5,
+    };
+
+    /// A setting's value as it crosses: a toggle's 0 or 1, a choice's option
+    /// by its index, a number.
+    pub fn get(&self, key: SettingKey) -> u32 {
+        match key {
+            SettingKey::texture_pack => self.texture_pack as u32,
+            SettingKey::show_structures => self.show_structures as u32,
+            SettingKey::show_decor => self.show_decor as u32,
+            SettingKey::show_poi => self.show_poi as u32,
+            SettingKey::lock_camera_tilt => self.lock_camera_tilt as u32,
+            SettingKey::camera_terrain => self.camera_terrain as u32,
+            SettingKey::ground_snap => self.ground_snap as u32,
+            SettingKey::enable_terrain_carving => self.enable_terrain_carving as u32,
+            SettingKey::show_edge_shade => self.show_edge_shade as u32,
+            SettingKey::show_rim_light => self.show_rim_light as u32,
+            SettingKey::ao => self.ao as u32,
+            SettingKey::show_shadow_map => self.show_shadow_map as u32,
+            SettingKey::msaa => self.msaa as u32,
+            SettingKey::pixel_dither => self.pixel_dither as u32,
+            SettingKey::show_debug_objects => self.show_debug_objects as u32,
+            SettingKey::show_ledger => self.show_ledger as u32,
+            SettingKey::person_variant => self.person_variant as u32,
+            SettingKey::pet_variant => self.pet_variant as u32,
+        }
+    }
+
+    /// Sets a setting from its value as it crosses; false, and nothing set,
+    /// for a value the setting cannot hold.
+    pub fn set(&mut self, key: SettingKey, value: u32) -> bool {
+        match key {
+            SettingKey::texture_pack if value <= 1 => self.texture_pack = value == 1,
+            SettingKey::show_structures if value <= 1 => self.show_structures = value == 1,
+            SettingKey::show_decor if value <= 1 => self.show_decor = value == 1,
+            SettingKey::show_poi if value <= 1 => self.show_poi = value == 1,
+            SettingKey::lock_camera_tilt if value <= 1 => self.lock_camera_tilt = value == 1,
+            SettingKey::camera_terrain => match CameraTerrainMode::of(value) {
+                Some(o) => self.camera_terrain = o,
+                None => return false,
+            },
+            SettingKey::ground_snap if value <= 1 => self.ground_snap = value == 1,
+            SettingKey::enable_terrain_carving if value <= 1 => self.enable_terrain_carving = value == 1,
+            SettingKey::show_edge_shade if value <= 1 => self.show_edge_shade = value == 1,
+            SettingKey::show_rim_light if value <= 1 => self.show_rim_light = value == 1,
+            SettingKey::ao => match AoMode::of(value) {
+                Some(o) => self.ao = o,
+                None => return false,
+            },
+            SettingKey::show_shadow_map if value <= 1 => self.show_shadow_map = value == 1,
+            SettingKey::msaa if value <= 1 => self.msaa = value == 1,
+            SettingKey::pixel_dither if value <= 1 => self.pixel_dither = value == 1,
+            SettingKey::show_debug_objects if value <= 1 => self.show_debug_objects = value == 1,
+            SettingKey::show_ledger if value <= 1 => self.show_ledger = value == 1,
+            SettingKey::person_variant => match u8::try_from(value) {
+                Ok(n) => self.person_variant = n,
+                Err(_) => return false,
+            },
+            SettingKey::pet_variant => match u8::try_from(value) {
+                Ok(n) => self.pet_variant = n,
+                Err(_) => return false,
+            },
+            _ => return false,
+        }
+        true
+    }
 }

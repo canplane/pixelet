@@ -50,11 +50,11 @@ fn tick() -> Tick<Seen, 8> {
 #[test]
 fn tick_phases_run_in_their_fixed_order_whatever_order_they_registered_in() {
     let mut t = tick();
-    t.on_tick(REPORT, |c| c.state.order.push("report"), "t");
-    t.on_tick(COSMETIC, |c| c.state.order.push("cosmetic"), "t");
-    t.on_tick(CONTENT, |c| c.state.order.push("content"), "t");
-    t.on_tick(VISIBLE, |c| c.state.order.push("visible"), "t");
-    t.on_tick(INTERACTION, |c| c.state.order.push("interaction"), "t");
+    t.on_tick(REPORT, |c| c.state.order.push("report"), 0);
+    t.on_tick(COSMETIC, |c| c.state.order.push("cosmetic"), 0);
+    t.on_tick(CONTENT, |c| c.state.order.push("content"), 0);
+    t.on_tick(VISIBLE, |c| c.state.order.push("visible"), 0);
+    t.on_tick(INTERACTION, |c| c.state.order.push("interaction"), 0);
     let mut s = Seen::default();
     t.run(&mut s, 0.016, QUOTA_MS, now());
     assert_eq!(s.order, PHASES);
@@ -63,9 +63,9 @@ fn tick_phases_run_in_their_fixed_order_whatever_order_they_registered_in() {
 #[test]
 fn tick_within_a_phase_steps_run_in_registration_order() {
     let mut t = tick();
-    t.on_tick(VISIBLE, |c| c.state.order.push("1"), "t");
-    t.on_tick(VISIBLE, |c| c.state.order.push("2"), "t");
-    t.on_tick(VISIBLE, |c| c.state.order.push("3"), "t");
+    t.on_tick(VISIBLE, |c| c.state.order.push("1"), 0);
+    t.on_tick(VISIBLE, |c| c.state.order.push("2"), 0);
+    t.on_tick(VISIBLE, |c| c.state.order.push("3"), 0);
     let mut s = Seen::default();
     t.run(&mut s, 0.016, QUOTA_MS, now());
     assert_eq!(s.order, ["1", "2", "3"]);
@@ -74,8 +74,8 @@ fn tick_within_a_phase_steps_run_in_registration_order() {
 #[test]
 fn tick_one_budget_is_shared_what_an_earlier_phase_spends_a_later_one_does_not_get() {
     let mut t = tick();
-    t.on_tick(VISIBLE, |c| burn(c.budget.total_ms * 0.75), "t");
-    t.on_tick(CONTENT, |c| c.state.a = c.budget.remaining(), "t");
+    t.on_tick(VISIBLE, |c| burn(c.budget.total_ms * 0.75), 0);
+    t.on_tick(CONTENT, |c| c.state.a = c.budget.remaining(), 0);
     let mut s = Seen { a: -1.0, ..Default::default() };
     let report = t.run(&mut s, 0.016, QUOTA_MS, now());
     assert!(s.a >= 0.0);
@@ -99,9 +99,9 @@ fn tick_the_visible_phase_cannot_take_the_content_share_and_content_sees_it() {
                 None,
             );
         },
-        "t",
+        0,
     );
-    t.on_tick(CONTENT, |c| c.state.b = c.budget.remaining(), "t");
+    t.on_tick(CONTENT, |c| c.state.b = c.budget.remaining(), 0);
     let mut s = Seen::default();
     let report = t.run(&mut s, 0.016, QUOTA_MS, now());
     assert!(s.a <= report.budget_ms * 0.8 + 0.01, "visible saw {} of {}", s.a, report.budget_ms);
@@ -118,7 +118,7 @@ fn tick_a_step_that_unregisters_itself_mid_tick_is_not_run_again() {
             let id = c.state.id;
             c.off_tick(id);
         },
-        "t",
+        0,
     );
     let mut s = Seen { id, ..Default::default() };
     t.run(&mut s, 0.016, QUOTA_MS, now());
@@ -129,7 +129,7 @@ fn tick_a_step_that_unregisters_itself_mid_tick_is_not_run_again() {
 #[test]
 fn tick_a_step_that_unregisters_an_earlier_one_does_not_make_the_tick_skip_the_step_after_it() {
     let mut t = tick();
-    let first = t.on_tick(VISIBLE, |c| c.state.order.push("first"), "t");
+    let first = t.on_tick(VISIBLE, |c| c.state.order.push("first"), 0);
     t.on_tick(
         VISIBLE,
         |c| {
@@ -137,9 +137,9 @@ fn tick_a_step_that_unregisters_an_earlier_one_does_not_make_the_tick_skip_the_s
             let id = c.state.id;
             c.off_tick(id);
         },
-        "t",
+        0,
     );
-    t.on_tick(VISIBLE, |c| c.state.order.push("third"), "t");
+    t.on_tick(VISIBLE, |c| c.state.order.push("third"), 0);
     let mut s = Seen { id: first, ..Default::default() };
     t.run(&mut s, 0.016, QUOTA_MS, now());
     assert_eq!(s.order, ["first", "second", "third"]);
@@ -148,14 +148,14 @@ fn tick_a_step_that_unregisters_an_earlier_one_does_not_make_the_tick_skip_the_s
 #[test]
 fn tick_the_report_phase_sees_every_phase_before_it() {
     let mut t = tick();
-    t.on_tick(VISIBLE, |_| burn(2.0), "t");
+    t.on_tick(VISIBLE, |_| burn(2.0), 0);
     t.on_tick(
         REPORT,
         |c| {
             c.state.a = c.phase_ms[VISIBLE];
             c.state.b = c.phase_ms[REPORT];
         },
-        "t",
+        0,
     );
     let mut s = Seen { a: -1.0, ..Default::default() };
     t.run(&mut s, 0.016, QUOTA_MS, now());
@@ -194,7 +194,7 @@ fn tick_a_storm_of_steps_that_report_work_stays_within_the_budget_plus_one_step(
                 )
                 .ran;
         },
-        "t",
+        0,
     );
     let mut s = Seen::default();
     let report = t.run(&mut s, 0.016, QUOTA_MS, now());
@@ -223,7 +223,7 @@ fn tick_a_storm_of_steps_that_cost_time_and_report_none_stays_within_the_hard_ce
                 None,
             );
         },
-        "t",
+        0,
     );
     let mut s = Seen::default();
     let report = t.run(&mut s, 0.016, QUOTA_MS, now());
@@ -238,7 +238,7 @@ fn tick_a_storm_of_steps_that_cost_time_and_report_none_stays_within_the_hard_ce
 #[test]
 fn tick_what_the_turn_spent_before_the_tick_comes_off_the_budget() {
     let mut t = tick();
-    t.on_tick(VISIBLE, |c| c.state.a = c.budget.remaining(), "t");
+    t.on_tick(VISIBLE, |c| c.state.a = c.budget.remaining(), 0);
     let edge = now();
     burn(2.0);
     let mut s = Seen::default();
@@ -254,7 +254,7 @@ fn tick_what_the_interaction_phase_spends_comes_off_the_budget() {
         |_| {
             burn(1.5);
         },
-        "t",
+        0,
     );
     t.on_tick(
         VISIBLE,
@@ -262,7 +262,7 @@ fn tick_what_the_interaction_phase_spends_comes_off_the_budget() {
             c.state.a = c.budget.remaining();
             c.state.b = c.budget.total_ms;
         },
-        "t",
+        0,
     );
     let mut s = Seen::default();
     t.run(&mut s, 1.0 / 60.0, QUOTA_MS, now());
@@ -274,6 +274,6 @@ fn tick_what_the_interaction_phase_spends_comes_off_the_budget() {
 fn tick_the_step_table_is_fixed_a_step_past_it_is_refused() {
     let mut t = tick();
     for _ in 0..9 {
-        t.on_tick(COSMETIC, |_| {}, "t");
+        t.on_tick(COSMETIC, |_| {}, 0);
     }
 }

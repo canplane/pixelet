@@ -4,13 +4,18 @@
     "where the settings sheet shows it. The store reads the defaults from here",
     "and the sheet renders rows from here, so adding a setting is one entry in",
     "SETTINGS plus its two strings in the locale catalogue under",
-    "`settings.<section>.<key>`. A `handheld_default` is the default on a",
-    "handheld device, where it differs. A choice may carry `costs` beside its",
+    "`settings.<section>.<key>`. A choice may carry `costs` beside its",
     "`options`, one per option in the same order, for when what an option costs",
     "differs from its neighbours'; an empty string is no badge. A `dev` setting",
     "is in the kernel's table in every build and offered only under a",
     "development one; the shell's production bundle carries SETTINGS_SHIPPED,",
-    "the table without them, in SETTINGS' place."
+    "the table without them, in SETTINGS' place.",
+    "",
+    "A choice's `options` names one of the lists below, and the option crosses",
+    "and is held as its index there; only storage keeps it by name. A setting",
+    "is numbered by its place in SETTINGS (the kernel's SettingKey), which is",
+    "what crosses for it. `sources_chunks` marks one a chunk's build reads, so",
+    "that changing it builds the chunks again."
   ],
   "SETTING_SECTIONS": {
     "$value": ["display", "camera", "editing", "lighting", "quality", "debug", "character"],
@@ -72,18 +77,24 @@
         "Low because the four taps are all of it: fill rate, which scales with",
         "the screen and not with the world, and nothing else — no geometry, no",
         "pass of its own, and no work off the GPU past an atlas the client",
-        "already holds."
+        "already holds.",
+        "",
+        "It sources the chunks: the shader samples a leaf's layer or does not,",
+        "but a tier over it carries one colour and no layer to sample, so which",
+        "colour that is was baked in (mesh/chunk_mesher.rs)."
       ],
       "kind": "toggle",
       "default": true,
       "section": "display",
-      "cost": "low"
+      "cost": "low",
+      "sources_chunks": true
     },
     "show_structures": {
       "$doc": ["Whether the STRUCTURE ground channel is painted. The bake writes it", "either way (pipeline/overture/policy.rs); this is a render decision."],
       "kind": "toggle",
       "default": true,
-      "section": "display"
+      "section": "display",
+      "sources_chunks": true
     },
     "show_decor": {
       "$doc": [
@@ -101,7 +112,8 @@
       "kind": "toggle",
       "default": true,
       "section": "display",
-      "cost": "med"
+      "cost": "med",
+      "sources_chunks": true
     },
     "show_poi": {
       "$doc": ["Opt-in bounded POI summary snapshot for the local vertical slice."],
@@ -130,7 +142,7 @@
       ],
       "kind": "choice",
       "default": "climb",
-      "options": ["through", "stop", "climb"],
+      "options": "CAMERA_TERRAIN_MODES",
       "section": "camera",
       "dev": true
     },
@@ -173,7 +185,7 @@
       ],
       "kind": "choice",
       "default": "corner",
-      "options": ["off", "corner", "screen"],
+      "options": "AO_MODES",
       "costs": ["", "low", "high"],
       "section": "lighting"
     },
@@ -194,13 +206,12 @@
         "Four samples a pixel for the frame's colour and depth:",
         "the largest allocation the page makes — 32 bytes a device pixel, a",
         "hundred megabytes on a phone at its native density — for edges the",
-        "far terrain's boxes would otherwise shimmer at. Off on a phone, whose",
+        "far terrain's boxes would otherwise shimmer at. Off, since a phone's",
         "density does the same job at no cost; the setting is read when the",
         "renderer is made."
       ],
       "kind": "toggle",
       "default": false,
-      "handheld_default": false,
       "section": "quality",
       "dev": true,
       "cost": "high"

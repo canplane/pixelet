@@ -7,9 +7,9 @@ use pxl_spec::space::pyramid::LevelPage;
 
 use crate::global::Global;
 use crate::host::measure_text;
-use crate::layer::billboard::canvas::scale::FONT_FAMILY;
 use crate::layer::billboard::sheet::billboard_sheet;
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
+use pxl_render::gpu::pass::badges::BADGE_FONT;
 use pxl_render::gpu::surface::DPR_MAX;
 
 use crate::world::pyramid::Layer;
@@ -77,8 +77,7 @@ pub fn width(label: Label) -> f64 {
     badges()
         .entry(label)
         .or_insert_with(|| {
-            let font = format!("400 12px {FONT_FAMILY}");
-            let width = (measure_text(&font, &label.text()).ceil() + 20.0).max(27.0);
+            let width = (measure_text(BADGE_FONT, &label.text()).ceil() + 20.0).max(27.0);
             Badge { width, slot: NO_SLOT }
         })
         .width

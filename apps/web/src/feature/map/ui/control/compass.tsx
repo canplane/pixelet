@@ -2,15 +2,16 @@
 
 import { useTranslation } from "react-i18next";
 
-import { kernel_action, useKernel } from "@/kernel/shell.ts";
+import { Command } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_command, useKernel } from "@/kernel/shell.ts";
 
 import { MotionContainer } from "@/shared/ui/motion/motion-container.tsx";
 import { CircularButton } from "@/shared/ui/shadcn/circular-button.tsx";
 
 export function MapCompass() {
   const { t } = useTranslation();
-  const azimuth = useKernel((s) => s.view.azimuth);
-  const showCompass = useKernel((s) => s.compass.show);
+  const azimuth = useKernel((s) => s.azimuth);
+  const showCompass = useKernel((s) => s.show_compass);
 
   return (
     // layout={false}: without it, framer-motion's default layout={true}
@@ -18,7 +19,7 @@ export function MapCompass() {
     // column it sits in (top-overlays.tsx) resizes for any reason, which
     // can leave it stuck mid-transition instead of cleanly disappearing.
     <MotionContainer show={showCompass} variant="compass" delay={0.4} layout={false}>
-      <CircularButton className="w-12 h-12" shadow={false} onClick={() => kernel_action({ type: "compass_reset" })} title={t("map.controls.reset_orientation")}>
+      <CircularButton className="w-12 h-12" shadow={false} onClick={() => kernel_command(Command.INPUT_COMPASS_RESET)} title={t("map.controls.reset_orientation")}>
         <span className="absolute top-0.5 text-[10px] font-medium tracking-tighter select-none z-20 text-[#5B4636]/50">
           N
         </span>

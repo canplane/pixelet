@@ -226,8 +226,8 @@ instead. `check:rules` holds every other file to it.
 which share the kernel's vocabulary, and `camelCase` in the rest of
 `apps/web` and in `script/`, which is TypeScript and nothing else. An
 acronym is a word (`nextChatLineId`, `assetUrl`), as Rust cases it. A name
-that crosses — a snapshot field, an action string, a catalog entry, a ledger
-record — keeps the kernel's `snake_case` on both sides.
+that crosses — a packet's field, a catalog entry, a ledger record — keeps the
+kernel's `snake_case` on both sides.
 
 **A file's name is its language's**: `snake_case` in Rust and `packages/`,
 `kebab-case` in `apps/web` and `script/`. The WGSL beside the Rust and the

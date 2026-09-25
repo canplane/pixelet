@@ -28,28 +28,12 @@ use xpute_runtime::mem::heap::alloc;
 
 use crate::global::Global;
 use crate::host::now;
-use crate::io::demand::{Category, DemandKey, Phases};
-use crate::sched::ledger::spec::{CATEGORY_NAMES, FRAME, GPU_SPAN_NAMES, LIMITS, OUTCOME_NAMES, PHASE_NAMES, SUMMARY, TASK, TASK_PHASE_NAMES, WORST};
+use crate::io::demand::{DemandKey, Phases};
+use crate::sched::ledger::spec::{FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, TASK, WORST};
 use crate::sched::tick::PHASES;
 
+pub use crate::sched::ledger::spec::OutcomeName as Outcome;
 pub use crate::sched::ledger::spec::CENSUS_TAGS;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Outcome {
-    Ok,
-    Aborted,
-    Error,
-}
-
-impl Outcome {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Outcome::Ok => "ok",
-            Outcome::Aborted => "aborted",
-            Outcome::Error => "error",
-        }
-    }
-}
 
 /// A task as a scheduler settles it.
 #[derive(Clone, Debug, PartialEq)]
@@ -94,55 +78,6 @@ impl fmt::Display for Failure {
     }
 }
 
-/// Where `name` sits in `names`, as a record's number; -1 where it is absent.
-pub fn name_id(names: &[&str], name: &str) -> f64 {
-    names.iter().position(|n| *n == name).map_or(-1.0, |i| i as f64)
-}
-
-/// Where `name` sits in `names`, for a name known when the kernel is built:
-/// evaluated in a `const`, a name ledger.json does not list fails the build
-/// instead of reaching the shell as a -1 it prints as "?".
-pub const fn name_index(names: &[&str], name: &str) -> u32 {
-    let mut i = 0;
-    while i < names.len() {
-        if str_eq(names[i], name) {
-            return i as u32;
-        }
-        i += 1;
-    }
-    panic!("a name ledger.json does not list");
-}
-
-const fn str_eq(a: &str, b: &str) -> bool {
-    let (a, b) = (a.as_bytes(), b.as_bytes());
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut i = 0;
-    while i < a.len() {
-        if a[i] != b[i] {
-            return false;
-        }
-        i += 1;
-    }
-    true
-}
-
-/// A category's index in CATEGORY_NAMES. `Category` is the I/O's own and the
-/// ledger only observes it, so the ledger maps it rather than defining it:
-/// the match is exhaustive and each arm a constant, so a category without a
-/// name here is a build error rather than a task the reports cannot place.
-const fn category_id(c: Category) -> u32 {
-    match c {
-        Category::Terrain => const { name_index(CATEGORY_NAMES, Category::Terrain.as_str()) },
-        Category::Ocean => const { name_index(CATEGORY_NAMES, Category::Ocean.as_str()) },
-        Category::Poi => const { name_index(CATEGORY_NAMES, Category::Poi.as_str()) },
-        Category::Geocode => const { name_index(CATEGORY_NAMES, Category::Geocode.as_str()) },
-        Category::GeocodeDict => const { name_index(CATEGORY_NAMES, Category::GeocodeDict.as_str()) },
-        Category::Asset => const { name_index(CATEGORY_NAMES, Category::Asset.as_str()) },
-    }
-}
-
 const PHASES_MAX: usize = LIMITS::PHASES_MAX as usize;
 const _: () = assert!(PHASES_MAX == crate::io::demand::PHASES_MAX, "a task row holds every phase a run can report");
 
@@ -166,7 +101,7 @@ pub struct TaskRow {
     pub detail: f64,
     /// How many of the phase lanes are filled; 0 where the run reported none.
     pub phase_count: f64,
-    /// Indices into TASK_PHASE_NAMES, a timing's -1 where the list lacks it.
+    /// Indices into TASK_PHASE_NAMES.
     pub phase_ids: [f64; PHASES_MAX],
     pub phase_values: [f64; PHASES_MAX],
 }
@@ -174,20 +109,20 @@ pub struct TaskRow {
 impl TaskRow {
     pub fn of(rec: &TaskRecord) -> TaskRow {
         let mut row = TaskRow {
-            category: category_id(rec.key.category) as f64,
+            category: rec.key.category as u32 as f64,
             subject: rec.key.subject,
             priority: rec.priority,
             enqueue_ms: rec.enqueue_ms,
             start_ms: rec.start_ms.unwrap_or(f64::NAN),
             end_ms: rec.end_ms,
             transport_ms: rec.transport_ms,
-            outcome: name_id(OUTCOME_NAMES, rec.outcome.as_str()),
+            outcome: rec.outcome as u32 as f64,
             fail: rec.fail.fail as u32 as f64,
             detail: rec.fail.detail as f64,
             ..TaskRow::default()
         };
         for (k, (name, value)) in rec.phases.iter().flat_map(|p| p.iter()).enumerate() {
-            row.phase_ids[k] = name_id(TASK_PHASE_NAMES, name);
+            row.phase_ids[k] = name as u32 as f64;
             row.phase_values[k] = value;
             row.phase_count = (k + 1) as f64;
         }

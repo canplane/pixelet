@@ -11,8 +11,9 @@ import { cn } from "@/shared/lib/util/cn.ts";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { useAppContext } from "@/app/provider/context.ts";
 import { useUiStore } from "@/app/store/ui-store.ts";
+import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { type DecorId, placeable_cubes, type PlaceableCube, placeableCubeId } from "@/catalog/cell/mod.ts";
-import { OBJECT_SIZES, objectScaleExponents } from "@/feature/map/object/size.ts";
+import { useKernel } from "@/kernel/shell.ts";
 import { cubeSwatchStyle } from "./cube-swatch.ts";
 
 type ModeId = "message" | "palette";
@@ -35,11 +36,11 @@ function sizeButtonDims(i: u32): string {
   return i === 0 ? "w-6 h-6" : i === 1 ? "w-4 h-4" : i === 2 ? "w-2 h-2" : "w-1 h-1";
 }
 
-// Tier index i is exponent -i (objectScaleExponents), sign-flipped and
-// sorted here for display only — itemRefs/dragIndex/on_up still index by
-// tier (OBJECT_SIZES' own index), not by render position.
-function sizeTiersFor(cube: PlaceableCube): f64[] {
-  return objectScaleExponents(cube).map((exp) => -exp).sort((a, b) => b - a);
+// Finest first, reversed here for display only — itemRefs/dragIndex/on_up
+// still index by tier (the kernel's object_sizes' own index), not by render
+// position.
+function sizeTiers(count: u32): u32[] {
+  return Array.from({ length: count }, (_, i) => count - 1 - i);
 }
 
 interface SizeFlyoutAnchor {
@@ -51,7 +52,7 @@ const FLYOUT_HOLD_MS = 150;
 const FLYOUT_AXIS_PX = 12;
 
 function useSizeFlyout(onActivate: () => void) {
-  const setObjectSize = useUiStore.getState().setObjectSize;
+  const setObjectTier = useUiStore.getState().setObjectTier;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -118,7 +119,7 @@ function useSizeFlyout(onActivate: () => void) {
     function on_up(ev: PointerEvent) {
       if (gesture === "flyout") {
         const idx = indexAt(ev.clientX, ev.clientY);
-        if (idx !== null) setObjectSize(OBJECT_SIZES[idx]);
+        if (idx !== null) setObjectTier(idx);
       } else if (gesture === null) {
         onActivate();
       }
@@ -145,11 +146,11 @@ interface SizeFlyoutProps {
   anchor: SizeFlyoutAnchor;
   dragIndex: u32 | null;
   itemRefs: React.MutableRefObject<(HTMLButtonElement | null)[]>;
-  object_size: f64;
-  tiers: readonly f64[];
+  object_tier: u32;
+  sizes: readonly f64[];
 }
 
-function SizeFlyout({ anchor, dragIndex, itemRefs, object_size, tiers }: SizeFlyoutProps) {
+function SizeFlyout({ anchor, dragIndex, itemRefs, object_tier, sizes }: SizeFlyoutProps) {
   return createPortal(
     // Portaled to document.body, not positioned relative to the owning
     // button: that button sits in a horizontally scrolling row, and CSS
@@ -163,11 +164,11 @@ function SizeFlyout({ anchor, dragIndex, itemRefs, object_size, tiers }: SizeFly
       style={{ position: "fixed", left: anchor.left, bottom: anchor.bottom, transform: "translateX(-50%)", zIndex: 2000 }}
       className="flex flex-col items-center gap-1.5 rounded-full bg-neutral-900/60 backdrop-blur-sm shadow-[0_6px_20px_rgba(0,0,0,0.25)] py-2 px-1.5"
     >
-      {tiers.map((tier) => {
-        const s = OBJECT_SIZES[tier];
+      {sizeTiers(sizes.length).map((tier) => {
+        const s = sizes[tier];
         return (
           <button
-            key={s}
+            key={tier}
             ref={(el) => {
               itemRefs.current[tier] = el;
             }}
@@ -179,7 +180,7 @@ function SizeFlyout({ anchor, dragIndex, itemRefs, object_size, tiers }: SizeFly
               className={cn(
                 "rounded-sm transition-transform",
                 sizeButtonDims(tier),
-                dragIndex === tier ? "bg-white scale-125 ring-1 ring-white" : object_size === s ? "bg-white/80" : "bg-white/40",
+                dragIndex === tier ? "bg-white scale-125 ring-1 ring-white" : object_tier === tier ? "bg-white/80" : "bg-white/40",
               )}
             />
           </button>
@@ -194,15 +195,15 @@ function ColorSwatchButton({ cube }: { cube: PlaceableCube }) {
   const { t } = useTranslation();
   const activeTool = useUiStore((s) => s.activeTool);
   const objectColorId = useUiStore((s) => s.objectColorId);
-  const object_size = useUiStore((s) => s.object_size);
+  const object_tier = useUiStore((s) => s.object_tier);
+  const sizes = useKernel((s) => s.object_sizes);
   const selectCube = (pick: PlaceableCube) => useUiStore.getState().selectCube(placeableCubeId(pick));
 
   const { menuOpen, anchor, dragIndex, itemRefs, buttonRef, onPointerDown } = useSizeFlyout(() => selectCube(cube));
-  const tiers = sizeTiersFor(cube);
 
   return (
     <div className="relative w-[38px] h-[38px] flex items-center justify-center">
-      {menuOpen && anchor && <SizeFlyout anchor={anchor} dragIndex={dragIndex} itemRefs={itemRefs} object_size={object_size} tiers={tiers} />}
+      {menuOpen && anchor && <SizeFlyout anchor={anchor} dragIndex={dragIndex} itemRefs={itemRefs} object_tier={object_tier} sizes={sizes} />}
       <button
         type="button"
         onPointerDown={onPointerDown}
@@ -214,7 +215,7 @@ function ColorSwatchButton({ cube }: { cube: PlaceableCube }) {
           style={cubeSwatchStyle(cube)}
           className={cn(
             "w-5 h-5 rounded-full transition-transform",
-            activeTool === "object" && objectColorId === placeableCubeId(cube) ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
+            activeTool === ActiveTool.Object && objectColorId === placeableCubeId(cube) ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "ring-1 ring-white/15 scale-100",
           )}
         />
       </button>
@@ -225,14 +226,14 @@ function ColorSwatchButton({ cube }: { cube: PlaceableCube }) {
 // The hotbar's decor slot(s) — reinstated (2026-09-07) now that recentPicks
 // (ui-store.ts) is one shared MRU list across cube and decor: unlike a
 // ColorSwatchButton, a decor pick has no size flyout of its own (DECOR_SIZE
-// is fixed, object/size.ts), so this stays a plain tap button.
+// is fixed, pxl-kernel layer/object/size.rs), so this stays a plain tap button.
 function DecorIconButton({ id }: { id: DecorId }) {
   const { t } = useTranslation();
   const activeTool = useUiStore((s) => s.activeTool);
   const decor_id = useUiStore((s) => s.decor_id);
   const selectDecor = useUiStore.getState().selectDecor;
   const Icon = DECOR_ICONS[id];
-  const active = activeTool === "decor" && decor_id === id;
+  const active = activeTool === ActiveTool.Decor && decor_id === id;
 
   return (
     <button
@@ -485,10 +486,10 @@ export function ModeBar() {
                   <div className="flex items-center p-[4px] shrink-0">
                     <button
                       type="button"
-                      onClick={() => set_activeTool("pointer")}
+                      onClick={() => set_activeTool(ActiveTool.Pointer)}
                       className={cn(
                         "flex items-center justify-center w-[38px] h-[38px] rounded-full cursor-pointer transition-colors shrink-0",
-                        activeTool === "pointer" ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
+                        activeTool === ActiveTool.Pointer ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
                       )}
                       title={t("map.mode_bar.pointer")}
                     >
@@ -497,10 +498,10 @@ export function ModeBar() {
 
                     <button
                       type="button"
-                      onClick={() => set_activeTool("eraser")}
+                      onClick={() => set_activeTool(ActiveTool.Eraser)}
                       className={cn(
                         "flex items-center justify-center w-[38px] h-[38px] rounded-full cursor-pointer transition-colors shrink-0",
-                        activeTool === "eraser" ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
+                        activeTool === ActiveTool.Eraser ? "bg-white/20 text-white" : "text-white/60 hover:text-white/90",
                       )}
                       title={t("map.mode_bar.eraser")}
                     >

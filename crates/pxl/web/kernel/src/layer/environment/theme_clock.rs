@@ -19,7 +19,7 @@ use pxl_spec::space::adapter::epsg4326::{self, G4326};
 use crate::global::Global;
 use crate::host::{local_time, now};
 use crate::kernel::kernel;
-use crate::layer::environment::theme::{get_theme_key, WorldThemeKey};
+use crate::layer::environment::theme::{get_theme_key, Theme};
 use crate::shell::map_store::map_store;
 use crate::world::change::wake_at;
 
@@ -29,7 +29,7 @@ const THEME_CHECK_INTERVAL_MS: f64 = 60_000.0;
 // map_center exists.
 use crate::control::navigation::bootstrap::FALLBACK_G4326;
 
-fn compute_theme_key() -> WorldThemeKey {
+fn compute_theme_key() -> Theme {
     let (lon, lat) = match map_store().map_center {
         Some(center) => {
             let mut g: G4326 = [0.0; 3];
@@ -46,7 +46,7 @@ fn compute_theme_key() -> WorldThemeKey {
 }
 
 struct ThemeClock {
-    theme_key: WorldThemeKey,
+    theme_key: Theme,
     checked_at: f64,
 }
 
@@ -75,6 +75,6 @@ pub fn theme_clock_step() {
 }
 
 /// The current theme key.
-pub fn theme_key() -> WorldThemeKey {
+pub fn theme_key() -> Theme {
     clock().theme_key
 }

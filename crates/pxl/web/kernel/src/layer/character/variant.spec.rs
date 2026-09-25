@@ -18,7 +18,7 @@
 /// The groups a character is of, each numbered, and in each its variants by
 /// key, row for row with its models, the colormap its pack shares, how tall it
 /// stands and which clip is its move.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Group {
     person = 0,
@@ -42,7 +42,7 @@ pub mod groups {
     pub mod person {
         /// World units tall — one cell.
         pub const size: f64 = 1.0;
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         #[repr(u8)]
         pub enum Key {
             female_1 = 0,
@@ -121,7 +121,7 @@ pub mod groups {
     pub mod pet {
         /// World units tall — a quarter cell, the step OBJECT_SIZES also takes.
         pub const size: f64 = 0.25;
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         #[repr(u8)]
         pub enum Key {
             beaver = 0,

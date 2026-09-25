@@ -64,6 +64,13 @@ pub mod resource {
     pub const KEYS: &[&str] = &["BUFFER", "VIEW", "SAMPLER"];
 }
 
+/// What a canvas the shell hands over shows (gpu/surface.rs): the world, or one thing in a case.
+pub mod surface_role {
+    pub const WORLD: u32 = 0;
+    pub const CASE: u32 = 1;
+    pub const KEYS: &[&str] = &["WORLD", "CASE"];
+}
+
 /// An attachment's start: cleared, loaded, or a depth read and not written.
 pub mod load {
     pub const CLEAR: u32 = 0;
@@ -86,13 +93,13 @@ pub mod paint {
     pub const SCALE: u32 = 5;
     /// on
     pub const SMOOTHING: u32 = 6;
-    /// css
+    /// rgba: 0xRRGGBBAA
     pub const FILL_STYLE: u32 = 7;
-    /// css
+    /// rgba: 0xRRGGBBAA
     pub const STROKE_STYLE: u32 = 8;
     /// width
     pub const LINE_WIDTH: u32 = 9;
-    /// css
+    /// weight, px: the page's own font-family at them
     pub const FONT: u32 = 10;
     /// 0 left, 1 center
     pub const TEXT_ALIGN: u32 = 11;

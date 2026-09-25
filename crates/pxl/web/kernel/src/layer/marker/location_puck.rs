@@ -17,7 +17,7 @@ use xpute_runtime::mem::heap::{alloc, free};
 use crate::global::Global;
 use crate::kernel::kernel;
 use crate::layer::environment::fog::view_reach;
-use crate::layer::environment::theme::WorldThemeKey;
+use crate::layer::environment::theme::Theme;
 use crate::layer::environment::theme_clock::theme_key;
 use crate::layer::terrain::elevation::get_ele;
 use crate::world::change::request_world_tick;
@@ -167,7 +167,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
     // boxes; the beacon has no such constraint, so this adds the remainder back
     // — otherwise it would quantize to whole-cell jumps instead of moving
     // smoothly.
-    let beacon = ([pos[0] - center_pos[0], pos[1] - center_pos[1]], theme_key() == WorldThemeKey::night);
+    let beacon = ([pos[0] - center_pos[0], pos[1] - center_pos[1]], theme_key() == Theme::Night);
     if p.beacon_for != Some(beacon) {
         p.beacon_for = Some(beacon);
         kernel().sched.markers.set_beacon(beacon.0, beacon.1);

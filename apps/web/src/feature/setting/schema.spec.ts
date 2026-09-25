@@ -6,51 +6,24 @@
 // where the settings sheet shows it. The store reads the defaults from here
 // and the sheet renders rows from here, so adding a setting is one entry in
 // SETTINGS plus its two strings in the locale catalogue under
-// `settings.<section>.<key>`. A `handheld_default` is the default on a
-// handheld device, where it differs. A choice may carry `costs` beside its
+// `settings.<section>.<key>`. A choice may carry `costs` beside its
 // `options`, one per option in the same order, for when what an option costs
 // differs from its neighbours'; an empty string is no badge. A `dev` setting
 // is in the kernel's table in every build and offered only under a
 // development one; the shell's production bundle carries SETTINGS_SHIPPED,
 // the table without them, in SETTINGS' place.
-
-/** The sheet's sections, in the order they are shown. `character` is not a
- * section of the sheet at all — its two settings are picked from the
- * drawer's Character tab (feature/character/picker.tsx). */
-export const SETTING_SECTIONS = ["display", "camera", "editing", "lighting", "quality", "debug", "character"] as const;
+//
+// A choice's `options` names one of the lists below, and the option crosses
+// and is held as its index there; only storage keeps it by name. A setting
+// is numbered by its place in SETTINGS (the kernel's SettingKey), which is
+// what crosses for it. `sources_chunks` marks one a chunk's build reads, so
+// that changing it builds the chunks again.
 
 /** The sections that are a development build's as a whole. One of these is
  * shown under `__IS_DEV__` only and carries the badge on its heading, so
  * its rows do not repeat it; a `dev` row in any other section carries its
  * own. Which rows exist in a build is the rows' `dev`, not this. */
 export const DEV_SECTIONS = ["debug"] as const;
-
-/** What terrain does to the camera.
- *
- *   through — nothing. The eye goes wherever the controls put it, ground
- *             included, where the terrain shell has no inward-facing
- *             geometry and the scene reads inside out.
- *   stop    — a control goes as far as it asked or as far as it can.
- *             Nothing moves on its own; a zoom into a hill stops short.
- *   climb   — dist is always granted and the *view* pitches up instead,
- *             as far as straight down, so every zoom level stays
- *             reachable at the cost of an angle nobody asked for. */
-export const CAMERA_TERRAIN_MODES = ["through", "stop", "climb"] as const;
-
-/** Where the ambient occlusion comes from.
- *
- *   off    — none.
- *   corner — a chunk shades its own corners from the face bits the edge
- *            shading reads (crates/pxl/web/render/src/frame/shader/chunk.wgsl):
- *            the floor along a cube and the inside of a corner, over about
- *            half a cell, scaling the ambient and hemisphere light only.
- *            A few fragment ops behind a uniform.
- *   screen — N8AO as the three.js build ran it until 2026-09-14
- *            (crates/pxl/web/render/src/gpu/ao.rs): the world's depth drawn
- *            once more, the occlusion sampled from it at half resolution,
- *            denoised, and applied to every lit surface as a warm dark
- *            tint. Five passes and 11 bytes a pixel. */
-export const AO_MODES = ["off", "corner", "screen"] as const;
 
 export const SETTINGS = {
   /** Ground colour from the art pack (four sampler2DArray taps per fragment)
@@ -60,8 +33,13 @@ export const SETTINGS = {
    * Low because the four taps are all of it: fill rate, which scales with
    * the screen and not with the world, and nothing else — no geometry, no
    * pass of its own, and no work off the GPU past an atlas the client
-   * already holds. */
+   * already holds.
+   *
+   * It sources the chunks: the shader samples a leaf's layer or does not,
+   * but a tier over it carries one colour and no layer to sample, so which
+   * colour that is was baked in (mesh/chunk_mesher.rs). */
   texture_pack: {
+    key: 0 as number,
     kind: "toggle",
     default: true,
     section: "display",
@@ -70,6 +48,7 @@ export const SETTINGS = {
   /** Whether the STRUCTURE ground channel is painted. The bake writes it
    * either way (pipeline/overture/policy.rs); this is a render decision. */
   show_structures: {
+    key: 1 as number,
     kind: "toggle",
     default: true,
     section: "display",
@@ -85,6 +64,7 @@ export const SETTINGS = {
    * would being decided and not built. The badge is an ordering, and this is
    * the one to reach for before any shading term. */
   show_decor: {
+    key: 2 as number,
     kind: "toggle",
     default: true,
     section: "display",
@@ -92,6 +72,7 @@ export const SETTINGS = {
   },
   /** Opt-in bounded POI summary snapshot for the local vertical slice. */
   show_poi: {
+    key: 3 as number,
     kind: "toggle",
     default: false,
     section: "display",
@@ -102,6 +83,7 @@ export const SETTINGS = {
    * Off by default: the tilt is the one control a map view is expected to
    * have, and locking it reads as the app being stuck. */
   lock_camera_tilt: {
+    key: 4 as number,
     kind: "toggle",
     default: false,
     section: "camera",
@@ -111,6 +93,7 @@ export const SETTINGS = {
    * back a control that did nothing, which reads as the app being stuck
    * rather than as the ground being in the way. */
   camera_terrain: {
+    key: 5 as number,
     kind: "choice",
     default: "climb",
     options: ["through", "stop", "climb"],
@@ -119,6 +102,7 @@ export const SETTINGS = {
   },
   /** Panning re-samples the terrain height under the map centre each step. */
   ground_snap: {
+    key: 6 as number,
     kind: "toggle",
     default: true,
     section: "camera",
@@ -127,6 +111,7 @@ export const SETTINGS = {
   /** The eraser digs into the baked terrain where nothing is placed. Off by
    * default: the terrain is real map data, not the player's scratch canvas. */
   enable_terrain_carving: {
+    key: 7 as number,
     kind: "toggle",
     default: false,
     section: "editing",
@@ -135,6 +120,7 @@ export const SETTINGS = {
   /** Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   show_edge_shade: {
+    key: 8 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -142,6 +128,7 @@ export const SETTINGS = {
   },
   /** A uniform on an already-compiled shader term; not a pass. */
   show_rim_light: {
+    key: 9 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -151,6 +138,7 @@ export const SETTINGS = {
    * screen-space pass; screen, the three.js build's N8AO, kept to be put
    * beside it. AO_MODES says each. */
   ao: {
+    key: 10 as number,
     kind: "choice",
     default: "corner",
     options: ["off", "corner", "screen"],
@@ -161,6 +149,7 @@ export const SETTINGS = {
    * from the sun each frame, depth only, and a 3x3 compare per fragment;
    * 16 MB of map on a desktop, 4 on a phone. */
   show_shadow_map: {
+    key: 11 as number,
     kind: "toggle",
     default: false,
     section: "lighting",
@@ -170,13 +159,13 @@ export const SETTINGS = {
   /** Four samples a pixel for the frame's colour and depth:
    * the largest allocation the page makes — 32 bytes a device pixel, a
    * hundred megabytes on a phone at its native density — for edges the
-   * far terrain's boxes would otherwise shimmer at. Off on a phone, whose
+   * far terrain's boxes would otherwise shimmer at. Off, since a phone's
    * density does the same job at no cost; the setting is read when the
    * renderer is made. */
   msaa: {
+    key: 12 as number,
     kind: "toggle",
     default: false,
-    handheld_default: false,
     section: "quality",
     dev: true,
     cost: "high",
@@ -189,6 +178,7 @@ export const SETTINGS = {
    * hashed threshold and pops tier by tier, which is the cheaper of the
    * two to live with until the pattern holds still. */
   pixel_dither: {
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "quality",
@@ -197,6 +187,7 @@ export const SETTINGS = {
   },
   /** The debug gizmos: frame origins, page corners, the map centre and the rings. */
   show_debug_objects: {
+    key: 14 as number,
     kind: "toggle",
     default: false,
     section: "debug",
@@ -204,20 +195,21 @@ export const SETTINGS = {
   },
   /** The scheduler ledger's corner panel. The console stream is a button on it. */
   show_ledger: {
+    key: 15 as number,
     kind: "toggle",
     default: false,
     section: "debug",
     dev: true,
   },
   person_variant: {
+    key: 16 as number,
     kind: "number",
-    /** female-2, by its number in variant.json's person keys. */
     default: 1 as number,
     section: "character",
   },
   pet_variant: {
+    key: 17 as number,
     kind: "number",
-    /** chick, by its number in variant.json's pet keys. */
     default: 5 as number,
     section: "character",
   },
@@ -232,8 +224,13 @@ export const SETTINGS_SHIPPED = {
    * Low because the four taps are all of it: fill rate, which scales with
    * the screen and not with the world, and nothing else — no geometry, no
    * pass of its own, and no work off the GPU past an atlas the client
-   * already holds. */
+   * already holds.
+   *
+   * It sources the chunks: the shader samples a leaf's layer or does not,
+   * but a tier over it carries one colour and no layer to sample, so which
+   * colour that is was baked in (mesh/chunk_mesher.rs). */
   texture_pack: {
+    key: 0 as number,
     kind: "toggle",
     default: true,
     section: "display",
@@ -242,6 +239,7 @@ export const SETTINGS_SHIPPED = {
   /** Whether the STRUCTURE ground channel is painted. The bake writes it
    * either way (pipeline/overture/policy.rs); this is a render decision. */
   show_structures: {
+    key: 1 as number,
     kind: "toggle",
     default: true,
     section: "display",
@@ -257,6 +255,7 @@ export const SETTINGS_SHIPPED = {
    * would being decided and not built. The badge is an ordering, and this is
    * the one to reach for before any shading term. */
   show_decor: {
+    key: 2 as number,
     kind: "toggle",
     default: true,
     section: "display",
@@ -266,6 +265,7 @@ export const SETTINGS_SHIPPED = {
    * Off by default: the tilt is the one control a map view is expected to
    * have, and locking it reads as the app being stuck. */
   lock_camera_tilt: {
+    key: 4 as number,
     kind: "toggle",
     default: false,
     section: "camera",
@@ -273,6 +273,7 @@ export const SETTINGS_SHIPPED = {
   /** Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
   show_edge_shade: {
+    key: 8 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -280,6 +281,7 @@ export const SETTINGS_SHIPPED = {
   },
   /** A uniform on an already-compiled shader term; not a pass. */
   show_rim_light: {
+    key: 9 as number,
     kind: "toggle",
     default: true,
     section: "lighting",
@@ -289,6 +291,7 @@ export const SETTINGS_SHIPPED = {
    * screen-space pass; screen, the three.js build's N8AO, kept to be put
    * beside it. AO_MODES says each. */
   ao: {
+    key: 10 as number,
     kind: "choice",
     default: "corner",
     options: ["off", "corner", "screen"],
@@ -296,14 +299,14 @@ export const SETTINGS_SHIPPED = {
     section: "lighting",
   },
   person_variant: {
+    key: 16 as number,
     kind: "number",
-    /** female-2, by its number in variant.json's person keys. */
     default: 1 as number,
     section: "character",
   },
   pet_variant: {
+    key: 17 as number,
     kind: "number",
-    /** chick, by its number in variant.json's pet keys. */
     default: 5 as number,
     section: "character",
   },

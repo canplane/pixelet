@@ -9,7 +9,7 @@
 //! level rather than a radius: a ring of HELD_AXIS² around the view at every
 //! level of a window — the levels the ground in view wants, at most
 //! WINDOW_LEVELS — of which the inner RENDER_AXIS² is what is drawn from
-//! (window.json says why each is what it is).
+//! (each constant below says why it is what it is).
 
 use pxl_render::look::lod::REFERENCE_THRESHOLD_0;
 use pxl_spec::space::indexer::L3_IDX;
@@ -23,7 +23,6 @@ use crate::control::camera::store::camera_store;
 use crate::layer::environment::fog::{pivot_height, reach_at};
 
 use super::chunk::Chunk;
-use super::window_spec::{HELD_AXIS, RENDER_AXIS, WINDOW_LEVELS};
 
 const _: () = assert!(HELD_AXIS % 2 == 1 && RENDER_AXIS % 2 == 1 && RENDER_AXIS < HELD_AXIS, "a ring is centred on the view's page");
 const _: () = assert!(WINDOW_LEVELS <= TOP_LEVEL + 1, "a window no wider than the pyramid");
@@ -282,6 +281,40 @@ pub fn centre_dist(anchor: IVec, p: LevelPage) -> f64 {
     let (dx, dy) = (at(ivec::X(anchor), ivec::X(p.page)), at(ivec::Y(anchor), ivec::Y(p.page)));
     crate::sched::priority::in_own_sides(dx * dx + dy * dy, span).sqrt()
 }
+
+// The window a view holds of the pyramid, for every layer on it.
+//
+// The page stays the unit of transfer and storage: one object, one decode,
+// one key, one eviction, the same record at every level. What is derived
+// rather than chosen is *which* pages: a ring around the view at every level
+// of a window, which is at once what gets fetched, what stays decoded, and
+// what each layer has a record for (world/pyramid.rs). One set, so a
+// page can never be requested and then dropped from under its own in-flight
+// request (issue/20260921-level-step-and-zoom-are-one-number.md).
+/// The most levels held at once: a window holds the levels the ground in
+/// view wants and no others (world/pyramid/window.rs), and this is the widest that
+/// can be, which `.fixed` is sized for. What a 50° field of view shows spans
+/// log2(sin(θ + 25°) / sin(θ − 25°)) octaves of distance at a tilt θ above
+/// the horizon: under one looking down, 3.2 at 30°, 4.5 at 27°. Five cover
+/// every tilt to 27°; below 25° the top ray grazes the horizon and how far
+/// to draw is a choice rather than a measurement, and fog ends it. The
+/// window follows the camera rather than growing, so memory is constant in
+/// zoom.
+pub const WINDOW_LEVELS: u32 = 5;
+
+/// Pages held along one axis of a level's ring, around the view's own page.
+/// Odd, so the ring is centred. Its records are this squared a level, and
+/// the range's bytes are those records across the window.
+pub const HELD_AXIS: u32 = 5;
+
+/// Pages drawn from along one axis: the held ring less its rim. That rim is
+/// the margin that lets the view cross a page before the pages past it
+/// arrive. Three pages reach one page past the view at any level, 512·2^k
+/// units, against the 384·2^k the ladder wants step 2^(k+1) to, which is
+/// the step level k draws: the level a chunk wants is resident, with a
+/// third of slack at every level. Where a wide screen's corners see past
+/// that, the window's top is a coarser level (world/pyramid/window.rs).
+pub const RENDER_AXIS: u32 = 3;
 
 #[cfg(test)]
 #[path = "window.test.rs"]

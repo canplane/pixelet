@@ -9,7 +9,7 @@
  * the enum because the words are the shell's.
  */
 
-import { Message } from "@/kernel/abi/message.ts";
+import { Message } from "@/kernel/abi/cmd.spec.ts";
 
 export function messageKey(message: Message): string | null {
   switch (message) {

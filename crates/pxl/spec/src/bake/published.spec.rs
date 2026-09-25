@@ -20,17 +20,28 @@ pub struct PublishedVersion {
 
 pub const PUBLISHED_VERSION: PublishedVersion = PublishedVersion {
     terrain: "v6",
-    poi: "v8",
+    poi: "v7",
     geocode: "v4",
 };
 
-/// The kinds a version is published for: the fields of `PUBLISHED_VERSION`.
+/// The kinds a version is published for: the fields of `PUBLISHED_VERSION`,
+/// numbered in their order.
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
 pub enum BakeKind {
     terrain,
     poi,
     geocode,
+}
+
+impl BakeKind {
+    pub const ALL: [BakeKind; 3] = [BakeKind::terrain, BakeKind::poi, BakeKind::geocode];
+
+    /// The kind a number names, or none for a number nobody gave out.
+    pub fn of(number: u32) -> Option<BakeKind> {
+        BakeKind::ALL.into_iter().find(|k| *k as u32 == number)
+    }
 }
 
 impl PublishedVersion {

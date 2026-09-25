@@ -145,7 +145,7 @@ pub type TickStep<S> = fn(&mut TickContext<S>);
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StepStats {
     pub phase: Phase,
-    pub name: &'static str,
+    pub name: u32,
     pub ms: f64,
     pub count: u32,
     pub max_ms: f64,
@@ -166,7 +166,7 @@ struct Registered<S> {
     id: u32,
     phase: Phase,
     step: TickStep<S>,
-    name: &'static str,
+    name: u32,
 }
 
 impl<S> Clone for Registered<S> {
@@ -203,8 +203,9 @@ impl<S, const N: usize> Tick<S, N> {
     }
 
     /// Registers a step into a phase. Returns the id `off_tick` takes. `name`
-    /// is what the step's time is reported under.
-    pub fn on_tick(&mut self, phase: Phase, step: TickStep<S>, name: &'static str) -> u32 {
+    /// is what the step's time is reported under: the caller's own number for
+    /// it, which the words for it are looked up by where they are printed.
+    pub fn on_tick(&mut self, phase: Phase, step: TickStep<S>, name: u32) -> u32 {
         assert!(self.len < N, "the tick's {N} steps are taken");
         let id = self.next_id;
         self.next_id += 1;
@@ -245,7 +246,7 @@ impl<S, const N: usize> Tick<S, N> {
     }
 
     /// A step's time into its row; a table with no row left drops it.
-    fn record(&mut self, phase: Phase, name: &'static str, ms: f64) {
+    fn record(&mut self, phase: Phase, name: u32, ms: f64) {
         let at = match (0..self.stats_len).find(|&k| self.stats[k].phase == phase && self.stats[k].name == name) {
             Some(k) => k,
             None if self.stats_len < N => {

@@ -21,8 +21,8 @@ use crate::kernel::kernel;
 use crate::layer::billboard::sheet::billboard_sheet;
 use crate::sched::ledger::block::{AtlasBlock, CountersBlock, FetchBlock, FramesBlock, RecBlock, RetainBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
 use crate::sched::ledger::log::window_counters;
-use crate::sched::ledger::record::{fixed_lane, ledger_frame_peak, ledger_frames_since, ledger_recording_state, ledger_tasks_since, name_id, put, FrameSample, TaskRow, FRAME_LIMIT, TASK_LIMIT};
-use crate::sched::ledger::spec::{LIMITS, OUTCOME_NAMES, STEP_NAMES, SUMMARY, TASK_PHASE_NAMES};
+use crate::sched::ledger::record::{fixed_lane, ledger_frame_peak, ledger_frames_since, ledger_recording_state, ledger_tasks_since, put, FrameSample, Outcome, TaskRow, FRAME_LIMIT, TASK_LIMIT};
+use crate::sched::ledger::spec::{LIMITS, SUMMARY, TASK_PHASE_NAMES};
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
 use crate::world::chunk::node::{chunk_retention, RETAIN_BUDGET_BYTES};
 
@@ -159,7 +159,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesBlock {
 }
 
 fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksBlock {
-    let (ok, aborted, error) = (name_id(OUTCOME_NAMES, "ok"), name_id(OUTCOME_NAMES, "aborted"), name_id(OUTCOME_NAMES, "error"));
+    let (ok, aborted, error) = (Outcome::ok as u32 as f64, Outcome::aborted as u32 as f64, Outcome::error as u32 as f64);
     let mut block = TasksBlock::default();
     for (c, slot) in block.slots.iter_mut().enumerate() {
         let mine = || tasks.iter().filter(move |r| r.category == c as f64);
@@ -288,7 +288,7 @@ fn side(out: &mut [f64]) {
     for s in tick_step_stats().iter().filter(|s| s.count > 0).take(STEP_SLOTS) {
         steps.slots[steps.count as usize] = StepBlock {
             phase: s.phase as f64,
-            name: name_id(STEP_NAMES, s.name),
+            name: s.name as f64,
             ms: s.ms,
             count: s.count as f64,
             max_ms: s.max_ms,
