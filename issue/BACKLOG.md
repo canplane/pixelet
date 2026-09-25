@@ -53,6 +53,16 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   answers nothing past `--top-level` (3 by default; z11 and coarser are 503
   for terrain and POI alike), so a view that draws nothing finer than
   level 4 has no page it can get.
+- **One order out from the center, finished.** Every scheduler takes work
+  nearest the view's center first and drops what leaves the demand
+  ([20260926-one-order-out-from-the-center.md](./20260926-one-order-out-from-the-center.md)).
+  Left: fetches the view no longer wants stopped in the turn they leave it,
+  not one per round trip; a drawn level held until its replacement is ready,
+  so steep ground does not flip its splits as pages land and starve; and
+  occluded chunks left unsplit. Under all three, the view's nodes are still
+  2.5D columns: a chunk is a footprint and one height range, the budget
+  counts a disc, and objects ride the ground's chunk. 3D nodes — a level's
+  blocks in three axes, a band high — are what the rule was derived for.
 - **A seam while a chunk is drawn from a page over it.** Since
   2026-09-26 a chunk whose page has not come is drawn in its place from the
   nearest resident page over it, upsampled (world/pyramid.rs `drawn_from`),

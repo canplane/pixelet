@@ -102,6 +102,12 @@ The rules below keep it one thing. They come from finding it several.
   Placed objects are all resident, so they have no lifecycle to share; they
   share the lattice and the fold rule (`majority`, `pxl-spec bake/fold.rs`)
   and are folded when a chunk is built.
+- **2.5D is how ground is stored, not how anything behaves.** A page's
+  heightfield is a compression; what the view selects, orders, budgets,
+  occludes and draws is 3D — boxes in a sphere about the eye and the view's
+  center — for terrain, places and objects alike. A 2.5D shortcut (a height
+  read off the raster, `get_ele`) is an optimization where it is known to
+  behave exactly as the 3D rule would, never a model of its own.
 - **A mark stands at a cell's center** (`cell_center`), at the height of the
   surface drawn there, never at a center derived from its data's bounds. A
   mark for many things stands at the z16 cell their centroid falls in,
