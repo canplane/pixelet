@@ -13,12 +13,13 @@ use pxl_render::gpu::pass::badges::BUBBLE_FONT;
 use pxl_render::gpu::surface::DPR_MAX;
 
 use crate::global::Global;
-use crate::host::{measure_text, wall_now};
+use crate::host::{measure_text, now};
 use crate::layer::billboard::canvas::text::wrap_text;
 use crate::layer::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 
-// ts (wall clock at append) lets the bubble derive its own remaining show
-// time from wall-clock, not from when it happened to start showing — without
+// ts (the host's clock at append) lets the bubble derive its own remaining
+// show time from when the line was said, not from when it happened to start
+// showing — without
 // it, a character swap resets its state and it has no way to tell an old,
 // already-dismissed line apart from a brand new one.
 #[derive(Clone, Debug, PartialEq)]
@@ -32,10 +33,7 @@ static CHAT_LINE: Global<Option<ChatLine>> = Global::new();
 
 /// A line the shell's chat appended.
 pub fn append_chat_line(text: &str) {
-    *CHAT_LINE.get(|| None) = Some(ChatLine {
-        text: text.to_string(),
-        ts: wall_now(),
-    });
+    *CHAT_LINE.get(|| None) = Some(ChatLine { text: text.to_string(), ts: now() });
 }
 
 // A new chat line shows for this long, then the bubble disappears — chat itself
@@ -108,10 +106,12 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
         written: None,
     });
 
-    // Driven by the line's wall-clock ts, so this stays correct across a
-    // character swap, which would otherwise make an old, already-dismissed line
-    // look brand new again.
-    let visible = CHAT_LINE.get(|| None).as_ref().filter(|l| l.ts + SHOW_DURATION_MS - wall_now() > 0.0).map(|l| l.text.clone());
+    // Driven by the line's own time, so this stays correct across a character
+    // swap, which would otherwise make an old, already-dismissed line look
+    // brand new again. The host's clock rather than the wall clock: the wall
+    // clock comes with a frame, and a line said after a still spell would be
+    // stamped with the last frame's time and read as long gone.
+    let visible = CHAT_LINE.get(|| None).as_ref().filter(|l| l.ts + SHOW_DURATION_MS - now() > 0.0).map(|l| l.text.clone());
     let want = actor.zip(visible);
 
     if want != b.shown {
