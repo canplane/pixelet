@@ -284,7 +284,7 @@ pub mod FRAME {
     pub const slot_waits: u32 = 108;
     pub const slot_wait_levels: u32 = 109;
     pub const slot_holder_levels: u32 = 110;
-    pub const slot_cut: u32 = 111;
+    pub const slot_coarser: u32 = 111;
     pub const cap_commit_left: u32 = 112;
     pub const cap_mount_left: u32 = 113;
     pub const cap_mount_full: u32 = 114;
@@ -360,7 +360,7 @@ pub mod FRAME {
         "slot_waits",
         "slot_wait_levels",
         "slot_holder_levels",
-        "slot_cut",
+        "slot_coarser",
         "cap_commit_left",
         "cap_mount_left",
         "cap_mount_full",
@@ -394,7 +394,7 @@ pub mod FRAME_GROUPS {
     ];
     pub const mounts: &[&str] = &["mounts_added", "mounts_removed", "mounts_layouts"];
     pub const stale: &[&str] = &["stale_chunks", "stale_drawn", "stale_levels", "stale_hidden", "stale_uncovered", "stale_unready", "stale_on_waiter"];
-    pub const slot: &[&str] = &["slot_waits", "slot_wait_levels", "slot_holder_levels", "slot_cut"];
+    pub const slot: &[&str] = &["slot_waits", "slot_wait_levels", "slot_holder_levels", "slot_coarser"];
     pub const cap: &[&str] = &["cap_commit_left", "cap_mount_left", "cap_mount_full", "cap_record_refused"];
     pub const work: &[&str] = &["work_scans", "work_bakes", "work_fine_peak", "work_coarse_peak"];
     pub const q: &[&str] = &["q_terrain", "q_poi"];

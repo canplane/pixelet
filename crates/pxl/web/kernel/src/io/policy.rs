@@ -18,17 +18,21 @@
 //!    catalog's models and images the decor is drawn with, then the places'
 //!    pages (the user's order, 2026-09-26). Placed objects are all resident
 //!    and are built with the ground's chunks, so they are never fetched.
-//! 3. Within a layer, one order for every layer, out from the view's center
-//!    (world/pyramid/domain.rs `Domain::order_of`), the point the camera
-//!    turns about and the character stands on:
-//!    - the page the ground nearest the center is drawn from, so where the
-//!      character stands is right before anything else is;
+//! 3. Within a layer, one order for every layer, out from the eye
+//!    (world/pyramid/domain.rs `Order`): what the view sees before what it
+//!    does not, and the nearer the eye first.
+//!    - the page the first ground of that order is drawn from, so what is in
+//!      front of the eye is right before anything else is;
 //!    - the pyramid's top pages, a handful, which every chunk under them can
 //!      be drawn from until its own comes, so no ground is left open for
 //!      long;
-//!    - every page the view draws ground from, nearest the center first, so
-//!      the view fills outward as a sphere grows;
+//!    - every page the view draws ground from, in the order, so the view
+//!      fills outward as a sphere about the eye grows;
 //!    - the pages held only for ground drawn finer to fall back on.
+//!
+//!    In each of those, a page whose ground the view sees before one whose
+//!    ground it does not: the ground under and behind a tilted eye is the
+//!    nearest there is, and none of it is on the screen.
 //!
 //!    Ranking a hole before ground drawn coarsely filled the view coarsest
 //!    first instead: from a cold start the eye's ancestors took the first six
@@ -45,6 +49,7 @@
 use crate::io::demand::Category;
 use crate::io::sched::Rank;
 use crate::sched::ledger::record::Outcome;
+use crate::world::pyramid::domain::Order;
 
 /// The shared open-ocean tile: every page waiting on it is a page showing
 /// nothing, and one arrival answers all of them.
@@ -55,8 +60,8 @@ pub fn ocean() -> Rank {
 /// Where a page stands in its layer's order (point 3 above).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shell {
-    /// The page the ground nearest the view's center is drawn from.
-    Center,
+    /// The page the first ground of the view's order is drawn from.
+    First,
     /// A page of the pyramid's top.
     Top,
     /// A page the view draws ground from.
@@ -65,17 +70,21 @@ pub enum Shell {
     Fallback,
 }
 
-const SHELLS: u8 = 4;
+/// Four shells, each with what the view sees ahead of what it does not.
+const SHELLS: u8 = 2 * 4;
 /// Where each layer's shells begin (point 2 above).
 const TERRAIN: u8 = 1;
 const ASSET: u8 = TERRAIN + SHELLS;
 const PLACES: u8 = ASSET + 1;
 
-/// A page of a layer the pyramid holds, where it stands in the layer's order,
-/// and its distance from the view's center.
-pub fn page(layer: Category, shell: Shell, distance: f64) -> Rank {
+/// A page of a layer the pyramid holds, its shell in the layer's order, and
+/// its place in the view's.
+pub fn page(layer: Category, shell: Shell, order: Order) -> Rank {
     let base = if layer == Category::terrain { TERRAIN } else { PLACES };
-    Rank { class: base + shell as u8, distance }
+    Rank {
+        class: base + 2 * shell as u8 + !order.seen as u8,
+        distance: order.near,
+    }
 }
 
 /// Where everything with no argued relation sits: one class after the view,

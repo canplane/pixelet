@@ -38,6 +38,12 @@ use xpute_core::status::errno::Errno;
 const COLOR: V3 = [0.0, 0.0, 0.0];
 const DASH: f64 = 0.3;
 const GAP: f64 = 0.2;
+/// The most dashes a line is drawn in, said aloud: past this its dashes
+/// lengthen rather than multiply. A line between the map center and the
+/// floating origin reaches as far as the coarsest level the origin is floored
+/// to, hundreds of thousands of units at a zoom out, and at a fixed dash that
+/// was millions of them a frame — a block the heap refused, and a trap.
+const DASHES: f64 = 256.0;
 /// Half the cross a point is drawn as, in units.
 const POINT_HALF: f64 = 0.15;
 const RING_RADIUS: f64 = 4.0;
@@ -79,14 +85,16 @@ impl Sketch {
             return;
         }
         let d = [(to[0] - from[0]) / len, (to[1] - from[1]) / len, (to[2] - from[2]) / len];
+        let period = (DASH + GAP).max(len / DASHES);
+        let dash = period * DASH / (DASH + GAP);
         let mut s = 0.0;
         while s < len {
-            let e = len.min(s + DASH);
+            let e = len.min(s + dash);
             self.line(
                 [from[0] + d[0] * s, from[1] + d[1] * s, from[2] + d[2] * s],
                 [from[0] + d[0] * e, from[1] + d[1] * e, from[2] + d[2] * e],
             );
-            s += DASH + GAP;
+            s += period;
         }
     }
 

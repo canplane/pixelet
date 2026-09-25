@@ -44,7 +44,7 @@ use crate::kernel::kernel;
 use crate::layer::terrain::elevation::get_ground_type;
 use crate::shell::setting::store::hidden_ground;
 use crate::world::change::{bump_world, wake_at, world_changes, world_edge, OBJECT_COLUMN};
-use crate::world::chunk::source::{chunk_sources_changed, column_written};
+use crate::world::chunk::source::{band_written, chunk_sources_changed};
 use crate::world::frame::coord::local_world_to_canonical;
 use xpute_core::status::bug::OrBug;
 
@@ -281,12 +281,12 @@ pub fn objects_revision() -> u32 {
 }
 
 /// Applies the writes to the store, which makes each changed column's
-/// entries again inside the call, and announces every column changed.
+/// entries again inside the call, and announces every band changed.
 fn apply(writes: impl IntoIterator<Item = Write>) {
-    for col_idx in kernel().objects.write(writes) {
+    for (col_idx, band_idx) in kernel().objects.write(writes) {
         chunk_sources_changed();
         bump_world(OBJECT_COLUMN, col_idx);
-        column_written(col_idx);
+        band_written(col_idx, band_idx);
     }
 }
 
@@ -982,6 +982,36 @@ impl Store {
         self.reaches.get(&(u32::try_from(side.above(L2)).ok()?, at)).copied()
     }
 
+    /// Whether anything stands under a node between heights `z0` and `z1`, in
+    /// units: some band of some column under it lies there. A column's reach
+    /// is one span from its lowest object to its highest, and the air between
+    /// two things stacked apart is in it; the bands are only where something
+    /// is, and a band is a z16 chunk's height (world/pyramid/chunk.rs), so a
+    /// chunk between two floating things holds nothing. Down the reaches, a
+    /// subtree whose span misses the heights is not entered.
+    pub fn holds(&self, (side, at): (Scale, [i64; 2]), (z0, z1): (f64, f64)) -> bool {
+        let Ok(level) = u32::try_from(side.above(L2)) else { return false };
+        let band = L2.side();
+        let (b0, b1) = ((z0 / band).floor() as BandZ, (z1 / band).ceil() as BandZ - 1);
+        let mut down = vec![(level, at)];
+        while let Some((level, at)) = down.pop() {
+            let Some(&(lo, hi)) = self.reaches.get(&(level, at)) else { continue };
+            if hi < z0 || lo >= z1 {
+                continue;
+            }
+            match level {
+                0 => {
+                    let column = self.columns.get(&ivec::gather(at[0], at[1], 0));
+                    if column.is_some_and(|c| c.bands.range(b0..=b1).next().is_some()) {
+                        return true;
+                    }
+                }
+                _ => down.extend((0..4).map(|slot| (level - 1, child_of(at, slot)))),
+            }
+        }
+        false
+    }
+
     /// The columns holding objects under a node, a column's or coarser,
     /// found down the reaches: a subtree nothing stands in is not entered, so
     /// the cost is what is under the node and not what the store holds.
@@ -1030,15 +1060,18 @@ impl Store {
 
     /// Applies every write, then makes again the entries of each column one
     /// changed, once: what a reader sees is the trees, whatever it reads.
-    /// The columns changed, for the caller to announce.
-    pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> BTreeSet<IVec> {
+    /// The bands changed, each with its column, for the caller to announce:
+    /// a band is a z16 chunk's height, so a column and a band are the chunk
+    /// a write is in (world/pyramid/chunk.rs).
+    pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> BTreeSet<(IVec, BandZ)> {
         let mut changed = BTreeSet::new();
         for w in writes {
             if self.put(w) {
-                changed.insert(w.col_idx);
+                changed.insert((w.col_idx, w.band_idx));
             }
         }
-        for &col_idx in &changed {
+        let columns: BTreeSet<IVec> = changed.iter().map(|&(col_idx, _)| col_idx).collect();
+        for &col_idx in &columns {
             if let Some(column) = self.columns.get_mut(&col_idx) {
                 column.derive_entries();
             }

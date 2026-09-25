@@ -44,7 +44,9 @@ pub struct Hit {
 }
 
 struct Entry {
-    /// The z16 chunk it is the composite of.
+    /// The z16 column it is the composite of, named by its chunk at no
+    /// height: a composite is the whole column's, whatever chunks over it
+    /// the view draws, so a ray that climbs through them reads it once.
     chunk: Chunk,
     /// What it was made valid for (the builder's compose_leaf).
     valid: u32,

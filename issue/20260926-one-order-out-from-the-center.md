@@ -4,6 +4,12 @@
 piece of work a view asks for is ordered and dropped: pages fetched, chunks
 mounted and built, decor, places.
 
+**Superseded in part** the same day by
+[the view is cubes about the eye](./20260926-the-view-is-cubes-about-the-eye.md):
+the order is taken from the eye and not from the center the camera turns
+about, and a node is a cube of its level, not a block one band high. The
+rest stands, and what it lists as missing is built there but for occlusion.
+
 ## The rule
 
 There is one key and one demand. The key is how near the view's center a

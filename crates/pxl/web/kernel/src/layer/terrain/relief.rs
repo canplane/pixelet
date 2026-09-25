@@ -1,71 +1,83 @@
 // pxl-kernel/layer/terrain/relief.rs
 
-//! How high the ground a page draws stands: the lowest and highest point of
-//! the surface its own elevation samples make, for every resident page. A
-//! view measures how near it is to ground from these (world/pyramid/domain.rs
-//! `Domain`), in three dimensions, so a hill is as near as it stands.
+//! How high the ground under a piece of the view stands: the lowest and
+//! highest point of the surface drawn over its footprint. A view measures how
+//! near it is to ground from this (world/pyramid/domain.rs `Domain`), in three
+//! dimensions, so a hill is as near as it stands and the flat ground beside
+//! it is as far as it lies.
 //!
-//! A level's chunks are drawn from that level's own samples, so for a
-//! resident page the range is the drawn geometry's and exact. A page not yet
-//! resident takes its nearest resident ancestor's, which is an estimate and
-//! not a bound: a parent's samples average its children's, and an average
-//! does not reach its extremes. The estimate is replaced the moment the page
-//! arrives.
+//! Terrain is stored as a heightfield, a 2D page of elevation samples; this
+//! is where a node of the view, which is 3D, is pointed at it. The footprint
+//! is read from the page the ground is drawn from — its own, or the nearest
+//! resident one over it, upsampled (world/pyramid.rs `drawn_from`) — so the
+//! height a node is measured at is the height of the surface on the screen.
+//!
+//! Only the samples under the footprint are read, never a page's whole
+//! range. A mountain in one corner of a page then makes its own ground near
+//! and no other. And ground read from a page over it comes out no wider than
+//! it will once its own page lands, but for the samples at its rim: a
+//! parent's sample is the mean of an aligned 2 × 2 of its children's
+//! (pxl-spec bake/fold.rs `fold_ele`), and a mean lies inside what it
+//! averages. An arrival widens a footprint's range rather than narrowing it,
+//! so a view refines as pages land and does not coarsen back.
 
-use std::collections::HashMap;
-
-use pxl_spec::bake::constant::U_PER_CELL;
+use pxl_spec::bake::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN, U_PER_CELL};
 use pxl_spec::bake::format::Terrain;
-use pxl_spec::space::pyramid::{LevelPage, TOP_LEVEL};
+use pxl_spec::space::hierarchy::Scale;
+use pxl_spec::space::pyramid::{LevelPage, GROUND, PAGE_CELLS};
 
-use crate::global::Global;
+use crate::world::pyramid::Layer as _;
 
-/// Every resident page's range. It changes with the resident set, so the
-/// terrain pyramid's revision is its revision too.
-#[derive(Default)]
-struct Relief {
-    pages: HashMap<LevelPage, (f64, f64)>,
-}
+/// Cells a sample stands for along an axis.
+const CELL_STEP: f64 = PAGE_CELLS as f64 / PAGE_ELE_SPAN as f64;
 
-static RELIEF: Global<Relief> = Global::new();
-fn relief() -> &'static mut Relief {
-    RELIEF.get(Relief::default)
-}
-
-/// The surface a page's samples make, from their range: a cell's height is
-/// their Catmull-Rom interpolation (pxl-render mesh/paint/terrain/
-/// elevation.rs), whose weights are negative by at most an eighth along an
-/// axis. The positive part of the two axes' products then sums to at most
-/// (9/8)² + (1/8)² = 41/32, so an interpolated height lies within 9/32 of
-/// the samples' span past either end of it.
-fn surface_of(page: &Terrain) -> (f64, f64) {
-    let (lo, hi) = page.ele.iter().fold((i16::MAX, i16::MIN), |(lo, hi), &e| (lo.min(e), hi.max(e)));
-    let (lo, hi) = (lo as f64 * U_PER_CELL, hi as f64 * U_PER_CELL);
-    let past = (hi - lo) * 9.0 / 32.0;
-    (lo - past, hi + past)
-}
-
-/// A page came or went (page.rs `Layer::changed`).
-pub fn page_changed(p: LevelPage, page: Option<&Terrain>) {
-    let r = relief();
-    match page {
-        Some(t) => r.pages.insert(p, surface_of(t)),
-        None => r.pages.remove(&p),
-    };
-}
-
-/// The heights the ground `p` draws spans, in units: its own where it is
-/// resident, its nearest resident ancestor's where it is not, and none where
+/// The heights, in units, the ground over a node of `page`'s level spans:
+/// `node`'s footprint, read from the page it is drawn from. None where
 /// nothing over it is held.
-pub fn range_over(p: LevelPage) -> Option<(f64, f64)> {
-    let mut at = p;
-    loop {
-        if let Some(&r) = relief().pages.get(&at) {
-            return Some(r);
+///
+/// A cell's height is the Catmull-Rom interpolation of the 4 × 4 samples
+/// about it (pxl-render mesh/paint/terrain/elevation.rs). Its weights are
+/// negative by at most an eighth along an axis; the positive part of the two
+/// axes' products then sums to at most (9/8)² + (1/8)² = 41/32, so an
+/// interpolated height lies within 9/32 of those sixteen samples' span past
+/// either end of it. The bound is each window's, and taken window by window:
+/// over the whole footprint's span it reaches past ground that does not move
+/// by as much as a quarter of the tallest relief anywhere in the footprint,
+/// water at sea level beside a hill read that far under the sea, and a chunk
+/// holding only what the bound reached into is made one all the same
+/// (world/pyramid/domain.rs `Domain::occupied`).
+pub fn ground_under(page: LevelPage, (side, at): (Scale, [i64; 2])) -> Option<(f64, f64)> {
+    let pyramid = Terrain::pyramid();
+    let src = pyramid.drawn_from(page)?;
+    let ele = &pyramid.get(src)?.ele;
+    let corner = GROUND.cell_of(page.level, &side.base_of([at[0], at[1], 0]));
+    // The footprint in the source page's cells: its own cells, n of them to
+    // one of the source's.
+    let n = GROUND.scale(page.level).count_in(GROUND.scale(src.level)) as f64;
+    let [ox, oy] = corner.in_page_above(src.level - page.level);
+    let cells = GROUND.scale(page.level).count_in(side) as f64 / n;
+    let span = ELE_PADDED_SPAN as i64;
+    let samples = |t0: f64| {
+        let s = |t: f64| (t / CELL_STEP + ELE_PAD as f64 - 0.5).floor() as i64;
+        ((s(t0) - 1).clamp(0, span - 1), (s(t0 + cells) + 2).clamp(0, span - 1))
+    };
+    let ((x0, x1), (y0, y1)) = (samples(ox as f64 / n), samples(oy as f64 / n));
+    // Every 4 × 4 window a cell of the footprint is interpolated from.
+    let window = |a0: i64, a1: i64, k: i64| (k.max(a0), (k + 3).min(a1));
+    let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+    for wy in y0..=(y1 - 3).max(y0) {
+        for wx in x0..=(x1 - 3).max(x0) {
+            let ((ax, bx), (ay, by)) = (window(x0, x1, wx), window(y0, y1, wy));
+            let (mut wlo, mut whi) = (i16::MAX, i16::MIN);
+            for y in ay..=by {
+                for &e in &ele[(y * span + ax) as usize..=(y * span + bx) as usize] {
+                    (wlo, whi) = (wlo.min(e), whi.max(e));
+                }
+            }
+            let past = (whi - wlo) as f64 * 9.0 / 32.0;
+            lo = lo.min(wlo as f64 - past);
+            hi = hi.max(whi as f64 + past);
         }
-        if at.level >= TOP_LEVEL {
-            return None;
-        }
-        at = at.parent();
     }
+    Some((lo * U_PER_CELL, hi * U_PER_CELL))
 }

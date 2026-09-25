@@ -53,16 +53,16 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   answers nothing past `--top-level` (3 by default; z11 and coarser are 503
   for terrain and POI alike), so a view that draws nothing finer than
   level 4 has no page it can get.
-- **One order out from the center, finished.** Every scheduler takes work
-  nearest the view's center first and drops what leaves the demand
-  ([20260926-one-order-out-from-the-center.md](./20260926-one-order-out-from-the-center.md)).
-  Left: fetches the view no longer wants stopped in the turn they leave it,
-  not one per round trip; a drawn level held until its replacement is ready,
-  so steep ground does not flip its splits as pages land and starve; and
-  occluded chunks left unsplit. Under all three, the view's nodes are still
-  2.5D columns: a chunk is a footprint and one height range, the budget
-  counts a disc, and objects ride the ground's chunk. 3D nodes — a level's
-  blocks in three axes, a band high — are what the rule was derived for.
+- **One order out from the eye, the rest.** Every scheduler takes work in
+  one order out from the eye, a chunk is a cube of its level holding
+  something, and a placed object lives in the cube its band is in
+  ([20260926-the-view-is-cubes-about-the-eye.md](./20260926-the-view-is-cubes-about-the-eye.md)).
+  Left: occluded chunks are split, fetched and built like seen ones; a cut
+  ceiling flashes on a cold load while a coarser page stands in; and a
+  column crossing a cube's floor or ceiling is two chunks — 1.5 a column
+  near Gangnam and 1.7 on Bukhansan, 2026-09-26 — each scanning the whole
+  column's runs again, where the runs could be the column's once and each
+  chunk a cut of them.
 - **A seam while a chunk is drawn from a page over it.** Since
   2026-09-26 a chunk whose page has not come is drawn in its place from the
   nearest resident page over it, upsampled (world/pyramid.rs `drawn_from`),

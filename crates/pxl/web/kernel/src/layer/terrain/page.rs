@@ -33,7 +33,7 @@ use crate::layer::terrain::ground_snap::reground_map_center;
 use crate::mem::fixed::{at, Range};
 use crate::shell::map_store::{map_store, MapStatus};
 use crate::world::pyramid::domain::eye;
-use crate::world::pyramid::{Cover, Domain, Layer, Pyramid, ABSENT};
+use crate::world::pyramid::{Layer, Pyramid, ABSENT};
 
 /// Object key of the single shared open-ocean tile in the static bucket.
 pub const OCEAN_KEY: &str = "_ocean";
@@ -90,17 +90,11 @@ impl Layer for Terrain {
         }
     }
 
-    /// What the mesh can draw of the cover (present.rs).
-    fn present(cover: Cover, d: &Domain, pyramid: &Pyramid<Terrain>) -> Cover {
-        crate::layer::terrain::present::mesh(cover, d, |c| pyramid.drawn_from(c.page()).is_some())
-    }
-
     /// A leaf is what a map center that could not be grounded before may be
     /// grounded on now. The chunks are told nothing: which a view draws is
     /// the cover's, made again from the pyramid's revision, and a chunk
     /// whose page has gone leaves it.
     fn changed(p: LevelPage, present: bool) {
-        crate::layer::terrain::relief::page_changed(p, Terrain::pyramid().get(p));
         // A chunk is read from its own page or the nearest one over it, so a
         // page coming or going changes what some are read from.
         crate::world::chunk::source::chunk_sources_changed();
