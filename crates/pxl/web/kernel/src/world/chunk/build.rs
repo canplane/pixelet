@@ -17,7 +17,7 @@ use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Heights, Step, FIN
 use pxl_render::mesh::paint::level::write_level_runs;
 use pxl_render::mesh::paint::object::adapter::{Claims, Entries, Painted, Painter};
 use pxl_render::mesh::paint::object::fold::fold_columns;
-use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView};
+use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
 use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, BAND, CELL, OBJECT_FINEST};
@@ -248,7 +248,6 @@ enum Progress {
 /// Everything a build reads and writes that is not its own.
 pub struct World<'a> {
     pub volumes: &'a mut Volumes,
-    pub materials: &'a Materials,
     pub store: &'a Store,
     pub painter: &'a mut Painter,
 }
@@ -658,7 +657,7 @@ impl Builder {
 
     fn paint_terrain_at(&mut self, world: &mut World, tx0: u32, ty0: u32, show: bool, page: &Terrain) -> Option<u32> {
         let view = Self::page_view(page);
-        self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
+        self.sample.read(&view, tx0, ty0, hidden_ground(show));
         let volume = world.volumes.open();
         if !self.sample.paint(world.volumes, volume) {
             world.volumes.release(volume);
@@ -748,7 +747,7 @@ impl Builder {
         let c = &self.chunks[&id];
         let ((tx0, ty0), show) = (c.at.in_page(), c.show_structures);
         let view = Self::page_view(page);
-        self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
+        self.sample.read(&view, tx0, ty0, hidden_ground(show));
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
         let floor = self.sample.floor;
         // Every column of the set, the chunk's own and the apron's: the
@@ -784,7 +783,7 @@ impl Builder {
         let c = &self.chunks[&id];
         let ((tx0, ty0), show, level, base) = (c.at.in_page(), c.show_structures, c.level(), c.base());
         let view = Self::page_view(page);
-        self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
+        self.sample.read(&view, tx0, ty0, hidden_ground(show));
         let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         let mut columns = Vec::new();

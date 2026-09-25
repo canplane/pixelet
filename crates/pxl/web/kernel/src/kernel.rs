@@ -1,13 +1,11 @@
 // pxl-kernel/kernel.rs
 //
-// The kernel's one state: the volumes, the terrain tables, the object store
-// and its painter, the scheduler, the change log and the raycast — as one
+// The kernel's one state: the volumes, the object store and its painter, the scheduler, the change log and the raycast — as one
 // value made on first use. The kernel's modules read and write it
 // directly, and hand the view (pxl-render) what it draws; pxl-wasm keeps only
 // the rings and hands commands to it.
 
 use pxl_render::mesh::paint::object::adapter::Painter;
-use pxl_render::mesh::paint::terrain::adapter::Materials;
 use pxl_render::mesh::volume::Volumes;
 use xpute_runtime::ipc::change::{ChangeLog, ChangeLogOptions};
 
@@ -22,8 +20,6 @@ pub const JOURNAL_CAPACITY: u32 = 4096;
 pub struct Kernel {
     /// The volumes over the heap, made at boot.
     pub volumes: Option<Volumes>,
-    /// The terrain tables.
-    pub terrain: Materials,
     /// The object store and its painter.
     pub objects: Store,
     pub painter: Painter,
@@ -39,7 +35,6 @@ impl Kernel {
     fn new() -> Kernel {
         Kernel {
             volumes: None,
-            terrain: Materials::default(),
             objects: Store::new(),
             painter: Painter::new(),
             sched: Scheduler::new(),
@@ -61,13 +56,12 @@ pub fn kernel() -> &'static mut Kernel {
 }
 
 impl Kernel {
-    /// The world over the kernel's volumes, materials, objects and painter,
+    /// The world over the kernel's volumes, objects and painter,
     /// with the scheduler and the raycast beside it: each a field of its own,
     /// so the three are borrowed at once. None before the volumes are opened.
     pub fn world(&mut self) -> Option<(crate::world::chunk::build::World<'_>, &mut Scheduler, &mut Raycast)> {
         let Kernel {
             volumes,
-            terrain,
             objects,
             painter,
             sched,
@@ -76,7 +70,6 @@ impl Kernel {
         } = self;
         let world = crate::world::chunk::build::World {
             volumes: volumes.as_mut()?,
-            materials: terrain,
             store: objects,
             painter,
         };

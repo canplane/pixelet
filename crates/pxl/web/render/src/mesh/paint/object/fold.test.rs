@@ -1,18 +1,20 @@
 // pxl-render/mesh/paint/object/fold.test.rs
 
 use super::*;
-use crate::mesh::paint::object::adapter::Kind;
 use pxl_spec::bake::constant::CELL_STEPS;
+use pxl_spec::cell::cube_types::Block;
+use pxl_spec::cell::object::{placeable_cube_num_id, PlaceableCube};
 use pxl_spec::space::pyramid::GROUND;
 
-const RED: u32 = 20;
 const AIR: u32 = pxl_spec::cell::cube_types::common::air as u32;
 
+/// A solid cube's state, as the catalog numbers it.
+fn red() -> u32 {
+    placeable_cube_num_id(PlaceableCube::Block(Block::red))
+}
+
 fn painter() -> Painter {
-    let mut p = Painter::new();
-    p.teach(RED, Kind::Solid, 0x01ff0000, 0);
-    p.teach(AIR, Kind::Air, 0, 0);
-    p
+    Painter::new()
 }
 
 /// A cell-sized entry's packed position at cell (x, y, z) of its band.
@@ -44,18 +46,18 @@ fn fold(cells: &[(u32, u32, u32, u32)], level: u32) -> HashMap<[i64; 3], u32> {
 
 #[test]
 fn a_cell_folds_to_itself_at_level_0() {
-    let out = fold(&[(3, 4, 5, RED)], 0);
+    let out = fold(&[(3, 4, 5, red())], 0);
     let [x, y] = origin(0);
-    assert_eq!(out.get(&[x + 3, y + 4, 5]), Some(&RED));
+    assert_eq!(out.get(&[x + 3, y + 4, 5]), Some(&red()));
     assert_eq!(out.len(), 1);
 }
 
 #[test]
 fn a_lone_cube_goes_at_the_first_fold_and_a_slab_of_half_stays() {
-    assert!(fold(&[(0, 0, 0, RED)], 1).is_empty());
-    let slab = [(0, 0, 0, RED), (1, 0, 0, RED), (0, 1, 0, RED), (1, 1, 0, RED)];
+    assert!(fold(&[(0, 0, 0, red())], 1).is_empty());
+    let slab = [(0, 0, 0, red()), (1, 0, 0, red()), (0, 1, 0, red()), (1, 1, 0, red())];
     let [x, y] = origin(1);
-    assert_eq!(fold(&slab, 1).get(&[x, y, 0]), Some(&RED));
+    assert_eq!(fold(&slab, 1).get(&[x, y, 0]), Some(&red()));
 }
 
 #[test]
@@ -64,13 +66,13 @@ fn a_solid_block_keeps_folding_while_it_fills_its_parent() {
     for z in 0..4 {
         for y in 0..4 {
             for x in 0..4 {
-                cube.push((x, y, z, RED));
+                cube.push((x, y, z, red()));
             }
         }
     }
     let out = fold(&cube, 2);
     let [x, y] = origin(2);
-    assert_eq!(out.get(&[x, y, 0]), Some(&RED));
+    assert_eq!(out.get(&[x, y, 0]), Some(&red()));
     assert_eq!(out.len(), 1);
 }
 

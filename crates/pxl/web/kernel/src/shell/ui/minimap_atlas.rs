@@ -8,13 +8,12 @@
 //! Rebaked when a page of the level arrives or leaves and when the centre
 //! crosses a page, not on every pan tick — the pan is `minimap_pan_px`'s.
 
-use pxl_render::mesh::paint::palette::shader_meta::rgb255;
+use pxl_render::mesh::paint::terrain::adapter::MATERIALS;
 use pxl_spec::bake::constant::CELL;
 use pxl_spec::space::hierarchy::Scale;
 use pxl_spec::space::pyramid::GROUND;
 
 use pxl_spec::bake::format::GROUND_CH_KEYS;
-use pxl_spec::cell::{color, cube_types};
 use pxl_spec::space::indexer::{L3, L3_CENTER, L3_IDX, L3_RANGE};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
@@ -52,28 +51,6 @@ pub const MINIMAP_ATLAS_PX: u32 = ATLAS_PX;
 const MIN_MINIMAP_SCALE: f64 = 0.5;
 const MAX_MINIMAP_SCALE: f64 = 2.0;
 
-type Rgb = [u8; 3];
-
-/// Ground channel bytes are type IDs, not weights, so a cell's colour is the
-/// last non-void channel's in `GROUND_CH_KEYS`' order — the order the terrain
-/// paint resolves a cell by too, which is why the minimap and the 3D terrain
-/// agree about a cell without either knowing the other.
-struct Colors {
-    base: Rgb,
-    by_channel: [[Option<Rgb>; 256]; 4],
-}
-
-fn colors() -> Colors {
-    let base = color::ground(cube_types::base::CHANNEL, cube_types::base::TYPE).map_or([0; 3], |s| rgb255(s.rgb));
-    let mut by_channel = [[None; 256]; 4];
-    for (slot, ch) in GROUND_CH_KEYS.iter().enumerate() {
-        for (type_id, rgb) in by_channel[slot].iter_mut().enumerate() {
-            *rgb = color::ground(*ch, type_id as u8).map(|s| rgb255(s.rgb));
-        }
-    }
-    Colors { base, by_channel }
-}
-
 pub struct MinimapAtlas {
     /// ATLAS_PX² RGBA pixels, north up.
     pub pixels: Vec<u8>,
@@ -83,7 +60,6 @@ pub struct MinimapAtlas {
 }
 
 struct Atlas {
-    colors: Colors,
     image: Option<MinimapAtlas>,
     baked_for: Option<(u64, IVec)>,
 }
@@ -92,11 +68,7 @@ static ATLAS: Global<Atlas> = Global::new();
 
 /// The minimap's image as it stands, rebaked when its inputs moved.
 pub fn minimap_atlas() -> Option<&'static MinimapAtlas> {
-    let a = ATLAS.get(|| Atlas {
-        colors: colors(),
-        image: None,
-        baked_for: None,
-    });
+    let a = ATLAS.get(|| Atlas { image: None, baked_for: None });
     let map_center = map_store().map_center?;
     let origin = Pvf3 { i: L3_CENTER(map_center.i), f: 0 };
     let half = ATLAS_PX as i64 / 2;
@@ -124,12 +96,16 @@ pub fn minimap_atlas() -> Option<&'static MinimapAtlas> {
             let cy = oy + (half - 1 - py);
             for px in 0..ATLAS_PX as i64 {
                 let cell = cell_at(ox + (px - half), cy);
-                let mut color = a.colors.base;
+                // A cell's colour is the last non-void channel's in
+                // `GROUND_CH_KEYS`' order, from the tables the terrain paint
+                // resolves a cell by, so the minimap and the 3D terrain
+                // agree about a cell.
+                let mut color = MATERIALS.base_rgb;
                 if let Some(tile) = Terrain::pyramid().get(cell.page()) {
-                    for (slot, ch) in GROUND_CH_KEYS.iter().enumerate() {
-                        let v = tile.ground.channel(cell.index() as usize, *ch);
-                        if let Some(c) = (v != 0).then(|| a.colors.by_channel[slot][v as usize]).flatten() {
-                            color = c;
+                    for (ch, table) in GROUND_CH_KEYS.iter().zip(&MATERIALS.channels) {
+                        let v = tile.ground.channel(cell.index() as usize, *ch) as usize;
+                        if v != 0 && table.has_color[v] {
+                            color = table.rgb[v];
                         }
                     }
                 }

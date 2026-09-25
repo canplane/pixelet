@@ -8,9 +8,12 @@ use std::collections::BTreeSet;
 
 use pxl_spec::bake::constant::{band_cell_z, in_cell, unpack_pos, BandZ, CellZ, EntryAt, CELL, CELL_STEPS};
 use pxl_spec::cell::cube_types;
+use pxl_spec::cell::object::{decor_ids, decor_num_id, placeable_cube_num_id, placeable_cubes};
+
+use crate::mesh::paint::object::material::solid_material;
 use pxl_spec::space::pvf3::ivec::IVec;
 
-use crate::mesh::volume::{pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};
+use crate::mesh::volume::{pack_material, pack_sub_cell_fraction, Cell, Volumes, Voxel, NO_LAYER, SUB_CELL_NONE};
 
 const AIR: u32 = cube_types::common::air as u32;
 
@@ -39,7 +42,7 @@ impl Entries<'_> {
 /// What a state paints as: nothing (decor renders as instanced geometry,
 /// not a voxel), air, or a solid with a material.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Kind {
+enum Kind {
     Untaught = 0,
     Solid = 1,
     Air = 2,
@@ -82,19 +85,31 @@ impl Default for Painter {
 }
 
 impl Painter {
+    /// A painter of every state the catalog can put in a leaf: each
+    /// placeable cube as its material (material.rs), AIR, and the decor
+    /// kinds, which paint nothing.
     pub fn new() -> Painter {
-        Painter {
+        let mut p = Painter {
             kinds: Vec::new(),
             materials: Vec::new(),
             layers: Vec::new(),
             claimed: BTreeSet::new(),
+        };
+        for &cube in placeable_cubes.iter() {
+            let m = solid_material(cube);
+            p.set(placeable_cube_num_id(cube), Kind::Solid, pack_material(&m), m.layer_idx as u8);
         }
+        p.set(AIR, Kind::Air, 0, NO_LAYER as u8);
+        for &id in decor_ids.iter() {
+            p.set(decor_num_id(id), Kind::Decor, 0, NO_LAYER as u8);
+        }
+        p
     }
 
-    /// Teaches what `state` paints as. A state is what a leaf's palette
-    /// index resolves to, so a state past a leaf's width is a bug in the
-    /// catalogue and not taught, rather than sizing the tables to it.
-    pub fn teach(&mut self, state: u32, kind: Kind, material: u32, layer: u8) {
+    /// What `state` paints as. A state is what a leaf's palette index
+    /// resolves to, so a state past a leaf's width is a bug in the catalogue
+    /// and not set, rather than sizing the tables to it.
+    fn set(&mut self, state: u32, kind: Kind, material: u32, layer: u8) {
         if state >= u16::MAX as u32 {
             return;
         }

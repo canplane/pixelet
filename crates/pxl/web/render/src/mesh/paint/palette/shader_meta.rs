@@ -4,9 +4,9 @@
 //! numbered as the layers of the texture pack's arrays (layers builds the
 //! arrays in this order); the placed cubes' colours are numbered after them
 //! (tex_array.rs).
-//! What the kernel is taught for the terrain (terrain/teach) and the objects
-//! (object/teach) reads from here, so the kernel and the arrays cannot
-//! disagree about what a type_id means.
+//! The terrain's materials (terrain/adapter.rs `MATERIALS`) and a placed
+//! cube's (object/material.rs) are read from here, so the paint and the
+//! arrays cannot disagree about what a type_id means.
 
 use std::sync::LazyLock;
 

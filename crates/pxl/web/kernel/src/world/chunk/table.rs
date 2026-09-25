@@ -1021,7 +1021,7 @@ impl Scheduler {
             let view = source.map(|(_, _, page, _)| Builder::page_view(page));
             if let (Some((tx0, ty0, _, show)), Some(view)) = (source, view.as_ref()) {
                 if scatters {
-                    self.decor_sample.read(view, world.materials, tx0, ty0, hidden_ground(show));
+                    self.decor_sample.read(view, tx0, ty0, hidden_ground(show));
                 }
             }
             let placed: Vec<Placed> = cols
