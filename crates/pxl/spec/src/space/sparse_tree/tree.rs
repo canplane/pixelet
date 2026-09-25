@@ -1,6 +1,7 @@
 // pxl-spec/space/sparse_tree/tree.rs
 // sparse tree (2^d-ary sparse tree; quadtree/octree are special cases)
 
+use crate::space::hierarchy::Scale;
 use crate::space::pvf3::{pvf3, IVec, Ivec, PVecTraits, Pvf3};
 
 use super::mem as st_mem;
@@ -19,9 +20,9 @@ pub struct SparseTree<T: Copy + Default + PartialEq> {
 /// Semantics:
 /// - sparse-tree traversal consumes the integer lattice key only
 /// - PVF3 fractional residue is discarded by shifting down to the leaf scale
-fn to_key(coord: &Pvf3, min: i32) -> IVec {
+fn to_key(coord: &Pvf3, min: Scale) -> IVec {
     let mut reg = Pvf3::default();
-    pvf3::sh(&mut reg, coord, -min).i
+    pvf3::sh(&mut reg, coord, -min.shamt()).i
 }
 
 /// Allocate a sparse tree with the given layout and initial capacity.
@@ -67,9 +68,9 @@ where
 
 /// Write one value at the given PVF3 coordinate. `level` (the finest,
 /// `tree.layout.min`, for a leaf) claims a whole block at that coarser
-/// shift amount in one call instead of always writing a single finest-leaf
+/// scale in one call instead of always writing a single finest-leaf
 /// cell — see st_mem::set's own doc comment.
-pub fn write<T: Copy + Default + PartialEq>(tree: &mut SparseTree<T>, coord: &Pvf3, val: T, level: i32) {
+pub fn write<T: Copy + Default + PartialEq>(tree: &mut SparseTree<T>, coord: &Pvf3, val: T, level: Scale) {
     let key: IVec = to_key(coord, tree.layout.min);
     st_mem::set::<Ivec, T>(&mut tree.mem, &tree.layout, key, val, level, 0);
 }
@@ -93,9 +94,9 @@ pub fn compact<T: Copy + Default + PartialEq>(tree: &mut SparseTree<T>) -> &mut 
 
 /// Visit every maximal uniform leaf block — see st_mem::walk's own doc
 /// comment. `x`/`y`/`z` are in min-level lattice units (multiply by
-/// `2**tree.layout.min` for a real-unit corner); `level` is that block's
-/// own shift amount (`2**level` is its real-unit size).
-pub fn walk<T: Copy + Default + PartialEq>(tree: &SparseTree<T>, visit: &mut dyn FnMut(i32, i32, i32, i32, T)) {
+/// `tree.layout.min.side()` for a real-unit corner); `level` is that block's
+/// own scale.
+pub fn walk<T: Copy + Default + PartialEq>(tree: &SparseTree<T>, visit: &mut dyn FnMut(i32, i32, i32, Scale, T)) {
     st_mem::walk(&tree.mem, &tree.layout, visit, 0);
 }
 

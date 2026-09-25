@@ -520,7 +520,7 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
             Ok(Some(0))
         }
         Command::INPUT_POINTER => {
-            use pxl_spec::cell::object::placeable_cube_of;
+            use pxl_spec::cell::object::placeable_cube;
             use pxl_spec::cell::DecorId;
             let p = abi::InputPointer::read(packet(pkt)?)?;
             let mut holding = Holding {
@@ -530,7 +530,7 @@ fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>,
             };
             match p.tool {
                 abi::ActiveTool::Object => {
-                    if let Some(cube) = placeable_cube_of(p.value) {
+                    if let Some(cube) = placeable_cube(p.channel, p.value) {
                         holding.object_cube = cube;
                     }
                 }

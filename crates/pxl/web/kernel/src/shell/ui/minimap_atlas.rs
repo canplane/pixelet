@@ -12,7 +12,7 @@ use pxl_render::mesh::paint::palette::shader_meta::rgb255;
 use pxl_spec::space::pyramid::PAGE_CELLS;
 
 use pxl_spec::bake::format::GROUND_CH_KEYS;
-use pxl_spec::cell::{cube_colors, cube_types};
+use pxl_spec::cell::{color, cube_types};
 use pxl_spec::space::indexer::{L3_CENTER, L3_IDX, L3_RANGE};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
@@ -63,18 +63,11 @@ struct Colors {
 }
 
 fn colors() -> Colors {
-    let base = cube_colors
-        .get("land")
-        .and_then(|c| c.get(&(cube_types::land::bare as u32)).copied().flatten())
-        .map_or([0; 3], |s| rgb255(s.rgb));
+    let base = color::ground(cube_types::base::CHANNEL, cube_types::base::TYPE).map_or([0; 3], |s| rgb255(s.rgb));
     let mut by_channel = [[None; 256]; 4];
     for (slot, ch) in GROUND_CH_KEYS.iter().enumerate() {
-        if let Some(table) = cube_colors.get(ch.as_str()) {
-            for (&type_id, swatch) in table {
-                if let (Some(swatch), true) = (swatch, type_id < 256) {
-                    by_channel[slot][type_id as usize] = Some(rgb255(swatch.rgb));
-                }
-            }
+        for (type_id, rgb) in by_channel[slot].iter_mut().enumerate() {
+            *rgb = color::ground(*ch, type_id as u8).map(|s| rgb255(s.rgb));
         }
     }
     Colors { base, by_channel }

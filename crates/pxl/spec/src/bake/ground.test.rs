@@ -3,6 +3,7 @@
 use xpute_core::golden::Golden;
 
 use super::*;
+use crate::cell::cube::ground_pack;
 
 const GOLDEN: &str = include_str!("../../golden/bake/ground.tsv");
 
@@ -25,7 +26,11 @@ fn shown_ground_is_what_the_record_holds() {
         };
         let hidden = if show { 0 } else { channel_bit(GroundChannelKey::STRUCTURE) };
         let s = shown_ground(read, hidden);
-        assert_eq!((s.channel.as_str(), s.type_id), (v.s(&format!("{k}.channel")), v.u32(&format!("{k}.type_id"))), "{k}");
+        assert_eq!(
+            (ground_pack::CHANNELS[s.channel as usize], s.type_id),
+            (v.s(&format!("{k}.channel")), v.u32(&format!("{k}.type_id"))),
+            "{k}"
+        );
     });
 }
 

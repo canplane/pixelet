@@ -10,6 +10,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
+- **A view's level from the eye, in 3D, by one rule.** A node splits while
+  its nearest distance from the camera is under `r_L = (P / τ) · 2^(s + L)`,
+  for every layer and every level including an object's sub-cell ones, so a
+  cell's pixels and a view's node count are held between constants whatever
+  the tilt or position; the window's rings around the map centre go
+  ([20260925-what-a-view-costs-is-the-eye-s.md](./20260925-what-a-view-costs-is-the-eye-s.md)).
 - **The move to a Rust core in WASM, drawing through WebGPU.** Scheduled
   2026-09-13 ([20260912-why-the-destination-is-wasm.md](./20260912-why-the-destination-is-wasm.md))
   and through by 2026-09-15: the kernel (`crates/pxl/kernel`, built by

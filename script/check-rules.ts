@@ -11,9 +11,10 @@
 //   deleted leaves its citations behind; eleven still named the terrain
 //   level module weeks after the pyramid window replaced it.
 // - The lattice's arithmetic is the space model's. A level's cells, chunks
-//   and pages are 2^level of the leaf's, shifted by the hierarchy's constants
-//   in `pxl-spec space/`; the same shift written in a layer is a second owner
-//   of the lattice, and every one found had drifted or duplicated a constant.
+//   and pages are 2^level of the leaf's, and every size is a `Scale` stepped
+//   and counted in `pxl-spec space/`; a shift by a tier or by a scale's own
+//   exponent written in a layer is a second owner of the lattice, and every
+//   one found had drifted or duplicated a constant.
 //
 // `issue/` is exempt from the second: a decision record names the files of
 // its day.
@@ -91,6 +92,7 @@ function exists(path: string, from: string): boolean {
   const [head, ...rest] = path.split("/");
   const tail = rest.join("/");
   if (head === "@pxl") return suffixes.has(`apps/web/src/${tail.replace(/^web\//, "")}`) || suffixes.has(`apps/web/${tail.replace(/^web\//, "")}`);
+  if (head === "@") return suffixes.has(`apps/web/src/${tail}`);
   if (head === "@xpute") return suffixes.has(`packages/xpute/${rest[0]}/src/${rest.slice(1).join("/")}`);
   const dir = crates.get(head);
   if (dir && (suffixes.has(`${dir}src/${tail}`) || suffixes.has(`${dir}${tail}`))) return true;
@@ -126,7 +128,7 @@ for (const f of files) {
 /** Where a level's shift of the hierarchy is written: the space model, and
  * the elevation format's sampling, which is derived from a page's span. */
 const LATTICE_OWNERS = ["crates/pxl/spec/src/space/", "crates/pxl/spec/src/bake/constant.rs"];
-const SHIFT = /\b(L[2-4]_SHAMT|L[2-4]_RANGE|PAGE_CELLS|CHUNK_CELLS)\b[^;]*(<<|>>)|(<<|>>)[^;]*\b(L[2-4]_SHAMT)\b/;
+const SHIFT = /(\b(L[1-4]|L[2-4]_RANGE|PAGE_CELLS|CHUNK_CELLS)\b|\.shamt\(\))[^;]*(<<|>>)|(<<|>>)[^;]*(\bL[1-4]\b|\.shamt\(\))/;
 
 for (const f of files) {
   if (!f.endsWith(".rs") || LATTICE_OWNERS.some((o) => f.startsWith(o))) continue;

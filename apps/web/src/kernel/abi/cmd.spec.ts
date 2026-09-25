@@ -28,6 +28,7 @@ import type { F64Array, U32Array, U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, i32, u32, u64 } from "@xpute/core/abi/word.ts";
 import { packet } from "@xpute/runtime/ipc/doorbell.ts";
 import type { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
+import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 
 /** What a command is about. */
 export const enum Major {
@@ -551,14 +552,16 @@ export interface InputPointer {
   x: f64;
   y: f64;
   tool: ActiveTool;
-  /** The placeable cube's or the decor's catalog number. */
+  /** The ground channel the held cube stands in for; absent for a flat colour, a decor kind or nothing. */
+  channel: GroundChannelKey | null;
+  /** The held cube's type in its channel, or the decor kind, by the catalog's number; what the object store keeps is the kernel's to derive. */
   value: u32;
   /** The object size, by its index in the snapshot's object_sizes. */
   tier: u32;
 }
 
 export function encode_input_pointer(p: InputPointer): U8Array {
-  return packet((b) => b.u32(p.phase).u32(p.kind).i32(p.id).i32(p.button).f64(p.x).f64(p.y).u32(p.tool).u32(p.value).u32(p.tier));
+  return packet((b) => b.u32(p.phase).u32(p.kind).i32(p.id).i32(p.button).f64(p.x).f64(p.y).u32(p.tool).u32(p.channel).u32(p.value).u32(p.tier));
 }
 
 /** Command.INPUT_WHEEL's packet. */

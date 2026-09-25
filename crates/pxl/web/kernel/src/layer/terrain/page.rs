@@ -33,9 +33,7 @@ use crate::mem;
 use crate::shell::map_store::{map_store, MapStatus};
 use crate::world::change::TERRAIN_PAGE;
 use crate::world::chunk::node::{chunk_page, chunk_sources_changed};
-use crate::world::frame::range_anchor::range_anchor;
-use crate::world::pyramid::window::HELD_AXIS;
-use crate::world::pyramid::window::{ring_of, window};
+use crate::world::pyramid::window::{eye, ring_of, window, HELD_AXIS};
 use crate::world::pyramid::{Cover, Domain, Layer, Pyramid};
 
 /// Object key of the single shared open-ocean tile in the static bucket.
@@ -102,6 +100,7 @@ impl Layer for Terrain {
     /// A leaf is what the scheduler mounts from, and what a map centre that
     /// could not be grounded before may be grounded on now.
     fn changed(p: LevelPage, present: bool) {
+        crate::layer::terrain::relief::page_changed(p, Terrain::pyramid().get(p));
         chunk_page(p, present);
         if p.level == 0 {
             chunk_sources_changed();
@@ -217,9 +216,9 @@ pub fn adopt_ocean(pkt: &[u8]) -> Result<(), FetchFail> {
 /// asked for while pages wait on it, and map_status following the queue.
 pub fn terrain_step() {
     let device = map_navigation().device_coord.map(|c| LevelPage::new(0, TO_XY(L3_IDX(c.i))));
-    if let Some(anchor) = range_anchor() {
+    if let Some(e) = eye() {
         let w = window();
-        ocean().waiting.retain(|p| Some(*p) == device || (w.contains(&p.level) && ring_of(anchor, *p) <= HELD_AXIS / 2));
+        ocean().waiting.retain(|p| Some(*p) == device || (w.contains(&p.level) && ring_of(e.foot, *p) <= HELD_AXIS / 2));
     }
     let o = ocean();
     let ocean_wants: &[(u64, Rank)] = if o.terrain.is_none() && !o.waiting.is_empty() { &[(0, policy::ocean())] } else { &[] };

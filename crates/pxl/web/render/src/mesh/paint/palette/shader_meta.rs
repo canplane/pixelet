@@ -12,7 +12,7 @@ use std::sync::LazyLock;
 
 use pxl_spec::asset::texture::{shipped_tile_mean, CubeFace};
 use pxl_spec::bake::format::{GroundChannelKey, GROUND_CH_KEYS};
-use pxl_spec::cell::object::{block_cubes, ground_channel_colors, ground_channel_types, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
+use pxl_spec::cell::object::{block_cubes, ground_channel_types, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 
 use crate::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
 
@@ -35,12 +35,11 @@ fn layer_meta() -> Vec<TerrainLayerMeta> {
         // iteration, not merged into the data: AIR never resolves to a colour
         // for any of these channels, so it's filtered out below as any other
         // type with no real colour is; VOID and UNKNOWN do.
-        let Some(colors) = ground_channel_colors(ch_key) else { continue };
         for type_id in ground_channel_types(ch_key) {
             // Every swatch the catalog holds is a colour: the generator packs
             // it from the JSON and refuses anything that is not #RRGGBB, so
             // there is nothing left here to validate.
-            if let Some(Some(swatch)) = colors.get(&(type_id as u32)) {
+            if let Some(swatch) = pxl_spec::cell::color::ground(ch_key, type_id) {
                 let layer_index = out.len() as u32;
                 out.push(TerrainLayerMeta {
                     ch_key,

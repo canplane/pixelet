@@ -49,7 +49,7 @@
 //!
 //! Current consequence:
 //! - X / Y remain hierarchical through L5.
-//! - Z collapses at L5 (Z_W = 16, L5_SHAMT = 16), so L5 is effectively horizontal.
+//! - Z collapses at L5 (Z_W = 16, L5 = 2^16), so L5 is effectively horizontal.
 //!
 //! Naming:
 //! - RANGE   = absolute coordinate range at that level, measured in canonical `u` units
@@ -67,43 +67,47 @@
 // level the choice is made at rather than item by item.
 #![allow(non_snake_case)]
 
+use super::hierarchy::Scale;
 use super::pvf3::ivec::{self, add, fill, IVec};
 use super::pvf3::pvf3::{self, Pvf3};
 use xpute_core::abi::word::{bit64, field_mask64};
 
 // ---- Hierarchy Configuration ----
 
-/// SHAMT is the cumulative packed bit distance from the canonical base unit (`u` = L1).
-pub const L2_SHAMT: u32 = 6;
-pub const L3_SHAMT: u32 = 9;
-pub const L4_SHAMT: u32 = 12;
-// pub const L5_SHAMT: u32 = 16;
+/// Each tier's side: its cumulative packed bit distance from the canonical
+/// base unit (`u` = L1). The one place a tier's size is spelled; every other
+/// extent that is a tier's is stepped from these.
+pub const L1: Scale = Scale::of(0);
+pub const L2: Scale = Scale::of(6);
+pub const L3: Scale = Scale::of(9);
+pub const L4: Scale = Scale::of(12);
+// pub const L5: Scale = Scale::of(16);
 
 // ---- Absolute Ranges (in Canonical `u` Units) ----
 
 // canonical base unit: 1u = 1 L1 block
-pub const L2_RANGE: u64 = bit64(L2_SHAMT); // 1 << 6  = 64u
-pub const L3_RANGE: u64 = bit64(L3_SHAMT); // 1 << 9  = 512u
-pub const L4_RANGE: u64 = bit64(L4_SHAMT); // 1 << 12 = 4096u
-                                           // pub const L5_RANGE: u64 = bit64(L5_SHAMT); // 1 << 16 = 65536u
+pub const L2_RANGE: u64 = L1.count_in(L2) as u64; // 1 << 6  = 64u
+pub const L3_RANGE: u64 = L1.count_in(L3) as u64; // 1 << 9  = 512u
+pub const L4_RANGE: u64 = L1.count_in(L4) as u64; // 1 << 12 = 4096u
+                                                  // pub const L5_RANGE: u64 = L1.count_in(L5) as u64; // 1 << 16 = 65536u
 
 // ---- Relative Spans inside Parent Levels ----
 
-pub const L2_SPAN_IN_L3: u64 = bit64(L3_SHAMT - L2_SHAMT);
-pub const L2_SPAN_IN_L4: u64 = bit64(L4_SHAMT - L2_SHAMT);
-pub const L3_SPAN_IN_L4: u64 = bit64(L4_SHAMT - L3_SHAMT);
-// pub const L3_SPAN_IN_L5: u64 = bit64(L5_SHAMT - L3_SHAMT);
-// pub const L4_SPAN_IN_L5: u64 = bit64(L5_SHAMT - L4_SHAMT);
+pub const L2_SPAN_IN_L3: u64 = L2.count_in(L3) as u64;
+pub const L2_SPAN_IN_L4: u64 = L2.count_in(L4) as u64;
+pub const L3_SPAN_IN_L4: u64 = L3.count_in(L4) as u64;
+// pub const L3_SPAN_IN_L5: u64 = L3.count_in(L5) as u64;
+// pub const L4_SPAN_IN_L5: u64 = L4.count_in(L5) as u64;
 
 // ---- Hierarchy Masks ----
 
 /// These are component-wise packed masks used to isolate lower-level bits.
 /// `ivec::fill` is not const, so each is the word it evaluates to, pinned
 /// by a test against `fill`.
-pub const L2_MASK: IVec = fill_const(field_mask64(L2_SHAMT, 0));
-pub const L3_MASK: IVec = fill_const(field_mask64(L3_SHAMT, 0));
-pub const L4_MASK: IVec = fill_const(field_mask64(L4_SHAMT, 0));
-// pub const L5_MASK: IVec = fill_const(field_mask64(L5_SHAMT)); // Z masks out completely at this level (Z_W = 16)
+pub const L2_MASK: IVec = fill_const(field_mask64(L2.shamt() as u32, 0));
+pub const L3_MASK: IVec = fill_const(field_mask64(L3.shamt() as u32, 0));
+pub const L4_MASK: IVec = fill_const(field_mask64(L4.shamt() as u32, 0));
+// pub const L5_MASK: IVec = fill_const(field_mask64(L5.shamt() as u32)); // Z masks out completely at this level (Z_W = 16)
 
 /// `ivec::fill(e)` for a non-negative `e`, at compile time.
 const fn fill_const(e: u64) -> IVec {
@@ -207,26 +211,26 @@ pub fn L3_IDX_IN_L4(addr: IVec) -> IVec {
 ///   its neighbor.
 /// - FROM_*_IDX restores packed base form from that logical index field.
 pub fn L2_IDX(addr: IVec) -> IVec {
-    ivec::sh(L2_BASE(addr), -(L2_SHAMT as i32))
+    ivec::sh(L2_BASE(addr), -L2.shamt())
 }
 pub fn L3_IDX(addr: IVec) -> IVec {
-    ivec::sh(L3_BASE(addr), -(L3_SHAMT as i32))
+    ivec::sh(L3_BASE(addr), -L3.shamt())
 }
 pub fn L4_IDX(addr: IVec) -> IVec {
-    ivec::sh(L4_BASE(addr), -(L4_SHAMT as i32))
+    ivec::sh(L4_BASE(addr), -L4.shamt())
 }
-// pub fn L5_IDX(addr: IVec) -> IVec { ivec::sh(L5_BASE(addr), -(L5_SHAMT as i32)) } // Z has collapsed at L5
+// pub fn L5_IDX(addr: IVec) -> IVec { ivec::sh(L5_BASE(addr), -L5.shamt()) } // Z has collapsed at L5
 
 pub fn FROM_L2_IDX(idx: IVec) -> IVec {
-    ivec::sh(idx, L2_SHAMT as i32)
+    ivec::sh(idx, L2.shamt())
 }
 pub fn FROM_L3_IDX(idx: IVec) -> IVec {
-    ivec::sh(idx, L3_SHAMT as i32)
+    ivec::sh(idx, L3.shamt())
 }
 pub fn FROM_L4_IDX(idx: IVec) -> IVec {
-    ivec::sh(idx, L4_SHAMT as i32)
+    ivec::sh(idx, L4.shamt())
 }
-// pub fn FROM_L5_IDX(idx: IVec) -> IVec { ivec::sh(idx, L5_SHAMT as i32) }
+// pub fn FROM_L5_IDX(idx: IVec) -> IVec { ivec::sh(idx, L5.shamt()) }
 
 #[cfg(test)]
 #[path = "indexer.test.rs"]

@@ -35,7 +35,7 @@ use crate::layer::decor::instance::{DecorScratch, Instance, DECOR_GROUPS, HIDDEN
 use crate::layer::decor::kind::DecorKind;
 use crate::layer::decor::scatter::{transport_aligned_rotation, SCALE_JITTER};
 use crate::layer::decor::scatter::{DecorChannelRule, DecorKindSeed, DecorOrientationMode, DecorRules};
-use crate::layer::object::store::{unpack_pos, Store, BAND_CELLS, CELL_STEPS, STEP_UNITS};
+use crate::layer::object::store::{unpack_pos, Store, BAND_CELLS, BAND_UNITS, CELL, CELL_STEPS, STEP_UNITS};
 use pxl_spec::asset::ingested::Asset;
 
 // Fixed, arbitrary — the one thing every kind's own placement ultimately
@@ -238,7 +238,7 @@ pub struct DecorBuild<'s> {
 pub struct Chunk<'a> {
     pub page: &'a PageView<'a>,
     pub page_idx: IVec,
-    /// The column this chunk stands in, and its X and Y lanes.
+    /// The column this chunk stands in, and its X and Y lanes in units.
     pub col_idx: IVec,
     pub col_x: i64,
     pub col_y: i64,
@@ -312,11 +312,12 @@ impl<'s> DecorBuild<'s> {
                         continue;
                     }
                     let pos = poss[k];
-                    let (x, y, z, level) = unpack_pos(pos);
-                    let size = 2f64.powi(level);
+                    let (x, y, z, scale) = unpack_pos(pos);
+                    let size = scale.side();
+                    // The entry's cell, which seeds its variant and turn.
                     let corner = gather(
-                        chunk.col_x + (x / CELL_STEPS) as i64,
-                        chunk.col_y + (y / CELL_STEPS) as i64,
+                        CELL.index(chunk.col_x) + (x / CELL_STEPS) as i64,
+                        CELL.index(chunk.col_y) + (y / CELL_STEPS) as i64,
                         bands[k] as i64 * BAND_CELLS as i64 + (z / CELL_STEPS) as i64,
                     );
                     let mut rng = Rng::new(derive_seed_u64(DECOR_MASTER_SEED, corner));
@@ -329,7 +330,7 @@ impl<'s> DecorBuild<'s> {
                         Instance {
                             x: (chunk.ox + x as f64 * STEP_UNITS + h) as f32,
                             y: (chunk.oy + y as f64 * STEP_UNITS + h) as f32,
-                            z: (bands[k] as f64 * BAND_CELLS as f64 + z as f64 * STEP_UNITS) as f32,
+                            z: (bands[k] as f64 * BAND_UNITS + z as f64 * STEP_UNITS) as f32,
                             rotation: rotation as f32,
                             scale: 1.0,
                             flags: if hidden { HIDDEN_FLAG } else { 0 },

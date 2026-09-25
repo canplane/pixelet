@@ -4,21 +4,20 @@
 //!
 //! This is the only module that knows every producer's vocabulary, and the
 //! only one that holds a number. A producer says what it knows in its own
-//! terms — a page is not drawn, a page is drawn coarsely, a page is outside
-//! the ring the view draws — and the number it lands on is decided here, once,
+//! terms — a page is not drawn, a page is drawn coarsely — and the number it
+//! lands on is decided here, once,
 //! where the producers can be read against each other.
 //!
 //! **Only the orderings the code gives a reason for are kept.** There are
-//! four, and they are all terrain's or terrain's dependency's:
+//! three, and they are all terrain's or terrain's dependency's:
 //!
 //! 1. The shared ocean tile before a page that is not drawn. One arrival sets
 //!    every page waiting on it (`layer/terrain/page.rs`'s `adopt_ocean` drains
 //!    `waiting`); a page's own arrival sets one.
 //! 2. A page nothing draws before a page drawn coarsely. The first is a hole
 //!    on the screen and the second is already there (`world/pyramid.rs`'s `resolve`).
-//! 3. A page the view draws before one outside the ring it draws. The second
-//!    is margin against a move that has not happened.
-//! 4. Nearer before further, within any of those.
+//! 3. Nearer the eye before further, within any of those: the distance the
+//!    page's level was chosen by (world/pyramid/window.rs `Domain`).
 //!
 //! **Everything else is a tie.** A label, a POI page, the device's own page
 //! and a catalog asset have no relation to each other or to terrain that
@@ -40,20 +39,18 @@ pub fn ocean() -> Rank {
     Rank { class: 0, distance: 0.0 }
 }
 
-/// A page of any layer the pyramid holds that the view wants, `distance` from
-/// what the view is looking at, and whether it falls outside the ring the
-/// view actually draws. A layer's page ranks by what its absence costs, the
+/// A page of any layer the pyramid holds that the view wants, and its
+/// nearest `distance` from the eye. A layer's page ranks by what its absence costs, the
 /// same for every layer: the orderings below are the pyramid's.
 ///
 /// `Exact` and `Foldable` are not demands — the caller has them already — and
 /// rank as the weakest thing here rather than being given a place of their
 /// own, since nothing should be asking for one.
-pub fn page(resolved: Resolved, speculative: bool, distance: f64) -> Rank {
-    let class = match (resolved, speculative) {
-        (_, true) => 3,
-        (Resolved::Missing, _) => 1,
-        (Resolved::Covered, _) => 2,
-        (Resolved::Exact | Resolved::Foldable, _) => ASIDE,
+pub fn page(resolved: Resolved, distance: f64) -> Rank {
+    let class = match resolved {
+        Resolved::Missing => 1,
+        Resolved::Covered => 2,
+        Resolved::Exact | Resolved::Foldable => ASIDE,
     };
     Rank { class, distance }
 }

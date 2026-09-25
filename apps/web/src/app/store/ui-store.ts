@@ -1,10 +1,10 @@
 // @pxl/web/app/store/ui-store.ts
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
-import type { u32 } from "@xpute/core/abi/word.ts";
-import { decor_ids, type DecorId, decorNumId, placeable_cubes, type PlaceableCubeId, placeableCubeId, placeableCubeNumId } from "@/catalog/cell/mod.ts";
+import type { u32, u8 } from "@xpute/core/abi/word.ts";
+import { cube_types, GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
+import { decor_kinds, placeable_cubes, type PlaceableCube, sameCube } from "@/catalog/cell/mod.ts";
 import { ActiveTool, Command, encode_chat_create } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command } from "@/kernel/shell.ts";
 import { kernel_hold } from "@/kernel/control/input.ts";
@@ -28,11 +28,11 @@ let nextChatLineId = 0;
 // drawer-modal.tsx holds the *entire* catalog (colors,
 // terrain-styled cubes, decor), the hotbar's job shrunk to "whatever you
 // actually reached for lately," across cube and decor alike, one shared MRU
-// list instead of two side-by-side ones. Tagged (not a bare id union): a
-// cube id and a decor id are both plain strings with no shared namespace, so
-// telling them apart — and knowing whether picking one sets objectColorId
-// or decor_id — needs the kind alongside the id, not just the id.
-export type RecentPick = { kind: "object"; id: PlaceableCubeId } | { kind: "decor"; id: DecorId };
+// list instead of two side-by-side ones. Tagged by the tool that holds it: a
+// cube and a decor kind are numbers of two catalogs, so which one a pick is —
+// and whether picking it sets the cube or the decor kind — is the tool
+// alongside it.
+export type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u8 };
 
 // 8, not the full 15-color/32-terrain-style/N-decor catalog — the whole
 // point of moving to MRU instead of a static, ever-growing enumeration.
@@ -42,15 +42,16 @@ export type RecentPick = { kind: "object"; id: PlaceableCubeId } | { kind: "deco
 const MAX_RECENT_PICKS = 8;
 
 function isSamePick(a: RecentPick, b: RecentPick): boolean {
-  return a.kind === b.kind && a.id === b.id;
+  if (a.tool === ActiveTool.Object) return b.tool === ActiveTool.Object && sameCube(a.cube, b.cube);
+  return b.tool === ActiveTool.Decor && a.kind === b.kind;
 }
 
-// A pick persisted from an older session can name an id the catalog no
-// longer has (a cube/decor kind renamed or removed since) — dropped here
-// rather than trusted as-is, so a stale localStorage entry can't leave a
-// dead id sitting in the hotbar forever.
+// A pick stored by an older build can name a cube or a decor kind the catalog
+// no longer gives out — dropped here rather than trusted as-is, so a stale
+// entry can't leave a dead one sitting in the hotbar forever.
 function isKnownPick(pick: RecentPick): boolean {
-  return pick.kind === "object" ? placeable_cubes.some((cube) => placeableCubeId(cube) === pick.id) : (decor_ids as readonly string[]).includes(pick.id);
+  if (pick.tool === ActiveTool.Object) return placeable_cubes.some((cube) => sameCube(cube, pick.cube));
+  return pick.tool === ActiveTool.Decor && decor_kinds.includes(pick.kind);
 }
 
 // Only ever inserts a genuinely new pick at the front — re-picking one
@@ -67,85 +68,120 @@ interface UiState {
   activeTool: ActiveTool;
   set_activeTool: (activeTool: ActiveTool) => void;
 
-  // Widened to the full placeable catalog (2026-09-06, drawer-modal.tsx's
-  // own terrain-styled entries alongside mode-bar.tsx's original 15 flat
-  // colors) — the hotbar only ever sets this to the narrower CubeColorId
-  // subset, but the field itself has to hold whatever the modal picks too.
-  objectColorId: PlaceableCubeId;
+  /** The cube the object tool holds: any the drawer offers, not only the
+   * hotbar's flat colours. */
+  cube: PlaceableCube;
 
   /** The object size, by its tier in the kernel's `object_sizes`. */
   object_tier: u32;
   setObjectTier: (object_tier: u32) => void;
 
-  decor_id: DecorId;
+  /** The decor kind the decor tool holds, by its number. */
+  decor: u8;
 
   // The hotbar's own shared MRU list (see RecentPick's own comment) — most
   // recent first. selectCube/selectDecor are the only way to advance it;
-  // there's no bare set_object_color_id/set_decor_id left; every real caller
+  // there's no bare setter for the cube or the decor kind; every real caller
   // (mode_bar's swatch/decor buttons, drawer_modal's pickCube/pickDecor)
   // wanted the activeTool switch and the recency bump every single time
   // anyway, so a setter that skipped either was never actually useful.
   recentPicks: RecentPick[];
-  selectCube: (id: PlaceableCubeId) => void;
-  selectDecor: (id: DecorId) => void;
+  selectCube: (cube: PlaceableCube) => void;
+  selectDecor: (kind: u8) => void;
 
   chatLines: ChatLine[];
   append_chat_line: (text: string) => void;
 }
 
-// Persisted (localStorage): objectColorId/decor_id/recentPicks — real
-// picks worth remembering across a reload, mirroring store.ts's
-// own reasoning. activeTool and chatLines are deliberately left out
-// (partialize below): a fresh load should always start at the neutral
-// pointer tool, and chatLines is dev-only dummy data, not user state.
-export const useUiStore = create<UiState>()(persist((set) => ({
+// One representative per placeable genre, not the first 5 flat colors — a
+// fresh session's hotbar should hint at everything you *can* place (a plain
+// color, and one of each terrain-styled channel) rather than just the color
+// catalog's own first few entries, which only ever showed colors.
+//
+// Filled to MAX_RECENT_PICKS rather than left short: the strip's own width is
+// the eight slots either way, so the empty tail read as missing rather than
+// as room. The two that fill it are plain saturated colors, which is what the
+// genre row above is least able to hint at — white alone does not say "there
+// are colors in here".
+const SEED: readonly RecentPick[] = [
+  { tool: ActiveTool.Object, cube: { channel: null, type: cube_types.block.white } },
+  { tool: ActiveTool.Object, cube: { channel: GroundChannelKey.LAND, type: cube_types.land.bare } },
+  { tool: ActiveTool.Object, cube: { channel: GroundChannelKey.WATER, type: cube_types.water.river } },
+  { tool: ActiveTool.Object, cube: { channel: GroundChannelKey.STRUCTURE, type: cube_types.structure.building } },
+  { tool: ActiveTool.Object, cube: { channel: GroundChannelKey.TRANSPORT, type: cube_types.transport.road_default } },
+  { tool: ActiveTool.Object, cube: { channel: null, type: cube_types.block.red } },
+  { tool: ActiveTool.Object, cube: { channel: null, type: cube_types.block.blue } },
+  { tool: ActiveTool.Decor, kind: decor_kinds[0] },
+];
+
+// Stored (localStorage) by the catalog's numbers: the cube, the decor kind
+// and the picks — real picks worth remembering across a reload. The tool and
+// the chat lines are left out: a load always starts at the neutral pointer
+// tool, and the chat lines are a UI shell's, not the user's.
+const STORAGE_KEY = "pxl:ui_hotbar";
+
+interface Stored {
+  cube: PlaceableCube;
+  decor: u8;
+  picks: RecentPick[];
+}
+
+function load(): Stored {
+  let stored: Partial<Stored> | null = null;
+  try {
+    stored = JSON.parse(globalThis.localStorage?.getItem(STORAGE_KEY) ?? "null");
+  } catch { /* nothing stored that reads */ }
+  const picks = Array.isArray(stored?.picks) ? stored.picks.filter((p) => typeof p === "object" && p !== null && isKnownPick(p)) : [];
+  // A short list is padded from the seed rather than left short. The strip is
+  // eight slots wide whether or not they hold anything, so a missing tail
+  // reads as broken rather than as room — and the padding is the first thing
+  // to fall off the end once a real pick arrives, since touchRecent prepends
+  // and slices.
+  for (const seed of SEED) {
+    if (picks.length >= MAX_RECENT_PICKS) break;
+    if (!picks.some((pick) => isSamePick(pick, seed))) picks.push(seed);
+  }
+  const cube = placeable_cubes.find((c) => stored?.cube !== undefined && sameCube(c, stored.cube)) ?? { channel: null, type: cube_types.block.red };
+  const decor = decor_kinds.find((kind) => kind === stored?.decor) ?? decor_kinds[0];
+  return { cube, decor, picks };
+}
+
+function save(s: UiState): void {
+  try {
+    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify({ cube: s.cube, decor: s.decor, picks: s.recentPicks } satisfies Stored));
+  } catch { /* storage refused; the picks last this session */ }
+}
+
+const stored = load();
+
+export const useUiStore = create<UiState>()((set) => ({
   activeTool: ActiveTool.Pointer,
   set_activeTool: (activeTool) => {
     set({ activeTool });
   },
 
-  objectColorId: "block.red",
+  cube: stored.cube,
 
   object_tier: 0,
   setObjectTier: (object_tier) => {
     set({ object_tier });
   },
 
-  decor_id: "tree",
+  decor: stored.decor,
 
-  // One representative per placeable genre, not the first 5 flat colors —
-  // a fresh session's hotbar should hint at everything you *can* place
-  // (a plain color, and one of each terrain-styled channel) rather than
-  // just the color catalog's own first few entries, which only ever showed
-  // colors. Each id is that channel's own first-declared key (cube.ts).
-  //
-  // Filled to MAX_RECENT_PICKS rather than left short: the strip's own
-  // width is the eight slots either way, so the empty tail read as missing
-  // rather than as room. The two that fill it are plain saturated colors,
-  // which is what the genre row above is least able to hint at — white
-  // alone does not say "there are colors in here".
-  recentPicks: [
-    { kind: "object", id: "block.white" },
-    { kind: "object", id: "land.bare" },
-    { kind: "object", id: "water.river" },
-    { kind: "object", id: "structure.building" },
-    { kind: "object", id: "transport.road_default" },
-    { kind: "object", id: "block.red" },
-    { kind: "object", id: "block.blue" },
-    { kind: "decor", id: decor_ids[0] },
-  ],
-  selectCube: (id) => {
+  recentPicks: stored.picks,
+  selectCube: (cube) => {
     set((state) => ({
-      objectColorId: id,
+      cube,
       activeTool: ActiveTool.Object,
-      recentPicks: touchRecent(state.recentPicks, { kind: "object", id }),
+      recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Object, cube }),
     }));
   },
-  selectDecor: (id) => {
+  selectDecor: (kind) => {
     set((state) => ({
-      decor_id: id,
+      decor: kind,
       activeTool: ActiveTool.Decor,
-      recentPicks: touchRecent(state.recentPicks, { kind: "decor", id }),
+      recentPicks: touchRecent(state.recentPicks, { tool: ActiveTool.Decor, kind }),
     }));
   },
 
@@ -157,51 +193,18 @@ export const useUiStore = create<UiState>()(persist((set) => ({
     // The kernel draws the bubble over the companion from the last line.
     kernel_command(Command.CHAT_CREATE, encode_chat_create({ text }));
   },
-}), {
-  name: "pxl:ui_hotbar",
-  partialize: (state) => ({
-    objectColorId: state.objectColorId,
-    decor_id: state.decor_id,
-    recentPicks: state.recentPicks,
-  }),
-  // Default merge is a blind `{...current, ...persisted}` — fine for
-  // store.ts's own always-valid fields, not here: a persisted id
-  // might no longer exist (isKnownPick above), and an empty persisted
-  // recentPicks (every entry filtered out) should fall back to the fresh
-  // default seeded above rather than leaving the hotbar empty.
-  merge: (persisted, current) => {
-    const p = persisted as Partial<{ objectColorId: PlaceableCubeId; decor_id: DecorId; recentPicks: RecentPick[] }> | null;
-    if (!p) return current;
-    const recentPicks = Array.isArray(p.recentPicks) ? p.recentPicks.filter(isKnownPick) : [];
-    // A short list is padded from the seed rather than left short. The strip
-    // is eight slots wide whether or not they hold anything, so a missing
-    // tail reads as broken rather than as room — and the padding is the
-    // first thing to fall off the end once a real pick arrives, since
-    // touchRecent prepends and slices.
-    for (const seed of current.recentPicks) {
-      if (recentPicks.length >= MAX_RECENT_PICKS) break;
-      if (!recentPicks.some((pick) => isSamePick(pick, seed))) recentPicks.push(seed);
-    }
-    return {
-      ...current,
-      objectColorId: p.objectColorId && isKnownPick({ kind: "object", id: p.objectColorId }) ? p.objectColorId : current.objectColorId,
-      decor_id: p.decor_id && isKnownPick({ kind: "decor", id: p.decor_id }) ? p.decor_id : current.decor_id,
-      recentPicks,
-    };
-  },
 }));
 
 // What the pointer holds crosses to the kernel with each pointer event, by
-// the catalog's numbers (spec/cell): the object tool holds the cube, the decor
-// tool the decor kind.
-
+// the catalog's numbers: the object tool holds the cube, the decor tool the
+// decor kind.
 function hold(s: UiState): void {
-  const cube = placeable_cubes.find((c) => placeableCubeId(c) === s.objectColorId);
-  const value = s.activeTool === ActiveTool.Object ? (cube ? placeableCubeNumId(cube) : 0) : s.activeTool === ActiveTool.Decor ? decorNumId(s.decor_id) : 0;
-  kernel_hold(s.activeTool, value, s.object_tier);
+  if (s.activeTool === ActiveTool.Object) kernel_hold(s.activeTool, s.cube.channel, s.cube.type, s.object_tier);
+  else kernel_hold(s.activeTool, null, s.activeTool === ActiveTool.Decor ? s.decor : 0, s.object_tier);
 }
 
 hold(useUiStore.getState());
 useUiStore.subscribe((s, prev) => {
-  if (s.activeTool !== prev.activeTool || s.objectColorId !== prev.objectColorId || s.decor_id !== prev.decor_id || s.object_tier !== prev.object_tier) hold(s);
+  if (s.activeTool !== prev.activeTool || s.cube !== prev.cube || s.decor !== prev.decor || s.object_tier !== prev.object_tier) hold(s);
+  if (s.cube !== prev.cube || s.decor !== prev.decor || s.recentPicks !== prev.recentPicks) save(s);
 });

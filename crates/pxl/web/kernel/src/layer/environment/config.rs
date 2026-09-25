@@ -21,15 +21,11 @@
 /// opens out as the reach grows past FOG_FAR so a zoom out is a change of
 /// scale and nothing else.
 ///
-/// Anchoring the rings at the view centre rather than the camera is what
-/// keeps residency invariant under rotation: at a wide zoom the camera sits
-/// its whole distance from that centre, and following it would sweep pages
-/// in and out on a spin. Which chunk is drawn at which level, and which tier
-/// it shows, are camera-relative — both measure against the camera — so
-/// ground standing above the terrain is ranked where it actually is. Over
-/// every zoom, tilt, aspect ratio and pivot height the camera allows, the
-/// ground the band leaves visible lies inside what the window's top ring
-/// draws (world/chunk/view_range.test.rs).
+/// What is drawn at which level is measured from the eye (world/pyramid/
+/// window.rs `Domain`), so the band ends the ground at the nearer of the
+/// reach and how far the window's coarsest level draws, and nothing the band
+/// leaves visible is outside what the window draws: a root is any top-level
+/// chunk nearer than that.
 pub mod render_cfg {
     /// 1.5 × FOG_FAR: the far plane a reach of FOG_FAR asks for, so the band
     /// completes inside the frustum rather than being cut by it. Read as that

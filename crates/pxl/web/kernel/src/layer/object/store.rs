@@ -19,17 +19,18 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use base64::Engine;
 use pxl_render::mesh::paint::object::adapter::{Carve, Entries};
-use pxl_spec::bake::constant::{OBJECT_LAYOUT, U_PER_CELL};
+use pxl_spec::bake::constant::{OBJECT_FINEST, OBJECT_LAYOUT, POS_MASK, U_PER_CELL};
 use pxl_spec::bake::ground::shown_ground;
 use pxl_spec::cell::object::{decor_id_from_num, decor_num_id, object_value_is_air, object_value_is_decor, placeable_cube_num_id, placeable_cube_of, terrain_style_cube_source, PlaceableCube};
 use pxl_spec::cell::{cube_types, DecorId};
+use pxl_spec::space::hierarchy::Scale;
 use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX, L3_IDX};
 use pxl_spec::space::pvf3::fvec::{self, FVec};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pvf3::Ivec;
 use pxl_spec::space::sparse_tree::mem;
-use pxl_spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree, SparseTreeLayout};
+use pxl_spec::space::sparse_tree::tree::{self as sparse_tree, SparseTree};
 use pxl_spec::space::xy::TO_XY;
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
@@ -44,7 +45,6 @@ use crate::shell::setting::store::hidden_ground;
 use crate::world::change::{bump_world, request_world_tick, wake_at, world_changes, world_edge, DECOR_COLUMN, OBJECT_COLUMN};
 use crate::world::chunk::node::chunk_sources_changed;
 use crate::world::frame::coord::local_world_to_canonical;
-use xpute_core::math::scalar::round;
 
 /// What a leaf holds, past its corner and size. A solid is the catalog's own
 /// cube; the id it is spelled out under belongs to the two sides' shared
@@ -105,11 +105,7 @@ fn storage_key() -> String {
 // this section does is lower a coordinate to what the kernel keys by — the
 // chunk (the L2 index of the XY column), the band's Z, and the position within
 // the band in finest-tier steps, which is the low bits of each lane of the
-// coordinate shifted to the finest level — and read its lanes back.
-
-/// Cells along one side of a chunk, and of a band.
-const CHUNK_CELLS: i64 = pxl_spec::space::pyramid::CHUNK_CELLS as i64;
-const BAND_STEP_MASK: i64 = CELL_STEPS as i64 * CHUNK_CELLS - 1;
+// coordinate shifted to the finest tier's scale — and read its lanes back.
 
 fn cell_size_fp() -> i64 {
     pvf3::from_real(U_PER_CELL)
@@ -177,13 +173,13 @@ struct At {
 
 fn lower(coord: &Pvf3) -> At {
     let mut lattice = Pvf3::default();
-    pvf3::sh(&mut lattice, coord, -OBJECT_LAYOUT.min);
+    pvf3::sh(&mut lattice, coord, -OBJECT_FINEST.shamt());
     At {
         col_idx: L2_IDX(TO_XY(coord.i)),
         band: band_z_of(cell_index(coord)[2]),
-        x: (ivec::X(lattice.i) & BAND_STEP_MASK) as u32,
-        y: (ivec::Y(lattice.i) & BAND_STEP_MASK) as u32,
-        z: (ivec::Z(lattice.i) & BAND_STEP_MASK) as u32,
+        x: ivec::X(lattice.i) as u32 & POS_MASK,
+        y: ivec::Y(lattice.i) as u32 & POS_MASK,
+        z: ivec::Z(lattice.i) as u32 & POS_MASK,
     }
 }
 
@@ -216,13 +212,13 @@ fn entry_count(col_idx: IVec) -> u32 {
     kernel().objects.chunk_lanes(col_idx).map_or(0, |l| l.count)
 }
 
-/// Real-unit local offset (x,y,z at min-level lattice units) as a PVF3,
+/// Real-unit local offset (x,y,z in finest-tier steps) as a PVF3,
 /// computed via exact bit-shift (pvf3::sh), not a float multiply.
 fn local_offset(x: u32, y: u32, z: u32) -> Pvf3 {
     let mut scalar = Pvf3::default();
     pvf3::gather(&mut scalar, pvf3::from_real(x as f64), pvf3::from_real(y as f64), pvf3::from_real(z as f64));
     let mut out = Pvf3::default();
-    pvf3::sh(&mut out, &scalar, OBJECT_LAYOUT.min);
+    pvf3::sh(&mut out, &scalar, OBJECT_FINEST.shamt());
     out
 }
 
@@ -236,7 +232,7 @@ fn local_offset(x: u32, y: u32, z: u32) -> Pvf3 {
 // cell's leaves together, so a cell's entries are one contiguous run.
 //
 // `pos` packs the leaf's band-local position in finest-tier steps and its
-// level above the finest; the kernel's `unpack_pos` reads it back.
+// scale as the tiers above the finest (pxl-spec bake/constant.rs `pack_pos`).
 
 /// The one entry that is not stored — the eraser's carve preview.
 #[derive(Clone, Debug)]
@@ -266,7 +262,6 @@ pub struct EntryCursor {
     x: u32,
     y: u32,
     z: u32,
-    level: i32,
     fixed: Option<Fixed>,
 }
 
@@ -283,11 +278,12 @@ impl EntryCursor {
         self.fixed = None;
         self.band_idx = band_idx;
         self.pos = pos;
-        (self.x, self.y, self.z, self.level) = unpack_pos(pos);
+        let scale;
+        (self.x, self.y, self.z, scale) = unpack_pos(pos);
         self.lx = self.x as f64 * STEP_UNITS;
         self.ly = self.y as f64 * STEP_UNITS;
         self.lz = band_idx as f64 * BAND_UNITS + self.z as f64 * STEP_UNITS;
-        self.size = 2f64.powi(self.level);
+        self.size = scale.side();
         self.state = state;
     }
 
@@ -397,6 +393,52 @@ fn cell_run(ix: i64, iy: i64, iz: i64) -> Option<CellRun> {
 pub fn objects_revision() -> u32 {
     let log = world_changes();
     log.tick(OBJECT_COLUMN) + log.tick(DECOR_COLUMN)
+}
+
+/// A column holding objects, as a box in units: its corner and side on the
+/// ground, and the lowest and highest any of its entries reaches.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ColumnBox {
+    pub x0: f64,
+    pub y0: f64,
+    pub side: f64,
+    pub z: (f64, f64),
+}
+
+static BOXES: Global<Option<(u32, Vec<ColumnBox>)>> = Global::new();
+
+/// Every column holding objects, as its box: what a view measures how near it
+/// is to what is placed by (world/pyramid/window.rs `Domain`). Made again
+/// only when the store has changed.
+pub fn column_boxes() -> &'static [ColumnBox] {
+    let revision = objects_revision();
+    let held = BOXES.get(|| None);
+    if held.as_ref().is_none_or(|(r, _)| *r != revision) {
+        let boxes = object_cols()
+            .into_iter()
+            .filter_map(|col| {
+                let mut z: Option<(f64, f64)> = None;
+                each_col_entry(
+                    col,
+                    &mut |e| {
+                        let lo = pvf3::to_real(pvf3::Z(&e.corner()));
+                        let hi = lo + e.size;
+                        z = Some(z.map_or((lo, hi), |(a, b)| (a.min(lo), b.max(hi))));
+                    },
+                    false,
+                );
+                let base = FROM_L2_IDX(col);
+                Some(ColumnBox {
+                    x0: ivec::to_real(ivec::X(base)),
+                    y0: ivec::to_real(ivec::Y(base)),
+                    side: pxl_spec::space::pyramid::chunk_span_of(0),
+                    z: z?,
+                })
+            })
+            .collect();
+        *held = Some((revision, boxes));
+    }
+    &held.as_ref().expect("made above").1
 }
 
 fn bump_col(col_idx: IVec, objects: bool, decor: bool) {
@@ -898,10 +940,9 @@ pub fn object_store_stats() -> (u32, u32, u32) {
 /// would otherwise sit in every save for nothing.
 fn write_object_value(coord: &Pvf3, size: f64, val: u32) {
     // size is always an exact power of two by construction (object/size.rs's
-    // OBJECT_SIZES); the round only guards against float noise.
-    let level = round(size.log2()) as i32;
+    // OBJECT_SIZES); the nearest scale only guards against float noise.
     let at = lower(coord);
-    kernel().objects.write(at.col_idx, at.band, [at.x, at.y, at.z], level, val);
+    kernel().objects.write(at.col_idx, at.band, [at.x, at.y, at.z], Scale::of_side(size), val);
     if store_state().restoring {
         return;
     }
@@ -999,18 +1040,7 @@ pub fn remove(at: EntryAt) {
 // rebuilt a chunk at a time because a write touches one chunk and the cost
 // is bounded by what that chunk holds.
 
-pub use pxl_spec::bake::constant::{BandZ, CellZ, BAND_CELLS, BAND_SHAMT, BAND_UNITS, CELL_LEVEL, CELL_STEPS, MIN_LEVEL, POS_BITS, POS_MASK, STEP_UNITS};
-
-/// A band's tree: OBJECT_LAYOUT's levels, reaching six above the cell to
-/// the band's 64 cells.
-const BAND_LAYOUT: SparseTreeLayout = SparseTreeLayout {
-    dim: 3,
-    min: MIN_LEVEL,
-    max: CELL_LEVEL + BAND_SHAMT as i32,
-};
-pub fn pack_pos(x: u32, y: u32, z: u32, level: i32) -> u32 {
-    x | (y << POS_BITS) | (z << (2 * POS_BITS)) | (((level - MIN_LEVEL) as u32) << (3 * POS_BITS))
-}
+pub use pxl_spec::bake::constant::{pack_pos, unpack_pos, BandZ, CellZ, BAND_CELLS, BAND_CELL_SHAMT, BAND_UNITS, CELL, CELL_STEPS, STEP_UNITS};
 
 /// A lattice position in a band, as its tree's key.
 fn band_key(at: [u32; 3]) -> IVec {
@@ -1022,16 +1052,6 @@ fn band_is_empty(tree: &SparseTree<u16>) -> bool {
     let mut empty = true;
     sparse_tree::walk(tree, &mut |_, _, _, _, idx| empty &= idx == 0);
     empty
-}
-
-/// The packed position's parts: x, y, z in finest-tier steps, and the level.
-pub fn unpack_pos(pos: u32) -> (u32, u32, u32, i32) {
-    (
-        pos & POS_MASK,
-        (pos >> POS_BITS) & POS_MASK,
-        (pos >> (2 * POS_BITS)) & POS_MASK,
-        (pos >> (3 * POS_BITS)) as i32 + MIN_LEVEL,
-    )
 }
 
 /// The catalog's sentinels: the absence a zeroed leaf reads as, the eraser's
@@ -1157,7 +1177,7 @@ impl Store {
         if self.bands.contains_key(&(key, band_idx)) {
             return;
         }
-        self.bands.insert((key, band_idx), sparse_tree::alloc::<u16>(BAND_LAYOUT, 64));
+        self.bands.insert((key, band_idx), sparse_tree::alloc::<u16>(OBJECT_LAYOUT, 64));
         let chunk = &mut self.chunks[cpos];
         chunk.band_min = chunk.band_min.min(band_idx);
         chunk.band_max = chunk.band_max.max(band_idx);
@@ -1204,12 +1224,12 @@ impl Store {
         self.chunks[cpos as usize].palette[mem::get::<Ivec, u16>(&tree.mem, &tree.layout, band_key(at), 0) as usize]
     }
 
-    /// Writes `state` as one leaf of `level` at a lattice position of band
+    /// Writes `state` as one leaf of `scale` at a lattice position of band
     /// `z` of chunk `key`, compacts the band, and drops the band — and the
     /// chunk — once every leaf reads VOID. The entries are not re-derived:
     /// that is `reindex`, once, after however many writes.
-    pub fn write(&mut self, col_idx: IVec, band_idx: BandZ, at: [u32; 3], level: i32, state: u32) {
-        assert!((MIN_LEVEL..=CELL_LEVEL).contains(&level), "an object level outside its layout");
+    pub fn write(&mut self, col_idx: IVec, band_idx: BandZ, at: [u32; 3], scale: Scale, state: u32) {
+        assert!((OBJECT_FINEST..=CELL).contains(&scale), "an object no finer than its finest tier and no coarser than a cell");
         let cpos = match self.chunk_at.get(&col_idx) {
             Some(&pos) => pos as usize,
             None if state == VOID => return,
@@ -1223,7 +1243,7 @@ impl Store {
         }
         let idx = self.palette_index(cpos, state);
         let tree = self.bands.get_mut(&(col_idx, band_idx)).expect("the band just opened");
-        mem::set::<Ivec, u16>(&mut tree.mem, &tree.layout, band_key(at), idx, level, 0);
+        mem::set::<Ivec, u16>(&mut tree.mem, &tree.layout, band_key(at), idx, scale, 0);
         sparse_tree::compact(tree);
         if band_is_empty(tree) {
             self.close_band(cpos, band_idx);
@@ -1251,24 +1271,24 @@ impl Store {
         // key is the column before the Z, so a column's bands lie together and
         // the Z between two of them is a step rather than a search.
         for (&(_, bz), tree) in self.bands.range((chunk.col_idx, chunk.band_min)..=(chunk.col_idx, chunk.band_max)) {
-            sparse_tree::walk(tree, &mut |x, y, z, level, idx| {
+            sparse_tree::walk(tree, &mut |x, y, z, scale, idx| {
                 let (x, y, z) = (x as u32, y as u32, z as u32);
                 let val = chunk.palette[idx as usize];
                 if val == VOID || val == UNKNOWN {
                     return;
                 }
-                if level <= CELL_LEVEL {
+                if scale <= CELL {
                     chunk.e_band.push(bz);
-                    chunk.e_pos.push(pack_pos(x, y, z, level));
+                    chunk.e_pos.push(pack_pos(x, y, z, scale));
                     chunk.e_state.push(val);
                     return;
                 }
-                let span = 1u32 << (level - MIN_LEVEL);
+                let span = OBJECT_FINEST.count_in(scale);
                 for dz in (0..span).step_by(CELL_STEPS as usize) {
                     for dy in (0..span).step_by(CELL_STEPS as usize) {
                         for dx in (0..span).step_by(CELL_STEPS as usize) {
                             chunk.e_band.push(bz);
-                            chunk.e_pos.push(pack_pos(x + dx, y + dy, z + dz, CELL_LEVEL));
+                            chunk.e_pos.push(pack_pos(x + dx, y + dy, z + dz, CELL));
                             chunk.e_state.push(val);
                         }
                     }
@@ -1279,12 +1299,16 @@ impl Store {
 
     fn cell_of(col_idx: IVec, band_idx: BandZ, pos: u32) -> CellKey {
         let (x, y, z, _) = unpack_pos(pos);
-        (col_idx, band_idx * BAND_CELLS as i32 + (z / CELL_STEPS) as i32, ((y / CELL_STEPS) << BAND_SHAMT) | (x / CELL_STEPS))
+        (
+            col_idx,
+            band_idx * BAND_CELLS as i32 + (z / CELL_STEPS) as i32,
+            ((y / CELL_STEPS) << BAND_CELL_SHAMT) | (x / CELL_STEPS),
+        )
     }
 
     fn touch(&mut self, cell: CellKey) {
         if self.touched_set.insert(cell) {
-            self.touched.push([(cell.2 & (BAND_CELLS - 1)) as i32, (cell.2 >> BAND_SHAMT) as i32, cell.1]);
+            self.touched.push([(cell.2 & (BAND_CELLS - 1)) as i32, (cell.2 >> BAND_CELL_SHAMT) as i32, cell.1]);
         }
     }
 
@@ -1363,7 +1387,7 @@ impl Store {
     /// The run of a chunk's entries in the cell at band-local (cx, cy) and
     /// absolute cell Z `cz`.
     pub fn cell(&self, col_idx: IVec, cx: u32, cy: u32, cz: CellZ) -> Option<CellRec> {
-        self.cells.get(&(col_idx, cz, (cy << BAND_SHAMT) | cx)).copied()
+        self.cells.get(&(col_idx, cz, (cy << BAND_CELL_SHAMT) | cx)).copied()
     }
 
     /// Every record gone, as a load that could not be read leaves the world.

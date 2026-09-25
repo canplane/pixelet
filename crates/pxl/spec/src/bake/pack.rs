@@ -21,7 +21,7 @@
 
 use crate::cell::cube::ground_pack;
 
-use super::format::{const_str_eq, GroundChannelKey, GROUND_CH_KEYS};
+use super::format::{GroundChannelKey, GROUND_CH_KEYS};
 
 /// A ground cell, its four channels packed.
 pub type GroundCell = u16;
@@ -32,16 +32,10 @@ const _: () = assert!(
 );
 
 /// Where `key`'s field sits among the packed ones, which is where
-/// `ground_pack`'s rows are indexed from.
+/// `ground_pack`'s rows are indexed from: the key's own number, the generator
+/// writing both from one list.
 const fn field_of(key: GroundChannelKey) -> usize {
-    let mut i = 0;
-    while i < ground_pack::CHANNELS.len() {
-        if const_str_eq(ground_pack::CHANNELS[i], key.name()) {
-            return i;
-        }
-        i += 1;
-    }
-    panic!("a ground channel with no field in the packed cell")
+    key as usize
 }
 
 /// The catalog number channel `key` holds in `cell`, as the four planes held

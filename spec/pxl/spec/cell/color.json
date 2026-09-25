@@ -1,5 +1,8 @@
 {
   "_meta": { "source": "land/water/structure/transport: OpenStreetMap Carto; block: hand-picked" },
+  "common": {
+    "unknown": { "hex": "#D9D0CC", "note": "A cell whose data is missing or invalid, a visible neutral grey so it reads as not known rather than as whatever drew last." }
+  },
   "land": {
     "bare": { "hex": "#EEE5DC" },
     "sea": { "hex": "#AAD3DF" },

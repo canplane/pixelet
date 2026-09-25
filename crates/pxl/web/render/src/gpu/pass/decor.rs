@@ -14,13 +14,14 @@
 //! by image rather than by group, since two variants — two kinds, even — may
 //! name the same skin and a texture is uploaded per row, not per group.
 
-use crate::frame::draw::{DRAW_WORDS, MODEL_VERTEX_WORDS, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, UNIFORM_FLOATS};
+use crate::frame::draw::{DRAW_WORDS, PIPELINE_DECOR, PIPELINE_GHOST_DECOR, UNIFORM_FLOATS};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_PREPASS};
-use crate::gpu::api::{buffer_usage, object, release, GpuApi};
-use crate::gpu::api_spec::{address, compare, filter, format, resource};
+use crate::gpu::api::{object, release, GpuApi};
+use crate::gpu::api_spec::{address, compare, filter, format};
 use crate::gpu::atmosphere::AIR_WORDS;
+use crate::gpu::pass::model::{draw_model, DrawUniforms, FrameGroups};
 use crate::gpu::pipeline::{Built, Pipelines};
-use crate::gpu::renderer::{frame_group, put_f32, put_u32, skin_group, Blocks, Scratch};
+use crate::gpu::renderer::{put_f32, put_u32, skin_group, Blocks};
 use crate::gpu::shadow::Shadow;
 
 /// A decor draw's dynamic uniform (shader/decor.wgsl's Draw): translation, the
@@ -67,16 +68,9 @@ pub struct DecorPass {
     ghost: Built,
     depth: Built,
     prepass: Built,
-    frame_group: u32,
-    light_group: u32,
-    /// The air's entries, which group 0 is made with again on a rebind.
-    air: [u32; AIR_WORDS],
+    frames: FrameGroups,
     sampler: u32,
-    stride: u32,
-    draw_buffer: u32,
-    draw_bytes: u32,
-    draw_group: u32,
-    scratch: Scratch,
+    uniforms: DrawUniforms,
     groups: [Group; GROUPS],
     skins: [Skin; GROUPS],
 }
@@ -93,16 +87,10 @@ impl DecorPass {
             ghost: pipelines.build(g, PIPELINE_GHOST_DECOR, format::CANVAS, samples),
             depth: pipelines.build(g, PIPELINE_DECOR_DEPTH, format::CANVAS, samples),
             prepass: pipelines.build(g, PIPELINE_DECOR_PREPASS, format::CANVAS, 1),
-            frame_group: frame_group(g, lit.layouts[0], frame_buffer, shadow.entries(1), ao, air),
-            light_group: frame_group(g, lit.layouts[0], shadow.light_frame, shadow.blank_entries(1), ao, air),
-            air,
+            frames: FrameGroups::new(g, lit.layouts[0], frame_buffer, shadow.entries(1), Some((shadow.light_frame, shadow.blank_entries(1))), ao, air),
             lit,
             sampler,
-            stride: DRAW_UNIFORM_BYTES.max(align),
-            draw_buffer: 0,
-            draw_bytes: 0,
-            draw_group: 0,
-            scratch: Scratch::default(),
+            uniforms: DrawUniforms::new(DRAW_UNIFORM_BYTES, align),
             groups: [Group::default(); GROUPS],
             skins: [Skin::default(); GROUPS],
         }
@@ -116,10 +104,8 @@ impl DecorPass {
 
     /// Group 0 again over a new occlusion map's entry `ao`.
     pub fn rebind(&mut self, g: &GpuApi, frame_buffer: u32, shadow: &Shadow, ao: [u32; 5]) {
-        release(self.frame_group);
-        release(self.light_group);
-        self.frame_group = frame_group(g, self.lit.layouts[0], frame_buffer, shadow.entries(1), ao, self.air);
-        self.light_group = frame_group(g, self.lit.layouts[0], shadow.light_frame, shadow.blank_entries(1), ao, self.air);
+        self.frames
+            .rebind(g, self.lit.layouts[0], frame_buffer, shadow.entries(1), Some((shadow.light_frame, shadow.blank_entries(1))), ao);
     }
 
     /// Each group's model block and skin image as the kernel has them now, in
@@ -176,70 +162,48 @@ impl DecorPass {
         self.groups.get(group as usize).and_then(|gr| blocks.get(gr.mesh)).map_or(0, |(_, _, index_cnt)| index_cnt / 3)
     }
 
-    /// Writes every decor draw's uniforms, ghosts included, in one write: a
-    /// later write to the same buffer before the submit would stand for every draw.
+    /// Writes every decor draw's uniforms, ghosts included, in one write.
     pub fn prepare(&mut self, g: &GpuApi, draws: &[u32], uniforms: &[f32]) {
-        let n = draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| is_decor(d[4])).count() as u32;
-        if n == 0 {
-            return;
-        }
-        let need = self.stride * n.next_power_of_two().max(8);
-        if need > self.draw_bytes {
-            release(self.draw_group);
-            release(self.draw_buffer);
-            self.draw_buffer = object();
-            (g.buffer)(self.draw_buffer, need, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-            self.draw_group = object();
-            (g.bind_group)(self.draw_group, self.lit.layouts[1], &[0, resource::BUFFER, self.draw_buffer, 0, DRAW_UNIFORM_BYTES]);
-            self.draw_bytes = need;
-        }
-        let stride = self.stride as usize;
-        let buf = self.scratch.take(n * self.stride);
-        for (slot, d) in draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| is_decor(d[4])).enumerate() {
-            let (at, u) = (slot * stride, d[3] as usize * UNIFORM_FLOATS);
-            put_f32(buf, at, uniforms[u]);
-            put_f32(buf, at + 4, uniforms[u + 1]);
-            put_f32(buf, at + 8, uniforms[u + 2]);
-            put_u32(buf, at + 12, uniforms[u + 3] as u32);
-            put_u32(buf, at + 16, d[2]);
-            put_f32(buf, at + 20, uniforms[u + 4]);
-            put_u32(buf, at + 24, 0);
-            put_u32(buf, at + 28, 0);
-        }
-        (g.write_buffer)(self.draw_buffer, 0, buf);
+        let mine = || draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| is_decor(d[4]));
+        self.uniforms.write(g, self.lit.layouts[1], mine().count() as u32, mine(), |buf, d| {
+            let u = d[3] as usize * UNIFORM_FLOATS;
+            put_f32(buf, 0, uniforms[u]);
+            put_f32(buf, 4, uniforms[u + 1]);
+            put_f32(buf, 8, uniforms[u + 2]);
+            put_u32(buf, 12, uniforms[u + 3] as u32);
+            put_u32(buf, 16, d[2]);
+            put_f32(buf, 20, uniforms[u + 4]);
+            put_u32(buf, 24, 0);
+            put_u32(buf, 28, 0);
+        });
     }
 
     /// The opaque decor into the open pass, after `prepare`.
     pub fn draw(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
-        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, self.lit.pipeline, self.frame_group)
+        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, self.lit.pipeline, self.frames.frame)
     }
 
     /// The opaque decor's depth from the light.
     pub fn draw_depth(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
-        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, self.depth.pipeline, self.light_group)
+        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, self.depth.pipeline, self.frames.light)
     }
 
     /// The opaque decor's depth from the eye, for the screen-space occlusion.
     pub fn draw_prepass(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
-        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, self.prepass.pipeline, self.frame_group)
+        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_DECOR, self.prepass.pipeline, self.frames.frame)
     }
 
     /// The ghost's decor, blended, after everything opaque.
     pub fn draw_ghosts(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks) -> u32 {
-        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_GHOST_DECOR, self.ghost.pipeline, self.frame_group)
+        self.draw_pipeline(g, pass, draws, blocks, PIPELINE_GHOST_DECOR, self.ghost.pipeline, self.frames.frame)
     }
 
     #[allow(clippy::too_many_arguments)]
     fn draw_pipeline(&mut self, g: &GpuApi, pass: u32, draws: &[u32], blocks: &mut Blocks, which: u32, pipeline: u32, group0: u32) -> u32 {
-        let mut slot = 0;
         let mut drawn = 0;
-        for d in draws.as_chunks::<DRAW_WORDS>().0 {
-            if !is_decor(d[4]) {
-                continue;
-            }
-            let offset = slot * self.stride;
-            slot += 1;
-            if d[4] != which || self.draw_group == 0 {
+        for (k, d) in draws.as_chunks::<DRAW_WORDS>().0.iter().filter(|d| is_decor(d[4])).enumerate() {
+            let Some((group, offset)) = self.uniforms.at(k as u32) else { break };
+            if d[4] != which {
                 continue;
             }
             let Some((model, vertex_cnt, index_cnt, skin)) = self.model_of(g, d[1], blocks) else { continue };
@@ -248,17 +212,10 @@ impl DecorPass {
                 (g.set_pipeline)(pass, pipeline);
                 (g.set_bind_group)(pass, 0, group0, &[]);
             }
-            (g.set_bind_group)(pass, 1, self.draw_group, &[offset]);
+            (g.set_bind_group)(pass, 1, group, &[offset]);
             (g.set_bind_group)(pass, 2, skin, &[]);
             (g.set_bind_group)(pass, 3, block, &[]);
-            let mut at = 0;
-            for lane in 0..self.lit.lanes {
-                let size = vertex_cnt * self.lit.strides[lane];
-                (g.set_vertex_buffer)(pass, lane as u32, model, at, size);
-                at += size;
-            }
-            (g.set_index_buffer)(pass, model, vertex_cnt * MODEL_VERTEX_WORDS * 4, index_cnt * 4);
-            (g.draw_indexed)(pass, index_cnt, d[2], 0, 0);
+            draw_model(g, pass, &self.lit, model, vertex_cnt, index_cnt, d[2]);
             drawn += 1;
         }
         drawn

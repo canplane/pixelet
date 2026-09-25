@@ -17,7 +17,7 @@
 //! lists, so nothing here decides what is shown, and a block never has to
 //! outlive the scheduler's naming of it.
 
-use pxl_spec::space::pyramid::{chunk_span_of, Cell, CHUNK_CELLS, PAGE_CELLS};
+use pxl_spec::space::pyramid::{chunk_span_of, Cell, CHUNK_CELLS, GROUND, PAGE_CELLS};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 use pxl_render::look::lod::LodStep;
@@ -28,7 +28,7 @@ use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView};
 use pxl_render::mesh::volume::Volumes;
 use pxl_render::mesh::voxel_scan::{Apron, BandView, RunSet, ScanContext, ScanStep, APRON, COL_SPAN};
-use pxl_spec::bake::constant::{ELE_PADDED_SPAN, U_PER_CELL};
+use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::space::indexer::{FROM_L2_IDX, FROM_L3_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
@@ -448,7 +448,7 @@ fn objects_revision_of(level: u32, base: IVec) -> u32 {
 fn folds_into(level: u32, base: IVec, col: IVec) -> bool {
     // In units: a cell of the level, the chunk, and a column, which is a
     // leaf chunk.
-    let (s, span, w) = (U_PER_CELL * f64::from(1u32 << level), chunk_span_of(level), chunk_span_of(0));
+    let (s, span, w) = (GROUND.scale(level).side(), chunk_span_of(level), chunk_span_of(0));
     let (o, x0, y0) = (FROM_L2_IDX(col), ivec::X(base) as f64, ivec::Y(base) as f64);
     let (ox, oy) = (ivec::X(o) as f64, ivec::Y(o) as f64);
     ox + w > x0 - s && ox < x0 + span + s && oy + w > y0 - s && oy < y0 + span + s
@@ -1145,8 +1145,7 @@ impl Builder {
         // the chunk is.
         let view = unsafe { Self::page_view(world, page) };
         self.sample.read(&view, world.materials, tx0, ty0, hidden_ground(show));
-        let scale = 1u32 << level;
-        let s = i64::from(scale);
+        let target = GROUND.scale(level);
         let (x0, y0) = (ivec::X(base), ivec::Y(base));
         let mut columns = Vec::new();
         for i in 0..world.store.chunk_count() {
@@ -1157,16 +1156,23 @@ impl Builder {
             let o = FROM_L2_IDX(key);
             let (ox, oy) = (ivec::X(o), ivec::Y(o));
             if let Some(entries) = world.store.entries(key) {
-                columns.push(Column { cx0: ox, cy0: oy, entries });
+                columns.push(Column { x0: ox, y0: oy, entries });
             }
         }
         let hide = self.hide.map(|(col, band, pos)| {
             let o = FROM_L2_IDX(col);
             (ivec::X(o), ivec::Y(o), band, pos)
         });
-        fold_columns(world.painter, &columns, level, hide, &mut self.folded);
+        fold_columns(world.painter, &columns, target, hide, &mut self.folded);
         assert!(self.direct.begin_direct(), "the direct writer left open");
-        write_level_runs(&mut self.direct, &self.sample, world.painter, &self.folded, (x0.div_euclid(s), y0.div_euclid(s)), scale);
+        write_level_runs(
+            &mut self.direct,
+            &self.sample,
+            world.painter,
+            &self.folded,
+            (target.index(x0), target.index(y0)),
+            GROUND.scale(0).count_in(target),
+        );
         let bytes = self.direct.close_direct();
         let Some((set, at)) = self.set_of(id, bytes) else {
             self.direct.abort();

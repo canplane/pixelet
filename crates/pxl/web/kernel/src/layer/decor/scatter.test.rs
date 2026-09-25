@@ -6,7 +6,7 @@ use crate::layer::decor::kind::train::TRAIN_RULES;
 use crate::layer::decor::kind::tree::TREE_RULES;
 use pxl_spec::bake::pack::with_channel;
 
-// A whole page's lanes, because that is what a page is: PAGE_CELL_SPAN²
+// A whole page's lanes, because that is what a page is: PAGE_CELLS²
 // cells. A fixture of fewer rows lets an alignment vote near the last row
 // read past the lane.
 const SPAN: usize = PAGE_CELLS as usize;

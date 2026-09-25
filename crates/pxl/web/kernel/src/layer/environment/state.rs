@@ -9,6 +9,7 @@
 use pxl_render::look::color::linear_rgb;
 use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS, NIGHT, THEME_FLOATS};
 use pxl_render::look::globe::Globe;
+use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::V3;
@@ -19,14 +20,14 @@ use crate::host::{now, wall_now};
 use crate::kernel::kernel;
 use crate::layer::environment::celestial_position::{equatorial_to_local, moon_position, sun_position};
 use crate::layer::environment::config::light_cfg;
-use crate::layer::environment::fog::{band_at, camera_height, centre_ground};
+use crate::layer::environment::fog::{band_at, eye_ground, eye_height, reach_at};
 use crate::layer::environment::theme::{themes, Theme};
 use crate::layer::environment::theme_clock::theme_key;
 use crate::shell::map_store::map_store;
 use crate::world::change::{request_world_tick, wake_at};
 use crate::world::chunk::table::Frame;
-use crate::world::frame::view::{camera_centre, view};
-use crate::world::pyramid::window::{drawn_from_eye, window};
+use crate::world::frame::view::camera_centre;
+use crate::world::pyramid::Layer as _;
 
 // The map's own fallback, so the first frames before map_center exists light
 // the world from a real place instead of computing sun and moon for (0, 0).
@@ -280,9 +281,12 @@ impl EnvironmentDraw {
         let r = Globe::at(self.lat.to_radians()).radius_u();
         let over = frame.camera[0].hypot(frame.camera[1]).hypot(frame.camera[2] + r) - r;
         // Where the ground ends for the eye: the nearer of what the air and
-        // the planet leave (environment/fog.rs) and what the rings draw.
-        let v = view();
-        let band = band_at(camera_height(v.dist, v.polar), drawn_from_eye(v.dist, v.polar, window().end - 1));
+        // the planet leave (environment/fog.rs) and what the window draws.
+        let height = eye_height();
+        // What the ground's pyramid last drew, the view it was made from:
+        // read, not made again a frame at a time.
+        let drawn = Terrain::pyramid().domain().map(|d| d.far);
+        let band = band_at(height, drawn.unwrap_or_else(|| reach_at(height)));
         let light = Light {
             theme: self.current,
             sun: self.sun,
@@ -294,7 +298,7 @@ impl EnvironmentDraw {
             fog_far: band.1,
             floor: light_cfg::FLOOR,
             altitude_km: (frame.centre_z + over) * km_per_u,
-            ground_km: centre_ground() * km_per_u,
+            ground_km: eye_ground() * km_per_u,
             km_per_u,
             latitude: self.lat.to_radians(),
             star_frame: equatorial_to_local(self.days, self.lat, self.lon),

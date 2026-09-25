@@ -35,12 +35,14 @@ use std::process::ExitCode;
 
 use flate2::write::ZlibEncoder;
 use flate2::{Compression, Crc};
-use pxl_spec::bake::constant::{ELE_PADDED_SPAN, PAGE_CELL_SPAN};
+use pxl_spec::bake::constant::ELE_PADDED_SPAN;
 use pxl_spec::bake::format::decode_terrain;
+use pxl_spec::bake::format::GroundChannelKey;
 use pxl_spec::bake::pack::GroundCell;
 use pxl_spec::bake::published::PUBLISHED_VERSION;
 use pxl_spec::cell::cube::ground_pack;
-use pxl_spec::cell::{cube_colors, cube_types};
+use pxl_spec::cell::{color, cube_types};
+use pxl_spec::space::pyramid::PAGE_CELLS;
 use xpute_core::wire::xtp::{HDR_SZ, WORD_SZ};
 
 const MAGENTA: u32 = 0xff00ff;
@@ -73,8 +75,8 @@ fn decode(pkt: &[u8]) -> Result<Page, String> {
     if ele.len() != (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize {
         return Err(format!("ele has {} samples, expected {ELE_PADDED_SPAN}²", ele.len()));
     }
-    if cells.len() != (PAGE_CELL_SPAN * PAGE_CELL_SPAN) as usize {
-        return Err(format!("ground has {} cells, expected {PAGE_CELL_SPAN}²", cells.len()));
+    if cells.len() != (PAGE_CELLS * PAGE_CELLS) as usize {
+        return Err(format!("ground has {} cells, expected {PAGE_CELLS}²", cells.len()));
     }
     // Nothing may follow: a page is exactly its tree, and bytes past it are a
     // writer that disagrees with the reader, which only checks that the
@@ -195,11 +197,11 @@ fn heights_png(page: &Page, s: &Summary) -> Vec<u8> {
 
 /// Channel `f` in the palette's colours.
 fn channel_png(page: &Page, f: usize) -> Vec<u8> {
-    let swatches = cube_colors.get(ground_pack::CHANNELS[f]);
+    let channel = GroundChannelKey::from_id(f as u32).expect("a packed field is a ground channel");
     let rgb_of = |cell: GroundCell| match ground_pack::NUMBER[f].get(index_of(cell, f)) {
         None => MAGENTA,
         Some(&n) if n == cube_types::common::void => 0,
-        Some(&n) => swatches.and_then(|c| c.get(&(n as u32))).copied().flatten().map_or(MAGENTA, |s| s.rgb),
+        Some(&n) => color::ground(channel, n).map_or(MAGENTA, |s| s.rgb),
     };
     let px: Vec<u8> = page
         .cells
@@ -209,7 +211,7 @@ fn channel_png(page: &Page, f: usize) -> Vec<u8> {
             [(v >> 16) as u8, (v >> 8) as u8, v as u8]
         })
         .collect();
-    png(PAGE_CELL_SPAN, PAGE_CELL_SPAN, 3, &px)
+    png(PAGE_CELLS, PAGE_CELLS, 3, &px)
 }
 
 // ---- driver ----

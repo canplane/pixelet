@@ -6,9 +6,10 @@
 //! at a resolution of its own, since the rings of neighbouring levels meet
 //! at chunk edges and not at page edges (window.rs).
 
+use pxl_spec::space::hierarchy::{child_of, parent_of};
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
-use pxl_spec::space::pyramid::{cell_base, child_of, chunk_span_of, parent_of, span_of, Cell, LevelPage, CHUNK_CELLS, PAGE_CELLS, PAGE_CHUNKS, TOP_LEVEL};
+use pxl_spec::space::pyramid::{cell_base, chunk_span_of, span_of, Cell, LevelPage, CHUNK_CELLS, PAGE_CELLS, PAGE_CHUNKS, TOP_LEVEL};
 
 /// A chunk by where it is: its page, and its corner in the page's cells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]

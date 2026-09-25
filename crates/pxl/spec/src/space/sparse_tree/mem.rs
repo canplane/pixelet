@@ -44,6 +44,7 @@
 
 use xpute_core::wire::xtp::spec::{ALIGN, GET_WORD, NONE, RESERVED, SET_WORD, WORD_SZ};
 
+use crate::space::hierarchy::{child_of, slot_of, Scale};
 use crate::space::pvf3::PVecTraits;
 
 /// Scratchpad for 64-bit word operations to avoid allocation.
@@ -68,9 +69,9 @@ pub struct SparseTreeMemory<T: Copy + Default + PartialEq> {
 /// Sparse tree layout.
 ///
 /// Level model:
-/// - min = leaf level
-/// - max = root level
-/// - dep = max - min
+/// - min = the leaf's scale
+/// - max = the root block's scale
+/// - dep = how many levels max is above min
 ///
 /// Structural interpretation:
 /// - one descent step consumes one bit per active axis
@@ -79,11 +80,9 @@ pub struct SparseTreeMemory<T: Copy + Default + PartialEq> {
 pub struct SparseTreeLayout {
     pub dim: u32, // dimension (2 or 3)
 
-    // Signed log2 scale used by the layout contract.
-    // - min can be negative (e.g. -2 => 1m if 0 means "1 lattice unit")
-    // - core never shifts by signed values; it normalizes to u = level - min (u>=0).
-    pub min: i32, // leaf level (signed)
-    pub max: i32, // root level (signed). dep = max - min
+    // The core never shifts by a scale: it counts u, the levels above min.
+    pub min: Scale,
+    pub max: Scale,
 }
 
 // ============ Allocator ============
@@ -106,9 +105,9 @@ fn block_width(dim: u32) -> u32 {
 /// - dep = max - min must be >= 1
 /// - therefore the root is always one top-level child block, never a scalar leaf
 fn validate_layout(layout: &SparseTreeLayout) {
-    let dep = layout.max - layout.min;
+    let dep = layout.max.above(layout.min);
     if dep <= 0 {
-        panic!("sparse_tree: bad layout: expected max > min, got min={}, max={}", layout.min, layout.max);
+        panic!("sparse_tree: bad layout: expected max > min, got min={:?}, max={:?}", layout.min, layout.max);
     }
 }
 
@@ -201,23 +200,18 @@ pub fn fill<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layout
 
 // ============ Traversal ============
 
-/// The child slot `key` selects at level `u`: one bit per active axis.
-fn child_of<K: PVecTraits>(layout: &SparseTreeLayout, key: K::V, u: i32) -> u32
+/// The child slot `key` selects at level `u`: its lanes `u` levels above the
+/// leaf, in the hierarchy's slot order over the active axes.
+fn slot_at<K: PVecTraits>(layout: &SparseTreeLayout, key: K::V, u: i32) -> u32
 where
     K::V: Copy,
 {
     let shifted = K::sh(key, -u);
-    let mut child = (K::X(shifted) & 1) as u32;
-    if layout.dim >= 2 {
-        child |= ((K::Y(shifted) & 1) as u32) << 1;
-    }
-    if layout.dim >= 3 {
-        child |= ((K::Z(shifted) & 1) as u32) << 2;
-    }
-    child
+    let (x, y, z) = (K::X(shifted), K::Y(shifted), K::Z(shifted));
+    (if layout.dim == 3 { slot_of([x, y, z]) } else { slot_of([x, y]) }) as u32
 }
 
-/// Resolve the leaf slot corresponding to `key` at `target_shift`.
+/// Resolve the leaf slot corresponding to `key` at `target`.
 ///
 /// Semantics:
 /// - traversal state carries a current block base
@@ -226,14 +220,14 @@ where
 ///
 /// Return value:
 /// - always one concrete slot, never a block base for the next level unless target landed there
-pub fn resolve<K: PVecTraits, T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, layout: &SparseTreeLayout, key: K::V, target_shift: i32, root: u32) -> u32
+pub fn resolve<K: PVecTraits, T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, layout: &SparseTreeLayout, key: K::V, target: Scale, root: u32) -> u32
 where
     K::V: Copy,
 {
     validate_layout(layout);
 
-    let dep = layout.max - layout.min;
-    let target_u = target_shift - layout.min;
+    let dep = layout.max.above(layout.min);
+    let target_u = target.above(layout.min);
 
     if target_u < 0 {
         return root;
@@ -246,7 +240,7 @@ where
 
     let mut u = dep - 1;
     while u >= target_u {
-        let child = child_of::<K>(layout, key, u);
+        let child = slot_at::<K>(layout, key, u);
 
         let slot = base + child;
         let node = mem.heap[slot as usize];
@@ -283,7 +277,7 @@ where
 
 /// Write one value, splitting only when needed.
 ///
-/// `target_shift` (the finest, `layout.min`, for a leaf — the same
+/// `target` (the finest, `layout.min`, for a leaf — the same
 /// parameter shape as `resolve()`) lets a write claim a whole coarser
 /// block in one call instead of always bottoming out at the finest leaf:
 /// reaching `target_u` unconditionally claims that slot as one uniform
@@ -295,7 +289,7 @@ where
 /// Traversal invariant:
 /// - `base` is always the current child-block base
 /// - `slot` is the selected child entry inside that block
-pub fn set<K: PVecTraits, T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, key: K::V, val: T, target_shift: i32, root: u32)
+pub fn set<K: PVecTraits, T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layout: &SparseTreeLayout, key: K::V, val: T, target: Scale, root: u32)
 where
     K::V: Copy,
 {
@@ -304,16 +298,16 @@ where
     let mut base = root;
     let width = block_width(layout.dim);
 
-    let dep = layout.max - layout.min;
+    let dep = layout.max.above(layout.min);
     if dep <= 0 {
         return;
     }
 
-    let target_u = target_shift - layout.min;
+    let target_u = target.above(layout.min);
 
     let mut u = dep - 1;
     while u >= target_u {
-        let child = child_of::<K>(layout, key, u);
+        let child = slot_at::<K>(layout, key, u);
 
         let slot = (base + child) as usize;
 
@@ -358,7 +352,7 @@ pub fn build<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, layou
     validate_layout(layout);
 
     let width = block_width(layout.dim);
-    let dep = layout.max - layout.min;
+    let dep = layout.max.above(layout.min);
 
     if leaves.is_empty() {
         panic!("sparse_tree: empty leaves");
@@ -439,7 +433,7 @@ where
 {
     validate_layout(layout);
 
-    let dep = layout.max - layout.min;
+    let dep = layout.max.above(layout.min);
 
     let side: u32 = 1 << dep;
     let plane = side * side;
@@ -477,15 +471,15 @@ where
 /// Visit every maximal uniform leaf block in the tree — the inverse of
 /// `dense()`: instead of expanding to one value per finest-level cell, this
 /// calls `visit` once per *block*, however coarse, with that block's own
-/// corner (in min-level lattice units — multiply by `2**layout.min` for a
-/// real-unit offset) and shift level (`2**level` is that block's real-unit
+/// corner (in steps of `layout.min` — multiply by `layout.min.side()` for a
+/// real-unit offset) and scale (its `side()` is the block's real-unit
 /// size). Skips branch slots entirely (never visits an internal node, only
 /// leaves), so a caller building a sparse "list of occupied regions" view
 /// (e.g. one render/placement record per uniform block) never has to
 /// re-detect uniformity itself the way `dense()`-then-rescan would.
-pub fn walk<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, layout: &SparseTreeLayout, visit: &mut dyn FnMut(i32, i32, i32, i32, T), root: u32) {
+pub fn walk<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, layout: &SparseTreeLayout, visit: &mut dyn FnMut(i32, i32, i32, Scale, T), root: u32) {
     validate_layout(layout);
-    let dep = layout.max - layout.min;
+    let dep = layout.max.above(layout.min);
     let width = block_width(layout.dim);
 
     // The root itself can never be a scalar leaf (invariant #4 — it's always
@@ -516,16 +510,16 @@ pub fn walk<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, layout: &S
 }
 
 #[allow(clippy::too_many_arguments)]
-fn _walk<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, dim: u32, min: i32, base: u32, u: i32, x: i32, y: i32, z: i32, visit: &mut dyn FnMut(i32, i32, i32, i32, T)) {
+fn _walk<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, dim: u32, min: Scale, base: u32, u: i32, x: i32, y: i32, z: i32, visit: &mut dyn FnMut(i32, i32, i32, Scale, T)) {
     let width = block_width(dim);
 
     for c in 0..width {
         let slot = (base + c) as usize;
         let node = mem.heap[slot];
 
-        let bit_x = (c & 1) as i32;
-        let bit_y = if dim >= 2 { ((c >> 1) & 1) as i32 } else { 0 };
-        let bit_z = if dim >= 3 { ((c >> 2) & 1) as i32 } else { 0 };
+        // The child's own bit on each axis: its corner a level down from the
+        // block's, which at the finest scale is that bit shifted by u.
+        let [bit_x, bit_y, bit_z] = child_of([0; 3], c as usize).map(|b| b as i32);
         let cx = x | (bit_x << u);
         let cy = y | (bit_y << u);
         let cz = z | (bit_z << u);
@@ -533,7 +527,7 @@ fn _walk<T: Copy + Default + PartialEq>(mem: &SparseTreeMemory<T>, dim: u32, min
         if node & NODE_MSB != 0 {
             _walk(mem, dim, min, node & BLOCK_MASK, u - 1, cx, cy, cz, visit);
         } else {
-            visit(cx, cy, cz, min + u, mem.data[slot]);
+            visit(cx, cy, cz, min.up(u), mem.data[slot]);
         }
     }
 }
@@ -552,7 +546,7 @@ pub fn compact<T: Copy + Default + PartialEq>(mem: &mut SparseTreeMemory<T>, lay
 
     let width = block_width(layout.dim);
 
-    _prune(mem, root, layout.max - layout.min, width);
+    _prune(mem, root, layout.max.above(layout.min), width);
 
     let mut new_mem = alloc::<T>(layout.dim, mem.head);
 

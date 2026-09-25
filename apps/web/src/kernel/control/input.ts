@@ -27,6 +27,7 @@ import {
   PointerPhase,
   Sensor,
 } from "@/kernel/abi/cmd.spec.ts";
+import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import { send_permission } from "@/kernel/control/sensor.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { request_frame, set_driver, strobe } from "@/kernel/sched.ts";
@@ -37,22 +38,24 @@ export function send_rect(element: HTMLElement): void {
   CORE_BUILD.send(0, Command.INPUT_UPDATE, encode_input_update({ left: r.left, top: r.top, width: r.width, height: r.height }));
 }
 
-/** What the pointer holds: a tool, the placeable cube's or decor's catalog
- * number, and the object size's tier. The kernel keeps no pick of its own; each
- * pointer event carries this. */
+/** What the pointer holds: a tool, the held cube's ground channel (none for
+ * a flat colour) and type, or the decor kind, by the catalog's numbers, and
+ * the object size's tier. The kernel keeps no pick of its own; each pointer
+ * event carries this. */
 interface Holding {
   tool: ActiveTool;
+  channel: GroundChannelKey | null;
   value: u32;
   tier: u32;
 }
 
-let holding: Holding = { tool: ActiveTool.Pointer, value: 0, tier: 0 };
+let holding: Holding = { tool: ActiveTool.Pointer, channel: null, value: 0, tier: 0 };
 /** The last hovering pointer, while it is over the canvas. */
 let last_hover: { kind: PointerKind; id: i32; button: i32; x: f64; y: f64 } | null = null;
 
 function send_pointer_at(phase: PointerPhase, kind: PointerKind, id: i32, button: i32, x: f64, y: f64): void {
-  const { tool, value, tier } = holding;
-  CORE_BUILD.send(0, Command.INPUT_POINTER, encode_input_pointer({ phase, kind, id, button, x, y, tool, value, tier }));
+  const { tool, channel, value, tier } = holding;
+  CORE_BUILD.send(0, Command.INPUT_POINTER, encode_input_pointer({ phase, kind, id, button, x, y, tool, channel, value, tier }));
   strobe.input();
   request_frame();
 }
@@ -69,8 +72,8 @@ function send_pointer(phase: PointerPhase, e: PointerEvent): void {
  * is sent, as a browser synthesizes a mouse move when what is under a still
  * cursor changes.
  */
-export function kernel_hold(tool: ActiveTool, value: u32, tier: u32): void {
-  holding = { tool, value, tier };
+export function kernel_hold(tool: ActiveTool, channel: GroundChannelKey | null, value: u32, tier: u32): void {
+  holding = { tool, channel, value, tier };
   if (last_hover) send_pointer_at(PointerPhase.Move, last_hover.kind, last_hover.id, last_hover.button, last_hover.x, last_hover.y);
 }
 

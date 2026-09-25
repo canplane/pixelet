@@ -24,7 +24,9 @@
 //! walk serves the raycast (`ColumnRuns`), which asks for one column of a
 //! volume on a hover and reads the answer once.
 
-use crate::mesh::volume::{BAND_SPAN, BAND_VOXELS, MATERIAL_OBJECT, SUB_CELL_NONE};
+use pxl_spec::bake::constant::BAND_CELLS;
+
+use crate::mesh::volume::{BAND_VOXELS, MATERIAL_OBJECT, SUB_CELL_NONE};
 
 /// Cells on a band's side; a chunk is one column of bands.
 /// The ring of neighbour columns a run set carries around the chunk's own.
@@ -43,7 +45,7 @@ use crate::mesh::volume::{BAND_SPAN, BAND_VOXELS, MATERIAL_OBJECT, SUB_CELL_NONE
 /// column: it exists to be asked about.
 pub const APRON: u32 = 1;
 /// Columns on a side of a run set: the chunk's own and the ring.
-pub const COL_SPAN: u32 = BAND_SPAN + 2 * APRON;
+pub const COL_SPAN: u32 = BAND_CELLS + 2 * APRON;
 const COLUMN_CNT: usize = (COL_SPAN * COL_SPAN) as usize;
 
 /// A padded column's index, from the chunk's own (cx, cy).
@@ -400,7 +402,7 @@ fn push(runs: &mut Vec<Run>, run: Run) -> usize {
 }
 
 fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) {
-    let col = (cy * BAND_SPAN + cx) as usize;
+    let col = (cy * BAND_CELLS + cx) as usize;
     let mut open: Option<usize> = None;
     let mut previous_band_z: Option<i32> = None;
     for band in bands {
@@ -411,15 +413,15 @@ fn walk_column(runs: &mut Vec<Run>, bands: &[BandView], cx: u32, cy: u32) {
         }
         previous_band_z = Some(band.band_z);
 
-        let base = col * BAND_SPAN as usize;
-        for local_z in 0..BAND_SPAN as usize {
+        let base = col * BAND_CELLS as usize;
+        for local_z in 0..BAND_CELLS as usize {
             let idx = base + local_z;
             let packed = band.material[idx];
             if packed == 0 {
                 open = None;
                 continue;
             }
-            let z = band.band_z * BAND_SPAN as i32 + local_z as i32;
+            let z = band.band_z * BAND_CELLS as i32 + local_z as i32;
             let (r, g, b) = ((packed >> 16) as u8, (packed >> 8) as u8, packed as u8);
             let material_class = (packed >> 24) as u8;
             let layer_idx = band.layer_idx[idx];

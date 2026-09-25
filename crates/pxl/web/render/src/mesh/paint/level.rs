@@ -1,18 +1,19 @@
 // pxl-render/mesh/paint/level.rs
 
 //! A level-k chunk's runs: its level page's ground and the object layer
-//! folded to the level, 2^k units a column across and the height in units
+//! folded to the level, a level-k cell a column across and the height in the
+//! ground's level-0 cells
 //! (issue/20260921-level-step-and-zoom-are-one-number.md).
 //!
 //! The ground is a height field, and only its footprint coarsens with the
-//! level: the elevation stays in units at every level, so the column is a run
-//! from the floor to it, whole, and never a level cell part filled. A part
-//! cell would have to be drawn as something inside the cell, and every
-//! shape that is not the cell leaves a gap beside the next column — in a flat
-//! place, where the ground is thin against a coarse cell, the whole
-//! level turns to cubes standing apart. In units a column is exactly as tall
-//! as the ground it stands for, and next to a column of the same height it
-//! merges.
+//! level: the elevation stays in level-0 cells at every level, so the column
+//! is a run from the floor to it, whole, and never a level cell part filled.
+//! A part cell would have to be drawn as something inside the cell, and
+//! every shape that is not the cell leaves a gap beside the next column — in
+//! a flat place, where the ground is thin against a coarse cell, the whole
+//! level turns to cubes standing apart. In level-0 cells a column is exactly
+//! as tall as the ground it stands for, and next to a column of the same
+//! height it merges.
 //!
 //! What a placed cube folds to stands over the ground where it lies, a level
 //! cell tall, and air folded to a cell takes the ground out of it, as the
@@ -28,11 +29,12 @@ use crate::mesh::voxel_scan::{ScanContext, APRON, COL_SPAN};
 /// column of the padded grid, the chunk's own and the apron's. `sample` is the
 /// chunk read from its level page; `cells` what the object layer folds to at
 /// the level, by level coordinate; `(cx0, cy0)` the chunk's own first column
-/// at that coordinate; `scale` the level's cell in units. Heights are units.
-pub fn write_level_runs(direct: &mut ScanContext, sample: &ChunkSample, painter: &Painter, cells: &HashMap<[i64; 3], u32>, (cx0, cy0): (i64, i64), scale: u32) {
+/// at that coordinate; `step` how many level-0 cells a level cell spans.
+/// Heights are level-0 cells.
+pub fn write_level_runs(direct: &mut ScanContext, sample: &ChunkSample, painter: &Painter, cells: &HashMap<[i64; 3], u32>, (cx0, cy0): (i64, i64), step: u32) {
     let span = COL_SPAN as i64;
     let apron = APRON as i64;
-    let s = scale as i32;
+    let s = step as i32;
     let mut by_column: Vec<Vec<(i32, u32)>> = vec![Vec::new(); (COL_SPAN * COL_SPAN) as usize];
     for (&[x, y, z], &state) in cells {
         let (px, py) = (x - cx0 + apron, y - cy0 + apron);

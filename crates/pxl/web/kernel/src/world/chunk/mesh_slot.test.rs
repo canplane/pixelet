@@ -2,9 +2,6 @@
 
 use super::*;
 
-/// Chunks a level's drawn ring holds: what one pool's slots are counted in.
-const RING_CHUNKS: u32 = RENDER_AXIS * RENDER_AXIS * PAGE_CHUNKS * PAGE_CHUNKS;
-
 #[test]
 fn the_two_pools_are_disjoint_and_cover_every_slot() {
     let leaf = pool(0, 1);
@@ -13,8 +10,8 @@ fn the_two_pools_are_disjoint_and_cover_every_slot() {
     assert_eq!(rest, pool(3, 1), "a level chunk's step 1 is not a leaf's own tier");
     assert!(rest.end <= leaf.start, "disjoint");
     assert_eq!(leaf.end, OCCUPANCY, "and between them, every slot");
-    assert_eq!(leaf.len() as u32, RING_CHUNKS, "the leaves' own tier: a drawn ring of them");
-    assert_eq!(rest.len() as u32, WINDOW_LEVELS * RING_CHUNKS, "the rest: a ring for every level of the window");
+    assert_eq!(leaf.len() as u32, LEVEL_CHUNKS, "the leaves' own tier: a level's chunks");
+    assert_eq!(rest.len() as u32, WINDOW_LEVELS * LEVEL_CHUNKS, "the rest: a level's chunks for every level of the window");
 }
 
 #[test]

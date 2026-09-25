@@ -117,20 +117,34 @@ fn slot_of(key: u64) -> Option<usize> {
 ///
 /// Re-declaring the same set changes nothing observable, so a producer says
 /// what it wants every turn and never has to notice whether that changed.
+///
+/// In place: a subject still wanted keeps its entry and when it was first
+/// asked for, one no longer wanted leaves, one new joins — so a producer
+/// saying the same thing again allocates nothing.
 pub fn declare(category: Category, wanted: &[(u64, Rank)]) {
     let s = sched();
-    let at = now();
-    let mut was: Vec<(u64, f64)> = Vec::new();
-    s.desired.retain(|w| {
-        if w.category == category {
-            was.push((w.subject, w.enqueue_ms));
-            return false;
+    s.desired.retain_mut(|w| {
+        if w.category != category {
+            return true;
         }
-        true
+        match wanted.iter().find(|(k, _)| *k == w.subject) {
+            Some(&(_, rank)) => {
+                w.rank = rank;
+                true
+            }
+            None => false,
+        }
     });
+    let at = now();
     for &(subject, rank) in wanted {
-        let enqueue_ms = was.iter().find(|(k, _)| *k == subject).map_or(at, |(_, t)| *t);
-        s.desired.push(Wanted { category, subject, rank, enqueue_ms });
+        if !s.desired.iter().any(|w| w.category == category && w.subject == subject) {
+            s.desired.push(Wanted {
+                category,
+                subject,
+                rank,
+                enqueue_ms: at,
+            });
+        }
     }
 }
 

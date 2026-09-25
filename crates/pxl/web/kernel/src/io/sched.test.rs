@@ -142,7 +142,7 @@ fn an_asset_shares_the_credits_and_is_never_withdrawn() {
     let _g = fresh();
     set_credits(1);
     // A page the viewer is waiting on and an asset, both wanted at once.
-    declare(Category::terrain, &[(1, crate::io::policy::page(crate::world::pyramid::Resolved::Missing, false, 0.0))]);
+    declare(Category::terrain, &[(1, crate::io::policy::page(crate::world::pyramid::Resolved::Missing, 0.0))]);
     declare(Category::asset, &[(7, crate::io::policy::asset())]);
     pump();
     assert_eq!(started().len(), 1, "one credit, one read — an asset does not go beside the pages");

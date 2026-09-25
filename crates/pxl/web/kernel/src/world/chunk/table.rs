@@ -5,7 +5,7 @@
 //!
 //! A tick is four passes over the slots. `mount` decides which chunks exist
 //! at all, by range from the anchor; `refresh` measures each against the
-//! frame and flips its IN_FRUSTUM; `recheck` asks the ladder for the tier
+//! frame and flips its IN_FRUSTUM; `recheck` asks the rule for the tier
 //! that distance wants and marks the slot pending when its layout is not
 //! that; `commit` applies a layout whose tiers are all in hand, or releases
 //! one that has gone off screen. What is committed first is `priority`'s
@@ -20,17 +20,16 @@
 //! go. The nodes hold the meshes; this holds every decision about them.
 
 use pxl_spec::space::indexer::L3_IDX;
-use pxl_spec::space::pyramid::{chunk_span_of, Cell, CHUNK_CELLS, PAGE_CELLS, PAGE_CHUNKS};
+use pxl_spec::space::pyramid::{chunk_span_of, Cell, CHUNK_CELLS, GROUND, PAGE_CELLS, PAGE_CHUNKS};
 use std::collections::{BTreeMap, VecDeque};
 
 use pxl_render::frame::draw::DrawList;
 use pxl_render::gpu::arena::{arena_configure, arena_epoch, arena_write};
 use pxl_render::look::globe::Globe;
-use pxl_render::look::lod::{Ladder, COARSEST};
+use pxl_render::look::lod::COARSEST;
 use pxl_render::mesh::chunk_mesher::{box_bounds, Heights};
 use pxl_render::mesh::paint::terrain::adapter::ChunkSample;
 
-use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::Pvf3;
 use pxl_spec::space::pyramid::TOP_LEVEL;
@@ -48,15 +47,13 @@ use crate::layer::environment::state::EnvironmentDraw;
 use crate::layer::marker::frame_gizmo::DebugLines;
 use crate::layer::marker::hover_cursor::GhostDraw;
 use crate::layer::marker::location_puck::Markers;
-use crate::sched::priority::view_centre;
 use crate::shell::setting::store::hidden_ground;
 use crate::world::chunk::mesh_slot::{group_box_words, group_bytes, group_is_fine, pool, slot_at, MeshSlot, FINE_BOXES, OCCUPANCY};
 use crate::world::chunk::node::{BuildEvent, Builder, PageLanes, World, MAX_CHUNKS};
 
 use crate::world::pyramid::chunk::Chunk;
-use crate::world::pyramid::window::{decor_reach, ring_rect, DECOR_REACH};
-use crate::world::pyramid::window::{RENDER_AXIS, WINDOW_LEVELS};
-use crate::world::pyramid::Layer;
+use crate::world::pyramid::window::{split_distance, LEVEL_CHUNKS, WINDOW_LEVELS};
+use crate::world::pyramid::{Domain, Layer};
 use pxl_spec::bake::format::Terrain;
 use pxl_spec::space::indexer::L2_IDX;
 use pxl_spec::space::pyramid::LevelPage;
@@ -68,7 +65,7 @@ const APPROXIMATE_CHUNK_RADIUS: f64 = chunk_span_of(0) * 0.75;
 /// Reconciliation and nothing else. What a chunk should be showing is a
 /// function of the view, so a view that moved is rechecked in the same
 /// frame it moved in (`view_dirty`); this is for what moves without the
-/// view — the ladder's pressure, a generation, a source told late — and for
+/// view — the budget's pressure, a generation, a source told late — and for
 /// anything that sets the flag and is missed. A camera is not polled for.
 const RECHECK_INTERVAL_S: f64 = 0.15;
 /// Layouts applied per frame on screen, and releases off it — more of the
@@ -90,24 +87,19 @@ const MAX_RECLAIMS_WHEN_REFUSED: u32 = 64;
 const MAX_MOUNTS_PER_FRAME: u32 = 64;
 const _: () = assert!(MAX_MOUNTS_PER_FRAME == PAGE_CHUNKS * PAGE_CHUNKS, "a page mounts in the frame it arrives in");
 
-/// Chunks a level's drawn ring holds.
-const RING_CHUNKS: u32 = RENDER_AXIS * RENDER_AXIS * PAGE_CHUNKS * PAGE_CHUNKS;
-
-/// The widest selection there is: the top ring, each of whose pages may be
-/// stood in for by its four children where it has not arrived, and three
-/// quarters of a ring for every level under it — a level's ring is half the
-/// width of the one above, so a quarter of it is wanted finer and the rest
-/// stays (window.rs `Domain`). The terrain draws no more than that
-/// (layer/terrain/present.rs): a finer page stands in only at the top, a
-/// level finer, and the balance a mesh needs only refines toward what the
-/// view wants.
+/// The widest selection there is: the top level's chunks, each of whose
+/// pages may be stood in for by its four children where it has not arrived,
+/// and a level's chunks for every level under it (window.rs `LEVEL_CHUNKS`).
+/// The terrain draws no more than that (layer/terrain/present.rs): a finer
+/// page stands in only at the top, a level finer, and the balance a mesh
+/// needs only refines toward what the view wants.
 ///
 /// The point of writing it down is that it is under MAX_CHUNKS. The table is
 /// a hard budget, so what it can refuse matters: with the widest selection
 /// inside it, what a full table turns away is never the chunk the camera
 /// wants — there is always a stale one to give up instead (`give_room`), and
 /// the current view can always be represented whatever the last one left.
-const WIDEST_SELECTION: usize = (4 * RING_CHUNKS + RING_CHUNKS / 4 * 3 * (WINDOW_LEVELS - 1)) as usize;
+const WIDEST_SELECTION: usize = (4 * LEVEL_CHUNKS + LEVEL_CHUNKS * (WINDOW_LEVELS - 1)) as usize;
 
 const _: () = assert!(WIDEST_SELECTION <= MAX_CHUNKS, "render: a view the chunk table cannot hold at once");
 /// The heap's live share past which off-screen chunks are reclaimed
@@ -119,7 +111,7 @@ const MAX_CACHED_TIERS: usize = 4;
 /// A wait halves a chunk's distance key every this many milliseconds.
 const AGE_HALF_MS: f64 = 4000.0;
 /// The byte budget, paid in LOD: when the heap refuses a block and reclaim
-/// found nothing to give back, the ladder is pulled in a step (the module's
+/// found nothing to give back, the rule's criterion is pulled in a step (the module's
 /// pressure) and the set on screen gets coarser until it fits; a step at
 /// most this often, so the coarser layouts have time to land and free
 /// what they replace before the next is taken, and up to three tiers. A
@@ -144,7 +136,7 @@ pub const SETTLING: u16 = 32;
 /// parent it merged into, the children it split into — and it is drawn until
 /// every one of those is ready, then let go.
 pub const STALE: u16 = 64;
-/// Nothing coarser in the selection draws this chunk's ground, so the ladder
+/// Nothing coarser in the selection draws this chunk's ground, so the rule
 /// is followed as far as it goes here rather than stopping one step past the
 /// chunk's own cells (`relative`): the view wants its ground at the
 /// window's top, which has no ring over it (window.rs `Domain::outermost`).
@@ -167,8 +159,6 @@ pub struct Frame {
     /// The frustum as six planes of (nx, ny, nz, constant).
     pub planes: [f64; 24],
     pub camera: V3,
-    /// Where the camera is heading.
-    pub lead: V3,
     pub viewport_h: f64,
     pub fov_deg: f64,
     pub delta_s: f64,
@@ -178,9 +168,6 @@ pub struct Frame {
     pub hard_slack_ms: f64,
     pub pixel_dither: bool,
     pub retain_budget_bytes: f64,
-    /// The range anchor — the map centre's chunk, in units — when there is
-    /// one: what each level's ring is centred on.
-    pub anchor: Option<[f64; 2]>,
     /// The camera centre's height (view.rs's camera_centre), in units: what
     /// the camera's height over the sea is measured up from.
     pub centre_z: f64,
@@ -188,8 +175,6 @@ pub struct Frame {
     /// back on the planet about (pxl-render's look/globe.rs); none for a flat
     /// world.
     pub globe: Option<Globe>,
-    /// The levels held, lowest first and one past the top (world/pyramid/window.rs).
-    pub window: (u32, u32),
     /// Whether procedural decor is scattered at all (the setting).
     pub show_decor: bool,
 }
@@ -283,15 +268,6 @@ pub enum Event {
 /// stands, and the pass is skipped once nothing of it is left to mount.
 type MountKey = u32;
 
-/// How far a chunk's centre is from `(ax, ay)`, squared: what the mounts are
-/// ordered by, as the builds are (`priority`). The anchor is the same ground
-/// the builds measure from, at the resolution a page scheduler has.
-fn chunk_near(k: Chunk, ax: f64, ay: f64) -> f64 {
-    let (x0, y0, side) = k.rect();
-    let (dx, dy) = (x0 + side / 2.0 - ax, y0 + side / 2.0 - ay);
-    dx * dx + dy * dy
-}
-
 /// Whether two squares, each a corner and a side, share any ground.
 fn overlaps(a: (f64, f64, f64), b: (f64, f64, f64)) -> bool {
     a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.2 && b.1 < a.1 + a.2
@@ -349,17 +325,20 @@ impl Decor {
 #[derive(Clone)]
 struct Slot {
     id: u32,
+    /// The chunk it draws.
+    chunk: Chunk,
     /// The level it is drawn from, and its side in units: 64 cells of 2^level.
     level: u32,
     span: f64,
     base_x: f64,
     base_y: f64,
-    stable_hash: f64,
     /// The bounding sphere in the chunk's own space.
     bc: V3,
     radius: f64,
+    /// The nearest distance from the eye to its ground, squared: what its
+    /// level was chosen by (window.rs `Domain::nearest_to`), and so what its
+    /// work is ordered by.
     distance2: f64,
-    centre_distance2: f64,
     flags: u16,
     pending_since: f64,
     request: i32,
@@ -442,7 +421,7 @@ pub struct Census {
     pub released: u32,
     pub retained_on: f64,
     pub retained_off: f64,
-    /// The ladder's pressure: how far the byte budget has pulled the LOD in.
+    /// The budget's pressure: how far the byte budget has pulled the LOD in.
     pub pressure: u32,
     /// Stale chunks: mounted, no longer wanted, kept until what replaces
     /// them is whole.
@@ -540,7 +519,9 @@ pub struct Scheduler {
     pub debug: DebugLines,
     slots: Vec<Slot>,
     index: BTreeMap<u32, usize>,
-    ladder: Ladder,
+    /// How many levels coarser than the rule the byte budget has pulled the
+    /// tiers (`press`): it moves the criterion, never the rule.
+    pressure: u32,
     recheck_elapsed: f64,
     frame: Option<Frame>,
     /// Something changed that a recheck has not seen: the view moved, a
@@ -578,9 +559,9 @@ pub struct Scheduler {
     /// levels, against six hundred looking down. The work a zoom costs grew
     /// with the tilt for no reason but this.
     to_mount: VecDeque<(Chunk, bool)>,
-    /// The ground the window draws: the top level's drawn ring, as a corner
-    /// and a side in units.
-    drawn: Option<(f64, f64, f64)>,
+    /// The ground the view draws: the window's top-level chunks, each a
+    /// corner and a side in units (window.rs `Domain::ground`).
+    drawn: Option<Vec<(f64, f64, f64)>>,
     /// The decor kinds, in the order decor/build.rs taught them — the order of
     /// the groups in every decor block.
     decor_kinds: Vec<DecorKind>,
@@ -680,7 +661,7 @@ impl Scheduler {
             debug: DebugLines::default(),
             slots: Vec::with_capacity(MAX_CHUNKS),
             index: BTreeMap::new(),
-            ladder: Ladder::default(),
+            pressure: 0,
             recheck_elapsed: RECHECK_INTERVAL_S,
             frame: None,
             view_dirty: true,
@@ -711,15 +692,10 @@ impl Scheduler {
     /// Teaches a decor kind; its index. Its rules start as `Any` on every
     /// channel, and `decor_rule` sets them.
     pub fn decor_kind(&mut self, kind: DecorKind) -> u32 {
-        // Decoration is scattered from the leaves alone, which is sound only
-        // while no kind is drawn further than the leaves are.
-        assert!(
-            decor_reach(kind.extent) <= DECOR_REACH,
-            "a decor kind of extent {} is drawn to {}u, past the {}u the leaves reach",
-            kind.extent,
-            decor_reach(kind.extent),
-            DECOR_REACH
-        );
+        // Decoration is scattered from the leaves alone, and the rule draws
+        // leaves only out to DECOR_REACH for certain: a kind whose own reach
+        // runs past that is cut where the leaves end, until decoration is
+        // scattered at whatever level the rule draws its ground at.
         self.decor_kinds.push(kind);
         (self.decor_kinds.len() - 1) as u32
     }
@@ -758,24 +734,22 @@ impl Scheduler {
 
     // ---- commands ----
 
-    /// A chunk at `base`, starting at page cell (tx0, ty0). Its first tier is
-    /// guessed from the last frame, so the first recheck's hysteresis starts
-    /// from where the camera is.
-    #[allow(clippy::too_many_arguments)]
-    fn add(&mut self, id: u32, level: u32, base: IVec, base_x: f64, base_y: f64, tx0: u32, ty0: u32, stable_hash: f64, root: bool) {
-        self.builder.add(id, level, base, tx0, ty0);
+    /// Chunk `k`, its first tier the one the rule wants for it now.
+    fn add(&mut self, id: u32, k: Chunk, root: bool) {
+        let level = k.level();
+        let (base_x, base_y, _) = k.rect();
+        self.builder.add(id, level, ivec::gather(base_x as i64, base_y as i64, 0), k.bx, k.by);
         let span = chunk_span_of(level);
         let mut slot = Slot {
             id,
+            chunk: k,
             level,
             span,
             base_x,
             base_y,
-            stable_hash,
             bc: [0.0; 3],
             radius: 0.0,
             distance2: f64::INFINITY,
-            centre_distance2: f64::INFINITY,
             flags: EMPTY | FRESH,
             pending_since: -1.0,
             request: 0,
@@ -792,10 +766,9 @@ impl Scheduler {
         };
         slot.set(OUTERMOST, root);
         slot.unmeasured();
-        if let Some(frame) = self.frame {
-            let (visible, _, d2, _) = measure(&frame, &slot);
-            if visible {
-                slot.layout_primary = relative(self.ladder.guide(d2.sqrt(), COARSEST).step, level, root);
+        if let (Some(frame), Some(d)) = (self.frame, Terrain::pyramid().domain()) {
+            if measure(&frame, &slot).0 {
+                slot.layout_primary = relative(wanted_step(d, k, self.pressure), level, root);
                 slot.desired = (slot.layout_primary, 0);
             }
         }
@@ -806,7 +779,7 @@ impl Scheduler {
     }
 
     /// Whether nothing coarser in the selection draws this chunk's ground, so
-    /// its own tier is free to be as coarse as the ladder says.
+    /// its own tier is free to be as coarse as the rule says.
     ///
     /// A root of the selection's traversal (`select`), which used to be the
     /// same as being at the window's top ring and is not any more: a chunk
@@ -1114,7 +1087,7 @@ impl Scheduler {
             if !s.has(STALE) {
                 continue;
             }
-            let key = (!(s.has(IN_FRUSTUM) && s.layout_ready), s.centre_distance2);
+            let key = (!(s.has(IN_FRUSTUM) && s.layout_ready), s.distance2);
             if worst.as_ref().is_none_or(|(low, _, _)| key > *low) {
                 worst = Some((key, k, id));
             }
@@ -1126,15 +1099,13 @@ impl Scheduler {
         true
     }
 
-    fn mount(&mut self, world: &mut World, frame: &Frame, emit: &mut impl FnMut(Event)) {
-        let Some(anchor) = frame.anchor else { return };
-        let anchor_i = ivec::gather(anchor[0] as i64, anchor[1] as i64, 0);
+    fn mount(&mut self, world: &mut World, emit: &mut impl FnMut(Event)) {
         let key = Terrain::pyramid().cover().1;
         if self.selected_for == Some(key) && self.to_mount.is_empty() {
             return;
         }
         self.census.mount_full = 0;
-        self.drawn = Some(ring_rect(frame.window.1 - 1, anchor_i));
+        self.drawn = Terrain::pyramid().domain().map(Domain::ground);
         if self.selected_for != Some(key) {
             let mut wanted = BTreeMap::new();
             self.select(&mut wanted);
@@ -1165,16 +1136,10 @@ impl Scheduler {
             // the ground at the horizon appeared last however badly the
             // builds wanted it.
             //
-            // From the anchor, the view centre on the ground, and not from
-            // the camera: the builds measure from where the camera is heading
-            // and have a mesh to measure, while this has a key and runs
-            // before anything is built.
-            let (ax, ay) = (ivec::X(anchor_i) as f64, ivec::Y(anchor_i) as f64);
-            let mut near: Vec<(f64, Chunk, bool)> = wanted
-                .iter()
-                .filter(|(k, _)| !self.mounted.contains_key(k))
-                .map(|(&k, &root)| (chunk_near(k, ax, ay), k, root))
-                .collect();
+            // Nearest the eye first, by the distance the level was chosen
+            // by (window.rs `Domain::nearest_to`).
+            let Some(d) = Terrain::pyramid().domain() else { return };
+            let mut near: Vec<(f64, Chunk, bool)> = wanted.iter().filter(|(k, _)| !self.mounted.contains_key(k)).map(|(&k, &root)| (d.nearest_to(k), k, root)).collect();
             near.sort_by(|a, b| a.0.total_cmp(&b.0));
             self.to_mount.clear();
             self.to_mount.extend(near.into_iter().map(|(_, k, root)| (k, root)));
@@ -1200,15 +1165,13 @@ impl Scheduler {
             mounts += 1;
             let id = self.next_mount_id;
             self.next_mount_id = self.next_mount_id.wrapping_add(1).max(MOUNT_ID_BASE);
-            let (x0, y0, _) = k.rect();
-            let base = ivec::gather(x0 as i64, y0 as i64, 0);
             emit(Event::Mount {
                 id,
                 page: k.page,
                 base_x: k.bx,
                 base_y: k.by,
             });
-            self.add(id, k.level(), base, x0, y0, k.bx, k.by, blend_point(k), root);
+            self.add(id, k, root);
             self.mounted.insert(k, id);
         }
     }
@@ -1314,8 +1277,8 @@ impl Scheduler {
             // other way out — the view lies inside it, so it never leaves the
             // drawn rect either. Both doors shut, and it stays drawn over
             // ground it no longer describes, for as long as the view is there.
-            let gone_from_view = self.drawn.is_none_or(|d| !overlaps(rect, d));
-            let whole = covered >= self.drawn.map_or(0.0, |d| shared_area(rect, d));
+            let gone_from_view = self.drawn.as_ref().is_none_or(|d| !d.iter().any(|&g| overlaps(rect, g)));
+            let whole = covered >= self.drawn.as_ref().map_or(0.0, |d| d.iter().map(|&g| shared_area(rect, g)).sum());
             // A stale chunk is kept for what it is showing. One that never
             // got a layout is showing nothing, so there is nothing to keep
             // and no reason to wait on whatever covers it.
@@ -1361,7 +1324,6 @@ impl Scheduler {
             self.view_dirty = true;
         }
         self.frame = Some(frame);
-        self.ladder.set_projection(frame.viewport_h, frame.fov_deg);
         // The view decides what every chunk should be showing, so a view
         // that has moved is answered now and not on the next tick of a
         // timer. `view_dirty` is that question outstanding — set by a frame
@@ -1376,7 +1338,7 @@ impl Scheduler {
 
         self.stop_evicted(world);
         self.lose_meshes(emit);
-        self.mount(world, &frame, emit);
+        self.mount(world, emit);
         self.refresh(&frame, emit);
         self.retire(world, emit);
         let mut sc = core::mem::take(&mut self.scratch);
@@ -1416,14 +1378,14 @@ impl Scheduler {
         // coarse boxes under the camera sat there while the budget went on
         // the horizon.
         //
-        // It costs a ladder lookup and a few flags a chunk, MAX_CHUNKS of
+        // It costs a distance and a few flags a chunk, MAX_CHUNKS of
         // them at the worst, and only on the interval. The FRESH case was
         // already exempted for this exact reason; it is the whole pass that
         // needed to be.
         eligible.clear();
         eligible.extend(order.iter().copied().filter(|&i| full_recheck || self.slots[i].flags & (FRESH | BLEND_ACTIVE | SETTLING) != 0));
         for &i in eligible.iter() {
-            self.recheck(world, i, t0, &frame, emit);
+            self.recheck(world, i, t0, emit);
         }
         if full_recheck {
             self.view_dirty = false;
@@ -1519,7 +1481,7 @@ impl Scheduler {
         (c.stale_uncovered, c.stale_unready, c.stale_on_waiter) = self.kept;
         c.retained_on = self.retained_on;
         c.retained_off = self.retained_off;
-        c.pressure = self.ladder.pressure();
+        c.pressure = self.pressure;
         let blending = c.blend_active > 0;
         self.census = c;
         committed > 0 || pending_total > committed || blending || self.view_dirty || animating
@@ -1667,11 +1629,12 @@ impl Scheduler {
     /// between the on-screen and off-screen totals and says so with a
     /// `Visible` event, which is what the retention budget is spent from.
     fn refresh(&mut self, frame: &Frame, emit: &mut impl FnMut(Event)) {
+        let domain = Terrain::pyramid().domain();
         for i in 0..self.slots.len() {
-            let (visible, _, d2, ld2) = measure(frame, &self.slots[i]);
+            let visible = measure(frame, &self.slots[i]).0;
+            let near = domain.map_or(f64::INFINITY, |d| d.nearest_to(self.slots[i].chunk));
             let s = &mut self.slots[i];
-            s.distance2 = d2;
-            s.centre_distance2 = ld2;
+            s.distance2 = near * near;
             let was = s.has(IN_FRUSTUM);
             if visible != was {
                 let bytes = s.retained();
@@ -1701,7 +1664,7 @@ impl Scheduler {
                 in_frustum: s.has(IN_FRUSTUM),
                 hole: s.has(EMPTY) && !s.has(COVERED),
                 restale: s.layout_ready && s.layout_generation != self.builder.generation_of(s.id).unwrap_or(0),
-                centre_distance2: s.centre_distance2,
+                distance2: s.distance2,
                 pending_since: s.pending_since,
             }
             .keyed(now)
@@ -1750,11 +1713,11 @@ impl Scheduler {
     /// pending.
     ///
     /// Off screen it wants the coarsest tier and a release. On screen the
-    /// ladder answers for its distance — one tier, or two and a weight while
-    /// it crosses — and the slot is pending when what it shows is not that.
+    /// rule answers for its nearest distance (`wanted_step`), and the slot is
+    /// pending when what it shows is not that.
     /// SETTLING is pending with a layout already up, so a frame can tell a
     /// chunk that is changing tier from one that has nothing to show yet.
-    fn recheck(&mut self, world: &mut World, i: usize, now: f64, frame: &Frame, emit: &mut impl FnMut(Event)) {
+    fn recheck(&mut self, world: &mut World, i: usize, now: f64, emit: &mut impl FnMut(Event)) {
         self.slots[i].set(FRESH, false);
         // A stale chunk shows what it shows until it is let go: nothing
         // more is built for it.
@@ -1777,46 +1740,23 @@ impl Scheduler {
             return;
         }
         let s = &self.slots[i];
-        let level = s.level;
+        let (level, chunk) = (s.level, s.chunk);
         let outermost = self.outermost(i);
-        let guide = self.ladder.guide(s.distance2.sqrt(), s.layout_primary << level);
-        // The ladder speaks in world steps; a chunk builds in its own, and a
-        // blend whose two ends are one step of the chunk's is no blend.
-        let (primary, secondary) = match guide.blend {
-            Some((finer, coarser, _)) if relative(finer, level, outermost) != relative(coarser, level, outermost) => (relative(finer, level, outermost), relative(coarser, level, outermost)),
-            _ => (relative(guide.step, level, outermost), 0),
-        };
-        self.slots[i].desired = (primary, secondary);
+        let Some(d) = Terrain::pyramid().domain() else { return };
+        let primary = relative(wanted_step(d, chunk, self.pressure), level, outermost);
+        self.slots[i].desired = (primary, 0);
         let current = self.generation(i);
         let s = &self.slots[i];
-        let pending = !s.layout_ready || s.layout_primary != primary || s.layout_secondary != secondary || s.layout_generation != current;
-        self.set_pending(i, pending, build_request(primary, secondary), now);
+        let pending = !s.layout_ready || s.layout_primary != primary || s.layout_secondary != 0 || s.layout_generation != current;
+        self.set_pending(i, pending, build_request(primary, 0), now);
         let s = &mut self.slots[i];
         let settling = s.has(PENDING) && s.layout_ready;
         s.set(SETTLING, settling);
-        let pending = s.has(PENDING);
-        s.set(BLEND_ACTIVE, guide.blend.is_some());
-        if !pending {
+        s.set(BLEND_ACTIVE, false);
+        if !s.has(PENDING) {
             self.stop_work(world, i);
         }
-        let Some((finer_step, _, f)) = guide.blend.filter(|_| secondary != 0) else {
-            self.decide(i, 1.0, 0.0, emit);
-            return;
-        };
-        let finer_step = relative(finer_step, level, outermost);
-        if pending {
-            self.decide(i, 1.0, 0.0, emit);
-            return;
-        }
-        let (finer, coarser) = if frame.pixel_dither {
-            (2.0 + (f * 2.0 - 1.0).max(0.0), (f * 2.0).min(1.0))
-        } else {
-            let coarser = self.slots[i].stable_hash < f;
-            (if coarser { 0.0 } else { 1.0 }, if coarser { 1.0 } else { 0.0 })
-        };
-        let primary_is_finer = self.slots[i].layout_primary == finer_step;
-        let (p, q) = if primary_is_finer { (finer, coarser) } else { (coarser, finer) };
-        self.decide(i, p as f32, q as f32, emit);
+        self.decide(i, 1.0, 0.0, emit);
     }
 
     /// Whether the chunk nodes hold every tier of (primary, secondary) of the
@@ -2077,12 +2017,12 @@ impl Scheduler {
     /// The byte budget paid in LOD (MAX_PRESSURE): a step in when a block
     /// was refused and reclaim gave nothing back, a step out when the
     /// refusals have stopped and the section is off its mark. A change is
-    /// a new ladder, and every chunk is rechecked against it.
+    /// a new criterion, and every chunk is rechecked against it.
     fn press(&mut self, world: &World, now: f64, freed: u32) {
         if self.refused_last {
             self.refused_at = now;
         }
-        let pressure = self.ladder.pressure();
+        let pressure = self.pressure;
         let next = if self.refused_last && freed == 0 && pressure < MAX_PRESSURE && now - self.pressure_at >= PRESSURE_STEP_MS {
             pressure + 1
         } else if pressure > 0 && now - self.refused_at >= PRESSURE_RELIEF_MS && now - self.pressure_at >= PRESSURE_RELIEF_MS && !heap_pressed(world) {
@@ -2090,7 +2030,7 @@ impl Scheduler {
         } else {
             return;
         };
-        self.ladder.set_pressure(next);
+        self.pressure = next;
         self.pressure_at = now;
         self.recheck_elapsed = RECHECK_INTERVAL_S;
         self.view_dirty = true;
@@ -2112,13 +2052,20 @@ fn same_view(a: &Frame, b: &Frame) -> bool {
         && a.origin == b.origin
         && a.planes == b.planes
         && a.camera == b.camera
-        && a.lead == b.lead
         && a.viewport_h == b.viewport_h
         && a.fov_deg == b.fov_deg
         && a.pixel_dither == b.pixel_dither
-        && a.anchor == b.anchor
-        && a.window == b.window
         && a.show_decor == b.show_decor
+}
+
+/// The world step the rule wants `c` shown at: the level wanted at its
+/// nearest point (window.rs `split_distance`), as that level's cells averaged
+/// 2×2 — step 2^(want + 1) — and coarser by the byte budget's `pressure`.
+/// Nearer than level 0's split distance the rule wants a level the ground
+/// has no data for, and the leaves' own cells are what there is.
+fn wanted_step(d: &Domain, c: Chunk, pressure: u32) -> u32 {
+    let want = (d.nearest_to(c) / split_distance(0)).log2().floor().max(-1.0) as i32 + pressure as i32;
+    1 << (want + 1).clamp(0, (COARSEST.trailing_zeros() + TOP_LEVEL) as i32)
 }
 
 /// A world step as a chunk of `level` builds it: its own cells are 2^level,
@@ -2131,23 +2078,11 @@ fn relative(world_step: u32, level: u32, outermost: bool) -> u32 {
     // A level draws its own cells one step coarser than they are, and no
     // coarser: step 4 of level k is the ground level k+1 draws at step 2, and
     // that ring is the one holding it. The outermost ring has no level over
-    // it, so nothing else would draw that ground — there the ladder is
+    // it, so nothing else would draw that ground — there the rule is
     // followed as far as it goes, which is what makes a far ring cheap
     // (issue/20260923-the-ground-runs-to-the-horizon.md).
     let cap = if outermost { COARSEST } else { 2 };
     (world_step >> level).clamp(if level == 0 { 1 } else { 2 }, cap)
-}
-
-/// Where a chunk sits in `[0, 1)`, from `<level>/<page index>:<base x>,<base y>`.
-///
-/// `recheck` compares this against the blend's weight, so neighbouring chunks
-/// cross a tier boundary at different moments instead of the whole ring
-/// switching at once. It only has to be spread and to be the same for a chunk
-/// every time it is mounted; nothing reads the number itself.
-fn blend_point(k: Chunk) -> f64 {
-    let mut h = fnv::FnvHasher::default();
-    std::hash::Hasher::write(&mut h, format!("{}/{}:{},{}", k.page.level, k.page.page, k.bx, k.by).as_bytes());
-    std::hash::Hasher::finish(&h) as f64 / 2f64.powi(64)
 }
 
 /// What a chunk's place in the order is decided by. `hole`: nothing is drawn
@@ -2161,7 +2096,8 @@ pub struct Priority {
     /// not what the page under it now says. Worse than a chunk asking only
     /// to be sharper, better than one showing nothing at all.
     pub restale: bool,
-    pub centre_distance2: f64,
+    /// The nearest distance from the eye to its ground, squared.
+    pub distance2: f64,
     pub pending_since: f64,
 }
 
@@ -2170,14 +2106,14 @@ pub struct Priority {
 /// moved past, then the ones asking only to be sharper, as progressive
 /// refinement goes — a coarse chunk a zoom out has just brought covers ground
 /// nothing shows, a fine one ground a stale chunk still shows; within each,
-/// the nearest the ground the view is heading to look at, which is the
-/// middle of the screen; then what is off screen farthest first — a release
+/// the nearest the eye, by the distance its level was chosen by, so the work
+/// follows the rule that asked for it; then what is off screen farthest first — a release
 /// takes memory from what is least likely to be wanted again. A wait halves
 /// the distance key every AGE_HALF_MS, within its class.
 ///
 /// A plain distance and not one in the chunk's own sides. That was "the
 /// biggest on the screen first", and it is the same thing for every level:
-/// the ladder puts a chunk where its own cells are the right size, so a
+/// the rule puts a chunk where its own cells are the right size, so a
 /// coarse one at the horizon subtends about what a fine one under the camera
 /// does, and they came out equal. The screen then filled everywhere at once
 /// rather than from the middle — and everywhere at once means the middle
@@ -2197,7 +2133,7 @@ pub struct Keyed {
 
 impl Priority {
     pub fn keyed(self, now: f64) -> Keyed {
-        let d2 = self.centre_distance2;
+        let d2 = self.distance2;
         let key = if self.pending_since < 0.0 {
             d2
         } else {
@@ -2216,9 +2152,8 @@ fn priority_keyed(a: &Keyed, b: &Keyed) -> core::cmp::Ordering {
         .then_with(|| if a.p.in_frustum { a.key.total_cmp(&b.key) } else { b.key.total_cmp(&a.key) })
 }
 
-/// Where a slot is from a frame: on screen, its world centre, and its two
-/// squared distances.
-fn measure(frame: &Frame, s: &Slot) -> (bool, V3, f64, f64) {
+/// Where a slot is from a frame: on screen, and its world centre.
+fn measure(frame: &Frame, s: &Slot) -> (bool, V3) {
     let [x, y, z] = frame.world_of([s.base_x + s.bc[0], s.base_y + s.bc[1], s.bc[2]]);
     // Where the renderer draws it: laid back on the planet about the view
     // centre, the world's origin here, in the map's own axes — the view's
@@ -2230,9 +2165,6 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3, f64, f64) {
         None => [x, y, z],
     };
     let c = frame.camera;
-    let d2 = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2);
-    let t = view_centre(c, frame.lead);
-    let ld2 = (x - t[0]).powi(2) + (y - t[1]).powi(2) + (z - t[2]).powi(2);
     let half = s.span * 0.5;
     let mut visible = (c[0] - x).abs() <= half && (c[1] - y).abs() <= half;
     if !visible {
@@ -2259,7 +2191,7 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3, f64, f64) {
             }
         }
     }
-    (visible, [x, y, z], d2, ld2)
+    (visible, [x, y, z])
 }
 
 fn world_mem(world: &World) -> *const u8 {
@@ -2428,7 +2360,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<u32, usize>, mem: *const u8,
 /// for coarse, independent of source or POI cardinality.
 fn surface_centres(words: &[u32], stride: usize, step: u32, level: u32, heights: Heights) -> Box<[u32]> {
     let axis = (CHUNK_CELLS / step) as usize;
-    let unit = (step << level) as f64 * U_PER_CELL;
+    let unit = step as f64 * GROUND.scale(level).side();
     let mut tops = vec![0; axis * axis];
     for r in words.chunks_exact(stride) {
         let (min, size) = box_bounds(r, unit, heights);
@@ -2460,7 +2392,7 @@ pub struct Drawn<'a> {
 impl Drawn<'_> {
     /// The level of the cells the chunk is drawn in: a block of 2^s cells of
     /// the chunk's level is a cell s levels up (pxl-spec space/pyramid.rs
-    /// `Cell`). The ladder's steps are its powers of two, so there is no step
+    /// `Cell`). The rule's steps are powers of two, so there is no step
     /// this does not name.
     pub fn cell_level(&self) -> u32 {
         debug_assert!(self.step.is_power_of_two(), "a ladder step is a power of two");

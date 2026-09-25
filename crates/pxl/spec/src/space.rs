@@ -7,6 +7,7 @@
 //! same way because it computes it here.
 
 pub mod adapter;
+pub mod hierarchy;
 pub mod indexer;
 pub mod lattice;
 pub mod pvf3;

@@ -989,7 +989,9 @@ pub struct InputPointer {
     pub x: f64,
     pub y: f64,
     pub tool: ActiveTool,
-    /// The placeable cube's or the decor's catalog number.
+    /// The ground channel the held cube stands in for; absent for a flat colour, a decor kind or nothing.
+    pub channel: Option<pxl_spec::bake::format::GroundChannelKey>,
+    /// The held cube's type in its channel, or the decor kind, by the catalog's number; what the object store keeps is the kernel's to derive.
     pub value: u32,
     /// The object size, by its index in the snapshot's object_sizes.
     pub tier: u32,
@@ -1006,8 +1008,17 @@ impl InputPointer {
             x: f.at(4)?.get_number()?,
             y: f.at(5)?.get_number()?,
             tool: ActiveTool::of(f.at(6)?.get_number()? as u32).ok_or_else(|| unknown("ActiveTool"))?,
-            value: f.at(7)?.get_number()? as u32,
-            tier: f.at(8)?.get_number()? as u32,
+            channel: match f.at(7)?.opt() {
+                Some(c) => Some(
+                    u8::try_from(c.get_number()? as u32)
+                        .ok()
+                        .and_then(pxl_spec::bake::format::GroundChannelKey::of)
+                        .ok_or_else(|| unknown("GroundChannelKey"))?,
+                ),
+                None => None,
+            },
+            value: f.at(8)?.get_number()? as u32,
+            tier: f.at(9)?.get_number()? as u32,
         })
     }
 }

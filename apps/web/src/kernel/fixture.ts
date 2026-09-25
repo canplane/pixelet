@@ -20,12 +20,12 @@ import { ground_pack } from "@/catalog/cell/cube_type.spec.ts";
 import { encoder, TreeView } from "@xpute/core/wire/xtp/mod.ts";
 
 /**
- * One L3 page's span in raster cells, and the elevation raster's own padded
- * span — `1 << (L3_SHAMT - CELL_SHAMT)` and `1 << (L3_SHAMT + 1 - 5)` plus two
- * cells of padding on each side, which is what gives a bicubic sample a 4×4
- * kernel at every edge texel (pxl-spec/bake/constant.rs).
+ * Cells on an L3 page's side, and the elevation raster's own padded span —
+ * pxl-spec's `PAGE_CELLS` (space/pyramid.rs) and `ELE_PADDED_SPAN`, a sample
+ * every 32 metres plus two of padding on each side, which is what gives a
+ * bicubic sample a 4×4 kernel at every edge texel (bake/constant.rs).
  */
-export const PAGE_CELL_SPAN = 512;
+export const PAGE_CELLS = 512;
 export const ELE_PADDED_SPAN = 36;
 
 /** A cell's four channels in one word, as pxl-spec's bake/pack.rs reads it:

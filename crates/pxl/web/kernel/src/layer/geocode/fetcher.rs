@@ -46,12 +46,11 @@ pub fn centre_group() -> Option<IVec> {
 pub fn geocode_fetcher_step() {
     // Answered once, either way: a bake with no dictionary is a bake whose
     // groups name nothing, and that is a store's answer rather than a hole.
-    let dict = if store::dict_answered() { Vec::new() } else { vec![(DICT_SUBJECT, policy::geocode())] };
-    declare(DICT_CATEGORY, &dict);
+    let dict = [(DICT_SUBJECT, policy::geocode())];
+    declare(DICT_CATEGORY, if store::dict_answered() { &[] } else { &dict });
 
-    let group = match centre_group() {
-        Some(idx) if store::answered() != Some(idx) => vec![(idx, policy::geocode())],
-        _ => Vec::new(),
-    };
-    declare(CATEGORY, &group);
+    match centre_group() {
+        Some(idx) if store::answered() != Some(idx) => declare(CATEGORY, &[(idx, policy::geocode())]),
+        _ => declare(CATEGORY, &[]),
+    }
 }

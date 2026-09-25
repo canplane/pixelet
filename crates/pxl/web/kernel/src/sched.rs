@@ -5,6 +5,5 @@
 //! (xpute_runtime::sched); what runs inside one is decided here.
 
 pub mod ledger;
-pub mod priority;
 pub mod tick;
 pub mod turn;

@@ -2,21 +2,6 @@
 
 use super::*;
 
-/// The hierarchy is one algebra in any number of dimensions: a child's
-/// parent and slot give it back, and a parent's children are the 2^D nodes
-/// whose parent it is.
-#[test]
-fn a_child_is_its_parent_and_slot_in_two_and_three_dimensions() {
-    for at in [[5i64, -3], [-1, -1], [0, 8]] {
-        assert_eq!(child_of(parent_of(at), slot_of(at)), at);
-        assert!((0..4).all(|k| parent_of(child_of(at, k)) == at && slot_of(child_of(at, k)) == k));
-    }
-    for at in [[5i64, -3, 2], [-1, -1, -1], [0, 8, 7]] {
-        assert_eq!(child_of(parent_of(at), slot_of(at)), at);
-        assert!((0..8).all(|k| parent_of(child_of(at, k)) == at && slot_of(child_of(at, k)) == k));
-    }
-}
-
 /// A block of cells is a cell of a coarser level, so a cell's centre and
 /// its block's are one computation: the block's cell `up` levels over, its
 /// XY the middle of its span and its Z half its side above the ground.
@@ -47,7 +32,7 @@ fn a_cells_centre_is_its_middle_and_half_its_side_above_the_ground() {
 /// their levels are.
 #[test]
 fn a_cell_found_by_its_offset_in_a_coarser_one_is_itself() {
-    let coarse = Lattice::new(GROUND.cell_shamt(0) + 2);
+    let coarse = Lattice::new(GROUND.scale(0).up(2));
     for (x, y) in [(-1234, 5678), (0, 0), (97, -3)] {
         let point = Pvf3 {
             i: ivec::gather(x, y, 0),
@@ -69,7 +54,7 @@ fn a_cell_found_by_its_offset_in_a_coarser_one_is_itself() {
 /// rather than a level-2 one.
 #[test]
 fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_levels_up() {
-    let coarse = Lattice::new(GROUND.cell_shamt(0) + 2);
+    let coarse = Lattice::new(GROUND.scale(0).up(2));
     let point = Pvf3 {
         i: ivec::gather(-1234, 5678, 0),
         ..Default::default()

@@ -24,10 +24,7 @@ pub struct ShownGround {
 /// What a cell shows when no channel has painted it, the catalog's `base`
 /// (cube_type.json): a cell with nothing on it is still ground.
 pub const BASE: ShownGround = ShownGround {
-    channel: match GroundChannelKey::from_name(cube_types::base::CHANNEL) {
-        Some(channel) => channel,
-        None => panic!("the catalog's base names no ground channel"),
-    },
+    channel: cube_types::base::CHANNEL,
     type_id: cube_types::base::TYPE as u32,
 };
 

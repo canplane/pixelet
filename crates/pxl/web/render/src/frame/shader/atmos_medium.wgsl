@@ -39,8 +39,8 @@ struct Atmosphere {
   moon_light: f32,
   // The ground's colour past the terrain, in linear light
   // (look/atmosphere.rs's `land`), and how high that ground stands over the
-  // datum the model's radii are measured from — the elevation under the map
-  // centre (kernel environment/fog.rs's `centre_ground`). The terrain is
+  // datum the model's radii are measured from — the elevation under the eye
+  // (kernel environment/fog.rs's `eye_ground`). The terrain is
   // drawn at its own elevation, so a planet whose surface is the sea would
   // leave it standing over the ground the sky draws past it, its chunk walls
   // showing at the edge.
