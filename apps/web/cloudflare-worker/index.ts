@@ -107,7 +107,7 @@ const KEY_RE =
 
 /** Where a stored entry keeps the encoding its bytes are in. A header the
  * cache has no meaning for is a header it leaves alone, which is the whole
- * point: `content-encoding` is what makes it normalise an entry. */
+ * point: `content-encoding` is what makes it normalize an entry. */
 const STORED_ENCODING = "x-pxl-stored-encoding";
 
 /** An entry on its way to the client: the encoding back where HTTP expects it,
@@ -194,13 +194,13 @@ export default {
     // terrain, POI and assets are immutable and versioned by URL — a re-bake
     // publishes a new prefix rather than replacing bytes — and the
     // geocode prefixes, which are rewritten in place monthly, carry a one-day
-    // max-age the cache honours. This is also the only real cost control: R2 has no
+    // max-age the cache honors. This is also the only real cost control: R2 has no
     // spend limit, and class-B reads are the one meter that scales with
     // traffic, so every edge hit is a read that never happens.
     //
     // What is cached is the packed bytes, and the client is what unpacks them.
     // That is not what caching the response as it stands does: an entry whose
-    // `content-encoding` the cache can read is one the cache normalises, and
+    // `content-encoding` the cache can read is one the cache normalizes, and
     // it stores the *decoded* body, marks the entry `vary: accept-encoding`
     // and then declines to compress it again, because `application/octet-stream`
     // is not one of the types Cloudflare compresses. Measured on one URL,

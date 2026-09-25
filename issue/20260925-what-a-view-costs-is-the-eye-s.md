@@ -16,7 +16,7 @@ eye: its base from the nearest ground the frustum shows, its top from the
 farthest, `level_at(d) = ceil(log2(d / 192)) − 1`. Inside the window a chunk
 is wanted at level k where it lies in level k's 3 × 3 page ring and not
 wholly in level k − 1's (`Domain::splits`, `wanted_over`). The rings are
-centred on the range anchor, and the range anchor is the map centre
+centered on the range anchor, and the range anchor is the map center
 (`world/frame/range_anchor.rs`), not the eye.
 
 A level-k cell, side 2^k, covers at most `P · 2^k / D` pixels at distance D
@@ -26,8 +26,8 @@ from the eye, face on; `P = H / (2 tan(fov / 2))`, 1158 at the reference
 - **Drawn at the window's base.** `near > 192 · 2^k`, and every ground point
   shown is at least `near` away, so `px < P / 192 = 6.03`. Bounded.
 - **Drawn coarser by a ring.** The point lies outside level k − 1's ring, so
-  at least a level-(k − 1) page, `256 · 2^k`, from the map centre. The map
-  centre stands ahead of the eye, and a point that far from it toward the eye
+  at least a level-(k − 1) page, `256 · 2^k`, from the map center. The map
+  center stands ahead of the eye, and a point that far from it toward the eye
   can be as near the eye as the frustum's lower edge. At that edge, with the
   eye `h` up, tilt `t` and half field of view `f`: `2^k ≤ (h cot t − h
   cot(t + f)) / 256` and `D = h / sin(t + f)`, so
@@ -52,7 +52,7 @@ base's bound.
 ## What is required
 
 - **The cost of perspective does not depend on where the observer is.** The
-  centre is the camera — the eye — and never the map centre, which is only a
+  center is the camera — the eye — and never the map center, which is only a
   handle for moving the camera.
 - **Tilt plays no part.** A level is a function of the distance from the eye,
   a sphere around it.
@@ -126,7 +126,7 @@ revisited if measured.
 
 - **The window and the rings go.** `level_at`, `window_for`, `ground_reach`
   and `Domain`'s rings are replaced by the rule above, from the camera's
-  position; the range anchor is no longer the map centre.
+  position; the range anchor is no longer the map center.
 - **A 2.5D page's height range.** A node's box needs its z extent to
   measure `D_min`. A level's chunks are drawn from that level's own
   samples, so a resident page's range — its samples', widened by the
@@ -148,7 +148,7 @@ Designed and first built on 2026-09-25, for the pyramid's layers — terrain
 and places:
 
 - `world/pyramid/window.rs` chooses levels by the rule from the eye
-  (`Domain::splits`, `split_distance`); the rings around the map centre, the
+  (`Domain::splits`, `split_distance`); the rings around the map center, the
   range anchor and the tilt-driven window are gone. `LEVEL_CHUNKS` is
   derived from the rule and sizes the chunk table and the mesh arena; the
   held ring stays 5 × 5, now as the bound on how far a level's chunks
@@ -159,7 +159,7 @@ and places:
 - The window's base is the level the ground under the eye wants, from the
   highest point known there; a hill nearer the eye than that ground is
   drawn no finer than the base.
-- Turning the camera moves the eye around the map centre in this orbit
+- Turning the camera moves the eye around the map center in this orbit
   model, so a spin changes what is near and what is held.
 
 - Every ancestor of the window's top pages is held up to the pyramid's top,
@@ -263,12 +263,12 @@ estimate misses is split a fetch late and corrected when its page arrives,
 so what is drawn once the pages are held is exact and the bake is left as
 it is.
 
-## Drawn in place, and ordered from the centre
+## Drawn in place, and ordered from the center
 
 2026-09-26. With the window gone, a view fetched its pages coarsest first:
 every ancestor of the page under the eye was a hole at distance nought, so
 the first six connections went to z6 through z11, and the top page's
-two-kilometre cubes stood as walls in front of the eye for seconds while the
+two-kilometer cubes stood as walls in front of the eye for seconds while the
 eye's own page waited (measured on a cold origin: the eye's z16 page asked
 for at 3.5 s, landed at 5.9 s). Fetched finest first instead, the fine pages
 sat unused: a sibling group was drawn whole or not at all, so a resident top
@@ -280,15 +280,15 @@ Two changes, decided with the user and reviewed by the other sessions:
 
 - Every chunk the rule wants is drawn in its own place, from its page or the
   nearest resident page over it, upsampled: that page's cells for its
-  colour, its surface at the chunk's own cells for its height (Cesium draws
+  color, its surface at the chunk's own cells for its height (Cesium draws
   a parent tile's data for a child not yet loaded). The whole-group rule,
   stand-ins from under, their depth limit and the chunk table's fourfold
   room for them went. A chunk borrowing a page scatters no decor, and its
   own page landing rebuilds it through the ordinary sources compare.
-- One order for every layer's work, out from the view's centre — the point
+- One order for every layer's work, out from the view's center — the point
   the camera turns about, where the character stands: within a layer the
-  page the ground nearest the centre is drawn from, then the top pages,
-  then every page drawn from nearest the centre first, then the fallbacks;
+  page the ground nearest the center is drawn from, then the top pages,
+  then every page drawn from nearest the center first, then the fallbacks;
   the layers terrain, then the decor's models, then the places; the chunk
   table builds in the same order.
 

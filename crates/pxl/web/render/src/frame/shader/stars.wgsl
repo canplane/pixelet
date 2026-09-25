@@ -1,10 +1,10 @@
-// The stars: the Yale Bright Star Catalogue (script/bake-stars.ts), every
+// The stars: the Yale Bright Star Catalog (script/bake-stars.ts), every
 // star an eye sees on a dark night, each a quad a few pixels wide at
 // infinity, drawn over the sky and under everything else. A star's place is
-// the catalogue's turned by the stars' frame — the sidereal time and the
+// the catalog's turned by the stars' frame — the sidereal time and the
 // latitude (look/environment.rs) — and drawn through the root frame's
 // matrix, which turns it with the map; its brightness is
-// its magnitude, its colour its temperature, both dimmed by the air it is
+// its magnitude, its color its temperature, both dimmed by the air it is
 // seen through. Added to the sky, which is already encoded: a point this
 // small reads the same added either side of the encode.
 
@@ -29,8 +29,8 @@ struct Stars {
 
 @group(0) @binding(0) var<uniform> stars: Stars;
 // Each star as gpu/stars.rs took it once: its direction in the equatorial
-// frame and its flux, then its colour.
-@group(0) @binding(1) var<storage, read> catalogue: array<vec4f>;
+// frame and its flux, then its color.
+@group(0) @binding(1) var<storage, read> catalog: array<vec4f>;
 
 // A magnitude-0 star's peak, and how a brighter one swells rather than
 // clipping: a photograph's and an eye's bright star is a larger point. In
@@ -66,8 +66,8 @@ fn airmass(sin_alt: f32) -> f32 {
 
 @vertex
 fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> StarOut {
-  let at = catalogue[2u * i];
-  let colour = catalogue[2u * i + 1u].rgb;
+  let at = catalog[2u * i];
+  let color = catalog[2u * i + 1u].rgb;
   let dir = (stars.sky * vec4f(at.xyz, 0.0)).xyz;
 
   var o: StarOut;
@@ -76,7 +76,7 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> StarOut
   // something moves — at rest every two seconds, which turns a twinkle into
   // a blink — and drawing every frame for it is the device's to pay.
   let height = dot(dir, stars.up);
-  let light = colour * flux * STAR_GAIN * exp(-stars.depth * airmass(height)) * stars.intensity;
+  let light = color * flux * STAR_GAIN * exp(-stars.depth * airmass(height)) * stars.intensity;
   var clip = stars.view_proj * vec4f(dir, 0.0);
   if (height < -0.02 || clip.w <= 0.0 || max(light.r, max(light.g, light.b)) < STAR_FLOOR) {
     o.clip = vec4f(0.0, 0.0, 2.0, 1.0);

@@ -57,7 +57,7 @@ pub struct Platform {
 }
 
 /// The companion's place, from map_center in the local floating-origin frame —
-/// wherever the camera actually is, not the origin's cell's centre.
+/// wherever the camera actually is, not the origin's cell's center.
 fn companion_props() -> Option<CompanionProps> {
     let map_center = map_store().map_center?;
     let map_origin = local_world_origin();
@@ -98,7 +98,7 @@ pub fn boot() {
     on_tick(INTERACTION, camera_step, StepName::camera);
     on_tick(INTERACTION, view_rotation_step, StepName::view_rotation);
     on_tick(INTERACTION, view_translation_step, StepName::view_translation);
-    // After the view has moved: the environment observes the camera centre
+    // After the view has moved: the environment observes the camera center
     // the view eased to this tick.
     on_tick(INTERACTION, environment_tick, StepName::environment);
     on_tick(INTERACTION, companion_tick, StepName::companion);

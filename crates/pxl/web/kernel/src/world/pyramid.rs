@@ -274,7 +274,7 @@ impl<L: Layer> Pyramid<L> {
     /// A page is never waited on for its siblings, so ground whose own page
     /// has come is drawn at once however little of the ground around it has,
     /// and whatever arrives first — the finest near the eye, the view filling
-    /// outwards (io/policy.rs) — is on the screen the turn it lands (Cesium's
+    /// outward (io/policy.rs) — is on the screen the turn it lands (Cesium's
     /// upsampled tiles).
     pub fn cover_of(&self, d: &Domain) -> Cover {
         let mut out = Cover::default();
@@ -434,9 +434,9 @@ impl<L: Layer> Pyramid<L> {
     fn wants(&self) -> Vec<(u64, Rank)> {
         let mut wants = Vec::new();
         if let Some(d) = self.domain.as_ref() {
-            // The page the ground nearest the view's centre is drawn from:
+            // The page the ground nearest the view's center is drawn from:
             // the first of the layer's order (io/policy.rs).
-            let centre = d.pages().filter_map(|(p, order)| order.map(|o| (o, p))).min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, p)| p);
+            let center = d.pages().filter_map(|(p, order)| order.map(|o| (o, p))).min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, p)| p);
             for (p, order) in d.pages() {
                 // A page the tree stops above is none to ask for, whether or
                 // not the page over it has come yet: that page is its own want.
@@ -444,7 +444,7 @@ impl<L: Layer> Pyramid<L> {
                     continue;
                 }
                 let (shell, distance) = match order {
-                    _ if Some(p) == centre => (Shell::Centre, 0.0),
+                    _ if Some(p) == center => (Shell::Center, 0.0),
                     _ if p.level == TOP_LEVEL => (Shell::Top, d.page_order(p)),
                     Some(distance) => (Shell::Drawn, distance),
                     None => (Shell::Fallback, d.page_order(p)),

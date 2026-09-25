@@ -12,10 +12,10 @@ and not about the distance.
 Two things dim the distance, and only one of them is physics.
 
 - **The air.** Aerial perspective, from the atmosphere's own tables: a
-  segment's transmittance dims a colour and the light scattered along it
-  fills the colour back in (`pxl-render frame/shader/atmos_view.wgsl`,
-  `veil`). It is measured in kilometres of real air, so it changes with the
-  zoom because a world unit is a different number of kilometres at each.
+  segment's transmittance dims a color and the light scattered along it
+  fills the color back in (`pxl-render frame/shader/atmos_view.wgsl`,
+  `veil`). It is measured in kilometers of real air, so it changes with the
+  zoom because a world unit is a different number of kilometers at each.
 - **The band.** A smoothstep from `FOG_NEAR` to `FOG_FAR` on the distance
   from the eye, mixing the surface into what the sky pass draws past it
   along the same ray (`shade.wgsl`). `FOG_FAR` is `RENDER_DIST`, scaled up
@@ -25,7 +25,7 @@ The air alone cannot hide the edge. Horizontally at sea level the optical
 depth over 6 km — where the band ends at street level — leaves about 0.8 of
 the blue and 0.94 of the red, and looking down from altitude the air is
 thinner still. What lies past the edge is the sky pass's ground: a smooth
-sphere in the land palette's colour, with no relief and no buildings. Take
+sphere in the land palette's color, with no relief and no buildings. Take
 the band away and that difference is the seam. The band is a crossfade into
 it, not weather.
 
@@ -37,7 +37,7 @@ render distance had to end it. The map is drawn on Web Mercator's sphere
 
     d = √(2Rh + h²)
 
-with `h` the camera's height and `R` the sphere's radius in the map centre's
+with `h` the camera's height and `R` the sphere's radius in the map center's
 units — `MERCATOR_RADIUS_U / cos φ`, 3,365,684 u at Seoul. The tilt decides
 whether the horizon is on screen, not how far it is. So the edge the band
 hides can be put where the planet already ends:
@@ -106,7 +106,7 @@ the mesh arena on the device 206.9 → 287.9 MiB.
 A distance is the wrong thing to hold the haze at, but haze itself is not
 wrong: on Earth the far ground goes long before the geometry does, and what
 takes it is the aerosol near the surface. A world unit is 1.89 m where the
-map is (`km_per_u`, the projection's metre scaled by the latitude's cosine),
+map is (`km_per_u`, the projection's meter scaled by the latitude's cosine),
 so the horizons above are 35 km at street level and 112 km from 980 m up. A
 clear day's visual range is 30 to 50 km — Koschmieder's `V = 3.912/β`, with
 β about 0.1/km clear and 0.5/km hazy.
@@ -174,7 +174,7 @@ The band stays until the far rings are cheap, and the order is:
    saturates from space). What is left is reading the reach off it.
 3. **Horizon culling** — built 09-23 (`measure` in world/chunk/table.rs):
    a chunk is drawn while `E·P >= r²`, the eye and the chunk taken from the
-   planet's centre, widened by the chunk's own radius. It is correctness as
+   planet's center, widened by the chunk's own radius. It is correctness as
    much as cost — nothing draws the planet, so ground past the horizon would
    come up under the horizon line with no occluder to hide it.
 4. **The band** — built 09-23: demoted from a render distance to a crossfade

@@ -10,9 +10,9 @@
 //! past that there is nothing left to draw.
 //!
 //! Which of the two is nearer changes with height, and both move out with
-//! it. Standing on the ground the horizon is a few kilometres and the air is
+//! it. Standing on the ground the horizon is a few kilometers and the air is
 //! clear well past it, so the planet ends the ground; from a few hundred
-//! metres up the horizon has run past the visual range and the haze ends it;
+//! meters up the horizon has run past the visual range and the haze ends it;
 //! from orbit the layer is one crossing however far the eye looks, the air
 //! sees through it, and the planet ends the ground again.
 //!

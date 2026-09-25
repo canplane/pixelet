@@ -15,7 +15,7 @@
 //! A slot is a descriptor of four words and a payload of `slot_bytes`, and the
 //! two lie apart because one is sixteen bytes and the other is thousands: the
 //! descriptors are a header of eight u32 words and `capacity` of them, and the
-//! payloads are `capacity` runs of `slot_bytes` **elsewhere in the memory**. Which is how every ring this is modelled on
+//! payloads are `capacity` runs of `slot_bytes` **elsewhere in the memory**. Which is how every ring this is modeled on
 //! is built: virtio's descriptor table, avail and used are three separate
 //! areas, and AF_XDP's rings are one mapping and its UMEM another. The
 //! descriptors are kilobytes and the payloads are megabytes, so tying the two
@@ -66,7 +66,7 @@ use super::frame::{cmd_of, cmd_word, flags_of, FRAME_CMD, FRAME_PACKET, FRAME_RE
 /// The arithmetic is on the address and not on the pointer, which matters: a
 /// ring's memory is a machine's — a wasm module's linear memory, addressed
 /// from 0 — so its base is a number and not a pointer into an allocation, and
-/// `ptr::add` on one of those is undefined. A release build took the licence:
+/// `ptr::add` on one of those is undefined. A release build took the license:
 /// it dropped a ring's capacity word and left the rest of the header standing,
 /// so the ring read back as one of capacity 0.
 fn at_of<T>(mem: *mut u8, off: usize) -> *mut T {

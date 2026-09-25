@@ -1,5 +1,5 @@
 // The screen-space occlusion as a lit pass reads it: the byte the upsample
-// wrote for this pixel, applied as N8AO composited it — the colour pulled
+// wrote for this pixel, applied as N8AO composited it — the color pulled
 // toward itself times a dark warm tint by the occlusion — before the
 // grade, where the post stack had it. A blank map is bound while the
 // screen-space mode is off, and the uniform says not to read it.

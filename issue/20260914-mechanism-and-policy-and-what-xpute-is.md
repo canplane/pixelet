@@ -193,7 +193,7 @@ for pixelet. The order instead:
 ```
 xpute inside the pixelet monorepo
   → used by the pxl workload, continuously
-  → the WebGPU/WASM migration stabilised
+  → the WebGPU/WASM migration stabilized
   → a second workload proves it
   → the xpute boundary corrected from that
   → then the public extraction
@@ -232,6 +232,6 @@ implemented.
   and the reshaping after the move both follow it
   ([where the pair differs](./20260914-where-the-pair-differs.md)).
 - Nothing about opening xpute is scheduled. It is recorded so the
-  checkpoint — a second, non-spatial workload — is recognised when it
+  checkpoint — a second, non-spatial workload — is recognized when it
   comes, after the WASM move is done and the boundary has been corrected
   by use.

@@ -25,7 +25,7 @@
 //!
 //! For one page it also writes `heights.png` (the raster stretched to its own
 //! range, so a flat page is flat grey) and one PNG a channel in the palette's
-//! colours, with `void` left black and an index the pack has no type for in
+//! colors, with `void` left black and an index the pack has no type for in
 //! magenta. The picture is for the eye; the summary is the check.
 
 use std::collections::BTreeMap;
@@ -196,7 +196,7 @@ fn heights_png(page: &Page, s: &Summary) -> Vec<u8> {
     png(ELE_PADDED_SPAN, ELE_PADDED_SPAN, 1, &grey)
 }
 
-/// Channel `f` in the palette's colours.
+/// Channel `f` in the palette's colors.
 fn channel_png(page: &Page, f: usize) -> Vec<u8> {
     let channel = GroundChannelKey::from_id(f as u32).expect("a packed field is a ground channel");
     let rgb_of = |cell: GroundCell| match ground_pack::NUMBER[f].get(index_of(cell, f)) {

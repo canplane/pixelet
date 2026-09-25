@@ -64,7 +64,7 @@ not have yet.
 **Elevation needs no new rule.** The `68²` grid is already 16 cells a
 sample at level 0 with a two-sample skirt for bicubic
 ([constant.rs](../crates/pxl/spec/src/bake/constant.rs)); at level `k` it is
-`16 · 2^k` cells a sample, under the page's own centre-sample convention. A
+`16 · 2^k` cells a sample, under the page's own center-sample convention. A
 level-0 sample is 16 u, about 30 m on the ground at this latitude, which is
 the 30 m source's own resolution: level 0 already tracks the source, and
 every level above it is a true reduction rather than a resampling.
@@ -210,7 +210,7 @@ client at all.
 [20260921-level-step-and-zoom-are-one-number.md](./20260921-level-step-and-zoom-are-one-number.md):
 the page is 512 cells rather than 1,024, which puts a level on Web Mercator's
 own zoom and a level-0 cell on its z16 pixel; and the fold this note says
-already exists in `chunk_mesher.rs` folds surface colour and coverage, not the
+already exists in `chunk_mesher.rs` folds surface color and coverage, not the
 ground channels' categories, so the rule had to be decided rather than moved.
 
 What is unchanged: the diagnosis — that the phone's memory, the reach of the

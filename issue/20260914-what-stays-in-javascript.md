@@ -321,7 +321,7 @@ Not cut yet, and why:
   and a crate boundary between them would be crossed in both directions.
 - **`pxl-render` today** — `render/draw.rs` imports nothing of the crate
   and `render/shader.rs` only it; six world modules fill the list. The cut
-  is a `git mv` and a `Cargo.toml`. The one judgement in it: the mesher's
+  is a `git mv` and a `Cargo.toml`. The one judgment in it: the mesher's
   lane order and strides are the renderer's fact (the block layout is
   what the pipeline record declares, and naga holds the record to the
   shader), so the mesher takes them from `pxl-render` and three places

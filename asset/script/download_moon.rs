@@ -12,10 +12,10 @@ ureq = "2"
 
 //! The moon's face, as the sky draws it (frame/shader/sky.wgsl's moon_disc).
 //!
-//! NASA SVS's CGI Moon Kit colour map at 1K (LRO's LROC WAC mosaic, an
-//! equirectangular map with longitude 0 at its centre and east to the right)
+//! NASA SVS's CGI Moon Kit color map at 1K (LRO's LROC WAC mosaic, an
+//! equirectangular map with longitude 0 at its center and east to the right)
 //! cut to the near side, longitude −90° to 90°, since the Moon keeps that face
-//! to the Earth; each pixel's colour taken to its luminance in linear light
+//! to the Earth; each pixel's color taken to its luminance in linear light
 //! and written back as an eight-bit sRGB grey, 512 × 512, to
 //! `asset/sky/moon.png`. The ingest ships it from there.
 //!
@@ -26,7 +26,7 @@ ureq = "2"
 //! by that mean.
 //!
 //! Credit: NASA's Scientific Visualization Studio, which asks for it — here
-//! and where the face is drawn (gpu/moon.rs), as the star catalogue is
+//! and where the face is drawn (gpu/moon.rs), as the star catalog is
 //! credited, rather than in THIRD_PARTY_NOTICES.md, which covers copied
 //! source.
 //!

@@ -90,7 +90,7 @@ Deno.test("run_under_budget - hard_budget_ms bounds a pass of expensive no-ops",
 });
 
 Deno.test("run_under_budget - without a ceiling, expensive no-ops still walk the whole list", () => {
-  // Locks in the behaviour the ceiling is opt-in against, so it is clear
+  // Locks in the behavior the ceiling is opt-in against, so it is clear
   // this is a deliberate choice per caller and not an accident.
   const items = Array.from({ length: 6 }, (_, i) => i);
   const seen: number[] = [];

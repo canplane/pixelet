@@ -98,7 +98,7 @@ cell, the conflict unit is already as small as it goes.
 ## What POI is, and how much of it is reusable
 
 POI is three layers, and they are worth telling apart because only two of them
-generalise.
+generalize.
 
 The **page** is a column table: `x`, `y`, `z` as `f64`, a category index and a
 rank as `u16`, and the id's FNV-1a as `u64`, all as lanes; then the category
@@ -115,7 +115,7 @@ becomes a count — then commit the field whole. The problem it solves is
 "draw world-anchored labels inside a budget", which is also the problem a
 player's name tag and a chat bubble are.
 
-The **index** is the part that does not generalise, and it says so:
+The **index** is the part that does not generalize, and it says so:
 
 > POI is static. It changes when a page arrives or leaves and at no other
 > time, which is the axis this indexes along.

@@ -250,7 +250,7 @@ export const enum Command {
   INPUT_RESET_DIST = 0x1c14,
   /** The compass's press: north up. */
   INPUT_COMPASS_RESET = 0x1c15,
-  /** A search result: the map centre moved there. */
+  /** A search result: the map center moved there. */
   INPUT_GO_TO = 0x1c16,
   /** A GPS fix; a field is absent where the browser gave none. */
   SENSOR_UPDATE = 0x1d03,
@@ -359,8 +359,8 @@ export interface Snapshot {
   /** Every setting's value by its SettingKey, as SETTING_UPDATE carries one. */
   settings: u32[];
   scale_bar: ScaleBar;
-  /** The place the map centre is in, broad to narrow, already cut at the rung the
-   * current zoom asks for; empty where the centre is in none or the packets it is
+  /** The place the map center is in, broad to narrow, already cut at the rung the
+   * current zoom asks for; empty where the center is in none or the packets it is
    * read out of have not arrived. */
   place: PlacePart[];
   /** The sizes an object places at, in units, coarsest first: the tiers the size flyout offers, one of which the shell holds by its index. */
@@ -387,9 +387,9 @@ export function read_snapshot(b: BranchCursor): Snapshot {
 export interface MapState {
   status: MapStatus;
   is_off_center: boolean;
-  /** The map centre in degrees: what the search measures distance from. */
+  /** The map center in degrees: what the search measures distance from. */
   center: LonLat | null;
-  /** The L3 page the centre falls in: what the area being looked at is announced per.
+  /** The L3 page the center falls in: what the area being looked at is announced per.
    * Sent because the shell would otherwise need a second implementation of the space
    * to reach it. */
   page: u64 | null;
@@ -554,7 +554,7 @@ export interface InputPointer {
   x: f64;
   y: f64;
   tool: ActiveTool;
-  /** The ground channel the held cube stands in for; absent for a flat colour, a decor kind or nothing. */
+  /** The ground channel the held cube stands in for; absent for a flat color, a decor kind or nothing. */
   channel: GroundChannelKey | null;
   /** The held cube's type in its channel, or the decor kind, by the catalog's number; what the object store keeps is the kernel's to derive. */
   value: u32;

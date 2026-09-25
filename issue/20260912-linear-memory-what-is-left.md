@@ -33,7 +33,7 @@ This checklist assumes that destination rather than arguing it.
 Where the line runs, settled 2026-09-12 over the POI question: **a resource
 the canvas reads every frame is linear memory, and a page our API emits
 comes in that form (XTP) whoever the provider was** — the provider is
-normalised on the server and does not reach the client. A live response
+normalized on the server and does not reach the client. A live response
 the UI shows once (a search, a reverse geocode) and the views that measure
 the client (the ledger, the census) are glue. The test is who reads the
 data each frame, not who produced it.
@@ -87,7 +87,7 @@ Two consequences that came up in practice and are now rules:
 - **2026-09-12, the scheduler's view of every chunk.** The eight scheduler
   fields on ~2,500 nodes and the `Set` that gathered them became one slot
   per chunk in `sched/chunk_table.ts`: flags, origin, bounding sphere, world
-  centre, the two distances, pending-since, request, retained bytes. The
+  center, the two distances, pending-since, request, retained bytes. The
   per-frame measurement is one loop with one matrix (the anchor root's) and
   six plane dots per slot; the orders sort scratch slot lists; the memory
   budget's on/off totals are the table's own. Commit de9a8ce.

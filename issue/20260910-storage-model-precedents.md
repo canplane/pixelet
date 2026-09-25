@@ -104,7 +104,7 @@ of objects. It only depends on the number of object primitives."
 
 **What this means for pixelet.** The cell size should track the _entity's own
 extent_, not a level of the existing hierarchy. An L2 chunk is 121 m and an
-L1 cell is 1.89 m; a POI badge or an actor is neither, so quantising a
+L1 cell is 1.89 m; a POI badge or an actor is neither, so quantizing a
 dynamic-point index against a terrain level would be choosing the cell size
 for the wrong reason. The L4 ceiling from the density document bites here
 too: above L4 the lattice has no Z, so a hash key derived from lattice
@@ -159,7 +159,7 @@ than baked into the precomputed shape.
 
 **Greedy, in importance order.** For each label in priority order: compute
 its screen geometry, query the grid, insert if the space is free, otherwise
-mark it collided. There is no global optimisation — first fit wins.
+mark it collided. There is no global optimization — first fit wins.
 
 **Cross-tile identity carries the fade state.** `CrossTileSymbolIndex` gives
 the same real-world symbol appearing in tiles at different zooms one shared
@@ -212,7 +212,7 @@ not an embellishment on it.
 **What this settles.** Clustering and decluttering are not alternatives. A
 40 px cluster radius already guarantees the circles do not overlap, so for
 _symbols_ the clustering is the decluttering. Labels are wider than 40 px,
-which is why Mapbox still runs collision over the text afterwards. Both
+which is why Mapbox still runs collision over the text afterward. Both
 passes, in that order.
 
 ---
@@ -440,7 +440,7 @@ interaction and eventual AOI. Teschner's rule sets the cell to the _query
 radius_, since that is the effective extent of the thing being asked about.
 Timestamped rather than cleared, prime table well above the entity count.
 
-It must not quantise against the L hierarchy. An L2 chunk is 121 m and an L1
+It must not quantize against the L hierarchy. An L2 chunk is 121 m and an L1
 cell is 1.89 m; an actor is neither, so picking a level would be choosing
 the cell size for the wrong reason. And above L4 the lattice has no Z at
 all. A hash does not need the lattice, which is the point.
@@ -497,7 +497,7 @@ so choosing one cluster level per frame is wrong.
 This is already solved here. Chunks resolve their own `LodStep` from
 distance — the 1/2/4/8/16/32/64 ladder `DECOR_DENSITY_BY_LOD_STEP` uses. So
 a cluster hierarchy keyed on **page × LodStep** lets each page use the tier
-it has already chosen. No new quantisation, and the tiers cannot drift out
+it has already chosen. No new quantization, and the tiers cannot drift out
 of step with terrain and decor, because it is the same number.
 
 Mapbox handles pitch the same way, and for the same reason: clustering is
@@ -565,7 +565,7 @@ like the answer.
 Checked: `poi_layer.tsx` already dedupes by `POI.id` across pages, and that
 id is Overture's `gers_id`, stable globally. Mapbox cannot do this — vector
 tile feature ids are not reliable across zooms, so `CrossTileSymbolIndex`
-identifies a symbol by _(label text, anchor position quantised to a ~4 px
+identifies a symbol by _(label text, anchor position quantized to a ~4 px
 grid)_ and searches a KDBush within one grid unit, sorting matches to keep
 the assignment deterministic. That machinery exists to reconstruct an
 identity we are simply given.
@@ -644,7 +644,7 @@ points every frame to keep a few hundred moving ones current.
 
 ## Order, and what verifies each step
 
-**1. `PointIndex` alone.** No behaviour changes. Pure logic, so `deno test`
+**1. `PointIndex` alone.** No behavior changes. Pure logic, so `deno test`
 covers it with no browser — which is the half
 [20260910-point-density-and-the-order-to-multiplayer.md](./20260910-point-density-and-the-order-to-multiplayer.md)
 calls already tractable. The invariants are stateable:

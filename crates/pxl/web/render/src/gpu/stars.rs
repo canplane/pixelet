@@ -1,13 +1,13 @@
 // pxl-render/gpu/stars.rs
 
-//! The stars: the Yale Bright Star Catalogue (Hoffleit and Warren, fifth
+//! The stars: the Yale Bright Star Catalog (Hoffleit and Warren, fifth
 //! revised edition, 1991; CDS V/50), baked by script/bake-stars.ts into eight
 //! bytes a star, and drawn as one instanced strip of four corners a star
 //! (frame/shader/stars.wgsl) right after the sky, under everything else.
 //!
 //! What never changes of a star is taken once, here, when the pass is made:
 //! its direction in the equatorial frame, its flux from its magnitude, and
-//! its colour from its temperature — Planck's law at three wavelengths,
+//! its color from its temperature — Planck's law at three wavelengths,
 //! which the vertex stage would otherwise work out for each of a star's four
 //! corners every frame. What the frame changes — where the sky has turned
 //! to, the air the star is seen through — stays the vertex stage's.
@@ -28,11 +28,11 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::look::atmosphere::transmittance;
 use crate::look::environment::{ENV_AIR, ENV_SKY, ENV_STARS};
 
-/// The catalogue as the bake wrote it.
-const CATALOGUE: &[u8] = include_bytes!("../frame/shader/bright-stars.bin");
+/// The catalog as the bake wrote it.
+const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-stars.bin");
 const STAR_BYTES: usize = 8;
 /// Floats a star takes on the device: its direction and its flux, then its
-/// colour and a word of padding (stars.wgsl's `catalogue`).
+/// color and a word of padding (stars.wgsl's `catalog`).
 const STAR_FLOATS: usize = 8;
 
 /// Floats the Stars uniform (stars.wgsl's Stars) holds.
@@ -59,14 +59,14 @@ impl StarPass {
         let built = pipelines.build(g, PIPELINE_STARS, format::CANVAS);
         let uniform = object();
         g.buffer(uniform, word_bytes(STARS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let stars: Vec<f32> = CATALOGUE.as_chunks::<STAR_BYTES>().0.iter().flat_map(star).collect();
-        let catalogue = object();
-        g.buffer(catalogue, word_bytes(stars.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
-        g.write_buffer(catalogue, 0, bytes(&stars));
+        let stars: Vec<f32> = CATALOG.as_chunks::<STAR_BYTES>().0.iter().flat_map(star).collect();
+        let catalog = object();
+        g.buffer(catalog, word_bytes(stars.len()), buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        g.write_buffer(catalog, 0, bytes(&stars));
         let group = object();
         let mut e = [0u32; 10];
         e[..5].copy_from_slice(&buffer_entry(0, uniform));
-        e[5..].copy_from_slice(&buffer_entry(1, catalogue));
+        e[5..].copy_from_slice(&buffer_entry(1, catalog));
         g.bind_group(group, built.layouts[0], &e);
         StarPass {
             built,
@@ -115,13 +115,13 @@ impl StarPass {
         }
         g.set_pipeline(pass, self.built.pipeline);
         g.set_bind_group(pass, 0, self.group, &[]);
-        g.draw(pass, 4, (CATALOGUE.len() / STAR_BYTES) as u32, 0, 0);
+        g.draw(pass, 4, (CATALOG.len() / STAR_BYTES) as u32, 0, 0);
     }
 }
 
 /// A star as the bake packed it — its right ascension as a u16 of a turn,
 /// its declination as an i16 of a quarter turn, its visual magnitude and its
-/// B−V colour index as i16 thousandths (script/bake-stars.ts) — as the
+/// B−V color index as i16 thousandths (script/bake-stars.ts) — as the
 /// vertex stage reads it.
 fn star(packed: &[u8; STAR_BYTES]) -> [f32; STAR_FLOATS] {
     let word = |k: usize| [packed[2 * k], packed[2 * k + 1]];
@@ -130,7 +130,7 @@ fn star(packed: &[u8; STAR_BYTES]) -> [f32; STAR_FLOATS] {
     let vmag = i16::from_le_bytes(word(2)) as f64 / 1000.0;
     let bv = i16::from_le_bytes(word(3)) as f64 / 1000.0;
     let flux = 10f64.powf(-0.4 * vmag);
-    let [r, g, b] = star_colour(bv);
+    let [r, g, b] = star_color(bv);
     [
         (dec.cos() * ra.cos()) as f32,
         (dec.cos() * ra.sin()) as f32,
@@ -144,17 +144,17 @@ fn star(packed: &[u8; STAR_BYTES]) -> [f32; STAR_FLOATS] {
 }
 
 /// Planck's law at a wavelength `lambda` (nm) and a temperature `t` (K), up
-/// to a constant the colour divides out.
+/// to a constant the color divides out.
 fn planck(lambda: f64, t: f64) -> f64 {
     let l = lambda * 1e-9;
     1.0 / (l.powi(5) * ((1.4388e-2 / (l * t)).exp() - 1.0))
 }
 
-/// B−V to temperature (Ballesteros 2012), and the temperature to a colour at
+/// B−V to temperature (Ballesteros 2012), and the temperature to a color at
 /// the three primaries' wavelengths relative to a 6,500 K white, normalized
 /// to its brightest channel and taken half-way to white: the eye's cone
-/// response at night leaves a star's colour a tint.
-fn star_colour(bv: f64) -> [f64; 3] {
+/// response at night leaves a star's color a tint.
+fn star_color(bv: f64) -> [f64; 3] {
     let t = 4600.0 * (1.0 / (0.92 * bv + 1.7) + 1.0 / (0.92 * bv + 0.62));
     let c = [610.0, 550.0, 465.0].map(|lambda| planck(lambda, t) / planck(lambda, 6500.0));
     let peak = c[0].max(c[1]).max(c[2]);

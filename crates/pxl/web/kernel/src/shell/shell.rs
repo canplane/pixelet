@@ -23,7 +23,7 @@ use crate::control::sensor::geolocation::{geolocation_close, geolocation_open, s
 use crate::control::sensor::store::{device_location_store, device_orientation_store};
 use crate::global::Global;
 use crate::layer::character::store::companion_load_store;
-use crate::layer::geocode::fetcher::centre_group;
+use crate::layer::geocode::fetcher::center_group;
 use crate::layer::geocode::store as geocode_store;
 use crate::layer::terrain::elevation::{ground_at, ground_or_raw};
 use crate::sched::turn::world_platform;
@@ -45,7 +45,7 @@ fn shell() -> &'static mut Shell {
     SHELL.get(|| Shell { go_to: None })
 }
 
-/// The place the centre page is in, broad to narrow, cut at the rung this
+/// The place the center page is in, broad to narrow, cut at the rung this
 /// zoom asks for, each part handed to `each`; none where the page is in none
 /// or the packets it is read out of are not here yet.
 ///
@@ -55,7 +55,7 @@ fn shell() -> &'static mut Shell {
 fn place_parts(page: Option<IVec>, zoom: f64, each: &mut dyn FnMut(&PlacePart<'_>)) {
     let deepest = PlaceRank::at_zoom(zoom);
     let parts = page
-        .zip(centre_group())
+        .zip(center_group())
         .zip(geocode_store::dict())
         .and_then(|((page, group), dict)| {
             let group = geocode_store::group_of(group)?;
@@ -160,7 +160,7 @@ pub fn tracking_action(tracking: Tracking) {
     }
 }
 
-/// Moves the map centre to `target`, grounded the way every map_center
+/// Moves the map center to `target`, grounded the way every map_center
 /// setter that respects ground_snap is.
 pub fn go_to(target: Pvf3) {
     // The user drove the camera: GPS stops overriding it.
@@ -173,7 +173,7 @@ pub fn go_to(target: Pvf3) {
     shell().go_to = (grounded == target).then_some(target);
 }
 
-/// A search result: the centre moved to degrees.
+/// A search result: the center moved to degrees.
 pub fn go_to_degrees(lon: f64, lat: f64) {
     let mut target = Pvf3::default();
     epsg4326::project(&mut target, &[lon, lat, 0.0]);

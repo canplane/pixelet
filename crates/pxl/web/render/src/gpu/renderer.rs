@@ -184,7 +184,7 @@ fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
 /// the frame's origin, and their f32 difference kept a direction to about a
 /// thousandth of a radian that changed its rounding with every move of the
 /// camera. A ray meeting the cloud layer at a grazing angle carries that
-/// error out by the secant — kilometres at the horizon — and the clouds
+/// error out by the secant — kilometers at the horizon — and the clouds
 /// there shook on their own. Taken in f64 here, the ray is exact to the f32
 /// it lands in.
 /// Points at one depth un-project onto a plane, so the ray is affine in
@@ -812,21 +812,21 @@ impl Renderer {
         // on the map, which anchors the clouds to the ground.
         let eye_local = [s[STAGE_AT::EYE_LOCAL], s[STAGE_AT::EYE_LOCAL + 1], s[STAGE_AT::EYE_LOCAL + 2]];
         let origin = ivec::gather(ivec::from_real(s[STAGE_AT::ORIGIN]), ivec::from_real(s[STAGE_AT::ORIGIN + 1]), 0);
-        // The camera centre — the root frame's origin undone — which the
+        // The camera center — the root frame's origin undone — which the
         // sun's shadow is aimed at and the map is laid back on the planet
         // about (look/globe.rs): its latitude's values and the planet's
         // radius in the units the map has there.
-        let centre = [-s[STAGE_AT::TRANSLATION], -s[STAGE_AT::TRANSLATION + 1], -s[STAGE_AT::TRANSLATION + 2]];
+        let center = [-s[STAGE_AT::TRANSLATION], -s[STAGE_AT::TRANSLATION + 1], -s[STAGE_AT::TRANSLATION + 2]];
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
-        // Straight up where the eye stands: away from the planet's centre,
-        // the radius below the camera centre. The eye stands off the camera
-        // centre by the orbit, so its up leans from the root frame's Z by that
+        // Straight up where the eye stands: away from the planet's center,
+        // the radius below the camera center. The eye stands off the camera
+        // center by the orbit, so its up leans from the root frame's Z by that
         // over the radius — nothing at a street, degrees from orbit — and the
         // air, the clouds and the stars are measured from it, on the sphere
         // the world is laid on.
-        let planet_centre = [centre[0], centre[1], centre[2] - sphere.radius_u()];
+        let planet_center = [center[0], center[1], center[2] - sphere.radius_u()];
         let mut up = [0.0; 3];
-        norm3(sub3(&eye_local, &planet_centre, &mut [0.0; 3]), &mut up);
+        norm3(sub3(&eye_local, &planet_center, &mut [0.0; 3]), &mut up);
         self.clouds.lay_out(g, &m, &eye_local, env, &up);
         self.atmosphere.set_clouds(&clouds::field(origin, env));
         self.stars.lay_out(g, &m, env, width, height, &up);
@@ -856,10 +856,10 @@ impl Renderer {
             self.ao.lay_out(g, &proj, width, height, env[7], env[11]);
         }
         let globe = [
-            centre[0] as f32,
-            centre[1] as f32,
+            center[0] as f32,
+            center[1] as f32,
             sphere.radius_u() as f32,
-            centre[2] as f32,
+            center[2] as f32,
             sphere.e0 as f32,
             sphere.sin_lat as f32,
             sphere.cos_lat as f32,
@@ -873,7 +873,7 @@ impl Renderer {
         u[SHADOW_STRENGTH] = if self.shadows { 1.0 } else { 0.0 };
         u[SHADOW_TEXEL] = self.shadow.texel as f32;
         if self.shadows {
-            self.shadow.aim(g, &env[0..3], centre, globe);
+            self.shadow.aim(g, &env[0..3], center, globe);
             put_mat(u, LIGHT_VIEW_PROJ, &self.shadow.light_view_proj);
         }
 

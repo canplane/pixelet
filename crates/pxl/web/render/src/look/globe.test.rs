@@ -5,7 +5,7 @@ use super::*;
 const SEOUL: f64 = 37.5665 * core::f64::consts::PI / 180.0;
 
 #[test]
-fn the_map_centre_is_left_where_it_is() {
+fn the_map_center_is_left_where_it_is() {
     let globe = Globe::at(SEOUL);
     assert_eq!(globe.place([0.0, 0.0, 0.0]), [0.0, 0.0, 0.0]);
     // A unit out, and a unit up, stay a unit to within a millionth: the
@@ -20,7 +20,7 @@ fn the_map_centre_is_left_where_it_is() {
 
 #[test]
 fn a_point_due_north_is_where_its_latitude_is() {
-    // A point 2° north of the centre, found by its Mercator ordinate: on the
+    // A point 2° north of the center, found by its Mercator ordinate: on the
     // sphere it is 2° of arc away, the arc's chord along north and its
     // sagitta down — where the flat map had it a few percent further off.
     let globe = Globe::at(SEOUL);
@@ -42,10 +42,10 @@ fn every_point_lies_on_the_sphere_at_its_height() {
     let r = globe.radius_u();
     for d in [[1e5, 3e4, 0.0], [-2e5, -1e5, 0.0], [5e4, -3e5, 400.0]] {
         let p = globe.place(d);
-        let from_centre = (p[0] * p[0] + p[1] * p[1] + (p[2] + r) * (p[2] + r)).sqrt();
+        let from_center = (p[0] * p[0] + p[1] * p[1] + (p[2] + r) * (p[2] + r)).sqrt();
         let lat = 2.0 * (globe.e0 * (d[1] / MERCATOR_RADIUS_U).exp()).atan() - core::f64::consts::FRAC_PI_2;
         let want = r + d[2] * lat.cos() / globe.cos_lat;
-        assert!((from_centre - want).abs() < 1e-3, "{d:?}: {from_centre} vs {want}");
+        assert!((from_center - want).abs() < 1e-3, "{d:?}: {from_center} vs {want}");
     }
 }
 

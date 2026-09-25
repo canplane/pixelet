@@ -19,7 +19,7 @@ pub const TILE_SIZE: u32 = 256;
 
 /// "cute-painted-fantasy-v1" sources are hand-painted well above 256² and need
 /// a real smoothing resample or they re-pixelate on the way down; "legacy"
-/// sources are the original pixel-art set and keep nearest-neighbour. Absent
+/// sources are the original pixel-art set and keep nearest-neighbor. Absent
 /// means legacy — the conservative choice, since nearest never blurs a source
 /// that genuinely was pixel-perfect already.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
@@ -97,8 +97,8 @@ pub fn load(cube_dir: &Path) -> Result<Vec<Item>, String> {
     for (ty, entry) in &manifest.terrain.side {
         push(format!("terrain.side.{ty}"), entry);
     }
-    for (colour, entry) in &manifest.objects.block {
-        push(format!("objects.block.{colour}"), entry);
+    for (color, entry) in &manifest.objects.block {
+        push(format!("objects.block.{color}"), entry);
     }
     Ok(items)
 }
@@ -128,7 +128,7 @@ pub fn looks_like_sprite_sheet(w: u32, h: u32) -> bool {
     w != h && w.max(h) as f64 / w.min(h) as f64 >= 1.2
 }
 
-/// Nearest-neighbour, for the pixel-art sources: their clusters have to stay
+/// Nearest-neighbor, for the pixel-art sources: their clusters have to stay
 /// crisp rather than blur into a smear. Only ever called on a square source,
 /// so it never distorts an aspect ratio.
 pub fn nearest_resize(src: &[u8], sw: u32, sh: u32, dw: u32, dh: u32) -> Vec<u8> {
@@ -155,10 +155,10 @@ fn hex_to_rgb(hex: &str) -> Option<[u8; 3]> {
     Some([u8::from_str_radix(&h[0..2], 16).ok()?, u8::from_str_radix(&h[2..4], 16).ok()?, u8::from_str_radix(&h[4..6], 16).ok()?])
 }
 
-/// No unintended transparent pixel afterwards: every alpha becomes 255.
+/// No unintended transparent pixel afterward: every alpha becomes 255.
 ///
 /// The manifest's own `paletteHex` is the flatten background where it is given
-/// — the colour that type is already known to read as — falling back to the
+/// — the color that type is already known to read as — falling back to the
 /// image's own opaque-pixel average for the one entry without one.
 pub fn flatten_alpha(data: &mut [u8], palette_hex: Option<&str>) {
     let bg = palette_hex.and_then(hex_to_rgb).unwrap_or_else(|| {

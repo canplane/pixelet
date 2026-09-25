@@ -45,7 +45,7 @@ received bytes.
 
 **Schemaless matches the thing that changes.** The bake pipeline is the
 fastest-moving part of this repo — OSM to Overture, ground channels added,
-names reorganised, all inside one week. A schema file plus `flatc` plus
+names reorganized, all inside one week. A schema file plus `flatc` plus
 regenerated readers in two languages puts the heaviest procedure on the part
 that changes most.
 

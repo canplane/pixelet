@@ -156,7 +156,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
         remaining_ms: ctx.budget.remaining(),
         hard_slack_ms: HARD_SLACK_MS,
         retain_budget_bytes: RETAIN_BUDGET_BYTES(),
-        centre_z: ivec::to_real(ivec::Z(v.origin)) - v.tz,
+        center_z: ivec::to_real(ivec::Z(v.origin)) - v.tz,
         globe: Some(globe()),
     };
 

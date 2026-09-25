@@ -378,7 +378,7 @@ impl Outbox {
 }
 
 /// Signals one command may raise before `drain` checks again. A frame is the
-/// many-signalled one — its sensor asks, snapshot, fetches and loads —
+/// many-signaled one — its sensor asks, snapshot, fetches and loads —
 /// so this bounds a single command rather than a turn.
 const MOST_SIGNALS: u32 = 64;
 

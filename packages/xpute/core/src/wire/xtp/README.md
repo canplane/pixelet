@@ -138,7 +138,7 @@ Generic lowering does it for you.
 Notes:
 
 - The `number -> i32 | f64` split is a **JS-side lowering policy**, not a wire-level requirement.
-- Generic lowering treats unsupported input or out-of-contract generic bigint input as **programmer error** and throws.
+- Generic lowering treats unsupported input or out-of-contract generic bigint input as **programr error** and throws.
 - Explicit scalar writers such as `u8()`, `i32()`, `u64()`, `f32()` are **caller-chosen constructors** and normalize through the word cast helpers.
 - Generic `set(null)` / `put(null)` are intentionally distinct from typed optional null such as `str(null)` or `u32(null)`.
 

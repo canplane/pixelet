@@ -154,7 +154,7 @@ disturbing it, since there is then no server-side path at all.
   regions "which a kernel over the wasm memory cannot see," harmless while
   everything computes in JS. When a kernel lands, a spill has to trigger
   reclaim or refuse. That item is a prerequisite of this move, not a
-  neighbour of it.
+  neighbor of it.
 - **WebGL reach versus a hard cut to WebGPU** is undecided and deliberately
   not decided here. Two renderers is two of everything; one renderer is a
   reach cost on whatever has not shipped WebGPU. Decided below, 2026-09-13:
@@ -188,7 +188,7 @@ would be thrown away with it. The facts carry.
   MB in plain regions), the badge sheet's canvas (16–64 MB), the JS glue
   (30–40 MB of objects — three's, React's, ours), and on the GPU side the
   chunk meshes, textures and the composer's targets.
-- **A multisampled target is pixels × samples × (colour + depth bytes).**
+- **A multisampled target is pixels × samples × (color + depth bytes).**
   At 3.2 Mpx, four samples and half-float that is 150 MB, and it cost a
   millisecond of frame time — the composer's defaults set it, not a
   decision. The renderer that replaces this one creates that target

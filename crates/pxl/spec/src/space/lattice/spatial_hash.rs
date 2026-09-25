@@ -7,7 +7,7 @@
 //! small volume, moving. A tree prunes nothing when everything lands in two
 //! leaves and charges traversal for the privilege, and a dense grid pays for
 //! cells it never fills — which is fatal when the world has no bounds to
-//! size a grid against. Hashing quantised positions is insensitive to both
+//! size a grid against. Hashing quantized positions is insensitive to both
 //! density and emptiness, and re-insertion on movement is a bucket write.
 //!
 //! **Counting sort, not a map of buckets.** Zhyhallo (ICAART 2024) revisits
@@ -106,7 +106,7 @@ pub struct SpatialHash {
     item_cz: Box<[i32]>,
 
     /// Bump cursor per bucket during the placing pass, folded back into
-    /// `starts` afterwards so `starts[b]` is the group's first index.
+    /// `starts` afterward so `starts[b]` is the group's first index.
     cursors: Box<[u32]>,
 
     generation: u32,
@@ -236,7 +236,7 @@ impl SpatialHash {
     /// point, written into `out`, returning how many.
     ///
     /// Broadphase: no false negatives, and false positives only from the cell
-    /// quantisation itself — the caller applies the exact test it was going to
+    /// quantization itself — the caller applies the exact test it was going to
     /// apply anyway. No id appears twice. Stops at `out.len()` and reports
     /// the truncation through the return value, since a caller with a
     /// fixed-size result buffer has already decided how many it can use.
@@ -263,7 +263,7 @@ impl SpatialHash {
                         // The bucket is shared with every other cell that hashes here,
                         // and with itself when a wide box reaches it twice. Comparing
                         // the cell is what turns "probably nearby" into "in the box, or
-                        // one quantisation step outside it".
+                        // one quantization step outside it".
                         if self.item_cx[i] != cx || self.item_cy[i] != cy || self.item_cz[i] != cz {
                             continue;
                         }

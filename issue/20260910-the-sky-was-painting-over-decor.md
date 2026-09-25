@@ -69,7 +69,7 @@ That is the whole bug, and it explains each reported fact exactly:
   Clouds and stars come along because they are in the same shader.
 - **The terrain behind it does not show** because the terrain draws later and
   fails the depth test against the tree's surviving depth.
-- **No colour is ever applied** because the tree's colour was written and then
+- **No color is ever applied** because the tree's color was written and then
   overwritten in the same frame.
 - **Terrain is unaffected** because its material is constructed lazily, on the
   first chunk attach, long after the sky's.

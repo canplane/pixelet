@@ -545,7 +545,7 @@ pub(super) fn fixed_lane<T: Copy>(cap: usize) -> &'static mut [T] {
         // once, which is what the kernel's lane is too — the ledger holds its
         // rings for the program's life either way. Without this the ledger
         // records nothing under `cargo test` and every check of what it
-        // summarises reads zero.
+        // summarizes reads zero.
         // SAFETY: the rings hold plain numbers, which the kernel's own lane
         // is handed zeroed below for the same reason.
         return Box::leak(vec![unsafe { core::mem::zeroed::<T>() }; cap].into_boxed_slice());
@@ -575,7 +575,7 @@ pub struct LedgerSink {
 /// way a frame is. It used to be copied field by field into a hand-ordered
 /// slice, and two lanes appended to the block's end were inserted in the
 /// middle of that slice: every lane from the fifth on carried its
-/// neighbour's number, and nothing said so (2026-09-23).
+/// neighbor's number, and nothing said so (2026-09-23).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FramePeak {
@@ -698,7 +698,7 @@ pub fn ledger_recording_start() {
     l.recording = true;
 }
 
-/// Freezes the window; exports taken afterwards see exactly this data.
+/// Freezes the window; exports taken afterward see exactly this data.
 pub fn ledger_recording_stop() {
     let l = ledger();
     if !l.recording {

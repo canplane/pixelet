@@ -64,11 +64,11 @@ tile. A 404 here isn't an error — it's the signal for "nothing but water here"
 This is only sound if the ocean tile is genuinely page-independent, which is
 not obvious: `bake_terrain` takes a `page_idx` and derives both a bbox and a
 latitude-dependent `Z_SCALE` from it. So the tool **verifies it rather than
-assuming it** — it bakes a synthesised empty source (zero elevation grid, no
+assuming it** — it bakes a synthesized empty source (zero elevation grid, no
 features, no coastline rows) at three different pages and refuses to proceed
 unless all three produce identical bytes. They do.
 
-Synthesising the empty source, rather than sampling some far-offshore page from
+Synthesizing the empty source, rather than sampling some far-offshore page from
 the DB, matters: deep-ocean pages turn out to carry the occasional stray feature
 row (buoys, EEZ boundary points), so a sampled tile would have baked whatever
 happened to be floating in the page that got picked.
@@ -152,9 +152,9 @@ This is a property of where the DEM coverage ends, not a bug in the bake.
 **Kept rather than dropped from the upload set**, on evidence rather than
 convenience. The alternative was shrinking the candidate grid by one ring so
 these pages 404 into the ocean fallback. Decoding the affected tiles and their
-inward neighbours shows why that would be worse:
+inward neighbors shows why that would be worse:
 
-- The neighbour one page inside the ring carries real elevation (96–344 in the
+- The neighbor one page inside the ring carries real elevation (96–344 in the
   sampled tile). So the geometric discontinuity at the boundary exists either
   way — dropping the ring does not remove the cliff, since the ocean fallback is
   also flat at zero.
@@ -319,7 +319,7 @@ Three facts, each checked rather than assumed:
   reports public access via the r2.dev URL disabled, and no custom domain is
   attached to it. Every path to the bucket goes through the Worker.
 - **Workers is on the free plan**, whose limit is 100k requests/day and whose
-  behaviour past it is to fail with a 1027 error, not to bill. `run_worker_first`
+  behavior past it is to fail with a 1027 error, not to bill. `run_worker_first`
   routes `/tiles/*` through the Worker, so a tile read cannot happen without a
   Worker invocation.
 - **The edge cache is real here.** A repeat request for `/tiles/v1/_ocean`
@@ -587,13 +587,13 @@ the build at all. And since the API is not deployed, `ADMIN_TOKEN` and
 
 Two secret-looking literals in the bundle were checked and are benign: React's
 own list of input types (which contains `password`), and the deliberate
-attribution link in the licence section.
+attribution link in the license section.
 
 **Location is the sensitive surface here.** The only personal data
-leaving the client is the map-centre coordinate sent to Nominatim — rounded to
+leaving the client is the map-center coordinate sent to Nominatim — rounded to
 four decimal places (~11 m) and debounced, never stored. That is now disclosed
-in the settings licence section, translated rather than hardcoded, because it is
-a statement to the user rather than a notice a licence demands verbatim.
+in the settings license section, translated rather than hardcoded, because it is
+a statement to the user rather than a notice a license demands verbatim.
 
 Everything else stays on the device: `pxl:lang`, `pxl:render_settings`,
 `pxl:debug_settings`, and `pxl:objects:v4` in `localStorage`.

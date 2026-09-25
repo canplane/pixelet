@@ -2,7 +2,7 @@
 
 //! Line segments over the world, drawn on top of everything: what the dev
 //! gizmos (frame_gizmo.rs) mark — the frame's origins, page corners and the
-//! map centre. The segments are written whenever what they mark moves; this
+//! map center. The segments are written whenever what they mark moves; this
 //! holds them as a block and lists their draw each frame, placed against the
 //! frame's origin. A module built without the gizmos holds none.
 
@@ -13,7 +13,7 @@ use pxl_spec::space::v3::V3;
 use crate::world::chunk::build::World;
 
 /// Floats a vertex takes: its position relative to the set's origin (3)
-/// and its colour, linear (3). Two vertices a segment.
+/// and its color, linear (3). Two vertices a segment.
 pub const DEBUG_VERTEX_FLOATS: usize = 6;
 
 #[derive(Default)]

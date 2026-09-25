@@ -39,7 +39,7 @@ when its fix lands.
   change, and the scheduler drops a failed demand), so a jump followed by a
   still view left a hole; a failed terrain fetch now rebuilds the wishlist
   once the quarantine has passed.
-  Exercised afterwards on the running client, every network path but POI's
+  Exercised afterward on the running client, every network path but POI's
   (which stays disconnected, BACKLOG) let out: a pan of eighty steps (terrain
   182 fetched, 0 failed; geocode 15, 0 failed; the module heap's live bytes
   flat at 9.8 MB), the jump from Seoul to Busan (terrain 122, 0 failed), the
@@ -148,7 +148,7 @@ when its fix lands.
   untextured for good. A slot now carries when it was last asked for, and a
   new model takes the one asked for longest ago.
 
-## B. Behaviour that differs
+## B. Behavior that differs
 
 - **B1** ~~`fetch_scheduler.rs:160-177` `fetch_settle` records nothing in the
   ledger when the row is gone; `fetch_scheduler.ts:158-177` recorded every
@@ -234,7 +234,7 @@ when its fix lands.
   results (`:145-147`, the TypeScript kept them); `{:.1}` rounds a tie to
   even (1250 m "1.2km", `toFixed` "1.3km"). `search_modal.tsx:192-195`.
 - ~~**B17**~~ `use_reverse_geocode.rs:67-88` submits during a continuous pan;
-  `use_reverse_geocode.ts:55-100` restarted 500 ms on every centre change.
+  `use_reverse_geocode.ts:55-100` restarted 500 ms on every center change.
 - **B18** ~~`map/environment.rs:60-64` `tail_ambient`, `mid` and a `Vec`
   nothing reads.~~ Gone; the writes beside them already put the ambient
   intensity in the lane.
@@ -274,7 +274,7 @@ when its fix lands.
 - **B26** ~~`renderer.rs:867-889` resizes a surface's targets after
   `SETTLE_TURNS` turns at the new size; `renderer.ts:242-268` in the frame.~~
   **Kept as it is**: a drag on a window edge changes the size every frame,
-  and each change would otherwise rebuild the depth and multisampled colour.
+  and each change would otherwise rebuild the depth and multisampled color.
   The wait is not a delay — `request_world_tick` keeps the turns coming, and
   the buffer already made is drawn scaled until the size holds still.
 - **B27** ~~`render/gpu/decor.rs:98-104,116` uploads a texture per group;

@@ -106,7 +106,7 @@ pub fn ledger_window_start() {
     log().baseline = counters();
 }
 
-/// Freezes the window, so an export taken afterwards sees exactly this data,
+/// Freezes the window, so an export taken afterward sees exactly this data,
 /// and stops paying for the timing that fills it.
 pub fn ledger_window_stop() {
     ledger_recording_stop();

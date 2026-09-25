@@ -44,7 +44,7 @@
     // It is a bucket read: it needs the network and wrangler's credentials,
     // and where it cannot have them the server still starts on the cached
     // number and says so.
-    "sync:build-number": "sh -c './script/build-log.ts >/dev/null || echo \"[build-number] not synced: this build is labelled from the cached number\" >&2'",
+    "sync:build-number": "sh -c './script/build-log.ts >/dev/null || echo \"[build-number] not synced: this build is labeled from the cached number\" >&2'",
     // The production bundle at localhost:4173 on the same data: what to
     // measure the client against, since the dev server's unbundled modules
     // and hooks are not in it.

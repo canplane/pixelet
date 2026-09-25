@@ -13,7 +13,7 @@ fn spelled(cube: PlaceableCube) -> String {
 }
 
 #[test]
-fn every_flat_colour_round_trips_through_its_leaf_value_and_has_a_colour() {
+fn every_flat_color_round_trips_through_its_leaf_value_and_has_a_color() {
     for block in block_cubes() {
         let cube = PlaceableCube::Block(block);
         assert_eq!(placeable_cube_num_id(cube), block as u32);
@@ -29,7 +29,7 @@ fn a_cube_named_by_its_channel_and_number_is_the_cube() {
         let (channel, t) = placeable_cube_parts(cube);
         assert_eq!(placeable_cube(channel, t as u32), Some(cube), "{}", spelled(cube));
     }
-    assert_eq!(placeable_cube(None, cube_types::common::air as u32), None, "air is no flat colour");
+    assert_eq!(placeable_cube(None, cube_types::common::air as u32), None, "air is no flat color");
     assert_eq!(placeable_cube(Some(GroundChannelKey::WATER), cube_types::common::unknown as u32), None, "unknown is no water cube");
 }
 

@@ -61,7 +61,7 @@ deferrals, no failures.
   task p95 is the same on both paths (27, 26 ms) with the same scans behind
   it. What the main thread spends while terrain fills in is not the bake.
 - **The stepped path filled faster.** More bakes in a third of the frames,
-  at the same main-thread cost. One worker serialises its bakes, the phone
+  at the same main-thread cost. One worker serializes its bakes, the phone
   may schedule it on an efficiency core, and every bake pays two copies.
 - **The settled gap is the scene, not the path.** Both settled windows
   baked 40 chunks with commit p95 at 1 ms; the worker session drew more and

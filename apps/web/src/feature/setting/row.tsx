@@ -76,11 +76,11 @@ interface SettingGroupProps {
  * the name sits on the border itself, carrying the sheet's own background
  * so the line appears to run through it on either side. The box takes the
  * top padding the name needs to clear the first answer, and the name is
- * inset to the left rather than centred, since every other line in the
+ * inset to the left rather than centered, since every other line in the
  * sheet starts at the left — by its own padding, so the name starts exactly
  * where the answers' names start. A pixel above the line rather than
- * centred on it: the badges beside the name make the span taller than the
- * name is, and centring the span left the name reading low.
+ * centered on it: the badges beside the name make the span taller than the
+ * name is, and centering the span left the name reading low.
  *
  * The box stands away from the rows it sits among — a switch's row has only
  * the section's own gap around it, which left this one reading as another

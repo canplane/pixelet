@@ -136,7 +136,7 @@ with them the wait and the deadlock above. And the arena becomes a budget,
 which the pressure that already exists can be paid from — a handheld's is
 one number rather than a branch.
 
-## A coarse cell's floor is the centring's, not the ground's
+## A coarse cell's floor is the centering's, not the ground's
 
 A coarse tier is about 3.4 runs to a cell: the full buckets under the
 surface, merged into one; the floor that fills the gap under the top
@@ -145,10 +145,10 @@ move the 3.4 — that was measured and reverted
 ([a coarse cell is isotropic](./20260923-a-coarse-cell-is-isotropic.md)).
 
 The middle term is not the ground's. A box shrinks by `∛f` **about the
-cell's centre**, which leaves a gap to every neighbour, and the floor exists
+cell's center**, which leaves a gap to every neighbor, and the floor exists
 to fill it. Give the box the occupied extent on each axis instead, scaled so
 its volume is still `f`, and flat ground fills its cell laterally on its
-own: no gap, so no floor, and the top bucket merges with its neighbours as
+own: no gap, so no floor, and the top bucket merges with its neighbors as
 the full buckets already do. The rule stays symmetric — the same sentence
 for x, y and z — so it does not fall to the evidence that withdrew the
 height field, where thirty-two voxels lying flat and thirty-two standing up
@@ -210,7 +210,7 @@ window holds.
 
 ## Closed
 
-- **Work for a zoom that has passed is already cancelled.** The builds are
+- **Work for a zoom that has passed is already canceled.** The builds are
   cleared and rebuilt every tick from the chunks that are visible and
   pending, so a chunk the window has left stops being stepped on the next
   tick. What is wasted is a tick's budget, not a bake.

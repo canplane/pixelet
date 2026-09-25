@@ -2,7 +2,7 @@
 
 //! Places as a layer of the pyramid (world/pyramid.rs): a page counts the
 //! places in each of its cells (pxl-spec bake/poi_page.rs), and a count is
-//! drawn as a badge at the centre of the block of cells the ground under it
+//! drawn as a badge at the center of the block of cells the ground under it
 //! is drawn at (placement.rs). Which pages are held, fetched or folded is the
 //! pyramid's, in the same window as the ground's.
 

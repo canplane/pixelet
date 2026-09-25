@@ -63,7 +63,7 @@ on:
     paths-ignore: ["**.md"]
   workflow_dispatch: {}
 
-# A pull request's run is superseded by its next commit and may be cancelled.
+# A pull request's run is superseded by its next commit and may be canceled.
 # A run on deploy may not: the gate takes a build number, and one killed between
 # taking it and publishing would burn it.
 concurrency:
@@ -399,13 +399,13 @@ jobs:
   #
   # The outputs rather than the jobs' own conditions, because a job that
   # decided it had nothing to publish still succeeds, and a docs-only push
-  # should not spend a runner re-asking what no deploy touched. `!cancelled()`
+  # should not spend a runner re-asking what no deploy touched. `!canceled()`
   # is what lets this run at all — a needs: on a job that skipped would
   # otherwise skip this one too.
   smoke:
     name: smoke-test the public surface
     needs: [deploy-web, deploy-server]
-    if: ${{ !cancelled() && !failure() && (needs.deploy-web.outputs.published == 'true' || needs.deploy-server.outputs.rebuilt == 'true') }}
+    if: ${{ !canceled() && !failure() && (needs.deploy-web.outputs.published == 'true' || needs.deploy-server.outputs.rebuilt == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -445,7 +445,7 @@ jobs:
     # smoke so the line can say what the smoke found, and records whatever it
     # found — a build that went out and failed the smoke is still a build that
     # went out, and the one most worth finding in the log later.
-    if: ${{ !cancelled() && (needs.deploy-web.outputs.published == 'true' || needs.deploy-server.outputs.rebuilt == 'true') }}
+    if: ${{ !canceled() && (needs.deploy-web.outputs.published == 'true' || needs.deploy-server.outputs.rebuilt == 'true') }}
     runs-on: ubuntu-latest
     # R2 has no append, so the write is read-add-write as the counter's is, and
     # this is what keeps two of them from losing a line. Its own group rather

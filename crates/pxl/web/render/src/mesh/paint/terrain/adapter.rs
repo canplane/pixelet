@@ -3,7 +3,7 @@
 //! A terrain page's chunk as the render pipeline reads it.
 //!
 //! A page is a heightmap — four ground channels of one type byte a cell,
-//! and a coarse elevation raster sampled bicubically at cell centres to the
+//! and a coarse elevation raster sampled bicubically at cell centers to the
 //! chunk's 64×64 — and a chunk of it becomes, cell by cell, one material
 //! (the last non-void channel wins, in the channels' fixed order) and one
 //! top. That is what the terrain layer paints into a volume, one solid
@@ -40,7 +40,7 @@ pub const CHANNELS: usize = 4;
 
 const VOID: u8 = 0;
 
-/// What a channel's type byte means: the colour and the texture-array
+/// What a channel's type byte means: the color and the texture-array
 /// layer of each type it has, and the material class the channel paints.
 #[derive(Clone, Copy)]
 pub struct Channel {
@@ -71,7 +71,7 @@ pub struct Materials {
     pub base_class: u8,
 }
 
-/// Every ground type's colour and layer, from the palette's tables
+/// Every ground type's color and layer, from the palette's tables
 /// (palette/shader_meta.rs), each channel's class, and the catalog's base:
 /// a function of the palette and the catalog alone, so made once, here,
 /// where the paint and the minimap read it.
@@ -123,7 +123,7 @@ pub struct PageView<'a> {
 
 /// One chunk of a page, sampled: a material and a top a cell, and the
 /// floor the columns share, over the run set's padded column grid: the
-/// chunk's own cells and the ring of neighbours around them (voxel_scan.rs's APRON). The
+/// chunk's own cells and the ring of neighbors around them (voxel_scan.rs's APRON). The
 /// ring is sampled from the same page — the elevation raster is padded, so a
 /// cell outside the page still has a height — and is never painted into the
 /// volume or emitted; it is there for the face mask to ask about.
@@ -153,7 +153,7 @@ impl ChunkSample {
     /// the page is the chunk's own, more where it is a page over it read in
     /// the chunk's place until its own comes. Each cell takes the material of
     /// the page cell it lies in and the height of the page's surface at its
-    /// own centre, so a chunk read from a coarser page is that page's ground
+    /// own center, so a chunk read from a coarser page is that page's ground
     /// at the chunk's step and nothing invented. A channel in `hidden` is
     /// stepped over, as `shown_ground` steps over it.
     pub fn read(&mut self, page: &PageView, origin: [i64; 2], n: u32, hidden: ChannelMask) {
@@ -200,11 +200,11 @@ impl ChunkSample {
                 // all (elevation.rs's ground_ele). An apron cell off the page
                 // has no channels to judge by and takes the raw height.
                 let lanes = on_page.then_some(GroundLanes { cells: page.cells });
-                let centre = |v: i64| (v as f64 + 0.5) / n as f64;
-                let ele = ground_ele_at(page.ele, lanes, centre(x), centre(y)) as i32;
+                let center = |v: i64| (v as f64 + 0.5) / n as f64;
+                let ele = ground_ele_at(page.ele, lanes, center(x), center(y)) as i32;
                 self.ele[i] = ele as i16;
                 // The floor is the chunk's own: an apron column is written
-                // from it, and a neighbour's valley must not drop it.
+                // from it, and a neighbor's valley must not drop it.
                 if inner {
                     min_ele = min_ele.min(ele);
                 }

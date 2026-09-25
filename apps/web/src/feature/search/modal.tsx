@@ -34,11 +34,11 @@ const EARTH_RADIUS_M = 6378137;
 const DEG_TO_RAD = Math.PI / 180;
 
 /**
- * Great-circle metres between two WGS84 points.
+ * Great-circle meters between two WGS84 points.
  *
  * Not the world-unit distance scaled by epsg3857's own M_PER_U, which would
  * be cheaper and is already at hand: world units are a Mercator plane, where
- * a metre is stretched by 1/cos(latitude) — 1.26x at Seoul's — and that is
+ * a meter is stretched by 1/cos(latitude) — 1.26x at Seoul's — and that is
  * not a rounding error on a label whose whole job is to say how far away
  * something is.
  */
@@ -50,7 +50,7 @@ function groundDistanceM(a: LonLat, b: LonLat): f64 {
   return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-/** Whole metres under a kilometre, then one decimal, then whole kilometres —
+/** Whole meters under a kilometer, then one decimal, then whole kilometers —
  * the precision a reader can actually act on at each scale. */
 function formatDistance(m: f64): string {
   if (m < 1000) return `${round(m)}m`;
@@ -154,7 +154,7 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
     const controller = new AbortController();
     const signal = controller.signal;
     const timer = setTimeout(() => {
-      // The kernel's map centre, in degrees.
+      // The kernel's map center, in degrees.
       const near = kernel_snapshot().map.center ?? undefined;
       fetchSearch(q, { near, signal })
         .then((found) => {
@@ -174,7 +174,7 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
   }, [query]);
 
   function select(result: SearchResult) {
-    // The kernel's map centre: it grounds the jump the way a pan is, stops
+    // The kernel's map center: it grounds the jump the way a pan is, stops
     // follow mode (the user drove the camera), and grounds it again once the
     // target page's tile arrives, while the map is still on that page.
     kernel_command(Command.INPUT_GO_TO, encode_input_go_to({ lon: result.lon, lat: result.lat }));

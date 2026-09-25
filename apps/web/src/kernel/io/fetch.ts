@@ -43,7 +43,7 @@ import { request_frame } from "@/kernel/sched.ts";
 export const running = new Map<bigint, AbortController>();
 
 /** Whether a body is still in the encoding it was stored in — which, on this
- * side of the wire, means the transport did not decode it. The same judgement
+ * side of the wire, means the transport did not decode it. The same judgment
  * the bake makes on the other side (pxl-geo-bake util.rs's `encoding_of`). */
 function packed(body: U8Array): boolean {
   return (body[0] === 0x28 && body[1] === 0xb5) || (body[0] === 0x1f && body[1] === 0x8b);

@@ -89,11 +89,11 @@ pub const PAGE_ELE_SPAN: u32 = 1 << (L3.shamt() + 1 - 5);
 /// reaches ELE_PAD samples — 2 * (PAGE_CELLS / PAGE_ELE_SPAN) = 32 cells
 /// — past the page's own span, so the ground height of a cell outside the
 /// page is readable from inside it. Whatever has to know what the ground
-/// beyond its own span does can ask without the neighbouring page being
+/// beyond its own span does can ask without the neighboring page being
 /// resident: a mesh deciding whether the cell past its edge rises above the
 /// face it is about to draw, a raycast stepping off the page. Reconstruction
 /// is the reason the pad is two samples wide; this is the reason it is worth
-/// carrying in every page rather than recomputed from neighbours.
+/// carrying in every page rather than recomputed from neighbors.
 pub const ELE_PAD: u32 = 2;
 pub const ELE_PADDED_SPAN: u32 = PAGE_ELE_SPAN + 2 * ELE_PAD;
 

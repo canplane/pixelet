@@ -16,7 +16,7 @@ stated.
 1. One on-screen chunk waited sixteen seconds while the scheduler ran at 119
    bakes/s (recorded in
    [20260909-cooperative-scheduler-and-task-ledger.md](./20260909-cooperative-scheduler-and-task-ledger.md)).
-2. After ageing was added, zooming in from a wide view refined in visible
+2. After aging was added, zooming in from a wide view refined in visible
    steps, 4 then 2 then 1, with the intermediate tier clearly held.
 3. Sometimes on a zoom-out the far ring filled before the middle of the screen.
 4. Crossing an L3 page boundary made a page-sized block of terrain vanish, on
@@ -29,7 +29,7 @@ stated.
 `pending_since` was set when `pending` went false to true, and an off-screen
 chunk stays pending for as long as its release is queued. So a chunk that sat
 off screen with a queued release for several seconds came back into view still
-holding that clock, and ageing treated those seconds as time spent waiting to
+holding that clock, and aging treated those seconds as time spent waiting to
 be built. Symptom 3 is exactly this: the far ring had been off screen, had
 aged, and outranked the middle of the screen, which had just become
 interesting and had no age at all. Symptom 2 has the same root on the
@@ -41,9 +41,9 @@ wait restarts.
 
 ## Cause 2: one priority key for four different kinds of work
 
-The key was `holds_slot`, then `in_frustum`, then distance, with ageing on
+The key was `holds_slot`, then `in_frustum`, then distance, with aging on
 distance. That puts "this chunk has nothing on screen at all" and "this chunk
-would like to be sharper" in the same bucket, and lets ageing trade one
+would like to be sharper" in the same bucket, and lets aging trade one
 against the other. Streaming systems normally separate the two, because they
 are not the same promise: a hole is a correctness problem, a refinement is a
 quality problem.
@@ -61,19 +61,19 @@ The ordering, in full:
 
 Emptiness was tried as a class of its own, directly under the frustum test,
 and it was wrong on screen: every hole anywhere outranked every refinement, so
-ground a few metres from the camera stayed visibly blocky while chunks at the
+ground a few meters from the camera stayed visibly blocky while chunks at the
 fog edge filled in. "Already drawn" had become "done". What a viewer wants is
 the nearest thing to improve next, whether improving means appearing or
 sharpening — so distance decides, and emptiness only breaks a tie.
 
-Ageing cannot lift anything across the frustum test, so a release still never
+Aging cannot lift anything across the frustum test, so a release still never
 passes a build.
 
 Class 4 gets a small guaranteed share of each frame anyway, two steps, because
 "lowest priority" and "never" have to be different things. In the 2026-09-12
 capture 403 releases waited 10.4 s while heap peaked at 522 MB, and a pending
 release is holding a mesh the pool could reuse. A guaranteed minimum share for
-the lowest class is the standard shape here, not ageing it up into the classes
+the lowest class is the standard shape here, not aging it up into the classes
 above.
 
 ## Cause 3: priority computed from stale measurements
@@ -124,7 +124,7 @@ visible on a hard zoom-out, left that way on purpose."
 
 Concretely, three radii were chosen independently:
 
-- `LOAD_RADIUS` 1, in pages, Chebyshev around the page the view centre is in.
+- `LOAD_RADIUS` 1, in pages, Chebyshev around the page the view center is in.
   Data therefore reached 1,024 u at worst.
 - `RENDER_RADIUS` 2, in pages, the same shape, gating which pages may
   contribute chunks at all.
@@ -132,7 +132,7 @@ Concretely, three radii were chosen independently:
 
 Two consequences. The nominal view distance was never real: geometry ended
 somewhere between 1,024 u and 1,800 u depending on where in its page the
-camera stood. And because both page filters keyed on _which page the centre is
+camera stood. And because both page filters keyed on _which page the center is
 in_, crossing a boundary moved the whole admitted set by one page, so a
 page-sized block entered or left in one step.
 
@@ -203,7 +203,7 @@ The second was subtler and survived the first fix. Fetching and keeping were
 still two different rules — a radius for one, a count for the other — so a
 page could be asked for and then fall out of the fetch set while its request
 was still in flight, and `fetch_scheduler` sheds demands whose category no
-longer wants them. Panning cancelled its own tiles: 127 terrain requests
+longer wants them. Panning canceled its own tiles: 127 terrain requests
 aborted in one session, in bursts on whichever side the view was moving away
 from, which is why the two sides took turns disappearing. Making the two rules
 one set fixes it by construction — a page being fetched is, by definition, a
@@ -235,25 +235,25 @@ retina screen builds; supersampling is what dpr is spent on here
 ([20260911-taa-tried-and-closed.md](./20260911-taa-tried-and-closed.md)), while
 tier selection is about how large a cell looks.
 
-## Why the ranges are anchored at the view centre and not the camera
+## Why the ranges are anchored at the view center and not the camera
 
-The camera orbits the view centre at up to 1,023 u of horizontal offset, so
+The camera orbits the view center at up to 1,023 u of horizontal offset, so
 "where the view is" has two candidate answers. They are used for different
 things:
 
 - **Which tier a chunk shows, and which chunk is built first**, are
   camera-relative, and always were. Both measure the chunk's own 3D bounds
-  centre against the camera position, so a chunk whose content stands 100 u
+  center against the camera position, so a chunk whose content stands 100 u
   above the terrain is ranked where it actually is rather than where the
   ground under it is. The one exception is a chunk that has never built: its
   seed assumes z = 0 until its first real measurement replaces it.
-- **Which pages exist** is anchored at the view centre, because residency has
+- **Which pages exist** is anchored at the view center, because residency has
   to be invariant under rotation. Anchored at the camera, spinning at a wide
   zoom would sweep pages in and out of the cache and refetch them, against an
   API with no cache or rate limit of its own.
 
-Anchoring the range at the centre is only sufficient because the camera always
-looks at the centre, which is what keeps the visible wedge near it. That is an
+Anchoring the range at the center is only sufficient because the camera always
+looks at the center, which is what keeps the visible wedge near it. That is an
 invariant rather than a coincidence, so it is measured instead of assumed:
 `render/view_range.test.ts` casts the frustum at the ground across every zoom,
 tilt, aspect ratio and pivot height the camera allows, and checks that ground
@@ -263,7 +263,7 @@ Pivot height is the case that reaches furthest, and it is one a user creates:
 a placed object can stand above the terrain, and the camera rises with
 whatever it looks at. Zoomed close onto something 50 u up, the camera sees
 nearly a full fog radius in every direction and visible ground reaches
-~1,532 u from the centre. Mounting to 1,664 u leaves 132 u, which also has to
+~1,532 u from the center. Mounting to 1,664 u leaves 132 u, which also has to
 cover the anchor's own chunk quantization, up to ~90 u. At 1,600 u it would
 not have.
 
@@ -301,7 +301,7 @@ Two smaller causes were found on the way and fixed too:
   and panning 16 u back rebuilt them all. Chunks and pages are now built at
   the range and kept to four chunks past it (`RANGE_HYSTERESIS`).
 
-## Cause 8: ageing that outran the queue
+## Cause 8: aging that outran the queue
 
 After everything above, a hard zoom-out filled the screen as a ring: the
 middle first, then the far edge, and the band between them last.
@@ -310,14 +310,14 @@ The half-life was 500 ms. A full zoom-out queues ~2,300 visible chunks
 against one scan slot, about seven seconds of work, and at that half-life a
 chunk at the fog edge — 2.4 times the distance of the middle of the screen —
 overtook the middle after 640 ms of waiting. So the real order was a little
-of the middle, then the far edge (cheap to reach through ageing), then the
-band between, which was neither first nor aged enough. Ageing had stopped
+of the middle, then the far edge (cheap to reach through aging), then the
+band between, which was neither first nor aged enough. Aging had stopped
 being a floor under starvation and become the order itself.
 
 The rule is that the half-life must be long against the queue's drain time.
 It is now four seconds: the same overtake takes five, so a seven-second drain
 stays nearest-first almost throughout, while a chunk passed over for sixteen
-seconds — the case ageing exists for — is still lifted well before that. The
+seconds — the case aging exists for — is still lifted well before that. The
 overlay's `STARVED_MS` moves to ten seconds for the same reason: above any
 ordinary drain, below the wait that counts as being passed over.
 
@@ -356,26 +356,26 @@ Two release-order findings from the same session, recorded with it:
   is running stays in the wishlist while it is within one page of the held
   set; a search jump still yields as designed.
 
-## Not a cause: tile requests cancelled at boot
+## Not a cause: tile requests canceled at boot
 
 Listed as open after the session above and closed on measurement: the map
-centre does not move during boot. Logged with its caller, it is seeded once
+center does not move during boot. Logged with its caller, it is seeded once
 (879 ms) and then untouched until the first drag (12 s). The bursts of
-cancelled requests that looked like boot were two other things, both
+canceled requests that looked like boot were two other things, both
 intended: a search jump, which yields every request for the place being
-left (the geocode request cancelled alongside gave it away), and a
+left (the geocode request canceled alongside gave it away), and a
 zoomed-out drag, which crosses up to 25 pages per frame — at that speed the
 page set is replaced wholesale every frame and the one-page in-flight
 hysteresis cannot apply, nor should it. The vite proxy also logs each
 cancellation twice, so every count read off that log was double.
 
-What would be better than cancelling is asking for less while moving, not
+What would be better than canceling is asking for less while moving, not
 asking for nothing: a map still has to fetch what has just scrolled into
 view mid-drag, or the user drags into blank. The usual shape is that only
 the pages the view reaches right now are requested while `view_moving` is
 set, and the resident margin around them — the rest of the nearest 32 — is
 filled in once it clears. The pages needed at the destination arrive at
-once, and the margin stops being requested and cancelled once per frame on
+once, and the margin stops being requested and canceled once per frame on
 the way there. Worth doing; not urgent.
 
 ## Keeping what was built: a memory budget instead of a visibility rule

@@ -99,11 +99,11 @@ const EXPOSURE_TEXEL: usize = 3;
 const MOON_VIEW: usize = 4;
 
 /// How far the sun's height, as a cosine, moves before the sky is drawn
-/// again: a thousandth of a radian or so near the horizon, where the colours
+/// again: a thousandth of a radian or so near the horizon, where the colors
 /// move fastest.
 const SUN_MU_STEP: f32 = 2e-4;
 /// How far the camera's altitude moves before the sky is drawn again, as a
-/// share of it, and at least a metre.
+/// share of it, and at least a meter.
 const ALTITUDE_SHARE: f32 = 0.005;
 const ALTITUDE_FLOOR_KM: f32 = 0.001;
 
@@ -236,7 +236,7 @@ impl Atmosphere {
 
     /// The frame's air, from the environment's lane `env`: the sun's
     /// direction in the root frame, unturned; the moon's and how bright its
-    /// sky is shown; the camera's altitude in kilometres, a unit's length in
+    /// sky is shown; the camera's altitude in kilometers, a unit's length in
     /// them and the ground's own height, which the sky draws its ground at;
     /// and straight up where the eye stands, which every height of a light or
     /// a ray is measured from.

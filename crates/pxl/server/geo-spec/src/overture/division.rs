@@ -31,7 +31,7 @@ pub fn rank_of(subtype: &str) -> Option<PlaceRank> {
         "region" => PlaceRank::Region,
         "county" => PlaceRank::County,
         "macrohood" => PlaceRank::District,
-        "locality" | "neighborhood" | "microhood" => PlaceRank::Neighbourhood,
+        "locality" | "neighborhood" | "microhood" => PlaceRank::Neighborhood,
         _ => return None,
     })
 }

@@ -6,7 +6,7 @@ fn transmittance_to_top(r: f32, mu: f32) -> vec3f {
 }
 
 // The sun's light at a point, the ground's shadow included. The disc sets
-// across its own width rather than at its centre, as look/atmosphere.rs's
+// across its own width rather than at its center, as look/atmosphere.rs's
 // sun_light has it, so the air's light does not switch off in one frame.
 fn sun_transmittance(r: f32, mu_s: f32) -> vec3f {
   let horizon = -sqrt(max(1.0 - (atmos.bottom_radius / r) * (atmos.bottom_radius / r), 0.0));

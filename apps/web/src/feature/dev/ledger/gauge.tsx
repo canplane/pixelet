@@ -44,7 +44,7 @@ const INTERACTION_WARN_MS = 2;
 /** A pending chunk waiting longer than this is being passed over rather than
  * queued. Ten seconds is above what a full zoom-out's queue takes to drain
  * (~7 s against one scan slot), so an ordinary backlog never trips it, and
- * below the sixteen-second wait that ageing exists to prevent: past it, ageing
+ * below the sixteen-second wait that aging exists to prevent: past it, aging
  * is not doing its job. */
 const STARVED_MS = 10_000;
 

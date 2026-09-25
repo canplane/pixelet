@@ -79,7 +79,7 @@ fn pill(p: &mut Paint, logical_w: f32) {
     p.fill();
 }
 
-/// The anchor dot, centred under the pill, marking the ground point it floats above.
+/// The anchor dot, centered under the pill, marking the ground point it floats above.
 fn anchor_dot(p: &mut Paint, logical_w: f32) {
     p.fill_style(0xffffff99);
     p.begin_path();
@@ -90,7 +90,7 @@ fn anchor_dot(p: &mut Paint, logical_w: f32) {
     p.stroke();
 }
 
-/// A badge's width around a line of `text_w`: a count's centred on the pill,
+/// A badge's width around a line of `text_w`: a count's centered on the pill,
 /// never narrower than the pill's two caps, and a place's after its icon.
 pub fn badge_width(text_w: f64, icon: bool) -> f64 {
     if icon {

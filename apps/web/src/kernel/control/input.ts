@@ -39,7 +39,7 @@ export function send_rect(element: HTMLElement): void {
 }
 
 /** What the pointer holds: a tool, the held cube's ground channel (none for
- * a flat colour) and type, or the decor kind, by the catalog's numbers, and
+ * a flat color) and type, or the decor kind, by the catalog's numbers, and
  * the object size's tier. The kernel keeps no pick of its own; each pointer
  * event carries this. */
 interface Holding {

@@ -27,13 +27,13 @@ use xpute_core::math::scalar::round;
 const PAGE_AREA: usize = (PAGE_CELLS * PAGE_CELLS) as usize;
 const SPAN: i64 = PAGE_CELLS as i64;
 
-/// Ground rasterization uses cell-centre sampling; the bias lives here rather
+/// Ground rasterization uses cell-center sampling; the bias lives here rather
 /// than sprinkled across the file. The contract must stay aligned with
 /// elevation sampling and dense unpack semantics at the page boundary.
 const PX_CENTER: f64 = 0.5;
 const EPS: f64 = 1e-9;
 
-/// Pixel-centre snap for raster coordinates.
+/// Pixel-center snap for raster coordinates.
 fn snap_px(x: f64) -> i64 {
     (x + PX_CENTER).floor() as i64
 }
@@ -238,7 +238,7 @@ fn render_linear_feat(points: &[V3], value: u8, target: &mut Target, width_cell:
         let p1 = points[i];
         let p2 = points[i + 1];
 
-        // A round cap at each end, centred on the pixel.
+        // A round cap at each end, centered on the pixel.
         draw_circle(target, mask, snap_px(p1[0]), snap_px(p1[1]), thickness, value);
         if i == points.len() - 2 {
             draw_circle(target, mask, snap_px(p2[0]), snap_px(p2[1]), thickness, value);

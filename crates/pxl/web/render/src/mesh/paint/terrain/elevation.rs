@@ -32,7 +32,7 @@ const ELE_CELL_STEP: f64 = PAGE_CELLS as f64 / PAGE_ELE_SPAN as f64;
 /// - uses an unclamped fast path for the common interior case
 /// - falls back to clamped sampling near tile boundaries
 ///
-/// `tx`/`ty` are a point in texels, continuous: a cell's centre is its
+/// `tx`/`ty` are a point in texels, continuous: a cell's center is its
 /// index and a half.
 fn sample_ele_bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
     let sx = tx / ELE_CELL_STEP + ELE_PAD as f64 - 0.5;
@@ -83,7 +83,7 @@ fn sample_ele_bicubic(page_ele: &[i16], tx: f64, ty: f64) -> i16 {
 /// `tx`/`ty` are signed because the padded raster reaches ELE_PAD samples
 /// past the page's own span (pxl-spec's ELE_PAD): a cell just outside the
 /// page has a height here, which is what lets a chunk at the page's edge
-/// read the ground its neighbour stands on.
+/// read the ground its neighbor stands on.
 pub fn sample_ele(page_ele: &[i16], tx: i32, ty: i32) -> i16 {
     sample_ele_bicubic(page_ele, tx as f64 + 0.5, ty as f64 + 0.5)
 }
@@ -136,7 +136,7 @@ pub fn ground_ele(page_ele: &[i16], ground: Option<GroundLanes>, tx: i32, ty: i3
     ground_ele_at(page_ele, ground, tx as f64 + 0.5, ty as f64 + 0.5)
 }
 
-/// `ground_ele` at a point in texels rather than a cell's centre: where a
+/// `ground_ele` at a point in texels rather than a cell's center: where a
 /// finer cell read from this page stands, its height the surface's there
 /// and its recess the page cell's it lies in.
 pub fn ground_ele_at(page_ele: &[i16], ground: Option<GroundLanes>, tx: f64, ty: f64) -> i16 {

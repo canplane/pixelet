@@ -1,6 +1,6 @@
 // The numbers every shader shares, put ahead of each one's own files
 // (record.rs's wgsl!): pi and what is made of it, and the luminance of a
-// linear colour (Rec. 709), the weights look/environment.rs's luminance
+// linear color (Rec. 709), the weights look/environment.rs's luminance
 // takes on the CPU.
 
 const PI: f32 = 3.14159265;

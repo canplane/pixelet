@@ -54,7 +54,7 @@ fn world_struck_corner_at_cell_size_lands_on_the_struck_cell_with_no_sub_cell_re
 /// Asking for the cell is not a different answer from asking for a tier — it
 /// is the same cell, named without the residue. A branch that rounded instead
 /// of flooring, or that lost the epsilon on a face flush with a boundary,
-/// would name a neighbour for one of the tiers and not for the others.
+/// would name a neighbor for one of the tiers and not for the others.
 #[test]
 fn world_struck_corner_at_cell_size_names_the_cell_every_tier_lands_inside() {
     for (name, hit) in cases() {

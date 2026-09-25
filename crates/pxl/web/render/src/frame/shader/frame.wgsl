@@ -37,8 +37,8 @@ struct Frame {
   other_color: vec3f,
   _p4: f32,
   // The planet the flat map is laid back on (look/globe.rs): the map
-  // centre in the root frame, the planet's radius in its units (0 for none),
-  // and the centre's ground height; then the centre's Mercator exponential,
+  // center in the root frame, the planet's radius in its units (0 for none),
+  // and the center's ground height; then the center's Mercator exponential,
   // its latitude's sine and cosine, and Mercator's radius in units.
   planet: vec4f,
   globe: vec4f,

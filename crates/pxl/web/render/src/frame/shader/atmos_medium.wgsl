@@ -2,8 +2,8 @@
 // scatters, and where a ray through it ends. Every number is the uniform's
 // (look/atmosphere.rs is their one home, gpu/atmosphere.rs lays them out);
 // a shader that includes this declares `atmos` at a binding of its own.
-// Distances are kilometres, and a point is its radius from the planet's
-// centre `r` and the cosine `mu` of its ray from the local zenith, as
+// Distances are kilometers, and a point is its radius from the planet's
+// center `r` and the cosine `mu` of its ray from the local zenith, as
 // Bruneton writes them.
 
 struct Atmosphere {
@@ -37,7 +37,7 @@ struct Atmosphere {
   // while the sun's sky is the one to see.
   moon_dir: vec3f,
   moon_light: f32,
-  // The ground's colour past the terrain, in linear light
+  // The ground's color past the terrain, in linear light
   // (look/atmosphere.rs's `land`), and how high that ground stands over the
   // datum the model's radii are measured from — the elevation under the eye
   // (kernel environment/fog.rs's `eye_ground`). The terrain is
@@ -52,7 +52,7 @@ struct Atmosphere {
   sun_seen: vec3f,
   _p1: f32,
   // Straight up where the eye stands, in the root frame: away from the
-  // planet's centre, which lies under the camera centre and not under the
+  // planet's center, which lies under the camera center and not under the
   // eye (gpu/renderer.rs). Every height of a ray or a light the air is read
   // with is measured from it.
   up: vec3f,
@@ -70,12 +70,12 @@ struct Atmosphere {
   cloud_gone_km: f32,
   // The aerosol near the ground (look/atmosphere.rs), which the tables do
   // not carry: the aerial perspective's alone, so the sky keeps the medium's
-  // own colour while the far ground goes as Earth's does.
+  // own color while the far ground goes as Earth's does.
   haze_extinction: f32,
   haze_scale_height: f32,
 };
 
-// The camera's radius from the planet's centre: over the ground, and above
+// The camera's radius from the planet's center: over the ground, and above
 // the atmosphere too, where the view is from space — the sky-view table is
 // drawn from there (atmos_skyview.wgsl marches from where a ray enters the
 // air) and the ground and the horizon are where the planet puts them.
@@ -115,7 +115,7 @@ fn mie_phase(c: f32) -> f32 {
 }
 
 // Where a ray from radius `r` at `mu` meets a sphere of `radius` about the
-// planet's centre, and whether it does at all.
+// planet's center, and whether it does at all.
 fn meets_sphere(r: f32, mu: f32, radius: f32) -> bool {
   return mu < 0.0 && r * r * (mu * mu - 1.0) + radius * radius >= 0.0;
 }
@@ -138,8 +138,8 @@ fn to_ground(r: f32, mu: f32) -> f32 {
 }
 
 // The surface a view ray is drawn against: the model's raised to the ground
-// under the map centre. Only what is drawn moves — the tables keep the
-// radius they were baked at, and a metre of ground against a planet's radius
+// under the map center. Only what is drawn moves — the tables keep the
+// radius they were baked at, and a meter of ground against a planet's radius
 // is nothing to the air along a ray.
 fn land_radius() -> f32 {
   return atmos.bottom_radius + atmos.land_altitude_km;
@@ -153,8 +153,8 @@ fn to_land(r: f32, mu: f32) -> f32 {
   return to_sphere(r, mu, land_radius());
 }
 
-// A table's texel centres to [0, 1] and back: the ends of a range land on
-// the first and last texels' centres, so nothing reads past them.
+// A table's texel centers to [0, 1] and back: the ends of a range land on
+// the first and last texels' centers, so nothing reads past them.
 fn unit_of(u: f32, size: f32) -> f32 {
   return (u - 0.5 / size) / (1.0 - 1.0 / size);
 }
@@ -167,7 +167,7 @@ const TRANSMITTANCE_SIZE: vec2f = vec2f(256.0, 64.0);
 const MULTISCATTER_SIZE: vec2f = vec2f(32.0, 32.0);
 const SKY_VIEW_SIZE: vec2f = vec2f(192.0, 108.0);
 
-// Bruneton's transmittance parameterisation: the height through rho, the
+// Bruneton's transmittance parameterization: the height through rho, the
 // distance to the top through the range a height allows, which spends the
 // table's rows where the transmittance changes and not where it is flat.
 fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {

@@ -195,10 +195,10 @@ pub struct Frame {
     pub remaining_ms: f64,
     pub hard_slack_ms: f64,
     pub retain_budget_bytes: f64,
-    /// The camera centre's height (view.rs's camera_centre), in units: what
+    /// The camera center's height (view.rs's camera_center), in units: what
     /// the camera's height over the sea is measured up from.
-    pub centre_z: f64,
-    /// The map centre's latitude's values, which the renderer lays the map
+    pub center_z: f64,
+    /// The map center's latitude's values, which the renderer lays the map
     /// back on the planet about (pxl-render's look/globe.rs); none for a flat
     /// world.
     pub globe: Option<Globe>,
@@ -329,7 +329,7 @@ struct Slot {
     /// The bounding sphere in the chunk's own space.
     bc: V3,
     radius: f64,
-    /// How near the view's centre its ground comes, squared: its place in
+    /// How near the view's center its ground comes, squared: its place in
     /// the order every layer's work is taken in (domain.rs
     /// `Domain::order_of`).
     distance2: f64,
@@ -374,7 +374,7 @@ struct Sources {
     show_structures: bool,
     /// The texture setting the tiers were baked under. A leaf's box carries
     /// its layer and the shader samples or does not, but a tier over it
-    /// carries one colour and no layer, so which colour that is was decided
+    /// carries one color and no layer, so which color that is was decided
     /// when it was baked (mesh/chunk_mesher.rs).
     textured: bool,
     objects_revision: u32,
@@ -2130,7 +2130,7 @@ fn wanted_cube(d: &Domain, c: Chunk) -> Cube {
 ///
 /// A chunk read from a page over it is drawn at its own cube like any other:
 /// its heights are that page's surface sampled at its own cells, which
-/// invents no step, and only its colour is the coarser page's. Drawn at the
+/// invents no step, and only its color is the coarser page's. Drawn at the
 /// coarser page's cells instead, a chunk far under its page stood one cube
 /// as wide as itself, and those stood apart as blocks over the sea after a
 /// jump (2026-09-26).
@@ -2162,7 +2162,7 @@ struct Priority {
     /// not what the page under it now says. Worse than a chunk asking only
     /// to be sharper, better than one showing nothing at all.
     restale: bool,
-    /// How near the view's centre its ground comes, squared: its place in
+    /// How near the view's center its ground comes, squared: its place in
     /// the view's order.
     distance2: f64,
     pending_since: f64,
@@ -2192,9 +2192,9 @@ impl Priority {
 /// moved past, then the ones asking only to be sharper, as progressive
 /// refinement goes — a coarse chunk a zoom out has just brought covers ground
 /// nothing shows, a fine one ground a stale chunk still shows; within each,
-/// the nearest the view's centre (world/pyramid/domain.rs `Domain::order_of`),
+/// the nearest the view's center (world/pyramid/domain.rs `Domain::order_of`),
 /// the one order every layer's work is taken in, so the ground where the
-/// character stands is built first and the view fills outwards from it; then what is off screen farthest first — a release
+/// character stands is built first and the view fills outward from it; then what is off screen farthest first — a release
 /// takes memory from what is least likely to be wanted again. A wait halves
 /// the distance key every AGE_HALF_MS, within its class.
 ///
@@ -2216,11 +2216,11 @@ fn priority_keyed(a: &Keyed, b: &Keyed) -> core::cmp::Ordering {
         .then_with(|| if a.p.in_frustum { a.key.total_cmp(&b.key) } else { b.key.total_cmp(&a.key) })
 }
 
-/// Where a slot is from a frame: on screen, and its world centre.
+/// Where a slot is from a frame: on screen, and its world center.
 fn measure(frame: &Frame, s: &Slot) -> (bool, V3) {
     let [x, y, z] = frame.world_of([s.base_x() + s.bc[0], s.base_y() + s.bc[1], s.bc[2]]);
     // Where the renderer draws it: laid back on the planet about the view
-    // centre, the world's origin here, in the map's own axes — the view's
+    // center, the world's origin here, in the map's own axes — the view's
     // turned back by the azimuth and forward again. A far chunk culled where
     // the flat world has it would leave a hole at the horizon. The root's
     // first column is the azimuth's cosine and sine.
@@ -2243,7 +2243,7 @@ fn measure(frame: &Frame, s: &Slot) -> (bool, V3) {
         // it: ground there would come up under the horizon line with no
         // occluder to hide it. A point of a sphere of radius `r` is over the
         // eye's horizon while `E·P >= r²`, the eye and the point taken from
-        // the planet's centre — the virtual globe's own cull (Cozzi & Ring),
+        // the planet's center — the virtual globe's own cull (Cozzi & Ring),
         // widened by the chunk's radius so a chunk half over it stays.
         if visible {
             if let Some(globe) = frame.globe {
@@ -2397,7 +2397,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<Chunk, usize>, mem: *const u
                     meshes.epoch = arena_epoch();
                 }
             }
-            meshes.surface[slot.index] = surface_centres(words, box_words as usize, mesh_step(cube, slots[i].level()), slots[i].level(), heights);
+            meshes.surface[slot.index] = surface_centers(words, box_words as usize, mesh_step(cube, slots[i].level()), slots[i].level(), heights);
             meshes.holder[slot.index] = Some((chunk, id));
             let s = &mut slots[i];
             // A tier of an older generation in the same slot shows these boxes
@@ -2419,11 +2419,11 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<Chunk, usize>, mem: *const u
     }
 }
 
-/// A cell-centre height query needs no CPU copy of the mesh. Quantized tops
-/// use the mesh's own height scale, with zero reserved for an empty centre.
+/// A cell-center height query needs no CPU copy of the mesh. Quantized tops
+/// use the mesh's own height scale, with zero reserved for an empty center.
 /// Allocation is bounded by mesh slots: 64² words for fine, at most 32²
 /// for coarse, independent of source or POI cardinality.
-fn surface_centres(words: &[u32], stride: usize, step: u32, level: u32, heights: Heights) -> Box<[u32]> {
+fn surface_centers(words: &[u32], stride: usize, step: u32, level: u32, heights: Heights) -> Box<[u32]> {
     let axis = (CHUNK_CELLS / step) as usize;
     let unit = step as f64 * GROUND.scale(level).side();
     let mut tops = vec![0; axis * axis];
@@ -2473,8 +2473,8 @@ impl Drawn<'_> {
         self.top((x / unit) as u32, (y / unit) as u32)
     }
 
-    /// The top of the drawn surface at the centre of the `step` block at
-    /// (bx, by), in units; none where that centre is empty. Samples share the
+    /// The top of the drawn surface at the center of the `step` block at
+    /// (bx, by), in units; none where that center is empty. Samples share the
     /// GPU mesh slot's lifetime, including a stale holder's.
     pub fn top(&self, bx: u32, by: u32) -> Option<f64> {
         let axis = CHUNK_CELLS / self.step;

@@ -15,7 +15,7 @@ use crate::world::change::wake_at;
 /// the session: indoors, in a tunnel, between buildings, a fix simply does not
 /// arrive for a while. The error path has to stop the watch — a dead watch left
 /// subscribed races the next one and flickers device_coord between none and
-/// some — but stopping it alone leaves nothing running afterwards, and the
+/// some — but stopping it alone leaves nothing running afterward, and the
 /// only things that ever restart it are a permission change or a return to the
 /// foreground. So one bad minute underground ended location tracking until the
 /// app was backgrounded and reopened, taking follow mode with it.

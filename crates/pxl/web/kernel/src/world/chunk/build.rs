@@ -62,7 +62,7 @@ pub fn object_fold(cube: Cube) -> Scale {
 }
 
 /// Hands a block back to the heap. Every view into it is dead
-/// afterwards.
+/// afterward.
 pub fn release_block(at: usize, bytes: u32) {
     // SAFETY: a block this chunk took and has not given back.
     unsafe { free((at, bytes)) };

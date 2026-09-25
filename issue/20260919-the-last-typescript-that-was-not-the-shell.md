@@ -59,7 +59,7 @@ coordinate space. The kernel holds `map_center` as a PVF3 and already calls
 `L3_IDX` on it; what it _sent_ was degrees, so the shell projected them back and
 indexed them again to reach the number the first one had. The snapshot carries
 `map.page` now. They could disagree before: a round trip through degrees is not
-the identity, so a centre near a page boundary could be labelled from the page
+the identity, so a center near a page boundary could be labeled from the page
 next door.
 
 **One derivation was written twice.** `OBJECT_SIZES` was
@@ -98,7 +98,7 @@ loop were copied into all five.
 
 ## Three float bugs the ingest port found, none of them visible by reading
 
-**An untyped NULL is not a NULL.** A parameter is serialised by its Rust type,
+**An untyped NULL is not a NULL.** A parameter is serialized by its Rust type,
 so a missing `height` bound as `None::<&str>` reaches a `double precision`
 column as text and the driver refuses it. Absence had to move inside each
 variant: a missing height is a missing _float_.

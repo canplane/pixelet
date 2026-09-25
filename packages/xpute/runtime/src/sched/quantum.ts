@@ -18,7 +18,7 @@
  * comes off its own next quota, down to nothing, and the host's share of
  * the frame is left as it was (a constant bandwidth server's rule). Whether
  * the turn is interactive is the host's call, as an OS scheduler's is, from
- * behaviour rather than from the guest's inside: input within `settle_ms`,
+ * behavior rather than from the guest's inside: input within `settle_ms`,
  * or a guest that asked for the very next edge. An interactive turn gets
  * what the frame leaves after the margin; otherwise that of `batch_frames`
  * frames, past one on purpose — with nothing moving, a frame that takes two

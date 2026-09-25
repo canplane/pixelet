@@ -3,7 +3,7 @@
 //! A chunk's column runs to one mesh.
 //!
 //! Three phases, each resumable: face masks, then a greedy merge, then the
-//! emit. A coarse tier summarises its cells into a run set of its own first
+//! emit. A coarse tier summarizes its cells into a run set of its own first
 //! and bakes that. The bake is a cursor the caller steps under a frame
 //! budget, so a chunk can take as many frames as it needs without holding
 //! the tick.
@@ -59,7 +59,7 @@ const ALL_CREASES: u32 = CREASE_PX | CREASE_NX | CREASE_PY | CREASE_NY;
 pub const CAP_PZ: u32 = 1 << 22;
 pub const CAP_NZ: u32 = 1 << 23;
 /// The underside is the same surface as the top, and is lit as one: a coarse
-/// cell's box is shrunk about its centre and hangs over the rest of the
+/// cell's box is shrunk about its center and hangs over the rest of the
 /// ground it stands for, so an underside shaded as an overhang reads as a
 /// hole in the ground rather than as ground seen from below.
 pub const UNDER_AS_TOP: u32 = 1 << 28;
@@ -93,11 +93,11 @@ const BAKE_BOXES_PER_STEP: usize = 512;
 ///
 /// **A leaf's own tier (`FINE_BOX_WORDS`)** holds its corner and its width
 /// across x and y, a u16 each in steps of its cell (XY_STEPS); its floor and
-/// its height, a u16 each in the mesh's own steps (Heights); its colour, sRGB
+/// its height, a u16 each in the mesh's own steps (Heights); its color, sRGB
 /// bytes; its four layer taps, a byte each; its face mask.
 ///
 /// **Every tier over it (`COARSE_BOX_WORDS`)** drops two of those six. The
-/// taps go because a box that merges cells is its colour alone — the texture
+/// taps go because a box that merges cells is its color alone — the texture
 /// pack is for a leaf's cells, where a top and a side mean something. The
 /// corner and the width shrink to a byte an axis because of how the ladder
 /// draws: a level-`k` chunk is never drawn nearer than `192·2^k`
@@ -111,7 +111,7 @@ const BAKE_BOXES_PER_STEP: usize = 512;
 ///
 /// A box as six f32 was 36 bytes; the leaf's is 24 and every other 16.
 /// Before that a box was vertices — a face's four corners each carrying
-/// position, normal, local position, the box's scale, colour, taps and the
+/// position, normal, local position, the box's scale, color, taps and the
 /// mask, 84 bytes a vertex and an index list besides, over a kilobyte for a
 /// box of three faces. Every one of those numbers was the box's, repeated.
 pub const FINE_BOX_WORDS: u32 = 6;
@@ -242,8 +242,8 @@ struct MeshTarget {
 /// Two measures, both in the set's own cells — a column's footprint by a
 /// unit. `coverage` is how much of the bucket is not air, which sizes the
 /// box; `faces` is how many of those cells' six faces meet air, which
-/// colours it. A cell buried on every side weighs nothing, so flat ground
-/// takes the colour of its top and a wall the colour of its side.
+/// colors it. A cell buried on every side weighs nothing, so flat ground
+/// takes the color of its top and a wall the color of its side.
 #[derive(Clone, Copy, Default)]
 struct ZBucketAccum {
     bz: i32,
@@ -252,7 +252,7 @@ struct ZBucketAccum {
     ground: bool,
     coverage: f64,
     faces: f64,
-    /// The exposed faces' colour and the whole volume's, both summed in
+    /// The exposed faces' color and the whole volume's, both summed in
     /// linear light: a bucket with no face at all falls back to the volume.
     fr: f64,
     fg: f64,
@@ -276,10 +276,10 @@ impl ZBucketAccum {
         self.vb += rgb[2] * volume;
     }
 
-    /// The colour the box shows on every face: the exposed surface's mean,
+    /// The color the box shows on every face: the exposed surface's mean,
     /// or the volume's where nothing of the bucket faces the air — which
-    /// happens once its neighbours have shrunk away from it.
-    fn colour(&self) -> [u8; 3] {
+    /// happens once its neighbors have shrunk away from it.
+    fn color(&self) -> [u8; 3] {
         let (sum, weight) = if self.faces > 0.0 {
             ([self.fr, self.fg, self.fb], self.faces)
         } else {
@@ -338,7 +338,7 @@ pub struct BakeContext {
     /// Whether the pack is drawn, which decides what a summary is drawn in:
     /// the tile's own mean where it is, the catalog's swatch where it is not,
     /// so a coarse tier matches the leaves under it either way. A box carries
-    /// one colour and the bake picks it, rather than carrying both for the
+    /// one color and the bake picks it, rather than carrying both for the
     /// frame to pick — a coarse box has no room for a second and the setting
     /// re-sources every chunk when it changes (shell/setting/store.rs).
     textured: bool,
@@ -395,7 +395,7 @@ impl BakeContext {
         self.mesh = None;
         self.mesh_words = 0;
         self.box_cnt = 0;
-        // A coarse bake summarises the set into one of its own and takes its
+        // A coarse bake summarizes the set into one of its own and takes its
         // heights from that, once it is packed (step_coarse).
         self.heights = if lod_step == 1 { Heights::of(set, 1.0) } else { Heights::default() };
         self.box_words = box_words(lod_step);
@@ -403,7 +403,7 @@ impl BakeContext {
             Open::Fine(self.begin_fine(set.span, set.apron, scale, 1))
         } else {
             // The chunk's own columns, not the apron's: a coarse tier is
-            // summarised from them and carries no ring of its own.
+            // summarized from them and carries no ring of its own.
             let inner = set.span - 2 * set.apron;
             xpute_core::ensure!(lod_step.is_power_of_two() && inner.is_multiple_of(lod_step), EINVAL, lod_step, inner);
             Open::Coarse(CoarseBake {
@@ -491,7 +491,7 @@ impl BakeContext {
     fn step_fine(&mut self, b: &mut FineBake, set: &RunSet) -> bool {
         let span = b.span;
         // The chunk's own columns. The ring outside them is read through
-        // run_face_mask's neighbour lookups and is never walked: nothing is
+        // run_face_mask's neighbor lookups and is never walked: nothing is
         // emitted from a column that belongs to the next chunk.
         let (lo, hi) = (b.apron, span - b.apron);
 
@@ -741,13 +741,13 @@ impl BakeContext {
 
     /// Adds one run of column `col` to the coarse cell's buckets, each
     /// `bucket` units tall: how much of the bucket it fills, and how much of
-    /// its surface meets air, which is what the bucket's colour is weighed
+    /// its surface meets air, which is what the bucket's color is weighed
     /// by. A sub-cell run is its share of a cell `cell` units on a side.
     #[allow(clippy::too_many_arguments)]
     fn accumulate_run(&mut self, start: u32, mut cnt: u32, bucket: i32, cell: u32, set: &RunSet, i: usize, col: u32) -> u32 {
         let (run_z0, run_z1) = (set.z0[i], set.z1[i]);
         // What the run reads as from here. With the pack drawn, a patch of
-        // this material shows its layer's own mean colour once the tile is
+        // this material shows its layer's own mean color once the tile is
         // too small to see, and the catalog's swatch is only the fallback for
         // a type the pack has no tile for. With the pack off there is no tile
         // to average, and the leaves under this tier show the swatch, so the
@@ -800,23 +800,23 @@ impl BakeContext {
             }
             let linear = libm::cbrt(fill);
             // A full cell is a plain run; a sparse one is inset, scaled by
-            // the cube root of its fill about its centre on every axis.
+            // the cube root of its fill about its center on every axis.
             let inset = (linear < 1.0).then(|| pack_inset(linear));
-            let rgb = acc.colour();
-            // No layer of its own: a box that merges cells is its colour
+            let rgb = acc.color();
+            // No layer of its own: a box that merges cells is its color
             // and nothing else. The texture pack is for a leaf's own cells,
-            // where a top and a side mean something; a box summarising a
+            // where a top and a side mean something; a box summarizing a
             // patch of ground has no cut through earth to show (chunk.wgsl).
             let taps = packed_taps(0, 0);
-            // What lies under the box. A box shrunk about its centre stands
+            // What lies under the box. A box shrunk about its center stands
             // clear of its cell on every side, and a view from above reads
             // those gaps as holes rather than as one surface
             // (issue/20260923-a-coarse-cell-is-isotropic.md), so a cell of
             // ground lays its floor: the cell's own bottom face, its whole
-            // footprint, in the box's colour — a face and not a run up to
+            // footprint, in the box's color — a face and not a run up to
             // the box, so the box stands over it as a placed thing stands
             // over the ground. A cell of placed things alone lays none: its
-            // box floats at the cell's centre.
+            // box floats at the cell's center.
             //
             // The cell's lowest box hangs a cell below its floor too — the
             // skirt every terrain LOD hangs off its tiles: two cells whose
@@ -854,7 +854,7 @@ impl BakeContext {
                 last_top = z1;
             }
             // A box of placed things alone is one of them: it hides none of
-            // its neighbours' faces and shows its underside, as a placed cube
+            // its neighbors' faces and shows its underside, as a placed cube
             // does over the ground.
             let class = if acc.ground { MATERIAL_LAND } else { MATERIAL_OBJECT };
             let co = &mut self.coarse;
@@ -988,7 +988,7 @@ fn column_covers(set: &RunSet, col: u32, z: i32) -> bool {
     false
 }
 
-fn neighbour_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
+fn neighbor_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
     let above = z1 + 1;
     let below = z0 - 1;
     let mut rel = 0;
@@ -1027,7 +1027,7 @@ fn neighbour_relation(set: &RunSet, col: u32, z0: i32, z1: i32) -> u32 {
 
 /// Whether a run's underside is drawn: a placed cube's is, since it may
 /// stand clear of the ground, and so is an inset box's — a coarse cell's
-/// box is shrunk about its centre and rests on nothing.
+/// box is shrunk about its center and rests on nothing.
 fn run_include_bottom(set: &RunSet, i: usize) -> bool {
     set.material_class[i] == MATERIAL_OBJECT || set.sub_sz[i] != SUB_CELL_NONE
 }
@@ -1092,16 +1092,16 @@ fn run_faces(set: &RunSet, span: u32, cx: u32, cy: u32, i: usize) -> u32 {
         mask |= CAP_NZ;
     }
     if cx + 1 < span {
-        mask = side_bits(mask, neighbour_relation(set, col + 1, z0, z1), FACE_PX, CREASE_PX, RISES_PX, DIPS_PX);
+        mask = side_bits(mask, neighbor_relation(set, col + 1, z0, z1), FACE_PX, CREASE_PX, RISES_PX, DIPS_PX);
     }
     if cx > 0 {
-        mask = side_bits(mask, neighbour_relation(set, col - 1, z0, z1), FACE_NX, CREASE_NX, RISES_NX, DIPS_NX);
+        mask = side_bits(mask, neighbor_relation(set, col - 1, z0, z1), FACE_NX, CREASE_NX, RISES_NX, DIPS_NX);
     }
     if cy + 1 < span {
-        mask = side_bits(mask, neighbour_relation(set, col + span, z0, z1), FACE_PY, CREASE_PY, RISES_PY, DIPS_PY);
+        mask = side_bits(mask, neighbor_relation(set, col + span, z0, z1), FACE_PY, CREASE_PY, RISES_PY, DIPS_PY);
     }
     if cy > 0 {
-        mask = side_bits(mask, neighbour_relation(set, col - span, z0, z1), FACE_NY, CREASE_NY, RISES_NY, DIPS_NY);
+        mask = side_bits(mask, neighbor_relation(set, col - span, z0, z1), FACE_NY, CREASE_NY, RISES_NY, DIPS_NY);
     }
     if cx + 1 < span && cy + 1 < span && wants_diagonal(mask, FACE_PX, FACE_PY) && column_spans_range(set, col + span + 1, z0, z1) {
         mask |= DIAG_PP;
@@ -1150,7 +1150,7 @@ fn runs_match(set: &RunSet, a: usize, b: usize) -> bool {
 /// How much of one run's surface meets air, between `lo` and `hi`, in the
 /// faces of the set's own cells: its top and its bottom where they fall in
 /// that span and nothing of its own column is there, and along each of the
-/// four sides whatever the neighbouring column does not cover. A column
+/// four sides whatever the neighboring column does not cover. A column
 /// outside the set — past the apron — counts as air, which is the edge of
 /// the chunk and is rare enough to leave generous.
 fn exposed_faces(set: &RunSet, col: u32, i: usize, lo: i32, hi: i32) -> f64 {
@@ -1196,7 +1196,7 @@ fn covered_height(set: &RunSet, col: u32, lo: i32, hi: i32) -> i32 {
     covered
 }
 
-/// sRGB bytes as linear light, 0 to 1 — where a mean of colours belongs, the
+/// sRGB bytes as linear light, 0 to 1 — where a mean of colors belongs, the
 /// transfer being what the eye needs and not what light does.
 fn linear_of(r: u8, g: u8, b: u8) -> [f64; 3] {
     [linear_channel(r), linear_channel(g), linear_channel(b)]
@@ -1238,7 +1238,7 @@ fn to_u8(v: f64) -> u32 {
 }
 
 /// A sparse cell's (inset, scale) as sub-cell fractions: a box of `linear`
-/// a side, centred.
+/// a side, centered.
 fn pack_inset(linear: f64) -> (u8, u8) {
     (pack_sub_cell_fraction((1.0 - linear) * 0.5) as u8, pack_sub_cell_fraction(linear) as u8)
 }

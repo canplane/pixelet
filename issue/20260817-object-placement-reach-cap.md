@@ -201,7 +201,7 @@ a placement that did nothing, silently, and left nothing stored — and the
 cause was in none of the three paths traced here: `place()` dropped a
 terrain-styled pick as redundant when any one ground channel matched,
 without checking that the cell was above the surface, so a cube on ground
-that merely contained the matching channel was cancelled before the
+that merely contained the matching channel was canceled before the
 write. That fits "fails at elevation" as "fails on hilly, mixed ground".
 Not re-reproduced at the original site; if it recurs, the instrumentation
 list above is still the next step.

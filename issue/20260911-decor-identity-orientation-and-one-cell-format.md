@@ -49,7 +49,7 @@ is why it could not be fixed with one number.
 | size                  | the model's own units, scale 1 (± jitter when scattered)            | nothing declares a footprint. User decor collides as one cell (`DECOR_SIZE`); cars and trains are 2.4–3 cells long                 |
 | heading               | `random` or `align_transport` per kind                              | no stated forward axis or world zero; only the Y-up to Z-up fix is written down                                                    |
 | level of detail       | one density table for every kind                                    | no per-kind policy, no triangle budget                                                                                             |
-| anchor                | base at the model origin, centred on X/Y                            | a comment, not a rule                                                                                                              |
+| anchor                | base at the model origin, centered on X/Y                           | a comment, not a rule                                                                                                              |
 
 ## glTF orientation, checked on the assets
 
@@ -375,7 +375,7 @@ would reach the fourth.
 per tile — and the altitude rule in the follow-up above is that formula
 solved for distance. Google Maps' vector buildings are not this: they
 switch on at a zoom level regardless of a building's size, z15 to z16,
-which at Seoul's latitude is 5 to 10 pixels for a twenty-metre building.
+which at Seoul's latitude is 5 to 10 pixels for a twenty-meter building.
 Twelve was chosen against six by eye and by the phone: it draws less, and
 the phone is the target. It was not measured from Earth, where a building
 does not vanish but coarsens with its tile. One constant, to move if it

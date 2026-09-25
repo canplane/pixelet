@@ -119,7 +119,7 @@ fn fold_grids_held(f: impl Fn(i64, i64) -> i64 + Copy, held: impl Fn(usize) -> b
 /// than the sixteen a bake has: the page itself and the padding sample next
 /// to it are the bake's, to the bit, and the outermost padding sample — the
 /// fourth tap of a bicubic read at the page's own rim — is the block's edge
-/// extended instead of the neighbour's.
+/// extended instead of the neighbor's.
 #[test]
 fn elevation_folded_from_the_four_children_differs_only_in_its_outermost_padding() {
     let f = |x: i64, y: i64| 7 * x - 3 * y + 11;
@@ -141,9 +141,9 @@ fn elevation_folded_from_the_four_children_differs_only_in_its_outermost_padding
 }
 
 #[test]
-fn elevation_keeps_the_centre_sample_convention() {
+fn elevation_keeps_the_center_sample_convention() {
     // Child sample m sits at m + 0.5; the parent's sample i covers children 2i
-    // and 2i + 1, whose centres average to 2i + 1 — the parent's own centre in
+    // and 2i + 1, whose centers average to 2i + 1 — the parent's own center in
     // child samples. So a ramp of height 2m folds to 4i + 1 exactly.
     let out = fold_grids(|mx, _| 2 * mx);
     let pad = ELE_PAD as i64;
@@ -154,9 +154,9 @@ fn elevation_keeps_the_centre_sample_convention() {
 }
 
 #[test]
-fn elevation_reads_the_skirt_from_the_neighbours() {
+fn elevation_reads_the_skirt_from_the_neighbors() {
     // The parent's outermost padding samples lie four child samples past the
-    // block, which only the neighbouring pages hold. Heights that differ by
+    // block, which only the neighboring pages hold. Heights that differ by
     // page show which page each came from.
     let out = fold_grids(|mx, my| 100 * mx.div_euclid(PAGE_ELE_SPAN as i64) + my.div_euclid(PAGE_ELE_SPAN as i64));
     assert_eq!(out[0], -101);

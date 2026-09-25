@@ -32,7 +32,7 @@ use pxl_spec::bake::format::Terrain;
 const ZONE_RADIUS_CELL: f64 = 4.0 / U_PER_CELL - 0.707;
 const ZONE_RADIUS2_CELL: f64 = ZONE_RADIUS_CELL * ZONE_RADIUS_CELL;
 
-/// A zone cell: its offset from the centre, and which of its sides (top,
+/// A zone cell: its offset from the center, and which of its sides (top,
 /// bottom, right, left) lie on the zone's border.
 struct ZoneSample {
     off: V3,
@@ -78,7 +78,7 @@ struct Puck {
     /// Not yet grounded gates drawing, instead of drawing the marker at a
     /// guessed height while the device's own page isn't loaded yet.
     last_known_center_z: Option<f64>,
-    /// The zone as last written: its centre, and the tiles it was grounded
+    /// The zone as last written: its center, and the tiles it was grounded
     /// against. A zone sample can reach a page not yet loaded; a page arriving
     /// grounds it again.
     zone_for: Option<(V3, u32)>,
@@ -179,7 +179,7 @@ fn clear(p: &mut Puck) {
 // cells the zone covers at what height are decided above; this holds them,
 // animates the beacon each tick, and lists their draws.
 
-/// Floats a zone instance takes: the box's centre relative to the zone's
+/// Floats a zone instance takes: the box's center relative to the zone's
 /// (3), and which of its top, bottom, right and left edges border the ring
 /// (4).
 pub const ZONE_INSTANCE_FLOATS: usize = 7;
@@ -194,9 +194,9 @@ pub struct PuckDraw {
     bytes: u32,
     handle: u32,
     count: u32,
-    /// The zone's centre, in units.
-    centre: V3,
-    /// Where the beacon should stand and where it stands, relative to the centre.
+    /// The zone's center, in units.
+    center: V3,
+    /// Where the beacon should stand and where it stands, relative to the center.
     target: [f64; 2],
     shown: Option<[f64; 2]>,
     snap_dist2: f64,
@@ -212,12 +212,12 @@ pub struct Markers {
 
 impl Markers {
     /// The zone: `count` instances of ZONE_INSTANCE_FLOATS floats from `lane`,
-    /// about a centre at `centre` in units. Replaces what was there.
+    /// about a center at `center` in units. Replaces what was there.
     ///
     /// # Safety
     /// `lane` addresses count * ZONE_INSTANCE_FLOATS f32s in the memory.
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn set_zone(&mut self, world: &mut World, draw: &mut DrawList, centre: V3, count: u32, lane: usize, snap_dist: f64) {
+    pub unsafe fn set_zone(&mut self, world: &mut World, draw: &mut DrawList, center: V3, count: u32, lane: usize, snap_dist: f64) {
         let bytes = word_bytes(count as usize * ZONE_INSTANCE_FLOATS).max(4);
         let keep = self.puck.as_ref().is_some_and(|p| p.bytes == bytes);
         if !keep {
@@ -228,7 +228,7 @@ impl Markers {
                 bytes,
                 handle: 0,
                 count,
-                centre,
+                center,
                 target: [0.0; 2],
                 shown: None,
                 snap_dist2: snap_dist * snap_dist,
@@ -238,13 +238,13 @@ impl Markers {
             });
         }
         let p = self.puck.as_mut().unwrap();
-        // The beacon's shown offset follows the centre, so a centre that moves
+        // The beacon's shown offset follows the center, so a center that moves
         // a whole cell does not play as a slide back.
         if let Some(s) = p.shown.as_mut() {
-            s[0] -= centre[0] - p.centre[0];
-            s[1] -= centre[1] - p.centre[1];
+            s[0] -= center[0] - p.center[0];
+            s[1] -= center[1] - p.center[1];
         }
-        p.centre = centre;
+        p.center = center;
         p.count = count;
         let mem = world.volumes.mem();
         core::ptr::copy_nonoverlapping(mem.add(lane), mem.add(p.at), count as usize * ZONE_INSTANCE_FLOATS * 4);
@@ -255,8 +255,8 @@ impl Markers {
         }
     }
 
-    /// Where the beacon should stand relative to the zone's centre, and
-    /// whether it wears the night colour.
+    /// Where the beacon should stand relative to the zone's center, and
+    /// whether it wears the night color.
     pub fn set_beacon(&mut self, target: [f64; 2], night: bool) {
         if let Some(p) = self.puck.as_mut() {
             p.target = target;
@@ -288,7 +288,7 @@ impl Markers {
         }
         // Drawn within the fog's far edge of the camera, as the three puck
         // hid itself past it: the beacon's place through the anchor root.
-        let [x, y, z] = frame.world_of([p.centre[0] + shown[0], p.centre[1] + shown[1], p.centre[2] + BEACON_Z_BIAS]);
+        let [x, y, z] = frame.world_of([p.center[0] + shown[0], p.center[1] + shown[1], p.center[2] + BEACON_Z_BIAS]);
         let c = frame.camera;
         p.visible = (x - c[0]).powi(2) + (y - c[1]).powi(2) + (z - c[2]).powi(2) < view_reach().powi(2);
         p.visible
@@ -299,13 +299,13 @@ impl Markers {
         if !p.visible || p.handle == 0 {
             return;
         }
-        let centre = DrawList::translation(p.centre, origin);
-        draw.draw_as(PIPELINE_PUCK_ZONE, p.handle, p.count, 0, centre, 0.0, 1.0);
+        let center = DrawList::translation(p.center, origin);
+        draw.draw_as(PIPELINE_PUCK_ZONE, p.handle, p.count, 0, center, 0.0, 1.0);
         let shown = p.shown.unwrap_or(p.target);
         let beacon = [
-            centre[0] + shown[0] as f32,
-            centre[1] + shown[1] as f32,
-            centre[2] + (BEACON_Z_BIAS + (p.time * 2.0).sin() * 0.1) as f32,
+            center[0] + shown[0] as f32,
+            center[1] + shown[1] as f32,
+            center[2] + (BEACON_Z_BIAS + (p.time * 2.0).sin() * 0.1) as f32,
         ];
         draw.draw_as(PIPELINE_PUCK_BEACON, 0, p.night as u32, 0, beacon, (p.time * 1.2) as f32, 1.0);
     }

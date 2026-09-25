@@ -1,7 +1,7 @@
 # The audit after the move
 
 **2026-09-14** — with the renderer, the shaders and the scheduler the
-module's and the trees reorganised, three read-only audits went over what
+module's and the trees reorganized, three read-only audits went over what
 the two days left: the Rust against the TypeScript it replaced (the
 hand-ported parts, read against `b9e31004`), the
 crates for duplication, hot-path waste, stale comments and unsafe surfaces,
@@ -14,7 +14,7 @@ item is struck when its commit lands. The four moves that follow it are in
 
 Put right in `b9fb023` (deployed as b9): the grade's brightness and
 contrast ran in linear light, whose zero at linear 0.05 crushed every night
-colour to black (postprocessing's BrightnessContrastEffect takes sRGB); the
+color to black (postprocessing's BrightnessContrastEffect takes sRGB); the
 vignette was a full-screen pass and the sky and the badges had none; the
 fog was a ramp over the ray's length where three's is a smoothstep over
 view depth; the terrain took the brighter of the sun and the moon, and the
@@ -64,7 +64,7 @@ mapping (the composer never tone-mapped), reversed-Z.
   returns it, folded into the tick's draw bit); the companion no longer
   asks for frames itself. An actor playing a clip still means a frame a
   tick — that is what an animated companion is — but the module decides.
-- ~~**B2**~~ `climb_polar` is memoised on the view, the map centre and the
+- ~~**B2**~~ `climb_polar` is memoised on the view, the map center and the
   page table's revision.
 - ~~**B3**~~ The store's save is put off 300 ms and flushed when the page
   hides; a burst of writes is one save. Immediate off the page (the tests).
@@ -123,13 +123,13 @@ TypeScript file is that whole file, at the same path (`script/pair.ts`).
 - ~~**C5**~~ "Read a row of the module's memory" thirteen times, `take → fill
   → pxl_* → give` five times → `row()` and `with_lane()` in `wasm/pxl.ts`.
   **Do.**
-- ~~**C6**~~ FNV twice (the kit has it), hex colour three times, pixels per
+- ~~**C6**~~ FNV twice (the kit has it), hex color three times, pixels per
   unit four times (the scale bar's against `innerHeight`, which can
   disagree), degrees/radians at seven sites, the Seoul fallback three
   times, the DPR clamp three times, canonical→local three times, the
   badges' `RENDER_SCALE` rationale twice. **Do.**
 - ~~**C7**~~ pxl-wasm splits the state once (`parts`) and opens the
-  volumes once (`opened`); `mix64` is the one finaliser; `GridWalk` is
+  volumes once (`opened`); `mix64` is the one finalizer; `GridWalk` is
   the one DDA; `Frame::world_of` the one transform;
   `DrawList::translation` the one "against the origin"; `Held` the one
   grow-and-upload, for the badges and the gizmos — the puck's block is
@@ -186,7 +186,7 @@ TypeScript file is that whole file, at the same path (`script/pair.ts`).
 - ~~**F1**~~ Crate comments naming TypeScript files that no longer exist
   (`chunk_stage.tsx`, `chunk_table.ts`, `celestial_position.ts`,
   `debug_layer.tsx`, `decor_layer.ts`, `arena.rs`, …), nine places. **Do.**
-- ~~**F2**~~ Comments describing behaviour the code no longer has: `sched_ms`
+- ~~**F2**~~ Comments describing behavior the code no longer has: `sched_ms`
   "does not include the render" (the WebGPU submit is inside the visible
   phase now), `mounts` as React mounts (they are node constructions),
   hover_cursor's "which polygon offset wins" (it is the coplanar pipeline),

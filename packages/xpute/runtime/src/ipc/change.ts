@@ -119,7 +119,7 @@ export class ChangeLog implements ChangeJournal {
   }
 
   /** Drops a key that has left — a page unloaded — from its topic's table.
-   * Its revision reads 0 afterwards; the journal keeps what was written. */
+   * Its revision reads 0 afterward; the journal keeps what was written. */
   forget(topic: Topic, key: bigint): void {
     const table = this.tables[topic];
     const pos = table.find(key);

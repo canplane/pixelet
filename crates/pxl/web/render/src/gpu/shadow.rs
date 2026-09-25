@@ -1,7 +1,7 @@
 // pxl-render/gpu/shadow.rs
 
 //! The sun's shadow map: the world drawn once more each frame from the sun,
-//! depth only, into a square map over the map centre, which every lit pass
+//! depth only, into a square map over the map center, which every lit pass
 //! then compares its fragments against (shader/shadow.wgsl). The light's frame
 //! is a second frame uniform whose view_proj is the light's, so each pass
 //! draws its depth with the vertex shader it already has.

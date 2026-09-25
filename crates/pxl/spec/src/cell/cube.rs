@@ -21,7 +21,7 @@
 // exactly one of them. Nothing here needs to know that; this file is cell
 // definitions and nothing else.
 
-// A cube's colour is color.spec.rs's, by its channel and its number; a
+// A cube's color is color.spec.rs's, by its channel and its number; a
 // ground channel falls back to `common`'s, which is how a cell holding VOID
 // shows nothing and one holding UNKNOWN a neutral grey.
 

@@ -1,31 +1,31 @@
 #!/usr/bin/env -S deno run -A
-// The night sky's stars, baked from the Yale Bright Star Catalogue into the
+// The night sky's stars, baked from the Yale Bright Star Catalog into the
 // eight bytes a star the renderer reads (pxl-render's gpu/stars.rs).
 //
-//   deno run -A script/bake-stars.ts                    # fetch the catalogue from CDS
+//   deno run -A script/bake-stars.ts                    # fetch the catalog from CDS
 //   deno run -A script/bake-stars.ts catalog.gz         # or read one already here
 //
-// The catalogue is Hoffleit and Warren's fifth revised edition (1991), every
+// The catalog is Hoffleit and Warren's fifth revised edition (1991), every
 // star to about magnitude 6.5, which is what an eye sees on a dark night:
 // CDS publishes it as V/50, a fixed-width table whose ReadMe gives the
-// columns read below. It is a public catalogue, credited here and where it is
+// columns read below. It is a public catalog, credited here and where it is
 // drawn rather than in THIRD_PARTY_NOTICES.md, which covers copied source.
 //
 // A star is two little-endian words: its right ascension as a u16 of a turn
 // and its declination as an i16 of a quarter turn, then its visual magnitude
-// and its B−V colour as i16 thousandths. The quantization is 20″ in right
+// and its B−V color as i16 thousandths. The quantization is 20″ in right
 // ascension and 10″ in declination, under a pixel at any field of view the
 // camera has. The few entries with no position — novae and objects the
-// catalogue has retired — are left out; a star with no colour index takes
+// catalog has retired — are left out; a star with no color index takes
 // the Sun's. Brightest first, so a prefix of the file is the sky to a
 // magnitude.
 
 const SOURCE = "https://cdsarc.cds.unistra.fr/ftp/V/50/catalog.gz";
 const OUT = new URL("../crates/pxl/web/render/src/frame/shader/bright-stars.bin", import.meta.url);
-/// The Sun's B−V, for a star the catalogue gives no colour.
+/// The Sun's B−V, for a star the catalog gives no color.
 const SOLAR_BV = 0.65;
 
-async function catalogue(path: string | undefined): Promise<string> {
+async function catalog(path: string | undefined): Promise<string> {
   const packed = path ? await Deno.readFile(path) : new Uint8Array(await (await fetch(SOURCE)).arrayBuffer());
   const text = new Blob([packed]).stream().pipeThrough(new DecompressionStream("gzip"));
   return await new Response(text).text();
@@ -52,7 +52,7 @@ function star(line: string): Star | null {
   return { ra, dec, vmag: Number(vmag), bv: bv === "" ? SOLAR_BV : Number(bv) };
 }
 
-const stars = (await catalogue(Deno.args[0])).split("\n").map(star).filter((s): s is Star => s !== null);
+const stars = (await catalog(Deno.args[0])).split("\n").map(star).filter((s): s is Star => s !== null);
 stars.sort((a, b) => a.vmag - b.vmag);
 
 const out = new DataView(new ArrayBuffer(stars.length * 8));

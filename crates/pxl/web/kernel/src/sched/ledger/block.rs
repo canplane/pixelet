@@ -9,14 +9,14 @@
 //! Three faults followed from that one shape, and an audit rather than the
 //! compiler is what found them (2026-09-23): a section whose slice put two
 //! values in the middle of lanes the JSON had appended to the end, so fifteen
-//! of its twenty lanes carried a neighbour's number; a lane fed from a
+//! of its twenty lanes carried a neighbor's number; a lane fed from a
 //! structure that mirrored the one it was about; and fields computed for the
 //! ledger that no lane read.
 //!
 //! A record closes all three. A lane with no field is a size mismatch, a
 //! field at the wrong word is an offset mismatch, and a field nobody fills is
 //! a struct literal that does not compile — so none of them is a thing to go
-//! and check. What a field is filled *from* is still a judgement, but it is
+//! and check. What a field is filled *from* is still a judgment, but it is
 //! one line beside the field's own name, in one place.
 
 use core::mem::{offset_of, size_of};

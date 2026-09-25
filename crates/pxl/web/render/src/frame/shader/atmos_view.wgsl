@@ -1,6 +1,6 @@
 // The air as the frame shows it, for the sky and for every lit pass: the
 // sky along a direction, the ground under the air where no terrain is
-// drawn, and what the air between the eye and a point does to its colour.
+// drawn, and what the air between the eye and a point does to its color.
 // Over the sky-view table (atmos_sky.wgsl), shown at the exposure the eye
 // has adapted to, which gpu/atmosphere.rs draws into a texel of its own.
 
@@ -33,7 +33,7 @@ fn zenith_sky() -> vec3f {
 // the adaptation rises and the sun's light falls. The sun's sky, from the
 // exposure pass's second texel, and while the moon lights one, the moon's,
 // as its zenith over the hemisphere. It is the sky's half of the fill the
-// terrain is lit by (shade.wgsl), in place of a colour a theme chose: a
+// terrain is lit by (shade.wgsl), in place of a color a theme chose: a
 // sunset's orange, a moonlit night's blue, and what little a moonless night
 // leaves.
 fn sky_fill() -> vec3f {
@@ -44,14 +44,14 @@ fn sky_fill() -> vec3f {
   return fill;
 }
 
-// What the ground under a point throws back up at it: the land's colour
+// What the ground under a point throws back up at it: the land's color
 // against everything that falls on a face turned up — the sun and the second
 // light at their own heights, the themes' ambient, and the sky's own light as
 // the vertex took it — over pi, and the floor, which the ground takes as
 // every other face does. It is `beyond`'s ground under the same lights, so
 // the fill a face takes from below is the ground it would see if it looked,
 // and it goes orange into a sunset and blue into a moonlit night where a
-// theme's one colour could not.
+// theme's one color could not.
 fn ground_bounce(fill: vec3f) -> vec3f {
   let up = vec3f(0.0, 0.0, 1.0);
   let lit = frame.sun_color * max(frame.sun_dir.z, 0.0) + frame.other_color * max(frame.other_dir.z, 0.0) + frame.ambient + fill;
@@ -133,7 +133,7 @@ fn layer_depth(h0: f32, h1: f32, d: f32, scale: f32) -> f32 {
   return d * scale * (exp(-h0 / scale) - exp(-h1 / scale)) / dh;
 }
 
-// What the surface haze leaves of a colour `d` km away, between altitudes
+// What the surface haze leaves of a color `d` km away, between altitudes
 // `h0` and `h1`: the aerosol the tables do not carry, mixed through its own
 // layer, so it thins with height as Earth's does and a view from above sees
 // through it (look/atmosphere.rs's HAZE_VISUAL_RANGE_KM).
@@ -145,7 +145,7 @@ fn haze_through(h0: f32, h1: f32, d: f32) -> f32 {
 // ray meets the planet, the ground's through the air. It is what lies past
 // the terrain's drawn edge, so a view from high up reads as ground in haze
 // there and not as sky under the horizon; and the ground is a flat face of
-// the land's colour lit as shade.wgsl lights the terrain, by the frame's
+// the land's color lit as shade.wgsl lights the terrain, by the frame's
 // lights, so the edge is no seam.
 fn beyond(air: Air) -> vec3f {
   var light = air.light;
@@ -162,7 +162,7 @@ fn beyond(air: Air) -> vec3f {
 }
 
 // Aerial perspective: what the air between the eye and `world_pos` does to
-// a colour there — `through`, the segment's transmittance, dims it, and
+// a color there — `through`, the segment's transmittance, dims it, and
 // `scattered`, the light the air scatters along it, fills it in. `air` is
 // the ray's through that point (`air_along`), whose light is scattered
 // along it to its end, so a point part way along has the share of it that
@@ -181,8 +181,8 @@ fn veil(world_pos: vec3f, air: Air) -> Veil {
     return v;
   }
   let d = du * atmos.km_per_u;
-  // Both ends' altitudes over the planet, measured from its centre, under
-  // the map centre's ground by the radius: the point is on the globe
+  // Both ends' altitudes over the planet, measured from its center, under
+  // the map center's ground by the radius: the point is on the globe
   // (frame.wgsl's on_globe), and the camera is where it stands.
   let h0 = clamp(atmos.camera_altitude, 0.0, atmos.top_radius - atmos.bottom_radius);
   let planet = vec3f(frame.planet.xy, frame.planet.w - frame.planet.z);

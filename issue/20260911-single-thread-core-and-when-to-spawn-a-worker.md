@@ -167,14 +167,14 @@ parallel-friendly shape there is.
 ## Against January to April
 
 This is not the earlier architecture returning. That one put preemption and an
-IPC switch at the centre, with every WASM instance holding its own memory, so
-everything between instances was a copy or a message. Here the centre is one
+IPC switch at the center, with every WASM instance holding its own memory, so
+everything between instances was a copy or a message. Here the center is one
 address space on one thread, and workers are peripheral, detachable, and fed
 by ownership transfer — closer to a large process with a few helpers than to a
 microkernel. What comes back from April is the part that was always sound: the
 CommandPort contract for mutation, and a wire format (XTP) for boundaries where
 memory is **not** shared — the network, the disk, a worker. Where memory is
-shared, commands carry handles and nothing is serialised.
+shared, commands carry handles and nothing is serialized.
 
 ## Keeping views alive across growth — measured, and one answer rejected
 
@@ -213,7 +213,7 @@ resizable, copied to plain first         8.9 - 9.0 ms
 
 The penalty belongs to resizable buffers in general in this engine, not to
 WASM. The mesher and the scan make about a hundred lane accesses between them
-and are the centre of the frame budget; this is not a cost to take.
+and are the center of the frame budget; this is not a cost to take.
 
 **And the GPU will not accept them.** WebIDL's buffer-view conversion reads:
 "If the conversion is not to an IDL type associated with the
@@ -380,7 +380,7 @@ against the model above:
   after frame while pending does not fall. Today's reading is a scheduler
   p95 at the still budget with pending at zero, so the signal is not there,
   and building the executor ahead of it would be the runtime-tier
-  generalisation the 2026-09-09 guardrail names.
+  generalization the 2026-09-09 guardrail names.
 
 So the "unified resource manager" is the tick, the fetch scheduler, the
 big pool and the little pool, each reporting into the ledger — not a

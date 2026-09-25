@@ -1,6 +1,6 @@
 // pxl-spec/cell.rs
 
-//! The cell model: the generated tables — colours, cubes, cube types, decor,
+//! The cell model: the generated tables — colors, cubes, cube types, decor,
 //! their types — and `object`, where a cell becomes the value the object
 //! store keeps.
 

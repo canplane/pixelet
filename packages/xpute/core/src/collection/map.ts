@@ -129,7 +129,7 @@ export class IndexedMap<K extends numeric> {
   /**
    * Every position once, in an order fixed by `seed`, in O(1) memory: a
    * start and a step coprime to the size walk the positions as a cycle. For
-   * spreading work or routing without favouring insertion order. Mutating
+   * spreading work or routing without favoring insertion order. Mutating
    * during the walk is undefined.
    */
   *positions_seeded(seed: u64): IterableIterator<u32> {

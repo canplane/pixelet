@@ -343,7 +343,7 @@ function read_timestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: 
 
 // ---- the 2D scratch ----
 
-/** A colour the kernel packs as `0xRRGGBBAA`. */
+/** A color the kernel packs as `0xRRGGBBAA`. */
 function css_color(rgba: u32): string {
   return `rgba(${rgba >>> 24},${(rgba >>> 16) & 0xff},${(rgba >>> 8) & 0xff},${(rgba & 0xff) / 255})`;
 }

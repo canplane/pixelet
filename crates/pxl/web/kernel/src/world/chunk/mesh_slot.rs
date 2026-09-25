@@ -46,7 +46,7 @@
 //! to carry two different pairs of numbers for it (2026-09-23). What the
 //! measurement showed, and the constants cannot say, is that the coarse tier
 //! asks for *more* than the leaf's own: nothing of it merges, since a box
-//! shrunk about its cell's centre touches nothing
+//! shrunk about its cell's center touches nothing
 //! (issue/20260923-a-coarse-cell-is-isotropic.md). Either is read live as the
 //! ledger's `work fine_peak` and `coarse_peak`, through a zoom out and back.
 

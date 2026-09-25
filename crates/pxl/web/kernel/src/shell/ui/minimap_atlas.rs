@@ -1,11 +1,11 @@
 // pxl-kernel/shell/ui/minimap_atlas.rs
 
-//! The minimap's image: the ground around the map centre's page, a cell of
+//! The minimap's image: the ground around the map center's page, a cell of
 //! the level whose cell is a minimap pixel to a pixel, as RGBA pixels the
 //! shell puts on a canvas. That level's page is folded from the leaves by
 //! majority (pxl-spec bake/fold.rs), so a pixel is the ground its 16 u square
 //! mostly is rather than whichever cell a stride happened to land on.
-//! Rebaked when a page of the level arrives or leaves and when the centre
+//! Rebaked when a page of the level arrives or leaves and when the center
 //! crosses a page, not on every pan tick — the pan is `minimap_pan_px`'s.
 
 use pxl_render::mesh::paint::terrain::adapter::MATERIALS;
@@ -28,7 +28,7 @@ use pxl_spec::space::pyramid::LevelPage;
 
 /// The minimap's scale and reach, in units: properties of the minimap, not of
 /// how wide a page is. The atlas is a whole number of leaf pages around the
-/// centre's, so both are turned into pages here: at a page of 512 u, 32
+/// center's, so both are turned into pages here: at a page of 512 u, 32
 /// pixels a page and five pages each side.
 const MINIMAP_PX: Scale = Scale::of(4);
 const ATLAS_REACH_U: u64 = 2560;
@@ -37,8 +37,8 @@ const ATLAS_PAGE_PX: u32 = MINIMAP_PX.count_in(L3);
 
 /// The level whose cell is one minimap pixel.
 const ATLAS_LEVEL: u32 = MINIMAP_PX.above(CELL) as u32;
-/// Pages each side of the centre one: as many as it takes for the atlas's
-/// half-width, the centre page's half included, to reach ATLAS_REACH_U.
+/// Pages each side of the center one: as many as it takes for the atlas's
+/// half-width, the center page's half included, to reach ATLAS_REACH_U.
 const ATLAS_RADIUS_PAGES: u32 = ((ATLAS_REACH_U - L3_RANGE / 2).div_ceil(L3_RANGE)) as u32;
 
 const L3_RANGE_REAL: f64 = L3_RANGE as f64;
@@ -96,7 +96,7 @@ pub fn minimap_atlas() -> Option<&'static MinimapAtlas> {
             let cy = oy + (half - 1 - py);
             for px in 0..ATLAS_PX as i64 {
                 let cell = cell_at(ox + (px - half), cy);
-                // A cell's colour is the last non-void channel's in
+                // A cell's color is the last non-void channel's in
                 // `GROUND_CH_KEYS`' order, from the tables the terrain paint
                 // resolves a cell by, so the minimap and the 3D terrain
                 // agree about a cell.

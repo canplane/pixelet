@@ -77,7 +77,7 @@ pub fn decor_revision_of(level: u32, base: IVec) -> u32 {
 
 /// A write to column `col`: every chunk above z16 that draws it moves, in
 /// its tiers or its decor. Its tiers' are the chunk the column lies in and,
-/// through the apron a fold reads, its neighbours; its decor's the one it
+/// through the apron a fold reads, its neighbors; its decor's the one it
 /// lies in.
 pub fn column_written(col: IVec) {
     let corner = Pvf3 { i: FROM_L2_IDX(col), f: 0 };

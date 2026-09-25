@@ -1,7 +1,7 @@
 // pxl-geo-bake/geocode/provider/overture.rs
 
 //! Overture's Divisions theme resolved by point-in-polygon against the page's
-//! own centre point (`overture_divisions`: region, county, locality,
+//! own center point (`overture_divisions`: region, county, locality,
 //! neighborhood, microhood and macrohood — `country` is the only subtype
 //! dropped).
 //!
@@ -192,7 +192,7 @@ impl GeocodeProvider {
                 // rung the part sits on. A subtype the ladder has no rung for
                 // is still the finest thing this page has a name from.
                 parts.push(PartSource::Near(Division {
-                    rank: rank_of(&point.subtype).unwrap_or(PlaceRank::Neighbourhood),
+                    rank: rank_of(&point.subtype).unwrap_or(PlaceRank::Neighborhood),
                     name: point.name.clone(),
                     names: names_of(&point.common).into_iter().collect(),
                 }));

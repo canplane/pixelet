@@ -49,14 +49,14 @@ export function ToastController() {
   const { t } = useTranslation();
   const locationStatus = useKernel((s) => s.location.status);
   // Rendered through t() here (not resolved to a message where the error
-  // fires) because i18next loads its catalogue over the network — an
+  // fires) because i18next loads its catalog over the network — an
   // imperative t() at sensor-error/startup time would freeze the raw key
   // in the store and never follow a later language change.
   const locationError = useKernel((s) => s.location.error);
   const locationErrorKey: string | null = locationError === null ? null : locationMessageKey(locationError);
 
   const mapStatus = useKernel((s) => s.map.status);
-  // The L3 page the map centre falls in — what "the area I am looking at"
+  // The L3 page the map center falls in — what "the area I am looking at"
   // means to the kernel, and the key the world toast is announced per.
   const mapPage = useKernel((s) => s.map.page);
   // Merged with mapStatus below into a single "world-status" toast, not a
@@ -106,12 +106,12 @@ export function ToastController() {
   // "just finished, flash success" from "never started, nothing to show."
   const wasWorldLoadingRef = useRef(false);
   // The last page announced as ready. `undefined` rather than null so that the
-  // very first announcement is not swallowed by a centre that has none yet.
+  // very first announcement is not swallowed by a center that has none yet.
   const announcedPageRef = useRef<bigint | null | undefined>(undefined);
   const shownWorldToastRef = useRef(false);
   // The ready toast's own timer, held here rather than returned as the
   // effect's cleanup: the effect re-runs whenever the page changes, and a
-  // cleanup that cancelled the timer would leave the toast standing forever.
+  // cleanup that canceled the timer would leave the toast standing forever.
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropWorldToast = () => {
     if (dismissTimerRef.current !== null) {
@@ -137,7 +137,7 @@ export function ToastController() {
     const isLoading = isMapLoading || relevantCompanionLoading;
 
     // A page already announced is one the user has been told about, and what
-    // reaches the terrain queue for it afterwards is the fetcher asking again
+    // reaches the terrain queue for it afterward is the fetcher asking again
     // for a tile that did not arrive — every OCEAN_RETRY_MS, for as long as it
     // keeps not arriving (world/pyramid.rs). The queue filling and
     // draining on that beat is not the world loading and becoming ready, and

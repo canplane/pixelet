@@ -55,7 +55,7 @@ pub const MODEL_VERTEX_WORDS: u32 = 16;
 pub const PIPELINE_SKINNED: u32 = 5;
 /// The location puck (crates/pxl/web/kernel/src/layer/marker/location_puck.rs): the zone's instances as (the zone block's
 /// handle, the instance count, 0, uniform, pipeline), translated to the
-/// zone's centre; the beacon as (0, night, 0, uniform, pipeline), its
+/// zone's center; the beacon as (0, night, 0, uniform, pipeline), its
 /// uniform's fourth float its spin.
 pub const PIPELINE_PUCK_ZONE: u32 = 6;
 pub const PIPELINE_PUCK_BEACON: u32 = 7;

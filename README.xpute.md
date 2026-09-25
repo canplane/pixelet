@@ -66,6 +66,6 @@ deno task test    # deno test and cargo test, the golden records included
 deno task lint    # deno lint
 ```
 
-## Licence
+## License
 
-xpute is MIT. One file under `alloc/` is a port of someone else's code rather than a dependency, and `THIRD_PARTY_NOTICES.md` carries the notice its licence asks for.
+xpute is MIT. One file under `alloc/` is a port of someone else's code rather than a dependency, and `THIRD_PARTY_NOTICES.md` carries the notice its license asks for.

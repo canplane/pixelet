@@ -5,12 +5,12 @@
  * each face, by bucket key.
  *
  * A pack decorates the cube catalog; it does not define it. A cube's identity
- * and colour are spec/cell's (catalog/cell/color.spec.ts), and the pack is
+ * and color are spec/cell's (catalog/cell/color.spec.ts), and the pack is
  * one image per type and face on top of that, so a type with no image
- * here still draws — as its colour — and a pack can be swapped without
+ * here still draws — as its color — and a pack can be swapped without
  * touching an id. Which image is which is the file's name under
  * asset/cube: `<channel>_<type>.png` for a top, `side_<type>.png` for a
- * land side, `block_<colour>.png` for a placed block; the bytes and keys
+ * land side, `block_<color>.png` for a placed block; the bytes and keys
  * come from ingested.spec.ts.
  */
 
@@ -30,7 +30,7 @@ function pathOf(channel: string, type_name: string, face: CubeFace): string | nu
 
 /** The bucket key of the image a cube type wears on a face, or null when
  * the pack has none for it — the caller decides whether a side falls back
- * to the top or the type to its colour. */
+ * to the top or the type to its color. */
 export function shippedTextureKey(channel: string, type_name: string, face: CubeFace): string | null {
   const path = pathOf(channel, type_name, face);
   return path ? INGESTED[path]?.key ?? null : null;

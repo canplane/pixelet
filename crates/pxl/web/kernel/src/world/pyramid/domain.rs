@@ -13,7 +13,7 @@
 //! and wherever the eye is. The rule starts at the pyramid's top and stops
 //! only at terrain's atom, so a hill beside the eye is drawn as finely as
 //! the ground under it and the far ground runs as far as the air lets it.
-//! The map centre is only the handle the camera is moved by and plays no
+//! The map center is only the handle the camera is moved by and plays no
 //! part in it.
 //!
 //! What a view holds is a budget, not a count of levels: the chunks and the
@@ -138,14 +138,14 @@ impl Frustum {
         Frustum { planes, planet: globe().radius_u() }
     }
 
-    /// Whether any of a sphere at `centre` of `radius` can be on screen from
+    /// Whether any of a sphere at `center` of `radius` can be on screen from
     /// `eye`. The planet curves ground `d` away down by about `d² / 2R`, which
     /// can bring ground under the frustum's upper plane into it, so the
     /// sphere is widened by that much.
-    fn sees(&self, centre: [f64; 3], radius: f64, eye: [f64; 3]) -> bool {
-        let d2 = (0..3).map(|k| (centre[k] - eye[k]).powi(2)).sum::<f64>();
+    fn sees(&self, center: [f64; 3], radius: f64, eye: [f64; 3]) -> bool {
+        let d2 = (0..3).map(|k| (center[k] - eye[k]).powi(2)).sum::<f64>();
         let r = radius + d2 / (2.0 * self.planet);
-        self.planes.as_chunks::<4>().0.iter().all(|p| p[0] * centre[0] + p[1] * centre[1] + p[2] * centre[2] + p[3] >= -r)
+        self.planes.as_chunks::<4>().0.iter().all(|p| p[0] * center[0] + p[1] * center[1] + p[2] * center[2] + p[3] >= -r)
     }
 }
 
@@ -154,9 +154,9 @@ impl Frustum {
 pub struct Eye {
     pub at: [f64; 3],
     pub foot: IVec,
-    /// The point the camera turns about — the map centre, where the
+    /// The point the camera turns about — the map center, where the
     /// character stands — which every layer's work is ordered out from.
-    pub centre: [f64; 3],
+    pub center: [f64; 3],
 }
 
 /// The eye as the view draws it, once there is a map to stand over.
@@ -169,8 +169,8 @@ pub fn eye() -> Option<Eye> {
         ivec::to_real(ivec::Z(v.origin)) + v.eye_local[2],
     ];
     let foot = ivec::gather(at[0].floor() as i64, at[1].floor() as i64, 0);
-    let centre = [pvf3::to_real(pvf3::X(&mc)), pvf3::to_real(pvf3::Y(&mc)), pvf3::to_real(pvf3::Z(&mc))];
-    Some(Eye { at, foot, centre })
+    let center = [pvf3::to_real(pvf3::X(&mc)), pvf3::to_real(pvf3::Y(&mc)), pvf3::to_real(pvf3::Z(&mc))];
+    Some(Eye { at, foot, center })
 }
 
 /// The level the rule wants ground `dist` from the eye at: the one whose
@@ -190,14 +190,14 @@ pub fn ground_level() -> u32 {
 }
 
 /// The page `anchor` stands in at `level`.
-pub fn centre_page(level: u32, anchor: IVec) -> LevelPage {
+pub fn center_page(level: u32, anchor: IVec) -> LevelPage {
     LevelPage::over(level, TO_XY(L3_IDX(anchor)))
 }
 
 /// How far `page` lies from the anchor's page at its level, in pages along
 /// the further axis: 0 for the anchor's own.
 pub fn ring_of(anchor: IVec, page: LevelPage) -> u32 {
-    let center = centre_page(page.level, anchor);
+    let center = center_page(page.level, anchor);
     let d = ivec::sub(page.page, center.page);
     ivec::X(d).unsigned_abs().max(ivec::Y(d).unsigned_abs()) as u32
 }
@@ -209,8 +209,8 @@ pub fn ring_of(anchor: IVec, page: LevelPage) -> u32 {
 /// it is its own (`Pyramid::cover`).
 pub struct Domain {
     eye: [f64; 3],
-    /// Where the view's work is ordered out from (`Eye::centre`).
-    centre: [f64; 3],
+    /// Where the view's work is ordered out from (`Eye::center`).
+    center: [f64; 3],
     foot: IVec,
     /// The height of the ground under the eye: what ground no page over it is
     /// held for is taken to stand at, until one is.
@@ -245,7 +245,7 @@ pub struct Domain {
 
 /// A piece of ground as the view measures it: how near the eye it comes,
 /// which chooses its level, whether the view sees it, and how near the
-/// view's centre it comes, which orders the work on it.
+/// view's center it comes, which orders the work on it.
 #[derive(Clone, Copy)]
 struct Measure {
     near: f64,
@@ -259,7 +259,7 @@ struct Measure {
 pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>, pressure: u32) -> Domain {
     let mut d = Domain {
         eye: eye.at,
-        centre: eye.centre,
+        center: eye.center,
         foot: eye.foot,
         ground: eye.at[2] - height,
         far: reach_at(height).min(split_distance(TOP_LEVEL as i32 + 1)),
@@ -330,9 +330,9 @@ impl Domain {
     fn in_view(&self, (x0, y0, side): (f64, f64, f64), z: Option<(f64, f64)>) -> bool {
         let Some(f) = self.frustum else { return true };
         let (zlo, zhi) = z.unwrap_or((self.ground, self.ground));
-        let centre = [x0 + side / 2.0, y0 + side / 2.0, (zlo + zhi) / 2.0];
+        let center = [x0 + side / 2.0, y0 + side / 2.0, (zlo + zhi) / 2.0];
         let radius = (2.0 * side * side + (zhi - zlo).powi(2)).sqrt() / 2.0;
-        f.sees(centre, radius, self.eye)
+        f.sees(center, radius, self.eye)
     }
 
     /// How near the eye `c` comes, and whether the view sees any of it.
@@ -345,7 +345,7 @@ impl Domain {
         Measure {
             near: self.nearest(rect, z),
             seen: self.in_view(rect, z),
-            order: self.nearest_from(self.centre, rect, z),
+            order: self.nearest_from(self.center, rect, z),
         }
     }
 
@@ -360,9 +360,9 @@ impl Domain {
         self.measure(c).near
     }
 
-    /// Where `c` falls in the view's order: how near the view's centre its
+    /// Where `c` falls in the view's order: how near the view's center its
     /// ground comes. Every layer's work — a page fetched, a chunk built — is
-    /// taken nearest the centre first, so the view fills out from where the
+    /// taken nearest the center first, so the view fills out from where the
     /// camera looks and the character stands, whatever the tilt.
     pub fn order_of(&self, c: Chunk) -> f64 {
         self.measure(c).order
@@ -371,7 +371,7 @@ impl Domain {
     /// Where `p` falls in the view's order, by its whole ground: for a page
     /// held only for finer ground to fall back on.
     pub fn page_order(&self, p: LevelPage) -> f64 {
-        self.nearest_from(self.centre, p.rect(), Self::heights(p, p.node()))
+        self.nearest_from(self.center, p.rect(), Self::heights(p, p.node()))
     }
 
     /// The largest drawn cell per unit of distance under this view's
@@ -404,11 +404,11 @@ impl Domain {
     fn find_roots(&self) -> Vec<Chunk> {
         let n = (self.far / chunk_span_of(TOP_LEVEL)).ceil() as i64 + 1;
         let foot = Pvf3 { i: self.foot, ..Pvf3::default() };
-        let centre = Chunk::of(TOP_LEVEL, &foot);
+        let center = Chunk::of(TOP_LEVEL, &foot);
         let mut out = Vec::new();
         for dy in -n..=n {
             for dx in -n..=n {
-                let c = centre.beside(dx, dy);
+                let c = center.beside(dx, dy);
                 if self.nearest_to(c) < self.far {
                     out.push(c);
                 }
@@ -450,7 +450,7 @@ impl Domain {
 
     /// Every page the view wants, and where the ground drawn at its level
     /// falls in the view's order (`order_of`): the nearest of its chunks to
-    /// the centre. None for a page held only over ground drawn finer, which
+    /// the center. None for a page held only over ground drawn finer, which
     /// is what that ground falls back to and not ground of its own.
     pub fn pages(&self) -> impl Iterator<Item = (LevelPage, Option<f64>)> + '_ {
         self.pages.iter().map(|(&p, &order)| (p, order))

@@ -1,8 +1,8 @@
 // pxl-kernel/layer/marker/frame_gizmo.rs
 
-//! The dev gizmos (the `show_debug_objects` setting): the cell the map centre
-//! floors to, the map centre itself, the floating origin, the page's base and
-//! centre corners, and the two frames' gyro rings — one fixed to the screen
+//! The dev gizmos (the `show_debug_objects` setting): the cell the map center
+//! floors to, the map center itself, the floating origin, the page's base and
+//! center corners, and the two frames' gyro rings — one fixed to the screen
 //! whatever the azimuth, one turning with the map so its vertex points north —
 //! as line segments the kernel holds and the renderer draws over everything
 //! (debug_lines.rs), with labels at points drawn as billboards: a line of
@@ -54,7 +54,7 @@ pub struct Label {
     pub text: String,
 }
 
-/// A sketch: segments as pairs of vertices (position and colour), and labels at
+/// A sketch: segments as pairs of vertices (position and color), and labels at
 /// points.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Sketch {
@@ -143,13 +143,13 @@ impl Sketch {
         }
     }
 
-    /// A dashed ring of `radius` about `centre` in the plane of `a` and `b`.
-    pub fn ring(&mut self, centre: V3, radius: f64, a: V3, b: V3) {
+    /// A dashed ring of `radius` about `center` in the plane of `a` and `b`.
+    pub fn ring(&mut self, center: V3, radius: f64, a: V3, b: V3) {
         let mut prev: Option<V3> = None;
         for i in 0..=RING_SEGMENTS {
             let t = (i as f64 / RING_SEGMENTS as f64) * core::f64::consts::PI * 2.0;
             let (c, sn) = (t.cos() * radius, t.sin() * radius);
-            let at = [centre[0] + a[0] * c + b[0] * sn, centre[1] + a[1] * c + b[1] * sn, centre[2] + a[2] * c + b[2] * sn];
+            let at = [center[0] + a[0] * c + b[0] * sn, center[1] + a[1] * c + b[1] * sn, center[2] + a[2] * c + b[2] * sn];
             if let Some(p) = prev.filter(|_| i % 2 == 1) {
                 self.line(p, at);
             }
@@ -164,15 +164,15 @@ impl Sketch {
         let horiz = (vertex[0] * vertex[0] + vertex[1] * vertex[1]).sqrt();
         let dir = if horiz > 1e-9 { [vertex[0] / horiz, vertex[1] / horiz, 0.0] } else { [1.0, 0.0, 0.0] };
         let radius = hypot3(vertex);
-        let centre = to_local([0.0, 0.0, 0.0]);
+        let center = to_local([0.0, 0.0, 0.0]);
         let axis = |v: V3| {
             let p = to_local(v);
-            [p[0] - centre[0], p[1] - centre[1], p[2] - centre[2]]
+            [p[0] - center[0], p[1] - center[1], p[2] - center[2]]
         };
-        self.ring(centre, radius, axis([1.0, 0.0, 0.0]), axis([0.0, 1.0, 0.0]));
-        self.ring(centre, radius, axis(dir), axis([0.0, 0.0, 1.0]));
+        self.ring(center, radius, axis([1.0, 0.0, 0.0]), axis([0.0, 1.0, 0.0]));
+        self.ring(center, radius, axis(dir), axis([0.0, 0.0, 1.0]));
         if show_radius {
-            self.labelled_line(centre, to_local(vertex), Some(&format!("{radius}")), true);
+            self.labelled_line(center, to_local(vertex), Some(&format!("{radius}")), true);
         }
         self.point(to_local(vertex), Some(label));
     }
@@ -215,7 +215,7 @@ fn local_of(p: &Pvf3, map_origin: IVec) -> V3 {
 fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     let mut s = Sketch::default();
 
-    // raw_v: the map centre as placed, no elevation override. quant_v: the cell
+    // raw_v: the map center as placed, no elevation override. quant_v: the cell
     // it floors to, ground-snapped — a cell, so a box.
     let mut raw_v = [0.0; 3];
     projection::unproject(&mut raw_v, ivec::sub(map_center.i, map_origin), map_center.f);
@@ -245,7 +245,7 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
 }
 
 struct Gizmos {
-    /// What the drawn sketch was built from: the map centre, the origin, the
+    /// What the drawn sketch was built from: the map center, the origin, the
     /// tiles' revision, and the view's frame.
     built_for: Option<(Pvf3, IVec, u32, [f64; 4])>,
     drawn: Sketch,
@@ -312,7 +312,7 @@ fn make_labels(g: &mut Gizmos, origin: V3) {
 }
 
 /// Writes the labels' instances, once per sheet generation: each label's
-/// point, its logical size, its rectangle of the sheet, centred on the point.
+/// point, its logical size, its rectangle of the sheet, centered on the point.
 fn write_labels(g: &mut Gizmos) {
     let Some(set) = g.set else { return };
     let sheet = billboard_sheet();

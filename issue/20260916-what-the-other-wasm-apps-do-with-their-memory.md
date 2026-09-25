@@ -139,7 +139,7 @@ The frequently-quoted line against custom allocators —
 > where the presence of any allocator won't make much of a splash (and the
 > maintenance of playing whack-a-mole with panics is too burdensome).
 
-— comes from an article optimising **module size**, not fragmentation or
+— comes from an article optimizing **module size**, not fragmentation or
 layout. It says an allocator swap is not worth the maintenance for a few KB of
 module. It says nothing about what a heap should hold. (Recorded because it was
 misread that way once in the conversation that produced this file.)
@@ -251,7 +251,7 @@ only use it suggests is a different problem entirely:
 
 The API says the same thing. `k_mem_slab_alloc(&slab, &ptr, K_MSEC(100))` takes
 a **timeout**, and threads that find no free block queue on it by priority.
-That is a synchronisation primitive — a fixed set of buffers cycled between a
+That is a synchronization primitive — a fixed set of buffers cycled between a
 producer and a consumer, the shape a driver hands DMA buffers round in — not a
 policy about what belongs in a heap.
 
@@ -268,7 +268,7 @@ data structure and not the reason either exists. Zephyr separates slabs from its
 heap because the **runtime API and the blocking semantics differ**; nothing in
 its documentation argues for separating them in a memory map. The terrain slab
 has no API at all — `slot_of` is arithmetic — so there is nothing there to
-categorise.
+categorize.
 
 ### TLSF — the fragmentation number, for comparison
 

@@ -74,7 +74,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
         let dist_sample = view_dist(sample_depth);
         let dist_world = view_dist(ndc.z);
         let range_check = smoothstep(0.0, 1.0, falloff / abs(dist_sample - dist_world));
-        // Not the pixel's own texel: the pixel centre is half a texel
+        // Not the pixel's own texel: the pixel center is half a texel
         // past its corner, so a difference under one is itself.
         let diff = i.clip.xy - texel;
         occluded += range_check * f32(dist_sample != dist_world) * f32(sample_depth != depth)

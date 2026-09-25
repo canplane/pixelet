@@ -6,13 +6,13 @@
  * kernel's store (crates/pxl/web/kernel/src/shell/setting/store.rs) holds the
  * values and sends them in its snapshot, a setting's value at its `key`; the
  * sheet (section.tsx) renders rows from here, so adding a setting is one
- * entry in schema.json plus its two strings in the locale catalogue under
+ * entry in schema.json plus its two strings in the locale catalog under
  * `settings.<section>.<name>`.
  *
  * A `dev` setting is offered only under a development build, and is absent
  * from the shell's production bundle: the table below is SETTINGS_SHIPPED
  * there, which has no such row, and its strings live in the dev locale
- * catalogue, so the artifact carries neither the row nor its name
+ * catalog, so the artifact carries neither the row nor its name
  * (apps/web/script/check-bundle.ts reads the artifact to be sure).
  */
 

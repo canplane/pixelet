@@ -450,7 +450,7 @@ fn ray_meets_square(o: &V3, d: &[f64; 3], x0: f64, y0: f64, x1: f64, y1: f64, li
     true
 }
 
-/// Whether the ray from `p` (relative to the sphere's centre) comes within
+/// Whether the ray from `p` (relative to the sphere's center) comes within
 /// `r` of it before `limit`.
 fn ray_meets_sphere(p: &V3, d: &[f64; 3], r: f64, limit: f64) -> bool {
     let b = p[0] * d[0] + p[1] * d[1] + p[2] * d[2];

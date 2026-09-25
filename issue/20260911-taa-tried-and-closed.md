@@ -42,7 +42,7 @@ It went through these stages:
 4. **Rewritten to the standard recipe**, the ad hoc parts removed:
    closest-depth 3×3 reprojection (Pedersen 2016, INSIDE; Tardif),
    jitter-aware source filter, Catmull–Rom history (Karis 2014), YCoCg clip
-   toward the box centre, luminance-weighted 0.05 feedback (Karis; Tardif),
+   toward the box center, luminance-weighted 0.05 feedback (Karis; Tardif),
    at dpr [1, 2] with unjittered reprojection. Distant terrain still
    jittered with a variance box (Salvi 2016, γ = 1); a rounded min/max box
    (Karis; INSIDE) did not settle it either.
@@ -112,7 +112,7 @@ TAA is closed; two questions it touched are not, and are recorded here so
   mobile path until it has earned it on the desktop one.
 
   Measured on the WebGPU renderer, 2026-09-14, M1 Max, a 9.6 Mpx canvas
-  (dpr 2), 4x MSAA on, shadows off: the colour and depth targets 147 MB
+  (dpr 2), 4x MSAA on, shadows off: the color and depth targets 147 MB
   each (the ledger's `targets` line), GPU 10.6 ms p50 / 20.1 ms p95 by
   timestamp query, dt p50 16.5 ms against 8.3 ms before the post effects,
   36% of frames missed — the frame is GPU-bound at that pixel count, which

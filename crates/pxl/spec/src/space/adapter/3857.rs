@@ -41,7 +41,7 @@ pub type G3857 = [f64; 3];
 
 // World width at the equator in EPSG:3857 planar meters
 /// The projection's own width at the equator, which a tile pyramid divides
-/// by `256 * 2^z` to get the metres one pixel of its level z covers.
+/// by `256 * 2^z` to get the meters one pixel of its level z covers.
 pub const WORLD_WIDTH_3857: f64 = 40075016.68557849;
 const HALF_W_3857: f64 = WORLD_WIDTH_3857 / 2.0;
 

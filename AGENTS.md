@@ -85,9 +85,9 @@ The rules below keep it one thing. They come from finding it several.
   stepped from two roots — the tiers (`pxl-spec space/indexer.rs`) and the
   raster's cell (`bake/constant.rs` `CELL`), which is a resolution and
   derives from neither — and parent and children in any number of axes are
-  `space/hierarchy.rs`'s. Level and span, a cell's base and centre, its
+  `space/hierarchy.rs`'s. Level and span, a cell's base and center, its
   place in its page — which is the index into every lane the page has —
-  the 4 × 4 neighbourhood a fold reads, and a page's name are
+  the 4 × 4 neighborhood a fold reads, and a page's name are
   `space/pyramid.rs`'s; a level is a count from a lattice's cell, and the
   lattice is what turns it into a size. A layer that shifts by a tier or a
   scale's exponent itself, or numbers a page's cells by its width, is a
@@ -102,8 +102,8 @@ The rules below keep it one thing. They come from finding it several.
   Placed objects are all resident, so they have no lifecycle to share; they
   share the lattice and the fold rule (`majority`, `pxl-spec bake/fold.rs`)
   and are folded when a chunk is built.
-- **A mark stands at a cell's centre** (`cell_centre`), at the height of the
-  surface drawn there, never at a centre derived from its data's bounds. A
+- **A mark stands at a cell's center** (`cell_center`), at the height of the
+  surface drawn there, never at a center derived from its data's bounds. A
   mark for many things stands at the z16 cell their centroid falls in,
   which folds by count as the things do (`pxl-spec bake/poi_page.rs`).
 - **One rule chooses the level; a layer chooses its detail.** The shared
@@ -215,9 +215,9 @@ device scale. Already derived — don't re-derive or drift:
 | Floating overlay inset         | iOS keyboard accessory bar | 16                    |
 
 - **A tap target is as wide as the pitch and no wider**; past that it overlaps
-  a neighbour and the overlap belongs to whichever is later in the DOM. Where
-  the visible thing is smaller (colour swatches), the button is a transparent
-  box at full pitch with the shape centred.
+  a neighbor and the overlap belongs to whichever is later in the DOM. Where
+  the visible thing is smaller (color swatches), the button is a transparent
+  box at full pitch with the shape centered.
 - **The named radius steps are theme tokens.** `app/style/index.css` derives
   `--radius-*` from `--radius`, which themes redefine as far as 2.5rem, so `rounded-md` is not a
   fixed number. Spell literals out (`rounded-[6px]`) when a radius is meant.
@@ -306,7 +306,7 @@ shows, never write it as a changelog ("X → Y because…", "previously…"). Tr
 or visual code gets none unless the choice rests on profiling or a derivation.
 
 **Comments are working notes, not a contract.** Never cite an in-repo comment
-as evidence; verify against the code, its behaviour or git history. When the
+as evidence; verify against the code, its behavior or git history. When the
 author contradicts a comment — even one written this session — defer. Keep
 comments accurate; don't treat them as authority. A source path a comment or a
 document names must exist, and `check:rules` says where one does not; a
@@ -334,7 +334,7 @@ value of their own.
   those last are sometimes needed, but none of them is an architecture. Do
   not start at the end because the diff is smaller.
 - **Question a transformation before optimizing it.** Where data is copied,
-  packed, mirrored, synchronised or reconciled across a boundary, ask whether
+  packed, mirrored, synchronized or reconciled across a boundary, ask whether
   both representations are needed. Where two things are kept in step, ask
   whether one owner would do. Where something is cleaned up, ask whether a
   lifetime makes the cleanup unnecessary. Where a capacity is short, ask
@@ -352,7 +352,7 @@ value of their own.
   drain, generous capacity, a retry, a timing assumption, "this cannot
   normally happen", or a green test run.
 - **Tests carry semantics, not architecture.** They are evidence of intended
-  behaviour, not a requirement to design around: one that encodes an
+  behavior, not a requirement to design around: one that encodes an
   implementation detail is changed or deleted with the detail. Write them
   for what is externally meaningful and for the invariants. The order is
   invariant, architecture, implementation, verification, then the tests
@@ -397,7 +397,7 @@ value of their own.
 **When these conflict**, the order is: semantic correctness and stated
 invariants; a smaller state space; simpler representation and ownership; a
 whole failure class gone; runtime responsiveness; bounded resource
-behaviour; performance; contracts genuinely outside this tree; effort; diff
+behavior; performance; contracts genuinely outside this tree; effort; diff
 size.
 
 ## Working agreements

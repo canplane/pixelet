@@ -65,7 +65,7 @@ fn view_dist(d: f32) -> f32 {
 }
 
 // The view-space normal at pixel `p` of a depth image `res` pixels across,
-// from the neighbour on each axis whose second difference is the smaller —
+// from the neighbor on each axis whose second difference is the smaller —
 // the side that lies on the same surface, where the pixel sits on an edge
 // — as N8AO's computeNormal took it. `depth_at` is the including pass's,
 // over the depth it reads. The cross is taken in the order that points the

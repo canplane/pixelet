@@ -15,7 +15,7 @@ use crate::look::style::marker_colors;
 
 const BEACON_RADIUS: f32 = 0.3;
 
-/// A unit box centred on the origin, a face at a time with its own 0..1 UVs:
+/// A unit box centered on the origin, a face at a time with its own 0..1 UVs:
 /// positions, UVs and indices.
 fn box_lanes() -> ([f32; 72], [f32; 48], [u32; 36]) {
     let faces: [[[f32; 3]; 3]; 6] = [
@@ -82,7 +82,7 @@ pub struct PuckPass {
     box_index: u32,
     oct_position: u32,
     oct_normal: u32,
-    /// The zone's colour, the UI's action colour, in linear light.
+    /// The zone's color, the UI's action color, in linear light.
     color: [f32; 3],
 }
 

@@ -119,7 +119,7 @@ function windowSection(r: LedgerReport): string[] {
     `  by tag  ${f.census.map((t) => `${t.tag} ${round(t.draws)}/${tris(t.tris)}`).join("  ")}   (draws/tris a frame, mean)`,
     `  by lvl  ${levels || "-"}   (terrain tris a frame, mean)`,
     `  build   ${c.built_direct} direct  ${c.built_scans} scans  ${c.built_bakes} bakes  ${c.built_starved} refused a block${c.decor_dropped > 0 ? `   DECOR DROPPED ${c.decor_dropped}` : ""}`,
-    `  per     chunks/bake ${f.chunks_per_bake === null ? "-" : n1(f.chunks_per_bake)}ms   (workload-normalised; comparable across sessions)`,
+    `  per     chunks/bake ${f.chunks_per_bake === null ? "-" : n1(f.chunks_per_bake)}ms   (workload-normalized; comparable across sessions)`,
     `  rate    ${n1(f.perS[1])} bakes/s  ${n1(f.perS[0])} scans/s   while backlog ${n1(f.backlogPerS[1])} bakes/s  ${n1(f.backlogPerS[0])} scans/s over ${n1(f.backlog_s)}s`,
     `  faces   kept ${c.faces_kept} / ${c.faces_possible} (${pct(c.faces_kept, c.faces_possible)}%)  runs culled ${c.runs_culled}/${c.runs_total}`,
     `  coarse  boxes ${c.coarse_boxes}  low fill ${c.coarse_low_fill} (${pct(c.coarse_low_fill, c.coarse_boxes)}%; a cull at this fill was measured and did not pay)`,

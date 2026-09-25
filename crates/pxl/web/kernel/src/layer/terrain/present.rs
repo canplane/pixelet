@@ -25,13 +25,13 @@ use xpute_core::status::errno::Errno;
 /// on screen is inside both chunks' bounds, so both are seen: a pair the view
 /// does not see both of has no step to hide. Held to it anyway, ground the
 /// frustum leaves at the pyramid's top — which is never refined — coarsened
-/// the ground under the eye, a level a step, from the screen's edge inwards.
+/// the ground under the eye, a level a step, from the screen's edge inward.
 ///
-/// Every chunk too coarse for a neighbour is refined where the view wants it
+/// Every chunk too coarse for a neighbor is refined where the view wants it
 /// finer and something the cover can draw it from is held — its four
 /// children in its place, never finer than the view wants, so no more
 /// chunks than the view has. Then what is still too fine for a coarse
-/// neighbour is coarsened: its sibling group and everything under it
+/// neighbor is coarsened: its sibling group and everything under it
 /// becomes the nearest chunk over it the cover can draw. Where none is it
 /// stays as it is, a seam until a page over it comes, where opening it would
 /// show nothing there at all. The first pass only makes chunks finer and

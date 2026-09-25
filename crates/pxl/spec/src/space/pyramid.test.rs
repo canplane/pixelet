@@ -2,11 +2,11 @@
 
 use super::*;
 
-/// A block of cells is a cell of a coarser level, so a cell's centre and
+/// A block of cells is a cell of a coarser level, so a cell's center and
 /// its block's are one computation: the block's cell `up` levels over, its
 /// XY the middle of its span and its Z half its side above the ground.
 #[test]
-fn a_cells_centre_is_its_middle_and_half_its_side_above_the_ground() {
+fn a_cells_center_is_its_middle_and_half_its_side_above_the_ground() {
     let point = Pvf3 {
         i: ivec::gather(-1234, 5678, 0),
         ..Default::default()
@@ -18,7 +18,7 @@ fn a_cells_centre_is_its_middle_and_half_its_side_above_the_ground() {
         assert_eq!(cell.up(2), GROUND.cell_of(level + 2, &point), "a block is the cell over it");
         let side = cell.side();
         let mut at = [0.0; 3];
-        let c = cell.centre(10.0);
+        let c = cell.center(10.0);
         projection::unproject(&mut at, c.i, c.f);
         let base = cell.base();
         assert_eq!(at[2], 10.0 + side / 2.0);
@@ -94,14 +94,14 @@ fn a_coarser_lattices_cell_is_the_grounds_cell_as_many_levels_up() {
     }
 }
 
-/// A page's children in its neighbourhood are its children, and a cell and
+/// A page's children in its neighborhood are its children, and a cell and
 /// the block it folds from are parent and children whichever child page the
 /// cell lies in: `child_block` gives back the cell `parent_cell` names, in
 /// every lattice a page is cut into.
 #[test]
 fn a_parent_cell_and_its_child_block_are_one_relation() {
     let p = LevelPage::new(3, ivec::gather(-5, 7, 0));
-    let around = neighbourhood(p);
+    let around = neighborhood(p);
     assert!((0..4).all(|q| around[CHILDREN[q]] == p.children()[q]));
     for lattice in [GROUND, Lattice::new(GROUND.scale(0).up(4))] {
         let n = lattice.page_cells();

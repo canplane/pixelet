@@ -63,7 +63,7 @@ export function load_model(key: u64, load: u32): Promise<void> {
 }
 
 /** An image, as the kernel's renderer uploads it: the file's own pixels, top
- * row first, no colour conversion and no premultiplied alpha. */
+ * row first, no color conversion and no premultiplied alpha. */
 export function load_image(key: u64, load: u32): Promise<void> {
   return read(key, load, async (res) => {
     const image = await createImageBitmap(await res.blob(), { colorSpaceConversion: "none", premultiplyAlpha: "none" });

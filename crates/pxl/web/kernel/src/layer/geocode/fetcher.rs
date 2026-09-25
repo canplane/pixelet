@@ -1,7 +1,7 @@
 // pxl-kernel/layer/geocode/fetcher.rs
 
 //! Demands the two packets a label is read out of: the dictionary, once a
-//! session, and the group the map centre is in, whenever the centre leaves
+//! session, and the group the map center is in, whenever the center leaves
 //! the one held.
 //!
 //! The wishlist is two keys, so it is rebuilt every turn rather than guarded
@@ -9,7 +9,7 @@
 //! and a key that has not changed costs a comparison.
 //!
 //! A key the store has any answer for is not asked about again, and the one
-//! thing that re-opens a question is the centre moving to a different group
+//! thing that re-opens a question is the center moving to a different group
 //! (store.rs). The group's own question re-opens by itself, since the store
 //! holds one group and a different one is a different key; the dictionary's
 //! has to be re-opened here.
@@ -33,8 +33,8 @@ pub const DICT_CATEGORY: Category = Category::geocode_dict;
 /// The dictionary is a stream of one, so its key names no page.
 const DICT_SUBJECT: u64 = 0;
 
-/// The group the map centre's page is in.
-pub fn centre_group() -> Option<IVec> {
+/// The group the map center's page is in.
+pub fn center_group() -> Option<IVec> {
     map_store().map_center.map(|c| ivec::sh(L3_IDX(c.i), -(GROUP_SHAMT as i32)))
 }
 
@@ -49,7 +49,7 @@ pub fn geocode_fetcher_step() {
     let dict = [(DICT_SUBJECT, policy::geocode())];
     declare(DICT_CATEGORY, if store::dict_answered() { &[] } else { &dict });
 
-    match centre_group() {
+    match center_group() {
         Some(idx) if store::answered() != Some(idx) => declare(CATEGORY, &[(idx, policy::geocode())]),
         _ => declare(CATEGORY, &[]),
     }

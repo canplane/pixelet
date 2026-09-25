@@ -27,7 +27,7 @@ fn device_coord() -> Option<Pvf3> {
 }
 
 /// Device location projected into canonical PVF3 world space, and whether
-/// the map centre has wandered off it as of this turn.
+/// the map center has wandered off it as of this turn.
 pub fn map_navigation() -> MapNavigation {
     MapNavigation {
         device_coord: device_coord(),
@@ -35,7 +35,7 @@ pub fn map_navigation() -> MapNavigation {
     }
 }
 
-/// Whether the map centre is off the device, decided once a turn.
+/// Whether the map center is off the device, decided once a turn.
 pub fn map_navigation_step() {
     let off = OFF_CENTER.get(|| false);
     // Off-center hysteresis over horizontal (X/Y only) distance, not full 3D.

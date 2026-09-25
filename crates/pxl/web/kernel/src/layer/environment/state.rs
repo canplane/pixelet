@@ -26,7 +26,7 @@ use crate::layer::environment::theme_clock::theme_key;
 use crate::shell::map_store::map_store;
 use crate::world::change::{request_world_tick, wake_at};
 use crate::world::chunk::table::Frame;
-use crate::world::frame::view::camera_centre;
+use crate::world::frame::view::camera_center;
 use crate::world::pyramid::Layer as _;
 
 // The map's own fallback, so the first frames before map_center exists light
@@ -38,7 +38,7 @@ use crate::world::pyramid::Layer as _;
 // tick; the clock only needs one this often.
 const ENV_CLOCK_FRAME_MS: f64 = 2000.0;
 
-/// The theme as the environment takes it: colours in linear light.
+/// The theme as the environment takes it: colors in linear light.
 pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: Theme) {
     let t = themes(key);
     let mut k = 0;
@@ -56,7 +56,7 @@ pub fn write_theme(lane: &mut [f32; THEME_FLOATS], key: Theme) {
 
 struct Environment {
     theme_key: Option<Theme>,
-    observed_centre: Option<Pvf3>,
+    observed_center: Option<Pvf3>,
     observed_lat: f64,
     observed_lon: f64,
     clock_frame_at: f64,
@@ -67,21 +67,21 @@ static ENVIRONMENT: Global<Environment> = Global::new();
 fn environment() -> &'static mut Environment {
     ENVIRONMENT.get(|| Environment {
         theme_key: None,
-        observed_centre: None,
+        observed_center: None,
         observed_lat: FALLBACK_G4326[1],
         observed_lon: FALLBACK_G4326[0],
         clock_frame_at: 0.0,
     })
 }
 
-/// A world unit's true length where the map is, in kilometres: the
+/// A world unit's true length where the map is, in kilometers: the
 /// projection's, which Mercator stretches by the secant of the latitude, in
 /// either axis alike since heights are stretched with it.
 pub fn km_per_u() -> f64 {
     epsg3857::M_PER_U * environment().observed_lat.to_radians().cos() / 1000.0
 }
 
-/// The sphere about the camera centre (view.rs's camera_centre), which the
+/// The sphere about the camera center (view.rs's camera_center), which the
 /// flat map is laid back on (pxl-render's look/globe.rs), for the chunks'
 /// culling as the renderer takes it for its frame.
 pub fn globe() -> Globe {
@@ -103,12 +103,12 @@ pub fn map_environment_step() {
         request_world_tick();
     }
 
-    // Observed from the camera centre, the one the world is laid on the
+    // Observed from the camera center, the one the world is laid on the
     // planet about, so the sphere's latitude and the sky over it are its.
-    let centre = map_store().map_center.map(|_| camera_centre());
-    if centre != e.observed_centre {
-        e.observed_centre = centre;
-        if let Some(c) = centre {
+    let center = map_store().map_center.map(|_| camera_center());
+    if center != e.observed_center {
+        e.observed_center = center;
+        if let Some(c) = center {
             let mut g = [0.0; 3];
             epsg4326::unproject(&mut g, c.i, c.f);
             e.observed_lon = g[0];
@@ -126,9 +126,9 @@ pub fn map_environment_step() {
 
 // ---- the environment as the kernel eases it ----
 //
-// Where the sun and the moon are, and the theme's light, fog and sky colours,
+// Where the sun and the moon are, and the theme's light, fog and sky colors,
 // eased toward the time of day's theme. The inputs come from above — the
-// theme's colours when the theme changes, and each tick the observer's
+// theme's colors when the theme changes, and each tick the observer's
 // latitude and longitude and the wall clock; this places the sun and the moon
 // from the clock and eases everything toward its target. What the frame is lit
 // with is composed from that by the view (crates/pxl/web/render/src/look/environment.rs).
@@ -272,11 +272,11 @@ impl EnvironmentDraw {
         for k in 0..THEME_FLOATS {
             self.current[k] += (self.target[k] - self.current[k]) * a as f32;
         }
-        // The camera's height over the planet, measured from its centre,
-        // under the camera centre by the radius (look/globe.rs): the world is
-        // tangent to the planet at the camera centre, and the planet falls
+        // The camera's height over the planet, measured from its center,
+        // under the camera center by the radius (look/globe.rs): the world is
+        // tangent to the planet at the camera center, and the planet falls
         // away under a camera standing off it. Above the sea, it is that and
-        // the camera centre's height.
+        // the camera center's height.
         let km_per_u = km_per_u();
         let r = Globe::at(self.lat.to_radians()).radius_u();
         let over = frame.camera[0].hypot(frame.camera[1]).hypot(frame.camera[2] + r) - r;
@@ -297,7 +297,7 @@ impl EnvironmentDraw {
             fog_near: band.0,
             fog_far: band.1,
             floor: light_cfg::FLOOR,
-            altitude_km: (frame.centre_z + over) * km_per_u,
+            altitude_km: (frame.center_z + over) * km_per_u,
             ground_km: eye_ground() * km_per_u,
             km_per_u,
             latitude: self.lat.to_radians(),

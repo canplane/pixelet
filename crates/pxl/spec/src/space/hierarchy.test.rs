@@ -70,7 +70,7 @@ fn a_point_lies_in_the_side_whose_corner_is_under_it() {
 }
 
 /// Two nodes share ground exactly when one lies under the other, however
-/// many levels apart, and a node shares none with its neighbour's children.
+/// many levels apart, and a node shares none with its neighbor's children.
 #[test]
 fn nodes_share_ground_only_where_one_lies_under_the_other() {
     let at = (Scale::of(4), [3i64, -2]);

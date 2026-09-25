@@ -20,7 +20,7 @@ const SAME_SURFACE_EPS: f64 = 1e-6;
 /// The z extents of every placed object whose footprint covers a local XY,
 /// gathered in one pass over the column the point stands in.
 ///
-/// One pass rather than a 27-cell neighbourhood query at each step upward: with
+/// One pass rather than a 27-cell neighborhood query at each step upward: with
 /// nothing placed at the XY a probe runs to its 64-cell guard on every call,
 /// and the companion asks twice a frame. A placed object is at most a cell and
 /// lies inside one, so one whose footprint covers the point is in the point's

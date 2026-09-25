@@ -144,7 +144,7 @@ filled by the bakes, offline
 
 The four roots are written in one file, `spec/pxl/spec/route.json`, and every relay reads them from there. A green push to the `deploy` branch takes a build number, deploys whichever half its files touched, and smoke-tests the result; [infra/README.md](./infra/README.md) has the procedures by hand.
 
-Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and **XTP**, a relocatable binary tree read without copying. One piece of the kernel is a port rather than a dependency: evanw/buddy-malloc, under the heap, and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) carries what its licence asks.
+Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and **XTP**, a relocatable binary tree read without copying. One piece of the kernel is a port rather than a dependency: evanw/buddy-malloc, under the heap, and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) carries what its license asks.
 
 ---
 
@@ -159,7 +159,7 @@ Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and *
 │           ├── app/ page/    #   the frame, the router, the pages
 │           ├── feature/      #   a screen's own pieces: map, search, setting, character, dev
 │           ├── catalog/      #   the data screens show (cells, assets, geocode)
-│           ├── locale/       #   i18n catalogues, dev-only ones apart
+│           ├── locale/       #   i18n catalogs, dev-only ones apart
 │           ├── config/       #   deployment config and routes
 │           └── shared/       #   shared UI kit and browser helpers
 ├── crates/                   # The Rust workspace, grouped by where a crate runs

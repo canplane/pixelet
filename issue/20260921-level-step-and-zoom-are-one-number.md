@@ -121,7 +121,7 @@ decoration too, and it scatters it from the leaves under it rather than from
 its own record. **Decoration is always a function of the level-0 ground**,
 which is why it needs no aggregation of its own. What holds it there is that
 the leaves are resident wherever it reaches: level 0 is held while any ground
-within 512 u of the view centre is in view, which is how far the leaves' ring
+within 512 u of the view center is in view, which is how far the leaves' ring
 draws (below), and an assert holds `96 · max_extent` inside those 512 u.
 
 ## Rings, and the window
@@ -199,7 +199,7 @@ that left — the layout stays settled at compile time.
 Its top is the level the farthest ground wants, and at least the level whose
 ring covers all the ground in view. The slack is only a third, and a wide
 screen's upper corners see further than its middle, so the first can fall
-short. The ground in view is measured from the view centre at the frustum's
+short. The ground in view is measured from the view center at the frustum's
 four corners on the ground — a frustum meets a plane in a convex footprint, so
 its farthest point is a corner — or, where a corner meets no ground before fog,
 on fog's circle around the eye's foot as far round as that corner's bearing.
@@ -234,7 +234,7 @@ Three rules fall out for the stream:
   and record together, so a page cannot be evicted from under its own request;
   across levels this is the rule that replaces a hole with a blurrier answer.
   A page kept past its ring goes when another page takes its record.
-- **A coarse request is not cancelled by a zoom in.** It is small, it stays
+- **A coarse request is not canceled by a zoom in.** It is small, it stays
   valid far longer than a fine one, and a zoom back out draws it first. It is
   kept while it runs, and only while its level's record group is one the
   window leaves free: arriving, it would otherwise take a held page's record,
@@ -346,7 +346,7 @@ the land channel a fallback the others have none of; `show_structures` skips
 one channel for a dev toggle; `sea` is a land value with its high bit set so a
 channel stays one byte. All three are meant to be there, and each becomes a
 column of the catalog rather than a branch when it is worth the move. The
-fourth is `WATER_RECESS_CELLS`, and its own neighbour says why it is not
+fourth is `WATER_RECESS_CELLS`, and its own neighbor says why it is not
 really a channel's business: `is_water_family` checks `land.sea` separately
 "because cube.rs models it as land.sea", so water-family already crosses the
 channel boundary and is a property of the type.
@@ -425,7 +425,7 @@ map wants; half-or-nothing drops it at once. This project is not a map.
 
 z10 is not shown as the z10 page but as z11 averaged. Step `2^(k+1)` is
 always level `k`'s cells averaged 2×2 — a coarse tier of the mesher, which
-averages colour, volume, objects and textures alike, as every coarse tier did
+averages color, volume, objects and textures alike, as every coarse tier did
 before there were levels — and only the leaves are also drawn as they are, for
 step 1.
 
@@ -439,7 +439,7 @@ mean, where it reads as texture.
 Drawn at its own cells, a level would also disagree with the one below it. It
 would show step `2^(k+1)` as the vote, where the level below shows the same
 step as the mean of the same four cells, and every level's edge would change
-colour. With one rule each step is drawn one way, and a split or a merge moves
+color. With one rule each step is drawn one way, and a split or a merge moves
 between adjacent steps drawn from adjacent levels, each the mean of its own.
 
 What it costs is the ring's slack, which drops from 2.67 to 1.33, and the
@@ -516,7 +516,7 @@ no TypeScript twin to hold it to.
 
 One asymmetry survives. Ground folds from the 2×2 block alone. Elevation does
 not: a parent's two-sample skirt reaches 64 child cells past the block and a
-child carries only 32, so the fold reads a rim from the neighbours. Offline
+child carries only 32, so the fold reads a rim from the neighbors. Offline
 that is a window over a sorted key space. In the client it means a page is
 folded only where the sixteen pages around its children are held, not just
 the four under it — so zooming out is served without the network where the
@@ -579,11 +579,11 @@ of the rule being measured: a maximum spreads a type, which is why buildings
 saturated at level 1. Under half-or-nothing nothing spreads, and the table is
 not needed.
 
-**Majority against nearest-neighbour for the land channel.** Both were run
-over real pages. Area error after six folds: 2.23% for nearest-neighbour,
+**Majority against nearest-neighbor for the land channel.** Both were run
+over real pages. Area error after six folds: 2.23% for nearest-neighbor,
 4.89% for majority, with the two disagreeing on where they put things by up to
 36.7%. A first run had majority at 57.76% because ties were broken toward the
-smaller type id, which favours `bare`; broken toward the nearest child it is a
+smaller type id, which favors `bare`; broken toward the nearest child it is a
 wash. Area fidelity does not choose between them, so the tie rule is what
 survived into the rule above.
 

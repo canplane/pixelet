@@ -15,23 +15,23 @@ Alpha is the wrong answer — a voxel renderer's whole cost model assumes
 opaque, unsorted geometry, and partial transparency would drag in ordering
 problems for something that is not actually translucent. So the choices are
 geometric or photometric: draw a smaller box, or draw a full box in a
-different colour, or refuse to merge the cell at all (the sparse-voxel-octree
+different color, or refuse to merge the cell at all (the sparse-voxel-octree
 answer, which costs geometry exactly where the merge was supposed to save
 it).
 
 ## What was there, what replaced it, what came back
 
 The original coarse tier shrank the box isotropically by the cube root of its
-fill fraction, centred in its own cell. Over the day that was replaced twice
+fill fraction, centered in its own cell. Over the day that was replaced twice
 and then restored:
 
-|          | model                                                | why it was tried                               | why it was dropped                            |
-| -------- | ---------------------------------------------------- | ---------------------------------------------- | --------------------------------------------- |
-| original | `cbrt(fill)` shrink, centred                         | density is size; needs no alpha and no sort    | thought incompatible with a dither cross-fade |
-| B        | full-size box, colour dimmed by fill, cull below 25% | a dissolve needs both tiers in the same volume | dilates a lone block 8x or erases it          |
-| B′       | as B, but Z kept at fine resolution                  | distant terrain read flat                      | made XY the privileged axis                   |
-| C        | box fitted per axis to the voxels present            | fixes both, and is symmetric _within_ a cell   | still decimates XY only                       |
-| final    | back to `cbrt(fill)`, centred                        | no axis is special                             | —                                             |
+|          | model                                               | why it was tried                               | why it was dropped                            |
+| -------- | --------------------------------------------------- | ---------------------------------------------- | --------------------------------------------- |
+| original | `cbrt(fill)` shrink, centered                       | density is size; needs no alpha and no sort    | thought incompatible with a dither cross-fade |
+| B        | full-size box, color dimmed by fill, cull below 25% | a dissolve needs both tiers in the same volume | dilates a lone block 8x or erases it          |
+| B′       | as B, but Z kept at fine resolution                 | distant terrain read flat                      | made XY the privileged axis                   |
+| C        | box fitted per axis to the voxels present           | fixes both, and is symmetric _within_ a cell   | still decimates XY only                       |
+| final    | back to `cbrt(fill)`, centered                      | no axis is special                             | —                                             |
 
 The measurable defect that killed B′ is worth keeping: its fill number mixed
 resolutions, a coarse XY footprint over a fine Z height. At `lod_step` 8,
@@ -52,13 +52,13 @@ heightfield mipmap: filter the coordinate, not the value.
 That argument is correct about the mechanism and wrong about the decision.
 It buys smoother distant ground by assuming the camera stays near-top-down
 and the data stays surface-shaped — assumptions about today, not about
-voxels. And it does not survive its own generalisation: the pipeline's
+voxels. And it does not survive its own generalization: the pipeline's
 `ColumnRunSet` is already XY-indexed with Z run-length encoded, so making the
 LOD anisotropic too compounds an existing asymmetry rather than paying for
 it once.
 
 The final position: **no axis is a first-class citizen.** One cubic lattice,
-one scalar occupancy over `lod_step³`, one cube root, centred. Mesh a chunk
+one scalar occupancy over `lod_step³`, one cube root, centered. Mesh a chunk
 on its side and you get the same chunk on its side. The cost is real and
 accepted — flat ground shrinks too, and distant terrain reads as separated
 cubes rather than a continuous sheet. That look is the price of a rule with
@@ -68,7 +68,7 @@ angle.
 Two things were kept from the failed attempts, because they were independent
 of the axis question:
 
-- **Colour is a surface average, not a volumetric one.** Only the topmost run
+- **Color is a surface average, not a volumetric one.** Only the topmost run
   of each sub-column contributes. A cell of grass over twenty of rock used to
   come out almost entirely rock, though grass is all you can see.
 - **Full cells stay ordinary runs.** A cell at fill 1 shrinks by nothing, so
@@ -84,7 +84,7 @@ with X/Y silently ignoring the tier's scale.
 ## The cross-fade, and why zooming out popped
 
 Two ways to spend an LOD transition band. Per chunk: a stable hash picks one
-tier for the whole chunk, so neighbours cross at different moments — cheap,
+tier for the whole chunk, so neighbors cross at different moments — cheap,
 nothing drawn twice, and it reads as chunks flipping one at a time. Per
 fragment: both tiers draw, punched with dither patterns — a real dissolve, at
 the cost of drawing a blending chunk twice.
@@ -148,7 +148,7 @@ right turned out to be three separate mistakes, all the same shape — a bit
 that answered a _culling_ question being read as a _shading_ one.
 
 1. **Chunk boundaries.** A face at a chunk edge is emitted without ever
-   looking at the neighbour, so its face bit says "exists" while the world
+   looking at the neighbor, so its face bit says "exists" while the world
    says "flat ground continues". Fixed earlier by separating `CREASE_*` bits
    from face bits.
 
@@ -160,7 +160,7 @@ that answered a _culling_ question being read as a _shading_ one.
 
 3. **Walls capped by a user cube.** The shader read `FACE_PZ` as "is this
    wall capped" — a proxy that only holds for terrain, since an object keeps
-   its neighbour's face alive.
+   its neighbor's face alive.
 
 The general rule that came out of it: **culling gets to be conservative,
 shading has to be accurate.** They now ask separately. `HIDES_SIDE` and the
@@ -184,7 +184,7 @@ the point where it isn't.
 
 **A `THREE.Sprite` is depth-tested as a point, not as a surface.** Its vertex
 shader offsets the quad's corners in view-space XY and leaves view Z at the
-sprite centre's, so every fragment carries the anchor's depth. The depth
+sprite center's, so every fragment carries the anchor's depth. The depth
 _test_ is still per fragment. So a badge is not compared against the world as
 a thing occupying space — each of its pixels is asked "is the terrain behind
 _you_ nearer than my anchor?", and different pixels get different answers.
@@ -246,7 +246,7 @@ preference.
 One thing from the failed attempt was kept, because it never depended on any
 of this: a chat bubble draws over a POI badge (`BILLBOARD_ORDER.chat` 10001
 vs `.poi` 10000). A bubble is something a person is saying right now and it
-expires; a badge labels a fixed place and will still be there afterwards.
+expires; a badge labels a fixed place and will still be there afterward.
 Named at both call sites rather than defaulted, so the hierarchy is visible
 where it is chosen.
 

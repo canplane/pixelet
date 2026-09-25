@@ -1,7 +1,7 @@
 // @pxl/web/shared/ui/text-field.tsx
 
 /**
- * A text input that carries the two browser behaviours nobody remembers
+ * A text input that carries the two browser behaviors nobody remembers
  * until they are bitten by them.
  *
  * **iOS zooms the page** when a focused input's computed font-size is under
@@ -14,7 +14,7 @@
  * two tokens inside one component's class string, discovered once and then
  * not applied to the next input anyone wrote. The search bar zoomed for
  * exactly that reason. It is appended *after* the caller's className so
- * tailwind-merge resolves it in this component's favour: a caller cannot
+ * tailwind-merge resolves it in this component's favor: a caller cannot
  * reintroduce the bug by passing `text-sm`, which is the whole point. A field
  * that genuinely wants a different size can set one in `style`.
  *

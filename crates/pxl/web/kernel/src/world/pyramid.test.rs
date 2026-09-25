@@ -18,7 +18,7 @@ fn the_domain() -> Domain {
     let eye = Eye {
         at: [ivec::X(anchor()) as f64, ivec::Y(anchor()) as f64, HEIGHT],
         foot: anchor(),
-        centre: [ivec::X(anchor()) as f64, ivec::Y(anchor()) as f64, 0.0],
+        center: [ivec::X(anchor()) as f64, ivec::Y(anchor()) as f64, 0.0],
     };
     domain_for(&eye, HEIGHT, None, 0)
 }
@@ -183,10 +183,10 @@ fn the_terrain_draws_its_cover_balanced_and_still_whole() {
 }
 
 /// Fine ground that arrived before anything over it stays drawn beside a
-/// coarse neighbour rather than opening: an island's land beside the sea a
+/// coarse neighbor rather than opening: an island's land beside the sea a
 /// coarse page draws.
 #[test]
-fn fine_ground_with_nothing_held_over_it_is_drawn_beside_a_coarse_neighbour() {
+fn fine_ground_with_nothing_held_over_it_is_drawn_beside_a_coarse_neighbor() {
     let _serial = crate::global::serial();
     let d = the_domain();
     let level4 = |c: Chunk| c.ancestors().find(|a| a.level() == 4).expect("a level-4 chunk over it");
@@ -236,25 +236,25 @@ fn a_gap_the_mesh_leaves_is_asked_for() {
     }
 }
 
-/// The view is asked for out from its centre, one order for every layer:
-/// the page the ground nearest the centre is drawn from first, then the
+/// The view is asked for out from its center, one order for every layer:
+/// the page the ground nearest the center is drawn from first, then the
 /// pyramid's top, then every page the view draws ground from nearest the
-/// centre first, and the pages held only for finer ground to fall back on
+/// center first, and the pages held only for finer ground to fall back on
 /// last.
 #[test]
-fn the_view_is_asked_for_out_from_its_centre() {
+fn the_view_is_asked_for_out_from_its_center() {
     let _serial = crate::global::serial();
     let mut pyramid = Pyramid::<PoiPage>::default();
     let d = the_domain();
     let order: std::collections::HashMap<u64, Option<f64>> = d.pages().map(|(p, o)| (p.subject(), o)).collect();
-    let centre = d.pages().filter_map(|(p, o)| o.map(|o| (o, p))).min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, p)| p.subject());
+    let center = d.pages().filter_map(|(p, o)| o.map(|o| (o, p))).min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, p)| p.subject());
     pyramid.domain = Some(d);
     let mut wants = pyramid.wants();
     wants.sort_by(|a, b| a.1.class.cmp(&b.1.class).then(a.1.distance.total_cmp(&b.1.distance)));
-    assert_eq!(Some(wants[0].0), centre, "the page under the centre first");
+    assert_eq!(Some(wants[0].0), center, "the page under the center first");
     let shell = |s: u64| {
         let p = LevelPage::of_subject(s);
-        if Some(s) == centre {
+        if Some(s) == center {
             0
         } else if p.level == TOP_LEVEL {
             1
@@ -265,9 +265,9 @@ fn the_view_is_asked_for_out_from_its_centre() {
         }
     };
     let shells: Vec<u8> = wants.iter().map(|(s, _)| shell(*s)).collect();
-    assert!(shells.windows(2).all(|w| w[0] <= w[1]), "centre, top, drawn, fallback: {shells:?}");
+    assert!(shells.windows(2).all(|w| w[0] <= w[1]), "center, top, drawn, fallback: {shells:?}");
     let drawn: Vec<f64> = wants.iter().filter(|(s, _)| shell(*s) == 2).map(|(s, _)| order[s].expect("drawn")).collect();
-    assert!(drawn.windows(2).all(|w| w[0] <= w[1]), "drawn pages nearest the centre first");
+    assert!(drawn.windows(2).all(|w| w[0] <= w[1]), "drawn pages nearest the center first");
 }
 
 /// The pinned page keeps its record through every page a view wants

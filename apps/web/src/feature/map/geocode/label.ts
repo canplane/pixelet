@@ -1,7 +1,7 @@
 // @pxl/web/feature/map/geocode/label.ts
 //
 // One place's name assembled into a line. Shared by the address pill, which
-// reads the place the map centre is in out of the kernel snapshot, and by
+// reads the place the map center is in out of the kernel snapshot, and by
 // search/modal.tsx, which reads each result's own context off the search
 // API — the same shape from both, so the two cannot read it differently.
 

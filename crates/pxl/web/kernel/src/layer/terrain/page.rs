@@ -94,7 +94,7 @@ impl Layer for Terrain {
         crate::layer::terrain::present::mesh(cover, d, |c| pyramid.drawn_from(c.page()).is_some())
     }
 
-    /// A leaf is what a map centre that could not be grounded before may be
+    /// A leaf is what a map center that could not be grounded before may be
     /// grounded on now. The chunks are told nothing: which a view draws is
     /// the cover's, made again from the pyramid's revision, and a chunk
     /// whose page has gone leaves it.

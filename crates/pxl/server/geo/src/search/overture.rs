@@ -55,7 +55,7 @@ LIMIT $2";
 /// tiebreaker for exactly-equal names and nothing else, so "스타벅스 강남대로"
 /// at 0.61 sorted ahead of every "스타벅스" at 0.60 no matter which continent
 /// each was on — a difference of one trigram outranking a difference of a
-/// thousand kilometres. A band collapses scores that are indistinguishable as
+/// thousand kilometers. A band collapses scores that are indistinguishable as
 /// answers into one tie, and distance then decides inside the band. Two
 /// decimals is roughly "the same name, modulo a word": it does not let a
 /// genuinely worse match win on proximity, since those differ by far more
