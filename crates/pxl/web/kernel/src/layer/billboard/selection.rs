@@ -21,8 +21,7 @@
 //! at first, a stable hash of each candidate's own id breaking ties, which is
 //! the order a list of them is read in.
 
-use xpute_core::math::mat4::mat4_transform_point;
-use xpute_core::math::vec3::Vec3;
+use pxl_spec::space::mat4::mat4_transform_point;
 
 use crate::layer::billboard::batch::BillboardBatch;
 use crate::layer::billboard::distance_fade::distance_fade_far;
@@ -53,7 +52,7 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
     let eye = v.eye;
 
     let mut n = 0usize;
-    let mut pos = Vec3::default();
+    let mut pos = [0.0; 3];
     let globe = globe();
     for i in 0..batch.count as usize {
         // Through the root and onto the planet, as badge.wgsl places it,
@@ -61,15 +60,14 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
         // measured from, and the point the screen box is projected from —
         // done once, and kept in the lanes.
         mat4_transform_point(&mut pos, &v.root, batch.local_x[i], batch.local_y[i], batch.local_z[i]);
-        let [x, y, z] = globe.place_turned([pos.x, pos.y, pos.z], v.root[1], v.root[0]);
-        let pos = Vec3 { x, y, z };
-        let dist2 = (pos.x - eye.x).powi(2) + (pos.y - eye.y).powi(2) + (pos.z - eye.z).powi(2);
-        if !view_sees_sphere(pos.x, pos.y, pos.z, dist2.sqrt() * ANCHOR_REACH) {
+        let pos = globe.place_turned(pos, v.root[1], v.root[0]);
+        let dist2 = (pos[0] - eye[0]).powi(2) + (pos[1] - eye[1]).powi(2) + (pos[2] - eye[2]).powi(2);
+        if !view_sees_sphere(pos[0], pos[1], pos[2], dist2.sqrt() * ANCHOR_REACH) {
             continue;
         }
-        batch.world_x[i] = pos.x;
-        batch.world_y[i] = pos.y;
-        batch.world_z[i] = pos.z;
+        batch.world_x[i] = pos[0];
+        batch.world_y[i] = pos[1];
+        batch.world_z[i] = pos[2];
         batch.d2[i] = dist2;
         batch.order[n] = i as u32;
         n += 1;
@@ -88,7 +86,7 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
     batch.order[..n].sort_by(|&a, &b| at(a).total_cmp(&at(b)).then(tiebreak[a as usize].total_cmp(&tiebreak[b as usize])));
 
     out.clear();
-    let mut ndc = Vec3::default();
+    let mut ndc = [0.0; 3];
 
     for k in 0..n {
         let i = batch.order[k] as usize;
@@ -101,8 +99,8 @@ pub fn select_visible_billboards(batch: &mut BillboardBatch, viewport_w: f64, vi
         }
 
         mat4_transform_point(&mut ndc, &v.view_proj, batch.world_x[i], batch.world_y[i], batch.world_z[i]);
-        let sx = (ndc.x * 0.5 + 0.5) * viewport_w;
-        let sy = (-ndc.y * 0.5 + 0.5) * viewport_h;
+        let sx = (ndc[0] * 0.5 + 0.5) * viewport_w;
+        let sy = (-ndc[1] * 0.5 + 0.5) * viewport_h;
 
         // Canvas Y and screen Y both grow downward, so the anchor's canvas offset
         // reads straight across: the box's top sits that far above the

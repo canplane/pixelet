@@ -15,12 +15,12 @@
 //!
 //! Held here the matrices are current the moment a step writes them.
 
-use pxl_spec::space::pvf3::ivec::{self, IVec};
-use pxl_spec::space::pvf3::pvf3::Pvf3;
-use xpute_core::math::mat4::{
+use pxl_spec::space::mat4::{
     mat4, mat4_frustum_planes, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_rotation_z, mat4_transform_direction, mat4_transform_point, mat4_translation, Mat4,
 };
-use xpute_core::math::vec3::Vec3;
+use pxl_spec::space::pvf3::ivec::{self, IVec};
+use pxl_spec::space::pvf3::pvf3::Pvf3;
+use pxl_spec::space::v3::V3;
 
 use crate::control::camera::config::camera_cfg;
 use crate::control::camera::orbit::orbit_local_offset;
@@ -29,8 +29,8 @@ use crate::layer::environment::config::render_cfg;
 use crate::layer::environment::fog::{far_clip_at, height_at, near_clip_at};
 use crate::world::frame::coord::local_world_to_canonical;
 
-const UP: Vec3 = Vec3 { x: 0.0, y: 0.0, z: 1.0 };
-const ORIGIN: Vec3 = Vec3 { x: 0.0, y: 0.0, z: 0.0 };
+const UP: V3 = [0.0, 0.0, 1.0];
+const ORIGIN: V3 = [0.0, 0.0, 0.0];
 
 pub struct View {
     // ---- the controls as drawn, written by their damping steps ----
@@ -58,9 +58,9 @@ pub struct View {
 
     // ---- composed ----
     /// The eye, in the view's own frame.
-    pub eye: Vec3,
+    pub eye: V3,
     /// The eye in the root frame, where everything is placed.
-    pub eye_local: Vec3,
+    pub eye_local: V3,
     /// View-frame to camera, and back: the camera's own matrix.
     pub view_matrix: Mat4,
     pub inv_view_matrix: Mat4,
@@ -93,8 +93,8 @@ impl View {
             fov: camera_cfg::projection::FOV,
             near: camera_cfg::projection::NEAR,
             far: render_cfg::FAR_CLIP,
-            eye: Vec3 { x: 0.0, y: 0.0, z: 1.0 },
-            eye_local: Vec3 { x: 0.0, y: 0.0, z: 1.0 },
+            eye: [0.0, 0.0, 1.0],
+            eye_local: [0.0, 0.0, 1.0],
             view_matrix: mat4(),
             inv_view_matrix: mat4(),
             proj: mat4(),
@@ -143,11 +143,7 @@ pub fn view_resize(width: f64, height: f64) {
 pub fn view_compose() {
     let v = view();
     let o = orbit_local_offset(v.dist, v.polar);
-    v.eye = Vec3 {
-        x: 0.0,
-        y: -o.horiz_dist,
-        z: o.vert_dist,
-    };
+    v.eye = [0.0, -o.horiz_dist, o.vert_dist];
     mat4_look_at(&mut v.view_matrix, v.eye, ORIGIN, UP);
     let vm = v.view_matrix;
     mat4_invert(&mut v.inv_view_matrix, &vm);
@@ -158,7 +154,7 @@ pub fn view_compose() {
     let root = v.root;
     mat4_invert(&mut v.inv_root, &root);
     let (inv_root, eye) = (v.inv_root, v.eye);
-    mat4_transform_point(&mut v.eye_local, &inv_root, eye.x, eye.y, eye.z);
+    mat4_transform_point(&mut v.eye_local, &inv_root, eye[0], eye[1], eye[2]);
     // The planes follow the reach, which follows the eye's height over the
     // ground under it: a view laid along the ground reaches no further than
     // the haze, and one from high up no further than the planet's own edge.
@@ -166,9 +162,9 @@ pub fn view_compose() {
     // the view a second time while this holds it.
     let o = v.origin;
     let at = [
-        ivec::to_real(ivec::X(o)) + v.eye_local.x,
-        ivec::to_real(ivec::Y(o)) + v.eye_local.y,
-        ivec::to_real(ivec::Z(o)) + v.eye_local.z,
+        ivec::to_real(ivec::X(o)) + v.eye_local[0],
+        ivec::to_real(ivec::Y(o)) + v.eye_local[1],
+        ivec::to_real(ivec::Z(o)) + v.eye_local[2],
     ];
     let height = height_at(at);
     v.near = near_clip_at(height);
@@ -184,15 +180,15 @@ pub fn view_compose() {
 
 /// The ray under a screen point, in the root frame: `ndc_x`/`ndc_y` in
 /// [−1, 1], x right and y up. `origin` is the eye and `direction` unit.
-pub fn view_ray_local(ndc_x: f64, ndc_y: f64, origin: &mut Vec3, direction: &mut Vec3) {
+pub fn view_ray_local(ndc_x: f64, ndc_y: f64, origin: &mut V3, direction: &mut V3) {
     let v = view();
     *origin = v.eye_local;
     // A point on the far plane, back through the projection and the root.
-    let mut far = Vec3::default();
+    let mut far = [0.0; 3];
     mat4_transform_point(&mut far, &v.inv_view_proj, ndc_x, ndc_y, 1.0);
     let f = far;
-    mat4_transform_point(&mut far, &v.inv_root, f.x, f.y, f.z);
-    mat4_transform_direction(direction, &mat4(), far.x - origin.x, far.y - origin.y, far.z - origin.z);
+    mat4_transform_point(&mut far, &v.inv_root, f[0], f[1], f[2]);
+    mat4_transform_direction(direction, &mat4(), far[0] - origin[0], far[1] - origin[1], far[2] - origin[2]);
 }
 
 /// Whether a sphere in the view frame meets the frustum.

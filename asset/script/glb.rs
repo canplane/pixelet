@@ -15,9 +15,9 @@
 //! `min`/`max` is what bounds the mesh, and reading a few hundred thousand
 //! vertices to rediscover it would be slower and no more correct.
 
+use pxl_spec::space::mat4::{mat4_identity, mat4_mul, mat4_transform_point, Mat4};
+use pxl_spec::space::v3::V3;
 use serde::Deserialize;
-use xpute_core::math::mat4::{mat4_identity, mat4_mul, mat4_transform_point, Mat4};
-use xpute_core::math::vec3::Vec3;
 
 #[derive(Deserialize)]
 struct Gltf {
@@ -133,8 +133,8 @@ impl Bounds {
             hi: [f64::NEG_INFINITY; 3],
         }
     }
-    fn add(&mut self, p: &Vec3) {
-        for (i, v) in [p.x, p.y, p.z].into_iter().enumerate() {
+    fn add(&mut self, p: &V3) {
+        for (i, &v) in p.iter().enumerate() {
             self.lo[i] = self.lo[i].min(v);
             self.hi[i] = self.hi[i].max(v);
         }
@@ -169,7 +169,7 @@ fn visit(gltf: &Gltf, index: usize, parent: &Mat4, bounds: &mut Bounds, depth: u
                     if corner & 2 != 0 { max[1] } else { min[1] },
                     if corner & 4 != 0 { max[2] } else { min[2] },
                 ];
-                let mut w = Vec3::default();
+                let mut w = [0.0; 3];
                 mat4_transform_point(&mut w, &world, p[0], p[1], p[2]);
                 bounds.add(&w);
             }

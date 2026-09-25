@@ -17,8 +17,8 @@
 //! the vertex stage as too faint for the frame's eight bits, and none at all
 //! while the stars are faded out, which is every hour of daylight.
 
+use pxl_spec::space::mat4::Mat4;
 use pxl_spec::space::v3::V3;
-use xpute_core::math::mat4::Mat4;
 
 use crate::frame::shader::record::PIPELINE_STARS;
 use crate::frame::stage::{stage_lane, STAGE_AT};

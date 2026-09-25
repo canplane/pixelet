@@ -16,8 +16,8 @@
 //! cannot read the map it writes — binds a blank map, where every fragment
 //! reads as lit.
 
-use xpute_core::math::mat4::{mat4, mat4_look_at, mat4_mul, Mat4};
-use xpute_core::math::vec3::Vec3;
+use pxl_spec::space::mat4::{mat4, mat4_look_at, mat4_mul, Mat4};
+use pxl_spec::space::v3::V3;
 
 use crate::frame::shader::record::FRAME_FLOATS;
 use crate::gpu::api::{buffer_usage, bytes, object, pass_desc, texture_usage, word_bytes, GpuApi, Stamp};
@@ -105,20 +105,20 @@ impl Shadow {
     /// writes the light's frame, with the frame's curve and globe: the map
     /// drawn into the shadow is the one the eye sees laid on the planet, or a
     /// far caster would shade the ground it no longer stands over.
-    pub fn aim(&mut self, g: &GpuApi, sun_dir: &[f32], target: Vec3, globe: [f32; 8]) {
-        let eye = Vec3 {
-            x: target.x + sun_dir[0] as f64 * LIGHT_DISTANCE,
-            y: target.y + sun_dir[1] as f64 * LIGHT_DISTANCE,
-            z: target.z + sun_dir[2] as f64 * LIGHT_DISTANCE,
-        };
+    pub fn aim(&mut self, g: &GpuApi, sun_dir: &[f32], target: V3, globe: [f32; 8]) {
+        let eye = [
+            target[0] + sun_dir[0] as f64 * LIGHT_DISTANCE,
+            target[1] + sun_dir[1] as f64 * LIGHT_DISTANCE,
+            target[2] + sun_dir[2] as f64 * LIGHT_DISTANCE,
+        ];
         let (mut view, mut proj) = (mat4(), mat4());
-        mat4_look_at(&mut view, eye, target, Vec3 { x: 0.0, y: 0.0, z: 1.0 });
+        mat4_look_at(&mut view, eye, target, [0.0, 0.0, 1.0]);
         ortho(&mut proj, HALF_EXTENT, 0.1, LIGHT_FAR);
         mat4_mul(&mut self.light_view_proj, &proj, &view);
         for (i, v) in self.light_view_proj.iter().enumerate() {
             self.light[VIEW_PROJ + i] = *v as f32;
         }
-        self.light[CAMERA_POS..CAMERA_POS + 3].copy_from_slice(&[eye.x as f32, eye.y as f32, eye.z as f32]);
+        self.light[CAMERA_POS..CAMERA_POS + 3].copy_from_slice(&[eye[0] as f32, eye[1] as f32, eye[2] as f32]);
         self.light[PLANET..PLANET + 4].copy_from_slice(&globe[..4]);
         self.light[GLOBE..GLOBE + 4].copy_from_slice(&globe[4..]);
         // Depth and nothing else: no vertex takes the air (frame.wgsl's

@@ -1,9 +1,9 @@
-// xpute-core/math/mat4.test.rs
+// pxl-spec/space/mat4.test.rs
 
 use super::*;
 
-fn v(x: f64, y: f64, z: f64) -> Vec3 {
-    Vec3 { x, y, z }
+fn v(x: f64, y: f64, z: f64) -> V3 {
+    [x, y, z]
 }
 
 fn assert_almost(a: f64, b: f64, tol: f64) {
@@ -28,15 +28,15 @@ fn mat4_a_matrix_times_its_inverse_is_the_identity() {
 fn mat4_look_at_puts_the_target_on_the_camera_s_z_axis_up_on_y() {
     let mut view = mat4();
     mat4_look_at(&mut view, v(0.0, -30.0, 40.0), v(0.0, 0.0, 0.0), v(0.0, 0.0, 1.0));
-    let mut target = Vec3::default();
+    let mut target = [0.0; 3];
     mat4_transform_point(&mut target, &view, 0.0, 0.0, 0.0);
-    assert_almost(target.x, 0.0, 1e-12);
-    assert_almost(target.y, 0.0, 1e-12);
-    assert_almost(target.z, -50.0, 1e-12);
+    assert_almost(target[0], 0.0, 1e-12);
+    assert_almost(target[1], 0.0, 1e-12);
+    assert_almost(target[2], -50.0, 1e-12);
     // A point above the target is up on screen.
-    let mut above = Vec3::default();
+    let mut above = [0.0; 3];
     mat4_transform_point(&mut above, &view, 0.0, 0.0, 1.0);
-    assert!(above.y > 0.0);
+    assert!(above[1] > 0.0);
 }
 
 #[test]
@@ -55,11 +55,11 @@ fn mat4_the_frustum_s_planes_hold_the_target_and_reject_what_is_behind_the_eye()
 
 /// What the TypeScript computed, recorded: the generator that wrote it
 /// is gone and the vector stands as it is (xpute-core/golden.rs).
-const GOLDEN: &str = include_str!("../../golden/math/mat4.tsv");
+const GOLDEN: &str = include_str!("../../golden/spec/space/mat4.tsv");
 
 #[test]
 fn mat4_computes_what_the_record_holds() {
-    let v = crate::golden::Golden::load(GOLDEN);
+    let v = xpute_core::golden::Golden::load(GOLDEN);
     // Exact where the arithmetic alone decides; a few ulps where a value
     // passed through a transcendental function: `libm`'s msun against V8's fdlibm.
     let exact = |name: &str, got: &[f64]| {
@@ -85,8 +85,8 @@ fn mat4_computes_what_the_record_holds() {
     mat4_translation(&mut t, 5.0, -3.0, 2.25);
     mat4_mul(&mut m, &r, &t);
     mat4_perspective(&mut persp, core::f64::consts::PI / 3.0, 1.6, 0.1, 1000.0);
-    mat4_look_at(&mut look, v3(0.5, -30.0, 40.0), v3(1.0, 2.0, 0.0), v3(0.0, 0.0, 1.0));
-    mat4_look_at(&mut up, v3(0.0, 0.0, 10.0), v3(0.0, 0.0, 0.0), v3(0.0, 0.0, 1.0));
+    mat4_look_at(&mut look, [0.5, -30.0, 40.0], [1.0, 2.0, 0.0], [0.0, 0.0, 1.0]);
+    mat4_look_at(&mut up, [0.0, 0.0, 10.0], [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
     mat4_mul(&mut vp, &persp, &look);
     mat4_invert(&mut inv, &vp);
     mat4_invert(&mut singular, &[0.0; 16]);
@@ -99,25 +99,21 @@ fn mat4_computes_what_the_record_holds() {
     near("vp", &vp);
     near("invert", &inv);
     exact("singular", &singular);
-    let mut p = Vec3::default();
+    let mut p = [0.0; 3];
     mat4_transform_point(&mut p, &vp, 3.0, -4.0, 5.0);
-    near("point", &[p.x, p.y, p.z]);
-    let mut d = Vec3::default();
+    near("point", &p);
+    let mut d = [0.0; 3];
     mat4_transform_direction(&mut d, &look, 1.0, 2.0, 3.0);
-    exact("direction", &[d.x, d.y, d.z]);
+    exact("direction", &d);
     let mut nan_w = mat4();
     mat4_translation(&mut nan_w, 1.0, 2.0, 3.0);
     nan_w[15] = f64::NAN;
-    let mut q = Vec3::default();
+    let mut q = [0.0; 3];
     mat4_transform_point(&mut q, &nan_w, 3.0, -4.0, 5.0);
-    exact("nan_w_point", &[q.x, q.y, q.z]);
+    exact("nan_w_point", &q);
     let (w, want) = (mat4_clip_w(&vp, 3.0, -4.0, 5.0), v.f64("clip_w"));
     assert!((w - want).abs() < 1e-12, "clip_w: {w} vs {want}");
     let mut planes = [0.0; 24];
     mat4_frustum_planes(&mut planes, &vp);
     near("planes", &planes);
-}
-
-fn v3(x: f64, y: f64, z: f64) -> Vec3 {
-    Vec3 { x, y, z }
 }

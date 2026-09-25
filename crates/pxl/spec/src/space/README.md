@@ -152,3 +152,4 @@ quantity (`issue/20260921-level-step-and-zoom-are-one-number.md`).
 | [`sparse_tree/`](./sparse_tree/) | an octree in two flat lanes, storing what differs from the default                                     |
 | `xy.rs`                          | `TO_XY`, which drops Z to give the key every 2D map surface is keyed by                                |
 | `v3.rs`                          | three doubles, for the arithmetic that has left the lattice                                            |
+| `mat4.rs`                        | sixteen doubles, column-major: the transforms that arithmetic is carried through                       |

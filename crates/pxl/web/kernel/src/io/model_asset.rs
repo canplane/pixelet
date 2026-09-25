@@ -28,8 +28,7 @@
 use std::collections::HashMap;
 
 use pxl_render::asset::gltf::{scene_nodes, world_matrices, Gltf};
-use xpute_core::math::mat4::{mat4_transform_direction, mat4_transform_point};
-use xpute_core::math::vec3::Vec3;
+use pxl_spec::space::mat4::{mat4_transform_direction, mat4_transform_point};
 
 use crate::kernel::with_world;
 
@@ -109,7 +108,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
 
         let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
         let (mut v0, mut i0) = (0usize, 0usize);
-        let mut p = Vec3 { x: 0.0, y: 0.0, z: 0.0 };
+        let mut p = [0.0; 3];
         for &(node_index, mesh, prim_index) in &parts {
             let node = &gltf.nodes[node_index as usize];
             let prim = &gltf.meshes[mesh][prim_index];
@@ -126,9 +125,9 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
                 let mut normal = prim.normal.as_ref().map_or([0.0, 1.0, 0.0], |nm| [nm[i * 3], nm[i * 3 + 1], nm[i * 3 + 2]]);
                 if still {
                     let at = mat4_transform_point(&mut p, world_m, x as f64, y as f64, z as f64);
-                    (x, y, z) = (at.x as f32, at.y as f32, at.z as f32);
+                    (x, y, z) = (at[0] as f32, at[1] as f32, at[2] as f32);
                     let n = mat4_transform_direction(&mut p, world_m, normal[0] as f64, normal[1] as f64, normal[2] as f64);
-                    normal = [n.x as f32, n.y as f32, n.z as f32];
+                    normal = [n[0] as f32, n[1] as f32, n[2] as f32];
                 }
                 put_f(words, lane(0) + v * 3, x);
                 put_f(words, lane(0) + v * 3 + 1, y);
@@ -156,7 +155,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
                 let at_y = if remap.is_some() || still {
                     y as f64
                 } else {
-                    mat4_transform_point(&mut p, world_m, x as f64, y as f64, z as f64).y
+                    mat4_transform_point(&mut p, world_m, x as f64, y as f64, z as f64)[1]
                 };
                 lo = lo.min(at_y);
                 hi = hi.max(at_y);

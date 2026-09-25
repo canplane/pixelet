@@ -17,7 +17,6 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pyramid::CHUNK_CELLS;
 use pxl_spec::space::v3::V3;
-use xpute_core::math::vec3::Vec3;
 
 use crate::kernel::kernel;
 use crate::world::chunk::node::World;
@@ -507,8 +506,8 @@ pub struct WorldHit {
 /// A ray as an origin and a direction: what camera/ray.rs builds from the view.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RayLike {
-    pub origin: Vec3,
-    pub direction: Vec3,
+    pub origin: V3,
+    pub direction: V3,
 }
 
 /// The map origin as a ray query carries it, in units.
@@ -523,7 +522,7 @@ pub fn ray_origin(map_origin: IVec) -> [f64; 2] {
 pub fn ray_hit_world(ray: &RayLike, map_origin: IVec, max_dist: f64) -> Option<WorldHit> {
     let (mut world, sched, raycast) = kernel().world()?;
     let (o, d) = (ray.origin, ray.direction);
-    let h = raycast.hit(&mut world, sched, ray_origin(map_origin), [o.x, o.y, o.z], [d.x, d.y, d.z], max_dist)?;
+    let h = raycast.hit(&mut world, sched, ray_origin(map_origin), o, d, max_dist)?;
     Some(WorldHit {
         material_class: h.material_class as MaterialClass,
         face_normal: h.normal,
@@ -539,7 +538,7 @@ pub fn ray_hit_world(ray: &RayLike, map_origin: IVec, max_dist: f64) -> Option<W
 pub fn ray_hit_decor(ray: &RayLike, map_origin: IVec, max_dist: f64) -> Option<DecorHit> {
     let (world, sched, _) = kernel().world()?;
     let (o, d) = (ray.origin, ray.direction);
-    hit_decor(&world, sched, ray_origin(map_origin), [o.x, o.y, o.z], [d.x, d.y, d.z], max_dist)
+    hit_decor(&world, sched, ray_origin(map_origin), o, d, max_dist)
 }
 
 #[cfg(test)]

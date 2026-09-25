@@ -149,9 +149,9 @@ pub fn eye() -> Option<Eye> {
     map_store().map_center?;
     let v = view();
     let at = [
-        ivec::to_real(ivec::X(v.origin)) + v.eye_local.x,
-        ivec::to_real(ivec::Y(v.origin)) + v.eye_local.y,
-        ivec::to_real(ivec::Z(v.origin)) + v.eye_local.z,
+        ivec::to_real(ivec::X(v.origin)) + v.eye_local[0],
+        ivec::to_real(ivec::Y(v.origin)) + v.eye_local[1],
+        ivec::to_real(ivec::Z(v.origin)) + v.eye_local[2],
     ];
     let foot = ivec::gather(at[0].floor() as i64, at[1].floor() as i64, 0);
     Some(Eye { at, foot })

@@ -199,7 +199,7 @@ fn the_view_s_frustum_sees_the_ground_it_looks_at() {
         let f = Frustum::of_view();
         let centre = [3_000_000.0 + 500.0, 2_000_000.0 + 300.0, 10.0];
         let v = crate::world::frame::view::view();
-        let eye = [3_000_000.0 + v.eye_local.x, 2_000_000.0 + v.eye_local.y, v.eye_local.z];
+        let eye = [3_000_000.0 + v.eye_local[0], 2_000_000.0 + v.eye_local[1], v.eye_local[2]];
         assert!(f.sees(centre, 1.0, eye), "dist {dist}, polar {polar}, azimuth {azimuth}");
         // And not what lies straight behind the eye.
         let behind = [2.0 * eye[0] - centre[0], 2.0 * eye[1] - centre[1], centre[2]];

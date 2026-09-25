@@ -8,7 +8,7 @@
 //! object store files the entry under.
 
 use pxl_spec::space::pvf3::ivec::IVec;
-use xpute_core::math::vec3::Vec3;
+use pxl_spec::space::v3::V3;
 
 use crate::kernel::kernel;
 use crate::layer::object::store::EntryAt;
@@ -31,7 +31,7 @@ const SAME_SURFACE_EPS: f64 = 1e-3;
 /// Procedural instances are passed over by the kernel, so a hit on one falls
 /// through to whatever is next along the ray. The ray is in the root frame,
 /// relative to `map_origin`, as the voxel raycast takes it.
-pub fn raycast_decor(origin: Vec3, direction: Vec3, map_origin: IVec, max_dist: f64) -> Option<EntryAt> {
+pub fn raycast_decor(origin: V3, direction: V3, map_origin: IVec, max_dist: f64) -> Option<EntryAt> {
     let hit = ray_hit_decor(&RayLike { origin, direction }, map_origin, max_dist + SAME_SURFACE_EPS)?;
     let (_, col_idx, ..) = kernel().sched.builder.source_of(hit.chunk)?;
     // The lane holds the band's own i32 as a word (layer/decor/build.rs), NO_ENTRY

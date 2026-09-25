@@ -17,11 +17,10 @@
 //! the eye, so the two cancel and the far terrain's coplanar faces stop
 //! fighting.
 
+use pxl_spec::space::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
 use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::v3::{norm3, sub3, V3};
-use xpute_core::math::mat4::{mat4, mat4_invert, mat4_look_at, mat4_mul, mat4_perspective, mat4_translation, Mat4};
 use xpute_core::math::scalar::round;
-use xpute_core::math::vec3::Vec3;
 use xpute_runtime::global::Global;
 use xpute_runtime::mem::heap::{alloc, free};
 
@@ -588,8 +587,8 @@ struct Case {
 }
 
 /// The eye and what it looks at, in a case's own Z-up frame, and its field.
-const CASE_EYE: Vec3 = Vec3 { x: 0.0, y: -2.2, z: 0.9 };
-const CASE_TARGET: Vec3 = Vec3 { x: 0.0, y: 0.0, z: 0.55 };
+const CASE_EYE: V3 = [0.0, -2.2, 0.9];
+const CASE_TARGET: V3 = [0.0, 0.0, 0.55];
 const CASE_FOV_DEG: f64 = 35.0;
 
 impl Case {
@@ -835,11 +834,7 @@ impl Renderer {
         // sun's shadow is aimed at and the map is laid back on the planet
         // about (look/globe.rs): its latitude's values and the planet's
         // radius in the units the map has there.
-        let centre = Vec3 {
-            x: -s[STAGE_AT::TRANSLATION],
-            y: -s[STAGE_AT::TRANSLATION + 1],
-            z: -s[STAGE_AT::TRANSLATION + 2],
-        };
+        let centre = [-s[STAGE_AT::TRANSLATION], -s[STAGE_AT::TRANSLATION + 1], -s[STAGE_AT::TRANSLATION + 2]];
         let sphere = Globe::at(env[ENV_AIR + 2] as f64);
         // Straight up where the eye stands: away from the planet's centre,
         // the radius below the camera centre. The eye stands off the camera
@@ -847,7 +842,7 @@ impl Renderer {
         // over the radius — nothing at a street, degrees from orbit — and the
         // air, the clouds and the stars are measured from it, on the sphere
         // the world is laid on.
-        let planet_centre = [centre.x, centre.y, centre.z - sphere.radius_u()];
+        let planet_centre = [centre[0], centre[1], centre[2] - sphere.radius_u()];
         let mut up = [0.0; 3];
         norm3(sub3(&eye_local, &planet_centre, &mut [0.0; 3]), &mut up);
         self.clouds.lay_out(g, &m, &eye_local, env, &up);
@@ -879,10 +874,10 @@ impl Renderer {
             self.ao.lay_out(g, &proj, width, height, env[7], env[11]);
         }
         let globe = [
-            centre.x as f32,
-            centre.y as f32,
+            centre[0] as f32,
+            centre[1] as f32,
             sphere.radius_u() as f32,
-            centre.z as f32,
+            centre[2] as f32,
             sphere.e0 as f32,
             sphere.sin_lat as f32,
             sphere.cos_lat as f32,
@@ -1114,15 +1109,15 @@ impl Renderer {
             *u = world_frame;
             let (mut proj, mut view, mut t, mut m, mut n) = (mat4(), mat4(), mat4(), mat4(), mat4());
             mat4_perspective(&mut proj, CASE_FOV_DEG.to_radians(), s.width as f64 / s.height as f64, 0.1, 100.0);
-            mat4_look_at(&mut view, CASE_EYE, CASE_TARGET, Vec3 { x: 0.0, y: 0.0, z: 1.0 });
+            mat4_look_at(&mut view, CASE_EYE, CASE_TARGET, [0.0, 0.0, 1.0]);
             mat4_translation(&mut t, -actor[0], -actor[1], -actor[2]);
             mat4_mul(&mut m, &GL_TO_WGPU, &proj);
             mat4_mul(&mut n, &m, &view);
             mat4_mul(&mut m, &n, &t);
             put_mat(u, VIEW_PROJ, &m);
-            u[CAMERA_POS] = (CASE_EYE.x + actor[0]) as f32;
-            u[CAMERA_POS + 1] = (CASE_EYE.y + actor[1]) as f32;
-            u[CAMERA_POS + 2] = (CASE_EYE.z + actor[2]) as f32;
+            u[CAMERA_POS] = (CASE_EYE[0] + actor[0]) as f32;
+            u[CAMERA_POS + 1] = (CASE_EYE[1] + actor[1]) as f32;
+            u[CAMERA_POS + 2] = (CASE_EYE[2] + actor[2]) as f32;
             // No fog: the near and far pushed out of reach (crates/pxl/web/kernel/src/layer/environment/state.rs's
             // fog_near and fog_far in the run).
             u[ENV + 7] = 1e9;

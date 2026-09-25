@@ -21,7 +21,7 @@
 //! three half-resolution and one full-resolution fragment pass. The blue
 //! noise is 64 KB in the module.
 
-use xpute_core::math::mat4::{mat4_invert, Mat4};
+use pxl_spec::space::mat4::{mat4_invert, Mat4};
 
 use crate::frame::shader::record::{PIPELINE_AO_BLUR, PIPELINE_AO_DOWNSAMPLE, PIPELINE_AO_SAMPLE, PIPELINE_AO_UPSAMPLE};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, GpuApi, Stamp};

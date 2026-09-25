@@ -316,7 +316,7 @@ impl Walker {
                 self.pose[3] = heading + core::f64::consts::PI / 2.0;
             } else if !self.initial_facing_done {
                 let eye = view().eye_local;
-                self.pose[3] = heading_to(Vec2 { x: step.x, y: step.y }, Vec2 { x: eye.x, y: eye.y }) + core::f64::consts::PI / 2.0;
+                self.pose[3] = heading_to(Vec2 { x: step.x, y: step.y }, Vec2 { x: eye[0], y: eye[1] }) + core::f64::consts::PI / 2.0;
                 self.initial_facing_done = true;
             }
         }

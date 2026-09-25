@@ -10,6 +10,7 @@ pub mod adapter;
 pub mod hierarchy;
 pub mod indexer;
 pub mod lattice;
+pub mod mat4;
 pub mod pvf3;
 pub mod pyramid;
 pub mod sparse_tree;

@@ -19,7 +19,6 @@ use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::v3::V3;
-use xpute_core::math::vec3::Vec3;
 
 use crate::layer::object::geometry::{aabb_overlap, object_aabb, Aabb};
 use crate::layer::object::store::{get_objects_near, OccupiedEntry};
@@ -226,7 +225,7 @@ pub struct PickResult {
 
 /// Single raycast entry point — see this module's own doc comment. The ray is
 /// in the root frame.
-pub fn ray_pick(origin: Vec3, direction: Vec3, map_center: Option<&Pvf3>) -> Option<PickResult> {
+pub fn ray_pick(origin: V3, direction: V3, map_center: Option<&Pvf3>) -> Option<PickResult> {
     let map_center = map_center?;
     let map_origin = local_world_origin();
 

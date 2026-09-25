@@ -17,13 +17,12 @@ use pxl_render::gpu::pass::badges::LABEL_FONT;
 use pxl_render::gpu::surface::DPR_MAX;
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::indexer::{L3_BASE, L3_CENTER};
+use pxl_spec::space::mat4::{mat4_transform_point, Mat4};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{floor3n, V3};
 use pxl_spec::space::xy::TO_XY;
-use xpute_core::math::mat4::{mat4_transform_point, Mat4};
-use xpute_core::math::vec3::Vec3;
 
 use crate::global::Global;
 use crate::host::measure_text;
@@ -188,9 +187,9 @@ impl Sketch {
 /// A point of a matrix's frame, in the root frame.
 fn through(m: Mat4) -> impl Fn(V3) -> V3 {
     move |v: V3| {
-        let mut out = Vec3::default();
+        let mut out = [0.0; 3];
         mat4_transform_point(&mut out, &m, v[0], v[1], v[2]);
-        [out.x, out.y, out.z]
+        out
     }
 }
 

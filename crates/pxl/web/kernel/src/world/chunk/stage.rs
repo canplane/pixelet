@@ -160,7 +160,7 @@ pub fn core_tick_visible_step(ctx: &mut TickContext) {
         root: v.root,
         origin: [ivec::to_real(ivec::X(origin)), ivec::to_real(ivec::Y(origin)), ivec::to_real(ivec::Z(origin))],
         planes: v.planes,
-        camera: [v.eye.x, v.eye.y, v.eye.z],
+        camera: v.eye,
         viewport_h: v.height,
         fov_deg: v.fov,
         delta_s: ctx.delta,
