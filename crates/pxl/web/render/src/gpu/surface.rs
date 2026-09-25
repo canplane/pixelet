@@ -43,17 +43,14 @@ pub struct Surface {
     pub dpr: f64,
     /// Its context configured on the device the renderer has.
     pub configured: bool,
-    /// The buffer its targets were made at, and their samples.
+    /// The buffer its targets were made at.
     pub width: u32,
     pub height: u32,
-    pub samples: u32,
     /// A size the buffer is waiting to be made at, and the turns it has held.
     pub wanted: (u32, u32),
     pub waited: u32,
     pub depth: u32,
     pub depth_view: u32,
-    pub msaa: u32,
-    pub msaa_view: u32,
 }
 
 impl Surface {

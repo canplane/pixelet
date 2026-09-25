@@ -167,23 +167,9 @@ export const SETTINGS = {
     section: "quality",
     cost: "low",
   },
-  /** Four samples a pixel for the frame's colour and depth:
-   * the largest allocation the page makes — 32 bytes a device pixel, a
-   * hundred megabytes on a phone at its native density — for edges the
-   * far terrain's boxes would otherwise shimmer at. Off, since a phone's
-   * density does the same job at no cost; the setting is read when the
-   * renderer is made. */
-  msaa: {
-    key: 13 as number,
-    kind: "toggle",
-    default: false,
-    section: "quality",
-    dev: true,
-    cost: "high",
-  },
   /** The debug gizmos: frame origins, page corners, the map centre and the rings. */
   show_debug_objects: {
-    key: 14 as number,
+    key: 13 as number,
     kind: "toggle",
     default: false,
     section: "debug",
@@ -191,20 +177,20 @@ export const SETTINGS = {
   },
   /** The scheduler ledger's corner panel. The console stream is a button on it. */
   show_ledger: {
-    key: 15 as number,
+    key: 14 as number,
     kind: "toggle",
     default: false,
     section: "debug",
     dev: true,
   },
   person_variant: {
-    key: 16 as number,
+    key: 15 as number,
     kind: "number",
     default: 1 as number,
     section: "character",
   },
   pet_variant: {
-    key: 17 as number,
+    key: 16 as number,
     kind: "number",
     default: 5 as number,
     section: "character",
@@ -315,13 +301,13 @@ export const SETTINGS_SHIPPED = {
     cost: "low",
   },
   person_variant: {
-    key: 16 as number,
+    key: 15 as number,
     kind: "number",
     default: 1 as number,
     section: "character",
   },
   pet_variant: {
-    key: 17 as number,
+    key: 16 as number,
     kind: "number",
     default: 5 as number,
     section: "character",

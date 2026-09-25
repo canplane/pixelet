@@ -225,11 +225,11 @@ pub struct BadgePass {
 }
 
 impl BadgePass {
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, samples: u32) -> BadgePass {
+    pub fn new(g: &GpuApi, pipelines: &mut Pipelines) -> BadgePass {
         let sampler = object();
         (g.sampler)(sampler, filter::NEAREST, filter::LINEAR, filter::LINEAR, address::CLAMP, compare::NONE, 1);
         BadgePass {
-            built: pipelines.build(g, PIPELINE_BADGE, format::CANVAS, samples),
+            built: pipelines.build(g, PIPELINE_BADGE, format::CANVAS),
             sampler,
             sheet: 0,
             sheet_view: 0,
@@ -247,17 +247,6 @@ impl BadgePass {
             far: 1000.0,
             cell: 0.01,
             globe: [0.0; 8],
-        }
-    }
-
-    /// The frame's depth is multisampled as the frame is, so a set's group is
-    /// laid out anew.
-    pub fn set_samples(&mut self, g: &GpuApi, pipelines: &mut Pipelines, samples: u32) {
-        self.built = pipelines.build(g, PIPELINE_BADGE, format::CANVAS, samples);
-        for s in &mut self.sets {
-            release(s.group);
-            s.group = 0;
-            s.depth = 0;
         }
     }
 
@@ -282,7 +271,6 @@ impl BadgePass {
                 1,
                 format::RGBA8_SRGB,
                 self.levels,
-                1,
                 texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT,
             );
             self.sheet_view = object();
@@ -323,11 +311,10 @@ impl BadgePass {
     }
 
     /// Every billboard set's draw, in the order listed, in one pass of their
-    /// own over `color` (resolved into `resolve` where the colour is
-    /// multisampled) reading `depth`, timed under `stamp`; how many instances
-    /// it drew.
+    /// own over `color` reading `depth`, timed under `stamp`; how many
+    /// instances it drew.
     #[allow(clippy::too_many_arguments)]
-    pub fn draw(&mut self, g: &GpuApi, encoder: u32, color: u32, resolve: u32, depth: u32, viewport: [u32; 2], draws: &[u32], uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) -> u32 {
+    pub fn draw(&mut self, g: &GpuApi, encoder: u32, color: u32, depth: u32, viewport: [u32; 2], draws: &[u32], uniforms: &[f32], blocks: &Blocks, stamp: &mut Stamp) -> u32 {
         if self.sheet_group == 0 {
             return 0;
         }
@@ -368,7 +355,7 @@ impl BadgePass {
             }
             if pass == 0 {
                 pass = object();
-                (g.pass)(pass, encoder, &pass_desc(color, resolve, load::LOAD, depth, load::READ_ONLY, 0.0, stamp.pass()));
+                (g.pass)(pass, encoder, &pass_desc(color, load::LOAD, depth, load::READ_ONLY, 0.0, stamp.pass()));
                 (g.set_pipeline)(pass, self.built.pipeline);
                 (g.set_bind_group)(pass, 1, self.sheet_group, &[]);
             }

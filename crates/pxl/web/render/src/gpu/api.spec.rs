@@ -154,13 +154,13 @@ pub mod paint {
 /// before its vertex buffers — the one number three parsers of a record would
 /// otherwise each hold their own copy of. Then: the topology, the cull mode, the
 /// depth compare under reversed Z (LESS is the shadow map's plain depth; NO_DEPTH, no
-/// depth attachment), the blend, the sample count, which vertex entry point of
+/// depth attachment), the blend, which vertex entry point of
 /// its shader the pipeline enters, a vertex step and format, a
-/// binding's stages, and a binding's kind — FRAME_DEPTH a depth texture
-/// multisampled as the frame is, TEXTURE_UNFILTERED one in a format no sampler
+/// binding's stages, and a binding's kind — TEXTURE_UNFILTERED a texture in a
+/// format no sampler
 /// filters (RGBA32F), read by textureLoad alone.
 pub mod record {
-    pub const HEAD: u32 = 12;
+    pub const HEAD: u32 = 10;
     pub const TRIANGLES: u32 = 0;
     pub const STRIP: u32 = 1;
     pub const LINES: u32 = 2;
@@ -174,8 +174,6 @@ pub mod record {
     pub const OPAQUE: u32 = 0;
     pub const ALPHA: u32 = 1;
     pub const ADD: u32 = 2;
-    pub const FRAME_SAMPLES: u32 = 0;
-    pub const ONE_SAMPLE: u32 = 1;
     pub const VS: u32 = 0;
     pub const VS_COARSE: u32 = 1;
     pub const PER_VERTEX: u32 = 0;
@@ -198,8 +196,7 @@ pub mod record {
     pub const DEPTH: u32 = 5;
     pub const SAMPLER: u32 = 6;
     pub const SAMPLER_COMPARISON: u32 = 7;
-    pub const FRAME_DEPTH: u32 = 8;
-    pub const TEXTURE_UNFILTERED: u32 = 9;
+    pub const TEXTURE_UNFILTERED: u32 = 8;
     pub const KEYS: &[&str] = &[
         "HEAD",
         "TRIANGLES",
@@ -215,8 +212,6 @@ pub mod record {
         "OPAQUE",
         "ALPHA",
         "ADD",
-        "FRAME_SAMPLES",
-        "ONE_SAMPLE",
         "VS",
         "VS_COARSE",
         "PER_VERTEX",
@@ -239,7 +234,6 @@ pub mod record {
         "DEPTH",
         "SAMPLER",
         "SAMPLER_COMPARISON",
-        "FRAME_DEPTH",
         "TEXTURE_UNFILTERED",
     ];
 }

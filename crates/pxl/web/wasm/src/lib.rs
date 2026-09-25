@@ -789,7 +789,7 @@ extern "C" {
     #[link_name = "gpu_buffer"]
     fn host_gpu_buffer(id: u32, size: u32, usage: u32);
     #[link_name = "gpu_texture"]
-    fn host_gpu_texture(id: u32, width: u32, height: u32, layers: u32, format: u32, mips: u32, samples: u32, usage: u32);
+    fn host_gpu_texture(id: u32, width: u32, height: u32, layers: u32, format: u32, mips: u32, usage: u32);
     #[link_name = "gpu_image_texture"]
     fn host_gpu_image_texture(id: u32, image: u32) -> u32;
     #[link_name = "gpu_view"]
@@ -799,9 +799,9 @@ extern "C" {
     #[link_name = "gpu_shader"]
     fn host_gpu_shader(id: u32, code: *const u8, len: usize);
     #[link_name = "gpu_layout"]
-    fn host_gpu_layout(id: u32, entries: *const u32, words: usize, samples: u32);
+    fn host_gpu_layout(id: u32, entries: *const u32, words: usize);
     #[link_name = "gpu_pipeline"]
-    fn host_gpu_pipeline(id: u32, record: *const u32, words: usize, layouts: *const u32, count: usize, module: u32, format: u32, samples: u32);
+    fn host_gpu_pipeline(id: u32, record: *const u32, words: usize, layouts: *const u32, count: usize, module: u32, format: u32);
     #[link_name = "gpu_bind_group"]
     fn host_gpu_bind_group(id: u32, layout: u32, entries: *const u32, words: usize);
     #[link_name = "gpu_destroy"]
@@ -857,13 +857,13 @@ fn install_gpu() {
     set_gpu_api(GpuApi {
         reset: || unsafe { host_gpu_reset() },
         buffer: |id, size, usage| unsafe { host_gpu_buffer(id, size, usage) },
-        texture: |id, width, height, layers, format, mips, samples, usage| unsafe { host_gpu_texture(id, width, height, layers, format, mips, samples, usage) },
+        texture: |id, width, height, layers, format, mips, usage| unsafe { host_gpu_texture(id, width, height, layers, format, mips, usage) },
         image_texture: |id, image| unsafe { host_gpu_image_texture(id, image) != 0 },
         view: |id, texture, dimension, base_mip, mips, base_layer, layers| unsafe { host_gpu_view(id, texture, dimension, base_mip, mips, base_layer, layers) },
         sampler: |id, mag, min, mipmap, address, compare, anisotropy| unsafe { host_gpu_sampler(id, mag, min, mipmap, address, compare, anisotropy) },
         shader: |id, code| unsafe { host_gpu_shader(id, code.as_ptr(), code.len()) },
-        layout: |id, entries, samples| unsafe { host_gpu_layout(id, entries.as_ptr(), entries.len(), samples) },
-        pipeline: |id, record, layouts, module, format, samples| unsafe { host_gpu_pipeline(id, record.as_ptr(), record.len(), layouts.as_ptr(), layouts.len(), module, format, samples) },
+        layout: |id, entries| unsafe { host_gpu_layout(id, entries.as_ptr(), entries.len()) },
+        pipeline: |id, record, layouts, module, format| unsafe { host_gpu_pipeline(id, record.as_ptr(), record.len(), layouts.as_ptr(), layouts.len(), module, format) },
         bind_group: |id, layout, entries| unsafe { host_gpu_bind_group(id, layout, entries.as_ptr(), entries.len()) },
         destroy: |id| unsafe { host_gpu_destroy(id) },
         write_buffer: |id, offset, bytes| unsafe { host_gpu_write_buffer(id, offset, bytes.as_ptr(), bytes.len()) },

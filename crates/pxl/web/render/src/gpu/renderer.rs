@@ -9,9 +9,7 @@
 //! shader.rs's.
 //!
 //! What the frame is drawn into is sized here and its cost counted: the depth
-//! buffer, the multisampled colour and depth where MSAA is on — four samples a
-//! pixel, the one count WebGPU offers, the largest allocation the page makes —
-//! the sun's shadow map, the texture pack's layers with their mip chains, the
+//! buffer, the sun's shadow map, the texture pack's layers with their mip chains, the
 //! badge sheet. Reversed float depth throughout, near at 1 and far at 0: a
 //! float's precision is densest near zero and a perspective depth densest near
 //! the eye, so the two cancel and the far terrain's coplanar faces stop
@@ -145,10 +143,9 @@ pub struct FrameStat {
     pub triangles: f64,
     pub buffers: f64,
     pub buffer_bytes: f64,
-    /// The targets' and textures' megabytes: depth, multisampled colour, the
-    /// shadow map, the texture pack's layers.
+    /// The targets' and textures' megabytes: depth, the shadow map, the
+    /// texture pack's layers.
     pub depth_mb: f64,
-    pub msaa_mb: f64,
     pub shadow_mb: f64,
     pub layers_mb: f64,
     /// The world surface's width times its height.
@@ -523,7 +520,7 @@ pub fn gpu_lost() {
 
 /// A surface closed: what it held on the device let go.
 pub fn surface_closed(s: Surface) {
-    for id in [s.depth_view, s.depth, s.msaa_view, s.msaa] {
+    for id in [s.depth_view, s.depth] {
         release(id);
     }
     let slot = xpute_runtime::abi::handle::handle_slot(s.handle) as usize;
@@ -542,8 +539,8 @@ struct DebugPass {
 }
 
 impl DebugPass {
-    fn new(g: &GpuApi, pipelines: &mut Pipelines, samples: u32, frame_buffer: u32) -> DebugPass {
-        let built = pipelines.build(g, PIPELINE_DEBUG, format::CANVAS, samples);
+    fn new(g: &GpuApi, pipelines: &mut Pipelines, frame_buffer: u32) -> DebugPass {
+        let built = pipelines.build(g, PIPELINE_DEBUG, format::CANVAS);
         let draw_buffer = object();
         (g.buffer)(draw_buffer, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let frame_group = object();
@@ -595,7 +592,7 @@ impl Case {
     fn new(g: &GpuApi, pipelines: &mut Pipelines, shadow: &Shadow, ao: &ScreenAo, air: [u32; AIR_WORDS], align: u32) -> Case {
         let frame_buffer = object();
         (g.buffer)(frame_buffer, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
-        let skinned = SkinnedPass::new(g, pipelines, 1, frame_buffer, shadow.blank_entries(1), None, ao.blank_entry(7), air, align);
+        let skinned = SkinnedPass::new(g, pipelines, frame_buffer, shadow.blank_entries(1), None, ao.blank_entry(7), air, align);
         Case {
             frame_buffer,
             frame: [0.0; FRAME_FLOATS],
@@ -611,7 +608,6 @@ impl Case {
 
 pub struct Renderer {
     align: u32,
-    samples: u32,
     query_set: u32,
     pipelines: Pipelines,
     frame_buffer: u32,
@@ -654,7 +650,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    fn new(g: &GpuApi, device: Device, samples: u32, handheld: bool) -> Renderer {
+    fn new(g: &GpuApi, device: Device, handheld: bool) -> Renderer {
         let mut pipelines = Pipelines::new();
         let frame_buffer = object();
         (g.buffer)(frame_buffer, word_bytes(FRAME_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
@@ -664,12 +660,12 @@ impl Renderer {
         let ao = ScreenAo::new(g, &mut pipelines, device.align);
         let atmosphere = Atmosphere::new(g, &mut pipelines);
         let air = atmosphere.entries();
-        let stars = StarPass::new(g, &mut pipelines, samples);
-        let clouds = CloudPass::new(g, &mut pipelines, samples, frame_buffer, air);
+        let stars = StarPass::new(g, &mut pipelines);
+        let clouds = CloudPass::new(g, &mut pipelines, frame_buffer, air);
         let mips = Mips::new(g, &mut pipelines, format::RGBA8_SRGB);
         let layers = Layers::new(g);
-        let chunk = pipelines.build(g, PIPELINE_CHUNK, format::CANVAS, samples);
-        let sky_built = pipelines.build(g, PIPELINE_SKY, format::CANVAS, samples);
+        let chunk = pipelines.build(g, PIPELINE_CHUNK, format::CANVAS);
+        let sky_built = pipelines.build(g, PIPELINE_SKY, format::CANVAS);
         let sky_group = object();
         let moon = MoonMap::new(g);
         let mut sky_entries = [0u32; 20 + AIR_WORDS];
@@ -690,23 +686,18 @@ impl Renderer {
         };
         let mut r = Renderer {
             align: device.align,
-            samples,
             query_set,
             chunk,
-            chunk_depth: pipelines.build(g, PIPELINE_CHUNK_DEPTH, format::CANVAS, samples),
-            chunk_prepass: pipelines.build(g, PIPELINE_CHUNK_PREPASS, format::CANVAS, 1),
-            chunk_coarse: pipelines.build(g, PIPELINE_CHUNK_COARSE, format::CANVAS, samples),
-            chunk_coarse_depth: pipelines.build(g, PIPELINE_CHUNK_COARSE_DEPTH, format::CANVAS, samples),
-            chunk_coarse_prepass: pipelines.build(g, PIPELINE_CHUNK_COARSE_PREPASS, format::CANVAS, 1),
-            ghost: [
-                pipelines.build(g, PIPELINE_GHOST_BOX, format::CANVAS, samples),
-                pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples),
-            ],
-            decor: DecorPass::new(g, &mut pipelines, samples, frame_buffer, &shadow, ao.blank_entry(7), air, device.align),
+            chunk_depth: pipelines.build(g, PIPELINE_CHUNK_DEPTH, format::CANVAS),
+            chunk_prepass: pipelines.build(g, PIPELINE_CHUNK_PREPASS, format::CANVAS),
+            chunk_coarse: pipelines.build(g, PIPELINE_CHUNK_COARSE, format::CANVAS),
+            chunk_coarse_depth: pipelines.build(g, PIPELINE_CHUNK_COARSE_DEPTH, format::CANVAS),
+            chunk_coarse_prepass: pipelines.build(g, PIPELINE_CHUNK_COARSE_PREPASS, format::CANVAS),
+            ghost: [pipelines.build(g, PIPELINE_GHOST_BOX, format::CANVAS), pipelines.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS)],
+            decor: DecorPass::new(g, &mut pipelines, frame_buffer, &shadow, ao.blank_entry(7), air, device.align),
             skinned: SkinnedPass::new(
                 g,
                 &mut pipelines,
-                samples,
                 frame_buffer,
                 shadow.entries(1),
                 Some((shadow.light_frame, shadow.blank_entries(1))),
@@ -714,9 +705,9 @@ impl Renderer {
                 air,
                 device.align,
             ),
-            puck: PuckPass::new(g, &mut pipelines, samples, frame_buffer),
-            badges: BadgePass::new(g, &mut pipelines, samples),
-            debug: DebugPass::new(g, &mut pipelines, samples, frame_buffer),
+            puck: PuckPass::new(g, &mut pipelines, frame_buffer),
+            badges: BadgePass::new(g, &mut pipelines),
+            debug: DebugPass::new(g, &mut pipelines, frame_buffer),
             pipelines,
             frame_buffer,
             frame: [0.0; FRAME_FLOATS],
@@ -775,29 +766,6 @@ impl Renderer {
         self.decor.rebind(g, self.frame_buffer, &self.shadow, ao);
         self.skinned
             .rebind(g, self.frame_buffer, self.shadow.entries(1), Some((self.shadow.light_frame, self.shadow.blank_entries(1))), ao);
-    }
-
-    /// MSAA is every pipeline's sample count and the targets': a change
-    /// rebuilds what depends on it and keeps the rest.
-    fn set_samples(&mut self, g: &GpuApi, samples: u32) {
-        self.samples = samples;
-        let p = &mut self.pipelines;
-        self.chunk = p.build(g, PIPELINE_CHUNK, format::CANVAS, samples);
-        self.chunk_depth = p.build(g, PIPELINE_CHUNK_DEPTH, format::CANVAS, samples);
-        self.chunk_coarse = p.build(g, PIPELINE_CHUNK_COARSE, format::CANVAS, samples);
-        self.chunk_coarse_depth = p.build(g, PIPELINE_CHUNK_COARSE_DEPTH, format::CANVAS, samples);
-        self.ghost = [
-            p.build(g, PIPELINE_GHOST_BOX, format::CANVAS, samples),
-            p.build(g, PIPELINE_GHOST_BOX_COPLANAR, format::CANVAS, samples),
-        ];
-        self.sky_built = p.build(g, PIPELINE_SKY, format::CANVAS, samples);
-        self.stars.set_samples(g, p, samples);
-        self.clouds.set_samples(g, p, samples);
-        self.decor.set_samples(g, p, samples);
-        self.skinned.set_samples(g, p, samples);
-        self.puck.set_samples(g, p, samples);
-        self.badges.set_samples(g, p, samples);
-        self.debug.built = p.build(g, PIPELINE_DEBUG, format::CANVAS, samples);
     }
 
     /// The frame's uniforms and the sky's, laid out from the stage and the
@@ -971,8 +939,7 @@ impl Renderer {
         self.badges.sync_sheet(g, &self.mips, input.atlas);
         let (draws, uniforms) = take_lists(Some(g), input.lists);
 
-        let samples = self.samples;
-        targets(g, world, samples);
+        targets(g, world);
         self.lay_out(g, world.width, world.height, input.environment);
         if self.screen_ao && self.ao.ensure(g, world.width, world.height) {
             self.rebind(g);
@@ -1036,9 +1003,8 @@ impl Renderer {
         }
         let canvas_view = object();
         (g.current)(world.handle, canvas_view);
-        let (color, resolve) = if world.msaa_view != 0 { (world.msaa_view, canvas_view) } else { (canvas_view, 0) };
         let pass = object();
-        (g.pass)(pass, encoder, &pass_desc(color, resolve, load::CLEAR, world.depth_view, load::CLEAR, 0.0, stamps[SPAN_WORLD].pass()));
+        (g.pass)(pass, encoder, &pass_desc(canvas_view, load::CLEAR, world.depth_view, load::CLEAR, 0.0, stamps[SPAN_WORLD].pass()));
         (g.set_pipeline)(pass, self.chunk.pipeline);
         (g.set_bind_group)(pass, 0, self.bind_group, &[]);
         self.draw_meshes(g, pass, draws, PIPELINE_CHUNK, FINE_BOX_BYTES, None);
@@ -1068,7 +1034,7 @@ impl Renderer {
         release(pass);
         let badges = self
             .badges
-            .draw(g, encoder, color, resolve, world.depth_view, [world.width, world.height], draws, uniforms, b, &mut stamps[SPAN_BADGES]);
+            .draw(g, encoder, canvas_view, world.depth_view, [world.width, world.height], draws, uniforms, b, &mut stamps[SPAN_BADGES]);
         self.draw_cases(g, encoder, draws, uniforms, input.cases, &mut stamps[SPAN_CASES]);
         if q != 0 {
             let written = stamps.iter().enumerate().filter(|(_, s)| s.written()).fold(0, |m, (k, _)| m | 1 << k);
@@ -1095,7 +1061,7 @@ impl Renderer {
             let Some(own) = draws.as_chunks::<DRAW_WORDS>().0.iter().find(|d| d[4] == PIPELINE_SKINNED && d[2] == model) else {
                 continue;
             };
-            targets(g, s, 1);
+            targets(g, s);
             let slot = xpute_runtime::abi::handle::handle_slot(id) as usize;
             if self.cases[slot].is_none() {
                 self.cases[slot] = Some(Case::new(g, &mut self.pipelines, &self.shadow, &self.ao, self.atmosphere.entries(), self.align));
@@ -1136,7 +1102,7 @@ impl Renderer {
             let view_id = object();
             (g.current)(s.handle, view_id);
             let pass = object();
-            (g.pass)(pass, encoder, &pass_desc(view_id, 0, load::CLEAR, s.depth_view, load::CLEAR, 0.0, stamp.pass()));
+            (g.pass)(pass, encoder, &pass_desc(view_id, load::CLEAR, s.depth_view, load::CLEAR, 0.0, stamp.pass()));
             case.skinned.draw(g, pass, own, blocks());
             (g.end)(pass);
             release(pass);
@@ -1175,8 +1141,7 @@ impl Renderer {
             triangles: triangles as f64,
             buffers: b.count as f64,
             buffer_bytes: b.bytes as f64,
-            depth_mb: round(px * 4.0 * world.samples as f64 / MB),
-            msaa_mb: if world.samples > 1 { round(px * 4.0 * world.samples as f64 / MB) } else { 0.0 },
+            depth_mb: round(px * 4.0 / MB),
             shadow_mb: round(self.shadow.bytes as f64 / MB),
             layers_mb: round(self.layers.bytes as f64 / MB),
             px,
@@ -1187,18 +1152,18 @@ impl Renderer {
     }
 }
 
-/// A surface's context configured, and its depth and multisampled colour made
-/// at its buffer's size and `samples`: at once where there are none or the
-/// samples changed, and for a new size once it has held SETTLE_TURNS turns —
-/// until then the buffer it has is drawn and the page scales it.
-fn targets(g: &GpuApi, s: &mut Surface, samples: u32) {
+/// A surface's context configured, and its depth made at its buffer's size:
+/// at once where there is none, and for a new size once it has held
+/// SETTLE_TURNS turns — until then the buffer it has is drawn and the page
+/// scales it.
+fn targets(g: &GpuApi, s: &mut Surface) {
     let (width, height) = s.buffer_px();
     if !s.configured {
         (g.configure)(s.handle);
         s.configured = true;
         s.depth = 0;
     }
-    let made = s.depth != 0 && s.samples == samples;
+    let made = s.depth != 0;
     if made && s.width == width && s.height == height {
         s.waited = 0;
         return;
@@ -1216,34 +1181,15 @@ fn targets(g: &GpuApi, s: &mut Surface, samples: u32) {
     }
     s.waited = 0;
     (g.resize)(s.handle, width, height);
-    for id in [s.depth_view, s.depth, s.msaa_view, s.msaa] {
+    for id in [s.depth_view, s.depth] {
         release(id);
     }
     s.depth = object();
-    (g.texture)(
-        s.depth,
-        width,
-        height,
-        1,
-        format::DEPTH32,
-        1,
-        samples,
-        texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
-    );
+    (g.texture)(s.depth, width, height, 1, format::DEPTH32, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
     s.depth_view = object();
     (g.view)(s.depth_view, s.depth, dimension::D2, 0, 1, 0, 1);
-    if samples > 1 {
-        s.msaa = object();
-        (g.texture)(s.msaa, width, height, 1, format::CANVAS, 1, samples, texture_usage::RENDER_ATTACHMENT);
-        s.msaa_view = object();
-        (g.view)(s.msaa_view, s.msaa, dimension::D2, 0, 1, 0, 1);
-    } else {
-        s.msaa = 0;
-        s.msaa_view = 0;
-    }
     s.width = width;
     s.height = height;
-    s.samples = samples;
 }
 
 /// The turn's draw: the world's surface and every case, once a device has
@@ -1256,13 +1202,9 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()), input.lists);
         return FrameOutput { redraw: false, stat: None };
     };
-    let samples = if stage_lane()[STAGE_AT::MSAA] != 0.0 { 4 } else { 1 };
     let slot = RENDERER.get(|| None);
-    let r = slot.get_or_insert_with(|| Renderer::new(g, device, samples, input.handheld));
+    let r = slot.get_or_insert_with(|| Renderer::new(g, device, input.handheld));
     blocks().restore(g);
-    if r.samples != samples {
-        r.set_samples(g, samples);
-    }
     let stat = r.frame(g, world, input);
     FrameOutput {
         redraw: *REDRAW.get(|| false),

@@ -63,7 +63,6 @@ pub fn stage_write() {
     s[STAGE_AT::EDGE_WIDTH] = EDGE_WIDTH;
     s[STAGE_AT::RIM_INTENSITY] = if settings.show_rim_light { rim_cfg::INTENSITY } else { 0.0 };
     s[STAGE_AT::SHADOWS] = if settings.show_shadow_map { 1.0 } else { 0.0 };
-    s[STAGE_AT::MSAA] = if settings.msaa { 1.0 } else { 0.0 };
 }
 
 /// The turn's draw: the stage's frame handed to the renderer with the
@@ -124,7 +123,6 @@ pub fn stage_render() {
             buffer_mb: round(stat.buffer_bytes / MB),
             arena_mb: stat.arena_mb,
             depth_mb: stat.depth_mb,
-            msaa_mb: stat.msaa_mb,
             shadow_mb: stat.shadow_mb,
             layers_mb: stat.layers_mb,
         },

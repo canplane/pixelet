@@ -36,7 +36,7 @@ impl MoonMap {
         let levels = mip_levels(MOON_TEX_SZ, MOON_TEX_SZ);
         let texture = object();
         let usage = texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST | texture_usage::RENDER_ATTACHMENT;
-        (g.texture)(texture, MOON_TEX_SZ, MOON_TEX_SZ, 1, format::RGBA8_SRGB, levels, 1, usage);
+        (g.texture)(texture, MOON_TEX_SZ, MOON_TEX_SZ, 1, format::RGBA8_SRGB, levels, usage);
         let view = object();
         (g.view)(view, texture, dimension::D2_ARRAY, 0, levels, 0, 1);
         let sampler = object();

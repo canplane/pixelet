@@ -94,9 +94,9 @@ fn put(g: &GpuApi, data: &[u8], usage: u32) -> u32 {
 }
 
 impl PuckPass {
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, samples: u32, frame_buffer: u32) -> PuckPass {
-        let zone = pipelines.build(g, PIPELINE_PUCK_ZONE, format::CANVAS, samples);
-        let beacon = pipelines.build(g, PIPELINE_PUCK_BEACON, format::CANVAS, samples);
+    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, frame_buffer: u32) -> PuckPass {
+        let zone = pipelines.build(g, PIPELINE_PUCK_ZONE, format::CANVAS);
+        let beacon = pipelines.build(g, PIPELINE_PUCK_BEACON, format::CANVAS);
         let uniform = || {
             let id = object();
             (g.buffer)(id, 32, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
@@ -126,11 +126,6 @@ impl PuckPass {
             oct_normal: put(g, bytes(&oct_n), buffer_usage::VERTEX),
             color: [r as f32, gr as f32, b as f32],
         }
-    }
-
-    pub fn set_samples(&mut self, g: &GpuApi, pipelines: &mut Pipelines, samples: u32) {
-        self.zone = pipelines.build(g, PIPELINE_PUCK_ZONE, format::CANVAS, samples);
-        self.beacon = pipelines.build(g, PIPELINE_PUCK_BEACON, format::CANVAS, samples);
     }
 
     fn write_uniform(&self, g: &GpuApi, buffer: u32, uniforms: &[f32], at: usize, night: f32) {

@@ -172,11 +172,11 @@ impl Atmosphere {
         for k in 0..5 {
             textures[k] = object();
             let (w, h) = SIZES[k];
-            (g.texture)(textures[k], w, h, 1, format::RGBA16F, 1, 1, texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT);
+            (g.texture)(textures[k], w, h, 1, format::RGBA16F, 1, texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT);
             views[k] = object();
             (g.view)(views[k], textures[k], dimension::D2, 0, 1, 0, 1);
         }
-        let passes = [PIPELINE_ATMOS_TRANSMITTANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_EXPOSURE].map(|id| pipelines.build(g, id, format::RGBA16F, 1));
+        let passes = [PIPELINE_ATMOS_TRANSMITTANCE, PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_EXPOSURE].map(|id| pipelines.build(g, id, format::RGBA16F));
 
         let air = buffer_entry(8, uniform);
         let transmittance = [9, resource::VIEW, views[TRANSMITTANCE], 0, 0];
@@ -301,7 +301,7 @@ impl Atmosphere {
 
     fn table(&self, g: &GpuApi, encoder: u32, k: usize, stamp: &mut Stamp) {
         let pass = object();
-        (g.pass)(pass, encoder, &pass_desc(self.views[k], 0, load::CLEAR, 0, load::CLEAR, 0.0, stamp.pass()));
+        (g.pass)(pass, encoder, &pass_desc(self.views[k], load::CLEAR, 0, load::CLEAR, 0.0, stamp.pass()));
         (g.set_pipeline)(pass, self.passes[if k == MOON_VIEW { SKY_VIEW } else { k }].pipeline);
         (g.set_bind_group)(pass, 0, self.groups[k], &[]);
         (g.draw)(pass, 3, 1, 0, 0);

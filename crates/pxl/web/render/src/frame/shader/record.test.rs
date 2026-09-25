@@ -249,7 +249,8 @@ fn vertex_inputs(module: &Module, entry: u32) -> BTreeMap<u32, u32> {
 }
 
 /// The module's resource bindings: (group, binding) to (the stages
-/// that use it, its kind, whether a depth texture is multisampled).
+/// that use it, its kind, whether a depth texture is multisampled — which
+/// none may be).
 fn bindings(module: &Module, info: &naga::valid::ModuleInfo) -> BTreeMap<(u32, u32), (u32, u32, bool)> {
     let mut out = BTreeMap::new();
     for (handle, var) in module.global_variables.iter() {
@@ -284,7 +285,8 @@ fn every_pipeline_matches_its_shader() {
         let words = pipeline(id);
         assert!(!words.is_empty(), "pipeline {id} has a record");
         let r = Record::read(&words);
-        for (shader, msaa) in [(r.shader, false), (r.shader_msaa, true)] {
+        let shader = r.shader;
+        {
             let (module, info) = compile(shader);
             // Every input the vertex shader declares is fed by exactly
             // one attribute of the same format, and no attribute feeds
@@ -305,13 +307,11 @@ fn every_pipeline_matches_its_shader() {
             let mut laid = BTreeMap::new();
             for (group, entries) in r.groups.iter().enumerate() {
                 for (binding, visibility, kind) in entries {
-                    // A dynamic offset is the bind group's business, the
-                    // frame's depth is a depth texture multisampled as
-                    // the frame is, and whether a float texture is
-                    // filterable is its format's, not the shader's.
+                    // A dynamic offset is the bind group's business, and
+                    // whether a float texture is filterable is its
+                    // format's, not the shader's.
                     let (kind, multi) = match *kind {
                         UNIFORM_DYNAMIC => (UNIFORM, false),
-                        FRAME_DEPTH => (DEPTH, msaa),
                         TEXTURE_UNFILTERED => (TEXTURE, false),
                         k => (k, false),
                     };
@@ -332,11 +332,11 @@ fn every_pipeline_matches_its_shader() {
                 assert_eq!(*visibility, used, "pipeline {id}: the visibility at {slot:?} is the stages that read it");
             }
             // A pipeline without a fragment stage draws depth only,
-            // writing it, at one sample, unblended: the shadow map's
+            // writing it, unblended: the shadow map's
             // plain depth, or the frame's reversed one from the eye.
             if !r.fragment {
                 assert!(
-                    r.depth_write && (r.depth_compare == LESS || r.depth_compare == GREATER) && r.samples == ONE_SAMPLE && r.blend == OPAQUE,
+                    r.depth_write && (r.depth_compare == LESS || r.depth_compare == GREATER) && r.blend == OPAQUE,
                     "pipeline {id} is a depth pass"
                 );
             }

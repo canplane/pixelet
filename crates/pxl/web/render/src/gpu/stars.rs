@@ -55,8 +55,8 @@ pub struct StarPass {
 }
 
 impl StarPass {
-    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, samples: u32) -> StarPass {
-        let built = pipelines.build(g, PIPELINE_STARS, format::CANVAS, samples);
+    pub fn new(g: &GpuApi, pipelines: &mut Pipelines) -> StarPass {
+        let built = pipelines.build(g, PIPELINE_STARS, format::CANVAS);
         let uniform = object();
         (g.buffer)(uniform, word_bytes(STARS_FLOATS), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let stars: Vec<f32> = CATALOGUE.as_chunks::<STAR_BYTES>().0.iter().flat_map(star).collect();
@@ -74,10 +74,6 @@ impl StarPass {
             group,
             words: [0.0; STARS_FLOATS],
         }
-    }
-
-    pub fn set_samples(&mut self, g: &GpuApi, pipelines: &mut Pipelines, samples: u32) {
-        self.built = pipelines.build(g, PIPELINE_STARS, format::CANVAS, samples);
     }
 
     /// The frame's stars: `view_proj`, the root frame to WebGPU clip,

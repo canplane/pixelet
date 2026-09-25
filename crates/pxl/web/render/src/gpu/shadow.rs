@@ -65,13 +65,13 @@ impl Shadow {
     pub fn new(g: &GpuApi, handheld: bool) -> Shadow {
         let size = map_size(handheld);
         let map = object();
-        (g.texture)(map, size, size, 1, format::DEPTH32, 1, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
+        (g.texture)(map, size, size, 1, format::DEPTH32, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING);
         let map_view = object();
         (g.view)(map_view, map, dimension::D2, 0, 1, 0, 1);
         let sampler = object();
         (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::LESS_EQUAL, 1);
         let blank = object();
-        (g.texture)(blank, 1, 1, 1, format::DEPTH32, 1, 1, texture_usage::TEXTURE_BINDING);
+        (g.texture)(blank, 1, 1, 1, format::DEPTH32, 1, texture_usage::TEXTURE_BINDING);
         let blank_view = object();
         (g.view)(blank_view, blank, dimension::D2, 0, 1, 0, 1);
         let blank_sampler = object();
@@ -131,7 +131,7 @@ impl Shadow {
     /// draws into it and ends it.
     pub fn begin(&self, g: &GpuApi, encoder: u32, stamp: &mut Stamp) -> u32 {
         let pass = object();
-        (g.pass)(pass, encoder, &pass_desc(0, 0, load::CLEAR, self.map_view, load::CLEAR, 1.0, stamp.pass()));
+        (g.pass)(pass, encoder, &pass_desc(0, load::CLEAR, self.map_view, load::CLEAR, 1.0, stamp.pass()));
         pass
     }
 }

@@ -51,23 +51,13 @@ impl SkinnedPass {
     /// `ao` and the air's entries; `light` the light's frame and its entries
     /// where the pass draws into the shadow map too.
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        g: &GpuApi,
-        pipelines: &mut Pipelines,
-        samples: u32,
-        frame_buffer: u32,
-        shadow: [u32; 10],
-        light: Option<(u32, [u32; 10])>,
-        ao: [u32; 5],
-        air: [u32; AIR_WORDS],
-        align: u32,
-    ) -> SkinnedPass {
-        let lit = pipelines.build(g, PIPELINE_SKINNED, format::CANVAS, samples);
+    pub fn new(g: &GpuApi, pipelines: &mut Pipelines, frame_buffer: u32, shadow: [u32; 10], light: Option<(u32, [u32; 10])>, ao: [u32; 5], air: [u32; AIR_WORDS], align: u32) -> SkinnedPass {
+        let lit = pipelines.build(g, PIPELINE_SKINNED, format::CANVAS);
         let sampler = object();
         (g.sampler)(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::REPEAT, compare::NONE, 1);
         SkinnedPass {
-            depth: pipelines.build(g, PIPELINE_SKINNED_DEPTH, format::CANVAS, samples),
-            prepass: pipelines.build(g, PIPELINE_SKINNED_PREPASS, format::CANVAS, 1),
+            depth: pipelines.build(g, PIPELINE_SKINNED_DEPTH, format::CANVAS),
+            prepass: pipelines.build(g, PIPELINE_SKINNED_PREPASS, format::CANVAS),
             groups: FrameGroups::new(g, lit.layouts[0], frame_buffer, shadow, light, ao, air),
             lit,
             sampler,
@@ -75,11 +65,6 @@ impl SkinnedPass {
             skins: [Skin::default(); SKINS],
             seq: 0,
         }
-    }
-
-    pub fn set_samples(&mut self, g: &GpuApi, pipelines: &mut Pipelines, samples: u32) {
-        self.lit = pipelines.build(g, PIPELINE_SKINNED, format::CANVAS, samples);
-        self.depth = pipelines.build(g, PIPELINE_SKINNED_DEPTH, format::CANVAS, samples);
     }
 
     /// Group 0 again over a new occlusion map's entry `ao`.

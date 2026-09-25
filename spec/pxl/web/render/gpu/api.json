@@ -101,13 +101,13 @@
       "before its vertex buffers — the one number three parsers of a record would",
       "otherwise each hold their own copy of. Then: the topology, the cull mode, the",
       "depth compare under reversed Z (LESS is the shadow map's plain depth; NO_DEPTH, no",
-      "depth attachment), the blend, the sample count, which vertex entry point of",
+      "depth attachment), the blend, which vertex entry point of",
       "its shader the pipeline enters, a vertex step and format, a",
-      "binding's stages, and a binding's kind — FRAME_DEPTH a depth texture",
-      "multisampled as the frame is, TEXTURE_UNFILTERED one in a format no sampler",
+      "binding's stages, and a binding's kind — TEXTURE_UNFILTERED a texture in a",
+      "format no sampler",
       "filters (RGBA32F), read by textureLoad alone."
     ],
-    "HEAD": 12,
+    "HEAD": 10,
     "TRIANGLES": 0,
     "STRIP": 1,
     "LINES": 2,
@@ -121,8 +121,6 @@
     "OPAQUE": 0,
     "ALPHA": 1,
     "ADD": 2,
-    "FRAME_SAMPLES": 0,
-    "ONE_SAMPLE": 1,
     "VS": 0,
     "VS_COARSE": 1,
     "PER_VERTEX": 0,
@@ -145,7 +143,6 @@
     "DEPTH": 5,
     "SAMPLER": 6,
     "SAMPLER_COMPARISON": 7,
-    "FRAME_DEPTH": 8,
-    "TEXTURE_UNFILTERED": 9
+    "TEXTURE_UNFILTERED": 8
   }
 }
