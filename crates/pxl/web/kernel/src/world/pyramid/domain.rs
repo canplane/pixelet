@@ -30,7 +30,7 @@ use pxl_spec::space::hierarchy::Scale;
 use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
-use pxl_spec::space::pyramid::{chunk_span_of, span_of, LevelPage, CHUNK_CELLS, GROUND, TOP_LEVEL};
+use pxl_spec::space::pyramid::{chunk_span_of, LevelPage, CHUNK_CELLS, GROUND, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::kernel::kernel;
@@ -319,9 +319,7 @@ impl Domain {
 
     /// How near the eye `p` comes.
     pub fn page_nearest_to(&self, p: LevelPage) -> f64 {
-        let span = span_of(p.level);
-        let rect = (ivec::X(p.page) as f64 * span, ivec::Y(p.page) as f64 * span, span);
-        self.nearest(rect, Self::heights(p, p.node()))
+        self.nearest(p.rect(), Self::heights(p, p.node()))
     }
 
     /// The level the rule wants `c`'s nearest ground at, under this view's

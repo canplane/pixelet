@@ -222,6 +222,13 @@ impl LevelPage {
         span_of(self.level)
     }
 
+    /// The page's south-west corner and side, in units.
+    pub fn rect(self) -> (f64, f64, f64) {
+        let (side, [x, y]) = self.node();
+        let base = side.base_of([x, y, 0]);
+        (pvf3::to_real(pvf3::X(&base)), pvf3::to_real(pvf3::Y(&base)), side.side())
+    }
+
     /// A demand's subject: the key with the level in the lane a page does not
     /// use. The URL and the arrival take it apart again.
     pub fn subject(self) -> u64 {
