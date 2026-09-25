@@ -16,11 +16,8 @@
 pub mod chunk;
 pub mod window;
 
-use core::fmt;
-
-use pxl_spec::bake::quadkey::quadkey_of;
 use pxl_spec::space::pvf3::ivec::IVec;
-use pxl_spec::space::pyramid::{zoom_of_level, Folds, LevelPage, TOP_LEVEL};
+use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 use std::collections::HashSet;
 use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
@@ -66,16 +63,6 @@ pub trait Layer: Folds + Clone + 'static {
     /// screen and what is asked for are one cover.
     fn present(cover: Cover, _d: &Domain, _pyramid: &Pyramid<Self>) -> Cover {
         cover
-    }
-}
-
-/// A page's name in a bake: the quadkey of the tile it stands on, at the zoom
-/// its level is (pxl-spec bake/quadkey.rs). The name's length is the level.
-pub struct PageName(pub LevelPage);
-
-impl fmt::Display for PageName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", quadkey_of(zoom_of_level(self.0.level), self.0.page))
     }
 }
 

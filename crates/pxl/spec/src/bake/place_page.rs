@@ -41,13 +41,24 @@ use xpute_core::status::error::MarshalError;
 use xpute_core::wire::xtp::BranchCursor;
 use xpute_core::wire::xtp::{encoder, BranchViewImpl, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
+use crate::bake::quadkey::{quadkey_of, Quadkey};
 use crate::place::PlaceRank;
+use crate::space::pvf3::ivec::IVec;
+use crate::space::pyramid::LEVEL0_ZOOM;
 
 /// The one object the dictionary is under, beside the groups.
 pub const DICT_OBJECT: &str = "_dict";
 
 /// Levels a group is above a page: 16 pages on a side.
 pub const GROUP_SHAMT: u32 = 4;
+
+/// The zoom a group is named at: `GROUP_SHAMT` coarser than a page's.
+pub const GROUP_ZOOM: u32 = LEVEL0_ZOOM - GROUP_SHAMT;
+
+/// A group's name in its bake (bake/quadkey.rs).
+pub fn group_name(group_idx: IVec) -> Quadkey {
+    quadkey_of(GROUP_ZOOM, group_idx)
+}
 /// Pages under one group.
 pub const GROUP_PAGES: usize = 1 << (2 * GROUP_SHAMT);
 

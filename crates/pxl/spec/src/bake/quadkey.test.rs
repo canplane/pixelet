@@ -65,3 +65,14 @@ fn what_is_not_a_name_is_refused() {
     assert_eq!(index_of(&"0".repeat(LEVEL0_ZOOM as usize + 1)), None, "nothing is finer than a leaf");
     assert!(index_of(&"0".repeat(LEVEL0_ZOOM as usize)).is_some(), "a leaf is");
 }
+
+/// A pyramid page's name reads back as the page at every level the pyramid
+/// holds, and a name no level holds is no page.
+#[test]
+fn a_page_s_name_reads_back_as_the_page_and_only_a_held_level_is_one() {
+    for level in 0..=TOP_LEVEL {
+        let p = LevelPage::new(level, ivec::gather(-3, 5, 0));
+        assert_eq!(page_of_name(&page_name(p).to_string()), Some(p), "level {level}");
+    }
+    assert_eq!(page_of_name("0"), None, "zoom 1 is past the top level");
+}

@@ -36,9 +36,11 @@ use crate::layer::geocode::{repository as geocode_repository, store as geocode_s
 use crate::layer::terrain::page::{adopt_ocean, OCEAN_KEY};
 use crate::sched::ledger::record::{Failure, Outcome};
 use crate::world::change::world_edge;
-use crate::world::pyramid::{Layer, PageName};
+use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
+use pxl_spec::bake::place_page::group_name;
 use pxl_spec::bake::poi_page::PoiPage;
+use pxl_spec::bake::quadkey::page_name;
 use pxl_spec::space::pyramid::LevelPage;
 
 /// A started attempt's object, named inside its bake — what is written where
@@ -50,11 +52,11 @@ impl fmt::Display for DemandName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let key = self;
         match key.0 {
-            Category::terrain => write!(f, "{}", PageName(LevelPage::of_subject(key.1))),
+            Category::terrain => write!(f, "{}", page_name(LevelPage::of_subject(key.1))),
             // The one tile the stream has, at the name the bake gives it.
             Category::ocean => f.write_str(OCEAN_KEY),
-            Category::poi => write!(f, "{}", PageName(LevelPage::of_subject(key.1))),
-            Category::geocode => write!(f, "{}", geocode_repository::group_name(key.1)),
+            Category::poi => write!(f, "{}", page_name(LevelPage::of_subject(key.1))),
+            Category::geocode => write!(f, "{}", group_name(key.1)),
             // The one packet the stream has, at the name the bake gives it.
             Category::geocode_dict => write!(f, "{}", geocode_repository::dict_name()),
             // An asset is named by its content and belongs to no bake, so it

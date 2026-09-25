@@ -12,8 +12,8 @@ use super::job::{self, Job, Publication, Runner};
 use super::{Dataset, Failure, Kind};
 use crate::pyramid::{fold_stored, Layer, PageSet};
 use crate::util::{pack, Level};
-use pxl_spec::bake::quadkey::index_of;
-use pxl_spec::space::pyramid::{LevelPage, LEVEL0_ZOOM, TOP_LEVEL};
+use pxl_spec::bake::quadkey::page_of_name;
+use pxl_spec::space::pyramid::LevelPage;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
@@ -31,8 +31,7 @@ pub(super) async fn resolve(data: Arc<Dataset>, runner: Arc<Runner>, kind: Kind,
             .await?;
         return Ok(Some(name.into()));
     }
-    let (zoom, page) = index_of(name).filter(|(z, _)| LEVEL0_ZOOM - *z <= TOP_LEVEL).ok_or(Failure::BadName)?;
-    let p = LevelPage::new(LEVEL0_ZOOM - zoom, page);
+    let p = page_of_name(name).ok_or(Failure::BadName)?;
     if p.level > top {
         return Err(Failure::Unavailable);
     }
