@@ -9,13 +9,13 @@
 //! what it asks.
 
 use pxl_spec::space::pyramid::GROUND;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 
 use pxl_render::gpu::api::{gpu, room};
 use pxl_render::gpu::renderer::device_ready;
 use pxl_render::mesh::chunk_mesher::{mesh_words, BakeContext, Heights, Step, FINE_BOX_WORDS};
 use pxl_render::mesh::paint::level::write_level_runs;
-use pxl_render::mesh::paint::object::adapter::{Carve, Entries, Painted, Painter};
+use pxl_render::mesh::paint::object::adapter::{Carve, Claims, Entries, Painted, Painter};
 use pxl_render::mesh::paint::object::fold::{fold_columns, Column};
 use pxl_render::mesh::paint::terrain::adapter::{ChunkSample, Materials, PageView};
 use pxl_render::mesh::volume::Volumes;
@@ -277,7 +277,7 @@ pub struct Builder {
     /// The scan job's bands, kept between the scan's steps.
     bands: Vec<BandView<'static>>,
     /// The scan job's paint's claimed voxels, kept between its steps.
-    claimed: BTreeSet<u32>,
+    claimed: Claims,
     /// A level chunk's objects folded, kept for its capacity.
     folded: HashMap<[i64; 3], u32>,
     /// A z16 chunk's objects folded to its cube, as entries: what its paint
@@ -308,7 +308,7 @@ impl Builder {
             carve: None,
             run_holders: [None; RUN_SETS],
             bands: Vec::new(),
-            claimed: BTreeSet::new(),
+            claimed: Claims::new(),
             folded: HashMap::new(),
             fold_band: Vec::new(),
             fold_pos: Vec::new(),

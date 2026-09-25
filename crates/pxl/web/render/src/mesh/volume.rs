@@ -201,7 +201,7 @@ impl Extras {
 }
 
 /// A cell of the chunk: chunk-local x and y, absolute z.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Cell {
     pub cx: u32,
     pub cy: u32,

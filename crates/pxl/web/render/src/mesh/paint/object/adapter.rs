@@ -61,22 +61,13 @@ pub struct Painter {
     kinds: Vec<Kind>,
     materials: Vec<u32>,
     layers: Vec<u8>,
-    /// The voxels this paint has claimed, so a second sub-cell object
-    /// landing on a claimed one is filed as overflow rather than
-    /// overwriting it; by packed address, cleared per paint.
-    claimed: BTreeSet<u32>,
+    claimed: Claims,
 }
 
-/// What a cell's Z is shifted by to address it unsigned: PVF3 gives Z sixteen
-/// bits, so this is half that range and the sum is one.
-const Z_BIAS: CellZ = 1 << 15;
-
-/// A voxel's address within a paint: its Z above the bias, then its cell in
-/// the band. Sixteen bits of Z over twelve of column is twenty-eight, which is
-/// what the claimed set is keyed by.
-fn voxel_address(cx: u32, cy: u32, z: CellZ) -> u32 {
-    (((z + Z_BIAS) as u32) << 12) | (cy << 6) | cx
-}
+/// The voxels a paint has claimed, so a second sub-cell object landing on a
+/// claimed one is filed as overflow rather than overwriting it: by the cell
+/// the volume addresses it by, cleared per paint.
+pub type Claims = BTreeSet<Cell>;
 
 impl Default for Painter {
     fn default() -> Self {
@@ -154,17 +145,7 @@ impl Painter {
     /// entry sets one voxel. The carve preview is not an entry;
     /// `paint_carve` ends the paint.
     #[allow(clippy::too_many_arguments)]
-    pub fn paint_entries(
-        &self,
-        entries: Option<Entries>,
-        volumes: &mut Volumes,
-        volume: u32,
-        hide: Option<(i32, u32)>,
-        from: usize,
-        voxels: usize,
-        claimed: &mut BTreeSet<u32>,
-        any: &mut bool,
-    ) -> Painted {
+    pub fn paint_entries(&self, entries: Option<Entries>, volumes: &mut Volumes, volume: u32, hide: Option<(i32, u32)>, from: usize, voxels: usize, claimed: &mut Claims, any: &mut bool) -> Painted {
         let Some(e) = entries else { return Painted::Done };
         let mut set = 0;
         for k in from..e.band.len() {
@@ -184,7 +165,7 @@ impl Painter {
     }
 
     /// The carve preview painted as air, last. False when a paint was refused.
-    pub fn paint_carve(&self, volumes: &mut Volumes, volume: u32, carve: Option<Carve>, claimed: &mut BTreeSet<u32>, any: &mut bool) -> bool {
+    pub fn paint_carve(&self, volumes: &mut Volumes, volume: u32, carve: Option<Carve>, claimed: &mut Claims, any: &mut bool) -> bool {
         match carve {
             Some(c) => self.paint_entry(volumes, volume, c.band, c.pos, AIR, claimed, any).is_some(),
             None => true,
@@ -196,7 +177,7 @@ impl Painter {
     /// voxel, and what is finer than a cell rides in the voxel's sub-cell
     /// fraction.
     #[allow(clippy::too_many_arguments)]
-    fn paint_entry(&self, volumes: &mut Volumes, volume: u32, band: BandZ, pos: u32, state: u32, claimed: &mut BTreeSet<u32>, any: &mut bool) -> Option<usize> {
+    fn paint_entry(&self, volumes: &mut Volumes, volume: u32, band: BandZ, pos: u32, state: u32, claimed: &mut Claims, any: &mut bool) -> Option<usize> {
         let kind = self.kind(state);
         if kind == Kind::Decor || kind == Kind::Untaught {
             return Some(0);
@@ -220,13 +201,12 @@ impl Painter {
         };
         let v = Voxel { material, layer_idx, sub };
 
-        let address = voxel_address(cx, cy, z);
         *any = true;
         let at = Cell { cx, cy, z };
-        let ok = if claimed.contains(&address) && !is_air {
+        let ok = if claimed.contains(&at) && !is_air {
             volumes.append_sub_voxel(volume, at, v)
         } else {
-            claimed.insert(address);
+            claimed.insert(at);
             volumes.set_voxel(volume, at, v)
         };
         ok.then_some(1)
