@@ -1,11 +1,5 @@
 {
   "settings": {
-    "display": {
-      "show_poi": {
-        "label": "장소",
-        "description": "지도 위에 주변 장소(카페, 상점, 랜드마크 등) 뱃지를 표시합니다."
-      }
-    },
     "camera": {
       "ground_snap": {
         "label": "고도 접지 고정",

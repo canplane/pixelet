@@ -70,14 +70,13 @@ export const SETTINGS = {
     section: "display",
     cost: "med",
   },
-  /** Opt-in bounded POI summary snapshot for the local vertical slice. */
+  /** The places' badges over the map, from the published POI pages. */
   show_poi: {
     key: 3 as number,
     kind: "toggle",
     default: false,
     section: "display",
     cost: "low",
-    dev: true,
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
    * Off by default: the tilt is the one control a map view is expected to
@@ -257,6 +256,14 @@ export const SETTINGS_SHIPPED = {
     default: true,
     section: "display",
     cost: "med",
+  },
+  /** The places' badges over the map, from the published POI pages. */
+  show_poi: {
+    key: 3 as number,
+    kind: "toggle",
+    default: false,
+    section: "display",
+    cost: "low",
   },
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
    * Off by default: the tilt is the one control a map view is expected to
