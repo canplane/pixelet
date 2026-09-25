@@ -313,6 +313,11 @@ pub fn domain_for(eye: &Eye, height: f64, frustum: Option<Frustum>, pressure: u3
 /// roots alone are wanted, which fit.
 const MAX_STEP: i32 = SCALE_STEPS * (TOP_LEVEL as i32 + 1);
 
+/// Every column's heights as `Domain::heights` read them, and the revision
+/// they were read at.
+type HeightsCache = (Option<(u32, u32)>, HashMap<(u32, (Scale, [i64; 2])), Option<(f64, f64)>>);
+static HEIGHTS: Global<HeightsCache> = Global::new();
+
 /// The step the last view's criterion was loosened by (`domain_for`). One
 /// for every layer: each makes its domain from the same eye and the same
 /// heights, and they have to agree on the ground they draw.
@@ -344,12 +349,25 @@ impl Domain {
     /// stored, which is 2D: the terrain's heightfield and the objects'
     /// columns, each read by the column (`Chunk::column`). `heights_revision`
     /// says when any answer this gives may have changed.
+    ///
+    /// Read once for each column until the revision moves: a view is made
+    /// again every frame the eye moves, and every chunk it walks asks, eight
+    /// children at a time over every step of the budget's criterion, while
+    /// the answer only moves with the heights. Asked afresh, it was most of
+    /// a zoom's turn (measured 2026-09-26).
     pub fn heights(page: LevelPage, column: (Scale, [i64; 2])) -> Option<(f64, f64)> {
-        let ground = ground_under(page, column);
-        match kernel().objects.reach_over(column) {
-            Some(b) => Some(ground.map_or(b, |(lo, hi)| (lo.min(b.0), hi.max(b.1)))),
-            None => ground,
+        let revision = heights_revision();
+        let cache = HEIGHTS.get(Default::default);
+        if cache.0 != Some(revision) {
+            *cache = (Some(revision), HashMap::new());
         }
+        *cache.1.entry((page.level, column)).or_insert_with(|| {
+            let ground = ground_under(page, column);
+            match kernel().objects.reach_over(column) {
+                Some(b) => Some(ground.map_or(b, |(lo, hi)| (lo.min(b.0), hi.max(b.1)))),
+                None => ground,
+            }
+        })
     }
 
     /// What of `c` holds anything: the heights its column's contents span,
