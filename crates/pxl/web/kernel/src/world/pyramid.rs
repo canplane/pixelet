@@ -366,6 +366,13 @@ impl<L: Layer> Pyramid<L> {
         self.domain.as_ref()
     }
 
+    /// Whether the view keeps `p` now: the pinned page, or one the domain
+    /// wants. What a page with no record lives by, and what anything held
+    /// for the view is held by.
+    pub fn keeps(&self, p: LevelPage) -> bool {
+        keeps(self.pinned, self.domain.as_ref(), p)
+    }
+
     /// Which making of the domain this is.
     pub fn domains(&self) -> u32 {
         self.domains
@@ -407,7 +414,7 @@ impl<L: Layer> Pyramid<L> {
     /// comparison rather than a score, so a page the camera wants is never
     /// given up for one it does not, whatever the distance.
     fn worth(&self, p: LevelPage, anchor: IVec) -> (bool, bool, u32) {
-        let wanted = Some(p) == self.pinned || self.domain.as_ref().is_some_and(|d| d.wants(p));
+        let wanted = self.keeps(p);
         (!wanted, self.covered(p), ring_of(anchor, p))
     }
 
@@ -527,13 +534,8 @@ impl<L: Layer> Pyramid<L> {
     fn drop_unrecorded(&mut self, d: &Domain) {
         // An answer the camera has left is asked again if it comes back.
         let pinned = self.pinned;
-        self.answered.retain(|p| Some(*p) == pinned || d.wants(*p));
-        let drop: Vec<LevelPage> = self
-            .pages
-            .iter()
-            .filter(|(&p, held)| held.record.is_none() && Some(p) != self.pinned && !d.wants(p))
-            .map(|(&p, _)| p)
-            .collect();
+        self.answered.retain(|&p| keeps(pinned, Some(d), p));
+        let drop: Vec<LevelPage> = self.pages.iter().filter(|(&p, held)| held.record.is_none() && !keeps(pinned, Some(d), p)).map(|(&p, _)| p).collect();
         for p in drop {
             self.clear(p);
         }
@@ -578,6 +580,11 @@ impl<L: Layer> Pyramid<L> {
         declare(L::CATEGORY, &[]);
         self.last = None;
     }
+}
+
+/// The one rule a view keeps a page by: pinned, or wanted by its domain.
+fn keeps(pinned: Option<LevelPage>, d: Option<&Domain>, p: LevelPage) -> bool {
+    Some(p) == pinned || d.is_some_and(|d| d.wants(p))
 }
 
 fn folds<L: Layer>() -> &'static mut Notify {

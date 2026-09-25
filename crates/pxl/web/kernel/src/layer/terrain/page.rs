@@ -213,15 +213,16 @@ pub fn adopt_ocean(pkt: &[u8]) -> Result<(), FetchFail> {
 /// asked for while pages wait on it, and map_status following the queue.
 pub fn terrain_step() {
     let device = map_navigation().device_coord.map(|c| LevelPage::new(0, TO_XY(L3_IDX(c.i))));
+    let terrain = Terrain::pyramid();
+    terrain.pin(device);
+    // A page waiting on the shared tile is held as the view holds a page
+    // with no record: while it keeps it.
     if eye().is_some() {
-        let d = Terrain::pyramid().domain();
-        ocean().waiting.retain(|p| Some(*p) == device || d.is_some_and(|d| d.wants(*p)));
+        ocean().waiting.retain(|&p| terrain.keeps(p));
     }
     let o = ocean();
     let ocean_wants: &[(u64, Rank)] = if o.terrain.is_none() && !o.waiting.is_empty() { &[(0, policy::ocean())] } else { &[] };
     declare(OCEAN_CATEGORY, ocean_wants);
-    let terrain = Terrain::pyramid();
-    terrain.pin(device);
     terrain.step();
     // Derived from the scheduler rather than tracked, so a later pan that
     // supersedes a batch cannot leave a stale SUCCESS behind.
