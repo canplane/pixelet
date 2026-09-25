@@ -46,9 +46,11 @@ impl Label {
 }
 
 /// How much of a name a badge shows, the rest behind an ellipsis. A product
-/// choice and not a derivation: long enough for nearly every place's name
-/// whole, and short enough that one badge cannot cross the screen.
-const SHOWN_CHARS: usize = 48;
+/// choice and not a derivation: the length a one-line badge still reads as a
+/// name at. Counted in code points, so a character outside the BMP is one
+/// and is never cut in half, as a UTF-16 count would; a cluster of several,
+/// a flag or a joined emoji, can still be cut, and is rare in a place's name.
+const SHOWN_CHARS: usize = 12;
 
 struct Badge {
     width: f64,
