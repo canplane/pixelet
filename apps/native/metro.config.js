@@ -27,6 +27,43 @@ const PREFIXES = [
 const SINGLETONS = ["react", "react-native"];
 const FROM_APP = path.join(__dirname, "index.ts");
 
+/**
+ * What this build is — when, from which source, under which number — as the
+ * module `virtual:pxl-build` (config/deploy.ts reads it). The source is git's
+ * short hash, `-dirty` where the tree had changes; the number is the one CI
+ * handed the build, or else `#<last>-<id>` from the last one this checkout saw
+ * published (apps/web/.build_number), since a build CI did not number is not
+ * that build. Written once, when Metro starts: a dev server's stamp is the
+ * one it started under.
+ */
+function build_stamp() {
+  const { execSync } = require("node:child_process");
+  const fs = require("node:fs");
+  let id = "unknown";
+  try {
+    const git = (args) => execSync(`git ${args}`, { cwd: root, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    id = `${git("rev-parse --short HEAD")}${git("status --porcelain") !== "" ? "-dirty" : ""}`;
+  } catch { /* not a checkout */ }
+  let number = id;
+  if (process.env.PXL_BUILD_NUMBER) number = `#${process.env.PXL_BUILD_NUMBER}`;
+  else {
+    try {
+      const last = fs.readFileSync(path.join(root, "apps/web/.build_number"), "utf8").trim();
+      if (/^\d+$/.test(last)) number = `#${last}-${id}`;
+    } catch { /* none seen yet */ }
+  }
+  const file = path.join(__dirname, ".expo/pxl-build.js");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(
+    file,
+    `export const time = ${JSON.stringify(new Date().toISOString())};\n` +
+      `export const id = ${JSON.stringify(id)};\n` +
+      `export const number = ${JSON.stringify(number)};\n`,
+  );
+  return file;
+}
+const BUILD_STAMP = build_stamp();
+
 const config = getDefaultConfig(__dirname);
 
 // The shell's files and the packages Deno installed are both outside this
@@ -44,8 +81,7 @@ config.resolver.resolveRequest = (context, name, platform) => {
   for (const [prefix, dir] of PREFIXES) {
     if (name.startsWith(prefix)) return context.resolveRequest(context, dir + name.slice(prefix.length), platform);
   }
-  // What a build is, which Vite writes as a virtual module on the web.
-  if (name === "virtual:pxl-build") return { type: "sourceFile", filePath: path.join(__dirname, "src/build.ts") };
+  if (name === "virtual:pxl-build") return { type: "sourceFile", filePath: BUILD_STAMP };
   return context.resolveRequest(context, name, platform);
 };
 

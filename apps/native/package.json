@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "main": "index.ts",
+  "scripts": {
+    "start": "EXPO_NO_TYPESCRIPT_SETUP=1 deno run -A npm:expo@57.0.25 start"
+  },
   "dependencies": {
     "expo": "57.0.25",
     "i18next": "^26.4.2",
