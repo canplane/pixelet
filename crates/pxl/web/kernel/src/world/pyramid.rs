@@ -147,6 +147,9 @@ pub struct Pyramid<L: Layer> {
     /// The view the layer last drew, what it draws of it, and which making
     /// of it this is: whoever draws it re-reads it when the number moves.
     domain: Option<Domain>,
+    /// Which making of the domain this is: it moves whenever the domain is
+    /// made again, whether or not the cover changed with it.
+    domains: u32,
     cover: Cover,
     covers: u32,
     /// What the layer asks the fetcher for, made with the cover: a function
@@ -169,6 +172,7 @@ impl<L: Layer> Default for Pyramid<L> {
             revision: 0,
             pinned: None,
             domain: None,
+            domains: 0,
             cover: Cover::default(),
             covers: 0,
             wishlist: Vec::new(),
@@ -362,6 +366,11 @@ impl<L: Layer> Pyramid<L> {
         self.domain.as_ref()
     }
 
+    /// Which making of the domain this is.
+    pub fn domains(&self) -> u32 {
+        self.domains
+    }
+
     /// What the resident pages can do for `p`, by what the cover made of its
     /// ground.
     fn resolve(&self, p: LevelPage) -> Resolved {
@@ -546,6 +555,7 @@ impl<L: Layer> Pyramid<L> {
             cover.drawn.sort_unstable();
             cover.gaps.sort_unstable();
             self.domain = Some(d);
+            self.domains = self.domains.wrapping_add(1);
             // The eye moves every frame the camera does, and most of those
             // moves cross no chunk's split distance: whoever reads the cover
             // is told only when what it draws has changed.

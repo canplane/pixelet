@@ -67,14 +67,6 @@ use pxl_spec::space::pyramid::LevelPage;
 
 /// The sphere a chunk nothing has measured is culled by.
 const APPROXIMATE_CHUNK_RADIUS: f64 = chunk_span_of(0) * 0.75;
-/// How long a settled view goes before every chunk is rechecked anyway.
-///
-/// Reconciliation and nothing else. What a chunk should be showing is a
-/// function of the view, so a view that moved is rechecked in the same
-/// frame it moved in (`view_dirty`); this is for what moves without the
-/// view — the budget's pressure, a generation, a source told late — and for
-/// anything that sets the flag and is missed. A camera is not polled for.
-const RECHECK_INTERVAL_S: f64 = 0.15;
 /// Layouts applied per frame on screen, and releases off it — more of the
 /// latter after a frame that had a block refused: a release is cheap, and
 /// what an off-screen chunk still shows is what the refused block needs
@@ -626,7 +618,10 @@ pub struct Scheduler {
     /// How many levels coarser than the rule the byte budget has pulled the
     /// tiers (`press`): it moves the criterion, never the rule.
     pressure: u32,
-    recheck_elapsed: f64,
+    /// The terrain's domain the last recheck saw (world/pyramid.rs
+    /// `domains`): what a chunk should show is read off it, and it is made
+    /// again when the eye, the resident pages or the heights move.
+    domain_seen: u32,
     frame: Option<Frame>,
     /// Something changed that a recheck has not seen: the view moved, a
     /// chunk came or went, a source was told. The next tick rechecks every
@@ -769,7 +764,7 @@ impl Scheduler {
             slots: Vec::with_capacity(MAX_CHUNKS),
             index: BTreeMap::new(),
             pressure: 0,
-            recheck_elapsed: RECHECK_INTERVAL_S,
+            domain_seen: u32::MAX,
             frame: None,
             view_dirty: true,
             retained_on: 0.0,
@@ -1237,6 +1232,9 @@ impl Scheduler {
         }
         self.census.mount_full = 0;
         if self.selected_for != Some(key) {
+            // A chunk's staleness and whether it is a root are the
+            // selection's, which a recheck reads.
+            self.view_dirty = true;
             let mut wanted = BTreeMap::new();
             self.select(&mut wanted);
 
@@ -1475,17 +1473,18 @@ impl Scheduler {
         }
         self.frame = Some(frame);
         self.clock_ms += frame.delta_s * 1000.0;
-        // The view decides what every chunk should be showing, so a view
-        // that has moved is answered now and not on the next tick of a
-        // timer. `view_dirty` is that question outstanding — set by a frame
-        // that differs from the last, and by anything else a recheck has not
-        // seen — and the interval below is only what catches a change that
-        // set no flag.
-        self.recheck_elapsed += frame.delta_s;
-        let full_recheck = self.view_dirty || self.recheck_elapsed >= RECHECK_INTERVAL_S;
-        if full_recheck {
-            self.recheck_elapsed = 0.0;
+        // What every chunk should be showing is read off the frame, the
+        // domain, the pressure and what the chunk was told, so a change to
+        // any of them is answered now: `view_dirty` is that question
+        // outstanding — set by a frame that differs from the last, a domain
+        // made again, and every other input where it changes. Nothing is
+        // left to a timer to catch.
+        let domains = Terrain::pyramid().domains();
+        if domains != self.domain_seen {
+            self.domain_seen = domains;
+            self.view_dirty = true;
         }
+        let full_recheck = self.view_dirty;
 
         self.stop_evicted(world);
         self.lose_meshes();
@@ -1515,7 +1514,7 @@ impl Scheduler {
 
         // What each chunk should be showing, for every chunk that could have
         // changed: freshly mounted, mid-blend, or settling — and all of them
-        // on the interval.
+        // when an input they all read moved.
         //
         // Not under the budget, and that is the point. This decides what is
         // *wanted*; the budget is for the work that follows, and a pass that
@@ -1530,7 +1529,7 @@ impl Scheduler {
         // the horizon.
         //
         // It costs a distance and a few flags a chunk, MAX_CHUNKS of
-        // them at the worst, and only on the interval. The FRESH case was
+        // them at the worst, and only when an input moved. The FRESH case was
         // already exempted for this exact reason; it is the whole pass that
         // needed to be.
         eligible.clear();
@@ -2197,7 +2196,6 @@ impl Scheduler {
         };
         self.pressure = next;
         self.pressure_at = now;
-        self.recheck_elapsed = RECHECK_INTERVAL_S;
         self.view_dirty = true;
     }
 }
