@@ -519,6 +519,33 @@ impl BakeContext {
         // run_face_mask's neighbor lookups and is never walked: nothing is
         // emitted from a column that belongs to the next chunk.
         let (lo, hi) = (b.apron, span - b.apron);
+        // The sides a column on the chunk's rim faces out of it: drawn
+        // whatever the apron beside them holds. The apron is the chunk's own
+        // level read past its edge, and the chunk drawn there may be another
+        // level whose ground stands lower than that reading — with the side
+        // hidden against the apron, the step between them was open to the
+        // sky. Drawn down to the chunk's floor, the rim closes on whatever
+        // lies beside it, so no two chunks need to be a level apart or less.
+        let rim = |cx: u32, cy: u32| {
+            if b.apron == 0 {
+                return 0;
+            }
+            let x = if cx + 1 == hi {
+                FACE_PX
+            } else if cx == lo {
+                FACE_NX
+            } else {
+                0
+            };
+            let y = if cy + 1 == hi {
+                FACE_PY
+            } else if cy == lo {
+                FACE_NY
+            } else {
+                0
+            };
+            x | y
+        };
 
         if b.phase == 0 {
             let row_end = hi.min(b.row + BAKE_ROWS_PER_STEP);
@@ -530,7 +557,7 @@ impl BakeContext {
                     for i in set.start[col as usize]..end {
                         let i = i as usize;
                         self.counters.total_runs += 1;
-                        let mask = run_face_mask(set, span, cx, cy, i);
+                        let mask = run_face_mask(set, span, cx, cy, i) | if set.z1[i] >= set.z0[i] { rim(cx, cy) } else { 0 };
                         self.counters.faces_possible += if run_include_bottom(set, i) { FULL_FACE_CNT } else { OPEN_BOTTOM_FACE_CNT };
                         if mask & ALL_FACES == 0 {
                             self.counters.culled += 1;

@@ -88,8 +88,7 @@ const _: () = assert!(MAX_MOUNTS_PER_FRAME == PAGE_CHUNKS * PAGE_CHUNKS, "a page
 
 /// The widest selection there is: the chunks a view draws (domain.rs
 /// `VIEW_CHUNKS`), each in its own place whether its page has come or a page
-/// over it draws it (world/pyramid.rs `Cover`), and the balance a mesh needs
-/// only refines toward what the view wants (layer/terrain/present.rs).
+/// over it draws it (world/pyramid.rs `Cover`).
 ///
 /// The point of writing it down is that it is under MAX_CHUNKS with the
 /// view it replaces beside it. The table is a hard budget, so what it can
@@ -1135,7 +1134,7 @@ impl Scheduler {
     }
 
     /// The chunks to draw: what the terrain draws of the view
-    /// (world/pyramid.rs `Cover`, layer/terrain/present.rs).
+    /// (world/pyramid.rs `Cover`).
     fn select(&self) -> BTreeSet<Chunk> {
         Terrain::pyramid().cover().0.drawn.iter().copied().collect()
     }

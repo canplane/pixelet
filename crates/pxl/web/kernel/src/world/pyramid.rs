@@ -58,15 +58,6 @@ pub trait Layer: Folds + Clone + 'static {
 
     /// A page came or went; whoever reads this layer's pages is told.
     fn changed(_p: LevelPage, _present: bool) {}
-
-    /// What the layer draws of its cover. A layer whose drawing has limits
-    /// of its own — the terrain's mesh cannot meet a chunk two levels from
-    /// it, and its chunk table holds so many — turns what it cannot draw into
-    /// gaps here; a gap is what the wishlist fetches, so what is on the
-    /// screen and what is asked for are one cover.
-    fn present(cover: Cover, _d: &Domain, _pyramid: &Pyramid<Self>) -> Cover {
-        cover
-    }
 }
 
 /// Pages a layer keeps wherever the view is: the device's own leaf, so the
@@ -500,7 +491,7 @@ impl<L: Layer> Pyramid<L> {
         if self.last != Some(wish) {
             let d = domain_for(&e, eye_height(), Some(frustum), wish.6);
             self.drop_absent(&d);
-            let mut cover = L::present(self.cover_of(&d), &d, self);
+            let mut cover = self.cover_of(&d);
             cover.drawn.sort_unstable();
             cover.gaps.sort_unstable();
             self.domain = Some(d);

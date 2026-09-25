@@ -33,7 +33,7 @@ use crate::layer::terrain::ground_snap::reground_map_center;
 use crate::mem::fixed::{at, Range};
 use crate::shell::map_store::{map_store, MapStatus};
 use crate::world::pyramid::domain::eye;
-use crate::world::pyramid::{Cover, Domain, Layer, Pyramid, ABSENT};
+use crate::world::pyramid::{Layer, Pyramid, ABSENT};
 
 /// Object key of the single shared open-ocean tile in the static bucket.
 pub const OCEAN_KEY: &str = "_ocean";
@@ -88,11 +88,6 @@ impl Layer for Terrain {
             None if !o.waiting.contains(&p) => o.waiting.push(p),
             None => {}
         }
-    }
-
-    /// What the mesh can draw of the cover (present.rs).
-    fn present(cover: Cover, d: &Domain, pyramid: &Pyramid<Terrain>) -> Cover {
-        crate::layer::terrain::present::mesh(cover, d, |c| pyramid.drawn_from(c.page()).is_some())
     }
 
     /// A leaf is what a map center that could not be grounded before may be

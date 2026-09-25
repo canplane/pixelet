@@ -143,12 +143,10 @@ fn the_cover_and_its_gaps_partition_the_domain_and_count_every_place_once() {
     }
 }
 
-/// The terrain's mesh draws its cover balanced: no two chunks that meet
-/// more than a level apart unless nothing over the finer is held, never more
-/// than a level finer than the view wants, and still the domain's ground
-/// exactly once.
+/// Whatever of the pages is held, the cover is the domain's ground exactly
+/// once: every piece drawn or open, and no two meeting.
 #[test]
-fn the_terrain_draws_its_cover_balanced_and_still_whole() {
+fn the_cover_is_the_domain_whole_whatever_is_held() {
     // The domain reads the terrain's and the objects' heights, which are
     // globals.
     let _serial = crate::global::serial();
@@ -164,56 +162,17 @@ fn the_terrain_draws_its_cover_balanced_and_still_whole() {
                 pyramid.set(*p, page.clone());
             }
         }
-        let cover = crate::layer::terrain::present::mesh(pyramid.cover_of(&d), &d, |c| pyramid.get(c.page()).is_some());
-        for &c in &cover.drawn {
-            let want = d.wanted_over(c);
-            assert!(c.level() + 1 >= want.level(), "trial {trial}: {c:?} finer than the view wants");
-            for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
-                let next = c.beside(dx, dy, 0);
-                if let Some(o) = std::iter::once(next).chain(next.ancestors()).find(|a| cover.drawn.contains(a)) {
-                    let held_over = c.ancestors().any(|a| pyramid.get(a.page()).is_some());
-                    assert!(o.level() < c.level() + 2 || !held_over, "trial {trial}: {c:?} meets {o:?}");
-                }
-            }
-        }
+        let cover = pyramid.cover_of(&d);
         let pieces: Vec<Chunk> = cover.drawn.iter().chain(&cover.gaps).copied().collect();
         assert!(disjoint(&pieces), "trial {trial}: two pieces meet");
         assert_eq!(pieces.iter().map(|&c| area(c)).sum::<f64>(), whole, "trial {trial}");
     }
 }
 
-/// Fine ground that arrived before anything over it stays drawn beside a
-/// coarse neighbor rather than opening: an island's land beside the sea a
-/// coarse page draws.
+/// What the cover leaves open is what it asks for: a page under a gap that
+/// nothing resident answers is in the wishlist.
 #[test]
-fn fine_ground_with_nothing_held_over_it_is_drawn_beside_a_coarse_neighbor() {
-    let _serial = crate::global::serial();
-    let d = the_domain();
-    let level4 = |c: Chunk| c.ancestors().find(|a| a.level() == 4).expect("a level-4 chunk over it");
-    let (fine, coarse) = drawn_by_rule(&d)
-        .into_iter()
-        .filter(|c| c.level() == 2)
-        .find_map(|c| {
-            [(1, 0), (-1, 0), (0, 1), (0, -1)]
-                .into_iter()
-                .map(|(dx, dy)| level4(c.beside(dx, dy, 0)))
-                .find(|&k| k != level4(c))
-                .map(|k| (c, k))
-        })
-        .expect("level-2 ground beside another level-4 chunk's");
-    let cover = Cover {
-        drawn: vec![fine, coarse],
-        gaps: Vec::new(),
-    };
-    let shown = crate::layer::terrain::present::mesh(cover, &d, |c| c == fine || c == coarse);
-    assert!(shown.drawn.contains(&fine), "the fine ground stays drawn");
-    assert!(!shown.gaps.contains(&fine) && !shown.gaps.iter().any(|g| fine.ancestors().any(|a| a == *g)), "and is not opened");
-}
-
-/// What the terrain leaves open is what it asks for: a page under a gap the
-/// presentation made that nothing resident answers is in the wishlist.
-#[test]
-fn a_gap_the_mesh_leaves_is_asked_for() {
+fn a_gap_the_cover_leaves_is_asked_for() {
     // The domain reads the terrain's and the objects' heights, which are
     // globals.
     let _serial = crate::global::serial();
@@ -223,7 +182,7 @@ fn a_gap_the_mesh_leaves_is_asked_for() {
     for (p, page) in pages.iter().filter(|(p, _)| p.level == 2 || (p.level == 4 && ivec::X(p.page) % 2 == 0)) {
         pyramid.set(*p, page.clone());
     }
-    pyramid.cover = crate::layer::terrain::present::mesh(pyramid.cover_of(&d), &d, |c| pyramid.get(c.page()).is_some());
+    pyramid.cover = pyramid.cover_of(&d);
     let gaps = pyramid.cover.gaps.clone();
     assert!(!gaps.is_empty(), "a residency with ground left open");
     pyramid.domain = Some(d);
