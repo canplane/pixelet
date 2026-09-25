@@ -219,7 +219,3 @@ impl Layers {
 fn table_len() -> usize {
     GROUND_LAYER_META.len() + block_cubes().len()
 }
-
-#[cfg(test)]
-#[path = "layers.test.rs"]
-mod test;

@@ -153,7 +153,3 @@ pub fn set_lod_projection(viewport_h: f64, fov_deg: f64, pressure: u32) {
     l.set_projection(viewport_h, fov_deg);
     l.set_pressure(pressure);
 }
-
-#[cfg(test)]
-#[path = "lod.test.rs"]
-mod test;

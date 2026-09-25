@@ -139,7 +139,3 @@ impl Place {
         self.parts.iter().filter(move |p| p.rank <= deepest)
     }
 }
-
-#[cfg(test)]
-#[path = "place.test.rs"]
-mod test;

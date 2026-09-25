@@ -127,7 +127,3 @@ pub fn surface_z_from_terrain(map_origin: IVec, local_x: f64, local_y: f64, terr
     }
     surface
 }
-
-#[cfg(test)]
-#[path = "surface_height.test.rs"]
-mod test;

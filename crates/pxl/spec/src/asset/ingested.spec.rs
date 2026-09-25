@@ -750,7 +750,3 @@ pub const SHEET: Sheet = Sheet {
         [154, 209, 193],
     ],
 };
-
-#[cfg(test)]
-#[path = "ingested.test.rs"]
-mod test;

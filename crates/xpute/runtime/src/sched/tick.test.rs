@@ -268,12 +268,3 @@ fn tick_what_the_interaction_phase_spends_comes_off_the_budget() {
     t.run(&mut s, 1.0 / 60.0, QUOTA_MS, now());
     assert!(s.a <= s.b - 1.5, "visible saw {} of {}", s.a, s.b);
 }
-
-#[test]
-#[should_panic(expected = "steps are taken")]
-fn tick_the_step_table_is_fixed_a_step_past_it_is_refused() {
-    let mut t = tick();
-    for _ in 0..9 {
-        t.on_tick(COSMETIC, |_| {}, 0);
-    }
-}

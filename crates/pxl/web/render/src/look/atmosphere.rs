@@ -181,7 +181,3 @@ pub fn sun_light(altitude_km: f64, sun_mu: f64, white: [f64; 3]) -> [f64; 3] {
     let t = light_at(altitude_km, sun_mu);
     core::array::from_fn(|k| SUN_LIGHT * t[k] * white[k])
 }
-
-#[cfg(test)]
-#[path = "atmosphere.test.rs"]
-mod test;

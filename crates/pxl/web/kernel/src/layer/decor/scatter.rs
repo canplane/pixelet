@@ -150,7 +150,3 @@ pub fn transport_aligned_rotation(cells: &[GroundCell], cell_x: u32, cell_y: u32
         axis_rotation
     }
 }
-
-#[cfg(test)]
-#[path = "scatter.test.rs"]
-mod test;

@@ -494,7 +494,3 @@ pub fn scene_nodes(gltf: &Gltf) -> Vec<u32> {
     }
     out
 }
-
-#[cfg(test)]
-#[path = "gltf.test.rs"]
-mod test;

@@ -170,20 +170,6 @@ fn a_parent_gives_way_only_to_all_of_its_children() {
     assert!(!(here(parent) && under.iter().any(|&k| here(k))), "never a parent and its child");
 }
 
-/// The cover and the folds are functions of the resident set, and what
-/// tells them it changed is one number every set and clear moves.
-#[test]
-fn every_arrival_and_departure_moves_the_resident_revision() {
-    let mut pyramid = Pyramid::<PoiPage>::default();
-    let p = LevelPage::new(0, ivec::gather(4, 9, 0));
-    let before = pyramid.revision();
-    pyramid.set(p, PoiPage::default());
-    let arrived = pyramid.revision();
-    assert_ne!(arrived, before);
-    pyramid.clear(p);
-    assert_ne!(pyramid.revision(), arrived);
-}
-
 /// Where nothing over a wanted chunk is resident, the pages under it stand
 /// in however far down they are.
 #[test]

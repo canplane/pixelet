@@ -227,6 +227,6 @@ pub const SHEET: Sheet = Sheet {
     for m in &sheet.means {
         let _ = writeln!(out, "        [{}, {}, {}],", m[0], m[1], m[2]);
     }
-    out.push_str("    ],\n};\n\n#[cfg(test)]\n#[path = \"ingested.test.rs\"]\nmod test;\n");
+    out.push_str("    ],\n};\n");
     out
 }

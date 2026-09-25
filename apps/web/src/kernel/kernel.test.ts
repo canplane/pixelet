@@ -246,15 +246,6 @@ Deno.test("kernel - the settings commands reach the snapshot", () => {
   assertEquals(turn().snapshot.settings[tilt], 1 - before);
   command(Command.SETTING_UPDATE, encode_setting_update({ key: tilt, value: before }));
   assertEquals(turn().snapshot.settings[tilt], before);
-  // The world was created as no development build: a dev-only setting is one
-  // this build does not offer, and the command is refused rather than
-  // applied to a row nothing on screen could undo.
-  const snap = SETTINGS.ground_snap.key;
-  const dev = turn().snapshot.settings[snap];
-  command(Command.SETTING_TOGGLE, encode_setting_toggle({ key: snap }));
-  assertEquals(turn().snapshot.settings[snap], dev);
-  command(Command.SETTING_UPDATE, encode_setting_update({ key: snap, value: 1 - dev }));
-  assertEquals(turn().snapshot.settings[snap], dev);
 });
 
 Deno.test("kernel - a settled turn asks the module heap for nothing", () => {

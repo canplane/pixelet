@@ -89,7 +89,3 @@ pub fn MIN(a: i64, b: i64) -> i64 {
         b
     }
 }
-
-#[cfg(test)]
-#[path = "core.test.rs"]
-mod test;

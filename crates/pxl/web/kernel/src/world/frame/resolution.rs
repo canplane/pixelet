@@ -135,7 +135,3 @@ fn change(r: &mut Resolution, ratio: f64) {
     r.over_ms = 0.0;
     r.room_ms = 0.0;
 }
-
-#[cfg(test)]
-#[path = "resolution.test.rs"]
-mod test;

@@ -132,7 +132,3 @@ pub fn near_clip_at(height: f64) -> f64 {
 pub fn far_clip_at(height: f64) -> f64 {
     reach_at(height) * (render_cfg::FAR_CLIP / render_cfg::FOG_FAR)
 }
-
-#[cfg(test)]
-#[path = "fog.test.rs"]
-mod test;

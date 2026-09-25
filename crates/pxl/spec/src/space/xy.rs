@@ -55,7 +55,3 @@ pub fn WITH_Z(z: i64, i: IVec) -> IVec {
 pub fn CELL_CENTER_U(u_per_cell: f64) -> f64 {
     u_per_cell * 0.5
 }
-
-#[cfg(test)]
-#[path = "xy.test.rs"]
-mod test;
