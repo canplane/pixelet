@@ -11,7 +11,10 @@ fn the_two_pools_are_disjoint_and_cover_every_slot() {
     assert!(rest.end <= leaf.start, "disjoint");
     assert_eq!(leaf.end, OCCUPANCY, "and between them, every slot");
     assert_eq!(leaf.len() as u32, LEVEL_CHUNKS, "the leaves' own tier: a level's chunks");
-    assert!(rest.len() as u32 >= VIEW_CHUNKS * 3 / 2, "the rest: every chunk a view draws, and half again for what a change holds on to");
+    assert!(
+        rest.len() as u32 >= VIEW_CHUNKS * 3 / 2,
+        "the rest: every chunk a view draws, and half again for what a change holds on to"
+    );
 }
 
 #[test]
