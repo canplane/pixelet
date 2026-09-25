@@ -29,7 +29,7 @@ use crate::host::measure_text;
 use crate::kernel::kernel;
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
-use crate::layer::terrain::elevation::{get_ele, with_ele};
+use crate::layer::terrain::elevation::{ground_at, with_ele};
 use crate::world::change::request_world_tick;
 use crate::world::chunk::node::World;
 use crate::world::frame::view::view;
@@ -220,13 +220,13 @@ fn sketch_map(map_center: &Pvf3, map_origin: IVec) -> Sketch {
     // it floors to, ground-snapped — a cell, so a box.
     let mut raw_v = [0.0; 3];
     projection::unproject(&mut raw_v, ivec::sub(map_center.i, map_origin), map_center.f);
-    let gnd_v = [raw_v[0], raw_v[1], get_ele(map_center).unwrap_or(0.0)];
+    let gnd_v = [raw_v[0], raw_v[1], ground_at(map_center).unwrap_or(0.0)];
     let mut quant_v = [0.0; 3];
     floor3n(&gnd_v, U_PER_CELL, &mut quant_v);
 
     // The floating origin, grounded and floored: local (0, 0, ground).
     let mut anchor_base_gnd_v = [0.0; 3];
-    anchor_base_gnd_v[2] = get_ele(&Pvf3 { i: map_origin, f: 0 }).unwrap_or(0.0);
+    anchor_base_gnd_v[2] = ground_at(&Pvf3 { i: map_origin, f: 0 }).unwrap_or(0.0);
     let mut anchor_base_quant_v = [0.0; 3];
     floor3n(&anchor_base_gnd_v, U_PER_CELL, &mut anchor_base_quant_v);
 

@@ -3,13 +3,11 @@
 use pxl_render::mesh::paint::terrain::elevation::{ground_ele, GroundLanes};
 use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::bake::format::{GroundChannelKey, Terrain};
-use pxl_spec::space::indexer::{FROM_L3_IDX, L3_IDX};
-use pxl_spec::space::pvf3::ivec::IVec;
+use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::pvf3::{self, Pvf3};
 use pxl_spec::space::pyramid::{LevelPage, GROUND, PAGE_CELLS, TOP_LEVEL};
 use pxl_spec::space::xy::TO_XY;
 
-use crate::world::frame::coord::local_world_to_canonical;
 use crate::world::pyramid::Layer as _;
 
 /// The height the chunk's mesh and its raycast are built from, asked of the
@@ -23,17 +21,15 @@ fn sample_ele_grounded(terrain: &Terrain, tx: u32, ty: u32) -> f64 {
     ground_ele(&terrain.ele, Some(GroundLanes::of(&terrain.ground)), idx, tx as i32, ty as i32) as f64
 }
 
-/// Returns ground height in lattice/render units.
-pub fn get_ele(at: &Pvf3) -> Option<f64> {
-    let cell = GROUND.cell_of(0, at);
-    let tile = Terrain::pyramid().get(cell.page())?;
-    Some(sample_ele_grounded(tile, cell.index() % PAGE_CELLS, cell.index() / PAGE_CELLS) * U_PER_CELL)
-}
-
 /// The ground's height at `at` as the finest resident page draws it, in
 /// units: the leaf's where it is held, else the nearest coarser page's own
 /// raster at that point — the surface a view there is standing over, not a
 /// page's extremes. None where no page over it is held.
+///
+/// The one question every reader of the terrain's height asks — the
+/// camera's clearance, a character's footing, a marker, the map centre — so
+/// that none of them stands on a height the others do not: before a leaf
+/// comes, all of them stand on the page over it.
 pub fn ground_at(at: &Pvf3) -> Option<f64> {
     let leaf = TO_XY(L3_IDX(at.i));
     (0..=TOP_LEVEL).find_map(|level| {
@@ -43,9 +39,9 @@ pub fn ground_at(at: &Pvf3) -> Option<f64> {
     })
 }
 
-/// Raw baked ground-channel value at this exact cell, one specific channel
-/// (LAND/WATER/STRUCTURE/TRANSPORT) — get_ele's own sibling, same tile/tx/ty
-/// lookup, just reading `.ground[channel]` instead of sampling `.ele`. Used
+/// Raw baked ground-channel value at this exact z16 cell, one specific
+/// channel (LAND/WATER/STRUCTURE/TRANSPORT), from the leaf page: a type is a
+/// z16 cell's, which a coarser page's vote does not say. Used
 /// by object/store.rs's place() to tell whether a terrain-styled pick would
 /// actually change anything — painting "land.green_deep" over ground the bake
 /// already recorded as GREEN_DEEP land paints nothing new.
@@ -55,18 +51,9 @@ pub fn get_ground_type(at: &Pvf3, channel: GroundChannelKey) -> Option<u32> {
     Some(tile.ground.channel(cell.index() as usize, channel) as u32)
 }
 
-/// `get_ele` at a point given in the frame of `origin_page_idx_xy`'s page
-/// corner, in units: TO_XY(L3_IDX(map_origin)), map_origin being L4-aligned
-/// and so aligned to its page too.
-pub fn get_ele_at_local(origin_page_idx_xy: IVec, local_x: f64, local_y: f64) -> Option<f64> {
-    let mut at = Pvf3::default();
-    local_world_to_canonical(&mut at, &[local_x, local_y, 0.0], FROM_L3_IDX(origin_page_idx_xy));
-    get_ele(&at)
-}
-
 pub fn with_ele(out: &mut Pvf3, at: &Pvf3) -> Option<Pvf3> {
     // sample terrain height at the current X/Y position.
-    let ele = get_ele(at)?;
+    let ele = ground_at(at)?;
 
     // rebuild absolute PVF3 with ground-relative Z applied.
     *out = *at;

@@ -13,9 +13,7 @@
 //! budget, then the draw. The rest wait on what they work on: arrivals, the
 //! chunk builds, the decor models, the save.
 
-use pxl_spec::space::indexer::L3_IDX;
 use pxl_spec::space::pvf3::{ivec, projection};
-use pxl_spec::space::xy::TO_XY;
 use xpute_runtime::sched::edge::{notified, Notify};
 
 use crate::control::camera::damping::camera_step;
@@ -64,7 +62,6 @@ fn companion_props() -> Option<CompanionProps> {
     let mut local = [0.0; 3];
     projection::unproject(&mut local, ivec::sub(map_center.i, map_origin), map_center.f);
     Some(CompanionProps {
-        origin_page_idx_xy: TO_XY(L3_IDX(map_origin)),
         map_origin,
         center_x: local[0],
         center_y: local[1],
