@@ -322,6 +322,13 @@ impl Domain {
         f.sees(centre, radius, self.eye)
     }
 
+    /// Whether the view can see any of `c`'s ground: everything where the
+    /// frustum is not known.
+    pub fn sees(&self, c: Chunk) -> bool {
+        let rect = c.rect();
+        self.in_view(rect, Self::heights(c.page, rect))
+    }
+
     /// How near the eye `c` comes.
     pub fn nearest_to(&self, c: Chunk) -> f64 {
         let rect = c.rect();
