@@ -164,7 +164,7 @@ export const SETTINGS = {
     options: ["auto", "fixed", "low"],
     section: "quality",
   },
-  /** A change of what a chunk draws dissolves over 300 ms of frames instead
+  /** A change of what a chunk draws dissolves over 150 ms of frames instead
    * of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
    * Fade): a cube for another, a stale chunk for what replaced it. The two
    * draw on complementary halves of one screen-space pattern, so a chunk
@@ -306,7 +306,7 @@ export const SETTINGS_SHIPPED = {
     options: ["auto", "fixed", "low"],
     section: "quality",
   },
-  /** A change of what a chunk draws dissolves over 300 ms of frames instead
+  /** A change of what a chunk draws dissolves over 150 ms of frames instead
    * of switching at once (crates/pxl/web/kernel/src/world/chunk/table.rs's
    * Fade): a cube for another, a stale chunk for what replaced it. The two
    * draw on complementary halves of one screen-space pattern, so a chunk

@@ -125,9 +125,10 @@ pub const SETTLING: u16 = 32;
 pub const STALE: u16 = 64;
 
 /// How long a change of what a chunk draws dissolves over, in milliseconds:
-/// a tier for another, a stale chunk for what replaced it. A number chosen
-/// by eye, to be measured.
-const FADE_MS: f64 = 300.0;
+/// a tier for another, a stale chunk for what replaced it. A product number,
+/// said aloud: 300 read as slow (2026-09-26), and half of it is what the
+/// dissolve takes now.
+const FADE_MS: f64 = 150.0;
 
 /// A dissolve under way, and when it began on the frames' clock
 /// (`Scheduler::clock_ms`). The two
