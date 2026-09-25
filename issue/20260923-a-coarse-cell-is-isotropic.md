@@ -120,3 +120,17 @@ this rule and sized to it.
   paragraph on the elevation lane and its "one thing does not merge" in
   _Objects fold too_ describe the 09-22 height field, and are rewritten when
   this is built.
+
+## The floor is a face, 09-25
+
+The floor that 09-23 lays under an inset box was a run from the cell's bottom
+up to the box: a column with the box on it, which read as a box standing on a
+pillar. It is now the cell's bottom face alone — a run with no height, drawn
+by its top — so the box stands clear over it, and the lowest box's skirt
+stays, since what it hides is the step between two cells' floors.
+
+The box's size and colour are still the one rule for the ground and objects
+alike; the floor is not. A cell with any ground in it lays one, and a cell of
+placed things alone lays none: its box floats at the cell's centre, and is a
+placed thing's box, drawing its underside as its own
+(`pxl-render mesh/chunk_mesher.rs` `pack_coarse_cell`).
