@@ -38,7 +38,8 @@ import { bytes_at } from "@/kernel/module.ts";
 import { declareUnsupported } from "@/app/store/unsupported-store.ts";
 import { acquire_device } from "@/kernel/render/gpu.ts";
 import { request_frame } from "@/kernel/sched.ts";
-import { set_snapshot } from "@/kernel/shell.ts";
+import { kernel_snapshot, set_snapshot, subscribe_snapshot } from "@/kernel/shell.ts";
+import { keepSettings, storedSettings } from "@/feature/setting/store.ts";
 
 function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
   switch (cmd) {
@@ -123,9 +124,12 @@ export function boot_kernel(): void {
       geolocation: "geolocation" in navigator,
       orientation: orientation_supported(),
       orientation_permission: orientation_needs_permission(),
-      settings: stored(storage.SETTINGS) ?? "",
+      settings: storedSettings(),
       ...objects_body(),
     }),
     (result) => result,
   );
+  // What the kernel holds from now on is what storage keeps: the snapshot
+  // after WORLD_CREATE is the first to say it.
+  subscribe_snapshot(() => keepSettings(kernel_snapshot().settings));
 }

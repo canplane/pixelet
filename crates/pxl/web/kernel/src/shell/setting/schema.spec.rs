@@ -49,15 +49,6 @@ impl CameraTerrainMode {
     pub fn of(index: u32) -> Option<CameraTerrainMode> {
         CameraTerrainMode::ALL.get(index as usize).copied()
     }
-
-    /// The name storage keeps it under.
-    pub fn name(self) -> &'static str {
-        match self {
-            CameraTerrainMode::through => "through",
-            CameraTerrainMode::stop => "stop",
-            CameraTerrainMode::climb => "climb",
-        }
-    }
 }
 
 /// Where the ambient occlusion comes from.
@@ -88,15 +79,6 @@ impl AoMode {
     pub fn of(index: u32) -> Option<AoMode> {
         AoMode::ALL.get(index as usize).copied()
     }
-
-    /// The name storage keeps it under.
-    pub fn name(self) -> &'static str {
-        match self {
-            AoMode::off => "off",
-            AoMode::corner => "corner",
-            AoMode::screen => "screen",
-        }
-    }
 }
 
 /// How many device pixels the world is drawn at to a CSS pixel.
@@ -121,15 +103,6 @@ impl ResolutionMode {
     /// The option an index names, or none for an index past the list.
     pub fn of(index: u32) -> Option<ResolutionMode> {
         ResolutionMode::ALL.get(index as usize).copied()
-    }
-
-    /// The name storage keeps it under.
-    pub fn name(self) -> &'static str {
-        match self {
-            ResolutionMode::auto => "auto",
-            ResolutionMode::fixed => "fixed",
-            ResolutionMode::low => "low",
-        }
     }
 }
 
@@ -279,61 +252,6 @@ impl SettingKey {
     /// Read by a chunk's build, so a change builds the chunks again.
     pub fn sources_chunks(self) -> bool {
         matches!(self, SettingKey::texture_pack | SettingKey::show_structures | SettingKey::show_decor)
-    }
-
-    /// The name storage keeps it under, or none where this module does not
-    /// name it.
-    pub fn name(self) -> Option<&'static str> {
-        match self {
-            SettingKey::texture_pack => Some("texture_pack"),
-            SettingKey::show_structures => Some("show_structures"),
-            SettingKey::show_decor => Some("show_decor"),
-            SettingKey::show_poi => Some("show_poi"),
-            SettingKey::lock_camera_tilt => Some("lock_camera_tilt"),
-            #[cfg(feature = "dev")]
-            SettingKey::camera_terrain => Some("camera_terrain"),
-            #[cfg(feature = "dev")]
-            SettingKey::ground_snap => Some("ground_snap"),
-            #[cfg(feature = "dev")]
-            SettingKey::enable_terrain_carving => Some("enable_terrain_carving"),
-            SettingKey::show_edge_shade => Some("show_edge_shade"),
-            SettingKey::show_rim_light => Some("show_rim_light"),
-            SettingKey::ao => Some("ao"),
-            #[cfg(feature = "dev")]
-            SettingKey::show_shadow_map => Some("show_shadow_map"),
-            SettingKey::resolution => Some("resolution"),
-            SettingKey::lod_crossfade => Some("lod_crossfade"),
-            #[cfg(feature = "dev")]
-            SettingKey::show_debug_objects => Some("show_debug_objects"),
-            #[cfg(feature = "dev")]
-            SettingKey::show_ledger => Some("show_ledger"),
-            SettingKey::person_variant => Some("person_variant"),
-            SettingKey::pet_variant => Some("pet_variant"),
-            #[allow(unreachable_patterns)]
-            _ => None,
-        }
-    }
-
-    /// A choice's option by its index, as storage names it.
-    pub fn option_name(self, index: u32) -> Option<&'static str> {
-        match self {
-            #[cfg(feature = "dev")]
-            SettingKey::camera_terrain => CameraTerrainMode::of(index).map(CameraTerrainMode::name),
-            SettingKey::ao => AoMode::of(index).map(AoMode::name),
-            SettingKey::resolution => ResolutionMode::of(index).map(ResolutionMode::name),
-            _ => None,
-        }
-    }
-
-    /// A choice's option by the name storage keeps it under, as its index.
-    pub fn option_index(self, name: &str) -> Option<u32> {
-        match self {
-            #[cfg(feature = "dev")]
-            SettingKey::camera_terrain => CameraTerrainMode::ALL.into_iter().find(|o| o.name() == name).map(|o| o as u32),
-            SettingKey::ao => AoMode::ALL.into_iter().find(|o| o.name() == name).map(|o| o as u32),
-            SettingKey::resolution => ResolutionMode::ALL.into_iter().find(|o| o.name() == name).map(|o| o as u32),
-            _ => None,
-        }
     }
 }
 

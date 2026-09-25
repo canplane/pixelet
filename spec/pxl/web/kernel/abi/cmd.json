@@ -369,7 +369,15 @@
             { "name": "geolocation", "type": "bool" },
             { "name": "orientation", "type": "bool" },
             { "name": "orientation_permission", "type": "bool", "doc": ["iOS 13+'s gate: requestPermission exists and must run inside a gesture."] },
-            { "name": "settings", "type": "str", "doc": ["The settings as stored, empty for none: a row a setting, far under a slot."] },
+            {
+              "name": "settings",
+              "type": "u32",
+              "list": true,
+              "doc": [
+                "The settings as storage kept them, a value a setting in SettingKey's order as the",
+                "snapshot carries them, 0xffffffff for one it kept nothing for."
+              ]
+            },
             { "name": "objects", "type": "u32", "doc": ["The objects as stored, held as a body (host.json's BODY_READ), 0 for none."] },
             { "name": "objects_bytes", "type": "u32" }
           ]

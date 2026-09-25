@@ -45,7 +45,8 @@ export function set_snapshot(bytes: U8Array): void {
   for (const listener of snapshot_listeners) listener();
 }
 
-function subscribe_snapshot(listener: () => void): () => void {
+/** Calls `listener` with every snapshot the kernel posts from now on. */
+export function subscribe_snapshot(listener: () => void): () => void {
   snapshot_listeners.add(listener);
   return () => snapshot_listeners.delete(listener);
 }

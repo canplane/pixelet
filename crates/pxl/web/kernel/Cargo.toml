@@ -18,10 +18,10 @@ pxl-spec = { path = "../../spec" }
 pxl-render = { path = "../render" }
 
 [features]
-# The settings schema.json marks `dev`: in the table, so that a development
-# build can offer them. A published module is built without (pxl-wasm's
-# `dev`, off by apps/web/script/build-wasm.ts), and then neither their names
-# nor their rows are in it — what such a setting does, the module still does,
-# at the default the JSON gives.
+# What a development build has and a published one does not: the settings
+# schema.json marks `dev`, offered, and the frame gizmo they turn on. A
+# published module is built without (pxl-wasm's `dev`, off by
+# apps/web/script/build-wasm.ts): it offers no dev setting, each running at the
+# default the JSON gives, and carries no gizmo.
 default = ["dev"]
 dev = []
