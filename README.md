@@ -98,6 +98,7 @@ deno task dev:local
 | `deno task build:web`                | Build the client                                                      |
 | `deno task build:wasm`               | Build the kernel module into `apps/web/src/kernel/kernel.wasm`        |
 | `deno task build:native`             | Build the kernel for a device, the xcframework the app links          |
+| `deno task build:native:published`   | The same without the kernel's dev settings, for a release build       |
 | `deno task dev:native`               | Metro, for the device app                                             |
 | `deno task bake:{tiles,poi,geocode}` | db-geo into `./out/<kind>/<version>`                                  |
 | `deno task ingest:asset`             | Hash `asset/` into `./out/asset`, regenerate the asset tables         |
@@ -126,7 +127,7 @@ deno task build:native     # the kernel, as the xcframework the app links
 deno task dev:native       # Metro
 ```
 
-`apps/native/ios/` is generated from `app.json` and the module under `modules/platform/`, and is not kept. `pod install` and Xcode both run Node: put it on `PATH` for the first, and name it in `ios/.xcode.env.local` (`export NODE_BINARY=…`) for the second. Then build `ios/pixelet.xcworkspace` from Xcode, with a team to sign with for a phone. The app is built for iOS alone: `modules/platform` has no Android half.
+`apps/native/ios/` is generated from `app.json` and the module under `modules/platform/`, and is not kept. `pod install` and Xcode both run Node: put it on `PATH` for the first, and name it in `ios/.xcode.env.local` (`export NODE_BINARY=…`) for the second. Then build `ios/pixelet.xcworkspace` from Xcode, with a team to sign with for a phone. A release build takes its kernel from `build:native:published`, as a deployed page's is built without the kernel's dev settings. The app is built for iOS alone: `modules/platform` has no Android half.
 
 ---
 

@@ -4,6 +4,13 @@
 // library and the simulator's, each with the header Swift imports it by
 // (`import PxlNative`). Run before the app is built; the framework is not
 // committed.
+//
+//   ./script/build-native.ts               # a kernel with its dev settings
+//   ./script/build-native.ts --published   # without, as the page's deploy is
+//
+// The published kernel is built as script/build-wasm.ts builds the page's,
+// with the kernel's `dev` feature off, so an app built for release carries
+// the same kernel a deployed page does.
 
 const CRATES = new URL("../../../crates/", import.meta.url);
 const INCLUDE = new URL("pxl/web/native/include/", CRATES);
@@ -18,8 +25,10 @@ async function run(cmd: string, args: string[], cwd?: URL): Promise<void> {
   if (code !== 0) Deno.exit(code);
 }
 
+const published = Deno.args.includes("--published");
+
 for (const target of TARGETS) {
-  await run("cargo", ["build", "--profile", "native", "--package", "pxl-native", "--target", target], CRATES);
+  await run("cargo", ["build", "--profile", "native", "--package", "pxl-native", "--target", target, ...(published ? ["--no-default-features"] : [])], CRATES);
 }
 
 // xcodebuild refuses to write over a framework that is there.
@@ -30,4 +39,4 @@ await run("xcodebuild", [
   "-output",
   OUT.pathname,
 ]);
-console.log(`[build-native] ${TARGETS.join(", ")} -> ${OUT.pathname}`);
+console.log(`[build-native] ${published ? "published " : ""}${TARGETS.join(", ")} -> ${OUT.pathname}`);
