@@ -22,9 +22,9 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use std::alloc::{GlobalAlloc, Layout, System};
 
 use pxl_kernel::host::HeapStat;
+use pxl_kernel::mem::heap::{heap_stat, HeapBounds, KernelAlloc};
 use pxl_kernel::mem::section;
 use pxl_kernel::mem::spec::{GLOBAL_BASE, PHONE_BYTES};
-use xpute_core::alloc::slab::SlabMalloc;
 
 /// The memory the kernel is given: a phone's reservation, mem.json's, as a
 /// page on a phone reserves.
@@ -74,25 +74,11 @@ pub fn region() -> usize {
     }
 }
 
-/// The heap: from the page past the last fixed range to the end of the
-/// region, as the module's is to the end of its memory.
-struct ModuleHeap;
+/// Where the heap lies: from the page past the last fixed range to the end of
+/// the region, as the module's is to the end of its memory.
+struct RegionBounds;
 
-/// The largest block the heap's tree can describe, as the module's (pxl-wasm).
-const HEAP_MAX_LOG2: usize = 31;
-
-/// The smallest block, which is the page the rest of the memory is counted in.
-const HEAP_MIN_LOG2: usize = section::PAGE_BYTES.trailing_zeros() as usize;
-
-/// A bit for every node of the tree that can be a parent.
-const HEAP_SPLIT_BYTES: usize = (1 << (HEAP_MAX_LOG2 - HEAP_MIN_LOG2)) / 8;
-
-impl xpute_core::alloc::buddy_tree::Range for ModuleHeap {
-    const MIN_LOG2: usize = HEAP_MIN_LOG2;
-    const MAX_LOG2: usize = HEAP_MAX_LOG2;
-    type Split = [u8; HEAP_SPLIT_BYTES];
-    const SPLIT_INIT: Self::Split = [0; HEAP_SPLIT_BYTES];
-
+impl HeapBounds for RegionBounds {
     fn base() -> usize {
         region() + section::heap_at(DATA_END) as usize
     }
@@ -117,14 +103,14 @@ extern "C" {
 /// The slab behind the system's lock.
 pub struct Locked {
     lock: UnfairLock,
-    slab: SlabMalloc<ModuleHeap>,
+    slab: KernelAlloc<RegionBounds>,
 }
 
 // SAFETY: the slab is only reached holding the lock.
 unsafe impl Sync for Locked {}
 
 impl Locked {
-    fn with<R>(&self, f: impl FnOnce(&SlabMalloc<ModuleHeap>) -> R) -> R {
+    fn with<R>(&self, f: impl FnOnce(&KernelAlloc<RegionBounds>) -> R) -> R {
         // SAFETY: a lock in a static, never moved, locked and unlocked on the
         // same thread.
         unsafe { os_unfair_lock_lock(self.lock.0.get()) };
@@ -136,17 +122,7 @@ impl Locked {
 
     /// The allocator's reading, for the ledger and the heap's row.
     pub fn stat(&self) -> HeapStat {
-        self.with(|a| HeapStat {
-            range: a.range_bytes(),
-            used: a.used(),
-            live: a.live(),
-            run: a.run_live(),
-            slot: a.slot_live(),
-            largest_free: a.largest_free(),
-            releases: a.releases(),
-            refusals: a.refusals(),
-            requests: a.pages().allocs() as u32,
-        })
+        self.with(heap_stat)
     }
 }
 
@@ -174,5 +150,5 @@ unsafe impl GlobalAlloc for Locked {
 #[global_allocator]
 pub static ALLOC: Locked = Locked {
     lock: UnfairLock(UnsafeCell::new(0)),
-    slab: SlabMalloc::new(),
+    slab: KernelAlloc::new(),
 };
