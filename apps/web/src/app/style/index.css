@@ -1,5 +1,3 @@
-@import "./fonts.css";
-
 /* What the page is before any view is laid on it. Everything drawn is a
    React Native style (shared/ui/theme.ts); what is here is the document the
    views are put into, which no view can style. */
@@ -13,10 +11,10 @@ body,
   padding: 0;
   overflow: hidden;
 
-  font-family:
-    /* 1. Apple-only keywords, first so Apple platforms never fall through */ -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
-    /* 2. Hangul coverage, and the whole face everywhere else */
-    "Pretendard Variable", /* 3. System default, in case no webfont loads */ system-ui, sans-serif;
+  /* The platform's own face, as a device app has it: nothing is downloaded,
+     and each system falls back through its own scripts. The Apple keywords
+     come first because Safari has long named its system face by them. */
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 /* The window a device's root fills: react-native-web lays its root view

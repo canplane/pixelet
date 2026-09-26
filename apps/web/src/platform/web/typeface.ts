@@ -2,10 +2,9 @@
 
 import type { TextStyle } from "react-native";
 
-/** The chrome's faces on a page: fonts.css's Pretendard after the Apple
- * system faces, as index.css orders them, and a monospace for numbers that
- * have to line up. */
-export const FAMILY: string | undefined = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Pretendard Variable", system-ui, sans-serif';
+/** The chrome's faces on a page: the system's own, as index.css names it,
+ * and a monospace for numbers that have to line up. */
+export const FAMILY: string | undefined = "-apple-system, BlinkMacSystemFont, system-ui, sans-serif";
 export const MONO: string | undefined = 'ui-monospace, SFMono-Regular, Menlo, "Roboto Mono", monospace';
 
 /** A thin edge of `tint` around text, so it reads over any ground: one CSS
