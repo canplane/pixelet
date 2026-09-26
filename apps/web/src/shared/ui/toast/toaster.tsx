@@ -25,12 +25,12 @@ const SWIPE_PX = 24;
  * the deck, as if it had been on top of the others all along. */
 const FROM_ABOVE_PX = -24;
 
-/** A new card's arrival over the deck: quick, and the cards it pushes back
- * wait it out. A card stays where it stands until one covers it, so the
- * front of the deck never drops and rises again while the new one is still
- * too faint to be seen over it. */
-const ARRIVE = LEAVE;
-const MAKE_ROOM = after(SETTLE, ARRIVE.durationMs);
+/** A new card fades in as a card settles, and the cards it pushes back wait
+ * half of it: a card stays where it stands until one mostly covers it, so
+ * the front of the deck never drops and rises again while the new one is
+ * still too faint to be seen over it. */
+const ARRIVE = SETTLE;
+const MAKE_ROOM = after(SETTLE, ARRIVE.durationMs / 2);
 
 /**
  * The deck: every toast at one point, the front card on top and the next

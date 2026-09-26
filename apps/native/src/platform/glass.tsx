@@ -59,16 +59,19 @@ export function Glass({ fill, tint, interactive, fade = 1, fadeFrom, transition 
 
   const target = glassAt(veil.level);
   const [shown, setShown] = useState<GlassStyle>(fadeFrom === undefined ? target : glassAt(fadeFrom));
-  // Applied once the glass is mounted — one mounted `none` has to be there
-  // before it can be told to materialize — and after the transition's delay,
-  // which the glass has none of its own for.
+  // A style is applied only once the glass has been laid out: the native view
+  // installs its effect in its first layout, and a style set before that is
+  // installed as it is, without the animation: glass meant to materialize
+  // would stand whole from its first frame. And after the transition's
+  // delay, which the glass has none of its own for.
+  const [laidOut, setLaidOut] = useState(false);
   useEffect(() => {
-    if (shown === target) return;
+    if (!laidOut || shown === target) return;
     const delay = veil.transition.delayMs ?? 0;
     if (delay === 0) return setShown(target);
     const timer = setTimeout(() => setShown(target), delay);
     return () => clearTimeout(timer);
-  }, [target]);
+  }, [target, laidOut]);
 
   if (!SYSTEM_GLASS) {
     return (
@@ -81,6 +84,7 @@ export function Glass({ fill, tint, interactive, fade = 1, fadeFrom, transition 
   const { boxShadow: _shadow, borderWidth: _width, borderColor: _color, flexDirection, alignItems, justifyContent, gap, rowGap, columnGap, ...ground } = StyleSheet.flatten(style) ?? {};
   return (
     <GlassView
+      onLayout={laidOut ? undefined : () => setLaidOut(true)}
       style={ground}
       glassEffectStyle={{ style: shown, animate: true, animationDuration: durationMs(veil.transition) / 1000 }}
       tintColor={tint}

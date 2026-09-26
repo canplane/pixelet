@@ -56,7 +56,7 @@ export function Motion({ to, from, replay = null, transition, onSettled, style, 
     replayed.current = replay;
 
     let start: Required<Pose> = stood.current ?? initial;
-    if (replaying && from) {
+    if ((replaying || stood.current === null) && from) {
       start = resolve(from);
       for (const c of CHANNELS) v[c].setValue(start[c]);
     }
@@ -85,6 +85,14 @@ export function Motion({ to, from, replay = null, transition, onSettled, style, 
     // `transition` and `from` are read when a pose arrives, not watched: a
     // new transition alone moves nothing.
   }, [target.opacity, target.translateX, target.translateY, target.scale, target.rotate, replay]);
+
+  // Unmounted — or, under StrictMode, taken down to be put straight back:
+  // what runs stops, and a view put back arrives again from `from` as a new
+  // one does, rather than standing where it was going with nothing played.
+  useEffect(() => () => {
+    for (const c of CHANNELS) v[c].stopAnimation();
+    stood.current = null;
+  }, []);
 
   return (
     <Animated.View

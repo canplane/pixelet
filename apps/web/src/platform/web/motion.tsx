@@ -12,7 +12,7 @@
  * one has it, read off the element, so a turn back never jumps.
  */
 
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { View } from "react-native";
 
 import { type MotionProps, type Pose, resolve, type SpinProps } from "@/shared/ui/motion/pose.ts";
@@ -91,7 +91,15 @@ export function Motion({ to, from, replay = null, transition, onSettled, style, 
     // new transition alone moves nothing.
   }, [target.opacity, target.translateX, target.translateY, target.scale, target.rotate, replay]);
 
-  useEffect(() => () => running.current?.cancel(), []);
+  // Unmounted — or, under StrictMode, taken down to be put straight back:
+  // what runs stops, and a view put back arrives again from `from` as a new
+  // one does. Kept as if it had stood where it was going, it would read its
+  // own canceled start back as the end and play nothing.
+  useLayoutEffect(() => () => {
+    running.current?.cancel();
+    running.current = null;
+    stood.current = null;
+  }, []);
 
   return (
     <View
