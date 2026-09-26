@@ -31,7 +31,7 @@ use crate::frame::draw::{
 use crate::frame::shader::record::{FRAME_AT, FRAME_FLOATS, PIPELINES, PIPELINE_CHUNK_COARSE_DEPTH, PIPELINE_CHUNK_COARSE_PREPASS, PIPELINE_CHUNK_DEPTH, PIPELINE_CHUNK_PREPASS, PIPELINE_SKY};
 use crate::frame::stage::{stage_lane, STAGE_AT};
 use crate::gpu::ao::ScreenAo;
-use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, gpu, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, forget_objects, frame_room, gpu, object, pass_desc, release, room, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{dimension, format, load, resource, surface_role};
 use crate::gpu::arena::{arena_buffer, arena_lose};
 use crate::gpu::atmosphere::{Atmosphere, AIR_WORDS};
@@ -1228,6 +1228,12 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()), input.lists);
         return FrameOutput { redraw: false, stat: None };
     };
+    // The GPU has as many frames as it may hold: this one is skipped rather
+    // than waited for, what it listed put on the device, and the next asked.
+    if !frame_room() {
+        take_lists(Some(g), input.lists);
+        return FrameOutput { redraw: true, stat: None };
+    }
     let slot = RENDERER.get(|| None);
     let r = slot.get_or_insert_with(|| Renderer::new(g, device, input.handheld));
     blocks().restore(g);

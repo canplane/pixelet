@@ -61,6 +61,12 @@ pub fn gpu_publish() {
     }
 }
 
+/// Always: a page's frames are held back by the browser, which paces them
+/// to what the GPU finishes (api/device.rs `frame_room` is a device's).
+pub fn frame_room() -> bool {
+    true
+}
+
 /// Whether an upload of `bytes` may go in this turn: taken, it leaves the
 /// stream `stream::RESERVE` for what cannot wait.
 pub fn room(bytes: u32) -> bool {

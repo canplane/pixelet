@@ -16,11 +16,11 @@ mod device;
 mod record;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use device::{gpu, gpu_publish, install, room, Gpu};
+pub use device::{frame_room, gpu, gpu_publish, install, room, Gpu};
 #[cfg(not(target_arch = "wasm32"))]
 pub use device::{hold_image, open_device, surface_bind, surface_unbind, BindRefused, DeviceInfo};
 #[cfg(target_arch = "wasm32")]
-pub use record::{gpu, gpu_publish, install, room, Gpu};
+pub use record::{frame_room, gpu, gpu_publish, install, room, Gpu};
 
 use xpute_runtime::abi::handle::HandleTable;
 
