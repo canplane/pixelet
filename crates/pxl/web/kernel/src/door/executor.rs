@@ -1,9 +1,8 @@
-// pxl-wasm/executor.rs
+// pxl-kernel/door/executor.rs
 
-//! The executor the module installs for the kernel's tasks, as it installs the
-//! slab for its memory: embassy's raw executor behind xpute_runtime::sched::task's
-//! `Executor`. pxl-kernel spawns and polls through that interface and never
-//! names this; which tasks there are is pxl-kernel's.
+//! The executor the door installs for the kernel's tasks at boot: embassy's raw
+//! executor behind xpute_runtime::sched::task's `Executor`. The rest of the
+//! kernel spawns and polls through that interface and never names this.
 //!
 //! A task reaches here type-erased and is run by the one task type below,
 //! pooled as many times as the kernel declares it spawns (TASKS).
@@ -16,9 +15,9 @@
 //! One thread, and no turn re-enters another, so the critical section the
 //! executor takes has nothing to exclude.
 
+use crate::global::Global;
+use crate::world::change::TASKS;
 use embassy_executor::raw::Executor as Raw;
-use pxl_kernel::global::Global;
-use pxl_kernel::world::change::TASKS;
 use xpute_runtime::sched::task::{set_executor, Executor, Priority, Task};
 
 struct OneThread;

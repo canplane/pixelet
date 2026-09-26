@@ -16,6 +16,11 @@ xpute-runtime = { path = "../../../xpute/runtime" }
 xpute-core = { path = "../../../xpute/core" }
 pxl-spec = { path = "../../spec" }
 pxl-render = { path = "../render" }
+# The executor the door polls the kernel's tasks on inside a turn
+# (door/executor.rs). No platform feature: the pender is the kernel's own, and
+# the platform one for wasm brings wasm-bindgen.
+embassy-executor = { version = "0.10", default-features = false }
+critical-section = "1.1"
 
 [features]
 # What a development build has and a published one does not: the settings

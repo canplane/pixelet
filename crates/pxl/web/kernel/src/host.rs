@@ -260,6 +260,9 @@ pub struct HeapStat {
     /// Requests answered with nothing: the one way this memory is full, since
     /// the fixed ranges cannot be.
     pub refusals: u32,
+    /// Requests the page level has served: a turn that makes none has asked
+    /// the heap for nothing.
+    pub requests: u32,
 }
 
 static HEAP: Global<fn() -> HeapStat> = Global::new();

@@ -37,7 +37,7 @@ export interface KernelExports {
   interrupt(quota_ms: f64): f64;
 }
 
-/** crates/pxl/web/wasm/src/lib.rs's boot block, word by word: where the module's
+/** crates/pxl/web/kernel/src/door.rs's boot block, word by word: where the module's
  * own front ends; where the submission and completion rings are; then `.fixed`
  * and the heap, each its offset, bytes and page size; then the quantum the
  * kernel declares, three words in thousandths; then the heap's row; then the

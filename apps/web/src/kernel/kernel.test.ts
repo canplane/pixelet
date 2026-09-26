@@ -109,11 +109,12 @@ function terrain_body(seed: u32): U8Array {
   return encode_terrain(ele, packed);
 }
 
-/** The heap's row (xpute's BuddyMalloc::stat): base, top reached, end and
- * live as words, then releases and requests. */
+/** The heap's row (crates/pxl/web/kernel/src/door.rs, written at every turn's
+ * fall): range, used, live, run, slot, largest free, releases, refusals,
+ * requests. `used` is the top the heap has reached. */
 const HEAP_TOP = 1;
-const HEAP_REQUESTS = 5;
-const heap_row = new Uint32Array(CORE_KERNEL.memory.buffer, boot_block(CORE_KERNEL)[BOOT.heap_row], 6);
+const HEAP_REQUESTS = 8;
+const heap_row = new Uint32Array(CORE_KERNEL.memory.buffer, boot_block(CORE_KERNEL)[BOOT.heap_row], 9);
 let strobe_requests = 0;
 const answer_requests: Record<string, number> = {};
 

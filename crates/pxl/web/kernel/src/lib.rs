@@ -9,6 +9,7 @@
 
 pub mod abi;
 pub mod control;
+pub mod door;
 pub mod global;
 pub mod host;
 pub mod io;

@@ -1507,6 +1507,8 @@ name = "pxl-kernel"
 version = "0.0.0"
 dependencies = [
  "base64 0.23.1",
+ "critical-section",
+ "embassy-executor",
  "fnv",
  "indexmap",
  "libm",
@@ -1580,14 +1582,8 @@ dependencies = [
 name = "pxl-wasm"
 version = "0.0.0"
 dependencies = [
- "critical-section",
- "embassy-executor",
- "fnv",
  "pxl-kernel",
- "pxl-render",
- "pxl-spec",
  "xpute-core",
- "xpute-runtime",
 ]
 
 [[package]]

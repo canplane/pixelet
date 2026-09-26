@@ -15,7 +15,7 @@ import { RING_CAPACITY } from "@/kernel/mem/mem.spec.ts";
 // The module the test reads, loaded before it runs.
 await load_core();
 
-/** A command crates/pxl/web/wasm/src/lib.rs does not number. */
+/** A command crates/pxl/web/kernel/src/door/apply.rs does not number. */
 const UNNUMBERED = 0x0fff;
 
 Deno.test("rings - the shell submits, one ring replies to each in order, and a full completion ring holds the rest back", () => {
