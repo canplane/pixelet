@@ -1,4 +1,4 @@
-// @pxl/web/feature/dev/ledger/lane.ts
+// @pxl/web/feature/debug/ledger/lane.ts
 
 /**
  * The ledger's words, in one table the report, the panel and the trace all

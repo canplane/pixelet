@@ -13,7 +13,7 @@
 //! literal the build does not read is one the bundler drops.
 
 use super::data::ts_literal;
-use super::{casing_note, enum_name, file, js_num, line_comments, pascal, read, rs_doc, rs_ident, ts_doc, Node, Output};
+use super::{casing_note, enum_name, file, js_num, line_comments, pascal, read, rs_doc, rs_ident, Node, Output};
 
 const JSON: &str = "spec/pxl/web/kernel/shell/setting/schema.json";
 
@@ -298,9 +298,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         }
         Ok(Node::Obj(out))
     };
-    let List {
-        values: dev_sections, doc: dev_doc, ..
-    } = list("DEV_SECTIONS").ok_or(format!("{JSON}: no DEV_SECTIONS"))?;
     let mut ts = vec![
         "// @pxl/web/feature/setting/schema.spec.ts".to_string(),
         "//".into(),
@@ -308,12 +305,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         "//".into(),
     ];
     ts.extend(line_comments(&spec.lines_at("$doc").unwrap_or_default(), ""));
-    ts.push(String::new());
-    ts.extend(ts_doc(dev_doc.as_deref().unwrap_or_default(), ""));
-    ts.push(format!(
-        "export const DEV_SECTIONS = {} as const;",
-        ts_literal(&Node::Arr(dev_sections.iter().cloned().map(Node::Str).collect()), "f64", "")?
-    ));
     ts.extend([String::new(), format!("export const SETTINGS = {} as const;", ts_literal(&table(&|_| true)?, "f64", "")?)]);
     ts.extend([
         String::new(),

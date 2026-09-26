@@ -1,4 +1,4 @@
-// @pxl/web/feature/dev/ledger/gauge.tsx
+// @pxl/web/feature/debug/ledger/gauge.tsx
 
 /**
  * The gauge half of the instrument in
@@ -20,6 +20,7 @@
  */
 
 import { round } from "@xpute/core/math/scalar.ts";
+import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { EFFECT_NAMES } from "./ledger.spec.ts";
@@ -73,15 +74,16 @@ function Row(props: { k: string; v: string; warn?: boolean }) {
 /** A note where a row's numbers would be. */
 const Note = ({ children }: { children: string }) => <Text style={[gauge.text, gauge.key]}>{children}</Text>;
 
-export const Rule = () => <View style={gauge.rule} />;
+const Rule = () => <View style={gauge.rule} />;
 
 /** A section's start: the rule that separated one from the next, with the word
  * it separates on it. The panel runs to forty rows and a reader is looking for
  * one of them; a bare rule says where a group ends and never what it is. */
-const Head = ({ children }: { children: string }) => (
+export const Head = ({ children, end }: { children: string; end?: ReactNode }) => (
   <View style={gauge.head}>
     <Text style={[gauge.text, gauge.headText]}>{children}</Text>
     <View style={gauge.headLine} />
+    {end}
   </View>
 );
 

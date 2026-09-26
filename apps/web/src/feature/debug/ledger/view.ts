@@ -1,4 +1,4 @@
-// @pxl/web/feature/dev/ledger/view.ts
+// @pxl/web/feature/debug/ledger/view.ts
 
 /**
  * The kernel's ledger, read where it lies. LEDGER_READ answers with the

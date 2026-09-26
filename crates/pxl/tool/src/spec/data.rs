@@ -76,7 +76,7 @@ const DATA_SPECS: [DataSpec; 6] = [
     },
     DataSpec {
         json: "spec/pxl/web/kernel/sched/ledger/ledger.json",
-        ts: Some("apps/web/src/feature/dev/ledger/ledger.spec.ts"),
+        ts: Some("apps/web/src/feature/debug/ledger/ledger.spec.ts"),
         rs: Some("crates/pxl/web/kernel/src/sched/ledger/ledger.spec.rs"),
         module: Some("spec"),
         enums: Enums::Named(&["CATEGORY_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES", "STEP_NAMES", "EFFECT_NAMES"]),

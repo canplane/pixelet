@@ -19,12 +19,6 @@
 // what crosses for it. `sources_chunks` marks one a chunk's build reads, so
 // that changing it builds the chunks again.
 
-/** The sections that are a development build's as a whole. One of these is
- * shown under `__IS_DEV__` only and carries the badge on its heading, so
- * its rows do not repeat it; a `dev` row in any other section carries its
- * own. Which rows exist in a build is the rows' `dev`, not this. */
-export const DEV_SECTIONS = ["debug"] as const;
-
 export const SETTINGS = {
   /** Ground color from the art pack (four sampler2DArray taps per fragment)
    * instead of the flat per-instance average. The shader's `u_low_spec` is
@@ -182,7 +176,6 @@ export const SETTINGS = {
     kind: "toggle",
     default: false,
     section: "debug",
-    dev: true,
   },
   /** The scheduler ledger's corner panel. The console stream is a button on it. */
   show_ledger: {
@@ -190,7 +183,6 @@ export const SETTINGS = {
     kind: "toggle",
     default: false,
     section: "debug",
-    dev: true,
   },
   person_variant: {
     key: 16 as number,
@@ -317,6 +309,20 @@ export const SETTINGS_SHIPPED = {
     default: true,
     section: "quality",
     cost: "low",
+  },
+  /** The debug gizmos: frame origins, page corners, the map center and the rings. */
+  show_debug_objects: {
+    key: 14 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+  },
+  /** The scheduler ledger's corner panel. The console stream is a button on it. */
+  show_ledger: {
+    key: 15 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
   },
   person_variant: {
     key: 16 as number,

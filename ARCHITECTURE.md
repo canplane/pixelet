@@ -358,7 +358,7 @@ Flat ground at a distance therefore reads as separated cubes rather than a sheet
 
 The camera is three controls — `dist`, `polar`, `azimuth` — and nothing else writes them. Terrain may ask one question, in `control/camera/terrain_gate.rs`: would this state put the eye inside the ground. The gate is a function of the three controls only, and it sits in `set_view_state`, the one funnel every input path goes through, so a refused move never leaves the controls and the drawn camera disagreeing. `Settings > Camera` picks the answer: `through` ignores terrain, `stop` takes a control as far as it can, `climb` grants the move and raises the drawn pitch instead, so the pitch relaxes back on its own.
 
-Every setting is one entry of one schema (`spec/pxl/web/kernel/shell/setting/schema.json`): default, kind, section. The store keeps only the user's overrides, and the settings sheet renders its rows from the schema. Dev-only entries — gizmos, the ledger panel, a render-path bisect — are marked `dev`.
+Every setting is one entry of one schema (`spec/pxl/web/kernel/shell/setting/schema.json`): default, kind, section. The store keeps only the user's overrides, and the settings sheet renders its rows from the schema. The nightly entries — the camera against terrain, the ground snap, terrain carving, the shadow map's view — are marked `dev`: a development build offers them, and a published one carries neither their rows nor the kernel's code for them (`apps/web/script/check-bundle.ts` holds it to that). The debug section — the gizmos, the ledger panel — is in every build, since a release is what it most needs to measure.
 
 ## Billboards and POI
 

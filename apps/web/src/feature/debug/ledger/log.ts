@@ -1,4 +1,4 @@
-// @pxl/web/feature/dev/ledger/log.ts
+// @pxl/web/feature/debug/ledger/log.ts
 
 /**
  * The ledger's live console stream, read out of the module's memory rather

@@ -1,4 +1,4 @@
-// @pxl/web/feature/dev/ledger/long-frame.ts
+// @pxl/web/feature/debug/ledger/long-frame.ts
 //
 // The long-frame observers, and the ring they fill. A frame that blocks the
 // event loop past 50ms is a browser measurement of the whole task, and the
@@ -13,8 +13,8 @@
 // nothing else but fires everywhere, and a >50ms task is exactly the event
 // worth catching. Installed alongside each other rather than instead.
 //
-// A dev instrument: the shipped monitor cannot lean on LoAF, which is why
-// this is wired from the ledger overlay rather than from boot.
+// A debug instrument, installed with the ledger's panel rather than at boot:
+// nothing that always runs can lean on LoAF, which is Chromium's alone.
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 

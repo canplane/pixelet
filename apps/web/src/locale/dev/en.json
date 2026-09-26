@@ -27,18 +27,6 @@
         "description": "The sun casts shadows from terrain, objects and characters onto the ground."
       }
     },
-    "debug": {
-      "section_title": "Debug",
-      "section_caption": "Diagnostics, in dev builds only",
-      "show_debug_objects": {
-        "label": "Debug Gizmos",
-        "description": "Displays coordinate markers (map centers, tile boundaries) for debugging purposes."
-      },
-      "show_ledger": {
-        "label": "Scheduler Ledger",
-        "description": "Corner panel showing frame pacing, GPU load, fetch-queue depth and task latency from the world scheduler, with the report, trace and console-log buttons."
-      }
-    },
     "editing": {
       "section_title": "Editing",
       "section_caption": "What the tools may change",
