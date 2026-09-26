@@ -25,7 +25,7 @@
 //! function of the one under it is what lets the client fold what it holds.
 //! Exact would mean per-type counts through every level, 32 lanes a cell,
 //! which the resident records cannot carry. Where this differs from Earth
-//! Engine is the tie's corner (`tie_child`).
+//! Engine is the tie's corner (`majority`).
 //!
 //! Elevation is the box average, and that is forced rather than chosen. A
 //! column's volume is linear in its height, so the mean is what preserves it,

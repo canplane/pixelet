@@ -27,7 +27,7 @@ interface ToastState {
   /** How far the deck has been turned by swiping: the entry at raw index
    * `rotation` (mod the count) is the one in front. */
   rotation: i32;
-  /** A finger is on the front card; see `setDragging`. */
+  /** A finger is on the front card; see `setToastDragging`. */
   dragging: boolean;
   /** An update that arrived mid-drag, brought to the front once it ends. */
   pending: u32 | null;

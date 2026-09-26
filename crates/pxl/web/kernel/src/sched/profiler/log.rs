@@ -11,7 +11,7 @@
 //! read alike without this side knowing a word of it.
 //!
 //! It does not go out on the ring. The ring is the control path — ordered,
-//! back-pressured, and full is fatal: `Outbox::post` asserts when the
+//! back-pressured, and full is fatal: `Door::post` asserts when the
 //! completion queue and its spill are both full, so a debug line could take
 //! the module down, and the moment logging is turned on is exactly the moment
 //! instrumentation would be competing for ring slots with the fetch burst it
@@ -19,7 +19,7 @@
 //! ftrace and perf mmap their own per-CPU buffers, printk keeps `log_buf` and
 //! is read through /dev/kmsg, eBPF has its own ring — so the stream is two
 //! lanes of the profiler's own records the consumer reads in place at its own
-//! pace, through pxl-wasm's `profiler_log`, and clears when it has read them.
+//! pace, through `PROFILER_TAKE`, and clears when it has read them.
 //!
 //! A dev instrument that never feeds back into scheduling. The stream
 //! thresholds frames deliberately: an unfiltered per-frame record would bury

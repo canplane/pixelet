@@ -77,7 +77,8 @@ fn coast_tuple<'a>(b: &mut BranchViewImpl<'a>, row: &'a CoastRow) {
 }
 
 /// Packs what the database gave into `[ele, buildings, segments, base, coasts]`,
-/// each row a tuple in the order pxl-spec's `*_ROW_KEYS` name.
+/// each row a tuple in the order of its row type's fields (pxl-spec
+/// bake/format.rs).
 pub fn pack_source(source: &PageSource, stats: &mut SourceStats) -> Result<Vec<u8>, MarshalError> {
     let ele = match &source.ele {
         Some(v) if v.len() == ELE_PADDED_SPAN2 => v.clone(),

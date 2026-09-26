@@ -29,7 +29,6 @@ use xpute_core::wire::xtp::PacketWriter;
 use xpute_runtime::ipc::doorbell::{Door, DoorLayout};
 use xpute_runtime::ipc::ring::Ring;
 use xpute_runtime::mem::base::{off_of, off_of_slice, ptr_at};
-use xpute_runtime::mem::section::{write_section, SECTION_WORDS};
 
 /// What a bracket gives the kernel on its first turn.
 pub struct Bracket {
@@ -107,23 +106,25 @@ fn state() -> &'static mut State {
 // for it. The shell pushes into the submission ring, rings `interrupt` with
 // the turn's quota, and reads the completion ring when the call returns.
 
-/// Words in the boot block: where the bracket's own data ends; where the
-/// submission ring and the completion ring are; then `.fixed` and the heap,
-/// each its offset, its bytes and the page it begins on; then the quantum the
-/// kernel declares to the central scheduler (xpute_runtime::sched::quantum's
-/// QuantumPolicy): margin share, batch frames and the settle time, each in
-/// thousandths; then the heap's row; then the two streams the shell runs after
-/// every turn, the renderer's (pxl_render::gpu::api, 0 where the bracket draws
-/// itself) and the host's (crate::host).
-pub const BOOT_WORDS: usize = 15;
+/// Words in the boot block, each one the shell reads: where the submission
+/// ring and the completion ring are; the quantum the kernel declares to the
+/// central scheduler (xpute_runtime::sched::quantum's QuantumPolicy): margin
+/// share, batch frames and the settle time, each in thousandths; the heap's
+/// row; and the two streams the shell runs after every turn, the renderer's
+/// (pxl_render::gpu::api, 0 where the bracket draws itself) and the host's
+/// (crate::host). Where the kernel's ranges lie is its own and is not here:
+/// what the shell reads of them, it is given the address of.
+pub const BOOT_WORDS: usize = 8;
+
+const BOOT_QUANTUM: usize = 2;
+
+/// The boot word holding the address of the heap's row.
+const BOOT_HEAP: usize = 5;
 
 /// The boot words holding the addresses of the renderer's and the host's
 /// streams.
-const BOOT_GPU: usize = 13;
-const BOOT_HOST: usize = 14;
-
-/// The boot word holding the address of the heap's row.
-const BOOT_HEAP: usize = 12;
+const BOOT_GPU: usize = 6;
+const BOOT_HOST: usize = 7;
 
 /// The heap's row: the bracket's reading (`HeapStat`) as words — range, used,
 /// live, run, slot, largest free, releases, refusals, requests — written at
@@ -148,8 +149,6 @@ fn write_heap_row() {
         h.requests,
     ];
 }
-
-const BOOT_QUANTUM: usize = 9;
 
 /// A shell has booted against this kernel. On a page there is only ever the
 /// first, since the page's module goes with its shell; on a device the kernel
@@ -193,18 +192,15 @@ fn boot(b: &Bracket) {
             crate::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);
         }
     }));
-    let (map, gpu_stream) = lay_out(b);
+    let gpu_stream = lay_out(b);
     crate::sched::turn::boot();
     // SAFETY: the page at BOOT_AT, which the layout keeps clear of the rings
     // and the bracket's data; the boot block's alone.
     let block = unsafe { &mut *ptr_at::<[u32; BOOT_WORDS]>(crate::mem::spec::BOOT_AT as usize) };
-    block[..3].copy_from_slice(&[b.data_end, ring_address(door().submission()), ring_address(door().completion())]);
+    block[..2].copy_from_slice(&[ring_address(door().submission()), ring_address(door().completion())]);
     block[BOOT_HEAP] = HEAP_ROW_AT;
     block[BOOT_GPU] = gpu_stream;
     block[BOOT_HOST] = fixed_at(Range::Host);
-    for (i, sec) in [map.fixed, map.heap].into_iter().enumerate() {
-        write_section(block, 3 + i * SECTION_WORDS as usize, sec);
-    }
     let q = crate::sched::tick::QUANTUM;
     for (i, v) in [q.margin_share, q.batch_frames, q.settle_ms].into_iter().enumerate() {
         block[BOOT_QUANTUM + i] = round(v * 1000.0) as u32;
@@ -223,19 +219,18 @@ fn fixed_at(r: Range) -> u32 {
 /// Nothing is cut here. The sections are ranges the map names and their
 /// contents' own affair; the heap is the one allocator and it knows its range
 /// without being told (`buddy_tree`'s `Range`).
-fn lay_out(b: &Bracket) -> (section::Map, u32) {
+fn lay_out(b: &Bracket) -> u32 {
     let map = section::lay_out(b.given, b.data_end);
     kernel().volumes = Some(Volumes::new());
     section::set_map(map);
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, each what it
     // is installed as from a page, zeroed, the renderer's and the host's
     // alone.
-    let gpu_stream = unsafe {
+    unsafe {
         crate::host::set_host_stream(fixed_at(Range::Host));
         pxl_render::gpu::renderer::set_blocks(fixed_at(Range::Blocks));
         pxl_render::gpu::api::install(fixed_at(Range::Gpu))
-    };
-    (map, gpu_stream)
+    }
 }
 
 /// The doorbell: the rising edge of a turn, with the time it may take. The

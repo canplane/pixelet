@@ -136,6 +136,14 @@ deno task dev:native       # Metro
 
 `apps/native/ios/` is generated from `app.json` and the module under `modules/platform/`, and is not kept. `pod install` and Xcode both run Node: put it on `PATH` for the first, and name it in `ios/.xcode.env.local` (`export NODE_BINARY=…`) for the second. Then build `ios/pixelet.xcworkspace` from Xcode, with a team to sign with for a phone. The kernel is built with the app, by a phase of the platform module's pod (`apps/native/script/build-native.ts`), for the configuration and the device or simulator the app is: a Debug build's with the kernel's dev settings, a Release build's without, as a deployed page's is. The phase finds cargo and Deno where their installers put them, `~/.cargo/bin` and `~/.deno/bin`. The app is built for iOS alone: `modules/platform` has no Android half.
 
+A device draws its text at the size the phone's Text Size setting asks for, which a page ignores, so a view that fits on a page can overflow on a device set larger. The simulator takes the setting from the command line; the two ends are the ones worth a look:
+
+```bash
+xcrun simctl ui booted content_size extra-small                            # the smallest
+xcrun simctl ui booted content_size accessibility-extra-extra-extra-large  # the largest
+xcrun simctl ui booted content_size large                                  # the default
+```
+
 ---
 
 ## What runs where
