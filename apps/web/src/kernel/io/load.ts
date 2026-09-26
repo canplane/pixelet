@@ -17,9 +17,9 @@
 import type { u32, u64 } from "@xpute/core/abi/word.ts";
 import { Command, encode_load_delete, encode_load_image, encode_load_update } from "@/kernel/abi/cmd.spec.ts";
 import { load_key } from "@/catalog/asset/load.ts";
-import { ORIGIN } from "@platform/origin.ts";
+import { origin_get } from "@platform/origin.ts";
 import { asset_url } from "@/config/route.ts";
-import { running } from "@/kernel/io/fetch.ts";
+import { begin_read } from "@/kernel/io/fetch.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { hold_body } from "@/kernel/module.ts";
 import { hold_image } from "@platform/image.ts";
@@ -29,27 +29,35 @@ import { request_frame } from "@/kernel/sched.ts";
 async function fetch_load(load: u32, signal: AbortSignal): Promise<Response> {
   const key = load_key(load);
   if (key === null) throw new Error(`load ${load} names no asset`);
-  const res = await fetch(`${ORIGIN}${asset_url(key)}`, { signal });
+  const res = await origin_get(asset_url(key), signal);
   if (!res.ok) throw new Error(`${key} ${res.status}`);
   return res;
 }
 
+/** Tells the kernel the read under `key` did not arrive: it asks again in
+ * its own time. */
+function refuse(key: u64): void {
+  CORE_BUILD.send(0, Command.LOAD_DELETE, encode_load_delete({ key }));
+  request_frame();
+}
+
 /** Runs one read the scheduler started, and reports what became of it under
- * the key it was started with. */
-async function read(key: u64, load: u32, take: (res: Response) => Promise<void>): Promise<void> {
-  const controller = new AbortController();
-  running.set(key, controller);
+ * the key it was started with: `take` reads what arrived and gives back its
+ * report, made only if the read is still this one's to report. */
+async function read(key: u64, load: u32, take: (res: Response) => Promise<() => void>): Promise<void> {
+  // A stop is the scheduler's own doing: it took the credit for something
+  // the viewer is more waiting on, and it still wants this. The guest is told
+  // the read did not arrive the moment it is stopped (fetch.ts begin_read).
+  const { signal, own } = begin_read(key, () => refuse(key));
   try {
-    await take(await fetch_load(load, controller.signal));
-  } catch (err) {
-    // A stop is the scheduler's own doing: it took the credit for something
-    // the viewer is more waiting on, and it still wants this. Either way the
-    // guest is told the read did not arrive and asks again in its own time.
-    if (!controller.signal.aborted) console.error(`[kernel] asset: ${err instanceof Error ? err.message : String(err)}`);
-    CORE_BUILD.send(0, Command.LOAD_DELETE, encode_load_delete({ key }));
-  } finally {
-    running.delete(key);
+    const report = await take(await fetch_load(load, signal));
+    if (!own()) return;
+    report();
     request_frame();
+  } catch (err) {
+    if (!own()) return;
+    console.error(`[kernel] asset: ${err instanceof Error ? err.message : String(err)}`);
+    refuse(key);
   }
 }
 
@@ -58,7 +66,7 @@ export function load_model(key: u64, load: u32): Promise<void> {
     const bytes = new Uint8Array(await res.arrayBuffer());
     // A model is far past a ring frame: the host holds it, and the kernel
     // reads it in its turn.
-    CORE_BUILD.send(0, Command.LOAD_UPDATE, encode_load_update({ key, body: hold_body(bytes), bytes: bytes.byteLength }));
+    return () => CORE_BUILD.send(0, Command.LOAD_UPDATE, encode_load_update({ key, body: hold_body(bytes), bytes: bytes.byteLength }));
   });
 }
 
@@ -67,8 +75,7 @@ export function load_model(key: u64, load: u32): Promise<void> {
 export function load_image(key: u64, load: u32): Promise<void> {
   return read(key, load, async (res) => {
     const handle = await hold_image(res);
-    // A device with no decoder here yet refuses it, as a failed read is.
-    if (handle === null) CORE_BUILD.send(0, Command.LOAD_DELETE, encode_load_delete({ key }));
-    else CORE_BUILD.send(0, Command.LOAD_IMAGE, encode_load_image({ key, handle }));
+    // An image that does not decode is refused, as a failed read is.
+    return () => handle === null ? refuse(key) : CORE_BUILD.send(0, Command.LOAD_IMAGE, encode_load_image({ key, handle }));
   });
 }
