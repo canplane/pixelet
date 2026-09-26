@@ -15,7 +15,7 @@ import { type ActiveTool, Command, encode_input_tracking, Tracking } from "@/ker
 import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { boot_kernel } from "@/kernel/kernel.ts";
 import { kernel_hold } from "@/kernel/control/input.ts";
-import { orientation_permit } from "@/kernel/control/sensor.ts";
+import { orientation_permit } from "@platform/sensor.ts";
 import { missing_before_boot } from "@/kernel/render/gpu.ts";
 import { request_frame, ring_now, strobe } from "@/kernel/sched.ts";
 import type { UnsupportedReason } from "@/app/store/unsupported-store.ts";

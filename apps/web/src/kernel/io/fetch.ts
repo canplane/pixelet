@@ -31,6 +31,7 @@ import { Command, encode_fetch_update, FetchOutcome } from "@/kernel/abi/cmd.spe
 import { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
 import { declareUnsupported, isUnsupported } from "@/app/store/unsupported-store.ts";
 import { PUBLISHED_TILES } from "@/config/deploy.ts";
+import { ORIGIN } from "@platform/origin.ts";
 import { tile_url } from "@/config/route.ts";
 import { BAKE_KINDS } from "@/config/published.spec.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
@@ -74,7 +75,7 @@ export async function run_fetch(key: u64, bake: number, name: string): Promise<v
   let net_ms = 0;
   try {
     const t0 = performance.now();
-    const res = await fetch(tile_url(BAKE_KINDS[bake], name, PUBLISHED_TILES), { signal });
+    const res = await fetch(`${ORIGIN}${tile_url(BAKE_KINDS[bake], name, PUBLISHED_TILES)}`, { signal });
     const body = new Uint8Array(await res.arrayBuffer());
     net_ms = performance.now() - t0;
     if (res.status === 404) {

@@ -28,7 +28,7 @@ import {
   Sensor,
 } from "@/kernel/abi/cmd.spec.ts";
 import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
-import { send_permission } from "@/kernel/control/sensor.ts";
+import { send_permission } from "@platform/sensor.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { request_frame, ring_now, set_driver, strobe } from "@/kernel/sched.ts";
 

@@ -1,4 +1,4 @@
-// @pxl/web/kernel/control/sensor.ts
+// @pxl/web/platform/web/sensor.ts
 
 /**
  * The device's two sensors as the browser grants them
@@ -19,6 +19,10 @@ interface IOSOrientationEvent extends DeviceOrientationEvent {
   webkitCompassHeading?: number;
 }
 type IOSOrientationEventCtor = typeof DeviceOrientationEvent & { requestPermission?: () => Promise<"granted" | "denied"> };
+
+export function geolocation_supported(): boolean {
+  return "geolocation" in navigator;
+}
 
 export function orientation_supported(): boolean {
   return typeof DeviceOrientationEvent !== "undefined";

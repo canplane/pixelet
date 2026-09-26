@@ -17,6 +17,7 @@
 import type { u32, u64 } from "@xpute/core/abi/word.ts";
 import { Command, encode_load_delete, encode_load_image, encode_load_update } from "@/kernel/abi/cmd.spec.ts";
 import { load_key } from "@/catalog/asset/load.ts";
+import { ORIGIN } from "@platform/origin.ts";
 import { asset_url } from "@/config/route.ts";
 import { running } from "@/kernel/io/fetch.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
@@ -28,7 +29,7 @@ import { request_frame } from "@/kernel/sched.ts";
 async function fetch_load(load: u32, signal: AbortSignal): Promise<Response> {
   const key = load_key(load);
   if (key === null) throw new Error(`load ${load} names no asset`);
-  const res = await fetch(asset_url(key), { signal });
+  const res = await fetch(`${ORIGIN}${asset_url(key)}`, { signal });
   if (!res.ok) throw new Error(`${key} ${res.status}`);
   return res;
 }

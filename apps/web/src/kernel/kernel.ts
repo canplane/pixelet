@@ -28,7 +28,7 @@ import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { storage } from "@/kernel/abi/host.spec.ts";
 import { stored } from "@/kernel/host.ts";
 import { hold_body } from "@/kernel/module.ts";
-import { geolocation_start, geolocation_stop, orientation_listen, orientation_needs_permission, orientation_remove, orientation_supported } from "@/kernel/control/sensor.ts";
+import { geolocation_start, geolocation_stop, geolocation_supported, orientation_listen, orientation_needs_permission, orientation_remove, orientation_supported } from "@platform/sensor.ts";
 import { abort_fetch, run_fetch } from "@/kernel/io/fetch.ts";
 import { load_image, load_model } from "@/kernel/io/load.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
@@ -98,7 +98,7 @@ export async function boot_kernel(): Promise<void> {
     encode_world_create({
       development: __IS_DEV__,
       handheld: HANDHELD,
-      geolocation: "geolocation" in navigator,
+      geolocation: geolocation_supported(),
       orientation: orientation_supported(),
       orientation_permission: orientation_needs_permission(),
       settings: storedSettings(),
