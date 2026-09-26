@@ -75,11 +75,6 @@
 
     // ── Ship it ──
     "build:wasm": "deno task --cwd apps/web build:wasm",
-    // The kernel for a device: the xcframework the app links, the iPhone's and
-    // the simulator's in one.
-    "build:native": "./apps/native/script/build-native.ts",
-    // The same without the kernel's dev settings, for an app built for release.
-    "build:native:published": "./apps/native/script/build-native.ts --published",
     "build:web": "deno task --cwd apps/web build",
     // Does not upload what the bucket holds.
     "deploy": "deno task --cwd apps/web deploy",
