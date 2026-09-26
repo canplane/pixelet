@@ -1,4 +1,4 @@
-// ingest-asset/glb.rs
+// pxl-tool/asset/glb.rs
 
 //! A model's size, measured from the file rather than typed into a catalog.
 //!
@@ -15,9 +15,32 @@
 //! `min`/`max` is what bounds the mesh, and reading a few hundred thousand
 //! vertices to rediscover it would be slower and no more correct.
 
-use pxl_spec::space::mat4::{mat4_identity, mat4_mul, mat4_transform_point, Mat4};
-use pxl_spec::space::v3::V3;
 use serde::Deserialize;
+
+/// A node's transform, column-major as glTF writes it. glTF holds a node to
+/// an affine transform — a matrix it can decompose into TRS — so a point is
+/// carried with no projective divide. Its own two operations rather than
+/// pxl-spec's: the ingest writes part of pxl-spec, and must build where what
+/// it last wrote does not.
+type Mat4 = [f64; 16];
+
+const IDENTITY: Mat4 = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
+
+/// `a × b`.
+fn mul(a: &Mat4, b: &Mat4) -> Mat4 {
+    let mut out = [0.0; 16];
+    for c in 0..4 {
+        for r in 0..4 {
+            out[c * 4 + r] = (0..4).map(|k| a[k * 4 + r] * b[c * 4 + k]).sum();
+        }
+    }
+    out
+}
+
+/// `m × (p, 1)`.
+fn apply(m: &Mat4, p: [f64; 3]) -> [f64; 3] {
+    [0, 1, 2].map(|r| m[r] * p[0] + m[4 + r] * p[1] + m[8 + r] * p[2] + m[12 + r])
+}
 
 #[derive(Deserialize)]
 struct Gltf {
@@ -133,7 +156,7 @@ impl Bounds {
             hi: [f64::NEG_INFINITY; 3],
         }
     }
-    fn add(&mut self, p: &V3) {
+    fn add(&mut self, p: &[f64; 3]) {
         for (i, &v) in p.iter().enumerate() {
             self.lo[i] = self.lo[i].min(v);
             self.hi[i] = self.hi[i].max(v);
@@ -148,8 +171,7 @@ fn visit(gltf: &Gltf, index: usize, parent: &Mat4, bounds: &mut Bounds, depth: u
         return;
     }
     let Some(node) = gltf.nodes.get(index) else { return };
-    let mut world = [0.0; 16];
-    mat4_mul(&mut world, parent, &local(node));
+    let world = mul(parent, &local(node));
 
     if let Some(mesh) = node.mesh.and_then(|m| gltf.meshes.get(m)) {
         for primitive in &mesh.primitives {
@@ -169,9 +191,7 @@ fn visit(gltf: &Gltf, index: usize, parent: &Mat4, bounds: &mut Bounds, depth: u
                     if corner & 2 != 0 { max[1] } else { min[1] },
                     if corner & 4 != 0 { max[2] } else { min[2] },
                 ];
-                let mut w = [0.0; 3];
-                mat4_transform_point(&mut w, &world, p[0], p[1], p[2]);
-                bounds.add(&w);
+                bounds.add(&apply(&world, p));
             }
         }
     }
@@ -185,8 +205,6 @@ fn visit(gltf: &Gltf, index: usize, parent: &Mat4, bounds: &mut Bounds, depth: u
 pub fn extent(bytes: &[u8]) -> Result<[f64; 3], String> {
     let gltf: Gltf = serde_json::from_slice(json_chunk(bytes)?).map_err(|e| e.to_string())?;
     let mut bounds = Bounds::new();
-    let mut root = [0.0; 16];
-    mat4_identity(&mut root);
 
     let scenes: Vec<&Scene> = match gltf.scene.and_then(|i| gltf.scenes.get(i)) {
         Some(s) => vec![s],
@@ -194,7 +212,7 @@ pub fn extent(bytes: &[u8]) -> Result<[f64; 3], String> {
     };
     let roots: Vec<usize> = scenes.iter().flat_map(|s| s.nodes.iter().copied()).collect();
     for r in roots {
-        visit(&gltf, r, &root, &mut bounds, 0);
+        visit(&gltf, r, &IDENTITY, &mut bounds, 0);
     }
 
     if bounds.lo[0] > bounds.hi[0] {

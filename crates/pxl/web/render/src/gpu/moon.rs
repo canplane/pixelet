@@ -2,7 +2,7 @@
 
 //! The Moon's face on the device: the near side's reflectance
 //! (asset/sky/moon.png, cut from the CGI Moon Kit of NASA's Scientific
-//! Visualization Studio by asset/script/download_moon.rs), painted once into
+//! Visualization Studio by pxl-tool/bin/download_moon.rs), painted once into
 //! a texture with its mip chain for the sky pass to read
 //! (frame/shader/sky.wgsl's moon_disc).
 //!

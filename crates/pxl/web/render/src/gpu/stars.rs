@@ -1,7 +1,7 @@
 // pxl-render/gpu/stars.rs
 
 //! The stars: the Yale Bright Star Catalog (Hoffleit and Warren, fifth
-//! revised edition, 1991; CDS V/50), baked by script/bake-stars.ts into eight
+//! revised edition, 1991; CDS V/50), baked by pxl-tool/bin/bake_stars.rs into eight
 //! bytes a star, and drawn as one instanced strip of four corners a star
 //! (frame/shader/stars.wgsl) right after the sky, under everything else.
 //!
@@ -121,7 +121,7 @@ impl StarPass {
 
 /// A star as the bake packed it — its right ascension as a u16 of a turn,
 /// its declination as an i16 of a quarter turn, its visual magnitude and its
-/// B−V color index as i16 thousandths (script/bake-stars.ts) — as the
+/// B−V color index as i16 thousandths (pxl-tool/bin/bake_stars.rs) — as the
 /// vertex stage reads it.
 fn star(packed: &[u8; STAR_BYTES]) -> [f32; STAR_FLOATS] {
     let word = |k: usize| [packed[2 * k], packed[2 * k + 1]];

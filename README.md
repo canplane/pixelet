@@ -98,6 +98,10 @@ deno task dev:local
 | `deno task build:web`                | Build the client                                                      |
 | `deno task build:wasm`               | Build the kernel module into `apps/web/src/kernel/kernel.wasm`        |
 | `deno task bake:{tiles,poi,geocode}` | db-geo into `./out/<kind>/<version>`                                  |
+| `deno task ingest:asset`             | Hash `asset/` into `./out/asset`, regenerate the asset tables         |
+| `deno task download:{pack,moon}`     | Normalize the texture pack's sources, or cut the Moon's near side     |
+| `deno task bake:stars`               | The star catalog into the renderer's `bright-stars.bin`               |
+| `deno task render:brand`             | The favicon, app icons and link preview from `apps/web/brand/`        |
 | `deno task spec`                     | Generate Rust and TypeScript from the JSON under `spec/`              |
 | `deno task deploy`                   | Build the client and publish the Cloudflare Worker                    |
 | `deno task smoke <url>`              | What a deployment must answer, against a running one                  |
@@ -105,15 +109,7 @@ deno task dev:local
 | `deno task test`                     | Every test, every workspace member                                    |
 | `deno task lint` / `fmt`             | Lint / format                                                         |
 
-Five tools are run by path rather than by task, since each belongs to the tree it reads:
-
-| Run                                                 | What it does                                                   |
-| --------------------------------------------------- | -------------------------------------------------------------- |
-| `cargo run --manifest-path asset/script/Cargo.toml` | Hash `asset/` into `./out/asset`, regenerate the asset tables  |
-| `./asset/script/download_texture_pack.rs`           | Normalize the texture pack's sources into 256² tiles           |
-| `./asset/script/download_moon.rs`                   | Cut the Moon's near side from NASA SVS's map into `asset/sky/` |
-| `./apps/web/brand/render.rs`                        | Render the favicon, app icons and link preview from `brand/`   |
-| `infra/geo/**/script/*`                             | Fill db-geo from Overture and GEDTM30 — infra/geo/README.md §4 |
+db-geo is filled by the scripts under `infra/geo/**/script/`, run by path as [infra/geo/README.md](./infra/geo/README.md) §4 says: they make a database's state rather than a file the tree keeps.
 
 To measure the client, use `preview` (`localhost:4173`). It is the bundle as the deployment builds it, so the dev server's unbundled modules and hooks are gone. It is still a development build, so the ledger overlay is compiled in — a deployed build does not have it.
 
@@ -174,20 +170,21 @@ Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and *
 │       │   ├── render/       #     pxl-render: the view
 │       │   ├── kernel/       #     pxl-kernel: the stores, the schedulers, the turn
 │       │   └── wasm/         #     pxl-wasm: the one WebAssembly module
-│       └── server/           #   pxl-server: what geo and api both need to start
-│           ├── geo-spec/     #     pxl-geo-spec: geographic provider values (Overture today)
-│           ├── geo/          #     pxl-geo: the world's data server (/geo)
-│           ├── api/          #     pxl-api: the application server (/api)
-│           └── geo-bake/     #     pxl-geo-bake: the three page bakes and the dev tile server
+│       ├── server/           #   pxl-server: what geo and api both need to start
+│       │   ├── geo-spec/     #     pxl-geo-spec: geographic provider values (Overture today)
+│       │   ├── geo/          #     pxl-geo: the world's data server (/geo)
+│       │   ├── api/          #     pxl-api: the application server (/api)
+│       │   └── geo-bake/     #     pxl-geo-bake: the three page bakes and the dev tile server
+│       └── tool/             #   pxl-tool: the ingest and the bakes that write files the tree keeps
 ├── packages/                 # The TypeScript workspace packages
 │   └── xpute/
 │       ├── core/             #   @xpute/core: the same kit in TypeScript
 │       └── runtime/          #   @xpute/runtime: the rings' host end and the reservation
-├── spec/                     # JSON every language is generated from (script/spec.ts),
+├── spec/                     # JSON every language is generated from (pxl-tool),
 │                             #   grouped as crates/ is: xpute/, pxl/{spec, web, server}
 ├── asset/                    # Shipped models and texture pack (cube, decor, actor),
-│                             #   imported by nothing; script/ is the ingest, its own crate
-├── script/                   # spec and locale generators and checks, the deployment smoke
+│                             #   imported by nothing
+├── script/                   # the spec generator, the tree's checks, the deployment smoke
 ├── infra/                    # local and production compose files, and what fills db-geo:
 │                             #   geo/overture/ and geo/elevation/, each with init/ and script/
 └── issue/                    # Decisions and why, the backlog, experiment/ for measurements

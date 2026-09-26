@@ -111,8 +111,8 @@
   "cubes": {
     "block": {
       "white": "흰색",
-      "gray": "회색",
-      "dark_gray": "진회색",
+      "grey": "회색",
+      "dark_grey": "진회색",
       "black": "검정",
       "red": "빨강",
       "orange": "주황",

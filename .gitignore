@@ -182,9 +182,6 @@ vite.config.ts.timestamp-*
 # Rust workspace build output
 /target
 /crates/target
-# The ingest is its own workspace (asset/script/Cargo.toml), so its build
-# lands beside it rather than in crates/.
-/asset/script/target
 
 # The core's module, built from crates/ by apps/web/script/build_wasm.ts
 apps/web/src/kernel/kernel.wasm

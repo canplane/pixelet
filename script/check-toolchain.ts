@@ -11,7 +11,7 @@
 // is for. The failure it prevents is quiet: the image builds fine on the
 // wrong compiler and publishes a binary nothing in the gate ever compiled.
 //
-// The same shape as script/spec.ts's checks of wrangler.jsonc and
+// The same shape as pxl-tool/spec/route.rs's checks of wrangler.jsonc and
 // check-bundle.ts: read what was written by hand, compare it to the one
 // source, and say which is which when they disagree.
 //

@@ -1,14 +1,4 @@
-#!/usr/bin/env -S cargo +nightly -Zscript
----
-[package]
-edition = "2021"
-
-[dependencies]
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
-# One file from NASA's Scientific Visualization Studio, once: a blocking
-# client, as the texture pack's script uses.
-ureq = "2"
----
+// pxl-tool/bin/download_moon.rs
 
 //! The moon's face, as the sky draws it (frame/shader/sky.wgsl's moon_disc).
 //!
@@ -30,18 +20,15 @@ ureq = "2"
 //! credited, rather than in THIRD_PARTY_NOTICES.md, which covers copied
 //! source.
 //!
-//!   ./asset/script/download_moon.rs
+//!   deno task download:moon
 
-use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use image::{GrayImage, ImageFormat, Luma};
 
-const SOURCE: &str = "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg";
+use pxl_tool::root;
 
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap_or_else(|_| PathBuf::from("."))
-}
+const SOURCE: &str = "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg";
 
 fn to_linear(c: u8) -> f64 {
     let c = c as f64 / 255.0;

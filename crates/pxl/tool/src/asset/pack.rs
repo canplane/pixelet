@@ -1,4 +1,4 @@
-// ingest-asset/pack.rs
+// pxl-tool/asset/pack.rs
 
 //! The texture pack's manifest, and what one entry becomes on disk.
 //!
@@ -58,11 +58,22 @@ struct Manifest {
     objects: Objects,
 }
 
+/// Which cube face an entry is the image of, by the manifest's own keys: the
+/// top of a channel's type, or the side of a type in every channel that has
+/// one of that name. A placed block is the `block` channel's top. The file's
+/// name says nothing here — a pack names its files as it likes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Slot {
+    Top { channel: String, ty: String },
+    Side { ty: String },
+}
+
 /// One entry as the tool works it: where it comes from, where its original is
 /// cached, and where the normalized tile goes.
 pub struct Item {
     /// For logging only, e.g. `terrain.top.land.bare`.
     pub label: String,
+    pub slot: Slot,
     pub url: String,
     pub file: String,
     pub dest: PathBuf,
@@ -77,9 +88,10 @@ pub fn load(cube_dir: &Path) -> Result<Vec<Item>, String> {
     let originals = cube_dir.join("original");
 
     let mut items = Vec::new();
-    let mut push = |label: String, e: &Entry| {
+    let mut push = |label: String, slot: Slot, e: &Entry| {
         items.push(Item {
             label,
+            slot,
             url: e.url.clone(),
             file: e.file.clone(),
             dest: cube_dir.join(&e.file),
@@ -91,14 +103,28 @@ pub fn load(cube_dir: &Path) -> Result<Vec<Item>, String> {
 
     for (channel, types) in &manifest.terrain.top {
         for (ty, entry) in types {
-            push(format!("terrain.top.{channel}.{ty}"), entry);
+            push(
+                format!("terrain.top.{channel}.{ty}"),
+                Slot::Top {
+                    channel: channel.clone(),
+                    ty: ty.clone(),
+                },
+                entry,
+            );
         }
     }
     for (ty, entry) in &manifest.terrain.side {
-        push(format!("terrain.side.{ty}"), entry);
+        push(format!("terrain.side.{ty}"), Slot::Side { ty: ty.clone() }, entry);
     }
-    for (color, entry) in &manifest.objects.block {
-        push(format!("objects.block.{color}"), entry);
+    for (ty, entry) in &manifest.objects.block {
+        push(
+            format!("objects.block.{ty}"),
+            Slot::Top {
+                channel: "block".to_string(),
+                ty: ty.clone(),
+            },
+            entry,
+        );
     }
     Ok(items)
 }
@@ -171,11 +197,7 @@ pub fn flatten_alpha(data: &mut [u8], palette_hex: Option<&str>) {
                 n += 1;
             }
         }
-        if n > 0 {
-            [(r / n) as u8, (g / n) as u8, (b / n) as u8]
-        } else {
-            [200, 200, 200]
-        }
+        [r, g, b].map(|sum| sum.checked_div(n).map_or(200, |mean| mean as u8))
     });
 
     for px in data.as_chunks_mut::<4>().0 {

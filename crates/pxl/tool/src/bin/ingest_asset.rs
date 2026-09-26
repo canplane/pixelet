@@ -1,4 +1,4 @@
-// ingest-asset/ingest_asset.rs
+// pxl-tool/bin/ingest_asset.rs
 
 //! Every shipped asset into the form the bucket holds and the catalogs name:
 //! one object per file, named by its own path with a hash of its bytes in the
@@ -20,18 +20,17 @@
 //! `asset/cube/{terrain,block}` composed into a sheet and encoded once
 //! (sheet.rs).
 //!
-//!   cargo run --manifest-path asset/script/Cargo.toml
-
-mod glb;
-mod sheet;
-mod table;
+//!   deno task ingest:asset
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use sha2::{Digest, Sha256};
 
-use crate::table::{Row, Sheet};
+use pxl_tool::asset::table::{Row, Sheet};
+use pxl_tool::asset::{glb, pack, sheet, table};
+use pxl_tool::fmt::formatted;
+use pxl_tool::root;
 
 /// What the bucket prefix for an asset is; a key is this over the asset's own
 /// path. Mirrored by the Worker's `KEY_RE` and by the shell's `asset_url`.
@@ -44,10 +43,6 @@ const KEY_PREFIX: &str = "asset/";
 /// — so what it buys is only that one file's next version cannot land on the
 /// name its last one had.
 const KEY_HEX: usize = 12;
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap_or_else(|_| PathBuf::from("."))
-}
 
 /// The asset tree as the table walks it: every `.glb` and `.png`, sorted by
 /// path.
@@ -86,35 +81,9 @@ fn named(rel: &str, hex: &str) -> String {
     }
 }
 
-/// Through the formatter the tree is checked with, so that writing a table and
-/// then formatting the repository do not disagree — `deno fmt --check` and
-/// `cargo fmt --check` are both gates, and a generator that emits unformatted
-/// output makes the next unrelated run of either fail.
 fn write_formatted(path: &Path, text: &str) -> Result<(), String> {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-
-    let rust = path.extension().is_some_and(|e| e == "rs");
-    let mut cmd = if rust {
-        let mut c = Command::new("rustfmt");
-        c.args(["--edition", "2021", "--emit", "stdout", "--config-path"]).arg(root().join("rustfmt.toml"));
-        // The table is formatted with the toolchain the tree is checked with,
-        // not this script's. A single-file script is nightly-only, and rustup
-        // exports that choice to every child — nightly carries no rustfmt.
-        c.env_remove("RUSTUP_TOOLCHAIN");
-        c
-    } else {
-        let mut c = Command::new("deno");
-        c.args(["fmt", "--ext", "ts", "-"]).current_dir(root());
-        c
-    };
-    let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().map_err(|e| format!("fmt {}: {e}", path.display()))?;
-    child.stdin.take().ok_or("no stdin")?.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
-    if !out.status.success() {
-        return Err(format!("fmt {}: exited {}", path.display(), out.status.code().unwrap_or(-1)));
-    }
-    std::fs::write(path, out.stdout).map_err(|e| format!("{}: {e}", path.display()))
+    let text = formatted(&path.to_string_lossy(), text.to_string())?;
+    std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 fn main() -> ExitCode {
@@ -164,6 +133,23 @@ fn run() -> Result<(), String> {
         .filter(|r| r.path.ends_with(".png") && (r.path.starts_with("cube/terrain/") || r.path.starts_with("cube/block/")))
         .map(|r| r.path.clone())
         .collect();
+    // Which cube face each tile is, from the pack's manifest; a tile with no
+    // entry there, or an entry with no tile, is a pack out of step with itself.
+    let slots = pack::load(&asset_dir.join("cube"))?;
+    let tile_slots = tiles
+        .iter()
+        .map(|t| {
+            slots
+                .iter()
+                .find(|i| format!("cube/{}", i.file) == *t)
+                .map(|i| i.slot.clone())
+                .ok_or(format!("{t} has no entry in asset/cube/manifest.json"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if let Some(i) = slots.iter().find(|i| !tiles.contains(&format!("cube/{}", i.file))) {
+        return Err(format!("{} names {}, which is not under asset/cube", i.label, i.file));
+    }
+    let faces = table::faces(&tile_slots, &pxl_tool::spec::cell::catalog()?)?;
     let composed = sheet::compose(&asset_dir, &tiles)?;
     // The one object with no source file of its own: it is composed from every
     // tile under `cube/`, so it is named there.
@@ -179,13 +165,11 @@ fn run() -> Result<(), String> {
         columns: sheet::COLUMNS,
         tiles: composed.tiles,
         means: composed.means,
+        faces,
     };
 
     write_formatted(&root.join("apps/web/src/catalog/asset/ingested.spec.ts"), &table::render_ts(&rows, &sheet))?;
-    write_formatted(
-        &root.join("crates/pxl/spec/src/asset/ingested.spec.rs"),
-        &table::render_rs(&rows, &sheet, pxl_spec::cell::cube_type::cube_types::CHANNELS),
-    )?;
+    write_formatted(&root.join("crates/pxl/spec/src/asset/ingested.spec.rs"), &table::render_rs(&rows, &sheet))?;
 
     println!(
         "[ingest] {} assets, {:.1} MiB, sheet {} tiles {:.0} KiB -> out/asset/{{glb,png,webp}}, tables written",

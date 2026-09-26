@@ -7,8 +7,9 @@
 //! and color are spec/cell's (cell/color.spec.rs), and the pack is one image
 //! per type and face on top of that, so a type with no image here still draws
 //! — as its color — and a pack can be swapped without touching an id. Which
-//! cube face a tile is, the ingest reads off the file's name and writes into
-//! ingested.spec.rs; the sheet's bucket key is the shell's.
+//! cube face a tile is, the ingest reads off the pack's manifest
+//! (asset/cube/manifest.json) and writes into ingested.spec.rs; the sheet's
+//! bucket key is the shell's.
 
 pub use super::ingested::CubeFace;
 use super::ingested::{Sheet, SHEET};

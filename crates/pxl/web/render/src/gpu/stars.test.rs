@@ -11,7 +11,7 @@ const BRIGHTEST: [(&str, f64, f64, f64); 3] = [
     ("Arcturus", (14.0 + 15.0 / 60.0 + 39.7 / 3600.0) * 15.0, 19.0 + 10.0 / 60.0 + 57.0 / 3600.0, -0.04),
 ];
 
-/// The baked file is written by script/bake-stars.ts and read here, two
+/// The baked file is written by pxl-tool/bin/bake_stars.rs and read here, two
 /// spellings of one layout. Read through `star`, the file's first stars have
 /// to be where and as bright as the catalog says, so a bake that changed
 /// the layout without this reader, or the other way round, fails here rather

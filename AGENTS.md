@@ -73,6 +73,16 @@ servers and the bakes compile the model, so they are crates; an ingest that
 moves a provider's columns into Postgres shares nothing, so it is a script;
 `apps/web` is the shell and stays TypeScript.
 
+**A tool that makes a file is Rust; one that talks to a service is
+TypeScript.** What writes or reads a format the Rust side owns, or processes
+a binary — the asset ingest, the stars, the Moon, the brand, the code
+generated from `spec/` — is a binary of `pxl-tool` (`crates/pxl/tool`)
+wherever it fetches its input from, and links no crate it writes into. The
+shell's own build is
+`apps/web/script/`; the tree's checks, the export and what reaches a
+deployment or a bucket are `script/`. A script under `infra/` makes a
+database's state, not a file, and runs as infra's README says.
+
 ## One spatial model
 
 Everything placed on the map sits in one hierarchy, the **pyramid**: level k
