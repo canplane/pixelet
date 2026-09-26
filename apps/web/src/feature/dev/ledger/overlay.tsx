@@ -52,14 +52,34 @@ const TINT: Record<Tint, { border: string; ground: string; ink: string; lit: str
   off: { border: alpha(color.white, 0.1), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.25), lit: alpha(color.white, 0.05), litInk: alpha(color.white, 0.25) },
 };
 
-function PanelButton({ label, hint, tint = "plain", onPress, disabled }: { label: string; hint: string; tint?: Tint; onPress: () => void; disabled?: boolean }) {
+/** A button whose hint is said in the panel's title while a pointer is over
+ * it or a finger holds it: a page's tooltip would reach no device, and a
+ * hold is a device's hover. */
+function PanelButton({ label, hint, tint = "plain", onPress, onHint, disabled }: {
+  label: string;
+  hint: string;
+  tint?: Tint;
+  onPress: () => void;
+  onHint: (hint: string | null) => void;
+  disabled?: boolean;
+}) {
   const [hovered, setHovered] = useState(false);
   const t = TINT[tint];
   return (
     <Pressable
       onPress={onPress}
-      onHoverIn={() => setHovered(true)}
-      onHoverOut={() => setHovered(false)}
+      onHoverIn={() => {
+        setHovered(true);
+        onHint(hint);
+      }}
+      onHoverOut={() => {
+        setHovered(false);
+        onHint(null);
+      }}
+      onLongPress={() => onHint(hint)}
+      onPressOut={() => {
+        if (!hovered) onHint(null);
+      }}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityHint={hint}
@@ -94,6 +114,7 @@ function startWindow(): void {
 export function LedgerOverlay() {
   const show = useKernel((s) => DEV_BUNDLE && s.settings[SETTINGS.show_ledger.key] === 1);
   const [logging, setLogging] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
   const [g, setG] = useState<Gauge | null>(null);
   const { height } = useWindowDimensions();
 
@@ -144,7 +165,7 @@ export function LedgerOverlay() {
 
   return (
     <View style={[styles.panel, { maxHeight: height - 96 }]}>
-      <Text style={[gauge.text, styles.title]}>sched/ledger, last 10s</Text>
+      <Text style={[gauge.text, styles.title]}>{hint ?? "sched/ledger, last 10s"}</Text>
 
       {
         /* The buttons come before the numbers: on a phone the panel runs past
@@ -161,8 +182,9 @@ export function LedgerOverlay() {
             and then "start" is the button you cannot find when you want a
             clean window. */
         }
-        <PanelButton label="start" hint="clear everything and begin a fresh window" tint={recording ? "plain" : "go"} onPress={startWindow} />
+        <PanelButton onHint={setHint} label="start" hint="clear everything and begin a fresh window" tint={recording ? "plain" : "go"} onPress={startWindow} />
         <PanelButton
+          onHint={setHint}
           label="stop"
           hint="freeze the window so exports are stable while you read them"
           tint={recording ? "halt" : "off"}
@@ -171,9 +193,10 @@ export function LedgerOverlay() {
         />
       </View>
       <View style={styles.buttons}>
-        <PanelButton label="report" hint="print + copy a text report" onPress={() => void ledgerReportPrint(ledgerReportText(ledgerReportRead()))} />
-        <PanelButton label="trace" hint="save the window as a Trace Event Format file for ui.perfetto.dev" onPress={() => void ledgerTraceDownload()} />
+        <PanelButton onHint={setHint} label="report" hint="print + copy a text report" onPress={() => void ledgerReportPrint(ledgerReportText(ledgerReportRead()))} />
+        <PanelButton onHint={setHint} label="trace" hint="save the window as a Trace Event Format file for ui.perfetto.dev" onPress={() => void ledgerTraceDownload()} />
         <PanelButton
+          onHint={setHint}
           label={logging ? "log on" : "log"}
           hint="stream each settled task, missed frame and long frame to the console"
           onPress={() => {
