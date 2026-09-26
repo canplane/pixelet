@@ -73,6 +73,25 @@ checksums (v2 sends `x-amz-checksum-*` headers R2 refuses), set
 
 ## Upload
 
+**What a publish costs is one Class A operation an object**, and a server-side
+copy is the same one. The free month has a million, and nothing stops at it:
+the guarantee that the bucket cannot bill covers its reads, which all pass
+the Worker's fail-closed plan, and not its writes. A new terrain version is
+every page of the pyramid — the sum of `objects` over the bake manifest's
+`levels`, 227,310 for v6 — and a POI version likewise, so four terrain
+publishes in a month, or one rename done twice, is past it. September 2026
+went to 1.67M on bakes re-published and the quadkey rename run twice.
+
+So before an upload, and after one:
+
+```bash
+deno task usage     # Class A this month against the million, and the rest
+```
+
+and set the manifest's object count against what is left. A sync re-run
+after an interruption is cheap — it skips an object already there — but a
+new version is never partial. Deleting an old version is free.
+
 ### Terrain
 
 Terrain and POI are the bakes whose disk layout is not the bucket's. They keep

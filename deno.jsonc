@@ -85,6 +85,9 @@
     "deploy": "deno task --cwd apps/web deploy",
     // Against a running deployment, not a checkout.
     "smoke": "./script/smoke.ts",
+    // What the Worker, the bucket and the box have used against their free
+    // allowances. Reads with wrangler's login and hcloud's context.
+    "usage": "./script/usage.ts",
 
     // ── The gate ──
     "check": "deno task check:fmt && deno task check:toolchain && deno task check:rules && deno task check:web && deno task check:native && deno task check:xpute && deno task check:rust && deno task check:spec",
