@@ -66,7 +66,7 @@ impl<B: HeapBounds> Range for Heap<B> {
 /// The allocator a bracket installs over its memory.
 pub type KernelAlloc<B> = SlabMalloc<Heap<B>>;
 
-/// The allocator's reading, for the ledger and the heap's row.
+/// The allocator's reading, for the profiler and the heap's row.
 pub fn heap_stat<B: HeapBounds>(a: &KernelAlloc<B>) -> HeapStat {
     HeapStat {
         range: a.range_bytes(),

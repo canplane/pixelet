@@ -1,4 +1,4 @@
-// @pxl/web/feature/debug/ledger/gauge.tsx
+// @pxl/web/feature/debug/profiler/gauge.tsx
 
 /**
  * The gauge half of the instrument in
@@ -10,7 +10,7 @@
  * retention counts, band reuse, mounts and the window peak stay in the report.
  * Everything here comes from the kernel's summary block, read in place
  * (view.ts) — the same block the report is built from. It is grouped the way
- * the report's lanes are (ledger.json FRAME_GROUPS), in the order a reader
+ * the report's lanes are (profiler.json FRAME_GROUPS), in the order a reader
  * asks: **pace**, where the turn's time went against the display's measured
  * frame; **ground**, what the chunk scheduler is holding and what its
  * ceilings left behind; **draw**, the GPU's time and what it drew; **work**,
@@ -23,7 +23,7 @@ import { round } from "@xpute/core/math/scalar.ts";
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { EFFECT_NAMES } from "./ledger.spec.ts";
+import { EFFECT_NAMES } from "./profiler.spec.ts";
 import { n1, pct, tris, valueText } from "./lane.ts";
 import { BOUND, failText } from "./report.ts";
 import type { FrameSummary, Gauge, Spread } from "./view.ts";
@@ -91,7 +91,7 @@ const phase = (f: FrameSummary, name: string): Spread => f.phases.find((p) => p.
 
 /** The panel over one read of the window; the overlay polls and hands it down,
  * since the start/stop buttons above the panel read the same `rec`. */
-export function LedgerGauge({ g }: { g: Gauge | null }) {
+export function ProfilerGauge({ g }: { g: Gauge | null }) {
   if (g === null) return <Note>no window open</Note>;
 
   const { rec, frames: f } = g;
@@ -283,6 +283,8 @@ export const gauge = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
   rule: { marginVertical: 4, borderTopWidth: 1, borderTopColor: alpha(color.white, 0.1) },
   head: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 2 },
-  headText: { fontSize: 7.5, letterSpacing: 0.4, textTransform: "uppercase", color: alpha(color.white, 0.3) },
+  // Ten, macOS's smallest text style: the panel is dense on purpose, and
+  // what is smaller than any scale sets does not render on a 1x screen.
+  headText: { fontSize: 10, letterSpacing: 0.4, textTransform: "uppercase", color: alpha(color.white, 0.3) },
   headLine: { flex: 1, borderTopWidth: 1, borderTopColor: alpha(color.white, 0.1) },
 });

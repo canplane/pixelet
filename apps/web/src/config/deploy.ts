@@ -26,7 +26,7 @@ export const APP_ENV: string = __APP_ENV__;
 export const BUILD_TIME: string = build_time;
 
 /** Which source this bundle was built from, `<hash>[-dirty]`
- * (vite.config.ts#build_id). Stamped on every ledger report and trace so a
+ * (vite.config.ts#build_id). Stamped on every profiler report and trace so a
  * measurement names what it measured, and carried in BUILD_NUMBER where the
  * build is not one CI numbered. */
 export const BUILD_ID: string = build_id;

@@ -1,11 +1,11 @@
-// @pxl/web/feature/debug/ledger/lane.ts
+// @pxl/web/feature/debug/profiler/lane.ts
 
 /**
- * The ledger's words, in one table the report, the panel and the trace all
+ * The profiler's words, in one table the report, the panel and the trace all
  * read: where each of a frame's lanes lies, which line of the report prints
  * it, and what its number reads as.
  *
- * The kernel names a lane and nothing more (ledger.json's FRAME), and the
+ * The kernel names a lane and nothing more (profiler.json's FRAME), and the
  * name carries its unit — `_ms`, `_mb`, `_levels`, `_name` — so a lane it
  * adds is read, grouped and printed here without a word written for it. Only
  * a lane that is a list of other names' values — phases, spans, pipelines,
@@ -15,7 +15,7 @@
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
 
-import { CENSUS_TAGS, EFFECT_NAMES, FRAME, FRAME_GROUPS, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES } from "./ledger.spec.ts";
+import { CENSUS_TAGS, EFFECT_NAMES, FRAME, FRAME_GROUPS, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES } from "./profiler.spec.ts";
 
 const MB = 1048576;
 

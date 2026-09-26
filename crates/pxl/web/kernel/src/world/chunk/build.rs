@@ -287,7 +287,7 @@ pub struct World<'a> {
     pub painter: &'a mut Painter,
 }
 
-/// The build counters the ledger reads.
+/// The build counters the profiler reads.
 #[derive(Clone, Copy, Default)]
 pub struct BuildStat {
     pub direct: u32,

@@ -65,11 +65,11 @@ export const color = {
   costMedium: "#e17100",
   costHigh: "#e7000b",
   dev: "#7f22fe",
-  /** The ledger's buttons: one to begin a window, and the ink of one to
+  /** The profiler's buttons: one to begin a window, and the ink of one to
    * begin it and of one to stop it, over its dark panel. */
-  ledgerGo: "#00d492",
-  ledgerGoInk: "#5ee9b5",
-  ledgerHaltInk: "#ffd230",
+  profilerGo: "#00d492",
+  profilerGoInk: "#5ee9b5",
+  profilerHaltInk: "#ffd230",
 } as const;
 
 /** A panel's hairlines: its text, faint. */

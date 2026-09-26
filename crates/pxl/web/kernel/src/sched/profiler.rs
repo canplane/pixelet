@@ -1,4 +1,4 @@
-// pxl-kernel/sched/ledger.rs
+// pxl-kernel/sched/profiler.rs
 
 //! Where the schedulers' time and allocations are recorded, and nothing else:
 //! a read-only instrument that never feeds back into scheduling. The window
@@ -8,6 +8,6 @@
 pub mod block;
 pub mod log;
 pub mod record;
-#[path = "ledger/ledger.spec.rs"]
+#[path = "profiler/profiler.spec.rs"]
 pub mod spec;
 pub mod summary;

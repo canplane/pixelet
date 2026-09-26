@@ -1,10 +1,10 @@
-// @pxl/web/feature/debug/ledger/view.ts
+// @pxl/web/feature/debug/profiler/view.ts
 
 /**
- * The kernel's ledger, read where it lies. LEDGER_READ answers with the
+ * The kernel's profiler, read where it lies. PROFILER_READ answers with the
  * address of a few words — the summary block over a window, and the frame,
- * task and worst-frame rings — and LEDGER_TAKE with the rows the live stream
- * kept; everything is laid out as ledger.json says and read here through
+ * task and worst-frame rings — and PROFILER_TAKE with the rows the live stream
+ * kept; everything is laid out as profiler.json says and read here through
  * views over the module's memory, into the shapes report.ts formats.
  *
  * Only the address crosses the ring and nothing is built in the kernel for a
@@ -16,7 +16,7 @@
 import type { F64Array } from "@xpute/core/abi/array.ts";
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
-import { Command, encode_ledger_read } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_profiler_read } from "@/kernel/abi/cmd.spec.ts";
 import { CORE, CORE_DOORBELL } from "@/kernel/mem.ts";
 
 import {
@@ -36,7 +36,7 @@ import {
   TASK_PHASE_NAMES,
   TASK_SUMMARY,
   WORST,
-} from "./ledger.spec.ts";
+} from "./profiler.spec.ts";
 import { type Frame, frameAt } from "./lane.ts";
 import { type LongFrame, longFramesSince } from "./long-frame.ts";
 
@@ -81,7 +81,7 @@ function tasks_at(at: u32, count: u32): TaskRecord[] {
   });
 }
 
-// ---- what the ledger holds, as it is read ----
+// ---- what the profiler holds, as it is read ----
 
 export interface Spread {
   p50: f64;
@@ -144,11 +144,11 @@ export interface TaskSummary {
   phase_mean: [string, f64][] | null;
 }
 
-export interface LedgerReport {
+export interface ProfilerReport {
   t: f64;
   build: { number: string; id: string; time: string };
   frames: FrameSummary | null;
-  /** The summary's side sections, a field a number, as ledger.json names them. */
+  /** The summary's side sections, a field a number, as profiler.json names them. */
   sections: Record<"counters" | "atlas" | "retain" | "fetch", Record<string, f64>>;
   steps: { phase: string; name: string; ms: f64; count: f64; max_ms: f64 }[];
   peak: Record<string, f64> | null;
@@ -220,7 +220,7 @@ function taskSummaries(s: F64Array): TaskSummary[] {
   return out;
 }
 
-/** A section of the block as named numbers, in the order ledger.json lists
+/** A section of the block as named numbers, in the order profiler.json lists
  * its fields. */
 function section(s: F64Array, sec: Record<string, u32>): Record<string, f64> {
   const out: Record<string, f64> = {};
@@ -236,7 +236,7 @@ interface Read {
 }
 
 function read(window_ms: f64): Read {
-  const r = u32s(CORE_DOORBELL.call(Command.LEDGER_READ, encode_ledger_read({ window_ms }), (at) => at >>> 0), READ.WORDS);
+  const r = u32s(CORE_DOORBELL.call(Command.PROFILER_READ, encode_profiler_read({ window_ms }), (at) => at >>> 0), READ.WORDS);
   return {
     summary: words(r[READ.summary_at], r[READ.summary_words]),
     frames: [r[READ.frames_at], r[READ.frames_count]],
@@ -262,7 +262,7 @@ function recOf(s: F64Array): Gauge["rec"] {
 const atlasOf = (s: F64Array) => section(s, SUMMARY.atlas) as Gauge["atlas"];
 
 /** What the panel draws: the summary over the last `window_ms`. */
-export function ledgerGaugeRead(window_ms: f64): Gauge {
+export function profilerGaugeRead(window_ms: f64): Gauge {
   const { summary: s } = read(window_ms);
   return {
     rec: recOf(s),
@@ -275,7 +275,7 @@ export function ledgerGaugeRead(window_ms: f64): Gauge {
 }
 
 /** The whole recording, as the report prints it. */
-export function ledgerReportRead(): LedgerReport {
+export function profilerReportRead(): ProfilerReport {
   const { summary: s, tasks, worst } = read(Infinity);
   const peak = section(s, SUMMARY.peak);
   const stepsAt = SUMMARY.steps.AT;
@@ -316,7 +316,7 @@ export function ledgerReportRead(): LedgerReport {
 }
 
 /** The whole recording's rings, for the trace. */
-export function ledgerRingsRead(): { frames: Frame[]; tasks: TaskRecord[]; worst: LedgerReport["worst"] } {
+export function profilerRingsRead(): { frames: Frame[]; tasks: TaskRecord[]; worst: ProfilerReport["worst"] } {
   const { tasks, frames, worst } = read(0);
   const worstWords = words(worst[0], worst[1] * WORST.WORDS);
   return {
@@ -330,7 +330,7 @@ export function ledgerRingsRead(): { frames: Frame[]; tasks: TaskRecord[]; worst
 }
 
 /** What the live stream kept since the last take, cleared by taking. */
-export function ledgerLogTake(): { tasks: TaskRecord[]; frames: Frame[] } {
-  const l = u32s(CORE_DOORBELL.call(Command.LEDGER_TAKE, null, (at) => at >>> 0), LOG.WORDS);
+export function profilerLogTake(): { tasks: TaskRecord[]; frames: Frame[] } {
+  const l = u32s(CORE_DOORBELL.call(Command.PROFILER_TAKE, null, (at) => at >>> 0), LOG.WORDS);
   return { tasks: tasks_at(l[LOG.tasks_at], l[LOG.tasks_count]), frames: frames_at(l[LOG.frames_at], l[LOG.frames_count]) };
 }

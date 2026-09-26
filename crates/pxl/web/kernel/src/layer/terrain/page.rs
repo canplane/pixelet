@@ -21,7 +21,7 @@ use pxl_spec::space::xy::TO_XY;
 use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::mem::base::ptr_at;
 
-use crate::sched::ledger::record::Failure;
+use crate::sched::profiler::record::Failure;
 
 use crate::control::navigation::store::map_navigation;
 use crate::global::Global;

@@ -1,4 +1,4 @@
-// pxl-kernel/sched/ledger/record.rs
+// pxl-kernel/sched/profiler/record.rs
 
 //! Read-only instrument for the schedulers: records where time and work go so
 //! it can be seen. Never read back into a scheduling decision — the
@@ -13,8 +13,8 @@
 //!   pressure). Only accrues while frames actually render (the tick runs only
 //!   when asked), which is correct: idle means nothing to sample.
 //!
-//! Both are laid out word for word as ledger.json says, and the rings holding
-//! them are lanes the shell reads where they lie (LEDGER_READ):
+//! Both are laid out word for word as profiler.json says, and the rings holding
+//! them are lanes the shell reads where they lie (PROFILER_READ):
 //! nothing is built to be read, so reading the instrument allocates nothing in
 //! the heap it measures. The summary a panel or a report shows is summary.rs's,
 //! written into a block of the same kind; the words for any of it are the
@@ -34,12 +34,12 @@ use crate::global::Global;
 use crate::host::now;
 use crate::io::demand::{DemandKey, Phases};
 use crate::mem::fixed::{lane, range, Range};
-use crate::sched::ledger::log::PENDING;
-use crate::sched::ledger::spec::{FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, TASK, WORST};
+use crate::sched::profiler::log::PENDING;
+use crate::sched::profiler::spec::{FRAME, GPU_SPAN_NAMES, LIMITS, PHASE_NAMES, SUMMARY, TASK, WORST};
 use crate::sched::tick::PHASES;
 
-pub use crate::sched::ledger::spec::OutcomeName as Outcome;
-pub use crate::sched::ledger::spec::CENSUS_TAGS;
+pub use crate::sched::profiler::spec::OutcomeName as Outcome;
+pub use crate::sched::profiler::spec::CENSUS_TAGS;
 
 /// A task as a scheduler settles it.
 #[derive(Clone, Debug, PartialEq)]
@@ -445,7 +445,7 @@ pub struct WorstFrame {
     pub prev: FrameSample,
 }
 
-/// A record laid out as a block of ledger.json: every word a plain f64 at the
+/// A record laid out as a block of profiler.json: every word a plain f64 at the
 /// word that block gives it. It is what `put` may write, and the only way to
 /// implement it is `words!`, which is what checks the claim — so a block
 /// cannot be written by hand into an index, and a lane with no field, a field
@@ -465,12 +465,12 @@ pub fn put<T: Words>(out: &mut [f64], block: u32, value: &T) {
     out[at..at + words.len()].copy_from_slice(words);
 }
 
-/// Each named field at the word ledger.json gives it, and the record marked as
+/// Each named field at the word profiler.json gives it, and the record marked as
 /// a block's own layout.
 macro_rules! words {
     ($t:ty, $words:expr, $($($field:ident).+ => $at:expr),+ $(,)?) => {
-        const _: () = assert!(size_of::<$t>() == $words as usize * 8, concat!(stringify!($t), " is not the size ledger.json lays out"));
-        $(const _: () = assert!(offset_of!($t, $($field).+) == $at as usize * 8, concat!(stringify!($t), " puts ", stringify!($($field).+), " off the word ledger.json gives it"));)+
+        const _: () = assert!(size_of::<$t>() == $words as usize * 8, concat!(stringify!($t), " is not the size profiler.json lays out"));
+        $(const _: () = assert!(offset_of!($t, $($field).+) == $at as usize * 8, concat!(stringify!($t), " puts ", stringify!($($field).+), " off the word profiler.json gives it"));)+
         // SAFETY: the two assertions above are the claim.
         unsafe impl Words for $t {}
     };
@@ -525,12 +525,12 @@ words!(FramePeak, SUMMARY::peak::WORDS,
     coarse_peak => SUMMARY::peak::coarse_peak,
 );
 
-const _: () = assert!(PHASE_NAMES.len() == PHASES.len(), "ledger.json names the tick's phases");
+const _: () = assert!(PHASE_NAMES.len() == PHASES.len(), "profiler.json names the tick's phases");
 
 /// The GPU's spans and the pyramid's levels, a lane of each.
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES.len();
 pub const LEVELS: usize = LIMITS::LEVELS as usize;
-const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "ledger.json names the renderer's spans");
+const _: () = assert!(GPU_SPANS == pxl_render::gpu::renderer::GPU_SPANS.len(), "profiler.json names the renderer's spans");
 
 #[cfg(test)]
 #[path = "record.test.rs"]
@@ -538,7 +538,7 @@ mod test;
 const _: () = assert!(LEVELS == pxl_spec::space::pyramid::TOP_LEVEL as usize + 1, "a lane a level holds every level of the pyramid");
 
 /// The rings keep the last minute: a record older than WINDOW_MS is dropped as
-/// a new one lands, so what the ledger holds is bounded by the display's rate,
+/// a new one lands, so what the profiler holds is bounded by the display's rate,
 /// not by how long the tab has been open. A report or a trace covers the minute
 /// before it was taken. The rings are lanes at the capacities below — a minute
 /// at 60 Hz is 3,600 frames, about 2 MB of samples — so a faster display, or a
@@ -587,7 +587,7 @@ pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
     *len -= n;
 }
 
-/// The ledger's lanes in `.fixed.ledger`, in the order they are laid.
+/// The profiler's lanes in `.fixed.profiler`, in the order they are laid.
 #[derive(Clone, Copy)]
 pub(super) enum Lane {
     Tasks,
@@ -613,16 +613,16 @@ const LANES: [u32; 6] = [
 /// What a lane begins on: a cache line, past any record's alignment.
 const LANE_ALIGN: u32 = 64;
 
-/// `.fixed.ledger`: every lane, end to end.
-pub const LEDGER_BYTES: u32 = span_of(&LANES, LANE_ALIGN);
+/// `.fixed.profiler`: every lane, end to end.
+pub const PROFILER_BYTES: u32 = span_of(&LANES, LANE_ALIGN);
 
 /// `lane`, as `cap` records, zeroed. Under a native test, which lays no
 /// memory out, the host's own allocator stands in: leaked once, which is what
-/// the kernel's lane is too — the ledger holds its rings for the program's
-/// life either way. Without it the ledger records nothing under `cargo test`
+/// the kernel's lane is too — the profiler holds its rings for the program's
+/// life either way. Without it the profiler records nothing under `cargo test`
 /// and every check of what it summarizes reads zero.
 pub(super) fn fixed_lane<T: Copy>(which: Lane, cap: usize) -> &'static mut [T] {
-    match range(Range::Ledger) {
+    match range(Range::Profiler) {
         // SAFETY: the lane's own bytes, which only its ring holds, zeroed as
         // the range was laid; a zeroed record is a valid one for the plain
         // numbers the rings hold.
@@ -635,7 +635,7 @@ pub(super) fn fixed_lane<T: Copy>(which: Lane, cap: usize) -> &'static mut [T] {
 /// Live consumer for records as they land — log.rs's console stream. One sink,
 /// not a list: the instrument has a single output mode at a time.
 #[derive(Clone, Copy, Default)]
-pub struct LedgerSink {
+pub struct ProfilerSink {
     pub task: Option<fn(&TaskRow)>,
     pub frame: Option<fn(&FrameSample)>,
 }
@@ -685,7 +685,7 @@ pub struct RecordingState {
     pub truncated: bool,
 }
 
-struct Ledger {
+struct Profiler {
     /// The rings, lanes taken at their first record, `*_len` of each in use.
     task_ring: &'static mut [TaskRow],
     task_len: usize,
@@ -696,15 +696,15 @@ struct Ledger {
     task_head: usize,
     frame_head: usize,
     truncated: bool,
-    sink: LedgerSink,
+    sink: ProfilerSink,
     /// Explicit recording window: stopping freezes the data so an export is
     /// stable while it is being read; restarting clears and begins a fresh one.
     ///
-    /// Off until someone asks. Nothing in the world reads the ledger — the one
+    /// Off until someone asks. Nothing in the world reads the profiler — the one
     /// caller outside the instrument writes a turn's task time back into the
     /// frame it belongs to and does nothing when there is no frame — so a
     /// client with no dev overlay pays for none of this: the rings are lanes of
-    /// `.fixed.ledger`, 3.75 MiB of frames and 368 KiB of tasks, and nothing
+    /// `.fixed.profiler`, 3.75 MiB of frames and 368 KiB of tasks, and nothing
     /// writes them while this is off.
     recording: bool,
     started_at: f64,
@@ -717,10 +717,10 @@ struct Ledger {
     rings: RingSample,
 }
 
-static LEDGER: Global<Ledger> = Global::new();
+static PROFILER: Global<Profiler> = Global::new();
 
-fn ledger() -> &'static mut Ledger {
-    LEDGER.get(|| Ledger {
+fn profiler() -> &'static mut Profiler {
+    PROFILER.get(|| Profiler {
         task_ring: &mut [],
         task_len: 0,
         frame_ring: &mut [],
@@ -728,7 +728,7 @@ fn ledger() -> &'static mut Ledger {
         task_head: 0,
         frame_head: 0,
         truncated: false,
-        sink: LedgerSink::default(),
+        sink: ProfilerSink::default(),
         recording: false,
         started_at: now(),
         stopped_at: None,
@@ -740,16 +740,16 @@ fn ledger() -> &'static mut Ledger {
 }
 
 /// True once any limit was hit and recording stopped being exhaustive.
-pub fn ledger_truncated() -> bool {
-    ledger().truncated
+pub fn profiler_truncated() -> bool {
+    profiler().truncated
 }
 
-pub fn ledger_set_sink(sink: Option<LedgerSink>) {
-    ledger().sink = sink.unwrap_or_default();
+pub fn profiler_set_sink(sink: Option<ProfilerSink>) {
+    profiler().sink = sink.unwrap_or_default();
 }
 
-pub fn ledger_recording_state() -> RecordingState {
-    let l = ledger();
+pub fn profiler_recording_state() -> RecordingState {
+    let l = profiler();
     RecordingState {
         recording: l.recording,
         elapsed_ms: l.stopped_at.unwrap_or_else(now) - l.started_at,
@@ -760,8 +760,8 @@ pub fn ledger_recording_state() -> RecordingState {
 }
 
 /// Clears everything and opens a fresh window.
-pub fn ledger_recording_start() {
-    let l = ledger();
+pub fn profiler_recording_start() {
+    let l = profiler();
     (l.task_len, l.frame_len, l.worst_len) = (0, 0, 0);
     (l.task_head, l.frame_head) = (0, 0);
     l.frame_peak = FramePeak::default();
@@ -772,8 +772,8 @@ pub fn ledger_recording_start() {
 }
 
 /// Freezes the window; exports taken afterward see exactly this data.
-pub fn ledger_recording_stop() {
-    let l = ledger();
+pub fn profiler_recording_stop() {
+    let l = profiler();
     if !l.recording {
         return;
     }
@@ -781,8 +781,8 @@ pub fn ledger_recording_stop() {
     l.stopped_at = Some(now());
 }
 
-pub fn ledger_record(rec: TaskRecord) {
-    let l = ledger();
+pub fn profiler_record(rec: TaskRecord) {
+    let l = profiler();
     if !l.recording {
         return;
     }
@@ -801,25 +801,25 @@ pub fn ledger_record(rec: TaskRecord) {
 }
 
 /// Copy of the window's worst-seen frame values.
-pub fn ledger_frame_peak() -> FramePeak {
-    ledger().frame_peak
+pub fn profiler_frame_peak() -> FramePeak {
+    profiler().frame_peak
 }
 
 /// The completion ring and its spill as a post left them: kept at their
 /// fullest until the next frame takes them.
-pub fn ledger_note_rings(cq_len: u32, spill_len: u32) {
-    let r = &mut ledger().rings;
+pub fn profiler_note_rings(cq_len: u32, spill_len: u32) {
+    let r = &mut profiler().rings;
     r.cq_peak = r.cq_peak.max(cq_len as f64);
     r.spill_peak = r.spill_peak.max(spill_len as f64);
 }
 
 /// The rings' fullest since the last take, cleared by taking.
-pub fn ledger_take_rings() -> RingSample {
-    core::mem::take(&mut ledger().rings)
+pub fn profiler_take_rings() -> RingSample {
+    core::mem::take(&mut profiler().rings)
 }
 
-pub fn ledger_record_frame(s: FrameSample) {
-    let l = ledger();
+pub fn profiler_record_frame(s: FrameSample) {
+    let l = profiler();
     if !l.recording {
         return;
     }
@@ -877,8 +877,8 @@ pub fn ledger_record_frame(s: FrameSample) {
 /// The frame sample just recorded, so a late-arriving measurement (task_ms,
 /// which is only known once the turn is over) can be written into the frame it
 /// belongs to instead of being attributed to the next one.
-pub fn ledger_last_frame() -> Option<&'static mut FrameSample> {
-    let l = ledger();
+pub fn profiler_last_frame() -> Option<&'static mut FrameSample> {
+    let l = profiler();
     l.frame_ring[..l.frame_len].last_mut()
 }
 
@@ -888,33 +888,33 @@ fn first_at<T>(ring: &[T], t: f64, at: impl Fn(&T) -> f64) -> usize {
 }
 
 /// The frame window, newest last.
-pub fn ledger_frames() -> &'static [FrameSample] {
-    let l = ledger();
+pub fn profiler_frames() -> &'static [FrameSample] {
+    let l = profiler();
     &l.frame_ring[l.frame_head..l.frame_len]
 }
 
 /// The task window, newest last. A task is recorded as it settles, so the ring
 /// is in `end_ms` order.
-pub fn ledger_tasks() -> &'static [TaskRow] {
-    let l = ledger();
+pub fn profiler_tasks() -> &'static [TaskRow] {
+    let l = profiler();
     &l.task_ring[l.task_head..l.task_len]
 }
 
 /// The window's worst frames, slowest first.
-pub fn ledger_worst() -> &'static [WorstFrame] {
-    let l = ledger();
+pub fn profiler_worst() -> &'static [WorstFrame] {
+    let l = profiler();
     &l.worst[..l.worst_len]
 }
 
 /// Frames recorded at or after `t`, newest last — a live reader's window, so
 /// it costs the tail it reads and not the whole recording.
-pub fn ledger_frames_since(t: f64) -> &'static [FrameSample] {
-    let ring = ledger_frames();
+pub fn profiler_frames_since(t: f64) -> &'static [FrameSample] {
+    let ring = profiler_frames();
     &ring[first_at(ring, t, |f| f.t)..]
 }
 
 /// Tasks settled at or after `t`.
-pub fn ledger_tasks_since(t: f64) -> &'static [TaskRow] {
-    let ring = ledger_tasks();
+pub fn profiler_tasks_since(t: f64) -> &'static [TaskRow] {
+    let ring = profiler_tasks();
     &ring[first_at(ring, t, |r| r.end_ms)..]
 }

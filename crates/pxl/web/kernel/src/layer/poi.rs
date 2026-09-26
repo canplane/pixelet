@@ -15,7 +15,7 @@ use xpute_runtime::abi::fetch::FetchFail;
 
 use crate::global::Global;
 use crate::io::demand::{Category, Phases};
-use crate::sched::ledger::record::Failure;
+use crate::sched::profiler::record::Failure;
 use crate::shell::setting::store::settings_store;
 use crate::world::pyramid::{Layer, Pyramid};
 

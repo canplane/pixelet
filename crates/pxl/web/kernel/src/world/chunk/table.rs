@@ -251,7 +251,7 @@ pub struct ChunkCounts {
     pub released: u32,
 }
 
-/// What the chunks hold, for the ledger.
+/// What the chunks hold, for the profiler.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ChunkRetention {
     /// Chunks holding a run set, and what those sets cost in the heap.
@@ -482,7 +482,7 @@ impl Slot {
     }
 }
 
-/// The census the ledger reads.
+/// The census the profiler reads.
 #[derive(Clone, Copy, Default)]
 pub struct Census {
     /// Chunks the table holds, which is the number MAX_CHUNKS bounds.
@@ -1115,7 +1115,7 @@ impl Scheduler {
     }
 
     /// Decor instances the build's lanes had no room for, since the kernel
-    /// started: the ledger's, so a chunk short of its decor says so.
+    /// started: the profiler's, so a chunk short of its decor says so.
     pub fn decor_dropped(&self) -> u32 {
         self.decor_scratch.as_ref().map_or(0, |s| s.dropped)
     }

@@ -1,21 +1,22 @@
-// @pxl/web/feature/debug/ledger/overlay.tsx
+// @pxl/web/feature/debug/profiler/overlay.tsx
 
 /**
- * The debug overlay for the kernel's ledger
- * (crates/pxl/web/kernel/src/sched/ledger): the recording window and the
+ * The debug overlay for the kernel's profiler
+ * (crates/pxl/web/kernel/src/sched/profiler): the recording window and the
  * exports as buttons, over the gauge panel (gauge.tsx). Shown by the
- * `show_ledger` setting, off by default, in any build: it is the debug
+ * `show_profiler` setting, off by default, in any build: it is the debug
  * menu's, and a release is what it most needs to measure.
  *
- * The ledger records while the panel is on and not otherwise, so a client
- * that never turns it on pays for none of it. The setting is kept, so one
- * left on records from the boot — what makes a ledger worth having is that
- * the minute before you went looking is already in it. With the panel come
- * the long-frame observers and the handles on `window` an A/B is driven and
- * read through from the console — `__pxl_ledger_trace`, `__pxl_view` and
- * `__pxl_gauge`. Two builds are only comparable read at the same view, which
- * is what `__pxl_view` puts the camera at (INPUT_VIEW), and the numbers are
- * the panel's own.
+ * The profiler records while the setting is on and not otherwise, so a
+ * client that never turns it on pays for none of it; the kernel follows the
+ * setting itself (sched/profiler/log.rs `profiler_follow`), so one left on
+ * records from the boot — what makes a profiler worth having is that the
+ * minute before you went looking is already in it. With the panel come the
+ * long-frame observers and the handles on `window` an A/B is driven and read
+ * through from the console — `__pxl_profiler_trace`, `__pxl_profiler_log`,
+ * `__pxl_view` and `__pxl_gauge`. Two builds are only comparable read at the
+ * same view, which is what `__pxl_view` puts the camera at (INPUT_VIEW), and
+ * the numbers are the panel's own.
  */
 
 import { ChevronDown, ChevronUp } from "lucide-react-native";
@@ -23,18 +24,15 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { alpha, color } from "@/shared/ui/theme.ts";
-import { gauge, Head, LedgerGauge } from "./gauge.tsx";
-import { ledgerDrainLog, ledgerLogLongFrames } from "./log.ts";
-import { ledgerReportPrint, ledgerReportText } from "./report.ts";
-import { type Gauge, ledgerGaugeRead, ledgerReportRead } from "./view.ts";
+import { gauge, Head, ProfilerGauge } from "./gauge.tsx";
+import { profilerLog } from "./log.ts";
+import { profilerReportCopy, profilerReportText } from "./report.ts";
+import { type Gauge, profilerGaugeRead, profilerReportRead } from "./view.ts";
 import { installLongFrameObservers, longFramesClear } from "./long-frame.ts";
-import { ledgerTraceDownload } from "./trace.ts";
-import { Command, encode_input_view, encode_ledger_log } from "@/kernel/abi/cmd.spec.ts";
+import { profilerTraceSave } from "./trace.ts";
+import { Command, encode_input_view } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
-
-/** How often the stream is collected while it is on. */
-const DRAIN_MS = 500;
 
 /** A button's tint: plain; go, when a window is stopped and one can begin;
  * halt, while one is open; off, when there is nothing to press it for. */
@@ -49,8 +47,8 @@ export const enum Tint {
  * under a hovering pointer or a finger. */
 const TINT: Record<Tint, { border: string; ground: string; ink: string; lit: string; litInk: string }> = {
   [Tint.Plain]: { border: alpha(color.white, 0.15), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.6), lit: alpha(color.white, 0.1), litInk: alpha(color.white, 0.9) },
-  [Tint.Go]: { border: alpha(color.ledgerGo, 0.4), ground: alpha(color.ledgerGo, 0.1), ink: color.ledgerGoInk, lit: alpha(color.ledgerGo, 0.2), litInk: color.ledgerGoInk },
-  [Tint.Halt]: { border: alpha(color.glow, 0.4), ground: alpha(color.glow, 0.1), ink: color.ledgerHaltInk, lit: alpha(color.glow, 0.2), litInk: color.ledgerHaltInk },
+  [Tint.Go]: { border: alpha(color.profilerGo, 0.4), ground: alpha(color.profilerGo, 0.1), ink: color.profilerGoInk, lit: alpha(color.profilerGo, 0.2), litInk: color.profilerGoInk },
+  [Tint.Halt]: { border: alpha(color.glow, 0.4), ground: alpha(color.glow, 0.1), ink: color.profilerHaltInk, lit: alpha(color.glow, 0.2), litInk: color.profilerHaltInk },
   [Tint.Off]: { border: alpha(color.white, 0.1), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.25), lit: alpha(color.white, 0.05), litInk: alpha(color.white, 0.25) },
 };
 
@@ -101,22 +99,26 @@ const POLL_MS = 500;
  * covers the whole window. */
 const LIVE_WINDOW_MS = 10_000;
 
-type LedgerGlobals = typeof globalThis & {
-  __pxl_ledger_trace?: () => Promise<void>;
+/** How long what an export became of stays said under the buttons. */
+const SAID_MS = 2500;
+
+type ProfilerGlobals = typeof globalThis & {
+  __pxl_profiler_trace?: () => Promise<string>;
+  __pxl_profiler_log?: (on: boolean) => void;
   __pxl_view?: (dist: number | null, polar: number | null) => void;
   __pxl_gauge?: (window_ms: number) => Gauge;
 };
 
 /** A fresh window on both sides: the kernel's rings and the shell's long frames. */
-function startWindow(): void {
-  kernel_command(Command.LEDGER_START);
+function restartWindow(): void {
+  kernel_command(Command.PROFILER_START);
   longFramesClear();
 }
 
-export function LedgerOverlay() {
-  const show = useKernel((s) => s.settings[SETTINGS.show_ledger.key] === 1);
-  const [logging, setLogging] = useState(false);
+export function ProfilerOverlay() {
+  const show = useKernel((s) => s.settings[SETTINGS.show_profiler.key] === 1);
   const [hint, setHint] = useState<string | null>(null);
+  const [said, setSaid] = useState<string | null>(null);
   const [g, setG] = useState<Gauge | null>(null);
   const [open, setOpen] = useState(true);
 
@@ -124,40 +126,36 @@ export function LedgerOverlay() {
   // the fold of the window is for, and nobody is looking at it.
   useEffect(() => {
     if (!show || !open) return;
-    const read = () => setG(ledgerGaugeRead(LIVE_WINDOW_MS));
+    const read = () => setG(profilerGaugeRead(LIVE_WINDOW_MS));
     read();
     const id = setInterval(read, POLL_MS);
     return () => clearInterval(id);
   }, [show, open]);
 
-  // Nothing is pushed: the kernel keeps the rows and this comes for them,
-  // in batches rather than per frame — the stream is read while watching, and
-  // a drain that ran on every frame would be instrumentation paced by the
-  // thing it measures. The buffer is capped, so a slow reader loses the
-  // oldest rather than growing the kernel's heap.
   useEffect(() => {
-    if (!logging) return;
-    const id = setInterval(ledgerDrainLog, DRAIN_MS);
-    return () => clearInterval(id);
-  }, [logging]);
+    if (said === null) return;
+    const id = setTimeout(() => setSaid(null), SAID_MS);
+    return () => clearTimeout(id);
+  }, [said]);
 
   useEffect(() => {
     if (!show) return;
-    startWindow();
-    // The observers, once installed, stay: the browser offers no way to
-    // take one back but disconnecting it, and a panel turned on again
-    // wants the ring they fill.
+    // The kernel opened its window when the setting came on; the shell's
+    // long frames start with it. Cleared before the observers are first
+    // installed, which replay what the page buffered since it loaded, so a
+    // panel on from the boot has the boot's; the observers then stay, as the
+    // browser offers no way to take one back but disconnecting it.
+    longFramesClear();
     installLongFrameObservers();
-    const w = globalThis as LedgerGlobals;
-    w.__pxl_ledger_trace = ledgerTraceDownload;
+    const w = globalThis as ProfilerGlobals;
+    w.__pxl_profiler_trace = profilerTraceSave;
+    w.__pxl_profiler_log = profilerLog;
     w.__pxl_view = (dist, polar) => kernel_command(Command.INPUT_VIEW, encode_input_view({ dist, polar }));
-    w.__pxl_gauge = (window_ms) => ledgerGaugeRead(window_ms);
+    w.__pxl_gauge = (window_ms) => profilerGaugeRead(window_ms);
     return () => {
-      kernel_command(Command.LEDGER_STOP);
-      kernel_command(Command.LEDGER_LOG, encode_ledger_log({ on: false }));
-      ledgerLogLongFrames(false);
-      setLogging(false);
-      delete w.__pxl_ledger_trace;
+      profilerLog(false);
+      delete w.__pxl_profiler_trace;
+      delete w.__pxl_profiler_log;
       delete w.__pxl_view;
       delete w.__pxl_gauge;
     };
@@ -175,49 +173,52 @@ export function LedgerOverlay() {
       }
       <View style={styles.buttons}>
         {
-          /* start and stop are both present rather than one toggle: the panel
-            opens a window when it is shown so a cold-load stall is never
-            missed, so a toggle would read "stop" until you had stopped once —
-            and then "start" is the button you cannot find when you want a
-            clean window. */
+          /* restart and stop are both present rather than one toggle: a
+            profiler left on opens its window at the boot so a cold-load stall
+            is never missed, so a toggle would read "stop" until you had
+            stopped once — and then "start" is the button you cannot find when
+            you want a clean window. While a window is open, starting one
+            throws it away, and the label says so. */
         }
-        <PanelButton onHint={setHint} label="start" hint="clear everything and begin a fresh window" tint={recording ? Tint.Plain : Tint.Go} onPress={startWindow} />
+        <PanelButton
+          onHint={setHint}
+          label={recording ? "restart" : "start"}
+          hint="clear everything and begin a fresh window"
+          tint={recording ? Tint.Plain : Tint.Go}
+          onPress={restartWindow}
+        />
         <PanelButton
           onHint={setHint}
           label="stop"
           hint="freeze the window so exports are stable while you read them"
           tint={recording ? Tint.Halt : Tint.Off}
           disabled={!recording}
-          onPress={() => kernel_command(Command.LEDGER_STOP)}
+          onPress={() => kernel_command(Command.PROFILER_STOP)}
         />
-      </View>
-      <View style={styles.buttons}>
-        <PanelButton onHint={setHint} label="report" hint="print + copy a text report" onPress={() => void ledgerReportPrint(ledgerReportText(ledgerReportRead()))} />
-        <PanelButton onHint={setHint} label="trace" hint="save the window as a Trace Event Format file for ui.perfetto.dev" onPress={() => void ledgerTraceDownload()} />
         <PanelButton
           onHint={setHint}
-          label={logging ? "log on" : "log"}
-          hint="stream each settled task, missed frame and long frame to the console"
-          onPress={() => {
-            kernel_command(Command.LEDGER_LOG, encode_ledger_log({ on: !logging }));
-            ledgerLogLongFrames(!logging);
-            setLogging(!logging);
-          }}
+          label="report"
+          hint="copy the window's summary as text"
+          onPress={() => void profilerReportCopy(profilerReportText(profilerReportRead())).then(setSaid)}
         />
+        <PanelButton onHint={setHint} label="trace" hint="save the window as a timeline for ui.perfetto.dev" onPress={() => void profilerTraceSave().then(setSaid)} />
       </View>
       {
         /* Under the buttons, not over them: a hint that ran to a second line
           above them moved the button the pointer was on out from under it,
-          which took the hint away and brought the button back. */
+          which took the hint away and brought the button back. What an
+          export became of is said in the same place, and before a hint: the
+          pointer is still on the button just pressed, and the console that
+          says it too is not one a device has. */
       }
-      {hint !== null && <Text style={[gauge.text, styles.hint]}>{hint}</Text>}
+      {(said ?? hint) !== null && <Text style={[gauge.text, styles.hint]}>{said ?? hint}</Text>}
 
       <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" aria-expanded={open}>
         <Head end={open ? <ChevronUp size={12} color={HINT_INK} /> : <ChevronDown size={12} color={HINT_INK} />}>last 10s</Head>
       </Pressable>
       {open && (
         <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-          <LedgerGauge g={g} />
+          <ProfilerGauge g={g} />
         </ScrollView>
       )}
     </View>

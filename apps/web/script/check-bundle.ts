@@ -193,7 +193,7 @@ console.log(`[check-bundle] ok — ${forbidden.length} development-only string(s
 // readable in the artifact with their defaults. The shell now takes the
 // table without them (feature/setting/schema.ts), and this reads the
 // artifact to see that it did. What is looked for is the row and not the
-// bare name: a name may be read elsewhere for its own reasons (the ledger
+// bare name: a name may be read elsewhere for its own reasons (the profiler
 // report has an `msaa` of its own), and a row is a property whose value is
 // an object. A row every build offers is the sentinel, so that a minifier
 // writing rows some other way fails this loudly rather than passing it

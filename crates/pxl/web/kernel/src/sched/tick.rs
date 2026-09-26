@@ -15,7 +15,7 @@ pub use xpute_runtime::sched::tick::{FrameBudget, Phase, StepStats, TickReport, 
 use xpute_runtime::sched::tick::{Tick, TickPolicy};
 
 use crate::global::Global;
-pub use crate::sched::ledger::spec::StepName;
+pub use crate::sched::profiler::spec::StepName;
 
 /// What a step reads of the frame beside the tick's own numbers.
 #[derive(Clone, Copy, Debug, Default)]
@@ -28,11 +28,11 @@ pub struct TickState {
     /// wall clock by what the pause cost (sched/turn.rs's MAX_STEP_S).
     pub elapsed_s: f64,
     /// The host's measured frame interval and whether it ran this turn as
-    /// interactive: the ledger's, which reads a frame against them.
+    /// interactive: the profiler's, which reads a frame against them.
     pub frame_ms: f64,
     pub interactive: bool,
     /// The gap the host measured before this turn, in seconds — what passed,
-    /// which past MAX_STEP_S is more than the world is stepped by. The ledger
+    /// which past MAX_STEP_S is more than the world is stepped by. The profiler
     /// wants this one; nothing that moves does (sched/turn.rs).
     pub gap_s: f64,
 }
@@ -85,7 +85,7 @@ pub fn tick_step_stats_reset() {
 }
 
 /// Registers a step into a phase. Returns the id `off_tick` takes. `name` is
-/// what the ledger reports the step's time under.
+/// what the profiler reports the step's time under.
 pub fn on_tick(phase: Phase, step: TickStep, name: StepName) -> u32 {
     tick().on_tick(phase, step, name as u32)
 }

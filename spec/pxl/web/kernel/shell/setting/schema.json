@@ -233,8 +233,8 @@
       "default": false,
       "section": "debug"
     },
-    "show_ledger": {
-      "$doc": ["The scheduler ledger's corner panel. The console stream is a button on it."],
+    "show_profiler": {
+      "$doc": ["The scheduler profiler's corner panel. The console stream is a button on it."],
       "kind": "toggle",
       "default": false,
       "section": "debug"

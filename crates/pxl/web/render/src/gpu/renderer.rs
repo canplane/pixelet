@@ -93,7 +93,7 @@ const MB: f64 = 1_048_576.0;
 /// What a frame's GPU time is taken apart into, in the order the frame
 /// encodes them: the air's tables, the sun's shadow map, the depth prepass,
 /// the screen-space occlusion from it, the world's own pass, the billboards'
-/// and the cases'. The ledger names them in the same order (ledger.json's
+/// and the cases'. The profiler names them in the same order (profiler.json's
 /// GPU_SPAN_NAMES), and a pair of queries a span is the frame's set.
 pub const GPU_SPANS: [&str; 7] = ["air", "shadow", "prepass", "ao", "world", "badges", "cases"];
 const _: () = assert!(GPU_SPANS.len() <= 32, "a span a bit of the mask the host is told");

@@ -410,7 +410,7 @@ impl BillboardAtlas {
     ///
     /// Growth only ever went one way, so a sheet that doubled to 4096 crossing
     /// the densest part of the map stayed at 4096 after the badges that needed
-    /// it were gone — the ledger read 12 entries on a 4096 sheet, which is a
+    /// it were gone — the profiler read 12 entries on a 4096 sheet, which is a
     /// 64 MB canvas and another 64 MB of texture holding almost nothing.
     ///
     /// Planned before anything moves: the entries are laid out on the smaller

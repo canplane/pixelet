@@ -226,7 +226,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   in LOD — the ladder's pressure (lod.rs): a step in when a block is refused
   and reclaim found nothing, at most every half second, up to three tiers; a
   step out after five seconds without a refusal with the section off its
-  mark; the ledger's `lod ... pressure`. Still open: what the rounding costs
+  mark; the profiler's `lod ... pressure`. Still open: what the rounding costs
   the section (about a third at the sizes tiers come in) — size classes
   between the powers of two, or a large-block region — once the pressure
   has been seen doing its work.
@@ -288,7 +288,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **Strings out of the kernel's records.** Most of the kernel's `String`s
   name something rather than hold text — a task's key is a category and a
   page, its error a status — and a record holding one cannot sit in a lane of
-  a section, so the ledger's task ring stays on the module heap while its
+  a section, so the profiler's task ring stays on the module heap while its
   frame ring moved out (2026-09-15,
   [the heap all of it runs in](./20260915-the-audit-against-the-rings-checkpoint.md)).
   A name becomes numbers (a category index, a page index, `fnv1a64` of what
@@ -302,7 +302,7 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   category and a `u64` subject, a failure is `FetchFail`'s number with its
   status beside it, a `Message` and a `CameraTerrain` are numbers, a
   placeable cube is a sum type over the catalog's own numbering, and the
-  ledger's report, trace and live stream are documents of numbers the shell
+  profiler's report, trace and live stream are documents of numbers the shell
   writes the words for. A color is a number too — the catalog's swatches and
   the themes' lighting are packed by the generator, and nothing in the kernel
   parses `#rrggbb` any more.

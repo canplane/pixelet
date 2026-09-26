@@ -1,9 +1,9 @@
-// @pxl/web/feature/debug/ledger/long-frame.ts
+// @pxl/web/feature/debug/profiler/long-frame.ts
 //
 // The long-frame observers, and the ring they fill. A frame that blocks the
 // event loop past 50ms is a browser measurement of the whole task, and the
 // kernel's tick is only part of that task — so it is measured here, and it
-// stays here: the ledger is read-only and nothing in the kernel would do
+// stays here: the profiler is read-only and nothing in the kernel would do
 // anything with it, so it does not cross. The panel and the report put these
 // beside the kernel's frames by time, both clocks being `performance.now()`.
 //
@@ -13,7 +13,7 @@
 // nothing else but fires everywhere, and a >50ms task is exactly the event
 // worth catching. Installed alongside each other rather than instead.
 //
-// A debug instrument, installed with the ledger's panel rather than at boot:
+// A debug instrument, installed with the profiler's panel rather than at boot:
 // nothing that always runs can lean on LoAF, which is Chromium's alone.
 
 import type { f64 } from "@xpute/core/abi/word.ts";

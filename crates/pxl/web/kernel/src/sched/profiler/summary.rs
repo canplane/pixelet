@@ -1,14 +1,14 @@
-// pxl-kernel/sched/ledger/summary.rs
+// pxl-kernel/sched/profiler/summary.rs
 
-//! The ledger window, reduced once, into a block the shell reads in place.
+//! The profiler window, reduced once, into a block the shell reads in place.
 //!
 //! The panel and the report both read this block, so a number on the panel and
-//! the same number in a pasted report agree. It is laid out as ledger.json's
+//! the same number in a pasted report agree. It is laid out as profiler.json's
 //! SUMMARY, every word an f64, written where it stays: a read builds nothing,
 //! and the sorts a percentile needs run in a scratch lane taken once, so
 //! reading the instrument does not allocate from the heap it measures.
 //!
-//! A section is built as its record (ledger/block.rs) and handed to `put`,
+//! A section is built as its record (profiler/block.rs) and handed to `put`,
 //! which is the only way anything reaches the block. Nothing here indexes a
 //! lane, so no section can be written in an order of its own and no field can
 //! be quietly left out — which is what this file used to allow, and did
@@ -19,10 +19,10 @@ use crate::host::now;
 use crate::io::sched::{counts, credits};
 use crate::kernel::{kernel, with_world};
 use crate::layer::billboard::sheet::billboard_sheet;
-use crate::sched::ledger::block::{AtlasBlock, FetchBlock, FramesBlock, RecBlock, RetainBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
-use crate::sched::ledger::log::window_counters;
-use crate::sched::ledger::record::{fixed_lane, ledger_frame_peak, ledger_frames_since, ledger_recording_state, ledger_tasks_since, put, FrameSample, Lane, Outcome, TaskRow, SPREAD_LIMIT};
-use crate::sched::ledger::spec::{LIMITS, SUMMARY, TASK_PHASE_NAMES};
+use crate::sched::profiler::block::{AtlasBlock, FetchBlock, FramesBlock, RecBlock, RetainBlock, Spread, StepBlock, StepsBlock, TaskBlock, TasksBlock};
+use crate::sched::profiler::log::window_counters;
+use crate::sched::profiler::record::{fixed_lane, profiler_frame_peak, profiler_frames_since, profiler_recording_state, profiler_tasks_since, put, FrameSample, Lane, Outcome, TaskRow, SPREAD_LIMIT};
+use crate::sched::profiler::spec::{LIMITS, SUMMARY, TASK_PHASE_NAMES};
 use crate::sched::tick::{tick_step_stats, HARD_SLACK_MS};
 use crate::world::chunk::build::RETAIN_BUDGET_BYTES;
 
@@ -84,7 +84,7 @@ fn spread(scratch: &mut [f64], values: impl Iterator<Item = f64>) -> Spread {
 
 /// The window since `now - window_ms` reduced into the block, and the block —
 /// an infinite window is the whole recording.
-pub fn ledger_summarize(window_ms: f64) -> &'static [f64] {
+pub fn profiler_summarize(window_ms: f64) -> &'static [f64] {
     let b = block();
     if b.scratch.is_empty() {
         b.scratch = fixed_lane(Lane::Scratch, SPREAD_LIMIT);
@@ -93,7 +93,7 @@ pub fn ledger_summarize(window_ms: f64) -> &'static [f64] {
     out.fill(0.0);
     let since = now() - window_ms;
 
-    let rec = ledger_recording_state();
+    let rec = profiler_recording_state();
     put(
         out,
         SUMMARY::rec::AT,
@@ -106,9 +106,9 @@ pub fn ledger_summarize(window_ms: f64) -> &'static [f64] {
         },
     );
 
-    put(out, SUMMARY::frames::AT, &frames(scratch, ledger_frames_since(since)));
-    put(out, SUMMARY::tasks::AT, &tasks(scratch, ledger_tasks_since(since)));
-    put(out, SUMMARY::peak::AT, &ledger_frame_peak());
+    put(out, SUMMARY::frames::AT, &frames(scratch, profiler_frames_since(since)));
+    put(out, SUMMARY::tasks::AT, &tasks(scratch, profiler_tasks_since(since)));
+    put(out, SUMMARY::peak::AT, &profiler_frame_peak());
     side(out);
     out
 }

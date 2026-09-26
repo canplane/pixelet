@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::global::serial;
-use crate::sched::ledger::record::{Failure, Outcome};
+use crate::sched::profiler::record::{Failure, Outcome};
 use xpute_runtime::abi::fetch::FetchFail;
 
 /// `Global` hands out `&mut` from a shared static on the promise that one

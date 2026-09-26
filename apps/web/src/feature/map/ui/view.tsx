@@ -14,7 +14,7 @@ import { AboveKeyboard } from "@platform/above-keyboard.tsx";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { useViewportTop } from "@platform/visual-viewport.ts";
 import { WorldSurface } from "@platform/surface.tsx";
-import { LedgerOverlay } from "@/feature/debug/ledger/overlay.tsx";
+import { ProfilerOverlay } from "@/feature/debug/profiler/overlay.tsx";
 import { Toaster } from "@/shared/ui/toast/toaster.tsx";
 import { chrome } from "@/shared/ui/theme.ts";
 
@@ -45,7 +45,7 @@ export function MapView() {
     <View style={[StyleSheet.absoluteFill, styles.root]}>
       <ToastController />
       <BetweenChrome>
-        <LedgerOverlay />
+        <ProfilerOverlay />
       </BetweenChrome>
 
       <View style={StyleSheet.absoluteFill}>

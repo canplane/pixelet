@@ -1,8 +1,8 @@
-// @pxl/web/feature/debug/ledger/trace.ts
+// @pxl/web/feature/debug/profiler/trace.ts
 
 /**
- * The ledger window as Chrome's Trace Event Format, saved as a file openable
- * at ui.perfetto.dev or chrome://tracing. Aggregates the same numbers the ledger's
+ * The profiler window as Chrome's Trace Event Format, saved as a file openable
+ * at ui.perfetto.dev or chrome://tracing. Aggregates the same numbers the profiler's
  * panel shows, but on one timeline — the "trace, not just aggregates" point
  * in issue/20260909-cooperative-scheduler-and-task-ledger.md: p95 says a
  * category is slow, the timeline shows it's slow *because* it's contending
@@ -25,7 +25,7 @@ import { save_file } from "@platform/save.ts";
 
 import { type Frame, isList, LANES, LIST_NAMES } from "./lane.ts";
 import { failText } from "./report.ts";
-import { ledgerRingsRead } from "./view.ts";
+import { profilerRingsRead } from "./view.ts";
 import { longFramesSince } from "./long-frame.ts";
 
 const PID = 1;
@@ -78,8 +78,8 @@ function frameArgs(f: Frame): Args {
 }
 
 /** The trace as a JSON string. */
-function ledgerTraceJson(): string {
-  const { frames, tasks, worst } = ledgerRingsRead();
+function profilerTraceJson(): string {
+  const { frames, tasks, worst } = profilerRingsRead();
   const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];
 
@@ -147,14 +147,17 @@ function ledgerTraceJson(): string {
   return JSON.stringify({ traceEvents: events, displayTimeUnit: "ms", metadata: { build_number: BUILD_NUMBER, build_id: BUILD_ID, build_time: BUILD_TIME } });
 }
 
-export async function ledgerTraceDownload(): Promise<void> {
-  const json = ledgerTraceJson();
-  const mb = (json.length / 1e6).toFixed(1);
-  const name = `pxl-ledger-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+/** Saves the trace as a file: what became of it, as the panel says it. */
+export async function profilerTraceSave(): Promise<string> {
+  const json = profilerTraceJson();
+  const mb = `${(json.length / 1e6).toFixed(1)} MB`;
+  const name = `pxl-profiler-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   try {
     await save_file(name, json, "application/json");
-    console.log(`[ledger] trace saved as ${name} — ${mb}MB. Open it at ui.perfetto.dev`);
+    console.log(`[profiler] trace saved as ${name} · ${mb} — open it at ui.perfetto.dev`);
+    return `trace saved · ${mb}`;
   } catch (err) {
-    console.log(`[ledger] trace built (${mb}MB) but saving it failed:`, err);
+    console.log(`[profiler] trace built (${mb}) but saving it failed:`, err);
+    return `trace not saved · ${mb}`;
   }
 }

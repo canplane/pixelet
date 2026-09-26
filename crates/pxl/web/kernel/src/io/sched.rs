@@ -31,7 +31,7 @@
 use crate::global::Global;
 use crate::host::now;
 use crate::io::demand::{Category, Phases};
-use crate::sched::ledger::record::{ledger_record, Failure, Outcome, TaskRecord};
+use crate::sched::profiler::record::{profiler_record, Failure, Outcome, TaskRecord};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 
@@ -56,7 +56,7 @@ struct Wanted {
     category: Category,
     subject: u64,
     rank: Rank,
-    /// When it was first wanted, kept across re-declarations so the ledger
+    /// When it was first wanted, kept across re-declarations so the profiler
     /// measures the wait rather than the last turn.
     enqueue_ms: f64,
 }
@@ -279,7 +279,7 @@ fn stop(s: &mut Sched, slot: usize, at: f64) {
     let a = s.attempt[slot].take().or_bug(Errno::ENOTRECOVERABLE);
     s.stops.push(key_of(slot, s.generation[slot]));
     s.generation[slot] = s.generation[slot].wrapping_add(1);
-    ledger_record(TaskRecord {
+    profiler_record(TaskRecord {
         key: crate::io::demand::DemandKey::new(a.category, a.subject),
         priority: a.rank.class as f64 + a.rank.distance,
         enqueue_ms: a.enqueue_ms,
@@ -335,7 +335,7 @@ pub fn settle(key: u64, outcome: Outcome, phases: Option<Phases>, fail: Failure,
             }),
         }
     }
-    ledger_record(TaskRecord {
+    profiler_record(TaskRecord {
         key: crate::io::demand::DemandKey::new(a.category, a.subject),
         priority: a.rank.class as f64 + a.rank.distance,
         enqueue_ms: a.enqueue_ms,
