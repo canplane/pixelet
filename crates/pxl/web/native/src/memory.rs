@@ -19,7 +19,7 @@
 
 use core::cell::UnsafeCell;
 use core::sync::atomic::{AtomicUsize, Ordering};
-use std::alloc::{GlobalAlloc, Layout, System};
+use std::alloc::{GlobalAlloc, Layout};
 
 use pxl_kernel::host::HeapStat;
 use pxl_kernel::mem::heap::{heap_stat, HeapBounds, KernelAlloc};
@@ -44,31 +44,49 @@ const REGION_ALIGN: usize = 1 << 16;
 /// The region's first byte, 0 before the first request.
 static REGION: AtomicUsize = AtomicUsize::new(0);
 
-/// The region, taken on the first call — zeroed, as a WebAssembly memory is,
-/// and committed by the system page by page as it is touched rather than at
-/// once — and made the memory's base.
+/// The region, taken on the first call and made the memory's base: mapped
+/// from the system as a WebAssembly memory is, so its pages are zero until
+/// written and cost nothing until touched. Not through the system allocator:
+/// C has no aligned calloc, so `System.alloc_zeroed` at this alignment
+/// allocates and then writes every byte to zero — the whole region made
+/// resident at boot, which a phone killed the app for.
 pub fn region() -> usize {
     let at = REGION.load(Ordering::Acquire);
     if at != 0 {
         return at;
     }
-    let layout = Layout::from_size_align(GIVEN as usize, REGION_ALIGN).unwrap_or_else(|_| std::process::abort());
-    // SAFETY: a layout of non-zero size.
-    let p = unsafe { System.alloc_zeroed(layout) };
-    if p.is_null() {
+    let bytes = GIVEN as usize;
+    // Mapped a boundary's worth larger, and what lies outside the aligned
+    // region given back: the system aligns a mapping to its page, not to this.
+    let span = bytes + REGION_ALIGN;
+    // SAFETY: an anonymous private mapping, which touches nothing that exists.
+    let p = unsafe { libc::mmap(core::ptr::null_mut(), span, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_PRIVATE | libc::MAP_ANON, -1, 0) };
+    if p == libc::MAP_FAILED {
         // No memory for the kernel is no kernel; nothing can be reported
         // from inside the allocator that would need it.
         std::process::abort();
     }
-    let addr = p.expose_provenance();
+    let p = p.cast::<u8>();
+    let head = p.addr().next_multiple_of(REGION_ALIGN) - p.addr();
+    let region = p.wrapping_add(head);
+    // SAFETY: the two ends of the mapping just made, outside the region.
+    unsafe {
+        if head > 0 {
+            libc::munmap(p.cast(), head);
+        }
+        if span - head > bytes {
+            libc::munmap(region.wrapping_add(bytes).cast(), span - head - bytes);
+        }
+    }
+    let addr = region.expose_provenance();
     match REGION.compare_exchange(0, addr, Ordering::AcqRel, Ordering::Acquire) {
         Ok(_) => {
-            xpute_runtime::mem::base::set_base(addr, GIVEN as usize);
+            xpute_runtime::mem::base::set_base(addr, bytes);
             addr
         }
         Err(won) => {
-            // SAFETY: the block this call took, which nothing has seen.
-            unsafe { System.dealloc(p, layout) };
+            // SAFETY: the region this call mapped, which nothing has seen.
+            unsafe { libc::munmap(region.cast(), bytes) };
             won
         }
     }
