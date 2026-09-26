@@ -46,6 +46,7 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::shadow::Shadow;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
+use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::look::globe::{Globe, MERCATOR_RADIUS_U};
 use crate::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
@@ -122,10 +123,12 @@ pub struct FrameInput<'a> {
     pub cases: &'a [(u32, u32, u32)],
     /// The texture pack's sheet as an image, asked for until it is drawn.
     pub sheet: fn() -> Option<u32>,
-    /// The Moon's face as an image, asked for until it is painted.
+    /// The Moon's face as an image, asked for until it is copied in.
     pub moon: fn() -> Option<u32>,
     /// The billboards' sheet, whose changes the badge texture mirrors.
     pub atlas: &'a mut BillboardAtlas,
+    /// A line of text as the platform draws it, asked for until it is.
+    pub text: TextOf,
     /// Whether the device is a phone's: the shadow map is made smaller.
     pub handheld: bool,
 }
@@ -956,7 +959,7 @@ impl Renderer {
         }
         self.layers.step(g, &self.mips, input.sheet);
         self.moon.step(g, &self.mips, input.moon);
-        self.badges.sync_sheet(g, &self.mips, input.atlas);
+        self.badges.sync_sheet(g, &self.mips, input.atlas, input.text);
         let (draws, uniforms) = take_lists(Some(g), input.lists);
 
         targets(g, world);

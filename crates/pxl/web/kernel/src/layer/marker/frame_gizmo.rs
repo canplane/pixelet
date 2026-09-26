@@ -23,11 +23,11 @@ use pxl_spec::space::v3::{floor3n, V3};
 use pxl_spec::space::xy::TO_XY;
 
 use crate::global::Global;
-use crate::host::measure_text;
 use crate::kernel::kernel;
 use crate::layer::billboard::field::BILLBOARD_FLOATS;
 use crate::layer::billboard::sheet::{billboard_sheet, new_billboard_set, place_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
 use crate::layer::terrain::elevation::{ground_at, with_ele};
+use crate::text::text_width;
 use crate::world::change::request_world_tick;
 use crate::world::frame::view::view;
 use crate::world::pyramid::Layer as _;
@@ -295,15 +295,15 @@ fn drop_labels(g: &mut Gizmos) {
 }
 
 /// Paints the drawn sketch's labels into the sheet and stands their set at
-/// `origin`; the instances follow on the next `write_labels`. Where a label's
-/// glyphs are not all measured yet, nothing is painted and the sketch is
-/// built again on a later frame, when they are.
+/// `origin`; the instances follow on the next `write_labels`. Where a label
+/// is not laid out yet, nothing is painted and the sketch is built again on a
+/// later frame, when it is.
 fn make_labels(g: &mut Gizmos, origin: V3) {
     drop_labels(g);
     if g.drawn.labels.is_empty() {
         return;
     }
-    let widths: Vec<Option<f64>> = g.drawn.labels.iter().map(|l| measure_text(LABEL_FONT, &l.text)).collect();
+    let widths: Vec<Option<f64>> = g.drawn.labels.iter().map(|l| text_width(LABEL_FONT, &l.text)).collect();
     if widths.contains(&None) {
         g.built_for = None;
         return;

@@ -7,7 +7,6 @@
 //! from drawing a hundred of them.
 
 pub mod batch;
-pub mod canvas;
 pub mod distance_fade;
 pub mod field;
 pub mod order;

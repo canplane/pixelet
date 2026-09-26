@@ -1,0 +1,203 @@
+// pxl-render/gpu/sheet.rs
+
+//! An entry of the billboard sheet drawn on the device: a sketch of shapes
+//! and lines of text, drawn by one pass into a texture of the entry's size
+//! and copied into its rectangle (frame/shader/sheet.wgsl). The shapes are
+//! signed distances, so nothing here fills a path; the lines are the
+//! platform's pixels (gpu/text.rs), one layer of an array each.
+//!
+//! A sketch is said in the entry's logical pixels and drawn at the sheet's
+//! scale, past the entry's padding, as the atlas lays the entry out.
+
+use crate::asset::atlas::PAD;
+use crate::frame::shader::record::PIPELINE_SHEET;
+use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, texture_usage, Gpu, Stamp};
+use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
+use crate::gpu::pipeline::{Built, Pipelines};
+use crate::gpu::surface::DPR_MAX;
+use crate::gpu::text::{Font, Raster, TextOf};
+
+/// Floats an instance holds (sheet.wgsl's Shape).
+const SHAPE_FLOATS: usize = 20;
+
+const FILL: u32 = 0;
+const STROKE: u32 = 1;
+const TRIANGLE: u32 = 2;
+const TEXT: u32 = 3;
+
+/// Where a line of text stands on its x.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Align {
+    Left,
+    Center,
+}
+
+struct Line {
+    font: Font,
+    color: u32,
+    text: String,
+    at: [f32; 2],
+    align: Align,
+}
+
+/// What an entry is drawn from, in its logical pixels.
+#[derive(Default)]
+pub struct Sketch {
+    shapes: Vec<[f32; SHAPE_FLOATS]>,
+    lines: Vec<Line>,
+}
+
+/// An entry's logical pixel in its texture's pixels.
+fn px(v: f32) -> f32 {
+    PAD as f32 + v * DPR_MAX as f32
+}
+
+/// 0xRRGGBBAA as linear RGB and alpha: the texture is sRGB, and what a
+/// shader writes into it is linear.
+fn linear(rgba: u32) -> [f32; 4] {
+    let channel = |shift: u32| {
+        let c = ((rgba >> shift) & 0xff) as f32 / 255.0;
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            libm::powf((c + 0.055) / 1.055, 2.4)
+        }
+    };
+    [channel(24), channel(16), channel(8), (rgba & 0xff) as f32 / 255.0]
+}
+
+fn shape(kind: u32, rect: [f32; 4], color: u32, p: [f32; 4], q: [f32; 2]) -> [f32; SHAPE_FLOATS] {
+    let mut s = [0.0; SHAPE_FLOATS];
+    s[..4].copy_from_slice(&rect);
+    s[4..8].copy_from_slice(&linear(color));
+    s[8..12].copy_from_slice(&p);
+    s[12..14].copy_from_slice(&q);
+    s[16] = f32::from_bits(kind);
+    s
+}
+
+impl Sketch {
+    /// A rectangle from (x, y), `w` by `h`, its corners rounded by `r`.
+    pub fn round_rect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, color: u32) {
+        let rect = [px(x), px(y), px(x + w), px(y + h)];
+        self.shapes.push(shape(FILL, rect, color, [r * DPR_MAX as f32, 0.0, 0.0, 0.0], [0.0; 2]));
+    }
+
+    pub fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, color: u32) {
+        self.round_rect(x, y, w, h, 0.0, color);
+    }
+
+    /// A disc about (cx, cy).
+    pub fn circle(&mut self, cx: f32, cy: f32, r: f32, color: u32) {
+        self.round_rect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, color);
+    }
+
+    /// A circle about (cx, cy) stroked `width` wide, the stroke centered on it.
+    pub fn ring(&mut self, cx: f32, cy: f32, r: f32, width: f32, color: u32) {
+        let rect = [px(cx - r), px(cy - r), px(cx + r), px(cy + r)];
+        let scale = DPR_MAX as f32;
+        self.shapes.push(shape(STROKE, rect, color, [r * scale, width * scale, 0.0, 0.0], [0.0; 2]));
+    }
+
+    pub fn triangle(&mut self, a: [f32; 2], b: [f32; 2], c: [f32; 2], color: u32) {
+        let [a, b, c] = [a, b, c].map(|[x, y]| [px(x), px(y)]);
+        let rect = [a[0].min(b[0]).min(c[0]), a[1].min(b[1]).min(c[1]), a[0].max(b[0]).max(c[0]), a[1].max(b[1]).max(c[1])];
+        self.shapes.push(shape(TRIANGLE, rect, color, [a[0], a[1], b[0], b[1]], c));
+    }
+
+    /// A line of text with the middle of its em box on `y`, starting at `x`
+    /// or centered on it.
+    pub fn text(&mut self, font: Font, color: u32, text: &str, x: f32, y: f32, align: Align) {
+        self.lines.push(Line {
+            font,
+            color,
+            text: text.to_owned(),
+            at: [x, y],
+            align,
+        });
+    }
+}
+
+/// The pipeline every entry is drawn with, and what it samples its text by.
+pub struct SheetPainter {
+    built: Built,
+    sampler: u32,
+}
+
+impl SheetPainter {
+    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> SheetPainter {
+        let sampler = object();
+        g.sampler(sampler, filter::LINEAR, filter::LINEAR, filter::NEAREST, address::CLAMP, compare::NONE, 1);
+        SheetPainter {
+            built: pipelines.build(g, PIPELINE_SHEET, format::RGBA8_SRGB),
+            sampler,
+        }
+    }
+
+    /// Records `sketch` drawn into `sheet` at `rect` (x, y, w, h), in
+    /// `encoder`, and adds what it made for it to `made`, to be let go once
+    /// the encoder is submitted. False, and nothing recorded, while a line
+    /// of its text is not drawn yet: `text` has asked for it.
+    #[allow(clippy::too_many_arguments)]
+    pub fn paint(&self, g: &Gpu, encoder: u32, sheet: u32, rect: [u32; 4], sketch: &Sketch, text: TextOf, made: &mut Vec<u32>) -> bool {
+        let mut rasters: Vec<Raster<'static>> = Vec::with_capacity(sketch.lines.len());
+        for line in &sketch.lines {
+            let Some(r) = text(line.font, line.color, &line.text) else { return false };
+            rasters.push(r);
+        }
+        let [x, y, w, h] = rect;
+
+        // The lines, a layer each, in an array as large as the largest.
+        let layer_w = rasters.iter().map(|r| r.width).max().unwrap_or(1).max(1);
+        let layer_h = rasters.iter().map(|r| r.height).max().unwrap_or(1).max(1);
+        let layers = (rasters.len() as u32).max(1);
+        let lines = object();
+        g.texture(lines, layer_w, layer_h, layers, format::RGBA8_SRGB, 1, texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST);
+        let mut shapes = sketch.shapes.clone();
+        for (layer, (line, r)) in sketch.lines.iter().zip(&rasters).enumerate() {
+            g.write_texture(lines, layer as u32, r.width, r.height, r.pixels);
+            let start = match line.align {
+                Align::Left => px(line.at[0]),
+                Align::Center => px(line.at[0]) - r.advance / 2.0,
+            };
+            let x0 = (start - r.origin[0]).round();
+            let y0 = (px(line.at[1]) - r.origin[1]).round();
+            let place = [x0, y0, x0 + r.width as f32, y0 + r.height as f32];
+            let cover = [layer as f32, r.width as f32 / layer_w as f32, r.height as f32 / layer_h as f32, 0.0];
+            shapes.push(shape(TEXT, place, 0, cover, [0.0; 2]));
+        }
+        let lines_view = object();
+        g.view(lines_view, lines, dimension::D2_ARRAY, 0, 1, 0, layers);
+
+        let size = object();
+        g.buffer(size, 16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
+        g.write_buffer(size, 0, bytes(&[w as f32, h as f32, 0.0, 0.0]));
+        let instances = object();
+        let instance_bytes = bytes(shapes.as_flattened());
+        g.buffer(instances, instance_bytes.len().max(16) as u32, buffer_usage::STORAGE | buffer_usage::COPY_DST);
+        g.write_buffer(instances, 0, instance_bytes);
+
+        let entry_group = object();
+        let mut e = [0u32; 10];
+        e[..5].copy_from_slice(&buffer_entry(0, size));
+        e[5..].copy_from_slice(&buffer_entry(1, instances));
+        g.bind_group(entry_group, self.built.layouts[0], &e);
+        let lines_group = object();
+        g.bind_group(lines_group, self.built.layouts[1], &[0, resource::VIEW, lines_view, 0, 0, 1, resource::SAMPLER, self.sampler, 0, 0]);
+
+        let target = object();
+        g.texture(target, w, h, 1, format::RGBA8_SRGB, 1, texture_usage::RENDER_ATTACHMENT | texture_usage::COPY_SRC);
+        let target_view = object();
+        g.view(target_view, target, dimension::D2, 0, 1, 0, 1);
+        let pass = object();
+        g.pass(pass, encoder, &pass_desc(target_view, load::CLEAR, 0, load::CLEAR, 0.0, Stamp::UNTIMED));
+        g.set_pipeline(pass, self.built.pipeline);
+        g.set_bind_group(pass, 0, entry_group, &[]);
+        g.set_bind_group(pass, 1, lines_group, &[]);
+        g.draw(pass, 4, shapes.len() as u32, 0, 0);
+        g.end(pass);
+        g.copy_texture(encoder, target, 0, 0, sheet, x, y, 0, w, h);
+        made.extend([pass, target_view, target, lines_group, entry_group, instances, size, lines_view, lines]);
+        true
+    }
+}

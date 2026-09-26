@@ -10,9 +10,8 @@
 //! A call that names an object the device does not hold does nothing, as the
 //! page's does no more than log a WebGPU error: an object a refused call never
 //! made, or a surface's texture a frame could not have, stays missing until
-//! the renderer makes it again. The device's timestamps and the 2D paint are
-//! not here yet; the device says it has no timestamps, so the renderer asks
-//! for none.
+//! the renderer makes it again. The device's timestamps are not here yet;
+//! the device says it has none, so the renderer asks for none.
 
 use std::num::NonZeroU64;
 use std::sync::Mutex;
@@ -918,9 +917,4 @@ impl Gpu {
     pub fn gpu_ms(&self, _span: u32) -> f64 {
         0.0
     }
-
-    /// The 2D paint is not on a device yet.
-    pub fn paint(&self, _ops: &[u32]) {}
-
-    pub fn paint_copy(&self, _texture: u32, _x: u32, _y: u32, _layer: u32, _width: u32, _height: u32) {}
 }

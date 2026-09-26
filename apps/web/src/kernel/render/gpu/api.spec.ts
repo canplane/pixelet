@@ -145,56 +145,8 @@ export const op = {
   QUERY_SET: 27 as number,
   /** encoder, query set, written: the pairs of the spans set in `written` read once the GPU has them */
   TIMESTAMPS: 28 as number,
-  /** a 2D paint stream (`paint`) run over the host's scratch */
-  PAINT: 29 as number,
-  /** texture, x, y, layer, width, height: the scratch's corner into a texture's layer */
-  PAINT_COPY: 30 as number,
   /** encoder, source, x, y, target, x, y, layer, width, height: a region of one texture's first mip into another's layer */
   COPY_TEXTURE: 31 as number,
-} as const;
-
-/** The 2D paint stream's operations, over the host's scratch canvas: an operation
- * then its arguments, a number a word (f32 bits where fractional), a string as its
- * bytes' count and its bytes, an image as the handle a load gave it. */
-export const paint = {
-  /** width, height: the scratch at least this big, and cleared that far */
-  SIZE: 1 as number,
-  SAVE: 2 as number,
-  RESTORE: 3 as number,
-  /** x, y */
-  TRANSLATE: 4 as number,
-  /** x, y */
-  SCALE: 5 as number,
-  /** on */
-  SMOOTHING: 6 as number,
-  /** rgba: 0xRRGGBBAA */
-  FILL_STYLE: 7 as number,
-  /** rgba: 0xRRGGBBAA */
-  STROKE_STYLE: 8 as number,
-  /** width */
-  LINE_WIDTH: 9 as number,
-  /** weight, px: the page's own font-family at them */
-  FONT: 10 as number,
-  /** 0 left, 1 center */
-  TEXT_ALIGN: 11 as number,
-  /** 0 middle */
-  TEXT_BASELINE: 12 as number,
-  BEGIN_PATH: 13 as number,
-  /** x, y, w, h, radius */
-  ROUND_RECT: 14 as number,
-  /** x, y, radius, from, to */
-  ARC: 15 as number,
-  /** x, y */
-  MOVE_TO: 16 as number,
-  /** x, y */
-  LINE_TO: 17 as number,
-  CLOSE_PATH: 18 as number,
-  FILL: 19 as number,
-  STROKE: 20 as number,
-  /** x, y, w, h */
-  FILL_RECT: 21 as number,
-  /** x, y, then the text: its bytes' count and its UTF-8, padded to a word */
-  FILL_TEXT: 22 as number,
 } as const;
 
 /** A pipeline record's codes (shader.rs), and HEAD, the words it opens with

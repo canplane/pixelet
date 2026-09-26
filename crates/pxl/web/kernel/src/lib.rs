@@ -18,4 +18,5 @@ pub mod layer;
 pub mod mem;
 pub mod sched;
 pub mod shell;
+pub mod text;
 pub mod world;

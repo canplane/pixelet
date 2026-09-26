@@ -226,14 +226,4 @@ impl Gpu {
         let w = stream().head();
         f64::from_bits(w[at] as u64 | (w[at + 1] as u64) << 32)
     }
-
-    /// Runs a 2D paint stream (api.json's `paint`) over the host's scratch.
-    pub fn paint(&self, ops: &[u32]) {
-        stream().record(op::PAINT, &[], ops, None);
-    }
-
-    /// Copies the scratch's corner into a texture's layer at (x, y).
-    pub fn paint_copy(&self, texture: u32, x: u32, y: u32, layer: u32, width: u32, height: u32) {
-        put(op::PAINT_COPY, &[texture, x, y, layer, width, height]);
-    }
 }
