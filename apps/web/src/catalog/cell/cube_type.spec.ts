@@ -148,8 +148,8 @@ export const cube_types = {
 
   block: {
     white: 130,
-    gray: 131,
-    dark_gray: 132,
+    grey: 131,
+    dark_grey: 132,
     black: 133,
     red: 134,
     orange: 135,

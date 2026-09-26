@@ -232,8 +232,8 @@ pub mod cube_types {
     // every real key here is a real, pickable color.
     pub mod block {
         pub const white: u8 = 130;
-        pub const gray: u8 = 131;
-        pub const dark_gray: u8 = 132;
+        pub const grey: u8 = 131;
+        pub const dark_grey: u8 = 132;
         pub const black: u8 = 133;
         pub const red: u8 = 134;
         pub const orange: u8 = 135;
@@ -249,8 +249,8 @@ pub mod cube_types {
 
         pub const ENTRIES: &[(&str, u8)] = &[
             ("white", white),
-            ("gray", gray),
-            ("dark_gray", dark_gray),
+            ("grey", grey),
+            ("dark_grey", dark_grey),
             ("black", black),
             ("red", red),
             ("orange", orange),
@@ -484,8 +484,8 @@ pub mod cube_types {
     #[repr(u8)]
     pub enum Block {
         white = 130,
-        gray = 131,
-        dark_gray = 132,
+        grey = 131,
+        dark_grey = 132,
         black = 133,
         red = 134,
         orange = 135,
@@ -504,8 +504,8 @@ pub mod cube_types {
         /// Every type the channel gives out, in the JSON's own order.
         pub const ALL: [Block; 15] = [
             Block::white,
-            Block::gray,
-            Block::dark_gray,
+            Block::grey,
+            Block::dark_grey,
             Block::black,
             Block::red,
             Block::orange,

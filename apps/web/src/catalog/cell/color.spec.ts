@@ -163,11 +163,11 @@ export default {
       hex: "#f7f7f7",
       rgb: 16250871,
     },
-    gray: {
+    grey: {
       hex: "#8d8d8d",
       rgb: 9276813,
     },
-    dark_gray: {
+    dark_grey: {
       hex: "#3f3f3f",
       rgb: 4144959,
     },

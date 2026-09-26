@@ -28,7 +28,7 @@ use std::process::ExitCode;
 use sha2::{Digest, Sha256};
 
 use pxl_tool::asset::table::{Row, Sheet};
-use pxl_tool::asset::{glb, sheet, table};
+use pxl_tool::asset::{glb, pack, sheet, table};
 use pxl_tool::root;
 
 /// What the bucket prefix for an asset is; a key is this over the asset's own
@@ -154,6 +154,23 @@ fn run() -> Result<(), String> {
         .filter(|r| r.path.ends_with(".png") && (r.path.starts_with("cube/terrain/") || r.path.starts_with("cube/block/")))
         .map(|r| r.path.clone())
         .collect();
+    // Which cube face each tile is, from the pack's manifest; a tile with no
+    // entry there, or an entry with no tile, is a pack out of step with itself.
+    let slots = pack::load(&asset_dir.join("cube"))?;
+    let tile_slots = tiles
+        .iter()
+        .map(|t| {
+            slots
+                .iter()
+                .find(|i| format!("cube/{}", i.file) == *t)
+                .map(|i| i.slot.clone())
+                .ok_or(format!("{t} has no entry in asset/cube/manifest.json"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if let Some(i) = slots.iter().find(|i| !tiles.contains(&format!("cube/{}", i.file))) {
+        return Err(format!("{} names {}, which is not under asset/cube", i.label, i.file));
+    }
+    let faces = table::faces(&tile_slots, pxl_spec::cell::cube_type::cube_types::CHANNELS)?;
     let composed = sheet::compose(&asset_dir, &tiles)?;
     // The one object with no source file of its own: it is composed from every
     // tile under `cube/`, so it is named there.
@@ -169,13 +186,11 @@ fn run() -> Result<(), String> {
         columns: sheet::COLUMNS,
         tiles: composed.tiles,
         means: composed.means,
+        faces,
     };
 
     write_formatted(&root.join("apps/web/src/catalog/asset/ingested.spec.ts"), &table::render_ts(&rows, &sheet))?;
-    write_formatted(
-        &root.join("crates/pxl/spec/src/asset/ingested.spec.rs"),
-        &table::render_rs(&rows, &sheet, pxl_spec::cell::cube_type::cube_types::CHANNELS),
-    )?;
+    write_formatted(&root.join("crates/pxl/spec/src/asset/ingested.spec.rs"), &table::render_rs(&rows, &sheet))?;
 
     println!(
         "[ingest] {} assets, {:.1} MiB, sheet {} tiles {:.0} KiB -> out/asset/{{glb,png,webp}}, tables written",

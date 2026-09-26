@@ -91,8 +91,8 @@ pub const fn transport(t: u8) -> Option<Swatch> {
 pub const fn block(t: u8) -> Option<Swatch> {
     match t {
         cube_types::block::white => Some(Swatch::new(0xf7f7f7)),
-        cube_types::block::gray => Some(Swatch::new(0x8d8d8d)),
-        cube_types::block::dark_gray => Some(Swatch::new(0x3f3f3f)),
+        cube_types::block::grey => Some(Swatch::new(0x8d8d8d)),
+        cube_types::block::dark_grey => Some(Swatch::new(0x3f3f3f)),
         cube_types::block::black => Some(Swatch::new(0x191919)),
         cube_types::block::red => Some(Swatch::new(0xb01313)),
         cube_types::block::pink => Some(Swatch::new(0xff8787)),

@@ -10,6 +10,10 @@
 
 use std::fmt::Write;
 
+use pxl_spec::cell::r#type::Channels;
+
+use crate::asset::pack::Slot;
+
 /// One ingested file: its path under `asset/`, its bucket key, its size and,
 /// for a model, its extent.
 pub struct Row {
@@ -29,6 +33,46 @@ pub struct Sheet {
     pub tiles: Vec<String>,
     /// Each tile's own mean color (sheet.rs).
     pub means: Vec<[u8; 3]>,
+    /// Every cube face a tile is, in tile order.
+    pub faces: Vec<TileFace>,
+}
+
+/// One cube face and the tile it wears.
+pub struct TileFace {
+    pub channel: &'static str,
+    pub ty: String,
+    pub side: bool,
+    pub tile: u32,
+}
+
+/// The cube faces each tile is, from the manifest's slot for it: a top is
+/// its channel's type, a side the type of that name in every channel that
+/// has one. A slot that names no type in the catalog is an error rather than
+/// a tile no face wears, which is how a renamed type once left its blocks
+/// untextured with nothing said.
+pub fn faces(slots: &[Slot], channels: &Channels) -> Result<Vec<TileFace>, String> {
+    let mut out = Vec::new();
+    for (n, slot) in slots.iter().enumerate() {
+        let (side, ty, wanted) = match slot {
+            Slot::Top { channel, ty } => (false, ty, Some(channel.as_str())),
+            Slot::Side { ty } => (true, ty, None),
+        };
+        let before = out.len();
+        for (channel, types) in channels.iter().filter(|(ch, _)| *ch != "common" && wanted.is_none_or(|w| w == *ch)) {
+            if types.iter().any(|(t, _)| t == ty) {
+                out.push(TileFace {
+                    channel,
+                    ty: ty.clone(),
+                    side,
+                    tile: n as u32,
+                });
+            }
+        }
+        if out.len() == before {
+            return Err(format!("the manifest's {slot:?} is no cube type in spec/pxl/spec/cell/cube_type.json"));
+        }
+    }
+    Ok(out)
 }
 
 /// A double as a Rust literal. An integral double has no point in its shortest
@@ -80,7 +124,8 @@ export const INGESTED: Readonly<Record<string, IngestedAsset>> = {
 
 /** The texture pack as one sheet: `columns` tiles of `cell` pixels per
  * row, tile n at column n % columns and row n / columns, `tiles` the asset
- * path each holds. */
+ * path each holds, and `faces` the cube face — channel, type, face — each
+ * tile is. */
 export const SHEET = {
 "#,
     );
@@ -92,36 +137,18 @@ export const SHEET = {
     for t in &sheet.tiles {
         let _ = writeln!(out, "    \"{t}\",");
     }
+    out.push_str("  ],\n  faces: [\n");
+    for f in &sheet.faces {
+        let _ = writeln!(out, "    [\"{}\", \"{}\", \"{}\", {}],", f.channel, f.ty, if f.side { "side" } else { "top" }, f.tile);
+    }
     out.push_str("  ],\n} as const;\n");
     out
-}
-
-/// Which cube type a texture-pack tile is, from the name the pack gives the
-/// file: `block_<type>` a block's top, `<channel>_<type>` a ground type's top,
-/// `side_<type>` the side of every channel's type of that name.
-fn tile_cubes(path: &str, channels: &pxl_spec::cell::r#type::Channels) -> Vec<(String, &'static str)> {
-    let name = path.rsplit('/').next().unwrap_or(path).trim_end_matches(".png");
-    let Some((head, ty)) = name.split_once('_') else { return Vec::new() };
-    let cube = |channel: &str| {
-        let mut c = channel.chars();
-        let upper: String = c.next().map(|f| f.to_ascii_uppercase().to_string() + c.as_str()).unwrap_or_default();
-        format!("PlaceableCube::{upper}(cube_types::{upper}::{ty})")
-    };
-    let has = |ch: &str| channels.iter().any(|(name, types)| *name == ch && types.iter().any(|(t, _)| *t == ty));
-    if head == "side" {
-        return channels.iter().filter(|(ch, _)| *ch != "common" && has(ch)).map(|(ch, _)| (cube(ch), "Side")).collect();
-    }
-    if head != "common" && has(head) {
-        vec![(cube(head), "Top")]
-    } else {
-        Vec::new()
-    }
 }
 
 /// The same table for the kernel, which holds no text: every asset a member of
 /// `Asset`, its size and extent a row at that member's number, and the sheet's
 /// tiles the cube faces they are. The bucket keys are the shell's.
-pub fn render_rs(rows: &[Row], sheet: &Sheet, channels: &pxl_spec::cell::r#type::Channels) -> String {
+pub fn render_rs(rows: &[Row], sheet: &Sheet) -> String {
     let mut out = String::with_capacity(rows.len() * 160);
     out.push_str(
         r##"// pxl-spec/asset/ingested.spec.rs
@@ -218,10 +245,11 @@ pub const SHEET: Sheet = Sheet {
     let _ = writeln!(out, "    cell: {},", sheet.cell);
     let _ = writeln!(out, "    columns: {},", sheet.columns);
     out.push_str("    tiles: &[\n");
-    for (n, t) in sheet.tiles.iter().enumerate() {
-        for (cube, face) in tile_cubes(t, channels) {
-            let _ = writeln!(out, "        ({cube}, CubeFace::{face}, {n}),");
-        }
+    for f in &sheet.faces {
+        let mut c = f.channel.chars();
+        let upper: String = c.next().map(|first| first.to_ascii_uppercase().to_string() + c.as_str()).unwrap_or_default();
+        let face = if f.side { "Side" } else { "Top" };
+        let _ = writeln!(out, "        (PlaceableCube::{upper}(cube_types::{upper}::{}), CubeFace::{face}, {}),", f.ty, f.tile);
     }
     out.push_str("    ],\n    means: &[\n");
     for m in &sheet.means {
