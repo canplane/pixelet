@@ -20,6 +20,27 @@ export function alpha(hex: string, a: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 
+/** `tint(color, 0.1)`: a `#rrggbb` laid over white at an opacity, as one
+ * solid color — for a ground that must not show what is behind it. */
+function tint(hex: string, a: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const mix = (c: number) => Math.round(255 + (c - 255) * a).toString(16).padStart(2, "0");
+  return `#${mix((n >> 16) & 255)}${mix((n >> 8) & 255)}${mix(n & 255)}`;
+}
+
+/** iOS's system hues, in light mode. Every hue the shell draws in is one of
+ * these, at an opacity or as a tint; a device takes the system's own where
+ * it can (platform palette.ts), which also moves with dark mode. */
+const SYSTEM = {
+  red: "#FF3B30",
+  orange: "#FF9500",
+  yellow: "#FFCC00",
+  green: "#34C759",
+  purple: "#AF52DE",
+  /** The dark mode's grouped ground. */
+  dark: "#1C1C1E",
+} as const;
+
 export const color = {
   white: "#ffffff",
   black: "#000000",
@@ -30,24 +51,28 @@ export const color = {
   /** The round controls', the address pill's and the toasts' solid ground. */
   cream: "#FFFDF7",
   /** A round control switched on: its ground, and the glow of its ring. */
-  lit: "#fffbeb",
-  glow: "#ffb900",
+  lit: tint(SYSTEM.yellow, 0.1),
+  glow: SYSTEM.yellow,
   /** The follow mode's compass. */
-  heading: "#fe9a00",
+  heading: SYSTEM.orange,
   /** The compass needle's north end. */
-  north: "#fb2c36",
+  north: SYSTEM.red,
   /** The tool strip's flat dark. */
-  band: "#171717",
+  band: SYSTEM.dark,
   /** The send button. */
-  send: "#ff6900",
-  /** A status, in Apple's own green, orange and red: something ready, as a
-   * sensor or the world is; something on its way; a report that something
-   * failed, with the failure's ground and edge. */
-  ready: "#34C759",
-  pending: "#FF9500",
-  alarm: "#FF3B30",
-  alarmGround: "#fef2f2",
-  alarmEdge: "#fecaca",
+  send: SYSTEM.orange,
+  /** One's own name in the chat. */
+  self: SYSTEM.orange,
+  /** The scale bar as it leaves, the zoom put back. */
+  reset: SYSTEM.yellow,
+  /** A status: something ready, as a sensor or the world is; something on
+   * its way; a report that something failed, with the failure's ground and
+   * edge. */
+  ready: SYSTEM.green,
+  pending: SYSTEM.orange,
+  alarm: SYSTEM.red,
+  alarmGround: tint(SYSTEM.red, 0.06),
+  alarmEdge: tint(SYSTEM.red, 0.3),
 
   // The panels' surface: a warm paper and its bark-brown text.
   paper: "#fcf8f1",
@@ -61,15 +86,15 @@ export const color = {
   track: "#d5cdc0",
 
   // What a setting costs the device, and what only a developer sees.
-  costLow: "#009966",
-  costMedium: "#e17100",
-  costHigh: "#e7000b",
-  dev: "#7f22fe",
+  costLow: SYSTEM.green,
+  costMedium: SYSTEM.orange,
+  costHigh: SYSTEM.red,
+  dev: SYSTEM.purple,
   /** The profiler's buttons: one to begin a window, and the ink of one to
    * begin it and of one to stop it, over its dark panel. */
-  profilerGo: "#00d492",
-  profilerGoInk: "#5ee9b5",
-  profilerHaltInk: "#ffd230",
+  profilerGo: SYSTEM.green,
+  profilerGoInk: SYSTEM.green,
+  profilerHaltInk: SYSTEM.yellow,
 } as const;
 
 /** A panel's hairlines: its text, faint. */

@@ -38,6 +38,6 @@ const styles = StyleSheet.create({
     fontWeight: weight.medium,
     ...textEdge(alpha(color.black, 0.9)),
   },
-  self: { flexShrink: 0, color: "#ff8904" },
+  self: { flexShrink: 0, color: color.self },
   said: { flexShrink: 1, color: color.white },
 });

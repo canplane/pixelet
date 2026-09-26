@@ -93,7 +93,7 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
       // rim, and a border is the fill's alone (platform glass.tsx).
       tint={error ? alpha(color.alarm, 0.15) : undefined}
       border={{ width: 2, color: error ? color.alarmEdge : alpha(color.white, 0.9) }}
-      shadow={error ? "0 6px 20px rgba(220, 38, 38, 0.15)" : "0 6px 20px rgba(0, 0, 0, 0.25)"}
+      shadow={error ? `0 6px 20px ${alpha(color.alarm, 0.15)}` : "0 6px 20px rgba(0, 0, 0, 0.25)"}
       fade={fade}
       fadeFrom={0}
       fadeTransition={fadeTransition}
