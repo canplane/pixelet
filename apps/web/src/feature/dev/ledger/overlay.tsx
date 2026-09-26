@@ -69,7 +69,7 @@ const POLL_MS = 500;
 const LIVE_WINDOW_MS = 10_000;
 
 type LedgerGlobals = typeof globalThis & {
-  __pxl_ledger_trace?: () => void;
+  __pxl_ledger_trace?: () => Promise<void>;
   __pxl_view?: (dist: number | null, polar: number | null) => void;
   __pxl_gauge?: (window_ms: number) => Gauge;
 };
@@ -161,7 +161,7 @@ export function LedgerOverlay() {
       </View>
       <View style={styles.buttons}>
         <PanelButton label="report" hint="print + copy a text report" onPress={() => void ledgerReportPrint(ledgerReportText(ledgerReportRead()))} />
-        <PanelButton label="trace" hint="save the window as a Trace Event Format file for ui.perfetto.dev" onPress={ledgerTraceDownload} />
+        <PanelButton label="trace" hint="save the window as a Trace Event Format file for ui.perfetto.dev" onPress={() => void ledgerTraceDownload()} />
         <PanelButton
           label={logging ? "log on" : "log"}
           hint="stream each settled task, missed frame and long frame to the console"

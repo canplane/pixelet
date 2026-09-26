@@ -11,7 +11,7 @@ import { StyleSheet, View } from "react-native";
 
 import { AboveKeyboard } from "@platform/above-keyboard.tsx";
 import { WorldSurface } from "@platform/surface.tsx";
-import { DevOverlay } from "@platform/dev-overlay.tsx";
+import { LedgerOverlay } from "@/feature/dev/ledger/overlay.tsx";
 import { Toaster } from "@/shared/ui/toast/toaster.tsx";
 import { chrome } from "@/shared/ui/theme.ts";
 
@@ -26,7 +26,7 @@ export function MapView() {
   return (
     <View style={[StyleSheet.absoluteFill, styles.root]}>
       <ToastController />
-      <DevOverlay />
+      <LedgerOverlay />
 
       <View style={StyleSheet.absoluteFill}>
         <WorldSurface />
