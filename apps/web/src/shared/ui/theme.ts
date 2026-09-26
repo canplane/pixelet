@@ -97,6 +97,10 @@ export const color = {
   profilerHaltInk: SYSTEM.yellow,
 } as const;
 
+/** The dark rim what floats over the map is drawn on — the scale, the address
+ * and the glyphs beside it — so it reads over any ground. */
+export const edge = alpha(color.black, 0.9);
+
 /** A panel's hairlines: its text, faint. */
 export const hairline = alpha(color.text, 0.1);
 

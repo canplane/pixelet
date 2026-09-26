@@ -7,7 +7,9 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { DevicePoseStatus } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_enable_sensors, useKernel } from "@/kernel/shell.ts";
 
-import { LABEL, STATUS } from "@platform/palette.ts";
+import { STATUS } from "@platform/palette.ts";
+import { OutlinedIcon } from "@/shared/ui/outlined-icon.tsx";
+import { color } from "@/shared/ui/theme.ts";
 
 function statusColor(status: DevicePoseStatus): string {
   switch (status) {
@@ -19,7 +21,7 @@ function statusColor(status: DevicePoseStatus): string {
       return STATUS.failed;
     case DevicePoseStatus.Idle:
     default:
-      return LABEL.secondary;
+      return color.white;
   }
 }
 
@@ -35,7 +37,7 @@ export function SensorStatus() {
 
   const canRequest: boolean = locationStatus !== DevicePoseStatus.Ready || orientationStatus !== DevicePoseStatus.Ready;
 
-  const icon = (Icon: typeof Locate, status: DevicePoseStatus) => <Icon size={14} strokeWidth={2.5} color={statusColor(status)} />;
+  const icon = (Icon: typeof Locate, status: DevicePoseStatus) => <OutlinedIcon icon={Icon} size={14} strokeWidth={2.5} color={statusColor(status)} />;
   const icons = (
     <>
       {icon(Locate, locationStatus)}
