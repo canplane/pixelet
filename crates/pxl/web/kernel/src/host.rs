@@ -88,6 +88,7 @@ pub fn host_fall() {
 /// Where the kernel stops with its process, before any host could run the
 /// record, the bracket says the report as well (`last_words`).
 pub fn host_bug(errno: Errno, at: &Location<'_>, a: u64, b: u64) {
+    STOPPED.set(true);
     last_words(&format_args!("{errno:?} at {}:{}:{} ({a}, {b})", at.file(), at.line(), at.column()));
     if let Some(h) = host() {
         h.stream.publish();
@@ -95,6 +96,15 @@ pub fn host_bug(errno: Errno, at: &Location<'_>, a: u64, b: u64) {
         h.stream.record(op::PANIC, &args, &[], Some(at.file().as_bytes()));
         h.stream.publish();
     }
+}
+
+static STOPPED: Global<bool> = Global::new();
+
+/// Whether the kernel has reported what stopped it: past its report a bug
+/// panics where it cannot trap (xpute-core status/bug.rs), and that panic is
+/// its way out rather than a second fault.
+pub fn stopped() -> bool {
+    *STOPPED.get(|| false)
 }
 
 /// What the platform keeps under `storage`'s key (host.json).

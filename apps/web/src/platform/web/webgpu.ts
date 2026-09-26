@@ -49,7 +49,7 @@ const transferred = new WeakMap<HTMLCanvasElement, OffscreenCanvas>();
 const images = new Map<u32, ImageBitmap>();
 const utf8 = new TextDecoder();
 
-export interface DeviceInfo {
+interface DeviceInfo {
   align: u32;
   timestamps: boolean;
 }
@@ -58,7 +58,7 @@ export interface DeviceInfo {
  * shown (app/store/unsupported-store.ts) rather than being one; `detail` is
  * the same fact for whoever is reading a console, which names what a sentence
  * for a reader should not. */
-export interface NoDevice {
+interface NoDevice {
   reason: UnsupportedReason;
   detail: string;
 }

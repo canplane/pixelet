@@ -72,13 +72,6 @@ export function take_body(body: u32): U8Array | undefined {
 
 const utf8_decoder = new TextDecoder();
 
-/** The `(at, bytes)` pair at `at`: how the kernel names a run of memory it
- * built and holds, rather than carrying it through a ring slot. */
-export function range_at(memory: ArrayBuffer, at: u32): readonly [u32, u32] {
-  const [lies_at, bytes] = new Uint32Array(memory, at, 2);
-  return [lies_at, bytes];
-}
-
 /** A range's bytes, where they lie. Valid until the kernel is given them back
  * or writes them again, so a caller that keeps them copies them first. */
 export function bytes_at(memory: ArrayBuffer, at: u32, len: u32): U8Array {

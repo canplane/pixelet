@@ -14,10 +14,10 @@ import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
 import { useEffect, useRef } from "react";
 
-import { Command, encode_surface_create, encode_surface_delete, encode_surface_update, PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
+import { PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_open, kernel_pointer, kernel_rect, kernel_visible, kernel_wheel } from "@/kernel/control/input.ts";
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
-import { CORE_DOORBELL } from "@/kernel/mem.ts";
+import { surface_create, surface_delete, surface_size } from "@/kernel/render/surface.ts";
 import { request_frame } from "@/kernel/sched.ts";
 import { bind_surface, unbind_surface } from "@/platform/web/webgpu.ts";
 
@@ -40,13 +40,10 @@ function dpr(): f64 {
  * which changes the ratio and not the box — is caught by the window's resize.
  */
 function open_surface(canvas: HTMLCanvasElement, role: u32): { handle: u32; close: () => void } {
-  const handle = CORE_DOORBELL.call(Command.SURFACE_CREATE, encode_surface_create({ role }), (result) => result >>> 0);
+  const handle = surface_create(role);
   if (handle === 0) return { handle, close: () => {} };
   bind_surface(handle, canvas);
-  const send = (width: u32, height: u32) => {
-    CORE_DOORBELL.send(0, Command.SURFACE_UPDATE, encode_surface_update({ surface: handle, width, height, device_pixel_ratio: dpr() }));
-    request_frame();
-  };
+  const send = (width: u32, height: u32) => surface_size(handle, width, height, dpr());
   const send_box = () => send(round(canvas.clientWidth * dpr()), round(canvas.clientHeight * dpr()));
   const observer = new ResizeObserver((entries) => {
     const entry = entries[entries.length - 1];
@@ -65,7 +62,7 @@ function open_surface(canvas: HTMLCanvasElement, role: u32): { handle: u32; clos
     close: () => {
       globalThis.removeEventListener("resize", send_box);
       observer.disconnect();
-      CORE_DOORBELL.call(Command.SURFACE_DELETE, encode_surface_delete({ surface: handle }), (result) => result);
+      surface_delete(handle);
       unbind_surface(handle);
     },
   };

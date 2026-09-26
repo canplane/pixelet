@@ -164,6 +164,9 @@ fn boot(b: &Bracket) {
     // place alone, the errno being that no invariant said why.
     xpute_core::status::bug::set_report(crate::host::host_bug);
     std::panic::set_hook(Box::new(|info| {
+        if crate::host::stopped() {
+            return;
+        }
         crate::host::last_words(info);
         if let Some(at) = info.location() {
             crate::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);

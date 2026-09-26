@@ -21,10 +21,10 @@ import { requireNativeView } from "expo";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import { AppState, type GestureResponderEvent, type LayoutChangeEvent, type NativeSyntheticEvent, PixelRatio, StyleSheet, type ViewProps } from "react-native";
 
-import { Command, encode_surface_create, encode_surface_delete, encode_surface_update, PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
+import { PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_open, kernel_pointer, kernel_rect, kernel_visible } from "@/kernel/control/input.ts";
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
-import { CORE_DOORBELL } from "@/kernel/mem.ts";
+import { surface_create, surface_delete, surface_size } from "@/kernel/render/surface.ts";
 import { request_frame, type Viewport } from "@/kernel/sched.ts";
 
 interface SurfaceProps extends ViewProps {
@@ -54,18 +54,17 @@ function useSurface(role: u32, key: string, opened?: (surface: u32) => () => voi
     const surface = bound.current;
     if (surface === 0) return;
     const { width, height, dpr } = size.current;
-    CORE_DOORBELL.send(0, Command.SURFACE_UPDATE, encode_surface_update({ surface, width: round(width * dpr), height: round(height * dpr), device_pixel_ratio: dpr }));
-    request_frame();
+    surface_size(surface, round(width * dpr), round(height * dpr), dpr);
   };
 
   useEffect(() => {
-    const surface = CORE_DOORBELL.call(Command.SURFACE_CREATE, encode_surface_create({ role }), (result) => result >>> 0);
+    const surface = surface_create(role);
     setHandle(surface);
     const close = surface !== 0 && open.current ? open.current(surface) : () => {};
     return () => {
       close();
       setHandle(0);
-      if (surface !== 0) CORE_DOORBELL.call(Command.SURFACE_DELETE, encode_surface_delete({ surface }), (result) => result);
+      if (surface !== 0) surface_delete(surface);
     };
   }, [key]);
 
