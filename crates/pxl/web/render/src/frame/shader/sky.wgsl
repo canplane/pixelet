@@ -41,7 +41,7 @@ const DISC_SCALE: f32 = 4.0;
 const MOON_ANGULAR_RADIUS: f32 = 0.004522;
 const MOON_ALBEDO: f32 = 0.12;
 // The face's map (gpu/moon.rs): texels across a radius, and its mean over the
-// disc as the Earth sees it, which asset/script/download_moon.rs prints — the
+// disc as the Earth sees it, which pxl-tool/bin/download_moon.rs prints — the
 // map is relative, and this is what scales it to MOON_ALBEDO.
 const MOON_MAP_RADIUS_TEXELS: f32 = 256.0;
 const MOON_MAP_MEAN: f32 = 0.2459;

@@ -14,7 +14,7 @@
 //
 // The numbers themselves are not decided here either. They are mem.json's,
 // the same file the map and the shell read, included below rather than copied
-// (script/spec.ts writes mem/mem.spec.rs; `deno task check:spec` fails where
+// (pxl-tool/bin/spec.rs writes mem/mem.spec.rs; `deno task check:spec` fails where
 // what is on disk is not what the JSON writes).
 
 use std::io::Write;

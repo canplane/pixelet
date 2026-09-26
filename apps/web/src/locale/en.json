@@ -111,8 +111,8 @@
   "cubes": {
     "block": {
       "white": "White",
-      "gray": "Gray",
-      "dark_gray": "Dark Gray",
+      "grey": "Grey",
+      "dark_grey": "Dark Grey",
       "black": "Black",
       "red": "Red",
       "orange": "Orange",

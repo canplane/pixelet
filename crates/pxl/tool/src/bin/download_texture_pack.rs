@@ -1,16 +1,4 @@
-#!/usr/bin/env -S cargo +nightly -Zscript
----
-[package]
-edition = "2021"
-
-[dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-image = { version = "0.25", default-features = false, features = ["png"] }
-# The pack's sources are third-party URLs. A blocking client, because this
-# fetches at most sixty files once and has nothing to overlap them with.
-ureq = "2"
----
+// pxl-tool/bin/download_texture_pack.rs
 
 //! The texture pack, normalized.
 //!
@@ -26,20 +14,14 @@ ureq = "2"
 //!
 //!   deno task download:pack
 
-mod pack;
-
-use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use image::{ImageFormat, RgbaImage};
 
-use crate::pack::{Item, Style, TILE_SIZE};
+use pxl_tool::asset::pack::{self, Item, Style, TILE_SIZE};
+use pxl_tool::root;
 
 const RETRY_ATTEMPTS: u32 = 3;
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap_or_else(|_| PathBuf::from("."))
-}
 
 /// A few attempts with a growing pause, because the sources are third-party
 /// URLs and one refused connection is not a reason to fail a whole pack.

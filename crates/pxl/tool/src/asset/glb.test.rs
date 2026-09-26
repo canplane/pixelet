@@ -1,4 +1,4 @@
-// ingest-asset/glb.test.rs
+// pxl-tool/asset/glb.test.rs
 
 use std::path::{Path, PathBuf};
 
@@ -41,7 +41,7 @@ fn every_shipped_model_measures_what_the_table_says() {
     // `cargo test` runs from the script's own directory rather than the
     // repository root the tools are otherwise invoked from, so the tree is
     // addressed from this file rather than from the working directory.
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let root = crate::root().join("asset");
     let files = walked(&root);
     assert_eq!(files.len(), INGESTED.len(), "the walk found what the table holds");
 
@@ -52,7 +52,7 @@ fn every_shipped_model_measures_what_the_table_says() {
             continue;
         }
         let bytes = std::fs::read(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-        let got = crate::glb::extent(&bytes).unwrap_or_else(|e| panic!("{rel}: {e}"));
+        let got = super::extent(&bytes).unwrap_or_else(|e| panic!("{rel}: {e}"));
         let want = INGESTED[i].extent.unwrap_or_else(|| panic!("{rel}: the table has no extent for a model"));
         assert_eq!(got, want, "{rel}");
         models += 1;

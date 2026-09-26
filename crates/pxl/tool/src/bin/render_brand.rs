@@ -1,18 +1,7 @@
-#!/usr/bin/env -S cargo +nightly -Zscript
----
-[package]
-edition = "2021"
+// pxl-tool/bin/render_brand.rs
 
-[dependencies]
-image = { version = "0.25", default-features = false, features = ["png", "ico"] }
-# `image`'s own encoder writes the same picture at nearly twice the size — 55 kB
-# where this is 30 kB at quality 88 — and the preview is what every crawler
-# unfurling a link fetches.
-mozjpeg = "0.10"
----
-
-//! The app's icons and link-preview image, from the three sources beside this
-//! file into `apps/web/public`, which the deploy ships as static assets.
+//! The app's icons and link-preview image, from the three sources in
+//! `apps/web/brand` into `apps/web/public`, which the deploy ships as static assets.
 //!
 //! - `symbol.png` — the cube on a transparent field, for every place that
 //!   draws the icon's own shape: the favicon and the manifest's `any` icons.
@@ -24,13 +13,10 @@ mozjpeg = "0.10"
 //! - `og.png` — the link preview, 1200×630. Kept as PNG: it was delivered as a
 //!   10-bit AVIF under a `.png` name, which not every decoder reads.
 //!
-//! A single file on nightly (`rustup toolchain install nightly`) rather than a
-//! crate the gate compiles: it runs when a source changes, and mozjpeg would
-//! otherwise be built by every check for nothing. Re-runnable; the outputs are
-//! committed, so a changed source is followed by running this and committing
-//! what it wrote.
+//! Re-runnable; the outputs are committed, so a changed source is followed by
+//! running this and committing what it wrote.
 //!
-//!   ./apps/web/brand/render.rs
+//!   deno task render:brand
 
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -40,10 +26,12 @@ use image::codecs::ico::{IcoEncoder, IcoFrame};
 use image::imageops::FilterType;
 use image::{DynamicImage, ExtendedColorType, ImageFormat, Rgba, RgbaImage};
 
+use pxl_tool::root;
+
 const CLEAR: Rgba<u8> = Rgba([0, 0, 0, 0]);
 
 fn brand() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    root().join("apps/web/brand")
 }
 
 fn open(name: &str) -> Result<RgbaImage, String> {
@@ -123,7 +111,7 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    let out = brand().join("../public").canonicalize().map_err(|e| format!("apps/web/public: {e}"))?;
+    let out = root().join("apps/web/public");
     let symbol = trim(&open("symbol.png")?, 8);
     let icon = open("icon.png")?;
     let preview = open("og.png")?;

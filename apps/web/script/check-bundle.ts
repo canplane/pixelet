@@ -67,7 +67,7 @@ const DEV_MARKERS = ["dev/test", "development"];
  * file (2026-09-23). It is the shell's again now that the kernel names an
  * object and never an address (io/fetch.rs), and this failed a deploy the
  * other way round (2026-09-24). So the spec's `bundle` flag names the artifact
- * rather than asserting there is one, and script/spec.ts fails when either
+ * rather than asserting there is one, and pxl-tool/spec/route.rs fails when either
  * list here and the flag disagree.
  *
  * Neither failure was caught before the deploy, because this runs there and

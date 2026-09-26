@@ -34,6 +34,7 @@ members = [
   "pxl/server/geo",
   "pxl/server/api",
   "pxl/server/geo-bake",
+  "pxl/tool",
 ]
 
 # Why libm is not pinned, which is pixelet's answer and not xpute's: it was
@@ -55,7 +56,7 @@ members = [
 # test, whichever libm the platform has.
 libm = "0.2"
 # FNV-1a, 64 bits: what a POI page keys a record by (id_hash) and the
-# kernel keys a demand by. Over UTF-8 bytes, the same as script/spec.ts's.
+# kernel keys a demand by. Over UTF-8 bytes, the same as pxl-tool/spec/data.rs's.
 fnv = "1"
 # base64url without padding: the blob a placement set is kept under in the
 # shell's storage.

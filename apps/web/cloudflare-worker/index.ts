@@ -78,7 +78,7 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX } from "./route.spec.
  *   layer/geocode/ reads as no label.
  * - `asset/<path>/<stem>-<12 hex>.<ext>` — a model or an image under the tree
  *   it lives in, with a hash of its bytes in the stem, the way a bundler names
- *   a chunk. ingest-asset writes them and the catalogs name
+ *   a chunk. pxl-tool's ingest_asset writes them and the catalogs name
  *   them by path. No version segment and none wanted: a changed file is a new
  *   name, which is what makes `immutable` true of it.
  *

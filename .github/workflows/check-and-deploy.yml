@@ -195,7 +195,7 @@ jobs:
 
       # Everything the bundle is built from. A whitelist rather than a list of
       # what to skip, because the set that does not ship is the one that keeps
-      # growing — `issue/`, `infra/`, `asset/script/` and the rest — and a root
+      # growing — `issue/`, `infra/`, `asset/` and the rest — and a root
       # forgotten from a skip list is a republish nobody asked for.
       #
       # It used to run on every green push, which was right while a rebuild
@@ -218,7 +218,10 @@ jobs:
           # rust-toolchain.toml is in the list because the module is what that
           # file's compiler emitted, and unlike the servers the client has no
           # second copy of the version to change alongside it.
-          if printf '%s\n' "$changed" | grep -qE '^(apps/|crates/|packages/|spec/|deno\.jsonc|deno\.lock|rust-toolchain\.toml)'; then
+          # crates/pxl/tool is the repository's own tooling, which nothing
+          # the bundle holds is built from; what it writes lands elsewhere in
+          # the tree and is caught there.
+          if printf '%s\n' "$changed" | grep -v '^crates/pxl/tool/' | grep -qE '^(apps/|crates/|packages/|spec/|deno\.jsonc|deno\.lock|rust-toolchain\.toml)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -317,7 +320,8 @@ jobs:
           else
             changed="crates/"
           fi
-          if printf '%s\n' "$changed" | grep -qE '^(crates/|infra/prod/|crates/pxl/server/geo/Dockerfile|\.dockerignore)'; then
+          # crates/pxl/tool is in no image; see the client's scope above.
+          if printf '%s\n' "$changed" | grep -v '^crates/pxl/tool/' | grep -qE '^(crates/|infra/prod/|crates/pxl/server/geo/Dockerfile|\.dockerignore)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"

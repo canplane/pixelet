@@ -1,4 +1,4 @@
-// ingest-asset/sheet.rs
+// pxl-tool/asset/sheet.rs
 
 //! The texture pack as one image.
 //!

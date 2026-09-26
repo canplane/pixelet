@@ -3,7 +3,7 @@
 // every name in a locale is one the catalogs still give out.
 //
 // The rest of the chain from a stored number to what a person reads is held
-// by something already: spec.ts writes the numbering from cube_type.json,
+// by something already: pxl-tool/spec/cell.rs writes the numbering from cube_type.json,
 // the color table it writes from color.json does not compile against a type
 // no channel has, and a
 // texture the pack lacks falls back to the cube's own color. The last link

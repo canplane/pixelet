@@ -1,4 +1,4 @@
-// The stars: the Yale Bright Star Catalog (script/bake-stars.ts), every
+// The stars: the Yale Bright Star Catalog (pxl-tool/bin/bake_stars.rs), every
 // star an eye sees on a dark night, each a quad a few pixels wide at
 // infinity, drawn over the sky and under everything else. A star's place is
 // the catalog's turned by the stars' frame — the sidereal time and the
