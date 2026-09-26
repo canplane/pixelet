@@ -22,13 +22,6 @@ pub struct Built {
     pub lanes: usize,
 }
 
-impl Built {
-    /// The bytes a vertex takes across every lane.
-    pub fn vertex_bytes(&self) -> u32 {
-        self.strides[..self.lanes].iter().sum()
-    }
-}
-
 const LAYOUTS: usize = 32;
 const BUILT: usize = 48;
 

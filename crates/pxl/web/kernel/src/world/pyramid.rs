@@ -26,7 +26,7 @@ use pxl_spec::space::pyramid::{Folds, LevelPage, TOP_LEVEL};
 use std::collections::{BTreeMap, HashSet};
 use xpute_runtime::abi::fetch::FetchFail;
 
-use crate::sched::ledger::record::Failure;
+use crate::sched::profiler::record::Failure;
 use xpute_runtime::sched::edge::{notified, yield_if_spent, Notify};
 
 use crate::io::demand::{Category, Phases};
@@ -390,7 +390,7 @@ impl<L: Layer> Pyramid<L> {
     }
 
     /// Arrivals dropped for want of a record since the last take, for the
-    /// ledger.
+    /// profiler.
     pub fn take_refusals(&mut self) -> u32 {
         core::mem::take(&mut self.refused)
     }

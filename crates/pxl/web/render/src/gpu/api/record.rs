@@ -3,7 +3,7 @@
 //! The renderer's calls as records in one range of the kernel's memory: the
 //! stream (api.json's `stream`). The kernel writes a turn's calls into it, and
 //! the page runs them once the turn has returned
-//! (apps/web/src/kernel/render/gpu.ts), so nothing but that range and the turn
+//! (apps/web/src/platform/web/webgpu.ts), so nothing but that range and the turn
 //! connects the two. The page keeps each object at its handle's slot.
 //!
 //! A record carries everything it names, bytes included. Nothing it reads
@@ -59,6 +59,12 @@ pub fn gpu_publish() {
     if let Some(s) = STREAM.get(|| None).as_mut() {
         s.publish();
     }
+}
+
+/// Always: a page's frames are held back by the browser, which paces them
+/// to what the GPU finishes (api/device.rs `frame_room` is a device's).
+pub fn frame_room() -> bool {
+    true
 }
 
 /// Whether an upload of `bytes` may go in this turn: taken, it leaves the

@@ -13,7 +13,6 @@ import { API_PREFIX, ASSET_PREFIX, GEO_PREFIX, TILE_PREFIX, TILE_ROOT } from "./
 
 export { PUBLISHED_VERSION };
 export { API_PREFIX, API_ROOT, ASSET_PREFIX, ASSET_ROOT, GEO_PREFIX, GEO_ROOT, SEARCH_URL, TILE_PREFIX, TILE_ROOT } from "./route.spec.ts";
-export type TileKind = BakeKind;
 
 /** Where a baked object lives: `<tile>/<kind>[/<version>]/<name>`.
  *
@@ -22,7 +21,7 @@ export type TileKind = BakeKind;
  * deployment fact and belongs on this side with the rest of them: a dev server
  * bakes on demand and has no versions, a published one requests the prefix
  * `PUBLISHED_VERSION` names. */
-export function tile_url(kind: TileKind, name: string, published: boolean): string {
+export function tile_url(kind: BakeKind, name: string, published: boolean): string {
   return published ? `${TILE_ROOT}/${kind}/${PUBLISHED_VERSION[kind]}/${name}` : `${TILE_ROOT}/${kind}/${name}`;
 }
 

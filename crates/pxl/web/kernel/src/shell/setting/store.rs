@@ -5,7 +5,7 @@
 //!
 //! Two layers, read as one. schema.json's defaults are the fallback; what the
 //! user has set differently lies over them; the store is the two merged
-//! (schema.spec.rs `Settings`), so a consumer reads `show_poi` and never asks
+//! (schema.spec.rs `Settings`), so a consumer reads `poi` and never asks
 //! which layer it came from.
 //!
 //! What the browser keeps of them is the shell's (feature/setting/store.ts):
@@ -18,7 +18,8 @@ use pxl_spec::bake::ground::{channel_bit, ChannelMask, GroundChannelKey};
 
 use crate::global::Global;
 use crate::host::development;
-pub use crate::shell::setting::schema_spec::{AoMode, CameraTerrainMode, ResolutionMode, SettingKey, SettingKind, Settings};
+use crate::sched::profiler::log::profiler_follow;
+pub use crate::shell::setting::schema_spec::{AoMode, CameraCollisionMode, ResolutionMode, SettingKey, SettingKind, Settings};
 use crate::world::chunk::source::chunk_sources_changed;
 
 /// Whether this build offers the setting at all.
@@ -48,9 +49,9 @@ pub fn is_offered(key: SettingKey) -> bool {
 }
 
 /// The ground channels the settings hide, as the paint and `shown_ground`
-/// take them: `show_structures` off hides the structure channel.
-pub fn hidden_ground(show_structures: bool) -> ChannelMask {
-    if show_structures {
+/// take them: `structures` off hides the structure channel.
+pub fn hidden_ground(structures: bool) -> ChannelMask {
+    if structures {
         0
     } else {
         channel_bit(GroundChannelKey::STRUCTURE)
@@ -71,6 +72,9 @@ impl Settings {
         }
         if key.sources_chunks() {
             chunk_sources_changed();
+        }
+        if key == SettingKey::profiler {
+            profiler_follow(value == 1);
         }
     }
 
@@ -97,6 +101,7 @@ pub fn settings_load(values: impl IntoIterator<Item = u32>) {
         }
     }
     SETTINGS_STORE.set(s);
+    profiler_follow(settings_store().profiler);
 }
 
 pub fn settings_store() -> &'static mut Settings {

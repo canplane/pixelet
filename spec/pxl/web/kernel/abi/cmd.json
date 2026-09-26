@@ -81,7 +81,7 @@
         { "name": "SETTING", "value": 34 },
         { "name": "CHAT", "value": 35 },
         { "name": "PREVIEW", "value": 36 },
-        { "name": "LEDGER", "value": 37 }
+        { "name": "PROFILER", "value": 37 }
       ]
     },
     {
@@ -171,8 +171,8 @@
       "entries": [{ "name": "TOGGLE", "value": 16 }]
     },
     {
-      "name": "LedgerMinor",
-      "doc": ["The ledger's own verbs."],
+      "name": "ProfilerMinor",
+      "doc": ["The profiler's own verbs."],
       "format": "hex2",
       "entries": [
         { "name": "START", "value": 16 },
@@ -555,7 +555,7 @@
             { "name": "body", "type": "u32" },
             { "name": "body_bytes", "type": "u32", "doc": ["0 for none."] },
             { "name": "fail", "type": "FetchFail" },
-            { "name": "detail", "type": "u32", "doc": ["Whatever number the host refused with, kept for the ledger to print and for nothing to branch on."] },
+            { "name": "detail", "type": "u32", "doc": ["Whatever number the host refused with, kept for the profiler to print and for nothing to branch on."] },
             { "name": "net_ms", "type": "f64" }
           ]
         },
@@ -642,20 +642,20 @@
           ]
         },
         { "name": "PREVIEW_DELETE", "value": 9220, "packet": [{ "name": "surface", "type": "u32" }] },
-        { "name": "LEDGER_START", "value": 9488, "doc": ["A fresh recording window."] },
-        { "name": "LEDGER_STOP", "value": 9489, "doc": ["The window frozen, so what is exported holds still."] },
-        { "name": "LEDGER_LOG", "value": 9490, "doc": ["The console stream on or off."], "packet": [{ "name": "on", "type": "bool" }] },
+        { "name": "PROFILER_START", "value": 9488, "doc": ["A fresh recording window."] },
+        { "name": "PROFILER_STOP", "value": 9489, "doc": ["The window frozen, so what is exported holds still."] },
+        { "name": "PROFILER_LOG", "value": 9490, "doc": ["The console stream on or off."], "packet": [{ "name": "on", "type": "bool" }] },
         {
-          "name": "LEDGER_READ",
+          "name": "PROFILER_READ",
           "value": 9491,
           "doc": [
-            "The ledger where it lies: the reply is the address of READ's words (ledger.json) over the",
+            "The profiler where it lies: the reply is the address of READ's words (profiler.json) over the",
             "last `window_ms`, an infinite window being the whole recording, good until the next turn."
           ],
           "packet": [{ "name": "window_ms", "type": "f64" }]
         },
         {
-          "name": "LEDGER_TAKE",
+          "name": "PROFILER_TAKE",
           "value": 9492,
           "doc": ["The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn."]
         },

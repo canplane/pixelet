@@ -38,10 +38,9 @@ const BADGE_FLOATS: usize = 52;
 const SETS: usize = 32;
 
 // The fonts are the kernel's too, which measures what is painted in them.
-// The weights are the page's own scale (Tailwind's font-normal and
-// font-semibold) rather than canvas's "bold", which resolves to 700 —
-// Pretendard Variable's weight axis (45–920) renders either as a real
-// distinct face, not a synthetic bold.
+// The weights are the chrome's regular and semibold rather than canvas's
+// "bold", which resolves to 700; the system faces carry a real semibold,
+// so neither is a synthetic bold.
 
 const REGULAR: u32 = 400;
 const SEMIBOLD: u32 = 600;
@@ -179,7 +178,7 @@ pub struct BadgePass {
     pub far: f32,
     pub cell: f32,
     /// The planet the frame lays the map on, as the frame's uniform has it
-    /// (globe.wgsl's `curve` and `globe`): a badge is placed on it as the
+    /// (frame.wgsl's `planet` and `globe`, which globe.wgsl's `on_globe_of` reads): a badge is placed on it as the
     /// ground under it is.
     pub globe: [f32; 8],
 }

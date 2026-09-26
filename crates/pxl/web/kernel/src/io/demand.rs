@@ -13,7 +13,7 @@
 
 use pxl_spec::bake::published::BakeKind;
 
-pub use crate::sched::ledger::spec::TaskPhaseName;
+pub use crate::sched::profiler::spec::TaskPhaseName;
 
 /// The most sub-timings one run reports.
 pub const PHASES_MAX: usize = 6;
@@ -56,8 +56,8 @@ impl Phases {
 }
 
 /// Which stream of deferrable I/O a demand belongs to. Coarse grouping —
-/// scopes sync's diff, and is what map_status and the ledger roll up by, so
-/// it is the ledger's own list (ledger.json's CATEGORY_NAMES):
+/// scopes sync's diff, and is what map_status and the profiler roll up by, so
+/// it is the profiler's own list (profiler.json's CATEGORY_NAMES):
 ///
 /// - `ocean`: the one tile every open-water page shares.
 /// - `geocode`: one group of pages of the reverse-geocode bake, and
@@ -66,7 +66,7 @@ impl Phases {
 ///   with the pages and nothing else: a page is wanted while the view is
 ///   where it is, and an asset is wanted from the first time something needs
 ///   it until it is there, so it is never stale and never withdrawn.
-pub use crate::sched::ledger::spec::CategoryName as Category;
+pub use crate::sched::profiler::spec::CategoryName as Category;
 
 impl Category {
     /// Which bake an object of this category belongs to. The name inside that
@@ -100,16 +100,4 @@ impl DemandKey {
     pub fn new(category: Category, subject: u64) -> DemandKey {
         DemandKey { category, subject }
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Demand {
-    /// Stable identity across sync calls. Two demands sharing a key are the
-    /// same work: re-submitting one that is already queued updates its
-    /// priority, one already in flight is left alone.
-    pub key: DemandKey,
-    /// Lower runs sooner. A page's is how far it sits from the view in its
-    /// category's own order (world/pyramid.rs's), doubled so a second
-    /// category can interleave at the odd numbers.
-    pub priority: f64,
 }

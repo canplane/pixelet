@@ -338,12 +338,6 @@ pub fn get_objects_in_cell(ix: i64, iy: i64, iz: i64) -> Vec<OccupiedEntry> {
     out
 }
 
-/// Whether anything really occupies the cell — what scattered decor asks
-/// before standing in it, without making an object to find out.
-pub fn cell_is_occupied(ix: i64, iy: i64, iz: i64) -> bool {
-    cell_run(ix, iy, iz).is_some_and(|run| run.solid > 0)
-}
-
 /// Every object claiming the cell `at` stands in.
 pub fn objects_at(at: &Pvf3) -> Vec<OccupiedEntry> {
     let [ix, iy, iz] = CELL.index_of(at);
@@ -740,7 +734,7 @@ fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
     }
 }
 
-/// Whether painting `color_id` at this exact whole cell would actually change
+/// Whether painting `cube` at this exact whole cell would actually change
 /// anything a viewer could see — true only for a terrain-styled pick whose
 /// own channel+type exactly matches what the REAL baked terrain already
 /// shows there. Scoped to whole-cell writes only: a sub-cell pick paints a
@@ -760,12 +754,12 @@ fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
 /// type is a per-column (2.5D) fact while a placement lands in the empty cell
 /// above the surface, so without this every cube stacked on matching ground
 /// read as redundant and was silently dropped.
-fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube, show_structures: bool) -> bool {
+fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube, structures: bool) -> bool {
     if size < U_PER_CELL {
         return false;
     }
     let Some(source) = terrain_style_cube_source(cube) else { return false };
-    let shown = shown_ground(|ch| get_ground_type(at, ch).unwrap_or(0), hidden_ground(show_structures));
+    let shown = shown_ground(|ch| get_ground_type(at, ch).unwrap_or(0), hidden_ground(structures));
     if shown.channel != source.channel || shown.type_id != source.terrain_num_id {
         return false;
     }
@@ -777,8 +771,8 @@ fn place_value_is_redundant(at: &Pvf3, size: f64, cube: PlaceableCube, show_stru
 /// nothing: rather than storing a "solid" leaf that only ever repaints what
 /// terrain would already show, this writes VOID — the same absence remove()
 /// itself produces.
-pub fn place(at: &Pvf3, size: f64, cube: PlaceableCube, show_structures: bool) {
-    let val = if place_value_is_redundant(at, size, cube, show_structures) {
+pub fn place(at: &Pvf3, size: f64, cube: PlaceableCube, structures: bool) {
+    let val = if place_value_is_redundant(at, size, cube, structures) {
         VOID
     } else {
         placeable_cube_num_id(cube)

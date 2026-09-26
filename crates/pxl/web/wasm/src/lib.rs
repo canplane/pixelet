@@ -12,6 +12,7 @@
 //! shell rings.
 
 use pxl_kernel::door::Bracket;
+use pxl_kernel::mem::heap::{HeapBounds, KernelAlloc};
 use pxl_kernel::mem::section;
 
 extern "C" {
@@ -38,43 +39,13 @@ fn data_end() -> u32 {
     core::ptr::addr_of!(__data_end) as u32
 }
 
-/// The heap: from the page past the last fixed range to the end of the memory,
-/// ascending. Everything before it is settled before it — the stack, the
-/// rings, the linker's data, and `.fixed` — so the heap is what is left, and
-/// what is left is whatever the device gave.
-struct ModuleHeap;
+/// Where the module's heap lies: from the page past the last fixed range to
+/// the end of the memory, ascending. Everything before it is settled before
+/// it — the stack, the rings, the linker's data, and `.fixed`.
+struct ModuleBounds;
 
-/// The largest block the heap's tree can describe. Two gigabytes is what a
-/// 32-bit address space holds a whole power of two of, so it is the top of the
-/// shape and not a claim about any device: the tree begins as a single leaf and
-/// doubles only as far as a request makes it, and how much of it is real comes
-/// from `end` at runtime.
-const HEAP_MAX_LOG2: usize = 31;
-
-/// The smallest block, which is the page the rest of the memory is counted in
-/// (mem.json's PAGE_BYTES).
-const HEAP_MIN_LOG2: usize = memory_shift(section::PAGE_BYTES);
-
-const fn memory_shift(bytes: u32) -> usize {
-    assert!(bytes.is_power_of_two());
-    bytes.trailing_zeros() as usize
-}
-
-/// A bit for every node of the tree that can be a parent. The exponents give
-/// the length and the compiler will not derive it for us, so it is written
-/// once here and `BuddyMalloc` checks it against them on the first request.
-const HEAP_SPLIT_BYTES: usize = (1 << (HEAP_MAX_LOG2 - HEAP_MIN_LOG2)) / 8;
-
-impl xpute_core::alloc::buddy_tree::Range for ModuleHeap {
-    const MIN_LOG2: usize = HEAP_MIN_LOG2;
-    const MAX_LOG2: usize = HEAP_MAX_LOG2;
-    type Split = [u8; HEAP_SPLIT_BYTES];
-    const SPLIT_INIT: Self::Split = [0; HEAP_SPLIT_BYTES];
-
+impl HeapBounds for ModuleBounds {
     fn base() -> usize {
-        // A pure function of the linker's answer and the map's constants, with
-        // no state and no order to be in: the first block is asked for long
-        // before anything has laid the memory out.
         section::heap_at(data_end()) as usize
     }
     fn end() -> usize {
@@ -82,13 +53,9 @@ impl xpute_core::alloc::buddy_tree::Range for ModuleHeap {
     }
 }
 
-/// The module's one allocator: a slab of size classes over a buddy of 4 KiB
-/// pages, both over the range above. The buddy is what the sections' blocks
-/// come from; the slab is what a `Vec` or a `String` comes from, and it
-/// borrows and returns whole runs of pages to the same buddy, so neither level
-/// can starve while the other has room.
+/// The module's one allocator (pxl_kernel::mem::heap).
 #[global_allocator]
-static ALLOC: xpute_core::alloc::slab::SlabMalloc<ModuleHeap> = xpute_core::alloc::slab::SlabMalloc::new();
+static ALLOC: KernelAlloc<ModuleBounds> = KernelAlloc::new();
 
 // `wasm_import_module` is what makes this an import, and it is load-bearing
 // rather than documentation. wasm-ld used to be handed `--allow-undefined`,
@@ -103,19 +70,9 @@ extern "C" {
     fn host_now() -> f64;
 }
 
-/// The allocator's reading, for the ledger and the heap's row.
+/// The allocator's reading, for the profiler and the heap's row.
 fn heap_stat() -> pxl_kernel::host::HeapStat {
-    pxl_kernel::host::HeapStat {
-        range: ALLOC.range_bytes(),
-        used: ALLOC.used(),
-        live: ALLOC.live(),
-        run: ALLOC.run_live(),
-        slot: ALLOC.slot_live(),
-        largest_free: ALLOC.largest_free(),
-        releases: ALLOC.releases(),
-        refusals: ALLOC.refusals(),
-        requests: ALLOC.pages().allocs() as u32,
-    }
+    pxl_kernel::mem::heap::heap_stat(&ALLOC)
 }
 
 fn now() -> f64 {
@@ -134,6 +91,7 @@ fn bracket() -> Bracket {
         data_end: data_end(),
         clock: now,
         heap_stat,
+        last_words: None,
     }
 }
 

@@ -67,7 +67,7 @@ function build_number(id: string): string {
  * `define` constants so that a dev server gives every page load the values
  * as they are then, not as they were when the server started: the module is
  * dropped from the graph on each navigation and computed again on import,
- * so a ledger report taken from a long-running dev server names the source
+ * so a profiler report taken from a long-running dev server names the source
  * actually on screen.
  *
  * The time is evaluated at build, so it updates itself with nothing to
@@ -160,13 +160,19 @@ function build_stamp(): Plugin {
  * It refuses rather than guesses. A member whose value is not a plain literal
  * or arithmetic over literals leaves its whole enum alone, and an access left
  * behind after the declaration went is a build error, never a bundle that
- * reaches a browser and throws.
+ * reaches a browser and throws. The table is read once, as the server starts,
+ * so an enum declared since, or a member added to one, is the same error,
+ * saying the server has to be restarted.
  */
 function const_enum(roots: string[]): Plugin {
   const DECL = /export\s+const\s+enum\s+(\w+)\s*\{([^}]*)\}/g;
   /** Numbers, strings and arithmetic over them, and nothing that runs. */
   const VALUE = /^(?:0x[0-9a-fA-F]+|\d+|"[^"\\]*"|'[^'\\]*'|[-+*/|&^~()<>\s])+$/;
   const enums = new Map<string, Map<string, string>>();
+  /** Enums left alone on purpose, so that leaving them is not taken for a
+   * table gone stale. */
+  const refused = new Set<string>();
+  const stale = (what: string) => `const-enum: ${what} is not in the enum table read when the dev server started; the enums changed since, so restart it`;
 
   for (const root of roots) {
     const stack = [root];
@@ -195,6 +201,7 @@ function const_enum(roots: string[]): Plugin {
             members.set(key, /^["']/.test(value) ? value : String(Function(`return (${value})`)()));
           }
           if (whole) enums.set(name, members);
+          else refused.add(name);
         }
       }
     }
@@ -214,6 +221,9 @@ function const_enum(roots: string[]): Plugin {
     enforce: "pre",
     transform(code, id) {
       if (!/\.tsx?$/.test(source_of(id)) || id.includes("node_modules")) return null;
+      for (const [, name] of code.matchAll(DECL)) {
+        if (!enums.has(name) && !refused.has(name)) throw new Error(`${stale(`const enum ${name}`)} (${id})`);
+      }
       let out = code;
       const struck: string[] = [];
       for (const [name, members] of enums) {
@@ -236,7 +246,7 @@ function const_enum(roots: string[]): Plugin {
       });
       for (const name of struck) {
         const left = new RegExp(`\\b${name}\\.\\w`).exec(out);
-        if (left) throw new Error(`const-enum: ${id} still reads ${left[0]} after ${name} was inlined`);
+        if (left) throw new Error(`${stale(`${name}.${/\w+/.exec(out.slice(left.index + name.length + 1))![0]}`)} (${id})`);
       }
       return { code: out, map: null };
     },
@@ -457,7 +467,6 @@ export default defineConfig(({ mode }) => {
     preview: { proxy },
 
     define: {
-      __ENV__: JSON.stringify("browser"),
       __APP_ENV__: JSON.stringify(appEnv),
       __IS_DEV__: JSON.stringify(isDev),
       // Vite's own import.meta.env.DEV, as a global a bundle Vite did not
@@ -465,11 +474,6 @@ export default defineConfig(({ mode }) => {
       __DEV_BUNDLE__: JSON.stringify(mode !== "production"),
 
       __PUBLISHED_TILES__: JSON.stringify(published),
-
-      /** A droplet fades. A pixelet remains. 🫧 */
-      __APP_NAME__: JSON.stringify("pixelet"),
-
-      __ROLE__: JSON.stringify("client"),
 
       // react-native-web's Animated reads React Native's `global`, which a
       // browser calls `globalThis`.

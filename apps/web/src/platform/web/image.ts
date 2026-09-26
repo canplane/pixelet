@@ -2,11 +2,11 @@
 
 /**
  * An image the renderer uploads, decoded where the device is: on the web, by
- * the browser, into a bitmap the page's WebGPU copies from (render/gpu.ts).
+ * the browser, into a bitmap the page's WebGPU copies from (webgpu.ts).
  */
 
 import type { u32 } from "@xpute/core/abi/word.ts";
-import { register_image } from "@/kernel/render/gpu.ts";
+import { register_image } from "@/platform/web/webgpu.ts";
 
 let next_image: u32 = 1;
 

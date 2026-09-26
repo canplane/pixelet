@@ -55,15 +55,32 @@ function variantsOf(groupNumber: u32, group: GroupSpec): CharacterVariant[] {
 
 const PERSON_VARIANTS = variantsOf(Group.person, groups.person);
 
-export const PERSON_VARIANTS_FEMALE: readonly CharacterVariant[] = PERSON_VARIANTS.filter((v) => v.key.startsWith(PERSON_GENDER_PREFIXES.female));
-export const PERSON_VARIANTS_MALE: readonly CharacterVariant[] = PERSON_VARIANTS.filter((v) => v.key.startsWith(PERSON_GENDER_PREFIXES.male));
+/** A person's gender: what the persons' keys are prefixed with
+ * (variant.json), and what the picker browses them by. */
+export type Gender = keyof typeof PERSON_GENDER_PREFIXES;
+export const GENDERS = Object.keys(PERSON_GENDER_PREFIXES) as Gender[];
+
+/** The persons of a gender. */
+export function personVariantsOf(gender: Gender): readonly CharacterVariant[] {
+  return PERSON_VARIANTS.filter((v) => v.key.startsWith(PERSON_GENDER_PREFIXES[gender]));
+}
+
+/** The gender a person's key belongs to; the first where it names none. */
+export function genderOf(key: string): Gender {
+  return GENDERS.find((g) => key.startsWith(PERSON_GENDER_PREFIXES[g])) ?? GENDERS[0];
+}
+
+/** The person numbered `number` in the settings; none where no person is. */
+export function personVariantNumbered(number: number): CharacterVariant | undefined {
+  return PERSON_VARIANTS.find((v) => v.number === number);
+}
 export const PET_VARIANTS: readonly CharacterVariant[] = variantsOf(Group.pet, groups.pet);
 
 export const DEFAULT_PERSON_VARIANT_KEY: string = PERSON_KEY;
 export const DEFAULT_PET_VARIANT_KEY: string = PET_KEY;
 
 export function findPersonVariant(key: string): CharacterVariant {
-  return PERSON_VARIANTS_FEMALE.find((v) => v.key === key) ?? PERSON_VARIANTS_MALE.find((v) => v.key === key) ?? PERSON_VARIANTS_FEMALE[0];
+  return PERSON_VARIANTS.find((v) => v.key === key) ?? personVariantsOf(GENDERS[0])[0];
 }
 
 export function findPetVariant(key: string): CharacterVariant {

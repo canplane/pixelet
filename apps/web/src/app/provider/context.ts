@@ -2,21 +2,12 @@
 
 import { createContext, useContext } from "react";
 
-// import AppStore from "../model/store";
 import type { UiController } from "../type/ui.type.ts";
 
 /**
  * Values provided by the AppContext
  */
 interface AppContextValue {
-  /**
-   * Global application store
-   *
-   * This is intentionally typed loosely for now
-   * and can be replaced with a concrete store implementation later.
-   */
-  store: unknown; // AppStore;
-
   /**
    * Imperative UI controller
    *
@@ -29,9 +20,8 @@ interface AppContextValue {
 /**
  * Application-level context
  *
- * This context provides access to:
- * - Global application state (store)
- * - Imperative UI controls (ui controller)
+ * This context provides access to the imperative UI controls (ui
+ * controller).
  *
  * It should be mounted once at the root of the app.
  */

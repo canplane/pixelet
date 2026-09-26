@@ -67,7 +67,7 @@ pub enum DrawSpec {
     Place { name: String, icon: &'static str, color: u32, logical_w: f64 },
     /// The notched speech bubble and its wrapped lines.
     Bubble { lines: Vec<String>, box_w: f64, box_h: f64 },
-    /// A line of small text on nothing: the dev gizmos' labels.
+    /// A line of small text on nothing: the debug gizmos' labels.
     Text { text: String, logical_w: f64 },
 }
 
@@ -410,7 +410,7 @@ impl BillboardAtlas {
     ///
     /// Growth only ever went one way, so a sheet that doubled to 4096 crossing
     /// the densest part of the map stayed at 4096 after the badges that needed
-    /// it were gone — the ledger read 12 entries on a 4096 sheet, which is a
+    /// it were gone — the profiler read 12 entries on a 4096 sheet, which is a
     /// 64 MB canvas and another 64 MB of texture holding almost nothing.
     ///
     /// Planned before anything moves: the entries are laid out on the smaller

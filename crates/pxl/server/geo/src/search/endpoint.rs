@@ -54,6 +54,9 @@ pub fn routes(pool: Pool) -> Router {
     Router::new().route(pxl_spec::route::SEARCH_URL, get(search)).with_state(pool)
 }
 
+/// No rate limit, timeout or abort, on purpose: it is one indexed query on
+/// one table, the only route that reaches a database at request time, and
+/// hardening it is a traffic decision made without traffic.
 async fn search(State(pool): State<Pool>, Query(params): Query<Params>) -> Response {
     let q = params.q.unwrap_or_default().trim().to_string();
     // Characters rather than bytes: a Korean query is three bytes a syllable,

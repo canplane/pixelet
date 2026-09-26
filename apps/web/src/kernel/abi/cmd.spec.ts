@@ -43,7 +43,7 @@ export const enum Major {
   SETTING = 0x22,
   CHAT = 0x23,
   PREVIEW = 0x24,
-  LEDGER = 0x25,
+  PROFILER = 0x25,
 }
 
 /** The pointer's own verbs, and the map controls'. */
@@ -84,8 +84,8 @@ export const enum SettingMinor {
   TOGGLE = 0x10,
 }
 
-/** The ledger's own verbs. */
-export const enum LedgerMinor {
+/** The profiler's own verbs. */
+export const enum ProfilerMinor {
   START = 0x10,
   STOP = 0x11,
   LOG = 0x12,
@@ -302,16 +302,16 @@ export const enum Command {
   PREVIEW_CREATE = 0x2401,
   PREVIEW_DELETE = 0x2404,
   /** A fresh recording window. */
-  LEDGER_START = 0x2510,
+  PROFILER_START = 0x2510,
   /** The window frozen, so what is exported holds still. */
-  LEDGER_STOP = 0x2511,
+  PROFILER_STOP = 0x2511,
   /** The console stream on or off. */
-  LEDGER_LOG = 0x2512,
-  /** The ledger where it lies: the reply is the address of READ's words (ledger.json) over the
+  PROFILER_LOG = 0x2512,
+  /** The profiler where it lies: the reply is the address of READ's words (profiler.json) over the
    * last `window_ms`, an infinite window being the whole recording, good until the next turn. */
-  LEDGER_READ = 0x2513,
+  PROFILER_READ = 0x2513,
   /** The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn. */
-  LEDGER_TAKE = 0x2514,
+  PROFILER_TAKE = 0x2514,
 
   // ---- the turn's signals: kernel → shell, left on the completion ring by a strobe or a command ----
 
@@ -674,7 +674,7 @@ export interface FetchUpdate {
   /** 0 for none. */
   body_bytes: u32;
   fail: FetchFail;
-  /** Whatever number the host refused with, kept for the ledger to print and for nothing to branch on. */
+  /** Whatever number the host refused with, kept for the profiler to print and for nothing to branch on. */
   detail: u32;
   net_ms: f64;
 }
@@ -803,21 +803,21 @@ export function encode_preview_delete(p: PreviewDelete): U8Array {
   return packet((b) => b.u32(p.surface));
 }
 
-/** Command.LEDGER_LOG's packet. */
-export interface LedgerLog {
+/** Command.PROFILER_LOG's packet. */
+export interface ProfilerLog {
   on: boolean;
 }
 
-export function encode_ledger_log(p: LedgerLog): U8Array {
+export function encode_profiler_log(p: ProfilerLog): U8Array {
   return packet((b) => b.bool(p.on));
 }
 
-/** Command.LEDGER_READ's packet. */
-export interface LedgerRead {
+/** Command.PROFILER_READ's packet. */
+export interface ProfilerRead {
   window_ms: f64;
 }
 
-export function encode_ledger_read(p: LedgerRead): U8Array {
+export function encode_profiler_read(p: ProfilerRead): U8Array {
   return packet((b) => b.f64(p.window_ms));
 }
 

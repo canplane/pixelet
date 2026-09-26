@@ -36,18 +36,18 @@
 ///             reachable at the cost of an angle nobody asked for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum CameraTerrainMode {
+pub enum CameraCollisionMode {
     through = 0,
     stop = 1,
     climb = 2,
 }
 
-impl CameraTerrainMode {
-    pub const ALL: [CameraTerrainMode; 3] = [CameraTerrainMode::through, CameraTerrainMode::stop, CameraTerrainMode::climb];
+impl CameraCollisionMode {
+    pub const ALL: [CameraCollisionMode; 3] = [CameraCollisionMode::through, CameraCollisionMode::stop, CameraCollisionMode::climb];
 
     /// The option an index names, or none for an index past the list.
-    pub fn of(index: u32) -> Option<CameraTerrainMode> {
-        CameraTerrainMode::ALL.get(index as usize).copied()
+    pub fn of(index: u32) -> Option<CameraCollisionMode> {
+        CameraCollisionMode::ALL.get(index as usize).copied()
     }
 }
 
@@ -118,9 +118,9 @@ pub enum SettingKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SettingKey {
-    /// Ground color from the art pack (four sampler2DArray taps per fragment)
-    /// instead of the flat per-instance average. The shader's `u_low_spec` is
-    /// this, inverted.
+    /// Ground color from the art pack (four taps of the layer array per
+    /// fragment) instead of the flat per-instance average. The chunk shader's
+    /// `frame.low_spec` is this, inverted.
     ///
     /// Low because the four taps are all of it: fill rate, which scales with
     /// the screen and not with the world, and nothing else — no geometry, no
@@ -130,10 +130,10 @@ pub enum SettingKey {
     /// It sources the chunks: the shader samples a leaf's layer or does not,
     /// but a tier over it carries one color and no layer to sample, so which
     /// color that is was baked in (mesh/chunk_mesher.rs).
-    texture_pack = 0,
+    textures = 0,
     /// Whether the STRUCTURE ground channel is painted. The bake writes it
-    /// either way (pipeline/overture/policy.rs); this is a render decision.
-    show_structures = 1,
+    /// either way (pxl-geo-bake terrain/pipeline/overture/policy.rs); this is a render decision.
+    structures = 1,
     /// Procedurally scattered decor only; what the player placed stays.
     ///
     /// Med because it is models rather than a shading term: a chunk builds its
@@ -144,36 +144,38 @@ pub enum SettingKey {
     /// the nearest tier without making far decor cheap, the impostor tier that
     /// would being decided and not built. The badge is an ordering, and this is
     /// the one to reach for before any shading term.
-    show_decor = 2,
+    decor = 2,
     /// The places' badges over the map, from the published POI pages.
-    show_poi = 3,
+    poi = 3,
     /// Rotate-drag and pinch stop writing polar; azimuth is unaffected.
     /// Off by default: the tilt is the one control a map view is expected to
     /// have, and locking it reads as the app being stuck.
-    lock_camera_tilt = 4,
-    /// climb, because the one thing a map camera must not do is refuse to
+    tilt_lock = 4,
+    /// What the camera does when the controls would put it underground;
+    /// CAMERA_COLLISION_MODES says each. The default is climb, because the one
+    /// thing a map camera must not do is refuse to
     /// move. stop is the more literal answer and the worse default: it hands
     /// back a control that did nothing, which reads as the app being stuck
     /// rather than as the ground being in the way.
-    camera_terrain = 5,
+    camera_collision = 5,
     /// Panning re-samples the terrain height under the map center each step.
     ground_snap = 6,
     /// The eraser digs into the baked terrain where nothing is placed. Off by
     /// default: the terrain is real map data, not the player's scratch canvas.
-    enable_terrain_carving = 7,
+    terrain_carving = 7,
     /// Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
-    show_edge_shade = 8,
+    edge_shade = 8,
     /// A uniform on an already-compiled shader term; not a pass.
-    show_rim_light = 9,
+    rim_light = 9,
     /// corner, the occlusion a voxel world gets from its own geometry with no
-    /// screen-space pass; screen, the three.js build's N8AO, kept to be put
-    /// beside it. AO_MODES says each.
+    /// screen-space pass; screen, N8AO's screen-space pass, the costliest of
+    /// the three. AO_MODES says each.
     ao = 10,
     /// The sun's shadow map (crates/pxl/web/render/src/gpu/shadow.rs): the world drawn once more
     /// from the sun each frame, depth only, and a 3x3 compare per fragment;
     /// 16 MB of map on a desktop, 4 on a phone.
-    show_shadow_map = 11,
+    shadows = 11,
     /// The pixels the world is filled at, the GPU's largest cost: two to a
     /// CSS pixel is four times the fragments of one. RESOLUTION_MODES says each.
     resolution = 12,
@@ -183,34 +185,34 @@ pub enum SettingKey {
     /// draw on complementary halves of one screen-space pattern, so a chunk
     /// in a dissolve is drawn twice while it lasts.
     lod_crossfade = 13,
-    /// The debug gizmos: frame origins, page corners, the map center and the rings.
-    show_debug_objects = 14,
-    /// The scheduler ledger's corner panel. The console stream is a button on it.
-    show_ledger = 15,
-    person_variant = 16,
-    pet_variant = 17,
+    /// The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`).
+    profiler = 14,
+    /// Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs).
+    gizmos = 15,
+    person = 16,
+    pet = 17,
 }
 
 impl SettingKey {
     pub const ALL: [SettingKey; 18] = [
-        SettingKey::texture_pack,
-        SettingKey::show_structures,
-        SettingKey::show_decor,
-        SettingKey::show_poi,
-        SettingKey::lock_camera_tilt,
-        SettingKey::camera_terrain,
+        SettingKey::textures,
+        SettingKey::structures,
+        SettingKey::decor,
+        SettingKey::poi,
+        SettingKey::tilt_lock,
+        SettingKey::camera_collision,
         SettingKey::ground_snap,
-        SettingKey::enable_terrain_carving,
-        SettingKey::show_edge_shade,
-        SettingKey::show_rim_light,
+        SettingKey::terrain_carving,
+        SettingKey::edge_shade,
+        SettingKey::rim_light,
         SettingKey::ao,
-        SettingKey::show_shadow_map,
+        SettingKey::shadows,
         SettingKey::resolution,
         SettingKey::lod_crossfade,
-        SettingKey::show_debug_objects,
-        SettingKey::show_ledger,
-        SettingKey::person_variant,
-        SettingKey::pet_variant,
+        SettingKey::profiler,
+        SettingKey::gizmos,
+        SettingKey::person,
+        SettingKey::pet,
     ];
 
     /// The setting a number names, or none for a number past the table.
@@ -220,109 +222,106 @@ impl SettingKey {
 
     pub fn kind(self) -> SettingKind {
         match self {
-            SettingKey::texture_pack => SettingKind::Toggle,
-            SettingKey::show_structures => SettingKind::Toggle,
-            SettingKey::show_decor => SettingKind::Toggle,
-            SettingKey::show_poi => SettingKind::Toggle,
-            SettingKey::lock_camera_tilt => SettingKind::Toggle,
-            SettingKey::camera_terrain => SettingKind::Choice,
+            SettingKey::textures => SettingKind::Toggle,
+            SettingKey::structures => SettingKind::Toggle,
+            SettingKey::decor => SettingKind::Toggle,
+            SettingKey::poi => SettingKind::Toggle,
+            SettingKey::tilt_lock => SettingKind::Toggle,
+            SettingKey::camera_collision => SettingKind::Choice,
             SettingKey::ground_snap => SettingKind::Toggle,
-            SettingKey::enable_terrain_carving => SettingKind::Toggle,
-            SettingKey::show_edge_shade => SettingKind::Toggle,
-            SettingKey::show_rim_light => SettingKind::Toggle,
+            SettingKey::terrain_carving => SettingKind::Toggle,
+            SettingKey::edge_shade => SettingKind::Toggle,
+            SettingKey::rim_light => SettingKind::Toggle,
             SettingKey::ao => SettingKind::Choice,
-            SettingKey::show_shadow_map => SettingKind::Toggle,
+            SettingKey::shadows => SettingKind::Toggle,
             SettingKey::resolution => SettingKind::Choice,
             SettingKey::lod_crossfade => SettingKind::Toggle,
-            SettingKey::show_debug_objects => SettingKind::Toggle,
-            SettingKey::show_ledger => SettingKind::Toggle,
-            SettingKey::person_variant => SettingKind::Number,
-            SettingKey::pet_variant => SettingKind::Number,
+            SettingKey::profiler => SettingKind::Toggle,
+            SettingKey::gizmos => SettingKind::Toggle,
+            SettingKey::person => SettingKind::Number,
+            SettingKey::pet => SettingKind::Number,
         }
     }
 
     /// Offered by a development build only.
     pub fn dev(self) -> bool {
-        matches!(
-            self,
-            SettingKey::camera_terrain | SettingKey::ground_snap | SettingKey::enable_terrain_carving | SettingKey::show_shadow_map | SettingKey::show_debug_objects | SettingKey::show_ledger
-        )
+        matches!(self, SettingKey::camera_collision | SettingKey::ground_snap | SettingKey::terrain_carving | SettingKey::shadows)
     }
 
     /// Read by a chunk's build, so a change builds the chunks again.
     pub fn sources_chunks(self) -> bool {
-        matches!(self, SettingKey::texture_pack | SettingKey::show_structures | SettingKey::show_decor)
+        matches!(self, SettingKey::textures | SettingKey::structures | SettingKey::decor)
     }
 }
 
 /// Every setting's value: what the store holds, and what the app reads.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Settings {
-    pub texture_pack: bool,
-    pub show_structures: bool,
-    pub show_decor: bool,
-    pub show_poi: bool,
-    pub lock_camera_tilt: bool,
-    pub camera_terrain: CameraTerrainMode,
+    pub textures: bool,
+    pub structures: bool,
+    pub decor: bool,
+    pub poi: bool,
+    pub tilt_lock: bool,
+    pub camera_collision: CameraCollisionMode,
     pub ground_snap: bool,
-    pub enable_terrain_carving: bool,
-    pub show_edge_shade: bool,
-    pub show_rim_light: bool,
+    pub terrain_carving: bool,
+    pub edge_shade: bool,
+    pub rim_light: bool,
     pub ao: AoMode,
-    pub show_shadow_map: bool,
+    pub shadows: bool,
     pub resolution: ResolutionMode,
     pub lod_crossfade: bool,
-    pub show_debug_objects: bool,
-    pub show_ledger: bool,
-    pub person_variant: u8,
-    pub pet_variant: u8,
+    pub profiler: bool,
+    pub gizmos: bool,
+    pub person: u8,
+    pub pet: u8,
 }
 
 impl Settings {
     /// Every setting at schema.json's default.
     pub const DEFAULT: Settings = Settings {
-        texture_pack: true,
-        show_structures: true,
-        show_decor: true,
-        show_poi: false,
-        lock_camera_tilt: false,
-        camera_terrain: CameraTerrainMode::climb,
+        textures: true,
+        structures: true,
+        decor: true,
+        poi: false,
+        tilt_lock: false,
+        camera_collision: CameraCollisionMode::climb,
         ground_snap: true,
-        enable_terrain_carving: false,
-        show_edge_shade: true,
-        show_rim_light: true,
+        terrain_carving: false,
+        edge_shade: true,
+        rim_light: true,
         ao: AoMode::corner,
-        show_shadow_map: false,
+        shadows: false,
         resolution: ResolutionMode::auto,
         lod_crossfade: true,
-        show_debug_objects: false,
-        show_ledger: false,
-        person_variant: 1,
-        pet_variant: 5,
+        profiler: false,
+        gizmos: false,
+        person: 1,
+        pet: 5,
     };
 
     /// A setting's value as it crosses: a toggle's 0 or 1, a choice's option
     /// by its index, a number.
     pub fn get(&self, key: SettingKey) -> u32 {
         match key {
-            SettingKey::texture_pack => self.texture_pack as u32,
-            SettingKey::show_structures => self.show_structures as u32,
-            SettingKey::show_decor => self.show_decor as u32,
-            SettingKey::show_poi => self.show_poi as u32,
-            SettingKey::lock_camera_tilt => self.lock_camera_tilt as u32,
-            SettingKey::camera_terrain => self.camera_terrain as u32,
+            SettingKey::textures => self.textures as u32,
+            SettingKey::structures => self.structures as u32,
+            SettingKey::decor => self.decor as u32,
+            SettingKey::poi => self.poi as u32,
+            SettingKey::tilt_lock => self.tilt_lock as u32,
+            SettingKey::camera_collision => self.camera_collision as u32,
             SettingKey::ground_snap => self.ground_snap as u32,
-            SettingKey::enable_terrain_carving => self.enable_terrain_carving as u32,
-            SettingKey::show_edge_shade => self.show_edge_shade as u32,
-            SettingKey::show_rim_light => self.show_rim_light as u32,
+            SettingKey::terrain_carving => self.terrain_carving as u32,
+            SettingKey::edge_shade => self.edge_shade as u32,
+            SettingKey::rim_light => self.rim_light as u32,
             SettingKey::ao => self.ao as u32,
-            SettingKey::show_shadow_map => self.show_shadow_map as u32,
+            SettingKey::shadows => self.shadows as u32,
             SettingKey::resolution => self.resolution as u32,
             SettingKey::lod_crossfade => self.lod_crossfade as u32,
-            SettingKey::show_debug_objects => self.show_debug_objects as u32,
-            SettingKey::show_ledger => self.show_ledger as u32,
-            SettingKey::person_variant => self.person_variant as u32,
-            SettingKey::pet_variant => self.pet_variant as u32,
+            SettingKey::profiler => self.profiler as u32,
+            SettingKey::gizmos => self.gizmos as u32,
+            SettingKey::person => self.person as u32,
+            SettingKey::pet => self.pet as u32,
         }
     }
 
@@ -330,37 +329,37 @@ impl Settings {
     /// for a value the setting cannot hold.
     pub fn set(&mut self, key: SettingKey, value: u32) -> bool {
         match key {
-            SettingKey::texture_pack if value <= 1 => self.texture_pack = value == 1,
-            SettingKey::show_structures if value <= 1 => self.show_structures = value == 1,
-            SettingKey::show_decor if value <= 1 => self.show_decor = value == 1,
-            SettingKey::show_poi if value <= 1 => self.show_poi = value == 1,
-            SettingKey::lock_camera_tilt if value <= 1 => self.lock_camera_tilt = value == 1,
-            SettingKey::camera_terrain => match CameraTerrainMode::of(value) {
-                Some(o) => self.camera_terrain = o,
+            SettingKey::textures if value <= 1 => self.textures = value == 1,
+            SettingKey::structures if value <= 1 => self.structures = value == 1,
+            SettingKey::decor if value <= 1 => self.decor = value == 1,
+            SettingKey::poi if value <= 1 => self.poi = value == 1,
+            SettingKey::tilt_lock if value <= 1 => self.tilt_lock = value == 1,
+            SettingKey::camera_collision => match CameraCollisionMode::of(value) {
+                Some(o) => self.camera_collision = o,
                 None => return false,
             },
             SettingKey::ground_snap if value <= 1 => self.ground_snap = value == 1,
-            SettingKey::enable_terrain_carving if value <= 1 => self.enable_terrain_carving = value == 1,
-            SettingKey::show_edge_shade if value <= 1 => self.show_edge_shade = value == 1,
-            SettingKey::show_rim_light if value <= 1 => self.show_rim_light = value == 1,
+            SettingKey::terrain_carving if value <= 1 => self.terrain_carving = value == 1,
+            SettingKey::edge_shade if value <= 1 => self.edge_shade = value == 1,
+            SettingKey::rim_light if value <= 1 => self.rim_light = value == 1,
             SettingKey::ao => match AoMode::of(value) {
                 Some(o) => self.ao = o,
                 None => return false,
             },
-            SettingKey::show_shadow_map if value <= 1 => self.show_shadow_map = value == 1,
+            SettingKey::shadows if value <= 1 => self.shadows = value == 1,
             SettingKey::resolution => match ResolutionMode::of(value) {
                 Some(o) => self.resolution = o,
                 None => return false,
             },
             SettingKey::lod_crossfade if value <= 1 => self.lod_crossfade = value == 1,
-            SettingKey::show_debug_objects if value <= 1 => self.show_debug_objects = value == 1,
-            SettingKey::show_ledger if value <= 1 => self.show_ledger = value == 1,
-            SettingKey::person_variant => match u8::try_from(value) {
-                Ok(n) => self.person_variant = n,
+            SettingKey::profiler if value <= 1 => self.profiler = value == 1,
+            SettingKey::gizmos if value <= 1 => self.gizmos = value == 1,
+            SettingKey::person => match u8::try_from(value) {
+                Ok(n) => self.person = n,
                 Err(_) => return false,
             },
-            SettingKey::pet_variant => match u8::try_from(value) {
-                Ok(n) => self.pet_variant = n,
+            SettingKey::pet => match u8::try_from(value) {
+                Ok(n) => self.pet = n,
                 Err(_) => return false,
             },
             _ => return false,

@@ -8,19 +8,25 @@
  */
 
 import { Command, encode_gpu_create } from "@/kernel/abi/cmd.spec.ts";
-import { CORE_BUILD } from "@/kernel/ipc.ts";
+import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame } from "@/kernel/sched.ts";
-import { declareUnsupported } from "@/app/store/unsupported-store.ts";
-import { PXL_KERNEL } from "./core.ts";
+import { declareUnsupported, UnsupportedReason } from "@/app/store/unsupported-store.ts";
+
+/** A device that runs the app has a GPU to ask for; whether it answers is
+ * `gpu_boot`'s. */
+export function gpu_missing(): UnsupportedReason | null {
+  return null;
+}
+import { PLATFORM } from "./module.ts";
 
 export function gpu_boot(): void {
-  const info = PXL_KERNEL.gpuOpen();
+  const info = PLATFORM.gpuOpen();
   if (info === null) {
     console.error("[gpu] the system has no GPU; nothing can be drawn");
-    declareUnsupported("gpu");
+    declareUnsupported(UnsupportedReason.Gpu);
     return;
   }
   const [align, timestamps] = info;
-  CORE_BUILD.send(0, Command.GPU_CREATE, encode_gpu_create({ min_uniform_offset_alignment: align, timestamps: timestamps !== 0 }));
+  CORE_DOORBELL.send(0, Command.GPU_CREATE, encode_gpu_create({ min_uniform_offset_alignment: align, timestamps: timestamps !== 0 }));
   request_frame();
 }

@@ -16,7 +16,7 @@ import { Command, encode_preview_create, encode_preview_delete } from "@/kernel/
 import { kernel_command } from "@/kernel/shell.ts";
 import type { CharacterVariant } from "@/feature/character/variant.ts";
 
-export interface CharacterPreviewProps {
+interface CharacterPreviewProps {
   variant: CharacterVariant;
   style?: StyleProp<ViewStyle>;
 }

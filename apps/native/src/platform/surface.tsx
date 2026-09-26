@@ -2,19 +2,17 @@
 
 /**
  * What the kernel draws into, on a device: a native view backed by a Metal
- * layer (modules/pxl-surface), which the kernel draws into directly through
- * wgpu (crates/pxl/web/render/src/gpu/api/device.rs). A view is a kernel
- * surface as a page's canvas is (kernel/render/surface.ts): opened while it
- * is mounted, bound to the view's layer by the view itself while it has one —
- * it says when, since its layer comes after it is mounted and laid out — and
- * sized in device pixels as it is laid out.
+ * layer (modules/platform/ios/SurfaceView.swift), which the kernel draws into
+ * directly through wgpu (crates/pxl/web/render/src/gpu/api/device.rs). A
+ * view is a kernel surface as a page's canvas is (platform/web/surface.tsx):
+ * opened while it is mounted, bound to the view's layer by the view itself
+ * while it has one — it says when, since its layer comes after it is mounted
+ * and laid out — and sized in device pixels as it is laid out.
  *
- * The world's view is also the scheduler's frame loop and the pointer's
- * source, as the web's driver is (kernel/control/input.ts): its size is the
- * frame's viewport, its touches are pointers the kernel reads into drags and
- * pinches, the turns run while it is up and the app is in front, and the
- * kernel hears when the app goes to the background — where it saves what was
- * placed — and, back in front, whether location was granted meanwhile.
+ * The world's view is also the app's driver (kernel/control/input.ts), as a
+ * page's canvas is: its size is the frame's viewport, its touches are
+ * pointers the kernel reads into drags and pinches, and the app in front or
+ * in the background is the kernel's visibility.
  */
 
 import type { u32 } from "@xpute/core/abi/word.ts";
@@ -23,14 +21,13 @@ import { requireNativeView } from "expo";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import { AppState, type GestureResponderEvent, type LayoutChangeEvent, type NativeSyntheticEvent, PixelRatio, StyleSheet, type ViewProps } from "react-native";
 
-import { Command, encode_sensor_visibility, encode_surface_create, encode_surface_delete, encode_surface_update, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
-import { kernel_rect, kernel_touch } from "@/kernel/control/input.ts";
+import { PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_open, kernel_pointer, kernel_rect, kernel_visible } from "@/kernel/control/input.ts";
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
-import { CORE_BUILD } from "@/kernel/ipc.ts";
-import { request_frame, ring_now, set_driver, strobe, type Viewport } from "@/kernel/sched.ts";
-import { permission_recheck } from "@platform/sensor.ts";
+import { surface_create, surface_delete, surface_size } from "@/kernel/render/surface.ts";
+import { request_frame, type Viewport } from "@/kernel/sched.ts";
 
-interface PxlSurfaceProps extends ViewProps {
+interface SurfaceProps extends ViewProps {
   /** The kernel's surface to show; 0 for none. */
   surface: u32;
   /** The view bound its layer to `surface`. */
@@ -38,16 +35,16 @@ interface PxlSurfaceProps extends ViewProps {
   onDetach: () => void;
 }
 
-const PxlSurface: ComponentType<PxlSurfaceProps> = requireNativeView("PxlSurface");
+const SurfaceView: ComponentType<SurfaceProps> = requireNativeView("PxlPlatform");
 
-/** A kernel surface of `role` for a PxlSurface view: opened while mounted and
+/** A kernel surface of `role` for a SurfaceView: opened while mounted and
  * again whenever `key` changes, `opened` handed it once it is the kernel's —
  * what that returns is run before it is let go — and sized in device pixels
  * once the view has bound its layer to it. `size` is the view's, in its own
  * pixels. */
 function useSurface(role: u32, key: string, opened?: (surface: u32) => () => void) {
   const [handle, setHandle] = useState<u32>(0);
-  const size = useRef<Viewport>({ width: 0, height: 0 });
+  const size = useRef<Viewport>({ width: 0, height: 0, dpr: PixelRatio.get() });
   /** The surface the view says its layer is bound to; 0 for none. */
   const bound = useRef<u32>(0);
   const open = useRef(opened);
@@ -56,27 +53,25 @@ function useSurface(role: u32, key: string, opened?: (surface: u32) => () => voi
   const send = () => {
     const surface = bound.current;
     if (surface === 0) return;
-    const scale = PixelRatio.get();
-    const { width, height } = size.current;
-    CORE_BUILD.send(0, Command.SURFACE_UPDATE, encode_surface_update({ surface, width: round(width * scale), height: round(height * scale), device_pixel_ratio: scale }));
-    request_frame();
+    const { width, height, dpr } = size.current;
+    surface_size(surface, round(width * dpr), round(height * dpr), dpr);
   };
 
   useEffect(() => {
-    const surface = CORE_BUILD.call(Command.SURFACE_CREATE, encode_surface_create({ role }), (result) => result >>> 0);
+    const surface = surface_create(role);
     setHandle(surface);
     const close = surface !== 0 && open.current ? open.current(surface) : () => {};
     return () => {
       close();
       setHandle(0);
-      if (surface !== 0) CORE_BUILD.call(Command.SURFACE_DELETE, encode_surface_delete({ surface }), (result) => result);
+      if (surface !== 0) surface_delete(surface);
     };
   }, [key]);
 
-  const props: PxlSurfaceProps = {
+  const props: SurfaceProps = {
     surface: handle,
     onLayout: (e: LayoutChangeEvent) => {
-      size.current = { width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height };
+      size.current = { width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height, dpr: PixelRatio.get() };
       send();
     },
     onAttach: (e) => {
@@ -94,23 +89,11 @@ export function WorldSurface() {
   const { size, props } = useSurface(surface_role.WORLD, "world");
 
   useEffect(() => {
-    set_driver(() => size.current);
-    ring_now(Command.SENSOR_OPEN);
-    strobe.start();
-    const visibility = AppState.addEventListener("change", (state) => {
-      const visible = state === "active";
-      CORE_BUILD.send(0, Command.SENSOR_VISIBILITY, encode_sensor_visibility({ visible }));
-      CORE_BUILD.ring(0);
-      if (visible) {
-        permission_recheck();
-        strobe.start();
-      } else strobe.stop();
-    });
+    const close = kernel_open(() => size.current);
+    const visibility = AppState.addEventListener("change", (state) => kernel_visible(state === "active"));
     return () => {
       visibility.remove();
-      strobe.stop();
-      ring_now(Command.SENSOR_CLOSE);
-      set_driver(null);
+      close();
     };
   }, []);
 
@@ -124,11 +107,11 @@ export function WorldSurface() {
 
   /** Every touch the event changed, as a pointer in `phase`. */
   const touches = (phase: PointerPhase) => (e: GestureResponderEvent) => {
-    for (const t of e.nativeEvent.changedTouches) kernel_touch(phase, Number(t.identifier), t.locationX, t.locationY);
+    for (const t of e.nativeEvent.changedTouches) kernel_pointer(phase, PointerKind.Touch, Number(t.identifier), 0, t.locationX, t.locationY);
   };
 
   return (
-    <PxlSurface
+    <SurfaceView
       {...props}
       style={StyleSheet.absoluteFill}
       onLayout={onLayout}
@@ -145,5 +128,5 @@ export function WorldSurface() {
  * before the surface is let go; it opens again whenever `openKey` changes. */
 export function CaseSurface({ onOpen, openKey }: { onOpen: (surface: u32) => () => void; openKey: string }) {
   const { props } = useSurface(surface_role.CASE, openKey, onOpen);
-  return <PxlSurface {...props} style={StyleSheet.absoluteFill} />;
+  return <SurfaceView {...props} style={StyleSheet.absoluteFill} />;
 }

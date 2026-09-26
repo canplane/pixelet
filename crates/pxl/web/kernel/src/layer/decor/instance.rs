@@ -70,7 +70,7 @@ pub struct DecorScratch {
     pub(crate) counts: [u32; DECOR_GROUPS],
     pub(crate) group_count: usize,
     /// Instances the lanes had no room for, since the kernel started: what a
-    /// chunk shows is short by this many, and the ledger says so rather than
+    /// chunk shows is short by this many, and the profiler says so rather than
     /// leaving the gap to be noticed on screen.
     pub dropped: u32,
 }

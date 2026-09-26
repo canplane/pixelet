@@ -7,19 +7,19 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { DevicePoseStatus } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_enable_sensors, useKernel } from "@/kernel/shell.ts";
 
-import { alpha, color } from "@/shared/ui/theme.ts";
+import { LABEL, STATUS } from "@platform/palette.ts";
 
 function statusColor(status: DevicePoseStatus): string {
   switch (status) {
     case DevicePoseStatus.Ready:
-      return color.emerald500;
+      return STATUS.ready;
     case DevicePoseStatus.Loading:
-      return color.amber400;
+      return STATUS.pending;
     case DevicePoseStatus.Error:
-      return color.red400;
+      return STATUS.failed;
     case DevicePoseStatus.Idle:
     default:
-      return alpha(color.ink, 0.3);
+      return LABEL.secondary;
   }
 }
 

@@ -52,7 +52,7 @@ pub enum Major {
     SETTING = 0x22,
     CHAT = 0x23,
     PREVIEW = 0x24,
-    LEDGER = 0x25,
+    PROFILER = 0x25,
 }
 
 impl Major {
@@ -68,7 +68,7 @@ impl Major {
         Major::SETTING,
         Major::CHAT,
         Major::PREVIEW,
-        Major::LEDGER,
+        Major::PROFILER,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -187,10 +187,10 @@ impl SettingMinor {
     }
 }
 
-/// The ledger's own verbs.
+/// The profiler's own verbs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
-pub enum LedgerMinor {
+pub enum ProfilerMinor {
     START = 0x10,
     STOP = 0x11,
     LOG = 0x12,
@@ -198,12 +198,12 @@ pub enum LedgerMinor {
     TAKE = 0x14,
 }
 
-impl LedgerMinor {
-    pub const ALL: [LedgerMinor; 5] = [LedgerMinor::START, LedgerMinor::STOP, LedgerMinor::LOG, LedgerMinor::READ, LedgerMinor::TAKE];
+impl ProfilerMinor {
+    pub const ALL: [ProfilerMinor; 5] = [ProfilerMinor::START, ProfilerMinor::STOP, ProfilerMinor::LOG, ProfilerMinor::READ, ProfilerMinor::TAKE];
 
     /// The member a number names, or none for a number nobody gave out.
-    pub fn of(number: u32) -> Option<LedgerMinor> {
-        LedgerMinor::ALL.into_iter().find(|m| *m as u32 == number)
+    pub fn of(number: u32) -> Option<ProfilerMinor> {
+        ProfilerMinor::ALL.into_iter().find(|m| *m as u32 == number)
     }
 }
 
@@ -571,16 +571,16 @@ pub enum Command {
     PREVIEW_CREATE = 0x2401,
     PREVIEW_DELETE = 0x2404,
     /// A fresh recording window.
-    LEDGER_START = 0x2510,
+    PROFILER_START = 0x2510,
     /// The window frozen, so what is exported holds still.
-    LEDGER_STOP = 0x2511,
+    PROFILER_STOP = 0x2511,
     /// The console stream on or off.
-    LEDGER_LOG = 0x2512,
-    /// The ledger where it lies: the reply is the address of READ's words (ledger.json) over the
+    PROFILER_LOG = 0x2512,
+    /// The profiler where it lies: the reply is the address of READ's words (profiler.json) over the
     /// last `window_ms`, an infinite window being the whole recording, good until the next turn.
-    LEDGER_READ = 0x2513,
+    PROFILER_READ = 0x2513,
     /// The rows the console stream kept: the reply is the address of LOG's words, and the rows are let go on the next turn.
-    LEDGER_TAKE = 0x2514,
+    PROFILER_TAKE = 0x2514,
 
     // ---- the turn's signals: kernel → shell, left on the completion ring by a strobe or a command ----
     /// The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
@@ -641,11 +641,11 @@ impl Command {
         Command::CHAT_CREATE,
         Command::PREVIEW_CREATE,
         Command::PREVIEW_DELETE,
-        Command::LEDGER_START,
-        Command::LEDGER_STOP,
-        Command::LEDGER_LOG,
-        Command::LEDGER_READ,
-        Command::LEDGER_TAKE,
+        Command::PROFILER_START,
+        Command::PROFILER_STOP,
+        Command::PROFILER_LOG,
+        Command::PROFILER_READ,
+        Command::PROFILER_TAKE,
         Command::WORLD_SNAPSHOT,
         Command::SENSOR_CREATE,
         Command::SENSOR_DELETE,
@@ -1207,7 +1207,7 @@ pub struct FetchUpdate {
     /// 0 for none.
     pub body_bytes: u32,
     pub fail: xpute_runtime::abi::fetch::FetchFail,
-    /// Whatever number the host refused with, kept for the ledger to print and for nothing to branch on.
+    /// Whatever number the host refused with, kept for the profiler to print and for nothing to branch on.
     pub detail: u32,
     pub net_ms: f64,
 }
@@ -1426,29 +1426,29 @@ impl PreviewDelete {
     }
 }
 
-/// Command::LEDGER_LOG's packet.
+/// Command::PROFILER_LOG's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct LedgerLog {
+pub struct ProfilerLog {
     pub on: bool,
 }
 
-impl LedgerLog {
-    pub fn read(pkt: &[u8]) -> Result<LedgerLog, MarshalError> {
+impl ProfilerLog {
+    pub fn read(pkt: &[u8]) -> Result<ProfilerLog, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(LedgerLog { on: f.at(0)?.get_bool()? })
+        Ok(ProfilerLog { on: f.at(0)?.get_bool()? })
     }
 }
 
-/// Command::LEDGER_READ's packet.
+/// Command::PROFILER_READ's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct LedgerRead {
+pub struct ProfilerRead {
     pub window_ms: f64,
 }
 
-impl LedgerRead {
-    pub fn read(pkt: &[u8]) -> Result<LedgerRead, MarshalError> {
+impl ProfilerRead {
+    pub fn read(pkt: &[u8]) -> Result<ProfilerRead, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(LedgerRead { window_ms: f.at(0)?.get_number()? })
+        Ok(ProfilerRead { window_ms: f.at(0)?.get_number()? })
     }
 }
 

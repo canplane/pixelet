@@ -18,11 +18,11 @@ The two sides share one linear memory and nothing else. The host reserves it at 
 
 What goes in the memory is the guest's business; placing it is the runtime's. The guest hands in a base, a unit and a list of sizes, and gets back where each range landed (`mem/section.rs`). A linker script does the same thing with output sections, for the same reason: whatever places ranges should not need to know what any of them hold. A range comes back as a section, and whatever is asked of it — a span to write, or ranges laid inside it — is checked against where it ends (`Section::at`, `nth`), so nothing written through one range lands in the next.
 
+The memory need not begin at address zero. A WebAssembly module's linear memory does; a guest linked into a native program is given one region instead, wherever the system put it. So every address a guest names — a heap block, a range, a ring, what a record hands its host — is an offset from the memory's base and never a pointer (`mem/base.rs`): a number means the same to the host however the guest is built, and it fits the `u32` a record carries however wide the machine's pointers are. A pointer becomes an offset in one place (`off_of`), and one outside the memory is refused rather than passed on, since a static or a read-only constant lies where the linker put it and not in the region. An empty slice names nothing and is offset 0, since its pointer is only its alignment.
+
 The last range is the heap, and blocks come out of it through a single call (`mem/heap.rs`). What answers that call is the guest's choice. `core` offers two allocators that fit together. The lower one is a buddy allocator, which hands out fixed pages over a given span (`alloc/buddy_tree.rs`, ported from evanw/buddy-malloc). Above it sits a slab allocator holding size classes (`alloc/slab.rs`), so that a small request takes a slot of its own class instead of a whole page. The slab keeps its bookkeeping inside the blocks it has not handed out, so what it costs does not grow with the span it covers.
 
 The buddy is not ours: it was written for this same situation, a module handed one heap with no system allocator beneath it.
-
-One kind of buffer cannot live in that memory at all. Work sent off the thread needs something transferable, and a `WebAssembly.Memory` is not. The host keeps a small pool of fixed-size transferable buffers for that case (`mem/transfer.ts`), made on first need, reused when they come back, and let go once idle. The pool is capped, and the cap is the backpressure: when every buffer is out, whatever wanted one waits.
 
 ---
 
@@ -57,6 +57,8 @@ Positions only ever grow, so `tail - head` is how many messages are waiting. Mes
 A push can fail in two ways and no others. `EAGAIN` means the ring is full: the producer waits, and nothing is dropped. `EMSGSIZE` means the packet is bigger than a slot, and a packet that big crosses by address instead, in a heap block the guest hands out and the host writes into.
 
 Two rings make a pair: one for what the host submits, one for what the guest completes. Driving that pair from the host end is the **doorbell** (`ipc/doorbell.ts`). It pushes the commands, rings the guest with a quota, and then reads the completion ring dry, handing each message either to the call that was waiting for it or to whoever listens for signals. One ring of the bell is one whole turn of the guest.
+
+The guest's end (`ipc/doorbell.rs`) applies what waits in the submission ring in order, answering each with what the guest made of it, and posts what the guest raises into the completion ring — or, while the host has not read and that ring is full, into a third ring behind it, the spill, so that nothing is dropped and what was raised first is read first. Each message is written once, in place.
 
 ## Streams, for what the host must do before the next turn
 
@@ -111,7 +113,7 @@ Not everything that crosses deserves a message. A packet describing state the ot
 
 The two places exist because readers come in two kinds. A reader that cares about a handful of keys compares each key's revision against the one it remembers. A reader that cares about everything walks the journal forward from its own cursor — and if the journal has lapped that cursor, it gives up on the journal and re-reads the keys of the topics it follows.
 
-A change carries no value; the value is read where it lives. How a reader is woken — by polling on each turn, by a listener (`ipc/change_waker`), by a React hook — is built on top of this and is not part of it.
+A change carries no value; the value is read where it lives. How a reader is woken — by polling on each turn, by a listener, by a React hook — is built on top of this and is not part of it.
 
 ---
 
@@ -195,10 +197,10 @@ Everything above is implemented in both Rust and TypeScript, and the two impleme
 
 `core` is symmetric. Each language implements the same kit, and the golden records hold the two to each other wherever they must produce identical bytes. `runtime` is not symmetric and is not meant to be: its two halves are the two ends of one arrangement. The host end is TypeScript and the guest end is Rust. A module with nothing facing it across the boundary is not a gap waiting to be filled. What the two ends must agree on is not their module lists but their formats: the message's four words, the ring's layout, the memory's sections.
 
-|             | Rust (`crates/xpute/`)                                                                                                                                                                                        | TypeScript (`packages/xpute/`)                                                                                                                                                      |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **core**    | `abi` words and the command number · `alloc` slab and buddy · `codec` JSON · `collection` arena, deque, heap · `math` scalar, rng · `status` errno, error, bug · `wire` XTP, TLV · `golden` the record reader | `abi` `codec` `collection` `math` `status` `wire` as the Rust, plus `kit` (comparators, iterators, types) and `env` (feature detection)                                             |
-| **runtime** | `mem` sections and the heap door · `ipc` frame, ring, stream, change log · `sched` quantum, tick, pass, task, edge · `abi` handles, fetch · `clock` · `global`                                                | `mem` the reservation and the transferable buffers · `ipc` frame, ring, stream, change log, **doorbell** · `sched` quantum, tick, pass, **strobe** · `abi` handles, fetch · `clock` |
+|             | Rust (`crates/xpute/`)                                                                                                                                                                                        | TypeScript (`packages/xpute/`)                                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **core**    | `abi` words and the command number · `alloc` slab and buddy · `codec` JSON · `collection` arena, deque, heap · `math` scalar, rng · `status` errno, error, bug · `wire` XTP, TLV · `golden` the record reader | `abi` `codec` `collection` `math` `status` `wire` as the Rust, plus `kit` (comparators, iterators, types) and `env` (feature detection) |
+| **runtime** | `mem` sections, the base and the heap door · `ipc` frame, ring, stream, change log, the guest's doorbell · `sched` quantum, tick, pass, task, edge · `abi` handles, fetch · `clock` · `global`                | `mem` the reservation · `ipc` frame, ring, stream, the host's doorbell · `sched` quantum, **strobe** · `abi` handles, fetch             |
 
 The two rows differ in what they ask of a program. `core` asks nothing: link it and call it. `runtime` asks a program to run xpute's way — memory granted once, work in turns, I/O by credits.
 

@@ -1,11 +1,11 @@
 // @pxl/web/feature/setting/section/about.tsx
 
-import { Box } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
 import { SectionTitle, settingText } from "@/feature/setting/row.tsx";
-import { color, font } from "@/shared/ui/theme.ts";
+import { BrandSymbol } from "@/shared/ui/brand-symbol.tsx";
+import { color, textStyle } from "@/shared/ui/theme.ts";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
 import { PUBLISHED_VERSION } from "@/config/route.ts";
 import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
@@ -45,7 +45,7 @@ export function AboutSection() {
       <SectionTitle>{t("settings.about.section_title")}</SectionTitle>
       <View style={styles.body}>
         <View style={styles.name}>
-          <Box size={20} color={color.foreground} />
+          <BrandSymbol size={20} color={color.text} />
           <Text style={styles.nameText}>pixelet</Text>
         </View>
 
@@ -70,5 +70,5 @@ const styles = StyleSheet.create({
   section: { gap: 4 },
   body: { gap: 8, paddingVertical: 4 },
   name: { flexDirection: "row", alignItems: "center", gap: 8 },
-  nameText: { fontFamily: font.family, fontSize: 15, fontWeight: "600", color: color.foreground },
+  nameText: { ...textStyle.title, color: color.text },
 });

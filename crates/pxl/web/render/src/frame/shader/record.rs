@@ -40,12 +40,6 @@ pub const SHADER_CLOUD_FIELD: u32 = 19;
 pub const SHADER_SHEET: u32 = 20;
 pub const SHADERS: u32 = 21;
 
-/// The shaders that place a point of the world, each of which lays it on the
-/// planet as the ground is (globe.wgsl's `on_globe_of`) before it projects
-/// it: what is drawn over the map and not laid on it floats off the ground
-/// as the planet falls away. The rest draw the sky or work on the screen.
-pub const WORLD_SHADERS: [u32; 7] = [SHADER_CHUNK, SHADER_DECOR, SHADER_SKINNED, SHADER_PUCK_ZONE, SHADER_PUCK_BEACON, SHADER_BADGE, SHADER_DEBUG];
-
 /// A shader's pieces, as build.rs wrote them: the files beside this one with
 /// their comments and indentation off, since what ships is what the GPU
 /// compiles and the GPU does not read the prose; constant.wgsl, which every
@@ -259,7 +253,7 @@ struct Head {
 }
 
 /// The vertex entry points a record can name, indexed by VS and kin. The
-/// shell holds the same list against the same numbers (kernel/render/gpu.ts).
+/// shell holds the same list against the same numbers (apps/web/src/platform/web/webgpu.ts).
 pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_coarse"];
 
 /// The same pipeline entered at the coarse boxes' vertex entry point.

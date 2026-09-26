@@ -19,6 +19,8 @@ pxl-render = { path = "../render" }
 # The view's layer made a surface on (src/surface.rs); the device and every
 # call on it are pxl-render's.
 wgpu = { version = "30", default-features = false, features = ["metal", "wgsl"] }
+# The kernel's region, mapped from the system (src/memory.rs).
+libc = "0.2"
 
 [features]
 # Forwarded to the kernel, as pxl-wasm forwards it: on for a build anyone

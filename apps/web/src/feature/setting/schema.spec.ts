@@ -19,16 +19,10 @@
 // what crosses for it. `sources_chunks` marks one a chunk's build reads, so
 // that changing it builds the chunks again.
 
-/** The sections that are a development build's as a whole. One of these is
- * shown under `__IS_DEV__` only and carries the badge on its heading, so
- * its rows do not repeat it; a `dev` row in any other section carries its
- * own. Which rows exist in a build is the rows' `dev`, not this. */
-export const DEV_SECTIONS = ["debug"] as const;
-
 export const SETTINGS = {
-  /** Ground color from the art pack (four sampler2DArray taps per fragment)
-   * instead of the flat per-instance average. The shader's `u_low_spec` is
-   * this, inverted.
+  /** Ground color from the art pack (four taps of the layer array per
+   * fragment) instead of the flat per-instance average. The chunk shader's
+   * `frame.low_spec` is this, inverted.
    *
    * Low because the four taps are all of it: fill rate, which scales with
    * the screen and not with the world, and nothing else — no geometry, no
@@ -38,7 +32,7 @@ export const SETTINGS = {
    * It sources the chunks: the shader samples a leaf's layer or does not,
    * but a tier over it carries one color and no layer to sample, so which
    * color that is was baked in (mesh/chunk_mesher.rs). */
-  texture_pack: {
+  textures: {
     key: 0 as number,
     kind: "toggle",
     default: true,
@@ -46,8 +40,8 @@ export const SETTINGS = {
     cost: "low",
   },
   /** Whether the STRUCTURE ground channel is painted. The bake writes it
-   * either way (pipeline/overture/policy.rs); this is a render decision. */
-  show_structures: {
+   * either way (pxl-geo-bake terrain/pipeline/overture/policy.rs); this is a render decision. */
+  structures: {
     key: 1 as number,
     kind: "toggle",
     default: true,
@@ -63,7 +57,7 @@ export const SETTINGS = {
    * the nearest tier without making far decor cheap, the impostor tier that
    * would being decided and not built. The badge is an ordering, and this is
    * the one to reach for before any shading term. */
-  show_decor: {
+  decor: {
     key: 2 as number,
     kind: "toggle",
     default: true,
@@ -71,7 +65,7 @@ export const SETTINGS = {
     cost: "med",
   },
   /** The places' badges over the map, from the published POI pages. */
-  show_poi: {
+  poi: {
     key: 3 as number,
     kind: "toggle",
     default: false,
@@ -81,17 +75,19 @@ export const SETTINGS = {
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
    * Off by default: the tilt is the one control a map view is expected to
    * have, and locking it reads as the app being stuck. */
-  lock_camera_tilt: {
+  tilt_lock: {
     key: 4 as number,
     kind: "toggle",
     default: false,
     section: "camera",
   },
-  /** climb, because the one thing a map camera must not do is refuse to
+  /** What the camera does when the controls would put it underground;
+   * CAMERA_COLLISION_MODES says each. The default is climb, because the one
+   * thing a map camera must not do is refuse to
    * move. stop is the more literal answer and the worse default: it hands
    * back a control that did nothing, which reads as the app being stuck
    * rather than as the ground being in the way. */
-  camera_terrain: {
+  camera_collision: {
     key: 5 as number,
     kind: "choice",
     default: "climb",
@@ -109,7 +105,7 @@ export const SETTINGS = {
   },
   /** The eraser digs into the baked terrain where nothing is placed. Off by
    * default: the terrain is real map data, not the player's scratch canvas. */
-  enable_terrain_carving: {
+  terrain_carving: {
     key: 7 as number,
     kind: "toggle",
     default: false,
@@ -118,7 +114,7 @@ export const SETTINGS = {
   },
   /** Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
-  show_edge_shade: {
+  edge_shade: {
     key: 8 as number,
     kind: "toggle",
     default: true,
@@ -126,7 +122,7 @@ export const SETTINGS = {
     cost: "low",
   },
   /** A uniform on an already-compiled shader term; not a pass. */
-  show_rim_light: {
+  rim_light: {
     key: 9 as number,
     kind: "toggle",
     default: true,
@@ -134,8 +130,8 @@ export const SETTINGS = {
     cost: "low",
   },
   /** corner, the occlusion a voxel world gets from its own geometry with no
-   * screen-space pass; screen, the three.js build's N8AO, kept to be put
-   * beside it. AO_MODES says each. */
+   * screen-space pass; screen, N8AO's screen-space pass, the costliest of
+   * the three. AO_MODES says each. */
   ao: {
     key: 10 as number,
     kind: "choice",
@@ -147,7 +143,7 @@ export const SETTINGS = {
   /** The sun's shadow map (crates/pxl/web/render/src/gpu/shadow.rs): the world drawn once more
    * from the sun each frame, depth only, and a 3x3 compare per fragment;
    * 16 MB of map on a desktop, 4 on a phone. */
-  show_shadow_map: {
+  shadows: {
     key: 11 as number,
     kind: "toggle",
     default: false,
@@ -176,29 +172,27 @@ export const SETTINGS = {
     section: "quality",
     cost: "low",
   },
-  /** The debug gizmos: frame origins, page corners, the map center and the rings. */
-  show_debug_objects: {
+  /** The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
+  profiler: {
     key: 14 as number,
     kind: "toggle",
     default: false,
     section: "debug",
-    dev: true,
   },
-  /** The scheduler ledger's corner panel. The console stream is a button on it. */
-  show_ledger: {
+  /** Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs). */
+  gizmos: {
     key: 15 as number,
     kind: "toggle",
     default: false,
     section: "debug",
-    dev: true,
   },
-  person_variant: {
+  person: {
     key: 16 as number,
     kind: "number",
     default: 1 as number,
     section: "character",
   },
-  pet_variant: {
+  pet: {
     key: 17 as number,
     kind: "number",
     default: 5 as number,
@@ -208,9 +202,9 @@ export const SETTINGS = {
 
 /** SETTINGS without its `dev` entries: what a production bundle carries in its place. */
 export const SETTINGS_SHIPPED = {
-  /** Ground color from the art pack (four sampler2DArray taps per fragment)
-   * instead of the flat per-instance average. The shader's `u_low_spec` is
-   * this, inverted.
+  /** Ground color from the art pack (four taps of the layer array per
+   * fragment) instead of the flat per-instance average. The chunk shader's
+   * `frame.low_spec` is this, inverted.
    *
    * Low because the four taps are all of it: fill rate, which scales with
    * the screen and not with the world, and nothing else — no geometry, no
@@ -220,7 +214,7 @@ export const SETTINGS_SHIPPED = {
    * It sources the chunks: the shader samples a leaf's layer or does not,
    * but a tier over it carries one color and no layer to sample, so which
    * color that is was baked in (mesh/chunk_mesher.rs). */
-  texture_pack: {
+  textures: {
     key: 0 as number,
     kind: "toggle",
     default: true,
@@ -228,8 +222,8 @@ export const SETTINGS_SHIPPED = {
     cost: "low",
   },
   /** Whether the STRUCTURE ground channel is painted. The bake writes it
-   * either way (pipeline/overture/policy.rs); this is a render decision. */
-  show_structures: {
+   * either way (pxl-geo-bake terrain/pipeline/overture/policy.rs); this is a render decision. */
+  structures: {
     key: 1 as number,
     kind: "toggle",
     default: true,
@@ -245,7 +239,7 @@ export const SETTINGS_SHIPPED = {
    * the nearest tier without making far decor cheap, the impostor tier that
    * would being decided and not built. The badge is an ordering, and this is
    * the one to reach for before any shading term. */
-  show_decor: {
+  decor: {
     key: 2 as number,
     kind: "toggle",
     default: true,
@@ -253,7 +247,7 @@ export const SETTINGS_SHIPPED = {
     cost: "med",
   },
   /** The places' badges over the map, from the published POI pages. */
-  show_poi: {
+  poi: {
     key: 3 as number,
     kind: "toggle",
     default: false,
@@ -263,7 +257,7 @@ export const SETTINGS_SHIPPED = {
   /** Rotate-drag and pinch stop writing polar; azimuth is unaffected.
    * Off by default: the tilt is the one control a map view is expected to
    * have, and locking it reads as the app being stuck. */
-  lock_camera_tilt: {
+  tilt_lock: {
     key: 4 as number,
     kind: "toggle",
     default: false,
@@ -271,7 +265,7 @@ export const SETTINGS_SHIPPED = {
   },
   /** Darkens cube edges that border open air (crates/pxl/web/render/src/frame/shader/chunk.wgsl).
    * A few fragment ops behind a uniform; the shader is the same either way. */
-  show_edge_shade: {
+  edge_shade: {
     key: 8 as number,
     kind: "toggle",
     default: true,
@@ -279,7 +273,7 @@ export const SETTINGS_SHIPPED = {
     cost: "low",
   },
   /** A uniform on an already-compiled shader term; not a pass. */
-  show_rim_light: {
+  rim_light: {
     key: 9 as number,
     kind: "toggle",
     default: true,
@@ -287,8 +281,8 @@ export const SETTINGS_SHIPPED = {
     cost: "low",
   },
   /** corner, the occlusion a voxel world gets from its own geometry with no
-   * screen-space pass; screen, the three.js build's N8AO, kept to be put
-   * beside it. AO_MODES says each. */
+   * screen-space pass; screen, N8AO's screen-space pass, the costliest of
+   * the three. AO_MODES says each. */
   ao: {
     key: 10 as number,
     kind: "choice",
@@ -318,13 +312,27 @@ export const SETTINGS_SHIPPED = {
     section: "quality",
     cost: "low",
   },
-  person_variant: {
+  /** The performance overlay: the profiler's panel, and the profiler recording while it is on (sched/profiler/log.rs `profiler_follow`). */
+  profiler: {
+    key: 14 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+  },
+  /** Markers for the map center and the cell it floors to, the floating origin, the page's corners and the two gyro rings (layer/marker/frame_gizmo.rs). */
+  gizmos: {
+    key: 15 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+  },
+  person: {
     key: 16 as number,
     kind: "number",
     default: 1 as number,
     section: "character",
   },
-  pet_variant: {
+  pet: {
     key: 17 as number,
     kind: "number",
     default: 5 as number,

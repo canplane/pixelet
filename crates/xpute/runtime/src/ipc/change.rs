@@ -51,18 +51,6 @@ pub struct ChangeLogOptions {
     pub keys_per_topic: Option<u32>,
 }
 
-/// What a reader walks: the journal's lanes and positions. ChangeLog is one;
-/// a log kept in a WASM core and read through views is another.
-pub trait ChangeJournal {
-    fn topics(&self) -> u32;
-    fn head(&self) -> Cursor;
-    fn readable(&self, cursor: Cursor) -> bool;
-    fn slot(&self, position: Cursor) -> u32;
-    fn topic(&self) -> &[u16];
-    fn key(&self) -> &[i64];
-    fn revision(&self) -> &[u32];
-}
-
 pub struct ChangeLog {
     pub capacity: u32,
 
@@ -174,30 +162,6 @@ impl ChangeLog {
             off_of(&raw const self._head),
             off_of(self.ticks.as_ptr()),
         ]
-    }
-}
-
-impl ChangeJournal for ChangeLog {
-    fn topics(&self) -> u32 {
-        ChangeLog::topics(self)
-    }
-    fn head(&self) -> Cursor {
-        ChangeLog::head(self)
-    }
-    fn readable(&self, cursor: Cursor) -> bool {
-        ChangeLog::readable(self, cursor)
-    }
-    fn slot(&self, position: Cursor) -> u32 {
-        ChangeLog::slot(self, position)
-    }
-    fn topic(&self) -> &[u16] {
-        &self.topic
-    }
-    fn key(&self) -> &[i64] {
-        &self.key
-    }
-    fn revision(&self) -> &[u32] {
-        &self.revision
     }
 }
 

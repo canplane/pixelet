@@ -5,7 +5,7 @@
 //! frame (pxl-render's gpu/renderer.rs) — the draw list the scheduler left,
 //! the environment, the models and skins as they stand — with what it hands
 //! back: whether another turn is wanted, and what the frame cost, for the
-//! ledger. The renderer reads nothing of the kernel on its own.
+//! profiler. The renderer reads nothing of the kernel on its own.
 
 use pxl_render::frame::stage::{stage_lane_mut, AO_STRENGTH, EDGE_STRENGTH, EDGE_WIDTH, STAGE_AT};
 use pxl_render::gpu::pass::decor::GROUPS;
@@ -30,7 +30,7 @@ use crate::layer::character::companion::companion_skins;
 use crate::layer::character::preview::preview_rows;
 use crate::layer::decor::asset_store::decor_bundle_assets;
 use crate::layer::environment::config::rim_cfg;
-use crate::sched::ledger::record::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
+use crate::sched::profiler::record::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
 use crate::shell::setting::store::{settings_store, AoMode};
 use crate::text::text_raster;
 use crate::world::change::request_world_tick;
@@ -62,13 +62,13 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::FAR] = v.far;
     (s[STAGE_AT::FADE_START], s[STAGE_AT::FADE_END]) = fade_range();
     s[STAGE_AT::LOD_CELL] = Terrain::pyramid().domain().map_or(2.0 / split_distance(0), Domain::cell_per_distance);
-    s[STAGE_AT::EDGE_STRENGTH] = if settings.show_edge_shade { EDGE_STRENGTH } else { 0.0 };
+    s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
-    s[STAGE_AT::LOW_SPEC] = if settings.texture_pack { 0.0 } else { 1.0 };
+    s[STAGE_AT::LOW_SPEC] = if settings.textures { 0.0 } else { 1.0 };
     s[STAGE_AT::EDGE_WIDTH] = EDGE_WIDTH;
-    s[STAGE_AT::RIM_INTENSITY] = if settings.show_rim_light { rim_cfg::INTENSITY } else { 0.0 };
-    s[STAGE_AT::SHADOWS] = if settings.show_shadow_map { 1.0 } else { 0.0 };
+    s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { rim_cfg::INTENSITY } else { 0.0 };
+    s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
     s[STAGE_AT::RESOLUTION] = resolution;
 }
 

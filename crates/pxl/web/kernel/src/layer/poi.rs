@@ -15,7 +15,7 @@ use xpute_runtime::abi::fetch::FetchFail;
 
 use crate::global::Global;
 use crate::io::demand::{Category, Phases};
-use crate::sched::ledger::record::Failure;
+use crate::sched::profiler::record::Failure;
 use crate::shell::setting::store::settings_store;
 use crate::world::pyramid::{Layer, Pyramid};
 
@@ -50,7 +50,7 @@ impl Layer for PoiPage {
 }
 
 pub fn enabled() -> bool {
-    settings_store().show_poi
+    settings_store().poi
 }
 
 /// The layer's turn: its pyramid's while places are shown, and nothing asked

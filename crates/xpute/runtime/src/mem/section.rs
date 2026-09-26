@@ -16,12 +16,6 @@
 //! where it lies. What the ranges are for, and how large each one is, is the
 //! kernel's own policy, and nothing here reads it.
 
-/// A WebAssembly page.
-pub const WASM_PAGE_BYTES: u32 = 1 << 16;
-
-/// Words a section takes in a boot block: its offset, bytes and alignment.
-pub const SECTION_WORDS: u32 = 3;
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Section {
     pub offset: u32,
@@ -87,20 +81,6 @@ pub const fn span_of(sizes: &[u32], unit: u32) -> u32 {
 /// Where the `n`th of `sizes` begins, laid from `base` on `unit`.
 pub const fn nth_at(base: u32, sizes: &[u32], unit: u32, n: usize) -> u32 {
     base + span_of(sizes.split_at(n).0, unit)
-}
-
-/// Writes a section's words at `at`.
-pub fn write_section(words: &mut [u32], at: usize, s: Section) {
-    words[at..at + SECTION_WORDS as usize].copy_from_slice(&[s.offset, s.bytes, s.align]);
-}
-
-/// The section whose words are at `at`.
-pub fn read_section(words: &[u32], at: usize) -> Section {
-    Section {
-        offset: words[at],
-        bytes: words[at + 1],
-        align: words[at + 2],
-    }
 }
 
 #[cfg(test)]

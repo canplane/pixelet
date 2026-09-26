@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { View } from "react-native";
 
-import { isDevSection, type Setting, type SettingName, SETTINGS, type SettingSection, settingsIn } from "@/feature/setting/schema.ts";
+import { type Setting, type SettingName, SETTINGS, type SettingSection, settingsIn } from "@/feature/setting/schema.ts";
 import { SectionTitle, SettingGroup, SettingRadioRow, SettingRow } from "./row.tsx";
 import { Command, encode_setting_toggle, encode_setting_update } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
@@ -27,20 +27,13 @@ const SECTION_ICONS: Partial<Record<SettingSection, LucideIcon>> = {
 export function SettingsSection(props: { section: SettingSection; children?: ReactNode }) {
   const { section, children } = props;
   const { t } = useTranslation();
-  // A dev section is a development build's as a whole (schema.json's
-  // DEV_SECTIONS); the constant folds, so outside dev the section is not in
-  // the bundle at all. Its rows would not be either — the table is the
-  // build's own (schema.ts) — but the section says so once, here, rather than
-  // being found empty.
-  const dev = isDevSection(section);
-  if (!__IS_DEV__ && dev) return null;
   const keys = settingsIn(section);
   // A section whose every entry is dev-only has nothing to show outside dev.
   if (keys.length === 0 && children === undefined) return null;
 
   return (
     <View style={{ gap: 4 }}>
-      <SectionTitle icon={SECTION_ICONS[section]} caption={t(`settings.${section}.section_caption`)} dev={dev}>
+      <SectionTitle icon={SECTION_ICONS[section]} caption={t(`settings.${section}.section_caption`)}>
         {t(`settings.${section}.section_title`)}
       </SectionTitle>
       {keys.map((key) => <SettingControl key={key} name={key} />)}
@@ -66,12 +59,12 @@ function SettingControl(props: { name: SettingName }) {
           active={value === 1}
           onToggle={() => kernel_command(Command.SETTING_TOGGLE, encode_setting_toggle({ key }))}
           cost={setting.cost}
-          dev={setting.dev && !isDevSection(setting.section)}
+          dev={setting.dev}
         />
       );
     case "choice":
       return (
-        <SettingGroup label={t(`${base}.label`)} cost={setting.cost} dev={setting.dev && !isDevSection(setting.section)}>
+        <SettingGroup label={t(`${base}.label`)} cost={setting.cost} dev={setting.dev}>
           {setting.options.map((option, i) => (
             <SettingRadioRow
               key={option}

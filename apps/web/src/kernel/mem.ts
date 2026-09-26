@@ -18,23 +18,23 @@ import { Doorbell } from "@xpute/runtime/ipc/doorbell.ts";
 import { open_core } from "@platform/core.ts";
 import { BOOT, boot_block, type Core } from "@/kernel/module.ts";
 import { run_host_stream } from "@/kernel/host.ts";
-import { run_gpu_stream } from "@/kernel/render/gpu.ts";
 
-// Set once by `load_core`, which the host's boot awaits before anything that
-// reads them can run (platform/web/host.ts): the core arrives over the
-// network on a page, and a bundle that cannot wait on a module's import —
-// Metro's — waits on the boot instead.
+// Set once by `load_core`, which the boot awaits before anything that reads
+// them can run (kernel.ts `boot_kernel`): the core arrives over the network on
+// a page, and a bundle that cannot wait on a module's import — Metro's —
+// waits on the boot instead.
 
 /** The core, booted: the kernel has laid the memory out before anything here
  * reads it. */
 export let CORE: Core;
 
 /** The rings to the core and its doorbell, made with it. A turn's falling
- * edge leaves what the kernel asks of the host in its streams, run before
- * anything else can reach the device or ring again: the host's always, the
- * renderer's where the core records its calls for the host to make rather
- * than drawing itself. A turn that traps leaves its report in the host's: the
- * broken invariant's errno and place (xpute-core status/bug.rs). */
+ * edge leaves what the kernel asks of the host in the host stream, run before
+ * anything else can ring again — and where the core records its GPU calls
+ * rather than making them, the platform's core runs those inside the turn it
+ * was handed (platform/web/core.ts). A turn that traps leaves its report in
+ * the host stream: the broken invariant's errno and place (xpute-core
+ * status/bug.rs). */
 export let CORE_DOORBELL: Doorbell;
 
 /** Opens the core and makes its doorbell. A core that fails to open fails the
@@ -50,7 +50,6 @@ export async function load_core(): Promise<void> {
     } finally {
       run_host_stream(core.buffer, boot[BOOT.host]);
     }
-    if (boot[BOOT.gpu] !== 0) run_gpu_stream(core.buffer, boot[BOOT.gpu]);
     return wake;
   });
 }

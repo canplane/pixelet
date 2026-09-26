@@ -7,7 +7,13 @@ import { messageKey as locationMessageKey } from "@/locale/message-key.ts";
 import { DevicePoseStatus, MapStatus } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
-import { toastDismiss, toastShow } from "@/shared/ui/toast/store.ts";
+import { toastDismiss, toastShow, ToastTone } from "@/shared/ui/toast/store.ts";
+
+/** The reports the map keeps up, each one toast that replaces itself. */
+export const enum Report {
+  Location = 0,
+  World = 1,
+}
 
 export function ToastController() {
   const { t } = useTranslation();
@@ -23,7 +29,7 @@ export function ToastController() {
   // The L3 page the map center falls in — what "the area I am looking at"
   // means to the kernel, and the key the world toast is announced per.
   const mapPage = useKernel((s) => s.map.page);
-  // Merged with mapStatus below into a single "world-status" toast, not a
+  // Merged with mapStatus below into a single Report.World toast, not a
   // toast of its own — both represent the same thing to a viewer ("is the
   // world I'm looking at actually ready yet"), unlike locationStatus
   // (device GPS sensor state, a genuinely separate concern that keeps its
@@ -43,16 +49,16 @@ export function ToastController() {
 
     if (!isLoading && !isError) {
       if (shownLocationToastRef.current) {
-        toastDismiss("location-status");
+        toastDismiss(Report.Location);
         shownLocationToastRef.current = false;
       }
       return;
     }
 
     shownLocationToastRef.current = true;
-    toastShow("location-status", {
+    toastShow(Report.Location, {
       message: isError ? (locationErrorKey ? tRef.current(locationErrorKey) : tRef.current("toast.location_weak_signal")) : tRef.current("toast.location_checking"),
-      tone: isError ? "error" : "loading",
+      tone: isError ? ToastTone.Error : ToastTone.Loading,
     });
   }, [locationStatus, locationErrorKey]);
 
@@ -74,14 +80,14 @@ export function ToastController() {
       dismissTimerRef.current = null;
     }
     if (!shownWorldToastRef.current) return;
-    toastDismiss("world-status");
+    toastDismiss(Report.World);
     shownWorldToastRef.current = false;
   };
   useEffect(() => dropWorldToast, []);
   // Once the companion has completed its very first load, every later
   // person_ready/pet_ready dip is from the user swapping a variant in
-  // settings (Walker remounts on a key change, so a fresh instance briefly
-  // reports not-ready) — a costume change, not the world going unready —
+  // settings (the companion replaces its walker on a variant switch, and a
+  // new one starts unloaded) — a costume change, not the world going unready —
   // so companion_loading stops feeding this toast after that point.
   const companionFirstLoadDoneRef = useRef(false);
   useEffect(() => {
@@ -112,7 +118,7 @@ export function ToastController() {
       // nothing left to report.
       const messageKey = isError ? "toast.map_load_error" : isMapLoading ? "toast.map_loading" : "toast.companion_loading";
       shownWorldToastRef.current = true;
-      toastShow("world-status", { message: tRef.current(messageKey), tone: isError ? "error" : "loading" });
+      toastShow(Report.World, { message: tRef.current(messageKey), tone: isError ? ToastTone.Error : ToastTone.Loading });
       return;
     }
 
@@ -124,10 +130,10 @@ export function ToastController() {
     }
     announcedPageRef.current = mapPage;
     shownWorldToastRef.current = true;
-    toastShow("world-status", { message: tRef.current("toast.world_ready"), tone: "ready" });
+    toastShow(Report.World, { message: tRef.current("toast.world_ready"), tone: ToastTone.Ready });
     dismissTimerRef.current = setTimeout(() => {
       dismissTimerRef.current = null;
-      toastDismiss("world-status");
+      toastDismiss(Report.World);
       shownWorldToastRef.current = false;
     }, 3000);
   }, [mapStatus, companion_loading, mapPage]);

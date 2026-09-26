@@ -1,16 +1,16 @@
 # Architecture — pixelet
 
-[pixelet](./README.md) turns geographic data and player-built blocks into one voxel world and draws it in a browser. It is an application written over [xpute](./ARCHITECTURE.xpute.md): a Rust kernel that runs as xpute's guest in one WebAssembly module, a TypeScript shell that is xpute's host, and Rust servers and bakes that share the kernel's model. This document is what pixelet builds; what it builds on — the memory, the rings, the turn, the credits — is the other one.
+[pixelet](./README.md) turns geographic data and player-built blocks into one voxel world and draws it in a browser tab or a device app. It is an application written over [xpute](./ARCHITECTURE.xpute.md): a Rust kernel that runs as xpute's guest, a TypeScript shell that is xpute's host, and Rust servers and bakes that share the kernel's model. The kernel is one WebAssembly module in a tab and a library linked into the app on a device; the shell is the same on both. This document is what pixelet builds; what it builds on — the memory, the rings, the turn, the credits — is the other one.
 
-Most of what follows is shaped by where it has to run: a phone, in a browser tab, with a frame to fill. That is why the reservation is halved there, why a chunk's working storage is torn down as soon as it is scanned, and why detail is the first thing spent when memory runs short.
+Most of what follows is shaped by where it has to run: a phone, in a browser tab or an app, with a frame to fill. That is why the reservation is halved there, why a chunk's working storage is torn down as soon as it is scanned, and why detail is the first thing spent when memory runs short.
 
 Three properties hold everywhere. The first two are xpute's and everything here lives inside them; the third is pixelet's own.
 
 - The world's state lives in **one linear memory**, fixed at boot.
 - All work runs in **turns under one quota**.
-- What the client measures about itself goes to a **read-only ledger**. No decision reads it.
+- What the client measures about itself goes to a **read-only profiler**. No decision reads it.
 
-This document is in three parts. **The world** is the vocabulary: what a position is, what each level addresses, and what arrives at one. **The client** is the machine that holds it — the crates, the two sides of the browser tab, and how a turn is spent. **The engine** is what is computed with it, from a chunk being built to a frame being drawn.
+This document is in three parts. **The world** is the vocabulary: what a position is, what each level addresses, and what arrives at one. **The client** is the machine that holds it — the crates, the shell and the kernel on either side of it, and how a turn is spent. **The engine** is what is computed with it, from a chunk being built to a frame being drawn.
 
 ---
 
@@ -44,7 +44,7 @@ One more word belongs to the renderer rather than to the model. A **Band** is on
 | terrain + object, for build | L2 Chunk           | Volume | a volume of bands (`pxl-render mesh/volume.rs`) |
 | any                         | L4 Anchor          | —      | the view's frame of reference                   |
 
-Objects are client-local. The store (`pxl-kernel layer/object/store.rs`) keeps a sparse octree per occupied band, leaves being catalog values, and derives the chunk's entries as columns inside every write, in the trees' walk order, so a cell's entries are one run found by a binary search — the occupancy and hit queries read no index of their own. It persists to `localStorage` as five columns per page — page-local `x`, `y` and `z`, footprint side, value — under a key that carries the layout's version. One chunk — a slot of `world/chunk/table.rs`, built by `world/chunk/build.rs` — is one L2 cube of its level, named by level and x, y and z (`world/pyramid/chunk.rs`); it composes the column it stands in, as many signed 64-cell Z bands as the column's content touches, and bakes the part in its own heights. A page holds 64 columns, and a column as many chunks as its ground and objects reach through.
+Objects are client-local. The store (`pxl-kernel layer/object/store.rs`) keeps a sparse octree per occupied band, leaves being catalog values, and derives the chunk's entries as columns inside every write, in the trees' walk order, so a cell's entries are one run found by a binary search — the occupancy and hit queries read no index of their own. It persists to the platform's storage — `localStorage` in a tab, `UserDefaults` on a device — as five columns per page — page-local `x`, `y` and `z`, footprint side, value — under a key that carries the layout's version. One chunk — a slot of `world/chunk/table.rs`, built by `world/chunk/build.rs` — is one L2 cube of its level, named by level and x, y and z (`world/pyramid/chunk.rs`); it composes the column it stands in, as many signed 64-cell Z bands as the column's content touches, and bakes the part in its own heights. A page holds 64 columns, and a column as many chunks as its ground and objects reach through.
 
 ## Coordinate System — PVF3
 
@@ -110,7 +110,7 @@ Those pages are the leaves, z16. A view from farther away wants fewer, coarser p
 
 # The client
 
-Two things run in the tab: a kernel that decides and a shell that carries out. Where a piece of code lives follows from that, and so does which language it is written in.
+Two things run on the client: a kernel that decides and a shell that carries out. Where a piece of code lives follows from that, and so does which language it is written in.
 
 ## Crates and packages
 
@@ -133,45 +133,51 @@ view                  │     │              │ pxl-render    │            
                       │     │              ┌───────▼───────┐            pxl-server · pxl-geo-spec
 kernel                │     │              │ pxl-kernel    │            beneath them, no model
                       │     │              └───────┬───────┘
-                      │     │              ┌───────▼───────┐
-module                │     │              │ pxl-wasm      │
-                      │     ▼              └───────┬───────┘
-              ┌───────▼─────────────┐              │ kernel.wasm
-app           │ apps/web  *.spec.ts │◀─────────────┘
-              └─────────────────────┘
+                      │     │                      ├──────────────────────────┐
+                      │     │              ┌───────▼───────┐          ┌───────▼───────┐
+bracket               │     │              │ pxl-wasm      │          │ pxl-native    │
+                      │     ▼              └───────┬───────┘          └───────┬───────┘
+              ┌───────▼─────────────┐              │ kernel.wasm    ┌─────────▼─────────┐
+app           │ apps/web  *.spec.ts │◀─────────────┘                │ apps/native       │
+              └──────────┬──────────┘                               └─────────▲─────────┘
+                         └──── the same shell, its own @platform/ ────────────┘
 ```
 
-| Crate / package | What it is                                                                                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pxl-spec`      | The model: PVF3, the spatial hierarchy, the cell catalogs, the command numbers, the page formats, the asset tables. One implementation, in Rust. |
-| `pxl-render`    | The view: volumes, the column scan, the mesher, glTF, the LOD criterion's reference, the atlas, the draw list, the shaders, the renderer.        |
-| `pxl-kernel`    | The kernel: the chunk scheduler, the layers and their stores, fetches and loads, the camera and sensors, the turn, the ledger.                   |
-| `pxl-wasm`      | The module: installs the allocator and the executor, fixes the memory's front with linker flags, imports the clock and exports `interrupt`.      |
-| `apps/web`      | The shell: React over the kernel's snapshot, the WebGPU host, the I/O the kernel names; and the Cloudflare Worker that serves it all.            |
-| `pxl-server`    | What both servers need before answering: the environment variables, the database pool, the gate over internal routes.                            |
-| `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                         |
-| `pxl-geo`       | The world's server. Forward search — the one route that queries a database at request time.                                                      |
-| `pxl-api`       | The application's server.                                                                                                                        |
-| `pxl-geo-bake`  | The three offline bakes — terrain, POI, geocode — and, behind a feature, the dev tile server.                                                    |
-| `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables `pxl-spec` and the shell carry; bakes the stars, the Moon, the brand.        |
+| Crate / package | What it is                                                                                                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pxl-spec`      | The model: PVF3, the spatial hierarchy, the cell catalogs, the command numbers, the page formats, the asset tables. One implementation, in Rust.                                                 |
+| `pxl-render`    | The view: volumes, the column scan, the mesher, glTF, the LOD criterion's reference, the atlas, the draw list, the shaders, the renderer.                                                        |
+| `pxl-kernel`    | The kernel: the chunk scheduler, the layers and their stores, fetches and loads, the camera and sensors, the turn, the profiler.                                                                 |
+| `pxl-wasm`      | The kernel in a tab: one module that fixes the memory's front with linker flags, imports the clock and exports `interrupt`.                                                                      |
+| `pxl-native`    | The kernel on a device: a static library that takes its memory from the system, runs every call on a thread of its own, and exports `pxl_interrupt` and the surface's binding through the C ABI. |
+| `apps/web`      | The shell, both apps': React Native over the kernel's snapshot, the I/O the kernel names, and what only a page does — the WebGPU host among it; and the Cloudflare Worker that serves it all.    |
+| `apps/native`   | The device app: the shell run by Metro, what only a device does, and the native module that links the kernel.                                                                                    |
+| `pxl-server`    | What both servers need before answering: the environment variables, the database pool, the gate over internal routes.                                                                            |
+| `pxl-geo-spec`  | What the geo server and the bakes agree on about db-geo: table names, and what Overture's categories and divisions mean.                                                                         |
+| `pxl-geo`       | The world's server. Forward search — the one route that queries a database at request time.                                                                                                      |
+| `pxl-api`       | The application's server.                                                                                                                                                                        |
+| `pxl-geo-bake`  | The three offline bakes — terrain, POI, geocode — and, behind a feature, the dev tile server.                                                                                                    |
+| `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables `pxl-spec` and the shell carry; bakes the stars, the Moon, the brand.                                                        |
 
 The servers, the bakes and the asset ingest all compile the model, so they are crates. The Overture and elevation ingests move a provider's columns into Postgres columns and touch no model, so they are scripts under `infra/geo/`. The shell is TypeScript because it decides nothing about the world; what it needs of the model — catalogs, ABI enums, routes — is generated into `apps/web/src/**/*.spec.ts` from the same JSON the Rust is generated from.
 
 Three rules hold the graph in that shape:
 
 - **The view does not know the kernel.** `pxl-render` sees the model and a `FrameInput`, and returns what a frame cost.
-- **The kernel does not know it is WebAssembly.** The host's clock, storage and text measurement arrive as hooks `pxl-wasm` installs, so the kernel runs natively under `cargo test`.
+- **The kernel does not know which bracket holds it.** A **bracket** is what gives the kernel a place to run: `pxl-wasm` in a tab, `pxl-native` on a device. It hands in the memory, the clock, the allocator's reading and where to say what stopped the kernel (`door.rs` `Bracket`), and the kernel asks everything else of the host in records the host runs after the turn — storage, text, a body's bytes (`host.rs`). So the kernel also runs under `cargo test`, with no bracket at all. The one thing the target decides is how the renderer's calls are made: recorded for the page's WebGPU on wasm32, made through wgpu anywhere else (`pxl-render gpu/api.rs`).
 - **Nothing is found by name.** Commands, cells, decor kinds (what the world grows on its own — trees, cars, boats, trains), character variants (the people and pets a player can be), assets and messages are numbers fixed in data. The words a message is shown in belong to the shell's locale files.
 
 ## Shell and kernel
 
 The shell is a device driver (`apps/web/src/kernel/`). It does five things:
 
-- Reserves the memory and instantiates the module (`mem.ts`, `module.ts`).
+- Opens the kernel: reserves the memory and instantiates the module over it in a tab, asks the app's native module for the linked kernel's memory on a device (`platform/core.ts`, `mem.ts`, `module.ts`).
 - Rings the doorbell once per animation frame, when something asked for one.
-- Forwards pointer, wheel, sensor and visibility events as commands.
-- Does the I/O the kernel names — fetches, image decodes, sensor watches — and hands the bytes to blocks the kernel chose.
-- Hands over canvases. A canvas is transferred to an `OffscreenCanvas` once and drawn by the kernel from then on, named by a handle like any GPU object.
+- Forwards pointer, wheel, sensor and visibility events as commands (`control/input.ts`).
+- Does the I/O the kernel names — fetches, image decodes, sensor watches, storage, a line of text laid out or drawn — and hands the bytes to blocks the kernel chose.
+- Hands over surfaces, each named by a handle like any GPU object. In a tab a canvas is transferred to an `OffscreenCanvas` once; on a device a view binds its own Metal layer to the handle while it has one, and the kernel draws into it directly.
+
+Both apps run this one tree of TypeScript. What differs between a page and a device is behind one import prefix, `@platform/`, which each app resolves to its own directory: `apps/web/src/platform/web/` for Vite, `apps/native/src/platform/` for Metro. Each module there exports what its twin does — a check fails the gate if a device's module lacks a name the page's has (`platform/conform.ts`) — and the device's modules reach the system through one native module of the app's (`apps/native/modules/platform/`). A device's kernel runs every call on a thread of its own, with a stack it sizes, while the caller waits ([a device's kernel on a thread of its own](./issue/20260926-a-device-s-kernel-on-a-thread-of-its-own.md)).
 
 The UI is React over one snapshot, a packet the kernel writes after a turn in which something changed. Every control is a command of its own that the kernel applies. Nothing in the shell computes a coordinate, a tile or a draw.
 
@@ -216,13 +222,13 @@ What the policy says: the frame is the 25th percentile of recent gaps between fr
 | `visible`     | the chunk scheduler's pass                                                                                                                                           |
 | `content`     | what is about to be on screen; guaranteed `content_share` of the budget                                                                                              |
 | `cosmetic`    | what only looks better for running (debug gizmos)                                                                                                                    |
-| `report`      | the ledger, last, so it sees everything                                                                                                                              |
+| `report`      | the profiler, last, so it sees everything                                                                                                                            |
 
 **The tasks** run on `embassy-executor`'s raw executor, which the module installs. The frame is a task rather than a function so that the order above is its own, and no task depends on the order the executor happens to poll them in.
 
 **The credits** bound what is out, and one place spends them (`io/sched.rs`). A producer says only what it wants — the subjects it wants read, each with a rank, replacing whatever it said last turn — and never that an attempt should start, stop or be retried. What is wanted, what is running and what has just failed are three tables, so an attempt ending answers nothing about the demand that outlived it, a failure waits rather than asking straight back, and the demand of a camera that has just moved is representable however much old work is still draining. A rank is a class and a distance; the numbers behind both are in one module (`io/policy.rs`) rather than one per layer, and a model or a texture is a read like any other, spending the same credits as a page rather than bidding against it from a second scheduler.
 
-**The ledger** (`sched/ledger`, laid out by `spec/pxl/web/kernel/sched/ledger/ledger.json`) records what each frame and each task cost — pacing, per-phase time, GPU ask, heap gauges, LOD pressure, draw census, per-job waits — into rings the shell reads in place (`LEDGER_READ`, `LEDGER_TAKE`) and prints as a report or exports as a Chrome trace. The scheduler never reads them.
+**The profiler** (`sched/profiler`, laid out by `spec/pxl/web/kernel/sched/profiler/profiler.json`) records what each frame and each task cost — pacing, per-phase time, GPU ask, heap gauges, LOD pressure, draw census, per-job waits — into rings the shell reads in place (`PROFILER_READ`, `PROFILER_TAKE`) and prints as a report or exports as a Chrome trace. The scheduler never reads them.
 
 ## The channel
 
@@ -236,7 +242,9 @@ The world's change log (`world/change.rs`) keeps what is stored: a column's revi
 
 ## The memory map
 
-The client's state is one `WebAssembly.Memory`, 1 GiB on the desktop and 512 MiB on a phone, `initial == maximum`, never grown. Since it never moves, a ring keeps its words and a table is read where it lies for the module's whole life — the way Figma's editor core holds every object as a range inside one pre-allocated array. A phone gets half because JavaScriptCore counts the whole reservation as the tab's JavaScript memory, committed or not.
+The client's state is one memory, reserved once and never grown: in a tab a `WebAssembly.Memory`, 1 GiB on the desktop and 512 MiB on a phone, `initial == maximum`; on a device one region of 512 MiB the library takes from the system on the first call (`pxl-native memory.rs`), zeroed and committed page by page as it is touched. Since it never moves, a ring keeps its words and a table is read where it lies for the kernel's whole life — the way Figma's editor core holds every object as a range inside one pre-allocated array. A phone's tab gets half because JavaScriptCore counts the whole reservation as the tab's JavaScript memory, committed or not.
+
+Every address the kernel names is an offset from the memory's first byte (xpute's `mem/base.rs`), which is address zero in a module and the region's start on a device. So the map below holds on both, and the shell reads the same numbers either way. On a device the stack and the library's own data are where the system put them, outside the region, so the two ranges the map keeps for them below — `.stack` and the linker's — stand empty there.
 
 ```text
 address        bytes                    range                  placed by
@@ -254,7 +262,7 @@ address        bytes                    range                  placed by
 ~74.5 MiB      0.88 MiB                 .fixed.blocks          the kernel (mem/fixed.rs)
 ~75.4 MiB      4 MiB                    .fixed.gpu             the kernel (mem/fixed.rs)
 ~79.4 MiB      64 KiB                   .fixed.host            the kernel (mem/fixed.rs)
-~79.5 MiB      4.72 MiB                 .fixed.ledger          the kernel (mem/fixed.rs)
+~79.5 MiB      4.72 MiB                 .fixed.profiler        the kernel (mem/fixed.rs)
 ~84.2 MiB      428 MiB  (phone)         .heap                  the allocator
                940 MiB  (desktop)
 512 MiB / 1 GiB                         end
@@ -263,13 +271,13 @@ address        bytes                    range                  placed by
 
 The map is `pxl-kernel mem/section.rs`'s, over xpute's sections. The stack is first so that an overflow wraps below zero and traps — there is no MMU, so the wraparound is the only guard — and the kernel asserts at boot that the linker's `__stack_high` is where `mem.json` says. The rings sit at fixed addresses and `build.rs` emits `--global-base` from the same numbers, so the linker cannot place `.data` over them.
 
-`.fixed` is what the kernel places once, sizes at compile time and never frees. The largest of it is the resident terrain (`layer/terrain/fixed.rs`): a lane of ground, one packed 16-bit cell each, and an elevation plane past it, one record a page. Which page lies in which record is the pyramid's (`world/pyramid.rs`), not a coordinate's: there is a record for every page a view can want (`VIEW_PAGES`, 48, a stated budget the view's criterion is loosened to fit) and one for the pinned page, so every page the view wants has room at once. Every layer's records begin with `ABSENT`, which is no page's own: it holds what a page the bake left as no object reads, written once and taken by no page, so an absent page is resident like any other and shares it. Here, in the terrain's range, that is the open ocean; the POI's records are only its room in the count, and its `ABSENT` a page of no places on the heap. A page that arrives takes a free record or the one whose page is worth least — one the view has left before one it wants — and the pinned page never gives its record up. Past it, those that serve one thing side by side: what a chunk is built in, in the order its work runs — two run sets (`.fixed.runs`), one filled while the other is baked from, the one mesh a bake has open (`.fixed.bake`, 1 MiB), sent to the device the moment it is done, the surface each mesh slot's tier is drawn with (`.fixed.surface`) and where one chunk's decor is gathered (`.fixed.decor`) — then the renderer's — its table of the draw list's blocks (`.fixed.blocks`) and the stream its calls cross in (`.fixed.gpu`) — and what the kernel says to the shell: the stream of its other asks (`.fixed.host`) and the ledger's rings (`.fixed.ledger`), read where they lie. A thing belongs here when it is in the kernel's own format and its size is settled at compile time or its bound sits near its ordinary fill; the heap is left for what is asked for, refused and given back, and for what another format decides the size of — a glTF, a PNG — whose bound nothing here can predict. Every range is reached through `mem/fixed.rs`, which checks what is asked for against the range's end, so nothing written through one lands in the next.
+`.fixed` is what the kernel places once, sizes at compile time and never frees. The largest of it is the resident terrain (`layer/terrain/fixed.rs`): a lane of ground, one packed 16-bit cell each, and an elevation plane past it, one record a page. Which page lies in which record is the pyramid's (`world/pyramid.rs`), not a coordinate's: there is a record for every page a view can want (`VIEW_PAGES`, 48, a stated budget the view's criterion is loosened to fit) and one for the pinned page, so every page the view wants has room at once. Every layer's records begin with `ABSENT`, which is no page's own: it holds what a page the bake left as no object reads, written once and taken by no page, so an absent page is resident like any other and shares it. Here, in the terrain's range, that is the open ocean; the POI's records are only its room in the count, and its `ABSENT` a page of no places on the heap. A page that arrives takes a free record or the one whose page is worth least — one the view has left before one it wants — and the pinned page never gives its record up. Past it, those that serve one thing side by side: what a chunk is built in, in the order its work runs — two run sets (`.fixed.runs`), one filled while the other is baked from, the one mesh a bake has open (`.fixed.bake`, 1 MiB), sent to the device the moment it is done, the surface each mesh slot's tier is drawn with (`.fixed.surface`) and where one chunk's decor is gathered (`.fixed.decor`) — then the renderer's — its table of the draw list's blocks (`.fixed.blocks`) and the stream its calls cross in (`.fixed.gpu`) — and what the kernel says to the shell: the stream of its other asks (`.fixed.host`) and the profiler's rings (`.fixed.profiler`), read where they lie. A thing belongs here when it is in the kernel's own format and its size is settled at compile time or its bound sits near its ordinary fill; the heap is left for what is asked for, refused and given back, and for what another format decides the size of — a glTF, a PNG — whose bound nothing here can predict. Every range is reached through `mem/fixed.rs`, which checks what is asked for against the range's end, so nothing written through one lands in the next.
 
 `.heap` is everything else, under xpute's slab over buddy. A `String`, a band's voxels and a fetch body all come from here. A refused request is a wait, not a failure: the build keeps its place and asks again after a release, and the view's criterion is loosened until what it wants fits (`world/pyramid/pressure.rs`).
 
 The numbers — page size, stack, ring addresses, `--global-base`, the two reservations, the heap a phone is guaranteed (`MIN_HEAP_BYTES`) — are one file, `spec/pxl/web/kernel/mem/mem.json`, read by the kernel's map, by `build.rs` and by the shell's reservation, and asserted at compile time and at boot.
 
-What the renderer reads each frame is laid out as **column lanes**, structure-of-arrays — not the packed-word lanes of a coordinate. They are terrain planes, voxel bands, column runs, a mesh per LOD tier, the chunk table, decor instances, the object store's records, and every registry. A table whose columns move together is one struct of lanes with one length. Slots are dense, and an index is told when its slot moves — except in a handle table, where the slot is what the other side holds, so it stays and is reused under a new generation. A lane set has one owner; a consumer borrows it for one call. The JavaScript heap holds only glue: React, the WebGPU objects behind the kernel's handles, and response bodies until the kernel takes them.
+What the renderer reads each frame is laid out as **column lanes**, structure-of-arrays — not the packed-word lanes of a coordinate. They are terrain planes, voxel bands, column runs, a mesh per LOD tier, the chunk table, decor instances, the object store's records, and every registry. A table whose columns move together is one struct of lanes with one length. Slots are dense, and an index is told when its slot moves — except in a handle table, where the slot is what the other side holds, so it stays and is reused under a new generation. A lane set has one owner; a consumer borrows it for one call. The JavaScript heap holds only glue: React, the WebGPU objects behind the kernel's handles on a page, and response bodies until the kernel takes them.
 
 ---
 
@@ -306,17 +314,17 @@ Objects paint after terrain, so a placed value wins the voxel. A chunk records t
 
 **What to build next** is one priority. A chunk build runs in two stages, a scan and a mesh bake, and one of each is open at a time; the priority (`world/chunk/table.rs` `priority`) puts the two chunks holding those slots first, then what the view sees nearest the eye, then what it does not, farthest first. Nothing is aged: a wait that raised a chunk sent the builds to the edge of the view while its middle stood coarse, and the view fills out from the eye instead. Builds run in the build task on what the tick left of the quota.
 
-**Memory is paid for in LOD.** A refused block ends the tick's builds and the chunk waits for a release; reclaim gives back off-screen work, farthest first. If a refusal finds nothing to reclaim, the view's one criterion is pulled a level coarser (`world/pyramid/pressure.rs`) — at most every half second, up to six — and its split, its pages and its tiers coarsen together; it is let out again after five seconds without a refusal and with the heap under 90%. The view gets coarser; the tab does not die.
+**Memory is paid for in LOD.** A refused block ends the tick's builds and the chunk waits for a release; reclaim gives back off-screen work, farthest first. If a refusal finds nothing to reclaim, the view's one criterion is pulled a level coarser (`world/pyramid/pressure.rs`) — at most every half second, up to six — and its split, its pages and its tiers coarsen together; it is let out again after five seconds without a refusal and with the heap under 90%. The view gets coarser; the client does not die.
 
 ## Rendering
 
-Each tick ends with a **draw list** (`pxl-render frame/draw.rs`). In it: the chunk meshes at the weights the LOD blend chose; decor as instanced draws, one model at many placements; the actors — the companion and other characters, each with a joint palette for skinning; the location puck; the billboards, labels and bubbles drawn flat to the camera; and the dev gizmos.
+Each tick ends with a **draw list** (`pxl-render frame/draw.rs`). In it: the chunk meshes at the weights the LOD blend chose; decor as instanced draws, one model at many placements; the actors — the companion and other characters, each with a joint palette for skinning; the location puck; the billboards, labels and bubbles drawn flat to the camera; and the debug gizmos.
 
-The kernel writes the frame's uniforms into the stage lane (`frame/stage.rs`) and calls `render_frame` (`gpu/renderer.rs`) with a `FrameInput`: the list, the environment, the models and their skins, the billboard sheet (the one texture every label is drawn into), and the surfaces. The renderer draws into every open surface — the world's canvas and the character picker's display case — and reports what the frame cost and whether it wants another turn. It decides nothing.
+The kernel writes the frame's uniforms into the stage lane (`frame/stage.rs`) and calls `render_frame` (`gpu/renderer.rs`) with a `FrameInput`: the list, the environment, the models and their skins, the billboard sheet (the one texture every label is drawn into), and the surfaces. The renderer draws into every open surface — the world's and the character picker's display case — and reports what the frame cost and whether it wants another turn. It decides nothing.
 
-It reaches WebGPU through calls the host answers (`gpu/api.rs` ↔ `apps/web/src/kernel/render/gpu.ts`). A call carries numbers and the address and length of what it names, and every GPU object is one of xpute's handles: 2^15 slots for objects, 8 for surfaces.
+Its calls are WebGPU's, and how they are made is the target's (`gpu/api.rs`). A module cannot reach WebGPU itself, so on wasm32 they are records the page makes once the turn has returned (`api/record.rs` ↔ `apps/web/src/platform/web/webgpu.ts`); on a device the same calls are made through wgpu as they are asked for (`api/device.rs`). A call carries numbers and the address and length of what it names, the same words to both, and every GPU object is one of xpute's handles: 2^15 slots for objects, 8 for surfaces.
 
-Shaders and pipelines are the kernel's (`frame/shader/`). A pipeline is a record of words — shaders, vertex lanes, bind group layouts, primitive, depth and blend state — that the host turns into a WebGPU descriptor, and that a native host could turn into wgpu's. `cargo test` compiles every shader with naga, the WGSL compiler, and checks each record against its shader.
+Shaders and pipelines are the kernel's (`frame/shader/`). A pipeline is a record of words — shaders, vertex lanes, bind group layouts, primitive, depth and blend state — that the page turns into a WebGPU descriptor and a device into wgpu's. `cargo test` compiles every shader with naga, the WGSL compiler, and checks each record against its shader.
 
 Two choices outlive a frame. Depth is reversed float, near at 1, so precision falls where perspective needs it and far coplanar faces do not fight. And on device loss the blocks are still in memory, so everything is re-uploaded from the addresses it already had.
 
@@ -350,7 +358,7 @@ Flat ground at a distance therefore reads as separated cubes rather than a sheet
 
 The camera is three controls — `dist`, `polar`, `azimuth` — and nothing else writes them. Terrain may ask one question, in `control/camera/terrain_gate.rs`: would this state put the eye inside the ground. The gate is a function of the three controls only, and it sits in `set_view_state`, the one funnel every input path goes through, so a refused move never leaves the controls and the drawn camera disagreeing. `Settings > Camera` picks the answer: `through` ignores terrain, `stop` takes a control as far as it can, `climb` grants the move and raises the drawn pitch instead, so the pitch relaxes back on its own.
 
-Every setting is one entry of one schema (`spec/pxl/web/kernel/shell/setting/schema.json`): default, kind, section. The store keeps only the user's overrides, and the settings sheet renders its rows from the schema. Dev-only entries — gizmos, the ledger panel, a render-path bisect — are marked `dev`.
+Every setting is one entry of one schema (`spec/pxl/web/kernel/shell/setting/schema.json`): default, kind, section. The store keeps only the user's overrides, and the settings sheet renders its rows from the schema. The nightly entries — the camera against terrain, the ground snap, terrain carving, the shadows — are marked `dev`: a development build offers them, and a published one carries neither their rows nor the kernel's code for them (`apps/web/script/check-bundle.ts` holds it to that). The debug section — the gizmos, the profiler panel — is in every build, since a release is what it most needs to measure.
 
 ## Billboards and POI
 
@@ -362,9 +370,11 @@ The local server (`geo-bake demand/`) holds every pyramid layer the same way (`d
 
 Badges are one instanced quad (`layer/billboard/field.rs`) drawn from one atlas (`pxl-render asset/atlas.rs`, one texture the badges are packed into shelf by shelf): anchor, size and sheet rectangle per instance, with the fit to screen pixels, the distance fade and the badge's anchor pinning in the vertex shader. Occlusion is all or nothing per badge: the pass (`frame/shader/badge.wgsl`) binds the world's depth as a texture, reprojects several points up each badge through it, and discards the badge when most are behind terrain. The same pass writes `gl_FragDepth` from an upright twin of the quad, so billboards sort against the world along world-up. Chat bubbles are drawn by the same pass, with a sprite where a badge has text.
 
+An entry of the sheet is drawn on the GPU as well, once, when what it shows changes (`pxl-render gpu/sheet.rs`, `frame/shader/sheet.wgsl`): its shapes — rounded rectangles, circles, rings, a bubble's tail — as signed distances, and its text as lines the platform drew, into a texture of the entry's size that is then copied into its rectangle. Text is asked of the platform a line at a time, so kerning, joining, bidirectional runs, fallback and emoji are the platform engine's on every target: the kernel asks for a text's lines and widths and then for each line's pixels (`pxl-kernel text.rs`), the page answering with its canvas and a device with CoreText ([the sheet on the GPU, and text by the line](./issue/20260926-the-sheet-on-the-gpu-and-text-by-the-line.md)).
+
 ## Catalogs and assets
 
-Everything a build ships is decided at build time, as JSON under `spec/` grouped the way `crates/` is. `pxl-tool` writes a Rust module from each file and, where the shell reads it, a TypeScript one; `deno task spec` writes them and `check:spec` fails when the tree disagrees with the JSON. That covers the commands and their packets, the cell catalogs, the memory map, the GPU API's enums, the ledger's layout, the settings schema, the decor and character catalogs, the routes and the published versions.
+Everything a build ships is decided at build time, as JSON under `spec/` grouped the way `crates/` is. `pxl-tool` writes a Rust module from each file and, where the shell reads it, a TypeScript one; `deno task spec` writes them and `check:spec` fails when the tree disagrees with the JSON. That covers the commands and their packets, the cell catalogs, the memory map, the GPU API's enums, the profiler's layout, the settings schema, the decor and character catalogs, the routes and the published versions.
 
 A catalog is never sent. Both sides compile it, so a message carrying it would be a program telling itself what it already knows. Where bytes do cross — a published page, a saved blob — the layout is the model's and the version is in the envelope: the path, or the storage key.
 

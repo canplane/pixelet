@@ -1,7 +1,7 @@
 // pxl-render/gpu/api/device.rs
 
 //! The renderer's calls made on the device itself, through wgpu: what the
-//! page's player does with a turn's records (apps/web/src/kernel/render/gpu.ts)
+//! page's player does with a turn's records (apps/web/src/platform/web/webgpu.ts)
 //! done as each call is made, since a kernel linked into an app reaches its
 //! GPU without a host between. Every object is kept at its handle's slot, and
 //! every call means what the record of it means to the page — the same codes,
@@ -14,7 +14,7 @@
 //! (`TIMESTAMP_QUERY`), read back a turn or more later as the page's are.
 
 use std::num::NonZeroU64;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 
 use xpute_runtime::abi::handle::handle_slot;
@@ -111,7 +111,7 @@ enum Object {
 
 /// Where a set's timestamps are read back: resolved into one buffer and
 /// copied into one of three, so a read still on its way does not hold the
-/// next frame's up, as the page's are (apps/web/src/kernel/render/gpu.ts).
+/// next frame's up, as the page's are (apps/web/src/platform/web/webgpu.ts).
 struct Stamps {
     count: u32,
     resolve: wgpu::Buffer,
@@ -161,6 +161,18 @@ struct Device {
     /// What the last read brought, in milliseconds: each span's, then the
     /// whole frame's from its first pass's start to its last's end.
     gpu_ms: Vec<f64>,
+    /// Where a turn's buffer writes are staged: chunks mapped once and used
+    /// again, where `Queue::write_buffer` makes a buffer of its own for every
+    /// write — a Metal buffer, and its mapping, a dozen times a frame. A
+    /// page's WebGPU keeps such a belt behind its `writeBuffer`; on a device
+    /// the renderer's calls meet wgpu, and the belt is this backend's.
+    belt: wgpu::util::StagingBelt,
+    /// The copies the belt's writes are, this turn's, submitted ahead of the
+    /// next encoder so a write lands before whatever reads it, as a queue's
+    /// write does.
+    uploads: Option<wgpu::CommandEncoder>,
+    /// Frames shown that the GPU has not finished (`frame_room`).
+    in_flight: Arc<AtomicU32>,
 }
 
 static DEVICE: Global<Option<Device>> = Global::new();
@@ -196,14 +208,17 @@ pub fn open_device() -> Option<DeviceInfo> {
         DEVICE.set(Some(Device {
             instance,
             adapter,
-            device,
-            queue,
             objects: Vec::new(),
             surfaces: Vec::new(),
             sizes: Vec::new(),
             frames: Vec::new(),
             stamps: None,
             gpu_ms: Vec::new(),
+            belt: wgpu::util::StagingBelt::new(device.clone(), BELT_CHUNK_BYTES),
+            uploads: None,
+            in_flight: Arc::new(AtomicU32::new(0)),
+            device,
+            queue,
         }));
     }
     let d = device()?;
@@ -285,12 +300,58 @@ pub fn gpu() -> Option<&'static Gpu> {
     device().map(|_| &GPU)
 }
 
-/// The turn's fall: what it drew into a surface, shown.
+/// Frames the GPU may have in hand at once. The layer keeps three drawables
+/// (wgpu's default latency of two, and one on screen), so with no more than
+/// two frames unfinished a third always finds one free, and taking it never
+/// waits. Taking one waits for the GPU otherwise, inside the turn, and on a
+/// device the caller's thread — the JavaScript's — waits with it: a page's
+/// browser holds its frames back instead, and this is that.
+const FRAMES_IN_FLIGHT: u32 = 2;
+
+/// Staged writes a chunk holds: a baked mesh, the largest a turn usually
+/// sends, is 1 MiB (.fixed.bake); a larger write takes a chunk of its own.
+const BELT_CHUNK_BYTES: u64 = 1 << 20;
+
+/// Whether a frame may be drawn now: false while the GPU has as many frames
+/// unfinished as it may hold, and the frame is better skipped than waited
+/// for.
+pub fn frame_room() -> bool {
+    device().is_none_or(|d| d.in_flight.load(Ordering::Acquire) < FRAMES_IN_FLIGHT)
+}
+
+/// Submits what the turn staged, ahead of `then` if there is one.
+fn flush(d: &mut Device, then: Option<wgpu::CommandBuffer>) {
+    let uploads = d.uploads.take().map(|e| {
+        d.belt.finish();
+        e.finish()
+    });
+    let staged = uploads.is_some();
+    d.queue.submit(uploads.into_iter().chain(then));
+    if staged {
+        d.belt.recall();
+    }
+}
+
+/// The turn's fall: what it staged sent, what it drew into a surface shown,
+/// and the GPU's finished work taken in.
 pub fn gpu_publish() {
     if let Some(d) = device() {
-        for frame in d.frames.drain(..) {
-            d.queue.present(frame);
+        if d.uploads.is_some() {
+            flush(d, None);
         }
+        if !d.frames.is_empty() {
+            for frame in d.frames.drain(..) {
+                d.queue.present(frame);
+            }
+            d.in_flight.fetch_add(1, Ordering::AcqRel);
+            let in_flight = Arc::clone(&d.in_flight);
+            d.queue.on_submitted_work_done(move || {
+                in_flight.fetch_sub(1, Ordering::AcqRel);
+            });
+        }
+        // What the GPU finished is heard here: a frame done, a belt chunk
+        // free again, a timestamp mapped.
+        let _ = d.device.poll(wgpu::PollType::Poll);
         read_stamps(d);
     }
 }
@@ -308,7 +369,6 @@ fn read_stamps(d: &mut Device) {
             });
         }
     }
-    let _ = d.device.poll(wgpu::PollType::Poll);
     let period_ns = d.queue.get_timestamp_period() as f64;
     for r in &s.reads {
         if r.state.load(Ordering::Acquire) != MAPPED {
@@ -776,8 +836,15 @@ impl Gpu {
 
     pub fn write_buffer(&self, id: u32, offset: u32, bytes: &[u8]) {
         let Some(d) = device() else { return };
-        let Some(b) = d.buffer(id) else { return };
-        d.queue.write_buffer(b, offset as u64, bytes);
+        let Some(b) = d.buffer(id).cloned() else { return };
+        let (Some(size), true) = (NonZeroU64::new(bytes.len() as u64), offset.is_multiple_of(4) && bytes.len().is_multiple_of(4)) else {
+            // What the belt cannot copy — nothing, or a span off the copy
+            // alignment — goes by the queue.
+            d.queue.write_buffer(&b, offset as u64, bytes);
+            return;
+        };
+        let encoder = d.uploads.get_or_insert_with(|| d.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default()));
+        d.belt.write_buffer(encoder, &b, offset as u64, size).copy_from_slice(bytes);
     }
 
     /// A texture's first mip of one layer, whole.
@@ -982,7 +1049,7 @@ impl Gpu {
     pub fn submit(&self, encoder: u32) {
         let Some(d) = device() else { return };
         if let Some(Object::Encoder(e)) = d.take(encoder) {
-            d.queue.submit([e.finish()]);
+            flush(d, Some(e.finish()));
         }
     }
 

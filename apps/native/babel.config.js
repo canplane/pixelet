@@ -24,12 +24,14 @@ const root = path.resolve(__dirname, "../..");
  * below does the rest.
  *
  * It refuses rather than guesses: a member whose value is not a plain
- * literal or arithmetic over literals leaves its whole enum alone.
+ * literal or arithmetic over literals leaves its whole enum alone, and is
+ * named in `refused` so that leaving it is not taken for a table gone stale.
  */
 function read_enums() {
   const DECL = /export\s+const\s+enum\s+(\w+)\s*\{([^}]*)\}/g;
   const VALUE = /^(?:0x[0-9a-fA-F]+|\d+|"[^"\\]*"|'[^'\\]*'|[-+*/|&^~()<>\s])+$/;
   const enums = new Map();
+  const refused = new Set();
   const walk = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, e.name);
@@ -54,14 +56,21 @@ function read_enums() {
           members.set(key, /^["']/.test(value) ? value.slice(1, -1) : Function(`return (${value})`)());
         }
         if (whole) enums.set(name, members);
+        else refused.add(name);
       }
     }
   };
   walk(path.join(root, "apps/web/src"));
   walk(path.join(root, "packages"));
-  return enums;
+  return { enums, refused };
 }
-const ENUMS = read_enums();
+const { enums: ENUMS, refused: REFUSED } = read_enums();
+
+/** The table is read once, when Metro loads this file, so an enum or a member
+ * added since — a spec regenerated under a running Metro — is not in it. Left
+ * alone, it bundles as a name nothing binds and throws on the device; said
+ * here, it stops the build with what to do. */
+const stale = (what) => `${what} is not in the const enum table Metro read when it started; the enums changed since, so restart Metro with --clear`;
 
 /** Replaces each `Enum.Member` with its value and strikes the declarations,
  * so the import that named the enum is left with no use and goes with the
@@ -74,13 +83,18 @@ const inline_enums = ({ types: t }) => ({
       const { object, property, computed } = p.node;
       if (computed || !t.isIdentifier(object) || !t.isIdentifier(property)) return;
       const members = ENUMS.get(object.name);
-      if (!members || !members.has(property.name)) return;
+      if (!members) return;
       const binding = p.scope.getBinding(object.name);
       if (binding && !binding.path.isImportSpecifier() && !state.declared.has(binding.identifier)) return;
+      if (!members.has(property.name)) throw p.buildCodeFrameError(stale(`${object.name}.${property.name}`));
       p.replaceWith(t.valueToNode(members.get(property.name)));
     },
     TSEnumDeclaration(p) {
-      if (!p.node.const || !ENUMS.has(p.node.id.name)) return;
+      if (!p.node.const) return;
+      if (!ENUMS.has(p.node.id.name)) {
+        if (p.parentPath.isExportNamedDeclaration() && !REFUSED.has(p.node.id.name)) throw p.buildCodeFrameError(stale(`const enum ${p.node.id.name}`));
+        return;
+      }
       // The declaration itself first: a path struck only through its parent
       // still reads as live to the plugins after this one on the same node,
       // and the TypeScript transform turns it into a declaration with no
@@ -117,8 +131,7 @@ const inline_enums = ({ types: t }) => ({
 
 module.exports = (api) => {
   const production = process.env.NODE_ENV === "production";
-  const platform = api.caller((caller) => caller?.platform);
-  api.cache.using(() => `${process.env.NODE_ENV}:${platform}`);
+  api.cache.using(() => process.env.NODE_ENV);
 
   const DEFINE = {
     __IS_DEV__: !production,
@@ -126,9 +139,6 @@ module.exports = (api) => {
     __APP_ENV__: production ? "production" : "development",
     // Every route a dev server forwards is the published deployment's.
     __PUBLISHED_TILES__: true,
-    __APP_NAME__: "pixelet",
-    __ENV__: platform === "web" ? "browser" : "native",
-    __ROLE__: "client",
   };
 
   /** Replaces each free name above with its value. */

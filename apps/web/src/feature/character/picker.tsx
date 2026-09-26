@@ -4,13 +4,13 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { alpha, color, font, hairline } from "@/shared/ui/theme.ts";
+import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 import { CharacterPreview } from "@/feature/character/preview.tsx";
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { Command, encode_setting_update } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
-import { findPersonVariant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_VARIANTS } from "@/feature/character/variant.ts";
+import { findPersonVariant, findPetVariant, type Gender, genderOf, GENDERS, personVariantNumbered, personVariantsOf, PET_VARIANTS } from "@/feature/character/variant.ts";
 
 // Not a setting: person/pet variant is a companion *appearance* pick, the
 // same "which of these do I want equipped" shape as a cube color or decor
@@ -28,8 +28,6 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
   );
 }
 
-type Gender = "female" | "male";
-
 interface PersonPickerProps {
   gender: Gender;
   onGenderChange: (gender: Gender) => void;
@@ -46,7 +44,7 @@ function PersonPicker(props: PersonPickerProps) {
   const { gender, onGenderChange, selectedKey, onSelect } = props;
   const { t } = useTranslation();
   const selected = findPersonVariant(selectedKey);
-  const variants = gender === "female" ? PERSON_VARIANTS_FEMALE : PERSON_VARIANTS_MALE;
+  const variants = personVariantsOf(gender);
 
   return (
     <View style={styles.picker}>
@@ -55,7 +53,7 @@ function PersonPicker(props: PersonPickerProps) {
         <CharacterPreview variant={selected} style={styles.preview} />
         <View style={styles.chipColumn}>
           <View style={styles.chips}>
-            {(["female", "male"] as const).map((g) => <Chip key={g} label={t(`drawer_modal.character.${g}_label`)} active={gender === g} onPress={() => onGenderChange(g)} />)}
+            {GENDERS.map((g) => <Chip key={g} label={t(`drawer_modal.character.${g}_label`)} active={gender === g} onPress={() => onGenderChange(g)} />)}
           </View>
           <View style={styles.rule} />
           <View style={styles.chips}>
@@ -75,7 +73,7 @@ interface PetPickerProps {
 function PetPicker(props: PetPickerProps) {
   const { selectedKey, onSelect } = props;
   const { t } = useTranslation();
-  const selected = PET_VARIANTS.find((v) => v.key === selectedKey) ?? PET_VARIANTS[0];
+  const selected = findPetVariant(selectedKey);
 
   return (
     <View style={styles.picker}>
@@ -99,23 +97,21 @@ function PetPicker(props: PetPickerProps) {
 export function CharacterPicker() {
   // The settings hold a variant as its number; the picker reads its key off
   // the same catalog the kernel was numbered from.
-  const person_variant = useKernel((s) => s.settings[SETTINGS.person_variant.key] ?? -1);
-  const pet_variant = useKernel((s) => s.settings[SETTINGS.pet_variant.key] ?? -1);
-  const personVariantKey = [...PERSON_VARIANTS_FEMALE, ...PERSON_VARIANTS_MALE].find((v) => v.number === person_variant)?.key ?? "";
+  const person_variant = useKernel((s) => s.settings[SETTINGS.person.key] ?? -1);
+  const pet_variant = useKernel((s) => s.settings[SETTINGS.pet.key] ?? -1);
+  const personVariantKey = personVariantNumbered(person_variant)?.key ?? "";
   const petVariantKey = PET_VARIANTS.find((v) => v.number === pet_variant)?.key ?? "";
   const set_setting = (key: u32, value: u32) => kernel_command(Command.SETTING_UPDATE, encode_setting_update({ key, value }));
 
   // Opens on whichever gender the current selection already belongs to,
-  // not always "female" — so a male variant picked earlier doesn't look
-  // like it silently reset when the drawer reopens.
-  const [gender, setGender] = useState<Gender>(
-    PERSON_VARIANTS_MALE.some((v) => v.key === personVariantKey) ? "male" : "female",
-  );
+  // not always the first — so a variant of another picked earlier doesn't
+  // look like it silently reset when the drawer reopens.
+  const [gender, setGender] = useState<Gender>(genderOf(personVariantKey));
 
   return (
     <View style={styles.pickers}>
-      <PersonPicker gender={gender} onGenderChange={setGender} selectedKey={personVariantKey} onSelect={(key) => set_setting(SETTINGS.person_variant.key, findPersonVariant(key).number)} />
-      <PetPicker selectedKey={petVariantKey} onSelect={(key) => set_setting(SETTINGS.pet_variant.key, (PET_VARIANTS.find((v) => v.key === key) ?? PET_VARIANTS[0]).number)} />
+      <PersonPicker gender={gender} onGenderChange={setGender} selectedKey={personVariantKey} onSelect={(key) => set_setting(SETTINGS.person.key, findPersonVariant(key).number)} />
+      <PetPicker selectedKey={petVariantKey} onSelect={(key) => set_setting(SETTINGS.pet.key, findPetVariant(key).number)} />
     </View>
   );
 }
@@ -123,15 +119,15 @@ export function CharacterPicker() {
 const styles = StyleSheet.create({
   pickers: { gap: 16 },
   picker: { gap: 8 },
-  pickerLabel: { fontFamily: font.family, fontSize: 13, fontWeight: "500", color: color.mutedForeground },
+  pickerLabel: { ...sectionTitle, color: color.textMuted },
   pickerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  preview: { width: 80, height: 80, flexShrink: 0, borderRadius: 10, overflow: "hidden", backgroundColor: alpha(color.accent, 0.4) },
+  preview: { width: 80, height: 80, flexShrink: 0, borderRadius: 10, overflow: "hidden", backgroundColor: alpha(color.wash, 0.4) },
   chipColumn: { flexShrink: 1, minWidth: 0, gap: 6 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   rule: { height: 1, backgroundColor: hairline },
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  chipOn: { borderColor: color.primary, backgroundColor: alpha(color.primary, 0.1) },
-  chipOff: { borderColor: alpha(color.foreground, 0.06) },
-  chipText: { fontFamily: font.family, fontSize: 12, fontWeight: "500", lineHeight: 14, color: color.mutedForeground },
-  chipTextOn: { color: color.primary },
+  chipOn: { borderColor: color.chosen, backgroundColor: alpha(color.chosen, 0.1) },
+  chipOff: { borderColor: alpha(color.text, 0.06) },
+  chipText: { ...textStyle.footnote, fontWeight: weight.medium, color: color.textMuted },
+  chipTextOn: { color: color.chosen },
 });

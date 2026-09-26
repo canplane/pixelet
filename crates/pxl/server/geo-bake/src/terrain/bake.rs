@@ -6,9 +6,9 @@
 //!
 //!   [ele, buildings, segments, base, coasts]
 //!
-//! with each row a tuple in the order pxl-spec's `*_ROW_KEYS` name. Those
-//! arrays are the encoder's; a reader knows the order by position, so the rows
-//! are read here by index against the same lists.
+//! with each row a tuple in the order of its row type's fields (pxl-spec
+//! bake/format.rs, `BuildingRow` and the rest). A reader knows the order by
+//! position, so the rows are read here by index in that order.
 
 use pxl_spec::bake::format::{encode_terrain, BaseRow, BuildingRow, CoastRow, Ground, SegmentRow};
 use pxl_spec::bake::model::feature::Feature;

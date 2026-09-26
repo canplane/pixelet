@@ -20,7 +20,7 @@ import { load_key } from "@/catalog/asset/load.ts";
 import { origin_get } from "@platform/origin.ts";
 import { asset_url } from "@/config/route.ts";
 import { begin_read } from "@/kernel/io/fetch.ts";
-import { CORE_BUILD } from "@/kernel/ipc.ts";
+import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { hold_body } from "@/kernel/module.ts";
 import { hold_image } from "@platform/image.ts";
 import { request_frame } from "@/kernel/sched.ts";
@@ -37,7 +37,7 @@ async function fetch_load(load: u32, signal: AbortSignal): Promise<Response> {
 /** Tells the kernel the read under `key` did not arrive: it asks again in
  * its own time. */
 function refuse(key: u64): void {
-  CORE_BUILD.send(0, Command.LOAD_DELETE, encode_load_delete({ key }));
+  CORE_DOORBELL.send(0, Command.LOAD_DELETE, encode_load_delete({ key }));
   request_frame();
 }
 
@@ -66,7 +66,7 @@ export function load_model(key: u64, load: u32): Promise<void> {
     const bytes = new Uint8Array(await res.arrayBuffer());
     // A model is far past a ring frame: the host holds it, and the kernel
     // reads it in its turn.
-    return () => CORE_BUILD.send(0, Command.LOAD_UPDATE, encode_load_update({ key, body: hold_body(bytes), bytes: bytes.byteLength }));
+    return () => CORE_DOORBELL.send(0, Command.LOAD_UPDATE, encode_load_update({ key, body: hold_body(bytes), bytes: bytes.byteLength }));
   });
 }
 
@@ -76,6 +76,6 @@ export function load_image(key: u64, load: u32): Promise<void> {
   return read(key, load, async (res) => {
     const handle = await hold_image(res);
     // An image that does not decode is refused, as a failed read is.
-    return () => handle === null ? refuse(key) : CORE_BUILD.send(0, Command.LOAD_IMAGE, encode_load_image({ key, handle }));
+    return () => handle === null ? refuse(key) : CORE_DOORBELL.send(0, Command.LOAD_IMAGE, encode_load_image({ key, handle }));
   });
 }

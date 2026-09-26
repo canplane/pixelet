@@ -29,12 +29,12 @@ import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, u32, u64 } from "@xpute/core/abi/word.ts";
 import { Command, encode_fetch_update, FetchOutcome } from "@/kernel/abi/cmd.spec.ts";
 import { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
-import { declareUnsupported, isUnsupported } from "@/app/store/unsupported-store.ts";
+import { declareUnsupported, isUnsupported, UnsupportedReason } from "@/app/store/unsupported-store.ts";
 import { PUBLISHED_TILES } from "@/config/deploy.ts";
 import { origin_get } from "@platform/origin.ts";
 import { tile_url } from "@/config/route.ts";
 import { BAKE_KINDS } from "@/config/published.spec.ts";
-import { CORE_BUILD } from "@/kernel/ipc.ts";
+import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { hold_body } from "@/kernel/module.ts";
 import { request_frame } from "@/kernel/sched.ts";
 
@@ -70,7 +70,7 @@ function packed(body: U8Array): boolean {
 
 /** Tells the kernel what became of the read it started under `key`. */
 function settle(key: u64, outcome: FetchOutcome, body: u32, body_bytes: u32, fail: FetchFail, detail: u32, net_ms: f64): void {
-  CORE_BUILD.send(0, Command.FETCH_UPDATE, encode_fetch_update({ key, outcome, body, body_bytes, fail, detail, net_ms }));
+  CORE_DOORBELL.send(0, Command.FETCH_UPDATE, encode_fetch_update({ key, outcome, body, body_bytes, fail, detail, net_ms }));
   request_frame();
 }
 
@@ -104,7 +104,7 @@ export async function run_fetch(key: u64, bake: number, name: string): Promise<v
     } else if (body.byteLength > 0 && packed(body)) {
       // Handing these on would spend a heap block and fail in the kernel's
       // decoder, far from the one thing that is actually wrong.
-      declareUnsupported("encoding");
+      declareUnsupported(UnsupportedReason.Encoding);
       outcome = FetchOutcome.Error;
       fail = FetchFail.Shell;
     } else if (body.byteLength > 0) {

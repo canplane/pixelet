@@ -216,9 +216,7 @@ apps/native/.expo/
 # A standalone WebGPU repro page is dev-only and not part of the app.
 apps/web/public/repro-*.html
 
-# The Rust core as the device app links it, built by
-# apps/native/script/build-native.ts; and what `expo prebuild` generates, which
-# is made again from app.json and the modules rather than kept.
-apps/native/modules/pxl-surface/ios/PxlNative.xcframework/
+# What `expo prebuild` generates, which is made again from app.json and the
+# modules rather than kept.
 apps/native/ios/
 apps/native/android/

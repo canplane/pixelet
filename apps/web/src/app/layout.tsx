@@ -5,20 +5,10 @@ import { StyleSheet, View } from "react-native";
 
 import { AppContext } from "./provider/context.ts";
 
-import { useAppInit } from "./hook/use-init.ts";
+import { useBooted } from "./bootstrap.ts";
 import { useUiController } from "./hook/use-ui-controller.ts";
 import { ModalManager } from "./provider/modal-manager.tsx";
 import { UnsupportedNotice } from "./unsupported.tsx";
-
-/** Loading page */
-function LoadingPage() {
-  return null;
-}
-
-/** Error page */
-function ErrorPage() {
-  return null;
-}
 
 /** AppLayout props */
 interface AppLayoutProps {
@@ -29,18 +19,13 @@ interface AppLayoutProps {
 export function AppLayout(props: AppLayoutProps) {
   const { children } = props;
 
-  const { loadState, store } = useAppInit(); // init
+  const booted = useBooted();
 
-  const { uiController, mergeUiController } = useUiController(store);
+  const { uiController, mergeUiController } = useUiController();
 
   return (
-    <AppContext.Provider value={{ store, ui: uiController }}>
-      <View style={styles.page}>
-        {loadState === "success" && children}
-
-        {loadState == "loading" && <LoadingPage />}
-        {(loadState === "timeout" || loadState === "error") && <ErrorPage />}
-      </View>
+    <AppContext.Provider value={{ ui: uiController }}>
+      <View style={styles.page}>{booted && children}</View>
 
       {/* Global modal host */}
       <ModalManager mergeUiController={mergeUiController} />

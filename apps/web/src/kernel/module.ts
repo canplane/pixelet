@@ -20,20 +20,20 @@ import { BOOT_AT } from "@/kernel/mem/mem.spec.ts";
 export interface Core {
   buffer: ArrayBuffer;
   /** Hands the kernel a turn of `quota_ms`; when it wants the next, in ms
-   * (@xpute/runtime/sched/quantum.ts). The first turn lays the memory out. */
+   * (@xpute/runtime/sched/quantum.ts). The first turn lays the memory out. A
+   * platform whose core records its GPU calls runs them here, before the
+   * turn is over, so what it drew is on the device before anything else can
+   * reach it. */
   interrupt(quota_ms: f64): f64;
 }
 
 /** crates/pxl/web/kernel/src/door.rs's boot block, word by word: where the
- * bracket's own front ends; where the submission and completion rings are;
- * then `.fixed` and the heap, each its offset, bytes and page size; then the
- * quantum the kernel declares, three words in thousandths; then the heap's
- * row; then the two streams run after every turn, the renderer's
- * (render/gpu.ts, 0 where the core draws itself) and the host's (host.ts).
- * `data_end` is everything the bracket keeps for itself below the kernel's
- * ranges — the stack, the rings and, in a module, the linker's data. */
-export const BOOT = { data_end: 0, sq: 1, cq: 2, fixed: 3, heap: 6, quantum: 9, heap_row: 12, gpu: 13, host: 14 } as const;
-const BOOT_WORDS = 15;
+ * submission and completion rings are; the quantum the kernel declares,
+ * three words in thousandths; the heap's row; and the two streams run after
+ * every turn, the renderer's (platform/web/webgpu.ts, 0 where the core draws
+ * itself) and the host's (host.ts). */
+export const BOOT = { sq: 0, cq: 1, quantum: 2, heap_row: 5, gpu: 6, host: 7 } as const;
+const BOOT_WORDS = 8;
 
 /** The boot block, read in place at mem.json's BOOT_AT. */
 export function boot_block(memory: ArrayBuffer): U32Array {
@@ -68,13 +68,6 @@ export function take_body(body: u32): U8Array | undefined {
 }
 
 const utf8_decoder = new TextDecoder();
-
-/** The `(at, bytes)` pair at `at`: how the kernel names a run of memory it
- * built and holds, rather than carrying it through a ring slot. */
-export function range_at(memory: ArrayBuffer, at: u32): readonly [u32, u32] {
-  const [lies_at, bytes] = new Uint32Array(memory, at, 2);
-  return [lies_at, bytes];
-}
 
 /** A range's bytes, where they lie. Valid until the kernel is given them back
  * or writes them again, so a caller that keeps them copies them first. */

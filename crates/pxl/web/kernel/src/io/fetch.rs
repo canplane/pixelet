@@ -35,7 +35,7 @@ use crate::io::policy;
 use crate::io::sched::{attempt_of, settle};
 use crate::layer::geocode::{repository as geocode_repository, store as geocode_store};
 use crate::layer::terrain::page::{adopt_ocean, OCEAN_KEY};
-use crate::sched::ledger::record::{Failure, Outcome};
+use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::change::world_edge;
 use crate::world::pyramid::Layer;
 use pxl_spec::bake::format::Terrain;
@@ -110,7 +110,7 @@ fn arrivals() -> &'static mut Notify {
 }
 
 /// The host's report that a read finished, queued for `fetch_task`. `detail`
-/// is whatever number the host refused with, kept for the ledger to print;
+/// is whatever number the host refused with, kept for the profiler to print;
 /// nothing branches on it, which is what keeps a protocol out of here.
 pub fn fetch_queued(update: FetchUpdate) {
     arrived().push(update);

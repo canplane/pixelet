@@ -8,7 +8,7 @@ import { asset_url } from "@/config/route.ts";
 import { textureKey } from "@/feature/map/object/tex.ts";
 
 function placeableCubeTextureUrl(cube: PlaceableCube): string | null {
-  const key = textureKey(cube, "top");
+  const key = textureKey(cube);
   return key ? `${ORIGIN}${asset_url(key)}` : null;
 }
 

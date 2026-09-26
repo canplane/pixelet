@@ -203,19 +203,6 @@ pub struct Frame {
 }
 
 impl Frame {
-    /// Where `at`, in the world the camera is written in, is in the map's
-    /// units: the anchor root undone — a rotation and a translation, so its
-    /// inverse is its rotation transposed — then the origin put back.
-    pub fn map_of(&self, at: V3) -> V3 {
-        let m = &self.root;
-        let (x, y, z) = (at[0] - m[12], at[1] - m[13], at[2] - m[14]);
-        [
-            m[0] * x + m[1] * y + m[2] * z + self.origin[0],
-            m[4] * x + m[5] * y + m[6] * z + self.origin[1],
-            m[8] * x + m[9] * y + m[10] * z + self.origin[2],
-        ]
-    }
-
     /// Where `at`, in the map's units, is in the world the camera is
     /// written in: against the origin, then through the anchor root.
     pub fn world_of(&self, at: V3) -> V3 {
@@ -264,7 +251,7 @@ pub struct ChunkCounts {
     pub released: u32,
 }
 
-/// What the chunks hold, for the ledger.
+/// What the chunks hold, for the profiler.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ChunkRetention {
     /// Chunks holding a run set, and what those sets cost in the heap.
@@ -362,7 +349,7 @@ struct Slot {
 /// that fall on them (object/store.rs `render_edits`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Sources {
-    show_structures: bool,
+    structures: bool,
     /// The texture setting the tiers were baked under. A leaf's box carries
     /// its layer and the shader samples or does not, but a tier over it
     /// carries one color and no layer, so which color that is was decided
@@ -393,8 +380,8 @@ impl Sources {
         let (level, base) = (k.level(), k.corner());
         let drawn = |at: &EntryAt| tiers_draw(level, base, at.col_idx) && draws_band(k, at.band_idx);
         Sources {
-            show_structures: settings.show_structures,
-            textured: settings.texture_pack,
+            structures: settings.structures,
+            textured: settings.textures,
             objects_revision: objects_revision_of(k),
             hide: edits.hide.filter(|at| edits.hide_in.0 && drawn(at)),
             carve: edits.carve.filter(drawn),
@@ -408,7 +395,7 @@ impl DecorSources {
         let (level, base) = (k.level(), k.corner());
         DecorSources {
             revision: decor_revision_of(k),
-            shown: settings_store().show_decor,
+            shown: settings_store().decor,
             hide: edits.hide.filter(|at| edits.hide_in.1 && decor_draws(level, base, at.col_idx) && draws_band(k, at.band_idx)),
         }
     }
@@ -495,7 +482,7 @@ impl Slot {
     }
 }
 
-/// The census the ledger reads.
+/// The census the profiler reads.
 #[derive(Clone, Copy, Default)]
 pub struct Census {
     /// Chunks the table holds, which is the number MAX_CHUNKS bounds.
@@ -607,7 +594,7 @@ pub struct Scheduler {
     pub decor_models: Vec<Option<u32>>,
     /// The sun, the moon, the light and the sky (layer/environment/state.rs).
     pub environment: EnvironmentDraw,
-    /// The dev gizmos' segments (marker/debug_lines.rs).
+    /// The debug gizmos' segments (marker/debug_lines.rs).
     pub debug: DebugLines,
     slots: Vec<Slot>,
     /// Where each mounted chunk's slot is: the one way a chunk is found. A
@@ -805,7 +792,7 @@ impl Scheduler {
         let edits = render_edits();
         let sources = Sources::of(k, edits);
         self.builder.add(id, k);
-        self.builder.source(world, id, sources.show_structures);
+        self.builder.source(world, id, sources.structures);
         let mut slot = Slot {
             id,
             chunk: k,
@@ -884,8 +871,8 @@ impl Scheduler {
     fn source(&mut self, world: &mut World, i: usize) {
         self.view_dirty = true;
         let before = self.slots[i].retained();
-        let (id, show_structures) = (self.slots[i].id, self.slots[i].sources.show_structures);
-        self.builder.source(world, id, show_structures);
+        let (id, structures) = (self.slots[i].id, self.slots[i].sources.structures);
+        self.builder.source(world, id, structures);
         let s = &mut self.slots[i];
         if !s.layout_ready {
             s.unmeasured();
@@ -989,7 +976,7 @@ impl Scheduler {
         let (id, level, corner) = (self.slots[i].id, self.slots[i].level(), self.slots[i].chunk.corner());
         let (x0, y0) = (ivec::X(corner), ivec::Y(corner));
         // Whether it scatters is one of what its decor is made of, as told.
-        let show_decor = self.slots[i].decor_sources.shown;
+        let decor = self.slots[i].decor_sources.shown;
         if self.decor_scratch.is_none() {
             self.decor_scratch = DecorScratch::new();
         }
@@ -1006,7 +993,7 @@ impl Scheduler {
             // Every column whose corner lies in the chunk: its own, at z16.
             let cols = world.store.cols_under(self.slots[i].chunk.column());
             let drawn = |k: &&DecorKind| decor_density(k.extent, world_step) > 0.0;
-            let scatters = show_decor && self.decor_kinds.iter().filter(drawn).any(|k| k.density > 0.0);
+            let scatters = decor && self.decor_kinds.iter().filter(drawn).any(|k| k.density > 0.0);
             let places = !cols.is_empty() && self.decor_kinds.iter().filter(drawn).any(|k| k.decor_value.is_some());
             if !scatters && !places {
                 continue;
@@ -1062,7 +1049,7 @@ impl Scheduler {
             });
             let Some(scratch) = self.decor_scratch.as_mut() else { return false };
             let heights = self.slots[i].chunk.z_range();
-            let built = DecorBuild::build(scratch, &self.decor_kinds, ground.as_ref(), &placed, self.builder.hide(), world.store, world_step, show_decor, heights);
+            let built = DecorBuild::build(scratch, &self.decor_kinds, ground.as_ref(), &placed, self.builder.hide(), world.store, world_step, decor, heights);
             let bytes = built.bytes();
             let Some((at, bytes)) = alloc(bytes) else {
                 self.builder.stat.starved += 1;
@@ -1128,7 +1115,7 @@ impl Scheduler {
     }
 
     /// Decor instances the build's lanes had no room for, since the kernel
-    /// started: the ledger's, so a chunk short of its decor says so.
+    /// started: the profiler's, so a chunk short of its decor says so.
     pub fn decor_dropped(&self) -> u32 {
         self.decor_scratch.as_ref().map_or(0, |s| s.dropped)
     }

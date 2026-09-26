@@ -34,18 +34,6 @@ fn memory_nothing_laid_spans_nothing() {
 }
 
 #[test]
-fn memory_a_section_s_words_read_back_as_they_were_written() {
-    let mut words = [0u32; 2 * SECTION_WORDS as usize];
-    let s = Section {
-        offset: 1 << 26,
-        bytes: 2 << 26,
-        align: PAGE,
-    };
-    write_section(&mut words, SECTION_WORDS as usize, s);
-    assert_eq!(read_section(&words, SECTION_WORDS as usize), s);
-}
-
-#[test]
 fn memory_a_span_inside_a_section_is_reached_only_where_it_ends_by_the_section_s_end() {
     let s = Section {
         offset: 4 * PAGE,

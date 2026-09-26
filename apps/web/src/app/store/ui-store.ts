@@ -7,37 +7,27 @@ import { cube_types, GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import { decor_kinds, placeable_cubes, type PlaceableCube, sameCube } from "@/catalog/cell/mod.ts";
 import { ActiveTool, Command, encode_chat_create } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command } from "@/kernel/shell.ts";
-import { host_hold } from "@platform/host.ts";
+import { kernel_hold } from "@/kernel/shell.ts";
 import { storage_get, storage_set } from "@platform/storage.ts";
 
-// ts (Date.now() at append) lets ChatBubble derive its own remaining show
-// time from wall-clock, not from when its own component happened to mount —
-// without it, a character swap (Walker remounts under a new variant.key)
-// resets ChatBubble's local state and it has no way to
-// tell an old, already-dismissed line apart from a brand new one.
-export interface ChatLine {
+interface ChatLine {
   id: number;
   text: string;
-  ts: number;
 }
 
 const MAX_CHAT_LINES = 10;
 let nextChatLineId = 0;
 
-// mode-bar.tsx's hotbar (2026-09-07): used to be a fixed, always-complete
-// enumeration (every flat color, plus its own separate decor row) — now that
-// drawer-modal.tsx holds the *entire* catalog (colors,
-// terrain-styled cubes, decor), the hotbar's job shrunk to "whatever you
-// actually reached for lately," across cube and decor alike, one shared MRU
-// list instead of two side-by-side ones. Tagged by the tool that holds it: a
+// mode-bar.tsx's hotbar is whatever was reached for lately, across cube and
+// decor alike, one shared MRU list; the entire catalog (colors,
+// terrain-styled cubes, decor) is drawer-modal.tsx's. Tagged by the tool that holds it: a
 // cube and a decor kind are numbers of two catalogs, so which one a pick is —
 // and whether picking it sets the cube or the decor kind — is the tool
 // alongside it.
-export type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u8 };
+type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u8 };
 
-// 8, not the full 15-color/32-terrain-style/N-decor catalog — the whole
-// point of moving to MRU instead of a static, ever-growing enumeration.
-// mode-bar.tsx's own strip already scrolls (overflow-x-auto) once the row
+// 8, not the full 15-color/32-terrain-style/N-decor catalog: a recent list
+// is short, and the drawer holds the rest. mode-bar.tsx's own strip already scrolls (overflow-x-auto) once the row
 // overflows a narrow phone's width, so this doesn't need to fit in one
 // glance with zero scroll the way a smaller cap might.
 const MAX_RECENT_PICKS = 8;
@@ -187,7 +177,7 @@ export const useUiStore = create<UiState>()((set) => ({
   chatLines: [],
   append_chat_line: (text) => {
     set((state) => ({
-      chatLines: [...state.chatLines, { id: nextChatLineId++, text, ts: Date.now() }].slice(-MAX_CHAT_LINES),
+      chatLines: [...state.chatLines, { id: nextChatLineId++, text }].slice(-MAX_CHAT_LINES),
     }));
     // The kernel draws the bubble over the companion from the last line.
     kernel_command(Command.CHAT_CREATE, encode_chat_create({ text }));
@@ -198,8 +188,8 @@ export const useUiStore = create<UiState>()((set) => ({
 // the catalog's numbers: the object tool holds the cube, the decor tool the
 // decor kind.
 function hold(s: UiState): void {
-  if (s.activeTool === ActiveTool.Object) host_hold(s.activeTool, s.cube.channel, s.cube.type, s.object_tier);
-  else host_hold(s.activeTool, null, s.activeTool === ActiveTool.Decor ? s.decor : 0, s.object_tier);
+  if (s.activeTool === ActiveTool.Object) kernel_hold(s.activeTool, s.cube.channel, s.cube.type, s.object_tier);
+  else kernel_hold(s.activeTool, null, s.activeTool === ActiveTool.Decor ? s.decor : 0, s.object_tier);
 }
 
 hold(useUiStore.getState());

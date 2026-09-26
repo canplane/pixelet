@@ -7,10 +7,10 @@
  * The central scheduler runs guests the way an OS runs processes: it owns
  * the clock and the resources, and the turn alternates like a clock's two
  * edges. On the rising edge the host hands the guest one quota, the time it
- * may take; the guest runs its own tasks cooperatively (sched/tick.ts) and,
+ * may take; the guest runs its own tasks cooperatively (xpute-runtime sched/tick.rs) and,
  * on the falling edge, hands the turn back with when it wants the next one.
  * The host knows nothing of what runs inside. Memory is granted once
- * (mem/section.ts, mem/transfer.ts), and I/O by credits — how many reads may
+ * (mem/reserve.ts), and I/O by credits — how many reads may
  * be out this turn, the guest saying which.
  *
  * **One quota, sized from what the host sees.** Nothing is preempted, so a
@@ -28,7 +28,7 @@
  * the display sets; how much work fits in it is the guest's to find out by
  * yielding, and an overrun corrects itself through the next quota. The floor
  * is not a number of milliseconds either: a pass always takes its first step
- * (sched/frame_budget.ts), so a quota of nothing still makes progress.
+ * (xpute-runtime sched/frame_budget.rs), so a quota of nothing still makes progress.
  *
  * **The frame interval is measured, not assumed.** `1000 / 60` is wrong on
  * any faster display: a 5.8 ms frame was once sized for 16.7, and a storm

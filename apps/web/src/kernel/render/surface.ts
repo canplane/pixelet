@@ -1,61 +1,30 @@
 // @pxl/web/kernel/render/surface.ts
 
 /**
- * The canvases the kernel draws into
- * (crates/pxl/web/render/src/gpu/surface.rs). A canvas is the kernel's once
- * handed over: the page lays it out, and nothing here draws in it.
+ * The kernel's surfaces as a platform opens them
+ * (crates/pxl/web/render/src/gpu/surface.rs): one made for a role, sized in
+ * device pixels as its box is laid out, and let go. What a surface is bound
+ * to — a canvas handed over, a view's layer — is the platform's
+ * (platform/web/surface.tsx, a device's surface).
  */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
-import { round } from "@xpute/core/math/scalar.ts";
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { Command, encode_surface_create, encode_surface_delete, encode_surface_update } from "@/kernel/abi/cmd.spec.ts";
-import { CORE_BUILD } from "@/kernel/ipc.ts";
-import { bind_surface, unbind_surface } from "@/kernel/render/gpu.ts";
-import { dpr, request_frame } from "@/kernel/sched.ts";
+import { CORE_DOORBELL } from "@/kernel/mem.ts";
+import { request_frame } from "@/kernel/sched.ts";
 
-export interface OpenSurface {
-  handle: u32;
-  close: () => void;
+/** A surface for `role`: its handle, 0 when the kernel has none left. */
+export function surface_create(role: u32): u32 {
+  return CORE_DOORBELL.call(Command.SURFACE_CREATE, encode_surface_create({ role }), (result) => result >>> 0);
 }
 
-/** Hands `canvas` to the kernel to draw `role` into, and follows its layout
- * box in device pixels. The handle is 0 when the kernel has no surface left,
- * and then nothing is drawn in it.
- *
- * The box is the layout's, not the bounding rectangle: a rectangle includes
- * transforms, so a canvas mounted inside a drawer that is sliding or scaling in
- * would report a size it only passes through, and no resize follows a
- * transform. Where the observer reports device pixels they are exact; where it
- * does not (Safari), the CSS box times the pixel ratio stands in, and a zoom —
- * which changes the ratio and not the box — is caught by the window's resize. */
-export function open_surface(canvas: HTMLCanvasElement, role: u32): OpenSurface {
-  const handle = CORE_BUILD.call(Command.SURFACE_CREATE, encode_surface_create({ role }), (result) => result >>> 0);
-  if (handle === 0) return { handle, close: () => {} };
-  bind_surface(handle, canvas);
-  const send = (width: u32, height: u32) => {
-    CORE_BUILD.send(0, Command.SURFACE_UPDATE, encode_surface_update({ surface: handle, width, height, device_pixel_ratio: dpr() }));
-    request_frame();
-  };
-  const send_box = () => send(round(canvas.clientWidth * dpr()), round(canvas.clientHeight * dpr()));
-  const observer = new ResizeObserver((entries) => {
-    const entry = entries[entries.length - 1];
-    const exact = entry.devicePixelContentBoxSize?.[0];
-    if (exact) send(exact.inlineSize, exact.blockSize);
-    else send_box();
-  });
-  try {
-    observer.observe(canvas, { box: "device-pixel-content-box" });
-  } catch {
-    observer.observe(canvas);
-  }
-  globalThis.addEventListener("resize", send_box);
-  return {
-    handle,
-    close: () => {
-      globalThis.removeEventListener("resize", send_box);
-      observer.disconnect();
-      CORE_BUILD.call(Command.SURFACE_DELETE, encode_surface_delete({ surface: handle }), (result) => result);
-      unbind_surface(handle);
-    },
-  };
+/** The surface's box: `width` by `height` device pixels, `dpr` of them to a
+ * CSS pixel. */
+export function surface_size(surface: u32, width: u32, height: u32, dpr: f64): void {
+  CORE_DOORBELL.send(0, Command.SURFACE_UPDATE, encode_surface_update({ surface, width, height, device_pixel_ratio: dpr }));
+  request_frame();
+}
+
+export function surface_delete(surface: u32): void {
+  CORE_DOORBELL.call(Command.SURFACE_DELETE, encode_surface_delete({ surface }), (result) => result);
 }
