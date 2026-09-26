@@ -147,6 +147,11 @@ struct Device {
     queue: wgpu::Queue,
     objects: Vec<Option<Object>>,
     surfaces: Vec<Option<Surface>>,
+    /// The size the renderer last gave each surface, with its handle, by
+    /// slot, bound or not: a layer bound after it is configured at it, since
+    /// the renderer says a size when it changes and not again when a view
+    /// comes back.
+    sizes: Vec<Option<(u32, [u32; 2])>>,
     /// The surfaces' textures this turn drew into, shown at its fall.
     frames: Vec<wgpu::SurfaceTexture>,
     stamps: Option<Stamps>,
@@ -192,6 +197,7 @@ pub fn open_device() -> Option<DeviceInfo> {
             queue,
             objects: Vec::new(),
             surfaces: Vec::new(),
+            sizes: Vec::new(),
             frames: Vec::new(),
             stamps: None,
             gpu_ms: Vec::new(),
@@ -223,7 +229,11 @@ pub unsafe fn surface_bind(handle: u32, target: wgpu::SurfaceTargetUnsafe) -> Re
     let d = device().ok_or(BindRefused::NoDevice)?;
     // SAFETY: the caller's target.
     let surface = unsafe { d.instance.create_surface_unsafe(target) }.map_err(|_| BindRefused::NoSurface)?;
-    let mut config = surface.get_default_config(&d.adapter, 1, 1).ok_or(BindRefused::NoSurface)?;
+    let [width, height] = match d.sizes.get(handle_slot(handle) as usize) {
+        Some(&Some((h, size))) if h == handle => size,
+        _ => [1, 1],
+    };
+    let mut config = surface.get_default_config(&d.adapter, width, height).ok_or(BindRefused::NoSurface)?;
     config.format = SURFACE_FORMAT;
     config.present_mode = wgpu::PresentMode::Fifo;
     surface.configure(&d.device, &config);
@@ -965,8 +975,14 @@ impl Gpu {
 
     pub fn resize(&self, surface: u32, width: u32, height: u32) {
         let Some(d) = device() else { return };
-        let Some(Some(s)) = d.surfaces.get_mut(handle_slot(surface) as usize) else { return };
-        (s.config.width, s.config.height) = (width.max(1), height.max(1));
+        let size = [width.max(1), height.max(1)];
+        let slot = handle_slot(surface) as usize;
+        if d.sizes.len() <= slot {
+            d.sizes.resize(slot + 1, None);
+        }
+        d.sizes[slot] = Some((surface, size));
+        let Some(Some(s)) = d.surfaces.get_mut(slot) else { return };
+        [s.config.width, s.config.height] = size;
         s.surface.configure(&d.device, &s.config);
     }
 
