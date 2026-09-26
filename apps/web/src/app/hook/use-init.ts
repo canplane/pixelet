@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { useBootState } from "@/app/bootstrap.ts";
+
 export const enum LoadState {
   IDLE = "idle", // Initial state
   LOADING = "loading", // Show loading UI (after threshold)
@@ -16,11 +18,13 @@ interface AppInitResult {
 }
 
 /**
- * Hook to manage the global application initialization process.
+ * Hook to manage the global application initialization process: the host's
+ * boot (app/bootstrap.ts).
  */
 export function useAppInit(): AppInitResult {
-  const [loadState] = useState<LoadState>(LoadState.SUCCESS);
+  const boot = useBootState();
   const [store] = useState<unknown>({});
+  const loadState = boot === "ready" ? LoadState.SUCCESS : boot === "failed" ? LoadState.ERROR : LoadState.LOADING;
 
   return { store, loadState };
 }

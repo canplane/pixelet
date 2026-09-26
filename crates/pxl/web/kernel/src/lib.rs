@@ -9,6 +9,7 @@
 
 pub mod abi;
 pub mod control;
+pub mod door;
 pub mod global;
 pub mod host;
 pub mod io;
@@ -17,4 +18,5 @@ pub mod layer;
 pub mod mem;
 pub mod sched;
 pub mod shell;
+pub mod text;
 pub mod world;

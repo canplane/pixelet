@@ -231,7 +231,7 @@ fn side(out: &mut [f64]) {
         },
     );
 
-    let retain = with_world(|world, sched| sched.retention(world)).unwrap_or_default();
+    let retain = with_world(|_, sched| sched.retention()).unwrap_or_default();
     let census = kernel().sched.census;
     put(
         out,

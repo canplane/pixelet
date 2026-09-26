@@ -2,7 +2,8 @@
 
 import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
-import LanguageDetector from "i18next-browser-languagedetector";
+
+import { languageDetector, showLanguage } from "@platform/locale.ts";
 
 import en from "./en.json" with { type: "json" };
 import ko from "./ko.json" with { type: "json" };
@@ -73,7 +74,7 @@ export function bootstrapI18n(): void {
   booted = true;
 
   i18next
-    .use(LanguageDetector)
+    .use(languageDetector)
     .use(initReactI18next)
     .init({
       fallbackLng: "en",
@@ -83,11 +84,6 @@ export function bootstrapI18n(): void {
       resources: {
         en: { translation: catalog.en },
         ko: { translation: catalog.ko },
-      },
-      detection: {
-        order: ["localStorage", "navigator"],
-        caches: ["localStorage"],
-        lookupLocalStorage: "pxl:lang",
       },
       interpolation: {
         // React already escapes interpolated values when rendering — i18next's
@@ -99,12 +95,8 @@ export function bootstrapI18n(): void {
       },
     });
 
-  // index.html ships a static lang="en" for crawlers, which never run the
-  // bundle that would otherwise correct it. For real visitors, keep it in
-  // sync with whatever i18next actually resolves/switches to — detection
-  // is synchronous (see above), so this is correct from the first paint.
-  document.documentElement.lang = i18next.language;
-  i18next.on("languageChanged", (lng) => {
-    document.documentElement.lang = lng;
-  });
+  // Detection is synchronous (see above), so this is correct from the first
+  // paint.
+  showLanguage(i18next.language);
+  i18next.on("languageChanged", showLanguage);
 }

@@ -1,24 +1,25 @@
 // @pxl/web/feature/map/ui/overlay/sensor-status.tsx
 
-import { Compass, Locate } from "lucide-react";
+import { Compass, Locate } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
+import { Pressable, StyleSheet, View } from "react-native";
 
 import { DevicePoseStatus } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_enable_sensors, useKernel } from "@/kernel/shell.ts";
 
-import { cn } from "@/shared/lib/util/cn.ts";
+import { alpha, color } from "@/shared/ui/theme.ts";
 
-function statusClass(status: DevicePoseStatus): string {
+function statusColor(status: DevicePoseStatus): string {
   switch (status) {
     case DevicePoseStatus.Ready:
-      return "text-emerald-500";
+      return color.emerald500;
     case DevicePoseStatus.Loading:
-      return "text-amber-400 animate-pulse";
+      return color.amber400;
     case DevicePoseStatus.Error:
-      return "text-red-400";
+      return color.red400;
     case DevicePoseStatus.Idle:
     default:
-      return "text-[#5B4636]/30";
+      return alpha(color.ink, 0.3);
   }
 }
 
@@ -34,24 +35,23 @@ export function SensorStatus() {
 
   const canRequest: boolean = locationStatus !== DevicePoseStatus.Ready || orientationStatus !== DevicePoseStatus.Ready;
 
+  const icon = (Icon: typeof Locate, status: DevicePoseStatus) => <Icon size={14} strokeWidth={2.5} color={statusColor(status)} />;
   const icons = (
     <>
-      <Locate className={cn("w-3.5 h-3.5 transition-colors duration-500", statusClass(locationStatus))} strokeWidth={2.5} />
-      <Compass className={cn("w-3.5 h-3.5 transition-colors duration-500", statusClass(orientationStatus))} strokeWidth={2.5} />
+      {icon(Locate, locationStatus)}
+      {icon(Compass, orientationStatus)}
     </>
   );
 
-  if (!canRequest) return <div className="flex items-center gap-2">{icons}</div>;
+  if (!canRequest) return <View style={styles.row}>{icons}</View>;
 
   return (
-    <button
-      type="button"
-      onClick={kernel_enable_sensors}
-      className="flex items-center gap-2 -m-2 p-2 cursor-pointer pointer-events-auto"
-      title={t("map.sensors.enable")}
-      aria-label={t("map.sensors.enable")}
-    >
+    <Pressable onPress={kernel_enable_sensors} hitSlop={8} accessibilityRole="button" accessibilityLabel={t("map.sensors.enable")} style={styles.row}>
       {icons}
-    </button>
+    </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "center", gap: 8 },
+});

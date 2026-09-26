@@ -70,7 +70,7 @@ use super::frame::{cmd_of, cmd_word, flags_of, FRAME_CMD, FRAME_PACKET, FRAME_RE
 /// it dropped a ring's capacity word and left the rest of the header standing,
 /// so the ring read back as one of capacity 0.
 fn at_of<T>(mem: *mut u8, off: usize) -> *mut T {
-    (mem as usize + off) as *mut T
+    core::ptr::with_exposed_provenance_mut(mem.expose_provenance() + off)
 }
 
 pub const RING_HEADER_WORDS: u32 = 8;

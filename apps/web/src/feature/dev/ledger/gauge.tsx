@@ -20,13 +20,15 @@
  */
 
 import { round } from "@xpute/core/math/scalar.ts";
+import { StyleSheet, Text, View } from "react-native";
 
 import { EFFECT_NAMES } from "./ledger.spec.ts";
 import { n1, pct, tris, valueText } from "./lane.ts";
 import { BOUND, failText } from "./report.ts";
 import type { FrameSummary, Gauge, Spread } from "./view.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
-import { CORE_MEMORY } from "@/kernel/mem.ts";
+import { CORE } from "@/kernel/mem.ts";
+import { alpha, color, font } from "@/shared/ui/theme.ts";
 
 /** Tags listed under the triangle total — the heaviest few carry the cost —
  * and spans under the GPU's time, and levels under the terrain's triangles. */
@@ -61,23 +63,26 @@ const ATLAS_SPARSE_PCT = 25;
 
 function Row(props: { k: string; v: string; warn?: boolean }) {
   return (
-    <div className="flex justify-between gap-3">
-      <span className="text-white/45">{props.k}</span>
-      <span className={props.warn ? "text-amber-400" : "text-white/90"}>{props.v}</span>
-    </div>
+    <View style={gauge.row}>
+      <Text style={[gauge.text, gauge.key]}>{props.k}</Text>
+      <Text style={[gauge.text, props.warn && gauge.warn]}>{props.v}</Text>
+    </View>
   );
 }
 
-const Rule = () => <div className="my-1 border-t border-white/10" />;
+/** A note where a row's numbers would be. */
+const Note = ({ children }: { children: string }) => <Text style={[gauge.text, gauge.key]}>{children}</Text>;
+
+export const Rule = () => <View style={gauge.rule} />;
 
 /** A section's start: the rule that separated one from the next, with the word
  * it separates on it. The panel runs to forty rows and a reader is looking for
  * one of them; a bare rule says where a group ends and never what it is. */
 const Head = ({ children }: { children: string }) => (
-  <div className="mt-2 mb-0.5 flex items-center gap-2">
-    <span className="text-[0.7em] uppercase tracking-wider text-white/30">{children}</span>
-    <div className="flex-1 border-t border-white/10" />
-  </div>
+  <View style={gauge.head}>
+    <Text style={[gauge.text, gauge.headText]}>{children}</Text>
+    <View style={gauge.headLine} />
+  </View>
 );
 
 const phase = (f: FrameSummary, name: string): Spread => f.phases.find((p) => p.name === name)?.spread ?? { p50: 0, p95: 0, max: 0 };
@@ -85,7 +90,7 @@ const phase = (f: FrameSummary, name: string): Spread => f.phases.find((p) => p.
 /** The panel over one read of the window; the overlay polls and hands it down,
  * since the start/stop buttons above the panel read the same `rec`. */
 export function LedgerGauge({ g }: { g: Gauge | null }) {
-  if (g === null) return <div className="text-white/45">no window open</div>;
+  if (g === null) return <Note>no window open</Note>;
 
   const { rec, frames: f } = g;
   const atlasPct = round((g.atlas.used_px / (g.atlas.size * g.atlas.size)) * 100);
@@ -101,7 +106,7 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
         warn={rec.recording || rec.truncated}
       />
 
-      {f === null && <div className="text-white/45">no frames sampled yet</div>}
+      {f === null && <Note>no frames sampled yet</Note>}
       {f !== null && (
         <>
           <Head>pace</Head>
@@ -239,7 +244,7 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
               and the kernel is handed a range rather than told how big the page
               thinks it is. */
           }
-          <Row k="  core MB" v={`${round(CORE_MEMORY.buffer.byteLength / 1048576)}MB`} />
+          <Row k="  core MB" v={`${round(CORE.buffer.byteLength / 1048576)}MB`} />
           <Row k="buffers / arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)} / ${valueText("_mb", f.last.arena_mb)}`} />
           <Row k="targets MB" v={`d${f.last.tex_depth_mb} s${f.last.tex_shadow_mb} l${f.last.tex_layers_mb}`} />
           {g.atlas.entries > 0 && <Row k="atlas" v={`${g.atlas.size}px ${g.atlas.entries} ${atlasPct}%`} warn={g.atlas.size > ATLAS_INITIAL && atlasPct < ATLAS_SPARSE_PCT} />}
@@ -248,11 +253,11 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
 
       {g.tasks.length > 0 && <Rule />}
       {g.tasks.map((t) => (
-        <div key={t.category}>
+        <View key={t.category}>
           <Row k={`${t.category}${BOUND[t.category] ? ` (${BOUND[t.category].bound})` : ""} p50/p95`} v={`${n1(t.lat.p50)}/${n1(t.lat.p95)}ms`} />
           <Row k="  ok/ab/err" v={`${t.ok}/${t.aborted}/${t.error}`} warn={t.error > 0} />
           {t.reasons.length > 0 && <Row k="  top err" v={`${failText(t.reasons[0].fail, t.reasons[0].detail)} x${t.reasons[0].n}`} warn />}
-        </div>
+        </View>
       ))}
 
       <Rule />
@@ -267,3 +272,15 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
     </>
   );
 }
+
+/** The panel's type: a small monospace, which the numbers line up in. */
+export const gauge = StyleSheet.create({
+  text: { fontFamily: font.mono, fontSize: 10.5, lineHeight: 16, color: alpha(color.white, 0.9) },
+  key: { color: alpha(color.white, 0.45) },
+  warn: { color: color.amber400 },
+  row: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
+  rule: { marginVertical: 4, borderTopWidth: 1, borderTopColor: alpha(color.white, 0.1) },
+  head: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 2 },
+  headText: { fontSize: 7.5, letterSpacing: 1, textTransform: "uppercase", color: alpha(color.white, 0.3) },
+  headLine: { flex: 1, borderTopWidth: 1, borderTopColor: alpha(color.white, 0.1) },
+});

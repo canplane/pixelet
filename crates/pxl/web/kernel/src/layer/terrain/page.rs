@@ -19,6 +19,7 @@ use pxl_spec::space::pyramid::LevelPage;
 use pxl_spec::space::pyramid::PAGE_CELLS;
 use pxl_spec::space::xy::TO_XY;
 use xpute_runtime::abi::fetch::FetchFail;
+use xpute_runtime::mem::base::ptr_at;
 
 use crate::sched::ledger::record::Failure;
 
@@ -63,8 +64,8 @@ impl Layer for Terrain {
         let room = PageRoom {
             // SAFETY: the record is this page's from the pyramid, at the
             // page's lane sizes, and nothing reads it until the page is set.
-            cells: unsafe { core::slice::from_raw_parts_mut(lanes.cells as *mut GroundCell, CELLS) },
-            ele: unsafe { core::slice::from_raw_parts_mut(lanes.ele as *mut i16, SAMPLES) },
+            cells: unsafe { core::slice::from_raw_parts_mut(ptr_at::<GroundCell>(lanes.cells), CELLS) },
+            ele: unsafe { core::slice::from_raw_parts_mut(ptr_at::<i16>(lanes.ele), SAMPLES) },
         };
         decode_terrain_into(pkt, room)?;
         phases.push(TaskPhaseName::decode_ms, now() - t0);
@@ -125,9 +126,9 @@ unsafe fn open_terrain(lanes: TerrainLanes) -> Terrain {
     // cell, an i16 lane 2 bytes a sample.
     Terrain {
         ground: Ground {
-            cells: unsafe { core::slice::from_raw_parts(lanes.cells as *const GroundCell, CELLS) }.into(),
+            cells: unsafe { core::slice::from_raw_parts(ptr_at::<GroundCell>(lanes.cells), CELLS) }.into(),
         },
-        ele: unsafe { core::slice::from_raw_parts(lanes.ele as *const i16, SAMPLES) }.into(),
+        ele: unsafe { core::slice::from_raw_parts(ptr_at::<i16>(lanes.ele), SAMPLES) }.into(),
     }
 }
 
@@ -139,13 +140,13 @@ fn write_lanes(t: &Terrain, lanes: TerrainLanes) {
     };
     let cells = &t.ground.cells;
     let sources = [
-        bytes(cells.as_ptr() as *const u8, cells.len() * core::mem::size_of::<GroundCell>()),
-        bytes(t.ele.as_ptr() as *const u8, t.ele.len() * 2),
+        bytes(cells.as_ptr().cast::<u8>(), cells.len() * core::mem::size_of::<GroundCell>()),
+        bytes(t.ele.as_ptr().cast::<u8>(), t.ele.len() * 2),
     ];
     for (src, to) in sources.iter().zip([lanes.cells, lanes.ele]) {
         // SAFETY: `to` is the page's room in the range, the lane's own size,
         // and apart from `src`.
-        unsafe { core::ptr::copy_nonoverlapping(src.as_ptr(), to as *mut u8, src.len()) };
+        unsafe { core::ptr::copy_nonoverlapping(src.as_ptr(), ptr_at::<u8>(to), src.len()) };
     }
 }
 

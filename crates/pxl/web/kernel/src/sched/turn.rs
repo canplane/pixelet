@@ -43,6 +43,7 @@ use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickReport, T
 use crate::shell::map_store::map_store;
 #[cfg(feature = "dev")]
 use crate::shell::setting::store::settings_store;
+use crate::text::text_rise;
 use crate::world::change::{request_world_tick, world_edge};
 use crate::world::chunk::source::chunk_sources_step;
 use crate::world::chunk::stage::{core_tick_report_step, core_tick_visible_step, set_host_task_ms, set_turn_timing, take_draw};
@@ -301,6 +302,7 @@ fn world_frame(host: HostFrame, quota_ms: f64, edge_at: f64) -> TickReport {
     } = host;
     let t0 = now();
     set_credits(credits);
+    text_rise();
     let effects_ms = world_turn();
     let state = TICK_STATE.get(TickState::default);
     state.width = width;

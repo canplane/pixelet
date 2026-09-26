@@ -1,0 +1,22 @@
+{
+  "name": "@pxl/native",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "EXPO_NO_TYPESCRIPT_SETUP=1 deno run -A npm:expo@57.0.25 start"
+  },
+  "dependencies": {
+    "expo": "57.0.25",
+    "expo-glass-effect": "~57.0.4",
+    "expo-location": "~57.0.20",
+    "i18next": "^26.4.2",
+    "lucide-react-native": "^1.48.0",
+    "react": "19.2.3",
+    "react-i18next": "^17.0.14",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4",
+    "zustand": "^5.0.15"
+  }
+}

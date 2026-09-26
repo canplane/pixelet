@@ -1,11 +1,13 @@
 // @pxl/web/feature/map/ui/overlay/top-overlays.tsx
 
-import { Search } from "lucide-react";
+import { Search } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
+import { Pressable, StyleSheet, View } from "react-native";
 
-import { cn } from "@/shared/lib/util/cn.ts";
+import { Glass } from "@platform/glass.tsx";
+import { useViewportTop } from "@platform/visual-viewport.ts";
 import { useAppContext } from "@/app/provider/context.ts";
-import { useCameraBusyInteractionStyle } from "@/feature/map/ui/use-camera-busy-interaction-style.ts";
+import { alpha, chrome, color } from "@/shared/ui/theme.ts";
 import { CurrentAddress } from "./current-address.tsx";
 import { useReverseGeocode } from "./use-reverse-geocode.ts";
 import { SensorStatus } from "./sensor-status.tsx";
@@ -16,73 +18,73 @@ import { TrackingButton } from "@/feature/map/ui/control/tracking-button.tsx";
 import { SettingsTriggerButton } from "@/feature/setting/trigger-button.tsx";
 
 export function TopOverlays() {
-  const { isCameraBusy, interactionStyle } = useCameraBusyInteractionStyle();
   const { ui } = useAppContext();
   const { t } = useTranslation();
+  const top = chrome.inset + useViewportTop();
 
   const addressLabel = useReverseGeocode();
 
   return (
     <>
-      <div className={cn("absolute top-[calc(1rem+var(--vv-top,0px))] left-4 z-50 flex flex-col items-start gap-3", interactionStyle)}>
-        <div className="pointer-events-auto">
-          <SettingsTriggerButton />
-        </div>
+      <View style={[styles.left, { top }]}>
+        <SettingsTriggerButton />
         {__IS_DEV__ && <DummyChatText />}
-      </div>
+      </View>
 
-      <div
-        className={cn(
-          "absolute top-[calc(1rem+var(--vv-top,0px))] right-4 z-50 flex flex-col items-end gap-4 pointer-events-none",
-          interactionStyle,
-        )}
-      >
-        <div className="flex flex-col items-end gap-1">
+      <View style={[styles.right, { top }]}>
+        {
+          /* The round controls' ground: the platform's glass, or their solid
+          cream where it has none. */
+        }
+        <Glass fill={color.cream} style={styles.pill}>
           {
-            /* Solid, not translucent — same as mode-bar.tsx's own chrome
-          (its tool strip is a flat bg-neutral-900, not an alpha'd one), and
-          matches the round controls' own solid cream bg-[#FFFDF7]. */
+            /* Opens forward search — the current-address label and "where
+            do I want to go" share the same mental slot on a map, so this
+            is the one trigger for both rather than a separate
+            always-visible search bar. A sibling of SensorStatus, which is
+            its own button, rather than a wrapper around the whole pill. */
           }
-          <div className="flex items-center gap-2 h-6 bg-[#FFFDF7] rounded-full px-3 w-fit">
+          <Pressable onPress={ui.openSearchModal} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.search}>
             {
-              /* Opens forward search — the current-address label and "where
-              do I want to go" share the same mental slot on a map, so this
-              is the one trigger for both rather than a separate
-              always-visible search bar. A sibling button, not a wrapper
-              around the whole pill: SensorStatus is its own clickable
-              button right next to it, and nesting one button inside
-              another is invalid HTML. */
+              /* Always visible, unlike the address text (CurrentAddress
+              renders nothing until a label resolves) — without this the
+              whole trigger would be an invisible tap target on first
+              load or over unmapped water. SensorStatus's icon size, the
+              glyphs beside it in this same pill. */
             }
-            <button
-              type="button"
-              onClick={ui.openSearchModal}
-              aria-label={t("map.search.trigger_aria_label")}
-              className="min-w-0 flex items-center gap-1.5 pointer-events-auto cursor-pointer"
-            >
-              {
-                /* Always visible, unlike the address text (CurrentAddress
-                renders nothing until a label resolves) — without this the
-                whole trigger would be an invisible tap target on first
-                load or over unmapped water. w-3.5 h-3.5 to match
-                SensorStatus's own icons right next to it in this same
-                pill, not an arbitrary size of its own. */
-              }
-              <Search className="w-3.5 h-3.5 text-[#5B4636]/50 shrink-0" />
-              <CurrentAddress label={addressLabel} />
-            </button>
-            <SensorStatus />
-          </div>
-        </div>
+            <Search size={14} color={alpha(color.ink, 0.5)} />
+            <CurrentAddress label={addressLabel} />
+          </Pressable>
+          <SensorStatus />
+        </Glass>
 
-        <div className={cn("flex items-start gap-2.5", !isCameraBusy && "pointer-events-auto")}>
+        <View style={styles.controls}>
           <MapScaleBar />
 
-          <div className="flex flex-col items-center gap-2.5">
+          <View style={styles.stack}>
             <TrackingButton />
             <MapCompass />
-          </div>
-        </div>
-      </div>
+          </View>
+        </View>
+      </View>
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  // A layer takes no touches itself, only what stands on it: the map between
+  // the controls is still the map.
+  left: { position: "absolute", left: chrome.inset, zIndex: 50, alignItems: "flex-start", gap: 12, pointerEvents: "box-none" },
+  right: { position: "absolute", right: chrome.inset, zIndex: 50, alignItems: "flex-end", gap: 16, pointerEvents: "box-none" },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    height: 24,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  search: { flexDirection: "row", alignItems: "center", gap: 6, minWidth: 0, flexShrink: 1 },
+  controls: { flexDirection: "row", alignItems: "flex-start", gap: chrome.controlGap },
+  stack: { alignItems: "center", gap: chrome.controlGap },
+});

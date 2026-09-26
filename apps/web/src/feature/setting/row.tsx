@@ -1,37 +1,45 @@
 // @pxl/web/feature/setting/row.tsx
 
-import type { LucideIcon } from "lucide-react";
-
+import type { LucideIcon } from "lucide-react-native";
 import type { ReactNode } from "react";
+import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 
-import { cn } from "@/shared/lib/util/cn.ts";
-import { Switch } from "@/shared/ui/shadcn/switch.tsx";
 import type { SettingCost } from "@/feature/setting/schema.ts";
+import { alpha, color, font, hairline } from "@/shared/ui/theme.ts";
 
-const COST_CLASS: Record<SettingCost, string> = {
-  low: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600",
-  med: "border-amber-500/30 bg-amber-500/10 text-amber-600",
-  high: "border-red-500/30 bg-red-500/10 text-red-600",
+const COST_COLOR: Record<SettingCost, string> = {
+  low: color.emerald600,
+  med: color.amber600,
+  high: color.red600,
 };
 
-function CostBadge(props: { cost: SettingCost }) {
+function Badge({ text, tint }: { text: string; tint: string }) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-1 py-0.5 text-[9px] font-semibold leading-none tracking-wide",
-        COST_CLASS[props.cost],
-      )}
-    >
-      {props.cost.toUpperCase()}
-    </span>
+    <View style={[styles.badge, { borderColor: alpha(tint, 0.3), backgroundColor: alpha(tint, 0.1) }]}>
+      <Text style={[styles.badgeText, { color: tint }]}>{text}</Text>
+    </View>
   );
 }
 
+function CostBadge(props: { cost: SettingCost }) {
+  return <Badge text={props.cost.toUpperCase()} tint={COST_COLOR[props.cost]} />;
+}
+
 function DevBadge() {
+  return <Badge text="DEV" tint={color.violet600} />;
+}
+
+/** A name, its badges, and what it does under it. */
+function Described({ label, description, cost, dev }: { label: string; description: string; cost?: SettingCost; dev?: boolean }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-violet-500/30 bg-violet-500/10 px-1 py-0.5 text-[9px] font-semibold leading-none tracking-wide text-violet-600">
-      DEV
-    </span>
+    <View style={styles.described}>
+      <View style={styles.nameLine}>
+        <Text style={styles.name}>{label}</Text>
+        {dev && <DevBadge />}
+        {cost && <CostBadge cost={cost} />}
+      </View>
+      <Text style={styles.description}>{description}</Text>
+    </View>
   );
 }
 
@@ -45,20 +53,24 @@ interface SettingRowProps {
   dev?: boolean;
 }
 
+/** A toggle: the whole row is its switch. */
 export function SettingRow(props: SettingRowProps) {
   const { label, description, active, onToggle, cost, dev } = props;
   return (
-    <label className="flex items-center justify-between gap-3 rounded-[8px] px-3 py-2.5 -mx-3 transition-colors hover:bg-accent/50 cursor-pointer">
-      <div className="min-w-0 flex flex-col gap-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[15px] font-medium leading-tight">{label}</span>
-          {dev && <DevBadge />}
-          {cost && <CostBadge cost={cost} />}
-        </div>
-        <div className="text-[12px] leading-snug text-muted-foreground">{description}</div>
-      </div>
-      <Switch checked={active} onCheckedChange={onToggle} />
-    </label>
+    <Pressable onPress={onToggle} accessibilityRole="switch" aria-checked={active} style={[styles.row, styles.bleed]}>
+      <Described label={label} description={description} cost={cost} dev={dev} />
+      <Switch
+        value={active}
+        onValueChange={onToggle}
+        trackColor={{ false: color.input, true: color.primary }}
+        thumbColor={color.white}
+        {
+          // react-native-web colors an on thumb by this alone, and teal where
+          // it is not given; React Native's types do not name it.
+          ...{ activeThumbColor: color.white }
+        }
+      />
+    </Pressable>
   );
 }
 
@@ -73,14 +85,12 @@ interface SettingGroupProps {
  * that draws it — a fieldset's legend, drawn rather than declared. The
  * answers each name an answer and nothing said what they were answers to; a
  * name floating above the box would have been a second thing to place, so
- * the name sits on the border itself, carrying the sheet's own background
+ * the name sits on the border itself, carrying the panel's own background
  * so the line appears to run through it on either side. The box takes the
  * top padding the name needs to clear the first answer, and the name is
  * inset to the left rather than centered, since every other line in the
- * sheet starts at the left — by its own padding, so the name starts exactly
- * where the answers' names start. A pixel above the line rather than
- * centered on it: the badges beside the name make the span taller than the
- * name is, and centering the span left the name reading low.
+ * panel starts at the left — by its own padding, so the name starts exactly
+ * where the answers' names start.
  *
  * The box stands away from the rows it sits among — a switch's row has only
  * the section's own gap around it, which left this one reading as another
@@ -90,14 +100,14 @@ interface SettingGroupProps {
 export function SettingGroup(props: SettingGroupProps) {
   const { label, cost, dev, children } = props;
   return (
-    <div className="relative -mx-3 mb-2.5 mt-4 rounded-[10px] border border-border p-1 pt-2.5">
-      <span className="absolute -top-px left-2 flex -translate-y-1/2 items-center gap-1.5 bg-background px-2 text-[12px] font-medium leading-none">
-        {label}
+    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[styles.group, styles.bleed]}>
+      <View style={styles.legend}>
+        <Text style={styles.legendText}>{label}</Text>
         {dev && <DevBadge />}
         {cost && <CostBadge cost={cost} />}
-      </span>
-      <div className="flex flex-col gap-0.5">{children}</div>
-    </div>
+      </View>
+      <View style={styles.answers}>{children}</View>
+    </View>
   );
 }
 
@@ -109,25 +119,16 @@ interface SettingRadioRowProps {
   cost?: SettingCost;
 }
 
-/** One option in a mutually-exclusive settings group — same label/
- * description/cost-badge layout as SettingRow, a radio instead of a Switch
- * since selecting one option here deselects the others (see e.g.
- * schema.ts's camera_terrain). No -mx-3 bleed like SettingRow: this is
- * meant to sit inside a small background-grouped wrapper (its own padding,
- * not the tab content's px-5), not directly against the tab content edge. */
+/** One answer of a choice — the same layout as SettingRow, with a radio
+ * mark, since picking one answer here drops the others. It sits inside its
+ * group's box, so it does not bleed to the panel's edge as a row does. */
 export function SettingRadioRow(props: SettingRadioRowProps) {
   const { label, description, selected, onSelect, cost } = props;
   return (
-    <label className="flex items-center justify-between gap-3 rounded-[8px] px-3 py-2.5 transition-colors hover:bg-accent/50 cursor-pointer">
-      <div className="min-w-0 flex flex-col gap-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[15px] font-medium leading-tight">{label}</span>
-          {cost && <CostBadge cost={cost} />}
-        </div>
-        <div className="text-[12px] leading-snug text-muted-foreground">{description}</div>
-      </div>
-      <input type="radio" checked={selected} onChange={onSelect} className="size-4 shrink-0 accent-primary cursor-pointer" />
-    </label>
+    <Pressable onPress={onSelect} accessibilityRole="radio" aria-checked={selected} style={styles.row}>
+      <Described label={label} description={description} cost={cost} />
+      <View style={[styles.radio, selected && styles.radioOn]}>{selected && <View style={styles.radioDot} />}</View>
+    </Pressable>
   );
 }
 
@@ -144,13 +145,61 @@ interface SectionTitleProps {
 export function SectionTitle(props: SectionTitleProps) {
   const { children, icon: Icon, caption, dev } = props;
   return (
-    <div className="flex flex-col gap-1 mb-1">
-      <h3 className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {Icon && <Icon className="size-4" />}
-        {children}
+    <View style={styles.titleBlock}>
+      <View style={styles.titleLine}>
+        {Icon && <Icon size={16} color={color.mutedForeground} />}
+        <Text accessibilityRole="header" style={styles.title}>{children}</Text>
         {dev && <DevBadge />}
-      </h3>
-      {caption && <p className="text-[11px] text-muted-foreground/70">{caption}</p>}
-    </div>
+      </View>
+      {caption && <Text style={styles.caption}>{caption}</Text>}
+    </View>
   );
+}
+
+/** Settings' shared type: the panel's small print. */
+export const settingText = StyleSheet.create({
+  small: { fontFamily: font.family, fontSize: 12, lineHeight: 17, color: color.mutedForeground },
+  faint: { fontFamily: font.family, fontSize: 11, lineHeight: 15, color: alpha(color.mutedForeground, 0.7) },
+  link: { textDecorationLine: "underline" },
+});
+
+const styles = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8 },
+  // A row reaches past the panel's padding to its edge, so its own padding
+  // lines its words up with the section title's.
+  bleed: { marginHorizontal: -12 },
+  described: { flexShrink: 1, minWidth: 0, gap: 4 },
+  nameLine: { flexDirection: "row", alignItems: "center", gap: 6 },
+  name: { fontFamily: font.family, fontSize: 15, fontWeight: "500", lineHeight: 19, color: color.foreground },
+  description: settingTextOf(12, color.mutedForeground),
+
+  badge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 4, paddingVertical: 2 },
+  badgeText: { fontFamily: font.family, fontSize: 9, fontWeight: "600", lineHeight: 10, letterSpacing: 0.4 },
+
+  group: { marginTop: 16, marginBottom: 10, borderWidth: 1, borderColor: hairline, borderRadius: 10, padding: 4, paddingTop: 10 },
+  legend: {
+    position: "absolute",
+    top: -7,
+    left: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+    backgroundColor: color.background,
+  },
+  legendText: { fontFamily: font.family, fontSize: 12, fontWeight: "500", lineHeight: 13, color: color.foreground },
+  answers: { gap: 2 },
+
+  radio: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: color.input, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  radioOn: { borderColor: color.primary },
+  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: color.primary },
+
+  titleBlock: { gap: 4, marginBottom: 4 },
+  titleLine: { flexDirection: "row", alignItems: "center", gap: 6 },
+  title: { fontFamily: font.family, fontSize: 12, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: color.mutedForeground },
+  caption: settingTextOf(11, alpha(color.mutedForeground, 0.7)),
+});
+
+function settingTextOf(fontSize: number, tint: string) {
+  return { fontFamily: font.family, fontSize, lineHeight: Math.round(fontSize * 1.4), color: tint };
 }

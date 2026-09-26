@@ -32,6 +32,7 @@ use crate::layer::decor::asset_store::decor_bundle_assets;
 use crate::layer::environment::config::rim_cfg;
 use crate::sched::ledger::record::{DeviceSample, DrawCensus, GpuSample, CENSUS_LEN};
 use crate::shell::setting::store::{settings_store, AoMode};
+use crate::text::text_raster;
 use crate::world::change::request_world_tick;
 use crate::world::chunk::stage::{set_host_frame_stat, HostFrameStat};
 use crate::world::frame::resolution::resolution_observe;
@@ -104,6 +105,7 @@ pub fn stage_render() {
         cases: &cases[..case_cnt],
         sheet: || load_image(Load::Sheet),
         moon: || load_image(Load::Asset(Asset::sky_moon_png)),
+        text: text_raster,
         atlas: billboard_sheet(),
         handheld: handheld(),
     });

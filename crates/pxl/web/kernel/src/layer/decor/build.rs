@@ -446,7 +446,7 @@ impl<'s> DecorBuild<'s> {
     /// `at` must address `bytes()` bytes, 4-aligned, the caller's to write.
     pub unsafe fn write(&self, at: *mut u8) {
         let s = self.scratch;
-        let words = at as *mut u32;
+        let words = at.cast::<u32>();
         let groups = s.group_count;
         *words = groups as u32;
         let mut lanes = [GroupLanes { first: 0, count: 0 }; DECOR_GROUPS];

@@ -134,9 +134,12 @@ fn fs(i: VertexOut) -> FragOut {
     discard;
   }
   var o: FragOut;
+  // The sheet holds its colors premultiplied (gpu/sheet.rs), which its mips
+  // filter without a dark fringe; the pass lays a straight color over.
+  let color = texel.rgb / max(texel.a, 1e-4);
   // Vignetted as the world under it is: the post stack darkened the whole
   // screen, badges included.
-  o.color = vec4f(to_srgb(grade(texel.rgb) * vignette_of(i.clip.xy, badge.viewport, badge.vignette)), texel.a * i.opacity);
+  o.color = vec4f(to_srgb(grade(color) * vignette_of(i.clip.xy, badge.viewport, badge.vignette)), texel.a * i.opacity);
   o.depth = i.upright_z;
   return o;
 }

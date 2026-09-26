@@ -113,7 +113,7 @@ pub fn preview_step(ctx: &mut TickContext) {
         if case.actor.is_none() {
             if let (Some(model), Some(_)) = (&case.model, case.skin) {
                 let id = model.model;
-                case.actor = with_world(|world, sched| sched.models.new_actor(world, &mut sched.draw, id)).flatten();
+                case.actor = with_world(|_, sched| sched.models.new_actor(&mut sched.draw, id)).flatten();
                 if let (Some(actor), true) = (case.actor, IDLE_CLIP < model.clip_count) {
                     kernel().sched.models.play(actor, IDLE_CLIP, 0.0);
                 }

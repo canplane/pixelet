@@ -20,7 +20,7 @@
 pub mod stream {
     pub const HEAD: u32 = 2;
     /// The range's size. A record names what it moves rather than carrying it, so
-    /// a turn's records are words, and a glyph request's code points the most of them.
+    /// a turn's records are words, and a text's bytes the most of them.
     pub const BYTES: u32 = 65536;
     pub const KEYS: &[&str] = &["HEAD", "BYTES"];
 }
@@ -31,13 +31,20 @@ pub mod op {
     pub const BODY_READ: u32 = 1;
     /// key, at, len: the UTF-8 at `at` stored under `storage`'s key
     pub const STORAGE_SET: u32 = 2;
-    /// weight, px (f32 bits), at, then code points: each one's advance in the page's own
-    /// family at the weight and size, a float apiece from `at`
-    pub const MEASURE: u32 = 3;
+    /// weight, px (f32 bits), max width (f32 bits, 0 for one line), at, lines, then the
+    /// text's bytes: the text in the platform's own family at the weight and size, broken
+    /// into lines no wider than the width where it can be; at `at`, how many lines, then
+    /// a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
+    pub const TEXT_LAYOUT: u32 = 3;
+    /// weight, px (f32 bits), color (0xRRGGBBAA), at, width, height, x (f32 bits), then
+    /// the text's bytes: one line drawn in the platform's own family, starting at x with
+    /// the middle of its em box on the middle row, into `width` by `height` pixels at
+    /// `at`, RGBA a byte a channel, top row first, alpha not premultiplied
+    pub const TEXT_RASTER: u32 = 5;
     /// errno, line, column, a (low, high word), b (low, high word), then the file's bytes:
     /// the broken invariant the kernel reported before it trapped (xpute-core status/bug.rs)
     pub const PANIC: u32 = 4;
-    pub const KEYS: &[&str] = &["BODY_READ", "STORAGE_SET", "MEASURE", "PANIC"];
+    pub const KEYS: &[&str] = &["BODY_READ", "STORAGE_SET", "TEXT_LAYOUT", "TEXT_RASTER", "PANIC"];
 }
 
 /// What the kernel keeps in the browser's storage, by the key the host keeps it under (`STORAGE_KEYS`).

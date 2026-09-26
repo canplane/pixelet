@@ -33,22 +33,20 @@
 //! enough — MAX_SIZE is a place to give up, not a bound. Pack *glyphs* instead
 //! and the sheet is bounded by the script. That is what map renderers do, and
 //! it is the only version of this that stops growing with the world; it costs
-//! a badge becoming a run of quads, which is the same instanced machinery with
-//! a different count.
+//! a badge becoming a run of quads, and the text a run of glyphs the kernel
+//! places itself — shaping, kerning and joining that the platform does now,
+//! drawing a line whole (gpu/text.rs).
 //!
 //! ---
 //!
-//! **The pixels are the shell's.** An entry is a rectangle and a DrawSpec —
-//! what to paint, as data — and the shell's canvas paints it: the whole sheet
-//! when the generation moved (growth and compaction replace the sheet), else
-//! only the dirty entries, each through a scratch the size of one badge.
-//! Uploads are rectangles, not the sheet: re-uploading the whole canvas
-//! whenever a badge was drawn cost 64 MB at 4096 px once for every frame a
-//! badge was drawn in, and a phone paid it as a hundred-millisecond task each
-//! time. The scratch is painted from the spec rather than copied out of the
-//! sheet: reading a rectangle out of a large accelerated canvas has WebKit read
-//! the whole canvas back into a pixel buffer — 64 MB of ArrayBuffer at 4096 px,
-//! once per flush.
+//! **An entry is drawn from what drew it.** An entry is a rectangle and a
+//! DrawSpec — what to draw, as data — and the renderer draws it on the device
+//! (gpu/sheet.rs): the whole sheet when the generation moved (growth and
+//! compaction replace the sheet), else only the dirty entries, each into a
+//! texture its own size and copied into its rectangle. What is written is
+//! rectangles, never the sheet: re-uploading the whole sheet whenever a badge
+//! was drawn cost 64 MB at 4096 px once for every frame a badge was drawn in,
+//! and a phone paid it as a hundred-millisecond task each time.
 
 /// An entry is a slot, named by its index, and a consumer keeps that index for
 /// as long as the badge is cached. Its rectangle is read through the `u0`..`v1`
@@ -281,7 +279,9 @@ impl BillboardAtlas {
         slot
     }
 
-    fn mark_dirty(&mut self, slot: u32) {
+    /// Draws `slot` again at the next flush: what it is drawn from was not
+    /// there when it was last taken.
+    pub fn mark_dirty(&mut self, slot: u32) {
         let s = slot as usize;
         if self.is_dirty.len() <= s {
             self.is_dirty.resize(s + 1, false);

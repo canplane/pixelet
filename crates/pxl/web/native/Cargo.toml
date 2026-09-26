@@ -1,0 +1,30 @@
+[package]
+name = "pxl-native"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+# Linked into the device app's binary, as pxl-wasm is instantiated by the page.
+crate-type = ["staticlib"]
+path = "src/lib.rs"
+test = false
+doctest = false
+
+[dependencies]
+xpute-core = { path = "../../../xpute/core" }
+xpute-runtime = { path = "../../../xpute/runtime" }
+pxl-kernel = { path = "../kernel", default-features = false }
+pxl-render = { path = "../render" }
+# The view's layer made a surface on (src/surface.rs); the device and every
+# call on it are pxl-render's.
+wgpu = { version = "30", default-features = false, features = ["metal", "wgsl"] }
+
+[features]
+# Forwarded to the kernel, as pxl-wasm forwards it: on for a build anyone
+# works on.
+default = ["dev"]
+dev = ["pxl-kernel/dev"]
+
+[lints]
+workspace = true

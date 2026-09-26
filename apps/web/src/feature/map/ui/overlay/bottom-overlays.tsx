@@ -1,37 +1,24 @@
 // @pxl/web/feature/map/ui/overlay/bottom-overlays.tsx
 
-import { cn } from "@/shared/lib/util/cn.ts";
-import { useCameraBusyInteractionStyle } from "@/feature/map/ui/use-camera-busy-interaction-style.ts";
+import { StyleSheet, View } from "react-native";
+
+import { AboveKeyboard } from "@platform/above-keyboard.tsx";
+import { chrome } from "@/shared/ui/theme.ts";
 import { ModeBar } from "./mode-bar.tsx";
 
-// How far off the screen bottom this positions ModeBar — app/layout.tsx
-// reads this (together with mode-bar.tsx's own MODE_BAR_HEIGHT_PX) to keep
-// Toaster clear of it.
-export const BOTTOM_OFFSET_PX = 16;
-
 export function BottomOverlays() {
-  const { isCameraBusy, interactionStyle } = useCameraBusyInteractionStyle();
-
   return (
-    <>
-      <div
-        // iOS delivers visualViewport events inconsistently (streamed while the
-        // keyboard opens, or as one final value if it was already up), so only
-        // `bottom` gets a short ease here — long enough to read as motion, short
-        // enough to stay attached during the streaming case.
-        //
-        // bottom via inline style, not a Tailwind bottom-[calc(...)] class:
-        // BOTTOM_OFFSET_PX needs to reach here as a real value, and
-        // Tailwind's JIT scanner can't see a variable interpolated into an
-        // arbitrary-value class (see mode-bar.tsx's own note on this).
-        className={cn("absolute left-4 right-4 z-40 pointer-events-none transition-[bottom] duration-150 ease-out", interactionStyle)}
-        style={{ bottom: `calc(${BOTTOM_OFFSET_PX}px + var(--vv-bottom, 0px))` }}
-      >
-        {/* ModeBar's own w-full/flex-1 chain needs a real ancestor width to resolve against — without this wrapper, flex-grow has nothing to grow into. */}
-        <div className={cn("min-w-0 w-full flex justify-center", !isCameraBusy && "pointer-events-auto")}>
-          <ModeBar />
-        </div>
-      </div>
-    </>
+    <AboveKeyboard inset={chrome.inset}>
+      <View style={styles.row}>
+        <ModeBar />
+      </View>
+    </AboveKeyboard>
   );
 }
+
+const styles = StyleSheet.create({
+  // ModeBar's own width chain needs a real ancestor width to resolve
+  // against — without it, a growing child has nothing to grow into. The
+  // row itself takes no touches, only the bar on it.
+  row: { width: "100%", minWidth: 0, alignItems: "center", pointerEvents: "box-none" },
+});

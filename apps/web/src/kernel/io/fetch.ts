@@ -31,6 +31,7 @@ import { Command, encode_fetch_update, FetchOutcome } from "@/kernel/abi/cmd.spe
 import { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
 import { declareUnsupported, isUnsupported } from "@/app/store/unsupported-store.ts";
 import { PUBLISHED_TILES } from "@/config/deploy.ts";
+import { origin_get } from "@platform/origin.ts";
 import { tile_url } from "@/config/route.ts";
 import { BAKE_KINDS } from "@/config/published.spec.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
@@ -38,9 +39,27 @@ import { hold_body } from "@/kernel/module.ts";
 import { request_frame } from "@/kernel/sched.ts";
 
 /** Every read the scheduler started and the host has not settled, by the key
- * it handed out. One map for both kinds: a stop names a key and nothing else,
- * so which kind of read it was is not this side's question (load.ts). */
-export const running = new Map<bigint, AbortController>();
+ * it handed out, with what stops it. One map for both kinds: a stop names a
+ * key and nothing else, so which kind of read it was is not this side's
+ * question (load.ts). */
+const running = new Map<bigint, () => void>();
+
+/** A read begun under `key`: the signal its transport is stopped by, and
+ * `own`, which says whether its end is still this read's to report — and
+ * from then on it is not. A read ends once, by its answer or by its stop,
+ * whichever comes first: a stop is reported at once, through `stopped`, and
+ * never waits on the transport to let the read go. A transport may never let
+ * it go — a device's fetch left a body stopped after its response unsettled
+ * for good — and the credit the read spends would never come back. */
+export function begin_read(key: u64, stopped: () => void): { signal: AbortSignal; own: () => boolean } {
+  const controller = new AbortController();
+  running.set(key, () => {
+    running.delete(key);
+    controller.abort();
+    stopped();
+  });
+  return { signal: controller.signal, own: () => running.delete(key) };
+}
 
 /** Whether a body is still in the encoding it was stored in — which, on this
  * side of the wire, means the transport did not decode it. The same judgment
@@ -63,9 +82,7 @@ export async function run_fetch(key: u64, bake: number, name: string): Promise<v
   // demand is real and nothing about it failed — but the answer would be the
   // same bytes again, and the reader is looking at the notice.
   if (isUnsupported()) return settle(key, FetchOutcome.Error, 0, 0, FetchFail.Shell, 0, 0);
-  const controller = new AbortController();
-  running.set(key, controller);
-  const signal = controller.signal;
+  const { signal, own } = begin_read(key, () => settle(key, FetchOutcome.Aborted, 0, 0, FetchFail.None, 0, 0));
   let outcome: FetchOutcome = FetchOutcome.Read;
   let held = 0;
   let bytes = 0;
@@ -74,9 +91,10 @@ export async function run_fetch(key: u64, bake: number, name: string): Promise<v
   let net_ms = 0;
   try {
     const t0 = performance.now();
-    const res = await fetch(tile_url(BAKE_KINDS[bake], name, PUBLISHED_TILES), { signal });
+    const res = await origin_get(tile_url(BAKE_KINDS[bake], name, PUBLISHED_TILES), signal);
     const body = new Uint8Array(await res.arrayBuffer());
     net_ms = performance.now() - t0;
+    if (!own()) return;
     if (res.status === 404) {
       outcome = FetchOutcome.Absent;
     } else if (!res.ok) {
@@ -94,23 +112,21 @@ export async function run_fetch(key: u64, bake: number, name: string): Promise<v
       bytes = body.byteLength;
     }
   } catch (err) {
-    outcome = signal.aborted ? FetchOutcome.Aborted : FetchOutcome.Error;
-    // A stop is the scheduler's own doing and carries no reason. Everything
-    // else is the transport's: a browser raises TypeError for offline, DNS,
-    // CORS and a refused connection alike, and its words for them are this
-    // side's to log — what the kernel needs is which of these happened.
-    if (!signal.aborted) {
-      fail = err instanceof Error && err.name === "TypeError" ? FetchFail.Network : FetchFail.Shell;
-      console.warn(`[fetch] ${key}: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
-    }
-  } finally {
-    running.delete(key);
-    settle(key, outcome, held, bytes, fail, detail, net_ms);
+    // A stop was reported when it was made, and carries no reason.
+    if (!own()) return;
+    // Everything else is the transport's: a browser raises TypeError for
+    // offline, DNS, CORS and a refused connection alike, and its words for
+    // them are this side's to log — what the kernel needs is which of these
+    // happened.
+    outcome = FetchOutcome.Error;
+    fail = err instanceof Error && err.name === "TypeError" ? FetchFail.Network : FetchFail.Shell;
+    console.warn(`[fetch] ${key}: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
   }
+  settle(key, outcome, held, bytes, fail, detail, net_ms);
 }
 
 /** Stops the read the kernel started under `key`, whichever kind it is, if it
  * is still running. */
 export function abort_fetch(key: u64): void {
-  running.get(key)?.abort();
+  running.get(key)?.();
 }

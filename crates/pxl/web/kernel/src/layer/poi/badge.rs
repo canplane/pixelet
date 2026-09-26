@@ -6,8 +6,8 @@ use pxl_spec::bake::poi_page::{kind_color, kind_icon, Place, PoiPage};
 use pxl_spec::space::pyramid::LevelPage;
 
 use crate::global::Global;
-use crate::host::measure_text;
 use crate::layer::billboard::sheet::billboard_sheet;
+use crate::text::text_width;
 use pxl_render::asset::atlas::{DrawSpec, NO_SLOT};
 use pxl_render::gpu::pass::badges::{badge_width, BADGE_FONT};
 use pxl_render::gpu::surface::DPR_MAX;
@@ -82,13 +82,13 @@ pub fn retain(labels: &HashSet<Label>) {
     });
 }
 
-/// A badge's width, measured once; none until its glyphs' advances are
-/// known, which the next turn's are.
+/// A badge's width, measured once; none until its label is laid out, which
+/// a later turn has.
 pub fn width(label: Label) -> Option<f64> {
     if let Some(b) = badges().get(&label) {
         return Some(b.width);
     }
-    let width = badge_width(measure_text(BADGE_FONT, &label.text())?.ceil(), matches!(label, Label::Place { .. }));
+    let width = badge_width(text_width(BADGE_FONT, &label.text())?.ceil(), matches!(label, Label::Place { .. }));
     badges().insert(label, Badge { width, slot: NO_SLOT });
     Some(width)
 }

@@ -162,10 +162,8 @@ pub mod op {
     pub const QUERY_SET: u32 = 27;
     /// encoder, query set, written: the pairs of the spans set in `written` read once the GPU has them
     pub const TIMESTAMPS: u32 = 28;
-    /// a 2D paint stream (`paint`) run over the host's scratch
-    pub const PAINT: u32 = 29;
-    /// texture, x, y, layer, width, height: the scratch's corner into a texture's layer
-    pub const PAINT_COPY: u32 = 30;
+    /// encoder, source, x, y, target, x, y, layer, width, height: a region of one texture's first mip into another's layer
+    pub const COPY_TEXTURE: u32 = 31;
     pub const KEYS: &[&str] = &[
         "RESET",
         "BUFFER",
@@ -195,79 +193,7 @@ pub mod op {
         "CURRENT",
         "QUERY_SET",
         "TIMESTAMPS",
-        "PAINT",
-        "PAINT_COPY",
-    ];
-}
-
-/// The 2D paint stream's operations, over the host's scratch canvas: an operation
-/// then its arguments, a number a word (f32 bits where fractional), a string as its
-/// bytes' count and its bytes, an image as the handle a load gave it.
-pub mod paint {
-    /// width, height: the scratch at least this big, and cleared that far
-    pub const SIZE: u32 = 1;
-    pub const SAVE: u32 = 2;
-    pub const RESTORE: u32 = 3;
-    /// x, y
-    pub const TRANSLATE: u32 = 4;
-    /// x, y
-    pub const SCALE: u32 = 5;
-    /// on
-    pub const SMOOTHING: u32 = 6;
-    /// rgba: 0xRRGGBBAA
-    pub const FILL_STYLE: u32 = 7;
-    /// rgba: 0xRRGGBBAA
-    pub const STROKE_STYLE: u32 = 8;
-    /// width
-    pub const LINE_WIDTH: u32 = 9;
-    /// weight, px: the page's own font-family at them
-    pub const FONT: u32 = 10;
-    /// 0 left, 1 center
-    pub const TEXT_ALIGN: u32 = 11;
-    /// 0 middle
-    pub const TEXT_BASELINE: u32 = 12;
-    pub const BEGIN_PATH: u32 = 13;
-    /// x, y, w, h, radius
-    pub const ROUND_RECT: u32 = 14;
-    /// x, y, radius, from, to
-    pub const ARC: u32 = 15;
-    /// x, y
-    pub const MOVE_TO: u32 = 16;
-    /// x, y
-    pub const LINE_TO: u32 = 17;
-    pub const CLOSE_PATH: u32 = 18;
-    pub const FILL: u32 = 19;
-    pub const STROKE: u32 = 20;
-    /// x, y, w, h
-    pub const FILL_RECT: u32 = 21;
-    /// x, y, then the text: its bytes' count and its UTF-8, padded to a word
-    pub const FILL_TEXT: u32 = 22;
-    /// image, sx, sy, sw, sh, dx, dy, dw, dh
-    pub const IMAGE: u32 = 23;
-    pub const KEYS: &[&str] = &[
-        "SIZE",
-        "SAVE",
-        "RESTORE",
-        "TRANSLATE",
-        "SCALE",
-        "SMOOTHING",
-        "FILL_STYLE",
-        "STROKE_STYLE",
-        "LINE_WIDTH",
-        "FONT",
-        "TEXT_ALIGN",
-        "TEXT_BASELINE",
-        "BEGIN_PATH",
-        "ROUND_RECT",
-        "ARC",
-        "MOVE_TO",
-        "LINE_TO",
-        "CLOSE_PATH",
-        "FILL",
-        "STROKE",
-        "FILL_RECT",
-        "FILL_TEXT",
-        "IMAGE",
+        "COPY_TEXTURE",
     ];
 }
 

@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { cn } from "@/shared/lib/util/cn.ts";
+import { alpha, color, font, hairline } from "@/shared/ui/theme.ts";
 import { CharacterPreview } from "@/feature/character/preview.tsx";
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { Command, encode_setting_update } from "@/kernel/abi/cmd.spec.ts";
@@ -17,13 +18,13 @@ import { findPersonVariant, PERSON_VARIANTS_FEMALE, PERSON_VARIANTS_MALE, PET_VA
 // drawer-modal.tsx's Character tab rather than the settings sheet.
 
 // Every chip in this component — gender, person variant, pet variant alike —
-// shares this exact class, not just a visually-similar one, since the point
-// of chipClass existing at all is that a gender chip and a variant chip
-// are literally the same kind of control.
-function chipClass(active: boolean): string {
-  return cn(
-    "rounded-full border px-2.5 py-1 text-[12px] font-medium leading-none transition-colors cursor-pointer",
-    active ? "border-primary bg-primary/10 text-primary" : "border-border/60 text-muted-foreground hover:bg-accent/50",
+// is this one component, not a look-alike, since a gender chip and a variant
+// chip are literally the same kind of control.
+function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="radio" aria-checked={active} style={[styles.chip, active ? styles.chipOn : styles.chipOff]}>
+      <Text style={[styles.chipText, active && styles.chipTextOn]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -48,29 +49,21 @@ function PersonPicker(props: PersonPickerProps) {
   const variants = gender === "female" ? PERSON_VARIANTS_FEMALE : PERSON_VARIANTS_MALE;
 
   return (
-    <div className="flex flex-col gap-2">
-      <span className="text-[13px] font-medium text-muted-foreground">{t("drawer_modal.character.person_label")}</span>
-      <div className="flex gap-3 items-center">
-        <CharacterPreview variant={selected} className="size-20 shrink-0 rounded-[10px] bg-accent/40" />
-        <div className="flex flex-col gap-1.5 min-w-0">
-          <div className="flex flex-wrap gap-1.5">
-            {(["female", "male"] as const).map((g) => (
-              <button key={g} type="button" onClick={() => onGenderChange(g)} className={chipClass(gender === g)}>
-                {t(`drawer_modal.character.${g}_label`)}
-              </button>
-            ))}
-          </div>
-          <div className="h-px bg-border" />
-          <div className="flex flex-wrap gap-1.5">
-            {variants.map((v) => (
-              <button key={v.key} type="button" onClick={() => onSelect(v.key)} className={chipClass(v.key === selectedKey)}>
-                {t(`drawer_modal.character.persons.${v.key}`)}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
+    <View style={styles.picker}>
+      <Text style={styles.pickerLabel}>{t("drawer_modal.character.person_label")}</Text>
+      <View style={styles.pickerRow}>
+        <CharacterPreview variant={selected} style={styles.preview} />
+        <View style={styles.chipColumn}>
+          <View style={styles.chips}>
+            {(["female", "male"] as const).map((g) => <Chip key={g} label={t(`drawer_modal.character.${g}_label`)} active={gender === g} onPress={() => onGenderChange(g)} />)}
+          </View>
+          <View style={styles.rule} />
+          <View style={styles.chips}>
+            {variants.map((v) => <Chip key={v.key} label={t(`drawer_modal.character.persons.${v.key}`)} active={v.key === selectedKey} onPress={() => onSelect(v.key)} />)}
+          </View>
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -85,19 +78,15 @@ function PetPicker(props: PetPickerProps) {
   const selected = PET_VARIANTS.find((v) => v.key === selectedKey) ?? PET_VARIANTS[0];
 
   return (
-    <div className="flex flex-col gap-2">
-      <span className="text-[13px] font-medium text-muted-foreground">{t("drawer_modal.character.pet_label")}</span>
-      <div className="flex gap-3 items-center">
-        <CharacterPreview variant={selected} className="size-20 shrink-0 rounded-[10px] bg-accent/40" />
-        <div className="flex flex-wrap gap-1.5">
-          {PET_VARIANTS.map((v) => (
-            <button key={v.key} type="button" onClick={() => onSelect(v.key)} className={chipClass(v.key === selectedKey)}>
-              {t(`drawer_modal.character.pets.${v.key}`)}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
+    <View style={styles.picker}>
+      <Text style={styles.pickerLabel}>{t("drawer_modal.character.pet_label")}</Text>
+      <View style={styles.pickerRow}>
+        <CharacterPreview variant={selected} style={styles.preview} />
+        <View style={[styles.chips, styles.chipColumn]}>
+          {PET_VARIANTS.map((v) => <Chip key={v.key} label={t(`drawer_modal.character.pets.${v.key}`)} active={v.key === selectedKey} onPress={() => onSelect(v.key)} />)}
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -124,9 +113,25 @@ export function CharacterPicker() {
   );
 
   return (
-    <div className="flex flex-col gap-4">
+    <View style={styles.pickers}>
       <PersonPicker gender={gender} onGenderChange={setGender} selectedKey={personVariantKey} onSelect={(key) => set_setting(SETTINGS.person_variant.key, findPersonVariant(key).number)} />
       <PetPicker selectedKey={petVariantKey} onSelect={(key) => set_setting(SETTINGS.pet_variant.key, (PET_VARIANTS.find((v) => v.key === key) ?? PET_VARIANTS[0]).number)} />
-    </div>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  pickers: { gap: 16 },
+  picker: { gap: 8 },
+  pickerLabel: { fontFamily: font.family, fontSize: 13, fontWeight: "500", color: color.mutedForeground },
+  pickerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  preview: { width: 80, height: 80, flexShrink: 0, borderRadius: 10, overflow: "hidden", backgroundColor: alpha(color.accent, 0.4) },
+  chipColumn: { flexShrink: 1, minWidth: 0, gap: 6 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  rule: { height: 1, backgroundColor: hairline },
+  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  chipOn: { borderColor: color.primary, backgroundColor: alpha(color.primary, 0.1) },
+  chipOff: { borderColor: alpha(color.foreground, 0.06) },
+  chipText: { fontFamily: font.family, fontSize: 12, fontWeight: "500", lineHeight: 14, color: color.mutedForeground },
+  chipTextOn: { color: color.primary },
+});

@@ -2,7 +2,7 @@
 // Holds the tree to the rules in AGENTS.md that a machine can decide, so that
 // what drifts without anyone deciding it is caught where it drifts.
 //
-// Three of them, each a rule that went wrong by accident more than once and
+// Four of them, each a rule that went wrong by accident more than once and
 // none a judgment about design:
 //
 // - A source file opens with its own logical path. The comment is how a file
@@ -18,6 +18,12 @@
 //   its page worked out by hand: the lattice numbers a page's cells, and
 //   that number is the index into every lane a page has (`cell_index`,
 //   `in_page`), where seven layers had each spelled it out again.
+// - The kernel's memory is reached through its base. An address the kernel
+//   names is an offset, and one cast straight to a pointer reads the right
+//   memory only where the base is 0 — a module's — so it passed every test
+//   and faulted on a device, twice. Every other pointer cast is spelled by
+//   what it is (clippy, crates/Cargo.toml), so `as *const` and `as *mut` are
+//   left meaning only that, and are refused.
 //
 // `issue/` is exempt from the second: a decision record names the files of
 // its day.
@@ -63,9 +69,10 @@ function header(f: string): string | null {
     }
     return null;
   }
-  if (!/\.tsx?$/.test(f) || f.includes("/shadcn/")) return null;
-  if (f.startsWith("apps/web/src/")) return `@pxl/web/${f.slice("apps/web/src/".length)}`;
-  if (f.startsWith("apps/web/")) return `@pxl/web/${f.slice("apps/web/".length)}`;
+  if (!/\.tsx?$/.test(f)) return null;
+  // An app's file by the app's name: under its src/, or at its root.
+  const app = f.match(/^apps\/([\w-]+)\/(?:src\/)?(.*)$/);
+  if (app) return `@pxl/${app[1]}/${app[2]}`;
   const pkg = f.match(/^packages\/xpute\/(\w+)\/src\/(.*)$/);
   return pkg ? `@xpute/${pkg[1]}/${pkg[2]}` : null;
 }
@@ -94,7 +101,11 @@ function exists(path: string, from: string): boolean {
   if (suffixes.has(path)) return true;
   const [head, ...rest] = path.split("/");
   const tail = rest.join("/");
-  if (head === "@pxl") return suffixes.has(`apps/web/src/${tail.replace(/^web\//, "")}`) || suffixes.has(`apps/web/${tail.replace(/^web\//, "")}`);
+  if (head === "@pxl") {
+    // `@pxl/<app>/…`: under the app's src/, or at its root.
+    const [app, ...within] = rest;
+    return suffixes.has(`apps/${app}/src/${within.join("/")}`) || suffixes.has(`apps/${app}/${within.join("/")}`);
+  }
   if (head === "@") return suffixes.has(`apps/web/src/${tail}`);
   if (head === "@xpute") return suffixes.has(`packages/xpute/${rest[0]}/src/${rest.slice(1).join("/")}`);
   const dir = crates.get(head);
@@ -146,9 +157,25 @@ for (const f of files) {
   });
 }
 
+// ---- the memory's offsets ----
+
+/** The crates that name the kernel's memory by offsets from its base
+ * (xpute-runtime mem/base.rs), where clippy makes every harmless pointer
+ * cast say what it is (crates/Cargo.toml's workspace lints). */
+const OFFSET_CRATES = ["crates/xpute/runtime/src/", "crates/pxl/web/kernel/src/", "crates/pxl/web/render/src/", "crates/pxl/web/wasm/src/", "crates/pxl/web/native/src/"];
+const CAST_TO_POINTER = /\bas\s+\*(const|mut)\b/;
+
+for (const f of files) {
+  if (!f.endsWith(".rs") || !OFFSET_CRATES.some((c) => f.startsWith(c))) continue;
+  read(f)?.split("\n").forEach((line, n) => {
+    if (/^\s*\/\//.test(line)) return;
+    if (CAST_TO_POINTER.test(line)) problems.push(`${f}:${n + 1}: casts to a pointer where an offset goes through mem::base::ptr_at: ${line.trim()}`);
+  });
+}
+
 if (problems.length) {
   console.error(problems.join("\n"));
   console.error(`\ncheck-rules: ${problems.length} (AGENTS.md says why each rule is there)`);
   Deno.exit(1);
 }
-console.log("check-rules: headers, cited paths and the lattice hold");
+console.log("check-rules: headers, cited paths, the lattice and the memory's offsets hold");

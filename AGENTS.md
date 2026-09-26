@@ -209,7 +209,7 @@ unprompted causes regressions or premature hardening.
 ## Overlay CSS over the canvas
 
 The UI sits over a canvas that repaints every frame, and WebKit handles that
-worse than Chromium. Three rules, each learned from the scale bar:
+worse than Chromium. Two rules, each learned from the scale bar:
 
 - **`box-shadow` / `text-shadow`, not `filter: drop-shadow()`.** A filter
   region over the canvas smeared, clipped transformed children and vanished
@@ -218,10 +218,6 @@ worse than Chromium. Three rules, each learned from the scale bar:
 - **Animate `transform` and `opacity`, not layout.** A `width` tween ghosted
   on iOS. When neither is clean, ask whether the animation is worth having —
   the scale bar snaps between its 1/2/5 steps.
-- **Avoid `backdrop-filter` over the canvas.** It re-blurs what is behind it
-  every frame; the leading suspect for a Galaxy S23 janking where an iPhone
-  13 mini ran fine, and why the map controls and the address pill carry an
-  opaque fill. Only where the element is rarely on screen.
 
 ## Sizing UI against something
 
@@ -250,11 +246,8 @@ import-map path with its extension (`// @pxl/web/feature/map/ui/view.tsx`); a
 Rust file gives its package name as Cargo.toml spells it, hyphens and all,
 then the path under `src/` (`// pxl-spec/space/indexer.rs`). A crate named in
 a comment is hyphenated; only a `::` path keeps the underscore. New files get
-one too, tests included. The one exception is `shared/ui/shadcn/`, uniformly
-header-less as a flat shadcn tree; its notice is in
-[THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md). Don't add headers there,
-and don't drop them elsewhere. An executable script opens on its interpreter
-instead. `check:rules` holds every other file to it.
+one too, tests included, and don't drop them. An executable script opens on
+its interpreter instead. `check:rules` holds every other file to it.
 
 **A name's case follows the side it is on.** `PascalCase` for types,
 `SCREAMING_SNAKE_CASE` for module constants. Functions and locals are
@@ -307,7 +300,7 @@ that is only a number stays `number`. A typed array over an `ArrayBuffer` for
 certain is `U32Array` and kin; one that may sit in a `SharedArrayBuffer` keeps
 `Uint32Array`.
 
-**Ported code keeps its original conventions** (`shadcn/tabs.tsx`). Some of
+**Ported code keeps its original conventions** (`alloc/buddy_tree.rs`). Some of
 `@xpute/core` came from other projects to stay reusable; the divergence is
 deliberate. React hooks, stores and components keep their ecosystem's
 `camelCase`/`PascalCase` (`useTileStore`, `MapStatus`), and a component file
