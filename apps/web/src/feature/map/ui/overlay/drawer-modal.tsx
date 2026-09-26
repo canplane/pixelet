@@ -13,7 +13,7 @@ import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel, PanelHeader, Side } from "@/shared/ui/panel.tsx";
 import { Segmented } from "@/shared/ui/segmented.tsx";
-import { alpha, color, font, hairline } from "@/shared/ui/theme.ts";
+import { alpha, color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
 import { CharacterPicker } from "@/feature/character/picker.tsx";
 import { CubeSwatch } from "./cube-swatch.tsx";
 import { DECOR_ICONS } from "./mode-bar.tsx";
@@ -170,11 +170,11 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 16, gap: 16 },
   section: { gap: 8 },
-  sectionTitle: { fontFamily: font.family, fontSize: 12, fontWeight: "500", color: color.textMuted },
+  sectionTitle: { ...sectionTitle, color: color.textMuted },
   // Five to a row, as the catalog was laid out.
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
   cell: { width: "18.4%", alignItems: "center", gap: 4, padding: 6, borderRadius: 20 },
-  cellLabel: { width: "100%", textAlign: "center", fontFamily: font.family, fontSize: 10, lineHeight: 12, color: color.textMuted },
+  cellLabel: { width: "100%", textAlign: "center", ...textStyle.caption2, color: color.textMuted },
   markOff: { boxShadow: `0 0 0 1px ${hairline}` },
   markOn: { boxShadow: `0 0 0 1px ${color.paper}, 0 0 0 3px ${color.text}`, transform: [{ scale: 1.05 }] },
   decor: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { alpha, color, font, hairline } from "@/shared/ui/theme.ts";
+import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 import { CharacterPreview } from "@/feature/character/preview.tsx";
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { Command, encode_setting_update } from "@/kernel/abi/cmd.spec.ts";
@@ -119,7 +119,7 @@ export function CharacterPicker() {
 const styles = StyleSheet.create({
   pickers: { gap: 16 },
   picker: { gap: 8 },
-  pickerLabel: { fontFamily: font.family, fontSize: 13, fontWeight: "500", color: color.textMuted },
+  pickerLabel: { ...sectionTitle, color: color.textMuted },
   pickerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   preview: { width: 80, height: 80, flexShrink: 0, borderRadius: 10, overflow: "hidden", backgroundColor: alpha(color.wash, 0.4) },
   chipColumn: { flexShrink: 1, minWidth: 0, gap: 6 },
@@ -128,6 +128,6 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   chipOn: { borderColor: color.chosen, backgroundColor: alpha(color.chosen, 0.1) },
   chipOff: { borderColor: alpha(color.text, 0.06) },
-  chipText: { fontFamily: font.family, fontSize: 12, fontWeight: "500", lineHeight: 14, color: color.textMuted },
+  chipText: { ...textStyle.footnote, fontWeight: weight.medium, color: color.textMuted },
   chipTextOn: { color: color.chosen },
 });

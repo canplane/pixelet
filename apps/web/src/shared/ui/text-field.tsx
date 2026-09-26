@@ -24,7 +24,7 @@
 import type { Ref } from "react";
 import { StyleSheet, TextInput, type TextInputProps } from "react-native";
 
-import { font } from "@/shared/ui/theme.ts";
+import { textStyle } from "@/shared/ui/theme.ts";
 
 type TextFieldProps = Omit<TextInputProps, "onSubmitEditing"> & {
   ref?: Ref<TextInput>;
@@ -47,6 +47,6 @@ export function TextField({ style, onSubmit, ...props }: TextFieldProps) {
 }
 
 const styles = StyleSheet.create({
-  field: { fontFamily: font.family },
-  size: { fontSize: 16 },
+  field: textStyle.input,
+  size: { fontSize: textStyle.input.fontSize },
 });

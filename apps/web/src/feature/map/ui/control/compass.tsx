@@ -10,7 +10,7 @@ import { LABEL } from "@platform/palette.ts";
 import { CircularButton } from "@/shared/ui/circular-button.tsx";
 import { Presence } from "@/shared/ui/motion/presence.tsx";
 import { after, ARRIVE } from "@/shared/ui/motion/transition.ts";
-import { alpha, color, font } from "@/shared/ui/theme.ts";
+import { alpha, color, textStyle } from "@/shared/ui/theme.ts";
 
 export function MapCompass() {
   const { t } = useTranslation();
@@ -50,9 +50,7 @@ const styles = StyleSheet.create({
   north: {
     position: "absolute",
     top: 2,
-    fontFamily: font.family,
-    fontSize: 10,
-    fontWeight: "500",
+    ...textStyle.caption2,
     letterSpacing: -0.5,
     color: LABEL.secondary,
   },

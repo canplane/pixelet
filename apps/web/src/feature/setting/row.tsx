@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 
 import type { SettingCost } from "@/feature/setting/schema.ts";
-import { alpha, color, font, hairline } from "@/shared/ui/theme.ts";
+import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 
 const COST_COLOR: Record<SettingCost, string> = {
   low: color.costLow,
@@ -157,8 +157,8 @@ export function SectionTitle(props: SectionTitleProps) {
 
 /** Settings' shared type: the panel's small print. */
 export const settingText = StyleSheet.create({
-  small: { fontFamily: font.family, fontSize: 12, lineHeight: 17, color: color.textMuted },
-  faint: { fontFamily: font.family, fontSize: 11, lineHeight: 15, color: alpha(color.textMuted, 0.7) },
+  small: { ...textStyle.caption, color: color.textMuted },
+  faint: { ...textStyle.caption2, fontWeight: weight.regular, color: alpha(color.textMuted, 0.7) },
   link: { textDecorationLine: "underline" },
 });
 
@@ -171,11 +171,11 @@ const styles = StyleSheet.create({
   bleed: { marginHorizontal: -12 },
   described: { flexShrink: 1, minWidth: 0, gap: 4 },
   nameLine: { flexDirection: "row", alignItems: "center", gap: 6 },
-  name: { fontFamily: font.family, fontSize: 15, fontWeight: "500", lineHeight: 19, color: color.text },
-  description: settingTextOf(12, color.textMuted),
+  name: { ...textStyle.body, color: color.text },
+  description: { ...textStyle.caption, color: color.textMuted },
 
   badge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 4, paddingVertical: 2 },
-  badgeText: { fontFamily: font.family, fontSize: 9, fontWeight: "600", lineHeight: 10, letterSpacing: 0.4 },
+  badgeText: { ...textStyle.caption2, letterSpacing: 0.4 },
 
   group: { marginTop: 16, marginBottom: 10, borderWidth: 1, borderColor: hairline, borderRadius: 10, padding: 4, paddingTop: 10 },
   legend: {
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     backgroundColor: color.paper,
   },
-  legendText: { fontFamily: font.family, fontSize: 12, fontWeight: "500", lineHeight: 13, color: color.text },
+  legendText: { ...textStyle.caption, fontWeight: weight.medium, color: color.text },
   answers: { gap: 2 },
 
   radio: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: color.track, alignItems: "center", justifyContent: "center", flexShrink: 0 },
@@ -197,10 +197,6 @@ const styles = StyleSheet.create({
 
   titleBlock: { gap: 4, marginBottom: 4 },
   titleLine: { flexDirection: "row", alignItems: "center", gap: 6 },
-  title: { fontFamily: font.family, fontSize: 12, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: color.textMuted },
-  caption: settingTextOf(11, alpha(color.textMuted, 0.7)),
+  title: { ...sectionTitle, color: color.textMuted },
+  caption: { ...textStyle.caption2, fontWeight: weight.regular, color: alpha(color.textMuted, 0.7) },
 });
-
-function settingTextOf(fontSize: number, tint: string) {
-  return { fontFamily: font.family, fontSize, lineHeight: Math.round(fontSize * 1.4), color: tint };
-}

@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { alpha, color, font } from "@/shared/ui/theme.ts";
+import { alpha, color, textStyle, weight } from "@/shared/ui/theme.ts";
 
 interface Segment<T extends string | number> {
   value: T;
@@ -39,6 +39,6 @@ const styles = StyleSheet.create({
   track: { flexDirection: "row", height: 36, padding: 3, borderRadius: 18, backgroundColor: alpha(color.wash, 0.6) },
   segment: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 15 },
   on: { backgroundColor: color.paper, boxShadow: "0 1px 2px rgba(0, 0, 0, 0.08)" },
-  label: { fontFamily: font.family, fontSize: 13, fontWeight: "500", color: color.textMuted },
+  label: { ...textStyle.footnote, fontWeight: weight.medium, color: color.textMuted },
   labelOn: { color: color.text },
 });

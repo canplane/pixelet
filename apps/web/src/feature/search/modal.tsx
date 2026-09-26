@@ -11,7 +11,7 @@ import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel, PANEL_HEADER_PX, Side } from "@/shared/ui/panel.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
-import { alpha, color, font, hairline } from "@/shared/ui/theme.ts";
+import { alpha, color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
 import { Command, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_snapshot } from "@/kernel/shell.ts";
 import { resolvePoiBadge } from "@/feature/search/poi-badge.ts";
@@ -268,25 +268,21 @@ const styles = StyleSheet.create({
   field: { flex: 1, minWidth: 0, color: color.text },
   clear: { width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: alpha(color.textMuted, 0.5) },
   results: { flex: 1 },
-  empty: { paddingHorizontal: 16, paddingVertical: 12, fontFamily: font.family, fontSize: 14, color: color.textMuted },
+  empty: { paddingHorizontal: 16, paddingVertical: 12, ...textStyle.footnote, color: color.textMuted },
   sectionHeader: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 6,
-    fontFamily: font.family,
-    fontSize: 12,
-    fontWeight: "500",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
+    ...sectionTitle,
     color: alpha(color.textMuted, 0.7),
   },
   row: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: hairline },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
-  name: { fontFamily: font.family, fontSize: 14, color: color.text },
+  name: { ...textStyle.body, color: color.text },
   subtitle: { flexDirection: "row", alignItems: "baseline", gap: 8 },
-  small: { fontFamily: font.family, fontSize: 12, color: color.textMuted },
+  small: { ...textStyle.caption, color: color.textMuted },
   context: { flexShrink: 1 },
   distance: { marginLeft: "auto", flexShrink: 0, fontVariant: ["tabular-nums"] },
   badge: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  badgeIcon: { fontSize: 13 },
+  badgeIcon: { fontSize: textStyle.footnote.fontSize },
 });

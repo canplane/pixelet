@@ -84,6 +84,32 @@ export const font = {
   mono: MONO,
 };
 
+/** The shell's text styles: Apple's, by name and by ratio, a step smaller,
+ * since the chrome floats over a map and is kept small. Every text takes one
+ * of these, and a weight only where its use differs from the style's: 400
+ * for what is read, 500 for the chrome and a control, 600 for a title and a
+ * toast. */
+export const weight = { regular: "400", medium: "500", semibold: "600" } as const;
+
+export const textStyle = {
+  /** A panel's heading. */
+  title: { fontFamily: FAMILY, fontSize: 17, lineHeight: 22, fontWeight: weight.semibold },
+  /** What is read: a row's name, a result, a notice. */
+  body: { fontFamily: FAMILY, fontSize: 15, lineHeight: 20, fontWeight: weight.regular },
+  /** A text field. Sixteen, not the body's fifteen: iOS Safari zooms the page
+   * into a field set smaller when it takes focus. */
+  input: { fontFamily: FAMILY, fontSize: 16, fontWeight: weight.regular },
+  /** A control's label, a toast, a short line. */
+  footnote: { fontFamily: FAMILY, fontSize: 13, lineHeight: 18, fontWeight: weight.regular },
+  /** Small print and the chrome's labels. */
+  caption: { fontFamily: FAMILY, fontSize: 12, lineHeight: 16, fontWeight: weight.regular },
+  /** The smallest label there is: eleven is iOS's floor. */
+  caption2: { fontFamily: FAMILY, fontSize: 11, lineHeight: 13, fontWeight: weight.medium },
+} as const;
+
+/** A section's title over a list: the caption, set apart by case. */
+export const sectionTitle = { ...textStyle.caption, fontWeight: weight.medium, letterSpacing: 0.6, textTransform: "uppercase" } as const;
+
 /** A thin dark edge around text, so it reads over any ground: the
  * platform's, which spell a text shadow differently. */
 export { textEdge };

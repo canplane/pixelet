@@ -3,7 +3,7 @@
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
-import { color, font } from "@/shared/ui/theme.ts";
+import { color, textStyle } from "@/shared/ui/theme.ts";
 import { useUnsupportedStore } from "./store/unsupported-store.ts";
 
 /**
@@ -39,6 +39,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     backgroundColor: color.paper,
   },
-  title: { fontFamily: font.family, fontSize: 18, fontWeight: "600", textAlign: "center", color: color.text },
-  body: { maxWidth: 384, fontFamily: font.family, fontSize: 14, lineHeight: 23, textAlign: "center", color: color.textMuted },
+  title: { ...textStyle.title, textAlign: "center", color: color.text },
+  body: { maxWidth: 384, ...textStyle.body, textAlign: "center", color: color.textMuted },
 });

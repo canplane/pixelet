@@ -10,7 +10,7 @@ import { LABEL, STATUS } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
 import { Swap } from "@/shared/ui/motion/presence.tsx";
 import { LEAVE, SNAP, spring, type Transition } from "@/shared/ui/motion/transition.ts";
-import { alpha, color, font } from "@/shared/ui/theme.ts";
+import { alpha, color, textStyle, weight } from "@/shared/ui/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
 
 const SIDE = 32;
@@ -128,6 +128,6 @@ const styles = StyleSheet.create({
   slot: { width: SIDE, height: SIDE, alignItems: "center", justifyContent: "center" },
   glyph: { position: "absolute" },
   disc: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  message: { fontFamily: font.family, fontSize: 13, fontWeight: "600", letterSpacing: -0.3, color: LABEL.primary, paddingHorizontal: 4 },
+  message: { ...textStyle.footnote, fontWeight: weight.semibold, letterSpacing: -0.3, color: LABEL.primary, paddingHorizontal: 4 },
   dot: { width: 6, height: 6, borderRadius: 3 },
 });
