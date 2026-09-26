@@ -9,8 +9,16 @@
 //! Unlike the module's, this allocator is the whole library's, and a device's
 //! GPU driver calls back on threads of its own; a lock makes the slab — built
 //! for one thread — sound for them. The kernel's thread takes it uncontended.
+//!
+//! Being the whole library's, it is wgpu's as well: what the device keeps on
+//! the CPU for its objects lies in the region beside the kernel's own blocks
+//! and counts in the heap's row, which a page's module has no part of. It
+//! cannot be told apart — an allocator is not told who asks, and wgpu asks on
+//! the kernel's thread too — so a device's row reads higher than a page's by
+//! what its driver holds.
 
-use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use core::cell::UnsafeCell;
+use core::sync::atomic::{AtomicUsize, Ordering};
 use std::alloc::{GlobalAlloc, Layout, System};
 
 use pxl_kernel::host::HeapStat;
@@ -93,19 +101,36 @@ impl xpute_core::alloc::buddy_tree::Range for ModuleHeap {
     }
 }
 
-/// The slab behind a spin lock.
+/// The system's lock for this (`os_unfair_lock`, libSystem's): it allocates
+/// nothing, where std's `Mutex` may box its pthread mutex on first use —
+/// inside the allocator, a call back into itself — and it lends its holder
+/// the waiter's priority, where a spin lock leaves a low-priority holder
+/// preempted by the high-priority thread spinning for it.
+#[repr(C)]
+struct UnfairLock(UnsafeCell<u32>);
+
+extern "C" {
+    fn os_unfair_lock_lock(lock: *mut u32);
+    fn os_unfair_lock_unlock(lock: *mut u32);
+}
+
+/// The slab behind the system's lock.
 pub struct Locked {
-    lock: AtomicBool,
+    lock: UnfairLock,
     slab: SlabMalloc<ModuleHeap>,
 }
 
+// SAFETY: the slab is only reached holding the lock.
+unsafe impl Sync for Locked {}
+
 impl Locked {
     fn with<R>(&self, f: impl FnOnce(&SlabMalloc<ModuleHeap>) -> R) -> R {
-        while self.lock.compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {
-            core::hint::spin_loop();
-        }
+        // SAFETY: a lock in a static, never moved, locked and unlocked on the
+        // same thread.
+        unsafe { os_unfair_lock_lock(self.lock.0.get()) };
         let r = f(&self.slab);
-        self.lock.store(false, Ordering::Release);
+        // SAFETY: as above.
+        unsafe { os_unfair_lock_unlock(self.lock.0.get()) };
         r
     }
 
@@ -148,6 +173,6 @@ unsafe impl GlobalAlloc for Locked {
 /// The library's one allocator.
 #[global_allocator]
 pub static ALLOC: Locked = Locked {
-    lock: AtomicBool::new(false),
+    lock: UnfairLock(UnsafeCell::new(0)),
     slab: SlabMalloc::new(),
 };
