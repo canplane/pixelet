@@ -79,6 +79,16 @@ cp apps/web/.env.example apps/web/.env
 deno task dev
 ```
 
+The agent instructions are [AGENTS.md](./AGENTS.md) and the procedures [.agents/skills/](./.agents/skills/), kept vendor-neutral. An assistant's own directory is gitignored; link it at them once per checkout:
+
+```bash
+mkdir -p .claude
+ln -sfn ../AGENTS.md      .claude/CLAUDE.md
+ln -sfn ../.agents/skills .claude/skills
+```
+
+A personal, uncommitted variant takes a `.local.` infix (`*.local.skill.md`, `.agents/skills/.local/`), which `.gitignore` keeps out.
+
 `dev` runs the client alone: every server route is proxied to the live deployment, so no Docker, database or server process is needed. That is the way in for most work, and the wrong way for bake work: a published tile prefix never changes, so the proxy would keep serving the tiles that are already live rather than the ones just baked. For that, start the databases and run the whole stack:
 
 ```bash
