@@ -1,9 +1,9 @@
-// @pxl/web/feature/dev/ledger/trace.ts
+// @pxl/web/feature/debug/ledger/trace.ts
 
 /**
  * The ledger window as Chrome's Trace Event Format, saved as a file openable
- * at ui.perfetto.dev or chrome://tracing. Aggregates the same numbers the dev
- * overlay shows, but on one timeline — the "trace, not just aggregates" point
+ * at ui.perfetto.dev or chrome://tracing. Aggregates the same numbers the ledger's
+ * panel shows, but on one timeline — the "trace, not just aggregates" point
  * in issue/20260909-cooperative-scheduler-and-task-ledger.md: p95 says a
  * category is slow, the timeline shows it's slow *because* it's contending
  * with a fetch burst that the same pan kicked off.
@@ -13,8 +13,8 @@
  * are this side's to allocate and never the kernel heap's. A file rather
  * than the clipboard — a download on a page, the share sheet on a device
  * (platform/save.ts): the clipboard handles that size badly, and Perfetto
- * wants a file anyway. Wired to `window` in dev (overlay.tsx) so it is
- * reachable from the console.
+ * wants a file anyway. Wired to `window` while the panel is on (overlay.tsx), so it
+ * is reachable from the console.
  */
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
@@ -78,7 +78,7 @@ function frameArgs(f: Frame): Args {
 }
 
 /** The trace as a JSON string. */
-export function ledgerTraceJson(): string {
+function ledgerTraceJson(): string {
   const { frames, tasks, worst } = ledgerRingsRead();
   const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];

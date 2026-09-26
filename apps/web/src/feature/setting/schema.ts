@@ -16,7 +16,7 @@
  * (apps/web/script/check-bundle.ts reads the artifact to be sure).
  */
 
-import { DEV_SECTIONS, SETTINGS as EVERY, SETTINGS_SHIPPED as SHIPPED } from "./schema.spec.ts";
+import { SETTINGS as EVERY, SETTINGS_SHIPPED as SHIPPED } from "./schema.spec.ts";
 
 type Spec = typeof EVERY;
 
@@ -42,13 +42,6 @@ export type Setting =
   & ({ kind: "toggle" } | { kind: "choice"; options: readonly string[]; costs?: readonly (SettingCost | "")[] } | { kind: "number" });
 
 const SETTING_NAMES = Object.keys(SETTINGS) as SettingName[];
-
-/** Whether a section is a development build's as a whole (schema.json's
- * DEV_SECTIONS): shown under `__IS_DEV__` only, badged on its heading rather
- * than on each row. */
-export function isDevSection(section: SettingSection): boolean {
-  return (DEV_SECTIONS as readonly string[]).includes(section);
-}
 
 /** The settings shown under a section, in declaration order. */
 export function settingsIn(section: SettingSection): SettingName[] {

@@ -19,7 +19,7 @@ import { CATEGORY_BADGE, DEFAULT_BADGE } from "./poi_badge.spec.ts";
  * weight, tried thickening it first) was the real problem.
  */
 
-export interface PoiBadge {
+interface PoiBadge {
   icon: string;
   color: string;
 }

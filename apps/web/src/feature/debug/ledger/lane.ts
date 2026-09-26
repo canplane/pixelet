@@ -1,4 +1,4 @@
-// @pxl/web/feature/dev/ledger/lane.ts
+// @pxl/web/feature/debug/ledger/lane.ts
 
 /**
  * The ledger's words, in one table the report, the panel and the trace all
@@ -22,9 +22,9 @@ const MB = 1048576;
 // ---- the lanes ----
 
 /** The lanes that are lists, each of the names its words are in order of. */
-export type ListLane = "phases" | "gpu_spans" | "census" | "level_tris" | "pages_by_level";
-export type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
-export type ScalarLane = Exclude<FrameLane, ListLane>;
+type ListLane = "phases" | "gpu_spans" | "census" | "level_tris" | "pages_by_level";
+type FrameLane = Exclude<keyof typeof FRAME, "WORDS">;
+type ScalarLane = Exclude<FrameLane, ListLane>;
 
 /** A frame as the shell holds it once read: a number a lane, a list a list lane. */
 export type Frame =
@@ -62,7 +62,7 @@ export function frameAt(words: ArrayLike<f64>, o: u32): Frame {
   return f as Frame;
 }
 
-export type FrameGroup = Exclude<keyof typeof FRAME_GROUPS, "$doc">;
+type FrameGroup = Exclude<keyof typeof FRAME_GROUPS, "$doc">;
 export const GROUPS = Object.keys(FRAME_GROUPS).filter((g) => !g.startsWith("$")) as FrameGroup[];
 
 // ---- the words ----
@@ -76,7 +76,7 @@ export const pct = (part: number, whole: number) => (whole > 0 ? round((part / w
 export const tris = (t: number) => (t >= 1000 ? `${round(t / 1000)}k` : String(round(t)));
 
 /** The levels a bit set names, as `0,3,5`, or `-` for none. */
-export function levelsText(bits: f64): string {
+function levelsText(bits: f64): string {
   const out: u32[] = [];
   for (let k = 0; k < 32; k++) if (bits & (1 << k)) out.push(k);
   return out.length > 0 ? out.join(",") : "-";

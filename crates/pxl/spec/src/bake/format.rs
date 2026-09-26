@@ -34,7 +34,6 @@ use super::pack::{channel_of, GroundCell};
 
 // ---- DB ----
 
-pub const BUILDING_ROW_KEYS: [&str; 6] = ["gers_id", "subtype", "class", "height", "num_floors", "geom_wkb"];
 pub struct BuildingRow {
     pub gers_id: String,
     pub subtype: Option<String>,
@@ -44,7 +43,6 @@ pub struct BuildingRow {
     pub geom_wkb: Box<[u8]>, // WKB
 }
 
-pub const SEGMENT_ROW_KEYS: [&str; 5] = ["gers_id", "subtype", "class", "road", "geom_wkb"];
 pub struct SegmentRow {
     pub gers_id: String,
     pub subtype: String,
@@ -53,7 +51,6 @@ pub struct SegmentRow {
     pub geom_wkb: Box<[u8]>,  // WKB
 }
 
-pub const BASE_ROW_KEYS: [&str; 5] = ["gers_id", "source", "subtype", "class", "geom_wkb"];
 pub struct BaseRow {
     pub gers_id: String,
     pub source: String, // "land_use" | "water" | "land" | "infrastructure"
@@ -62,7 +59,6 @@ pub struct BaseRow {
     pub geom_wkb: Box<[u8]>, // WKB
 }
 
-pub const COAST_ROW_KEYS: [&str; 3] = ["id", "geom_wkb", "covers_page"];
 pub struct CoastRow {
     pub id: String,
     pub geom_wkb: Box<[u8]>, // WKB

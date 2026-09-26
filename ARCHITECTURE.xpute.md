@@ -24,8 +24,6 @@ The last range is the heap, and blocks come out of it through a single call (`me
 
 The buddy is not ours: it was written for this same situation, a module handed one heap with no system allocator beneath it.
 
-One kind of buffer cannot live in that memory at all. Work sent off the thread needs something transferable, and a `WebAssembly.Memory` is not. The host keeps a small pool of fixed-size transferable buffers for that case (`mem/transfer.ts`), made on first need, reused when they come back, and let go once idle. The pool is capped, and the cap is the backpressure: when every buffer is out, whatever wanted one waits.
-
 ---
 
 ## The message, and the rings that carry it
@@ -115,7 +113,7 @@ Not everything that crosses deserves a message. A packet describing state the ot
 
 The two places exist because readers come in two kinds. A reader that cares about a handful of keys compares each key's revision against the one it remembers. A reader that cares about everything walks the journal forward from its own cursor — and if the journal has lapped that cursor, it gives up on the journal and re-reads the keys of the topics it follows.
 
-A change carries no value; the value is read where it lives. How a reader is woken — by polling on each turn, by a listener (`ipc/change_waker`), by a React hook — is built on top of this and is not part of it.
+A change carries no value; the value is read where it lives. How a reader is woken — by polling on each turn, by a listener, by a React hook — is built on top of this and is not part of it.
 
 ---
 
@@ -199,10 +197,10 @@ Everything above is implemented in both Rust and TypeScript, and the two impleme
 
 `core` is symmetric. Each language implements the same kit, and the golden records hold the two to each other wherever they must produce identical bytes. `runtime` is not symmetric and is not meant to be: its two halves are the two ends of one arrangement. The host end is TypeScript and the guest end is Rust. A module with nothing facing it across the boundary is not a gap waiting to be filled. What the two ends must agree on is not their module lists but their formats: the message's four words, the ring's layout, the memory's sections.
 
-|             | Rust (`crates/xpute/`)                                                                                                                                                                                        | TypeScript (`packages/xpute/`)                                                                                                                                                             |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **core**    | `abi` words and the command number · `alloc` slab and buddy · `codec` JSON · `collection` arena, deque, heap · `math` scalar, rng · `status` errno, error, bug · `wire` XTP, TLV · `golden` the record reader | `abi` `codec` `collection` `math` `status` `wire` as the Rust, plus `kit` (comparators, iterators, types) and `env` (feature detection)                                                    |
-| **runtime** | `mem` sections, the base and the heap door · `ipc` frame, ring, stream, change log, the guest's doorbell · `sched` quantum, tick, pass, task, edge · `abi` handles, fetch · `clock` · `global`                | `mem` the reservation and the transferable buffers · `ipc` frame, ring, stream, change log, the host's doorbell · `sched` quantum, tick, pass, **strobe** · `abi` handles, fetch · `clock` |
+|             | Rust (`crates/xpute/`)                                                                                                                                                                                        | TypeScript (`packages/xpute/`)                                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **core**    | `abi` words and the command number · `alloc` slab and buddy · `codec` JSON · `collection` arena, deque, heap · `math` scalar, rng · `status` errno, error, bug · `wire` XTP, TLV · `golden` the record reader | `abi` `codec` `collection` `math` `status` `wire` as the Rust, plus `kit` (comparators, iterators, types) and `env` (feature detection) |
+| **runtime** | `mem` sections, the base and the heap door · `ipc` frame, ring, stream, change log, the guest's doorbell · `sched` quantum, tick, pass, task, edge · `abi` handles, fetch · `clock` · `global`                | `mem` the reservation · `ipc` frame, ring, stream, the host's doorbell · `sched` quantum, **strobe** · `abi` handles, fetch             |
 
 The two rows differ in what they ask of a program. `core` asks nothing: link it and call it. `runtime` asks a program to run xpute's way — memory granted once, work in turns, I/O by credits.
 

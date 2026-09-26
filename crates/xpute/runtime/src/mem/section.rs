@@ -16,9 +16,6 @@
 //! where it lies. What the ranges are for, and how large each one is, is the
 //! kernel's own policy, and nothing here reads it.
 
-/// A WebAssembly page.
-pub const WASM_PAGE_BYTES: u32 = 1 << 16;
-
 /// Words a section takes in a boot block: its offset, bytes and alignment.
 pub const SECTION_WORDS: u32 = 3;
 

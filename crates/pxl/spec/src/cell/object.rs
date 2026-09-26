@@ -23,13 +23,6 @@ use crate::cell::decor::{decor_types, DecorId};
 // that already aggregates every cell-definition module together.
 // =============================================================================
 
-/// Zero (cube_types::common::void) means sparse absence/fallback here, not
-/// explicit air — the one distinction there is, since a real value shares
-/// no bit with any other real value; see cube.rs's own top comment.
-pub fn object_value_is_present(value: u32) -> bool {
-    value != cube_types::common::void as u32
-}
-
 /// Explicit object-layer air: retain this leaf and erase lower layers.
 pub fn object_value_is_air(value: u32) -> bool {
     value == cube_types::common::air as u32

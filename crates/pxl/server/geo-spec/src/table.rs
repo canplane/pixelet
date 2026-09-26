@@ -21,12 +21,6 @@
 pub const PLACES: &str = "overture_places";
 pub const DIVISIONS: &str = "overture_divisions";
 pub const DIVISION_POINTS: &str = "overture_division_points";
-pub const BUILDINGS: &str = "overture_buildings";
-pub const TRANSPORTATION: &str = "overture_transportation";
-pub const BASE_LAND: &str = "overture_base_land";
-pub const BASE_LAND_USE: &str = "overture_base_land_use";
-pub const BASE_WATER: &str = "overture_base_water";
-pub const BASE_INFRASTRUCTURE: &str = "overture_base_infrastructure";
 
 /// Which release each of the above was pulled from, and with what bbox. The
 /// one table an ingest adds to rather than replacing.

@@ -245,7 +245,7 @@ impl SettingKey {
     pub fn dev(self) -> bool {
         matches!(
             self,
-            SettingKey::camera_terrain | SettingKey::ground_snap | SettingKey::enable_terrain_carving | SettingKey::show_shadow_map | SettingKey::show_debug_objects | SettingKey::show_ledger
+            SettingKey::camera_terrain | SettingKey::ground_snap | SettingKey::enable_terrain_carving | SettingKey::show_shadow_map
         )
     }
 

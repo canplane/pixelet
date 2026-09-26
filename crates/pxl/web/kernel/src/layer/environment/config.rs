@@ -73,13 +73,3 @@ pub mod light_cfg {
 pub mod rim_cfg {
     pub const INTENSITY: f64 = 0.1;
 }
-
-/// The canvas's resolution. The color grade and the vignette are the
-/// shaders' own constants (crates/pxl/web/render/src/frame/shader/{grade,shade}.wgsl);
-/// the rest of the post stack three ran — contact AO, bloom, god rays,
-/// SMAA — is at b9e31004 with its tuning.
-pub mod post_cfg {
-    /// The canvas draws at the device's pixel ratio clamped to this
-    /// (issue/20260911-taa-tried-and-closed.md on why the cap is where it is).
-    pub const DPR: [f64; 2] = [1.0, 2.0];
-}

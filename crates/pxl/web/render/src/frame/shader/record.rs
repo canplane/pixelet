@@ -40,12 +40,6 @@ pub const SHADER_CLOUD_FIELD: u32 = 19;
 pub const SHADER_SHEET: u32 = 20;
 pub const SHADERS: u32 = 21;
 
-/// The shaders that place a point of the world, each of which lays it on the
-/// planet as the ground is (globe.wgsl's `on_globe_of`) before it projects
-/// it: what is drawn over the map and not laid on it floats off the ground
-/// as the planet falls away. The rest draw the sky or work on the screen.
-pub const WORLD_SHADERS: [u32; 7] = [SHADER_CHUNK, SHADER_DECOR, SHADER_SKINNED, SHADER_PUCK_ZONE, SHADER_PUCK_BEACON, SHADER_BADGE, SHADER_DEBUG];
-
 /// A shader's pieces, as build.rs wrote them: the files beside this one with
 /// their comments and indentation off, since what ships is what the GPU
 /// compiles and the GPU does not read the prose; constant.wgsl, which every

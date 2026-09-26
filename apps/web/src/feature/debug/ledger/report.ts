@@ -1,4 +1,4 @@
-// @pxl/web/feature/dev/ledger/report.ts
+// @pxl/web/feature/debug/ledger/report.ts
 //
 // The ledger's report, written from the numbers the kernel measured and the
 // shell read in place (view.ts). What a lane reads as is lane.ts's, the one
@@ -177,7 +177,7 @@ function tasksSection(n: u32, tasks: TaskSummary[]): string[] {
 /** The whole instrument as pasteable text: the window, the last frame, the
  * state beside the rings, then the raw tail of each ring. */
 export function ledgerReportText(r: LedgerReport): string {
-  const out = [`=== sched/ledger @ t=${n1(r.t)}ms  build ${r.build.number} ${r.build.id} (${r.build.time}) ===`];
+  const out = [`=== ledger @ t=${n1(r.t)}ms  build ${r.build.number} ${r.build.id} (${r.build.time}) ===`];
   out.push(...windowSection(r));
   if (r.frames !== null) out.push(...lastSection(r.frames.last));
   out.push(...sideSection(r));

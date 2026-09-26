@@ -25,7 +25,7 @@
  */
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
-import { reserve_memory } from "@xpute/runtime/mem/section.ts";
+import { reserve_memory } from "@xpute/runtime/mem/reserve.ts";
 import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/kernel/mem/mem.spec.ts";
 import { BOOT, boot_block, type Core } from "@/kernel/module.ts";
 import { run_gpu_stream } from "@/platform/web/webgpu.ts";

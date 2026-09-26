@@ -388,8 +388,3 @@ pub fn debug_gizmos_step(show: bool, map_center: Option<Pvf3>, map_origin: IVec)
     write_labels(g);
     request_world_tick();
 }
-
-/// The labels of the drawn sketch.
-pub fn debug_labels() -> &'static [Label] {
-    gizmos().drawn.labels.as_slice()
-}

@@ -24,10 +24,10 @@ critical-section = "1.1"
 
 [features]
 # What a development build has and a published one does not: the settings
-# schema.json marks `dev`, offered, and the frame gizmo they turn on. A
-# published module is built without (pxl-wasm's `dev`, off by
-# apps/web/script/build-wasm.ts): it offers no dev setting, each running at the
-# default the JSON gives, and carries no gizmo.
+# schema.json marks `dev` — the nightly features — offered. A published module
+# is built without (pxl-wasm's `dev`, off by apps/web/script/build-wasm.ts,
+# and pxl-native's by apps/native/script/build-native.ts): it offers no dev
+# setting, each running at the default the JSON gives.
 default = ["dev"]
 dev = []
 

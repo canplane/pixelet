@@ -22,6 +22,7 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use pxl_kernel::door::Bracket;
+use pxl_kernel::host::Stop;
 
 /// The device's clock, in milliseconds from the first reading: a turn's quota
 /// is spent against it, and only differences are read.
@@ -36,8 +37,11 @@ fn heap_stat() -> pxl_kernel::host::HeapStat {
 
 /// The process's error stream: the kernel stops with the app, before the
 /// shell could run the report's record.
-fn last_words(what: &dyn core::fmt::Display) {
-    eprintln!("[pxl] {what}");
+fn last_words(stop: Stop<'_>) {
+    match stop {
+        Stop::Bug { errno, at, a, b } => eprintln!("[pxl] {errno:?} at {}:{}:{} ({a}, {b})", at.file(), at.line(), at.column()),
+        Stop::Panic(info) => eprintln!("[pxl] {info}"),
+    }
 }
 
 /// What a device gives the kernel: the region, the clock and the allocator.

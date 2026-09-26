@@ -6,7 +6,7 @@
 //! aggregate.
 //!
 //! What is streamed is what was measured. The lines a person reads are the
-//! shell's (apps/web/src/feature/dev/ledger/report.ts), the same
+//! shell's (apps/web/src/feature/debug/ledger/report.ts), the same
 //! formatters the report already uses, so a streamed task and a reported one
 //! read alike without this side knowing a word of it.
 //!
@@ -111,11 +111,6 @@ pub fn ledger_window_start() {
 pub fn ledger_window_stop() {
     ledger_recording_stop();
     set_step_timing(false);
-}
-
-/// Every registered step by mean ms per run, heaviest first.
-pub fn ledger_logging() -> bool {
-    log().logging
 }
 
 /// `one` onto a lane, the oldest dropped when it is full.

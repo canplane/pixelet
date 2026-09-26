@@ -1,10 +1,6 @@
 // xpute-runtime/ipc/change.test.rs
 
-use core::cell::RefCell;
-use std::rc::Rc;
-
 use super::*;
-use crate::ipc::change_waker::ChangeWaker;
 
 const PAGE: Topic = 0;
 const CELL: Topic = 1;
@@ -116,71 +112,4 @@ fn change_a_key_past_2_63_is_the_same_key_in_the_table_and_the_journal() {
 fn change_the_topic_count_is_bounded_by_the_u16_a_topic_travels_as() {
     assert!(std::panic::catch_unwind(|| log(0x10001, 4)).is_err());
     assert!(std::panic::catch_unwind(|| log(1, 0)).is_err());
-}
-
-#[test]
-fn waker_a_pump_wakes_the_listeners_of_changed_keys_once_each_and_nothing_between_pumps() {
-    let log = Rc::new(RefCell::new(log(2, 16)));
-    let mut waker = ChangeWaker::new(log.clone());
-    let (a, b, cell) = (Rc::new(RefCell::new(0)), Rc::new(RefCell::new(0)), Rc::new(RefCell::new(0)));
-    let (a2, b2, cell2) = (a.clone(), b.clone(), cell.clone());
-    waker.subscribe(PAGE, 1, Box::new(move || *a2.borrow_mut() += 1));
-    let off_b = waker.subscribe(PAGE, 2, Box::new(move || *b2.borrow_mut() += 1));
-    waker.subscribe(CELL, 1, Box::new(move || *cell2.borrow_mut() += 1));
-
-    log.borrow_mut().bump(PAGE, 1);
-    log.borrow_mut().bump(PAGE, 1);
-    assert_eq!([*a.borrow(), *b.borrow(), *cell.borrow()], [0, 0, 0], "the log calls no one");
-    assert_eq!(waker.pump(), 1);
-    assert_eq!(
-        [*a.borrow(), *b.borrow(), *cell.borrow()],
-        [1, 0, 0],
-        "twice in one span wakes once; the same key in another topic is another key"
-    );
-
-    waker.unsubscribe(off_b);
-    log.borrow_mut().bump(PAGE, 2);
-    assert_eq!(waker.pump(), 0);
-    assert_eq!(waker.pump(), 0, "an empty span wakes nothing");
-}
-
-#[test]
-fn waker_a_pump_whose_cursor_was_overwritten_wakes_every_listener_it_holds() {
-    let log = Rc::new(RefCell::new(log(2, 2)));
-    let mut waker = ChangeWaker::new(log.clone());
-    let (a, cell) = (Rc::new(RefCell::new(0)), Rc::new(RefCell::new(0)));
-    let (a2, cell2) = (a.clone(), cell.clone());
-    waker.subscribe(PAGE, 1, Box::new(move || *a2.borrow_mut() += 1));
-    waker.subscribe(CELL, 9, Box::new(move || *cell2.borrow_mut() += 1));
-    for k in 10..15 {
-        log.borrow_mut().bump(PAGE, k);
-    }
-    waker.pump();
-    assert_eq!([*a.borrow(), *cell.borrow()], [1, 1]);
-}
-
-#[test]
-fn waker_a_topic_listener_hears_each_changed_key_of_its_topic_once_per_pump_and_null_when_the_pump_was_lost() {
-    let log = Rc::new(RefCell::new(log(2, 4)));
-    let mut waker = ChangeWaker::new(log.clone());
-    let heard: Rc<RefCell<Vec<Option<i64>>>> = Rc::new(RefCell::new(Vec::new()));
-    let h = heard.clone();
-    let off = waker.subscribe_topic(PAGE, Box::new(move |key| h.borrow_mut().push(key)));
-    log.borrow_mut().bump(PAGE, 1);
-    log.borrow_mut().bump(CELL, 1);
-    log.borrow_mut().bump(PAGE, 2);
-    log.borrow_mut().bump(PAGE, 1);
-    waker.pump();
-    assert_eq!(*heard.borrow(), [Some(1), Some(2)]);
-    heard.borrow_mut().clear();
-    for k in 0..6 {
-        log.borrow_mut().bump(PAGE, k);
-    }
-    waker.pump();
-    assert_eq!(*heard.borrow(), [None]);
-    waker.unsubscribe(off);
-    log.borrow_mut().bump(PAGE, 9);
-    heard.borrow_mut().clear();
-    waker.pump();
-    assert!(heard.borrow().is_empty());
 }

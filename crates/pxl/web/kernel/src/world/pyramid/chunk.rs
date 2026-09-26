@@ -62,12 +62,6 @@ impl Chunk {
         self.level
     }
 
-    /// Its coordinate among its level's blocks, as one word.
-    pub fn chunk_idx(self) -> IVec {
-        let [x, y, z] = self.at;
-        ivec::gather(x, y, z)
-    }
-
     /// The page the chunk's column lies in.
     pub fn page(self) -> LevelPage {
         let [x, y] = ancestor_of(self.column().1, PAGE_LEVELS);

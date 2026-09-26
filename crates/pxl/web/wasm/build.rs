@@ -1,7 +1,7 @@
 // pxl-wasm/build.rs
 
 // The module imports its memory: the central scheduler gives it one
-// (@xpute/runtime/mem/section.ts's reserve_memory), and the kernel lays out
+// (@xpute/runtime/mem/reserve.ts's reserve_memory), and the kernel lays out
 // everything inside it (pxl_kernel::mem, over xpute_runtime::mem).
 //
 // The front of that memory is the door's (pxl-kernel door/layout.rs): the

@@ -15,7 +15,7 @@ import { storage_get, storage_set } from "@platform/storage.ts";
 // without it, a character swap (Walker remounts under a new variant.key)
 // resets ChatBubble's local state and it has no way to
 // tell an old, already-dismissed line apart from a brand new one.
-export interface ChatLine {
+interface ChatLine {
   id: number;
   text: string;
   ts: number;
@@ -30,7 +30,7 @@ let nextChatLineId = 0;
 // cube and a decor kind are numbers of two catalogs, so which one a pick is —
 // and whether picking it sets the cube or the decor kind — is the tool
 // alongside it.
-export type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u8 };
+type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u8 };
 
 // 8, not the full 15-color/32-terrain-style/N-decor catalog: a recent list
 // is short, and the drawer holds the rest. mode-bar.tsx's own strip already scrolls (overflow-x-auto) once the row

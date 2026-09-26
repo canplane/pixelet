@@ -92,6 +92,18 @@
         "description": "Blocks fade into their new level of detail as you zoom or move, instead of switching at once. Draws the changing blocks twice while they fade."
       }
     },
+    "debug": {
+      "section_title": "Debug",
+      "section_caption": "Diagnostics for the view and the scheduler",
+      "show_debug_objects": {
+        "label": "Debug Gizmos",
+        "description": "Displays coordinate markers (map centers, tile boundaries) for debugging purposes."
+      },
+      "show_ledger": {
+        "label": "Scheduler Ledger",
+        "description": "Corner panel showing frame pacing, GPU load, fetch-queue depth and task latency from the world scheduler, with the report, trace and console-log buttons."
+      }
+    },
     "disclaimer": {
       "section_title": "Notice",
       "demo_notice": "This service is a demo. Data may be lost or the service may be discontinued without notice.",

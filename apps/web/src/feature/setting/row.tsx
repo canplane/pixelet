@@ -140,20 +140,15 @@ interface SectionTitleProps {
   children: string;
   icon?: LucideIcon;
   caption?: string;
-  /** Marks the whole section as a development build's (schema.json's
-   * DEV_SECTIONS) — section.tsx decides whether it is shown at all, this just
-   * labels it once shown. */
-  dev?: boolean;
 }
 
 export function SectionTitle(props: SectionTitleProps) {
-  const { children, icon: Icon, caption, dev } = props;
+  const { children, icon: Icon, caption } = props;
   return (
     <View style={styles.titleBlock}>
       <View style={styles.titleLine}>
         {Icon && <Icon size={16} color={color.textMuted} />}
         <Text accessibilityRole="header" style={styles.title}>{children}</Text>
-        {dev && <DevBadge />}
       </View>
       {caption && <Text style={styles.caption}>{caption}</Text>}
     </View>

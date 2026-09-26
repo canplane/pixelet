@@ -27,18 +27,6 @@
         "description": "지형, 오브젝트, 캐릭터가 햇빛을 받아 땅에 그림자를 드리웁니다."
       }
     },
-    "debug": {
-      "section_title": "디버그",
-      "section_caption": "개발 빌드에서만 보이는 진단 도구입니다",
-      "show_debug_objects": {
-        "label": "디버그 기즈모",
-        "description": "지도 중심, 타일 경계 등 디버깅용 좌표계 마커를 화면에 표시합니다."
-      },
-      "show_ledger": {
-        "label": "스케줄러 레저",
-        "description": "월드 스케줄러의 프레임 페이싱, GPU 부하, fetch 큐 깊이, 태스크 레이턴시를 보여주는 구석 패널입니다. 리포트, 트레이스, 콘솔 로그 버튼이 함께 있습니다."
-      }
-    },
     "editing": {
       "section_title": "편집",
       "section_caption": "도구가 무엇을 바꿀 수 있는지 설정합니다",

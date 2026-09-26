@@ -1,4 +1,4 @@
-// @pxl/web/feature/dev/ledger/lane.test.ts
+// @pxl/web/feature/debug/ledger/lane.test.ts
 
 import { assertEquals } from "@std/assert";
 
