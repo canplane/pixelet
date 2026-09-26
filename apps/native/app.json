@@ -10,7 +10,8 @@
     "ios": { "bundleIdentifier": "me.plei.pixelet" },
     "android": { "package": "me.plei.pixelet", "adaptiveIcon": { "foregroundImage": "../web/brand/icon.png" } },
     "plugins": [
-      ["expo-location", { "locationWhenInUsePermission": "pixelet shows you where you are on the map, and what you build stands there." }]
+      ["expo-location", { "locationWhenInUsePermission": "pixelet shows you where you are on the map, and what you build stands there." }],
+      "./plugin/prebuilt-flavor.js"
     ]
   }
 }

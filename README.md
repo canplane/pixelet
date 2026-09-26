@@ -107,8 +107,6 @@ deno task dev:local
 | `deno task preview`                  | The production bundle, served locally, data from the live deployment  |
 | `deno task build:web`                | Build the client                                                      |
 | `deno task build:wasm`               | Build the kernel module into `apps/web/src/kernel/kernel.wasm`        |
-| `deno task build:native`             | Build the kernel for a device, the xcframework the app links          |
-| `deno task build:native:published`   | The same without the kernel's dev settings, for a release build       |
 | `deno task dev:native`               | Metro, for the device app                                             |
 | `deno task bake:{tiles,poi,geocode}` | db-geo into `./out/<kind>/<version>`                                  |
 | `deno task ingest:asset`             | Hash `asset/` into `./out/asset`, regenerate the asset tables         |
@@ -131,13 +129,12 @@ To measure the client, use `preview` (`localhost:4173`). It is the bundle as the
 `apps/native` is the same shell as a React Native app, through Expo, with the kernel linked in and every route from the live deployment. It needs Xcode and CocoaPods besides the above, Node for Expo's native build, and the iPhone's and the simulator's Rust targets, which `rust-toolchain.toml` installs.
 
 ```bash
-deno task build:native     # the kernel, as the xcframework the app links
 (cd apps/native && deno install && deno run -A npm:expo@57.0.25 prebuild --platform ios --no-install)
 (cd apps/native/ios && pod install)
 deno task dev:native       # Metro
 ```
 
-`apps/native/ios/` is generated from `app.json` and the module under `modules/platform/`, and is not kept. `pod install` and Xcode both run Node: put it on `PATH` for the first, and name it in `ios/.xcode.env.local` (`export NODE_BINARY=…`) for the second. Then build `ios/pixelet.xcworkspace` from Xcode, with a team to sign with for a phone. A release build takes its kernel from `build:native:published`, as a deployed page's is built without the kernel's dev settings. The app is built for iOS alone: `modules/platform` has no Android half.
+`apps/native/ios/` is generated from `app.json` and the module under `modules/platform/`, and is not kept. `pod install` and Xcode both run Node: put it on `PATH` for the first, and name it in `ios/.xcode.env.local` (`export NODE_BINARY=…`) for the second. Then build `ios/pixelet.xcworkspace` from Xcode, with a team to sign with for a phone. The kernel is built with the app, by a phase of the platform module's pod (`apps/native/script/build-native.ts`), for the configuration and the device or simulator the app is: a Debug build's with the kernel's dev settings, a Release build's without, as a deployed page's is. The phase finds cargo and Deno where their installers put them, `~/.cargo/bin` and `~/.deno/bin`. The app is built for iOS alone: `modules/platform` has no Android half.
 
 ---
 
