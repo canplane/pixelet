@@ -75,7 +75,7 @@ export function stored(storage: u32): string | null {
 
 /** Runs the records the turn just returned left in the host stream at `at`. */
 export function run_host_stream(memory: ArrayBuffer, at: u32): void {
-  each_record(memory, at, stream.HEAD, (code, w, a, n) => {
+  each_record(memory, at, stream.HEAD, (code, w, a) => {
     switch (code) {
       case op.BODY_READ: {
         const [body, dst, len] = [w[a], w[a + 1], w[a + 2]];
