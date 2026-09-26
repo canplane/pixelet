@@ -6,23 +6,29 @@
 //! it — the slab over a buddy the module has (pxl-wasm), so a `Vec` the kernel
 //! hands the shell lies in the memory the shell reads.
 //!
-//! Unlike the module's, this allocator is the whole library's, and a device's
-//! GPU driver calls back on threads of its own; a lock makes the slab — built
-//! for one thread — sound for them. The kernel's thread takes it uncontended.
+//! Unlike the module's, this allocator is the whole library's, and the
+//! library runs on more threads than the kernel's: an image decoded off it,
+//! the GPU driver's callbacks. What the kernel's thread asks for is placed in
+//! the region; what any other thread asks for is the system's, as a page's
+//! bitmaps are the browser's and not the module's. A block goes back to
+//! whichever holds its address.
 //!
-//! Being the whole library's, it is wgpu's as well: what the device keeps on
-//! the CPU for its objects lies in the region beside the kernel's own blocks
-//! and counts in the heap's row, which a page's module has no part of. It
-//! cannot be told apart — an allocator is not told who asks, and wgpu asks on
-//! the kernel's thread too — so a device's row reads higher than a page's by
-//! what its driver holds.
+//! A block of the region can still be let go on another thread — wgpu drops
+//! what the kernel made where its callbacks run — so the slab, built for one
+//! thread, is behind a lock; the kernel's thread takes it uncontended. What
+//! wgpu keeps on the CPU for its objects is made on the kernel's thread, lies
+//! in the region and counts in the heap's row, which a page's module has no
+//! part of: a device's row reads higher than a page's by what its driver
+//! holds.
 
 use core::cell::UnsafeCell;
 use core::sync::atomic::{AtomicUsize, Ordering};
-use std::alloc::{GlobalAlloc, Layout};
+use std::alloc::{GlobalAlloc, Layout, System};
 
 use pxl_kernel::host::HeapStat;
 use pxl_kernel::mem::heap::{heap_stat, HeapBounds, KernelAlloc};
+
+use crate::thread::on_kernel_thread;
 use pxl_kernel::mem::section;
 use pxl_kernel::mem::spec::{GLOBAL_BASE, PHONE_BYTES};
 
@@ -144,23 +150,65 @@ impl Locked {
     }
 }
 
-// SAFETY: every call into the slab holds the lock.
+/// Whether `ptr` lies in the region, where the slab gave it.
+fn in_region(ptr: *mut u8) -> bool {
+    let at = REGION.load(Ordering::Acquire);
+    at != 0 && (at..at + GIVEN as usize).contains(&ptr.addr())
+}
+
+// SAFETY: every call into the slab holds the lock, and every block goes back
+// to the allocator its address says gave it.
 unsafe impl GlobalAlloc for Locked {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        // SAFETY: the caller's layout, passed on.
-        self.with(|a| unsafe { a.alloc(layout) })
+        if on_kernel_thread() {
+            // SAFETY: the caller's layout, passed on.
+            self.with(|a| unsafe { a.alloc(layout) })
+        } else {
+            // SAFETY: as above.
+            unsafe { System.alloc(layout) }
+        }
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        // SAFETY: the caller's block, passed on.
-        self.with(|a| unsafe { a.dealloc(ptr, layout) })
+        if in_region(ptr) {
+            // SAFETY: the caller's block, which the slab gave.
+            self.with(|a| unsafe { a.dealloc(ptr, layout) })
+        } else {
+            // SAFETY: the caller's block, which the system gave.
+            unsafe { System.dealloc(ptr, layout) }
+        }
     }
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        // SAFETY: as `alloc`.
-        self.with(|a| unsafe { a.alloc_zeroed(layout) })
+        if on_kernel_thread() {
+            // SAFETY: as `alloc`.
+            self.with(|a| unsafe { a.alloc_zeroed(layout) })
+        } else {
+            // SAFETY: as `alloc`.
+            unsafe { System.alloc_zeroed(layout) }
+        }
     }
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        // SAFETY: as `dealloc`.
-        self.with(|a| unsafe { a.realloc(ptr, layout, new_size) })
+        let here = in_region(ptr);
+        if here == on_kernel_thread() {
+            return if here {
+                // SAFETY: as `dealloc`.
+                self.with(|a| unsafe { a.realloc(ptr, layout, new_size) })
+            } else {
+                // SAFETY: as `dealloc`.
+                unsafe { System.realloc(ptr, layout, new_size) }
+            };
+        }
+        // A block that grows on the other side of the line from where it was
+        // made: moved to where this thread's blocks are.
+        // SAFETY: a layout the caller's allocation was valid under, resized.
+        let grown = unsafe { self.alloc(Layout::from_size_align_unchecked(new_size, layout.align())) };
+        if !grown.is_null() {
+            // SAFETY: two live blocks, the copy no longer than either.
+            unsafe {
+                core::ptr::copy_nonoverlapping(ptr, grown, layout.size().min(new_size));
+                self.dealloc(ptr, layout);
+            }
+        }
+        grown
     }
 }
 
