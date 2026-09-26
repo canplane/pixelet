@@ -13,7 +13,7 @@ use core::panic::Location;
 
 use xpute_core::status::errno::Errno;
 use xpute_runtime::ipc::stream::Stream;
-use xpute_runtime::mem::base::{off_of, ptr_at};
+use xpute_runtime::mem::base::{off_of_slice, ptr_at};
 
 use crate::abi::host::{op, stream};
 use crate::global::Global;
@@ -101,7 +101,7 @@ pub fn host_bug(errno: Errno, at: &Location<'_>, a: u64, b: u64) {
 /// What the platform keeps under `storage`'s key (host.json).
 pub fn storage_set(storage: u32, value: String) {
     let Some(h) = host() else { return };
-    h.stream.record(op::STORAGE_SET, &[storage, off_of(value.as_ptr()) as u32, value.len() as u32], &[], None);
+    h.stream.record(op::STORAGE_SET, &[storage, off_of_slice(value.as_bytes()) as u32, value.len() as u32], &[], None);
     h.held.push(value);
 }
 
@@ -110,7 +110,7 @@ pub fn storage_set(storage: u32, value: String) {
 /// turn on, and `dst` must be kept until then.
 pub fn body_read(body: u32, dst: &mut [u8]) {
     let Some(h) = host() else { return };
-    h.stream.record(op::BODY_READ, &[body, off_of(dst.as_mut_ptr()) as u32, dst.len() as u32], &[], None);
+    h.stream.record(op::BODY_READ, &[body, off_of_slice(&raw mut *dst) as u32, dst.len() as u32], &[], None);
 }
 
 static HANDHELD: Global<bool> = Global::new();

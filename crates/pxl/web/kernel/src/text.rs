@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 use pxl_render::gpu::surface::DPR_MAX;
 use pxl_render::gpu::text::{raster_box, Font, Raster};
-use xpute_runtime::mem::base::off_of;
+use xpute_runtime::mem::base::off_of_slice;
 
 use crate::abi::host::op;
 use crate::global::Global;
@@ -75,7 +75,7 @@ pub fn text_lines(font: Font, max_width: f64, text_in: &str) -> Option<Vec<(&str
         // No more lines than characters, and one for an empty text.
         let lines = text_in.chars().count().max(1) as u32;
         let mut at = vec![0u32; 1 + 2 * lines as usize].into_boxed_slice();
-        let args = [font.weight, font.px.to_bits(), (max_width as f32).to_bits(), off_of(at.as_mut_ptr()) as u32, lines];
+        let args = [font.weight, font.px.to_bits(), (max_width as f32).to_bits(), off_of_slice(&raw mut *at) as u32, lines];
         if !host_record(op::TEXT_LAYOUT, &args, text_in.as_bytes()) {
             return Some(vec![(text_in, text_in.chars().count() as f64 * 7.0)]);
         }
@@ -133,7 +133,7 @@ pub fn text_raster(font: Font, color: u32, text_in: &str) -> Option<Raster<'stat
         font.weight,
         (font.px * scale).to_bits(),
         color,
-        off_of(pixels.as_mut_ptr()) as u32,
+        off_of_slice(&raw mut *pixels) as u32,
         size[0],
         size[1],
         origin[0].to_bits(),

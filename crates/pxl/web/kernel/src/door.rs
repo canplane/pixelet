@@ -28,7 +28,7 @@ use xpute_core::status::errno::Errno;
 use xpute_core::wire::xtp::PacketWriter;
 use xpute_runtime::ipc::doorbell::{Door, DoorLayout};
 use xpute_runtime::ipc::ring::Ring;
-use xpute_runtime::mem::base::{off_of, ptr_at};
+use xpute_runtime::mem::base::{off_of, off_of_slice, ptr_at};
 use xpute_runtime::mem::section::{write_section, SECTION_WORDS};
 
 /// What a bracket gives the kernel on its first turn.
@@ -285,7 +285,10 @@ fn post_shell(s: &mut State) {
     let hash = std::hash::Hasher::finish(&h);
     if hash != s.snapshot {
         s.snapshot = hash;
-        let signal = WorldSnapshotSignal { at: off_of(buf.as_ptr()) as u32, len };
+        let signal = WorldSnapshotSignal {
+            at: off_of_slice(&raw const buf[..]) as u32,
+            len,
+        };
         raise(Command::WORLD_SNAPSHOT, WorldSnapshotSignal::FIELDS, |w| signal.write(w));
     }
     // The key crosses as the one word the queue orders by; the shell holds it

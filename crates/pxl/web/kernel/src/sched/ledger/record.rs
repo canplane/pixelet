@@ -27,7 +27,7 @@ use std::collections::HashMap;
 
 use xpute_core::status::error::MarshalError;
 use xpute_runtime::abi::fetch::FetchFail;
-use xpute_runtime::mem::base::off_of;
+use xpute_runtime::mem::base::off_of_slice;
 use xpute_runtime::mem::section::span_of;
 
 use crate::global::Global;
@@ -158,7 +158,7 @@ impl TaskRow {
             ..TaskRow::default()
         };
         if let Some(at) = rec.fail.at {
-            row.at_file = off_of(file_in_memory(at.file()).as_ptr()) as f64;
+            row.at_file = off_of_slice(file_in_memory(at.file()).as_bytes()) as f64;
             row.at_file_bytes = at.file().len() as f64;
             row.at_line = at.line() as f64;
         }

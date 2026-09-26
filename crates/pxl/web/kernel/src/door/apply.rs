@@ -7,7 +7,7 @@ use super::{post_shell, State};
 use crate::abi::cmd::{self as abi, Command};
 use xpute_core::status::errno::Errno;
 use xpute_core::status::error::MarshalError;
-use xpute_runtime::mem::base::off_of;
+use xpute_runtime::mem::base::{off_of, off_of_slice};
 
 /// A command's packet, refused when the command needs one and the message
 /// has none.
@@ -312,13 +312,13 @@ fn ledger_read(window_ms: f64) -> u32 {
     let summary = crate::sched::ledger::summary::ledger_summarize(window_ms);
     let (frames, tasks, worst) = (ledger_frames(), ledger_tasks(), ledger_worst());
     let w = WORDS.get(|| Box::new([0; READ::WORDS as usize]));
-    w[READ::summary_at as usize] = off_of(summary.as_ptr()) as u32;
+    w[READ::summary_at as usize] = off_of_slice(&raw const *summary) as u32;
     w[READ::summary_words as usize] = summary.len() as u32;
-    w[READ::frames_at as usize] = off_of(frames.as_ptr()) as u32;
+    w[READ::frames_at as usize] = off_of_slice(&raw const *frames) as u32;
     w[READ::frames_count as usize] = frames.len() as u32;
-    w[READ::tasks_at as usize] = off_of(tasks.as_ptr()) as u32;
+    w[READ::tasks_at as usize] = off_of_slice(&raw const *tasks) as u32;
     w[READ::tasks_count as usize] = tasks.len() as u32;
-    w[READ::worst_at as usize] = off_of(worst.as_ptr()) as u32;
+    w[READ::worst_at as usize] = off_of_slice(&raw const *worst) as u32;
     w[READ::worst_count as usize] = worst.len() as u32;
     off_of(w.as_ptr()) as u32
 }
@@ -333,9 +333,9 @@ fn ledger_take(s: &mut State) -> u32 {
     static WORDS: crate::global::Global<Box<[u32; LOG::WORDS as usize]>> = crate::global::Global::new();
     let (tasks, frames) = crate::sched::ledger::log::ledger_log_rows();
     let w = WORDS.get(|| Box::new([0; LOG::WORDS as usize]));
-    w[LOG::tasks_at as usize] = off_of(tasks.as_ptr()) as u32;
+    w[LOG::tasks_at as usize] = off_of_slice(&raw const *tasks) as u32;
     w[LOG::tasks_count as usize] = tasks.len() as u32;
-    w[LOG::frames_at as usize] = off_of(frames.as_ptr()) as u32;
+    w[LOG::frames_at as usize] = off_of_slice(&raw const *frames) as u32;
     w[LOG::frames_count as usize] = frames.len() as u32;
     s.ledger_taken = true;
     off_of(w.as_ptr()) as u32

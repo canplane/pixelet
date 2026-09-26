@@ -65,3 +65,16 @@ pub fn off_of<T>(p: *const T) -> usize {
     let (base, bytes) = memory();
     p.expose_provenance().checked_sub(base).filter(|&off| off < bytes).or_bug(Errno::EFAULT)
 }
+
+/// Where `s` lies, as `off_of` says, for a reader told its length too. An
+/// empty slice owns no bytes and its pointer is only its alignment — inside
+/// wasm's memory by chance, outside a native build's region — so it names 0,
+/// where nothing is read. A slice the host writes into is passed as
+/// `&mut`, so what is exposed may be written through.
+pub fn off_of_slice<T>(s: *const [T]) -> usize {
+    if s.is_empty() {
+        0
+    } else {
+        off_of(s.cast::<T>())
+    }
+}
