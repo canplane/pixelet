@@ -34,6 +34,12 @@ fn heap_stat() -> pxl_kernel::host::HeapStat {
     memory::ALLOC.stat()
 }
 
+/// The process's error stream: the kernel stops with the app, before the
+/// shell could run the report's record.
+fn last_words(what: &dyn core::fmt::Display) {
+    eprintln!("[pxl] {what}");
+}
+
 /// What a device gives the kernel: the region, the clock and the allocator.
 fn bracket() -> Bracket {
     memory::region();
@@ -42,6 +48,7 @@ fn bracket() -> Bracket {
         data_end: memory::DATA_END,
         clock: now,
         heap_stat,
+        last_words: Some(last_words),
     }
 }
 

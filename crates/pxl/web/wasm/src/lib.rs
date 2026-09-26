@@ -134,6 +134,7 @@ fn bracket() -> Bracket {
         data_end: data_end(),
         clock: now,
         heap_stat,
+        last_words: None,
     }
 }
 

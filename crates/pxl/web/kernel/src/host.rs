@@ -85,11 +85,10 @@ pub fn host_fall() {
 /// host to find when the trap reaches it. What was recorded before it in the
 /// turn is dropped: the kernel stops here, and none of it is to be done.
 ///
-/// A device's kernel stops with its process, before any host could run the
-/// record, so it says the report on the process's own error stream as well.
+/// Where the kernel stops with its process, before any host could run the
+/// record, the bracket says the report as well (`last_words`).
 pub fn host_bug(errno: Errno, at: &Location<'_>, a: u64, b: u64) {
-    #[cfg(not(target_arch = "wasm32"))]
-    eprintln!("[pxl] {errno:?} at {}:{}:{} ({a}, {b})", at.file(), at.line(), at.column());
+    last_words(&format_args!("{errno:?} at {}:{}:{} ({a}, {b})", at.file(), at.line(), at.column()));
     if let Some(h) = host() {
         h.stream.publish();
         let args = [errno as i32 as u32, at.line(), at.column(), a as u32, (a >> 32) as u32, b as u32, (b >> 32) as u32];
@@ -208,6 +207,22 @@ fn no_heap() -> HeapStat {
 /// Installs the module's allocator's reading.
 pub fn set_heap_stat(stat: fn() -> HeapStat) {
     HEAP.set(stat);
+}
+
+/// Where a bracket says what stopped the kernel (door.rs `Bracket`).
+pub type LastWords = fn(&dyn core::fmt::Display);
+
+static LAST_WORDS: Global<Option<LastWords>> = Global::new();
+
+pub fn set_last_words(say: Option<LastWords>) {
+    LAST_WORDS.set(say);
+}
+
+/// Says `what` stopped the kernel, where the bracket has somewhere to.
+pub fn last_words(what: &dyn core::fmt::Display) {
+    if let Some(say) = *LAST_WORDS.get(|| None) {
+        say(what);
+    }
 }
 
 /// The module's heap as it stands; every word 0 where there is none.
