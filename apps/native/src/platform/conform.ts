@@ -14,6 +14,7 @@
 import type * as WebAboveKeyboard from "../../../web/src/platform/web/above-keyboard.tsx";
 import type * as WebCore from "../../../web/src/platform/web/core.ts";
 import type * as WebGlass from "../../../web/src/platform/web/glass.tsx";
+import type * as WebGesture from "../../../web/src/platform/web/gesture.ts";
 import type * as WebGpu from "../../../web/src/platform/web/gpu.ts";
 import type * as WebImage from "../../../web/src/platform/web/image.ts";
 import type * as WebLocale from "../../../web/src/platform/web/locale.ts";
@@ -33,6 +34,7 @@ import type * as WebVisualViewport from "../../../web/src/platform/web/visual-vi
 import * as AboveKeyboard from "./above-keyboard.tsx";
 import * as Core from "./core.ts";
 import * as Glass from "./glass.tsx";
+import * as Gesture from "./gesture.ts";
 import * as Gpu from "./gpu.ts";
 import * as Image from "./image.ts";
 import * as Locale from "./locale.ts";
@@ -53,6 +55,7 @@ export const CONFORMS = [
   AboveKeyboard satisfies typeof WebAboveKeyboard,
   Core satisfies typeof WebCore,
   Glass satisfies typeof WebGlass,
+  Gesture satisfies typeof WebGesture,
   Gpu satisfies typeof WebGpu,
   Image satisfies typeof WebImage,
   Locale satisfies typeof WebLocale,

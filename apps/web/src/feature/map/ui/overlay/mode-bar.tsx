@@ -3,7 +3,8 @@
 import { useRef, useState } from "react";
 import { Eraser, LayoutGrid, MessageCircle, MousePointer, Palette, Send, TreePine } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { PanResponder, PixelRatio, Platform, Pressable, ScrollView, StyleSheet, type TextInput, View } from "react-native";
+import { PanResponder, PixelRatio, Pressable, ScrollView, StyleSheet, type TextInput, View } from "react-native";
+import { PAN_X } from "@platform/gesture.ts";
 
 import type { f64, u32, u8 } from "@xpute/core/abi/word.ts";
 import { Glass, SYSTEM_GLASS } from "@platform/glass.tsx";
@@ -531,9 +532,7 @@ const styles = StyleSheet.create({
   picksContent: { alignItems: "center", paddingHorizontal: 4 },
 
   slot: { width: PITCH, height: PITCH, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  // The browser pans the strip sideways itself; what is left of a finger
-  // on a swatch — a hold, a drag up — reaches the swatch's gesture.
-  swatchSlot: Platform.OS === "web" ? ({ touchAction: "pan-x" } as object) : {},
+  swatchSlot: PAN_X,
   round: { borderRadius: PITCH / 2 },
   toolActive: { backgroundColor: STRIP.held },
   swatchIdle: { boxShadow: `0 0 0 1px ${STRIP.line}` },
