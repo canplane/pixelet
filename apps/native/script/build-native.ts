@@ -1,13 +1,13 @@
 #!/usr/bin/env -S deno run -A
 // Builds the Rust core for a device (crates/pxl/web/native) and puts it where
-// the app's surface module links it from: one xcframework holding the iPhone's
+// the app's platform module links it from: one xcframework holding the iPhone's
 // library and the simulator's, each with the header Swift imports it by
 // (`import PxlNative`). Run before the app is built; the framework is not
 // committed.
 
 const CRATES = new URL("../../../crates/", import.meta.url);
 const INCLUDE = new URL("pxl/web/native/include/", CRATES);
-const OUT = new URL("../modules/pxl-surface/ios/PxlNative.xcframework", import.meta.url);
+const OUT = new URL("../modules/platform/ios/PxlNative.xcframework", import.meta.url);
 
 /** The targets an iPhone app is built for: the device, and the simulator on
  * an Apple silicon Mac. */

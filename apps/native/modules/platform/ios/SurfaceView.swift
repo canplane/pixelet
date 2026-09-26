@@ -1,4 +1,4 @@
-// @pxl/native/modules/pxl-surface/ios/PxlSurfaceView.swift
+// @pxl/native/modules/platform/ios/SurfaceView.swift
 
 import ExpoModulesCore
 import PxlNative
@@ -13,7 +13,7 @@ import UIKit
 /// it is bound (`onAttach`) and when it is not (`onDetach`). The kernel sizes
 /// the surface and draws every frame inside a turn, so nothing here draws or
 /// runs a frame.
-class PxlSurfaceView: ExpoView {
+class SurfaceView: ExpoView {
   override class var layerClass: AnyClass { CAMetalLayer.self }
 
   let onAttach = EventDispatcher()

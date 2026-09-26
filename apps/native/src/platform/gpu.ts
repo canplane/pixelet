@@ -17,10 +17,10 @@ import { declareUnsupported, type UnsupportedReason } from "@/app/store/unsuppor
 export function gpu_missing(): UnsupportedReason | null {
   return null;
 }
-import { PXL_KERNEL } from "./core.ts";
+import { PLATFORM } from "./module.ts";
 
 export function gpu_boot(): void {
-  const info = PXL_KERNEL.gpuOpen();
+  const info = PLATFORM.gpuOpen();
   if (info === null) {
     console.error("[gpu] the system has no GPU; nothing can be drawn");
     declareUnsupported("gpu");

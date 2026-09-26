@@ -15,26 +15,20 @@
  * when it fails, so its silence is no loss (`orientation_silence_is_loss`).
  */
 
-import { requireNativeModule } from "expo";
 import { AppState } from "react-native";
 import * as Location from "expo-location";
 
 import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_update, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame, ring_now } from "@/kernel/sched.ts";
-
-interface PxlSensor {
-  headingAvailable(): boolean;
-}
-
-const SENSOR: PxlSensor = requireNativeModule("PxlSensor");
+import { PLATFORM } from "./module.ts";
 
 export function geolocation_supported(): boolean {
   return true;
 }
 
 export function orientation_supported(): boolean {
-  return SENSOR.headingAvailable();
+  return PLATFORM.headingAvailable();
 }
 
 /** The heading needs no prompt of its own: the location permission covers it. */

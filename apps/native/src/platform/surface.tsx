@@ -2,12 +2,12 @@
 
 /**
  * What the kernel draws into, on a device: a native view backed by a Metal
- * layer (modules/pxl-surface), which the kernel draws into directly through
- * wgpu (crates/pxl/web/render/src/gpu/api/device.rs). A view is a kernel
- * surface as a page's canvas is (platform/web/surface.tsx): opened while it
- * is mounted, bound to the view's layer by the view itself while it has one —
- * it says when, since its layer comes after it is mounted and laid out — and
- * sized in device pixels as it is laid out.
+ * layer (modules/platform/ios/SurfaceView.swift), which the kernel draws into
+ * directly through wgpu (crates/pxl/web/render/src/gpu/api/device.rs). A
+ * view is a kernel surface as a page's canvas is (platform/web/surface.tsx):
+ * opened while it is mounted, bound to the view's layer by the view itself
+ * while it has one — it says when, since its layer comes after it is mounted
+ * and laid out — and sized in device pixels as it is laid out.
  *
  * The world's view is also the app's driver (kernel/control/input.ts), as a
  * page's canvas is: its size is the frame's viewport, its touches are
@@ -27,7 +27,7 @@ import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame, type Viewport } from "@/kernel/sched.ts";
 
-interface PxlSurfaceProps extends ViewProps {
+interface SurfaceProps extends ViewProps {
   /** The kernel's surface to show; 0 for none. */
   surface: u32;
   /** The view bound its layer to `surface`. */
@@ -35,9 +35,9 @@ interface PxlSurfaceProps extends ViewProps {
   onDetach: () => void;
 }
 
-const PxlSurface: ComponentType<PxlSurfaceProps> = requireNativeView("PxlSurface");
+const SurfaceView: ComponentType<SurfaceProps> = requireNativeView("PxlPlatform");
 
-/** A kernel surface of `role` for a PxlSurface view: opened while mounted and
+/** A kernel surface of `role` for a SurfaceView: opened while mounted and
  * again whenever `key` changes, `opened` handed it once it is the kernel's —
  * what that returns is run before it is let go — and sized in device pixels
  * once the view has bound its layer to it. `size` is the view's, in its own
@@ -69,7 +69,7 @@ function useSurface(role: u32, key: string, opened?: (surface: u32) => () => voi
     };
   }, [key]);
 
-  const props: PxlSurfaceProps = {
+  const props: SurfaceProps = {
     surface: handle,
     onLayout: (e: LayoutChangeEvent) => {
       size.current = { width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height, dpr: PixelRatio.get() };
@@ -112,7 +112,7 @@ export function WorldSurface() {
   };
 
   return (
-    <PxlSurface
+    <SurfaceView
       {...props}
       style={StyleSheet.absoluteFill}
       onLayout={onLayout}
@@ -129,5 +129,5 @@ export function WorldSurface() {
  * before the surface is let go; it opens again whenever `openKey` changes. */
 export function CaseSurface({ onOpen, openKey }: { onOpen: (surface: u32) => () => void; openKey: string }) {
   const { props } = useSurface(surface_role.CASE, openKey, onOpen);
-  return <PxlSurface {...props} style={StyleSheet.absoluteFill} />;
+  return <SurfaceView {...props} style={StyleSheet.absoluteFill} />;
 }
