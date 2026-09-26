@@ -114,7 +114,7 @@ pub fn body_read(body: u32, dst: &mut [u8]) {
 
 static HANDHELD: Global<bool> = Global::new();
 
-/// Installs whether the device is a phone or a tablet (shared/lib/browser/handheld).
+/// Installs whether the device is a phone or a tablet (the platform's `HANDHELD`, apps/web/src/platform/web/core.ts).
 pub fn set_handheld(handheld: bool) {
     HANDHELD.set(handheld);
 }

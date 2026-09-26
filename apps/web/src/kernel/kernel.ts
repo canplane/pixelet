@@ -24,7 +24,6 @@ import {
   read_world_snapshot,
   Sensor,
 } from "@/kernel/abi/cmd.spec.ts";
-import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { storage } from "@/kernel/abi/host.spec.ts";
 import { stored } from "@/kernel/host.ts";
 import { hold_body } from "@/kernel/module.ts";
@@ -43,6 +42,7 @@ import { load_image, load_model } from "@/kernel/io/load.ts";
 import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
 import { bytes_at } from "@/kernel/module.ts";
 import { gpu_boot } from "@platform/gpu.ts";
+import { HANDHELD } from "@platform/core.ts";
 import { start_sched } from "@/kernel/sched.ts";
 import { kernel_snapshot, set_snapshot, subscribe_snapshot } from "@/kernel/snapshot.ts";
 import { keepSettings, storedSettings } from "@/feature/setting/store.ts";

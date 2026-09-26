@@ -12,6 +12,11 @@ import type { f64 } from "@xpute/core/abi/word.ts";
 import type { Core } from "@/kernel/module.ts";
 import { PLATFORM } from "./module.ts";
 
+/** A device the app runs on is a phone, a tablet or a headset, held to a
+ * phone's ceilings — the memory the core takes is a phone's too
+ * (crates/pxl/web/native/src/memory.rs `GIVEN`). */
+export const HANDHELD: boolean = true;
+
 /** The core, booted: its first turn lays the memory out before anything reads
  * the boot block. */
 export function open_core(): Promise<Core> {
