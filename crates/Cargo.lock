@@ -1523,7 +1523,9 @@ name = "pxl-native"
 version = "0.0.0"
 dependencies = [
  "pollster",
+ "pxl-kernel",
  "wgpu",
+ "xpute-core",
  "xpute-runtime",
 ]
 

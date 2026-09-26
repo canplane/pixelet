@@ -1,115 +1,64 @@
 // pxl-native/lib.rs
 
 //! The kernel on a device: pxl-kernel linked into the app, where pxl-wasm
-//! instantiates it in a page. For now the one thing it does is the chain the
-//! rest will stand on: the app's view hands over its layer, wgpu makes a
-//! surface on it, and a frame reaches the screen.
+//! instantiates it in a page. The same door (pxl_kernel::door) behind a
+//! different bracket — the memory is a region this library takes from the
+//! system (memory.rs), the clock is the device's, and the renderer draws
+//! rather than recording its calls for a host to run.
 //!
-//! Called from the app's Swift through the C ABI (pxl_native.h), on the main
+//! Called from the app through the C ABI (include/pxl_native.h), on one
 //! thread, one call at a time — the single thread `Global` is sound for.
 
-use std::ffi::c_void;
+mod memory;
+mod surface;
 
-use xpute_runtime::global::Global;
+use std::sync::OnceLock;
+use std::time::Instant;
 
-/// A surface over one view's layer, and the device drawing into it.
-struct Surface {
-    surface: wgpu::Surface<'static>,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
+use pxl_kernel::door::Bracket;
+
+/// The device's clock, in milliseconds from the first reading: a turn's quota
+/// is spent against it, and only differences are read.
+fn now() -> f64 {
+    static START: OnceLock<Instant> = OnceLock::new();
+    START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
 }
 
-static SURFACE: Global<Option<Surface>> = Global::new();
+fn heap_stat() -> pxl_kernel::host::HeapStat {
+    memory::ALLOC.stat()
+}
 
-/// A surface on `layer`, a `CAMetalLayer`, `width` × `height` pixels. 0 when
-/// it is drawn into, -1 when no device would take it.
+/// What a device gives the kernel: the region, the clock and the allocator,
+/// and no recorded renderer calls — the renderer draws here.
+fn bracket() -> Bracket {
+    memory::region();
+    Bracket {
+        given: memory::GIVEN,
+        data_end: memory::DATA_END,
+        clock: now,
+        heap_stat,
+        gpu_stream: false,
+    }
+}
+
+/// The doorbell (pxl_kernel::door::interrupt): a turn of `quota_ms`, and when
+/// the kernel wants the next. The first lays the memory out.
+#[no_mangle]
+pub extern "C" fn pxl_interrupt(quota_ms: f64) -> f64 {
+    pxl_kernel::door::interrupt(quota_ms, bracket)
+}
+
+/// The memory: its first byte, with its bytes written through `bytes` — what
+/// the shell reads the boot block and the rings through.
 ///
 /// # Safety
-/// `layer` is a live `CAMetalLayer` that outlives the surface: the view that
-/// owns it closes the surface before it goes.
+/// `bytes` is null or points at a `u32` the caller owns.
 #[no_mangle]
-pub unsafe extern "C" fn pxl_surface_open(layer: *mut c_void, width: u32, height: u32) -> i32 {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::METAL,
-        ..wgpu::InstanceDescriptor::new_without_display_handle()
-    });
-    // SAFETY: the caller's layer, alive for as long as the surface.
-    let Ok(surface) = (unsafe { instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(layer)) }) else {
-        return -1;
-    };
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        compatible_surface: Some(&surface),
-        ..Default::default()
-    })) else {
-        return -1;
-    };
-    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        // What the adapter has, not WebGPU's defaults: the simulator's Metal
-        // falls short of some of those and refuses the device outright.
-        required_limits: adapter.limits(),
-        ..Default::default()
-    })) else {
-        return -1;
-    };
-    let Some(mut config) = surface.get_default_config(&adapter, width.max(1), height.max(1)) else {
-        return -1;
-    };
-    config.present_mode = wgpu::PresentMode::Fifo;
-    surface.configure(&device, &config);
-    SURFACE.set(Some(Surface { surface, device, queue, config }));
-    0
-}
-
-/// The layer is now `width` × `height` pixels.
-#[no_mangle]
-pub extern "C" fn pxl_surface_resize(width: u32, height: u32) {
-    let Some(s) = SURFACE.get(|| None) else { return };
-    s.config.width = width.max(1);
-    s.config.height = height.max(1);
-    s.surface.configure(&s.device, &s.config);
-}
-
-/// One frame: the surface cleared to the ground's color.
-#[no_mangle]
-pub extern "C" fn pxl_surface_draw() {
-    let Some(s) = SURFACE.get(|| None) else { return };
-    let frame = match s.surface.get_current_texture() {
-        wgpu::CurrentSurfaceTexture::Success(frame) => frame,
-        // Drawn, and configured again for the next: the layer changed under
-        // the swapchain.
-        wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
-            s.surface.configure(&s.device, &s.config);
-            frame
-        }
-        wgpu::CurrentSurfaceTexture::Outdated => {
-            s.surface.configure(&s.device, &s.config);
-            return;
-        }
-        // Backgrounded, or no drawable in time: the next frame asks again.
-        _ => return,
-    };
-    let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let mut encoder = s.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: &view,
-            depth_slice: None,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.28, g: 0.43, b: 0.22, a: 1.0 }),
-                store: wgpu::StoreOp::Store,
-            },
-        })],
-        ..Default::default()
-    });
-    s.queue.submit([encoder.finish()]);
-    s.queue.present(frame);
-}
-
-/// The view is going: the surface and its device with it.
-#[no_mangle]
-pub extern "C" fn pxl_surface_close() {
-    SURFACE.set(None);
+pub unsafe extern "C" fn pxl_memory(bytes: *mut u32) -> *mut u8 {
+    memory::region();
+    if !bytes.is_null() {
+        // SAFETY: the caller's word.
+        unsafe { *bytes = memory::GIVEN };
+    }
+    xpute_runtime::mem::base::ptr_at(0)
 }
