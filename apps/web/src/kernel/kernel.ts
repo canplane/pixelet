@@ -40,8 +40,7 @@ import {
 } from "@platform/sensor.ts";
 import { abort_fetch, run_fetch } from "@/kernel/io/fetch.ts";
 import { load_image, load_model } from "@/kernel/io/load.ts";
-import { CORE_BUILD } from "@/kernel/ipc.ts";
-import { CORE, load_core } from "@/kernel/mem.ts";
+import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
 import { bytes_at } from "@/kernel/module.ts";
 import { gpu_boot } from "@platform/gpu.ts";
 import { start_sched } from "@/kernel/sched.ts";
@@ -95,14 +94,14 @@ function objects_body(): { objects: u32; objects_bytes: u32 } {
 
 /** Starts the kernel: the module, the turns it is given and who hears what
  * a turn leaves, then a device to draw with and the world it draws. Called
- * once by the host's boot, so that what boots is ordered rather than
- * whichever module happened to be imported first. */
+ * once by the app's boot (app/bootstrap.ts), so that what boots is ordered
+ * rather than whichever module happened to be imported first. */
 export async function boot_kernel(): Promise<void> {
   await load_core();
   start_sched();
-  CORE_BUILD.signal = on_signal;
+  CORE_DOORBELL.signal = on_signal;
   gpu_boot();
-  CORE_BUILD.call(
+  CORE_DOORBELL.call(
     Command.WORLD_CREATE,
     encode_world_create({
       development: __IS_DEV__,

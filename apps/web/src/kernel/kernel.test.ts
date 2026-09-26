@@ -40,10 +40,9 @@ import { SETTINGS } from "@/feature/setting/schema.spec.ts";
 
 import { ELE_PADDED_SPAN, encode_terrain, pack_ground_cell, PAGE_CELLS } from "@/kernel/fixture.ts";
 
-import { CORE_BUILD } from "@/kernel/ipc.ts";
-import { CORE, load_core } from "@/kernel/mem.ts";
+import { CORE, CORE_DOORBELL, load_core } from "@/kernel/mem.ts";
 import { BOOT, boot_block, bytes_at, hold_body } from "@/kernel/module.ts";
-import { acquire_device } from "@/kernel/render/gpu.ts";
+import { acquire_device } from "@/platform/web/webgpu.ts";
 
 // The module the tests drive, loaded before any of them reads it.
 await load_core();
@@ -78,7 +77,7 @@ let fetched: Fetched[] = [];
 let loads: bigint[] = [];
 let draws = 0;
 
-CORE_BUILD.signal = (_tag, cmd, f) => {
+CORE_DOORBELL.signal = (_tag, cmd, f) => {
   if (cmd === Command.WORLD_SNAPSHOT) {
     const { at, len } = read_world_snapshot(f!);
     snapshot = read_snapshot(new TreeReader(bytes_at(CORE.buffer, at, len)).read_branch());
@@ -124,16 +123,16 @@ function answer(f: Fetched, outcome: FetchOutcome, body: U8Array | null): void {
   try {
     const bytes = body?.byteLength ?? 0;
     const held = body !== null && bytes > 0 ? hold_body(body) : 0;
-    CORE_BUILD.send(0, Command.FETCH_UPDATE, encode_fetch_update({ key: f.key, outcome, body: held, body_bytes: bytes, fail: FetchFail.None, detail: 0, net_ms: 0 }));
-    CORE_BUILD.ring(0);
+    CORE_DOORBELL.send(0, Command.FETCH_UPDATE, encode_fetch_update({ key: f.key, outcome, body: held, body_bytes: bytes, fail: FetchFail.None, detail: 0, net_ms: 0 }));
+    CORE_DOORBELL.ring(0);
   } finally {
     answer_requests[f.category] = (answer_requests[f.category] ?? 0) + heap_row[HEAP_REQUESTS] - requests;
   }
 }
 
 function fail(f: Fetched): void {
-  CORE_BUILD.send(0, Command.FETCH_UPDATE, encode_fetch_update({ key: f.key, outcome: FetchOutcome.Error, body: 0, body_bytes: 0, fail: FetchFail.Network, detail: 0, net_ms: 0 }));
-  CORE_BUILD.ring(0);
+  CORE_DOORBELL.send(0, Command.FETCH_UPDATE, encode_fetch_update({ key: f.key, outcome: FetchOutcome.Error, body: 0, body_bytes: 0, fail: FetchFail.Network, detail: 0, net_ms: 0 }));
+  CORE_DOORBELL.ring(0);
 }
 
 /** One frame as the driver runs it, with every fetch answered at once. */
@@ -141,12 +140,12 @@ function turn(delta = 1 / 60): Turn {
   fetched = [];
   loads = [];
   const requests = heap_row[HEAP_REQUESTS];
-  CORE_BUILD.send(
+  CORE_DOORBELL.send(
     0,
     Command.WORLD_UPDATE,
     encode_world_update({ width: 1280, height: 720, dpr: 1, delta_s: delta, frame_ms: 1000 / 60, interactive: true, credits: 6, unix_ms: 0, hours: 12, minutes: 0, seconds: 0, day_start_ms: 0 }),
   );
-  CORE_BUILD.ring(8);
+  CORE_DOORBELL.ring(8);
   strobe_requests += heap_row[HEAP_REQUESTS] - requests;
   const started = fetched;
   for (const f of started) {
@@ -155,18 +154,18 @@ function turn(delta = 1 / 60): Turn {
   }
   // An asset's read is a read: it is settled by the key it was started with,
   // and the kernel asks again in its own time.
-  for (const key of loads) CORE_BUILD.send(0, Command.LOAD_DELETE, encode_load_delete({ key }));
+  for (const key of loads) CORE_DOORBELL.send(0, Command.LOAD_DELETE, encode_load_delete({ key }));
   assert(snapshot !== null, "the kernel posted its snapshot");
   return { snapshot, fetched: started, draws };
 }
 
 /** One of the UI's commands, rung at once as the shell rings it. */
 function command(cmd: Command, pkt?: U8Array): void {
-  CORE_BUILD.send(0, cmd, pkt);
-  CORE_BUILD.ring(0);
+  CORE_DOORBELL.send(0, cmd, pkt);
+  CORE_DOORBELL.ring(0);
 }
 
-CORE_BUILD.call(
+CORE_DOORBELL.call(
   Command.WORLD_CREATE,
   encode_world_create({
     development: false,
@@ -212,8 +211,8 @@ Object.defineProperty(navigator, "gpu", {
 });
 const device = await acquire_device(() => {});
 assert("align" in device, "the stand-in device answered");
-CORE_BUILD.send(0, Command.GPU_CREATE, encode_gpu_create({ min_uniform_offset_alignment: device.align, timestamps: device.timestamps }));
-CORE_BUILD.ring(0);
+CORE_DOORBELL.send(0, Command.GPU_CREATE, encode_gpu_create({ min_uniform_offset_alignment: device.align, timestamps: device.timestamps }));
+CORE_DOORBELL.ring(0);
 turn();
 console.log(`heap: through the first turn ${heap_row[HEAP_REQUESTS]} requests, top ${heap_row[HEAP_TOP]}`);
 

@@ -24,11 +24,12 @@
  * every static host gives.
  */
 
-import type { u32 } from "@xpute/core/abi/word.ts";
+import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { reserve_memory } from "@xpute/runtime/mem/section.ts";
 import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
 import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/kernel/mem/mem.spec.ts";
-import type { Core } from "@/kernel/module.ts";
+import { BOOT, boot_block, type Core } from "@/kernel/module.ts";
+import { run_gpu_stream } from "@/platform/web/webgpu.ts";
 import { DEV_BUNDLE } from "@/config/bundle.ts";
 
 /** The memory the kernel is reserved: a gibibyte on the desktop, half of one
@@ -62,11 +63,20 @@ export async function open_core(): Promise<Core> {
     // makes, since a turn measures itself while the host cannot run.
     env: { memory, now: () => performance.now() },
   });
-  const interrupt = instance.exports.interrupt as Core["interrupt"];
+  const turn = instance.exports.interrupt as Core["interrupt"];
   // A turn with no quota applies what waits, which is nothing: the first one
   // lays the memory out and writes the boot block.
-  interrupt(0);
+  turn(0);
   // The reservation's maximum is its initial size, so the buffer is never
   // replaced by a grow and one reference to it holds for the page's life.
-  return { buffer: memory.buffer as ArrayBuffer, interrupt };
+  const buffer = memory.buffer as ArrayBuffer;
+  // A module reaches WebGPU no other way than through the page, so the calls
+  // its renderer recorded in a turn are made as the turn returns.
+  const gpu = boot_block(buffer)[BOOT.gpu];
+  const interrupt = (quota_ms: f64) => {
+    const wake = turn(quota_ms);
+    run_gpu_stream(buffer, gpu);
+    return wake;
+  };
+  return { buffer, interrupt };
 }

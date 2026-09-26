@@ -20,7 +20,10 @@ import { BOOT_AT } from "@/kernel/mem/mem.spec.ts";
 export interface Core {
   buffer: ArrayBuffer;
   /** Hands the kernel a turn of `quota_ms`; when it wants the next, in ms
-   * (@xpute/runtime/sched/quantum.ts). The first turn lays the memory out. */
+   * (@xpute/runtime/sched/quantum.ts). The first turn lays the memory out. A
+   * platform whose core records its GPU calls runs them here, before the
+   * turn is over, so what it drew is on the device before anything else can
+   * reach it. */
   interrupt(quota_ms: f64): f64;
 }
 
@@ -29,7 +32,7 @@ export interface Core {
  * then `.fixed` and the heap, each its offset, bytes and page size; then the
  * quantum the kernel declares, three words in thousandths; then the heap's
  * row; then the two streams run after every turn, the renderer's
- * (render/gpu.ts, 0 where the core draws itself) and the host's (host.ts).
+ * (platform/web/webgpu.ts, 0 where the core draws itself) and the host's (host.ts).
  * `data_end` is everything the bracket keeps for itself below the kernel's
  * ranges — the stack, the rings and, in a module, the linker's data. */
 export const BOOT = { data_end: 0, sq: 1, cq: 2, fixed: 3, heap: 6, quantum: 9, heap_row: 12, gpu: 13, host: 14 } as const;

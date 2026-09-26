@@ -3,21 +3,27 @@
 /**
  * The device the kernel draws with, on the web: the page's WebGPU, asked for
  * once the kernel has booted and again after one is lost, and the kernel told
- * of each (render/gpu.ts runs the calls it records). A device's core draws
+ * of each (webgpu.ts runs the calls it records). A device's core draws
  * through its own and is told nothing from here.
  */
 
 import { Command, encode_gpu_create } from "@/kernel/abi/cmd.spec.ts";
-import { CORE_BUILD } from "@/kernel/ipc.ts";
-import { acquire_device } from "@/kernel/render/gpu.ts";
+import { CORE_DOORBELL } from "@/kernel/mem.ts";
+import { acquire_device, missing_before_boot } from "@/platform/web/webgpu.ts";
 import { request_frame } from "@/kernel/sched.ts";
-import { declareUnsupported } from "@/app/store/unsupported-store.ts";
+import { declareUnsupported, type UnsupportedReason } from "@/app/store/unsupported-store.ts";
+
+/** Why this browser cannot draw at all, before anything is started: what it
+ * lacks outright, where the device's answer need not be waited for. */
+export function gpu_missing(): UnsupportedReason | null {
+  return missing_before_boot();
+}
 
 /** Asks for a device and tells the kernel when one answers, and again after
  * one is lost. */
 export function gpu_boot(): void {
   const lost = () => {
-    CORE_BUILD.send(0, Command.GPU_DELETE);
+    CORE_DOORBELL.send(0, Command.GPU_DELETE);
     gpu_boot();
     request_frame();
   };
@@ -31,7 +37,7 @@ export function gpu_boot(): void {
       declareUnsupported(info.reason);
       return;
     }
-    CORE_BUILD.send(0, Command.GPU_CREATE, encode_gpu_create({ min_uniform_offset_alignment: info.align, timestamps: info.timestamps }));
+    CORE_DOORBELL.send(0, Command.GPU_CREATE, encode_gpu_create({ min_uniform_offset_alignment: info.align, timestamps: info.timestamps }));
     request_frame();
   }, (err) => console.error("[gpu] the device request failed; nothing can be drawn:", err));
 }

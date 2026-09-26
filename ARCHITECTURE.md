@@ -314,7 +314,7 @@ Each tick ends with a **draw list** (`pxl-render frame/draw.rs`). In it: the chu
 
 The kernel writes the frame's uniforms into the stage lane (`frame/stage.rs`) and calls `render_frame` (`gpu/renderer.rs`) with a `FrameInput`: the list, the environment, the models and their skins, the billboard sheet (the one texture every label is drawn into), and the surfaces. The renderer draws into every open surface — the world's canvas and the character picker's display case — and reports what the frame cost and whether it wants another turn. It decides nothing.
 
-It reaches WebGPU through calls the host answers (`gpu/api.rs` ↔ `apps/web/src/kernel/render/gpu.ts`). A call carries numbers and the address and length of what it names, and every GPU object is one of xpute's handles: 2^15 slots for objects, 8 for surfaces.
+It reaches WebGPU through calls the host answers (`gpu/api.rs` ↔ `apps/web/src/platform/web/webgpu.ts`). A call carries numbers and the address and length of what it names, and every GPU object is one of xpute's handles: 2^15 slots for objects, 8 for surfaces.
 
 Shaders and pipelines are the kernel's (`frame/shader/`). A pipeline is a record of words — shaders, vertex lanes, bind group layouts, primitive, depth and blend state — that the host turns into a WebGPU descriptor, and that a native host could turn into wgpu's. `cargo test` compiles every shader with naga, the WGSL compiler, and checks each record against its shader.
 

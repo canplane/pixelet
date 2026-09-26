@@ -1,7 +1,7 @@
 // pxl-render/gpu/api/device.rs
 
 //! The renderer's calls made on the device itself, through wgpu: what the
-//! page's player does with a turn's records (apps/web/src/kernel/render/gpu.ts)
+//! page's player does with a turn's records (apps/web/src/platform/web/webgpu.ts)
 //! done as each call is made, since a kernel linked into an app reaches its
 //! GPU without a host between. Every object is kept at its handle's slot, and
 //! every call means what the record of it means to the page — the same codes,
@@ -111,7 +111,7 @@ enum Object {
 
 /// Where a set's timestamps are read back: resolved into one buffer and
 /// copied into one of three, so a read still on its way does not hold the
-/// next frame's up, as the page's are (apps/web/src/kernel/render/gpu.ts).
+/// next frame's up, as the page's are (apps/web/src/platform/web/webgpu.ts).
 struct Stamps {
     count: u32,
     resolve: wgpu::Buffer,

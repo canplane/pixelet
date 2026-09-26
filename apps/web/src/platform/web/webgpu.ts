@@ -1,4 +1,4 @@
-// @pxl/web/kernel/render/gpu.ts
+// @pxl/web/platform/web/webgpu.ts
 
 /**
  * The host's WebGPU: the device, and the calls the kernel's renderer made

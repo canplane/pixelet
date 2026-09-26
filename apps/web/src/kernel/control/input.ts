@@ -1,10 +1,11 @@
 // @pxl/web/kernel/control/input.ts
 
 /**
- * The page as an interrupt source
- * (crates/pxl/web/kernel/src/control/camera/input.rs): the pointer's events
- * over the canvas, the wheel, the tab's visibility, and the one frame loop
- * that mounts them.
+ * The host as an interrupt source (crates/pxl/web/kernel/src/control/camera/
+ * input.rs): the pointer, the wheel, where the surface lies, and the world's
+ * surface opened, shown and hidden — as a driver hears them, whichever
+ * platform's it is (platform/web/surface.tsx, a device's surface). A driver
+ * translates its own events into these and decides nothing past that.
  *
  * The kernel keeps no pick of its own, so every pointer event carries what
  * the pointer holds. Visibility is rung at once with no quota: a hidden page
@@ -12,30 +13,12 @@
  * sure to get for a pending save.
  */
 
-import { useLayoutEffect } from "react";
-
 import type { f64, i32, u32 } from "@xpute/core/abi/word.ts";
-import {
-  ActiveTool,
-  Command,
-  encode_input_pointer,
-  encode_input_update,
-  encode_input_wheel,
-  encode_sensor_visibility,
-  PermissionAnswer,
-  PointerKind,
-  PointerPhase,
-  Sensor,
-} from "@/kernel/abi/cmd.spec.ts";
+import { ActiveTool, Command, encode_input_pointer, encode_input_update, encode_input_wheel, encode_sensor_visibility, PointerKind, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
 import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
-import { send_permission } from "@platform/sensor.ts";
-import { CORE_BUILD } from "@/kernel/ipc.ts";
-import { request_frame, ring_now, set_driver, strobe } from "@/kernel/sched.ts";
-
-export function send_rect(element: HTMLElement): void {
-  const r = element.getBoundingClientRect();
-  kernel_rect(r.left, r.top, r.width, r.height);
-}
+import { permission_follow } from "@platform/sensor.ts";
+import { CORE_DOORBELL } from "@/kernel/mem.ts";
+import { request_frame, ring_now, set_driver, strobe, type Viewport } from "@/kernel/sched.ts";
 
 /** What the pointer holds: a tool, the held cube's ground channel (none for
  * a flat color) and type, or the decor kind, by the catalog's numbers, and
@@ -49,32 +32,34 @@ interface Holding {
 }
 
 let holding: Holding = { tool: ActiveTool.Pointer, channel: null, value: 0, tier: 0 };
-/** The last hovering pointer, while it is over the canvas. */
+/** The last hovering pointer, while it is over the surface. */
 let last_hover: { kind: PointerKind; id: i32; button: i32; x: f64; y: f64 } | null = null;
 
-function send_pointer_at(phase: PointerPhase, kind: PointerKind, id: i32, button: i32, x: f64, y: f64): void {
+function send_pointer(phase: PointerPhase, kind: PointerKind, id: i32, button: i32, x: f64, y: f64): void {
   const { tool, channel, value, tier } = holding;
-  CORE_BUILD.send(0, Command.INPUT_POINTER, encode_input_pointer({ phase, kind, id, button, x, y, tool, channel, value, tier }));
+  CORE_DOORBELL.send(0, Command.INPUT_POINTER, encode_input_pointer({ phase, kind, id, button, x, y, tool, channel, value, tier }));
   strobe.input();
   request_frame();
 }
 
-/** A touch at (x, y) in the window, as a device's surface hears it: a pointer
- * like any other, which the kernel reads into drags and pinches. */
-export function kernel_touch(phase: PointerPhase, id: i32, x: f64, y: f64): void {
-  send_pointer_at(phase, PointerKind.Touch, id, 0, x, y);
+/** A pointer at (x, y) in the window, in its pixels. A mouse or a pen
+ * hovers, and is remembered until it leaves; a touch only presses. */
+export function kernel_pointer(phase: PointerPhase, kind: PointerKind, id: i32, button: i32, x: f64, y: f64): void {
+  last_hover = phase === PointerPhase.Out || kind === PointerKind.Touch ? null : { kind, id, button, x, y };
+  send_pointer(phase, kind, id, button, x, y);
+}
+
+/** A wheel's turn over the surface. */
+export function kernel_wheel(delta_y: f64): void {
+  CORE_DOORBELL.send(0, Command.INPUT_WHEEL, encode_input_wheel({ delta_y }));
+  strobe.input();
+  request_frame();
 }
 
 /** Where the surface lies in the window, in its pixels: what a pointer's
  * place is read against. */
 export function kernel_rect(left: f64, top: f64, width: f64, height: f64): void {
-  CORE_BUILD.send(0, Command.INPUT_UPDATE, encode_input_update({ left, top, width, height }));
-}
-
-function send_pointer(phase: PointerPhase, e: PointerEvent): void {
-  const kind = e.pointerType === "touch" ? PointerKind.Touch : e.pointerType === "pen" ? PointerKind.Pen : PointerKind.Mouse;
-  last_hover = phase === PointerPhase.Out || kind === PointerKind.Touch ? null : { kind, id: e.pointerId, button: e.button, x: e.clientX, y: e.clientY };
-  send_pointer_at(phase, kind, e.pointerId, e.button, e.clientX, e.clientY);
+  CORE_DOORBELL.send(0, Command.INPUT_UPDATE, encode_input_update({ left, top, width, height }));
 }
 
 /**
@@ -85,96 +70,33 @@ function send_pointer(phase: PointerPhase, e: PointerEvent): void {
  */
 export function kernel_hold(tool: ActiveTool, channel: GroundChannelKey | null, value: u32, tier: u32): void {
   holding = { tool, channel, value, tier };
-  if (last_hover) send_pointer_at(PointerPhase.Move, last_hover.kind, last_hover.id, last_hover.button, last_hover.x, last_hover.y);
+  if (last_hover) send_pointer(PointerPhase.Move, last_hover.kind, last_hover.id, last_hover.button, last_hover.x, last_hover.y);
 }
 
-/**
- * The one frame loop over `element`: the kernel's turns, the pointer's events
- * on it, the tab's visibility and the sensors' open and close.
- */
-export function KernelDriver({ element }: { element: HTMLElement | null }): null {
-  useLayoutEffect(() => {
-    if (!element) return;
-    set_driver(() => ({ width: element.clientWidth, height: element.clientHeight }));
+/** The world's surface is up, sized as `viewport` reads it every frame: the
+ * turns run, the sensors open, and a permission granted from outside the app
+ * is followed. What it returns closes all of it. */
+export function kernel_open(viewport: () => Viewport): () => void {
+  set_driver(viewport);
+  ring_now(Command.SENSOR_OPEN);
+  strobe.start();
+  const unfollow = permission_follow();
+  return () => {
+    unfollow();
+    strobe.stop();
+    ring_now(Command.SENSOR_CLOSE);
+    set_driver(null);
+  };
+}
 
-    const on_down = (e: PointerEvent) => {
-      send_rect(element);
-      send_pointer(PointerPhase.Down, e);
-    };
-    const on_move = (e: PointerEvent) => send_pointer(PointerPhase.Move, e);
-    const on_up = (e: PointerEvent) => send_pointer(PointerPhase.Up, e);
-    const on_leave = (e: PointerEvent) => send_pointer(PointerPhase.Out, e);
-    const on_wheel = (e: WheelEvent) => {
-      if (e.ctrlKey) e.preventDefault();
-      CORE_BUILD.send(0, Command.INPUT_WHEEL, encode_input_wheel({ delta_y: e.deltaY }));
-      strobe.input();
-      request_frame();
-    };
-    const on_context_menu = (e: MouseEvent) => e.preventDefault();
-    const on_resize = () => {
-      send_rect(element);
-      request_frame();
-    };
-    // Rung at once with no quota: a hidden page gets no animation frame, and
-    // hiding is the last moment a phone's tab is sure to get for the pending
-    // save.
-    const send_visibility = (visible: boolean) => {
-      CORE_BUILD.send(0, Command.SENSOR_VISIBILITY, encode_sensor_visibility({ visible }));
-      CORE_BUILD.ring(0);
-    };
-    const on_visibility = () => {
-      send_visibility(document.visibilityState === "visible");
-      request_frame();
-    };
-    const on_page_hide = () => send_visibility(false);
-
-    element.addEventListener("pointerdown", on_down);
-    element.addEventListener("pointermove", on_move);
-    element.addEventListener("pointerleave", on_leave);
-    element.addEventListener("contextmenu", on_context_menu);
-    element.addEventListener("wheel", on_wheel, { passive: false });
-    globalThis.addEventListener("resize", on_resize);
-    globalThis.addEventListener("scroll", on_resize, true);
-    globalThis.addEventListener("pointerup", on_up);
-    globalThis.addEventListener("pointercancel", on_up);
-    document.addEventListener("visibilitychange", on_visibility);
-    globalThis.addEventListener("pagehide", on_page_hide);
-    const observer = new ResizeObserver(on_resize);
-    observer.observe(element);
-
-    // Recovers from a denied state the moment the user grants location access
-    // from outside the app, since nothing else would ask again.
-    let permission: PermissionStatus | null = null;
-    const on_permission = () => {
-      send_permission(Sensor.Geolocation, permission?.state === "granted" ? PermissionAnswer.Granted : PermissionAnswer.Denied);
-    };
-    navigator.permissions?.query({ name: "geolocation" }).then((status) => {
-      permission = status;
-      status.addEventListener("change", on_permission);
-    }).catch(() => {});
-
-    send_rect(element);
-    ring_now(Command.SENSOR_OPEN);
+/** Whether the app is on screen. Rung at once with no quota, since a hidden
+ * app gets no frame and hiding is its last sure moment for the pending save;
+ * the turns stop while it is hidden and resume when it is back. */
+export function kernel_visible(visible: boolean): void {
+  CORE_DOORBELL.send(0, Command.SENSOR_VISIBILITY, encode_sensor_visibility({ visible }));
+  CORE_DOORBELL.ring(0);
+  if (visible) {
     strobe.start();
-
-    return () => {
-      strobe.stop();
-      ring_now(Command.SENSOR_CLOSE);
-      permission?.removeEventListener("change", on_permission);
-      observer.disconnect();
-      globalThis.removeEventListener("pagehide", on_page_hide);
-      document.removeEventListener("visibilitychange", on_visibility);
-      globalThis.removeEventListener("pointercancel", on_up);
-      globalThis.removeEventListener("pointerup", on_up);
-      globalThis.removeEventListener("scroll", on_resize, true);
-      globalThis.removeEventListener("resize", on_resize);
-      element.removeEventListener("wheel", on_wheel);
-      element.removeEventListener("contextmenu", on_context_menu);
-      element.removeEventListener("pointerleave", on_leave);
-      element.removeEventListener("pointermove", on_move);
-      element.removeEventListener("pointerdown", on_down);
-      set_driver(null);
-    };
-  }, [element]);
-  return null;
+    request_frame();
+  } else strobe.stop();
 }

@@ -16,10 +16,11 @@
  */
 
 import { requireNativeModule } from "expo";
+import { AppState } from "react-native";
 import * as Location from "expo-location";
 
 import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_update, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
-import { CORE_BUILD } from "@/kernel/ipc.ts";
+import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame, ring_now } from "@/kernel/sched.ts";
 
 interface PxlSensor {
@@ -49,8 +50,8 @@ export function orientation_permit(): Promise<boolean> {
   return Promise.resolve(true);
 }
 
-export function send_permission(sensor: Sensor, answer: PermissionAnswer): void {
-  CORE_BUILD.send(0, Command.SENSOR_PERMISSION, encode_sensor_permission({ sensor, answer }));
+function send_permission(sensor: Sensor, answer: PermissionAnswer): void {
+  CORE_DOORBELL.send(0, Command.SENSOR_PERMISSION, encode_sensor_permission({ sensor, answer }));
   request_frame();
 }
 
@@ -64,13 +65,19 @@ async function permitted(): Promise<boolean> {
   return granted;
 }
 
-/**
- * The app is in front again. A grant made in the device's settings meanwhile
- * reaches the kernel as a page's permission `change` does
- * (kernel/control/input.ts) — the one way back from a refusal, since nothing
- * else would ask again.
- */
-export function permission_recheck(): void {
+/** A grant made in the device's settings, which the app can only leave for
+ * and come back from, reaches the kernel as it comes back — as a page's
+ * permission `change` does (platform/web/sensor.ts), the one way back from a
+ * refusal, since nothing else would ask again. What it returns stops
+ * following. */
+export function permission_follow(): () => void {
+  const back = AppState.addEventListener("change", (state) => {
+    if (state === "active") recheck();
+  });
+  return () => back.remove();
+}
+
+function recheck(): void {
   if (granted !== false) return;
   void Location.getForegroundPermissionsAsync().then(({ status }) => {
     if (granted !== false || status !== Location.PermissionStatus.GRANTED) return;
@@ -102,7 +109,7 @@ function geolocation_fail(watch: Watch, code: GeolocationErrorCode): void {
   if (geolocation !== watch) return;
   watch_end(watch);
   geolocation = null;
-  CORE_BUILD.send(0, Command.SENSOR_ERROR, encode_sensor_error({ code }));
+  CORE_DOORBELL.send(0, Command.SENSOR_ERROR, encode_sensor_error({ code }));
   request_frame();
 }
 
@@ -116,7 +123,7 @@ export function geolocation_start(): void {
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
       (pos) => {
         const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-        CORE_BUILD.send(0, Command.SENSOR_UPDATE, encode_sensor_update({ lon: longitude, lat: latitude, altitude, accuracy: accuracy ?? Infinity, heading }));
+        CORE_DOORBELL.send(0, Command.SENSOR_UPDATE, encode_sensor_update({ lon: longitude, lat: latitude, altitude, accuracy: accuracy ?? Infinity, heading }));
         request_frame();
       },
       () => geolocation_fail(watch, GeolocationErrorCode.PositionUnavailable),
@@ -154,7 +161,7 @@ export function orientation_listen(): void {
       (h) => {
         // True north where the OS has a fix to correct by, magnetic otherwise.
         const heading = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
-        CORE_BUILD.send(0, Command.SENSOR_ORIENTATION, encode_sensor_orientation({ webkit_compass_heading: heading, alpha: null, beta: null, gamma: null }));
+        CORE_DOORBELL.send(0, Command.SENSOR_ORIENTATION, encode_sensor_orientation({ webkit_compass_heading: heading, alpha: null, beta: null, gamma: null }));
         request_frame();
       },
       (reason) => {
