@@ -1,7 +1,7 @@
 {
   "$doc": [
-    "The ledger's records and blocks as the kernel lays them out and the shell reads",
-    "them in place (sched/ledger/record.rs, apps/web/src/feature/debug/ledger/view.ts):",
+    "The profiler's records and blocks as the kernel lays them out and the shell reads",
+    "them in place (sched/profiler/record.rs, apps/web/src/feature/debug/profiler/view.ts):",
     "word offsets, eight bytes a word, and the names the numbers index. Nothing is",
     "built for a read: the kernel writes numbers where they stay, and the words for",
     "them are the shell's."
@@ -54,7 +54,7 @@
     "preview",
     "chunks",
     "debug_gizmos",
-    "ledger"
+    "profiler"
   ],
   "EFFECT_NAMES": [
     "navigation",
@@ -94,7 +94,7 @@
   "FRAME": {
     "$type": "u32",
     "$doc": [
-      "One rendered frame (sched/ledger/record.rs FrameSample). `settled` is 0 or 1; `phases` is a lane of PHASE_NAMES' length, `gpu_spans` of GPU_SPAN_NAMES', `census` pairs of draws and triangles in CENSUS_TAGS' order, and `level_tris` and `pages_by_level` a word a level of the pyramid, LIMITS.LEVELS of them. A lane's name says its unit: `_ms`, `_mb`, and `_levels` for a set of levels as bits."
+      "One rendered frame (sched/profiler/record.rs FrameSample). `settled` is 0 or 1; `phases` is a lane of PHASE_NAMES' length, `gpu_spans` of GPU_SPAN_NAMES', `census` pairs of draws and triangles in CENSUS_TAGS' order, and `level_tris` and `pages_by_level` a word a level of the pyramid, LIMITS.LEVELS of them. A lane's name says its unit: `_ms`, `_mb`, and `_levels` for a set of levels as bits."
     ],
     "t": 0,
     "dt_ms": 1,
@@ -284,7 +284,7 @@
   "TASK": {
     "$type": "u32",
     "$doc": [
-      "One settled task (sched/ledger/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's."
+      "One settled task (sched/profiler/record.rs TaskRow). `subject` is a u64 word and every other word an f64; `start_ms` is NaN for a task that never ran; `category`, `outcome` and each of `phase_ids` index CATEGORY_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the host's."
     ],
     "category": 0,
     "subject": 1,
@@ -351,7 +351,7 @@
   "SUMMARY": {
     "$type": "u32",
     "$doc": [
-      "The block LEDGER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64."
+      "The block PROFILER_READ computes: each section's words at its AT, the fields relative to it. Every word an f64."
     ],
     "rec": {
       "AT": 0,
@@ -480,7 +480,7 @@
   "READ": {
     "$type": "u32",
     "$doc": [
-      "What LEDGER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count."
+      "What PROFILER_READ answers with the address of: u32 words, each range's address in the module's memory and its record count."
     ],
     "summary_at": 0,
     "summary_words": 1,
@@ -495,7 +495,7 @@
   "LOG": {
     "$type": "u32",
     "$doc": [
-      "What LEDGER_TAKE answers with the address of: u32 words, the frames and tasks the stream has kept since the last take."
+      "What PROFILER_TAKE answers with the address of: u32 words, the frames and tasks the stream has kept since the last take."
     ],
     "frames_at": 0,
     "frames_count": 1,

@@ -1,6 +1,6 @@
-// pxl-kernel/sched/ledger/block.rs
+// pxl-kernel/sched/profiler/block.rs
 
-//! Every section of the summary as one record, laid out as ledger.json lays
+//! Every section of the summary as one record, laid out as profiler.json lays
 //! the section out and held to it by `words!` (record.rs).
 //!
 //! The summary used to be written word by word — `out[at(a, F::field)] = v`
@@ -11,7 +11,7 @@
 //! values in the middle of lanes the JSON had appended to the end, so fifteen
 //! of its twenty lanes carried a neighbor's number; a lane fed from a
 //! structure that mirrored the one it was about; and fields computed for the
-//! ledger that no lane read.
+//! profiler that no lane read.
 //!
 //! A record closes all three. A lane with no field is a size mismatch, a
 //! field at the wrong word is an offset mismatch, and a field nobody fills is
@@ -21,13 +21,13 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::sched::ledger::record::{words, FrameSample, Words, CENSUS_LEN, GPU_SPANS, LEVELS};
-use crate::sched::ledger::spec::{FRAME, LIMITS, PHASE_NAMES, SPREAD, STEP, SUMMARY, TASK_PHASE_NAMES, TASK_SUMMARY};
+use crate::sched::profiler::record::{words, FrameSample, Words, CENSUS_LEN, GPU_SPANS, LEVELS};
+use crate::sched::profiler::spec::{FRAME, LIMITS, PHASE_NAMES, SPREAD, STEP, SUMMARY, TASK_PHASE_NAMES, TASK_SUMMARY};
 
 const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
-const CATEGORIES: usize = crate::sched::ledger::spec::CATEGORY_NAMES.len();
+const CATEGORIES: usize = crate::sched::profiler::spec::CATEGORY_NAMES.len();
 
 /// What a set of values was, at the two points worth naming and at its worst.
 #[repr(C)]
@@ -40,7 +40,7 @@ pub struct Spread {
 
 words!(Spread, SPREAD::WORDS, p50 => SPREAD::p50, p95 => SPREAD::p95, max => SPREAD::max);
 
-/// Whether the ledger is recording, and how much it holds.
+/// Whether the profiler is recording, and how much it holds.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RecBlock {
@@ -142,7 +142,7 @@ pub struct TasksBlock {
 
 words!(TasksBlock, SUMMARY::tasks::WORDS, slots => SUMMARY::tasks::slots);
 
-/// The counters the log keeps over the window (ledger/log.rs).
+/// The counters the log keeps over the window (profiler/log.rs).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CountersBlock {

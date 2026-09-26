@@ -195,7 +195,7 @@ pub fn mesh_words(box_cnt: u32, words: u32) -> u32 {
     box_cnt * words
 }
 
-/// What bakes have counted, for the ledger. Cumulative.
+/// What bakes have counted, for the profiler. Cumulative.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 pub struct Counters {
     pub total_runs: u32,

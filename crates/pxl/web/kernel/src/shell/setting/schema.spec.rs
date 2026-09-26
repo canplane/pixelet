@@ -185,8 +185,8 @@ pub enum SettingKey {
     lod_crossfade = 13,
     /// The debug gizmos: frame origins, page corners, the map center and the rings.
     show_debug_objects = 14,
-    /// The scheduler ledger's corner panel. The console stream is a button on it.
-    show_ledger = 15,
+    /// The scheduler profiler's corner panel. The console stream is a button on it.
+    show_profiler = 15,
     person_variant = 16,
     pet_variant = 17,
 }
@@ -208,7 +208,7 @@ impl SettingKey {
         SettingKey::resolution,
         SettingKey::lod_crossfade,
         SettingKey::show_debug_objects,
-        SettingKey::show_ledger,
+        SettingKey::show_profiler,
         SettingKey::person_variant,
         SettingKey::pet_variant,
     ];
@@ -235,7 +235,7 @@ impl SettingKey {
             SettingKey::resolution => SettingKind::Choice,
             SettingKey::lod_crossfade => SettingKind::Toggle,
             SettingKey::show_debug_objects => SettingKind::Toggle,
-            SettingKey::show_ledger => SettingKind::Toggle,
+            SettingKey::show_profiler => SettingKind::Toggle,
             SettingKey::person_variant => SettingKind::Number,
             SettingKey::pet_variant => SettingKind::Number,
         }
@@ -273,7 +273,7 @@ pub struct Settings {
     pub resolution: ResolutionMode,
     pub lod_crossfade: bool,
     pub show_debug_objects: bool,
-    pub show_ledger: bool,
+    pub show_profiler: bool,
     pub person_variant: u8,
     pub pet_variant: u8,
 }
@@ -296,7 +296,7 @@ impl Settings {
         resolution: ResolutionMode::auto,
         lod_crossfade: true,
         show_debug_objects: false,
-        show_ledger: false,
+        show_profiler: false,
         person_variant: 1,
         pet_variant: 5,
     };
@@ -320,7 +320,7 @@ impl Settings {
             SettingKey::resolution => self.resolution as u32,
             SettingKey::lod_crossfade => self.lod_crossfade as u32,
             SettingKey::show_debug_objects => self.show_debug_objects as u32,
-            SettingKey::show_ledger => self.show_ledger as u32,
+            SettingKey::show_profiler => self.show_profiler as u32,
             SettingKey::person_variant => self.person_variant as u32,
             SettingKey::pet_variant => self.pet_variant as u32,
         }
@@ -354,7 +354,7 @@ impl Settings {
             },
             SettingKey::lod_crossfade if value <= 1 => self.lod_crossfade = value == 1,
             SettingKey::show_debug_objects if value <= 1 => self.show_debug_objects = value == 1,
-            SettingKey::show_ledger if value <= 1 => self.show_ledger = value == 1,
+            SettingKey::show_profiler if value <= 1 => self.show_profiler = value == 1,
             SettingKey::person_variant => match u8::try_from(value) {
                 Ok(n) => self.person_variant = n,
                 Err(_) => return false,

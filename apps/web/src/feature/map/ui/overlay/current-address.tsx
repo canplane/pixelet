@@ -5,7 +5,7 @@ import { StyleSheet, Text, useWindowDimensions } from "react-native";
 import { Motion } from "@platform/motion.tsx";
 import { LABEL } from "@platform/palette.ts";
 import { LEAVE } from "@/shared/ui/motion/transition.ts";
-import { font } from "@/shared/ui/theme.ts";
+import { textStyle, weight } from "@/shared/ui/theme.ts";
 
 interface CurrentAddressProps {
   label: string | null;
@@ -30,5 +30,5 @@ export function CurrentAddress(props: CurrentAddressProps) {
 
 const styles = StyleSheet.create({
   shrink: { flexShrink: 1, minWidth: 0 },
-  label: { fontFamily: font.family, fontSize: 12, lineHeight: 16, fontWeight: "500", color: LABEL.primary, flexShrink: 1 },
+  label: { ...textStyle.caption, fontWeight: weight.medium, color: LABEL.primary, flexShrink: 1 },
 });

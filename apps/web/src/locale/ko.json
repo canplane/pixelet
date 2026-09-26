@@ -99,9 +99,9 @@
         "label": "디버그 기즈모",
         "description": "지도 중심, 타일 경계 등 디버깅용 좌표계 마커를 화면에 표시합니다."
       },
-      "show_ledger": {
-        "label": "스케줄러 레저",
-        "description": "월드 스케줄러의 프레임 페이싱, GPU 부하, fetch 큐 깊이, 태스크 레이턴시를 보여주는 구석 패널입니다. 리포트, 트레이스, 콘솔 로그 버튼이 함께 있습니다."
+      "show_profiler": {
+        "label": "성능 오버레이",
+        "description": "프레임, GPU, 메모리, fetch, 태스크의 비용을 보여주는 패널입니다."
       }
     },
     "disclaimer": {

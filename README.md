@@ -57,7 +57,7 @@ a sparse tree per band        ▼             one L2 chunk, a 64³ cube
 
 Above the dashed line is served as files; below it runs on the client, on the turn's quota.
 
-The kernel decides what exists, what is on screen, at what detail, and what to draw. The shell forwards events, does the I/O the kernel names, renders the UI, and on a page turns the renderer's calls into WebGPU. What it renders from is the kernel's snapshot: one packet of UI state, written after a turn that changed it. What each frame and task cost goes to a read-only ledger, which nothing that schedules is allowed to read.
+The kernel decides what exists, what is on screen, at what detail, and what to draw. The shell forwards events, does the I/O the kernel names, renders the UI, and on a page turns the renderer's calls into WebGPU. What it renders from is the kernel's snapshot: one packet of UI state, written after a turn that changed it. What each frame and task cost goes to a read-only profiler, which nothing that schedules is allowed to read.
 
 Almost nothing is computed at request time. Pages and assets are baked ahead and served from the bucket under names that cannot come to mean something else — a page under its bake's version, an asset under a hash of its own bytes; the one exception is forward search, which queries a database when asked.
 
@@ -78,6 +78,16 @@ cp apps/web/.env.example apps/web/.env
 
 deno task dev
 ```
+
+The agent instructions are [AGENTS.md](./AGENTS.md) and the procedures [.agents/skills/](./.agents/skills/), kept vendor-neutral. An assistant's own directory is gitignored; link it at them once per checkout:
+
+```bash
+mkdir -p .claude
+ln -sfn ../AGENTS.md      .claude/CLAUDE.md
+ln -sfn ../.agents/skills .claude/skills
+```
+
+A personal, uncommitted variant takes a `.local.` infix (`*.local.skill.md`, `.agents/skills/.local/`), which `.gitignore` keeps out.
 
 `dev` runs the client alone: every server route is proxied to the live deployment, so no Docker, database or server process is needed. That is the way in for most work, and the wrong way for bake work: a published tile prefix never changes, so the proxy would keep serving the tiles that are already live rather than the ones just baked. For that, start the databases and run the whole stack:
 
@@ -114,7 +124,7 @@ deno task dev:local
 
 db-geo is filled by the scripts under `infra/geo/**/script/`, run by path as [infra/geo/README.md](./infra/geo/README.md) §4 says: they make a database's state rather than a file the tree keeps.
 
-To measure the client, use `preview` (`localhost:4173`). It is the bundle as the deployment builds it, so the dev server's unbundled modules and hooks are gone. It is still a development build, so the ledger overlay is compiled in — a deployed build does not have it.
+To measure the client, use `preview` (`localhost:4173`). It is the bundle as the deployment builds it, so the dev server's unbundled modules and hooks are gone. It is still a development build, so it offers the nightly settings a deployed build leaves out; the profiler's overlay, which reads the numbers, is in both.
 
 ### On a device
 

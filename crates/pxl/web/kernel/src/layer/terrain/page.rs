@@ -21,7 +21,7 @@ use pxl_spec::space::xy::TO_XY;
 use xpute_runtime::abi::fetch::FetchFail;
 use xpute_runtime::mem::base::ptr_at;
 
-use crate::sched::ledger::record::Failure;
+use crate::sched::profiler::record::Failure;
 
 use crate::control::navigation::store::map_navigation;
 use crate::global::Global;
@@ -216,7 +216,10 @@ pub fn terrain_step() {
     declare(OCEAN_CATEGORY, ocean_wants);
     terrain.step();
     // Derived from the scheduler rather than tracked, so a later pan that
-    // supersedes a batch cannot leave a stale SUCCESS behind.
+    // supersedes a batch cannot leave a stale SUCCESS behind. Nothing sets
+    // Error: this reads only whether pages are pending, so a page that failed
+    // is not told apart from one delivered, and the shell's Error toast is
+    // never met. Known, and left alone.
     let map = map_store();
     if pending_count(Terrain::CATEGORY) + pending_count(OCEAN_CATEGORY) > 0 {
         map.map_status = MapStatus::Loading;

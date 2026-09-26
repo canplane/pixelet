@@ -70,7 +70,7 @@ extern "C" {
     fn host_now() -> f64;
 }
 
-/// The allocator's reading, for the ledger and the heap's row.
+/// The allocator's reading, for the profiler and the heap's row.
 fn heap_stat() -> pxl_kernel::host::HeapStat {
     pxl_kernel::mem::heap::heap_stat(&ALLOC)
 }

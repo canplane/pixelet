@@ -28,7 +28,7 @@ const MIN_WIDTH_PX = 44;
 const EDGE = "rgba(0, 0, 0, 0.9)";
 /** The bar as it leaves, the zoom back at its default: the one moment it is
  * shown in a color, which says what the tap did. */
-const RESET = "#ffb900";
+const RESET = color.reset;
 
 /** How far a distance on the map spans on screen, at the camera's zoom; a
  * tap puts the zoom back. Hidden at the default zoom.

@@ -67,7 +67,7 @@ function build_number(id: string): string {
  * `define` constants so that a dev server gives every page load the values
  * as they are then, not as they were when the server started: the module is
  * dropped from the graph on each navigation and computed again on import,
- * so a ledger report taken from a long-running dev server names the source
+ * so a profiler report taken from a long-running dev server names the source
  * actually on screen.
  *
  * The time is evaluated at build, so it updates itself with nothing to

@@ -11,3 +11,9 @@ export function save_file(name: string, text: string, mime: string): Promise<voi
   URL.revokeObjectURL(url);
   return Promise.resolve();
 }
+
+/** Puts `text` on the clipboard. A page may refuse it — without a user's
+ * gesture, or off a secure origin — and then this rejects. */
+export function copy_text(text: string): Promise<void> {
+  return navigator.clipboard.writeText(text);
+}

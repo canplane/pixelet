@@ -10,7 +10,7 @@ import { LABEL, STATUS } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
 import { Swap } from "@/shared/ui/motion/presence.tsx";
 import { LEAVE, SNAP, spring, type Transition } from "@/shared/ui/motion/transition.ts";
-import { alpha, color, font } from "@/shared/ui/theme.ts";
+import { alpha, color, textStyle, weight } from "@/shared/ui/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
 
 const SIDE = 32;
@@ -93,7 +93,7 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
       // rim, and a border is the fill's alone (platform glass.tsx).
       tint={error ? alpha(color.alarm, 0.15) : undefined}
       border={{ width: 2, color: error ? color.alarmEdge : alpha(color.white, 0.9) }}
-      shadow={error ? "0 6px 20px rgba(220, 38, 38, 0.15)" : "0 6px 20px rgba(0, 0, 0, 0.25)"}
+      shadow={error ? `0 6px 20px ${alpha(color.alarm, 0.15)}` : "0 6px 20px rgba(0, 0, 0, 0.25)"}
       fade={fade}
       fadeFrom={0}
       fadeTransition={fadeTransition}
@@ -128,6 +128,6 @@ const styles = StyleSheet.create({
   slot: { width: SIDE, height: SIDE, alignItems: "center", justifyContent: "center" },
   glyph: { position: "absolute" },
   disc: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  message: { fontFamily: font.family, fontSize: 13, fontWeight: "600", letterSpacing: -0.3, color: LABEL.primary, paddingHorizontal: 4 },
+  message: { ...textStyle.footnote, fontWeight: weight.semibold, letterSpacing: -0.3, color: LABEL.primary, paddingHorizontal: 4 },
   dot: { width: 6, height: 6, borderRadius: 3 },
 });

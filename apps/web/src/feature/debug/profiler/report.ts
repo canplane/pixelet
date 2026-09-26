@@ -1,6 +1,6 @@
-// @pxl/web/feature/debug/ledger/report.ts
+// @pxl/web/feature/debug/profiler/report.ts
 //
-// The ledger's report, written from the numbers the kernel measured and the
+// The profiler's report, written from the numbers the kernel measured and the
 // shell read in place (view.ts). What a lane reads as is lane.ts's, the one
 // table this, the panel and the trace share; what is written here are the
 // lines that are more than a lane — percentiles, ratios and the asides that
@@ -12,10 +12,11 @@
 
 import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
+import { copy_text } from "@platform/save.ts";
 
 import { fieldText, type Frame, GROUPS, groupText, n1, pct, tris } from "./lane.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
-import type { LedgerReport, Spread, TaskRecord, TaskSummary } from "./view.ts";
+import type { ProfilerReport, Spread, TaskRecord, TaskSummary } from "./view.ts";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 const spread = (s: Spread) => `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
@@ -91,7 +92,7 @@ export const longFrameLine = (l: LongFrame) =>
 // ---- the sections ----
 
 /** The window's percentiles and rates: what no one frame says. */
-function windowSection(r: LedgerReport): string[] {
+function windowSection(r: ProfilerReport): string[] {
   const f = r.frames;
   if (f === null) return ["frames n=0"];
   const last = f.last;
@@ -146,7 +147,7 @@ function lastSection(f: Frame): string[] {
 
 /** The summary's side sections, a field each, as the kernel names them; a
  * section with nothing in it is left out (POI, while it is not wired). */
-function sideSection(r: LedgerReport): string[] {
+function sideSection(r: ProfilerReport): string[] {
   const lines = [];
   for (const [name, fields] of Object.entries(r.sections)) {
     if (name === "counters" || Object.values(fields).every((v) => v === 0)) continue;
@@ -176,8 +177,8 @@ function tasksSection(n: u32, tasks: TaskSummary[]): string[] {
 
 /** The whole instrument as pasteable text: the window, the last frame, the
  * state beside the rings, then the raw tail of each ring. */
-export function ledgerReportText(r: LedgerReport): string {
-  const out = [`=== ledger @ t=${n1(r.t)}ms  build ${r.build.number} ${r.build.id} (${r.build.time}) ===`];
+export function profilerReportText(r: ProfilerReport): string {
+  const out = [`=== profiler @ t=${n1(r.t)}ms  build ${r.build.number} ${r.build.id} (${r.build.time}) ===`];
   out.push(...windowSection(r));
   if (r.frames !== null) out.push(...lastSection(r.frames.last));
   out.push(...sideSection(r));
@@ -200,16 +201,20 @@ export function ledgerReportText(r: LedgerReport): string {
   return out.join("\n");
 }
 
-/** Prints the report and puts it on the clipboard where the page may. */
-export async function ledgerReportPrint(text: string): Promise<void> {
+/** Prints the report and puts it on the clipboard: what became of it, as
+ * the panel says it. */
+export async function profilerReportCopy(text: string): Promise<string> {
   console.log(text);
-  let copied = false;
+  const kb = `${Math.max(1, round(text.length / 1024))} KB`;
+  let said: string;
   try {
-    await navigator.clipboard.writeText(text);
-    copied = true;
+    await copy_text(text);
+    said = `report copied · ${kb}`;
   } catch {
-    // The clipboard can refuse without a user gesture or on an insecure
-    // origin; the console print above is the fallback.
+    // A page's clipboard can refuse without a user's gesture or off a
+    // secure origin; the console print above is what is left.
+    said = `report printed to the console · ${kb} (the clipboard refused it)`;
   }
-  console.log(`[ledger] report ${copied ? "copied to clipboard" : "printed above (clipboard refused)"} — ${text.length} bytes`);
+  console.log(`[profiler] ${said}`);
+  return said;
 }

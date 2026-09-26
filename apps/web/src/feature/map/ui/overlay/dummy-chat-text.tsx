@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { useUiStore } from "@/app/store/ui-store.ts";
-import { alpha, color, font, textEdge } from "@/shared/ui/theme.ts";
+import { alpha, color, textEdge, textStyle, weight } from "@/shared/ui/theme.ts";
 
 /** The lines said so far, fading with age; a pointer over them brings them
  * all back up to be read. */
@@ -34,11 +34,10 @@ const styles = StyleSheet.create({
   line: { flexDirection: "row", alignItems: "baseline", gap: 6, maxWidth: "100%" },
   // A dark edge so white words read over any ground.
   text: {
-    fontFamily: font.family,
-    fontSize: 12,
-    fontWeight: "500",
+    ...textStyle.caption,
+    fontWeight: weight.medium,
     ...textEdge(alpha(color.black, 0.9)),
   },
-  self: { flexShrink: 0, color: "#ff8904" },
+  self: { flexShrink: 0, color: color.self },
   said: { flexShrink: 1, color: color.white },
 });

@@ -4,7 +4,7 @@
 //! pxl-native in a device app — hands a turn to. The rings and their order
 //! are xpute's (xpute_runtime::ipc::doorbell); what is here is the kernel's
 //! part of them: the boot block, the commands applied, the signals raised and
-//! the ledger read in place, the same on every host since the shell on the
+//! the profiler read in place, the same on every host since the shell on the
 //! other side is the same. What a bracket supplies is only what its platform
 //! decides (`Bracket`).
 //!
@@ -40,7 +40,7 @@ pub struct Bracket {
     pub data_end: u32,
     /// The client's clock, in milliseconds.
     pub clock: fn() -> f64,
-    /// The allocator's reading, for the ledger and the heap's row.
+    /// The allocator's reading, for the profiler and the heap's row.
     pub heap_stat: fn() -> HeapStat,
     /// Where a bracket whose process stops with the kernel says what stopped
     /// it: no host is left to run the report's record, and a panic's text —
@@ -53,8 +53,8 @@ struct State {
     /// The UI snapshot last posted, by hash: one is posted only when it changed.
     snapshot: u64,
     /// The console stream's rows were handed over, to be let go on the next
-    /// turn (LEDGER_TAKE).
-    ledger_taken: bool,
+    /// turn (PROFILER_TAKE).
+    profiler_taken: bool,
 }
 
 /// The rings, laid out empty: the whole memory is what a ring's two areas are
@@ -74,7 +74,7 @@ fn door() -> &'static Door {
         };
         // SAFETY: the module's memory, which never moves and outlives the
         // door; the ranges are the layout's and no one else's.
-        unsafe { Door::init(ptr_at(0), &layout, crate::sched::ledger::record::ledger_note_rings) }
+        unsafe { Door::init(ptr_at(0), &layout, crate::sched::profiler::record::profiler_note_rings) }
     })
 }
 
@@ -95,7 +95,7 @@ fn ring_address(ring: &Ring) -> u32 {
 static STATE: Global<State> = Global::new();
 
 fn state() -> &'static mut State {
-    STATE.get(|| State { snapshot: 0, ledger_taken: false })
+    STATE.get(|| State { snapshot: 0, profiler_taken: false })
 }
 
 // ---- Rings ----
@@ -253,8 +253,8 @@ pub fn interrupt(quota_ms: f64, bracket: fn() -> Bracket) -> f64 {
         boot(&bracket());
     }
     let s = state();
-    if core::mem::take(&mut s.ledger_taken) {
-        crate::sched::ledger::log::ledger_log_clear();
+    if core::mem::take(&mut s.profiler_taken) {
+        crate::sched::profiler::log::profiler_log_clear();
     }
     crate::host::host_rise();
     crate::world::change::world_edge().rise(quota_ms);

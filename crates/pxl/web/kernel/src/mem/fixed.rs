@@ -65,8 +65,8 @@
 //!
 //!   .fixed.host      the stream the kernel's other asks of the host cross in
 //!                    (host.rs), the same way.
-//!   .fixed.ledger    the ledger's rings (sched/ledger/record.rs), which the
-//!                    shell reads where they lie.
+//!   .fixed.profiler  the profiler's rings (sched/profiler/record.rs), which
+//!                    the shell reads where they lie.
 
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
@@ -81,7 +81,7 @@ use crate::abi::host::stream as host_stream;
 use crate::layer::decor::instance::DECOR_BYTES;
 use crate::layer::terrain::fixed::TERRAIN_BYTES;
 use crate::mem::section::{map, PAGE_BYTES};
-use crate::sched::ledger::record::LEDGER_BYTES;
+use crate::sched::profiler::record::PROFILER_BYTES;
 use crate::world::chunk::build::{RUN_SETS, RUN_SET_BYTES};
 use crate::world::chunk::mesh_slot::{BAKE_BYTES, SURFACE_BYTES};
 
@@ -97,7 +97,7 @@ pub enum Range {
     Blocks,
     Gpu,
     Host,
-    Ledger,
+    Profiler,
 }
 
 const COUNT: usize = 8 + RUN_SETS;
@@ -121,7 +121,7 @@ impl Range {
             Range::Blocks => 4 + RUN_SETS,
             Range::Gpu => 5 + RUN_SETS,
             Range::Host => 6 + RUN_SETS,
-            Range::Ledger => 7 + RUN_SETS,
+            Range::Profiler => 7 + RUN_SETS,
         }
     }
 }
@@ -142,7 +142,7 @@ const RANGES: [u32; COUNT] = {
     r[Range::Blocks.index()] = BLOCKS_BYTES;
     r[Range::Gpu.index()] = stream::BYTES;
     r[Range::Host.index()] = host_stream::BYTES;
-    r[Range::Ledger.index()] = LEDGER_BYTES;
+    r[Range::Profiler.index()] = PROFILER_BYTES;
     r
 };
 

@@ -3,6 +3,7 @@
 import CoreLocation
 import ExpoModulesCore
 import PxlNative
+import UIKit
 
 /// The device's half of the app's platform (apps/native/src/platform/), as
 /// one module: the kernel as the shell reaches it, the view it draws into,
@@ -59,6 +60,15 @@ public class PlatformModule: Module {
 
     Function("storageSet") { (key: String, value: String) in
       UserDefaults.standard.set(value, forKey: key)
+    }
+
+    // ---- the clipboard (platform/save.ts) ----
+    //
+    // The general pasteboard, as a page's navigator.clipboard is the
+    // browser's; React Native's JavaScript has none of its own.
+
+    Function("clipboardSet") { (text: String) in
+      UIPasteboard.general.string = text
     }
 
     // ---- text (platform/text.ts, Text.swift) ----

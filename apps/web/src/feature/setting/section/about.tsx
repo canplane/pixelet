@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
 import { SectionTitle, settingText } from "@/feature/setting/row.tsx";
-import { color, font } from "@/shared/ui/theme.ts";
+import { color, textStyle } from "@/shared/ui/theme.ts";
 import { APP_ENV, BUILD_NUMBER, BUILD_TIME, PUBLISHED_TILES } from "@/config/deploy.ts";
 import { PUBLISHED_VERSION } from "@/config/route.ts";
 import { storage, STORAGE_KEYS } from "@/kernel/abi/host.spec.ts";
@@ -70,5 +70,5 @@ const styles = StyleSheet.create({
   section: { gap: 4 },
   body: { gap: 8, paddingVertical: 4 },
   name: { flexDirection: "row", alignItems: "center", gap: 8 },
-  nameText: { fontFamily: font.family, fontSize: 15, fontWeight: "600", color: color.text },
+  nameText: { ...textStyle.title, color: color.text },
 });

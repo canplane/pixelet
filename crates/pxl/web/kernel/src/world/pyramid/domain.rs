@@ -478,7 +478,7 @@ impl Domain {
     }
 
     /// The chunks the rule draws under this view's criterion, with every
-    /// page resident: what the ledger sets the cover against.
+    /// page resident: what the profiler sets the cover against.
     pub fn chunks(&self) -> u32 {
         self.chunks
     }

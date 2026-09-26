@@ -1,8 +1,8 @@
-// @pxl/web/feature/debug/ledger/lane.test.ts
+// @pxl/web/feature/debug/profiler/lane.test.ts
 
 import { assertEquals } from "@std/assert";
 
-import { FRAME, FRAME_GROUPS } from "./ledger.spec.ts";
+import { FRAME, FRAME_GROUPS } from "./profiler.spec.ts";
 import { frameAt, GROUPS, isList, label, LANES, LIST_NAMES, valueText } from "./lane.ts";
 
 Deno.test("FRAME_GROUPS - every lane is printed, in one group", () => {

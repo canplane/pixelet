@@ -99,9 +99,9 @@
         "label": "Debug Gizmos",
         "description": "Displays coordinate markers (map centers, tile boundaries) for debugging purposes."
       },
-      "show_ledger": {
-        "label": "Scheduler Ledger",
-        "description": "Corner panel showing frame pacing, GPU load, fetch-queue depth and task latency from the world scheduler, with the report, trace and console-log buttons."
+      "show_profiler": {
+        "label": "Performance Overlay",
+        "description": "What frames, the GPU, memory, fetches and tasks cost."
       }
     },
     "disclaimer": {

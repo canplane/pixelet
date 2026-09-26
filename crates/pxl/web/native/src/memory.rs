@@ -144,7 +144,7 @@ impl Locked {
         r
     }
 
-    /// The allocator's reading, for the ledger and the heap's row.
+    /// The allocator's reading, for the profiler and the heap's row.
     pub fn stat(&self) -> HeapStat {
         self.with(heap_stat)
     }

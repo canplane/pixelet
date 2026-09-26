@@ -48,7 +48,7 @@
 
 use crate::io::demand::Category;
 use crate::io::sched::Rank;
-use crate::sched::ledger::record::Outcome;
+use crate::sched::profiler::record::Outcome;
 use crate::world::pyramid::domain::Order;
 
 /// The shared open-ocean tile: every page waiting on it is a page showing

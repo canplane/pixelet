@@ -4,6 +4,6 @@
 //! its steps in, and what each one cost. Dividing a turn is the mechanism's
 //! (xpute_runtime::sched); what runs inside one is decided here.
 
-pub mod ledger;
+pub mod profiler;
 pub mod tick;
 pub mod turn;

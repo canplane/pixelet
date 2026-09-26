@@ -28,8 +28,10 @@ const SEND_FADE_MS = 200;
 // The height of both pills — the map view (view.tsx) stands the toasts
 // clear of it.
 export const MODE_BAR_HEIGHT_PX = 48;
-/** A tool or swatch's pitch in the strip (AGENTS.md "Sizing UI against
- * something": the Instagram DM icon row). */
+/** A tool or swatch's pitch in the strip. A tap target is as wide as the
+ * pitch and no wider — past it, it overlaps a neighbor and the later
+ * one in the tree takes the tap — so a swatch smaller than the pitch is a
+ * transparent box at full pitch with its shape centered. */
 const PITCH = 38;
 const GLYPH = 20;
 const PILL_GAP = 10;
@@ -350,7 +352,8 @@ export function ModeBar() {
   // Reuses the palette pill's own idle collapsed-icon slot as the send
   // button rather than adding a separate one inside the message pill — the
   // same idle-slot-reuse pattern as the size flyout anchoring per-swatch
-  // instead of to one shared control (see AGENTS.md).
+  // instead of to one shared control. Reviewed and kept on purpose: a
+  // rework does not drop it without raising it.
   const showSendInPaletteSlot = messageExpanded && messageText.trim() !== "";
 
   // Where each pill stands and how wide it shows. The open pill takes what

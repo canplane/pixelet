@@ -18,6 +18,7 @@ use pxl_spec::bake::ground::{channel_bit, ChannelMask, GroundChannelKey};
 
 use crate::global::Global;
 use crate::host::development;
+use crate::sched::profiler::log::profiler_follow;
 pub use crate::shell::setting::schema_spec::{AoMode, CameraTerrainMode, ResolutionMode, SettingKey, SettingKind, Settings};
 use crate::world::chunk::source::chunk_sources_changed;
 
@@ -72,6 +73,9 @@ impl Settings {
         if key.sources_chunks() {
             chunk_sources_changed();
         }
+        if key == SettingKey::show_profiler {
+            profiler_follow(value == 1);
+        }
     }
 
     pub fn toggle_setting(&mut self, key: SettingKey) {
@@ -97,6 +101,7 @@ pub fn settings_load(values: impl IntoIterator<Item = u32>) {
         }
     }
     SETTINGS_STORE.set(s);
+    profiler_follow(settings_store().show_profiler);
 }
 
 pub fn settings_store() -> &'static mut Settings {

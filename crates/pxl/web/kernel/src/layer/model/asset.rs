@@ -39,7 +39,7 @@ pub struct ModelHandle {
     /// Clips registered, one per animation in the file's order, so a clip's
     /// number is its animation's index.
     pub clip_count: u32,
-    /// Triangles, for the ledger.
+    /// Triangles, for the profiler.
     pub triangles: u32,
 }
 

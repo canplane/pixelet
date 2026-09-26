@@ -5,7 +5,7 @@
  * what a compositor moves without laying anything out — opacity and a
  * transform — so a pose never reflows the page or a device's view tree, and
  * iOS's WebKit, which ghosted a width tween over the canvas, has nothing to
- * ghost (AGENTS.md "Overlay CSS over the canvas").
+ * ghost.
  */
 
 import type { ReactNode } from "react";

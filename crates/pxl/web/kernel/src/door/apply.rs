@@ -1,7 +1,7 @@
 // pxl-kernel/door/apply.rs
 
 //! The commands, applied: what each one the shell submits does to the kernel,
-//! and the ledger read in place for the two that ask for it.
+//! and the profiler read in place for the two that ask for it.
 
 use super::{post_shell, State};
 use crate::abi::cmd::{self as abi, Command};
@@ -30,7 +30,7 @@ fn applied(s: &mut State) -> Result<Option<i32>, MarshalError> {
 pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<Option<i32>, MarshalError> {
     use crate::control::camera::input::{camera_input_rect, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up, camera_wheel, Holding, Rect};
     use crate::control::sensor::{device_orientation, geolocation};
-    use crate::sched::ledger::log::{ledger_set_logging, ledger_window_start, ledger_window_stop};
+    use crate::sched::profiler::log::{profiler_set_logging, profiler_window_start, profiler_window_stop};
     use crate::sched::turn::world_platform;
     use crate::shell::setting::store::{settings_load, settings_store};
     use crate::shell::shell as ui;
@@ -278,26 +278,32 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             crate::layer::character::preview::preview_close(abi::PreviewDelete::read(packet(pkt)?)?.surface);
             applied(s)
         }
-        Command::LEDGER_START => {
-            ledger_window_start();
+        // The profiler records only while its setting is on (log.rs
+        // `profiler_follow`): a window opened with the panel off would be
+        // recording that nothing shows and nothing stops.
+        Command::PROFILER_START => {
+            if settings_store().show_profiler {
+                profiler_window_start();
+            }
             applied(s)
         }
-        Command::LEDGER_STOP => {
-            ledger_window_stop();
+        Command::PROFILER_STOP => {
+            profiler_window_stop();
             applied(s)
         }
-        Command::LEDGER_LOG => {
-            ledger_set_logging(abi::LedgerLog::read(packet(pkt)?)?.on);
+        Command::PROFILER_LOG => {
+            let on = abi::ProfilerLog::read(packet(pkt)?)?.on;
+            profiler_set_logging(on && settings_store().show_profiler);
             applied(s)
         }
         // An address in a memory of at most a gibibyte, which an i32 holds.
-        Command::LEDGER_READ => Ok(Some(ledger_read(abi::LedgerRead::read(packet(pkt)?)?.window_ms) as i32)),
-        Command::LEDGER_TAKE => Ok(Some(ledger_take(s) as i32)),
+        Command::PROFILER_READ => Ok(Some(profiler_read(abi::ProfilerRead::read(packet(pkt)?)?.window_ms) as i32)),
+        Command::PROFILER_TAKE => Ok(Some(profiler_take(s) as i32)),
         Command::WORLD_SNAPSHOT | Command::SENSOR_CREATE | Command::SENSOR_DELETE | Command::FETCH_CREATE | Command::FETCH_DELETE | Command::LOAD_CREATE => Ok(None),
     }
 }
 
-/// The ledger, where it lies: the address of READ's words (ledger.json) —
+/// The profiler, where it lies: the address of READ's words (profiler.json) —
 /// the summary block over the last `window_ms`, an infinite window being the
 /// whole recording, and the frame, task and worst-frame rings, each an address
 /// and a record count.
@@ -305,18 +311,18 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
 /// Read in place rather than sent: this is instrumentation, and
 /// instrumentation does not go out on the control ring, whose failure policy
 /// is that `Outbox::post` asserts when the completion queue and its spill are
-/// both full. Nothing is built for the read either — the rings are the ledger's
+/// both full. Nothing is built for the read either — the rings are the profiler's
 /// own lanes and the summary a block written where it stays — so a reader
-/// allocates nothing from the heap the ledger measures. The addresses are good
+/// allocates nothing from the heap the profiler measures. The addresses are good
 /// until the next turn.
-fn ledger_read(window_ms: f64) -> u32 {
-    use crate::sched::ledger::record::{ledger_frames, ledger_tasks, ledger_worst};
-    use crate::sched::ledger::spec::READ;
+fn profiler_read(window_ms: f64) -> u32 {
+    use crate::sched::profiler::record::{profiler_frames, profiler_tasks, profiler_worst};
+    use crate::sched::profiler::spec::READ;
     // On the heap rather than in a static: the shell reads it in the memory,
     // and a native build's statics are not in it.
     static WORDS: crate::global::Global<Box<[u32; READ::WORDS as usize]>> = crate::global::Global::new();
-    let summary = crate::sched::ledger::summary::ledger_summarize(window_ms);
-    let (frames, tasks, worst) = (ledger_frames(), ledger_tasks(), ledger_worst());
+    let summary = crate::sched::profiler::summary::profiler_summarize(window_ms);
+    let (frames, tasks, worst) = (profiler_frames(), profiler_tasks(), profiler_worst());
     let w = WORDS.get(|| Box::new([0; READ::WORDS as usize]));
     w[READ::summary_at as usize] = off_of_slice(&raw const *summary) as u32;
     w[READ::summary_words as usize] = summary.len() as u32;
@@ -330,19 +336,19 @@ fn ledger_read(window_ms: f64) -> u32 {
 }
 
 /// What the live stream kept since the shell last cleared it: the address of
-/// LOG's words (ledger.json), the task rows and the frames, each an address
+/// LOG's words (profiler.json), the task rows and the frames, each an address
 /// and a count. Zero counts when nothing is waiting, which a shell polling is
 /// asking about most of the time. The rows are let go on the next turn.
-fn ledger_take(s: &mut State) -> u32 {
-    use crate::sched::ledger::spec::LOG;
+fn profiler_take(s: &mut State) -> u32 {
+    use crate::sched::profiler::spec::LOG;
     // On the heap, as READ's words are.
     static WORDS: crate::global::Global<Box<[u32; LOG::WORDS as usize]>> = crate::global::Global::new();
-    let (tasks, frames) = crate::sched::ledger::log::ledger_log_rows();
+    let (tasks, frames) = crate::sched::profiler::log::profiler_log_rows();
     let w = WORDS.get(|| Box::new([0; LOG::WORDS as usize]));
     w[LOG::tasks_at as usize] = off_of_slice(&raw const *tasks) as u32;
     w[LOG::tasks_count as usize] = tasks.len() as u32;
     w[LOG::frames_at as usize] = off_of_slice(&raw const *frames) as u32;
     w[LOG::frames_count as usize] = frames.len() as u32;
-    s.ledger_taken = true;
+    s.profiler_taken = true;
     off_of(w.as_ptr()) as u32
 }

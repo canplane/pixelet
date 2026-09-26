@@ -44,7 +44,7 @@
 //! is what every measurement below is multiplied by. A group is one format
 //! throughout, which is what lets a slot be `residue × capacity`.
 //!
-//! What each tier asks for is read live as the ledger's `work fine_peak` and
+//! What each tier asks for is read live as the profiler's `work fine_peak` and
 //! `coarse_peak`, and how many were baked a step coarser than asked as its
 //! `slot coarser`. The coarse tier asks for more than a leaf's own: nothing of
 //! it merges, since a box shrunk about its cell's center touches nothing

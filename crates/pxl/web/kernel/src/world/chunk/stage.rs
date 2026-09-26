@@ -4,7 +4,7 @@
 //! the scheduler reads — the view, the frustum, the budget — and runs the
 //! scheduler's pass once; the view's renderer (pxl-render's
 //! gpu/renderer.rs) then draws the scheduler's lists. In the report phase it
-//! hands the frame's numbers to the ledger.
+//! hands the frame's numbers to the profiler.
 
 use pxl_spec::space::pvf3::ivec;
 use xpute_core::math::scalar::round;
@@ -15,8 +15,9 @@ use crate::host::now;
 use crate::io::sched::pending_count;
 use crate::kernel::{kernel, with_world};
 use crate::layer::environment::state::globe;
-use crate::sched::ledger::record::{
-    ledger_record_frame, ledger_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample, LEVELS,
+use crate::sched::profiler::record::{
+    profiler_record_frame, profiler_take_rings, CapSample, CoverSample, DeviceSample, FrameSample, GpuSample, HeapSample, LodSample, MountSample, PageSample, StaleSample, TurnSample, WorkSample,
+    LEVELS,
 };
 use crate::sched::tick::{TickContext, HARD_SLACK_MS};
 use crate::world::change::{request_world_tick, world_edge};
@@ -77,7 +78,7 @@ pub fn set_host_task_ms(task_ms: f64) {
     // The turn's own task time is only known once the turn is over, by which
     // point its frame is recorded; without this the number would be read as
     // the next frame's and every frame would carry the one before it.
-    if let Some(frame) = crate::sched::ledger::record::ledger_last_frame() {
+    if let Some(frame) = crate::sched::profiler::record::profiler_last_frame() {
         frame.task_ms = task_ms;
     }
 }
@@ -88,7 +89,7 @@ pub fn set_host_task_ms(task_ms: f64) {
 /// `task_ms` is accounted for — and what none of the three explains is the
 /// difference, where a region nobody measured would have to show itself.
 pub fn set_turn_timing(effects_ms: f64, stage_ms: f64) {
-    let Some(frame) = crate::sched::ledger::record::ledger_last_frame() else { return };
+    let Some(frame) = crate::sched::profiler::record::profiler_last_frame() else { return };
     let (step_ms, step_name) = crate::sched::turn::worst_effect();
     frame.turn = TurnSample {
         effects_ms,
@@ -211,7 +212,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
     for (tris, boxes) in gpu.level_tris.iter_mut().zip(census.level_boxes) {
         *tris = boxes as f64 * BOX_TRIANGLES;
     }
-    ledger_record_frame(FrameSample {
+    profiler_record_frame(FrameSample {
         t: now(),
         dt_ms: ctx.state.gap_s * 1000.0,
         frame_ms: ctx.state.frame_ms,
@@ -241,7 +242,7 @@ pub fn core_tick_report_step(ctx: &mut TickContext) {
         },
         pages,
         heap: heap_sample(),
-        rings: ledger_take_rings(),
+        rings: profiler_take_rings(),
         work: work_sample(c, &census),
         q_terrain: pending_count(Terrain::CATEGORY) as f64,
         q_poi: pending_count(PoiPage::CATEGORY) as f64,

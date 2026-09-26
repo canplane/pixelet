@@ -1,12 +1,12 @@
-// pxl-kernel/sched/ledger/log.rs
+// pxl-kernel/sched/profiler/log.rs
 
-//! The ledger's live stream — what the gauge panel cannot do: records as they
+//! The profiler's live stream — what the gauge panel cannot do: records as they
 //! land, so a stutter can be watched happening and correlated against whatever
 //! else is logging, rather than read off a panel that only shows the settled
 //! aggregate.
 //!
 //! What is streamed is what was measured. The lines a person reads are the
-//! shell's (apps/web/src/feature/debug/ledger/report.ts), the same
+//! shell's (apps/web/src/feature/debug/profiler/report.ts), the same
 //! formatters the report already uses, so a streamed task and a reported one
 //! read alike without this side knowing a word of it.
 //!
@@ -18,8 +18,8 @@
 //! was turned on to watch. This is what every operating system separates —
 //! ftrace and perf mmap their own per-CPU buffers, printk keeps `log_buf` and
 //! is read through /dev/kmsg, eBPF has its own ring — so the stream is two
-//! lanes of the ledger's own records the consumer reads in place at its own
-//! pace, through pxl-wasm's `ledger_log`, and clears when it has read them.
+//! lanes of the profiler's own records the consumer reads in place at its own
+//! pace, through pxl-wasm's `profiler_log`, and clears when it has read them.
 //!
 //! A dev instrument that never feeds back into scheduling. The stream
 //! thresholds frames deliberately: an unfiltered per-frame record would bury
@@ -30,9 +30,9 @@
 use crate::global::Global;
 use crate::kernel::kernel;
 use crate::layer::billboard::sheet::billboard_sheet;
-use crate::sched::ledger::block::CountersBlock;
-use crate::sched::ledger::record::{drop_front, fixed_lane, ledger_recording_start, ledger_recording_stop, ledger_set_sink, FrameSample, Lane, LedgerSink, TaskRow};
-use crate::sched::ledger::summary::{missed, overran};
+use crate::sched::profiler::block::CountersBlock;
+use crate::sched::profiler::record::{drop_front, fixed_lane, profiler_recording_start, profiler_recording_stop, profiler_set_sink, FrameSample, Lane, ProfilerSink, TaskRow};
+use crate::sched::profiler::summary::{missed, overran};
 use crate::sched::tick::{set_step_timing, tick_step_stats_reset};
 
 /// The side counters printed beside the rings, cumulative from load.
@@ -94,13 +94,27 @@ pub fn window_counters() -> CountersBlock {
     counters().minus(&log().baseline)
 }
 
-/// Clears the ledger and opens a fresh window, side counters included.
+/// The profiler follows its setting, `show_profiler`: it records while the
+/// setting is on and not at all while it is off. The store calls this with
+/// what storage kept at WORLD_CREATE, before the first turn, so a profiler
+/// left on has the boot in its window — the first turns and the first fetches,
+/// which a start sent once the shell had drawn its panel came too late for.
+pub fn profiler_follow(on: bool) {
+    if on {
+        profiler_window_start();
+    } else {
+        profiler_set_logging(false);
+        profiler_window_stop();
+    }
+}
+
+/// Clears the profiler and opens a fresh window, side counters included.
 ///
 /// Timing the steps one by one starts here rather than at boot, for the same
 /// reason recording does: it is a clock read on either side of every step of
 /// every phase of every tick, and only the report reads the result.
-pub fn ledger_window_start() {
-    ledger_recording_start();
+pub fn profiler_window_start() {
+    profiler_recording_start();
     tick_step_stats_reset();
     set_step_timing(true);
     log().baseline = counters();
@@ -108,8 +122,8 @@ pub fn ledger_window_start() {
 
 /// Freezes the window, so an export taken afterward sees exactly this data,
 /// and stops paying for the timing that fills it.
-pub fn ledger_window_stop() {
-    ledger_recording_stop();
+pub fn profiler_window_stop() {
+    profiler_recording_stop();
     set_step_timing(false);
 }
 
@@ -138,8 +152,8 @@ fn log_frame(s: &FrameSample) {
 }
 
 /// Turns the live console stream on/off by installing (or clearing) the
-/// ledger's single sink.
-pub fn ledger_set_logging(on: bool) {
+/// profiler's single sink.
+pub fn profiler_set_logging(on: bool) {
     let l = log();
     if on == l.logging {
         return;
@@ -149,7 +163,7 @@ pub fn ledger_set_logging(on: bool) {
         l.tasks = fixed_lane(Lane::LogTasks, PENDING);
         l.frames = fixed_lane(Lane::LogFrames, PENDING);
     }
-    ledger_set_sink(on.then_some(LedgerSink {
+    profiler_set_sink(on.then_some(ProfilerSink {
         task: Some(log_task),
         frame: Some(log_frame),
     }));
@@ -157,13 +171,13 @@ pub fn ledger_set_logging(on: bool) {
 
 /// The rows the stream kept since the last clear, oldest first: tasks, then
 /// frames.
-pub fn ledger_log_rows() -> (&'static [TaskRow], &'static [FrameSample]) {
+pub fn profiler_log_rows() -> (&'static [TaskRow], &'static [FrameSample]) {
     let l = log();
     (&l.tasks[..l.tasks_len], &l.frames[..l.frames_len])
 }
 
 /// Forgets what the stream kept, once the shell has read it.
-pub fn ledger_log_clear() {
+pub fn profiler_log_clear() {
     let l = log();
     (l.tasks_len, l.frames_len) = (0, 0);
 }

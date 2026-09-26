@@ -7,7 +7,7 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-na
 import { Motion } from "@platform/motion.tsx";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { SLIDE, SLIDE_AWAY } from "@/shared/ui/motion/transition.ts";
-import { alpha, color, font, hairline } from "@/shared/ui/theme.ts";
+import { alpha, color, hairline, textStyle } from "@/shared/ui/theme.ts";
 
 /** The edge of the screen a panel stands along. */
 export const enum Side {
@@ -101,6 +101,6 @@ const styles = StyleSheet.create({
   right: { right: 0, borderLeftWidth: 1, borderLeftColor: hairline },
   header: { borderBottomWidth: 1, borderBottomColor: alpha(color.text, 0.06) },
   headerRow: { height: PANEL_HEADER_PX, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20 },
-  title: { flex: 1, fontFamily: font.family, fontSize: 17, fontWeight: "600", color: color.text },
+  title: { flex: 1, ...textStyle.title, color: color.text },
   close: { width: 42, height: 42, marginRight: -10, borderRadius: 21, alignItems: "center", justifyContent: "center" },
 });

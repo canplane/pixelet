@@ -177,8 +177,8 @@ export const SETTINGS = {
     default: false,
     section: "debug",
   },
-  /** The scheduler ledger's corner panel. The console stream is a button on it. */
-  show_ledger: {
+  /** The scheduler profiler's corner panel. The console stream is a button on it. */
+  show_profiler: {
     key: 15 as number,
     kind: "toggle",
     default: false,
@@ -317,8 +317,8 @@ export const SETTINGS_SHIPPED = {
     default: false,
     section: "debug",
   },
-  /** The scheduler ledger's corner panel. The console stream is a button on it. */
-  show_ledger: {
+  /** The scheduler profiler's corner panel. The console stream is a button on it. */
+  show_profiler: {
     key: 15 as number,
     kind: "toggle",
     default: false,

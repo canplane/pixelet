@@ -86,6 +86,13 @@ FROM dumped,
     )
 }
 
+// Buildings and roads are not clipped to the page envelope, so a polygon
+// grazing a page costs it the whole geometry. Clipping them broke ring
+// closure; an attempt has to keep rings closed — clip-and-reclose,
+// Weiler–Atherton, Sutherland–Hodgman with holes — never a naive bbox clip.
+// The water branch of OVERTURE_BASE_SQL and OVERTURE_COAST_SQL do clip
+// (ST_Intersection guarded by ST_IsEmpty): those rows run to hundreds of
+// thousands of points.
 const OVERTURE_BUILDINGS_SQL: &str = "WITH env AS (
   SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e
 )

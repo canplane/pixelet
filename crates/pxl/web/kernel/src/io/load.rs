@@ -39,7 +39,7 @@ use crate::host::body_read;
 use crate::io::policy;
 use crate::io::sched::{attempt_of, settle, Rank};
 use crate::layer::decor::asset_store::decor_assets_arrived;
-use crate::sched::ledger::record::{Failure, Outcome};
+use crate::sched::profiler::record::{Failure, Outcome};
 use crate::world::change::{request_world_tick, world_edge};
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;

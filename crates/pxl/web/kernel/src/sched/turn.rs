@@ -35,7 +35,7 @@ use crate::layer::marker::frame_gizmo::debug_gizmos_step;
 use crate::layer::marker::hover_cursor::hover_cursor_step;
 use crate::layer::marker::location_puck::location_puck_step;
 use crate::layer::terrain::page::terrain_step;
-use crate::sched::ledger::spec::EffectName;
+use crate::sched::profiler::spec::EffectName;
 use crate::sched::tick::{on_tick, run_tick, StepName, TickContext, TickReport, TickState, COSMETIC, INTERACTION, REPORT, VISIBLE};
 use crate::shell::map_store::map_store;
 use crate::shell::setting::store::settings_store;
@@ -101,7 +101,7 @@ pub fn boot() {
     on_tick(INTERACTION, crate::layer::character::preview::preview_step, StepName::preview);
     on_tick(VISIBLE, core_tick_visible_step, StepName::chunks);
     on_tick(COSMETIC, debug_gizmos_tick, StepName::debug_gizmos);
-    on_tick(REPORT, core_tick_report_step, StepName::ledger);
+    on_tick(REPORT, core_tick_report_step, StepName::profiler);
     world_tasks();
 }
 
@@ -137,7 +137,7 @@ fn world_tasks() {
 
 /// The longest effect of the last turn, and which it was: a turn is only as
 /// cooperative as its longest step, and a total does not say where to look.
-/// Its index in EFFECT_NAMES (sched/ledger/ledger.json); none where no effect
+/// Its index in EFFECT_NAMES (sched/profiler/profiler.json); none where no effect
 /// took measurable time.
 static WORST_EFFECT: Global<(f64, Option<u32>)> = Global::new();
 
@@ -149,7 +149,7 @@ pub fn worst_effect() -> (f64, Option<u32>) {
 /// and they are not budgeted — nothing here may be work. What kept that
 /// honest was nothing at all until a fold running here took seventy
 /// milliseconds of a turn whose tick was one and a half, and no number in
-/// the ledger named the region it was in (2026-09-23).
+/// the profiler named the region it was in (2026-09-23).
 macro_rules! effect {
     ($worst:ident, $name:ident, $step:expr) => {{
         let at = now();
