@@ -9,8 +9,7 @@
 //! Called from the app through the C ABI (include/pxl_native.h), one call at
 //! a time, and run on the kernel's own thread (thread.rs) — the single
 //! thread `Global` is sound for. What reaches nothing a `Global` holds stays
-//! on the caller's: a view leaving its layer (surface.rs) and an image
-//! decoded (image.rs), each behind a lock of its own.
+//! on the caller's: an image decoded (image.rs), behind a lock of its own.
 
 mod image;
 mod memory;

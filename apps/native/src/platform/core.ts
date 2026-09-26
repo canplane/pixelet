@@ -13,17 +13,13 @@ import { requireNativeModule } from "expo";
 import type { Core } from "@/kernel/module.ts";
 
 /** The app's kernel module: the core's memory and doorbell, and on this side
- * of the platform alone, its device and the surfaces it draws into. */
+ * of the platform alone, its device and the images it uploads. */
 export interface PxlKernel {
   memory(): ArrayBuffer;
   interrupt(quota_ms: f64): f64;
   /** The device's uniform offset alignment and whether it times its passes,
    * or null where the system has no GPU. */
   gpuOpen(): [u32, u32] | null;
-  /** Binds a kernel surface to the world view's layer: false when no view has
-   * left one yet. */
-  surfaceBind(handle: u32): boolean;
-  surfaceUnbind(handle: u32): void;
   /** Decodes a PNG or a WebP off the JavaScript thread and holds it for the
    * renderer: its handle, or 0 when it does not decode. */
   imageHold(file: Uint8Array): Promise<u32>;

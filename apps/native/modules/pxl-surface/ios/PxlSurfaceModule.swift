@@ -8,6 +8,9 @@ public class PxlSurfaceModule: Module {
     Name("PxlSurface")
     View(PxlSurfaceView.self) {
       Events("onAttach", "onDetach")
+      Prop("surface") { (view: PxlSurfaceView, surface: UInt32) in
+        view.surface = surface
+      }
     }
   }
 }

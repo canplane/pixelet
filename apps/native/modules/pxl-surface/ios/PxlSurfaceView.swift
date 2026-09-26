@@ -6,27 +6,46 @@ import QuartzCore
 import UIKit
 
 /// A view backed by a Metal layer, which the kernel draws into
-/// (crates/pxl/web/native). The view only leaves its layer for the kernel
-/// while it is in a window, and says so: a view reaches its window after it
-/// is mounted and laid out, so the shell binds the kernel's surface to the
-/// layer on `onAttach` and unbinds it on `onDetach`. The kernel sizes it and
-/// draws every frame inside a turn, on the shell's thread, so nothing here
-/// draws or runs a frame.
+/// (crates/pxl/web/native). The view owns its layer, so it binds the kernel's
+/// surface to it itself: the surface the shell names (`surface`), while the
+/// view is in a window, and never past the moment it lets the layer go. A
+/// view reaches its window after it is mounted and laid out, so it says when
+/// it is bound (`onAttach`) and when it is not (`onDetach`). The kernel sizes
+/// the surface and draws every frame inside a turn, so nothing here draws or
+/// runs a frame.
 class PxlSurfaceView: ExpoView {
   override class var layerClass: AnyClass { CAMetalLayer.self }
 
   let onAttach = EventDispatcher()
   let onDetach = EventDispatcher()
 
+  /// The kernel's surface the shell wants shown here; 0 for none.
+  var surface: UInt32 = 0 {
+    didSet { rebind() }
+  }
+
+  /// The surface the layer is bound to; 0 for none.
+  private var bound: UInt32 = 0
+
   override func didMoveToWindow() {
     super.didMoveToWindow()
-    if let window {
-      layer.contentsScale = window.screen.scale
-      pxl_surface_attach(Unmanaged.passUnretained(layer).toOpaque())
-      onAttach()
-    } else {
-      pxl_surface_detach()
+    rebind()
+  }
+
+  /// Binds the layer to what is wanted, letting go of what is not.
+  private func rebind() {
+    let wanted = window == nil ? 0 : surface
+    if bound == wanted { return }
+    if bound != 0 {
+      pxl_surface_unbind(bound)
+      bound = 0
       onDetach()
+    }
+    guard wanted != 0, let window else { return }
+    layer.contentsScale = window.screen.scale
+    if pxl_surface_bind(wanted, Unmanaged.passUnretained(layer).toOpaque()) == 0 {
+      bound = wanted
+      onAttach(["surface": wanted])
     }
   }
 }

@@ -26,13 +26,9 @@ int32_t pxl_gpu_open(uint32_t *align, uint32_t *timestamps);
 // Any thread.
 uint32_t pxl_image_hold(const uint8_t *file, uint32_t bytes);
 
-// The view's CAMetalLayer is there to draw into (main thread); the view keeps
-// it until it detaches.
-void pxl_surface_attach(void *layer);
-void pxl_surface_detach(void);
-
-// Binds the kernel's surface `handle` to the view's layer: 0, or -1 when no
-// view has left one, -2 when no device is open, -3 when the system would not
-// make a surface of the layer.
-int32_t pxl_surface_bind(uint32_t handle);
+// Binds the kernel's surface `handle` to `layer`, a view's CAMetalLayer,
+// which the view keeps until it has unbound it: 0, or -2 when no device is
+// open, -3 when the system would not make a surface of the layer.
+int32_t pxl_surface_bind(uint32_t handle, void *layer);
+// Lets `handle`'s layer go, if it is still the one bound under its slot.
 void pxl_surface_unbind(uint32_t handle);

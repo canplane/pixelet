@@ -136,6 +136,9 @@ const MAPPED: u8 = 3;
 /// is before the app's view has a layer to bind, so binding is what
 /// configures, and a bound surface is always one a frame can be taken from.
 struct Surface {
+    /// The handle it is bound under: a slot outlives its handle, and a view
+    /// letting an old one go must not take the one bound there since.
+    handle: u32,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
 }
@@ -236,18 +239,31 @@ pub unsafe fn surface_bind(handle: u32, target: wgpu::SurfaceTargetUnsafe) -> Re
     let mut config = surface.get_default_config(&d.adapter, width, height).ok_or(BindRefused::NoSurface)?;
     config.format = SURFACE_FORMAT;
     config.present_mode = wgpu::PresentMode::Fifo;
+    // What the view shows under a surface shows through where it is clear, as
+    // under the page's canvas, which is configured premultiplied. Metal offers
+    // only opaque and post-multiplied, and either blending mode shows a
+    // cleared pixel through.
+    let modes = surface.get_capabilities(&d.adapter).alpha_modes;
+    if let Some(mode) = [wgpu::CompositeAlphaMode::PreMultiplied, wgpu::CompositeAlphaMode::PostMultiplied]
+        .into_iter()
+        .find(|m| modes.contains(m))
+    {
+        config.alpha_mode = mode;
+    }
     surface.configure(&d.device, &config);
     let slot = handle_slot(handle) as usize;
     if d.surfaces.len() <= slot {
         d.surfaces.resize_with(slot + 1, || None);
     }
-    d.surfaces[slot] = Some(Surface { surface, config });
+    d.surfaces[slot] = Some(Surface { handle, surface, config });
     Ok(())
 }
 
 pub fn surface_unbind(handle: u32) {
     if let Some(s) = device().and_then(|d| d.surfaces.get_mut(handle_slot(handle) as usize)) {
-        *s = None;
+        if s.as_ref().is_some_and(|b| b.handle == handle) {
+            *s = None;
+        }
     }
 }
 
@@ -982,6 +998,9 @@ impl Gpu {
         }
         d.sizes[slot] = Some((surface, size));
         let Some(Some(s)) = d.surfaces.get_mut(slot) else { return };
+        if s.handle != surface {
+            return;
+        }
         [s.config.width, s.config.height] = size;
         s.surface.configure(&d.device, &s.config);
     }

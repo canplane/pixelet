@@ -6,10 +6,11 @@ import PxlNative
 /// The kernel as the shell reaches it on a device (apps/native/src/platform/
 /// core.ts): its memory, handed over as one ArrayBuffer over the region the
 /// core took — no copy, so a ring the shell writes is the ring the kernel
-/// reads — its doorbell, its device, the surfaces it draws into and the
-/// images it uploads. The shell calls them on the JavaScript thread, one at a
-/// time; the core runs each on its own thread while this one waits
-/// (crates/pxl/web/native/src/thread.rs), and the images' decode off both.
+/// reads — its doorbell, its device and the images it uploads; the surfaces
+/// it draws into are the views' own (PxlSurfaceView.swift). The shell calls
+/// them on the JavaScript thread, one at a time; the core runs each on its own
+/// thread while this one waits (crates/pxl/web/native/src/thread.rs), and the
+/// images' decode off both.
 public class PxlKernelModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PxlKernel")
@@ -32,16 +33,6 @@ public class PxlKernelModule: Module {
       var align: UInt32 = 0
       var timestamps: UInt32 = 0
       return pxl_gpu_open(&align, &timestamps) == 0 ? [align, timestamps] : nil
-    }
-
-    /// Binds the kernel's surface to the world view's layer: false when no
-    /// view has left one yet.
-    Function("surfaceBind") { (handle: UInt32) -> Bool in
-      pxl_surface_bind(handle) == 0
-    }
-
-    Function("surfaceUnbind") { (handle: UInt32) in
-      pxl_surface_unbind(handle)
     }
 
     /// Decodes a PNG or a WebP and holds it for the renderer: its handle, or 0
