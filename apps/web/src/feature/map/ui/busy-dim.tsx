@@ -1,7 +1,7 @@
 // @pxl/web/feature/map/ui/busy-dim.tsx
 
 import type { ReactNode } from "react";
-import type { StyleProp, ViewStyle } from "react-native";
+import { type StyleProp, StyleSheet, type ViewStyle } from "react-native";
 
 import { HANDHELD } from "@platform/core.ts";
 import { Motion } from "@platform/motion.tsx";
@@ -23,9 +23,17 @@ export function BusyDim({ style, children }: { style?: StyleProp<ViewStyle>; chi
   const busy = useKernel((s) => s.camera_busy) && !HANDHELD;
   return (
     <Dim.Provider value={busy ? 0.4 : 1}>
-      <Motion to={busy ? { scale: 0.98 } : {}} transition={SLIDE} style={[style, { pointerEvents: busy ? "none" : "box-none" }]}>
+      <Motion to={busy ? { scale: 0.98 } : {}} transition={SLIDE} style={[style, busy ? styles.block : styles.pass]}>
         {children}
       </Motion>
     </Dim.Provider>
   );
 }
+
+const styles = StyleSheet.create({
+  // From a style sheet, not inline: react-native-web draws a sheet's
+  // `box-none` as a class that gives the children back their touches, and an
+  // inline one as a plain `none` that every control under it inherits.
+  pass: { pointerEvents: "box-none" },
+  block: { pointerEvents: "none" },
+});

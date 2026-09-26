@@ -53,23 +53,27 @@ interface SettingRowProps {
   dev?: boolean;
 }
 
-/** A toggle: the whole row is its switch. */
+/** A toggle: the whole row is its switch, and the switch in it only shows
+ * which way it is. A switch that took the press as well would turn with the
+ * row and back: a click on it would be two toggles, and only a drag, which
+ * cancels the row's press, would seem to work. */
 export function SettingRow(props: SettingRowProps) {
   const { label, description, active, onToggle, cost, dev } = props;
   return (
     <Pressable onPress={onToggle} accessibilityRole="switch" aria-checked={active} style={[styles.row, styles.bleed]}>
       <Described label={label} description={description} cost={cost} dev={dev} />
-      <Switch
-        value={active}
-        onValueChange={onToggle}
-        trackColor={{ false: color.track, true: color.chosen }}
-        thumbColor={color.white}
-        {
-          // react-native-web colors an on thumb by this alone, and teal where
-          // it is not given; React Native's types do not name it.
-          ...{ activeThumbColor: color.white }
-        }
-      />
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.shown}>
+        <Switch
+          value={active}
+          trackColor={{ false: color.track, true: color.chosen }}
+          thumbColor={color.white}
+          {
+            // react-native-web colors an on thumb by this alone, and teal where
+            // it is not given; React Native's types do not name it.
+            ...{ activeThumbColor: color.white }
+          }
+        />
+      </View>
     </Pressable>
   );
 }
@@ -164,6 +168,8 @@ export const settingText = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
+  // What the row's press reaches through: the switch takes none of its own.
+  shown: { pointerEvents: "none" },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8 },
   // A row reaches past the panel's padding to its edge, so its own padding
   // lines its words up with the section title's.

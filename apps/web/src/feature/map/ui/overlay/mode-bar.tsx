@@ -397,7 +397,7 @@ export function ModeBar() {
             <Motion
               to={paletteExpanded ? {} : { opacity: 0, translateX: -10 }}
               transition={SNAP}
-              style={[styles.strip, { maxWidth: room, pointerEvents: paletteExpanded ? "box-none" : "none" }]}
+              style={[styles.strip, { maxWidth: room }, paletteExpanded ? styles.pass : styles.block]}
             >
               <View style={styles.group}>
                 <ToolButton label={t("map.mode_bar.pointer")} active={activeTool === ActiveTool.Pointer} onPress={() => set_activeTool(ActiveTool.Pointer)}>
@@ -526,6 +526,10 @@ const styles = StyleSheet.create({
   sendPressed: { transform: [{ scale: 0.95 }] },
 
   strip: { ...PILL, flexDirection: "row", alignItems: "center" },
+  // From the sheet: an inline `box-none` is drawn as a `none` the strip's
+  // tools inherit (feature/map/ui/busy-dim.tsx).
+  pass: { pointerEvents: "box-none" },
+  block: { pointerEvents: "none" },
   group: { flexDirection: "row", alignItems: "center", padding: 4, flexShrink: 0 },
   divider: { width: 1, height: 28, backgroundColor: STRIP.line, flexShrink: 0 },
   picks: { flexShrink: 1, minWidth: 0 },

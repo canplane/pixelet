@@ -50,7 +50,7 @@ export function Panel({ side, width, label, onClose, dismissOnOutside, children 
   const away = { translateX: (side === "left" ? -1 : 1) * (shown + 16) };
 
   return (
-    <View style={[styles.layer, { pointerEvents: open ? "box-none" : "none" }]}>
+    <View style={[styles.layer, open ? styles.pass : styles.block]}>
       {dismissOnOutside && <Pressable accessible={false} onPress={onClose} style={StyleSheet.absoluteFill} />}
       <Motion
         from={away}
@@ -86,6 +86,10 @@ const styles = StyleSheet.create({
   // Over the map and its toasts.
   layer: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, zIndex: 70 },
   fill: { flex: 1 },
+  // From the sheet, not inline, where react-native-web would draw `box-none`
+  // as a `none` the panel inherits (feature/map/ui/busy-dim.tsx).
+  pass: { pointerEvents: "box-none" },
+  block: { pointerEvents: "none" },
   panel: { position: "absolute", top: 0, bottom: 0, backgroundColor: color.paper, boxShadow: "0 10px 15px rgba(0, 0, 0, 0.1)" },
   left: { left: 0, borderRightWidth: 1, borderRightColor: hairline },
   right: { right: 0, borderLeftWidth: 1, borderLeftColor: hairline },

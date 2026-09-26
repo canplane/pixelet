@@ -53,7 +53,7 @@ export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, f
   return (
     <Motion to={{ translateX: x }} transition={transition} style={styles.at}>
       <Motion from={fadeFrom === undefined ? undefined : { opacity: fadeFrom }} to={{ opacity: veil.level }} transition={veil.transition} style={styles.fade}>
-        <View {...touch} hitSlop={touch && TOUCH_SLOP} style={{ width, height, pointerEvents: "box-none" }}>
+        <View {...touch} hitSlop={touch && TOUCH_SLOP} style={[styles.box, { width, height }]}>
           {shadow && (
             <>
               <View style={[styles.clip, clipLeft]}>
@@ -93,6 +93,9 @@ export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, f
 const styles = StyleSheet.create({
   at: { position: "absolute", left: 0, top: 0, pointerEvents: "box-none" },
   fade: { pointerEvents: "box-none" },
+  // From the sheet: an inline `box-none` is drawn as a `none` the content
+  // inherits (feature/map/ui/busy-dim.tsx).
+  box: { pointerEvents: "box-none" },
   clip: { position: "absolute", overflow: "hidden", pointerEvents: "none" },
   circle: { position: "absolute", left: 0, top: 0, pointerEvents: "none" },
   fill: { flex: 1 },
