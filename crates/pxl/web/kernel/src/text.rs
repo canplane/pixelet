@@ -58,6 +58,15 @@ fn text() -> &'static mut Text {
     TEXT.get(Text::default)
 }
 
+/// Every answer let go: the host that was asked is gone (door.rs
+/// `host_attached`), and one it never ran would read as empty for as long as
+/// it is read.
+pub fn text_forget() {
+    let t = text();
+    t.layouts.clear();
+    t.rasters.clear();
+}
+
 /// A world frame's rise: what the last frame did not read goes.
 pub fn text_rise() {
     let t = text();
