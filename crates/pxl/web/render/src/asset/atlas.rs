@@ -67,7 +67,7 @@ pub enum DrawSpec {
     Place { name: String, icon: &'static str, color: u32, logical_w: f64 },
     /// The notched speech bubble and its wrapped lines.
     Bubble { lines: Vec<String>, box_w: f64, box_h: f64 },
-    /// A line of small text on nothing: the dev gizmos' labels.
+    /// A line of small text on nothing: the debug gizmos' labels.
     Text { text: String, logical_w: f64 },
 }
 

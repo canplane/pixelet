@@ -240,7 +240,7 @@ fn handle_tap(hovered: Pvf3) {
                 // (pxl-render mesh/voxel_scan.rs), so a smaller leaf would still
                 // take the cell whole while recording a bite nobody took — and
                 // the store is saved, so that number outlives the session.
-                None if settings_store().enable_terrain_carving => place_air(&hovered, U_PER_CELL),
+                None if settings_store().terrain_carving => place_air(&hovered, U_PER_CELL),
                 None => {}
             }
         }
@@ -252,7 +252,7 @@ fn handle_tap(hovered: Pvf3) {
                     place_decor(&hovered, DECOR_SIZE, ui.decor_id);
                 }
             } else if !is_placement_blocked(PlacementTool::Object, &hovered, object_size) {
-                place(&hovered, object_size, ui.object_cube, settings_store().show_structures);
+                place(&hovered, object_size, ui.object_cube, settings_store().structures);
             }
         }
     }
@@ -335,9 +335,9 @@ fn do_rotate(s: &mut Input, client_x: f64, client_y: f64) {
     let view_state = camera.view_state;
 
     if s.rotate_axis_lock == RotateAxisLock::Tilt {
-        // lock_camera_tilt only gates this write — an experiment toggle for a
+        // tilt_lock only gates this write — an experiment toggle for a
         // fixed-tilt UX, not yet a decided product change.
-        if !settings_store().lock_camera_tilt {
+        if !settings_store().tilt_lock {
             camera.set_view_state(ViewPatch {
                 polar: Some(s.rotate_start_polar + (client_y - s.rotate_drag_start_y) * tilt_gain()),
                 ..Default::default()
@@ -426,7 +426,7 @@ fn update_pinch(s: &mut Input) {
     camera.set_view_state(ViewPatch {
         dist: Some(next_dist),
         azimuth: Some(next_azimuth),
-        polar: (!settings_store().lock_camera_tilt).then_some(next_polar),
+        polar: (!settings_store().tilt_lock).then_some(next_polar),
     });
 }
 
@@ -574,7 +574,7 @@ fn update_hover(s: &Input) {
     camera.hovered_object_at = struck.as_ref().map(|o| o.at);
     if let Some(o) = struck {
         camera.hovered_coord = Some(Pvf3 { i: o.i, f: o.f });
-    } else if ui.active_tool == ActiveTool::Eraser && settings_store().enable_terrain_carving {
+    } else if ui.active_tool == ActiveTool::Eraser && settings_store().terrain_carving {
         // Bare terrain under the eraser wants the struck voxel's OWN corner
         // (real, possibly dug-into height included), not the baked-elevation
         // "flush on top" slot. On the cell's grid and not the tier's, because

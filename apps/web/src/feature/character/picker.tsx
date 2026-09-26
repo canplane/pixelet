@@ -97,8 +97,8 @@ function PetPicker(props: PetPickerProps) {
 export function CharacterPicker() {
   // The settings hold a variant as its number; the picker reads its key off
   // the same catalog the kernel was numbered from.
-  const person_variant = useKernel((s) => s.settings[SETTINGS.person_variant.key] ?? -1);
-  const pet_variant = useKernel((s) => s.settings[SETTINGS.pet_variant.key] ?? -1);
+  const person_variant = useKernel((s) => s.settings[SETTINGS.person.key] ?? -1);
+  const pet_variant = useKernel((s) => s.settings[SETTINGS.pet.key] ?? -1);
   const personVariantKey = personVariantNumbered(person_variant)?.key ?? "";
   const petVariantKey = PET_VARIANTS.find((v) => v.number === pet_variant)?.key ?? "";
   const set_setting = (key: u32, value: u32) => kernel_command(Command.SETTING_UPDATE, encode_setting_update({ key, value }));
@@ -110,8 +110,8 @@ export function CharacterPicker() {
 
   return (
     <View style={styles.pickers}>
-      <PersonPicker gender={gender} onGenderChange={setGender} selectedKey={personVariantKey} onSelect={(key) => set_setting(SETTINGS.person_variant.key, findPersonVariant(key).number)} />
-      <PetPicker selectedKey={petVariantKey} onSelect={(key) => set_setting(SETTINGS.pet_variant.key, findPetVariant(key).number)} />
+      <PersonPicker gender={gender} onGenderChange={setGender} selectedKey={personVariantKey} onSelect={(key) => set_setting(SETTINGS.person.key, findPersonVariant(key).number)} />
+      <PetPicker selectedKey={petVariantKey} onSelect={(key) => set_setting(SETTINGS.pet.key, findPetVariant(key).number)} />
     </View>
   );
 }

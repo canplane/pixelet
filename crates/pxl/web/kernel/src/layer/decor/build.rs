@@ -265,7 +265,7 @@ fn representative(tag: u64, level: u32, x: i64, y: i64) -> (i64, i64) {
 impl<'s> DecorBuild<'s> {
     /// Builds every kind's instances at world step `step` into `scratch`:
     /// the decor placed in `placed`'s columns, `hide` flagged hidden, and
-    /// where `show_decor`, the
+    /// where `decor`, the
     /// scatter over `ground`. A chunk scatters from its own level's page, so
     /// decoration reaches as far as the ground it stands on is drawn, a kind
     /// as far as it covers the pixels it is drawn at (`decor_density`).
@@ -283,7 +283,7 @@ impl<'s> DecorBuild<'s> {
         hide: Option<EntryAt>,
         store: &Store,
         step: u32,
-        show_decor: bool,
+        decor: bool,
         heights: (f64, f64),
     ) -> DecorBuild<'s> {
         scratch.clear();
@@ -309,7 +309,7 @@ impl<'s> DecorBuild<'s> {
             for column in placed {
                 Self::placed(scratch, kind, first, column, hide, store, heights);
             }
-            if let Some(ground) = ground.filter(|_| show_decor) {
+            if let Some(ground) = ground.filter(|_| decor) {
                 Self::scatter(scratch, kind, first, ground, store, heights);
             }
         }

@@ -17,27 +17,27 @@
     "display": {
       "section_title": "Display",
       "section_caption": "Choose what appears in the world",
-      "show_decor": {
+      "decor": {
         "label": "Decor",
-        "description": "Shows procedurally placed trees, vehicles, and other decor. Objects you place yourself are always shown."
+        "description": "Shows trees, vehicles and other decor placed on the terrain automatically. Objects you place yourself are always shown."
       },
-      "show_poi": {
+      "poi": {
         "label": "Places",
         "description": "Shows nearby place badges (cafes, stores, landmarks, ...) on the map."
       },
-      "show_structures": {
+      "structures": {
         "label": "Buildings",
         "description": "Shows or hides buildings on the terrain."
       },
-      "texture_pack": {
+      "textures": {
         "label": "Textures",
-        "description": "Applies detailed pixel-art textures to blocks and objects instead of flat colors."
+        "description": "Applies detailed textures to blocks instead of flat colors."
       }
     },
     "camera": {
       "section_title": "Camera",
       "section_caption": "Adjust how the camera moves",
-      "lock_camera_tilt": {
+      "tilt_lock": {
         "label": "Lock Camera Tilt",
         "description": "Locks vertical camera rotation while leaving horizontal rotation free."
       }
@@ -45,8 +45,8 @@
     "lighting": {
       "section_title": "Lighting & Shadows",
       "section_caption": "Enhance shapes, edges, and depth",
-      "show_edge_shade": {
-        "label": "Cube Outlines",
+      "edge_shade": {
+        "label": "Block Outlines",
         "description": "Darkens only edges exposed to open air, keeping flat ground seamless while outlining changes in height."
       },
       "ao": {
@@ -57,16 +57,16 @@
         },
         "corner": {
           "label": "Corner (Geometry)",
-          "description": "Darkens contact areas and inside corners so blocks look grounded instead of floating. Requires only a few operations per pixel."
+          "description": "Darkens contact areas and inside corners so blocks look grounded instead of floating. Light on performance."
         },
         "screen": {
           "label": "Detailed (SSAO)",
           "description": "Adds detailed contact shadows to corners and crevices for greater depth. This is the most demanding option because it processes the entire screen."
         }
       },
-      "show_rim_light": {
+      "rim_light": {
         "label": "Rim Light",
-        "description": "Adds a subtle highlight around object silhouettes to make them stand out from the background."
+        "description": "Adds a subtle highlight around the edges of blocks, decor and characters to make them stand out from the background."
       }
     },
     "quality": {
@@ -95,13 +95,13 @@
     "debug": {
       "section_title": "Debug",
       "section_caption": "Diagnostics for the view and the scheduler",
-      "show_debug_objects": {
-        "label": "Debug Gizmos",
-        "description": "Displays coordinate markers (map centers, tile boundaries) for debugging purposes."
-      },
-      "show_profiler": {
+      "profiler": {
         "label": "Performance Overlay",
-        "description": "What frames, the GPU, memory, fetches and tasks cost."
+        "description": "Shows a panel with frame rate, GPU load, memory use, network requests and task timing."
+      },
+      "gizmos": {
+        "label": "Gizmos",
+        "description": "Displays coordinate markers, such as the map center and tile boundaries, for debugging."
       }
     },
     "disclaimer": {
@@ -184,10 +184,10 @@
   },
   "drawer_modal": {
     "title": "Drawer",
-    "description": "Browse all available cube colors, decor, and characters.",
+    "description": "Browse all available block colors, decor, and characters.",
     "close": "Close",
     "tabs": {
-      "cube": "Cube",
+      "cube": "Block",
       "decor": "Decor",
       "character": "Character"
     },

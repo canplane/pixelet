@@ -16,28 +16,28 @@
     "cost_legend": "LOW / MED / HIGH는 각 옵션이 성능에 미치는 영향을 나타냅니다. 프레임 드랍이 발생하면 HIGH 항목부터 꺼 보세요.",
     "display": {
       "section_title": "표시",
-      "section_caption": "월드에 표시할 요소를 설정합니다",
-      "show_decor": {
+      "section_caption": "세계에 표시할 요소를 설정합니다",
+      "decor": {
         "label": "데코",
-        "description": "지형에 자동으로 배치된 나무와 차량 등의 데코를 표시합니다. 직접 배치한 오브젝트는 이 설정과 관계없이 표시됩니다."
+        "description": "지형에 자동으로 배치된 나무와 차량 등의 데코를 표시합니다. 직접 놓은 오브젝트는 이 설정과 관계없이 표시됩니다."
       },
-      "show_poi": {
+      "poi": {
         "label": "장소",
-        "description": "지도 위에 주변 장소(카페, 상점, 랜드마크 등) 뱃지를 표시합니다."
+        "description": "주변 장소(카페, 상점, 랜드마크 등) 뱃지를 표시합니다."
       },
-      "show_structures": {
+      "structures": {
         "label": "건물",
         "description": "지형 위의 건물을 표시하거나 숨깁니다."
       },
-      "texture_pack": {
+      "textures": {
         "label": "텍스처",
-        "description": "블록과 오브젝트 표면에 단색 대신 디테일한 픽셀 아트 텍스처를 적용합니다."
+        "description": "블록 표면에 단색 대신 디테일한 텍스처를 적용합니다."
       }
     },
     "camera": {
       "section_title": "카메라",
       "section_caption": "카메라가 움직이는 방식을 설정합니다",
-      "lock_camera_tilt": {
+      "tilt_lock": {
         "label": "카메라 기울기 고정",
         "description": "카메라의 수직 회전을 고정하고 수평 회전만 허용합니다."
       }
@@ -45,8 +45,8 @@
     "lighting": {
       "section_title": "조명 & 그림자",
       "section_caption": "형태와 경계, 깊이감을 강조합니다",
-      "show_edge_shade": {
-        "label": "큐브 외곽선",
+      "edge_shade": {
+        "label": "블록 외곽선",
         "description": "허공과 맞닿은 모서리만 어둡게 하여 평지는 매끄럽게 이어지고, 높낮이가 바뀌는 곳만 선으로 드러나게 합니다."
       },
       "ao": {
@@ -57,16 +57,16 @@
         },
         "corner": {
           "label": "모서리 (기하)",
-          "description": "큐브가 바닥과 맞닿는 부분과 안쪽 모서리를 어둡게 하여 블록이 떠 있지 않고 바닥에 놓인 것처럼 보이게 합니다. 픽셀당 몇 번의 연산만 필요합니다."
+          "description": "블록이 땅과 맞닿는 부분과 안쪽 모서리를 어둡게 하여 떠 있지 않고 땅에 놓인 것처럼 보이게 합니다. 성능 부담이 적습니다."
         },
         "screen": {
           "label": "정밀 (SSAO)",
-          "description": "오브젝트가 맞닿는 부분과 구석, 틈새에 세밀한 음영을 더해 입체감을 높입니다. 화면 전체를 처리하므로 가장 많은 성능을 사용합니다."
+          "description": "맞닿는 부분과 구석, 틈새에 세밀한 음영을 더해 입체감을 높입니다. 화면 전체를 처리하므로 가장 많은 성능을 사용합니다."
         }
       },
-      "show_rim_light": {
+      "rim_light": {
         "label": "림 라이트",
-        "description": "오브젝트의 실루엣에 은은한 하이라이트를 더해 배경과 선명하게 구분합니다."
+        "description": "블록과 데코, 캐릭터의 윤곽에 은은한 하이라이트를 더해 배경과 선명하게 구분합니다."
       }
     },
     "quality": {
@@ -95,20 +95,20 @@
     "debug": {
       "section_title": "디버그",
       "section_caption": "화면과 스케줄러를 들여다보는 진단 도구입니다",
-      "show_debug_objects": {
-        "label": "디버그 기즈모",
-        "description": "지도 중심, 타일 경계 등 디버깅용 좌표계 마커를 화면에 표시합니다."
-      },
-      "show_profiler": {
+      "profiler": {
         "label": "성능 오버레이",
-        "description": "프레임, GPU, 메모리, fetch, 태스크의 비용을 보여주는 패널입니다."
+        "description": "프레임 속도, GPU 부하, 메모리 사용량, 네트워크 요청, 작업 시간을 보여주는 패널입니다."
+      },
+      "gizmos": {
+        "label": "기즈모",
+        "description": "지도 중심, 타일 경계 등 디버깅용 좌표 마커를 화면에 표시합니다."
       }
     },
     "disclaimer": {
       "section_title": "유의사항",
       "demo_notice": "본 서비스는 데모로 제공되며, 예고 없이 데이터가 삭제되거나 서비스가 중단될 수 있습니다.",
       "coverage_notice": "현재 대한민국 지역만 지원하며, 그 외 지역은 바다로 표시됩니다.",
-      "storage_notice": "직접 배치한 오브젝트는 서버에 저장되지 않으며, 현재 기기에만 보관됩니다.",
+      "storage_notice": "직접 놓은 오브젝트는 서버에 저장되지 않으며, 현재 기기에만 보관됩니다.",
       "location_notice": "사용자의 위치 정보는 수집하거나 저장하지 않습니다.",
       "character_notice": "캐릭터와 데코에는 CC0 라이선스의 Kenney 에셋 팩을 사용합니다."
     },
@@ -184,10 +184,10 @@
   },
   "drawer_modal": {
     "title": "서랍",
-    "description": "배치할 수 있는 모든 큐브와 데코, 캐릭터를 둘러봅니다.",
+    "description": "놓을 수 있는 모든 블록과 데코, 캐릭터를 둘러봅니다.",
     "close": "닫기",
     "tabs": {
-      "cube": "큐브",
+      "cube": "블록",
       "decor": "데코",
       "character": "캐릭터"
     },

@@ -189,7 +189,7 @@ console.log(`[check-bundle] ok — ${forbidden.length} development-only string(s
 
 // A dev setting's row: the settings table is generated whole from
 // schema.json, and a build that filtered it at run time shipped every dev
-// row under its name — `enable_terrain_carving:{kind:...}` and the rest,
+// row under its name — `terrain_carving:{kind:...}` and the rest,
 // readable in the artifact with their defaults. The shell now takes the
 // table without them (feature/setting/schema.ts), and this reads the
 // artifact to see that it did. What is looked for is the row and not the
@@ -199,7 +199,7 @@ console.log(`[check-bundle] ok — ${forbidden.length} development-only string(s
 // writing rows some other way fails this loudly rather than passing it
 // blind.
 const SETTINGS_SPEC = "../../spec/pxl/web/kernel/shell/setting/schema.json";
-const SETTING_ROW_SENTINEL = "show_structures";
+const SETTING_ROW_SENTINEL = "structures";
 
 function row(bundle: string, key: string): boolean {
   return new RegExp(`[{,]\\s*["'\`]?${key}["'\`]?\\s*:\\s*\\{`).test(bundle);

@@ -164,7 +164,7 @@ deno task bake:poi --out ./out/poi/<version> --concurrency 8
 It is not resumable: a run clears the version directory and bakes it whole,
 which takes the one pass over the table the leaves need. Verify that the
 manifest's `levels` reach level 10 and that a leaf decompresses to `PXP5`.
-The client shows it only outside production, behind `show_poi` in the
+The client shows it only outside production, behind `poi` in the
 development settings, until a nationwide version is published.
 
 ## Geocode

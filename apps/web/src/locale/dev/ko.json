@@ -5,7 +5,7 @@
         "label": "고도 접지 고정",
         "description": "지도를 움직이는 동안 카메라 초점의 고도를 실제 지형 높이에 맞춰 고정합니다."
       },
-      "camera_terrain": {
+      "camera_collision": {
         "label": "지형 충돌",
         "through": {
           "label": "통과",
@@ -22,7 +22,7 @@
       }
     },
     "lighting": {
-      "show_shadow_map": {
+      "shadows": {
         "label": "그림자",
         "description": "지형, 오브젝트, 캐릭터가 햇빛을 받아 땅에 그림자를 드리웁니다."
       }
@@ -30,7 +30,7 @@
     "editing": {
       "section_title": "편집",
       "section_caption": "도구가 무엇을 바꿀 수 있는지 설정합니다",
-      "enable_terrain_carving": {
+      "terrain_carving": {
         "label": "지형 파내기",
         "description": "아무것도 놓여있지 않은 곳에서 지우개로 실제 지형을 한 칸씩 파낼 수 있게 합니다."
       }

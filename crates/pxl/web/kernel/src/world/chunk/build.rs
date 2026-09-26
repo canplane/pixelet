@@ -174,7 +174,7 @@ struct Chunk {
     /// The chunk being built: its level, corner, column and page all come
     /// from it.
     at: PyramidChunk,
-    show_structures: bool,
+    structures: bool,
     generation: u32,
     /// The tiers the node lacks, in the order it wants them.
     want: [Option<Cube>; 2],
@@ -363,14 +363,14 @@ impl Builder {
         let c = self.chunks.get(&id)?;
         let read = c.read().filter(Read::own)?;
         let (tx0, ty0) = c.at.in_page();
-        Some((tx0, ty0, read.page, c.show_structures))
+        Some((tx0, ty0, read.page, c.structures))
     }
 
     /// What the composite of z16 chunk `chunk` is valid for: its column's
     /// objects and the structure setting, the two things its paint reads that
     /// change.
     pub fn leaf_valid(&self, chunk: PyramidChunk) -> u32 {
-        object_col_revision(L2_IDX(chunk.corner())).wrapping_mul(2) | settings_store().show_structures as u32
+        object_col_revision(L2_IDX(chunk.corner())).wrapping_mul(2) | settings_store().structures as u32
     }
 
     /// The composite of z16 chunk `chunk` — the real set, no edits —
@@ -382,7 +382,7 @@ impl Builder {
     pub fn compose_leaf(&mut self, world: &mut World, chunk: PyramidChunk) -> Option<(u32, u32)> {
         let page = Terrain::pyramid().get(chunk.page())?;
         let (tx0, ty0) = chunk.in_page();
-        let show = settings_store().show_structures;
+        let show = settings_store().structures;
         let col_idx = L2_IDX(chunk.corner());
         let valid = self.leaf_valid(chunk);
         let volume = self.paint_terrain_at(world, [tx0 as i64, ty0 as i64], 1, show, page)?;
@@ -419,7 +419,7 @@ impl Builder {
             id,
             Chunk {
                 at,
-                show_structures: false,
+                structures: false,
                 generation: 0,
                 want: [None; 2],
                 runs: None,
@@ -435,10 +435,10 @@ impl Builder {
 
     /// The chunk's sources changed: what it was built from is gone, and a
     /// tier built before now is stale.
-    pub fn source(&mut self, world: &mut World, id: u32, show_structures: bool) {
+    pub fn source(&mut self, world: &mut World, id: u32, structures: bool) {
         self.drop_work(world, id);
         if let Some(c) = self.chunks.get_mut(&id) {
-            c.show_structures = show_structures;
+            c.structures = structures;
             c.generation = c.generation.wrapping_add(1);
         }
     }
@@ -688,7 +688,7 @@ impl Builder {
     /// A new volume with the chunk's terrain painted in, open; none when a
     /// paint was refused.
     fn paint_terrain(&mut self, world: &mut World, id: u32, read: Read) -> Option<u32> {
-        let show = self.chunks[&id].show_structures;
+        let show = self.chunks[&id].structures;
         self.paint_terrain_at(world, read.origin, read.n, show, read.page)
     }
 
@@ -781,7 +781,7 @@ impl Builder {
         if self.run_set_for(id).is_none() {
             return Progress::Blocked;
         }
-        let show = self.chunks[&id].show_structures;
+        let show = self.chunks[&id].structures;
         let view = Self::page_view(read.page);
         self.sample.read(&view, read.origin, read.n, hidden_ground(show));
         xpute_core::ensure!(self.direct.begin_direct(), ENOTRECOVERABLE);
@@ -817,7 +817,7 @@ impl Builder {
             return Progress::Blocked;
         }
         let c = &self.chunks[&id];
-        let (show, level, base) = (c.show_structures, c.level(), c.base());
+        let (show, level, base) = (c.structures, c.level(), c.base());
         let view = Self::page_view(read.page);
         self.sample.read(&view, read.origin, read.n, hidden_ground(show));
         let target = GROUND.scale(level);
@@ -895,7 +895,7 @@ impl Builder {
             // chunk.rs).
             let (z0, z1) = c.at.z_range();
             let clip = Some((z0 as i32, z1 as i32));
-            xpute_core::ensure!(self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().texture_pack, clip), ENOTRECOVERABLE);
+            xpute_core::ensure!(self.bake.begin(&set, mesh_step(cube, c.level()), 1 << c.level(), settings_store().textures, clip), ENOTRECOVERABLE);
             self.bake_job = Some(BakeJob {
                 id,
                 cube,

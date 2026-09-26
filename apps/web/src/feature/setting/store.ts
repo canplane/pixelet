@@ -6,7 +6,7 @@
  * store.rs) and names none, so the names stay here, where the sheet has
  * them anyway (schema.ts).
  *
- * Stored as one object by name, `{"show_poi":true,"ao":"screen"}`: a setting
+ * Stored as one object by name, `{"poi":true,"ao":"screen"}`: a setting
  * and a choice's option are numbered by their place in schema.json, and a
  * name outlives the order they are listed in. Only what differs from the
  * default is stored, and a value equal to it is not: a default written to

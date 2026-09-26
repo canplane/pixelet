@@ -5,8 +5,8 @@
         "label": "Ground Altitude Lock",
         "description": "Constrains the camera focus altitude to the actual terrain height while panning."
       },
-      "camera_terrain": {
-        "label": "Terrain collision",
+      "camera_collision": {
+        "label": "Terrain Collision",
         "through": {
           "label": "Pass through",
           "description": "The camera goes wherever the controls put it. Underground there are no inward-facing faces, so the scene reads inside out."
@@ -22,17 +22,17 @@
       }
     },
     "lighting": {
-      "show_shadow_map": {
+      "shadows": {
         "label": "Shadows",
-        "description": "The sun casts shadows from terrain, objects and characters onto the ground."
+        "description": "The sun casts shadows from the terrain, objects and characters onto the ground."
       }
     },
     "editing": {
       "section_title": "Editing",
       "section_caption": "What the tools may change",
-      "enable_terrain_carving": {
+      "terrain_carving": {
         "label": "Terrain Carving",
-        "description": "Lets the eraser dig into the real terrain itself, one voxel at a time, when nothing is placed there."
+        "description": "Lets the eraser dig into the real terrain itself, one block at a time, when nothing is placed there."
       }
     }
   },

@@ -11,7 +11,7 @@ use crate::control::camera::terrain_gate::climb_polar;
 use crate::global::Global;
 use crate::sched::tick::TickContext;
 use crate::shell::map_store::map_store;
-use crate::shell::setting::store::{settings_store, CameraTerrainMode};
+use crate::shell::setting::store::{settings_store, CameraCollisionMode};
 use crate::world::frame::view::{view, view_compose};
 use crate::world::pyramid::Layer as _;
 use pxl_spec::bake::format::Terrain;
@@ -131,7 +131,7 @@ pub fn camera_step(ctx: &mut TickContext) {
     // absolute angle through a second lag gave tilt an inertia rotation does
     // not have. Outside climb mode the offset is zero and the drawn pitch is
     // exactly the damped control.
-    let want_climb = if settings_store().camera_terrain == CameraTerrainMode::climb {
+    let want_climb = if settings_store().camera_collision == CameraCollisionMode::climb {
         climb_polar_memo(&mut s.memo, s.dist, s.polar, view_state.azimuth) - s.polar
     } else {
         0.0
