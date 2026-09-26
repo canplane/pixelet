@@ -24,6 +24,7 @@ import type * as WebSensor from "../../../web/src/platform/web/sensor.ts";
 import type * as WebStorage from "../../../web/src/platform/web/storage.ts";
 import type * as WebSurface from "../../../web/src/platform/web/surface.tsx";
 import type * as WebText from "../../../web/src/platform/web/text.ts";
+import type * as WebTypeface from "../../../web/src/platform/web/typeface.ts";
 import type * as WebVisualViewport from "../../../web/src/platform/web/visual-viewport.ts";
 
 import * as AboveKeyboard from "./above-keyboard.tsx";
@@ -39,6 +40,7 @@ import * as Sensor from "./sensor.ts";
 import * as Storage from "./storage.ts";
 import * as Surface from "./surface.tsx";
 import * as Text from "./text.ts";
+import * as Typeface from "./typeface.ts";
 import * as VisualViewport from "./visual-viewport.ts";
 
 export const CONFORMS = [
@@ -55,5 +57,6 @@ export const CONFORMS = [
   Storage satisfies typeof WebStorage,
   Surface satisfies typeof WebSurface,
   Text satisfies typeof WebText,
+  Typeface satisfies typeof WebTypeface,
   VisualViewport satisfies typeof WebVisualViewport,
 ];

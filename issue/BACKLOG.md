@@ -198,11 +198,9 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     is the page's resource timing, which a device has no counterpart of, so
     a device's trace says how long a read ran and never how much of it the
     network took.
-  - **What the shared shell still asks of a browser.** `shared/ui/theme.ts`
-    branches on `Platform.OS` and `app/scroll-to-top.tsx` on `window`, where
+  - **What the shared shell still asks of a browser.** `mode-bar.tsx`
+    branches on `Platform.OS` for its swatches' `touchAction`, where
     `@platform/` is the one place a platform's difference belongs.
-  - **The ledger panel's hints on a page.** The buttons' `title` tooltips
-    were lost in the move: react-native-web forwards no `title`.
 
 - **One byte budget over everything drawn, paid for in LOD.** The phone's
   page dies because the working set exceeds a budget of about two

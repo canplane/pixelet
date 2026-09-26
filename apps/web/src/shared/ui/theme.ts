@@ -11,7 +11,7 @@
  * Tailwind v4's own oklch values converted once.
  */
 
-import { Platform, type TextStyle } from "react-native";
+import { FAMILY, MONO, textEdge } from "@platform/typeface.ts";
 
 /** `alpha(color, 0.5)`: a `#rrggbb` at an opacity, as the palette's `/50`. */
 export function alpha(hex: string, a: number): string {
@@ -55,22 +55,18 @@ export const color = {
 /** A panel's hairlines: the foreground, faint. */
 export const hairline = alpha(color.foreground, 0.1);
 
-/** A face by name. The web takes a CSS stack, which it falls back through;
- * a device takes one face it has, and its own system face where none is
- * named. */
+/** A face by name: the platform's (platform/web/typeface.ts, a device's
+ * beside it) — a CSS stack a page falls back through, or one face a device
+ * has and its own system face where none is named. */
 export const font = {
-  /** fonts.css's Pretendard, after the Apple system faces, as index.css
-   * orders them for the web; the system face on a device. */
-  family: Platform.select({ web: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Pretendard Variable", system-ui, sans-serif' }),
+  family: FAMILY,
   /** For numbers that have to line up. */
-  mono: Platform.select({ web: 'ui-monospace, SFMono-Regular, Menlo, "Roboto Mono", monospace', ios: "Menlo", default: "monospace" }),
+  mono: MONO,
 };
 
-/** A thin dark edge around text, so it reads over any ground. The web draws
- * a shadow from one CSS value, and warns on the three a device takes. */
-export function textEdge(tint: string): TextStyle {
-  return Platform.OS === "web" ? ({ textShadow: `0 0 2px ${tint}` } as TextStyle) : { textShadowColor: tint, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 };
-}
+/** A thin dark edge around text, so it reads over any ground: the
+ * platform's, which spell a text shadow differently. */
+export { textEdge };
 
 /** The map's floating chrome. */
 export const chrome = {
