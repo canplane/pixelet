@@ -1,11 +1,13 @@
 // pxl-tool/lib.rs
 
 //! What the repository runs to make the files it ships and the source it
-//! generates: the asset ingest and the bakes that write a format the tree
-//! owns. Each is a binary under `bin/`, run by a task in the root deno.jsonc;
-//! what two of them share is here.
+//! generates: the code written from `spec/`, the asset ingest, and the bakes
+//! that write a format the tree owns. Each is a binary under `bin/`, run by a
+//! task in the root deno.jsonc; what they share is here.
 
 pub mod asset;
+pub mod fmt;
+pub mod spec;
 
 use std::path::{Path, PathBuf};
 

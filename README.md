@@ -180,7 +180,7 @@ Two formats are this project's: **PVF3**, a packed fixed-point coordinate, and *
 │   └── xpute/
 │       ├── core/             #   @xpute/core: the same kit in TypeScript
 │       └── runtime/          #   @xpute/runtime: the rings' host end and the reservation
-├── spec/                     # JSON every language is generated from (script/spec.ts),
+├── spec/                     # JSON every language is generated from (pxl-tool),
 │                             #   grouped as crates/ is: xpute/, pxl/{spec, web, server}
 ├── asset/                    # Shipped models and texture pack (cube, decor, actor),
 │                             #   imported by nothing

@@ -29,6 +29,7 @@ use sha2::{Digest, Sha256};
 
 use pxl_tool::asset::table::{Row, Sheet};
 use pxl_tool::asset::{glb, pack, sheet, table};
+use pxl_tool::fmt::formatted;
 use pxl_tool::root;
 
 /// What the bucket prefix for an asset is; a key is this over the asset's own
@@ -80,31 +81,9 @@ fn named(rel: &str, hex: &str) -> String {
     }
 }
 
-/// Through the formatter the tree is checked with, so that writing a table and
-/// then formatting the repository do not disagree — `deno fmt --check` and
-/// `cargo fmt --check` are both gates, and a generator that emits unformatted
-/// output makes the next unrelated run of either fail.
 fn write_formatted(path: &Path, text: &str) -> Result<(), String> {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-
-    let rust = path.extension().is_some_and(|e| e == "rs");
-    let mut cmd = if rust {
-        let mut c = Command::new("rustfmt");
-        c.args(["--edition", "2021", "--emit", "stdout", "--config-path"]).arg(root().join("rustfmt.toml"));
-        c
-    } else {
-        let mut c = Command::new("deno");
-        c.args(["fmt", "--ext", "ts", "-"]).current_dir(root());
-        c
-    };
-    let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().map_err(|e| format!("fmt {}: {e}", path.display()))?;
-    child.stdin.take().ok_or("no stdin")?.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
-    if !out.status.success() {
-        return Err(format!("fmt {}: exited {}", path.display(), out.status.code().unwrap_or(-1)));
-    }
-    std::fs::write(path, out.stdout).map_err(|e| format!("{}: {e}", path.display()))
+    let text = formatted(&path.to_string_lossy(), text.to_string())?;
+    std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 fn main() -> ExitCode {
@@ -170,7 +149,7 @@ fn run() -> Result<(), String> {
     if let Some(i) = slots.iter().find(|i| !tiles.contains(&format!("cube/{}", i.file))) {
         return Err(format!("{} names {}, which is not under asset/cube", i.label, i.file));
     }
-    let faces = table::faces(&tile_slots, pxl_spec::cell::cube_type::cube_types::CHANNELS)?;
+    let faces = table::faces(&tile_slots, &pxl_tool::spec::cell::catalog()?)?;
     let composed = sheet::compose(&asset_dir, &tiles)?;
     // The one object with no source file of its own: it is composed from every
     // tile under `cube/`, so it is named there.

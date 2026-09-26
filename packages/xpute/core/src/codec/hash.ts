@@ -10,7 +10,7 @@ const FNV64_OFFSET = 0xcbf29ce484222325n;
 const FNV64_PRIME = 0x100000001b3n;
 
 /** FNV-1a over a string's UTF-8 bytes, 64 bits wide — the same word the
- * Rust side and script/spec.ts compute, so an id hashed anywhere is one
+ * Rust side and the spec generator compute, so an id hashed anywhere is one
  * number. */
 export function fnv1a64_str(s: string): u64 {
   return fnv1a64_bytes(te.encode(s));

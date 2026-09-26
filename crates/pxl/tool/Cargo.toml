@@ -7,26 +7,21 @@ publish.workspace = true
 [lib]
 path = "src/lib.rs"
 
-[features]
-# What a tool that reaches outside the repository needs. Off by default, and
-# each such binary declares it as required, so the gate's clippy and test
-# build the ingest and skip the downloads: they run by hand, once in a while,
-# and their HTTP client would otherwise be compiled by every check for
-# nothing.
-net = ["dep:ureq"]
-# mozjpeg's C, for the link preview alone, off the gate for the same reason.
-jpeg = ["dep:mozjpeg"]
-
+# No crate of this workspace is a dependency: the spec generator writes part
+# of xpute-core, xpute-runtime, pxl-spec, pxl-kernel and pxl-render, and the
+# ingest part of pxl-spec, so a tool that linked one of them could not build
+# where what it last wrote does not — a type renamed in the JSON that
+# another generated file still names — and could not write it again. What a
+# tool knows of the model it reads from the JSON at run time.
 [dependencies]
-# Both directions: the emitted table is laid out by the cell catalog's own
-# channels, and the test reads back the table this writes.
-pxl-spec = { path = "../spec" }
 # A bucket key is the sha256 of an object's bytes.
 sha2 = "0.11"
-# The glb's own JSON chunk, and the texture pack's manifest.
+# The glb's own JSON chunk, the texture pack's manifest, and every spec.
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "ico"] }
+# The literals the route spec checks, and the shell's color table's keys.
+regex = "1"
 # libwebp itself, for the sheet. `image`'s own WebP support encodes lossless
 # only, and the sheet is quality-92 lossy — 60 tiles of 256² lossless is
 # several megabytes where this is 400 kB, and it is downloaded on every cold
@@ -36,24 +31,12 @@ webp = "0.3"
 flate2 = "1"
 # Third-party URLs, fetched once each: a blocking client, because nothing is
 # there to overlap them with.
-ureq = { version = "2", optional = true }
+ureq = "2"
 # `image`'s own encoder writes the link preview at nearly twice the size —
 # 55 kB where this is 30 kB at quality 88 — and the preview is what every
 # crawler unfurling a link fetches.
-mozjpeg = { version = "0.10", optional = true }
+mozjpeg = "0.10"
 
-[[bin]]
-name = "download_texture_pack"
-required-features = ["net"]
-
-[[bin]]
-name = "download_moon"
-required-features = ["net"]
-
-[[bin]]
-name = "bake_stars"
-required-features = ["net"]
-
-[[bin]]
-name = "render_brand"
-required-features = ["jpeg"]
+[dev-dependencies]
+# The test reads back the table the ingest wrote, as the kernel compiles it.
+pxl-spec = { path = "../spec" }

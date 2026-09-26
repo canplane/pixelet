@@ -14,10 +14,8 @@ asset/
 
 ## What to run, and when
 
-Each is a binary of `pxl-tool` (`crates/pxl/tool`), run by a task. The
-ingest is what `deno task check` clippies and tests with the rest. The two
-downloads are behind the crate's `net` feature: they are run by hand, and
-their HTTP client would otherwise be compiled by every gate for nothing.
+Each is a binary of `pxl-tool` (`crates/pxl/tool`), run by a task, and
+`deno task check` clippies and tests every one with the rest.
 
 ### After changing anything under `actor/`, `cube/` or `decor/`
 

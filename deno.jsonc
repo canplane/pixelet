@@ -61,11 +61,11 @@
     // After any change under asset/: out/asset for the bucket, and both tables.
     "ingest:asset": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin ingest_asset",
     // By hand, when a source outside the repository or under apps/web/brand
-    // changes; each is gated by the feature its dependency is behind.
-    "download:pack": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --features net --bin download_texture_pack",
-    "download:moon": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --features net --bin download_moon",
-    "bake:stars": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --features net --bin bake_stars --",
-    "render:brand": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --features jpeg --bin render_brand",
+    // changes.
+    "download:pack": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin download_texture_pack",
+    "download:moon": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin download_moon",
+    "bake:stars": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin bake_stars --",
+    "render:brand": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin render_brand",
 
     // ── Ship it ──
     "build:wasm": "deno task --cwd apps/web build:wasm",
@@ -95,9 +95,9 @@
     // The rules of AGENTS.md a machine can decide: file headers, the paths a
     // comment names, and who shifts the lattice.
     "check:rules": "./script/check-rules.ts",
-    "check:spec": "./script/spec.ts",
+    "check:spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec",
     // The write half of it: the same generator, allowed to touch the tree.
-    "spec": "./script/spec.ts --write",
+    "spec": "cargo run -q --manifest-path crates/Cargo.toml -p pxl-tool --bin spec -- --write",
 
     "test": "deno task test:web && deno task test:xpute && deno task test:rust",
     "test:web": "deno task --cwd apps/web test",
@@ -135,7 +135,7 @@
     // testing
     "@std/assert": "jsr:@std/assert@^1",
 
-    // script/spec.ts, apps/web/script/locale.ts
+    // script/, apps/web/script/
     "@std/path": "jsr:@std/path@^1",
 
     // build tools
