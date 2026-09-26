@@ -117,8 +117,7 @@ const inline_enums = ({ types: t }) => ({
 
 module.exports = (api) => {
   const production = process.env.NODE_ENV === "production";
-  const platform = api.caller((caller) => caller?.platform);
-  api.cache.using(() => `${process.env.NODE_ENV}:${platform}`);
+  api.cache.using(() => process.env.NODE_ENV);
 
   const DEFINE = {
     __IS_DEV__: !production,
@@ -126,9 +125,6 @@ module.exports = (api) => {
     __APP_ENV__: production ? "production" : "development",
     // Every route a dev server forwards is the published deployment's.
     __PUBLISHED_TILES__: true,
-    __APP_NAME__: "pixelet",
-    __ENV__: platform === "web" ? "browser" : "native",
-    __ROLE__: "client",
   };
 
   /** Replaces each free name above with its value. */

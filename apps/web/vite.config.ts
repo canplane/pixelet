@@ -457,7 +457,6 @@ export default defineConfig(({ mode }) => {
     preview: { proxy },
 
     define: {
-      __ENV__: JSON.stringify("browser"),
       __APP_ENV__: JSON.stringify(appEnv),
       __IS_DEV__: JSON.stringify(isDev),
       // Vite's own import.meta.env.DEV, as a global a bundle Vite did not
@@ -465,11 +464,6 @@ export default defineConfig(({ mode }) => {
       __DEV_BUNDLE__: JSON.stringify(mode !== "production"),
 
       __PUBLISHED_TILES__: JSON.stringify(published),
-
-      /** A droplet fades. A pixelet remains. 🫧 */
-      __APP_NAME__: JSON.stringify("pixelet"),
-
-      __ROLE__: JSON.stringify("client"),
 
       // react-native-web's Animated reads React Native's `global`, which a
       // browser calls `globalThis`.
