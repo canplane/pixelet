@@ -7,7 +7,7 @@ import { cube_types, GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
 import { decor_kinds, placeable_cubes, type PlaceableCube, sameCube } from "@/catalog/cell/mod.ts";
 import { ActiveTool, Command, encode_chat_create } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command } from "@/kernel/shell.ts";
-import { host_hold } from "@platform/host.ts";
+import { kernel_hold } from "@/kernel/shell.ts";
 import { storage_get, storage_set } from "@platform/storage.ts";
 
 // ts (Date.now() at append) lets ChatBubble derive its own remaining show
@@ -198,8 +198,8 @@ export const useUiStore = create<UiState>()((set) => ({
 // the catalog's numbers: the object tool holds the cube, the decor tool the
 // decor kind.
 function hold(s: UiState): void {
-  if (s.activeTool === ActiveTool.Object) host_hold(s.activeTool, s.cube.channel, s.cube.type, s.object_tier);
-  else host_hold(s.activeTool, null, s.activeTool === ActiveTool.Decor ? s.decor : 0, s.object_tier);
+  if (s.activeTool === ActiveTool.Object) kernel_hold(s.activeTool, s.cube.channel, s.cube.type, s.object_tier);
+  else kernel_hold(s.activeTool, null, s.activeTool === ActiveTool.Decor ? s.decor : 0, s.object_tier);
 }
 
 hold(useUiStore.getState());

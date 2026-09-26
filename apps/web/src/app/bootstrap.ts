@@ -2,11 +2,12 @@
 
 import { useSyncExternalStore } from "react";
 
-import { host_boot } from "@platform/host.ts";
+import { gpu_missing } from "@platform/gpu.ts";
+import { boot_kernel } from "@/kernel/kernel.ts";
 import { declareUnsupported } from "@/app/store/unsupported-store.ts";
 import { bootstrapI18n } from "@/locale/i18n.ts";
 
-/** Where the host's boot is: the map is drawn only once it has come up,
+/** Where the kernel's boot is: the map is drawn only once it has come up,
  * since everything on it speaks to the kernel. A device that cannot draw
  * never boots one, and is shown why instead (app/unsupported.tsx). */
 export type BootState = "loading" | "ready" | "failed";
@@ -23,17 +24,19 @@ export function bootstrapApp(): void {
   // The locale first, because what the host may have to say about the
   // device is said in it.
   bootstrapI18n();
-  host_boot().then(
-    (missing) => {
-      if (missing) {
-        declareUnsupported(missing);
-        settle("failed");
-      } else {
-        settle("ready");
-      }
-    },
+  // A platform that cannot draw is told so instead of being started, since
+  // the kernel would otherwise fetch its core, open a world and raise toasts
+  // about loading it, under a notice saying none of it can be shown.
+  const missing = gpu_missing();
+  if (missing) {
+    declareUnsupported(missing);
+    settle("failed");
+    return;
+  }
+  boot_kernel().then(
+    () => settle("ready"),
     (err) => {
-      console.error("[boot] the host did not start:", err);
+      console.error("[boot] the kernel did not start:", err);
       settle("failed");
     },
   );

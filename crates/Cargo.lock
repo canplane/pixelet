@@ -1596,6 +1596,7 @@ dependencies = [
 name = "pxl-native"
 version = "0.0.0"
 dependencies = [
+ "libc",
  "pxl-kernel",
  "pxl-render",
  "wgpu",

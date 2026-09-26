@@ -85,17 +85,26 @@ pub fn host_fall() {
 /// host to find when the trap reaches it. What was recorded before it in the
 /// turn is dropped: the kernel stops here, and none of it is to be done.
 ///
-/// A device's kernel stops with its process, before any host could run the
-/// record, so it says the report on the process's own error stream as well.
+/// Where the kernel stops with its process, before any host could run the
+/// record, the bracket says the report as well (`last_words`).
 pub fn host_bug(errno: Errno, at: &Location<'_>, a: u64, b: u64) {
-    #[cfg(not(target_arch = "wasm32"))]
-    eprintln!("[pxl] {errno:?} at {}:{}:{} ({a}, {b})", at.file(), at.line(), at.column());
+    STOPPED.set(true);
+    last_words(&format_args!("{errno:?} at {}:{}:{} ({a}, {b})", at.file(), at.line(), at.column()));
     if let Some(h) = host() {
         h.stream.publish();
         let args = [errno as i32 as u32, at.line(), at.column(), a as u32, (a >> 32) as u32, b as u32, (b >> 32) as u32];
         h.stream.record(op::PANIC, &args, &[], Some(at.file().as_bytes()));
         h.stream.publish();
     }
+}
+
+static STOPPED: Global<bool> = Global::new();
+
+/// Whether the kernel has reported what stopped it: past its report a bug
+/// panics where it cannot trap (xpute-core status/bug.rs), and that panic is
+/// its way out rather than a second fault.
+pub fn stopped() -> bool {
+    *STOPPED.get(|| false)
 }
 
 /// What the platform keeps under `storage`'s key (host.json).
@@ -115,7 +124,7 @@ pub fn body_read(body: u32, dst: &mut [u8]) {
 
 static HANDHELD: Global<bool> = Global::new();
 
-/// Installs whether the device is a phone or a tablet (shared/lib/browser/handheld).
+/// Installs whether the device is a phone or a tablet (the platform's `HANDHELD`, apps/web/src/platform/web/core.ts).
 pub fn set_handheld(handheld: bool) {
     HANDHELD.set(handheld);
 }
@@ -208,6 +217,22 @@ fn no_heap() -> HeapStat {
 /// Installs the module's allocator's reading.
 pub fn set_heap_stat(stat: fn() -> HeapStat) {
     HEAP.set(stat);
+}
+
+/// Where a bracket says what stopped the kernel (door.rs `Bracket`).
+pub type LastWords = fn(&dyn core::fmt::Display);
+
+static LAST_WORDS: Global<Option<LastWords>> = Global::new();
+
+pub fn set_last_words(say: Option<LastWords>) {
+    LAST_WORDS.set(say);
+}
+
+/// Says `what` stopped the kernel, where the bracket has somewhere to.
+pub fn last_words(what: &dyn core::fmt::Display) {
+    if let Some(say) = *LAST_WORDS.get(|| None) {
+        say(what);
+    }
 }
 
 /// The module's heap as it stands; every word 0 where there is none.

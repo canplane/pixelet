@@ -12,7 +12,7 @@
  */
 
 import { Command, encode_sensor_error, encode_sensor_orientation, encode_sensor_permission, encode_sensor_update, GeolocationErrorCode, PermissionAnswer, Sensor } from "@/kernel/abi/cmd.spec.ts";
-import { CORE_BUILD } from "@/kernel/ipc.ts";
+import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame } from "@/kernel/sched.ts";
 
 interface IOSOrientationEvent extends DeviceOrientationEvent {
@@ -50,7 +50,7 @@ export function geolocation_start(): void {
   geolocation_watch = navigator.geolocation.watchPosition(
     (pos) => {
       const { latitude, longitude, altitude, accuracy, heading } = pos.coords;
-      CORE_BUILD.send(0, Command.SENSOR_UPDATE, encode_sensor_update({ lon: longitude, lat: latitude, altitude, accuracy, heading }));
+      CORE_DOORBELL.send(0, Command.SENSOR_UPDATE, encode_sensor_update({ lon: longitude, lat: latitude, altitude, accuracy, heading }));
       request_frame();
     },
     (err) => {
@@ -64,7 +64,7 @@ export function geolocation_start(): void {
         : err.code === err.TIMEOUT
         ? GeolocationErrorCode.Timeout
         : GeolocationErrorCode.Other;
-      CORE_BUILD.send(0, Command.SENSOR_ERROR, encode_sensor_error({ code }));
+      CORE_DOORBELL.send(0, Command.SENSOR_ERROR, encode_sensor_error({ code }));
       request_frame();
     },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 },
@@ -75,7 +75,7 @@ let orientation_event: string | null = null;
 
 function on_orientation(e: Event): void {
   const o = e as IOSOrientationEvent;
-  CORE_BUILD.send(0, Command.SENSOR_ORIENTATION, encode_sensor_orientation({ webkit_compass_heading: o.webkitCompassHeading ?? null, alpha: o.alpha, beta: o.beta, gamma: o.gamma }));
+  CORE_DOORBELL.send(0, Command.SENSOR_ORIENTATION, encode_sensor_orientation({ webkit_compass_heading: o.webkitCompassHeading ?? null, alpha: o.alpha, beta: o.beta, gamma: o.gamma }));
   request_frame();
 }
 
@@ -89,9 +89,28 @@ export function orientation_listen(): void {
   listen_orientation("ondeviceorientationabsolute" in globalThis ? "deviceorientationabsolute" : "deviceorientation");
 }
 
-export function send_permission(sensor: Sensor, answer: PermissionAnswer): void {
-  CORE_BUILD.send(0, Command.SENSOR_PERMISSION, encode_sensor_permission({ sensor, answer }));
+function send_permission(sensor: Sensor, answer: PermissionAnswer): void {
+  CORE_DOORBELL.send(0, Command.SENSOR_PERMISSION, encode_sensor_permission({ sensor, answer }));
   request_frame();
+}
+
+/** Follows the location permission while the map is up, so a grant made
+ * outside the app — the browser's site settings — reaches the kernel the
+ * moment it is made, since nothing else would ask again after a refusal.
+ * What it returns stops following. */
+export function permission_follow(): () => void {
+  let status: PermissionStatus | null = null;
+  let stopped = false;
+  const on_change = () => send_permission(Sensor.Geolocation, status?.state === "granted" ? PermissionAnswer.Granted : PermissionAnswer.Denied);
+  navigator.permissions?.query({ name: "geolocation" }).then((s) => {
+    if (stopped) return;
+    status = s;
+    s.addEventListener("change", on_change);
+  }).catch(() => {});
+  return () => {
+    stopped = true;
+    status?.removeEventListener("change", on_change);
+  };
 }
 
 /**

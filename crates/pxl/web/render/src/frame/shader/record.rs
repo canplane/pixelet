@@ -259,7 +259,7 @@ struct Head {
 }
 
 /// The vertex entry points a record can name, indexed by VS and kin. The
-/// shell holds the same list against the same numbers (kernel/render/gpu.ts).
+/// shell holds the same list against the same numbers (apps/web/src/platform/web/webgpu.ts).
 pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_coarse"];
 
 /// The same pipeline entered at the coarse boxes' vertex entry point.

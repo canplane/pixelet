@@ -16,7 +16,6 @@ import type * as WebCore from "../../../web/src/platform/web/core.ts";
 import type * as WebDevOverlay from "../../../web/src/platform/web/dev-overlay.tsx";
 import type * as WebGlass from "../../../web/src/platform/web/glass.tsx";
 import type * as WebGpu from "../../../web/src/platform/web/gpu.ts";
-import type * as WebHost from "../../../web/src/platform/web/host.ts";
 import type * as WebImage from "../../../web/src/platform/web/image.ts";
 import type * as WebLocale from "../../../web/src/platform/web/locale.ts";
 import type * as WebOrigin from "../../../web/src/platform/web/origin.ts";
@@ -32,7 +31,6 @@ import * as Core from "./core.ts";
 import * as DevOverlay from "./dev-overlay.tsx";
 import * as Glass from "./glass.tsx";
 import * as Gpu from "./gpu.ts";
-import * as Host from "./host.ts";
 import * as Image from "./image.ts";
 import * as Locale from "./locale.ts";
 import * as Origin from "./origin.ts";
@@ -49,7 +47,6 @@ export const CONFORMS = [
   DevOverlay satisfies typeof WebDevOverlay,
   Glass satisfies typeof WebGlass,
   Gpu satisfies typeof WebGpu,
-  Host satisfies typeof WebHost,
   Image satisfies typeof WebImage,
   Locale satisfies typeof WebLocale,
   Origin satisfies typeof WebOrigin,

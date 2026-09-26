@@ -42,6 +42,11 @@ pub struct Bracket {
     pub clock: fn() -> f64,
     /// The allocator's reading, for the ledger and the heap's row.
     pub heap_stat: fn() -> HeapStat,
+    /// Where a bracket whose process stops with the kernel says what stopped
+    /// it: no host is left to run the report's record, and a panic's text —
+    /// a wgpu validation error's, say — is not in its numbers. None where the
+    /// host outlives the kernel and runs the record (a page).
+    pub last_words: Option<crate::host::LastWords>,
 }
 
 struct State {
@@ -152,16 +157,17 @@ const BOOT_QUANTUM: usize = 9;
 fn boot(b: &Bracket) {
     crate::host::set_clock(b.clock);
     crate::host::set_heap_stat(b.heap_stat);
+    crate::host::set_last_words(b.last_words);
     executor::install();
     // A broken invariant the kernel names reports itself (`bug!`); one core
     // raises — an index past a slice, an `unwrap` of nothing — reports its
     // place alone, the errno being that no invariant said why.
     xpute_core::status::bug::set_report(crate::host::host_bug);
     std::panic::set_hook(Box::new(|info| {
-        // A device's process stops here, and what the panic says — a wgpu
-        // validation error's text, say — is not in the report's numbers.
-        #[cfg(not(target_arch = "wasm32"))]
-        eprintln!("[pxl] {info}");
+        if crate::host::stopped() {
+            return;
+        }
+        crate::host::last_words(info);
         if let Some(at) = info.location() {
             crate::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);
         }
