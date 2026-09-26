@@ -31,7 +31,7 @@ use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::abi::handle::Slots;
-use xpute_runtime::mem::base::{off_of, ptr_at};
+use xpute_runtime::mem::base::{off_of_slice, ptr_at};
 use xpute_runtime::mem::heap::{alloc, free, Block, Guard};
 
 pub const MATERIAL_OBJECT: u8 = 5;
@@ -557,18 +557,17 @@ impl Volumes {
         let band = &self.volumes.get(id).or_bug(Errno::ENOTRECOVERABLE).bands[i];
         let store = &self.stores[band.store];
         let e = &store.extra;
-        let rel = |p: *const u8| off_of(p) as u32;
         self.row = [
             band.band_z as u32,
             store.material as u32,
             store.layer_idx as u32,
             store.sub_cell.map_or(0, |(at, _)| at as u32),
             e.len() as u32,
-            rel(e.col.as_ptr().cast::<u8>()),
-            rel(e.z.as_ptr().cast::<u8>()),
-            rel(e.material.as_ptr().cast::<u8>()),
-            rel(e.layer_idx.as_ptr()),
-            rel(e.sub.as_ptr().cast::<u8>()),
+            off_of_slice(&raw const *e.col) as u32,
+            off_of_slice(&raw const *e.z) as u32,
+            off_of_slice(&raw const *e.material) as u32,
+            off_of_slice(&raw const *e.layer_idx) as u32,
+            off_of_slice(&raw const *e.sub) as u32,
         ];
         &self.row
     }
