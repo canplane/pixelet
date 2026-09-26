@@ -1,0 +1,59 @@
+[package]
+name = "pxl-tool"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+# What a tool that reaches outside the repository needs. Off by default, and
+# each such binary declares it as required, so the gate's clippy and test
+# build the ingest and skip the downloads: they run by hand, once in a while,
+# and their HTTP client would otherwise be compiled by every check for
+# nothing.
+net = ["dep:ureq"]
+# mozjpeg's C, for the link preview alone, off the gate for the same reason.
+jpeg = ["dep:mozjpeg"]
+
+[dependencies]
+# Both directions: the emitted table is laid out by the cell catalog's own
+# channels, and the test reads back the table this writes.
+pxl-spec = { path = "../spec" }
+# A bucket key is the sha256 of an object's bytes.
+sha2 = "0.11"
+# The glb's own JSON chunk, and the texture pack's manifest.
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "ico"] }
+# libwebp itself, for the sheet. `image`'s own WebP support encodes lossless
+# only, and the sheet is quality-92 lossy — 60 tiles of 256² lossless is
+# several megabytes where this is 400 kB, and it is downloaded on every cold
+# start. Same library sharp reaches through libvips.
+webp = "0.3"
+# The star catalog as CDS publishes it.
+flate2 = "1"
+# Third-party URLs, fetched once each: a blocking client, because nothing is
+# there to overlap them with.
+ureq = { version = "2", optional = true }
+# `image`'s own encoder writes the link preview at nearly twice the size —
+# 55 kB where this is 30 kB at quality 88 — and the preview is what every
+# crawler unfurling a link fetches.
+mozjpeg = { version = "0.10", optional = true }
+
+[[bin]]
+name = "download_texture_pack"
+required-features = ["net"]
+
+[[bin]]
+name = "download_moon"
+required-features = ["net"]
+
+[[bin]]
+name = "bake_stars"
+required-features = ["net"]
+
+[[bin]]
+name = "render_brand"
+required-features = ["jpeg"]

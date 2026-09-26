@@ -56,6 +56,17 @@
     "bake:poi": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_poi_tiles -- \"$@\"' --",
     "bake:geocode": "sh -c '[ -f .env ] && set -a && . ./.env && set +a; exec cargo run --manifest-path crates/Cargo.toml --profile server --bin bake_geocode_tiles -- \"$@\"' --",
 
+    // ── Make what the tree ships ──
+    // pxl-tool's binaries, each writing files that are committed or uploaded.
+    // After any change under asset/: out/asset for the bucket, and both tables.
+    "ingest:asset": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --bin ingest_asset",
+    // By hand, when a source outside the repository or under apps/web/brand
+    // changes; each is gated by the feature its dependency is behind.
+    "download:pack": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --features net --bin download_texture_pack",
+    "download:moon": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --features net --bin download_moon",
+    "bake:stars": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --features net --bin bake_stars --",
+    "render:brand": "cargo run --manifest-path crates/Cargo.toml -p pxl-tool --features jpeg --bin render_brand",
+
     // ── Ship it ──
     "build:wasm": "deno task --cwd apps/web build:wasm",
     "build:web": "deno task --cwd apps/web build",
@@ -77,7 +88,7 @@
     // passes it; the host pass is what compiles those. geo-bake runs twice
     // because `serve` gates the dev tile server, and pxl-wasm twice because
     // the published module is built without `dev` (build-wasm.ts).
-    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -- -D warnings && cargo clippy --manifest-path asset/script/Cargo.toml --all-targets -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings",
+    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings",
     // Before anything compiles: a Rust version written twice is a binary
     // built on a compiler the gate never ran.
     "check:toolchain": "./script/check-toolchain.ts",
@@ -88,13 +99,13 @@
     // The write half of it: the same generator, allowed to touch the tree.
     "spec": "./script/spec.ts --write",
 
-    "test": "deno task test:web && deno task test:xpute && deno task test:rust && deno task test:asset",
+    "test": "deno task test:web && deno task test:xpute && deno task test:rust",
     "test:web": "deno task --cwd apps/web test",
     "test:xpute": "deno test -A packages/xpute/core/src && deno test -A packages/xpute/runtime/src",
-    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api && cargo test --manifest-path crates/Cargo.toml -p pxl-kernel --no-default-features && cargo test --manifest-path crates/Cargo.toml -p pxl-geo-bake --features serve",
-    // Every shipped model measured from its file and held against the table the
-    // ingest wrote. The table is committed, and it has been wrong by hand before.
-    "test:asset": "cargo test --manifest-path asset/script/Cargo.toml",
+    // pxl-tool's measures every shipped model from its file and holds it
+    // against the table the ingest wrote. The table is committed, and it has
+    // been wrong by hand before.
+    "test:rust": "cargo test --manifest-path crates/Cargo.toml -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool && cargo test --manifest-path crates/Cargo.toml -p pxl-kernel --no-default-features && cargo test --manifest-path crates/Cargo.toml -p pxl-geo-bake --features serve",
 
     "lint": "deno lint",
 

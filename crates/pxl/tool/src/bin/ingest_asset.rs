@@ -1,4 +1,4 @@
-// ingest-asset/ingest_asset.rs
+// pxl-tool/bin/ingest_asset.rs
 
 //! Every shipped asset into the form the bucket holds and the catalogs name:
 //! one object per file, named by its own path with a hash of its bytes in the
@@ -20,18 +20,16 @@
 //! `asset/cube/{terrain,block}` composed into a sheet and encoded once
 //! (sheet.rs).
 //!
-//!   cargo run --manifest-path asset/script/Cargo.toml
-
-mod glb;
-mod sheet;
-mod table;
+//!   deno task ingest:asset
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use sha2::{Digest, Sha256};
 
-use crate::table::{Row, Sheet};
+use pxl_tool::asset::table::{Row, Sheet};
+use pxl_tool::asset::{glb, sheet, table};
+use pxl_tool::root;
 
 /// What the bucket prefix for an asset is; a key is this over the asset's own
 /// path. Mirrored by the Worker's `KEY_RE` and by the shell's `asset_url`.
@@ -44,10 +42,6 @@ const KEY_PREFIX: &str = "asset/";
 /// — so what it buys is only that one file's next version cannot land on the
 /// name its last one had.
 const KEY_HEX: usize = 12;
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap_or_else(|_| PathBuf::from("."))
-}
 
 /// The asset tree as the table walks it: every `.glb` and `.png`, sorted by
 /// path.
@@ -98,10 +92,6 @@ fn write_formatted(path: &Path, text: &str) -> Result<(), String> {
     let mut cmd = if rust {
         let mut c = Command::new("rustfmt");
         c.args(["--edition", "2021", "--emit", "stdout", "--config-path"]).arg(root().join("rustfmt.toml"));
-        // The table is formatted with the toolchain the tree is checked with,
-        // not this script's. A single-file script is nightly-only, and rustup
-        // exports that choice to every child — nightly carries no rustfmt.
-        c.env_remove("RUSTUP_TOOLCHAIN");
         c
     } else {
         let mut c = Command::new("deno");

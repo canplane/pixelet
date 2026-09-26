@@ -34,6 +34,7 @@ members = [
   "pxl/server/geo",
   "pxl/server/api",
   "pxl/server/geo-bake",
+  "pxl/tool",
 ]
 
 # Why libm is not pinned, which is pixelet's answer and not xpute's: it was

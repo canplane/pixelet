@@ -1,4 +1,4 @@
-// ingest-asset/glb.rs
+// pxl-tool/asset/glb.rs
 
 //! A model's size, measured from the file rather than typed into a catalog.
 //!

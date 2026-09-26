@@ -195,7 +195,7 @@ jobs:
 
       # Everything the bundle is built from. A whitelist rather than a list of
       # what to skip, because the set that does not ship is the one that keeps
-      # growing — `issue/`, `infra/`, `asset/script/` and the rest — and a root
+      # growing — `issue/`, `infra/`, `asset/` and the rest — and a root
       # forgotten from a skip list is a republish nobody asked for.
       #
       # It used to run on every green push, which was right while a rebuild

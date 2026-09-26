@@ -128,7 +128,7 @@ runtime       │ @xpute/runtime│ two ends   │ xpute-runtime │  ┘
 model                 │   spec/ ─writes─▶  │ pxl-spec      │ ◀──────────┤ pxl-geo      │  forward search
                       │     │              └───────┬───────┘            │ pxl-api      │  the app's root
                       │     │              ┌───────▼───────┐            │ pxl-geo-bake │  the three bakes
-view                  │     │              │ pxl-render    │            │ ingest-asset │  asset/script
+view                  │     │              │ pxl-render    │            │ pxl-tool     │  ingest, bakes
                       │     │              └───────┬───────┘            └──────┬───────┘
                       │     │              ┌───────▼───────┐            pxl-server · pxl-geo-spec
 kernel                │     │              │ pxl-kernel    │            beneath them, no model
@@ -153,7 +153,7 @@ app           │ apps/web  *.spec.ts │◀────────────
 | `pxl-geo`       | The world's server. Forward search — the one route that queries a database at request time.                                                      |
 | `pxl-api`       | The application's server.                                                                                                                        |
 | `pxl-geo-bake`  | The three offline bakes — terrain, POI, geocode — and, behind a feature, the dev tile server.                                                    |
-| `ingest-asset`  | Hashes `asset/` into the bucket's shape and writes the asset tables that `pxl-spec` and the shell carry. Its own workspace.                      |
+| `pxl-tool`      | Hashes `asset/` into the bucket's shape and writes the asset tables `pxl-spec` and the shell carry; bakes the stars, the Moon, the brand.        |
 
 The servers, the bakes and the asset ingest all compile the model, so they are crates. The Overture and elevation ingests move a provider's columns into Postgres columns and touch no model, so they are scripts under `infra/geo/`. The shell is TypeScript because it decides nothing about the world; what it needs of the model — catalogs, ABI enums, routes — is generated into `apps/web/src/**/*.spec.ts` from the same JSON the Rust is generated from.
 
@@ -369,5 +369,5 @@ Everything a build ships is decided at build time, as JSON under `spec/` grouped
 A catalog is never sent. Both sides compile it, so a message carrying it would be a program telling itself what it already knows. Where bytes do cross — a published page, a saved blob — the layout is the model's and the version is in the envelope: the path, or the storage key.
 
 - **Cubes and decor kinds** are numbers in `spec/pxl/spec/cell/` (`cube_type.json`, `color.json`, `decor.json`), and the number is what the object store writes.
-- **Models** are named by path under `asset/` in the catalog that uses them — each decor kind's variants, a model and a skin each (`pxl-kernel layer/decor/kind/`), each character group's `keys`, `models`, `skin` and `size` (`spec/pxl/web/kernel/layer/character/variant.json`). A path resolves to a bucket key and a measured extent through the asset table `ingest-asset` writes (`pxl-spec asset/ingested.spec.rs`, `apps/web/src/catalog/asset/ingested.spec.ts`), naming every model, skin and texture by its own path with a hash of its bytes in the stem — `asset/actor/kenney_cube_pets/beaver-20f91809e69c.glb`, the way a bundler names a chunk — and measuring each glb's bounds. Nothing imports a model or an image; the client fetches a key, the same key from `./out/asset` in development and from R2 in production.
+- **Models** are named by path under `asset/` in the catalog that uses them — each decor kind's variants, a model and a skin each (`pxl-kernel layer/decor/kind/`), each character group's `keys`, `models`, `skin` and `size` (`spec/pxl/web/kernel/layer/character/variant.json`). A path resolves to a bucket key and a measured extent through the asset table `pxl-tool`'s ingest writes (`pxl-spec asset/ingested.spec.rs`, `apps/web/src/catalog/asset/ingested.spec.ts`), naming every model, skin and texture by its own path with a hash of its bytes in the stem — `asset/actor/kenney_cube_pets/beaver-20f91809e69c.glb`, the way a bundler names a chunk — and measuring each glb's bounds. Nothing imports a model or an image; the client fetches a key, the same key from `./out/asset` in development and from R2 in production.
 - **The texture pack** is one table (`pxl-spec asset/texture.rs`: which image a cube type wears on which face) and one WebP sheet in the bucket, from which the client fills its layer array one layer at a time. A cube's color is `color.json`'s, what the coarse tiers draw; a pack decorates it.

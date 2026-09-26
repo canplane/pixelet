@@ -1,4 +1,4 @@
-// ingest-asset/pack.rs
+// pxl-tool/asset/pack.rs
 
 //! The texture pack's manifest, and what one entry becomes on disk.
 //!
@@ -171,11 +171,7 @@ pub fn flatten_alpha(data: &mut [u8], palette_hex: Option<&str>) {
                 n += 1;
             }
         }
-        if n > 0 {
-            [(r / n) as u8, (g / n) as u8, (b / n) as u8]
-        } else {
-            [200, 200, 200]
-        }
+        [r, g, b].map(|sum| sum.checked_div(n).map_or(200, |mean| mean as u8))
     });
 
     for px in data.as_chunks_mut::<4>().0 {

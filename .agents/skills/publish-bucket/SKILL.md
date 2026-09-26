@@ -10,7 +10,7 @@ that is not the app itself. One Cloudflare Worker (`apps/web/cloudflare-worker/i
 `apps/web/wrangler.jsonc`) serves the built app and reads the bucket under
 `/tile/*` and `/asset/*` on the app's own hostname — same-origin, no CORS, and the
 client's paths stay relative. Producing what goes in is
-[bake-tiles](../bake-tiles/SKILL.md) and `asset/script`'s own ingest; this is
+[bake-tiles](../bake-tiles/SKILL.md) and `deno task ingest:asset`; this is
 how it gets there and how you know it arrived.
 
 ## What the bucket holds
@@ -154,7 +154,7 @@ set. The monthly workflow runs this refresh; it does not publish POI.
 ### Assets
 
 ```bash
-cargo run --manifest-path asset/script/Cargo.toml
+deno task ingest:asset
 # -> ./out/asset/<path>/<stem>-<12 hex>.<ext>, the tree the bucket holds, and
 #    regenerates crates/pxl/spec/src/asset/ingested.spec.rs and
 #    apps/web/src/catalog/asset/ingested.spec.ts

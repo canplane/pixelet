@@ -28,7 +28,7 @@ use crate::gpu::pipeline::Pipelines;
 use crate::mesh::paint::palette::shader_meta::GROUND_LAYER_META;
 use crate::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
 
-/// The tile edge in texels (ingest-asset/pack.rs's TILE_SIZE).
+/// The tile edge in texels (pxl-tool/asset/pack.rs's TILE_SIZE).
 pub const LAYER_TEX_SZ: u32 = 256;
 
 /// Levels a texture of `width` by `height` has, down to one texel.
