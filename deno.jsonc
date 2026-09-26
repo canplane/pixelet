@@ -79,13 +79,18 @@
     "smoke": "./script/smoke.ts",
 
     // ── The gate ──
-    "check": "deno task check:fmt && deno task check:toolchain && deno task check:rules && deno task check:web && deno task check:xpute && deno task check:rust && deno task check:spec",
+    "check": "deno task check:fmt && deno task check:toolchain && deno task check:rules && deno task check:web && deno task check:native && deno task check:xpute && deno task check:rust && deno task check:spec",
     // What check:rust's own `cargo fmt --check` does for the Rust: everything
     // Deno formats — TypeScript, JSON, JSONC, Markdown — held to one shape.
     // Without it the two languages were gated unevenly, and the half nothing
     // ran was where a config broke and sat broken.
     "check:fmt": "deno fmt --check",
     "check:web": "deno task --cwd apps/web check",
+    // The device's own files, which check:web never reaches: the shell is
+    // checked with `@platform/` as the web's, so this checks the device's
+    // modules against their own imports and, through platform/conform.ts,
+    // against the shape the web's export.
+    "check:native": "deno check apps/native/src",
     "check:xpute": "deno check packages/xpute/core/src/**/*.ts && deno check packages/xpute/runtime/src/**/*.ts",
     // The wasm32 pass builds libraries only, so a broken `.test.rs` still
     // passes it; the host pass is what compiles those. geo-bake runs twice

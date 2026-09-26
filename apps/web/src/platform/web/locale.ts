@@ -1,10 +1,11 @@
 // @pxl/web/platform/web/locale.ts
 
+import type { LanguageDetectorModule } from "i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 
 /** Which language the app opens in: the one last picked, kept in the
  * browser's storage, and otherwise the browser's own. */
-export const languageDetector = new LanguageDetector(null, {
+export const languageDetector: LanguageDetectorModule = new LanguageDetector(null, {
   order: ["localStorage", "navigator"],
   caches: ["localStorage"],
   lookupLocalStorage: "pxl:lang",
