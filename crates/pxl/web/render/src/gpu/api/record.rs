@@ -145,6 +145,13 @@ impl Gpu {
         put(op::ENCODER, &[id]);
     }
 
+    /// A region of `source`'s first mip at (x, y) into `target`'s `layer` at
+    /// (tx, ty), recorded into `encoder`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn copy_texture(&self, encoder: u32, source: u32, x: u32, y: u32, target: u32, tx: u32, ty: u32, layer: u32, width: u32, height: u32) {
+        put(op::COPY_TEXTURE, &[encoder, source, x, y, target, tx, ty, layer, width, height]);
+    }
+
     /// A render pass: color view, color load, clear r g b a
     /// (f32 bits), depth view, depth load, depth clear (f32 bits), query set,
     /// the begin and end timestamp indices; NONE or 0 for what is absent.

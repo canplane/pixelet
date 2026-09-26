@@ -129,7 +129,8 @@
     "QUERY_SET": { "$value": 27, "$doc": ["id, count"] },
     "TIMESTAMPS": { "$value": 28, "$doc": ["encoder, query set, written: the pairs of the spans set in `written` read once the GPU has them"] },
     "PAINT": { "$value": 29, "$doc": ["a 2D paint stream (`paint`) run over the host's scratch"] },
-    "PAINT_COPY": { "$value": 30, "$doc": ["texture, x, y, layer, width, height: the scratch's corner into a texture's layer"] }
+    "PAINT_COPY": { "$value": 30, "$doc": ["texture, x, y, layer, width, height: the scratch's corner into a texture's layer"] },
+    "COPY_TEXTURE": { "$value": 31, "$doc": ["encoder, source, x, y, target, x, y, layer, width, height: a region of one texture's first mip into another's layer"] }
   },
   "paint": {
     "$type": "u32",
@@ -159,8 +160,7 @@
     "FILL": 19,
     "STROKE": 20,
     "FILL_RECT": { "$value": 21, "$doc": ["x, y, w, h"] },
-    "FILL_TEXT": { "$value": 22, "$doc": ["x, y, then the text: its bytes' count and its UTF-8, padded to a word"] },
-    "IMAGE": { "$value": 23, "$doc": ["image, sx, sy, sw, sh, dx, dy, dw, dh"] }
+    "FILL_TEXT": { "$value": 22, "$doc": ["x, y, then the text: its bytes' count and its UTF-8, padded to a word"] }
   },
   "record": {
     "$type": "u32",

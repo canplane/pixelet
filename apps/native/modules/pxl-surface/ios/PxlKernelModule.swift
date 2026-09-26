@@ -6,9 +6,10 @@ import PxlNative
 /// The kernel as the shell reaches it on a device (apps/native/src/platform/
 /// core.ts): its memory, handed over as one ArrayBuffer over the region the
 /// core took — no copy, so a ring the shell writes is the ring the kernel
-/// reads — its doorbell, its device and the surfaces it draws into. All run on
-/// the JavaScript thread, where the shell calls them, which makes it the
-/// kernel's one thread.
+/// reads — its doorbell, its device, the surfaces it draws into and the
+/// images it uploads. The shell calls them on the JavaScript thread, one at a
+/// time; the core runs each on its own thread while this one waits
+/// (crates/pxl/web/native/src/thread.rs), and the images' decode off both.
 public class PxlKernelModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PxlKernel")
@@ -41,6 +42,15 @@ public class PxlKernelModule: Module {
 
     Function("surfaceUnbind") { (handle: UInt32) in
       pxl_surface_unbind(handle)
+    }
+
+    /// Decodes a PNG or a WebP and holds it for the renderer: its handle, or 0
+    /// when it does not decode. Async, so it runs on the module's queue rather
+    /// than the JavaScript thread: a large image costs no turn.
+    AsyncFunction("imageHold") { (file: Data) -> UInt32 in
+      file.withUnsafeBytes { bytes in
+        pxl_image_hold(bytes.bindMemory(to: UInt8.self).baseAddress, UInt32(bytes.count))
+      }
     }
   }
 }

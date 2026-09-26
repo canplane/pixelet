@@ -142,23 +142,6 @@ impl Paint {
         }
     }
 
-    /// `image`'s rectangle (sx, sy, sw, sh) drawn into (dx, dy, dw, dh).
-    #[allow(clippy::too_many_arguments)]
-    pub fn image(&mut self, image: u32, sx: f32, sy: f32, sw: f32, sh: f32, dx: f32, dy: f32, dw: f32, dh: f32) {
-        self.push(&[
-            op::IMAGE,
-            image,
-            sx.to_bits(),
-            sy.to_bits(),
-            sw.to_bits(),
-            sh.to_bits(),
-            dx.to_bits(),
-            dy.to_bits(),
-            dw.to_bits(),
-            dh.to_bits(),
-        ]);
-    }
-
     /// Runs the stream, and starts it over.
     pub fn run(&mut self, g: &Gpu) {
         g.paint(&self.ops[..self.len]);

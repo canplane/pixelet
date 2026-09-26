@@ -166,6 +166,8 @@ pub mod op {
     pub const PAINT: u32 = 29;
     /// texture, x, y, layer, width, height: the scratch's corner into a texture's layer
     pub const PAINT_COPY: u32 = 30;
+    /// encoder, source, x, y, target, x, y, layer, width, height: a region of one texture's first mip into another's layer
+    pub const COPY_TEXTURE: u32 = 31;
     pub const KEYS: &[&str] = &[
         "RESET",
         "BUFFER",
@@ -197,6 +199,7 @@ pub mod op {
         "TIMESTAMPS",
         "PAINT",
         "PAINT_COPY",
+        "COPY_TEXTURE",
     ];
 }
 
@@ -242,8 +245,6 @@ pub mod paint {
     pub const FILL_RECT: u32 = 21;
     /// x, y, then the text: its bytes' count and its UTF-8, padded to a word
     pub const FILL_TEXT: u32 = 22;
-    /// image, sx, sy, sw, sh, dx, dy, dw, dh
-    pub const IMAGE: u32 = 23;
     pub const KEYS: &[&str] = &[
         "SIZE",
         "SAVE",
@@ -267,7 +268,6 @@ pub mod paint {
         "STROKE",
         "FILL_RECT",
         "FILL_TEXT",
-        "IMAGE",
     ];
 }
 

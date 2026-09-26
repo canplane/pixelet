@@ -10,16 +10,80 @@
 //! A call that names an object the device does not hold does nothing, as the
 //! page's does no more than log a WebGPU error: an object a refused call never
 //! made, or a surface's texture a frame could not have, stays missing until
-//! the renderer makes it again. The device's timestamps, the 2D paint and a
-//! decoded image's texture are not here yet; the device says it has no
-//! timestamps, so the renderer asks for none.
+//! the renderer makes it again. The device's timestamps and the 2D paint are
+//! not here yet; the device says it has no timestamps, so the renderer asks
+//! for none.
 
 use std::num::NonZeroU64;
+use std::sync::Mutex;
 
 use xpute_runtime::abi::handle::handle_slot;
 use xpute_runtime::global::Global;
 
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, record, resource};
+
+/// An image a load holds: the file's own pixels, RGBA, top row first, no
+/// color conversion and no premultiplied alpha, as the page's bitmap is.
+struct Image {
+    width: u32,
+    height: u32,
+    pixels: Box<[u8]>,
+}
+
+/// The images loads hold, at their handles; 0 is none. Held for the app's
+/// life, as the page's bitmaps are: the renderer may make a texture of one
+/// again, and names it only by its handle. Behind a lock, since an image is
+/// decoded off the kernel's thread and read on it.
+static IMAGES: Mutex<Vec<Option<Image>>> = Mutex::new(Vec::new());
+
+/// Decodes a PNG or a WebP and holds it for the renderer: the handle the
+/// kernel names it by, or none for a file that does not decode. Runs on any
+/// thread.
+pub fn hold_image(file: &[u8]) -> Option<u32> {
+    let image = if file.starts_with(b"RIFF") { decode_webp(file)? } else { decode_png(file)? };
+    let mut images = IMAGES.lock().unwrap_or_else(|e| e.into_inner());
+    if images.is_empty() {
+        images.push(None);
+    }
+    images.push(Some(image));
+    Some(images.len() as u32 - 1)
+}
+
+fn decode_png(file: &[u8]) -> Option<Image> {
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(file));
+    // Palettes and low bit depths expanded, sixteen bits cut to eight: what
+    // is left is gray, gray and alpha, RGB or RGBA, a byte a channel.
+    decoder.set_transformations(png::Transformations::normalize_to_color8());
+    let mut reader = decoder.read_info().ok()?;
+    let mut buf = vec![0; reader.output_buffer_size()?];
+    let frame = reader.next_frame(&mut buf).ok()?;
+    let at = &buf[..frame.buffer_size()];
+    let pixels: Box<[u8]> = match frame.color_type {
+        png::ColorType::Rgba => at.into(),
+        png::ColorType::Rgb => at.as_chunks::<3>().0.iter().flat_map(|&[r, g, b]| [r, g, b, 255]).collect(),
+        png::ColorType::GrayscaleAlpha => at.as_chunks::<2>().0.iter().flat_map(|&[l, a]| [l, l, l, a]).collect(),
+        png::ColorType::Grayscale => at.iter().flat_map(|&l| [l, l, l, 255]).collect(),
+        png::ColorType::Indexed => return None,
+    };
+    Some(Image {
+        width: frame.width,
+        height: frame.height,
+        pixels,
+    })
+}
+
+fn decode_webp(file: &[u8]) -> Option<Image> {
+    let mut decoder = image_webp::WebPDecoder::new(std::io::Cursor::new(file)).ok()?;
+    let (width, height) = decoder.dimensions();
+    let mut buf = vec![0; decoder.output_buffer_size()?];
+    decoder.read_image(&mut buf).ok()?;
+    let pixels: Box<[u8]> = if decoder.has_alpha() {
+        buf.into()
+    } else {
+        buf.as_chunks::<3>().0.iter().flat_map(|&[r, g, b]| [r, g, b, 255]).collect()
+    };
+    Some(Image { width, height, pixels })
+}
 
 /// What the device answers the kernel with (the shell's GPU_CREATE).
 #[derive(Clone, Copy, Debug)]
@@ -384,8 +448,41 @@ impl Gpu {
         d.put(id, Object::Texture(t));
     }
 
-    /// Not yet on a device: the shell refuses every image, so none is named.
-    pub fn image_texture(&self, _id: u32, _image: u32) {}
+    /// A texture of an image a load holds, at the image's size, with the
+    /// image in it. The image was held before the kernel heard of it, so one
+    /// the kernel names is there.
+    pub fn image_texture(&self, id: u32, image: u32) {
+        let Some(d) = device() else { return };
+        let images = IMAGES.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(Some(image)) = images.get(image as usize) else { return };
+        let size = wgpu::Extent3d {
+            width: image.width,
+            height: image.height,
+            depth_or_array_layers: 1,
+        };
+        let t = d.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        d.queue.write_texture(
+            t.as_image_copy(),
+            &image.pixels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(image.width * 4),
+                rows_per_image: Some(image.height),
+            },
+            size,
+        );
+        drop(images);
+        d.put(id, Object::Texture(t));
+    }
 
     #[allow(clippy::too_many_arguments)]
     pub fn view(&self, id: u32, texture: u32, dim: u32, base_mip: u32, mips: u32, base_layer: u32, layers: u32) {
@@ -612,6 +709,37 @@ impl Gpu {
         let Some(d) = device() else { return };
         let e = d.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         d.put(id, Object::Encoder(e));
+    }
+
+    /// A region of `source`'s first mip at (x, y) into `target`'s `layer` at
+    /// (tx, ty), recorded into `encoder`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn copy_texture(&self, encoder: u32, source: u32, x: u32, y: u32, target: u32, tx: u32, ty: u32, layer: u32, width: u32, height: u32) {
+        let Some(d) = device() else { return };
+        let Some(e) = d.take(encoder) else { return };
+        let Object::Encoder(mut e) = e else { return };
+        if let (Some(Object::Texture(s)), Some(Object::Texture(t))) = (d.get(source), d.get(target)) {
+            e.copy_texture_to_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: s,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d { x, y, z: 0 },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::TexelCopyTextureInfo {
+                    texture: t,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d { x: tx, y: ty, z: layer },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
+        d.put(encoder, Object::Encoder(e));
     }
 
     /// A render pass: color view, color load, clear r g b a (f32 bits), depth

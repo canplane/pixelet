@@ -1,7 +1,9 @@
 // pxl-native/include/pxl_native.h
 
 // What the device app calls in the kernel (src/lib.rs), declared for its
-// Swift: the module map beside this makes it `import PxlNative`.
+// Swift: the module map beside this makes it `import PxlNative`. Whatever
+// reaches the kernel runs on the kernel's own thread while the caller waits
+// (src/thread.rs), so the caller may be any thread, one call at a time.
 
 #pragma once
 
@@ -19,6 +21,11 @@ uint8_t *pxl_memory(uint32_t *bytes);
 // times its passes: 0 when it is open, -1 when the system has none.
 int32_t pxl_gpu_open(uint32_t *align, uint32_t *timestamps);
 
+// Decodes the PNG or WebP of `bytes` bytes at `file` and holds it for the
+// renderer: the handle the kernel names it by, or 0 when it does not decode.
+// Any thread.
+uint32_t pxl_image_hold(const uint8_t *file, uint32_t bytes);
+
 // The view's CAMetalLayer is there to draw into (main thread); the view keeps
 // it until it detaches.
 void pxl_surface_attach(void *layer);
@@ -26,6 +33,6 @@ void pxl_surface_detach(void);
 
 // Binds the kernel's surface `handle` to the view's layer: 0, or -1 when no
 // view has left one, -2 when no device is open, -3 when the system would not
-// make a surface of the layer. Called on the kernel's thread, as unbind is.
+// make a surface of the layer.
 int32_t pxl_surface_bind(uint32_t handle);
 void pxl_surface_unbind(uint32_t handle);

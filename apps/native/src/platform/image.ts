@@ -1,13 +1,19 @@
 // @pxl/native/platform/image.ts
 
 /**
- * An image the renderer uploads, on a device: decoded by the core itself once
- * it draws, since the pixels it uploads are the file's own. Until then none
- * is held here, and the kernel hears each as refused.
+ * An image the renderer uploads, decoded where the device is: on a device, by
+ * the core itself, off the JavaScript thread, into the pixels its GPU copies
+ * from (crates/pxl/web/render/src/gpu/api/device.rs).
  */
 
 import type { u32 } from "@xpute/core/abi/word.ts";
+import { PXL_KERNEL } from "./core.ts";
 
-export function hold_image(_res: Response): Promise<u32 | null> {
-  return Promise.resolve(null);
+/** Decodes a response's image and holds it for the renderer: the handle the
+ * kernel names it by, or none for a file the core does not decode. The
+ * file's own pixels, top row first, no color conversion and no premultiplied
+ * alpha. */
+export async function hold_image(res: Response): Promise<u32 | null> {
+  const handle = await PXL_KERNEL.imageHold(new Uint8Array(await res.arrayBuffer()));
+  return handle === 0 ? null : handle;
 }

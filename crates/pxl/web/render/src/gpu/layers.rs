@@ -21,15 +21,15 @@ use pxl_spec::asset::texture::{shipped_texture_tile, CubeFace, TileOrigin, SHIPP
 use pxl_spec::cell::object::{block_cubes, placeable_cube_rgb, terrain_style_cube_for, PlaceableCube};
 
 use crate::frame::shader::record::PIPELINE_MIPS;
-use crate::gpu::api::{buffer_usage, bytes, object, texture_usage, Gpu};
+use crate::gpu::api::{buffer_usage, bytes, object, release, texture_usage, Gpu};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
-use crate::gpu::paint::Paint;
 use crate::gpu::pipeline::Pipelines;
 use crate::mesh::paint::palette::shader_meta::GROUND_LAYER_META;
 use crate::mesh::paint::palette::tex_array::OBJECT_LAYER_IDX;
 
-/// The tile edge in texels (pxl-tool/asset/pack.rs's TILE_SIZE).
-pub const LAYER_TEX_SZ: u32 = 256;
+/// A layer's edge in texels: a tile of the shipped sheet, copied into its
+/// layer texel for texel.
+pub const LAYER_TEX_SZ: u32 = SHIPPED_SHEET.cell;
 
 /// Levels a texture of `width` by `height` has, down to one texel.
 pub fn mip_levels(width: u32, height: u32) -> u32 {
@@ -201,14 +201,16 @@ impl Layers {
         }
         let Some(image) = sheet() else { return };
         let (tiles, table) = plan();
-        let (cell, size) = (SHIPPED_SHEET.cell as f32, LAYER_TEX_SZ as f32);
+        let texture = object();
+        g.image_texture(texture, image);
+        let encoder = object();
+        g.encoder(encoder);
         for (slot, tile) in tiles.iter().enumerate() {
-            let mut p = Paint::new();
-            p.size(LAYER_TEX_SZ, LAYER_TEX_SZ);
-            p.image(image, tile.x as f32, tile.y as f32, cell, cell, 0.0, 0.0, size, size);
-            p.run(g);
-            g.paint_copy(self.tex, 0, 0, slot as u32, LAYER_TEX_SZ, LAYER_TEX_SZ);
+            g.copy_texture(encoder, texture, tile.x, tile.y, self.tex, 0, 0, slot as u32, LAYER_TEX_SZ, LAYER_TEX_SZ);
         }
+        g.submit(encoder);
+        release(encoder);
+        release(texture);
         mips.build(g, self.tex, self.levels, 0, self.slots);
         g.write_buffer(self.table, 0, bytes(&table));
         self.loaded = true;

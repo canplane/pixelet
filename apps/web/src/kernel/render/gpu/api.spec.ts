@@ -149,6 +149,8 @@ export const op = {
   PAINT: 29 as number,
   /** texture, x, y, layer, width, height: the scratch's corner into a texture's layer */
   PAINT_COPY: 30 as number,
+  /** encoder, source, x, y, target, x, y, layer, width, height: a region of one texture's first mip into another's layer */
+  COPY_TEXTURE: 31 as number,
 } as const;
 
 /** The 2D paint stream's operations, over the host's scratch canvas: an operation
@@ -193,8 +195,6 @@ export const paint = {
   FILL_RECT: 21 as number,
   /** x, y, then the text: its bytes' count and its UTF-8, padded to a word */
   FILL_TEXT: 22 as number,
-  /** image, sx, sy, sw, sh, dx, dy, dw, dh */
-  IMAGE: 23 as number,
 } as const;
 
 /** A pipeline record's codes (shader.rs), and HEAD, the words it opens with

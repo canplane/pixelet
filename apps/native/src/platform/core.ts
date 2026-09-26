@@ -24,6 +24,9 @@ export interface PxlKernel {
    * left one yet. */
   surfaceBind(handle: u32): boolean;
   surfaceUnbind(handle: u32): void;
+  /** Decodes a PNG or a WebP off the JavaScript thread and holds it for the
+   * renderer: its handle, or 0 when it does not decode. */
+  imageHold(file: Uint8Array): Promise<u32>;
 }
 
 export const PXL_KERNEL: PxlKernel = requireNativeModule<PxlKernel>("PxlKernel");

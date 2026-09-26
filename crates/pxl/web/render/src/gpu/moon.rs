@@ -2,7 +2,7 @@
 
 //! The Moon's face on the device: the near side's reflectance
 //! (asset/sky/moon.png, cut from the CGI Moon Kit of NASA's Scientific
-//! Visualization Studio by pxl-tool/bin/download_moon.rs), painted once into
+//! Visualization Studio by pxl-tool/bin/download_moon.rs), copied once into
 //! a texture with its mip chain for the sky pass to read
 //! (frame/shader/sky.wgsl's moon_disc).
 //!
@@ -14,12 +14,12 @@
 //!
 //! What it costs: 1.4 MB on the device, a 512 × 512 level and its chain.
 
-use crate::gpu::api::{object, texture_usage, Gpu};
+use crate::gpu::api::{object, release, texture_usage, Gpu};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format};
 use crate::gpu::layers::{mip_levels, Mips};
-use crate::gpu::paint::Paint;
 
-/// The face's side in texels, the map's.
+/// The face's side in texels, the map's: the shipped image's (asset/sky/
+/// moon.png), which is copied in whole.
 const MOON_TEX_SZ: u32 = 512;
 
 pub struct MoonMap {
@@ -27,7 +27,7 @@ pub struct MoonMap {
     pub view: u32,
     pub sampler: u32,
     levels: u32,
-    /// The map painted in.
+    /// The face copied in.
     pub loaded: bool,
 }
 
@@ -50,19 +50,21 @@ impl MoonMap {
         }
     }
 
-    /// Paints the face in once it has arrived: `image` asks for it, until it
-    /// has been painted.
+    /// Copies the face in once it has arrived: `image` asks for it, until it
+    /// has been copied.
     pub fn step(&mut self, g: &Gpu, mips: &Mips, image: fn() -> Option<u32>) {
         if self.loaded {
             return;
         }
         let Some(image) = image() else { return };
-        let size = MOON_TEX_SZ as f32;
-        let mut p = Paint::new();
-        p.size(MOON_TEX_SZ, MOON_TEX_SZ);
-        p.image(image, 0.0, 0.0, size, size, 0.0, 0.0, size, size);
-        p.run(g);
-        g.paint_copy(self.texture, 0, 0, 0, MOON_TEX_SZ, MOON_TEX_SZ);
+        let face = object();
+        g.image_texture(face, image);
+        let encoder = object();
+        g.encoder(encoder);
+        g.copy_texture(encoder, face, 0, 0, self.texture, 0, 0, 0, MOON_TEX_SZ, MOON_TEX_SZ);
+        g.submit(encoder);
+        release(encoder);
+        release(face);
         mips.build(g, self.texture, self.levels, 0, 1);
         self.loaded = true;
     }

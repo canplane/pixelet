@@ -6,11 +6,18 @@
 //! system (memory.rs), the clock is the device's, and the renderer draws
 //! rather than recording its calls for a host to run.
 //!
-//! Called from the app through the C ABI (include/pxl_native.h), on one
-//! thread, one call at a time — the single thread `Global` is sound for.
+//! Called from the app through the C ABI (include/pxl_native.h), one call at
+//! a time, and run on the kernel's own thread (thread.rs) — the single
+//! thread `Global` is sound for. What reaches nothing a `Global` holds stays
+//! on the caller's: a view leaving its layer (surface.rs) and an image
+//! decoded (image.rs), each behind a lock of its own.
 
+mod image;
 mod memory;
 mod surface;
+mod thread;
+
+use thread::on_kernel;
 
 use std::sync::OnceLock;
 use std::time::Instant;
@@ -43,7 +50,7 @@ fn bracket() -> Bracket {
 /// the kernel wants the next. The first lays the memory out.
 #[no_mangle]
 pub extern "C" fn pxl_interrupt(quota_ms: f64) -> f64 {
-    pxl_kernel::door::interrupt(quota_ms, bracket)
+    on_kernel(move || pxl_kernel::door::interrupt(quota_ms, bracket))
 }
 
 /// The memory: its first byte, with its bytes written through `bytes` — what
@@ -53,10 +60,13 @@ pub extern "C" fn pxl_interrupt(quota_ms: f64) -> f64 {
 /// `bytes` is null or points at a `u32` the caller owns.
 #[no_mangle]
 pub unsafe extern "C" fn pxl_memory(bytes: *mut u32) -> *mut u8 {
-    memory::region();
+    let at = on_kernel(|| {
+        memory::region();
+        xpute_runtime::mem::base::ptr_at::<u8>(0).expose_provenance()
+    });
     if !bytes.is_null() {
         // SAFETY: the caller's word.
         unsafe { *bytes = memory::GIVEN };
     }
-    xpute_runtime::mem::base::ptr_at(0)
+    core::ptr::with_exposed_provenance_mut(at)
 }

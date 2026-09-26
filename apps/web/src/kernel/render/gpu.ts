@@ -12,8 +12,7 @@
  * A canvas handed to the kernel is a surface: transferred to an
  * OffscreenCanvas once, and drawn by the kernel alone from then on. The 2D
  * scratch is where the kernel paints what needs the host's fonts (the badge
- * sheet) or its decoded images (the texture pack), before copying it into a
- * texture.
+ * sheet), before copying it into a texture.
  */
 
 import type { U32Array } from "@xpute/core/abi/array.ts";
@@ -454,12 +453,6 @@ function run_paint(w: U32Array): void {
         k += (len + 3) >>> 2;
         break;
       }
-      case paint.IMAGE: {
-        const image = images.get(w[k++]);
-        const [sx, sy, sw, sh, dx, dy, dw, dh] = [f(), f(), f(), f(), f(), f(), f(), f()];
-        if (image) ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh);
-        break;
-      }
       default:
         throw new Error(`[gpu] paint operation ${op}`);
     }
@@ -516,7 +509,7 @@ export function run_gpu_stream(memory: ArrayBuffer, at: u32): void {
         const texture = d.createTexture({
           size: [bitmap.width, bitmap.height],
           format: "rgba8unorm-srgb",
-          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
         d.queue.copyExternalImageToTexture({ source: bitmap }, { texture }, [bitmap.width, bitmap.height]);
         put(w[a], texture);
@@ -580,6 +573,13 @@ export function run_gpu_stream(memory: ArrayBuffer, at: u32): void {
         break;
       case op.ENCODER:
         put(w[a], d.createCommandEncoder());
+        break;
+      case op.COPY_TEXTURE:
+        get<GPUCommandEncoder>(w[a]).copyTextureToTexture(
+          { texture: get<GPUTexture>(w[a + 1]), origin: [w[a + 2], w[a + 3], 0] },
+          { texture: get<GPUTexture>(w[a + 4]), origin: [w[a + 5], w[a + 6], w[a + 7]] },
+          [w[a + 8], w[a + 9], 1],
+        );
         break;
       case op.PASS:
         put(w[a], begin_pass(get<GPUCommandEncoder>(w[a + 1]), w.subarray(a + 2, k)));
