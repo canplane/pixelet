@@ -45,7 +45,7 @@ export function AboutSection() {
       <SectionTitle>{t("settings.about.section_title")}</SectionTitle>
       <View style={styles.body}>
         <View style={styles.name}>
-          <Box size={20} color={color.foreground} />
+          <Box size={20} color={color.text} />
           <Text style={styles.nameText}>pixelet</Text>
         </View>
 
@@ -70,5 +70,5 @@ const styles = StyleSheet.create({
   section: { gap: 4 },
   body: { gap: 8, paddingVertical: 4 },
   name: { flexDirection: "row", alignItems: "center", gap: 8 },
-  nameText: { fontFamily: font.family, fontSize: 15, fontWeight: "600", color: color.foreground },
+  nameText: { fontFamily: font.family, fontSize: 15, fontWeight: "600", color: color.text },
 });

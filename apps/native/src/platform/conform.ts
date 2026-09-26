@@ -17,7 +17,10 @@ import type * as WebGlass from "../../../web/src/platform/web/glass.tsx";
 import type * as WebGpu from "../../../web/src/platform/web/gpu.ts";
 import type * as WebImage from "../../../web/src/platform/web/image.ts";
 import type * as WebLocale from "../../../web/src/platform/web/locale.ts";
+import type * as WebMotion from "../../../web/src/platform/web/motion.tsx";
 import type * as WebOrigin from "../../../web/src/platform/web/origin.ts";
+import type * as WebPalette from "../../../web/src/platform/web/palette.ts";
+import type * as WebPill from "../../../web/src/platform/web/pill.tsx";
 import type * as WebSafeArea from "../../../web/src/platform/web/safe-area.ts";
 import type * as WebSave from "../../../web/src/platform/web/save.ts";
 import type * as WebSensor from "../../../web/src/platform/web/sensor.ts";
@@ -33,7 +36,10 @@ import * as Glass from "./glass.tsx";
 import * as Gpu from "./gpu.ts";
 import * as Image from "./image.ts";
 import * as Locale from "./locale.ts";
+import * as Motion from "./motion.tsx";
 import * as Origin from "./origin.ts";
+import * as Palette from "./palette.ts";
+import * as Pill from "./pill.tsx";
 import * as SafeArea from "./safe-area.ts";
 import * as Save from "./save.ts";
 import * as Sensor from "./sensor.ts";
@@ -50,7 +56,10 @@ export const CONFORMS = [
   Gpu satisfies typeof WebGpu,
   Image satisfies typeof WebImage,
   Locale satisfies typeof WebLocale,
+  Motion satisfies typeof WebMotion,
   Origin satisfies typeof WebOrigin,
+  Palette satisfies typeof WebPalette,
+  Pill satisfies typeof WebPill,
   SafeArea satisfies typeof WebSafeArea,
   Save satisfies typeof WebSave,
   Sensor satisfies typeof WebSensor,

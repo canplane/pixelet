@@ -277,7 +277,7 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
 export const gauge = StyleSheet.create({
   text: { fontFamily: font.mono, fontSize: 10.5, lineHeight: 16, color: alpha(color.white, 0.9) },
   key: { color: alpha(color.white, 0.45) },
-  warn: { color: color.amber400 },
+  warn: { color: color.glow },
   row: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
   rule: { marginVertical: 4, borderTopWidth: 1, borderTopColor: alpha(color.white, 0.1) },
   head: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 2 },

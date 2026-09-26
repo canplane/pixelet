@@ -34,10 +34,10 @@ function Link({ href, children }: { href: string; children: ReactNode }) {
  *
  * **Elevation.** GEDTM30 is CC BY 4.0, which asks for the creator, the title,
  * a link to the license, and an indication that changes were made — the
- * pipeline crops and reprojects, so it changed. That is the whole of it. The
- * author list and journal reference that used to sit here are an academic
- * courtesy, not part of what the license asks, and they were long enough to
- * crowd out the line below, which is not optional. The link is the DOI of the
+ * pipeline crops and reprojects, so it changed. That is the whole of it. An
+ * author list and journal reference would be an academic courtesy, not part
+ * of what the license asks, and long enough to crowd out the line below,
+ * which is not optional. The link is the DOI of the
  * distribution this pipeline actually consumes
  * (tool/elevation/metadata.json), so the notice, the README and the ingest
  * script all name one source instead of three mirrors of it.

@@ -35,9 +35,10 @@ export function Segmented<T extends string>({ segments, value, onChange }: { seg
 }
 
 const styles = StyleSheet.create({
-  track: { flexDirection: "row", height: 36, padding: 3, borderRadius: 10, backgroundColor: alpha(color.accent, 0.6) },
-  segment: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 7 },
-  on: { backgroundColor: color.background, boxShadow: "0 1px 2px rgba(0, 0, 0, 0.08)" },
-  label: { fontFamily: font.family, fontSize: 13, fontWeight: "500", color: color.mutedForeground },
-  labelOn: { color: color.foreground },
+  // Capsules, the track and the segment in it alike.
+  track: { flexDirection: "row", height: 36, padding: 3, borderRadius: 18, backgroundColor: alpha(color.wash, 0.6) },
+  segment: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 15 },
+  on: { backgroundColor: color.paper, boxShadow: "0 1px 2px rgba(0, 0, 0, 0.08)" },
+  label: { fontFamily: font.family, fontSize: 13, fontWeight: "500", color: color.textMuted },
+  labelOn: { color: color.text },
 });

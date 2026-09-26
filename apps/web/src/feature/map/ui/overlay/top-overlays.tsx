@@ -5,9 +5,10 @@ import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { Glass } from "@platform/glass.tsx";
+import { LABEL } from "@platform/palette.ts";
 import { useViewportTop } from "@platform/visual-viewport.ts";
 import { useAppContext } from "@/app/provider/context.ts";
-import { alpha, chrome, color } from "@/shared/ui/theme.ts";
+import { chrome, color } from "@/shared/ui/theme.ts";
 import { CurrentAddress } from "./current-address.tsx";
 import { useReverseGeocode } from "./use-reverse-geocode.ts";
 import { SensorStatus } from "./sensor-status.tsx";
@@ -15,6 +16,7 @@ import { DummyChatText } from "./dummy-chat-text.tsx";
 import { MapCompass } from "../control/compass.tsx";
 import { MapScaleBar } from "../control/scale-bar.tsx";
 import { TrackingButton } from "@/feature/map/ui/control/tracking-button.tsx";
+import { BusyDim } from "@/feature/map/ui/busy-dim.tsx";
 import { SettingsTriggerButton } from "@/feature/setting/trigger-button.tsx";
 
 export function TopOverlays() {
@@ -26,12 +28,12 @@ export function TopOverlays() {
 
   return (
     <>
-      <View style={[styles.left, { top }]}>
+      <BusyDim style={[styles.left, { top }]}>
         <SettingsTriggerButton />
         {__IS_DEV__ && <DummyChatText />}
-      </View>
+      </BusyDim>
 
-      <View style={[styles.right, { top }]}>
+      <BusyDim style={[styles.right, { top }]}>
         {
           /* The round controls' ground: the platform's glass, or their solid
           cream where it has none. */
@@ -52,7 +54,7 @@ export function TopOverlays() {
               load or over unmapped water. SensorStatus's icon size, the
               glyphs beside it in this same pill. */
             }
-            <Search size={14} color={alpha(color.ink, 0.5)} />
+            <Search size={14} color={LABEL.secondary} />
             <CurrentAddress label={addressLabel} />
           </Pressable>
           <SensorStatus />
@@ -66,16 +68,16 @@ export function TopOverlays() {
             <MapCompass />
           </View>
         </View>
-      </View>
+      </BusyDim>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  // A layer takes no touches itself, only what stands on it: the map between
-  // the controls is still the map.
-  left: { position: "absolute", left: chrome.inset, zIndex: 50, alignItems: "flex-start", gap: 12, pointerEvents: "box-none" },
-  right: { position: "absolute", right: chrome.inset, zIndex: 50, alignItems: "flex-end", gap: 16, pointerEvents: "box-none" },
+  // A layer takes no touches itself, only what stands on it (BusyDim): the
+  // map between the controls is still the map.
+  left: { position: "absolute", left: chrome.inset, zIndex: 50, alignItems: "flex-start", gap: 12 },
+  right: { position: "absolute", right: chrome.inset, zIndex: 50, alignItems: "flex-end", gap: 16 },
   pill: {
     flexDirection: "row",
     alignItems: "center",

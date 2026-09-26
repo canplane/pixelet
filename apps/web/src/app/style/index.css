@@ -15,7 +15,7 @@ body,
 
   font-family:
     /* 1. Apple-only keywords, first so Apple platforms never fall through */ -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
-    /* 2. Hangul coverage, and the whole face everywhere else. "Inter" used to sit ahead of this for Latin on Windows/Android; nothing ever loaded it — fonts.css declares only Pretendard now — so it resolved for whoever happened to have Inter installed locally and was skipped by everyone else. */
+    /* 2. Hangul coverage, and the whole face everywhere else */
     "Pretendard Variable", /* 3. System default, in case no webfont loads */ system-ui, sans-serif;
 }
 

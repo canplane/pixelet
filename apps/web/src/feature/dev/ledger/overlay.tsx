@@ -38,17 +38,12 @@ const DRAIN_MS = 500;
  * halt, while one is open; off, when there is nothing to press it for. */
 type Tint = "plain" | "go" | "halt" | "off";
 
-/** The instrument's own greens and ambers, Tailwind's as the panel's were. */
-const EMERALD_300 = "#5ee9b5";
-const EMERALD_400 = "#00d492";
-const AMBER_300 = "#ffd230";
-
 /** Each tint's border, ground and ink, and the ground and ink it lights to
  * under a hovering pointer or a finger. */
 const TINT: Record<Tint, { border: string; ground: string; ink: string; lit: string; litInk: string }> = {
   plain: { border: alpha(color.white, 0.15), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.6), lit: alpha(color.white, 0.1), litInk: alpha(color.white, 0.9) },
-  go: { border: alpha(EMERALD_400, 0.4), ground: alpha(EMERALD_400, 0.1), ink: EMERALD_300, lit: alpha(EMERALD_400, 0.2), litInk: EMERALD_300 },
-  halt: { border: alpha(color.amber400, 0.4), ground: alpha(color.amber400, 0.1), ink: AMBER_300, lit: alpha(color.amber400, 0.2), litInk: AMBER_300 },
+  go: { border: alpha(color.ledgerGo, 0.4), ground: alpha(color.ledgerGo, 0.1), ink: color.ledgerGoInk, lit: alpha(color.ledgerGo, 0.2), litInk: color.ledgerGoInk },
+  halt: { border: alpha(color.glow, 0.4), ground: alpha(color.glow, 0.1), ink: color.ledgerHaltInk, lit: alpha(color.glow, 0.2), litInk: color.ledgerHaltInk },
   off: { border: alpha(color.white, 0.1), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.25), lit: alpha(color.white, 0.05), litInk: alpha(color.white, 0.25) },
 };
 

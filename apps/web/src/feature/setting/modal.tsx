@@ -58,8 +58,8 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
           value={tab}
           onChange={setTab}
           segments={[
-            { value: "effects", label: t("settings.tabs.effects"), icon: <Sparkles size={14} color={color.mutedForeground} /> },
-            { value: "info", label: t("settings.tabs.info"), icon: <Info size={14} color={color.mutedForeground} /> },
+            { value: "effects", label: t("settings.tabs.effects"), icon: <Sparkles size={14} color={color.textMuted} /> },
+            { value: "info", label: t("settings.tabs.info"), icon: <Info size={14} color={color.textMuted} /> },
           ]}
         />
       </View>

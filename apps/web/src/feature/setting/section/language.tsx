@@ -42,8 +42,8 @@ const styles = StyleSheet.create({
   section: { gap: 4 },
   choices: { flexDirection: "row", gap: 6 },
   choice: { flex: 1, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 16, borderWidth: 1, paddingHorizontal: 8 },
-  on: { borderColor: color.primary, backgroundColor: alpha(color.primary, 0.1) },
-  off: { borderColor: "transparent", backgroundColor: alpha(color.accent, 0.3) },
-  label: { fontFamily: font.family, fontSize: 13, fontWeight: "500", color: color.mutedForeground },
-  labelOn: { color: color.foreground },
+  on: { borderColor: color.chosen, backgroundColor: alpha(color.chosen, 0.1) },
+  off: { borderColor: "transparent", backgroundColor: alpha(color.wash, 0.3) },
+  label: { fontFamily: font.family, fontSize: 13, fontWeight: "500", color: color.textMuted },
+  labelOn: { color: color.text },
 });

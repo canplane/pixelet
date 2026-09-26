@@ -240,9 +240,6 @@ device scale. Already derived — don't re-derive or drift:
   a neighbor and the overlap belongs to whichever is later in the DOM. Where
   the visible thing is smaller (color swatches), the button is a transparent
   box at full pitch with the shape centered.
-- **The named radius steps are theme tokens.** `app/style/index.css` derives
-  `--radius-*` from `--radius`, which themes redefine as far as 2.5rem, so `rounded-md` is not a
-  fixed number. Spell literals out (`rounded-[6px]`) when a radius is meant.
 
 ## Code conventions
 

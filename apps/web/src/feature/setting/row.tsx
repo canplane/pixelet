@@ -8,9 +8,9 @@ import type { SettingCost } from "@/feature/setting/schema.ts";
 import { alpha, color, font, hairline } from "@/shared/ui/theme.ts";
 
 const COST_COLOR: Record<SettingCost, string> = {
-  low: color.emerald600,
-  med: color.amber600,
-  high: color.red600,
+  low: color.costLow,
+  med: color.costMedium,
+  high: color.costHigh,
 };
 
 function Badge({ text, tint }: { text: string; tint: string }) {
@@ -26,7 +26,7 @@ function CostBadge(props: { cost: SettingCost }) {
 }
 
 function DevBadge() {
-  return <Badge text="DEV" tint={color.violet600} />;
+  return <Badge text="DEV" tint={color.dev} />;
 }
 
 /** A name, its badges, and what it does under it. */
@@ -62,7 +62,7 @@ export function SettingRow(props: SettingRowProps) {
       <Switch
         value={active}
         onValueChange={onToggle}
-        trackColor={{ false: color.input, true: color.primary }}
+        trackColor={{ false: color.track, true: color.chosen }}
         thumbColor={color.white}
         {
           // react-native-web colors an on thumb by this alone, and teal where
@@ -147,7 +147,7 @@ export function SectionTitle(props: SectionTitleProps) {
   return (
     <View style={styles.titleBlock}>
       <View style={styles.titleLine}>
-        {Icon && <Icon size={16} color={color.mutedForeground} />}
+        {Icon && <Icon size={16} color={color.textMuted} />}
         <Text accessibilityRole="header" style={styles.title}>{children}</Text>
         {dev && <DevBadge />}
       </View>
@@ -158,8 +158,8 @@ export function SectionTitle(props: SectionTitleProps) {
 
 /** Settings' shared type: the panel's small print. */
 export const settingText = StyleSheet.create({
-  small: { fontFamily: font.family, fontSize: 12, lineHeight: 17, color: color.mutedForeground },
-  faint: { fontFamily: font.family, fontSize: 11, lineHeight: 15, color: alpha(color.mutedForeground, 0.7) },
+  small: { fontFamily: font.family, fontSize: 12, lineHeight: 17, color: color.textMuted },
+  faint: { fontFamily: font.family, fontSize: 11, lineHeight: 15, color: alpha(color.textMuted, 0.7) },
   link: { textDecorationLine: "underline" },
 });
 
@@ -170,8 +170,8 @@ const styles = StyleSheet.create({
   bleed: { marginHorizontal: -12 },
   described: { flexShrink: 1, minWidth: 0, gap: 4 },
   nameLine: { flexDirection: "row", alignItems: "center", gap: 6 },
-  name: { fontFamily: font.family, fontSize: 15, fontWeight: "500", lineHeight: 19, color: color.foreground },
-  description: settingTextOf(12, color.mutedForeground),
+  name: { fontFamily: font.family, fontSize: 15, fontWeight: "500", lineHeight: 19, color: color.text },
+  description: settingTextOf(12, color.textMuted),
 
   badge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 4, paddingVertical: 2 },
   badgeText: { fontFamily: font.family, fontSize: 9, fontWeight: "600", lineHeight: 10, letterSpacing: 0.4 },
@@ -185,19 +185,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     paddingHorizontal: 8,
-    backgroundColor: color.background,
+    backgroundColor: color.paper,
   },
-  legendText: { fontFamily: font.family, fontSize: 12, fontWeight: "500", lineHeight: 13, color: color.foreground },
+  legendText: { fontFamily: font.family, fontSize: 12, fontWeight: "500", lineHeight: 13, color: color.text },
   answers: { gap: 2 },
 
-  radio: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: color.input, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  radioOn: { borderColor: color.primary },
-  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: color.primary },
+  radio: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: color.track, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  radioOn: { borderColor: color.chosen },
+  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: color.chosen },
 
   titleBlock: { gap: 4, marginBottom: 4 },
   titleLine: { flexDirection: "row", alignItems: "center", gap: 6 },
-  title: { fontFamily: font.family, fontSize: 12, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: color.mutedForeground },
-  caption: settingTextOf(11, alpha(color.mutedForeground, 0.7)),
+  title: { fontFamily: font.family, fontSize: 12, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: color.textMuted },
+  caption: settingTextOf(11, alpha(color.textMuted, 0.7)),
 });
 
 function settingTextOf(fontSize: number, tint: string) {

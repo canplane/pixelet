@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 
 import type { ModalController, UiController } from "../type/ui.type.ts";
 
+import { PanelPresence } from "@/shared/ui/panel.tsx";
+
 import { EditFooModal } from "@/feature/placeholder/ui/edit-foo-modal.tsx";
 import type { EditFooProps } from "@/feature/placeholder/ui/edit-foo-modal.tsx";
 import { SettingsModal, type SettingsModalProps } from "@/feature/setting/modal.tsx";
@@ -54,42 +56,48 @@ export function ModalManager(props: ModalManagerProps) {
     mergeUiController(modalsController);
   }, [modalsController, mergeUiController]);
 
-  // no active modal
-  if (!modalState) {
+  // What is drawn: the modal asked for, or the last one while it slides
+  // away. A modal asked for over one still leaving replaces it at once.
+  const [shown, setShown] = useState<ModalState>(null);
+  if (modalState !== null && modalState !== shown) setShown(modalState);
+  const open = modalState !== null;
+
+  if (!shown) {
     return null;
   }
-  const { type } = modalState;
+  const { type } = shown;
+  const onOpenChange = (next: boolean) => !next && setModalState(null);
 
   return (
-    <>
+    <PanelPresence.Provider value={{ open, gone: () => setShown(null) }}>
       {type === "foo:update" && (
         <EditFooModal
-          open={!!modalState}
-          onOpenChange={(open: boolean) => !open && setModalState(null)}
-          {...modalState}
+          open={open}
+          onOpenChange={onOpenChange}
+          {...shown}
         />
       )}
       {type === "settings" && (
         <SettingsModal
-          open={!!modalState}
-          onOpenChange={(open: boolean) => !open && setModalState(null)}
-          {...modalState}
+          open={open}
+          onOpenChange={onOpenChange}
+          {...shown}
         />
       )}
       {type === "drawer" && (
         <DrawerModal
-          open={!!modalState}
-          onOpenChange={(open: boolean) => !open && setModalState(null)}
-          {...modalState}
+          open={open}
+          onOpenChange={onOpenChange}
+          {...shown}
         />
       )}
       {type === "search" && (
         <SearchModal
-          open={!!modalState}
-          onOpenChange={(open: boolean) => !open && setModalState(null)}
-          {...modalState}
+          open={open}
+          onOpenChange={onOpenChange}
+          {...shown}
         />
       )}
-    </>
+    </PanelPresence.Provider>
   );
 }

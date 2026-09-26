@@ -13,7 +13,7 @@ import { useKernel } from "@/kernel/shell.ts";
  * numbers name places in, and it cuts the parts at the rung the current zoom
  * asks for (pxl-kernel layer/geocode/). Nothing is fetched here — the
  * debounce, the abort and the "have we asked about this page" bookkeeping
- * this hook used to carry are the kernel's I/O scheduler's.
+ * are the kernel's I/O scheduler's.
  *
  * The parts arrive unjoined and in every language the provider had, so
  * assembleLabel() runs on every render against the current i18n.language:

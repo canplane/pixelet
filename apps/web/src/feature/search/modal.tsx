@@ -179,13 +179,13 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
             unambiguously as "leave", with no second X anywhere in the row. */
           }
           <Pressable onPress={() => onOpenChange(false)} accessibilityRole="button" accessibilityLabel={t("settings.close")} style={styles.back}>
-            <ChevronLeft size={20} color={color.mutedForeground} />
+            <ChevronLeft size={20} color={color.textMuted} />
           </Pressable>
           <TextField
             value={query}
             onChangeText={setQuery}
             placeholder={t("map.search.placeholder")}
-            placeholderTextColor={color.mutedForeground}
+            placeholderTextColor={color.textMuted}
             autoFocus
             style={styles.field}
           />
@@ -207,7 +207,7 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
               accessibilityLabel={t("map.search.clear_aria_label")}
               style={styles.clear}
             >
-              <X size={10} strokeWidth={3} color={color.background} />
+              <X size={10} strokeWidth={3} color={color.paper} />
             </Pressable>
           )}
         </View>
@@ -266,13 +266,13 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
 }
 
 const styles = StyleSheet.create({
-  header: { borderBottomWidth: 1, borderBottomColor: alpha(color.foreground, 0.06) },
+  header: { borderBottomWidth: 1, borderBottomColor: alpha(color.text, 0.06) },
   headerRow: { height: PANEL_HEADER_PX, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 },
   back: { width: 42, height: 42, marginLeft: -10, borderRadius: 21, alignItems: "center", justifyContent: "center" },
-  field: { flex: 1, minWidth: 0, color: color.foreground },
-  clear: { width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: alpha(color.mutedForeground, 0.5) },
+  field: { flex: 1, minWidth: 0, color: color.text },
+  clear: { width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: alpha(color.textMuted, 0.5) },
   results: { flex: 1 },
-  empty: { paddingHorizontal: 16, paddingVertical: 12, fontFamily: font.family, fontSize: 14, color: color.mutedForeground },
+  empty: { paddingHorizontal: 16, paddingVertical: 12, fontFamily: font.family, fontSize: 14, color: color.textMuted },
   sectionHeader: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -282,13 +282,13 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    color: alpha(color.mutedForeground, 0.7),
+    color: alpha(color.textMuted, 0.7),
   },
   row: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: hairline },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
-  name: { fontFamily: font.family, fontSize: 14, color: color.foreground },
+  name: { fontFamily: font.family, fontSize: 14, color: color.text },
   subtitle: { flexDirection: "row", alignItems: "baseline", gap: 8 },
-  small: { fontFamily: font.family, fontSize: 12, color: color.mutedForeground },
+  small: { fontFamily: font.family, fontSize: 12, color: color.textMuted },
   context: { flexShrink: 1 },
   distance: { marginLeft: "auto", flexShrink: 0, fontVariant: ["tabular-nums"] },
   badge: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", flexShrink: 0 },

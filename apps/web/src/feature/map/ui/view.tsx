@@ -19,8 +19,9 @@ import { Overlays } from "./overlay/overlays.tsx";
 import { MODE_BAR_HEIGHT_PX } from "./overlay/mode-bar.tsx";
 import { ToastController } from "./toast-controller.tsx";
 
-/** How far the toasts stand over the mode bar. */
-const TOAST_LIFT_PX = 20;
+/** How far the toasts stand over the mode bar: a gap as wide as the
+ * chrome's inset, and a lift past it. */
+const TOAST_LIFT_PX = chrome.inset + 20;
 
 export function MapView() {
   return (
