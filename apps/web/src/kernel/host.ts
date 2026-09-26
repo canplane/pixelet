@@ -16,6 +16,7 @@ import { bytes_of, each_record } from "@xpute/runtime/ipc/stream.ts";
 import { op, STORAGE_KEYS, stream } from "@/kernel/abi/host.spec.ts";
 import { take_body, text_at } from "@/kernel/module.ts";
 import { css_font } from "@/kernel/render/gpu.ts";
+import { storage_get, storage_set } from "@platform/storage.ts";
 
 const utf8 = new TextDecoder();
 
@@ -29,14 +30,9 @@ function measure_context(): OffscreenCanvasRenderingContext2D | null {
 
 const word = new DataView(new ArrayBuffer(4));
 
-/** What the browser's storage keeps under `storage`'s key (host.json), or
- * none. */
+/** What storage keeps under `storage`'s key (host.json), or none. */
 export function stored(storage: u32): string | null {
-  try {
-    return globalThis.localStorage?.getItem(STORAGE_KEYS[storage]) ?? null;
-  } catch {
-    return null;
-  }
+  return storage_get(STORAGE_KEYS[storage]);
 }
 
 /** Runs the records the turn just returned left in the host stream at `at`. */
@@ -50,11 +46,7 @@ export function run_host_stream(memory: ArrayBuffer, at: u32): void {
         break;
       }
       case op.STORAGE_SET:
-        try {
-          globalThis.localStorage?.setItem(STORAGE_KEYS[w[a]], text_at(memory, w[a + 1], w[a + 2]));
-        } catch {
-          // Storage refused (a private window's quota): the kernel keeps its state for the session.
-        }
+        storage_set(STORAGE_KEYS[w[a]], text_at(memory, w[a + 1], w[a + 2]));
         break;
       case op.MEASURE: {
         word.setUint32(0, w[a + 1], true);

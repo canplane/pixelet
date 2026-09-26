@@ -8,6 +8,7 @@ import { decor_kinds, placeable_cubes, type PlaceableCube, sameCube } from "@/ca
 import { ActiveTool, Command, encode_chat_create } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command } from "@/kernel/shell.ts";
 import { host_hold } from "@platform/host.ts";
+import { storage_get, storage_set } from "@platform/storage.ts";
 
 // ts (Date.now() at append) lets ChatBubble derive its own remaining show
 // time from wall-clock, not from when its own component happened to mount —
@@ -114,7 +115,7 @@ const SEED: readonly RecentPick[] = [
   { tool: ActiveTool.Decor, kind: decor_kinds[0] },
 ];
 
-// Stored (localStorage) by the catalog's numbers: the cube, the decor kind
+// Stored (platform/web/storage.ts) by the catalog's numbers: the cube, the decor kind
 // and the picks — real picks worth remembering across a reload. The tool and
 // the chat lines are left out: a load always starts at the neutral pointer
 // tool, and the chat lines are a UI shell's, not the user's.
@@ -129,7 +130,7 @@ interface Stored {
 function load(): Stored {
   let stored: Partial<Stored> | null = null;
   try {
-    stored = JSON.parse(globalThis.localStorage?.getItem(STORAGE_KEY) ?? "null");
+    stored = JSON.parse(storage_get(STORAGE_KEY) ?? "null");
   } catch { /* nothing stored that reads */ }
   const picks = Array.isArray(stored?.picks) ? stored.picks.filter((p) => typeof p === "object" && p !== null && isKnownPick(p)) : [];
   // A short list is padded from the seed rather than left short. The strip is
@@ -147,9 +148,7 @@ function load(): Stored {
 }
 
 function save(s: UiState): void {
-  try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify({ cube: s.cube, decor: s.decor, picks: s.recentPicks } satisfies Stored));
-  } catch { /* storage refused; the picks last this session */ }
+  storage_set(STORAGE_KEY, JSON.stringify({ cube: s.cube, decor: s.decor, picks: s.recentPicks } satisfies Stored));
 }
 
 const stored = load();
