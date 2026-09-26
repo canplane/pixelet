@@ -95,7 +95,7 @@ fn release(block: Option<Block>) {
 fn view<'a>((at, bytes): Block) -> &'a [u8] {
     // SAFETY: the block is one `receive` acquired for this body alone,
     // `bytes` long, and it is not released while the view is read.
-    unsafe { core::slice::from_raw_parts(at as *const u8, bytes as usize) }
+    unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at), bytes as usize) }
 }
 
 static ARRIVED: Global<Vec<FetchUpdate>> = Global::new();

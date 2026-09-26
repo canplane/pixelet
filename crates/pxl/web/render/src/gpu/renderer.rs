@@ -253,7 +253,7 @@ impl Scratch {
         }
         // SAFETY: a heap block this scratch holds alone, at
         // least `bytes` long.
-        unsafe { core::slice::from_raw_parts_mut(self.at as *mut u8, bytes as usize) }
+        unsafe { core::slice::from_raw_parts_mut(ptr_at::<u8>(self.at), bytes as usize) }
     }
 
     /// Gives the block back.
@@ -318,7 +318,7 @@ pub const BLOCKS_BYTES: u32 = (BLOCK_LANES * BLOCK_SLOTS * 4) as u32;
 /// for as long as the module runs.
 pub unsafe fn set_blocks(at: u32) {
     // SAFETY: the caller's range, one lane of BLOCK_SLOTS words after another.
-    let lane = |k: usize| unsafe { core::slice::from_raw_parts_mut((at as usize + k * BLOCK_SLOTS * 4) as *mut u32, BLOCK_SLOTS) };
+    let lane = |k: usize| unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize + k * BLOCK_SLOTS * 4), BLOCK_SLOTS) };
     BLOCKS.set(Blocks {
         handle: lane(0),
         at: lane(1),
