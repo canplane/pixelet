@@ -414,17 +414,16 @@ pub mod TASK {
     pub const enqueue_ms: u32 = 3;
     pub const start_ms: u32 = 4;
     pub const end_ms: u32 = 5;
-    pub const transport_ms: u32 = 6;
-    pub const outcome: u32 = 7;
-    pub const fail: u32 = 8;
-    pub const detail: u32 = 9;
-    pub const at_file: u32 = 10;
-    pub const at_file_bytes: u32 = 11;
-    pub const at_line: u32 = 12;
-    pub const phase_count: u32 = 13;
-    pub const phase_ids: u32 = 14;
-    pub const phase_values: u32 = 20;
-    pub const WORDS: u32 = 26;
+    pub const outcome: u32 = 6;
+    pub const fail: u32 = 7;
+    pub const detail: u32 = 8;
+    pub const at_file: u32 = 9;
+    pub const at_file_bytes: u32 = 10;
+    pub const at_line: u32 = 11;
+    pub const phase_count: u32 = 12;
+    pub const phase_ids: u32 = 13;
+    pub const phase_values: u32 = 19;
+    pub const WORDS: u32 = 25;
     pub const KEYS: &[&str] = &[
         "category",
         "subject",
@@ -432,7 +431,6 @@ pub mod TASK {
         "enqueue_ms",
         "start_ms",
         "end_ms",
-        "transport_ms",
         "outcome",
         "fail",
         "detail",

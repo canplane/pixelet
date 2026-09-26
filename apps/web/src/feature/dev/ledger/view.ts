@@ -72,7 +72,6 @@ function tasks_at(at: u32, count: u32): TaskRecord[] {
       enqueue_ms: w[o + TASK.enqueue_ms],
       start_ms: Number.isNaN(start) ? null : start,
       end_ms: w[o + TASK.end_ms],
-      transport_ms: w[o + TASK.transport_ms],
       outcome: OUTCOME_NAMES[w[o + TASK.outcome]] ?? "?",
       fail: w[o + TASK.fail],
       detail: w[o + TASK.detail],
@@ -126,7 +125,6 @@ export interface TaskRecord {
   enqueue_ms: f64;
   start_ms: f64 | null;
   end_ms: f64;
-  transport_ms: f64;
   outcome: string;
   fail: u32;
   detail: u32;

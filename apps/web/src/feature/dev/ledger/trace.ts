@@ -97,7 +97,6 @@ export function ledgerTraceJson(): string {
       priority: r.priority,
       queuedMs: r.start_ms === null ? null : fixed(r.start_ms - r.enqueue_ms, 1),
       ranMs: r.start_ms === null ? null : fixed(r.end_ms - r.start_ms, 1),
-      transport_ms: r.transport_ms,
     };
     if (r.fail !== 0) {
       args.fail = failText(r.fail, r.detail);
