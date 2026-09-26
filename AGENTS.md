@@ -20,14 +20,17 @@ did: [issue/](./issue/). What is queued:
 
 ## Environment
 
-**This is a Deno workspace, not an npm project.** There is no `package.json`;
-`node_modules/` exists only because Deno materializes it. Drive the repo
-through its tasks, from the root:
+**This is a Deno workspace, not an npm project.** The one `package.json` is
+the device app's (`apps/native`), because Expo and Metro find their packages
+the way npm lays them out; `node_modules/` exists only because Deno
+materializes it. Drive the repo through its tasks, from the root:
 
 | Task                     | Purpose                                                     |
 | ------------------------ | ----------------------------------------------------------- |
 | `deno task dev`          | the client alone, every route from the published deployment |
 | `deno task dev:local`    | the client and the three servers a deployment has two of    |
+| `deno task dev:native`   | Metro, for the device app built from Xcode                  |
+| `deno task build:native` | the kernel for a device, as the xcframework the app links   |
 | `deno task bake:tiles`   | bake every land page into `./out/terrain/<version>`         |
 | `deno task deploy`       | build the client and publish the Cloudflare Worker          |
 | `deno task smoke <url>`  | what a deployment must answer, against a running one        |
@@ -51,7 +54,7 @@ it casually** — the volume is the data. Ingestion and operations are
 ## Boundaries
 
 The tree is grouped by where a thing runs (`crates/xpute`, `crates/pxl/{spec,web,server}`,
-`packages/xpute`, `apps/web`); README.md has the map. Three lines are easy to
+`packages/xpute`, `apps/web`, `apps/native`); README.md has the map. Three lines are easy to
 erode by accident:
 
 - **xpute holds no domain.** No coordinates, terrain, tiles or Overture in
@@ -71,7 +74,8 @@ erode by accident:
 **What shares `pxl-spec` is Rust, and what does not is free.** The kernel, the
 servers and the bakes compile the model, so they are crates; an ingest that
 moves a provider's columns into Postgres shares nothing, so it is a script;
-`apps/web` is the shell and stays TypeScript.
+`apps/web` is the shell — the device app runs the same one, and adds only
+what a device does behind `@platform/` — and stays TypeScript.
 
 **A tool that makes a file is Rust; one that talks to a service is
 TypeScript.** What writes or reads a format the Rust side owns, or processes
@@ -164,8 +168,9 @@ pipeline — is production-grade; the building layer works (place, erase, stack,
 raycast, persist); the chat/social half is a UI shell wired to nothing. Check
 the code before characterizing any part of the surface.
 
-**The client is a Rust kernel in WASM drawing through WebGPU**
-([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md)).
+**The client is a Rust kernel drawing through WebGPU**: in WASM on a page
+([issue/20260912-why-the-destination-is-wasm.md](./issue/20260912-why-the-destination-is-wasm.md)),
+and on a device linked into a React Native app and drawing through wgpu.
 three.js is gone. The kernel decides and lists what to draw; the renderer
 executes and decides nothing. **Don't propose a WebGL path or pre-WebGPU
 support** — closed.
@@ -253,13 +258,13 @@ its interpreter instead. `check:rules` holds every other file to it.
 `SCREAMING_SNAKE_CASE` for module constants. Functions and locals are
 `snake_case` in Rust, in `packages/xpute` and in `apps/web/src/kernel/`,
 which share the kernel's vocabulary, and `camelCase` in the rest of
-`apps/web` and in `script/`, which is TypeScript and nothing else. An
+`apps/` and in `script/`, which is TypeScript and nothing else. An
 acronym is a word (`nextChatLineId`, `assetUrl`), as Rust cases it. A name
 that crosses — a packet's field, a catalog entry, a ledger record — keeps the
 kernel's `snake_case` on both sides.
 
 **A file's name is its language's**: `snake_case` in Rust and `packages/`,
-`kebab-case` in `apps/web` and `script/`. The WGSL beside the Rust and the
+`kebab-case` in `apps/` and `script/`. The WGSL beside the Rust and the
 SQL Postgres runs in order are `snake_case` too; a file that belongs to no
 language — a document, a workflow, a shell script — is `kebab-case`. What is
 generated from `spec/` is Rust's shadow: its stem is the JSON's,

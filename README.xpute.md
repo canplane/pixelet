@@ -4,7 +4,7 @@ xpute runs one program inside another. The **host** owns the machine — the clo
 
 **xpute is both ends of that arrangement, and `core`, the generic code underneath them.** All of it is written twice, once in Rust and once in TypeScript.
 
-It was written for a Rust program compiled to one WebAssembly module and driven by TypeScript in a browser tab. Nothing in xpute knows what that program computes.
+It was written for a Rust program driven by TypeScript: compiled to one WebAssembly module in a browser tab, or linked into a native app. Nothing in xpute knows what that program computes.
 
 ## The arrangement
 

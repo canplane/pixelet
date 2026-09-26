@@ -176,6 +176,20 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
+- **The device app, the rest.** Built for iOS 2026-09-26 (apps/native,
+  crates/pxl/web/native); what is left:
+  - **Android and Quest.** The Kotlin half of `modules/platform` — the
+    surface on a Vulkan layer, the kernel's memory and doorbell, storage,
+    text through Android's own engine, the compass — and the Android
+    targets in `build-native.ts`; the kernel, the renderer and the shell
+    take them as they are.
+  - **The ledger over the map on a device.** `platform/dev-overlay.tsx` is
+    empty on a device, though the memory the ledger is read from is the
+    same buffer there as on a page.
+  - **A reload leaves its surfaces.** A development reload of the JavaScript
+    drops the old shell without closing what it opened, and the kernel keeps
+    those surfaces; development only.
+
 - **One byte budget over everything drawn, paid for in LOD.** The phone's
   page dies because the working set exceeds a budget of about two
   gigabytes, and a WebView (Capacitor) runs in the same WebKit content
@@ -324,6 +338,12 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   table's handle beside the views.
 
 ## P3
+
+- **A terrain read that hung.** Seen once on the simulator, 2026-09-27:
+  every terrain page's read went unanswered for a minute and more while
+  assets, geocode pages and the site's root answered at once, and a minute
+  later the same pages came back in under two seconds. Not reproduced; the
+  cause is unknown.
 
 - **The address label by the zoom.** Asked 2026-09-23, not now: it wants a
   rebake. The label is one baked answer a leaf page
