@@ -40,13 +40,13 @@ export function stored(storage: u32): string | null {
 }
 
 /** Runs the records the turn just returned left in the host stream at `at`. */
-export function run_host_stream(memory: WebAssembly.Memory, at: u32): void {
-  each_record(memory.buffer, at, stream.HEAD, (code, w, a, n) => {
+export function run_host_stream(memory: ArrayBuffer, at: u32): void {
+  each_record(memory, at, stream.HEAD, (code, w, a, n) => {
     switch (code) {
       case op.BODY_READ: {
         const [body, dst, len] = [w[a], w[a + 1], w[a + 2]];
         const bytes = take_body(body);
-        if (bytes !== undefined && len > 0) new Uint8Array(memory.buffer, dst, len).set(bytes.subarray(0, len));
+        if (bytes !== undefined && len > 0) new Uint8Array(memory, dst, len).set(bytes.subarray(0, len));
         break;
       }
       case op.STORAGE_SET:
@@ -60,7 +60,7 @@ export function run_host_stream(memory: WebAssembly.Memory, at: u32): void {
         word.setUint32(0, w[a + 1], true);
         const ctx = measure_context();
         if (ctx !== null) ctx.font = css_font(w[a], word.getFloat32(0, true));
-        const out = new Float32Array(memory.buffer, w[a + 2], n - 3);
+        const out = new Float32Array(memory, w[a + 2], n - 3);
         for (let i = 0; i < out.length; i++) out[i] = ctx === null ? 7 : ctx.measureText(String.fromCodePoint(w[a + 3 + i])).width;
         break;
       }

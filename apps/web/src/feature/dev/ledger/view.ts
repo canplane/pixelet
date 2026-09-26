@@ -18,7 +18,7 @@ import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
 import { Command, encode_ledger_read } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
-import { CORE_KERNEL } from "@/kernel/mem.ts";
+import { CORE } from "@/kernel/mem.ts";
 
 import {
   CATEGORY_NAMES,
@@ -45,10 +45,10 @@ const WORD = 8;
 /** The tail of the task ring the report carries whole, newest last. */
 const RECENT_TASKS = 20;
 
-const words = (at: u32, n: u32) => new Float64Array(CORE_KERNEL.memory.buffer, at, n);
-const u32s = (at: u32, n: u32) => new Uint32Array(CORE_KERNEL.memory.buffer, at, n);
+const words = (at: u32, n: u32) => new Float64Array(CORE.buffer, at, n);
+const u32s = (at: u32, n: u32) => new Uint32Array(CORE.buffer, at, n);
 /** Where the kernel made a failure: a file name in its memory and a line. */
-const site = (file: u32, bytes: u32, line: u32) => file === 0 ? null : `${new TextDecoder().decode(new Uint8Array(CORE_KERNEL.memory.buffer, file, bytes))}:${line}`;
+const site = (file: u32, bytes: u32, line: u32) => file === 0 ? null : `${new TextDecoder().decode(new Uint8Array(CORE.buffer, file, bytes))}:${line}`;
 
 function frames_at(at: u32, count: u32): Frame[] {
   const w = words(at, count * FRAME.WORDS);
@@ -57,7 +57,7 @@ function frames_at(at: u32, count: u32): Frame[] {
 
 function tasks_at(at: u32, count: u32): TaskRecord[] {
   const w = words(at, count * TASK.WORDS);
-  const subjects = new BigUint64Array(CORE_KERNEL.memory.buffer, at, count * TASK.WORDS);
+  const subjects = new BigUint64Array(CORE.buffer, at, count * TASK.WORDS);
   return Array.from({ length: count }, (_, i) => {
     const o = i * TASK.WORDS;
     const phase_count = w[o + TASK.phase_count];

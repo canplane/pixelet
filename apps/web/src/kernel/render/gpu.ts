@@ -293,7 +293,7 @@ function begin_pass(encoder: GPUCommandEncoder, w: U32Array): GPURenderPassEncod
 let stamps: { count: u32; resolve: GPUBuffer; read: GPUBuffer[]; pending: Set<GPUBuffer> } | null = null;
 /** Where the last frame read goes: the stream's head, from GPU_MS — each
  * span's time, then the frame's whole — where the kernel reads it in a turn. */
-let gpu_ms_at: { memory: WebAssembly.Memory; at: u32 } | null = null;
+let gpu_ms_at: { memory: ArrayBuffer; at: u32 } | null = null;
 
 /** Resolves the timestamps an encoder's passes wrote into `set`, a begin and
  * an end a span, and reads them once the GPU has them, a few frames behind.
@@ -333,7 +333,7 @@ function read_timestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: 
         if (e > last) last = e;
       }
       spans.push(Number(last - first) / 1e6);
-      if (gpu_ms_at) new Float64Array(gpu_ms_at.memory.buffer, gpu_ms_at.at, spans.length).set(spans);
+      if (gpu_ms_at) new Float64Array(gpu_ms_at.memory, gpu_ms_at.at, spans.length).set(spans);
       read.unmap();
       s.pending.delete(read);
     }, () => s.pending.delete(read))
@@ -469,11 +469,11 @@ function run_paint(w: U32Array): void {
 /** Runs the records the turn just returned left in the stream at `at`. With
  * no device they are dropped whole: the kernel hears the device went and
  * makes everything again on the next one. */
-export function run_gpu_stream(memory: WebAssembly.Memory, at: u32): void {
+export function run_gpu_stream(memory: ArrayBuffer, at: u32): void {
   gpu_ms_at ??= { memory, at: at + stream.GPU_MS * 4 };
   if (device === null) return;
   const d = device;
-  each_record(memory.buffer, at, stream.HEAD, (code, w, a, n) => {
+  each_record(memory, at, stream.HEAD, (code, w, a, n) => {
     const k = a + n;
     switch (code) {
       case op.RESET:
@@ -573,7 +573,7 @@ export function run_gpu_stream(memory: WebAssembly.Memory, at: u32): void {
         break;
       }
       case op.WRITE_BUFFER:
-        d.queue.writeBuffer(get<GPUBuffer>(w[a]), w[a + 1], memory.buffer, w.byteOffset + 4 * (a + 3), w[a + 2]);
+        d.queue.writeBuffer(get<GPUBuffer>(w[a]), w[a + 1], memory, w.byteOffset + 4 * (a + 3), w[a + 2]);
         break;
       case op.WRITE_TEXTURE:
         d.queue.writeTexture({ texture: get<GPUTexture>(w[a]), origin: [0, 0, w[a + 1]] }, bytes_of(w, a + 4), { bytesPerRow: w[a + 2] * 4 }, [w[a + 2], w[a + 3], 1]);

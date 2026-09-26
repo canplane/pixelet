@@ -41,7 +41,7 @@ import { SETTINGS } from "@/feature/setting/schema.spec.ts";
 import { ELE_PADDED_SPAN, encode_terrain, pack_ground_cell, PAGE_CELLS } from "@/kernel/fixture.ts";
 
 import { CORE_BUILD } from "@/kernel/ipc.ts";
-import { CORE_KERNEL, load_core } from "@/kernel/mem.ts";
+import { CORE, load_core } from "@/kernel/mem.ts";
 import { BOOT, boot_block, bytes_at, hold_body } from "@/kernel/module.ts";
 import { acquire_device } from "@/kernel/render/gpu.ts";
 
@@ -81,7 +81,7 @@ let draws = 0;
 CORE_BUILD.signal = (_tag, cmd, f) => {
   if (cmd === Command.WORLD_SNAPSHOT) {
     const { at, len } = read_world_snapshot(f!);
-    snapshot = read_snapshot(new TreeReader(bytes_at(CORE_KERNEL.memory, at, len)).read_branch());
+    snapshot = read_snapshot(new TreeReader(bytes_at(CORE.buffer, at, len)).read_branch());
   } else if (cmd === Command.WORLD_UPDATE) draws = read_world_update(f!).draws;
   else if (cmd === Command.FETCH_CREATE) {
     const { key, bake, name } = read_fetch_create(f!);
@@ -114,7 +114,7 @@ function terrain_body(seed: u32): U8Array {
  * requests. `used` is the top the heap has reached. */
 const HEAP_TOP = 1;
 const HEAP_REQUESTS = 8;
-const heap_row = new Uint32Array(CORE_KERNEL.memory.buffer, boot_block(CORE_KERNEL)[BOOT.heap_row], 9);
+const heap_row = new Uint32Array(CORE.buffer, boot_block(CORE.buffer)[BOOT.heap_row], 9);
 let strobe_requests = 0;
 const answer_requests: Record<string, number> = {};
 

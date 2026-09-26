@@ -1,79 +1,56 @@
 // @pxl/web/kernel/mem.ts
 
 /**
- * The central scheduler's big memory, and the kernel booted over it.
+ * The core, opened, and its doorbell.
  *
- * How much memory the kernel gets is the central scheduler's: one fixed
- * `WebAssembly.Memory`, reserved and handed to the module
- * (@xpute/runtime/mem/section.ts). A reservation is committed lazily, so it is
- * sized for the peak; JavaScriptCore nonetheless reports the whole of it as
- * the page's JavaScript memory (a Safari heap timeline read it as one
- * ArrayBuffer), which is why a phone gets half.
- *
- * What is where inside it is the kernel's alone (crates/pxl/web/kernel/src/mem/section.rs):
- * the rings sit at addresses its build.rs fixed, the fixed ranges follow
- * whatever the linker placed, and the heap is everything past them. The shell
- * holds no picture of any of it — a block is an address and a length the
- * kernel handed out.
+ * How the core is opened is the platform's (platform/web/core.ts): a page
+ * reserves a memory and instantiates the module over it, a device's app links
+ * the library and is handed its memory. Either way what the shell holds is a
+ * buffer and a doorbell, and what is where inside the buffer is the kernel's
+ * alone (crates/pxl/web/kernel/src/mem/section.rs): the rings at addresses
+ * the kernel's layout fixes, the fixed ranges past the bracket's front, and
+ * the heap past them. The shell holds no picture of any of it — a block is
+ * an address and a length the kernel handed out.
  */
 
-import type { f64, u32 } from "@xpute/core/abi/word.ts";
-import { reserve_memory } from "@xpute/runtime/mem/section.ts";
+import type { f64 } from "@xpute/core/abi/word.ts";
 import { Doorbell } from "@xpute/runtime/ipc/doorbell.ts";
-import { HANDHELD } from "@/shared/lib/browser/handheld.ts";
-import { DESKTOP_BYTES, PHONE_BYTES, REGION_BYTES } from "@/kernel/mem/mem.spec.ts";
-import { BOOT, boot_block, instantiate_kernel, type KernelExports } from "@/kernel/module.ts";
+import { open_core } from "@platform/core.ts";
+import { BOOT, boot_block, type Core } from "@/kernel/module.ts";
 import { run_host_stream } from "@/kernel/host.ts";
 import { run_gpu_stream } from "@/kernel/render/gpu.ts";
 
-export { REGION_BYTES };
-
-/** The memory the kernel is reserved: a gibibyte on the desktop, half of one
- * on a phone. Both are mem.json's, the same file the kernel's map and the
- * module's linker flags read, so there is no second place to keep them true.
- *
- * There is no smaller reservation to fall back to. The terrain a view holds
- * is a fixed 24.62 MiB and the kernel lays its map out around it, so
- * a device that will not reserve this much cannot run the world at all — and
- * failing here says that, where failing in the map would say the map was
- * wrong. The module declares PHONE_BYTES as the floor it needs
- * (`--initial-memory`), so asking for less fails at instantiation too. */
-const CORE_BYTES: u32 = HANDHELD ? PHONE_BYTES : DESKTOP_BYTES;
-
 // Set once by `load_core`, which the host's boot awaits before anything that
-// reads them can run (platform/web/host.ts): the module arrives over the
-// network, and a bundle that cannot wait on a module's import — Metro's —
-// waits on the boot instead.
+// reads them can run (platform/web/host.ts): the core arrives over the
+// network on a page, and a bundle that cannot wait on a module's import —
+// Metro's — waits on the boot instead.
 
-/** The one module over the memory, booted: the kernel has laid the memory
- * out before anything here reads it. */
-export let CORE_KERNEL: KernelExports;
+/** The core, booted: the kernel has laid the memory out before anything here
+ * reads it. */
+export let CORE: Core;
 
-export let CORE_MEMORY: WebAssembly.Memory;
-
-/** The rings to the module and its doorbell, made with it. A turn's
- * falling edge leaves what the kernel asks of the host in its two streams,
- * run before anything else can reach the device or ring again. A turn that
- * traps leaves its report in the host's: the broken invariant's errno and
- * place (xpute-core status/bug.rs). */
+/** The rings to the core and its doorbell, made with it. A turn's falling
+ * edge leaves what the kernel asks of the host in its streams, run before
+ * anything else can reach the device or ring again: the host's always, the
+ * renderer's where the core records its calls for the host to make rather
+ * than drawing itself. A turn that traps leaves its report in the host's: the
+ * broken invariant's errno and place (xpute-core status/bug.rs). */
 export let CORE_DOORBELL: Doorbell;
 
-/** Reserves the memory and loads the module over it. A module that fails to
- * load fails the client — the memory exists for the kernel. */
+/** Opens the core and makes its doorbell. A core that fails to open fails the
+ * client — the memory exists for the kernel. */
 export async function load_core(): Promise<void> {
-  const memory = reserve_memory([CORE_BYTES / REGION_BYTES], REGION_BYTES);
-  const kernel = await instantiate_kernel(memory);
-  const boot = boot_block(kernel);
-  CORE_MEMORY = memory;
-  CORE_KERNEL = kernel;
-  CORE_DOORBELL = new Doorbell(memory.buffer, boot[BOOT.sq], boot[BOOT.cq], (quota_ms) => {
+  const core = await open_core();
+  const boot = boot_block(core.buffer);
+  CORE = core;
+  CORE_DOORBELL = new Doorbell(core.buffer, boot[BOOT.sq], boot[BOOT.cq], (quota_ms) => {
     let wake: f64;
     try {
-      wake = kernel.interrupt(quota_ms);
+      wake = core.interrupt(quota_ms);
     } finally {
-      run_host_stream(memory, boot[BOOT.host]);
+      run_host_stream(core.buffer, boot[BOOT.host]);
     }
-    run_gpu_stream(memory, boot[BOOT.gpu]);
+    if (boot[BOOT.gpu] !== 0) run_gpu_stream(core.buffer, boot[BOOT.gpu]);
     return wake;
   });
 }

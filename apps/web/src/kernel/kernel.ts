@@ -14,7 +14,6 @@ import type { u32 } from "@xpute/core/abi/word.ts";
 import type { BranchCursor } from "@xpute/core/wire/xtp/mod.ts";
 import {
   Command,
-  encode_gpu_create,
   encode_world_create,
   LoadKind,
   read_fetch_create,
@@ -33,11 +32,10 @@ import { geolocation_start, geolocation_stop, orientation_listen, orientation_ne
 import { abort_fetch, run_fetch } from "@/kernel/io/fetch.ts";
 import { load_image, load_model } from "@/kernel/io/load.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
-import { CORE_KERNEL, load_core } from "@/kernel/mem.ts";
+import { CORE, load_core } from "@/kernel/mem.ts";
 import { bytes_at } from "@/kernel/module.ts";
-import { declareUnsupported } from "@/app/store/unsupported-store.ts";
-import { acquire_device } from "@/kernel/render/gpu.ts";
-import { request_frame, start_sched } from "@/kernel/sched.ts";
+import { gpu_boot } from "@platform/gpu.ts";
+import { start_sched } from "@/kernel/sched.ts";
 import { kernel_snapshot, set_snapshot, subscribe_snapshot } from "@/kernel/snapshot.ts";
 import { keepSettings, storedSettings } from "@/feature/setting/store.ts";
 
@@ -48,7 +46,7 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
       // it holds it in. It is the kernel's and stays valid until it writes
       // the next one, which is a turn away.
       const { at, len } = read_world_snapshot(f!);
-      set_snapshot(bytes_at(CORE_KERNEL.memory, at, len));
+      set_snapshot(bytes_at(CORE.buffer, at, len));
       return;
     }
     case Command.WORLD_UPDATE:
@@ -76,29 +74,6 @@ function on_signal(_tag: u32, cmd: Command, f: BranchCursor | null): void {
     }
   }
   console.warn(`[kernel] signal 0x${cmd.toString(16)} with no one to hear it`);
-}
-
-/** Asks for a device and tells the kernel when one answers, and again after
- * one is lost. */
-function gpu_boot(): void {
-  const lost = () => {
-    CORE_BUILD.send(0, Command.GPU_DELETE);
-    gpu_boot();
-    request_frame();
-  };
-  void acquire_device(lost).then((info) => {
-    if ("reason" in info) {
-      // The same end as a browser that cannot read the wire: nothing here is a
-      // moment to recover from, so it is said once, in front of everything,
-      // rather than left to a console nobody on that browser will open
-      // (app/unsupported.tsx).
-      console.error(`[gpu] ${info.detail}; nothing can be drawn`);
-      declareUnsupported(info.reason);
-      return;
-    }
-    CORE_BUILD.send(0, Command.GPU_CREATE, encode_gpu_create({ min_uniform_offset_alignment: info.align, timestamps: info.timestamps }));
-    request_frame();
-  }, (err) => console.error("[gpu] the device request failed; nothing can be drawn:", err));
 }
 
 /** The objects storage kept, held as a body for the kernel to copy in. */

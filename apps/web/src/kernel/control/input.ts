@@ -83,7 +83,7 @@ export function kernel_hold(tool: ActiveTool, channel: GroundChannelKey | null, 
 export function KernelDriver({ element }: { element: HTMLElement | null }): null {
   useLayoutEffect(() => {
     if (!element) return;
-    set_driver(element);
+    set_driver(() => ({ width: element.clientWidth, height: element.clientHeight }));
 
     const on_down = (e: PointerEvent) => {
       send_rect(element);

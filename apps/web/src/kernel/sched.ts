@@ -6,9 +6,10 @@
  * carries — the viewport, the gap, the frame interval as measured, the I/O
  * credits — and the return is when the kernel wants its next turn.
  *
- * The element is held here rather than passed in because the strobe fires from
- * the browser's frame and has to find it: what mounts it is the driver
- * (control/input.ts), and a turn with nothing mounted carries no frame.
+ * The viewport is held here rather than passed in because the strobe fires
+ * from the frame and has to find it: what mounts the surface is the driver
+ * (control/input.ts on the web, the device's surface on a device), and a turn
+ * with nothing mounted carries no frame.
  */
 
 import type { U8Array } from "@xpute/core/abi/array.ts";
@@ -16,10 +17,18 @@ import type { f64 } from "@xpute/core/abi/word.ts";
 import { Strobe } from "@xpute/runtime/sched/strobe.ts";
 import { Command, encode_world_update } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
-import { CORE_KERNEL } from "@/kernel/mem.ts";
+import { CORE } from "@/kernel/mem.ts";
 import { boot_block, quantum_policy } from "@/kernel/module.ts";
 
-let driver: HTMLElement | null = null;
+/** The surface's size in CSS pixels, as the frame reads it. */
+export interface Viewport {
+  width: f64;
+  height: f64;
+}
+
+/** Reads the mounted surface's size, asked every frame so a resize needs no
+ * event of its own. */
+let driver: (() => Viewport) | null = null;
 
 /** The local wall clock, as the frame's command carries it: unix ms, the
  * local hour, minute and second, and the local day's start. */
@@ -52,8 +61,8 @@ export function ring_now(cmd: Command, pkt?: U8Array): void {
   request_frame();
 }
 
-export function set_driver(element: HTMLElement | null): void {
-  driver = element;
+export function set_driver(viewport: (() => Viewport) | null): void {
+  driver = viewport;
 }
 
 export function dpr(): f64 {
@@ -71,11 +80,11 @@ const NET_CREDITS = 6;
 export let strobe: Strobe;
 
 export function start_sched(): void {
-  strobe = new Strobe(CORE_BUILD, quantum_policy(boot_block(CORE_KERNEL)), (grant, delta_s) => {
-    const element = driver;
-    if (element === null) return;
-    const width = Math.max(1, element.clientWidth);
-    const height = Math.max(1, element.clientHeight);
+  strobe = new Strobe(CORE_BUILD, quantum_policy(boot_block(CORE.buffer)), (grant, delta_s) => {
+    if (driver === null) return;
+    const viewport = driver();
+    const width = Math.max(1, viewport.width);
+    const height = Math.max(1, viewport.height);
     CORE_BUILD.send(
       0,
       Command.WORLD_UPDATE,

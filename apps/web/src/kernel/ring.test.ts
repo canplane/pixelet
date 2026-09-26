@@ -8,7 +8,7 @@ import { FrameFlag } from "@xpute/runtime/ipc/frame.ts";
 import { Ring } from "@xpute/runtime/ipc/ring.ts";
 import { Command } from "@/kernel/abi/cmd.spec.ts";
 
-import { CORE_KERNEL, load_core } from "@/kernel/mem.ts";
+import { CORE, load_core } from "@/kernel/mem.ts";
 import { BOOT, boot_block } from "@/kernel/module.ts";
 import { RING_CAPACITY } from "@/kernel/mem/mem.spec.ts";
 
@@ -19,11 +19,11 @@ await load_core();
 const UNNUMBERED = 0x0fff;
 
 Deno.test("rings - the shell submits, one ring replies to each in order, and a full completion ring holds the rest back", () => {
-  assert(CORE_KERNEL !== null);
-  const p = CORE_KERNEL;
-  const boot = boot_block(p);
-  const sq = new Ring(p.memory.buffer, boot[BOOT.sq]);
-  const cq = new Ring(p.memory.buffer, boot[BOOT.cq]);
+  assert(CORE !== undefined);
+  const p = CORE;
+  const boot = boot_block(p.buffer);
+  const sq = new Ring(p.buffer, boot[BOOT.sq]);
+  const cq = new Ring(p.buffer, boot[BOOT.cq]);
   // mem.json's, not a number written here: the rings were 4096 once.
   assertEquals([sq.capacity, cq.capacity], [RING_CAPACITY, RING_CAPACITY]);
 

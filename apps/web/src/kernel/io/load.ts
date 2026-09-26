@@ -9,8 +9,9 @@
  * scheduler handed out, it can be stopped by that key, and it spends one of
  * the same credits the pages do. What is different is what comes back: a
  * model is far past a ring frame, so the host holds its bytes and the kernel
- * reads them in its turn, and an image is decoded here instead, because what
- * the renderer uploads is the file's own pixels.
+ * reads them in its turn, and an image is decoded where the device is instead
+ * (platform/web/image.ts on the web), because what the renderer uploads is
+ * the file's own pixels.
  */
 
 import type { u32, u64 } from "@xpute/core/abi/word.ts";
@@ -20,10 +21,8 @@ import { asset_url } from "@/config/route.ts";
 import { running } from "@/kernel/io/fetch.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { hold_body } from "@/kernel/module.ts";
-import { register_image } from "@/kernel/render/gpu.ts";
+import { hold_image } from "@platform/image.ts";
 import { request_frame } from "@/kernel/sched.ts";
-
-let next_image = 1;
 
 /** The bytes a load names: the kernel says a number, the shell knows the URL. */
 async function fetch_load(load: u32, signal: AbortSignal): Promise<Response> {
@@ -66,9 +65,9 @@ export function load_model(key: u64, load: u32): Promise<void> {
  * row first, no color conversion and no premultiplied alpha. */
 export function load_image(key: u64, load: u32): Promise<void> {
   return read(key, load, async (res) => {
-    const image = await createImageBitmap(await res.blob(), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
-    const handle = next_image++;
-    register_image(handle, image);
-    CORE_BUILD.send(0, Command.LOAD_IMAGE, encode_load_image({ key, handle }));
+    const handle = await hold_image(res);
+    // A device with no decoder here yet refuses it, as a failed read is.
+    if (handle === null) CORE_BUILD.send(0, Command.LOAD_DELETE, encode_load_delete({ key }));
+    else CORE_BUILD.send(0, Command.LOAD_IMAGE, encode_load_image({ key, handle }));
   });
 }

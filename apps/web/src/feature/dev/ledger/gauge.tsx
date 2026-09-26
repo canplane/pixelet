@@ -27,7 +27,7 @@ import { n1, pct, tris, valueText } from "./lane.ts";
 import { BOUND, failText } from "./report.ts";
 import type { FrameSummary, Gauge, Spread } from "./view.ts";
 import { loafSupported, type LongFrame } from "./long-frame.ts";
-import { CORE_MEMORY } from "@/kernel/mem.ts";
+import { CORE } from "@/kernel/mem.ts";
 import { alpha, color, font } from "@/shared/ui/theme.ts";
 
 /** Tags listed under the triangle total — the heaviest few carry the cost —
@@ -244,7 +244,7 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
               and the kernel is handed a range rather than told how big the page
               thinks it is. */
           }
-          <Row k="  core MB" v={`${round(CORE_MEMORY.buffer.byteLength / 1048576)}MB`} />
+          <Row k="  core MB" v={`${round(CORE.buffer.byteLength / 1048576)}MB`} />
           <Row k="buffers / arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)} / ${valueText("_mb", f.last.arena_mb)}`} />
           <Row k="targets MB" v={`d${f.last.tex_depth_mb} s${f.last.tex_shadow_mb} l${f.last.tex_layers_mb}`} />
           {g.atlas.entries > 0 && <Row k="atlas" v={`${g.atlas.size}px ${g.atlas.entries} ${atlasPct}%`} warn={g.atlas.size > ATLAS_INITIAL && atlasPct < ATLAS_SPARSE_PCT} />}
