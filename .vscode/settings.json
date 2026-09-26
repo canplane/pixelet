@@ -6,30 +6,17 @@
   "deno.enable": true,
   "deno.lint": true,
   "deno.unstable": ["webgpu"],
-  // No "deno.config" pin here on purpose: this repo is a Deno workspace
-  // (root deno.jsonc's "workspace" field lists apps/web and packages/*),
-  // and each member has its own import map (e.g. apps/web/deno.jsonc's
-  // "@/" -> "./src/"). Pinning deno.config to the root file disables
-  // auto-detection and forces every open file to resolve against the
-  // root imports only, which don't include "@/" — that's what caused
-  // "Cannot find module '@/shared/...'" false errors in the editor.
-  // Leaving this unset lets the LSP walk up from each file to its
-  // nearest deno.jsonc.
+  // No "deno.config" pin: each workspace member resolves its own import map
+  // ("@/" in apps/web and apps/native), and a pin makes every file resolve
+  // against the root's alone, where "@/" is unknown.
+
   "deno.suggest.imports.hosts": {
     "https://deno.land": false,
     "https://jsr.io": true
   },
 
-  // VSCode's built-in TS/JS language features extension runs its own
-  // tsserver alongside Deno's, and it has no idea about deno.jsonc import
-  // maps (there's no tsconfig.json for it to fall back to either). That's
-  // what produced the "Cannot find module '@/...'" ts(2307) squiggles even
-  // though Deno's own go-to-definition resolved the same path fine. Deno's
-  // extension docs explicitly warn against running both at once — turn the
-  // built-in one's validation off so only the Deno LSP reports diagnostics.
-  "js/ts.validate.enable": false,
+  "js/ts.validate.enabled": false,
 
-  "editor.defaultFormatter": "denoland.vscode-deno",
   "editor.formatOnSave": true,
 
   "[javascript]": { "editor.defaultFormatter": "denoland.vscode-deno" },
@@ -43,10 +30,5 @@
 
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "never"
-  },
-
-  "files.associations": {
-    "*.json": "jsonc",
-    "tsconfig.json": "jsonc"
   }
 }
