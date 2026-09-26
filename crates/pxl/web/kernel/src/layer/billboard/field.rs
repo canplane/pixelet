@@ -11,7 +11,7 @@
 //! placed against the frame's origin, in the order the sets draw in.
 
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_BADGE};
-use pxl_render::gpu::api::word_bytes;
+use pxl_render::gpu::api::bytes;
 use pxl_spec::space::v3::V3;
 use xpute_runtime::abi::handle::Slots;
 
@@ -56,16 +56,12 @@ impl Billboards {
         self.sets.insert(set)
     }
 
-    /// Replaces a set's instances with `count` of BILLBOARD_FLOATS floats
-    /// from `lane`.
-    ///
-    /// # Safety
-    /// `lane` addresses count * BILLBOARD_FLOATS f32s in the memory.
-    pub unsafe fn write(&mut self, draw: &mut DrawList, id: u32, count: u32, lane: usize) {
+    /// Replaces a set's instances with those in `lane`, BILLBOARD_FLOATS
+    /// floats each.
+    pub fn write(&mut self, draw: &mut DrawList, id: u32, lane: &[f32]) {
         let Some(s) = self.sets.get_mut(id) else { return };
-        let len = word_bytes(count as usize * BILLBOARD_FLOATS);
-        let written = s.held.write(draw, lane, len);
-        s.count = if written { count } else { 0 };
+        let written = s.held.write(draw, bytes(lane));
+        s.count = if written { (lane.len() / BILLBOARD_FLOATS) as u32 } else { 0 };
     }
 
     /// Stands a set at `origin`, in units.

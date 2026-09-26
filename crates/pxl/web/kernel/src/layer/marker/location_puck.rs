@@ -12,7 +12,7 @@ use pxl_spec::bake::constant::U_PER_CELL;
 use pxl_spec::space::pvf3::projection;
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::v3::{add3, center3n, floor3n, V3};
-use xpute_runtime::mem::base::{off_of, ptr_at};
+use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::global::Global;
@@ -142,11 +142,7 @@ pub fn location_puck_step(device_coord: Option<Pvf3>) {
                 s.borders[3] as f32,
             ]);
         }
-        let count = p.samples.len() as u32;
-        with_world(|_, sched| {
-            // SAFETY: the zone's floats are in the kernel's memory, read before this returns.
-            unsafe { sched.markers.set_zone(&mut sched.draw, center_pos, count, off_of(lane.as_ptr()), ZONE_RADIUS_CELL * U_PER_CELL) };
-        });
+        with_world(|_, sched| sched.markers.set_zone(&mut sched.draw, center_pos, &lane, ZONE_RADIUS_CELL * U_PER_CELL));
         p.shown = true;
         request_world_tick();
     }
@@ -211,14 +207,11 @@ pub struct Markers {
 }
 
 impl Markers {
-    /// The zone: `count` instances of ZONE_INSTANCE_FLOATS floats from `lane`,
+    /// The zone: the instances in `lane`, ZONE_INSTANCE_FLOATS floats each,
     /// about a center at `center` in units. Replaces what was there.
-    ///
-    /// # Safety
-    /// `lane` addresses count * ZONE_INSTANCE_FLOATS f32s in the memory.
-    #[allow(clippy::too_many_arguments)]
-    pub unsafe fn set_zone(&mut self, draw: &mut DrawList, center: V3, count: u32, lane: usize, snap_dist: f64) {
-        let bytes = word_bytes(count as usize * ZONE_INSTANCE_FLOATS).max(4);
+    pub fn set_zone(&mut self, draw: &mut DrawList, center: V3, lane: &[f32], snap_dist: f64) {
+        let count = (lane.len() / ZONE_INSTANCE_FLOATS) as u32;
+        let bytes = word_bytes(lane.len()).max(4);
         let keep = self.puck.as_ref().is_some_and(|p| p.bytes == bytes);
         if !keep {
             self.clear(draw);
@@ -246,7 +239,8 @@ impl Markers {
         }
         p.center = center;
         p.count = count;
-        core::ptr::copy_nonoverlapping(ptr_at::<u8>(lane), ptr_at::<u8>(p.at), count as usize * ZONE_INSTANCE_FLOATS * 4);
+        // SAFETY: the block is the heap's, `p.bytes` long, which is the lane's.
+        unsafe { core::ptr::copy_nonoverlapping(lane.as_ptr().cast::<u8>(), ptr_at::<u8>(p.at), word_bytes(lane.len()) as usize) };
         if p.handle == 0 {
             p.handle = draw.upload(p.at as u32, p.bytes, 0, 0);
         } else {

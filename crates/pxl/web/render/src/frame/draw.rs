@@ -247,14 +247,10 @@ pub struct Held {
 }
 
 impl Held {
-    /// Copies `len` bytes at `lane` of the memory into the block, growing it
-    /// from the heap first when it must; false when it refused, the
-    /// block then gone.
-    ///
-    /// # Safety
-    /// `lane` addresses `len` bytes of the memory, which the heap's blocks are in.
-    pub unsafe fn write(&mut self, draw: &mut DrawList, lane: usize, len: u32) -> bool {
-        let need = len.max(4);
+    /// Copies `lane` into the block, growing it from the heap first when it
+    /// must; false when it refused, the block then gone.
+    pub fn write(&mut self, draw: &mut DrawList, lane: &[u8]) -> bool {
+        let need = (lane.len() as u32).max(4);
         if need > self.bytes {
             self.free(draw);
             let bytes = need.next_power_of_two();
@@ -262,7 +258,9 @@ impl Held {
             self.at = at;
             self.bytes = bytes;
         }
-        core::ptr::copy_nonoverlapping(ptr_at::<u8>(lane), ptr_at::<u8>(self.at), len as usize);
+        // SAFETY: the block is the heap's, `self.bytes` long, and at least
+        // `lane` long.
+        unsafe { core::ptr::copy_nonoverlapping(lane.as_ptr(), ptr_at::<u8>(self.at), lane.len()) };
         if self.handle == 0 {
             self.handle = draw.upload(self.at as u32, self.bytes, 0, 0);
         } else {

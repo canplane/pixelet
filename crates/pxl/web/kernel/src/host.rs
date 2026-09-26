@@ -79,7 +79,12 @@ pub fn host_fall() {
 /// its two numbers, as the one record of the turn, published at once for the
 /// host to find when the trap reaches it. What was recorded before it in the
 /// turn is dropped: the kernel stops here, and none of it is to be done.
+///
+/// A device's kernel stops with its process, before any host could run the
+/// record, so it says the report on the process's own error stream as well.
 pub fn host_bug(errno: Errno, at: &Location<'_>, a: u64, b: u64) {
+    #[cfg(not(target_arch = "wasm32"))]
+    eprintln!("[pxl] {errno:?} at {}:{}:{} ({a}, {b})", at.file(), at.line(), at.column());
     if let Some(h) = host() {
         h.stream.publish();
         let args = [errno as i32 as u32, at.line(), at.column(), a as u32, (a >> 32) as u32, b as u32, (b >> 32) as u32];
