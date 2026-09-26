@@ -61,6 +61,7 @@ pub fn ptr_at<T>(off: usize) -> *mut T {
 /// is a bug: what the module names has to be in it, and on a native build a
 /// static or the binary's read-only data is not — it is where the linker put
 /// it, not in the region the bracket gave.
+#[track_caller]
 pub fn off_of<T>(p: *const T) -> usize {
     let (base, bytes) = memory();
     p.expose_provenance().checked_sub(base).filter(|&off| off < bytes).or_bug(Errno::EFAULT)
@@ -71,6 +72,7 @@ pub fn off_of<T>(p: *const T) -> usize {
 /// wasm's memory by chance, outside a native build's region — so it names 0,
 /// where nothing is read. A slice the host writes into is passed as
 /// `&mut`, so what is exposed may be written through.
+#[track_caller]
 pub fn off_of_slice<T>(s: *const [T]) -> usize {
     if s.is_empty() {
         0

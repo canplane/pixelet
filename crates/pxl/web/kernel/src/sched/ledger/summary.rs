@@ -48,7 +48,9 @@ const REASONS: usize = LIMITS::REASONS as usize;
 const STEP_SLOTS: usize = LIMITS::STEP_SLOTS as usize;
 
 struct Block {
-    words: [f64; WORDS],
+    /// On the heap rather than in the static: the shell reads it in the
+    /// memory, and a native build's statics are not in it.
+    words: Box<[f64; WORDS]>,
     /// Where a spread's values are gathered and sorted: as long as the longer
     /// ring, taken on the first read.
     scratch: &'static mut [f64],
@@ -58,7 +60,7 @@ static BLOCK: Global<Block> = Global::new();
 
 fn block() -> &'static mut Block {
     BLOCK.get(|| Block {
-        words: [0.0; WORDS],
+        words: Box::new([0.0; WORDS]),
         scratch: &mut [],
     })
 }
@@ -87,7 +89,7 @@ pub fn ledger_summarize(window_ms: f64) -> &'static [f64] {
     if b.scratch.is_empty() {
         b.scratch = fixed_lane(Lane::Scratch, SPREAD_LIMIT);
     }
-    let (out, scratch) = (&mut b.words, &mut *b.scratch);
+    let (out, scratch) = (&mut b.words[..], &mut *b.scratch);
     out.fill(0.0);
     let since = now() - window_ms;
 
