@@ -310,7 +310,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
 ///
 /// Read in place rather than sent: this is instrumentation, and
 /// instrumentation does not go out on the control ring, whose failure policy
-/// is that `Outbox::post` asserts when the completion queue and its spill are
+/// is that `Door::post` (xpute-runtime ipc/doorbell.rs) asserts when the completion queue and its spill are
 /// both full. Nothing is built for the read either — the rings are the profiler's
 /// own lanes and the summary a block written where it stays — so a reader
 /// allocates nothing from the heap the profiler measures. The addresses are good

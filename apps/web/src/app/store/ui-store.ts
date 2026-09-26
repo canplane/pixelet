@@ -10,15 +10,9 @@ import { kernel_command } from "@/kernel/shell.ts";
 import { kernel_hold } from "@/kernel/shell.ts";
 import { storage_get, storage_set } from "@platform/storage.ts";
 
-// ts (Date.now() at append) lets ChatBubble derive its own remaining show
-// time from wall-clock, not from when its own component happened to mount —
-// without it, a character swap (Walker remounts under a new variant.key)
-// resets ChatBubble's local state and it has no way to
-// tell an old, already-dismissed line apart from a brand new one.
 interface ChatLine {
   id: number;
   text: string;
-  ts: number;
 }
 
 const MAX_CHAT_LINES = 10;
@@ -183,7 +177,7 @@ export const useUiStore = create<UiState>()((set) => ({
   chatLines: [],
   append_chat_line: (text) => {
     set((state) => ({
-      chatLines: [...state.chatLines, { id: nextChatLineId++, text, ts: Date.now() }].slice(-MAX_CHAT_LINES),
+      chatLines: [...state.chatLines, { id: nextChatLineId++, text }].slice(-MAX_CHAT_LINES),
     }));
     // The kernel draws the bubble over the companion from the last line.
     kernel_command(Command.CHAT_CREATE, encode_chat_create({ text }));

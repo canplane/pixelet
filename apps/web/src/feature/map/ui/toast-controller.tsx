@@ -86,8 +86,8 @@ export function ToastController() {
   useEffect(() => dropWorldToast, []);
   // Once the companion has completed its very first load, every later
   // person_ready/pet_ready dip is from the user swapping a variant in
-  // settings (Walker remounts on a key change, so a fresh instance briefly
-  // reports not-ready) — a costume change, not the world going unready —
+  // settings (the companion replaces its walker on a variant switch, and a
+  // new one starts unloaded) — a costume change, not the world going unready —
   // so companion_loading stops feeding this toast after that point.
   const companionFirstLoadDoneRef = useRef(false);
   useEffect(() => {

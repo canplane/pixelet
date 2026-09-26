@@ -178,7 +178,7 @@ pub struct BadgePass {
     pub far: f32,
     pub cell: f32,
     /// The planet the frame lays the map on, as the frame's uniform has it
-    /// (globe.wgsl's `curve` and `globe`): a badge is placed on it as the
+    /// (frame.wgsl's `planet` and `globe`, which globe.wgsl's `on_globe_of` reads): a badge is placed on it as the
     /// ground under it is.
     pub globe: [f32; 8],
 }

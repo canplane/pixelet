@@ -734,7 +734,7 @@ fn write_of(coord: &Pvf3, size: f64, val: u32) -> Write {
     }
 }
 
-/// Whether painting `color_id` at this exact whole cell would actually change
+/// Whether painting `cube` at this exact whole cell would actually change
 /// anything a viewer could see — true only for a terrain-styled pick whose
 /// own channel+type exactly matches what the REAL baked terrain already
 /// shows there. Scoped to whole-cell writes only: a sub-cell pick paints a
