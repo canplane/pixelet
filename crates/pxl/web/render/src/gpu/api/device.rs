@@ -10,15 +10,17 @@
 //! A call that names an object the device does not hold does nothing, as the
 //! page's does no more than log a WebGPU error: an object a refused call never
 //! made, or a surface's texture a frame could not have, stays missing until
-//! the renderer makes it again. The device's timestamps are not here yet;
-//! the device says it has none, so the renderer asks for none.
+//! the renderer makes it again. A device times its passes where its GPU can
+//! (`TIMESTAMP_QUERY`), read back a turn or more later as the page's are.
 
 use std::num::NonZeroU64;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::{Arc, Mutex};
 
 use xpute_runtime::abi::handle::handle_slot;
 use xpute_runtime::global::Global;
 
+use super::NONE;
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, record, resource};
 
 /// An image a load holds: the file's own pixels, RGBA, top row first, no
@@ -103,7 +105,31 @@ enum Object {
     Encoder(wgpu::CommandEncoder),
     /// Boxed: a pass is far larger than any other object, and passes are few.
     Pass(Box<wgpu::RenderPass<'static>>),
+    /// A timestamp query set, and how many queries it holds.
+    QuerySet(wgpu::QuerySet, u32),
 }
+
+/// Where a set's timestamps are read back: resolved into one buffer and
+/// copied into one of three, so a read still on its way does not hold the
+/// next frame's up, as the page's are (apps/web/src/kernel/render/gpu.ts).
+struct Stamps {
+    count: u32,
+    resolve: wgpu::Buffer,
+    reads: [StampRead; 3],
+}
+
+struct StampRead {
+    buffer: wgpu::Buffer,
+    /// FREE, COPIED (the copy is recorded, not yet mapped), MAPPING, MAPPED.
+    state: Arc<AtomicU8>,
+    /// Which spans' pairs the frame wrote.
+    written: u32,
+}
+
+const FREE: u8 = 0;
+const COPIED: u8 = 1;
+const MAPPING: u8 = 2;
+const MAPPED: u8 = 3;
 
 /// A surface the kernel draws into, configured from the moment it is bound:
 /// the renderer configures its surfaces when it opens them, which on a device
@@ -123,6 +149,10 @@ struct Device {
     surfaces: Vec<Option<Surface>>,
     /// The surfaces' textures this turn drew into, shown at its fall.
     frames: Vec<wgpu::SurfaceTexture>,
+    stamps: Option<Stamps>,
+    /// What the last read brought, in milliseconds: each span's, then the
+    /// whole frame's from its first pass's start to its last's end.
+    gpu_ms: Vec<f64>,
 }
 
 static DEVICE: Global<Option<Device>> = Global::new();
@@ -150,6 +180,7 @@ pub fn open_device() -> Option<DeviceInfo> {
         }))
         .ok()?;
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            required_features: adapter.features() & wgpu::Features::TIMESTAMP_QUERY,
             required_limits: adapter.limits(),
             ..Default::default()
         }))
@@ -162,12 +193,14 @@ pub fn open_device() -> Option<DeviceInfo> {
             objects: Vec::new(),
             surfaces: Vec::new(),
             frames: Vec::new(),
+            stamps: None,
+            gpu_ms: Vec::new(),
         }));
     }
     let d = device()?;
     Some(DeviceInfo {
         align: d.device.limits().min_uniform_buffer_offset_alignment,
-        timestamps: false,
+        timestamps: d.device.features().contains(wgpu::Features::TIMESTAMP_QUERY),
     })
 }
 
@@ -232,6 +265,48 @@ pub fn gpu_publish() {
         for frame in d.frames.drain(..) {
             d.queue.present(frame);
         }
+        read_stamps(d);
+    }
+}
+
+/// Maps what the turn's encoders copied, now that they are submitted, and
+/// takes what an earlier turn's maps brought.
+fn read_stamps(d: &mut Device) {
+    let Some(s) = d.stamps.as_mut() else { return };
+    for r in &s.reads {
+        if r.state.load(Ordering::Acquire) == COPIED {
+            r.state.store(MAPPING, Ordering::Release);
+            let state = Arc::clone(&r.state);
+            r.buffer.slice(..).map_async(wgpu::MapMode::Read, move |result| {
+                state.store(if result.is_ok() { MAPPED } else { FREE }, Ordering::Release);
+            });
+        }
+    }
+    let _ = d.device.poll(wgpu::PollType::Poll);
+    let period_ns = d.queue.get_timestamp_period() as f64;
+    for r in &s.reads {
+        if r.state.load(Ordering::Acquire) != MAPPED {
+            continue;
+        }
+        if let Ok(range) = r.buffer.slice(..).get_mapped_range() {
+            let (ticks, _) = range.as_chunks::<8>();
+            let t: Vec<u64> = ticks.iter().map(|b| u64::from_le_bytes(*b)).collect();
+            let mut spans = Vec::with_capacity(t.len() / 2 + 1);
+            let (mut first, mut last) = (0u64, 0u64);
+            for (k, pair) in t.as_chunks::<2>().0.iter().enumerate() {
+                let [b, e] = *pair;
+                let ran = r.written & (1 << k) != 0 && e >= b;
+                spans.push(if ran { (e - b) as f64 * period_ns / 1e6 } else { 0.0 });
+                if ran {
+                    first = if first == 0 { b } else { first.min(b) };
+                    last = last.max(e);
+                }
+            }
+            spans.push(last.saturating_sub(first) as f64 * period_ns / 1e6);
+            d.gpu_ms = spans;
+        }
+        r.buffer.unmap();
+        r.state.store(FREE, Ordering::Release);
     }
 }
 
@@ -747,7 +822,9 @@ impl Gpu {
     /// are missing is not begun, and every call on it does nothing.
     pub fn pass(&self, id: u32, encoder: u32, desc: &[u32]) {
         let Some(d) = device() else { return };
-        let [color, color_load, r, g, b, a, depth, depth_load, depth_clear, ..] = *desc else { return };
+        let [color, color_load, r, g, b, a, depth, depth_load, depth_clear, query_set, begin, end] = *desc else {
+            return;
+        };
         let color_view = if color != 0 {
             match d.view(color) {
                 Some(v) => Some(v.clone()),
@@ -795,13 +872,22 @@ impl Gpu {
             }),
             stencil_ops: None,
         });
+        let stamped = match d.get(query_set) {
+            Some(Object::QuerySet(set, _)) if query_set != 0 => Some(set.clone()),
+            _ => None,
+        };
+        let timestamp_writes = stamped.as_ref().map(|set| wgpu::RenderPassTimestampWrites {
+            query_set: set,
+            beginning_of_pass_write_index: (begin != NONE).then_some(begin),
+            end_of_pass_write_index: (end != NONE).then_some(end),
+        });
         let Some(Object::Encoder(e)) = d.get_mut(encoder) else { return };
         let p = e
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &color_attachments,
                 depth_stencil_attachment,
-                timestamp_writes: None,
+                timestamp_writes,
                 occlusion_query_set: None,
                 multiview_mask: None,
             })
@@ -910,11 +996,58 @@ impl Gpu {
     }
 
     /// Timestamps are not asked for on a device (DeviceInfo).
-    pub fn query_set(&self, _id: u32, _count: u32) {}
+    pub fn query_set(&self, id: u32, count: u32) {
+        let Some(d) = device() else { return };
+        let set = d.device.create_query_set(&wgpu::QuerySetDescriptor {
+            label: None,
+            ty: wgpu::QueryType::Timestamp,
+            count,
+        });
+        d.put(id, Object::QuerySet(set, count));
+    }
 
-    pub fn timestamps(&self, _encoder: u32, _query_set: u32, _written: u32) {}
+    /// Reads the timestamps an encoder's passes wrote into the set, once the
+    /// GPU has them: `written` says which spans' pairs the frame wrote. None
+    /// is read while every read is still on its way.
+    pub fn timestamps(&self, encoder: u32, query_set: u32, written: u32) {
+        let Some(d) = device() else { return };
+        let Some(Object::QuerySet(set, count)) = d.get(query_set) else { return };
+        let (set, count) = (set.clone(), *count);
+        let bytes = u64::from(count) * 8;
+        if d.stamps.as_ref().is_none_or(|s| s.count != count) {
+            let buffer = |usage| {
+                d.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: None,
+                    size: bytes,
+                    usage,
+                    mapped_at_creation: false,
+                })
+            };
+            let read = || StampRead {
+                buffer: buffer(wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ),
+                state: Arc::new(AtomicU8::new(FREE)),
+                written: 0,
+            };
+            d.stamps = Some(Stamps {
+                count,
+                resolve: buffer(wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC),
+                reads: [read(), read(), read()],
+            });
+        }
+        let Some(Object::Encoder(e)) = d.objects.get_mut(handle_slot(encoder) as usize).and_then(Option::as_mut) else {
+            return;
+        };
+        let Some(s) = d.stamps.as_mut() else { return };
+        let Some(r) = s.reads.iter_mut().find(|r| r.state.load(Ordering::Acquire) == FREE) else { return };
+        e.resolve_query_set(&set, 0..count, &s.resolve, 0);
+        e.copy_buffer_to_buffer(&s.resolve, 0, &r.buffer, 0, Some(bytes));
+        r.written = written;
+        r.state.store(COPIED, Ordering::Release);
+    }
 
-    pub fn gpu_ms(&self, _span: u32) -> f64 {
-        0.0
+    /// Span `span`'s time the last read brought, in milliseconds; the one past
+    /// the spans is the whole frame's.
+    pub fn gpu_ms(&self, span: u32) -> f64 {
+        device().and_then(|d| d.gpu_ms.get(span as usize).copied()).unwrap_or(0.0)
     }
 }
