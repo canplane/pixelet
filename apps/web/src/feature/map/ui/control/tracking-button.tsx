@@ -2,7 +2,7 @@
 
 import { Compass, Locate, Navigation } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 
 import { DevicePoseStatus, Tracking } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_tracking, useKernel } from "@/kernel/shell.ts";
@@ -29,7 +29,13 @@ export function TrackingButton() {
     if (canShowLocationControl) return <Locate size={18} color={alpha(color.ink, 0.6)} />;
     if (is_follow_mode) {
       const finalRotationDeg = (heading ?? 0) - (azimuth * 180) / Math.PI;
-      return <Compass size={22} color={color.amber500} style={{ transform: `rotate(${finalRotationDeg}deg)` }} />;
+      // Turned by the view around it, in React Native's own transform: a CSS
+      // string on the icon is the page's SVG, and a device's SVG refuses it.
+      return (
+        <View style={{ transform: [{ rotate: `${finalRotationDeg}deg` }] }}>
+          <Compass size={22} color={color.amber500} />
+        </View>
+      );
     }
     return <Navigation size={20} color={alpha(color.ink, 0.8)} />;
   };
