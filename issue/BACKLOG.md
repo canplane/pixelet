@@ -191,16 +191,6 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     text through Android's own engine, the compass — and the Android
     targets in `build-native.ts`; the kernel, the renderer and the shell
     take them as they are. Once the shell has settled.
-  - **A reload leaves its surfaces.** A development reload of the JavaScript
-    drops the old shell without closing what it opened, and the kernel keeps
-    those surfaces; development only.
-  - **A read's time on the wire, on a device.** The ledger's `transport_ms`
-    is the page's resource timing, which a device has no counterpart of, so
-    a device's trace says how long a read ran and never how much of it the
-    network took.
-  - **What the shared shell still asks of a browser.** `mode-bar.tsx`
-    branches on `Platform.OS` for its swatches' `touchAction`, where
-    `@platform/` is the one place a platform's difference belongs.
 
 - **One byte budget over everything drawn, paid for in LOD.** The phone's
   page dies because the working set exceeds a budget of about two
@@ -359,8 +349,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **A terrain read that hung.** Seen once on the simulator, 2026-09-27:
   every terrain page's read went unanswered for a minute and more while
   assets, geocode pages and the site's root answered at once, and a minute
-  later the same pages came back in under two seconds. Not reproduced; the
-  cause is unknown.
+  later the same pages came back in under two seconds. Not reproduced. The
+  JavaScript was being reloaded under the kernel at the time, and a reload
+  then left every credit with reads no shell would answer — the kernel now
+  lets them go when a shell attaches (door.rs `host_attached`); whether that
+  was all of it is not known.
 
 - **The address label by the zoom.** Asked 2026-09-23, not now: it wants a
   rebake. The label is one baked answer a leaf page
