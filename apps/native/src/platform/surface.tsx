@@ -7,20 +7,23 @@
  * kernel's world surface as a page's canvas is (kernel/render/surface.ts):
  * opened on mount, bound to the view's layer while the view has one — the
  * view says when, since its layer comes after it is mounted and laid out —
- * and sized in device pixels as the view is laid out. It is also the scheduler's frame loop, as the web's driver is
- * (kernel/control/input.ts): its size is the frame's viewport, the turns run
- * while it is up and the app is in front, and the kernel hears when the app
- * goes to the background — where it saves what was placed. A display case has
- * no surface of its own yet.
+ * and sized in device pixels as the view is laid out. It is also the
+ * scheduler's frame loop and the pointer's source, as the web's driver is
+ * (kernel/control/input.ts): its size is the frame's viewport, its touches
+ * are pointers the kernel reads into drags and pinches, the turns run while
+ * it is up and the app is in front, and the kernel hears when the app goes to
+ * the background — where it saves what was placed. A display case has no
+ * surface of its own yet.
  */
 
 import type { u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
 import { requireNativeView } from "expo";
 import { type ComponentType, useEffect, useRef } from "react";
-import { AppState, type LayoutChangeEvent, PixelRatio, StyleSheet, View, type ViewProps } from "react-native";
+import { AppState, type GestureResponderEvent, type LayoutChangeEvent, PixelRatio, StyleSheet, View, type ViewProps } from "react-native";
 
-import { Command, encode_sensor_visibility, encode_surface_create, encode_surface_delete, encode_surface_update } from "@/kernel/abi/cmd.spec.ts";
+import { Command, encode_sensor_visibility, encode_surface_create, encode_surface_delete, encode_surface_update, PointerPhase } from "@/kernel/abi/cmd.spec.ts";
+import { kernel_rect, kernel_touch } from "@/kernel/control/input.ts";
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { request_frame, ring_now, set_driver, strobe, type Viewport } from "@/kernel/sched.ts";
@@ -75,9 +78,18 @@ export function WorldSurface() {
   }, []);
 
   const onLayout = (e: LayoutChangeEvent) => {
-    size.current = { width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height };
+    const { width, height } = e.nativeEvent.layout;
+    size.current = { width, height };
+    // A touch's place is the view's own (`locationX`), so the view is the
+    // frame it is read against, wherever the view lies.
+    kernel_rect(0, 0, width, height);
     update();
     request_frame();
+  };
+
+  /** Every touch the event changed, as a pointer in `phase`. */
+  const touches = (phase: PointerPhase) => (e: GestureResponderEvent) => {
+    for (const t of e.nativeEvent.changedTouches) kernel_touch(phase, Number(t.identifier), t.locationX, t.locationY);
   };
 
   const onAttach = () => {
@@ -92,7 +104,18 @@ export function WorldSurface() {
     s.bound = false;
   };
 
-  return <PxlSurface style={StyleSheet.absoluteFill} onLayout={onLayout} onAttach={onAttach} onDetach={onDetach} />;
+  return (
+    <PxlSurface
+      style={StyleSheet.absoluteFill}
+      onLayout={onLayout}
+      onAttach={onAttach}
+      onDetach={onDetach}
+      onTouchStart={touches(PointerPhase.Down)}
+      onTouchMove={touches(PointerPhase.Move)}
+      onTouchEnd={touches(PointerPhase.Up)}
+      onTouchCancel={touches(PointerPhase.Up)}
+    />
+  );
 }
 
 export function CaseSurface(_props: { onOpen: (surface: u32) => () => void; openKey: string }) {
