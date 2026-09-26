@@ -50,7 +50,7 @@ impl Layer for PoiPage {
 }
 
 pub fn enabled() -> bool {
-    settings_store().show_poi
+    settings_store().poi
 }
 
 /// The layer's turn: its pyramid's while places are shown, and nothing asked

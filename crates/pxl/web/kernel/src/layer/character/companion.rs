@@ -411,10 +411,7 @@ pub fn companion_step(ctx: &TickContext, props: Option<CompanionProps>) {
         return;
     };
     let settings = settings_store();
-    let (Some(person_variant), Some(pet_variant)) = (
-        character_variant(CharacterGroup::person, settings.person_variant),
-        character_variant(CharacterGroup::pet, settings.pet_variant),
-    ) else {
+    let (Some(person_variant), Some(pet_variant)) = (character_variant(CharacterGroup::person, settings.person), character_variant(CharacterGroup::pet, settings.pet)) else {
         return;
     };
     let (person_variant, pet_variant) = (&person_variant, &pet_variant);

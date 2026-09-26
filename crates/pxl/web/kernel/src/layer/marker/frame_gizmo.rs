@@ -1,6 +1,6 @@
 // pxl-kernel/layer/marker/frame_gizmo.rs
 
-//! The dev gizmos (the `show_debug_objects` setting): the cell the map center
+//! The debug gizmos (the `gizmos` setting): the cell the map center
 //! floors to, the map center itself, the floating origin, the page's base and
 //! center corners, and the two frames' gyro rings — one fixed to the screen
 //! whatever the azimuth, one turning with the map so its vertex points north —

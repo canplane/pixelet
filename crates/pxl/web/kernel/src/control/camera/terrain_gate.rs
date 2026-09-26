@@ -16,7 +16,7 @@ use crate::control::camera::config::camera_cfg;
 use crate::control::camera::orbit::{orbit_local_offset, rotate2};
 use crate::layer::terrain::elevation::ground_at;
 use crate::shell::map_store::map_store;
-use crate::shell::setting::store::{settings_store, CameraTerrainMode};
+use crate::shell::setting::store::{settings_store, CameraCollisionMode};
 use crate::world::frame::coord::{local_world_origin, local_world_to_canonical};
 
 /// One cell, so a bicubic elevation sample disagreeing slightly with the
@@ -105,7 +105,7 @@ pub fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     // Checked first so the setting skips the heightfield walk, not its result.
     // `climb` grants every control too — it answers terrain by pitching the
     // view, not by holding a control back.
-    if settings_store().camera_terrain != CameraTerrainMode::stop {
+    if settings_store().camera_collision != CameraCollisionMode::stop {
         return *to;
     }
 

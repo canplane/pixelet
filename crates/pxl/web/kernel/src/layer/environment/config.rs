@@ -67,7 +67,7 @@ pub mod light_cfg {
 /// placed objects read as distinct from terrain cells sharing the same
 /// block palette), but a shared render pipeline shouldn't treat one
 /// geometry role differently from another for the same shader term, so it
-/// applies everywhere show_rim_light is on. The falloff's exponent is the
+/// applies everywhere rim_light is on. The falloff's exponent is the
 /// shader's; this is the linear scale on it, the one that controls peak
 /// brightness, written into the frame uniform.
 pub mod rim_cfg {

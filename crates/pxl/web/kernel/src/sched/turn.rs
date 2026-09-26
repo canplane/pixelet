@@ -74,7 +74,7 @@ fn companion_tick(ctx: &mut TickContext) {
 
 fn debug_gizmos_tick(_: &mut TickContext) {
     let map_center = map_store().map_center;
-    let show = settings_store().show_debug_objects && map_center.is_some();
+    let show = settings_store().gizmos && map_center.is_some();
     debug_gizmos_step(show, map_center, local_world_origin());
 }
 

@@ -282,7 +282,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         // `profiler_follow`): a window opened with the panel off would be
         // recording that nothing shows and nothing stops.
         Command::PROFILER_START => {
-            if settings_store().show_profiler {
+            if settings_store().profiler {
                 profiler_window_start();
             }
             applied(s)
@@ -293,7 +293,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::PROFILER_LOG => {
             let on = abi::ProfilerLog::read(packet(pkt)?)?.on;
-            profiler_set_logging(on && settings_store().show_profiler);
+            profiler_set_logging(on && settings_store().profiler);
             applied(s)
         }
         // An address in a memory of at most a gibibyte, which an i32 holds.

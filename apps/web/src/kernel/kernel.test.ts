@@ -257,7 +257,7 @@ Deno.test("kernel - a map center fetches its terrain and draws it, and the map s
 });
 
 Deno.test("kernel - the settings commands reach the snapshot", () => {
-  const tilt = SETTINGS.lock_camera_tilt.key;
+  const tilt = SETTINGS.tilt_lock.key;
   const before = turn().snapshot.settings[tilt];
   command(Command.SETTING_TOGGLE, encode_setting_toggle({ key: tilt }));
   assertEquals(turn().snapshot.settings[tilt], 1 - before);

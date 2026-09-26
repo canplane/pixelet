@@ -62,13 +62,13 @@ pub fn stage_write(resolution: f64) {
     s[STAGE_AT::FAR] = v.far;
     (s[STAGE_AT::FADE_START], s[STAGE_AT::FADE_END]) = fade_range();
     s[STAGE_AT::LOD_CELL] = Terrain::pyramid().domain().map_or(2.0 / split_distance(0), Domain::cell_per_distance);
-    s[STAGE_AT::EDGE_STRENGTH] = if settings.show_edge_shade { EDGE_STRENGTH } else { 0.0 };
+    s[STAGE_AT::EDGE_STRENGTH] = if settings.edge_shade { EDGE_STRENGTH } else { 0.0 };
     s[STAGE_AT::AO_STRENGTH] = if settings.ao == AoMode::corner { AO_STRENGTH } else { 0.0 };
     s[STAGE_AT::SCREEN_AO] = if settings.ao == AoMode::screen { 1.0 } else { 0.0 };
-    s[STAGE_AT::LOW_SPEC] = if settings.texture_pack { 0.0 } else { 1.0 };
+    s[STAGE_AT::LOW_SPEC] = if settings.textures { 0.0 } else { 1.0 };
     s[STAGE_AT::EDGE_WIDTH] = EDGE_WIDTH;
-    s[STAGE_AT::RIM_INTENSITY] = if settings.show_rim_light { rim_cfg::INTENSITY } else { 0.0 };
-    s[STAGE_AT::SHADOWS] = if settings.show_shadow_map { 1.0 } else { 0.0 };
+    s[STAGE_AT::RIM_INTENSITY] = if settings.rim_light { rim_cfg::INTENSITY } else { 0.0 };
+    s[STAGE_AT::SHADOWS] = if settings.shadows { 1.0 } else { 0.0 };
     s[STAGE_AT::RESOLUTION] = resolution;
 }
 

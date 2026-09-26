@@ -4,7 +4,7 @@
  * The debug overlay for the kernel's profiler
  * (crates/pxl/web/kernel/src/sched/profiler): the recording window and the
  * exports as buttons, over the gauge panel (gauge.tsx). Shown by the
- * `show_profiler` setting, off by default, in any build: it is the debug
+ * `profiler` setting, off by default, in any build: it is the debug
  * menu's, and a release is what it most needs to measure.
  *
  * The profiler records while the setting is on and not otherwise, so a
@@ -116,7 +116,7 @@ function restartWindow(): void {
 }
 
 export function ProfilerOverlay() {
-  const show = useKernel((s) => s.settings[SETTINGS.show_profiler.key] === 1);
+  const show = useKernel((s) => s.settings[SETTINGS.profiler.key] === 1);
   const [hint, setHint] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [g, setG] = useState<Gauge | null>(null);

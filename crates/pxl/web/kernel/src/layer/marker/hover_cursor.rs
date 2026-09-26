@@ -66,16 +66,16 @@ pub fn hover_cursor_step() {
     let settings = settings_store();
     let hovered = camera.hovered_coord;
     let active_tool = ui.active_tool;
-    let enable_terrain_carving = settings.enable_terrain_carving;
+    let terrain_carving = settings.terrain_carving;
 
     let hovered_object = camera.hovered_object_at.and_then(get_placed_object);
 
     // Eraser's own "dig into the terrain itself" case (camera/input.rs's
     // handle_tap/update_hover) — gated on the same settings flag those use, so
     // this ghost never previews an edit the tap handler wouldn't commit.
-    let digging_terrain = active_tool == ActiveTool::Eraser && hovered_object.is_none() && enable_terrain_carving;
-    let show_structures = settings.show_structures;
-    let texture_pack = settings.texture_pack;
+    let digging_terrain = active_tool == ActiveTool::Eraser && hovered_object.is_none() && terrain_carving;
+    let structures = settings.structures;
+    let textures = settings.textures;
 
     let use_object_style = matches!(active_tool, ActiveTool::Object | ActiveTool::Decor | ActiveTool::Eraser) || hovered_object.is_some();
 
@@ -106,7 +106,7 @@ pub fn hover_cursor_step() {
         }
         // Eraser hovering an existing object is never blocked; bare terrain is
         // blocked exactly when digging into it isn't enabled.
-        (Some(_), ActiveTool::Eraser) => hovered_object.is_none() && !enable_terrain_carving,
+        (Some(_), ActiveTool::Eraser) => hovered_object.is_none() && !terrain_carving,
         _ => false,
     };
 
@@ -139,7 +139,7 @@ pub fn hover_cursor_step() {
     // that looks like one: its terrain-styled id.
     let carved_style_cube: Option<PlaceableCube> = match (&hovered, digging_terrain) {
         (Some(h), true) => {
-            let shown = shown_ground(|ch| get_ground_type(h, ch).unwrap_or(0), hidden_ground(show_structures));
+            let shown = shown_ground(|ch| get_ground_type(h, ch).unwrap_or(0), hidden_ground(structures));
             terrain_style_cube_for(shown.channel, shown.type_id)
         }
         _ => None,
@@ -209,7 +209,7 @@ pub fn hover_cursor_step() {
                 _ => Ghost::Box {
                     at: [x, y, z],
                     size: current_scale,
-                    value: match (cube, texture_pack) {
+                    value: match (cube, textures) {
                         (Some(cube), true) => placeable_cube_num_id(cube),
                         _ => 0,
                     },

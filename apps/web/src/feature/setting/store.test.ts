@@ -21,13 +21,13 @@ Deno.test("settings - what is kept is what differs, by name, and it reads back",
     return row.kind === "toggle" ? Number(row.default) : row.kind === "choice" ? row.options.indexOf(row.default as string) : row.default as number;
   });
   values[SETTINGS.ao.key] = (SETTINGS.ao.options as readonly string[]).indexOf("screen");
-  values[SETTINGS.person_variant.key] = 3;
+  values[SETTINGS.person.key] = 3;
   keepSettings(values);
-  assertEquals(localStorage.getItem(STORAGE_KEYS[storage.SETTINGS]), '{"ao":"screen","person_variant":3}');
+  assertEquals(localStorage.getItem(STORAGE_KEYS[storage.SETTINGS]), '{"ao":"screen","person":3}');
   const back = storedSettings();
-  assertEquals([back[SETTINGS.ao.key], back[SETTINGS.person_variant.key]], [values[SETTINGS.ao.key], 3]);
+  assertEquals([back[SETTINGS.ao.key], back[SETTINGS.person.key]], [values[SETTINGS.ao.key], 3]);
   values[SETTINGS.ao.key] = (SETTINGS.ao.options as readonly string[]).indexOf(SETTINGS.ao.default);
   keepSettings(values);
-  assertEquals(localStorage.getItem(STORAGE_KEYS[storage.SETTINGS]), '{"person_variant":3}');
+  assertEquals(localStorage.getItem(STORAGE_KEYS[storage.SETTINGS]), '{"person":3}');
   localStorage.clear();
 });
