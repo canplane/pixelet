@@ -89,7 +89,7 @@ pub fn host_fall() {
 /// record, the bracket says the report as well (`last_words`).
 pub fn host_bug(errno: Errno, at: &Location<'_>, a: u64, b: u64) {
     STOPPED.set(true);
-    last_words(&format_args!("{errno:?} at {}:{}:{} ({a}, {b})", at.file(), at.line(), at.column()));
+    last_words(Stop::Bug { errno, at, a, b });
     if let Some(h) = host() {
         h.stream.publish();
         let args = [errno as i32 as u32, at.line(), at.column(), a as u32, (a >> 32) as u32, b as u32, (b >> 32) as u32];
@@ -219,8 +219,20 @@ pub fn set_heap_stat(stat: fn() -> HeapStat) {
     HEAP.set(stat);
 }
 
+/// What stopped the kernel, as a bracket is told it: the numbers and the
+/// place, never a sentence. Making one is the bracket's, so that only a
+/// bracket that says it links the formatting — a name for every errno, a
+/// panic's message — and the module, which says nothing, carries none of it.
+pub enum Stop<'a> {
+    /// A broken invariant (xpute-core status/bug.rs).
+    Bug { errno: Errno, at: &'a Location<'a>, a: u64, b: u64 },
+    /// A panic no invariant named: an index past a slice, a wgpu validation
+    /// error, whose text is not in any number.
+    Panic(&'a std::panic::PanicHookInfo<'a>),
+}
+
 /// Where a bracket says what stopped the kernel (door.rs `Bracket`).
-pub type LastWords = fn(&dyn core::fmt::Display);
+pub type LastWords = fn(Stop<'_>);
 
 static LAST_WORDS: Global<Option<LastWords>> = Global::new();
 
@@ -228,10 +240,10 @@ pub fn set_last_words(say: Option<LastWords>) {
     LAST_WORDS.set(say);
 }
 
-/// Says `what` stopped the kernel, where the bracket has somewhere to.
-pub fn last_words(what: &dyn core::fmt::Display) {
+/// Says what stopped the kernel, where the bracket has somewhere to.
+pub fn last_words(stop: Stop<'_>) {
     if let Some(say) = *LAST_WORDS.get(|| None) {
-        say(what);
+        say(stop);
     }
 }
 

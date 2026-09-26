@@ -188,7 +188,7 @@ fn boot(b: &Bracket) {
         if crate::host::stopped() {
             return;
         }
-        crate::host::last_words(info);
+        crate::host::last_words(crate::host::Stop::Panic(info));
         if let Some(at) = info.location() {
             crate::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);
         }
