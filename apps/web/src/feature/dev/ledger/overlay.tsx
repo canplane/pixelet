@@ -37,24 +37,35 @@ const DRAIN_MS = 500;
 /** A button's tint: plain; go, when a window is stopped and one can begin;
  * halt, while one is open; off, when there is nothing to press it for. */
 type Tint = "plain" | "go" | "halt" | "off";
-const TINT: Record<Tint, string> = {
-  plain: alpha(color.white, 0.6),
-  go: color.emerald500,
-  halt: color.amber400,
-  off: alpha(color.white, 0.25),
+
+/** The instrument's own greens and ambers, Tailwind's as the panel's were. */
+const EMERALD_300 = "#5ee9b5";
+const EMERALD_400 = "#00d492";
+const AMBER_300 = "#ffd230";
+
+/** Each tint's border, ground and ink, and the ground and ink it lights to
+ * under a hovering pointer or a finger. */
+const TINT: Record<Tint, { border: string; ground: string; ink: string; lit: string; litInk: string }> = {
+  plain: { border: alpha(color.white, 0.15), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.6), lit: alpha(color.white, 0.1), litInk: alpha(color.white, 0.9) },
+  go: { border: alpha(EMERALD_400, 0.4), ground: alpha(EMERALD_400, 0.1), ink: EMERALD_300, lit: alpha(EMERALD_400, 0.2), litInk: EMERALD_300 },
+  halt: { border: alpha(color.amber400, 0.4), ground: alpha(color.amber400, 0.1), ink: AMBER_300, lit: alpha(color.amber400, 0.2), litInk: AMBER_300 },
+  off: { border: alpha(color.white, 0.1), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.25), lit: alpha(color.white, 0.05), litInk: alpha(color.white, 0.25) },
 };
 
 function PanelButton({ label, hint, tint = "plain", onPress, disabled }: { label: string; hint: string; tint?: Tint; onPress: () => void; disabled?: boolean }) {
-  const ink = TINT[tint];
+  const [hovered, setHovered] = useState(false);
+  const t = TINT[tint];
   return (
     <Pressable
       onPress={onPress}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityHint={hint}
-      style={[styles.button, { borderColor: alpha(ink, 0.4), backgroundColor: alpha(ink, 0.1) }]}
+      style={({ pressed }) => [styles.button, { borderColor: t.border, backgroundColor: hovered || pressed ? t.lit : t.ground }]}
     >
-      <Text style={[gauge.text, { color: ink }]}>{label}</Text>
+      {({ pressed }) => <Text style={[gauge.text, { color: hovered || pressed ? t.litInk : t.ink }]}>{label}</Text>}
     </Pressable>
   );
 }
@@ -195,7 +206,7 @@ const styles = StyleSheet.create({
     backgroundColor: alpha(color.black, 0.72),
     pointerEvents: "box-none",
   },
-  title: { marginBottom: 4, fontWeight: "600", letterSpacing: 0.5, color: alpha(color.white, 0.55) },
+  title: { marginBottom: 4, fontWeight: "600", letterSpacing: 0.25, color: alpha(color.white, 0.55) },
   buttons: { flexDirection: "row", gap: 4, marginTop: 4 },
   button: { flex: 1, alignItems: "center", paddingVertical: 4, borderWidth: 1, borderRadius: 4 },
 });

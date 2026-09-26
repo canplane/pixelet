@@ -132,7 +132,7 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
               and are not budgeted. */
           }
           <Row k="turn eff/stage" v={`${n1(f.last.turn_effects_ms)}/${n1(f.last.turn_stage_ms)}ms`} warn={f.last.turn_effects_ms > 4} />
-          <Row k="  worst effect" v={`${n1(f.last.turn_step_ms)}ms ${EFFECT_NAMES[f.last.turn_step_name] ?? "-"}`} warn={f.last.turn_step_ms > 4} />
+          <Row k="worst effect" v={`${n1(f.last.turn_step_ms)}ms ${EFFECT_NAMES[f.last.turn_step_name] ?? "-"}`} warn={f.last.turn_step_ms > 4} />
 
           <Head>ground</Head>
           <Row k="lod c/f/p" v={`${f.last.lod_chunks}/${f.last.lod_in_frustum}/${f.last.lod_pending}`} warn={f.last.lod_pending > 32} />
@@ -191,11 +191,11 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
 
           <Head>draw</Head>
           <Row k="gpu p95" v={f.gpu.p95 > 0 ? `${n1(f.gpu.p95)}ms` : "n/a"} warn={f.gpu.p95 > f.last.frame_ms} />
-          {heaviest(f.gpu_spans, (s) => s.spread.p95, SPAN_ROWS).map((s) => <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.spread.p95)}ms`} />)}
+          {heaviest(f.gpu_spans, (s) => s.spread.p95, SPAN_ROWS).map((s) => <Row key={s.name} k={`${s.name} p95`} v={`${n1(s.spread.p95)}ms`} />)}
           <Row k="draws" v={String(f.last.draw_calls)} />
           <Row k="tris" v={tris(f.last.triangles)} />
-          {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`  ${r.tag} d/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}
-          {heaviest(f.level_tris.map((t, k) => ({ k, t })), (r) => r.t, LEVEL_ROWS).map((r) => <Row key={r.k} k={`  L${r.k} tris`} v={tris(r.t)} />)}
+          {f.census.slice(0, CENSUS_ROWS).map((r) => <Row key={r.tag} k={`${r.tag} d/tris`} v={`${round(r.draws)}/${tris(r.tris)}`} />)}
+          {heaviest(f.level_tris.map((t, k) => ({ k, t })), (r) => r.t, LEVEL_ROWS).map((r) => <Row key={r.k} k={`L${r.k} tris`} v={tris(r.t)} />)}
           <Row k="fill Mpx" v={(f.last.px / 1e6).toFixed(1)} warn={f.last.px / 1e6 > 12} />
 
           <Head>work</Head>
@@ -221,16 +221,16 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
               what the carving costs. */
           }
           <Row
-            k="  used/live of"
+            k="used/live of"
             v={`${f.last.heap_used_mb}/${f.last.heap_live_mb} of ${f.last.heap_range_mb}MB ${pct(f.last.heap_live_mb, f.last.heap_range_mb)}%`}
             warn={f.last.heap_live_mb >= f.last.heap_range_mb * 0.8}
           />
           <Row
-            k="  slab run/slot"
+            k="slab run/slot"
             v={`${n1(f.last.heap_run_mb)}/${n1(f.last.heap_slot_mb)}MB ${pct(f.last.heap_slot_mb, f.last.heap_run_mb)}%`}
             warn={f.last.heap_run_mb > 1 && f.last.heap_slot_mb < f.last.heap_run_mb / 2}
           />
-          <Row k="  refused / free" v={`${f.last.heap_refusals} / ${n1(f.last.heap_largest_free_mb)}MB`} warn={f.last.heap_refusals > 0} />
+          <Row k="refused / free" v={`${f.last.heap_refusals} / ${n1(f.last.heap_largest_free_mb)}MB`} warn={f.last.heap_refusals > 0} />
           {
             /* Pages are records in `.fixed`, a fixed number of them a level,
               so the count is what the window holds and not a cost in bytes. */
@@ -244,7 +244,7 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
               and the kernel is handed a range rather than told how big the page
               thinks it is. */
           }
-          <Row k="  core MB" v={`${round(CORE.buffer.byteLength / 1048576)}MB`} />
+          <Row k="core MB" v={`${round(CORE.buffer.byteLength / 1048576)}MB`} />
           <Row k="buffers / arena" v={`${f.last.buffers} ${valueText("_mb", f.last.buffer_mb)} / ${valueText("_mb", f.last.arena_mb)}`} />
           <Row k="targets MB" v={`d${f.last.tex_depth_mb} s${f.last.tex_shadow_mb} l${f.last.tex_layers_mb}`} />
           {g.atlas.entries > 0 && <Row k="atlas" v={`${g.atlas.size}px ${g.atlas.entries} ${atlasPct}%`} warn={g.atlas.size > ATLAS_INITIAL && atlasPct < ATLAS_SPARSE_PCT} />}
@@ -255,8 +255,8 @@ export function LedgerGauge({ g }: { g: Gauge | null }) {
       {g.tasks.map((t) => (
         <View key={t.category}>
           <Row k={`${t.category}${BOUND[t.category] ? ` (${BOUND[t.category].bound})` : ""} p50/p95`} v={`${n1(t.lat.p50)}/${n1(t.lat.p95)}ms`} />
-          <Row k="  ok/ab/err" v={`${t.ok}/${t.aborted}/${t.error}`} warn={t.error > 0} />
-          {t.reasons.length > 0 && <Row k="  top err" v={`${failText(t.reasons[0].fail, t.reasons[0].detail)} x${t.reasons[0].n}`} warn />}
+          <Row k="ok/ab/err" v={`${t.ok}/${t.aborted}/${t.error}`} warn={t.error > 0} />
+          {t.reasons.length > 0 && <Row k="top err" v={`${failText(t.reasons[0].fail, t.reasons[0].detail)} x${t.reasons[0].n}`} warn />}
         </View>
       ))}
 
@@ -281,6 +281,6 @@ export const gauge = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
   rule: { marginVertical: 4, borderTopWidth: 1, borderTopColor: alpha(color.white, 0.1) },
   head: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 2 },
-  headText: { fontSize: 7.5, letterSpacing: 1, textTransform: "uppercase", color: alpha(color.white, 0.3) },
+  headText: { fontSize: 7.5, letterSpacing: 0.4, textTransform: "uppercase", color: alpha(color.white, 0.3) },
   headLine: { flex: 1, borderTopWidth: 1, borderTopColor: alpha(color.white, 0.1) },
 });
