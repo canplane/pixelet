@@ -51,8 +51,6 @@ pub struct TaskRecord {
     pub enqueue_ms: f64,
     pub start_ms: Option<f64>,
     pub end_ms: f64,
-    /// 0 while inline; worker hop cost once a task body runs off-thread.
-    pub transport_ms: f64,
     /// whatever split the demand's own run reported (terrain: net vs decode).
     /// None when it reported none — the run is then one opaque step.
     pub phases: Option<Phases>,
@@ -124,7 +122,6 @@ pub struct TaskRow {
     /// NaN for a task that never ran.
     pub start_ms: f64,
     pub end_ms: f64,
-    pub transport_ms: f64,
     /// An index into OUTCOME_NAMES.
     pub outcome: f64,
     /// The FetchFail's own number, and the host's own number beside it.
@@ -151,7 +148,6 @@ impl TaskRow {
             enqueue_ms: rec.enqueue_ms,
             start_ms: rec.start_ms.unwrap_or(f64::NAN),
             end_ms: rec.end_ms,
-            transport_ms: rec.transport_ms,
             outcome: rec.outcome as u32 as f64,
             fail: rec.fail.fail as u32 as f64,
             detail: rec.fail.detail as f64,
@@ -511,7 +507,7 @@ words!(FrameSample, FRAME::WORDS,
 
 words!(TaskRow, TASK::WORDS,
     category => TASK::category, subject => TASK::subject, priority => TASK::priority, enqueue_ms => TASK::enqueue_ms,
-    start_ms => TASK::start_ms, end_ms => TASK::end_ms, transport_ms => TASK::transport_ms, outcome => TASK::outcome,
+    start_ms => TASK::start_ms, end_ms => TASK::end_ms, outcome => TASK::outcome,
     fail => TASK::fail, detail => TASK::detail,
     at_file => TASK::at_file, at_file_bytes => TASK::at_file_bytes, at_line => TASK::at_line, phase_count => TASK::phase_count, phase_ids => TASK::phase_ids, phase_values => TASK::phase_values,
 );

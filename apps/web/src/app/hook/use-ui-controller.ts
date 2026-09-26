@@ -8,7 +8,7 @@ import type { UiController } from "../type/ui.type.ts";
  * Hook for managing the global UI controller.
  * Provides a stable imperative interface to trigger UI actions from anywhere.
  */
-export function useUiController(_store: unknown) {
+export function useUiController() {
   // Pure data store for registered actions
   const [actions, setActions] = useState<Partial<UiController>>({});
 

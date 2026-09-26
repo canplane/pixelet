@@ -29,7 +29,7 @@ import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, u32, u64 } from "@xpute/core/abi/word.ts";
 import { Command, encode_fetch_update, FetchOutcome } from "@/kernel/abi/cmd.spec.ts";
 import { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
-import { declareUnsupported, isUnsupported } from "@/app/store/unsupported-store.ts";
+import { declareUnsupported, isUnsupported, UnsupportedReason } from "@/app/store/unsupported-store.ts";
 import { PUBLISHED_TILES } from "@/config/deploy.ts";
 import { origin_get } from "@platform/origin.ts";
 import { tile_url } from "@/config/route.ts";
@@ -104,7 +104,7 @@ export async function run_fetch(key: u64, bake: number, name: string): Promise<v
     } else if (body.byteLength > 0 && packed(body)) {
       // Handing these on would spend a heap block and fail in the kernel's
       // decoder, far from the one thing that is actually wrong.
-      declareUnsupported("encoding");
+      declareUnsupported(UnsupportedReason.Encoding);
       outcome = FetchOutcome.Error;
       fail = FetchFail.Shell;
     } else if (body.byteLength > 0) {

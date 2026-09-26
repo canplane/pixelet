@@ -67,6 +67,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
         }
         Command::WORLD_CREATE => {
             let p = abi::WorldCreate::read(packet(pkt)?)?;
+            super::host_attached(s);
             crate::host::set_development(p.development);
             crate::host::set_handheld(p.handheld);
             crate::sched::turn::set_world_platform(crate::sched::turn::Platform {

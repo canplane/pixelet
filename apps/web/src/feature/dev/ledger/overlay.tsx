@@ -36,25 +36,56 @@ const DRAIN_MS = 500;
 
 /** A button's tint: plain; go, when a window is stopped and one can begin;
  * halt, while one is open; off, when there is nothing to press it for. */
-type Tint = "plain" | "go" | "halt" | "off";
-const TINT: Record<Tint, string> = {
-  plain: alpha(color.white, 0.6),
-  go: color.emerald500,
-  halt: color.amber400,
-  off: alpha(color.white, 0.25),
+export const enum Tint {
+  Plain = 0,
+  Go = 1,
+  Halt = 2,
+  Off = 3,
+}
+
+/** Each tint's border, ground and ink, and the ground and ink it lights to
+ * under a hovering pointer or a finger. */
+const TINT: Record<Tint, { border: string; ground: string; ink: string; lit: string; litInk: string }> = {
+  [Tint.Plain]: { border: alpha(color.white, 0.15), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.6), lit: alpha(color.white, 0.1), litInk: alpha(color.white, 0.9) },
+  [Tint.Go]: { border: alpha(color.ledgerGo, 0.4), ground: alpha(color.ledgerGo, 0.1), ink: color.ledgerGoInk, lit: alpha(color.ledgerGo, 0.2), litInk: color.ledgerGoInk },
+  [Tint.Halt]: { border: alpha(color.glow, 0.4), ground: alpha(color.glow, 0.1), ink: color.ledgerHaltInk, lit: alpha(color.glow, 0.2), litInk: color.ledgerHaltInk },
+  [Tint.Off]: { border: alpha(color.white, 0.1), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.25), lit: alpha(color.white, 0.05), litInk: alpha(color.white, 0.25) },
 };
 
-function PanelButton({ label, hint, tint = "plain", onPress, disabled }: { label: string; hint: string; tint?: Tint; onPress: () => void; disabled?: boolean }) {
-  const ink = TINT[tint];
+/** A button whose hint is said in the panel's title while a pointer is over
+ * it or a finger holds it: a page's tooltip would reach no device, and a
+ * hold is a device's hover. */
+function PanelButton({ label, hint, tint = Tint.Plain, onPress, onHint, disabled }: {
+  label: string;
+  hint: string;
+  tint?: Tint;
+  onPress: () => void;
+  onHint: (hint: string | null) => void;
+  disabled?: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const t = TINT[tint];
   return (
     <Pressable
       onPress={onPress}
+      onHoverIn={() => {
+        setHovered(true);
+        onHint(hint);
+      }}
+      onHoverOut={() => {
+        setHovered(false);
+        onHint(null);
+      }}
+      onLongPress={() => onHint(hint)}
+      onPressOut={() => {
+        if (!hovered) onHint(null);
+      }}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityHint={hint}
-      style={[styles.button, { borderColor: alpha(ink, 0.4), backgroundColor: alpha(ink, 0.1) }]}
+      style={({ pressed }) => [styles.button, { borderColor: t.border, backgroundColor: hovered || pressed ? t.lit : t.ground }]}
     >
-      <Text style={[gauge.text, { color: ink }]}>{label}</Text>
+      {({ pressed }) => <Text style={[gauge.text, { color: hovered || pressed ? t.litInk : t.ink }]}>{label}</Text>}
     </Pressable>
   );
 }
@@ -69,7 +100,7 @@ const POLL_MS = 500;
 const LIVE_WINDOW_MS = 10_000;
 
 type LedgerGlobals = typeof globalThis & {
-  __pxl_ledger_trace?: () => void;
+  __pxl_ledger_trace?: () => Promise<void>;
   __pxl_view?: (dist: number | null, polar: number | null) => void;
   __pxl_gauge?: (window_ms: number) => Gauge;
 };
@@ -83,6 +114,7 @@ function startWindow(): void {
 export function LedgerOverlay() {
   const show = useKernel((s) => DEV_BUNDLE && s.settings[SETTINGS.show_ledger.key] === 1);
   const [logging, setLogging] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
   const [g, setG] = useState<Gauge | null>(null);
   const { height } = useWindowDimensions();
 
@@ -133,7 +165,7 @@ export function LedgerOverlay() {
 
   return (
     <View style={[styles.panel, { maxHeight: height - 96 }]}>
-      <Text style={[gauge.text, styles.title]}>sched/ledger, last 10s</Text>
+      <Text style={[gauge.text, styles.title]}>{hint ?? "sched/ledger, last 10s"}</Text>
 
       {
         /* The buttons come before the numbers: on a phone the panel runs past
@@ -150,19 +182,21 @@ export function LedgerOverlay() {
             and then "start" is the button you cannot find when you want a
             clean window. */
         }
-        <PanelButton label="start" hint="clear everything and begin a fresh window" tint={recording ? "plain" : "go"} onPress={startWindow} />
+        <PanelButton onHint={setHint} label="start" hint="clear everything and begin a fresh window" tint={recording ? Tint.Plain : Tint.Go} onPress={startWindow} />
         <PanelButton
+          onHint={setHint}
           label="stop"
           hint="freeze the window so exports are stable while you read them"
-          tint={recording ? "halt" : "off"}
+          tint={recording ? Tint.Halt : Tint.Off}
           disabled={!recording}
           onPress={() => kernel_command(Command.LEDGER_STOP)}
         />
       </View>
       <View style={styles.buttons}>
-        <PanelButton label="report" hint="print + copy a text report" onPress={() => void ledgerReportPrint(ledgerReportText(ledgerReportRead()))} />
-        <PanelButton label="trace" hint="save the window as a Trace Event Format file for ui.perfetto.dev" onPress={ledgerTraceDownload} />
+        <PanelButton onHint={setHint} label="report" hint="print + copy a text report" onPress={() => void ledgerReportPrint(ledgerReportText(ledgerReportRead()))} />
+        <PanelButton onHint={setHint} label="trace" hint="save the window as a Trace Event Format file for ui.perfetto.dev" onPress={() => void ledgerTraceDownload()} />
         <PanelButton
+          onHint={setHint}
           label={logging ? "log on" : "log"}
           hint="stream each settled task, missed frame and long frame to the console"
           onPress={() => {
@@ -195,7 +229,7 @@ const styles = StyleSheet.create({
     backgroundColor: alpha(color.black, 0.72),
     pointerEvents: "box-none",
   },
-  title: { marginBottom: 4, fontWeight: "600", letterSpacing: 0.5, color: alpha(color.white, 0.55) },
+  title: { marginBottom: 4, fontWeight: "600", letterSpacing: 0.25, color: alpha(color.white, 0.55) },
   buttons: { flexDirection: "row", gap: 4, marginTop: 4 },
   button: { flex: 1, alignItems: "center", paddingVertical: 4, borderWidth: 1, borderRadius: 4 },
 });

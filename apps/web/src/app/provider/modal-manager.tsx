@@ -4,17 +4,18 @@ import { useEffect, useState } from "react";
 
 import type { ModalController, UiController } from "../type/ui.type.ts";
 
-import { EditFooModal } from "@/feature/placeholder/ui/edit-foo-modal.tsx";
-import type { EditFooProps } from "@/feature/placeholder/ui/edit-foo-modal.tsx";
-import { SettingsModal, type SettingsModalProps } from "@/feature/setting/modal.tsx";
-import { DrawerModal, type DrawerModalProps } from "@/feature/map/ui/overlay/drawer-modal.tsx";
-import { SearchModal, type SearchModalProps } from "@/feature/search/modal.tsx";
+import { PanelPresence } from "@/shared/ui/panel.tsx";
 
-/**
- * Represents the currently active modal state.
- * `null` means no modal is visible.
- */
-export type ModalState = EditFooProps | SettingsModalProps | DrawerModalProps | SearchModalProps | null;
+import { SettingsModal } from "@/feature/setting/modal.tsx";
+import { DrawerModal } from "@/feature/map/ui/overlay/drawer-modal.tsx";
+import { SearchModal } from "@/feature/search/modal.tsx";
+
+/** The panels a modal can be; none of them takes anything to open. */
+export const enum Modal {
+  Settings = 0,
+  Drawer = 1,
+  Search = 2,
+}
 
 /** ModalManager props */
 interface ModalManagerProps {
@@ -32,7 +33,8 @@ interface ModalManagerProps {
 export function ModalManager(props: ModalManagerProps) {
   const { mergeUiController } = props;
 
-  const [modalState, setModalState] = useState<ModalState>(null);
+  /** The modal asked for; null when none is. */
+  const [asked, setAsked] = useState<Modal | null>(null);
 
   /**
    * Modal-specific UI controller
@@ -41,10 +43,9 @@ export function ModalManager(props: ModalManagerProps) {
    * (e.g. opening a modal from anywhere in the app)
    */
   const [modalsController] = useState<ModalController>({
-    openUpdateFooModal: (id) => setModalState({ type: "foo:update", params: { id } }),
-    openSettingsModal: () => setModalState({ type: "settings" }),
-    openDrawerModal: () => setModalState({ type: "drawer" }),
-    openSearchModal: () => setModalState({ type: "search" }),
+    openSettingsModal: () => setAsked(Modal.Settings),
+    openDrawerModal: () => setAsked(Modal.Drawer),
+    openSearchModal: () => setAsked(Modal.Search),
   });
 
   /**
@@ -54,42 +55,21 @@ export function ModalManager(props: ModalManagerProps) {
     mergeUiController(modalsController);
   }, [modalsController, mergeUiController]);
 
-  // no active modal
-  if (!modalState) {
+  // What is drawn: the modal asked for, or the last one while it slides
+  // away. A modal asked for over one still leaving replaces it at once.
+  const [shown, setShown] = useState<Modal | null>(null);
+  if (asked !== null && asked !== shown) setShown(asked);
+
+  if (shown === null) {
     return null;
   }
-  const { type } = modalState;
+  const onClose = () => setAsked(null);
 
   return (
-    <>
-      {type === "foo:update" && (
-        <EditFooModal
-          open={!!modalState}
-          onOpenChange={(open: boolean) => !open && setModalState(null)}
-          {...modalState}
-        />
-      )}
-      {type === "settings" && (
-        <SettingsModal
-          open={!!modalState}
-          onOpenChange={(open: boolean) => !open && setModalState(null)}
-          {...modalState}
-        />
-      )}
-      {type === "drawer" && (
-        <DrawerModal
-          open={!!modalState}
-          onOpenChange={(open: boolean) => !open && setModalState(null)}
-          {...modalState}
-        />
-      )}
-      {type === "search" && (
-        <SearchModal
-          open={!!modalState}
-          onOpenChange={(open: boolean) => !open && setModalState(null)}
-          {...modalState}
-        />
-      )}
-    </>
+    <PanelPresence.Provider value={{ open: asked !== null, gone: () => setShown(null) }}>
+      {shown === Modal.Settings && <SettingsModal onClose={onClose} />}
+      {shown === Modal.Drawer && <DrawerModal onClose={onClose} />}
+      {shown === Modal.Search && <SearchModal onClose={onClose} />}
+    </PanelPresence.Provider>
   );
 }

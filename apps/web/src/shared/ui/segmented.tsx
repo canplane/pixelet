@@ -5,14 +5,14 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { alpha, color, font } from "@/shared/ui/theme.ts";
 
-export interface Segment<T extends string> {
+export interface Segment<T extends string | number> {
   value: T;
   label: string;
   icon?: ReactNode;
 }
 
 /** One of a few views of the same panel, picked from a row of segments. */
-export function Segmented<T extends string>({ segments, value, onChange }: { segments: readonly Segment<T>[]; value: T; onChange: (value: T) => void }) {
+export function Segmented<T extends string | number>({ segments, value, onChange }: { segments: readonly Segment<T>[]; value: T; onChange: (value: T) => void }) {
   return (
     <View accessibilityRole="tablist" style={styles.track}>
       {segments.map((s) => {
@@ -35,9 +35,10 @@ export function Segmented<T extends string>({ segments, value, onChange }: { seg
 }
 
 const styles = StyleSheet.create({
-  track: { flexDirection: "row", height: 36, padding: 3, borderRadius: 10, backgroundColor: alpha(color.accent, 0.6) },
-  segment: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 7 },
-  on: { backgroundColor: color.background, boxShadow: "0 1px 2px rgba(0, 0, 0, 0.08)" },
-  label: { fontFamily: font.family, fontSize: 13, fontWeight: "500", color: color.mutedForeground },
-  labelOn: { color: color.foreground },
+  // Capsules, the track and the segment in it alike.
+  track: { flexDirection: "row", height: 36, padding: 3, borderRadius: 18, backgroundColor: alpha(color.wash, 0.6) },
+  segment: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 15 },
+  on: { backgroundColor: color.paper, boxShadow: "0 1px 2px rgba(0, 0, 0, 0.08)" },
+  label: { fontFamily: font.family, fontSize: 13, fontWeight: "500", color: color.textMuted },
+  labelOn: { color: color.text },
 });

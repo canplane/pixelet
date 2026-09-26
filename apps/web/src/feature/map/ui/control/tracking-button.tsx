@@ -1,14 +1,17 @@
 // @pxl/web/feature/map/ui/control/tracking-button.tsx
 
-import { Compass, Locate, Navigation } from "lucide-react-native";
+import { Compass, Loader2, Locate, Navigation } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
+
+import { Spin } from "@platform/motion.tsx";
+import { LABEL } from "@platform/palette.ts";
 
 import { DevicePoseStatus, Tracking } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_tracking, useKernel } from "@/kernel/shell.ts";
 
 import { CircularButton } from "@/shared/ui/circular-button.tsx";
-import { alpha, color } from "@/shared/ui/theme.ts";
+import { color } from "@/shared/ui/theme.ts";
 
 export function TrackingButton() {
   const { t } = useTranslation();
@@ -25,19 +28,25 @@ export function TrackingButton() {
   const isLoading: boolean = locationStatus === DevicePoseStatus.Loading;
 
   const icon = () => {
-    if (isLoading) return <ActivityIndicator size="small" color={alpha(color.ink, 0.4)} />;
-    if (canShowLocationControl) return <Locate size={18} color={alpha(color.ink, 0.6)} />;
+    if (isLoading) {
+      return (
+        <Spin periodMs={1000}>
+          <Loader2 size={20} color={LABEL.primary} />
+        </Spin>
+      );
+    }
+    if (canShowLocationControl) return <Locate size={18} color={LABEL.primary} />;
     if (is_follow_mode) {
       const finalRotationDeg = (heading ?? 0) - (azimuth * 180) / Math.PI;
       // Turned by the view around it, in React Native's own transform: a CSS
       // string on the icon is the page's SVG, and a device's SVG refuses it.
       return (
         <View style={{ transform: [{ rotate: `${finalRotationDeg}deg` }] }}>
-          <Compass size={22} color={color.amber500} />
+          <Compass size={22} color={color.heading} />
         </View>
       );
     }
-    return <Navigation size={20} color={alpha(color.ink, 0.8)} />;
+    return <Navigation size={20} color={LABEL.primary} />;
   };
 
   const title = canShowLocationControl ? t("map.controls.move_to_location") : is_follow_mode ? t("map.controls.exit_compass_mode") : t("map.controls.start_compass_mode");

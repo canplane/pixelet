@@ -11,7 +11,7 @@ import { StyleSheet, View } from "react-native";
 
 import { AboveKeyboard } from "@platform/above-keyboard.tsx";
 import { WorldSurface } from "@platform/surface.tsx";
-import { DevOverlay } from "@platform/dev-overlay.tsx";
+import { LedgerOverlay } from "@/feature/dev/ledger/overlay.tsx";
 import { Toaster } from "@/shared/ui/toast/toaster.tsx";
 import { chrome } from "@/shared/ui/theme.ts";
 
@@ -19,14 +19,15 @@ import { Overlays } from "./overlay/overlays.tsx";
 import { MODE_BAR_HEIGHT_PX } from "./overlay/mode-bar.tsx";
 import { ToastController } from "./toast-controller.tsx";
 
-/** How far the toasts stand over the mode bar. */
-const TOAST_LIFT_PX = 20;
+/** How far the toasts stand over the mode bar: a gap as wide as the
+ * chrome's inset, and a lift past it. */
+const TOAST_LIFT_PX = chrome.inset + 20;
 
 export function MapView() {
   return (
     <View style={[StyleSheet.absoluteFill, styles.root]}>
       <ToastController />
-      <DevOverlay />
+      <LedgerOverlay />
 
       <View style={StyleSheet.absoluteFill}>
         <WorldSurface />

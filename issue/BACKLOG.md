@@ -34,7 +34,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
     1080 px and 50° (pxl-render look/lod.rs); `P` is to come from the
     canvas's device pixels and the field of view, and where a screen needs
     more than the tables are sized for, τ rises rather than the rule
-    breaking. Planned 2026-09-25, held.
+    breaking. Planned 2026-09-25, held. Measured on an iPhone 13 mini
+    2026-09-27 (a debug build, the ratio fixed at 2): the GPU's time
+    follows the triangles and not the pixels — 6 ms at a quarter of a
+    million, 14 at half, 26.6 at the 2.07 million the view drew for most of
+    the window — so a frame fits under half a million, and 78% of frames
+    ran past 16.6 ms. A turn past 16 ms came in a frame the GPU ran long in
+    532 times of 537: the kernel waits for the layer's next drawable, and
+    on a device the JavaScript thread waits with it.
   - **What a crossfade leaves.** A change of what a chunk draws dissolves
     over 300 ms of frames (chunk/table.rs `Fade`), a cube for another and a
     stale chunk for what replaced it, its decor with it on the same half of
@@ -176,19 +183,14 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
-- **The device app, the rest.** Built for iOS 2026-09-26 (apps/native,
-  crates/pxl/web/native); what is left:
+- **The move to React Native, the rest.** Built for iOS 2026-09-26
+  (apps/native, crates/pxl/web/native); what is left of the move itself —
+  what the device costs to run is the budgets' items, not this one:
   - **Android and Quest.** The Kotlin half of `modules/platform` — the
     surface on a Vulkan layer, the kernel's memory and doorbell, storage,
     text through Android's own engine, the compass — and the Android
     targets in `build-native.ts`; the kernel, the renderer and the shell
-    take them as they are.
-  - **The ledger over the map on a device.** `platform/dev-overlay.tsx` is
-    empty on a device, though the memory the ledger is read from is the
-    same buffer there as on a page.
-  - **A reload leaves its surfaces.** A development reload of the JavaScript
-    drops the old shell without closing what it opened, and the kernel keeps
-    those surfaces; development only.
+    take them as they are. Once the shell has settled.
 
 - **One byte budget over everything drawn, paid for in LOD.** The phone's
   page dies because the working set exceeds a budget of about two
@@ -203,6 +205,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   it raises the screen-space error until they fit — the view gets coarser,
   the page does not die
   ([Cesium3DTileset](https://cesium.com/learn/cesiumjs/ref-doc/Cesium3DTileset.html)).
+  On a device the same ceiling is the app's: a debug build on the mini
+  still took the system's critical memory warning once, seconds after
+  start, with the kernel's region mapped rather than written (2026-09-27),
+  and a device's heap row counts wgpu's own allocations beside the
+  kernel's (crates/pxl/web/native/src/memory.rs).
   MapLibre sizes its tile cache from the viewport rather than a count
   ([MapOptions](https://maplibre.org/maplibre-gl-js/docs/API/type-aliases/MapOptions/)).
   The same lever exists here: the one LOD criterion's distance thresholds.
@@ -342,8 +349,11 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
 - **A terrain read that hung.** Seen once on the simulator, 2026-09-27:
   every terrain page's read went unanswered for a minute and more while
   assets, geocode pages and the site's root answered at once, and a minute
-  later the same pages came back in under two seconds. Not reproduced; the
-  cause is unknown.
+  later the same pages came back in under two seconds. Not reproduced. The
+  JavaScript was being reloaded under the kernel at the time, and a reload
+  then left every credit with reads no shell would answer — the kernel now
+  lets them go when a shell attaches (door.rs `host_attached`); whether that
+  was all of it is not known.
 
 - **The address label by the zoom.** Asked 2026-09-23, not now: it wants a
   rebake. The label is one baked answer a leaf page
@@ -474,7 +484,9 @@ it is not rediscovered, **parked** decided-not-now with the reason on file.
   measured before the 512-cell page, which is 1 MB, and before the
   levels, which ask a ring of pages a level, coarse first; what is worth asking
   is whether the quota and the page size are right on a phone's
-  connection, measured again.
+  connection, measured again. On the device app over Wi-Fi, 2026-09-27: a
+  terrain read that completed ran p50 1.6 s, and 28 of 48 were stopped
+  before they did as the view moved.
 - **The run set's per-axis inset has no writer.** `sub_sx`/`sub_sy` are
   always a copy of `sub_sz` (the scan, the coarse pack and the object
   adapter all set the three equal), so the per-axis design column_run.ts

@@ -11,16 +11,12 @@ import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { useUiStore } from "@/app/store/ui-store.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { useSafeArea } from "@platform/safe-area.ts";
-import { Panel, PanelHeader } from "@/shared/ui/panel.tsx";
+import { Panel, PanelHeader, Side } from "@/shared/ui/panel.tsx";
 import { Segmented } from "@/shared/ui/segmented.tsx";
 import { alpha, color, font, hairline } from "@/shared/ui/theme.ts";
 import { CharacterPicker } from "@/feature/character/picker.tsx";
 import { CubeSwatch } from "./cube-swatch.tsx";
 import { DECOR_ICONS } from "./mode-bar.tsx";
-
-export interface DrawerModalProps {
-  type: "drawer";
-}
 
 /** The full catalog's own grouping — mode-bar.tsx's hotbar stays a flat
  * scrolling strip (no sections, that's the point of a hotbar), but a grid
@@ -71,7 +67,7 @@ function CubeSwatchButton({ cube, onPick }: { cube: PlaceableCube; onPick: (cube
 
   return (
     <GridButton label={cubeLabel(t, cube)} active={active} onPress={() => onPick(cube)}>
-      <CubeSwatch cube={cube} size={32} radius={6} style={active ? styles.markOn : styles.markOff} />
+      <CubeSwatch cube={cube} size={32} radius={16} style={active ? styles.markOn : styles.markOff} />
     </GridButton>
   );
 }
@@ -87,62 +83,64 @@ function DecorGridButton({ kind, onPick }: { kind: u8; onPick: (kind: u8) => voi
   return (
     <GridButton label={t(`decors.${name}`)} active={active} onPress={() => onPick(kind)}>
       <View style={[styles.decor, active ? [styles.markOn, styles.decorOn] : styles.markOff]}>
-        <Icon size={16} strokeWidth={2} color={color.foreground} />
+        <Icon size={16} strokeWidth={2} color={color.text} />
       </View>
     </GridButton>
   );
 }
 
-type Tab = "cube" | "decor" | "character";
+/** The catalog's three tabs. */
+export const enum DrawerTab {
+  Cube = 0,
+  Decor = 1,
+  Character = 2,
+}
 
-/** The full cube/decor/character catalog — mode-bar.tsx's own hotbar (its
- * horizontal scrolling color strip) stays untouched and is the everyday
- * quick-pick; this is the Minecraft-inventory-style "everything" view opened
- * from its own trigger button, never a replacement for the hotbar. Picking a
- * Cube/Decor entry does exactly what its (now-removed) hotbar counterpart
- * used to (set the same ui-store fields), then closes. The Character tab is
+/** The full cube/decor/character catalog: the Minecraft-inventory-style
+ * "everything" view beside mode-bar.tsx's hotbar, which is the everyday
+ * quick-pick, opened from its own trigger button. Picking a Cube/Decor entry
+ * sets what a hotbar pick sets (the same ui-store fields), then closes. The Character tab is
  * the odd one out: it equips the single always-on companion rather than
  * placing anything, so its picks (CharacterPicker) apply immediately and
  * deliberately leave the sheet open — see that component's own comment. */
-export function DrawerModal(props: BaseModalProps & DrawerModalProps) {
-  const { onOpenChange } = props;
+export function DrawerModal(props: BaseModalProps) {
+  const { onClose } = props;
   const { t } = useTranslation();
   const { bottom } = useSafeArea();
-  const [tab, setTab] = useState<Tab>("cube");
+  const [tab, setTab] = useState<DrawerTab>(DrawerTab.Cube);
   const selectCube = useUiStore.getState().selectCube;
   const selectDecor = useUiStore.getState().selectDecor;
-  const close = () => onOpenChange(false);
 
   const sections = groupBySection(placeable_cubes);
 
   function pickCube(cube: PlaceableCube): void {
     selectCube(cube);
-    close();
+    onClose();
   }
 
   function pickDecor(kind: u8): void {
     selectDecor(kind);
-    close();
+    onClose();
   }
 
   return (
-    <Panel side="right" width={360} label={t("drawer_modal.title")} onClose={close}>
-      <PanelHeader title={t("drawer_modal.title")} closeLabel={t("drawer_modal.close")} onClose={close} />
+    <Panel side={Side.Right} width={360} label={t("drawer_modal.title")} onClose={onClose}>
+      <PanelHeader title={t("drawer_modal.title")} closeLabel={t("drawer_modal.close")} onClose={onClose} />
 
       <View style={styles.tabs}>
         <Segmented
           value={tab}
           onChange={setTab}
           segments={[
-            { value: "cube", label: t("drawer_modal.tabs.cube") },
-            { value: "decor", label: t("drawer_modal.tabs.decor") },
-            { value: "character", label: t("drawer_modal.tabs.character") },
+            { value: DrawerTab.Cube, label: t("drawer_modal.tabs.cube") },
+            { value: DrawerTab.Decor, label: t("drawer_modal.tabs.decor") },
+            { value: DrawerTab.Character, label: t("drawer_modal.tabs.character") },
           ]}
         />
       </View>
 
       <ScrollView key={tab} style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: bottom + 16 }]}>
-        {tab === "cube" && SECTION_ORDER.map((section) => {
+        {tab === DrawerTab.Cube && SECTION_ORDER.map((section) => {
           const cubes = sections.get(section);
           if (!cubes || cubes.length === 0) return null;
           return (
@@ -155,13 +153,13 @@ export function DrawerModal(props: BaseModalProps & DrawerModalProps) {
           );
         })}
 
-        {tab === "decor" && (
+        {tab === DrawerTab.Decor && (
           <View style={styles.grid}>
             {decor_kinds.map((kind) => <DecorGridButton key={kind} kind={kind} onPick={pickDecor} />)}
           </View>
         )}
 
-        {tab === "character" && <CharacterPicker />}
+        {tab === DrawerTab.Character && <CharacterPicker />}
       </ScrollView>
     </Panel>
   );
@@ -172,13 +170,13 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 16, gap: 16 },
   section: { gap: 8 },
-  sectionTitle: { fontFamily: font.family, fontSize: 12, fontWeight: "500", color: color.mutedForeground },
+  sectionTitle: { fontFamily: font.family, fontSize: 12, fontWeight: "500", color: color.textMuted },
   // Five to a row, as the catalog was laid out.
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  cell: { width: "18.4%", alignItems: "center", gap: 4, padding: 6, borderRadius: 8 },
-  cellLabel: { width: "100%", textAlign: "center", fontFamily: font.family, fontSize: 10, lineHeight: 12, color: color.mutedForeground },
+  cell: { width: "18.4%", alignItems: "center", gap: 4, padding: 6, borderRadius: 20 },
+  cellLabel: { width: "100%", textAlign: "center", fontFamily: font.family, fontSize: 10, lineHeight: 12, color: color.textMuted },
   markOff: { boxShadow: `0 0 0 1px ${hairline}` },
-  markOn: { boxShadow: `0 0 0 1px ${color.background}, 0 0 0 3px ${color.foreground}`, transform: [{ scale: 1.05 }] },
-  decor: { width: 32, height: 32, borderRadius: 6, alignItems: "center", justifyContent: "center" },
-  decorOn: { backgroundColor: alpha(color.accent, 0.6) },
+  markOn: { boxShadow: `0 0 0 1px ${color.paper}, 0 0 0 3px ${color.text}`, transform: [{ scale: 1.05 }] },
+  decor: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  decorOn: { backgroundColor: alpha(color.wash, 0.6) },
 });

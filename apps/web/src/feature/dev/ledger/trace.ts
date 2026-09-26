@@ -10,8 +10,9 @@
  *
  * Built here from the kernel's rings read in place (view.ts) and the
  * shell's own long frames, so the tens of megabytes a window's trace runs to
- * are this side's to allocate and never the kernel heap's. A download rather
- * than the clipboard: the clipboard handles that size badly, and Perfetto
+ * are this side's to allocate and never the kernel heap's. A file rather
+ * than the clipboard — a download on a page, the share sheet on a device
+ * (platform/save.ts): the clipboard handles that size badly, and Perfetto
  * wants a file anyway. Wired to `window` in dev (overlay.tsx) so it is
  * reachable from the console.
  */
@@ -20,6 +21,7 @@ import type { f64, u32 } from "@xpute/core/abi/word.ts";
 import { round } from "@xpute/core/math/scalar.ts";
 
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/config/deploy.ts";
+import { save_file } from "@platform/save.ts";
 
 import { type Frame, isList, LANES, LIST_NAMES } from "./lane.ts";
 import { failText } from "./report.ts";
@@ -95,7 +97,6 @@ export function ledgerTraceJson(): string {
       priority: r.priority,
       queuedMs: r.start_ms === null ? null : fixed(r.start_ms - r.enqueue_ms, 1),
       ranMs: r.start_ms === null ? null : fixed(r.end_ms - r.start_ms, 1),
-      transport_ms: r.transport_ms,
     };
     if (r.fail !== 0) {
       args.fail = failText(r.fail, r.detail);
@@ -146,19 +147,14 @@ export function ledgerTraceJson(): string {
   return JSON.stringify({ traceEvents: events, displayTimeUnit: "ms", metadata: { build_number: BUILD_NUMBER, build_id: BUILD_ID, build_time: BUILD_TIME } });
 }
 
-export function ledgerTraceDownload(): void {
+export async function ledgerTraceDownload(): Promise<void> {
   const json = ledgerTraceJson();
   const mb = (json.length / 1e6).toFixed(1);
   const name = `pxl-ledger-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   try {
-    const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    a.click();
-    URL.revokeObjectURL(url);
+    await save_file(name, json, "application/json");
     console.log(`[ledger] trace saved as ${name} — ${mb}MB. Open it at ui.perfetto.dev`);
   } catch (err) {
-    console.log(`[ledger] trace built (${mb}MB) but the download failed:`, err);
+    console.log(`[ledger] trace built (${mb}MB) but saving it failed:`, err);
   }
 }

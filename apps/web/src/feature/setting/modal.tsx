@@ -8,7 +8,7 @@ import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { Info, Sparkles } from "lucide-react-native";
 
 import { useSafeArea } from "@platform/safe-area.ts";
-import { Panel, PanelHeader } from "@/shared/ui/panel.tsx";
+import { Panel, PanelHeader, Side } from "@/shared/ui/panel.tsx";
 import { Segmented } from "@/shared/ui/segmented.tsx";
 import { color, hairline } from "@/shared/ui/theme.ts";
 import { SettingsSection } from "./section.tsx";
@@ -18,11 +18,11 @@ import { DisclaimerSection } from "./section/disclaimer.tsx";
 import { AboutSection } from "./section/about.tsx";
 import { AttributionSection } from "./section/attribution.tsx";
 
-export interface SettingsModalProps {
-  type: "settings";
+/** The sheet's two tabs. */
+export const enum SettingsTab {
+  Effects = 0,
+  Info = 1,
 }
-
-type Tab = "effects" | "info";
 
 function Separator() {
   return <View style={styles.separator} />;
@@ -43,30 +43,29 @@ function TabScroll({ children }: { children: React.ReactNode }) {
 
 /** The settings, beside the map they change: the map stays in reach, so an
  * effect can be switched and looked at without closing anything. */
-export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
-  const { onOpenChange } = props;
+export function SettingsModal(props: BaseModalProps) {
+  const { onClose } = props;
   const { t } = useTranslation();
-  const [tab, setTab] = useState<Tab>("effects");
-  const close = () => onOpenChange(false);
+  const [tab, setTab] = useState<SettingsTab>(SettingsTab.Effects);
 
   return (
-    <Panel side="left" width={360} label={t("settings.title")} onClose={close}>
-      <PanelHeader title={t("settings.title")} closeLabel={t("settings.close")} onClose={close} />
+    <Panel side={Side.Left} width={360} label={t("settings.title")} onClose={onClose}>
+      <PanelHeader title={t("settings.title")} closeLabel={t("settings.close")} onClose={onClose} />
 
       <View style={styles.tabs}>
         <Segmented
           value={tab}
           onChange={setTab}
           segments={[
-            { value: "effects", label: t("settings.tabs.effects"), icon: <Sparkles size={14} color={color.mutedForeground} /> },
-            { value: "info", label: t("settings.tabs.info"), icon: <Info size={14} color={color.mutedForeground} /> },
+            { value: SettingsTab.Effects, label: t("settings.tabs.effects"), icon: <Sparkles size={14} color={color.textMuted} /> },
+            { value: SettingsTab.Info, label: t("settings.tabs.info"), icon: <Info size={14} color={color.textMuted} /> },
           ]}
         />
       </View>
 
-      {tab === "effects"
+      {tab === SettingsTab.Effects
         ? (
-          <TabScroll key="effects">
+          <TabScroll key={SettingsTab.Effects}>
             <Text style={settingText.faint}>{t("settings.cost_legend")}</Text>
             <Separator />
             <SettingsSection section="display" />
@@ -78,7 +77,7 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
           </TabScroll>
         )
         : (
-          <TabScroll key="info">
+          <TabScroll key={SettingsTab.Info}>
             <LanguageSection />
             <Separator />
             <DisclaimerSection />

@@ -18,7 +18,7 @@ import type { f32, f64, u32 } from "@xpute/core/abi/word.ts";
 import { handle_slot } from "@xpute/runtime/abi/handle.ts";
 import { bytes_of, each_record } from "@xpute/runtime/ipc/stream.ts";
 
-import type { UnsupportedReason } from "@/app/store/unsupported-store.ts";
+import { UnsupportedReason } from "@/app/store/unsupported-store.ts";
 import { DEV_BUNDLE } from "@/config/bundle.ts";
 import { address, compare, dimension, filter, format, load, op, record, resource, stream } from "@/kernel/render/gpu/api.spec.ts";
 
@@ -72,7 +72,7 @@ interface NoDevice {
  * device request, and by then the module is loaded either way. */
 export function missing_before_boot(): UnsupportedReason | null {
   if ("gpu" in navigator) return null;
-  return isSecureContext ? "webgpu" : "insecure";
+  return isSecureContext ? UnsupportedReason.WebGpu : UnsupportedReason.Insecure;
 }
 
 /** The device, once the browser answers, or why there is none. `lost` hears
@@ -83,11 +83,11 @@ export async function acquire_device(lost: () => void): Promise<DeviceInfo | NoD
   // dev server's LAN address over http.
   if (!("gpu" in navigator)) {
     return isSecureContext
-      ? { reason: "webgpu", detail: "this browser has no navigator.gpu" }
-      : { reason: "insecure", detail: `${location.origin} is not a secure context, which is the only place navigator.gpu is exposed` };
+      ? { reason: UnsupportedReason.WebGpu, detail: "this browser has no navigator.gpu" }
+      : { reason: UnsupportedReason.Insecure, detail: `${location.origin} is not a secure context, which is the only place navigator.gpu is exposed` };
   }
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-  if (!adapter) return { reason: "gpu", detail: "navigator.gpu is here but no adapter answered — the GPU is unavailable or blocklisted (chrome://gpu)" };
+  if (!adapter) return { reason: UnsupportedReason.Gpu, detail: "navigator.gpu is here but no adapter answered — the GPU is unavailable or blocklisted (chrome://gpu)" };
   const timestamps = adapter.features.has("timestamp-query");
   const d = await adapter.requestDevice({ requiredFeatures: timestamps ? ["timestamp-query"] : [] });
   // What the adapter says it can do, on a device nobody can attach a debugger

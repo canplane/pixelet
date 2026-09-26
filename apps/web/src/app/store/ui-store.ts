@@ -24,20 +24,16 @@ export interface ChatLine {
 const MAX_CHAT_LINES = 10;
 let nextChatLineId = 0;
 
-// mode-bar.tsx's hotbar (2026-09-07): used to be a fixed, always-complete
-// enumeration (every flat color, plus its own separate decor row) — now that
-// drawer-modal.tsx holds the *entire* catalog (colors,
-// terrain-styled cubes, decor), the hotbar's job shrunk to "whatever you
-// actually reached for lately," across cube and decor alike, one shared MRU
-// list instead of two side-by-side ones. Tagged by the tool that holds it: a
+// mode-bar.tsx's hotbar is whatever was reached for lately, across cube and
+// decor alike, one shared MRU list; the entire catalog (colors,
+// terrain-styled cubes, decor) is drawer-modal.tsx's. Tagged by the tool that holds it: a
 // cube and a decor kind are numbers of two catalogs, so which one a pick is —
 // and whether picking it sets the cube or the decor kind — is the tool
 // alongside it.
 export type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u8 };
 
-// 8, not the full 15-color/32-terrain-style/N-decor catalog — the whole
-// point of moving to MRU instead of a static, ever-growing enumeration.
-// mode-bar.tsx's own strip already scrolls (overflow-x-auto) once the row
+// 8, not the full 15-color/32-terrain-style/N-decor catalog: a recent list
+// is short, and the drawer holds the rest. mode-bar.tsx's own strip already scrolls (overflow-x-auto) once the row
 // overflows a narrow phone's width, so this doesn't need to fit in one
 // glance with zero scroll the way a smaller cap might.
 const MAX_RECENT_PICKS = 8;

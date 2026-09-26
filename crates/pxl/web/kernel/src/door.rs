@@ -151,6 +151,27 @@ fn write_heap_row() {
 
 const BOOT_QUANTUM: usize = 9;
 
+/// A shell has booted against this kernel. On a page there is only ever the
+/// first, since the page's module goes with its shell; on a device the kernel
+/// outlives a reload of the JavaScript, and what the shell before was running
+/// — its reads and loads, its surfaces, its sensors' watches, the texts it
+/// was asked to lay out — is answered by no one now. A read left out keeps
+/// its credit until it is answered, so a reload with every credit out asked
+/// for nothing ever again. All of it is let go here, and the new shell starts
+/// from what it asks for.
+fn host_attached(s: &mut State) {
+    crate::io::sched::reset();
+    let open: Vec<u32> = pxl_render::gpu::surface::surfaces().map(|surface| surface.handle).collect();
+    for handle in open {
+        if let Some(closed) = pxl_render::gpu::surface::surface_delete(handle) {
+            pxl_render::gpu::renderer::surface_closed(closed);
+        }
+    }
+    crate::shell::shell::sensors_close();
+    crate::text::text_forget();
+    s.snapshot = 0;
+}
+
 /// The first turn's: lays out the memory the module was given and writes the
 /// boot block where mem.json's BOOT_AT says, for the shell to read once
 /// before any ring.

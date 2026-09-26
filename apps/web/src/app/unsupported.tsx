@@ -37,8 +37,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 12,
     paddingHorizontal: 32,
-    backgroundColor: color.background,
+    backgroundColor: color.paper,
   },
-  title: { fontFamily: font.family, fontSize: 18, fontWeight: "600", textAlign: "center", color: color.foreground },
-  body: { maxWidth: 384, fontFamily: font.family, fontSize: 14, lineHeight: 23, textAlign: "center", color: color.mutedForeground },
+  title: { fontFamily: font.family, fontSize: 18, fontWeight: "600", textAlign: "center", color: color.text },
+  body: { maxWidth: 384, fontFamily: font.family, fontSize: 14, lineHeight: 23, textAlign: "center", color: color.textMuted },
 });
