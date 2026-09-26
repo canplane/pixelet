@@ -101,15 +101,3 @@ impl DemandKey {
         DemandKey { category, subject }
     }
 }
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Demand {
-    /// Stable identity across sync calls. Two demands sharing a key are the
-    /// same work: re-submitting one that is already queued updates its
-    /// priority, one already in flight is left alone.
-    pub key: DemandKey,
-    /// Lower runs sooner. A page's is how far it sits from the view in its
-    /// category's own order (world/pyramid.rs's), doubled so a second
-    /// category can interleave at the odd numbers.
-    pub priority: f64,
-}

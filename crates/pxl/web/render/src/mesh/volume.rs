@@ -97,16 +97,6 @@ pub fn pack_material(material: &VoxelMaterial) -> u32 {
     ((material.material_class & 255) << 24) | ((material.r & 255) << 16) | ((material.g & 255) << 8) | (material.b & 255)
 }
 
-pub fn unpack_material(packed: u32, layer_idx: u32) -> VoxelMaterial {
-    VoxelMaterial {
-        material_class: packed >> 24,
-        r: (packed >> 16) & 255,
-        g: (packed >> 8) & 255,
-        b: packed & 255,
-        layer_idx,
-    }
-}
-
 // ---- the volume ----
 
 const BAND_MASK: u32 = BAND_CELLS - 1;

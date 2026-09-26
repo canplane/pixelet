@@ -362,6 +362,12 @@ fn reaches(module: &Module, f: &naga::Function, name: &str) -> bool {
     block(module, &f.body, name)
 }
 
+/// The shaders that place a point of the world, each of which lays it on the
+/// planet as the ground is (globe.wgsl's `on_globe_of`) before it projects
+/// it: what is drawn over the map and not laid on it floats off the ground
+/// as the planet falls away. The rest draw the sky or work on the screen.
+const WORLD_SHADERS: [u32; 7] = [SHADER_CHUNK, SHADER_DECOR, SHADER_SKINNED, SHADER_PUCK_ZONE, SHADER_PUCK_BEACON, SHADER_BADGE, SHADER_DEBUG];
+
 #[test]
 fn every_shader_that_places_the_world_lays_it_on_the_planet() {
     for kind in WORLD_SHADERS {

@@ -113,11 +113,6 @@ pub fn ledger_window_stop() {
     set_step_timing(false);
 }
 
-/// Every registered step by mean ms per run, heaviest first.
-pub fn ledger_logging() -> bool {
-    log().logging
-}
-
 /// `one` onto a lane, the oldest dropped when it is full.
 fn keep<T: Copy>(lane: &mut [T], len: &mut usize, one: T) {
     if lane.is_empty() {

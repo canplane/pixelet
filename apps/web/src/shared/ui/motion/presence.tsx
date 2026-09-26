@@ -51,7 +51,7 @@ export function Presence({ show, from, to = {}, exit, transition, exitTransition
 /** What an item is told apart by, as React keys it. */
 export type Key = string | number;
 
-export interface Present<T> {
+interface Present<T> {
   item: T;
   key: Key;
   /** False while it is leaving: drawn at its exit, and dropped by `gone`. */

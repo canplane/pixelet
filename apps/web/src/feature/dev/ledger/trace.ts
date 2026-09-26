@@ -78,7 +78,7 @@ function frameArgs(f: Frame): Args {
 }
 
 /** The trace as a JSON string. */
-export function ledgerTraceJson(): string {
+function ledgerTraceJson(): string {
   const { frames, tasks, worst } = ledgerRingsRead();
   const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];

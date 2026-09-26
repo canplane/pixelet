@@ -94,11 +94,6 @@ pub fn off_tick(id: u32) {
     tick().off_tick(id);
 }
 
-/// What the previous tick spent, per phase. For the ledger.
-pub fn tick_last() -> TickReport {
-    tick().last()
-}
-
 /// The world's tick, on the quota the central scheduler strobed it with at
 /// `edge_at`.
 pub fn run_tick(state: &mut TickState, delta: f64, quota_ms: f64, edge_at: f64) -> TickReport {

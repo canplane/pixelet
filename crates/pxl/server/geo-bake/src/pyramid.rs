@@ -28,10 +28,6 @@ pub trait Layer: Folds + PartialEq + Send + Sync {
     fn decode(raw: &[u8]) -> Result<Self, String>;
 }
 
-/// The marker a page that does not exist leaves, so that asking again does
-/// not ask the source again. Local to a page set and never uploaded.
-const ABSENT: &str = "empty";
-
 pub struct PageSet {
     pub root: PathBuf,
 }
@@ -54,26 +50,6 @@ impl PageSet {
         let path = self.path(p);
         fs::create_dir_all(self.level_dir(p.level)).map_err(|e| e.to_string())?;
         write_atomic(&path, packed).map_err(|e| format!("{}: {e}", path.display()))
-    }
-
-    /// Records that a page does not exist.
-    pub fn write_absent(&self, p: LevelPage) -> Result<(), String> {
-        fs::create_dir_all(self.level_dir(p.level)).map_err(|e| e.to_string())?;
-        let path = self.path(p).with_extension(ABSENT);
-        fs::write(&path, b"").map_err(|e| format!("{}: {e}", path.display()))
-    }
-
-    /// Whether a page is settled on disk: some when it is (whether it exists),
-    /// none when nothing has been decided about it yet.
-    pub fn settled(&self, p: LevelPage) -> Option<bool> {
-        let path = self.path(p);
-        if path.exists() {
-            Some(true)
-        } else if path.with_extension(ABSENT).exists() {
-            Some(false)
-        } else {
-            None
-        }
     }
 
     /// A stored page, decoded, or none where the page does not exist.

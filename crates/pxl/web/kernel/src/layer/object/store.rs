@@ -338,12 +338,6 @@ pub fn get_objects_in_cell(ix: i64, iy: i64, iz: i64) -> Vec<OccupiedEntry> {
     out
 }
 
-/// Whether anything really occupies the cell — what scattered decor asks
-/// before standing in it, without making an object to find out.
-pub fn cell_is_occupied(ix: i64, iy: i64, iz: i64) -> bool {
-    cell_run(ix, iy, iz).is_some_and(|run| run.solid > 0)
-}
-
 /// Every object claiming the cell `at` stands in.
 pub fn objects_at(at: &Pvf3) -> Vec<OccupiedEntry> {
     let [ix, iy, iz] = CELL.index_of(at);

@@ -40,8 +40,6 @@ use super::constant::{ELE_PAD, ELE_PADDED_SPAN, PAGE_ELE_SPAN};
 use super::format::{Ground, Terrain, GROUND_CH_KEYS};
 use super::pack::{channel_of, with_channel, GroundCell};
 use crate::space::pyramid::{neighborhood, Folds, LevelPage, CHILDREN, GROUND};
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
 
 /// The value that fills more than half of a 2×2 block, or of a 2×2×2 one,
 /// folding into `level`; when none does, or two fill half each, the tie
@@ -154,18 +152,12 @@ impl Folds for Terrain {
     }
 
     fn fold_page<'a>(p: LevelPage, held: impl Fn(LevelPage) -> Option<&'a Self>) -> Option<Self> {
-        fold_terrain_held(neighborhood(p).map(held), p.level)
+        fold_terrain(neighborhood(p).map(held), p.level)
     }
 }
 
-/// A parent page from the 4×4 pages around its four children, indexed as
-/// `fold_ele` takes them. Ground reads only the middle four; elevation reads
-/// all sixteen.
-pub fn fold_terrain(around: [&Terrain; 16], level: u32) -> Terrain {
-    fold_terrain_held(around.map(Some), level).or_bug(Errno::ENOTRECOVERABLE)
-}
-
-/// A parent page from whichever of those sixteen are held. The middle four —
+/// A parent page from whichever of the 4×4 pages around its four children
+/// are held, indexed as `fold_ele` takes them. The middle four —
 /// 5, 6, 9 and 10, the parent's own children — are what it is made of and
 /// None in any of them is None here; the ring is the skirt's and `fold_ele`
 /// says what its absence costs.
@@ -173,7 +165,7 @@ pub fn fold_terrain(around: [&Terrain; 16], level: u32) -> Terrain {
 /// This is why a zoom out need not reach the network. The client holds the
 /// level it is leaving, and a level is folded from four pages of it, not
 /// from the sixteen a bake has lying around.
-pub fn fold_terrain_held(around: [Option<&Terrain>; 16], level: u32) -> Option<Terrain> {
+fn fold_terrain(around: [Option<&Terrain>; 16], level: u32) -> Option<Terrain> {
     let child = |q: usize| around[CHILDREN[q]].map(|t| &t.ground);
     let ground = fold_ground([child(0)?, child(1)?, child(2)?, child(3)?], level);
     let mut ele = vec![0i16; (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize];

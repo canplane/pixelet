@@ -13,8 +13,6 @@ use crate::control::camera::store::camera_store;
 use crate::shell::map_store::map_store;
 
 pub const SCALE_BAR_MAX_WIDTH_PX: f64 = 56.0;
-pub const SCALE_BAR_TICK_PX: f64 = 6.0;
-pub const SCALE_BAR_PAD_PX: f64 = 3.0;
 
 pub fn round_to_nice_scale(raw: f64) -> f64 {
     if raw.is_nan() || raw <= 0.0 {

@@ -2,15 +2,6 @@
 
 //! Camera projection and interaction limits.
 
-/// Control knob for global view-dependent distances.
-///
-/// MAX_DIST is how far the camera can stand from its pivot; how far it then
-/// sees is not set here at all. The reach is the world's — the planet's
-/// horizon and the air's visual range, whichever is nearer
-/// (environment/fog.rs) — and the clip planes are shares of it, so a zoom
-/// out moves the camera and the reach follows on its own.
-pub const VIEW_DIST: f64 = 6144.0;
-
 /// Default tilt angle in degrees from the ground plane.
 pub const DEFAULT_TILT_DEG: f64 = 30.0;
 

@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { alpha, color, font } from "@/shared/ui/theme.ts";
 
-export interface Segment<T extends string | number> {
+interface Segment<T extends string | number> {
   value: T;
   label: string;
   icon?: ReactNode;

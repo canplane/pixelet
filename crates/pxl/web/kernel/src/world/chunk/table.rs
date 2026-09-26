@@ -203,19 +203,6 @@ pub struct Frame {
 }
 
 impl Frame {
-    /// Where `at`, in the world the camera is written in, is in the map's
-    /// units: the anchor root undone — a rotation and a translation, so its
-    /// inverse is its rotation transposed — then the origin put back.
-    pub fn map_of(&self, at: V3) -> V3 {
-        let m = &self.root;
-        let (x, y, z) = (at[0] - m[12], at[1] - m[13], at[2] - m[14]);
-        [
-            m[0] * x + m[1] * y + m[2] * z + self.origin[0],
-            m[4] * x + m[5] * y + m[6] * z + self.origin[1],
-            m[8] * x + m[9] * y + m[10] * z + self.origin[2],
-        ]
-    }
-
     /// Where `at`, in the map's units, is in the world the camera is
     /// written in: against the origin, then through the anchor root.
     pub fn world_of(&self, at: V3) -> V3 {

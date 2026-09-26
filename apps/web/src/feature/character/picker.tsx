@@ -10,7 +10,7 @@ import type { u32 } from "@xpute/core/abi/word.ts";
 import { Command, encode_setting_update } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
 import { SETTINGS } from "@/feature/setting/schema.ts";
-import { findPersonVariant, type Gender, genderOf, GENDERS, personVariantNumbered, personVariantsOf, PET_VARIANTS } from "@/feature/character/variant.ts";
+import { findPersonVariant, findPetVariant, type Gender, genderOf, GENDERS, personVariantNumbered, personVariantsOf, PET_VARIANTS } from "@/feature/character/variant.ts";
 
 // Not a setting: person/pet variant is a companion *appearance* pick, the
 // same "which of these do I want equipped" shape as a cube color or decor
@@ -73,7 +73,7 @@ interface PetPickerProps {
 function PetPicker(props: PetPickerProps) {
   const { selectedKey, onSelect } = props;
   const { t } = useTranslation();
-  const selected = PET_VARIANTS.find((v) => v.key === selectedKey) ?? PET_VARIANTS[0];
+  const selected = findPetVariant(selectedKey);
 
   return (
     <View style={styles.picker}>
@@ -111,7 +111,7 @@ export function CharacterPicker() {
   return (
     <View style={styles.pickers}>
       <PersonPicker gender={gender} onGenderChange={setGender} selectedKey={personVariantKey} onSelect={(key) => set_setting(SETTINGS.person_variant.key, findPersonVariant(key).number)} />
-      <PetPicker selectedKey={petVariantKey} onSelect={(key) => set_setting(SETTINGS.pet_variant.key, (PET_VARIANTS.find((v) => v.key === key) ?? PET_VARIANTS[0]).number)} />
+      <PetPicker selectedKey={petVariantKey} onSelect={(key) => set_setting(SETTINGS.pet_variant.key, findPetVariant(key).number)} />
     </View>
   );
 }

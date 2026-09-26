@@ -76,11 +76,6 @@ pub fn forget_objects() {
     OBJECT_TABLE.set(HandleTable::new());
 }
 
-/// Objects held now.
-pub fn object_count() -> u32 {
-    OBJECT_TABLE.get(HandleTable::new).count()
-}
-
 /// A lane's bytes, where they lie.
 pub fn bytes<T: Copy>(lane: &[T]) -> &[u8] {
     // SAFETY: plain numbers read as their bytes, for as long as the lane is borrowed.

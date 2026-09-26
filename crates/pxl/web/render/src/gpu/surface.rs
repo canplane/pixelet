@@ -22,7 +22,8 @@ pub const SURFACES: usize = 9;
 /// zoomed-out page, drawn at least at its own pixels. The billboards' sheets
 /// are drawn at DPR_MAX, so a label is never shown smaller than it was drawn.
 /// The world's surface is drawn at what the kernel's resolution chooses
-/// inside these (pxl-kernel world/frame/resolution.rs).
+/// inside these (pxl-kernel world/frame/resolution.rs), and
+/// issue/20260911-taa-tried-and-closed.md says why the cap is where it is.
 pub const DPR_MIN: f64 = 1.0;
 pub const DPR_MAX: f64 = 2.0;
 
