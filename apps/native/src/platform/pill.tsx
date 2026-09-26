@@ -20,7 +20,7 @@ import { LayoutAnimation, type LayoutAnimationConfig, StyleSheet, View } from "r
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Glass } from "@platform/glass.tsx";
 import { Motion } from "@platform/motion.tsx";
-import { SNAP, springCurve } from "@/shared/ui/motion/transition.ts";
+import { SNAP } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";
 import type { PillProps } from "@/shared/ui/pill.ts";
 
@@ -31,7 +31,7 @@ const TOUCH_SLOP = 8;
  * Only what changes size or place is animated: a view that comes or goes in
  * the same commit does so at once, as the page's does. */
 const MOVE: LayoutAnimationConfig = {
-  duration: springCurve(SNAP).durationMs,
+  duration: SNAP.durationMs,
   update: { type: "spring", springDamping: 1 },
 };
 

@@ -23,7 +23,7 @@ import { type ColorValue, type StyleProp, StyleSheet, type ViewStyle } from "rea
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Motion } from "@platform/motion.tsx";
-import { durationMs, SNAP, type Transition } from "@/shared/ui/motion/transition.ts";
+import { SNAP, type Transition } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";
 
 export interface GlassProps {
@@ -86,7 +86,7 @@ export function Glass({ fill, tint, interactive, fade = 1, fadeFrom, transition 
     <GlassView
       onLayout={laidOut ? undefined : () => setLaidOut(true)}
       style={ground}
-      glassEffectStyle={{ style: shown, animate: true, animationDuration: durationMs(veil.transition) / 1000 }}
+      glassEffectStyle={{ style: shown, animate: true, animationDuration: veil.transition.durationMs / 1000 }}
       tintColor={tint}
       isInteractive={interactive}
     >

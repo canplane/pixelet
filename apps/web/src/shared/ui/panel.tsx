@@ -9,12 +9,18 @@ import { useSafeArea } from "@platform/safe-area.ts";
 import { SLIDE, SLIDE_AWAY } from "@/shared/ui/motion/transition.ts";
 import { alpha, color, font, hairline } from "@/shared/ui/theme.ts";
 
+/** The edge of the screen a panel stands along. */
+export const enum Side {
+  Left = 0,
+  Right = 1,
+}
+
 /** Under this, a panel is the whole screen's width. */
 const NARROW_PX = 640;
 export const PANEL_HEADER_PX = 56;
 
 interface PanelProps {
-  side: "left" | "right";
+  side: Side;
   /** Its width where the screen is wide enough to leave the map beside it. */
   width: number;
   /** What assistive technology announces it as. */
@@ -47,7 +53,7 @@ export function Panel({ side, width, label, onClose, dismissOnOutside, children 
   const narrow = window.width < NARROW_PX;
   const shown = narrow ? window.width : width;
   // Past its own edge and its shadow, off the side it stands on.
-  const away = { translateX: (side === "left" ? -1 : 1) * (shown + 16) };
+  const away = { translateX: (side === Side.Left ? -1 : 1) * (shown + 16) };
 
   return (
     <View style={[styles.layer, open ? styles.pass : styles.block]}>
@@ -57,7 +63,7 @@ export function Panel({ side, width, label, onClose, dismissOnOutside, children 
         to={open ? {} : away}
         transition={open ? SLIDE : SLIDE_AWAY}
         onSettled={open ? undefined : gone}
-        style={[styles.panel, side === "left" ? styles.left : styles.right, { width: shown }]}
+        style={[styles.panel, side === Side.Left ? styles.left : styles.right, { width: shown }]}
       >
         <View accessibilityViewIsModal accessibilityLabel={label} style={styles.fill}>
           {children}

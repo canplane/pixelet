@@ -1,10 +1,14 @@
 // @pxl/web/shared/ui/toast/store.ts
 
-import type { i32 } from "@xpute/core/abi/word.ts";
+import type { i32, u32 } from "@xpute/core/abi/word.ts";
 import { create } from "zustand";
 
 /** What a toast says about the thing it reports on. */
-export type ToastTone = "loading" | "error" | "ready";
+export const enum ToastTone {
+  Loading = 0,
+  Error = 1,
+  Ready = 2,
+}
 
 export interface ToastSpec {
   message: string;
@@ -12,7 +16,9 @@ export interface ToastSpec {
 }
 
 interface Entry extends ToastSpec {
-  id: string;
+  /** Which report this is, by the caller's own numbering: a report shown
+   * again replaces itself. */
+  id: u32;
 }
 
 interface ToastState {
@@ -24,7 +30,7 @@ interface ToastState {
   /** A finger is on the front card; see `setDragging`. */
   dragging: boolean;
   /** An update that arrived mid-drag, brought to the front once it ends. */
-  pending: string | null;
+  pending: u32 | null;
 }
 
 export const useToastStore = create<ToastState>(() => ({ entries: [], rotation: 0, dragging: false, pending: null }));
@@ -50,7 +56,7 @@ function unturned(): Entry[] {
     .map((x) => x.e);
 }
 
-function toFront(id: string): void {
+function toFront(id: u32): void {
   const entries = unturned();
   const at = entries.findIndex((e) => e.id === id);
   if (at < 0) return;
@@ -59,7 +65,7 @@ function toFront(id: string): void {
 
 /** Shows `spec` under `id`, in front: a toast already up under that id is
  * replaced where it is and brought forward. */
-export function toastShow(id: string, spec: ToastSpec): void {
+export function toastShow(id: u32, spec: ToastSpec): void {
   const { entries, dragging } = get();
   if (entries.some((e) => e.id === id)) {
     set({ entries: entries.map((e) => (e.id === id ? { id, ...spec } : e)) });
@@ -72,7 +78,7 @@ export function toastShow(id: string, spec: ToastSpec): void {
   set({ entries: [{ id, ...spec }, ...unturned()], rotation: 0 });
 }
 
-export function toastDismiss(id: string): void {
+export function toastDismiss(id: u32): void {
   const entries = unturned().filter((e) => e.id !== id);
   set({ entries, rotation: 0, pending: get().pending === id ? null : get().pending });
 }

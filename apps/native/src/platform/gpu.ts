@@ -10,7 +10,7 @@
 import { Command, encode_gpu_create } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame } from "@/kernel/sched.ts";
-import { declareUnsupported, type UnsupportedReason } from "@/app/store/unsupported-store.ts";
+import { declareUnsupported, UnsupportedReason } from "@/app/store/unsupported-store.ts";
 
 /** A device that runs the app has a GPU to ask for; whether it answers is
  * `gpu_boot`'s. */
@@ -23,7 +23,7 @@ export function gpu_boot(): void {
   const info = PLATFORM.gpuOpen();
   if (info === null) {
     console.error("[gpu] the system has no GPU; nothing can be drawn");
-    declareUnsupported("gpu");
+    declareUnsupported(UnsupportedReason.Gpu);
     return;
   }
   const [align, timestamps] = info;

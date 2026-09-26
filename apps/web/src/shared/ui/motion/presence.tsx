@@ -48,16 +48,19 @@ export function Presence({ show, from, to = {}, exit, transition, exitTransition
   );
 }
 
+/** What an item is told apart by, as React keys it. */
+export type Key = string | number;
+
 export interface Present<T> {
   item: T;
-  key: string;
+  key: Key;
   /** False while it is leaving: drawn at its exit, and dropped by `gone`. */
   present: boolean;
 }
 
 interface Leaving<T> {
   item: T;
-  key: string;
+  key: Key;
 }
 
 /**
@@ -67,7 +70,7 @@ interface Leaving<T> {
  * as itself. `items` is compared by identity, so a caller hands the same
  * array until the list changes.
  */
-export function usePresent<T>(items: readonly T[], keyOf: (item: T) => string): { list: Present<T>[]; gone: (key: string) => void } {
+export function usePresent<T>(items: readonly T[], keyOf: (item: T) => Key): { list: Present<T>[]; gone: (key: Key) => void } {
   const [prev, setPrev] = useState(items);
   const [leaving, setLeaving] = useState<Leaving<T>[]>([]);
 
@@ -89,7 +92,7 @@ export function usePresent<T>(items: readonly T[], keyOf: (item: T) => string): 
 
 interface SwapProps {
   /** What is shown; a new id's view comes in once the old one has left. */
-  id: string;
+  id: Key;
   from: Pose;
   exit: Pose;
   transition: Transition;
@@ -105,9 +108,9 @@ export function Swap({ id, from, exit, transition, exitTransition = transition, 
   const ids = useMemo(() => [id], [id]);
   // What each id last drew, so one leaving keeps drawing it. Written in
   // render, and the same on a second render of the same props.
-  const nodes = useRef(new Map<string, ReactNode>());
+  const nodes = useRef(new Map<Key, ReactNode>());
   nodes.current.set(id, children);
-  const [initial, setInitial] = useState<string | null>(id);
+  const [initial, setInitial] = useState<Key | null>(id);
   if (initial !== null && initial !== id) setInitial(null);
   const { list, gone } = usePresent(ids, (k) => k);
   const leaving = list.some((p) => !p.present);

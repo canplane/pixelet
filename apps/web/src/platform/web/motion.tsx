@@ -16,7 +16,7 @@ import { useLayoutEffect, useRef } from "react";
 import { View } from "react-native";
 
 import { type MotionProps, type Pose, resolve, type SpinProps } from "@/shared/ui/motion/pose.ts";
-import { springCurve, type Transition } from "@/shared/ui/motion/transition.ts";
+import type { Transition } from "@/shared/ui/motion/transition.ts";
 
 function keyframe(p: Required<Pose>): Keyframe {
   return {
@@ -32,10 +32,7 @@ function same(a: Required<Pose>, b: Required<Pose>): boolean {
 function timing(t: Transition): KeyframeAnimationOptions {
   // `backwards` holds the start through a delay; after the end the committed
   // style, which is the end, shows by itself.
-  const base = { delay: t.delayMs ?? 0, fill: "backwards" as const };
-  if (t.type === "ease") return { ...base, duration: t.durationMs, easing: `cubic-bezier(${t.bezier.join(", ")})` };
-  const curve = springCurve(t);
-  return { ...base, duration: curve.durationMs, easing: `linear(${curve.samples.join(", ")})` };
+  return { delay: t.delayMs ?? 0, fill: "backwards", duration: t.durationMs, easing: `linear(${t.samples.join(", ")})` };
 }
 
 export function Motion({ to, from, replay = null, transition, onSettled, style, onLayout, children }: MotionProps) {

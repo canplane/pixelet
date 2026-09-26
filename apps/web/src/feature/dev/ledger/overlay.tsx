@@ -36,21 +36,26 @@ const DRAIN_MS = 500;
 
 /** A button's tint: plain; go, when a window is stopped and one can begin;
  * halt, while one is open; off, when there is nothing to press it for. */
-type Tint = "plain" | "go" | "halt" | "off";
+export const enum Tint {
+  Plain = 0,
+  Go = 1,
+  Halt = 2,
+  Off = 3,
+}
 
 /** Each tint's border, ground and ink, and the ground and ink it lights to
  * under a hovering pointer or a finger. */
 const TINT: Record<Tint, { border: string; ground: string; ink: string; lit: string; litInk: string }> = {
-  plain: { border: alpha(color.white, 0.15), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.6), lit: alpha(color.white, 0.1), litInk: alpha(color.white, 0.9) },
-  go: { border: alpha(color.ledgerGo, 0.4), ground: alpha(color.ledgerGo, 0.1), ink: color.ledgerGoInk, lit: alpha(color.ledgerGo, 0.2), litInk: color.ledgerGoInk },
-  halt: { border: alpha(color.glow, 0.4), ground: alpha(color.glow, 0.1), ink: color.ledgerHaltInk, lit: alpha(color.glow, 0.2), litInk: color.ledgerHaltInk },
-  off: { border: alpha(color.white, 0.1), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.25), lit: alpha(color.white, 0.05), litInk: alpha(color.white, 0.25) },
+  [Tint.Plain]: { border: alpha(color.white, 0.15), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.6), lit: alpha(color.white, 0.1), litInk: alpha(color.white, 0.9) },
+  [Tint.Go]: { border: alpha(color.ledgerGo, 0.4), ground: alpha(color.ledgerGo, 0.1), ink: color.ledgerGoInk, lit: alpha(color.ledgerGo, 0.2), litInk: color.ledgerGoInk },
+  [Tint.Halt]: { border: alpha(color.glow, 0.4), ground: alpha(color.glow, 0.1), ink: color.ledgerHaltInk, lit: alpha(color.glow, 0.2), litInk: color.ledgerHaltInk },
+  [Tint.Off]: { border: alpha(color.white, 0.1), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.25), lit: alpha(color.white, 0.05), litInk: alpha(color.white, 0.25) },
 };
 
 /** A button whose hint is said in the panel's title while a pointer is over
  * it or a finger holds it: a page's tooltip would reach no device, and a
  * hold is a device's hover. */
-function PanelButton({ label, hint, tint = "plain", onPress, onHint, disabled }: {
+function PanelButton({ label, hint, tint = Tint.Plain, onPress, onHint, disabled }: {
   label: string;
   hint: string;
   tint?: Tint;
@@ -177,12 +182,12 @@ export function LedgerOverlay() {
             and then "start" is the button you cannot find when you want a
             clean window. */
         }
-        <PanelButton onHint={setHint} label="start" hint="clear everything and begin a fresh window" tint={recording ? "plain" : "go"} onPress={startWindow} />
+        <PanelButton onHint={setHint} label="start" hint="clear everything and begin a fresh window" tint={recording ? Tint.Plain : Tint.Go} onPress={startWindow} />
         <PanelButton
           onHint={setHint}
           label="stop"
           hint="freeze the window so exports are stable while you read them"
-          tint={recording ? "halt" : "off"}
+          tint={recording ? Tint.Halt : Tint.Off}
           disabled={!recording}
           onPress={() => kernel_command(Command.LEDGER_STOP)}
         />

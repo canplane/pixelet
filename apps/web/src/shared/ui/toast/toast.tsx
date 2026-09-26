@@ -9,9 +9,9 @@ import { Motion, Spin } from "@platform/motion.tsx";
 import { LABEL, STATUS } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
 import { Swap } from "@/shared/ui/motion/presence.tsx";
-import { type Ease, LEAVE, SNAP, type Spring, type Transition } from "@/shared/ui/motion/transition.ts";
+import { LEAVE, SNAP, spring, type Transition } from "@/shared/ui/motion/transition.ts";
 import { alpha, color, font } from "@/shared/ui/theme.ts";
-import type { ToastSpec, ToastTone } from "./store.ts";
+import { type ToastSpec, ToastTone } from "./store.ts";
 
 const SIDE = 32;
 
@@ -19,9 +19,9 @@ const SIDE = 32;
 const OPEN_AFTER_MS = 450;
 
 /** The check's arrival: under critical damping on purpose, a small bounce. */
-const POP: Spring = { type: "spring", stiffness: 260, damping: 12, mass: 0.8 };
+const POP: Transition = spring({ stiffness: 260, damping: 12, mass: 0.8 });
 /** A glyph arriving otherwise, and any glyph leaving. */
-const GLYPH_FADE: Ease = { ...LEAVE, durationMs: 200 };
+const GLYPH_FADE: Transition = { ...LEAVE, durationMs: 200 };
 
 /** A status as Apple draws one (checkmark.circle.fill): a white glyph in a
  * disc of the status's color. A stroked glyph in the color alone is too thin
@@ -33,19 +33,19 @@ function StatusDisc({ fill, children }: { fill: string; children: React.ReactNod
 
 function glyph(tone: ToastTone) {
   switch (tone) {
-    case "loading":
+    case ToastTone.Loading:
       return (
         <Spin periodMs={1000}>
           <Loader2 size={16} strokeWidth={2.5} color={LABEL.primary} />
         </Spin>
       );
-    case "error":
+    case ToastTone.Error:
       return (
         <StatusDisc fill={STATUS.failed}>
           <MapPinOff size={11} strokeWidth={2.75} color={color.white} />
         </StatusDisc>
       );
-    case "ready":
+    case ToastTone.Ready:
       return (
         <StatusDisc fill={STATUS.ready}>
           <Check size={11} strokeWidth={3.5} color={color.white} />
@@ -70,7 +70,7 @@ interface ToastProps extends ToastSpec {
  * page's pill cuts its shadow cleanly (platform/web/pill.tsx).
  */
 export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps) {
-  const error = tone === "error";
+  const error = tone === ToastTone.Error;
   const span = useWindowDimensions().width;
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState<f64>(SIDE);
@@ -103,9 +103,9 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
       <View style={styles.slot}>
         <Swap
           id={tone}
-          from={tone === "ready" ? { opacity: 0, scale: 0.3, rotate: -20 } : { opacity: 0, scale: 0.8 }}
+          from={tone === ToastTone.Ready ? { opacity: 0, scale: 0.3, rotate: -20 } : { opacity: 0, scale: 0.8 }}
           exit={{ opacity: 0, scale: 0.5 }}
-          transition={tone === "ready" ? POP : GLYPH_FADE}
+          transition={tone === ToastTone.Ready ? POP : GLYPH_FADE}
           exitTransition={GLYPH_FADE}
           style={styles.glyph}
         >
@@ -117,7 +117,7 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
       </Motion>
       <View style={styles.slot}>
         <Motion to={open ? {} : { opacity: 0, scale: 0 }} transition={SNAP}>
-          <View style={[styles.dot, { backgroundColor: error ? STATUS.failed : tone === "ready" ? STATUS.ready : LABEL.secondary }]} />
+          <View style={[styles.dot, { backgroundColor: error ? STATUS.failed : tone === ToastTone.Ready ? STATUS.ready : LABEL.secondary }]} />
         </Motion>
       </View>
     </Pill>

@@ -23,8 +23,6 @@ import type { DecorId } from "@/catalog/cell/decor.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 import { CubeSwatch } from "./cube-swatch.tsx";
 
-type ModeId = "message" | "palette";
-
 const SEND_FADE_MS = 200;
 
 // The height of both pills — the map view (view.tsx) stands the toasts
@@ -51,6 +49,23 @@ const FLYOUT_HOLD_MS = 150;
 /** A finger that moves this far first decides the gesture: up opens the
  * sizes, sideways leaves the strip to scroll. */
 const FLYOUT_AXIS_PX = 12;
+
+/** Where a finger on a swatch is: not yet decided, holding the size flyout
+ * open, or given to the strip to scroll. */
+export const enum Gesture {
+  Pending = 0,
+  Flyout = 1,
+  Scroll = 2,
+}
+
+/** What the palette pill's slot holds while the message pill is open: the
+ * way back to the palette, or the send button; nothing while the strip is
+ * open over it. */
+export const enum Slot {
+  Empty = 0,
+  Palette = 1,
+  Send = 2,
+}
 
 /** A size tier's mark in the flyout, a dot, finest the smallest. */
 function sizeMark(tier: u32): number {
@@ -144,7 +159,7 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
   handlers.current = g;
   const responder = useRef<ReturnType<typeof PanResponder.create> | null>(null);
   if (!responder.current) {
-    let state: "pending" | "flyout" | "scroll" = "pending";
+    let state = Gesture.Pending;
     let hold: ReturnType<typeof setTimeout> | null = null;
     const stopHold = () => {
       if (hold !== null) clearTimeout(hold);
@@ -152,19 +167,19 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
     };
     const open = () => {
       stopHold();
-      if (state !== "pending" || !swatch.current) return;
-      state = "flyout";
+      if (state !== Gesture.Pending || !swatch.current) return;
+      state = Gesture.Flyout;
       handlers.current.open(swatch.current);
     };
     responder.current = PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        state = "pending";
+        state = Gesture.Pending;
         hold = setTimeout(open, FLYOUT_HOLD_MS);
       },
       onPanResponderMove: (_e, s) => {
-        if (state === "flyout") return handlers.current.move(s.moveX, s.moveY);
-        if (state === "scroll") return;
+        if (state === Gesture.Flyout) return handlers.current.move(s.moveX, s.moveY);
+        if (state === Gesture.Scroll) return;
         const dx = Math.abs(s.dx);
         const dy = Math.abs(s.dy);
         if (dx < FLYOUT_AXIS_PX && dy < FLYOUT_AXIS_PX) return;
@@ -172,24 +187,24 @@ function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
           open();
           handlers.current.move(s.moveX, s.moveY);
         } else {
-          state = "scroll";
+          state = Gesture.Scroll;
           stopHold();
         }
       },
       onPanResponderRelease: (_e, s) => {
         stopHold();
-        if (state === "flyout") handlers.current.lift(s.moveX, s.moveY);
-        else if (state === "pending") handlers.current.tap();
-        state = "pending";
+        if (state === Gesture.Flyout) handlers.current.lift(s.moveX, s.moveY);
+        else if (state === Gesture.Pending) handlers.current.tap();
+        state = Gesture.Pending;
       },
       onPanResponderTerminate: () => {
         stopHold();
-        if (state === "flyout") handlers.current.close();
-        state = "pending";
+        if (state === Gesture.Flyout) handlers.current.close();
+        state = Gesture.Pending;
       },
       // Once the sizes are open the finger is theirs; before that, a strip
       // that starts to scroll may have it.
-      onPanResponderTerminationRequest: () => state !== "flyout",
+      onPanResponderTerminationRequest: () => state !== Gesture.Flyout,
     });
   }
   return responder.current.panHandlers;
@@ -274,7 +289,8 @@ function ToolButton({ label, active, onPress, children }: { label: string; activ
 export function ModeBar() {
   const { t } = useTranslation();
   const { ui } = useAppContext();
-  const [mode, setMode] = useState<ModeId>("palette");
+  // The message pill open, or the palette strip: the two share the bar.
+  const [messageExpanded, setMessageExpanded] = useState(false);
   const activeTool = useUiStore((s) => s.activeTool);
   const set_activeTool = useUiStore.getState().set_activeTool;
   const recentPicks = useUiStore((s) => s.recentPicks);
@@ -329,9 +345,8 @@ export function ModeBar() {
     },
   };
 
-  const flyoutOpen = flyoutAt !== null && mode === "palette";
-  const messageExpanded = mode === "message";
-  const paletteExpanded = mode === "palette";
+  const paletteExpanded = !messageExpanded;
+  const flyoutOpen = flyoutAt !== null && paletteExpanded;
   // Reuses the palette pill's own idle collapsed-icon slot as the send
   // button rather than adding a separate one inside the message pill — the
   // same idle-slot-reuse pattern as the size flyout anchoring per-swatch
@@ -356,7 +371,7 @@ export function ModeBar() {
         <>
           <Pill x={messageX} width={messageWidth} height={MODE_BAR_HEIGHT_PX} span={barWidth} fill={color.white} shadow="0 6px 20px rgba(0, 0, 0, 0.25)">
             <Pressable
-              onPress={() => setMode("message")}
+              onPress={() => setMessageExpanded(true)}
               accessibilityRole="button"
               accessibilityLabel={t("map.mode_bar.message_tooltip")}
               style={styles.messageIcon}
@@ -442,7 +457,7 @@ export function ModeBar() {
             </Motion>
 
             <Swap
-              id={paletteExpanded ? "none" : showSendInPaletteSlot ? "send" : "palette"}
+              id={paletteExpanded ? Slot.Empty : showSendInPaletteSlot ? Slot.Send : Slot.Palette}
               from={{ opacity: 0 }}
               exit={{ opacity: 0 }}
               transition={LEAVE}
@@ -465,7 +480,7 @@ export function ModeBar() {
                     // The field is not blurred here: it lets go of focus, and the keyboard
                     // goes, when it has slid out and unmounts. Blurred on this press, the
                     // pills snapped to the palette on a device instead of moving there.
-                    onPress={() => setMode("palette")}
+                    onPress={() => setMessageExpanded(false)}
                     accessibilityRole="button"
                     accessibilityLabel={t("map.mode_bar.palette_tooltip")}
                     style={styles.slotButton}

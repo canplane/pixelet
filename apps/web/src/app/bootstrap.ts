@@ -7,16 +7,15 @@ import { boot_kernel } from "@/kernel/kernel.ts";
 import { declareUnsupported } from "@/app/store/unsupported-store.ts";
 import { bootstrapI18n } from "@/locale/i18n.ts";
 
-/** Where the kernel's boot is: the map is drawn only once it has come up,
- * since everything on it speaks to the kernel. A device that cannot draw
- * never boots one, and is shown why instead (app/unsupported.tsx). */
-export type BootState = "loading" | "ready" | "failed";
-
-let state: BootState = "loading";
+/** Whether the kernel has come up: the map is drawn only once it has, since
+ * everything on it speaks to the kernel. A device that cannot draw never
+ * boots one and is shown why instead (app/unsupported.tsx), and a boot that
+ * fails leaves the map undrawn as well. */
+let booted = false;
 const listeners = new Set<() => void>();
 
-function settle(next: BootState): void {
-  state = next;
+function settle(): void {
+  booted = true;
   for (const l of listeners) l();
 }
 
@@ -30,24 +29,20 @@ export function bootstrapApp(): void {
   const missing = gpu_missing();
   if (missing) {
     declareUnsupported(missing);
-    settle("failed");
     return;
   }
   boot_kernel().then(
-    () => settle("ready"),
-    (err) => {
-      console.error("[boot] the kernel did not start:", err);
-      settle("failed");
-    },
+    settle,
+    (err) => console.error("[boot] the kernel did not start:", err),
   );
 }
 
-export function useBootState(): BootState {
+export function useBooted(): boolean {
   return useSyncExternalStore(
     (l) => {
       listeners.add(l);
       return () => listeners.delete(l);
     },
-    () => state,
+    () => booted,
   );
 }

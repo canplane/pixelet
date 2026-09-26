@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { useSafeArea } from "@platform/safe-area.ts";
-import { Panel, PANEL_HEADER_PX } from "@/shared/ui/panel.tsx";
+import { Panel, PANEL_HEADER_PX, Side } from "@/shared/ui/panel.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { alpha, color, font, hairline } from "@/shared/ui/theme.ts";
 import { Command, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
@@ -23,10 +23,6 @@ import { fetchSearch, type SearchResult } from "@/feature/search/repository.ts";
 // typing to pause, which is a much shorter, more familiar rhythm for a
 // search box.
 const DEBOUNCE_MS = 300;
-
-export interface SearchModalProps {
-  type: "search";
-}
 
 interface LonLat {
   lon: f64;
@@ -102,8 +98,8 @@ function SectionHeader(props: { label: string }) {
  * so a returning search starts empty: the last thing it almost never wants
  * is last session's list for a place already visited.
  */
-export function SearchModal(props: BaseModalProps & SearchModalProps) {
-  const { onOpenChange } = props;
+export function SearchModal(props: BaseModalProps) {
+  const { onClose } = props;
   const { t, i18n } = useTranslation();
   const { top } = useSafeArea();
   const lang = i18n.language.split("-")[0].toLowerCase();
@@ -156,7 +152,7 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
     // follow mode (the user drove the camera), and grounds it again once the
     // target page's tile arrives, while the map is still on that page.
     kernel_command(Command.INPUT_GO_TO, encode_input_go_to({ lon: result.lon, lat: result.lat }));
-    onOpenChange(false);
+    onClose();
   }
 
   function distanceOf(result: SearchResult): string | null {
@@ -167,7 +163,7 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
   const poiResults = results.filter((r) => r.kind === "poi");
 
   return (
-    <Panel side="right" width={380} label={t("map.search.placeholder")} onClose={() => onOpenChange(false)} dismissOnOutside>
+    <Panel side={Side.Right} width={380} label={t("map.search.placeholder")} onClose={() => onClose()} dismissOnOutside>
       <View style={[styles.header, { paddingTop: top }]}>
         <View style={styles.headerRow}>
           {
@@ -178,7 +174,7 @@ export function SearchModal(props: BaseModalProps & SearchModalProps) {
             search UI's own back-navigation slot already occupies reads
             unambiguously as "leave", with no second X anywhere in the row. */
           }
-          <Pressable onPress={() => onOpenChange(false)} accessibilityRole="button" accessibilityLabel={t("settings.close")} style={styles.back}>
+          <Pressable onPress={() => onClose()} accessibilityRole="button" accessibilityLabel={t("settings.close")} style={styles.back}>
             <ChevronLeft size={20} color={color.textMuted} />
           </Pressable>
           <TextField

@@ -5,14 +5,14 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { alpha, color, font } from "@/shared/ui/theme.ts";
 
-export interface Segment<T extends string> {
+export interface Segment<T extends string | number> {
   value: T;
   label: string;
   icon?: ReactNode;
 }
 
 /** One of a few views of the same panel, picked from a row of segments. */
-export function Segmented<T extends string>({ segments, value, onChange }: { segments: readonly Segment<T>[]; value: T; onChange: (value: T) => void }) {
+export function Segmented<T extends string | number>({ segments, value, onChange }: { segments: readonly Segment<T>[]; value: T; onChange: (value: T) => void }) {
   return (
     <View accessibilityRole="tablist" style={styles.track}>
       {segments.map((s) => {

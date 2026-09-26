@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
 
 import { Motion } from "@platform/motion.tsx";
-import { usePresent } from "@/shared/ui/motion/presence.tsx";
+import { type Key, usePresent } from "@/shared/ui/motion/presence.tsx";
 import { after, LEAVE, SETTLE } from "@/shared/ui/motion/transition.ts";
 import { setToastDragging, toastDepth, toastRotate, useToastStore } from "./store.ts";
 import { Toast } from "./toast.tsx";
@@ -50,16 +50,16 @@ export function Toaster() {
   // last commit, so they are written after it: a card that a turn back
   // brings to the front comes down from above, every other card moves
   // between depths in place.
-  const lastOrder = useRef<string[]>([]);
+  const lastOrder = useRef<Key[]>([]);
   const lastRotation = useRef(rotation);
   const turnedBack = rotation < lastRotation.current;
-  const order = entries
+  const order: Key[] = entries
     .map((e, i) => ({ key: e.id, depth: toastDepth(i, rotation, entries.length) }))
     .sort((a, b) => a.depth - b.depth)
     .map((c) => c.key);
   // A card that has just arrived is in front of every card already there,
   // a leaving one included.
-  const arrivals = new Set(order.filter((key) => !lastOrder.current.includes(key)));
+  const arrivals = new Set<Key>(order.filter((key) => !lastOrder.current.includes(key)));
   const arrived = arrivals.size;
   for (const key of list.filter((c) => !c.present).map((c) => c.key).sort((a, b) => lastOrder.current.indexOf(a) - lastOrder.current.indexOf(b))) {
     order.splice(Math.min(Math.max(0, lastOrder.current.indexOf(key)) + arrived, order.length), 0, key);

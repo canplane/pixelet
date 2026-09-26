@@ -6,7 +6,7 @@
  * is one call per new pose, which hands the whole curve over; no frame of it
  * runs on the JavaScript thread, whose frame the kernel's turn spends.
  *
- * A spring goes over as a timing whose easing is the spring's solved curve
+ * A move goes over as a timing whose easing is its solved curve
  * (shared/ui/motion/transition.ts), the same curve the page plays, so the two
  * move alike and settle together. A pose that arrives mid-flight starts from
  * the value the UI thread has, so a turn back never jumps.
@@ -16,15 +16,13 @@ import { useEffect, useReducer, useRef } from "react";
 import { Animated, Easing, type EasingFunction } from "react-native";
 
 import { type MotionProps, type Pose, resolve, type SpinProps } from "@/shared/ui/motion/pose.ts";
-import { curveAt, springCurve, type Transition } from "@/shared/ui/motion/transition.ts";
+import { curveAt, type Transition } from "@/shared/ui/motion/transition.ts";
 
 type Channel = keyof Pose;
 const CHANNELS: readonly Channel[] = ["opacity", "translateX", "translateY", "scale", "rotate"];
 
 function timing(t: Transition): { duration: number; easing: EasingFunction; delay: number } {
-  if (t.type === "ease") return { duration: t.durationMs, easing: Easing.bezier(...t.bezier), delay: t.delayMs ?? 0 };
-  const curve = springCurve(t);
-  return { duration: curve.durationMs, easing: (p) => curveAt(curve, p), delay: t.delayMs ?? 0 };
+  return { duration: t.durationMs, easing: (p) => curveAt(t, p), delay: t.delayMs ?? 0 };
 }
 
 export function Motion({ to, from, replay = null, transition, onSettled, style, onLayout, children }: MotionProps) {
