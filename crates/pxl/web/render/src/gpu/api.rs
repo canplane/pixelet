@@ -294,7 +294,7 @@ pub fn object_count() -> u32 {
 /// A lane's bytes, where they lie.
 pub fn bytes<T: Copy>(lane: &[T]) -> &[u8] {
     // SAFETY: plain numbers read as their bytes, for as long as the lane is borrowed.
-    unsafe { core::slice::from_raw_parts(lane.as_ptr() as *const u8, core::mem::size_of_val(lane)) }
+    unsafe { core::slice::from_raw_parts(lane.as_ptr().cast::<u8>(), core::mem::size_of_val(lane)) }
 }
 
 /// The bytes `words` 32-bit words take — floats or u32s — as a size the

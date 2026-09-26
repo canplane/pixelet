@@ -278,7 +278,7 @@ impl ScanContext {
         let n = self.runs.len();
         let mut at = ptr;
         let mut words = |len: usize| {
-            let p = at as *mut u32;
+            let p = at.cast::<u32>();
             at = at.add(len * 4);
             core::slice::from_raw_parts_mut(p, len)
         };
@@ -573,10 +573,10 @@ impl<'a> RunSet<'a> {
             at += len * 4;
             p
         };
-        let start = unsafe { core::slice::from_raw_parts(words(cols) as *const u32, cols) };
-        let z0 = unsafe { core::slice::from_raw_parts(words(n) as *const i32, n) };
-        let z1 = unsafe { core::slice::from_raw_parts(words(n) as *const i32, n) };
-        let layer_taps = unsafe { core::slice::from_raw_parts(words(n) as *const u32, n) };
+        let start = unsafe { core::slice::from_raw_parts(words(cols).cast::<u32>(), cols) };
+        let z0 = unsafe { core::slice::from_raw_parts(words(n).cast::<i32>(), n) };
+        let z1 = unsafe { core::slice::from_raw_parts(words(n).cast::<i32>(), n) };
+        let layer_taps = unsafe { core::slice::from_raw_parts(words(n).cast::<u32>(), n) };
         let mut bytes_at = at;
         let mut lane = || unsafe {
             let s = core::slice::from_raw_parts(base.add(bytes_at), n);

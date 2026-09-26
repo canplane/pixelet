@@ -22,3 +22,6 @@ pxl-kernel = { path = "../kernel", default-features = false }
 # carries no dev-only setting.
 default = ["dev"]
 dev = ["pxl-kernel/dev"]
+
+[lints]
+workspace = true

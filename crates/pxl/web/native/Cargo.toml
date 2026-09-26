@@ -28,3 +28,6 @@ pollster = "1"
 # works on.
 default = ["dev"]
 dev = ["pxl-kernel/dev"]
+
+[lints]
+workspace = true

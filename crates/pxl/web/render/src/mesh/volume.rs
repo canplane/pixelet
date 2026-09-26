@@ -520,15 +520,15 @@ impl Volumes {
         let n = row[4] as usize;
         crate::mesh::voxel_scan::BandView {
             band_z: row[0] as i32,
-            material: core::slice::from_raw_parts(at(row[1]) as *const u32, voxels),
-            layer_idx: core::slice::from_raw_parts(at(row[2]) as *const u8, voxels),
-            sub_cell: (row[3] != 0).then(|| core::slice::from_raw_parts(at(row[3]) as *const u8, voxels * 4)),
+            material: core::slice::from_raw_parts(at(row[1]).cast::<u32>(), voxels),
+            layer_idx: core::slice::from_raw_parts(at(row[2]).cast_const(), voxels),
+            sub_cell: (row[3] != 0).then(|| core::slice::from_raw_parts(at(row[3]).cast_const(), voxels * 4)),
             extra: crate::mesh::voxel_scan::ExtraView {
-                col: core::slice::from_raw_parts(at(row[5]) as *const u32, n),
-                z: core::slice::from_raw_parts(at(row[6]) as *const i32, n),
-                material: core::slice::from_raw_parts(at(row[7]) as *const u32, n),
+                col: core::slice::from_raw_parts(at(row[5]).cast::<u32>(), n),
+                z: core::slice::from_raw_parts(at(row[6]).cast::<i32>(), n),
+                material: core::slice::from_raw_parts(at(row[7]).cast::<u32>(), n),
                 layer_idx: core::slice::from_raw_parts(at(row[8]), n),
-                sub: core::slice::from_raw_parts(at(row[9]) as *const u32, n),
+                sub: core::slice::from_raw_parts(at(row[9]).cast::<u32>(), n),
             },
         }
     }
@@ -564,11 +564,11 @@ impl Volumes {
             store.layer_idx as u32,
             store.sub_cell.map_or(0, |(at, _)| at as u32),
             e.len() as u32,
-            rel(e.col.as_ptr() as *const u8),
-            rel(e.z.as_ptr() as *const u8),
-            rel(e.material.as_ptr() as *const u8),
+            rel(e.col.as_ptr().cast::<u8>()),
+            rel(e.z.as_ptr().cast::<u8>()),
+            rel(e.material.as_ptr().cast::<u8>()),
             rel(e.layer_idx.as_ptr()),
-            rel(e.sub.as_ptr() as *const u8),
+            rel(e.sub.as_ptr().cast::<u8>()),
         ];
         &self.row
     }

@@ -140,8 +140,8 @@ fn write_lanes(t: &Terrain, lanes: TerrainLanes) {
     };
     let cells = &t.ground.cells;
     let sources = [
-        bytes(cells.as_ptr() as *const u8, cells.len() * core::mem::size_of::<GroundCell>()),
-        bytes(t.ele.as_ptr() as *const u8, t.ele.len() * 2),
+        bytes(cells.as_ptr().cast::<u8>(), cells.len() * core::mem::size_of::<GroundCell>()),
+        bytes(t.ele.as_ptr().cast::<u8>(), t.ele.len() * 2),
     ];
     for (src, to) in sources.iter().zip([lanes.cells, lanes.ele]) {
         // SAFETY: `to` is the page's room in the range, the lane's own size,

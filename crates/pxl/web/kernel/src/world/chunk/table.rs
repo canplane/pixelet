@@ -2377,7 +2377,7 @@ fn self_record(slots: &mut [Slot], index: &BTreeMap<Chunk, usize>, meshes: &mut 
     if boxes > 0 {
         let before = arena_epoch();
         // SAFETY: the same words, as bytes.
-        let bytes = unsafe { core::slice::from_raw_parts(words.as_ptr() as *const u8, words.len() * 4) };
+        let bytes = unsafe { core::slice::from_raw_parts(words.as_ptr().cast::<u8>(), words.len() * 4) };
         // No device to write to: asked for again once there is one.
         if !arena_write(slot.group as usize, slot.first_box * box_words * 4, bytes) {
             return;

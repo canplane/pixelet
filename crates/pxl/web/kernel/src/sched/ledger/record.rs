@@ -451,7 +451,7 @@ pub unsafe trait Words: Sized {}
 pub fn put<T: Words>(out: &mut [f64], block: u32, value: &T) {
     // SAFETY: Words says the record is plain f64s laid end to end, and
     // `words!` is what let it say so.
-    let words = unsafe { core::slice::from_raw_parts(value as *const T as *const f64, size_of::<T>() / 8) };
+    let words = unsafe { core::slice::from_raw_parts(std::ptr::from_ref::<T>(value).cast::<f64>(), size_of::<T>() / 8) };
     let at = block as usize;
     out[at..at + words.len()].copy_from_slice(words);
 }

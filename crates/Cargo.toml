@@ -72,6 +72,21 @@ hex = "0.4"
 # badge table a place by — hashed by the FNV above, so no random state.
 indexmap = "2"
 
+# The client's crates name the kernel's memory by offsets from one base
+# (xpute-runtime mem/base.rs), and an offset cast straight to a pointer
+# reads the wrong memory wherever the base is not 0 — on a device, where the
+# kernel faulted reading a terrain page from address 92 MB. `as` spells that
+# cast and every harmless one alike, so the harmless ones are made to say
+# what they are — `.cast()`, `.cast_const()`, `&raw`, `ptr::from_ref` — and
+# any `as *const` or `as *mut` left is an offset made a pointer, which
+# script/check-rules.ts refuses. A crate takes these with `[lints]
+# workspace = true`; xpute-runtime, exported on its own, spells them itself.
+[workspace.lints.clippy]
+ptr_as_ptr = "warn"
+ptr_cast_constness = "warn"
+borrow_as_ptr = "warn"
+ref_as_ptr = "warn"
+
 [workspace.package]
 edition = "2021"
 version = "0.0.0"

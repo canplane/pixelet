@@ -174,8 +174,8 @@ impl CountersBlock {
         // SAFETY: `words!` below holds the block to plain f64s end to end.
         let (a, b) = unsafe {
             (
-                core::slice::from_raw_parts_mut(&mut self as *mut _ as *mut f64, n),
-                core::slice::from_raw_parts(b as *const _ as *const f64, n),
+                core::slice::from_raw_parts_mut((&raw mut self).cast::<f64>(), n),
+                core::slice::from_raw_parts(std::ptr::from_ref(b).cast::<f64>(), n),
             )
         };
         for (x, y) in a.iter_mut().zip(b) {
