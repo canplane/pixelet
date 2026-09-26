@@ -15,15 +15,17 @@ double pxl_interrupt(double quota_ms);
 // may be null) — what the shell reads the boot block and the rings through.
 uint8_t *pxl_memory(uint32_t *bytes);
 
-// A surface on `layer`, a CAMetalLayer, width x height pixels: 0 when it is
-// drawn into, -1 when no device would take it. The layer outlives it.
-int32_t pxl_surface_open(void *layer, uint32_t width, uint32_t height);
+// Opens the device, writing its uniform offset alignment and whether it
+// times its passes: 0 when it is open, -1 when the system has none.
+int32_t pxl_gpu_open(uint32_t *align, uint32_t *timestamps);
 
-// The layer is now width x height pixels.
-void pxl_surface_resize(uint32_t width, uint32_t height);
+// The view's CAMetalLayer is there to draw into (main thread); the view keeps
+// it until it detaches.
+void pxl_surface_attach(void *layer);
+void pxl_surface_detach(void);
 
-// One frame.
-void pxl_surface_draw(void);
-
-// The view is going: the surface and its device with it.
-void pxl_surface_close(void);
+// Binds the kernel's surface `handle` to the view's layer: 0, or -1 when no
+// view has left one, -2 when no device is open, -3 when the system would not
+// make a surface of the layer. Called on the kernel's thread, as unbind is.
+int32_t pxl_surface_bind(uint32_t handle);
+void pxl_surface_unbind(uint32_t handle);

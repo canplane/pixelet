@@ -42,10 +42,6 @@ pub struct Bracket {
     pub clock: fn() -> f64,
     /// The allocator's reading, for the ledger and the heap's row.
     pub heap_stat: fn() -> HeapStat,
-    /// Whether the renderer's calls are recorded for the host to run after
-    /// each turn (pxl_render::gpu::api), which is the page's loopback: a
-    /// module cannot reach WebGPU itself. A bracket that draws has none.
-    pub gpu_stream: bool,
 }
 
 struct State {
@@ -166,14 +162,14 @@ fn boot(b: &Bracket) {
             crate::host::host_bug(Errno::ENOTRECOVERABLE, at, 0, 0);
         }
     }));
-    let map = lay_out(b);
+    let (map, gpu_stream) = lay_out(b);
     crate::sched::turn::boot();
     // SAFETY: the page at BOOT_AT, which the layout keeps clear of the rings
     // and the bracket's data; the boot block's alone.
     let block = unsafe { &mut *ptr_at::<[u32; BOOT_WORDS]>(crate::mem::spec::BOOT_AT as usize) };
     block[..3].copy_from_slice(&[b.data_end, ring_address(door().submission()), ring_address(door().completion())]);
     block[BOOT_HEAP] = HEAP_ROW_AT;
-    block[BOOT_GPU] = if b.gpu_stream { fixed_at(Range::Gpu) } else { 0 };
+    block[BOOT_GPU] = gpu_stream;
     block[BOOT_HOST] = fixed_at(Range::Host);
     for (i, sec) in [map.fixed, map.heap].into_iter().enumerate() {
         write_section(block, 3 + i * SECTION_WORDS as usize, sec);
@@ -190,26 +186,25 @@ fn fixed_at(r: Range) -> u32 {
 }
 
 /// Records the kernel's map over the memory the bracket gave, and makes the
-/// volumes over it.
+/// volumes over it; with it, where the renderer's calls are recorded for the
+/// host to run, 0 where the kernel makes them itself (pxl_render::gpu::api).
 ///
 /// Nothing is cut here. The sections are ranges the map names and their
 /// contents' own affair; the heap is the one allocator and it knows its range
 /// without being told (`buddy_tree`'s `Range`).
-fn lay_out(b: &Bracket) -> section::Map {
+fn lay_out(b: &Bracket) -> (section::Map, u32) {
     let map = section::lay_out(b.given, b.data_end);
     kernel().volumes = Some(Volumes::new());
     section::set_map(map);
     // SAFETY: `.fixed.gpu`, `.fixed.host` and `.fixed.blocks`, each what it
     // is installed as from a page, zeroed, the renderer's and the host's
     // alone.
-    unsafe {
-        if b.gpu_stream {
-            pxl_render::gpu::api::set_gpu_stream(fixed_at(Range::Gpu));
-        }
+    let gpu_stream = unsafe {
         crate::host::set_host_stream(fixed_at(Range::Host));
         pxl_render::gpu::renderer::set_blocks(fixed_at(Range::Blocks));
-    }
-    map
+        pxl_render::gpu::api::install(fixed_at(Range::Gpu))
+    };
+    (map, gpu_stream)
 }
 
 /// The doorbell: the rising edge of a turn, with the time it may take. The

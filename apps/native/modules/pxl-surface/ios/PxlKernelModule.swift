@@ -6,8 +6,9 @@ import PxlNative
 /// The kernel as the shell reaches it on a device (apps/native/src/platform/
 /// core.ts): its memory, handed over as one ArrayBuffer over the region the
 /// core took — no copy, so a ring the shell writes is the ring the kernel
-/// reads — and its doorbell. Both run on the JavaScript thread, where the
-/// shell calls them, which makes it the kernel's one thread.
+/// reads — its doorbell, its device and the surfaces it draws into. All run on
+/// the JavaScript thread, where the shell calls them, which makes it the
+/// kernel's one thread.
 public class PxlKernelModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PxlKernel")
@@ -22,6 +23,24 @@ public class PxlKernelModule: Module {
 
     Function("interrupt") { (quotaMs: Double) -> Double in
       pxl_interrupt(quotaMs)
+    }
+
+    /// The device's uniform offset alignment and whether it times its
+    /// passes, or nil where the system has no GPU.
+    Function("gpuOpen") { () -> [UInt32]? in
+      var align: UInt32 = 0
+      var timestamps: UInt32 = 0
+      return pxl_gpu_open(&align, &timestamps) == 0 ? [align, timestamps] : nil
+    }
+
+    /// Binds the kernel's surface to the world view's layer: false when no
+    /// view has left one yet.
+    Function("surfaceBind") { (handle: UInt32) -> Bool in
+      pxl_surface_bind(handle) == 0
+    }
+
+    Function("surfaceUnbind") { (handle: UInt32) in
+      pxl_surface_unbind(handle)
     }
   }
 }

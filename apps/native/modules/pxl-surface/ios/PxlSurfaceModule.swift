@@ -6,6 +6,8 @@ import ExpoModulesCore
 public class PxlSurfaceModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PxlSurface")
-    View(PxlSurfaceView.self) {}
+    View(PxlSurfaceView.self) {
+      Events("onAttach", "onDetach")
+    }
   }
 }

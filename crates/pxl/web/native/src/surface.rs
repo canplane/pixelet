@@ -1,111 +1,71 @@
 // pxl-native/surface.rs
 
-//! The chain the renderer will draw along: the app's view hands over its
-//! layer, wgpu makes a surface on it, and a frame reaches the screen. For now
-//! the frame is the ground's color alone.
+//! What the app's view hands the kernel to draw into, and the device it draws
+//! with (pxl_render::gpu::api, the device backend). The view lives on the
+//! app's main thread and the kernel on the thread the shell rings it from, so
+//! the view only leaves its layer here, under a lock; the kernel's thread
+//! opens the device and binds the layer to the surface the renderer names,
+//! and every frame is drawn and shown inside a turn.
 
 use std::ffi::c_void;
+use std::sync::Mutex;
 
-use xpute_runtime::global::Global;
+/// The view's `CAMetalLayer`, while the view is in a window: an address, left
+/// by the main thread and read by the kernel's.
+static LAYER: Mutex<usize> = Mutex::new(0);
 
-/// A surface over one view's layer, and the device drawing into it.
-struct Surface {
-    surface: wgpu::Surface<'static>,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
-}
-
-static SURFACE: Global<Option<Surface>> = Global::new();
-
-/// A surface on `layer`, a `CAMetalLayer`, `width` × `height` pixels. 0 when
-/// it is drawn into, -1 when no device would take it.
+/// The view's layer is there to draw into.
 ///
 /// # Safety
-/// `layer` is a live `CAMetalLayer` that outlives the surface: the view that
-/// owns it closes the surface before it goes.
+/// `layer` is a live `CAMetalLayer`, which the view keeps until it detaches.
 #[no_mangle]
-pub unsafe extern "C" fn pxl_surface_open(layer: *mut c_void, width: u32, height: u32) -> i32 {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::METAL,
-        ..wgpu::InstanceDescriptor::new_without_display_handle()
-    });
-    // SAFETY: the caller's layer, alive for as long as the surface.
-    let Ok(surface) = (unsafe { instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(layer)) }) else {
-        return -1;
-    };
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        compatible_surface: Some(&surface),
-        ..Default::default()
-    })) else {
-        return -1;
-    };
-    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        // What the adapter has, not WebGPU's defaults: the simulator's Metal
-        // falls short of some of those and refuses the device outright.
-        required_limits: adapter.limits(),
-        ..Default::default()
-    })) else {
-        return -1;
-    };
-    let Some(mut config) = surface.get_default_config(&adapter, width.max(1), height.max(1)) else {
-        return -1;
-    };
-    config.present_mode = wgpu::PresentMode::Fifo;
-    surface.configure(&device, &config);
-    SURFACE.set(Some(Surface { surface, device, queue, config }));
+pub unsafe extern "C" fn pxl_surface_attach(layer: *mut c_void) {
+    *LAYER.lock().unwrap_or_else(|e| e.into_inner()) = layer.expose_provenance();
+}
+
+/// The view is going: nothing is bound to its layer from now on.
+#[no_mangle]
+pub extern "C" fn pxl_surface_detach() {
+    *LAYER.lock().unwrap_or_else(|e| e.into_inner()) = 0;
+}
+
+/// Opens the device: its uniform offset alignment and whether it times its
+/// passes, written through the two words. 0 when it is open, -1 when the
+/// system has none.
+///
+/// # Safety
+/// `align` and `timestamps` point at words the caller owns.
+#[no_mangle]
+pub unsafe extern "C" fn pxl_gpu_open(align: *mut u32, timestamps: *mut u32) -> i32 {
+    let Some(info) = pxl_render::gpu::api::open_device() else { return -1 };
+    // SAFETY: the caller's words.
+    unsafe {
+        *align = info.align;
+        *timestamps = info.timestamps as u32;
+    }
     0
 }
 
-/// The layer is now `width` × `height` pixels.
+/// Binds the kernel's surface `handle` to the view's layer: 0 when bound, -1
+/// when no view has left one, -2 when no device is open, -3 when the system
+/// would not make a surface of the layer.
 #[no_mangle]
-pub extern "C" fn pxl_surface_resize(width: u32, height: u32) {
-    let Some(s) = SURFACE.get(|| None) else { return };
-    s.config.width = width.max(1);
-    s.config.height = height.max(1);
-    s.surface.configure(&s.device, &s.config);
+pub extern "C" fn pxl_surface_bind(handle: u32) -> i32 {
+    let layer = *LAYER.lock().unwrap_or_else(|e| e.into_inner());
+    if layer == 0 {
+        return -1;
+    }
+    let target = wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(core::ptr::with_exposed_provenance_mut(layer));
+    // SAFETY: the view's layer, which it keeps until it detaches; the shell
+    // unbinds the surface before the view goes.
+    match unsafe { pxl_render::gpu::api::surface_bind(handle, target) } {
+        Ok(()) => 0,
+        Err(pxl_render::gpu::api::BindRefused::NoDevice) => -2,
+        Err(pxl_render::gpu::api::BindRefused::NoSurface) => -3,
+    }
 }
 
-/// One frame: the surface cleared to the ground's color.
 #[no_mangle]
-pub extern "C" fn pxl_surface_draw() {
-    let Some(s) = SURFACE.get(|| None) else { return };
-    let frame = match s.surface.get_current_texture() {
-        wgpu::CurrentSurfaceTexture::Success(frame) => frame,
-        // Drawn, and configured again for the next: the layer changed under
-        // the swapchain.
-        wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
-            s.surface.configure(&s.device, &s.config);
-            frame
-        }
-        wgpu::CurrentSurfaceTexture::Outdated => {
-            s.surface.configure(&s.device, &s.config);
-            return;
-        }
-        // Backgrounded, or no drawable in time: the next frame asks again.
-        _ => return,
-    };
-    let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let mut encoder = s.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: &view,
-            depth_slice: None,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.28, g: 0.43, b: 0.22, a: 1.0 }),
-                store: wgpu::StoreOp::Store,
-            },
-        })],
-        ..Default::default()
-    });
-    s.queue.submit([encoder.finish()]);
-    s.queue.present(frame);
-}
-
-/// The view is going: the surface and its device with it.
-#[no_mangle]
-pub extern "C" fn pxl_surface_close() {
-    SURFACE.set(None);
+pub extern "C" fn pxl_surface_unbind(handle: u32) {
+    pxl_render::gpu::api::surface_unbind(handle);
 }

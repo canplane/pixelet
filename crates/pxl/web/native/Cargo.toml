@@ -15,13 +15,10 @@ doctest = false
 xpute-core = { path = "../../../xpute/core" }
 xpute-runtime = { path = "../../../xpute/runtime" }
 pxl-kernel = { path = "../kernel", default-features = false }
-# The device's GPU: what the browser's WebGPU is to pxl-wasm, a Metal or
-# Vulkan device behind the same API. Only the Metal backend is built, which
-# is the one an iPhone has.
+pxl-render = { path = "../render" }
+# The view's layer made a surface on (src/surface.rs); the device and every
+# call on it are pxl-render's.
 wgpu = { version = "30", default-features = false, features = ["metal", "wgsl"] }
-# Waits out the adapter's and the device's futures at start-up, which wgpu
-# resolves at once on a native backend.
-pollster = "1"
 
 [features]
 # Forwarded to the kernel, as pxl-wasm forwards it: on for a build anyone

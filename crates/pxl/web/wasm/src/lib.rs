@@ -124,9 +124,7 @@ fn now() -> f64 {
 }
 
 /// What this module gives the kernel: the memory the page grew it to, the
-/// linker's end of its data, the page's clock and the allocator — and the
-/// renderer's calls recorded for the page to run, since a module cannot reach
-/// WebGPU itself.
+/// linker's end of its data, the page's clock and the allocator.
 fn bracket() -> Bracket {
     let stack_high = core::ptr::addr_of!(__stack_high) as u32;
     xpute_core::ensure!(stack_high == pxl_kernel::mem::spec::STACK_BYTES, ENOTRECOVERABLE, stack_high);
@@ -136,7 +134,6 @@ fn bracket() -> Bracket {
         data_end: data_end(),
         clock: now,
         heap_stat,
-        gpu_stream: true,
     }
 }
 

@@ -28,8 +28,7 @@ fn heap_stat() -> pxl_kernel::host::HeapStat {
     memory::ALLOC.stat()
 }
 
-/// What a device gives the kernel: the region, the clock and the allocator,
-/// and no recorded renderer calls — the renderer draws here.
+/// What a device gives the kernel: the region, the clock and the allocator.
 fn bracket() -> Bracket {
     memory::region();
     Bracket {
@@ -37,7 +36,6 @@ fn bracket() -> Bracket {
         data_end: memory::DATA_END,
         clock: now,
         heap_stat,
-        gpu_stream: false,
     }
 }
 
