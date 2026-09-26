@@ -175,7 +175,11 @@ const styles = StyleSheet.create({
   description: { ...textStyle.caption, color: color.textMuted },
 
   badge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 4, paddingVertical: 2 },
-  badgeText: { ...textStyle.caption2, letterSpacing: 0.4 },
+  // Under the smallest style on purpose: a badge is a tag, read as a shape at
+  // a glance and not as text, the size iOS's own tab labels and an app's
+  // counters go down to. Its capitals, weight and color carry it. With the
+  // badge's padding and border it stands 16 tall, Material's badge height.
+  badgeText: { ...textStyle.caption2, fontSize: 9, lineHeight: 10, letterSpacing: 0.4 },
 
   group: { marginTop: 16, marginBottom: 10, borderWidth: 1, borderColor: hairline, borderRadius: 10, padding: 4, paddingTop: 10 },
   legend: {
