@@ -17,7 +17,7 @@
 import { createContext, useContext, useEffect, useRef } from "react";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
-import { SLIDE, type Transition } from "./transition.ts";
+import { DIM, type Transition } from "./transition.ts";
 
 /** How dim the chrome around a surface is: 1 but while the camera is busy
  * (feature/map/ui/busy-dim.tsx). */
@@ -33,5 +33,5 @@ export function useVeil(fade: f64, transition: Transition): { level: f64; transi
   useEffect(() => {
     last.current = dim;
   });
-  return { level: fade * dim, transition: dimming ? SLIDE : transition };
+  return { level: fade * dim, transition: dimming ? DIM : transition };
 }

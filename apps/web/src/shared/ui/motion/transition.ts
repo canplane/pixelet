@@ -109,12 +109,21 @@ export const LEAVE: Transition = ease(150, [0, 0, 0.58, 1]);
 /** A control arriving on the map: a long, soft landing. */
 export const ARRIVE: Transition = ease(600, [0.16, 1, 0.3, 1]);
 
-/** A panel sliding over the map, and the chrome dimming while the camera is
- * busy: even at both ends. */
-export const SLIDE: Transition = ease(500, [0.42, 0, 0.58, 1]);
+/** A panel sliding over the map: a spring at critical damping, so it leaves
+ * at full speed the moment it is asked for and lands without a bounce —
+ * three fifths of the way in 100 ms and all but settled by 250. An ease even
+ * at both ends, as this was, had moved a panel 8% in its first 100 ms, and
+ * read as the app being slow to answer. */
+export const SLIDE: Transition = spring({ stiffness: 420, damping: 41, mass: 1 });
 
-/** A panel sliding away: the same curve, sooner done. */
-export const SLIDE_AWAY: Transition = { ...SLIDE, durationMs: 300 };
+/** A panel sliding away: slow to let go and quick to be gone, in 200 ms —
+ * Material's emphasized accelerate. A spring would linger at the end, where
+ * nothing is left to see. */
+export const SLIDE_AWAY: Transition = ease(200, [0.3, 0, 0.8, 0.15]);
+
+/** The chrome dimming while the camera is busy: a change in place rather
+ * than a move, even at both ends. */
+export const DIM: Transition = ease(500, [0.42, 0, 0.58, 1]);
 
 /** A delay added to a transition. */
 export function after(t: Transition, delayMs: f64): Transition {
