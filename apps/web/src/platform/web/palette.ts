@@ -22,6 +22,6 @@ export const LABEL: { primary: string; secondary: string; placeholder: string } 
 
 export const STATUS: { ready: string; pending: string; failed: string } = {
   ready: color.ready,
-  pending: color.glow,
+  pending: color.pending,
   failed: color.alarm,
 };

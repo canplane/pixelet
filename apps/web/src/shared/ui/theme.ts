@@ -40,10 +40,12 @@ export const color = {
   band: "#171717",
   /** The send button. */
   send: "#ff6900",
-  /** Something ready, as a sensor or the world is. */
-  ready: "#00bc7d",
-  /** A report that something failed: its mark, its ground and its edge. */
-  alarm: "#fb2c36",
+  /** A status, in Apple's own green, orange and red: something ready, as a
+   * sensor or the world is; something on its way; a report that something
+   * failed, with the failure's ground and edge. */
+  ready: "#34C759",
+  pending: "#FF9500",
+  alarm: "#FF3B30",
   alarmGround: "#fef2f2",
   alarmEdge: "#fecaca",
 

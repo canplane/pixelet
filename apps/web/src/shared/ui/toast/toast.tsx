@@ -1,6 +1,6 @@
 // @pxl/web/shared/ui/toast/toast.tsx
 
-import { CheckCircle2, Loader2, MapPinOff } from "lucide-react-native";
+import { Check, Loader2, MapPinOff } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { type GestureResponderHandlers, PixelRatio, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
@@ -23,6 +23,14 @@ const POP: Spring = { type: "spring", stiffness: 260, damping: 12, mass: 0.8 };
 /** A glyph arriving otherwise, and any glyph leaving. */
 const GLYPH_FADE: Ease = { ...LEAVE, durationMs: 200 };
 
+/** A status as Apple draws one (checkmark.circle.fill): a white glyph in a
+ * disc of the status's color. A stroked glyph in the color alone is too thin
+ * to read — green's stroke on the glass stands under 2:1 against it — where
+ * a filled disc is read by its shape whatever it stands on. */
+function StatusDisc({ fill, children }: { fill: string; children: React.ReactNode }) {
+  return <View style={[styles.disc, { backgroundColor: fill }]}>{children}</View>;
+}
+
 function glyph(tone: ToastTone) {
   switch (tone) {
     case "loading":
@@ -32,9 +40,17 @@ function glyph(tone: ToastTone) {
         </Spin>
       );
     case "error":
-      return <MapPinOff size={16} color={STATUS.failed} />;
+      return (
+        <StatusDisc fill={STATUS.failed}>
+          <MapPinOff size={11} strokeWidth={2.75} color={color.white} />
+        </StatusDisc>
+      );
     case "ready":
-      return <CheckCircle2 size={16} strokeWidth={2.5} color={STATUS.ready} />;
+      return (
+        <StatusDisc fill={STATUS.ready}>
+          <Check size={11} strokeWidth={3.5} color={color.white} />
+        </StatusDisc>
+      );
   }
 }
 
@@ -111,6 +127,7 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
 const styles = StyleSheet.create({
   slot: { width: SIDE, height: SIDE, alignItems: "center", justifyContent: "center" },
   glyph: { position: "absolute" },
+  disc: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   message: { fontFamily: font.family, fontSize: 13, fontWeight: "600", letterSpacing: -0.3, color: LABEL.primary, paddingHorizontal: 4 },
   dot: { width: 6, height: 6, borderRadius: 3 },
 });

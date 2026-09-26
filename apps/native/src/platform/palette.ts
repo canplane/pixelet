@@ -27,4 +27,4 @@ export const LABEL: { primary: string; secondary: string; placeholder: string } 
 
 export const STATUS: { ready: string; pending: string; failed: string } = IOS
   ? { ready: system("systemGreen"), pending: system("systemOrange"), failed: system("systemRed") }
-  : { ready: color.ready, pending: color.glow, failed: color.alarm };
+  : { ready: color.ready, pending: color.pending, failed: color.alarm };
