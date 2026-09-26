@@ -23,6 +23,7 @@
 use core::fmt;
 use core::mem::{offset_of, size_of};
 use core::panic::Location;
+use std::collections::HashMap;
 
 use xpute_core::status::error::MarshalError;
 use xpute_runtime::abi::fetch::FetchFail;
@@ -157,7 +158,7 @@ impl TaskRow {
             ..TaskRow::default()
         };
         if let Some(at) = rec.fail.at {
-            row.at_file = off_of(at.file().as_ptr()) as f64;
+            row.at_file = off_of(file_in_memory(at.file()).as_ptr()) as f64;
             row.at_file_bytes = at.file().len() as f64;
             row.at_line = at.line() as f64;
         }
@@ -168,6 +169,18 @@ impl TaskRow {
         }
         row
     }
+}
+
+/// Source files' names, each copied once into the kernel's memory, by where
+/// the binary keeps them.
+static FILES: Global<HashMap<usize, Box<str>>> = Global::new();
+
+/// `file` where the shell can read it. A location's file name is the
+/// binary's own data, which lies in the kernel's memory on the page but
+/// outside it on a device, so a row names a copy the heap holds. The names
+/// are the source files', so the copies are few and kept for good.
+fn file_in_memory(file: &'static str) -> &'static str {
+    FILES.get(HashMap::new).entry(file.as_ptr().addr()).or_insert_with(|| file.into())
 }
 
 pub const CENSUS_LEN: usize = CENSUS_TAGS.len();
