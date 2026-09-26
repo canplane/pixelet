@@ -134,7 +134,8 @@
         },
         { "name": "ENABLE", "value": 20 },
         { "name": "OPEN", "value": 21 },
-        { "name": "CLOSE", "value": 22 }
+        { "name": "CLOSE", "value": 22 },
+        { "name": "ORIENTATION_LOST", "value": 23 }
       ]
     },
     {
@@ -370,6 +371,15 @@
             { "name": "orientation", "type": "bool" },
             { "name": "orientation_permission", "type": "bool", "doc": ["iOS 13+'s gate: requestPermission exists and must run inside a gesture."] },
             {
+              "name": "orientation_silence_is_loss",
+              "type": "bool",
+              "doc": [
+                "A browser's compass talks while the device is still and cannot say it stopped, so",
+                "silence is the only sign of loss; a device's speaks only when the heading turns and",
+                "reports a failure itself (SENSOR_ORIENTATION_LOST)."
+              ]
+            },
+            {
               "name": "settings",
               "type": "u32",
               "list": true,
@@ -534,6 +544,7 @@
         },
         { "name": "SENSOR_OPEN", "value": 7445, "doc": ["The map is on screen and wants the sensors."] },
         { "name": "SENSOR_CLOSE", "value": 7446, "doc": ["The map is gone, and the sensors are let go."] },
+        { "name": "SENSOR_ORIENTATION_LOST", "value": 7447, "doc": ["The compass failed and its listener was removed, where the platform says so."] },
         {
           "name": "FETCH_UPDATE",
           "value": 7683,

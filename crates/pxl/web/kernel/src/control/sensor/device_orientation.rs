@@ -19,6 +19,8 @@ use crate::world::change::wake_at;
 /// user gesture, by design), so a permission revoked mid-session can't be pushed
 /// to us like geolocation's `change` event. Track the last real event instead
 /// and treat a long gap while nominally tracking as the signal having been lost.
+/// That holds only where the sensor talks while the device is still, which a
+/// browser's does and a device's does not (`silence_is_loss`).
 const WATCHDOG_TIMEOUT_MS: f64 = 8000.0;
 const WATCHDOG_INTERVAL_MS: f64 = 3000.0;
 
@@ -36,6 +38,12 @@ pub struct OrientationPlatform {
     /// iOS 13+'s permission gate: requestPermission exists and must run inside
     /// a direct user gesture.
     pub needs_permission: bool,
+    /// Whether a silent sensor has been lost. A browser's dispatches events
+    /// while the device lies still and cannot report that it stopped; a
+    /// device's (Core Location) speaks only when the heading turns, so its
+    /// silence is a heading that holds, and it reports a failure itself
+    /// (`orientation_lost`).
+    pub silence_is_loss: bool,
 }
 
 struct Orientation {
@@ -86,9 +94,11 @@ pub fn request_orientation(platform: OrientationPlatform) -> bool {
     true
 }
 
-/// Where the shell's permission prompt stands. A granted prompt has already
-/// started the shell's listener.
-pub fn orientation_permission(answer: PermissionAnswer) {
+/// Where the permission stands. Where a prompt gates the sensor, a granted
+/// prompt has already started the shell's listener; where none does, a grant
+/// came from outside the app — a device's settings — and starts it here. A
+/// refusal leaves no listener: the shell let go of whatever it had begun.
+pub fn orientation_permission(answer: PermissionAnswer, platform: OrientationPlatform) {
     let store = device_orientation_store();
     match answer {
         PermissionAnswer::Asking => {
@@ -96,13 +106,32 @@ pub fn orientation_permission(answer: PermissionAnswer) {
                 store.status = DevicePoseStatus::Loading;
             }
         }
-        PermissionAnswer::Granted => {
+        PermissionAnswer::Granted if platform.needs_permission => {
             orientation().last_event_at = Some(now());
             store.set_is_tracking_orientation(true);
         }
-        PermissionAnswer::Denied => store.set_error(Message::OrientationPermissionDenied),
-        PermissionAnswer::Failed => store.set_error(Message::OrientationPermissionError),
+        PermissionAnswer::Granted => {
+            request_orientation(platform);
+        }
+        PermissionAnswer::Denied => {
+            store.set_is_tracking_orientation(false);
+            store.set_error(Message::OrientationPermissionDenied);
+        }
+        PermissionAnswer::Failed => {
+            store.set_is_tracking_orientation(false);
+            store.set_error(Message::OrientationPermissionError);
+        }
     }
+}
+
+/// The sensor was lost, the listener gone with it: the shell's report where
+/// the platform makes one, the watchdog's verdict where silence is all there
+/// is. Back through a control that asks for the compass, or the watchdog.
+pub fn orientation_lost() {
+    orientation().last_event_at = None;
+    let store = device_orientation_store();
+    store.set_is_tracking_orientation(false);
+    store.set_error(Message::OrientationSignalLost);
 }
 
 /// The map opened: started where the platform allows it without a prompt.
@@ -133,8 +162,12 @@ pub fn orientation_visible() {
 /// while nominally tracking, and doubles as this sensor's only path back once
 /// marked lost — request_orientation no-ops while already tracking, so retrying
 /// is safe to repeat. iOS's request must run inside a user gesture, so recovery
-/// there stays manual (the compass button).
+/// there stays manual (the compass button). Where silence is no loss, there is
+/// nothing to watch.
 pub fn orientation_watchdog_step(platform: OrientationPlatform) {
+    if !platform.silence_is_loss {
+        return;
+    }
     let o = orientation();
     let t = now();
     if t < o.watchdog_at {
@@ -153,9 +186,7 @@ pub fn orientation_watchdog_step(platform: OrientationPlatform) {
     let Some(last) = o.last_event_at else { return };
     if t - last > WATCHDOG_TIMEOUT_MS {
         o.commands.push(OrientationCommand::Remove);
-        store.set_is_tracking_orientation(false);
-        store.set_error(Message::OrientationSignalLost);
-        o.last_event_at = None;
+        orientation_lost();
     }
 }
 

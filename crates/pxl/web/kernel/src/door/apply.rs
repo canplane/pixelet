@@ -74,6 +74,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                 orientation: device_orientation::OrientationPlatform {
                     supported: p.orientation,
                     needs_permission: p.orientation_permission,
+                    silence_is_loss: p.orientation_silence_is_loss,
                 },
             });
             settings_load(p.settings.iter().copied());
@@ -163,6 +164,10 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
             device_orientation::orientation_event(p.webkit_compass_heading, p.alpha, p.beta, p.gamma);
             Ok(Some(0))
         }
+        Command::SENSOR_ORIENTATION_LOST => {
+            device_orientation::orientation_lost();
+            Ok(Some(0))
+        }
         Command::SENSOR_PERMISSION => {
             let p = abi::SensorPermission::read(packet(pkt)?)?;
             match p.sensor {
@@ -171,7 +176,7 @@ pub(super) fn apply(s: &mut State, number: u32, pkt: &Option<&[u8]>) -> Result<O
                         geolocation::geolocation_permission_granted(world_platform().geolocation);
                     }
                 }
-                abi::Sensor::Orientation => device_orientation::orientation_permission(p.answer),
+                abi::Sensor::Orientation => device_orientation::orientation_permission(p.answer, world_platform().orientation),
             }
             Ok(Some(0))
         }

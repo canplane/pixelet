@@ -66,6 +66,7 @@ export const enum SensorMinor {
   ENABLE = 0x14,
   OPEN = 0x15,
   CLOSE = 0x16,
+  ORIENTATION_LOST = 0x17,
 }
 
 /** A load's own verb. */
@@ -270,6 +271,8 @@ export const enum Command {
   SENSOR_OPEN = 0x1d15,
   /** The map is gone, and the sensors are let go. */
   SENSOR_CLOSE = 0x1d16,
+  /** The compass failed and its listener was removed, where the platform says so. */
+  SENSOR_ORIENTATION_LOST = 0x1d17,
   /** A read the host finished, its body held as `body` until the kernel takes it (host.json's BODY_READ). */
   FETCH_UPDATE = 0x1e03,
   /** A model's bytes, held by the host as `body` until the kernel reads them (host.json's BODY_READ). */
@@ -485,6 +488,10 @@ export interface WorldCreate {
   orientation: boolean;
   /** iOS 13+'s gate: requestPermission exists and must run inside a gesture. */
   orientation_permission: boolean;
+  /** A browser's compass talks while the device is still and cannot say it stopped, so
+   * silence is the only sign of loss; a device's speaks only when the heading turns and
+   * reports a failure itself (SENSOR_ORIENTATION_LOST). */
+  orientation_silence_is_loss: boolean;
   /** The settings as storage kept them, a value a setting in SettingKey's order as the
    * snapshot carries them, 0xffffffff for one it kept nothing for. */
   settings: u32[];
@@ -495,7 +502,9 @@ export interface WorldCreate {
 
 export function encode_world_create(p: WorldCreate): U8Array {
   return packet((b) =>
-    b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).u32_array(Uint32Array.from(p.settings)).u32(p.objects).u32(p.objects_bytes)
+    b.bool(p.development).bool(p.handheld).bool(p.geolocation).bool(p.orientation).bool(p.orientation_permission).bool(p.orientation_silence_is_loss).u32_array(Uint32Array.from(p.settings)).u32(
+      p.objects,
+    ).u32(p.objects_bytes)
   );
 }
 

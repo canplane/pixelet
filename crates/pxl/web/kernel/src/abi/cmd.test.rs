@@ -27,6 +27,7 @@ fn every_number_is_its_major_and_minor() {
         (SENSOR_ENABLE, Major::SENSOR as u32, SensorMinor::ENABLE as u32),
         (SENSOR_OPEN, Major::SENSOR as u32, SensorMinor::OPEN as u32),
         (SENSOR_CLOSE, Major::SENSOR as u32, SensorMinor::CLOSE as u32),
+        (SENSOR_ORIENTATION_LOST, Major::SENSOR as u32, SensorMinor::ORIENTATION_LOST as u32),
         (FETCH_UPDATE, Major::FETCH as u32, Minor::UPDATE as u32),
         (LOAD_UPDATE, Major::LOAD as u32, Minor::UPDATE as u32),
         (LOAD_IMAGE, Major::LOAD as u32, LoadMinor::IMAGE as u32),
@@ -66,7 +67,7 @@ fn every_number_is_its_major_and_minor() {
 /// same number as one of the four every subject has.
 #[test]
 fn a_subject_s_own_verbs_start_past_the_four_every_subject_has() {
-    let own: [(&str, u32); 22] = [
+    let own: [(&str, u32); 23] = [
         ("InputMinor::POINTER", InputMinor::POINTER as u32),
         ("InputMinor::WHEEL", InputMinor::WHEEL as u32),
         ("InputMinor::TRACKING", InputMinor::TRACKING as u32),
@@ -81,6 +82,7 @@ fn a_subject_s_own_verbs_start_past_the_four_every_subject_has() {
         ("SensorMinor::ENABLE", SensorMinor::ENABLE as u32),
         ("SensorMinor::OPEN", SensorMinor::OPEN as u32),
         ("SensorMinor::CLOSE", SensorMinor::CLOSE as u32),
+        ("SensorMinor::ORIENTATION_LOST", SensorMinor::ORIENTATION_LOST as u32),
         ("LoadMinor::IMAGE", LoadMinor::IMAGE as u32),
         ("WorldMinor::SNAPSHOT", WorldMinor::SNAPSHOT as u32),
         ("SettingMinor::TOGGLE", SettingMinor::TOGGLE as u32),
