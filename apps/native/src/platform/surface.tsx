@@ -14,7 +14,7 @@
  * frame's viewport, its touches are pointers the kernel reads into drags and
  * pinches, the turns run while it is up and the app is in front, and the
  * kernel hears when the app goes to the background — where it saves what was
- * placed.
+ * placed — and, back in front, whether location was granted meanwhile.
  */
 
 import type { u32 } from "@xpute/core/abi/word.ts";
@@ -28,6 +28,7 @@ import { kernel_rect, kernel_touch } from "@/kernel/control/input.ts";
 import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
 import { request_frame, ring_now, set_driver, strobe, type Viewport } from "@/kernel/sched.ts";
+import { permission_recheck } from "@platform/sensor.ts";
 
 interface PxlSurfaceProps extends ViewProps {
   /** The kernel's surface to show; 0 for none. */
@@ -100,8 +101,10 @@ export function WorldSurface() {
       const visible = state === "active";
       CORE_BUILD.send(0, Command.SENSOR_VISIBILITY, encode_sensor_visibility({ visible }));
       CORE_BUILD.ring(0);
-      if (visible) strobe.start();
-      else strobe.stop();
+      if (visible) {
+        permission_recheck();
+        strobe.start();
+      } else strobe.stop();
     });
     return () => {
       visibility.remove();

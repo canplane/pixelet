@@ -32,6 +32,12 @@ export function orientation_needs_permission(): boolean {
   return orientation_supported() && typeof (DeviceOrientationEvent as IOSOrientationEventCtor).requestPermission === "function";
 }
 
+/** A browser dispatches orientation while the device lies still and never
+ * says the listener stopped hearing, so silence is how a loss shows. */
+export function orientation_silence_is_loss(): boolean {
+  return true;
+}
+
 let geolocation_watch: number | null = null;
 
 export function geolocation_stop(): void {

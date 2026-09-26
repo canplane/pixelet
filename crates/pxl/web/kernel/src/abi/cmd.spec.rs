@@ -118,10 +118,11 @@ pub enum SensorMinor {
     ENABLE = 0x14,
     OPEN = 0x15,
     CLOSE = 0x16,
+    ORIENTATION_LOST = 0x17,
 }
 
 impl SensorMinor {
-    pub const ALL: [SensorMinor; 7] = [
+    pub const ALL: [SensorMinor; 8] = [
         SensorMinor::ERROR,
         SensorMinor::ORIENTATION,
         SensorMinor::PERMISSION,
@@ -129,6 +130,7 @@ impl SensorMinor {
         SensorMinor::ENABLE,
         SensorMinor::OPEN,
         SensorMinor::CLOSE,
+        SensorMinor::ORIENTATION_LOST,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -538,6 +540,8 @@ pub enum Command {
     SENSOR_OPEN = 0x1d15,
     /// The map is gone, and the sensors are let go.
     SENSOR_CLOSE = 0x1d16,
+    /// The compass failed and its listener was removed, where the platform says so.
+    SENSOR_ORIENTATION_LOST = 0x1d17,
     /// A read the host finished, its body held as `body` until the kernel takes it (host.json's BODY_READ).
     FETCH_UPDATE = 0x1e03,
     /// A model's bytes, held by the host as `body` until the kernel reads them (host.json's BODY_READ).
@@ -602,7 +606,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 44] = [
+    pub const ALL: [Command; 45] = [
         Command::NOP,
         Command::WORLD_CREATE,
         Command::WORLD_UPDATE,
@@ -622,6 +626,7 @@ impl Command {
         Command::SENSOR_ENABLE,
         Command::SENSOR_OPEN,
         Command::SENSOR_CLOSE,
+        Command::SENSOR_ORIENTATION_LOST,
         Command::FETCH_UPDATE,
         Command::LOAD_UPDATE,
         Command::LOAD_IMAGE,
@@ -870,6 +875,10 @@ pub struct WorldCreate<'a> {
     pub orientation: bool,
     /// iOS 13+'s gate: requestPermission exists and must run inside a gesture.
     pub orientation_permission: bool,
+    /// A browser's compass talks while the device is still and cannot say it stopped, so
+    /// silence is the only sign of loss; a device's speaks only when the heading turns and
+    /// reports a failure itself (SENSOR_ORIENTATION_LOST).
+    pub orientation_silence_is_loss: bool,
     /// The settings as storage kept them, a value a setting in SettingKey's order as the
     /// snapshot carries them, 0xffffffff for one it kept nothing for.
     pub settings: &'a [u32],
@@ -887,9 +896,10 @@ impl<'a> WorldCreate<'a> {
             geolocation: f.at(2)?.get_bool()?,
             orientation: f.at(3)?.get_bool()?,
             orientation_permission: f.at(4)?.get_bool()?,
-            settings: f.at(5)?.get_array::<u32>()?,
-            objects: f.at(6)?.get_number()? as u32,
-            objects_bytes: f.at(7)?.get_number()? as u32,
+            orientation_silence_is_loss: f.at(5)?.get_bool()?,
+            settings: f.at(6)?.get_array::<u32>()?,
+            objects: f.at(7)?.get_number()? as u32,
+            objects_bytes: f.at(8)?.get_number()? as u32,
         })
     }
 }

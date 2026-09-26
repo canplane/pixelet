@@ -5,8 +5,9 @@
  * (platform/core.ts), rung from the app's frame by the same scheduler and
  * rings the page uses (kernel/). The shell asks it what it asks any host — to
  * start, to hear a control's command, to know what the pointer holds — and
- * nothing of how. What a device does not have yet is left out rather than
- * faked: no compass prompt, no sensors' watches.
+ * nothing of how. The compass needs no prompt of its own on a device — the
+ * location permission covers it — so the tracking and sensor buttons only
+ * command the kernel.
  */
 
 import type { U8Array } from "@xpute/core/abi/array.ts";

@@ -222,6 +222,7 @@ pub fn world_platform() -> Platform {
         orientation: OrientationPlatform {
             supported: false,
             needs_permission: false,
+            silence_is_loss: false,
         },
     })
 }
