@@ -209,5 +209,16 @@ apps/web/.wrangler/
 # What a device posts to the dev server's /__console, for reading with tail.
 apps/web/.dev-console.log
 
+# Expo's per-machine state for the device app: the dev server's settings and
+# the types it generates.
+apps/native/.expo/
+
 # A standalone WebGPU repro page is dev-only and not part of the app.
 apps/web/public/repro-*.html
+
+# The Rust core as the device app links it, built by
+# apps/native/script/build-native.ts; and what `expo prebuild` generates, which
+# is made again from app.json and the modules rather than kept.
+apps/native/modules/pxl-surface/ios/PxlNative.xcframework/
+apps/native/ios/
+apps/native/android/

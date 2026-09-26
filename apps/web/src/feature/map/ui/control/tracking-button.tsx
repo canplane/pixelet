@@ -1,13 +1,14 @@
 // @pxl/web/feature/map/ui/control/tracking-button.tsx
 
-import { Compass, Loader2, Locate, Navigation } from "lucide-react";
+import { Compass, Locate, Navigation } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
+import { ActivityIndicator } from "react-native";
 
 import { DevicePoseStatus, Tracking } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_tracking, useKernel } from "@/kernel/shell.ts";
 
-import { cn } from "@/shared/lib/util/cn.ts";
-import { CircularButton } from "@/shared/ui/shadcn/circular-button.tsx";
+import { CircularButton } from "@/shared/ui/circular-button.tsx";
+import { alpha, color } from "@/shared/ui/theme.ts";
 
 export function TrackingButton() {
   const { t } = useTranslation();
@@ -23,30 +24,26 @@ export function TrackingButton() {
   const isEnabled: boolean = locationStatus === DevicePoseStatus.Ready && has_location;
   const isLoading: boolean = locationStatus === DevicePoseStatus.Loading;
 
-  const getIconStyle = () => {
-    if (isLoading) return { Icon: Loader2, className: "animate-spin opacity-40" };
-    if (canShowLocationControl) return { Icon: Locate, className: "text-[#5B4636]/60 scale-90" };
+  const icon = () => {
+    if (isLoading) return <ActivityIndicator size="small" color={alpha(color.ink, 0.4)} />;
+    if (canShowLocationControl) return <Locate size={18} color={alpha(color.ink, 0.6)} />;
     if (is_follow_mode) {
       const finalRotationDeg = (heading ?? 0) - (azimuth * 180) / Math.PI;
-      return { Icon: Compass, style: { transform: `rotate(${finalRotationDeg}deg)` }, className: "text-amber-500 scale-110" };
+      return <Compass size={22} color={color.amber500} style={{ transform: `rotate(${finalRotationDeg}deg)` }} />;
     }
-    return { Icon: Navigation, className: "text-[#5B4636]/80 group-hover:rotate-[45deg]" };
+    return <Navigation size={20} color={alpha(color.ink, 0.8)} />;
   };
-
-  const { Icon, className, style } = getIconStyle();
 
   const title = canShowLocationControl ? t("map.controls.move_to_location") : is_follow_mode ? t("map.controls.exit_compass_mode") : t("map.controls.start_compass_mode");
 
   return (
     <CircularButton
-      className="w-12 h-12"
-      shadow={false}
-      onClick={() => void kernel_tracking(canShowLocationControl ? Tracking.Recenter : is_follow_mode ? Tracking.Unfollow : Tracking.Follow)}
+      onPress={() => void kernel_tracking(canShowLocationControl ? Tracking.Recenter : is_follow_mode ? Tracking.Unfollow : Tracking.Follow)}
       isActive={is_follow_mode}
       disabled={!isEnabled || isLoading}
-      title={title}
+      label={title}
     >
-      <Icon className={cn("w-5 h-5 transition-all duration-500 ease-out", className)} style={style} />
+      {icon()}
     </CircularButton>
   );
 }

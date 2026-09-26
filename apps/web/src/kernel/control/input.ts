@@ -28,14 +28,13 @@ import {
   Sensor,
 } from "@/kernel/abi/cmd.spec.ts";
 import type { GroundChannelKey } from "@/catalog/cell/cube_type.spec.ts";
-import { send_permission } from "@/kernel/control/sensor.ts";
+import { send_permission } from "@platform/sensor.ts";
 import { CORE_BUILD } from "@/kernel/ipc.ts";
-import { request_frame, set_driver, strobe } from "@/kernel/sched.ts";
-import { kernel_command } from "@/kernel/shell.ts";
+import { request_frame, ring_now, set_driver, strobe } from "@/kernel/sched.ts";
 
 export function send_rect(element: HTMLElement): void {
   const r = element.getBoundingClientRect();
-  CORE_BUILD.send(0, Command.INPUT_UPDATE, encode_input_update({ left: r.left, top: r.top, width: r.width, height: r.height }));
+  kernel_rect(r.left, r.top, r.width, r.height);
 }
 
 /** What the pointer holds: a tool, the held cube's ground channel (none for
@@ -58,6 +57,18 @@ function send_pointer_at(phase: PointerPhase, kind: PointerKind, id: i32, button
   CORE_BUILD.send(0, Command.INPUT_POINTER, encode_input_pointer({ phase, kind, id, button, x, y, tool, channel, value, tier }));
   strobe.input();
   request_frame();
+}
+
+/** A touch at (x, y) in the window, as a device's surface hears it: a pointer
+ * like any other, which the kernel reads into drags and pinches. */
+export function kernel_touch(phase: PointerPhase, id: i32, x: f64, y: f64): void {
+  send_pointer_at(phase, PointerKind.Touch, id, 0, x, y);
+}
+
+/** Where the surface lies in the window, in its pixels: what a pointer's
+ * place is read against. */
+export function kernel_rect(left: f64, top: f64, width: f64, height: f64): void {
+  CORE_BUILD.send(0, Command.INPUT_UPDATE, encode_input_update({ left, top, width, height }));
 }
 
 function send_pointer(phase: PointerPhase, e: PointerEvent): void {
@@ -84,7 +95,7 @@ export function kernel_hold(tool: ActiveTool, channel: GroundChannelKey | null, 
 export function KernelDriver({ element }: { element: HTMLElement | null }): null {
   useLayoutEffect(() => {
     if (!element) return;
-    set_driver(element);
+    set_driver(() => ({ width: element.clientWidth, height: element.clientHeight }));
 
     const on_down = (e: PointerEvent) => {
       send_rect(element);
@@ -143,12 +154,12 @@ export function KernelDriver({ element }: { element: HTMLElement | null }): null
     }).catch(() => {});
 
     send_rect(element);
-    kernel_command(Command.SENSOR_OPEN);
+    ring_now(Command.SENSOR_OPEN);
     strobe.start();
 
     return () => {
       strobe.stop();
-      kernel_command(Command.SENSOR_CLOSE);
+      ring_now(Command.SENSOR_CLOSE);
       permission?.removeEventListener("change", on_permission);
       observer.disconnect();
       globalThis.removeEventListener("pagehide", on_page_hide);

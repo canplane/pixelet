@@ -1,49 +1,13 @@
 // @pxl/web/feature/map/ui/toast-controller.tsx
 
 import { useEffect, useRef } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, Loader2, MapPinOff } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { messageKey as locationMessageKey } from "@/locale/message-key.ts";
 import { DevicePoseStatus, MapStatus } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
-import { Toast } from "@/shared/ui/toast/toast.tsx";
-import { toastCustom, toastDismiss } from "@/shared/ui/toast/store.ts";
-
-const LoadingIcon = (
-  <motion.div
-    key="loading-icon"
-    initial={{ opacity: 0, scale: 0.8 }}
-    animate={{ opacity: 1, scale: 1 }}
-    exit={{ opacity: 0, scale: 0.5 }}
-    transition={{ duration: 0.2 }}
-  >
-    <Loader2 className="w-4 h-4 text-[#5B4636] animate-spin-slow stroke-[2.5px]" />
-  </motion.div>
-);
-
-const SuccessIcon = (
-  <motion.div
-    key="success-icon"
-    initial={{ opacity: 0, scale: 0.3, rotate: -20 }}
-    animate={{ opacity: 1, scale: 1, rotate: 0 }}
-    transition={{ type: "spring", damping: 12, stiffness: 260, mass: 0.8 }}
-  >
-    <CheckCircle2 className="w-4 h-4 text-[#34C759] stroke-[2.5px]" />
-  </motion.div>
-);
-
-function StatusIcon({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="relative flex items-center justify-center w-4 h-4">
-      <AnimatePresence mode="wait" initial={false}>
-        {children}
-      </AnimatePresence>
-    </div>
-  );
-}
+import { toastDismiss, toastShow } from "@/shared/ui/toast/store.ts";
 
 export function ToastController() {
   const { t } = useTranslation();
@@ -86,19 +50,10 @@ export function ToastController() {
     }
 
     shownLocationToastRef.current = true;
-    toastCustom("location-status", ({ index, stackSize, isRemoving }) => (
-      <Toast
-        id="location-status"
-        index={index}
-        stackSize={stackSize}
-        isRemoving={isRemoving}
-        message={isError ? (locationErrorKey ? tRef.current(locationErrorKey) : tRef.current("toast.location_weak_signal")) : tRef.current("toast.location_checking")}
-        statusColor={isError ? "bg-red-500" : "bg-[#34C759]/30"}
-        icon={<StatusIcon>{isError ? <MapPinOff key="location-error-icon" className="w-4 h-4 text-red-500" /> : LoadingIcon}</StatusIcon>}
-        backgroundColor={isError ? "bg-red-50" : undefined}
-        className={isError ? "border-red-200 shadow-[0_6px_20px_rgba(220,38,38,0.15)]" : undefined}
-      />
-    ));
+    toastShow("location-status", {
+      message: isError ? (locationErrorKey ? tRef.current(locationErrorKey) : tRef.current("toast.location_weak_signal")) : tRef.current("toast.location_checking"),
+      tone: isError ? "error" : "loading",
+    });
   }, [locationStatus, locationErrorKey]);
 
   // Tracks only "was the combined loading/error state active last run" —
@@ -157,19 +112,7 @@ export function ToastController() {
       // nothing left to report.
       const messageKey = isError ? "toast.map_load_error" : isMapLoading ? "toast.map_loading" : "toast.companion_loading";
       shownWorldToastRef.current = true;
-      toastCustom("world-status", ({ index, stackSize, isRemoving }) => (
-        <Toast
-          id="world-status"
-          index={index}
-          stackSize={stackSize}
-          isRemoving={isRemoving}
-          message={tRef.current(messageKey)}
-          statusColor={isError ? "bg-red-500" : "bg-[#34C759]/30"}
-          icon={<StatusIcon>{isError ? <MapPinOff key="world-error-icon" className="w-4 h-4 text-red-500" /> : LoadingIcon}</StatusIcon>}
-          backgroundColor={isError ? "bg-red-50" : undefined}
-          className={isError ? "border-red-200 shadow-[0_6px_20px_rgba(220,38,38,0.15)]" : undefined}
-        />
-      ));
+      toastShow("world-status", { message: tRef.current(messageKey), tone: isError ? "error" : "loading" });
       return;
     }
 
@@ -181,17 +124,7 @@ export function ToastController() {
     }
     announcedPageRef.current = mapPage;
     shownWorldToastRef.current = true;
-    toastCustom("world-status", ({ index, stackSize, isRemoving }) => (
-      <Toast
-        id="world-status"
-        index={index}
-        stackSize={stackSize}
-        isRemoving={isRemoving}
-        message={tRef.current("toast.world_ready")}
-        statusColor="bg-[#34C759]"
-        icon={<StatusIcon>{SuccessIcon}</StatusIcon>}
-      />
-    ));
+    toastShow("world-status", { message: tRef.current("toast.world_ready"), tone: "ready" });
     dismissTimerRef.current = setTimeout(() => {
       dismissTimerRef.current = null;
       toastDismiss("world-status");

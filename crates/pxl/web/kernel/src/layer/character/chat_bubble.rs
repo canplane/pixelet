@@ -13,11 +13,9 @@ use pxl_render::gpu::pass::badges::BUBBLE_FONT;
 use pxl_render::gpu::surface::DPR_MAX;
 
 use crate::global::Global;
-use crate::host::{measure_text, now};
-use crate::layer::billboard::canvas::text::wrap_text;
+use crate::host::now;
 use crate::layer::billboard::sheet::{billboard_sheet, follow_billboard_set, new_billboard_set, remove_billboard_set, write_billboard_set, BillboardOrder};
-use xpute_core::status::bug::OrBug;
-use xpute_core::status::errno::Errno;
+use crate::text::text_lines;
 
 // ts (the host's clock at append) lets the bubble derive its own remaining
 // show time from when the line was said, not from when it happened to start
@@ -65,13 +63,12 @@ pub struct BubbleLayout {
     pub logical_h: f64,
 }
 
-/// None until every glyph of `text` has its advance, which the next turn's
-/// have.
+/// None until `text` is laid out, which a later turn has. A line broken at
+/// a space loses the space.
 pub fn layout_bubble(text: &str) -> Option<BubbleLayout> {
-    measure_text(BUBBLE_FONT, text)?;
-    let measure = |s: &str| measure_text(BUBBLE_FONT, s).or_bug(Errno::ENOTRECOVERABLE);
-    let lines = wrap_text(&measure, text, MAX_TEXT_WIDTH_PX);
-    let text_w = lines.iter().map(|l| measure(l)).fold(f64::NEG_INFINITY, f64::max).ceil();
+    let laid = text_lines(BUBBLE_FONT, MAX_TEXT_WIDTH_PX, text)?;
+    let text_w = laid.iter().map(|&(_, w)| w).fold(f64::NEG_INFINITY, f64::max).ceil();
+    let lines: Vec<String> = laid.iter().map(|&(line, _)| line.trim().to_owned()).collect();
     let box_w = text_w + PADDING_X * 2.0;
     let box_h = lines.len() as f64 * LINE_H + PADDING_Y * 2.0;
     Some(BubbleLayout {
@@ -124,7 +121,7 @@ pub fn chat_bubble_step(actor: Option<u32>, anchor_z: f64) {
         b.written = None;
         b.shown = want.clone();
         if let Some((_, text)) = want {
-            // Laid out on a later frame, the glyphs' advances in.
+            // Laid out on a later frame, once the platform has laid it out.
             let Some(layout) = layout_bubble(&text) else {
                 b.shown = None;
                 return;

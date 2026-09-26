@@ -15,6 +15,7 @@ use pxl_spec::cell::object::{placeable_cube_num_id, placeable_cube_rgb, terrain_
 use pxl_spec::space::pvf3::pvf3::Pvf3;
 use pxl_spec::space::pvf3::{fvec, ivec};
 use pxl_spec::space::v3::V3;
+use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::control::camera::input::{holding, ActiveTool};
@@ -222,7 +223,7 @@ pub fn hover_cursor_step() {
     if c.ghost != ghost {
         let written = with_world(|world, sched| match &ghost {
             Ghost::None => sched.ghost.clear(&mut sched.draw),
-            Ghost::Decor { at, group, rotation } => sched.ghost.set_decor(world, &mut sched.draw, *at, *group, *rotation as f32),
+            Ghost::Decor { at, group, rotation } => sched.ghost.set_decor(&mut sched.draw, *at, *group, *rotation as f32),
             Ghost::Box { at, size, value, rgb, coplanar } => sched.ghost.set_box(world, &mut sched.draw, *at, *size, *value, *rgb, *coplanar),
         });
         if written.is_some() {
@@ -287,14 +288,14 @@ impl GhostDraw {
         let bytes = mesh_words(1, FINE_BOX_WORDS) * 4;
         let Some(block) = self.replace(draw, shape, bytes) else { return };
         // SAFETY: a block of the words asked for, this ghost's until replaced.
-        let m = unsafe { core::slice::from_raw_parts_mut(world.volumes.mem().add(block) as *mut u32, bytes as usize / 4) };
+        let m = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), bytes as usize / 4) };
         let heights = write_lone_box(m, size, rgb, layer);
         self.held.as_mut().unwrap().heights = heights;
         self.upload(draw, 1, 0);
     }
 
     /// One instance of decor group `group`, turned `rotation` about Z, at `at`.
-    pub fn set_decor(&mut self, world: &mut World, draw: &mut DrawList, at: V3, group: u32, rotation: f32) {
+    pub fn set_decor(&mut self, draw: &mut DrawList, at: V3, group: u32, rotation: f32) {
         let shape = Shape::Decor {
             group,
             rotation_bits: rotation.to_bits(),
@@ -307,7 +308,7 @@ impl GhostDraw {
         let bytes = 8 * 4;
         let Some(block) = self.replace(draw, shape, bytes) else { return };
         // SAFETY: as for the box.
-        let m = unsafe { core::slice::from_raw_parts_mut(world.volumes.mem().add(block) as *mut u32, 8) };
+        let m = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), 8) };
         m.copy_from_slice(&[0f32.to_bits(), 0f32.to_bits(), 0f32.to_bits(), rotation.to_bits(), 1f32.to_bits(), 0, NO_ENTRY, 0]);
         self.upload(draw, 0, 0);
     }

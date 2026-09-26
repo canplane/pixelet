@@ -7,10 +7,12 @@
 //! both of its depth questions of this frame's depth).
 //!
 //! The sheet is the billboard atlas (asset/atlas.rs),
-//! painted into a texture an entry at a time and whole when the atlas replaced
-//! the sheet, with its mip chain rebuilt after. An entry is painted through the
-//! host's 2D scratch (paint.rs) — the fonts are the host's — as the atlas's draw
-//! spec says, and copied into its rectangle. Magnification is nearest, for the
+//! drawn into a texture an entry at a time and whole when the atlas replaced
+//! the sheet, with its mip chain rebuilt after. An entry is sketched as the
+//! atlas's draw spec says and drawn on the device into its rectangle
+//! (gpu/sheet.rs), its text in the platform's lines (gpu/text.rs). The sheet
+//! holds its colors premultiplied, which a mip chain filters without the dark
+//! fringe a straight alpha gets. Magnification is nearest, for the
 //! pixel read up close; minification is mipmapped linear, because a badge held
 //! at a constant screen size is still slightly minified against the sheet's
 //! supersampled resolution, and without a mip chain every camera
@@ -20,17 +22,15 @@
 //! a badge was drawn cost 64 MB at 4096 px once for every frame a badge was
 //! drawn in, and a phone paid it as a hundred-millisecond task each time.
 
-use crate::gpu::surface::DPR_MAX;
-use core::f32::consts::TAU;
-
-use crate::asset::atlas::{BillboardAtlas, DrawSpec, PAD};
+use crate::asset::atlas::{BillboardAtlas, DrawSpec};
 use crate::frame::draw::{DRAW_WORDS, PIPELINE_BADGE, UNIFORM_FLOATS};
 use crate::gpu::api::{buffer_entry, buffer_usage, bytes, object, pass_desc, release, texture_usage, word_bytes, Gpu, Stamp};
 use crate::gpu::api_spec::{address, compare, dimension, filter, format, load, resource};
 use crate::gpu::layers::{mip_levels, Mips};
-use crate::gpu::paint::{Font, Paint};
 use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::renderer::Blocks;
+use crate::gpu::sheet::{Align, SheetPainter, Sketch};
+use crate::gpu::text::{Font, TextOf};
 
 /// Floats the badge uniform holds (shader/badge.wgsl's Badge).
 const BADGE_FLOATS: usize = 52;
@@ -67,27 +67,15 @@ const DOT_CY: f32 = PILL_H + DOT_GAP + DOT_DIAM / 2.0;
 /// pill's left cap.
 const TEXT_X: f32 = PILL_R + ICON_SIZE / 2.0 + GAP;
 
-const LEFT: u32 = 0;
-const CENTER: u32 = 1;
-const MIDDLE: u32 = 0;
-
 /// The pill every badge stands on: fully-rounded ends.
-fn pill(p: &mut Paint, logical_w: f32) {
-    p.fill_style(0x14141ab8);
-    p.begin_path();
-    p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R);
-    p.fill();
+fn pill(p: &mut Sketch, logical_w: f32) {
+    p.round_rect(0.0, 0.0, logical_w, PILL_H, PILL_R, 0x14141ab8);
 }
 
 /// The anchor dot, centered under the pill, marking the ground point it floats above.
-fn anchor_dot(p: &mut Paint, logical_w: f32) {
-    p.fill_style(0xffffff99);
-    p.begin_path();
-    p.arc(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, 0.0, TAU);
-    p.fill();
-    p.stroke_style(0xffffff40);
-    p.line_width(DOT_BORDER);
-    p.stroke();
+fn anchor_dot(p: &mut Sketch, logical_w: f32) {
+    p.circle(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, 0xffffff99);
+    p.ring(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, DOT_BORDER, 0xffffff40);
 }
 
 /// A badge's width around a line of `text_w`: a count's centered on the pill,
@@ -100,31 +88,18 @@ pub fn badge_width(text_w: f64, icon: bool) -> f64 {
     }
 }
 
-fn place(p: &mut Paint, name: &str, icon: &str, color: u32, logical_w: f32) {
+fn place(p: &mut Sketch, name: &str, icon: &str, color: u32, logical_w: f32) {
     pill(p, logical_w);
     let (cx, cy) = (PILL_R, PILL_H / 2.0);
-    p.fill_style(color);
-    p.begin_path();
-    p.arc(cx, cy, ICON_SIZE / 2.0, 0.0, TAU);
-    p.fill();
-    p.font(ICON_FONT);
-    p.text_align(CENTER);
-    p.text_baseline(MIDDLE);
-    p.fill_text(icon, cx, cy + 1.0);
-    p.font(BADGE_FONT);
-    p.text_align(LEFT);
-    p.fill_style(WHITE);
-    p.fill_text(name, TEXT_X, PILL_H / 2.0 + 1.0);
+    p.circle(cx, cy, ICON_SIZE / 2.0, color);
+    p.text(ICON_FONT, WHITE, icon, cx, cy + 1.0, Align::Center);
+    p.text(BADGE_FONT, WHITE, name, TEXT_X, PILL_H / 2.0 + 1.0, Align::Left);
     anchor_dot(p, logical_w);
 }
 
-fn cluster(p: &mut Paint, label: &str, logical_w: f32) {
+fn cluster(p: &mut Sketch, label: &str, logical_w: f32) {
     pill(p, logical_w);
-    p.font(BADGE_FONT);
-    p.text_align(CENTER);
-    p.text_baseline(MIDDLE);
-    p.fill_style(WHITE);
-    p.fill_text(label, logical_w / 2.0, PILL_H / 2.0 + 1.0);
+    p.text(BADGE_FONT, WHITE, label, logical_w / 2.0, PILL_H / 2.0 + 1.0, Align::Center);
     anchor_dot(p, logical_w);
 }
 
@@ -133,12 +108,8 @@ fn cluster(p: &mut Paint, label: &str, logical_w: f32) {
 pub const LABEL_FONT: Font = Font { weight: REGULAR, px: 10.0 };
 const LABEL_H: f32 = 12.0;
 
-fn label(p: &mut Paint, text: &str, logical_w: f32) {
-    p.font(LABEL_FONT);
-    p.text_align(CENTER);
-    p.text_baseline(MIDDLE);
-    p.fill_style(BLACK);
-    p.fill_text(text, logical_w / 2.0, LABEL_H / 2.0);
+fn label(p: &mut Sketch, text: &str, logical_w: f32) {
+    p.text(LABEL_FONT, BLACK, text, logical_w / 2.0, LABEL_H / 2.0, Align::Center);
 }
 
 // ---- a speech bubble (crates/pxl/web/kernel/src/layer/character/chat_bubble.rs) ----
@@ -155,36 +126,24 @@ const TAIL_H: f32 = 10.0;
 /// uncovered read as a chunky, pixel-art rounded corner without a real arc,
 /// which would anti-alias against nearest sampling.
 #[allow(clippy::too_many_arguments)]
-fn notched_rect(p: &mut Paint, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: u32) {
-    p.fill_style(fill);
-    p.fill_rect(x + notch, y, (w - notch * 2.0).max(0.0), h);
-    p.fill_rect(x, y + notch, w, (h - notch * 2.0).max(0.0));
+fn notched_rect(p: &mut Sketch, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: u32) {
+    p.rect(x + notch, y, (w - notch * 2.0).max(0.0), h, fill);
+    p.rect(x, y + notch, w, (h - notch * 2.0).max(0.0), fill);
 }
 
-fn bubble(p: &mut Paint, lines: &[String], box_w: f32, box_h: f32) {
+fn bubble(p: &mut Sketch, lines: &[String], box_w: f32, box_h: f32) {
     notched_rect(p, 0.0, 0.0, box_w, box_h, NOTCH, BLACK);
     notched_rect(p, BORDER, BORDER, box_w - BORDER * 2.0, box_h - BORDER * 2.0, (NOTCH - BORDER).max(1.0), WHITE);
     let cx = box_w / 2.0;
-    p.fill_style(BLACK);
-    p.begin_path();
-    p.move_to(cx - TAIL_W / 2.0, box_h - BORDER);
-    p.line_to(cx + TAIL_W / 2.0, box_h - BORDER);
-    p.line_to(cx, box_h + TAIL_H - BORDER);
-    p.close_path();
-    p.fill();
-    p.fill_style(WHITE);
-    p.begin_path();
-    p.move_to(cx - TAIL_W / 2.0 + BORDER * 1.5, box_h - BORDER);
-    p.line_to(cx + TAIL_W / 2.0 - BORDER * 1.5, box_h - BORDER);
-    p.line_to(cx, box_h + TAIL_H - BORDER * 2.5);
-    p.close_path();
-    p.fill();
-    p.font(BUBBLE_FONT);
-    p.fill_style(BLACK);
-    p.text_align(CENTER);
-    p.text_baseline(MIDDLE);
+    p.triangle([cx - TAIL_W / 2.0, box_h - BORDER], [cx + TAIL_W / 2.0, box_h - BORDER], [cx, box_h + TAIL_H - BORDER], BLACK);
+    p.triangle(
+        [cx - TAIL_W / 2.0 + BORDER * 1.5, box_h - BORDER],
+        [cx + TAIL_W / 2.0 - BORDER * 1.5, box_h - BORDER],
+        [cx, box_h + TAIL_H - BORDER * 2.5],
+        WHITE,
+    );
     for (i, line) in lines.iter().enumerate() {
-        p.fill_text(line, box_w / 2.0, PADDING_Y + LINE_H * (i as f32 + 0.5));
+        p.text(BUBBLE_FONT, BLACK, line, box_w / 2.0, PADDING_Y + LINE_H * (i as f32 + 0.5), Align::Center);
     }
 }
 
@@ -198,6 +157,7 @@ struct Set {
 
 pub struct BadgePass {
     built: Built,
+    painter: SheetPainter,
     sampler: u32,
     sheet: u32,
     sheet_view: u32,
@@ -230,6 +190,7 @@ impl BadgePass {
         g.sampler(sampler, filter::NEAREST, filter::LINEAR, filter::LINEAR, address::CLAMP, compare::NONE, 1);
         BadgePass {
             built: pipelines.build(g, PIPELINE_BADGE, format::CANVAS),
+            painter: SheetPainter::new(g, pipelines),
             sampler,
             sheet: 0,
             sheet_view: 0,
@@ -250,9 +211,10 @@ impl BadgePass {
         }
     }
 
-    /// Paints what `atlas` changed since the texture last looked, and
-    /// rebuilds its mip chain when anything moved.
-    pub fn sync_sheet(&mut self, g: &Gpu, mips: &Mips, atlas: &mut BillboardAtlas) {
+    /// Draws what `atlas` changed since the texture last looked, and
+    /// rebuilds its mip chain when anything moved. An entry whose text is not
+    /// drawn yet is left for a later frame.
+    pub fn sync_sheet(&mut self, g: &Gpu, mips: &Mips, atlas: &mut BillboardAtlas, text: TextOf) {
         let flush = atlas.flush(self.generation);
         self.generation = flush.generation;
         let slots = if flush.whole {
@@ -288,26 +250,35 @@ impl BadgePass {
         if slots.is_empty() || self.sheet == 0 {
             return;
         }
+        let encoder = object();
+        g.encoder(encoder);
+        let mut made = Vec::new();
+        let mut drawn = false;
         for &slot in &slots {
-            let [x, y, w, h] = atlas.slot_rect(slot);
             let Some(spec) = atlas.slot_draw(slot) else { continue };
-            let mut p = Paint::new();
-            p.size(w, h);
-            p.save();
-            p.translate(PAD as f32, PAD as f32);
-            p.smoothing(false);
-            p.scale(DPR_MAX as f32, DPR_MAX as f32);
+            let mut p = Sketch::default();
             match spec {
                 DrawSpec::Cluster { label, logical_w } => cluster(&mut p, label, *logical_w as f32),
                 DrawSpec::Place { name, icon, color, logical_w } => place(&mut p, name, icon, *color, *logical_w as f32),
                 DrawSpec::Bubble { lines, box_w, box_h } => bubble(&mut p, lines, *box_w as f32, *box_h as f32),
-                DrawSpec::Text { text, logical_w } => label(&mut p, text, *logical_w as f32),
+                DrawSpec::Text { text: line, logical_w } => label(&mut p, line, *logical_w as f32),
             }
-            p.restore();
-            p.run(g);
-            g.paint_copy(self.sheet, x, y, 0, w, h);
+            if self.painter.paint(g, encoder, self.sheet, atlas.slot_rect(slot), &p, text, &mut made) {
+                drawn = true;
+            } else {
+                atlas.mark_dirty(slot);
+            }
         }
-        mips.build(g, self.sheet, self.levels, 0, 1);
+        g.submit(encoder);
+        release(encoder);
+        // After the submit: a texture let go before it would be gone from the
+        // commands that read it.
+        for id in made {
+            release(id);
+        }
+        if drawn {
+            mips.build(g, self.sheet, self.levels, 0, 1);
+        }
     }
 
     /// Every billboard set's draw, in the order listed, in one pass of their

@@ -1,14 +1,18 @@
 // @pxl/web/feature/setting/modal.tsx
 
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
-import { Info, Sparkles, X } from "lucide-react";
+import { Info, Sparkles } from "lucide-react-native";
 
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/shared/ui/shadcn/sheet.tsx";
-import { Separator } from "@/shared/ui/shadcn/separator.tsx";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs.tsx";
+import { useSafeArea } from "@platform/safe-area.ts";
+import { Panel, PanelHeader } from "@/shared/ui/panel.tsx";
+import { Segmented } from "@/shared/ui/segmented.tsx";
+import { color, hairline } from "@/shared/ui/theme.ts";
 import { SettingsSection } from "./section.tsx";
+import { settingText } from "./row.tsx";
 import { LanguageSection } from "./section/language.tsx";
 import { DisclaimerSection } from "./section/disclaimer.tsx";
 import { AboutSection } from "./section/about.tsx";
@@ -18,52 +22,52 @@ export interface SettingsModalProps {
   type: "settings";
 }
 
-// Each tab scrolls on its own. One scroller around both panels kept its
-// scrollTop across a switch, so a long scroll down the effects list opened
-// the info tab already scrolled past its top; Radix mounts a panel fresh
-// when it becomes active, so a scroller per panel starts at zero every time.
-const TAB_SCROLL = "flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-4";
-const TAB_PAD = { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" } as const;
+type Tab = "effects" | "info";
 
+function Separator() {
+  return <View style={styles.separator} />;
+}
+
+// Each tab scrolls on its own, and only the tab shown is mounted. One
+// scroller around both kept its offset across a switch, so a long scroll
+// down the effects list opened the info tab already scrolled past its top;
+// a scroller mounted fresh starts at zero every time.
+function TabScroll({ children }: { children: React.ReactNode }) {
+  const { bottom } = useSafeArea();
+  return (
+    <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: bottom + 16 }]}>
+      {children}
+    </ScrollView>
+  );
+}
+
+/** The settings, beside the map they change: the map stays in reach, so an
+ * effect can be switched and looked at without closing anything. */
 export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
-  const { open, onOpenChange } = props;
+  const { onOpenChange } = props;
   const { t } = useTranslation();
+  const [tab, setTab] = useState<Tab>("effects");
+  const close = () => onOpenChange(false);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="left"
-        hideClose
-        className="sm:w-[360px] p-0 gap-0 flex flex-col bg-background text-foreground"
-        overlayStyle={{ pointerEvents: "none" }}
-      >
-        <div className="shrink-0 border-b border-border/60" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
-          <div className="flex h-14 items-center gap-2 px-5">
-            <SheetTitle className="flex-1 text-[17px] font-semibold">{t("settings.title")}</SheetTitle>
-            <SheetDescription className="sr-only">{t("settings.description")}</SheetDescription>
-            <SheetClose
-              className="-mr-2.5 flex size-[42px] items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
-              aria-label={t("settings.close")}
-            >
-              <X className="size-5" />
-            </SheetClose>
-          </div>
-        </div>
+    <Panel side="left" width={360} label={t("settings.title")} onClose={close}>
+      <PanelHeader title={t("settings.title")} closeLabel={t("settings.close")} onClose={close} />
 
-        <Tabs defaultValue="effects" className="flex-1 min-h-0">
-          <TabsList className="mx-5 mt-4">
-            <TabsTrigger value="effects">
-              <Sparkles className="size-3.5" />
-              {t("settings.tabs.effects")}
-            </TabsTrigger>
-            <TabsTrigger value="info">
-              <Info className="size-3.5" />
-              {t("settings.tabs.info")}
-            </TabsTrigger>
-          </TabsList>
+      <View style={styles.tabs}>
+        <Segmented
+          value={tab}
+          onChange={setTab}
+          segments={[
+            { value: "effects", label: t("settings.tabs.effects"), icon: <Sparkles size={14} color={color.mutedForeground} /> },
+            { value: "info", label: t("settings.tabs.info"), icon: <Info size={14} color={color.mutedForeground} /> },
+          ]}
+        />
+      </View>
 
-          <TabsContent value="effects" className={TAB_SCROLL} style={TAB_PAD}>
-            <p className="text-[11px] leading-snug text-muted-foreground/70">{t("settings.cost_legend")}</p>
+      {tab === "effects"
+        ? (
+          <TabScroll key="effects">
+            <Text style={settingText.faint}>{t("settings.cost_legend")}</Text>
             <Separator />
             <SettingsSection section="display" />
             <SettingsSection section="camera" />
@@ -71,17 +75,24 @@ export function SettingsModal(props: BaseModalProps & SettingsModalProps) {
             <SettingsSection section="lighting" />
             <SettingsSection section="quality" />
             <SettingsSection section="debug" />
-          </TabsContent>
-
-          <TabsContent value="info" className={TAB_SCROLL} style={TAB_PAD}>
+          </TabScroll>
+        )
+        : (
+          <TabScroll key="info">
             <LanguageSection />
             <Separator />
             <DisclaimerSection />
             <AttributionSection />
             <AboutSection />
-          </TabsContent>
-        </Tabs>
-      </SheetContent>
-    </Sheet>
+          </TabScroll>
+        )}
+    </Panel>
   );
 }
+
+const styles = StyleSheet.create({
+  tabs: { paddingHorizontal: 20, paddingTop: 16 },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 16, gap: 16 },
+  separator: { height: 1, backgroundColor: hairline },
+});

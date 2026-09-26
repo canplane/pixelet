@@ -1,27 +1,27 @@
 // @pxl/web/feature/map/ui/overlay/current-address.tsx
 
-import { AnimatePresence, motion } from "framer-motion";
+import { StyleSheet, Text, useWindowDimensions } from "react-native";
+
+import { alpha, color, font } from "@/shared/ui/theme.ts";
 
 interface CurrentAddressProps {
   label: string | null;
 }
 
+/** The place under the map's center. */
 export function CurrentAddress(props: CurrentAddressProps) {
   const { label } = props;
+  const { width } = useWindowDimensions();
+
+  if (!label) return null;
 
   return (
-    <AnimatePresence mode="wait">
-      {label && (
-        <motion.span
-          key={label}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="text-xs font-medium text-[#5B4636]/80 whitespace-nowrap overflow-hidden text-ellipsis min-w-0 max-w-[40vw]"
-        >
-          {label}
-        </motion.span>
-      )}
-    </AnimatePresence>
+    <Text numberOfLines={1} style={[styles.label, { maxWidth: width * 0.4 }]}>
+      {label}
+    </Text>
   );
 }
+
+const styles = StyleSheet.create({
+  label: { fontFamily: font.family, fontSize: 12, lineHeight: 16, fontWeight: "500", color: alpha(color.ink, 0.8), flexShrink: 1 },
+});

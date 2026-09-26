@@ -23,6 +23,7 @@
 use core::fmt;
 
 use xpute_runtime::abi::fetch::FetchFail;
+use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free, Block};
 use xpute_runtime::sched::edge::{next_turn, notified, yield_if_spent, Notify};
 
@@ -79,7 +80,7 @@ fn receive((body, bytes): (u32, u32)) -> Result<Option<Block>, FetchFail> {
         return Err(FetchFail::NoRoom);
     };
     // SAFETY: a block just acquired, `bytes` long, and no one else's.
-    body_read(body, unsafe { core::slice::from_raw_parts_mut(block.0 as *mut u8, bytes as usize) });
+    body_read(body, unsafe { core::slice::from_raw_parts_mut(ptr_at::<u8>(block.0), bytes as usize) });
     Ok(Some(block))
 }
 
@@ -94,7 +95,7 @@ fn release(block: Option<Block>) {
 fn view<'a>((at, bytes): Block) -> &'a [u8] {
     // SAFETY: the block is one `receive` acquired for this body alone,
     // `bytes` long, and it is not released while the view is read.
-    unsafe { core::slice::from_raw_parts(at as *const u8, bytes as usize) }
+    unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at), bytes as usize) }
 }
 
 static ARRIVED: Global<Vec<FetchUpdate>> = Global::new();

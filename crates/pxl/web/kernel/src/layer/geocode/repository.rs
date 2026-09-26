@@ -12,6 +12,7 @@
 
 use pxl_spec::bake::place_page::{open_place_dict, open_place_group, PlaceGroupView, PlacesView, DICT_OBJECT};
 use xpute_core::status::error::MarshalError;
+use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};
 
 /// The dictionary, which the set has one of at the name the bake gives it.
@@ -60,7 +61,7 @@ impl Drop for ResidentGroup {
 /// the packet is released.
 unsafe fn packet<'a>(at: usize, bytes: u32) -> &'a [u8] {
     // SAFETY: the caller's contract above.
-    unsafe { core::slice::from_raw_parts(at as *const u8, bytes as usize) }
+    unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at), bytes as usize) }
 }
 
 /// # Safety

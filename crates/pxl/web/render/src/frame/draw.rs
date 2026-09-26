@@ -16,6 +16,7 @@
 //! free is listed, and may be someone else's by the time the list runs.
 
 use pxl_spec::space::v3::V3;
+use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
 /// Words an upload record holds: the handle, the block's address and its
@@ -246,14 +247,10 @@ pub struct Held {
 }
 
 impl Held {
-    /// Copies `len` bytes at `lane` of `mem` into the block, growing it
-    /// from the heap first when it must; false when it refused, the
-    /// block then gone.
-    ///
-    /// # Safety
-    /// `lane` addresses `len` bytes in `mem`, which the heap's blocks are in.
-    pub unsafe fn write(&mut self, draw: &mut DrawList, mem: *mut u8, lane: usize, len: u32) -> bool {
-        let need = len.max(4);
+    /// Copies `lane` into the block, growing it from the heap first when it
+    /// must; false when it refused, the block then gone.
+    pub fn write(&mut self, draw: &mut DrawList, lane: &[u8]) -> bool {
+        let need = (lane.len() as u32).max(4);
         if need > self.bytes {
             self.free(draw);
             let bytes = need.next_power_of_two();
@@ -261,7 +258,9 @@ impl Held {
             self.at = at;
             self.bytes = bytes;
         }
-        core::ptr::copy_nonoverlapping(mem.add(lane), mem.add(self.at), len as usize);
+        // SAFETY: the block is the heap's, `self.bytes` long, and at least
+        // `lane` long.
+        unsafe { core::ptr::copy_nonoverlapping(lane.as_ptr(), ptr_at::<u8>(self.at), lane.len()) };
         if self.handle == 0 {
             self.handle = draw.upload(self.at as u32, self.bytes, 0, 0);
         } else {

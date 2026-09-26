@@ -10,10 +10,7 @@
  * module reaches WebGPU no other way.
  *
  * A canvas handed to the kernel is a surface: transferred to an
- * OffscreenCanvas once, and drawn by the kernel alone from then on. The 2D
- * scratch is where the kernel paints what needs the host's fonts (the badge
- * sheet) or its decoded images (the texture pack), before copying it into a
- * texture.
+ * OffscreenCanvas once, and drawn by the kernel alone from then on.
  */
 
 import type { U32Array } from "@xpute/core/abi/array.ts";
@@ -22,7 +19,8 @@ import { handle_slot } from "@xpute/runtime/abi/handle.ts";
 import { bytes_of, each_record } from "@xpute/runtime/ipc/stream.ts";
 
 import type { UnsupportedReason } from "@/app/store/unsupported-store.ts";
-import { address, compare, dimension, filter, format, load, op, paint, record, resource, stream } from "@/kernel/render/gpu/api.spec.ts";
+import { DEV_BUNDLE } from "@/config/bundle.ts";
+import { address, compare, dimension, filter, format, load, op, record, resource, stream } from "@/kernel/render/gpu/api.spec.ts";
 
 type GpuObject =
   | GPUBuffer
@@ -98,9 +96,7 @@ export async function acquire_device(lost: () => void): Promise<DeviceInfo | NoD
   // is allowed to refuse outright: OpenGL ES 3.1 hardware may offer none in
   // that stage at all, and a WebGPU running in compatibility mode says so in
   // these numbers rather than in an error.
-  // `?.` because this file is also loaded by a test, which has no Vite and so
-  // no `import.meta.env` at all.
-  if (import.meta.env?.DEV) {
+  if (DEV_BUNDLE) {
     const l = d.limits as unknown as Record<string, number>;
     const of = (k: string) => `${k}=${l[k] ?? "-"}`;
     const info = (adapter as unknown as { info?: Record<string, string> }).info;
@@ -294,7 +290,7 @@ function begin_pass(encoder: GPUCommandEncoder, w: U32Array): GPURenderPassEncod
 let stamps: { count: u32; resolve: GPUBuffer; read: GPUBuffer[]; pending: Set<GPUBuffer> } | null = null;
 /** Where the last frame read goes: the stream's head, from GPU_MS — each
  * span's time, then the frame's whole — where the kernel reads it in a turn. */
-let gpu_ms_at: { memory: WebAssembly.Memory; at: u32 } | null = null;
+let gpu_ms_at: { memory: ArrayBuffer; at: u32 } | null = null;
 
 /** Resolves the timestamps an encoder's passes wrote into `set`, a begin and
  * an end a span, and reads them once the GPU has them, a few frames behind.
@@ -334,147 +330,21 @@ function read_timestamps(encoder: GPUCommandEncoder, set: GPUQuerySet, written: 
         if (e > last) last = e;
       }
       spans.push(Number(last - first) / 1e6);
-      if (gpu_ms_at) new Float64Array(gpu_ms_at.memory.buffer, gpu_ms_at.at, spans.length).set(spans);
+      if (gpu_ms_at) new Float64Array(gpu_ms_at.memory, gpu_ms_at.at, spans.length).set(spans);
       read.unmap();
       s.pending.delete(read);
     }, () => s.pending.delete(read))
   );
 }
 
-// ---- the 2D scratch ----
-
-/** A color the kernel packs as `0xRRGGBBAA`. */
-function css_color(rgba: u32): string {
-  return `rgba(${rgba >>> 24},${(rgba >>> 16) & 0xff},${(rgba >>> 8) & 0xff},${(rgba & 0xff) / 255})`;
-}
-
-let family: string | null = null;
-
-/** The kernel's font — a weight and a size — in the page's own family, read
- * off the page once it is styled, so what the kernel paints and measures is
- * the face the page sets around it. */
-export function css_font(weight: u32, px: f32): string {
-  family ??= globalThis.document ? getComputedStyle(document.body).fontFamily : "sans-serif";
-  return `${weight} ${px}px ${family}`;
-}
-
-let scratch: OffscreenCanvas | null = null;
-let scratch_ctx: OffscreenCanvasRenderingContext2D | null = null;
-
-function scratch_canvas(): [OffscreenCanvas, OffscreenCanvasRenderingContext2D] {
-  if (!scratch) {
-    scratch = new OffscreenCanvas(1, 1);
-    scratch_ctx = scratch.getContext("2d");
-  }
-  return [scratch, scratch_ctx!];
-}
-
-function run_paint(w: U32Array): void {
-  const [canvas, ctx] = scratch_canvas();
-  let k = 0;
-  const f = () => float(w[k++]);
-  while (k < w.length) {
-    const op = w[k++];
-    switch (op) {
-      case paint.SIZE: {
-        const width = w[k++];
-        const height = w[k++];
-        if (canvas.width < width || canvas.height < height) {
-          canvas.width = Math.max(canvas.width, width);
-          canvas.height = Math.max(canvas.height, height);
-        }
-        ctx.clearRect(0, 0, width, height);
-        break;
-      }
-      case paint.SAVE:
-        ctx.save();
-        break;
-      case paint.RESTORE:
-        ctx.restore();
-        break;
-      case paint.TRANSLATE:
-        ctx.translate(f(), f());
-        break;
-      case paint.SCALE:
-        ctx.scale(f(), f());
-        break;
-      case paint.SMOOTHING:
-        ctx.imageSmoothingEnabled = w[k++] !== 0;
-        break;
-      case paint.FILL_STYLE:
-        ctx.fillStyle = css_color(w[k++]);
-        break;
-      case paint.STROKE_STYLE:
-        ctx.strokeStyle = css_color(w[k++]);
-        break;
-      case paint.LINE_WIDTH:
-        ctx.lineWidth = f();
-        break;
-      case paint.FONT: {
-        const weight = w[k++];
-        ctx.font = css_font(weight, f());
-        break;
-      }
-      case paint.TEXT_ALIGN:
-        ctx.textAlign = w[k++] === 1 ? "center" : "left";
-        break;
-      case paint.TEXT_BASELINE:
-        k++;
-        ctx.textBaseline = "middle";
-        break;
-      case paint.BEGIN_PATH:
-        ctx.beginPath();
-        break;
-      case paint.ROUND_RECT:
-        ctx.roundRect(f(), f(), f(), f(), f());
-        break;
-      case paint.ARC:
-        ctx.arc(f(), f(), f(), f(), f());
-        break;
-      case paint.MOVE_TO:
-        ctx.moveTo(f(), f());
-        break;
-      case paint.LINE_TO:
-        ctx.lineTo(f(), f());
-        break;
-      case paint.CLOSE_PATH:
-        ctx.closePath();
-        break;
-      case paint.FILL:
-        ctx.fill();
-        break;
-      case paint.STROKE:
-        ctx.stroke();
-        break;
-      case paint.FILL_RECT:
-        ctx.fillRect(f(), f(), f(), f());
-        break;
-      case paint.FILL_TEXT: {
-        const [x, y, len] = [f(), f(), w[k++]];
-        ctx.fillText(utf8.decode(new Uint8Array(w.buffer, w.byteOffset + 4 * k, len)), x, y);
-        k += (len + 3) >>> 2;
-        break;
-      }
-      case paint.IMAGE: {
-        const image = images.get(w[k++]);
-        const [sx, sy, sw, sh, dx, dy, dw, dh] = [f(), f(), f(), f(), f(), f(), f(), f()];
-        if (image) ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh);
-        break;
-      }
-      default:
-        throw new Error(`[gpu] paint operation ${op}`);
-    }
-  }
-}
-
 /** Runs the records the turn just returned left in the stream at `at`. With
  * no device they are dropped whole: the kernel hears the device went and
  * makes everything again on the next one. */
-export function run_gpu_stream(memory: WebAssembly.Memory, at: u32): void {
+export function run_gpu_stream(memory: ArrayBuffer, at: u32): void {
   gpu_ms_at ??= { memory, at: at + stream.GPU_MS * 4 };
   if (device === null) return;
   const d = device;
-  each_record(memory.buffer, at, stream.HEAD, (code, w, a, n) => {
+  each_record(memory, at, stream.HEAD, (code, w, a, n) => {
     const k = a + n;
     switch (code) {
       case op.RESET:
@@ -517,7 +387,7 @@ export function run_gpu_stream(memory: WebAssembly.Memory, at: u32): void {
         const texture = d.createTexture({
           size: [bitmap.width, bitmap.height],
           format: "rgba8unorm-srgb",
-          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
         d.queue.copyExternalImageToTexture({ source: bitmap }, { texture }, [bitmap.width, bitmap.height]);
         put(w[a], texture);
@@ -574,13 +444,20 @@ export function run_gpu_stream(memory: WebAssembly.Memory, at: u32): void {
         break;
       }
       case op.WRITE_BUFFER:
-        d.queue.writeBuffer(get<GPUBuffer>(w[a]), w[a + 1], memory.buffer, w.byteOffset + 4 * (a + 3), w[a + 2]);
+        d.queue.writeBuffer(get<GPUBuffer>(w[a]), w[a + 1], memory, w.byteOffset + 4 * (a + 3), w[a + 2]);
         break;
       case op.WRITE_TEXTURE:
         d.queue.writeTexture({ texture: get<GPUTexture>(w[a]), origin: [0, 0, w[a + 1]] }, bytes_of(w, a + 4), { bytesPerRow: w[a + 2] * 4 }, [w[a + 2], w[a + 3], 1]);
         break;
       case op.ENCODER:
         put(w[a], d.createCommandEncoder());
+        break;
+      case op.COPY_TEXTURE:
+        get<GPUCommandEncoder>(w[a]).copyTextureToTexture(
+          { texture: get<GPUTexture>(w[a + 1]), origin: [w[a + 2], w[a + 3], 0] },
+          { texture: get<GPUTexture>(w[a + 4]), origin: [w[a + 5], w[a + 6], w[a + 7]] },
+          [w[a + 8], w[a + 9], 1],
+        );
         break;
       case op.PASS:
         put(w[a], begin_pass(get<GPUCommandEncoder>(w[a + 1]), w.subarray(a + 2, k)));
@@ -643,12 +520,6 @@ export function run_gpu_stream(memory: WebAssembly.Memory, at: u32): void {
         break;
       case op.TIMESTAMPS:
         read_timestamps(get<GPUCommandEncoder>(w[a]), get<GPUQuerySet>(w[a + 1]), w[a + 2]);
-        break;
-      case op.PAINT:
-        run_paint(w.subarray(a, k));
-        break;
-      case op.PAINT_COPY:
-        d.queue.copyExternalImageToTexture({ source: scratch_canvas()[0] }, { texture: get<GPUTexture>(w[a]), origin: [w[a + 1], w[a + 2], w[a + 3]] }, [w[a + 4], w[a + 5]]);
         break;
       default:
         throw new Error(`[gpu] record ${code}`);

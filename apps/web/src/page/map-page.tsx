@@ -1,14 +1,20 @@
 // @pxl/web/page/map-page.tsx
 
+import { StyleSheet, View } from "react-native";
+
 import { MapView } from "@/feature/map/ui/view.tsx";
 
 /** Map page */
 function MapPage() {
   return (
-    <div className="relative flex-1 w-full flex flex-col items-center">
+    <View style={styles.page}>
       <MapView />
-    </div>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  page: { flex: 1, width: "100%", alignItems: "center" },
+});
 
 export default MapPage;

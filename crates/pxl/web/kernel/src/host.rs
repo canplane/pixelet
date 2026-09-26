@@ -1,20 +1,19 @@
 // pxl-kernel/host.rs
 //
 // What the kernel asks of the host that is not a command it answers: the
-// browser's key-value storage, a body the host holds copied in, a glyph's
-// advance. Each is a record in the host stream (abi/host.json), which the
-// host runs once the turn has returned, so what a record asks is done by the
-// time the next turn rises — and what it names is kept that long. Only the
-// clock is still called: a turn measures its own budget mid-turn, when the
-// host cannot run. A native test has no stream; storage keeps nothing there,
-// and a glyph is a fixed width.
+// platform's key-value storage, a body the host holds copied in, a text laid
+// out or drawn (text.rs). Each is a record in the host stream
+// (abi/host.json), which the host runs once the turn has returned, so what a
+// record asks is done by the time the next turn rises — and what it names is
+// kept that long. Only the clock is still called: a turn measures its own
+// budget mid-turn, when the host cannot run. A native test has no stream, and
+// storage keeps nothing there.
 
 use core::panic::Location;
-use std::collections::{HashMap, HashSet};
 
-use pxl_render::gpu::paint::Font;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::ipc::stream::Stream;
+use xpute_runtime::mem::base::{off_of, ptr_at};
 
 use crate::abi::host::{op, stream};
 use crate::global::Global;
@@ -42,7 +41,7 @@ fn host() -> Option<&'static mut Host> {
 /// `at` must address that range, 4-aligned, for as long as the module runs.
 pub unsafe fn set_host_stream(at: u32) {
     // SAFETY: the caller's range.
-    let words = unsafe { core::slice::from_raw_parts_mut(at as usize as *mut u32, (stream::BYTES / 4) as usize) };
+    let words = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize), (stream::BYTES / 4) as usize) };
     HOST.set(Some(Host {
         stream: Stream::new(words, stream::HEAD as usize),
         held: Vec::new(),
@@ -50,13 +49,20 @@ pub unsafe fn set_host_stream(at: u32) {
 }
 
 /// The turn's rise: what the host did after the last turn is in, so what was
-/// held for it goes and the advances it wrote are known.
+/// held for it goes.
 pub fn host_rise() {
     *TURN.get(|| 0) += 1;
     if let Some(h) = host() {
         h.held.clear();
     }
-    glyphs_rise();
+}
+
+/// Records `op` with `args` and `bytes` for the host to run once the turn
+/// has returned; false where there is no host to run it.
+pub fn host_record(op: u32, args: &[u32], bytes: &[u8]) -> bool {
+    let Some(h) = host() else { return false };
+    h.stream.record(op, args, &[], Some(bytes));
+    true
 }
 
 static TURN: Global<u64> = Global::new();
@@ -78,7 +84,12 @@ pub fn host_fall() {
 /// its two numbers, as the one record of the turn, published at once for the
 /// host to find when the trap reaches it. What was recorded before it in the
 /// turn is dropped: the kernel stops here, and none of it is to be done.
+///
+/// A device's kernel stops with its process, before any host could run the
+/// record, so it says the report on the process's own error stream as well.
 pub fn host_bug(errno: Errno, at: &Location<'_>, a: u64, b: u64) {
+    #[cfg(not(target_arch = "wasm32"))]
+    eprintln!("[pxl] {errno:?} at {}:{}:{} ({a}, {b})", at.file(), at.line(), at.column());
     if let Some(h) = host() {
         h.stream.publish();
         let args = [errno as i32 as u32, at.line(), at.column(), a as u32, (a >> 32) as u32, b as u32, (b >> 32) as u32];
@@ -87,10 +98,10 @@ pub fn host_bug(errno: Errno, at: &Location<'_>, a: u64, b: u64) {
     }
 }
 
-/// `localStorage.setItem` under `storage`'s key (host.json).
+/// What the platform keeps under `storage`'s key (host.json).
 pub fn storage_set(storage: u32, value: String) {
     let Some(h) = host() else { return };
-    h.stream.record(op::STORAGE_SET, &[storage, value.as_ptr() as u32, value.len() as u32], &[], None);
+    h.stream.record(op::STORAGE_SET, &[storage, off_of(value.as_ptr()) as u32, value.len() as u32], &[], None);
     h.held.push(value);
 }
 
@@ -99,7 +110,7 @@ pub fn storage_set(storage: u32, value: String) {
 /// turn on, and `dst` must be kept until then.
 pub fn body_read(body: u32, dst: &mut [u8]) {
     let Some(h) = host() else { return };
-    h.stream.record(op::BODY_READ, &[body, dst.as_mut_ptr() as u32, dst.len() as u32], &[], None);
+    h.stream.record(op::BODY_READ, &[body, off_of(dst.as_mut_ptr()) as u32, dst.len() as u32], &[], None);
 }
 
 static HANDHELD: Global<bool> = Global::new();
@@ -124,82 +135,6 @@ pub fn set_development(development: bool) {
 
 pub fn development() -> bool {
     *DEVELOPMENT.get(|| false)
-}
-
-/// Every glyph advance the host has said, by font and code point, and what
-/// was asked for since the last turn and where its answers go. The table
-/// grows with the characters a session has drawn in a font, which is bounded
-/// by the fonts and the script, not by what is drawn.
-struct Glyphs {
-    known: HashMap<(u32, u32, u32), f32>,
-    asked: HashSet<(u32, u32, u32)>,
-    answers: Vec<Asked>,
-}
-
-/// One MEASURE record's glyphs, and where the host writes their advances.
-struct Asked {
-    weight: u32,
-    px: u32,
-    cps: Vec<u32>,
-    widths: Box<[f32]>,
-}
-
-static GLYPHS: Global<Glyphs> = Global::new();
-
-fn glyphs() -> &'static mut Glyphs {
-    GLYPHS.get(|| Glyphs {
-        known: HashMap::new(),
-        asked: HashSet::new(),
-        answers: Vec::new(),
-    })
-}
-
-fn glyphs_rise() {
-    let g = glyphs();
-    if g.answers.is_empty() {
-        return;
-    }
-    for a in g.answers.drain(..) {
-        for (cp, w) in a.cps.into_iter().zip(a.widths.iter()) {
-            g.known.insert((a.weight, a.px, cp), *w);
-        }
-    }
-    g.asked.clear();
-    // What was waiting on a width is laid out on the frame that knows it.
-    crate::world::change::request_world_tick();
-}
-
-/// The width `text` takes in `font`: the sum of its glyphs' advances, as the
-/// host's canvas measures each. None while one is not yet known, and it is
-/// asked for: the next turn knows it.
-pub fn measure_text(font: Font, text: &str) -> Option<f64> {
-    let Some(h) = host() else { return Some(text.chars().count() as f64 * 7.0) };
-    let g = glyphs();
-    let px = font.px.to_bits();
-    let mut width = 0.0;
-    let mut missing = Vec::new();
-    for c in text.chars() {
-        let key = (font.weight, px, c as u32);
-        match g.known.get(&key) {
-            Some(&w) => width += w as f64,
-            None => {
-                if g.asked.insert(key) {
-                    missing.push(c as u32);
-                }
-            }
-        }
-    }
-    if !missing.is_empty() {
-        let mut widths = vec![0.0f32; missing.len()].into_boxed_slice();
-        h.stream.record(op::MEASURE, &[font.weight, px, widths.as_mut_ptr() as u32], &missing, None);
-        g.answers.push(Asked {
-            weight: font.weight,
-            px,
-            cps: missing,
-            widths,
-        });
-    }
-    text.chars().all(|c| g.known.contains_key(&(font.weight, px, c as u32))).then_some(width)
 }
 
 /// The local wall clock: `Date.now()`, and the local hour and the local day's
@@ -259,6 +194,9 @@ pub struct HeapStat {
     /// Requests answered with nothing: the one way this memory is full, since
     /// the fixed ranges cannot be.
     pub refusals: u32,
+    /// Requests the page level has served: a turn that makes none has asked
+    /// the heap for nothing.
+    pub requests: u32,
 }
 
 static HEAP: Global<fn() -> HeapStat> = Global::new();

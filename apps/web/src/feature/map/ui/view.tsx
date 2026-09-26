@@ -1,51 +1,51 @@
 // @pxl/web/feature/map/ui/view.tsx
 
 /**
- * The map as the page shows it: the world's canvas, handed to the kernel,
- * and the overlays on top. The camera and its input, the world, the
+ * The map as the page shows it: the world's surface, handed to the kernel,
+ * and the chrome on top. The camera and its input, the world, the
  * environment, the fetches that follow the view and the drawing are the
- * kernel's turn (kernel/kernel.ts); this lays out the canvas and the chrome.
+ * kernel's turn (kernel/kernel.ts); this lays out the surface and the chrome.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { StyleSheet, View } from "react-native";
 
-import { KernelDriver } from "@/kernel/control/input.ts";
-import { open_surface } from "@/kernel/render/surface.ts";
-import { surface_role } from "@/kernel/render/gpu/api.spec.ts";
-import { LedgerOverlay } from "@/feature/dev/ledger/overlay.tsx";
+import { AboveKeyboard } from "@platform/above-keyboard.tsx";
+import { WorldSurface } from "@platform/surface.tsx";
+import { DevOverlay } from "@platform/dev-overlay.tsx";
+import { Toaster } from "@/shared/ui/toast/toaster.tsx";
+import { chrome } from "@/shared/ui/theme.ts";
 
 import { Overlays } from "./overlay/overlays.tsx";
+import { MODE_BAR_HEIGHT_PX } from "./overlay/mode-bar.tsx";
 import { ToastController } from "./toast-controller.tsx";
 
+/** How far the toasts stand over the mode bar. */
+const TOAST_LIFT_PX = 20;
+
 export function MapView() {
-  const ref = useRef<HTMLCanvasElement>(null);
-  /** The world's canvas once the kernel has it: the frame loop's viewport and
-   * the pointer's target. */
-  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    const surface = open_surface(element, surface_role.WORLD);
-    setCanvas(element);
-    return () => {
-      setCanvas(null);
-      surface.close();
-    };
-  }, []);
-
   return (
-    <div className="fixed inset-0 overflow-hidden bg-black">
+    <View style={[StyleSheet.absoluteFill, styles.root]}>
       <ToastController />
-      <LedgerOverlay />
+      <DevOverlay />
 
-      <div className="absolute inset-0">
-        <canvas ref={ref} className="absolute inset-0 h-full w-full touch-none" />
-        <KernelDriver element={canvas} />
-      </div>
+      <View style={StyleSheet.absoluteFill}>
+        <WorldSurface />
+      </View>
 
-      {/* Absolute-position UI layer */}
+      {
+        /* Under the chrome, not over it: the toasts stand clear of the
+        mode bar, and what the bar opens over them — the size flyout —
+        is meant to cover them. */
+      }
+      <AboveKeyboard inset={chrome.inset} lift={MODE_BAR_HEIGHT_PX + TOAST_LIFT_PX}>
+        <Toaster />
+      </AboveKeyboard>
+
       <Overlays />
-    </div>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { overflow: "hidden", backgroundColor: "black" },
+});

@@ -70,6 +70,7 @@
 
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
+use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::section::{span_of, Section};
 
 use pxl_render::gpu::api_spec::stream;
@@ -172,5 +173,5 @@ pub unsafe fn lane<T>(s: Section, off: u32, n: usize) -> &'static mut [T] {
     let at = u32::try_from(n * size_of::<T>()).ok().and_then(|bytes| s.at(off, bytes)).or_bug(Errno::ENOTRECOVERABLE);
     xpute_core::ensure!((at as usize).is_multiple_of(align_of::<T>()), ENOTRECOVERABLE, at);
     // SAFETY: inside `s`, aligned, and the caller's alone.
-    unsafe { core::slice::from_raw_parts_mut(at as usize as *mut T, n) }
+    unsafe { core::slice::from_raw_parts_mut(ptr_at::<T>(at as usize), n) }
 }

@@ -41,11 +41,8 @@ pub fn follow_billboard_set(set: u32, actor: u32, lift: f64) {
 
 /// Replaces a set's instances with `lane`, BILLBOARD_FLOATS floats each.
 pub fn write_billboard_set(set: u32, lane: &[f32]) {
-    let Some((mut world, sched, _)) = kernel().world() else { return };
-    let count = (lane.len() / crate::layer::billboard::field::BILLBOARD_FLOATS) as u32;
-    // SAFETY: `lane` is `count` instances of f32s in the kernel's memory, read
-    // before this returns.
-    unsafe { sched.billboards.write(&mut world, &mut sched.draw, set, count, lane.as_ptr() as usize) };
+    let Some((_, sched, _)) = kernel().world() else { return };
+    sched.billboards.write(&mut sched.draw, set, lane);
 }
 
 pub fn remove_billboard_set(set: u32) {

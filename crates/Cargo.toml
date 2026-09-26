@@ -7,7 +7,9 @@
 # The client is one core compiled to one WebAssembly module that the main
 # thread and each worker instantiate for themselves
 # (issue/20260912-why-the-destination-is-wasm.md): pxl/render, pxl/kernel and
-# pxl/wasm. The server end is native
+# pxl/wasm. On a device the same core is linked into the app instead, through
+# pxl/native, which draws with wgpu where the page's host draws with the
+# browser's WebGPU. The server end is native
 # (issue/20260918-the-server-in-rust-and-the-line-already-drawn.md): pxl/geo
 # and pxl/api over pxl/server, pxl/geo-bake beside them for what is baked
 # rather than answered, and pxl/overture where the two geo halves read the
@@ -29,6 +31,7 @@ members = [
   "pxl/web/render",
   "pxl/web/kernel",
   "pxl/web/wasm",
+  "pxl/web/native",
   "pxl/server",
   "pxl/server/geo-spec",
   "pxl/server/geo",
@@ -68,6 +71,21 @@ hex = "0.4"
 # positions. What a change log keys a topic by, a page table a page by, a
 # badge table a place by — hashed by the FNV above, so no random state.
 indexmap = "2"
+
+# The client's crates name the kernel's memory by offsets from one base
+# (xpute-runtime mem/base.rs), and an offset cast straight to a pointer
+# reads the wrong memory wherever the base is not 0 — on a device, where the
+# kernel faulted reading a terrain page from address 92 MB. `as` spells that
+# cast and every harmless one alike, so the harmless ones are made to say
+# what they are — `.cast()`, `.cast_const()`, `&raw`, `ptr::from_ref` — and
+# any `as *const` or `as *mut` left is an offset made a pointer, which
+# script/check-rules.ts refuses. A crate takes these with `[lints]
+# workspace = true`; xpute-runtime, exported on its own, spells them itself.
+[workspace.lints.clippy]
+ptr_as_ptr = "warn"
+ptr_cast_constness = "warn"
+borrow_as_ptr = "warn"
+ref_as_ptr = "warn"
 
 [workspace.package]
 edition = "2021"
@@ -121,3 +139,11 @@ panic = "abort"
 inherits = "release"
 opt-level = 3
 panic = "unwind"
+
+# What the device app links (pxl-native). The release profile's `z` is for a
+# download, and an app is installed once and then runs every frame on a
+# phone's battery, so it takes the faster code; it aborts as the module does,
+# since a trap ends the client either way.
+[profile.native]
+inherits = "release"
+opt-level = 3

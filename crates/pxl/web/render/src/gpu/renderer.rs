@@ -20,6 +20,7 @@ use pxl_spec::space::pvf3::ivec;
 use pxl_spec::space::v3::{norm3, sub3, V3};
 use xpute_core::math::scalar::round;
 use xpute_runtime::global::Global;
+use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{alloc, free};
 
 use crate::asset::atlas::BillboardAtlas;
@@ -45,6 +46,7 @@ use crate::gpu::pipeline::{Built, Pipelines};
 use crate::gpu::shadow::Shadow;
 use crate::gpu::stars::StarPass;
 use crate::gpu::surface::{surface, surfaces, surfaces_lost, Surface, SETTLE_TURNS, SURFACES};
+use crate::gpu::text::TextOf;
 use crate::look::environment::{ENV_AIR, ENV_OTHER_LIGHT, ENV_STARS};
 use crate::look::globe::{Globe, MERCATOR_RADIUS_U};
 use crate::mesh::chunk_mesher::{COARSE_BOX_WORDS, FINE_BOX_WORDS};
@@ -121,10 +123,12 @@ pub struct FrameInput<'a> {
     pub cases: &'a [(u32, u32, u32)],
     /// The texture pack's sheet as an image, asked for until it is drawn.
     pub sheet: fn() -> Option<u32>,
-    /// The Moon's face as an image, asked for until it is painted.
+    /// The Moon's face as an image, asked for until it is copied in.
     pub moon: fn() -> Option<u32>,
     /// The billboards' sheet, whose changes the badge texture mirrors.
     pub atlas: &'a mut BillboardAtlas,
+    /// A line of text as the platform draws it, asked for until it is.
+    pub text: TextOf,
     /// Whether the device is a phone's: the shadow map is made smaller.
     pub handheld: bool,
 }
@@ -252,7 +256,7 @@ impl Scratch {
         }
         // SAFETY: a heap block this scratch holds alone, at
         // least `bytes` long.
-        unsafe { core::slice::from_raw_parts_mut(self.at as *mut u8, bytes as usize) }
+        unsafe { core::slice::from_raw_parts_mut(ptr_at::<u8>(self.at), bytes as usize) }
     }
 
     /// Gives the block back.
@@ -299,8 +303,8 @@ fn buffer_size(len: u32) -> u32 {
 /// `n` bytes of the memory at `at`.
 fn memory(at: u32, n: u32) -> &'static [u8] {
     // SAFETY: a heap block the draw list named, live until its free is
-    // listed, in the memory addressed from 0.
-    unsafe { core::slice::from_raw_parts(at as usize as *const u8, n as usize) }
+    // listed.
+    unsafe { core::slice::from_raw_parts(ptr_at::<u8>(at as usize), n as usize) }
 }
 
 /// Lanes the table is: handle, where, length, the two counts, buffer, group.
@@ -317,7 +321,7 @@ pub const BLOCKS_BYTES: u32 = (BLOCK_LANES * BLOCK_SLOTS * 4) as u32;
 /// for as long as the module runs.
 pub unsafe fn set_blocks(at: u32) {
     // SAFETY: the caller's range, one lane of BLOCK_SLOTS words after another.
-    let lane = |k: usize| unsafe { core::slice::from_raw_parts_mut((at as usize + k * BLOCK_SLOTS * 4) as *mut u32, BLOCK_SLOTS) };
+    let lane = |k: usize| unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(at as usize + k * BLOCK_SLOTS * 4), BLOCK_SLOTS) };
     BLOCKS.set(Blocks {
         handle: lane(0),
         at: lane(1),
@@ -955,7 +959,7 @@ impl Renderer {
         }
         self.layers.step(g, &self.mips, input.sheet);
         self.moon.step(g, &self.mips, input.moon);
-        self.badges.sync_sheet(g, &self.mips, input.atlas);
+        self.badges.sync_sheet(g, &self.mips, input.atlas, input.text);
         let (draws, uniforms) = take_lists(Some(g), input.lists);
 
         targets(g, world);

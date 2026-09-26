@@ -29,6 +29,7 @@ use std::collections::HashMap;
 
 use pxl_render::asset::gltf::{scene_nodes, world_matrices, Gltf};
 use pxl_spec::space::mat4::{mat4_transform_direction, mat4_transform_point};
+use xpute_runtime::mem::base::ptr_at;
 
 use crate::kernel::with_world;
 
@@ -96,13 +97,12 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
         return None;
     }
 
-    with_world(|world, sched| {
+    with_world(|_, sched| {
         let (model, block) = sched.models.new_model(vertex_cnt, index_cnt, joint_cnt)?;
-        let mem = world.volumes.mem();
         let n = (vertex_cnt * 16 + index_cnt) as usize;
         // SAFETY: the model's block is `n` words in the volumes' memory, ours
         // until the model is sealed.
-        let words = unsafe { core::slice::from_raw_parts_mut(mem.add(block) as *mut u32, n) };
+        let words = unsafe { core::slice::from_raw_parts_mut(ptr_at::<u32>(block), n) };
         let lane = |k: usize| k * vertex_cnt as usize;
         let put_f = |words: &mut [u32], at: usize, v: f32| words[at] = v.to_bits();
 
@@ -209,22 +209,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
             let c = sched.models.clip(model, anim.duration as f32);
             for channel in &anim.channels {
                 let Some(&joint) = joint_of.get(&channel.node) else { continue };
-                let keys = channel.times.len() as u32;
-                // SAFETY: the keys' floats are this channel's own vectors, read
-                // before this returns; a null base makes their addresses absolute.
-                unsafe {
-                    sched.models.channel(
-                        core::ptr::null(),
-                        model,
-                        c,
-                        joint,
-                        channel.path as u8,
-                        channel.step,
-                        keys,
-                        channel.times.as_ptr() as usize,
-                        channel.values.as_ptr() as usize,
-                    );
-                }
+                sched.models.channel(model, c, joint, channel.path as u8, channel.step, &channel.times, &channel.values);
             }
         }
 
@@ -234,7 +219,7 @@ pub fn register_model(gltf: &Gltf, height_u: Option<f64>) -> Option<ModelHandle>
             _ => 1.0,
         };
         // SAFETY: the model's block is in the volumes' memory.
-        unsafe { sched.models.seal(&mut sched.draw, mem, model, scale) };
+        unsafe { sched.models.seal(&mut sched.draw, model, scale) };
         Some(ModelHandle {
             model,
             clip_count: gltf.animations.len() as u32,

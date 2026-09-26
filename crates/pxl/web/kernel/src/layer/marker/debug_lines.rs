@@ -7,10 +7,8 @@
 //! frame's origin. A module built without the gizmos holds none.
 
 use pxl_render::frame::draw::{DrawList, Held, PIPELINE_DEBUG};
-use pxl_render::gpu::api::word_bytes;
+use pxl_render::gpu::api::bytes;
 use pxl_spec::space::v3::V3;
-
-use crate::world::chunk::build::World;
 
 /// Floats a vertex takes: its position relative to the set's origin (3)
 /// and its color, linear (3). Two vertices a segment.
@@ -24,15 +22,11 @@ pub struct DebugLines {
 }
 
 impl DebugLines {
-    /// Replaces the segments with `vertex_cnt` vertices from `lane`,
-    /// relative to `origin` in units.
-    ///
-    /// # Safety
-    /// `lane` addresses vertex_cnt * DEBUG_VERTEX_FLOATS f32s in the memory.
-    pub unsafe fn set(&mut self, world: &mut World, draw: &mut DrawList, origin: V3, vertex_cnt: u32, lane: usize) {
-        let len = word_bytes(vertex_cnt as usize * DEBUG_VERTEX_FLOATS);
-        let written = self.held.write(draw, world.volumes.mem(), lane, len);
-        self.vertex_cnt = if written { vertex_cnt } else { 0 };
+    /// Replaces the segments with the vertices in `lane`, DEBUG_VERTEX_FLOATS
+    /// floats each, relative to `origin` in units.
+    pub fn set(&mut self, draw: &mut DrawList, origin: V3, lane: &[f32]) {
+        let written = self.held.write(draw, bytes(lane));
+        self.vertex_cnt = if written { (lane.len() / DEBUG_VERTEX_FLOATS) as u32 } else { 0 };
         self.origin = origin;
     }
 

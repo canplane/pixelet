@@ -3,6 +3,9 @@
 
   "workspace": [
     "apps/web",
+    // The same shell on a device, through Expo: a package.json member, since
+    // Expo and Metro find their packages the way npm lays them out.
+    "apps/native",
 
     "packages/xpute/core",
     "packages/xpute/runtime"
@@ -76,19 +79,25 @@
     "smoke": "./script/smoke.ts",
 
     // ── The gate ──
-    "check": "deno task check:fmt && deno task check:toolchain && deno task check:rules && deno task check:web && deno task check:xpute && deno task check:rust && deno task check:spec",
+    "check": "deno task check:fmt && deno task check:toolchain && deno task check:rules && deno task check:web && deno task check:native && deno task check:xpute && deno task check:rust && deno task check:spec",
     // What check:rust's own `cargo fmt --check` does for the Rust: everything
     // Deno formats — TypeScript, JSON, JSONC, Markdown — held to one shape.
     // Without it the two languages were gated unevenly, and the half nothing
     // ran was where a config broke and sat broken.
     "check:fmt": "deno fmt --check",
     "check:web": "deno task --cwd apps/web check",
+    // The device's own files, which check:web never reaches: the shell is
+    // checked with `@platform/` as the web's, so this checks the device's
+    // modules against their own imports and, through platform/conform.ts,
+    // against the shape the web's export.
+    "check:native": "deno check apps/native/src",
     "check:xpute": "deno check packages/xpute/core/src/**/*.ts && deno check packages/xpute/runtime/src/**/*.ts",
     // The wasm32 pass builds libraries only, so a broken `.test.rs` still
     // passes it; the host pass is what compiles those. geo-bake runs twice
     // because `serve` gates the dev tile server, and pxl-wasm twice because
-    // the published module is built without `dev` (build-wasm.ts).
-    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings",
+    // the published module is built without `dev` (build-wasm.ts). pxl-native
+    // is checked for the iPhone, the one target its Metal backend has.
+    "check:rust": "cargo fmt --manifest-path crates/Cargo.toml --all --check && cargo clippy --manifest-path crates/Cargo.toml --target aarch64-apple-ios -p pxl-native -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -p pxl-wasm -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-spec -p pxl-server -p pxl-geo -p pxl-geo-bake -p pxl-api -p pxl-tool -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p pxl-geo-bake --features serve -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --all-targets -p xpute-core -p xpute-runtime -p pxl-spec -p pxl-render -p pxl-kernel -- -D warnings && cargo clippy --manifest-path crates/Cargo.toml --target wasm32-unknown-unknown -p pxl-wasm --no-default-features -- -D warnings",
     // Before anything compiles: a Rust version written twice is a binary
     // built on a compiler the gate never ran.
     "check:toolchain": "./script/check-toolchain.ts",

@@ -1,0 +1,6 @@
+{
+  "platforms": ["apple"],
+  "apple": {
+    "modules": ["PxlSurfaceModule", "PxlKernelModule", "PxlStorageModule", "PxlTextModule"]
+  }
+}

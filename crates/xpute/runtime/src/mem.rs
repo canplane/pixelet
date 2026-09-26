@@ -6,5 +6,6 @@
 //! of the heap is a `malloc`'s, which is why they are two files rather than
 //! one module doing both.
 
+pub mod base;
 pub mod heap;
 pub mod section;

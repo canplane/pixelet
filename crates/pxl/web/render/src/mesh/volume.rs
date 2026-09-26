@@ -31,6 +31,7 @@ use xpute_core::math::scalar::round;
 use xpute_core::status::bug::OrBug;
 use xpute_core::status::errno::Errno;
 use xpute_runtime::abi::handle::Slots;
+use xpute_runtime::mem::base::{off_of, ptr_at};
 use xpute_runtime::mem::heap::{alloc, free, Block, Guard};
 
 pub const MATERIAL_OBJECT: u8 = 5;
@@ -260,7 +261,6 @@ pub struct VolumeStat {
 
 /// Every volume alive, and the stores they draw on.
 pub struct Volumes {
-    mem: *mut u8,
     stores: Vec<Store>,
     /// Stores with their lanes, waiting for a band.
     free_stores: Vec<usize>,
@@ -272,15 +272,16 @@ pub struct Volumes {
     pub stat: VolumeStat,
 }
 
+impl Default for Volumes {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Volumes {
-    /// Over the memory at `mem`, taking the standing stores from
-    /// the heap.
-    ///
-    /// # Safety
-    /// `mem` must be the base of the memory the lanes are addressed in.
-    pub unsafe fn new(mem: *mut u8) -> Volumes {
+    /// None yet: the standing stores are taken from the heap as bands ask.
+    pub fn new() -> Volumes {
         Volumes {
-            mem,
             stores: Vec::new(),
             free_stores: Vec::new(),
             empty_stores: Vec::new(),
@@ -301,15 +302,15 @@ impl Volumes {
     }
 
     fn material(&self, store: usize) -> *mut u32 {
-        self.mem.wrapping_add(self.stores[store].material) as *mut u32
+        ptr_at::<u32>(self.stores[store].material)
     }
 
     fn layer(&self, store: usize) -> *mut u8 {
-        self.mem.wrapping_add(self.stores[store].layer_idx)
+        ptr_at(self.stores[store].layer_idx)
     }
 
     fn sub_cell(&self, store: usize) -> Option<*mut u8> {
-        self.stores[store].sub_cell.map(|(at, _)| self.mem.wrapping_add(at))
+        self.stores[store].sub_cell.map(|(at, _)| ptr_at(at))
     }
 
     /// A store for a new band: a free one, or one built from the heap —
@@ -380,7 +381,7 @@ impl Volumes {
             let (at, bytes) = alloc(SUB_CELL_BYTES)?;
             self.stores[store].sub_cell = Some((at, bytes));
             // SAFETY: a block of `bytes` this module just took.
-            unsafe { core::slice::from_raw_parts_mut(self.mem.wrapping_add(at), bytes as usize).fill(0) };
+            unsafe { core::slice::from_raw_parts_mut(ptr_at::<u8>(at), bytes as usize).fill(0) };
         }
         self.sub_cell(store)
     }
@@ -508,32 +509,26 @@ impl Volumes {
         }
     }
 
-    /// The memory the volumes' addresses are offsets into.
-    pub fn mem(&self) -> *mut u8 {
-        self.mem
-    }
-
     /// Band `i` of volume `id` as the scan reads it, over the memory.
     ///
     /// # Safety
     /// The views are valid until the volume is painted again or released.
     pub unsafe fn band_view(&mut self, id: u32, i: usize) -> crate::mesh::voxel_scan::BandView<'static> {
         let row = *self.band_row(id, i);
-        let mem = self.mem;
-        let at = |w: u32| mem.add(w as usize);
+        let at = |w: u32| ptr_at::<u8>(w as usize);
         let voxels = BAND_VOXELS;
         let n = row[4] as usize;
         crate::mesh::voxel_scan::BandView {
             band_z: row[0] as i32,
-            material: core::slice::from_raw_parts(at(row[1]) as *const u32, voxels),
-            layer_idx: core::slice::from_raw_parts(at(row[2]) as *const u8, voxels),
-            sub_cell: (row[3] != 0).then(|| core::slice::from_raw_parts(at(row[3]) as *const u8, voxels * 4)),
+            material: core::slice::from_raw_parts(at(row[1]).cast::<u32>(), voxels),
+            layer_idx: core::slice::from_raw_parts(at(row[2]).cast_const(), voxels),
+            sub_cell: (row[3] != 0).then(|| core::slice::from_raw_parts(at(row[3]).cast_const(), voxels * 4)),
             extra: crate::mesh::voxel_scan::ExtraView {
-                col: core::slice::from_raw_parts(at(row[5]) as *const u32, n),
-                z: core::slice::from_raw_parts(at(row[6]) as *const i32, n),
-                material: core::slice::from_raw_parts(at(row[7]) as *const u32, n),
+                col: core::slice::from_raw_parts(at(row[5]).cast::<u32>(), n),
+                z: core::slice::from_raw_parts(at(row[6]).cast::<i32>(), n),
+                material: core::slice::from_raw_parts(at(row[7]).cast::<u32>(), n),
                 layer_idx: core::slice::from_raw_parts(at(row[8]), n),
-                sub: core::slice::from_raw_parts(at(row[9]) as *const u32, n),
+                sub: core::slice::from_raw_parts(at(row[9]).cast::<u32>(), n),
             },
         }
     }
@@ -562,18 +557,18 @@ impl Volumes {
         let band = &self.volumes.get(id).or_bug(Errno::ENOTRECOVERABLE).bands[i];
         let store = &self.stores[band.store];
         let e = &store.extra;
-        let rel = |p: *const u8| (p as usize).wrapping_sub(self.mem as usize) as u32;
+        let rel = |p: *const u8| off_of(p) as u32;
         self.row = [
             band.band_z as u32,
             store.material as u32,
             store.layer_idx as u32,
             store.sub_cell.map_or(0, |(at, _)| at as u32),
             e.len() as u32,
-            rel(e.col.as_ptr() as *const u8),
-            rel(e.z.as_ptr() as *const u8),
-            rel(e.material.as_ptr() as *const u8),
+            rel(e.col.as_ptr().cast::<u8>()),
+            rel(e.z.as_ptr().cast::<u8>()),
+            rel(e.material.as_ptr().cast::<u8>()),
             rel(e.layer_idx.as_ptr()),
-            rel(e.sub.as_ptr() as *const u8),
+            rel(e.sub.as_ptr().cast::<u8>()),
         ];
         &self.row
     }

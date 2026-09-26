@@ -24,6 +24,7 @@ use pxl_spec::bake::constant::{pack_pos, BandZ, EntryAt, BAND, CELL, OBJECT_FINE
 use pxl_spec::space::indexer::{FROM_L2_IDX, L2_IDX};
 use pxl_spec::space::pvf3::ivec::{self, IVec};
 use pxl_spec::space::pvf3::pvf3::Pvf3;
+use xpute_runtime::mem::base::ptr_at;
 use xpute_runtime::mem::heap::{free, Block};
 
 use crate::layer::object::store::{object_col_revision, Store};
@@ -661,7 +662,7 @@ impl Builder {
                     return Progress::Blocked;
                 };
                 // SAFETY: the run set the chunk holds, past the bytes asked for.
-                unsafe { self.scan.provide_set(world.volumes.mem().add(at), bytes) };
+                unsafe { self.scan.provide_set(ptr_at::<u8>(at), bytes) };
                 let count = self.scan.finish();
                 let job = self.scan_job.take().unwrap();
                 world.volumes.release(job.volume);
@@ -801,7 +802,7 @@ impl Builder {
             return Progress::Blocked;
         };
         // SAFETY: as for a scan's set.
-        unsafe { self.direct.provide_set(world.volumes.mem().add(at), bytes) };
+        unsafe { self.direct.provide_set(ptr_at::<u8>(at), bytes) };
         let count = self.direct.finish();
         self.stat.direct += 1;
         self.keep_runs(id, Runs { set, bytes, count, fold: None });
@@ -849,7 +850,7 @@ impl Builder {
             return Progress::Blocked;
         };
         // SAFETY: as for a scan's set.
-        unsafe { self.direct.provide_set(world.volumes.mem().add(at), bytes) };
+        unsafe { self.direct.provide_set(ptr_at::<u8>(at), bytes) };
         let count = self.direct.finish();
         self.stat.direct += 1;
         self.keep_runs(id, Runs { set, bytes, count, fold: None });
@@ -873,17 +874,17 @@ impl Builder {
         self.chunks.get_mut(&id).unwrap().runs = Some(runs);
     }
 
-    fn run_set(world: &World, runs: &Runs) -> RunSet<'static> {
+    fn run_set(runs: &Runs) -> RunSet<'static> {
         let bytes = pxl_render::mesh::voxel_scan::run_set_bytes(runs.count, COL_SPAN) as usize;
         let set_at = at(Range::Run(runs.set), 0, bytes as u32).or_bug(Errno::ENOTRECOVERABLE) as usize;
         // SAFETY: the chunk's own set, held until its runs are let go.
-        unsafe { RunSet::carve(core::slice::from_raw_parts(world.volumes.mem().add(set_at), bytes), runs.count, COL_SPAN, APRON) }
+        unsafe { RunSet::carve(core::slice::from_raw_parts(ptr_at::<u8>(set_at), bytes), runs.count, COL_SPAN, APRON) }
     }
 
     fn advance_bake(&mut self, world: &mut World, id: u32, emit: &mut impl FnMut(BuildEvent)) -> Progress {
         let holding = matches!(&self.bake_job, Some(j) if j.id == id);
         let c = &self.chunks[&id];
-        let set = Self::run_set(world, c.runs.as_ref().unwrap());
+        let set = Self::run_set(c.runs.as_ref().unwrap());
         if !holding {
             if self.bake_job.is_some() {
                 return Progress::Blocked;
@@ -936,7 +937,7 @@ impl Builder {
                 };
                 // SAFETY: `.fixed.bake`, the open bake's alone until it is
                 // finished and handed over, or aborted.
-                unsafe { self.bake.provide_mesh(world.volumes.mem().add(mesh_at as usize) as *mut u32, words) };
+                unsafe { self.bake.provide_mesh(ptr_at::<u32>(mesh_at as usize), words) };
                 self.bake_job.as_mut().unwrap().mesh = Some((mesh_at as usize, words * 4));
                 Progress::Busy
             }

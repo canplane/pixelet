@@ -37,7 +37,8 @@ pub const SHADER_ATMOS_EXPOSURE: u32 = 16;
 pub const SHADER_STARS: u32 = 17;
 pub const SHADER_CLOUDS: u32 = 18;
 pub const SHADER_CLOUD_FIELD: u32 = 19;
-pub const SHADERS: u32 = 20;
+pub const SHADER_SHEET: u32 = 20;
+pub const SHADERS: u32 = 21;
 
 /// The shaders that place a point of the world, each of which lays it on the
 /// planet as the ground is (globe.wgsl's `on_globe_of`) before it projects
@@ -124,6 +125,7 @@ pub fn source(kind: u32) -> &'static str {
         ),
         SHADER_DEBUG => wgsl!("frame", "globe", "grade", "debug"),
         SHADER_MIPS => wgsl!("mips"),
+        SHADER_SHEET => wgsl!("sheet"),
         SHADER_AO_DOWNSAMPLE => wgsl!("ao_view", "ao_downsample"),
         SHADER_AO_SAMPLE => wgsl!("ao_view", "ao_sample"),
         SHADER_AO_BLUR => wgsl!("ao_view", "ao_blur"),
@@ -217,7 +219,9 @@ pub const PIPELINE_CLOUD_FIELD: u32 = 29;
 /// vertex layout of four words rather than six (`chunk_lanes`).
 pub const PIPELINE_CHUNK_COARSE_DEPTH: u32 = 30;
 pub const PIPELINE_CHUNK_COARSE_PREPASS: u32 = 31;
-pub const PIPELINES: u32 = 33;
+/// An entry of the billboard sheet (gpu/sheet.rs).
+pub const PIPELINE_SHEET: u32 = 33;
+pub const PIPELINES: u32 = 34;
 
 // A pipeline record's words, in order: the shader; whether it has a fragment
 // stage; the topology; the cull mode; whether it writes depth; the depth
@@ -559,6 +563,17 @@ pub fn pipeline(id: u32) -> Vec<u32> {
         // A mip level from the one above: no depth, into the texture's own
         // format.
         PIPELINE_MIPS => record(screen(SHADER_MIPS), &[], &[group(&SKIN)]),
+        // An entry of the billboard sheet: its shapes and lines of text laid
+        // over each other in the entry's own texture, no depth.
+        PIPELINE_SHEET => record(
+            Head {
+                topology: STRIP,
+                blend: ALPHA,
+                ..screen(SHADER_SHEET)
+            },
+            &[],
+            &[group(&[[0, VERTEX, UNIFORM], [1, BOTH, STORAGE]]), group(&[[0, FRAGMENT, TEXTURE_ARRAY], [1, FRAGMENT, SAMPLER]])],
+        ),
         // The screen-space occlusion (gpu/ao.rs): the frame's depth to half
         // resolution with a normal; the occlusion from that; the denoise,
         // reading the blue noise, the pass before it and which run it is;

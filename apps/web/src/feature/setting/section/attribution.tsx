@@ -1,8 +1,14 @@
 // @pxl/web/feature/setting/section/attribution.tsx
 
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { Linking, Text, View } from "react-native";
 
-import { SectionTitle } from "@/feature/setting/row.tsx";
+import { SectionTitle, settingText } from "@/feature/setting/row.tsx";
+
+function Link({ href, children }: { href: string; children: ReactNode }) {
+  return <Text style={settingText.link} onPress={() => Linking.openURL(href)}>{children}</Text>;
+}
 
 /**
  * Source notices. Hardcoded rather than run through t(): these are license
@@ -48,53 +54,21 @@ import { SectionTitle } from "@/feature/setting/row.tsx";
 export function AttributionSection() {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col gap-1">
+    <View style={{ gap: 4 }}>
       <SectionTitle>{t("settings.attribution.section_title")}</SectionTitle>
-      <div className="flex flex-col gap-2 py-1 text-[12px] text-muted-foreground">
-        <span>
-          ©{" "}
-          <a
-            href="https://www.openstreetmap.org/copyright"
-            target="_blank"
-            rel="noreferrer"
-            className="underline hover:text-foreground"
-          >
-            OpenStreetMap
-          </a>{" "}
-          contributors, available under the{" "}
-          <a
-            href="https://opendatacommons.org/licenses/odbl/"
-            target="_blank"
-            rel="noreferrer"
-            className="underline hover:text-foreground"
-          >
-            Open Database License
-          </a>
-        </span>
-        <span>
-          Elevation: modified{" "}
-          <a
-            href="https://doi.org/10.5281/zenodo.15689805"
-            target="_blank"
-            rel="noreferrer"
-            className="underline hover:text-foreground"
-          >
-            GEDTM30
-          </a>{" "}
-          by OpenGeoHub, licensed under{" "}
-          <a
-            href="https://creativecommons.org/licenses/by/4.0/"
-            target="_blank"
-            rel="noreferrer"
-            className="underline hover:text-foreground"
-          >
-            CC BY 4.0
-          </a>
-        </span>
-        <span>
+      <View style={{ gap: 8, paddingVertical: 4 }}>
+        <Text style={settingText.small}>
+          © <Link href="https://www.openstreetmap.org/copyright">OpenStreetMap</Link> contributors, available under the{" "}
+          <Link href="https://opendatacommons.org/licenses/odbl/">Open Database License</Link>
+        </Text>
+        <Text style={settingText.small}>
+          Elevation: modified <Link href="https://doi.org/10.5281/zenodo.15689805">GEDTM30</Link> by OpenGeoHub, licensed under{" "}
+          <Link href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</Link>
+        </Text>
+        <Text style={settingText.small}>
           produced using Copernicus WorldDEM © DLR e.V. 2010–2014 and © Airbus Defense and Space GmbH 2014–2018 provided under COPERNICUS by the European Union and ESA; all rights reserved
-        </span>
-      </div>
-    </div>
+        </Text>
+      </View>
+    </View>
   );
 }

@@ -1,6 +1,0 @@
-// pxl-kernel/layer/billboard/canvas.rs
-
-//! What a billboard asks of the host's 2D canvas: the text it measures and
-//! lays out.
-
-pub mod text;
