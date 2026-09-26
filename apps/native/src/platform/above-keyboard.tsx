@@ -1,7 +1,8 @@
 // @pxl/native/platform/above-keyboard.tsx
 
-import { type ReactNode, useEffect, useState } from "react";
-import { Keyboard, Platform, View } from "react-native";
+import { requireNativeView } from "expo";
+import type { ComponentType, ReactNode } from "react";
+import type { ViewProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface AboveKeyboardProps {
@@ -12,49 +13,31 @@ interface AboveKeyboardProps {
   children: ReactNode;
 }
 
+/** The view that stands on the keyboard (modules/platform/ios/KeyboardDock.swift). */
+const KeyboardDock: ComponentType<ViewProps> = requireNativeView("PxlPlatform", "KeyboardDock");
+
 /**
  * A layer across the bottom of the screen that stands on the keyboard while
- * one is open, and over the home indicator while none is. iOS says where the
- * keyboard is going before it moves, Android once it has.
- *
- * It rides the keyboard's own motion: the move is laid out once and the
- * system animates it on the UI thread with the curve and duration the
- * keyboard reports (Keyboard.scheduleLayoutAnimation, as React Native's
- * KeyboardAvoidingView does), so the layer and the keys move as one.
+ * one is open, and over the home indicator while none is. Laid out here where
+ * it stands with no keyboard; the keyboard's lift is the native view's own,
+ * moved in the keyboard's animation as the keyboard says it is going, so the
+ * layer and the keys move as one — which a layout set from here, a thread hop
+ * after the keys had left and on a curve of React Native's, did not.
  */
 export function AboveKeyboard({ inset, lift = 0, children }: AboveKeyboardProps) {
   const { bottom } = useSafeAreaInsets();
-  const [keyboard, setKeyboard] = useState(0);
-
-  useEffect(() => {
-    const show = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hide = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const shown = Keyboard.addListener(show, (e) => {
-      Keyboard.scheduleLayoutAnimation(e);
-      setKeyboard(e.endCoordinates.height);
-    });
-    const hidden = Keyboard.addListener(hide, (e) => {
-      Keyboard.scheduleLayoutAnimation(e);
-      setKeyboard(0);
-    });
-    return () => {
-      shown.remove();
-      hidden.remove();
-    };
-  }, []);
-
   return (
-    <View
+    <KeyboardDock
       style={{
         position: "absolute",
         left: inset,
         right: inset,
-        bottom: inset + lift + Math.max(keyboard, bottom),
+        bottom: inset + lift + bottom,
         zIndex: 40,
         pointerEvents: "box-none",
       }}
     >
       {children}
-    </View>
+    </KeyboardDock>
   );
 }

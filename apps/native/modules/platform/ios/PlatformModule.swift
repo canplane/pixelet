@@ -102,6 +102,13 @@ public class PlatformModule: Module {
         view.surface = surface
       }
     }
+
+    // ---- the keyboard (platform/above-keyboard.tsx, KeyboardDock.swift) ----
+    //
+    // The surface stays the first view, the one the module's name alone
+    // reaches; this one is asked for by its own.
+
+    View(KeyboardDock.self) {}
   }
 }
 

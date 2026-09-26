@@ -1,9 +1,9 @@
 // @pxl/web/feature/map/ui/overlay/mode-bar.tsx
 
 import { useRef, useState } from "react";
-import { Eraser, LayoutGrid, MessageCircle, MousePointer, Palette, Send, TreePine } from "lucide-react-native";
+import { ArrowUp, Eraser, LayoutGrid, MessageCircle, MousePointer, Palette, TreePine } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { PanResponder, PixelRatio, Pressable, ScrollView, StyleSheet, type TextInput, View } from "react-native";
+import { Keyboard, PanResponder, PixelRatio, Pressable, ScrollView, StyleSheet, type TextInput, View } from "react-native";
 import { PAN_X } from "@platform/gesture.ts";
 
 import type { f64, u32, u8 } from "@xpute/core/abi/word.ts";
@@ -13,6 +13,7 @@ import { LABEL } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
 import { Presence, Swap } from "@/shared/ui/motion/presence.tsx";
 import { LEAVE, SNAP } from "@/shared/ui/motion/transition.ts";
+import { keepKeyboard } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { alpha, color } from "@/shared/ui/theme.ts";
 import { useAppContext } from "@/app/provider/context.ts";
@@ -24,6 +25,8 @@ import { useKernel } from "@/kernel/shell.ts";
 import { CubeSwatch } from "./cube-swatch.tsx";
 
 const SEND_FADE_MS = 200;
+/** How small the send starts as it grows into its circle. */
+const SEND_FROM_SCALE = 0.5;
 
 // The height of both pills — the map view (view.tsx) stands the toasts
 // clear of it.
@@ -293,6 +296,19 @@ export function ModeBar() {
   const { ui } = useAppContext();
   // The message pill open, or the palette strip: the two share the bar.
   const [messageExpanded, setMessageExpanded] = useState(false);
+  // The bar is where a message is typed and sent: a touch that starts on its
+  // pills leaves the keyboard up (shared/ui/keyboard.tsx). A finger drawn
+  // down it puts the keyboard away, as one drawn down a chat's messages does;
+  // it decides on the distance a swatch's gesture does, and only downward,
+  // where a swatch's opens its sizes upward, so the two never want the same
+  // finger.
+  const putAway = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponderCapture: keepKeyboard,
+      onMoveShouldSetPanResponderCapture: (_e, s) => s.dy > FLYOUT_AXIS_PX && s.dy > Math.abs(s.dx),
+      onPanResponderGrant: () => Keyboard.dismiss(),
+    }),
+  ).current;
   const activeTool = useUiStore((s) => s.activeTool);
   const set_activeTool = useUiStore.getState().set_activeTool;
   const recentPicks = useUiStore((s) => s.recentPicks);
@@ -369,7 +385,7 @@ export function ModeBar() {
   const paletteX = PixelRatio.roundToNearestPixel(messageX + messageWidth + PILL_GAP);
 
   return (
-    <View ref={bar} onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)} style={styles.bar}>
+    <View ref={bar} {...putAway.panHandlers} onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)} style={styles.bar}>
       {barWidth > 0 && (
         <>
           <Pill x={messageX} width={messageWidth} height={MODE_BAR_HEIGHT_PX} span={barWidth} fill={color.white} shadow="0 6px 20px rgba(0, 0, 0, 0.25)">
@@ -459,11 +475,18 @@ export function ModeBar() {
               </View>
             </Motion>
 
+            {
+              /* The send arrives as a message app's does, growing into its
+                circle on a spring the moment there is something to send;
+                whatever leaves the slot, and the palette coming back, only
+                fade. */
+            }
             <Swap
               id={paletteExpanded ? Slot.Empty : showSendInPaletteSlot ? Slot.Send : Slot.Palette}
-              from={{ opacity: 0 }}
+              from={showSendInPaletteSlot ? { opacity: 0, scale: SEND_FROM_SCALE } : { opacity: 0 }}
               exit={{ opacity: 0 }}
-              transition={LEAVE}
+              transition={showSendInPaletteSlot ? SNAP : LEAVE}
+              exitTransition={LEAVE}
               style={[styles.slotButton, { pointerEvents: paletteExpanded ? "none" : "auto" }]}
             >
               {paletteExpanded ? null : showSendInPaletteSlot
@@ -475,7 +498,7 @@ export function ModeBar() {
                     accessibilityLabel={t("map.mode_bar.send")}
                     style={({ pressed }) => [styles.slotButton, styles.send, pressed && styles.sendPressed]}
                   >
-                    <Send size={GLYPH} strokeWidth={2} color={color.white} />
+                    <ArrowUp size={GLYPH} strokeWidth={2.75} color={color.white} />
                   </Pressable>
                 )
                 : (
@@ -540,8 +563,11 @@ const styles = StyleSheet.create({
   messageInput: { width: "100%", color: LABEL.primary },
 
   slotButton: { ...PILL, position: "absolute", left: 0, top: 0, width: MODE_BAR_HEIGHT_PX, alignItems: "center", justifyContent: "center" },
-  send: { backgroundColor: color.send, boxShadow: `0 4px 6px ${alpha(color.send, 0.4)}` },
-  sendPressed: { transform: [{ scale: 0.95 }] },
+  // A message app's send: the field's one action, so filled rather than
+  // tinted — an arrow up in a circle of the send color, dimmed while pressed.
+  // No glow of its own; the pill it stands in already casts one.
+  send: { backgroundColor: color.send },
+  sendPressed: { opacity: 0.7 },
 
   strip: { ...PILL, flexDirection: "row", alignItems: "center" },
   // From the sheet: an inline `box-none` is drawn as a `none` the strip's

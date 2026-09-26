@@ -9,6 +9,7 @@ import { useBooted } from "./bootstrap.ts";
 import { useUiController } from "./hook/use-ui-controller.ts";
 import { ModalManager } from "./provider/modal-manager.tsx";
 import { UnsupportedNotice } from "./unsupported.tsx";
+import { KeyboardAway } from "@/shared/ui/keyboard.tsx";
 
 /** AppLayout props */
 interface AppLayoutProps {
@@ -25,10 +26,12 @@ export function AppLayout(props: AppLayoutProps) {
 
   return (
     <AppContext.Provider value={{ ui: uiController }}>
-      <View style={styles.page}>{booted && children}</View>
+      <KeyboardAway>
+        <View style={styles.page}>{booted && children}</View>
 
-      {/* Global modal host */}
-      <ModalManager mergeUiController={mergeUiController} />
+        {/* Global modal host */}
+        <ModalManager mergeUiController={mergeUiController} />
+      </KeyboardAway>
 
       {
         /* Last, and over all of it: nothing below this is worth reading once

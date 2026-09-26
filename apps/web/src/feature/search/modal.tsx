@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel, PANEL_HEADER_PX, Side } from "@/shared/ui/panel.tsx";
+import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
 import { alpha, color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
 import { Command, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
@@ -165,7 +166,11 @@ export function SearchModal(props: BaseModalProps) {
   return (
     <Panel side={Side.Right} width={380} label={t("map.search.placeholder")} onClose={() => onClose()} dismissOnOutside>
       <View style={[styles.header, { paddingTop: top }]}>
-        <View style={styles.headerRow}>
+        {
+          /* The field and its clear: a touch there leaves the keyboard up;
+            one on a result, the list or anywhere else is done typing. */
+        }
+        <View {...KEEPS_KEYBOARD} style={styles.headerRow}>
           {
             /* Doubles as the panel's own close trigger — a leading
             magnifying-glass icon here was purely decorative, and a trailing
@@ -182,7 +187,6 @@ export function SearchModal(props: BaseModalProps) {
             onChangeText={setQuery}
             placeholder={t("map.search.placeholder")}
             placeholderTextColor={color.textMuted}
-            autoFocus
             style={styles.field}
           />
           {
