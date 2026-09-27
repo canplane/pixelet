@@ -122,6 +122,9 @@ public class PlatformModule: Module {
       Prop("clearance") { (view: KeyboardDock, clearance: Double) in
         view.clearance = clearance
       }
+      Prop("rest") { (view: KeyboardDock, rest: Double) in
+        view.rest = rest
+      }
     }
   }
 }

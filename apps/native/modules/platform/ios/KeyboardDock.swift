@@ -4,11 +4,10 @@ import ExpoModulesCore
 import UIKit
 
 /// A view that stands on the keyboard (apps/native/src/platform/above-keyboard.tsx).
-/// Its layout is the shell's, where it stands with no keyboard up:
-/// `clearance` from the bottom edge, or on the safe area where that is
-/// higher. While a keyboard is up, the view is lifted to stand `clearance`
-/// above it, in the
-/// animation the keyboard's own change runs in — its duration and its curve,
+/// Its layout is the shell's, where it rests with no keyboard up, `rest` off
+/// the bottom edge (shared/ui/bottom-rest.ts). While a keyboard is up, the
+/// view is lifted to stand `clearance` above it, in the animation the
+/// keyboard's own change runs in — its duration and its curve,
 /// the keyboard's private one among them — so the view and the keys move as
 /// one. Told from here rather than from the JavaScript, which hears of the
 /// keyboard a thread hop later and would lay out after the keys had left.
@@ -20,6 +19,9 @@ class KeyboardDock: ExpoView {
   /// The gap the shell keeps from the bottom edge and from the keyboard.
   /// Not `inset`, which React Native reads as a layout style.
   var clearance: CGFloat = 0
+  /// How far off the bottom edge the shell rests the view; the lift is
+  /// measured from there, so the rule of where it rests is the shell's alone.
+  var rest: CGFloat = 0
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -31,7 +33,7 @@ class KeyboardDock: ExpoView {
           let end = (info[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
     else { return }
     let covered = window.bounds.maxY - window.convert(end, from: window.screen.coordinateSpace).minY
-    let lift = max(0, covered + clearance - max(clearance, window.safeAreaInsets.bottom))
+    let lift = max(0, covered + clearance - rest)
     let duration = (info[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0
     let curve = (info[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt) ?? UInt(UIView.AnimationCurve.easeInOut.rawValue)
     UIView.animate(withDuration: duration, delay: 0, options: [UIView.AnimationOptions(rawValue: curve << 16), .beginFromCurrentState]) {

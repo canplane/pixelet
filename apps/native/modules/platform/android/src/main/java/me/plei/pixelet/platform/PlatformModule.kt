@@ -7,6 +7,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorManager
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.jni.NativeArrayBuffer
 import expo.modules.kotlin.modules.Module
@@ -88,6 +90,18 @@ class PlatformModule : Module() {
       sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null || sensors.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null
     }
 
+    // ---- the safe area (platform/safe-area.ts) ----
+
+    /** How much of the screen's bottom inset takes a touch, in
+     * density-independent pixels: the navigation buttons' bar, or none with
+     * gesture navigation, whose handle only takes a swipe. What the shell
+     * rests its bottom chrome clear of (shared/ui/bottom-rest.ts). */
+    Function("tappableBottom") {
+      val view = appContext.currentActivity?.window?.decorView ?: return@Function 0.0
+      val insets = ViewCompat.getRootWindowInsets(view) ?: return@Function 0.0
+      insets.getInsets(WindowInsetsCompat.Type.tappableElement()).bottom / view.resources.displayMetrics.density.toDouble()
+    }
+
     // ---- the surface (platform/surface.tsx, KernelSurfaceView.kt) ----
     //
     // The first view, the one the module's name alone reaches.
@@ -100,10 +114,13 @@ class PlatformModule : Module() {
     // ---- the keyboard (platform/above-keyboard.tsx, KeyboardDock.kt) ----
 
     View(KeyboardDock::class) {
-      // The shell's clearance is in density-independent pixels, the view's in
+      // The shell's lengths are in density-independent pixels, the view's in
       // the screen's.
       Prop("clearance") { view: KeyboardDock, clearance: Double ->
         view.clearance = (clearance * view.resources.displayMetrics.density).toInt()
+      }
+      Prop("rest") { view: KeyboardDock, rest: Double ->
+        view.rest = (rest * view.resources.displayMetrics.density).toInt()
       }
     }
   }

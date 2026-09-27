@@ -5,6 +5,10 @@ import { useEffect, useState } from "react";
 export interface SafeArea {
   top: number;
   bottom: number;
+  /** The part of `bottom` that takes a touch — a system's buttons, which the
+   * chrome stands clear of (shared/ui/bottom-rest.ts). A page's is none: the
+   * browser keeps its bars off the viewport. */
+  tappable: number;
 }
 
 /** What the notch and the home indicator take off the screen's edges, in
@@ -16,7 +20,7 @@ function measure(): SafeArea {
   probe.style.cssText = "position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)";
   document.body.appendChild(probe);
   const style = getComputedStyle(probe);
-  const area = { top: parseFloat(style.paddingTop) || 0, bottom: parseFloat(style.paddingBottom) || 0 };
+  const area = { top: parseFloat(style.paddingTop) || 0, bottom: parseFloat(style.paddingBottom) || 0, tappable: 0 };
   probe.remove();
   return area;
 }
