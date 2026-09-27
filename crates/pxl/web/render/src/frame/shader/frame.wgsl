@@ -44,10 +44,47 @@ struct Frame {
   globe: vec4f,
 };
 
-@group(0) @binding(0) var<uniform> frame: Frame;
+// Held as vec4 words and read back by `frame()`: what the host and a shader
+// share has no room inside it for a driver to lay out its own way
+// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+@group(0) @binding(0) var<uniform> frame_words: array<vec4f, 21>;
+
+fn frame() -> Frame {
+  return Frame(
+    mat4x4f(frame_words[0], frame_words[1], frame_words[2], frame_words[3]),
+    frame_words[4].xyz,
+    frame_words[4].w,
+    frame_words[5].xyz,
+    frame_words[5].w,
+    frame_words[6].xyz,
+    frame_words[6].w,
+    frame_words[7].xyz,
+    frame_words[7].w,
+    frame_words[8].xyz,
+    frame_words[8].w,
+    frame_words[9].xyz,
+    frame_words[9].w,
+    frame_words[10].xyz,
+    frame_words[10].w,
+    frame_words[11].xy,
+    frame_words[11].z,
+    frame_words[11].w,
+    frame_words[12].x,
+    frame_words[12].y,
+    frame_words[12].z,
+    frame_words[12].w,
+    mat4x4f(frame_words[13], frame_words[14], frame_words[15], frame_words[16]),
+    frame_words[17].xyz,
+    frame_words[17].w,
+    frame_words[18].xyz,
+    frame_words[18].w,
+    frame_words[19],
+    frame_words[20],
+  );
+}
 
 // A point of the flat map where the planet has it, by the frame's values
 // (globe.wgsl).
 fn on_globe(p: vec3f) -> vec3f {
-  return on_globe_of(p, frame.planet, frame.globe);
+  return on_globe_of(p, frame().planet, frame().globe);
 }

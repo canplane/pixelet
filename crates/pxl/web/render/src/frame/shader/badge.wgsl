@@ -38,7 +38,29 @@ struct Badge {
   globe: vec4f,
 };
 
-@group(0) @binding(0) var<uniform> badge: Badge;
+// Held as vec4 words and read back by `badge()`: what the host and a shader
+// share has no room inside it for a driver to lay out its own way
+// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+@group(0) @binding(0) var<uniform> badge_words: array<vec4f, 13>;
+
+fn badge() -> Badge {
+  return Badge(
+    mat4x4f(badge_words[0], badge_words[1], badge_words[2], badge_words[3]),
+    mat4x4f(badge_words[4], badge_words[5], badge_words[6], badge_words[7]),
+    badge_words[8].xyz,
+    badge_words[8].w,
+    badge_words[9].x,
+    badge_words[9].y,
+    badge_words[9].z,
+    badge_words[9].w,
+    badge_words[10].x,
+    badge_words[10].y,
+    badge_words[10].zw,
+    badge_words[11],
+    badge_words[12],
+  );
+}
+
 @group(0) @binding(1) var<storage, read> instances: array<f32>;
 @group(1) @binding(0) var sheet: texture_2d<f32>;
 @group(1) @binding(1) var sheet_sampler: sampler;
@@ -56,7 +78,7 @@ struct VertexOut {
 // three's.
 fn view_distance(d: f32) -> f32 {
   let z = depth_to_gl_z(d);
-  return (2.0 * badge.near * badge.far) / (badge.far + badge.near - z * (badge.far - badge.near));
+  return (2.0 * badge().near * badge().far) / (badge().far + badge().near - z * (badge().far - badge().near));
 }
 
 // Whether the world stands in front of a point of the badge, given in clip
@@ -74,37 +96,37 @@ fn behind_world(clip: vec4f) -> bool {
   let world = view_distance(textureLoad(world_depth, vec2i(uv * dims), 0));
   // ndc.z is the reversed depth the point would be written at.
   let point = view_distance(ndc.z);
-  return world < point - DEPTH_BIAS_U - point * badge.cell * DEPTH_BIAS_CELLS;
+  return world < point - DEPTH_BIAS_U - point * badge().cell * DEPTH_BIAS_CELLS;
 }
 
 @vertex
 fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VertexOut {
   // BILLBOARD_FLOATS (kernel billboard/field.rs) floats an instance.
   let k = ii * 10u;
-  let anchor = on_globe_of(vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + badge.translation, badge.planet, badge.globe);
+  let anchor = on_globe_of(vec3f(instances[k], instances[k + 1u], instances[k + 2u]) + badge().translation, badge().planet, badge().globe);
   let size_px = vec2f(instances[k + 3u], instances[k + 4u]);
   let rect = vec4f(instances[k + 5u], instances[k + 6u], instances[k + 7u], instances[k + 8u]);
   let frac = instances[k + 9u];
   let corners = array<vec2f, 4>(vec2f(-0.5, -0.5), vec2f(0.5, -0.5), vec2f(-0.5, 0.5), vec2f(0.5, 0.5));
   let q = corners[vi];
 
-  let anchor_view = (badge.view * vec4f(anchor, 1.0)).xyz;
+  let anchor_view = (badge().view * vec4f(anchor, 1.0)).xyz;
   let dist = length(anchor_view);
   let depth = max(-anchor_view.z, 1e-3);
-  let fade = 1.0 - smoothstep(badge.fade_start, badge.fade_end, dist);
-  let size = size_px * depth / badge.px_k * fade;
+  let fade = 1.0 - smoothstep(badge().fade_start, badge().fade_end, dist);
+  let size = size_px * depth / badge().px_k * fade;
   let drop = size.y * (frac - 0.5);
   // The sprite anchor is a screen offset, independent of camera tilt.
   let center_view = anchor_view + vec3f(0.0, drop, 0.0);
   let corner = q * size;
 
   var o: VertexOut;
-  o.clip = badge.proj * vec4f(center_view + vec3f(corner, 0.0), 1.0);
+  o.clip = badge().proj * vec4f(center_view + vec3f(corner, 0.0), 1.0);
   // The sheet's v0 is the rectangle's top edge.
   o.uv = vec2f(mix(rect.x, rect.z, q.x + 0.5), mix(rect.w, rect.y, q.y + 0.5));
   o.opacity = fade;
 
-  let view_proj = badge.proj * badge.view;
+  let view_proj = badge().proj * badge().view;
   let lifted = view_proj * vec4f(anchor + vec3f(0.0, 0.0, DEPTH_LIFT_U), 1.0);
   let rise = view_proj * vec4f(0.0, 0.0, size.y, 0.0);
   var hidden = 0u;
@@ -115,9 +137,9 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   }
   o.hidden = select(0u, 1u, hidden >= DEPTH_HIDE_AT);
 
-  let world_up_view = normalize((badge.view * vec4f(0.0, 0.0, 1.0, 0.0)).xyz);
-  let push = DEPTH_BIAS_U + max(0.0, -center_view.z) * badge.cell * DEPTH_BIAS_CELLS;
-  let upright = badge.proj * vec4f(center_view + vec3f(corner.x, 0.0, push) + world_up_view * corner.y, 1.0);
+  let world_up_view = normalize((badge().view * vec4f(0.0, 0.0, 1.0, 0.0)).xyz);
+  let push = DEPTH_BIAS_U + max(0.0, -center_view.z) * badge().cell * DEPTH_BIAS_CELLS;
+  let upright = badge().proj * vec4f(center_view + vec3f(corner.x, 0.0, push) + world_up_view * corner.y, 1.0);
   o.upright_z = clamp(upright.z / upright.w, 0.0, 1.0);
   return o;
 }
@@ -139,7 +161,7 @@ fn fs(i: VertexOut) -> FragOut {
   let color = texel.rgb / max(texel.a, 1e-4);
   // Vignetted as the world under it is: the post stack darkened the whole
   // screen, badges included.
-  o.color = vec4f(to_srgb(grade(color) * vignette_of(i.clip.xy, badge.viewport, badge.vignette)), texel.a * i.opacity);
+  o.color = vec4f(to_srgb(grade(color) * vignette_of(i.clip.xy, badge().viewport, badge().vignette)), texel.a * i.opacity);
   o.depth = i.upright_z;
   return o;
 }

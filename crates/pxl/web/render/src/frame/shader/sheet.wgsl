@@ -7,10 +7,6 @@
 // Every instance comes out straight-alpha and is laid over what is under it,
 // so the texture holds its colors premultiplied (badge.wgsl divides them out).
 
-struct Entry {
-  size: vec2f,
-};
-
 // kind: 0 a rounded rectangle filled, 1 one stroked, 2 a triangle, 3 a line
 // of text. `rect` bounds it, in pixels. `p`: a rectangle's radius and stroke;
 // a triangle's first two points; a text's layer and how much of the layer it
@@ -23,7 +19,7 @@ struct Shape {
   kind: vec4u,
 };
 
-@group(0) @binding(0) var<uniform> entry: Entry;
+@group(0) @binding(0) var<uniform> entry: vec4f;
 @group(0) @binding(1) var<storage, read> shapes: array<Shape>;
 @group(1) @binding(0) var text: texture_2d_array<f32>;
 @group(1) @binding(1) var text_sampler: sampler;
@@ -43,7 +39,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   let corner = vec2f(f32(vi & 1u), f32(vi >> 1u));
   let at = mix(lo, hi, corner);
   var o: VertexOut;
-  o.clip = vec4f(at.x / entry.size.x * 2.0 - 1.0, 1.0 - at.y / entry.size.y * 2.0, 0.0, 1.0);
+  o.clip = vec4f(at.x / entry.xy.x * 2.0 - 1.0, 1.0 - at.y / entry.xy.y * 2.0, 0.0, 1.0);
   o.at = at;
   o.shape = ii;
   return o;

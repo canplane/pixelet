@@ -2,7 +2,7 @@
 // grade, the vignette and the encode (grade.wgsl's), in that order.
 
 fn vignette(frag: vec2f) -> f32 {
-  return vignette_of(frag, frame.viewport, frame.vignette);
+  return vignette_of(frag, frame().viewport, frame().vignette);
 }
 
 fn finish(color: vec3f, frag: vec2f) -> vec3f {

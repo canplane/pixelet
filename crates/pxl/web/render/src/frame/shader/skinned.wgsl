@@ -14,7 +14,22 @@ struct Draw {
   _p1: f32,
 };
 
-@group(1) @binding(0) var<uniform> draw: Draw;
+// Held as vec4 words and read back by `draw()`: what the host and a shader
+// share has no room inside it for a driver to lay out its own way
+// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+@group(1) @binding(0) var<uniform> draw_words: array<vec4f, 2>;
+
+fn draw() -> Draw {
+  return Draw(
+    draw_words[0].xyz,
+    draw_words[0].w,
+    draw_words[1].x,
+    draw_words[1].y,
+    draw_words[1].z,
+    draw_words[1].w,
+  );
+}
+
 @group(2) @binding(0) var skin: texture_2d<f32>;
 @group(2) @binding(1) var skin_sampler: sampler;
 // The palette is mat4s, one a joint, read as the four vec4 columns each is: a
@@ -50,13 +65,13 @@ struct VertexOut {
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
   let m = joint(v.joints.x) * v.weights.x + joint(v.joints.y) * v.weights.y + joint(v.joints.z) * v.weights.z + joint(v.joints.w) * v.weights.w;
-  let p = (m * vec4f(v.position, 1.0)).xyz * draw.scale;
+  let p = (m * vec4f(v.position, 1.0)).xyz * draw().scale;
   let n = (m * vec4f(v.normal, 0.0)).xyz;
-  let world = on_globe(place_up(p, draw.rotation) + draw.translation);
+  let world = on_globe(place_up(p, draw().rotation) + draw().translation);
   var o: VertexOut;
-  o.clip = frame.view_proj * vec4f(world, 1.0);
+  o.clip = frame().view_proj * vec4f(world, 1.0);
   o.uv = v.uv;
-  o.normal = place_up(n, draw.rotation);
+  o.normal = place_up(n, draw().rotation);
   o.world_pos = world;
   let seen = seen_at_vertex(world);
   o.through = seen.through;
@@ -71,5 +86,5 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
   let n = normalize(i.normal);
   let color = screen_ao(shade(albedo, n, i.world_pos, sun_lit(i.world_pos, n), vec3f(1.0), Seen(i.through, i.scattered, i.past, i.fill)), i.clip.xy);
-  return vec4f(finish(color, i.clip.xy), draw.opacity);
+  return vec4f(finish(color, i.clip.xy), draw().opacity);
 }

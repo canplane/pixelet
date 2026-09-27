@@ -11,7 +11,7 @@
 @group(0) @binding(4) var blurred_sampler: sampler;
 
 fn depth_at(p: vec2i) -> f32 {
-  return textureLoad(scene_depth, clamp(p, vec2i(0), vec2i(ao.full) - 1), 0);
+  return textureLoad(scene_depth, clamp(p, vec2i(0), vec2i(ao().full) - 1), 0);
 }
 
 @fragment
@@ -21,17 +21,17 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   if (depth == 0.0) {
     return vec4f(1.0);
   }
-  let uv = i.clip.xy / ao.full;
+  let uv = i.clip.xy / ao().full;
   let pos = view_pos(depth, uv);
-  let normal = view_normal(fp, ao.full, uv);
-  let half_max = vec2i(ao.half) - 1;
+  let normal = view_normal(fp, ao().full, uv);
+  let half_max = vec2i(ao().half) - 1;
   var total = 0.0;
   var acc = vec4f(0.0);
   for (var y = -1; y <= 1; y++) {
     for (var x = -1; x <= 1; x++) {
       let p = clamp(fp / 2 + vec2i(x, y), vec2i(0), half_max);
       // The tap's corner, as the compositer placed it.
-      let p_uv = vec2f(p) / ao.half;
+      let p_uv = vec2f(p) / ao().half;
       let tap_depth = textureLoad(half_depth, p, 0).r;
       let tap = textureLoad(blurred, p, 0);
       let tap_normal = tap.gba * 2.0 - 1.0;
@@ -49,7 +49,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     texel = textureSampleLevel(blurred, blurred_sampler, uv, 0.0);
   }
   var occlusion = pow(texel.r, AO_INTENSITY);
-  let fog = smoothstep(ao.fog_near, ao.fog_far, -pos.z);
+  let fog = smoothstep(ao().fog_near, ao().fog_far, -pos.z);
   occlusion = mix(occlusion, 1.0, fog);
   return vec4f(occlusion, 0.0, 0.0, 1.0);
 }

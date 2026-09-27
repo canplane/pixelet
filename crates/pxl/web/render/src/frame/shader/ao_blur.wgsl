@@ -26,7 +26,7 @@ const DISC = array<vec2f, 4>(
 );
 
 fn depth_at(p: vec2i) -> f32 {
-  return textureLoad(half_depth, clamp(p, vec2i(0), vec2i(ao.half) - 1), 0).r;
+  return textureLoad(half_depth, clamp(p, vec2i(0), vec2i(ao().half) - 1), 0).r;
 }
 
 @fragment
@@ -37,8 +37,8 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   if (depth == 0.0) {
     return data;
   }
-  let uv = i.clip.xy / ao.half;
-  let texel = 1.0 / ao.half;
+  let uv = i.clip.xy / ao().half;
+  let texel = 1.0 / ao().half;
   let normal = data.gba * 2.0 - 1.0;
   let pos = view_pos(depth, uv);
   let noise = textureLoad(blue_noise, hp & vec2i(AO_NOISE_MASK), 0);
@@ -54,7 +54,7 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
     let at = uv + (spin * disc[k]) * texel * AO_DENOISE_RADIUS;
     let tap = textureSampleLevel(src, src_sampler, at, 0.0);
     let tap_normal = tap.gba * 2.0 - 1.0;
-    let tap_depth = depth_at(vec2i(at * ao.half));
+    let tap_depth = depth_at(vec2i(at * ao().half));
     let tap_pos = view_pos(tap_depth, at);
     let plane_dist = abs(dot(tap_pos - pos, normal));
     let weight = f32(tap_depth != 0.0) * exp(-plane_dist / falloff) * max(dot(normal, tap_normal), 0.0);

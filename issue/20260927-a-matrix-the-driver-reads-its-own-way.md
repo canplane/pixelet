@@ -79,40 +79,68 @@ and one stride. There is nothing about them for two readers to disagree on.
   matrix from them in the shader. The kernel writes the same sixty-four bytes
   a joint as before; only the declaration changed.
 
-## What is proposed
+## The rule for the class
 
 The fix above closes one declaration. The class is every declaration of its
-kind, so the proposal is a rule and a check.
+kind, so it took a rule and a check.
 
 **The rule.** What the host and a shader share — every `var<uniform>` and
-`var<storage>` — is made of types with no room inside them:
+`var<storage>` — is made of types with no room inside them: a four-byte
+scalar, a four-lane vector of them, an array of those whose stride is its
+element, or a struct of those whose members follow one another with nothing
+between. Never a `vec3`, a `vec2` beside something, a matrix, or a padded
+struct. Types a shader keeps to itself — `Seen`, `Air`, what one function
+hands another — are no one else's to read and stay as they are.
 
-- a four-byte scalar (`f32`, `u32`, `i32`), a sixteen-byte vector (`vec4f`,
-  `vec4u`, `vec4i`), an array of either, or a struct of them;
-- never a `vec3` or a `vec2` in a struct, and never a matrix;
-- a matrix is assembled in the shader from `vec4` columns, and a three-vector
-  is a `vec4`'s `.xyz`.
+**How a block keeps it.** Thirteen uniforms broke it: `Frame`, `Atmosphere`,
+`Clouds` (a `mat3x3f`, whose columns carry padding), `Sky` (another), `Ao`,
+`Badge`, `Stars`, the `Draw` of decor, debug, the puck and the actors, and the
+sheet's `Entry`. Each is now bound as what it is on the wire, `vec4` words:
 
-Types a shader keeps to itself — `Seen`, `Air`, what one function hands
-another — are no one else's to read and stay as they are.
+```wgsl
+struct Frame { view_proj: mat4x4f, camera_pos: vec3f, edge_strength: f32, … };
+@group(0) @binding(0) var<uniform> frame_words: array<vec4f, 21>;
+fn frame() -> Frame {
+  return Frame(
+    mat4x4f(frame_words[0], frame_words[1], frame_words[2], frame_words[3]),
+    frame_words[4].xyz,
+    frame_words[4].w,
+    …
+  );
+}
+```
 
-**The check.** A rule kept by memory is kept until the next shader. naga,
-which wgpu already carries, parses every shader module; a test walks each
-uniform and storage global's type to its leaves and refuses anything outside
-the list, beside `every_pipeline_matches_its_shader`. A `mat4x4f` added to a
-uniform then fails `deno task test`, on every machine, before any device sees
-it.
+and read as `frame().camera_pos` where it was `frame.camera_pos`. The struct
+stays as it was, now the shader's own, so the tests that hold the Rust's
+offsets against it (`frame_layout_matches_the_struct`,
+`the_skys_layouts_match_their_structs`) keep their meaning, and the bytes the
+Rust writes did not move: every field already sat where the words put it.
+`Entry`, one `vec2f` in a sixteen-byte buffer, became a `vec4f` whose `xy` is
+the size.
 
-**What it touches today.** Storage passes after this fix: what remains is
-`u32`, `f32` and `vec4f` arrays and two structs of `vec4`s (`Shape`, the
-chunk's `Draw`). Uniforms do not: `Frame` (a `mat4x4f` and several `vec3f`),
-`Atmosphere` (eight `vec3f`), `Clouds` (a `mat3x3f`, whose columns carry
-padding — the riskiest of them), `Ao` and `Badge` (`mat4x4f`s), and the `Draw`
-of decor, debug, the puck and the actors, each opening on a `vec3f`. They draw
-right on the S23 today, which is luck, not a property; each becomes `vec4`
-fields, with the Rust that writes them.
+The other way considered was to rename the fields to the words
+(`frame.camera.xyz`, `frame.camera.w` for the edge strength) and drop the
+struct. It loses every name a shader reads, some two hundred of them, to save
+a function per block — and the function is where the layout is written down
+once, beside the words.
+
+**The check.** A rule kept by memory is kept until the next shader. Two tests
+beside `every_pipeline_matches_its_shader` parse every module with naga:
+
+- `what_a_shader_shares_with_the_host_has_no_room_inside_it` walks every
+  uniform and storage global's type to its leaves and refuses a gap anywhere;
+- `every_block_reads_each_field_from_where_it_lies` follows each unpacking
+  function's constructor back to the words, and holds every field to the word
+  and lane WGSL lays it at — a lane off by one in `frame()` fails as
+  `Frame.edge_strength`.
+
+Both were checked against the fault they are for: the palette put back as
+`array<mat4x4f>` fails the first, and one lane moved in `frame()` fails the
+second.
 
 ## Where it stands
 
-The palette is fixed and verified on the S23. The rule and its check are
-proposed and not yet applied.
+Applied. On the S23 the ground, the sky, the decor, the actors and the puck
+draw as they should; in Chrome on a Mac the ground, the sky and the decor do.
+Not yet looked at: the actors in Chrome (the tab had no location, so no
+character stood) and the iPhone.

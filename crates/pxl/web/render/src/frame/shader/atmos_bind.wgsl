@@ -3,6 +3,9 @@
 // the chunk's, so one numbering serves every pass that reads the air — the
 // tables' own passes, the sky, and each lit pass's shading.
 
-@group(0) @binding(8) var<uniform> atmos: Atmosphere;
+// Held as vec4 words and read back by `atmos()`: what the host and a shader
+// share has no room inside it for a driver to lay out its own way
+// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+@group(0) @binding(8) var<uniform> atmos_words: array<vec4f, 14>;
 @group(0) @binding(9) var transmittance_lut: texture_2d<f32>;
 @group(0) @binding(11) var atmos_sampler: sampler;
