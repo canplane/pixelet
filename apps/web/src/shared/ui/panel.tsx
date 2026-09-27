@@ -32,6 +32,10 @@ export const PANEL_HEADER = {
 /** Gap between the top row's controls and the floating tabs under them: the
  * one between any two controls. */
 const STACK_GAP = chrome.controlGap;
+/** Gap between two sections of a panel's content, a step over the gap inside
+ * one, so where one ends and the next begins reads, as iOS's grouped lists
+ * part theirs. */
+export const PANEL_SECTION_GAP = 24;
 /** Gap between the tabs and the first row of content. */
 const CONTENT_GAP = 16;
 /** Height of the header area: PANEL_EDGE above and below the round

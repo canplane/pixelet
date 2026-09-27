@@ -8,7 +8,7 @@ import type { BaseModalProps } from "@/app/type/ui.type.ts";
 
 import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel } from "@platform/panel.tsx";
-import { PANEL_EDGE, PANEL_TABS_ROOM, PanelBody, PanelHeader } from "@/shared/ui/panel.tsx";
+import { PANEL_EDGE, PANEL_SECTION_GAP, PANEL_TABS_ROOM, PanelBody, PanelHeader } from "@/shared/ui/panel.tsx";
 import { Segmented } from "@platform/segmented.tsx";
 import { hairline } from "@/shared/ui/theme.ts";
 import { SettingsSection } from "./section.tsx";
@@ -92,6 +92,6 @@ export function SettingsModal(props: BaseModalProps) {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: PANEL_EDGE, paddingTop: PANEL_TABS_ROOM, gap: 16 },
+  scrollContent: { paddingHorizontal: PANEL_EDGE, paddingTop: PANEL_TABS_ROOM, gap: PANEL_SECTION_GAP },
   separator: { height: 1, backgroundColor: hairline },
 });
