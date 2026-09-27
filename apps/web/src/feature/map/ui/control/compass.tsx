@@ -1,5 +1,6 @@
 // @pxl/web/feature/map/ui/control/compass.tsx
 
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, View } from "react-native";
 import { Path, Svg } from "react-native-svg";
@@ -10,7 +11,7 @@ import { kernel_command, useKernel } from "@/kernel/shell.ts";
 import { LABEL, NORTH } from "@platform/palette.ts";
 import { CircularButton } from "@/shared/ui/circular-button.tsx";
 import { Presence } from "@/shared/ui/motion/presence.tsx";
-import { after, ARRIVE } from "@/shared/ui/motion/transition.ts";
+import { ARRIVE } from "@/shared/ui/motion/transition.ts";
 import { chrome } from "@/shared/ui/theme.ts";
 import type { f64 } from "@xpute/core/abi/word.ts";
 
@@ -59,17 +60,35 @@ function face(end: f64, side: f64): string {
   return `M0 0L${side} 0L${x} ${y}Q${turn} ${ridge} 0 ${ridge}Z`;
 }
 
+/** How long the kernel's word on the compass must stand before the button
+ * follows it, in and out alike: a map turned past the threshold for a moment
+ * does not flash the button, nor a map settling back on north take it away
+ * mid-glance. */
+const HOLD_MS = 400;
+
+/** `value` once it has stood `ms` unchanged. */
+function useHeld(value: boolean, ms: number): boolean {
+  const [held, setHeld] = useState(value);
+  useEffect(() => {
+    if (value === held) return;
+    const timer = setTimeout(() => setHeld(value), ms);
+    return () => clearTimeout(timer);
+  }, [value, held, ms]);
+  return held;
+}
+
 export function MapCompass() {
   const { t } = useTranslation();
   const azimuth = useKernel((s) => s.azimuth);
   const compass = useKernel((s) => s.compass);
+  const shown = useHeld(compass !== CompassState.Hidden, HOLD_MS);
   // Clockwise on the screen, as the view turns.
   const turn = -azimuth;
   const w = NEEDLE_WIDTH / 2;
 
   return (
     <Presence
-      show={compass !== CompassState.Hidden}
+      show={shown}
       // It turns in and grows from next to nothing, and turns on and shrinks
       // away. Its glass is never faded: the glass steps through a darker style
       // on its way in and out, which read as the button darkening. Not from
@@ -77,7 +96,7 @@ export function MapCompass() {
       // an effect view through.
       from={{ scale: 0.01, rotate: -45, translateY: 10 }}
       exit={{ scale: 0.01, rotate: 45 }}
-      transition={after(ARRIVE, 400)}
+      transition={ARRIVE}
       exitTransition={ARRIVE}
     >
       {
