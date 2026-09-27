@@ -217,6 +217,9 @@ apps/native/.expo/
 apps/web/public/repro-*.html
 
 # What `expo prebuild` generates, which is made again from app.json and the
-# modules rather than kept.
+# modules rather than kept, and what the platform module's own Gradle build
+# leaves beside it.
+apps/native/modules/platform/android/build/
+apps/native/modules/platform/android/.gradle/
 apps/native/ios/
 apps/native/android/

@@ -1,56 +1,112 @@
 #!/usr/bin/env -S deno run -A
 // Builds the Rust core for a device (crates/pxl/web/native) as the app is
-// built. Xcode runs this before it compiles the platform module
-// (modules/platform/ios/PxlPlatform.podspec's script phase), and the app links
-// what it leaves: so the kernel in an app is always this tree's, built for the
-// configuration and the SDK the app is. A kernel kept between builds let an
-// app link one left from another configuration — a debug bundle's dev settings
-// over a kernel built without them — or from before the Rust last changed.
+// built, and the app links what it leaves: so the kernel in an app is always
+// this tree's, built for the configuration and the system the app is. A
+// kernel kept between builds let an app link one left from another
+// configuration — a debug bundle's dev settings over a kernel built without
+// them — or from before the Rust last changed.
+//
+// Two builds run it. Xcode, before it compiles the platform module
+// (modules/platform/ios/PxlPlatform.podspec's script phase), with every input
+// in its environment: CONFIGURATION, PLATFORM_NAME and
+// PODS_CONFIGURATION_BUILD_DIR, one directory for each configuration and SDK.
+// Gradle, before it merges the module's native libraries
+// (modules/platform/android/build.gradle), with them as arguments:
+//
+//   build-native.ts --android --variant release --out <jniLibs dir> --ndk <dir> --api 24
+//
+// An iPhone links a static library; an Android app loads a shared one, asked
+// of cargo by name so an iPhone's build makes none.
 //
 // A release is built as script/build-wasm.ts builds the page's deploy, with the
 // kernel's `dev` feature off, so an app built for release carries the kernel a
 // deployed page does; any other configuration keeps its dev settings.
-//
-// Every input is Xcode's: CONFIGURATION, PLATFORM_NAME and
-// PODS_CONFIGURATION_BUILD_DIR, which is one directory for each configuration
-// and SDK, so each keeps its own library.
 
 const CRATES = new URL("../../../crates/", import.meta.url);
 
-/** The Rust target each SDK the app is built for runs: the device, and the
- * simulator on an Apple silicon Mac. */
-const TARGETS: Record<string, string> = {
+/** What one build asks for: the Rust target, whether it is a release, where
+ * the library is put, and what cargo runs with. */
+interface Build {
+  target: string;
+  published: boolean;
+  /** The library as cargo writes it, and where the app takes it from. */
+  built: string;
+  linked: string;
+  /** cargo's subcommand and its own arguments before the shared ones. */
+  cargo: string[];
+  env: Record<string, string>;
+}
+
+function fail(message: string): never {
+  console.error(`[build-native] ${message}`);
+  Deno.exit(1);
+}
+
+/** The Rust target each SDK an iPhone app is built for runs: the device, and
+ * the simulator on an Apple silicon Mac. */
+const IOS_TARGETS: Record<string, string> = {
   iphoneos: "aarch64-apple-ios",
   iphonesimulator: "aarch64-apple-ios-sim",
 };
 
-function need(name: string): string {
-  const value = Deno.env.get(name);
-  if (!value) {
-    console.error(`[build-native] ${name} is not set: this runs as the app's build phase, from Xcode`);
-    Deno.exit(1);
-  }
-  return value;
+function xcode(): Build {
+  const need = (name: string) => Deno.env.get(name) ?? fail(`${name} is not set: this runs as the app's build phase, from Xcode or Gradle`);
+  const sdk = need("PLATFORM_NAME");
+  const target = IOS_TARGETS[sdk] ?? fail(`no Rust target for the SDK ${sdk}`);
+  const env = { ...Deno.env.toObject() };
+  // Xcode's SDKROOT names the iPhone's SDK, and a build script cargo compiles
+  // for this Mac would link against it; rustc finds each target's SDK itself.
+  delete env.SDKROOT;
+  return {
+    target,
+    published: need("CONFIGURATION") === "Release",
+    built: `target/${target}/native/libpxl_native.a`,
+    linked: `${need("PODS_CONFIGURATION_BUILD_DIR")}/PxlNative/libpxl_native.a`,
+    cargo: ["build"],
+    env,
+  };
 }
 
-const configuration = need("CONFIGURATION");
-const sdk = need("PLATFORM_NAME");
-const target = TARGETS[sdk];
-if (!target) {
-  console.error(`[build-native] no Rust target for the SDK ${sdk}`);
-  Deno.exit(1);
-}
-const published = configuration === "Release";
-const out = `${need("PODS_CONFIGURATION_BUILD_DIR")}/PxlNative`;
+/** The ABI an Android build packs the library for, and its Rust target. */
+const ANDROID_ABI = "arm64-v8a";
+const ANDROID_TARGET = "aarch64-linux-android";
 
-// Xcode's SDKROOT names the iPhone's SDK, and a build script cargo compiles
-// for this Mac would link against it; rustc finds each target's SDK itself.
-const env = { ...Deno.env.toObject() };
-delete env.SDKROOT;
+function gradle(args: Record<string, string | undefined>): Build {
+  const need = (name: string) => args[name] ?? fail(`--${name} is not given`);
+  // The NDK's compiler for the API the app runs down to, which links the
+  // library and compiles what any crate builds in C.
+  const bin = `${need("ndk")}/toolchains/llvm/prebuilt/darwin-x86_64/bin`;
+  const clang = `${bin}/${ANDROID_TARGET}${need("api")}-clang`;
+  return {
+    target: ANDROID_TARGET,
+    published: need("variant") === "release",
+    built: `target/${ANDROID_TARGET}/native/libpxl_native.so`,
+    linked: `${need("out")}/${ANDROID_ABI}/libpxl_native.so`,
+    cargo: ["rustc", "--crate-type", "cdylib"],
+    env: {
+      ...Deno.env.toObject(),
+      CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: clang,
+      // Loadable on a device whose pages are 16 KB, which the NDK's own
+      // libraries already are and a Rust link is not unless told.
+      CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS: "-C link-arg=-Wl,-z,max-page-size=16384",
+      CC_aarch64_linux_android: clang,
+      AR_aarch64_linux_android: `${bin}/llvm-ar`,
+    },
+  };
+}
+
+/** `--name value` pairs, as Gradle passes them. */
+const args: Record<string, string | undefined> = {};
+for (let i = 0; i < Deno.args.length; i++) {
+  const name = Deno.args[i].match(/^--(.+)$/)?.[1];
+  if (name && name !== "android") args[name] = Deno.args[++i];
+}
+const build = Deno.args.includes("--android") ? gradle(args) : xcode();
+
 const { code } = await new Deno.Command("cargo", {
-  args: ["build", "--profile", "native", "--package", "pxl-native", "--target", target, ...(published ? ["--no-default-features"] : [])],
+  args: [...build.cargo, "--profile", "native", "--package", "pxl-native", "--target", build.target, ...(build.published ? ["--no-default-features"] : [])],
   cwd: CRATES,
-  env,
+  env: build.env,
   clearEnv: true,
   stdout: "inherit",
   stderr: "inherit",
@@ -58,12 +114,11 @@ const { code } = await new Deno.Command("cargo", {
 if (code !== 0) Deno.exit(code);
 
 // Copied only when cargo wrote a new one: the app relinks whenever the
-// library it links is newer than it.
-const built = new URL(`target/${target}/native/libpxl_native.a`, CRATES).pathname;
-const linked = `${out}/libpxl_native.a`;
+// library it takes is newer than the one it has.
+const built = new URL(build.built, CRATES).pathname;
 const mtime = (path: string) => Deno.stat(path).then((s) => s.mtime?.getTime() ?? 0, () => 0);
-if ((await mtime(built)) > (await mtime(linked))) {
-  await Deno.mkdir(out, { recursive: true });
-  await Deno.copyFile(built, linked);
+if ((await mtime(built)) > (await mtime(build.linked))) {
+  await Deno.mkdir(build.linked.slice(0, build.linked.lastIndexOf("/")), { recursive: true });
+  await Deno.copyFile(built, build.linked);
 }
-console.log(`[build-native] ${published ? "published" : "dev"} ${target} -> ${linked}`);
+console.log(`[build-native] ${build.published ? "published" : "dev"} ${build.target} -> ${build.linked}`);
