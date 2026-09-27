@@ -17,7 +17,15 @@ struct Draw {
 @group(1) @binding(0) var<uniform> draw: Draw;
 @group(2) @binding(0) var skin: texture_2d<f32>;
 @group(2) @binding(1) var skin_sampler: sampler;
-@group(3) @binding(0) var<storage, read> palette: array<mat4x4f>;
+// The palette is mat4s, one a joint, read as the four vec4 columns each is: a
+// Galaxy S23's Vulkan read an `array<mat4x4f>` in storage as some other
+// layout, and a vec4 has no layout to read two ways
+// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+@group(3) @binding(0) var<storage, read> palette: array<vec4f>;
+
+fn joint(j: u32) -> mat4x4f {
+  return mat4x4f(palette[j * 4u], palette[j * 4u + 1u], palette[j * 4u + 2u], palette[j * 4u + 3u]);
+}
 
 struct VertexIn {
   @location(0) position: vec3f,
@@ -41,7 +49,7 @@ struct VertexOut {
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
-  let m = palette[v.joints.x] * v.weights.x + palette[v.joints.y] * v.weights.y + palette[v.joints.z] * v.weights.z + palette[v.joints.w] * v.weights.w;
+  let m = joint(v.joints.x) * v.weights.x + joint(v.joints.y) * v.weights.y + joint(v.joints.z) * v.weights.z + joint(v.joints.w) * v.weights.w;
   let p = (m * vec4f(v.position, 1.0)).xyz * draw.scale;
   let n = (m * vec4f(v.normal, 0.0)).xyz;
   let world = on_globe(place_up(p, draw.rotation) + draw.translation);
