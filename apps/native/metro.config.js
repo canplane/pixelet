@@ -64,6 +64,17 @@ function build_stamp() {
 }
 const BUILD_STAMP = build_stamp();
 
+/** A platform module as the system being built has it: `x.android.tsx` beside
+ * `x.tsx` is Android's, and `x.tsx` every other's. The shell names a module
+ * with its extension, which Metro's own `.android` lookup does not take, so it
+ * is looked for here. */
+function own_platform(file, platform) {
+  if (!platform) return file;
+  const ext = path.extname(file);
+  const own = `${file.slice(0, -ext.length)}.${platform}${ext}`;
+  return require("node:fs").existsSync(own) ? own : file;
+}
+
 const config = getDefaultConfig(__dirname);
 
 // The shell's files and the packages Deno installed are both outside this
@@ -76,7 +87,7 @@ config.resolver.resolveRequest = (context, name, platform) => {
     return context.resolveRequest({ ...context, originModulePath: FROM_APP }, name, platform);
   }
   if (name.startsWith("@platform/")) {
-    return context.resolveRequest(context, path.join(__dirname, "src/platform/") + name.slice("@platform/".length), platform);
+    return context.resolveRequest(context, own_platform(path.join(__dirname, "src/platform/") + name.slice("@platform/".length), platform), platform);
   }
   for (const [prefix, dir] of PREFIXES) {
     if (name.startsWith(prefix)) return context.resolveRequest(context, dir + name.slice(prefix.length), platform);
