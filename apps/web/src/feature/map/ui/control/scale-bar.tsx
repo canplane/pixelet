@@ -3,6 +3,7 @@
 import { StyleSheet } from "react-native";
 import { G, Path, Svg } from "react-native-svg";
 
+import type { f64 } from "@xpute/core/abi/word.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
 import { Presence } from "@/shared/ui/motion/presence.tsx";
@@ -12,8 +13,10 @@ import { Motion } from "@platform/motion.tsx";
 import { HaloText } from "@/shared/ui/halo.tsx";
 import { color, halo, haloRings, textStyle, weight } from "@/shared/ui/theme.ts";
 
-/** How far the end ticks drop from the line. */
+/** How far the ticks at the ends and the half drop from the line. */
 const TICK_PX = 5;
+/** How far the quarters' ticks drop: lower, as a ruler's finer marks are. */
+const QUARTER_TICK_PX = 3;
 const LINE_PX = 1;
 /** Room around the strokes for their halo. */
 const PAD_PX = LINE_PX + halo.reach + 1;
@@ -23,8 +26,9 @@ const LABEL_GAP_PX = 6;
 /** How far a distance on the map spans on screen, at the camera's zoom.
  *
  * Drawn as a drawing's dimension is: the label over a line with a tick
- * dropping at each end. A scale is read by its ends, and the halo softens
- * where a bare line stops.
+ * dropping at each end and at the half, and shorter ones at the quarters, as
+ * a ruler marks its divisions. A scale is read by its ends, and the halo
+ * softens where a bare line stops.
  * The line and ticks are one path, stroked as the halo's rings, so the halo
  * runs unbroken where they meet. */
 export function MapScaleBar({ show }: { show: boolean }) {
@@ -40,7 +44,10 @@ export function MapScaleBar({ show }: { show: boolean }) {
   // A one-pixel line centered on a pixel, spanning the bar's pixels inclusive.
   const left = PAD_PX + 0.5;
   const right = left + bar_width_px - 1;
-  const d = `M${left} ${PAD_PX + TICK_PX}V${PAD_PX}H${right}V${PAD_PX + TICK_PX}`;
+  // A tick at a fraction of the bar, on a pixel as the ends are.
+  const at = (f: f64) => Math.round(left + (right - left) * f - 0.5) + 0.5;
+  const tick = (f: f64, px: f64) => `M${at(f)} ${PAD_PX}V${PAD_PX + px}`;
+  const d = `M${left} ${PAD_PX + TICK_PX}V${PAD_PX}H${right}V${PAD_PX + TICK_PX}` + tick(0.5, TICK_PX) + tick(0.25, QUARTER_TICK_PX) + tick(0.75, QUARTER_TICK_PX);
   const svgHeight = PAD_PX + TICK_PX + PAD_PX;
   // Centered in the title's slot, the line stands on the round controls'
   // centerline either side, the label above it and the ticks below: room
