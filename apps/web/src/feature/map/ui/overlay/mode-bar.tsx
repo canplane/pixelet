@@ -16,7 +16,7 @@ import { Presence, Swap } from "@/shared/ui/motion/presence.tsx";
 import { FADE, LEAVE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { keepKeyboard } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
-import { alpha, chrome, color, shadow } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, material, shadow } from "@/shared/ui/theme.ts";
 import { useAppContext } from "@/app/provider/context.ts";
 import { useInHand, useUiStore } from "@/app/store/ui-store.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
@@ -118,7 +118,8 @@ function SizeFlyout({ shown, hover }: { shown: boolean; hover: u32 | null }) {
 
   return (
     <Backing
-      fill={STRIP.flyout}
+      fill={STRIP.ground}
+      material={material.flyout}
       tint={STRIP.ground}
       place={BackingPlace.OverMap}
       fade={shown ? 1 : 0}
@@ -249,8 +250,9 @@ function ColorSwatchButton({ cube, sizes }: { cube: PlaceableCube; sizes: Omit<S
   );
 }
 
-/** A decor kind in the strip, on a disc as a cube's swatch is: a plain tap, since a decor has one size
- * (DECOR_SIZE, pxl-kernel layer/object/size.rs) and so no flyout. */
+/** A decor kind in the strip, on a disc as a cube's swatch is: a plain tap,
+ * since a decor has one size (DECOR_SIZE, pxl-kernel layer/object/size.rs)
+ * and so no flyout. */
 function DecorIconButton({ kind }: { kind: u8 }) {
   const { t } = useTranslation();
   const selectDecor = useUiStore.getState().selectDecor;
@@ -568,7 +570,6 @@ const STRIP = {
   held: alpha(color.white, 0.2),
   line: alpha(color.white, 0.15),
   ground: color.band,
-  flyout: alpha(color.band, 0.8),
 };
 
 const styles = StyleSheet.create({

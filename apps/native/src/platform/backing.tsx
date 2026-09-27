@@ -18,19 +18,25 @@
  * nor match it. A color it is to carry is its tint.
  */
 
+import { requireNativeView } from "expo";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import { type ReactNode, useEffect, useState } from "react";
-import { type ColorValue, type StyleProp, StyleSheet, type ViewStyle } from "react-native";
+import { type ComponentType, type ReactNode, useEffect, useState } from "react";
+import { type ColorValue, type StyleProp, StyleSheet, View, type ViewProps, type ViewStyle } from "react-native";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Motion } from "@platform/motion.tsx";
 import { SNAP, type Transition } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";
 import { BackingPlace } from "@/shared/ui/backing-place.ts";
+import { alpha, type Material } from "@/shared/ui/theme.ts";
 
 export interface BackingProps {
-  /** The backing where the system draws none. */
+  /** The backing where the system draws none; with a material, its color
+   * as a `#rrggbb`, which the material sets the opacity of. */
   fill: ColorValue;
+  /** Where the system draws none, see-through, as this recipe says; the
+   * glass is see-through of its own. */
+  material?: Material;
   /** The glass's tint. */
   tint?: ColorValue;
   /** Whether the glass answers a touch, as a control's does. */
@@ -52,6 +58,11 @@ export interface BackingProps {
  * not gain or lose glass while the app runs. */
 export const SYSTEM_BACKING = isLiquidGlassAvailable();
 
+/** The system's blur a bar stands on (modules/platform/ios/BarBlur.swift).
+ * UIKit blurs by a material, not a radius, so a material's `blur` has no
+ * meaning here. */
+const BarBlur: ComponentType<ViewProps> = requireNativeView("PxlPlatform", "BarBlur");
+
 type Effect = "none" | "clear" | "regular";
 
 /** expo-glass-effect's style for a place at a presence level: "none" at 0,
@@ -62,7 +73,7 @@ function effectAt(level: f64, place: BackingPlace): Effect {
   return "regular";
 }
 
-export function Backing({ fill, tint, interactive, place, fade = 1, fadeFrom, transition = SNAP, style, children }: BackingProps) {
+export function Backing({ fill, material, tint, interactive, place, fade = 1, fadeFrom, transition = SNAP, style, children }: BackingProps) {
   const veil = useVeil(fade, transition);
   const from = fadeFrom === undefined ? undefined : { opacity: fadeFrom };
 
@@ -81,6 +92,20 @@ export function Backing({ fill, tint, interactive, place, fade = 1, fadeFrom, tr
     const timer = setTimeout(() => setShown(target), delay);
     return () => clearTimeout(timer);
   }, [target, laidOut]);
+
+  // A material that is not the glass, or any material where there is no
+  // glass: the system's blur, which every iPhone has, under the fill at the
+  // material's `system` opacity. The blur's own tint is mostly hidden by the
+  // ground over it, so at rest on the sheet it is the sheet's ground.
+  if (material && (!material.glass || !SYSTEM_BACKING)) {
+    return (
+      <Motion from={from} to={{ opacity: veil.level }} transition={veil.transition} style={style}>
+        <BarBlur style={StyleSheet.absoluteFill} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: alpha(fill as string, material.system) }]} />
+        {children}
+      </Motion>
+    );
+  }
 
   if (!SYSTEM_BACKING) {
     return (

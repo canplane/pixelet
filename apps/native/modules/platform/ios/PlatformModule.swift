@@ -142,6 +142,10 @@ public class PlatformModule: Module {
         view.selectedIndex = index
       }
     }
+
+    // ---- a bar's blur (platform/backing.tsx, BarBlur.swift) ----
+
+    View(BarBlur.self) {}
   }
 }
 
