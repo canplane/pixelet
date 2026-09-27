@@ -558,6 +558,9 @@ const STRIP = {
   mark: color.white,
   held: alpha(color.white, 0.2),
   line: alpha(color.white, 0.15),
+  // Brighter than a divider's line: a black or dark grey swatch is its ring
+  // and nothing else on the black strip.
+  swatchLine: alpha(color.white, 0.3),
   ground: color.band,
 };
 
@@ -589,7 +592,7 @@ const styles = StyleSheet.create({
   held: { width: HELD_PX, height: HELD_PX, borderRadius: HELD_PX / 2, alignItems: "center", justifyContent: "center" },
   toolActive: { backgroundColor: STRIP.held },
   decorDisc: { width: ITEM, height: ITEM, borderRadius: ITEM / 2, alignItems: "center", justifyContent: "center", backgroundColor: STRIP.held },
-  swatchIdle: { boxShadow: `0 0 0 1px ${STRIP.line}` },
+  swatchIdle: { boxShadow: `0 0 0 1px ${STRIP.swatchLine}` },
   swatchSelected: { boxShadow: heldRing(STRIP.ground, STRIP.mark, 1) },
 
   // It takes the pointer as a whole, so the map
