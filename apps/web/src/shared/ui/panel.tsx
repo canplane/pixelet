@@ -6,19 +6,25 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Backing } from "@platform/backing.tsx";
 import { BackingPlace } from "@/shared/ui/backing-place.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
-import { color, textStyle } from "@/shared/ui/theme.ts";
+import { chrome, color, textStyle } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
 /** Height of the controls on a sheet (close button, search field, segmented
- * control); the same as an iOS search bar. */
-export const PANEL_CONTROL = 36;
+ * control), a step under a map control's 48; a press lands on 44, iOS's
+ * least target (PANEL_TOUCH_SLOP). */
+export const PANEL_CONTROL = 40;
+/** A glyph on a sheet's control: two fifths of it, as a map control's 20 is
+ * of its 48. */
+export const PANEL_GLYPH = 16;
+/** How far past a sheet control's edge a press still lands on it. */
+const PANEL_TOUCH_SLOP = (44 - PANEL_CONTROL) / 2;
 /** Top row height, the same as an iOS navigation bar. */
 const ROW = 44;
 /** Distance of the top row's controls from the sheet's side and top edges,
- * and the side inset of a panel's content. iOS draws the sheet's drag handle
- * 5pt from the top and 5pt tall, so this leaves 10pt between the handle and
- * the controls. */
-export const PANEL_EDGE = 20;
+ * and the side inset of a panel's content: iOS 26's, as its Maps' sheet
+ * stands its search field and close. The drag handle, 5 from the top and 5
+ * tall, leaves 6 above the controls. */
+export const PANEL_EDGE = 16;
 
 /** A sheet's top row. */
 export const PANEL_HEADER = {
@@ -29,8 +35,9 @@ export const PANEL_HEADER = {
   alignItems: "center",
 } as const;
 
-/** Gap between the top row's controls and the floating tabs under them. */
-const STACK_GAP = 8;
+/** Gap between the top row's controls and the floating tabs under them: the
+ * one between any two controls. */
+const STACK_GAP = chrome.controlGap;
 /** Gap between the tabs and the first row of content. */
 const CONTENT_GAP = 16;
 /** Height of the header area: PANEL_EDGE above and below the round
@@ -101,9 +108,9 @@ export function PanelBody({ header, tabs, children }: { header: ReactNode; tabs?
  * sheets. */
 export function PanelClose({ label, onClose }: { label: string; onClose: () => void }) {
   return (
-    <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={label} style={styles.close}>
+    <Pressable onPress={onClose} hitSlop={PANEL_TOUCH_SLOP} accessibilityRole="button" accessibilityLabel={label} style={styles.close}>
       <Backing fill={color.faint} place={BackingPlace.OnSheet} interactive style={styles.closeFace}>
-        <Glyph glyph="xmark" size={18} color={LABEL.primary} />
+        <Glyph glyph="xmark" size={PANEL_GLYPH} color={LABEL.primary} />
       </Backing>
     </Pressable>
   );

@@ -8,10 +8,10 @@ import { useTranslation } from "react-i18next";
 
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { Panel } from "@platform/panel.tsx";
-import { PANEL_CONTROL, PANEL_EDGE, PANEL_HEADER, PanelBody, PanelClose } from "@/shared/ui/panel.tsx";
+import { PANEL_CONTROL, PANEL_EDGE, PANEL_GLYPH, PANEL_HEADER, PanelBody, PanelClose } from "@/shared/ui/panel.tsx";
 import { KEEPS_KEYBOARD } from "@/shared/ui/keyboard.tsx";
 import { TextField } from "@/shared/ui/text-field.tsx";
-import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 import { Command, DevicePoseStatus, encode_input_go_to } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, kernel_enable_location, kernel_snapshot } from "@/kernel/shell.ts";
 import { useSensors } from "@/feature/map/ui/overlay/sensor-status.tsx";
@@ -213,7 +213,7 @@ export function SearchModal(props: BaseModalProps) {
                   confused. */
               }
               <Backing fill={color.faint} place={BackingPlace.OnSheet} style={styles.well}>
-                <Glyph glyph="magnifyingglass" size={16} color={LABEL.secondary} />
+                <Glyph glyph="magnifyingglass" size={PANEL_GLYPH} color={LABEL.secondary} />
                 <TextField
                   value={query}
                   onChangeText={setQuery}
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
   locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.action },
   // Room under the last result for the card that floats over it.
   resultsRoom: { paddingBottom: LOCATE_HEIGHT + 2 * LOCATE_INSET },
-  headerRow: { ...PANEL_HEADER, gap: 8 },
+  headerRow: { ...PANEL_HEADER, gap: chrome.controlGap },
   well: { flex: 1, minWidth: 0, height: PANEL_CONTROL, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: PANEL_CONTROL / 2 },
   field: { flex: 1, minWidth: 0, color: LABEL.primary },
   clear: { width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: LABEL.tertiary },
