@@ -18,6 +18,7 @@ import { kernel_command, kernel_enable_location, kernel_snapshot } from "@/kerne
 import { useSensors } from "@/feature/map/ui/overlay/sensor-status.tsx";
 import { LABEL, STATUS } from "@platform/palette.ts";
 import { AboveKeyboard } from "@platform/above-keyboard.tsx";
+import { SYSTEM_CLEAR } from "@platform/core.ts";
 import { Glass } from "@platform/glass.tsx";
 import { resolvePoiBadge } from "@/feature/search/poi-badge.ts";
 import { assembleLabel } from "@/feature/map/geocode/label.ts";
@@ -224,21 +225,20 @@ export function SearchModal(props: BaseModalProps) {
             onChangeText={setQuery}
             placeholder={t("map.search.placeholder")}
             placeholderTextColor={color.textMuted}
+            clearButtonMode={SYSTEM_CLEAR ? "while-editing" : undefined}
             style={styles.field}
           />
           {
-            /* Lucide has no filled circle-X glyph (it's a pure
-            outline/stroke icon set) — composed by hand: a solid circle
-            with a smaller X cut into it in the background color, the
-            familiar "clear field" shape (iOS/macOS search fields) rather
-            than a bare X that reads more like "close" than "clear". */
+            /* Where the field has no clear of its own. Lucide has no filled
+            circle-X glyph (it's a pure outline/stroke icon set) — composed
+            by hand: a solid circle with a smaller X cut into it in the
+            background color, the familiar "clear field" shape (iOS/macOS
+            search fields) rather than a bare X that reads more like "close"
+            than "clear". The results follow the emptied query. */
           }
-          {query.length > 0 && (
+          {!SYSTEM_CLEAR && query.length > 0 && (
             <Pressable
-              onPress={() => {
-                setQuery("");
-                setResults([]);
-              }}
+              onPress={() => setQuery("")}
               hitSlop={12}
               accessibilityRole="button"
               accessibilityLabel={t("map.search.clear_aria_label")}
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
   locateCard: { borderRadius: 22, pointerEvents: "auto", boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)" },
   locateRow: { height: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 },
   locateLabel: { flex: 1, ...textStyle.body, color: color.text },
-  locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.chosen },
+  locateAction: { ...textStyle.body, fontWeight: weight.semibold, color: color.action },
   // Room under the last result for the card that floats over it.
   resultsRoom: { paddingBottom: 76 },
   headerRow: { height: PANEL_HEADER_PX, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16 },

@@ -8,6 +8,8 @@
  * gets from instantiating the module, so everything past this is the same.
  */
 
+import { Platform } from "react-native";
+
 import type { f64 } from "@xpute/core/abi/word.ts";
 import type { Core } from "@/kernel/module.ts";
 import { PLATFORM } from "./module.ts";
@@ -16,6 +18,10 @@ import { PLATFORM } from "./module.ts";
  * phone's ceilings — the memory the core takes is a phone's too
  * (crates/pxl/web/native/src/memory.rs `GIVEN`). */
 export const HANDHELD: boolean = true;
+
+/** Whether a text field draws its own clear, as iOS's does inside the field
+ * while it is edited; Android's has none. */
+export const SYSTEM_CLEAR: boolean = Platform.OS === "ios";
 
 /** The core, booted: its first turn lays the memory out before anything reads
  * the boot block. */

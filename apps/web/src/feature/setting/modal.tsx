@@ -5,12 +5,11 @@ import { useTranslation } from "react-i18next";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
-import { Info, Sparkles } from "lucide-react-native";
 
 import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel, PanelHeader, Side } from "@/shared/ui/panel.tsx";
-import { Segmented } from "@/shared/ui/segmented.tsx";
-import { color, hairline } from "@/shared/ui/theme.ts";
+import { Segmented } from "@platform/segmented.tsx";
+import { hairline } from "@/shared/ui/theme.ts";
 import { SettingsSection } from "./section.tsx";
 import { settingText } from "./row.tsx";
 import { LanguageSection } from "./section/language.tsx";
@@ -57,8 +56,8 @@ export function SettingsModal(props: BaseModalProps) {
           value={tab}
           onChange={setTab}
           segments={[
-            { value: SettingsTab.Effects, label: t("settings.tabs.effects"), icon: <Sparkles size={14} color={color.textMuted} /> },
-            { value: SettingsTab.Info, label: t("settings.tabs.info"), icon: <Info size={14} color={color.textMuted} /> },
+            { value: SettingsTab.Effects, label: t("settings.tabs.effects") },
+            { value: SettingsTab.Info, label: t("settings.tabs.info") },
           ]}
         />
       </View>

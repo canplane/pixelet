@@ -28,9 +28,10 @@ function tint(hex: string, a: number): string {
   return `#${mix((n >> 16) & 255)}${mix((n >> 8) & 255)}${mix(n & 255)}`;
 }
 
-/** iOS's system hues, in light mode. Every hue the shell draws in is one of
- * these, at an opacity or as a tint; a device takes the system's own where
- * it can (platform palette.ts), which also moves with dark mode. */
+/** iOS's system hues, in light mode: what a state or a cost is drawn in,
+ * at an opacity or as a tint, so it reads as the system's own would. A
+ * device takes the system's own where it can (platform palette.ts), which
+ * also moves with dark mode. */
 const SYSTEM = {
   red: "#FF3B30",
   orange: "#FF9500",
@@ -39,6 +40,17 @@ const SYSTEM = {
   purple: "#AF52DE",
   /** The dark mode's grouped ground. */
   dark: "#1C1C1E",
+} as const;
+
+/** The app's own hue: the coral of its mark (#FF865E), darkened with its hue
+ * and chroma held (OKLCH) to where white on it, or it on white, reaches a
+ * contrast — 3:1 for a filled control and its white glyph or word, 4.5:1 for
+ * words in the coral on the paper. The mark's own is lighter than either,
+ * too light to carry white. Everything the app itself says — chosen, send,
+ * one's own — is this, and nothing a state or a cost says. */
+const CORAL = {
+  base: "#E9724B",
+  deep: "#C6522A",
 } as const;
 
 export const color = {
@@ -60,9 +72,9 @@ export const color = {
   /** The tool strip's flat dark. */
   band: SYSTEM.dark,
   /** The send button. */
-  send: SYSTEM.orange,
+  send: CORAL.base,
   /** One's own name in the chat. */
-  self: SYSTEM.orange,
+  self: CORAL.deep,
   /** A status: something ready, as a sensor or the world is; something on
    * its way; a report that something failed, with the failure's ground and
    * edge. */
@@ -81,8 +93,10 @@ export const color = {
   textMuted: "#696257",
   /** A warm wash for what is picked or pressed; used at an opacity. */
   wash: "#efe3cf",
-  /** What is chosen on a panel: a radio, a switch, a chip. */
-  chosen: "#4b361c",
+  /** What is chosen on a panel: a check, a switch, a chip. */
+  chosen: CORAL.base,
+  /** An action's words on a panel. */
+  action: CORAL.deep,
   /** An off control's track, clearly darker than the paper. */
   track: "#d5cdc0",
 

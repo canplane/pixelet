@@ -39,7 +39,8 @@ const SHADOW_ROOM = 32;
 /** How far past its edge a touch still lands on it. */
 const TOUCH_SLOP = 8;
 
-// A page has no system glass (glass.tsx), so `tint` is a device's alone.
+// A page has no system glass (glass.tsx), so `tint` and `interactive` are a
+// device's alone.
 export function Pill({ x, width, height, span, fill, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, children, onContentWidth }: PillProps) {
   const transition = SNAP;
   const veil = useVeil(fade, fadeTransition);

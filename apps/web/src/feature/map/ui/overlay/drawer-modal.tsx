@@ -12,7 +12,7 @@ import { useUiStore } from "@/app/store/ui-store.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { useSafeArea } from "@platform/safe-area.ts";
 import { Panel, PanelHeader, Side } from "@/shared/ui/panel.tsx";
-import { Segmented } from "@/shared/ui/segmented.tsx";
+import { Segmented } from "@platform/segmented.tsx";
 import { alpha, color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
 import { CharacterPicker } from "@/feature/character/picker.tsx";
 import { CubeSwatch } from "./cube-swatch.tsx";

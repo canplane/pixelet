@@ -22,8 +22,14 @@ import { findPersonVariant, findPetVariant, type Gender, genderOf, GENDERS, pers
 // chip are literally the same kind of control.
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="radio" aria-checked={active} style={[styles.chip, active ? styles.chipOn : styles.chipOff]}>
-      <Text style={[styles.chipText, active && styles.chipTextOn]}>{label}</Text>
+    <Pressable onPress={onPress} accessibilityRole="radio" aria-checked={active} style={[styles.chip, active && styles.chipOn]}>
+      {
+        /* The chip is as wide as its label in the heavier weight, whichever it
+      shows: a pick that widened its chip would rewrap the row under the
+      finger. */
+      }
+      <Text aria-hidden style={[styles.chipText, styles.chipTextOn, styles.sizer]}>{label}</Text>
+      <Text style={[styles.chipText, styles.label, active && styles.chipTextOn]}>{label}</Text>
     </Pressable>
   );
 }
@@ -125,9 +131,10 @@ const styles = StyleSheet.create({
   chipColumn: { flexShrink: 1, minWidth: 0, gap: 6 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   rule: { height: 1, backgroundColor: hairline },
-  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  chipOn: { borderColor: color.chosen, backgroundColor: alpha(color.chosen, 0.1) },
-  chipOff: { borderColor: alpha(color.text, 0.06) },
-  chipText: { ...textStyle.footnote, fontWeight: weight.medium, color: color.textMuted },
-  chipTextOn: { color: color.chosen },
+  chip: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5, backgroundColor: alpha(color.wash, 0.6) },
+  chipOn: { backgroundColor: color.chosen },
+  chipText: { ...textStyle.footnote, fontWeight: weight.medium, color: color.text },
+  chipTextOn: { fontWeight: weight.semibold, color: color.paper },
+  sizer: { opacity: 0 },
+  label: { position: "absolute", left: 0, right: 0, top: 5, textAlign: "center" },
 });

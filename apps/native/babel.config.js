@@ -155,5 +155,10 @@ module.exports = (api) => {
   // Expo's own copy of the preset, found from Expo, which is what the app
   // depends on.
   const preset = require.resolve("babel-preset-expo", { paths: [require.resolve("expo/package.json")] });
-  return { presets: [preset], plugins: [define, inline_enums] };
+  // The defines and the enums are this tree's: a package's own sources are
+  // left as they are, where a name of theirs could be one of ours — @expo/ui
+  // has a `Slot` of its own, which the enum pass took for the mode bar's.
+  // A function and not a RegExp: Metro reads the config with no file for its
+  // cache key, and Babel refuses a RegExp it has nothing to test against.
+  return { presets: [preset], overrides: [{ exclude: (file) => /[\\/]node_modules[\\/]/.test(file ?? ""), plugins: [define, inline_enums] }] };
 };

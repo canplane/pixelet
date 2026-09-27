@@ -27,6 +27,9 @@ export interface PillProps {
   fill: ColorValue;
   /** The glass's tint, where there is glass. */
   tint?: ColorValue;
+  /** Whether the glass answers a touch, where there is glass: a pill that is
+   * one button, not one that holds several, whose own buttons answer. */
+  interactive?: boolean;
   border?: { width: f64; color: ColorValue };
   shadow?: string;
   /** How present it is, from 1 to 0 (gone), what it mounts at, and how a
