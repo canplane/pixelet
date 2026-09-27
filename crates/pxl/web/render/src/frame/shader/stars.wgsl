@@ -27,24 +27,22 @@ struct Stars {
   _p1: f32,
 };
 
-// Held as vec4 words and read back by `stars()`: what the host and a shader
-// share has no room inside it for a driver to lay out its own way
-// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+// Held as vec4 words, each field read from its own by `stars_<field>()`:
+// what the host and a shader share has no room inside it for a driver to
+// lay out its own way (issue/20260927-a-matrix-the-driver-reads-its-own-way.md),
+// and nothing builds the struct back, with which Safari's WebGPU lost its
+// GPU process.
 @group(0) @binding(0) var<uniform> stars_words: array<vec4f, 11>;
 
-fn stars() -> Stars {
-  return Stars(
-    mat4x4f(stars_words[0], stars_words[1], stars_words[2], stars_words[3]),
-    mat4x4f(stars_words[4], stars_words[5], stars_words[6], stars_words[7]),
-    stars_words[8].xy,
-    stars_words[8].z,
-    stars_words[8].w,
-    stars_words[9].xyz,
-    stars_words[9].w,
-    stars_words[10].xyz,
-    stars_words[10].w,
-  );
-}
+fn stars_view_proj() -> mat4x4f { return mat4x4f(stars_words[0], stars_words[1], stars_words[2], stars_words[3]); }
+fn stars_sky() -> mat4x4f { return mat4x4f(stars_words[4], stars_words[5], stars_words[6], stars_words[7]); }
+fn stars_viewport() -> vec2f { return stars_words[8].xy; }
+fn stars_intensity() -> f32 { return stars_words[8].z; }
+fn stars__p0() -> f32 { return stars_words[8].w; }
+fn stars_depth() -> vec3f { return stars_words[9].xyz; }
+fn stars_density() -> f32 { return stars_words[9].w; }
+fn stars_up() -> vec3f { return stars_words[10].xyz; }
+fn stars__p1() -> f32 { return stars_words[10].w; }
 
 // Each star as gpu/stars.rs took it once: its direction in the equatorial
 // frame and its flux, then its color.
@@ -86,26 +84,26 @@ fn airmass(sin_alt: f32) -> f32 {
 fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> StarOut {
   let at = catalog[2u * i];
   let color = catalog[2u * i + 1u].rgb;
-  let dir = (stars().sky * vec4f(at.xyz, 0.0)).xyz;
+  let dir = (stars_sky() * vec4f(at.xyz, 0.0)).xyz;
 
   var o: StarOut;
   let flux = at.w;
   // No scintillation: a twinkle is motion, and the frame is drawn only when
   // something moves — at rest every two seconds, which turns a twinkle into
   // a blink — and drawing every frame for it is the device's to pay.
-  let height = dot(dir, stars().up);
-  let light = color * flux * STAR_GAIN * exp(-stars().depth * airmass(height)) * stars().intensity;
-  var clip = stars().view_proj * vec4f(dir, 0.0);
+  let height = dot(dir, stars_up());
+  let light = color * flux * STAR_GAIN * exp(-stars_depth() * airmass(height)) * stars_intensity();
+  var clip = stars_view_proj() * vec4f(dir, 0.0);
   if (height < -0.02 || clip.w <= 0.0 || max(light.r, max(light.g, light.b)) < STAR_FLOOR) {
     o.clip = vec4f(0.0, 0.0, 2.0, 1.0);
     return o;
   }
-  let sigma = (STAR_SIGMA_PX + STAR_SWELL_PX * sqrt(max(flux - 1.0, 0.0))) * stars().density;
+  let sigma = (STAR_SIGMA_PX + STAR_SWELL_PX * sqrt(max(flux - 1.0, 0.0))) * stars_density();
   let halo = select(0.0, HALO_GAIN * sqrt(flux / HALO_FROM), flux > HALO_FROM);
   let corner = vec2f(f32(v & 1u), f32(v >> 1u)) * 2.0 - 1.0;
   let half = 3.0 * sigma * select(1.0, HALO_SIGMA, halo > 0.0);
   clip.z = 0.0;
-  clip = vec4f(clip.xy + corner * half * 2.0 / stars().viewport * clip.w, clip.z, clip.w);
+  clip = vec4f(clip.xy + corner * half * 2.0 / stars_viewport() * clip.w, clip.z, clip.w);
   o.clip = clip;
   o.at = corner * half;
   o.light = min(light, vec3f(4.0));

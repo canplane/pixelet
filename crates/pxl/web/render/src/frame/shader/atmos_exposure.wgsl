@@ -15,7 +15,7 @@ const EXPOSURE_BEARINGS: i32 = 16;
 fn fs(v: TableOut) -> @location(0) vec4f {
   // In the table's own frame: the sun's height from the zenith at the eye,
   // and each ray's bearing from the sun's.
-  let mu_s = clamp(dot(atmos().sun_dir, atmos().up), -1.0, 1.0);
+  let mu_s = clamp(dot(atmos_sun_dir(), atmos_up()), -1.0, 1.0);
   // Cosine-weighted: rings evenly spaced in sin² of the zenith angle, so
   // each sample stands for an equal share of the irradiance and the sum is
   // pi times their mean.
@@ -29,8 +29,8 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   }
   sky *= PI / f32(EXPOSURE_RINGS * EXPOSURE_BEARINGS);
   let direct = sun_transmittance(camera_r(), mu_s) * max(mu_s, 0.0);
-  let light = dot((sky + direct) * atmos().white, LUMA);
-  let adapted = clamp(pow(1.0 / max(light, 1e-6), atmos().adaptation), 1.0, atmos().max_adaptation);
+  let light = dot((sky + direct) * atmos_white(), LUMA);
+  let adapted = clamp(pow(1.0 / max(light, 1e-6), atmos_adaptation()), 1.0, atmos_max_adaptation());
   // The second texel: the sky's irradiance alone, unexposed
   // (atmos_view.wgsl's sky_fill).
   if (v.clip.x >= 1.0) {
@@ -39,5 +39,5 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   // Beside the exposure, the sky straight up, unexposed, which the clouds
   // are lit by from above (atmos_view.wgsl's zenith_sky): one texel read a
   // fragment rather than a table's.
-  return vec4f(atmos().exposure * adapted, table_at(sky_view_lut, 1.0, 1.0));
+  return vec4f(atmos_exposure() * adapted, table_at(sky_view_lut, 1.0, 1.0));
 }

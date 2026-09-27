@@ -25,7 +25,7 @@ fn vs(v: VertexIn) -> VertexOut {
   let k = v.i * 7u;
   let center = vec3f(zone[k], zone[k + 1u], zone[k + 2u]);
   var o: VertexOut;
-  o.clip = frame().view_proj * vec4f(on_globe(v.position + center + draw().translation), 1.0);
+  o.clip = frame_view_proj() * vec4f(on_globe(v.position + center + draw_translation()), 1.0);
   o.uv = v.uv;
   o.borders = vec4f(zone[k + 3u], zone[k + 4u], zone[k + 5u], zone[k + 6u]);
   return o;
@@ -44,5 +44,5 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let right = aastep(1.0 - bw, i.uv.x) * i.borders.z;
   let left = (1.0 - aastep(bw, i.uv.x)) * i.borders.w;
   let border = max(max(top, bottom), max(left, right));
-  return vec4f(finish(draw().color, i.clip.xy), mix(ZONE_FILL_OPACITY, 1.0, border));
+  return vec4f(finish(draw_color(), i.clip.xy), mix(ZONE_FILL_OPACITY, 1.0, border));
 }

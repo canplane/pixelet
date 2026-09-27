@@ -15,7 +15,7 @@ fn table_at(lut: texture_2d<f32>, mu: f32, light_cos: f32) -> vec3f {
 // frame: their heights from the zenith at the eye, and the angle between
 // their bearings round it.
 fn table_view(lut: texture_2d<f32>, dir: vec3f, toward: vec3f) -> vec3f {
-  let up = atmos().up;
+  let up = atmos_up();
   let mu = dot(dir, up);
   let dir_h = dir - mu * up;
   let light_h = toward - dot(toward, up) * up;
