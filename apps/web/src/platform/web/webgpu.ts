@@ -18,7 +18,6 @@ import type { f32, f64, u32 } from "@xpute/core/abi/word.ts";
 import { handle_slot } from "@xpute/runtime/abi/handle.ts";
 import { bytes_of, each_record } from "@xpute/runtime/ipc/stream.ts";
 
-import { UnsupportedReason } from "@/app/store/unsupported-store.ts";
 import { DEV_BUNDLE } from "@/config/bundle.ts";
 import { address, compare, dimension, filter, format, load, op, record, resource, stream } from "@/kernel/render/gpu/api.spec.ts";
 
@@ -53,41 +52,40 @@ interface DeviceInfo {
   align: u32;
   timestamps: boolean;
 }
-/** Why the browser answered with no device. The ways WebGPU goes missing are
- * fixed in different places, so `reason` picks the sentence the reader is
- * shown (app/store/unsupported-store.ts) rather than being one; `detail` is
- * the same fact for whoever is reading a console, which names what a sentence
- * for a reader should not. */
-interface NoDevice {
-  reason: UnsupportedReason;
-  detail: string;
+/** What this browser lacks to run the app at all: no WebGPU, WebGPU withheld
+ * from a page not served securely, or no graphics adapter answering. Each is
+ * put right in a different place — a newer browser, the page's https://
+ * address, the machine's own graphics — so each has its own sentence
+ * (unsupported.tsx), named as its value. */
+export const enum Missing {
+  WebGpu = "webgpu",
+  Insecure = "insecure",
+  Gpu = "gpu",
 }
 
-/** What the browser is missing, where that is knowable without asking it for
- * anything — no adapter request, no module, no kernel. A browser with no
- * WebGPU has no use for any of those, so the page becomes the notice rather
- * than being covered by it (app/bootstrap.ts).
+/** The adapter the check below found, held for the first device request so
+ * it is not asked for twice. */
+let checked: GPUAdapter | null = null;
+
+/** What the browser is missing, asked once before anything is started: a
+ * property of the browser, which is why nothing after boot asks it again. A
+ * device lost later is a moment, and is asked for again (gpu.ts).
  *
- * Whether an adapter answers is not knowable here: it is a question for the
- * device request, and by then the module is loaded either way. */
-export function missingBeforeBoot(): UnsupportedReason | null {
-  if ("gpu" in navigator) return null;
-  return isSecureContext ? UnsupportedReason.WebGpu : UnsupportedReason.Insecure;
+ * `navigator.gpu` is exposed to a secure context and nowhere else, so the
+ * same browser on the same machine has WebGPU at localhost and none at the
+ * dev server's LAN address over http. */
+export async function whatIsMissing(): Promise<Missing | null> {
+  if (!("gpu" in navigator)) return isSecureContext ? Missing.WebGpu : Missing.Insecure;
+  checked = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+  return checked ? null : Missing.Gpu;
 }
 
-/** The device, once the browser answers, or why there is none. `lost` hears
- * it go. */
-export async function acquireDevice(lost: () => void): Promise<DeviceInfo | NoDevice> {
-  // `navigator.gpu` is exposed to a secure context and nowhere else, so the
-  // same browser on the same machine has WebGPU at localhost and none at the
-  // dev server's LAN address over http.
-  if (!("gpu" in navigator)) {
-    return isSecureContext
-      ? { reason: UnsupportedReason.WebGpu, detail: "this browser has no navigator.gpu" }
-      : { reason: UnsupportedReason.Insecure, detail: `${location.origin} is not a secure context, which is the only place navigator.gpu is exposed` };
-  }
-  const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-  if (!adapter) return { reason: UnsupportedReason.Gpu, detail: "navigator.gpu is here but no adapter answered — the GPU is unavailable or blocklisted (chrome://gpu)" };
+/** The device, once the browser answers, or null while no adapter does.
+ * `lost` hears it go. */
+export async function acquireDevice(lost: () => void): Promise<DeviceInfo | null> {
+  const adapter = checked ?? await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+  checked = null;
+  if (!adapter) return null;
   const timestamps = adapter.features.has("timestamp-query");
   const d = await adapter.requestDevice({ requiredFeatures: timestamps ? ["timestamp-query"] : [] });
   // What the adapter says it can do, on a device nobody can attach a debugger

@@ -304,7 +304,6 @@
     "title": "This browser isn't supported",
     "webgpu": "This browser has no WebGPU, which is what the world is drawn with. Open the page in a recent Chrome, Edge, Firefox or Safari.",
     "insecure": "WebGPU is only available over HTTPS. Open the page at its https:// address.",
-    "gpu": "WebGPU is here but no graphics adapter answered. It may be disabled or blocked for this GPU.",
-    "encoding": "The map data is sent compressed, and this browser can't read that compression. Open the page in a recent Chrome, Edge, Firefox or Safari."
+    "gpu": "WebGPU is here but no graphics adapter answered. It may be disabled or blocked for this GPU."
   }
 }

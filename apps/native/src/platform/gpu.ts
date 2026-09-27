@@ -3,27 +3,21 @@
 /**
  * The device the kernel draws with, on a device: the core's own, opened
  * through wgpu (crates/pxl/web/render/src/gpu/api/device.rs) and announced to
- * the kernel as the page's WebGPU is (platform/web/gpu.ts). A device the
- * system does not give is said once, in front of everything.
+ * the kernel as the page's WebGPU is (platform/web/gpu.ts).
  */
 
 import { Command, encode_gpu_create } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { request_frame } from "@/kernel/sched.ts";
-import { declareUnsupported, UnsupportedReason } from "@/app/store/unsupported-store.ts";
-
-/** A device that runs the app has a GPU to ask for; whether it answers is
- * `gpuBoot`'s. */
-export function gpuMissing(): UnsupportedReason | null {
-  return null;
-}
 import { PLATFORM } from "./module.ts";
 
 export function gpuBoot(): void {
   const info = PLATFORM.gpuOpen();
   if (info === null) {
-    console.error("[gpu] the system has no GPU; nothing can be drawn");
-    declareUnsupported(UnsupportedReason.Gpu);
+    // The app installs only where the system draws through Metal or Vulkan,
+    // so this is the system failing, not a device the app does not support:
+    // there is nothing to tell a reader, and nothing to draw.
+    console.error("[gpu] the system opened no GPU; nothing can be drawn");
     return;
   }
   const [align, timestamps] = info;

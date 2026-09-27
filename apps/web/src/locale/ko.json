@@ -304,7 +304,6 @@
     "title": "지원하지 않는 브라우저입니다",
     "webgpu": "이 브라우저에는 세계를 그리는 데 쓰는 WebGPU가 없습니다. 최신 버전의 Chrome, Edge, Firefox, Safari에서 열어 주세요.",
     "insecure": "WebGPU는 HTTPS에서만 쓸 수 있습니다. https:// 주소로 열어 주세요.",
-    "gpu": "WebGPU는 있지만 그래픽 어댑터가 응답하지 않았습니다. 이 GPU에서 꺼져 있거나 차단되었을 수 있습니다.",
-    "encoding": "지도 데이터는 압축해서 보내는데, 이 브라우저는 그 압축을 읽지 못합니다. 최신 버전의 Chrome, Edge, Firefox, Safari에서 열어 주세요."
+    "gpu": "WebGPU는 있지만 그래픽 어댑터가 응답하지 않았습니다. 이 GPU에서 꺼져 있거나 차단되었을 수 있습니다."
   }
 }
