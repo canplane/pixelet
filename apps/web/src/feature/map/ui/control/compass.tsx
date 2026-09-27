@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet, View } from "react-native";
 import { Path, Svg } from "react-native-svg";
 
-import { Command } from "@/kernel/abi/cmd.spec.ts";
+import { Command, CompassState } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
 
 import { LABEL, NORTH } from "@platform/palette.ts";
@@ -62,14 +62,14 @@ function face(end: f64, side: f64): string {
 export function MapCompass() {
   const { t } = useTranslation();
   const azimuth = useKernel((s) => s.azimuth);
-  const showCompass = useKernel((s) => s.show_compass);
+  const compass = useKernel((s) => s.compass);
   // Clockwise on the screen, as the view turns.
   const turn = -azimuth;
   const w = NEEDLE_WIDTH / 2;
 
   return (
     <Presence
-      show={showCompass}
+      show={compass !== CompassState.Hidden}
       // It turns in and grows from next to nothing, and turns on and shrinks
       // away. Its glass is never faded: the glass steps through a darker style
       // on its way in and out, which read as the button darkening. Not from
@@ -80,7 +80,16 @@ export function MapCompass() {
       transition={after(ARRIVE, 400)}
       exitTransition={ARRIVE}
     >
-      <CircularButton onPress={() => kernel_command(Command.INPUT_COMPASS_RESET)} label={t("map.controls.reset_orientation")}>
+      {
+        // Following the heading, it shows where north is, dimmed and taking
+        // no press: north up is the tracking button's to ask then, and the
+        // kernel turns no reset down its way (shell/ui/compass.rs).
+      }
+      <CircularButton
+        onPress={() => kernel_command(Command.INPUT_COMPASS_RESET)}
+        label={t("map.controls.reset_orientation")}
+        disabled={compass === CompassState.Following}
+      >
         <View style={{ width: DIAL, height: DIAL }}>
           <Svg width={DIAL} height={DIAL} viewBox={BOX} style={StyleSheet.absoluteFill}>
             <Path d={QUARTERS} stroke={LABEL.secondary} strokeWidth={QUARTER_STROKE} strokeLinecap="round" />

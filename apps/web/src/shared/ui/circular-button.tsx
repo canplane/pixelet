@@ -26,14 +26,17 @@ interface CircularButtonProps {
 export function CircularButton({ children, onPress, label, isActive, disabled }: CircularButtonProps) {
   return (
     <Pressable
-      onPress={onPress}
-      disabled={disabled}
+      // Disabled, it still takes a touch and does nothing with it: a
+      // Pressable told it is disabled lets the touch through to the map under
+      // it, where a tap on the dimmed compass left the heading's follow.
+      onPress={disabled ? undefined : onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
       style={styles.disc}
     >
       {({ pressed }) => (
-        <Motion to={{ scale: pressed && !SYSTEM_BACKING ? 0.95 : 1 }} transition={SNAP} style={styles.press}>
+        <Motion to={{ scale: pressed && !disabled && !SYSTEM_BACKING ? 0.95 : 1 }} transition={SNAP} style={styles.press}>
           <Backing
             fill={isActive ? surface.chosen.fill : color.ground}
             tint={isActive ? surface.chosen.glass : undefined}
