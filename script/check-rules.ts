@@ -2,7 +2,7 @@
 // Holds the tree to the rules in AGENTS.md that a machine can decide, so that
 // what drifts without anyone deciding it is caught where it drifts.
 //
-// Four of them, each a rule that went wrong by accident more than once and
+// Five of them, each a rule that went wrong by accident more than once and
 // none a judgment about design:
 //
 // - A source file opens with its own logical path. The comment is how a file
@@ -24,6 +24,10 @@
 //   and faulted on a device, twice. Every other pointer cast is spelled by
 //   what it is (clippy, crates/Cargo.toml), so `as *const` and `as *mut` are
 //   left meaning only that, and are refused.
+// - On an iPhone, SwiftUI draws the sheet and nothing a touch lands on inside
+//   React Native: a SwiftUI control there missed quick taps where UIKit's
+//   took them (apps/native/src/platform/README.md). `@expo/ui` is imported
+//   by the sheet alone.
 //
 // `issue/` is exempt from the second: a decision record names the files of
 // its day.
@@ -173,9 +177,20 @@ for (const f of files) {
   });
 }
 
+// ---- SwiftUI's place ----
+
+const SWIFTUI_OWNERS = ["apps/native/src/platform/panel.tsx"];
+
+for (const f of files) {
+  if (!/\.tsx?$/.test(f) || !f.startsWith("apps/") || SWIFTUI_OWNERS.includes(f)) continue;
+  read(f)?.split("\n").forEach((line, n) => {
+    if (/^\s*import\b.*["']@expo\/ui/.test(line)) problems.push(`${f}:${n + 1}: imports @expo/ui outside the sheet, where a control that takes a touch is UIKit's`);
+  });
+}
+
 if (problems.length) {
   console.error(problems.join("\n"));
   console.error(`\ncheck-rules: ${problems.length} (AGENTS.md says why each rule is there)`);
   Deno.exit(1);
 }
-console.log("check-rules: headers, cited paths, the lattice and the memory's offsets hold");
+console.log("check-rules: headers, cited paths, the lattice, the memory's offsets and SwiftUI's place hold");

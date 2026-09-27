@@ -130,6 +130,18 @@ public class PlatformModule: Module {
         view.applied = applied
       }
     }
+
+    // ---- the segmented control (platform/segmented.tsx, SegmentedControl.swift) ----
+
+    View(SegmentedControl.self) {
+      Events("onPick")
+      Prop("labels") { (view: SegmentedControl, labels: [String]) in
+        view.labels = labels
+      }
+      Prop("selectedIndex") { (view: SegmentedControl, index: Int) in
+        view.selectedIndex = index
+      }
+    }
   }
 }
 

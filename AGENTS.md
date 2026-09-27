@@ -73,6 +73,12 @@ shell's own build is
 deployment or a bucket are `script/`. A script under `infra/` makes a
 database's state, not a file, and runs as infra's README says.
 
+**On an iPhone, a control a touch lands on is UIKit's.** SwiftUI
+(`@expo/ui`) draws the sheet and nothing inside React Native's views that
+takes a touch: a SwiftUI switch there missed quick taps that UIKit's took.
+Which technology draws each `@platform/` piece is
+[apps/native/src/platform/README.md](./apps/native/src/platform/README.md).
+
 ## One spatial model
 
 Everything placed on the map sits in one hierarchy, the **pyramid**: level k
