@@ -14,14 +14,14 @@ import { request_frame } from "@/kernel/sched.ts";
 
 /** How long to wait before asking again when no adapter answers while the
  * page is shown. Only a device lost after boot gets here — a browser with
- * none never boots (main.tsx) — and a GPU process restarting or a driver
- * resetting answers again within moments, so the page keeps asking. */
+ * none never boots (main.tsx) — and there is no telling when a browser will
+ * give one again: Safari, its GPU process lost, gave none for a while after,
+ * to this tab and every other. So the page keeps asking. */
 const RETRY_MS = 1000;
 
-/** Asks again once the page is shown, or after RETRY_MS if it is. A browser
- * takes the GPU back from a page it hides — iOS Safari does, behind a share
- * sheet or another app — and gives none while it stays hidden, so asking on
- * a timer then is asking for nothing. */
+/** Asks again once the page is shown, or after RETRY_MS if it is: a hidden
+ * page draws nothing, so there is nothing a device is wanted for until it is
+ * shown again. */
 function askAgain(): void {
   if (document.visibilityState === "visible") {
     console.warn(`[gpu] no adapter answered; asking again in ${RETRY_MS} ms`);
