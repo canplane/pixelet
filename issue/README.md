@@ -103,7 +103,7 @@ last section is the authority when the two disagree.
 | 20260912-what-to-render-when | **built** · both "left open" items closed since |
 | 20260912-linear-memory-what-is-left | **superseded** by 20260914-what-stays-in-javascript · checklist A–C built |
 | 20260912-coarse-tiers-what-the-field-does | **built** (heightmap direct path) |
-| 20260912-coarse-tiers-need-a-larger-unit | **not taken** · block archived on a branch |
+| 20260912-coarse-tiers-need-a-larger-unit | **not taken** · block kept at `17cb91c0` |
 | 20260911-taa-tried-and-closed | **closed** · cross-fade kept; MSAA's memory to be revisited on desktop first |
 | 20260911-single-thread-core-and-when-to-spawn-a-worker | **decided** · one thread stays; the bake worker was built and measured not to help; reservation measured |
 | 20260911-decor-identity-orientation-and-one-cell-format | **built** (extent criterion) · impostor tier decided, culling deferred · palette, id and heading superseded by 20260913-everything-is-a-file-the-placement-and-the-palette |
