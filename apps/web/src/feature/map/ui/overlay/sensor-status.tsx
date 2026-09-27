@@ -1,6 +1,6 @@
 // @pxl/web/feature/map/ui/overlay/sensor-status.tsx
 
-import { Compass, Locate } from "lucide-react-native";
+import { Compass, createLucideIcon, Locate, LocateOff, type LucideIcon } from "lucide-react-native";
 import { StyleSheet, View } from "react-native";
 
 import { DevicePoseStatus } from "@/kernel/abi/cmd.spec.ts";
@@ -22,6 +22,17 @@ export function useSensors() {
   return { location, orientation, hasCompass };
 }
 
+/** Lucide has no crossed-out compass, so this is its Compass drawn the way
+ * its other "-off" icons are: the 2,2 → 22,22 slash, and the circle split
+ * into two arcs that stop 12° short of where the slash crosses it (at 45°
+ * and 225°), so the slash does not touch the outline. */
+const CompassOff = createLucideIcon("compass-off", [
+  ["path", { d: "M6.55 3.61A10 10 0 0 1 20.39 17.45", key: "arc-upper" }],
+  ["path", { d: "M17.45 20.39A10 10 0 0 1 3.61 6.55", key: "arc-lower" }],
+  ["path", { d: "m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z", key: "needle" }],
+  ["path", { d: "m2 2 20 20", key: "slash" }],
+]);
+
 function statusColor(status: DevicePoseStatus): string {
   switch (status) {
     case DevicePoseStatus.Loading:
@@ -40,17 +51,18 @@ export function SensorStatus() {
 
   // A sensor not yet on is the glyph faded whole, its rim with it, as iOS
   // draws what is off; one that is on is plain white, and only a sensor on
-  // its way or failed takes a color.
-  const icon = (Icon: typeof Locate, status: DevicePoseStatus) => (
+  // its way or failed takes a color. A failed one is also crossed out, so
+  // the state does not rest on color alone.
+  const icon = (Icon: LucideIcon, Failed: LucideIcon, status: DevicePoseStatus) => (
     <View style={status === DevicePoseStatus.Idle && styles.off}>
-      <OutlinedIcon icon={Icon} size={14} strokeWidth={2.5} color={statusColor(status)} />
+      <OutlinedIcon icon={status === DevicePoseStatus.Error ? Failed : Icon} size={14} strokeWidth={2.5} color={statusColor(status)} />
     </View>
   );
 
   return (
     <View style={styles.row}>
-      {icon(Locate, location)}
-      {hasCompass && icon(Compass, orientation)}
+      {icon(Locate, LocateOff, location)}
+      {hasCompass && icon(Compass, CompassOff, orientation)}
     </View>
   );
 }
