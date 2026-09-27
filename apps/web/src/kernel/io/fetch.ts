@@ -29,7 +29,6 @@ import type { U8Array } from "@xpute/core/abi/array.ts";
 import type { f64, u32, u64 } from "@xpute/core/abi/word.ts";
 import { Command, encode_fetch_update, FetchOutcome } from "@/kernel/abi/cmd.spec.ts";
 import { FetchFail } from "@xpute/runtime/abi/fetch.spec.ts";
-import { declareUnsupported, isUnsupported, UnsupportedReason } from "@/app/store/unsupported-store.ts";
 import { PUBLISHED_TILES } from "@/config/deploy.ts";
 import { originGet } from "@platform/origin.ts";
 import { tileUrl } from "@/config/route.ts";
@@ -77,11 +76,6 @@ function settle(key: u64, outcome: FetchOutcome, body: u32, body_bytes: u32, fai
 /** Reads one object the kernel named: its bytes written into the room the
  * kernel gives them, and what became of the read reported back. */
 export async function run_fetch(key: u64, bake: number, name: string): Promise<void> {
-  // Settled without being made, once a body has shown that nothing here can be
-  // read. The kernel keeps its demand and keeps asking, which is right — the
-  // demand is real and nothing about it failed — but the answer would be the
-  // same bytes again, and the reader is looking at the notice.
-  if (isUnsupported()) return settle(key, FetchOutcome.Error, 0, 0, FetchFail.Shell, 0, 0);
   const { signal, own } = begin_read(key, () => settle(key, FetchOutcome.Aborted, 0, 0, FetchFail.None, 0, 0));
   let outcome: FetchOutcome = FetchOutcome.Read;
   let held = 0;
@@ -102,11 +96,14 @@ export async function run_fetch(key: u64, bake: number, name: string): Promise<v
       fail = FetchFail.Refused;
       detail = res.status;
     } else if (body.byteLength > 0 && packed(body)) {
-      // Handing these on would spend a heap block and fail in the kernel's
-      // decoder, far from the one thing that is actually wrong.
-      declareUnsupported(UnsupportedReason.Encoding);
+      // Still in the encoding it was stored in: something between the bucket
+      // and here dropped the header that says so, since the edge decodes a
+      // body for a browser that cannot. The object's failure, not the
+      // browser's — and handing it on would spend a heap block and fail in the
+      // kernel's decoder, far from the one thing that is actually wrong.
+      console.warn(`[fetch] ${key}: the body arrived still packed, with no encoding to undo it`);
       outcome = FetchOutcome.Error;
-      fail = FetchFail.Shell;
+      fail = FetchFail.Decode;
     } else if (body.byteLength > 0) {
       held = hold_body(body);
       bytes = body.byteLength;

@@ -186,6 +186,9 @@ export const font = {
 export const weight = { regular: "400", medium: "500", semibold: "600" } as const;
 
 export const textStyle = {
+  /** What a whole page is about, where the page is one message: Title 2,
+   * semibold. */
+  title2: { fontFamily: FAMILY, fontSize: 20, lineHeight: 25, fontWeight: weight.semibold },
   /** A panel's heading: body size, semibold, like an iOS sheet title. */
   title: { fontFamily: FAMILY, fontSize: 15, lineHeight: 20, fontWeight: weight.semibold },
   /** What is read: a row's name, a result, a notice. */

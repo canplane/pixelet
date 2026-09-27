@@ -9,15 +9,14 @@
 
 import { Command, encode_gpu_create } from "@/kernel/abi/cmd.spec.ts";
 import { CORE_DOORBELL } from "@/kernel/mem.ts";
-import { acquireDevice, missingBeforeBoot } from "@/platform/web/webgpu.ts";
+import { acquireDevice } from "@/platform/web/webgpu.ts";
 import { request_frame } from "@/kernel/sched.ts";
-import { declareUnsupported, type UnsupportedReason } from "@/app/store/unsupported-store.ts";
 
-/** Why this browser cannot draw at all, before anything is started: what it
- * lacks outright, where the device's answer need not be waited for. */
-export function gpuMissing(): UnsupportedReason | null {
-  return missingBeforeBoot();
-}
+/** How long to wait before asking again when no adapter answers. Only a
+ * device lost after boot gets here — a browser with none never boots
+ * (main.tsx) — and a GPU process restarting or a driver resetting answers
+ * again within moments, so the page keeps asking rather than giving up. */
+const RETRY_MS = 1000;
 
 /** Asks for a device and tells the kernel when one answers, and again after
  * one is lost. */
@@ -28,13 +27,9 @@ export function gpuBoot(): void {
     request_frame();
   };
   void acquireDevice(lost).then((info) => {
-    if ("reason" in info) {
-      // The same end as a browser that cannot read the wire: nothing here is a
-      // moment to recover from, so it is said once, in front of everything,
-      // rather than left to a console nobody on that browser will open
-      // (app/unsupported.tsx).
-      console.error(`[gpu] ${info.detail}; nothing can be drawn`);
-      declareUnsupported(info.reason);
+    if (info === null) {
+      console.warn(`[gpu] no adapter answered; asking again in ${RETRY_MS} ms`);
+      setTimeout(gpuBoot, RETRY_MS);
       return;
     }
     CORE_DOORBELL.send(0, Command.GPU_CREATE, encode_gpu_create({ min_uniform_offset_alignment: info.align, timestamps: info.timestamps }));

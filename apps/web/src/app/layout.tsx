@@ -8,7 +8,6 @@ import { AppContext } from "./provider/context.ts";
 import { useBooted } from "./bootstrap.ts";
 import { useUiController } from "./hook/use-ui-controller.ts";
 import { ModalManager } from "./provider/modal-manager.tsx";
-import { UnsupportedNotice } from "./unsupported.tsx";
 import { KeyboardAway } from "@/shared/ui/keyboard.tsx";
 
 /** AppLayout props */
@@ -32,12 +31,6 @@ export function AppLayout(props: AppLayoutProps) {
         {/* Global modal host */}
         <ModalManager mergeUiController={mergeUiController} />
       </KeyboardAway>
-
-      {
-        /* Last, and over all of it: nothing below this is worth reading once
-          it renders. */
-      }
-      <UnsupportedNotice />
     </AppContext.Provider>
   );
 }
