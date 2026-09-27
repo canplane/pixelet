@@ -16,7 +16,22 @@ struct Draw {
   _p: u32,
 };
 
-@group(1) @binding(0) var<uniform> draw: Draw;
+// Held as vec4 words and read back by `draw()`: what the host and a shader
+// share has no room inside it for a driver to lay out its own way
+// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+@group(1) @binding(0) var<uniform> draw_words: array<vec4f, 2>;
+
+fn draw() -> Draw {
+  return Draw(
+    draw_words[0].xyz,
+    bitcast<u32>(draw_words[0].w),
+    bitcast<u32>(draw_words[1].x),
+    draw_words[1].y,
+    draw_words[1].z,
+    bitcast<u32>(draw_words[1].w),
+  );
+}
+
 @group(2) @binding(0) var skin: texture_2d<f32>;
 @group(2) @binding(1) var skin_sampler: sampler;
 @group(3) @binding(0) var<storage, read> block: array<u32>;
@@ -41,13 +56,13 @@ struct VertexOut {
 };
 
 fn lane(k: u32, i: u32) -> f32 {
-  return bitcast<f32>(block[draw.offset + k * draw.count + i]);
+  return bitcast<f32>(block[draw().offset + k * draw().count + i]);
 }
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
-  let n = draw.count;
-  let flags = (block[draw.offset + 5u * n + v.i / 4u] >> ((v.i % 4u) * 8u)) & 255u;
+  let n = draw().count;
+  let flags = (block[draw().offset + 5u * n + v.i / 4u] >> ((v.i % 4u) * 8u)) & 255u;
   var o: VertexOut;
   if ((flags & 1u) != 0u) {
     o.clip = vec4f(0.0, 0.0, -2.0, 1.0);
@@ -56,8 +71,8 @@ fn vs(v: VertexIn) -> VertexOut {
   let at = vec3f(lane(0u, v.i), lane(1u, v.i), lane(2u, v.i));
   let spin = lane(3u, v.i);
   let scale = lane(4u, v.i);
-  let world = on_globe(place_up(v.position * scale, spin) + at + draw.translation);
-  o.clip = frame.view_proj * vec4f(world, 1.0);
+  let world = on_globe(place_up(v.position * scale, spin) + at + draw().translation);
+  o.clip = frame().view_proj * vec4f(world, 1.0);
   o.uv = v.uv;
   o.normal = place_up(v.normal, spin);
   o.world_pos = world;
@@ -71,11 +86,11 @@ fn vs(v: VertexIn) -> VertexOut {
 
 @fragment
 fn fs(i: VertexOut) -> @location(0) vec4f {
-  if (dissolved(draw.visible, i.clip.xy)) {
+  if (dissolved(draw().visible, i.clip.xy)) {
     discard;
   }
   let albedo = textureSample(skin, skin_sampler, i.uv).rgb;
   let n = normalize(i.normal);
   let color = screen_ao(shade(albedo, n, i.world_pos, sun_lit(i.world_pos, n), vec3f(1.0), Seen(i.through, i.scattered, i.past, i.fill)), i.clip.xy);
-  return vec4f(finish(color, i.clip.xy), draw.opacity);
+  return vec4f(finish(color, i.clip.xy), draw().opacity);
 }

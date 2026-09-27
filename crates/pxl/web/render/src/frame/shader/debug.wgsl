@@ -7,7 +7,17 @@ struct Draw {
   translation: vec3f,
   _p: f32,
 };
-@group(1) @binding(0) var<uniform> draw: Draw;
+// Held as vec4 words and read back by `draw()`: what the host and a shader
+// share has no room inside it for a driver to lay out its own way
+// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+@group(1) @binding(0) var<uniform> draw_words: array<vec4f, 1>;
+
+fn draw() -> Draw {
+  return Draw(
+    draw_words[0].xyz,
+    draw_words[0].w,
+  );
+}
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
@@ -17,7 +27,7 @@ struct VertexOut {
 @vertex
 fn vs(@location(0) position: vec3f, @location(1) color: vec3f) -> VertexOut {
   var o: VertexOut;
-  o.clip = frame.view_proj * vec4f(on_globe(position + draw.translation), 1.0);
+  o.clip = frame().view_proj * vec4f(on_globe(position + draw().translation), 1.0);
   o.color = color;
   return o;
 }

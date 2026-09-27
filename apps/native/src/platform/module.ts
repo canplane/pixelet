@@ -26,6 +26,10 @@ interface PxlPlatform {
   textWidth(weight: u32, px: f32, text: string): f32;
   textRaster(weight: u32, px: f32, rgba: u32, text: string, x: f32, width: u32, height: u32, out: Uint8Array): void;
   headingAvailable(): boolean;
+  /** Android's: how much of the screen's bottom inset takes a touch — the
+   * navigation buttons' bar, or 0 with gestures — in density-independent
+   * pixels. */
+  tappableBottom(): f64;
 }
 
 export const PLATFORM: PxlPlatform = requireNativeModule<PxlPlatform>("PxlPlatform");

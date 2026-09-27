@@ -3,14 +3,14 @@
 import { Search } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
-import { Defs, RadialGradient, Rect, Stop, Svg } from "react-native-svg";
+import { Defs, LinearGradient, Mask, Rect, Stop, Svg } from "react-native-svg";
 
 import { useViewportTop } from "@platform/visual-viewport.ts";
 import { useAppContext } from "@/app/provider/context.ts";
 import { useKernel } from "@/kernel/shell.ts";
 import { Presence } from "@/shared/ui/motion/presence.tsx";
 import { LEAVE, SETTLE } from "@/shared/ui/motion/transition.ts";
-import { OutlinedIcon } from "@/shared/ui/outlined-icon.tsx";
+import { HaloIcon } from "@/shared/ui/halo.tsx";
 import { chrome, color } from "@/shared/ui/theme.ts";
 import { CurrentAddress } from "./current-address.tsx";
 import { useReverseGeocode } from "./use-reverse-geocode.ts";
@@ -30,19 +30,31 @@ export function TopOverlays() {
   const addressLabel = useReverseGeocode();
   const zooming = useKernel((s) => s.zooming);
   const { width } = useWindowDimensions();
-  const scrimWidth = Math.min(width - 2 * chrome.inset, SCRIM_WIDTH);
   const scrimDepth = top + chrome.control + SCRIM_TAIL;
+  // The fade across runs from `from` to the plateau's edge and back on the
+  // other side. On a phone the plateau is the whole width, and the fades lie
+  // off the screen.
+  const from = (width - Math.min(width, SCRIM_WIDTH)) / 2 - SCRIM_FADE;
+  const ramp = SCRIM_FADE / (width - 2 * from);
 
   return (
     <>
-      <View style={[styles.scrim, { top: -scrimDepth, left: (width - scrimWidth) / 2, width: scrimWidth, height: 2 * scrimDepth }]}>
+      <View style={[styles.scrim, { height: scrimDepth }]}>
         <Svg width="100%" height="100%">
           <Defs>
-            <RadialGradient id="scrim" cx="50%" cy="50%" r="50%">
-              {SCRIM_STOPS.map(([at, opacity]) => <Stop key={at} offset={at} stopColor={color.black} stopOpacity={opacity} />)}
-            </RadialGradient>
+            <LinearGradient id="scrim-down" x1="0" y1="0" x2="0" y2="1">
+              {SCRIM_EASE.map(([at, k]) => <Stop key={at} offset={at} stopColor={color.black} stopOpacity={SCRIM_OPACITY * (1 - k)} />)}
+            </LinearGradient>
+            <LinearGradient id="scrim-across" gradientUnits="userSpaceOnUse" x1={from} y1={0} x2={width - from} y2={0}>
+              {[...SCRIM_EASE.map(([at, k]) => [ramp * at, k] as const), ...SCRIM_EASE.toReversed().map(([at, k]) => [1 - ramp * at, k] as const)].map(([at, k], i) => (
+                <Stop key={i} offset={at} stopColor={color.white} stopOpacity={k} />
+              ))}
+            </LinearGradient>
+            <Mask id="scrim-mask">
+              <Rect width="100%" height="100%" fill="url(#scrim-across)" />
+            </Mask>
           </Defs>
-          <Rect width="100%" height="100%" fill="url(#scrim)" />
+          <Rect width="100%" height="100%" fill="url(#scrim-down)" mask="url(#scrim-mask)" />
         </Svg>
       </View>
 
@@ -61,7 +73,7 @@ export function TopOverlays() {
           }
           <Pressable onPress={ui.openSearchModal} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.title}>
             <View style={styles.search}>
-              <OutlinedIcon icon={Search} size={14} color={color.white} />
+              <HaloIcon icon={Search} size={14} strokeWidth={2.5} color={color.white} />
               <CurrentAddress label={addressLabel} />
             </View>
             <SensorStatus />
@@ -80,24 +92,26 @@ export function TopOverlays() {
   );
 }
 
-/** The dark the title hangs in: half an ellipse from the middle of the
- * screen's top edge, fading down past the controls and out to either side.
- * What lets white read over a bright ground, as a photo's caption does,
- * without blurring the map, drawing an edge across it, or darkening the
- * width of a wide screen where nothing is. The ellipse's upper half is off
- * the screen. It eases out rather than falling in a line, whose end the eye
- * reads as an edge: flat at both ends, smoothstep's curve, sampled into
- * stops. */
+/** The dark behind the top controls, so white text and glyphs read over a
+ * bright ground without a blur or an edge across the map. It fades down from
+ * the screen's top edge to past the controls, and across it is flat over at
+ * most SCRIM_WIDTH about the center and fades out beyond: on a phone that is
+ * the whole width, status bar included, as a system's top protection is; on
+ * a wide screen it stays near the title instead of darkening empty map.
+ * Every fade follows smoothstep, sampled into stops, since a straight fade's
+ * end reads as an edge. */
 const SCRIM_OPACITY = 0.45;
 const SCRIM_WIDTH = 560;
+const SCRIM_FADE = 240;
 const SCRIM_TAIL = 32;
-const SCRIM_STOPS = Array.from({ length: 9 }, (_, i) => {
+/** [position, smoothstep(position)] from 0 to 1. */
+const SCRIM_EASE = Array.from({ length: 9 }, (_, i) => {
   const t = i / 8;
-  return [t, SCRIM_OPACITY * (1 - t * t * (3 - 2 * t))] as const;
+  return [t, t * t * (3 - 2 * t)] as const;
 });
 
 const styles = StyleSheet.create({
-  scrim: { position: "absolute", zIndex: 49, pointerEvents: "none" },
+  scrim: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 49, pointerEvents: "none" },
   // A layer takes no touches itself, only what stands on it (BusyDim): the
   // map between the controls is still the map.
   left: { position: "absolute", left: chrome.inset, zIndex: 50, alignItems: "flex-start", gap: 12 },

@@ -3,7 +3,10 @@
 import { requireNativeView } from "expo";
 import type { ComponentType, ReactNode } from "react";
 import type { ViewProps } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { bottomRest } from "@/shared/ui/bottom-rest.ts";
+
+import { useSafeArea } from "./safe-area.ts";
 
 interface AboveKeyboardProps {
   /** From the screen's side and bottom edges, and from the keyboard's top. */
@@ -14,25 +17,29 @@ interface AboveKeyboardProps {
 }
 
 /** The view that stands on the keyboard (modules/platform/ios/KeyboardDock.swift). */
-const KeyboardDock: ComponentType<ViewProps> = requireNativeView("PxlPlatform", "KeyboardDock");
+const KeyboardDock: ComponentType<ViewProps & { clearance: number; rest: number }> = requireNativeView("PxlPlatform", "KeyboardDock");
 
 /**
- * A layer across the bottom of the screen that stands on the keyboard while
- * one is open, and over the home indicator while none is. Laid out here where
- * it stands with no keyboard; the keyboard's lift is the native view's own,
- * moved in the keyboard's animation as the keyboard says it is going, so the
- * layer and the keys move as one — which a layout set from here, a thread hop
- * after the keys had left and on a curve of React Native's, did not.
+ * A layer across the bottom of the screen that stands `inset` over the
+ * keyboard while one is open, and rests where the bottom chrome does while
+ * none is (shared/ui/bottom-rest.ts). Laid out here where it rests, which
+ * the native view is told (`rest`) so that it lifts from there. The lift is
+ * the native view's own, moved in the keyboard's animation as the keyboard
+ * says it is going, so the layer and the keys move as one — which a layout
+ * set from here, a thread hop after the keys had left and on a curve of
+ * React Native's, did not.
  */
 export function AboveKeyboard({ inset, lift = 0, children }: AboveKeyboardProps) {
-  const { bottom } = useSafeAreaInsets();
+  const rest = bottomRest(useSafeArea(), inset);
   return (
     <KeyboardDock
+      clearance={inset}
+      rest={rest}
       style={{
         position: "absolute",
         left: inset,
         right: inset,
-        bottom: inset + lift + bottom,
+        bottom: rest + lift,
         zIndex: 40,
         pointerEvents: "box-none",
       }}

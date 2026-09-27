@@ -13,7 +13,7 @@ const MULTISCATTER_STEPS: i32 = 20;
 fn fs(v: TableOut) -> @location(0) vec4f {
   let uv = v.clip.xy / MULTISCATTER_SIZE;
   let mu_s = unit_of(uv.x, MULTISCATTER_SIZE.x) * 2.0 - 1.0;
-  let r = atmos.bottom_radius + unit_of(uv.y, MULTISCATTER_SIZE.y) * (atmos.top_radius - atmos.bottom_radius);
+  let r = atmos().bottom_radius + unit_of(uv.y, MULTISCATTER_SIZE.y) * (atmos().top_radius - atmos().bottom_radius);
   let sun = vec3f(sqrt(max(1.0 - mu_s * mu_s, 0.0)), 0.0, mu_s);
   let origin = vec3f(0.0, 0.0, r);
 
@@ -34,7 +34,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
       for (var i = 0; i < MULTISCATTER_STEPS; i++) {
         let p = origin + dir * ((f32(i) + 0.5) * dt);
         let pr = length(p);
-        let m = medium_at(pr - atmos.bottom_radius);
+        let m = medium_at(pr - atmos().bottom_radius);
         let step = exp(-m.extinction * dt);
         // The analytic integral over the step, of a source constant across
         // it: (S - S * T) / extinction.
@@ -48,7 +48,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
         let p = origin + dir * d;
         let n = normalize(p);
         let lit = sun_transmittance(length(p), dot(n, sun));
-        second += through * lit * max(dot(n, sun), 0.0) * atmos.ground_albedo / PI;
+        second += through * lit * max(dot(n, sun), 0.0) * atmos().ground_albedo / PI;
       }
     }
   }

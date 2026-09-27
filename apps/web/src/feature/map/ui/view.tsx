@@ -15,6 +15,7 @@ import { useSafeArea } from "@platform/safe-area.ts";
 import { useViewportTop } from "@platform/visual-viewport.ts";
 import { WorldSurface } from "@platform/surface.tsx";
 import { ProfilerOverlay } from "@/feature/debug/profiler/overlay.tsx";
+import { bottomRest } from "@/shared/ui/bottom-rest.ts";
 import { Toaster } from "@/shared/ui/toast/toaster.tsx";
 import { chrome } from "@/shared/ui/theme.ts";
 
@@ -36,7 +37,7 @@ const PANEL_GAP_PX = 12;
  * panel is not what one types beside. */
 function BetweenChrome({ children }: { children: ReactNode }) {
   const top = chrome.inset + useViewportTop() + chrome.control + PANEL_GAP_PX;
-  const bottom = chrome.inset + useSafeArea().bottom + MODE_BAR_HEIGHT_PX + PANEL_GAP_PX;
+  const bottom = bottomRest(useSafeArea(), chrome.inset) + MODE_BAR_HEIGHT_PX + PANEL_GAP_PX;
   return <View style={[styles.between, { top, bottom }]}>{children}</View>;
 }
 

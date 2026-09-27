@@ -9,7 +9,7 @@ fn transmittance_to_top(r: f32, mu: f32) -> vec3f {
 // across its own width rather than at its center, as look/atmosphere.rs's
 // sun_light has it, so the air's light does not switch off in one frame.
 fn sun_transmittance(r: f32, mu_s: f32) -> vec3f {
-  let horizon = -sqrt(max(1.0 - (atmos.bottom_radius / r) * (atmos.bottom_radius / r), 0.0));
-  let above = clamp((mu_s - horizon) / (2.0 * atmos.sun_angular_radius) + 0.5, 0.0, 1.0);
+  let horizon = -sqrt(max(1.0 - (atmos().bottom_radius / r) * (atmos().bottom_radius / r), 0.0));
+  let above = clamp((mu_s - horizon) / (2.0 * atmos().sun_angular_radius) + 0.5, 0.0, 1.0);
   return transmittance_to_top(r, max(mu_s, horizon + 1e-4)) * above;
 }

@@ -29,7 +29,20 @@ struct Clouds {
   _p2: f32,
 };
 
-@group(0) @binding(1) var<uniform> clouds: Clouds;
+// Held as vec4 words and read back by `clouds()`: what the host and a shader
+// share has no room inside it for a driver to lay out its own way
+// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+@group(0) @binding(1) var<uniform> clouds_words: array<vec4f, 5>;
+
+fn clouds() -> Clouds {
+  return Clouds(
+    mat3x3f(clouds_words[0].xyz, clouds_words[1].xyz, clouds_words[2].xyz),
+    clouds_words[3].xyz,
+    clouds_words[3].w,
+    clouds_words[4].xyz,
+    clouds_words[4].w,
+  );
+}
 
 const CLOUD_ALBEDO: f32 = 0.9;
 // Past this, from under the layer or close over it, the layer is too thin a
@@ -71,26 +84,26 @@ fn lit_by(toward: vec3f, view: vec3f, arriving: vec3f, shown_at: vec3f) -> vec3f
 
 @fragment
 fn fs(v: CloudOut) -> @location(0) vec4f {
-  let dir = normalize(clouds.ray * vec3f(v.ndc, 1.0));
+  let dir = normalize(clouds().ray * vec3f(v.ndc, 1.0));
 
   // The layer's sphere from the camera's: the near crossing from above, the
   // way out from below.
   let r0 = camera_r();
-  let shell = atmos.bottom_radius + atmos.cloud_altitude_km;
-  let mu = dot(dir, atmos.up);
+  let shell = atmos().bottom_radius + atmos().cloud_altitude_km;
+  let mu = dot(dir, atmos().up);
   let disc = r0 * r0 * (mu * mu - 1.0) + shell * shell;
   var t = -1.0;
   if (disc >= 0.0) {
     let root = sqrt(disc);
     t = select(-r0 * mu + root, -r0 * mu - root, r0 > shell);
   }
-  let reach = CLOUD_REACH_KM + 3.0 * max(atmos.camera_altitude - atmos.cloud_altitude_km, 0.0);
+  let reach = CLOUD_REACH_KM + 3.0 * max(atmos().camera_altitude - atmos().cloud_altitude_km, 0.0);
 
   // Where the ray meets the layer on the cloud field's lattice
   // (cloud_field.wgsl), and how many lattice units a pixel spans: a
   // derivative, so taken before any pixel is discarded.
-  let du = t / atmos.km_per_u;
-  let p = cloud_lattice(frame.camera_pos + dir * du);
+  let du = t / atmos().km_per_u;
+  let p = cloud_lattice(frame().camera_pos + dir * du);
   let footprint = max(length(fwidth(p)), 1e-6);
   if (t <= 0.0 || t > reach) {
     discard;
@@ -110,11 +123,11 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   // point the eye sees, at half the weight light through it carries: an
   // opacity of 1 - exp(-depth) makes that 1 - sqrt(1 - opacity).
   let self_shade = select(1.0, mix(1.0, 0.3, 1.0 - sqrt(1.0 - opacity)), below);
-  var light = lit_by(atmos.sun_dir, dir, clouds.sun_at, shown());
+  var light = lit_by(atmos().sun_dir, dir, clouds().sun_at, shown());
   var sky = zenith_sky();
-  if (atmos.moon_light > 0.0) {
-    light += lit_by(atmos.moon_dir, dir, clouds.moon_at, moon_shown());
-    sky += moon_view(atmos.up) * moon_shown();
+  if (atmos().moon_light > 0.0) {
+    light += lit_by(atmos().moon_dir, dir, clouds().moon_at, moon_shown());
+    sky += moon_view(atmos().up) * moon_shown();
   }
   light *= self_shade;
   // The sky above lights the layer as well: its zenith, half of it thrown
@@ -124,11 +137,11 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   // it lies over: at night the air's light is all but gone, the ground is
   // lit by the fill, and a cloud without it read as a black blot on it. By
   // day the sun has already taken the layer past white.
-  let fill = (frame.ambient + sky_fill()) / PI + frame.floor;
+  let fill = (frame().ambient + sky_fill()) / PI + frame().floor;
   var color = CLOUD_ALBEDO * (light + sky * 0.5 + fill);
 
   // Where the layer lies in the root frame, for the air in front of it.
-  let world = frame.camera_pos + dir * du;
+  let world = frame().camera_pos + dir * du;
   color = aerial(color, world);
   return vec4f(finish(shoulder(color), v.clip.xy), alpha);
 }

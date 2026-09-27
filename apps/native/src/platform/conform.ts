@@ -7,6 +7,9 @@
  * lacked a name, or took another shape, would pass the check and fail only
  * when Metro ran it; root deno.jsonc's check:native checks this file and fails
  * there instead. A module may export more than the web's does, never less.
+ * A module's Android file beside it — `panel.android.tsx` beside `panel.tsx`
+ * — is what Metro takes for Android (metro.config.js); it is held to the
+ * web's the same way.
  *
  * Nothing imports this. It is a check, not code, and Metro never sees it.
  */
@@ -58,6 +61,13 @@ import * as ToggleRow from "./toggle-row.tsx";
 import * as TextField from "./text-field.ts";
 import * as Typeface from "./typeface.ts";
 import * as VisualViewport from "./visual-viewport.ts";
+import * as GlassAndroid from "./glass.android.tsx";
+import * as PaletteAndroid from "./palette.android.ts";
+import * as PanelAndroid from "./panel.android.tsx";
+import * as PillAndroid from "./pill.android.tsx";
+import * as SegmentedAndroid from "./segmented.android.tsx";
+import * as ToggleRowAndroid from "./toggle-row.android.tsx";
+import * as TextFieldAndroid from "./text-field.android.ts";
 
 export const CONFORMS = [
   AboveKeyboard satisfies typeof WebAboveKeyboard,
@@ -83,4 +93,11 @@ export const CONFORMS = [
   TextField satisfies typeof WebTextField,
   Typeface satisfies typeof WebTypeface,
   VisualViewport satisfies typeof WebVisualViewport,
+  GlassAndroid satisfies typeof WebGlass,
+  PaletteAndroid satisfies typeof WebPalette,
+  PanelAndroid satisfies typeof WebPanel,
+  PillAndroid satisfies typeof WebPill,
+  SegmentedAndroid satisfies typeof WebSegmented,
+  ToggleRowAndroid satisfies typeof WebToggleRow,
+  TextFieldAndroid satisfies typeof WebTextField,
 ];

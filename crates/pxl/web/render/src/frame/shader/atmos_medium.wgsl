@@ -75,12 +75,53 @@ struct Atmosphere {
   haze_scale_height: f32,
 };
 
+fn atmos() -> Atmosphere {
+  return Atmosphere(
+    atmos_words[0].xyz,
+    atmos_words[0].w,
+    atmos_words[1].xyz,
+    atmos_words[1].w,
+    atmos_words[2].xyz,
+    atmos_words[2].w,
+    atmos_words[3].xyz,
+    atmos_words[3].w,
+    atmos_words[4].x,
+    atmos_words[4].y,
+    atmos_words[4].z,
+    atmos_words[4].w,
+    atmos_words[5].x,
+    atmos_words[5].y,
+    atmos_words[5].z,
+    atmos_words[5].w,
+    atmos_words[6].x,
+    atmos_words[6].y,
+    atmos_words[6].z,
+    atmos_words[6].w,
+    atmos_words[7].xyz,
+    atmos_words[7].w,
+    atmos_words[8].xyz,
+    atmos_words[8].w,
+    atmos_words[9].xyz,
+    atmos_words[9].w,
+    atmos_words[10].xyz,
+    atmos_words[10].w,
+    bitcast<vec2u>(atmos_words[11].xy),
+    atmos_words[11].zw,
+    atmos_words[12].x,
+    bitcast<u32>(atmos_words[12].y),
+    atmos_words[12].z,
+    atmos_words[12].w,
+    atmos_words[13].x,
+    atmos_words[13].y,
+  );
+}
+
 // The camera's radius from the planet's center: over the ground, and above
 // the atmosphere too, where the view is from space — the sky-view table is
 // drawn from there (atmos_skyview.wgsl marches from where a ray enters the
 // air) and the ground and the horizon are where the planet puts them.
 fn camera_r() -> f32 {
-  return atmos.bottom_radius + max(atmos.camera_altitude, 0.001);
+  return atmos().bottom_radius + max(atmos().camera_altitude, 0.001);
 }
 
 struct Medium {
@@ -91,14 +132,14 @@ struct Medium {
 };
 
 fn medium_at(h: f32) -> Medium {
-  let r = exp(-h / atmos.rayleigh_scale_height);
-  let m = exp(-h / atmos.mie_scale_height);
-  let o = max(0.0, 1.0 - abs(h - atmos.ozone_center) / atmos.ozone_half_width);
+  let r = exp(-h / atmos().rayleigh_scale_height);
+  let m = exp(-h / atmos().mie_scale_height);
+  let o = max(0.0, 1.0 - abs(h - atmos().ozone_center) / atmos().ozone_half_width);
   var out: Medium;
-  out.rayleigh = atmos.rayleigh_scattering * r;
-  out.mie = vec3f(atmos.mie_scattering * m);
+  out.rayleigh = atmos().rayleigh_scattering * r;
+  out.mie = vec3f(atmos().mie_scattering * m);
   out.scattering = out.rayleigh + out.mie;
-  out.extinction = out.rayleigh + vec3f(atmos.mie_extinction * m) + atmos.ozone_absorption * o;
+  out.extinction = out.rayleigh + vec3f(atmos().mie_extinction * m) + atmos().ozone_absorption * o;
   return out;
 }
 
@@ -109,7 +150,7 @@ fn rayleigh_phase(c: f32) -> f32 {
 // Cornette-Shanks: Henyey-Greenstein's shape with Rayleigh's symmetry
 // folded in, which is what keeps a hazy sky bright opposite the sun too.
 fn mie_phase(c: f32) -> f32 {
-  let g = atmos.mie_g;
+  let g = atmos().mie_g;
   let k = 3.0 * INV_4PI / 2.0 * (1.0 - g * g) / (2.0 + g * g);
   return k * (1.0 + c * c) / pow(max(1.0 + g * g - 2.0 * g * c, 1e-4), 1.5);
 }
@@ -126,15 +167,15 @@ fn to_sphere(r: f32, mu: f32, radius: f32) -> f32 {
 
 // The model's own surface, which the tables are baked against.
 fn meets_ground(r: f32, mu: f32) -> bool {
-  return meets_sphere(r, mu, atmos.bottom_radius);
+  return meets_sphere(r, mu, atmos().bottom_radius);
 }
 
 fn to_top(r: f32, mu: f32) -> f32 {
-  return max(-r * mu + sqrt(max(r * r * (mu * mu - 1.0) + atmos.top_radius * atmos.top_radius, 0.0)), 0.0);
+  return max(-r * mu + sqrt(max(r * r * (mu * mu - 1.0) + atmos().top_radius * atmos().top_radius, 0.0)), 0.0);
 }
 
 fn to_ground(r: f32, mu: f32) -> f32 {
-  return to_sphere(r, mu, atmos.bottom_radius);
+  return to_sphere(r, mu, atmos().bottom_radius);
 }
 
 // The surface a view ray is drawn against: the model's raised to the ground
@@ -142,7 +183,7 @@ fn to_ground(r: f32, mu: f32) -> f32 {
 // radius they were baked at, and a meter of ground against a planet's radius
 // is nothing to the air along a ray.
 fn land_radius() -> f32 {
-  return atmos.bottom_radius + atmos.land_altitude_km;
+  return atmos().bottom_radius + atmos().land_altitude_km;
 }
 
 fn meets_land(r: f32, mu: f32) -> bool {
@@ -171,8 +212,8 @@ const SKY_VIEW_SIZE: vec2f = vec2f(192.0, 108.0);
 // distance to the top through the range a height allows, which spends the
 // table's rows where the transmittance changes and not where it is flat.
 fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {
-  let bottom = atmos.bottom_radius;
-  let top = atmos.top_radius;
+  let bottom = atmos().bottom_radius;
+  let top = atmos().top_radius;
   // Above the top there is no air left to cross: what is left from there is
   // what is left from the top.
   let r = min(r_in, top);
@@ -188,8 +229,8 @@ fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {
 
 // The inverse, for the pass that draws the table: the (r, mu) a texel is.
 fn transmittance_r_mu(uv: vec2f) -> vec2f {
-  let bottom = atmos.bottom_radius;
-  let top = atmos.top_radius;
+  let bottom = atmos().bottom_radius;
+  let top = atmos().top_radius;
   let x_mu = unit_of(uv.x, TRANSMITTANCE_SIZE.x);
   let x_r = unit_of(uv.y, TRANSMITTANCE_SIZE.y);
   let h = sqrt(top * top - bottom * bottom);
@@ -208,7 +249,7 @@ fn transmittance_r_mu(uv: vec2f) -> vec2f {
 // The multiple scattering's table: the sun's cosine across, the altitude up.
 fn multiscatter_uv(r: f32, mu_s: f32) -> vec2f {
   let x = mu_s * 0.5 + 0.5;
-  let y = (r - atmos.bottom_radius) / (atmos.top_radius - atmos.bottom_radius);
+  let y = (r - atmos().bottom_radius) / (atmos().top_radius - atmos().bottom_radius);
   return vec2f(coord_of(clamp(x, 0.0, 1.0), MULTISCATTER_SIZE.x), coord_of(clamp(y, 0.0, 1.0), MULTISCATTER_SIZE.y));
 }
 
@@ -216,7 +257,7 @@ fn multiscatter_uv(r: f32, mu_s: f32) -> vec2f {
 // the sky-view table splits its rows there, the sky above and the ground
 // below.
 fn horizon_dip(r: f32) -> f32 {
-  let v_horizon = sqrt(max(r * r - atmos.bottom_radius * atmos.bottom_radius, 0.0));
+  let v_horizon = sqrt(max(r * r - atmos().bottom_radius * atmos().bottom_radius, 0.0));
   return acos(clamp(v_horizon / r, -1.0, 1.0));
 }
 

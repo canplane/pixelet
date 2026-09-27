@@ -52,9 +52,18 @@ function send_permission(sensor: Sensor, answer: PermissionAnswer): void {
 /** The permission as last seen: what a return to the app compares against. */
 let granted: boolean | null = null;
 
-/** Whether the OS lets the app read where it is, asking the first time. */
+/** Whether the OS lets the app read where it is, asking only the first time.
+ *
+ * Asking is a system screen over the app even when the answer is already
+ * given: Android opens its permission activity and closes it at once, and
+ * the app pauses and resumes under it. A resume restarts the sensors, and a
+ * sensor that asked on every start asked again — seven times a second, the
+ * position never landing. So what is already answered is only read, as a
+ * page's permission is; a refusal is not asked again, and a grant made in the
+ * settings reaches the kernel on the way back (`recheck`). */
 async function permitted(): Promise<boolean> {
-  const { status } = await Location.requestForegroundPermissionsAsync();
+  const now = await Location.getForegroundPermissionsAsync();
+  const { status } = now.status === Location.PermissionStatus.UNDETERMINED ? await Location.requestForegroundPermissionsAsync() : now;
   granted = status === Location.PermissionStatus.GRANTED;
   return granted;
 }

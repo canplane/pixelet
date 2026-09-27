@@ -380,3 +380,155 @@ fn every_shader_that_places_the_world_lays_it_on_the_planet() {
         assert!(reaches(&module, &vs.function, "on_globe_of"), "shader {kind} places the world off the planet");
     }
 }
+
+/// Whether a type the host shares with a shader has no room inside it: its
+/// words run end to end, so no layout rule has a gap to place differently.
+/// A four-byte scalar, a four-lane vector of them, an array of those whose
+/// stride is its element, or a struct of those whose members follow one
+/// another with nothing between. A `vec3`, a matrix and a padded struct are
+/// where a Galaxy S23's Vulkan read what the WGSL did not say
+/// (issue/20260927-a-matrix-the-driver-reads-its-own-way.md).
+fn has_no_room(module: &Module, ty: naga::Handle<naga::Type>) -> bool {
+    let ctx = module.to_ctx();
+    match &module.types[ty].inner {
+        TypeInner::Scalar(s) => s.width == 4,
+        TypeInner::Vector { size: VectorSize::Quad, scalar } => scalar.width == 4,
+        TypeInner::Array { base, stride, .. } => has_no_room(module, *base) && *stride == module.types[*base].inner.size(ctx),
+        TypeInner::Struct { members, span } => {
+            let mut end = 0;
+            for m in members {
+                if m.offset != end || !has_no_room(module, m.ty) {
+                    return false;
+                }
+                end += module.types[m.ty].inner.size(ctx);
+            }
+            end == *span
+        }
+        _ => false,
+    }
+}
+
+#[test]
+fn what_a_shader_shares_with_the_host_has_no_room_inside_it() {
+    for kind in 0..SHADERS {
+        let (module, _) = compile(kind);
+        for (_, var) in module.global_variables.iter() {
+            if matches!(var.space, AddressSpace::Uniform | AddressSpace::Storage { .. }) {
+                let name = var.name.as_deref().unwrap_or("?");
+                assert!(has_no_room(&module, var.ty), "shader {kind}: `{name}` is a type a driver may lay out its own way");
+            }
+        }
+    }
+}
+
+/// The floats of the words global an expression reads, in order: a load of a
+/// word or of a lane, and what a swizzle, a lane, a bitcast or a constructor
+/// makes of those.
+fn floats_read(f: &naga::Function, e: naga::Handle<naga::Expression>) -> Vec<u32> {
+    use naga::Expression as E;
+    // A pointer into the words: how deep it is (0 the array, 1 a word, 2 a
+    // lane) and the float it starts at.
+    fn place(f: &naga::Function, e: naga::Handle<naga::Expression>) -> Option<(u32, u32)> {
+        let index = |i: naga::Handle<naga::Expression>| match f.expressions[i] {
+            E::Literal(naga::Literal::U32(v)) => v,
+            E::Literal(naga::Literal::I32(v)) => v as u32,
+            E::Literal(naga::Literal::AbstractInt(v)) => v as u32,
+            ref other => panic!("a constant index, not {other:?}"),
+        };
+        let step = |base, i: u32| {
+            let (depth, at) = place(f, base)?;
+            Some(match depth {
+                0 => (1, i * 4),
+                1 => (2, at + i),
+                _ => panic!("no deeper than a lane"),
+            })
+        };
+        match f.expressions[e] {
+            E::GlobalVariable(_) => Some((0, 0)),
+            E::AccessIndex { base, index: i } => step(base, i),
+            E::Access { base, index: i } => step(base, index(i)),
+            _ => None,
+        }
+    }
+    match f.expressions[e] {
+        E::Load { pointer } => match place(f, pointer) {
+            Some((1, at)) => (at..at + 4).collect(),
+            Some((2, at)) => vec![at],
+            other => panic!("a load of a word or a lane, not {other:?}"),
+        },
+        E::Swizzle { size, vector, pattern } => {
+            let v = floats_read(f, vector);
+            pattern[..size as usize].iter().map(|c| v[*c as usize]).collect()
+        }
+        E::AccessIndex { base, index } => vec![floats_read(f, base)[index as usize]],
+        E::As { expr, convert: None, .. } => floats_read(f, expr),
+        E::Compose { ref components, .. } => components.iter().flat_map(|c| floats_read(f, *c)).collect(),
+        ref other => panic!("{other:?} reads no word"),
+    }
+}
+
+/// The floats a value of `ty` at byte `offset` lies on, as WGSL lays it out:
+/// a matrix's columns each start on their alignment.
+fn floats_of(module: &Module, ty: naga::Handle<naga::Type>, offset: u32) -> Vec<u32> {
+    let at = offset / 4;
+    match module.types[ty].inner {
+        TypeInner::Scalar(_) => vec![at],
+        TypeInner::Vector { size, .. } => (at..at + size as u32).collect(),
+        TypeInner::Matrix { columns, rows, .. } => {
+            let column = if rows == VectorSize::Bi { 2 } else { 4 };
+            (0..columns as u32).flat_map(|c| (0..rows as u32).map(move |r| at + c * column + r)).collect()
+        }
+        ref other => panic!("no field of {other:?} in a shared block"),
+    }
+}
+
+/// Each shared block read back by its function (`frame()` for the `Frame`
+/// its words hold): every field is the word and the lane WGSL lays that
+/// field at, so the struct the Rust's offsets are held against by the tests
+/// above is the struct the shader reads.
+#[test]
+fn every_block_reads_each_field_from_where_it_lies() {
+    let blocks = [
+        (SHADER_CHUNK, "frame", "Frame"),
+        (SHADER_SKY, "atmos", "Atmosphere"),
+        (SHADER_ATMOS_TRANSMITTANCE, "atmos", "Atmosphere"),
+        (SHADER_CLOUDS, "clouds", "Clouds"),
+        (SHADER_AO_SAMPLE, "ao", "Ao"),
+        (SHADER_BADGE, "badge", "Badge"),
+        (SHADER_DECOR, "draw", "Draw"),
+        (SHADER_DEBUG, "draw", "Draw"),
+        (SHADER_PUCK_ZONE, "draw", "Draw"),
+        (SHADER_SKINNED, "draw", "Draw"),
+        (SHADER_SKY, "sky", "Sky"),
+        (SHADER_STARS, "stars", "Stars"),
+    ];
+    for (kind, fun, block) in blocks {
+        let (module, _) = compile(kind);
+        let (_, f) = module
+            .functions
+            .iter()
+            .find(|(_, f)| f.name.as_deref() == Some(fun))
+            .unwrap_or_else(|| panic!("shader {kind}: fn {fun}"));
+        let ty = f.result.as_ref().expect("a block").ty;
+        assert_eq!(module.types[ty].name.as_deref(), Some(block), "shader {kind}: {fun}() is a {block}");
+        let TypeInner::Struct { ref members, .. } = module.types[ty].inner else {
+            panic!("{block} is a struct")
+        };
+        let value = f
+            .body
+            .iter()
+            .find_map(|st| match st {
+                naga::Statement::Return { value } => *value,
+                _ => None,
+            })
+            .expect("a return");
+        let naga::Expression::Compose { ref components, .. } = f.expressions[value] else {
+            panic!("{fun}() returns a {block} it builds")
+        };
+        assert_eq!(components.len(), members.len(), "shader {kind}: {fun}() gives every field");
+        for (m, c) in members.iter().zip(components) {
+            let name = m.name.as_deref().unwrap_or("?");
+            assert_eq!(floats_read(f, *c), floats_of(&module, m.ty, m.offset), "shader {kind}: {block}.{name} is read from where it lies");
+        }
+    }
+}
