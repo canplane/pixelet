@@ -48,12 +48,17 @@ const FIELD_PX = 384;
 /** The message pill open: its glyph's slot, the field, and room after it. */
 const MESSAGE_OPEN_PX = MODE_BAR_HEIGHT_PX + FIELD_PX + 16;
 
-/** How far above the bar the size flyout's bottom stands. */
+/** How far above the swatch it was opened from the size flyout's bottom
+ * stands. */
 const FLYOUT_LIFT_PX = 20;
-const FLYOUT_ITEM_PX = 40;
+/** A size's slot, which a finger picks: the least target. */
+const FLYOUT_ITEM_PX = chrome.target;
 const FLYOUT_GAP_PX = 8;
 const FLYOUT_PAD_Y = 8;
 const FLYOUT_WIDTH = FLYOUT_ITEM_PX + 12;
+/** The flyout's foot over the bar's bottom: FLYOUT_LIFT_PX over the swatch,
+ * which is centered in the bar. */
+const FLYOUT_FOOT = (MODE_BAR_HEIGHT_PX + ITEM) / 2 + FLYOUT_LIFT_PX;
 /** A press held this long on a swatch opens its sizes. */
 const FLYOUT_HOLD_MS = 150;
 /** A finger that moves this far first decides the gesture: up opens the
@@ -77,30 +82,37 @@ const enum Slot {
   Send = 2,
 }
 
-/** Each size tier's mark in the flyout, a dot, the coarsest largest: one per
- * tier the kernel has, so a fifth tier needs its mark named here. */
-const SIZE_MARKS = [24, 16, 8, 4];
+/** A size tier's mark in the flyout, a dot: a scale of sizes in general,
+ * not a picture of the block. Its area halves with the tier, so each step
+ * reads as one and the finest stays large enough to see, where halving the
+ * width left the finest a speck: 28, 20, 14, 10. */
+const MARK_COARSEST = 28;
+function sizeMark(tier: u32): f64 {
+  return Math.round(MARK_COARSEST / Math.SQRT2 ** tier);
+}
 
-/** The tiers top to bottom: coarsest first, as the marks shrink downward. */
+/** The tiers top to bottom: finest first, so the coarsest stands at the
+ * flyout's foot, nearest the swatch. */
 function sizeTiers(count: u32): u32[] {
   return Array.from({ length: count }, (_, i) => count - 1 - i);
 }
 
-/** Where the size flyout stands, in the bar's frame and in the window's: its
- * center over the swatch, and the bar's top, which its foot stands above. */
-interface FlyoutAt {
+/** The size flyout while it is open: its center over the swatch, in the
+ * bar's frame and in the window's, its foot in the window's, and the tier the
+ * finger is over. */
+interface Flyout {
   left: f64;
   centerX: f64;
-  barTop: f64;
+  foot: f64;
+  hover: u32 | null;
 }
 
 /** The tier under a point in the window, or null: the flyout's items are a
- * fixed pitch above the bar, so this is arithmetic on the point, and nothing
- * is measured while the finger moves. */
-function tierAt(at: FlyoutAt, count: u32, x: f64, y: f64): u32 | null {
+ * fixed pitch above the swatch, so this is arithmetic on the point, and
+ * nothing is measured while the finger moves. */
+function tierAt(at: Flyout, count: u32, x: f64, y: f64): u32 | null {
   if (Math.abs(x - at.centerX) > FLYOUT_WIDTH / 2) return null;
-  const bottom = at.barTop - FLYOUT_LIFT_PX;
-  const top = bottom - (2 * FLYOUT_PAD_Y + count * FLYOUT_ITEM_PX + (count - 1) * FLYOUT_GAP_PX);
+  const top = at.foot - (2 * FLYOUT_PAD_Y + count * FLYOUT_ITEM_PX + (count - 1) * FLYOUT_GAP_PX);
   const along = y - top - FLYOUT_PAD_Y;
   if (along < 0) return null;
   const row = Math.floor(along / (FLYOUT_ITEM_PX + FLYOUT_GAP_PX));
@@ -112,23 +124,14 @@ function tierAt(at: FlyoutAt, count: u32, x: f64, y: f64): u32 | null {
  * is over is marked, and the one it lifts on is the size placed from then
  * on. Drawn from the bar rather than from the swatch, which sits in a
  * horizontally scrolling strip that clips what stands outside it. */
-function SizeFlyout({ shown, hover }: { shown: boolean; hover: u32 | null }) {
+function SizeFlyout({ hover }: { hover: u32 | null }) {
   const objectTier = useUiStore((s) => s.objectTier);
   const sizes = useKernel((s) => s.object_sizes);
 
   return (
-    <Backing
-      fill={STRIP.ground}
-      material={material.flyout}
-      tint={STRIP.ground}
-      place={BackingPlace.OverMap}
-      fade={shown ? 1 : 0}
-      fadeFrom={0}
-      transition={shown ? SNAP : LEAVE}
-      style={styles.flyout}
-    >
+    <Backing fill={STRIP.ground} material={material.flyout} place={BackingPlace.OverMap} style={styles.flyout}>
       {sizeTiers(sizes.length).map((tier) => {
-        const mark = SIZE_MARKS[tier];
+        const mark = sizeMark(tier);
         return (
           <View key={tier} accessibilityLabel={`${sizes[tier]}u`} style={styles.flyoutItem}>
             <Motion to={{ scale: hover === tier ? 1.25 : 1 }} transition={SNAP}>
@@ -313,17 +316,12 @@ export function ModeBar() {
   const recentPicks = useUiStore((s) => s.recentPicks);
   const appendChatLine = useUiStore.getState().appendChatLine;
   const setObjectTier = useUiStore.getState().setObjectTier;
-  const sizeCount = useKernel((s) => s.object_sizes.length);
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [barWidth, setBarWidth] = useState<f64>(0);
   const [stripWidth, setStripWidth] = useState<f64>(MODE_BAR_HEIGHT_PX);
-  // Where the size flyout stands is kept after it closes, so it leaves from
-  // there.
-  const [flyout, setFlyout] = useState<{ at: FlyoutAt; shown: boolean } | null>(null);
-  const flyoutShown = flyout?.shown ?? false;
-  const hide = () => setFlyout((f) => f && { ...f, shown: false });
-  const [hover, setHover] = useState<u32 | null>(null);
+  const [flyout, setFlyout] = useState<Flyout | null>(null);
+  const sizeCount = useKernel((s) => s.object_sizes.length);
   const inputRef = useRef<TextInput | null>(null);
   const bar = useRef<View | null>(null);
 
@@ -343,30 +341,25 @@ export function ModeBar() {
     open: (swatch) => {
       swatch.measureInWindow((sx, _sy, sw) => {
         bar.current?.measureInWindow((bx, by) => {
-          setFlyout({ at: { left: sx + sw / 2 - bx, centerX: sx + sw / 2, barTop: by }, shown: true });
+          setFlyout({ left: sx + sw / 2 - bx, centerX: sx + sw / 2, foot: by + MODE_BAR_HEIGHT_PX - FLYOUT_FOOT, hover: null });
         });
       });
-      setHover(null);
     },
     move: (x, y) => {
-      if (!flyout?.shown) return;
-      const tier = tierAt(flyout.at, sizeCount, x, y);
-      if (tier !== hover) setHover(tier);
+      if (flyout === null) return;
+      const hover = tierAt(flyout, sizeCount, x, y);
+      if (hover !== flyout.hover) setFlyout({ ...flyout, hover });
     },
     lift: (x, y) => {
-      const tier = flyout?.shown ? tierAt(flyout.at, sizeCount, x, y) : null;
+      const tier = flyout === null ? null : tierAt(flyout, sizeCount, x, y);
       if (tier !== null) setObjectTier(tier);
-      hide();
-      setHover(null);
+      setFlyout(null);
     },
-    close: () => {
-      hide();
-      setHover(null);
-    },
+    close: () => setFlyout(null),
   };
 
   const paletteExpanded = !messageExpanded;
-  const flyoutOpen = flyoutShown && paletteExpanded;
+  const openFlyout = paletteExpanded ? flyout : null;
   // Reuses the palette pill's own idle collapsed-icon slot as the send
   // button rather than adding a separate one inside the message pill — the
   // same idle-slot-reuse pattern as the size flyout anchoring per-swatch
@@ -464,7 +457,7 @@ export function ModeBar() {
 
               <ScrollView
                 horizontal
-                scrollEnabled={!flyoutShown}
+                scrollEnabled={flyout === null}
                 showsHorizontalScrollIndicator={false}
                 style={styles.picks}
                 contentContainerStyle={styles.picksContent}
@@ -532,20 +525,16 @@ export function ModeBar() {
             </Swap>
           </Pill>
 
-          <Presence
-            show={flyoutOpen}
-            from={{ scale: 0.9, translateY: 8 }}
-            exit={{ scale: 0.9, translateY: 8 }}
-            transition={SNAP}
-            exitTransition={LEAVE}
-            style={[styles.flyoutAt, { left: (flyout?.at.left ?? 0) - FLYOUT_WIDTH / 2 }]}
-          >
-            {
-              // Faded by its glass, not by the presence around it
-              // (shared/ui/motion/veil.ts).
-            }
-            <SizeFlyout shown={flyoutOpen} hover={hover} />
-          </Presence>
+          {
+            // At once, both ways, as a key's alternatives pop up over it: a
+            // finger already on its way must find the sizes where they stand,
+            // and a pick lifted is done.
+            openFlyout && (
+              <View style={[styles.flyoutAt, { left: openFlyout.left - FLYOUT_WIDTH / 2 }]}>
+                <SizeFlyout hover={openFlyout.hover} />
+              </View>
+            )
+          }
         </>
       )}
     </View>
@@ -603,14 +592,15 @@ const styles = StyleSheet.create({
   swatchIdle: { boxShadow: `0 0 0 1px ${STRIP.line}` },
   swatchSelected: { boxShadow: heldRing(STRIP.ground, STRIP.mark, 1) },
 
-  // Its foot stands over the bar, its scale grows from there.
+  // It takes the pointer as a whole, so the map
+  // under it hears no move of the finger picking a size and draws no hover
+  // there; the finger is still the swatch's, which holds it until it lifts.
   flyoutAt: {
     position: "absolute",
-    bottom: MODE_BAR_HEIGHT_PX + FLYOUT_LIFT_PX,
+    bottom: FLYOUT_FOOT,
     width: FLYOUT_WIDTH,
     zIndex: 10,
-    transformOrigin: "center bottom",
-    pointerEvents: "none",
+    pointerEvents: "box-only",
   },
   flyout: {
     alignItems: "center",
