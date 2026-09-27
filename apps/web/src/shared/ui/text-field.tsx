@@ -19,12 +19,17 @@
  *
  * **A submit keeps the field.** A single-line input blurs itself on submit by
  * default, which closes a phone's keyboard between two messages.
+ *
+ * **The caret is the app's coral**, as an iPhone tints a field's caret and
+ * selection with its app's accent; left alone it is the system's blue, and
+ * on Android Material's. A device reads `selectionColor` and `cursorColor`;
+ * react-native-web reads neither and passes `caretColor` through as CSS.
  */
 
 import type { Ref } from "react";
-import { StyleSheet, TextInput, type TextInputProps } from "react-native";
+import { StyleSheet, TextInput, type TextInputProps, type TextStyle } from "react-native";
 
-import { textStyle } from "@/shared/ui/theme.ts";
+import { color, textStyle } from "@/shared/ui/theme.ts";
 
 type TextFieldProps = Omit<TextInputProps, "onSubmitEditing"> & {
   ref?: Ref<TextInput>;
@@ -41,7 +46,9 @@ export function TextField({ style, onSubmit, ...props }: TextFieldProps) {
       // the older `blurOnSubmit`, so both say the same thing.
       submitBehavior="submit"
       blurOnSubmit={false}
-      style={[styles.field, style, styles.size]}
+      selectionColor={color.chosen}
+      cursorColor={color.chosen}
+      style={[styles.field, style, styles.size, styles.caret]}
     />
   );
 }
@@ -49,4 +56,6 @@ export function TextField({ style, onSubmit, ...props }: TextFieldProps) {
 const styles = StyleSheet.create({
   field: textStyle.input,
   size: { fontSize: textStyle.input.fontSize },
+  // React Native's style has no `caretColor`; the page's is CSS.
+  caret: { caretColor: color.chosen } as TextStyle,
 });
