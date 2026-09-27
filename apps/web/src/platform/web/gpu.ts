@@ -12,19 +12,25 @@ import { CORE_DOORBELL } from "@/kernel/mem.ts";
 import { acquireDevice } from "@/platform/web/webgpu.ts";
 import { request_frame } from "@/kernel/sched.ts";
 
-/** How long to wait before asking again when no adapter answers while the
- * page is shown. Only a device lost after boot gets here — a browser with
- * none never boots (main.tsx) — and there is no telling when a browser will
- * give one again: Safari, its GPU process lost, gave none for a while after,
- * to this tab and every other. So the page keeps asking. */
+/** How long to wait before asking again while the page is shown: after a
+ * device is lost, and after each request no adapter answers. Only a device
+ * lost after boot gets here — a browser with none never boots (main.tsx) —
+ * and there is no telling when a browser will give one again: Safari, its
+ * GPU process lost, gave none for a while after, to this tab and every
+ * other. So the page keeps asking. The first request after a loss waits as
+ * well: an adapter that answers with a device already lost would otherwise
+ * be asked again at once, and again, with nothing between. */
 const RETRY_MS = 1000;
+
+/** Requests made since a device last answered: said once when an outage
+ * starts and once when it ends, rather than on every retry. */
+let tries = 0;
 
 /** Asks again once the page is shown, or after RETRY_MS if it is: a hidden
  * page draws nothing, so there is nothing a device is wanted for until it is
  * shown again. */
 function askAgain(): void {
   if (document.visibilityState === "visible") {
-    console.warn(`[gpu] no adapter answered; asking again in ${RETRY_MS} ms`);
     setTimeout(gpuBoot, RETRY_MS);
     return;
   }
@@ -41,11 +47,17 @@ function askAgain(): void {
 export function gpuBoot(): void {
   const lost = () => {
     CORE_DOORBELL.send(0, Command.GPU_DELETE);
-    gpuBoot();
+    askAgain();
     request_frame();
   };
+  tries += 1;
   void acquireDevice(lost).then((info) => {
-    if (info === null) return askAgain();
+    if (info === null) {
+      if (tries === 1) console.warn(`[gpu] no adapter answered; asking every ${RETRY_MS} ms while the page is shown`);
+      return askAgain();
+    }
+    if (tries > 1) console.info(`[gpu] a device answered after ${tries} requests`);
+    tries = 0;
     CORE_DOORBELL.send(0, Command.GPU_CREATE, encode_gpu_create({ min_uniform_offset_alignment: info.align, timestamps: info.timestamps }));
     request_frame();
   }, (err) => console.error("[gpu] the device request failed; nothing can be drawn:", err));
