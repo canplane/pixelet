@@ -67,8 +67,6 @@ export const color = {
   /** A round control switched on: its ground, and the glow of its ring. */
   lit: tint(SYSTEM.yellow, 0.1),
   glow: SYSTEM.yellow,
-  /** The follow mode's compass. */
-  heading: SYSTEM.orange,
   /** The compass needle's north end. */
   north: SYSTEM.red,
   /** The tool strip's flat dark. */
@@ -85,8 +83,10 @@ export const color = {
   alarm: SYSTEM.red,
   alarmGround: tint(SYSTEM.red, 0.06),
   alarmEdge: tint(SYSTEM.red, 0.3),
-  /** A failure's glyph over the map: its red lightened toward the white of
-   * the glyphs beside it, so it tells without shouting. */
+  /** A sensor's glyph over the map, on its way and failed: the status hues
+   * lightened toward the white of the glyphs beside them by one ratio, so
+   * they tell without shouting and stay a pair. */
+  pendingGlyph: tint(SYSTEM.orange, 0.6),
   alarmGlyph: tint(SYSTEM.red, 0.6),
 
   // The panels' surface: a warm paper and its bark-brown text.

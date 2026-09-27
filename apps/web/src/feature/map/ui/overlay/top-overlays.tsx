@@ -61,7 +61,7 @@ export function TopOverlays() {
           }
           <Pressable onPress={ui.openSearchModal} accessibilityRole="button" accessibilityLabel={t("map.search.trigger_aria_label")} style={styles.title}>
             <View style={styles.search}>
-              <OutlinedIcon icon={Search} size={14} color={color.white} />
+              <OutlinedIcon icon={Search} size={14} strokeWidth={2.5} color={color.white} />
               <CurrentAddress label={addressLabel} />
             </View>
             <SensorStatus />

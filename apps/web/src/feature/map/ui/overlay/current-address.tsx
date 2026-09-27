@@ -6,7 +6,7 @@ import { Motion } from "@platform/motion.tsx";
 import type { LonLat } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 import { LEAVE } from "@/shared/ui/motion/transition.ts";
-import { alpha, color, edge, textStyle, weight } from "@/shared/ui/theme.ts";
+import { color, edge, textStyle, weight } from "@/shared/ui/theme.ts";
 
 interface CurrentAddressProps {
   label: string | null;
@@ -31,7 +31,7 @@ export function CurrentAddress(props: CurrentAddressProps) {
             {text}
           </Text>
         ))}
-        <Text numberOfLines={1} style={[styles.label, !label && [styles.numbers, styles.unnamed]]}>
+        <Text numberOfLines={1} style={[styles.label, !label && styles.numbers]}>
           {text}
         </Text>
       </View>
@@ -52,6 +52,5 @@ const styles = StyleSheet.create({
   shrink: { flexShrink: 1, minWidth: 0 },
   label: { ...textStyle.body, fontWeight: weight.semibold, color: color.white },
   numbers: { fontVariant: ["tabular-nums"] },
-  unnamed: { color: alpha(color.white, 0.8) },
   rim: { position: "absolute", top: 0, left: 0, right: 0, color: edge },
 });

@@ -11,7 +11,6 @@ import { DevicePoseStatus, Tracking } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_tracking, useKernel } from "@/kernel/shell.ts";
 
 import { CircularButton } from "@/shared/ui/circular-button.tsx";
-import { color } from "@/shared/ui/theme.ts";
 
 export function TrackingButton() {
   const { t } = useTranslation();
@@ -35,14 +34,14 @@ export function TrackingButton() {
         </Spin>
       );
     }
-    if (canShowLocationControl) return <Locate size={18} color={LABEL.primary} />;
+    if (canShowLocationControl) return <Locate size={20} color={LABEL.primary} />;
     if (is_follow_mode) {
       const finalRotationDeg = (heading ?? 0) - (azimuth * 180) / Math.PI;
       // Turned by the view around it, in React Native's own transform: a CSS
       // string on the icon is the page's SVG, and a device's SVG refuses it.
       return (
         <View style={{ transform: [{ rotate: `${finalRotationDeg}deg` }] }}>
-          <Compass size={22} color={color.heading} />
+          <Compass size={20} color={LABEL.primary} />
         </View>
       );
     }

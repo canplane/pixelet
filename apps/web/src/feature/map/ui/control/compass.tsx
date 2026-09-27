@@ -56,5 +56,5 @@ const styles = StyleSheet.create({
   },
   needle: { width: 2, height: 24 },
   tip: { flex: 1, backgroundColor: alpha(color.north, 0.8), borderTopLeftRadius: 1, borderTopRightRadius: 1, boxShadow: `0 0 12px ${alpha(color.north, 0.4)}` },
-  tail: { flex: 1, backgroundColor: alpha(color.ink, 0.3), borderBottomLeftRadius: 1, borderBottomRightRadius: 1 },
+  tail: { flex: 1, backgroundColor: LABEL.secondary, borderBottomLeftRadius: 1, borderBottomRightRadius: 1 },
 });

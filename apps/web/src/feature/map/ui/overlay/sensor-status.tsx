@@ -7,7 +7,6 @@ import { DevicePoseStatus } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
 import { HANDHELD } from "@platform/core.ts";
-import { STATUS } from "@platform/palette.ts";
 import { OutlinedIcon } from "@/shared/ui/outlined-icon.tsx";
 import { color } from "@/shared/ui/theme.ts";
 
@@ -36,7 +35,7 @@ const CompassOff = createLucideIcon("compass-off", [
 function statusColor(status: DevicePoseStatus): string {
   switch (status) {
     case DevicePoseStatus.Loading:
-      return STATUS.pending;
+      return color.pendingGlyph;
     case DevicePoseStatus.Error:
       return color.alarmGlyph;
     default:
