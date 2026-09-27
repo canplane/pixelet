@@ -2,17 +2,17 @@
 
 import type { ViewStyle } from "react-native";
 
-import { alpha, type Material } from "@/shared/ui/theme.ts";
+import type { Material } from "@/shared/ui/theme.ts";
 
 /**
- * A see-through backing on a device that draws it as a fill (the page's is
- * platform/web/backdrop.ts): the fill alone, at the material's bare opacity,
- * since nothing here blurs what is behind it. An iPhone blurs for itself,
- * with its glass or its blur (backing.tsx), and asks nothing of this.
- * Android cannot: the map is drawn
- * in a SurfaceView, a window of its own that a view's blur cannot read, and
- * React Native has no backdrop blur over its own views.
+ * A see-through backing where nothing blurs what is behind it (the page's is
+ * platform/web/backdrop.ts): its fill, solid. Android cannot blur: the map is
+ * drawn in a SurfaceView, a window of its own that a view's blur cannot read,
+ * and React Native has no backdrop blur over its own views; and a fill left
+ * see-through without one shows what is behind it sharp, a mess under a
+ * header's words or a flyout's marks. An iPhone blurs for itself
+ * (backing.tsx) and asks nothing of this.
  */
-export function backdrop(fill: string, m: Material): ViewStyle {
-  return { backgroundColor: alpha(fill, m.bare) };
+export function backdrop(fill: string, _m: Material): ViewStyle {
+  return { backgroundColor: fill };
 }

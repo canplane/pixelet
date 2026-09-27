@@ -129,32 +129,24 @@ export const surface = {
 } as const;
 
 /** A see-through backing (@platform backdrop.ts): how much of its fill
- * stands over what is behind it, how far what is behind is blurred where the
- * platform can, and how much of the fill stands where it cannot. What a
- * platform does with it is its own; each surface keeps its own recipe, as
- * the system's materials do. */
+ * stands over what is behind it, blurred as far as `blur` where the platform
+ * can; where it cannot, the fill stands solid. What a platform does with it
+ * is its own; each surface keeps its own recipe, as the system's materials
+ * do. */
 export interface Material {
   opacity: number;
   blur: number;
-  bare: number;
-  /** Whether an iPhone draws it as its glass, a floating thing's; otherwise
-   * the system's blur under the fill, as a bar is drawn. */
-  glass: boolean;
   /** The fill's opacity over an iPhone's blur, which tints what it blurs
-   * itself: less than `opacity`, which is over a bare blur. */
+   * itself: less than `opacity`, which is over a blur alone. */
   system: number;
 }
 
 export const material = {
-  /** The size flyout over the map. The ground under it reads through a bare
-   * fill well enough, so unblurred it stays as it is. */
-  flyout: { opacity: 0.6, blur: 8, bare: 0.6, glass: true, system: 0.6 },
+  /** The size flyout over the map. */
+  flyout: { opacity: 0.6, blur: 8, system: 0.6 },
   /** A sheet's header, over its content scrolling under it: iOS's bar, as
-   * Apple's own page draws one (72% over a 20px blur), and not its glass, whose rim ran along the
-   * bar's foot as a line across the sheet. Words under a bare fill read as a mess, so
-   * unblurred it is opaque, as iOS draws a material when transparency is
-   * reduced. */
-  bar: { opacity: 0.72, blur: 20, bare: 1, glass: false, system: 0.5 },
+   * Apple's own page draws one, 72% over a 20px blur. */
+  bar: { opacity: 0.72, blur: 20, system: 0.5 },
 } as const satisfies Record<string, Material>;
 
 /** A control that takes no press: what it holds at this opacity, its ground

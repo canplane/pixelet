@@ -143,9 +143,9 @@ public class PlatformModule: Module {
       }
     }
 
-    // ---- a bar's blur (platform/backing.tsx, BarBlur.swift) ----
+    // ---- a see-through backing's blur (platform/backing.tsx, Blur.swift) ----
 
-    View(BarBlur.self) {}
+    View(Blur.self) {}
   }
 }
 

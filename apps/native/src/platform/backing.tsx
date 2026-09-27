@@ -58,10 +58,10 @@ export interface BackingProps {
  * not gain or lose glass while the app runs. */
 export const SYSTEM_BACKING = isLiquidGlassAvailable();
 
-/** The system's blur a bar stands on (modules/platform/ios/BarBlur.swift).
- * UIKit blurs by a material, not a radius, so a material's `blur` has no
- * meaning here. */
-const BarBlur: ComponentType<ViewProps> = requireNativeView("PxlPlatform", "BarBlur");
+/** The system's blur a see-through backing stands on
+ * (modules/platform/ios/Blur.swift). UIKit blurs by a material, not a
+ * radius, so a material's `blur` has no meaning here. */
+const Blur: ComponentType<ViewProps> = requireNativeView("PxlPlatform", "Blur");
 
 type Effect = "none" | "clear" | "regular";
 
@@ -93,15 +93,20 @@ export function Backing({ fill, material, tint, interactive, place, fade = 1, fa
     return () => clearTimeout(timer);
   }, [target, laidOut]);
 
-  // A material that is not the glass, or any material where there is no
-  // glass: the system's blur, which every iPhone has, under the fill at the
-  // material's `system` opacity. The blur's own tint is mostly hidden by the
-  // ground over it, so at rest on the sheet it is the sheet's ground.
-  if (material && (!material.glass || !SYSTEM_BACKING)) {
+  // A see-through backing is the system's blur, which every iPhone has,
+  // under the fill at the material's `system` opacity, and not the glass:
+  // the glass rims what it covers, which ran along a bar's foot as a line
+  // across the sheet, and reads as a control, where this is a surface.
+  // The blur and the fill take the backing's corners and are cut to them:
+  // laid over it, they stood square in a round flyout. The backing itself
+  // is not cut, which would cut its shadow away.
+  if (material) {
+    const { borderRadius } = StyleSheet.flatten(style) ?? {};
+    const round = { borderRadius, overflow: "hidden" as const };
     return (
       <Motion from={from} to={{ opacity: veil.level }} transition={veil.transition} style={style}>
-        <BarBlur style={StyleSheet.absoluteFill} />
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: alpha(fill as string, material.system) }]} />
+        <Blur style={[StyleSheet.absoluteFill, round]} />
+        <View style={[StyleSheet.absoluteFill, round, { backgroundColor: alpha(fill as string, material.system) }]} />
         {children}
       </Motion>
     );
