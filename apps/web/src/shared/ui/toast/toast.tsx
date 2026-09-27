@@ -12,7 +12,7 @@ import { BackingPlace } from "@/shared/ui/backing-place.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
 import { Swap } from "@/shared/ui/motion/presence.tsx";
 import { FADE, SNAP, spring, type Transition } from "@/shared/ui/motion/transition.ts";
-import { alpha, chrome, color, shadow, surface, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, shadow, surface, SYSTEM, textStyle, weight } from "@/shared/ui/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
 
 const SIDE = 32;
@@ -33,7 +33,8 @@ const POP: Transition = spring({ stiffness: 260, damping: 12, mass: 0.8 });
  * green's stroke on the glass stands under 2:1 against it — where a filled
  * disc is read by its shape whatever it stands on. */
 const TONE: Record<ToastTone, { mark: "checkmark" | "xmark" | null; status: string }> = {
-  [ToastTone.Loading]: { mark: null, status: LABEL.secondary },
+  // On its way: the green it will turn, faint, as iOS's own green at 30%.
+  [ToastTone.Loading]: { mark: null, status: alpha(SYSTEM.green, 0.3) },
   [ToastTone.Error]: { mark: "xmark", status: STATUS.failed },
   [ToastTone.Ready]: { mark: "checkmark", status: STATUS.ready },
 };

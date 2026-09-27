@@ -142,6 +142,10 @@ public class PlatformModule: Module {
         view.selectedIndex = index
       }
     }
+
+    // ---- a see-through backing's blur (platform/backing.tsx, Blur.swift) ----
+
+    View(Blur.self) {}
   }
 }
 

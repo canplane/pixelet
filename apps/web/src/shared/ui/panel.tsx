@@ -6,7 +6,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { Backing } from "@platform/backing.tsx";
 import { BackingPlace } from "@/shared/ui/backing-place.ts";
 import { CircularButton } from "@/shared/ui/circular-button.tsx";
-import { chrome, color, textStyle } from "@/shared/ui/theme.ts";
+import { chrome, color, material, textStyle } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
 /** Height of the controls on a sheet (close button, search field, segmented
@@ -39,15 +39,15 @@ export const PANEL_SECTION_GAP = 24;
  * controls, or its tabs) and the content's first row: a section's gap, as if
  * the controls were the section before. */
 const CONTENT_GAP = PANEL_SECTION_GAP;
-/** Height of the header area: PANEL_EDGE above and below the round
- * controls. Content scrolls only below it, and a sheet is dragged by it. */
+/** Height of the header: PANEL_EDGE above and below the round controls. A
+ * sheet is dragged by it, and its content scrolls under it. */
 export const PANEL_HEAD_HEIGHT = PANEL_EDGE + PANEL_CONTROL + PANEL_EDGE;
 /** Top of the floating tabs, measured from the sheet's top: STACK_GAP under
  * the top row's controls, so they straddle the header's bottom edge. */
 const TABS_TOP = PANEL_EDGE + PANEL_CONTROL + STACK_GAP;
-/** Top padding of a panel's scroll content: CONTENT_GAP under the header's
- * controls, of which the header already holds PANEL_EDGE. */
-export const PANEL_CONTENT_TOP = CONTENT_GAP - PANEL_EDGE;
+/** Top padding of a panel's scroll content, which starts at the sheet's top
+ * under the header: CONTENT_GAP under the header's controls. */
+export const PANEL_CONTENT_TOP = PANEL_EDGE + PANEL_CONTROL + CONTENT_GAP;
 /** The same with tabs floating over the content: CONTENT_GAP under the tabs
  * instead, which stand STACK_GAP under the header's controls. */
 export const PANEL_TABS_ROOM = PANEL_CONTENT_TOP + STACK_GAP + PANEL_CONTROL;
@@ -87,16 +87,20 @@ export function PanelHeader({ title, closeLabel, onClose }: { title: string; clo
   );
 }
 
-/** A panel's body: the header area (`header`, PANEL_HEAD_HEIGHT tall) and
- * under it the scroll area (`children`), so content never scrolls behind the
- * header. The tabs float across the boundary, over the content that moves
- * behind their lower part; scroll content under tabs pads its top by
- * PANEL_TABS_ROOM. */
+/** A panel's body: the scroll area (`children`), the whole sheet's height,
+ * and floating over it the header (`header`, PANEL_HEAD_HEIGHT tall) and the
+ * tabs, as iOS's bars stand over a list that scrolls under them. The header
+ * is a see-through bar (theme.ts `material.bar`): at rest it stands on the
+ * sheet's own ground and shows nothing, and content scrolled under it shows
+ * through it blurred, or not at all where nothing blurs. Scroll content pads
+ * its top by PANEL_CONTENT_TOP, or PANEL_TABS_ROOM under tabs. */
 export function PanelBody({ header, tabs, children }: { header: ReactNode; tabs?: ReactNode; children: ReactNode }) {
   return (
     <View style={styles.body}>
-      <View style={styles.head}>{header}</View>
       <View style={styles.scroll}>{children}</View>
+      <Backing fill={color.ground} material={material.bar} place={BackingPlace.OverContent} style={styles.head}>
+        {header}
+      </Backing>
       {tabs && (
         <Backing fill={color.ground} place={BackingPlace.OverContent} style={styles.tabs}>
           {tabs}
@@ -118,7 +122,7 @@ const styles = StyleSheet.create({
   // space left of the close button.
   title: { position: "absolute", left: 0, right: 0, textAlign: "center", pointerEvents: "none", ...textStyle.title, color: LABEL.primary },
   body: { flex: 1 },
-  head: { height: PANEL_HEAD_HEIGHT },
+  head: { position: "absolute", top: 0, left: 0, right: 0, height: PANEL_HEAD_HEIGHT },
   scroll: { flex: 1, overflow: "hidden" },
   tabs: {
     position: "absolute",

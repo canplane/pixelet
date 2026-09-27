@@ -52,7 +52,7 @@ export function MapScaleBar({ show }: { show: boolean }) {
   // Centered in the title's slot, the line stands on the round controls'
   // centerline either side, the label above it and the ticks below: room
   // below balances the box about the line.
-  const line = styles.label.lineHeight + LABEL_GAP_PX;
+  const line = halo.reach + styles.label.lineHeight + LABEL_GAP_PX;
   const height = line + TICK_PX + PAD_PX;
 
   return (
@@ -81,5 +81,6 @@ export function MapScaleBar({ show }: { show: boolean }) {
 const styles = StyleSheet.create({
   root: { alignItems: "center" },
   label: { ...textStyle.caption2, fontWeight: weight.semibold, letterSpacing: 0.8, fontVariant: ["tabular-nums"], color: color.white },
-  bar: { marginTop: LABEL_GAP_PX - PAD_PX },
+  // The label's box holds its halo's room below it.
+  bar: { marginTop: LABEL_GAP_PX - halo.reach - PAD_PX },
 });

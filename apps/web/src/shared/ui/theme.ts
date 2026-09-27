@@ -128,6 +128,27 @@ export const surface = {
   alarm: { glass: alpha(SYSTEM.red, 0.15), fill: tint(SYSTEM.red, 0.06), edge: tint(SYSTEM.red, 0.3), shadow: alpha(SYSTEM.red, 0.15) },
 } as const;
 
+/** A see-through backing (@platform backdrop.ts): how much of its fill
+ * stands over what is behind it, blurred as far as `blur` where the platform
+ * can; where it cannot, the fill stands solid. What a platform does with it
+ * is its own; each surface keeps its own recipe, as the system's materials
+ * do. */
+export interface Material {
+  opacity: number;
+  blur: number;
+  /** The fill's opacity over an iPhone's blur, which tints what it blurs
+   * itself: less than `opacity`, which is over a blur alone. */
+  system: number;
+}
+
+export const material = {
+  /** The size flyout over the map. */
+  flyout: { opacity: 0.6, blur: 8, system: 0.6 },
+  /** A sheet's header, over its content scrolling under it: iOS's bar, as
+   * Apple's own page draws one, 72% over a 20px blur. */
+  bar: { opacity: 0.72, blur: 20, system: 0.5 },
+} as const satisfies Record<string, Material>;
+
 /** A control that takes no press: what it holds at this opacity, its ground
  * as it is, as iOS dims a disabled button — the glass left whole, which an
  * opacity or a clear style would read as the button gone rather than off. */

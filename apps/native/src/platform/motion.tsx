@@ -92,9 +92,15 @@ export function Motion({ to, from, replay = null, transition, onSettled, style, 
     stood.current = null;
   }, []);
 
+  // Faded as one layer, as the page and an iPhone fade a view: Android fades
+  // each thing in it apart unless told otherwise, and where two overlap the
+  // one under shows through. Android cuts that layer at the view's bounds,
+  // so a view that fades holds what it draws; the layer is there only while
+  // it is not opaque.
   return (
     <Animated.View
       onLayout={onLayout}
+      needsOffscreenAlphaCompositing
       style={[
         style,
         {

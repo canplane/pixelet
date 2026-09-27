@@ -18,19 +18,25 @@
  * nor match it. A color it is to carry is its tint.
  */
 
+import { requireNativeView } from "expo";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import { type ReactNode, useEffect, useState } from "react";
-import { type ColorValue, type StyleProp, StyleSheet, type ViewStyle } from "react-native";
+import { type ComponentType, type ReactNode, useEffect, useState } from "react";
+import { type ColorValue, type StyleProp, StyleSheet, View, type ViewProps, type ViewStyle } from "react-native";
 
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Motion } from "@platform/motion.tsx";
 import { SNAP, type Transition } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";
 import { BackingPlace } from "@/shared/ui/backing-place.ts";
+import { alpha, type Material } from "@/shared/ui/theme.ts";
 
 export interface BackingProps {
-  /** The backing where the system draws none. */
+  /** The backing where the system draws none; with a material, its color
+   * as a `#rrggbb`, which the material sets the opacity of. */
   fill: ColorValue;
+  /** Where the system draws none, see-through, as this recipe says; the
+   * glass is see-through of its own. */
+  material?: Material;
   /** The glass's tint. */
   tint?: ColorValue;
   /** Whether the glass answers a touch, as a control's does. */
@@ -52,6 +58,11 @@ export interface BackingProps {
  * not gain or lose glass while the app runs. */
 export const SYSTEM_BACKING = isLiquidGlassAvailable();
 
+/** The system's blur a see-through backing stands on
+ * (modules/platform/ios/Blur.swift). UIKit blurs by a material, not a
+ * radius, so a material's `blur` has no meaning here. */
+const Blur: ComponentType<ViewProps> = requireNativeView("PxlPlatform", "Blur");
+
 type Effect = "none" | "clear" | "regular";
 
 /** expo-glass-effect's style for a place at a presence level: "none" at 0,
@@ -62,7 +73,7 @@ function effectAt(level: f64, place: BackingPlace): Effect {
   return "regular";
 }
 
-export function Backing({ fill, tint, interactive, place, fade = 1, fadeFrom, transition = SNAP, style, children }: BackingProps) {
+export function Backing({ fill, material, tint, interactive, place, fade = 1, fadeFrom, transition = SNAP, style, children }: BackingProps) {
   const veil = useVeil(fade, transition);
   const from = fadeFrom === undefined ? undefined : { opacity: fadeFrom };
 
@@ -81,6 +92,25 @@ export function Backing({ fill, tint, interactive, place, fade = 1, fadeFrom, tr
     const timer = setTimeout(() => setShown(target), delay);
     return () => clearTimeout(timer);
   }, [target, laidOut]);
+
+  // A see-through backing is the system's blur, which every iPhone has,
+  // under the fill at the material's `system` opacity, and not the glass:
+  // the glass rims what it covers, which ran along a bar's foot as a line
+  // across the sheet, and reads as a control, where this is a surface.
+  // The blur and the fill take the backing's corners and are cut to them:
+  // laid over it, they stood square in a round flyout. The backing itself
+  // is not cut, which would cut its shadow away.
+  if (material) {
+    const { borderRadius } = StyleSheet.flatten(style) ?? {};
+    const round = { borderRadius, overflow: "hidden" as const };
+    return (
+      <Motion from={from} to={{ opacity: veil.level }} transition={veil.transition} style={style}>
+        <Blur style={[StyleSheet.absoluteFill, round]} />
+        <View style={[StyleSheet.absoluteFill, round, { backgroundColor: alpha(fill as string, material.system) }]} />
+        {children}
+      </Motion>
+    );
+  }
 
   if (!SYSTEM_BACKING) {
     return (

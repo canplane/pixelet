@@ -16,15 +16,21 @@ import { color as theme, halo, haloRings } from "@/shared/ui/theme.ts";
  * an iPhone's symbol is an image — and copies take a word, a lucide glyph and
  * an SF Symbol alike: eight points a pixel out, more as the circle grows, so
  * no gap opens between two. Each ring is faded as a whole, so where the
- * copies overlap it is no darker.
+ * copies overlap it is no darker: a page and an iPhone fade a view as one
+ * layer, and Android does when told to composite it offscreen.
+ *
+ * Its box is what it draws, rings and all: `halo.reach` of room on every
+ * side of what it holds, which a caller counts in its gaps (`haloGap`).
+ * Android cuts a layer at its view's bounds, so a ring drawn past its box,
+ * whether the rings' own layer or an ancestor faded whole, was cut square.
  */
 function Halo({ style, draw }: { style: StyleProp<ViewStyle>; draw: (ink?: string) => ReactNode }) {
   return (
-    <View style={style}>
+    <View style={[style, styles.reach]}>
       {haloRings.map((px) => (
         <View key={px} aria-hidden needsOffscreenAlphaCompositing style={[StyleSheet.absoluteFill, { opacity: halo.ring }]}>
           {around(px).map(([x, y], i) => (
-            <View key={i} style={[StyleSheet.absoluteFill, { transform: [{ translateX: x }, { translateY: y }] }]}>
+            <View key={i} style={[styles.copy, { transform: [{ translateX: x }, { translateY: y }] }]}>
               {draw(theme.black)}
             </View>
           ))}
@@ -40,10 +46,16 @@ function Halo({ style, draw }: { style: StyleProp<ViewStyle>; draw: (ink?: strin
   );
 }
 
+/** The gap to lay out between two haloed things for `gap` between what they
+ * draw: each box holds its halo's room. */
+export function haloGap(gap: f64): f64 {
+  return gap - 2 * halo.reach;
+}
+
 /** A glyph over the map in the halo its text has; crossed out, the strike is
  * haloed with it, which parts it from the strokes it crosses. */
 export function HaloIcon({ struck, ...icon }: IconProps & { struck?: boolean }) {
-  return <Halo style={{ width: icon.size, height: icon.size }} draw={(ink) => <Glyph {...icon} color={ink ?? icon.color} struck={struck} />} />;
+  return <Halo style={{ width: icon.size + 2 * halo.reach, height: icon.size + 2 * halo.reach }} draw={(ink) => <Glyph {...icon} color={ink ?? icon.color} struck={struck} />} />;
 }
 
 /** One line of text over the map in the halo. Every copy is cut short where
@@ -72,4 +84,6 @@ function around(px: f64): [f64, f64][] {
 
 const styles = StyleSheet.create({
   shrink: { flexShrink: 1, minWidth: 0 },
+  reach: { padding: halo.reach },
+  copy: { position: "absolute", top: halo.reach, right: halo.reach, bottom: halo.reach, left: halo.reach },
 });

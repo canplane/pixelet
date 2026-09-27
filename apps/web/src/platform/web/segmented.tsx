@@ -25,7 +25,8 @@ export function Segmented<T extends string | number>({ segments, value, onChange
             aria-selected={on}
             style={styles.reach}
           >
-            <View style={[styles.segment, on && styles.on]}>
+            {/* A view from the start, though unselected it draws nothing (mode-bar.tsx `ToolButton` says why). */}
+            <View collapsable={false} style={[styles.segment, on && styles.on]}>
               <Text style={[styles.label, on && styles.labelOn]}>{s.label}</Text>
             </View>
           </Pressable>
