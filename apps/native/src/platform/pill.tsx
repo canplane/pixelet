@@ -20,14 +20,7 @@ import { LayoutAnimation, type LayoutAnimationConfig, StyleSheet, View } from "r
 import type { f64 } from "@xpute/core/abi/word.ts";
 import { Backing } from "@platform/backing.tsx";
 import { SNAP } from "@/shared/ui/motion/transition.ts";
-import type { PillProps } from "@/shared/ui/pill.ts";
-import { chrome } from "@/shared/ui/theme.ts";
-
-/** How far past its edge a touch lands on a pill `height` tall: out to the
- * least target. */
-function touchSlop(height: f64): f64 {
-  return Math.max(0, (chrome.target - height) / 2);
-}
+import { type PillProps, touchReach } from "@/shared/ui/pill.ts";
 
 /** A control's move, as long as the page's (shared/ui/motion/transition.ts).
  * Only what changes size or place is animated: a view that comes or goes in
@@ -46,11 +39,13 @@ export function Pill({ x, width, height, fill, tint, place, interactive, border,
   last.current = [x, width];
 
   const r = height / 2;
-  // What it holds stands in the glass rather than beside it: a touch reaches
-  // the glass only through what the glass contains, and interactive glass
-  // answers no touch it is not given.
+  const reach = touch ? touchReach(height) : 0;
+  // What a finger lands on reaches the least target around the pill, as the
+  // page's does. What it holds stands in the glass rather than beside it: a
+  // touch reaches the glass only through what the glass contains, and
+  // interactive glass answers no touch it is not given.
   return (
-    <View {...touch} hitSlop={touch && touchSlop(height)} style={[styles.at, { left: x, width, height }]}>
+    <View {...touch} style={[touch ? styles.reach : styles.at, { left: x - reach, top: -reach, width: width + 2 * reach, height: height + 2 * reach, padding: reach }]}>
       <Backing
         fill={fill}
         tint={tint}
@@ -59,7 +54,7 @@ export function Pill({ x, width, height, fill, tint, place, interactive, border,
         fade={fade}
         fadeFrom={fadeFrom}
         transition={fadeTransition}
-        style={[StyleSheet.absoluteFill, { borderRadius: r }, border && { borderWidth: border.width, borderColor: border.color }, shadow ? { boxShadow: shadow } : null]}
+        style={[styles.glass, { borderRadius: r }, border && { borderWidth: border.width, borderColor: border.color }, shadow ? { boxShadow: shadow } : null]}
       >
         <View style={[StyleSheet.absoluteFill, styles.clip, { borderRadius: r }]}>
           <View onLayout={onContentWidth && ((e) => onContentWidth(e.nativeEvent.layout.width))} style={[styles.content, { height }]}>
@@ -72,7 +67,9 @@ export function Pill({ x, width, height, fill, tint, place, interactive, border,
 }
 
 const styles = StyleSheet.create({
-  at: { position: "absolute", top: 0, pointerEvents: "box-none" },
+  at: { position: "absolute", pointerEvents: "box-none" },
+  reach: { position: "absolute" },
+  glass: { flex: 1 },
   clip: { overflow: "hidden", pointerEvents: "box-none" },
   content: { position: "absolute", left: 0, top: 0, flexDirection: "row", alignItems: "center", pointerEvents: "box-none" },
 });

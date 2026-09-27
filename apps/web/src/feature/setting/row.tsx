@@ -8,7 +8,7 @@ import { ToggleRow } from "@platform/toggle-row.tsx";
 
 import type { SettingCost } from "@/feature/setting/schema.ts";
 import { Glyph } from "@/shared/ui/glyph.tsx";
-import { alpha, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
+import { alpha, chrome, color, hairline, sectionTitle, textStyle, weight } from "@/shared/ui/theme.ts";
 import { LABEL } from "@platform/palette.ts";
 
 const COST_COLOR: Record<SettingCost, string> = {
@@ -108,14 +108,14 @@ interface SettingChoiceRowProps {
 /** One option of a single choice (a setting's options, the language list).
  * Same layout as SettingRow; the selected option shows a check, the others
  * nothing. The check slot keeps its width when empty so selecting does not
- * rewrap the text. Unlike SettingRow it does not extend to the panel edge:
- * its group box or list handles that. */
+ * rewrap the text. Unlike SettingRow it does not reach into the panel's
+ * padding: its group box or list handles that. */
 export function SettingChoiceRow(props: SettingChoiceRowProps) {
   const { label, description, selected, onSelect, cost } = props;
   return (
     <Pressable onPress={onSelect} accessibilityRole="radio" aria-checked={selected} style={styles.row}>
       <Described label={label} description={description} cost={cost} />
-      <View style={styles.check}>{selected && <Glyph glyph="checkmark" size={18} weight="semibold" color={color.chosen} />}</View>
+      <View style={styles.check}>{selected && <Glyph glyph="checkmark" size={chrome.glyph} weight="semibold" color={color.chosen} />}</View>
     </Pressable>
   );
 }
@@ -147,24 +147,24 @@ export const settingText = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8 },
-  // A row reaches past the panel's padding to its edge, so its own padding
-  // lines its words up with the section title's.
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 8 },
+  // A row reaches into the panel's padding by its own, so its words line up
+  // with the section title's.
   bleed: { marginHorizontal: -12 },
   described: { flexShrink: 1, minWidth: 0, gap: 4 },
-  nameLine: { flexDirection: "row", alignItems: "center", gap: 6 },
+  nameLine: { flexDirection: "row", alignItems: "center", gap: 8 },
   name: { ...textStyle.body, color: LABEL.primary },
 
   // iOS's tinted style: the tint as a faint ground and the words in it, no
   // edge — a full fill is what a chosen chip says.
-  badge: { borderRadius: 999, paddingHorizontal: 5, paddingVertical: 3 },
+  badge: { height: 16, justifyContent: "center", borderRadius: 8, paddingHorizontal: 4 },
   // Under the smallest style on purpose: a badge is a tag, read as a shape at
   // a glance and not as text, the size iOS's own tab labels and an app's
-  // counters go down to. Its capitals, weight and color carry it. With the
-  // badge's padding it stands 16 tall, Material's badge height.
+  // counters go down to. Its capitals, weight and color carry it. The badge
+  // stands 16 tall, Material's badge height.
   badgeText: { ...textStyle.caption2, fontSize: 9, lineHeight: 10, letterSpacing: 0.4 },
 
-  group: { marginTop: 16, marginBottom: 10, borderWidth: 1, borderColor: hairline, borderRadius: 10, padding: 4, paddingTop: 10 },
+  group: { marginTop: 16, marginBottom: 12, borderWidth: 1, borderColor: hairline, borderRadius: 12, padding: 4, paddingTop: 12 },
   legend: {
     position: "absolute",
     // The name's middle on the box's one-point border.
@@ -172,16 +172,16 @@ const styles = StyleSheet.create({
     left: 8,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
     paddingHorizontal: 8,
-    backgroundColor: color.paper,
+    backgroundColor: color.ground,
   },
   legendText: { ...textStyle.caption, fontWeight: weight.medium, color: LABEL.primary },
-  answers: { gap: 2 },
+  answers: { gap: 4 },
 
-  check: { width: 18, height: 18, flexShrink: 0 },
+  check: { width: chrome.glyph, height: chrome.glyph, flexShrink: 0 },
 
   titleBlock: { gap: 4, marginBottom: 4 },
-  titleLine: { flexDirection: "row", alignItems: "center", gap: 6 },
+  titleLine: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { ...sectionTitle, color: LABEL.secondary },
 });

@@ -35,11 +35,8 @@ export const MODE_BAR_HEIGHT_PX = chrome.control;
  * one in the tree takes the tap — so a swatch smaller than the pitch is a
  * transparent box at full pitch with its shape centered. */
 const PITCH = chrome.target;
-/** A glyph, and a pick's swatch, as every control's. */
-const GLYPH = chrome.glyph;
-/** The capsule a tool in hand is lit on, a step inside its slot: concentric
- * with the pill, as far in from its edge as the capsule is from the slot's. */
-const HELD_PX = 36;
+/** The capsule a tool in hand is lit on, centered in its slot. */
+const HELD_PX = chrome.selection;
 const PILL_GAP = chrome.controlGap;
 /** The message field's width where the bar leaves it room. */
 const FIELD_PX = 384;
@@ -49,7 +46,7 @@ const MESSAGE_OPEN_PX = MODE_BAR_HEIGHT_PX + FIELD_PX + 16;
 /** How far above the bar the size flyout's bottom stands. */
 const FLYOUT_LIFT_PX = 20;
 const FLYOUT_ITEM_PX = 40;
-const FLYOUT_GAP_PX = 6;
+const FLYOUT_GAP_PX = 8;
 const FLYOUT_PAD_Y = 8;
 const FLYOUT_WIDTH = FLYOUT_ITEM_PX + 12;
 /** A press held this long on a swatch opens its sizes. */
@@ -241,7 +238,7 @@ function ColorSwatchButton({ cube, sizes }: { cube: PlaceableCube; sizes: Omit<S
   return (
     <View ref={ref} {...handlers} accessibilityRole="button" accessibilityLabel={cubeLabel(t, cube)} style={[styles.slot, styles.swatchSlot]}>
       <Motion to={{ scale: selected ? 1.1 : 1 }} transition={SNAP}>
-        <CubeSwatch cube={cube} size={GLYPH} radius={GLYPH / 2} style={selected ? styles.swatchSelected : styles.swatchIdle} />
+        <CubeSwatch cube={cube} size={chrome.glyph} radius={chrome.glyph / 2} style={selected ? styles.swatchSelected : styles.swatchIdle} />
       </Motion>
     </View>
   );
@@ -257,7 +254,7 @@ function DecorIconButton({ kind }: { kind: u8 }) {
 
   return (
     <ToolButton label={t(`decors.${name}`)} active={active} onPress={() => selectDecor(kind)}>
-      <Glyph glyph={DECOR_GLYPH[name]} size={GLYPH} color={active ? STRIP.glyphOn : STRIP.glyph} />
+      <Glyph glyph={DECOR_GLYPH[name]} size={chrome.glyph} color={active ? STRIP.glyphOn : STRIP.glyph} />
     </ToolButton>
   );
 }
@@ -386,7 +383,7 @@ export function ModeBar() {
             width={messageWidth}
             height={MODE_BAR_HEIGHT_PX}
             span={barWidth}
-            fill={color.white}
+            fill={color.ground}
             place={BackingPlace.OverMap}
             interactive={!messageExpanded}
             shadow={shadow.lift}
@@ -397,7 +394,7 @@ export function ModeBar() {
               accessibilityLabel={t("map.mode_bar.message_tooltip")}
               style={styles.messageIcon}
             >
-              <Glyph glyph="bubble.left" size={GLYPH} color={LABEL.primary} />
+              <Glyph glyph="bubble.left" size={chrome.glyph} color={LABEL.primary} />
             </Pressable>
             <Presence
               show={messageExpanded}
@@ -440,10 +437,10 @@ export function ModeBar() {
             >
               <View style={styles.group}>
                 <ToolButton label={t("map.mode_bar.pointer")} active={activeTool === ActiveTool.Pointer} onPress={() => set_activeTool(ActiveTool.Pointer)}>
-                  <Glyph glyph="hand.point.up.left" size={GLYPH} color={activeTool === ActiveTool.Pointer ? STRIP.glyphOn : STRIP.glyph} />
+                  <Glyph glyph="hand.point.up.left" size={chrome.glyph} color={activeTool === ActiveTool.Pointer ? STRIP.glyphOn : STRIP.glyph} />
                 </ToolButton>
                 <ToolButton label={t("map.mode_bar.eraser")} active={activeTool === ActiveTool.Eraser} onPress={() => set_activeTool(ActiveTool.Eraser)}>
-                  <Glyph glyph="eraser" size={GLYPH} color={activeTool === ActiveTool.Eraser ? STRIP.glyphOn : STRIP.glyph} />
+                  <Glyph glyph="eraser" size={chrome.glyph} color={activeTool === ActiveTool.Eraser ? STRIP.glyphOn : STRIP.glyph} />
                 </ToolButton>
               </View>
 
@@ -472,7 +469,7 @@ export function ModeBar() {
               }
               <View style={styles.group}>
                 <ToolButton label={t("map.mode_bar.catalog_tooltip")} onPress={ui.openDrawerModal}>
-                  <Glyph glyph="square.grid.2x2" size={GLYPH} color={STRIP.glyph} />
+                  <Glyph glyph="square.grid.2x2" size={chrome.glyph} color={STRIP.glyph} />
                 </ToolButton>
               </View>
             </Motion>
@@ -500,7 +497,7 @@ export function ModeBar() {
                     accessibilityLabel={t("map.mode_bar.send")}
                     style={({ pressed }) => [styles.slotButton, pressed && styles.sendPressed]}
                   >
-                    <Glyph glyph="arrow.up" size={GLYPH} weight="bold" color={color.white} />
+                    <Glyph glyph="arrow.up" size={chrome.glyph} weight="bold" color={color.white} />
                   </Pressable>
                 )
                 : (
@@ -513,7 +510,7 @@ export function ModeBar() {
                     accessibilityLabel={t("map.mode_bar.palette_tooltip")}
                     style={styles.slotButton}
                   >
-                    <Glyph glyph="paintpalette" size={GLYPH} color={STRIP.glyph} />
+                    <Glyph glyph="paintpalette" size={chrome.glyph} color={STRIP.glyph} />
                   </Pressable>
                 )}
             </Swap>

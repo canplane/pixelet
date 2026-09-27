@@ -34,11 +34,17 @@ for (const cube of placeableCubes) {
 }
 
 // A catalog entry's three sizes (issue/20260928-three-sizes-of-a-control.md):
-// a press lands on its 44 cell; the tile one sees is 40, a block's top as a
+// a press lands on its 44 cell; the tile one sees is a block's top as a
 // rounded square, where a circle cut its texture away; a decor's glyph is 20.
 const CELL = chrome.target;
-const TILE = 40;
-const TILE_RADIUS = 10;
+const GRID_GAP = 4;
+/** In hand, a tile grows and is ringed: 1 of the ground, then the ink. */
+const LIT_SCALE = 1.05;
+const LIT_INK = 2;
+/** As large as a tile can be while, lit, it reaches no further than halfway
+ * into the gap to the next cell: 40. */
+const TILE = (CELL + GRID_GAP - 2 * (1 + LIT_INK)) / LIT_SCALE;
+const TILE_RADIUS = 12;
 
 /** A catalog entry: its picture alone, lit while it is in hand. Its name is
  * read out, and shown by its section once it is the one in hand; a grid of
@@ -52,8 +58,9 @@ function GridButton({ label, active, onPress, children }: { label: string; activ
 }
 
 /** A section's title, and the name of what is in hand when it is one of its
- * own. */
+ * own; nothing, with neither, rather than an empty line over the grid. */
 function SectionHead({ title, held }: { title?: string; held: string | null }) {
+  if (title === undefined && held === null) return null;
   return (
     <View style={styles.sectionHead}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -137,7 +144,7 @@ export function DrawerModal(props: BaseModalProps) {
           />
         }
       >
-        <ScrollView key={tab} style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: bottom + 16 }]}>
+        <ScrollView key={tab} style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: bottom + PANEL_EDGE }]}>
           {tab === DrawerTab.Cube && SECTION_ORDER.map((section) => {
             const cubes = SECTIONS.get(section);
             if (!cubes) return null;
@@ -174,10 +181,10 @@ const styles = StyleSheet.create({
   sectionHead: { flexDirection: "row", alignItems: "baseline", gap: 8 },
   sectionTitle: { ...sectionTitle, color: LABEL.secondary },
   held: { flex: 1, textAlign: "right", ...textStyle.caption, color: LABEL.primary },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: GRID_GAP },
   cell: { width: CELL, height: CELL, alignItems: "center", justifyContent: "center" },
   markOff: { boxShadow: `0 0 0 1px ${hairline}` },
-  markOn: { boxShadow: heldRing(color.paper, color.black, 2), transform: [{ scale: 1.05 }] },
+  markOn: { boxShadow: heldRing(color.ground, color.black, LIT_INK), transform: [{ scale: LIT_SCALE }] },
   decor: { width: TILE, height: TILE, borderRadius: TILE_RADIUS, alignItems: "center", justifyContent: "center" },
   decorOn: { backgroundColor: color.faint },
 });

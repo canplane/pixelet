@@ -49,9 +49,15 @@ seen, not written in the HIG, which states only the 44 target.
 
 - `chrome.control` (48) is a map control's container, `PANEL_CONTROL` (44) a
   sheet's, and the strip's slots are 44 (mode-bar.tsx `PITCH`), with what is
-  lit in one a 36 capsule inside it, as a segmented control's selection is.
+  lit in one a `chrome.selection` (36) capsule inside it, as a segmented
+  control's selection is.
 - `chrome.glyph` (20) is every control's glyph and swatch.
-- CircularButton takes `size`, `glyphSize` and `place`, defaulting to a map
-  control's, so a sheet's close is the same control at `PANEL_CONTROL`.
-- Every gap between two controls is `chrome.controlGap` (10), and a sheet's
+- CircularButton takes `size` and `place`, defaulting to a map control's, so
+  a sheet's close is the same control at `PANEL_CONTROL`; its glyph is
+  `chrome.glyph` whatever its size.
+- Every gap between two controls is `chrome.controlGap` (8), and a sheet's
   controls stand 16 from its edges.
+- A press wider than what one sees is a box laid out around it (a chip, the
+  search field's clear, a toast), never a `hitSlop`: react-native-web honors
+  `hitSlop` only on the old Touchable, so on the page a `Pressable`'s or a
+  `View`'s landed on the shape alone, and a 32 chip took 32.

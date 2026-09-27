@@ -23,27 +23,29 @@ import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/shared/ui/panel.tsx";
 // is this one component, not a look-alike, since a gender chip and a variant
 // chip are literally the same kind of control.
 // Its three sizes (issue/20260928-three-sizes-of-a-control.md): a press lands
-// on 44, the least target, reaching into the gaps around it by half, which
-// the gaps are sized to hold so no two chips' targets meet; the chip one sees
-// is 32, as a Material chip is, a choice set in a panel; its words are the
-// footnote's.
+// on 44, the least target, a box laid out around the chip that reaches into
+// the gaps by half, which the gaps are sized to hold so no two chips' boxes
+// overlap; the chip one sees is 32, as a Material chip is, a choice set in a
+// panel; its words are the footnote's.
 const CHIP_HEIGHT = 32;
 /** A companion's preview, a square. */
 const PREVIEW = 96;
 const CHIP_GAP_X = 8;
 const CHIP_GAP_Y = chrome.target - CHIP_HEIGHT;
-const CHIP_SLOP = { top: CHIP_GAP_Y / 2, bottom: CHIP_GAP_Y / 2, left: CHIP_GAP_X / 2, right: CHIP_GAP_X / 2 };
+const CHIP_REACH = { paddingHorizontal: CHIP_GAP_X / 2, paddingVertical: CHIP_GAP_Y / 2 };
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} hitSlop={CHIP_SLOP} accessibilityRole="radio" aria-checked={active} style={[styles.chip, active && styles.chipOn]}>
-      {
-        /* The chip is as wide as its label in the heavier weight, whichever it
-      shows: a pick that widened its chip would rewrap the row under the
-      finger. */
-      }
-      <Text aria-hidden style={[styles.chipText, styles.chipTextOn, styles.sizer]}>{label}</Text>
-      <Text style={[styles.chipText, styles.label, active && styles.chipTextOn]}>{label}</Text>
+    <Pressable onPress={onPress} accessibilityRole="radio" aria-checked={active} style={CHIP_REACH}>
+      <View style={[styles.chip, active && styles.chipOn]}>
+        {
+          /* The chip is as wide as its label in the heavier weight, whichever it
+        shows: a pick that widened its chip would rewrap the row under the
+        finger. */
+        }
+        <Text aria-hidden style={[styles.chipText, styles.chipTextOn, styles.sizer]}>{label}</Text>
+        <Text style={[styles.chipText, styles.label, active && styles.chipTextOn]}>{label}</Text>
+      </View>
     </Pressable>
   );
 }
@@ -100,8 +102,10 @@ function PetPicker(props: PetPickerProps) {
       <Text style={styles.pickerLabel}>{t("drawer_modal.character.pet_label")}</Text>
       <View style={styles.pickerRow}>
         <CharacterPreview variant={selected} style={styles.preview} />
-        <View style={[styles.chips, styles.chipColumn]}>
-          {PET_VARIANTS.map((v) => <Chip key={v.key} label={t(`drawer_modal.character.pets.${v.key}`)} active={v.key === selectedKey} onPress={() => onSelect(v.key)} />)}
+        <View style={styles.chipColumn}>
+          <View style={styles.chips}>
+            {PET_VARIANTS.map((v) => <Chip key={v.key} label={t(`drawer_modal.character.pets.${v.key}`)} active={v.key === selectedKey} onPress={() => onSelect(v.key)} />)}
+          </View>
         </View>
       </View>
     </View>
@@ -143,13 +147,16 @@ const styles = StyleSheet.create({
   // The preview stands off the chips by the sheet's own edge.
   pickerRow: { flexDirection: "row", alignItems: "flex-start", gap: PANEL_EDGE },
   preview: { width: PREVIEW, height: PREVIEW, flexShrink: 0, borderRadius: 12, overflow: "hidden", backgroundColor: alpha(color.fill, 0.4) },
-  chipColumn: { flexShrink: 1, minWidth: 0, gap: CHIP_GAP_Y },
-  chips: { flexDirection: "row", flexWrap: "wrap", columnGap: CHIP_GAP_X, rowGap: CHIP_GAP_Y },
-  rule: { height: 1, backgroundColor: hairline },
+  // The chips' boxes stand edge to edge, and the column reaches out by as
+  // much as they do, so the chips one sees keep their gaps and their
+  // alignment with the preview.
+  chipColumn: { flexShrink: 1, minWidth: 0, gap: CHIP_GAP_Y / 2, marginHorizontal: -CHIP_GAP_X / 2, marginVertical: -CHIP_GAP_Y / 2 },
+  chips: { flexDirection: "row", flexWrap: "wrap" },
+  rule: { height: 1, marginHorizontal: CHIP_GAP_X / 2, backgroundColor: hairline },
   chip: { height: CHIP_HEIGHT, justifyContent: "center", borderRadius: CHIP_HEIGHT / 2, paddingHorizontal: 12, backgroundColor: color.faint },
   chipOn: { backgroundColor: color.chosen },
   chipText: { ...textStyle.footnote, fontWeight: weight.medium, color: LABEL.primary },
-  chipTextOn: { fontWeight: weight.semibold, color: color.paper },
+  chipTextOn: { fontWeight: weight.semibold, color: color.ground },
   sizer: { opacity: 0 },
   label: { position: "absolute", left: 0, right: 0, top: (CHIP_HEIGHT - textStyle.footnote.lineHeight) / 2, textAlign: "center" },
 });

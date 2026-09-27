@@ -126,12 +126,12 @@ const styles = StyleSheet.create({
   },
   right: { position: "absolute", right: chrome.inset, zIndex: 50, alignItems: "center", gap: chrome.controlGap },
   place: { maxWidth: "100%" },
-  title: { alignItems: "center", gap: 6 },
+  title: { alignItems: "center", gap: 8 },
   // Held to the title's width: centered in a column, a page lays a row out
   // at its content's width however wide, and a line that will not wrap is
   // all content — the address ran over the buttons either side rather than
   // ending in an ellipsis, where a device's layout held it.
-  search: { flexDirection: "row", alignItems: "center", gap: 6, minWidth: 0, maxWidth: "100%", flexShrink: 1 },
+  search: { flexDirection: "row", alignItems: "center", gap: 8, minWidth: 0, maxWidth: "100%", flexShrink: 1 },
   // Where the address stood: the scale takes its place while the zoom moves.
   scale: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, alignItems: "center", justifyContent: "center", pointerEvents: "box-none" },
 });

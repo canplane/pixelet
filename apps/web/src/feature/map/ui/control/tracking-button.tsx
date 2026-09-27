@@ -22,8 +22,6 @@ const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
   [Tracking.Unfollow]: { glyph: "location.north.line.fill", label: "map.controls.exit_compass_mode" },
 };
 
-const GLYPH = chrome.glyph;
-
 export function TrackingButton() {
   const { t } = useTranslation();
 
@@ -46,12 +44,12 @@ export function TrackingButton() {
       disabled={status !== DevicePoseStatus.Ready || !hasLocation}
       label={t(label)}
     >
-      {status === DevicePoseStatus.Loading ? <Spinner size={GLYPH} color={LABEL.primary} /> : (
+      {status === DevicePoseStatus.Loading ? <Spinner size={chrome.glyph} color={LABEL.primary} /> : (
         // Turned by the view around it, in React Native's own transform: a
         // CSS string on the icon is the page's SVG, and a device's SVG
         // refuses it.
         <View style={{ transform: [{ rotate: `${turn}deg` }] }}>
-          <Glyph glyph={glyph} size={GLYPH} color={LABEL.primary} />
+          <Glyph glyph={glyph} size={chrome.glyph} color={LABEL.primary} />
         </View>
       )}
     </CircularButton>

@@ -67,7 +67,7 @@ function face(end: f64, side: f64): string {
 const HOLD_MS = 400;
 
 /** `value` once it has stood `ms` unchanged. */
-function useHeld(value: boolean, ms: number): boolean {
+function useHeld(value: boolean, ms: f64): boolean {
   const [held, setHeld] = useState(value);
   useEffect(() => {
     if (value === held) return;

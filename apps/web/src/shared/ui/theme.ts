@@ -47,7 +47,7 @@ export const SYSTEM = {
 /** The app's own hue: the coral of its mark (#FF865E), darkened with its hue
  * and chroma held (OKLCH) to where white on it, or it on white, reaches a
  * contrast — 3:1 for a filled control and its white glyph or word, 4.5:1 for
- * words in the coral on the paper. The mark's own is lighter than either,
+ * words in the coral on the ground. The mark's own is lighter than either,
  * too light to carry white. Everything the app itself says — chosen, send,
  * one's own — is this, and nothing a state or a cost says. */
 const CORAL = {
@@ -56,24 +56,25 @@ const CORAL = {
 } as const;
 
 /** The gray a sheet's fills are drawn in at an opacity: iOS's fill gray,
- * turned as warm as the paper. */
+ * turned as warm as the ground. */
 const FILL = "#7d766c";
 
 /** White, barely warm: what the sheets and the solid controls stand on. */
-const PAPER = "#fffcf7";
+const GROUND = "#fffcf7";
 
 export const color = {
   white: "#ffffff",
   black: "#000000",
+  /** Every light surface: a sheet and a card on it, and where there is no
+   * system glass, the round controls, the message pill and the toasts. One
+   * color, so a control reads as the same stuff as the sheet it opens. */
+  ground: GROUND,
 
   // The map's chrome, which floats over the world.
   /** iOS's label gray in light mode, the base its secondary and tertiary
    * labels are drawn at an opacity of; the page's labels are iOS's
    * (platform palette.ts), and a hairline is this gray, faint. */
   labelGray: "#3C3C43",
-  /** The round controls' and the toasts' ground where there is no system
-   * glass. */
-  ground: PAPER,
   /** The tool strip's dark band, where there is no system glass. */
   band: SYSTEM.dark,
   /** The send button. */
@@ -88,8 +89,6 @@ export const color = {
 
   // The panels' surface and what stands on it: iOS's system colors, turned
   // barely warm.
-  /** A sheet's ground, on the page and on a device's sheet alike. */
-  paper: PAPER,
   /** The fill gray, for a ground an opacity of it is set on. */
   fill: FILL,
   /** Background of unselected controls (tracks, chips, round buttons and
@@ -100,8 +99,8 @@ export const color = {
   chosen: CORAL.base,
   /** An action's words on a panel. */
   action: CORAL.deep,
-  /** An off switch's track: iOS's, its fill gray at 16% over the paper. */
-  track: tint(FILL, 0.16, PAPER),
+  /** An off switch's track: iOS's, its fill gray at 16% over the ground. */
+  track: tint(FILL, 0.16, GROUND),
 
   // What a setting costs the device, and what only a developer sees.
   costLow: SYSTEM.green,
@@ -195,11 +194,14 @@ export const chrome = {
   /** A round map control's side, and the gap between two controls side by
    * side or stacked. */
   control: 48,
-  controlGap: 10,
+  controlGap: 8,
   /** The least a press lands on, whatever the control one sees: iOS's 44
    * (issue/20260928-three-sizes-of-a-control.md). */
   target: 44,
   /** A control's glyph, one size whatever the control's: a map control's 48,
    * a sheet's 44, a slot in the strip. */
   glyph: 20,
+  /** What is lit in a row of choices 44 tall (the strip's tool in hand, a
+   * segmented control's segment): a capsule this tall inside its slot. */
+  selection: 36,
 } as const;
