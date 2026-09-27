@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   chipColumn: { flexShrink: 1, minWidth: 0, gap: 6 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   rule: { height: 1, backgroundColor: hairline },
-  chip: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5, backgroundColor: alpha(color.wash, 0.6) },
+  chip: { borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5, backgroundColor: color.faint },
   chipOn: { backgroundColor: color.chosen },
   chipText: { ...textStyle.footnote, fontWeight: weight.medium, color: color.text },
   chipTextOn: { fontWeight: weight.semibold, color: color.paper },

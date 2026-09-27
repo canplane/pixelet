@@ -33,7 +33,7 @@ const MOVE: LayoutAnimationConfig = {
   update: { type: "spring", springDamping: 1 },
 };
 
-export function Pill({ x, width, height, fill, tint, interactive, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, children, onContentWidth }: PillProps) {
+export function Pill({ x, width, height, fill, tint, variant, interactive, border, shadow, fade = 1, fadeFrom, fadeTransition = SNAP, touch, children, onContentWidth }: PillProps) {
   // Asked for in render, before the commit that lays the new frame out: a
   // layout animation applies to the next commit, and after this one's is too
   // late. The same on a second render of the same props.
@@ -50,6 +50,7 @@ export function Pill({ x, width, height, fill, tint, interactive, border, shadow
       <Glass
         fill={fill}
         tint={tint}
+        variant={variant}
         interactive={interactive}
         fade={fade}
         fadeFrom={fadeFrom}

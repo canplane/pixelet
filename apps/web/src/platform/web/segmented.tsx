@@ -2,7 +2,8 @@
 
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { alpha, color, textStyle, weight } from "@/shared/ui/theme.ts";
+import { PANEL_CONTROL } from "@/shared/ui/panel.tsx";
+import { color, textStyle, weight } from "@/shared/ui/theme.ts";
 
 export interface Segment<T extends string | number> {
   value: T;
@@ -31,10 +32,14 @@ export function Segmented<T extends string | number>({ segments, value, onChange
   );
 }
 
+/** Gap between the track and the selected segment. */
+const INSET = 3;
+
 const styles = StyleSheet.create({
-  // Capsules, the track and the segment in it alike.
-  track: { flexDirection: "row", height: 36, padding: 3, borderRadius: 18, backgroundColor: alpha(color.wash, 0.6) },
-  segment: { flex: 1, alignItems: "center", justifyContent: "center", borderRadius: 15 },
+  // Track and segment are both capsules; the segment's radius is the track's
+  // minus the inset, so the two are concentric.
+  track: { flexDirection: "row", height: PANEL_CONTROL, padding: INSET, borderRadius: PANEL_CONTROL / 2, backgroundColor: color.faint },
+  segment: { flex: 1, alignItems: "center", justifyContent: "center", borderRadius: PANEL_CONTROL / 2 - INSET },
   on: { backgroundColor: color.paper, boxShadow: "0 1px 2px rgba(0, 0, 0, 0.08)" },
   label: { ...textStyle.footnote, fontWeight: weight.medium, color: color.textMuted },
   labelOn: { color: color.text },

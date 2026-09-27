@@ -7,7 +7,8 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import type { BaseModalProps } from "@/app/type/ui.type.ts";
 
 import { useSafeArea } from "@platform/safe-area.ts";
-import { Panel, PanelHeader, Side } from "@/shared/ui/panel.tsx";
+import { Panel } from "@platform/panel.tsx";
+import { PanelHeader } from "@/shared/ui/panel.tsx";
 import { Segmented } from "@platform/segmented.tsx";
 import { hairline } from "@/shared/ui/theme.ts";
 import { SettingsSection } from "./section.tsx";
@@ -48,7 +49,7 @@ export function SettingsModal(props: BaseModalProps) {
   const [tab, setTab] = useState<SettingsTab>(SettingsTab.Effects);
 
   return (
-    <Panel side={Side.Left} width={360} label={t("settings.title")} onClose={onClose}>
+    <Panel label={t("settings.title")} onClose={onClose}>
       <PanelHeader title={t("settings.title")} closeLabel={t("settings.close")} onClose={onClose} />
 
       <View style={styles.tabs}>

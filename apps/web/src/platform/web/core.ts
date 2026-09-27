@@ -31,9 +31,6 @@ import { BOOT, boot_block, type Core } from "@/kernel/module.ts";
 import { run_gpu_stream } from "@/platform/web/webgpu.ts";
 import { DEV_BUNDLE } from "@/config/bundle.ts";
 
-/** Whether a text field draws its own clear: a page's does not. */
-export const SYSTEM_CLEAR: boolean = false;
-
 /**
  * Whether this device is a phone or tablet, for the few ceilings that are
  * set by memory rather than by measurement of time.

@@ -21,6 +21,7 @@ import type * as WebLocale from "../../../web/src/platform/web/locale.ts";
 import type * as WebMotion from "../../../web/src/platform/web/motion.tsx";
 import type * as WebOrigin from "../../../web/src/platform/web/origin.ts";
 import type * as WebPalette from "../../../web/src/platform/web/palette.ts";
+import type * as WebPanel from "../../../web/src/platform/web/panel.tsx";
 import type * as WebPill from "../../../web/src/platform/web/pill.tsx";
 import type * as WebSafeArea from "../../../web/src/platform/web/safe-area.ts";
 import type * as WebSave from "../../../web/src/platform/web/save.ts";
@@ -30,6 +31,7 @@ import type * as WebStorage from "../../../web/src/platform/web/storage.ts";
 import type * as WebSurface from "../../../web/src/platform/web/surface.tsx";
 import type * as WebText from "../../../web/src/platform/web/text.ts";
 import type * as WebToggleRow from "../../../web/src/platform/web/toggle-row.tsx";
+import type * as WebTextField from "../../../web/src/platform/web/text-field.ts";
 import type * as WebTypeface from "../../../web/src/platform/web/typeface.ts";
 import type * as WebVisualViewport from "../../../web/src/platform/web/visual-viewport.ts";
 
@@ -43,6 +45,7 @@ import * as Locale from "./locale.ts";
 import * as Motion from "./motion.tsx";
 import * as Origin from "./origin.ts";
 import * as Palette from "./palette.ts";
+import * as Panel from "./panel.tsx";
 import * as Pill from "./pill.tsx";
 import * as SafeArea from "./safe-area.ts";
 import * as Save from "./save.ts";
@@ -52,6 +55,7 @@ import * as Storage from "./storage.ts";
 import * as Surface from "./surface.tsx";
 import * as Text from "./text.ts";
 import * as ToggleRow from "./toggle-row.tsx";
+import * as TextField from "./text-field.ts";
 import * as Typeface from "./typeface.ts";
 import * as VisualViewport from "./visual-viewport.ts";
 
@@ -66,6 +70,7 @@ export const CONFORMS = [
   Motion satisfies typeof WebMotion,
   Origin satisfies typeof WebOrigin,
   Palette satisfies typeof WebPalette,
+  Panel satisfies typeof WebPanel,
   Pill satisfies typeof WebPill,
   SafeArea satisfies typeof WebSafeArea,
   Save satisfies typeof WebSave,
@@ -75,6 +80,7 @@ export const CONFORMS = [
   Surface satisfies typeof WebSurface,
   Text satisfies typeof WebText,
   ToggleRow satisfies typeof WebToggleRow,
+  TextField satisfies typeof WebTextField,
   Typeface satisfies typeof WebTypeface,
   VisualViewport satisfies typeof WebVisualViewport,
 ];

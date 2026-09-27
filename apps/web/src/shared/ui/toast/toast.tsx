@@ -8,6 +8,7 @@ import type { f64 } from "@xpute/core/abi/word.ts";
 import { Motion, Spin } from "@platform/motion.tsx";
 import { LABEL, STATUS } from "@platform/palette.ts";
 import { Pill } from "@platform/pill.tsx";
+import { GlassVariant } from "@/shared/ui/glass-variant.ts";
 import { Swap } from "@/shared/ui/motion/presence.tsx";
 import { LEAVE, SNAP, spring, type Transition } from "@/shared/ui/motion/transition.ts";
 import { alpha, color, textStyle, weight } from "@/shared/ui/theme.ts";
@@ -92,6 +93,7 @@ export function Toast({ message, tone, fade, fadeTransition, touch }: ToastProps
       // On glass the tint is all the color it carries: the system draws the
       // rim, and a border is the fill's alone (platform glass.tsx).
       tint={error ? alpha(color.alarm, 0.15) : undefined}
+      variant={GlassVariant.Regular}
       border={{ width: 2, color: error ? color.alarmEdge : alpha(color.white, 0.9) }}
       shadow={error ? `0 6px 20px ${alpha(color.alarm, 0.15)}` : "0 6px 20px rgba(0, 0, 0, 0.25)"}
       fade={fade}

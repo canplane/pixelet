@@ -53,6 +53,8 @@ const CORAL = {
   deep: "#C6522A",
 } as const;
 
+const WASH = "#efe3cf";
+
 export const color = {
   white: "#ffffff",
   black: "#000000",
@@ -92,7 +94,10 @@ export const color = {
   text: "#272117",
   textMuted: "#696257",
   /** A warm wash for what is picked or pressed; used at an opacity. */
-  wash: "#efe3cf",
+  wash: WASH,
+  /** Background of unselected controls (tracks, chips, round buttons and
+   * fields on a sheet). Selected controls use a solid fill instead. */
+  faint: alpha(WASH, 0.6),
   /** What is chosen on a panel: a check, a switch, a chip. */
   chosen: CORAL.base,
   /** An action's words on a panel. */
@@ -136,8 +141,8 @@ export const font = {
 export const weight = { regular: "400", medium: "500", semibold: "600" } as const;
 
 export const textStyle = {
-  /** A panel's heading. */
-  title: { fontFamily: FAMILY, fontSize: 17, lineHeight: 22, fontWeight: weight.semibold },
+  /** A panel's heading: body size, semibold, like an iOS sheet title. */
+  title: { fontFamily: FAMILY, fontSize: 15, lineHeight: 20, fontWeight: weight.semibold },
   /** What is read: a row's name, a result, a notice. */
   body: { fontFamily: FAMILY, fontSize: 15, lineHeight: 20, fontWeight: weight.regular },
   /** A text field. Sixteen, not the body's fifteen: iOS Safari zooms the page

@@ -11,9 +11,10 @@ import type { BaseModalProps } from "@/app/type/ui.type.ts";
 import { useUiStore } from "@/app/store/ui-store.ts";
 import { ActiveTool } from "@/kernel/abi/cmd.spec.ts";
 import { useSafeArea } from "@platform/safe-area.ts";
-import { Panel, PanelHeader, Side } from "@/shared/ui/panel.tsx";
+import { Panel } from "@platform/panel.tsx";
+import { PanelHeader } from "@/shared/ui/panel.tsx";
 import { Segmented } from "@platform/segmented.tsx";
-import { alpha, color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
+import { color, hairline, sectionTitle, textStyle } from "@/shared/ui/theme.ts";
 import { CharacterPicker } from "@/feature/character/picker.tsx";
 import { CubeSwatch } from "./cube-swatch.tsx";
 import { DECOR_ICONS } from "./mode-bar.tsx";
@@ -124,7 +125,7 @@ export function DrawerModal(props: BaseModalProps) {
   }
 
   return (
-    <Panel side={Side.Right} width={360} label={t("drawer_modal.title")} onClose={onClose}>
+    <Panel label={t("drawer_modal.title")} onClose={onClose} half>
       <PanelHeader title={t("drawer_modal.title")} closeLabel={t("drawer_modal.close")} onClose={onClose} />
 
       <View style={styles.tabs}>
@@ -178,5 +179,5 @@ const styles = StyleSheet.create({
   markOff: { boxShadow: `0 0 0 1px ${hairline}` },
   markOn: { boxShadow: `0 0 0 1px ${color.paper}, 0 0 0 3px ${color.text}`, transform: [{ scale: 1.05 }] },
   decor: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  decorOn: { backgroundColor: alpha(color.wash, 0.6) },
+  decorOn: { backgroundColor: color.faint },
 });

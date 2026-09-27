@@ -7,8 +7,8 @@ import { useTranslation } from "react-i18next";
 import { View } from "react-native";
 
 import { type Setting, type SettingName, SETTINGS, type SettingSection, settingsIn } from "@/feature/setting/schema.ts";
-import { SectionTitle, SettingGroup, SettingRadioRow, SettingRow } from "./row.tsx";
-import { Command, encode_setting_toggle, encode_setting_update } from "@/kernel/abi/cmd.spec.ts";
+import { SectionTitle, SettingChoiceRow, SettingGroup, SettingRow } from "./row.tsx";
+import { Command, encode_setting_update } from "@/kernel/abi/cmd.spec.ts";
 import { kernel_command, useKernel } from "@/kernel/shell.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, LucideIcon>> = {
@@ -57,7 +57,7 @@ function SettingControl(props: { name: SettingName }) {
           label={t(`${base}.label`)}
           description={t(`${base}.description`)}
           active={value === 1}
-          onToggle={() => kernel_command(Command.SETTING_TOGGLE, encode_setting_toggle({ key }))}
+          onChange={(on) => kernel_command(Command.SETTING_UPDATE, encode_setting_update({ key, value: on ? 1 : 0 }))}
           cost={setting.cost}
           dev={setting.dev}
         />
@@ -66,7 +66,7 @@ function SettingControl(props: { name: SettingName }) {
       return (
         <SettingGroup label={t(`${base}.label`)} cost={setting.cost} dev={setting.dev}>
           {setting.options.map((option, i) => (
-            <SettingRadioRow
+            <SettingChoiceRow
               key={option}
               label={t(`${base}.${option}.label`)}
               description={t(`${base}.${option}.description`)}

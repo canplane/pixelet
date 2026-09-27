@@ -31,8 +31,8 @@ function DevBadge() {
   return <Badge text="DEV" tint={color.dev} />;
 }
 
-/** A name, its badges, and what it does under it. */
-function Described({ label, description, cost, dev }: { label: string; description: string; cost?: SettingCost; dev?: boolean }) {
+/** A name, its badges, and an optional description under it. */
+function Described({ label, description, cost, dev }: { label: string; description?: string; cost?: SettingCost; dev?: boolean }) {
   return (
     <View style={styles.described}>
       <View style={styles.nameLine}>
@@ -40,7 +40,7 @@ function Described({ label, description, cost, dev }: { label: string; descripti
         {dev && <DevBadge />}
         {cost && <CostBadge cost={cost} />}
       </View>
-      <Text style={styles.description}>{description}</Text>
+      {description && <Text style={styles.description}>{description}</Text>}
     </View>
   );
 }
@@ -49,7 +49,10 @@ interface SettingRowProps {
   label: string;
   description: string;
   active: boolean;
-  onToggle: () => void;
+  /** Called with the switch's new value, which is sent to the kernel as is.
+   * Sending a flip instead would depend on the current value having arrived
+   * already. */
+  onChange: (active: boolean) => void;
   cost?: SettingCost;
   /** Marks a setting only a development build offers (schema.json's `dev`) — the table decides whether the row is there at all, this just labels it once shown. */
   dev?: boolean;
@@ -57,9 +60,9 @@ interface SettingRowProps {
 
 /** A toggle: the platform's row for a switch (platform toggle-row.tsx). */
 export function SettingRow(props: SettingRowProps) {
-  const { label, description, active, onToggle, cost, dev } = props;
+  const { label, description, active, onChange, cost, dev } = props;
   return (
-    <ToggleRow value={active} onValueChange={() => onToggle()} style={[styles.row, styles.bleed]}>
+    <ToggleRow value={active} onValueChange={onChange} style={[styles.row, styles.bleed]}>
       <Described label={label} description={description} cost={cost} dev={dev} />
     </ToggleRow>
   );
@@ -102,20 +105,20 @@ export function SettingGroup(props: SettingGroupProps) {
   );
 }
 
-interface SettingRadioRowProps {
+interface SettingChoiceRowProps {
   label: string;
-  description: string;
+  description?: string;
   selected: boolean;
   onSelect: () => void;
   cost?: SettingCost;
 }
 
-/** One answer of a choice — the same layout as SettingRow, with a check on
- * the answer taken and nothing on the rest, as a system's list marks one of
- * many. The check's place is kept when it is empty, so taking an answer does
- * not rewrap the words beside it. It sits inside its group's box, so it does
- * not bleed to the panel's edge as a row does. */
-export function SettingRadioRow(props: SettingRadioRowProps) {
+/** One option of a single choice (a setting's options, the language list).
+ * Same layout as SettingRow; the selected option shows a check, the others
+ * nothing. The check slot keeps its width when empty so selecting does not
+ * rewrap the text. Unlike SettingRow it does not extend to the panel edge:
+ * its group box or list handles that. */
+export function SettingChoiceRow(props: SettingChoiceRowProps) {
   const { label, description, selected, onSelect, cost } = props;
   return (
     <Pressable onPress={onSelect} accessibilityRole="radio" aria-checked={selected} style={styles.row}>
