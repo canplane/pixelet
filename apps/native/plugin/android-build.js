@@ -2,8 +2,8 @@
 
 /**
  * What an Android build of this app is for, written into the Gradle
- * properties and the app's build script `expo prebuild` generates (android/
- * is its, and not kept).
+ * properties, the app's build script and the daemon's criteria `expo
+ * prebuild` generates (android/ is its, and not kept).
  *
  * - One ABI, arm64-v8a: the kernel is built for aarch64-linux-android alone
  *   (script/build-native.ts), and an ABI packed without it is an app that
@@ -15,9 +15,17 @@
  *   React Native takes a variant for a debug build only by its whole name,
  *   `debug` unless told, and bundles every other one into its APK: a
  *   `questDebug` was a Debug build that never asked Metro.
+ * - Gradle's daemon on Java 17, whatever launches it: the NDK's native build
+ *   of expo-modules-core fails under a newer Java ("A restricted method in
+ *   java.lang.System has been called"). A shell's `JAVA_HOME` did not hold
+ *   it — Android Studio's sync writes the daemon's criteria for its own
+ *   bundled Java 25, and the criteria outrank `JAVA_HOME` — so the criteria
+ *   are written here, where Studio finds them already said.
  */
 
-const { withAppBuildGradle, withGradleProperties } = require("expo/config-plugins");
+const fs = require("node:fs");
+const path = require("node:path");
+const { withAppBuildGradle, withDangerousMod, withGradleProperties } = require("expo/config-plugins");
 
 const PROPERTIES = {
   reactNativeArchitectures: "arm64-v8a",
@@ -27,6 +35,7 @@ const PROPERTIES = {
 const FLAVORS = ["mobile", "quest"];
 const DEBUGGABLE = FLAVORS.flatMap((flavor) => [`${flavor}Debug`, `${flavor}DebugOptimized`]);
 const MARK = "// pxl: the flavors' debug builds (plugin/android-build.js)";
+const DAEMON_JAVA = "17";
 
 module.exports = (config) => {
   config = withGradleProperties(config, (config) => {
@@ -35,6 +44,11 @@ module.exports = (config) => {
     config.modResults = items;
     return config;
   });
+  config = withDangerousMod(config, ["android", (config) => {
+    const file = path.join(config.modRequest.platformProjectRoot, "gradle", "gradle-daemon-jvm.properties");
+    fs.writeFileSync(file, `# plugin/android-build.js\ntoolchainVersion=${DAEMON_JAVA}\n`);
+    return config;
+  }]);
   return withAppBuildGradle(config, (config) => {
     const gradle = config.modResults.contents;
     if (gradle.includes(MARK)) return config;

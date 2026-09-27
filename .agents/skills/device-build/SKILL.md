@@ -118,10 +118,11 @@ not run it yet.
   has been called". `apps/native/.java-version` names 17 for jenv:
   `jenv add <JDK 17 home>` once, and Gradle run under `apps/native` gets it
   (`jenv exec ./gradlew …`, or `JAVA_HOME` set by jenv's export plugin).
-  Where prebuild writes `android/gradle/gradle-daemon-jvm.properties`, it
-  pins Gradle's daemon to Java 25 whatever `JAVA_HOME` says, and the same
-  failure follows; deleting the file lets the daemon run on the JDK Gradle
-  is started with.
+  `plugin/android-build.js` writes Gradle's daemon criteria
+  (`android/gradle/gradle-daemon-jvm.properties`) for 17, so the daemon
+  runs on a 17 Gradle finds whatever launches it; opening the project in
+  Android Studio once wrote them for its own Java 25, which outranks
+  `JAVA_HOME`, and the same failure followed.
 - The Rust target `aarch64-linux-android`, which `rust-toolchain.toml`
   installs.
 
