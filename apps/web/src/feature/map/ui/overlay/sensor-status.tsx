@@ -3,11 +3,13 @@
 import { Compass, createLucideIcon, Locate, LocateOff, type LucideIcon } from "lucide-react-native";
 import { StyleSheet, View } from "react-native";
 
+import type { f64 } from "@xpute/core/abi/word.ts";
+
 import { DevicePoseStatus } from "@/kernel/abi/cmd.spec.ts";
 import { useKernel } from "@/kernel/shell.ts";
 
 import { HANDHELD } from "@platform/core.ts";
-import { OutlinedIcon } from "@/shared/ui/outlined-icon.tsx";
+import { HaloIcon } from "@/shared/ui/halo.tsx";
 import { color } from "@/shared/ui/theme.ts";
 
 /** Where the two sensors stand: read by the glyphs over the map and by the
@@ -43,18 +45,35 @@ function statusColor(status: DevicePoseStatus): string {
   }
 }
 
+/** How present a sensor's glyph is. The row is a subtitle under the address,
+ * so a sensor that is on stays quiet at QUIET, and one not yet on is half of
+ * that, as iOS draws what is off. A sensor on its way or failed has something
+ * to say and is drawn in full. */
+function presence(status: DevicePoseStatus): f64 {
+  switch (status) {
+    case DevicePoseStatus.Loading:
+    case DevicePoseStatus.Error:
+      return 1;
+    case DevicePoseStatus.Idle:
+      return QUIET / 2;
+    default:
+      return QUIET;
+  }
+}
+
+const QUIET = 0.7;
+
 /** The sensors' state, over the map: shown, not pressed — they are turned on
  * from the search panel. */
 export function SensorStatus() {
   const { location, orientation, hasCompass } = useSensors();
 
-  // A sensor not yet on is the glyph faded whole, its rim with it, as iOS
-  // draws what is off; one that is on is plain white, and only a sensor on
-  // its way or failed takes a color. A failed one is also crossed out, so
-  // the state does not rest on color alone.
+  // The glyph is faded whole, its rim with it. Only a sensor on its way or
+  // failed takes a color, and a failed one is also crossed out, so the state
+  // does not rest on color alone.
   const icon = (Icon: LucideIcon, Failed: LucideIcon, status: DevicePoseStatus) => (
-    <View style={status === DevicePoseStatus.Idle && styles.off}>
-      <OutlinedIcon icon={status === DevicePoseStatus.Error ? Failed : Icon} size={14} strokeWidth={2.5} color={statusColor(status)} />
+    <View style={{ opacity: presence(status) }}>
+      <HaloIcon icon={status === DevicePoseStatus.Error ? Failed : Icon} size={12} color={statusColor(status)} />
     </View>
   );
 
@@ -68,5 +87,4 @@ export function SensorStatus() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  off: { opacity: 0.5 },
 });

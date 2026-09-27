@@ -1,7 +1,7 @@
 // @pxl/web/feature/map/ui/control/scale-bar.tsx
 
 import { StyleSheet } from "react-native";
-import { Path, Svg, Text as SvgText } from "react-native-svg";
+import { G, Path, Svg } from "react-native-svg";
 
 import { useKernel } from "@/kernel/shell.ts";
 
@@ -9,24 +9,26 @@ import { Presence } from "@/shared/ui/motion/presence.tsx";
 import { LEAVE, SETTLE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";
 import { Motion } from "@platform/motion.tsx";
-import { color, edge, font } from "@/shared/ui/theme.ts";
+import { HaloText } from "@/shared/ui/halo.tsx";
+import { color, halo, textStyle, weight } from "@/shared/ui/theme.ts";
 
-const TICK_PX = 8;
-/** Room around the strokes for their edge. */
-const PAD_PX = 3;
-const LABEL_PX = 11;
-/** Where the label's baseline stands below the bar's box: tucked up under
- * it, as a label sits under a map's scale. */
-const LABEL_BASELINE_PX = 7;
-/** The narrowest the bar is, so a short one still has room for its label. */
-const MIN_WIDTH_PX = 44;
+/** How far the end ticks drop from the line. */
+const TICK_PX = 5;
+const LINE_PX = 1;
+/** Room around the strokes for their halo. */
+const PAD_PX = 4;
+/** From the bottom of the label's line box down to the line. */
+const LABEL_GAP_PX = 6;
 
 /** How far a distance on the map spans on screen, at the camera's zoom.
  *
- * Drawn as one path stroked twice — the edge wide and dark, the line over it
- * — so the edge runs unbroken round the ticks and the line where they meet,
- * and the label as text stroked the same way: a crisp outline on every
- * platform, where a device's text takes one soft shadow. */
+ * Drawn as a drawing's dimension is: the label over a line with a tick
+ * dropping at each end. A scale is read by its ends, and the halo softens
+ * where a bare line stops.
+ *
+ * In the halo the address has (theme.ts `halo`): the label is a HaloText, as
+ * the address is, and the line and ticks are one path stroked as rings, so
+ * the halo runs unbroken round the ticks and the line where they meet. */
 export function MapScaleBar({ show }: { show: boolean }) {
   const { total_meters, bar_width_px } = useKernel((s) => s.scale_bar);
   // Dimmed with the chrome around it, as a surface of its own.
@@ -36,16 +38,16 @@ export function MapScaleBar({ show }: { show: boolean }) {
   // label must not be forced to upper case.
   const label: string = total_meters >= 1000 ? `${total_meters / 1000}km` : `${total_meters}m`;
 
-  const width = Math.max(bar_width_px + PAD_PX * 2, MIN_WIDTH_PX);
-  const barHeight = TICK_PX + PAD_PX * 2;
-  const height = barHeight + LABEL_BASELINE_PX + LABEL_PX / 2;
-  const left = (width - bar_width_px) / 2 + 0.5;
+  const width = bar_width_px + PAD_PX * 2;
+  const left = PAD_PX + 0.5;
   const right = left + bar_width_px - 1;
-  const top = PAD_PX;
-  const bottom = PAD_PX + TICK_PX;
-  const mid = top + TICK_PX / 2;
-  const d = `M${left} ${top}V${bottom} M${left} ${mid}H${right} M${right} ${top}V${bottom}`;
-  const text = { x: width / 2, y: barHeight + LABEL_BASELINE_PX, fontSize: LABEL_PX, fontWeight: "700", fontFamily: font.family, letterSpacing: 0.8, textAnchor: "middle" } as const;
+  const d = `M${left} ${PAD_PX + TICK_PX}V${PAD_PX}H${right}V${PAD_PX + TICK_PX}`;
+  const svgHeight = PAD_PX + TICK_PX + PAD_PX;
+  // Centered in the title's slot, the line stands on the round controls'
+  // centerline either side, the label above it and the ticks below: room
+  // below balances the box about the line.
+  const line = styles.label.lineHeight + LABEL_GAP_PX;
+  const height = line + TICK_PX + PAD_PX;
 
   return (
     <Presence
@@ -55,12 +57,15 @@ export function MapScaleBar({ show }: { show: boolean }) {
       transition={SETTLE}
       exitTransition={LEAVE}
     >
-      <Motion to={{ opacity: veil.level }} transition={veil.transition} style={styles.root}>
-        <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-          <Path d={d} stroke={edge} strokeWidth={3.5} fill="none" strokeLinecap="square" />
-          <Path d={d} stroke={color.white} strokeWidth={1.5} fill="none" strokeLinecap="square" />
-          <SvgText {...text} stroke={edge} strokeWidth={2} strokeLinejoin="round" fill={edge}>{label}</SvgText>
-          <SvgText {...text} fill={color.white}>{label}</SvgText>
+      <Motion to={{ opacity: veil.level }} transition={veil.transition} style={[styles.root, { paddingBottom: 2 * line - height }]}>
+        <HaloText style={styles.label}>{label}</HaloText>
+        <Svg width={width} height={svgHeight} viewBox={`0 0 ${width} ${svgHeight}`} style={styles.bar}>
+          {halo.rings.map((px) => (
+            <G key={px} opacity={halo.ring}>
+              <Path d={d} stroke={color.black} strokeWidth={LINE_PX + 2 * px} fill="none" strokeLinecap="square" />
+            </G>
+          ))}
+          <Path d={d} stroke={color.white} strokeWidth={LINE_PX} fill="none" strokeLinecap="square" />
         </Svg>
       </Motion>
     </Presence>
@@ -68,5 +73,7 @@ export function MapScaleBar({ show }: { show: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  root: { alignItems: "center", paddingTop: 4, paddingBottom: 8 },
+  root: { alignItems: "center" },
+  label: { ...textStyle.caption2, fontWeight: weight.semibold, fontVariant: ["tabular-nums"], color: color.white },
+  bar: { marginTop: LABEL_GAP_PX - PAD_PX },
 });

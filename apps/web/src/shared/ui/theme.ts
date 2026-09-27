@@ -117,9 +117,12 @@ export const color = {
   profilerHaltInk: SYSTEM.yellow,
 } as const;
 
-/** The dark rim what floats over the map is drawn on — the scale, the address
- * and the glyphs beside it — so it reads over any ground. */
-export const edge = alpha(color.black, 0.9);
+/** The soft dark halo what floats over the map stands in (the address, the
+ * glyphs beside it, the scale), so white reads over any ground, as a map's
+ * labels do: black copies of a glyph, a line or a text grown by each of
+ * `rings` pixels a side, each copy faded whole to `ring`, so the dark falls
+ * off with the distance from the stroke (shared/ui/halo.tsx). */
+export const halo = { rings: [2, 1], ring: 0.3 } as const;
 
 /** A panel's hairlines: its text, faint. */
 export const hairline = alpha(color.text, 0.1);
