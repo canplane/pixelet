@@ -78,18 +78,18 @@ export function PanelHeader({ title, closeLabel, onClose }: { title: string; clo
   );
 }
 
-/** A panel's body: the header area (`header`, PANEL_HEAD_HEIGHT tall) and under it the
- * scroll area (`children`), so content never scrolls behind the header.
- * The tabs float across the boundary between the two, on Regular glass,
- * since content moves behind their lower part; scroll content that has tabs
- * above it pads its top by PANEL_TABS_ROOM. No divider between the two. */
+/** A panel's body: the header area (`header`, PANEL_HEAD_HEIGHT tall) and
+ * under it the scroll area (`children`), so content never scrolls behind the
+ * header. The tabs float across the boundary, over the content that moves
+ * behind their lower part; scroll content under tabs pads its top by
+ * PANEL_TABS_ROOM. */
 export function PanelBody({ header, tabs, children }: { header: ReactNode; tabs?: ReactNode; children: ReactNode }) {
   return (
     <View style={styles.body}>
       <View style={styles.head}>{header}</View>
       <View style={styles.scroll}>{children}</View>
       {tabs && (
-        <Backing fill={color.paper} place={BackingPlace.OverMap} style={styles.tabs}>
+        <Backing fill={color.paper} place={BackingPlace.OverContent} style={styles.tabs}>
           {tabs}
         </Backing>
       )}

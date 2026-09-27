@@ -35,8 +35,8 @@ export interface BackingProps {
   tint?: ColorValue;
   /** Whether the glass answers a touch, as a control's does. */
   interactive?: boolean;
-  /** Where it stands (shared/ui/backing-place.ts): clear glass on a sheet,
-   * regular over the map. */
+  /** Where it stands (shared/ui/backing-place.ts): clear glass on a sheet's
+   * plain ground, regular over the map or over content that scrolls. */
   place: BackingPlace;
   /** How present it is, from 1 to 0 (gone); and what it mounts at. */
   fade?: f64;

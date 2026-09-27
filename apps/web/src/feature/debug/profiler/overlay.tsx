@@ -47,8 +47,8 @@ export const enum Tint {
  * under a hovering pointer or a finger. */
 const TINT: Record<Tint, { border: string; ground: string; ink: string; lit: string; litInk: string }> = {
   [Tint.Plain]: { border: alpha(color.white, 0.15), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.6), lit: alpha(color.white, 0.1), litInk: alpha(color.white, 0.9) },
-  [Tint.Go]: { border: alpha(color.profilerGo, 0.4), ground: alpha(color.profilerGo, 0.1), ink: color.profilerGoInk, lit: alpha(color.profilerGo, 0.2), litInk: color.profilerGoInk },
-  [Tint.Halt]: { border: alpha(color.glow, 0.4), ground: alpha(color.glow, 0.1), ink: color.profilerHaltInk, lit: alpha(color.glow, 0.2), litInk: color.profilerHaltInk },
+  [Tint.Go]: { border: alpha(color.profilerGo, 0.4), ground: alpha(color.profilerGo, 0.1), ink: color.profilerGo, lit: alpha(color.profilerGo, 0.2), litInk: color.profilerGo },
+  [Tint.Halt]: { border: alpha(color.profilerHalt, 0.4), ground: alpha(color.profilerHalt, 0.1), ink: color.profilerHalt, lit: alpha(color.profilerHalt, 0.2), litInk: color.profilerHalt },
   [Tint.Off]: { border: alpha(color.white, 0.1), ground: alpha(color.white, 0.05), ink: alpha(color.white, 0.25), lit: alpha(color.white, 0.05), litInk: alpha(color.white, 0.25) },
 };
 
@@ -151,7 +151,7 @@ export function ProfilerOverlay() {
     w.__pxl_profiler_trace = profilerTraceSave;
     w.__pxl_profiler_log = profilerLog;
     w.__pxl_view = (dist, polar) => kernel_command(Command.INPUT_VIEW, encode_input_view({ dist, polar }));
-    w.__pxl_gauge = (window_ms) => profilerGaugeRead(window_ms);
+    w.__pxl_gauge = (windowMs) => profilerGaugeRead(windowMs);
     return () => {
       profilerLog(false);
       delete w.__pxl_profiler_trace;

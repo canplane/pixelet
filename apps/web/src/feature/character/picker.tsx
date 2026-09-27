@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
   picker: { gap: 8 },
   pickerLabel: { ...sectionTitle, color: LABEL.secondary },
   pickerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  preview: { width: 80, height: 80, flexShrink: 0, borderRadius: 10, overflow: "hidden", backgroundColor: alpha(color.wash, 0.4) },
+  preview: { width: 80, height: 80, flexShrink: 0, borderRadius: 10, overflow: "hidden", backgroundColor: alpha(color.fill, 0.4) },
   chipColumn: { flexShrink: 1, minWidth: 0, gap: 6 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   rule: { height: 1, backgroundColor: hairline },

@@ -23,47 +23,28 @@ export function useSensors() {
   return { location, orientation, hasCompass };
 }
 
-function statusColor(status: DevicePoseStatus): string {
-  switch (status) {
-    case DevicePoseStatus.Loading:
-      return color.pendingGlyph;
-    case DevicePoseStatus.Error:
-      return color.alarmGlyph;
-    default:
-      return color.white;
-  }
-}
-
-/** How present a sensor's glyph is. The row is a subtitle under the address,
- * so a sensor that is on stays quiet at QUIET, and one not yet on is half of
- * that, as iOS draws what is off. A sensor on its way or failed has something
- * to say and is drawn in full. */
-function presence(status: DevicePoseStatus): f64 {
-  switch (status) {
-    case DevicePoseStatus.Loading:
-    case DevicePoseStatus.Error:
-      return 1;
-    case DevicePoseStatus.Idle:
-      return QUIET / 2;
-    default:
-      return QUIET;
-  }
-}
-
-const QUIET = 0.7;
+/** A sensor's glyph by its state: its color and how present it is. The row is
+ * a subtitle under the address, so a sensor that is on stays quiet, and one
+ * not yet on is half as present, as iOS draws what is off. Only a sensor on
+ * its way or failed takes a color, drawn in full: it has something to say. */
+const LOOK: Record<DevicePoseStatus, { color: string; presence: f64 }> = {
+  [DevicePoseStatus.Idle]: { color: color.white, presence: 0.35 },
+  [DevicePoseStatus.Loading]: { color: color.pendingGlyph, presence: 1 },
+  [DevicePoseStatus.Ready]: { color: color.white, presence: 0.7 },
+  [DevicePoseStatus.Error]: { color: color.alarmGlyph, presence: 1 },
+  [DevicePoseStatus.Unavailable]: { color: color.white, presence: 0.7 },
+};
 
 /** The sensors' state, over the map: shown, not pressed — they are turned on
  * from the search panel. */
 export function SensorStatus() {
   const { location, orientation, hasCompass } = useSensors();
 
-  // The glyph is faded whole, its rim with it. Only a sensor on its way or
-  // failed takes a color, and a failed one is also crossed out, so the state
-  // does not rest on color alone — the location as its symbol's own `.slash`
-  // is, and the compass, whose symbol has none, the same way.
+  // The glyph is faded whole, its halo with it. A failed one is also crossed
+  // out, so the state does not rest on color alone.
   const icon = (glyph: GlyphName, status: DevicePoseStatus) => (
-    <View style={{ opacity: presence(status) }}>
-      <HaloIcon glyph={glyph} size={12} color={statusColor(status)} struck={status === DevicePoseStatus.Error} />
+    <View style={{ opacity: LOOK[status].presence }}>
+      <HaloIcon glyph={glyph} size={12} color={LOOK[status].color} struck={status === DevicePoseStatus.Error} />
     </View>
   );
 

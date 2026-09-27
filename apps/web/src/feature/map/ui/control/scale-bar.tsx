@@ -10,13 +10,13 @@ import { LEAVE, SETTLE, SNAP } from "@/shared/ui/motion/transition.ts";
 import { useVeil } from "@/shared/ui/motion/veil.ts";
 import { Motion } from "@platform/motion.tsx";
 import { HaloText } from "@/shared/ui/halo.tsx";
-import { color, halo, textStyle, weight } from "@/shared/ui/theme.ts";
+import { color, halo, haloRings, textStyle, weight } from "@/shared/ui/theme.ts";
 
 /** How far the end ticks drop from the line. */
 const TICK_PX = 5;
 const LINE_PX = 1;
 /** Room around the strokes for their halo. */
-const PAD_PX = 4;
+const PAD_PX = LINE_PX + halo.reach + 1;
 /** From the bottom of the label's line box down to the line. */
 const LABEL_GAP_PX = 6;
 
@@ -25,10 +25,8 @@ const LABEL_GAP_PX = 6;
  * Drawn as a drawing's dimension is: the label over a line with a tick
  * dropping at each end. A scale is read by its ends, and the halo softens
  * where a bare line stops.
- *
- * In the halo the address has (theme.ts `halo`): the label is a HaloText, as
- * the address is, and the line and ticks are one path stroked as rings, so
- * the halo runs unbroken round the ticks and the line where they meet. */
+ * The line and ticks are one path, stroked as the halo's rings, so the halo
+ * runs unbroken where they meet. */
 export function MapScaleBar({ show }: { show: boolean }) {
   const { total_meters, bar_width_px } = useKernel((s) => s.scale_bar);
   // Dimmed with the chrome around it, as a surface of its own.
@@ -39,6 +37,7 @@ export function MapScaleBar({ show }: { show: boolean }) {
   const label: string = total_meters >= 1000 ? `${total_meters / 1000}km` : `${total_meters}m`;
 
   const width = bar_width_px + PAD_PX * 2;
+  // A one-pixel line centered on a pixel, spanning the bar's pixels inclusive.
   const left = PAD_PX + 0.5;
   const right = left + bar_width_px - 1;
   const d = `M${left} ${PAD_PX + TICK_PX}V${PAD_PX}H${right}V${PAD_PX + TICK_PX}`;
@@ -60,7 +59,7 @@ export function MapScaleBar({ show }: { show: boolean }) {
       <Motion to={{ opacity: veil.level }} transition={veil.transition} style={[styles.root, { paddingBottom: 2 * line - height }]}>
         <HaloText style={styles.label}>{label}</HaloText>
         <Svg width={width} height={svgHeight} viewBox={`0 0 ${width} ${svgHeight}`} style={styles.bar}>
-          {halo.rings.map((px) => (
+          {haloRings.map((px) => (
             <G key={px} opacity={halo.ring}>
               <Path d={d} stroke={color.black} strokeWidth={LINE_PX + 2 * px} fill="none" strokeLinecap="square" />
             </G>

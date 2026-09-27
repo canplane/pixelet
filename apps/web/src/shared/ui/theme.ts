@@ -20,19 +20,21 @@ export function alpha(hex: string, a: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 
-/** `tint(color, 0.1)`: a `#rrggbb` laid over white at an opacity, as one
- * solid color — for a ground that must not show what is behind it. */
-function tint(hex: string, a: number): string {
+/** `tint(color, 0.1)`: a `#rrggbb` laid over a ground (white, or `over`) at
+ * an opacity, as one solid color — for a ground that must not show what is
+ * behind it. */
+function tint(hex: string, a: number, over = "#ffffff"): string {
   const n = parseInt(hex.slice(1), 16);
-  const mix = (c: number) => Math.round(255 + (c - 255) * a).toString(16).padStart(2, "0");
-  return `#${mix((n >> 16) & 255)}${mix((n >> 8) & 255)}${mix(n & 255)}`;
+  const g = parseInt(over.slice(1), 16);
+  const mix = (c: number, b: number) => Math.round(b + (c - b) * a).toString(16).padStart(2, "0");
+  return `#${[16, 8, 0].map((s) => mix((n >> s) & 255, (g >> s) & 255)).join("")}`;
 }
 
 /** iOS's system hues, in light mode: what a state or a cost is drawn in,
- * at an opacity or as a tint, so it reads as the system's own would. A
- * device takes the system's own where it can (platform palette.ts), which
- * also moves with dark mode. */
-const SYSTEM = {
+ * at an opacity or as a tint, so it reads as the system's own would. The
+ * page's palette names its roles from these; a device names the system's own
+ * (platform palette.ts). */
+export const SYSTEM = {
   red: "#FF3B30",
   orange: "#FF9500",
   yellow: "#FFCC00",
@@ -53,9 +55,12 @@ const CORAL = {
   deep: "#C6522A",
 } as const;
 
-/** The gray the fills on a sheet are drawn at an opacity of: iOS's fill gray
- * turned a little warm, as the paper is. */
+/** The gray a sheet's fills are drawn in at an opacity: iOS's fill gray,
+ * turned as warm as the paper. */
 const FILL = "#7d766c";
+
+/** White, barely warm: what the sheets and the solid controls stand on. */
+const PAPER = "#fffcf7";
 
 export const color = {
   white: "#ffffff",
@@ -66,58 +71,47 @@ export const color = {
    * labels are drawn at an opacity of; the page's labels are iOS's
    * (platform palette.ts), and a hairline is this gray, faint. */
   labelGray: "#3C3C43",
-  /** The round controls' and the toasts' solid ground, where there is no
-   * system glass: the paper's warm white. */
-  ground: "#fffcf7",
-  /** The profiler's warning. */
-  glow: SYSTEM.yellow,
-  /** The compass's north on the page (platform palette.ts `NORTH`): the
-   * system's red, as iOS's own Maps and Compass draw it. */
-  north: SYSTEM.red,
+  /** The round controls' and the toasts' ground where there is no system
+   * glass. */
+  ground: PAPER,
+  /** The tool strip's dark band, where there is no system glass. */
+  band: SYSTEM.dark,
   /** The send button. */
   send: CORAL.base,
   /** One's own name in the chat. */
   self: CORAL.deep,
-  /** A status: something ready, as a sensor or the world is; something on
-   * its way; a report that something failed. */
-  ready: SYSTEM.green,
-  pending: SYSTEM.orange,
-  alarm: SYSTEM.red,
   /** A sensor's glyph over the map, on its way and failed: the status hues
    * lightened toward the white of the glyphs beside them by one ratio, so
    * they tell without shouting and stay a pair. */
   pendingGlyph: tint(SYSTEM.orange, 0.6),
   alarmGlyph: tint(SYSTEM.red, 0.6),
 
-  // The panels' surface and what stands on it: iOS's system colors, each
-  // turned a little warm, so the sheets keep the app's warmth under the
-  // system's words.
-  /** A sheet's ground, on the page and on a device's sheet alike: white,
-   * barely warm. */
-  paper: "#fffcf7",
-  /** For what is picked or pressed; used at an opacity. */
-  wash: FILL,
+  // The panels' surface and what stands on it: iOS's system colors, turned
+  // barely warm.
+  /** A sheet's ground, on the page and on a device's sheet alike. */
+  paper: PAPER,
+  /** The fill gray, for a ground an opacity of it is set on. */
+  fill: FILL,
   /** Background of unselected controls (tracks, chips, round buttons and
-   * fields on a sheet): iOS's tertiary system fill, in the warm gray.
-   * Selected controls use a solid fill instead. */
+   * fields on a sheet): iOS's tertiary system fill. Selected controls use a
+   * solid fill instead. */
   faint: alpha(FILL, 0.12),
   /** What is chosen on a panel: a check, a switch, a chip. */
   chosen: CORAL.base,
   /** An action's words on a panel. */
   action: CORAL.deep,
-  /** An off switch's track: iOS's, in the warm gray over the paper. */
-  track: "#ebe7e0",
+  /** An off switch's track: iOS's, its fill gray at 16% over the paper. */
+  track: tint(FILL, 0.16, PAPER),
 
   // What a setting costs the device, and what only a developer sees.
   costLow: SYSTEM.green,
   costMedium: SYSTEM.orange,
   costHigh: SYSTEM.red,
   dev: SYSTEM.purple,
-  /** The profiler's buttons: one to begin a window, and the ink of one to
-   * begin it and of one to stop it, over its dark panel. */
+  /** The profiler's, over its dark panel: the button that begins a window,
+   * and the one that stops it, which a gauge's warning shares. */
   profilerGo: SYSTEM.green,
-  profilerGoInk: SYSTEM.green,
-  profilerHaltInk: SYSTEM.yellow,
+  profilerHalt: SYSTEM.yellow,
 } as const;
 
 /**
@@ -128,42 +122,24 @@ export const color = {
  * surface drawn where there is no glass.
  */
 export const surface = {
-  /** A control switched on: the app's coral, as whatever is chosen is. */
-  on: { glass: alpha(CORAL.base, 0.25), fill: tint(CORAL.base, 0.1), edge: alpha(CORAL.base, 0.6) },
+  /** A control switched on: the coral of whatever is chosen. */
+  chosen: { glass: alpha(CORAL.base, 0.25), fill: tint(CORAL.base, 0.1) },
   /** A report that something failed. */
   alarm: { glass: alpha(SYSTEM.red, 0.15), fill: tint(SYSTEM.red, 0.06), edge: tint(SYSTEM.red, 0.3), shadow: alpha(SYSTEM.red, 0.15) },
 } as const;
 
-/** The tool strip and its size flyout, in the two sets they are drawn in: a
- * toolbar on the system's glass, and a dark band where there is none
- * (feature/map/ui/overlay/mode-bar.tsx says why). */
-export const strip = {
-  glass: {
-    glyph: color.black,
-    glyphOn: color.black,
-    held: alpha(color.black, 0.08),
-    line: alpha(color.black, 0.1),
-    ink: color.black,
-    ground: color.white,
-    flyout: color.white,
-  },
-  band: {
-    glyph: alpha(color.white, 0.6),
-    glyphOn: color.white,
-    held: alpha(color.white, 0.2),
-    line: alpha(color.white, 0.15),
-    ink: color.white,
-    ground: SYSTEM.dark,
-    flyout: alpha(SYSTEM.dark, 0.8),
-  },
-} as const;
+/** A floating control's lift off the map. */
+export const shadow = { lift: "0 6px 20px rgba(0, 0, 0, 0.25)" } as const;
 
 /** The soft dark halo what floats over the map stands in (the address, the
  * glyphs beside it, the scale), so white reads over any ground, as a map's
- * labels do: black copies of a glyph, a line or a text grown by each of
- * `rings` pixels a side, each copy faded whole to `ring`, so the dark falls
- * off with the distance from the stroke (shared/ui/halo.tsx). */
-export const halo = { rings: [2, 1], ring: 0.3 } as const;
+ * labels do: black copies of a glyph, a line or a text grown by 1 to `reach`
+ * pixels a side, each copy faded whole to `ring`, so the dark falls off with
+ * the distance from the stroke (shared/ui/halo.tsx). */
+export const halo = { reach: 2, ring: 0.3 } as const;
+
+/** The halo's rings, one per pixel of its reach, widest first. */
+export const haloRings: readonly number[] = Array.from({ length: halo.reach }, (_, i) => halo.reach - i);
 
 /** A panel's hairlines: its text, faint. */
 export const hairline = alpha(color.labelGray, 0.1);
@@ -172,7 +148,6 @@ export const hairline = alpha(color.labelGray, 0.1);
  * beside it) — a CSS stack a page falls back through, or one face a device
  * has and its own system face where none is named. */
 export const font = {
-  family: FAMILY,
   /** For numbers that have to line up. */
   mono: MONO,
 };
@@ -211,7 +186,8 @@ export { textEdge };
 export const chrome = {
   /** The inset from the screen's edge. */
   inset: 16,
-  /** A round map control's side, and the gap between two stacked. */
+  /** A round map control's side, and the gap between two controls side by
+   * side or stacked. */
   control: 48,
   controlGap: 10,
 } as const;

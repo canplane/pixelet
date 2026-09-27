@@ -24,12 +24,10 @@ let nextChatLineId = 0;
 // cube and a decor kind are numbers of two catalogs, so which one a pick is —
 // and whether picking it sets the cube or the decor kind — is the tool
 // alongside it.
-type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u8 };
+export type RecentPick = { tool: ActiveTool.Object; cube: PlaceableCube } | { tool: ActiveTool.Decor; kind: u8 };
 
-// 8, not the full 15-color/32-terrain-style/N-decor catalog: a recent list
-// is short, and the drawer holds the rest. mode-bar.tsx's own strip already scrolls (overflow-x-auto) once the row
-// overflows a narrow phone's width, so this doesn't need to fit in one
-// glance with zero scroll the way a smaller cap might.
+// A recent list is short and the drawer holds the rest; the strip scrolls
+// once the row outgrows a narrow phone, so this need not fit in one glance.
 const MAX_RECENT_PICKS = 8;
 
 function isSamePick(a: RecentPick, b: RecentPick): boolean {
@@ -45,11 +43,9 @@ function isKnownPick(pick: RecentPick): boolean {
   return pick.tool === ActiveTool.Decor && decorKinds.includes(pick.kind);
 }
 
-// Only ever inserts a genuinely new pick at the front — re-picking one
-// already in the strip leaves the list untouched, so tapping an existing
-// hotbar slot doesn't reshuffle the ones around it (confirmed live as
-// disorienting: the strip's own order should only change when something new
-// actually joins it, not every time you use it).
+// Only a new pick joins, at the front; one already in the strip leaves the
+// list as it is, since slots that reshuffle under the finger each time one
+// is used read as disorienting.
 function touchRecent(recentPicks: readonly RecentPick[], pick: RecentPick): RecentPick[] {
   if (recentPicks.some((p) => isSamePick(p, pick))) return recentPicks as RecentPick[];
   return [pick, ...recentPicks].slice(0, MAX_RECENT_PICKS);
@@ -183,6 +179,12 @@ export const useUiStore = create<UiState>()((set) => ({
     kernel_command(Command.CHAT_CREATE, encode_chat_create({ text }));
   },
 }));
+
+/** Whether a pick is the one in hand: its tool is the one in hand, holding
+ * it. */
+export function useInHand(pick: RecentPick): boolean {
+  return useUiStore((s) => pick.tool === ActiveTool.Object ? s.activeTool === ActiveTool.Object && sameCube(s.cube, pick.cube) : s.activeTool === ActiveTool.Decor && s.decor === pick.kind);
+}
 
 // What the pointer holds crosses to the kernel with each pointer event, by
 // the catalog's numbers: the object tool holds the cube, the decor tool the

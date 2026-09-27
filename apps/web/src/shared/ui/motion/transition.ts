@@ -106,6 +106,10 @@ export const SETTLE: Transition = ease(300, [0, 0, 0.58, 1]);
 /** Something leaving: quicker than it came. */
 export const LEAVE: Transition = ease(150, [0, 0, 0.58, 1]);
 
+/** One thing giving way to another in the same place: a word or a glyph
+ * that changes, or a field that empties on a send. */
+export const FADE: Transition = ease(200, [0, 0, 0.58, 1]);
+
 /** A control arriving on the map: a long, soft landing. */
 export const ARRIVE: Transition = ease(600, [0.16, 1, 0.3, 1]);
 
