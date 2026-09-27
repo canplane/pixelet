@@ -65,6 +65,17 @@ fn orientation() -> &'static mut Orientation {
 /// An orientation event: iOS's own compass heading preferred, the alpha-derived
 /// one otherwise.
 pub fn orientation_event(webkit_compass_heading: Option<f64>, alpha: Option<f64>, beta: Option<f64>, gamma: Option<f64>) {
+    // A browser that has the API but no sensor answers the listener once,
+    // with nothing in it, and then never again: the device has no compass.
+    if webkit_compass_heading.is_none() && alpha.is_none() && beta.is_none() && gamma.is_none() {
+        let o = orientation();
+        o.last_event_at = None;
+        o.commands.push(OrientationCommand::Remove);
+        let store = device_orientation_store();
+        store.set_is_tracking_orientation(false);
+        store.status = DevicePoseStatus::Unavailable;
+        return;
+    }
     orientation().last_event_at = Some(now());
     let heading = webkit_compass_heading.or_else(|| alpha.map(|a| (360.0 - a) % 360.0));
     device_orientation_store().set_orientation(heading, beta, gamma);
@@ -79,8 +90,8 @@ pub fn request_orientation(platform: OrientationPlatform) -> bool {
     if store.is_tracking_orientation {
         return true;
     }
-    if !platform.supported {
-        store.set_error(Message::OrientationUnsupported);
+    if !platform.supported || store.status == DevicePoseStatus::Unavailable {
+        store.status = DevicePoseStatus::Unavailable;
         return false;
     }
     if platform.needs_permission {
